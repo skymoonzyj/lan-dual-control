@@ -31,6 +31,10 @@ const elements = {
   clipboardToggle: document.querySelector("#clipboardToggle"),
   fileClipboardButton: document.querySelector("#fileClipboardButton"),
   fileClipboardInput: document.querySelector("#fileClipboardInput"),
+  keyMapWinSelect: document.querySelector("#keyMapWinSelect"),
+  keyMapAltSelect: document.querySelector("#keyMapAltSelect"),
+  keyMapCtrlSelect: document.querySelector("#keyMapCtrlSelect"),
+  resetKeyMapButton: document.querySelector("#resetKeyMapButton"),
   directionIndicator: document.querySelector("#directionIndicator"),
   directionText: document.querySelector("#directionText"),
   reverseStateText: document.querySelector("#reverseStateText"),
@@ -78,6 +82,18 @@ const qualityPresets = {
     fps: "90",
     bandwidth: "120",
   },
+};
+const defaultKeyboardMapping = {
+  win: "meta",
+  alt: "alt",
+  ctrl: "ctrl",
+};
+const remoteModifierLabels = {
+  meta: "⌘ Command",
+  alt: "⌥ Option",
+  ctrl: "^ Control",
+  shift: "⇧ Shift",
+  none: "不映射",
 };
 const fallbackDisplays = [
   {
@@ -333,6 +349,7 @@ function collectPreferences() {
     audio: elements.audioToggle.checked,
     audioVolume: elements.audioVolumeRange.value,
     clipboard: elements.clipboardToggle.checked,
+    keyboardMapping: getKeyboardMapping(),
     recentConnections: state.recentConnections,
   };
 }
@@ -359,6 +376,7 @@ function applyPreferences() {
   if (typeof preferences.clipboard === "boolean") {
     elements.clipboardToggle.checked = preferences.clipboard;
   }
+  applyKeyboardMapping(preferences.keyboardMapping ?? defaultKeyboardMapping);
 
   state.recentConnections = Array.isArray(preferences.recentConnections)
     ? preferences.recentConnections.slice(0, 5)
@@ -407,6 +425,70 @@ function renderDisplayOptions(displays = state.remoteDisplays, preferredDisplayI
 
 function updateDisplaysFromSession(answer = {}) {
   renderDisplayOptions(answer.displays, answer.activeDisplayId || answer.displayId || state.activeDisplayId);
+}
+
+function normalizeKeyMapValue(value, fallback) {
+  return Object.prototype.hasOwnProperty.call(remoteModifierLabels, value) ? value : fallback;
+}
+
+function getKeyboardMapping() {
+  return {
+    win: normalizeKeyMapValue(elements.keyMapWinSelect.value, defaultKeyboardMapping.win),
+    alt: normalizeKeyMapValue(elements.keyMapAltSelect.value, defaultKeyboardMapping.alt),
+    ctrl: normalizeKeyMapValue(elements.keyMapCtrlSelect.value, defaultKeyboardMapping.ctrl),
+  };
+}
+
+function applyKeyboardMapping(mapping = defaultKeyboardMapping) {
+  elements.keyMapWinSelect.value = normalizeKeyMapValue(mapping.win, defaultKeyboardMapping.win);
+  elements.keyMapAltSelect.value = normalizeKeyMapValue(mapping.alt, defaultKeyboardMapping.alt);
+  elements.keyMapCtrlSelect.value = normalizeKeyMapValue(mapping.ctrl, defaultKeyboardMapping.ctrl);
+}
+
+function resetKeyboardMapping() {
+  applyKeyboardMapping(defaultKeyboardMapping);
+  savePreferences();
+  addLog("按键映射", "已还原默认：Win→Command，Alt→Option，Ctrl→Control");
+}
+
+function addMappedModifier(modifiers, modifier) {
+  if (modifier && modifier !== "none") {
+    modifiers.add(modifier);
+  }
+}
+
+function mapKeyboardModifiers(event) {
+  const mapping = getKeyboardMapping();
+  const remoteModifiers = new Set();
+  if (event.shiftKey) {
+    remoteModifiers.add("shift");
+  }
+  if (event.metaKey) {
+    addMappedModifier(remoteModifiers, mapping.win);
+  }
+  if (event.altKey) {
+    addMappedModifier(remoteModifiers, mapping.alt);
+  }
+  if (event.ctrlKey) {
+    addMappedModifier(remoteModifiers, mapping.ctrl);
+  }
+
+  const modifiers = [...remoteModifiers];
+  return {
+    mapping,
+    modifiers,
+    ctrlKey: modifiers.includes("ctrl"),
+    altKey: modifiers.includes("alt"),
+    shiftKey: modifiers.includes("shift"),
+    metaKey: modifiers.includes("meta"),
+  };
+}
+
+function describeKeyboardInput(event, mapped) {
+  const prefix = mapped.modifiers
+    .map((modifier) => remoteModifierLabels[modifier] ?? modifier)
+    .join("+");
+  return `${prefix ? `${prefix}+` : ""}${event.key}`;
 }
 
 function applyQualityPreset(presetKey, { send = true } = {}) {
@@ -901,6 +983,7 @@ function makeLogFileName() {
 
 function buildLogExportText() {
   const settings = currentDisplaySettings();
+  const keyboardMapping = getKeyboardMapping();
   const connectionLabel =
     elements.transportSelect.value === "websocket" ? "WebSocket 局域网" : "本地模拟";
   const eventLines = state.logEntries
@@ -934,6 +1017,7 @@ function buildLogExportText() {
     `- 带宽：${Math.round(settings.maxBandwidthKbps / 1000)} Mbps`,
     `- 声音：${settings.audio ? `开启 · ${settings.audioVolume}%` : "关闭"}`,
     `- 剪贴板：${settings.clipboard ? "开启" : "关闭"}`,
+    `- 按键映射：Win→${remoteModifierLabels[keyboardMapping.win]}，Alt→${remoteModifierLabels[keyboardMapping.alt]}，Ctrl→${remoteModifierLabels[keyboardMapping.ctrl]}`,
     "",
     "运行统计",
     `- 输入事件：${state.inputEvents}`,
@@ -1827,6 +1911,21 @@ elements.fileClipboardButton.addEventListener("click", () => {
   elements.fileClipboardInput.click();
 });
 elements.fileClipboardInput.addEventListener("change", sendClipboardFiles);
+[
+  elements.keyMapWinSelect,
+  elements.keyMapAltSelect,
+  elements.keyMapCtrlSelect,
+].forEach((select) => {
+  select.addEventListener("change", () => {
+    savePreferences();
+    const mapping = getKeyboardMapping();
+    addLog(
+      "按键映射",
+      `Win→${remoteModifierLabels[mapping.win]}，Alt→${remoteModifierLabels[mapping.alt]}，Ctrl→${remoteModifierLabels[mapping.ctrl]}`,
+    );
+  });
+});
+elements.resetKeyMapButton.addEventListener("click", resetKeyboardMapping);
 
 [elements.hostInput, elements.portInput].forEach((input) => {
   input.addEventListener("change", savePreferences);
@@ -1884,14 +1983,22 @@ elements.remoteCanvas.addEventListener("keydown", (event) => {
     syncClipboardText();
   }
   if (!canSendControlInput()) return;
-  registerInputEvent("键盘", `${event.ctrlKey ? "Ctrl+" : ""}${event.key}`, {
+  const mapped = mapKeyboardModifiers(event);
+  registerInputEvent("键盘", describeKeyboardInput(event, mapped), {
     action: "key",
     key: event.key,
     code: event.code,
-    ctrlKey: event.ctrlKey,
-    altKey: event.altKey,
-    shiftKey: event.shiftKey,
-    metaKey: event.metaKey,
+    repeat: event.repeat,
+    ctrlKey: mapped.ctrlKey,
+    altKey: mapped.altKey,
+    shiftKey: mapped.shiftKey,
+    metaKey: mapped.metaKey,
+    remoteModifiers: mapped.modifiers,
+    keyboardMapping: mapped.mapping,
+    localCtrlKey: event.ctrlKey,
+    localAltKey: event.altKey,
+    localShiftKey: event.shiftKey,
+    localMetaKey: event.metaKey,
   });
 });
 

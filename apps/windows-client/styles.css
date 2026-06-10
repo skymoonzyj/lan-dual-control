@@ -161,7 +161,8 @@ button:disabled {
 
 .field input,
 .field select,
-.select-control select {
+.select-control select,
+.keymap-row select {
   min-height: 38px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -174,6 +175,7 @@ button:disabled {
 .field input:focus,
 .field select:focus,
 .select-control select:focus,
+.keymap-row select:focus,
 .remote-canvas:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(20, 122, 108, 0.16);
@@ -234,6 +236,42 @@ button:disabled {
   width: 32px;
   height: 32px;
   font-size: 18px;
+}
+
+.keymap-panel {
+  padding-bottom: 4px;
+}
+
+.keymap-panel .panel-heading {
+  align-items: center;
+}
+
+.keymap-panel .secondary-action {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.keymap-row {
+  display: grid;
+  grid-template-columns: 1fr 128px;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid #edf0f3;
+  padding: 10px 0;
+  font-size: 14px;
+}
+
+.keymap-row:first-of-type {
+  border-top: 0;
+}
+
+.keymap-row span {
+  color: var(--text);
+}
+
+.keymap-row select {
+  width: 100%;
 }
 
 .device-panel {

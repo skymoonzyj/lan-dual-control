@@ -138,9 +138,24 @@
   },
   "inputEvent": {
     "type": "input_event",
-    "event": "mouse_move",
-    "x": 0.52,
-    "y": 0.37
+    "event": "key",
+    "action": "key",
+    "key": "A",
+    "code": "KeyA",
+    "remoteModifiers": ["meta"],
+    "keyboardMapping": {
+      "win": "meta",
+      "alt": "alt",
+      "ctrl": "ctrl"
+    },
+    "ctrlKey": false,
+    "altKey": false,
+    "shiftKey": false,
+    "metaKey": true,
+    "localCtrlKey": false,
+    "localAltKey": false,
+    "localShiftKey": false,
+    "localMetaKey": true
   },
   "clipboardText": {
     "type": "clipboard_text",

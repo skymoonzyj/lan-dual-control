@@ -393,9 +393,30 @@ Both directions: clipboard_event loop
   "key": "A",
   "code": "KeyA",
   "action": "down",
-  "modifiers": ["ctrl"]
+  "remoteModifiers": ["meta"],
+  "keyboardMapping": {
+    "win": "meta",
+    "alt": "alt",
+    "ctrl": "ctrl"
+  },
+  "ctrlKey": false,
+  "altKey": false,
+  "shiftKey": false,
+  "metaKey": true,
+  "localCtrlKey": false,
+  "localAltKey": false,
+  "localShiftKey": false,
+  "localMetaKey": true
 }
 ```
+
+macOS 默认按键映射：
+
+- Windows `Win` 键 -> macOS `Command`。
+- Windows `Alt` 键 -> macOS `Option`。
+- Windows `Ctrl` 键 -> macOS `Control`。
+- `remoteModifiers` 是按映射转换后的远端修饰键，后续 macOS 输入注入优先读取这个字段。
+- `local*Key` 保留 Windows 本地原始按键状态，用于日志和排查。
 
 ## 10. 剪贴板协议
 

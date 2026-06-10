@@ -73,6 +73,48 @@
           </div>
         </section>
 
+        <section class="panel keymap-panel" aria-labelledby="keymap-title">
+          <div class="panel-heading">
+            <h2 id="keymap-title">远控 macOS 按键映射</h2>
+            <button id="resetKeyMapButton" class="secondary-action compact" type="button">
+              还原默认按键
+            </button>
+          </div>
+
+          <div class="keymap-row">
+            <span>Win 键</span>
+            <select id="keyMapWinSelect">
+              <option value="meta" selected>⌘ Command</option>
+              <option value="alt">⌥ Option</option>
+              <option value="ctrl">^ Control</option>
+              <option value="shift">⇧ Shift</option>
+              <option value="none">不映射</option>
+            </select>
+          </div>
+
+          <div class="keymap-row">
+            <span>Alt 键</span>
+            <select id="keyMapAltSelect">
+              <option value="meta">⌘ Command</option>
+              <option value="alt" selected>⌥ Option</option>
+              <option value="ctrl">^ Control</option>
+              <option value="shift">⇧ Shift</option>
+              <option value="none">不映射</option>
+            </select>
+          </div>
+
+          <div class="keymap-row">
+            <span>Ctrl 键</span>
+            <select id="keyMapCtrlSelect">
+              <option value="meta">⌘ Command</option>
+              <option value="alt">⌥ Option</option>
+              <option value="ctrl" selected>^ Control</option>
+              <option value="shift">⇧ Shift</option>
+              <option value="none">不映射</option>
+            </select>
+          </div>
+        </section>
+
         <section class="panel device-panel" aria-labelledby="device-title">
           <div class="panel-heading">
             <h2 id="device-title">设备</h2>
