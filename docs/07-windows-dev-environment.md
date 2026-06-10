@@ -12,21 +12,23 @@
   - `RUSTUP_HOME=E:\codex\.tools\rustup`
   - `CARGO_HOME=E:\codex\.tools\cargo`
   - `E:\codex\.tools\cargo\bin` 已写入当前用户 Path。
+- Visual Studio C++ Build Tools：已安装，用于 Tauri、Rust `stable-msvc` 工具链和后续 Windows 原生模块编译。
+  - `cl.exe` 位于 Visual Studio BuildTools 的 MSVC 目录。
+  - `MSBuild.exe` 位于 Visual Studio BuildTools 的 MSBuild 目录。
+- Rust/MSVC 编译链路已通过临时 `cargo build` 验证，可以生成 Windows `.exe`。
 
-## 仍需管理员完成
+## 管理员脚本
 
-Visual Studio C++ Build Tools 需要管理员权限安装。它用于 Tauri、Rust `stable-msvc` 工具链和后续 Windows 原生模块编译。
-
-安装器已下载到：
-
-```text
-E:\codex\.tools\installers\vs_BuildTools.exe
-```
-
-推荐方式：右键以管理员身份运行：
+如果以后换新电脑，或需要重新配置系统级环境变量，可以右键以管理员身份运行：
 
 ```powershell
 E:\codex\lan-dual-control\scripts\windows\setup-dev-env-admin.ps1
+```
+
+安装器缓存位置：
+
+```text
+E:\codex\.tools\installers\vs_BuildTools.exe
 ```
 
 该脚本会做两件事：
@@ -55,7 +57,7 @@ E:\codex\lan-dual-control\scripts\windows\verify-dev-env.ps1
 - MSBuild `[ok]`
 - WebView2 Runtime `[ok]`
 
-如果 `MSVC cl.exe` 或 `MSBuild` 仍显示 missing，说明 Visual Studio C++ Build Tools 还没有安装完成，或当前终端没有加载开发者环境。
+普通 PowerShell 里直接输入 `cl` 或 `msbuild` 可能仍然找不到，这是正常的；Visual Studio 的 C++ 工具默认不写入普通 PATH。验证脚本会直接扫描 BuildTools 安装目录。
 
 ## 当前项目运行
 

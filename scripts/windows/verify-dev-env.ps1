@@ -21,6 +21,48 @@ function Test-Command {
   }
 }
 
+function Test-ExecutablePath {
+  param(
+    [string] $Name,
+    [string] $Path,
+    [string[]] $Arguments = @("--version")
+  )
+
+  if (-not $Path -or -not (Test-Path $Path)) {
+    Write-Host "[missing] $Name"
+    return
+  }
+
+  try {
+    $output = & $Path @Arguments 2>&1 | Select-Object -First 1
+    Write-Host "[ok] $Name - $output"
+  } catch {
+    Write-Host "[error] $Name - $($_.Exception.Message)"
+  }
+}
+
+function Find-FirstFile {
+  param(
+    [string[]] $Roots,
+    [string] $Filter
+  )
+
+  foreach ($root in $Roots) {
+    if (-not (Test-Path $root)) {
+      continue
+    }
+
+    $match = Get-ChildItem $root -Recurse -Filter $Filter -ErrorAction SilentlyContinue |
+      Select-Object -First 1 -ExpandProperty FullName
+
+    if ($match) {
+      return $match
+    }
+  }
+
+  return $null
+}
+
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Resolve-Path (Join-Path $scriptRoot "..\..")
 $workspaceRoot = Split-Path -Parent $repoRoot
@@ -57,8 +99,17 @@ Test-Command "npm" "npm.cmd"
 Test-Command "Git" "git"
 Test-Command "Rust" "rustc"
 Test-Command "Cargo" "cargo"
-Test-Command "MSVC cl.exe" "cl" @()
-Test-Command "MSBuild" "msbuild" @("-version")
+
+$visualStudioRoots = @(
+  "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools",
+  "C:\Program Files\Microsoft Visual Studio\2022\BuildTools",
+  "C:\Program Files (x86)\Microsoft Visual Studio",
+  "C:\Program Files\Microsoft Visual Studio"
+)
+$clPath = Find-FirstFile $visualStudioRoots "cl.exe"
+$msbuildPath = Find-FirstFile $visualStudioRoots "MSBuild.exe"
+Test-ExecutablePath "MSVC cl.exe" $clPath @()
+Test-ExecutablePath "MSBuild" $msbuildPath @("-version")
 
 $webViewRoots = @(
   "C:\Program Files (x86)\Microsoft\EdgeWebView\Application",

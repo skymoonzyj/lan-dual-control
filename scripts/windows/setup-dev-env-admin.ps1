@@ -33,7 +33,7 @@ if (-not (Test-Path $buildToolsInstaller)) {
 }
 
 Write-Host "Installing Visual Studio C++ Build Tools..."
-Start-Process -FilePath $buildToolsInstaller -ArgumentList @(
+$installer = Start-Process -FilePath $buildToolsInstaller -ArgumentList @(
   "--quiet",
   "--wait",
   "--norestart",
@@ -41,6 +41,10 @@ Start-Process -FilePath $buildToolsInstaller -ArgumentList @(
   "--add",
   "Microsoft.VisualStudio.Workload.VCTools",
   "--includeRecommended"
-) -Wait
+) -Wait -PassThru
+
+if ($installer.ExitCode -ne 0 -and $installer.ExitCode -ne 3010) {
+  throw "Visual Studio Build Tools installer failed with exit code $($installer.ExitCode)."
+}
 
 Write-Host "Done. Open a new terminal and run scripts/windows/verify-dev-env.ps1."
