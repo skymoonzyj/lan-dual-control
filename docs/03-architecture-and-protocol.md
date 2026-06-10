@@ -135,9 +135,12 @@ Both directions: clipboard_event loop
   "width": 1920,
   "height": 1080,
   "clipboardText": true,
-  "clipboardFile": true
+  "clipboardFile": true,
+  "hostMode": "windows-host-skeleton"
 }
 ```
+
+`hostMode` 是可选调试字段，用于标记当前被控端是否处在骨架、模拟帧或真实采集模式。
 
 ## 6. 视频帧格式
 

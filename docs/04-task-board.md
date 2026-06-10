@@ -127,10 +127,10 @@ Windows 端：
 
 Windows 端：
 
-- [ ] 创建 Windows 被控服务。
+- [x] 创建 Windows 被控服务骨架。
 - [ ] 采集 Windows 屏幕。
 - [ ] 采集 Windows 系统声音。
-- [ ] 接收 Mac 输入事件。
+- [x] 接收 Mac 输入事件骨架。
 - [ ] 使用 SendInput 注入输入。
 - [ ] 处理防火墙提示。
 
@@ -147,6 +147,12 @@ Mac 端：
 - [ ] Mac 可以窗口化控制 Windows。
 - [ ] Windows 和 Mac 都能担任控制端或被控端。
 - [ ] 声音和文本剪贴板在反方向可用。
+
+当前备注：
+
+- 已创建 `apps/windows-host` Node.js WebSocket 被控服务骨架。
+- 当前可完成 hello/auth/session 握手、发送模拟 `video_frame`、接收 `input_event`、确认 `clipboard_text`。
+- 当前仍是骨架模式：屏幕采集待接 Windows Graphics Capture，声音采集待接 WASAPI loopback，输入注入待接 SendInput。
 
 ## 里程碑 M4：一键反控
 

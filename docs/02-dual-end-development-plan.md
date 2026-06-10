@@ -49,7 +49,9 @@
 lan-dual-control/
   apps/
     mac-host/              macOS 被控与控制端
-    windows-client/        Windows 控制与被控端
+    windows-client/        Windows 控制端 Web 原型
+    windows-desktop/       Windows 控制端 Tauri 桌面壳
+    windows-host/          Windows 被控端骨架，用于 Mac 反控 Windows
   shared/
     protocol/              消息结构、端口、状态机
     media/                 视频、音频、剪贴板和文件传输抽象

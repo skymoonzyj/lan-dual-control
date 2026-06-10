@@ -27,7 +27,7 @@
 4. 播放 Mac 传来的声音；
 5. 捕获 Windows 窗口内鼠标键盘事件；
 6. 实现窗口化、全屏、分辨率、刷新率、带宽、声音和剪贴板控制项；
-7. 后续实现 Windows 被控端，用于 Mac 反控 Windows。
+7. 维护 `apps/windows-host` Windows 被控端骨架，用于 Mac 反控 Windows。
 
 开发时遵守 docs/03-architecture-and-protocol.md 的协议。完成任何任务后更新 docs/04-task-board.md。不要改 Mac 端实现，除非协议或对接要求必须同步。
 ```
@@ -46,7 +46,7 @@
 6. 支持被控端分辨率、刷新率、带宽和剪贴板能力；
 7. 后续实现 Mac 控制窗口，用于 Mac 反控 Windows。
 
-当前已存在 apps/mac-host Swift Package 骨架。Mac mini 到位后，先运行 `swift run lan-dual-mac-host`，验证权限、TCP hello 握手、ScreenCaptureKit 预检，再逐步实现真实视频帧和 CGEvent 输入注入。
+当前已存在 `apps/mac-host` Swift Package 骨架和 `apps/windows-host` Windows 被控端骨架。Mac mini 到位后，先运行 `swift run lan-dual-mac-host`，验证权限、TCP hello 握手、ScreenCaptureKit 预检，再逐步实现真实视频帧和 CGEvent 输入注入。后续做 Mac 反控 Windows 时，可先连接 `apps/windows-host`，它会返回模拟 `video_frame` 并记录输入事件。
 
 开发时遵守 docs/03-architecture-and-protocol.md 的协议。完成任何任务后更新 docs/04-task-board.md。不要改 Windows 端实现，除非协议或对接要求必须同步。
 ```

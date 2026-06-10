@@ -30,7 +30,8 @@
     "width": 1920,
     "height": 1080,
     "clipboardText": true,
-    "clipboardFile": true
+    "clipboardFile": true,
+    "hostMode": "windows-host-skeleton"
   },
   "displaySettings": {
     "type": "display_settings",

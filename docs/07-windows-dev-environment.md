@@ -75,6 +75,18 @@ node E:\codex\lan-dual-control\apps\windows-client\server.mjs 5178
 node E:\codex\lan-dual-control\apps\mock-mac-host\server.mjs 43770
 ```
 
+Windows 被控端骨架：
+
+```powershell
+node E:\codex\lan-dual-control\apps\windows-host\server.mjs 43770 0.0.0.0
+```
+
+如果本机调试时 `43770` 已被假 Mac 服务占用，可以临时改用：
+
+```powershell
+node E:\codex\lan-dual-control\apps\windows-host\server.mjs 43772 127.0.0.1
+```
+
 浏览器访问：
 
 ```text

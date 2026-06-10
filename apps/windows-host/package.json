@@ -1,0 +1,10 @@
+{
+  "name": "lan-dual-control-windows-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node ./server.mjs",
+    "check": "node --check ./server.mjs && node --check ./src/windows-host-service.mjs && node --check ./src/websocket-codec.mjs && node --check ./src/windows-screen-capture.mjs && node --check ./src/windows-input-injector.mjs && node --check ./src/windows-audio-capture.mjs && node --check ./src/windows-clipboard-bridge.mjs && node --check ./src/windows-host-logger.mjs"
+  }
+}
