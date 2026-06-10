@@ -386,7 +386,8 @@ button:disabled {
 }
 
 .select-control,
-.toggle-control {
+.toggle-control,
+.range-control {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -403,6 +404,22 @@ button:disabled {
   width: 18px;
   height: 18px;
   accent-color: var(--accent);
+}
+
+.range-control input[type="range"] {
+  width: 92px;
+  accent-color: var(--accent);
+}
+
+.range-control output {
+  min-width: 36px;
+  color: var(--text);
+  font-size: 12px;
+  text-align: right;
+}
+
+.compact-range {
+  gap: 6px;
 }
 
 .direction-indicator {

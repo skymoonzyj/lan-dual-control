@@ -170,6 +170,12 @@
             <span>声音</span>
           </label>
 
+          <label class="range-control compact-range">
+            <span>音量</span>
+            <input id="audioVolumeRange" type="range" min="0" max="100" value="80" />
+            <output id="audioVolumeText">80%</output>
+          </label>
+
           <label class="toggle-control">
             <input id="clipboardToggle" type="checkbox" checked />
             <span>剪贴板</span>
@@ -237,6 +243,7 @@
         <footer class="statusbar">
           <span id="statusText">未连接</span>
           <span id="inputText">输入事件：0</span>
+          <span id="audioText">声音：待机</span>
           <span id="clipboardText">剪贴板：待机</span>
         </footer>
       </main>

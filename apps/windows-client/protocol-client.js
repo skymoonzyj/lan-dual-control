@@ -76,7 +76,9 @@
       this.onClose = null;
       this.connected = false;
       this.frameTimer = null;
+      this.audioTimer = null;
       this.frameId = 0;
+      this.audioFrameId = 0;
     }
 
     async connect() {
@@ -97,6 +99,7 @@
       const wasConnected = this.connected;
       this.connected = false;
       this.stopVideoFrames();
+      this.stopAudioFrames();
       if (notify && wasConnected && this.onClose) {
         this.onClose();
       }
@@ -172,11 +175,17 @@
           displays: mockDisplays,
           activeDisplayId: activeDisplay.id,
           displayName: activeDisplay.name,
+          audioEnabled: Boolean(message.wantAudio),
+          sampleRate: 48000,
+          channels: 2,
           clipboardText: Boolean(message.wantClipboardText),
           clipboardFile: Boolean(message.wantClipboardFile),
         };
         sendLater(answer);
         global.setTimeout(() => this.startVideoFrames(answer), 300);
+        if (message.wantAudio) {
+          global.setTimeout(() => this.startAudioFrames(answer), 360);
+        }
         if (message.mockScenario === "video_interrupted") {
           global.setTimeout(() => {
             if (this.connected && this.onMessage) {
@@ -223,6 +232,30 @@
           fps: Number(message.fps) || 60,
           displayName: activeDisplay.name,
         });
+        if (message.audio) {
+          this.startAudioFrames({
+            audioVolume: Number(message.audioVolume) || 80,
+            sampleRate: 48000,
+            channels: 2,
+          });
+        } else {
+          this.stopAudioFrames();
+        }
+        return;
+      }
+
+      if (message.type === "audio_settings_update") {
+        if (message.enabled) {
+          this.startAudioFrames(message);
+        } else {
+          this.stopAudioFrames();
+        }
+        sendLater({
+          type: "audio_settings_ack",
+          enabled: Boolean(message.enabled),
+          volume: Number(message.volume) || 0,
+          muted: Boolean(message.muted),
+        }, 60);
         return;
       }
 
@@ -306,6 +339,35 @@
       if (this.frameTimer) {
         global.clearInterval(this.frameTimer);
         this.frameTimer = null;
+      }
+    }
+
+    startAudioFrames(settings = {}) {
+      this.stopAudioFrames();
+      const volume = Math.max(0, Math.min(100, Number(settings.audioVolume ?? settings.volume ?? 80)));
+      this.audioTimer = global.setInterval(() => {
+        if (!this.connected || !this.onMessage) return;
+        this.audioFrameId += 1;
+        const wave = (Math.sin(this.audioFrameId / 2.5) + 1) / 2;
+        this.onMessage({
+          type: "audio_frame",
+          frameId: this.audioFrameId,
+          codec: "mock-opus",
+          sampleRate: Number(settings.sampleRate) || 48000,
+          channels: Number(settings.channels) || 2,
+          durationMs: 20,
+          level: Number((wave * (volume / 100)).toFixed(3)),
+          volume,
+          latencyMs: 18 + (this.audioFrameId % 7),
+          encoding: "mock",
+        });
+      }, 240);
+    }
+
+    stopAudioFrames() {
+      if (this.audioTimer) {
+        global.clearInterval(this.audioTimer);
+        this.audioTimer = null;
       }
     }
   }
@@ -433,6 +495,14 @@
       if (!this.connected) return;
       this.send({
         type: "display_settings",
+        ...settings,
+      });
+    }
+
+    sendAudioSettings(settings) {
+      if (!this.connected) return;
+      this.send({
+        type: "audio_settings_update",
         ...settings,
       });
     }

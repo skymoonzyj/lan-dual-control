@@ -116,7 +116,8 @@ Windows 端：
 - [ ] Windows 缩放窗口后坐标仍正确。
 - [ ] 全屏和窗口化切换正常。
 - [x] 分辨率、刷新率、带宽设置在 Windows 原型中生效。
-- [ ] 控制端可以接收被控端声音。
+- [x] 控制端可以接收被控端声音骨架：支持音量设置、`audio_settings_update` 和模拟 `audio_frame` 状态回传。
+- [ ] 控制端播放真实被控端声音。
 - [x] Windows 控制端可发送和接收文本剪贴板消息。
 - [x] Windows 控制端可导出连接和事件日志。
 - [ ] 真机两端可以同步复制文字。
@@ -129,6 +130,7 @@ Windows 端：
 
 - [x] 创建 Windows 被控服务骨架。
 - [ ] 采集 Windows 屏幕。
+- [x] Windows 模拟音频帧骨架。
 - [ ] 采集 Windows 系统声音。
 - [x] 接收 Mac 输入事件骨架。
 - [ ] 使用 SendInput 注入输入。
@@ -151,8 +153,8 @@ Mac 端：
 当前备注：
 
 - 已创建 `apps/windows-host` Node.js WebSocket 被控服务骨架。
-- 当前可完成 hello/auth/session 握手、发送模拟 `video_frame`、接收 `input_event`、确认 `clipboard_text`。
-- 当前仍是骨架模式：屏幕采集待接 Windows Graphics Capture，声音采集待接 WASAPI loopback，输入注入待接 SendInput。
+- 当前可完成 hello/auth/session 握手、发送模拟 `video_frame` 和 `audio_frame`、接收 `input_event`、确认 `clipboard_text`。
+- 当前仍是骨架模式：屏幕采集待接 Windows Graphics Capture，真实声音采集待接 WASAPI loopback，输入注入待接 SendInput。
 
 ## 里程碑 M4：一键反控
 

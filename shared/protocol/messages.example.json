@@ -39,7 +39,8 @@
     "preferredWidth": 1920,
     "preferredHeight": 1080,
     "preferredVideoCodec": "mjpeg",
-    "preferredAudioCodec": "opus"
+    "preferredAudioCodec": "opus",
+    "audioVolume": 80
   },
   "sessionAnswer": {
     "type": "session_answer",
@@ -67,6 +68,9 @@
       }
     ],
     "activeDisplayId": "main",
+    "audioEnabled": true,
+    "sampleRate": 48000,
+    "channels": 2,
     "clipboardText": true,
     "clipboardFile": true,
     "hostMode": "windows-host-skeleton"
@@ -82,6 +86,7 @@
     "fps": 60,
     "maxBandwidthKbps": 50000,
     "audio": true,
+    "audioVolume": 80,
     "clipboardText": true,
     "clipboardFile": true
   },
@@ -99,6 +104,35 @@
     "encoding": "data-url",
     "keyFrame": true,
     "dataUrl": "data:image/svg+xml;base64,..."
+  },
+  "audioSettingsUpdate": {
+    "type": "audio_settings_update",
+    "enabled": true,
+    "codec": "opus",
+    "sampleRate": 48000,
+    "channels": 2,
+    "volume": 80,
+    "muted": false
+  },
+  "audioSettingsAck": {
+    "type": "audio_settings_ack",
+    "enabled": true,
+    "volume": 80,
+    "muted": false,
+    "sampleRate": 48000,
+    "channels": 2
+  },
+  "audioFrame": {
+    "type": "audio_frame",
+    "frameId": 1,
+    "codec": "mock-opus",
+    "sampleRate": 48000,
+    "channels": 2,
+    "durationMs": 20,
+    "level": 0.62,
+    "volume": 80,
+    "latencyMs": 22,
+    "encoding": "mock"
   },
   "inputEvent": {
     "type": "input_event",

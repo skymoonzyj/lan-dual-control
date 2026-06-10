@@ -167,7 +167,8 @@ Both directions: clipboard_event loop
   "preferredWidth": 1920,
   "preferredHeight": 1080,
   "preferredVideoCodec": "mjpeg",
-  "preferredAudioCodec": "opus"
+  "preferredAudioCodec": "opus",
+  "audioVolume": 80
 }
 ```
 
@@ -193,6 +194,9 @@ Both directions: clipboard_event loop
     }
   ],
   "activeDisplayId": "main",
+  "audioEnabled": true,
+  "sampleRate": 48000,
+  "channels": 2,
   "clipboardText": true,
   "clipboardFile": true,
   "hostMode": "windows-host-skeleton"
@@ -251,6 +255,7 @@ Both directions: clipboard_event loop
   "fps": 60,
   "maxBandwidthKbps": 30000,
   "audio": true,
+  "audioVolume": 80,
   "clipboardText": true,
   "clipboardFile": true
 }
@@ -286,7 +291,7 @@ Both directions: clipboard_event loop
 
 控制端可接收被控端声音。
 
-第一版可以先保留开关和协议字段，第二版实现音频流：
+当前骨架已支持音频开关、音量设置和模拟 `audio_frame` 状态回传；真实系统声音采集和播放后续分别接 macOS 音频采集、Windows WASAPI loopback 和控制端播放模块。
 
 ```json
 {
@@ -300,6 +305,36 @@ Both directions: clipboard_event loop
 }
 ```
 
+音频帧：
+
+```json
+{
+  "type": "audio_frame",
+  "frameId": 1,
+  "codec": "mock-opus",
+  "sampleRate": 48000,
+  "channels": 2,
+  "durationMs": 20,
+  "level": 0.62,
+  "volume": 80,
+  "latencyMs": 22,
+  "encoding": "mock"
+}
+```
+
+音频设置确认：
+
+```json
+{
+  "type": "audio_settings_ack",
+  "enabled": true,
+  "volume": 80,
+  "muted": false,
+  "sampleRate": 48000,
+  "channels": 2
+}
+```
+
 音频建议：
 
 - 编码优先 Opus。
@@ -307,6 +342,7 @@ Both directions: clipboard_event loop
 - 控制端提供静音和音量调节。
 - 被控端提供是否允许采集系统声音的开关。
 - 音频通道不能阻塞视频和输入事件。
+- `encoding: "mock"` 表示当前为联调帧，只用于验证协议和 UI 状态，不代表已播放真实系统声音。
 
 ## 9. 输入事件格式
 

@@ -21,6 +21,9 @@ function makeSessionAnswer(message, screen, audio) {
     ok: true,
     videoCodec: screen.videoCodec,
     audioCodec: audio.audioCodec,
+    audioEnabled: audio.audioEnabled,
+    sampleRate: audio.sampleRate,
+    channels: audio.channels,
     fps: screen.fps,
     maxBandwidthKbps: screen.maxBandwidthKbps,
     width: screen.width,
@@ -39,6 +42,7 @@ function createClient(socket, context) {
   let session = null;
   let frameId = 0;
   let frameTimer = null;
+  let audioTimer = null;
 
   function send(message) {
     socket.write(
@@ -58,6 +62,13 @@ function createClient(socket, context) {
     context.screen.stop();
   }
 
+  function stopAudioFrames() {
+    if (audioTimer) {
+      clearInterval(audioTimer);
+      audioTimer = null;
+    }
+  }
+
   function startVideoFrames(nextSession) {
     stopVideoFrames();
     context.screen.start(nextSession);
@@ -66,6 +77,16 @@ function createClient(socket, context) {
       frameId += 1;
       send(context.screen.makeFrame(frameId, nextSession));
     }, intervalMs);
+  }
+
+  function startAudioFrames(nextSession) {
+    stopAudioFrames();
+    if (!nextSession.audioEnabled || nextSession.audioCodec === "none") {
+      return;
+    }
+    audioTimer = setInterval(() => {
+      send(context.audio.makeFrame(nextSession));
+    }, 240);
   }
 
   function handleMessage(message) {
@@ -106,6 +127,7 @@ function createClient(socket, context) {
       if (message.wantVideo !== false) {
         startVideoFrames(session);
       }
+      startAudioFrames(session);
       context.logger.info(`会话已协商：${session.width}x${session.height} / ${session.fps} FPS`);
       return;
     }
@@ -113,9 +135,37 @@ function createClient(socket, context) {
     if (message.type === "display_settings") {
       if (session) {
         session = context.screen.updateSessionDisplay(session, message);
+        session = {
+          ...session,
+          audioEnabled: Boolean(message.audio),
+          audioVolume: Number(message.audioVolume) || session.audioVolume || 80,
+        };
         startVideoFrames(session);
+        if (session.audioEnabled) {
+          startAudioFrames(session);
+        } else {
+          stopAudioFrames();
+        }
       }
       send({ type: "display_settings_ack", accepted: true });
+      return;
+    }
+
+    if (message.type === "audio_settings_update") {
+      send(context.audio.updateSettings(message));
+      if (session) {
+        session = {
+          ...session,
+          audioEnabled: Boolean(message.enabled),
+          audioVolume: Number(message.volume) || 0,
+          audioCodec: message.enabled ? (message.codec ?? session.audioCodec ?? "opus") : "none",
+        };
+      }
+      if (message.enabled && !message.muted) {
+        startAudioFrames(session ?? { audioEnabled: true, audioCodec: message.codec ?? "opus" });
+      } else {
+        stopAudioFrames();
+      }
       return;
     }
 
@@ -169,6 +219,7 @@ function createClient(socket, context) {
     decoded.messages.forEach((frame) => {
       if (frame.type === "close") {
         stopVideoFrames();
+        stopAudioFrames();
         socket.end();
         return;
       }
@@ -185,7 +236,9 @@ function createClient(socket, context) {
   });
 
   socket.on("close", stopVideoFrames);
+  socket.on("close", stopAudioFrames);
   socket.on("error", stopVideoFrames);
+  socket.on("error", stopAudioFrames);
 }
 
 export function createWindowsHostServer({

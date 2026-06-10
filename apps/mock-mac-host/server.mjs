@@ -125,6 +125,9 @@ function negotiateSession(message) {
     displays: mockDisplays,
     activeDisplayId: activeDisplay.id,
     displayName: activeDisplay.name,
+    audioEnabled: Boolean(message.wantAudio),
+    sampleRate: 48000,
+    channels: 2,
     clipboardText: Boolean(message.wantClipboardText),
     clipboardFile: Boolean(message.wantClipboardFile),
   };
@@ -171,7 +174,9 @@ function createClient(socket, options) {
   let buffer = Buffer.alloc(0);
   let inputCount = 0;
   let frameCount = 0;
+  let audioFrameCount = 0;
   let frameTimer = null;
+  let audioTimer = null;
   let session = null;
   const fileTransfers = new Map();
 
@@ -229,6 +234,9 @@ function createClient(socket, options) {
       session = negotiateSession(message);
       send(session);
       startVideoFrames(session);
+      if (message.wantAudio) {
+        startAudioFrames(session);
+      }
       if (message.mockScenario === "video_interrupted") {
         setTimeout(() => {
           send({
@@ -275,12 +283,42 @@ function createClient(socket, options) {
               : Number(message.height) || session.height,
           fps: Number(message.fps) || session.fps,
           maxBandwidthKbps: Number(message.maxBandwidthKbps) || session.maxBandwidthKbps,
+          audioEnabled: Boolean(message.audio),
+          audioVolume: Number(message.audioVolume) || session.audioVolume || 80,
         };
         startVideoFrames(session);
+        if (session.audioEnabled) {
+          startAudioFrames(session);
+        } else {
+          stopAudioFrames();
+        }
       }
       send({
         type: "display_settings_ack",
         accepted: true,
+      });
+      return;
+    }
+
+    if (message.type === "audio_settings_update") {
+      if (session) {
+        session = {
+          ...session,
+          audioEnabled: Boolean(message.enabled),
+          audioVolume: Number(message.volume) || 0,
+          muted: Boolean(message.muted),
+        };
+      }
+      if (message.enabled && !message.muted) {
+        startAudioFrames(session ?? message);
+      } else {
+        stopAudioFrames();
+      }
+      send({
+        type: "audio_settings_ack",
+        enabled: Boolean(message.enabled),
+        volume: Number(message.volume) || 0,
+        muted: Boolean(message.muted),
       });
       return;
     }
@@ -395,6 +433,34 @@ function createClient(socket, options) {
     }
   }
 
+  function startAudioFrames(settings = {}) {
+    stopAudioFrames();
+    const volume = Math.max(0, Math.min(100, Number(settings.audioVolume ?? settings.volume ?? 80)));
+    audioTimer = setInterval(() => {
+      audioFrameCount += 1;
+      const wave = (Math.sin(audioFrameCount / 2.8) + 1) / 2;
+      send({
+        type: "audio_frame",
+        frameId: audioFrameCount,
+        codec: "mock-opus",
+        sampleRate: Number(settings.sampleRate) || 48000,
+        channels: Number(settings.channels) || 2,
+        durationMs: 20,
+        level: Number((wave * (volume / 100)).toFixed(3)),
+        volume,
+        latencyMs: 16 + (audioFrameCount % 8),
+        encoding: "mock",
+      });
+    }, 240);
+  }
+
+  function stopAudioFrames() {
+    if (audioTimer) {
+      clearInterval(audioTimer);
+      audioTimer = null;
+    }
+  }
+
   socket.on("data", (chunk) => {
     buffer = Buffer.concat([buffer, chunk]);
     const decoded = decodeFrames(buffer);
@@ -403,6 +469,7 @@ function createClient(socket, options) {
     decoded.messages.forEach((frame) => {
       if (frame.type === "close") {
         stopVideoFrames();
+        stopAudioFrames();
         socket.end();
         return;
       }
@@ -419,7 +486,9 @@ function createClient(socket, options) {
   });
 
   socket.on("close", stopVideoFrames);
+  socket.on("close", stopAudioFrames);
   socket.on("error", stopVideoFrames);
+  socket.on("error", stopAudioFrames);
 }
 
 export function createMockMacHostServer({
