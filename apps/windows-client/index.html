@@ -97,9 +97,11 @@
             <span>分辨率</span>
             <select id="resolutionSelect">
               <option value="native">原生</option>
+              <option value="1280x720">1280 × 720</option>
+              <option value="1600x900">1600 × 900</option>
               <option value="1920x1080" selected>1920 × 1080</option>
               <option value="2560x1440">2560 × 1440</option>
-              <option value="1280x720">1280 × 720</option>
+              <option value="3840x2160">3840 × 2160</option>
             </select>
           </label>
 
@@ -107,15 +109,26 @@
             <span>刷新率</span>
             <select id="fpsSelect">
               <option value="15">15 FPS</option>
-              <option value="30" selected>30 FPS</option>
-              <option value="60">60 FPS</option>
+              <option value="30">30 FPS</option>
+              <option value="45">45 FPS</option>
+              <option value="60" selected>60 FPS</option>
+              <option value="90">90 FPS</option>
+              <option value="120">120 FPS</option>
+              <option value="144">144 FPS</option>
             </select>
           </label>
 
-          <label class="range-control">
+          <label class="select-control">
             <span>带宽</span>
-            <input id="bandwidthRange" type="range" min="5" max="80" value="20" />
-            <output id="bandwidthOutput">20 Mbps</output>
+            <select id="bandwidthSelect">
+              <option value="5">5 Mbps</option>
+              <option value="10">10 Mbps</option>
+              <option value="20">20 Mbps</option>
+              <option value="50" selected>50 Mbps</option>
+              <option value="80">80 Mbps</option>
+              <option value="120">120 Mbps</option>
+              <option value="200">200 Mbps</option>
+            </select>
           </label>
 
           <label class="toggle-control">
@@ -156,11 +169,11 @@
                       <span>分辨率</span>
                     </div>
                     <div>
-                      <strong id="metricFps">30 FPS</strong>
+                      <strong id="metricFps">60 FPS</strong>
                       <span>刷新率</span>
                     </div>
                     <div>
-                      <strong id="metricBandwidth">20 Mbps</strong>
+                      <strong id="metricBandwidth">50 Mbps</strong>
                       <span>带宽</span>
                     </div>
                     <div>

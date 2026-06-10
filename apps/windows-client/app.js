@@ -15,8 +15,7 @@ const elements = {
   clipboardText: document.querySelector("#clipboardText"),
   resolutionSelect: document.querySelector("#resolutionSelect"),
   fpsSelect: document.querySelector("#fpsSelect"),
-  bandwidthRange: document.querySelector("#bandwidthRange"),
-  bandwidthOutput: document.querySelector("#bandwidthOutput"),
+  bandwidthSelect: document.querySelector("#bandwidthSelect"),
   audioToggle: document.querySelector("#audioToggle"),
   clipboardToggle: document.querySelector("#clipboardToggle"),
   fullscreenButton: document.querySelector("#fullscreenButton"),
@@ -74,7 +73,7 @@ function currentDisplaySettings() {
     width,
     height,
     fps: Number(elements.fpsSelect.value),
-    maxBandwidthKbps: Number(elements.bandwidthRange.value) * 1000,
+    maxBandwidthKbps: Number(elements.bandwidthSelect.value) * 1000,
     audio: elements.audioToggle.checked,
     clipboard: elements.clipboardToggle.checked,
   };
@@ -82,11 +81,10 @@ function currentDisplaySettings() {
 
 function updateMetrics() {
   const settings = currentDisplaySettings();
-  elements.bandwidthOutput.value = `${elements.bandwidthRange.value} Mbps`;
   elements.metricResolution.textContent =
     settings.resolutionMode === "native" ? "原生" : `${settings.width} × ${settings.height}`;
   elements.metricFps.textContent = `${settings.fps} FPS`;
-  elements.metricBandwidth.textContent = `${elements.bandwidthRange.value} Mbps`;
+  elements.metricBandwidth.textContent = `${elements.bandwidthSelect.value} Mbps`;
   elements.clipboardText.textContent = `剪贴板：${settings.clipboard ? "已开启" : "已关闭"}`;
 }
 
@@ -198,7 +196,7 @@ function sendDisplaySettings() {
   const settings = currentDisplaySettings();
   addLog(
     "更新显示设置",
-    `${settings.displayMode === "fullscreen" ? "全屏" : "窗口"} · ${elements.metricResolution.textContent} · ${settings.fps} FPS · ${elements.bandwidthRange.value} Mbps`,
+    `${settings.displayMode === "fullscreen" ? "全屏" : "窗口"} · ${elements.metricResolution.textContent} · ${settings.fps} FPS · ${elements.bandwidthSelect.value} Mbps`,
   );
 }
 
@@ -270,7 +268,7 @@ elements.reverseButton.addEventListener("click", () => addLog("一键反控", "�
 
 elements.resolutionSelect.addEventListener("change", sendDisplaySettings);
 elements.fpsSelect.addEventListener("change", sendDisplaySettings);
-elements.bandwidthRange.addEventListener("input", sendDisplaySettings);
+elements.bandwidthSelect.addEventListener("change", sendDisplaySettings);
 elements.audioToggle.addEventListener("change", () => {
   addLog("声音", elements.audioToggle.checked ? "已请求接收被控端声音" : "已关闭声音接收");
 });

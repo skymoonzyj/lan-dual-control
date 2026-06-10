@@ -112,8 +112,8 @@ Both directions: clipboard_event loop
   "wantAudio": true,
   "wantClipboardText": true,
   "wantClipboardFile": true,
-  "maxFps": 30,
-  "maxBandwidthKbps": 20000,
+  "maxFps": 60,
+  "maxBandwidthKbps": 50000,
   "displayMode": "windowed",
   "preferredWidth": 1920,
   "preferredHeight": 1080,
@@ -186,8 +186,8 @@ Both directions: clipboard_event loop
   "ok": true,
   "effectiveWidth": 1920,
   "effectiveHeight": 1080,
-  "effectiveFps": 30,
-  "effectiveBandwidthKbps": 20000,
+  "effectiveFps": 60,
+  "effectiveBandwidthKbps": 50000,
   "message": "设置已生效"
 }
 ```
@@ -405,4 +405,3 @@ Both directions: clipboard_event loop
 - 首次配对生成设备密钥。
 - 后续通过设备密钥快速连接。
 - 可以删除已信任设备。
-
