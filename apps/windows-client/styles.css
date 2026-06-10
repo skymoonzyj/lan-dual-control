@@ -145,6 +145,7 @@ button:disabled {
 }
 
 .field input,
+.field select,
 .select-control select {
   min-height: 38px;
   border: 1px solid var(--line);
@@ -156,6 +157,7 @@ button:disabled {
 }
 
 .field input:focus,
+.field select:focus,
 .select-control select:focus,
 .remote-canvas:focus {
   border-color: var(--accent);

@@ -24,8 +24,16 @@
           </div>
 
           <label class="field">
+            <span>连接方式</span>
+            <select id="transportSelect">
+              <option value="local" selected>本地模拟</option>
+              <option value="websocket">WebSocket 局域网</option>
+            </select>
+          </label>
+
+          <label class="field">
             <span>目标地址</span>
-            <input id="hostInput" type="text" value="192.168.1.23" autocomplete="off" />
+            <input id="hostInput" type="text" value="127.0.0.1" autocomplete="off" />
           </label>
 
           <label class="field">
@@ -57,7 +65,14 @@
               ↻
             </button>
           </div>
-          <button class="device-row active" type="button" data-host="192.168.1.23">
+          <button class="device-row active" type="button" data-host="127.0.0.1">
+            <span class="device-dot"></span>
+            <span>
+              <strong>本机假 Mac</strong>
+              <small>127.0.0.1</small>
+            </span>
+          </button>
+          <button class="device-row" type="button" data-host="192.168.1.23">
             <span class="device-dot"></span>
             <span>
               <strong>Mac mini</strong>
@@ -196,6 +211,7 @@
       </main>
     </div>
 
-    <script type="module" src="./app.js"></script>
+    <script src="./protocol-client.js"></script>
+    <script src="./app.js"></script>
   </body>
 </html>

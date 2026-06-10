@@ -5,7 +5,8 @@
 ## 当前能力
 
 - 手动输入 Mac 局域网 IP 和端口。
-- 模拟 hello、auth、session_offer 握手。
+- 支持本地模拟握手，也支持 WebSocket 协议连接。
+- 支持 hello、auth_request、session_offer、display_settings、input_event、clipboard_text 和 reverse_control_request 消息。
 - 显示模拟远程桌面画面。
 - 捕获远程画面区域内的鼠标移动、点击、滚轮和键盘事件。
 - 支持窗口化和全屏显示切换。
@@ -18,13 +19,15 @@
 
 ## 运行方式
 
-直接打开：
+### 方式一：直接打开静态页面
 
 ```text
 E:\codex\lan-dual-control\apps\windows-client\index.html
 ```
 
-或使用本地静态服务：
+默认选择“本地模拟”时，不需要启动任何服务。
+
+### 方式二：使用本地静态服务
 
 ```powershell
 node E:\codex\lan-dual-control\apps\windows-client\server.mjs 5178
@@ -36,13 +39,31 @@ node E:\codex\lan-dual-control\apps\windows-client\server.mjs 5178
 http://127.0.0.1:5178/
 ```
 
+### 方式三：联调 WebSocket 假 Mac
+
+先启动假 Mac 服务：
+
+```powershell
+node E:\codex\lan-dual-control\apps\mock-mac-host\server.mjs 43770
+```
+
+再打开 Windows 控制端，选择：
+
+- 连接方式：WebSocket 局域网
+- 目标地址：127.0.0.1
+- 端口：43770
+- 连接密码：demo-password
+
+连接成功后，分辨率、刷新率、带宽、声音、剪贴板、鼠标键盘输入和一键反控按钮都会通过协议层发送消息。
+
 ## 后续对接
 
-等 Mac 端被控服务完成后，把 `app.js` 里的模拟握手替换为真实网络连接：
+等 Mac 端被控服务完成后，优先复用 `protocol-client.js` 的消息格式，对接真实被控服务：
 
 - hello
 - auth_request
 - session_offer
+- display_settings
 - video_frame
 - audio_frame
 - input_event
