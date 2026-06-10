@@ -127,23 +127,43 @@ Both directions: clipboard_event loop
 ```json
 {
   "type": "session_answer",
-  "screenWidth": 2560,
-  "screenHeight": 1440,
-  "fps": 20,
+  "ok": true,
   "videoCodec": "mjpeg",
-  "audioEnabled": false,
-  "audioCodec": "none",
-  "clipboardTextEnabled": true,
-  "clipboardFileEnabled": false
+  "audioCodec": "opus",
+  "fps": 60,
+  "maxBandwidthKbps": 50000,
+  "width": 1920,
+  "height": 1080,
+  "clipboardText": true,
+  "clipboardFile": true
 }
 ```
 
 ## 6. 视频帧格式
 
-第一版建议：
+第一版协议先定义统一的 `video_frame` 消息，便于 Windows 控制端和 Mac 被控端对接。
+
+当前假 Mac 服务使用 JSON 文本帧发送 `data-url` 模拟画面：
+
+```json
+{
+  "type": "video_frame",
+  "frameId": 1,
+  "timestamp": "2026-06-10T12:00:00.000Z",
+  "width": 1920,
+  "height": 1080,
+  "codec": "mock-svg",
+  "encoding": "data-url",
+  "keyFrame": true,
+  "dataUrl": "data:image/svg+xml;base64,..."
+}
+```
+
+真实 Mac 端接入后建议：
 
 - 控制消息仍用 JSON。
-- 图像帧使用二进制帧。
+- 初期可以发送 `codec: "jpeg"`、`encoding: "data-url"` 或 `encoding: "base64"` 的 JPEG 帧，降低联调难度。
+- 性能不足时再把图像帧升级为二进制帧。
 - 每帧带一个小头部：frameId、timestamp、width、height、format、payloadLength。
 - payload 使用 JPEG 或 PNG，优先 JPEG。
 
@@ -159,14 +179,16 @@ Both directions: clipboard_event loop
 
 ```json
 {
-  "type": "display_settings_update",
+  "type": "display_settings",
   "displayMode": "fullscreen",
   "resolutionMode": "fixed",
   "width": 1920,
   "height": 1080,
   "fps": 60,
   "maxBandwidthKbps": 30000,
-  "quality": "balanced"
+  "audio": true,
+  "clipboardText": true,
+  "clipboardFile": true
 }
 ```
 
@@ -176,19 +198,21 @@ Both directions: clipboard_event loop
 - resolutionMode：native、fit_client、fixed。
 - fps：目标刷新率，第一版建议支持 15、30、60。
 - maxBandwidthKbps：最大带宽。
-- quality：latency、balanced、quality。
+- audio：是否接收被控端声音。
+- clipboardText：是否同步文本剪贴板。
+- clipboardFile：是否同步文件剪贴板。
 
 如果被控端不能满足设置，需要返回实际生效值。
 
 ```json
 {
-  "type": "display_settings_result",
-  "ok": true,
-  "effectiveWidth": 1920,
-  "effectiveHeight": 1080,
-  "effectiveFps": 60,
-  "effectiveBandwidthKbps": 50000,
-  "message": "设置已生效"
+  "type": "display_settings_ack",
+  "accepted": true,
+  "width": 1920,
+  "height": 1080,
+  "fps": 60,
+  "maxBandwidthKbps": 50000,
+  "message": "设置已接收"
 }
 ```
 

@@ -20,6 +20,45 @@
     "preferredVideoCodec": "mjpeg",
     "preferredAudioCodec": "opus"
   },
+  "sessionAnswer": {
+    "type": "session_answer",
+    "ok": true,
+    "videoCodec": "mjpeg",
+    "audioCodec": "opus",
+    "fps": 60,
+    "maxBandwidthKbps": 50000,
+    "width": 1920,
+    "height": 1080,
+    "clipboardText": true,
+    "clipboardFile": true
+  },
+  "displaySettings": {
+    "type": "display_settings",
+    "displayMode": "windowed",
+    "resolutionMode": "fixed",
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "maxBandwidthKbps": 50000,
+    "audio": true,
+    "clipboardText": true,
+    "clipboardFile": true
+  },
+  "displaySettingsAck": {
+    "type": "display_settings_ack",
+    "accepted": true
+  },
+  "videoFrame": {
+    "type": "video_frame",
+    "frameId": 1,
+    "timestamp": "2026-06-10T12:00:00.000Z",
+    "width": 1920,
+    "height": 1080,
+    "codec": "mock-svg",
+    "encoding": "data-url",
+    "keyFrame": true,
+    "dataUrl": "data:image/svg+xml;base64,..."
+  },
   "inputEvent": {
     "type": "input_event",
     "event": "mouse_move",

@@ -10,8 +10,12 @@
 - `auth_result`
 - `session_offer`
 - `session_answer`
+- `display_settings`
+- `display_settings_ack`
+- `video_frame`
 - `input_event`
 - `clipboard_text`
+- `clipboard_ack`
 - `clipboard_file_offer`
 
 ## 当前代码引用
@@ -20,5 +24,6 @@
 - macOS 被控端模型：`apps/mac-host/Sources/MacHost/ProtocolMessages.swift`
 - 示例消息：`shared/protocol/messages.example.json`
 
-后续进入真实视频流后，控制消息仍可用 JSON Lines，视频帧、音频帧和文件块再使用二进制帧。
+当前假 Mac 服务会用 `video_frame` JSON 消息发送 `data-url` 模拟帧，便于 Windows 端提前验证渲染流程。
 
+后续进入真实视频流后，控制消息仍可用 JSON Lines，视频帧、音频帧和文件块可以升级为二进制帧。

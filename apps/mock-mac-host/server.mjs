@@ -114,9 +114,47 @@ function negotiateSession(message) {
   };
 }
 
+function makeMockVideoFrame(frameId, width = 1920, height = 1080) {
+  const now = new Date();
+  const hue = (frameId * 23) % 360;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <defs>
+        <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stop-color="hsl(${hue}, 42%, 24%)"/>
+          <stop offset="100%" stop-color="hsl(${(hue + 90) % 360}, 38%, 12%)"/>
+        </linearGradient>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#bg)"/>
+      <rect x="48" y="42" width="${width - 96}" height="46" rx="12" fill="rgba(255,255,255,0.9)"/>
+      <text x="76" y="72" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="22" fill="#1f2937">Mock Mac Desktop</text>
+      <rect x="${Math.round(width * 0.12)}" y="${Math.round(height * 0.18)}" width="${Math.round(width * 0.48)}" height="${Math.round(height * 0.46)}" rx="18" fill="rgba(255,255,255,0.92)"/>
+      <circle cx="${Math.round(width * 0.15)}" cy="${Math.round(height * 0.22)}" r="12" fill="#ef4444"/>
+      <circle cx="${Math.round(width * 0.18)}" cy="${Math.round(height * 0.22)}" r="12" fill="#f59e0b"/>
+      <circle cx="${Math.round(width * 0.21)}" cy="${Math.round(height * 0.22)}" r="12" fill="#22c55e"/>
+      <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.34)}" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="44" font-weight="700" fill="#111827">局域网远控测试帧</text>
+      <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.42)}" font-family="Consolas, monospace" font-size="30" fill="#4b5563">frame #${frameId}</text>
+      <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.48)}" font-family="Consolas, monospace" font-size="26" fill="#4b5563">${now.toLocaleTimeString("zh-CN")}</text>
+    </svg>`;
+
+  return {
+    type: "video_frame",
+    frameId,
+    timestamp: now.toISOString(),
+    width,
+    height,
+    codec: "mock-svg",
+    encoding: "data-url",
+    keyFrame: frameId === 1 || frameId % 30 === 0,
+    dataUrl: `data:image/svg+xml;base64,${Buffer.from(svg, "utf8").toString("base64")}`,
+  };
+}
+
 function createClient(socket, options) {
   let buffer = Buffer.alloc(0);
   let inputCount = 0;
+  let frameCount = 0;
+  let frameTimer = null;
 
   function send(message) {
     socket.write(encodeTextFrame(JSON.stringify({
@@ -148,7 +186,9 @@ function createClient(socket, options) {
     }
 
     if (message.type === "session_offer") {
-      send(negotiateSession(message));
+      const session = negotiateSession(message);
+      send(session);
+      startVideoFrames(session);
       return;
     }
 
@@ -185,6 +225,22 @@ function createClient(socket, options) {
     }
   }
 
+  function startVideoFrames(session) {
+    stopVideoFrames();
+    const intervalMs = Math.max(120, Math.round(1000 / Math.min(Number(session.fps) || 5, 8)));
+    frameTimer = setInterval(() => {
+      frameCount += 1;
+      send(makeMockVideoFrame(frameCount, session.width, session.height));
+    }, intervalMs);
+  }
+
+  function stopVideoFrames() {
+    if (frameTimer) {
+      clearInterval(frameTimer);
+      frameTimer = null;
+    }
+  }
+
   socket.on("data", (chunk) => {
     buffer = Buffer.concat([buffer, chunk]);
     const decoded = decodeFrames(buffer);
@@ -192,6 +248,7 @@ function createClient(socket, options) {
 
     decoded.messages.forEach((frame) => {
       if (frame.type === "close") {
+        stopVideoFrames();
         socket.end();
         return;
       }
@@ -206,6 +263,9 @@ function createClient(socket, options) {
       }
     });
   });
+
+  socket.on("close", stopVideoFrames);
+  socket.on("error", stopVideoFrames);
 }
 
 export function createMockMacHostServer({

@@ -369,7 +369,26 @@ button:disabled {
     #16202b;
 }
 
+.remote-frame-image {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #111827;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.remote-frame-image.is-visible {
+  opacity: 1;
+}
+
 .mac-menubar {
+  position: relative;
+  z-index: 1;
   display: flex;
   height: 32px;
   align-items: center;
@@ -382,6 +401,7 @@ button:disabled {
 
 .mock-window {
   position: absolute;
+  z-index: 1;
   left: 7%;
   top: 11%;
   width: min(760px, 72%);

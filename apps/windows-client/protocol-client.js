@@ -12,10 +12,48 @@
     return `${prefix}-${Date.now().toString(16)}-${random}`;
   }
 
+  function makeMockVideoFrame(frameId, width = 1920, height = 1080) {
+    const now = new Date();
+    const hue = (frameId * 23) % 360;
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+        <defs>
+          <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stop-color="hsl(${hue}, 42%, 24%)"/>
+            <stop offset="100%" stop-color="hsl(${(hue + 90) % 360}, 38%, 12%)"/>
+          </linearGradient>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#bg)"/>
+        <rect x="48" y="42" width="${width - 96}" height="46" rx="12" fill="rgba(255,255,255,0.9)"/>
+        <text x="76" y="72" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="22" fill="#1f2937">Mock Mac Desktop</text>
+        <rect x="${Math.round(width * 0.12)}" y="${Math.round(height * 0.18)}" width="${Math.round(width * 0.48)}" height="${Math.round(height * 0.46)}" rx="18" fill="rgba(255,255,255,0.92)"/>
+        <circle cx="${Math.round(width * 0.15)}" cy="${Math.round(height * 0.22)}" r="12" fill="#ef4444"/>
+        <circle cx="${Math.round(width * 0.18)}" cy="${Math.round(height * 0.22)}" r="12" fill="#f59e0b"/>
+        <circle cx="${Math.round(width * 0.21)}" cy="${Math.round(height * 0.22)}" r="12" fill="#22c55e"/>
+        <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.34)}" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="44" font-weight="700" fill="#111827">局域网远控测试帧</text>
+        <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.42)}" font-family="Consolas, monospace" font-size="30" fill="#4b5563">frame #${frameId}</text>
+        <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.48)}" font-family="Consolas, monospace" font-size="26" fill="#4b5563">${now.toLocaleTimeString("zh-CN")}</text>
+      </svg>`;
+
+    return {
+      type: "video_frame",
+      frameId,
+      timestamp: now.toISOString(),
+      width,
+      height,
+      codec: "mock-svg",
+      encoding: "data-url",
+      keyFrame: frameId === 1 || frameId % 30 === 0,
+      dataUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+    };
+  }
+
   class LocalMockTransport {
     constructor() {
       this.onMessage = null;
       this.connected = false;
+      this.frameTimer = null;
+      this.frameId = 0;
     }
 
     async connect() {
@@ -34,6 +72,7 @@
 
     disconnect() {
       this.connected = false;
+      this.stopVideoFrames();
     }
 
     replyFor(message) {
@@ -65,18 +104,22 @@
       }
 
       if (message.type === "session_offer") {
-        sendLater({
+        const width = Number(message.preferredWidth) || 1920;
+        const height = Number(message.preferredHeight) || 1080;
+        const answer = {
           type: "session_answer",
           ok: true,
           videoCodec: message.preferredVideoCodec ?? "mjpeg",
           audioCodec: message.wantAudio ? (message.preferredAudioCodec ?? "opus") : "none",
           fps: Math.min(Number(message.maxFps) || 60, 60),
           maxBandwidthKbps: Number(message.maxBandwidthKbps) || 50000,
-          width: Number(message.preferredWidth) || 1920,
-          height: Number(message.preferredHeight) || 1080,
+          width,
+          height,
           clipboardText: Boolean(message.wantClipboardText),
           clipboardFile: Boolean(message.wantClipboardFile),
-        });
+        };
+        sendLater(answer);
+        global.setTimeout(() => this.startVideoFrames(answer), 300);
         return;
       }
 
@@ -96,6 +139,23 @@
           accepted: false,
           reason: "Mac 端确认窗口还没有实装",
         });
+      }
+    }
+
+    startVideoFrames(session) {
+      this.stopVideoFrames();
+      const intervalMs = Math.max(120, Math.round(1000 / Math.min(Number(session.fps) || 5, 8)));
+      this.frameTimer = global.setInterval(() => {
+        if (!this.connected || !this.onMessage) return;
+        this.frameId += 1;
+        this.onMessage(makeMockVideoFrame(this.frameId, session.width, session.height));
+      }, intervalMs);
+    }
+
+    stopVideoFrames() {
+      if (this.frameTimer) {
+        global.clearInterval(this.frameTimer);
+        this.frameTimer = null;
       }
     }
   }

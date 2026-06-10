@@ -26,6 +26,7 @@ const elements = {
   windowModeButton: document.querySelector("#windowModeButton"),
   reverseButton: document.querySelector("#reverseButton"),
   cursorDot: document.querySelector("#cursorDot"),
+  remoteFrameImage: document.querySelector("#remoteFrameImage"),
   metricResolution: document.querySelector("#metricResolution"),
   metricFps: document.querySelector("#metricFps"),
   metricBandwidth: document.querySelector("#metricBandwidth"),
@@ -42,6 +43,7 @@ const state = {
   client: null,
   activeHost: "",
   activePort: "",
+  videoFrames: 0,
 };
 
 function nowTime() {
@@ -70,6 +72,7 @@ function setBadge(mode, text) {
 function setUiConnecting(host, port) {
   state.connecting = true;
   state.connected = false;
+  state.videoFrames = 0;
   setBadge("connecting", "连接中");
   elements.statusText.textContent = `正在连接 ${host}:${port}`;
   elements.remoteStatusText.textContent = "正在建立局域网会话...";
@@ -108,6 +111,8 @@ function setUiDisconnected(statusText = "未连接", logDetail = "会话已关�
   setBadge("offline", "未连接");
   elements.statusText.textContent = statusText;
   elements.remoteStatusText.textContent = "连接已断开。";
+  elements.remoteFrameImage.removeAttribute("src");
+  elements.remoteFrameImage.classList.remove("is-visible");
   elements.metricLatency.textContent = "-- ms";
   elements.connectButton.disabled = false;
   elements.disconnectButton.disabled = true;
@@ -342,6 +347,11 @@ function syncClipboardText() {
 }
 
 function handleProtocolMessage(message) {
+  if (message.type === "video_frame") {
+    renderVideoFrame(message);
+    return;
+  }
+
   if (message.type === "display_settings_ack") {
     addLog("被控端确认", "显示设置已接收");
     return;
@@ -359,6 +369,29 @@ function handleProtocolMessage(message) {
 
   if (message.type === "error") {
     addLog("协议错误", message.message || "未知错误");
+  }
+}
+
+function renderVideoFrame(frame) {
+  if (!frame.dataUrl) {
+    addLog("视频帧", "收到视频帧但缺少 dataUrl");
+    return;
+  }
+
+  state.videoFrames += 1;
+  elements.remoteFrameImage.src = frame.dataUrl;
+  elements.remoteFrameImage.classList.add("is-visible");
+  elements.remoteStatusText.textContent = `正在接收模拟视频帧 #${frame.frameId ?? state.videoFrames}`;
+
+  if (frame.width && frame.height) {
+    elements.metricResolution.textContent = `${frame.width} × ${frame.height}`;
+  }
+
+  if (state.videoFrames === 1 || state.videoFrames % 30 === 0) {
+    addLog(
+      "视频帧",
+      `#${frame.frameId ?? state.videoFrames} · ${frame.width ?? "--"}×${frame.height ?? "--"} · ${frame.codec ?? "mock"}`,
+    );
   }
 }
 

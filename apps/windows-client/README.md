@@ -6,8 +6,9 @@
 
 - 手动输入 Mac 局域网 IP 和端口。
 - 支持本地模拟握手，也支持 WebSocket 协议连接。
-- 支持 hello、auth_request、session_offer、display_settings、input_event、clipboard_text 和 reverse_control_request 消息。
+- 支持 hello、auth_request、session_offer、display_settings、video_frame、input_event、clipboard_text 和 reverse_control_request 消息。
 - 显示模拟远程桌面画面。
+- 接收并渲染假 Mac 服务发送的模拟 `video_frame`。
 - 捕获远程画面区域内的鼠标移动、点击、滚轮和键盘事件。
 - 支持窗口化和全屏显示切换。
 - 支持分辨率、刷新率、带宽、声音、剪贴板控制项。
@@ -55,6 +56,7 @@ node E:\codex\lan-dual-control\apps\mock-mac-host\server.mjs 43770
 - 连接密码：demo-password
 
 连接成功后，分辨率、刷新率、带宽、声音、剪贴板、鼠标键盘输入和一键反控按钮都会通过协议层发送消息。
+假 Mac 服务还会持续发送模拟 `video_frame`，用于提前验证 Windows 端画面渲染流程。
 
 ## 后续对接
 
