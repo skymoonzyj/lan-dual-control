@@ -21,6 +21,7 @@ const elements = {
   statusText: document.querySelector("#statusText"),
   inputText: document.querySelector("#inputText"),
   clipboardText: document.querySelector("#clipboardText"),
+  qualityPresetSelect: document.querySelector("#qualityPresetSelect"),
   resolutionSelect: document.querySelector("#resolutionSelect"),
   displaySelect: document.querySelector("#displaySelect"),
   fpsSelect: document.querySelector("#fpsSelect"),
@@ -58,6 +59,26 @@ const discoveryProbeTimeoutMs = 650;
 const defaultControlPort = "43770";
 const fileChunkSizeBytes = 64 * 1024;
 const maxClipboardFileBytes = 512 * 1024 * 1024;
+const qualityPresets = {
+  smooth: {
+    label: "流畅",
+    resolution: "1280x720",
+    fps: "30",
+    bandwidth: "10",
+  },
+  balanced: {
+    label: "均衡",
+    resolution: "1920x1080",
+    fps: "60",
+    bandwidth: "50",
+  },
+  sharp: {
+    label: "高清",
+    resolution: "2560x1440",
+    fps: "90",
+    bandwidth: "120",
+  },
+};
 const fallbackDisplays = [
   {
     id: "main",
@@ -152,6 +173,7 @@ const state = {
   activeDisplayId: "main",
   remoteFrameWidth: 1920,
   remoteFrameHeight: 1080,
+  applyingQualityPreset: false,
   manualDisconnect: false,
   reconnectAttempts: 0,
   reconnectTimer: null,
@@ -302,6 +324,7 @@ function collectPreferences() {
     host: elements.hostInput.value.trim(),
     port: elements.portInput.value.trim(),
     mockScenario: elements.mockScenarioSelect.value,
+    qualityPreset: elements.qualityPresetSelect.value,
     resolution: elements.resolutionSelect.value,
     displayId: elements.displaySelect.value,
     fps: elements.fpsSelect.value,
@@ -325,6 +348,7 @@ function applyPreferences() {
   if (preferences.host) elements.hostInput.value = preferences.host;
   if (preferences.port) elements.portInput.value = preferences.port;
   if (preferences.mockScenario) elements.mockScenarioSelect.value = preferences.mockScenario;
+  if (preferences.qualityPreset) elements.qualityPresetSelect.value = preferences.qualityPreset;
   if (preferences.resolution) elements.resolutionSelect.value = preferences.resolution;
   if (preferences.displayId) state.activeDisplayId = preferences.displayId;
   if (preferences.fps) elements.fpsSelect.value = preferences.fps;
@@ -383,6 +407,34 @@ function renderDisplayOptions(displays = state.remoteDisplays, preferredDisplayI
 
 function updateDisplaysFromSession(answer = {}) {
   renderDisplayOptions(answer.displays, answer.activeDisplayId || answer.displayId || state.activeDisplayId);
+}
+
+function applyQualityPreset(presetKey, { send = true } = {}) {
+  const preset = qualityPresets[presetKey];
+  if (!preset) {
+    savePreferences();
+    return;
+  }
+
+  state.applyingQualityPreset = true;
+  elements.resolutionSelect.value = preset.resolution;
+  elements.fpsSelect.value = preset.fps;
+  elements.bandwidthSelect.value = preset.bandwidth;
+  state.applyingQualityPreset = false;
+  updateMetrics();
+  savePreferences();
+  addLog("画质预设", `${preset.label} · ${preset.resolution} · ${preset.fps} FPS · ${preset.bandwidth} Mbps`);
+
+  if (send) {
+    sendDisplaySettings();
+  }
+}
+
+function markQualityPresetCustom() {
+  if (state.applyingQualityPreset || elements.qualityPresetSelect.value === "custom") {
+    return;
+  }
+  elements.qualityPresetSelect.value = "custom";
 }
 
 function getPlatformLabel(platform = "") {
@@ -773,6 +825,7 @@ function currentDisplaySettings() {
     resolutionValue === "native" ? ["原生", ""] : resolutionValue.split("x");
 
   return {
+    qualityPreset: elements.qualityPresetSelect.value,
     displayMode: state.fullscreen ? "fullscreen" : "windowed",
     displayId: elements.displaySelect.value || state.activeDisplayId,
     resolutionMode: resolutionValue === "native" ? "native" : "fixed",
@@ -872,6 +925,7 @@ function buildLogExportText() {
     `- 协议版本：${protocolVersion}`,
     "",
     "显示与能力",
+    `- 画质预设：${elements.qualityPresetSelect.selectedOptions[0]?.textContent ?? settings.qualityPreset}`,
     `- 显示模式：${settings.displayMode === "fullscreen" ? "全屏" : "窗口"}`,
     `- 显示器：${elements.displaySelect.selectedOptions[0]?.textContent ?? settings.displayId}`,
     `- 分辨率：${settings.resolutionMode === "native" ? "原生" : `${settings.width} × ${settings.height}`}`,
@@ -929,6 +983,7 @@ function buildSessionOffer() {
     wantClipboardFile: settings.clipboard,
     maxFps: settings.fps,
     maxBandwidthKbps: settings.maxBandwidthKbps,
+    qualityPreset: settings.qualityPreset,
     displayMode: settings.displayMode,
     displayId: settings.displayId,
     preferredWidth,
@@ -951,6 +1006,7 @@ function buildDisplaySettingsMessage() {
         };
 
   return {
+    qualityPreset: settings.qualityPreset,
     displayMode: settings.displayMode,
     displayId: settings.displayId,
     resolutionMode: settings.resolutionMode,
@@ -1715,7 +1771,18 @@ elements.fullscreenButton.addEventListener("click", () => setFullscreen(true));
 elements.windowModeButton.addEventListener("click", () => setFullscreen(false));
 elements.reverseButton.addEventListener("click", requestReverseControl);
 
-elements.resolutionSelect.addEventListener("change", sendDisplaySettings);
+elements.qualityPresetSelect.addEventListener("change", () => {
+  if (elements.qualityPresetSelect.value === "custom") {
+    savePreferences();
+    addLog("画质预设", "自定义");
+    return;
+  }
+  applyQualityPreset(elements.qualityPresetSelect.value);
+});
+elements.resolutionSelect.addEventListener("change", () => {
+  markQualityPresetCustom();
+  sendDisplaySettings();
+});
 elements.displaySelect.addEventListener("change", () => {
   state.activeDisplayId = elements.displaySelect.value;
   sendDisplaySettings();
@@ -1726,8 +1793,14 @@ elements.scaleModeSelect.addEventListener("change", () => {
   sendDisplaySettings();
   addLog("缩放模式", elements.scaleModeSelect.selectedOptions[0]?.textContent ?? "适应窗口");
 });
-elements.fpsSelect.addEventListener("change", sendDisplaySettings);
-elements.bandwidthSelect.addEventListener("change", sendDisplaySettings);
+elements.fpsSelect.addEventListener("change", () => {
+  markQualityPresetCustom();
+  sendDisplaySettings();
+});
+elements.bandwidthSelect.addEventListener("change", () => {
+  markQualityPresetCustom();
+  sendDisplaySettings();
+});
 elements.audioToggle.addEventListener("change", () => {
   savePreferences();
   addLog("声音", elements.audioToggle.checked ? "已请求接收被控端声音" : "已关闭声音接收");

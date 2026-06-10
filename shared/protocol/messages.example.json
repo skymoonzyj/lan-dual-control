@@ -34,6 +34,7 @@
     "wantClipboardFile": true,
     "maxFps": 60,
     "maxBandwidthKbps": 50000,
+    "qualityPreset": "balanced",
     "displayMode": "windowed",
     "displayId": "main",
     "preferredWidth": 1920,
@@ -77,6 +78,7 @@
   },
   "displaySettings": {
     "type": "display_settings",
+    "qualityPreset": "balanced",
     "displayMode": "windowed",
     "displayId": "main",
     "resolutionMode": "fixed",

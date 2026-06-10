@@ -162,6 +162,7 @@ Both directions: clipboard_event loop
   "wantClipboardFile": true,
   "maxFps": 60,
   "maxBandwidthKbps": 50000,
+  "qualityPreset": "balanced",
   "displayMode": "windowed",
   "displayId": "main",
   "preferredWidth": 1920,
@@ -246,6 +247,7 @@ Both directions: clipboard_event loop
 ```json
 {
   "type": "display_settings",
+  "qualityPreset": "balanced",
   "displayMode": "fullscreen",
   "displayId": "main",
   "resolutionMode": "fixed",
@@ -264,6 +266,7 @@ Both directions: clipboard_event loop
 字段说明：
 
 - displayMode：windowed 或 fullscreen。
+- qualityPreset：控制端画质预设，当前可用 `smooth`、`balanced`、`sharp`、`custom`。
 - displayId：目标显示器编号，由 `session_answer.displays` 提供。
 - resolutionMode：native、fit_client、fixed。
 - scaleMode：fit、original、stretch，控制端显示缩放模式。
