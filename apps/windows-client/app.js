@@ -10,6 +10,7 @@ const elements = {
   disconnectButton: document.querySelector("#disconnectButton"),
   refreshDevicesButton: document.querySelector("#refreshDevicesButton"),
   clearLogButton: document.querySelector("#clearLogButton"),
+  historyList: document.querySelector("#historyList"),
   connectionBadge: document.querySelector("#connectionBadge"),
   eventLog: document.querySelector("#eventLog"),
   remoteCanvas: document.querySelector("#remoteCanvas"),
@@ -34,6 +35,8 @@ const elements = {
   clockText: document.querySelector("#clockText"),
 };
 
+const storageKey = "lan-dual-control.windows-client.preferences.v1";
+
 const state = {
   connected: false,
   connecting: false,
@@ -44,6 +47,7 @@ const state = {
   activeHost: "",
   activePort: "",
   videoFrames: 0,
+  recentConnections: [],
 };
 
 function nowTime() {
@@ -67,6 +71,128 @@ function addLog(title, detail = "") {
 function setBadge(mode, text) {
   elements.connectionBadge.className = `status-badge ${mode}`;
   elements.connectionBadge.textContent = text;
+}
+
+function readPreferences() {
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writePreferences(nextPreferences) {
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(nextPreferences));
+  } catch {
+    addLog("设置保存", "当前环境不允许写入本地存储");
+  }
+}
+
+function collectPreferences() {
+  return {
+    transport: elements.transportSelect.value,
+    host: elements.hostInput.value.trim(),
+    port: elements.portInput.value.trim(),
+    resolution: elements.resolutionSelect.value,
+    fps: elements.fpsSelect.value,
+    bandwidth: elements.bandwidthSelect.value,
+    audio: elements.audioToggle.checked,
+    clipboard: elements.clipboardToggle.checked,
+    recentConnections: state.recentConnections,
+  };
+}
+
+function savePreferences() {
+  writePreferences(collectPreferences());
+}
+
+function applyPreferences() {
+  const preferences = readPreferences();
+
+  if (preferences.transport) elements.transportSelect.value = preferences.transport;
+  if (preferences.host) elements.hostInput.value = preferences.host;
+  if (preferences.port) elements.portInput.value = preferences.port;
+  if (preferences.resolution) elements.resolutionSelect.value = preferences.resolution;
+  if (preferences.fps) elements.fpsSelect.value = preferences.fps;
+  if (preferences.bandwidth) elements.bandwidthSelect.value = preferences.bandwidth;
+  if (typeof preferences.audio === "boolean") elements.audioToggle.checked = preferences.audio;
+  if (typeof preferences.clipboard === "boolean") {
+    elements.clipboardToggle.checked = preferences.clipboard;
+  }
+
+  state.recentConnections = Array.isArray(preferences.recentConnections)
+    ? preferences.recentConnections.slice(0, 5)
+    : [];
+  renderRecentConnections();
+}
+
+function rememberCurrentConnection() {
+  const host = elements.hostInput.value.trim();
+  const port = elements.portInput.value.trim();
+  if (!host || !port) return;
+
+  const transport = elements.transportSelect.value;
+  const id = `${transport}:${host}:${port}`;
+  const nextConnection = {
+    id,
+    host,
+    port,
+    transport,
+    label: transport === "websocket" ? "WebSocket 局域网" : "本地模拟",
+    lastConnectedAt: new Date().toISOString(),
+  };
+
+  state.recentConnections = [
+    nextConnection,
+    ...state.recentConnections.filter((item) => item.id !== id),
+  ].slice(0, 5);
+
+  renderRecentConnections();
+  savePreferences();
+}
+
+function renderRecentConnections() {
+  elements.historyList.innerHTML = "";
+
+  if (state.recentConnections.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "history-empty";
+    empty.textContent = "还没有连接历史";
+    elements.historyList.append(empty);
+    return;
+  }
+
+  state.recentConnections.forEach((connection) => {
+    const button = document.createElement("button");
+    button.className = "history-row";
+    button.type = "button";
+    button.dataset.host = connection.host;
+    button.dataset.port = connection.port;
+    button.dataset.transport = connection.transport;
+    const dot = document.createElement("span");
+    dot.className = "device-dot";
+    const textWrap = document.createElement("span");
+    const title = document.createElement("strong");
+    title.textContent = `${connection.host}:${connection.port}`;
+    const detail = document.createElement("small");
+    detail.textContent = connection.label;
+    textWrap.append(title, detail);
+    button.append(dot, textWrap);
+    button.addEventListener("click", () => {
+      document.querySelectorAll(".device-row, .history-row").forEach((item) =>
+        item.classList.remove("active"),
+      );
+      button.classList.add("active");
+      elements.hostInput.value = connection.host;
+      elements.portInput.value = connection.port;
+      elements.transportSelect.value = connection.transport;
+      savePreferences();
+      addLog("选择历史", `${connection.label} · ${connection.host}:${connection.port}`);
+    });
+    elements.historyList.append(button);
+  });
 }
 
 function setUiConnecting(host, port) {
@@ -212,6 +338,7 @@ async function connect() {
     elements.transportSelect.value === "websocket" ? "WebSocket 局域网" : "本地模拟";
   state.activeHost = host;
   state.activePort = port;
+  savePreferences();
   setUiConnecting(host, port);
   addLog("开始连接", `${transportLabel} · ${host}:${port}`);
 
@@ -235,6 +362,7 @@ async function connect() {
       sessionOffer: buildSessionOffer(),
     });
     setUiConnected(answer);
+    rememberCurrentConnection();
     addLog(
       "连接成功",
       `${answer.videoCodec} · ${answer.fps} FPS · ${Math.round(answer.maxBandwidthKbps / 1000)} Mbps`,
@@ -283,6 +411,7 @@ function describeDisplaySettings() {
 
 function sendDisplaySettings() {
   updateMetrics();
+  savePreferences();
   if (!state.connected || !state.client) {
     return;
   }
@@ -407,12 +536,14 @@ document.querySelectorAll(".device-row").forEach((button) => {
     document.querySelectorAll(".device-row").forEach((item) => item.classList.remove("active"));
     button.classList.add("active");
     elements.hostInput.value = button.dataset.host;
+    savePreferences();
     addLog("选择设备", button.dataset.host);
   });
 });
 
 elements.transportSelect.addEventListener("change", () => {
   const isWebSocket = elements.transportSelect.value === "websocket";
+  savePreferences();
   addLog("连接方式", isWebSocket ? "WebSocket 局域网" : "本地模拟");
 });
 elements.connectButton.addEventListener("click", connect);
@@ -438,13 +569,19 @@ elements.resolutionSelect.addEventListener("change", sendDisplaySettings);
 elements.fpsSelect.addEventListener("change", sendDisplaySettings);
 elements.bandwidthSelect.addEventListener("change", sendDisplaySettings);
 elements.audioToggle.addEventListener("change", () => {
+  savePreferences();
   addLog("声音", elements.audioToggle.checked ? "已请求接收被控端声音" : "已关闭声音接收");
   sendDisplaySettings();
 });
 elements.clipboardToggle.addEventListener("change", () => {
   updateMetrics();
+  savePreferences();
   addLog("剪贴板", elements.clipboardToggle.checked ? "已开启" : "已关闭");
   sendDisplaySettings();
+});
+
+[elements.hostInput, elements.portInput].forEach((input) => {
+  input.addEventListener("change", savePreferences);
 });
 
 elements.remoteCanvas.addEventListener("mousemove", updateCursor);
@@ -493,5 +630,6 @@ window.addEventListener("keydown", (event) => {
 
 tickClock();
 setInterval(tickClock, 1000);
+applyPreferences();
 updateMetrics();
 addLog("控制端启动", "本地模拟模式，可切换 WebSocket");

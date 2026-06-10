@@ -205,7 +205,8 @@ button:disabled {
 .secondary-action:hover,
 .tool-button:hover,
 .icon-button:hover,
-.device-row:hover {
+.device-row:hover,
+.history-row:hover {
   border-color: #aeb8c4;
   background: var(--panel-strong);
 }
@@ -224,7 +225,8 @@ button:disabled {
   padding-bottom: 8px;
 }
 
-.device-row {
+.device-row,
+.history-row {
   display: grid;
   width: 100%;
   grid-template-columns: 12px 1fr;
@@ -235,17 +237,21 @@ button:disabled {
   text-align: left;
 }
 
-.device-row.active {
+.device-row.active,
+.history-row.active {
   border-color: var(--accent);
   background: var(--accent-soft);
 }
 
 .device-row strong,
-.device-row small {
+.device-row small,
+.history-row strong,
+.history-row small {
   display: block;
 }
 
-.device-row small {
+.device-row small,
+.history-row small {
   color: var(--muted);
   font-size: 12px;
   margin-top: 2px;
@@ -260,6 +266,39 @@ button:disabled {
 
 .device-dot.muted {
   background: #a8b2bf;
+}
+
+.history-block {
+  margin-top: 12px;
+  border-top: 1px solid #edf0f3;
+  padding-top: 10px;
+}
+
+.history-title {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.history-row {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  padding: 9px;
+  text-align: left;
+}
+
+.history-empty {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .event-panel {
