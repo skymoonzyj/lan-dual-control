@@ -271,7 +271,7 @@ Both directions: clipboard_event loop
 - resolutionMode：native、fit_client、fixed。
 - scaleMode：fit、original、stretch，控制端显示缩放模式。
 - fps：目标刷新率，当前控制端提供 30、60、120、144、240 Hz。
-- maxBandwidthKbps：最大码率，单位 Kbps；当前控制端提供 5M、10M、15M、20M、40M、50M。
+- maxBandwidthKbps：最大码率，单位 Kbps；当前控制端提供 5 Mbps、10 Mbps、15 Mbps、20 Mbps、40 Mbps、50 Mbps。
 - audio：是否接收被控端声音。
 - clipboardText：是否同步文本剪贴板。
 - clipboardFile：是否同步文件剪贴板。

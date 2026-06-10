@@ -522,7 +522,7 @@ function applyQualityPreset(presetKey, { send = true } = {}) {
   state.applyingQualityPreset = false;
   updateMetrics();
   savePreferences();
-  addLog("画质预设", `${preset.label} · ${preset.resolution} · ${preset.fps} Hz · ${preset.bandwidth}M`);
+  addLog("画质预设", `${preset.label} · ${preset.resolution} · ${preset.fps} Hz · ${preset.bandwidth} Mbps`);
 
   if (send) {
     sendDisplaySettings();
@@ -818,7 +818,7 @@ function setUiConnected(answer) {
     elements.metricFps.textContent = `${answer.fps} Hz`;
   }
   if (answer.maxBandwidthKbps) {
-    elements.metricBandwidth.textContent = `${Math.round(answer.maxBandwidthKbps / 1000)}M`;
+    elements.metricBandwidth.textContent = `${Math.round(answer.maxBandwidthKbps / 1000)} Mbps`;
   }
   if (answer.audioEnabled) {
     elements.audioText.textContent = `声音：已协商 · ${answer.audioCodec ?? "opus"}`;
@@ -944,7 +944,7 @@ function updateMetrics() {
   elements.metricResolution.textContent =
     settings.resolutionMode === "native" ? "原生" : `${settings.width} × ${settings.height}`;
   elements.metricFps.textContent = `${settings.fps} Hz`;
-  elements.metricBandwidth.textContent = `${elements.bandwidthSelect.value}M`;
+  elements.metricBandwidth.textContent = `${elements.bandwidthSelect.value} Mbps`;
   elements.audioVolumeText.textContent = `${settings.audioVolume}%`;
   elements.audioText.textContent = settings.audio
     ? `声音：已开启 · ${settings.audioVolume}%`
@@ -1031,7 +1031,7 @@ function buildLogExportText() {
     `- 分辨率：${settings.resolutionMode === "native" ? "原生" : `${settings.width} × ${settings.height}`}`,
     `- 缩放：${elements.scaleModeSelect.selectedOptions[0]?.textContent ?? settings.scaleMode}`,
     `- 刷新率：${settings.fps} Hz`,
-    `- 码率：${Math.round(settings.maxBandwidthKbps / 1000)}M`,
+    `- 码率：${Math.round(settings.maxBandwidthKbps / 1000)} Mbps`,
     `- 声音：${settings.audio ? `开启 · ${settings.audioVolume}%` : "关闭"}`,
     `- 剪贴板：${settings.clipboard ? "开启" : "关闭"}`,
     `- 按键映射：Win→${remoteModifierLabels[keyboardMapping.win]}，Alt→${remoteModifierLabels[keyboardMapping.alt]}，Ctrl→${remoteModifierLabels[keyboardMapping.ctrl]}`,
@@ -1190,7 +1190,7 @@ async function connect({ reconnect = false } = {}) {
     rememberCurrentConnection();
     addLog(
       "连接成功",
-      `${answer.videoCodec} · ${answer.fps} Hz · ${Math.round(answer.maxBandwidthKbps / 1000)}M`,
+      `${answer.videoCodec} · ${answer.fps} Hz · ${Math.round(answer.maxBandwidthKbps / 1000)} Mbps`,
     );
   } catch (error) {
     client.disconnect();
@@ -1240,7 +1240,7 @@ function stopLatencyLoop() {
 
 function describeDisplaySettings() {
   const settings = currentDisplaySettings();
-  return `${settings.displayMode === "fullscreen" ? "全屏" : "窗口"} · ${elements.metricResolution.textContent} · ${settings.fps} Hz · ${elements.bandwidthSelect.value}M`;
+  return `${settings.displayMode === "fullscreen" ? "全屏" : "窗口"} · ${elements.metricResolution.textContent} · ${settings.fps} Hz · ${elements.bandwidthSelect.value} Mbps`;
 }
 
 function applyScaleMode() {
