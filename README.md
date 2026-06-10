@@ -23,6 +23,7 @@
 - [双 Codex 账号协作说明](docs/05-codex-handoff.md)
 - [GitHub 使用与同步流程](docs/06-github-workflow.md)
 - [Windows 开发环境说明](docs/07-windows-dev-environment.md)
+- [明日工作计划](docs/08-next-work-plan.md)
 
 ## 推荐开发顺序
 
