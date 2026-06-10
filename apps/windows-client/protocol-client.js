@@ -59,6 +59,7 @@
   class LocalMockTransport {
     constructor() {
       this.onMessage = null;
+      this.onClose = null;
       this.connected = false;
       this.frameTimer = null;
       this.frameId = 0;
@@ -78,9 +79,17 @@
       this.replyFor(parsed);
     }
 
-    disconnect() {
+    disconnect({ notify = false } = {}) {
+      const wasConnected = this.connected;
       this.connected = false;
       this.stopVideoFrames();
+      if (notify && wasConnected && this.onClose) {
+        this.onClose();
+      }
+    }
+
+    closeFromHost() {
+      this.disconnect({ notify: true });
     }
 
     replyFor(message) {
@@ -163,7 +172,7 @@
           }, 2600);
         }
         if (message.mockScenario === "disconnect_after_connect") {
-          global.setTimeout(() => this.disconnect(), 3200);
+          global.setTimeout(() => this.closeFromHost(), 3200);
         }
         return;
       }
@@ -174,7 +183,12 @@
       }
 
       if (message.type === "clipboard_text") {
-        sendLater({ type: "clipboard_ack", accepted: true }, 80);
+        sendLater({
+          type: "clipboard_ack",
+          accepted: true,
+          clipboardId: message.clipboardId,
+          textLength: message.textLength ?? message.text?.length ?? 0,
+        }, 80);
         return;
       }
 
@@ -332,11 +346,24 @@
       });
     }
 
-    sendClipboardText(text) {
+    sendClipboardText(text, options = {}) {
       if (!this.connected) return;
       this.send({
         type: "clipboard_text",
+        direction: options.direction ?? "client_to_host",
+        clipboardId: options.clipboardId,
+        textLength: text.length,
         text,
+      });
+    }
+
+    sendClipboardAck({ accepted, clipboardId = "", reason = "" } = {}) {
+      if (!this.connected) return;
+      this.send({
+        type: "clipboard_ack",
+        accepted: Boolean(accepted),
+        clipboardId,
+        reason,
       });
     }
 

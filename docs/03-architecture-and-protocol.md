@@ -48,7 +48,7 @@ idle
 - authenticating：正在验证密码或配对码。
 - negotiating：交换屏幕尺寸、帧率、编码格式、音频能力、剪贴板能力。
 - streaming：正在传输画面、声音、输入和剪贴板事件。
-- reconnecting：短暂断线后尝试恢复。
+- reconnecting：短暂断线后尝试恢复；Windows 控制端当前最多自动重连 3 次，用户手动断开不会触发自动重连。
 - disconnected：连接已结束。
 
 ## 4. 会话握手
@@ -304,14 +304,29 @@ Both directions: clipboard_event loop
 {
   "type": "clipboard_text",
   "direction": "host_to_client",
+  "clipboardId": "clip-1780000000000-1",
+  "textLength": 8,
   "text": "复制的文字内容",
   "timestamp": 1780000000000
 }
 ```
 
+接收方确认：
+
+```json
+{
+  "type": "clipboard_ack",
+  "accepted": true,
+  "clipboardId": "clip-1780000000000-1",
+  "textLength": 8
+}
+```
+
 规则：
 
-- 文本剪贴板可以第一版或第二版实现。
+- 文本剪贴板第一版先同步纯文本，文件和压缩包走文件剪贴板通道。
+- `direction` 使用 `client_to_host` 或 `host_to_client`。
+- `clipboardId` 用于把发送和确认对应起来，排查重复同步或失败原因。
 - 需要避免循环同步：收到远端剪贴板后，本地写入时要标记来源。
 - 可以提供开关：关闭剪贴板同步。
 

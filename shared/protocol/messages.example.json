@@ -66,6 +66,19 @@
     "x": 0.52,
     "y": 0.37
   },
+  "clipboardText": {
+    "type": "clipboard_text",
+    "direction": "client_to_host",
+    "clipboardId": "clip-1780000000000-1",
+    "textLength": 8,
+    "text": "复制的文字"
+  },
+  "clipboardAck": {
+    "type": "clipboard_ack",
+    "accepted": true,
+    "clipboardId": "clip-1780000000000-1",
+    "textLength": 8
+  },
   "clipboardFileOffer": {
     "type": "clipboard_file_offer",
     "transferId": "uuid",

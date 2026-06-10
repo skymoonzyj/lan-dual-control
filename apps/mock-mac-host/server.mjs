@@ -241,6 +241,8 @@ function createClient(socket, options) {
       send({
         type: "clipboard_ack",
         accepted: true,
+        clipboardId: message.clipboardId,
+        textLength: message.textLength ?? message.text?.length ?? 0,
       });
       return;
     }
