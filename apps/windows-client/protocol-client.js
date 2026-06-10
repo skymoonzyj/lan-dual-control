@@ -174,6 +174,18 @@
         if (message.mockScenario === "disconnect_after_connect") {
           global.setTimeout(() => this.closeFromHost(), 3200);
         }
+        if (message.mockScenario === "incoming_reverse_request") {
+          global.setTimeout(() => {
+            if (this.connected && this.onMessage) {
+              this.onMessage({
+                type: "reverse_control_request",
+                requestId: makeId("reverse"),
+                from: "本机假 Mac",
+                message: "本机假 Mac 请求切换为 Mac 控制 Windows",
+              });
+            }
+          }, 1800);
+        }
         return;
       }
 
@@ -193,11 +205,24 @@
       }
 
       if (message.type === "reverse_control_request") {
+        if (message.mockScenario === "reverse_control_timeout") {
+          return;
+        }
+
         sendLater({
           type: "reverse_control_response",
-          accepted: false,
-          reason: "Mac 端确认窗口还没有实装",
+          requestId: message.requestId,
+          accepted: message.mockScenario === "reverse_control_accepted",
+          reason:
+            message.mockScenario === "reverse_control_accepted"
+              ? ""
+              : "Mac 端确认窗口还没有实装",
         });
+        return;
+      }
+
+      if (message.type === "reverse_control_response") {
+        return;
       }
     }
 
@@ -367,11 +392,24 @@
       });
     }
 
-    requestReverseControl() {
+    requestReverseControl(options = {}) {
       if (!this.connected) return;
       this.send({
         type: "reverse_control_request",
-        requestedBy: "windows-client",
+        requestId: options.requestId,
+        from: options.from ?? "Windows 控制端",
+        message: options.message ?? "对方请求切换为反向控制",
+        mockScenario: options.mockScenario,
+      });
+    }
+
+    sendReverseControlResponse({ requestId = "", accepted, reason = "" } = {}) {
+      if (!this.connected) return;
+      this.send({
+        type: "reverse_control_response",
+        requestId,
+        accepted: Boolean(accepted),
+        reason,
       });
     }
 

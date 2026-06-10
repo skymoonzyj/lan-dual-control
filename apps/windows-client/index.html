@@ -55,6 +55,9 @@
               <option value="accessibility_permission_denied">缺少辅助功能权限</option>
               <option value="video_interrupted">视频流中断</option>
               <option value="disconnect_after_connect">连接后断开</option>
+              <option value="reverse_control_accepted">反控已同意</option>
+              <option value="reverse_control_timeout">反控超时</option>
+              <option value="incoming_reverse_request">对方向我发起反控</option>
             </select>
           </label>
 
@@ -185,9 +188,14 @@
             <span>剪贴板</span>
           </label>
 
+          <div id="directionIndicator" class="direction-indicator" aria-live="polite">
+            <strong id="directionText">Windows 控制 Mac</strong>
+            <small id="reverseStateText">你当前是控制方</small>
+          </div>
+
           <button id="reverseButton" class="secondary-action compact" type="button" disabled>
             <span aria-hidden="true">⇄</span>
-            反控
+            <span id="reverseButtonText">请求反控</span>
           </button>
         </header>
 

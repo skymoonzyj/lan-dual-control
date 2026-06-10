@@ -403,7 +403,8 @@ Both directions: clipboard_event loop
 {
   "type": "reverse_control_response",
   "requestId": "uuid",
-  "accepted": true
+  "accepted": true,
+  "reason": ""
 }
 ```
 
@@ -413,6 +414,8 @@ Both directions: clipboard_event loop
 - 未确认不能切换。
 - 切换方向前要保存当前连接状态。
 - 切换失败要回到原连接或干净断开。
+- `requestId` 用于把请求和确认一一对应，避免重连或重复点击后串线。
+- 控制端应处理超时场景，超时后方向保持不变。
 
 ## 12. 错误码
 

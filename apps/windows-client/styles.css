@@ -342,6 +342,7 @@ button:disabled {
 
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   min-height: 72px;
   align-items: center;
   gap: 12px;
@@ -385,6 +386,38 @@ button:disabled {
   width: 18px;
   height: 18px;
   accent-color: var(--accent);
+}
+
+.direction-indicator {
+  display: inline-flex;
+  min-width: 168px;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  padding: 6px 10px;
+}
+
+.direction-indicator strong {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.direction-indicator small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.direction-indicator.is-pending {
+  border-color: #f0d38a;
+  background: #fff7da;
+}
+
+.direction-indicator.is-reversed {
+  border-color: #b9d0f3;
+  background: #eef5ff;
 }
 
 .remote-surface {

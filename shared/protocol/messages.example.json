@@ -80,6 +80,18 @@
     "clipboardId": "clip-1780000000000-1",
     "textLength": 8
   },
+  "reverseControlRequest": {
+    "type": "reverse_control_request",
+    "requestId": "reverse-1780000000000-1",
+    "from": "Windows-PC",
+    "message": "请求切换为 Mac 控制 Windows"
+  },
+  "reverseControlResponse": {
+    "type": "reverse_control_response",
+    "requestId": "reverse-1780000000000-1",
+    "accepted": true,
+    "reason": ""
+  },
   "clipboardFileOffer": {
     "type": "clipboard_file_offer",
     "transferId": "uuid",

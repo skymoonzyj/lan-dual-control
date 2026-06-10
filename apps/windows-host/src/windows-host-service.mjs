@@ -135,6 +135,7 @@ function createClient(socket, context) {
     if (message.type === "reverse_control_request") {
       send({
         type: "reverse_control_response",
+        requestId: message.requestId,
         accepted: false,
         reason: "Windows 被控端骨架已收到请求，反控切换状态机尚未实装。",
       });

@@ -26,9 +26,13 @@ const elements = {
   scaleModeSelect: document.querySelector("#scaleModeSelect"),
   audioToggle: document.querySelector("#audioToggle"),
   clipboardToggle: document.querySelector("#clipboardToggle"),
+  directionIndicator: document.querySelector("#directionIndicator"),
+  directionText: document.querySelector("#directionText"),
+  reverseStateText: document.querySelector("#reverseStateText"),
   fullscreenButton: document.querySelector("#fullscreenButton"),
   windowModeButton: document.querySelector("#windowModeButton"),
   reverseButton: document.querySelector("#reverseButton"),
+  reverseButtonText: document.querySelector("#reverseButtonText"),
   cursorDot: document.querySelector("#cursorDot"),
   remoteFrameImage: document.querySelector("#remoteFrameImage"),
   metricResolution: document.querySelector("#metricResolution"),
@@ -41,6 +45,7 @@ const elements = {
 const storageKey = "lan-dual-control.windows-client.preferences.v1";
 const maxReconnectAttempts = 3;
 const reconnectBaseDelayMs = 1200;
+const reverseControlTimeoutMs = 4800;
 const maxStoredLogEntries = 500;
 
 const connectionStates = {
@@ -85,6 +90,11 @@ const state = {
   reconnectTimer: null,
   reconnectStableTimer: null,
   clipboardSequence: 0,
+  controlDirection: "windows_to_mac",
+  pendingControlDirection: "",
+  reverseRequestId: "",
+  reverseRequestTimer: null,
+  reverseStateDetail: "你当前是控制方",
   logEntries: [],
 };
 
@@ -133,6 +143,62 @@ function setConnectionState(nextState, detail = "") {
   setBadge(stateConfig.badge, stateConfig.label);
   elements.statusText.textContent = detail || stateConfig.status;
   elements.remoteStatusText.textContent = detail || stateConfig.status;
+}
+
+function clearReverseControlTimer() {
+  if (state.reverseRequestTimer) {
+    window.clearTimeout(state.reverseRequestTimer);
+    state.reverseRequestTimer = null;
+  }
+}
+
+function getControlDirectionLabel(direction) {
+  return direction === "mac_to_windows" ? "Mac 控制 Windows" : "Windows 控制 Mac";
+}
+
+function getDefaultReverseStateDetail(direction = state.controlDirection) {
+  return direction === "mac_to_windows" ? "你当前是被控方" : "你当前是控制方";
+}
+
+function getNextControlDirection(direction = state.controlDirection) {
+  return direction === "mac_to_windows" ? "windows_to_mac" : "mac_to_windows";
+}
+
+function updateInputStatus() {
+  if (state.connected && state.controlDirection === "mac_to_windows") {
+    elements.inputText.textContent = "输入事件：暂停（当前由 Mac 控制）";
+    return;
+  }
+
+  elements.inputText.textContent = `输入事件：${state.inputEvents}`;
+}
+
+function updateReverseControlUi() {
+  elements.directionText.textContent = getControlDirectionLabel(state.controlDirection);
+  elements.reverseStateText.textContent = state.reverseStateDetail;
+  elements.directionIndicator.classList.toggle("is-pending", Boolean(state.reverseRequestId));
+  elements.directionIndicator.classList.toggle(
+    "is-reversed",
+    state.controlDirection === "mac_to_windows",
+  );
+  elements.reverseButtonText.textContent =
+    state.controlDirection === "mac_to_windows" ? "请求切回" : "请求反控";
+  elements.reverseButton.disabled =
+    !state.connected || state.connecting || Boolean(state.reconnectTimer) || Boolean(state.reverseRequestId);
+  updateInputStatus();
+}
+
+function resetReverseControlState() {
+  clearReverseControlTimer();
+  state.controlDirection = "windows_to_mac";
+  state.pendingControlDirection = "";
+  state.reverseRequestId = "";
+  state.reverseStateDetail = getDefaultReverseStateDetail("windows_to_mac");
+  updateReverseControlUi();
+}
+
+function canSendControlInput() {
+  return state.connected && state.controlDirection === "windows_to_mac";
 }
 
 function getErrorMessage(error) {
@@ -273,6 +339,7 @@ function setUiConnecting(host, port) {
   state.connecting = true;
   state.connected = false;
   state.videoFrames = 0;
+  resetReverseControlState();
   setConnectionState("connecting", `正在连接 ${host}:${port}`);
   elements.connectButton.disabled = true;
   elements.disconnectButton.disabled = false;
@@ -300,6 +367,8 @@ function setUiConnected(answer) {
   if (answer.maxBandwidthKbps) {
     elements.metricBandwidth.textContent = `${Math.round(answer.maxBandwidthKbps / 1000)} Mbps`;
   }
+
+  updateReverseControlUi();
 }
 
 function clearReconnectTimers() {
@@ -316,6 +385,7 @@ function clearReconnectTimers() {
 function setUiDisconnected(statusText = "未连接", logDetail = "会话已关闭") {
   state.connected = false;
   state.connecting = false;
+  resetReverseControlState();
   stopLatencyLoop();
   setConnectionState(statusText === "连接失败" ? "failed" : "disconnected", statusText);
   elements.remoteFrameImage.removeAttribute("src");
@@ -352,6 +422,11 @@ function handleUnexpectedClose(reason = "被控端关闭了连接") {
 
 function scheduleReconnect(reason) {
   clearReconnectTimers();
+  clearReverseControlTimer();
+  state.controlDirection = "windows_to_mac";
+  state.reverseRequestId = "";
+  state.pendingControlDirection = "";
+  state.reverseStateDetail = getDefaultReverseStateDetail("windows_to_mac");
 
   if (state.reconnectAttempts >= maxReconnectAttempts) {
     setUiDisconnected("连接失败", `自动重连 ${maxReconnectAttempts} 次仍未恢复：${reason}`);
@@ -368,6 +443,7 @@ function scheduleReconnect(reason) {
   elements.disconnectButton.disabled = false;
   elements.reverseButton.disabled = true;
   addLog("自动重连", `${reason} · 第 ${state.reconnectAttempts}/${maxReconnectAttempts} 次`);
+  updateReverseControlUi();
 
   state.reconnectTimer = window.setTimeout(() => {
     state.reconnectTimer = null;
@@ -430,6 +506,8 @@ function buildLogExportText() {
     "连接状态",
     `- 当前状态：${connectionStates[state.connectionState]?.label ?? state.connectionState}`,
     `- 状态详情：${elements.statusText.textContent}`,
+    `- 当前方向：${getControlDirectionLabel(state.controlDirection)}`,
+    `- 反控状态：${state.reverseStateDetail}`,
     `- 连接方式：${connectionLabel}`,
     `- 目标地址：${elements.hostInput.value.trim() || "-"}:${elements.portInput.value.trim() || "-"}`,
     `- 协议版本：${protocolVersion}`,
@@ -745,12 +823,12 @@ function setFullscreen(enabled) {
 }
 
 function registerInputEvent(kind, detail, eventPayload = {}) {
-  if (!state.connected) {
+  if (!canSendControlInput()) {
     return;
   }
 
   state.inputEvents += 1;
-  elements.inputText.textContent = `输入事件：${state.inputEvents}`;
+  updateInputStatus();
 
   if (state.client) {
     state.client.sendInputEvent({
@@ -767,6 +845,10 @@ function registerInputEvent(kind, detail, eventPayload = {}) {
 }
 
 function updateCursor(event) {
+  if (!canSendControlInput()) {
+    return;
+  }
+
   const mapped = mapPointerToRemote(event);
   if (!mapped) {
     return;
@@ -793,6 +875,10 @@ function updateCursor(event) {
 function makeClipboardId() {
   state.clipboardSequence += 1;
   return `clip-${Date.now().toString(16)}-${state.clipboardSequence}`;
+}
+
+function makeReverseRequestId() {
+  return `reverse-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 8)}`;
 }
 
 async function readLocalClipboardText() {
@@ -868,6 +954,104 @@ async function receiveClipboardText(message) {
   }
 }
 
+function requestReverseControl() {
+  if (!state.connected || !state.client || state.reverseRequestId) {
+    return;
+  }
+
+  const nextDirection = getNextControlDirection();
+  const requestId = makeReverseRequestId();
+  state.pendingControlDirection = nextDirection;
+  state.reverseRequestId = requestId;
+  state.reverseStateDetail = `等待对端确认切换到${getControlDirectionLabel(nextDirection)}`;
+  updateReverseControlUi();
+
+  state.client.requestReverseControl({
+    requestId,
+    from: "Windows 控制端",
+    message: `请求切换为${getControlDirectionLabel(nextDirection)}`,
+    mockScenario: elements.mockScenarioSelect.value,
+  });
+  addLog("一键反控", `已发送请求，目标方向：${getControlDirectionLabel(nextDirection)}`);
+
+  state.reverseRequestTimer = window.setTimeout(() => {
+    state.reverseRequestTimer = null;
+    state.reverseRequestId = "";
+    state.pendingControlDirection = "";
+    state.reverseStateDetail = "反控请求超时，当前方向保持不变";
+    updateReverseControlUi();
+    addLog("一键反控", "等待对端确认超时，当前方向保持不变");
+  }, reverseControlTimeoutMs);
+}
+
+function handleReverseControlResponse(message) {
+  if (!state.reverseRequestId) {
+    addLog("一键反控", "收到未匹配的反控确认，已忽略");
+    return;
+  }
+
+  if (state.reverseRequestId && message.requestId && message.requestId !== state.reverseRequestId) {
+    return;
+  }
+
+  const nextDirection = state.pendingControlDirection || getNextControlDirection();
+  clearReverseControlTimer();
+  state.reverseRequestId = "";
+  state.pendingControlDirection = "";
+
+  if (message.accepted) {
+    state.controlDirection = nextDirection;
+    state.reverseStateDetail = `方向已切换到${getControlDirectionLabel(nextDirection)}`;
+    updateReverseControlUi();
+    addLog("一键反控", `对端已同意，已切换到${getControlDirectionLabel(nextDirection)}`);
+    return;
+  }
+
+  state.reverseStateDetail = message.reason || "对端未同意，当前方向保持不变";
+  updateReverseControlUi();
+  addLog("一键反控", message.reason || "对端未同意，当前方向保持不变");
+}
+
+function handleIncomingReverseControlRequest(message) {
+  if (!state.client) {
+    return;
+  }
+
+  if (state.reverseRequestId) {
+    state.client.sendReverseControlResponse({
+      requestId: message.requestId,
+      accepted: false,
+      reason: "当前已有反控请求处理中",
+    });
+    addLog("一键反控", "已拒绝对方请求：当前已有反控请求处理中");
+    return;
+  }
+
+  const nextDirection = getNextControlDirection();
+  const requester = message.from || "对方";
+  const promptText =
+    message.message || `${requester} 请求切换为${getControlDirectionLabel(nextDirection)}，是否同意？`;
+  const accepted = typeof window.confirm === "function" ? window.confirm(promptText) : false;
+
+  state.client.sendReverseControlResponse({
+    requestId: message.requestId,
+    accepted,
+    reason: accepted ? "" : "Windows 控制端拒绝切换方向",
+  });
+
+  if (accepted) {
+    state.controlDirection = nextDirection;
+    state.reverseStateDetail = `已同意对方请求，切换到${getControlDirectionLabel(nextDirection)}`;
+    updateReverseControlUi();
+    addLog("一键反控", `已同意${requester}请求，切换到${getControlDirectionLabel(nextDirection)}`);
+    return;
+  }
+
+  state.reverseStateDetail = getDefaultReverseStateDetail();
+  updateReverseControlUi();
+  addLog("一键反控", `已拒绝${requester}的反控请求`);
+}
+
 function handleProtocolMessage(message) {
   if (message.type === "video_frame") {
     renderVideoFrame(message);
@@ -893,8 +1077,13 @@ function handleProtocolMessage(message) {
     return;
   }
 
+  if (message.type === "reverse_control_request") {
+    handleIncomingReverseControlRequest(message);
+    return;
+  }
+
   if (message.type === "reverse_control_response") {
-    addLog("一键反控", message.accepted ? "被控端已同意" : message.reason || "被控端暂未同意");
+    handleReverseControlResponse(message);
     return;
   }
 
@@ -973,12 +1162,7 @@ elements.clearLogButton.addEventListener("click", () => {
 
 elements.fullscreenButton.addEventListener("click", () => setFullscreen(true));
 elements.windowModeButton.addEventListener("click", () => setFullscreen(false));
-elements.reverseButton.addEventListener("click", () => {
-  if (state.client) {
-    state.client.requestReverseControl();
-  }
-  addLog("一键反控", "已发送反控请求，等待 Mac 确认");
-});
+elements.reverseButton.addEventListener("click", requestReverseControl);
 
 elements.resolutionSelect.addEventListener("change", sendDisplaySettings);
 elements.scaleModeSelect.addEventListener("change", () => {
@@ -1006,6 +1190,7 @@ elements.clipboardToggle.addEventListener("change", () => {
 
 elements.remoteCanvas.addEventListener("mousemove", updateCursor);
 elements.remoteCanvas.addEventListener("mousedown", (event) => {
+  if (!canSendControlInput()) return;
   const mapped = mapPointerToRemote(event);
   if (!mapped) return;
   registerInputEvent("鼠标按下", `button=${event.button} · ${mapped.remoteX},${mapped.remoteY}`, {
@@ -1020,6 +1205,7 @@ elements.remoteCanvas.addEventListener("mousedown", (event) => {
   });
 });
 elements.remoteCanvas.addEventListener("mouseup", (event) => {
+  if (!canSendControlInput()) return;
   const mapped = mapPointerToRemote(event);
   if (!mapped) return;
   registerInputEvent("鼠标抬起", `button=${event.button} · ${mapped.remoteX},${mapped.remoteY}`, {
@@ -1035,6 +1221,7 @@ elements.remoteCanvas.addEventListener("mouseup", (event) => {
 });
 elements.remoteCanvas.addEventListener("wheel", (event) => {
   event.preventDefault();
+  if (!canSendControlInput()) return;
   const mapped = mapPointerToRemote(event);
   if (!mapped) return;
   registerInputEvent("滚轮", `deltaY=${Math.round(event.deltaY)}`, {
@@ -1052,6 +1239,7 @@ elements.remoteCanvas.addEventListener("keydown", (event) => {
   if (event.key.toLowerCase() === "v" && event.ctrlKey) {
     syncClipboardText();
   }
+  if (!canSendControlInput()) return;
   registerInputEvent("键盘", `${event.ctrlKey ? "Ctrl+" : ""}${event.key}`, {
     action: "key",
     key: event.key,
@@ -1074,4 +1262,5 @@ setInterval(tickClock, 1000);
 applyPreferences();
 applyScaleMode();
 updateMetrics();
+updateReverseControlUi();
 addLog("控制端启动", "本地模拟模式，可切换 WebSocket");

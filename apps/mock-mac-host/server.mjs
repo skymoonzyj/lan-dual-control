@@ -226,6 +226,16 @@ function createClient(socket, options) {
           socket.end();
         }, 3200);
       }
+      if (message.mockScenario === "incoming_reverse_request") {
+        setTimeout(() => {
+          send({
+            type: "reverse_control_request",
+            requestId: `reverse-${Date.now().toString(16)}`,
+            from: "本机假 Mac",
+            message: "本机假 Mac 请求切换为 Mac 控制 Windows",
+          });
+        }, 1800);
+      }
       return;
     }
 
@@ -256,11 +266,24 @@ function createClient(socket, options) {
     }
 
     if (message.type === "reverse_control_request") {
+      if (message.mockScenario === "reverse_control_timeout") {
+        return;
+      }
+
       send({
         type: "reverse_control_response",
-        accepted: false,
-        reason: "假 Mac 服务只用于联调，暂不切换控制方向",
+        requestId: message.requestId,
+        accepted: message.mockScenario === "reverse_control_accepted",
+        reason:
+          message.mockScenario === "reverse_control_accepted"
+            ? ""
+            : "假 Mac 服务只用于联调，暂不切换控制方向",
       });
+      return;
+    }
+
+    if (message.type === "reverse_control_response") {
+      return;
     }
   }
 
