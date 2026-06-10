@@ -166,12 +166,9 @@
           <label class="select-control">
             <span>分辨率</span>
             <select id="resolutionSelect">
-              <option value="native">原生</option>
-              <option value="1280x720">1280 × 720</option>
-              <option value="1600x900">1600 × 900</option>
-              <option value="1920x1080" selected>1920 × 1080</option>
-              <option value="2560x1440">2560 × 1440</option>
-              <option value="3840x2160">3840 × 2160</option>
+              <option value="1920x1080" selected>1080P</option>
+              <option value="2560x1440">2K</option>
+              <option value="3840x2160">4K</option>
             </select>
           </label>
 
@@ -194,26 +191,23 @@
           <label class="select-control">
             <span>刷新率</span>
             <select id="fpsSelect">
-              <option value="15">15 FPS</option>
-              <option value="30">30 FPS</option>
-              <option value="45">45 FPS</option>
-              <option value="60" selected>60 FPS</option>
-              <option value="90">90 FPS</option>
-              <option value="120">120 FPS</option>
-              <option value="144">144 FPS</option>
+              <option value="30">30 Hz</option>
+              <option value="60" selected>60 Hz</option>
+              <option value="120">120 Hz</option>
+              <option value="144">144 Hz</option>
+              <option value="240">240 Hz</option>
             </select>
           </label>
 
           <label class="select-control">
-            <span>带宽</span>
+            <span>码率</span>
             <select id="bandwidthSelect">
-              <option value="5">5 Mbps</option>
-              <option value="10">10 Mbps</option>
-              <option value="20">20 Mbps</option>
-              <option value="50" selected>50 Mbps</option>
-              <option value="80">80 Mbps</option>
-              <option value="120">120 Mbps</option>
-              <option value="200">200 Mbps</option>
+              <option value="5">5M</option>
+              <option value="10">10M</option>
+              <option value="15">15M</option>
+              <option value="20">20M</option>
+              <option value="40">40M</option>
+              <option value="50" selected>50M</option>
             </select>
           </label>
 
@@ -273,12 +267,12 @@
                       <span>分辨率</span>
                     </div>
                     <div>
-                      <strong id="metricFps">60 FPS</strong>
+                      <strong id="metricFps">60 Hz</strong>
                       <span>刷新率</span>
                     </div>
                     <div>
-                      <strong id="metricBandwidth">50 Mbps</strong>
-                      <span>带宽</span>
+                      <strong id="metricBandwidth">50M</strong>
+                      <span>码率</span>
                     </div>
                     <div>
                       <strong id="metricLatency">-- ms</strong>

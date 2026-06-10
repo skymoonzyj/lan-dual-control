@@ -70,7 +70,7 @@ export class WindowsScreenCaptureCoordinator {
 
   start(session) {
     this.logger?.info(
-      `屏幕采集骨架已启动：${session.displayName ?? "显示器"} / ${session.width}x${session.height} / ${session.fps} FPS / mock`,
+      `屏幕采集骨架已启动：${session.displayName ?? "显示器"} / ${session.width}x${session.height} / ${session.fps} Hz / mock`,
     );
   }
 

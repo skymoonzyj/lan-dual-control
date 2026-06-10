@@ -63,24 +63,34 @@ const discoveryProbeTimeoutMs = 650;
 const defaultControlPort = "43770";
 const fileChunkSizeBytes = 64 * 1024;
 const maxClipboardFileBytes = 512 * 1024 * 1024;
+const displayOptionDefaults = {
+  resolution: "1920x1080",
+  fps: "60",
+  bandwidth: "50",
+};
+const allowedDisplayOptions = {
+  resolution: ["1920x1080", "2560x1440", "3840x2160"],
+  fps: ["30", "60", "120", "144", "240"],
+  bandwidth: ["5", "10", "15", "20", "40", "50"],
+};
 const qualityPresets = {
   smooth: {
     label: "流畅",
-    resolution: "1280x720",
+    resolution: "1920x1080",
     fps: "30",
     bandwidth: "10",
   },
   balanced: {
     label: "均衡",
-    resolution: "1920x1080",
+    resolution: "2560x1440",
     fps: "60",
-    bandwidth: "50",
+    bandwidth: "20",
   },
   sharp: {
     label: "高清",
-    resolution: "2560x1440",
-    fps: "90",
-    bandwidth: "120",
+    resolution: "3840x2160",
+    fps: "120",
+    bandwidth: "50",
   },
 };
 const defaultKeyboardMapping = {
@@ -166,7 +176,7 @@ const errorMessages = {
   LAN004: "Mac 缺少屏幕录制权限，请在系统设置中允许本应用录制屏幕。",
   LAN005: "Mac 缺少辅助功能权限，无法执行鼠标键盘控制。",
   LAN006: "协议版本不兼容，请同步两端到同一版本。",
-  LAN007: "视频流中断，请检查局域网连接或降低刷新率/带宽。",
+  LAN007: "视频流中断，请检查局域网连接或降低刷新率/码率。",
   LAN008: "一键反控被拒绝，当前控制方向保持不变。",
   LAN011: "剪贴板同步失败，请检查剪贴板权限或关闭后重试。",
 };
@@ -358,6 +368,13 @@ function savePreferences() {
   writePreferences(collectPreferences());
 }
 
+function normalizeDisplayOption(kind, value) {
+  const normalized = String(value ?? "");
+  return allowedDisplayOptions[kind]?.includes(normalized)
+    ? normalized
+    : displayOptionDefaults[kind];
+}
+
 function applyPreferences() {
   const preferences = readPreferences();
 
@@ -366,10 +383,10 @@ function applyPreferences() {
   if (preferences.port) elements.portInput.value = preferences.port;
   if (preferences.mockScenario) elements.mockScenarioSelect.value = preferences.mockScenario;
   if (preferences.qualityPreset) elements.qualityPresetSelect.value = preferences.qualityPreset;
-  if (preferences.resolution) elements.resolutionSelect.value = preferences.resolution;
+  elements.resolutionSelect.value = normalizeDisplayOption("resolution", preferences.resolution);
   if (preferences.displayId) state.activeDisplayId = preferences.displayId;
-  if (preferences.fps) elements.fpsSelect.value = preferences.fps;
-  if (preferences.bandwidth) elements.bandwidthSelect.value = preferences.bandwidth;
+  elements.fpsSelect.value = normalizeDisplayOption("fps", preferences.fps);
+  elements.bandwidthSelect.value = normalizeDisplayOption("bandwidth", preferences.bandwidth);
   if (preferences.scaleMode) elements.scaleModeSelect.value = preferences.scaleMode;
   if (typeof preferences.audio === "boolean") elements.audioToggle.checked = preferences.audio;
   if (preferences.audioVolume) elements.audioVolumeRange.value = preferences.audioVolume;
@@ -505,7 +522,7 @@ function applyQualityPreset(presetKey, { send = true } = {}) {
   state.applyingQualityPreset = false;
   updateMetrics();
   savePreferences();
-  addLog("画质预设", `${preset.label} · ${preset.resolution} · ${preset.fps} FPS · ${preset.bandwidth} Mbps`);
+  addLog("画质预设", `${preset.label} · ${preset.resolution} · ${preset.fps} Hz · ${preset.bandwidth}M`);
 
   if (send) {
     sendDisplaySettings();
@@ -798,10 +815,10 @@ function setUiConnected(answer) {
     elements.metricResolution.textContent = `${answer.width} × ${answer.height}`;
   }
   if (answer.fps) {
-    elements.metricFps.textContent = `${answer.fps} FPS`;
+    elements.metricFps.textContent = `${answer.fps} Hz`;
   }
   if (answer.maxBandwidthKbps) {
-    elements.metricBandwidth.textContent = `${Math.round(answer.maxBandwidthKbps / 1000)} Mbps`;
+    elements.metricBandwidth.textContent = `${Math.round(answer.maxBandwidthKbps / 1000)}M`;
   }
   if (answer.audioEnabled) {
     elements.audioText.textContent = `声音：已协商 · ${answer.audioCodec ?? "opus"}`;
@@ -926,8 +943,8 @@ function updateMetrics() {
   const settings = currentDisplaySettings();
   elements.metricResolution.textContent =
     settings.resolutionMode === "native" ? "原生" : `${settings.width} × ${settings.height}`;
-  elements.metricFps.textContent = `${settings.fps} FPS`;
-  elements.metricBandwidth.textContent = `${elements.bandwidthSelect.value} Mbps`;
+  elements.metricFps.textContent = `${settings.fps} Hz`;
+  elements.metricBandwidth.textContent = `${elements.bandwidthSelect.value}M`;
   elements.audioVolumeText.textContent = `${settings.audioVolume}%`;
   elements.audioText.textContent = settings.audio
     ? `声音：已开启 · ${settings.audioVolume}%`
@@ -1013,8 +1030,8 @@ function buildLogExportText() {
     `- 显示器：${elements.displaySelect.selectedOptions[0]?.textContent ?? settings.displayId}`,
     `- 分辨率：${settings.resolutionMode === "native" ? "原生" : `${settings.width} × ${settings.height}`}`,
     `- 缩放：${elements.scaleModeSelect.selectedOptions[0]?.textContent ?? settings.scaleMode}`,
-    `- 刷新率：${settings.fps} FPS`,
-    `- 带宽：${Math.round(settings.maxBandwidthKbps / 1000)} Mbps`,
+    `- 刷新率：${settings.fps} Hz`,
+    `- 码率：${Math.round(settings.maxBandwidthKbps / 1000)}M`,
     `- 声音：${settings.audio ? `开启 · ${settings.audioVolume}%` : "关闭"}`,
     `- 剪贴板：${settings.clipboard ? "开启" : "关闭"}`,
     `- 按键映射：Win→${remoteModifierLabels[keyboardMapping.win]}，Alt→${remoteModifierLabels[keyboardMapping.alt]}，Ctrl→${remoteModifierLabels[keyboardMapping.ctrl]}`,
@@ -1173,7 +1190,7 @@ async function connect({ reconnect = false } = {}) {
     rememberCurrentConnection();
     addLog(
       "连接成功",
-      `${answer.videoCodec} · ${answer.fps} FPS · ${Math.round(answer.maxBandwidthKbps / 1000)} Mbps`,
+      `${answer.videoCodec} · ${answer.fps} Hz · ${Math.round(answer.maxBandwidthKbps / 1000)}M`,
     );
   } catch (error) {
     client.disconnect();
@@ -1223,7 +1240,7 @@ function stopLatencyLoop() {
 
 function describeDisplaySettings() {
   const settings = currentDisplaySettings();
-  return `${settings.displayMode === "fullscreen" ? "全屏" : "窗口"} · ${elements.metricResolution.textContent} · ${settings.fps} FPS · ${elements.bandwidthSelect.value} Mbps`;
+  return `${settings.displayMode === "fullscreen" ? "全屏" : "窗口"} · ${elements.metricResolution.textContent} · ${settings.fps} Hz · ${elements.bandwidthSelect.value}M`;
 }
 
 function applyScaleMode() {

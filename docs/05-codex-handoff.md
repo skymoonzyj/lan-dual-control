@@ -26,7 +26,7 @@
 3. 渲染 Mac 传来的画面；
 4. 播放 Mac 传来的声音；
 5. 捕获 Windows 窗口内鼠标键盘事件；
-6. 实现窗口化、全屏、分辨率、刷新率、带宽、声音和剪贴板控制项；
+6. 实现窗口化、全屏、分辨率、刷新率、码率、声音和剪贴板控制项；
 7. 维护 `apps/windows-host` Windows 被控端骨架，用于 Mac 反控 Windows。
 
 开发时遵守 docs/03-architecture-and-protocol.md 的协议。完成任何任务后更新 docs/04-task-board.md。不要改 Mac 端实现，除非协议或对接要求必须同步。
@@ -43,7 +43,7 @@
 3. 采集 Mac 系统声音；
 4. 开启局域网被控服务；
 5. 接收 Windows 端发来的鼠标键盘事件并注入系统；
-6. 支持被控端分辨率、刷新率、带宽和剪贴板能力；
+6. 支持被控端分辨率、刷新率、码率和剪贴板能力；
 7. 后续实现 Mac 控制窗口，用于 Mac 反控 Windows。
 
 当前已存在 `apps/mac-host` Swift Package 骨架和 `apps/windows-host` Windows 被控端骨架。Mac mini 到位后，先运行 `swift run lan-dual-mac-host`，验证权限、TCP hello 握手、ScreenCaptureKit 预检，再逐步实现真实视频帧和 CGEvent 输入注入。后续做 Mac 反控 Windows 时，可先连接 `apps/windows-host`，它会返回模拟 `video_frame` 并记录输入事件。
@@ -62,7 +62,7 @@
 - 视频帧格式一致。
 - 鼠标坐标是否按 0 到 1 的比例传递。
 - 声音开关、编码格式、采样率是否一致。
-- 分辨率、刷新率、带宽设置字段是否一致。
+- 分辨率、刷新率、码率设置字段是否一致。
 - 文本剪贴板和文件剪贴板协议版本是否一致。
 - macOS 权限是否已开启。
 - Windows 防火墙是否允许局域网连接。

@@ -37,6 +37,6 @@ apps\windows-desktop\src-tauri\target\release\lan-dual-control-windows.exe
 
 - 已接入现有中文控制端界面。
 - 已支持本地模拟和 WebSocket 局域网连接方式。
-- 已支持分辨率、刷新率、带宽、声音、剪贴板等控制项。
+- 已支持分辨率、刷新率、码率、声音、剪贴板等控制项。
 - 已验证可构建 Windows 桌面 exe。
 - 下一步再接入原生窗口菜单、托盘、配置存储、正式图标、安装包和自动启动。

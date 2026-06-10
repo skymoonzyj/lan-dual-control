@@ -110,7 +110,7 @@ final class MacHostService {
         }
 
         if let offer = try? JSONDecoder().decode(SessionOffer.self, from: data), offer.type == "session_offer" {
-            logger.info("会话协商：\(offer.maxFps) FPS / \(offer.maxBandwidthKbps) Kbps / \(offer.displayMode)")
+            logger.info("会话协商：\(offer.maxFps) Hz / 码率 \(offer.maxBandwidthKbps) Kbps / \(offer.displayMode)")
             let answer = SessionAnswer(
                 type: "session_answer",
                 screenWidth: offer.preferredWidth == 0 ? 1920 : offer.preferredWidth,
@@ -201,4 +201,3 @@ enum HostServiceError: LocalizedError {
         }
     }
 }
-

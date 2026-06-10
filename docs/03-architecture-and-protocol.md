@@ -255,7 +255,7 @@ Both directions: clipboard_event loop
   "width": 1920,
   "height": 1080,
   "fps": 60,
-  "maxBandwidthKbps": 30000,
+  "maxBandwidthKbps": 50000,
   "audio": true,
   "audioVolume": 80,
   "clipboardText": true,
@@ -270,8 +270,8 @@ Both directions: clipboard_event loop
 - displayId：目标显示器编号，由 `session_answer.displays` 提供。
 - resolutionMode：native、fit_client、fixed。
 - scaleMode：fit、original、stretch，控制端显示缩放模式。
-- fps：目标刷新率，第一版建议支持 15、30、60。
-- maxBandwidthKbps：最大带宽。
+- fps：目标刷新率，当前控制端提供 30、60、120、144、240 Hz。
+- maxBandwidthKbps：最大码率，单位 Kbps；当前控制端提供 5M、10M、15M、20M、40M、50M。
 - audio：是否接收被控端声音。
 - clipboardText：是否同步文本剪贴板。
 - clipboardFile：是否同步文件剪贴板。
@@ -592,7 +592,7 @@ macOS 默认按键映射：
 | LAN010 | 分辨率设置失败 |
 | LAN011 | 剪贴板同步失败 |
 | LAN012 | 文件传输失败 |
-| LAN013 | 带宽设置超出限制 |
+| LAN013 | 码率设置超出限制 |
 
 ## 13. 安全设计
 

@@ -128,7 +128,7 @@ function createClient(socket, context) {
         startVideoFrames(session);
       }
       startAudioFrames(session);
-      context.logger.info(`会话已协商：${session.width}x${session.height} / ${session.fps} FPS`);
+      context.logger.info(`会话已协商：${session.width}x${session.height} / ${session.fps} Hz`);
       return;
     }
 
