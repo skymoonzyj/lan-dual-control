@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "局域网远控",
+  "version": "0.1.0",
+  "identifier": "com.skymoonzyj.lan-dual-control.windows",
+  "build": {
+    "beforeDevCommand": "node ../windows-client/server.mjs 5178",
+    "devUrl": "http://127.0.0.1:5178",
+    "frontendDist": "../../windows-client"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "局域网远控 - Windows 控制端",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 980,
+        "minHeight": 640,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all"
+  }
+}

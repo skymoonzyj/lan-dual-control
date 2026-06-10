@@ -37,6 +37,10 @@
 
 - [Windows 控制端原型](apps/windows-client/README.md)
 
+已加入 Windows Tauri 桌面壳，位置：
+
+- [Windows 桌面壳](apps/windows-desktop/README.md)
+
 已加入本机假 Mac WebSocket 联调服务，位置：
 
 - [假 Mac 服务](apps/mock-mac-host/server.mjs)
@@ -45,4 +49,4 @@
 
 - [macOS 被控端骨架](apps/mac-host/README.md)
 
-当前 Windows 端已经可以在“本地模拟”和“WebSocket 局域网”之间切换。Mac mini 到位后，继续从 [任务清单与里程碑](docs/04-task-board.md) 的 M1 对接真实 Mac 被控端。
+当前 Windows 端已经可以在“本地模拟”和“WebSocket 局域网”之间切换，并可构建为 Windows 桌面 exe。Mac mini 到位后，继续从 [任务清单与里程碑](docs/04-task-board.md) 的 M1 对接真实 Mac 被控端。

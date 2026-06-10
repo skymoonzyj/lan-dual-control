@@ -11,6 +11,7 @@ dist/
 build/
 out/
 target/
+apps/windows-desktop/src-tauri/gen/
 bin/
 obj/
 
@@ -21,4 +22,3 @@ venv/
 
 # Logs
 *.log
-

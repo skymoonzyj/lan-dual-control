@@ -37,6 +37,8 @@ Windows 端：
 - [x] 映射窗口坐标到远程屏幕坐标。
 - [x] 增加 WebSocket 协议客户端。
 - [x] 增加本机假 Mac 联调服务。
+- [x] 增加 Windows Tauri 桌面壳。
+- [x] 构建 Windows 桌面 exe。
 - [ ] 连接真实 Mac 被控端。
 
 共享：
@@ -55,13 +57,15 @@ Windows 端：
 - [x] 键盘输入可记录为输入事件。
 - [x] 断开连接不会卡死。
 - [x] Windows 可通过 WebSocket 连接本机假 Mac 服务。
+- [x] Windows 控制端可构建为桌面 exe。
 
 当前备注：
 
 - 已完成 Windows 控制端静态原型，当前支持本地模拟和 WebSocket 协议连接。
+- 已完成 Windows Tauri 桌面壳，已验证可构建 `lan-dual-control-windows.exe`。
 - 已完成本机假 Mac WebSocket 联调服务，真实 Mac 被控端到位后按同一消息格式替换。
 - 已完成 macOS 被控端 Swift 骨架，Mac mini 到位后需要真机编译和权限验证。
-- 本机后台服务启动和自动打开浏览器被当前环境权限限制拦截，已通过 Node 静态资源自检。
+- MSI/NSIS 安装包暂未开启，先保留桌面 exe 构建；安装包放到 M5 处理。
 
 ## 里程碑 M2：安全和控制体验
 
