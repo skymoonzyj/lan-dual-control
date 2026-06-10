@@ -118,6 +118,12 @@ button:disabled {
   font-size: 15px;
 }
 
+.panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .status-badge {
   border-radius: 999px;
   padding: 4px 8px;

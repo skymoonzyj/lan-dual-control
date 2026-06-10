@@ -10,6 +10,7 @@ const elements = {
   connectButton: document.querySelector("#connectButton"),
   disconnectButton: document.querySelector("#disconnectButton"),
   refreshDevicesButton: document.querySelector("#refreshDevicesButton"),
+  exportLogButton: document.querySelector("#exportLogButton"),
   clearLogButton: document.querySelector("#clearLogButton"),
   historyList: document.querySelector("#historyList"),
   connectionBadge: document.querySelector("#connectionBadge"),
@@ -40,6 +41,7 @@ const elements = {
 const storageKey = "lan-dual-control.windows-client.preferences.v1";
 const maxReconnectAttempts = 3;
 const reconnectBaseDelayMs = 1200;
+const maxStoredLogEntries = 500;
 
 const connectionStates = {
   idle: { badge: "offline", label: "未连接", status: "未连接" },
@@ -83,6 +85,7 @@ const state = {
   reconnectTimer: null,
   reconnectStableTimer: null,
   clipboardSequence: 0,
+  logEntries: [],
 };
 
 function nowTime() {
@@ -94,8 +97,24 @@ function nowTime() {
 }
 
 function addLog(title, detail = "") {
+  const entry = {
+    time: new Date().toISOString(),
+    title,
+    detail,
+  };
+  state.logEntries.unshift(entry);
+  if (state.logEntries.length > maxStoredLogEntries) {
+    state.logEntries.length = maxStoredLogEntries;
+  }
+
   const item = document.createElement("li");
-  item.innerHTML = `<strong>${title}</strong>${detail ? ` · ${detail}` : ""}<br><span>${nowTime()}</span>`;
+  const titleElement = document.createElement("strong");
+  titleElement.textContent = title;
+  const detailText = document.createTextNode(detail ? ` · ${detail}` : "");
+  const breakElement = document.createElement("br");
+  const timeElement = document.createElement("span");
+  timeElement.textContent = nowTime();
+  item.append(titleElement, detailText, breakElement, timeElement);
   elements.eventLog.prepend(item);
 
   while (elements.eventLog.children.length > 24) {
@@ -381,6 +400,78 @@ function updateMetrics() {
   elements.metricFps.textContent = `${settings.fps} FPS`;
   elements.metricBandwidth.textContent = `${elements.bandwidthSelect.value} Mbps`;
   elements.clipboardText.textContent = `剪贴板：${settings.clipboard ? "已开启" : "已关闭"}`;
+}
+
+function makeLogFileName() {
+  const stamp = new Date()
+    .toISOString()
+    .replaceAll("-", "")
+    .replaceAll(":", "")
+    .replace(/\.\d{3}Z$/, "Z");
+  return `lan-dual-control-log-${stamp}.txt`;
+}
+
+function buildLogExportText() {
+  const settings = currentDisplaySettings();
+  const connectionLabel =
+    elements.transportSelect.value === "websocket" ? "WebSocket 局域网" : "本地模拟";
+  const eventLines = state.logEntries
+    .slice()
+    .reverse()
+    .map((entry, index) => {
+      const detail = entry.detail ? ` | ${entry.detail}` : "";
+      return `${String(index + 1).padStart(3, "0")} | ${entry.time} | ${entry.title}${detail}`;
+    });
+
+  return [
+    "LAN Dual Control Windows 控制端日志",
+    `导出时间：${new Date().toISOString()}`,
+    "",
+    "连接状态",
+    `- 当前状态：${connectionStates[state.connectionState]?.label ?? state.connectionState}`,
+    `- 状态详情：${elements.statusText.textContent}`,
+    `- 连接方式：${connectionLabel}`,
+    `- 目标地址：${elements.hostInput.value.trim() || "-"}:${elements.portInput.value.trim() || "-"}`,
+    `- 协议版本：${protocolVersion}`,
+    "",
+    "显示与能力",
+    `- 显示模式：${settings.displayMode === "fullscreen" ? "全屏" : "窗口"}`,
+    `- 分辨率：${settings.resolutionMode === "native" ? "原生" : `${settings.width} × ${settings.height}`}`,
+    `- 缩放：${elements.scaleModeSelect.selectedOptions[0]?.textContent ?? settings.scaleMode}`,
+    `- 刷新率：${settings.fps} FPS`,
+    `- 带宽：${Math.round(settings.maxBandwidthKbps / 1000)} Mbps`,
+    `- 声音：${settings.audio ? "开启" : "关闭"}`,
+    `- 剪贴板：${settings.clipboard ? "开启" : "关闭"}`,
+    "",
+    "运行统计",
+    `- 输入事件：${state.inputEvents}`,
+    `- 视频帧：${state.videoFrames}`,
+    `- 重连次数：${state.reconnectAttempts}/${maxReconnectAttempts}`,
+    `- 远端画面：${state.remoteFrameWidth} × ${state.remoteFrameHeight}`,
+    "",
+    "事件记录",
+    ...(eventLines.length ? eventLines : ["暂无事件记录"]),
+    "",
+  ].join("\n");
+}
+
+function exportLogs() {
+  try {
+    const text = buildLogExportText();
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = makeLogFileName();
+    link.style.display = "none";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    addLog("日志导出", link.download);
+  } catch (error) {
+    addLog("日志导出失败", error?.message || "当前环境不允许导出文件");
+  }
 }
 
 function buildSessionOffer() {
@@ -873,7 +964,9 @@ elements.disconnectButton.addEventListener("click", disconnect);
 elements.refreshDevicesButton.addEventListener("click", () =>
   addLog("刷新设备", "发现 3 台模拟设备"),
 );
+elements.exportLogButton.addEventListener("click", exportLogs);
 elements.clearLogButton.addEventListener("click", () => {
+  state.logEntries = [];
   elements.eventLog.innerHTML = "";
   addLog("日志", "已清空");
 });

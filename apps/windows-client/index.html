@@ -108,7 +108,10 @@
         <section class="panel event-panel" aria-labelledby="event-title">
           <div class="panel-heading">
             <h2 id="event-title">事件</h2>
-            <button id="clearLogButton" class="icon-button" type="button" title="清空日志">⌫</button>
+            <div class="panel-actions">
+              <button id="exportLogButton" class="icon-button" type="button" title="导出日志">⤓</button>
+              <button id="clearLogButton" class="icon-button" type="button" title="清空日志">⌫</button>
+            </div>
           </div>
           <ol id="eventLog" class="event-log" aria-live="polite"></ol>
         </section>
