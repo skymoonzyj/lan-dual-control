@@ -1,5 +1,25 @@
 {
   "protocolVersion": 1,
+  "discovery": {
+    "type": "lan_dual_discovery",
+    "protocolVersion": 1,
+    "deviceId": "mock-mac-127.0.0.1-43770",
+    "deviceName": "本机假 Mac",
+    "platform": "macos",
+    "role": "host",
+    "host": "127.0.0.1",
+    "port": 43770,
+    "controlPort": 43770,
+    "capabilities": {
+      "video": true,
+      "audio": true,
+      "input": true,
+      "clipboardText": true,
+      "clipboardFile": true,
+      "reverseControl": true
+    },
+    "lastSeenAt": "2026-06-10T12:00:00.000Z"
+  },
   "hello": {
     "type": "hello",
     "clientName": "Windows 控制端",

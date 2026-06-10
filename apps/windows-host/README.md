@@ -11,6 +11,7 @@
 - WASAPI loopback 音频采集占位模块。
 - SendInput 输入注入占位模块，当前只记录鼠标键盘事件，不注入系统。
 - 文本剪贴板占位模块，当前只确认收到文字，不写入系统剪贴板。
+- `/discovery` 设备发现接口，供 Windows 控制端或未来 Mac 控制端扫描局域网设备列表。
 
 ## 运行
 
@@ -24,6 +25,12 @@ cd E:\codex\lan-dual-control\apps\windows-host
 
 ```powershell
 node .\server.mjs
+```
+
+设备发现接口：
+
+```text
+http://127.0.0.1:43770/discovery
 ```
 
 可选参数：

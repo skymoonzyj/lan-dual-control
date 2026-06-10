@@ -10,6 +10,7 @@ const elements = {
   connectButton: document.querySelector("#connectButton"),
   disconnectButton: document.querySelector("#disconnectButton"),
   refreshDevicesButton: document.querySelector("#refreshDevicesButton"),
+  deviceList: document.querySelector("#deviceList"),
   exportLogButton: document.querySelector("#exportLogButton"),
   clearLogButton: document.querySelector("#clearLogButton"),
   historyList: document.querySelector("#historyList"),
@@ -47,6 +48,44 @@ const maxReconnectAttempts = 3;
 const reconnectBaseDelayMs = 1200;
 const reverseControlTimeoutMs = 4800;
 const maxStoredLogEntries = 500;
+const discoveryProbeTimeoutMs = 650;
+const defaultControlPort = "43770";
+
+const fallbackDevices = [
+  {
+    id: "local-mock:127.0.0.1:43770",
+    deviceName: "本地模拟 Mac",
+    host: "127.0.0.1",
+    port: "43770",
+    platform: "macos",
+    role: "host",
+    transport: "local",
+    status: "suggested",
+    source: "内置模拟",
+  },
+  {
+    id: "websocket-local:127.0.0.1:43770",
+    deviceName: "本机 WebSocket 服务",
+    host: "127.0.0.1",
+    port: "43770",
+    platform: "macos",
+    role: "host",
+    transport: "websocket",
+    status: "suggested",
+    source: "假 Mac 或 Windows 被控端",
+  },
+  {
+    id: "mac-mini-example:192.168.1.23:43770",
+    deviceName: "Mac mini 示例",
+    host: "192.168.1.23",
+    port: "43770",
+    platform: "macos",
+    role: "host",
+    transport: "websocket",
+    status: "manual",
+    source: "手动填写后可连接",
+  },
+];
 
 const connectionStates = {
   idle: { badge: "offline", label: "未连接", status: "未连接" },
@@ -96,6 +135,7 @@ const state = {
   reverseRequestTimer: null,
   reverseStateDetail: "你当前是控制方",
   logEntries: [],
+  discoveredDevices: fallbackDevices,
 };
 
 function nowTime() {
@@ -266,6 +306,188 @@ function applyPreferences() {
     ? preferences.recentConnections.slice(0, 5)
     : [];
   renderRecentConnections();
+}
+
+function getPlatformLabel(platform = "") {
+  const value = platform.toLowerCase();
+  if (value === "macos") return "Mac";
+  if (value === "windows") return "Windows";
+  return platform || "未知系统";
+}
+
+function getRoleLabel(role = "") {
+  const value = role.toLowerCase();
+  if (value === "host") return "可被控制";
+  if (value === "controller") return "控制端";
+  if (value === "both") return "双端待命";
+  return role || "未知角色";
+}
+
+function makeDeviceKey(device) {
+  return `${device.transport ?? "websocket"}:${device.host}:${device.port}`;
+}
+
+function makeDiscoveryCandidate(host, port = defaultControlPort) {
+  const normalizedHost = String(host ?? "").trim();
+  const normalizedPort = String(port ?? defaultControlPort).trim();
+  if (!normalizedHost || !normalizedPort) return null;
+  return {
+    host: normalizedHost,
+    port: normalizedPort,
+  };
+}
+
+function getDiscoveryCandidates() {
+  const candidates = [
+    makeDiscoveryCandidate(elements.hostInput.value, elements.portInput.value),
+    makeDiscoveryCandidate("127.0.0.1", defaultControlPort),
+    makeDiscoveryCandidate("127.0.0.1", "43771"),
+    ...state.recentConnections.map((connection) =>
+      makeDiscoveryCandidate(connection.host, connection.port),
+    ),
+    ...fallbackDevices
+      .filter((device) => device.transport === "websocket")
+      .map((device) => makeDiscoveryCandidate(device.host, device.port)),
+  ].filter(Boolean);
+
+  const seen = new Set();
+  return candidates.filter((candidate) => {
+    const key = `${candidate.host}:${candidate.port}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function normalizeDiscoveryDevice(payload, candidate) {
+  if (!payload || payload.type !== "lan_dual_discovery") {
+    return null;
+  }
+
+  const host =
+    payload.host && payload.host !== "0.0.0.0" ? String(payload.host) : candidate.host;
+  const port = String(payload.controlPort ?? payload.port ?? candidate.port ?? defaultControlPort);
+  const platform = payload.platform ?? "unknown";
+  const role = payload.role ?? "host";
+
+  return {
+    id: payload.deviceId || `discovery:${platform}:${role}:${host}:${port}`,
+    deviceName: payload.deviceName || `${getPlatformLabel(platform)} 被控端`,
+    host,
+    port,
+    platform,
+    role,
+    transport: "websocket",
+    status: "online",
+    source: "自动发现",
+    capabilities: payload.capabilities ?? {},
+    lastSeenAt: payload.lastSeenAt || new Date().toISOString(),
+  };
+}
+
+async function probeDiscoveryCandidate(candidate) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), discoveryProbeTimeoutMs);
+
+  try {
+    const response = await fetch(`http://${candidate.host}:${candidate.port}/discovery`, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      return null;
+    }
+    return normalizeDiscoveryDevice(await response.json(), candidate);
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+function buildDeviceList(discoveredDevices = []) {
+  const devices = [...discoveredDevices.filter(Boolean), ...fallbackDevices];
+  const byKey = new Map();
+
+  devices.forEach((device) => {
+    const key = makeDeviceKey(device);
+    if (!byKey.has(key) || byKey.get(key).status !== "online") {
+      byKey.set(key, {
+        ...device,
+        id: device.id || key,
+      });
+    }
+  });
+
+  return [...byKey.values()].sort((left, right) => {
+    const rank = { online: 0, suggested: 1, manual: 2 };
+    return (rank[left.status] ?? 9) - (rank[right.status] ?? 9);
+  });
+}
+
+function selectDevice(device, button) {
+  document.querySelectorAll(".device-row, .history-row").forEach((item) =>
+    item.classList.remove("active"),
+  );
+  button.classList.add("active");
+  elements.hostInput.value = device.host;
+  elements.portInput.value = device.port;
+  elements.transportSelect.value = device.transport ?? "websocket";
+  savePreferences();
+  addLog("选择设备", `${device.deviceName} · ${device.host}:${device.port}`);
+}
+
+function renderDiscoveredDevices() {
+  elements.deviceList.innerHTML = "";
+
+  state.discoveredDevices.forEach((device) => {
+    const button = document.createElement("button");
+    button.className = "device-row";
+    button.type = "button";
+    button.dataset.host = device.host;
+    button.dataset.port = device.port;
+    button.dataset.transport = device.transport ?? "websocket";
+
+    const isActive =
+      elements.hostInput.value.trim() === device.host &&
+      elements.portInput.value.trim() === device.port &&
+      elements.transportSelect.value === button.dataset.transport;
+    if (isActive) {
+      button.classList.add("active");
+    }
+
+    const dot = document.createElement("span");
+    dot.className = `device-dot ${device.status === "online" ? "online" : "muted"}`;
+
+    const textWrap = document.createElement("span");
+    const title = document.createElement("strong");
+    title.textContent = device.deviceName;
+    const detail = document.createElement("small");
+    const statusText = device.status === "online" ? "在线" : device.source;
+    detail.textContent = `${device.host}:${device.port} · ${getPlatformLabel(device.platform)} · ${getRoleLabel(device.role)} · ${statusText}`;
+    textWrap.append(title, detail);
+    button.append(dot, textWrap);
+    button.addEventListener("click", () => selectDevice(device, button));
+    elements.deviceList.append(button);
+  });
+}
+
+async function refreshDevices() {
+  elements.refreshDevicesButton.disabled = true;
+  addLog("刷新设备", "正在探测本机、当前地址和连接历史");
+
+  const discovered = (await Promise.all(getDiscoveryCandidates().map(probeDiscoveryCandidate))).filter(
+    Boolean,
+  );
+  state.discoveredDevices = buildDeviceList(discovered);
+  renderDiscoveredDevices();
+
+  const onlineCount = state.discoveredDevices.filter((device) => device.status === "online").length;
+  addLog(
+    "刷新设备",
+    onlineCount > 0 ? `发现 ${onlineCount} 台在线设备` : "暂未发现在线设备，保留手动和模拟入口",
+  );
+  elements.refreshDevicesButton.disabled = false;
 }
 
 function rememberCurrentConnection() {
@@ -1129,16 +1351,6 @@ function tickClock() {
   }).format(new Date());
 }
 
-document.querySelectorAll(".device-row").forEach((button) => {
-  button.addEventListener("click", () => {
-    document.querySelectorAll(".device-row").forEach((item) => item.classList.remove("active"));
-    button.classList.add("active");
-    elements.hostInput.value = button.dataset.host;
-    savePreferences();
-    addLog("选择设备", button.dataset.host);
-  });
-});
-
 elements.transportSelect.addEventListener("change", () => {
   const isWebSocket = elements.transportSelect.value === "websocket";
   savePreferences();
@@ -1150,9 +1362,7 @@ elements.mockScenarioSelect.addEventListener("change", () => {
 });
 elements.connectButton.addEventListener("click", connect);
 elements.disconnectButton.addEventListener("click", disconnect);
-elements.refreshDevicesButton.addEventListener("click", () =>
-  addLog("刷新设备", "发现 3 台模拟设备"),
-);
+elements.refreshDevicesButton.addEventListener("click", refreshDevices);
 elements.exportLogButton.addEventListener("click", exportLogs);
 elements.clearLogButton.addEventListener("click", () => {
   state.logEntries = [];
@@ -1260,6 +1470,8 @@ window.addEventListener("keydown", (event) => {
 tickClock();
 setInterval(tickClock, 1000);
 applyPreferences();
+state.discoveredDevices = buildDeviceList();
+renderDiscoveredDevices();
 applyScaleMode();
 updateMetrics();
 updateReverseControlUi();

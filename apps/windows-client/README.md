@@ -4,7 +4,7 @@
 
 ## 当前能力
 
-- 手动输入 Mac 局域网 IP 和端口。
+- 手动输入 Mac 局域网 IP 和端口，也可以用“刷新设备”探测本机服务和连接历史里的 `/discovery` 接口。
 - 支持本地模拟握手，也支持 WebSocket 协议连接。
 - 支持 hello、auth_request、session_offer、display_settings、video_frame、input_event、clipboard_text 和 reverse_control_request 消息。
 - 显示模拟远程桌面画面。
@@ -68,6 +68,7 @@ node E:\codex\lan-dual-control\apps\mock-mac-host\server.mjs 43770
 假 Mac 服务还会持续发送模拟 `video_frame`，用于提前验证 Windows 端画面渲染流程。
 如果假 Mac 断开连接，Windows 控制端会进入“重连中”状态并自动尝试恢复；点击“断开”会停止自动重连。
 模拟场景中的“反控已同意 / 反控超时 / 对方向我发起反控”可用于提前联调反控状态机。
+点击左侧“刷新设备”后，如果假 Mac 服务正在运行，会显示为在线设备，点击即可自动填入地址、端口和 WebSocket 连接方式。
 
 ## 后续对接
 

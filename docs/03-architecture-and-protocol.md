@@ -11,7 +11,7 @@
 
 ## 2. 连接方式
 
-第一版使用手动 IP 连接。
+第一版保留手动 IP 连接，同时加入 HTTP 发现骨架，方便在没有真实 Mac 硬件时先联调设备列表。
 
 示例：
 
@@ -24,10 +24,58 @@ Windows 控制端输入：192.168.1.23:43770
 端口暂定：
 
 - 控制协议端口：43770
-- 自动发现端口：43771，第二版再做
+- 自动发现：第一阶段复用控制端口的 `/discovery` HTTP 接口；后续再补 UDP/mDNS 广播
 - 文件传输端口：默认复用控制连接，必要时再拆分独立端口
 
 第一版不做公网穿透，不做云账号登录。
+
+### 2.1 局域网发现骨架
+
+当前 Windows 控制端的“刷新设备”会探测以下候选地址：
+
+- 当前输入框中的地址和端口。
+- `127.0.0.1:43770` 和 `127.0.0.1:43771`。
+- 最近连接历史。
+- 内置的本地调试示例地址。
+
+被控端服务提供：
+
+```text
+GET http://host:port/discovery
+```
+
+响应示例：
+
+```json
+{
+  "type": "lan_dual_discovery",
+  "protocolVersion": 1,
+  "deviceId": "mock-mac-127.0.0.1-43770",
+  "deviceName": "本机假 Mac",
+  "platform": "macos",
+  "role": "host",
+  "host": "127.0.0.1",
+  "port": 43770,
+  "controlPort": 43770,
+  "capabilities": {
+    "video": true,
+    "audio": true,
+    "input": true,
+    "clipboardText": true,
+    "clipboardFile": true,
+    "reverseControl": true
+  },
+  "lastSeenAt": "2026-06-10T12:00:00.000Z"
+}
+```
+
+说明：
+
+- `platform` 当前使用 `macos` 或 `windows`。
+- `role` 当前使用 `host`、`controller` 或 `both`。
+- `controlPort` 是 WebSocket 控制协议端口。
+- 浏览器和 Tauri 页面不能直接做 UDP 广播，所以当前用 HTTP 探测骨架先跑通 UI 和两端协议。
+- 真正跨设备自动发现建议后续放到原生层实现 UDP/mDNS，然后把发现结果回传给前端。
 
 ## 3. 连接状态机
 

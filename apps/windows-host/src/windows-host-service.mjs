@@ -188,7 +188,53 @@ export function createWindowsHostServer({
   const clipboard = new WindowsClipboardBridge({ logger });
 
   const server = createServer((request, response) => {
-    response.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    };
+
+    if (request.method === "OPTIONS") {
+      response.writeHead(204, corsHeaders);
+      response.end();
+      return;
+    }
+
+    if ((request.url ?? "").split("?")[0] === "/discovery") {
+      const requestHost = request.headers.host?.split(":")[0];
+      const advertisedHost = host === "0.0.0.0" ? (requestHost ?? host) : host;
+      response.writeHead(200, {
+        ...corsHeaders,
+        "Content-Type": "application/json; charset=utf-8",
+      });
+      response.end(JSON.stringify({
+        type: "lan_dual_discovery",
+        protocolVersion,
+        deviceId: `windows-host-${advertisedHost}-${port}`,
+        deviceName: "Windows 被控端骨架",
+        platform: "windows",
+        role: "host",
+        host: advertisedHost,
+        port,
+        controlPort: port,
+        capabilities: {
+          screen: screen.getCapabilities(),
+          audio: audio.getCapabilities(),
+          input: input.getCapabilities(),
+          clipboardText: true,
+          clipboardFile: false,
+          reverseControl: true,
+          mock: true,
+        },
+        lastSeenAt: new Date().toISOString(),
+      }));
+      return;
+    }
+
+    response.writeHead(200, {
+      ...corsHeaders,
+      "Content-Type": "text/plain; charset=utf-8",
+    });
     response.end("LAN dual control Windows host skeleton. Use WebSocket to connect.\n");
   });
 
