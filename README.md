@@ -36,4 +36,8 @@
 
 - [Windows 控制端原型](apps/windows-client/README.md)
 
+已加入 macOS 被控端 Swift 骨架，位置：
+
+- [macOS 被控端骨架](apps/mac-host/README.md)
+
 Mac mini 到位后，继续从 [任务清单与里程碑](docs/04-task-board.md) 的 M1 对接真实 Mac 被控端。

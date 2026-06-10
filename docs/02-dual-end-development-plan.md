@@ -29,7 +29,8 @@
 - 声音采集：研究 ScreenCaptureKit 音频或系统音频捕获方案。
 - 输入注入：使用 Accessibility 权限和 CGEvent。
 - 权限：引导用户开启屏幕录制、辅助功能、输入监控，声音采集如需权限也要提示。
-- UI：SwiftUI 或轻量跨平台 UI。
+- 第一阶段先使用 Swift Package 命令行被控端骨架，验证协议、权限、屏幕采集和输入注入。
+- UI：真机验证后再补 SwiftUI 状态窗口。
 
 ### Windows 端
 
@@ -228,4 +229,3 @@ Windows 端优先负责：
 - 每次任务完成必须更新 docs/04-task-board.md。
 - 双端都不要私自改对方模块，除非同步文档。
 - 所有用户可见文字默认中文。
-

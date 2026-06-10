@@ -46,6 +46,8 @@
 6. 支持被控端分辨率、刷新率、带宽和剪贴板能力；
 7. 后续实现 Mac 控制窗口，用于 Mac 反控 Windows。
 
+当前已存在 apps/mac-host Swift Package 骨架。Mac mini 到位后，先运行 `swift run lan-dual-mac-host`，验证权限、TCP hello 握手、ScreenCaptureKit 预检，再逐步实现真实视频帧和 CGEvent 输入注入。
+
 开发时遵守 docs/03-architecture-and-protocol.md 的协议。完成任何任务后更新 docs/04-task-board.md。不要改 Windows 端实现，除非协议或对接要求必须同步。
 ```
 
@@ -78,4 +80,3 @@
 遗留问题：
 下一步建议：
 ```
-
