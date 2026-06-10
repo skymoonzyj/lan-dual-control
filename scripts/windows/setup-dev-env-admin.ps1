@@ -4,13 +4,13 @@
 $ErrorActionPreference = "Stop"
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$repoRoot = Resolve-Path (Join-Path $scriptRoot "..\..")
-$workspaceRoot = Split-Path -Parent $repoRoot
-$toolsRoot = Join-Path $workspaceRoot ".tools"
+$toolsRoot = "C:\DevTools"
 $cargoHome = Join-Path $toolsRoot "cargo"
 $rustupHome = Join-Path $toolsRoot "rustup"
 $cargoBin = Join-Path $cargoHome "bin"
 $buildToolsInstaller = Join-Path $toolsRoot "installers\vs_BuildTools.exe"
+
+New-Item -ItemType Directory -Force $toolsRoot | Out-Null
 
 function Add-MachinePathEntry {
   param([string] $PathEntry)

@@ -8,14 +8,16 @@
 - npm：使用 `npm.cmd` 调用，避免 PowerShell 执行策略拦截 `npm.ps1`。
 - Git：用于同步 GitHub 仓库。
 - WebView2 Runtime：Windows 桌面壳运行时已存在。
-- Rust：已安装在 `E:\codex\.tools`。
-  - `RUSTUP_HOME=E:\codex\.tools\rustup`
-  - `CARGO_HOME=E:\codex\.tools\cargo`
-  - `E:\codex\.tools\cargo\bin` 已写入当前用户 Path。
+- Rust：已安装在 `C:\DevTools`。
+  - `RUSTUP_HOME=C:\DevTools\rustup`
+  - `CARGO_HOME=C:\DevTools\cargo`
+  - `C:\DevTools\cargo\bin` 已写入当前用户 Path。
 - Visual Studio C++ Build Tools：已安装，用于 Tauri、Rust `stable-msvc` 工具链和后续 Windows 原生模块编译。
   - `cl.exe` 位于 Visual Studio BuildTools 的 MSVC 目录。
   - `MSBuild.exe` 位于 Visual Studio BuildTools 的 MSBuild 目录。
 - Rust/MSVC 编译链路已通过临时 `cargo build` 验证，可以生成 Windows `.exe`。
+
+说明：旧目录 `E:\codex\.tools` 暂时保留为兼容备份。如果系统级 `Machine` 环境变量还指向旧目录，请用管理员身份运行下面的管理员脚本刷新到 `C:\DevTools`，确认验证全绿后再删除旧目录。
 
 ## 管理员脚本
 
@@ -28,7 +30,7 @@ E:\codex\lan-dual-control\scripts\windows\setup-dev-env-admin.ps1
 安装器缓存位置：
 
 ```text
-E:\codex\.tools\installers\vs_BuildTools.exe
+C:\DevTools\installers\vs_BuildTools.exe
 ```
 
 该脚本会做两件事：

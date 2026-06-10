@@ -65,8 +65,7 @@ function Find-FirstFile {
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Resolve-Path (Join-Path $scriptRoot "..\..")
-$workspaceRoot = Split-Path -Parent $repoRoot
-$toolsRoot = Join-Path $workspaceRoot ".tools"
+$toolsRoot = "C:\DevTools"
 $cargoBin = Join-Path $toolsRoot "cargo\bin"
 
 $env:RUSTUP_HOME = [Environment]::GetEnvironmentVariable("RUSTUP_HOME", "User")
