@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>局域网双端远控 - Windows 控制端</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="设备与连接">
+        <header class="brand">
+          <div class="brand-mark" aria-hidden="true">L</div>
+          <div>
+            <h1>局域网远控</h1>
+            <p>Windows 控制端</p>
+          </div>
+        </header>
+
+        <section class="panel connection-panel" aria-labelledby="connection-title">
+          <div class="panel-heading">
+            <h2 id="connection-title">连接</h2>
+            <span id="connectionBadge" class="status-badge offline">未连接</span>
+          </div>
+
+          <label class="field">
+            <span>目标地址</span>
+            <input id="hostInput" type="text" value="192.168.1.23" autocomplete="off" />
+          </label>
+
+          <label class="field">
+            <span>端口</span>
+            <input id="portInput" type="number" value="43770" min="1025" max="65535" />
+          </label>
+
+          <label class="field">
+            <span>连接密码</span>
+            <input id="passwordInput" type="password" value="demo-password" autocomplete="off" />
+          </label>
+
+          <div class="button-row">
+            <button id="connectButton" class="primary-action" type="button">
+              <span aria-hidden="true">▶</span>
+              连接
+            </button>
+            <button id="disconnectButton" class="secondary-action" type="button" disabled>
+              <span aria-hidden="true">■</span>
+              断开
+            </button>
+          </div>
+        </section>
+
+        <section class="panel device-panel" aria-labelledby="device-title">
+          <div class="panel-heading">
+            <h2 id="device-title">设备</h2>
+            <button id="refreshDevicesButton" class="icon-button" type="button" title="刷新设备">
+              ↻
+            </button>
+          </div>
+          <button class="device-row active" type="button" data-host="192.168.1.23">
+            <span class="device-dot"></span>
+            <span>
+              <strong>Mac mini</strong>
+              <small>192.168.1.23</small>
+            </span>
+          </button>
+          <button class="device-row" type="button" data-host="192.168.1.42">
+            <span class="device-dot muted"></span>
+            <span>
+              <strong>测试 Mac</strong>
+              <small>192.168.1.42</small>
+            </span>
+          </button>
+        </section>
+
+        <section class="panel event-panel" aria-labelledby="event-title">
+          <div class="panel-heading">
+            <h2 id="event-title">事件</h2>
+            <button id="clearLogButton" class="icon-button" type="button" title="清空日志">⌫</button>
+          </div>
+          <ol id="eventLog" class="event-log" aria-live="polite"></ol>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div class="toolbar-group" role="group" aria-label="显示模式">
+            <button id="windowModeButton" class="tool-button active" type="button" title="窗口模式">
+              ◱
+            </button>
+            <button id="fullscreenButton" class="tool-button" type="button" title="全屏">
+              ⛶
+            </button>
+          </div>
+
+          <label class="select-control">
+            <span>分辨率</span>
+            <select id="resolutionSelect">
+              <option value="native">原生</option>
+              <option value="1920x1080" selected>1920 × 1080</option>
+              <option value="2560x1440">2560 × 1440</option>
+              <option value="1280x720">1280 × 720</option>
+            </select>
+          </label>
+
+          <label class="select-control">
+            <span>刷新率</span>
+            <select id="fpsSelect">
+              <option value="15">15 FPS</option>
+              <option value="30" selected>30 FPS</option>
+              <option value="60">60 FPS</option>
+            </select>
+          </label>
+
+          <label class="range-control">
+            <span>带宽</span>
+            <input id="bandwidthRange" type="range" min="5" max="80" value="20" />
+            <output id="bandwidthOutput">20 Mbps</output>
+          </label>
+
+          <label class="toggle-control">
+            <input id="audioToggle" type="checkbox" checked />
+            <span>声音</span>
+          </label>
+
+          <label class="toggle-control">
+            <input id="clipboardToggle" type="checkbox" checked />
+            <span>剪贴板</span>
+          </label>
+
+          <button id="reverseButton" class="secondary-action compact" type="button" disabled>
+            <span aria-hidden="true">⇄</span>
+            反控
+          </button>
+        </header>
+
+        <section class="remote-surface" aria-label="远程画面">
+          <div id="remoteCanvas" class="remote-canvas" tabindex="0">
+            <div class="mock-desktop">
+              <div class="mac-menubar">
+                <span>Mac mini</span>
+                <span id="clockText">--:--</span>
+              </div>
+              <div class="mock-window">
+                <div class="mock-titlebar">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <div class="mock-content">
+                  <h2>等待局域网连接</h2>
+                  <p id="remoteStatusText">输入目标 IP 后开始连接。</p>
+                  <div class="metrics-grid">
+                    <div>
+                      <strong id="metricResolution">1920 × 1080</strong>
+                      <span>分辨率</span>
+                    </div>
+                    <div>
+                      <strong id="metricFps">30 FPS</strong>
+                      <span>刷新率</span>
+                    </div>
+                    <div>
+                      <strong id="metricBandwidth">20 Mbps</strong>
+                      <span>带宽</span>
+                    </div>
+                    <div>
+                      <strong id="metricLatency">-- ms</strong>
+                      <span>延迟</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div id="cursorDot" class="cursor-dot"></div>
+            </div>
+          </div>
+        </section>
+
+        <footer class="statusbar">
+          <span id="statusText">未连接</span>
+          <span id="inputText">输入事件：0</span>
+          <span id="clipboardText">剪贴板：待机</span>
+        </footer>
+      </main>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

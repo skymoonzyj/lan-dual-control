@@ -32,5 +32,8 @@
 
 ## 当前状态
 
-这是规划仓库，尚未进入代码实现阶段。等 Mac mini 到位后，按文档里的任务清单开始开发。
+已加入第一版 Windows 控制端静态原型，位置：
 
+- [Windows 控制端原型](apps/windows-client/README.md)
+
+Mac mini 到位后，继续从 [任务清单与里程碑](docs/04-task-board.md) 的 M1 对接真实 Mac 被控端。
