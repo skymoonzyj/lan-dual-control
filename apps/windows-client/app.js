@@ -6,6 +6,7 @@ const elements = {
   hostInput: document.querySelector("#hostInput"),
   portInput: document.querySelector("#portInput"),
   passwordInput: document.querySelector("#passwordInput"),
+  mockScenarioSelect: document.querySelector("#mockScenarioSelect"),
   connectButton: document.querySelector("#connectButton"),
   disconnectButton: document.querySelector("#disconnectButton"),
   refreshDevicesButton: document.querySelector("#refreshDevicesButton"),
@@ -37,6 +38,29 @@ const elements = {
 
 const storageKey = "lan-dual-control.windows-client.preferences.v1";
 
+const connectionStates = {
+  idle: { badge: "offline", label: "未连接", status: "未连接" },
+  connecting: { badge: "connecting", label: "连接中", status: "正在建立局域网连接..." },
+  authenticating: { badge: "connecting", label: "验证中", status: "正在验证连接密码..." },
+  negotiating: { badge: "connecting", label: "协商中", status: "正在协商画面、声音和剪贴板能力..." },
+  streaming: { badge: "online", label: "已连接", status: "正在接收远程画面。" },
+  reconnecting: { badge: "connecting", label: "重连中", status: "连接中断，正在尝试恢复..." },
+  disconnected: { badge: "offline", label: "已断开", status: "连接已断开。" },
+  failed: { badge: "offline", label: "连接失败", status: "连接失败。" },
+};
+
+const errorMessages = {
+  LAN001: "无法连接到目标 IP，请确认两台设备在同一局域网，且被控端服务已经启动。",
+  LAN002: "连接密码错误，请重新输入连接密码。",
+  LAN003: "目标端拒绝连接，请查看被控端状态。",
+  LAN004: "Mac 缺少屏幕录制权限，请在系统设置中允许本应用录制屏幕。",
+  LAN005: "Mac 缺少辅助功能权限，无法执行鼠标键盘控制。",
+  LAN006: "协议版本不兼容，请同步两端到同一版本。",
+  LAN007: "视频流中断，请检查局域网连接或降低刷新率/带宽。",
+  LAN008: "一键反控被拒绝，当前控制方向保持不变。",
+  LAN011: "剪贴板同步失败，请检查剪贴板权限或关闭后重试。",
+};
+
 const state = {
   connected: false,
   connecting: false,
@@ -48,6 +72,7 @@ const state = {
   activePort: "",
   videoFrames: 0,
   recentConnections: [],
+  connectionState: "idle",
 };
 
 function nowTime() {
@@ -73,6 +98,22 @@ function setBadge(mode, text) {
   elements.connectionBadge.textContent = text;
 }
 
+function setConnectionState(nextState, detail = "") {
+  const stateConfig = connectionStates[nextState] ?? connectionStates.idle;
+  state.connectionState = nextState;
+  setBadge(stateConfig.badge, stateConfig.label);
+  elements.statusText.textContent = detail || stateConfig.status;
+  elements.remoteStatusText.textContent = detail || stateConfig.status;
+}
+
+function getErrorMessage(error) {
+  const code = error?.code;
+  if (code && errorMessages[code]) {
+    return errorMessages[code];
+  }
+  return error?.message || "发生未知错误。";
+}
+
 function readPreferences() {
   try {
     const raw = window.localStorage.getItem(storageKey);
@@ -95,6 +136,7 @@ function collectPreferences() {
     transport: elements.transportSelect.value,
     host: elements.hostInput.value.trim(),
     port: elements.portInput.value.trim(),
+    mockScenario: elements.mockScenarioSelect.value,
     resolution: elements.resolutionSelect.value,
     fps: elements.fpsSelect.value,
     bandwidth: elements.bandwidthSelect.value,
@@ -114,6 +156,7 @@ function applyPreferences() {
   if (preferences.transport) elements.transportSelect.value = preferences.transport;
   if (preferences.host) elements.hostInput.value = preferences.host;
   if (preferences.port) elements.portInput.value = preferences.port;
+  if (preferences.mockScenario) elements.mockScenarioSelect.value = preferences.mockScenario;
   if (preferences.resolution) elements.resolutionSelect.value = preferences.resolution;
   if (preferences.fps) elements.fpsSelect.value = preferences.fps;
   if (preferences.bandwidth) elements.bandwidthSelect.value = preferences.bandwidth;
@@ -199,9 +242,7 @@ function setUiConnecting(host, port) {
   state.connecting = true;
   state.connected = false;
   state.videoFrames = 0;
-  setBadge("connecting", "连接中");
-  elements.statusText.textContent = `正在连接 ${host}:${port}`;
-  elements.remoteStatusText.textContent = "正在建立局域网会话...";
+  setConnectionState("connecting", `正在连接 ${host}:${port}`);
   elements.connectButton.disabled = true;
   elements.disconnectButton.disabled = false;
   elements.reverseButton.disabled = true;
@@ -210,9 +251,7 @@ function setUiConnecting(host, port) {
 function setUiConnected(answer) {
   state.connected = true;
   state.connecting = false;
-  setBadge("online", "已连接");
-  elements.statusText.textContent = `已连接 ${state.activeHost}:${state.activePort}`;
-  elements.remoteStatusText.textContent = "远程画面通道已就绪，等待真实视频帧接入。";
+  setConnectionState("streaming", `已连接 ${state.activeHost}:${state.activePort}`);
   elements.connectButton.disabled = true;
   elements.disconnectButton.disabled = false;
   elements.reverseButton.disabled = false;
@@ -234,9 +273,7 @@ function setUiDisconnected(statusText = "未连接", logDetail = "会话已关�
   state.connected = false;
   state.connecting = false;
   stopLatencyLoop();
-  setBadge("offline", "未连接");
-  elements.statusText.textContent = statusText;
-  elements.remoteStatusText.textContent = "连接已断开。";
+  setConnectionState(statusText === "连接失败" ? "failed" : "disconnected", statusText);
   elements.remoteFrameImage.removeAttribute("src");
   elements.remoteFrameImage.classList.remove("is-visible");
   elements.metricLatency.textContent = "-- ms";
@@ -293,6 +330,7 @@ function buildSessionOffer() {
     preferredHeight,
     preferredVideoCodec: "mjpeg",
     preferredAudioCodec: "opus",
+    mockScenario: elements.mockScenarioSelect.value,
   };
 }
 
@@ -344,6 +382,7 @@ async function connect() {
 
   const client = new ProtocolClient({
     transport: createTransport(),
+    onState: setConnectionState,
     onMessage: handleProtocolMessage,
     onClose: () => {
       state.client = null;
@@ -370,9 +409,10 @@ async function connect() {
   } catch (error) {
     client.disconnect();
     state.client = null;
-    setUiDisconnected("连接失败", error.message);
-    elements.remoteStatusText.textContent = error.message;
-    addLog("连接失败", error.message);
+    const message = getErrorMessage(error);
+    setUiDisconnected("连接失败", message);
+    elements.remoteStatusText.textContent = message;
+    addLog("连接失败", message);
   }
 }
 
@@ -497,7 +537,9 @@ function handleProtocolMessage(message) {
   }
 
   if (message.type === "error") {
-    addLog("协议错误", message.message || "未知错误");
+    const errorMessage = getErrorMessage(message);
+    setConnectionState("failed", errorMessage);
+    addLog("协议错误", errorMessage);
   }
 }
 
@@ -545,6 +587,10 @@ elements.transportSelect.addEventListener("change", () => {
   const isWebSocket = elements.transportSelect.value === "websocket";
   savePreferences();
   addLog("连接方式", isWebSocket ? "WebSocket 局域网" : "本地模拟");
+});
+elements.mockScenarioSelect.addEventListener("change", () => {
+  savePreferences();
+  addLog("模拟场景", elements.mockScenarioSelect.selectedOptions[0]?.textContent ?? "正常连接");
 });
 elements.connectButton.addEventListener("click", connect);
 elements.disconnectButton.addEventListener("click", disconnect);

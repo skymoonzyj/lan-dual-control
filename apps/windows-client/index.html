@@ -46,6 +46,18 @@
             <input id="passwordInput" type="password" value="demo-password" autocomplete="off" />
           </label>
 
+          <label class="field">
+            <span>模拟场景</span>
+            <select id="mockScenarioSelect">
+              <option value="normal" selected>正常连接</option>
+              <option value="auth_failed">密码错误</option>
+              <option value="screen_permission_denied">缺少屏幕录制权限</option>
+              <option value="accessibility_permission_denied">缺少辅助功能权限</option>
+              <option value="video_interrupted">视频流中断</option>
+              <option value="disconnect_after_connect">连接后断开</option>
+            </select>
+          </label>
+
           <div class="button-row">
             <button id="connectButton" class="primary-action" type="button">
               <span aria-hidden="true">▶</span>

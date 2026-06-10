@@ -176,19 +176,56 @@ function createClient(socket, options) {
     }
 
     if (message.type === "auth_request") {
-      const ok = message.password === options.password;
+      const ok = message.password === options.password && message.mockScenario !== "auth_failed";
       send({
         type: "auth_result",
         ok,
+        code: ok ? "" : "LAN002",
         reason: ok ? "" : "连接密码不正确",
       });
       return;
     }
 
     if (message.type === "session_offer") {
+      if (message.mockScenario === "screen_permission_denied") {
+        send({
+          type: "session_answer",
+          ok: false,
+          code: "LAN004",
+          reason: "Mac 缺少屏幕录制权限",
+        });
+        return;
+      }
+
+      if (message.mockScenario === "accessibility_permission_denied") {
+        send({
+          type: "session_answer",
+          ok: false,
+          code: "LAN005",
+          reason: "Mac 缺少辅助功能权限",
+        });
+        return;
+      }
+
       const session = negotiateSession(message);
       send(session);
       startVideoFrames(session);
+      if (message.mockScenario === "video_interrupted") {
+        setTimeout(() => {
+          send({
+            type: "error",
+            code: "LAN007",
+            message: "视频流中断",
+          });
+          stopVideoFrames();
+        }, 2600);
+      }
+      if (message.mockScenario === "disconnect_after_connect") {
+        setTimeout(() => {
+          stopVideoFrames();
+          socket.end();
+        }, 3200);
+      }
       return;
     }
 

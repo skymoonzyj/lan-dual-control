@@ -12,6 +12,14 @@
     return `${prefix}-${Date.now().toString(16)}-${random}`;
   }
 
+  class ProtocolError extends Error {
+    constructor(message, code = "LAN001") {
+      super(message);
+      this.name = "ProtocolError";
+      this.code = code;
+    }
+  }
+
   function makeMockVideoFrame(frameId, width = 1920, height = 1080) {
     const now = new Date();
     const hue = (frameId * 23) % 360;
@@ -95,15 +103,37 @@
       }
 
       if (message.type === "auth_request") {
+        const authFailed = message.password !== "demo-password" || message.mockScenario === "auth_failed";
         sendLater({
           type: "auth_result",
-          ok: message.password === "demo-password",
-          reason: message.password === "demo-password" ? "" : "连接密码不正确",
+          ok: !authFailed,
+          code: authFailed ? "LAN002" : "",
+          reason: authFailed ? "连接密码不正确" : "",
         });
         return;
       }
 
       if (message.type === "session_offer") {
+        if (message.mockScenario === "screen_permission_denied") {
+          sendLater({
+            type: "session_answer",
+            ok: false,
+            code: "LAN004",
+            reason: "Mac 缺少屏幕录制权限",
+          });
+          return;
+        }
+
+        if (message.mockScenario === "accessibility_permission_denied") {
+          sendLater({
+            type: "session_answer",
+            ok: false,
+            code: "LAN005",
+            reason: "Mac 缺少辅助功能权限",
+          });
+          return;
+        }
+
         const width = Number(message.preferredWidth) || 1920;
         const height = Number(message.preferredHeight) || 1080;
         const answer = {
@@ -120,6 +150,21 @@
         };
         sendLater(answer);
         global.setTimeout(() => this.startVideoFrames(answer), 300);
+        if (message.mockScenario === "video_interrupted") {
+          global.setTimeout(() => {
+            if (this.connected && this.onMessage) {
+              this.onMessage({
+                type: "error",
+                code: "LAN007",
+                message: "视频流中断",
+              });
+            }
+            this.stopVideoFrames();
+          }, 2600);
+        }
+        if (message.mockScenario === "disconnect_after_connect") {
+          global.setTimeout(() => this.disconnect(), 3200);
+        }
         return;
       }
 
@@ -212,8 +257,9 @@
   }
 
   class ProtocolClient {
-    constructor({ transport, onMessage, onClose } = {}) {
+    constructor({ transport, onState, onMessage, onClose } = {}) {
       this.transport = transport;
+      this.onState = onState ?? (() => {});
       this.onMessage = onMessage ?? (() => {});
       this.onClose = onClose ?? (() => {});
       this.waiters = new Map();
@@ -225,6 +271,7 @@
     }
 
     async connect({ host, port, password, sessionOffer }) {
+      this.onState("connecting", `正在连接 ${host}:${port}`);
       await this.transport.connect({ host, port });
 
       await this.sendAndWait(
@@ -237,25 +284,29 @@
         "hello_ack",
       );
 
+      this.onState("authenticating");
       const auth = await this.sendAndWait(
         {
           type: "auth_request",
           password,
+          mockScenario: sessionOffer.mockScenario,
         },
         "auth_result",
       );
 
       if (!auth.ok) {
-        throw new Error(auth.reason || "被控端拒绝连接");
+        throw new ProtocolError(auth.reason || "被控端拒绝连接", auth.code || "LAN002");
       }
 
+      this.onState("negotiating");
       const answer = await this.sendAndWait(sessionOffer, "session_answer");
       if (!answer.ok) {
-        throw new Error(answer.reason || "媒体协商失败");
+        throw new ProtocolError(answer.reason || "媒体协商失败", answer.code || "LAN003");
       }
 
       this.connected = true;
       this.session = answer;
+      this.onState("streaming");
       return answer;
     }
 

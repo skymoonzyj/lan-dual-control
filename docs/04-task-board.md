@@ -40,6 +40,9 @@ Windows 端：
 - [x] 接收并渲染模拟视频帧。
 - [x] 保存连接方式、地址、端口和画质设置。
 - [x] 增加最近连接列表。
+- [x] 增加连接状态机。
+- [x] 增加中文错误提示。
+- [x] 增加假 Mac 错误模拟。
 - [x] 增加 Windows Tauri 桌面壳。
 - [x] 构建 Windows 桌面 exe。
 - [ ] 连接真实 Mac 被控端。
@@ -62,12 +65,14 @@ Windows 端：
 - [x] Windows 可通过 WebSocket 连接本机假 Mac 服务。
 - [x] Windows 可接收并显示假 Mac 服务的模拟视频帧。
 - [x] Windows 可记住最近连接和常用画质设置。
+- [x] Windows 可显示密码错误、权限不足、视频中断等中文错误。
 - [x] Windows 控制端可构建为桌面 exe。
 
 当前备注：
 
 - 已完成 Windows 控制端静态原型，当前支持本地模拟和 WebSocket 协议连接。
 - 已完成连接历史和设置持久化；连接密码不会写入本地存储。
+- 已完成连接状态机和中文错误提示，假 Mac 服务可模拟常见失败场景。
 - 已统一 `display_settings`、`display_settings_ack`、`video_frame` 协议命名，假 Mac 服务可持续发送模拟帧。
 - 已完成 Windows Tauri 桌面壳，已验证可构建 `lan-dual-control-windows.exe`。
 - 已完成本机假 Mac WebSocket 联调服务，真实 Mac 被控端到位后按同一消息格式替换。
@@ -79,8 +84,8 @@ Windows 端：
 目标：能作为个人日常工具试用。
 
 - [ ] 添加密码或配对码。
-- [ ] 添加中文连接状态。
-- [ ] 添加权限不足提示。
+- [x] 添加中文连接状态。
+- [x] 添加权限不足提示。
 - [ ] 添加画质设置。
 - [x] 添加分辨率设置。
 - [x] 添加刷新率设置。
