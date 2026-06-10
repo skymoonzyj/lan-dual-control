@@ -22,6 +22,7 @@ const elements = {
   resolutionSelect: document.querySelector("#resolutionSelect"),
   fpsSelect: document.querySelector("#fpsSelect"),
   bandwidthSelect: document.querySelector("#bandwidthSelect"),
+  scaleModeSelect: document.querySelector("#scaleModeSelect"),
   audioToggle: document.querySelector("#audioToggle"),
   clipboardToggle: document.querySelector("#clipboardToggle"),
   fullscreenButton: document.querySelector("#fullscreenButton"),
@@ -73,6 +74,8 @@ const state = {
   videoFrames: 0,
   recentConnections: [],
   connectionState: "idle",
+  remoteFrameWidth: 1920,
+  remoteFrameHeight: 1080,
 };
 
 function nowTime() {
@@ -140,6 +143,7 @@ function collectPreferences() {
     resolution: elements.resolutionSelect.value,
     fps: elements.fpsSelect.value,
     bandwidth: elements.bandwidthSelect.value,
+    scaleMode: elements.scaleModeSelect.value,
     audio: elements.audioToggle.checked,
     clipboard: elements.clipboardToggle.checked,
     recentConnections: state.recentConnections,
@@ -160,6 +164,7 @@ function applyPreferences() {
   if (preferences.resolution) elements.resolutionSelect.value = preferences.resolution;
   if (preferences.fps) elements.fpsSelect.value = preferences.fps;
   if (preferences.bandwidth) elements.bandwidthSelect.value = preferences.bandwidth;
+  if (preferences.scaleMode) elements.scaleModeSelect.value = preferences.scaleMode;
   if (typeof preferences.audio === "boolean") elements.audioToggle.checked = preferences.audio;
   if (typeof preferences.clipboard === "boolean") {
     elements.clipboardToggle.checked = preferences.clipboard;
@@ -295,6 +300,7 @@ function currentDisplaySettings() {
     height,
     fps: Number(elements.fpsSelect.value),
     maxBandwidthKbps: Number(elements.bandwidthSelect.value) * 1000,
+    scaleMode: elements.scaleModeSelect.value,
     audio: elements.audioToggle.checked,
     clipboard: elements.clipboardToggle.checked,
   };
@@ -352,6 +358,7 @@ function buildDisplaySettingsMessage() {
     audio: settings.audio,
     clipboardText: settings.clipboard,
     clipboardFile: settings.clipboard,
+    scaleMode: settings.scaleMode,
     ...fixedResolution,
   };
 }
@@ -449,8 +456,91 @@ function describeDisplaySettings() {
   return `${settings.displayMode === "fullscreen" ? "全屏" : "窗口"} · ${elements.metricResolution.textContent} · ${settings.fps} FPS · ${elements.bandwidthSelect.value} Mbps`;
 }
 
+function applyScaleMode() {
+  elements.remoteCanvas.classList.toggle("scale-fit", elements.scaleModeSelect.value === "fit");
+  elements.remoteCanvas.classList.toggle(
+    "scale-original",
+    elements.scaleModeSelect.value === "original",
+  );
+  elements.remoteCanvas.classList.toggle(
+    "scale-stretch",
+    elements.scaleModeSelect.value === "stretch",
+  );
+
+  if (elements.scaleModeSelect.value === "original") {
+    elements.remoteFrameImage.style.width = `${state.remoteFrameWidth}px`;
+    elements.remoteFrameImage.style.height = `${state.remoteFrameHeight}px`;
+  } else {
+    elements.remoteFrameImage.style.removeProperty("width");
+    elements.remoteFrameImage.style.removeProperty("height");
+  }
+}
+
+function getDisplayedFrameRect() {
+  const canvasRect = elements.remoteCanvas.getBoundingClientRect();
+  const scrollLeft = elements.remoteCanvas.scrollLeft;
+  const scrollTop = elements.remoteCanvas.scrollTop;
+  const frameWidth = Math.max(1, state.remoteFrameWidth);
+  const frameHeight = Math.max(1, state.remoteFrameHeight);
+  const canvasWidth = Math.max(1, elements.remoteCanvas.clientWidth);
+  const canvasHeight = Math.max(1, elements.remoteCanvas.clientHeight);
+  const scaleMode = elements.scaleModeSelect.value;
+
+  if (scaleMode === "stretch") {
+    return {
+      left: canvasRect.left,
+      top: canvasRect.top,
+      width: canvasWidth,
+      height: canvasHeight,
+    };
+  }
+
+  if (scaleMode === "original") {
+    return {
+      left: canvasRect.left - scrollLeft,
+      top: canvasRect.top - scrollTop,
+      width: frameWidth,
+      height: frameHeight,
+    };
+  }
+
+  const scale = Math.min(canvasWidth / frameWidth, canvasHeight / frameHeight);
+  const width = frameWidth * scale;
+  const height = frameHeight * scale;
+
+  return {
+    left: canvasRect.left + (canvasWidth - width) / 2,
+    top: canvasRect.top + (canvasHeight - height) / 2,
+    width,
+    height,
+  };
+}
+
+function mapPointerToRemote(event) {
+  const frameRect = getDisplayedFrameRect();
+  const x = (event.clientX - frameRect.left) / frameRect.width;
+  const y = (event.clientY - frameRect.top) / frameRect.height;
+  const normalizedX = Math.min(1, Math.max(0, x));
+  const normalizedY = Math.min(1, Math.max(0, y));
+  const remoteMaxX = Math.max(0, state.remoteFrameWidth - 1);
+  const remoteMaxY = Math.max(0, state.remoteFrameHeight - 1);
+
+  if (x < 0 || x > 1 || y < 0 || y > 1) {
+    return null;
+  }
+
+  return {
+    x: normalizedX,
+    y: normalizedY,
+    remoteX: Math.round(normalizedX * remoteMaxX),
+    remoteY: Math.round(normalizedY * remoteMaxY),
+    frameRect,
+  };
+}
+
 function sendDisplaySettings() {
   updateMetrics();
+  applyScaleMode();
   savePreferences();
   if (!state.connected || !state.client) {
     return;
@@ -491,17 +581,27 @@ function registerInputEvent(kind, detail, eventPayload = {}) {
 }
 
 function updateCursor(event) {
-  const rect = elements.remoteCanvas.getBoundingClientRect();
-  const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-  const y = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
-  elements.cursorDot.style.left = `${x * 100}%`;
-  elements.cursorDot.style.top = `${y * 100}%`;
-  registerInputEvent("鼠标移动", `x=${x.toFixed(3)}, y=${y.toFixed(3)}`, {
+  const mapped = mapPointerToRemote(event);
+  if (!mapped) {
+    return;
+  }
+
+  const canvasRect = elements.remoteCanvas.getBoundingClientRect();
+  elements.cursorDot.style.left = `${((event.clientX - canvasRect.left + elements.remoteCanvas.scrollLeft) / elements.remoteCanvas.scrollWidth) * 100}%`;
+  elements.cursorDot.style.top = `${((event.clientY - canvasRect.top + elements.remoteCanvas.scrollTop) / elements.remoteCanvas.scrollHeight) * 100}%`;
+  registerInputEvent(
+    "鼠标移动",
+    `x=${mapped.x.toFixed(3)}, y=${mapped.y.toFixed(3)} · ${mapped.remoteX},${mapped.remoteY}`,
+    {
     pointerType: "mouse",
     action: "move",
-    x,
-    y,
-  });
+      x: mapped.x,
+      y: mapped.y,
+      remoteX: mapped.remoteX,
+      remoteY: mapped.remoteY,
+      scaleMode: elements.scaleModeSelect.value,
+    },
+  );
 }
 
 function syncClipboardText() {
@@ -550,6 +650,11 @@ function renderVideoFrame(frame) {
   }
 
   state.videoFrames += 1;
+  if (frame.width && frame.height) {
+    state.remoteFrameWidth = Number(frame.width);
+    state.remoteFrameHeight = Number(frame.height);
+  }
+  applyScaleMode();
   elements.remoteFrameImage.src = frame.dataUrl;
   elements.remoteFrameImage.classList.add("is-visible");
   elements.remoteStatusText.textContent = `正在接收模拟视频帧 #${frame.frameId ?? state.videoFrames}`;
@@ -612,6 +717,11 @@ elements.reverseButton.addEventListener("click", () => {
 });
 
 elements.resolutionSelect.addEventListener("change", sendDisplaySettings);
+elements.scaleModeSelect.addEventListener("change", () => {
+  applyScaleMode();
+  sendDisplaySettings();
+  addLog("缩放模式", elements.scaleModeSelect.selectedOptions[0]?.textContent ?? "适应窗口");
+});
 elements.fpsSelect.addEventListener("change", sendDisplaySettings);
 elements.bandwidthSelect.addEventListener("change", sendDisplaySettings);
 elements.audioToggle.addEventListener("change", () => {
@@ -632,25 +742,46 @@ elements.clipboardToggle.addEventListener("change", () => {
 
 elements.remoteCanvas.addEventListener("mousemove", updateCursor);
 elements.remoteCanvas.addEventListener("mousedown", (event) => {
-  registerInputEvent("鼠标按下", `button=${event.button}`, {
+  const mapped = mapPointerToRemote(event);
+  if (!mapped) return;
+  registerInputEvent("鼠标按下", `button=${event.button} · ${mapped.remoteX},${mapped.remoteY}`, {
     pointerType: "mouse",
     action: "down",
     button: event.button,
+    x: mapped.x,
+    y: mapped.y,
+    remoteX: mapped.remoteX,
+    remoteY: mapped.remoteY,
+    scaleMode: elements.scaleModeSelect.value,
   });
 });
 elements.remoteCanvas.addEventListener("mouseup", (event) => {
-  registerInputEvent("鼠标抬起", `button=${event.button}`, {
+  const mapped = mapPointerToRemote(event);
+  if (!mapped) return;
+  registerInputEvent("鼠标抬起", `button=${event.button} · ${mapped.remoteX},${mapped.remoteY}`, {
     pointerType: "mouse",
     action: "up",
     button: event.button,
+    x: mapped.x,
+    y: mapped.y,
+    remoteX: mapped.remoteX,
+    remoteY: mapped.remoteY,
+    scaleMode: elements.scaleModeSelect.value,
   });
 });
 elements.remoteCanvas.addEventListener("wheel", (event) => {
   event.preventDefault();
+  const mapped = mapPointerToRemote(event);
+  if (!mapped) return;
   registerInputEvent("滚轮", `deltaY=${Math.round(event.deltaY)}`, {
     pointerType: "mouse",
     action: "wheel",
     deltaY: Math.round(event.deltaY),
+    x: mapped.x,
+    y: mapped.y,
+    remoteX: mapped.remoteX,
+    remoteY: mapped.remoteY,
+    scaleMode: elements.scaleModeSelect.value,
   });
 });
 elements.remoteCanvas.addEventListener("keydown", (event) => {
@@ -677,5 +808,6 @@ window.addEventListener("keydown", (event) => {
 tickClock();
 setInterval(tickClock, 1000);
 applyPreferences();
+applyScaleMode();
 updateMetrics();
 addLog("控制端启动", "本地模拟模式，可切换 WebSocket");

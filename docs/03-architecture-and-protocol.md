@@ -182,6 +182,7 @@ Both directions: clipboard_event loop
   "type": "display_settings",
   "displayMode": "fullscreen",
   "resolutionMode": "fixed",
+  "scaleMode": "fit",
   "width": 1920,
   "height": 1080,
   "fps": 60,
@@ -196,6 +197,7 @@ Both directions: clipboard_event loop
 
 - displayMode：windowed 或 fullscreen。
 - resolutionMode：native、fit_client、fixed。
+- scaleMode：fit、original、stretch，控制端显示缩放模式。
 - fps：目标刷新率，第一版建议支持 15、30、60。
 - maxBandwidthKbps：最大带宽。
 - audio：是否接收被控端声音。

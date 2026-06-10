@@ -399,6 +399,10 @@ button:disabled {
   outline: none;
 }
 
+.remote-canvas.scale-original {
+  overflow: auto;
+}
+
 .mock-desktop {
   position: absolute;
   inset: 0;
@@ -419,6 +423,21 @@ button:disabled {
   opacity: 0;
   pointer-events: none;
   transition: opacity 160ms ease;
+}
+
+.remote-canvas.scale-stretch .remote-frame-image {
+  object-fit: fill;
+}
+
+.remote-canvas.scale-original .remote-frame-image {
+  inset: auto;
+  left: 0;
+  top: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  object-fit: none;
 }
 
 .remote-frame-image.is-visible {
