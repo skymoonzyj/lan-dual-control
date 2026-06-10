@@ -27,6 +27,8 @@ const elements = {
   scaleModeSelect: document.querySelector("#scaleModeSelect"),
   audioToggle: document.querySelector("#audioToggle"),
   clipboardToggle: document.querySelector("#clipboardToggle"),
+  fileClipboardButton: document.querySelector("#fileClipboardButton"),
+  fileClipboardInput: document.querySelector("#fileClipboardInput"),
   directionIndicator: document.querySelector("#directionIndicator"),
   directionText: document.querySelector("#directionText"),
   reverseStateText: document.querySelector("#reverseStateText"),
@@ -50,6 +52,8 @@ const reverseControlTimeoutMs = 4800;
 const maxStoredLogEntries = 500;
 const discoveryProbeTimeoutMs = 650;
 const defaultControlPort = "43770";
+const fileChunkSizeBytes = 64 * 1024;
+const maxClipboardFileBytes = 512 * 1024 * 1024;
 
 const fallbackDevices = [
   {
@@ -129,6 +133,8 @@ const state = {
   reconnectTimer: null,
   reconnectStableTimer: null,
   clipboardSequence: 0,
+  fileTransferSequence: 0,
+  fileTransferActive: false,
   controlDirection: "windows_to_mac",
   pendingControlDirection: "",
   reverseRequestId: "",
@@ -566,6 +572,7 @@ function setUiConnecting(host, port) {
   elements.connectButton.disabled = true;
   elements.disconnectButton.disabled = false;
   elements.reverseButton.disabled = true;
+  updateFileClipboardButton();
 }
 
 function setUiConnected(answer) {
@@ -577,6 +584,7 @@ function setUiConnected(answer) {
   elements.connectButton.disabled = true;
   elements.disconnectButton.disabled = false;
   elements.reverseButton.disabled = false;
+  updateFileClipboardButton();
   elements.remoteCanvas.focus();
   startLatencyLoop();
 
@@ -616,6 +624,8 @@ function setUiDisconnected(statusText = "未连接", logDetail = "会话已关�
   elements.connectButton.disabled = false;
   elements.disconnectButton.disabled = true;
   elements.reverseButton.disabled = true;
+  state.fileTransferActive = false;
+  updateFileClipboardButton();
   addLog("断开连接", logDetail);
 }
 
@@ -664,6 +674,7 @@ function scheduleReconnect(reason) {
   elements.connectButton.disabled = true;
   elements.disconnectButton.disabled = false;
   elements.reverseButton.disabled = true;
+  updateFileClipboardButton();
   addLog("自动重连", `${reason} · 第 ${state.reconnectAttempts}/${maxReconnectAttempts} 次`);
   updateReverseControlUi();
 
@@ -698,6 +709,15 @@ function updateMetrics() {
   elements.metricFps.textContent = `${settings.fps} FPS`;
   elements.metricBandwidth.textContent = `${elements.bandwidthSelect.value} Mbps`;
   elements.clipboardText.textContent = `剪贴板：${settings.clipboard ? "已开启" : "已关闭"}`;
+  updateFileClipboardButton();
+}
+
+function updateFileClipboardButton() {
+  elements.fileClipboardButton.disabled =
+    !state.connected ||
+    !state.client ||
+    !elements.clipboardToggle.checked ||
+    state.fileTransferActive;
 }
 
 function makeLogFileName() {
@@ -858,6 +878,7 @@ async function connect({ reconnect = false } = {}) {
     elements.connectButton.disabled = true;
     elements.disconnectButton.disabled = false;
     elements.reverseButton.disabled = true;
+    updateFileClipboardButton();
   } else {
     state.reconnectAttempts = 0;
     clearReconnectTimers();
@@ -1099,8 +1120,34 @@ function makeClipboardId() {
   return `clip-${Date.now().toString(16)}-${state.clipboardSequence}`;
 }
 
+function makeFileTransferId() {
+  state.fileTransferSequence += 1;
+  return `file-${Date.now().toString(16)}-${state.fileTransferSequence}`;
+}
+
 function makeReverseRequestId() {
   return `reverse-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const step = 0x8000;
+  for (let index = 0; index < bytes.length; index += step) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + step));
+  }
+  return window.btoa(binary);
+}
+
+function yieldToUi() {
+  return new Promise((resolve) => window.setTimeout(resolve, 0));
 }
 
 async function readLocalClipboardText() {
@@ -1144,6 +1191,137 @@ async function syncClipboardText() {
     elements.clipboardText.textContent = "剪贴板：同步失败";
     addLog("剪贴板失败", message);
   }
+}
+
+async function sendClipboardFiles() {
+  if (!state.connected || !state.client) {
+    elements.clipboardText.textContent = "剪贴板：请先连接被控端";
+    addLog("文件剪贴板", "未连接，无法发送文件");
+    return;
+  }
+
+  if (!elements.clipboardToggle.checked) {
+    elements.clipboardText.textContent = "剪贴板：已关闭";
+    addLog("文件剪贴板", "剪贴板同步已关闭");
+    return;
+  }
+
+  const files = Array.from(elements.fileClipboardInput.files ?? []);
+  if (files.length === 0) {
+    return;
+  }
+
+  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+  if (totalBytes > maxClipboardFileBytes) {
+    const message = `文件总大小 ${formatBytes(totalBytes)}，超过当前上限 ${formatBytes(maxClipboardFileBytes)}`;
+    elements.clipboardText.textContent = "剪贴板：文件过大";
+    addLog("文件剪贴板", message);
+    elements.fileClipboardInput.value = "";
+    return;
+  }
+
+  const transferId = makeFileTransferId();
+  const fileMetas = files.map((file, index) => ({
+    index,
+    name: file.name,
+    size: file.size,
+    mimeType: file.type || "application/octet-stream",
+    lastModified: file.lastModified,
+  }));
+
+  let sentBytes = 0;
+  state.fileTransferActive = true;
+  updateFileClipboardButton();
+  elements.clipboardText.textContent = `剪贴板：准备发送 ${files.length} 个文件`;
+
+  try {
+    state.client.sendClipboardFileOffer({
+      transferId,
+      direction: "client_to_host",
+      totalBytes,
+      fileCount: files.length,
+      maxChunkBytes: fileChunkSizeBytes,
+      files: fileMetas,
+    });
+    addLog("文件剪贴板", `开始发送 ${files.length} 个文件，共 ${formatBytes(totalBytes)}`);
+
+    for (const [fileIndex, file] of files.entries()) {
+      let chunkIndex = 0;
+      for (let offset = 0; offset < file.size; offset += fileChunkSizeBytes) {
+        const chunk = file.slice(offset, Math.min(offset + fileChunkSizeBytes, file.size));
+        const dataBase64 = arrayBufferToBase64(await chunk.arrayBuffer());
+        const nextSentBytes = sentBytes + chunk.size;
+        state.client.sendClipboardFileChunk({
+          transferId,
+          fileIndex,
+          fileName: file.name,
+          chunkIndex,
+          offset,
+          bytes: chunk.size,
+          sentBytes: nextSentBytes,
+          totalBytes,
+          encoding: "base64",
+          dataBase64,
+        });
+        sentBytes = nextSentBytes;
+        chunkIndex += 1;
+        const percent = totalBytes === 0 ? 100 : Math.round((sentBytes / totalBytes) * 100);
+        elements.clipboardText.textContent = `剪贴板：文件发送 ${percent}%`;
+        if (chunkIndex % 8 === 0) {
+          await yieldToUi();
+        }
+      }
+    }
+
+    state.client.sendClipboardFileComplete({
+      transferId,
+      totalBytes,
+      fileCount: files.length,
+    });
+    elements.clipboardText.textContent = `剪贴板：文件已发送 ${formatBytes(sentBytes)}`;
+    addLog("文件剪贴板", `文件块发送完成，等待对端确认 · ${transferId}`);
+  } catch (error) {
+    const message = error?.message || "文件发送失败";
+    elements.clipboardText.textContent = "剪贴板：文件发送失败";
+    addLog("文件剪贴板失败", message);
+  } finally {
+    state.fileTransferActive = false;
+    elements.fileClipboardInput.value = "";
+    updateFileClipboardButton();
+  }
+}
+
+function handleClipboardFileOffer(message) {
+  const fileCount = Array.isArray(message.files) ? message.files.length : 0;
+  addLog("文件剪贴板", `收到远端文件清单 ${fileCount} 个，当前先不落地保存`);
+  state.client?.sendClipboardFileResponse({
+    transferId: message.transferId,
+    accepted: false,
+    reason: "Windows 控制端接收文件到系统剪贴板需要桌面原生模块，后续接入。",
+  });
+}
+
+function handleClipboardFileResponse(message) {
+  const text = message.accepted
+    ? "剪贴板：对端已准备接收文件"
+    : `剪贴板：对端拒绝文件${message.reason ? `，${message.reason}` : ""}`;
+  elements.clipboardText.textContent = text;
+  addLog("文件剪贴板", message.accepted ? "对端已接受文件清单" : message.reason || "对端拒绝文件清单");
+}
+
+function handleClipboardFileProgress(message) {
+  if (!message.totalBytes) {
+    return;
+  }
+  const percent = Math.round((Number(message.receivedBytes || 0) / Number(message.totalBytes)) * 100);
+  elements.clipboardText.textContent = `剪贴板：对端接收 ${percent}%`;
+}
+
+function handleClipboardFileResult(message) {
+  elements.clipboardText.textContent = message.accepted
+    ? "剪贴板：对端已完成文件接收"
+    : "剪贴板：对端文件接收失败";
+  addLog("文件剪贴板", message.reason || (message.accepted ? "对端已完成文件接收" : "对端文件接收失败"));
 }
 
 async function receiveClipboardText(message) {
@@ -1299,6 +1477,26 @@ function handleProtocolMessage(message) {
     return;
   }
 
+  if (message.type === "clipboard_file_offer") {
+    handleClipboardFileOffer(message);
+    return;
+  }
+
+  if (message.type === "clipboard_file_response") {
+    handleClipboardFileResponse(message);
+    return;
+  }
+
+  if (message.type === "clipboard_file_progress") {
+    handleClipboardFileProgress(message);
+    return;
+  }
+
+  if (message.type === "clipboard_file_result") {
+    handleClipboardFileResult(message);
+    return;
+  }
+
   if (message.type === "reverse_control_request") {
     handleIncomingReverseControlRequest(message);
     return;
@@ -1393,6 +1591,11 @@ elements.clipboardToggle.addEventListener("change", () => {
   addLog("剪贴板", elements.clipboardToggle.checked ? "已开启" : "已关闭");
   sendDisplaySettings();
 });
+elements.fileClipboardButton.addEventListener("click", () => {
+  if (elements.fileClipboardButton.disabled) return;
+  elements.fileClipboardInput.click();
+});
+elements.fileClipboardInput.addEventListener("change", sendClipboardFiles);
 
 [elements.hostInput, elements.portInput].forEach((input) => {
   input.addEventListener("change", savePreferences);

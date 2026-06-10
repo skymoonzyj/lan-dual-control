@@ -415,11 +415,48 @@ Both directions: clipboard_event loop
 
 ```json
 {
-  "type": "file_chunk",
+  "type": "clipboard_file_chunk",
   "transferId": "uuid",
   "fileIndex": 0,
   "offset": 0,
-  "length": 65536
+  "bytes": 65536,
+  "sentBytes": 65536,
+  "encoding": "base64",
+  "dataBase64": "..."
+}
+```
+
+进度：
+
+```json
+{
+  "type": "clipboard_file_progress",
+  "transferId": "uuid",
+  "receivedBytes": 65536,
+  "totalBytes": 1048576
+}
+```
+
+发送方完成：
+
+```json
+{
+  "type": "clipboard_file_complete",
+  "transferId": "uuid",
+  "fileCount": 1,
+  "totalBytes": 1048576
+}
+```
+
+接收方最终结果：
+
+```json
+{
+  "type": "clipboard_file_result",
+  "transferId": "uuid",
+  "accepted": true,
+  "receivedBytes": 1048576,
+  "totalBytes": 1048576
 }
 ```
 
@@ -431,6 +468,7 @@ Both directions: clipboard_event loop
 - 文件通道不能阻塞输入事件、视频流和音频流。
 - 大文件传输要显示进度、速度、剩余时间。
 - 文件先落到安全临时目录，再写入系统剪贴板或用户选择的位置。
+- 当前 Windows 控制端第一阶段通过文件选择器发送文件块；真实“复制系统文件后自动同步”需要 Tauri/原生剪贴板模块。
 
 ## 11. 一键反控协议
 

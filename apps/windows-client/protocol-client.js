@@ -204,6 +204,38 @@
         return;
       }
 
+      if (message.type === "clipboard_file_offer") {
+        sendLater({
+          type: "clipboard_file_response",
+          transferId: message.transferId,
+          accepted: true,
+          saveMode: "memory-only",
+          maxChunkBytes: message.maxChunkBytes,
+        }, 80);
+        return;
+      }
+
+      if (message.type === "clipboard_file_chunk") {
+        sendLater({
+          type: "clipboard_file_progress",
+          transferId: message.transferId,
+          receivedBytes:
+            Number(message.sentBytes) || Number(message.offset || 0) + Number(message.bytes || 0),
+          totalBytes: message.totalBytes,
+        }, 40);
+        return;
+      }
+
+      if (message.type === "clipboard_file_complete") {
+        sendLater({
+          type: "clipboard_file_result",
+          transferId: message.transferId,
+          accepted: true,
+          reason: "本地模拟已接收文件块，真实剪贴板写入后续接入。",
+        }, 80);
+        return;
+      }
+
       if (message.type === "reverse_control_request") {
         if (message.mockScenario === "reverse_control_timeout") {
           return;
@@ -389,6 +421,38 @@
         accepted: Boolean(accepted),
         clipboardId,
         reason,
+      });
+    }
+
+    sendClipboardFileOffer(offer) {
+      if (!this.connected) return;
+      this.send({
+        type: "clipboard_file_offer",
+        ...offer,
+      });
+    }
+
+    sendClipboardFileResponse(response) {
+      if (!this.connected) return;
+      this.send({
+        type: "clipboard_file_response",
+        ...response,
+      });
+    }
+
+    sendClipboardFileChunk(chunk) {
+      if (!this.connected) return;
+      this.send({
+        type: "clipboard_file_chunk",
+        ...chunk,
+      });
+    }
+
+    sendClipboardFileComplete(complete) {
+      if (!this.connected) return;
+      this.send({
+        type: "clipboard_file_complete",
+        ...complete,
       });
     }
 

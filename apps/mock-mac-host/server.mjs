@@ -155,6 +155,7 @@ function createClient(socket, options) {
   let inputCount = 0;
   let frameCount = 0;
   let frameTimer = null;
+  const fileTransfers = new Map();
 
   function send(message) {
     socket.write(encodeTextFrame(JSON.stringify({
@@ -254,6 +255,60 @@ function createClient(socket, options) {
         clipboardId: message.clipboardId,
         textLength: message.textLength ?? message.text?.length ?? 0,
       });
+      return;
+    }
+
+    if (message.type === "clipboard_file_offer") {
+      fileTransfers.set(message.transferId, {
+        totalBytes: Number(message.totalBytes) || 0,
+        receivedBytes: 0,
+        fileCount: Number(message.fileCount) || message.files?.length || 0,
+      });
+      send({
+        type: "clipboard_file_response",
+        transferId: message.transferId,
+        accepted: true,
+        saveMode: "memory-only",
+        maxChunkBytes: message.maxChunkBytes,
+        reason: "假 Mac 服务已准备接收文件块。",
+      });
+      return;
+    }
+
+    if (message.type === "clipboard_file_chunk") {
+      const transfer = fileTransfers.get(message.transferId) ?? {
+        totalBytes: Number(message.totalBytes) || 0,
+        receivedBytes: 0,
+        fileCount: 0,
+      };
+      transfer.receivedBytes =
+        Number(message.sentBytes) ||
+        Math.min(
+          transfer.totalBytes || Number(message.totalBytes) || Number.MAX_SAFE_INTEGER,
+          transfer.receivedBytes + Number(message.bytes || 0),
+        );
+      fileTransfers.set(message.transferId, transfer);
+      send({
+        type: "clipboard_file_progress",
+        transferId: message.transferId,
+        receivedBytes: transfer.receivedBytes,
+        totalBytes: transfer.totalBytes || message.totalBytes,
+      });
+      return;
+    }
+
+    if (message.type === "clipboard_file_complete") {
+      const transfer = fileTransfers.get(message.transferId);
+      send({
+        type: "clipboard_file_result",
+        transferId: message.transferId,
+        accepted: true,
+        receivedBytes: transfer?.receivedBytes ?? message.totalBytes ?? 0,
+        totalBytes: message.totalBytes,
+        fileCount: message.fileCount,
+        reason: "假 Mac 服务已接收文件块，真实剪贴板写入后续接入。",
+      });
+      fileTransfers.delete(message.transferId);
       return;
     }
 

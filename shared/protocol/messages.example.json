@@ -116,12 +116,57 @@
     "type": "clipboard_file_offer",
     "transferId": "uuid",
     "direction": "host_to_client",
+    "totalBytes": 1048576,
+    "fileCount": 1,
+    "maxChunkBytes": 65536,
     "files": [
       {
+        "index": 0,
         "name": "archive.zip",
         "size": 1048576,
+        "mimeType": "application/zip",
+        "lastModified": 1780000000000,
         "sha256": "hash-value"
       }
     ]
+  },
+  "clipboardFileResponse": {
+    "type": "clipboard_file_response",
+    "transferId": "uuid",
+    "accepted": true,
+    "saveMode": "memory-only",
+    "maxChunkBytes": 65536
+  },
+  "clipboardFileChunk": {
+    "type": "clipboard_file_chunk",
+    "transferId": "uuid",
+    "fileIndex": 0,
+    "fileName": "archive.zip",
+    "chunkIndex": 0,
+    "offset": 0,
+    "bytes": 65536,
+    "sentBytes": 65536,
+    "totalBytes": 1048576,
+    "encoding": "base64",
+    "dataBase64": "..."
+  },
+  "clipboardFileProgress": {
+    "type": "clipboard_file_progress",
+    "transferId": "uuid",
+    "receivedBytes": 65536,
+    "totalBytes": 1048576
+  },
+  "clipboardFileComplete": {
+    "type": "clipboard_file_complete",
+    "transferId": "uuid",
+    "fileCount": 1,
+    "totalBytes": 1048576
+  },
+  "clipboardFileResult": {
+    "type": "clipboard_file_result",
+    "transferId": "uuid",
+    "accepted": true,
+    "receivedBytes": 1048576,
+    "totalBytes": 1048576
   }
 }

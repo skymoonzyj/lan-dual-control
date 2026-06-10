@@ -23,6 +23,7 @@
 - 支持假 Mac 联调错误模拟：密码错误、权限不足、视频中断、连接后断开。
 - 支持非手动断线后自动重连，最多重试 3 次。
 - 支持 `Ctrl+V` 读取本机文字剪贴板并发送给被控端，也可接收远端 `clipboard_text` 并写入本机剪贴板。
+- 支持文件剪贴板发送骨架：可手动选择文件、压缩包或图片，按 `clipboard_file_*` 消息分块发送并显示进度。
 - 支持一键反控请求编号、方向状态显示、超时回滚和对端确认。
 - 支持收到对端 `reverse_control_request` 时弹出确认。
 - 本地事件日志，可一键导出当前连接状态、画质参数、重连状态和事件记录。
@@ -83,3 +84,5 @@ node E:\codex\lan-dual-control\apps\mock-mac-host\server.mjs 43770
 - input_event
 - clipboard_text
 - clipboard_file_offer
+- clipboard_file_chunk
+- clipboard_file_complete

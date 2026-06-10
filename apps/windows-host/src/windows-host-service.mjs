@@ -26,7 +26,7 @@ function makeSessionAnswer(message, screen, audio) {
     width: screen.width,
     height: screen.height,
     clipboardText: Boolean(message.wantClipboardText),
-    clipboardFile: false,
+    clipboardFile: Boolean(message.wantClipboardFile),
     hostMode: "windows-host-skeleton",
   };
 }
@@ -77,7 +77,7 @@ function createClient(socket, context) {
           audio: context.audio.getCapabilities(),
           input: context.input.getCapabilities(),
           clipboardText: true,
-          clipboardFile: false,
+          clipboardFile: true,
         },
       });
       return;
@@ -129,6 +129,21 @@ function createClient(socket, context) {
 
     if (message.type === "clipboard_text") {
       send(context.clipboard.receiveText(message));
+      return;
+    }
+
+    if (message.type === "clipboard_file_offer") {
+      send(context.clipboard.receiveFileOffer(message));
+      return;
+    }
+
+    if (message.type === "clipboard_file_chunk") {
+      send(context.clipboard.receiveFileChunk(message));
+      return;
+    }
+
+    if (message.type === "clipboard_file_complete") {
+      send(context.clipboard.completeFileTransfer(message));
       return;
     }
 
@@ -222,7 +237,7 @@ export function createWindowsHostServer({
           audio: audio.getCapabilities(),
           input: input.getCapabilities(),
           clipboardText: true,
-          clipboardFile: false,
+          clipboardFile: true,
           reverseControl: true,
           mock: true,
         },
