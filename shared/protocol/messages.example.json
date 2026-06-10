@@ -35,6 +35,7 @@
     "maxFps": 60,
     "maxBandwidthKbps": 50000,
     "displayMode": "windowed",
+    "displayId": "main",
     "preferredWidth": 1920,
     "preferredHeight": 1080,
     "preferredVideoCodec": "mjpeg",
@@ -49,6 +50,23 @@
     "maxBandwidthKbps": 50000,
     "width": 1920,
     "height": 1080,
+    "displays": [
+      {
+        "id": "main",
+        "name": "内建显示器",
+        "width": 1920,
+        "height": 1080,
+        "primary": true
+      },
+      {
+        "id": "secondary",
+        "name": "扩展显示器",
+        "width": 2560,
+        "height": 1440,
+        "primary": false
+      }
+    ],
+    "activeDisplayId": "main",
     "clipboardText": true,
     "clipboardFile": true,
     "hostMode": "windows-host-skeleton"
@@ -56,6 +74,7 @@
   "displaySettings": {
     "type": "display_settings",
     "displayMode": "windowed",
+    "displayId": "main",
     "resolutionMode": "fixed",
     "scaleMode": "fit",
     "width": 1920,

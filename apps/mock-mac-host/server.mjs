@@ -4,6 +4,10 @@ import { pathToFileURL } from "node:url";
 
 const websocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const defaultPassword = "demo-password";
+const mockDisplays = [
+  { id: "main", name: "内建显示器", width: 1920, height: 1080, primary: true },
+  { id: "secondary", name: "扩展显示器", width: 2560, height: 1440, primary: false },
+];
 
 function makeAcceptKey(key) {
   return createHash("sha1")
@@ -94,9 +98,18 @@ function decodeFrames(buffer) {
   };
 }
 
+function pickMockDisplay(displayId) {
+  return (
+    mockDisplays.find((display) => display.id === displayId) ||
+    mockDisplays.find((display) => display.primary) ||
+    mockDisplays[0]
+  );
+}
+
 function negotiateSession(message) {
-  const width = Number(message.preferredWidth) || 1920;
-  const height = Number(message.preferredHeight) || 1080;
+  const activeDisplay = pickMockDisplay(message.displayId);
+  const width = Number(message.preferredWidth) || activeDisplay.width || 1920;
+  const height = Number(message.preferredHeight) || activeDisplay.height || 1080;
   const maxFps = Number(message.maxFps) || 60;
   const maxBandwidthKbps = Number(message.maxBandwidthKbps) || 50000;
 
@@ -109,12 +122,15 @@ function negotiateSession(message) {
     maxBandwidthKbps,
     width,
     height,
+    displays: mockDisplays,
+    activeDisplayId: activeDisplay.id,
+    displayName: activeDisplay.name,
     clipboardText: Boolean(message.wantClipboardText),
     clipboardFile: Boolean(message.wantClipboardFile),
   };
 }
 
-function makeMockVideoFrame(frameId, width = 1920, height = 1080) {
+function makeMockVideoFrame(frameId, width = 1920, height = 1080, displayName = "内建显示器") {
   const now = new Date();
   const hue = (frameId * 23) % 360;
   const svg = `
@@ -133,8 +149,9 @@ function makeMockVideoFrame(frameId, width = 1920, height = 1080) {
       <circle cx="${Math.round(width * 0.18)}" cy="${Math.round(height * 0.22)}" r="12" fill="#f59e0b"/>
       <circle cx="${Math.round(width * 0.21)}" cy="${Math.round(height * 0.22)}" r="12" fill="#22c55e"/>
       <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.34)}" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="44" font-weight="700" fill="#111827">局域网远控测试帧</text>
-      <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.42)}" font-family="Consolas, monospace" font-size="30" fill="#4b5563">frame #${frameId}</text>
-      <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.48)}" font-family="Consolas, monospace" font-size="26" fill="#4b5563">${now.toLocaleTimeString("zh-CN")}</text>
+      <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.42)}" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="30" fill="#4b5563">${displayName}</text>
+      <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.49)}" font-family="Consolas, monospace" font-size="30" fill="#4b5563">frame #${frameId}</text>
+      <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.55)}" font-family="Consolas, monospace" font-size="26" fill="#4b5563">${now.toLocaleTimeString("zh-CN")}</text>
     </svg>`;
 
   return {
@@ -155,6 +172,7 @@ function createClient(socket, options) {
   let inputCount = 0;
   let frameCount = 0;
   let frameTimer = null;
+  let session = null;
   const fileTransfers = new Map();
 
   function send(message) {
@@ -208,7 +226,7 @@ function createClient(socket, options) {
         return;
       }
 
-      const session = negotiateSession(message);
+      session = negotiateSession(message);
       send(session);
       startVideoFrames(session);
       if (message.mockScenario === "video_interrupted") {
@@ -241,6 +259,25 @@ function createClient(socket, options) {
     }
 
     if (message.type === "display_settings") {
+      if (session) {
+        const activeDisplay = pickMockDisplay(message.displayId);
+        session = {
+          ...session,
+          activeDisplayId: activeDisplay.id,
+          displayName: activeDisplay.name,
+          width:
+            message.resolutionMode === "native"
+              ? activeDisplay.width
+              : Number(message.width) || session.width,
+          height:
+            message.resolutionMode === "native"
+              ? activeDisplay.height
+              : Number(message.height) || session.height,
+          fps: Number(message.fps) || session.fps,
+          maxBandwidthKbps: Number(message.maxBandwidthKbps) || session.maxBandwidthKbps,
+        };
+        startVideoFrames(session);
+      }
       send({
         type: "display_settings_ack",
         accepted: true,
@@ -347,7 +384,7 @@ function createClient(socket, options) {
     const intervalMs = Math.max(120, Math.round(1000 / Math.min(Number(session.fps) || 5, 8)));
     frameTimer = setInterval(() => {
       frameCount += 1;
-      send(makeMockVideoFrame(frameCount, session.width, session.height));
+      send(makeMockVideoFrame(frameCount, session.width, session.height, session.displayName));
     }, intervalMs);
   }
 
@@ -428,6 +465,7 @@ export function createMockMacHostServer({
           clipboardFile: true,
           reverseControl: true,
           mock: true,
+          displays: mockDisplays,
         },
         lastSeenAt: new Date().toISOString(),
       }));

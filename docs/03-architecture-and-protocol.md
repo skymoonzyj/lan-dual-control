@@ -163,6 +163,7 @@ Both directions: clipboard_event loop
   "maxFps": 60,
   "maxBandwidthKbps": 50000,
   "displayMode": "windowed",
+  "displayId": "main",
   "preferredWidth": 1920,
   "preferredHeight": 1080,
   "preferredVideoCodec": "mjpeg",
@@ -182,6 +183,16 @@ Both directions: clipboard_event loop
   "maxBandwidthKbps": 50000,
   "width": 1920,
   "height": 1080,
+  "displays": [
+    {
+      "id": "main",
+      "name": "内建显示器",
+      "width": 1920,
+      "height": 1080,
+      "primary": true
+    }
+  ],
+  "activeDisplayId": "main",
   "clipboardText": true,
   "clipboardFile": true,
   "hostMode": "windows-host-skeleton"
@@ -232,6 +243,7 @@ Both directions: clipboard_event loop
 {
   "type": "display_settings",
   "displayMode": "fullscreen",
+  "displayId": "main",
   "resolutionMode": "fixed",
   "scaleMode": "fit",
   "width": 1920,
@@ -247,6 +259,7 @@ Both directions: clipboard_event loop
 字段说明：
 
 - displayMode：windowed 或 fullscreen。
+- displayId：目标显示器编号，由 `session_answer.displays` 提供。
 - resolutionMode：native、fit_client、fixed。
 - scaleMode：fit、original、stretch，控制端显示缩放模式。
 - fps：目标刷新率，第一版建议支持 15、30、60。

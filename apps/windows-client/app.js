@@ -22,6 +22,7 @@ const elements = {
   inputText: document.querySelector("#inputText"),
   clipboardText: document.querySelector("#clipboardText"),
   resolutionSelect: document.querySelector("#resolutionSelect"),
+  displaySelect: document.querySelector("#displaySelect"),
   fpsSelect: document.querySelector("#fpsSelect"),
   bandwidthSelect: document.querySelector("#bandwidthSelect"),
   scaleModeSelect: document.querySelector("#scaleModeSelect"),
@@ -54,6 +55,22 @@ const discoveryProbeTimeoutMs = 650;
 const defaultControlPort = "43770";
 const fileChunkSizeBytes = 64 * 1024;
 const maxClipboardFileBytes = 512 * 1024 * 1024;
+const fallbackDisplays = [
+  {
+    id: "main",
+    name: "主显示器",
+    width: 1920,
+    height: 1080,
+    primary: true,
+  },
+  {
+    id: "secondary",
+    name: "扩展显示器",
+    width: 2560,
+    height: 1440,
+    primary: false,
+  },
+];
 
 const fallbackDevices = [
   {
@@ -126,6 +143,8 @@ const state = {
   videoFrames: 0,
   recentConnections: [],
   connectionState: "idle",
+  remoteDisplays: fallbackDisplays,
+  activeDisplayId: "main",
   remoteFrameWidth: 1920,
   remoteFrameHeight: 1080,
   manualDisconnect: false,
@@ -279,6 +298,7 @@ function collectPreferences() {
     port: elements.portInput.value.trim(),
     mockScenario: elements.mockScenarioSelect.value,
     resolution: elements.resolutionSelect.value,
+    displayId: elements.displaySelect.value,
     fps: elements.fpsSelect.value,
     bandwidth: elements.bandwidthSelect.value,
     scaleMode: elements.scaleModeSelect.value,
@@ -300,6 +320,7 @@ function applyPreferences() {
   if (preferences.port) elements.portInput.value = preferences.port;
   if (preferences.mockScenario) elements.mockScenarioSelect.value = preferences.mockScenario;
   if (preferences.resolution) elements.resolutionSelect.value = preferences.resolution;
+  if (preferences.displayId) state.activeDisplayId = preferences.displayId;
   if (preferences.fps) elements.fpsSelect.value = preferences.fps;
   if (preferences.bandwidth) elements.bandwidthSelect.value = preferences.bandwidth;
   if (preferences.scaleMode) elements.scaleModeSelect.value = preferences.scaleMode;
@@ -311,7 +332,50 @@ function applyPreferences() {
   state.recentConnections = Array.isArray(preferences.recentConnections)
     ? preferences.recentConnections.slice(0, 5)
     : [];
+  renderDisplayOptions(fallbackDisplays, state.activeDisplayId);
   renderRecentConnections();
+}
+
+function normalizeDisplays(displays = []) {
+  const normalized = displays
+    .filter(Boolean)
+    .map((display, index) => ({
+      id: String(display.id ?? `display-${index + 1}`),
+      name: display.name || `显示器 ${index + 1}`,
+      width: Number(display.width) || 0,
+      height: Number(display.height) || 0,
+      primary: Boolean(display.primary),
+    }));
+
+  return normalized.length > 0 ? normalized : fallbackDisplays;
+}
+
+function getDisplayOptionLabel(display) {
+  const size = display.width && display.height ? ` · ${display.width} × ${display.height}` : "";
+  return `${display.name}${display.primary ? " · 主屏" : ""}${size}`;
+}
+
+function renderDisplayOptions(displays = state.remoteDisplays, preferredDisplayId = state.activeDisplayId) {
+  state.remoteDisplays = normalizeDisplays(displays);
+  const nextDisplayId =
+    state.remoteDisplays.find((display) => display.id === preferredDisplayId)?.id ??
+    state.remoteDisplays.find((display) => display.primary)?.id ??
+    state.remoteDisplays[0].id;
+
+  elements.displaySelect.innerHTML = "";
+  state.remoteDisplays.forEach((display) => {
+    const option = document.createElement("option");
+    option.value = display.id;
+    option.textContent = getDisplayOptionLabel(display);
+    elements.displaySelect.append(option);
+  });
+
+  elements.displaySelect.value = nextDisplayId;
+  state.activeDisplayId = nextDisplayId;
+}
+
+function updateDisplaysFromSession(answer = {}) {
+  renderDisplayOptions(answer.displays, answer.activeDisplayId || answer.displayId || state.activeDisplayId);
 }
 
 function getPlatformLabel(platform = "") {
@@ -584,6 +648,7 @@ function setUiConnected(answer) {
   elements.connectButton.disabled = true;
   elements.disconnectButton.disabled = false;
   elements.reverseButton.disabled = false;
+  updateDisplaysFromSession(answer);
   updateFileClipboardButton();
   elements.remoteCanvas.focus();
   startLatencyLoop();
@@ -691,6 +756,7 @@ function currentDisplaySettings() {
 
   return {
     displayMode: state.fullscreen ? "fullscreen" : "windowed",
+    displayId: elements.displaySelect.value || state.activeDisplayId,
     resolutionMode: resolutionValue === "native" ? "native" : "fixed",
     width,
     height,
@@ -756,6 +822,7 @@ function buildLogExportText() {
     "",
     "显示与能力",
     `- 显示模式：${settings.displayMode === "fullscreen" ? "全屏" : "窗口"}`,
+    `- 显示器：${elements.displaySelect.selectedOptions[0]?.textContent ?? settings.displayId}`,
     `- 分辨率：${settings.resolutionMode === "native" ? "原生" : `${settings.width} × ${settings.height}`}`,
     `- 缩放：${elements.scaleModeSelect.selectedOptions[0]?.textContent ?? settings.scaleMode}`,
     `- 刷新率：${settings.fps} FPS`,
@@ -811,6 +878,7 @@ function buildSessionOffer() {
     maxFps: settings.fps,
     maxBandwidthKbps: settings.maxBandwidthKbps,
     displayMode: settings.displayMode,
+    displayId: settings.displayId,
     preferredWidth,
     preferredHeight,
     preferredVideoCodec: "mjpeg",
@@ -831,6 +899,7 @@ function buildDisplaySettingsMessage() {
 
   return {
     displayMode: settings.displayMode,
+    displayId: settings.displayId,
     resolutionMode: settings.resolutionMode,
     fps: settings.fps,
     maxBandwidthKbps: settings.maxBandwidthKbps,
@@ -1573,6 +1642,11 @@ elements.windowModeButton.addEventListener("click", () => setFullscreen(false));
 elements.reverseButton.addEventListener("click", requestReverseControl);
 
 elements.resolutionSelect.addEventListener("change", sendDisplaySettings);
+elements.displaySelect.addEventListener("change", () => {
+  state.activeDisplayId = elements.displaySelect.value;
+  sendDisplaySettings();
+  addLog("显示器", elements.displaySelect.selectedOptions[0]?.textContent ?? state.activeDisplayId);
+});
 elements.scaleModeSelect.addEventListener("change", () => {
   applyScaleMode();
   sendDisplaySettings();

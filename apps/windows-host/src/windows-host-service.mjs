@@ -25,6 +25,9 @@ function makeSessionAnswer(message, screen, audio) {
     maxBandwidthKbps: screen.maxBandwidthKbps,
     width: screen.width,
     height: screen.height,
+    displays: screen.displays,
+    activeDisplayId: screen.activeDisplayId,
+    displayName: screen.displayName,
     clipboardText: Boolean(message.wantClipboardText),
     clipboardFile: Boolean(message.wantClipboardFile),
     hostMode: "windows-host-skeleton",
@@ -109,13 +112,7 @@ function createClient(socket, context) {
 
     if (message.type === "display_settings") {
       if (session) {
-        session = {
-          ...session,
-          width: Number(message.width) || session.width,
-          height: Number(message.height) || session.height,
-          fps: Number(message.fps) || session.fps,
-          maxBandwidthKbps: Number(message.maxBandwidthKbps) || session.maxBandwidthKbps,
-        };
+        session = context.screen.updateSessionDisplay(session, message);
         startVideoFrames(session);
       }
       send({ type: "display_settings_ack", accepted: true });

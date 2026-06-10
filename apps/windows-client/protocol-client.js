@@ -12,6 +12,19 @@
     return `${prefix}-${Date.now().toString(16)}-${random}`;
   }
 
+  const mockDisplays = [
+    { id: "main", name: "内建显示器", width: 1920, height: 1080, primary: true },
+    { id: "secondary", name: "扩展显示器", width: 2560, height: 1440, primary: false },
+  ];
+
+  function pickMockDisplay(displayId) {
+    return (
+      mockDisplays.find((display) => display.id === displayId) ||
+      mockDisplays.find((display) => display.primary) ||
+      mockDisplays[0]
+    );
+  }
+
   class ProtocolError extends Error {
     constructor(message, code = "LAN001") {
       super(message);
@@ -20,7 +33,7 @@
     }
   }
 
-  function makeMockVideoFrame(frameId, width = 1920, height = 1080) {
+  function makeMockVideoFrame(frameId, width = 1920, height = 1080, displayName = "内建显示器") {
     const now = new Date();
     const hue = (frameId * 23) % 360;
     const svg = `
@@ -39,7 +52,8 @@
         <circle cx="${Math.round(width * 0.18)}" cy="${Math.round(height * 0.22)}" r="12" fill="#f59e0b"/>
         <circle cx="${Math.round(width * 0.21)}" cy="${Math.round(height * 0.22)}" r="12" fill="#22c55e"/>
         <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.34)}" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="44" font-weight="700" fill="#111827">局域网远控测试帧</text>
-        <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.42)}" font-family="Consolas, monospace" font-size="30" fill="#4b5563">frame #${frameId}</text>
+        <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.42)}" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="30" fill="#4b5563">${displayName}</text>
+        <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.49)}" font-family="Consolas, monospace" font-size="30" fill="#4b5563">frame #${frameId}</text>
         <text x="${Math.round(width * 0.15)}" y="${Math.round(height * 0.48)}" font-family="Consolas, monospace" font-size="26" fill="#4b5563">${now.toLocaleTimeString("zh-CN")}</text>
       </svg>`;
 
@@ -143,8 +157,9 @@
           return;
         }
 
-        const width = Number(message.preferredWidth) || 1920;
-        const height = Number(message.preferredHeight) || 1080;
+        const activeDisplay = pickMockDisplay(message.displayId);
+        const width = Number(message.preferredWidth) || activeDisplay.width || 1920;
+        const height = Number(message.preferredHeight) || activeDisplay.height || 1080;
         const answer = {
           type: "session_answer",
           ok: true,
@@ -154,6 +169,9 @@
           maxBandwidthKbps: Number(message.maxBandwidthKbps) || 50000,
           width,
           height,
+          displays: mockDisplays,
+          activeDisplayId: activeDisplay.id,
+          displayName: activeDisplay.name,
           clipboardText: Boolean(message.wantClipboardText),
           clipboardFile: Boolean(message.wantClipboardFile),
         };
@@ -190,7 +208,21 @@
       }
 
       if (message.type === "display_settings") {
+        const activeDisplay = pickMockDisplay(message.displayId);
         sendLater({ type: "display_settings_ack", accepted: true }, 80);
+        this.stopVideoFrames();
+        this.startVideoFrames({
+          width:
+            message.resolutionMode === "native"
+              ? activeDisplay.width
+              : Number(message.width) || activeDisplay.width,
+          height:
+            message.resolutionMode === "native"
+              ? activeDisplay.height
+              : Number(message.height) || activeDisplay.height,
+          fps: Number(message.fps) || 60,
+          displayName: activeDisplay.name,
+        });
         return;
       }
 
@@ -264,7 +296,9 @@
       this.frameTimer = global.setInterval(() => {
         if (!this.connected || !this.onMessage) return;
         this.frameId += 1;
-        this.onMessage(makeMockVideoFrame(this.frameId, session.width, session.height));
+        this.onMessage(
+          makeMockVideoFrame(this.frameId, session.width, session.height, session.displayName),
+        );
       }, intervalMs);
     }
 
