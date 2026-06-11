@@ -33,6 +33,9 @@ const elements = {
   clipboardToggle: document.querySelector("#clipboardToggle"),
   fileClipboardButton: document.querySelector("#fileClipboardButton"),
   fileClipboardInput: document.querySelector("#fileClipboardInput"),
+  receivedFilesList: document.querySelector("#receivedFilesList"),
+  downloadAllReceivedFilesButton: document.querySelector("#downloadAllReceivedFilesButton"),
+  clearReceivedFilesButton: document.querySelector("#clearReceivedFilesButton"),
   keyMapWinSelect: document.querySelector("#keyMapWinSelect"),
   keyMapAltSelect: document.querySelector("#keyMapAltSelect"),
   keyMapCtrlSelect: document.querySelector("#keyMapCtrlSelect"),
@@ -1388,6 +1391,10 @@ function buildLogExportText() {
       const detail = entry.detail ? ` | ${entry.detail}` : "";
       return `${String(index + 1).padStart(3, "0")} | ${entry.time} | ${entry.title}${detail}`;
     });
+  const receivedFileLines = state.receivedClipboardFiles.map(
+    (file, index) =>
+      `${index + 1}. ${file.name} · ${formatBytes(file.size || 0)} · ${file.mimeType || "application/octet-stream"}`,
+  );
 
   return [
     "LAN Dual Control Windows 控制端日志",
@@ -1413,6 +1420,7 @@ function buildLogExportText() {
     `- 码率：${Math.round(settings.maxBandwidthKbps / 1000)} Mbps`,
     `- 声音：${settings.audio ? `开启 · ${settings.audioVolume}%` : "关闭"}`,
     `- 剪贴板：${settings.clipboard ? "开启" : "关闭"}`,
+    `- 最近收到远端文件：${state.receivedClipboardFiles.length} 个`,
     `- 按键映射：Win→${remoteModifierLabels[keyboardMapping.win]}，Alt→${remoteModifierLabels[keyboardMapping.alt]}，Ctrl→${remoteModifierLabels[keyboardMapping.ctrl]}`,
     `- Windows 快捷键兼容：${elements.shortcutCompatToggle.checked ? "开启" : "关闭"}`,
     "",
@@ -1425,6 +1433,9 @@ function buildLogExportText() {
     "",
     "事件记录",
     ...(eventLines.length ? eventLines : ["暂无事件记录"]),
+    "",
+    "最近收到远端文件",
+    ...(receivedFileLines.length ? receivedFileLines : ["暂无远端文件"]),
     "",
   ].join("\n");
 }
@@ -1769,6 +1780,10 @@ function formatBytes(bytes) {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 
+function makeSafeDownloadName(name, index) {
+  return normalizeRemoteFileName(name, index).replace(/^\.+/, "") || `clipboard-${index + 1}`;
+}
+
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
   let binary = "";
@@ -2004,6 +2019,80 @@ async function sendClipboardFiles() {
   await sendFilesToRemote(files, { sourceLabel: "文件剪贴板", clearFileInput: true });
 }
 
+function renderReceivedFiles() {
+  elements.receivedFilesList.innerHTML = "";
+  const files = state.receivedClipboardFiles;
+  elements.downloadAllReceivedFilesButton.disabled = files.length === 0;
+  elements.clearReceivedFilesButton.disabled = files.length === 0;
+
+  if (files.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "received-files-empty";
+    empty.textContent = "Mac 复制文件后，会先暂存在这里，可手动下载。";
+    elements.receivedFilesList.append(empty);
+    return;
+  }
+
+  for (const [index, file] of files.entries()) {
+    const row = document.createElement("div");
+    row.className = "received-file-row";
+    const info = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = file.name || `clipboard-${index + 1}`;
+    const meta = document.createElement("small");
+    meta.textContent = `${formatBytes(file.size || 0)} · ${file.mimeType || "application/octet-stream"}`;
+    info.append(name, meta);
+
+    const button = document.createElement("button");
+    button.className = "secondary-action compact";
+    button.type = "button";
+    button.textContent = "下载";
+    button.addEventListener("click", () => downloadReceivedFile(index));
+
+    row.append(info, button);
+    elements.receivedFilesList.append(row);
+  }
+}
+
+function downloadReceivedFile(index) {
+  const file = state.receivedClipboardFiles[index];
+  if (!file?.objectUrl) {
+    addLog("远端文件下载失败", "文件已不在内存中，请重新同步");
+    return;
+  }
+
+  const link = document.createElement("a");
+  link.href = file.objectUrl;
+  link.download = makeSafeDownloadName(file.name, index);
+  link.style.display = "none";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  addLog("远端文件下载", `${link.download} · ${formatBytes(file.size || 0)}`);
+}
+
+function downloadAllReceivedFiles() {
+  if (state.receivedClipboardFiles.length === 0) {
+    return;
+  }
+
+  for (const index of state.receivedClipboardFiles.keys()) {
+    window.setTimeout(() => downloadReceivedFile(index), index * 160);
+  }
+}
+
+function clearReceivedFiles() {
+  for (const file of state.receivedClipboardFiles) {
+    if (file.objectUrl && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+      URL.revokeObjectURL(file.objectUrl);
+    }
+  }
+  state.receivedClipboardFiles = [];
+  renderReceivedFiles();
+  elements.clipboardText.textContent = elements.clipboardToggle.checked ? "剪贴板：已开启" : "剪贴板：已关闭";
+  addLog("远端文件", "已清空内存暂存文件");
+}
+
 function normalizeRemoteFileName(name, index) {
   const fallback = `clipboard-${index + 1}`;
   const cleaned = String(name || fallback)
@@ -2201,8 +2290,9 @@ function handleClipboardFileComplete(message) {
     }
   }
   state.receivedClipboardFiles = files;
+  renderReceivedFiles();
   elements.clipboardText.textContent = `剪贴板：已接收远端 ${files.length} 个文件（内存暂存）`;
-  addLog("文件剪贴板", `已接收远端 ${files.length} 个文件，共 ${formatBytes(receivedBytes)}，当前为浏览器内存暂存`);
+  addLog("文件剪贴板", `已接收远端 ${files.length} 个文件，共 ${formatBytes(receivedBytes)}，可在远端文件托盘下载`);
   state.client?.sendClipboardFileResult({
     transferId,
     accepted: true,
@@ -2635,6 +2725,8 @@ elements.fileClipboardButton.addEventListener("click", () => {
   elements.fileClipboardInput.click();
 });
 elements.fileClipboardInput.addEventListener("change", sendClipboardFiles);
+elements.downloadAllReceivedFilesButton.addEventListener("click", downloadAllReceivedFiles);
+elements.clearReceivedFilesButton.addEventListener("click", clearReceivedFiles);
 [
   elements.keyMapWinSelect,
   elements.keyMapAltSelect,
@@ -2768,6 +2860,7 @@ state.discoveredDevices = buildDeviceList();
 renderDiscoveredDevices();
 applyScaleMode();
 updateMetrics();
+renderReceivedFiles();
 resetHostDiagnostics();
 updateReverseControlUi();
 addLog("控制端启动", "本地模拟模式，可切换 WebSocket");

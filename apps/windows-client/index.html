@@ -139,6 +139,35 @@
           </div>
         </section>
 
+        <section class="panel received-files-panel" aria-labelledby="received-files-title">
+          <div class="panel-heading">
+            <h2 id="received-files-title">远端文件</h2>
+            <div class="panel-actions">
+              <button
+                id="downloadAllReceivedFilesButton"
+                class="icon-button"
+                type="button"
+                title="下载全部远端文件"
+                disabled
+              >
+                ⤓
+              </button>
+              <button
+                id="clearReceivedFilesButton"
+                class="icon-button"
+                type="button"
+                title="清空远端文件"
+                disabled
+              >
+                ⌫
+              </button>
+            </div>
+          </div>
+          <div id="receivedFilesList" class="received-files-list" aria-live="polite">
+            <p class="received-files-empty">Mac 复制文件后，会先暂存在这里，可手动下载。</p>
+          </div>
+        </section>
+
         <section class="panel event-panel" aria-labelledby="event-title">
           <div class="panel-heading">
             <h2 id="event-title">事件</h2>

@@ -378,9 +378,67 @@ button:disabled {
   line-height: 1.5;
 }
 
+.received-files-panel {
+  padding-bottom: 10px;
+}
+
+.received-files-list {
+  display: grid;
+  max-height: 168px;
+  overflow: auto;
+  gap: 8px;
+}
+
+.received-files-empty {
+  margin: 0;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--panel-strong);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 10px;
+}
+
+.received-file-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+}
+
+.received-file-row strong,
+.received-file-row small {
+  display: block;
+}
+
+.received-file-row strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.received-file-row small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.received-file-row .secondary-action {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .event-panel {
   display: flex;
-  min-height: 240px;
+  min-height: 200px;
   flex: 1;
   flex-direction: column;
 }
