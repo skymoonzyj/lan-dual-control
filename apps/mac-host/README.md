@@ -1,6 +1,6 @@
-# macOS 被控端骨架
+# macOS 被控端
 
-这是 Mac mini 到位前先准备的 macOS 被控端骨架。它的目标是接收 Windows 控制端协议，后续接入真实屏幕采集、声音采集和输入注入。
+这是 macOS 被控端。它的目标是接收 Windows 控制端协议，采集 Mac 屏幕并执行远程输入事件。
 
 ## 当前内容
 
@@ -12,9 +12,10 @@
   - 屏幕录制。
   - 辅助功能。
   - 输入监控提示。
-- ScreenCaptureKit 资源预检骨架。
-- 多显示器枚举骨架。
-- 模拟 `video_frame` 和 `audio_frame` 发送，便于 Windows 控制端先完成联调。
+- ScreenCaptureKit 资源预检。
+- 多显示器枚举。
+- 真实屏幕 JPEG `video_frame` 抓取；权限不足或采集失败时自动回退模拟 `video_frame`。
+- 模拟 `audio_frame` 发送，便于 Windows 控制端先完成声音链路联调。
 - CGEvent 输入注入占位实现。
 
 ## 在 Mac 上运行
@@ -37,8 +38,15 @@ swift run lan-dual-mac-host
 export LAN_DUAL_HOST=0.0.0.0
 export LAN_DUAL_PORT=43770
 export LAN_DUAL_PASSWORD=demo-password
+export LAN_DUAL_VIDEO_MODE=auto
 swift run lan-dual-mac-host
 ```
+
+`LAN_DUAL_VIDEO_MODE` 可选值：
+
+- `auto`：默认值。有屏幕录制权限时发送真实 JPEG 帧，否则发送模拟帧。
+- `screen`：强制尝试真实屏幕帧，失败时仍会临时回退模拟帧并打印日志。
+- `mock`：只发送模拟帧，适合协议调试。
 
 Windows 控制端选择“WebSocket 局域网”，地址填写 Mac 的局域网 IP，端口填写 `43770`，默认密码为：
 
@@ -75,5 +83,5 @@ Mac mini 到位后优先验证：
 1. `swift run lan-dual-mac-host` 能启动。
 2. 权限检查结果是否正确。
 3. Windows 控制端能通过 WebSocket 发送 `hello` 并收到 `hello_ack`。
-4. ScreenCaptureKit 能拿到主屏幕。
+4. Windows 控制端能收到 `codec: "jpeg"` 的真实 Mac 屏幕帧。
 5. CGEvent 能注入鼠标移动和点击。

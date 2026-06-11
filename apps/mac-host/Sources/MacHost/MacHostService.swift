@@ -10,6 +10,7 @@ private struct HostSession {
     var displayName: String
     var audioEnabled: Bool
     var audioVolume: Int
+    var screenFramesEnabled: Bool
 }
 
 private struct FileTransferState {
@@ -29,6 +30,7 @@ private final class ClientContext {
     var videoTimer: DispatchSourceTimer?
     var audioTimer: DispatchSourceTimer?
     var fileTransfers: [String: FileTransferState] = [:]
+    var reportedVideoCaptureFallback = false
 
     init(connection: NWConnection) {
         self.connection = connection
@@ -174,6 +176,8 @@ final class MacHostService {
 
     private func sendDiscoveryResponse(request: (path: String, headers: [String: String]), to context: ClientContext) {
         let advertisedHost = advertisedHost(from: request.headers["host"])
+        let snapshot = permissions.snapshot()
+        let screenFramesEnabled = shouldUseScreenFrames(snapshot)
         let body: [String: Any] = [
             "type": "lan_dual_discovery",
             "protocolVersion": 1,
@@ -191,8 +195,15 @@ final class MacHostService {
                 "clipboardText": true,
                 "clipboardFile": true,
                 "reverseControl": true,
-                "mock": true,
+                "mock": !screenFramesEnabled,
+                "videoMode": configuration.videoMode.rawValue,
+                "screenCapture": screenFramesEnabled,
                 "displays": screenCapture.availableDisplays().map { $0.jsonObject },
+            ],
+            "permissions": [
+                "screenRecording": snapshot.screenRecordingGranted,
+                "accessibility": snapshot.accessibilityGranted,
+                "inputMonitoring": snapshot.inputMonitoringGranted,
             ],
             "lastSeenAt": ISO8601DateFormatter().string(from: Date()),
         ]
@@ -336,13 +347,17 @@ final class MacHostService {
 
     private func handleHello(_ message: [String: Any], to context: ClientContext) {
         logger.info("hello：\(message["clientName"] ?? "unknown") / \(message["clientPlatform"] ?? "unknown")")
+        let screenFramesEnabled = shouldUseScreenFrames(permissions.snapshot())
         send([
             "type": "hello_ack",
             "protocolVersion": 1,
             "hostName": "macOS 被控端",
             "hostPlatform": "macos",
             "capabilities": [
-                "screen": ["mode": "mock-frame", "codec": "mjpeg"],
+                "screen": [
+                    "mode": screenFramesEnabled ? "jpeg-frame" : "mock-frame",
+                    "codec": screenFramesEnabled ? "jpeg" : "mock-svg",
+                ],
                 "audio": ["mode": "mock-frame", "codec": "mock-opus"],
                 "input": ["mode": "logged"],
                 "clipboardText": true,
@@ -381,6 +396,7 @@ final class MacHostService {
         let audioVolume = positiveInt(message["audioVolume"]) ?? 80
 
         let snapshot = permissions.snapshot()
+        let screenFramesEnabled = shouldUseScreenFrames(snapshot)
         context.session = HostSession(
             width: width,
             height: height,
@@ -389,14 +405,15 @@ final class MacHostService {
             displayId: activeDisplay.id,
             displayName: activeDisplay.name,
             audioEnabled: wantAudio,
-            audioVolume: audioVolume
+            audioVolume: audioVolume,
+            screenFramesEnabled: screenFramesEnabled
         )
 
-        logger.info("会话协商：\(width)x\(height) / \(fps) Hz / 码率 \(bandwidth / 1000) Mbps / \(activeDisplay.name)")
+        logger.info("会话协商：\(width)x\(height) / \(fps) Hz / 码率 \(bandwidth / 1000) Mbps / \(activeDisplay.name) / 视频 \(screenFramesEnabled ? "真实 JPEG" : "模拟帧")")
         send([
             "type": "session_answer",
             "ok": true,
-            "videoCodec": videoCodec,
+            "videoCodec": screenFramesEnabled ? "jpeg" : videoCodec,
             "audioCodec": audioCodec,
             "fps": fps,
             "maxBandwidthKbps": bandwidth,
@@ -410,7 +427,7 @@ final class MacHostService {
             "channels": 2,
             "clipboardText": wantClipboardText,
             "clipboardFile": wantClipboardFile,
-            "hostMode": "mac-host-websocket-skeleton",
+            "hostMode": screenFramesEnabled ? "mac-host-screen-jpeg" : "mac-host-mock-video",
             "permissions": [
                 "screenRecording": snapshot.screenRecordingGranted,
                 "accessibility": snapshot.accessibilityGranted,
@@ -433,6 +450,7 @@ final class MacHostService {
         let fps = min(positiveInt(message["fps"]) ?? context.session?.fps ?? 60, 60)
         let audioEnabled = boolValue(message["audio"])
         let audioVolume = positiveInt(message["audioVolume"]) ?? context.session?.audioVolume ?? 80
+        let screenFramesEnabled = shouldUseScreenFrames(permissions.snapshot())
 
         context.session = HostSession(
             width: width,
@@ -442,7 +460,8 @@ final class MacHostService {
             displayId: activeDisplay.id,
             displayName: activeDisplay.name,
             audioEnabled: audioEnabled,
-            audioVolume: audioVolume
+            audioVolume: audioVolume,
+            screenFramesEnabled: screenFramesEnabled
         )
 
         send(["type": "display_settings_ack", "accepted": true], to: context)
@@ -548,14 +567,16 @@ final class MacHostService {
 
     private func startVideoFrames(_ context: ClientContext) {
         stopVideoFrames(context)
-        let session = context.session ?? HostSession(width: 1920, height: 1080, fps: 8, maxBandwidthKbps: 50_000, displayId: "main", displayName: "主显示器", audioEnabled: false, audioVolume: 80)
-        let intervalMs = max(120, Int((1000.0 / Double(min(session.fps, 8))).rounded()))
+        context.reportedVideoCaptureFallback = false
+        let session = context.session ?? HostSession(width: 1920, height: 1080, fps: 8, maxBandwidthKbps: 50_000, displayId: "main", displayName: "主显示器", audioEnabled: false, audioVolume: 80, screenFramesEnabled: false)
+        let maxFps = session.screenFramesEnabled ? 4 : 8
+        let intervalMs = max(session.screenFramesEnabled ? 250 : 120, Int((1000.0 / Double(min(session.fps, maxFps))).rounded()))
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + .milliseconds(intervalMs), repeating: .milliseconds(intervalMs))
         timer.setEventHandler { [weak self, weak context] in
             guard let self, let context else { return }
             context.frameId += 1
-            self.send(self.makeMockVideoFrame(context.frameId, session: context.session ?? session), to: context)
+            self.send(self.makeVideoFrame(context.frameId, session: context.session ?? session, context: context), to: context)
         }
         context.videoTimer = timer
         timer.resume()
@@ -598,6 +619,21 @@ final class MacHostService {
         context.audioTimer = nil
     }
 
+    private func makeVideoFrame(_ frameId: Int, session: HostSession, context: ClientContext) -> [String: Any] {
+        if session.screenFramesEnabled,
+           let capturedFrame = screenCapture.captureFrame(displayId: session.displayId, maxWidth: session.width, maxHeight: session.height) {
+            let now = ISO8601DateFormatter().string(from: Date())
+            return capturedFrame.jsonObject(frameId: frameId, timestamp: now, keyFrame: frameId == 1 || frameId % 30 == 0)
+        }
+
+        if session.screenFramesEnabled && !context.reportedVideoCaptureFallback {
+            context.reportedVideoCaptureFallback = true
+            logger.warn("真实屏幕帧抓取失败，已临时回退到模拟视频帧。请检查屏幕录制权限或重新启动服务。")
+        }
+
+        return makeMockVideoFrame(frameId, session: session)
+    }
+
     private func makeMockVideoFrame(_ frameId: Int, session: HostSession) -> [String: Any] {
         let hue = (frameId * 23) % 360
         let now = Date()
@@ -633,8 +669,20 @@ final class MacHostService {
             "codec": "mock-svg",
             "encoding": "data-url",
             "keyFrame": frameId == 1 || frameId % 30 == 0,
+            "source": "mock",
             "dataUrl": dataUrl,
         ]
+    }
+
+    private func shouldUseScreenFrames(_ snapshot: MacPermissionSnapshot) -> Bool {
+        switch configuration.videoMode {
+        case .mock:
+            return false
+        case .screen:
+            return true
+        case .auto:
+            return snapshot.screenRecordingGranted
+        }
     }
 
     private func sendAuthRequired(for message: [String: Any], type: String, to context: ClientContext) {
