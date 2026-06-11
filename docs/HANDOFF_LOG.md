@@ -21,6 +21,40 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：补充 Mac 系统声音持续帧观察脚本。
+完成内容：
+- 新增 `scripts/mac/observe-mac-audio.mjs`，用最小 `hello/auth/session_offer` 握手连接真实 Mac host，持续统计 `audio_frame`。
+- 脚本会校验 `pcm-f32le`、`pcm-f32le-base64`、48kHz、2ch、有效 `frames` 和 payload，并统计帧数、接收间隔、payload 大小、电平范围、frameId 范围。
+- 更新 Mac host README，记录音频持续观察命令。
+修改文件：
+- `scripts/mac/observe-mac-audio.mjs`
+- `apps/mac-host/README.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+验证方式：
+- `node --check scripts/mac/observe-mac-audio.mjs`
+- `node scripts/mac/observe-mac-audio.mjs --help`
+- `node scripts/mac/observe-mac-audio.mjs --durationMs 5000 --minFrames 40 --maxGapMs 1000`
+- `node scripts/mac/observe-mac-audio.mjs --durationMs 10000 --minFrames 80 --maxGapMs 1000`
+验证结果：
+- 真实 Mac host `127.0.0.1:43770` / `system-pcm` 10 秒观察通过。
+- 收到 501 帧，约 50.0 fps，接收间隔平均/最大 `20.0/22 ms`。
+- payload 固定 `7680` bytes，总 payload `3847680` bytes，frameId `1->501`。
+- 当前环境无系统声音，电平 `0.000/0.000/0.000`，这不影响帧节奏和格式验证。
+遗留问题：
+- 还需要在真实有声音播放、静音切换和长时间运行下继续观察电平变化、延迟和 CPU。
+下一步建议：
+- Mac 端可播放系统声音后运行 `node scripts/mac/observe-mac-audio.mjs --durationMs 30000 --minFrames 250 --maxGapMs 1000`，确认 level 随音频变化。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：补充 Mac host H.264 + PCM 音频连续连接稳定性检查入口。
 完成内容：
 - 新增 `scripts/mac/stress-mac-host.mjs`，循环复用 canonical `scripts/windows/probe-mac-host.mjs` 做连续 WebSocket 建连、H.264 首帧和 PCM 音频帧校验。
