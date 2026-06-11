@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const defaults = {
   host: "127.0.0.1",
@@ -71,17 +72,22 @@ async function waitFor(fn, timeoutMs, label) {
   throw new Error(`${label} timed out${lastError ? `: ${lastError.message}` : ""}`);
 }
 
-function findEdgePath() {
+function findBrowserPath() {
   const candidates = [
+    process.env.BROWSER_PATH,
     process.env.MSEDGE_PATH,
+    process.env.CHROME_PATH,
     "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
     "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
   ].filter(Boolean);
-  const edgePath = candidates.find((candidate) => existsSync(candidate));
-  if (!edgePath) {
-    throw new Error("msedge.exe not found; install Microsoft Edge or set MSEDGE_PATH");
+  const browserPath = candidates.find((candidate) => existsSync(candidate));
+  if (!browserPath) {
+    throw new Error("browser not found; install Microsoft Edge/Chrome or set BROWSER_PATH, MSEDGE_PATH, or CHROME_PATH");
   }
-  return edgePath;
+  return browserPath;
 }
 
 function startProcess(command, args, options = {}) {
@@ -195,7 +201,7 @@ async function evaluate(session, expression) {
 
 async function run() {
   const args = parseArgs(process.argv);
-  const repoRoot = new URL("../../", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+  const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
   const clientUrl = `http://127.0.0.1:${args.clientPort}/`;
   const userDataDir = await mkdtemp(join(tmpdir(), "lan-dual-edge-"));
   const clientServer = startProcess(process.execPath, ["apps/windows-client/server.mjs", String(args.clientPort)], {
@@ -217,7 +223,7 @@ async function run() {
   }
   edgeArgs.push(clientUrl);
 
-  const edge = startProcess(findEdgePath(), edgeArgs);
+  const edge = startProcess(findBrowserPath(), edgeArgs);
   attachProcessLog(edge, "edge");
 
   let session;

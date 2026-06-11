@@ -64,6 +64,8 @@ node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs -
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password --injectPcmAudio
 ```
 
+该脚本也可在 macOS 开发机上用 Chrome/Edge 跑；找不到浏览器时可设置 `BROWSER_PATH`、`MSEDGE_PATH` 或 `CHROME_PATH`。
+
 ### 方式二：使用本地静态服务
 
 ```powershell
