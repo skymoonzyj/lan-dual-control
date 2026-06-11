@@ -120,13 +120,21 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-mac
 
 `-RequireRealVideo` 会要求首帧为 `codec=jpeg`、`data:image/jpeg`、非 mock 来源；`-ExpectInputMode log` 用于安全联调，确认输入事件只记录不注入。准备实测控制鼠标键盘时再改为 `-ExpectInputMode inject`。
 
-如需顺便验证 macOS 系统剪贴板写入，可以显式打开剪贴板探测：
+如需顺便验证 Windows/控制端到 macOS 的系统剪贴板写入，可以显式打开剪贴板探测：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -ClipboardText -ClipboardFile
 ```
 
 说明：剪贴板探测会向 Mac 写入一段测试文字，并发送一个小测试文件到 Mac 系统文件剪贴板。普通联通自检默认不改远端剪贴板。
+
+在 Mac 本机运行探针时，可以验证 macOS 本机复制文字后是否按 `host_to_client` 推给控制端：
+
+```bash
+node scripts/windows/probe-mac-host.mjs --host 127.0.0.1 --port 43770 --clipboardRoundTrip
+```
+
+说明：`--clipboardHostToClient` / `--clipboardRoundTrip` 会临时改写 Mac 本机文本剪贴板，探测结束后会恢复原文本内容；该方向需要在 Mac 本机运行，因为 Windows 机器不能直接改 Mac 的本机剪贴板。
 
 ## 当前项目运行
 

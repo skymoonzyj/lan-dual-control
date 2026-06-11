@@ -9,6 +9,8 @@ param(
   [int] $Fps = 60,
   [int] $BandwidthKbps = 50000,
   [switch] $ClipboardText,
+  [switch] $ClipboardHostToClient,
+  [switch] $ClipboardRoundTrip,
   [switch] $ClipboardFile,
   [int] $ClipboardFileBytes = 96,
   [switch] $InputEvents,
@@ -42,6 +44,12 @@ try {
   )
   if ($ClipboardText) {
     $nodeArgs += "--clipboardText"
+  }
+  if ($ClipboardHostToClient) {
+    $nodeArgs += "--clipboardHostToClient"
+  }
+  if ($ClipboardRoundTrip) {
+    $nodeArgs += "--clipboardRoundTrip"
   }
   if ($ClipboardFile) {
     $nodeArgs += @("--clipboardFile", "--clipboardFileBytes", $ClipboardFileBytes)

@@ -82,6 +82,12 @@ LAN_DUAL_INPUT_MODE=log swift run lan-dual-mac-host
 scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireRealVideo -ExpectInputMode log
 ```
 
+在 Mac 本机验证文本剪贴板双向同步：
+
+```bash
+node scripts/windows/probe-mac-host.mjs --host 127.0.0.1 --port 43770 --clipboardRoundTrip
+```
+
 ## 首次运行需要打开的 macOS 权限
 
 进入系统设置：

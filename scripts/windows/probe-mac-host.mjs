@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
 
 const defaults = {
   host: "127.0.0.1",
@@ -10,6 +11,7 @@ const defaults = {
   fps: 60,
   bandwidthKbps: 50000,
   clipboardText: false,
+  clipboardHostToClient: false,
   clipboardFile: false,
   clipboardFileBytes: 96,
   inputEvents: false,
@@ -37,7 +39,9 @@ function parseArgs(argv) {
   args.height = Number(args.height) || defaults.height;
   args.fps = Number(args.fps) || defaults.fps;
   args.bandwidthKbps = Number(args.bandwidthKbps) || defaults.bandwidthKbps;
-  args.clipboardText = booleanArg(args.clipboardText) || booleanArg(args.clipboard);
+  const clipboardRoundTrip = booleanArg(args.clipboardRoundTrip);
+  args.clipboardText = booleanArg(args.clipboardText) || booleanArg(args.clipboard) || clipboardRoundTrip;
+  args.clipboardHostToClient = booleanArg(args.clipboardHostToClient) || clipboardRoundTrip;
   args.clipboardFile = booleanArg(args.clipboardFile) || booleanArg(args.clipboard);
   args.clipboardFileBytes = Number(args.clipboardFileBytes) || defaults.clipboardFileBytes;
   args.inputEvents = booleanArg(args.inputEvents) || booleanArg(args.input);
@@ -91,6 +95,46 @@ function delay(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function runCommand(command, { input = "" } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, [], { stdio: ["pipe", "pipe", "pipe"] });
+    const stdout = [];
+    const stderr = [];
+
+    child.stdout.on("data", (chunk) => stdout.push(chunk));
+    child.stderr.on("data", (chunk) => stderr.push(chunk));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      const output = Buffer.concat(stdout).toString("utf8");
+      const errorOutput = Buffer.concat(stderr).toString("utf8");
+      if (code === 0) {
+        resolve(output);
+        return;
+      }
+      reject(new Error(`${command} exited ${code}: ${errorOutput.trim()}`));
+    });
+
+    if (input) {
+      child.stdin.write(input);
+    }
+    child.stdin.end();
+  });
+}
+
+async function readLocalMacClipboardText() {
+  if (process.platform !== "darwin") {
+    throw new Error("clipboard host_to_client probe must run on macOS so it can update the Mac pasteboard");
+  }
+  return runCommand("pbpaste");
+}
+
+async function writeLocalMacClipboardText(text) {
+  if (process.platform !== "darwin") {
+    throw new Error("clipboard host_to_client probe must run on macOS so it can update the Mac pasteboard");
+  }
+  await runCommand("pbcopy", { input: text });
 }
 
 async function fetchDiscovery(args) {
@@ -304,6 +348,26 @@ async function probeClipboardText(client, args) {
     throw new Error(`clipboard_text rejected: ${ack.reason || ack.code || "unknown"}`);
   }
   print("OK", `Clipboard text accepted: ${ack.textLength || text.length} chars / mode=${ack.mode || "unknown"}`);
+}
+
+async function probeClipboardHostToClient(client, args) {
+  const previousText = await readLocalMacClipboardText();
+  const text = `lan-dual-control host clipboard probe ${new Date().toISOString()} ${randomUUID()}`;
+
+  try {
+    const clipboardPromise = client.waitFor("clipboard_text", Math.max(args.timeoutMs, 10000));
+    await writeLocalMacClipboardText(text);
+    const message = await clipboardPromise;
+    if (message.direction !== "host_to_client") {
+      throw new Error(`clipboard_text direction mismatch: ${message.direction || "missing"}`);
+    }
+    if (message.text !== text) {
+      throw new Error(`clipboard_text payload mismatch: ${message.textLength || 0} chars`);
+    }
+    print("OK", `Clipboard host_to_client received: ${message.textLength || text.length} chars / mode=${message.mode || "unknown"}`);
+  } finally {
+    await writeLocalMacClipboardText(previousText);
+  }
 }
 
 function makeProbeFilePayload(size) {
@@ -530,6 +594,9 @@ async function main() {
 
     if (args.clipboardText) {
       await probeClipboardText(client, args);
+    }
+    if (args.clipboardHostToClient) {
+      await probeClipboardHostToClient(client, args);
     }
     if (args.clipboardFile) {
       await probeClipboardFile(client, args);

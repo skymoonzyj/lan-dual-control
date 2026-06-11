@@ -95,6 +95,7 @@ Windows 端：
 - 已完成意外断线自动重连，当前最多重试 3 次，手动断开会停止重连。
 - 已完成文本剪贴板协议打通，文件剪贴板仍按文件传输通道单独开发。
 - macOS 被控端已接入系统文本剪贴板：远端文本写入 `NSPasteboard`，本机复制新文本会按 `host_to_client` 推送。
+- 真 Mac 已通过 `--clipboardRoundTrip` 验证文本剪贴板双向同步：控制端文本可写入 Mac 系统剪贴板，Mac 本机复制的新文本可按 `host_to_client` 推回控制端。
 - macOS 被控端已接入系统文件剪贴板接收：Windows 发送的文件块会落到临时目录，并写入 `NSPasteboard` 文件 URL。
 - 已统一 `display_settings`、`display_settings_ack`、`video_frame` 协议命名，假 Mac 服务可持续发送模拟帧。
 - 已完成 Windows Tauri 桌面壳，已验证可构建 `lan-dual-control-windows.exe`。
@@ -142,7 +143,7 @@ Windows 端：
 - [ ] 控制端播放真实被控端声音。
 - [x] Windows 控制端可发送和接收文本剪贴板消息。
 - [x] Windows 控制端可导出连接和事件日志。
-- [ ] 真机两端可以同步复制文字。
+- [x] 真机两端可以同步复制文字。
 
 ## 里程碑 M3：Mac 控制 Windows
 

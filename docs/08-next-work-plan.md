@@ -14,6 +14,7 @@
 - Windows 控制端现在会把 `input_ack` 的已注入、已记录或被拒绝状态写入诊断条；被拒绝时会显示 `LAN005` 等错误码并把输入状态标为“被拒绝”。
 - Windows 控制端的坐标映射已增加独立回归脚本，覆盖适应窗口、原始比例滚动和拉伸填充；浏览器回归已验证全屏/窗口切换和缩放模式仍可发送输入。
 - 真 Mac 已通过 `--requireRealVideo --expectInputMode log --inputEvents` 强校验：首帧为真实 JPEG，输入事件以安全日志模式确认。
+- 真 Mac 已通过 `--clipboardRoundTrip` 验证文本剪贴板双向同步：控制端写入 Mac 和 Mac 本机复制推回控制端均可自动确认。
 - Windows 被控端仍是骨架阶段，真实屏幕采集和真实声音采集仍待实装；文本/文件剪贴板在 Windows 上已可写入系统剪贴板，输入事件已接入最小 SendInput 桥。
 - 当前已经在真 Mac 上开发和验证 macOS 被控端；后续功能验收以真实 `apps/mac-host` 为主，假 Mac 只作为快速回归和异常场景模拟。
 
