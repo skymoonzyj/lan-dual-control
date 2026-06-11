@@ -280,6 +280,12 @@ const state = {
   h264FallbackReason: "",
   audioFrames: 0,
   audioLevel: 0,
+  audioContext: null,
+  audioGain: null,
+  audioNextPlayTime: 0,
+  audioPlayedFrames: 0,
+  audioDroppedFrames: 0,
+  audioLastError: "",
   recentConnections: [],
   connectionState: "idle",
   remoteDisplays: fallbackDisplays,
@@ -1241,6 +1247,7 @@ function setUiConnecting(host, port) {
   state.videoFrames = 0;
   resetVideoFrameStats();
   resetVideoDecoder({ resetFallback: true });
+  resetAudioPlayback();
   state.lastFrameDecodeErrorId = "";
   state.remoteFileTransfers.clear();
   elements.remoteCanvas.classList.remove("has-video-frame");
@@ -1339,6 +1346,7 @@ function setUiDisconnected(statusText = "未连接", logDetail = "会话已关�
   resetHostDiagnostics(statusText === "未连接" ? defaultHostDiagnosticsText : `诊断：${statusText}`);
   state.audioFrames = 0;
   state.audioLevel = 0;
+  resetAudioPlayback();
   elements.audioText.textContent = "声音：待机";
   elements.connectButton.disabled = false;
   elements.disconnectButton.disabled = true;
@@ -1370,6 +1378,7 @@ function handleUnexpectedClose(reason = "被控端关闭了连接") {
   resetHostDiagnostics("诊断：连接中断，等待重连。");
   state.audioFrames = 0;
   state.audioLevel = 0;
+  resetAudioPlayback();
   elements.audioText.textContent = "声音：待机";
 
   if (state.manualDisconnect) {
@@ -1519,7 +1528,7 @@ function buildAudioSettingsMessage() {
   const settings = currentDisplaySettings();
   return {
     enabled: settings.audio,
-    codec: "opus",
+    codec: "pcm-f32le",
     sampleRate: 48000,
     channels: 2,
     volume: settings.audioVolume,
@@ -1527,20 +1536,185 @@ function buildAudioSettingsMessage() {
   };
 }
 
-function updateAudioStatusFromFrame(frame) {
-  state.audioFrames += 1;
-  state.audioLevel = Math.max(0, Math.min(1, Number(frame.level ?? frame.peak ?? 0)));
+function resetAudioPlayback() {
+  if (state.audioContext) {
+    state.audioContext.close().catch(() => {});
+  }
+  state.audioContext = null;
+  state.audioGain = null;
+  state.audioNextPlayTime = 0;
+  state.audioPlayedFrames = 0;
+  state.audioDroppedFrames = 0;
+  state.audioLastError = "";
+}
+
+function primeAudioPlayback() {
+  if (!elements.audioToggle.checked || Number(elements.audioVolumeRange.value) <= 0) {
+    return;
+  }
+
+  void ensureAudioPlayback(48000)
+    .then(() => {
+      if (state.audioContext?.state === "running") {
+        elements.audioText.textContent = `声音：播放已准备 · ${elements.audioVolumeRange.value}%`;
+      }
+    })
+    .catch((error) => {
+      state.audioLastError = error?.message || String(error);
+      addLog("声音播放准备失败", state.audioLastError);
+    });
+}
+
+async function ensureAudioPlayback(sampleRate) {
+  const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextConstructor) {
+    throw new Error("当前窗口环境不支持音频播放");
+  }
+
+  if (!state.audioContext || state.audioContext.state === "closed") {
+    try {
+      state.audioContext = new AudioContextConstructor({ sampleRate });
+    } catch {
+      state.audioContext = new AudioContextConstructor();
+    }
+    state.audioGain = state.audioContext.createGain();
+    state.audioGain.connect(state.audioContext.destination);
+    state.audioNextPlayTime = state.audioContext.currentTime + 0.04;
+  }
+
+  if (state.audioContext.state === "suspended") {
+    await state.audioContext.resume();
+  }
+  if (state.audioGain) {
+    state.audioGain.gain.value = Number(elements.audioVolumeRange.value) / 100;
+  }
+  return state.audioContext;
+}
+
+function getAudioPayload(frame) {
+  return frame.payload || frame.data || frame.samples || frame.audioData || "";
+}
+
+function decodePcmAudioFrame(frame) {
+  const payload = getAudioPayload(frame);
+  if (!payload) {
+    return null;
+  }
+
+  const codec = String(frame.codec ?? "").toLowerCase();
+  const encoding = String(frame.encoding ?? "").toLowerCase();
+  if (!codec.includes("pcm") && !codec.includes("f32") && !codec.includes("s16") && !encoding.includes("pcm")) {
+    return null;
+  }
+  const bytes = base64ToUint8Array(payload);
+  const channels = Math.max(1, Math.min(8, Number(frame.channels) || 2));
+  const sampleRate = Math.max(8000, Math.min(192000, Number(frame.sampleRate) || 48000));
+  const layout = String(frame.layout ?? "interleaved").toLowerCase() === "planar"
+    ? "planar"
+    : "interleaved";
+  let samples;
+
+  if (codec.includes("s16")) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    samples = new Float32Array(Math.floor(bytes.byteLength / 2));
+    for (let index = 0; index < samples.length; index += 1) {
+      samples[index] = Math.max(-1, Math.min(1, view.getInt16(index * 2, true) / 32768));
+    }
+  } else {
+    const alignedLength = bytes.byteLength - (bytes.byteLength % 4);
+    samples = new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + alignedLength));
+  }
+
+  const frameCount = Math.floor(samples.length / channels);
+  if (frameCount <= 0) {
+    return null;
+  }
+
+  return { samples, channels, sampleRate, frameCount, layout };
+}
+
+async function playPcmAudioFrame(frame) {
+  if (!elements.audioToggle.checked || Number(elements.audioVolumeRange.value) <= 0) {
+    return false;
+  }
+
+  const decoded = decodePcmAudioFrame(frame);
+  if (!decoded) {
+    return false;
+  }
+
+  const audioContext = await ensureAudioPlayback(decoded.sampleRate);
+  const buffer = audioContext.createBuffer(decoded.channels, decoded.frameCount, decoded.sampleRate);
+  for (let channel = 0; channel < decoded.channels; channel += 1) {
+    const channelData = buffer.getChannelData(channel);
+    for (let index = 0; index < decoded.frameCount; index += 1) {
+      const sampleIndex = decoded.layout === "planar"
+        ? channel * decoded.frameCount + index
+        : index * decoded.channels + channel;
+      channelData[index] = decoded.samples[sampleIndex] || 0;
+    }
+  }
+
+  const source = audioContext.createBufferSource();
+  source.buffer = buffer;
+  source.connect(state.audioGain);
+  const now = audioContext.currentTime;
+  const queuedSeconds = Math.max(0, state.audioNextPlayTime - now);
+  if (queuedSeconds > 0.35) {
+    state.audioDroppedFrames += 1;
+    state.audioNextPlayTime = now + 0.04;
+  }
+  const playAt = Math.max(audioContext.currentTime + 0.015, state.audioNextPlayTime);
+  source.start(playAt);
+  source.onended = () => source.disconnect();
+  state.audioNextPlayTime = playAt + buffer.duration;
+  state.audioPlayedFrames += 1;
+  return true;
+}
+
+function renderAudioStatusFromFrame(frame) {
   const volume = Number(elements.audioVolumeRange.value);
   const levelText = `${Math.round(state.audioLevel * 100)}%`;
   const latencyText = frame.latencyMs ? ` · ${Math.round(frame.latencyMs)} ms` : "";
-  elements.audioText.textContent = `声音：接收中 · ${levelText} · ${volume}%${latencyText}`;
+  const playbackText = state.audioPlayedFrames > 0
+    ? ` · 播放 ${state.audioPlayedFrames}`
+    : getAudioPayload(frame)
+      ? " · 等待播放"
+      : "";
+  const droppedText = state.audioDroppedFrames > 0 ? ` · 丢 ${state.audioDroppedFrames}` : "";
+  elements.audioText.textContent = `声音：接收中 · ${levelText} · ${volume}%${latencyText}${playbackText}${droppedText}`;
 
   if (state.audioFrames === 1 || state.audioFrames % 20 === 0) {
     addLog(
       "声音帧",
-      `${frame.codec ?? "mock"} · ${frame.sampleRate ?? 48000} Hz · level ${levelText}`,
+      `${frame.codec ?? "mock"} · ${frame.sampleRate ?? 48000} Hz · level ${levelText}${state.audioPlayedFrames ? ` · played ${state.audioPlayedFrames}` : ""}`,
     );
   }
+}
+
+function updateAudioStatusFromFrame(frame) {
+  state.audioFrames += 1;
+  state.audioLevel = Math.max(0, Math.min(1, Number(frame.level ?? frame.peak ?? 0)));
+  renderAudioStatusFromFrame(frame);
+}
+
+function handleAudioFrame(frame) {
+  updateAudioStatusFromFrame(frame);
+  if (!getAudioPayload(frame)) {
+    return;
+  }
+
+  void playPcmAudioFrame(frame)
+    .then((played) => {
+      if (played) {
+        renderAudioStatusFromFrame(frame);
+      }
+    })
+    .catch((error) => {
+      state.audioLastError = error?.message || String(error);
+      elements.audioText.textContent = `声音：播放失败 · ${state.audioLastError}`;
+      addLog("声音播放失败", state.audioLastError);
+    });
 }
 
 function updateFileClipboardButton() {
@@ -1663,7 +1837,7 @@ function buildSessionOffer() {
     preferredHeight,
     preferredVideoCodec: preferredVideoCodec(),
     preferredVideoEncoding: preferredVideoEncoding(),
-    preferredAudioCodec: "opus",
+    preferredAudioCodec: "pcm-f32le",
     audioVolume: settings.audioVolume,
     mockScenario: elements.mockScenarioSelect.value,
   };
@@ -2704,7 +2878,7 @@ function handleProtocolMessage(message) {
   }
 
   if (message.type === "audio_frame") {
-    updateAudioStatusFromFrame(message);
+    handleAudioFrame(message);
     return;
   }
 
@@ -3132,7 +3306,10 @@ elements.mockScenarioSelect.addEventListener("change", () => {
   savePreferences();
   addLog("模拟场景", elements.mockScenarioSelect.selectedOptions[0]?.textContent ?? "正常连接");
 });
-elements.connectButton.addEventListener("click", connect);
+elements.connectButton.addEventListener("click", () => {
+  primeAudioPlayback();
+  void connect();
+});
 elements.disconnectButton.addEventListener("click", disconnect);
 elements.refreshDevicesButton.addEventListener("click", refreshDevices);
 elements.exportLogButton.addEventListener("click", exportLogs);
@@ -3179,10 +3356,18 @@ elements.bandwidthSelect.addEventListener("change", () => {
 elements.audioToggle.addEventListener("change", () => {
   savePreferences();
   addLog("声音", elements.audioToggle.checked ? "已请求接收被控端声音" : "已关闭声音接收");
+  if (elements.audioToggle.checked) {
+    primeAudioPlayback();
+  } else {
+    resetAudioPlayback();
+  }
   sendDisplaySettings();
 });
 elements.audioVolumeRange.addEventListener("input", () => {
   elements.audioVolumeText.textContent = `${elements.audioVolumeRange.value}%`;
+  if (state.audioGain) {
+    state.audioGain.gain.value = Number(elements.audioVolumeRange.value) / 100;
+  }
   if (!state.connected || !state.client) {
     savePreferences();
     return;

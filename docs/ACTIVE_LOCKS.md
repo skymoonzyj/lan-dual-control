@@ -32,6 +32,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`、`apps/windows-client/README.md`、`scripts/windows/test-windows-client-browser.mjs`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md` | 2026-06-12 | Windows 控制端真实 PCM 音频播放入口：支持 `pcm-f32le-base64`、planar/interleaved 布局、音量增益和页面级自检注入。 |
 | Mac Codex | `apps/mac-host/Sources/MacHost/MacHostService.swift`、`apps/mac-host/Sources/MacHost/ScreenCaptureCoordinator.swift`、`apps/mac-host/README.md`、`shared/protocol/*`、`docs/03-architecture-and-protocol.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md` | 2026-06-12 | Mac 真实系统声音采集第一版：ScreenCaptureKit 输出 `pcm-f32le-base64` PCM 帧，失败回退 mock；真机音频探针已通过。 |
 | Mac Codex | `apps/mac-host/Sources/MacHost/MacHostService.swift`、`apps/mac-host/Sources/MacHost/ScreenCaptureCoordinator.swift`、`apps/mac-host/README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/TEST_COORDINATION.md` | 2026-06-12 | H.264 第一版真机验证收尾：Swift 6 Sendable 警告已清理，状态文档已同步，43770/log 当前运行并通过 `--requireH264`。 |
 | Windows Codex | `apps/mac-host/Sources/MacHost/HostConfiguration.swift`、`apps/mac-host/Sources/MacHost/MacHostService.swift`、`apps/windows-client/app.js`、`apps/windows-client/styles.css`、`docs/09-streaming-video-plan.md`、`shared/protocol/*` | 2026-06-12 | 已完成 JPEG 帧率协商修正、实收 FPS 显示、真实画面覆盖层修复和 H.264 流式视频计划。 |

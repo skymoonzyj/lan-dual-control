@@ -17,6 +17,38 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
+本轮目标：接入 Windows 控制端真实 Mac PCM 音频播放入口。
+完成内容：
+- Windows 控制端请求 `preferredAudioCodec=pcm-f32le`，并在 `audio_settings_update` 中声明 `codec=pcm-f32le`。
+- 新增 Web Audio 播放入口，支持 `pcm-f32le-base64` 过渡帧，兼容 `layout=planar` 和 `layout=interleaved`。
+- 音量滑块会实时调整播放增益；关闭声音会释放 AudioContext。
+- Edge 页面级自检新增 `--injectPcmAudio`，可注入 planar PCM 帧验证播放路径。
+- 已用真实 Mac 连接验证收到 `pcm-f32le` 音频帧后播放计数递增。
+修改文件：
+- `apps/windows-client/app.js`
+- `apps/windows-client/README.md`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password --timeoutMs 45000 --injectPcmAudio`
+遗留问题：
+- 当前仍是 PCM + base64 过渡格式，带宽较高；后续应接 Opus 或二进制音频帧。
+- 需要继续做长时间播放、静音、音量变化和延迟体验验证。
+下一步建议：
+- Mac 端继续验证系统声音采集稳定性；Windows 端可继续优化延迟和音频缓冲策略。
+是否改了协议：否；本轮只消费 Mac 已推送的 PCM 音频协议字段。
+是否需要另一端配合：暂无阻塞；后续长时间音频稳定性测试需要 Mac 端保持服务运行并播放系统声音。
+
 ## 2026-06-12 Mac Codex
 
 日期：2026-06-12

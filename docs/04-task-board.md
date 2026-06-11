@@ -115,7 +115,8 @@ Windows 端：
 - Windows 控制端已增加 Mac 主机诊断状态条：会汇总 `permissions`、`hostMode`、`capturePipeline`、`source`、WebCodecs 解码状态、`droppedFrames`、`input_ack` 和剪贴板模式，真机权限、输入拒绝、解码失败或采集回退问题可直接在画面内看到。
 - Mac 端已兼容 Windows 端现有 `kind/action/remoteX/remoteY` 输入事件字段。
 - Windows 控制端已新增 Edge 页面级自检脚本 `scripts/windows/test-windows-client-browser.mjs`，可自动打开控制端、连接真实 Mac、读取诊断条并确认视频 surface；当前 Edge headless 不支持 `avc1.420029` 时已验证会自动请求 JPEG 兜底并显示真实 Mac 画面。
-- 真 Mac 后续继续做输入注入、真实音频播放对接、低延迟稳定性和更完整的键盘/输入法兼容验证。
+- Windows 控制端已接入真实 `pcm-f32le-base64` 音频播放，支持 planar/interleaved Float32 PCM 和音量滑块；页面级自检已验证真实 Mac 连接下音频播放计数递增。
+- 真 Mac 后续继续做输入注入、真实音频长时间稳定性、低延迟稳定性和更完整的键盘/输入法兼容验证。
 - MSI/NSIS 安装包暂未开启，先保留桌面 exe 构建；安装包放到 M5 处理。
 
 ## 里程碑 M2：安全和控制体验
@@ -147,7 +148,7 @@ Windows 端：
 - [x] 全屏和窗口化切换正常。
 - [x] 分辨率、刷新率、码率设置在 Windows 原型中生效。
 - [x] 控制端可以接收被控端声音骨架：支持音量设置、`audio_settings_update` 和模拟 `audio_frame` 状态回传。
-- [ ] 控制端播放真实被控端声音。
+- [x] 控制端播放真实被控端声音。
 - [x] Windows 控制端可发送和接收文本剪贴板消息。
 - [x] Windows 控制端可导出连接和事件日志。
 - [x] 真机两端可以同步复制文字。

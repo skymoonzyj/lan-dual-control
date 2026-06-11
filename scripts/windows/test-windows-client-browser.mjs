@@ -12,6 +12,7 @@ const defaults = {
   debugPort: 9337,
   timeoutMs: 30000,
   requireVideoSurface: true,
+  injectPcmAudio: false,
   headless: true,
 };
 
@@ -29,6 +30,10 @@ function parseArgs(argv) {
     }
     if (key === "noRequireVideoSurface") {
       args.requireVideoSurface = false;
+      continue;
+    }
+    if (key === "injectPcmAudio") {
+      args.injectPcmAudio = true;
       continue;
     }
     if (Object.prototype.hasOwnProperty.call(args, key) && next && !next.startsWith("--")) {
@@ -321,6 +326,51 @@ async function run() {
     print("OK", `WebCodecs: VideoDecoder=${snapshot.webCodecs}, EncodedVideoChunk=${snapshot.encodedVideoChunk}`);
     if (snapshot.logs.length > 0) {
       print("INFO", `Recent logs: ${snapshot.logs.join(" | ")}`);
+    }
+    if (args.injectPcmAudio) {
+      const audioSnapshot = await evaluate(
+        session,
+        `(() => {
+          const sampleRate = 48000;
+          const channels = 2;
+          const frameCount = 960;
+          const samples = new Float32Array(frameCount * channels);
+          for (let channel = 0; channel < channels; channel += 1) {
+            for (let frame = 0; frame < frameCount; frame += 1) {
+              const value = Math.sin((frame / sampleRate) * Math.PI * 2 * 440) * 0.05;
+              samples[channel * frameCount + frame] = value;
+            }
+          }
+          const bytes = new Uint8Array(samples.buffer);
+          let binary = "";
+          for (const byte of bytes) binary += String.fromCharCode(byte);
+          handleAudioFrame({
+            type: "audio_frame",
+            frameId: 9001,
+            codec: "pcm-f32le",
+            encoding: "pcm-f32le-base64",
+            layout: "planar",
+            frames: frameCount,
+            sampleRate,
+            channels,
+            durationMs: 20,
+            level: 0.05,
+            payload: btoa(binary),
+          });
+          return new Promise((resolve) => setTimeout(() => {
+            resolve({
+              audioText: document.querySelector("#audioText")?.textContent || "",
+              logs: [...document.querySelectorAll("#eventLog li")]
+                .slice(0, 6)
+                .map((item) => item.innerText.replace(/\\s+/g, " ")),
+            });
+          }, 300));
+        })()`,
+      );
+      if (!audioSnapshot.audioText.includes("播放")) {
+        throw new Error(`PCM audio injection did not reach playback state: ${audioSnapshot.audioText}`);
+      }
+      print("OK", `Audio: ${audioSnapshot.audioText}`);
     }
   } finally {
     session?.close();

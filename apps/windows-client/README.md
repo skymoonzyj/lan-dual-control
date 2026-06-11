@@ -16,7 +16,7 @@
   - 分辨率：1080P、2K、4K。
   - 刷新率：30、60、120、144、240 Hz。
   - 码率：5 Mbps、10 Mbps、15 Mbps、20 Mbps、40 Mbps、50 Mbps。
-  - 声音：开关、音量、模拟音频帧状态。
+  - 声音：开关、音量、模拟音频帧状态、真实 PCM 音频播放。
 - 支持画面缩放模式：适应窗口、原始比例、拉伸填充。
 - 窗口缩放坐标映射有独立回归脚本，覆盖适应窗口黑边、原始比例滚动和拉伸填充。
 - 支持多显示器选择骨架：被控端返回 `displays` 后可在控制端选择目标显示器，并通过 `display_settings.displayId` 下发。
@@ -29,7 +29,7 @@
 - 支持假 Mac 联调错误模拟：密码错误、权限不足、输入被拒绝、视频中断、连接后断开。
 - 支持认证门禁联调：未认证连接不能进入会话、输入、剪贴板或反控流程。
 - 支持非手动断线后自动重连，最多重试 3 次。
-- 支持声音接收骨架：处理 `audio_settings_ack` 和模拟 `audio_frame`，状态栏显示音频帧、音量和延迟。
+- 支持声音接收：处理 `audio_settings_ack`、模拟 `audio_frame` 和真实 `pcm-f32le-base64` PCM 帧，状态栏显示音频帧、音量、延迟和播放计数。
 - 支持真实 Mac 视频帧诊断：连接后可区分 `jpeg` 真实视频帧和 `mock-svg` 模拟帧，并记录图片解码失败。
 - 支持实收 FPS 统计：刷新率卡片会区分“实收 FPS、协商 Hz、请求 Hz”，避免把控制端请求值误认为真实帧率。
 - 支持 H.264 流式解码入口：当前窗口环境支持 WebCodecs 时会优先请求 `h264`，收到 `annexb-base64` 帧后用 `VideoDecoder` 渲染到视频画布；会依次探测显式 Annex B 和浏览器默认 H.264 配置，连续失败时自动请求 JPEG 兜底。
@@ -57,10 +57,11 @@ E:\codex\lan-dual-control\apps\windows-client\index.html
 node E:\codex\lan-dual-control\scripts\windows\test-coordinate-mapping.mjs
 ```
 
-真实 Mac 页面级自检可自动启动本地控制端页面、打开 Edge、连接 Mac，并确认诊断条和视频画面：
+真实 Mac 页面级自检可自动启动本地控制端页面、打开 Edge、连接 Mac，并确认诊断条和视频画面；加 `--injectPcmAudio` 可额外注入一帧 planar PCM，验证控制端音频播放入口：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password
+node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password --injectPcmAudio
 ```
 
 ### 方式二：使用本地静态服务
