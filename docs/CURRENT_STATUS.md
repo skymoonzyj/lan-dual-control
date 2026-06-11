@@ -17,11 +17,11 @@
 
 - Windows 控制端已有中文界面、局域网连接、连接历史、画质设置、缩放模式、认证失败剩余次数提示、诊断状态条、真实 Mac 音频 PCM 播放、文本剪贴板、远端文件托盘、桌面版远端文件写入 Windows 系统文件剪贴板和桌面壳。
 - Windows 控制端可连接本机假 Mac 服务，也可用脚本探测真实 Mac 被控端；假 Mac 服务已对齐 3 次认证失败断开行为。
-- Windows 被控端已有 WebSocket 骨架、认证、Windows 系统截图 JPEG 视频帧、模拟音频帧、文本和文件剪贴板接收、最小 SendInput 输入注入。
+- Windows 被控端已有 WebSocket 骨架、认证、FFmpeg gdigrab MJPEG 视频帧、无 FFmpeg 时的 Windows 系统截图 JPEG 回退、模拟音频帧、文本和文件剪贴板接收、最小 SendInput 输入注入。
 - Windows 被控端新增 `scripts/windows/test-windows-host.ps1` 本机自检入口，可临时启动本机服务并验证真实 JPEG 首帧、文本剪贴板和文件剪贴板接收；`scripts/windows/test-mac-client-browser.mjs` 可启动 Mac client 页面验证 Mac 反控 Windows 的真实 JPEG 画面和 `input_ack`；`scripts/windows/test-auth-retry-policy.mjs` 可回归 Windows host 和假 Mac 的 3 次认证失败断开策略。
 - Windows 被控端已限制同一 WebSocket 连接内最多 3 次密码认证失败，失败耗尽后返回 `LAN002` 并关闭连接。
-- Windows 被控端真实屏幕采集目前是 PowerShell/System.Drawing 过渡实现，系统截图不可用时回退模拟帧；后续仍需升级 Windows Graphics Capture，并接入真实系统声音采集。
-- Mac 控制 Windows 的 Web 控制端原型已新增到 `apps/mac-client`：可发现/连接 Windows host、显示 JPEG/data-url 画面、发送鼠标/键盘输入事件并显示 `input_ack`；Windows 本机页面级自检已验证真实 `windows-gdi-jpeg` 首帧和 log 模式输入确认。
+- Windows 被控端真实屏幕采集目前默认优先 FFmpeg gdigrab 持续 MJPEG，PowerShell/System.Drawing 系统截图作为兜底，全部失败时回退模拟帧；后续仍需升级 Windows Graphics Capture，并接入真实系统声音采集。
+- Mac 控制 Windows 的 Web 控制端原型已新增到 `apps/mac-client`：可发现/连接 Windows host、显示 JPEG/data-url 画面、发送鼠标/键盘输入事件并显示 `input_ack`；Windows 本机页面级自检已验证真实 `windows-ffmpeg-gdigrab-mjpeg` 画面和 log 模式输入确认。
 
 ## Mac 端状态
 

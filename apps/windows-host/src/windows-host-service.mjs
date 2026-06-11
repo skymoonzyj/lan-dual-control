@@ -102,7 +102,11 @@ function createClient(socket, context) {
     const runId = videoRunId + 1;
     videoRunId = runId;
     captureBusy = false;
-    const intervalMs = Math.max(120, Math.round(1000 / Math.min(Number(nextSession.fps) || 5, 8)));
+    const schedulerFps = Math.max(
+      1,
+      Math.min(Number(nextSession.fps) || 5, Number(nextSession.maxScreenFps) || 8),
+    );
+    const intervalMs = Math.max(16, Math.round(1000 / schedulerFps));
     const sendNextFrame = async () => {
       if (runId !== videoRunId || captureBusy) {
         return;

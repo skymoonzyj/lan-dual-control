@@ -13,7 +13,7 @@ const defaults = {
   debugPort: 9340,
   timeoutMs: 30000,
   inputMode: "log",
-  screenMode: "system",
+  screenMode: "auto",
   requireRealVideo: true,
   useExistingHost: false,
   mockVideo: false,

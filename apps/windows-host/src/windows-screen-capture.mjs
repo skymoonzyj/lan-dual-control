@@ -13,6 +13,7 @@ const defaultDisplays = [
   },
 ];
 
+const ffmpegMode = "ffmpeg-mjpeg";
 const systemMode = "system-jpeg";
 const mockMode = "mock";
 
@@ -28,6 +29,9 @@ function normalizeScreenMode(value) {
   const mode = String(value ?? "auto").trim().toLowerCase();
   if (mode === "mock") {
     return mockMode;
+  }
+  if (mode === "ffmpeg" || mode === "ffmpeg-mjpeg" || mode === "gdigrab") {
+    return ffmpegMode;
   }
   if (mode === "system" || mode === "system-jpeg" || mode === "gdi" || mode === "auto") {
     return mode;
@@ -113,6 +117,31 @@ function loadWindowsDisplaysSync(logger) {
   }
 
   return defaultDisplays;
+}
+
+function hasFfmpegGdigrabSync(logger) {
+  if (process.platform !== "win32") {
+    return false;
+  }
+
+  const result = spawnSync("ffmpeg", ["-hide_banner", "-formats"], {
+    encoding: "utf8",
+    timeout: 3000,
+    windowsHide: true,
+  });
+
+  if (result.error || result.status !== 0) {
+    const message = result.error?.message || result.stderr?.trim() || `exit ${result.status}`;
+    logger?.warn(`FFmpeg 不可用，Windows 屏幕采集使用 PowerShell 过渡层：${message}`);
+    return false;
+  }
+
+  return `${result.stdout}\n${result.stderr}`.includes("gdigrab");
+}
+
+function qscaleFromJpegQuality(quality) {
+  const normalized = (clampNumber(quality, 35, 92, 70) - 35) / (92 - 35);
+  return Math.round(Math.min(31, Math.max(2, 31 - normalized * 26)));
 }
 
 function makePowerShellCaptureScript({ displayIndex, targetWidth, targetHeight, quality }) {
@@ -250,15 +279,27 @@ export class WindowsScreenCaptureCoordinator {
   constructor({ logger } = {}) {
     this.logger = logger;
     this.requestedMode = normalizeScreenMode(process.env.LAN_DUAL_WINDOWS_SCREEN_MODE);
+    this.ffmpegAvailable = hasFfmpegGdigrabSync(logger);
     this.mode = this.resolveMode();
     this.quality = clampNumber(process.env.LAN_DUAL_WINDOWS_JPEG_QUALITY, 35, 92, 70);
     this.captureTimeoutMs = clampNumber(process.env.LAN_DUAL_WINDOWS_CAPTURE_TIMEOUT_MS, 1000, 12000, 5000);
-    this.maxScreenFps = this.mode === systemMode
-      ? clampNumber(process.env.LAN_DUAL_WINDOWS_MAX_SCREEN_FPS, 1, 8, 4)
-      : 60;
-    this.displays = this.mode === systemMode ? loadWindowsDisplaysSync(logger) : defaultDisplays;
+    this.maxScreenFps = this.mode === ffmpegMode
+      ? clampNumber(process.env.LAN_DUAL_WINDOWS_MAX_SCREEN_FPS, 1, 60, 30)
+      : this.mode === systemMode
+        ? clampNumber(process.env.LAN_DUAL_WINDOWS_MAX_SCREEN_FPS, 1, 8, 4)
+        : 60;
+    this.displays = this.mode === ffmpegMode || this.mode === systemMode
+      ? loadWindowsDisplaysSync(logger)
+      : defaultDisplays;
     this.lastFailure = "";
     this.lastFailureLogAt = 0;
+    this.ffmpegProcess = null;
+    this.ffmpegKey = "";
+    this.ffmpegBuffer = Buffer.alloc(0);
+    this.ffmpegFrame = null;
+    this.ffmpegFrameId = 0;
+    this.ffmpegFrameWaiters = [];
+    this.lastServedFfmpegFrameId = 0;
   }
 
   resolveMode() {
@@ -266,27 +307,47 @@ export class WindowsScreenCaptureCoordinator {
       return mockMode;
     }
 
-    if (process.platform === "win32") {
-      return systemMode;
+    if (this.requestedMode === ffmpegMode) {
+      if (this.ffmpegAvailable) {
+        return ffmpegMode;
+      }
+      this.logger?.warn("已请求 FFmpeg gdigrab，但当前环境不可用，回退 PowerShell/System.Drawing。");
+      return process.platform === "win32" ? systemMode : mockMode;
     }
 
     if (this.requestedMode === "system" || this.requestedMode === systemMode || this.requestedMode === "gdi") {
+      if (process.platform === "win32") {
+        return systemMode;
+      }
       this.logger?.warn("当前不是 Windows 环境，无法启用系统屏幕采集，已回退模拟帧。");
+      return mockMode;
     }
+
+    if (process.platform === "win32") {
+      return this.ffmpegAvailable ? ffmpegMode : systemMode;
+    }
+
     return mockMode;
   }
 
   getCapabilities() {
+    const usingFfmpegCapture = this.mode === ffmpegMode;
     const usingSystemCapture = this.mode === systemMode;
     return {
-      available: usingSystemCapture,
+      available: usingFfmpegCapture || usingSystemCapture,
       mode: this.mode,
-      capturePipeline: usingSystemCapture ? "windows-gdi-jpeg" : "mock-svg",
+      capturePipeline: usingFfmpegCapture
+        ? "windows-ffmpeg-gdigrab-mjpeg"
+        : usingSystemCapture
+          ? "windows-gdi-jpeg"
+          : "mock-svg",
       plannedBackend: "Windows Graphics Capture",
       displays: this.getDisplays(),
-      message: usingSystemCapture
-        ? "当前使用 Windows 系统截图 JPEG 帧；后续可升级为 Windows Graphics Capture。"
-        : "当前为骨架模式，先发送模拟视频帧。",
+      message: usingFfmpegCapture
+        ? "当前使用 FFmpeg gdigrab 持续采集 MJPEG 帧；后续可升级为 Windows Graphics Capture。"
+        : usingSystemCapture
+          ? "当前使用 Windows 系统截图 JPEG 帧；后续可升级为 Windows Graphics Capture。"
+          : "当前为骨架模式，先发送模拟视频帧。",
       lastCaptureError: this.lastFailure,
     };
   }
@@ -305,14 +366,20 @@ export class WindowsScreenCaptureCoordinator {
   }
 
   getVideoCodec() {
-    return this.mode === systemMode ? "jpeg" : "mock-svg";
+    return this.mode === ffmpegMode || this.mode === systemMode ? "jpeg" : "mock-svg";
   }
 
   getCapturePipeline() {
+    if (this.mode === ffmpegMode) {
+      return "windows-ffmpeg-gdigrab-mjpeg";
+    }
     return this.mode === systemMode ? "windows-gdi-jpeg" : "mock-svg";
   }
 
   makeHostMode() {
+    if (this.mode === ffmpegMode) {
+      return "windows-host-ffmpeg-mjpeg";
+    }
     return this.mode === systemMode ? "windows-host-system-jpeg" : "windows-host-skeleton";
   }
 
@@ -379,13 +446,34 @@ export class WindowsScreenCaptureCoordinator {
     this.logger?.info(
       `屏幕采集已启动：${session.displayName ?? "显示器"} / ${session.width}x${session.height} / ${session.fps} Hz / ${session.capturePipeline}`,
     );
+    if (this.mode === ffmpegMode) {
+      this.startFfmpegCapture(session);
+    }
   }
 
   stop() {
+    this.stopFfmpegCapture();
     this.logger?.info("屏幕采集已停止");
   }
 
   async makeFrame(frameId, session) {
+    if (this.mode === ffmpegMode) {
+      try {
+        return await this.makeFfmpegMjpegFrame(frameId, session);
+      } catch (error) {
+        this.recordCaptureFailure(error);
+        try {
+          return await this.makeSystemJpegFrame(frameId, session);
+        } catch (fallbackError) {
+          this.recordCaptureFailure(fallbackError);
+          return this.makeMockFrame(frameId, session, {
+            capturePipeline: "windows-ffmpeg-gdigrab-fallback-mock",
+            fallbackReason: `${error.message}; ${fallbackError.message}`,
+          });
+        }
+      }
+    }
+
     if (this.mode === systemMode) {
       try {
         return await this.makeSystemJpegFrame(frameId, session);
@@ -399,6 +487,207 @@ export class WindowsScreenCaptureCoordinator {
     }
 
     return this.makeMockFrame(frameId, session);
+  }
+
+  makeFfmpegKey(session) {
+    const activeDisplay = this.pickDisplay(session.activeDisplayId);
+    const width = clampNumber(session.width, 320, 3840, activeDisplay.width || 1920);
+    const height = clampNumber(session.height, 180, 2160, activeDisplay.height || 1080);
+    const fps = this.normalizeFps(session.fps);
+    return [
+      activeDisplay.id,
+      activeDisplay.x,
+      activeDisplay.y,
+      activeDisplay.width,
+      activeDisplay.height,
+      width,
+      height,
+      fps,
+      this.quality,
+    ].join(":");
+  }
+
+  startFfmpegCapture(session) {
+    const activeDisplay = this.pickDisplay(session.activeDisplayId);
+    const width = clampNumber(session.width, 320, 3840, activeDisplay.width || 1920);
+    const height = clampNumber(session.height, 180, 2160, activeDisplay.height || 1080);
+    const fps = this.normalizeFps(session.fps);
+    const key = this.makeFfmpegKey(session);
+
+    if (this.ffmpegProcess && this.ffmpegKey === key) {
+      return;
+    }
+
+    this.stopFfmpegCapture({ silent: true });
+    this.ffmpegKey = key;
+    this.ffmpegBuffer = Buffer.alloc(0);
+    this.ffmpegFrame = null;
+    this.ffmpegFrameId = 0;
+    this.lastServedFfmpegFrameId = 0;
+
+    const args = [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-f",
+      "gdigrab",
+      "-framerate",
+      String(fps),
+      "-offset_x",
+      String(Number(activeDisplay.x) || 0),
+      "-offset_y",
+      String(Number(activeDisplay.y) || 0),
+      "-video_size",
+      `${activeDisplay.width}x${activeDisplay.height}`,
+      "-i",
+      "desktop",
+      "-vf",
+      `scale=${width}:${height}:flags=fast_bilinear`,
+      "-q:v",
+      String(qscaleFromJpegQuality(this.quality)),
+      "-f",
+      "image2pipe",
+      "-vcodec",
+      "mjpeg",
+      "-",
+    ];
+
+    const child = spawn("ffmpeg", args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    this.ffmpegProcess = child;
+
+    child.stdout.on("data", (chunk) => this.handleFfmpegChunk(chunk));
+    child.stderr.on("data", (chunk) => {
+      const detail = String(chunk).trim();
+      if (detail) {
+        this.lastFailure = detail;
+      }
+    });
+    child.on("error", (error) => {
+      if (this.ffmpegProcess === child) {
+        this.recordCaptureFailure(error);
+        this.ffmpegProcess = null;
+      }
+    });
+    child.on("close", (code, signal) => {
+      if (this.ffmpegProcess === child) {
+        this.ffmpegProcess = null;
+        if (code !== 0 && signal !== "SIGTERM") {
+          this.recordCaptureFailure(new Error(`FFmpeg gdigrab exited with ${code ?? signal ?? "unknown"}`));
+        }
+      }
+    });
+  }
+
+  stopFfmpegCapture({ silent = false } = {}) {
+    if (!this.ffmpegProcess) {
+      return;
+    }
+    const child = this.ffmpegProcess;
+    this.ffmpegProcess = null;
+    child.kill();
+    if (!silent) {
+      this.ffmpegKey = "";
+    }
+  }
+
+  handleFfmpegChunk(chunk) {
+    this.ffmpegBuffer = Buffer.concat([this.ffmpegBuffer, chunk]);
+    while (this.ffmpegBuffer.length > 0) {
+      const start = this.ffmpegBuffer.indexOf(Buffer.from([0xff, 0xd8]));
+      if (start < 0) {
+        this.ffmpegBuffer = this.ffmpegBuffer.length > 1024
+          ? this.ffmpegBuffer.subarray(this.ffmpegBuffer.length - 1024)
+          : this.ffmpegBuffer;
+        return;
+      }
+      if (start > 0) {
+        this.ffmpegBuffer = this.ffmpegBuffer.subarray(start);
+      }
+      const end = this.ffmpegBuffer.indexOf(Buffer.from([0xff, 0xd9]), 2);
+      if (end < 0) {
+        if (this.ffmpegBuffer.length > 64 * 1024 * 1024) {
+          this.ffmpegBuffer = this.ffmpegBuffer.subarray(0, 0);
+          this.recordCaptureFailure(new Error("FFmpeg MJPEG buffer exceeded 64MB before a complete JPEG frame"));
+        }
+        return;
+      }
+
+      this.ffmpegFrame = this.ffmpegBuffer.subarray(0, end + 2);
+      this.ffmpegBuffer = this.ffmpegBuffer.subarray(end + 2);
+      this.ffmpegFrameId += 1;
+      this.lastFailure = "";
+      this.resolveFfmpegFrameWaiters();
+    }
+  }
+
+  resolveFfmpegFrameWaiters() {
+    const remaining = [];
+    for (const waiter of this.ffmpegFrameWaiters) {
+      if (this.ffmpegFrameId > waiter.afterFrameId && this.ffmpegFrame) {
+        waiter.resolve();
+      } else {
+        remaining.push(waiter);
+      }
+    }
+    this.ffmpegFrameWaiters = remaining;
+  }
+
+  waitForFfmpegFrame(afterFrameId, timeoutMs) {
+    if (this.ffmpegFrameId > afterFrameId && this.ffmpegFrame) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+      const waiter = {
+        afterFrameId,
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+      };
+      const timer = setTimeout(() => {
+        this.ffmpegFrameWaiters = this.ffmpegFrameWaiters.filter((item) => item !== waiter);
+        reject(new Error(`FFmpeg did not produce a JPEG frame within ${timeoutMs} ms`));
+      }, timeoutMs);
+      this.ffmpegFrameWaiters.push(waiter);
+    });
+  }
+
+  async makeFfmpegMjpegFrame(frameId, session) {
+    if (!this.ffmpegProcess) {
+      this.startFfmpegCapture(session);
+    }
+    await this.waitForFfmpegFrame(this.lastServedFfmpegFrameId, Math.max(1000, this.captureTimeoutMs));
+    const activeDisplay = this.pickDisplay(session.activeDisplayId);
+    const payload = this.ffmpegFrame;
+    const sourceFrameId = this.ffmpegFrameId;
+    const previousServedFrameId = this.lastServedFfmpegFrameId;
+    this.lastServedFfmpegFrameId = sourceFrameId;
+    const now = new Date();
+
+    return {
+      type: "video_frame",
+      frameId,
+      timestamp: now.toISOString(),
+      width: clampNumber(session.width, 320, 3840, activeDisplay.width || 1920),
+      height: clampNumber(session.height, 180, 2160, activeDisplay.height || 1080),
+      sourceWidth: activeDisplay.width,
+      sourceHeight: activeDisplay.height,
+      fps: session.fps,
+      requestedFps: session.requestedFps,
+      maxScreenFps: session.maxScreenFps,
+      frameIntervalMs: session.frameIntervalMs ?? Math.round(1000 / (session.fps || 1)),
+      codec: "jpeg",
+      encoding: "data-url",
+      keyFrame: true,
+      source: "screen",
+      capturePipeline: "windows-ffmpeg-gdigrab-mjpeg",
+      droppedFrames: Math.max(0, sourceFrameId - previousServedFrameId - 1),
+      payloadBytes: payload.length,
+      dataUrl: `data:image/jpeg;base64,${payload.toString("base64")}`,
+    };
   }
 
   async makeSystemJpegFrame(frameId, session) {

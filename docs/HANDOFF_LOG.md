@@ -21,6 +21,59 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：把 Windows host 屏幕采集从逐帧 PowerShell 截图过渡到 FFmpeg gdigrab 持续 MJPEG 管线，并保持自检稳定。
+完成内容：
+- Windows host 在 `auto` 模式下会优先检测并使用 FFmpeg `gdigrab`，输出 `windows-ffmpeg-gdigrab-mjpeg` / `windows-host-ffmpeg-mjpeg`。
+- 无 FFmpeg 或显式 `system` 时继续使用 PowerShell/System.Drawing JPEG；采集失败仍会回退模拟帧。
+- 视频发送调度从固定 8 FPS 上限改为按 `maxScreenFps` 调度；FFmpeg 模式默认 30 FPS，允许 1-60。
+- `test-windows-host.ps1` 和 `test-mac-client-browser.mjs` 默认改为 `auto`，优先覆盖 FFmpeg 管线。
+- Windows 系统剪贴板文本/文件写入增加短重试，降低 `Set-Clipboard` 被临时占用导致的误失败。
+- 更新根 README、Windows host README、当前状态、下一步行动和任务板。
+修改文件：
+- `apps/windows-host/src/windows-screen-capture.mjs`
+- `apps/windows-host/src/windows-host-service.mjs`
+- `apps/windows-host/src/windows-clipboard-bridge.mjs`
+- `scripts/windows/test-windows-host.ps1`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `README.md`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check apps/windows-host/src/windows-clipboard-bridge.mjs`
+- `node --check apps/windows-host/src/windows-screen-capture.mjs`
+- `node --check apps/windows-host/src/windows-host-service.mjs`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `git diff --check`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-host.ps1 -Fps 30`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-host.ps1 -ScreenMode system -SkipClipboardText -SkipClipboardFile`
+- `node scripts/windows/test-mac-client-browser.mjs`
+- `npm.cmd run check` in `apps/windows-host`
+- `node scripts/windows/test-auth-retry-policy.mjs`
+验证结果：
+- Windows host 自检通过，`/discovery` 暴露 `mode=ffmpeg-mjpeg`、`capturePipeline=windows-ffmpeg-gdigrab-mjpeg`。
+- 30 Hz 请求下首帧真实视频通过：`codec=jpeg`、`encoding=data-url`、`source=screen`、`capturePipeline=windows-ffmpeg-gdigrab-mjpeg`。
+- 强制 `-ScreenMode system` 兜底路径通过，返回 `mode=system-jpeg`、`capturePipeline=windows-gdi-jpeg`。
+- 文本剪贴板写入通过：`Clipboard text accepted: 57 chars / mode=system`。
+- 文件剪贴板写入通过：`Clipboard file accepted: 1 file / 128 bytes / saveMode=clipboard`。
+- Mac client 页面级自检通过，远端状态显示 `windows-host-ffmpeg-mjpeg`，并收到 `input_ack · log`。
+- 认证重试策略回归通过，Windows host 和假 Mac 均保持错误密码剩余 `2/1/0`、第三次断开、新连接正确认证。
+遗留问题：
+- 这仍是过渡层，不是最终 Windows Graphics Capture；真实高帧率、低延迟和资源占用还需要后续 WGC 或原生编码管线。
+- 当前 Windows host 音频仍是模拟帧，真实系统声音待 WASAPI loopback。
+下一步建议：
+- Mac 端可继续用 `apps/mac-client` 连接 Windows host，观察 FFmpeg MJPEG 画面和输入确认。
+- Windows 端下一步可推进 WASAPI loopback 或 Windows Graphics Capture。
+是否改了协议：否。
+是否需要另一端配合：不需要；后续真机 Mac 反控 Windows 验收时再通过 Agent Link Board 发 call。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：把 Windows host 文本剪贴板写入纳入一键自检。
 完成内容：
 - `scripts/windows/test-windows-host.ps1` 默认增加 `--clipboardText` 验证。

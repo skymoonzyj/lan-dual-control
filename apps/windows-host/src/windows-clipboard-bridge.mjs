@@ -3,7 +3,7 @@ import { closeSync, mkdirSync, openSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
-const defaultClipboardTimeoutMs = 4000;
+const defaultClipboardTimeoutMs = 6000;
 const defaultMaxChunkBytes = 64 * 1024;
 
 function normalizeClipboardMode(mode) {
@@ -125,7 +125,9 @@ export class WindowsClipboardBridge {
       "$ErrorActionPreference = 'Stop'",
       "[Console]::InputEncoding = [System.Text.Encoding]::UTF8",
       "$text = [Console]::In.ReadToEnd()",
-      "Set-Clipboard -Value $text",
+      "$lastError = $null",
+      "for ($attempt = 1; $attempt -le 5; $attempt += 1) { try { Set-Clipboard -Value $text; $lastError = $null; break } catch { $lastError = $_; Start-Sleep -Milliseconds (80 * $attempt) } }",
+      "if ($lastError -ne $null) { throw $lastError }",
     ].join("; ");
 
     const result = spawnSync(
@@ -338,7 +340,9 @@ export class WindowsClipboardBridge {
       "$ErrorActionPreference = 'Stop'",
       "[Console]::InputEncoding = [System.Text.Encoding]::UTF8",
       "$paths = [Console]::In.ReadToEnd() | ConvertFrom-Json",
-      "Set-Clipboard -Path $paths",
+      "$lastError = $null",
+      "for ($attempt = 1; $attempt -le 5; $attempt += 1) { try { Set-Clipboard -Path $paths; $lastError = $null; break } catch { $lastError = $_; Start-Sleep -Milliseconds (80 * $attempt) } }",
+      "if ($lastError -ne $null) { throw $lastError }",
     ].join("; ");
 
     const result = spawnSync(

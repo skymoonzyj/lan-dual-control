@@ -8,8 +8,8 @@ param(
   [int] $Fps = 2,
   [int] $BandwidthKbps = 5000,
   [int] $ClipboardFileBytes = 128,
-  [ValidateSet("auto", "system", "mock")]
-  [string] $ScreenMode = "system",
+  [ValidateSet("auto", "ffmpeg", "system", "mock")]
+  [string] $ScreenMode = "auto",
   [ValidateSet("auto", "system", "memory")]
   [string] $ClipboardMode = "system",
   [ValidateSet("auto", "system", "log")]
@@ -57,7 +57,7 @@ function Start-LocalWindowsHost {
     "LAN_DUAL_WINDOWS_SCREEN_MODE" = if ($MockVideo) { "mock" } else { $ScreenMode }
     "LAN_DUAL_WINDOWS_CLIPBOARD_MODE" = $ClipboardMode
     "LAN_DUAL_WINDOWS_INPUT_MODE" = $InputMode
-    "LAN_DUAL_WINDOWS_MAX_SCREEN_FPS" = [string]([Math]::Max(1, [Math]::Min($Fps, 8)))
+    "LAN_DUAL_WINDOWS_MAX_SCREEN_FPS" = [string]([Math]::Max(1, [Math]::Min($Fps, 60)))
   }
 
   $previousEnv = @{}

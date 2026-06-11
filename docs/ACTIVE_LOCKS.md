@@ -15,7 +15,6 @@
 
 | 端 | 文件或目录 | 原因 | 开始时间 | 状态 |
 | --- | --- | --- | --- | --- |
-| 无 | - | 当前没有文件占用 | 2026-06-12 | 已释放 |
 
 ## 高冲突区域
 
@@ -32,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-host/src/windows-screen-capture.mjs`、`apps/windows-host/src/windows-host-service.mjs`、`apps/windows-host/src/windows-clipboard-bridge.mjs`、`scripts/windows/test-windows-host.ps1`、`scripts/windows/test-mac-client-browser.mjs`、`README.md`、`apps/windows-host/README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 04:56 | Windows host 新增 FFmpeg gdigrab MJPEG 持续采集管线；自检验证真实 `windows-ffmpeg-gdigrab-mjpeg` 首帧、文本剪贴板、文件剪贴板、Mac client 页面级连接和认证重试策略均通过。 |
 | Windows Codex | `scripts/windows/test-windows-host.ps1`、`README.md`、`apps/windows-host/README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 04:47 | Windows host 一键自检默认加入文本剪贴板验证；真实 JPEG、文本剪贴板和文件剪贴板均通过。 |
 | Windows Codex | `scripts/windows/test-auth-retry-policy.mjs`、`README.md`、`apps/windows-host/README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 04:42 | 新增认证重试策略回归脚本：同时验证 Windows host 和假 Mac 的错误密码剩余 `2/1/0`、第三次断开和新连接正确认证。 |
 | Windows Codex | `scripts/windows/test-mac-client-browser.mjs`、`README.md`、`apps/windows-host/README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 04:38 | 新增 Mac client 页面级自检：临时启动 Windows host 与 `apps/mac-client`，验证真实 `windows-gdi-jpeg` 画面和 `input_ack · log`。 |
