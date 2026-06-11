@@ -12,7 +12,7 @@
 - WASAPI loopback 音频采集占位模块，当前只发送模拟音频帧。
 - SendInput 输入注入占位模块，当前只记录鼠标键盘事件，不注入系统。
 - 文本剪贴板模块：在 Windows 上通过 PowerShell `Set-Clipboard` 写入系统剪贴板，在非 Windows 开发环境回退为内存保存。
-- 文件剪贴板接收骨架，当前接收 `clipboard_file_*` 文件清单、分块、完成消息并返回进度，不写入系统剪贴板。
+- 文件剪贴板接收模块：接收 `clipboard_file_*` 文件清单、分块、完成消息并返回进度；在 Windows 上通过 PowerShell `Set-Clipboard -Path` 写入系统文件剪贴板，在非 Windows 开发环境保存到临时目录。
 - `/discovery` 设备发现接口，供 Windows 控制端或未来 Mac 控制端扫描局域网设备列表。
 
 ## 运行
@@ -53,9 +53,9 @@ node .\server.mjs
 调试剪贴板时可选：
 
 ```powershell
-$env:LAN_DUAL_WINDOWS_CLIPBOARD_MODE="auto"   # 默认，Windows 写系统剪贴板，其他平台内存回退
-$env:LAN_DUAL_WINDOWS_CLIPBOARD_MODE="memory" # 强制内存回退
-$env:LAN_DUAL_WINDOWS_CLIPBOARD_MODE="system" # 强制使用 PowerShell Set-Clipboard
+$env:LAN_DUAL_WINDOWS_CLIPBOARD_MODE="auto"   # 默认，Windows 写系统剪贴板，其他平台临时/内存回退
+$env:LAN_DUAL_WINDOWS_CLIPBOARD_MODE="memory" # 强制临时/内存回退
+$env:LAN_DUAL_WINDOWS_CLIPBOARD_MODE="system" # 强制使用 PowerShell Set-Clipboard / Set-Clipboard -Path
 ```
 
 本机调试时如果 `43770` 已被假 Mac 服务占用，可以临时使用：

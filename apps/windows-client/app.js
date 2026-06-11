@@ -128,6 +128,7 @@ const clipboardModeLabels = {
   system: "系统",
   mock: "模拟",
   "memory-only": "内存",
+  temp: "临时文件",
 };
 const windowsShortcutMap = {
   a: { key: "a", code: "KeyA", action: "select_all", label: "全选" },

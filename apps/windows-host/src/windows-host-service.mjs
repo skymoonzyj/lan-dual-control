@@ -387,7 +387,7 @@ export function createWindowsHostServer({
       return new Promise((resolve) => {
         server.listen(port, host, () => {
           logger.info(`Windows 被控端骨架已监听 ws://${host}:${port}`);
-          logger.info("当前为骨架模式：模拟视频帧、记录输入事件、不注入系统；Windows 上可写入系统文本剪贴板。");
+          logger.info("当前为骨架模式：模拟视频帧、记录输入事件、不注入系统；Windows 上可写入系统文本和文件剪贴板。");
           resolve();
         });
       });

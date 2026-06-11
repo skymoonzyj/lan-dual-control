@@ -155,6 +155,7 @@ Windows 端：
 - [ ] 采集 Windows 系统声音。
 - [x] 接收 Mac 输入事件骨架。
 - [x] 接收文本剪贴板并在 Windows 上写入系统剪贴板。
+- [x] 接收文件剪贴板并在 Windows 上写入系统文件剪贴板。
 - [ ] 使用 SendInput 注入输入。
 - [ ] 处理防火墙提示。
 
@@ -177,6 +178,7 @@ Mac 端：
 - 已创建 `apps/windows-host` Node.js WebSocket 被控服务骨架。
 - 当前可完成 hello/auth/session 握手，未认证连接会被拒绝；认证后可发送模拟 `video_frame` 和 `audio_frame`、接收 `input_event`、处理 `clipboard_text`。
 - Windows 被控端在 Windows 上会用 PowerShell `Set-Clipboard` 写入系统文本剪贴板，非 Windows 开发环境回退为 `memory-only`，并在 `/discovery`、`hello_ack`、`session_answer` 暴露剪贴板模式。
+- Windows 被控端可接收 `clipboard_file_*` 文件块并落到临时目录；在 Windows 上会用 PowerShell `Set-Clipboard -Path` 写入系统文件剪贴板，非 Windows 开发环境回退为 `saveMode: temp`。
 - 当前仍是骨架模式：屏幕采集待接 Windows Graphics Capture，真实声音采集待接 WASAPI loopback，输入注入待接 SendInput。
 
 ## 里程碑 M4：一键反控
@@ -206,7 +208,7 @@ Mac 端：
 - [x] 局域网自动发现骨架：控制端刷新设备并探测 `/discovery`，假 Mac 和 Windows 被控端已返回设备信息。
 - [ ] 跨设备 UDP/mDNS 自动发现。
 - [x] 文件、压缩包、图片等剪贴板传输骨架：控制端可选择文件并按 `clipboard_file_*` 分块发送，假 Mac 和 Windows 被控端可确认进度。
-- [ ] 系统级文件剪贴板读写：macOS 被控端已支持接收端写入系统剪贴板，复制文件后自动同步和 Windows 接收端系统写入仍待做。
+- [ ] 系统级文件剪贴板读写：macOS 被控端和 Windows 被控端均已支持接收端写入系统剪贴板，复制文件后自动同步仍待做。
 - [ ] 大文件传输速度、剩余时间和断点续传。
 - [x] 多显示器选择骨架：控制端显示 `displays` 下拉框，并通过 `displayId` 切换目标屏幕。
 - [ ] 真实多显示器枚举和采集切换。

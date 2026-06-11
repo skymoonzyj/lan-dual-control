@@ -1,9 +1,32 @@
 import { spawnSync } from "node:child_process";
+import { closeSync, mkdirSync, openSync, writeSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 
 const defaultClipboardTimeoutMs = 4000;
+const defaultMaxChunkBytes = 64 * 1024;
 
 function normalizeClipboardMode(mode) {
   return ["auto", "system", "memory"].includes(mode) ? mode : "auto";
+}
+
+function safeFileName(name, fallback) {
+  const baseName = basename(String(name || fallback)).replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_");
+  return baseName || fallback;
+}
+
+function sanitizeTransferId(transferId) {
+  return String(transferId || `transfer-${Date.now().toString(16)}`).replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function decodeFileChunk(message) {
+  if (message.encoding === "base64" || message.dataBase64) {
+    return Buffer.from(String(message.dataBase64 || ""), "base64");
+  }
+  if (typeof message.data === "string") {
+    return Buffer.from(message.data, "utf8");
+  }
+  return Buffer.alloc(0);
 }
 
 export class WindowsClipboardBridge {
@@ -23,19 +46,30 @@ export class WindowsClipboardBridge {
 
   getCapabilities() {
     const systemTextAvailable = this.canUseSystemTextClipboard();
+    const systemFileAvailable = this.canUseSystemFileClipboard();
     return {
       text: true,
       textMode: systemTextAvailable ? "system" : "memory-only",
       file: true,
-      fileMode: "memory-only",
-      backend: systemTextAvailable ? "PowerShell Set-Clipboard" : "memory",
-      message: systemTextAvailable
-        ? "Windows 文本剪贴板会写入系统剪贴板；文件剪贴板仍为接收骨架。"
-        : "当前环境使用内存剪贴板回退；在 Windows 上会自动使用 PowerShell Set-Clipboard。",
+      fileMode: systemFileAvailable ? "system" : "temp",
+      backend: systemTextAvailable || systemFileAvailable ? "PowerShell Set-Clipboard" : "temp-files",
+      message: systemTextAvailable || systemFileAvailable
+        ? "Windows 文本和文件剪贴板会写入系统剪贴板；非 Windows 环境保存到临时目录。"
+        : "当前环境使用临时文件/内存回退；在 Windows 上会自动使用 PowerShell Set-Clipboard。",
     };
   }
 
   canUseSystemTextClipboard() {
+    if (this.mode === "memory") {
+      return false;
+    }
+    if (this.mode === "system") {
+      return true;
+    }
+    return process.platform === "win32";
+  }
+
+  canUseSystemFileClipboard() {
     if (this.mode === "memory") {
       return false;
     }
@@ -128,22 +162,41 @@ export class WindowsClipboardBridge {
   }
 
   receiveFileOffer(message) {
+    const transferId = sanitizeTransferId(message.transferId);
+    const rootDir = join(tmpdir(), "lan-dual-control-windows-host-clipboard", transferId);
+    mkdirSync(rootDir, { recursive: true });
+    const fileMetas = Array.isArray(message.files) ? message.files : [];
+    const files = fileMetas.map((file, index) => {
+      const name = safeFileName(file?.name, `clipboard-${index + 1}`);
+      return {
+        index,
+        name,
+        size: Number(file?.size) || 0,
+        mimeType: file?.mimeType || "application/octet-stream",
+        path: join(rootDir, `${String(index + 1).padStart(3, "0")}-${name}`),
+        receivedBytes: 0,
+        chunks: new Set(),
+      };
+    });
     const transfer = {
       totalBytes: Number(message.totalBytes) || 0,
       receivedBytes: 0,
-      fileCount: Number(message.fileCount) || message.files?.length || 0,
-      files: message.files ?? [],
+      fileCount: Number(message.fileCount) || files.length,
+      rootDir,
+      files,
     };
     this.fileTransfers.set(message.transferId, transfer);
-    this.logger?.info(`收到文件剪贴板清单：${transfer.fileCount} 个文件，共 ${transfer.totalBytes} 字节`);
+    this.logger?.info(
+      `收到文件剪贴板清单：${transfer.fileCount} 个文件，共 ${transfer.totalBytes} 字节 / ${rootDir}`,
+    );
 
     return {
       type: "clipboard_file_response",
       transferId: message.transferId,
       accepted: true,
-      saveMode: "memory-only",
-      maxChunkBytes: message.maxChunkBytes,
-      reason: "Windows 被控端骨架已准备接收文件块。",
+      saveMode: this.canUseSystemFileClipboard() ? "clipboard" : "temp",
+      maxChunkBytes: Math.min(Number(message.maxChunkBytes) || defaultMaxChunkBytes, defaultMaxChunkBytes),
+      reason: "Windows 被控端已准备接收文件块并保存到临时目录。",
     };
   }
 
@@ -153,13 +206,42 @@ export class WindowsClipboardBridge {
       receivedBytes: 0,
       fileCount: 0,
       files: [],
+      rootDir: join(tmpdir(), "lan-dual-control-windows-host-clipboard", sanitizeTransferId(message.transferId)),
     };
-    transfer.receivedBytes =
-      Number(message.sentBytes) ||
-      Math.min(
-        transfer.totalBytes || Number(message.totalBytes) || Number.MAX_SAFE_INTEGER,
-        transfer.receivedBytes + Number(message.bytes || 0),
-      );
+    mkdirSync(transfer.rootDir, { recursive: true });
+
+    const fileIndex = Math.max(0, Number(message.fileIndex) || 0);
+    if (!transfer.files[fileIndex]) {
+      const name = safeFileName(message.fileName, `clipboard-${fileIndex + 1}`);
+      transfer.files[fileIndex] = {
+        index: fileIndex,
+        name,
+        size: Number(message.totalBytes) || 0,
+        mimeType: "application/octet-stream",
+        path: join(transfer.rootDir, `${String(fileIndex + 1).padStart(3, "0")}-${name}`),
+        receivedBytes: 0,
+        chunks: new Set(),
+      };
+    }
+
+    const file = transfer.files[fileIndex];
+    const offset = Math.max(0, Number(message.offset) || file.receivedBytes || 0);
+    const chunkIndex = Number(message.chunkIndex) || 0;
+    const chunkKey = `${fileIndex}:${chunkIndex}:${offset}`;
+    const chunk = decodeFileChunk(message);
+
+    if (!file.chunks.has(chunkKey)) {
+      const fd = openSync(file.path, offset === 0 ? "w" : "r+");
+      try {
+        writeSync(fd, chunk, 0, chunk.length, offset);
+      } finally {
+        closeSync(fd);
+      }
+      file.chunks.add(chunkKey);
+      file.receivedBytes += chunk.length;
+      transfer.receivedBytes += chunk.length;
+    }
+
     this.fileTransfers.set(message.transferId, transfer);
 
     return {
@@ -173,18 +255,122 @@ export class WindowsClipboardBridge {
   completeFileTransfer(message) {
     const transfer = this.fileTransfers.get(message.transferId);
     this.fileTransfers.delete(message.transferId);
+    const paths = transfer?.files?.filter(Boolean).map((file) => file.path) ?? [];
+    const expectedBytes = Number(message.totalBytes) || transfer?.totalBytes || 0;
+    const receivedBytes = transfer?.receivedBytes ?? 0;
+    const isComplete = expectedBytes === 0 || receivedBytes >= expectedBytes;
     this.logger?.info(
-      `文件剪贴板接收完成：${message.fileCount ?? transfer?.fileCount ?? 0} 个文件，${transfer?.receivedBytes ?? message.totalBytes ?? 0} 字节`,
+      `文件剪贴板接收完成：${message.fileCount ?? transfer?.fileCount ?? 0} 个文件，${receivedBytes} 字节`,
     );
+
+    if (!transfer || paths.length === 0) {
+      return {
+        type: "clipboard_file_result",
+        transferId: message.transferId,
+        accepted: false,
+        receivedBytes,
+        totalBytes: message.totalBytes,
+        fileCount: message.fileCount ?? 0,
+        saveMode: "failed",
+        reason: "没有找到可写入剪贴板的文件。",
+      };
+    }
+
+    if (!isComplete) {
+      return {
+        type: "clipboard_file_result",
+        transferId: message.transferId,
+        accepted: false,
+        receivedBytes,
+        totalBytes: message.totalBytes,
+        fileCount: message.fileCount ?? transfer.fileCount,
+        saveMode: "failed",
+        reason: `文件块未接收完整：${receivedBytes}/${expectedBytes} 字节。`,
+      };
+    }
+
+    if (!this.canUseSystemFileClipboard()) {
+      return {
+        type: "clipboard_file_result",
+        transferId: message.transferId,
+        accepted: true,
+        receivedBytes,
+        totalBytes: message.totalBytes,
+        fileCount: message.fileCount ?? transfer.fileCount,
+        saveMode: "temp",
+        savedPaths: paths,
+        reason: `当前环境不是 Windows，文件已保存到临时目录：${transfer.rootDir}`,
+      };
+    }
+
+    const result = this.writeSystemFiles(paths);
+    if (!result.ok) {
+      this.logger?.warn(`Windows 系统文件剪贴板写入失败：${result.reason}`);
+      return {
+        type: "clipboard_file_result",
+        transferId: message.transferId,
+        accepted: false,
+        receivedBytes,
+        totalBytes: message.totalBytes,
+        fileCount: message.fileCount ?? transfer.fileCount,
+        saveMode: "failed",
+        savedPaths: paths,
+        code: "LAN011",
+        reason: result.reason,
+      };
+    }
 
     return {
       type: "clipboard_file_result",
       transferId: message.transferId,
       accepted: true,
-      receivedBytes: transfer?.receivedBytes ?? message.totalBytes ?? 0,
+      receivedBytes,
       totalBytes: message.totalBytes,
-      fileCount: message.fileCount ?? transfer?.fileCount ?? 0,
-      reason: "Windows 被控端骨架已接收文件块，真实剪贴板写入后续接入原生模块。",
+      fileCount: message.fileCount ?? transfer.fileCount,
+      saveMode: "clipboard",
+      savedPaths: paths,
+      reason: "Windows 系统文件剪贴板已写入。",
     };
+  }
+
+  writeSystemFiles(paths) {
+    const script = [
+      "$ErrorActionPreference = 'Stop'",
+      "[Console]::InputEncoding = [System.Text.Encoding]::UTF8",
+      "$paths = [Console]::In.ReadToEnd() | ConvertFrom-Json",
+      "Set-Clipboard -Path $paths",
+    ].join("; ");
+
+    const result = spawnSync(
+      this.powershellCommand,
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+      {
+        input: JSON.stringify(paths),
+        encoding: "utf8",
+        timeout: this.clipboardTimeoutMs,
+        windowsHide: true,
+      },
+    );
+
+    if (result.error) {
+      return {
+        ok: false,
+        reason:
+          result.error.code === "ETIMEDOUT"
+            ? `PowerShell 写入文件剪贴板超时（${this.clipboardTimeoutMs} ms）`
+            : result.error.message,
+      };
+    }
+
+    if (result.status !== 0) {
+      const stderr = String(result.stderr || "").trim();
+      const stdout = String(result.stdout || "").trim();
+      return {
+        ok: false,
+        reason: stderr || stdout || `PowerShell 退出码 ${result.status}`,
+      };
+    }
+
+    return { ok: true };
   }
 }
