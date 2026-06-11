@@ -307,6 +307,56 @@ function summarizeFrame(frame) {
   ].filter(Boolean).join(" / ");
 }
 
+const h264NalNames = new Map([
+  [1, "non-idr"],
+  [5, "idr"],
+  [6, "sei"],
+  [7, "sps"],
+  [8, "pps"],
+  [9, "aud"],
+]);
+
+function findAnnexBStartCode(buffer, offset) {
+  for (let index = offset; index <= buffer.length - 3; index += 1) {
+    if (buffer[index] !== 0 || buffer[index + 1] !== 0) continue;
+    if (buffer[index + 2] === 1) {
+      return { index, length: 3 };
+    }
+    if (index <= buffer.length - 4 && buffer[index + 2] === 0 && buffer[index + 3] === 1) {
+      return { index, length: 4 };
+    }
+  }
+  return null;
+}
+
+function parseAnnexBNalUnits(buffer) {
+  const units = [];
+  let startCode = findAnnexBStartCode(buffer, 0);
+
+  while (startCode) {
+    const nalStart = startCode.index + startCode.length;
+    const nextStartCode = findAnnexBStartCode(buffer, nalStart);
+    const nalEnd = nextStartCode ? nextStartCode.index : buffer.length;
+
+    if (nalEnd > nalStart) {
+      units.push({
+        type: buffer[nalStart] & 0x1f,
+        size: nalEnd - nalStart,
+      });
+    }
+
+    startCode = nextStartCode;
+  }
+
+  return units;
+}
+
+function summarizeNalTypes(units) {
+  return units
+    .map((unit) => `${unit.type}:${h264NalNames.get(unit.type) || "nal"}`)
+    .join(",");
+}
+
 function normalizedText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -376,6 +426,7 @@ function assertH264VideoFrame(frame, answer) {
   const answerCodec = normalizedText(answer?.videoCodec).toLowerCase();
   const encoding = normalizedText(frame.encoding).toLowerCase();
   const payload = normalizedText(frame.payload);
+  const codecString = normalizedText(frame.codecString || answer?.codecString);
   const framePipeline = normalizedText(frame.capturePipeline).toLowerCase();
   const answerPipeline = normalizedText(answer?.capturePipeline).toLowerCase();
   const pipeline = framePipeline || answerPipeline;
@@ -394,6 +445,38 @@ function assertH264VideoFrame(frame, answer) {
   if (!payload) {
     problems.push("payload missing");
   }
+  let nalUnits = [];
+  if (payload) {
+    const payloadBuffer = Buffer.from(payload, "base64");
+    if (payloadBuffer.length === 0) {
+      problems.push("payload decoded to 0 bytes");
+    } else {
+      nalUnits = parseAnnexBNalUnits(payloadBuffer);
+      if (nalUnits.length === 0) {
+        problems.push("Annex B start codes missing");
+      } else {
+        const nalTypes = new Set(nalUnits.map((unit) => unit.type));
+        const hasVcl = nalTypes.has(1) || nalTypes.has(5);
+        const shouldBeKeyFrame = frame.keyFrame !== false;
+
+        if (!hasVcl) {
+          problems.push(`video slice NAL missing: ${summarizeNalTypes(nalUnits)}`);
+        }
+        if (shouldBeKeyFrame && !nalTypes.has(7)) {
+          problems.push(`keyframe SPS missing: ${summarizeNalTypes(nalUnits)}`);
+        }
+        if (shouldBeKeyFrame && !nalTypes.has(8)) {
+          problems.push(`keyframe PPS missing: ${summarizeNalTypes(nalUnits)}`);
+        }
+        if (shouldBeKeyFrame && !nalTypes.has(5)) {
+          problems.push(`keyframe IDR missing: ${summarizeNalTypes(nalUnits)}`);
+        }
+      }
+    }
+  }
+  if (!codecString.toLowerCase().startsWith("avc1.")) {
+    problems.push(`codecString=${codecString || "missing"}`);
+  }
   if (pipeline !== "screencapturekit-h264") {
     problems.push(`capturePipeline=${pipeline || "missing"}`);
   }
@@ -405,7 +488,7 @@ function assertH264VideoFrame(frame, answer) {
     throw new Error(`H.264 required but got ${summarizeFrame(frame)} (${problems.join("; ")})`);
   }
 
-  print("OK", `H.264 video confirmed: ${encoding} / ${pipeline} / codecString=${frame.codecString || "missing"}`);
+  print("OK", `H.264 video confirmed: ${encoding} / ${pipeline} / codecString=${codecString} / nalTypes=${summarizeNalTypes(nalUnits)}`);
 }
 
 async function probeClipboardText(client, args) {

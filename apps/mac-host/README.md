@@ -97,6 +97,8 @@ scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireRealVideo -Expec
 scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireH264 -ExpectInputMode log
 ```
 
+`-RequireH264` 会检查 `codec=h264`、`encoding=annexb-base64`、`capturePipeline=screencapturekit-h264`，并解析首帧 Annex B NAL 单元确认关键帧带 SPS、PPS 和 IDR。
+
 在 Mac 本机验证文本剪贴板双向同步：
 
 ```bash

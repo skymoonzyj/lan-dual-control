@@ -101,6 +101,7 @@ H.264 帧第一版仍沿用 `video_frame`：
 ```
 
 后续性能不足时，把 `payload` 从 base64 迁移到 WebSocket 二进制帧。
+过渡期自检会解析 `payload` 中的 Annex B NAL 单元；关键帧必须包含 SPS、PPS 和 IDR，避免字段协商成功但码流不可解。
 
 ## Mac 端任务
 
@@ -128,6 +129,7 @@ H.264 帧第一版仍沿用 `video_frame`：
 ## 验收
 
 - 1080P/30FPS 下，实收 FPS 稳定接近 30。
+- `-RequireH264` 探针能确认 `annexb-base64` 码流含可解码的 NAL 单元。
 - 鼠标移动时画面延迟明显低于 JPEG 链路。
 - CPU 占用可接受。
 - 断开连接后编码器和采集流释放干净。
