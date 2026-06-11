@@ -21,6 +21,7 @@ Mac 端：
 - [x] 检测屏幕录制权限骨架。
 - [ ] 真机验证屏幕录制权限。
 - [x] 采集主屏幕图像。
+- [x] 后台 JPEG 采集管线，避免截图和编码阻塞主线程。
 - [x] 开启 WebSocket 局域网监听端口骨架。
 - [x] 提供 `/discovery` HTTP 发现接口。
 - [x] 发送模拟 `video_frame`，便于 Windows 控制端先联调真实 Mac 服务入口。
@@ -95,6 +96,7 @@ Windows 端：
 - 已完成本机假 Mac WebSocket 联调服务，真实 Mac 被控端到位后按同一消息格式替换。
 - 已完成 macOS 被控端 Swift WebSocket 骨架，支持 `/discovery`、hello/auth/session、模拟 `video_frame`/`audio_frame`、输入事件日志、文本和文件剪贴板确认。
 - macOS 被控端已接入真实屏幕 JPEG `video_frame` 抓取；默认 `LAN_DUAL_VIDEO_MODE=auto`，权限不足或采集失败时自动回退模拟帧。
+- macOS 被控端真实屏幕帧已改为后台采集/编码队列，支持 `LAN_DUAL_MAX_SCREEN_FPS`、`LAN_DUAL_JPEG_QUALITY` 和 `video_frame.droppedFrames` 调试字段。
 - macOS 被控端已接入 CGEvent 输入注入；默认 `LAN_DUAL_INPUT_MODE=inject`，可切到 `log` 做安全联调。
 - Windows 控制端当前已可区分真实 JPEG 视频帧和模拟视频帧，并记录图片解码失败；`scripts/windows/test-mac-host.ps1` 可用于真机连通自检。
 - Mac 端已兼容 Windows 端现有 `kind/action/remoteX/remoteY` 输入事件字段。

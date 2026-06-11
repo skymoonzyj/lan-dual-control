@@ -17,6 +17,8 @@ struct HostConfiguration {
     let pairingPassword: String
     let videoMode: VideoCaptureMode
     let inputMode: InputInjectionMode
+    let maxScreenFps: Int
+    let jpegQualityOverride: Double?
 
     static func fromEnvironment() -> HostConfiguration {
         let environment = ProcessInfo.processInfo.environment
@@ -28,13 +30,33 @@ struct HostConfiguration {
         let videoMode = VideoCaptureMode(rawValue: rawVideoMode) ?? .auto
         let rawInputMode = environment["LAN_DUAL_INPUT_MODE"]?.lowercased() ?? ""
         let inputMode = InputInjectionMode(rawValue: rawInputMode) ?? .inject
+        let maxScreenFps = clampedInt(environment["LAN_DUAL_MAX_SCREEN_FPS"], defaultValue: 12, range: 1...30)
+        let jpegQualityOverride = clampedDouble(environment["LAN_DUAL_JPEG_QUALITY"], range: 0.1...0.95)
 
         return HostConfiguration(
             host: host,
             port: portValue,
             pairingPassword: password,
             videoMode: videoMode,
-            inputMode: inputMode
+            inputMode: inputMode,
+            maxScreenFps: maxScreenFps,
+            jpegQualityOverride: jpegQualityOverride
         )
+    }
+
+    private static func clampedInt(_ rawValue: String?, defaultValue: Int, range: ClosedRange<Int>) -> Int {
+        guard let rawValue, let parsed = Int(rawValue) else {
+            return defaultValue
+        }
+
+        return min(range.upperBound, max(range.lowerBound, parsed))
+    }
+
+    private static func clampedDouble(_ rawValue: String?, range: ClosedRange<Double>) -> Double? {
+        guard let rawValue, let parsed = Double(rawValue) else {
+            return nil
+        }
+
+        return min(range.upperBound, max(range.lowerBound, parsed))
     }
 }

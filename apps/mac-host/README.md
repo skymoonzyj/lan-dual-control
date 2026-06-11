@@ -14,7 +14,7 @@
   - 输入监控提示。
 - ScreenCaptureKit 资源预检。
 - 多显示器枚举。
-- 真实屏幕 JPEG `video_frame` 抓取；权限不足或采集失败时自动回退模拟 `video_frame`。
+- 后台 JPEG `video_frame` 抓取；权限不足或采集失败时自动回退模拟 `video_frame`。
 - 模拟 `audio_frame` 发送，便于 Windows 控制端先完成声音链路联调。
 - CGEvent 输入注入：支持鼠标移动、左/右/中键按下抬起、滚轮、常用键盘按键和 macOS 快捷键修饰键。
 
@@ -40,6 +40,8 @@ export LAN_DUAL_PORT=43770
 export LAN_DUAL_PASSWORD=demo-password
 export LAN_DUAL_VIDEO_MODE=auto
 export LAN_DUAL_INPUT_MODE=inject
+export LAN_DUAL_MAX_SCREEN_FPS=12
+export LAN_DUAL_JPEG_QUALITY=0.58
 swift run lan-dual-mac-host
 ```
 
@@ -48,6 +50,8 @@ swift run lan-dual-mac-host
 - `auto`：默认值。有屏幕录制权限时发送真实 JPEG 帧，否则发送模拟帧。
 - `screen`：强制尝试真实屏幕帧，失败时仍会临时回退模拟帧并打印日志。
 - `mock`：只发送模拟帧，适合协议调试。
+
+真实屏幕帧采用后台采集和 JPEG 编码队列，避免主线程被截图/编码卡住。`LAN_DUAL_MAX_SCREEN_FPS` 可限制真实屏幕帧最高帧率，默认 `12`，范围 `1...30`。`LAN_DUAL_JPEG_QUALITY` 可覆盖控制端画质预设计算出的 JPEG 质量，范围 `0.1...0.95`；不设置时会按 Windows 控制端的 `smooth`、`balanced`、`sharp`、`custom` 和码率自动选择。
 
 `LAN_DUAL_INPUT_MODE` 可选值：
 

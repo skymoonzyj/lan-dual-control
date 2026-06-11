@@ -11,6 +11,8 @@ private struct HostSession {
     var audioEnabled: Bool
     var audioVolume: Int
     var screenFramesEnabled: Bool
+    var qualityPreset: String
+    var jpegQuality: Double
 }
 
 private struct FileTransferState {
@@ -31,6 +33,8 @@ private final class ClientContext {
     var audioTimer: DispatchSourceTimer?
     var fileTransfers: [String: FileTransferState] = [:]
     var reportedVideoCaptureFallback = false
+    var isVideoCaptureInFlight = false
+    var droppedVideoFrames = 0
 
     init(connection: NWConnection) {
         self.connection = connection
@@ -43,6 +47,7 @@ final class MacHostService {
     private let screenCapture: ScreenCaptureCoordinator
     private let inputInjector: InputEventInjector
     private let logger: HostLogger
+    private let videoCaptureQueue = DispatchQueue(label: "lan-dual-control.mac-host.video-capture", qos: .userInteractive)
 
     private var listener: NWListener?
     private var activeConnections: [ObjectIdentifier: ClientContext] = [:]
@@ -199,6 +204,8 @@ final class MacHostService {
                 "mock": !screenFramesEnabled,
                 "videoMode": configuration.videoMode.rawValue,
                 "screenCapture": screenFramesEnabled,
+                "capturePipeline": screenFramesEnabled ? "background-jpeg" : "mock-svg",
+                "maxScreenFps": configuration.maxScreenFps,
                 "displays": screenCapture.availableDisplays().map { $0.jsonObject },
             ],
             "permissions": [
@@ -358,6 +365,8 @@ final class MacHostService {
                 "screen": [
                     "mode": screenFramesEnabled ? "jpeg-frame" : "mock-frame",
                     "codec": screenFramesEnabled ? "jpeg" : "mock-svg",
+                    "pipeline": screenFramesEnabled ? "background-jpeg" : "mock-svg",
+                    "maxFps": screenFramesEnabled ? configuration.maxScreenFps : 8,
                 ],
                 "audio": ["mode": "mock-frame", "codec": "mock-opus"],
                 "input": ["mode": configuration.inputMode.rawValue],
@@ -395,9 +404,11 @@ final class MacHostService {
         let videoCodec = offer?.preferredVideoCodec ?? stringValue(message["preferredVideoCodec"]) ?? "mjpeg"
         let audioCodec = wantAudio ? (offer?.preferredAudioCodec ?? stringValue(message["preferredAudioCodec"]) ?? "opus") : "none"
         let audioVolume = positiveInt(message["audioVolume"]) ?? 80
+        let qualityPreset = offer?.qualityPreset ?? stringValue(message["qualityPreset"]) ?? "balanced"
 
         let snapshot = permissions.snapshot()
         let screenFramesEnabled = shouldUseScreenFrames(snapshot)
+        let jpegQuality = jpegQuality(for: qualityPreset, bandwidthKbps: bandwidth)
         context.session = HostSession(
             width: width,
             height: height,
@@ -407,10 +418,12 @@ final class MacHostService {
             displayName: activeDisplay.name,
             audioEnabled: wantAudio,
             audioVolume: audioVolume,
-            screenFramesEnabled: screenFramesEnabled
+            screenFramesEnabled: screenFramesEnabled,
+            qualityPreset: qualityPreset,
+            jpegQuality: jpegQuality
         )
 
-        logger.info("会话协商：\(width)x\(height) / \(fps) Hz / 码率 \(bandwidth / 1000) Mbps / \(activeDisplay.name) / 视频 \(screenFramesEnabled ? "真实 JPEG" : "模拟帧")")
+        logger.info("会话协商：\(width)x\(height) / \(fps) Hz / 码率 \(bandwidth / 1000) Mbps / \(activeDisplay.name) / 视频 \(screenFramesEnabled ? "后台 JPEG" : "模拟帧") / 质量 \(String(format: "%.2f", jpegQuality))")
         send([
             "type": "session_answer",
             "ok": true,
@@ -428,7 +441,10 @@ final class MacHostService {
             "channels": 2,
             "clipboardText": wantClipboardText,
             "clipboardFile": wantClipboardFile,
-            "hostMode": screenFramesEnabled ? "mac-host-screen-jpeg" : "mac-host-mock-video",
+            "hostMode": screenFramesEnabled ? "mac-host-background-jpeg" : "mac-host-mock-video",
+            "qualityPreset": qualityPreset,
+            "jpegQuality": jpegQuality,
+            "capturePipeline": screenFramesEnabled ? "background-jpeg" : "mock-svg",
             "permissions": [
                 "screenRecording": snapshot.screenRecordingGranted,
                 "accessibility": snapshot.accessibilityGranted,
@@ -451,21 +467,32 @@ final class MacHostService {
         let fps = min(positiveInt(message["fps"]) ?? context.session?.fps ?? 60, 60)
         let audioEnabled = boolValue(message["audio"])
         let audioVolume = positiveInt(message["audioVolume"]) ?? context.session?.audioVolume ?? 80
+        let bandwidth = positiveInt(message["maxBandwidthKbps"]) ?? context.session?.maxBandwidthKbps ?? 50_000
+        let qualityPreset = stringValue(message["qualityPreset"]) ?? context.session?.qualityPreset ?? "balanced"
         let screenFramesEnabled = shouldUseScreenFrames(permissions.snapshot())
+        let jpegQuality = jpegQuality(for: qualityPreset, bandwidthKbps: bandwidth)
 
         context.session = HostSession(
             width: width,
             height: height,
             fps: fps,
-            maxBandwidthKbps: positiveInt(message["maxBandwidthKbps"]) ?? context.session?.maxBandwidthKbps ?? 50_000,
+            maxBandwidthKbps: bandwidth,
             displayId: activeDisplay.id,
             displayName: activeDisplay.name,
             audioEnabled: audioEnabled,
             audioVolume: audioVolume,
-            screenFramesEnabled: screenFramesEnabled
+            screenFramesEnabled: screenFramesEnabled,
+            qualityPreset: qualityPreset,
+            jpegQuality: jpegQuality
         )
 
-        send(["type": "display_settings_ack", "accepted": true], to: context)
+        send([
+            "type": "display_settings_ack",
+            "accepted": true,
+            "qualityPreset": qualityPreset,
+            "jpegQuality": jpegQuality,
+            "capturePipeline": screenFramesEnabled ? "background-jpeg" : "mock-svg",
+        ], to: context)
         startVideoFrames(context)
         audioEnabled ? startAudioFrames(context) : stopAudioFrames(context)
     }
@@ -581,15 +608,34 @@ final class MacHostService {
     private func startVideoFrames(_ context: ClientContext) {
         stopVideoFrames(context)
         context.reportedVideoCaptureFallback = false
-        let session = context.session ?? HostSession(width: 1920, height: 1080, fps: 8, maxBandwidthKbps: 50_000, displayId: "main", displayName: "主显示器", audioEnabled: false, audioVolume: 80, screenFramesEnabled: false)
-        let maxFps = session.screenFramesEnabled ? 4 : 8
-        let intervalMs = max(session.screenFramesEnabled ? 250 : 120, Int((1000.0 / Double(min(session.fps, maxFps))).rounded()))
+        context.isVideoCaptureInFlight = false
+        context.droppedVideoFrames = 0
+        let session = context.session ?? HostSession(
+            width: 1920,
+            height: 1080,
+            fps: 8,
+            maxBandwidthKbps: 50_000,
+            displayId: "main",
+            displayName: "主显示器",
+            audioEnabled: false,
+            audioVolume: 80,
+            screenFramesEnabled: false,
+            qualityPreset: "balanced",
+            jpegQuality: jpegQuality(for: "balanced", bandwidthKbps: 50_000)
+        )
+        let maxFps = session.screenFramesEnabled ? min(session.fps, configuration.maxScreenFps) : min(session.fps, 8)
+        let intervalMs = max(session.screenFramesEnabled ? 80 : 120, Int((1000.0 / Double(max(1, maxFps))).rounded()))
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + .milliseconds(intervalMs), repeating: .milliseconds(intervalMs))
         timer.setEventHandler { [weak self, weak context] in
             guard let self, let context else { return }
-            context.frameId += 1
-            self.send(self.makeVideoFrame(context.frameId, session: context.session ?? session, context: context), to: context)
+            let currentSession = context.session ?? session
+            if currentSession.screenFramesEnabled {
+                self.enqueueScreenVideoFrame(context, session: currentSession)
+            } else {
+                context.frameId += 1
+                self.send(self.makeMockVideoFrame(context.frameId, session: currentSession), to: context)
+            }
         }
         context.videoTimer = timer
         timer.resume()
@@ -632,19 +678,60 @@ final class MacHostService {
         context.audioTimer = nil
     }
 
-    private func makeVideoFrame(_ frameId: Int, session: HostSession, context: ClientContext) -> [String: Any] {
-        if session.screenFramesEnabled,
-           let capturedFrame = screenCapture.captureFrame(displayId: session.displayId, maxWidth: session.width, maxHeight: session.height) {
-            let now = ISO8601DateFormatter().string(from: Date())
-            return capturedFrame.jsonObject(frameId: frameId, timestamp: now, keyFrame: frameId == 1 || frameId % 30 == 0)
+    private func enqueueScreenVideoFrame(_ context: ClientContext, session: HostSession) {
+        guard !context.isVideoCaptureInFlight else {
+            context.droppedVideoFrames += 1
+            return
         }
 
-        if session.screenFramesEnabled && !context.reportedVideoCaptureFallback {
-            context.reportedVideoCaptureFallback = true
-            logger.warn("真实屏幕帧抓取失败，已临时回退到模拟视频帧。请检查屏幕录制权限或重新启动服务。")
-        }
+        context.isVideoCaptureInFlight = true
+        context.frameId += 1
+        let frameId = context.frameId
+        let sessionSnapshot = session
 
-        return makeMockVideoFrame(frameId, session: session)
+        videoCaptureQueue.async { [weak self, weak context] in
+            guard let self else { return }
+            let capturedFrame = self.screenCapture.captureFrame(
+                displayId: sessionSnapshot.displayId,
+                maxWidth: sessionSnapshot.width,
+                maxHeight: sessionSnapshot.height,
+                quality: sessionSnapshot.jpegQuality
+            )
+
+            DispatchQueue.main.async { [weak self, weak context] in
+                guard let self, let context else { return }
+                context.isVideoCaptureInFlight = false
+                guard context.videoTimer != nil else {
+                    return
+                }
+
+                if let capturedFrame {
+                    var frame = capturedFrame.jsonObject(
+                        frameId: frameId,
+                        timestamp: ISO8601DateFormatter().string(from: Date()),
+                        keyFrame: frameId == 1 || frameId % 30 == 0
+                    )
+                    frame["qualityPreset"] = sessionSnapshot.qualityPreset
+                    frame["jpegQuality"] = sessionSnapshot.jpegQuality
+                    frame["capturePipeline"] = "background-jpeg"
+                    frame["droppedFrames"] = context.droppedVideoFrames
+                    context.droppedVideoFrames = 0
+                    self.send(frame, to: context)
+                    return
+                }
+
+                if !context.reportedVideoCaptureFallback {
+                    context.reportedVideoCaptureFallback = true
+                    self.logger.warn("真实屏幕帧抓取失败，已临时回退到模拟视频帧。请检查屏幕录制权限或重新启动服务。")
+                }
+
+                var fallbackFrame = self.makeMockVideoFrame(frameId, session: sessionSnapshot)
+                fallbackFrame["capturePipeline"] = "screen-fallback-mock"
+                fallbackFrame["droppedFrames"] = context.droppedVideoFrames
+                context.droppedVideoFrames = 0
+                self.send(fallbackFrame, to: context)
+            }
+        }
     }
 
     private func makeMockVideoFrame(_ frameId: Int, session: HostSession) -> [String: Any] {
@@ -696,6 +783,32 @@ final class MacHostService {
         case .auto:
             return snapshot.screenRecordingGranted
         }
+    }
+
+    private func jpegQuality(for preset: String, bandwidthKbps: Int) -> Double {
+        if let override = configuration.jpegQualityOverride {
+            return override
+        }
+
+        let baseQuality: Double
+        switch preset.lowercased() {
+        case "smooth":
+            baseQuality = 0.42
+        case "sharp":
+            baseQuality = 0.72
+        case "custom":
+            baseQuality = bandwidthKbps >= 40_000 ? 0.68 : 0.56
+        default:
+            baseQuality = 0.56
+        }
+
+        if bandwidthKbps <= 10_000 {
+            return max(0.35, baseQuality - 0.12)
+        }
+        if bandwidthKbps >= 40_000 {
+            return min(0.82, baseQuality + 0.06)
+        }
+        return baseQuality
     }
 
     private func sendAuthRequired(for message: [String: Any], type: String, to context: ClientContext) {

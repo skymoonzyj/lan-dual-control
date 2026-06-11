@@ -224,6 +224,8 @@ Both directions: clipboard_event loop
   "codec": "mock-svg",
   "encoding": "data-url",
   "keyFrame": true,
+  "capturePipeline": "mock-svg",
+  "droppedFrames": 0,
   "dataUrl": "data:image/svg+xml;base64,..."
 }
 ```
@@ -232,6 +234,8 @@ Both directions: clipboard_event loop
 
 - 控制消息仍用 JSON。
 - 初期可以发送 `codec: "jpeg"`、`encoding: "data-url"` 或 `encoding: "base64"` 的 JPEG 帧，降低联调难度。
+- macOS 被控端当前使用 `capturePipeline: "background-jpeg"` 表示截图和 JPEG 编码在后台队列执行；如果上一帧尚未完成，会丢弃调度并在后续 `video_frame.droppedFrames` 中带回数量。
+- `qualityPreset`、`jpegQuality` 可作为调试字段返回实际使用的画质预设和 JPEG 压缩质量。
 - 性能不足时再把图像帧升级为二进制帧。
 - 每帧带一个小头部：frameId、timestamp、width、height、format、payloadLength。
 - payload 使用 JPEG 或 PNG，优先 JPEG。

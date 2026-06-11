@@ -105,6 +105,8 @@
     "codec": "mock-svg",
     "encoding": "data-url",
     "keyFrame": true,
+    "capturePipeline": "mock-svg",
+    "droppedFrames": 0,
     "dataUrl": "data:image/svg+xml;base64,..."
   },
   "audioSettingsUpdate": {
