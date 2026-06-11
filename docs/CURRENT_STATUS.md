@@ -8,7 +8,7 @@
 
 - 项目中心仓库：`lan-dual-control`
 - 当前主目标：继续把 Windows 控制 Mac 做成真实可日常试用的版本，同时保留 Mac 反控 Windows 的骨架。
-- 当前优先级：真实 Mac 被控端验收、输入注入安全验证、真实音频、H.264 端到端解码体验和低延迟稳定性。
+- 当前优先级：真实 Mac 被控端验收、输入注入安全验证、Windows 播放真实 Mac 音频、H.264 端到端解码体验和低延迟稳定性。
 - 协议入口：`docs/03-architecture-and-protocol.md`
 - 任务入口：`docs/04-task-board.md`
 - 下一步入口：`docs/NEXT_ACTIONS.md`
@@ -26,7 +26,7 @@
 - JPEG 调试链路默认真实采集上限已改为 30 FPS，控制端会显示实收 FPS、协商帧率和请求帧率。
 - 真 Mac 已用于验证真实 JPEG 首帧、文本剪贴板双向同步、文件剪贴板从 Mac 推送到控制端内存托盘。
 - ScreenCaptureKit + VideoToolbox H.264 输出入口已在真 Mac 上编译、启动并通过本机 `--requireH264` 强校验，实际返回 `videoCodec=h264`、`videoEncoding=annexb-base64`、`capturePipeline=screencapturekit-h264`。
-- 真实声音采集仍未完成；H.264 后续继续做 Windows 控制端真实解码体验、延迟和稳定性验收。
+- Mac 系统声音采集第一版已接入 ScreenCaptureKit，真机验证可输出 `pcm-f32le-base64`、48kHz、双声道、20ms 的真实 `audio_frame`；Windows 控制端仍需接真实 PCM 播放。
 
 ## 共享协议状态
 

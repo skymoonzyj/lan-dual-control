@@ -104,7 +104,7 @@ Windows 端：
 - 已统一 `display_settings`、`display_settings_ack`、`video_frame` 协议命名，假 Mac 服务可持续发送模拟帧。
 - 已完成 Windows Tauri 桌面壳，已验证可构建 `lan-dual-control-windows.exe`。
 - 已完成本机假 Mac WebSocket 联调服务；当前真 Mac 已到位，后续功能完成以真实 macOS 被控端验证为准，假 Mac 只做快速回归和失败场景模拟。
-- 已完成 macOS 被控端 Swift WebSocket 骨架，支持 `/discovery`、hello/auth/session、模拟 `video_frame`/`audio_frame`、输入事件日志、文本和文件剪贴板确认。
+- 已完成 macOS 被控端 Swift WebSocket 骨架，支持 `/discovery`、hello/auth/session、模拟 `video_frame`、真实系统声音 PCM `audio_frame`、输入事件日志、文本和文件剪贴板确认。
 - macOS 被控端已接入真实屏幕 JPEG `video_frame` 抓取；默认 `LAN_DUAL_VIDEO_MODE=auto`，权限不足或采集失败时自动回退模拟帧。
 - macOS 被控端真实屏幕帧已改为后台采集/编码队列，支持 `LAN_DUAL_MAX_SCREEN_FPS`、`LAN_DUAL_JPEG_QUALITY` 和 `video_frame.droppedFrames` 调试字段。
 - macOS 被控端已补齐 FPS 诊断字段：`session_answer`、`display_settings_ack` 和 `video_frame` 会返回 `requestedFps`、实际 `fps`、`maxScreenFps`、`frameIntervalMs`、`videoCodec` 和 `capturePipeline`。
@@ -115,7 +115,7 @@ Windows 端：
 - Windows 控制端已增加 Mac 主机诊断状态条：会汇总 `permissions`、`hostMode`、`capturePipeline`、`source`、WebCodecs 解码状态、`droppedFrames`、`input_ack` 和剪贴板模式，真机权限、输入拒绝、解码失败或采集回退问题可直接在画面内看到。
 - Mac 端已兼容 Windows 端现有 `kind/action/remoteX/remoteY` 输入事件字段。
 - Windows 控制端已新增 Edge 页面级自检脚本 `scripts/windows/test-windows-client-browser.mjs`，可自动打开控制端、连接真实 Mac、读取诊断条并确认视频 surface；当前 Edge headless 不支持 `avc1.420029` 时已验证会自动请求 JPEG 兜底并显示真实 Mac 画面。
-- 真 Mac 后续继续做真实视频帧、输入注入、低延迟 ScreenCaptureKit 流式采集和更完整的键盘/输入法兼容验证。
+- 真 Mac 后续继续做输入注入、真实音频播放对接、低延迟稳定性和更完整的键盘/输入法兼容验证。
 - MSI/NSIS 安装包暂未开启，先保留桌面 exe 构建；安装包放到 M5 处理。
 
 ## 里程碑 M2：安全和控制体验
@@ -228,6 +228,7 @@ Mac 端：
 - [x] 多显示器选择骨架：控制端显示 `displays` 下拉框，并通过 `displayId` 切换目标屏幕。
 - [ ] 真实多显示器枚举和采集切换。
 - [ ] 音频延迟优化。
+- [x] macOS 系统声音采集第一版：ScreenCaptureKit 输出真实 `pcm-f32le-base64`、48kHz、双声道 PCM `audio_frame`，失败时回退模拟音频。
 - [x] ScreenCaptureKit 流式采集 + VideoToolbox H.264 硬件编码第一版。（已在真 Mac 上通过 `--requireH264` 首帧强校验；端到端延迟、连续重连和 CPU 占用继续作为稳定性任务推进。）
 - [ ] 安装包。
 - [ ] 开机自启。

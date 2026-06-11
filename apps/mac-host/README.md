@@ -17,7 +17,7 @@
 - 多显示器枚举。
 - 后台 JPEG `video_frame` 抓取；权限不足或采集失败时自动回退模拟 `video_frame`。
 - ScreenCaptureKit + VideoToolbox H.264 流式输出入口；Windows 控制端支持 WebCodecs 解码后会优先请求 `h264`，启动失败时自动回退 JPEG。
-- 模拟 `audio_frame` 发送，便于 Windows 控制端先完成声音链路联调。
+- ScreenCaptureKit 系统声音采集第一版：优先发送真实 `pcm-f32le-base64` PCM `audio_frame`，启动失败时回退模拟音频帧。
 - CGEvent 输入注入：支持鼠标移动、左/右/中键按下抬起、滚轮、常用键盘按键、小键盘、方向键、功能键和 macOS 快捷键修饰键。
 - macOS 系统文本剪贴板读写：接收 Windows 文字后写入 `NSPasteboard`，并把 Mac 本机复制的新文字推送给 Windows。
 - macOS 系统文件剪贴板接收：接收 Windows 文件块后保存到临时目录，并把文件 URL 写入 `NSPasteboard`。
@@ -98,6 +98,8 @@ scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireH264 -ExpectInpu
 ```
 
 `-RequireH264` 会检查 `codec=h264`、`encoding=annexb-base64`、`capturePipeline=screencapturekit-h264`，并解析首帧 Annex B NAL 单元确认关键帧带 SPS、PPS 和 IDR。
+
+验证真实系统声音采集时，可以先让 Mac 播放一声系统提示音，再请求 `wantAudio=true` 的会话；真实音频帧会返回 `codec=pcm-f32le`、`encoding=pcm-f32le-base64`、`audioMode=system-pcm`、`sampleRate=48000`、`channels=2`。当前 Windows 控制端仍只显示音频帧状态，真实播放还需要继续接入 PCM 播放链路。
 
 在 Mac 本机验证文本剪贴板双向同步：
 

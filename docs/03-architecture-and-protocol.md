@@ -185,9 +185,14 @@ Both directions: clipboard_event loop
 {
   "type": "session_answer",
   "ok": true,
-  "videoCodec": "mjpeg",
-  "audioCodec": "opus",
-  "fps": 60,
+  "videoCodec": "h264",
+  "videoEncoding": "annexb",
+  "audioCodec": "pcm-f32le",
+  "requestedAudioCodec": "opus",
+  "audioMode": "system-pcm",
+  "fps": 30,
+  "requestedFps": 60,
+  "maxScreenFps": 30,
   "maxBandwidthKbps": 50000,
   "width": 1920,
   "height": 1080,
@@ -206,7 +211,7 @@ Both directions: clipboard_event loop
   "channels": 2,
   "clipboardText": true,
   "clipboardFile": true,
-  "hostMode": "windows-host-skeleton"
+  "hostMode": "mac-host-h264-stream"
 }
 ```
 
@@ -333,7 +338,7 @@ H.264 过渡格式：
 
 控制端可接收被控端声音。
 
-当前骨架已支持音频开关、音量设置和模拟 `audio_frame` 状态回传；真实系统声音采集和播放后续分别接 macOS 音频采集、Windows WASAPI loopback 和控制端播放模块。
+当前已支持音频开关、音量设置和 `audio_frame` 状态回传。macOS 被控端已接入 ScreenCaptureKit 系统声音采集第一版，使用 `pcm-f32le-base64` 过渡格式发送真实 PCM 帧；控制端真实播放、Opus 压缩和 Windows WASAPI loopback 仍是后续任务。
 
 ```json
 {
@@ -353,14 +358,19 @@ H.264 过渡格式：
 {
   "type": "audio_frame",
   "frameId": 1,
-  "codec": "mock-opus",
+  "codec": "pcm-f32le",
   "sampleRate": 48000,
   "channels": 2,
   "durationMs": 20,
-  "level": 0.62,
+  "level": 0.06,
   "volume": 80,
-  "latencyMs": 22,
-  "encoding": "mock"
+  "latencyMs": 0,
+  "encoding": "pcm-f32le-base64",
+  "audioMode": "system-pcm",
+  "layout": "planar",
+  "frames": 960,
+  "payloadBytes": 7680,
+  "payload": "AAAA..."
 }
 ```
 
@@ -385,6 +395,7 @@ H.264 过渡格式：
 - 被控端提供是否允许采集系统声音的开关。
 - 音频通道不能阻塞视频和输入事件。
 - `encoding: "mock"` 表示当前为联调帧，只用于验证协议和 UI 状态，不代表已播放真实系统声音。
+- `encoding: "pcm-f32le-base64"` 表示当前为过渡真实音频帧，`payload` 是 base64 后的 Float32 little-endian PCM；`layout` 可能为 `planar` 或 `interleaved`，控制端播放前必须按布局重排或转换。
 
 ## 9. 输入事件格式
 

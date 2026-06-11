@@ -69,9 +69,11 @@
   "sessionAnswer": {
     "type": "session_answer",
     "ok": true,
-    "videoCodec": "jpeg",
-    "videoEncoding": "data-url",
-    "audioCodec": "opus",
+    "videoCodec": "h264",
+    "videoEncoding": "annexb",
+    "audioCodec": "pcm-f32le",
+    "requestedAudioCodec": "opus",
+    "audioMode": "system-pcm",
     "fps": 30,
     "requestedFps": 60,
     "maxScreenFps": 30,
@@ -209,14 +211,19 @@
   "audioFrame": {
     "type": "audio_frame",
     "frameId": 1,
-    "codec": "mock-opus",
+    "codec": "pcm-f32le",
     "sampleRate": 48000,
     "channels": 2,
     "durationMs": 20,
-    "level": 0.62,
+    "level": 0.06,
     "volume": 80,
-    "latencyMs": 22,
-    "encoding": "mock"
+    "latencyMs": 0,
+    "encoding": "pcm-f32le-base64",
+    "audioMode": "system-pcm",
+    "layout": "planar",
+    "frames": 960,
+    "payloadBytes": 7680,
+    "payload": "AAAA..."
   },
   "inputEvent": {
     "type": "input_event",

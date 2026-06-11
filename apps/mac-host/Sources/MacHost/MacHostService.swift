@@ -64,6 +64,7 @@ private final class ClientContext {
     var videoTimer: DispatchSourceTimer?
     var videoStream: ScreenVideoStream?
     var audioTimer: DispatchSourceTimer?
+    var audioStream: SystemAudioStream?
     var clipboardTimer: DispatchSourceTimer?
     var fileTransfers: [String: FileTransferState] = [:]
     var outboundFileTransfers: [String: OutboundFileTransferState] = [:]
@@ -256,6 +257,8 @@ final class MacHostService {
             "capabilities": [
                 "video": true,
                 "audio": true,
+                "audioMode": screenCapture.supportsSystemAudioCapture ? "system-pcm" : "mock-frame",
+                "audioCodec": screenCapture.supportsSystemAudioCapture ? "pcm-f32le" : "mock-opus",
                 "input": true,
                 "inputMode": configuration.inputMode.rawValue,
                 "clipboardText": true,
@@ -449,7 +452,12 @@ final class MacHostService {
                     "h264Stream": screenFramesEnabled && screenCapture.supportsH264Streaming,
                     "maxFps": screenFramesEnabled ? configuration.maxScreenFps : 8,
                 ],
-                "audio": ["mode": "mock-frame", "codec": "mock-opus"],
+                "audio": [
+                    "mode": screenCapture.supportsSystemAudioCapture ? "system-pcm" : "mock-frame",
+                    "codec": screenCapture.supportsSystemAudioCapture ? "pcm-f32le" : "mock-opus",
+                    "sampleRate": 48_000,
+                    "channels": 2,
+                ],
                 "input": ["mode": configuration.inputMode.rawValue],
                 "clipboardText": true,
                 "clipboardTextMode": "system",
@@ -494,7 +502,8 @@ final class MacHostService {
         let wantClipboardText = offer?.wantClipboardText ?? boolValue(message["wantClipboardText"])
         let wantClipboardFile = offer?.wantClipboardFile ?? boolValue(message["wantClipboardFile"])
         let videoCodec = offer?.preferredVideoCodec ?? stringValue(message["preferredVideoCodec"]) ?? "mjpeg"
-        let audioCodec = wantAudio ? (offer?.preferredAudioCodec ?? stringValue(message["preferredAudioCodec"]) ?? "opus") : "none"
+        let requestedAudioCodec = offer?.preferredAudioCodec ?? stringValue(message["preferredAudioCodec"]) ?? "opus"
+        let audioCodec = negotiatedAudioCodec(wantAudio: wantAudio)
         let audioVolume = positiveInt(message["audioVolume"]) ?? 80
         let qualityPreset = offer?.qualityPreset ?? stringValue(message["qualityPreset"]) ?? "balanced"
 
@@ -535,6 +544,8 @@ final class MacHostService {
             "requestedVideoCodec": videoCodec,
             "videoEncoding": videoEncodingForPipeline(session.capturePipeline),
             "audioCodec": audioCodec,
+            "requestedAudioCodec": requestedAudioCodec,
+            "audioMode": audioMode(wantAudio: wantAudio),
             "fps": effectiveFps,
             "requestedFps": requestedFps,
             "maxScreenFps": configuration.maxScreenFps,
@@ -635,6 +646,10 @@ final class MacHostService {
             "clipboardTextMode": "system",
             "clipboardFile": clipboardFile,
             "clipboardFileMode": "system",
+            "audioCodec": negotiatedAudioCodec(wantAudio: audioEnabled),
+            "audioMode": audioMode(wantAudio: audioEnabled),
+            "sampleRate": 48_000,
+            "channels": 2,
         ], to: context)
         startVideoFrames(context)
         audioEnabled ? startAudioFrames(context) : stopAudioFrames(context)
@@ -657,6 +672,10 @@ final class MacHostService {
             "enabled": enabled,
             "volume": volume,
             "muted": muted,
+            "codec": negotiatedAudioCodec(wantAudio: enabled && !muted),
+            "audioMode": audioMode(wantAudio: enabled && !muted),
+            "sampleRate": 48_000,
+            "channels": 2,
         ], to: context)
 
         enabled && !muted ? startAudioFrames(context) : stopAudioFrames(context)
@@ -1446,6 +1465,71 @@ final class MacHostService {
 
     private func startAudioFrames(_ context: ClientContext) {
         stopAudioFrames(context)
+        guard screenCapture.supportsSystemAudioCapture else {
+            startMockAudioFrames(context)
+            return
+        }
+
+        let sessionSnapshot = context.session
+        Task { [weak self, weak context] in
+            guard let self else { return }
+            do {
+                let stream = try await self.screenCapture.startSystemAudioStream(
+                    displayId: sessionSnapshot?.displayId ?? "main",
+                    sampleRate: 48_000,
+                    channels: 2,
+                    onFrame: { [weak self, weak context] frame in
+                        DispatchQueue.main.async { [weak self, weak context] in
+                            guard let self, let context, !context.isClosed else { return }
+                            guard context.session?.audioEnabled == true else { return }
+                            context.audioFrameId += 1
+                            let volume = max(0, min(100, context.session?.audioVolume ?? 80))
+                            self.send(frame.jsonObject(frameId: context.audioFrameId, volume: volume), to: context)
+                        }
+                    }
+                )
+
+                DispatchQueue.main.async { [weak self, weak context] in
+                    guard let self, let context, !context.isClosed else {
+                        stream.stop()
+                        return
+                    }
+                    guard context.session?.audioEnabled == true else {
+                        stream.stop()
+                        return
+                    }
+                    context.audioStream = stream
+                    self.send([
+                        "type": "audio_status",
+                        "enabled": true,
+                        "realAudio": true,
+                        "audioMode": "system-pcm",
+                        "codec": "pcm-f32le",
+                        "sampleRate": 48_000,
+                        "channels": 2,
+                        "message": "Mac 系统声音采集已开启",
+                    ], to: context)
+                }
+            } catch {
+                DispatchQueue.main.async { [weak self, weak context] in
+                    guard let self, let context, !context.isClosed else { return }
+                    self.logger.warn("系统声音采集启动失败：\(error.localizedDescription)。已退回模拟音频帧。")
+                    self.send([
+                        "type": "audio_status",
+                        "enabled": true,
+                        "realAudio": false,
+                        "audioMode": "mock-frame",
+                        "codec": "mock-opus",
+                        "message": "Mac 系统声音采集失败，已退回模拟音频帧：\(error.localizedDescription)",
+                    ], to: context)
+                    self.startMockAudioFrames(context)
+                }
+            }
+        }
+    }
+
+    private func startMockAudioFrames(_ context: ClientContext) {
+        context.audioTimer?.cancel()
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + .milliseconds(240), repeating: .milliseconds(240))
         timer.setEventHandler { [weak self, weak context] in
@@ -1474,6 +1558,8 @@ final class MacHostService {
     private func stopAudioFrames(_ context: ClientContext) {
         context.audioTimer?.cancel()
         context.audioTimer = nil
+        context.audioStream?.stop()
+        context.audioStream = nil
     }
 
     private func enqueueScreenVideoFrame(_ context: ClientContext, session: HostSession) {
@@ -1722,6 +1808,20 @@ final class MacHostService {
         default:
             return "unknown"
         }
+    }
+
+    private func negotiatedAudioCodec(wantAudio: Bool) -> String {
+        guard wantAudio else {
+            return "none"
+        }
+        return screenCapture.supportsSystemAudioCapture ? "pcm-f32le" : "mock-opus"
+    }
+
+    private func audioMode(wantAudio: Bool) -> String {
+        guard wantAudio else {
+            return "off"
+        }
+        return screenCapture.supportsSystemAudioCapture ? "system-pcm" : "mock-frame"
     }
 
     private func sendAuthRequired(for message: [String: Any], type: String, to context: ClientContext) {

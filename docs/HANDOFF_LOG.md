@@ -21,6 +21,42 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：接入 Mac 真实系统声音采集第一版。
+完成内容：
+- 新增 ScreenCaptureKit 系统音频采集流，优先输出真实 `audio_frame`。
+- 真实音频帧使用过渡格式：`codec=pcm-f32le`、`encoding=pcm-f32le-base64`、`audioMode=system-pcm`、48kHz、双声道、20ms。
+- 系统音频启动失败时会发送 `audio_status`，并自动回退到原有模拟音频帧，避免控制端声音状态断掉。
+- `/discovery`、`hello_ack`、`session_answer`、`display_settings_ack` 和 `audio_settings_ack` 会暴露实际音频 codec/mode。
+- 更新协议文档、共享示例、Mac README、当前状态、下一步和任务板。
+修改文件：
+- `apps/mac-host/Sources/MacHost/MacHostService.swift`
+- `apps/mac-host/Sources/MacHost/ScreenCaptureCoordinator.swift`
+- `apps/mac-host/README.md`
+- `shared/protocol/README.md`
+- `shared/protocol/messages.example.json`
+- `docs/03-architecture-and-protocol.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `swift build` in `apps/mac-host`
+- `node scripts/windows/probe-mac-host.mjs --host 127.0.0.1 --port 43770 --requireH264 --expectInputMode log`
+- Mac 本机播放 `/System/Library/Sounds/Glass.aiff`，临时 WebSocket 探针请求 `wantAudio=true`，收到 `pcm-f32le-base64` / `system-pcm` / `sampleRate=48000` / `channels=2` / `frames=960` / `payloadBytes=7680`。
+遗留问题：
+- Windows 控制端当前仍只显示音频帧状态，尚未播放真实 PCM。
+- 过渡期 PCM + base64 带宽较高，后续应接 Opus 或二进制音频帧。
+下一步建议：
+- Windows 端接入 `pcm-f32le-base64` 播放，注意 `layout=planar` 时需要重排为播放器需要的 interleaved 格式。
+- Mac 端继续验证静音、无系统声音、长时间运行和音量变化。
+是否改了协议：是，新增真实 PCM 音频帧过渡字段；向后兼容保留 mock 音频帧。
+是否需要另一端配合：需要 Windows 端接真实 PCM 播放。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：收尾 H.264 第一版真机验证状态，并清理 Swift 6 并发警告。
 完成内容：
 - 拉取并验证 `d63c4e3 Add H264 streaming video path` 后，Mac host 可在真 Mac 上启动 H.264 流式输出。
