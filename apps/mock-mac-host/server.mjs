@@ -106,6 +106,19 @@ function pickMockDisplay(displayId) {
   );
 }
 
+function makeInputAck(message, { injected = false, mode = "mock", reason = "假 Mac 服务已记录输入事件。" } = {}) {
+  return {
+    type: "input_ack",
+    inputId: message.id ?? "",
+    sequence: message.sequence,
+    event: message.event ?? message.action ?? message.kind ?? "unknown",
+    accepted: true,
+    injected,
+    mode,
+    reason,
+  };
+}
+
 function negotiateSession(message) {
   const activeDisplay = pickMockDisplay(message.displayId);
   const width = Number(message.preferredWidth) || activeDisplay.width || 1920;
@@ -411,6 +424,7 @@ function createClient(socket, options) {
       if (inputCount <= 3 || inputCount % 20 === 0) {
         console.log(`input_event #${inputCount}: ${message.kind ?? ""} ${message.detail ?? ""}`);
       }
+      send(makeInputAck(message));
       return;
     }
 
@@ -448,6 +462,20 @@ function createClient(socket, options) {
     }
     if (message.type === "audio_settings_update") {
       send({ type: "audio_settings_ack", accepted: false, enabled: false, code: "LAN002", reason });
+      return;
+    }
+    if (message.type === "input_event") {
+      send({
+        type: "input_ack",
+        inputId: message.id ?? "",
+        sequence: message.sequence,
+        event: message.event ?? message.action ?? message.kind ?? "unknown",
+        accepted: false,
+        injected: false,
+        mode: "auth",
+        code: "LAN002",
+        reason,
+      });
       return;
     }
     if (message.type === "clipboard_text") {

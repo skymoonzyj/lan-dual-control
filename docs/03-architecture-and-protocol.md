@@ -432,6 +432,23 @@ macOS 默认按键映射：
 - `shortcutProfile` 和 `shortcutAction` 标记 Windows 快捷键兼容层的语义，例如 `windows_to_macos` / `copy`。
 - `local*Key` 保留 Windows 本地原始按键状态，用于日志和排查。
 
+### 输入确认
+
+```json
+{
+  "type": "input_ack",
+  "inputId": "input_event-1780000000000-1",
+  "sequence": 42,
+  "event": "mouse_button",
+  "accepted": true,
+  "injected": true,
+  "mode": "inject",
+  "reason": "输入事件已注入。"
+}
+```
+
+被控端处理 `input_event` 后返回 `input_ack`，用于区分事件已注入、仅记录、被权限或平台能力拒绝。控制端可低频记录成功确认，必须明显提示失败确认。
+
 ## 10. 剪贴板协议
 
 剪贴板分文本和文件两类。

@@ -15,6 +15,19 @@ function makeMessageId(prefix = "winhost") {
   return `${prefix}-${Date.now().toString(16)}-${random}`;
 }
 
+function makeInputAck(message, result) {
+  return {
+    type: "input_ack",
+    inputId: message.id ?? "",
+    sequence: message.sequence,
+    event: message.event ?? message.action ?? message.kind ?? "unknown",
+    accepted: Boolean(result.accepted),
+    injected: Boolean(result.injected),
+    mode: result.mode ?? "unknown",
+    reason: result.reason ?? "",
+  };
+}
+
 function makeSessionAnswer(message, screen, audio, clipboard) {
   const clipboardCapabilities = clipboard.getCapabilities();
   return {
@@ -194,7 +207,7 @@ function createClient(socket, context) {
     }
 
     if (message.type === "input_event") {
-      context.input.inject(message);
+      send(makeInputAck(message, context.input.inject(message)));
       return;
     }
 
@@ -247,6 +260,15 @@ function createClient(socket, context) {
     }
     if (message.type === "audio_settings_update") {
       send({ type: "audio_settings_ack", accepted: false, enabled: false, code: "LAN002", reason });
+      return;
+    }
+    if (message.type === "input_event") {
+      send(makeInputAck(message, {
+        accepted: false,
+        injected: false,
+        mode: "auth",
+        reason,
+      }));
       return;
     }
     if (message.type === "clipboard_text") {

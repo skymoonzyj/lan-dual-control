@@ -9,7 +9,7 @@
 - [x] 建立协议草案。
 - [x] 建立双 Codex 协作说明。
 - [x] 上传到 GitHub 仓库。
-- [ ] Mac mini 到位后克隆仓库。
+- [x] Mac mini 到位后克隆仓库。
 
 ## 里程碑 M1：Windows 控制 Mac 原型
 
@@ -98,7 +98,7 @@ Windows 端：
 - macOS 被控端已接入系统文件剪贴板接收：Windows 发送的文件块会落到临时目录，并写入 `NSPasteboard` 文件 URL。
 - 已统一 `display_settings`、`display_settings_ack`、`video_frame` 协议命名，假 Mac 服务可持续发送模拟帧。
 - 已完成 Windows Tauri 桌面壳，已验证可构建 `lan-dual-control-windows.exe`。
-- 已完成本机假 Mac WebSocket 联调服务，真实 Mac 被控端到位后按同一消息格式替换。
+- 已完成本机假 Mac WebSocket 联调服务；当前真 Mac 已到位，后续功能完成以真实 macOS 被控端验证为准，假 Mac 只做快速回归和失败场景模拟。
 - 已完成 macOS 被控端 Swift WebSocket 骨架，支持 `/discovery`、hello/auth/session、模拟 `video_frame`/`audio_frame`、输入事件日志、文本和文件剪贴板确认。
 - macOS 被控端已接入真实屏幕 JPEG `video_frame` 抓取；默认 `LAN_DUAL_VIDEO_MODE=auto`，权限不足或采集失败时自动回退模拟帧。
 - macOS 被控端真实屏幕帧已改为后台采集/编码队列，支持 `LAN_DUAL_MAX_SCREEN_FPS`、`LAN_DUAL_JPEG_QUALITY` 和 `video_frame.droppedFrames` 调试字段。
@@ -106,7 +106,7 @@ Windows 端：
 - Windows 控制端当前已可区分真实 JPEG 视频帧和模拟视频帧，并记录图片解码失败；`scripts/windows/test-mac-host.ps1` 可用于真机连通自检，显式加 `-ClipboardText -ClipboardFile` 可验证 macOS 文本和文件剪贴板写入。
 - Windows 控制端已增加 Mac 主机诊断状态条：会汇总 `permissions`、`hostMode`、`capturePipeline`、`source`、`droppedFrames` 和剪贴板模式，真机权限或采集回退问题可直接在画面内看到。
 - Mac 端已兼容 Windows 端现有 `kind/action/remoteX/remoteY` 输入事件字段。
-- Mac mini 到位后需要继续做真机权限验证、低延迟 ScreenCaptureKit 流式采集和更完整的键盘/输入法兼容。
+- 真 Mac 后续继续做真实视频帧、输入注入、低延迟 ScreenCaptureKit 流式采集和更完整的键盘/输入法兼容验证。
 - MSI/NSIS 安装包暂未开启，先保留桌面 exe 构建；安装包放到 M5 处理。
 
 ## 里程碑 M2：安全和控制体验
@@ -180,6 +180,7 @@ Mac 端：
 - Windows 被控端在 Windows 上会用 PowerShell `Set-Clipboard` 写入系统文本剪贴板，非 Windows 开发环境回退为 `memory-only`，并在 `/discovery`、`hello_ack`、`session_answer` 暴露剪贴板模式。
 - Windows 被控端可接收 `clipboard_file_*` 文件块并落到临时目录；在 Windows 上会用 PowerShell `Set-Clipboard -Path` 写入系统文件剪贴板，非 Windows 开发环境回退为 `saveMode: temp`。
 - Windows 被控端已接入最小 SendInput 桥：Windows 上通过 PowerShell/C# 调用 `SendInput`/`SetCursorPos` 注入鼠标、滚轮和常用键盘事件，非 Windows 开发环境回退为日志模式。
+- macOS 被控端、Windows 被控端和假 Mac 服务处理输入事件后都会返回 `input_ack`，控制端和探针可确认输入已注入、仅记录或被拒绝。
 - 当前仍是骨架模式：屏幕采集待接 Windows Graphics Capture，真实声音采集待接 WASAPI loopback，输入注入后续可优化为高性能原生模块或常驻进程。
 
 ## 里程碑 M4：一键反控

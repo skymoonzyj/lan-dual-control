@@ -5,12 +5,13 @@
 ## 当前内容
 
 - Node.js WebSocket 被控服务，默认端口 `43770`。
-- `hello`、`auth_request`、`session_offer`、`display_settings`、`input_event`、`clipboard_text` 和 `reverse_control_request` 消息处理；未认证连接会被拒绝。
+- `hello`、`auth_request`、`session_offer`、`display_settings`、`input_event`、`input_ack`、`clipboard_text` 和 `reverse_control_request` 消息处理；未认证连接会被拒绝。
 - 模拟 `video_frame` 输出，用于未来 Mac 控制端提前验证画面渲染。
 - 模拟 `audio_frame` 输出，用于提前验证声音接收状态、音量设置和音频协议。
 - Windows Graphics Capture 占位模块。
 - WASAPI loopback 音频采集占位模块，当前只发送模拟音频帧。
 - SendInput 输入注入模块：在 Windows 上通过 PowerShell/C# 调用 `SendInput` 和 `SetCursorPos` 注入鼠标、滚轮和常用键盘事件，在非 Windows 开发环境只记录事件。
+- 输入事件处理后会返回 `input_ack`，便于控制端和联调脚本确认已注入、仅记录或被拒绝。
 - 文本剪贴板模块：在 Windows 上通过 PowerShell `Set-Clipboard` 写入系统剪贴板，在非 Windows 开发环境回退为内存保存。
 - 文件剪贴板接收模块：接收 `clipboard_file_*` 文件清单、分块、完成消息并返回进度；在 Windows 上通过 PowerShell `Set-Clipboard -Path` 写入系统文件剪贴板，在非 Windows 开发环境保存到临时目录。
 - `/discovery` 设备发现接口，供 Windows 控制端或未来 Mac 控制端扫描局域网设备列表。

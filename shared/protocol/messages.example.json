@@ -182,6 +182,16 @@
     "localShiftKey": false,
     "localMetaKey": false
   },
+  "inputAck": {
+    "type": "input_ack",
+    "inputId": "input_event-1780000000000-1",
+    "sequence": 42,
+    "event": "key",
+    "accepted": true,
+    "injected": true,
+    "mode": "inject",
+    "reason": "输入事件已注入。"
+  },
   "clipboardText": {
     "type": "clipboard_text",
     "direction": "client_to_host",

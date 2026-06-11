@@ -11,6 +11,13 @@ struct InputInjectionTarget {
     let frameHeight: Int
 }
 
+struct InputInjectionResult {
+    let accepted: Bool
+    let injected: Bool
+    let mode: String
+    let reason: String
+}
+
 final class InputEventInjector {
     private let logger: HostLogger
     private let mode: InputInjectionMode
@@ -20,23 +27,34 @@ final class InputEventInjector {
         self.mode = mode
     }
 
-    func inject(_ message: InputEventMessage, target: InputInjectionTarget? = nil) {
+    func inject(_ message: InputEventMessage, target: InputInjectionTarget? = nil) -> InputInjectionResult {
         if mode == .log {
             logOnly(message)
-            return
+            return InputInjectionResult(
+                accepted: true,
+                injected: false,
+                mode: "log",
+                reason: "macOS 输入注入处于日志模式，已记录但未注入系统。"
+            )
         }
 
         switch message.normalizedEvent {
         case "mouse_move":
-            injectMouseMove(message, target: target)
+            return injectMouseMove(message, target: target)
         case "mouse_button":
-            injectMouseButton(message, target: target)
+            return injectMouseButton(message, target: target)
         case "mouse_wheel":
-            injectMouseWheel(message)
+            return injectMouseWheel(message)
         case "key":
-            injectKey(message)
+            return injectKey(message)
         default:
             logger.warn("未知输入事件：\(message.event ?? message.action ?? "unknown")")
+            return InputInjectionResult(
+                accepted: false,
+                injected: false,
+                mode: "inject",
+                reason: "未知输入事件：\(message.event ?? message.action ?? "unknown")"
+            )
         }
     }
 
@@ -57,73 +75,107 @@ final class InputEventInjector {
         }
     }
 
-    private func injectMouseMove(_ message: InputEventMessage, target: InputInjectionTarget?) {
+    private func injectMouseMove(_ message: InputEventMessage, target: InputInjectionTarget?) -> InputInjectionResult {
         guard let point = screenPoint(from: message, target: target) else {
             logger.warn("鼠标移动缺少坐标")
-            return
+            return InputInjectionResult(
+                accepted: false,
+                injected: false,
+                mode: "inject",
+                reason: "鼠标移动缺少坐标"
+            )
         }
 
         #if os(macOS)
-        let event = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)
-        event?.post(tap: .cghidEventTap)
+        guard let event = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left) else {
+            return InputInjectionResult(accepted: false, injected: false, mode: "inject", reason: "创建鼠标移动事件失败")
+        }
+        event.post(tap: .cghidEventTap)
+        return InputInjectionResult(accepted: true, injected: true, mode: "inject", reason: "macOS 鼠标移动已注入。")
         #else
         logger.info("非 macOS 环境，跳过鼠标移动：x=\(point.x), y=\(point.y)")
+        return InputInjectionResult(accepted: true, injected: false, mode: "log", reason: "非 macOS 环境，已跳过鼠标移动注入。")
         #endif
     }
 
-    private func injectMouseButton(_ message: InputEventMessage, target: InputInjectionTarget?) {
+    private func injectMouseButton(_ message: InputEventMessage, target: InputInjectionTarget?) -> InputInjectionResult {
         guard let point = screenPoint(from: message, target: target) else {
             logger.warn("鼠标按钮缺少坐标")
-            return
+            return InputInjectionResult(
+                accepted: false,
+                injected: false,
+                mode: "inject",
+                reason: "鼠标按钮缺少坐标"
+            )
         }
 
         #if os(macOS)
         let button = mouseButton(from: message.button ?? message.localButton.map(String.init))
         let action = message.action ?? "down"
         let type = mouseEventType(button: button, action: action)
-        let event = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: button)
-        event?.post(tap: .cghidEventTap)
+        guard let event = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: button) else {
+            return InputInjectionResult(accepted: false, injected: false, mode: "inject", reason: "创建鼠标按钮事件失败")
+        }
+        event.post(tap: .cghidEventTap)
         logger.info("已注入鼠标\(action == "up" ? "抬起" : "按下")：\(message.button ?? "?") / x=\(Int(point.x)), y=\(Int(point.y))")
+        return InputInjectionResult(accepted: true, injected: true, mode: "inject", reason: "macOS 鼠标按钮已注入。")
         #else
         logger.info("非 macOS 环境，跳过鼠标按钮：\(message.button ?? "?") / \(message.action ?? "?")")
+        return InputInjectionResult(accepted: true, injected: false, mode: "log", reason: "非 macOS 环境，已跳过鼠标按钮注入。")
         #endif
     }
 
-    private func injectMouseWheel(_ message: InputEventMessage) {
+    private func injectMouseWheel(_ message: InputEventMessage) -> InputInjectionResult {
         #if os(macOS)
         let wheelX = -clampedScrollDelta(message.deltaX ?? 0)
         let wheelY = -clampedScrollDelta(message.deltaY ?? 0)
-        let event = CGEvent(
+        guard let event = CGEvent(
             scrollWheelEvent2Source: nil,
             units: .pixel,
             wheelCount: 2,
             wheel1: wheelY,
             wheel2: wheelX,
             wheel3: 0
-        )
-        event?.post(tap: .cghidEventTap)
+        ) else {
+            return InputInjectionResult(accepted: false, injected: false, mode: "inject", reason: "创建鼠标滚轮事件失败")
+        }
+        event.post(tap: .cghidEventTap)
         logger.info("已注入鼠标滚轮：dx=\(message.deltaX ?? 0), dy=\(message.deltaY ?? 0)")
+        return InputInjectionResult(accepted: true, injected: true, mode: "inject", reason: "macOS 鼠标滚轮已注入。")
         #else
         logger.info("非 macOS 环境，跳过鼠标滚轮：dx=\(message.deltaX ?? 0), dy=\(message.deltaY ?? 0)")
+        return InputInjectionResult(accepted: true, injected: false, mode: "log", reason: "非 macOS 环境，已跳过鼠标滚轮注入。")
         #endif
     }
 
-    private func injectKey(_ message: InputEventMessage) {
+    private func injectKey(_ message: InputEventMessage) -> InputInjectionResult {
         let modifiers = message.remoteModifiers ?? message.modifiers ?? []
         guard let keyCode = keyCode(for: message) else {
             logger.warn("暂不支持键盘注入：\(message.key ?? message.code ?? "?")")
-            return
+            return InputInjectionResult(
+                accepted: false,
+                injected: false,
+                mode: "inject",
+                reason: "暂不支持键盘注入：\(message.key ?? message.code ?? "?")"
+            )
         }
 
         #if os(macOS)
         let flags = eventFlags(from: message, modifiers: modifiers)
-        postKeyboardEvent(keyCode: keyCode, keyDown: true, flags: flags)
-        postKeyboardEvent(keyCode: keyCode, keyDown: false, flags: flags)
+        let keyDownInjected = postKeyboardEvent(keyCode: keyCode, keyDown: true, flags: flags)
+        let keyUpInjected = postKeyboardEvent(keyCode: keyCode, keyDown: false, flags: flags)
         let modifierText = modifiers.isEmpty ? "无修饰键" : modifiers.joined(separator: "+")
         let shortcutText = message.shortcutAction.map { " / 快捷键：\($0)" } ?? ""
         logger.info("已注入键盘：\(message.key ?? message.code ?? "?") / \(modifierText)\(shortcutText)")
+        return InputInjectionResult(
+            accepted: keyDownInjected && keyUpInjected,
+            injected: keyDownInjected && keyUpInjected,
+            mode: "inject",
+            reason: keyDownInjected && keyUpInjected ? "macOS 键盘事件已注入。" : "macOS 键盘事件创建失败。"
+        )
         #else
         logger.info("非 macOS 环境，跳过键盘：\(message.key ?? message.code ?? "?")")
+        return InputInjectionResult(accepted: true, injected: false, mode: "log", reason: "非 macOS 环境，已跳过键盘注入。")
         #endif
     }
 
@@ -249,14 +301,15 @@ final class InputEventInjector {
         return flags
     }
 
-    private func postKeyboardEvent(keyCode: CGKeyCode, keyDown: Bool, flags: CGEventFlags) {
+    private func postKeyboardEvent(keyCode: CGKeyCode, keyDown: Bool, flags: CGEventFlags) -> Bool {
         guard let event = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: keyDown) else {
             logger.warn("创建键盘事件失败：keyCode=\(keyCode)")
-            return
+            return false
         }
 
         event.flags = flags
         event.post(tap: .cghidEventTap)
+        return true
     }
     #endif
 

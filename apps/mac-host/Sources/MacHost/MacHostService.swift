@@ -557,11 +557,39 @@ final class MacHostService {
 
     private func handleInputEvent(_ data: Data, fallback: [String: Any], context: ClientContext) {
         if let input = try? JSONDecoder().decode(InputEventMessage.self, from: data) {
-            inputInjector.inject(input, target: inputTarget(for: context.session))
+            let result = inputInjector.inject(input, target: inputTarget(for: context.session))
+            sendInputAck(input: input, fallback: fallback, result: result, to: context)
             return
         }
 
         logger.info("收到输入事件：\(fallback["kind"] ?? fallback["event"] ?? "unknown") \(fallback["detail"] ?? "")")
+        let result = InputInjectionResult(
+            accepted: false,
+            injected: false,
+            mode: "decode",
+            reason: "macOS 被控端无法解码输入事件。"
+        )
+        sendInputAck(input: nil, fallback: fallback, result: result, to: context)
+    }
+
+    private func sendInputAck(input: InputEventMessage?, fallback: [String: Any], result: InputInjectionResult, to context: ClientContext) {
+        var ack: [String: Any] = [
+            "type": "input_ack",
+            "accepted": result.accepted,
+            "injected": result.injected,
+            "mode": result.mode,
+            "reason": result.reason,
+            "event": input?.normalizedEvent ?? stringValue(fallback["event"]) ?? stringValue(fallback["action"]) ?? stringValue(fallback["kind"]) ?? "unknown",
+        ]
+
+        if let inputId = stringValue(fallback["id"]) {
+            ack["inputId"] = inputId
+        }
+        if let sequence = input?.sequence ?? positiveInt(fallback["sequence"]) {
+            ack["sequence"] = sequence
+        }
+
+        send(ack, to: context)
     }
 
     private func inputTarget(for session: HostSession?) -> InputInjectionTarget? {
@@ -1107,6 +1135,18 @@ final class MacHostService {
             send(["type": "display_settings_ack", "accepted": false, "code": "LAN002", "reason": reason], to: context)
         case "audio_settings_update":
             send(["type": "audio_settings_ack", "accepted": false, "enabled": false, "code": "LAN002", "reason": reason], to: context)
+        case "input_event":
+            send([
+                "type": "input_ack",
+                "inputId": stringValue(message["id"]) ?? "",
+                "sequence": positiveInt(message["sequence"]) ?? 0,
+                "event": stringValue(message["event"]) ?? stringValue(message["action"]) ?? stringValue(message["kind"]) ?? "unknown",
+                "accepted": false,
+                "injected": false,
+                "mode": "auth",
+                "reason": reason,
+                "code": "LAN002",
+            ], to: context)
         case "clipboard_text":
             send([
                 "type": "clipboard_ack",

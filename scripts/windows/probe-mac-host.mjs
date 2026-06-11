@@ -172,7 +172,9 @@ function createSocketClient(socket, args) {
   }
 
   function send(message) {
-    socket.send(JSON.stringify(makeEnvelope(message)));
+    const envelope = makeEnvelope(message);
+    socket.send(JSON.stringify(envelope));
+    return envelope;
   }
 
   return { send, waitFor };
@@ -322,7 +324,7 @@ async function probeClipboardFile(client, args) {
   );
 }
 
-async function probeInputEvents(client) {
+async function probeInputEvents(client, args) {
   const events = [
     {
       type: "input_event",
@@ -374,9 +376,19 @@ async function probeInputEvents(client) {
     },
   ];
 
-  events.forEach((event) => client.send(event));
-  await delay(150);
-  print("OK", `Input events sent: ${events.length} events`);
+  for (const event of events) {
+    const envelope = client.send(event);
+    const ack = await client.waitFor("input_ack", args.timeoutMs);
+    if (ack.inputId && ack.inputId !== envelope.id) {
+      throw new Error(`input_ack id mismatch: ${ack.inputId} !== ${envelope.id}`);
+    }
+    if (!ack.accepted) {
+      throw new Error(`input_event rejected: ${ack.reason || ack.mode || "unknown"}`);
+    }
+  }
+
+  await delay(50);
+  print("OK", `Input events acknowledged: ${events.length} events`);
 }
 
 async function main() {
@@ -449,7 +461,7 @@ async function main() {
       await probeClipboardFile(client, args);
     }
     if (args.inputEvents) {
-      await probeInputEvents(client);
+      await probeInputEvents(client, args);
     }
   } catch (error) {
     fail(error.message);

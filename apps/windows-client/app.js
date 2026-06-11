@@ -2164,6 +2164,19 @@ function handleProtocolMessage(message) {
     return;
   }
 
+  if (message.type === "input_ack") {
+    const sequence = Number(message.sequence) || 0;
+    if (!message.accepted || sequence <= 3 || sequence % 20 === 0) {
+      const status = message.accepted
+        ? message.injected
+          ? "已注入"
+          : "已记录"
+        : "被拒绝";
+      addLog("输入确认", `${message.event ?? "input"} #${sequence || "-"} · ${status} · ${message.reason || message.mode || ""}`);
+    }
+    return;
+  }
+
   if (message.type === "clipboard_ack") {
     const detail = message.accepted
       ? `剪贴板文字已接收${message.textLength ? ` · ${message.textLength} 字` : ""}`

@@ -12,7 +12,7 @@
 - macOS 被控端已升级为 WebSocket 服务，支持 `/discovery`、hello/auth/session、后台真实屏幕 JPEG 帧、模拟视频帧回退、模拟音频帧、CGEvent 输入注入、系统文本剪贴板读写和变更推送、系统文件剪贴板接收写入；真实声音采集仍待实装。
 - Windows 控制端已可区分真实 JPEG 视频帧和模拟视频帧，并显示 Mac 主机诊断状态条；Mac 端已兼容 Windows 端当前发送的输入事件字段。
 - Windows 被控端仍是骨架阶段，真实屏幕采集和真实声音采集仍待实装；文本/文件剪贴板在 Windows 上已可写入系统剪贴板，输入事件已接入最小 SendInput 桥。
-- Mac mini 到位后，优先从 macOS 真机权限、Swift WebSocket 骨架运行和 Windows 控制端真实连接开始。
+- 当前已经在真 Mac 上开发和验证 macOS 被控端；后续功能验收以真实 `apps/mac-host` 为主，假 Mac 只作为快速回归和异常场景模拟。
 
 ## 明天优先目标
 
@@ -31,14 +31,14 @@
 - [x] 给假 Mac 服务和 Windows 被控端统一认证行为。
 - [x] 给 macOS Swift 骨架增加每条连接的认证状态记录。
 - [x] 记录连接密码暂不落盘的原则，避免本机保存明文密码。
-- [ ] 在真实 Mac 上验证 Swift 骨架的认证门禁。
+- [x] 在真实 Mac 上验证 Swift 骨架的认证门禁。
 
 验收：
 
 - [x] 密码错误或未认证时无法进入会话。
 - [x] 未认证请求返回明确中文错误。
 - [x] 本地模拟、假 Mac WebSocket、Windows 被控端骨架三条路径行为一致。
-- [ ] macOS 真机路径待 Mac mini 上验证。
+- [x] macOS 真机路径已通过 `scripts/windows/probe-mac-host.mjs` 验证 hello/auth/session。
 
 ## 任务 2：一键自检和联调启动脚本
 
@@ -76,23 +76,23 @@
 - [x] Windows 被控端收到 `clipboard_text` 后，在 Windows 上写入系统文本剪贴板，非 Windows 环境回退为内存模式。
 - [x] Windows 被控端收到 `clipboard_file_*` 后保存文件块，在 Windows 上写入系统文件剪贴板，非 Windows 环境回退为临时文件模式。
 - [x] Windows 被控端收到输入事件后，在 Windows 上通过 SendInput 注入鼠标、滚轮和常用键盘，非 Windows 环境回退为日志模式。
+- [x] 输入事件处理后返回 `input_ack`，联调脚本可确认 5 类样例输入事件已被处理。
 - [x] 不破坏现有模拟视频帧、模拟音频帧和协议握手。
 
-## 如果 Mac mini 明天到货
+## 真 Mac 优先验收
 
-优先级临时切换为 Mac 真机对接：
+现在优先级切换为 Mac 真机对接：
 
-1. 在 Mac 上安装 Git、Xcode Command Line Tools、Codex。
-2. 克隆 GitHub 仓库。
-3. 运行 `apps/mac-host` 的 Swift 骨架。
-4. 验证 `/discovery` 和 WebSocket hello/auth/session 是否跑通。
-5. 在 Windows 上运行 `scripts/windows/test-mac-host.ps1 -HostName <Mac-IP>` 做自动联通自检；需要剪贴板深度验证时加 `-ClipboardText -ClipboardFile`。
-6. 验证屏幕录制、辅助功能、输入监控权限。
-7. 验证 Windows 控制端能收到 `codec: "jpeg"` 的真实 Mac 屏幕帧。
-8. 验证 Windows 控制端能移动 Mac 鼠标、点击、滚轮和发送常用快捷键。
-9. 验证 Windows 和 Mac 能互相同步系统文本剪贴板。
-10. 验证 Windows 发送文件剪贴板后，Mac Finder 能粘贴收到的文件。
-11. 继续把当前后台 JPEG 管线升级为真正的 ScreenCaptureKit 流式输出或硬件编码。
+1. 在真 Mac 上运行 `apps/mac-host`，默认用 `LAN_DUAL_INPUT_MODE=log` 做安全协议验证。
+2. 用 `scripts/windows/probe-mac-host.mjs --inputEvents` 或 Windows 侧 `scripts/windows/test-mac-host.ps1 -InputEvents` 验证 `/discovery`、WebSocket、认证、会话、第一帧和 `input_ack`。
+3. 验证屏幕录制、辅助功能、输入监控权限。
+4. 验证 Windows 控制端能收到 `codec: "jpeg"` 的真实 Mac 屏幕帧。
+5. 在确认安全后切换 `LAN_DUAL_INPUT_MODE=inject`，验证 Windows 控制端能移动 Mac 鼠标、点击、滚轮和发送常用快捷键。
+6. 验证 Windows 和 Mac 能互相同步系统文本剪贴板。
+7. 验证 Windows 发送文件剪贴板后，Mac Finder 能粘贴收到的文件。
+8. 继续把当前后台 JPEG 管线升级为真正的 ScreenCaptureKit 流式输出或硬件编码。
+
+说明：假 Mac 服务仍保留，用来快速测试 UI、协议兼容和失败场景；但它不能替代真 Mac 验收。
 
 ## 暂不优先处理
 

@@ -25,6 +25,19 @@
     );
   }
 
+  function makeInputAck(message, { injected = false, mode = "mock", reason = "本地模拟已记录输入事件。" } = {}) {
+    return {
+      type: "input_ack",
+      inputId: message.id ?? "",
+      sequence: message.sequence,
+      event: message.event ?? message.action ?? message.kind ?? "unknown",
+      accepted: true,
+      injected,
+      mode,
+      reason,
+    };
+  }
+
   class ProtocolError extends Error {
     constructor(message, code = "LAN001") {
       super(message);
@@ -283,6 +296,11 @@
         return;
       }
 
+      if (message.type === "input_event") {
+        sendLater(makeInputAck(message), 20);
+        return;
+      }
+
       if (message.type === "clipboard_text") {
         sendLater({
           type: "clipboard_ack",
@@ -359,6 +377,20 @@
       }
       if (message.type === "audio_settings_update") {
         sendLater({ type: "audio_settings_ack", accepted: false, enabled: false, code: "LAN002", reason });
+        return;
+      }
+      if (message.type === "input_event") {
+        sendLater({
+          type: "input_ack",
+          inputId: message.id ?? "",
+          sequence: message.sequence,
+          event: message.event ?? message.action ?? message.kind ?? "unknown",
+          accepted: false,
+          injected: false,
+          mode: "auth",
+          code: "LAN002",
+          reason,
+        });
         return;
       }
       if (message.type === "clipboard_text") {
