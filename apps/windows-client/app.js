@@ -453,12 +453,31 @@ function canSendControlInput() {
   return state.connected && state.controlDirection === "windows_to_mac";
 }
 
+function getAuthErrorMessage(error) {
+  const attemptsRemaining = Number(error?.attemptsRemaining);
+  if (Number.isFinite(attemptsRemaining)) {
+    if (attemptsRemaining <= 0) {
+      return "连接密码错误次数过多，被控端已关闭连接，请检查密码后重新连接。";
+    }
+    return `连接密码错误，还可尝试 ${attemptsRemaining} 次。`;
+  }
+  return error?.message || errorMessages.LAN002;
+}
+
 function getErrorMessage(error) {
   const code = error?.code;
+  if (code === "LAN002") {
+    return getAuthErrorMessage(error);
+  }
   if (code && errorMessages[code]) {
     return errorMessages[code];
   }
   return error?.message || "发生未知错误。";
+}
+
+function shouldRetryConnection(error) {
+  const code = error?.code;
+  return code !== "LAN002" && code !== "LAN006";
 }
 
 function getEmptyHostDiagnostics() {
@@ -1967,9 +1986,12 @@ async function connect({ reconnect = false } = {}) {
       state.client = null;
     }
     const message = getErrorMessage(error);
-    if (reconnect && !state.manualDisconnect) {
+    if (reconnect && !state.manualDisconnect && shouldRetryConnection(error)) {
       scheduleReconnect(message);
       return;
+    }
+    if (reconnect && !state.manualDisconnect && !shouldRetryConnection(error)) {
+      addLog("停止重连", "认证失败，请确认连接密码后手动连接");
     }
     setUiDisconnected("连接失败", message);
     elements.remoteStatusText.textContent = message;

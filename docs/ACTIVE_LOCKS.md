@@ -32,6 +32,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`、`apps/windows-client/protocol-client.js`、`apps/windows-client/README.md`、`docs/CURRENT_STATUS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 04:27 | Windows 控制端认证失败提示会显示剩余尝试次数；自动重连遇到 `LAN002` 会停止，避免继续消耗密码尝试次数。 |
 | Mac Codex | `scripts/mac/check-input-keymap.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 04:18 | 新增 Mac 键盘映射覆盖自检；`keyCodeByCode=115`、`keyCodeByKey=113`，常用键组全覆盖。 |
 | Windows Codex | `apps/windows-host/src/windows-host-service.mjs`、`apps/windows-host/README.md`、`docs/CURRENT_STATUS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md` | 2026-06-12 04:15 | Windows 被控端认证失败限制对齐 Mac：同一连接 3 次失败后返回 `LAN002` 并关闭；正常和错误路径均已验证。 |
 | Mac Codex | `scripts/mac/observe-mac-audio.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 04:09 | 新增 Mac 系统声音持续帧观察脚本；真实 43770/system-pcm 10 秒收到 501 帧，约 50fps，最大间隔 22ms。 |

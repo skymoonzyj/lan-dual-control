@@ -43,10 +43,11 @@
   }
 
   class ProtocolError extends Error {
-    constructor(message, code = "LAN001") {
+    constructor(message, code = "LAN001", details = {}) {
       super(message);
       this.name = "ProtocolError";
       this.code = code;
+      Object.assign(this, details);
     }
   }
 
@@ -100,6 +101,8 @@
       this.frameId = 0;
       this.audioFrameId = 0;
       this.authenticated = false;
+      this.failedAuthAttempts = 0;
+      this.maxAuthAttempts = 3;
       this.mockScenario = "normal";
     }
 
@@ -107,6 +110,7 @@
       await delay(180);
       this.connected = true;
       this.authenticated = false;
+      this.failedAuthAttempts = 0;
       this.mockScenario = "normal";
     }
 
@@ -123,6 +127,7 @@
       const wasConnected = this.connected;
       this.connected = false;
       this.authenticated = false;
+      this.failedAuthAttempts = 0;
       this.mockScenario = "normal";
       this.stopVideoFrames();
       this.stopAudioFrames();
@@ -157,12 +162,27 @@
       if (message.type === "auth_request") {
         const authFailed = message.password !== "demo-password" || message.mockScenario === "auth_failed";
         this.authenticated = !authFailed;
+        if (authFailed) {
+          this.failedAuthAttempts += 1;
+        } else {
+          this.failedAuthAttempts = 0;
+        }
+        const attemptsRemaining = Math.max(0, this.maxAuthAttempts - this.failedAuthAttempts);
         sendLater({
           type: "auth_result",
           ok: !authFailed,
           code: authFailed ? "LAN002" : "",
-          reason: authFailed ? "连接密码不正确" : "",
+          reason: authFailed
+            ? attemptsRemaining === 0
+              ? "连接密码错误次数过多，请重新连接后再试。"
+              : "连接密码不正确"
+            : "",
+          attemptsRemaining,
+          maxAttempts: this.maxAuthAttempts,
         });
+        if (authFailed && attemptsRemaining === 0) {
+          global.setTimeout(() => this.closeFromHost(), 280);
+        }
         return;
       }
 
@@ -569,7 +589,10 @@
       );
 
       if (!auth.ok) {
-        throw new ProtocolError(auth.reason || "被控端拒绝连接", auth.code || "LAN002");
+        throw new ProtocolError(auth.reason || "被控端拒绝连接", auth.code || "LAN002", {
+          attemptsRemaining: auth.attemptsRemaining,
+          maxAttempts: auth.maxAttempts,
+        });
       }
 
       this.onState("negotiating");

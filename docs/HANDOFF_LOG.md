@@ -21,6 +21,36 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：补强 Windows 控制端认证失败提示和自动重连行为。
+完成内容：
+- Windows 控制端现在会读取 `auth_result.attemptsRemaining/maxAttempts`，密码错误时显示剩余尝试次数。
+- 密码错误次数耗尽时显示被控端已关闭连接，提示用户检查密码后重新连接。
+- 自动重连过程中如果遇到 `LAN002` 认证失败，会停止重连，避免继续消耗被控端认证次数。
+- 本地模拟传输也会返回认证剩余次数，便于快速回归失败提示。
+修改文件：
+- `apps/windows-client/app.js`
+- `apps/windows-client/protocol-client.js`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check apps/windows-client/protocol-client.js`
+- `git diff --check`
+- Edge 页面级本地模拟验证：选择“本地模拟 / 密码错误”后，远程状态显示 `连接密码错误，还可尝试 2 次。`，事件日志同步记录该提示。
+遗留问题：
+- 真机 UI 上的手动错误密码提示仍建议后续在 Windows 桌面窗口里人工看一眼。
+下一步建议：
+- 继续优化真实 Mac 连接中的重连和错误状态展示，尤其是权限、H.264 回退和输入拒绝场景。
+是否改了协议：否；消费已有字段。
+是否需要另一端配合：不需要。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：对齐 Windows 被控端认证失败重试限制。
 完成内容：
 - Windows 被控端同一 WebSocket 连接内最多允许 3 次密码认证失败。
