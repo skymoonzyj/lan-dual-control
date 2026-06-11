@@ -52,6 +52,7 @@ private struct OutboundFileTransferState {
 private final class ClientContext {
     let connection: NWConnection
     var buffer = Data()
+    var isClosed = false
     var isWebSocketReady = false
     var isAuthenticated = false
     var session: HostSession?
@@ -281,8 +282,15 @@ final class MacHostService {
             "\r\n",
         ].joined(separator: "\r\n")
 
-        context.connection.send(content: Data(response.utf8), completion: .contentProcessed { [weak self] error in
+        guard !context.isClosed else {
+            return
+        }
+
+        context.connection.send(content: Data(response.utf8), completion: .contentProcessed { [weak self, weak context] error in
             if let error {
+                guard context?.isClosed != true else {
+                    return
+                }
                 self?.logger.warn("WebSocket 握手响应失败：\(error.localizedDescription)")
             }
         })
@@ -322,6 +330,10 @@ final class MacHostService {
 
         var response = Data(headers.utf8)
         response.append(body)
+        guard !context.isClosed else {
+            return
+        }
+
         context.connection.send(content: response, completion: .contentProcessed { [weak self, weak context] _ in
             guard closeAfterSend, let context else { return }
             self?.close(context)
@@ -1450,6 +1462,10 @@ final class MacHostService {
     }
 
     private func send(_ message: [String: Any], to context: ClientContext) {
+        guard !context.isClosed else {
+            return
+        }
+
         var envelope = message
         let type = stringValue(message["type"]) ?? "message"
         envelope["id"] = "\(type)-\(UUID().uuidString)"
@@ -1462,8 +1478,11 @@ final class MacHostService {
             return
         }
 
-        context.connection.send(content: WebSocketCodec.encodeTextFrame(text), completion: .contentProcessed { [weak self] error in
+        context.connection.send(content: WebSocketCodec.encodeTextFrame(text), completion: .contentProcessed { [weak self, weak context] error in
             if let error {
+                guard context?.isClosed != true else {
+                    return
+                }
                 self?.logger.warn("发送 WebSocket 消息失败：\(error.localizedDescription)")
             }
         })
@@ -1542,6 +1561,10 @@ final class MacHostService {
     }
 
     private func close(_ context: ClientContext) {
+        guard !context.isClosed else {
+            return
+        }
+        context.isClosed = true
         stopVideoFrames(context)
         stopAudioFrames(context)
         stopClipboardWatcher(context)
