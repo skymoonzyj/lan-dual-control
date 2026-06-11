@@ -32,6 +32,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/test-auth-retry-policy.mjs`、`README.md`、`apps/windows-host/README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 04:42 | 新增认证重试策略回归脚本：同时验证 Windows host 和假 Mac 的错误密码剩余 `2/1/0`、第三次断开和新连接正确认证。 |
 | Windows Codex | `scripts/windows/test-mac-client-browser.mjs`、`README.md`、`apps/windows-host/README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 04:38 | 新增 Mac client 页面级自检：临时启动 Windows host 与 `apps/mac-client`，验证真实 `windows-gdi-jpeg` 画面和 `input_ack · log`。 |
 | Windows Codex | `apps/mock-mac-host/server.mjs`、`docs/CURRENT_STATUS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 04:32 | 假 Mac WebSocket 服务已对齐认证失败限制：同一连接 3 次密码错误后返回 `LAN002` 并关闭，返回剩余尝试次数。 |
 | Windows Codex | `apps/windows-client/app.js`、`apps/windows-client/protocol-client.js`、`apps/windows-client/README.md`、`docs/CURRENT_STATUS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 04:27 | Windows 控制端认证失败提示会显示剩余尝试次数；自动重连遇到 `LAN002` 会停止，避免继续消耗密码尝试次数。 |

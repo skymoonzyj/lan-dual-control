@@ -83,6 +83,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-win
 
 它会临时启动 Windows 被控端并验证真实 JPEG 首帧和文件剪贴板接收；默认不发送鼠标键盘事件。
 
+认证重试策略回归可运行：
+
+```powershell
+node scripts\windows\test-auth-retry-policy.mjs
+```
+
+它会验证 Windows 被控端和假 Mac 服务在同一连接内密码错误 3 次后关闭，并确认新连接正确密码可通过。
+
 Mac 控制 Windows 页面级自检可运行：
 
 ```powershell

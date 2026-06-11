@@ -21,6 +21,39 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：新增认证重试策略回归脚本。
+完成内容：
+- 新增 `scripts/windows/test-auth-retry-policy.mjs`。
+- 脚本会临时启动 Windows host，并导入启动假 Mac 服务。
+- 对两条链路分别验证错误密码剩余 `2/1/0`、第三次认证失败后关闭连接、新连接正确密码通过。
+- 更新根 README、Windows host README、当前状态、下一步行动和任务板。
+修改文件：
+- `scripts/windows/test-auth-retry-policy.mjs`
+- `README.md`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check scripts/windows/test-auth-retry-policy.mjs`
+- `git diff --check`
+- `node scripts/windows/test-auth-retry-policy.mjs`
+验证结果：
+- Windows host 错误密码 3 次分别返回剩余 `2/1/0`，第三次后关闭；重新连接正确密码通过。
+- 假 Mac 服务错误密码 3 次分别返回剩余 `2/1/0`，第三次后关闭；重新连接正确密码通过。
+遗留问题：
+- 该脚本只覆盖本地 Windows host 和假 Mac；真实 Mac 认证策略仍由 Mac 端自己的验证和探针覆盖。
+下一步建议：
+- 连接安全相关改动后先跑该脚本，再跑端到端页面/探针脚本。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：新增 Mac client 连接 Windows host 的 Windows 侧页面自检。
 完成内容：
 - 新增 `scripts/windows/test-mac-client-browser.mjs`。

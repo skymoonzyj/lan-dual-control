@@ -103,6 +103,12 @@ Mac 控制 Windows 的页面级自检可在 Windows 本机启动临时 Windows h
 node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs
 ```
 
+认证重试策略回归脚本会同时验证 Windows host 和假 Mac 服务：错误密码剩余 `2/1/0`、第三次断开、新连接正确密码通过。
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-auth-retry-policy.mjs
+```
+
 ## 下一步
 
 1. 使用 Mac 控制端连接 `ws://Windows-IP:43770`。
