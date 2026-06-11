@@ -7,6 +7,7 @@
 - Swift Package 项目结构。
 - WebSocket 监听骨架，默认端口 `43770`。
 - `/discovery` HTTP 发现接口。
+- Bonjour/mDNS 自动发现广播，服务类型为 `_lan-dual-control._tcp`。
 - `hello`、`auth_request`、`session_offer`、`display_settings`、`audio_settings_update`、`input_event`、`clipboard_text`、`clipboard_file_*` 和 `reverse_control_*` 消息处理。
 - macOS 权限检查骨架：
   - 屏幕录制。
@@ -40,11 +41,13 @@ swift run lan-dual-mac-host
 ```bash
 export LAN_DUAL_HOST=0.0.0.0
 export LAN_DUAL_PORT=43770
+export LAN_DUAL_DEVICE_NAME="macOS 被控端"
 export LAN_DUAL_PASSWORD=demo-password
 export LAN_DUAL_VIDEO_MODE=auto
 export LAN_DUAL_INPUT_MODE=inject
 export LAN_DUAL_MAX_SCREEN_FPS=12
 export LAN_DUAL_JPEG_QUALITY=0.58
+export LAN_DUAL_BONJOUR=1
 swift run lan-dual-mac-host
 ```
 
@@ -60,6 +63,8 @@ swift run lan-dual-mac-host
 
 - `inject`：默认值。收到 Windows 控制端的 `input_event` 后调用 macOS `CGEvent` 执行输入。
 - `log`：只打印输入事件，不真正移动鼠标或按键，适合联调协议时避免误操作。
+
+`LAN_DUAL_DEVICE_NAME` 会用于 `/discovery`、`hello_ack` 和 Bonjour/mDNS 服务名。`LAN_DUAL_BONJOUR` 默认开启；设为 `0`、`false` 或 `off` 可关闭 `_lan-dual-control._tcp` 广播。
 
 Windows 控制端选择“WebSocket 局域网”，地址填写 Mac 的局域网 IP，端口填写 `43770`，默认密码为：
 

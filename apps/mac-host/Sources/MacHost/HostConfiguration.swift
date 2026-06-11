@@ -14,16 +14,19 @@ enum InputInjectionMode: String {
 struct HostConfiguration {
     let host: String
     let port: UInt16
+    let deviceName: String
     let pairingPassword: String
     let videoMode: VideoCaptureMode
     let inputMode: InputInjectionMode
     let maxScreenFps: Int
     let jpegQualityOverride: Double?
+    let bonjourEnabled: Bool
 
     static func fromEnvironment() -> HostConfiguration {
         let environment = ProcessInfo.processInfo.environment
         let host = environment["LAN_DUAL_HOST"] ?? "0.0.0.0"
         let portValue = UInt16(environment["LAN_DUAL_PORT"] ?? "") ?? 43770
+        let deviceName = sanitizedString(environment["LAN_DUAL_DEVICE_NAME"]) ?? "macOS 被控端"
         let configuredPassword = environment["LAN_DUAL_PASSWORD"] ?? ""
         let password = configuredPassword.isEmpty ? "demo-password" : configuredPassword
         let rawVideoMode = environment["LAN_DUAL_VIDEO_MODE"]?.lowercased() ?? ""
@@ -32,16 +35,24 @@ struct HostConfiguration {
         let inputMode = InputInjectionMode(rawValue: rawInputMode) ?? .inject
         let maxScreenFps = clampedInt(environment["LAN_DUAL_MAX_SCREEN_FPS"], defaultValue: 12, range: 1...30)
         let jpegQualityOverride = clampedDouble(environment["LAN_DUAL_JPEG_QUALITY"], range: 0.1...0.95)
+        let bonjourEnabled = boolValue(environment["LAN_DUAL_BONJOUR"], defaultValue: true)
 
         return HostConfiguration(
             host: host,
             port: portValue,
+            deviceName: deviceName,
             pairingPassword: password,
             videoMode: videoMode,
             inputMode: inputMode,
             maxScreenFps: maxScreenFps,
-            jpegQualityOverride: jpegQualityOverride
+            jpegQualityOverride: jpegQualityOverride,
+            bonjourEnabled: bonjourEnabled
         )
+    }
+
+    private static func sanitizedString(_ rawValue: String?) -> String? {
+        let value = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.isEmpty ? nil : value
     }
 
     private static func clampedInt(_ rawValue: String?, defaultValue: Int, range: ClosedRange<Int>) -> Int {
@@ -58,5 +69,20 @@ struct HostConfiguration {
         }
 
         return min(range.upperBound, max(range.lowerBound, parsed))
+    }
+
+    private static func boolValue(_ rawValue: String?, defaultValue: Bool) -> Bool {
+        guard let rawValue else {
+            return defaultValue
+        }
+
+        switch rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "1", "true", "yes", "y", "on":
+            return true
+        case "0", "false", "no", "n", "off":
+            return false
+        default:
+            return defaultValue
+        }
     }
 }

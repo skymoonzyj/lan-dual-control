@@ -85,6 +85,7 @@ final class MacHostService {
     private let inputInjector: InputEventInjector
     private let clipboardBridge: MacClipboardBridge
     private let logger: HostLogger
+    private let bonjourAdvertiser: BonjourAdvertiser
     private let videoCaptureQueue = DispatchQueue(label: "lan-dual-control.mac-host.video-capture", qos: .userInteractive)
     private let videoCaptureTimeoutMs = 1500
     private let screenCaptureCooldownSeconds: TimeInterval = 4
@@ -109,6 +110,7 @@ final class MacHostService {
         self.inputInjector = inputInjector
         self.clipboardBridge = clipboardBridge
         self.logger = logger
+        self.bonjourAdvertiser = BonjourAdvertiser(configuration: configuration, logger: logger)
     }
 
     func start() async throws {
@@ -118,6 +120,9 @@ final class MacHostService {
 
         let listener = try NWListener(using: .tcp, on: port)
         self.listener = listener
+        defer {
+            bonjourAdvertiser.stop()
+        }
 
         listener.newConnectionHandler = { [weak self] connection in
             self?.accept(connection)
@@ -128,6 +133,7 @@ final class MacHostService {
         }
 
         listener.start(queue: .main)
+        bonjourAdvertiser.start()
         do {
             try await screenCapture.prepare()
         } catch {
@@ -232,7 +238,7 @@ final class MacHostService {
             "type": "lan_dual_discovery",
             "protocolVersion": 1,
             "deviceId": "mac-host-\(advertisedHost)-\(configuration.port)",
-            "deviceName": "macOS 被控端",
+            "deviceName": configuration.deviceName,
             "platform": "macos",
             "role": "host",
             "host": advertisedHost,
@@ -423,7 +429,7 @@ final class MacHostService {
         send([
             "type": "hello_ack",
             "protocolVersion": 1,
-            "hostName": "macOS 被控端",
+            "hostName": configuration.deviceName,
             "hostPlatform": "macos",
             "capabilities": [
                 "screen": [

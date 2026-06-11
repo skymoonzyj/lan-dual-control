@@ -24,7 +24,7 @@ Windows 控制端输入：192.168.1.23:43770
 端口暂定：
 
 - 控制协议端口：43770
-- 自动发现：第一阶段复用控制端口的 `/discovery` HTTP 接口；后续再补 UDP/mDNS 广播
+- 自动发现：第一阶段复用控制端口的 `/discovery` HTTP 接口；macOS 被控端已开始广播 Bonjour/mDNS 服务 `_lan-dual-control._tcp`
 - 文件传输端口：默认复用控制连接，必要时再拆分独立端口
 
 第一版不做公网穿透，不做云账号登录。
@@ -74,8 +74,9 @@ GET http://host:port/discovery
 - `platform` 当前使用 `macos` 或 `windows`。
 - `role` 当前使用 `host`、`controller` 或 `both`。
 - `controlPort` 是 WebSocket 控制协议端口。
-- 浏览器和 Tauri 页面不能直接做 UDP 广播，所以当前用 HTTP 探测骨架先跑通 UI 和两端协议。
-- 真正跨设备自动发现建议后续放到原生层实现 UDP/mDNS，然后把发现结果回传给前端。
+- 浏览器页面不能直接做 UDP 广播，所以当前仍保留 HTTP 探测骨架先跑通 UI 和两端协议。
+- macOS 被控端会发布 Bonjour/mDNS 服务 `_lan-dual-control._tcp`，TXT 记录包含 `protocol=1`、`role=host`、`platform=macos`、`path=/discovery`、`controlPort`、`videoMode` 和 `inputMode`。
+- 真正跨设备自动发现的下一步是由 Windows/Tauri 原生层浏览 `_lan-dual-control._tcp`，再读取 TXT 记录并请求对应的 `/discovery`。
 
 ## 3. 连接状态机
 
