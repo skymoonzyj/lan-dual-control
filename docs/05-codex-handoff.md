@@ -55,6 +55,7 @@
 
 每次双端对接前确认：
 
+- 先用局域网联络板查看对方状态和当前测试呼叫。
 - 两端都拉取最新 main。
 - docs/03-architecture-and-protocol.md 中的协议版本一致。
 - 两端端口一致。
@@ -67,7 +68,26 @@
 - macOS 权限是否已开启。
 - Windows 防火墙是否允许局域网连接。
 
-## 5. 交接记录模板
+## 5. 局域网联络板
+
+如果联络板服务已启动，可以打开网页查看：
+
+```text
+http://联络板主机:17888
+```
+
+也可以用命令行客户端收发状态和消息：
+
+```bash
+node scripts/codex-link-client.mjs --server http://联络板主机:17888 watch --once
+node scripts/codex-link-client.mjs --server http://联络板主机:17888 watch
+node scripts/codex-link-client.mjs --server http://联络板主机:17888 status --device "Mac Codex" --role "Mac 端" --status online --note "我已上线"
+node scripts/codex-link-client.mjs --server http://联络板主机:17888 send --from "Mac Codex" --text "mac-host 已启动，等待 Windows 连接。"
+```
+
+需要对方配合测试时，用 `call` 发布呼叫；测试结束或阻塞时及时更新呼叫状态。不要在联络板里发送密码、密钥或系统账号。
+
+## 6. 交接记录模板
 
 每次结束一个开发阶段，可以在任务清单末尾追加：
 
