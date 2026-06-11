@@ -26,6 +26,13 @@ struct AuthResult: Codable {
     let message: String
 }
 
+struct MessageEnvelope: Codable {
+    let type: String
+    let clipboardId: String?
+    let transferId: String?
+    let requestId: String?
+}
+
 struct SessionOffer: Codable {
     let type: String
     let protocolVersion: Int?

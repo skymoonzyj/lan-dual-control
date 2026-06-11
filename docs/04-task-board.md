@@ -95,7 +95,8 @@ Windows 端：
 
 目标：能作为个人日常工具试用。
 
-- [ ] 添加密码或配对码。
+- [x] 添加固定密码认证门禁。
+- [x] 添加 Windows 一键自检和联调启动脚本。
 - [x] 添加中文连接状态。
 - [x] 添加权限不足提示。
 - [x] 添加画质设置：流畅、均衡、高清、自定义预设，联动分辨率、刷新率和码率。
@@ -113,7 +114,7 @@ Windows 端：
 
 验收：
 
-- [ ] 未授权设备不能连接。
+- [x] 未授权设备不能连接。
 - [ ] Mac 权限不足时有明确中文提示。
 - [ ] Windows 缩放窗口后坐标仍正确。
 - [ ] 全屏和窗口化切换正常。
@@ -155,7 +156,7 @@ Mac 端：
 当前备注：
 
 - 已创建 `apps/windows-host` Node.js WebSocket 被控服务骨架。
-- 当前可完成 hello/auth/session 握手、发送模拟 `video_frame` 和 `audio_frame`、接收 `input_event`、确认 `clipboard_text`。
+- 当前可完成 hello/auth/session 握手，未认证连接会被拒绝；认证后可发送模拟 `video_frame` 和 `audio_frame`、接收 `input_event`、确认 `clipboard_text`。
 - 当前仍是骨架模式：屏幕采集待接 Windows Graphics Capture，真实声音采集待接 WASAPI loopback，输入注入待接 SendInput。
 
 ## 里程碑 M4：一键反控

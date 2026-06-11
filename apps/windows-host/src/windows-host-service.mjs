@@ -43,6 +43,7 @@ function createClient(socket, context) {
   let frameId = 0;
   let frameTimer = null;
   let audioTimer = null;
+  let authenticated = false;
 
   function send(message) {
     socket.write(
@@ -109,6 +110,7 @@ function createClient(socket, context) {
 
     if (message.type === "auth_request") {
       const ok = message.password === context.password;
+      authenticated = ok;
       send({
         type: "auth_result",
         ok,
@@ -116,6 +118,11 @@ function createClient(socket, context) {
         reason: ok ? "" : "连接密码不正确",
       });
       context.logger.info(ok ? "认证通过" : "认证失败");
+      return;
+    }
+
+    if (!authenticated) {
+      sendAuthRequired(message);
       return;
     }
 
@@ -209,6 +216,35 @@ function createClient(socket, context) {
       code: "LAN003",
       message: `Windows 被控端暂不支持消息：${message.type ?? "unknown"}`,
     });
+  }
+
+  function sendAuthRequired(message) {
+    const reason = "请先验证连接密码";
+    if (message.type === "session_offer") {
+      send({ type: "session_answer", ok: false, code: "LAN002", reason });
+      return;
+    }
+    if (message.type === "display_settings") {
+      send({ type: "display_settings_ack", accepted: false, code: "LAN002", reason });
+      return;
+    }
+    if (message.type === "audio_settings_update") {
+      send({ type: "audio_settings_ack", accepted: false, enabled: false, code: "LAN002", reason });
+      return;
+    }
+    if (message.type === "clipboard_text") {
+      send({ type: "clipboard_ack", accepted: false, clipboardId: message.clipboardId, code: "LAN002", reason });
+      return;
+    }
+    if (message.type === "clipboard_file_offer") {
+      send({ type: "clipboard_file_response", transferId: message.transferId, accepted: false, code: "LAN002", reason });
+      return;
+    }
+    if (message.type === "reverse_control_request") {
+      send({ type: "reverse_control_response", requestId: message.requestId, accepted: false, code: "LAN002", reason });
+      return;
+    }
+    send({ type: "error", code: "LAN002", message: reason });
   }
 
   socket.on("data", (chunk) => {

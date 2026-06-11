@@ -22,3 +22,6 @@ venv/
 
 # Logs
 *.log
+
+# Local development sessions
+.dev-lab/

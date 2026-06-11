@@ -178,6 +178,7 @@ function createClient(socket, options) {
   let frameTimer = null;
   let audioTimer = null;
   let session = null;
+  let authenticated = false;
   const fileTransfers = new Map();
 
   function send(message) {
@@ -201,12 +202,18 @@ function createClient(socket, options) {
 
     if (message.type === "auth_request") {
       const ok = message.password === options.password && message.mockScenario !== "auth_failed";
+      authenticated = ok;
       send({
         type: "auth_result",
         ok,
         code: ok ? "" : "LAN002",
         reason: ok ? "" : "连接密码不正确",
       });
+      return;
+    }
+
+    if (!authenticated) {
+      sendAuthRequired(message);
       return;
     }
 
@@ -415,6 +422,35 @@ function createClient(socket, options) {
     if (message.type === "reverse_control_response") {
       return;
     }
+  }
+
+  function sendAuthRequired(message) {
+    const reason = "请先验证连接密码";
+    if (message.type === "session_offer") {
+      send({ type: "session_answer", ok: false, code: "LAN002", reason });
+      return;
+    }
+    if (message.type === "display_settings") {
+      send({ type: "display_settings_ack", accepted: false, code: "LAN002", reason });
+      return;
+    }
+    if (message.type === "audio_settings_update") {
+      send({ type: "audio_settings_ack", accepted: false, enabled: false, code: "LAN002", reason });
+      return;
+    }
+    if (message.type === "clipboard_text") {
+      send({ type: "clipboard_ack", accepted: false, clipboardId: message.clipboardId, code: "LAN002", reason });
+      return;
+    }
+    if (message.type === "clipboard_file_offer") {
+      send({ type: "clipboard_file_response", transferId: message.transferId, accepted: false, code: "LAN002", reason });
+      return;
+    }
+    if (message.type === "reverse_control_request") {
+      send({ type: "reverse_control_response", requestId: message.requestId, accepted: false, code: "LAN002", reason });
+      return;
+    }
+    send({ type: "error", code: "LAN002", message: reason });
   }
 
   function startVideoFrames(session) {

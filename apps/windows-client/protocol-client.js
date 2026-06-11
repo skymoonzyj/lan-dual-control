@@ -79,11 +79,13 @@
       this.audioTimer = null;
       this.frameId = 0;
       this.audioFrameId = 0;
+      this.authenticated = false;
     }
 
     async connect() {
       await delay(180);
       this.connected = true;
+      this.authenticated = false;
     }
 
     send(message) {
@@ -98,6 +100,7 @@
     disconnect({ notify = false } = {}) {
       const wasConnected = this.connected;
       this.connected = false;
+      this.authenticated = false;
       this.stopVideoFrames();
       this.stopAudioFrames();
       if (notify && wasConnected && this.onClose) {
@@ -130,12 +133,18 @@
 
       if (message.type === "auth_request") {
         const authFailed = message.password !== "demo-password" || message.mockScenario === "auth_failed";
+        this.authenticated = !authFailed;
         sendLater({
           type: "auth_result",
           ok: !authFailed,
           code: authFailed ? "LAN002" : "",
           reason: authFailed ? "连接密码不正确" : "",
         });
+        return;
+      }
+
+      if (!this.authenticated) {
+        this.replyAuthRequired(message, sendLater);
         return;
       }
 
@@ -321,6 +330,35 @@
       if (message.type === "reverse_control_response") {
         return;
       }
+    }
+
+    replyAuthRequired(message, sendLater) {
+      const reason = "请先验证连接密码";
+      if (message.type === "session_offer") {
+        sendLater({ type: "session_answer", ok: false, code: "LAN002", reason });
+        return;
+      }
+      if (message.type === "display_settings") {
+        sendLater({ type: "display_settings_ack", accepted: false, code: "LAN002", reason });
+        return;
+      }
+      if (message.type === "audio_settings_update") {
+        sendLater({ type: "audio_settings_ack", accepted: false, enabled: false, code: "LAN002", reason });
+        return;
+      }
+      if (message.type === "clipboard_text") {
+        sendLater({ type: "clipboard_ack", accepted: false, clipboardId: message.clipboardId, code: "LAN002", reason });
+        return;
+      }
+      if (message.type === "clipboard_file_offer") {
+        sendLater({ type: "clipboard_file_response", transferId: message.transferId, accepted: false, code: "LAN002", reason });
+        return;
+      }
+      if (message.type === "reverse_control_request") {
+        sendLater({ type: "reverse_control_response", requestId: message.requestId, accepted: false, code: "LAN002", reason });
+        return;
+      }
+      sendLater({ type: "error", code: "LAN002", message: reason });
     }
 
     startVideoFrames(session) {

@@ -5,7 +5,7 @@
 ## 当前内容
 
 - Node.js WebSocket 被控服务，默认端口 `43770`。
-- `hello`、`auth_request`、`session_offer`、`display_settings`、`input_event`、`clipboard_text` 和 `reverse_control_request` 消息处理。
+- `hello`、`auth_request`、`session_offer`、`display_settings`、`input_event`、`clipboard_text` 和 `reverse_control_request` 消息处理；未认证连接会被拒绝。
 - 模拟 `video_frame` 输出，用于未来 Mac 控制端提前验证画面渲染。
 - 模拟 `audio_frame` 输出，用于提前验证声音接收状态、音量设置和音频协议。
 - Windows Graphics Capture 占位模块。

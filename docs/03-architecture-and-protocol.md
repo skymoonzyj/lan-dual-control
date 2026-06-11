@@ -116,6 +116,8 @@ Client -> Host: input_event loop
 Both directions: clipboard_event loop
 ```
 
+被控端必须记录每条连接的认证状态。除 `hello` 和 `auth_request` 外，未认证连接发来的 `session_offer`、`display_settings`、`input_event`、剪贴板、音频设置和反控消息都必须拒绝，并返回 `LAN002`。
+
 ## 5. 控制消息格式
 
 第一版可以用 JSON 消息，便于调试。后续性能不足时再改为二进制消息。

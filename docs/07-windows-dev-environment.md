@@ -61,6 +61,39 @@ E:\codex\lan-dual-control\scripts\windows\verify-dev-env.ps1
 
 普通 PowerShell 里直接输入 `cl` 或 `msbuild` 可能仍然找不到，这是正常的；Visual Studio 的 C++ 工具默认不写入普通 PATH。验证脚本会直接扫描 BuildTools 安装目录。
 
+## 一键联调脚本
+
+常用健康检查：
+
+```powershell
+cd E:\codex\lan-dual-control
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dev-lab.ps1
+```
+
+启动本地联调服务：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dev-lab.ps1 -Start
+```
+
+默认端口：
+
+- Windows 控制端页面：`http://127.0.0.1:5178/`
+- 假 Mac WebSocket：`127.0.0.1:43770`
+- Windows 被控端骨架：`127.0.0.1:43772`
+
+停止脚本启动的服务：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dev-lab.ps1 -Stop
+```
+
+如需顺手重新构建桌面 exe：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dev-lab.ps1 -Build
+```
+
 ## 当前项目运行
 
 Windows 控制端页面：

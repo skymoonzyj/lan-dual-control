@@ -10,6 +10,7 @@ final class MacHostService {
 
     private var listener: NWListener?
     private var activeConnections: [ObjectIdentifier: NWConnection] = [:]
+    private var authenticatedConnections: Set<ObjectIdentifier> = []
 
     init(
         configuration: HostConfiguration,
@@ -103,13 +104,28 @@ final class MacHostService {
         }
 
         if let auth = try? JSONDecoder().decode(AuthRequest.self, from: data), auth.type == "auth_request" {
+            let id = ObjectIdentifier(connection)
             let ok = auth.password == configuration.pairingPassword
+            if ok {
+                authenticatedConnections.insert(id)
+            } else {
+                authenticatedConnections.remove(id)
+            }
             logger.info(ok ? "认证通过" : "认证失败")
             send(AuthResult(type: "auth_result", ok: ok, message: ok ? "验证通过" : "密码错误"), to: connection)
             return
         }
 
+        if let envelope = try? JSONDecoder().decode(MessageEnvelope.self, from: data), !isAuthenticated(connection) {
+            sendAuthRequired(for: envelope, to: connection)
+            return
+        }
+
         if let offer = try? JSONDecoder().decode(SessionOffer.self, from: data), offer.type == "session_offer" {
+            guard isAuthenticated(connection) else {
+                sendAuthRequired(for: MessageEnvelope(type: "session_offer", clipboardId: nil, transferId: nil, requestId: nil), to: connection)
+                return
+            }
             logger.info("会话协商：\(offer.maxFps) Hz / 码率 \(offer.maxBandwidthKbps / 1000) Mbps / \(offer.displayMode)")
             let answer = SessionAnswer(
                 type: "session_answer",
@@ -127,6 +143,10 @@ final class MacHostService {
         }
 
         if let input = try? JSONDecoder().decode(InputEventMessage.self, from: data), input.type == "input_event" {
+            guard isAuthenticated(connection) else {
+                sendAuthRequired(for: MessageEnvelope(type: "input_event", clipboardId: nil, transferId: nil, requestId: nil), to: connection)
+                return
+            }
             inputInjector.inject(input)
             return
         }
@@ -159,6 +179,69 @@ final class MacHostService {
         })
     }
 
+    private func isAuthenticated(_ connection: NWConnection) -> Bool {
+        authenticatedConnections.contains(ObjectIdentifier(connection))
+    }
+
+    private func sendAuthRequired(for message: MessageEnvelope, to connection: NWConnection) {
+        let reason = "请先验证连接密码"
+        switch message.type {
+        case "session_offer":
+            send([
+                "type": "session_answer",
+                "ok": false,
+                "code": "LAN002",
+                "reason": reason
+            ], to: connection)
+        case "display_settings":
+            send([
+                "type": "display_settings_ack",
+                "accepted": false,
+                "code": "LAN002",
+                "reason": reason
+            ], to: connection)
+        case "audio_settings_update":
+            send([
+                "type": "audio_settings_ack",
+                "accepted": false,
+                "enabled": false,
+                "code": "LAN002",
+                "reason": reason
+            ], to: connection)
+        case "clipboard_text":
+            send([
+                "type": "clipboard_ack",
+                "accepted": false,
+                "clipboardId": message.clipboardId ?? "",
+                "code": "LAN002",
+                "reason": reason
+            ], to: connection)
+        case "clipboard_file_offer":
+            send([
+                "type": "clipboard_file_response",
+                "transferId": message.transferId ?? "",
+                "accepted": false,
+                "code": "LAN002",
+                "reason": reason
+            ], to: connection)
+        case "reverse_control_request":
+            send([
+                "type": "reverse_control_response",
+                "requestId": message.requestId ?? "",
+                "accepted": false,
+                "code": "LAN002",
+                "reason": reason
+            ], to: connection)
+        default:
+            send([
+                "type": "error",
+                "code": "LAN002",
+                "message": reason
+            ], to: connection)
+        }
+        logger.warn("拒绝未认证消息：\(message.type)")
+    }
+
     private func handleListenerState(_ state: NWListener.State) {
         switch state {
         case .ready:
@@ -185,7 +268,9 @@ final class MacHostService {
     }
 
     private func close(_ connection: NWConnection) {
-        activeConnections.removeValue(forKey: ObjectIdentifier(connection))
+        let id = ObjectIdentifier(connection)
+        activeConnections.removeValue(forKey: id)
+        authenticatedConnections.remove(id)
         connection.cancel()
         logger.info("连接已关闭")
     }

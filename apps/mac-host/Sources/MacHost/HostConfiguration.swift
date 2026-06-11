@@ -9,9 +9,9 @@ struct HostConfiguration {
         let environment = ProcessInfo.processInfo.environment
         let host = environment["LAN_DUAL_HOST"] ?? "0.0.0.0"
         let portValue = UInt16(environment["LAN_DUAL_PORT"] ?? "") ?? 43770
-        let password = environment["LAN_DUAL_PASSWORD"] ?? "demo-password"
+        let configuredPassword = environment["LAN_DUAL_PASSWORD"] ?? ""
+        let password = configuredPassword.isEmpty ? "demo-password" : configuredPassword
 
         return HostConfiguration(host: host, port: portValue, pairingPassword: password)
     }
 }
-
