@@ -52,8 +52,8 @@ function makeSessionAnswer(message, screen, audio, clipboard) {
     clipboardTextMode: clipboardCapabilities.textMode,
     clipboardFile: Boolean(message.wantClipboardFile),
     clipboardFileMode: clipboardCapabilities.fileMode,
-    hostMode: "windows-host-skeleton",
-    capturePipeline: "mock-svg",
+    hostMode: screen.hostMode ?? "windows-host-skeleton",
+    capturePipeline: screen.capturePipeline ?? "mock-svg",
   };
 }
 
@@ -62,6 +62,8 @@ function createClient(socket, context) {
   let session = null;
   let frameId = 0;
   let frameTimer = null;
+  let videoRunId = 0;
+  let captureBusy = false;
   let audioTimer = null;
   let authenticated = false;
 
@@ -76,6 +78,8 @@ function createClient(socket, context) {
   }
 
   function stopVideoFrames() {
+    videoRunId += 1;
+    captureBusy = false;
     if (frameTimer) {
       clearInterval(frameTimer);
       frameTimer = null;
@@ -93,11 +97,36 @@ function createClient(socket, context) {
   function startVideoFrames(nextSession) {
     stopVideoFrames();
     context.screen.start(nextSession);
+    const runId = videoRunId + 1;
+    videoRunId = runId;
+    captureBusy = false;
     const intervalMs = Math.max(120, Math.round(1000 / Math.min(Number(nextSession.fps) || 5, 8)));
+    const sendNextFrame = async () => {
+      if (runId !== videoRunId || captureBusy) {
+        return;
+      }
+
+      captureBusy = true;
+      try {
+        const nextFrameId = frameId + 1;
+        const frame = await context.screen.makeFrame(nextFrameId, nextSession);
+        if (runId === videoRunId) {
+          frameId = nextFrameId;
+          send(frame);
+        }
+      } catch (error) {
+        context.logger.warn(`视频帧生成失败：${error.message}`);
+      } finally {
+        if (runId === videoRunId) {
+          captureBusy = false;
+        }
+      }
+    };
+
     frameTimer = setInterval(() => {
-      frameId += 1;
-      send(context.screen.makeFrame(frameId, nextSession));
+      void sendNextFrame();
     }, intervalMs);
+    void sendNextFrame();
   }
 
   function startAudioFrames(nextSession) {
@@ -187,8 +216,9 @@ function createClient(socket, context) {
         fps: session?.fps ?? (Number(message.fps) || 60),
         requestedFps: Number(message.fps) || session?.fps || 60,
         maxScreenFps: session?.maxScreenFps ?? 60,
-        hostMode: "windows-host-skeleton",
-        capturePipeline: "mock-svg",
+        frameIntervalMs: session?.frameIntervalMs,
+        hostMode: session?.hostMode ?? "windows-host-skeleton",
+        capturePipeline: session?.capturePipeline ?? "mock-svg",
         clipboardText: Boolean(message.clipboardText ?? session?.clipboardText ?? true),
         clipboardTextMode: clipboardCapabilities.textMode,
         clipboardFile: Boolean(message.clipboardFile ?? session?.clipboardFile ?? true),
@@ -353,6 +383,7 @@ export function createWindowsHostServer({
       const requestHost = request.headers.host?.split(":")[0];
       const advertisedHost = host === "0.0.0.0" ? (requestHost ?? host) : host;
       const clipboardCapabilities = clipboard.getCapabilities();
+      const screenCapabilities = screen.getCapabilities();
       response.writeHead(200, {
         ...corsHeaders,
         "Content-Type": "application/json; charset=utf-8",
@@ -368,7 +399,7 @@ export function createWindowsHostServer({
         port,
         controlPort: port,
         capabilities: {
-          screen: screen.getCapabilities(),
+          screen: screenCapabilities,
           audio: audio.getCapabilities(),
           input: input.getCapabilities(),
           clipboardText: true,
@@ -377,7 +408,7 @@ export function createWindowsHostServer({
           clipboardFileMode: clipboardCapabilities.fileMode,
           clipboard: clipboardCapabilities,
           reverseControl: true,
-          mock: true,
+          mock: screenCapabilities.mode === "mock",
         },
         lastSeenAt: new Date().toISOString(),
       }));
@@ -418,7 +449,12 @@ export function createWindowsHostServer({
       return new Promise((resolve) => {
         server.listen(port, host, () => {
           logger.info(`Windows 被控端骨架已监听 ws://${host}:${port}`);
-          logger.info("当前为骨架模式：模拟视频帧和音频帧；Windows 上可注入输入并写入系统文本/文件剪贴板。");
+          const screenCapabilities = screen.getCapabilities();
+          logger.info(
+            screenCapabilities.mode === "system-jpeg"
+              ? "当前使用 Windows 系统截图 JPEG 视频帧，音频仍为模拟帧；可注入输入并写入系统文本/文件剪贴板。"
+              : "当前为骨架模式：模拟视频帧和音频帧；Windows 上可注入输入并写入系统文本/文件剪贴板。",
+          );
           resolve();
         });
       });

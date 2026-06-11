@@ -37,7 +37,7 @@
 ## Windows Codex 可接任务
 
 - 把远端文件写入 Windows 系统文件剪贴板。
-- 接入 Windows Graphics Capture，替换 Windows 被控端模拟视频帧。
+- 把 Windows 被控端当前系统截图 JPEG 过渡层升级为 Windows Graphics Capture，提升帧率、延迟和资源占用表现。
 - 接入 WASAPI loopback，替换 Windows 被控端模拟音频帧。
 - 优化 Windows 控制端文件托盘和错误提示。
 - 继续维护本机假 Mac 服务，用于快速回归和失败场景模拟。

@@ -160,7 +160,7 @@ Windows 端：
 Windows 端：
 
 - [x] 创建 Windows 被控服务骨架。
-- [ ] 采集 Windows 屏幕。
+- [x] 采集 Windows 屏幕第一版：系统截图 JPEG 帧，失败回退模拟帧。
 - [x] Windows 模拟音频帧骨架。
 - [ ] 采集 Windows 系统声音。
 - [x] 接收 Mac 输入事件骨架。
@@ -186,12 +186,12 @@ Mac 端：
 当前备注：
 
 - 已创建 `apps/windows-host` Node.js WebSocket 被控服务骨架。
-- 当前可完成 hello/auth/session 握手，未认证连接会被拒绝；认证后可发送模拟 `video_frame` 和 `audio_frame`、接收 `input_event`、处理 `clipboard_text`。
+- 当前可完成 hello/auth/session 握手，未认证连接会被拒绝；认证后可发送 Windows 系统截图 JPEG `video_frame`、模拟 `audio_frame`、接收 `input_event`、处理 `clipboard_text`。
 - Windows 被控端在 Windows 上会用 PowerShell `Set-Clipboard` 写入系统文本剪贴板，非 Windows 开发环境回退为 `memory-only`，并在 `/discovery`、`hello_ack`、`session_answer` 暴露剪贴板模式。
 - Windows 被控端可接收 `clipboard_file_*` 文件块并落到临时目录；在 Windows 上会用 PowerShell `Set-Clipboard -Path` 写入系统文件剪贴板，非 Windows 开发环境回退为 `saveMode: temp`。
 - Windows 被控端已接入最小 SendInput 桥：Windows 上通过 PowerShell/C# 调用 `SendInput`/`SetCursorPos` 注入鼠标、滚轮和常用键盘事件，非 Windows 开发环境回退为日志模式。
 - macOS 被控端、Windows 被控端和假 Mac 服务处理输入事件后都会返回 `input_ack`，控制端和探针可确认输入已注入、仅记录或被拒绝。
-- 当前仍是骨架模式：屏幕采集待接 Windows Graphics Capture，真实声音采集待接 WASAPI loopback，输入注入后续可优化为高性能原生模块或常驻进程。
+- 当前屏幕采集是 PowerShell/System.Drawing 过渡实现，默认上限较低，系统截图失败时会回退模拟帧；后续仍需升级 Windows Graphics Capture，真实声音采集待接 WASAPI loopback，输入注入可优化为高性能原生模块或常驻进程。
 
 ## 里程碑 M4：一键反控
 

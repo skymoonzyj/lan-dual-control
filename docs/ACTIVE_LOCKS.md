@@ -32,6 +32,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-host/src/windows-screen-capture.mjs`、`apps/windows-host/src/windows-host-service.mjs`、`apps/windows-host/README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md` | 2026-06-12 03:47 | Windows 被控端真实屏幕 JPEG 采集第一版：系统截图 `video_frame`，失败回退模拟帧；服务级 `--requireRealVideo` 已通过。 |
 | Windows Codex | `scripts/windows/probe-mac-host.mjs`、`scripts/windows/test-mac-host.ps1`、`apps/mac-host/README.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md` | 2026-06-12 | 新增 `-RequireAudio` / `--requireAudio` 强校验，可确认 Mac 真实 `pcm-f32le-base64` 音频帧。 |
 | Windows Codex | `apps/windows-client/app.js`、`apps/windows-client/README.md`、`scripts/windows/test-windows-client-browser.mjs`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md` | 2026-06-12 | Windows 控制端真实 PCM 音频播放入口：支持 `pcm-f32le-base64`、planar/interleaved 布局、音量增益和页面级自检注入。 |
 | Mac Codex | `apps/mac-host/Sources/MacHost/MacHostService.swift`、`apps/mac-host/Sources/MacHost/ScreenCaptureCoordinator.swift`、`apps/mac-host/README.md`、`shared/protocol/*`、`docs/03-architecture-and-protocol.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md` | 2026-06-12 | Mac 真实系统声音采集第一版：ScreenCaptureKit 输出 `pcm-f32le-base64` PCM 帧，失败回退 mock；真机音频探针已通过。 |
