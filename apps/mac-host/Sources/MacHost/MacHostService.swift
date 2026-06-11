@@ -469,6 +469,7 @@ final class MacHostService {
             "clipboardFile": wantClipboardFile,
             "clipboardFileMode": "system",
             "hostMode": screenFramesEnabled ? "mac-host-background-jpeg" : "mac-host-mock-video",
+            "inputMode": configuration.inputMode.rawValue,
             "qualityPreset": qualityPreset,
             "jpegQuality": jpegQuality,
             "capturePipeline": screenFramesEnabled ? "background-jpeg" : "mock-svg",

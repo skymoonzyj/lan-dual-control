@@ -72,3 +72,8 @@ scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x
 
 它会检查 `/discovery`、WebSocket、密码认证、会话协商和第一帧视频帧。
 需要验证系统剪贴板时，可以加上 `-ClipboardText -ClipboardFile`。
+真机验收时建议加 `-RequireRealVideo -ExpectInputMode log`，确认不是模拟帧，且输入仍处在安全日志模式：
+
+```powershell
+scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireRealVideo -ExpectInputMode log
+```

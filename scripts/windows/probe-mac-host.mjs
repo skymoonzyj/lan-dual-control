@@ -13,6 +13,8 @@ const defaults = {
   clipboardFile: false,
   clipboardFileBytes: 96,
   inputEvents: false,
+  requireRealVideo: false,
+  expectInputMode: "",
 };
 
 function parseArgs(argv) {
@@ -39,6 +41,8 @@ function parseArgs(argv) {
   args.clipboardFile = booleanArg(args.clipboardFile) || booleanArg(args.clipboard);
   args.clipboardFileBytes = Number(args.clipboardFileBytes) || defaults.clipboardFileBytes;
   args.inputEvents = booleanArg(args.inputEvents) || booleanArg(args.input);
+  args.requireRealVideo = booleanArg(args.requireRealVideo) || booleanArg(args.realVideo);
+  args.expectInputMode = String(args.expectInputMode || "").trim().toLowerCase();
   return args;
 }
 
@@ -213,6 +217,70 @@ function summarizeFrame(frame) {
     `dataUrl=${dataUrl.slice(0, 30) || "missing"}`,
     `bytes~${estimatedBytes}`,
   ].join(" / ");
+}
+
+function normalizedText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function assertExpectedInputMode({ args, discovery, hello, answer }) {
+  if (!args.expectInputMode) return;
+
+  const observedModes = [
+    answer?.inputMode,
+    hello?.capabilities?.input?.mode,
+    discovery?.capabilities?.inputMode,
+  ]
+    .map((mode) => normalizedText(mode).toLowerCase())
+    .filter(Boolean);
+  const uniqueModes = [...new Set(observedModes)];
+
+  if (!uniqueModes.includes(args.expectInputMode)) {
+    throw new Error(
+      `input mode mismatch: expected ${args.expectInputMode}, observed ${uniqueModes.join(", ") || "missing"}`,
+    );
+  }
+
+  print("OK", `Input mode: ${args.expectInputMode}`);
+}
+
+function assertRealVideoFrame(frame, answer) {
+  const codec = normalizedText(frame.codec).toLowerCase();
+  const answerCodec = normalizedText(answer?.videoCodec).toLowerCase();
+  const dataUrl = normalizedText(frame.dataUrl).toLowerCase();
+  const source = normalizedText(frame.source).toLowerCase();
+  const framePipeline = normalizedText(frame.capturePipeline).toLowerCase();
+  const answerPipeline = normalizedText(answer?.capturePipeline).toLowerCase();
+  const pipeline = framePipeline || answerPipeline;
+  const hostMode = normalizedText(answer?.hostMode).toLowerCase();
+  const problems = [];
+
+  if (codec !== "jpeg") {
+    problems.push(`frame codec=${frame.codec || "missing"}`);
+  }
+  if (answerCodec && answerCodec !== "jpeg") {
+    problems.push(`session videoCodec=${answer.videoCodec}`);
+  }
+  if (!dataUrl.startsWith("data:image/jpeg")) {
+    problems.push("dataUrl is not image/jpeg");
+  }
+  if (source === "mock") {
+    problems.push("source=mock");
+  }
+  if (!pipeline) {
+    problems.push("capturePipeline missing");
+  } else if (pipeline.includes("mock")) {
+    problems.push(`capturePipeline=${pipeline}`);
+  }
+  if (hostMode.includes("mock")) {
+    problems.push(`hostMode=${hostMode}`);
+  }
+
+  if (problems.length > 0) {
+    throw new Error(`real video required but got ${summarizeFrame(frame)} (${problems.join("; ")})`);
+  }
+
+  print("OK", `Real video confirmed: ${codec} / ${pipeline || "pipeline unknown"} / source=${source || "unknown"}`);
 }
 
 async function probeClipboardText(client, args) {
@@ -395,8 +463,9 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   print("INFO", `Target: ${args.host}:${args.port}`);
 
+  let discovery;
   try {
-    await fetchDiscovery(args);
+    discovery = await fetchDiscovery(args);
   } catch (error) {
     fail(`Discovery failed: ${error.message}`);
     return;
@@ -447,12 +516,17 @@ async function main() {
       print("INFO", `Permissions: ${JSON.stringify(answer.permissions)}`);
     }
 
+    assertExpectedInputMode({ args, discovery, hello, answer });
+
     const frame = await client.waitFor("video_frame", Math.max(args.timeoutMs, 10000));
     if (!frame.dataUrl) {
       fail("First video_frame has no dataUrl");
       return;
     }
     print("OK", `First frame: ${summarizeFrame(frame)}`);
+    if (args.requireRealVideo) {
+      assertRealVideoFrame(frame, answer);
+    }
 
     if (args.clipboardText) {
       await probeClipboardText(client, args);

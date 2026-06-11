@@ -11,7 +11,9 @@ param(
   [switch] $ClipboardText,
   [switch] $ClipboardFile,
   [int] $ClipboardFileBytes = 96,
-  [switch] $InputEvents
+  [switch] $InputEvents,
+  [switch] $RequireRealVideo,
+  [string] $ExpectInputMode = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,6 +48,12 @@ try {
   }
   if ($InputEvents) {
     $nodeArgs += "--inputEvents"
+  }
+  if ($RequireRealVideo) {
+    $nodeArgs += "--requireRealVideo"
+  }
+  if ($ExpectInputMode) {
+    $nodeArgs += @("--expectInputMode", $ExpectInputMode)
   }
 
   & node @nodeArgs

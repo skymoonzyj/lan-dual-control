@@ -11,6 +11,7 @@
 - Windows 侧已经增加 `scripts/windows/test-mac-host.ps1`，可在 Mac 真机服务启动后检查 `/discovery`、WebSocket、认证、会话和第一帧视频帧；显式加 `-ClipboardText -ClipboardFile` 可验证 macOS 文本和文件剪贴板写入。
 - macOS 被控端已升级为 WebSocket 服务，支持 `/discovery`、hello/auth/session、后台真实屏幕 JPEG 帧、模拟视频帧回退、模拟音频帧、CGEvent 输入注入、系统文本剪贴板读写和变更推送、系统文件剪贴板接收写入；真实声音采集仍待实装。
 - Windows 控制端已可区分真实 JPEG 视频帧和模拟视频帧，并显示 Mac 主机诊断状态条；Mac 端已兼容 Windows 端当前发送的输入事件字段。
+- 真 Mac 已通过 `--requireRealVideo --expectInputMode log --inputEvents` 强校验：首帧为真实 JPEG，输入事件以安全日志模式确认。
 - Windows 被控端仍是骨架阶段，真实屏幕采集和真实声音采集仍待实装；文本/文件剪贴板在 Windows 上已可写入系统剪贴板，输入事件已接入最小 SendInput 桥。
 - 当前已经在真 Mac 上开发和验证 macOS 被控端；后续功能验收以真实 `apps/mac-host` 为主，假 Mac 只作为快速回归和异常场景模拟。
 
@@ -84,7 +85,7 @@
 现在优先级切换为 Mac 真机对接：
 
 1. 在真 Mac 上运行 `apps/mac-host`，默认用 `LAN_DUAL_INPUT_MODE=log` 做安全协议验证。
-2. 用 `scripts/windows/probe-mac-host.mjs --inputEvents` 或 Windows 侧 `scripts/windows/test-mac-host.ps1 -InputEvents` 验证 `/discovery`、WebSocket、认证、会话、第一帧和 `input_ack`。
+2. 用 `scripts/windows/probe-mac-host.mjs --requireRealVideo --expectInputMode log --inputEvents` 或 Windows 侧 `scripts/windows/test-mac-host.ps1 -RequireRealVideo -ExpectInputMode log -InputEvents` 验证 `/discovery`、WebSocket、认证、会话、真实首帧和 `input_ack`。
 3. 验证屏幕录制、辅助功能、输入监控权限。
 4. 验证 Windows 控制端能收到 `codec: "jpeg"` 的真实 Mac 屏幕帧。
 5. 在确认安全后切换 `LAN_DUAL_INPUT_MODE=inject`，验证 Windows 控制端能移动 Mac 鼠标、点击、滚轮和发送常用快捷键。

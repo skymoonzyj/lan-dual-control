@@ -72,6 +72,16 @@ demo-password
 curl http://127.0.0.1:43770/discovery
 ```
 
+真机验收建议先用安全输入模式启动，再让探针强制要求真实视频帧：
+
+```bash
+LAN_DUAL_INPUT_MODE=log swift run lan-dual-mac-host
+```
+
+```powershell
+scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireRealVideo -ExpectInputMode log
+```
+
 ## 首次运行需要打开的 macOS 权限
 
 进入系统设置：
@@ -90,7 +100,7 @@ curl http://127.0.0.1:43770/discovery
 
 ## 下一步
 
-Mac mini 到位后优先验证：
+真 Mac 优先验证：
 
 1. `swift run lan-dual-mac-host` 能启动。
 2. 权限检查结果是否正确。

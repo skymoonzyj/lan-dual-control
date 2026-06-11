@@ -110,6 +110,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-mac
 
 脚本会依次检查 `/discovery`、WebSocket、`hello`、密码认证、`session_offer` 和第一帧 `video_frame`。如果 Mac 已获得屏幕录制权限，第一帧通常应显示 `codec=jpeg`；如果权限不足或采集失败，Mac 端会回退到模拟帧。
 
+真 Mac 验收时建议显式要求真实视频帧，并确认当前输入模式：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireRealVideo -ExpectInputMode log
+```
+
+`-RequireRealVideo` 会要求首帧为 `codec=jpeg`、`data:image/jpeg`、非 mock 来源；`-ExpectInputMode log` 用于安全联调，确认输入事件只记录不注入。准备实测控制鼠标键盘时再改为 `-ExpectInputMode inject`。
+
 如需顺便验证 macOS 系统剪贴板写入，可以显式打开剪贴板探测：
 
 ```powershell

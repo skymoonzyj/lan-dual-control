@@ -124,6 +124,10 @@ const videoSourceLabels = {
   screen: "真实屏幕",
   mock: "模拟源",
 };
+const inputModeLabels = {
+  inject: "真实注入",
+  log: "安全日志",
+};
 const clipboardModeLabels = {
   system: "系统",
   mock: "模拟",
@@ -264,6 +268,7 @@ const state = {
     clipboardFile: null,
     clipboardTextMode: "",
     clipboardFileMode: "",
+    inputMode: "",
     videoCodec: "",
     videoSource: "",
     droppedFrames: null,
@@ -393,6 +398,7 @@ function getEmptyHostDiagnostics() {
     clipboardFile: null,
     clipboardTextMode: "",
     clipboardFileMode: "",
+    inputMode: "",
     videoCodec: "",
     videoSource: "",
     droppedFrames: null,
@@ -511,6 +517,7 @@ function renderHostDiagnosticsText() {
     diagnostics.videoCodec || "",
     diagnostics.videoSource ? labelFromMap(diagnostics.videoSource, videoSourceLabels) : "",
   ].filter(Boolean);
+  const inputText = diagnostics.inputMode ? labelFromMap(diagnostics.inputMode, inputModeLabels) : "";
   const droppedFrames = Number(diagnostics.droppedFrames);
   const qualityText = formatJpegQuality(diagnostics.jpegQuality);
   const clipboardText = formatClipboardCapability(
@@ -538,6 +545,9 @@ function renderHostDiagnosticsText() {
   }
   if (permissionText) {
     parts.push(`权限：${permissionText}`);
+  }
+  if (inputText) {
+    parts.push(`输入：${inputText}`);
   }
   if (clipboardText || clipboardFile) {
     parts.push(`剪贴板：文字 ${clipboardText || "未知"}，文件 ${clipboardFile || "未知"}`);
@@ -1104,6 +1114,7 @@ function setUiConnected(answer) {
     clipboardFile: answer.clipboardFile ?? null,
     clipboardTextMode: answer.clipboardTextMode ?? "",
     clipboardFileMode: answer.clipboardFileMode ?? "",
+    inputMode: answer.inputMode ?? "",
     videoCodec: answer.videoCodec ?? "",
     qualityPreset: answer.qualityPreset ?? "",
     jpegQuality: answer.jpegQuality ?? null,
