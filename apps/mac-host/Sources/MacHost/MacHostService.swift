@@ -558,6 +558,21 @@ final class MacHostService {
 
     private func handleInputEvent(_ data: Data, fallback: [String: Any], context: ClientContext) {
         if let input = try? JSONDecoder().decode(InputEventMessage.self, from: data) {
+            if configuration.inputMode == .inject {
+                let snapshot = permissions.snapshot()
+                if !snapshot.accessibilityGranted {
+                    let result = InputInjectionResult(
+                        accepted: false,
+                        injected: false,
+                        mode: "inject",
+                        reason: "Mac 缺少辅助功能权限，无法注入鼠标键盘。",
+                        code: "LAN005"
+                    )
+                    sendInputAck(input: input, fallback: fallback, result: result, to: context)
+                    return
+                }
+            }
+
             let result = inputInjector.inject(input, target: inputTarget(for: context.session))
             sendInputAck(input: input, fallback: fallback, result: result, to: context)
             return
@@ -568,7 +583,8 @@ final class MacHostService {
             accepted: false,
             injected: false,
             mode: "decode",
-            reason: "macOS 被控端无法解码输入事件。"
+            reason: "macOS 被控端无法解码输入事件。",
+            code: "LAN003"
         )
         sendInputAck(input: nil, fallback: fallback, result: result, to: context)
     }
@@ -583,6 +599,9 @@ final class MacHostService {
             "event": input?.normalizedEvent ?? stringValue(fallback["event"]) ?? stringValue(fallback["action"]) ?? stringValue(fallback["kind"]) ?? "unknown",
         ]
 
+        if let code = result.code {
+            ack["code"] = code
+        }
         if let inputId = stringValue(fallback["id"]) {
             ack["inputId"] = inputId
         }

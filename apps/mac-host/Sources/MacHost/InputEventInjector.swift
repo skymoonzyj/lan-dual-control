@@ -16,6 +16,15 @@ struct InputInjectionResult {
     let injected: Bool
     let mode: String
     let reason: String
+    let code: String?
+
+    init(accepted: Bool, injected: Bool, mode: String, reason: String, code: String? = nil) {
+        self.accepted = accepted
+        self.injected = injected
+        self.mode = mode
+        self.reason = reason
+        self.code = code
+    }
 }
 
 final class InputEventInjector {

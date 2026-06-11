@@ -192,6 +192,17 @@
     "mode": "inject",
     "reason": "输入事件已注入。"
   },
+  "inputAckRejected": {
+    "type": "input_ack",
+    "inputId": "input_event-1780000000000-2",
+    "sequence": 43,
+    "event": "mouse_move",
+    "accepted": false,
+    "injected": false,
+    "mode": "inject",
+    "code": "LAN005",
+    "reason": "Mac 缺少辅助功能权限，无法注入鼠标键盘。"
+  },
   "clipboardText": {
     "type": "clipboard_text",
     "direction": "client_to_host",
