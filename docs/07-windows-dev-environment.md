@@ -94,6 +94,22 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dev-lab.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dev-lab.ps1 -Build
 ```
 
+## 真实 Mac 联通自检
+
+Mac 端运行 `swift run lan-dual-mac-host` 后，在 Windows 上用 Mac 的局域网 IP 检查：
+
+```powershell
+cd E:\codex\lan-dual-control
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x
+```
+
+默认端口和密码：
+
+- 端口：`43770`
+- 密码：`demo-password`
+
+脚本会依次检查 `/discovery`、WebSocket、`hello`、密码认证、`session_offer` 和第一帧 `video_frame`。如果 Mac 已获得屏幕录制权限，第一帧通常应显示 `codec=jpeg`；如果权限不足或采集失败，Mac 端会回退到模拟帧。
+
 ## 当前项目运行
 
 Windows 控制端页面：

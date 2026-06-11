@@ -216,6 +216,7 @@ const state = {
   activeDisplayId: "main",
   remoteFrameWidth: 1920,
   remoteFrameHeight: 1080,
+  lastFrameDecodeErrorId: "",
   applyingQualityPreset: false,
   manualDisconnect: false,
   reconnectAttempts: 0,
@@ -858,6 +859,7 @@ function setUiConnecting(host, port) {
   state.connecting = true;
   state.connected = false;
   state.videoFrames = 0;
+  state.lastFrameDecodeErrorId = "";
   resetReverseControlState();
   setConnectionState("connecting", `正在连接 ${host}:${port}`);
   elements.connectButton.disabled = true;
@@ -1970,14 +1972,17 @@ function renderVideoFrame(frame) {
   }
 
   state.videoFrames += 1;
+  const frameLabel = getVideoFrameLabel(frame);
   if (frame.width && frame.height) {
     state.remoteFrameWidth = Number(frame.width);
     state.remoteFrameHeight = Number(frame.height);
   }
   applyScaleMode();
+  elements.remoteFrameImage.dataset.frameId = String(frame.frameId ?? state.videoFrames);
+  elements.remoteFrameImage.dataset.frameCodec = frame.codec ?? "unknown";
   elements.remoteFrameImage.src = frame.dataUrl;
   elements.remoteFrameImage.classList.add("is-visible");
-  elements.remoteStatusText.textContent = `正在接收模拟视频帧 #${frame.frameId ?? state.videoFrames}`;
+  elements.remoteStatusText.textContent = `正在接收${frameLabel} #${frame.frameId ?? state.videoFrames}`;
 
   if (frame.width && frame.height) {
     elements.metricResolution.textContent = `${frame.width} × ${frame.height}`;
@@ -1989,6 +1994,21 @@ function renderVideoFrame(frame) {
       `#${frame.frameId ?? state.videoFrames} · ${frame.width ?? "--"}×${frame.height ?? "--"} · ${frame.codec ?? "mock"}`,
     );
   }
+}
+
+function getVideoFrameLabel(frame) {
+  const codec = String(frame.codec ?? "").toLowerCase();
+  const dataUrl = String(frame.dataUrl ?? "").toLowerCase();
+  if (codec === "jpeg" || dataUrl.startsWith("data:image/jpeg")) {
+    return "真实 JPEG 视频帧";
+  }
+  if (codec === "mock-svg" || dataUrl.startsWith("data:image/svg")) {
+    return "模拟视频帧";
+  }
+  if (codec) {
+    return `${codec} 视频帧`;
+  }
+  return "视频帧";
 }
 
 function tickClock() {
@@ -2100,6 +2120,16 @@ elements.resetKeyMapButton.addEventListener("click", resetKeyboardMapping);
 });
 
 elements.remoteCanvas.addEventListener("mousemove", updateCursor);
+elements.remoteFrameImage.addEventListener("error", () => {
+  const frameId = elements.remoteFrameImage.dataset.frameId || String(state.videoFrames);
+  if (state.lastFrameDecodeErrorId === frameId) {
+    return;
+  }
+  state.lastFrameDecodeErrorId = frameId;
+  const codec = elements.remoteFrameImage.dataset.frameCodec || "unknown";
+  elements.remoteStatusText.textContent = `视频帧解码失败 #${frameId}`;
+  addLog("视频帧", `图片解码失败 · #${frameId} · ${codec}`);
+});
 elements.remoteCanvas.addEventListener("contextmenu", (event) => {
   if (canSendControlInput()) {
     event.preventDefault();

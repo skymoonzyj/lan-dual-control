@@ -44,6 +44,7 @@ Windows 端：
 - [x] 增加 WebSocket 协议客户端。
 - [x] 增加本机假 Mac 联调服务。
 - [x] 接收并渲染模拟视频帧。
+- [x] 增加真实 Mac 联通自检脚本，可检查 `/discovery`、WebSocket、认证、会话和第一帧视频帧。
 - [x] 保存连接方式、地址、端口和画质设置。
 - [x] 增加最近连接列表。
 - [x] 增加连接状态机。
@@ -95,7 +96,8 @@ Windows 端：
 - 已完成 macOS 被控端 Swift WebSocket 骨架，支持 `/discovery`、hello/auth/session、模拟 `video_frame`/`audio_frame`、输入事件日志、文本和文件剪贴板确认。
 - macOS 被控端已接入真实屏幕 JPEG `video_frame` 抓取；默认 `LAN_DUAL_VIDEO_MODE=auto`，权限不足或采集失败时自动回退模拟帧。
 - macOS 被控端已接入 CGEvent 输入注入；默认 `LAN_DUAL_INPUT_MODE=inject`，可切到 `log` 做安全联调。
-- Windows 控制端当前不用配合修改；Mac 端已兼容 Windows 端现有 `kind/action/remoteX/remoteY` 输入事件字段。
+- Windows 控制端当前已可区分真实 JPEG 视频帧和模拟视频帧，并记录图片解码失败；`scripts/windows/test-mac-host.ps1` 可用于真机连通自检。
+- Mac 端已兼容 Windows 端现有 `kind/action/remoteX/remoteY` 输入事件字段。
 - Mac mini 到位后需要继续做真机权限验证、低延迟 ScreenCaptureKit 流式采集和更完整的键盘/输入法兼容。
 - MSI/NSIS 安装包暂未开启，先保留桌面 exe 构建；安装包放到 M5 处理。
 

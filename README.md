@@ -63,3 +63,11 @@ scripts\windows\dev-lab.ps1 -Start
 ```
 
 它会检查环境并启动 Windows 控制端页面、假 Mac 服务和 Windows 被控端骨架。
+
+Mac 真机被控端启动后，可在 Windows 上做一次联通自检：
+
+```powershell
+scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x
+```
+
+它会检查 `/discovery`、WebSocket、密码认证、会话协商和第一帧视频帧。
