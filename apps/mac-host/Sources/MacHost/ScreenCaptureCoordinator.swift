@@ -55,7 +55,7 @@ final class ScreenCaptureCoordinator {
     func captureFrame(displayId: String, maxWidth: Int, maxHeight: Int, quality: Double = 0.58) -> CapturedScreenFrame? {
         #if os(macOS)
         guard let displayId = resolveDisplayId(displayId),
-              let sourceImage = CGDisplayCreateImage(displayId) else {
+              let sourceImage = captureDisplayImage(displayId) else {
             return nil
         }
 
@@ -138,6 +138,18 @@ final class ScreenCaptureCoordinator {
         }
 
         return displays[0]
+    }
+
+    private func captureDisplayImage(_ displayId: CGDirectDisplayID) -> CGImage? {
+        for attempt in 0..<4 {
+            if let image = CGDisplayCreateImage(displayId) {
+                return image
+            }
+            if attempt < 3 {
+                Thread.sleep(forTimeInterval: 0.04)
+            }
+        }
+        return nil
     }
 
     private func fittedSize(sourceWidth: Int, sourceHeight: Int, maxWidth: Int, maxHeight: Int) -> (width: Int, height: Int) {

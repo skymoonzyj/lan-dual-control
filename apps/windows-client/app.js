@@ -123,6 +123,8 @@ const capturePipelineLabels = {
   "background-jpeg": "后台 JPEG",
   "mock-svg": "模拟画面",
   "screen-fallback-mock": "采集回退",
+  "screen-timeout-mock": "采集超时",
+  "screen-cooldown-mock": "等待恢复",
 };
 const videoSourceLabels = {
   screen: "真实屏幕",
@@ -532,23 +534,29 @@ function isMockVideoDiagnostics(diagnostics = state.hostDiagnostics) {
     diagnostics.videoSource === "mock" ||
     diagnostics.capturePipeline === "mock-svg" ||
     diagnostics.capturePipeline === "screen-fallback-mock" ||
+    diagnostics.capturePipeline === "screen-timeout-mock" ||
+    diagnostics.capturePipeline === "screen-cooldown-mock" ||
     diagnostics.videoCodec === "mock-svg"
   );
 }
 
 function getHostDiagnosticsLevel(diagnostics = state.hostDiagnostics) {
   const warnings = getHostPermissionWarnings(diagnostics.permissions);
+  const hasCaptureFallback =
+    diagnostics.capturePipeline === "screen-fallback-mock" ||
+    diagnostics.capturePipeline === "screen-timeout-mock" ||
+    diagnostics.capturePipeline === "screen-cooldown-mock";
   if (diagnostics.inputAckStatus === "rejected") {
     return "warning";
   }
-  if (warnings.length > 0 || diagnostics.capturePipeline === "screen-fallback-mock") {
+  if (warnings.length > 0 || hasCaptureFallback) {
     return "warning";
   }
   if (
     state.connected &&
     isMockVideoDiagnostics(diagnostics) &&
     (diagnostics.hostMode === "mac-host-mock-video" ||
-      diagnostics.capturePipeline === "screen-fallback-mock")
+      hasCaptureFallback)
   ) {
     return "warning";
   }
@@ -2594,7 +2602,7 @@ function renderVideoFrame(frame) {
 
   if (
     !state.hostDiagnostics.warnedMockFrame &&
-    (frameCapturePipeline === "screen-fallback-mock" ||
+    ((frameCapturePipeline && frameCapturePipeline.includes("mock")) ||
       state.hostDiagnostics.hostMode === "mac-host-mock-video")
   ) {
     state.hostDiagnostics.warnedMockFrame = true;

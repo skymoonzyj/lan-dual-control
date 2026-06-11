@@ -65,6 +65,9 @@ private final class ClientContext {
     var outboundFileTransfers: [String: OutboundFileTransferState] = [:]
     var reportedVideoCaptureFallback = false
     var isVideoCaptureInFlight = false
+    var videoCaptureToken = 0
+    var consecutiveVideoCaptureFailures = 0
+    var screenCaptureRetryAfter: Date?
     var droppedVideoFrames = 0
     var lastClipboardChangeCount = 0
     var lastClipboardText = ""
@@ -83,6 +86,9 @@ final class MacHostService {
     private let clipboardBridge: MacClipboardBridge
     private let logger: HostLogger
     private let videoCaptureQueue = DispatchQueue(label: "lan-dual-control.mac-host.video-capture", qos: .userInteractive)
+    private let videoCaptureTimeoutMs = 1500
+    private let screenCaptureCooldownSeconds: TimeInterval = 4
+    private let maxConsecutiveVideoCaptureFailuresBeforeCooldown = 3
     private let outboundClipboardFileChunkBytes = 64 * 1024
     private let maxOutboundClipboardFileBytes = 64 * 1024 * 1024
 
@@ -1196,6 +1202,9 @@ final class MacHostService {
         stopVideoFrames(context)
         context.reportedVideoCaptureFallback = false
         context.isVideoCaptureInFlight = false
+        context.videoCaptureToken = 0
+        context.consecutiveVideoCaptureFailures = 0
+        context.screenCaptureRetryAfter = nil
         context.droppedVideoFrames = 0
         let session = context.session ?? HostSession(
             width: 1920,
@@ -1220,7 +1229,22 @@ final class MacHostService {
             guard let self, let context else { return }
             let currentSession = context.session ?? session
             if currentSession.screenFramesEnabled {
-                self.enqueueScreenVideoFrame(context, session: currentSession)
+                if let retryAfter = context.screenCaptureRetryAfter, retryAfter > Date() {
+                    context.frameId += 1
+                    self.sendVideoFallbackFrame(
+                        context,
+                        frameId: context.frameId,
+                        session: currentSession,
+                        pipeline: "screen-cooldown-mock",
+                        retryAfter: retryAfter
+                    )
+                } else {
+                    if context.screenCaptureRetryAfter != nil {
+                        context.screenCaptureRetryAfter = nil
+                        self.logger.info("真实屏幕帧冷却结束，开始尝试恢复采集。")
+                    }
+                    self.enqueueScreenVideoFrame(context, session: currentSession)
+                }
             } else {
                 context.frameId += 1
                 self.send(self.makeMockVideoFrame(context.frameId, session: currentSession), to: context)
@@ -1274,9 +1298,36 @@ final class MacHostService {
         }
 
         context.isVideoCaptureInFlight = true
+        context.videoCaptureToken += 1
         context.frameId += 1
         let frameId = context.frameId
+        let captureToken = context.videoCaptureToken
         let sessionSnapshot = session
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(videoCaptureTimeoutMs)) { [weak self, weak context] in
+            guard let self, let context else { return }
+            guard context.videoTimer != nil,
+                  context.isVideoCaptureInFlight,
+                  context.videoCaptureToken == captureToken else {
+                return
+            }
+
+            context.isVideoCaptureInFlight = false
+            context.consecutiveVideoCaptureFailures += 1
+            let retryAfter = Date().addingTimeInterval(self.screenCaptureCooldownSeconds)
+            context.screenCaptureRetryAfter = retryAfter
+            if !context.reportedVideoCaptureFallback {
+                context.reportedVideoCaptureFallback = true
+                self.logger.warn("真实屏幕帧抓取超时，已临时降级到模拟视频帧并进入冷却。请检查是否有多个 Mac host 同时采集或屏幕录制权限异常。")
+            }
+            self.sendVideoFallbackFrame(
+                context,
+                frameId: frameId,
+                session: sessionSnapshot,
+                pipeline: "screen-timeout-mock",
+                retryAfter: retryAfter
+            )
+        }
 
         videoCaptureQueue.async { [weak self, weak context] in
             guard let self else { return }
@@ -1289,12 +1340,24 @@ final class MacHostService {
 
             DispatchQueue.main.async { [weak self, weak context] in
                 guard let self, let context else { return }
+                guard context.videoCaptureToken == captureToken else {
+                    return
+                }
+                guard context.isVideoCaptureInFlight else {
+                    return
+                }
                 context.isVideoCaptureInFlight = false
                 guard context.videoTimer != nil else {
                     return
                 }
 
                 if let capturedFrame {
+                    if context.reportedVideoCaptureFallback || context.consecutiveVideoCaptureFailures > 0 {
+                        self.logger.info("真实屏幕帧采集已恢复。")
+                    }
+                    context.reportedVideoCaptureFallback = false
+                    context.consecutiveVideoCaptureFailures = 0
+                    context.screenCaptureRetryAfter = nil
                     var frame = capturedFrame.jsonObject(
                         frameId: frameId,
                         timestamp: ISO8601DateFormatter().string(from: Date()),
@@ -1309,18 +1372,44 @@ final class MacHostService {
                     return
                 }
 
+                context.consecutiveVideoCaptureFailures += 1
+                let shouldCooldown = context.consecutiveVideoCaptureFailures >= self.maxConsecutiveVideoCaptureFailuresBeforeCooldown
+                let retryAfter = shouldCooldown ? Date().addingTimeInterval(self.screenCaptureCooldownSeconds) : nil
+                if let retryAfter {
+                    context.screenCaptureRetryAfter = retryAfter
+                }
                 if !context.reportedVideoCaptureFallback {
                     context.reportedVideoCaptureFallback = true
                     self.logger.warn("真实屏幕帧抓取失败，已临时回退到模拟视频帧。请检查屏幕录制权限或重新启动服务。")
                 }
 
-                var fallbackFrame = self.makeMockVideoFrame(frameId, session: sessionSnapshot)
-                fallbackFrame["capturePipeline"] = "screen-fallback-mock"
-                fallbackFrame["droppedFrames"] = context.droppedVideoFrames
-                context.droppedVideoFrames = 0
-                self.send(fallbackFrame, to: context)
+                self.sendVideoFallbackFrame(
+                    context,
+                    frameId: frameId,
+                    session: sessionSnapshot,
+                    pipeline: shouldCooldown ? "screen-cooldown-mock" : "screen-fallback-mock",
+                    retryAfter: retryAfter
+                )
             }
         }
+    }
+
+    private func sendVideoFallbackFrame(
+        _ context: ClientContext,
+        frameId: Int,
+        session: HostSession,
+        pipeline: String,
+        retryAfter: Date? = nil
+    ) {
+        var fallbackFrame = makeMockVideoFrame(frameId, session: session)
+        fallbackFrame["capturePipeline"] = pipeline
+        fallbackFrame["droppedFrames"] = context.droppedVideoFrames
+        fallbackFrame["screenCaptureFailureStreak"] = context.consecutiveVideoCaptureFailures
+        if let retryAfter {
+            fallbackFrame["screenCaptureRetryAfter"] = ISO8601DateFormatter().string(from: retryAfter)
+        }
+        context.droppedVideoFrames = 0
+        send(fallbackFrame, to: context)
     }
 
     private func makeMockVideoFrame(_ frameId: Int, session: HostSession) -> [String: Any] {
