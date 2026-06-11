@@ -55,6 +55,7 @@ private final class ClientContext {
     var isClosed = false
     var isWebSocketReady = false
     var isAuthenticated = false
+    var failedAuthAttempts = 0
     var session: HostSession?
     var frameId = 0
     var audioFrameId = 0
@@ -90,6 +91,7 @@ final class MacHostService {
     private let videoCaptureTimeoutMs = 1500
     private let screenCaptureCooldownSeconds: TimeInterval = 4
     private let maxConsecutiveVideoCaptureFailuresBeforeCooldown = 3
+    private let maxAuthAttempts = 3
     private let outboundClipboardFileChunkBytes = 64 * 1024
     private let maxOutboundClipboardFileBytes = 64 * 1024 * 1024
 
@@ -452,14 +454,23 @@ final class MacHostService {
         let password = message["password"] as? String
         let ok = password == configuration.pairingPassword
         context.isAuthenticated = ok
+        if ok {
+            context.failedAuthAttempts = 0
+        } else {
+            context.failedAuthAttempts += 1
+        }
         logger.info(ok ? "认证通过" : "认证失败")
+        let attemptsRemaining = max(0, maxAuthAttempts - context.failedAuthAttempts)
+        let shouldClose = !ok && attemptsRemaining == 0
         send([
             "type": "auth_result",
             "ok": ok,
             "code": ok ? "" : "LAN002",
-            "reason": ok ? "" : "连接密码不正确",
+            "reason": ok ? "" : (shouldClose ? "连接密码错误次数过多，请重新连接后再试。" : "连接密码不正确"),
             "message": ok ? "验证通过" : "密码错误",
-        ], to: context)
+            "attemptsRemaining": attemptsRemaining,
+            "maxAttempts": maxAuthAttempts,
+        ], to: context, closeAfterSend: shouldClose)
     }
 
     private func handleSessionOffer(_ data: Data, message: [String: Any], to context: ClientContext) {
@@ -1616,7 +1627,7 @@ final class MacHostService {
         send(["type": "error", "code": code, "message": message], to: context)
     }
 
-    private func send(_ message: [String: Any], to context: ClientContext) {
+    private func send(_ message: [String: Any], to context: ClientContext, closeAfterSend: Bool = false) {
         guard !context.isClosed else {
             return
         }
@@ -1639,6 +1650,11 @@ final class MacHostService {
                     return
                 }
                 self?.logger.warn("发送 WebSocket 消息失败：\(error.localizedDescription)")
+                return
+            }
+            if closeAfterSend, let context {
+                self?.logger.warn("认证失败次数过多，已关闭连接。")
+                self?.close(context)
             }
         })
     }

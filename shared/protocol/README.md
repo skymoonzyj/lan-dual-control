@@ -28,6 +28,7 @@
 
 当前假 Mac 服务会用 `video_frame` JSON 消息发送 `data-url` 模拟帧，便于 Windows 端提前验证渲染流程。
 当前 Windows 被控端骨架也会发送模拟 `video_frame`，便于后续 Mac 控制端提前验证反向控制画面渲染。
+认证失败仍使用 `LAN002`；被控端可在 `auth_result` 中返回 `attemptsRemaining` 和 `maxAttempts`，连续失败耗尽后可以主动关闭连接。
 局域网自动发现当前以 `/discovery` HTTP 响应为权威设备信息；macOS 被控端会额外发布 `_lan-dual-control._tcp` Bonjour/mDNS 服务，TXT 记录提供 `path=/discovery` 和 `controlPort`，供原生层发现后再拉取完整 JSON。
 macOS 被控端真实屏幕帧当前使用 `capturePipeline: "background-jpeg"`，并可在 `droppedFrames` 字段中报告后台编码忙碌时丢弃的调度次数。
 FPS 诊断字段约定：`requestedFps` 表示控制端请求值，`fps` 表示被控端实际发送目标值，`maxScreenFps` 表示被控端真实屏幕采集上限，`frameIntervalMs` 表示当前视频定时器间隔。

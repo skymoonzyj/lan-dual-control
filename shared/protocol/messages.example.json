@@ -26,6 +26,29 @@
     "clientPlatform": "windows",
     "protocolVersion": 1
   },
+  "authRequest": {
+    "type": "auth_request",
+    "method": "password",
+    "password": "demo-password"
+  },
+  "authResult": {
+    "type": "auth_result",
+    "ok": true,
+    "code": "",
+    "reason": "",
+    "message": "验证通过",
+    "attemptsRemaining": 3,
+    "maxAttempts": 3
+  },
+  "authResultRejected": {
+    "type": "auth_result",
+    "ok": false,
+    "code": "LAN002",
+    "reason": "连接密码不正确",
+    "message": "密码错误",
+    "attemptsRemaining": 2,
+    "maxAttempts": 3
+  },
   "sessionOffer": {
     "type": "session_offer",
     "wantVideo": true,
