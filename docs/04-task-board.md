@@ -111,7 +111,7 @@ Windows 端：
 - macOS 被控端 JPEG 调试链路默认真实采集上限改为 30 FPS；Windows 控制端会显示实收 FPS、协商帧率和请求帧率，避免把请求值误认为真实帧率。
 - macOS 被控端已接入 CGEvent 输入注入；默认 `LAN_DUAL_INPUT_MODE=inject`，可切到 `log` 做安全联调。
 - Windows 控制端当前已可区分真实 JPEG、H.264 视频帧和模拟视频帧，并记录图片或 WebCodecs 解码失败；`scripts/windows/test-mac-host.ps1` 可用于真机连通自检，显式加 `-ClipboardText -ClipboardFile` 可验证 macOS 文本和文件剪贴板写入。
-- 真 Mac 已通过强校验探针验证真实 JPEG 首帧和 H.264 Annex B 首帧：`-RequireRealVideo` 会拒绝 mock/fallback 视频帧，`-RequireH264` 会确认 SPS/PPS/IDR，`-ExpectInputMode log` 可确认安全输入模式。
+- 真 Mac 已通过强校验探针验证真实 JPEG 首帧、H.264 Annex B 首帧和 PCM 音频帧：`-RequireRealVideo` 会拒绝 mock/fallback 视频帧，`-RequireH264` 会确认 SPS/PPS/IDR，`-RequireAudio` 会确认 `pcm-f32le-base64` payload，`-ExpectInputMode log` 可确认安全输入模式。
 - Windows 控制端已增加 Mac 主机诊断状态条：会汇总 `permissions`、`hostMode`、`capturePipeline`、`source`、WebCodecs 解码状态、`droppedFrames`、`input_ack` 和剪贴板模式，真机权限、输入拒绝、解码失败或采集回退问题可直接在画面内看到。
 - Mac 端已兼容 Windows 端现有 `kind/action/remoteX/remoteY` 输入事件字段。
 - Windows 控制端已新增 Edge 页面级自检脚本 `scripts/windows/test-windows-client-browser.mjs`，可自动打开控制端、连接真实 Mac、读取诊断条并确认视频 surface；当前 Edge headless 不支持 `avc1.420029` 时已验证会自动请求 JPEG 兜底并显示真实 Mac 画面。

@@ -16,6 +16,7 @@ param(
   [switch] $InputEvents,
   [switch] $RequireRealVideo,
   [switch] $RequireH264,
+  [switch] $RequireAudio,
   [string] $ExpectInputMode = ""
 )
 
@@ -63,6 +64,9 @@ try {
   }
   if ($RequireH264) {
     $nodeArgs += "--requireH264"
+  }
+  if ($RequireAudio) {
+    $nodeArgs += "--requireAudio"
   }
   if ($ExpectInputMode) {
     $nodeArgs += @("--expectInputMode", $ExpectInputMode)

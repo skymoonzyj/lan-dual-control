@@ -27,11 +27,15 @@
 - 新增 Web Audio 播放入口，支持 `pcm-f32le-base64` 过渡帧，兼容 `layout=planar` 和 `layout=interleaved`。
 - 音量滑块会实时调整播放增益；关闭声音会释放 AudioContext。
 - Edge 页面级自检新增 `--injectPcmAudio`，可注入 planar PCM 帧验证播放路径。
+- Windows 真机探针新增 `-RequireAudio` / `--requireAudio`，可确认 Mac 返回真实 `pcm-f32le-base64` 音频帧。
 - 已用真实 Mac 连接验证收到 `pcm-f32le` 音频帧后播放计数递增。
 修改文件：
 - `apps/windows-client/app.js`
 - `apps/windows-client/README.md`
 - `scripts/windows/test-windows-client-browser.mjs`
+- `scripts/windows/probe-mac-host.mjs`
+- `scripts/windows/test-mac-host.ps1`
+- `apps/mac-host/README.md`
 - `docs/CURRENT_STATUS.md`
 - `docs/NEXT_ACTIONS.md`
 - `docs/04-task-board.md`
@@ -41,6 +45,7 @@
 - `node --check apps/windows-client/app.js`
 - `node --check scripts/windows/test-windows-client-browser.mjs`
 - `node scripts/windows/test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password --timeoutMs 45000 --injectPcmAudio`
+- `scripts/windows/test-mac-host.ps1 -HostName 192.168.31.122 -RequireH264 -RequireAudio -ExpectInputMode log -TimeoutMs 15000`
 遗留问题：
 - 当前仍是 PCM + base64 过渡格式，带宽较高；后续应接 Opus 或二进制音频帧。
 - 需要继续做长时间播放、静音、音量变化和延迟体验验证。

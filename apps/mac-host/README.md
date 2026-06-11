@@ -99,7 +99,13 @@ scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireH264 -ExpectInpu
 
 `-RequireH264` 会检查 `codec=h264`、`encoding=annexb-base64`、`capturePipeline=screencapturekit-h264`，并解析首帧 Annex B NAL 单元确认关键帧带 SPS、PPS 和 IDR。
 
-验证真实系统声音采集时，可以先让 Mac 播放一声系统提示音，再请求 `wantAudio=true` 的会话；真实音频帧会返回 `codec=pcm-f32le`、`encoding=pcm-f32le-base64`、`audioMode=system-pcm`、`sampleRate=48000`、`channels=2`。当前 Windows 控制端仍只显示音频帧状态，真实播放还需要继续接入 PCM 播放链路。
+验证真实系统声音采集和控制端播放：
+
+```powershell
+scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireH264 -RequireAudio -ExpectInputMode log
+```
+
+`-RequireAudio` 会检查首个真实音频帧：`codec=pcm-f32le`、`encoding=pcm-f32le-base64`、`audioMode=system-pcm`、`sampleRate=48000`、`channels=2`、`frames=960` 和有效 PCM payload。Windows 控制端已可播放该 PCM 帧；页面级自检可加 `--injectPcmAudio` 验证播放入口。
 
 在 Mac 本机验证文本剪贴板双向同步：
 

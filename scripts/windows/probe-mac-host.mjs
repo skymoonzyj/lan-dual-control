@@ -21,6 +21,7 @@ const defaults = {
   inputEvents: false,
   requireRealVideo: false,
   requireH264: false,
+  requireAudio: false,
   preferredVideoCodec: "mjpeg",
   expectInputMode: "",
 };
@@ -55,6 +56,7 @@ function parseArgs(argv) {
   args.inputEvents = booleanArg(args.inputEvents) || booleanArg(args.input);
   args.requireRealVideo = booleanArg(args.requireRealVideo) || booleanArg(args.realVideo);
   args.requireH264 = booleanArg(args.requireH264) || booleanArg(args.h264);
+  args.requireAudio = booleanArg(args.requireAudio) || booleanArg(args.audio);
   args.preferredVideoCodec = String(args.preferredVideoCodec || defaults.preferredVideoCodec).trim().toLowerCase();
   if (args.requireH264) {
     args.preferredVideoCodec = "h264";
@@ -491,6 +493,82 @@ function assertH264VideoFrame(frame, answer) {
   print("OK", `H.264 video confirmed: ${encoding} / ${pipeline} / codecString=${codecString} / nalTypes=${summarizeNalTypes(nalUnits)}`);
 }
 
+function summarizeAudioFrame(frame) {
+  const payload = normalizedText(frame.payload);
+  const estimatedBytes = payload ? Math.round((payload.length * 3) / 4) : 0;
+  return [
+    `codec=${frame.codec || "unknown"}`,
+    frame.encoding ? `encoding=${frame.encoding}` : "",
+    `sampleRate=${frame.sampleRate || "?"}`,
+    `channels=${frame.channels || "?"}`,
+    frame.frames ? `frames=${frame.frames}` : "",
+    frame.layout ? `layout=${frame.layout}` : "",
+    frame.audioMode ? `audioMode=${frame.audioMode}` : "",
+    payload ? `payloadBytes~${estimatedBytes}` : "",
+  ].filter(Boolean).join(" / ");
+}
+
+function assertAudioFrame(frame, answer) {
+  const codec = normalizedText(frame.codec).toLowerCase();
+  const encoding = normalizedText(frame.encoding).toLowerCase();
+  const audioMode = normalizedText(frame.audioMode || answer?.audioMode).toLowerCase();
+  const payload = normalizedText(frame.payload);
+  const sampleRate = Number(frame.sampleRate);
+  const channels = Number(frame.channels);
+  const frames = Number(frame.frames);
+  const layout = normalizedText(frame.layout).toLowerCase();
+  const problems = [];
+
+  if (codec !== "pcm-f32le") {
+    problems.push(`codec=${frame.codec || "missing"}`);
+  }
+  if (encoding !== "pcm-f32le-base64") {
+    problems.push(`encoding=${frame.encoding || "missing"}`);
+  }
+  if (audioMode !== "system-pcm") {
+    problems.push(`audioMode=${audioMode || "missing"}`);
+  }
+  if (sampleRate !== 48000) {
+    problems.push(`sampleRate=${frame.sampleRate || "missing"}`);
+  }
+  if (channels !== 2) {
+    problems.push(`channels=${frame.channels || "missing"}`);
+  }
+  if (!Number.isFinite(frames) || frames <= 0) {
+    problems.push(`frames=${frame.frames || "missing"}`);
+  }
+  if (layout && layout !== "planar" && layout !== "interleaved") {
+    problems.push(`layout=${frame.layout}`);
+  }
+  if (!payload) {
+    problems.push("payload missing");
+  } else {
+    const payloadBuffer = Buffer.from(payload, "base64");
+    const expectedBytes = Number(frame.payloadBytes);
+    if (payloadBuffer.length === 0) {
+      problems.push("payload decoded to 0 bytes");
+    }
+    if (payloadBuffer.length % 4 !== 0) {
+      problems.push(`payloadBytes not Float32 aligned: ${payloadBuffer.length}`);
+    }
+    if (Number.isFinite(expectedBytes) && expectedBytes > 0 && payloadBuffer.length !== expectedBytes) {
+      problems.push(`payloadBytes=${payloadBuffer.length}/${expectedBytes}`);
+    }
+    if (Number.isFinite(frames) && frames > 0 && channels > 0) {
+      const expectedFrameBytes = frames * channels * 4;
+      if (payloadBuffer.length !== expectedFrameBytes) {
+        problems.push(`frameBytes=${payloadBuffer.length}/${expectedFrameBytes}`);
+      }
+    }
+  }
+
+  if (problems.length > 0) {
+    throw new Error(`PCM audio required but got ${summarizeAudioFrame(frame)} (${problems.join("; ")})`);
+  }
+
+  print("OK", `Audio frame confirmed: ${summarizeAudioFrame(frame)}`);
+}
+
 async function probeClipboardText(client, args) {
   const clipboardId = makeProbeId("probe-text");
   const text = `lan-dual-control clipboard probe ${new Date().toISOString()}`;
@@ -883,6 +961,10 @@ async function main() {
       assertH264VideoFrame(frame, answer);
     } else if (args.requireRealVideo) {
       assertRealVideoFrame(frame, answer);
+    }
+    if (args.requireAudio) {
+      const audioFrame = await client.waitFor("audio_frame", Math.max(args.timeoutMs, 10000));
+      assertAudioFrame(audioFrame, answer);
     }
 
     if (args.clipboardText) {
