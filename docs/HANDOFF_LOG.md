@@ -21,6 +21,38 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：把 Windows host 文本剪贴板写入纳入一键自检。
+完成内容：
+- `scripts/windows/test-windows-host.ps1` 默认增加 `--clipboardText` 验证。
+- 新增 `-SkipClipboardText` 开关，特殊环境可跳过文本剪贴板验证。
+- 更新根 README、Windows host README、当前状态、下一步行动和任务板。
+修改文件：
+- `scripts/windows/test-windows-host.ps1`
+- `README.md`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `git diff --check`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-host.ps1`
+验证结果：
+- 临时 Windows host 启动成功，真实 `windows-gdi-jpeg` 首帧通过。
+- 文本剪贴板写入通过：`Clipboard text accepted: 57 chars / mode=system`。
+- 文件剪贴板写入通过：`Clipboard file accepted: 1 file / 128 bytes / saveMode=clipboard`。
+遗留问题：
+- 该自检会写入 Windows 系统剪贴板；需要保留原剪贴板内容时，可后续加保存/恢复逻辑。
+下一步建议：
+- Mac client 文本剪贴板入口推送后，用 `test-mac-client-browser.mjs` 扩展页面级验证，覆盖 Mac 控制 Windows 的剪贴板发送体验。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：新增认证重试策略回归脚本。
 完成内容：
 - 新增 `scripts/windows/test-auth-retry-policy.mjs`。

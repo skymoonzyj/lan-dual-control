@@ -81,7 +81,7 @@ Windows 被控端本机自检可运行：
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-windows-host.ps1
 ```
 
-它会临时启动 Windows 被控端并验证真实 JPEG 首帧和文件剪贴板接收；默认不发送鼠标键盘事件。
+它会临时启动 Windows 被控端并验证真实 JPEG 首帧、文本剪贴板和文件剪贴板接收；默认不发送鼠标键盘事件。
 
 认证重试策略回归可运行：
 

@@ -17,6 +17,7 @@ param(
   [switch] $UseExisting,
   [switch] $KeepRunning,
   [switch] $MockVideo,
+  [switch] $SkipClipboardText,
   [switch] $SkipClipboardFile,
   [switch] $InputEvents
 )
@@ -125,6 +126,9 @@ try {
 
   if (-not $MockVideo) {
     $nodeArgs += "--requireRealVideo"
+  }
+  if (-not $SkipClipboardText) {
+    $nodeArgs += "--clipboardText"
   }
   if (-not $SkipClipboardFile) {
     $nodeArgs += @("--clipboardFile", "--clipboardFileBytes", $ClipboardFileBytes)
