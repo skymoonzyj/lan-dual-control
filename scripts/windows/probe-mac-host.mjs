@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 const defaults = {
   host: "127.0.0.1",
@@ -13,6 +16,7 @@ const defaults = {
   clipboardText: false,
   clipboardHostToClient: false,
   clipboardFile: false,
+  clipboardFileHostToClient: false,
   clipboardFileBytes: 96,
   inputEvents: false,
   requireRealVideo: false,
@@ -40,9 +44,11 @@ function parseArgs(argv) {
   args.fps = Number(args.fps) || defaults.fps;
   args.bandwidthKbps = Number(args.bandwidthKbps) || defaults.bandwidthKbps;
   const clipboardRoundTrip = booleanArg(args.clipboardRoundTrip);
+  const clipboardFileRoundTrip = booleanArg(args.clipboardFileRoundTrip);
   args.clipboardText = booleanArg(args.clipboardText) || booleanArg(args.clipboard) || clipboardRoundTrip;
   args.clipboardHostToClient = booleanArg(args.clipboardHostToClient) || clipboardRoundTrip;
-  args.clipboardFile = booleanArg(args.clipboardFile) || booleanArg(args.clipboard);
+  args.clipboardFile = booleanArg(args.clipboardFile) || booleanArg(args.clipboard) || clipboardFileRoundTrip;
+  args.clipboardFileHostToClient = booleanArg(args.clipboardFileHostToClient) || clipboardFileRoundTrip;
   args.clipboardFileBytes = Number(args.clipboardFileBytes) || defaults.clipboardFileBytes;
   args.inputEvents = booleanArg(args.inputEvents) || booleanArg(args.input);
   args.requireRealVideo = booleanArg(args.requireRealVideo) || booleanArg(args.realVideo);
@@ -97,9 +103,9 @@ function delay(ms) {
   });
 }
 
-function runCommand(command, { input = "" } = {}) {
+function runCommand(command, { input = "", args = [] } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, [], { stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
     const stdout = [];
     const stderr = [];
 
@@ -137,6 +143,19 @@ async function writeLocalMacClipboardText(text) {
   await runCommand("pbcopy", { input: text });
 }
 
+function escapeAppleScriptString(value) {
+  return String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+}
+
+async function writeLocalMacClipboardFile(filePath) {
+  if (process.platform !== "darwin") {
+    throw new Error("clipboard file host_to_client probe must run on macOS so it can update the Mac pasteboard");
+  }
+  await runCommand("osascript", {
+    input: `set the clipboard to (POSIX file "${escapeAppleScriptString(filePath)}")\n`,
+  });
+}
+
 async function fetchDiscovery(args) {
   const url = `http://${args.host}:${args.port}/discovery`;
   const controller = new AbortController();
@@ -172,7 +191,7 @@ async function openWebSocket(args) {
 
 function createSocketClient(socket, args) {
   const pending = new Map();
-  const frames = [];
+  const queues = new Map();
 
   socket.addEventListener("message", (event) => {
     let message;
@@ -182,10 +201,6 @@ function createSocketClient(socket, args) {
       return;
     }
 
-    if (message.type === "video_frame") {
-      frames.push(message);
-    }
-
     const waiters = pending.get(message.type) || [];
     if (waiters.length > 0) {
       const waiter = waiters.shift();
@@ -193,7 +208,19 @@ function createSocketClient(socket, args) {
       if (waiters.length === 0) {
         pending.delete(message.type);
       }
+      return;
     }
+
+    if (message.type === "audio_frame") {
+      return;
+    }
+
+    const queue = queues.get(message.type) || [];
+    if (message.type === "video_frame" && queue.length >= 2) {
+      queue.shift();
+    }
+    queue.push(message);
+    queues.set(message.type, queue);
   });
 
   socket.addEventListener("close", () => {
@@ -206,8 +233,13 @@ function createSocketClient(socket, args) {
   function waitFor(type, timeoutMs = args.timeoutMs) {
     return withTimeout(
       new Promise((resolve, reject) => {
-        if (type === "video_frame" && frames.length > 0) {
-          resolve(frames.shift());
+        const queue = queues.get(type) || [];
+        if (queue.length > 0) {
+          const message = queue.shift();
+          if (queue.length === 0) {
+            queues.delete(type);
+          }
+          resolve(message);
           return;
         }
         const waiters = pending.get(type) || [];
@@ -456,6 +488,105 @@ async function probeClipboardFile(client, args) {
   );
 }
 
+async function probeClipboardFileHostToClient(client, args) {
+  const previousText = await readLocalMacClipboardText();
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "lan-dual-file-clip-"));
+  const fileName = `lan-dual-host-file-${Date.now().toString(16)}.txt`;
+  const filePath = path.join(tempDir, fileName);
+  const payload = makeProbeFilePayload(args.clipboardFileBytes);
+
+  try {
+    await fs.writeFile(filePath, payload);
+    const offerPromise = client.waitFor("clipboard_file_offer", Math.max(args.timeoutMs, 12000));
+    await writeLocalMacClipboardFile(filePath);
+    const offer = await offerPromise;
+    if (offer.direction !== "host_to_client") {
+      throw new Error(`clipboard_file_offer direction mismatch: ${offer.direction || "missing"}`);
+    }
+    if (!offer.transferId) {
+      throw new Error("clipboard_file_offer missing transferId");
+    }
+    if (Number(offer.fileCount) !== 1) {
+      throw new Error(`clipboard_file_offer fileCount mismatch: ${offer.fileCount || 0}`);
+    }
+    const offeredFile = Array.isArray(offer.files) ? offer.files[0] : null;
+    if (!offeredFile) {
+      throw new Error("clipboard_file_offer missing file metadata");
+    }
+    if (offeredFile.name !== fileName) {
+      throw new Error(`clipboard_file_offer filename mismatch: ${offeredFile.name || "missing"}`);
+    }
+    if (Number(offeredFile.size) !== payload.byteLength) {
+      throw new Error(`clipboard_file_offer size mismatch: ${offeredFile.size || 0}/${payload.byteLength}`);
+    }
+
+    const transferId = offer.transferId;
+    client.send({
+      type: "clipboard_file_response",
+      transferId,
+      accepted: true,
+      saveMode: "memory-only",
+      maxChunkBytes: 64 * 1024,
+      reason: "probe accepts host_to_client file clipboard",
+    });
+
+    const chunks = [];
+    let receivedBytes = 0;
+    const totalBytes = Number(offer.totalBytes) || payload.byteLength;
+    while (receivedBytes < totalBytes) {
+      const chunk = await client.waitFor("clipboard_file_chunk", args.timeoutMs);
+      if (chunk.transferId !== transferId) {
+        throw new Error(`clipboard_file_chunk id mismatch: ${chunk.transferId || "missing"}`);
+      }
+      if (Number(chunk.fileIndex) !== 0) {
+        throw new Error(`clipboard_file_chunk fileIndex mismatch: ${chunk.fileIndex || "missing"}`);
+      }
+      if (chunk.encoding !== "base64") {
+        throw new Error(`clipboard_file_chunk encoding mismatch: ${chunk.encoding || "missing"}`);
+      }
+      const data = Buffer.from(String(chunk.dataBase64 || ""), "base64");
+      const offset = Number(chunk.offset) || 0;
+      chunks.push({ offset, data });
+      receivedBytes += data.byteLength;
+      client.send({
+        type: "clipboard_file_progress",
+        transferId,
+        receivedBytes,
+        totalBytes,
+      });
+    }
+
+    const complete = await client.waitFor("clipboard_file_complete", args.timeoutMs);
+    if (complete.transferId !== transferId) {
+      throw new Error(`clipboard_file_complete id mismatch: ${complete.transferId || "missing"}`);
+    }
+
+    const received = Buffer.concat(
+      chunks
+        .sort((left, right) => left.offset - right.offset)
+        .map((chunk) => chunk.data),
+    );
+    if (!received.equals(payload)) {
+      throw new Error(`clipboard_file host_to_client payload mismatch: ${received.byteLength}/${payload.byteLength}`);
+    }
+
+    client.send({
+      type: "clipboard_file_result",
+      transferId,
+      accepted: true,
+      receivedBytes,
+      totalBytes,
+      fileCount: 1,
+      saveMode: "memory-only",
+      reason: "probe reconstructed host_to_client file payload",
+    });
+    print("OK", `Clipboard file host_to_client received: ${fileName} / ${receivedBytes} bytes`);
+  } finally {
+    await writeLocalMacClipboardText(previousText);
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
 async function probeInputEvents(client, args) {
   const events = [
     {
@@ -600,6 +731,9 @@ async function main() {
     }
     if (args.clipboardFile) {
       await probeClipboardFile(client, args);
+    }
+    if (args.clipboardFileHostToClient) {
+      await probeClipboardFileHostToClient(client, args);
     }
     if (args.inputEvents) {
       await probeInputEvents(client, args);

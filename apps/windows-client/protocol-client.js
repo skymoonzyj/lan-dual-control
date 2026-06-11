@@ -659,11 +659,27 @@
       });
     }
 
+    sendClipboardFileProgress(progress) {
+      if (!this.connected) return;
+      this.send({
+        type: "clipboard_file_progress",
+        ...progress,
+      });
+    }
+
     sendClipboardFileComplete(complete) {
       if (!this.connected) return;
       this.send({
         type: "clipboard_file_complete",
         ...complete,
+      });
+    }
+
+    sendClipboardFileResult(result) {
+      if (!this.connected) return;
+      this.send({
+        type: "clipboard_file_result",
+        ...result,
       });
     }
 

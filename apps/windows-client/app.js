@@ -261,6 +261,8 @@ const state = {
   clipboardSequence: 0,
   fileTransferSequence: 0,
   fileTransferActive: false,
+  remoteFileTransfers: new Map(),
+  receivedClipboardFiles: [],
   controlDirection: "windows_to_mac",
   pendingControlDirection: "",
   reverseRequestId: "",
@@ -1138,6 +1140,7 @@ function setUiConnecting(host, port) {
   state.connected = false;
   state.videoFrames = 0;
   state.lastFrameDecodeErrorId = "";
+  state.remoteFileTransfers.clear();
   resetReverseControlState();
   setConnectionState("connecting", `正在连接 ${host}:${port}`);
   resetHostDiagnostics(`诊断：正在连接 ${host}:${port}`);
@@ -1228,6 +1231,7 @@ function setUiDisconnected(statusText = "未连接", logDetail = "会话已关�
   elements.disconnectButton.disabled = true;
   elements.reverseButton.disabled = true;
   state.fileTransferActive = false;
+  state.remoteFileTransfers.clear();
   updateFileClipboardButton();
   addLog("断开连接", logDetail);
 }
@@ -1775,6 +1779,15 @@ function arrayBufferToBase64(buffer) {
   return window.btoa(binary);
 }
 
+function base64ToUint8Array(base64) {
+  const binary = window.atob(String(base64 || ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
 function yieldToUi() {
   return new Promise((resolve) => window.setTimeout(resolve, 0));
 }
@@ -1991,13 +2004,213 @@ async function sendClipboardFiles() {
   await sendFilesToRemote(files, { sourceLabel: "文件剪贴板", clearFileInput: true });
 }
 
+function normalizeRemoteFileName(name, index) {
+  const fallback = `clipboard-${index + 1}`;
+  const cleaned = String(name || fallback)
+    .replace(/[\\/:*?"<>|\0]/g, "_")
+    .trim();
+  if (!cleaned || cleaned === "." || cleaned === "..") {
+    return fallback;
+  }
+  return cleaned;
+}
+
 function handleClipboardFileOffer(message) {
   const fileCount = Array.isArray(message.files) ? message.files.length : 0;
-  addLog("文件剪贴板", `收到远端文件清单 ${fileCount} 个，当前先不落地保存`);
+  const transferId = message.transferId || makeFileTransferId();
+  const files = Array.isArray(message.files)
+    ? message.files.map((file, fallbackIndex) => {
+        const index = Number.isInteger(Number(file.index)) ? Number(file.index) : fallbackIndex;
+        return {
+          index,
+          name: normalizeRemoteFileName(file.name, index),
+          size: Math.max(0, Number(file.size) || 0),
+          mimeType: file.mimeType || "application/octet-stream",
+          lastModified: Number(file.lastModified) || Date.now(),
+          chunks: [],
+          receivedBytes: 0,
+        };
+      })
+    : [];
+  const totalBytes = Math.max(0, Number(message.totalBytes) || files.reduce((sum, file) => sum + file.size, 0));
+
+  if (!elements.clipboardToggle.checked) {
+    addLog("文件剪贴板", "已拒绝远端文件：剪贴板同步已关闭");
+    state.client?.sendClipboardFileResponse({
+      transferId,
+      accepted: false,
+      code: "LAN011",
+      reason: "Windows 控制端已关闭剪贴板同步",
+    });
+    return;
+  }
+
+  if (files.length === 0 && totalBytes > 0) {
+    addLog("文件剪贴板", "已拒绝远端文件：缺少文件清单");
+    state.client?.sendClipboardFileResponse({
+      transferId,
+      accepted: false,
+      code: "LAN011",
+      reason: "远端文件剪贴板缺少文件清单",
+    });
+    return;
+  }
+
+  if (totalBytes > maxClipboardFileBytes) {
+    const reason = `远端文件总大小 ${formatBytes(totalBytes)}，超过当前上限 ${formatBytes(maxClipboardFileBytes)}`;
+    addLog("文件剪贴板", reason);
+    state.client?.sendClipboardFileResponse({
+      transferId,
+      accepted: false,
+      code: "LAN011",
+      reason,
+    });
+    return;
+  }
+
+  state.remoteFileTransfers.set(transferId, {
+    transferId,
+    totalBytes,
+    receivedBytes: 0,
+    fileCount: Number(message.fileCount) || files.length,
+    files,
+  });
+
+  elements.clipboardText.textContent = `剪贴板：准备接收远端 ${fileCount || files.length} 个文件`;
+  addLog("文件剪贴板", `收到远端文件清单 ${fileCount || files.length} 个，共 ${formatBytes(totalBytes)}，暂存到浏览器内存`);
   state.client?.sendClipboardFileResponse({
-    transferId: message.transferId,
-    accepted: false,
-    reason: "Windows 控制端接收文件到系统剪贴板需要桌面原生模块，后续接入。",
+    transferId,
+    accepted: true,
+    saveMode: "memory-only",
+    maxChunkBytes: fileChunkSizeBytes,
+    reason: "Windows 控制端已准备在浏览器内存中接收文件。",
+  });
+}
+
+function handleClipboardFileChunk(message) {
+  const transferId = message.transferId || "";
+  const transfer = state.remoteFileTransfers.get(transferId);
+  if (!transfer) {
+    addLog("文件剪贴板", `收到未知文件块，已忽略 · ${transferId || "missing"}`);
+    return;
+  }
+
+  try {
+    const fileIndex = Math.max(0, Number(message.fileIndex) || 0);
+    let file = transfer.files.find((item) => item.index === fileIndex);
+    if (!file) {
+      file = {
+        index: fileIndex,
+        name: normalizeRemoteFileName(message.fileName, fileIndex),
+        size: 0,
+        mimeType: "application/octet-stream",
+        lastModified: Date.now(),
+        chunks: [],
+        receivedBytes: 0,
+      };
+      transfer.files.push(file);
+    }
+
+    const bytes = base64ToUint8Array(message.dataBase64);
+    const offset = Math.max(0, Number(message.offset) || file.receivedBytes);
+    file.chunks.push({ offset, bytes });
+    file.receivedBytes += bytes.byteLength;
+    transfer.receivedBytes += bytes.byteLength;
+
+    const totalBytes = transfer.totalBytes || Number(message.totalBytes) || transfer.receivedBytes;
+    const percent = totalBytes === 0 ? 100 : Math.min(100, Math.round((transfer.receivedBytes / totalBytes) * 100));
+    elements.clipboardText.textContent = `剪贴板：接收远端文件 ${percent}%`;
+    state.client?.sendClipboardFileProgress({
+      transferId,
+      receivedBytes: transfer.receivedBytes,
+      totalBytes,
+    });
+  } catch (error) {
+    const reason = error?.message || "远端文件块解析失败";
+    state.remoteFileTransfers.delete(transferId);
+    elements.clipboardText.textContent = "剪贴板：远端文件接收失败";
+    addLog("文件剪贴板失败", reason);
+    state.client?.sendClipboardFileResult({
+      transferId,
+      accepted: false,
+      code: "LAN011",
+      reason,
+    });
+  }
+}
+
+function handleClipboardFileComplete(message) {
+  const transferId = message.transferId || "";
+  const transfer = state.remoteFileTransfers.get(transferId);
+  if (!transfer) {
+    addLog("文件剪贴板", `收到未知文件完成消息，已忽略 · ${transferId || "missing"}`);
+    return;
+  }
+
+  const totalBytes = transfer.totalBytes || Number(message.totalBytes) || transfer.receivedBytes;
+  const files = transfer.files
+    .slice()
+    .sort((left, right) => left.index - right.index)
+    .map((file) => {
+      const orderedChunks = file.chunks
+        .slice()
+        .sort((left, right) => left.offset - right.offset)
+        .map((chunk) => chunk.bytes);
+      const blob = new Blob(orderedChunks, { type: file.mimeType || "application/octet-stream" });
+      const objectUrl =
+        typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+          ? URL.createObjectURL(blob)
+          : "";
+      return {
+        name: file.name,
+        size: blob.size,
+        mimeType: blob.type,
+        lastModified: file.lastModified,
+        blob,
+        objectUrl,
+      };
+    });
+  const receivedBytes = files.reduce((sum, file) => sum + file.size, 0);
+  const expectedFileCount = Number(message.fileCount) || transfer.fileCount || files.length;
+  const complete =
+    files.length >= expectedFileCount &&
+    receivedBytes >= totalBytes &&
+    transfer.files.every((file) => !file.size || file.receivedBytes >= file.size);
+
+  if (!complete) {
+    const reason = `远端文件接收不完整：${formatBytes(receivedBytes)}/${formatBytes(totalBytes)}`;
+    state.remoteFileTransfers.delete(transferId);
+    elements.clipboardText.textContent = "剪贴板：远端文件接收不完整";
+    addLog("文件剪贴板失败", reason);
+    state.client?.sendClipboardFileResult({
+      transferId,
+      accepted: false,
+      code: "LAN011",
+      reason,
+      receivedBytes,
+      totalBytes,
+      fileCount: files.length,
+    });
+    return;
+  }
+
+  state.remoteFileTransfers.delete(transferId);
+  for (const file of state.receivedClipboardFiles) {
+    if (file.objectUrl && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+      URL.revokeObjectURL(file.objectUrl);
+    }
+  }
+  state.receivedClipboardFiles = files;
+  elements.clipboardText.textContent = `剪贴板：已接收远端 ${files.length} 个文件（内存暂存）`;
+  addLog("文件剪贴板", `已接收远端 ${files.length} 个文件，共 ${formatBytes(receivedBytes)}，当前为浏览器内存暂存`);
+  state.client?.sendClipboardFileResult({
+    transferId,
+    accepted: true,
+    receivedBytes,
+    totalBytes,
+    fileCount: files.length,
+    saveMode: "memory-only",
+    reason: "Windows 控制端已在浏览器内存中接收文件，系统文件剪贴板后续接入桌面原生模块。",
   });
 }
 
@@ -2225,6 +2438,16 @@ function handleProtocolMessage(message) {
 
   if (message.type === "clipboard_file_offer") {
     handleClipboardFileOffer(message);
+    return;
+  }
+
+  if (message.type === "clipboard_file_chunk") {
+    handleClipboardFileChunk(message);
+    return;
+  }
+
+  if (message.type === "clipboard_file_complete") {
+    handleClipboardFileComplete(message);
     return;
   }
 

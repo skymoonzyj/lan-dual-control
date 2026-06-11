@@ -27,6 +27,23 @@ final class MacClipboardBridge {
         #endif
     }
 
+    func readFileURLs() -> [URL] {
+        #if os(macOS)
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [
+            .urlReadingFileURLsOnly: true,
+        ]
+        let objects = NSPasteboard.general.readObjects(forClasses: [NSURL.self], options: options) ?? []
+        return objects.compactMap { object in
+            if let url = object as? URL {
+                return url
+            }
+            return (object as? NSURL).map { $0 as URL }
+        }
+        #else
+        return []
+        #endif
+    }
+
     @discardableResult
     func writeText(_ text: String) -> Bool {
         #if os(macOS)

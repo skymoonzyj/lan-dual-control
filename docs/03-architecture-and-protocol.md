@@ -497,10 +497,16 @@ macOS 默认按键映射：
   "type": "clipboard_file_offer",
   "transferId": "uuid",
   "direction": "host_to_client",
+  "totalBytes": 1048576,
+  "fileCount": 1,
+  "maxChunkBytes": 65536,
   "files": [
     {
+      "index": 0,
       "name": "archive.zip",
       "size": 1048576,
+      "mimeType": "application/zip",
+      "lastModified": 1780000000000,
       "sha256": "hash-value"
     }
   ]
@@ -574,6 +580,8 @@ macOS 默认按键映射：
 
 - `saveMode: "clipboard"` 表示接收端已把文件写入系统文件剪贴板；`saveMode: "memory-only"` 表示只接收和记录文件块。
 - macOS 被控端会把收到的文件保存到系统临时目录，再把文件 URL 写入 `NSPasteboard`，未接收完整时不会写入系统文件剪贴板。
+- macOS 被控端读取本机文件剪贴板时，第一版只发送普通文件、跳过目录，并限制总量不超过 64 MB。
+- Windows 控制端收到远端文件时，第一版先在浏览器内存中重组并返回 `saveMode: "memory-only"`；写入 Windows 系统文件剪贴板需要桌面原生模块继续接入。
 
 文件剪贴板规则：
 

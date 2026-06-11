@@ -19,6 +19,7 @@
 - CGEvent 输入注入：支持鼠标移动、左/右/中键按下抬起、滚轮、常用键盘按键和 macOS 快捷键修饰键。
 - macOS 系统文本剪贴板读写：接收 Windows 文字后写入 `NSPasteboard`，并把 Mac 本机复制的新文字推送给 Windows。
 - macOS 系统文件剪贴板接收：接收 Windows 文件块后保存到临时目录，并把文件 URL 写入 `NSPasteboard`。
+- macOS 系统文件剪贴板推送：Mac 本机复制普通文件后，按 `clipboard_file_*` 分块发送给 Windows 控制端；当前控制端先以内存模式接收。
 
 ## 在 Mac 上运行
 
@@ -88,6 +89,12 @@ scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireRealVideo -Expec
 node scripts/windows/probe-mac-host.mjs --host 127.0.0.1 --port 43770 --clipboardRoundTrip
 ```
 
+在 Mac 本机验证文件剪贴板从 Mac 推送到控制端：
+
+```bash
+node scripts/windows/probe-mac-host.mjs --host 127.0.0.1 --port 43770 --clipboardFileHostToClient
+```
+
 ## 首次运行需要打开的 macOS 权限
 
 进入系统设置：
@@ -115,3 +122,4 @@ node scripts/windows/probe-mac-host.mjs --host 127.0.0.1 --port 43770 --clipboar
 5. Windows 控制端能通过 `input_event` 控制 Mac 鼠标、滚轮和常用快捷键。
 6. Windows 和 Mac 能互相同步系统文本剪贴板。
 7. Windows 发送文件剪贴板后，Mac 能把文件写入系统剪贴板并可在 Finder 粘贴。
+8. Mac 复制普通文件后，Windows 控制端能接收并重组完整文件。

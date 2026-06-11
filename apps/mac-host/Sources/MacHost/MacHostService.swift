@@ -34,6 +34,21 @@ private struct FileTransferState {
     var files: [Int: FileState]
 }
 
+private struct OutboundFileTransferState {
+    struct FileState {
+        var index: Int
+        var name: String
+        var size: Int
+        var url: URL
+        var lastModifiedMs: Int
+    }
+
+    var transferId: String
+    var totalBytes: Int
+    var files: [FileState]
+    var maxChunkBytes: Int
+}
+
 private final class ClientContext {
     let connection: NWConnection
     var buffer = Data()
@@ -46,11 +61,13 @@ private final class ClientContext {
     var audioTimer: DispatchSourceTimer?
     var clipboardTimer: DispatchSourceTimer?
     var fileTransfers: [String: FileTransferState] = [:]
+    var outboundFileTransfers: [String: OutboundFileTransferState] = [:]
     var reportedVideoCaptureFallback = false
     var isVideoCaptureInFlight = false
     var droppedVideoFrames = 0
     var lastClipboardChangeCount = 0
     var lastClipboardText = ""
+    var lastClipboardFileSignature = ""
 
     init(connection: NWConnection) {
         self.connection = connection
@@ -65,6 +82,8 @@ final class MacHostService {
     private let clipboardBridge: MacClipboardBridge
     private let logger: HostLogger
     private let videoCaptureQueue = DispatchQueue(label: "lan-dual-control.mac-host.video-capture", qos: .userInteractive)
+    private let outboundClipboardFileChunkBytes = 64 * 1024
+    private let maxOutboundClipboardFileBytes = 64 * 1024 * 1024
 
     private var listener: NWListener?
     private var activeConnections: [ObjectIdentifier: ClientContext] = [:]
@@ -365,6 +384,12 @@ final class MacHostService {
             handleClipboardFileChunk(message, to: context)
         case "clipboard_file_complete":
             handleClipboardFileComplete(message, to: context)
+        case "clipboard_file_response":
+            handleOutboundClipboardFileResponse(message, to: context)
+        case "clipboard_file_progress":
+            handleOutboundClipboardFileProgress(message, to: context)
+        case "clipboard_file_result":
+            handleOutboundClipboardFileResult(message, to: context)
         case "reverse_control_request":
             handleReverseControlRequest(message, to: context)
         case "reverse_control_response":
@@ -484,7 +509,7 @@ final class MacHostService {
         if wantAudio {
             startAudioFrames(context)
         }
-        wantClipboardText ? startClipboardTextWatcher(context) : stopClipboardTextWatcher(context)
+        wantClipboardText || wantClipboardFile ? startClipboardWatcher(context) : stopClipboardWatcher(context)
     }
 
     private func handleDisplaySettings(_ message: [String: Any], to context: ClientContext) {
@@ -532,7 +557,7 @@ final class MacHostService {
         ], to: context)
         startVideoFrames(context)
         audioEnabled ? startAudioFrames(context) : stopAudioFrames(context)
-        clipboardText ? startClipboardTextWatcher(context) : stopClipboardTextWatcher(context)
+        clipboardText || clipboardFile ? startClipboardWatcher(context) : stopClipboardWatcher(context)
     }
 
     private func handleAudioSettings(_ message: [String: Any], to context: ClientContext) {
@@ -655,16 +680,22 @@ final class MacHostService {
         ], to: context)
     }
 
-    private func startClipboardTextWatcher(_ context: ClientContext) {
-        stopClipboardTextWatcher(context)
+    private func startClipboardWatcher(_ context: ClientContext) {
+        stopClipboardWatcher(context)
         context.lastClipboardChangeCount = clipboardBridge.changeCount()
         context.lastClipboardText = clipboardBridge.readText() ?? ""
+        context.lastClipboardFileSignature = clipboardFileSignature(clipboardBridge.readFileURLs())
 
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + .milliseconds(900), repeating: .milliseconds(900))
         timer.setEventHandler { [weak self, weak context] in
             guard let self, let context else { return }
-            guard context.isAuthenticated, context.session?.clipboardTextEnabled == true else {
+            guard context.isAuthenticated else {
+                return
+            }
+            let wantsClipboardText = context.session?.clipboardTextEnabled == true
+            let wantsClipboardFile = context.session?.clipboardFileEnabled == true
+            guard wantsClipboardText || wantsClipboardFile else {
                 return
             }
 
@@ -674,14 +705,29 @@ final class MacHostService {
             }
 
             context.lastClipboardChangeCount = changeCount
+            let fileURLs = self.clipboardBridge.readFileURLs()
+            if wantsClipboardFile, !fileURLs.isEmpty {
+                let signature = self.clipboardFileSignature(fileURLs)
+                if context.session?.clipboardFileEnabled == true, signature != context.lastClipboardFileSignature {
+                    context.lastClipboardFileSignature = signature
+                    self.sendClipboardFiles(fileURLs, to: context)
+                }
+                return
+            }
+            context.lastClipboardFileSignature = ""
+
             guard let text = self.clipboardBridge.readText(), !text.isEmpty else {
                 return
             }
             guard text != context.lastClipboardText else {
                 return
             }
+            guard wantsClipboardText else {
+                return
+            }
 
             context.lastClipboardText = text
+            context.lastClipboardFileSignature = ""
             let clipboardId = "mac-clip-\(Int(Date().timeIntervalSince1970 * 1000))"
             self.send([
                 "type": "clipboard_text",
@@ -697,9 +743,203 @@ final class MacHostService {
         timer.resume()
     }
 
-    private func stopClipboardTextWatcher(_ context: ClientContext) {
+    private func stopClipboardWatcher(_ context: ClientContext) {
         context.clipboardTimer?.cancel()
         context.clipboardTimer = nil
+    }
+
+    private func clipboardFileSignature(_ urls: [URL]) -> String {
+        makeOutboundFileStates(from: urls)
+            .map { file in
+                "\(file.url.standardizedFileURL.path)|\(file.size)|\(file.lastModifiedMs)"
+            }
+            .joined(separator: "\n")
+    }
+
+    private func sendClipboardFiles(_ urls: [URL], to context: ClientContext) {
+        guard context.session?.clipboardFileEnabled == true else {
+            return
+        }
+
+        let files = makeOutboundFileStates(from: urls)
+        guard !files.isEmpty else {
+            logger.info("macOS 文件剪贴板没有可发送的普通文件，已跳过目录或不可读项目。")
+            return
+        }
+
+        let totalBytes = files.reduce(0) { $0 + $1.size }
+        guard totalBytes <= maxOutboundClipboardFileBytes else {
+            logger.warn("macOS 文件剪贴板总大小 \(totalBytes) 字节超过上限 \(maxOutboundClipboardFileBytes) 字节，已拒绝发送。")
+            return
+        }
+
+        let transferId = "mac-file-\(Int(Date().timeIntervalSince1970 * 1000))-\(UUID().uuidString.prefix(8))"
+        let transfer = OutboundFileTransferState(
+            transferId: transferId,
+            totalBytes: totalBytes,
+            files: files,
+            maxChunkBytes: outboundClipboardFileChunkBytes
+        )
+        context.outboundFileTransfers[transferId] = transfer
+
+        let fileMetas = files.map { file in
+            [
+                "index": file.index,
+                "name": file.name,
+                "size": file.size,
+                "mimeType": "application/octet-stream",
+                "lastModified": file.lastModifiedMs,
+            ] as [String: Any]
+        }
+
+        send([
+            "type": "clipboard_file_offer",
+            "transferId": transferId,
+            "direction": "host_to_client",
+            "totalBytes": totalBytes,
+            "fileCount": files.count,
+            "maxChunkBytes": outboundClipboardFileChunkBytes,
+            "files": fileMetas,
+        ], to: context)
+        logger.info("已发送 macOS 文件剪贴板清单：\(files.count) 个文件，\(totalBytes) 字节")
+    }
+
+    private func makeOutboundFileStates(from urls: [URL]) -> [OutboundFileTransferState.FileState] {
+        var files: [OutboundFileTransferState.FileState] = []
+        for url in urls {
+            let standardizedURL = url.standardizedFileURL
+            guard let values = try? standardizedURL.resourceValues(forKeys: [
+                .isRegularFileKey,
+                .fileSizeKey,
+                .contentModificationDateKey,
+            ]), values.isRegularFile == true else {
+                continue
+            }
+
+            let size = values.fileSize ?? fileSize(standardizedURL)
+            guard size >= 0 else {
+                continue
+            }
+
+            let modifiedAt = values.contentModificationDate ?? fileModificationDate(standardizedURL) ?? Date(timeIntervalSince1970: 0)
+            files.append(OutboundFileTransferState.FileState(
+                index: files.count,
+                name: sanitizeFileName(standardizedURL.lastPathComponent),
+                size: size,
+                url: standardizedURL,
+                lastModifiedMs: Int(modifiedAt.timeIntervalSince1970 * 1000)
+            ))
+        }
+        return files
+    }
+
+    private func fileSize(_ url: URL) -> Int {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        if let size = attributes?[.size] as? NSNumber {
+            return size.intValue
+        }
+        return -1
+    }
+
+    private func fileModificationDate(_ url: URL) -> Date? {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        return attributes?[.modificationDate] as? Date
+    }
+
+    private func handleOutboundClipboardFileResponse(_ message: [String: Any], to context: ClientContext) {
+        let transferId = stringValue(message["transferId"]) ?? ""
+        guard var transfer = context.outboundFileTransfers[transferId] else {
+            logger.warn("收到未知 macOS 文件剪贴板响应：\(transferId)")
+            return
+        }
+
+        guard boolValue(message["accepted"]) else {
+            context.outboundFileTransfers.removeValue(forKey: transferId)
+            logger.warn("Windows 控制端拒绝接收 macOS 文件剪贴板：\(stringValue(message["reason"]) ?? stringValue(message["code"]) ?? "unknown")")
+            return
+        }
+
+        if let maxChunkBytes = positiveInt(message["maxChunkBytes"]) {
+            transfer.maxChunkBytes = min(maxChunkBytes, outboundClipboardFileChunkBytes)
+            context.outboundFileTransfers[transferId] = transfer
+        }
+
+        sendOutboundClipboardFileChunks(transfer, to: context)
+    }
+
+    private func handleOutboundClipboardFileProgress(_ message: [String: Any], to context: ClientContext) {
+        let transferId = stringValue(message["transferId"]) ?? ""
+        guard context.outboundFileTransfers[transferId] != nil else {
+            return
+        }
+        let receivedBytes = positiveInt(message["receivedBytes"]) ?? 0
+        let totalBytes = positiveInt(message["totalBytes"]) ?? 0
+        logger.info("Windows 控制端接收 macOS 文件剪贴板进度：\(receivedBytes)/\(totalBytes) 字节")
+    }
+
+    private func handleOutboundClipboardFileResult(_ message: [String: Any], to context: ClientContext) {
+        let transferId = stringValue(message["transferId"]) ?? ""
+        guard context.outboundFileTransfers.removeValue(forKey: transferId) != nil else {
+            return
+        }
+
+        if boolValue(message["accepted"]) {
+            logger.info("Windows 控制端已完成接收 macOS 文件剪贴板：\(positiveInt(message["receivedBytes"]) ?? 0) 字节")
+        } else {
+            logger.warn("Windows 控制端接收 macOS 文件剪贴板失败：\(stringValue(message["reason"]) ?? stringValue(message["code"]) ?? "unknown")")
+        }
+    }
+
+    private func sendOutboundClipboardFileChunks(_ transfer: OutboundFileTransferState, to context: ClientContext) {
+        var sentBytes = 0
+        for file in transfer.files {
+            guard let handle = try? FileHandle(forReadingFrom: file.url) else {
+                sendError(code: "LAN006", message: "读取 macOS 文件剪贴板失败：\(file.name)", to: context)
+                context.outboundFileTransfers.removeValue(forKey: transfer.transferId)
+                return
+            }
+            defer {
+                try? handle.close()
+            }
+
+            var offset = 0
+            var chunkIndex = 0
+            while offset < file.size {
+                do {
+                    guard let chunk = try handle.read(upToCount: transfer.maxChunkBytes), !chunk.isEmpty else {
+                        break
+                    }
+                    sentBytes += chunk.count
+                    send([
+                        "type": "clipboard_file_chunk",
+                        "transferId": transfer.transferId,
+                        "fileIndex": file.index,
+                        "fileName": file.name,
+                        "chunkIndex": chunkIndex,
+                        "offset": offset,
+                        "bytes": chunk.count,
+                        "sentBytes": sentBytes,
+                        "totalBytes": transfer.totalBytes,
+                        "encoding": "base64",
+                        "dataBase64": chunk.base64EncodedString(),
+                    ], to: context)
+                    offset += chunk.count
+                    chunkIndex += 1
+                } catch {
+                    sendError(code: "LAN006", message: "读取 macOS 文件剪贴板块失败：\(error.localizedDescription)", to: context)
+                    context.outboundFileTransfers.removeValue(forKey: transfer.transferId)
+                    return
+                }
+            }
+        }
+
+        send([
+            "type": "clipboard_file_complete",
+            "transferId": transfer.transferId,
+            "totalBytes": transfer.totalBytes,
+            "fileCount": transfer.files.count,
+        ], to: context)
+        logger.info("macOS 文件剪贴板块发送完成：\(transfer.files.count) 个文件，\(sentBytes) 字节")
     }
 
     private func handleClipboardFileOffer(_ message: [String: Any], to context: ClientContext) {
@@ -821,6 +1061,8 @@ final class MacHostService {
             "reason": accepted ? "macOS 系统文件剪贴板已写入。" : (isComplete ? "macOS 系统文件剪贴板写入失败。" : "文件剪贴板块未接收完整。"),
         ], to: context)
         if accepted {
+            context.lastClipboardFileSignature = clipboardFileSignature(urls)
+            context.lastClipboardChangeCount = clipboardBridge.changeCount()
             context.fileTransfers.removeValue(forKey: transferId)
         }
     }
@@ -1183,6 +1425,12 @@ final class MacHostService {
                 "code": "LAN002",
                 "reason": reason,
             ], to: context)
+        case "clipboard_file_response", "clipboard_file_progress", "clipboard_file_result":
+            send([
+                "type": "error",
+                "code": "LAN002",
+                "message": reason,
+            ], to: context)
         case "reverse_control_request":
             send([
                 "type": "reverse_control_response",
@@ -1296,8 +1544,9 @@ final class MacHostService {
     private func close(_ context: ClientContext) {
         stopVideoFrames(context)
         stopAudioFrames(context)
-        stopClipboardTextWatcher(context)
+        stopClipboardWatcher(context)
         cleanupIncompleteFileTransfers(context)
+        context.outboundFileTransfers.removeAll()
         activeConnections.removeValue(forKey: ObjectIdentifier(context.connection))
         context.connection.cancel()
         logger.info("连接已关闭")
