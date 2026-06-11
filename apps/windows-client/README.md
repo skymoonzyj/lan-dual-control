@@ -32,8 +32,8 @@
 - 支持声音接收骨架：处理 `audio_settings_ack` 和模拟 `audio_frame`，状态栏显示音频帧、音量和延迟。
 - 支持真实 Mac 视频帧诊断：连接后可区分 `jpeg` 真实视频帧和 `mock-svg` 模拟帧，并记录图片解码失败。
 - 支持实收 FPS 统计：刷新率卡片会区分“实收 FPS、协商 Hz、请求 Hz”，避免把控制端请求值误认为真实帧率。
-- 支持 H.264 流式解码入口：当前窗口环境支持 WebCodecs 时会优先请求 `h264`，收到 `annexb-base64` 帧后用 `VideoDecoder` 渲染到视频画布；失败时保留 JPEG 兜底链路。
-- 支持 Mac 主机诊断状态条：显示主机模式、采集管线、视频来源、丢帧、权限和剪贴板通道。
+- 支持 H.264 流式解码入口：当前窗口环境支持 WebCodecs 时会优先请求 `h264`，收到 `annexb-base64` 帧后用 `VideoDecoder` 渲染到视频画布；连续失败时自动请求 JPEG 兜底。
+- 支持 Mac 主机诊断状态条：显示主机模式、采集管线、视频来源、WebCodecs 解码状态、丢帧、权限、输入模式和剪贴板通道。
 - 支持 `Ctrl+V` 粘贴前预同步本机剪贴板：文字走 `clipboard_text`，图片等可读剪贴板项走 `clipboard_file_*`，资源管理器文件路径后续接入桌面原生模块。
 - 支持文件剪贴板发送骨架：可手动选择文件、压缩包或图片，按 `clipboard_file_*` 消息分块发送并显示进度。
 - 支持远端文件收件托盘：Mac 复制普通文件后，控制端可在内存中接收、查看并手动下载，后续再接 Windows 系统文件剪贴板。
@@ -55,6 +55,12 @@ E:\codex\lan-dual-control\apps\windows-client\index.html
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-coordinate-mapping.mjs
+```
+
+真实 Mac 页面级自检可自动启动本地控制端页面、打开 Edge、连接 Mac，并确认诊断条和视频画面：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password
 ```
 
 ### 方式二：使用本地静态服务

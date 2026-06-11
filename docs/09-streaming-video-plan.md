@@ -115,7 +115,7 @@ H.264 帧第一版仍沿用 `video_frame`：
 当前实现进度：
 - Mac 端已新增 `SCStream` + `VTCompressionSession` 的 H.264 输出入口。
 - Mac 真机已通过本机强校验：`probe-mac-host.mjs --requireH264 --expectInputMode log` 返回 `h264` / `annexb-base64` / `screencapturekit-h264`。
-- Windows 端已新增 WebCodecs `VideoDecoder` 渲染入口。
+- Windows 端已新增 WebCodecs `VideoDecoder` 渲染入口、解码状态诊断和连续失败后的 JPEG 兜底请求。
 - 过渡期仍通过 JSON `video_frame.payload` 传输 base64，后续再迁移到二进制 WebSocket 帧。
 
 ## Windows 端任务
