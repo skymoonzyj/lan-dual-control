@@ -267,6 +267,7 @@ const state = {
   negotiatedFps: 0,
   actualVideoFps: 0,
   h264Decoder: null,
+  h264DecoderKey: "",
   h264DecoderCodec: "",
   h264DecoderStatus: "idle",
   h264DecoderLastError: "",
@@ -1467,6 +1468,7 @@ function resetVideoDecoder({ resetFallback = false } = {}) {
     }
   }
   state.h264Decoder = null;
+  state.h264DecoderKey = "";
   state.h264DecoderCodec = "";
   state.h264DecoderStatus = "idle";
   state.h264DecoderLastError = "";
@@ -2896,6 +2898,38 @@ function recordH264DecodeError(error) {
   }
 }
 
+async function selectH264DecoderConfig(baseConfig, format) {
+  const candidates = [
+    {
+      label: format,
+      config: { ...baseConfig, avc: { format } },
+    },
+    {
+      label: "default",
+      config: baseConfig,
+    },
+  ];
+
+  if (typeof window.VideoDecoder.isConfigSupported !== "function") {
+    return candidates[0];
+  }
+
+  const failures = [];
+  for (const candidate of candidates) {
+    try {
+      const support = await window.VideoDecoder.isConfigSupported(candidate.config);
+      if (support.supported) {
+        return candidate;
+      }
+      failures.push(`${candidate.label}=unsupported`);
+    } catch (error) {
+      failures.push(`${candidate.label}=${error?.message || "error"}`);
+    }
+  }
+
+  throw new Error(`当前窗口环境不支持 ${baseConfig.codec}（${failures.join("；")}）`);
+}
+
 async function renderH264VideoFrame(frame) {
   if (!frame.payload) {
     addLog("视频帧", "收到 H.264 视频帧但缺少 payload");
@@ -2980,7 +3014,7 @@ async function ensureH264Decoder(frame) {
     ? "annexb"
     : "avc";
   const decoderKey = `${codec}:${format}`;
-  if (state.h264Decoder && state.h264Decoder.state !== "closed" && state.h264DecoderCodec === decoderKey) {
+  if (state.h264Decoder && state.h264Decoder.state !== "closed" && state.h264DecoderKey === decoderKey) {
     return state.h264Decoder;
   }
 
@@ -2992,27 +3026,15 @@ async function ensureH264Decoder(frame) {
   state.h264DecoderWarned = previousWarned;
   state.h264DecoderLastError = previousLastError;
   state.h264DecoderStatus = "configuring";
-  state.h264DecoderCodec = decoderKey;
+  state.h264DecoderKey = decoderKey;
+  state.h264DecoderCodec = `${decoderKey}:checking`;
   updateH264DecoderDiagnostics();
   const baseConfig = {
     codec,
     hardwareAcceleration: "prefer-hardware",
     optimizeForLatency: true,
   };
-  let config = { ...baseConfig, avc: { format } };
-
-  if (typeof window.VideoDecoder.isConfigSupported === "function") {
-    let support;
-    try {
-      support = await window.VideoDecoder.isConfigSupported(config);
-    } catch {
-      config = baseConfig;
-      support = await window.VideoDecoder.isConfigSupported(config);
-    }
-    if (!support.supported) {
-      throw new Error(`当前窗口环境不支持 ${codec}`);
-    }
-  }
+  const { config, label } = await selectH264DecoderConfig(baseConfig, format);
 
   const decoder = new VideoDecoder({
     output: drawDecodedVideoFrame,
@@ -3022,7 +3044,8 @@ async function ensureH264Decoder(frame) {
   });
   decoder.configure(config);
   state.h264Decoder = decoder;
-  state.h264DecoderCodec = decoderKey;
+  state.h264DecoderKey = decoderKey;
+  state.h264DecoderCodec = `${codec}:${label}`;
   state.h264DecoderStatus = "configured";
   updateH264DecoderDiagnostics();
   return decoder;
