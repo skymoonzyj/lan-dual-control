@@ -1,5 +1,6 @@
 const { LocalMockTransport, ProtocolClient, WebSocketTransport, protocolVersion } =
   window.LanDualProtocol;
+const { computeDisplayedFrameRect, mapClientPointToRemote } = window.LanDualMapping;
 
 const elements = {
   transportSelect: document.querySelector("#transportSelect"),
@@ -1640,64 +1641,28 @@ function applyScaleMode() {
 
 function getDisplayedFrameRect() {
   const canvasRect = elements.remoteCanvas.getBoundingClientRect();
-  const scrollLeft = elements.remoteCanvas.scrollLeft;
-  const scrollTop = elements.remoteCanvas.scrollTop;
-  const frameWidth = Math.max(1, state.remoteFrameWidth);
-  const frameHeight = Math.max(1, state.remoteFrameHeight);
-  const canvasWidth = Math.max(1, elements.remoteCanvas.clientWidth);
-  const canvasHeight = Math.max(1, elements.remoteCanvas.clientHeight);
-  const scaleMode = elements.scaleModeSelect.value;
-
-  if (scaleMode === "stretch") {
-    return {
-      left: canvasRect.left,
-      top: canvasRect.top,
-      width: canvasWidth,
-      height: canvasHeight,
-    };
-  }
-
-  if (scaleMode === "original") {
-    return {
-      left: canvasRect.left - scrollLeft,
-      top: canvasRect.top - scrollTop,
-      width: frameWidth,
-      height: frameHeight,
-    };
-  }
-
-  const scale = Math.min(canvasWidth / frameWidth, canvasHeight / frameHeight);
-  const width = frameWidth * scale;
-  const height = frameHeight * scale;
-
-  return {
-    left: canvasRect.left + (canvasWidth - width) / 2,
-    top: canvasRect.top + (canvasHeight - height) / 2,
-    width,
-    height,
-  };
+  return computeDisplayedFrameRect({
+    canvasLeft: canvasRect.left,
+    canvasTop: canvasRect.top,
+    canvasWidth: elements.remoteCanvas.clientWidth,
+    canvasHeight: elements.remoteCanvas.clientHeight,
+    scrollLeft: elements.remoteCanvas.scrollLeft,
+    scrollTop: elements.remoteCanvas.scrollTop,
+    frameWidth: state.remoteFrameWidth,
+    frameHeight: state.remoteFrameHeight,
+    scaleMode: elements.scaleModeSelect.value,
+  });
 }
 
 function mapPointerToRemote(event) {
   const frameRect = getDisplayedFrameRect();
-  const x = (event.clientX - frameRect.left) / frameRect.width;
-  const y = (event.clientY - frameRect.top) / frameRect.height;
-  const normalizedX = Math.min(1, Math.max(0, x));
-  const normalizedY = Math.min(1, Math.max(0, y));
-  const remoteMaxX = Math.max(0, state.remoteFrameWidth - 1);
-  const remoteMaxY = Math.max(0, state.remoteFrameHeight - 1);
-
-  if (x < 0 || x > 1 || y < 0 || y > 1) {
-    return null;
-  }
-
-  return {
-    x: normalizedX,
-    y: normalizedY,
-    remoteX: Math.round(normalizedX * remoteMaxX),
-    remoteY: Math.round(normalizedY * remoteMaxY),
+  return mapClientPointToRemote({
+    clientX: event.clientX,
+    clientY: event.clientY,
     frameRect,
-  };
+    remoteFrameWidth: state.remoteFrameWidth,
+    remoteFrameHeight: state.remoteFrameHeight,
+  });
 }
 
 function getMouseButtonName(button) {

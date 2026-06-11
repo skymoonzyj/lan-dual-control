@@ -201,8 +201,10 @@ $gitOk = Test-CommandAvailable "git"
 
 Write-Section "Syntax and protocol checks"
 if ($nodeOk) {
+  Invoke-Check "Windows client mapping-utils.js" "node" @("--check", "apps\windows-client\mapping-utils.js") | Out-Null
   Invoke-Check "Windows client app.js" "node" @("--check", "apps\windows-client\app.js") | Out-Null
   Invoke-Check "Windows client protocol-client.js" "node" @("--check", "apps\windows-client\protocol-client.js") | Out-Null
+  Invoke-Check "Windows client coordinate mapping" "node" @("scripts\windows\test-coordinate-mapping.mjs") | Out-Null
   Invoke-Check "Mock Mac host" "node" @("--check", "apps\mock-mac-host\server.mjs") | Out-Null
   Invoke-Check "Protocol example JSON" "node" @("-e", "const fs=require('fs'); JSON.parse(fs.readFileSync('shared/protocol/messages.example.json','utf8'));") | Out-Null
 }

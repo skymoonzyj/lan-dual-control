@@ -70,6 +70,8 @@ cd E:\codex\lan-dual-control
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dev-lab.ps1
 ```
 
+健康检查会同时运行 Windows 控制端语法检查、坐标映射回归、假 Mac 服务语法检查、协议示例 JSON 解析和 Windows 被控端 `npm.cmd run check`。
+
 启动本地联调服务：
 
 ```powershell

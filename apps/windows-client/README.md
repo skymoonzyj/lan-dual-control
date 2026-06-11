@@ -18,6 +18,7 @@
   - 码率：5 Mbps、10 Mbps、15 Mbps、20 Mbps、40 Mbps、50 Mbps。
   - 声音：开关、音量、模拟音频帧状态。
 - 支持画面缩放模式：适应窗口、原始比例、拉伸填充。
+- 窗口缩放坐标映射有独立回归脚本，覆盖适应窗口黑边、原始比例滚动和拉伸填充。
 - 支持多显示器选择骨架：被控端返回 `displays` 后可在控制端选择目标显示器，并通过 `display_settings.displayId` 下发。
 - 支持远控 macOS 默认按键映射：Win -> Command、Alt -> Option、Ctrl -> Control，可手动调整并一键还原。
 - 默认开启 Windows 常用快捷键兼容：Ctrl+C/V/X/A/Z/S/F/P/O/N/W/T/R 会按 macOS Command 快捷键发送，Ctrl+Y 会转为 Command+Shift+Z。
@@ -46,6 +47,12 @@ E:\codex\lan-dual-control\apps\windows-client\index.html
 ```
 
 默认选择“本地模拟”时，不需要启动任何服务。
+
+坐标映射回归可单独运行：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-coordinate-mapping.mjs
+```
 
 ### 方式二：使用本地静态服务
 
