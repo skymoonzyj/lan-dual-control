@@ -83,6 +83,20 @@ $env:LAN_DUAL_WINDOWS_MAX_SCREEN_FPS="4"   # 当前过渡采集上限，1-8
 node .\server.mjs 43772 127.0.0.1
 ```
 
+## 一键自检
+
+Windows 本机可直接运行自检脚本。它会在 `127.0.0.1:43772` 临时启动 Windows 被控端，验证 `/discovery`、WebSocket 认证、真实 JPEG 首帧和文件剪贴板接收，结束后自动关闭临时服务：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\test-windows-host.ps1
+```
+
+默认不会发送鼠标键盘事件，避免无人值守时误操作。有人看着屏幕、需要验证 SendInput 时再加：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\test-windows-host.ps1 -InputEvents -InputMode system
+```
+
 ## 下一步
 
 1. 使用 Mac 控制端连接 `ws://Windows-IP:43770`。
