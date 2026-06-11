@@ -33,6 +33,7 @@
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
 | Mac Codex | `scripts/mac/check-input-keymap.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 04:18 | 新增 Mac 键盘映射覆盖自检；`keyCodeByCode=115`、`keyCodeByKey=113`，常用键组全覆盖。 |
+| Windows Codex | `apps/windows-host/src/windows-host-service.mjs`、`apps/windows-host/README.md`、`docs/CURRENT_STATUS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md` | 2026-06-12 04:15 | Windows 被控端认证失败限制对齐 Mac：同一连接 3 次失败后返回 `LAN002` 并关闭；正常和错误路径均已验证。 |
 | Mac Codex | `scripts/mac/observe-mac-audio.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 04:09 | 新增 Mac 系统声音持续帧观察脚本；真实 43770/system-pcm 10 秒收到 501 帧，约 50fps，最大间隔 22ms。 |
 | Windows Codex | `scripts/windows/test-windows-host.ps1`、`apps/windows-host/README.md`、`README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md` | 2026-06-12 04:08 | 新增 Windows 被控端本机一键自检脚本；已验证真实 JPEG 首帧和文件剪贴板 `saveMode=clipboard`，默认不发输入事件。 |
 | Mac Codex | `scripts/mac/stress-mac-host.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 04:00 | 新增 Mac host H.264+PCM 连续连接稳定性脚本；真实 43770/log 连续 10 次通过，FD 30->30。 |

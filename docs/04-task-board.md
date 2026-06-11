@@ -189,7 +189,7 @@ Mac 端：
 当前备注：
 
 - 已创建 `apps/windows-host` Node.js WebSocket 被控服务骨架。
-- 当前可完成 hello/auth/session 握手，未认证连接会被拒绝；认证后可发送 Windows 系统截图 JPEG `video_frame`、模拟 `audio_frame`、接收 `input_event`、处理 `clipboard_text`。
+- 当前可完成 hello/auth/session 握手，未认证连接会被拒绝，同一连接内密码错误 3 次后会关闭；认证后可发送 Windows 系统截图 JPEG `video_frame`、模拟 `audio_frame`、接收 `input_event`、处理 `clipboard_text`。
 - Windows 被控端在 Windows 上会用 PowerShell `Set-Clipboard` 写入系统文本剪贴板，非 Windows 开发环境回退为 `memory-only`，并在 `/discovery`、`hello_ack`、`session_answer` 暴露剪贴板模式。
 - Windows 被控端可接收 `clipboard_file_*` 文件块并落到临时目录；在 Windows 上会用 PowerShell `Set-Clipboard -Path` 写入系统文件剪贴板，非 Windows 开发环境回退为 `saveMode: temp`。
 - Windows 被控端已接入最小 SendInput 桥：Windows 上通过 PowerShell/C# 调用 `SendInput`/`SetCursorPos` 注入鼠标、滚轮和常用键盘事件，非 Windows 开发环境回退为日志模式。

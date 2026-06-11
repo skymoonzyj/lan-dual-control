@@ -5,7 +5,7 @@
 ## 当前内容
 
 - Node.js WebSocket 被控服务，默认端口 `43770`。
-- `hello`、`auth_request`、`session_offer`、`display_settings`、`input_event`、`input_ack`、`clipboard_text` 和 `reverse_control_request` 消息处理；未认证连接会被拒绝。
+- `hello`、`auth_request`、`session_offer`、`display_settings`、`input_event`、`input_ack`、`clipboard_text` 和 `reverse_control_request` 消息处理；未认证连接会被拒绝，同一连接内密码错误 3 次后会关闭连接。
 - Windows 系统截图 `video_frame` 输出：在 Windows 桌面会话中用系统截图生成 JPEG data URL，失败时回退模拟帧。
 - 模拟 `audio_frame` 输出，用于提前验证声音接收状态、音量设置和音频协议。
 - 屏幕采集当前是 PowerShell/System.Drawing 过渡实现，后续升级 Windows Graphics Capture 以提升帧率和延迟。

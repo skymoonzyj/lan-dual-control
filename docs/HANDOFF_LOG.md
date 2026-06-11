@@ -21,6 +21,34 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：对齐 Windows 被控端认证失败重试限制。
+完成内容：
+- Windows 被控端同一 WebSocket 连接内最多允许 3 次密码认证失败。
+- `auth_result` 现在会返回 `attemptsRemaining` 和 `maxAttempts`；第三次失败返回 `LAN002` 后关闭连接。
+- 认证成功会重置失败计数。
+- 更新 Windows host README、当前状态和任务板。
+修改文件：
+- `apps/windows-host/src/windows-host-service.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `npm.cmd run check` in `apps/windows-host`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-host.ps1`
+- 临时 WebSocket 错误密码验证：连续 3 次错误密码分别返回剩余 `2/1/0`，第三次后连接关闭。
+遗留问题：
+- 假 Mac 服务仍未加认证重试限制；如果要完全一致，后续可以补 mock 服务的失败次数模拟。
+下一步建议：
+- 后续 Windows host 安全相关改动后，继续同时验证正常认证路径和错误认证关闭路径。
+是否改了协议：否；使用 Mac 端已经采用的 `attemptsRemaining` / `maxAttempts` 字段。
+是否需要另一端配合：不需要。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：补充 Windows 被控端本机一键自检入口，方便后续 Mac 反控 Windows 前做快速回归。
 完成内容：
 - 新增 `scripts/windows/test-windows-host.ps1`，默认在 `127.0.0.1:43772` 临时启动 Windows 被控端，跑完后自动关闭。

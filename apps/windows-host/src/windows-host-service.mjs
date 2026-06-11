@@ -9,6 +9,7 @@ import { decodeFrames, encodeTextFrame, makeAcceptKey } from "./websocket-codec.
 
 const protocolVersion = 1;
 const defaultPassword = "demo-password";
+const maxAuthAttempts = 3;
 
 function makeMessageId(prefix = "winhost") {
   const random = Math.random().toString(16).slice(2, 8);
@@ -66,6 +67,7 @@ function createClient(socket, context) {
   let captureBusy = false;
   let audioTimer = null;
   let authenticated = false;
+  let failedAuthAttempts = 0;
 
   function send(message) {
     socket.write(
@@ -164,13 +166,26 @@ function createClient(socket, context) {
     if (message.type === "auth_request") {
       const ok = message.password === context.password;
       authenticated = ok;
+      if (ok) {
+        failedAuthAttempts = 0;
+      } else {
+        failedAuthAttempts += 1;
+      }
+      const attemptsRemaining = Math.max(0, maxAuthAttempts - failedAuthAttempts);
+      const shouldClose = !ok && attemptsRemaining === 0;
       send({
         type: "auth_result",
         ok,
         code: ok ? "" : "LAN002",
-        reason: ok ? "" : "连接密码不正确",
+        reason: ok ? "" : shouldClose ? "连接密码错误次数过多，请重新连接后再试。" : "连接密码不正确",
+        message: ok ? "验证通过" : "密码错误",
+        attemptsRemaining,
+        maxAttempts: maxAuthAttempts,
       });
-      context.logger.info(ok ? "认证通过" : "认证失败");
+      context.logger.info(ok ? "认证通过" : `认证失败，剩余 ${attemptsRemaining} 次`);
+      if (shouldClose) {
+        socket.end();
+      }
       return;
     }
 
