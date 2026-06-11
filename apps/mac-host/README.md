@@ -107,6 +107,14 @@ scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireH264 -RequireAud
 
 `-RequireAudio` 会检查首个真实音频帧：`codec=pcm-f32le`、`encoding=pcm-f32le-base64`、`audioMode=system-pcm`、`sampleRate=48000`、`channels=2`、`frames=960` 和有效 PCM payload。Windows 控制端已可播放该 PCM 帧；页面级自检可加 `--injectPcmAudio` 验证播放入口。
 
+在 Mac 本机做 H.264 和 PCM 音频连续重连稳定性检查：
+
+```bash
+node scripts/mac/stress-mac-host.mjs --iterations 20 --expectInputMode log
+```
+
+该脚本会复用 `scripts/windows/probe-mac-host.mjs`，默认每次都要求 H.264 首帧和真实 `pcm-f32le` 音频帧通过，并在 macOS 上采样监听进程的 RSS/FD 变化，便于排查连续建连后的资源释放问题。
+
 在 Mac 本机验证文本剪贴板双向同步：
 
 ```bash

@@ -29,7 +29,7 @@
 ## Mac Codex 可接任务
 
 - 继续验证真实 macOS 系统声音采集，重点看静音、无系统声音、音量变化和长时间运行。
-- 继续压测 ScreenCaptureKit + VideoToolbox H.264，重点看断开释放、连续重连、延迟和 CPU 占用。
+- 继续压测 ScreenCaptureKit + VideoToolbox H.264，重点看断开释放、连续重连、延迟和 CPU 占用；可用 `node scripts/mac/stress-mac-host.mjs --iterations 50 --expectInputMode log` 做连续连接回归。
 - 扩展 CGEvent 键盘映射，重点验证中文输入法、Command 组合键和功能键。
 - 增加真实多显示器枚举和采集切换。
 - 开始设计 Mac 控制 Windows 的最小控制窗口。
