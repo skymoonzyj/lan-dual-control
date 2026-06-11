@@ -2,222 +2,190 @@
 
 const defaults = {
   server: process.env.CODEX_LINK_SERVER || "http://127.0.0.1:17888",
-  intervalMs: 2000,
+  token: process.env.CODEX_LINK_TOKEN || "",
+  intervalMs: 1000,
 };
 
-function parseArgs(argv) {
-  const options = { ...defaults, _: [] };
-  for (let index = 0; index < argv.length; index += 1) {
-    const item = argv[index];
-    if (!item.startsWith("--")) {
-      options._.push(item);
-      continue;
-    }
+const args = parseArgs(process.argv.slice(2));
+const command = args._[0] || "help";
 
-    const key = item.slice(2);
-    const next = argv[index + 1];
-    if (!next || next.startsWith("--")) {
-      options[key] = true;
-      continue;
-    }
-    options[key] = next;
-    index += 1;
+try {
+  if (command === "help" || args.help) {
+    printHelp();
+  } else if (command === "watch") {
+    await watch(args);
+  } else if (command === "state") {
+    printState(await get(args, "/api/state"));
+  } else if (command === "status") {
+    await post(args, "/api/status", {
+      device: args.device || args.from || "Codex",
+      role: args.role || "",
+      status: args.status || "online",
+      note: args.note || args._.slice(1).join(" "),
+    });
+  } else if (command === "send") {
+    await post(args, "/api/message", {
+      from: args.from || args.device || "Codex",
+      text: args.text || args._.slice(1).join(" "),
+      type: args.type || "message",
+    });
+  } else if (command === "call") {
+    await post(args, "/api/call", {
+      status: args.status || "CALLING",
+      from: args.from || args.device || "Codex",
+      need: args.need || "",
+      goal: args.goal || args._.slice(1).join(" "),
+      environment: args.environment || "",
+      connection: args.connection || "",
+      command: args.command || "",
+      expected: args.expected || "",
+      actual: args.actual || "",
+      blockedBy: args.blockedBy || "",
+      ask: args.ask || "",
+      timeout: args.timeout || "",
+      owner: args.owner || args.need || "",
+    });
+  } else if (command === "clear-call") {
+    await post(args, "/api/clear-call", {});
+  } else {
+    throw new Error(`Unknown command: ${command}`);
   }
-  options.server = String(options.server || defaults.server).replace(/\/+$/, "");
-  options.intervalMs = Number(options.intervalMs || options.interval || defaults.intervalMs) || defaults.intervalMs;
-  return options;
-}
-
-function usage() {
-  return `
-Usage:
-  node scripts/codex-link-client.mjs --server http://host:17888 watch [--once]
-  node scripts/codex-link-client.mjs --server http://host:17888 status --device "Mac Codex" --role "Mac 端" --status online --note "我已上线"
-  node scripts/codex-link-client.mjs --server http://host:17888 send --from "Mac Codex" --text "mac-host 已启动"
-  node scripts/codex-link-client.mjs --server http://host:17888 call --from "Mac Codex" --need "Windows Codex" --goal "验证连接" --ask "请运行探针"
-  node scripts/codex-link-client.mjs --server http://host:17888 clear-call
-`.trim();
-}
-
-async function requestJson(options, path, { method = "GET", body } = {}) {
-  const response = await fetch(`${options.server}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.token ? { "X-Codex-Link-Token": String(options.token) } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  if (!response.ok) {
-    throw new Error(`${method} ${path} failed: HTTP ${response.status} ${await response.text()}`);
-  }
-  return response.json();
-}
-
-function formatTime(value) {
-  if (!value) return "";
-  try {
-    return new Date(value).toLocaleString("zh-CN", { hour12: false });
-  } catch {
-    return String(value);
-  }
-}
-
-function formatCall(call) {
-  if (!call) return "当前呼叫：暂无";
-  return [
-    `当前呼叫：${call.status || "UNKNOWN"}`,
-    `发起端：${call.from || ""}`,
-    `需要配合端：${call.need || ""}`,
-    `目标：${call.goal || ""}`,
-    `连接信息：${call.connection || ""}`,
-    `测试命令：${call.command || ""}`,
-    `需要对方做什么：${call.ask || ""}`,
-    `实际结果：${call.actual || ""}`,
-    `阻塞原因：${call.blockedBy || ""}`,
-    `更新时间：${formatTime(call.updatedAt)}`,
-  ].filter((line) => !line.endsWith("：")).join("\n");
-}
-
-function formatStatuses(statuses = {}) {
-  const entries = Object.entries(statuses).sort(([, a], [, b]) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
-  if (entries.length === 0) return "状态：暂无";
-  return [
-    "状态：",
-    ...entries.map(([device, item]) => `- ${device} [${item.role || ""}] ${item.status || ""} ${item.note || ""} (${formatTime(item.updatedAt)})`),
-  ].join("\n");
-}
-
-function formatEvents(events = [], limit = 12) {
-  const recent = events.slice(-limit);
-  if (recent.length === 0) return "事件：暂无";
-  return [
-    "事件：",
-    ...recent.map((event) => `- ${formatTime(event.at)} ${event.type || ""} ${event.from || ""}: ${event.text || ""}`),
-  ].join("\n");
-}
-
-function renderState(state, { limit } = {}) {
-  return [
-    `更新时间：${formatTime(state.updatedAt)}`,
-    formatCall(state.currentCall),
-    formatStatuses(state.statuses),
-    formatEvents(state.events, limit),
-  ].join("\n\n");
+} catch (error) {
+  console.error(`Codex Link client error: ${error.message}`);
+  process.exitCode = 1;
 }
 
 async function watch(options) {
   const seen = new Set();
-  let first = true;
+  let lastCallSignature = "";
+  const once = Boolean(options.once);
 
   while (true) {
-    const state = await requestJson(options, "/api/state");
-    const events = state.events || [];
-    const unseen = events.filter((event) => !seen.has(event.id));
-    for (const event of events) {
-      if (event.id) seen.add(event.id);
+    const state = await get(options, "/api/state");
+    const callSignature = JSON.stringify(state.currentCall || null);
+    if (callSignature !== lastCallSignature) {
+      lastCallSignature = callSignature;
+      console.log(state.currentCall ? formatCall(state.currentCall) : "[call] none");
     }
 
-    if (first || unseen.length > 0) {
-      const view = first ? state : { ...state, events: unseen };
-      console.log(renderState(view, { limit: Number(options.limit || 12) }));
-      console.log("");
+    for (const event of state.events || []) {
+      if (seen.has(event.id)) continue;
+      seen.add(event.id);
+      console.log(formatEvent(event));
     }
-    first = false;
 
-    if (options.once) return;
-    await new Promise((resolve) => setTimeout(resolve, options.intervalMs));
+    if (once) break;
+    await sleep(options.intervalMs);
   }
 }
 
-async function postStatus(options) {
-  requireOption(options, "device");
-  const result = await requestJson(options, "/api/status", {
-    method: "POST",
-    body: {
-      device: options.device,
-      role: options.role || "",
-      status: options.status || "online",
-      note: options.note || "",
-    },
-  });
-  console.log(`状态已发送：${options.device} ${options.status || "online"}`);
+async function post(options, path, body) {
+  const result = await request(options, "POST", path, body);
+  if (result?.ok === false) throw new Error(result.error || "request failed");
+  console.log("ok");
   return result;
 }
 
-async function sendMessage(options) {
-  const from = options.from || options.device || "unknown";
-  requireOption({ ...options, from }, "from");
-  requireOption(options, "text");
-  await requestJson(options, "/api/message", {
-    method: "POST",
-    body: { from, text: options.text },
-  });
-  console.log(`消息已发送：${from}`);
+async function get(options, path) {
+  return request(options, "GET", path);
 }
 
-async function postCall(options) {
-  await requestJson(options, "/api/call", {
-    method: "POST",
-    body: {
-      status: options.status || "CALLING",
-      from: options.from || options.device || "unknown",
-      need: options.need || "",
-      goal: options.goal || "",
-      connection: options.connection || "",
-      command: options.command || "",
-      ask: options.ask || "",
-      actual: options.actual || "",
-      blockedBy: options.blockedBy || "",
-      timeout: options.timeout || "",
-      owner: options.owner || options.need || "",
+async function request(options, method, path, body) {
+  const url = new URL(path, options.server);
+  const response = await fetch(url, {
+    method,
+    headers: {
+      ...(body ? { "Content-Type": "application/json" } : {}),
+      ...(options.token ? { "X-Codex-Link-Token": options.token } : {}),
     },
+    body: body ? JSON.stringify(body) : undefined,
   });
-  console.log(`呼叫已发布：${options.status || "CALLING"}`);
-}
 
-async function clearCall(options) {
-  await requestJson(options, "/api/clear-call", { method: "POST", body: {} });
-  console.log("当前呼叫已清除");
-}
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`${response.status}: ${text}`);
+  }
 
-function requireOption(options, key) {
-  if (!options[key]) {
-    throw new Error(`Missing --${key}\n${usage()}`);
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    return text;
   }
 }
 
-async function main() {
-  const options = parseArgs(process.argv.slice(2));
-  const command = options._[0];
-
-  switch (command) {
-    case "watch":
-      await watch(options);
-      break;
-    case "status":
-      await postStatus(options);
-      break;
-    case "send":
-      await sendMessage(options);
-      break;
-    case "call":
-      await postCall(options);
-      break;
-    case "clear-call":
-      await clearCall(options);
-      break;
-    case "help":
-    case undefined:
-      console.log(usage());
-      break;
-    default:
-      throw new Error(`Unknown command: ${command}\n${usage()}`);
+function printState(state) {
+  console.log(`updatedAt: ${state.updatedAt || ""}`);
+  console.log("");
+  console.log("currentCall:");
+  console.log(state.currentCall ? formatCall(state.currentCall) : "  none");
+  console.log("");
+  console.log("statuses:");
+  for (const [device, item] of Object.entries(state.statuses || {})) {
+    console.log(`  ${device}: ${item.status || ""}${item.note ? ` - ${item.note}` : ""}`);
+  }
+  console.log("");
+  console.log("recentEvents:");
+  for (const event of (state.events || []).slice(-10)) {
+    console.log(`  ${formatEvent(event)}`);
   }
 }
 
-main().catch((error) => {
-  console.error(error.message);
-  process.exitCode = 1;
-});
+function formatCall(call) {
+  return [
+    `[call] ${call.status || ""}: ${call.goal || ""}`,
+    `  from: ${call.from || ""}`,
+    `  need: ${call.need || ""}`,
+    call.environment ? `  environment: ${call.environment}` : "",
+    call.connection ? `  connection: ${call.connection}` : "",
+    call.command ? `  command: ${call.command}` : "",
+    call.expected ? `  expected: ${call.expected}` : "",
+    call.actual ? `  actual: ${call.actual}` : "",
+    call.ask ? `  ask: ${call.ask}` : "",
+    call.blockedBy ? `  blockedBy: ${call.blockedBy}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+function formatEvent(event) {
+  const time = event.at ? new Date(event.at).toLocaleTimeString() : "";
+  return `[${time}] ${event.type || "message"} ${event.from || "unknown"}: ${event.text || ""}`;
+}
+
+function parseArgs(argv) {
+  const parsed = { ...defaults, _: [] };
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (!arg.startsWith("--")) {
+      parsed._.push(arg);
+      continue;
+    }
+
+    const key = arg.slice(2);
+    const next = argv[index + 1];
+    if (!next || next.startsWith("--")) {
+      parsed[key] = true;
+      continue;
+    }
+
+    parsed[key] = next;
+    index += 1;
+  }
+
+  parsed.server = String(parsed.server || defaults.server).replace(/\/+$/, "");
+  parsed.token = String(parsed.token || defaults.token || "");
+  parsed.intervalMs = Number(parsed.intervalMs || parsed.interval || defaults.intervalMs) || defaults.intervalMs;
+  return parsed;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function printHelp() {
+  console.log(`Usage:
+  node scripts/codex-link-client.mjs --server http://host:17888 watch [--once]
+  node scripts/codex-link-client.mjs --server http://host:17888 state
+  node scripts/codex-link-client.mjs --server http://host:17888 status --device "Windows Codex" --role "Windows端" --status online --note "ready"
+  node scripts/codex-link-client.mjs --server http://host:17888 send --from "Windows Codex" --text "message"
+  node scripts/codex-link-client.mjs --server http://host:17888 call --from "Windows Codex" --need "Mac Codex" --goal "test" --ask "please verify"
+  node scripts/codex-link-client.mjs --server http://host:17888 clear-call`);
+}

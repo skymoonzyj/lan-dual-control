@@ -1,0 +1,142 @@
+# 局域网 Codex 联络板
+
+用途：让 Windows 端和 Mac 端在同一个局域网里及时互相喊话、记录测试呼叫、更新在线状态。
+
+这个工具不经过公网服务器。一台设备启动服务，两台设备都用浏览器打开同一个局域网地址。
+
+## Windows 启动
+
+在项目根目录运行：
+
+```powershell
+scripts\windows\start-codex-link.ps1
+```
+
+启动后会显示本机地址和局域网地址。Mac 端打开类似下面的地址：
+
+```text
+http://192.168.1.x:17888
+```
+
+## Mac 启动
+
+在项目根目录运行：
+
+```bash
+node scripts/codex-link-server.mjs --host 0.0.0.0 --port 17888
+```
+
+Windows 端打开 Mac 的局域网地址：
+
+```text
+http://192.168.1.x:17888
+```
+
+## 使用方式
+
+- “我的状态”：告诉对方自己在线、测试中、等待、阻塞或离开。
+- “发消息”：发普通文字消息。
+- “测试呼叫”：发起一轮需要另一端配合的联调。
+- “当前呼叫”：两端共同看到最新测试请求。
+
+网页本身是实时刷新的：打开页面后，它会通过浏览器的实时事件连接接收服务端推送，不需要手动刷新。
+
+## Codex 命令行收发
+
+两边 Codex 不一定一直盯着浏览器，所以也提供命令行客户端。
+
+查看当前状态：
+
+```powershell
+node scripts/codex-link-client.mjs --server http://192.168.1.x:17888 state
+```
+
+实时监控新消息和测试呼叫：
+
+```powershell
+node scripts/codex-link-client.mjs --server http://192.168.1.x:17888 watch
+```
+
+只看一眼然后退出，适合 Codex 开工前检查：
+
+```powershell
+node scripts/codex-link-client.mjs --server http://192.168.1.x:17888 watch --once
+```
+
+发送普通消息：
+
+```powershell
+node scripts/codex-link-client.mjs --server http://192.168.1.x:17888 send --from "Windows Codex" --text "我准备开始连接真实 Mac。"
+```
+
+更新自己的状态：
+
+```powershell
+node scripts/codex-link-client.mjs --server http://192.168.1.x:17888 status --device "Windows Codex" --role "Windows 端" --status testing --note "正在跑首帧验证"
+```
+
+发起测试呼叫：
+
+```powershell
+node scripts/codex-link-client.mjs --server http://192.168.1.x:17888 call --from "Windows Codex" --need "Mac Codex" --goal "验证真实 JPEG 首帧" --connection "Mac IP 192.168.1.x，端口 17654" --command "scripts/windows/test-mac-host.ps1 -HostName 192.168.1.x -RequireRealVideo -ExpectInputMode log" --ask "请启动 apps/mac-host，并确认屏幕录制权限已开启。"
+```
+
+清除当前呼叫：
+
+```powershell
+node scripts/codex-link-client.mjs --server http://192.168.1.x:17888 clear-call
+```
+
+Mac 端也用同一个客户端，只是命令写法换成 Bash：
+
+```bash
+node scripts/codex-link-client.mjs --server http://192.168.1.x:17888 send --from "Mac Codex" --text "mac-host 已启动，等待 Windows 连接。"
+```
+
+## 建议流程
+
+1. 开工时，两端都打开联络板并更新自己的状态。
+2. 一方要测试时，填写“测试呼叫”。
+3. 另一方看到后把状态改成 `READY` 或 `TESTING`。
+4. 测试完成后，把呼叫状态改成 `DONE`。
+5. 卡住时，把呼叫状态改成 `BLOCKED`，并写清楚需要对方做什么。
+
+## 安全说明
+
+默认不启用密码，适合可信局域网短时间使用。
+
+需要加令牌时，启动时传入：
+
+```powershell
+scripts\windows\start-codex-link.ps1 -Token "自己设一个临时令牌"
+```
+
+或在 Mac 上运行：
+
+```bash
+node scripts/codex-link-server.mjs --host 0.0.0.0 --port 17888 --token "自己设一个临时令牌"
+```
+
+第一次打开网页时，在地址后面加：
+
+```text
+?token=自己设的临时令牌
+```
+
+不要把令牌、连接密码、系统账号密码写进项目文档。
+
+命令行客户端使用令牌时，加上：
+
+```powershell
+node scripts/codex-link-client.mjs --server http://192.168.1.x:17888 --token "自己设的临时令牌" state
+```
+
+## 数据保存
+
+联络板会把状态保存到：
+
+```text
+.dev-lab/codex-link-state.json
+```
+
+这个文件只用于本地联调，不需要提交到仓库。

@@ -20,6 +20,8 @@ const defaults = {
   clipboardFileBytes: 96,
   inputEvents: false,
   requireRealVideo: false,
+  requireH264: false,
+  preferredVideoCodec: "mjpeg",
   expectInputMode: "",
 };
 
@@ -52,6 +54,11 @@ function parseArgs(argv) {
   args.clipboardFileBytes = Number(args.clipboardFileBytes) || defaults.clipboardFileBytes;
   args.inputEvents = booleanArg(args.inputEvents) || booleanArg(args.input);
   args.requireRealVideo = booleanArg(args.requireRealVideo) || booleanArg(args.realVideo);
+  args.requireH264 = booleanArg(args.requireH264) || booleanArg(args.h264);
+  args.preferredVideoCodec = String(args.preferredVideoCodec || defaults.preferredVideoCodec).trim().toLowerCase();
+  if (args.requireH264) {
+    args.preferredVideoCodec = "h264";
+  }
   args.expectInputMode = String(args.expectInputMode || "").trim().toLowerCase();
   return args;
 }
@@ -268,7 +275,8 @@ function makeSessionOffer(args) {
     wantAudio: true,
     wantClipboardText: true,
     wantClipboardFile: true,
-    preferredVideoCodec: "mjpeg",
+    preferredVideoCodec: args.preferredVideoCodec,
+    preferredVideoEncoding: "annexb",
     preferredAudioCodec: "opus",
     maxFps: args.fps,
     maxBandwidthKbps: args.bandwidthKbps,
@@ -286,13 +294,17 @@ function summarizeFrame(frame) {
   const comma = dataUrl.indexOf(",");
   const payloadLength = comma >= 0 ? dataUrl.length - comma - 1 : dataUrl.length;
   const estimatedBytes = Math.round((payloadLength * 3) / 4);
+  const encodedPayload = typeof frame.payload === "string" ? frame.payload : "";
+  const encodedBytes = Math.round((encodedPayload.length * 3) / 4);
   return [
     `codec=${frame.codec || "unknown"}`,
+    frame.encoding ? `encoding=${frame.encoding}` : "",
     `size=${frame.width || "?"}x${frame.height || "?"}`,
     `frameId=${frame.frameId || "?"}`,
-    `dataUrl=${dataUrl.slice(0, 30) || "missing"}`,
-    `bytes~${estimatedBytes}`,
-  ].join(" / ");
+    dataUrl ? `dataUrl=${dataUrl.slice(0, 30)}` : "",
+    encodedPayload ? `payloadBytes~${encodedBytes}` : "",
+    dataUrl ? `bytes~${estimatedBytes}` : "",
+  ].filter(Boolean).join(" / ");
 }
 
 function normalizedText(value) {
@@ -357,6 +369,43 @@ function assertRealVideoFrame(frame, answer) {
   }
 
   print("OK", `Real video confirmed: ${codec} / ${pipeline || "pipeline unknown"} / source=${source || "unknown"}`);
+}
+
+function assertH264VideoFrame(frame, answer) {
+  const codec = normalizedText(frame.codec).toLowerCase();
+  const answerCodec = normalizedText(answer?.videoCodec).toLowerCase();
+  const encoding = normalizedText(frame.encoding).toLowerCase();
+  const payload = normalizedText(frame.payload);
+  const framePipeline = normalizedText(frame.capturePipeline).toLowerCase();
+  const answerPipeline = normalizedText(answer?.capturePipeline).toLowerCase();
+  const pipeline = framePipeline || answerPipeline;
+  const hostMode = normalizedText(answer?.hostMode).toLowerCase();
+  const problems = [];
+
+  if (codec !== "h264") {
+    problems.push(`frame codec=${frame.codec || "missing"}`);
+  }
+  if (answerCodec !== "h264") {
+    problems.push(`session videoCodec=${answer?.videoCodec || "missing"}`);
+  }
+  if (!encoding.includes("annexb")) {
+    problems.push(`encoding=${frame.encoding || "missing"}`);
+  }
+  if (!payload) {
+    problems.push("payload missing");
+  }
+  if (pipeline !== "screencapturekit-h264") {
+    problems.push(`capturePipeline=${pipeline || "missing"}`);
+  }
+  if (hostMode !== "mac-host-h264-stream") {
+    problems.push(`hostMode=${hostMode || "missing"}`);
+  }
+
+  if (problems.length > 0) {
+    throw new Error(`H.264 required but got ${summarizeFrame(frame)} (${problems.join("; ")})`);
+  }
+
+  print("OK", `H.264 video confirmed: ${encoding} / ${pipeline} / codecString=${frame.codecString || "missing"}`);
 }
 
 async function probeClipboardText(client, args) {
@@ -742,12 +791,14 @@ async function main() {
     assertExpectedInputMode({ args, discovery, hello, answer });
 
     const frame = await client.waitFor("video_frame", Math.max(args.timeoutMs, 10000));
-    if (!frame.dataUrl) {
-      fail("First video_frame has no dataUrl");
+    if (!frame.dataUrl && !frame.payload) {
+      fail("First video_frame has neither dataUrl nor payload");
       return;
     }
     print("OK", `First frame: ${summarizeFrame(frame)}`);
-    if (args.requireRealVideo) {
+    if (args.requireH264) {
+      assertH264VideoFrame(frame, answer);
+    } else if (args.requireRealVideo) {
       assertRealVideoFrame(frame, answer);
     }
 

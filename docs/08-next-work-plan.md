@@ -13,7 +13,7 @@
 - Windows 控制端已可区分真实 JPEG 视频帧和模拟视频帧，并显示 Mac 主机诊断状态条；Mac 端已兼容 Windows 端当前发送的输入事件字段。
 - Windows 控制端现在会把 `input_ack` 的已注入、已记录或被拒绝状态写入诊断条；被拒绝时会显示 `LAN005` 等错误码并把输入状态标为“被拒绝”。
 - Windows 控制端的坐标映射已增加独立回归脚本，覆盖适应窗口、原始比例滚动和拉伸填充；浏览器回归已验证全屏/窗口切换和缩放模式仍可发送输入。
-- 真 Mac 已通过 `--requireRealVideo --expectInputMode log --inputEvents` 强校验：首帧为真实 JPEG，输入事件以安全日志模式确认。
+- 真 Mac 已通过 `--requireRealVideo --expectInputMode log --inputEvents` 强校验：首帧为真实 JPEG，输入事件以安全日志模式确认；JPEG 调试链路已经改为显示实收 FPS，不再把请求刷新率当作真实帧率。
 - 真 Mac 已通过 `--clipboardRoundTrip` 验证文本剪贴板双向同步：控制端写入 Mac 和 Mac 本机复制推回控制端均可自动确认。
 - 真 Mac 文件剪贴板新增 `--clipboardFileHostToClient` 探针：在 Mac 本机复制普通文件后，通过 `clipboard_file_*` 推送给控制端并重组校验字节；Windows 控制端当前先以内存托盘暂存并提供下载，不写系统文件剪贴板。
 - Windows 被控端仍是骨架阶段，真实屏幕采集和真实声音采集仍待实装；文本/文件剪贴板在 Windows 上已可写入系统剪贴板，输入事件已接入最小 SendInput 桥。
@@ -96,14 +96,14 @@
 6. 验证 Windows 和 Mac 能互相同步系统文本剪贴板。
 7. 验证 Windows 发送文件剪贴板后，Mac Finder 能粘贴收到的文件。
 8. 验证 Mac 复制普通文件后，Windows 控制端能按块接收并在内存中重组完整文件。
-9. 继续把当前后台 JPEG 管线升级为真正的 ScreenCaptureKit 流式输出或硬件编码。
+9. 按 [流式视频编码计划](09-streaming-video-plan.md) 把当前后台 JPEG 管线升级为 ScreenCaptureKit 流式采集 + VideoToolbox H.264。
 
 说明：假 Mac 服务仍保留，用来快速测试 UI、协议兼容和失败场景；但它不能替代真 Mac 验收。
 
 ## 暂不优先处理
 
 - MSI/NSIS 安装包。
-- 硬件编码。
+- H.264 硬件编码完整落地前，JPEG 链路只作为调试和兜底使用。
 - 真实低延迟音频优化。
 - UDP/mDNS 真正自动发现。
 - 大文件断点续传。

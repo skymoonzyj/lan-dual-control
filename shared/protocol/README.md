@@ -33,6 +33,7 @@
 macOS 被控端真实屏幕帧当前使用 `capturePipeline: "background-jpeg"`，并可在 `droppedFrames` 字段中报告后台编码忙碌时丢弃的调度次数。
 FPS 诊断字段约定：`requestedFps` 表示控制端请求值，`fps` 表示被控端实际发送目标值，`maxScreenFps` 表示被控端真实屏幕采集上限，`frameIntervalMs` 表示当前视频定时器间隔。
 如果 macOS 真实截图短暂失败，`capturePipeline` 会回退为 `screen-fallback-mock`；如果截图调用超时，会先发送 `screen-timeout-mock` 保活帧，并在冷却窗口内发送 `screen-cooldown-mock`，同时可带上 `screenCaptureFailureStreak` 和 `screenCaptureRetryAfter` 方便控制端诊断。
+当前视频链路正在升级为 ScreenCaptureKit + VideoToolbox H.264。过渡期仍沿用 `video_frame`，使用 `codec: "h264"`、`encoding: "annexb-base64"`、`codecString` 和 `payload` 字段；稳定后再迁移到 WebSocket 二进制帧。
 被控端收到 `input_event` 后会返回 `input_ack`，用于联调时确认输入事件已记录、已注入或被拒绝。
 文本剪贴板当前使用 `clipboard_text` + `clipboard_ack`，通过 `clipboardId` 对应一次发送和一次确认。
 macOS 被控端会把收到的文本写入系统 `NSPasteboard`，并把本机复制的新文本以 `direction: "host_to_client"` 推回 Windows 控制端。

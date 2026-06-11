@@ -597,7 +597,8 @@ button:disabled {
     #16202b;
 }
 
-.remote-frame-image {
+.remote-frame-image,
+.remote-video-canvas {
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -614,7 +615,13 @@ button:disabled {
   object-fit: fill;
 }
 
-.remote-canvas.scale-original .remote-frame-image {
+.remote-canvas.scale-stretch .remote-video-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.remote-canvas.scale-original .remote-frame-image,
+.remote-canvas.scale-original .remote-video-canvas {
   inset: auto;
   left: 0;
   top: 0;
@@ -625,8 +632,14 @@ button:disabled {
   object-fit: none;
 }
 
-.remote-frame-image.is-visible {
+.remote-frame-image.is-visible,
+.remote-video-canvas.is-visible {
   opacity: 1;
+}
+
+.remote-canvas.has-video-frame .mac-menubar,
+.remote-canvas.has-video-frame .mock-window {
+  display: none;
 }
 
 .mac-menubar {

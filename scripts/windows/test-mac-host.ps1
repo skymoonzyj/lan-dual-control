@@ -15,6 +15,7 @@ param(
   [int] $ClipboardFileBytes = 96,
   [switch] $InputEvents,
   [switch] $RequireRealVideo,
+  [switch] $RequireH264,
   [string] $ExpectInputMode = ""
 )
 
@@ -59,6 +60,9 @@ try {
   }
   if ($RequireRealVideo) {
     $nodeArgs += "--requireRealVideo"
+  }
+  if ($RequireH264) {
+    $nodeArgs += "--requireH264"
   }
   if ($ExpectInputMode) {
     $nodeArgs += @("--expectInputMode", $ExpectInputMode)

@@ -133,9 +133,12 @@ function negotiateSession(message) {
   return {
     type: "session_answer",
     ok: true,
-    videoCodec: message.preferredVideoCodec ?? "mjpeg",
+    videoCodec: "mock-svg",
+    videoEncoding: "data-url",
     audioCodec: message.wantAudio ? (message.preferredAudioCodec ?? "opus") : "none",
     fps: Math.min(maxFps, 60),
+    requestedFps: maxFps,
+    maxScreenFps: 60,
     maxBandwidthKbps,
     width,
     height,

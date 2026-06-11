@@ -41,8 +41,11 @@ export class WindowsScreenCaptureCoordinator {
       width,
       height,
       fps,
+      requestedFps: Number(message.maxFps) || 60,
+      maxScreenFps: 60,
       maxBandwidthKbps,
-      videoCodec: message.preferredVideoCodec ?? "mjpeg",
+      videoCodec: "mock-svg",
+      videoEncoding: "data-url",
       displays: this.getDisplays(),
       activeDisplayId: activeDisplay.id,
       displayName: activeDisplay.name,
@@ -64,6 +67,7 @@ export class WindowsScreenCaptureCoordinator {
           ? activeDisplay.height
           : Number(message.height) || session.height,
       fps: Number(message.fps) || session.fps,
+      requestedFps: Number(message.fps) || session.requestedFps || session.fps,
       maxBandwidthKbps: Number(message.maxBandwidthKbps) || session.maxBandwidthKbps,
     };
   }

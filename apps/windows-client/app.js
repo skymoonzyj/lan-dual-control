@@ -50,6 +50,7 @@ const elements = {
   reverseButtonText: document.querySelector("#reverseButtonText"),
   cursorDot: document.querySelector("#cursorDot"),
   remoteFrameImage: document.querySelector("#remoteFrameImage"),
+  remoteVideoCanvas: document.querySelector("#remoteVideoCanvas"),
   metricResolution: document.querySelector("#metricResolution"),
   metricFps: document.querySelector("#metricFps"),
   metricBandwidth: document.querySelector("#metricBandwidth"),
@@ -114,6 +115,7 @@ const remoteModifierLabels = {
 };
 const hostModeLabels = {
   "mac-host-background-jpeg": "Mac 后台 JPEG",
+  "mac-host-h264-stream": "Mac 流式 H.264",
   "mac-host-mock-video": "Mac 模拟画面",
   "local-mock-mac": "本地模拟 Mac",
   "mock-mac-host": "假 Mac 服务",
@@ -121,6 +123,7 @@ const hostModeLabels = {
 };
 const capturePipelineLabels = {
   "background-jpeg": "后台 JPEG",
+  "screencapturekit-h264": "流式 H.264",
   "mock-svg": "模拟画面",
   "screen-fallback-mock": "采集回退",
   "screen-timeout-mock": "采集超时",
@@ -249,6 +252,14 @@ const state = {
   activeHost: "",
   activePort: "",
   videoFrames: 0,
+  videoFrameTimes: [],
+  requestedFps: 0,
+  negotiatedFps: 0,
+  actualVideoFps: 0,
+  h264Decoder: null,
+  h264DecoderCodec: "",
+  h264DecoderErrorCount: 0,
+  h264DecoderWarned: false,
   audioFrames: 0,
   audioLevel: 0,
   recentConnections: [],
@@ -289,6 +300,7 @@ const state = {
     inputAckReason: "",
     inputAckCode: "",
     videoCodec: "",
+    videoEncoding: "",
     videoSource: "",
     droppedFrames: null,
     qualityPreset: "",
@@ -428,6 +440,7 @@ function getEmptyHostDiagnostics() {
     inputAckReason: "",
     inputAckCode: "",
     videoCodec: "",
+    videoEncoding: "",
     videoSource: "",
     droppedFrames: null,
     qualityPreset: "",
@@ -580,6 +593,7 @@ function renderHostDiagnosticsText() {
   ].filter(Boolean);
   const videoParts = [
     diagnostics.videoCodec || "",
+    diagnostics.videoEncoding || "",
     diagnostics.videoSource ? labelFromMap(diagnostics.videoSource, videoSourceLabels) : "",
   ].filter(Boolean);
   const inputText = formatInputDiagnostics(diagnostics);
@@ -1150,8 +1164,11 @@ function setUiConnecting(host, port) {
   state.connecting = true;
   state.connected = false;
   state.videoFrames = 0;
+  resetVideoFrameStats();
+  resetVideoDecoder();
   state.lastFrameDecodeErrorId = "";
   state.remoteFileTransfers.clear();
+  elements.remoteCanvas.classList.remove("has-video-frame");
   resetReverseControlState();
   setConnectionState("connecting", `正在连接 ${host}:${port}`);
   resetHostDiagnostics(`诊断：正在连接 ${host}:${port}`);
@@ -1182,6 +1199,7 @@ function setUiConnected(answer) {
     clipboardFileMode: answer.clipboardFileMode ?? "",
     inputMode: answer.inputMode ?? "",
     videoCodec: answer.videoCodec ?? "",
+    videoEncoding: answer.videoEncoding ?? "",
     qualityPreset: answer.qualityPreset ?? "",
     jpegQuality: answer.jpegQuality ?? null,
   });
@@ -1192,7 +1210,9 @@ function setUiConnected(answer) {
     elements.metricResolution.textContent = `${answer.width} × ${answer.height}`;
   }
   if (answer.fps) {
-    elements.metricFps.textContent = `${answer.fps} Hz`;
+    state.negotiatedFps = Number(answer.fps) || 0;
+    state.requestedFps = Number(answer.requestedFps) || Number(elements.fpsSelect.value) || state.negotiatedFps;
+    updateFpsMetric();
   }
   if (answer.maxBandwidthKbps) {
     elements.metricBandwidth.textContent = `${Math.round(answer.maxBandwidthKbps / 1000)} Mbps`;
@@ -1233,6 +1253,10 @@ function setUiDisconnected(statusText = "未连接", logDetail = "会话已关�
   setConnectionState(statusText === "连接失败" ? "failed" : "disconnected", statusText);
   elements.remoteFrameImage.removeAttribute("src");
   elements.remoteFrameImage.classList.remove("is-visible");
+  elements.remoteVideoCanvas.classList.remove("is-visible");
+  elements.remoteCanvas.classList.remove("has-video-frame");
+  resetVideoFrameStats();
+  resetVideoDecoder();
   elements.metricLatency.textContent = "-- ms";
   resetHostDiagnostics(statusText === "未连接" ? defaultHostDiagnosticsText : `诊断：${statusText}`);
   state.audioFrames = 0;
@@ -1260,6 +1284,10 @@ function handleUnexpectedClose(reason = "被控端关闭了连接") {
   stopLatencyLoop();
   elements.remoteFrameImage.removeAttribute("src");
   elements.remoteFrameImage.classList.remove("is-visible");
+  elements.remoteVideoCanvas.classList.remove("is-visible");
+  elements.remoteCanvas.classList.remove("has-video-frame");
+  resetVideoFrameStats();
+  resetVideoDecoder();
   elements.metricLatency.textContent = "-- ms";
   resetHostDiagnostics("诊断：连接中断，等待重连。");
   state.audioFrames = 0;
@@ -1332,7 +1360,11 @@ function updateMetrics() {
   const settings = currentDisplaySettings();
   elements.metricResolution.textContent =
     settings.resolutionMode === "native" ? "原生" : `${settings.width} × ${settings.height}`;
-  elements.metricFps.textContent = `${settings.fps} Hz`;
+  if (state.connected) {
+    updateFpsMetric();
+  } else {
+    elements.metricFps.textContent = `请求 ${settings.fps} Hz`;
+  }
   elements.metricBandwidth.textContent = `${elements.bandwidthSelect.value} Mbps`;
   elements.audioVolumeText.textContent = `${settings.audioVolume}%`;
   elements.audioText.textContent = settings.audio
@@ -1340,6 +1372,59 @@ function updateMetrics() {
     : "声音：已关闭";
   elements.clipboardText.textContent = `剪贴板：${settings.clipboard ? "已开启" : "已关闭"}`;
   updateFileClipboardButton();
+}
+
+function resetVideoFrameStats() {
+  state.videoFrameTimes = [];
+  state.actualVideoFps = 0;
+  state.requestedFps = 0;
+  state.negotiatedFps = 0;
+}
+
+function resetVideoDecoder() {
+  if (state.h264Decoder && state.h264Decoder.state !== "closed") {
+    try {
+      state.h264Decoder.close();
+    } catch {
+      // Decoder teardown is best-effort during reconnect/disconnect.
+    }
+  }
+  state.h264Decoder = null;
+  state.h264DecoderCodec = "";
+  state.h264DecoderErrorCount = 0;
+  state.h264DecoderWarned = false;
+}
+
+function recordVideoFrameTime() {
+  const now = performance.now();
+  state.videoFrameTimes.push(now);
+  const cutoff = now - 2000;
+  while (state.videoFrameTimes.length > 0 && state.videoFrameTimes[0] < cutoff) {
+    state.videoFrameTimes.shift();
+  }
+
+  if (state.videoFrameTimes.length < 2) {
+    state.actualVideoFps = 0;
+    return 0;
+  }
+
+  const first = state.videoFrameTimes[0];
+  const last = state.videoFrameTimes[state.videoFrameTimes.length - 1];
+  const durationSeconds = Math.max(0.001, (last - first) / 1000);
+  state.actualVideoFps = (state.videoFrameTimes.length - 1) / durationSeconds;
+  return state.actualVideoFps;
+}
+
+function updateFpsMetric() {
+  const requested = state.requestedFps || Number(elements.fpsSelect.value) || 0;
+  const negotiated = state.negotiatedFps || requested;
+  const actual = state.actualVideoFps;
+  const actualText = actual > 0 ? `${actual.toFixed(1)} FPS` : "-- FPS";
+  const parts = [`实收 ${actualText}`, `协商 ${negotiated || "--"} Hz`];
+  if (requested && negotiated && requested !== negotiated) {
+    parts.push(`请求 ${requested} Hz`);
+  }
+  elements.metricFps.textContent = parts.join(" · ");
 }
 
 function buildAudioSettingsMessage() {
@@ -1488,11 +1573,18 @@ function buildSessionOffer() {
     displayId: settings.displayId,
     preferredWidth,
     preferredHeight,
-    preferredVideoCodec: "mjpeg",
+    preferredVideoCodec: preferredVideoCodec(),
+    preferredVideoEncoding: "annexb",
     preferredAudioCodec: "opus",
     audioVolume: settings.audioVolume,
     mockScenario: elements.mockScenarioSelect.value,
   };
+}
+
+function preferredVideoCodec() {
+  return typeof window.VideoDecoder === "function" && typeof window.EncodedVideoChunk === "function"
+    ? "h264"
+    : "mjpeg";
 }
 
 function buildDisplaySettingsMessage() {
@@ -1512,6 +1604,8 @@ function buildDisplaySettingsMessage() {
     resolutionMode: settings.resolutionMode,
     fps: settings.fps,
     maxBandwidthKbps: settings.maxBandwidthKbps,
+    preferredVideoCodec: preferredVideoCodec(),
+    preferredVideoEncoding: "annexb",
     audio: settings.audio,
     audioVolume: settings.audioVolume,
     clipboardText: settings.clipboard,
@@ -1656,9 +1750,13 @@ function applyScaleMode() {
   if (elements.scaleModeSelect.value === "original") {
     elements.remoteFrameImage.style.width = `${state.remoteFrameWidth}px`;
     elements.remoteFrameImage.style.height = `${state.remoteFrameHeight}px`;
+    elements.remoteVideoCanvas.style.width = `${state.remoteFrameWidth}px`;
+    elements.remoteVideoCanvas.style.height = `${state.remoteFrameHeight}px`;
   } else {
     elements.remoteFrameImage.style.removeProperty("width");
     elements.remoteFrameImage.style.removeProperty("height");
+    elements.remoteVideoCanvas.style.removeProperty("width");
+    elements.remoteVideoCanvas.style.removeProperty("height");
   }
 }
 
@@ -2470,7 +2568,15 @@ function handleProtocolMessage(message) {
   }
 
   if (message.type === "display_settings_ack") {
+    if (message.fps) {
+      state.negotiatedFps = Number(message.fps) || state.negotiatedFps;
+      state.requestedFps = Number(message.requestedFps) || Number(elements.fpsSelect.value) || state.requestedFps;
+      updateFpsMetric();
+    }
     updateHostDiagnostics({
+      hostMode: message.hostMode ?? state.hostDiagnostics.hostMode,
+      videoCodec: message.videoCodec ?? state.hostDiagnostics.videoCodec,
+      videoEncoding: message.videoEncoding ?? state.hostDiagnostics.videoEncoding,
       capturePipeline: message.capturePipeline ?? state.hostDiagnostics.capturePipeline,
       clipboardText: message.clipboardText ?? state.hostDiagnostics.clipboardText,
       clipboardFile: message.clipboardFile ?? state.hostDiagnostics.clipboardFile,
@@ -2479,6 +2585,9 @@ function handleProtocolMessage(message) {
       qualityPreset: message.qualityPreset ?? state.hostDiagnostics.qualityPreset,
       jpegQuality: message.jpegQuality ?? state.hostDiagnostics.jpegQuality,
     });
+    if (message.streamFallbackReason) {
+      addLog("视频回退", message.streamFallbackReason);
+    }
     addLog("被控端确认", "显示设置已接收");
     return;
   }
@@ -2582,16 +2691,24 @@ function handleProtocolMessage(message) {
 }
 
 function renderVideoFrame(frame) {
+  if (String(frame.codec ?? "").toLowerCase() === "h264") {
+    void renderH264VideoFrame(frame);
+    return;
+  }
+
   if (!frame.dataUrl) {
     addLog("视频帧", "收到视频帧但缺少 dataUrl");
     return;
   }
 
   state.videoFrames += 1;
+  recordVideoFrameTime();
+  updateFpsMetric();
   const frameLabel = getVideoFrameLabel(frame);
   const frameCapturePipeline = frame.capturePipeline ?? state.hostDiagnostics.capturePipeline;
   const frameDiagnostics = {
     videoCodec: frame.codec ?? state.hostDiagnostics.videoCodec,
+    videoEncoding: frame.encoding ?? state.hostDiagnostics.videoEncoding,
     videoSource: frame.source ?? state.hostDiagnostics.videoSource,
     capturePipeline: frameCapturePipeline,
     droppedFrames: frame.droppedFrames ?? state.hostDiagnostics.droppedFrames,
@@ -2618,6 +2735,8 @@ function renderVideoFrame(frame) {
   elements.remoteFrameImage.dataset.frameCodec = frame.codec ?? "unknown";
   elements.remoteFrameImage.src = frame.dataUrl;
   elements.remoteFrameImage.classList.add("is-visible");
+  elements.remoteVideoCanvas.classList.remove("is-visible");
+  elements.remoteCanvas.classList.add("has-video-frame");
   elements.remoteStatusText.textContent = `正在接收${frameLabel} #${frame.frameId ?? state.videoFrames}`;
 
   if (frame.width && frame.height) {
@@ -2630,6 +2749,152 @@ function renderVideoFrame(frame) {
       `#${frame.frameId ?? state.videoFrames} · ${frame.width ?? "--"}×${frame.height ?? "--"} · ${frame.codec ?? "mock"}`,
     );
   }
+}
+
+async function renderH264VideoFrame(frame) {
+  if (!frame.payload) {
+    addLog("视频帧", "收到 H.264 视频帧但缺少 payload");
+    return;
+  }
+
+  state.videoFrames += 1;
+  recordVideoFrameTime();
+  updateFpsMetric();
+  updateHostDiagnostics({
+    videoCodec: "h264",
+    videoEncoding: frame.encoding ?? "annexb-base64",
+    videoSource: frame.source ?? state.hostDiagnostics.videoSource,
+    capturePipeline: frame.capturePipeline ?? "screencapturekit-h264",
+    droppedFrames: frame.droppedFrames ?? state.hostDiagnostics.droppedFrames,
+    qualityPreset: frame.qualityPreset ?? state.hostDiagnostics.qualityPreset,
+  });
+
+  if (frame.width && frame.height) {
+    state.remoteFrameWidth = Number(frame.width);
+    state.remoteFrameHeight = Number(frame.height);
+    elements.metricResolution.textContent = `${frame.width} × ${frame.height}`;
+  }
+  applyScaleMode();
+  elements.remoteCanvas.classList.add("has-video-frame");
+  elements.remoteStatusText.textContent = `正在接收 H.264 视频帧 #${frame.frameId ?? state.videoFrames}`;
+
+  try {
+    const decoder = await ensureH264Decoder(frame);
+    const durationUs = Number(frame.durationUs) || Math.round(1_000_000 / Math.max(1, state.negotiatedFps || 30));
+    const timestampUs =
+      Number(frame.timestampUs) ||
+      Math.max(0, Number(frame.frameId ?? state.videoFrames) - 1) * durationUs;
+    const chunk = new EncodedVideoChunk({
+      type: frame.keyFrame ? "key" : "delta",
+      timestamp: timestampUs,
+      duration: durationUs,
+      data: base64ToUint8Array(frame.payload),
+    });
+    decoder.decode(chunk);
+  } catch (error) {
+    state.h264DecoderErrorCount += 1;
+    if (!state.h264DecoderWarned || state.h264DecoderErrorCount <= 3) {
+      state.h264DecoderWarned = true;
+      addLog("H.264 解码失败", error?.message || String(error));
+    }
+  }
+
+  if (state.videoFrames === 1 || state.videoFrames % 30 === 0) {
+    addLog(
+      "视频帧",
+      `#${frame.frameId ?? state.videoFrames} · ${frame.width ?? "--"}×${frame.height ?? "--"} · h264`,
+    );
+  }
+}
+
+async function ensureH264Decoder(frame) {
+  if (typeof window.VideoDecoder !== "function" || typeof window.EncodedVideoChunk !== "function") {
+    throw new Error("当前窗口环境不支持 WebCodecs H.264 解码");
+  }
+
+  const codec = frame.codecString || "avc1.42E01F";
+  const format = String(frame.encoding ?? "annexb-base64").toLowerCase().includes("annexb")
+    ? "annexb"
+    : "avc";
+  const decoderKey = `${codec}:${format}`;
+  if (state.h264Decoder && state.h264Decoder.state !== "closed" && state.h264DecoderCodec === decoderKey) {
+    return state.h264Decoder;
+  }
+
+  resetVideoDecoder();
+  const baseConfig = {
+    codec,
+    hardwareAcceleration: "prefer-hardware",
+    optimizeForLatency: true,
+  };
+  let config = { ...baseConfig, avc: { format } };
+
+  if (typeof window.VideoDecoder.isConfigSupported === "function") {
+    let support;
+    try {
+      support = await window.VideoDecoder.isConfigSupported(config);
+    } catch {
+      config = baseConfig;
+      support = await window.VideoDecoder.isConfigSupported(config);
+    }
+    if (!support.supported) {
+      throw new Error(`当前窗口环境不支持 ${codec}`);
+    }
+  }
+
+  const decoder = new VideoDecoder({
+    output: drawDecodedVideoFrame,
+    error: (error) => {
+      state.h264DecoderErrorCount += 1;
+      addLog("H.264 解码器", error?.message || String(error));
+    },
+  });
+  decoder.configure(config);
+  state.h264Decoder = decoder;
+  state.h264DecoderCodec = decoderKey;
+  return decoder;
+}
+
+function drawDecodedVideoFrame(videoFrame) {
+  const width = videoFrame.displayWidth || videoFrame.codedWidth || state.remoteFrameWidth;
+  const height = videoFrame.displayHeight || videoFrame.codedHeight || state.remoteFrameHeight;
+  if (width && height) {
+    state.remoteFrameWidth = width;
+    state.remoteFrameHeight = height;
+    elements.metricResolution.textContent = `${width} × ${height}`;
+  }
+
+  const canvas = elements.remoteVideoCanvas;
+  if (canvas.width !== state.remoteFrameWidth) {
+    canvas.width = state.remoteFrameWidth;
+  }
+  if (canvas.height !== state.remoteFrameHeight) {
+    canvas.height = state.remoteFrameHeight;
+  }
+
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) {
+    videoFrame.close();
+    addLog("H.264 解码器", "无法取得视频画布上下文");
+    return;
+  }
+  context.drawImage(videoFrame, 0, 0, canvas.width, canvas.height);
+  videoFrame.close();
+
+  elements.remoteFrameImage.classList.remove("is-visible");
+  elements.remoteFrameImage.removeAttribute("src");
+  canvas.classList.add("is-visible");
+  elements.remoteCanvas.classList.add("has-video-frame");
+  applyScaleMode();
+}
+
+function base64ToUint8Array(value) {
+  const binary = window.atob(String(value));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
 }
 
 function getVideoFrameLabel(frame) {
@@ -2775,6 +3040,7 @@ elements.remoteCanvas.addEventListener("contextmenu", (event) => {
 });
 elements.remoteCanvas.addEventListener("mousedown", (event) => {
   if (!canSendControlInput()) return;
+  elements.remoteCanvas.focus();
   const mapped = mapPointerToRemote(event);
   if (!mapped) return;
   registerInputEvent("鼠标按下", `button=${event.button} · ${mapped.remoteX},${mapped.remoteY}`, {

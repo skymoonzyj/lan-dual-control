@@ -7,12 +7,33 @@
 
 两个 Codex 账号不会自动共享记忆，所以必须把项目事实写进仓库文档。
 
+## 0. 交接中心
+
+每个 Codex 开始工作前，必须先读这几个文件：
+
+- `docs/CURRENT_STATUS.md`：当前项目事实。
+- `docs/NEXT_ACTIONS.md`：短期下一步。
+- `docs/ACTIVE_LOCKS.md`：当前文件占用。
+- `docs/HANDOFF_LOG.md`：最近交接记录。
+- `docs/TEST_COORDINATION.md`：双端测试呼叫和阻塞记录。
+- `docs/04-task-board.md`：完整任务清单。
+
+每个 Codex 结束工作前，必须更新：
+
+- `docs/HANDOFF_LOG.md`：写清本轮做了什么、如何验证、下一步交给谁。
+- `docs/ACTIVE_LOCKS.md`：释放或更新自己占用的文件。
+- `docs/TEST_COORDINATION.md`：如果本轮需要另一端配合测试，更新当前呼叫。
+- `docs/04-task-board.md`：勾掉完成项或补充当前备注。
+
 ## 1. 通用规则
 
-- 开始开发前先阅读 README.md 和 docs/ 下所有文档。
+- 开始开发前先阅读 README.md 和交接中心文件；需要深入时再阅读 docs/ 下其他计划文档。
 - 修改协议前必须更新 docs/03-architecture-and-protocol.md。
 - 完成任务后必须更新 docs/04-task-board.md。
 - 重要问题写进 docs/04-task-board.md 的对应里程碑。
+- 阶段性交接写进 docs/HANDOFF_LOG.md。
+- 开工前登记或检查 docs/ACTIVE_LOCKS.md。
+- 测试联调需要另一端配合时，先更新 docs/TEST_COORDINATION.md，再用即时消息或 GitHub Issue 通知对方。
 - 不要随意改另一个端的代码，除非文档里明确需要。
 
 ## 2. 给 Windows 端 Codex 的启动提示
@@ -29,7 +50,7 @@
 6. 实现窗口化、全屏、分辨率、刷新率、码率、声音和剪贴板控制项；
 7. 维护 `apps/windows-host` Windows 被控端骨架，用于 Mac 反控 Windows。
 
-开发时遵守 docs/03-architecture-and-protocol.md 的协议。完成任何任务后更新 docs/04-task-board.md。不要改 Mac 端实现，除非协议或对接要求必须同步。
+开发时先读 docs/CURRENT_STATUS.md、docs/NEXT_ACTIONS.md、docs/ACTIVE_LOCKS.md、docs/HANDOFF_LOG.md 和 docs/TEST_COORDINATION.md。遵守 docs/03-architecture-and-protocol.md 的协议。完成任何任务后更新 docs/HANDOFF_LOG.md、docs/ACTIVE_LOCKS.md 和 docs/04-task-board.md；需要另一端配合测试时，同时更新 docs/TEST_COORDINATION.md。不要改 Mac 端实现，除非协议或对接要求必须同步。
 ```
 
 ## 3. 给 Mac 端 Codex 的启动提示
@@ -48,7 +69,7 @@
 
 当前已存在 `apps/mac-host` Swift Package 骨架和 `apps/windows-host` Windows 被控端骨架。Mac mini 到位后，先运行 `swift run lan-dual-mac-host`，验证权限、TCP hello 握手、ScreenCaptureKit 预检，再逐步实现真实视频帧和 CGEvent 输入注入。后续做 Mac 反控 Windows 时，可先连接 `apps/windows-host`，它会返回模拟 `video_frame` 并记录输入事件。
 
-开发时遵守 docs/03-architecture-and-protocol.md 的协议。完成任何任务后更新 docs/04-task-board.md。不要改 Windows 端实现，除非协议或对接要求必须同步。
+开发时先读 docs/CURRENT_STATUS.md、docs/NEXT_ACTIONS.md、docs/ACTIVE_LOCKS.md、docs/HANDOFF_LOG.md 和 docs/TEST_COORDINATION.md。遵守 docs/03-architecture-and-protocol.md 的协议。完成任何任务后更新 docs/HANDOFF_LOG.md、docs/ACTIVE_LOCKS.md 和 docs/04-task-board.md；需要另一端配合测试时，同时更新 docs/TEST_COORDINATION.md。不要改 Windows 端实现，除非协议或对接要求必须同步。
 ```
 
 ## 4. 对接前检查

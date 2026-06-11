@@ -199,9 +199,12 @@
         const answer = {
           type: "session_answer",
           ok: true,
-          videoCodec: message.preferredVideoCodec ?? "mjpeg",
+          videoCodec: "mock-svg",
+          videoEncoding: "data-url",
           audioCodec: message.wantAudio ? (message.preferredAudioCodec ?? "opus") : "none",
           fps: Math.min(Number(message.maxFps) || 60, 60),
+          requestedFps: Number(message.maxFps) || 60,
+          maxScreenFps: 60,
           maxBandwidthKbps: Number(message.maxBandwidthKbps) || 50000,
           width,
           height,

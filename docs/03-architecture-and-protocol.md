@@ -172,7 +172,8 @@ Both directions: clipboard_event loop
   "displayId": "main",
   "preferredWidth": 1920,
   "preferredHeight": 1080,
-  "preferredVideoCodec": "mjpeg",
+  "preferredVideoCodec": "h264",
+  "preferredVideoEncoding": "annexb",
   "preferredAudioCodec": "opus",
   "audioVolume": 80
 }
@@ -246,9 +247,30 @@ Both directions: clipboard_event loop
 
 第二版升级：
 
-- H.264 Annex B 或 AVCC。
-- 支持硬件编码。
-- 支持动态码率。
+- 使用 ScreenCaptureKit `SCStream` 做连续采集。
+- 使用 VideoToolbox 输出 H.264 Annex B。
+- `video_frame.codec` 使用 `h264`，`encoding` 第一版使用 `annexb-base64`，后续切到 WebSocket 二进制帧。
+- 支持硬件编码、动态码率和关键帧请求。
+
+H.264 过渡格式：
+
+```json
+{
+  "type": "video_frame",
+  "frameId": 101,
+  "timestamp": "2026-06-12T12:00:00.000Z",
+  "width": 1920,
+  "height": 1080,
+  "codec": "h264",
+  "codecString": "avc1.42E01F",
+  "encoding": "annexb-base64",
+  "keyFrame": true,
+  "timestampUs": 3300000,
+  "durationUs": 33333,
+  "capturePipeline": "screencapturekit-h264",
+  "payload": "AAAA..."
+}
+```
 
 ## 7. 显示和性能设置
 
@@ -266,6 +288,8 @@ Both directions: clipboard_event loop
   "height": 1080,
   "fps": 60,
   "maxBandwidthKbps": 50000,
+  "preferredVideoCodec": "h264",
+  "preferredVideoEncoding": "annexb",
   "audio": true,
   "audioVolume": 80,
   "clipboardText": true,
@@ -292,9 +316,14 @@ Both directions: clipboard_event loop
 {
   "type": "display_settings_ack",
   "accepted": true,
+  "videoCodec": "h264",
+  "videoEncoding": "annexb",
   "width": 1920,
   "height": 1080,
-  "fps": 60,
+  "fps": 30,
+  "requestedFps": 60,
+  "maxScreenFps": 30,
+  "capturePipeline": "screencapturekit-h264",
   "maxBandwidthKbps": 50000,
   "message": "设置已接收"
 }

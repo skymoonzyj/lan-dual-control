@@ -5,6 +5,8 @@ private struct HostSession {
     var width: Int
     var height: Int
     var fps: Int
+    var videoCodec: String
+    var capturePipeline: String
     var maxBandwidthKbps: Int
     var displayId: String
     var displayName: String
@@ -60,6 +62,7 @@ private final class ClientContext {
     var frameId = 0
     var audioFrameId = 0
     var videoTimer: DispatchSourceTimer?
+    var videoStream: ScreenVideoStream?
     var audioTimer: DispatchSourceTimer?
     var clipboardTimer: DispatchSourceTimer?
     var fileTransfers: [String: FileTransferState] = [:]
@@ -260,6 +263,7 @@ final class MacHostService {
                 "videoMode": configuration.videoMode.rawValue,
                 "screenCapture": screenFramesEnabled,
                 "capturePipeline": screenFramesEnabled ? "background-jpeg" : "mock-svg",
+                "h264Stream": screenFramesEnabled && screenCapture.supportsH264Streaming,
                 "maxScreenFps": configuration.maxScreenFps,
                 "displays": screenCapture.availableDisplays().map { $0.jsonObject },
             ],
@@ -438,6 +442,7 @@ final class MacHostService {
                     "mode": screenFramesEnabled ? "jpeg-frame" : "mock-frame",
                     "codec": screenFramesEnabled ? "jpeg" : "mock-svg",
                     "pipeline": screenFramesEnabled ? "background-jpeg" : "mock-svg",
+                    "h264Stream": screenFramesEnabled && screenCapture.supportsH264Streaming,
                     "maxFps": screenFramesEnabled ? configuration.maxScreenFps : 8,
                 ],
                 "audio": ["mode": "mock-frame", "codec": "mock-opus"],
@@ -479,7 +484,7 @@ final class MacHostService {
         let activeDisplay = pickDisplay(message["displayId"] as? String, from: displays)
         let width = positiveInt(message["preferredWidth"]) ?? activeDisplay.width
         let height = positiveInt(message["preferredHeight"]) ?? activeDisplay.height
-        let fps = min(positiveInt(message["maxFps"]) ?? 60, 60)
+        let requestedFps = min(positiveInt(message["maxFps"]) ?? 60, 60)
         let bandwidth = positiveInt(message["maxBandwidthKbps"]) ?? 50_000
         let wantAudio = offer?.wantAudio ?? boolValue(message["wantAudio"])
         let wantClipboardText = offer?.wantClipboardText ?? boolValue(message["wantClipboardText"])
@@ -491,11 +496,18 @@ final class MacHostService {
 
         let snapshot = permissions.snapshot()
         let screenFramesEnabled = shouldUseScreenFrames(snapshot)
+        let videoPipeline = negotiatedVideoPipeline(
+            requestedVideoCodec: videoCodec,
+            screenFramesEnabled: screenFramesEnabled
+        )
+        let negotiatedVideoCodec = videoCodecForPipeline(videoPipeline, fallback: videoCodec)
         let jpegQuality = jpegQuality(for: qualityPreset, bandwidthKbps: bandwidth)
         let session = HostSession(
             width: width,
             height: height,
-            fps: fps,
+            fps: requestedFps,
+            videoCodec: negotiatedVideoCodec,
+            capturePipeline: videoPipeline,
             maxBandwidthKbps: bandwidth,
             displayId: activeDisplay.id,
             displayName: activeDisplay.name,
@@ -508,20 +520,19 @@ final class MacHostService {
             clipboardFileEnabled: wantClipboardFile
         )
         context.session = session
-        let negotiatedVideoCodec = negotiatedVideoCodec(for: session)
-        let capturePipeline = capturePipelineName(for: session)
         let effectiveFps = effectiveVideoFps(for: session)
         let frameIntervalMs = videoFrameIntervalMs(for: session)
 
-        logger.info("会话协商：\(width)x\(height) / 请求 \(fps) Hz / 实际 \(effectiveFps) Hz / 码率 \(bandwidth / 1000) Mbps / \(activeDisplay.name) / 视频 \(screenFramesEnabled ? "后台 JPEG" : "模拟帧") / 质量 \(String(format: "%.2f", jpegQuality))")
+        logger.info("会话协商：\(width)x\(height) / 请求 \(requestedFps) Hz / 实际 \(effectiveFps) Hz / 码率 \(bandwidth / 1000) Mbps / \(activeDisplay.name) / 视频 \(session.capturePipeline) / 质量 \(String(format: "%.2f", jpegQuality))")
         send([
             "type": "session_answer",
             "ok": true,
-            "videoCodec": negotiatedVideoCodec,
+            "videoCodec": session.videoCodec,
             "requestedVideoCodec": videoCodec,
+            "videoEncoding": videoEncodingForPipeline(session.capturePipeline),
             "audioCodec": audioCodec,
             "fps": effectiveFps,
-            "requestedFps": fps,
+            "requestedFps": requestedFps,
             "maxScreenFps": configuration.maxScreenFps,
             "frameIntervalMs": frameIntervalMs,
             "maxBandwidthKbps": bandwidth,
@@ -537,11 +548,11 @@ final class MacHostService {
             "clipboardTextMode": "system",
             "clipboardFile": wantClipboardFile,
             "clipboardFileMode": "system",
-            "hostMode": screenFramesEnabled ? "mac-host-background-jpeg" : "mac-host-mock-video",
+            "hostMode": hostModeForPipeline(session.capturePipeline),
             "inputMode": configuration.inputMode.rawValue,
             "qualityPreset": qualityPreset,
             "jpegQuality": jpegQuality,
-            "capturePipeline": capturePipeline,
+            "capturePipeline": session.capturePipeline,
             "permissions": [
                 "screenRecording": snapshot.screenRecordingGranted,
                 "accessibility": snapshot.accessibilityGranted,
@@ -562,20 +573,28 @@ final class MacHostService {
         let resolutionMode = stringValue(message["resolutionMode"]) ?? "fixed"
         let width = resolutionMode == "native" ? activeDisplay.width : positiveInt(message["width"]) ?? context.session?.width ?? activeDisplay.width
         let height = resolutionMode == "native" ? activeDisplay.height : positiveInt(message["height"]) ?? context.session?.height ?? activeDisplay.height
-        let fps = min(positiveInt(message["fps"]) ?? context.session?.fps ?? 60, 60)
+        let requestedFps = min(positiveInt(message["fps"]) ?? context.session?.fps ?? 60, 60)
         let audioEnabled = boolValue(message["audio"])
         let audioVolume = positiveInt(message["audioVolume"]) ?? context.session?.audioVolume ?? 80
         let bandwidth = positiveInt(message["maxBandwidthKbps"]) ?? context.session?.maxBandwidthKbps ?? 50_000
         let qualityPreset = stringValue(message["qualityPreset"]) ?? context.session?.qualityPreset ?? "balanced"
+        let requestedVideoCodec = stringValue(message["preferredVideoCodec"]) ?? context.session?.videoCodec ?? "mjpeg"
         let clipboardText = message.keys.contains("clipboardText") ? boolValue(message["clipboardText"]) : context.session?.clipboardTextEnabled ?? true
         let clipboardFile = message.keys.contains("clipboardFile") ? boolValue(message["clipboardFile"]) : context.session?.clipboardFileEnabled ?? true
         let screenFramesEnabled = shouldUseScreenFrames(permissions.snapshot())
+        let videoPipeline = negotiatedVideoPipeline(
+            requestedVideoCodec: requestedVideoCodec,
+            screenFramesEnabled: screenFramesEnabled
+        )
+        let negotiatedVideoCodec = videoCodecForPipeline(videoPipeline, fallback: requestedVideoCodec)
         let jpegQuality = jpegQuality(for: qualityPreset, bandwidthKbps: bandwidth)
 
         let session = HostSession(
             width: width,
             height: height,
-            fps: fps,
+            fps: requestedFps,
+            videoCodec: negotiatedVideoCodec,
+            capturePipeline: videoPipeline,
             maxBandwidthKbps: bandwidth,
             displayId: activeDisplay.id,
             displayName: activeDisplay.name,
@@ -588,16 +607,15 @@ final class MacHostService {
             clipboardFileEnabled: clipboardFile
         )
         context.session = session
-        let negotiatedVideoCodec = negotiatedVideoCodec(for: session)
-        let capturePipeline = capturePipelineName(for: session)
         let effectiveFps = effectiveVideoFps(for: session)
 
         send([
             "type": "display_settings_ack",
             "accepted": true,
-            "videoCodec": negotiatedVideoCodec,
+            "videoCodec": session.videoCodec,
+            "videoEncoding": videoEncodingForPipeline(session.capturePipeline),
             "fps": effectiveFps,
-            "requestedFps": fps,
+            "requestedFps": requestedFps,
             "maxScreenFps": configuration.maxScreenFps,
             "frameIntervalMs": videoFrameIntervalMs(for: session),
             "width": width,
@@ -605,9 +623,10 @@ final class MacHostService {
             "activeDisplayId": activeDisplay.id,
             "displayName": activeDisplay.name,
             "maxBandwidthKbps": bandwidth,
+            "hostMode": hostModeForPipeline(session.capturePipeline),
             "qualityPreset": qualityPreset,
             "jpegQuality": jpegQuality,
-            "capturePipeline": capturePipeline,
+            "capturePipeline": session.capturePipeline,
             "clipboardText": clipboardText,
             "clipboardTextMode": "system",
             "clipboardFile": clipboardFile,
@@ -1250,6 +1269,8 @@ final class MacHostService {
             width: 1920,
             height: 1080,
             fps: 8,
+            videoCodec: "mock-svg",
+            capturePipeline: "mock-svg",
             maxBandwidthKbps: 50_000,
             displayId: "main",
             displayName: "主显示器",
@@ -1261,6 +1282,11 @@ final class MacHostService {
             clipboardTextEnabled: false,
             clipboardFileEnabled: false
         )
+        if session.capturePipeline == "screencapturekit-h264" {
+            startH264VideoStream(context, session: session)
+            return
+        }
+
         let intervalMs = videoFrameIntervalMs(for: session)
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + .milliseconds(intervalMs), repeating: .milliseconds(intervalMs))
@@ -1296,26 +1322,106 @@ final class MacHostService {
     private func stopVideoFrames(_ context: ClientContext) {
         context.videoTimer?.cancel()
         context.videoTimer = nil
+        context.videoStream?.stop()
+        context.videoStream = nil
     }
 
-    private func negotiatedVideoCodec(for session: HostSession) -> String {
-        session.screenFramesEnabled ? "jpeg" : "mock-svg"
-    }
+    private func startH264VideoStream(_ context: ClientContext, session: HostSession) {
+        let sessionSnapshot = session
+        Task { [weak self, weak context] in
+            guard let self else { return }
+            do {
+                let stream = try await self.screenCapture.startH264Stream(
+                    displayId: sessionSnapshot.displayId,
+                    maxWidth: sessionSnapshot.width,
+                    maxHeight: sessionSnapshot.height,
+                    fps: self.effectiveVideoFps(for: sessionSnapshot),
+                    bitrateKbps: sessionSnapshot.maxBandwidthKbps,
+                    onFrame: { [weak self, weak context] frame in
+                        DispatchQueue.main.async { [weak self, weak context] in
+                            guard let self, let context, !context.isClosed else { return }
+                            guard context.session?.capturePipeline == "screencapturekit-h264" else { return }
+                            context.frameId += 1
+                            var message = frame.jsonObject(
+                                frameId: context.frameId,
+                                timestamp: ISO8601DateFormatter().string(from: Date())
+                            )
+                            message["qualityPreset"] = sessionSnapshot.qualityPreset
+                            self.addVideoDiagnostics(
+                                to: &message,
+                                session: sessionSnapshot,
+                                pipeline: "screencapturekit-h264",
+                                codec: "h264"
+                            )
+                            message["droppedFrames"] = context.droppedVideoFrames
+                            context.droppedVideoFrames = 0
+                            self.send(message, to: context)
+                        }
+                    }
+                )
 
-    private func capturePipelineName(for session: HostSession) -> String {
-        session.screenFramesEnabled ? "background-jpeg" : "mock-svg"
+                DispatchQueue.main.async { [weak context] in
+                    guard let context, !context.isClosed else {
+                        stream.stop()
+                        return
+                    }
+                    guard context.session?.capturePipeline == "screencapturekit-h264" else {
+                        stream.stop()
+                        return
+                    }
+                    context.videoStream = stream
+                }
+            } catch {
+                DispatchQueue.main.async { [weak self, weak context] in
+                    guard let self, let context, !context.isClosed else { return }
+                    self.logger.warn("H.264 流式采集启动失败：\(error.localizedDescription)。已退回后台 JPEG。")
+                    if var fallbackSession = context.session {
+                        fallbackSession.videoCodec = "jpeg"
+                        fallbackSession.capturePipeline = "background-jpeg"
+                        context.session = fallbackSession
+                        self.send([
+                            "type": "display_settings_ack",
+                            "accepted": true,
+                            "videoCodec": "jpeg",
+                            "videoEncoding": self.videoEncodingForPipeline(fallbackSession.capturePipeline),
+                            "fps": self.effectiveVideoFps(for: fallbackSession),
+                            "requestedFps": fallbackSession.fps,
+                            "maxScreenFps": self.configuration.maxScreenFps,
+                            "frameIntervalMs": self.videoFrameIntervalMs(for: fallbackSession),
+                            "hostMode": self.hostModeForPipeline(fallbackSession.capturePipeline),
+                            "qualityPreset": fallbackSession.qualityPreset,
+                            "jpegQuality": fallbackSession.jpegQuality,
+                            "capturePipeline": fallbackSession.capturePipeline,
+                            "streamFallbackReason": error.localizedDescription,
+                        ], to: context)
+                    }
+                    self.startVideoFrames(context)
+                }
+            }
+        }
     }
 
     private func effectiveVideoFps(for session: HostSession) -> Int {
         let requestedFps = max(1, min(session.fps, 60))
-        return session.screenFramesEnabled
-            ? min(requestedFps, configuration.maxScreenFps)
-            : min(requestedFps, 8)
+        switch session.capturePipeline {
+        case "screencapturekit-h264", "background-jpeg":
+            return min(requestedFps, configuration.maxScreenFps)
+        default:
+            return min(requestedFps, 8)
+        }
     }
 
     private func videoFrameIntervalMs(for session: HostSession) -> Int {
         let fps = max(1, effectiveVideoFps(for: session))
-        let minimumIntervalMs = session.screenFramesEnabled ? 80 : 120
+        let minimumIntervalMs: Int
+        switch session.capturePipeline {
+        case "screencapturekit-h264":
+            minimumIntervalMs = 16
+        case "background-jpeg":
+            minimumIntervalMs = 33
+        default:
+            minimumIntervalMs = 120
+        }
         return max(minimumIntervalMs, Int((1000.0 / Double(fps)).rounded()))
     }
 
@@ -1326,6 +1432,7 @@ final class MacHostService {
         codec: String
     ) {
         frame["videoCodec"] = codec
+        frame["videoEncoding"] = videoEncodingForPipeline(pipeline)
         frame["fps"] = effectiveVideoFps(for: session)
         frame["requestedFps"] = max(1, min(session.fps, 60))
         frame["maxScreenFps"] = configuration.maxScreenFps
@@ -1564,6 +1671,53 @@ final class MacHostService {
             return min(0.82, baseQuality + 0.06)
         }
         return baseQuality
+    }
+
+    private func negotiatedVideoPipeline(requestedVideoCodec: String, screenFramesEnabled: Bool) -> String {
+        guard screenFramesEnabled else {
+            return "mock-svg"
+        }
+
+        if requestedVideoCodec.lowercased().contains("h264"), screenCapture.supportsH264Streaming {
+            return "screencapturekit-h264"
+        }
+
+        return "background-jpeg"
+    }
+
+    private func videoCodecForPipeline(_ pipeline: String, fallback: String) -> String {
+        switch pipeline {
+        case "screencapturekit-h264":
+            return "h264"
+        case "background-jpeg":
+            return "jpeg"
+        case "mock-svg":
+            return "mock-svg"
+        default:
+            return fallback
+        }
+    }
+
+    private func hostModeForPipeline(_ pipeline: String) -> String {
+        switch pipeline {
+        case "screencapturekit-h264":
+            return "mac-host-h264-stream"
+        case "background-jpeg":
+            return "mac-host-background-jpeg"
+        default:
+            return "mac-host-mock-video"
+        }
+    }
+
+    private func videoEncodingForPipeline(_ pipeline: String) -> String {
+        switch pipeline {
+        case "screencapturekit-h264":
+            return "annexb"
+        case "background-jpeg", "mock-svg", "screen-fallback-mock":
+            return "data-url"
+        default:
+            return "unknown"
+        }
     }
 
     private func sendAuthRequired(for message: [String: Any], type: String, to context: ClientContext) {

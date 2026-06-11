@@ -24,6 +24,13 @@
 - [GitHub 使用与同步流程](docs/06-github-workflow.md)
 - [Windows 开发环境说明](docs/07-windows-dev-environment.md)
 - [明日工作计划](docs/08-next-work-plan.md)
+- [当前开发状态](docs/CURRENT_STATUS.md)
+- [下一步行动](docs/NEXT_ACTIONS.md)
+- [当前文件占用](docs/ACTIVE_LOCKS.md)
+- [双端交接记录](docs/HANDOFF_LOG.md)
+- [双端测试联络规则](docs/TEST_COORDINATION.md)
+- [流式视频编码计划](docs/09-streaming-video-plan.md)
+- [局域网 Codex 联络板](docs/LAN_CODEX_LINK.md)
 
 ## 推荐开发顺序
 

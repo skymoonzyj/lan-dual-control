@@ -66,6 +66,7 @@ struct SessionOffer: Codable {
     let preferredWidth: Int?
     let preferredHeight: Int?
     let preferredVideoCodec: String?
+    let preferredVideoEncoding: String?
     let preferredAudioCodec: String?
     let audioVolume: Int?
     let mockScenario: String?
