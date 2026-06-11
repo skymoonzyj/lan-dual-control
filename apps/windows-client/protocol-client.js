@@ -25,15 +25,19 @@
     );
   }
 
-  function makeInputAck(message, { injected = false, mode = "mock", reason = "本地模拟已记录输入事件。" } = {}) {
+  function makeInputAck(
+    message,
+    { accepted = true, injected = false, mode = "mock", reason = "本地模拟已记录输入事件。", code = "" } = {},
+  ) {
     return {
       type: "input_ack",
       inputId: message.id ?? "",
       sequence: message.sequence,
       event: message.event ?? message.action ?? message.kind ?? "unknown",
-      accepted: true,
+      accepted,
       injected,
       mode,
+      code,
       reason,
     };
   }
@@ -96,12 +100,14 @@
       this.frameId = 0;
       this.audioFrameId = 0;
       this.authenticated = false;
+      this.mockScenario = "normal";
     }
 
     async connect() {
       await delay(180);
       this.connected = true;
       this.authenticated = false;
+      this.mockScenario = "normal";
     }
 
     send(message) {
@@ -117,6 +123,7 @@
       const wasConnected = this.connected;
       this.connected = false;
       this.authenticated = false;
+      this.mockScenario = "normal";
       this.stopVideoFrames();
       this.stopAudioFrames();
       if (notify && wasConnected && this.onClose) {
@@ -165,6 +172,7 @@
       }
 
       if (message.type === "session_offer") {
+        this.mockScenario = message.mockScenario ?? "normal";
         if (message.mockScenario === "screen_permission_denied") {
           sendLater({
             type: "session_answer",
@@ -297,6 +305,16 @@
       }
 
       if (message.type === "input_event") {
+        if (this.mockScenario === "input_rejected") {
+          sendLater(makeInputAck(message, {
+            accepted: false,
+            injected: false,
+            mode: "inject",
+            code: "LAN005",
+            reason: "Mac 缺少辅助功能权限，无法注入鼠标键盘。",
+          }), 20);
+          return;
+        }
         sendLater(makeInputAck(message), 20);
         return;
       }
@@ -517,6 +535,7 @@
       this.waiters = new Map();
       this.connected = false;
       this.session = null;
+      this.mockScenario = "normal";
 
       this.transport.onMessage = (message) => this.handleMessage(message);
       this.transport.onClose = () => this.handleClose();
@@ -558,12 +577,14 @@
 
       this.connected = true;
       this.session = answer;
+      this.mockScenario = sessionOffer.mockScenario ?? "normal";
       this.onState("streaming");
       return answer;
     }
 
     disconnect() {
       this.connected = false;
+      this.mockScenario = "normal";
       this.transport.disconnect();
       this.rejectWaiters(new Error("连接已断开"));
     }
@@ -572,6 +593,7 @@
       if (!this.connected) return;
       this.send({
         type: "input_event",
+        mockScenario: this.mockScenario,
         ...event,
       });
     }

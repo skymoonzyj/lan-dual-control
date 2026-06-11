@@ -127,6 +127,13 @@ const videoSourceLabels = {
 const inputModeLabels = {
   inject: "真实注入",
   log: "安全日志",
+  mock: "模拟记录",
+  auth: "等待认证",
+};
+const inputAckStatusLabels = {
+  injected: "已注入",
+  logged: "已记录",
+  rejected: "被拒绝",
 };
 const clipboardModeLabels = {
   system: "系统",
@@ -269,6 +276,10 @@ const state = {
     clipboardTextMode: "",
     clipboardFileMode: "",
     inputMode: "",
+    inputAckStatus: "",
+    inputAckEvent: "",
+    inputAckReason: "",
+    inputAckCode: "",
     videoCodec: "",
     videoSource: "",
     droppedFrames: null,
@@ -350,6 +361,11 @@ function updateInputStatus() {
     return;
   }
 
+  if (state.hostDiagnostics.inputAckStatus === "rejected") {
+    elements.inputText.textContent = `输入事件：${state.inputEvents}（被拒绝）`;
+    return;
+  }
+
   elements.inputText.textContent = `输入事件：${state.inputEvents}`;
 }
 
@@ -399,6 +415,10 @@ function getEmptyHostDiagnostics() {
     clipboardTextMode: "",
     clipboardFileMode: "",
     inputMode: "",
+    inputAckStatus: "",
+    inputAckEvent: "",
+    inputAckReason: "",
+    inputAckCode: "",
     videoCodec: "",
     videoSource: "",
     droppedFrames: null,
@@ -455,6 +475,34 @@ function formatJpegQuality(value) {
   return `质量 ${Math.round(quality * 100)}%`;
 }
 
+function getInputAckDiagnostics(message) {
+  const accepted = Boolean(message.accepted);
+  return {
+    inputMode: message.mode ?? state.hostDiagnostics.inputMode,
+    inputAckStatus: accepted ? (message.injected ? "injected" : "logged") : "rejected",
+    inputAckEvent: message.event ?? "input",
+    inputAckReason: message.reason ?? "",
+    inputAckCode: message.code ?? "",
+  };
+}
+
+function formatInputDiagnostics(diagnostics) {
+  const parts = [];
+  if (diagnostics.inputMode) {
+    parts.push(labelFromMap(diagnostics.inputMode, inputModeLabels));
+  }
+  if (diagnostics.inputAckStatus) {
+    parts.push(labelFromMap(diagnostics.inputAckStatus, inputAckStatusLabels));
+  }
+  if (diagnostics.inputAckStatus === "rejected") {
+    const detail = [diagnostics.inputAckCode, diagnostics.inputAckReason].filter(Boolean).join(" ");
+    if (detail) {
+      parts.push(detail);
+    }
+  }
+  return parts.join(" / ");
+}
+
 function getHostPermissionWarnings(permissions) {
   if (!permissions || typeof permissions !== "object") {
     return [];
@@ -484,6 +532,9 @@ function isMockVideoDiagnostics(diagnostics = state.hostDiagnostics) {
 
 function getHostDiagnosticsLevel(diagnostics = state.hostDiagnostics) {
   const warnings = getHostPermissionWarnings(diagnostics.permissions);
+  if (diagnostics.inputAckStatus === "rejected") {
+    return "warning";
+  }
   if (warnings.length > 0 || diagnostics.capturePipeline === "screen-fallback-mock") {
     return "warning";
   }
@@ -517,7 +568,7 @@ function renderHostDiagnosticsText() {
     diagnostics.videoCodec || "",
     diagnostics.videoSource ? labelFromMap(diagnostics.videoSource, videoSourceLabels) : "",
   ].filter(Boolean);
-  const inputText = diagnostics.inputMode ? labelFromMap(diagnostics.inputMode, inputModeLabels) : "";
+  const inputText = formatInputDiagnostics(diagnostics);
   const droppedFrames = Number(diagnostics.droppedFrames);
   const qualityText = formatJpegQuality(diagnostics.jpegQuality);
   const clipboardText = formatClipboardCapability(
@@ -2177,6 +2228,8 @@ function handleProtocolMessage(message) {
 
   if (message.type === "input_ack") {
     const sequence = Number(message.sequence) || 0;
+    updateHostDiagnostics(getInputAckDiagnostics(message));
+    updateInputStatus();
     if (!message.accepted || sequence <= 3 || sequence % 20 === 0) {
       const status = message.accepted
         ? message.injected
@@ -2184,6 +2237,9 @@ function handleProtocolMessage(message) {
           : "已记录"
         : "被拒绝";
       addLog("输入确认", `${message.event ?? "input"} #${sequence || "-"} · ${status} · ${message.reason || message.mode || ""}`);
+    }
+    if (!message.accepted) {
+      elements.remoteStatusText.textContent = `输入被拒绝：${message.reason || message.code || "请检查被控端权限"}`;
     }
     return;
   }

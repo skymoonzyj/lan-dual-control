@@ -106,15 +106,19 @@ function pickMockDisplay(displayId) {
   );
 }
 
-function makeInputAck(message, { injected = false, mode = "mock", reason = "假 Mac 服务已记录输入事件。" } = {}) {
+function makeInputAck(
+  message,
+  { accepted = true, injected = false, mode = "mock", reason = "假 Mac 服务已记录输入事件。", code = "" } = {},
+) {
   return {
     type: "input_ack",
     inputId: message.id ?? "",
     sequence: message.sequence,
     event: message.event ?? message.action ?? message.kind ?? "unknown",
-    accepted: true,
+    accepted,
     injected,
     mode,
+    code,
     reason,
   };
 }
@@ -199,6 +203,7 @@ function createClient(socket, options) {
   let audioTimer = null;
   let session = null;
   let authenticated = false;
+  let mockScenario = "normal";
   const fileTransfers = new Map();
 
   function send(message) {
@@ -258,6 +263,7 @@ function createClient(socket, options) {
         return;
       }
 
+      mockScenario = message.mockScenario ?? "normal";
       session = negotiateSession(message);
       send(session);
       startVideoFrames(session);
@@ -423,6 +429,16 @@ function createClient(socket, options) {
       inputCount += 1;
       if (inputCount <= 3 || inputCount % 20 === 0) {
         console.log(`input_event #${inputCount}: ${message.kind ?? ""} ${message.detail ?? ""}`);
+      }
+      if (mockScenario === "input_rejected" || message.mockScenario === "input_rejected") {
+        send(makeInputAck(message, {
+          accepted: false,
+          injected: false,
+          mode: "inject",
+          code: "LAN005",
+          reason: "Mac 缺少辅助功能权限，无法注入鼠标键盘。",
+        }));
+        return;
       }
       send(makeInputAck(message));
       return;

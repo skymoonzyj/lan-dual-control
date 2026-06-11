@@ -105,7 +105,7 @@ Windows 端：
 - macOS 被控端已接入 CGEvent 输入注入；默认 `LAN_DUAL_INPUT_MODE=inject`，可切到 `log` 做安全联调。
 - Windows 控制端当前已可区分真实 JPEG 视频帧和模拟视频帧，并记录图片解码失败；`scripts/windows/test-mac-host.ps1` 可用于真机连通自检，显式加 `-ClipboardText -ClipboardFile` 可验证 macOS 文本和文件剪贴板写入。
 - 真 Mac 已通过强校验探针验证真实 JPEG 首帧：`-RequireRealVideo` 会拒绝 mock/fallback 视频帧，`-ExpectInputMode log` 可确认安全输入模式。
-- Windows 控制端已增加 Mac 主机诊断状态条：会汇总 `permissions`、`hostMode`、`capturePipeline`、`source`、`droppedFrames` 和剪贴板模式，真机权限或采集回退问题可直接在画面内看到。
+- Windows 控制端已增加 Mac 主机诊断状态条：会汇总 `permissions`、`hostMode`、`capturePipeline`、`source`、`droppedFrames`、`input_ack` 和剪贴板模式，真机权限、输入拒绝或采集回退问题可直接在画面内看到。
 - Mac 端已兼容 Windows 端现有 `kind/action/remoteX/remoteY` 输入事件字段。
 - 真 Mac 后续继续做真实视频帧、输入注入、低延迟 ScreenCaptureKit 流式采集和更完整的键盘/输入法兼容验证。
 - MSI/NSIS 安装包暂未开启，先保留桌面 exe 构建；安装包放到 M5 处理。
