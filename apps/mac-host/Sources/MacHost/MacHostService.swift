@@ -192,6 +192,7 @@ final class MacHostService {
                 "video": true,
                 "audio": true,
                 "input": true,
+                "inputMode": configuration.inputMode.rawValue,
                 "clipboardText": true,
                 "clipboardFile": true,
                 "reverseControl": true,
@@ -327,7 +328,7 @@ final class MacHostService {
         case "audio_settings_update":
             handleAudioSettings(message, to: context)
         case "input_event":
-            handleInputEvent(data, fallback: message)
+            handleInputEvent(data, fallback: message, context: context)
         case "clipboard_text":
             handleClipboardText(message, to: context)
         case "clipboard_file_offer":
@@ -359,7 +360,7 @@ final class MacHostService {
                     "codec": screenFramesEnabled ? "jpeg" : "mock-svg",
                 ],
                 "audio": ["mode": "mock-frame", "codec": "mock-opus"],
-                "input": ["mode": "logged"],
+                "input": ["mode": configuration.inputMode.rawValue],
                 "clipboardText": true,
                 "clipboardFile": true,
             ],
@@ -490,13 +491,25 @@ final class MacHostService {
         enabled && !muted ? startAudioFrames(context) : stopAudioFrames(context)
     }
 
-    private func handleInputEvent(_ data: Data, fallback: [String: Any]) {
+    private func handleInputEvent(_ data: Data, fallback: [String: Any], context: ClientContext) {
         if let input = try? JSONDecoder().decode(InputEventMessage.self, from: data) {
-            inputInjector.inject(input)
+            inputInjector.inject(input, target: inputTarget(for: context.session))
             return
         }
 
         logger.info("收到输入事件：\(fallback["kind"] ?? fallback["event"] ?? "unknown") \(fallback["detail"] ?? "")")
+    }
+
+    private func inputTarget(for session: HostSession?) -> InputInjectionTarget? {
+        guard let session else {
+            return nil
+        }
+
+        return InputInjectionTarget(
+            displayId: session.displayId,
+            frameWidth: session.width,
+            frameHeight: session.height
+        )
     }
 
     private func handleClipboardText(_ message: [String: Any], to context: ClientContext) {

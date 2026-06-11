@@ -18,7 +18,7 @@ let host = MacHostService(
     configuration: config,
     permissions: permissions,
     screenCapture: ScreenCaptureCoordinator(logger: logger),
-    inputInjector: InputEventInjector(logger: logger),
+    inputInjector: InputEventInjector(logger: logger, mode: config.inputMode),
     logger: logger
 )
 

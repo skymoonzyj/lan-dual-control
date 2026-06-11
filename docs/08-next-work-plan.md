@@ -8,7 +8,7 @@
 - Windows 控制端已支持中文界面、本地模拟、WebSocket 局域网连接、画质档位、分辨率、刷新率、码率、声音骨架、剪贴板骨架、一键反控状态机和桌面 exe 构建。
 - 第一轮连接安全已经实装：未认证连接不能直接进入会话，假 Mac、Windows 被控端和 macOS 被控端骨架会返回统一的 `LAN002`。
 - Windows 侧已经增加 `scripts/windows/dev-lab.ps1`，可做一键健康检查，并可启动控制端、假 Mac 和 Windows 被控端联调服务。
-- macOS 被控端已升级为 WebSocket 服务，支持 `/discovery`、hello/auth/session、真实屏幕 JPEG 帧、模拟视频帧回退、模拟音频帧、输入事件日志和剪贴板确认；真实声音采集和真实输入注入仍待实装。
+- macOS 被控端已升级为 WebSocket 服务，支持 `/discovery`、hello/auth/session、真实屏幕 JPEG 帧、模拟视频帧回退、模拟音频帧、CGEvent 输入注入、输入事件日志和剪贴板确认；真实声音采集仍待实装。
 - Windows 控制端暂时不用配合修改，Mac 端已兼容 Windows 端当前发送的输入事件字段。
 - Windows 被控端仍是骨架阶段，真实屏幕采集、真实声音采集和真实输入注入仍待实装。
 - Mac mini 到位后，优先从 macOS 真机权限、Swift WebSocket 骨架运行和 Windows 控制端真实连接开始。
@@ -18,7 +18,7 @@
 1. 在 Mac mini 上跑通 macOS 被控端 Swift 骨架。
 2. 用 Windows 控制端连接真实 Mac，验证 hello/auth/session 是否跑通。
 3. 补强 Windows 被控端的基础可用性。
-4. 根据真机权限结果，拆分屏幕采集、声音采集和输入注入的第一批任务。
+4. 根据真机权限结果，拆分低延迟采集、声音采集和输入法兼容的第一批任务。
 
 ## 任务 1：连接安全第一轮
 
@@ -83,7 +83,8 @@
 4. 验证 `/discovery` 和 WebSocket hello/auth/session 是否跑通。
 5. 验证屏幕录制、辅助功能、输入监控权限。
 6. 验证 Windows 控制端能收到 `codec: "jpeg"` 的真实 Mac 屏幕帧。
-7. 继续把当前单帧 JPEG 抓取升级为低延迟 ScreenCaptureKit 流式采集。
+7. 验证 Windows 控制端能移动 Mac 鼠标、点击、滚轮和发送常用快捷键。
+8. 继续把当前单帧 JPEG 抓取升级为低延迟 ScreenCaptureKit 流式采集。
 
 ## 暂不优先处理
 

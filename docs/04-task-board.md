@@ -26,7 +26,7 @@ Mac 端：
 - [x] 发送模拟 `video_frame`，便于 Windows 控制端先联调真实 Mac 服务入口。
 - [x] 接收鼠标事件骨架。
 - [x] 接收键盘事件骨架。
-- [ ] 注入鼠标键盘到 macOS。
+- [x] 注入鼠标键盘到 macOS。
 
 Windows 端：
 
@@ -79,6 +79,7 @@ Windows 端：
 - [x] 意外断线后 Windows 控制端会自动重连，手动断开不会重连。
 - [x] Windows 控制端可发送和接收文本剪贴板消息。
 - [x] macOS 被控端可通过 WebSocket 完成 hello/auth/session 握手并发送模拟视频帧。
+- [x] macOS 被控端可接收 `input_event` 并通过 CGEvent 注入鼠标、滚轮和常用键盘快捷键。
 
 当前备注：
 
@@ -93,8 +94,9 @@ Windows 端：
 - 已完成本机假 Mac WebSocket 联调服务，真实 Mac 被控端到位后按同一消息格式替换。
 - 已完成 macOS 被控端 Swift WebSocket 骨架，支持 `/discovery`、hello/auth/session、模拟 `video_frame`/`audio_frame`、输入事件日志、文本和文件剪贴板确认。
 - macOS 被控端已接入真实屏幕 JPEG `video_frame` 抓取；默认 `LAN_DUAL_VIDEO_MODE=auto`，权限不足或采集失败时自动回退模拟帧。
+- macOS 被控端已接入 CGEvent 输入注入；默认 `LAN_DUAL_INPUT_MODE=inject`，可切到 `log` 做安全联调。
 - Windows 控制端当前不用配合修改；Mac 端已兼容 Windows 端现有 `kind/action/remoteX/remoteY` 输入事件字段。
-- Mac mini 到位后需要继续做真机权限验证、低延迟 ScreenCaptureKit 流式采集和 CGEvent 输入注入。
+- Mac mini 到位后需要继续做真机权限验证、低延迟 ScreenCaptureKit 流式采集和更完整的键盘/输入法兼容。
 - MSI/NSIS 安装包暂未开启，先保留桌面 exe 构建；安装包放到 M5 处理。
 
 ## 里程碑 M2：安全和控制体验
