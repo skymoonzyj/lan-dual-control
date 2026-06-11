@@ -71,3 +71,4 @@ scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x
 ```
 
 它会检查 `/discovery`、WebSocket、密码认证、会话协商和第一帧视频帧。
+需要验证系统剪贴板时，可以加上 `-ClipboardText -ClipboardFile`。

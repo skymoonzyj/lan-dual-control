@@ -9,6 +9,9 @@ const defaults = {
   height: 1080,
   fps: 60,
   bandwidthKbps: 50000,
+  clipboardText: false,
+  clipboardFile: false,
+  clipboardFileBytes: 96,
 };
 
 function parseArgs(argv) {
@@ -31,7 +34,14 @@ function parseArgs(argv) {
   args.height = Number(args.height) || defaults.height;
   args.fps = Number(args.fps) || defaults.fps;
   args.bandwidthKbps = Number(args.bandwidthKbps) || defaults.bandwidthKbps;
+  args.clipboardText = booleanArg(args.clipboardText) || booleanArg(args.clipboard);
+  args.clipboardFile = booleanArg(args.clipboardFile) || booleanArg(args.clipboard);
+  args.clipboardFileBytes = Number(args.clipboardFileBytes) || defaults.clipboardFileBytes;
   return args;
+}
+
+function booleanArg(value) {
+  return value === true || value === "true" || value === "1" || value === "yes";
 }
 
 function print(status, text) {
@@ -65,6 +75,10 @@ function makeEnvelope(message) {
     timestamp: new Date().toISOString(),
     ...message,
   };
+}
+
+function makeProbeId(prefix) {
+  return `${prefix}-${Date.now().toString(16)}-${randomUUID().slice(0, 8)}`;
 }
 
 async function fetchDiscovery(args) {
@@ -191,6 +205,115 @@ function summarizeFrame(frame) {
   ].join(" / ");
 }
 
+async function probeClipboardText(client, args) {
+  const clipboardId = makeProbeId("probe-text");
+  const text = `lan-dual-control clipboard probe ${new Date().toISOString()}`;
+  const ackPromise = client.waitFor("clipboard_ack", args.timeoutMs);
+  client.send({
+    type: "clipboard_text",
+    direction: "client_to_host",
+    clipboardId,
+    textLength: text.length,
+    text,
+    mode: "probe",
+  });
+
+  const ack = await ackPromise;
+  if (ack.clipboardId !== clipboardId) {
+    throw new Error(`clipboard_ack id mismatch: ${ack.clipboardId || "missing"}`);
+  }
+  if (!ack.accepted) {
+    throw new Error(`clipboard_text rejected: ${ack.reason || ack.code || "unknown"}`);
+  }
+  print("OK", `Clipboard text accepted: ${ack.textLength || text.length} chars / mode=${ack.mode || "unknown"}`);
+}
+
+function makeProbeFilePayload(size) {
+  const text = `lan-dual-control file clipboard probe ${new Date().toISOString()}\n`;
+  const chunks = [];
+  while (Buffer.byteLength(chunks.join("")) < size) {
+    chunks.push(text);
+  }
+  return Buffer.from(chunks.join("").slice(0, Math.max(1, size)), "utf8");
+}
+
+async function probeClipboardFile(client, args) {
+  const transferId = makeProbeId("probe-file");
+  const fileName = `lan-dual-probe-${Date.now().toString(16)}.txt`;
+  const payload = makeProbeFilePayload(args.clipboardFileBytes);
+  const responsePromise = client.waitFor("clipboard_file_response", args.timeoutMs);
+  client.send({
+    type: "clipboard_file_offer",
+    transferId,
+    direction: "client_to_host",
+    totalBytes: payload.byteLength,
+    fileCount: 1,
+    maxChunkBytes: 64 * 1024,
+    files: [
+      {
+        index: 0,
+        name: fileName,
+        size: payload.byteLength,
+        mimeType: "text/plain",
+        lastModified: Date.now(),
+      },
+    ],
+  });
+
+  const response = await responsePromise;
+  if (response.transferId !== transferId) {
+    throw new Error(`clipboard_file_response id mismatch: ${response.transferId || "missing"}`);
+  }
+  if (!response.accepted) {
+    throw new Error(`clipboard_file_offer rejected: ${response.reason || response.code || "unknown"}`);
+  }
+
+  const chunkSize = Math.max(1, Number(response.maxChunkBytes) || 64 * 1024);
+  let sentBytes = 0;
+  let chunkIndex = 0;
+  for (let offset = 0; offset < payload.byteLength; offset += chunkSize) {
+    const chunk = payload.subarray(offset, Math.min(offset + chunkSize, payload.byteLength));
+    sentBytes += chunk.byteLength;
+    client.send({
+      type: "clipboard_file_chunk",
+      transferId,
+      fileIndex: 0,
+      fileName,
+      chunkIndex,
+      offset,
+      bytes: chunk.byteLength,
+      sentBytes,
+      totalBytes: payload.byteLength,
+      encoding: "base64",
+      dataBase64: chunk.toString("base64"),
+    });
+    chunkIndex += 1;
+  }
+
+  const resultPromise = client.waitFor("clipboard_file_result", args.timeoutMs);
+  client.send({
+    type: "clipboard_file_complete",
+    transferId,
+    fileCount: 1,
+    totalBytes: payload.byteLength,
+  });
+
+  const result = await resultPromise;
+  if (result.transferId !== transferId) {
+    throw new Error(`clipboard_file_result id mismatch: ${result.transferId || "missing"}`);
+  }
+  if (!result.accepted) {
+    throw new Error(`clipboard_file transfer failed: ${result.reason || result.code || "unknown"}`);
+  }
+  if (Number(result.receivedBytes) !== payload.byteLength) {
+    throw new Error(`clipboard_file bytes mismatch: ${result.receivedBytes || 0}/${payload.byteLength}`);
+  }
+  print(
+    "OK",
+    `Clipboard file accepted: ${result.fileCount || 1} file / ${result.receivedBytes} bytes / saveMode=${result.saveMode || response.saveMode || "unknown"}`,
+  );
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   print("INFO", `Target: ${args.host}:${args.port}`);
@@ -253,6 +376,13 @@ async function main() {
       return;
     }
     print("OK", `First frame: ${summarizeFrame(frame)}`);
+
+    if (args.clipboardText) {
+      await probeClipboardText(client, args);
+    }
+    if (args.clipboardFile) {
+      await probeClipboardFile(client, args);
+    }
   } catch (error) {
     fail(error.message);
   } finally {

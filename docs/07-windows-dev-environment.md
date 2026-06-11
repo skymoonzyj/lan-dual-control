@@ -110,6 +110,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-mac
 
 脚本会依次检查 `/discovery`、WebSocket、`hello`、密码认证、`session_offer` 和第一帧 `video_frame`。如果 Mac 已获得屏幕录制权限，第一帧通常应显示 `codec=jpeg`；如果权限不足或采集失败，Mac 端会回退到模拟帧。
 
+如需顺便验证 macOS 系统剪贴板写入，可以显式打开剪贴板探测：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -ClipboardText -ClipboardFile
+```
+
+说明：剪贴板探测会向 Mac 写入一段测试文字，并发送一个小测试文件到 Mac 系统文件剪贴板。普通联通自检默认不改远端剪贴板。
+
 ## 当前项目运行
 
 Windows 控制端页面：

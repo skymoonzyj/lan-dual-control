@@ -8,7 +8,7 @@
 - Windows 控制端已支持中文界面、本地模拟、WebSocket 局域网连接、画质档位、分辨率、刷新率、码率、声音骨架、剪贴板骨架、一键反控状态机和桌面 exe 构建。
 - 第一轮连接安全已经实装：未认证连接不能直接进入会话，假 Mac、Windows 被控端和 macOS 被控端骨架会返回统一的 `LAN002`。
 - Windows 侧已经增加 `scripts/windows/dev-lab.ps1`，可做一键健康检查，并可启动控制端、假 Mac 和 Windows 被控端联调服务。
-- Windows 侧已经增加 `scripts/windows/test-mac-host.ps1`，可在 Mac 真机服务启动后检查 `/discovery`、WebSocket、认证、会话和第一帧视频帧。
+- Windows 侧已经增加 `scripts/windows/test-mac-host.ps1`，可在 Mac 真机服务启动后检查 `/discovery`、WebSocket、认证、会话和第一帧视频帧；显式加 `-ClipboardText -ClipboardFile` 可验证 macOS 文本和文件剪贴板写入。
 - macOS 被控端已升级为 WebSocket 服务，支持 `/discovery`、hello/auth/session、后台真实屏幕 JPEG 帧、模拟视频帧回退、模拟音频帧、CGEvent 输入注入、系统文本剪贴板读写和变更推送、系统文件剪贴板接收写入；真实声音采集仍待实装。
 - Windows 控制端已可区分真实 JPEG 视频帧和模拟视频帧，Mac 端已兼容 Windows 端当前发送的输入事件字段。
 - Windows 被控端仍是骨架阶段，真实屏幕采集、真实声音采集和真实输入注入仍待实装。
@@ -82,7 +82,7 @@
 2. 克隆 GitHub 仓库。
 3. 运行 `apps/mac-host` 的 Swift 骨架。
 4. 验证 `/discovery` 和 WebSocket hello/auth/session 是否跑通。
-5. 在 Windows 上运行 `scripts/windows/test-mac-host.ps1 -HostName <Mac-IP>` 做自动联通自检。
+5. 在 Windows 上运行 `scripts/windows/test-mac-host.ps1 -HostName <Mac-IP>` 做自动联通自检；需要剪贴板深度验证时加 `-ClipboardText -ClipboardFile`。
 6. 验证屏幕录制、辅助功能、输入监控权限。
 7. 验证 Windows 控制端能收到 `codec: "jpeg"` 的真实 Mac 屏幕帧。
 8. 验证 Windows 控制端能移动 Mac 鼠标、点击、滚轮和发送常用快捷键。

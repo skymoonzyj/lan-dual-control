@@ -7,7 +7,10 @@ param(
   [int] $Width = 1920,
   [int] $Height = 1080,
   [int] $Fps = 60,
-  [int] $BandwidthKbps = 50000
+  [int] $BandwidthKbps = 50000,
+  [switch] $ClipboardText,
+  [switch] $ClipboardFile,
+  [int] $ClipboardFileBytes = 96
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,15 +26,25 @@ if (-not $node) {
 
 Push-Location $repoRoot
 try {
-  & node $probeScript `
-    --host $HostName `
-    --port $Port `
-    --password $Password `
-    --timeoutMs $TimeoutMs `
-    --width $Width `
-    --height $Height `
-    --fps $Fps `
-    --bandwidthKbps $BandwidthKbps
+  $nodeArgs = @(
+    $probeScript,
+    "--host", $HostName,
+    "--port", $Port,
+    "--password", $Password,
+    "--timeoutMs", $TimeoutMs,
+    "--width", $Width,
+    "--height", $Height,
+    "--fps", $Fps,
+    "--bandwidthKbps", $BandwidthKbps
+  )
+  if ($ClipboardText) {
+    $nodeArgs += "--clipboardText"
+  }
+  if ($ClipboardFile) {
+    $nodeArgs += @("--clipboardFile", "--clipboardFileBytes", $ClipboardFileBytes)
+  }
+
+  & node @nodeArgs
   exit $LASTEXITCODE
 } finally {
   Pop-Location
