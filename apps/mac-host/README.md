@@ -16,7 +16,7 @@
 - 多显示器枚举。
 - 后台 JPEG `video_frame` 抓取；权限不足或采集失败时自动回退模拟 `video_frame`。
 - 模拟 `audio_frame` 发送，便于 Windows 控制端先完成声音链路联调。
-- CGEvent 输入注入：支持鼠标移动、左/右/中键按下抬起、滚轮、常用键盘按键和 macOS 快捷键修饰键。
+- CGEvent 输入注入：支持鼠标移动、左/右/中键按下抬起、滚轮、常用键盘按键、小键盘、方向键、功能键和 macOS 快捷键修饰键。
 - macOS 系统文本剪贴板读写：接收 Windows 文字后写入 `NSPasteboard`，并把 Mac 本机复制的新文字推送给 Windows。
 - macOS 系统文件剪贴板接收：接收 Windows 文件块后保存到临时目录，并把文件 URL 写入 `NSPasteboard`。
 - macOS 系统文件剪贴板推送：Mac 本机复制普通文件后，按 `clipboard_file_*` 分块发送给 Windows 控制端；当前控制端先以内存模式接收。

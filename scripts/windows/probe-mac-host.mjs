@@ -637,6 +637,34 @@ async function probeInputEvents(client, args) {
       modifiers: ["ctrl"],
       remoteModifiers: ["ctrl"],
     },
+    {
+      type: "input_event",
+      event: "key",
+      action: "key",
+      key: "Delete",
+      code: "Delete",
+    },
+    {
+      type: "input_event",
+      event: "key",
+      action: "key",
+      key: "5",
+      code: "Numpad5",
+    },
+    {
+      type: "input_event",
+      event: "key",
+      action: "key",
+      key: "F13",
+      code: "F13",
+    },
+    {
+      type: "input_event",
+      event: "key",
+      action: "key",
+      key: "Insert",
+      code: "Insert",
+    },
   ];
 
   for (const event of events) {
