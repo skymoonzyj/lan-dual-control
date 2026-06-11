@@ -51,6 +51,40 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：补充 Mac 键盘输入映射覆盖自检，降低后续输入注入回归风险。
+完成内容：
+- 新增 `scripts/mac/check-input-keymap.mjs`，解析 `InputEventInjector.swift` 中 `keyCodeByCode` 和 `keyCodeByKey` 两张映射表。
+- 自检覆盖 Windows 控制端会发送的常用 `KeyboardEvent.code` 和 `event.key`：字母、数字、符号、导航键、修饰键、F1-F20、小键盘。
+- 支持 `--json` 输出，便于后续接入一键回归或 CI。
+- 更新 Mac host README，说明该脚本只做源码静态检查，不会注入真实键盘事件。
+修改文件：
+- `scripts/mac/check-input-keymap.mjs`
+- `apps/mac-host/README.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+验证方式：
+- `node --check scripts/mac/check-input-keymap.mjs`
+- `node scripts/mac/check-input-keymap.mjs`
+- `node scripts/mac/check-input-keymap.mjs --json`
+验证结果：
+- `keyCodeByCode=115`、`keyCodeByKey=113`。
+- `KeyboardEvent.code` 覆盖：字母 26/26、数字 10/10、符号 11/11、导航 15/15、修饰键 9/9、功能键 20/20、小键盘 18/18。
+- `event.key` 覆盖：文本 60/60、导航 22/22、修饰键 8/8、功能键 20/20、小键盘 2/2。
+遗留问题：
+- 这是静态覆盖检查，不代表真实 `inject` 模式已经在用户桌面安全验证；真实注入仍需用户确认环境后切换 `LAN_DUAL_INPUT_MODE=inject` 做小范围验证。
+下一步建议：
+- 后续新增键盘映射或改 Windows 控制端键盘事件时，把 `node scripts/mac/check-input-keymap.mjs` 纳入回归。
+- 真机输入验证继续先用 `log` 模式跑 `--inputEvents`，再切 `inject` 做单键/鼠标移动安全验收。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：补充 Mac 系统声音持续帧观察脚本。
 完成内容：
 - 新增 `scripts/mac/observe-mac-audio.mjs`，用最小 `hello/auth/session_offer` 握手连接真实 Mac host，持续统计 `audio_frame`。

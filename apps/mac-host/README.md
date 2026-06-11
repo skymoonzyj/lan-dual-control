@@ -67,6 +67,14 @@ swift run lan-dual-mac-host
 - `inject`：默认值。收到 Windows 控制端的 `input_event` 后调用 macOS `CGEvent` 执行输入。
 - `log`：只打印输入事件，不真正移动鼠标或按键，适合联调协议时避免误操作。
 
+验证 Mac 键盘注入映射覆盖：
+
+```bash
+node scripts/mac/check-input-keymap.mjs
+```
+
+该脚本会解析 `InputEventInjector.swift` 的 `KeyboardEvent.code` 和 `event.key` 映射表，确认常用字母、数字、符号、导航键、修饰键、F1-F20 和小键盘都有 CGKeyCode 覆盖。它只做源码静态检查，不会发送真实键盘事件。
+
 `LAN_DUAL_DEVICE_NAME` 会用于 `/discovery`、`hello_ack` 和 Bonjour/mDNS 服务名。`LAN_DUAL_BONJOUR` 默认开启；设为 `0`、`false` 或 `off` 可关闭 `_lan-dual-control._tcp` 广播。
 
 Windows 控制端选择“WebSocket 局域网”，地址填写 Mac 的局域网 IP，端口填写 `43770`，默认密码为：
