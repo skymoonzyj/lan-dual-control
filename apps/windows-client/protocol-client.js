@@ -66,6 +66,9 @@
       codec: "mock-svg",
       encoding: "data-url",
       keyFrame: frameId === 1 || frameId % 30 === 0,
+      source: "mock",
+      capturePipeline: "mock-svg",
+      droppedFrames: 0,
       dataUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
     };
   }
@@ -189,6 +192,10 @@
           channels: 2,
           clipboardText: Boolean(message.wantClipboardText),
           clipboardFile: Boolean(message.wantClipboardFile),
+          clipboardTextMode: "mock",
+          clipboardFileMode: "mock",
+          hostMode: "local-mock-mac",
+          capturePipeline: "mock-svg",
         };
         sendLater(answer);
         global.setTimeout(() => this.startVideoFrames(answer), 300);
@@ -227,7 +234,15 @@
 
       if (message.type === "display_settings") {
         const activeDisplay = pickMockDisplay(message.displayId);
-        sendLater({ type: "display_settings_ack", accepted: true }, 80);
+        sendLater({
+          type: "display_settings_ack",
+          accepted: true,
+          capturePipeline: "mock-svg",
+          clipboardText: Boolean(message.clipboardText),
+          clipboardFile: Boolean(message.clipboardFile),
+          clipboardTextMode: "mock",
+          clipboardFileMode: "mock",
+        }, 80);
         this.stopVideoFrames();
         this.startVideoFrames({
           width:

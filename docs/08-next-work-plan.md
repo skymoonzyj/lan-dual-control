@@ -10,7 +10,7 @@
 - Windows 侧已经增加 `scripts/windows/dev-lab.ps1`，可做一键健康检查，并可启动控制端、假 Mac 和 Windows 被控端联调服务。
 - Windows 侧已经增加 `scripts/windows/test-mac-host.ps1`，可在 Mac 真机服务启动后检查 `/discovery`、WebSocket、认证、会话和第一帧视频帧；显式加 `-ClipboardText -ClipboardFile` 可验证 macOS 文本和文件剪贴板写入。
 - macOS 被控端已升级为 WebSocket 服务，支持 `/discovery`、hello/auth/session、后台真实屏幕 JPEG 帧、模拟视频帧回退、模拟音频帧、CGEvent 输入注入、系统文本剪贴板读写和变更推送、系统文件剪贴板接收写入；真实声音采集仍待实装。
-- Windows 控制端已可区分真实 JPEG 视频帧和模拟视频帧，Mac 端已兼容 Windows 端当前发送的输入事件字段。
+- Windows 控制端已可区分真实 JPEG 视频帧和模拟视频帧，并显示 Mac 主机诊断状态条；Mac 端已兼容 Windows 端当前发送的输入事件字段。
 - Windows 被控端仍是骨架阶段，真实屏幕采集、真实声音采集和真实输入注入仍待实装。
 - Mac mini 到位后，优先从 macOS 真机权限、Swift WebSocket 骨架运行和 Windows 控制端真实连接开始。
 

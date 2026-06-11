@@ -46,7 +46,7 @@
   "sessionAnswer": {
     "type": "session_answer",
     "ok": true,
-    "videoCodec": "mjpeg",
+    "videoCodec": "jpeg",
     "audioCodec": "opus",
     "fps": 60,
     "maxBandwidthKbps": 50000,
@@ -73,8 +73,18 @@
     "sampleRate": 48000,
     "channels": 2,
     "clipboardText": true,
+    "clipboardTextMode": "system",
     "clipboardFile": true,
-    "hostMode": "windows-host-skeleton"
+    "clipboardFileMode": "system",
+    "hostMode": "mac-host-background-jpeg",
+    "qualityPreset": "balanced",
+    "jpegQuality": 0.72,
+    "capturePipeline": "background-jpeg",
+    "permissions": {
+      "screenRecording": true,
+      "accessibility": true,
+      "inputMonitoring": true
+    }
   },
   "displaySettings": {
     "type": "display_settings",
@@ -94,7 +104,14 @@
   },
   "displaySettingsAck": {
     "type": "display_settings_ack",
-    "accepted": true
+    "accepted": true,
+    "qualityPreset": "balanced",
+    "jpegQuality": 0.72,
+    "capturePipeline": "background-jpeg",
+    "clipboardText": true,
+    "clipboardTextMode": "system",
+    "clipboardFile": true,
+    "clipboardFileMode": "system"
   },
   "videoFrame": {
     "type": "video_frame",
@@ -102,12 +119,13 @@
     "timestamp": "2026-06-10T12:00:00.000Z",
     "width": 1920,
     "height": 1080,
-    "codec": "mock-svg",
+    "codec": "jpeg",
     "encoding": "data-url",
     "keyFrame": true,
-    "capturePipeline": "mock-svg",
+    "source": "screen",
+    "capturePipeline": "background-jpeg",
     "droppedFrames": 0,
-    "dataUrl": "data:image/svg+xml;base64,..."
+    "dataUrl": "data:image/jpeg;base64,..."
   },
   "audioSettingsUpdate": {
     "type": "audio_settings_update",

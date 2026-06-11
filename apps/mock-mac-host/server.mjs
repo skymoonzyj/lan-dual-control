@@ -130,6 +130,10 @@ function negotiateSession(message) {
     channels: 2,
     clipboardText: Boolean(message.wantClipboardText),
     clipboardFile: Boolean(message.wantClipboardFile),
+    clipboardTextMode: "mock",
+    clipboardFileMode: "mock",
+    hostMode: "mock-mac-host",
+    capturePipeline: "mock-svg",
   };
 }
 
@@ -166,6 +170,9 @@ function makeMockVideoFrame(frameId, width = 1920, height = 1080, displayName = 
     codec: "mock-svg",
     encoding: "data-url",
     keyFrame: frameId === 1 || frameId % 30 === 0,
+    source: "mock",
+    capturePipeline: "mock-svg",
+    droppedFrames: 0,
     dataUrl: `data:image/svg+xml;base64,${Buffer.from(svg, "utf8").toString("base64")}`,
   };
 }
@@ -303,6 +310,11 @@ function createClient(socket, options) {
       send({
         type: "display_settings_ack",
         accepted: true,
+        capturePipeline: "mock-svg",
+        clipboardText: Boolean(message.clipboardText),
+        clipboardFile: Boolean(message.clipboardFile),
+        clipboardTextMode: "mock",
+        clipboardFileMode: "mock",
       });
       return;
     }

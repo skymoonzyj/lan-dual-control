@@ -465,7 +465,9 @@ final class MacHostService {
             "sampleRate": 48_000,
             "channels": 2,
             "clipboardText": wantClipboardText,
+            "clipboardTextMode": "system",
             "clipboardFile": wantClipboardFile,
+            "clipboardFileMode": "system",
             "hostMode": screenFramesEnabled ? "mac-host-background-jpeg" : "mac-host-mock-video",
             "qualityPreset": qualityPreset,
             "jpegQuality": jpegQuality,
@@ -523,7 +525,9 @@ final class MacHostService {
             "jpegQuality": jpegQuality,
             "capturePipeline": screenFramesEnabled ? "background-jpeg" : "mock-svg",
             "clipboardText": clipboardText,
+            "clipboardTextMode": "system",
             "clipboardFile": clipboardFile,
+            "clipboardFileMode": "system",
         ], to: context)
         startVideoFrames(context)
         audioEnabled ? startAudioFrames(context) : stopAudioFrames(context)

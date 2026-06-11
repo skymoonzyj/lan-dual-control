@@ -640,6 +640,30 @@ button:disabled {
   color: var(--muted);
 }
 
+.host-diagnostics {
+  display: inline-block;
+  max-width: 100%;
+  border: 1px solid #dfe5eb;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #526173;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 6px 10px;
+}
+
+.host-diagnostics.is-ok {
+  border-color: #bbdfd6;
+  background: #ecf8f5;
+  color: #0f665a;
+}
+
+.host-diagnostics.is-warning {
+  border-color: #f0d38a;
+  background: #fff7da;
+  color: #8a5200;
+}
+
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

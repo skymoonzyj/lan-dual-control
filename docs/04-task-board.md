@@ -46,6 +46,7 @@ Windows 端：
 - [x] 增加本机假 Mac 联调服务。
 - [x] 接收并渲染模拟视频帧。
 - [x] 增加真实 Mac 联通自检脚本，可检查 `/discovery`、WebSocket、认证、会话和第一帧视频帧。
+- [x] 增加 Mac 主机诊断状态条，可显示权限、采集管线、视频来源、丢帧和剪贴板通道。
 - [x] 保存连接方式、地址、端口和画质设置。
 - [x] 增加最近连接列表。
 - [x] 增加连接状态机。
@@ -103,6 +104,7 @@ Windows 端：
 - macOS 被控端真实屏幕帧已改为后台采集/编码队列，支持 `LAN_DUAL_MAX_SCREEN_FPS`、`LAN_DUAL_JPEG_QUALITY` 和 `video_frame.droppedFrames` 调试字段。
 - macOS 被控端已接入 CGEvent 输入注入；默认 `LAN_DUAL_INPUT_MODE=inject`，可切到 `log` 做安全联调。
 - Windows 控制端当前已可区分真实 JPEG 视频帧和模拟视频帧，并记录图片解码失败；`scripts/windows/test-mac-host.ps1` 可用于真机连通自检，显式加 `-ClipboardText -ClipboardFile` 可验证 macOS 文本和文件剪贴板写入。
+- Windows 控制端已增加 Mac 主机诊断状态条：会汇总 `permissions`、`hostMode`、`capturePipeline`、`source`、`droppedFrames` 和剪贴板模式，真机权限或采集回退问题可直接在画面内看到。
 - Mac 端已兼容 Windows 端现有 `kind/action/remoteX/remoteY` 输入事件字段。
 - Mac mini 到位后需要继续做真机权限验证、低延迟 ScreenCaptureKit 流式采集和更完整的键盘/输入法兼容。
 - MSI/NSIS 安装包暂未开启，先保留桌面 exe 构建；安装包放到 M5 处理。
@@ -131,7 +133,7 @@ Windows 端：
 验收：
 
 - [x] 未授权设备不能连接。
-- [ ] Mac 权限不足时有明确中文提示。
+- [x] Mac 权限不足时有明确中文提示。
 - [ ] Windows 缩放窗口后坐标仍正确。
 - [ ] 全屏和窗口化切换正常。
 - [x] 分辨率、刷新率、码率设置在 Windows 原型中生效。

@@ -18,6 +18,7 @@ const elements = {
   eventLog: document.querySelector("#eventLog"),
   remoteCanvas: document.querySelector("#remoteCanvas"),
   remoteStatusText: document.querySelector("#remoteStatusText"),
+  hostDiagnosticsText: document.querySelector("#hostDiagnosticsText"),
   statusText: document.querySelector("#statusText"),
   inputText: document.querySelector("#inputText"),
   clipboardText: document.querySelector("#clipboardText"),
@@ -64,6 +65,7 @@ const discoveryProbeTimeoutMs = 650;
 const defaultControlPort = "43770";
 const fileChunkSizeBytes = 64 * 1024;
 const maxClipboardFileBytes = 512 * 1024 * 1024;
+const defaultHostDiagnosticsText = "诊断：等待连接。";
 const displayOptionDefaults = {
   resolution: "1920x1080",
   fps: "60",
@@ -105,6 +107,27 @@ const remoteModifierLabels = {
   ctrl: "^ Control",
   shift: "⇧ Shift",
   none: "不映射",
+};
+const hostModeLabels = {
+  "mac-host-background-jpeg": "Mac 后台 JPEG",
+  "mac-host-mock-video": "Mac 模拟画面",
+  "local-mock-mac": "本地模拟 Mac",
+  "mock-mac-host": "假 Mac 服务",
+  "windows-host-skeleton": "Windows 被控骨架",
+};
+const capturePipelineLabels = {
+  "background-jpeg": "后台 JPEG",
+  "mock-svg": "模拟画面",
+  "screen-fallback-mock": "采集回退",
+};
+const videoSourceLabels = {
+  screen: "真实屏幕",
+  mock: "模拟源",
+};
+const clipboardModeLabels = {
+  system: "系统",
+  mock: "模拟",
+  "memory-only": "内存",
 };
 const windowsShortcutMap = {
   a: { key: "a", code: "KeyA", action: "select_all", label: "全选" },
@@ -232,6 +255,21 @@ const state = {
   reverseStateDetail: "你当前是控制方",
   logEntries: [],
   discoveredDevices: fallbackDevices,
+  hostDiagnostics: {
+    hostMode: "",
+    capturePipeline: "",
+    permissions: null,
+    clipboardText: null,
+    clipboardFile: null,
+    clipboardTextMode: "",
+    clipboardFileMode: "",
+    videoCodec: "",
+    videoSource: "",
+    droppedFrames: null,
+    qualityPreset: "",
+    jpegQuality: null,
+    warnedMockFrame: false,
+  },
 };
 
 function nowTime() {
@@ -343,6 +381,183 @@ function getErrorMessage(error) {
     return errorMessages[code];
   }
   return error?.message || "发生未知错误。";
+}
+
+function getEmptyHostDiagnostics() {
+  return {
+    hostMode: "",
+    capturePipeline: "",
+    permissions: null,
+    clipboardText: null,
+    clipboardFile: null,
+    clipboardTextMode: "",
+    clipboardFileMode: "",
+    videoCodec: "",
+    videoSource: "",
+    droppedFrames: null,
+    qualityPreset: "",
+    jpegQuality: null,
+    warnedMockFrame: false,
+  };
+}
+
+function normalizeOptionalBoolean(value) {
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return null;
+}
+
+function labelFromMap(value, labels) {
+  const normalized = String(value ?? "");
+  return labels[normalized] ?? normalized;
+}
+
+function formatPermissionItem(permissions, key, label) {
+  const value = normalizeOptionalBoolean(permissions?.[key]);
+  if (value === true) return `${label}已开`;
+  if (value === false) return `${label}未开`;
+  return `${label}未知`;
+}
+
+function formatPermissionStatus(permissions) {
+  if (!permissions || typeof permissions !== "object") {
+    return "";
+  }
+
+  return [
+    formatPermissionItem(permissions, "screenRecording", "屏幕录制"),
+    formatPermissionItem(permissions, "accessibility", "辅助功能"),
+    formatPermissionItem(permissions, "inputMonitoring", "输入监控"),
+  ].join("，");
+}
+
+function formatClipboardCapability(enabled, mode) {
+  const normalizedEnabled = normalizeOptionalBoolean(enabled);
+  if (normalizedEnabled === false) return "关闭";
+  if (mode) return labelFromMap(mode, clipboardModeLabels);
+  if (normalizedEnabled === true) return "已协商";
+  return "";
+}
+
+function formatJpegQuality(value) {
+  const quality = Number(value);
+  if (!Number.isFinite(quality) || quality <= 0) {
+    return "";
+  }
+  return `质量 ${Math.round(quality * 100)}%`;
+}
+
+function getHostPermissionWarnings(permissions) {
+  if (!permissions || typeof permissions !== "object") {
+    return [];
+  }
+
+  const warnings = [];
+  if (normalizeOptionalBoolean(permissions.screenRecording) === false) {
+    warnings.push("屏幕录制未开，可能只能看到模拟画面");
+  }
+  if (normalizeOptionalBoolean(permissions.accessibility) === false) {
+    warnings.push("辅助功能未开，鼠标键盘注入可能失败");
+  }
+  if (normalizeOptionalBoolean(permissions.inputMonitoring) === false) {
+    warnings.push("输入监控未开，部分快捷键可能受限");
+  }
+  return warnings;
+}
+
+function isMockVideoDiagnostics(diagnostics = state.hostDiagnostics) {
+  return (
+    diagnostics.videoSource === "mock" ||
+    diagnostics.capturePipeline === "mock-svg" ||
+    diagnostics.capturePipeline === "screen-fallback-mock" ||
+    diagnostics.videoCodec === "mock-svg"
+  );
+}
+
+function getHostDiagnosticsLevel(diagnostics = state.hostDiagnostics) {
+  const warnings = getHostPermissionWarnings(diagnostics.permissions);
+  if (warnings.length > 0 || diagnostics.capturePipeline === "screen-fallback-mock") {
+    return "warning";
+  }
+  if (
+    state.connected &&
+    isMockVideoDiagnostics(diagnostics) &&
+    (diagnostics.hostMode === "mac-host-mock-video" ||
+      diagnostics.capturePipeline === "screen-fallback-mock")
+  ) {
+    return "warning";
+  }
+  if (state.connected) {
+    return "ok";
+  }
+  return "idle";
+}
+
+function setHostDiagnosticsLevel(level) {
+  elements.hostDiagnosticsText.classList.toggle("is-ok", level === "ok");
+  elements.hostDiagnosticsText.classList.toggle("is-warning", level === "warning");
+}
+
+function renderHostDiagnosticsText() {
+  const diagnostics = state.hostDiagnostics;
+  const parts = [];
+  const hostParts = [
+    diagnostics.hostMode ? labelFromMap(diagnostics.hostMode, hostModeLabels) : "",
+    diagnostics.capturePipeline ? labelFromMap(diagnostics.capturePipeline, capturePipelineLabels) : "",
+  ].filter(Boolean);
+  const videoParts = [
+    diagnostics.videoCodec || "",
+    diagnostics.videoSource ? labelFromMap(diagnostics.videoSource, videoSourceLabels) : "",
+  ].filter(Boolean);
+  const droppedFrames = Number(diagnostics.droppedFrames);
+  const qualityText = formatJpegQuality(diagnostics.jpegQuality);
+  const clipboardText = formatClipboardCapability(
+    diagnostics.clipboardText,
+    diagnostics.clipboardTextMode,
+  );
+  const clipboardFile = formatClipboardCapability(
+    diagnostics.clipboardFile,
+    diagnostics.clipboardFileMode,
+  );
+  const permissionText = formatPermissionStatus(diagnostics.permissions);
+
+  if (hostParts.length > 0) {
+    parts.push(`主机：${hostParts.join(" / ")}`);
+  }
+  if (videoParts.length > 0) {
+    const frameParts = [...videoParts];
+    if (Number.isFinite(droppedFrames)) {
+      frameParts.push(`丢帧 ${droppedFrames}`);
+    }
+    if (qualityText) {
+      frameParts.push(qualityText);
+    }
+    parts.push(`视频：${frameParts.join(" / ")}`);
+  }
+  if (permissionText) {
+    parts.push(`权限：${permissionText}`);
+  }
+  if (clipboardText || clipboardFile) {
+    parts.push(`剪贴板：文字 ${clipboardText || "未知"}，文件 ${clipboardFile || "未知"}`);
+  }
+
+  return parts.length > 0 ? `诊断：${parts.join("；")}` : defaultHostDiagnosticsText;
+}
+
+function updateHostDiagnostics(nextDiagnostics = {}) {
+  state.hostDiagnostics = {
+    ...state.hostDiagnostics,
+    ...nextDiagnostics,
+  };
+  elements.hostDiagnosticsText.textContent = renderHostDiagnosticsText();
+  setHostDiagnosticsLevel(getHostDiagnosticsLevel());
+}
+
+function resetHostDiagnostics(text = defaultHostDiagnosticsText) {
+  state.hostDiagnostics = getEmptyHostDiagnostics();
+  elements.hostDiagnosticsText.textContent = text;
+  setHostDiagnosticsLevel("idle");
 }
 
 function readPreferences() {
@@ -862,6 +1077,7 @@ function setUiConnecting(host, port) {
   state.lastFrameDecodeErrorId = "";
   resetReverseControlState();
   setConnectionState("connecting", `正在连接 ${host}:${port}`);
+  resetHostDiagnostics(`诊断：正在连接 ${host}:${port}`);
   elements.connectButton.disabled = true;
   elements.disconnectButton.disabled = false;
   elements.reverseButton.disabled = true;
@@ -879,6 +1095,18 @@ function setUiConnected(answer) {
   elements.reverseButton.disabled = false;
   updateDisplaysFromSession(answer);
   updateFileClipboardButton();
+  updateHostDiagnostics({
+    hostMode: answer.hostMode ?? "",
+    capturePipeline: answer.capturePipeline ?? "",
+    permissions: answer.permissions ?? null,
+    clipboardText: answer.clipboardText ?? null,
+    clipboardFile: answer.clipboardFile ?? null,
+    clipboardTextMode: answer.clipboardTextMode ?? "",
+    clipboardFileMode: answer.clipboardFileMode ?? "",
+    videoCodec: answer.videoCodec ?? "",
+    qualityPreset: answer.qualityPreset ?? "",
+    jpegQuality: answer.jpegQuality ?? null,
+  });
   elements.remoteCanvas.focus();
   startLatencyLoop();
 
@@ -895,6 +1123,14 @@ function setUiConnected(answer) {
     elements.audioText.textContent = `声音：已协商 · ${answer.audioCodec ?? "opus"}`;
   } else if (elements.audioToggle.checked) {
     elements.audioText.textContent = "声音：对端暂未开启音频流";
+  }
+
+  const permissionWarnings = getHostPermissionWarnings(answer.permissions);
+  if (permissionWarnings.length > 0) {
+    addLog("Mac 权限", permissionWarnings.join("；"));
+  }
+  if (answer.capturePipeline === "mock-svg" && answer.hostMode === "mac-host-mock-video") {
+    addLog("主机诊断", "Mac 当前返回模拟画面，请检查屏幕录制权限或视频模式");
   }
 
   updateReverseControlUi();
@@ -920,6 +1156,7 @@ function setUiDisconnected(statusText = "未连接", logDetail = "会话已关�
   elements.remoteFrameImage.removeAttribute("src");
   elements.remoteFrameImage.classList.remove("is-visible");
   elements.metricLatency.textContent = "-- ms";
+  resetHostDiagnostics(statusText === "未连接" ? defaultHostDiagnosticsText : `诊断：${statusText}`);
   state.audioFrames = 0;
   state.audioLevel = 0;
   elements.audioText.textContent = "声音：待机";
@@ -945,6 +1182,7 @@ function handleUnexpectedClose(reason = "被控端关闭了连接") {
   elements.remoteFrameImage.removeAttribute("src");
   elements.remoteFrameImage.classList.remove("is-visible");
   elements.metricLatency.textContent = "-- ms";
+  resetHostDiagnostics("诊断：连接中断，等待重连。");
   state.audioFrames = 0;
   state.audioLevel = 0;
   elements.audioText.textContent = "声音：待机";
@@ -976,6 +1214,7 @@ function scheduleReconnect(reason) {
     "reconnecting",
     `连接中断，${Math.round(delayMs / 1000)} 秒后自动重连（${state.reconnectAttempts}/${maxReconnectAttempts}）`,
   );
+  resetHostDiagnostics(`诊断：等待第 ${state.reconnectAttempts}/${maxReconnectAttempts} 次自动重连。`);
   elements.connectButton.disabled = true;
   elements.disconnectButton.disabled = false;
   elements.reverseButton.disabled = true;
@@ -1094,6 +1333,7 @@ function buildLogExportText() {
     `- 连接方式：${connectionLabel}`,
     `- 目标地址：${elements.hostInput.value.trim() || "-"}:${elements.portInput.value.trim() || "-"}`,
     `- 协议版本：${protocolVersion}`,
+    `- 主机诊断：${elements.hostDiagnosticsText.textContent.replace(/^诊断：/, "") || "-"}`,
     "",
     "显示与能力",
     `- 画质预设：${elements.qualityPresetSelect.selectedOptions[0]?.textContent ?? settings.qualityPreset}`,
@@ -1891,6 +2131,15 @@ function handleProtocolMessage(message) {
   }
 
   if (message.type === "display_settings_ack") {
+    updateHostDiagnostics({
+      capturePipeline: message.capturePipeline ?? state.hostDiagnostics.capturePipeline,
+      clipboardText: message.clipboardText ?? state.hostDiagnostics.clipboardText,
+      clipboardFile: message.clipboardFile ?? state.hostDiagnostics.clipboardFile,
+      clipboardTextMode: message.clipboardTextMode ?? state.hostDiagnostics.clipboardTextMode,
+      clipboardFileMode: message.clipboardFileMode ?? state.hostDiagnostics.clipboardFileMode,
+      qualityPreset: message.qualityPreset ?? state.hostDiagnostics.qualityPreset,
+      jpegQuality: message.jpegQuality ?? state.hostDiagnostics.jpegQuality,
+    });
     addLog("被控端确认", "显示设置已接收");
     return;
   }
@@ -1973,6 +2222,26 @@ function renderVideoFrame(frame) {
 
   state.videoFrames += 1;
   const frameLabel = getVideoFrameLabel(frame);
+  const frameCapturePipeline = frame.capturePipeline ?? state.hostDiagnostics.capturePipeline;
+  const frameDiagnostics = {
+    videoCodec: frame.codec ?? state.hostDiagnostics.videoCodec,
+    videoSource: frame.source ?? state.hostDiagnostics.videoSource,
+    capturePipeline: frameCapturePipeline,
+    droppedFrames: frame.droppedFrames ?? state.hostDiagnostics.droppedFrames,
+    qualityPreset: frame.qualityPreset ?? state.hostDiagnostics.qualityPreset,
+    jpegQuality: frame.jpegQuality ?? state.hostDiagnostics.jpegQuality,
+  };
+  updateHostDiagnostics(frameDiagnostics);
+
+  if (
+    !state.hostDiagnostics.warnedMockFrame &&
+    (frameCapturePipeline === "screen-fallback-mock" ||
+      state.hostDiagnostics.hostMode === "mac-host-mock-video")
+  ) {
+    state.hostDiagnostics.warnedMockFrame = true;
+    addLog("视频诊断", "当前是模拟画面，可能是屏幕录制权限未开启或采集回退");
+  }
+
   if (frame.width && frame.height) {
     state.remoteFrameWidth = Number(frame.width);
     state.remoteFrameHeight = Number(frame.height);
@@ -2230,5 +2499,6 @@ state.discoveredDevices = buildDeviceList();
 renderDiscoveredDevices();
 applyScaleMode();
 updateMetrics();
+resetHostDiagnostics();
 updateReverseControlUi();
 addLog("控制端启动", "本地模拟模式，可切换 WebSocket");
