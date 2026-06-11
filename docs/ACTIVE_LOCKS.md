@@ -32,6 +32,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/test-mac-client-browser.mjs`、`README.md`、`apps/windows-host/README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 04:38 | 新增 Mac client 页面级自检：临时启动 Windows host 与 `apps/mac-client`，验证真实 `windows-gdi-jpeg` 画面和 `input_ack · log`。 |
 | Windows Codex | `apps/mock-mac-host/server.mjs`、`docs/CURRENT_STATUS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 04:32 | 假 Mac WebSocket 服务已对齐认证失败限制：同一连接 3 次密码错误后返回 `LAN002` 并关闭，返回剩余尝试次数。 |
 | Windows Codex | `apps/windows-client/app.js`、`apps/windows-client/protocol-client.js`、`apps/windows-client/README.md`、`docs/CURRENT_STATUS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 04:27 | Windows 控制端认证失败提示会显示剩余尝试次数；自动重连遇到 `LAN002` 会停止，避免继续消耗密码尝试次数。 |
 | Mac Codex | `apps/mac-client/*`、`README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 04:25 | 新增 Mac 控制 Windows Web 原型；本机连接 43772 Windows-host mock，视频显示和输入 ack 通过。 |

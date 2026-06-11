@@ -17,6 +17,41 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
+本轮目标：新增 Mac client 连接 Windows host 的 Windows 侧页面自检。
+完成内容：
+- 新增 `scripts/windows/test-mac-client-browser.mjs`。
+- 脚本会临时启动 Windows host 和 `apps/mac-client` 静态页面，打开 Edge/Chrome，通过页面连接 Windows host。
+- 自检会等待真实视频 surface，默认要求非 `mock-svg`，并发送鼠标移动、点击和键盘 `a`，确认页面收到 `input_ack`。
+- 更新根 README、Windows host README、当前状态、下一步行动和任务板。
+修改文件：
+- `scripts/windows/test-mac-client-browser.mjs`
+- `README.md`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `git diff --check`
+- `node scripts/windows/test-mac-client-browser.mjs`
+验证结果：
+- 临时 Windows host 启动在 `127.0.0.1:43772`，Mac client 页面启动在 `127.0.0.1:5188`。
+- 页面连接成功，远端状态 `1280x720 · windows-host-system-jpeg`，视频 `jpeg · #1`。
+- 页面发送鼠标和键盘事件后收到 `input_ack`，输入状态 `已确认 · log`。
+遗留问题：
+- 默认输入模式为 `log`，不会真实注入；SendInput 仍需有人看屏幕时用专门参数或人工联调验证。
+- 该脚本只验证 JPEG/data-url 路径；后续如果 Mac client 接 H.264 或音频播放，需要扩展自检。
+下一步建议：
+- Windows host 改动后同时跑 `test-windows-host.ps1` 和 `test-mac-client-browser.mjs`，覆盖被控端服务和 Mac 反控页面链路。
+是否改了协议：否。
+是否需要另一端配合：不需要；Mac 端可拉取后直接复用脚本结果。
+
 ## 2026-06-12 Mac Codex
 
 日期：2026-06-12

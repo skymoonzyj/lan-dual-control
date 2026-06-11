@@ -97,6 +97,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-contro
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\test-windows-host.ps1 -InputEvents -InputMode system
 ```
 
+Mac 控制 Windows 的页面级自检可在 Windows 本机启动临时 Windows host 和 `apps/mac-client`，自动打开浏览器，确认真实 JPEG 画面和 `input_ack`：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs
+```
+
 ## 下一步
 
 1. 使用 Mac 控制端连接 `ws://Windows-IP:43770`。

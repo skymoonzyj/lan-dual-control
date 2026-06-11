@@ -83,6 +83,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-win
 
 它会临时启动 Windows 被控端并验证真实 JPEG 首帧和文件剪贴板接收；默认不发送鼠标键盘事件。
 
+Mac 控制 Windows 页面级自检可运行：
+
+```powershell
+node scripts\windows\test-mac-client-browser.mjs
+```
+
+它会临时启动 Windows 被控端和 Mac 控制端页面，自动确认 Windows 画面与输入确认。
+
 Mac 真机被控端启动后，可在 Windows 上做一次联通自检：
 
 ```powershell

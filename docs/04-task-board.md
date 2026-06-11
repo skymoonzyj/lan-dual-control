@@ -195,6 +195,7 @@ Mac 端：
 - Windows 被控端已接入最小 SendInput 桥：Windows 上通过 PowerShell/C# 调用 `SendInput`/`SetCursorPos` 注入鼠标、滚轮和常用键盘事件，非 Windows 开发环境回退为日志模式。
 - macOS 被控端、Windows 被控端和假 Mac 服务处理输入事件后都会返回 `input_ack`，控制端和探针可确认输入已注入、仅记录或被拒绝。
 - Windows 被控端已新增本机一键自检脚本 `scripts/windows/test-windows-host.ps1`，可临时启动服务并验证真实 JPEG 首帧和文件剪贴板接收；默认不发送输入事件。
+- Windows 侧已新增 `scripts/windows/test-mac-client-browser.mjs` 页面级自检，可自动启动 Windows host 和 `apps/mac-client`，确认真实 `windows-gdi-jpeg` 画面与 `input_ack · log`。
 - Mac 控制 Windows 已新增 `apps/mac-client` Web 原型：可连接 Windows host、显示 JPEG/data-url 画面、发送鼠标和键盘 `input_event`，本机 mock/回退 Windows host 验证已通过。
 - 当前屏幕采集是 PowerShell/System.Drawing 过渡实现，默认上限较低，系统截图失败时会回退模拟帧；后续仍需升级 Windows Graphics Capture，真实声音采集待接 WASAPI loopback，输入注入可优化为高性能原生模块或常驻进程。
 

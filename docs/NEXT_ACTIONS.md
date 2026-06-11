@@ -40,7 +40,7 @@
 - 把 Windows 被控端当前系统截图 JPEG 过渡层升级为 Windows Graphics Capture，提升帧率、延迟和资源占用表现。
 - 接入 WASAPI loopback，替换 Windows 被控端模拟音频帧。
 - 优化 Windows 控制端文件托盘和错误提示。
-- Windows host 相关改动后运行 `scripts/windows/test-windows-host.ps1`，确认真实 JPEG 首帧和文件剪贴板接收未退化。
+- Windows host 相关改动后运行 `scripts/windows/test-windows-host.ps1`，确认真实 JPEG 首帧和文件剪贴板接收未退化；涉及 Mac 反控链路时再运行 `node scripts/windows/test-mac-client-browser.mjs`，确认 Mac client 页面可显示 Windows 画面并收到 `input_ack`。
 - 继续维护本机假 Mac 服务，用于快速回归和失败场景模拟。
 
 ## 暂不优先
