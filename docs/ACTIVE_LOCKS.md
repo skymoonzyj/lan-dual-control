@@ -32,6 +32,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/mock-mac-host/server.mjs`、`docs/CURRENT_STATUS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 04:32 | 假 Mac WebSocket 服务已对齐认证失败限制：同一连接 3 次密码错误后返回 `LAN002` 并关闭，返回剩余尝试次数。 |
 | Windows Codex | `apps/windows-client/app.js`、`apps/windows-client/protocol-client.js`、`apps/windows-client/README.md`、`docs/CURRENT_STATUS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 04:27 | Windows 控制端认证失败提示会显示剩余尝试次数；自动重连遇到 `LAN002` 会停止，避免继续消耗密码尝试次数。 |
 | Mac Codex | `apps/mac-client/*`、`README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 04:25 | 新增 Mac 控制 Windows Web 原型；本机连接 43772 Windows-host mock，视频显示和输入 ack 通过。 |
 | Mac Codex | `scripts/mac/check-input-keymap.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 04:18 | 新增 Mac 键盘映射覆盖自检；`keyCodeByCode=115`、`keyCodeByKey=113`，常用键组全覆盖。 |

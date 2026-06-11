@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 
 const websocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const defaultPassword = "demo-password";
+const maxAuthAttempts = 3;
 const mockDisplays = [
   { id: "main", name: "内建显示器", width: 1920, height: 1080, primary: true },
   { id: "secondary", name: "扩展显示器", width: 2560, height: 1440, primary: false },
@@ -206,6 +207,7 @@ function createClient(socket, options) {
   let audioTimer = null;
   let session = null;
   let authenticated = false;
+  let failedAuthAttempts = 0;
   let mockScenario = "normal";
   const fileTransfers = new Map();
 
@@ -231,12 +233,27 @@ function createClient(socket, options) {
     if (message.type === "auth_request") {
       const ok = message.password === options.password && message.mockScenario !== "auth_failed";
       authenticated = ok;
+      if (ok) {
+        failedAuthAttempts = 0;
+      } else {
+        failedAuthAttempts += 1;
+      }
+      const attemptsRemaining = Math.max(0, maxAuthAttempts - failedAuthAttempts);
       send({
         type: "auth_result",
         ok,
         code: ok ? "" : "LAN002",
-        reason: ok ? "" : "连接密码不正确",
+        reason: ok
+          ? ""
+          : attemptsRemaining === 0
+            ? "连接密码错误次数过多，请重新连接后再试。"
+            : "连接密码不正确",
+        attemptsRemaining,
+        maxAttempts: maxAuthAttempts,
       });
+      if (!ok && attemptsRemaining === 0) {
+        socket.end();
+      }
       return;
     }
 

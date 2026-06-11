@@ -63,6 +63,33 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：对齐本机假 Mac WebSocket 服务的认证失败限制。
+完成内容：
+- `apps/mock-mac-host/server.mjs` 现在会在同一 WebSocket 连接内统计密码失败次数。
+- 失败时 `auth_result` 返回 `attemptsRemaining` 和 `maxAttempts`。
+- 第 3 次失败返回 `LAN002` 和“次数过多”原因后关闭连接。
+- 成功认证会重置失败计数。
+修改文件：
+- `apps/mock-mac-host/server.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check apps/mock-mac-host/server.mjs`
+- `git diff --check`
+- 临时 WebSocket 错误密码验证：连续 3 次错误密码分别返回剩余 `2/1/0`，第三次后连接关闭。
+遗留问题：
+- 假 Mac 仍是快速回归和失败场景模拟工具，真实功能验收继续以真 Mac host 为准。
+下一步建议：
+- 后续连接安全相关改动，继续同时验证真实 Mac、Windows host 和假 Mac 三条链路。
+是否改了协议：否；使用现有 `attemptsRemaining/maxAttempts` 字段。
+是否需要另一端配合：不需要。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：补强 Windows 控制端认证失败提示和自动重连行为。
 完成内容：
 - Windows 控制端现在会读取 `auth_result.attemptsRemaining/maxAttempts`，密码错误时显示剩余尝试次数。
