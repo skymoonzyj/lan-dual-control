@@ -17,6 +17,7 @@
 - 后台 JPEG `video_frame` 抓取；权限不足或采集失败时自动回退模拟 `video_frame`。
 - 模拟 `audio_frame` 发送，便于 Windows 控制端先完成声音链路联调。
 - CGEvent 输入注入：支持鼠标移动、左/右/中键按下抬起、滚轮、常用键盘按键和 macOS 快捷键修饰键。
+- macOS 系统文本剪贴板读写：接收 Windows 文字后写入 `NSPasteboard`，并把 Mac 本机复制的新文字推送给 Windows。
 
 ## 在 Mac 上运行
 
@@ -95,3 +96,4 @@ Mac mini 到位后优先验证：
 3. Windows 控制端能通过 WebSocket 发送 `hello` 并收到 `hello_ack`。
 4. Windows 控制端能收到 `codec: "jpeg"` 的真实 Mac 屏幕帧。
 5. Windows 控制端能通过 `input_event` 控制 Mac 鼠标、滚轮和常用快捷键。
+6. Windows 和 Mac 能互相同步系统文本剪贴板。

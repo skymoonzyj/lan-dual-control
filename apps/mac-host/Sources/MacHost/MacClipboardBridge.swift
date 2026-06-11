@@ -1,0 +1,45 @@
+import Foundation
+
+#if os(macOS)
+import AppKit
+#endif
+
+final class MacClipboardBridge {
+    private let logger: HostLogger
+
+    init(logger: HostLogger) {
+        self.logger = logger
+    }
+
+    func changeCount() -> Int {
+        #if os(macOS)
+        return NSPasteboard.general.changeCount
+        #else
+        return 0
+        #endif
+    }
+
+    func readText() -> String? {
+        #if os(macOS)
+        return NSPasteboard.general.string(forType: .string)
+        #else
+        return nil
+        #endif
+    }
+
+    @discardableResult
+    func writeText(_ text: String) -> Bool {
+        #if os(macOS)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        let ok = pasteboard.setString(text, forType: .string)
+        if !ok {
+            logger.warn("写入 macOS 系统剪贴板失败")
+        }
+        return ok
+        #else
+        logger.warn("非 macOS 环境，跳过系统剪贴板写入")
+        return false
+        #endif
+    }
+}

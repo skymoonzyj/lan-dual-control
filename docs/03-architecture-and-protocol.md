@@ -445,6 +445,7 @@ macOS 默认按键映射：
   "clipboardId": "clip-1780000000000-1",
   "textLength": 8,
   "text": "复制的文字内容",
+  "mode": "system",
   "timestamp": 1780000000000
 }
 ```
@@ -456,7 +457,8 @@ macOS 默认按键映射：
   "type": "clipboard_ack",
   "accepted": true,
   "clipboardId": "clip-1780000000000-1",
-  "textLength": 8
+  "textLength": 8,
+  "mode": "system"
 }
 ```
 
@@ -464,6 +466,7 @@ macOS 默认按键映射：
 
 - 文本剪贴板第一版先同步纯文本，文件和压缩包走文件剪贴板通道。
 - `direction` 使用 `client_to_host` 或 `host_to_client`。
+- `mode: "system"` 表示接收端已写入系统剪贴板；`mode: "memory-only"` 表示只在被控服务内存中记录。
 - `clipboardId` 用于把发送和确认对应起来，排查重复同步或失败原因。
 - 需要避免循环同步：收到远端剪贴板后，本地写入时要标记来源。
 - 可以提供开关：关闭剪贴板同步。

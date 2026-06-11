@@ -29,5 +29,6 @@
 当前 Windows 被控端骨架也会发送模拟 `video_frame`，便于后续 Mac 控制端提前验证反向控制画面渲染。
 macOS 被控端真实屏幕帧当前使用 `capturePipeline: "background-jpeg"`，并可在 `droppedFrames` 字段中报告后台编码忙碌时丢弃的调度次数。
 文本剪贴板当前使用 `clipboard_text` + `clipboard_ack`，通过 `clipboardId` 对应一次发送和一次确认。
+macOS 被控端会把收到的文本写入系统 `NSPasteboard`，并把本机复制的新文本以 `direction: "host_to_client"` 推回 Windows 控制端。
 
 后续进入真实视频流后，控制消息仍可用 JSON Lines，视频帧、音频帧和文件块可以升级为二进制帧。

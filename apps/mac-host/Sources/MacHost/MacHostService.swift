@@ -13,6 +13,8 @@ private struct HostSession {
     var screenFramesEnabled: Bool
     var qualityPreset: String
     var jpegQuality: Double
+    var clipboardTextEnabled: Bool
+    var clipboardFileEnabled: Bool
 }
 
 private struct FileTransferState {
@@ -31,10 +33,13 @@ private final class ClientContext {
     var audioFrameId = 0
     var videoTimer: DispatchSourceTimer?
     var audioTimer: DispatchSourceTimer?
+    var clipboardTimer: DispatchSourceTimer?
     var fileTransfers: [String: FileTransferState] = [:]
     var reportedVideoCaptureFallback = false
     var isVideoCaptureInFlight = false
     var droppedVideoFrames = 0
+    var lastClipboardChangeCount = 0
+    var lastClipboardText = ""
 
     init(connection: NWConnection) {
         self.connection = connection
@@ -46,6 +51,7 @@ final class MacHostService {
     private let permissions: MacPermissionCenter
     private let screenCapture: ScreenCaptureCoordinator
     private let inputInjector: InputEventInjector
+    private let clipboardBridge: MacClipboardBridge
     private let logger: HostLogger
     private let videoCaptureQueue = DispatchQueue(label: "lan-dual-control.mac-host.video-capture", qos: .userInteractive)
 
@@ -57,12 +63,14 @@ final class MacHostService {
         permissions: MacPermissionCenter,
         screenCapture: ScreenCaptureCoordinator,
         inputInjector: InputEventInjector,
+        clipboardBridge: MacClipboardBridge,
         logger: HostLogger
     ) {
         self.configuration = configuration
         self.permissions = permissions
         self.screenCapture = screenCapture
         self.inputInjector = inputInjector
+        self.clipboardBridge = clipboardBridge
         self.logger = logger
     }
 
@@ -199,6 +207,7 @@ final class MacHostService {
                 "input": true,
                 "inputMode": configuration.inputMode.rawValue,
                 "clipboardText": true,
+                "clipboardTextMode": "system",
                 "clipboardFile": true,
                 "reverseControl": true,
                 "mock": !screenFramesEnabled,
@@ -371,6 +380,7 @@ final class MacHostService {
                 "audio": ["mode": "mock-frame", "codec": "mock-opus"],
                 "input": ["mode": configuration.inputMode.rawValue],
                 "clipboardText": true,
+                "clipboardTextMode": "system",
                 "clipboardFile": true,
             ],
         ], to: context)
@@ -420,7 +430,9 @@ final class MacHostService {
             audioVolume: audioVolume,
             screenFramesEnabled: screenFramesEnabled,
             qualityPreset: qualityPreset,
-            jpegQuality: jpegQuality
+            jpegQuality: jpegQuality,
+            clipboardTextEnabled: wantClipboardText,
+            clipboardFileEnabled: wantClipboardFile
         )
 
         logger.info("会话协商：\(width)x\(height) / \(fps) Hz / 码率 \(bandwidth / 1000) Mbps / \(activeDisplay.name) / 视频 \(screenFramesEnabled ? "后台 JPEG" : "模拟帧") / 质量 \(String(format: "%.2f", jpegQuality))")
@@ -456,6 +468,7 @@ final class MacHostService {
         if wantAudio {
             startAudioFrames(context)
         }
+        wantClipboardText ? startClipboardTextWatcher(context) : stopClipboardTextWatcher(context)
     }
 
     private func handleDisplaySettings(_ message: [String: Any], to context: ClientContext) {
@@ -469,6 +482,8 @@ final class MacHostService {
         let audioVolume = positiveInt(message["audioVolume"]) ?? context.session?.audioVolume ?? 80
         let bandwidth = positiveInt(message["maxBandwidthKbps"]) ?? context.session?.maxBandwidthKbps ?? 50_000
         let qualityPreset = stringValue(message["qualityPreset"]) ?? context.session?.qualityPreset ?? "balanced"
+        let clipboardText = message.keys.contains("clipboardText") ? boolValue(message["clipboardText"]) : context.session?.clipboardTextEnabled ?? true
+        let clipboardFile = message.keys.contains("clipboardFile") ? boolValue(message["clipboardFile"]) : context.session?.clipboardFileEnabled ?? true
         let screenFramesEnabled = shouldUseScreenFrames(permissions.snapshot())
         let jpegQuality = jpegQuality(for: qualityPreset, bandwidthKbps: bandwidth)
 
@@ -483,7 +498,9 @@ final class MacHostService {
             audioVolume: audioVolume,
             screenFramesEnabled: screenFramesEnabled,
             qualityPreset: qualityPreset,
-            jpegQuality: jpegQuality
+            jpegQuality: jpegQuality,
+            clipboardTextEnabled: clipboardText,
+            clipboardFileEnabled: clipboardFile
         )
 
         send([
@@ -492,9 +509,12 @@ final class MacHostService {
             "qualityPreset": qualityPreset,
             "jpegQuality": jpegQuality,
             "capturePipeline": screenFramesEnabled ? "background-jpeg" : "mock-svg",
+            "clipboardText": clipboardText,
+            "clipboardFile": clipboardFile,
         ], to: context)
         startVideoFrames(context)
         audioEnabled ? startAudioFrames(context) : stopAudioFrames(context)
+        clipboardText ? startClipboardTextWatcher(context) : stopClipboardTextWatcher(context)
     }
 
     private func handleAudioSettings(_ message: [String: Any], to context: ClientContext) {
@@ -540,14 +560,81 @@ final class MacHostService {
     }
 
     private func handleClipboardText(_ message: [String: Any], to context: ClientContext) {
-        let textLength = positiveInt(message["textLength"]) ?? stringValue(message["text"])?.count ?? 0
-        logger.info("收到文本剪贴板：\(textLength) 字")
+        let text = stringValue(message["text"]) ?? ""
+        let textLength = positiveInt(message["textLength"]) ?? text.count
+        guard context.session?.clipboardTextEnabled != false else {
+            send([
+                "type": "clipboard_ack",
+                "accepted": false,
+                "clipboardId": stringValue(message["clipboardId"]) ?? "",
+                "textLength": textLength,
+                "reason": "macOS 被控端已关闭文本剪贴板同步。",
+            ], to: context)
+            return
+        }
+
+        let accepted = clipboardBridge.writeText(text)
+        if accepted {
+            context.lastClipboardText = text
+            context.lastClipboardChangeCount = clipboardBridge.changeCount()
+        }
+
+        logger.info("收到文本剪贴板：\(textLength) 字，\(accepted ? "已写入系统剪贴板" : "写入失败")")
         send([
             "type": "clipboard_ack",
-            "accepted": true,
+            "accepted": accepted,
             "clipboardId": stringValue(message["clipboardId"]) ?? "",
             "textLength": textLength,
+            "mode": accepted ? "system" : "failed",
+            "reason": accepted ? "macOS 系统剪贴板已写入。" : "macOS 系统剪贴板写入失败。",
         ], to: context)
+    }
+
+    private func startClipboardTextWatcher(_ context: ClientContext) {
+        stopClipboardTextWatcher(context)
+        context.lastClipboardChangeCount = clipboardBridge.changeCount()
+        context.lastClipboardText = clipboardBridge.readText() ?? ""
+
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + .milliseconds(900), repeating: .milliseconds(900))
+        timer.setEventHandler { [weak self, weak context] in
+            guard let self, let context else { return }
+            guard context.isAuthenticated, context.session?.clipboardTextEnabled == true else {
+                return
+            }
+
+            let changeCount = self.clipboardBridge.changeCount()
+            guard changeCount != context.lastClipboardChangeCount else {
+                return
+            }
+
+            context.lastClipboardChangeCount = changeCount
+            guard let text = self.clipboardBridge.readText(), !text.isEmpty else {
+                return
+            }
+            guard text != context.lastClipboardText else {
+                return
+            }
+
+            context.lastClipboardText = text
+            let clipboardId = "mac-clip-\(Int(Date().timeIntervalSince1970 * 1000))"
+            self.send([
+                "type": "clipboard_text",
+                "direction": "host_to_client",
+                "clipboardId": clipboardId,
+                "textLength": text.count,
+                "text": text,
+                "mode": "system",
+            ], to: context)
+            self.logger.info("已发送 macOS 文本剪贴板：\(text.count) 字")
+        }
+        context.clipboardTimer = timer
+        timer.resume()
+    }
+
+    private func stopClipboardTextWatcher(_ context: ClientContext) {
+        context.clipboardTimer?.cancel()
+        context.clipboardTimer = nil
     }
 
     private func handleClipboardFileOffer(_ message: [String: Any], to context: ClientContext) {
@@ -621,7 +708,9 @@ final class MacHostService {
             audioVolume: 80,
             screenFramesEnabled: false,
             qualityPreset: "balanced",
-            jpegQuality: jpegQuality(for: "balanced", bandwidthKbps: 50_000)
+            jpegQuality: jpegQuality(for: "balanced", bandwidthKbps: 50_000),
+            clipboardTextEnabled: false,
+            clipboardFileEnabled: false
         )
         let maxFps = session.screenFramesEnabled ? min(session.fps, configuration.maxScreenFps) : min(session.fps, 8)
         let intervalMs = max(session.screenFramesEnabled ? 80 : 120, Int((1000.0 / Double(max(1, maxFps))).rounded()))
@@ -949,6 +1038,7 @@ final class MacHostService {
     private func close(_ context: ClientContext) {
         stopVideoFrames(context)
         stopAudioFrames(context)
+        stopClipboardTextWatcher(context)
         activeConnections.removeValue(forKey: ObjectIdentifier(context.connection))
         context.connection.cancel()
         logger.info("连接已关闭")

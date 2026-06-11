@@ -80,6 +80,7 @@ Windows 端：
 - [x] Windows 控制端可构建为桌面 exe。
 - [x] 意外断线后 Windows 控制端会自动重连，手动断开不会重连。
 - [x] Windows 控制端可发送和接收文本剪贴板消息。
+- [x] macOS 被控端可写入系统文本剪贴板，并把 Mac 本机复制的新文字推送给 Windows 控制端。
 - [x] macOS 被控端可通过 WebSocket 完成 hello/auth/session 握手并发送模拟视频帧。
 - [x] macOS 被控端可接收 `input_event` 并通过 CGEvent 注入鼠标、滚轮和常用键盘快捷键。
 
@@ -91,6 +92,7 @@ Windows 端：
 - 已完成连接状态机和中文错误提示，假 Mac 服务可模拟常见失败场景。
 - 已完成意外断线自动重连，当前最多重试 3 次，手动断开会停止重连。
 - 已完成文本剪贴板协议打通，文件剪贴板仍按文件传输通道单独开发。
+- macOS 被控端已接入系统文本剪贴板：远端文本写入 `NSPasteboard`，本机复制新文本会按 `host_to_client` 推送。
 - 已统一 `display_settings`、`display_settings_ack`、`video_frame` 协议命名，假 Mac 服务可持续发送模拟帧。
 - 已完成 Windows Tauri 桌面壳，已验证可构建 `lan-dual-control-windows.exe`。
 - 已完成本机假 Mac WebSocket 联调服务，真实 Mac 被控端到位后按同一消息格式替换。

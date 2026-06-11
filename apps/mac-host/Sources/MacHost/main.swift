@@ -19,6 +19,7 @@ let host = MacHostService(
     permissions: permissions,
     screenCapture: ScreenCaptureCoordinator(logger: logger),
     inputInjector: InputEventInjector(logger: logger, mode: config.inputMode),
+    clipboardBridge: MacClipboardBridge(logger: logger),
     logger: logger
 )
 
