@@ -18,9 +18,20 @@ private struct HostSession {
 }
 
 private struct FileTransferState {
+    struct FileState {
+        var index: Int
+        var name: String
+        var expectedBytes: Int
+        var receivedBytes: Int
+        var url: URL
+    }
+
+    var transferId: String
     var totalBytes: Int
     var receivedBytes: Int
     var fileCount: Int
+    var directoryURL: URL
+    var files: [Int: FileState]
 }
 
 private final class ClientContext {
@@ -209,6 +220,7 @@ final class MacHostService {
                 "clipboardText": true,
                 "clipboardTextMode": "system",
                 "clipboardFile": true,
+                "clipboardFileMode": "system",
                 "reverseControl": true,
                 "mock": !screenFramesEnabled,
                 "videoMode": configuration.videoMode.rawValue,
@@ -382,6 +394,7 @@ final class MacHostService {
                 "clipboardText": true,
                 "clipboardTextMode": "system",
                 "clipboardFile": true,
+                "clipboardFileMode": "system",
             ],
         ], to: context)
     }
@@ -641,24 +654,82 @@ final class MacHostService {
         let transferId = stringValue(message["transferId"]) ?? UUID().uuidString
         let totalBytes = positiveInt(message["totalBytes"]) ?? 0
         let fileCount = positiveInt(message["fileCount"]) ?? 0
-        context.fileTransfers[transferId] = FileTransferState(totalBytes: totalBytes, receivedBytes: 0, fileCount: fileCount)
+        guard context.session?.clipboardFileEnabled != false else {
+            send([
+                "type": "clipboard_file_response",
+                "transferId": transferId,
+                "accepted": false,
+                "code": "LAN006",
+                "reason": "macOS 被控端已关闭文件剪贴板同步。",
+            ], to: context)
+            return
+        }
+
+        do {
+            let directoryURL = try makeFileTransferDirectory(transferId: transferId)
+            let files = makeInitialFileStates(from: message, directoryURL: directoryURL)
+            context.fileTransfers[transferId] = FileTransferState(
+                transferId: transferId,
+                totalBytes: totalBytes,
+                receivedBytes: 0,
+                fileCount: fileCount > 0 ? fileCount : files.count,
+                directoryURL: directoryURL,
+                files: files
+            )
+            logger.info("文件剪贴板清单：\(files.count) 个文件，\(totalBytes) 字节，目录 \(directoryURL.path)")
+        } catch {
+            send([
+                "type": "clipboard_file_response",
+                "transferId": transferId,
+                "accepted": false,
+                "code": "LAN006",
+                "reason": "macOS 创建文件剪贴板临时目录失败：\(error.localizedDescription)",
+            ], to: context)
+            return
+        }
+
         send([
             "type": "clipboard_file_response",
             "transferId": transferId,
             "accepted": true,
-            "saveMode": "memory-only",
+            "saveMode": "clipboard",
             "maxChunkBytes": positiveInt(message["maxChunkBytes"]) ?? 256 * 1024,
-            "reason": "macOS 被控端已准备接收文件块。",
+            "reason": "macOS 被控端已准备接收文件块并写入系统文件剪贴板。",
         ], to: context)
     }
 
     private func handleClipboardFileChunk(_ message: [String: Any], to context: ClientContext) {
         let transferId = stringValue(message["transferId"]) ?? ""
-        var transfer = context.fileTransfers[transferId] ?? FileTransferState(totalBytes: positiveInt(message["totalBytes"]) ?? 0, receivedBytes: 0, fileCount: 0)
-        let chunkBytes = positiveInt(message["bytes"]) ?? 0
-        let sentBytes = positiveInt(message["sentBytes"])
-        let nextReceivedBytes = transfer.receivedBytes + chunkBytes
-        transfer.receivedBytes = sentBytes ?? (transfer.totalBytes > 0 ? min(transfer.totalBytes, nextReceivedBytes) : nextReceivedBytes)
+        guard var transfer = context.fileTransfers[transferId] else {
+            sendError(code: "LAN006", message: "未知文件剪贴板传输：\(transferId)", to: context)
+            return
+        }
+
+        let fileIndex = positiveInt(message["fileIndex"]) ?? 0
+        let fileName = stringValue(message["fileName"]) ?? transfer.files[fileIndex]?.name ?? "clipboard-\(fileIndex + 1)"
+        guard let dataBase64 = stringValue(message["dataBase64"]),
+              let chunkData = Data(base64Encoded: dataBase64) else {
+            sendError(code: "LAN006", message: "文件剪贴板块缺少 base64 数据", to: context)
+            return
+        }
+
+        do {
+            let offset = positiveInt(message["offset"]) ?? transfer.files[fileIndex]?.receivedBytes ?? 0
+            var fileState = transfer.files[fileIndex] ?? makeFileState(
+                index: fileIndex,
+                name: fileName,
+                expectedBytes: positiveInt(message["totalBytes"]) ?? 0,
+                directoryURL: transfer.directoryURL
+            )
+            try writeFileChunk(chunkData, to: fileState.url, offset: UInt64(offset))
+            fileState.receivedBytes = max(fileState.receivedBytes, offset + chunkData.count)
+            transfer.files[fileIndex] = fileState
+            transfer.receivedBytes = transfer.files.values.reduce(0) { $0 + $1.receivedBytes }
+        } catch {
+            sendError(code: "LAN006", message: "写入文件剪贴板块失败：\(error.localizedDescription)", to: context)
+            return
+        }
+
         context.fileTransfers[transferId] = transfer
         send([
             "type": "clipboard_file_progress",
@@ -670,17 +741,140 @@ final class MacHostService {
 
     private func handleClipboardFileComplete(_ message: [String: Any], to context: ClientContext) {
         let transferId = stringValue(message["transferId"]) ?? ""
-        let transfer = context.fileTransfers[transferId]
+        guard let transfer = context.fileTransfers[transferId] else {
+            send([
+                "type": "clipboard_file_result",
+                "transferId": transferId,
+                "accepted": false,
+                "code": "LAN006",
+                "reason": "未知文件剪贴板传输：\(transferId)",
+            ], to: context)
+            return
+        }
+
+        let urls = transfer.files
+            .sorted { $0.key < $1.key }
+            .map { $0.value.url }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        let isComplete = isFileTransferComplete(transfer, urls: urls)
+        let accepted = isComplete && clipboardBridge.writeFileURLs(urls)
         send([
             "type": "clipboard_file_result",
             "transferId": transferId,
-            "accepted": true,
-            "receivedBytes": transfer?.receivedBytes ?? positiveInt(message["totalBytes"]) ?? 0,
-            "totalBytes": transfer?.totalBytes ?? positiveInt(message["totalBytes"]) ?? 0,
-            "fileCount": transfer?.fileCount ?? positiveInt(message["fileCount"]) ?? 0,
-            "reason": "macOS 被控端已接收文件块，系统级文件剪贴板后续接入。",
+            "accepted": accepted,
+            "receivedBytes": transfer.receivedBytes,
+            "totalBytes": transfer.totalBytes > 0 ? transfer.totalBytes : positiveInt(message["totalBytes"]) ?? transfer.receivedBytes,
+            "fileCount": urls.count,
+            "saveMode": accepted ? "clipboard" : "failed",
+            "reason": accepted ? "macOS 系统文件剪贴板已写入。" : (isComplete ? "macOS 系统文件剪贴板写入失败。" : "文件剪贴板块未接收完整。"),
         ], to: context)
-        context.fileTransfers.removeValue(forKey: transferId)
+        if accepted {
+            context.fileTransfers.removeValue(forKey: transferId)
+        }
+    }
+
+    private func isFileTransferComplete(_ transfer: FileTransferState, urls: [URL]) -> Bool {
+        guard !urls.isEmpty else {
+            return false
+        }
+        if transfer.fileCount > 0, urls.count < transfer.fileCount {
+            return false
+        }
+        if transfer.totalBytes > 0, transfer.receivedBytes < transfer.totalBytes {
+            return false
+        }
+        return transfer.files.values.allSatisfy { file in
+            file.expectedBytes <= 0 || file.receivedBytes >= file.expectedBytes
+        }
+    }
+
+    private func makeFileTransferDirectory(transferId: String) throws -> URL {
+        let safeTransferId = sanitizeFileName(transferId.isEmpty ? UUID().uuidString : transferId)
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lan-dual-control-clipboard", isDirectory: true)
+        let directoryURL = rootURL
+            .appendingPathComponent(safeTransferId, isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        return directoryURL
+    }
+
+    private func makeInitialFileStates(from message: [String: Any], directoryURL: URL) -> [Int: FileTransferState.FileState] {
+        guard let files = message["files"] as? [[String: Any]] else {
+            return [:]
+        }
+
+        var states: [Int: FileTransferState.FileState] = [:]
+        for (fallbackIndex, file) in files.enumerated() {
+            let index = positiveInt(file["index"]) ?? fallbackIndex
+            let name = stringValue(file["name"]) ?? "clipboard-\(index + 1)"
+            states[index] = makeFileState(
+                index: index,
+                name: name,
+                expectedBytes: positiveInt(file["size"]) ?? 0,
+                directoryURL: directoryURL
+            )
+        }
+
+        return states
+    }
+
+    private func makeFileState(index: Int, name: String, expectedBytes: Int, directoryURL: URL) -> FileTransferState.FileState {
+        let safeName = uniqueFileName(sanitizeFileName(name), index: index, directoryURL: directoryURL)
+        return FileTransferState.FileState(
+            index: index,
+            name: safeName,
+            expectedBytes: expectedBytes,
+            receivedBytes: 0,
+            url: directoryURL.appendingPathComponent(safeName)
+        )
+    }
+
+    private func writeFileChunk(_ data: Data, to url: URL, offset: UInt64) throws {
+        if !FileManager.default.fileExists(atPath: url.path) {
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+        }
+
+        let handle = try FileHandle(forWritingTo: url)
+        defer {
+            try? handle.close()
+        }
+        try handle.seek(toOffset: offset)
+        try handle.write(contentsOf: data)
+    }
+
+    private func uniqueFileName(_ name: String, index: Int, directoryURL: URL) -> String {
+        let fallbackName = "clipboard-\(index + 1)"
+        let baseName = name.isEmpty ? fallbackName : name
+        var candidate = baseName
+        var suffix = 1
+        while FileManager.default.fileExists(atPath: directoryURL.appendingPathComponent(candidate).path) {
+            let url = URL(fileURLWithPath: baseName)
+            let stem = url.deletingPathExtension().lastPathComponent
+            let ext = url.pathExtension
+            candidate = ext.isEmpty ? "\(stem)-\(suffix)" : "\(stem)-\(suffix).\(ext)"
+            suffix += 1
+        }
+        return candidate
+    }
+
+    private func sanitizeFileName(_ name: String) -> String {
+        let invalid = CharacterSet(charactersIn: "/\\:\0")
+        let cleaned = name
+            .components(separatedBy: invalid)
+            .joined(separator: "_")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.isEmpty || cleaned == "." || cleaned == ".." {
+            return "clipboard-file"
+        }
+        return cleaned
+    }
+
+    private func cleanupIncompleteFileTransfers(_ context: ClientContext) {
+        let directories = context.fileTransfers.values.map { $0.directoryURL }
+        context.fileTransfers.removeAll()
+        for directoryURL in directories {
+            try? FileManager.default.removeItem(at: directoryURL)
+        }
     }
 
     private func handleReverseControlRequest(_ message: [String: Any], to context: ClientContext) {
@@ -1039,6 +1233,7 @@ final class MacHostService {
         stopVideoFrames(context)
         stopAudioFrames(context)
         stopClipboardTextWatcher(context)
+        cleanupIncompleteFileTransfers(context)
         activeConnections.removeValue(forKey: ObjectIdentifier(context.connection))
         context.connection.cancel()
         logger.info("连接已关闭")

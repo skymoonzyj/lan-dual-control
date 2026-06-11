@@ -497,7 +497,8 @@ macOS 默认按键映射：
   "type": "clipboard_file_response",
   "transferId": "uuid",
   "accepted": true,
-  "saveMode": "clipboard"
+  "saveMode": "clipboard",
+  "maxChunkBytes": 65536
 }
 ```
 
@@ -546,9 +547,16 @@ macOS 默认按键映射：
   "transferId": "uuid",
   "accepted": true,
   "receivedBytes": 1048576,
-  "totalBytes": 1048576
+  "totalBytes": 1048576,
+  "fileCount": 1,
+  "saveMode": "clipboard"
 }
 ```
+
+规则：
+
+- `saveMode: "clipboard"` 表示接收端已把文件写入系统文件剪贴板；`saveMode: "memory-only"` 表示只接收和记录文件块。
+- macOS 被控端会把收到的文件保存到系统临时目录，再把文件 URL 写入 `NSPasteboard`，未接收完整时不会写入系统文件剪贴板。
 
 文件剪贴板规则：
 

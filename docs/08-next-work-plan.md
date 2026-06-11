@@ -9,7 +9,7 @@
 - 第一轮连接安全已经实装：未认证连接不能直接进入会话，假 Mac、Windows 被控端和 macOS 被控端骨架会返回统一的 `LAN002`。
 - Windows 侧已经增加 `scripts/windows/dev-lab.ps1`，可做一键健康检查，并可启动控制端、假 Mac 和 Windows 被控端联调服务。
 - Windows 侧已经增加 `scripts/windows/test-mac-host.ps1`，可在 Mac 真机服务启动后检查 `/discovery`、WebSocket、认证、会话和第一帧视频帧。
-- macOS 被控端已升级为 WebSocket 服务，支持 `/discovery`、hello/auth/session、后台真实屏幕 JPEG 帧、模拟视频帧回退、模拟音频帧、CGEvent 输入注入、系统文本剪贴板读写和剪贴板变更推送；真实声音采集仍待实装。
+- macOS 被控端已升级为 WebSocket 服务，支持 `/discovery`、hello/auth/session、后台真实屏幕 JPEG 帧、模拟视频帧回退、模拟音频帧、CGEvent 输入注入、系统文本剪贴板读写和变更推送、系统文件剪贴板接收写入；真实声音采集仍待实装。
 - Windows 控制端已可区分真实 JPEG 视频帧和模拟视频帧，Mac 端已兼容 Windows 端当前发送的输入事件字段。
 - Windows 被控端仍是骨架阶段，真实屏幕采集、真实声音采集和真实输入注入仍待实装。
 - Mac mini 到位后，优先从 macOS 真机权限、Swift WebSocket 骨架运行和 Windows 控制端真实连接开始。
@@ -87,7 +87,8 @@
 7. 验证 Windows 控制端能收到 `codec: "jpeg"` 的真实 Mac 屏幕帧。
 8. 验证 Windows 控制端能移动 Mac 鼠标、点击、滚轮和发送常用快捷键。
 9. 验证 Windows 和 Mac 能互相同步系统文本剪贴板。
-10. 继续把当前后台 JPEG 管线升级为真正的 ScreenCaptureKit 流式输出或硬件编码。
+10. 验证 Windows 发送文件剪贴板后，Mac Finder 能粘贴收到的文件。
+11. 继续把当前后台 JPEG 管线升级为真正的 ScreenCaptureKit 流式输出或硬件编码。
 
 ## 暂不优先处理
 

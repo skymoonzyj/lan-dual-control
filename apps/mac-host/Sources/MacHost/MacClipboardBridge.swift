@@ -42,4 +42,24 @@ final class MacClipboardBridge {
         return false
         #endif
     }
+
+    @discardableResult
+    func writeFileURLs(_ urls: [URL]) -> Bool {
+        #if os(macOS)
+        guard !urls.isEmpty else {
+            return false
+        }
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        let ok = pasteboard.writeObjects(urls as [NSURL])
+        if !ok {
+            logger.warn("写入 macOS 文件剪贴板失败")
+        }
+        return ok
+        #else
+        logger.warn("非 macOS 环境，跳过系统文件剪贴板写入")
+        return false
+        #endif
+    }
 }

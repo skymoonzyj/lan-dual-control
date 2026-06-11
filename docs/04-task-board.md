@@ -81,6 +81,7 @@ Windows 端：
 - [x] 意外断线后 Windows 控制端会自动重连，手动断开不会重连。
 - [x] Windows 控制端可发送和接收文本剪贴板消息。
 - [x] macOS 被控端可写入系统文本剪贴板，并把 Mac 本机复制的新文字推送给 Windows 控制端。
+- [x] macOS 被控端可接收文件剪贴板块，保存到临时目录并写入系统文件剪贴板。
 - [x] macOS 被控端可通过 WebSocket 完成 hello/auth/session 握手并发送模拟视频帧。
 - [x] macOS 被控端可接收 `input_event` 并通过 CGEvent 注入鼠标、滚轮和常用键盘快捷键。
 
@@ -93,6 +94,7 @@ Windows 端：
 - 已完成意外断线自动重连，当前最多重试 3 次，手动断开会停止重连。
 - 已完成文本剪贴板协议打通，文件剪贴板仍按文件传输通道单独开发。
 - macOS 被控端已接入系统文本剪贴板：远端文本写入 `NSPasteboard`，本机复制新文本会按 `host_to_client` 推送。
+- macOS 被控端已接入系统文件剪贴板接收：Windows 发送的文件块会落到临时目录，并写入 `NSPasteboard` 文件 URL。
 - 已统一 `display_settings`、`display_settings_ack`、`video_frame` 协议命名，假 Mac 服务可持续发送模拟帧。
 - 已完成 Windows Tauri 桌面壳，已验证可构建 `lan-dual-control-windows.exe`。
 - 已完成本机假 Mac WebSocket 联调服务，真实 Mac 被控端到位后按同一消息格式替换。
@@ -200,7 +202,7 @@ Mac 端：
 - [x] 局域网自动发现骨架：控制端刷新设备并探测 `/discovery`，假 Mac 和 Windows 被控端已返回设备信息。
 - [ ] 跨设备 UDP/mDNS 自动发现。
 - [x] 文件、压缩包、图片等剪贴板传输骨架：控制端可选择文件并按 `clipboard_file_*` 分块发送，假 Mac 和 Windows 被控端可确认进度。
-- [ ] 系统级文件剪贴板读写：复制文件后自动同步，并在接收端写入系统剪贴板。
+- [ ] 系统级文件剪贴板读写：macOS 被控端已支持接收端写入系统剪贴板，复制文件后自动同步和 Windows 接收端系统写入仍待做。
 - [ ] 大文件传输速度、剩余时间和断点续传。
 - [x] 多显示器选择骨架：控制端显示 `displays` 下拉框，并通过 `displayId` 切换目标屏幕。
 - [ ] 真实多显示器枚举和采集切换。

@@ -213,7 +213,7 @@
     "type": "clipboard_file_response",
     "transferId": "uuid",
     "accepted": true,
-    "saveMode": "memory-only",
+    "saveMode": "clipboard",
     "maxChunkBytes": 65536
   },
   "clipboardFileChunk": {
@@ -246,6 +246,8 @@
     "transferId": "uuid",
     "accepted": true,
     "receivedBytes": 1048576,
-    "totalBytes": 1048576
+    "totalBytes": 1048576,
+    "fileCount": 1,
+    "saveMode": "clipboard"
   }
 }
