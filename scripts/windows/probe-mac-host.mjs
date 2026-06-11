@@ -12,6 +12,7 @@ const defaults = {
   clipboardText: false,
   clipboardFile: false,
   clipboardFileBytes: 96,
+  inputEvents: false,
 };
 
 function parseArgs(argv) {
@@ -37,6 +38,7 @@ function parseArgs(argv) {
   args.clipboardText = booleanArg(args.clipboardText) || booleanArg(args.clipboard);
   args.clipboardFile = booleanArg(args.clipboardFile) || booleanArg(args.clipboard);
   args.clipboardFileBytes = Number(args.clipboardFileBytes) || defaults.clipboardFileBytes;
+  args.inputEvents = booleanArg(args.inputEvents) || booleanArg(args.input);
   return args;
 }
 
@@ -79,6 +81,12 @@ function makeEnvelope(message) {
 
 function makeProbeId(prefix) {
   return `${prefix}-${Date.now().toString(16)}-${randomUUID().slice(0, 8)}`;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 async function fetchDiscovery(args) {
@@ -314,6 +322,63 @@ async function probeClipboardFile(client, args) {
   );
 }
 
+async function probeInputEvents(client) {
+  const events = [
+    {
+      type: "input_event",
+      event: "mouse_move",
+      action: "move",
+      x: 0.5,
+      y: 0.5,
+      remoteX: 960,
+      remoteY: 540,
+    },
+    {
+      type: "input_event",
+      event: "mouse_button",
+      action: "down",
+      button: "left",
+      x: 0.5,
+      y: 0.5,
+      remoteX: 960,
+      remoteY: 540,
+    },
+    {
+      type: "input_event",
+      event: "mouse_button",
+      action: "up",
+      button: "left",
+      x: 0.5,
+      y: 0.5,
+      remoteX: 960,
+      remoteY: 540,
+    },
+    {
+      type: "input_event",
+      event: "mouse_wheel",
+      action: "wheel",
+      deltaY: 120,
+      x: 0.5,
+      y: 0.5,
+      remoteX: 960,
+      remoteY: 540,
+    },
+    {
+      type: "input_event",
+      event: "key",
+      action: "key",
+      key: "a",
+      code: "KeyA",
+      modifiers: ["ctrl"],
+      remoteModifiers: ["ctrl"],
+    },
+  ];
+
+  events.forEach((event) => client.send(event));
+  await delay(150);
+  print("OK", `Input events sent: ${events.length} events`);
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   print("INFO", `Target: ${args.host}:${args.port}`);
@@ -382,6 +447,9 @@ async function main() {
     }
     if (args.clipboardFile) {
       await probeClipboardFile(client, args);
+    }
+    if (args.inputEvents) {
+      await probeInputEvents(client);
     }
   } catch (error) {
     fail(error.message);

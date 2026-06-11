@@ -10,7 +10,8 @@ param(
   [int] $BandwidthKbps = 50000,
   [switch] $ClipboardText,
   [switch] $ClipboardFile,
-  [int] $ClipboardFileBytes = 96
+  [int] $ClipboardFileBytes = 96,
+  [switch] $InputEvents
 )
 
 $ErrorActionPreference = "Stop"
@@ -42,6 +43,9 @@ try {
   }
   if ($ClipboardFile) {
     $nodeArgs += @("--clipboardFile", "--clipboardFileBytes", $ClipboardFileBytes)
+  }
+  if ($InputEvents) {
+    $nodeArgs += "--inputEvents"
   }
 
   & node @nodeArgs

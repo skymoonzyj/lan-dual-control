@@ -11,7 +11,7 @@
 - Windows 侧已经增加 `scripts/windows/test-mac-host.ps1`，可在 Mac 真机服务启动后检查 `/discovery`、WebSocket、认证、会话和第一帧视频帧；显式加 `-ClipboardText -ClipboardFile` 可验证 macOS 文本和文件剪贴板写入。
 - macOS 被控端已升级为 WebSocket 服务，支持 `/discovery`、hello/auth/session、后台真实屏幕 JPEG 帧、模拟视频帧回退、模拟音频帧、CGEvent 输入注入、系统文本剪贴板读写和变更推送、系统文件剪贴板接收写入；真实声音采集仍待实装。
 - Windows 控制端已可区分真实 JPEG 视频帧和模拟视频帧，并显示 Mac 主机诊断状态条；Mac 端已兼容 Windows 端当前发送的输入事件字段。
-- Windows 被控端仍是骨架阶段，真实屏幕采集、真实声音采集和真实输入注入仍待实装；文本和文件剪贴板在 Windows 上已可写入系统剪贴板。
+- Windows 被控端仍是骨架阶段，真实屏幕采集和真实声音采集仍待实装；文本/文件剪贴板在 Windows 上已可写入系统剪贴板，输入事件已接入最小 SendInput 桥。
 - Mac mini 到位后，优先从 macOS 真机权限、Swift WebSocket 骨架运行和 Windows 控制端真实连接开始。
 
 ## 明天优先目标
@@ -67,7 +67,7 @@
 
 - [x] 优先补文本剪贴板真实写入或更完整的接收状态。
 - [x] 补文件剪贴板接收端临时落地和 Windows 系统文件剪贴板写入。
-- [ ] 评估 SendInput 输入注入的最小实现范围。
+- [x] 评估并接入 SendInput 输入注入的最小实现范围。
 - [x] 继续保持 Windows 被控端可以独立跑 `npm.cmd run check`。
 
 验收：
@@ -75,6 +75,7 @@
 - [x] Windows 被控端日志能清楚显示收到的控制事件和剪贴板事件。
 - [x] Windows 被控端收到 `clipboard_text` 后，在 Windows 上写入系统文本剪贴板，非 Windows 环境回退为内存模式。
 - [x] Windows 被控端收到 `clipboard_file_*` 后保存文件块，在 Windows 上写入系统文件剪贴板，非 Windows 环境回退为临时文件模式。
+- [x] Windows 被控端收到输入事件后，在 Windows 上通过 SendInput 注入鼠标、滚轮和常用键盘，非 Windows 环境回退为日志模式。
 - [x] 不破坏现有模拟视频帧、模拟音频帧和协议握手。
 
 ## 如果 Mac mini 明天到货

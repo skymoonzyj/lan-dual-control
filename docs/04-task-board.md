@@ -156,7 +156,7 @@ Windows 端：
 - [x] 接收 Mac 输入事件骨架。
 - [x] 接收文本剪贴板并在 Windows 上写入系统剪贴板。
 - [x] 接收文件剪贴板并在 Windows 上写入系统文件剪贴板。
-- [ ] 使用 SendInput 注入输入。
+- [x] 使用 SendInput 注入输入。
 - [ ] 处理防火墙提示。
 
 Mac 端：
@@ -179,7 +179,8 @@ Mac 端：
 - 当前可完成 hello/auth/session 握手，未认证连接会被拒绝；认证后可发送模拟 `video_frame` 和 `audio_frame`、接收 `input_event`、处理 `clipboard_text`。
 - Windows 被控端在 Windows 上会用 PowerShell `Set-Clipboard` 写入系统文本剪贴板，非 Windows 开发环境回退为 `memory-only`，并在 `/discovery`、`hello_ack`、`session_answer` 暴露剪贴板模式。
 - Windows 被控端可接收 `clipboard_file_*` 文件块并落到临时目录；在 Windows 上会用 PowerShell `Set-Clipboard -Path` 写入系统文件剪贴板，非 Windows 开发环境回退为 `saveMode: temp`。
-- 当前仍是骨架模式：屏幕采集待接 Windows Graphics Capture，真实声音采集待接 WASAPI loopback，输入注入待接 SendInput。
+- Windows 被控端已接入最小 SendInput 桥：Windows 上通过 PowerShell/C# 调用 `SendInput`/`SetCursorPos` 注入鼠标、滚轮和常用键盘事件，非 Windows 开发环境回退为日志模式。
+- 当前仍是骨架模式：屏幕采集待接 Windows Graphics Capture，真实声音采集待接 WASAPI loopback，输入注入后续可优化为高性能原生模块或常驻进程。
 
 ## 里程碑 M4：一键反控
 
