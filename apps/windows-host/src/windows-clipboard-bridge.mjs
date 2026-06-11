@@ -1,22 +1,130 @@
+import { spawnSync } from "node:child_process";
+
+const defaultClipboardTimeoutMs = 4000;
+
+function normalizeClipboardMode(mode) {
+  return ["auto", "system", "memory"].includes(mode) ? mode : "auto";
+}
+
 export class WindowsClipboardBridge {
-  constructor({ logger } = {}) {
+  constructor({
+    logger,
+    mode = process.env.LAN_DUAL_WINDOWS_CLIPBOARD_MODE || "auto",
+    powershellCommand = process.env.LAN_DUAL_POWERSHELL || "powershell.exe",
+    clipboardTimeoutMs = defaultClipboardTimeoutMs,
+  } = {}) {
     this.logger = logger;
+    this.mode = normalizeClipboardMode(mode);
+    this.powershellCommand = powershellCommand;
+    this.clipboardTimeoutMs = Number(clipboardTimeoutMs) || defaultClipboardTimeoutMs;
     this.lastText = "";
     this.fileTransfers = new Map();
   }
 
-  receiveText(message) {
-    this.lastText = message.text ?? "";
-    this.logger?.info(`收到文本剪贴板：${this.lastText.length} 字`);
+  getCapabilities() {
+    const systemTextAvailable = this.canUseSystemTextClipboard();
+    return {
+      text: true,
+      textMode: systemTextAvailable ? "system" : "memory-only",
+      file: true,
+      fileMode: "memory-only",
+      backend: systemTextAvailable ? "PowerShell Set-Clipboard" : "memory",
+      message: systemTextAvailable
+        ? "Windows 文本剪贴板会写入系统剪贴板；文件剪贴板仍为接收骨架。"
+        : "当前环境使用内存剪贴板回退；在 Windows 上会自动使用 PowerShell Set-Clipboard。",
+    };
+  }
 
+  canUseSystemTextClipboard() {
+    if (this.mode === "memory") {
+      return false;
+    }
+    if (this.mode === "system") {
+      return true;
+    }
+    return process.platform === "win32";
+  }
+
+  receiveText(message) {
+    const text = message.text ?? "";
+    this.lastText = text;
+
+    if (!this.canUseSystemTextClipboard()) {
+      this.logger?.info(`收到文本剪贴板：${text.length} 字 / memory-only`);
+      return {
+        type: "clipboard_ack",
+        accepted: true,
+        clipboardId: message.clipboardId,
+        textLength: message.textLength ?? text.length,
+        mode: "memory-only",
+        reason: "当前环境不是 Windows，已用内存剪贴板回退保存。",
+      };
+    }
+
+    const result = this.writeSystemText(text);
+    if (!result.ok) {
+      this.logger?.warn(`Windows 系统文本剪贴板写入失败：${result.reason}`);
+      return {
+        type: "clipboard_ack",
+        accepted: false,
+        clipboardId: message.clipboardId,
+        textLength: message.textLength ?? text.length,
+        mode: "system",
+        code: "LAN011",
+        reason: result.reason,
+      };
+    }
+
+    this.logger?.info(`收到文本剪贴板：${text.length} 字 / system`);
     return {
       type: "clipboard_ack",
       accepted: true,
       clipboardId: message.clipboardId,
-      textLength: message.textLength ?? this.lastText.length,
-      mode: "memory-only",
-      reason: "Windows 系统剪贴板写入后续接入原生模块。",
+      textLength: message.textLength ?? text.length,
+      mode: "system",
+      reason: "Windows 系统文本剪贴板已写入。",
     };
+  }
+
+  writeSystemText(text) {
+    const script = [
+      "$ErrorActionPreference = 'Stop'",
+      "[Console]::InputEncoding = [System.Text.Encoding]::UTF8",
+      "$text = [Console]::In.ReadToEnd()",
+      "Set-Clipboard -Value $text",
+    ].join("; ");
+
+    const result = spawnSync(
+      this.powershellCommand,
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+      {
+        input: text,
+        encoding: "utf8",
+        timeout: this.clipboardTimeoutMs,
+        windowsHide: true,
+      },
+    );
+
+    if (result.error) {
+      return {
+        ok: false,
+        reason:
+          result.error.code === "ETIMEDOUT"
+            ? `PowerShell 写入剪贴板超时（${this.clipboardTimeoutMs} ms）`
+            : result.error.message,
+      };
+    }
+
+    if (result.status !== 0) {
+      const stderr = String(result.stderr || "").trim();
+      const stdout = String(result.stdout || "").trim();
+      return {
+        ok: false,
+        reason: stderr || stdout || `PowerShell 退出码 ${result.status}`,
+      };
+    }
+
+    return { ok: true };
   }
 
   receiveFileOffer(message) {

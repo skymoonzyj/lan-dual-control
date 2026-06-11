@@ -154,6 +154,7 @@ Windows 端：
 - [x] Windows 模拟音频帧骨架。
 - [ ] 采集 Windows 系统声音。
 - [x] 接收 Mac 输入事件骨架。
+- [x] 接收文本剪贴板并在 Windows 上写入系统剪贴板。
 - [ ] 使用 SendInput 注入输入。
 - [ ] 处理防火墙提示。
 
@@ -174,7 +175,8 @@ Mac 端：
 当前备注：
 
 - 已创建 `apps/windows-host` Node.js WebSocket 被控服务骨架。
-- 当前可完成 hello/auth/session 握手，未认证连接会被拒绝；认证后可发送模拟 `video_frame` 和 `audio_frame`、接收 `input_event`、确认 `clipboard_text`。
+- 当前可完成 hello/auth/session 握手，未认证连接会被拒绝；认证后可发送模拟 `video_frame` 和 `audio_frame`、接收 `input_event`、处理 `clipboard_text`。
+- Windows 被控端在 Windows 上会用 PowerShell `Set-Clipboard` 写入系统文本剪贴板，非 Windows 开发环境回退为 `memory-only`，并在 `/discovery`、`hello_ack`、`session_answer` 暴露剪贴板模式。
 - 当前仍是骨架模式：屏幕采集待接 Windows Graphics Capture，真实声音采集待接 WASAPI loopback，输入注入待接 SendInput。
 
 ## 里程碑 M4：一键反控

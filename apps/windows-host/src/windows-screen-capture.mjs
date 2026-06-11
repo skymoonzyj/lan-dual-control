@@ -110,6 +110,9 @@ export class WindowsScreenCaptureCoordinator {
       codec: "mock-svg",
       encoding: "data-url",
       keyFrame: frameId === 1 || frameId % 30 === 0,
+      source: "mock",
+      capturePipeline: "mock-svg",
+      droppedFrames: 0,
       dataUrl: `data:image/svg+xml;base64,${Buffer.from(svg, "utf8").toString("base64")}`,
     };
   }

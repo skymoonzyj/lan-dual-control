@@ -15,7 +15,8 @@ function makeMessageId(prefix = "winhost") {
   return `${prefix}-${Date.now().toString(16)}-${random}`;
 }
 
-function makeSessionAnswer(message, screen, audio) {
+function makeSessionAnswer(message, screen, audio, clipboard) {
+  const clipboardCapabilities = clipboard.getCapabilities();
   return {
     type: "session_answer",
     ok: true,
@@ -32,8 +33,11 @@ function makeSessionAnswer(message, screen, audio) {
     activeDisplayId: screen.activeDisplayId,
     displayName: screen.displayName,
     clipboardText: Boolean(message.wantClipboardText),
+    clipboardTextMode: clipboardCapabilities.textMode,
     clipboardFile: Boolean(message.wantClipboardFile),
+    clipboardFileMode: clipboardCapabilities.fileMode,
     hostMode: "windows-host-skeleton",
+    capturePipeline: "mock-svg",
   };
 }
 
@@ -92,6 +96,7 @@ function createClient(socket, context) {
 
   function handleMessage(message) {
     if (message.type === "hello") {
+      const clipboardCapabilities = context.clipboard.getCapabilities();
       send({
         type: "hello_ack",
         protocolVersion,
@@ -102,7 +107,10 @@ function createClient(socket, context) {
           audio: context.audio.getCapabilities(),
           input: context.input.getCapabilities(),
           clipboardText: true,
+          clipboardTextMode: clipboardCapabilities.textMode,
           clipboardFile: true,
+          clipboardFileMode: clipboardCapabilities.fileMode,
+          clipboard: clipboardCapabilities,
         },
       });
       return;
@@ -129,7 +137,7 @@ function createClient(socket, context) {
     if (message.type === "session_offer") {
       const screen = context.screen.negotiate(message);
       const audio = context.audio.negotiate(message);
-      session = makeSessionAnswer(message, screen, audio);
+      session = makeSessionAnswer(message, screen, audio, context.clipboard);
       send(session);
       if (message.wantVideo !== false) {
         startVideoFrames(session);
@@ -154,7 +162,16 @@ function createClient(socket, context) {
           stopAudioFrames();
         }
       }
-      send({ type: "display_settings_ack", accepted: true });
+      const clipboardCapabilities = context.clipboard.getCapabilities();
+      send({
+        type: "display_settings_ack",
+        accepted: true,
+        capturePipeline: "mock-svg",
+        clipboardText: Boolean(message.clipboardText ?? session?.clipboardText ?? true),
+        clipboardTextMode: clipboardCapabilities.textMode,
+        clipboardFile: Boolean(message.clipboardFile ?? session?.clipboardFile ?? true),
+        clipboardFileMode: clipboardCapabilities.fileMode,
+      });
       return;
     }
 
@@ -304,6 +321,7 @@ export function createWindowsHostServer({
     if ((request.url ?? "").split("?")[0] === "/discovery") {
       const requestHost = request.headers.host?.split(":")[0];
       const advertisedHost = host === "0.0.0.0" ? (requestHost ?? host) : host;
+      const clipboardCapabilities = clipboard.getCapabilities();
       response.writeHead(200, {
         ...corsHeaders,
         "Content-Type": "application/json; charset=utf-8",
@@ -323,7 +341,10 @@ export function createWindowsHostServer({
           audio: audio.getCapabilities(),
           input: input.getCapabilities(),
           clipboardText: true,
+          clipboardTextMode: clipboardCapabilities.textMode,
           clipboardFile: true,
+          clipboardFileMode: clipboardCapabilities.fileMode,
+          clipboard: clipboardCapabilities,
           reverseControl: true,
           mock: true,
         },
@@ -366,7 +387,7 @@ export function createWindowsHostServer({
       return new Promise((resolve) => {
         server.listen(port, host, () => {
           logger.info(`Windows 被控端骨架已监听 ws://${host}:${port}`);
-          logger.info("当前为骨架模式：模拟视频帧、记录输入事件、不注入系统。");
+          logger.info("当前为骨架模式：模拟视频帧、记录输入事件、不注入系统；Windows 上可写入系统文本剪贴板。");
           resolve();
         });
       });
