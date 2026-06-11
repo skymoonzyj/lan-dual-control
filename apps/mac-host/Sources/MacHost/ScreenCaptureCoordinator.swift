@@ -27,5 +27,31 @@ final class ScreenCaptureCoordinator {
     func startStreaming() async throws {
         logger.info("TODO：接入真实 ScreenCaptureKit 视频帧流")
     }
-}
 
+    func availableDisplays() -> [DisplayDescriptor] {
+        #if os(macOS)
+        var count: UInt32 = 0
+        CGGetActiveDisplayList(0, nil, &count)
+        var displays = Array(repeating: CGDirectDisplayID(), count: Int(count))
+        CGGetActiveDisplayList(count, &displays, &count)
+
+        let descriptors = displays.enumerated().map { index, displayId in
+            DisplayDescriptor(
+                id: index == 0 ? "main" : "display-\(displayId)",
+                name: index == 0 ? "主显示器" : "显示器 \(index + 1)",
+                width: CGDisplayPixelsWide(displayId),
+                height: CGDisplayPixelsHigh(displayId),
+                primary: index == 0
+            )
+        }
+
+        if !descriptors.isEmpty {
+            return descriptors
+        }
+        #endif
+
+        return [
+            DisplayDescriptor(id: "main", name: "主显示器", width: 1920, height: 1080, primary: true)
+        ]
+    }
+}

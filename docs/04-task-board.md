@@ -21,7 +21,9 @@ Mac 端：
 - [x] 检测屏幕录制权限骨架。
 - [ ] 真机验证屏幕录制权限。
 - [ ] 采集主屏幕图像。
-- [x] 开启局域网监听端口骨架。
+- [x] 开启 WebSocket 局域网监听端口骨架。
+- [x] 提供 `/discovery` HTTP 发现接口。
+- [x] 发送模拟 `video_frame`，便于 Windows 控制端先联调真实 Mac 服务入口。
 - [x] 接收鼠标事件骨架。
 - [x] 接收键盘事件骨架。
 - [ ] 注入鼠标键盘到 macOS。
@@ -76,6 +78,7 @@ Windows 端：
 - [x] Windows 控制端可构建为桌面 exe。
 - [x] 意外断线后 Windows 控制端会自动重连，手动断开不会重连。
 - [x] Windows 控制端可发送和接收文本剪贴板消息。
+- [x] macOS 被控端可通过 WebSocket 完成 hello/auth/session 握手并发送模拟视频帧。
 
 当前备注：
 
@@ -88,7 +91,9 @@ Windows 端：
 - 已统一 `display_settings`、`display_settings_ack`、`video_frame` 协议命名，假 Mac 服务可持续发送模拟帧。
 - 已完成 Windows Tauri 桌面壳，已验证可构建 `lan-dual-control-windows.exe`。
 - 已完成本机假 Mac WebSocket 联调服务，真实 Mac 被控端到位后按同一消息格式替换。
-- 已完成 macOS 被控端 Swift 骨架，Mac mini 到位后需要真机编译和权限验证。
+- 已完成 macOS 被控端 Swift WebSocket 骨架，支持 `/discovery`、hello/auth/session、模拟 `video_frame`/`audio_frame`、输入事件日志、文本和文件剪贴板确认。
+- Windows 控制端当前不用配合修改；Mac 端已兼容 Windows 端现有 `kind/action/remoteX/remoteY` 输入事件字段。
+- Mac mini 到位后需要继续做真机权限验证、真实 ScreenCaptureKit 采集和 CGEvent 输入注入。
 - MSI/NSIS 安装包暂未开启，先保留桌面 exe 构建；安装包放到 M5 处理。
 
 ## 里程碑 M2：安全和控制体验

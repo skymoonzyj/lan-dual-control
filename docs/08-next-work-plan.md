@@ -8,8 +8,10 @@
 - Windows 控制端已支持中文界面、本地模拟、WebSocket 局域网连接、画质档位、分辨率、刷新率、码率、声音骨架、剪贴板骨架、一键反控状态机和桌面 exe 构建。
 - 第一轮连接安全已经实装：未认证连接不能直接进入会话，假 Mac、Windows 被控端和 macOS 被控端骨架会返回统一的 `LAN002`。
 - Windows 侧已经增加 `scripts/windows/dev-lab.ps1`，可做一键健康检查，并可启动控制端、假 Mac 和 Windows 被控端联调服务。
-- macOS 被控端和 Windows 被控端都还是骨架阶段，真实屏幕采集、真实声音采集和真实输入注入仍待实装。
-- Mac mini 到位后，优先从 macOS 真机权限、Swift 骨架运行和 Windows 控制端真实连接开始。
+- macOS 被控端已升级为 WebSocket 骨架，支持 `/discovery`、hello/auth/session、模拟视频帧、模拟音频帧、输入事件日志和剪贴板确认；真实屏幕采集、真实声音采集和真实输入注入仍待实装。
+- Windows 控制端暂时不用配合修改，Mac 端已兼容 Windows 端当前发送的输入事件字段。
+- Windows 被控端仍是骨架阶段，真实屏幕采集、真实声音采集和真实输入注入仍待实装。
+- Mac mini 到位后，优先从 macOS 真机权限、Swift WebSocket 骨架运行和 Windows 控制端真实连接开始。
 
 ## 明天优先目标
 
@@ -78,8 +80,9 @@
 1. 在 Mac 上安装 Git、Xcode Command Line Tools、Codex。
 2. 克隆 GitHub 仓库。
 3. 运行 `apps/mac-host` 的 Swift 骨架。
-4. 验证屏幕录制、辅助功能、输入监控权限。
-5. Windows 控制端连接真实 Mac 被控端，先看 hello/auth/session 是否跑通。
+4. 验证 `/discovery` 和 WebSocket hello/auth/session 是否跑通。
+5. 验证屏幕录制、辅助功能、输入监控权限。
+6. 接入 ScreenCaptureKit 真实主屏幕帧，替换当前模拟 `video_frame`。
 
 ## 暂不优先处理
 

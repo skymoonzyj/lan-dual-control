@@ -12,7 +12,7 @@ final class InputEventInjector {
     }
 
     func inject(_ message: InputEventMessage) {
-        switch message.event {
+        switch message.normalizedEvent {
         case "mouse_move":
             injectMouseMove(message)
         case "mouse_button":
@@ -22,17 +22,21 @@ final class InputEventInjector {
         case "key":
             injectKey(message)
         default:
-            logger.warn("未知输入事件：\(message.event)")
+            logger.warn("未知输入事件：\(message.event ?? message.action ?? "unknown")")
         }
     }
 
     private func injectMouseMove(_ message: InputEventMessage) {
-        guard let x = message.x, let y = message.y else { return }
+        let x = message.remoteX ?? message.x
+        let y = message.remoteY ?? message.y
+        guard let x, let y else { return }
         logger.info("TODO 鼠标移动：x=\(x), y=\(y)")
     }
 
     private func injectMouseButton(_ message: InputEventMessage) {
-        logger.info("TODO 鼠标按钮：\(message.button ?? "?") / \(message.action ?? "?")")
+        let x = message.remoteX ?? message.x ?? 0
+        let y = message.remoteY ?? message.y ?? 0
+        logger.info("TODO 鼠标按钮：\(message.button ?? "?") / \(message.action ?? "?") / x=\(x), y=\(y)")
     }
 
     private func injectMouseWheel(_ message: InputEventMessage) {
@@ -40,7 +44,7 @@ final class InputEventInjector {
     }
 
     private func injectKey(_ message: InputEventMessage) {
-        let modifiers = message.modifiers ?? message.remoteModifiers ?? []
+        let modifiers = message.remoteModifiers ?? message.modifiers ?? []
         let modifierText = modifiers.isEmpty ? "无修饰键" : modifiers.joined(separator: "+")
         let shortcutText = message.shortcutAction.map { " / 快捷键：\($0)" } ?? ""
         logger.info("TODO 键盘：\(message.key ?? message.code ?? "?") / \(message.action ?? "?") / \(modifierText)\(shortcutText)")

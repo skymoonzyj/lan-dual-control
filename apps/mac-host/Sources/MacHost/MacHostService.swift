@@ -1,6 +1,40 @@
 import Foundation
 import Network
 
+private struct HostSession {
+    var width: Int
+    var height: Int
+    var fps: Int
+    var maxBandwidthKbps: Int
+    var displayId: String
+    var displayName: String
+    var audioEnabled: Bool
+    var audioVolume: Int
+}
+
+private struct FileTransferState {
+    var totalBytes: Int
+    var receivedBytes: Int
+    var fileCount: Int
+}
+
+private final class ClientContext {
+    let connection: NWConnection
+    var buffer = Data()
+    var isWebSocketReady = false
+    var isAuthenticated = false
+    var session: HostSession?
+    var frameId = 0
+    var audioFrameId = 0
+    var videoTimer: DispatchSourceTimer?
+    var audioTimer: DispatchSourceTimer?
+    var fileTransfers: [String: FileTransferState] = [:]
+
+    init(connection: NWConnection) {
+        self.connection = connection
+    }
+}
+
 final class MacHostService {
     private let configuration: HostConfiguration
     private let permissions: MacPermissionCenter
@@ -9,8 +43,7 @@ final class MacHostService {
     private let logger: HostLogger
 
     private var listener: NWListener?
-    private var activeConnections: [ObjectIdentifier: NWConnection] = [:]
-    private var authenticatedConnections: Set<ObjectIdentifier> = []
+    private var activeConnections: [ObjectIdentifier: ClientContext] = [:]
 
     init(
         configuration: HostConfiguration,
@@ -43,203 +76,675 @@ final class MacHostService {
         }
 
         listener.start(queue: .main)
-        try await screenCapture.prepare()
-        logger.info("等待 Windows 控制端连接...")
-        RunLoop.main.run()
+        do {
+            try await screenCapture.prepare()
+        } catch {
+            logger.warn("ScreenCaptureKit 预检失败：\(error.localizedDescription)。先继续启动 WebSocket 骨架，真实采集等权限打开后再接入。")
+        }
+        logger.info("等待 Windows 控制端通过 WebSocket 连接...")
+        while !Task.isCancelled {
+            try await Task.sleep(nanoseconds: 3_600_000_000_000)
+        }
     }
 
     private func accept(_ connection: NWConnection) {
-        let id = ObjectIdentifier(connection)
-        activeConnections[id] = connection
+        let context = ClientContext(connection: connection)
+        activeConnections[ObjectIdentifier(connection)] = context
         logger.info("收到连接：\(connection.endpoint.debugDescription)")
 
-        connection.stateUpdateHandler = { [weak self] state in
-            self?.handleConnectionState(state, connection: connection)
+        connection.stateUpdateHandler = { [weak self, weak context] state in
+            guard let context else { return }
+            self?.handleConnectionState(state, context: context)
         }
 
         connection.start(queue: .main)
-        receiveNextLine(from: connection)
+        receiveNextChunk(from: context)
     }
 
-    private func receiveNextLine(from connection: NWConnection) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [weak self] data, _, isComplete, error in
-            guard let self else { return }
+    private func receiveNextChunk(from context: ClientContext) {
+        context.connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [weak self, weak context] data, _, isComplete, error in
+            guard let self, let context else { return }
 
             if let error {
                 self.logger.warn("连接读取失败：\(error.localizedDescription)")
-                self.close(connection)
+                self.close(context)
                 return
             }
 
             if let data, !data.isEmpty {
-                self.handlePayload(data, connection: connection)
+                context.buffer.append(data)
+                if context.isWebSocketReady {
+                    self.handleWebSocketFrames(context)
+                } else {
+                    self.handleHttpRequest(context)
+                }
             }
 
             if isComplete {
-                self.close(connection)
+                self.close(context)
             } else {
-                self.receiveNextLine(from: connection)
+                self.receiveNextChunk(from: context)
             }
         }
     }
 
-    private func handlePayload(_ data: Data, connection: NWConnection) {
-        guard let text = String(data: data, encoding: .utf8) else {
-            logger.warn("收到非 UTF-8 消息，暂不处理")
+    private func handleHttpRequest(_ context: ClientContext) {
+        let marker = Data("\r\n\r\n".utf8)
+        guard let headerRange = context.buffer.range(of: marker),
+              let headerText = String(data: context.buffer[..<headerRange.lowerBound], encoding: .utf8) else {
             return
         }
 
-        for line in text.split(separator: "\n") {
-            handleMessageLine(String(line), connection: connection)
+        let headerEnd = headerRange.upperBound
+        let request = parseHttpRequest(headerText)
+        context.buffer.removeSubrange(..<headerEnd)
+
+        switch request.path {
+        case "/discovery":
+            sendDiscoveryResponse(request: request, to: context)
+        default:
+            if let key = request.headers["sec-websocket-key"],
+               request.headers["upgrade"]?.lowercased() == "websocket" {
+                sendWebSocketUpgradeResponse(key: key, to: context)
+                context.isWebSocketReady = true
+                if !context.buffer.isEmpty {
+                    handleWebSocketFrames(context)
+                }
+            } else {
+                sendPlainHttpResponse(to: context)
+            }
         }
     }
 
-    private func handleMessageLine(_ line: String, connection: NWConnection) {
-        guard let data = line.data(using: .utf8) else { return }
+    private func parseHttpRequest(_ text: String) -> (path: String, headers: [String: String]) {
+        let lines = text.components(separatedBy: "\r\n")
+        let requestParts = lines.first?.split(separator: " ") ?? []
+        let path = requestParts.count >= 2 ? String(requestParts[1]).split(separator: "?").first.map(String.init) ?? "/" : "/"
+        var headers: [String: String] = [:]
 
-        if let hello = try? JSONDecoder().decode(HelloMessage.self, from: data), hello.type == "hello" {
-            logger.info("hello：\(hello.clientName) / \(hello.clientPlatform.rawValue)")
-            send(["type": "hello_ack", "ok": true, "message": "macOS 被控端已就绪"], to: connection)
-            return
+        for line in lines.dropFirst() {
+            guard let separator = line.firstIndex(of: ":") else { continue }
+            let key = line[..<separator].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let value = line[line.index(after: separator)...].trimmingCharacters(in: .whitespacesAndNewlines)
+            headers[key] = value
         }
 
-        if let auth = try? JSONDecoder().decode(AuthRequest.self, from: data), auth.type == "auth_request" {
-            let id = ObjectIdentifier(connection)
-            let ok = auth.password == configuration.pairingPassword
-            if ok {
-                authenticatedConnections.insert(id)
-            } else {
-                authenticatedConnections.remove(id)
+        return (path, headers)
+    }
+
+    private func sendDiscoveryResponse(request: (path: String, headers: [String: String]), to context: ClientContext) {
+        let advertisedHost = advertisedHost(from: request.headers["host"])
+        let body: [String: Any] = [
+            "type": "lan_dual_discovery",
+            "protocolVersion": 1,
+            "deviceId": "mac-host-\(advertisedHost)-\(configuration.port)",
+            "deviceName": "macOS 被控端",
+            "platform": "macos",
+            "role": "host",
+            "host": advertisedHost,
+            "port": Int(configuration.port),
+            "controlPort": Int(configuration.port),
+            "capabilities": [
+                "video": true,
+                "audio": true,
+                "input": true,
+                "clipboardText": true,
+                "clipboardFile": true,
+                "reverseControl": true,
+                "mock": true,
+                "displays": screenCapture.availableDisplays().map { $0.jsonObject },
+            ],
+            "lastSeenAt": ISO8601DateFormatter().string(from: Date()),
+        ]
+
+        sendHttpJson(body, status: "200 OK", closeAfterSend: true, to: context)
+    }
+
+    private func advertisedHost(from hostHeader: String?) -> String {
+        if configuration.host != "0.0.0.0" {
+            return configuration.host
+        }
+
+        guard let hostHeader, !hostHeader.isEmpty else {
+            return configuration.host
+        }
+
+        return hostHeader.split(separator: ":").first.map(String.init) ?? configuration.host
+    }
+
+    private func sendWebSocketUpgradeResponse(key: String, to context: ClientContext) {
+        let acceptKey = WebSocketCodec.makeAcceptKey(key)
+        let response = [
+            "HTTP/1.1 101 Switching Protocols",
+            "Upgrade: websocket",
+            "Connection: Upgrade",
+            "Sec-WebSocket-Accept: \(acceptKey)",
+            "\r\n",
+        ].joined(separator: "\r\n")
+
+        context.connection.send(content: Data(response.utf8), completion: .contentProcessed { [weak self] error in
+            if let error {
+                self?.logger.warn("WebSocket 握手响应失败：\(error.localizedDescription)")
             }
-            logger.info(ok ? "认证通过" : "认证失败")
-            send(AuthResult(type: "auth_result", ok: ok, message: ok ? "验证通过" : "密码错误"), to: connection)
+        })
+        logger.info("WebSocket 握手完成")
+    }
+
+    private func sendPlainHttpResponse(to context: ClientContext) {
+        let body = "LAN dual control macOS host skeleton. Use WebSocket to connect.\n"
+        sendHttpText(body, status: "200 OK", closeAfterSend: true, to: context)
+    }
+
+    private func sendHttpJson(_ object: [String: Any], status: String, closeAfterSend: Bool, to context: ClientContext) {
+        guard JSONSerialization.isValidJSONObject(object),
+              let body = try? JSONSerialization.data(withJSONObject: object) else {
+            sendHttpText("JSON encode failed\n", status: "500 Internal Server Error", closeAfterSend: true, to: context)
             return
         }
 
-        if let envelope = try? JSONDecoder().decode(MessageEnvelope.self, from: data), !isAuthenticated(connection) {
-            sendAuthRequired(for: envelope, to: connection)
-            return
-        }
+        sendHttpBody(body, status: status, contentType: "application/json; charset=utf-8", closeAfterSend: closeAfterSend, to: context)
+    }
 
-        if let offer = try? JSONDecoder().decode(SessionOffer.self, from: data), offer.type == "session_offer" {
-            guard isAuthenticated(connection) else {
-                sendAuthRequired(for: MessageEnvelope(type: "session_offer", clipboardId: nil, transferId: nil, requestId: nil), to: connection)
-                return
+    private func sendHttpText(_ text: String, status: String, closeAfterSend: Bool, to context: ClientContext) {
+        sendHttpBody(Data(text.utf8), status: status, contentType: "text/plain; charset=utf-8", closeAfterSend: closeAfterSend, to: context)
+    }
+
+    private func sendHttpBody(_ body: Data, status: String, contentType: String, closeAfterSend: Bool, to context: ClientContext) {
+        let headers = [
+            "HTTP/1.1 \(status)",
+            "Access-Control-Allow-Origin: *",
+            "Access-Control-Allow-Methods: GET, OPTIONS",
+            "Access-Control-Allow-Headers: Content-Type",
+            "Content-Type: \(contentType)",
+            "Content-Length: \(body.count)",
+            "Connection: \(closeAfterSend ? "close" : "keep-alive")",
+            "\r\n",
+        ].joined(separator: "\r\n")
+
+        var response = Data(headers.utf8)
+        response.append(body)
+        context.connection.send(content: response, completion: .contentProcessed { [weak self, weak context] _ in
+            guard closeAfterSend, let context else { return }
+            self?.close(context)
+        })
+    }
+
+    private func handleWebSocketFrames(_ context: ClientContext) {
+        let decoded = WebSocketCodec.decodeFrames(context.buffer)
+        context.buffer = decoded.rest
+
+        for frame in decoded.frames {
+            switch frame {
+            case .close:
+                close(context)
+            case .text(let text):
+                handleWebSocketMessage(text, context: context)
             }
-            logger.info("会话协商：\(offer.maxFps) Hz / 码率 \(offer.maxBandwidthKbps / 1000) Mbps / \(offer.displayMode)")
-            let answer = SessionAnswer(
-                type: "session_answer",
-                screenWidth: offer.preferredWidth == 0 ? 1920 : offer.preferredWidth,
-                screenHeight: offer.preferredHeight == 0 ? 1080 : offer.preferredHeight,
-                fps: min(offer.maxFps, 60),
-                videoCodec: "mjpeg",
-                audioEnabled: false,
-                audioCodec: "none",
-                clipboardTextEnabled: offer.wantClipboardText,
-                clipboardFileEnabled: false
-            )
-            send(answer, to: connection)
+        }
+    }
+
+    private func handleWebSocketMessage(_ text: String, context: ClientContext) {
+        guard let data = text.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data),
+              let message = json as? [String: Any],
+              let type = message["type"] as? String else {
+            sendError(code: "LAN003", message: "macOS 被控端无法解析消息", to: context)
             return
         }
 
-        if let input = try? JSONDecoder().decode(InputEventMessage.self, from: data), input.type == "input_event" {
-            guard isAuthenticated(connection) else {
-                sendAuthRequired(for: MessageEnvelope(type: "input_event", clipboardId: nil, transferId: nil, requestId: nil), to: connection)
-                return
-            }
+        switch type {
+        case "hello":
+            handleHello(message, to: context)
+            return
+        case "auth_request":
+            handleAuth(message, to: context)
+            return
+        default:
+            break
+        }
+
+        guard context.isAuthenticated else {
+            sendAuthRequired(for: message, type: type, to: context)
+            return
+        }
+
+        switch type {
+        case "session_offer":
+            handleSessionOffer(data, message: message, to: context)
+        case "display_settings":
+            handleDisplaySettings(message, to: context)
+        case "audio_settings_update":
+            handleAudioSettings(message, to: context)
+        case "input_event":
+            handleInputEvent(data, fallback: message)
+        case "clipboard_text":
+            handleClipboardText(message, to: context)
+        case "clipboard_file_offer":
+            handleClipboardFileOffer(message, to: context)
+        case "clipboard_file_chunk":
+            handleClipboardFileChunk(message, to: context)
+        case "clipboard_file_complete":
+            handleClipboardFileComplete(message, to: context)
+        case "reverse_control_request":
+            handleReverseControlRequest(message, to: context)
+        case "reverse_control_response":
+            logger.info("收到反控确认：\(message["accepted"] ?? false)")
+        default:
+            sendError(code: "LAN003", message: "macOS 被控端暂不支持消息：\(type)", to: context)
+        }
+    }
+
+    private func handleHello(_ message: [String: Any], to context: ClientContext) {
+        logger.info("hello：\(message["clientName"] ?? "unknown") / \(message["clientPlatform"] ?? "unknown")")
+        send([
+            "type": "hello_ack",
+            "protocolVersion": 1,
+            "hostName": "macOS 被控端",
+            "hostPlatform": "macos",
+            "capabilities": [
+                "screen": ["mode": "mock-frame", "codec": "mjpeg"],
+                "audio": ["mode": "mock-frame", "codec": "mock-opus"],
+                "input": ["mode": "logged"],
+                "clipboardText": true,
+                "clipboardFile": true,
+            ],
+        ], to: context)
+    }
+
+    private func handleAuth(_ message: [String: Any], to context: ClientContext) {
+        let password = message["password"] as? String
+        let ok = password == configuration.pairingPassword
+        context.isAuthenticated = ok
+        logger.info(ok ? "认证通过" : "认证失败")
+        send([
+            "type": "auth_result",
+            "ok": ok,
+            "code": ok ? "" : "LAN002",
+            "reason": ok ? "" : "连接密码不正确",
+            "message": ok ? "验证通过" : "密码错误",
+        ], to: context)
+    }
+
+    private func handleSessionOffer(_ data: Data, message: [String: Any], to context: ClientContext) {
+        let offer = (try? JSONDecoder().decode(SessionOffer.self, from: data))
+        let displays = screenCapture.availableDisplays()
+        let activeDisplay = pickDisplay(message["displayId"] as? String, from: displays)
+        let width = positiveInt(message["preferredWidth"]) ?? activeDisplay.width
+        let height = positiveInt(message["preferredHeight"]) ?? activeDisplay.height
+        let fps = min(positiveInt(message["maxFps"]) ?? 60, 60)
+        let bandwidth = positiveInt(message["maxBandwidthKbps"]) ?? 50_000
+        let wantAudio = offer?.wantAudio ?? boolValue(message["wantAudio"])
+        let wantClipboardText = offer?.wantClipboardText ?? boolValue(message["wantClipboardText"])
+        let wantClipboardFile = offer?.wantClipboardFile ?? boolValue(message["wantClipboardFile"])
+        let videoCodec = offer?.preferredVideoCodec ?? stringValue(message["preferredVideoCodec"]) ?? "mjpeg"
+        let audioCodec = wantAudio ? (offer?.preferredAudioCodec ?? stringValue(message["preferredAudioCodec"]) ?? "opus") : "none"
+        let audioVolume = positiveInt(message["audioVolume"]) ?? 80
+
+        let snapshot = permissions.snapshot()
+        context.session = HostSession(
+            width: width,
+            height: height,
+            fps: fps,
+            maxBandwidthKbps: bandwidth,
+            displayId: activeDisplay.id,
+            displayName: activeDisplay.name,
+            audioEnabled: wantAudio,
+            audioVolume: audioVolume
+        )
+
+        logger.info("会话协商：\(width)x\(height) / \(fps) Hz / 码率 \(bandwidth / 1000) Mbps / \(activeDisplay.name)")
+        send([
+            "type": "session_answer",
+            "ok": true,
+            "videoCodec": videoCodec,
+            "audioCodec": audioCodec,
+            "fps": fps,
+            "maxBandwidthKbps": bandwidth,
+            "width": width,
+            "height": height,
+            "displays": displays.map { $0.jsonObject },
+            "activeDisplayId": activeDisplay.id,
+            "displayName": activeDisplay.name,
+            "audioEnabled": wantAudio,
+            "sampleRate": 48_000,
+            "channels": 2,
+            "clipboardText": wantClipboardText,
+            "clipboardFile": wantClipboardFile,
+            "hostMode": "mac-host-websocket-skeleton",
+            "permissions": [
+                "screenRecording": snapshot.screenRecordingGranted,
+                "accessibility": snapshot.accessibilityGranted,
+                "inputMonitoring": snapshot.inputMonitoringGranted,
+            ],
+        ], to: context)
+
+        startVideoFrames(context)
+        if wantAudio {
+            startAudioFrames(context)
+        }
+    }
+
+    private func handleDisplaySettings(_ message: [String: Any], to context: ClientContext) {
+        let displays = screenCapture.availableDisplays()
+        let activeDisplay = pickDisplay(message["displayId"] as? String ?? context.session?.displayId, from: displays)
+        let resolutionMode = stringValue(message["resolutionMode"]) ?? "fixed"
+        let width = resolutionMode == "native" ? activeDisplay.width : positiveInt(message["width"]) ?? context.session?.width ?? activeDisplay.width
+        let height = resolutionMode == "native" ? activeDisplay.height : positiveInt(message["height"]) ?? context.session?.height ?? activeDisplay.height
+        let fps = min(positiveInt(message["fps"]) ?? context.session?.fps ?? 60, 60)
+        let audioEnabled = boolValue(message["audio"])
+        let audioVolume = positiveInt(message["audioVolume"]) ?? context.session?.audioVolume ?? 80
+
+        context.session = HostSession(
+            width: width,
+            height: height,
+            fps: fps,
+            maxBandwidthKbps: positiveInt(message["maxBandwidthKbps"]) ?? context.session?.maxBandwidthKbps ?? 50_000,
+            displayId: activeDisplay.id,
+            displayName: activeDisplay.name,
+            audioEnabled: audioEnabled,
+            audioVolume: audioVolume
+        )
+
+        send(["type": "display_settings_ack", "accepted": true], to: context)
+        startVideoFrames(context)
+        audioEnabled ? startAudioFrames(context) : stopAudioFrames(context)
+    }
+
+    private func handleAudioSettings(_ message: [String: Any], to context: ClientContext) {
+        let enabled = boolValue(message["enabled"])
+        let muted = boolValue(message["muted"])
+        let volume = positiveInt(message["volume"]) ?? 0
+
+        if var session = context.session {
+            session.audioEnabled = enabled && !muted
+            session.audioVolume = volume
+            context.session = session
+        }
+
+        send([
+            "type": "audio_settings_ack",
+            "enabled": enabled,
+            "volume": volume,
+            "muted": muted,
+        ], to: context)
+
+        enabled && !muted ? startAudioFrames(context) : stopAudioFrames(context)
+    }
+
+    private func handleInputEvent(_ data: Data, fallback: [String: Any]) {
+        if let input = try? JSONDecoder().decode(InputEventMessage.self, from: data) {
             inputInjector.inject(input)
             return
         }
 
-        logger.warn("暂不支持的消息：\(line)")
+        logger.info("收到输入事件：\(fallback["kind"] ?? fallback["event"] ?? "unknown") \(fallback["detail"] ?? "")")
     }
 
-    private func send<T: Encodable>(_ message: T, to connection: NWConnection) {
-        guard let data = try? JSONEncoder().encode(message) else { return }
-        var payload = data
-        payload.append(0x0A)
-        connection.send(content: payload, completion: .contentProcessed { [weak self] error in
-            if let error {
-                self?.logger.warn("发送消息失败：\(error.localizedDescription)")
-            }
-        })
+    private func handleClipboardText(_ message: [String: Any], to context: ClientContext) {
+        let textLength = positiveInt(message["textLength"]) ?? stringValue(message["text"])?.count ?? 0
+        logger.info("收到文本剪贴板：\(textLength) 字")
+        send([
+            "type": "clipboard_ack",
+            "accepted": true,
+            "clipboardId": stringValue(message["clipboardId"]) ?? "",
+            "textLength": textLength,
+        ], to: context)
     }
 
-    private func send(_ message: [String: Any], to connection: NWConnection) {
-        guard JSONSerialization.isValidJSONObject(message),
-              let data = try? JSONSerialization.data(withJSONObject: message) else {
-            return
+    private func handleClipboardFileOffer(_ message: [String: Any], to context: ClientContext) {
+        let transferId = stringValue(message["transferId"]) ?? UUID().uuidString
+        let totalBytes = positiveInt(message["totalBytes"]) ?? 0
+        let fileCount = positiveInt(message["fileCount"]) ?? 0
+        context.fileTransfers[transferId] = FileTransferState(totalBytes: totalBytes, receivedBytes: 0, fileCount: fileCount)
+        send([
+            "type": "clipboard_file_response",
+            "transferId": transferId,
+            "accepted": true,
+            "saveMode": "memory-only",
+            "maxChunkBytes": positiveInt(message["maxChunkBytes"]) ?? 256 * 1024,
+            "reason": "macOS 被控端已准备接收文件块。",
+        ], to: context)
+    }
+
+    private func handleClipboardFileChunk(_ message: [String: Any], to context: ClientContext) {
+        let transferId = stringValue(message["transferId"]) ?? ""
+        var transfer = context.fileTransfers[transferId] ?? FileTransferState(totalBytes: positiveInt(message["totalBytes"]) ?? 0, receivedBytes: 0, fileCount: 0)
+        let chunkBytes = positiveInt(message["bytes"]) ?? 0
+        let sentBytes = positiveInt(message["sentBytes"])
+        let nextReceivedBytes = transfer.receivedBytes + chunkBytes
+        transfer.receivedBytes = sentBytes ?? (transfer.totalBytes > 0 ? min(transfer.totalBytes, nextReceivedBytes) : nextReceivedBytes)
+        context.fileTransfers[transferId] = transfer
+        send([
+            "type": "clipboard_file_progress",
+            "transferId": transferId,
+            "receivedBytes": transfer.receivedBytes,
+            "totalBytes": transfer.totalBytes,
+        ], to: context)
+    }
+
+    private func handleClipboardFileComplete(_ message: [String: Any], to context: ClientContext) {
+        let transferId = stringValue(message["transferId"]) ?? ""
+        let transfer = context.fileTransfers[transferId]
+        send([
+            "type": "clipboard_file_result",
+            "transferId": transferId,
+            "accepted": true,
+            "receivedBytes": transfer?.receivedBytes ?? positiveInt(message["totalBytes"]) ?? 0,
+            "totalBytes": transfer?.totalBytes ?? positiveInt(message["totalBytes"]) ?? 0,
+            "fileCount": transfer?.fileCount ?? positiveInt(message["fileCount"]) ?? 0,
+            "reason": "macOS 被控端已接收文件块，系统级文件剪贴板后续接入。",
+        ], to: context)
+        context.fileTransfers.removeValue(forKey: transferId)
+    }
+
+    private func handleReverseControlRequest(_ message: [String: Any], to context: ClientContext) {
+        send([
+            "type": "reverse_control_response",
+            "requestId": stringValue(message["requestId"]) ?? "",
+            "accepted": false,
+            "reason": "macOS 控制窗口尚未实装，暂不切换控制方向。",
+        ], to: context)
+    }
+
+    private func startVideoFrames(_ context: ClientContext) {
+        stopVideoFrames(context)
+        let session = context.session ?? HostSession(width: 1920, height: 1080, fps: 8, maxBandwidthKbps: 50_000, displayId: "main", displayName: "主显示器", audioEnabled: false, audioVolume: 80)
+        let intervalMs = max(120, Int((1000.0 / Double(min(session.fps, 8))).rounded()))
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + .milliseconds(intervalMs), repeating: .milliseconds(intervalMs))
+        timer.setEventHandler { [weak self, weak context] in
+            guard let self, let context else { return }
+            context.frameId += 1
+            self.send(self.makeMockVideoFrame(context.frameId, session: context.session ?? session), to: context)
         }
-        var payload = data
-        payload.append(0x0A)
-        connection.send(content: payload, completion: .contentProcessed { [weak self] error in
-            if let error {
-                self?.logger.warn("发送消息失败：\(error.localizedDescription)")
-            }
-        })
+        context.videoTimer = timer
+        timer.resume()
     }
 
-    private func isAuthenticated(_ connection: NWConnection) -> Bool {
-        authenticatedConnections.contains(ObjectIdentifier(connection))
+    private func stopVideoFrames(_ context: ClientContext) {
+        context.videoTimer?.cancel()
+        context.videoTimer = nil
     }
 
-    private func sendAuthRequired(for message: MessageEnvelope, to connection: NWConnection) {
+    private func startAudioFrames(_ context: ClientContext) {
+        stopAudioFrames(context)
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + .milliseconds(240), repeating: .milliseconds(240))
+        timer.setEventHandler { [weak self, weak context] in
+            guard let self, let context else { return }
+            context.audioFrameId += 1
+            let session = context.session
+            let volume = max(0, min(100, session?.audioVolume ?? 80))
+            let wave = (sin(Double(context.audioFrameId) / 2.8) + 1.0) / 2.0
+            self.send([
+                "type": "audio_frame",
+                "frameId": context.audioFrameId,
+                "codec": "mock-opus",
+                "sampleRate": 48_000,
+                "channels": 2,
+                "durationMs": 20,
+                "level": Double(round(wave * Double(volume)) / 100.0),
+                "volume": volume,
+                "latencyMs": 16 + (context.audioFrameId % 8),
+                "encoding": "mock",
+            ], to: context)
+        }
+        context.audioTimer = timer
+        timer.resume()
+    }
+
+    private func stopAudioFrames(_ context: ClientContext) {
+        context.audioTimer?.cancel()
+        context.audioTimer = nil
+    }
+
+    private func makeMockVideoFrame(_ frameId: Int, session: HostSession) -> [String: Any] {
+        let hue = (frameId * 23) % 360
+        let now = Date()
+        let svg = """
+        <svg xmlns="http://www.w3.org/2000/svg" width="\(session.width)" height="\(session.height)" viewBox="0 0 \(session.width) \(session.height)">
+          <defs>
+            <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0%" stop-color="hsl(\(hue), 42%, 24%)"/>
+              <stop offset="100%" stop-color="hsl(\((hue + 90) % 360), 38%, 12%)"/>
+            </linearGradient>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#bg)"/>
+          <rect x="48" y="42" width="\(max(120, session.width - 96))" height="46" rx="12" fill="rgba(255,255,255,0.9)"/>
+          <text x="76" y="72" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="22" fill="#1f2937">Real Mac WebSocket Host</text>
+          <rect x="\(Int(Double(session.width) * 0.12))" y="\(Int(Double(session.height) * 0.18))" width="\(Int(Double(session.width) * 0.52))" height="\(Int(Double(session.height) * 0.46))" rx="18" fill="rgba(255,255,255,0.92)"/>
+          <circle cx="\(Int(Double(session.width) * 0.15))" cy="\(Int(Double(session.height) * 0.22))" r="12" fill="#ef4444"/>
+          <circle cx="\(Int(Double(session.width) * 0.18))" cy="\(Int(Double(session.height) * 0.22))" r="12" fill="#f59e0b"/>
+          <circle cx="\(Int(Double(session.width) * 0.21))" cy="\(Int(Double(session.height) * 0.22))" r="12" fill="#22c55e"/>
+          <text x="\(Int(Double(session.width) * 0.15))" y="\(Int(Double(session.height) * 0.34))" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="44" font-weight="700" fill="#111827">macOS 被控端测试帧</text>
+          <text x="\(Int(Double(session.width) * 0.15))" y="\(Int(Double(session.height) * 0.42))" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="30" fill="#4b5563">\(session.displayName)</text>
+          <text x="\(Int(Double(session.width) * 0.15))" y="\(Int(Double(session.height) * 0.49))" font-family="Menlo, Consolas, monospace" font-size="30" fill="#4b5563">frame #\(frameId)</text>
+          <text x="\(Int(Double(session.width) * 0.15))" y="\(Int(Double(session.height) * 0.56))" font-family="Menlo, Consolas, monospace" font-size="26" fill="#4b5563">\(ISO8601DateFormatter().string(from: now))</text>
+        </svg>
+        """
+
+        let dataUrl = "data:image/svg+xml;base64,\(Data(svg.utf8).base64EncodedString())"
+        return [
+            "type": "video_frame",
+            "frameId": frameId,
+            "timestamp": ISO8601DateFormatter().string(from: now),
+            "width": session.width,
+            "height": session.height,
+            "codec": "mock-svg",
+            "encoding": "data-url",
+            "keyFrame": frameId == 1 || frameId % 30 == 0,
+            "dataUrl": dataUrl,
+        ]
+    }
+
+    private func sendAuthRequired(for message: [String: Any], type: String, to context: ClientContext) {
         let reason = "请先验证连接密码"
-        switch message.type {
+        switch type {
         case "session_offer":
-            send([
-                "type": "session_answer",
-                "ok": false,
-                "code": "LAN002",
-                "reason": reason
-            ], to: connection)
+            send(["type": "session_answer", "ok": false, "code": "LAN002", "reason": reason], to: context)
         case "display_settings":
-            send([
-                "type": "display_settings_ack",
-                "accepted": false,
-                "code": "LAN002",
-                "reason": reason
-            ], to: connection)
+            send(["type": "display_settings_ack", "accepted": false, "code": "LAN002", "reason": reason], to: context)
         case "audio_settings_update":
-            send([
-                "type": "audio_settings_ack",
-                "accepted": false,
-                "enabled": false,
-                "code": "LAN002",
-                "reason": reason
-            ], to: connection)
+            send(["type": "audio_settings_ack", "accepted": false, "enabled": false, "code": "LAN002", "reason": reason], to: context)
         case "clipboard_text":
             send([
                 "type": "clipboard_ack",
                 "accepted": false,
-                "clipboardId": message.clipboardId ?? "",
+                "clipboardId": stringValue(message["clipboardId"]) ?? "",
                 "code": "LAN002",
-                "reason": reason
-            ], to: connection)
+                "reason": reason,
+            ], to: context)
         case "clipboard_file_offer":
             send([
                 "type": "clipboard_file_response",
-                "transferId": message.transferId ?? "",
+                "transferId": stringValue(message["transferId"]) ?? "",
                 "accepted": false,
                 "code": "LAN002",
-                "reason": reason
-            ], to: connection)
+                "reason": reason,
+            ], to: context)
         case "reverse_control_request":
             send([
                 "type": "reverse_control_response",
-                "requestId": message.requestId ?? "",
+                "requestId": stringValue(message["requestId"]) ?? "",
                 "accepted": false,
                 "code": "LAN002",
-                "reason": reason
-            ], to: connection)
+                "reason": reason,
+            ], to: context)
         default:
-            send([
-                "type": "error",
-                "code": "LAN002",
-                "message": reason
-            ], to: connection)
+            send(["type": "error", "code": "LAN002", "message": reason], to: context)
         }
-        logger.warn("拒绝未认证消息：\(message.type)")
+        logger.warn("拒绝未认证消息：\(type)")
+    }
+
+    private func sendError(code: String, message: String, to context: ClientContext) {
+        send(["type": "error", "code": code, "message": message], to: context)
+    }
+
+    private func send(_ message: [String: Any], to context: ClientContext) {
+        var envelope = message
+        let type = stringValue(message["type"]) ?? "message"
+        envelope["id"] = "\(type)-\(UUID().uuidString)"
+        envelope["timestamp"] = ISO8601DateFormatter().string(from: Date())
+
+        guard JSONSerialization.isValidJSONObject(envelope),
+              let data = try? JSONSerialization.data(withJSONObject: envelope),
+              let text = String(data: data, encoding: .utf8) else {
+            logger.warn("发送消息失败：JSON 编码失败")
+            return
+        }
+
+        context.connection.send(content: WebSocketCodec.encodeTextFrame(text), completion: .contentProcessed { [weak self] error in
+            if let error {
+                self?.logger.warn("发送 WebSocket 消息失败：\(error.localizedDescription)")
+            }
+        })
+    }
+
+    private func pickDisplay(_ displayId: String?, from displays: [DisplayDescriptor]) -> DisplayDescriptor {
+        if let displayId, let display = displays.first(where: { $0.id == displayId }) {
+            return display
+        }
+
+        return displays.first(where: { $0.primary }) ?? displays[0]
+    }
+
+    private func boolValue(_ value: Any?) -> Bool {
+        if let value = value as? Bool {
+            return value
+        }
+        if let value = value as? NSNumber {
+            return value.boolValue
+        }
+        if let value = value as? String {
+            return value == "true" || value == "1"
+        }
+        return false
+    }
+
+    private func positiveInt(_ value: Any?) -> Int? {
+        if let value = value as? Int, value > 0 {
+            return value
+        }
+        if let value = value as? Double, value > 0 {
+            return Int(value)
+        }
+        if let value = value as? NSNumber, value.intValue > 0 {
+            return value.intValue
+        }
+        if let value = value as? String, let parsed = Int(value), parsed > 0 {
+            return parsed
+        }
+        return nil
+    }
+
+    private func stringValue(_ value: Any?) -> String? {
+        if let value = value as? String {
+            return value
+        }
+        if let value {
+            return String(describing: value)
+        }
+        return nil
     }
 
     private func handleListenerState(_ state: NWListener.State) {
@@ -253,25 +758,25 @@ final class MacHostService {
         }
     }
 
-    private func handleConnectionState(_ state: NWConnection.State, connection: NWConnection) {
+    private func handleConnectionState(_ state: NWConnection.State, context: ClientContext) {
         switch state {
         case .ready:
             logger.info("连接已建立")
         case .failed(let error):
             logger.warn("连接失败：\(error.localizedDescription)")
-            close(connection)
+            close(context)
         case .cancelled:
-            close(connection)
+            close(context)
         default:
             break
         }
     }
 
-    private func close(_ connection: NWConnection) {
-        let id = ObjectIdentifier(connection)
-        activeConnections.removeValue(forKey: id)
-        authenticatedConnections.remove(id)
-        connection.cancel()
+    private func close(_ context: ClientContext) {
+        stopVideoFrames(context)
+        stopAudioFrames(context)
+        activeConnections.removeValue(forKey: ObjectIdentifier(context.connection))
+        context.connection.cancel()
         logger.info("连接已关闭")
     }
 }
