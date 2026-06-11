@@ -33,6 +33,7 @@ const elements = {
   clipboardToggle: document.querySelector("#clipboardToggle"),
   fileClipboardButton: document.querySelector("#fileClipboardButton"),
   fileClipboardInput: document.querySelector("#fileClipboardInput"),
+  copyReceivedFilesButton: document.querySelector("#copyReceivedFilesButton"),
   receivedFilesList: document.querySelector("#receivedFilesList"),
   downloadAllReceivedFilesButton: document.querySelector("#downloadAllReceivedFilesButton"),
   clearReceivedFilesButton: document.querySelector("#clearReceivedFilesButton"),
@@ -70,6 +71,7 @@ const discoveryProbeTimeoutMs = 650;
 const defaultControlPort = "43770";
 const fileChunkSizeBytes = 64 * 1024;
 const maxClipboardFileBytes = 512 * 1024 * 1024;
+const maxNativeClipboardFileBytes = 128 * 1024 * 1024;
 const defaultHostDiagnosticsText = "诊断：等待连接。";
 const displayOptionDefaults = {
   resolution: "1920x1080",
@@ -120,10 +122,13 @@ const hostModeLabels = {
   "local-mock-mac": "本地模拟 Mac",
   "mock-mac-host": "假 Mac 服务",
   "windows-host-skeleton": "Windows 被控骨架",
+  "windows-host-system-jpeg": "Windows 系统 JPEG",
 };
 const capturePipelineLabels = {
   "background-jpeg": "后台 JPEG",
   "screencapturekit-h264": "流式 H.264",
+  "windows-gdi-jpeg": "Windows 系统截图",
+  "windows-gdi-jpeg-fallback-mock": "Windows 截图回退",
   "mock-svg": "模拟画面",
   "screen-fallback-mock": "采集回退",
   "screen-timeout-mock": "采集超时",
@@ -2396,9 +2401,99 @@ async function sendClipboardFiles() {
   await sendFilesToRemote(files, { sourceLabel: "文件剪贴板", clearFileInput: true });
 }
 
+function getTauriInvoke() {
+  return window.__TAURI__?.core?.invoke || window.__TAURI__?.invoke || null;
+}
+
+function canUseDesktopFileClipboard() {
+  return Boolean(getTauriInvoke());
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function blobToBase64(blob) {
+  return arrayBufferToBase64(await blob.arrayBuffer());
+}
+
+async function writeReceivedFilesToSystemClipboard(files = state.receivedClipboardFiles) {
+  const invoke = getTauriInvoke();
+  if (!invoke) {
+    return {
+      clipboardWritten: false,
+      saveMode: "memory-only",
+      reason: "当前是浏览器预览版，桌面版支持写入 Windows 系统文件剪贴板。",
+    };
+  }
+
+  if (files.length === 0) {
+    return {
+      clipboardWritten: false,
+      saveMode: "memory-only",
+      reason: "没有可写入系统文件剪贴板的远端文件。",
+    };
+  }
+
+  const totalBytes = files.reduce((sum, file) => sum + (Number(file.size) || 0), 0);
+  if (totalBytes > maxNativeClipboardFileBytes) {
+    return {
+      clipboardWritten: false,
+      saveMode: "memory-only",
+      reason: `远端文件 ${formatBytes(totalBytes)}，超过系统文件剪贴板写入上限 ${formatBytes(maxNativeClipboardFileBytes)}。`,
+    };
+  }
+
+  elements.copyReceivedFilesButton.disabled = true;
+  try {
+    const nativeFiles = await Promise.all(
+      files.map(async (file, index) => ({
+        name: makeSafeDownloadName(file.name, index),
+        dataBase64: await blobToBase64(file.blob),
+      })),
+    );
+    return await invoke("write_files_to_clipboard", { files: nativeFiles });
+  } catch (error) {
+    return {
+      clipboardWritten: false,
+      saveMode: "memory-only",
+      reason: error?.message || String(error) || "写入 Windows 系统文件剪贴板失败。",
+    };
+  } finally {
+    renderReceivedFiles();
+  }
+}
+
+async function copyReceivedFilesToSystemClipboard() {
+  if (state.receivedClipboardFiles.length === 0) {
+    return;
+  }
+
+  elements.clipboardText.textContent = "剪贴板：正在写入系统文件剪贴板";
+  const result = await writeReceivedFilesToSystemClipboard();
+  if (result.clipboardWritten) {
+    elements.clipboardText.textContent = `剪贴板：已写入系统文件剪贴板（${result.fileCount ?? state.receivedClipboardFiles.length} 个文件）`;
+    addLog("远端文件剪贴板", result.reason || "已写入 Windows 系统文件剪贴板");
+  } else {
+    elements.clipboardText.textContent = "剪贴板：系统文件剪贴板写入失败";
+    addLog("远端文件剪贴板", result.reason || "文件仍保留在远端文件托盘");
+  }
+}
+
 function renderReceivedFiles() {
   elements.receivedFilesList.innerHTML = "";
   const files = state.receivedClipboardFiles;
+  const canWriteFileClipboard = canUseDesktopFileClipboard();
+  elements.copyReceivedFilesButton.disabled = files.length === 0 || !canWriteFileClipboard;
+  elements.copyReceivedFilesButton.title = canWriteFileClipboard
+    ? "写入系统文件剪贴板"
+    : "桌面版支持写入系统文件剪贴板";
   elements.downloadAllReceivedFilesButton.disabled = files.length === 0;
   elements.clearReceivedFilesButton.disabled = files.length === 0;
 
@@ -2605,7 +2700,7 @@ function handleClipboardFileChunk(message) {
   }
 }
 
-function handleClipboardFileComplete(message) {
+async function handleClipboardFileComplete(message) {
   const transferId = message.transferId || "";
   const transfer = state.remoteFileTransfers.get(transferId);
   if (!transfer) {
@@ -2668,16 +2763,38 @@ function handleClipboardFileComplete(message) {
   }
   state.receivedClipboardFiles = files;
   renderReceivedFiles();
-  elements.clipboardText.textContent = `剪贴板：已接收远端 ${files.length} 个文件（内存暂存）`;
-  addLog("文件剪贴板", `已接收远端 ${files.length} 个文件，共 ${formatBytes(receivedBytes)}，可在远端文件托盘下载`);
+  let systemClipboardResult = {
+    clipboardWritten: false,
+    saveMode: "memory-only",
+    reason: "Windows 控制端已在浏览器内存中接收文件，桌面版可写入系统文件剪贴板。",
+  };
+  if (canUseDesktopFileClipboard()) {
+    elements.clipboardText.textContent = `剪贴板：已接收远端 ${files.length} 个文件，正在写入系统文件剪贴板`;
+    systemClipboardResult = await writeReceivedFilesToSystemClipboard(files);
+  }
+
+  const saveMode = systemClipboardResult.clipboardWritten ? "clipboard" : systemClipboardResult.saveMode || "memory-only";
+  const reason = systemClipboardResult.clipboardWritten
+    ? systemClipboardResult.reason || "Windows 系统文件剪贴板已写入。"
+    : systemClipboardResult.reason || "Windows 控制端已在浏览器内存中接收文件，可在远端文件托盘下载。";
+
+  elements.clipboardText.textContent = systemClipboardResult.clipboardWritten
+    ? `剪贴板：已接收并写入系统文件剪贴板（${files.length} 个文件）`
+    : `剪贴板：已接收远端 ${files.length} 个文件（内存暂存）`;
+  addLog(
+    "文件剪贴板",
+    systemClipboardResult.clipboardWritten
+      ? `已接收远端 ${files.length} 个文件，共 ${formatBytes(receivedBytes)}，并写入 Windows 系统文件剪贴板`
+      : `已接收远端 ${files.length} 个文件，共 ${formatBytes(receivedBytes)}，可在远端文件托盘下载；${reason}`,
+  );
   state.client?.sendClipboardFileResult({
     transferId,
     accepted: true,
     receivedBytes,
     totalBytes,
     fileCount: files.length,
-    saveMode: "memory-only",
-    reason: "Windows 控制端已在浏览器内存中接收文件，系统文件剪贴板后续接入桌面原生模块。",
+    saveMode,
+    reason,
   });
 }
 
@@ -2925,7 +3042,17 @@ function handleProtocolMessage(message) {
   }
 
   if (message.type === "clipboard_file_complete") {
-    handleClipboardFileComplete(message);
+    void handleClipboardFileComplete(message).catch((error) => {
+      const reason = error?.message || "远端文件完成处理失败";
+      elements.clipboardText.textContent = "剪贴板：远端文件接收失败";
+      addLog("文件剪贴板失败", reason);
+      state.client?.sendClipboardFileResult({
+        transferId: message.transferId,
+        accepted: false,
+        code: "LAN011",
+        reason,
+      });
+    });
     return;
   }
 
@@ -3387,6 +3514,9 @@ elements.fileClipboardButton.addEventListener("click", () => {
   elements.fileClipboardInput.click();
 });
 elements.fileClipboardInput.addEventListener("change", sendClipboardFiles);
+elements.copyReceivedFilesButton.addEventListener("click", () => {
+  void copyReceivedFilesToSystemClipboard();
+});
 elements.downloadAllReceivedFilesButton.addEventListener("click", downloadAllReceivedFiles);
 elements.clearReceivedFilesButton.addEventListener("click", clearReceivedFiles);
 [

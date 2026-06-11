@@ -38,5 +38,6 @@ apps\windows-desktop\src-tauri\target\release\lan-dual-control-windows.exe
 - 已接入现有中文控制端界面。
 - 已支持本地模拟和 WebSocket 局域网连接方式。
 - 已支持分辨率、刷新率、码率、声音、剪贴板等控制项。
+- 已增加桌面原生命令：远端文件接收完成后可保存到本机临时目录，并写入 Windows 系统文件剪贴板。
 - 已验证可构建 Windows 桌面 exe。
 - 下一步再接入原生窗口菜单、托盘、配置存储、正式图标、安装包和自动启动。

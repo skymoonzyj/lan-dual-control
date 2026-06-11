@@ -36,7 +36,7 @@
 
 ## Windows Codex 可接任务
 
-- 把远端文件写入 Windows 系统文件剪贴板。
+- 优化 Windows 控制端远端文件托盘，后续把桌面版文件剪贴板写入升级为原生分块，支持更大的文件。
 - 把 Windows 被控端当前系统截图 JPEG 过渡层升级为 Windows Graphics Capture，提升帧率、延迟和资源占用表现。
 - 接入 WASAPI loopback，替换 Windows 被控端模拟音频帧。
 - 优化 Windows 控制端文件托盘和错误提示。

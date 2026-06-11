@@ -15,7 +15,7 @@
 
 ## Windows 端状态
 
-- Windows 控制端已有中文界面、局域网连接、连接历史、画质设置、缩放模式、诊断状态条、真实 Mac 音频 PCM 播放、剪贴板骨架和桌面壳。
+- Windows 控制端已有中文界面、局域网连接、连接历史、画质设置、缩放模式、诊断状态条、真实 Mac 音频 PCM 播放、文本剪贴板、远端文件托盘、桌面版远端文件写入 Windows 系统文件剪贴板和桌面壳。
 - Windows 控制端可连接本机假 Mac 服务，也可用脚本探测真实 Mac 被控端。
 - Windows 被控端已有 WebSocket 骨架、认证、Windows 系统截图 JPEG 视频帧、模拟音频帧、文本和文件剪贴板接收、最小 SendInput 输入注入。
 - Windows 被控端真实屏幕采集目前是 PowerShell/System.Drawing 过渡实现，系统截图不可用时回退模拟帧；后续仍需升级 Windows Graphics Capture，并接入真实系统声音采集。

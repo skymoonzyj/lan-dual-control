@@ -85,6 +85,45 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：让 Windows 控制端把远端文件写入 Windows 系统文件剪贴板。
+完成内容：
+- Windows 桌面壳新增 `write_files_to_clipboard` 原生命令：接收远端文件内容，保存到本机临时目录，再用 Windows 系统文件剪贴板写入这些文件路径。
+- Windows 控制端远端文件托盘新增“写入系统文件剪贴板”按钮；桌面版接收远端文件完成后会自动尝试写入系统文件剪贴板。
+- 浏览器预览版保持原有内存暂存和手动下载能力，不会误报系统剪贴板成功。
+- 为避免桌面 IPC 一次传输过大，当前自动写系统文件剪贴板上限为 128MB；超过后仍保留在远端文件托盘下载。
+- `clipboard_file_result.saveMode` 在桌面版成功时返回 `clipboard`，失败或浏览器预览时继续返回 `memory-only` / `temp` 和原因。
+修改文件：
+- `apps/windows-client/app.js`
+- `apps/windows-client/index.html`
+- `apps/windows-client/README.md`
+- `apps/windows-desktop/src-tauri/src/main.rs`
+- `apps/windows-desktop/src-tauri/Cargo.toml`
+- `apps/windows-desktop/src-tauri/Cargo.lock`
+- `apps/windows-desktop/src-tauri/tauri.conf.json`
+- `apps/windows-desktop/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `cargo check` in `apps/windows-desktop/src-tauri`
+- `npm.cmd run build` in `apps/windows-desktop`
+- `git diff --check`
+遗留问题：
+- 还没有做大文件原生分块写入；超过 128MB 的远端文件先保留托盘下载。
+- 未做真实 Mac 文件复制到 Windows 桌面壳的人工端到端点击验证；需要有人在 Windows 桌面 exe 中连接 Mac 后复制文件测试。
+下一步建议：
+- 真机测试时让 Mac 复制一个小文件或压缩包，确认 Windows 桌面版收到后资源管理器里可以直接粘贴。
+- 后续把文件剪贴板写入从 base64 IPC 升级为原生分块/临时流，支持更大文件。
+是否改了协议：否；仍使用现有 `clipboard_file_*` 消息和 `saveMode` 字段。
+是否需要另一端配合：暂无阻塞；端到端验收时需要 Mac 端复制文件触发 `clipboard_file_*`。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：为 Windows 被控端接入真实屏幕采集第一版，支撑后续 Mac 反控 Windows。
 完成内容：
 - Windows 被控端新增系统截图 JPEG 视频帧路径，默认 Windows 环境使用 `system-jpeg`，非 Windows 或强制 mock 时保留模拟帧。
