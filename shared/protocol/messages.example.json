@@ -140,22 +140,27 @@
     "type": "input_event",
     "event": "key",
     "action": "key",
-    "key": "A",
-    "code": "KeyA",
+    "key": "c",
+    "code": "KeyC",
+    "modifiers": ["meta"],
     "remoteModifiers": ["meta"],
     "keyboardMapping": {
       "win": "meta",
       "alt": "alt",
       "ctrl": "ctrl"
     },
+    "shortcutProfile": "windows_to_macos",
+    "shortcutAction": "copy",
     "ctrlKey": false,
     "altKey": false,
     "shiftKey": false,
     "metaKey": true,
-    "localCtrlKey": false,
+    "localKey": "c",
+    "localCode": "KeyC",
+    "localCtrlKey": true,
     "localAltKey": false,
     "localShiftKey": false,
-    "localMetaKey": true
+    "localMetaKey": false
   },
   "clipboardText": {
     "type": "clipboard_text",

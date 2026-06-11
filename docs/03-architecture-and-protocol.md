@@ -390,23 +390,28 @@ Both directions: clipboard_event loop
 {
   "type": "input_event",
   "event": "key",
-  "key": "A",
-  "code": "KeyA",
-  "action": "down",
+  "key": "c",
+  "code": "KeyC",
+  "action": "key",
+  "modifiers": ["meta"],
   "remoteModifiers": ["meta"],
   "keyboardMapping": {
     "win": "meta",
     "alt": "alt",
     "ctrl": "ctrl"
   },
+  "shortcutProfile": "windows_to_macos",
+  "shortcutAction": "copy",
   "ctrlKey": false,
   "altKey": false,
   "shiftKey": false,
   "metaKey": true,
-  "localCtrlKey": false,
+  "localKey": "c",
+  "localCode": "KeyC",
+  "localCtrlKey": true,
   "localAltKey": false,
   "localShiftKey": false,
-  "localMetaKey": true
+  "localMetaKey": false
 }
 ```
 
@@ -415,7 +420,10 @@ macOS 默认按键映射：
 - Windows `Win` 键 -> macOS `Command`。
 - Windows `Alt` 键 -> macOS `Option`。
 - Windows `Ctrl` 键 -> macOS `Control`。
+- Windows 常用快捷键兼容默认开启：`Ctrl+C/V/X/A/Z/S/F/P/O/N/W/T/R` 会按 macOS `Command` 快捷键发送，`Ctrl+Y` 会转为 `Command+Shift+Z`。
 - `remoteModifiers` 是按映射转换后的远端修饰键，后续 macOS 输入注入优先读取这个字段。
+- `modifiers` 与 `remoteModifiers` 保持一致，用于 Swift 被控端直接解码。
+- `shortcutProfile` 和 `shortcutAction` 标记 Windows 快捷键兼容层的语义，例如 `windows_to_macos` / `copy`。
 - `local*Key` 保留 Windows 本地原始按键状态，用于日志和排查。
 
 ## 10. 剪贴板协议

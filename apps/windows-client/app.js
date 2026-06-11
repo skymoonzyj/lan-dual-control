@@ -34,6 +34,7 @@ const elements = {
   keyMapWinSelect: document.querySelector("#keyMapWinSelect"),
   keyMapAltSelect: document.querySelector("#keyMapAltSelect"),
   keyMapCtrlSelect: document.querySelector("#keyMapCtrlSelect"),
+  shortcutCompatToggle: document.querySelector("#shortcutCompatToggle"),
   resetKeyMapButton: document.querySelector("#resetKeyMapButton"),
   directionIndicator: document.querySelector("#directionIndicator"),
   directionText: document.querySelector("#directionText"),
@@ -104,6 +105,22 @@ const remoteModifierLabels = {
   ctrl: "^ Control",
   shift: "⇧ Shift",
   none: "不映射",
+};
+const windowsShortcutMap = {
+  a: { key: "a", code: "KeyA", action: "select_all", label: "全选" },
+  c: { key: "c", code: "KeyC", action: "copy", label: "复制" },
+  f: { key: "f", code: "KeyF", action: "find", label: "查找" },
+  n: { key: "n", code: "KeyN", action: "new", label: "新建" },
+  o: { key: "o", code: "KeyO", action: "open", label: "打开" },
+  p: { key: "p", code: "KeyP", action: "print", label: "打印" },
+  r: { key: "r", code: "KeyR", action: "reload", label: "刷新" },
+  s: { key: "s", code: "KeyS", action: "save", label: "保存" },
+  t: { key: "t", code: "KeyT", action: "new_tab", label: "新建标签" },
+  v: { key: "v", code: "KeyV", action: "paste", label: "粘贴" },
+  w: { key: "w", code: "KeyW", action: "close", label: "关闭" },
+  x: { key: "x", code: "KeyX", action: "cut", label: "剪切" },
+  y: { key: "z", code: "KeyZ", action: "redo", label: "重做", forceShift: true },
+  z: { key: "z", code: "KeyZ", action: "undo", label: "撤销" },
 };
 const fallbackDisplays = [
   {
@@ -360,6 +377,7 @@ function collectPreferences() {
     audioVolume: elements.audioVolumeRange.value,
     clipboard: elements.clipboardToggle.checked,
     keyboardMapping: getKeyboardMapping(),
+    shortcutCompatibility: elements.shortcutCompatToggle.checked,
     recentConnections: state.recentConnections,
   };
 }
@@ -393,6 +411,10 @@ function applyPreferences() {
   if (typeof preferences.clipboard === "boolean") {
     elements.clipboardToggle.checked = preferences.clipboard;
   }
+  elements.shortcutCompatToggle.checked =
+    typeof preferences.shortcutCompatibility === "boolean"
+      ? preferences.shortcutCompatibility
+      : true;
   applyKeyboardMapping(preferences.keyboardMapping ?? defaultKeyboardMapping);
 
   state.recentConnections = Array.isArray(preferences.recentConnections)
@@ -464,8 +486,9 @@ function applyKeyboardMapping(mapping = defaultKeyboardMapping) {
 
 function resetKeyboardMapping() {
   applyKeyboardMapping(defaultKeyboardMapping);
+  elements.shortcutCompatToggle.checked = true;
   savePreferences();
-  addLog("按键映射", "已还原默认：Win→Command，Alt→Option，Ctrl→Control");
+  addLog("按键映射", "已还原默认：Win→Command，Alt→Option，Ctrl→Control，Windows 快捷键开启");
 }
 
 function addMappedModifier(modifiers, modifier) {
@@ -476,6 +499,24 @@ function addMappedModifier(modifiers, modifier) {
 
 function mapKeyboardModifiers(event) {
   const mapping = getKeyboardMapping();
+  const shortcut = getMacShortcutOverride(event);
+  if (shortcut) {
+    const modifiers = shortcut.modifiers;
+    return {
+      mapping,
+      modifiers,
+      key: shortcut.key,
+      code: shortcut.code,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: modifiers.includes("shift"),
+      metaKey: true,
+      shortcutProfile: "windows_to_macos",
+      shortcutAction: shortcut.action,
+      shortcutLabel: shortcut.label,
+    };
+  }
+
   const remoteModifiers = new Set();
   if (event.shiftKey) {
     remoteModifiers.add("shift");
@@ -501,11 +542,39 @@ function mapKeyboardModifiers(event) {
   };
 }
 
+function getMacShortcutOverride(event) {
+  if (!elements.shortcutCompatToggle.checked || !event.ctrlKey || event.altKey || event.metaKey) {
+    return null;
+  }
+
+  const key = String(event.key ?? "").toLowerCase();
+  const shortcut = windowsShortcutMap[key];
+  if (!shortcut) {
+    return null;
+  }
+
+  const modifiers = new Set(["meta"]);
+  if (event.shiftKey || shortcut.forceShift) {
+    modifiers.add("shift");
+  }
+
+  const action = key === "z" && event.shiftKey ? "redo" : shortcut.action;
+  const label = key === "z" && event.shiftKey ? "重做" : shortcut.label;
+  return {
+    ...shortcut,
+    action,
+    label,
+    modifiers: [...modifiers],
+  };
+}
+
 function describeKeyboardInput(event, mapped) {
   const prefix = mapped.modifiers
     .map((modifier) => remoteModifierLabels[modifier] ?? modifier)
     .join("+");
-  return `${prefix ? `${prefix}+` : ""}${event.key}`;
+  const key = mapped.key ?? event.key;
+  const label = mapped.shortcutLabel ? ` · ${mapped.shortcutLabel}` : "";
+  return `${prefix ? `${prefix}+` : ""}${key}${label}`;
 }
 
 function applyQualityPreset(presetKey, { send = true } = {}) {
@@ -1035,6 +1104,7 @@ function buildLogExportText() {
     `- 声音：${settings.audio ? `开启 · ${settings.audioVolume}%` : "关闭"}`,
     `- 剪贴板：${settings.clipboard ? "开启" : "关闭"}`,
     `- 按键映射：Win→${remoteModifierLabels[keyboardMapping.win]}，Alt→${remoteModifierLabels[keyboardMapping.alt]}，Ctrl→${remoteModifierLabels[keyboardMapping.ctrl]}`,
+    `- Windows 快捷键兼容：${elements.shortcutCompatToggle.checked ? "开启" : "关闭"}`,
     "",
     "运行统计",
     `- 输入事件：${state.inputEvents}`,
@@ -1325,6 +1395,13 @@ function mapPointerToRemote(event) {
   };
 }
 
+function getMouseButtonName(button) {
+  if (button === 0) return "left";
+  if (button === 1) return "middle";
+  if (button === 2) return "right";
+  return "unknown";
+}
+
 function sendDisplaySettings() {
   updateMetrics();
   applyScaleMode();
@@ -1385,6 +1462,7 @@ function updateCursor(event) {
     "鼠标移动",
     `x=${mapped.x.toFixed(3)}, y=${mapped.y.toFixed(3)} · ${mapped.remoteX},${mapped.remoteY}`,
     {
+      event: "mouse_move",
       pointerType: "mouse",
       action: "move",
       x: mapped.x,
@@ -1438,6 +1516,52 @@ async function readLocalClipboardText() {
   return navigator.clipboard.readText();
 }
 
+function getClipboardBlobFileName(mimeType, index) {
+  const extensionMap = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "application/pdf": "pdf",
+    "application/zip": "zip",
+    "application/x-zip-compressed": "zip",
+  };
+  const extension = extensionMap[mimeType] ?? "bin";
+  return `clipboard-${Date.now().toString(16)}-${index + 1}.${extension}`;
+}
+
+async function readLocalClipboardFiles() {
+  if (!navigator.clipboard?.read || typeof File === "undefined") {
+    return {
+      files: [],
+      reason: "文件剪贴板自动同步需要桌面原生模块，当前可先用“发送文件”按钮。",
+    };
+  }
+
+  try {
+    const items = await navigator.clipboard.read();
+    const files = [];
+    for (const item of items) {
+      const fileTypes = item.types.filter((type) => !type.startsWith("text/"));
+      for (const type of fileTypes) {
+        const blob = await item.getType(type);
+        if (!blob || blob.size === 0) {
+          continue;
+        }
+        files.push(new File([blob], getClipboardBlobFileName(type, files.length), {
+          type,
+          lastModified: Date.now(),
+        }));
+      }
+    }
+    return { files, reason: "" };
+  } catch (error) {
+    return {
+      files: [],
+      reason: error?.message || "读取文件剪贴板失败，后续接入桌面原生模块。",
+    };
+  }
+}
+
 async function writeLocalClipboardText(text) {
   if (!navigator.clipboard?.writeText) {
     throw new Error("当前环境不允许写入系统剪贴板");
@@ -1445,17 +1569,19 @@ async function writeLocalClipboardText(text) {
   await navigator.clipboard.writeText(text);
 }
 
-async function syncClipboardText() {
+async function syncClipboardText({ quietNoText = false } = {}) {
   if (!state.connected || !elements.clipboardToggle.checked) {
-    return;
+    return false;
   }
 
   try {
     const text = await readLocalClipboardText();
     if (!text) {
-      elements.clipboardText.textContent = "剪贴板：没有可同步的文字";
-      addLog("剪贴板", "本机剪贴板没有文字内容");
-      return;
+      if (!quietNoText) {
+        elements.clipboardText.textContent = "剪贴板：没有可同步的文字";
+        addLog("剪贴板", "本机剪贴板没有文字内容");
+      }
+      return false;
     }
 
     const clipboardId = makeClipboardId();
@@ -1467,27 +1593,45 @@ async function syncClipboardText() {
       });
     }
     addLog("剪贴板", `已发送文字 ${text.length} 字`);
+    return true;
   } catch (error) {
     const message = error?.message || "剪贴板读取失败";
     elements.clipboardText.textContent = "剪贴板：同步失败";
     addLog("剪贴板失败", message);
+    return false;
   }
 }
 
-async function sendClipboardFiles() {
+async function syncClipboardBeforePaste() {
+  if (!state.connected || !elements.clipboardToggle.checked) {
+    return;
+  }
+
+  const clipboardFiles = await readLocalClipboardFiles();
+  if (clipboardFiles.files.length > 0) {
+    await sendFilesToRemote(clipboardFiles.files, { sourceLabel: "文件剪贴板" });
+    return;
+  }
+
+  const sentText = await syncClipboardText({ quietNoText: true });
+  if (!sentText && clipboardFiles.reason) {
+    addLog("文件剪贴板", clipboardFiles.reason);
+  }
+}
+
+async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clearFileInput = false } = {}) {
   if (!state.connected || !state.client) {
     elements.clipboardText.textContent = "剪贴板：请先连接被控端";
-    addLog("文件剪贴板", "未连接，无法发送文件");
+    addLog(sourceLabel, "未连接，无法发送文件");
     return;
   }
 
   if (!elements.clipboardToggle.checked) {
     elements.clipboardText.textContent = "剪贴板：已关闭";
-    addLog("文件剪贴板", "剪贴板同步已关闭");
+    addLog(sourceLabel, "剪贴板同步已关闭");
     return;
   }
 
-  const files = Array.from(elements.fileClipboardInput.files ?? []);
   if (files.length === 0) {
     return;
   }
@@ -1496,8 +1640,8 @@ async function sendClipboardFiles() {
   if (totalBytes > maxClipboardFileBytes) {
     const message = `文件总大小 ${formatBytes(totalBytes)}，超过当前上限 ${formatBytes(maxClipboardFileBytes)}`;
     elements.clipboardText.textContent = "剪贴板：文件过大";
-    addLog("文件剪贴板", message);
-    elements.fileClipboardInput.value = "";
+    addLog(sourceLabel, message);
+    if (clearFileInput) elements.fileClipboardInput.value = "";
     return;
   }
 
@@ -1524,7 +1668,7 @@ async function sendClipboardFiles() {
       maxChunkBytes: fileChunkSizeBytes,
       files: fileMetas,
     });
-    addLog("文件剪贴板", `开始发送 ${files.length} 个文件，共 ${formatBytes(totalBytes)}`);
+    addLog(sourceLabel, `开始发送 ${files.length} 个文件，共 ${formatBytes(totalBytes)}`);
 
     for (const [fileIndex, file] of files.entries()) {
       let chunkIndex = 0;
@@ -1560,16 +1704,21 @@ async function sendClipboardFiles() {
       fileCount: files.length,
     });
     elements.clipboardText.textContent = `剪贴板：文件已发送 ${formatBytes(sentBytes)}`;
-    addLog("文件剪贴板", `文件块发送完成，等待对端确认 · ${transferId}`);
+    addLog(sourceLabel, `文件块发送完成，等待对端确认 · ${transferId}`);
   } catch (error) {
     const message = error?.message || "文件发送失败";
     elements.clipboardText.textContent = "剪贴板：文件发送失败";
-    addLog("文件剪贴板失败", message);
+    addLog(`${sourceLabel}失败`, message);
   } finally {
     state.fileTransferActive = false;
-    elements.fileClipboardInput.value = "";
+    if (clearFileInput) elements.fileClipboardInput.value = "";
     updateFileClipboardButton();
   }
+}
+
+async function sendClipboardFiles() {
+  const files = Array.from(elements.fileClipboardInput.files ?? []);
+  await sendFilesToRemote(files, { sourceLabel: "文件剪贴板", clearFileInput: true });
 }
 
 function handleClipboardFileOffer(message) {
@@ -1932,13 +2081,15 @@ elements.fileClipboardInput.addEventListener("change", sendClipboardFiles);
   elements.keyMapWinSelect,
   elements.keyMapAltSelect,
   elements.keyMapCtrlSelect,
+  elements.shortcutCompatToggle,
 ].forEach((select) => {
   select.addEventListener("change", () => {
     savePreferences();
     const mapping = getKeyboardMapping();
+    const shortcutText = elements.shortcutCompatToggle.checked ? "Windows 快捷键开启" : "Windows 快捷键关闭";
     addLog(
       "按键映射",
-      `Win→${remoteModifierLabels[mapping.win]}，Alt→${remoteModifierLabels[mapping.alt]}，Ctrl→${remoteModifierLabels[mapping.ctrl]}`,
+      `Win→${remoteModifierLabels[mapping.win]}，Alt→${remoteModifierLabels[mapping.alt]}，Ctrl→${remoteModifierLabels[mapping.ctrl]}，${shortcutText}`,
     );
   });
 });
@@ -1949,14 +2100,21 @@ elements.resetKeyMapButton.addEventListener("click", resetKeyboardMapping);
 });
 
 elements.remoteCanvas.addEventListener("mousemove", updateCursor);
+elements.remoteCanvas.addEventListener("contextmenu", (event) => {
+  if (canSendControlInput()) {
+    event.preventDefault();
+  }
+});
 elements.remoteCanvas.addEventListener("mousedown", (event) => {
   if (!canSendControlInput()) return;
   const mapped = mapPointerToRemote(event);
   if (!mapped) return;
   registerInputEvent("鼠标按下", `button=${event.button} · ${mapped.remoteX},${mapped.remoteY}`, {
+    event: "mouse_button",
     pointerType: "mouse",
     action: "down",
-    button: event.button,
+    button: getMouseButtonName(event.button),
+    localButton: event.button,
     x: mapped.x,
     y: mapped.y,
     remoteX: mapped.remoteX,
@@ -1969,9 +2127,11 @@ elements.remoteCanvas.addEventListener("mouseup", (event) => {
   const mapped = mapPointerToRemote(event);
   if (!mapped) return;
   registerInputEvent("鼠标抬起", `button=${event.button} · ${mapped.remoteX},${mapped.remoteY}`, {
+    event: "mouse_button",
     pointerType: "mouse",
     action: "up",
-    button: event.button,
+    button: getMouseButtonName(event.button),
+    localButton: event.button,
     x: mapped.x,
     y: mapped.y,
     remoteX: mapped.remoteX,
@@ -1985,6 +2145,7 @@ elements.remoteCanvas.addEventListener("wheel", (event) => {
   const mapped = mapPointerToRemote(event);
   if (!mapped) return;
   registerInputEvent("滚轮", `deltaY=${Math.round(event.deltaY)}`, {
+    event: "mouse_wheel",
     pointerType: "mouse",
     action: "wheel",
     deltaY: Math.round(event.deltaY),
@@ -1995,23 +2156,30 @@ elements.remoteCanvas.addEventListener("wheel", (event) => {
     scaleMode: elements.scaleModeSelect.value,
   });
 });
-elements.remoteCanvas.addEventListener("keydown", (event) => {
-  if (event.key.toLowerCase() === "v" && event.ctrlKey) {
-    syncClipboardText();
-  }
+elements.remoteCanvas.addEventListener("keydown", async (event) => {
   if (!canSendControlInput()) return;
   const mapped = mapKeyboardModifiers(event);
+  event.preventDefault();
+  if (mapped.shortcutAction === "paste") {
+    await syncClipboardBeforePaste();
+  }
   registerInputEvent("键盘", describeKeyboardInput(event, mapped), {
+    event: "key",
     action: "key",
-    key: event.key,
-    code: event.code,
+    key: mapped.key ?? event.key,
+    code: mapped.code ?? event.code,
     repeat: event.repeat,
     ctrlKey: mapped.ctrlKey,
     altKey: mapped.altKey,
     shiftKey: mapped.shiftKey,
     metaKey: mapped.metaKey,
+    modifiers: mapped.modifiers,
     remoteModifiers: mapped.modifiers,
     keyboardMapping: mapped.mapping,
+    shortcutProfile: mapped.shortcutProfile,
+    shortcutAction: mapped.shortcutAction,
+    localKey: event.key,
+    localCode: event.code,
     localCtrlKey: event.ctrlKey,
     localAltKey: event.altKey,
     localShiftKey: event.shiftKey,

@@ -20,6 +20,7 @@
 - 支持画面缩放模式：适应窗口、原始比例、拉伸填充。
 - 支持多显示器选择骨架：被控端返回 `displays` 后可在控制端选择目标显示器，并通过 `display_settings.displayId` 下发。
 - 支持远控 macOS 默认按键映射：Win -> Command、Alt -> Option、Ctrl -> Control，可手动调整并一键还原。
+- 默认开启 Windows 常用快捷键兼容：Ctrl+C/V/X/A/Z/S/F/P/O/N/W/T/R 会按 macOS Command 快捷键发送，Ctrl+Y 会转为 Command+Shift+Z。
 - 鼠标坐标按实际视频画面区域映射，黑边区域不会误发输入。
 - 支持保存连接方式、地址、端口和画质设置。
 - 支持最近连接列表。
@@ -27,7 +28,7 @@
 - 支持假 Mac 联调错误模拟：密码错误、权限不足、视频中断、连接后断开。
 - 支持非手动断线后自动重连，最多重试 3 次。
 - 支持声音接收骨架：处理 `audio_settings_ack` 和模拟 `audio_frame`，状态栏显示音频帧、音量和延迟。
-- 支持 `Ctrl+V` 读取本机文字剪贴板并发送给被控端，也可接收远端 `clipboard_text` 并写入本机剪贴板。
+- 支持 `Ctrl+V` 粘贴前预同步本机剪贴板：文字走 `clipboard_text`，图片等可读剪贴板项走 `clipboard_file_*`，资源管理器文件路径后续接入桌面原生模块。
 - 支持文件剪贴板发送骨架：可手动选择文件、压缩包或图片，按 `clipboard_file_*` 消息分块发送并显示进度。
 - 支持一键反控请求编号、方向状态显示、超时回滚和对端确认。
 - 支持收到对端 `reverse_control_request` 时弹出确认。

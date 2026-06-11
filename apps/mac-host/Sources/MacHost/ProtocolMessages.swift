@@ -66,5 +66,15 @@ struct InputEventMessage: Codable {
     let key: String?
     let code: String?
     let modifiers: [String]?
+    let remoteModifiers: [String]?
+    let keyboardMapping: [String: String]?
+    let shortcutProfile: String?
+    let shortcutAction: String?
+    let localKey: String?
+    let localCode: String?
+    let localButton: Int?
+    let localCtrlKey: Bool?
+    let localAltKey: Bool?
+    let localShiftKey: Bool?
+    let localMetaKey: Bool?
 }
-

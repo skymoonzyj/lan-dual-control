@@ -40,7 +40,9 @@ final class InputEventInjector {
     }
 
     private func injectKey(_ message: InputEventMessage) {
-        logger.info("TODO 键盘：\(message.key ?? message.code ?? "?") / \(message.action ?? "?")")
+        let modifiers = message.modifiers ?? message.remoteModifiers ?? []
+        let modifierText = modifiers.isEmpty ? "无修饰键" : modifiers.joined(separator: "+")
+        let shortcutText = message.shortcutAction.map { " / 快捷键：\($0)" } ?? ""
+        logger.info("TODO 键盘：\(message.key ?? message.code ?? "?") / \(message.action ?? "?") / \(modifierText)\(shortcutText)")
     }
 }
-
