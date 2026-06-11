@@ -481,7 +481,7 @@ final class MacHostService {
         let snapshot = permissions.snapshot()
         let screenFramesEnabled = shouldUseScreenFrames(snapshot)
         let jpegQuality = jpegQuality(for: qualityPreset, bandwidthKbps: bandwidth)
-        context.session = HostSession(
+        let session = HostSession(
             width: width,
             height: height,
             fps: fps,
@@ -496,14 +496,23 @@ final class MacHostService {
             clipboardTextEnabled: wantClipboardText,
             clipboardFileEnabled: wantClipboardFile
         )
+        context.session = session
+        let negotiatedVideoCodec = negotiatedVideoCodec(for: session)
+        let capturePipeline = capturePipelineName(for: session)
+        let effectiveFps = effectiveVideoFps(for: session)
+        let frameIntervalMs = videoFrameIntervalMs(for: session)
 
-        logger.info("会话协商：\(width)x\(height) / \(fps) Hz / 码率 \(bandwidth / 1000) Mbps / \(activeDisplay.name) / 视频 \(screenFramesEnabled ? "后台 JPEG" : "模拟帧") / 质量 \(String(format: "%.2f", jpegQuality))")
+        logger.info("会话协商：\(width)x\(height) / 请求 \(fps) Hz / 实际 \(effectiveFps) Hz / 码率 \(bandwidth / 1000) Mbps / \(activeDisplay.name) / 视频 \(screenFramesEnabled ? "后台 JPEG" : "模拟帧") / 质量 \(String(format: "%.2f", jpegQuality))")
         send([
             "type": "session_answer",
             "ok": true,
-            "videoCodec": screenFramesEnabled ? "jpeg" : videoCodec,
+            "videoCodec": negotiatedVideoCodec,
+            "requestedVideoCodec": videoCodec,
             "audioCodec": audioCodec,
-            "fps": fps,
+            "fps": effectiveFps,
+            "requestedFps": fps,
+            "maxScreenFps": configuration.maxScreenFps,
+            "frameIntervalMs": frameIntervalMs,
             "maxBandwidthKbps": bandwidth,
             "width": width,
             "height": height,
@@ -521,7 +530,7 @@ final class MacHostService {
             "inputMode": configuration.inputMode.rawValue,
             "qualityPreset": qualityPreset,
             "jpegQuality": jpegQuality,
-            "capturePipeline": screenFramesEnabled ? "background-jpeg" : "mock-svg",
+            "capturePipeline": capturePipeline,
             "permissions": [
                 "screenRecording": snapshot.screenRecordingGranted,
                 "accessibility": snapshot.accessibilityGranted,
@@ -552,7 +561,7 @@ final class MacHostService {
         let screenFramesEnabled = shouldUseScreenFrames(permissions.snapshot())
         let jpegQuality = jpegQuality(for: qualityPreset, bandwidthKbps: bandwidth)
 
-        context.session = HostSession(
+        let session = HostSession(
             width: width,
             height: height,
             fps: fps,
@@ -567,13 +576,27 @@ final class MacHostService {
             clipboardTextEnabled: clipboardText,
             clipboardFileEnabled: clipboardFile
         )
+        context.session = session
+        let negotiatedVideoCodec = negotiatedVideoCodec(for: session)
+        let capturePipeline = capturePipelineName(for: session)
+        let effectiveFps = effectiveVideoFps(for: session)
 
         send([
             "type": "display_settings_ack",
             "accepted": true,
+            "videoCodec": negotiatedVideoCodec,
+            "fps": effectiveFps,
+            "requestedFps": fps,
+            "maxScreenFps": configuration.maxScreenFps,
+            "frameIntervalMs": videoFrameIntervalMs(for: session),
+            "width": width,
+            "height": height,
+            "activeDisplayId": activeDisplay.id,
+            "displayName": activeDisplay.name,
+            "maxBandwidthKbps": bandwidth,
             "qualityPreset": qualityPreset,
             "jpegQuality": jpegQuality,
-            "capturePipeline": screenFramesEnabled ? "background-jpeg" : "mock-svg",
+            "capturePipeline": capturePipeline,
             "clipboardText": clipboardText,
             "clipboardTextMode": "system",
             "clipboardFile": clipboardFile,
@@ -1227,8 +1250,7 @@ final class MacHostService {
             clipboardTextEnabled: false,
             clipboardFileEnabled: false
         )
-        let maxFps = session.screenFramesEnabled ? min(session.fps, configuration.maxScreenFps) : min(session.fps, 8)
-        let intervalMs = max(session.screenFramesEnabled ? 80 : 120, Int((1000.0 / Double(max(1, maxFps))).rounded()))
+        let intervalMs = videoFrameIntervalMs(for: session)
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + .milliseconds(intervalMs), repeating: .milliseconds(intervalMs))
         timer.setEventHandler { [weak self, weak context] in
@@ -1263,6 +1285,41 @@ final class MacHostService {
     private func stopVideoFrames(_ context: ClientContext) {
         context.videoTimer?.cancel()
         context.videoTimer = nil
+    }
+
+    private func negotiatedVideoCodec(for session: HostSession) -> String {
+        session.screenFramesEnabled ? "jpeg" : "mock-svg"
+    }
+
+    private func capturePipelineName(for session: HostSession) -> String {
+        session.screenFramesEnabled ? "background-jpeg" : "mock-svg"
+    }
+
+    private func effectiveVideoFps(for session: HostSession) -> Int {
+        let requestedFps = max(1, min(session.fps, 60))
+        return session.screenFramesEnabled
+            ? min(requestedFps, configuration.maxScreenFps)
+            : min(requestedFps, 8)
+    }
+
+    private func videoFrameIntervalMs(for session: HostSession) -> Int {
+        let fps = max(1, effectiveVideoFps(for: session))
+        let minimumIntervalMs = session.screenFramesEnabled ? 80 : 120
+        return max(minimumIntervalMs, Int((1000.0 / Double(fps)).rounded()))
+    }
+
+    private func addVideoDiagnostics(
+        to frame: inout [String: Any],
+        session: HostSession,
+        pipeline: String,
+        codec: String
+    ) {
+        frame["videoCodec"] = codec
+        frame["fps"] = effectiveVideoFps(for: session)
+        frame["requestedFps"] = max(1, min(session.fps, 60))
+        frame["maxScreenFps"] = configuration.maxScreenFps
+        frame["frameIntervalMs"] = videoFrameIntervalMs(for: session)
+        frame["capturePipeline"] = pipeline
     }
 
     private func startAudioFrames(_ context: ClientContext) {
@@ -1371,7 +1428,7 @@ final class MacHostService {
                     )
                     frame["qualityPreset"] = sessionSnapshot.qualityPreset
                     frame["jpegQuality"] = sessionSnapshot.jpegQuality
-                    frame["capturePipeline"] = "background-jpeg"
+                    addVideoDiagnostics(to: &frame, session: sessionSnapshot, pipeline: "background-jpeg", codec: "jpeg")
                     frame["droppedFrames"] = context.droppedVideoFrames
                     context.droppedVideoFrames = 0
                     self.send(frame, to: context)
@@ -1409,6 +1466,7 @@ final class MacHostService {
     ) {
         var fallbackFrame = makeMockVideoFrame(frameId, session: session)
         fallbackFrame["capturePipeline"] = pipeline
+        addVideoDiagnostics(to: &fallbackFrame, session: session, pipeline: pipeline, codec: "mock-svg")
         fallbackFrame["droppedFrames"] = context.droppedVideoFrames
         fallbackFrame["screenCaptureFailureStreak"] = context.consecutiveVideoCaptureFailures
         if let retryAfter {
@@ -1444,7 +1502,7 @@ final class MacHostService {
         """
 
         let dataUrl = "data:image/svg+xml;base64,\(Data(svg.utf8).base64EncodedString())"
-        return [
+        var frame: [String: Any] = [
             "type": "video_frame",
             "frameId": frameId,
             "timestamp": ISO8601DateFormatter().string(from: now),
@@ -1456,6 +1514,8 @@ final class MacHostService {
             "source": "mock",
             "dataUrl": dataUrl,
         ]
+        addVideoDiagnostics(to: &frame, session: session, pipeline: "mock-svg", codec: "mock-svg")
+        return frame
     }
 
     private func shouldUseScreenFrames(_ snapshot: MacPermissionSnapshot) -> Bool {

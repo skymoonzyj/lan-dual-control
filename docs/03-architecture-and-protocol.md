@@ -236,6 +236,7 @@ Both directions: clipboard_event loop
 - 控制消息仍用 JSON。
 - 初期可以发送 `codec: "jpeg"`、`encoding: "data-url"` 或 `encoding: "base64"` 的 JPEG 帧，降低联调难度。
 - macOS 被控端当前使用 `capturePipeline: "background-jpeg"` 表示截图和 JPEG 编码在后台队列执行；如果上一帧尚未完成，会丢弃调度并在后续 `video_frame.droppedFrames` 中带回数量。
+- FPS 诊断字段中，`requestedFps` 表示控制端请求帧率，`fps` 表示被控端当前实际目标帧率，`maxScreenFps` 表示被控端真实屏幕采集上限，`frameIntervalMs` 表示当前定时器间隔。当前 macOS 真实屏幕 JPEG 管线默认会把实际帧率限制到 `LAN_DUAL_MAX_SCREEN_FPS`。
 - `qualityPreset`、`jpegQuality` 可作为调试字段返回实际使用的画质预设和 JPEG 压缩质量。
 - 性能不足时再把图像帧升级为二进制帧。
 - 每帧带一个小头部：frameId、timestamp、width、height、format、payloadLength。

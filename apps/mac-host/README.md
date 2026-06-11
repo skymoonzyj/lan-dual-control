@@ -57,7 +57,7 @@ swift run lan-dual-mac-host
 - `screen`：强制尝试真实屏幕帧，失败时仍会临时回退模拟帧并打印日志。
 - `mock`：只发送模拟帧，适合协议调试。
 
-真实屏幕帧采用后台采集和 JPEG 编码队列，避免主线程被截图/编码卡住。截图短暂失败时会发送模拟保活帧；截图调用超时时会进入短暂冷却窗口，暂停继续排队真实截图，再自动尝试恢复。`LAN_DUAL_MAX_SCREEN_FPS` 可限制真实屏幕帧最高帧率，默认 `12`，范围 `1...30`。`LAN_DUAL_JPEG_QUALITY` 可覆盖控制端画质预设计算出的 JPEG 质量，范围 `0.1...0.95`；不设置时会按 Windows 控制端的 `smooth`、`balanced`、`sharp`、`custom` 和码率自动选择。
+真实屏幕帧采用后台采集和 JPEG 编码队列，避免主线程被截图/编码卡住。截图短暂失败时会发送模拟保活帧；截图调用超时时会进入短暂冷却窗口，暂停继续排队真实截图，再自动尝试恢复。`LAN_DUAL_MAX_SCREEN_FPS` 可限制真实屏幕帧最高帧率，默认 `12`，范围 `1...30`；`session_answer`、`display_settings_ack` 和 `video_frame` 会同时返回 `requestedFps` 与实际 `fps`，便于 Windows 端诊断。`LAN_DUAL_JPEG_QUALITY` 可覆盖控制端画质预设计算出的 JPEG 质量，范围 `0.1...0.95`；不设置时会按 Windows 控制端的 `smooth`、`balanced`、`sharp`、`custom` 和码率自动选择。
 
 `LAN_DUAL_INPUT_MODE` 可选值：
 
