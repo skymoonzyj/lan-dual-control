@@ -17,6 +17,48 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
+本轮目标：创建 Mac 控制 Windows 的最小控制端原型。
+完成内容：
+- 新增 `apps/mac-client` Web 原型，提供中文连接页和远端画面区域。
+- 支持 `/discovery`、WebSocket `hello`、`auth_request`、`session_offer`。
+- 支持显示 Windows host 的 JPEG/data-url `video_frame`，显示视频帧状态和 mock 音频状态。
+- 支持点击远端画面后发送鼠标移动、按下/抬起、滚轮和键盘 `input_event`。
+- 键盘映射默认把 Mac `Command` 当作 Windows `Ctrl` 发送，方便 Mac 上用 `Command+C/V` 控制 Windows 常用快捷键。
+- 新增 `apps/mac-client/server.mjs` 静态服务和 README。
+修改文件：
+- `apps/mac-client/*`
+- `README.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+验证方式：
+- `node --check apps/mac-client/server.mjs`
+- `node --check apps/mac-client/app.js`
+- `git diff --check`
+- 本机启动 `apps/windows-host`：`LAN_DUAL_PORT=43772 LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_WINDOWS_INPUT_MODE=log node server.mjs`
+- 本机启动 `apps/mac-client`：`node server.mjs`
+- 用浏览器打开 `http://127.0.0.1:5188/`，连接 `127.0.0.1:43772`。
+验证结果：
+- Mac client 页面发现 Windows host、认证、会话协商均通过。
+- 页面显示 mock `video_frame`，状态为 `mock-svg`，视频帧递增。
+- 点击远端画面并发送键盘 `a` 后，页面收到 `input_ack`：`已确认 · log`。
+- Windows host 日志记录了鼠标 move/down/up 和 key 输入事件；临时 `43772` 端口已释放。
+遗留问题：
+- 这是 Web 原型，不是 SwiftUI/原生桌面窗口。
+- 音频帧当前只显示状态，尚未播放 Windows host 音频。
+- 仍需连接真实 Windows 机器验证真实 JPEG 画面、SendInput 和防火墙放行体验。
+下一步建议：
+- Windows 端认证重试限制完成后，Mac 端可拉取最新，再用 `apps/mac-client` 连接真实 Windows host 做端到端验证。
+- 后续给 `apps/mac-client` 加剪贴板文本/文件入口、音频播放和更完整的错误提示。
+是否改了协议：否。
+是否需要另一端配合：后续真实 Windows host 验收需要 Windows 端配合启动服务。
+
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12

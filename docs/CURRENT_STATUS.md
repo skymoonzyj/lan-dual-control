@@ -21,6 +21,7 @@
 - Windows 被控端新增 `scripts/windows/test-windows-host.ps1` 本机自检入口，可临时启动本机服务并验证真实 JPEG 首帧和文件剪贴板接收。
 - Windows 被控端已限制同一 WebSocket 连接内最多 3 次密码认证失败，失败耗尽后返回 `LAN002` 并关闭连接。
 - Windows 被控端真实屏幕采集目前是 PowerShell/System.Drawing 过渡实现，系统截图不可用时回退模拟帧；后续仍需升级 Windows Graphics Capture，并接入真实系统声音采集。
+- Mac 控制 Windows 的 Web 控制端原型已新增到 `apps/mac-client`：可发现/连接 Windows host、显示 JPEG/data-url 画面、发送鼠标/键盘输入事件并显示 `input_ack`。
 
 ## Mac 端状态
 

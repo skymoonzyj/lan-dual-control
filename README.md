@@ -61,6 +61,10 @@
 
 - [Windows 被控端骨架](apps/windows-host/README.md)
 
+已加入 Mac 控制端 Web 原型，位置：
+
+- [Mac 控制端原型](apps/mac-client/README.md)
+
 当前 Windows 端已经可以在“本地模拟”和“WebSocket 局域网”之间切换，并可构建为 Windows 桌面 exe。左侧设备列表已加入局域网发现骨架，可探测本机假 Mac 服务、Windows 被控端和连接历史中的 `/discovery` 接口；画质设置已加入流畅、均衡、高清和自定义预设；剪贴板已加入文件传输骨架，可手动选择文件、压缩包或图片并按块发送；显示设置已加入多显示器选择骨架；声音接收已加入音量设置、模拟音频帧和真实 Mac PCM 播放。Windows 被控端已有系统截图 JPEG 画面、SendInput 输入桥、文本/文件剪贴板接收和本机自检脚本；后续 Mac 反控 Windows 时，继续升级 Windows Graphics Capture、WASAPI loopback 和 Mac 控制窗口。
 
 Windows 本机联调可运行：

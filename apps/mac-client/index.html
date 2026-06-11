@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mac 控制 Windows 原型</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">LAN Dual Control</p>
+        <h1>Mac 控制 Windows</h1>
+        <p class="subtitle">最小控制端原型：连接 Windows 被控端，显示 JPEG 画面，并发送鼠标键盘事件。</p>
+      </section>
+
+      <section class="panel connection-panel" aria-label="连接设置">
+        <label>
+          Windows 地址
+          <input id="hostInput" value="127.0.0.1" autocomplete="off" spellcheck="false">
+        </label>
+        <label>
+          端口
+          <input id="portInput" value="43772" inputmode="numeric" autocomplete="off">
+        </label>
+        <label>
+          密码
+          <input id="passwordInput" value="demo-password" type="password" autocomplete="current-password">
+        </label>
+        <div class="button-row">
+          <button id="discoverButton" type="button">发现</button>
+          <button id="connectButton" type="button" class="primary">连接</button>
+          <button id="disconnectButton" type="button" disabled>断开</button>
+        </div>
+      </section>
+
+      <section class="status-grid" aria-label="连接状态">
+        <article class="metric">
+          <span>连接</span>
+          <strong id="connectionStatus">未连接</strong>
+        </article>
+        <article class="metric">
+          <span>远端</span>
+          <strong id="remoteStatus">等待发现</strong>
+        </article>
+        <article class="metric">
+          <span>视频</span>
+          <strong id="videoStatus">无画面</strong>
+        </article>
+        <article class="metric">
+          <span>音频</span>
+          <strong id="audioStatus">未接收</strong>
+        </article>
+        <article class="metric">
+          <span>输入</span>
+          <strong id="inputStatus">未发送</strong>
+        </article>
+      </section>
+
+      <section class="workspace">
+        <div class="remote-card">
+          <div class="remote-toolbar">
+            <div>
+              <strong id="viewportTitle">远端 Windows 画面</strong>
+              <span id="viewportHint">点击画面后开始发送键盘事件</span>
+            </div>
+            <button id="focusButton" type="button">聚焦画面</button>
+          </div>
+          <div id="remoteViewport" class="remote-viewport" tabindex="0" aria-label="远端画面区域">
+            <img id="remoteImage" alt="远端 Windows 画面" draggable="false">
+            <div id="emptyState" class="empty-state">
+              <strong>还没有视频帧</strong>
+              <span>启动 Windows host 后连接，第一帧会显示在这里。</span>
+            </div>
+          </div>
+        </div>
+
+        <aside class="panel log-panel">
+          <div class="log-heading">
+            <h2>事件日志</h2>
+            <button id="clearLogButton" type="button">清空</button>
+          </div>
+          <ol id="eventLog" class="event-log"></ol>
+        </aside>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
