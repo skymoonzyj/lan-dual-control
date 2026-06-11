@@ -82,6 +82,10 @@ private final class ClientContext {
     }
 }
 
+// Network and capture callbacks cross concurrency domains, but mutable context
+// access is funneled back through the main queue before it is read or written.
+extension ClientContext: @unchecked Sendable {}
+
 final class MacHostService {
     private let configuration: HostConfiguration
     private let permissions: MacPermissionCenter
@@ -1900,6 +1904,10 @@ final class MacHostService {
         logger.info("连接已关闭")
     }
 }
+
+// The service owns non-Sendable connection state. Callbacks may capture it, but
+// state mutation remains serialized on the main queue.
+extension MacHostService: @unchecked Sendable {}
 
 enum HostServiceError: LocalizedError {
     case invalidPort(UInt16)

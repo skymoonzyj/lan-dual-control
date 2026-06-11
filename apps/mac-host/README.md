@@ -60,7 +60,7 @@ swift run lan-dual-mac-host
 
 真实屏幕帧采用后台采集和 JPEG 编码队列，避免主线程被截图/编码卡住。截图短暂失败时会发送模拟保活帧；截图调用超时时会进入短暂冷却窗口，暂停继续排队真实截图，再自动尝试恢复。`LAN_DUAL_MAX_SCREEN_FPS` 可限制真实屏幕帧最高帧率，默认 `30`，范围 `1...60`；`session_answer`、`display_settings_ack` 和 `video_frame` 会同时返回 `requestedFps` 与实际 `fps`，便于 Windows 端诊断。`LAN_DUAL_JPEG_QUALITY` 可覆盖控制端画质预设计算出的 JPEG 质量，范围 `0.1...0.95`；不设置时会按 Windows 控制端的 `smooth`、`balanced`、`sharp`、`custom` 和码率自动选择。
 
-当前 JPEG 链路仍是调试/兜底方案；低延迟方案见 `docs/09-streaming-video-plan.md`。H.264 流式入口已经接入源码，仍需在 Mac 真机上编译、启动和延迟验收。
+当前 JPEG 链路仍是调试/兜底方案；低延迟方案见 `docs/09-streaming-video-plan.md`。H.264 流式入口已经在 Mac 真机上编译、启动，并通过本机 `--requireH264` 首帧强校验；后续继续做 Windows 控制端端到端解码、延迟和稳定性验收。
 
 `LAN_DUAL_INPUT_MODE` 可选值：
 

@@ -32,4 +32,5 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `apps/mac-host/Sources/MacHost/MacHostService.swift`、`apps/mac-host/Sources/MacHost/ScreenCaptureCoordinator.swift`、`apps/mac-host/README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/TEST_COORDINATION.md` | 2026-06-12 | H.264 第一版真机验证收尾：Swift 6 Sendable 警告已清理，状态文档已同步，43770/log 当前运行并通过 `--requireH264`。 |
 | Windows Codex | `apps/mac-host/Sources/MacHost/HostConfiguration.swift`、`apps/mac-host/Sources/MacHost/MacHostService.swift`、`apps/windows-client/app.js`、`apps/windows-client/styles.css`、`docs/09-streaming-video-plan.md`、`shared/protocol/*` | 2026-06-12 | 已完成 JPEG 帧率协商修正、实收 FPS 显示、真实画面覆盖层修复和 H.264 流式视频计划。 |

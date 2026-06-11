@@ -227,6 +227,6 @@ Mac 端：
 - [x] 多显示器选择骨架：控制端显示 `displays` 下拉框，并通过 `displayId` 切换目标屏幕。
 - [ ] 真实多显示器枚举和采集切换。
 - [ ] 音频延迟优化。
-- [ ] ScreenCaptureKit 流式采集 + VideoToolbox H.264 硬件编码。（进行中：源码入口已接入，待 Mac 真机编译、启动和实测延迟。）
+- [x] ScreenCaptureKit 流式采集 + VideoToolbox H.264 硬件编码第一版。（已在真 Mac 上通过 `--requireH264` 首帧强校验；端到端延迟、连续重连和 CPU 占用继续作为稳定性任务推进。）
 - [ ] 安装包。
 - [ ] 开机自启。

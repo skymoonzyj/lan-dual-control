@@ -62,20 +62,20 @@
 
 ## 当前呼叫
 
-状态：CALLING
+状态：DONE
 发起端：Windows Codex
 需要配合端：Mac Codex
 开始时间：2026-06-12
-目标：验证 JPEG 调试链路帧率协商修正和实收 FPS 显示
-测试环境：Windows 控制端 + 真实 macOS 被控端
-连接信息：Mac 局域网 IP，端口 43770，不在文档中写密码
-测试命令：Windows 控制端连接真实 Mac，观察刷新率卡片；或运行 `scripts/windows/test-mac-host.ps1 -HostName <Mac-IP> -RequireRealVideo -ExpectInputMode inject`
-期望现象：Mac 返回 `requestedFps`、`maxScreenFps`，Windows 显示实收 FPS 和协商帧率；真实画面不再被等待连接卡片遮挡
-当前现象：Windows 端代码已更新并构建通过，等待 Mac 端拉取重启验证
-阻塞点：需要 Mac 端拉取最新代码并重启 `apps/mac-host`
-需要对方做什么：Mac 端拉取 GitHub 最新 main，重启服务后通知 Windows 端重新连接
-超时时间：30 分钟
-下一步负责人：Mac Codex
+目标：拉取 `d63c4e3` 后验证 Mac H.264 流式视频链路
+测试环境：真实 macOS 被控端，本机探针强校验
+连接信息：Mac 端口 43770，不在文档中写密码
+测试命令：`node scripts/windows/probe-mac-host.mjs --host 127.0.0.1 --port 43770 --requireH264 --expectInputMode log`
+期望现象：`videoCodec=h264`、`videoEncoding=annexb-base64`、`capturePipeline=screencapturekit-h264`
+当前现象：`swift build` 通过；Mac host 已重启在 `0.0.0.0:43770`；本机强校验通过，返回 `h264` / `annexb-base64` / `screencapturekit-h264`
+阻塞点：无
+需要对方做什么：Windows 端继续用真实 Mac host 验证控制端 WebCodecs 解码、延迟、回退和 UI 状态
+超时时间：-
+下一步负责人：Windows Codex
 
 ## 常见联调呼叫示例
 

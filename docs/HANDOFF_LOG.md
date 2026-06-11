@@ -17,6 +17,39 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
+本轮目标：收尾 H.264 第一版真机验证状态，并清理 Swift 6 并发警告。
+完成内容：
+- 拉取并验证 `d63c4e3 Add H264 streaming video path` 后，Mac host 可在真 Mac 上启动 H.264 流式输出。
+- 本机探针 `--requireH264 --expectInputMode log` 已确认 `videoCodec=h264`、`videoEncoding=annexb-base64`、`capturePipeline=screencapturekit-h264`。
+- 为 Mac host 的主队列串行状态对象补充受控 `@unchecked Sendable` 标记，消除 Swift 6 Sendable 捕获警告。
+- 同步当前状态、下一步、任务板、流式视频计划和测试协调文件，避免继续显示“H.264 待真机验证”的旧状态。
+修改文件：
+- `apps/mac-host/Sources/MacHost/MacHostService.swift`
+- `apps/mac-host/Sources/MacHost/ScreenCaptureCoordinator.swift`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/09-streaming-video-plan.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/TEST_COORDINATION.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `swift build` in `apps/mac-host`
+- `node scripts/windows/probe-mac-host.mjs --host 127.0.0.1 --port 43770 --requireH264 --expectInputMode log`
+遗留问题：
+- H.264 仍处于 JSON + base64 过渡传输，后续可迁移 WebSocket 二进制帧。
+- 还需要 Windows 控制端做真实 WebCodecs 解码、延迟、连续重连、CPU 占用和回退体验验收。
+下一步建议：
+- Windows 端连接真实 Mac host，验证 H.264 画面是否稳定显示，并记录解码失败或回退原因。
+- Mac 端下一轮优先做 H.264 连续重连/释放压测，或继续推进真实 macOS 系统声音采集。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端继续做控制端真实 H.264 解码体验验收。
+
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12

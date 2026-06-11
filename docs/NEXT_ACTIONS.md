@@ -16,8 +16,8 @@
    - 继续避免黑边区域误发输入。
    - 处理真实 Mac 连接中的中文错误提示和重连体验。
 
-3. 开始 H.264 流式视频链路。
-   - 按 `docs/09-streaming-video-plan.md` 先做 1080P / 30FPS / H.264。
+3. 继续 H.264 流式视频链路验收。
+   - Mac 真机已通过 `--requireH264` 首帧强校验，下一步由 Windows 控制端验证真实解码、延迟和回退体验。
    - JPEG 链路继续保留为兜底和权限调试。
    - Windows 控制端继续显示实收 FPS、协商帧率和请求帧率。
 
@@ -28,7 +28,7 @@
 ## Mac Codex 可接任务
 
 - 接入真实 macOS 系统声音采集。
-- 将当前 JPEG 截图管线升级为 ScreenCaptureKit 流式采集 + VideoToolbox H.264。
+- 继续压测 ScreenCaptureKit + VideoToolbox H.264，重点看断开释放、连续重连、延迟和 CPU 占用。
 - 扩展 CGEvent 键盘映射，重点验证中文输入法、Command 组合键和功能键。
 - 增加真实多显示器枚举和采集切换。
 - 开始设计 Mac 控制 Windows 的最小控制窗口。

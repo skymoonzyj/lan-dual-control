@@ -378,6 +378,11 @@ final class ScreenVideoStream {
     }
 }
 
+// The stream wrapper is only retained by the main connection context. Stop
+// requests can be scheduled from callbacks, while the underlying SCStream owns
+// its own async stop lifecycle.
+extension ScreenVideoStream: @unchecked Sendable {}
+
 private final class ScreenStreamOutput: NSObject, SCStreamOutput {
     private let encoder: H264VideoEncoder
 
