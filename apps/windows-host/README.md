@@ -278,6 +278,12 @@ node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --req
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs
 ```
 
+需要先查看参数而不启动临时 host 时，可以运行：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --help
+```
+
 默认临时使用 `127.0.0.1:43772`；如果该端口已被其他自检占用，脚本会自动换一个临时空闲端口。需要连接已运行的 Windows host 时再加 `--useExisting --host 127.0.0.1 --port 43770`。脚本会自动识别 `C:\DevTools\ffmpeg\bin\ffmpeg.exe`，也可以显式传入 `--ffmpeg C:\DevTools\ffmpeg\bin\ffmpeg.exe`。
 
 需要对照码率和 JPEG 质量时：

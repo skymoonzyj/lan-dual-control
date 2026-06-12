@@ -39,6 +39,35 @@ const defaults = {
   verbose: false,
 };
 
+function printUsage() {
+  console.log(`Usage:
+  node scripts/windows/observe-windows-host-video.mjs [options]
+
+Options:
+  --host <host>                         Windows host address (default: ${defaults.host})
+  --port <port>                         Windows host port (default: ${defaults.port})
+  --password <password>                 Windows host password (default: ${defaults.password})
+  --durationMs <ms>                     Observation duration (default: ${defaults.durationMs})
+  --width <px> --height <px> --fps <n>  Requested video size/FPS
+  --bandwidthKbps <kbps>                Requested max bandwidth (default: ${defaults.bandwidthKbps})
+  --qualityPreset <name>                smooth | balanced | sharp | custom
+  --maxGapMs <ms>                       Fail if inter-frame receive gap is higher
+  --maxFrameAgeMs <ms>                  Fail if video_frame.timestamp receive age is higher
+  --requireMonotonicTimestamp           Fail if video_frame.timestamp goes backwards
+  --requireRealVideo false              Allow mock-svg frames for local smoke checks
+  --screenMode <auto|ffmpeg|system|mock>
+  --ffmpeg <path>                       Explicit FFmpeg path for local temporary host
+  --useExisting                         Connect to an already running Windows host
+  --json                                Print JSON result only
+  --verbose                             Print temporary Windows host logs
+  --help, -h                            Show this help without starting a host
+
+Examples:
+  node scripts/windows/observe-windows-host-video.mjs --durationMs 2500 --maxFrameAgeMs 1000 --requireMonotonicTimestamp
+  node scripts/windows/observe-windows-host-video.mjs --screenMode mock --requireRealVideo false --minFrames 5
+`);
+}
+
 function parseArgs(argv) {
   const args = { ...defaults };
   for (let index = 2; index < argv.length; index += 1) {
@@ -482,6 +511,11 @@ function assertObservation(summary, args) {
 }
 
 async function main() {
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    printUsage();
+    return;
+  }
+
   const args = parseArgs(process.argv);
   let child = null;
   let socket = null;
