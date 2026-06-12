@@ -34,6 +34,7 @@
 - 真实输入注入前先跑 `node scripts/mac/smoke-mac-input-log.mjs`，确认当前 host 仍是 `inputMode=log` 且鼠标/滚轮/键盘/快捷键事件都会返回 `input_ack`；切 `inject` 前需要人工在屏幕前确认安全环境。
 - 扩展 CGEvent 键盘映射，重点验证中文输入法、Command 组合键和功能键；改映射前后先跑 `node scripts/mac/check-input-keymap.mjs`，它会覆盖常见 code/key、同义项和修饰键 flag fallback。
 - Mac host 已有真实显示器枚举、`displayId` 回执和单屏 round-trip 自检；`check-mac-displays` 默认会要求帧级 `activeDisplayId` 诊断，若主机没重启到最新二进制会失败。下一步接外接显示器后跑 `node scripts/mac/check-mac-displays.mjs --switchDisplayId <display-id>`，再让 Windows 控制端用显示器下拉做真实双屏切换验收。
+- Mac host 重启或部署后，先看 `/discovery.runtime` 或运行 `node scripts/mac/check-mac-displays.mjs`，确认 `processId`、`startedAt`、`uptimeSeconds` 和 `buildId` 符合预期，避免连到旧进程。
 - 继续完善 `apps/mac-client` Mac 控制 Windows 原型：用 `test-mac-client-browser.mjs --useExistingHost --enableAudio --expectAudioPayload --expectAudioPlayback` 接真实 Windows WASAPI host 验收 PCM 播放；Windows 本机临时启动 host 验收可直接加 `--requireAudio`；视频参数控件已可请求 1080P/2K/4K、30-240 Hz 和 5-50 Mbps，Windows host 已按码率回传并应用 `jpegQuality`，后续重点看真机 Mac 控制 Windows 的 60 Hz 观感、延迟、画质和键盘映射边界。
 
 ## Windows Codex 可接任务

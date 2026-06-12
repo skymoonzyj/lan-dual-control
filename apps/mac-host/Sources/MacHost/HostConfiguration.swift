@@ -21,6 +21,7 @@ struct HostConfiguration {
     let maxScreenFps: Int
     let jpegQualityOverride: Double?
     let bonjourEnabled: Bool
+    let buildId: String
 
     static func fromEnvironment() -> HostConfiguration {
         let environment = ProcessInfo.processInfo.environment
@@ -36,6 +37,7 @@ struct HostConfiguration {
         let maxScreenFps = clampedInt(environment["LAN_DUAL_MAX_SCREEN_FPS"], defaultValue: 30, range: 1...60)
         let jpegQualityOverride = clampedDouble(environment["LAN_DUAL_JPEG_QUALITY"], range: 0.1...0.95)
         let bonjourEnabled = boolValue(environment["LAN_DUAL_BONJOUR"], defaultValue: true)
+        let buildId = sanitizedString(environment["LAN_DUAL_BUILD_ID"]) ?? "dev"
 
         return HostConfiguration(
             host: host,
@@ -46,7 +48,8 @@ struct HostConfiguration {
             inputMode: inputMode,
             maxScreenFps: maxScreenFps,
             jpegQualityOverride: jpegQualityOverride,
-            bonjourEnabled: bonjourEnabled
+            bonjourEnabled: bonjourEnabled,
+            buildId: buildId
         )
     }
 

@@ -105,6 +105,7 @@ final class MacHostService {
     private let maxAuthAttempts = 3
     private let outboundClipboardFileChunkBytes = 64 * 1024
     private let maxOutboundClipboardFileBytes = 64 * 1024 * 1024
+    private let runtimeStartedAt = Date()
 
     private var listener: NWListener?
     private var activeConnections: [ObjectIdentifier: ClientContext] = [:]
@@ -282,10 +283,20 @@ final class MacHostService {
                 "accessibility": snapshot.accessibilityGranted,
                 "inputMonitoring": snapshot.inputMonitoringGranted,
             ],
+            "runtime": runtimeDiagnostics(),
             "lastSeenAt": ISO8601DateFormatter().string(from: Date()),
         ]
 
         sendHttpJson(body, status: "200 OK", closeAfterSend: true, to: context)
+    }
+
+    private func runtimeDiagnostics() -> [String: Any] {
+        [
+            "processId": Int(ProcessInfo.processInfo.processIdentifier),
+            "startedAt": ISO8601DateFormatter().string(from: runtimeStartedAt),
+            "uptimeSeconds": max(0, Int(Date().timeIntervalSince(runtimeStartedAt))),
+            "buildId": configuration.buildId,
+        ]
     }
 
     private func advertisedHost(from hostHeader: String?) -> String {
@@ -447,6 +458,7 @@ final class MacHostService {
             "protocolVersion": 1,
             "hostName": configuration.deviceName,
             "hostPlatform": "macos",
+            "runtime": runtimeDiagnostics(),
             "capabilities": [
                 "screen": [
                     "mode": screenFramesEnabled ? "jpeg-frame" : "mock-frame",

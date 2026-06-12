@@ -49,6 +49,7 @@ export LAN_DUAL_INPUT_MODE=inject
 export LAN_DUAL_MAX_SCREEN_FPS=30
 export LAN_DUAL_JPEG_QUALITY=0.58
 export LAN_DUAL_BONJOUR=1
+export LAN_DUAL_BUILD_ID=local-dev
 swift run lan-dual-mac-host
 ```
 
@@ -84,6 +85,8 @@ node scripts/mac/smoke-mac-input-log.mjs
 该脚本会先读取 `/discovery`，只有 `inputMode=log` 时才会发送 `input_event`；如果发现不是日志模式会立即拒绝运行，避免无人值守时误移动鼠标或按键。当前真机基线：16 个鼠标/滚轮/键盘/快捷键事件全部收到 `input_ack`，且 `mode=log`、`injected=false`。
 
 `LAN_DUAL_DEVICE_NAME` 会用于 `/discovery`、`hello_ack` 和 Bonjour/mDNS 服务名。`LAN_DUAL_BONJOUR` 默认开启；设为 `0`、`false` 或 `off` 可关闭 `_lan-dual-control._tcp` 广播。
+
+`LAN_DUAL_BUILD_ID` 是可选运行时诊断标识，默认 `dev`。`/discovery` 和 `hello_ack` 会返回 `runtime.processId`、`runtime.startedAt`、`runtime.uptimeSeconds` 和 `runtime.buildId`，方便确认当前连到的是哪一个 Mac host 进程，避免旧二进制未重启时误判。
 
 Windows 控制端选择“WebSocket 局域网”，地址填写 Mac 的局域网 IP，端口填写 `43770`，默认密码为：
 

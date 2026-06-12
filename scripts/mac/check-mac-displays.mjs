@@ -112,7 +112,7 @@ async function fetchDiscovery(args) {
     }
     const payload = await response.json();
     const displays = normalizeDisplays(payload?.capabilities?.displays ?? payload?.displays ?? []);
-    print("OK", `Discovery: ${payload.deviceName || payload.hostName || "unknown"} / displays=${formatDisplays(displays)}`);
+    print("OK", `Discovery: ${payload.deviceName || payload.hostName || "unknown"} / displays=${formatDisplays(displays)} / ${formatRuntime(payload.runtime)}`);
     return { payload, displays };
   } finally {
     clearTimeout(timer);
@@ -253,6 +253,16 @@ function formatDisplays(displays) {
   return displays
     .map((display) => `${display.id}${display.primary ? "*" : ""}:${display.width || "?"}x${display.height || "?"}`)
     .join(", ");
+}
+
+function formatRuntime(runtime) {
+  if (!runtime || typeof runtime !== "object") return "runtime=missing";
+  const parts = [];
+  if (runtime.processId) parts.push(`pid=${runtime.processId}`);
+  if (runtime.buildId) parts.push(`build=${runtime.buildId}`);
+  if (runtime.uptimeSeconds !== undefined) parts.push(`uptime=${runtime.uptimeSeconds}s`);
+  if (runtime.startedAt) parts.push(`startedAt=${runtime.startedAt}`);
+  return parts.length > 0 ? `runtime ${parts.join(" ")}` : "runtime=missing";
 }
 
 function chooseDisplay(displays, requestedId, label) {

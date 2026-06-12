@@ -21,6 +21,44 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：给 Mac host 增加运行时诊断，方便判断当前连接的是不是旧进程/旧二进制。
+完成内容：
+- `HostConfiguration` 新增可选 `LAN_DUAL_BUILD_ID`，未设置时为 `dev`。
+- `/discovery` 和 `hello_ack` 新增可选 `runtime` 对象：`processId`、`startedAt`、`uptimeSeconds`、`buildId`。
+- `scripts/mac/check-mac-displays.mjs` 的 discovery 输出会打印 runtime 摘要，便于常规自检时直接看到 PID/build/uptime。
+- Mac host README、当前状态、下一步和文件占用已同步。
+修改文件：
+- `apps/mac-host/Sources/MacHost/HostConfiguration.swift`
+- `apps/mac-host/Sources/MacHost/MacHostService.swift`
+- `scripts/mac/check-mac-displays.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `swift build` in `apps/mac-host`
+- `node --check scripts/mac/check-mac-displays.mjs`
+- 临时启动新 host：`LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_PORT=43771 LAN_DUAL_INPUT_MODE=log LAN_DUAL_BONJOUR=0 LAN_DUAL_BUILD_ID=runtime-test .build/debug/lan-dual-mac-host`
+- `curl -sS http://127.0.0.1:43771/discovery`
+- `node scripts/mac/check-mac-displays.mjs --port 43771 --timeoutMs 12000`
+- 临时 WebSocket `hello` 小脚本检查 `hello_ack.runtime`
+验证结果：
+- 临时 `43771` discovery 返回 `runtime.processId=34539`、`buildId=runtime-test`、`startedAt=2026-06-12T08:43:22Z`、`uptimeSeconds` 正常递增。
+- `check-mac-displays` 输出显示 `runtime pid=34539 build=runtime-test uptime=16s startedAt=...`，并完成 `main` 单屏 round-trip。
+- `hello_ack.runtime` 也返回同一组 runtime 字段。
+- 临时 `43771` 已停止，未重启主 `43770`。
+遗留问题：
+- 主 `43770` 仍需在合适时机重启到包含 runtime 诊断的新二进制；本轮为避免打断 Windows 侧，未重启主通道。
+下一步建议：
+- 之后重启/部署 Mac host 时设置 `LAN_DUAL_BUILD_ID=$(git rev-parse --short HEAD)` 或明确版本号，再用 `/discovery.runtime` 确认当前进程。
+是否改了协议：否；新增向后兼容的可选诊断字段。
+是否需要另一端配合：不阻塞；Windows 端可选择在诊断 UI 中展示 `runtime`。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：给 Mac 系统声音观察脚本补可选有声电平强校验，方便后续确认非静音系统声音确实进入 `audio_frame`。
 完成内容：
 - `scripts/mac/observe-mac-audio.mjs` 新增 `--requireLevel` 和 `--minLevel`，可要求观察窗口内最大电平达到阈值。
