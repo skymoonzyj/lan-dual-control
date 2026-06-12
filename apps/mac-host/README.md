@@ -61,6 +61,14 @@ node scripts/mac/check-mac-host-readiness.mjs
 
 默认体检只做低风险检查：Node/Swift、Mac host build、启动助手语法和干跑、键盘映射覆盖，以及当前 `/discovery` 状态。如果当前 host 没启动，默认只给出提示，不会失败；需要强制要求端口已打开时加 `--requireOpen`。
 
+如果需要确认当前 Mac 权限足够做真实视频和真实输入注入，可加：
+
+```bash
+node scripts/mac/check-mac-host-readiness.mjs --requireControlPermissions
+```
+
+该检查会要求 `/discovery.permissions.screenRecording=true` 和 `accessibility=true`。`inputMonitoring=false` 当前只作为 warning，因为 macOS 输入监控经常需要手工触发系统弹窗确认；若想让任何 warning 都失败，可再加 `--strict`。
+
 真机联调前可跑深度体检：
 
 ```bash

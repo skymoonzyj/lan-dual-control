@@ -30,7 +30,7 @@
 ## Mac Codex 可接任务
 
 - 日常启动真实 Mac host 优先用 `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword`；该入口默认 `inputMode=log`、打印 Windows 可连接的局域网地址、等待 `/discovery`，并跑只读 runtime/display 校验。需要真实注入时，必须有人在屏幕前确认安全后再显式加 `--inputMode inject` 或 `--injectInput`。
-- Mac host 改动、重启或联调前优先跑 `node scripts/mac/check-mac-host-readiness.mjs` 做低风险体检；需要深度验收当前真实 host 时加 `--expectBuildId <build-id> --probeVideo --probeAudio --probeInputLog`，需要顺带验证启动助手临时端口路径时再加 `--probeStartHelper`。
+- Mac host 改动、重启或联调前优先跑 `node scripts/mac/check-mac-host-readiness.mjs` 做低风险体检；需要确认真机权限足够真实视频和真实输入时加 `--requireControlPermissions`，需要深度验收当前真实 host 时加 `--expectBuildId <build-id> --probeVideo --probeAudio --probeInputLog`，需要顺带验证启动助手临时端口路径时再加 `--probeStartHelper`。
 - 继续验证真实 macOS 系统声音采集，5 分钟只读观察已稳定到 15001 帧/50.0fps/最大间隔 31ms；下一步重点看非静音系统声音、音量变化、Windows 控制端真实听感和延迟。有人确认可发声时，可运行 `node scripts/mac/observe-mac-audio.mjs --durationMs 4500 --minFrames 160 --maxGapMs 1000 --playTone --requireLevel --minLevel 0.01` 做 Mac 本机有声电平强校验。
 - 继续压测 ScreenCaptureKit + VideoToolbox H.264：30 秒动态/活跃窗口曾稳定到 877 帧/约 29.2fps/最大间隔 45ms，空闲桌面 5 分钟实收约 10.6fps、60 秒复测约 10.9fps；下一步重点用动态画面、CPU 占用、端到端延迟和 Windows 控制端同时连接体验来判断真实观感，不要把静态桌面 `--minFps 25` 当硬门槛。做长观察时可给 `scripts/mac/observe-mac-video.mjs` 加 `--expectActiveDisplayId main --requireMonotonicTimestampUs` 或外接屏对应 display id，同时确认帧率、显示器来源和 H.264 媒体时间线；重启到小数秒 timestamp build 后可用 `--maxFrameAgeMs 250` 级别检查本机接收年龄，旧 host 仍需临时放宽到 `1500` 以上。
 - 真实输入注入前先跑 `node scripts/mac/smoke-mac-input-log.mjs`，确认当前 host 仍是 `inputMode=log` 且鼠标/滚轮/键盘/快捷键事件都会返回 `input_ack`；切 `inject` 前需要人工在屏幕前确认安全环境。

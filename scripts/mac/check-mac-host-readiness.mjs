@@ -13,6 +13,7 @@ const defaults = {
   timeoutMs: 20000,
   expectBuildId: "",
   requireOpen: false,
+  requireControlPermissions: false,
   probeHost: false,
   probeVideo: false,
   probeAudio: false,
@@ -35,6 +36,7 @@ function parseArgs(argv) {
     }
     if (
       key === "requireOpen" ||
+      key === "requireControlPermissions" ||
       key === "probeHost" ||
       key === "probeVideo" ||
       key === "probeAudio" ||
@@ -58,6 +60,7 @@ function parseArgs(argv) {
   args.timeoutMs = clampInteger(args.timeoutMs, 3000, 120000, defaults.timeoutMs);
   args.expectBuildId = normalizedText(args.expectBuildId);
   args.requireOpen = booleanArg(args.requireOpen);
+  args.requireControlPermissions = booleanArg(args.requireControlPermissions);
   args.probeHost = booleanArg(args.probeHost) || Boolean(args.expectBuildId);
   args.probeVideo = booleanArg(args.probeVideo);
   args.probeAudio = booleanArg(args.probeAudio);
@@ -82,6 +85,8 @@ Options:
   --timeoutMs <ms>          Per-step timeout. Default: 20000
   --expectBuildId <id>      Require running host runtime.buildId. Implies --probeHost.
   --requireOpen             Fail if /discovery is not reachable.
+  --requireControlPermissions
+                            Require screen recording and accessibility permissions.
   --probeHost               Run check-mac-displays runtime/display round-trip.
   --probeVideo              Run short H.264 video observation.
   --probeAudio              Run short PCM audio observation. Does not play a tone.
@@ -322,6 +327,20 @@ function formatRuntime(runtime) {
   return parts.length > 0 ? parts.join(" ") : "runtime=missing";
 }
 
+function formatPermissions(permissions) {
+  if (!permissions || typeof permissions !== "object") return "permissions=missing";
+  const status = (value) => {
+    if (value === true) return "on";
+    if (value === false) return "off";
+    return "unknown";
+  };
+  return [
+    `screen=${status(permissions.screenRecording)}`,
+    `accessibility=${status(permissions.accessibility)}`,
+    `inputMonitoring=${status(permissions.inputMonitoring)}`,
+  ].join(" ");
+}
+
 function discoveryInputMode(discovery) {
   return discovery?.capabilities?.inputMode || discovery?.capabilities?.input?.mode || discovery?.inputMode || "unknown";
 }
@@ -331,7 +350,9 @@ async function checkDiscovery(args) {
     const discovery = await requestJson(`http://${args.host}:${args.port}/discovery`, Math.min(args.timeoutMs, 3000));
     const input = discoveryInputMode(discovery);
     const runtime = discovery.runtime || {};
+    const permissions = discovery.permissions || {};
     const warnings = [];
+    const errors = [];
     if (args.expectBuildId && runtime.buildId !== args.expectBuildId) {
       return {
         ok: false,
@@ -342,10 +363,26 @@ async function checkDiscovery(args) {
     if (input !== "log") {
       warnings.push(`input mode is ${input}; keep log mode for unattended readiness checks`);
     }
+    if (permissions.screenRecording !== true) {
+      warnings.push("screen recording permission is off; real video capture may fall back or fail");
+      if (args.requireControlPermissions) {
+        errors.push("screen recording permission is required");
+      }
+    }
+    if (permissions.accessibility !== true) {
+      warnings.push("accessibility permission is off; real input injection will fail");
+      if (args.requireControlPermissions) {
+        errors.push("accessibility permission is required");
+      }
+    }
+    if (permissions.inputMonitoring === false) {
+      warnings.push("input monitoring permission is off or not yet confirmed; keyboard edge cases may need manual permission review");
+    }
     return {
-      ok: true,
-      summary: `${discovery.deviceName || discovery.hostName || "Mac host"} · input=${input} · ${formatRuntime(runtime)}`,
+      ok: errors.length === 0,
+      summary: `${discovery.deviceName || discovery.hostName || "Mac host"} · input=${input} · ${formatRuntime(runtime)} · ${formatPermissions(permissions)}`,
       warnings,
+      errors,
     };
   } catch (error) {
     const summary = `/discovery not reachable on ${args.host}:${args.port}: ${error.message}`;
@@ -517,6 +554,7 @@ async function main() {
       port: args.port,
       expectBuildId: args.expectBuildId,
       requireOpen: args.requireOpen,
+      requireControlPermissions: args.requireControlPermissions,
       probeHost: args.probeHost,
       probeVideo: args.probeVideo,
       probeAudio: args.probeAudio,

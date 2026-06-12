@@ -21,6 +21,39 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：增强 Mac host readiness 的 macOS 权限诊断，避免真机联调时才发现屏幕录制或辅助功能权限缺失。
+完成内容：
+- `scripts/mac/check-mac-host-readiness.mjs` 的 `/discovery` 步骤现在会汇总 `permissions.screenRecording`、`permissions.accessibility` 和 `permissions.inputMonitoring`。
+- 新增 `--requireControlPermissions`，强制要求屏幕录制和辅助功能开启；这两个权限缺失时会失败。
+- `inputMonitoring=false` 仍默认只作为 warning，因为当前真机 discovery 显示该项为 off/待确认，但 `log` 模式和现有探针仍可安全工作；需要 warning 也失败时可加 `--strict`。
+- Mac host README、当前状态、下一步和文件占用已同步。
+修改文件：
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-host-readiness.mjs`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 30000`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 30000 --requireControlPermissions`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 30000 --strict`
+验证结果：
+- 默认 readiness 通过：当前 43770 `/discovery` 显示 `screen=on accessibility=on inputMonitoring=off`，因此只给 inputMonitoring warning，不失败。
+- `--requireControlPermissions` 通过，确认当前真实 Mac host 的屏幕录制和辅助功能权限足够做真实视频和输入注入前置条件。
+- `--strict` 按预期失败：0 个 failed step、1 个 warning，原因是 input monitoring 仍为 off/待确认。
+遗留问题：
+- input monitoring 仍需有人在系统设置里确认；本轮不自动打开系统权限，也不切 `inject`。
+下一步建议：
+- 真机切 `inject` 前先跑 `node scripts/mac/check-mac-host-readiness.mjs --requireControlPermissions --strict`；若 strict 因 input monitoring 失败，人工确认权限后再复测。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：新增 Mac host 一键体检聚合入口，把日常环境、构建、运行时和可选真实 host 探针串起来。
 完成内容：
 - 新增 `scripts/mac/check-mac-host-readiness.mjs`。
