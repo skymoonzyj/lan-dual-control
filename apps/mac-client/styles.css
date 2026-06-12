@@ -345,6 +345,7 @@ button:disabled {
 }
 
 .audio-panel,
+.diagnostics-panel,
 .clipboard-panel,
 .log-panel {
   display: grid;
@@ -352,22 +353,58 @@ button:disabled {
 }
 
 .audio-panel,
+.diagnostics-panel,
 .clipboard-panel {
   gap: 14px;
 }
 
 .audio-panel h2,
+.diagnostics-panel h2,
 .clipboard-panel h2 {
   margin: 0;
   font-size: 1.1rem;
 }
 
 .audio-panel p,
+.diagnostics-panel p,
 .clipboard-panel p {
   margin: 8px 0 0;
   color: var(--muted);
   font-size: 0.86rem;
   line-height: 1.6;
+}
+
+.diagnostic-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.diagnostic-list div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(28, 75, 60, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.diagnostic-list dt {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.diagnostic-list dd {
+  overflow: hidden;
+  margin: 0;
+  color: var(--forest);
+  font-size: 0.92rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .toggle-row {
@@ -483,5 +520,9 @@ button:disabled {
 
   .remote-viewport {
     min-height: 340px;
+  }
+
+  .diagnostic-list {
+    grid-template-columns: 1fr;
   }
 }

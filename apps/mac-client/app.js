@@ -22,6 +22,10 @@ const elements = {
   audioVolumeRange: document.querySelector("#audioVolumeRange"),
   audioVolumeText: document.querySelector("#audioVolumeText"),
   audioPlaybackStatus: document.querySelector("#audioPlaybackStatus"),
+  firstVideoMetric: document.querySelector("#firstVideoMetric"),
+  videoFlowMetric: document.querySelector("#videoFlowMetric"),
+  audioFlowMetric: document.querySelector("#audioFlowMetric"),
+  reconnectMetric: document.querySelector("#reconnectMetric"),
   inputStatus: document.querySelector("#inputStatus"),
   remoteViewport: document.querySelector("#remoteViewport"),
   remoteImage: document.querySelector("#remoteImage"),
@@ -59,6 +63,14 @@ const state = {
   audioPlayedFrames: 0,
   audioDroppedFrames: 0,
   audioLastError: "",
+  connectionStartedAt: 0,
+  firstVideoFrameMs: 0,
+  firstAudioFrameMs: 0,
+  lastVideoFrameAt: 0,
+  maxVideoGapMs: 0,
+  lastVideoFps: 0,
+  lastVideoCodec: "",
+  reconnectTotal: 0,
   fileTransferActive: false,
   fileTransfers: new Map(),
   closeStatusOverride: "",
@@ -121,6 +133,53 @@ function setConnected(connected) {
   elements.connectButton.disabled = connected;
   elements.disconnectButton.disabled = !connected;
   setConnectionStatus(connected ? "已连接" : "未连接");
+  renderSessionDiagnostics();
+}
+
+function formatMs(value) {
+  return `${Math.max(0, Math.round(value))} ms`;
+}
+
+function resetSessionDiagnostics({ resetReconnects = false } = {}) {
+  state.connectionStartedAt = performance.now();
+  state.firstVideoFrameMs = 0;
+  state.firstAudioFrameMs = 0;
+  state.lastVideoFrameAt = 0;
+  state.maxVideoGapMs = 0;
+  state.lastVideoFps = 0;
+  state.lastVideoCodec = "";
+  state.frameCount = 0;
+  state.frameWindowStartedAt = 0;
+  state.frameWindowCount = 0;
+  if (resetReconnects) {
+    state.reconnectTotal = 0;
+  }
+  renderSessionDiagnostics();
+}
+
+function renderSessionDiagnostics() {
+  elements.firstVideoMetric.textContent = state.firstVideoFrameMs > 0
+    ? `${formatMs(state.firstVideoFrameMs)} · ${state.remoteWidth}x${state.remoteHeight}`
+    : state.connected ? "等待首帧" : "未就绪";
+
+  if (state.frameCount > 0) {
+    const fpsText = state.lastVideoFps > 0 ? ` · ${state.lastVideoFps.toFixed(1)} fps` : "";
+    elements.videoFlowMetric.textContent = `${state.lastVideoCodec || "video"} · #${state.frameCount}${fpsText} · gap max ${formatMs(state.maxVideoGapMs)}`;
+  } else {
+    elements.videoFlowMetric.textContent = state.connected ? "等待视频" : "未接收";
+  }
+
+  if (state.audioFrames > 0) {
+    const firstAudioText = state.firstAudioFrameMs > 0 ? `首帧 ${formatMs(state.firstAudioFrameMs)} · ` : "";
+    const droppedText = state.audioDroppedFrames > 0 ? ` · 丢 ${state.audioDroppedFrames}` : "";
+    elements.audioFlowMetric.textContent = `${firstAudioText}接收 ${state.audioFrames} · 播放 ${state.audioPlayedFrames}${droppedText}`;
+  } else {
+    elements.audioFlowMetric.textContent = elements.audioToggle.checked ? "等待音频" : "未开启";
+  }
+
+  elements.reconnectMetric.textContent = state.reconnectTotal > 0
+    ? `已尝试 ${state.reconnectTotal} 次 · 当前 ${state.reconnectAttempts}/${maxReconnectAttempts}`
+    : "0 次";
 }
 
 function clearReconnectTimers() {
@@ -142,6 +201,7 @@ function markConnectionStableLater() {
     state.reconnectStableTimer = null;
     if (state.connected && state.authenticated) {
       state.reconnectAttempts = 0;
+      renderSessionDiagnostics();
     }
   }, reconnectStableMs);
 }
@@ -411,8 +471,11 @@ async function connect({ reconnect = false } = {}) {
     clearReconnectTimers();
     closeSocketSilently();
     state.authenticated = false;
+    resetSessionDiagnostics({ resetReconnects: true });
     stopClipboardWatch("正在重新连接，监听已停止");
     resetAudioPlayback();
+  } else {
+    resetSessionDiagnostics();
   }
   setConnectionStatus("连接中");
   elements.videoStatus.textContent = "等待视频";
@@ -482,10 +545,12 @@ function scheduleReconnect(reason) {
   }
 
   state.reconnectAttempts += 1;
+  state.reconnectTotal += 1;
   const delayMs = reconnectBaseDelayMs * state.reconnectAttempts;
   setConnectionStatus(`连接中断，${Math.round(delayMs / 1000)} 秒后自动重连（${state.reconnectAttempts}/${maxReconnectAttempts}）`);
   elements.connectButton.disabled = true;
   elements.disconnectButton.disabled = false;
+  renderSessionDiagnostics();
   logEvent("自动重连", `${reason} · 第 ${state.reconnectAttempts}/${maxReconnectAttempts} 次`);
 
   state.reconnectTimer = window.setTimeout(() => {
@@ -503,6 +568,7 @@ function disconnect() {
   stopClipboardWatch("已断开，监听已停止");
   resetAudioPlayback();
   setConnected(false);
+  renderSessionDiagnostics();
 }
 
 function handleMessage(rawData) {
@@ -669,18 +735,28 @@ function handleVideoFrame(frame) {
   state.frameCount += 1;
   state.frameWindowCount += 1;
   const now = performance.now();
+  if (!state.firstVideoFrameMs && state.connectionStartedAt) {
+    state.firstVideoFrameMs = now - state.connectionStartedAt;
+  }
+  if (state.lastVideoFrameAt) {
+    state.maxVideoGapMs = Math.max(state.maxVideoGapMs, now - state.lastVideoFrameAt);
+  }
+  state.lastVideoFrameAt = now;
+  state.lastVideoCodec = frame.codec || "jpeg";
   if (!state.frameWindowStartedAt) {
     state.frameWindowStartedAt = now;
   }
   const elapsed = now - state.frameWindowStartedAt;
   if (elapsed >= 1000) {
     const fps = (state.frameWindowCount * 1000) / elapsed;
+    state.lastVideoFps = fps;
     elements.videoStatus.textContent = `${frame.codec || "jpeg"} · #${frame.frameId || state.frameCount} · ${fps.toFixed(1)} fps`;
     state.frameWindowCount = 0;
     state.frameWindowStartedAt = now;
   } else {
     elements.videoStatus.textContent = `${frame.codec || "jpeg"} · #${frame.frameId || state.frameCount}`;
   }
+  renderSessionDiagnostics();
 }
 
 function imagePointFromEvent(event) {
@@ -799,7 +875,9 @@ function resetAudioPlayback() {
   state.audioLastError = "";
   state.audioFrames = 0;
   state.audioLevel = 0;
+  state.firstAudioFrameMs = 0;
   elements.audioPlaybackStatus.textContent = elements.audioToggle.checked ? "等待音频帧" : "未开启";
+  renderSessionDiagnostics();
 }
 
 async function ensureAudioPlayback(sampleRate = 48000) {
@@ -976,10 +1054,14 @@ function renderAudioFrameStatus(frame) {
   elements.audioPlaybackStatus.textContent = payload
     ? `${frame.encoding || "pcm"} · ${frame.sampleRate || 48000} Hz`
     : `接收 ${state.audioFrames} 帧 · ${frame.audioMode || "mock"}`;
+  renderSessionDiagnostics();
 }
 
 function handleAudioFrame(frame) {
   state.audioFrames += 1;
+  if (!state.firstAudioFrameMs && state.connectionStartedAt) {
+    state.firstAudioFrameMs = performance.now() - state.connectionStartedAt;
+  }
   state.audioLevel = Math.max(0, Math.min(1, Number(frame.level ?? frame.peak ?? 0)));
   renderAudioFrameStatus(frame);
   if (!getAudioPayload(frame)) {
@@ -1401,4 +1483,5 @@ elements.remoteViewport.addEventListener("keydown", (event) => {
 updateAudioVolumeLabel();
 updateDisplaySettingsStatus();
 initializeRecentConnections();
+renderSessionDiagnostics();
 logEvent("Mac 控制端已就绪", "默认连接 127.0.0.1:43772，可改为 Windows 局域网 IP:43770");

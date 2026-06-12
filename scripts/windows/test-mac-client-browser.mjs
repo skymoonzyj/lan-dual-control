@@ -591,6 +591,10 @@ function buildSnapshotExpression() {
       video: text("#videoStatus"),
       audio: text("#audioStatus"),
       audioPlayback: text("#audioPlaybackStatus"),
+      firstVideoMetric: text("#firstVideoMetric"),
+      videoFlowMetric: text("#videoFlowMetric"),
+      audioFlowMetric: text("#audioFlowMetric"),
+      reconnectMetric: text("#reconnectMetric"),
       audioToggleChecked: document.querySelector("#audioToggle")?.checked || false,
       audioPlayedFrames: Number((text("#audioStatus").match(/播放\\s*(\\d+)/) || [])[1] || 0),
       audioFrameCount: (window.__lanDualReceivedMessages || []).filter((message) => message.type === "audio_frame").length,
@@ -874,6 +878,13 @@ async function run() {
     print("OK", `Remote: ${videoSnapshot.remote}`);
     print("OK", `Video: ${videoSnapshot.video}`);
     print("OK", `Initial video ready: ${initialVideoMs}ms`);
+    if (!videoSnapshot.firstVideoMetric.includes("ms") || videoSnapshot.videoFlowMetric.includes("等待")) {
+      throw new Error(`Mac client diagnostics did not update after video: ${JSON.stringify({
+        firstVideoMetric: videoSnapshot.firstVideoMetric,
+        videoFlowMetric: videoSnapshot.videoFlowMetric,
+      })}`);
+    }
+    print("OK", `Diagnostics: ${videoSnapshot.firstVideoMetric} / ${videoSnapshot.videoFlowMetric}`);
     const sessionSettings = await evaluate(
       session,
       `(() => [...(window.__lanDualSentMessages || [])].find((message) => message.type === "session_offer"))()`,
@@ -1026,7 +1037,11 @@ async function run() {
       const payloadText = frame ? ` · payload=${frame.payloadBytes || frame.payloadLength || 0}` : "";
       const timingText = ` · firstAudio=${audioFrameSnapshot.audioFrameMs}ms` +
         (args.expectAudioPlayback ? ` · playback=${audioSnapshot.audioPlaybackMs}ms` : "");
+      if (!audioSnapshot.audioFlowMetric.includes("接收")) {
+        throw new Error(`Mac client audio diagnostics did not update: ${audioSnapshot.audioFlowMetric}`);
+      }
       print("OK", `Audio: ${audioSnapshot.audio} / ${audioSnapshot.audioPlayback}${payloadText}${timingText}`);
+      print("OK", `Audio diagnostics: ${audioSnapshot.audioFlowMetric}`);
     }
 
     const endpoint = `${args.host}:${args.port}`;

@@ -144,6 +144,31 @@
             <strong id="audioPlaybackStatus" class="panel-status">未开启</strong>
           </section>
 
+          <section class="panel diagnostics-panel" aria-label="会话诊断">
+            <div>
+              <h2>会话诊断</h2>
+              <p>把首帧、持续帧率、音频和重连状态放在同一处，方便真机联调时快速判断卡在哪里。</p>
+            </div>
+            <dl class="diagnostic-list">
+              <div>
+                <dt>首帧</dt>
+                <dd id="firstVideoMetric">未就绪</dd>
+              </div>
+              <div>
+                <dt>视频流</dt>
+                <dd id="videoFlowMetric">等待视频</dd>
+              </div>
+              <div>
+                <dt>音频</dt>
+                <dd id="audioFlowMetric">未开启</dd>
+              </div>
+              <div>
+                <dt>重连</dt>
+                <dd id="reconnectMetric">0 次</dd>
+              </div>
+            </dl>
+          </section>
+
           <section class="panel clipboard-panel" aria-label="文本剪贴板">
             <div>
               <h2>文本剪贴板</h2>
