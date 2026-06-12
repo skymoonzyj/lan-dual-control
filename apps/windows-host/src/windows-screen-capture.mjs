@@ -318,7 +318,7 @@ export class WindowsScreenCaptureCoordinator {
       : null;
     this.captureTimeoutMs = clampNumber(process.env.LAN_DUAL_WINDOWS_CAPTURE_TIMEOUT_MS, 1000, 12000, 5000);
     this.maxScreenFps = this.mode === ffmpegMode
-      ? clampNumber(process.env.LAN_DUAL_WINDOWS_MAX_SCREEN_FPS, 1, 60, 30)
+      ? clampNumber(process.env.LAN_DUAL_WINDOWS_MAX_SCREEN_FPS, 1, 60, 60)
       : this.mode === systemMode
         ? clampNumber(process.env.LAN_DUAL_WINDOWS_MAX_SCREEN_FPS, 1, 8, 4)
         : 60;

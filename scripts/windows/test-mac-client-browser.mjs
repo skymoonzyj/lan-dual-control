@@ -413,7 +413,6 @@ async function startWindowsHost(args, repoRoot) {
     LAN_DUAL_PASSWORD: args.hostPassword,
     LAN_DUAL_WINDOWS_INPUT_MODE: args.inputMode,
     LAN_DUAL_WINDOWS_SCREEN_MODE: args.mockVideo ? "mock" : args.screenMode,
-    LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: "60",
     ...(args.audioMode ? { LAN_DUAL_WINDOWS_AUDIO_MODE: args.audioMode } : {}),
   };
   const child = startProcess(

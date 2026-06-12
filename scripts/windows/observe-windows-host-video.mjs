@@ -28,6 +28,8 @@ const defaults = {
   screenMode: "auto",
   inputMode: "log",
   ffmpeg: process.env.LAN_DUAL_FFMPEG || "",
+  useDefaultMaxScreenFps: false,
+  expectSessionFps: 0,
   requireRealVideo: true,
   useExisting: false,
   keepRunning: false,
@@ -67,6 +69,8 @@ function parseArgs(argv) {
   if (!args.ffmpeg && process.platform === "win32" && existsSync(defaultWindowsFfmpeg)) {
     args.ffmpeg = defaultWindowsFfmpeg;
   }
+  args.useDefaultMaxScreenFps = booleanArg(args.useDefaultMaxScreenFps);
+  args.expectSessionFps = Number(args.expectSessionFps) || 0;
   args.requireRealVideo = booleanArg(args.requireRealVideo);
   args.useExisting = booleanArg(args.useExisting);
   args.keepRunning = booleanArg(args.keepRunning);
@@ -134,8 +138,10 @@ function startLocalWindowsHost(args) {
     LAN_DUAL_PORT: String(args.port),
     LAN_DUAL_PASSWORD: args.password,
     LAN_DUAL_WINDOWS_SCREEN_MODE: args.screenMode,
-    LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: String(Math.max(1, Math.min(args.fps, 60))),
     LAN_DUAL_WINDOWS_INPUT_MODE: args.inputMode,
+    ...(args.useDefaultMaxScreenFps
+      ? {}
+      : { LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: String(Math.max(1, Math.min(args.fps, 60))) }),
   };
   if (args.ffmpeg) {
     env.LAN_DUAL_FFMPEG = args.ffmpeg;
@@ -425,6 +431,9 @@ function assertObservation(summary, args) {
   if (summary.maxGapMs > args.maxGapMs) {
     problems.push(`maxGapMs ${summary.maxGapMs} > ${args.maxGapMs}`);
   }
+  if (args.expectSessionFps > 0 && summary.sessionFps !== args.expectSessionFps) {
+    problems.push(`sessionFps ${summary.sessionFps} != ${args.expectSessionFps}`);
+  }
   if (problems.length > 0) {
     throw new Error(`video observation failed: ${problems.join("; ")}`);
   }
@@ -468,6 +477,7 @@ async function main() {
     print("OK", `Session: ${answer.width || args.width}x${answer.height || args.height} / ${answer.fps || "?"} Hz / ${answer.capturePipeline || answer.hostMode || "unknown"}`, args);
 
     const summary = await observeFrames(client, args);
+    summary.sessionFps = Number(answer.fps) || 0;
     assertObservation(summary, args);
 
     const result = {
@@ -479,6 +489,7 @@ async function main() {
         fps: args.fps,
         bandwidthKbps: args.bandwidthKbps,
         qualityPreset: args.qualityPreset,
+        useDefaultMaxScreenFps: args.useDefaultMaxScreenFps,
         durationMs: args.durationMs,
         screenMode: args.screenMode,
       },

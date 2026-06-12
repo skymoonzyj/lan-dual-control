@@ -76,7 +76,7 @@ $env:LAN_DUAL_WINDOWS_SCREEN_MODE="ffmpeg" # 强制 FFmpeg gdigrab MJPEG
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="system" # 强制 Windows 系统截图 JPEG
 $env:LAN_DUAL_FFMPEG="C:\DevTools\ffmpeg\bin\ffmpeg.exe" # 可选；PATH 不稳定时显式指定 FFmpeg
 $env:LAN_DUAL_WINDOWS_JPEG_QUALITY="70"    # 强制覆盖 JPEG 质量，35-92；不设置时按 qualityPreset/maxBandwidthKbps 自动计算
-$env:LAN_DUAL_WINDOWS_MAX_SCREEN_FPS="30"  # FFmpeg 默认上限 30，1-60；system 模式默认 4，1-8
+$env:LAN_DUAL_WINDOWS_MAX_SCREEN_FPS="30"  # 可选：FFmpeg 默认上限 60，1-60；想省资源时可降到 30；system 模式默认 4，1-8
 ```
 
 调试音频采集时可选：
@@ -158,6 +158,12 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --bandwidthKbps 5000 --qualityPreset smooth --json
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --bandwidthKbps 40000 --qualityPreset sharp --json
+```
+
+需要确认普通启动的 FFmpeg 默认上限仍为 60 Hz 时：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --fps 60 --useDefaultMaxScreenFps --expectSessionFps 60 --durationMs 4000 --minFrames 140 --minFps 35 --maxGapMs 1000
 ```
 
 强制对照旧系统截图兜底路径：

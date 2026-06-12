@@ -21,6 +21,45 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：让 Windows host 普通启动时也能默认响应 Mac client 的 60 Hz 请求，避免 60Hz 选项只在测试环境生效。
+完成内容：
+- FFmpeg gdigrab 模式的 `LAN_DUAL_WINDOWS_MAX_SCREEN_FPS` 默认值从 30 提升到 60；仍可显式设置环境变量降到 30 以节省资源。
+- `scripts/windows/test-mac-client-browser.mjs` 不再给临时 Windows host 强制注入 `LAN_DUAL_WINDOWS_MAX_SCREEN_FPS=60`，页面级自检会验证真实默认配置。
+- `scripts/windows/observe-windows-host-video.mjs` 新增 `--useDefaultMaxScreenFps` 和 `--expectSessionFps`，可专门防止默认上限退回 30。
+- Windows host README、当前状态、下一步和任务板已同步普通启动 60Hz 验证方式。
+修改文件：
+- `apps/windows-host/src/windows-screen-capture.mjs`
+- `apps/windows-host/README.md`
+- `scripts/windows/observe-windows-host-video.mjs`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-host/src/windows-screen-capture.mjs`
+- `node --check scripts/windows/observe-windows-host-video.mjs`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/observe-windows-host-video.mjs --fps 60 --useDefaultMaxScreenFps --expectSessionFps 60 --durationMs 4000 --minFrames 140 --minFps 35 --maxGapMs 1000 --json`
+- `node scripts/windows/test-mac-client-browser.mjs --timeoutMs 45000`
+- `node scripts/windows/test-mac-client-browser.mjs --requireAudio --timeoutMs 45000 --clientPort 5192 --debugPort 9343 --skipFileClipboard`
+验证结果：
+- 普通启动默认上限观察通过：会话 `fps=60`、`maxScreenFps=60`，4 秒收到 228 帧，约 56.92 FPS，最大间隔 40ms，掉帧 6。
+- Mac client 页面级回归通过：临时 Windows host 普通启动，日志显示 1920x1080 / 60 Hz 和 2K / 60 Hz。
+- `--requireAudio` 回归通过：WASAPI PCM 播放计数递增，视频仍协商 60 Hz。
+遗留问题：
+- FFmpeg gdigrab + MJPEG 仍是过渡采集层，60Hz 下会增加 CPU、网络和 JSON/base64 压力；低延迟日常体验仍应继续推进 Windows Graphics Capture + 正式编码管线。
+下一步建议：
+- 真机 Mac 控制 Windows 时重点对照 30/60Hz 的主观流畅度、CPU、延迟和带宽；必要时 UI 可加“省电/性能”提示。
+- 以后改 Windows host 视频默认值时，加跑 `--useDefaultMaxScreenFps --expectSessionFps 60`。
+是否改了协议：否。
+是否需要另一端配合：暂无阻塞；真机主观 60Hz 体验需要 Mac 端连接 Windows host。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：让 Windows 被控端真正按控制端下发的码率/Mbps 调整 MJPEG/JPEG 压缩质量。
 完成内容：
 - Windows host 现在会把既有 `qualityPreset` 和 `maxBandwidthKbps` 换算为实际 `jpegQuality`，并用于 FFmpeg gdigrab MJPEG 的 `-q:v` 以及 System.Drawing JPEG 质量。
