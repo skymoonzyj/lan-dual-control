@@ -19,8 +19,11 @@ const elements = {
   emptyState: document.querySelector("#emptyState"),
   focusButton: document.querySelector("#focusButton"),
   clipboardTextInput: document.querySelector("#clipboardTextInput"),
+  readClipboardButton: document.querySelector("#readClipboardButton"),
   sendClipboardButton: document.querySelector("#sendClipboardButton"),
   clipboardStatus: document.querySelector("#clipboardStatus"),
+  clipboardWatchToggle: document.querySelector("#clipboardWatchToggle"),
+  localClipboardStatus: document.querySelector("#localClipboardStatus"),
   clipboardFileInput: document.querySelector("#clipboardFileInput"),
   sendClipboardFilesButton: document.querySelector("#sendClipboardFilesButton"),
   fileClipboardStatus: document.querySelector("#fileClipboardStatus"),
@@ -50,10 +53,14 @@ const state = {
   fileTransferActive: false,
   fileTransfers: new Map(),
   closeStatusOverride: "",
+  clipboardWatchTimer: null,
+  clipboardReadInFlight: false,
+  lastLocalClipboardText: "",
 };
 
 const fileChunkSizeBytes = 64 * 1024;
 const maxClipboardFileBytes = 32 * 1024 * 1024;
+const clipboardWatchIntervalMs = 1200;
 
 function nowText() {
   return new Date().toLocaleTimeString("zh-CN", { hour12: false });
@@ -170,6 +177,7 @@ async function connect() {
     }
     state.closeStatusOverride = "";
     state.authenticated = false;
+    stopClipboardWatch("连接关闭，监听已停止");
     resetAudioPlayback();
     logEvent("连接关闭");
   });
@@ -186,6 +194,7 @@ function disconnect() {
   }
   state.socket = null;
   state.authenticated = false;
+  stopClipboardWatch("已断开，监听已停止");
   resetAudioPlayback();
   setConnected(false);
 }
@@ -653,7 +662,7 @@ function makeClipboardId() {
   return `mac-client-clip-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 8)}`;
 }
 
-function sendClipboardText() {
+function sendClipboardText({ source = "manual" } = {}) {
   if (!state.authenticated) {
     elements.clipboardStatus.textContent = "未连接";
     logEvent("剪贴板未发送", "请先连接 Windows host");
@@ -674,13 +683,110 @@ function sendClipboardText() {
     mode: "system",
   });
   elements.clipboardStatus.textContent = `已发送 ${text.length} 字`;
-  logEvent("剪贴板已发送", `${text.length} 字`);
+  logEvent(source === "watch" ? "监听剪贴板已发送" : "剪贴板已发送", `${text.length} 字`);
 }
 
 function handleClipboardAck(message) {
   const status = `${message.accepted ? "已写入" : "写入失败"} · ${message.mode || "unknown"} · ${message.textLength ?? 0} 字`;
   elements.clipboardStatus.textContent = status;
   logEvent(message.accepted ? "剪贴板确认" : "剪贴板失败", message.reason || status);
+}
+
+function clipboardApiAvailable() {
+  return Boolean(navigator.clipboard?.readText);
+}
+
+async function readLocalClipboard({ silent = false } = {}) {
+  if (!clipboardApiAvailable()) {
+    elements.localClipboardStatus.textContent = "当前浏览器不支持读取剪贴板";
+    if (!silent) {
+      logEvent("读取 Mac 剪贴板失败", "浏览器不支持 Clipboard API");
+    }
+    return null;
+  }
+  if (state.clipboardReadInFlight) {
+    return null;
+  }
+
+  state.clipboardReadInFlight = true;
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text) {
+      elements.localClipboardStatus.textContent = "Mac 剪贴板为空";
+      return "";
+    }
+    elements.clipboardTextInput.value = text;
+    elements.localClipboardStatus.textContent = `已读取 ${text.length} 字`;
+    if (!silent) {
+      logEvent("已读取 Mac 剪贴板", `${text.length} 字`);
+    }
+    return text;
+  } catch (error) {
+    const message = error?.message || "读取权限被拒绝";
+    elements.localClipboardStatus.textContent = "读取失败";
+    if (!silent) {
+      logEvent("读取 Mac 剪贴板失败", message);
+    }
+    return null;
+  } finally {
+    state.clipboardReadInFlight = false;
+  }
+}
+
+async function readLocalClipboardIntoTextArea() {
+  const text = await readLocalClipboard();
+  if (text) {
+    state.lastLocalClipboardText = text;
+  }
+}
+
+async function pollLocalClipboard() {
+  const text = await readLocalClipboard({ silent: true });
+  if (text === null || text === "") {
+    return;
+  }
+  if (text === state.lastLocalClipboardText) {
+    elements.localClipboardStatus.textContent = `监听中 · ${text.length} 字`;
+    return;
+  }
+  state.lastLocalClipboardText = text;
+  if (!state.authenticated) {
+    elements.localClipboardStatus.textContent = "监听到变化 · 未连接";
+    logEvent("监听到 Mac 剪贴板变化", "请先连接 Windows host");
+    return;
+  }
+  elements.localClipboardStatus.textContent = `监听发送 ${text.length} 字`;
+  sendClipboardText({ source: "watch" });
+}
+
+async function startClipboardWatch() {
+  if (!clipboardApiAvailable()) {
+    elements.clipboardWatchToggle.checked = false;
+    elements.localClipboardStatus.textContent = "当前浏览器不支持读取剪贴板";
+    logEvent("剪贴板监听未开启", "浏览器不支持 Clipboard API");
+    return;
+  }
+  const initialText = await readLocalClipboard({ silent: true });
+  state.lastLocalClipboardText = initialText || elements.clipboardTextInput.value || "";
+  if (state.clipboardWatchTimer) {
+    window.clearInterval(state.clipboardWatchTimer);
+  }
+  state.clipboardWatchTimer = window.setInterval(() => {
+    void pollLocalClipboard();
+  }, clipboardWatchIntervalMs);
+  elements.localClipboardStatus.textContent = "监听中 · 仅文本";
+  logEvent("Mac 剪贴板监听已开启", "只监听文本变化，默认不会读取文件");
+}
+
+function stopClipboardWatch(status = "监听已关闭") {
+  if (state.clipboardWatchTimer) {
+    window.clearInterval(state.clipboardWatchTimer);
+  }
+  state.clipboardWatchTimer = null;
+  if (elements.clipboardWatchToggle.checked) {
+    elements.clipboardWatchToggle.checked = false;
+  }
+  elements.localClipboardStatus.textContent = status;
 }
 
 function formatBytes(bytes) {
@@ -884,7 +990,17 @@ elements.audioVolumeRange.addEventListener("input", () => {
   updateAudioVolumeLabel();
   sendAudioSettings();
 });
-elements.sendClipboardButton.addEventListener("click", sendClipboardText);
+elements.readClipboardButton.addEventListener("click", () => {
+  void readLocalClipboardIntoTextArea();
+});
+elements.sendClipboardButton.addEventListener("click", () => sendClipboardText());
+elements.clipboardWatchToggle.addEventListener("change", () => {
+  if (elements.clipboardWatchToggle.checked) {
+    void startClipboardWatch();
+  } else {
+    stopClipboardWatch();
+  }
+});
 elements.sendClipboardFilesButton.addEventListener("click", () => {
   void sendClipboardFiles();
 });

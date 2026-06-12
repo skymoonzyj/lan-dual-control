@@ -293,6 +293,15 @@ async function setFileInputFiles(session, selector, files) {
   });
 }
 
+async function grantClipboardPermissions(session, origin) {
+  await session.send("Browser.grantPermissions", {
+    origin,
+    permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"],
+  }).catch((error) => {
+    print("INFO", `Clipboard permission grant skipped: ${error.message}`);
+  });
+}
+
 async function startWindowsHost(args, repoRoot) {
   await ensureTemporaryHostPort(args);
   const discoveryUrl = `http://${args.host}:${args.port}/discovery`;
@@ -345,7 +354,9 @@ function buildSnapshotExpression() {
       audio: text("#audioStatus"),
       input: text("#inputStatus"),
       clipboard: text("#clipboardStatus"),
+      localClipboard: text("#localClipboardStatus"),
       fileClipboard: text("#fileClipboardStatus"),
+      clipboardTextValue: document.querySelector("#clipboardTextInput")?.value || "",
       imageVisible: image?.classList.contains("is-visible") || false,
       imageHasSource: Boolean(image?.getAttribute("src")),
       logs,
@@ -403,6 +414,7 @@ async function run() {
     session = await connectCdp(args.debugPort, args.timeoutMs);
     await session.send("Runtime.enable");
     await session.send("Page.enable");
+    await grantClipboardPermissions(session, clientUrl);
     await session.send("Page.navigate", { url: clientUrl });
     await session.waitForEvent("Page.loadEventFired", args.timeoutMs);
     await waitFor(
@@ -571,6 +583,70 @@ async function run() {
     );
 
     print("OK", `Clipboard: ${clipboardSnapshot.clipboard}`);
+
+    const localClipboardText = `Mac client local clipboard ${Date.now()}`;
+    await evaluate(session, `navigator.clipboard.writeText(${JSON.stringify(localClipboardText)})`);
+    await evaluate(
+      session,
+      `(() => {
+        document.querySelector("#readClipboardButton").click();
+        return true;
+      })()`,
+    );
+    const localClipboardReadSnapshot = await waitFor(
+      async () => {
+        const value = await evaluate(session, buildSnapshotExpression());
+        lastSnapshot = value;
+        return value.clipboardTextValue === localClipboardText ? value : null;
+      },
+      args.timeoutMs,
+      "Mac client local clipboard read",
+    );
+    print("OK", `Local clipboard: ${localClipboardReadSnapshot.localClipboard}`);
+
+    await evaluate(
+      session,
+      `(() => {
+        document.querySelector("#sendClipboardButton").click();
+        return true;
+      })()`,
+    );
+    const localClipboardSendSnapshot = await waitFor(
+      async () => {
+        const value = await evaluate(session, buildSnapshotExpression());
+        lastSnapshot = value;
+        const accepted = value.clipboard.includes("已写入") && value.clipboard.includes(String(localClipboardText.length));
+        const modeOk = !args.requireSystemClipboard || value.clipboard.includes("system");
+        return accepted && modeOk ? value : null;
+      },
+      args.timeoutMs,
+      "Mac client local clipboard send",
+    );
+    print("OK", `Local clipboard send: ${localClipboardSendSnapshot.clipboard}`);
+
+    const watchedClipboardText = `Mac client watched clipboard ${Date.now()}`;
+    await evaluate(
+      session,
+      `(() => {
+        document.querySelector("#clipboardWatchToggle").click();
+        return true;
+      })()`,
+    );
+    await delay(300);
+    await evaluate(session, `navigator.clipboard.writeText(${JSON.stringify(watchedClipboardText)})`);
+    const watchedClipboardSnapshot = await waitFor(
+      async () => {
+        const value = await evaluate(session, buildSnapshotExpression());
+        lastSnapshot = value;
+        const accepted = value.clipboard.includes("已写入") && value.clipboard.includes(String(watchedClipboardText.length));
+        const modeOk = !args.requireSystemClipboard || value.clipboard.includes("system");
+        return accepted && modeOk ? value : null;
+      },
+      args.timeoutMs,
+      "Mac client local clipboard watch",
+    );
+    print("OK", `Clipboard watch: ${watchedClipboardSnapshot.clipboard}`);
+
     if (args.testFileClipboard) {
       uploadDir = await mkdtemp(join(tmpdir(), "lan-dual-mac-client-upload-"));
       const uploadPath = join(uploadDir, `mac-client-file-clipboard-${Date.now()}.txt`);

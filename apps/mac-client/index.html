@@ -100,9 +100,15 @@
             </div>
             <textarea id="clipboardTextInput" rows="5" placeholder="输入要发送到 Windows 剪贴板的文字"></textarea>
             <div class="button-row clipboard-actions">
+              <button id="readClipboardButton" type="button">读取 Mac 剪贴板</button>
               <button id="sendClipboardButton" type="button" class="primary">发送文字</button>
               <strong id="clipboardStatus">未发送</strong>
             </div>
+            <label class="toggle-row clipboard-watch-row">
+              <input id="clipboardWatchToggle" type="checkbox">
+              监听 Mac 文本剪贴板变化并自动发送
+            </label>
+            <strong id="localClipboardStatus" class="panel-status">监听默认关闭</strong>
             <div class="file-transfer-box">
               <label>
                 文件剪贴板

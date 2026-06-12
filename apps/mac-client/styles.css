@@ -349,8 +349,16 @@ button:disabled {
 }
 
 .clipboard-actions {
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+}
+
+.clipboard-watch-row {
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(28, 75, 60, 0.07);
 }
 
 .panel-status,

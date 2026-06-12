@@ -83,6 +83,47 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：给 Mac 控制 Windows 原型增加本机文本剪贴板读取和可选自动监听。
+完成内容：
+- `apps/mac-client` 文本剪贴板面板新增“读取 Mac 剪贴板”按钮，可读取浏览器授权后的本机文本剪贴板并填入待发送文本框。
+- 新增“监听 Mac 文本剪贴板变化并自动发送”开关；默认关闭，只监听文本，用户显式开启后才会定时读取并发送变化内容。
+- 自动监听会去重同一段文本，断开连接或连接关闭时会自动停止，避免未连接状态继续读取本机剪贴板。
+- `scripts/windows/test-mac-client-browser.mjs` 会授予浏览器剪贴板权限，覆盖手动读取发送和监听变化自动发送。
+- README、当前状态、下一步和任务板已同步该能力。
+修改文件：
+- `apps/mac-client/index.html`
+- `apps/mac-client/app.js`
+- `apps/mac-client/styles.css`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `git diff --check`
+- 普通页面级自检：`node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --clientPort 5190 --debugPort 9341`
+- 认证失败回归：`node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3 --clientPort 5191 --debugPort 9342`
+验证结果：
+- 普通页面级自检通过：视频、`input_ack · log`、手动文本剪贴板、读取 Mac 本机剪贴板后发送、监听文本变化自动发送、文件剪贴板均通过。
+- 认证失败回归仍通过：`Auth failure: 认证失败 · 剩余 2/3 次`。
+遗留问题：
+- 当前只覆盖文本剪贴板；文件剪贴板仍需用户手动选择文件，浏览器不能后台读取系统文件剪贴板。
+- Windows 默认模式仍需 Windows 端跑一次系统文件剪贴板强校验 `saveMode=clipboard`。
+下一步建议：
+- Mac 端可继续打磨键盘映射和连接历史/最近连接体验。
+- Windows 端可继续跑默认 `test-mac-client-browser.mjs`，确认真实 Windows host 的文本/文件系统剪贴板模式。
+是否改了协议：否。
+是否需要另一端配合：Windows 系统剪贴板强校验仍需要 Windows 端执行默认页面级自检。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：把 Mac client 错误密码路径固化为页面级自检断言。
 完成内容：
 - `scripts/windows/test-mac-client-browser.mjs` 新增 `--expectAuthFailure` 模式，认证失败时不再把脚本判为失败，而是等待页面显示认证失败状态。

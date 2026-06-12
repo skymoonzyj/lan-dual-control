@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `apps/mac-client/*`、`scripts/windows/test-mac-client-browser.mjs`、`README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 12:01 | Mac client 新增本机文本剪贴板读取和可选自动监听；默认关闭、只监听文本、断开连接自动停止；页面级自检已覆盖手动读取发送和监听自动发送。 |
 | Mac Codex | `scripts/windows/test-mac-client-browser.mjs`、`apps/mac-client/README.md`、`README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 11:48 | Mac client 页面级自检新增 `--expectAuthFailure`，可断言认证失败剩余次数；错误密码模式和普通成功模式均通过。 |
 | Windows Codex | `apps/windows-host/src/windows-screen-capture.mjs`、`scripts/windows/test-windows-host.ps1`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 11:55 | Windows host 屏幕采集支持 `LAN_DUAL_FFMPEG` 显式路径；Windows host 自检脚本新增 `-Ffmpeg` 并自动识别 `C:\DevTools\ffmpeg\bin\ffmpeg.exe`。本机已安装 FFmpeg 并通过授权 FFmpeg 真实画面自检。 |
 | Mac Codex | `apps/mac-client/app.js`、`apps/mac-client/README.md`、`README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/04-task-board.md` | 2026-06-12 11:38 | Mac client 认证失败 UX：显示剩余尝试次数，失败后关闭当前 WebSocket 并释放连接按钮；正常路径与错误密码路径均已验证。 |
