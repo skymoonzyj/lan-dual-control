@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -134,6 +135,42 @@ async function waitForHttpOk(url, timeoutMs, label) {
   }, timeoutMs, label);
 }
 
+function canBindPort(host, port) {
+  return new Promise((resolveBind) => {
+    const server = createServer();
+    server.once("error", () => resolveBind(false));
+    server.once("listening", () => {
+      server.close(() => resolveBind(true));
+    });
+    server.listen(Number(port), host);
+  });
+}
+
+function reserveEphemeralPort(host) {
+  return new Promise((resolvePort, rejectPort) => {
+    const server = createServer();
+    server.once("error", rejectPort);
+    server.once("listening", () => {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      server.close(() => resolvePort(port));
+    });
+    server.listen(0, host);
+  });
+}
+
+async function ensureTemporaryHostPort(args) {
+  if (args.useExistingHost) {
+    return;
+  }
+  if (await canBindPort(args.host, args.port)) {
+    return;
+  }
+  const fallbackPort = await reserveEphemeralPort(args.host);
+  print("INFO", `Port ${args.port} is busy; using temporary Windows host port ${fallbackPort}`);
+  args.port = String(fallbackPort);
+}
+
 class CdpSession {
   constructor(socket) {
     this.socket = socket;
@@ -215,12 +252,16 @@ async function evaluate(session, expression) {
 }
 
 async function startWindowsHost(args, repoRoot) {
+  await ensureTemporaryHostPort(args);
   const discoveryUrl = `http://${args.host}:${args.port}/discovery`;
   try {
     const response = await fetch(discoveryUrl, { cache: "no-store" });
     if (response.ok) {
-      print("OK", `Using existing Windows host on ${args.host}:${args.port}`);
-      return null;
+      if (args.useExistingHost) {
+        print("OK", `Using existing Windows host on ${args.host}:${args.port}`);
+        return null;
+      }
+      throw new Error(`temporary port ${args.port} unexpectedly has an HTTP service`);
     }
   } catch {
     // No existing host; start a temporary one below.

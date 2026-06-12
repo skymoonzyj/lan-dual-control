@@ -21,6 +21,36 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：给 Mac client 页面级自检增加 Windows host 临时端口冲突防护。
+完成内容：
+- `scripts/windows/test-mac-client-browser.mjs` 在临时启动 Windows host 前会检查目标端口能否绑定。
+- 默认 `43772` 被占用时自动切换到临时空闲端口，并把页面表单同步改成该端口。
+- 只有显式 `--useExistingHost` 时才复用已经运行的 Windows host。
+- Windows host README 已记录该行为。
+修改文件：
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/windows-host/README.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `git diff --check`
+- `node scripts/windows/test-mac-client-browser.mjs`
+- 临时占用 `127.0.0.1:43772` 后运行 `node scripts/windows/test-mac-client-browser.mjs`
+验证结果：
+- 正常页面级自检通过：真实 `windows-host-ffmpeg-mjpeg` 画面和 `input_ack · log`。
+- 端口占用场景通过：输出 `Port 43772 is busy; using temporary Windows host port ...`，页面连接临时端口并通过。
+遗留问题：
+- Mac client 页面自己的日志仍会提示默认端口 `43772`，但脚本已经覆盖输入框端口，不影响自检结果。
+下一步建议：
+- 后续可给其他固定端口脚本继续补同样的端口避让。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：给 Windows host 增加显式配置的 FFmpeg DirectShow PCM 音频采集入口。
 完成内容：
 - `WindowsAudioCaptureCoordinator` 默认仍保持模拟音频帧，不会自动采集真实麦克风或系统声音。
