@@ -77,7 +77,7 @@
 - `node scripts/mac/check-mac-displays.mjs --port 43771 --timeoutMs 12000 --requireRuntime --expectBuildId runtime-assert-test`
 - `node scripts/mac/check-mac-displays.mjs --port 43771 --timeoutMs 12000 --expectBuildId wrong-build` 预期失败
 验证结果：
-- 临时 `43771` 正向强校验通过：`/discovery` 和 `hello_ack` 均返回 `pid=67925`、`build=runtime-assert-test`、同一 `startedAt`，并完成 `main` 单屏 round-trip。
+- 临时 `43771` 正向强校验通过：`/discovery` 和 `hello_ack` 均返回 `pid=79837`、`build=runtime-assert-test`、同一 `startedAt`，并完成 `main` 单屏 round-trip。
 - 故意传入 `--expectBuildId wrong-build` 按预期失败：`discovery runtime buildId mismatch: runtime-assert-test !== wrong-build`。
 - 主 `43770` 默认路径仍通过，输出 `runtime=missing`，说明当前主进程尚未重启到 runtime 版本，但默认兼容路径不受影响。
 - 临时 `43771` 已停止，端口无残留监听。
