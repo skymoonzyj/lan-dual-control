@@ -335,6 +335,165 @@ async function verifyFloatingControlCenter(session) {
   return result;
 }
 
+async function verifyBlackBarInputGuard(session) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      if (
+        typeof canSendControlInput !== "function" ||
+        typeof registerInputEvent !== "function" ||
+        typeof updateCursor !== "function"
+      ) {
+        return { ok: false, reason: "missing input functions" };
+      }
+
+      const canvas = document.querySelector("#remoteCanvas");
+      const status = document.querySelector("#remoteStatusText");
+      const cursorDot = document.querySelector("#cursorDot");
+      const scaleSelect = document.querySelector("#scaleModeSelect");
+      if (!canvas || !status || !cursorDot || !scaleSelect || typeof state !== "object") {
+        return { ok: false, reason: "missing input guard elements" };
+      }
+
+      const originalCanSend = canSendControlInput;
+      const originalRegister = registerInputEvent;
+      const originalRect = canvas.getBoundingClientRect.bind(canvas);
+      const originalScale = scaleSelect.value;
+      const originalConnected = state.connected;
+      const originalDirection = state.controlDirection;
+      const originalWidth = state.remoteFrameWidth;
+      const originalHeight = state.remoteFrameHeight;
+      const originalLastPointer = state.lastRemotePointer;
+      const originalButtons = new Set(state.remotePointerButtonsDown);
+      const sent = [];
+
+      const defineMetric = (name, value) => {
+        Object.defineProperty(canvas, name, {
+          configurable: true,
+          value,
+        });
+      };
+      const mouse = (type, x, y, button = 0) =>
+        new MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          clientX: x,
+          clientY: y,
+          button,
+        });
+
+      try {
+        canSendControlInput = () => true;
+        registerInputEvent = (kind, detail, payload = {}) => {
+          sent.push({ kind, detail, payload });
+        };
+        canvas.getBoundingClientRect = () => ({
+          left: 10,
+          top: 20,
+          width: 1000,
+          height: 1000,
+          right: 1010,
+          bottom: 1020,
+          x: 10,
+          y: 20,
+          toJSON() {
+            return this;
+          },
+        });
+        defineMetric("clientWidth", 1000);
+        defineMetric("clientHeight", 1000);
+        defineMetric("scrollWidth", 1000);
+        defineMetric("scrollHeight", 1000);
+        defineMetric("scrollLeft", 0);
+        defineMetric("scrollTop", 0);
+        state.connected = true;
+        state.controlDirection = "windows_to_mac";
+        state.remoteFrameWidth = 1920;
+        state.remoteFrameHeight = 1080;
+        state.lastRemotePointer = null;
+        state.remotePointerButtonsDown.clear();
+        scaleSelect.value = "fit";
+        if (typeof applyScaleMode === "function") applyScaleMode();
+
+        canvas.dispatchEvent(mouse("mousemove", 20, 40));
+        const moveIgnored = sent.length === 0 && cursorDot.classList.contains("is-hidden");
+
+        canvas.dispatchEvent(mouse("mousedown", 20, 40, 0));
+        const blackBarDownIgnored =
+          sent.length === 0 &&
+          status.textContent.includes("黑边区域不会发送远控输入");
+
+        canvas.dispatchEvent(mouse("mousedown", 510, 520, 0));
+        const insideDownSent =
+          sent.length === 1 &&
+          sent[0].payload.event === "mouse_button" &&
+          sent[0].payload.action === "down" &&
+          sent[0].payload.remoteX === 960 &&
+          sent[0].payload.remoteY === 540;
+
+        canvas.dispatchEvent(mouse("mouseup", 20, 40, 0));
+        const releaseSentAtLastPoint =
+          sent.length === 2 &&
+          sent[1].payload.event === "mouse_button" &&
+          sent[1].payload.action === "up" &&
+          sent[1].payload.remoteX === 960 &&
+          sent[1].payload.remoteY === 540;
+
+        canvas.dispatchEvent(
+          new WheelEvent("wheel", {
+            bubbles: true,
+            cancelable: true,
+            clientX: 20,
+            clientY: 40,
+            deltaY: 120,
+          }),
+        );
+        const blackBarWheelIgnored = sent.length === 2;
+
+        return {
+          ok:
+            moveIgnored &&
+            blackBarDownIgnored &&
+            insideDownSent &&
+            releaseSentAtLastPoint &&
+            blackBarWheelIgnored,
+          moveIgnored,
+          blackBarDownIgnored,
+          insideDownSent,
+          releaseSentAtLastPoint,
+          blackBarWheelIgnored,
+          sentCount: sent.length,
+          status: status.textContent,
+          sent,
+        };
+      } finally {
+        canSendControlInput = originalCanSend;
+        registerInputEvent = originalRegister;
+        canvas.getBoundingClientRect = originalRect;
+        delete canvas.clientWidth;
+        delete canvas.clientHeight;
+        delete canvas.scrollWidth;
+        delete canvas.scrollHeight;
+        delete canvas.scrollLeft;
+        delete canvas.scrollTop;
+        scaleSelect.value = originalScale;
+        state.connected = originalConnected;
+        state.controlDirection = originalDirection;
+        state.remoteFrameWidth = originalWidth;
+        state.remoteFrameHeight = originalHeight;
+        state.lastRemotePointer = originalLastPointer;
+        state.remotePointerButtonsDown.clear();
+        for (const button of originalButtons) state.remotePointerButtonsDown.add(button);
+        if (typeof applyScaleMode === "function") applyScaleMode();
+      }
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`black bar input guard check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function run() {
   const args = parseArgs(process.argv);
   const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -387,6 +546,11 @@ async function run() {
     print(
       "OK",
       `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, fullscreen=${controlCenterCheck.fullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
+    );
+    const blackBarCheck = await verifyBlackBarInputGuard(session);
+    print(
+      "OK",
+      `Black bar guard: move=${blackBarCheck.moveIgnored}, down=${blackBarCheck.blackBarDownIgnored}, release=${blackBarCheck.releaseSentAtLastPoint}, wheel=${blackBarCheck.blackBarWheelIgnored}`,
     );
 
     await evaluate(

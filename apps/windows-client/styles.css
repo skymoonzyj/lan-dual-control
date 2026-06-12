@@ -963,6 +963,10 @@ button:disabled {
     top 90ms ease;
 }
 
+.cursor-dot.is-hidden {
+  opacity: 0;
+}
+
 .statusbar {
   display: flex;
   min-height: 36px;

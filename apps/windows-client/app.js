@@ -321,6 +321,9 @@ const state = {
   fileTransferActive: false,
   remoteFileTransfers: new Map(),
   receivedClipboardFiles: [],
+  lastRemotePointer: null,
+  remotePointerButtonsDown: new Set(),
+  pointerOutsideFrameNoticeAt: 0,
   controlDirection: "windows_to_mac",
   pendingControlDirection: "",
   reverseRequestId: "",
@@ -2182,6 +2185,42 @@ function mapPointerToRemote(event) {
   });
 }
 
+function rememberRemotePointer(mapped) {
+  if (!mapped) return;
+  state.lastRemotePointer = {
+    x: mapped.x,
+    y: mapped.y,
+    remoteX: mapped.remoteX,
+    remoteY: mapped.remoteY,
+    frameRect: mapped.frameRect,
+  };
+}
+
+function getMappedPointerForRelease(event) {
+  const mapped = mapPointerToRemote(event);
+  if (mapped) {
+    rememberRemotePointer(mapped);
+    return mapped;
+  }
+  if (state.remotePointerButtonsDown.has(event.button) && state.lastRemotePointer) {
+    return state.lastRemotePointer;
+  }
+  return null;
+}
+
+function handlePointerOutsideFrame(action) {
+  elements.cursorDot.classList.add("is-hidden");
+  const now = Date.now();
+  if (now - state.pointerOutsideFrameNoticeAt < 800) {
+    return;
+  }
+  state.pointerOutsideFrameNoticeAt = now;
+  elements.remoteStatusText.textContent = "黑边区域不会发送远控输入";
+  if (action === "down" || action === "wheel") {
+    addLog("输入忽略", "指针位于远端画面黑边区域");
+  }
+}
+
 function getMouseButtonName(button) {
   if (button === 0) return "left";
   if (button === 1) return "middle";
@@ -2239,8 +2278,11 @@ function updateCursor(event) {
 
   const mapped = mapPointerToRemote(event);
   if (!mapped) {
+    handlePointerOutsideFrame("move");
     return;
   }
+  rememberRemotePointer(mapped);
+  elements.cursorDot.classList.remove("is-hidden");
 
   const canvasRect = elements.remoteCanvas.getBoundingClientRect();
   elements.cursorDot.style.left = `${((event.clientX - canvasRect.left + elements.remoteCanvas.scrollLeft) / elements.remoteCanvas.scrollWidth) * 100}%`;
@@ -3715,7 +3757,7 @@ elements.remoteFrameImage.addEventListener("error", () => {
   addLog("视频帧", `图片解码失败 · #${frameId} · ${codec}`);
 });
 elements.remoteCanvas.addEventListener("contextmenu", (event) => {
-  if (canSendControlInput()) {
+  if (canSendControlInput() && mapPointerToRemote(event)) {
     event.preventDefault();
   }
 });
@@ -3723,7 +3765,12 @@ elements.remoteCanvas.addEventListener("mousedown", (event) => {
   if (!canSendControlInput()) return;
   elements.remoteCanvas.focus();
   const mapped = mapPointerToRemote(event);
-  if (!mapped) return;
+  if (!mapped) {
+    handlePointerOutsideFrame("down");
+    return;
+  }
+  rememberRemotePointer(mapped);
+  state.remotePointerButtonsDown.add(event.button);
   registerInputEvent("鼠标按下", `button=${event.button} · ${mapped.remoteX},${mapped.remoteY}`, {
     event: "mouse_button",
     pointerType: "mouse",
@@ -3739,8 +3786,12 @@ elements.remoteCanvas.addEventListener("mousedown", (event) => {
 });
 elements.remoteCanvas.addEventListener("mouseup", (event) => {
   if (!canSendControlInput()) return;
-  const mapped = mapPointerToRemote(event);
-  if (!mapped) return;
+  const mapped = getMappedPointerForRelease(event);
+  state.remotePointerButtonsDown.delete(event.button);
+  if (!mapped) {
+    handlePointerOutsideFrame("up");
+    return;
+  }
   registerInputEvent("鼠标抬起", `button=${event.button} · ${mapped.remoteX},${mapped.remoteY}`, {
     event: "mouse_button",
     pointerType: "mouse",
@@ -3755,10 +3806,14 @@ elements.remoteCanvas.addEventListener("mouseup", (event) => {
   });
 });
 elements.remoteCanvas.addEventListener("wheel", (event) => {
-  event.preventDefault();
   if (!canSendControlInput()) return;
   const mapped = mapPointerToRemote(event);
-  if (!mapped) return;
+  if (!mapped) {
+    handlePointerOutsideFrame("wheel");
+    return;
+  }
+  event.preventDefault();
+  rememberRemotePointer(mapped);
   registerInputEvent("滚轮", `deltaY=${Math.round(event.deltaY)}`, {
     event: "mouse_wheel",
     pointerType: "mouse",

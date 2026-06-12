@@ -21,6 +21,44 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：增强 Windows 控制端远控画面黑边输入防护，避免窗口化/等比缩放时误操作远端。
+完成内容：
+- Windows 控制端在适应窗口黑边区域移动鼠标时会隐藏远端鼠标点，不再保留一个容易误导的位置。
+- 黑边区域鼠标按下、滚轮和右键菜单不会发送远控输入；页面会提示“黑边区域不会发送远控输入”。
+- 如果用户从真实画面内按下鼠标并拖到黑边再松开，会用最后一个有效画面坐标补发鼠标抬起，避免远端出现“按下没释放”的状态。
+- `test-windows-client-browser.mjs` 新增黑边输入防护页面级回归：模拟黑边移动、黑边按下、画面内按下、黑边释放和黑边滚轮；测试时会临时接管发送函数计数，不向真实 Mac 发鼠标事件。
+修改文件：
+- `apps/windows-client/app.js`
+- `apps/windows-client/styles.css`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-coordinate-mapping.mjs`
+- `git diff --check`
+- `node scripts/windows/test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password <本机测试密码> --timeoutMs 45000 --requireH264`
+- `node scripts/windows/test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password <本机测试密码> --timeoutMs 45000 --requireH264 --injectPcmAudio`
+验证结果：
+- 页面级自检输出 `Black bar guard: move=true, down=true, release=true, wheel=true`。
+- 真实 Mac H.264 验收仍通过：canvas `1920x1080`，`avc1.420029:annexb`，未回退 JPEG。
+- H.264 + PCM 注入组合验收仍通过，页面声音状态出现 `播放 47`。
+遗留问题：
+- 当前只是控制端黑边/拖拽释放防护；真实输入注入仍需 Mac 端在 `inject` 模式下由人工或明确联调呼叫验收。
+下一步建议：
+- 后续改 Windows 控制端缩放、画布层级、全屏布局或输入事件时，继续跑 `test-windows-client-browser.mjs`，确保黑边防护不退化。
+是否改了协议：否。
+是否需要另一端配合：否；本轮只改 Windows 控制端输入层和自测。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：把 Windows 控制端真实 Mac H.264/WebCodecs 页面级自检做成可靠强校验。
 完成内容：
 - `scripts/windows/test-windows-client-browser.mjs` 新增 `--requireH264`，要求远端画面必须走 canvas/WebCodecs H.264 解码，且诊断中不能出现 JPEG 回退。

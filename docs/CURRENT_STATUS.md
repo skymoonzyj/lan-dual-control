@@ -15,7 +15,7 @@
 
 ## Windows 端状态
 
-- Windows 控制端已有中文界面、局域网连接、连接历史、画质设置、缩放模式、认证失败剩余次数提示、诊断状态条、真实 Mac H.264/WebCodecs 画布解码、真实 Mac 音频 PCM 播放、文本剪贴板、远端文件托盘、桌面版远端文件写入 Windows 系统文件剪贴板和桌面壳。
+- Windows 控制端已有中文界面、局域网连接、连接历史、画质设置、缩放模式、适应窗口黑边输入防护、认证失败剩余次数提示、诊断状态条、真实 Mac H.264/WebCodecs 画布解码、真实 Mac 音频 PCM 播放、文本剪贴板、远端文件托盘、桌面版远端文件写入 Windows 系统文件剪贴板和桌面壳。
 - Windows 控制端可连接本机假 Mac 服务，也可用脚本探测真实 Mac 被控端；假 Mac 服务已对齐 3 次认证失败断开行为。
 - Windows 被控端已有 WebSocket 骨架、认证、FFmpeg gdigrab MJPEG 视频帧、无 FFmpeg 时的 Windows 系统截图 JPEG 回退、默认模拟音频帧、显式 WASAPI loopback 系统声音采集入口、显式 DirectShow PCM 音频设备采集入口、文本和文件剪贴板接收、最小 SendInput 输入注入。
 - Windows 被控端新增 `scripts/windows/test-windows-host.ps1` 本机自检入口，可临时启动本机服务并验证真实 JPEG 首帧、文本剪贴板、文件剪贴板接收，也可加 `-AudioMode wasapi -RequireAudio` 强校验系统声音 PCM；`scripts/windows/observe-windows-host-video.mjs` 可观察持续视频帧并统计实际 FPS、最大间隔和采集管线；`scripts/windows/observe-windows-host-audio.mjs` 可观察持续音频帧并统计稳态 FPS、最大间隔、payload 和电平，当前 WASAPI 本机 6 秒稳态约 49.9 FPS；`scripts/windows/test-mac-client-browser.mjs` 可启动 Mac client 页面验证 Mac 反控 Windows 的真实 JPEG 画面、`input_ack`、Mac `Command+C` 到 Windows `Ctrl+C` 映射、最近连接保存/回填/清空且不保存密码、文本剪贴板、Mac 本机文本剪贴板读取/监听、文件剪贴板发送、可选音频帧/PCM payload/播放计数和认证失败剩余次数提示，也可加 `--requireAudio` 临时启用 WASAPI 并强校验 `pcm-f32le-base64`；`scripts/windows/test-auth-retry-policy.mjs` 可回归 Windows host 和假 Mac 的 3 次认证失败断开策略。

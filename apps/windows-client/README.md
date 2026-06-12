@@ -20,6 +20,7 @@
   - 声音：开关、音量、模拟音频帧状态、真实 PCM 音频播放。
 - 支持画面缩放模式：适应窗口、原始比例、拉伸填充。
 - 窗口缩放坐标映射有独立回归脚本，覆盖适应窗口黑边、原始比例滚动和拉伸填充。
+- 适应窗口时黑边区域会隐藏远端鼠标点并忽略鼠标/滚轮输入；如果从真实画面内拖拽到黑边再松开，会用最后一个有效坐标补发抬起事件，避免远端卡住按下状态。
 - 支持多显示器选择骨架：被控端返回 `displays` 后可在控制端选择目标显示器，并通过 `display_settings.displayId` 下发。
 - 支持远控 macOS 默认按键映射：Win -> Command、Alt -> Option、Ctrl -> Control，可手动调整并一键还原。
 - 默认开启 Windows 常用快捷键兼容：Ctrl+C/V/X/A/Z/S/F/P/O/N/W/T/R 会按 macOS Command 快捷键发送，Ctrl+Y 会转为 Command+Shift+Z。
@@ -59,7 +60,7 @@ node E:\codex\lan-dual-control\scripts\windows\test-coordinate-mapping.mjs
 ```
 
 真实 Mac 页面级自检可自动启动本地控制端页面、打开 Edge、连接 Mac，并确认诊断条和视频画面；加 `--requireH264` 可强制要求真实 H.264/WebCodecs 画布解码成功，加 `--injectPcmAudio` 可额外注入一帧 planar PCM，验证控制端音频播放入口：
-脚本会先回归画面内悬浮控制中心，确认悬浮层、摘要、画质、缩放、声音、音量、全屏和窗口按钮能同步到原工具栏与页面布局。
+脚本会先回归画面内悬浮控制中心，确认悬浮层、摘要、画质、缩放、声音、音量、全屏和窗口按钮能同步到原工具栏与页面布局；随后会模拟适应窗口黑边输入，确认黑边移动、点击、滚轮不会发远控事件，画面内按下后移到黑边松开也能正常释放。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password
