@@ -357,6 +357,7 @@ const state = {
     h264DecodedFrames: 0,
     h264DecoderLatencyMs: 0,
     h264FallbackReason: "",
+    streamFallbackReason: "",
     warnedMockFrame: false,
   },
 };
@@ -524,6 +525,7 @@ function getEmptyHostDiagnostics() {
     h264DecodedFrames: 0,
     h264DecoderLatencyMs: 0,
     h264FallbackReason: "",
+    streamFallbackReason: "",
     warnedMockFrame: false,
   };
 }
@@ -677,6 +679,9 @@ function getHostDiagnosticsLevel(diagnostics = state.hostDiagnostics) {
   if (diagnostics.videoDecoderStatus === "error" || diagnostics.videoDecoderStatus === "fallback") {
     return "warning";
   }
+  if (diagnostics.streamFallbackReason) {
+    return "warning";
+  }
   if (Number(diagnostics.videoDecoderErrors) > 0) {
     return "warning";
   }
@@ -716,6 +721,7 @@ function renderHostDiagnosticsText() {
   ].filter(Boolean);
   const inputText = formatInputDiagnostics(diagnostics);
   const decoderText = formatVideoDecoderDiagnostics(diagnostics);
+  const streamFallbackText = diagnostics.streamFallbackReason || "";
   const droppedFrames = Number(diagnostics.droppedFrames);
   const qualityText = formatJpegQuality(diagnostics.jpegQuality);
   const clipboardText = formatClipboardCapability(
@@ -743,6 +749,9 @@ function renderHostDiagnosticsText() {
   }
   if (decoderText) {
     parts.push(`解码：${decoderText}`);
+  }
+  if (streamFallbackText) {
+    parts.push(`视频回退：${streamFallbackText}`);
   }
   if (permissionText) {
     parts.push(`权限：${permissionText}`);
@@ -1328,6 +1337,7 @@ function setUiConnected(answer) {
     videoEncoding: answer.videoEncoding ?? "",
     qualityPreset: answer.qualityPreset ?? "",
     jpegQuality: answer.jpegQuality ?? null,
+    streamFallbackReason: answer.streamFallbackReason ?? "",
   });
   elements.remoteCanvas.focus();
   startLatencyLoop();
@@ -3128,6 +3138,7 @@ function handleProtocolMessage(message) {
       videoCodec: message.videoCodec ?? state.hostDiagnostics.videoCodec,
       videoEncoding: message.videoEncoding ?? state.hostDiagnostics.videoEncoding,
       capturePipeline: message.capturePipeline ?? state.hostDiagnostics.capturePipeline,
+      streamFallbackReason: message.streamFallbackReason ?? "",
       clipboardText: message.clipboardText ?? state.hostDiagnostics.clipboardText,
       clipboardFile: message.clipboardFile ?? state.hostDiagnostics.clipboardFile,
       clipboardTextMode: message.clipboardTextMode ?? state.hostDiagnostics.clipboardTextMode,
@@ -3266,6 +3277,7 @@ function renderVideoFrame(frame) {
   updateFpsMetric();
   const frameLabel = getVideoFrameLabel(frame);
   const frameCapturePipeline = frame.capturePipeline ?? state.hostDiagnostics.capturePipeline;
+  const frameCodec = String(frame.codec ?? "").toLowerCase();
   const frameDiagnostics = {
     videoCodec: frame.codec ?? state.hostDiagnostics.videoCodec,
     videoEncoding: frame.encoding ?? state.hostDiagnostics.videoEncoding,
@@ -3274,6 +3286,11 @@ function renderVideoFrame(frame) {
     droppedFrames: frame.droppedFrames ?? state.hostDiagnostics.droppedFrames,
     qualityPreset: frame.qualityPreset ?? state.hostDiagnostics.qualityPreset,
     jpegQuality: frame.jpegQuality ?? state.hostDiagnostics.jpegQuality,
+    streamFallbackReason: Object.prototype.hasOwnProperty.call(frame, "streamFallbackReason")
+      ? (frame.streamFallbackReason ?? "")
+      : frameCodec === "h264"
+        ? ""
+        : state.hostDiagnostics.streamFallbackReason,
   };
   updateHostDiagnostics(frameDiagnostics);
 

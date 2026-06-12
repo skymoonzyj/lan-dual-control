@@ -21,6 +21,38 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：把 Mac host 新增的 H.264 启动回退原因显示到 Windows 控制端诊断条，避免用户只看到画面从 H.264 变成 JPEG 却不知道原因。
+完成内容：
+- `apps/windows-client/app.js` 新增 `hostDiagnostics.streamFallbackReason`，`display_settings_ack.streamFallbackReason` 会进入诊断状态并显示为“视频回退：...”，同时把诊断条标为 warning。
+- 收到后续正常 `display_settings_ack` 或 H.264 视频帧时会清掉旧的 `streamFallbackReason`，避免回退原因残留。
+- `scripts/windows/test-windows-client-browser.mjs` 新增 `--diagnosticsOnly`，可不连接被控端，仅打开页面检查悬浮控制中心、黑边输入防护和 stream fallback 诊断显示/清除逻辑。
+- Windows 控制端 README、当前状态、下一步和任务板已同步该诊断覆盖点。
+修改文件：
+- `apps/windows-client/app.js`
+- `apps/windows-client/README.md`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+验证结果：
+- `--diagnosticsOnly` 通过：悬浮控制中心、黑边输入防护和 stream fallback 诊断均通过；诊断条示例显示“视频回退：H.264 启动超时，已回退 JPEG”。
+遗留问题：
+- 这轮验证的是页面诊断逻辑；还需要用真实 Mac host 43770 连接一次，确认真实 `streamFallbackReason` 文案能如期出现，并确认正常 H.264 不会误显示回退。
+下一步建议：
+- Mac host 重启到 77f4cfa 后，Windows 端可跑真实连接页面自检；如触发 watchdog，检查诊断条和事件日志是否同时出现回退原因。
+是否改了协议：否，消费 Mac 端已新增的可选字段。
+是否需要另一端配合：真实 43770 端到端回退/不误回退验收需要 Mac host 运行最新版；页面逻辑本轮不阻塞。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：给 Windows host 常驻 input helper 增加低风险延迟测量入口，方便区分输入通道延迟和视频/网络延迟。
 完成内容：
 - 新增 `scripts/windows/measure-windows-input-helper.mjs`：复用 `WindowsInputInjector` 的 system 模式，发送故意不支持的 dry-run 事件，测量 C# SendInput helper 的冷启动和热路径 JSON 往返耗时。

@@ -15,6 +15,7 @@ const defaults = {
   requireVideoSurface: true,
   requireH264: false,
   injectPcmAudio: false,
+  diagnosticsOnly: false,
   headless: true,
 };
 
@@ -41,6 +42,11 @@ function parseArgs(argv) {
     }
     if (key === "injectPcmAudio") {
       args.injectPcmAudio = true;
+      continue;
+    }
+    if (key === "diagnosticsOnly") {
+      args.diagnosticsOnly = true;
+      args.requireVideoSurface = false;
       continue;
     }
     if (Object.prototype.hasOwnProperty.call(args, key) && next && !next.startsWith("--")) {
@@ -494,6 +500,86 @@ async function verifyBlackBarInputGuard(session) {
   return result;
 }
 
+async function verifyStreamFallbackDiagnostics(session) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      if (
+        typeof handleProtocolMessage !== "function" ||
+        typeof resetHostDiagnostics !== "function" ||
+        typeof renderHostDiagnosticsText !== "function" ||
+        typeof state !== "object"
+      ) {
+        return { ok: false, reason: "missing diagnostics functions" };
+      }
+
+      const diagnosticsElement = document.querySelector("#hostDiagnosticsText");
+      if (!diagnosticsElement) {
+        return { ok: false, reason: "missing diagnostics element" };
+      }
+
+      const originalDiagnostics = { ...state.hostDiagnostics };
+      const originalText = diagnosticsElement.textContent;
+      const originalOk = diagnosticsElement.classList.contains("is-ok");
+      const originalWarning = diagnosticsElement.classList.contains("is-warning");
+      const fallbackReason = "H.264 启动超时，已回退 JPEG";
+
+      try {
+        resetHostDiagnostics();
+        handleProtocolMessage({
+          type: "display_settings_ack",
+          accepted: true,
+          hostMode: "mac-host-background-jpeg",
+          videoCodec: "jpeg",
+          videoEncoding: "data-url",
+          capturePipeline: "background-jpeg",
+          streamFallbackReason: fallbackReason,
+        });
+
+        const fallbackText = diagnosticsElement.textContent;
+        const fallbackWarning = diagnosticsElement.classList.contains("is-warning");
+        const fallbackState = state.hostDiagnostics.streamFallbackReason;
+
+        handleProtocolMessage({
+          type: "display_settings_ack",
+          accepted: true,
+          hostMode: "mac-host-h264-stream",
+          videoCodec: "h264",
+          videoEncoding: "annexb-base64",
+          capturePipeline: "screencapturekit-h264",
+        });
+
+        const clearedText = diagnosticsElement.textContent;
+        const clearedState = state.hostDiagnostics.streamFallbackReason;
+
+        return {
+          ok:
+            fallbackText.includes("视频回退") &&
+            fallbackText.includes(fallbackReason) &&
+            fallbackWarning &&
+            fallbackState === fallbackReason &&
+            !clearedText.includes(fallbackReason) &&
+            clearedState === "",
+          fallbackText,
+          fallbackWarning,
+          fallbackState,
+          clearedText,
+          clearedState,
+        };
+      } finally {
+        state.hostDiagnostics = originalDiagnostics;
+        diagnosticsElement.textContent = originalText;
+        diagnosticsElement.classList.toggle("is-ok", originalOk);
+        diagnosticsElement.classList.toggle("is-warning", originalWarning);
+      }
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`stream fallback diagnostics check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function run() {
   const args = parseArgs(process.argv);
   const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -552,6 +638,12 @@ async function run() {
       "OK",
       `Black bar guard: move=${blackBarCheck.moveIgnored}, down=${blackBarCheck.blackBarDownIgnored}, release=${blackBarCheck.releaseSentAtLastPoint}, wheel=${blackBarCheck.blackBarWheelIgnored}`,
     );
+    const streamFallbackCheck = await verifyStreamFallbackDiagnostics(session);
+    print("OK", `Stream fallback diagnostics: ${streamFallbackCheck.fallbackText}`);
+    if (args.diagnosticsOnly) {
+      print("OK", "Diagnostics-only browser checks passed");
+      return;
+    }
 
     await evaluate(
       session,

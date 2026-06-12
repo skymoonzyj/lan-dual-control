@@ -19,7 +19,7 @@
 
 3. 继续 H.264 流式视频链路验收。
    - Mac 真机已通过 `--requireH264` 首帧强校验，Windows 控制端页面级 `--requireH264` 也已验证真实 WebCodecs 解码；下一步继续观察延迟、长时间稳定性和 JPEG 回退体验。
-   - Mac host 已增加 H.264 启动 5 秒 watchdog；若启动阶段卡住会回退 `background-jpeg` 并带 `streamFallbackReason`，后续需要在主 43770 单 host、动态画面和 Windows 控制端真实连接下继续确认正常 H.264 不被误回退。
+   - Mac host 已增加 H.264 启动 5 秒 watchdog；若启动阶段卡住会回退 `background-jpeg` 并带 `streamFallbackReason`，Windows 控制端诊断条已能显示该原因；后续需要在主 43770 单 host、动态画面和 Windows 控制端真实连接下继续确认正常 H.264 不被误回退。
    - JPEG 链路继续保留为兜底和权限调试。
    - Windows 控制端继续显示实收 FPS、协商帧率和请求帧率。
 
