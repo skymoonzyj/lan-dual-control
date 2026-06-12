@@ -21,6 +21,40 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：增强 Mac 视频观察脚本的时间戳和 H.264 媒体时间线诊断，方便后续排查低延迟/卡顿来源。
+完成内容：
+- `scripts/mac/observe-mac-video.mjs` 新增帧 `timestamp` 解析与接收年龄统计，汇总 `frameAge min/avg/max`。
+- 新增 H.264 `timestampUs` / `durationUs` 时间线统计，输出媒体时间戳范围、媒体间隔平均/最大值和 duration 分布。
+- 新增可选强校验参数：`--requireFrameTimestamp`、`--maxFrameAgeMs`、`--requireTimestampUs`、`--requireMonotonicTimestampUs`、`--maxTimestampGapUs`。
+- 默认行为保持兼容；未显式打开强校验时只做摘要统计，不要求旧 host 一定带 `timestampUs`。
+- Mac host README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `scripts/mac/observe-mac-video.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/observe-mac-video.mjs`
+- `node scripts/mac/observe-mac-video.mjs --help`
+- `node scripts/mac/observe-mac-video.mjs --host 127.0.0.1 --port 43770 --durationMs 3000 --requireH264 --minFrames 20 --maxGapMs 1000 --expectActiveDisplayId main --requireFrameTimestamp --maxFrameAgeMs 1000 --requireMonotonicTimestampUs --maxTimestampGapUs 1000000`
+- `node scripts/mac/observe-mac-video.mjs --host 127.0.0.1 --port 43770 --durationMs 2000 --preferredVideoCodec mjpeg --requireRealVideo --minFrames 10 --maxGapMs 1000 --expectActiveDisplayId main --requireFrameTimestamp --maxFrameAgeMs 1500`
+验证结果：
+- 真实 `43770` H.264 路径通过：89 帧、约 29.2fps、最大接收间隔 39ms，`activeDisplayId=main:89`，`timestampUs` 单调，媒体间隔平均/最大 `34281/41668us`，`durationUs=33333`。
+- 真实 `43770` JPEG 兜底路径通过：31 帧、约 15.4fps、最大接收间隔 74ms，`activeDisplayId=main:31`，帧 `timestamp` 均可解析。
+遗留问题：
+- Mac host 当前 ISO `timestamp` 是秒级精度，所以 `frameAge` 会天然出现约 0-1000ms 抖动；用 `--maxFrameAgeMs` 时建议阈值设为 `1500` 以上，真正低延迟判断仍应结合 H.264 `timestampUs`、接收 gap 和端到端控制端观感。
+下一步建议：
+- 后续做动态画面/H.264 长稳观察时加 `--requireMonotonicTimestampUs`，必要时再加 `--maxTimestampGapUs`；Windows 控制端端到端延迟仍需要页面侧日志或 UI 指标继续补。
+是否改了协议：否。
+是否需要另一端配合：否；Windows 端可正常拉取，本轮不影响 Windows host/client 功能。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：消除 Windows 控制端连接真实 Mac H.264 时偶发的 WebCodecs 首帧非关键帧解码噪声。
 完成内容：
 - `apps/windows-client/app.js` 新增 Annex B start code 解析和 AVC 长度前缀 NAL 解析，用 IDR/SPS/PPS 判断 H.264 payload 是否关键帧。

@@ -18,6 +18,11 @@ const defaults = {
   displayId: "main",
   requireFrameDisplayDiagnostic: false,
   expectActiveDisplayId: "",
+  requireFrameTimestamp: false,
+  maxFrameAgeMs: 0,
+  requireTimestampUs: false,
+  requireMonotonicTimestampUs: false,
+  maxTimestampGapUs: 0,
   width: 1280,
   height: 720,
   fps: 30,
@@ -57,12 +62,23 @@ function parseArgs(argv) {
   args.displayId = normalizedText(args.displayId || defaults.displayId) || "main";
   args.requireFrameDisplayDiagnostic = booleanArg(args.requireFrameDisplayDiagnostic, defaults.requireFrameDisplayDiagnostic);
   args.expectActiveDisplayId = normalizedText(args.expectActiveDisplayId);
+  args.requireFrameTimestamp = booleanArg(args.requireFrameTimestamp, defaults.requireFrameTimestamp);
+  args.maxFrameAgeMs = nonNegativeInteger(args.maxFrameAgeMs, defaults.maxFrameAgeMs);
+  args.requireTimestampUs = booleanArg(args.requireTimestampUs, defaults.requireTimestampUs);
+  args.requireMonotonicTimestampUs = booleanArg(args.requireMonotonicTimestampUs, defaults.requireMonotonicTimestampUs);
+  args.maxTimestampGapUs = nonNegativeInteger(args.maxTimestampGapUs, defaults.maxTimestampGapUs);
   args.width = positiveInteger(args.width, defaults.width);
   args.height = positiveInteger(args.height, defaults.height);
   args.fps = positiveInteger(args.fps, defaults.fps);
   args.bandwidthKbps = positiveInteger(args.bandwidthKbps, defaults.bandwidthKbps);
   if (args.expectActiveDisplayId) {
     args.requireFrameDisplayDiagnostic = true;
+  }
+  if (args.maxFrameAgeMs > 0) {
+    args.requireFrameTimestamp = true;
+  }
+  if (args.requireMonotonicTimestampUs || args.maxTimestampGapUs > 0) {
+    args.requireTimestampUs = true;
   }
   if (args.requireH264) {
     args.preferredVideoCodec = "h264";
@@ -273,6 +289,21 @@ function createVideoStats(args) {
     activeDisplayIds: new Map(),
     displayNames: new Map(),
     sizes: new Map(),
+    timestampFrames: 0,
+    missingTimestampFrames: 0,
+    frameAgeMinMs: Number.POSITIVE_INFINITY,
+    frameAgeMaxMs: Number.NEGATIVE_INFINITY,
+    frameAgeTotalMs: 0,
+    timestampUsFrames: 0,
+    missingTimestampUsFrames: 0,
+    firstTimestampUs: null,
+    lastTimestampUs: null,
+    timestampUsDeltas: [],
+    durationUsFrames: 0,
+    minDurationUs: Number.POSITIVE_INFINITY,
+    maxDurationUs: 0,
+    durationUsTotal: 0,
+    timestampUsRegressions: 0,
     invalidFrames: [],
   };
 
@@ -299,13 +330,72 @@ function createVideoStats(args) {
     countValue(stats.displayNames, frame.displayName || "");
     countValue(stats.sizes, `${frame.width || "?"}x${frame.height || "?"}`);
 
-    const problems = validateVideoFrame(frame, args);
+    const problems = [
+      ...validateVideoFrame(frame, args),
+      ...trackFrameTiming(stats, frame, now, args),
+    ];
     if (problems.length > 0 && stats.invalidFrames.length < 5) {
       stats.invalidFrames.push(`frame ${frame.frameId ?? "?"}: ${problems.join("; ")}`);
     }
   }
 
   return { stats, addFrame };
+}
+
+function trackFrameTiming(stats, frame, now, args) {
+  const problems = [];
+  const timestampMs = Date.parse(String(frame.timestamp || ""));
+  if (Number.isFinite(timestampMs)) {
+    const ageMs = now - timestampMs;
+    stats.timestampFrames += 1;
+    stats.frameAgeMinMs = Math.min(stats.frameAgeMinMs, ageMs);
+    stats.frameAgeMaxMs = Math.max(stats.frameAgeMaxMs, ageMs);
+    stats.frameAgeTotalMs += ageMs;
+    if (args.maxFrameAgeMs > 0 && ageMs > args.maxFrameAgeMs) {
+      problems.push(`frame age ${Math.round(ageMs)} ms exceeds ${args.maxFrameAgeMs} ms`);
+    }
+  } else {
+    stats.missingTimestampFrames += 1;
+    if (args.requireFrameTimestamp) {
+      problems.push("timestamp missing");
+    }
+  }
+
+  const timestampUs = finiteNumber(frame.timestampUs);
+  if (timestampUs === null) {
+    stats.missingTimestampUsFrames += 1;
+    if (args.requireTimestampUs) {
+      problems.push("timestampUs missing");
+    }
+  } else {
+    stats.timestampUsFrames += 1;
+    stats.firstTimestampUs ??= timestampUs;
+    if (stats.lastTimestampUs !== null) {
+      const deltaUs = timestampUs - stats.lastTimestampUs;
+      if (deltaUs < 0) {
+        stats.timestampUsRegressions += 1;
+        if (args.requireMonotonicTimestampUs) {
+          problems.push(`timestampUs regressed by ${Math.round(Math.abs(deltaUs))} us`);
+        }
+      } else {
+        stats.timestampUsDeltas.push(deltaUs);
+        if (args.maxTimestampGapUs > 0 && deltaUs > args.maxTimestampGapUs) {
+          problems.push(`timestampUs gap ${Math.round(deltaUs)} us exceeds ${args.maxTimestampGapUs} us`);
+        }
+      }
+    }
+    stats.lastTimestampUs = timestampUs;
+  }
+
+  const durationUs = finiteNumber(frame.durationUs);
+  if (durationUs !== null && durationUs > 0) {
+    stats.durationUsFrames += 1;
+    stats.minDurationUs = Math.min(stats.minDurationUs, durationUs);
+    stats.maxDurationUs = Math.max(stats.maxDurationUs, durationUs);
+    stats.durationUsTotal += durationUs;
+  }
+
+  return problems;
 }
 
 function countValue(map, value) {
@@ -325,6 +415,11 @@ function framePayloadBytes(frame) {
     return Math.round((payload.length * 3) / 4);
   }
   return 0;
+}
+
+function finiteNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function hasVideoPayload(frame) {
@@ -369,6 +464,7 @@ function summarizeStats(stats, args) {
   const frameRate = stats.frames > 1 ? ((stats.frames - 1) * 1000) / elapsedMs : 0;
   const maxGap = stats.gaps.length > 0 ? Math.max(...stats.gaps) : 0;
   const avgGap = stats.gaps.length > 0 ? stats.gaps.reduce((sum, gap) => sum + gap, 0) / stats.gaps.length : 0;
+  const timing = summarizeFrameTiming(stats);
   return [
     `frames=${stats.frames}`,
     `rate=${frameRate.toFixed(1)} fps`,
@@ -381,8 +477,54 @@ function summarizeStats(stats, args) {
     `activeDisplayId=${formatCounts(stats.activeDisplayIds)}`,
     `displayName=${formatCounts(stats.displayNames)}`,
     `size=${formatCounts(stats.sizes)}`,
+    ...timing,
     `frameId ${stats.firstFrameId ?? "?"}->${stats.lastFrameId ?? "?"}`,
   ].join(" / ");
+}
+
+function summarizeFrameTiming(stats) {
+  const parts = [];
+  if (stats.timestampFrames > 0) {
+    const avgAgeMs = stats.frameAgeTotalMs / stats.timestampFrames;
+    parts.push(
+      `frameAge min/avg/max=${Math.round(stats.frameAgeMinMs)}/${avgAgeMs.toFixed(1)}/${Math.round(stats.frameAgeMaxMs)} ms`,
+    );
+  }
+  if (stats.timestampUsFrames > 0) {
+    const mediaGap = summarizeNumberList(stats.timestampUsDeltas);
+    const durationAvg = stats.durationUsFrames > 0 ? stats.durationUsTotal / stats.durationUsFrames : 0;
+    parts.push(
+      `timestampUs ${Math.round(stats.firstTimestampUs)}->${Math.round(stats.lastTimestampUs)}`,
+    );
+    parts.push(
+      `mediaGap avg/max=${Math.round(mediaGap.avg)}/${Math.round(mediaGap.max)} us`,
+    );
+    parts.push(
+      `durationUs min/avg/max=${formatFiniteUs(stats.minDurationUs)}/${Math.round(durationAvg)}/${formatFiniteUs(stats.maxDurationUs)}`,
+    );
+  }
+  if (stats.missingTimestampFrames > 0) {
+    parts.push(`timestamp missing=${stats.missingTimestampFrames}`);
+  }
+  if (stats.missingTimestampUsFrames > 0 && stats.timestampUsFrames > 0) {
+    parts.push(`timestampUs missing=${stats.missingTimestampUsFrames}`);
+  }
+  if (stats.timestampUsRegressions > 0) {
+    parts.push(`timestampUs regressions=${stats.timestampUsRegressions}`);
+  }
+  return parts;
+}
+
+function summarizeNumberList(values) {
+  if (values.length === 0) return { avg: 0, max: 0 };
+  return {
+    avg: values.reduce((sum, value) => sum + value, 0) / values.length,
+    max: Math.max(...values),
+  };
+}
+
+function formatFiniteUs(value) {
+  return Number.isFinite(value) ? String(Math.round(value)) : "0";
 }
 
 function formatCounts(map) {
@@ -442,9 +584,14 @@ Options:
   --displayId <id>                 Requested display id in session_offer. Default: main
   --requireFrameDisplayDiagnostic  Require video_frame.activeDisplayId/displayId to be present.
   --expectActiveDisplayId <id>     Require every video_frame active display id to match.
+  --requireFrameTimestamp          Require every video_frame timestamp to parse as ISO time.
+  --maxFrameAgeMs <ms>             Maximum receive-time age from video_frame.timestamp. Default: off
+  --requireTimestampUs             Require every video_frame to include numeric timestampUs.
+  --requireMonotonicTimestampUs    Require timestampUs to never move backwards.
+  --maxTimestampGapUs <us>         Maximum allowed timestampUs delta between frames. Default: off
 
 Examples:
-  node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFrames 100 --minFps 20 --expectActiveDisplayId main
+  node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFrames 100 --minFps 20 --expectActiveDisplayId main --requireMonotonicTimestampUs
   node scripts/mac/observe-mac-video.mjs --preferredVideoCodec mjpeg --requireRealVideo --minFrames 20`);
 }
 

@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/mac/observe-mac-video.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 17:49 | `observe-mac-video` 新增帧 `timestamp` 接收年龄、H.264 `timestampUs` 单调性/媒体间隔和 `durationUs` 统计，并提供可选时间线强校验参数；真实 43770 H.264/JPEG 短测通过。 |
 | Windows Codex | `scripts/windows/check-windows-host-readiness.mjs`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md` | 2026-06-12 17:39 | 新增 Windows host 一键体检脚本：默认检查 Node/FFmpeg、Windows host 语法、input helper 安全干跑、音频设备/WASAPI 和 LAN/firewall；可加 `--probeVideo --probeAudio` 做临时采集短验收。 |
 | Windows Codex | `scripts/windows/test-windows-client-browser.mjs`、`apps/windows-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md` | 2026-06-12 17:22 | Windows 控制端页面级自检新增 `--expectDiscoveryRuntimeBuildId`，可配合 `--diagnosticsOnly` 无密码验收真实 `/discovery.runtime` 是否显示到设备列表和诊断条；已用 Mac 43770 `db48055` 通过。 |
 | Mac Codex | `apps/windows-client/app.js`、`scripts/windows/test-windows-client-browser.mjs`、`apps/windows-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 17:23 | Windows 控制端识别 Annex B/AVC H.264 关键帧，decoder 重配置后等待关键帧再解码；`--requireH264` 自检要求 `H264Errors=0`。 |

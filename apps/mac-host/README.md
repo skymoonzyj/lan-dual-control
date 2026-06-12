@@ -129,12 +129,12 @@ scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireH264 -ExpectInpu
 在 Mac 本机持续观察视频帧稳定性：
 
 ```bash
-node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFrames 100 --minFps 20 --maxGapMs 1000 --expectActiveDisplayId main
+node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFrames 100 --minFps 20 --maxGapMs 1000 --expectActiveDisplayId main --requireMonotonicTimestampUs
 ```
 
-该脚本会只读统计 `video_frame` 帧数、接收 FPS、最大帧间隔、payload 大小、codec、encoding、`capturePipeline`、source、`activeDisplayId` 和 `displayName`，用于排查 H.264/JPEG 帧率不稳、回退到 mock、采集管线漂移或显示器来源漂移。需要长时间强校验显示器来源时可加 `--requireFrameDisplayDiagnostic` 或 `--expectActiveDisplayId main`；JPEG 兜底链路可用 `--preferredVideoCodec mjpeg --requireRealVideo --expectActiveDisplayId main` 观察。
+该脚本会只读统计 `video_frame` 帧数、接收 FPS、最大帧间隔、payload 大小、codec、encoding、`capturePipeline`、source、`activeDisplayId`、`displayName`、帧 `timestamp` 接收年龄，以及 H.264 `timestampUs` / `durationUs` 媒体时间线，用于排查 H.264/JPEG 帧率不稳、回退到 mock、采集管线漂移、显示器来源漂移或编码时间线跳变。需要长时间强校验显示器来源时可加 `--requireFrameDisplayDiagnostic` 或 `--expectActiveDisplayId main`；需要校验 H.264 时间线时可加 `--requireTimestampUs --requireMonotonicTimestampUs --maxTimestampGapUs <us>`；JPEG 兜底链路可用 `--preferredVideoCodec mjpeg --requireRealVideo --expectActiveDisplayId main --requireFrameTimestamp` 观察。当前 Mac host 的 ISO `timestamp` 为秒级精度，`--maxFrameAgeMs` 建议设为 `1500` 以上，避免把正常秒级取整误判为旧帧。
 
-当前真机基线：H.264 30 秒观察 877 帧、约 29.2fps、最大间隔 45ms，全部为 `h264` / `annexb-base64` / `screencapturekit-h264`；空闲/低变化桌面下，H.264 5 分钟观察收到 3168 帧、约 10.6fps，60 秒低门槛复测收到 654 帧、约 10.9fps、最大间隔 883ms；JPEG 60 秒对照收到 983 帧、约 16.4fps。后续做长时间视频强校验时，需要区分静态桌面和动态画面，静态桌面不要直接把 `--minFps 25` 当硬门槛。
+当前真机基线：H.264 30 秒观察 877 帧、约 29.2fps、最大间隔 45ms，全部为 `h264` / `annexb-base64` / `screencapturekit-h264`；时间线增强后短测 H.264 3 秒 89 帧、约 29.2fps、最大接收间隔 39ms，`timestampUs` 单调，媒体间隔平均/最大 `34281/41668us`，`durationUs=33333`；JPEG 2 秒 31 帧、约 15.4fps、最大接收间隔 74ms，帧 `timestamp` 均可解析。空闲/低变化桌面下，H.264 5 分钟观察收到 3168 帧、约 10.6fps，60 秒低门槛复测收到 654 帧、约 10.9fps、最大间隔 883ms；JPEG 60 秒对照收到 983 帧、约 16.4fps。后续做长时间视频强校验时，需要区分静态桌面和动态画面，静态桌面不要直接把 `--minFps 25` 当硬门槛。
 
 H.264 流式启动有 5 秒 watchdog：如果 ScreenCaptureKit/VideoToolbox 启动阶段迟迟没有建立 `videoStream`，Mac host 会发送带 `streamFallbackReason` 的 `display_settings_ack` 并回退 `background-jpeg`，避免控制端长时间等待黑屏；迟到启动成功的旧 H.264 流会被 generation token 停止，不会覆盖新会话。
 
