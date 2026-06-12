@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `apps/windows-client/README.md`, 交接 docs | 2026-06-13 02:04 | Windows 控制端本机被控体检输出顶部显示体检档位、当前 build、视频/音频帧新鲜度阈值；diagnosticsOnly 和临时浏览器评估通过。 |
 | Windows Codex | `apps/windows-desktop/README.md`, 交接 docs | 2026-06-13 01:55 | Windows 桌面 README 同步本机被控部署档会跑带帧新鲜度和 timestamp 单调性强校验的视频/音频短观察。 |
 | Windows Codex | `scripts/windows/check-windows-host-readiness.mjs`, `apps/windows-host/README.md`, 交接 docs | 2026-06-13 01:52 | Windows host readiness 的视频/音频 probe 和 deploy/deep 档接入帧新鲜度与 timestamp 单调性强校验；默认阈值 1000ms，可用对应 maxFrameAge 选项设为 0 临时关闭。 |
 | Windows Codex | `scripts/windows/observe-windows-host-audio.mjs`, `apps/windows-host/README.md`, 交接 docs | 2026-06-13 01:45 | Windows host 音频观察脚本新增 `--help/-h` 纯帮助入口；README、当前状态和交接记录已同步。 |

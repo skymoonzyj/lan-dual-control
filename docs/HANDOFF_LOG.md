@@ -19,6 +19,34 @@
 
 ## 2026-06-13 Windows Codex
 
+日期：2026-06-13 02:04
+开发端：Windows Codex
+本轮目标：让 Windows 控制端“本机被控”体检结果直接显示 readiness 帧新鲜度阈值。
+完成内容：
+- Windows 控制端 `readinessLines` 输出顶部新增体检档位、当前代码 build、视频帧新鲜度阈值和音频帧新鲜度阈值。
+- Windows 控制端 README 已说明桌面版本机被控面板会显示体检帧新鲜度阈值。
+修改文件：
+- `apps/windows-client/app.js`
+- `apps/windows-client/README.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly`
+- 临时 Edge/CDP 浏览器评估：调用 `readinessLines` 模拟 deploy 结果，确认输出包含 build、视频/音频 frame age 阈值和观察项。
+验证结果：
+- 语法检查通过。
+- diagnosticsOnly 页面自检通过。
+- 临时浏览器评估通过：输出 `体检档位：部署 | 当前代码：abc1234 | 视频帧新鲜度阈值：1000 ms | 音频帧新鲜度阈值：750 ms`。
+遗留问题：
+- 页面自检脚本本轮未改，因为 Mac 端正在处理 `scripts/windows/test-windows-client-browser.mjs` 的 `--help` 入口；等其落库后可再补一个正式断言。
+下一步建议：
+- Mac 端 help 线落库后，Windows 端可以补 `test-windows-client-browser --diagnosticsOnly` 对 readiness 输出头的固定断言。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-13 Windows Codex
+
 日期：2026-06-13 01:55
 开发端：Windows Codex
 本轮目标：同步 Windows 桌面壳 README 的本机被控体检说明。

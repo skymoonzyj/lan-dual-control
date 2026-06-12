@@ -2855,13 +2855,23 @@ function readinessProfileLabel(profile) {
 function readinessLines(result) {
   const details = result?.json;
   if (!details?.results) return localHostCommandLines(result);
-  return details.results.flatMap((item) => {
-    const marker = item.ok ? "[OK]" : "[FAIL]";
-    const lines = [`${marker} ${item.label} · ${item.summary || "无摘要"}`];
-    for (const warning of item.warnings || []) lines.push(warning);
-    for (const error of item.errors || []) lines.push(error);
-    return lines;
-  });
+  const args = details.args || {};
+  const header = [
+    `体检档位：${readinessProfileLabel(args.profile || elements.localHostReadinessProfileSelect.value)}`,
+  ];
+  if (args.currentBuildId) header.push(`当前代码：${args.currentBuildId}`);
+  if (args.maxVideoFrameAgeMs != null) header.push(`视频帧新鲜度阈值：${args.maxVideoFrameAgeMs} ms`);
+  if (args.maxAudioFrameAgeMs != null) header.push(`音频帧新鲜度阈值：${args.maxAudioFrameAgeMs} ms`);
+  return [
+    ...header,
+    ...details.results.flatMap((item) => {
+      const marker = item.ok ? "[OK]" : "[FAIL]";
+      const lines = [`${marker} ${item.label} · ${item.summary || "无摘要"}`];
+      for (const warning of item.warnings || []) lines.push(warning);
+      for (const error of item.errors || []) lines.push(error);
+      return lines;
+    }),
+  ];
 }
 
 function updateLocalHostControls() {
