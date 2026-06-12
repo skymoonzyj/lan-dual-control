@@ -112,6 +112,7 @@ Windows 端：
 - macOS 被控端已接入 CGEvent 输入注入；默认 `LAN_DUAL_INPUT_MODE=inject`，可切到 `log` 做安全联调。
 - Windows 控制端当前已可区分真实 JPEG、H.264 视频帧和模拟视频帧，并记录图片或 WebCodecs 解码失败；`scripts/windows/test-mac-host.ps1` 可用于真机连通自检，显式加 `-ClipboardText -ClipboardFile` 可验证 macOS 文本和文件剪贴板写入。
 - 真 Mac 已通过强校验探针验证真实 JPEG 首帧、H.264 Annex B 首帧和 PCM 音频帧：`-RequireRealVideo` 会拒绝 mock/fallback 视频帧，`-RequireH264` 会确认 SPS/PPS/IDR，`-RequireAudio` 会确认 `pcm-f32le-base64` payload，`-ExpectInputMode log` 可确认安全输入模式。
+- Mac 端新增 `scripts/mac/observe-mac-video.mjs`，可持续观察 `video_frame` FPS、最大接收间隔、payload、codec、encoding、capturePipeline 和 source；真机 H.264 3 秒 89 帧约 29.2fps，JPEG 兜底 2 秒 37 帧约 17.9fps。
 - Mac 端新增 `scripts/mac/stress-mac-host.mjs`，可循环复用 canonical 探针做 H.264 + PCM 连续连接稳定性检查；真机 10 次循环已通过，监听进程 FD 保持 `30->30`。
 - Mac 端新增 `scripts/mac/observe-mac-audio.mjs`，可持续观察系统声音 `audio_frame` 帧率、接收间隔、payload 和电平；真机 10 秒观察收到 501 帧，约 50fps，最大间隔 22ms。
 - Mac 端新增 `scripts/mac/check-input-keymap.mjs`，可静态验证 CGEvent 键盘映射覆盖；当前常用 `KeyboardEvent.code` 和 `event.key` 键组全覆盖。

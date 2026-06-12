@@ -107,6 +107,14 @@ scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireH264 -ExpectInpu
 
 `-RequireH264` 会检查 `codec=h264`、`encoding=annexb-base64`、`capturePipeline=screencapturekit-h264`，并解析首帧 Annex B NAL 单元确认关键帧带 SPS、PPS 和 IDR。
 
+在 Mac 本机持续观察视频帧稳定性：
+
+```bash
+node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFrames 100 --minFps 20 --maxGapMs 1000
+```
+
+该脚本会只读统计 `video_frame` 帧数、接收 FPS、最大帧间隔、payload 大小、codec、encoding、`capturePipeline` 和 source，用于排查 H.264/JPEG 帧率不稳、回退到 mock 或采集管线漂移。JPEG 兜底链路可用 `--preferredVideoCodec mjpeg --requireRealVideo` 观察。
+
 验证真实系统声音采集和控制端播放：
 
 ```powershell

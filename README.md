@@ -136,3 +136,11 @@ scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x
 ```powershell
 scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireRealVideo -ExpectInputMode log
 ```
+
+Mac 本机可持续观察视频帧节奏：
+
+```bash
+node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFrames 100 --minFps 20
+```
+
+该脚本只读连接已运行的 Mac host，统计 `video_frame` FPS、最大帧间隔、payload 大小、codec、encoding 和 `capturePipeline`；也可用 `--preferredVideoCodec mjpeg --requireRealVideo` 观察 JPEG 兜底链路。

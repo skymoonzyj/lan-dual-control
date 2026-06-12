@@ -58,6 +58,41 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：新增 Mac host 视频持续帧观察脚本，便于持续验证真实 Mac H.264/JPEG 帧率、间隔和采集管线。
+完成内容：
+- 新增 `scripts/mac/observe-mac-video.mjs`。
+- 脚本只读连接已运行的 Mac host，不启动/停止服务，不发送输入事件。
+- 支持 `--preferredVideoCodec h264|mjpeg`、`--requireH264`、`--requireRealVideo`、`--expectedCodec`、`--expectedPipeline`、`--minFrames`、`--minFps` 和 `--maxGapMs`。
+- 统计 `video_frame` 帧数、实际 FPS、平均/最大接收间隔、payload 大小、codec、encoding、`capturePipeline`、source、尺寸和 frameId 范围。
+- README、Mac host README、当前状态、下一步和任务板已补充使用说明。
+修改文件：
+- `scripts/mac/observe-mac-video.mjs`
+- `apps/mac-host/README.md`
+- `README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/observe-mac-video.mjs`
+- `node scripts/mac/observe-mac-video.mjs --durationMs 3000 --requireH264 --minFrames 20 --minFps 5 --maxGapMs 1000`
+- `node scripts/mac/observe-mac-video.mjs --durationMs 2000 --preferredVideoCodec mjpeg --requireRealVideo --minFrames 10 --minFps 5 --maxGapMs 1000`
+验证结果：
+- 真实 Mac host `127.0.0.1:43770` H.264 观察通过：3 秒 89 帧，约 29.2fps，最大间隔 42ms，pipeline=`screencapturekit-h264`，encoding=`annexb-base64`。
+- JPEG 兜底观察通过：2 秒 37 帧，约 17.9fps，最大间隔 71ms，pipeline=`background-jpeg`，source=`screen`。
+遗留问题：
+- 这轮只新增观察工具；更长时间 30-60 秒观察、CPU 占用采样和端到端 Windows 解码体验仍需继续验证。
+下一步建议：
+- Mac 端可用 `node scripts/mac/observe-mac-video.mjs --durationMs 30000 --requireH264 --minFrames 600 --minFps 20 --maxGapMs 1000` 做长时间 H.264 帧节奏观察。
+- Windows 控制端端到端解码和 JPEG 回退体验仍由 Windows 端页面级自检继续覆盖。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：给 Mac client 页面级自检补可选音频验收模式，方便后续验证 Windows WASAPI host 到 Mac 控制端的 PCM 播放链路。
 完成内容：
 - `scripts/windows/test-mac-client-browser.mjs` 新增 `--enableAudio`、`--expectAudioFrame`、`--expectAudioPayload`、`--expectAudioPlayback` 和 `--audioMode <mode>`。
