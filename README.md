@@ -105,7 +105,7 @@ Mac 控制 Windows 页面级自检可运行：
 node scripts\windows\test-mac-client-browser.mjs
 ```
 
-它会临时启动 Windows 被控端和 Mac 控制端页面，自动确认 Windows 画面、输入确认、最近连接保存/回填且不保存密码、文本剪贴板、Mac 本机文本剪贴板读取/监听和文件剪贴板发送；Windows 上默认要求文本写入系统剪贴板、文件写入系统文件剪贴板。非 Windows 开发环境可加 `--mockVideo --allowClipboardFallback` 验证页面和临时目录回退链路。
+它会临时启动 Windows 被控端和 Mac 控制端页面，自动确认 Windows 画面、输入确认、Mac `Command+C` 映射为 Windows `Ctrl+C`、最近连接保存/回填且不保存密码、文本剪贴板、Mac 本机文本剪贴板读取/监听和文件剪贴板发送；Windows 上默认要求文本写入系统剪贴板、文件写入系统文件剪贴板。非 Windows 开发环境可加 `--mockVideo --allowClipboardFallback` 验证页面和临时目录回退链路。
 
 Mac 控制端认证失败提示可运行：
 

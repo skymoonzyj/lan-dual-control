@@ -369,6 +369,40 @@ function buildSnapshotExpression() {
   })()`;
 }
 
+function installWebSocketSendRecorderExpression() {
+  return `(() => {
+    window.__lanDualSentMessages = [];
+    if (window.__lanDualWebSocketSendHooked) return true;
+    const OriginalWebSocket = window.WebSocket;
+    function RecordingWebSocket(...args) {
+      const socket = new OriginalWebSocket(...args);
+      const originalSend = socket.send.bind(socket);
+      socket.send = (data) => {
+        try {
+          const parsed = JSON.parse(String(data));
+          window.__lanDualSentMessages.push(parsed);
+          if (window.__lanDualSentMessages.length > 200) {
+            window.__lanDualSentMessages.shift();
+          }
+        } catch {
+          window.__lanDualSentMessages.push({ raw: String(data) });
+        }
+        return originalSend(data);
+      };
+      return socket;
+    }
+    Object.setPrototypeOf(RecordingWebSocket, OriginalWebSocket);
+    RecordingWebSocket.prototype = OriginalWebSocket.prototype;
+    RecordingWebSocket.CONNECTING = OriginalWebSocket.CONNECTING;
+    RecordingWebSocket.OPEN = OriginalWebSocket.OPEN;
+    RecordingWebSocket.CLOSING = OriginalWebSocket.CLOSING;
+    RecordingWebSocket.CLOSED = OriginalWebSocket.CLOSED;
+    window.WebSocket = RecordingWebSocket;
+    window.__lanDualWebSocketSendHooked = true;
+    return true;
+  })()`;
+}
+
 function matchesExpectedAuthFailure(snapshot, args) {
   if (!snapshot.connection.includes("认证失败")) {
     return false;
@@ -427,6 +461,7 @@ async function run() {
       args.timeoutMs,
       "page load",
     );
+    await evaluate(session, installWebSocketSendRecorderExpression());
 
     await evaluate(
       session,
@@ -610,6 +645,55 @@ async function run() {
     if (inputSnapshot.logs.length > 0) {
       print("INFO", `Recent logs: ${inputSnapshot.logs.join(" | ")}`);
     }
+
+    await evaluate(
+      session,
+      `(() => {
+        const viewport = document.querySelector("#remoteViewport");
+        viewport.focus();
+        viewport.dispatchEvent(new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "c",
+          code: "KeyC",
+          metaKey: true,
+        }));
+        return true;
+      })()`,
+    );
+
+    const shortcutSnapshot = await waitFor(
+      async () => {
+        const value = await evaluate(
+          session,
+          `(() => {
+            const shortcut = [...(window.__lanDualSentMessages || [])]
+              .reverse()
+              .find((message) => message.type === "input_event" && message.event === "key" && message.code === "KeyC");
+            if (!shortcut) return null;
+            const logs = [...document.querySelectorAll("#eventLog li")]
+              .slice(0, 10)
+              .map((item) => item.innerText.replace(/\\s+/g, " "));
+            return {
+              shortcut,
+              input: document.querySelector("#inputStatus")?.textContent || "",
+              hint: document.querySelector("#viewportHint")?.textContent || "",
+              logs,
+            };
+          })()`,
+        );
+        if (!value?.shortcut) return null;
+        const shortcut = value.shortcut;
+        const mappedToCtrl = shortcut.ctrlKey === true && shortcut.metaKey === false && shortcut.modifiers?.includes("ctrl");
+        const preservedLocalMeta = shortcut.localMetaKey === true && shortcut.shortcutProfile === "mac_command_to_windows_ctrl";
+        const hintVisible = value.hint.includes("Command") && value.hint.includes("Ctrl");
+        const logVisible = value.logs.some((line) => line.includes("Command→Ctrl+C"));
+        return mappedToCtrl && preservedLocalMeta && hintVisible && logVisible ? value : null;
+      },
+      args.timeoutMs,
+      "Mac client Command-to-Ctrl shortcut mapping",
+    );
+    print("OK", `Shortcut: Command+C -> ctrlKey=${shortcutSnapshot.shortcut.ctrlKey}, metaKey=${shortcutSnapshot.shortcut.metaKey}`);
 
     const clipboardText = `Windows self-test clipboard ${Date.now()}`;
     await evaluate(

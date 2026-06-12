@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `apps/mac-client/*`、`scripts/windows/test-mac-client-browser.mjs`、`README.md`、`apps/mac-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 12:31 | Mac client 明确提示 `Command` 会按 Windows `Ctrl` 发送；页面级自检新增 `Command+C -> ctrlKey=true/metaKey=false` 断言。 |
 | Windows Codex | `scripts/windows/check-windows-audio-devices.mjs`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 12:22 | 新增 Windows DirectShow 音频设备检查脚本；默认只列设备不采集，支持显式 `--probe` 短时 PCM 检测。本机列出 7 个设备、4 个音频设备。 |
 | Mac Codex | `apps/mac-client/*`、`scripts/windows/test-mac-client-browser.mjs`、`README.md`、`apps/mac-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 12:20 | Mac client 新增最近连接保存/回填；只保存 host、port 和时间，不保存密码；页面级自检已覆盖保存、回填和 localStorage 不含密码。 |
 | Windows Codex | `scripts/windows/observe-windows-host-video.mjs`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 12:14 | Windows host 视频观察脚本新增 `--ffmpeg`，并自动识别 `C:\DevTools\ffmpeg\bin\ffmpeg.exe`；短时 FFmpeg 真实视频观察通过，约 9.31 FPS、掉帧 0。 |

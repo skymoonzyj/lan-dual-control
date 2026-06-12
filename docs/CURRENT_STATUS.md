@@ -18,10 +18,10 @@
 - Windows 控制端已有中文界面、局域网连接、连接历史、画质设置、缩放模式、认证失败剩余次数提示、诊断状态条、真实 Mac 音频 PCM 播放、文本剪贴板、远端文件托盘、桌面版远端文件写入 Windows 系统文件剪贴板和桌面壳。
 - Windows 控制端可连接本机假 Mac 服务，也可用脚本探测真实 Mac 被控端；假 Mac 服务已对齐 3 次认证失败断开行为。
 - Windows 被控端已有 WebSocket 骨架、认证、FFmpeg gdigrab MJPEG 视频帧、无 FFmpeg 时的 Windows 系统截图 JPEG 回退、默认模拟音频帧、显式 DirectShow PCM 音频设备采集入口、文本和文件剪贴板接收、最小 SendInput 输入注入。
-- Windows 被控端新增 `scripts/windows/test-windows-host.ps1` 本机自检入口，可临时启动本机服务并验证真实 JPEG 首帧、文本剪贴板和文件剪贴板接收；`scripts/windows/observe-windows-host-video.mjs` 可观察持续视频帧并统计实际 FPS、最大间隔和采集管线；`scripts/windows/test-mac-client-browser.mjs` 可启动 Mac client 页面验证 Mac 反控 Windows 的真实 JPEG 画面、`input_ack`、最近连接保存/回填且不保存密码、文本剪贴板、Mac 本机文本剪贴板读取/监听、文件剪贴板发送和认证失败剩余次数提示；`scripts/windows/test-auth-retry-policy.mjs` 可回归 Windows host 和假 Mac 的 3 次认证失败断开策略。
+- Windows 被控端新增 `scripts/windows/test-windows-host.ps1` 本机自检入口，可临时启动本机服务并验证真实 JPEG 首帧、文本剪贴板和文件剪贴板接收；`scripts/windows/observe-windows-host-video.mjs` 可观察持续视频帧并统计实际 FPS、最大间隔和采集管线；`scripts/windows/test-mac-client-browser.mjs` 可启动 Mac client 页面验证 Mac 反控 Windows 的真实 JPEG 画面、`input_ack`、Mac `Command+C` 到 Windows `Ctrl+C` 映射、最近连接保存/回填且不保存密码、文本剪贴板、Mac 本机文本剪贴板读取/监听、文件剪贴板发送和认证失败剩余次数提示；`scripts/windows/test-auth-retry-policy.mjs` 可回归 Windows host 和假 Mac 的 3 次认证失败断开策略。
 - Windows 被控端已限制同一 WebSocket 连接内最多 3 次密码认证失败，失败耗尽后返回 `LAN002` 并关闭连接。
 - Windows 被控端真实屏幕采集目前默认优先 FFmpeg gdigrab 持续 MJPEG，PowerShell/System.Drawing 系统截图作为兜底，全部失败时回退模拟帧；音频默认仍为模拟帧，但可显式配置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 试用 FFmpeg DirectShow PCM，后续仍需升级 Windows Graphics Capture 和 WASAPI loopback。
-- Mac 控制 Windows 的 Web 控制端原型已新增到 `apps/mac-client`：可发现/连接 Windows host、显示 JPEG/data-url 画面、发送鼠标/键盘输入事件并显示 `input_ack`，认证失败时显示剩余尝试次数并释放连接按钮，成功连接后可保存最近 host/port/时间并一键回填且不保存密码，也可手动发送文本 `clipboard_text` 并显示 `clipboard_ack`，可读取 Mac 本机文本剪贴板，用户显式开启后可监听文本变化并自动发送，以及选择文件后按 `clipboard_file_*` 分块发送；新增 PCM 音频播放入口，可播放 `pcm-f32le-base64` 过渡音频帧，mock 音频帧只显示状态。Windows 本机页面级自检已验证真实 `windows-ffmpeg-gdigrab-mjpeg` 画面、log 模式输入确认和文本剪贴板 `system` 确认；脚本现已可注入临时小文件并在 Windows 上默认要求文件剪贴板 `saveMode=clipboard`。
+- Mac 控制 Windows 的 Web 控制端原型已新增到 `apps/mac-client`：可发现/连接 Windows host、显示 JPEG/data-url 画面、发送鼠标/键盘输入事件并显示 `input_ack`，页面会提示 Mac `Command` 按 Windows `Ctrl` 发送且自检已覆盖该映射，认证失败时显示剩余尝试次数并释放连接按钮，成功连接后可保存最近 host/port/时间并一键回填且不保存密码，也可手动发送文本 `clipboard_text` 并显示 `clipboard_ack`，可读取 Mac 本机文本剪贴板，用户显式开启后可监听文本变化并自动发送，以及选择文件后按 `clipboard_file_*` 分块发送；新增 PCM 音频播放入口，可播放 `pcm-f32le-base64` 过渡音频帧，mock 音频帧只显示状态。Windows 本机页面级自检已验证真实 `windows-ffmpeg-gdigrab-mjpeg` 画面、log 模式输入确认和文本剪贴板 `system` 确认；脚本现已可注入临时小文件并在 Windows 上默认要求文件剪贴板 `saveMode=clipboard`。
 
 ## Mac 端状态
 

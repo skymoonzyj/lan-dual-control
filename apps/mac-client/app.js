@@ -525,10 +525,26 @@ function keyboardModifiers(event) {
   return modifiers;
 }
 
+function keyboardDisplayKey(event) {
+  if (!event.key) return event.code || "key";
+  return event.key.length === 1 ? event.key.toUpperCase() : event.key;
+}
+
+function keyboardSendLabel(event) {
+  const key = keyboardDisplayKey(event);
+  if (event.metaKey) return `Command→Ctrl+${key}`;
+  if (event.ctrlKey) return `Ctrl+${key}`;
+  if (event.altKey || event.shiftKey) {
+    return [...keyboardModifiers(event), key].join("+");
+  }
+  return key;
+}
+
 function sendKeyboardEvent(event) {
   if (!state.authenticated) return;
   state.inputSequence += 1;
   const modifiers = keyboardModifiers(event);
+  const label = keyboardSendLabel(event);
   const envelope = send({
     type: "input_event",
     event: "key",
@@ -552,7 +568,12 @@ function sendKeyboardEvent(event) {
     localMetaKey: event.metaKey,
   });
   if (envelope) {
-    elements.inputStatus.textContent = `键盘已发送 · ${event.key}`;
+    elements.inputStatus.textContent = event.metaKey || event.ctrlKey
+      ? `快捷键已发送 · ${label}`
+      : `键盘已发送 · ${label}`;
+    if (event.metaKey) {
+      logEvent("快捷键映射", `${label} · 发往 Windows 为 Ctrl`);
+    }
   }
 }
 

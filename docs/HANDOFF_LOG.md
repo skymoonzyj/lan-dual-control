@@ -21,6 +21,45 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：打磨 Mac 控制 Windows 原型的快捷键提示，并把 `Command` 到 Windows `Ctrl` 的映射固化进页面级自检。
+完成内容：
+- 远控画面提示改为明确说明 Mac `Command` 会按 Windows `Ctrl` 发送。
+- 发送 `Command` 快捷键时，输入状态和事件日志会显示 `Command→Ctrl+键`，人工测试时更容易判断映射是否生效。
+- `scripts/windows/test-mac-client-browser.mjs` 新增 WebSocket 发送记录器，只在浏览器测试进程中拦截本页发出的 JSON。
+- 页面级自检现在会模拟 `Command+C`，断言发出的 `input_event` 为 `ctrlKey=true`、`metaKey=false`、`localMetaKey=true`、`shortcutProfile=mac_command_to_windows_ctrl`。
+修改文件：
+- `apps/mac-client/index.html`
+- `apps/mac-client/app.js`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `git diff --check`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --clientPort 5190 --debugPort 9341`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3 --clientPort 5191 --debugPort 9342`
+验证结果：
+- 普通页面级自检通过，并输出 `Shortcut: Command+C -> ctrlKey=true, metaKey=false`。
+- 连接、最近连接、输入 ack、文本剪贴板、本机剪贴板读取/监听和文件剪贴板回归均通过。
+- 认证失败回归仍通过：`认证失败 · 剩余 2/3 次`。
+遗留问题：
+- 这轮只覆盖 Mac 控制 Windows 页面端的 `Command` 到 `Ctrl` 发送约定；更复杂的输入法、功能键、按下/抬起时序仍可后续继续打磨。
+下一步建议：
+- Windows 端完成 WASAPI loopback 后，Mac 端可继续用 `apps/mac-client` 做真实 Windows PCM 音频验收。
+- Mac 端后续可继续补最近连接清空/重命名，或扩展快捷键自检到 `Command+V`、`Command+A`。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：给 Mac 控制 Windows 原型增加最近连接保存和回填，改善重复连接体验。
 完成内容：
 - `apps/mac-client` 连接面板新增最近连接下拉框和“使用最近”按钮。
