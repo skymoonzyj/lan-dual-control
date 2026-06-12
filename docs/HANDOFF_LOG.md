@@ -17,6 +17,40 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
+本轮目标：补 Windows host 防火墙和局域网可达性只读自检，方便 Mac 反控 Windows 真机联调前快速判断是不是服务监听地址或 Windows 防火墙问题。
+完成内容：
+- 新增 `scripts/windows/check-windows-firewall.mjs`，默认只读检查本机局域网 IPv4、目标端口监听地址、loopback/LAN TCP 探测、当前网络配置、防火墙 profile 和 TCP 入站 allow 规则。
+- 支持 `--host`、`--port`、`--timeoutMs`、`--requireOpen`、`--requireRule`、`--strict`、`--skipFirewall` 和 `--json`；默认不修改系统防火墙。
+- 当缺少入站放行规则时，脚本会给出管理员 PowerShell 建议命令，例如 `New-NetFirewallRule ... -Profile Private`，但不会自动执行。
+- Windows host README、当前状态、下一步和任务板已同步；任务板把“防火墙/局域网可达性只读检查脚本”标记完成，同时保留“桌面端防火墙友好提示和一键引导”为后续任务。
+修改文件：
+- `scripts/windows/check-windows-firewall.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-firewall.mjs`
+- `node scripts/windows/check-windows-firewall.mjs --host 127.0.0.1 --port 43770 --timeoutMs 300`
+- 临时启动 `apps/windows-host/server.mjs 43772 0.0.0.0`，再运行 `node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43772 --requireOpen --timeoutMs 700`
+验证结果：
+- 无 host 运行时，脚本能正常报告 `43770` 未监听，并提示启动 `node apps\windows-host\server.mjs 43770 0.0.0.0`。
+- 临时 host 活体检查通过：监听 `0.0.0.0:43772`，`127.0.0.1:43772` 和本机 `192.168.31.68:43772` TCP 探测均 open。
+- 本机当前网络 profile 为 Public；Windows 防火墙 profile 当前显示 disabled，因此缺少 allow rule 只作为 warning，不阻塞默认检查。
+遗留问题：
+- 这轮只做脚本和文档，没有把防火墙检查接入桌面 UI，也没有自动申请管理员权限添加规则。
+- 真机 Mac 反控 Windows 前，仍需要在 Windows host 实际运行 `0.0.0.0:43770` 时跑一次 `--requireOpen`。
+下一步建议：
+- 桌面端后续可以在“启动 Windows 被控端/反控准备”页面调用该脚本或等价原生检查，把“只监听 127.0.0.1”“防火墙未放行”“当前网络是 Public”等情况转成中文提示。
+是否改了协议：否。
+是否需要另一端配合：否；Mac 端后续真机连接 Windows 前，可让 Windows 端先跑该脚本确认可达性。
+
 ## 2026-06-12 Mac Codex
 
 日期：2026-06-12

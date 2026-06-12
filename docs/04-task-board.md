@@ -176,7 +176,8 @@ Windows 端：
 - [x] 接收文本剪贴板并在 Windows 上写入系统剪贴板。
 - [x] 接收文件剪贴板并在 Windows 上写入系统文件剪贴板。
 - [x] 使用 SendInput 注入输入。
-- [ ] 处理防火墙提示。
+- [x] 防火墙/局域网可达性只读检查脚本。
+- [ ] 桌面端防火墙友好提示和一键引导。
 
 Mac 端：
 
@@ -209,6 +210,7 @@ Mac 端：
 - Windows 被控端已接入常驻 C# SendInput helper：Windows 上通过 helper 调用 `SendInput`/`SetCursorPos` 注入鼠标、滚轮和常用键盘事件，避免每个事件重复启动 PowerShell；非 Windows 开发环境回退为日志模式。`scripts/windows/measure-windows-input-helper.mjs` 可用不支持事件安全干跑，量化 helper 冷启动和热路径延迟。
 - macOS 被控端、Windows 被控端和假 Mac 服务处理输入事件后都会返回 `input_ack`，控制端和探针可确认输入已注入、仅记录或被拒绝。
 - Windows 被控端已新增本机一键自检脚本 `scripts/windows/test-windows-host.ps1`，可临时启动服务并验证真实 JPEG 首帧、文本剪贴板和文件剪贴板接收；默认不发送输入事件。
+- Windows 被控端已新增 `scripts/windows/check-windows-firewall.mjs` 只读检查脚本，可列出本机局域网 IP、端口监听、TCP 探测、网络配置和 TCP 入站放行规则；默认不改系统防火墙，只在缺少放行时给出管理员 PowerShell 建议命令。
 - Windows 被控端已新增视频持续帧观察脚本 `scripts/windows/observe-windows-host-video.mjs`，可统计实际 FPS、最大帧间隔、掉帧数、采集管线、请求码率和 `jpegQuality`；当前本机 FFmpeg gdigrab 普通启动已可协商 60Hz，720p/60Hz 观察约 56.9 FPS，System.Drawing 兜底仍约 3 FPS。
 - Windows 被控端已新增显式 WASAPI loopback 系统声音入口；设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi` 后可采集默认播放设备系统声音并发送 `pcm-f32le-base64`，默认未显式开启时继续发送模拟音频帧，避免误采。DirectShow PCM 入口仍保留给虚拟声卡/loopback 设备兼容验证。`observe-windows-host-audio.mjs` 已支持 30 秒稳态观察和 `--playTone --requireLevel` 短测试音电平强校验；本机 30 秒稳态 50 FPS、最大间隔 33ms，测试音最高电平 0.222。
 - Windows 侧已新增 `scripts/windows/test-mac-client-browser.mjs` 页面级自检，可自动启动 Windows host 和 `apps/mac-client`，确认真实 `windows-ffmpeg-gdigrab-mjpeg` 或 `windows-gdi-jpeg` 画面、默认 1080P/60Hz/20Mbps 和 2K/60Hz/40Mbps 的码率/JPEG 质量回执、`input_ack · log`、Mac `Command+C` 映射为 Windows `Ctrl+C`、最近连接保存/回填/清空且不保存密码、文本剪贴板 `clipboard_ack`、Mac 本机文本剪贴板读取/监听、文件剪贴板 `clipboard_file_result`，也可用 `--enableAudio` / `--expectAudioPayload` / `--expectAudioPlayback` 验收反控音频；Windows 本机强校验真实 WASAPI PCM 时可直接用 `--requireAudio`，认证失败可用 `--expectAuthFailure` 回归剩余次数提示。
