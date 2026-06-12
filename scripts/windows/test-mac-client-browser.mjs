@@ -358,6 +358,8 @@ function buildSnapshotExpression() {
       fileClipboard: text("#fileClipboardStatus"),
       recentConnection: text("#recentConnectionStatus"),
       recentConnectionValue: document.querySelector("#recentConnectionSelect")?.value || "",
+      recentConnectionDisabled: document.querySelector("#recentConnectionSelect")?.disabled || false,
+      clearRecentConnectionsDisabled: document.querySelector("#clearRecentConnectionsButton")?.disabled || false,
       recentConnectionOptions: [...document.querySelectorAll("#recentConnectionSelect option")]
         .map((option) => ({ value: option.value, text: option.textContent || "" })),
       recentConnectionStorage: localStorage.getItem("lanDualMacClientRecentConnections") || "",
@@ -590,6 +592,28 @@ async function run() {
       "Mac client recent connection apply",
     );
     print("OK", `Recent apply: ${recentApplySnapshot.host}:${recentApplySnapshot.port}`);
+
+    await evaluate(
+      session,
+      `(() => {
+        document.querySelector("#clearRecentConnectionsButton").click();
+        return true;
+      })()`,
+    );
+    const recentClearSnapshot = await waitFor(
+      async () => {
+        const value = await evaluate(session, buildSnapshotExpression());
+        lastSnapshot = value;
+        const hasEndpoint = value.recentConnectionOptions.some((option) => option.value === endpoint);
+        const storageCleared = !value.recentConnectionStorage.includes(args.host) && !value.recentConnectionStorage.includes(String(args.port));
+        const disabled = value.recentConnectionDisabled && value.clearRecentConnectionsDisabled;
+        const statusOk = value.recentConnection.includes("已清空") && value.recentConnection.includes("不保存密码");
+        return !hasEndpoint && storageCleared && disabled && statusOk ? value : null;
+      },
+      args.timeoutMs,
+      "Mac client recent connection clear",
+    );
+    print("OK", `Recent clear: ${recentClearSnapshot.recentConnection}`);
 
     await evaluate(
       session,

@@ -55,6 +55,45 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：给 Mac client 最近连接补清空入口，避免本地连接历史越积越乱。
+完成内容：
+- 连接面板最近连接行新增“清空”按钮。
+- 清空只删除 `lanDualMacClientRecentConnections` 本地记录，不影响密码输入框和当前连接。
+- 最近连接清空后会禁用下拉框、禁用清空按钮，并显示 `已清空最近连接 · 不保存密码`。
+- `scripts/windows/test-mac-client-browser.mjs` 新增清空断言：先验证保存和回填，再点击清空，确认 localStorage 不再包含 host/port，最近连接下拉禁用。
+修改文件：
+- `apps/mac-client/index.html`
+- `apps/mac-client/styles.css`
+- `apps/mac-client/app.js`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `git diff --check`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --clientPort 5190 --debugPort 9341`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3 --clientPort 5191 --debugPort 9342`
+验证结果：
+- 普通页面级自检通过，并输出 `Recent clear: 已清空最近连接 · 不保存密码`。
+- 连接、最近连接保存/回填、输入 ack、`Command+C` 映射、文本剪贴板、本机剪贴板读取/监听和文件剪贴板回归均通过。
+- 认证失败回归仍通过：`认证失败 · 剩余 2/3 次`。
+遗留问题：
+- 最近连接还没有重命名/编辑标签能力；当前标签仍来自 session/device 信息或 host:port。
+下一步建议：
+- 后续可补最近连接重命名，或等 Windows WASAPI 完成后做真实 Windows PCM 音频验收。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：打磨 Mac 控制 Windows 原型的快捷键提示，并把 `Command` 到 Windows `Ctrl` 的映射固化进页面级自检。
 完成内容：
 - 远控画面提示改为明确说明 Mac `Command` 会按 Windows `Ctrl` 发送。

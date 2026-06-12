@@ -7,6 +7,7 @@ const elements = {
   disconnectButton: document.querySelector("#disconnectButton"),
   recentConnectionSelect: document.querySelector("#recentConnectionSelect"),
   useRecentConnectionButton: document.querySelector("#useRecentConnectionButton"),
+  clearRecentConnectionsButton: document.querySelector("#clearRecentConnectionsButton"),
   recentConnectionStatus: document.querySelector("#recentConnectionStatus"),
   connectionStatus: document.querySelector("#connectionStatus"),
   remoteStatus: document.querySelector("#remoteStatus"),
@@ -176,6 +177,7 @@ function renderRecentConnections() {
   const hasRecent = state.recentConnections.length > 0;
   elements.recentConnectionSelect.disabled = !hasRecent;
   elements.useRecentConnectionButton.disabled = !hasRecent;
+  elements.clearRecentConnectionsButton.disabled = !hasRecent;
   elements.recentConnectionStatus.textContent = hasRecent
     ? `${state.recentConnections.length} 条 · 不保存密码`
     : "不保存密码";
@@ -211,6 +213,18 @@ function saveRecentConnection(details = {}) {
   persistRecentConnections();
   renderRecentConnections();
   elements.recentConnectionStatus.textContent = `已保存 ${recentConnectionKey(connection)} · 不保存密码`;
+}
+
+function clearRecentConnections() {
+  state.recentConnections = [];
+  try {
+    localStorage.removeItem(recentConnectionsStorageKey);
+  } catch (error) {
+    logEvent("最近连接清空失败", error?.message || "localStorage unavailable");
+  }
+  renderRecentConnections();
+  elements.recentConnectionStatus.textContent = "已清空最近连接 · 不保存密码";
+  logEvent("最近连接已清空", "只清空地址和端口，不影响密码输入框");
 }
 
 function initializeRecentConnections() {
@@ -1114,6 +1128,7 @@ elements.connectButton.addEventListener("click", () => {
 elements.disconnectButton.addEventListener("click", disconnect);
 elements.useRecentConnectionButton.addEventListener("click", applySelectedRecentConnection);
 elements.recentConnectionSelect.addEventListener("change", applySelectedRecentConnection);
+elements.clearRecentConnectionsButton.addEventListener("click", clearRecentConnections);
 elements.focusButton.addEventListener("click", () => elements.remoteViewport.focus());
 elements.clearLogButton.addEventListener("click", () => {
   elements.eventLog.textContent = "";

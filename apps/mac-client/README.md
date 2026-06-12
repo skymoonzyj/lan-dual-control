@@ -3,7 +3,7 @@
 这是 Mac 控制 Windows 的最小 Web 控制端原型。它先跑通 M3 反方向控制链路的控制端侧：
 
 - 输入 Windows host 地址、端口和密码。
-- 成功连接后保存最近连接，供下次一键回填；只保存 host、port 和时间，不保存密码。
+- 成功连接后保存最近连接，供下次一键回填，也可一键清空；只保存 host、port 和时间，不保存密码。
 - 通过 `/discovery` 发现 Windows 被控端。
 - 通过 WebSocket 完成 `hello`、`auth_request`、`session_offer`。
 - 认证失败时显示远端返回的剩余尝试次数，并自动释放连接按钮，方便改密码后重连。
@@ -53,7 +53,7 @@ LAN_DUAL_PORT=43772 LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_WINDOWS_INPUT_MODE=log node
 - 目前只显示 JPEG/data-url 视频帧；后续再接 H.264/WebCodecs 或原生解码。
 - 音频播放当前只覆盖 PCM 过渡格式；真实 Windows 系统声音需要 Windows host 配置 DirectShow loopback/虚拟声卡或后续 WASAPI loopback 后再端到端验收。
 - 当前支持手动发送文本和文件剪贴板；Mac 本机文本剪贴板读取和自动监听默认关闭，需用户手动点击读取或开启监听。
-- 最近连接只写入浏览器 localStorage 的地址、端口和时间，不保存连接密码。
+- 最近连接只写入浏览器 localStorage 的地址、端口和时间，不保存连接密码；“清空”只删除最近连接，不影响密码输入框。
 - 浏览器文件选择需要用户手动授权，自动化脚本不能无提示选择本机文件。
 - 键盘映射把 Mac `Command` 当作 Windows `Ctrl` 发送，方便 `Command+C/V` 控制 Windows 常用快捷键；页面会在远控画面提示该映射，发送快捷键时输入状态和日志也会显示 `Command→Ctrl`。
 - 浏览器安全限制下，必须点击远程画面后才会发送键盘事件。
@@ -69,7 +69,7 @@ node --check apps/mac-client/app.js
 
 Mac 本机文本剪贴板已纳入页面级自检：脚本会授权浏览器剪贴板、写入临时文本、点击“读取 Mac 剪贴板”并发送，再开启监听后写入新文本，确认自动发送收到 `clipboard_ack`。断开连接时监听会自动停止。
 
-最近连接已纳入页面级自检：成功协商后确认页面保存当前 host/port、localStorage 不包含连接密码，并验证选择最近连接可回填地址和端口。
+最近连接已纳入页面级自检：成功协商后确认页面保存当前 host/port、localStorage 不包含连接密码，验证选择最近连接可回填地址和端口，再点击“清空”确认 localStorage 删除该记录且下拉框禁用。
 
 快捷键映射已纳入页面级自检：脚本会模拟 `Command+C`，拦截页面发出的 `input_event`，断言发往 Windows 的 `ctrlKey=true`、`metaKey=false`，同时保留 `localMetaKey=true` 便于诊断。
 

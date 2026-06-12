@@ -108,7 +108,7 @@ h1 {
 .recent-connection-row {
   display: grid;
   grid-column: 1 / -1;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: end;
   gap: 10px;
   padding-top: 4px;
