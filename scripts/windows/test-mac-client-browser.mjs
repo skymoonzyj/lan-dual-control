@@ -43,6 +43,60 @@ const defaults = {
 };
 const temporaryWindowsHostBuildId = "mac-client-test";
 
+function helpRequested(argv) {
+  return argv.includes("--help") || argv.includes("-h");
+}
+
+function printHelp() {
+  console.log(`Usage:
+  node scripts/windows/test-mac-client-browser.mjs [options]
+
+Runs the Mac web client browser self-test against a temporary Windows host by
+default. Use --useExistingHost when connecting to a host that is already running.
+
+Options:
+  --host <host>                    Windows host address. Default: ${defaults.host}
+  --port <port>                    Windows host port. Default: ${defaults.port}
+  --password <password>            Shared password. Default: ${defaults.password}
+  --hostPassword <password>        Password used by the temporary Windows host.
+  --clientPassword <password>      Password typed into the Mac client page.
+  --clientPort <port>              Local Mac client web port. Default: ${defaults.clientPort}
+  --debugPort <port>               Browser remote debugging port. Default: ${defaults.debugPort}
+  --timeoutMs <ms>                 Per-step timeout. Default: ${defaults.timeoutMs}
+  --headed                         Run browser headed instead of headless.
+  --useExistingHost                Do not start a temporary Windows host.
+  --mockVideo                      Start temporary host with mock video and disable real-video requirement.
+  --screenMode <mode>              Temporary host screen mode. Default: ${defaults.screenMode}
+  --inputMode <mode>               Temporary host input mode. Default: ${defaults.inputMode}
+  --noRequireRealVideo             Allow mock/svg video frames.
+  --allowClipboardFallback         Allow memory/temp clipboard fallback on non-Windows systems.
+  --requireSystemClipboard         Require Windows system clipboard mode.
+  --skipFileClipboard              Skip file clipboard checks.
+  --expectAuthFailure              Expect wrong-password auth failure and skip file clipboard checks.
+  --expectedAttemptsRemaining <n>  Expected remaining attempts for --expectAuthFailure.
+  --expectedMaxAttempts <n>        Expected max attempts for --expectAuthFailure.
+  --enableAudio                    Turn on "play remote audio" in the Mac client.
+  --expectAudioFrame               Require at least one audio_frame.
+  --expectAudioPayload             Require audio payload; implies --expectAudioFrame.
+  --expectAudioPlayback            Require playback count; implies payload/frame.
+  --requireAudio                   Start temporary host with WASAPI audio and require playback.
+  --audioMode <mode>               Temporary host audio mode, for example wasapi.
+  --maxAudioFrameMs <ms>           Maximum first audio frame time. Default: off
+  --maxAudioPlaybackMs <ms>        Maximum playback count time. Default: off
+  --expectReconnect                Kill/restart temporary host and require auto-reconnect.
+  --maxReconnectRestoreMs <ms>     Maximum reconnect restore time. Default: off
+  --maxInitialVideoMs <ms>         Maximum initial visible video time. Default: off
+  --observeVideoMs <ms>            Observe sustained video after connect. Default: off
+  --minObservedVideoFrames <n>     Minimum frames during --observeVideoMs.
+  --minObservedVideoFps <fps>      Minimum FPS during --observeVideoMs.
+
+Examples:
+  node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard
+  node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --enableAudio --expectAudioFrame --observeVideoMs 1200 --minObservedVideoFrames 5
+  node scripts/windows/test-mac-client-browser.mjs --useExistingHost --host 192.168.1.50 --port 43770 --enableAudio --expectAudioPayload --expectAudioPlayback
+`);
+}
+
 function parseArgs(argv) {
   const args = { ...defaults };
   for (let index = 2; index < argv.length; index += 1) {
@@ -1102,6 +1156,11 @@ async function verifyMacClientFileClipboardDisconnectCancel({ args, session, upl
 }
 
 async function run() {
+  if (helpRequested(process.argv)) {
+    printHelp();
+    return;
+  }
+
   const args = parseArgs(process.argv);
   const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
   const clientUrl = `http://127.0.0.1:${args.clientPort}/`;

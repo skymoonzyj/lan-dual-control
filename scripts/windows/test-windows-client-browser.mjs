@@ -20,6 +20,39 @@ const defaults = {
   headless: true,
 };
 
+function helpRequested(argv) {
+  return argv.includes("--help") || argv.includes("-h");
+}
+
+function printHelp() {
+  console.log(`Usage:
+  node scripts/windows/test-windows-client-browser.mjs [options]
+
+Runs the Windows control client browser self-test against a Mac host. Without
+--diagnosticsOnly it connects to the configured host and validates the video
+surface, diagnostics, input guards, and optional audio injection.
+
+Options:
+  --host <host>                         Mac host address. Default: ${defaults.host}
+  --port <port>                         Mac host port. Default: ${defaults.port}
+  --password <password>                 Probe password. Default: ${defaults.password}
+  --clientPort <port>                   Local Windows client web port. Default: ${defaults.clientPort}
+  --debugPort <port>                    Browser remote debugging port. Default: ${defaults.debugPort}
+  --timeoutMs <ms>                      Per-step timeout. Default: ${defaults.timeoutMs}
+  --headed                              Run browser headed instead of headless.
+  --diagnosticsOnly                     Only run local UI diagnostics; do not connect to a Mac host.
+  --noRequireVideoSurface               Do not require a visible decoded video surface.
+  --requireH264                         Require H.264/WebCodecs decoded video.
+  --injectPcmAudio                      Inject a synthetic PCM frame into the page and require playback state.
+  --expectDiscoveryRuntimeBuildId <id>  Require /discovery runtime.buildId before connecting.
+
+Examples:
+  node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly
+  node scripts/windows/test-windows-client-browser.mjs --host 192.168.1.20 --port 43770 --password demo-password --requireH264
+  node scripts/windows/test-windows-client-browser.mjs --host 127.0.0.1 --port 43770 --injectPcmAudio
+`);
+}
+
 function parseArgs(argv) {
   const args = { ...defaults };
   for (let index = 2; index < argv.length; index += 1) {
@@ -930,6 +963,11 @@ async function verifyH264KeyFrameDetection(session) {
 }
 
 async function run() {
+  if (helpRequested(process.argv)) {
+    printHelp();
+    return;
+  }
+
   const args = parseArgs(process.argv);
   const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
   const clientUrl = `http://127.0.0.1:${args.clientPort}/`;

@@ -26,6 +26,47 @@ const defaults = {
   expectInputMode: "",
 };
 
+function helpRequested(argv) {
+  return argv.includes("--help") || argv.includes("-h");
+}
+
+function printHelp() {
+  console.log(`Usage:
+  node scripts/windows/probe-mac-host.mjs [options]
+
+Probes a running Mac host via /discovery and WebSocket. By default it performs
+hello/auth/session negotiation and waits for the first video frame.
+
+Options:
+  --host <host>                       Mac host address. Default: ${defaults.host}
+  --port <port>                       Mac host port. Default: ${defaults.port}
+  --password <password>               Probe password. Default: ${defaults.password}
+  --timeoutMs <ms>                    Per-step timeout. Default: ${defaults.timeoutMs}
+  --width <px>                        Requested video width. Default: ${defaults.width}
+  --height <px>                       Requested video height. Default: ${defaults.height}
+  --fps <fps>                         Requested FPS. Default: ${defaults.fps}
+  --bandwidthKbps <kbps>              Requested max bandwidth. Default: ${defaults.bandwidthKbps}
+  --preferredVideoCodec <codec>       Requested codec: mjpeg or h264. Default: ${defaults.preferredVideoCodec}
+  --requireRealVideo                  Reject mock/svg video frames.
+  --requireH264                       Require H.264 Annex B video; implies preferred codec h264.
+  --requireAudio                      Require one pcm-f32le audio_frame.
+  --expectInputMode <mode>            Require input mode from discovery/hello/session.
+  --inputEvents                       Send safe input events; requires host input mode expectations separately.
+  --clipboardText                     Send a text clipboard message to the host.
+  --clipboardHostToClient             Read Mac pasteboard changes sent by the host. macOS only.
+  --clipboardFile                     Send a small file clipboard transfer to the host.
+  --clipboardFileHostToClient         Read Mac file pasteboard changes sent by the host. macOS only.
+  --clipboardRoundTrip                Enable both text clipboard directions.
+  --clipboardFileRoundTrip            Enable both file clipboard directions.
+  --clipboardFileBytes <bytes>        Size of synthetic clipboard file. Default: ${defaults.clipboardFileBytes}
+
+Examples:
+  node scripts/windows/probe-mac-host.mjs --host 127.0.0.1 --port 43770 --requireH264 --expectInputMode log
+  node scripts/windows/probe-mac-host.mjs --host 192.168.1.20 --port 43770 --requireAudio
+  node scripts/windows/probe-mac-host.mjs --clipboardRoundTrip --expectInputMode log
+`);
+}
+
 function parseArgs(argv) {
   const args = { ...defaults };
   for (let index = 0; index < argv.length; index += 1) {
@@ -893,6 +934,11 @@ async function probeInputEvents(client, args) {
 }
 
 async function main() {
+  if (helpRequested(process.argv.slice(2))) {
+    printHelp();
+    return;
+  }
+
   const args = parseArgs(process.argv.slice(2));
   print("INFO", `Target: ${args.host}:${args.port}`);
 
