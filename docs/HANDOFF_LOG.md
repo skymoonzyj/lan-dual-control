@@ -21,6 +21,42 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：参考用户提供的 UU 远程控制中心思路，给 Windows 控制端增加画面内悬浮控制中心第一版。
+完成内容：
+- 在 Windows 控制端远控画面右上角新增“控制中心”悬浮入口。
+- 展开后可快速切换显示屏、画质、缩放模式、声音开关、音量、全屏、窗口和退出远控。
+- 悬浮控件不维护第二套状态，而是同步驱动现有顶部工具栏控件和原有 `sendDisplaySettings()`、`setFullscreen()`、`disconnect()` 逻辑。
+- 控制中心在真实视频帧显示后仍保留在画面上，不会被模拟窗口隐藏逻辑影响。
+- Windows 控制端 README 已补充该能力。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/styles.css`
+- `apps/windows-client/app.js`
+- `apps/windows-client/README.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check apps/windows-client/protocol-client.js`
+- `node scripts/windows/test-coordinate-mapping.mjs`
+- 本地浏览器自动化检查：展开控制中心，验证画质、缩放、声音和音量会同步到原工具栏。
+- 临时启动假 Mac 服务后运行 `node scripts/windows/test-windows-client-browser.mjs --noRequireVideoSurface`
+验证结果：
+- 自动化检查确认控制中心可展开，`sharp` 画质同步到 `4K / 120 Hz / 50 Mbps`，缩放、声音和音量同步正常。
+- 页面截图人工查看正常：浮层位于画面右上角，文字未溢出，未遮挡主要远控内容。
+- 假 Mac 页面级自检通过：控制端可连接、接收模拟视频帧并保持现有诊断状态。
+遗留问题：
+- 第一版是固定右上角浮层，暂未做拖动、吸附边缘、自动收起、快捷键唤出和菜单分组动画。
+下一步建议：
+- 后续可继续补“显示屏/画质/窗口/声音/安全/更多”分组菜单，并在全屏状态下隐藏顶部工具栏，只保留悬浮控制中心。
+- Mac 控制 Windows 的 `apps/mac-client` 后续也可复用同样的信息架构，形成双端一致体验。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：把 Mac client 文本剪贴板发送纳入 Windows 端页面级自检。
 完成内容：
 - `scripts/windows/test-mac-client-browser.mjs` 在视频和输入确认之后，会自动填写 Mac client 文本剪贴板输入框并点击发送。

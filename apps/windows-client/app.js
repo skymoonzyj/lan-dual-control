@@ -49,6 +49,18 @@ const elements = {
   windowModeButton: document.querySelector("#windowModeButton"),
   reverseButton: document.querySelector("#reverseButton"),
   reverseButtonText: document.querySelector("#reverseButtonText"),
+  remoteControlCenter: document.querySelector("#remoteControlCenter"),
+  controlCenterToggle: document.querySelector("#controlCenterToggle"),
+  controlCenterPanel: document.querySelector("#controlCenterPanel"),
+  floatingDisplaySelect: document.querySelector("#floatingDisplaySelect"),
+  floatingQualitySelect: document.querySelector("#floatingQualitySelect"),
+  floatingScaleSelect: document.querySelector("#floatingScaleSelect"),
+  floatingAudioSelect: document.querySelector("#floatingAudioSelect"),
+  floatingAudioVolumeRange: document.querySelector("#floatingAudioVolumeRange"),
+  floatingAudioVolumeText: document.querySelector("#floatingAudioVolumeText"),
+  floatingFullscreenButton: document.querySelector("#floatingFullscreenButton"),
+  floatingWindowButton: document.querySelector("#floatingWindowButton"),
+  floatingDisconnectButton: document.querySelector("#floatingDisconnectButton"),
   cursorDot: document.querySelector("#cursorDot"),
   remoteFrameImage: document.querySelector("#remoteFrameImage"),
   remoteVideoCanvas: document.querySelector("#remoteVideoCanvas"),
@@ -390,6 +402,7 @@ function setConnectionState(nextState, detail = "") {
   setBadge(stateConfig.badge, stateConfig.label);
   elements.statusText.textContent = detail || stateConfig.status;
   elements.remoteStatusText.textContent = detail || stateConfig.status;
+  syncFloatingControlCenter();
 }
 
 function clearReverseControlTimer() {
@@ -833,6 +846,7 @@ function applyPreferences() {
     : [];
   renderDisplayOptions(fallbackDisplays, state.activeDisplayId);
   renderRecentConnections();
+  syncFloatingControlCenter();
 }
 
 function normalizeDisplays(displays = []) {
@@ -871,6 +885,7 @@ function renderDisplayOptions(displays = state.remoteDisplays, preferredDisplayI
 
   elements.displaySelect.value = nextDisplayId;
   state.activeDisplayId = nextDisplayId;
+  syncFloatingControlCenter();
 }
 
 function updateDisplaysFromSession(answer = {}) {
@@ -1483,6 +1498,69 @@ function updateMetrics() {
     : "声音：已关闭";
   elements.clipboardText.textContent = `剪贴板：${settings.clipboard ? "已开启" : "已关闭"}`;
   updateFileClipboardButton();
+  syncFloatingControlCenter();
+}
+
+function cloneSelectOptions(sourceSelect, targetSelect) {
+  if (!sourceSelect || !targetSelect) return;
+  const sourceSignature = Array.from(sourceSelect.options)
+    .map((option) => `${option.value}:${option.textContent}`)
+    .join("|");
+  const targetSignature = Array.from(targetSelect.options)
+    .map((option) => `${option.value}:${option.textContent}`)
+    .join("|");
+  if (sourceSignature !== targetSignature) {
+    targetSelect.innerHTML = "";
+    Array.from(sourceSelect.options).forEach((sourceOption) => {
+      const option = document.createElement("option");
+      option.value = sourceOption.value;
+      option.textContent = sourceOption.textContent;
+      targetSelect.append(option);
+    });
+  }
+  targetSelect.value = sourceSelect.value;
+}
+
+function syncFloatingControlCenter() {
+  cloneSelectOptions(elements.displaySelect, elements.floatingDisplaySelect);
+  if (elements.floatingQualitySelect) {
+    elements.floatingQualitySelect.value = elements.qualityPresetSelect.value;
+  }
+  if (elements.floatingScaleSelect) {
+    elements.floatingScaleSelect.value = elements.scaleModeSelect.value;
+  }
+  if (elements.floatingAudioSelect) {
+    elements.floatingAudioSelect.value = elements.audioToggle.checked ? "on" : "off";
+  }
+  if (elements.floatingAudioVolumeRange) {
+    elements.floatingAudioVolumeRange.value = elements.audioVolumeRange.value;
+  }
+  if (elements.floatingAudioVolumeText) {
+    elements.floatingAudioVolumeText.textContent = `${elements.audioVolumeRange.value}%`;
+  }
+  if (elements.floatingDisconnectButton) {
+    elements.floatingDisconnectButton.disabled = !state.connected && !state.connecting;
+  }
+  if (elements.floatingFullscreenButton) {
+    elements.floatingFullscreenButton.disabled = state.fullscreen;
+  }
+  if (elements.floatingWindowButton) {
+    elements.floatingWindowButton.disabled = !state.fullscreen;
+  }
+}
+
+function setControlCenterOpen(open) {
+  if (!elements.controlCenterPanel || !elements.controlCenterToggle) return;
+  elements.controlCenterPanel.hidden = !open;
+  elements.controlCenterToggle.classList.toggle("is-open", open);
+  elements.controlCenterToggle.setAttribute("aria-expanded", String(open));
+  if (open) {
+    syncFloatingControlCenter();
+  }
+}
+
+function dispatchControlEvent(element, eventName = "change") {
+  element.dispatchEvent(new Event(eventName, { bubbles: true }));
 }
 
 function resetVideoFrameStats() {
@@ -3471,11 +3549,52 @@ elements.clearLogButton.addEventListener("click", () => {
 elements.fullscreenButton.addEventListener("click", () => setFullscreen(true));
 elements.windowModeButton.addEventListener("click", () => setFullscreen(false));
 elements.reverseButton.addEventListener("click", requestReverseControl);
+elements.controlCenterToggle.addEventListener("click", () => {
+  setControlCenterOpen(elements.controlCenterPanel.hidden);
+});
+elements.floatingFullscreenButton.addEventListener("click", () => {
+  setFullscreen(true);
+  setControlCenterOpen(false);
+});
+elements.floatingWindowButton.addEventListener("click", () => {
+  setFullscreen(false);
+  setControlCenterOpen(false);
+});
+elements.floatingDisconnectButton.addEventListener("click", () => {
+  disconnect();
+  setControlCenterOpen(false);
+});
+elements.floatingQualitySelect.addEventListener("change", () => {
+  elements.qualityPresetSelect.value = elements.floatingQualitySelect.value;
+  dispatchControlEvent(elements.qualityPresetSelect);
+  syncFloatingControlCenter();
+});
+elements.floatingDisplaySelect.addEventListener("change", () => {
+  elements.displaySelect.value = elements.floatingDisplaySelect.value;
+  dispatchControlEvent(elements.displaySelect);
+  syncFloatingControlCenter();
+});
+elements.floatingScaleSelect.addEventListener("change", () => {
+  elements.scaleModeSelect.value = elements.floatingScaleSelect.value;
+  dispatchControlEvent(elements.scaleModeSelect);
+  syncFloatingControlCenter();
+});
+elements.floatingAudioSelect.addEventListener("change", () => {
+  elements.audioToggle.checked = elements.floatingAudioSelect.value === "on";
+  dispatchControlEvent(elements.audioToggle);
+  syncFloatingControlCenter();
+});
+elements.floatingAudioVolumeRange.addEventListener("input", () => {
+  elements.audioVolumeRange.value = elements.floatingAudioVolumeRange.value;
+  dispatchControlEvent(elements.audioVolumeRange, "input");
+  syncFloatingControlCenter();
+});
 
 elements.qualityPresetSelect.addEventListener("change", () => {
   if (elements.qualityPresetSelect.value === "custom") {
     savePreferences();
     addLog("画质预设", "自定义");
+    syncFloatingControlCenter();
     return;
   }
   applyQualityPreset(elements.qualityPresetSelect.value);
@@ -3514,6 +3633,7 @@ elements.audioToggle.addEventListener("change", () => {
 });
 elements.audioVolumeRange.addEventListener("input", () => {
   elements.audioVolumeText.textContent = `${elements.audioVolumeRange.value}%`;
+  syncFloatingControlCenter();
   if (state.audioGain) {
     state.audioGain.gain.value = Number(elements.audioVolumeRange.value) / 100;
   }
@@ -3663,8 +3783,20 @@ elements.remoteCanvas.addEventListener("keydown", async (event) => {
 });
 
 window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !elements.controlCenterPanel.hidden) {
+    setControlCenterOpen(false);
+    return;
+  }
   if (event.key === "Escape" && state.fullscreen) {
     setFullscreen(false);
+  }
+});
+document.addEventListener("pointerdown", (event) => {
+  if (
+    !elements.controlCenterPanel.hidden &&
+    !elements.remoteControlCenter.contains(event.target)
+  ) {
+    setControlCenterOpen(false);
   }
 });
 

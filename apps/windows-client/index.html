@@ -330,6 +330,61 @@
                   </div>
                 </div>
               </div>
+              <div id="remoteControlCenter" class="remote-control-center">
+                <button
+                  id="controlCenterToggle"
+                  class="control-center-toggle"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="controlCenterPanel"
+                  title="控制中心"
+                >
+                  <span aria-hidden="true">☷</span>
+                  <strong>控制中心</strong>
+                </button>
+                <div id="controlCenterPanel" class="control-center-panel" hidden>
+                  <div class="control-center-grid">
+                    <label>
+                      <span>显示屏</span>
+                      <select id="floatingDisplaySelect"></select>
+                    </label>
+                    <label>
+                      <span>画质</span>
+                      <select id="floatingQualitySelect">
+                        <option value="smooth">流畅</option>
+                        <option value="balanced">均衡</option>
+                        <option value="sharp">高清</option>
+                        <option value="custom">自定义</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>窗口</span>
+                      <select id="floatingScaleSelect">
+                        <option value="fit">适应窗口</option>
+                        <option value="original">原始比例</option>
+                        <option value="stretch">拉伸填充</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>声音</span>
+                      <select id="floatingAudioSelect">
+                        <option value="on">开启</option>
+                        <option value="off">关闭</option>
+                      </select>
+                    </label>
+                  </div>
+                  <label class="control-center-volume">
+                    <span>音量</span>
+                    <input id="floatingAudioVolumeRange" type="range" min="0" max="100" value="80" />
+                    <output id="floatingAudioVolumeText">80%</output>
+                  </label>
+                  <div class="control-center-actions">
+                    <button id="floatingFullscreenButton" type="button">全屏</button>
+                    <button id="floatingWindowButton" type="button">窗口</button>
+                    <button id="floatingDisconnectButton" type="button">退出远控</button>
+                  </div>
+                </div>
+              </div>
               <div id="cursorDot" class="cursor-dot"></div>
             </div>
           </div>

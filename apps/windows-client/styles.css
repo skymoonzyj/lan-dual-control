@@ -642,6 +642,123 @@ button:disabled {
   display: none;
 }
 
+.remote-control-center {
+  position: absolute;
+  z-index: 3;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.control-center-toggle {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(214, 220, 227, 0.82);
+  border-radius: 8px;
+  background: rgba(249, 250, 251, 0.94);
+  color: #1f2937;
+  box-shadow: 0 12px 30px rgba(8, 15, 24, 0.2);
+  padding: 0 12px;
+}
+
+.control-center-toggle:hover,
+.control-center-toggle.is-open {
+  border-color: rgba(20, 122, 108, 0.64);
+  background: #ffffff;
+}
+
+.control-center-toggle span {
+  color: var(--accent-strong);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.control-center-toggle strong {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.control-center-panel {
+  width: min(360px, calc(100vw - 380px));
+  border: 1px solid rgba(214, 220, 227, 0.88);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 20px 55px rgba(8, 15, 24, 0.24);
+  color: var(--text);
+  padding: 12px;
+}
+
+.control-center-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.control-center-grid label,
+.control-center-volume {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.control-center-grid select {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  padding: 6px 8px;
+}
+
+.control-center-volume {
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.control-center-volume input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.control-center-volume output {
+  min-width: 36px;
+  color: var(--text);
+  text-align: right;
+}
+
+.control-center-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.control-center-actions button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+}
+
+.control-center-actions button:hover {
+  border-color: #aeb8c4;
+  background: var(--panel-strong);
+}
+
+#floatingDisconnectButton {
+  border-color: rgba(194, 65, 12, 0.38);
+  color: var(--danger);
+}
+
 .mac-menubar {
   position: relative;
   z-index: 1;
@@ -837,5 +954,9 @@ button:disabled {
 
   .metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .control-center-panel {
+    width: min(340px, calc(100vw - 340px));
   }
 }
