@@ -56,6 +56,40 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：收口 Windows 桌面版远端文件剪贴板分块写入的原生层可靠性。
+完成内容：
+- `apps/windows-desktop/src-tauri/src/main.rs` 将 begin/chunk/finish/cancel 拆到可单测的原生辅助函数。
+- 原生层新增 512MB 总量上限校验，避免绕过前端直接调用 Tauri 命令时写入超限。
+- 传输 ID 在时间戳后追加进程内递增序号，降低同毫秒并发创建临时目录撞名风险。
+- 新建写入任务前会尽力清理 7 天以上旧临时目录；近期目录继续保留，确保系统文件剪贴板刚写入后可正常粘贴。
+- 旧 `write_files_to_clipboard` 一次性兼容入口同步使用 512MB 上限，并在中途失败时清理刚创建的临时目录。
+- Rust 单元测试新增覆盖：分块偏移错误、写入超出预期大小、未写完禁止 finish、取消清理临时目录、超出 512MB 拒绝。
+- Windows client/desktop README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-desktop/src-tauri/src/main.rs`
+- `apps/windows-desktop/README.md`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `cargo fmt`
+- `cargo test`
+验证结果：
+- Rust 单测 4/4 通过。
+遗留问题：
+- 尚未人工用真实 100MB 以上压缩包从 Mac 复制到 Windows 控制端托盘，再写入系统文件剪贴板并在资源管理器粘贴。
+下一步建议：
+- 继续优化远端文件托盘失败恢复提示和真实大文件进度体验；或转入 Windows Graphics Capture/正式编码管线研究。
+是否改了协议：否。
+是否需要另一端配合：后续真实大文件体验验收需要 Mac 端复制文件触发 `clipboard_file_*`。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：升级 Windows 桌面版远端文件剪贴板写入，避免大文件一次性 base64 调用造成卡顿和 128MB 上限。
 完成内容：
 - `apps/windows-desktop/src-tauri/src/main.rs` 新增原生分块文件剪贴板命令：begin/chunk/finish/cancel。

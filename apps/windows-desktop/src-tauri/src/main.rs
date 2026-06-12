@@ -10,7 +10,10 @@ use std::{
     net::{SocketAddr, TcpStream},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -23,6 +26,9 @@ use std::os::windows::process::CommandExt;
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 const MAX_HOST_LOG_LINES: usize = 240;
+const MAX_NATIVE_CLIPBOARD_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
+const STALE_CLIPBOARD_ROOT_MAX_AGE_SECS: u64 = 7 * 24 * 60 * 60;
+static CLIPBOARD_TRANSFER_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Default)]
 struct WindowsHostProcessState {
@@ -200,10 +206,12 @@ fn decode_base64_payload(data_base64: &str) -> Result<Vec<u8>, String> {
         .map_err(|error| format!("文件内容 base64 解码失败：{error}"))
 }
 
+fn clipboard_base_temp_dir() -> PathBuf {
+    std::env::temp_dir().join("lan-dual-control-windows-client-clipboard")
+}
+
 fn make_clipboard_root_dir(transfer_id: &str) -> PathBuf {
-    std::env::temp_dir()
-        .join("lan-dual-control-windows-client-clipboard")
-        .join(transfer_id)
+    clipboard_base_temp_dir().join(transfer_id)
 }
 
 fn make_clipboard_transfer_id() -> Result<String, String> {
@@ -211,7 +219,8 @@ fn make_clipboard_transfer_id() -> Result<String, String> {
         .duration_since(UNIX_EPOCH)
         .map_err(|error| error.to_string())?
         .as_millis();
-    Ok(format!("clip-{stamp}"))
+    let counter = CLIPBOARD_TRANSFER_COUNTER.fetch_add(1, Ordering::Relaxed);
+    Ok(format!("clip-{stamp}-{counter}"))
 }
 
 fn clipboard_transfer_totals(transfer: &NativeClipboardTransfer) -> (u64, u64) {
@@ -226,6 +235,201 @@ fn clipboard_transfer_paths(transfer: &NativeClipboardTransfer) -> Vec<PathBuf> 
         .iter()
         .map(|file| file.path.clone())
         .collect()
+}
+
+fn add_clipboard_total_bytes(current: u64, added: u64) -> Result<u64, String> {
+    let total = current
+        .checked_add(added)
+        .ok_or_else(|| "远端文件总大小超出可处理范围。".to_string())?;
+    if total > MAX_NATIVE_CLIPBOARD_TOTAL_BYTES {
+        return Err(format!(
+            "远端文件总大小 {} 字节，超过桌面版系统文件剪贴板写入上限 {} 字节。",
+            total, MAX_NATIVE_CLIPBOARD_TOTAL_BYTES
+        ));
+    }
+    Ok(total)
+}
+
+fn cleanup_stale_clipboard_roots(max_age: Duration) {
+    let base_dir = clipboard_base_temp_dir();
+    let now = SystemTime::now();
+    let Ok(entries) = fs::read_dir(base_dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name_is_transfer = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .is_some_and(|name| name.starts_with("clip-"));
+        if !name_is_transfer {
+            continue;
+        }
+
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        if !metadata.is_dir() {
+            continue;
+        }
+        let Ok(modified_at) = metadata.modified() else {
+            continue;
+        };
+        let is_stale = now
+            .duration_since(modified_at)
+            .map(|age| age > max_age)
+            .unwrap_or(false);
+        if is_stale {
+            let _ = fs::remove_dir_all(path);
+        }
+    }
+}
+
+fn create_native_clipboard_transfer(
+    files: &[ClipboardFileMetaPayload],
+    transfers: &mut HashMap<String, NativeClipboardTransfer>,
+) -> Result<BeginClipboardFileWriteResult, String> {
+    if files.is_empty() {
+        return Err("没有可写入系统文件剪贴板的远端文件。".to_string());
+    }
+
+    let mut total_bytes = 0_u64;
+    for file in files {
+        total_bytes = add_clipboard_total_bytes(total_bytes, file.size)?;
+    }
+
+    cleanup_stale_clipboard_roots(Duration::from_secs(STALE_CLIPBOARD_ROOT_MAX_AGE_SECS));
+
+    let base_id = make_clipboard_transfer_id()?;
+    let mut transfer_id = base_id.clone();
+    let mut suffix = 1_u32;
+    while transfers.contains_key(&transfer_id) {
+        suffix += 1;
+        transfer_id = format!("{base_id}-{suffix}");
+    }
+
+    let root_dir = make_clipboard_root_dir(&transfer_id);
+    fs::create_dir_all(&root_dir).map_err(|error| format!("创建临时目录失败：{error}"))?;
+
+    let mut entries = Vec::with_capacity(files.len());
+    for (index, file) in files.iter().enumerate() {
+        let name = safe_file_name(&file.name, index);
+        let path = root_dir.join(format!("{:03}-{}", index + 1, name));
+        fs::File::create(&path).map_err(|error| format!("创建临时文件失败：{error}"))?;
+        entries.push(NativeClipboardFileEntry {
+            name,
+            path,
+            expected_bytes: file.size,
+            written_bytes: 0,
+        });
+    }
+
+    transfers.insert(
+        transfer_id.clone(),
+        NativeClipboardTransfer {
+            root_dir: root_dir.clone(),
+            files: entries,
+        },
+    );
+
+    Ok(BeginClipboardFileWriteResult {
+        transfer_id,
+        root_dir: root_dir.to_string_lossy().to_string(),
+        file_count: files.len(),
+        total_bytes,
+    })
+}
+
+fn append_native_clipboard_file_chunk(
+    transfers: &mut HashMap<String, NativeClipboardTransfer>,
+    payload: AppendClipboardFileChunkPayload,
+) -> Result<AppendClipboardFileChunkResult, String> {
+    let bytes = decode_base64_payload(&payload.data_base64)?;
+    let transfer = transfers
+        .get_mut(&payload.transfer_id)
+        .ok_or_else(|| "文件剪贴板传输不存在或已结束。".to_string())?;
+    let file = transfer
+        .files
+        .get_mut(payload.file_index)
+        .ok_or_else(|| "文件索引无效。".to_string())?;
+
+    if payload.offset != file.written_bytes {
+        return Err(format!(
+            "文件 {} 分块偏移不连续：收到 {}，预期 {}。",
+            file.name, payload.offset, file.written_bytes
+        ));
+    }
+
+    let next_written = file
+        .written_bytes
+        .checked_add(bytes.len() as u64)
+        .ok_or_else(|| "文件大小超出可处理范围。".to_string())?;
+    if next_written > file.expected_bytes {
+        return Err(format!(
+            "文件 {} 写入超出预期大小：{} > {}。",
+            file.name, next_written, file.expected_bytes
+        ));
+    }
+
+    let mut handle = fs::OpenOptions::new()
+        .append(true)
+        .open(&file.path)
+        .map_err(|error| format!("打开临时文件失败：{error}"))?;
+    handle
+        .write_all(&bytes)
+        .map_err(|error| format!("写入临时文件失败：{error}"))?;
+    file.written_bytes = next_written;
+    let written_bytes = file.written_bytes;
+
+    let (total_bytes, total_written_bytes) = clipboard_transfer_totals(transfer);
+    Ok(AppendClipboardFileChunkResult {
+        transfer_id: payload.transfer_id,
+        file_index: payload.file_index,
+        written_bytes,
+        total_written_bytes,
+        total_bytes,
+        complete: total_written_bytes == total_bytes,
+    })
+}
+
+fn finish_native_clipboard_transfer(
+    transfers: &mut HashMap<String, NativeClipboardTransfer>,
+    transfer_id: &str,
+) -> Result<(Vec<PathBuf>, u64, PathBuf), String> {
+    let (paths, total_bytes, root_dir) = {
+        let transfer = transfers
+            .get(transfer_id)
+            .ok_or_else(|| "文件剪贴板传输不存在或已结束。".to_string())?;
+        for file in &transfer.files {
+            if file.written_bytes != file.expected_bytes {
+                return Err(format!(
+                    "文件 {} 尚未写完：{} / {}。",
+                    file.name, file.written_bytes, file.expected_bytes
+                ));
+            }
+        }
+        let (total_bytes, _) = clipboard_transfer_totals(transfer);
+        (
+            clipboard_transfer_paths(transfer),
+            total_bytes,
+            transfer.root_dir.clone(),
+        )
+    };
+    transfers.remove(transfer_id);
+    Ok((paths, total_bytes, root_dir))
+}
+
+fn cancel_native_clipboard_transfer(
+    transfers: &mut HashMap<String, NativeClipboardTransfer>,
+    transfer_id: &str,
+) -> bool {
+    if let Some(transfer) = transfers.remove(transfer_id) {
+        let _ = fs::remove_dir_all(&transfer.root_dir);
+        true
+    } else {
+        false
+    }
 }
 
 fn file_entry_result_paths(paths: &[PathBuf]) -> Vec<String> {
@@ -726,21 +930,27 @@ fn write_files_to_clipboard(
         .duration_since(UNIX_EPOCH)
         .map_err(|error| error.to_string())?
         .as_millis();
-    let root_dir = std::env::temp_dir()
-        .join("lan-dual-control-windows-client-clipboard")
-        .join(format!("clip-{stamp}"));
+    cleanup_stale_clipboard_roots(Duration::from_secs(STALE_CLIPBOARD_ROOT_MAX_AGE_SECS));
+    let root_dir = make_clipboard_root_dir(&format!("clip-{stamp}"));
     fs::create_dir_all(&root_dir).map_err(|error| format!("创建临时目录失败：{error}"))?;
 
     let mut paths = Vec::with_capacity(files.len());
     let mut total_bytes = 0_u64;
 
-    for (index, file) in files.iter().enumerate() {
-        let bytes = decode_base64_payload(&file.data_base64)?;
-        let name = safe_file_name(&file.name, index);
-        let path = root_dir.join(format!("{:03}-{}", index + 1, name));
-        fs::write(&path, &bytes).map_err(|error| format!("写入临时文件失败：{error}"))?;
-        total_bytes += bytes.len() as u64;
-        paths.push(path);
+    let write_result = (|| {
+        for (index, file) in files.iter().enumerate() {
+            let bytes = decode_base64_payload(&file.data_base64)?;
+            total_bytes = add_clipboard_total_bytes(total_bytes, bytes.len() as u64)?;
+            let name = safe_file_name(&file.name, index);
+            let path = root_dir.join(format!("{:03}-{}", index + 1, name));
+            fs::write(&path, &bytes).map_err(|error| format!("写入临时文件失败：{error}"))?;
+            paths.push(path);
+        }
+        Ok::<(), String>(())
+    })();
+    if let Err(error) = write_result {
+        let _ = fs::remove_dir_all(&root_dir);
+        return Err(error);
     }
 
     let path_strings = paths
@@ -775,54 +985,11 @@ fn begin_clipboard_file_write(
     payload: BeginClipboardFileWritePayload,
     state: tauri::State<'_, ClipboardFileTransferState>,
 ) -> Result<BeginClipboardFileWriteResult, String> {
-    if payload.files.is_empty() {
-        return Err("没有可写入系统文件剪贴板的远端文件。".to_string());
-    }
-
     let mut transfers = state
         .transfers
         .lock()
         .map_err(|_| "文件剪贴板传输状态不可用。".to_string())?;
-    let base_id = make_clipboard_transfer_id()?;
-    let mut transfer_id = base_id.clone();
-    let mut suffix = 1_u32;
-    while transfers.contains_key(&transfer_id) {
-        suffix += 1;
-        transfer_id = format!("{base_id}-{suffix}");
-    }
-
-    let root_dir = make_clipboard_root_dir(&transfer_id);
-    fs::create_dir_all(&root_dir).map_err(|error| format!("创建临时目录失败：{error}"))?;
-
-    let mut entries = Vec::with_capacity(payload.files.len());
-    let mut total_bytes = 0_u64;
-    for (index, file) in payload.files.iter().enumerate() {
-        let name = safe_file_name(&file.name, index);
-        let path = root_dir.join(format!("{:03}-{}", index + 1, name));
-        fs::File::create(&path).map_err(|error| format!("创建临时文件失败：{error}"))?;
-        total_bytes = total_bytes.saturating_add(file.size);
-        entries.push(NativeClipboardFileEntry {
-            name,
-            path,
-            expected_bytes: file.size,
-            written_bytes: 0,
-        });
-    }
-
-    transfers.insert(
-        transfer_id.clone(),
-        NativeClipboardTransfer {
-            root_dir: root_dir.clone(),
-            files: entries,
-        },
-    );
-
-    Ok(BeginClipboardFileWriteResult {
-        transfer_id,
-        root_dir: root_dir.to_string_lossy().to_string(),
-        file_count: payload.files.len(),
-        total_bytes,
-    })
+    create_native_clipboard_transfer(&payload.files, &mut transfers)
 }
 
 #[tauri::command]
@@ -830,56 +997,11 @@ fn append_clipboard_file_chunk(
     payload: AppendClipboardFileChunkPayload,
     state: tauri::State<'_, ClipboardFileTransferState>,
 ) -> Result<AppendClipboardFileChunkResult, String> {
-    let bytes = decode_base64_payload(&payload.data_base64)?;
     let mut transfers = state
         .transfers
         .lock()
         .map_err(|_| "文件剪贴板传输状态不可用。".to_string())?;
-    let transfer = transfers
-        .get_mut(&payload.transfer_id)
-        .ok_or_else(|| "文件剪贴板传输不存在或已结束。".to_string())?;
-    let file = transfer
-        .files
-        .get_mut(payload.file_index)
-        .ok_or_else(|| "文件索引无效。".to_string())?;
-
-    if payload.offset != file.written_bytes {
-        return Err(format!(
-            "文件 {} 分块偏移不连续：收到 {}，预期 {}。",
-            file.name, payload.offset, file.written_bytes
-        ));
-    }
-
-    let next_written = file
-        .written_bytes
-        .checked_add(bytes.len() as u64)
-        .ok_or_else(|| "文件大小超出可处理范围。".to_string())?;
-    if next_written > file.expected_bytes {
-        return Err(format!(
-            "文件 {} 写入超出预期大小：{} > {}。",
-            file.name, next_written, file.expected_bytes
-        ));
-    }
-
-    let mut handle = fs::OpenOptions::new()
-        .append(true)
-        .open(&file.path)
-        .map_err(|error| format!("打开临时文件失败：{error}"))?;
-    handle
-        .write_all(&bytes)
-        .map_err(|error| format!("写入临时文件失败：{error}"))?;
-    file.written_bytes = next_written;
-    let written_bytes = file.written_bytes;
-
-    let (total_bytes, total_written_bytes) = clipboard_transfer_totals(transfer);
-    Ok(AppendClipboardFileChunkResult {
-        transfer_id: payload.transfer_id,
-        file_index: payload.file_index,
-        written_bytes,
-        total_written_bytes,
-        total_bytes,
-        complete: total_written_bytes == total_bytes,
-    })
+    append_native_clipboard_file_chunk(&mut transfers, payload)
 }
 
 #[tauri::command]
@@ -888,36 +1010,12 @@ fn finish_clipboard_file_write(
     state: tauri::State<'_, ClipboardFileTransferState>,
 ) -> Result<ClipboardFileWriteResult, String> {
     let (paths, total_bytes, root_dir) = {
-        let transfers = state
-            .transfers
-            .lock()
-            .map_err(|_| "文件剪贴板传输状态不可用。".to_string())?;
-        let transfer = transfers
-            .get(&payload.transfer_id)
-            .ok_or_else(|| "文件剪贴板传输不存在或已结束。".to_string())?;
-        for file in &transfer.files {
-            if file.written_bytes != file.expected_bytes {
-                return Err(format!(
-                    "文件 {} 尚未写完：{} / {}。",
-                    file.name, file.written_bytes, file.expected_bytes
-                ));
-            }
-        }
-        let (total_bytes, _) = clipboard_transfer_totals(transfer);
-        (
-            clipboard_transfer_paths(transfer),
-            total_bytes,
-            transfer.root_dir.clone(),
-        )
-    };
-
-    {
         let mut transfers = state
             .transfers
             .lock()
             .map_err(|_| "文件剪贴板传输状态不可用。".to_string())?;
-        transfers.remove(&payload.transfer_id);
-    }
+        finish_native_clipboard_transfer(&mut transfers, &payload.transfer_id)?
+    };
 
     let path_strings = file_entry_result_paths(&paths);
     match write_paths_to_clipboard(&paths) {
@@ -947,20 +1045,14 @@ fn cancel_clipboard_file_write(
     payload: CancelClipboardFileWritePayload,
     state: tauri::State<'_, ClipboardFileTransferState>,
 ) -> Result<bool, String> {
-    let transfer = {
-        let mut transfers = state
-            .transfers
-            .lock()
-            .map_err(|_| "文件剪贴板传输状态不可用。".to_string())?;
-        transfers.remove(&payload.transfer_id)
-    };
-
-    if let Some(transfer) = transfer {
-        let _ = fs::remove_dir_all(&transfer.root_dir);
-        Ok(true)
-    } else {
-        Ok(false)
-    }
+    let mut transfers = state
+        .transfers
+        .lock()
+        .map_err(|_| "文件剪贴板传输状态不可用。".to_string())?;
+    Ok(cancel_native_clipboard_transfer(
+        &mut transfers,
+        &payload.transfer_id,
+    ))
 }
 
 #[tauri::command]
@@ -1175,6 +1267,17 @@ fn get_windows_host_status(
 mod tests {
     use super::*;
 
+    fn test_file_meta(name: &str, size: u64) -> ClipboardFileMetaPayload {
+        ClipboardFileMetaPayload {
+            name: name.to_string(),
+            size,
+        }
+    }
+
+    fn test_chunk(bytes: &[u8]) -> String {
+        general_purpose::STANDARD.encode(bytes)
+    }
+
     #[test]
     fn decodes_chunked_discovery_body() {
         let body = "a\r\n{\"ok\":true\r\n2\r\n}\n\r\n0\r\n\r\n";
@@ -1182,6 +1285,124 @@ mod tests {
             decode_chunked_body(body).expect("chunked body"),
             "{\"ok\":true}\n"
         );
+    }
+
+    #[test]
+    fn chunked_clipboard_transfer_rejects_bad_offsets_and_finishes_complete_files() {
+        let mut transfers = HashMap::new();
+        let begin = create_native_clipboard_transfer(
+            &[test_file_meta("folder/unsafe:name.txt", 5)],
+            &mut transfers,
+        )
+        .expect("begin clipboard transfer");
+        let root_dir = PathBuf::from(&begin.root_dir);
+
+        let bad_offset = append_native_clipboard_file_chunk(
+            &mut transfers,
+            AppendClipboardFileChunkPayload {
+                transfer_id: begin.transfer_id.clone(),
+                file_index: 0,
+                offset: 1,
+                data_base64: test_chunk(b"he"),
+            },
+        )
+        .expect_err("bad offset should fail");
+        assert!(bad_offset.contains("偏移不连续"));
+
+        let first = append_native_clipboard_file_chunk(
+            &mut transfers,
+            AppendClipboardFileChunkPayload {
+                transfer_id: begin.transfer_id.clone(),
+                file_index: 0,
+                offset: 0,
+                data_base64: test_chunk(b"he"),
+            },
+        )
+        .expect("first chunk");
+        assert_eq!(first.written_bytes, 2);
+        assert!(!first.complete);
+
+        let oversized = append_native_clipboard_file_chunk(
+            &mut transfers,
+            AppendClipboardFileChunkPayload {
+                transfer_id: begin.transfer_id.clone(),
+                file_index: 0,
+                offset: 2,
+                data_base64: test_chunk(b"llo!"),
+            },
+        )
+        .expect_err("oversized chunk should fail");
+        assert!(oversized.contains("超出预期大小"));
+
+        let incomplete = finish_native_clipboard_transfer(&mut transfers, &begin.transfer_id)
+            .expect_err("incomplete file should not finish");
+        assert!(incomplete.contains("尚未写完"));
+
+        let second = append_native_clipboard_file_chunk(
+            &mut transfers,
+            AppendClipboardFileChunkPayload {
+                transfer_id: begin.transfer_id.clone(),
+                file_index: 0,
+                offset: 2,
+                data_base64: test_chunk(b"llo"),
+            },
+        )
+        .expect("second chunk");
+        assert!(second.complete);
+
+        let (paths, total_bytes, finished_root) =
+            finish_native_clipboard_transfer(&mut transfers, &begin.transfer_id)
+                .expect("finish complete file");
+        assert_eq!(total_bytes, 5);
+        assert_eq!(finished_root, root_dir);
+        assert_eq!(fs::read(&paths[0]).expect("written file"), b"hello");
+        assert!(!transfers.contains_key(&begin.transfer_id));
+        let _ = fs::remove_dir_all(root_dir);
+    }
+
+    #[test]
+    fn chunked_clipboard_cancel_removes_partial_temp_dir() {
+        let mut transfers = HashMap::new();
+        let begin =
+            create_native_clipboard_transfer(&[test_file_meta("partial.zip", 4)], &mut transfers)
+                .expect("begin clipboard transfer");
+        let root_dir = PathBuf::from(&begin.root_dir);
+
+        append_native_clipboard_file_chunk(
+            &mut transfers,
+            AppendClipboardFileChunkPayload {
+                transfer_id: begin.transfer_id.clone(),
+                file_index: 0,
+                offset: 0,
+                data_base64: test_chunk(b"pa"),
+            },
+        )
+        .expect("partial chunk");
+        assert!(root_dir.exists());
+        assert!(cancel_native_clipboard_transfer(
+            &mut transfers,
+            &begin.transfer_id,
+        ));
+        assert!(!root_dir.exists());
+        assert!(!cancel_native_clipboard_transfer(
+            &mut transfers,
+            &begin.transfer_id,
+        ));
+    }
+
+    #[test]
+    fn native_clipboard_transfer_rejects_total_size_over_limit() {
+        let mut transfers = HashMap::new();
+        let err = create_native_clipboard_transfer(
+            &[test_file_meta(
+                "too-large.zip",
+                MAX_NATIVE_CLIPBOARD_TOTAL_BYTES + 1,
+            )],
+            &mut transfers,
+        )
+        .expect_err("oversized transfer should fail");
+        assert!(err.contains("超过桌面版系统文件剪贴板写入上限"));
+        assert!(transfers.is_empty());
     }
 }
 
