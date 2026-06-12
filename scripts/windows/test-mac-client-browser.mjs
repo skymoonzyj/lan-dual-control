@@ -700,6 +700,7 @@ function installWebSocketSendRecorderExpression() {
     const OriginalWebSocket = window.WebSocket;
     function RecordingWebSocket(...args) {
       const socket = new OriginalWebSocket(...args);
+      window.__lanDualLastSocket = socket;
       const originalSend = socket.send.bind(socket);
       socket.addEventListener("message", (event) => {
         try {
@@ -847,6 +848,92 @@ async function verifyMacClientConnectCancel({ args, session }) {
       return true;
     })()`,
   );
+}
+
+async function verifyMacClientFileClipboardRejectCancel({ args, session, uploadDir }) {
+  const rejectPath = join(uploadDir, `mac-client-file-reject-${Date.now()}.txt`);
+  const rejectText = [
+    "LAN Dual Control Mac client file clipboard rejection self-test",
+    "This file should stop sending after the synthetic host rejection.",
+    "fedcba9876543210".repeat(12000),
+    "",
+  ].join("\n");
+  await writeFile(rejectPath, rejectText, "utf8");
+
+  await setFileInputFiles(session, "#clipboardFileInput", [rejectPath]);
+  await evaluate(
+    session,
+    `(() => {
+      window.__lanDualSentMessages = [];
+      window.__lanDualReceivedMessages = [];
+      window.__lanDualFileReadDelayMs = 650;
+      if (!window.__lanDualOriginalBlobArrayBuffer) {
+        window.__lanDualOriginalBlobArrayBuffer = Blob.prototype.arrayBuffer;
+        Blob.prototype.arrayBuffer = async function(...args) {
+          const delayMs = Number(window.__lanDualFileReadDelayMs || 0);
+          if (delayMs > 0) {
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          }
+          return window.__lanDualOriginalBlobArrayBuffer.apply(this, args);
+        };
+      }
+      const input = document.querySelector("#clipboardFileInput");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      document.querySelector("#sendClipboardFilesButton").click();
+      return true;
+    })()`,
+  );
+  const offerSnapshot = await waitFor(
+    async () => {
+      const value = await evaluate(
+        session,
+        `(() => {
+          const offer = (window.__lanDualSentMessages || []).find((message) => message.type === "clipboard_file_offer");
+          const snapshot = ${buildSnapshotExpression()};
+          return offer ? { ...snapshot, transferId: offer.transferId } : null;
+        })()`,
+      );
+      return value?.transferId && value.sendClipboardFilesButtonDisabled ? value : null;
+    },
+    args.timeoutMs,
+    "Mac client file clipboard rejection offer",
+  );
+  await evaluate(
+    session,
+    `(() => {
+      const socket = window.__lanDualLastSocket;
+      if (!socket) throw new Error("missing recorded WebSocket");
+      socket.dispatchEvent(new MessageEvent("message", {
+        data: JSON.stringify({
+          type: "clipboard_file_response",
+          transferId: ${JSON.stringify(offerSnapshot.transferId)},
+          accepted: false,
+          reason: "self-test reject",
+        }),
+      }));
+      return true;
+    })()`,
+  );
+  const rejectedSnapshot = await waitFor(
+    async () => {
+      const value = await evaluate(session, buildSnapshotExpression());
+      return value.fileClipboard.includes("对端拒绝") && value.sendClipboardFilesButtonDisabled ? value : null;
+    },
+    args.timeoutMs,
+    "Mac client file clipboard rejection cancel",
+  );
+  await delay(1000);
+  const leakedComplete = await evaluate(
+    session,
+    `(() => (window.__lanDualSentMessages || [])
+      .some((message) => message.type === "clipboard_file_complete"))()`,
+  );
+  await evaluate(session, "window.__lanDualFileReadDelayMs = 0");
+  if (leakedComplete) {
+    throw new Error("Mac client sent clipboard_file_complete after host rejected file offer");
+  }
+  print("OK", `File clipboard reject: ${rejectedSnapshot.fileClipboard}`);
 }
 
 async function verifyMacClientFileClipboardDisconnectCancel({ args, session, uploadDir }) {
@@ -1579,6 +1666,8 @@ async function run() {
 
     if (args.testFileClipboard) {
       uploadDir = await mkdtemp(join(tmpdir(), "lan-dual-mac-client-upload-"));
+      await verifyMacClientFileClipboardRejectCancel({ args, session, uploadDir });
+
       const uploadPath = join(uploadDir, `mac-client-file-clipboard-${Date.now()}.txt`);
       const uploadText = [
         "LAN Dual Control Mac client file clipboard self-test",

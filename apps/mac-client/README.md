@@ -93,7 +93,7 @@ Mac 本机文本剪贴板已纳入页面级自检：脚本会断言未连接/空
 
 Mac client 页面级自检可加 `--enableAudio --expectAudioFrame` 验证音频请求和 audio_frame 接收，脚本会打印首条音频帧耗时；加 `--maxAudioFrameMs <毫秒>` 可把它变成强校验。在 Windows 本机临时启动 WASAPI host 验收时，可加 `--audioMode wasapi --expectAudioPayload --expectAudioPlayback --maxAudioPlaybackMs <毫秒>`；连接已运行的真实 Windows WASAPI host 时，可加 `--useExistingHost --host <Windows IP> --port <端口> --enableAudio --expectAudioPayload --expectAudioPlayback --maxAudioFrameMs <毫秒> --maxAudioPlaybackMs <毫秒>`，要求收到带 PCM payload 的音频帧并确认页面播放计数递增。
 
-文件剪贴板入口本机联调已验证：页面显示文件选择和发送入口，未连接/未选择文件/发送中都会禁用发送按钮；`scripts/windows/test-mac-client-browser.mjs` 会用浏览器调试协议注入临时小文件并等待 `clipboard_file_result`。自检还会模拟文件读取中点击断开，确认页面取消当前文件发送且不会继续发出 `clipboard_file_complete`。在 Windows 上默认要求系统文件剪贴板 `saveMode=clipboard`，在 Mac/Linux 开发环境可加 `--allowClipboardFallback --mockVideo` 验证 `saveMode=temp` 回退链路。
+文件剪贴板入口本机联调已验证：页面显示文件选择和发送入口，未连接/未选择文件/发送中都会禁用发送按钮；`scripts/windows/test-mac-client-browser.mjs` 会用浏览器调试协议注入临时小文件并等待 `clipboard_file_result`。自检还会模拟对端拒绝文件清单和文件读取中点击断开，确认页面取消当前文件发送且不会继续发出 `clipboard_file_complete`。在 Windows 上默认要求系统文件剪贴板 `saveMode=clipboard`，在 Mac/Linux 开发环境可加 `--allowClipboardFallback --mockVideo` 验证 `saveMode=temp` 回退链路。
 
 认证失败路径已固化到页面级自检：`scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3` 会启动正确密码的临时 Windows host，并让 Mac 控制端填错密码，断言页面最终保留 `认证失败 · 剩余 2/3 次`，连接按钮可重试，且视频表面回到“无画面”。
 

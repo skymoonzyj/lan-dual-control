@@ -72,6 +72,7 @@ const state = {
   lastVideoCodec: "",
   reconnectTotal: 0,
   fileTransferActive: false,
+  fileTransferId: "",
   fileTransferAbortController: null,
   fileTransfers: new Map(),
   closeStatusOverride: "",
@@ -1343,6 +1344,7 @@ function cancelActiveFileTransfer(status = "文件发送已取消") {
     return;
   }
   state.fileTransferAbortController?.abort();
+  state.fileTransferId = "";
   state.fileTransferAbortController = null;
   state.fileTransferActive = false;
   state.fileTransfers.clear();
@@ -1383,6 +1385,7 @@ async function sendClipboardFiles() {
   let sentBytes = 0;
   const abortController = new AbortController();
   state.fileTransferActive = true;
+  state.fileTransferId = transferId;
   state.fileTransferAbortController = abortController;
   state.fileTransfers.set(transferId, { fileCount: files.length, totalBytes, sentBytes: 0 });
   updateFileClipboardButton();
@@ -1470,6 +1473,7 @@ async function sendClipboardFiles() {
   } finally {
     if (state.fileTransferAbortController === abortController) {
       state.fileTransferAbortController = null;
+      state.fileTransferId = "";
       state.fileTransferActive = false;
     }
     if (!state.fileTransferActive) {
@@ -1484,6 +1488,9 @@ function handleClipboardFileResponse(message) {
     elements.fileClipboardStatus.textContent = "对端拒绝";
     logEvent("文件剪贴板拒绝", message.reason || message.code || "unknown");
     state.fileTransfers.delete(message.transferId);
+    if (state.fileTransferActive && message.transferId === state.fileTransferId) {
+      cancelActiveFileTransfer("对端拒绝，文件发送已取消");
+    }
     return;
   }
   const chunkText = message.maxChunkBytes ? ` · 块 ${formatBytes(message.maxChunkBytes)}` : "";
