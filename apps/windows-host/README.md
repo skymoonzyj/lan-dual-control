@@ -42,16 +42,35 @@ PowerShell 入口等价，但参数更像 Windows 工具：
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1
 ```
 
+日常真机联调建议要求输入密码，避免服务退回 demo 密码；`-PromptPassword` 会不回显输入，`-RequirePassword` 会在没有密码时拒绝启动：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -PromptPassword -RequirePassword
+```
+
 需要把 Windows 系统声音也发给 Mac 控制端时，显式开启 WASAPI：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -Wasapi
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -PromptPassword -RequirePassword -Wasapi
 ```
 
 需要先确认会用什么地址和参数、但不真正启动服务时：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --dryRun
+```
+
+Node 入口同样支持：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --promptPassword --requirePassword
+```
+
+如果用环境变量传密码，也可以搭配 `--requirePassword`，脚本不会打印密码：
+
+```powershell
+$env:LAN_DUAL_PASSWORD="<your-lan-password>"
+node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --requirePassword
 ```
 
 设备发现接口：

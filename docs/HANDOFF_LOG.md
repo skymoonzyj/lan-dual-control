@@ -62,6 +62,45 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：增强 Windows host 启动助手的密码安全，避免真机联调时无意使用 demo 密码。
+完成内容：
+- `scripts/windows/start-windows-host.mjs` 新增 `--promptPassword`，可在交互终端中不回显输入 `LAN_DUAL_PASSWORD`。
+- 新增 `--requirePassword`，在未设置密码时拒绝启动，避免绑定到局域网时退回 demo 密码。
+- PowerShell 入口 `scripts/windows/start-windows-host.ps1` 新增 `-PromptPassword` 和 `-RequirePassword`。
+- 新增 `scripts/windows/test-windows-host-start-helper.mjs`，自动回归缺密码拒绝、非交互提示拒绝、环境密码干跑和临时端口真实启动。
+- Windows host README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 15000`
+- `node scripts/windows/check-windows-host-readiness.mjs --timeoutMs 20000`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 启动助手自测通过：缺密码会清楚拒绝且不带堆栈；非交互 `--promptPassword` 会安全失败；环境密码干跑不会打印 demo 警告；临时端口真实启动/关闭通过。
+- Windows host readiness 默认 6/6 通过；只提示当前默认 `43770` 未启动，这是预期提醒。
+遗留问题：
+- 本轮不改变底层 `server.mjs` 的 demo 默认值，避免破坏现有测试；真机入口通过 `-RequirePassword` 防止误用。
+下一步建议：
+- 真机让 Mac 控制 Windows 时，用 `scripts/windows/start-windows-host.ps1 -PromptPassword -RequirePassword`，需要系统声音再加 `-Wasapi`。
+- 后续桌面壳可把密码提示和防火墙提示做成图形化向导。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：新增 Windows host 日常启动助手，把启动、局域网地址提示和防火墙只读检查串起来，方便 Mac 反控 Windows 真机联调。
 完成内容：
 - 新增 `scripts/windows/start-windows-host.mjs`：启动 Windows host 后列出 Mac 端可填写的局域网地址，等待 `/discovery` 就绪，并自动运行只读 LAN/firewall 检查。

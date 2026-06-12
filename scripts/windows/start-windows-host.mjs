@@ -21,6 +21,8 @@ const defaults = {
   timeoutMs: 8000,
   skipFirewallCheck: false,
   noRequireOpen: false,
+  promptPassword: false,
+  requirePassword: false,
   dryRun: false,
   help: false,
 };
@@ -37,7 +39,13 @@ function parseArgs(argv) {
       args.help = true;
       continue;
     }
-    if (key === "skipFirewallCheck" || key === "noRequireOpen" || key === "dryRun") {
+    if (
+      key === "skipFirewallCheck" ||
+      key === "noRequireOpen" ||
+      key === "promptPassword" ||
+      key === "requirePassword" ||
+      key === "dryRun"
+    ) {
       args[key] = true;
       continue;
     }
@@ -72,6 +80,8 @@ function parseArgs(argv) {
   args.audioMode = normalizeMode(args.audioMode, ["mock", "wasapi", "dshow"], "");
   args.inputMode = normalizeMode(args.inputMode, ["auto", "log", "system"], "");
   args.ffmpeg = resolveFfmpegCommand(String(args.ffmpeg || "").trim());
+  args.promptPassword = Boolean(args.promptPassword);
+  args.requirePassword = Boolean(args.requirePassword);
   return args;
 }
 
@@ -90,6 +100,8 @@ Options:
   --audioMode <mode>      mock | wasapi | dshow
   --inputMode <mode>      auto | log | system
   --ffmpeg <path>         FFmpeg path. Auto-detects C:\\DevTools\\ffmpeg\\bin\\ffmpeg.exe
+  --promptPassword        Prompt for LAN_DUAL_PASSWORD without echoing it.
+  --requirePassword       Refuse to start if no password/env password was set.
   --wasapi                Shortcut for --audioMode wasapi
   --logInput              Shortcut for --inputMode log
   --systemInput           Shortcut for --inputMode system
@@ -130,6 +142,80 @@ function getLanAddresses() {
     }
   }
   return result;
+}
+
+async function preparePassword(args) {
+  if (args.promptPassword && !args.password && !process.env.LAN_DUAL_PASSWORD) {
+    args.password = await promptHidden("Windows host password: ");
+    if (!args.password) {
+      throw new Error("Password cannot be empty when --promptPassword is used.");
+    }
+  }
+  if (args.requirePassword && !args.password && !process.env.LAN_DUAL_PASSWORD) {
+    throw new Error("LAN_DUAL_PASSWORD is required. Set it in the environment, pass --password, or use --promptPassword.");
+  }
+}
+
+function promptHidden(label) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return Promise.reject(new Error("--promptPassword requires an interactive terminal."));
+  }
+
+  return new Promise((resolvePrompt, rejectPrompt) => {
+    const stdin = process.stdin;
+    const stdout = process.stdout;
+    const previousRawMode = stdin.isRaw;
+    let value = "";
+    let settled = false;
+
+    const cleanup = () => {
+      stdin.off("data", onData);
+      if (typeof stdin.setRawMode === "function") {
+        stdin.setRawMode(Boolean(previousRawMode));
+      }
+      stdin.pause();
+    };
+    const finish = (result, error = null) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      stdout.write("\n");
+      if (error) {
+        rejectPrompt(error);
+      } else {
+        resolvePrompt(result);
+      }
+    };
+    const onData = (chunk) => {
+      const text = String(chunk);
+      for (const char of text) {
+        const code = char.charCodeAt(0);
+        if (char === "\r" || char === "\n") {
+          finish(value);
+          return;
+        }
+        if (code === 3) {
+          finish("", new Error("Password prompt cancelled."));
+          return;
+        }
+        if (code === 8 || code === 127) {
+          value = value.slice(0, -1);
+          continue;
+        }
+        if (code >= 32) {
+          value += char;
+        }
+      }
+    };
+
+    stdout.write(label);
+    stdin.resume();
+    stdin.setEncoding("utf8");
+    if (typeof stdin.setRawMode === "function") {
+      stdin.setRawMode(true);
+    }
+    stdin.on("data", onData);
+  });
 }
 
 function makeLaunchEnv(args) {
@@ -255,6 +341,7 @@ async function main() {
     return;
   }
 
+  await preparePassword(args);
   const env = makeLaunchEnv(args);
   printLaunchPlan(args);
   if (args.dryRun) {
@@ -324,6 +411,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(`[ERROR] ${error.stack || error.message}`);
+  console.error(`[ERROR] ${error.message}`);
   process.exitCode = 1;
 });
