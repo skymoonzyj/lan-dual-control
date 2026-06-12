@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/windows/test-mac-client-browser.mjs`、`apps/mac-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 20:31 | Mac client 页面级自检新增首次视频可见耗时和断线恢复耗时指标；`--maxInitialVideoMs` / `--maxReconnectRestoreMs` 可把体验耗时转成强校验。 |
 | Mac Codex | `apps/mac-client/app.js`、`apps/mac-client/README.md`、`scripts/windows/test-mac-client-browser.mjs`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 20:16 | Mac client 意外断线后最多自动重连 3 次；手动断开/认证失败不重连；页面级自检新增 `--expectReconnect`，覆盖临时 Windows host 被杀后同端口恢复连接。 |
 | Mac Codex | `scripts/mac/check-mac-host-readiness.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 20:01 | Mac readiness 默认提示运行中 `/discovery.runtime.buildId` 是否落后当前 git short hash；新增 `--requireCurrentBuildId` 强制部署验收和 `--skipCurrentBuildCheck` 旧 build 调试放宽。 |
 | Windows Codex | `apps/windows-client/app.js`、`scripts/windows/test-windows-client-browser.mjs`、`apps/windows-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 20:29 | Windows 控制端远端文件托盘失败恢复提示：系统文件剪贴板失败但已落盘时，本地状态和事件日志显示临时目录；页面自检覆盖该提示。 |

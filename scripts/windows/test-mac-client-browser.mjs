@@ -30,6 +30,8 @@ const defaults = {
   expectAudioPlayback: false,
   requireAudio: false,
   expectReconnect: false,
+  maxInitialVideoMs: 0,
+  maxReconnectRestoreMs: 0,
   useExistingHost: false,
   mockVideo: false,
   headless: true,
@@ -116,6 +118,8 @@ function parseArgs(argv) {
   args.clientPort = Number(args.clientPort);
   args.debugPort = Number(args.debugPort);
   args.timeoutMs = Number(args.timeoutMs);
+  args.maxInitialVideoMs = Number(args.maxInitialVideoMs);
+  args.maxReconnectRestoreMs = Number(args.maxReconnectRestoreMs);
   args.hostPassword = args.hostPassword || args.password;
   args.clientPassword = args.clientPassword || (args.expectAuthFailure ? `${args.password}-wrong` : args.password);
   if (args.requireAudio && !args.audioMode) {
@@ -142,6 +146,13 @@ function print(kind, text) {
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function requireWithinDuration(label, elapsedMs, maxMs) {
+  if (!Number.isFinite(maxMs) || maxMs <= 0) return;
+  if (elapsedMs > maxMs) {
+    throw new Error(`${label} took ${elapsedMs}ms, expected <= ${maxMs}ms`);
+  }
 }
 
 async function waitFor(fn, timeoutMs, label) {
@@ -467,6 +478,7 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
     throw new Error("--expectReconnect requires a temporary Windows host managed by this script");
   }
 
+  const restoreStartedAt = Date.now();
   const discoveryUrl = `http://${args.host}:${args.port}/discovery`;
   const sessionAnswersBefore = await evaluate(
     session,
@@ -510,7 +522,12 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
     args.timeoutMs,
     "Mac client reconnect restore",
   );
-  print("OK", `Reconnect restored: ${reconnectedSnapshot.connection} · sessions=${reconnectedSnapshot.sessionAnswers}`);
+  const restoreMs = Date.now() - restoreStartedAt;
+  requireWithinDuration("Mac client reconnect restore", restoreMs, args.maxReconnectRestoreMs);
+  print(
+    "OK",
+    `Reconnect restored: ${reconnectedSnapshot.connection} · sessions=${reconnectedSnapshot.sessionAnswers} · ${restoreMs}ms`,
+  );
   return restartedHost;
 }
 
@@ -708,6 +725,7 @@ async function run() {
         "Mac client audio toggle",
       );
     }
+    const connectStartedAt = Date.now();
     await clickElement(session, "#connectButton");
 
     let lastSnapshot = null;
@@ -764,10 +782,13 @@ async function run() {
       }
       throw error;
     });
+    const initialVideoMs = Date.now() - connectStartedAt;
+    requireWithinDuration("Mac client initial video", initialVideoMs, args.maxInitialVideoMs);
 
     print("OK", `Connection: ${videoSnapshot.connection}`);
     print("OK", `Remote: ${videoSnapshot.remote}`);
     print("OK", `Video: ${videoSnapshot.video}`);
+    print("OK", `Initial video ready: ${initialVideoMs}ms`);
     const sessionSettings = await evaluate(
       session,
       `(() => [...(window.__lanDualSentMessages || [])].find((message) => message.type === "session_offer"))()`,

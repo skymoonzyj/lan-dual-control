@@ -21,6 +21,38 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：把 Mac 控制 Windows 页面级自检补上首帧和重连恢复耗时指标，开始把体验验收量化。
+完成内容：
+- `scripts/windows/test-mac-client-browser.mjs` 新增 `--maxInitialVideoMs`，首次视频可见耗时会默认打印；参数大于 0 时超过阈值即失败。
+- `--expectReconnect` 路径新增重连恢复总耗时打印；`--maxReconnectRestoreMs` 大于 0 时会强制要求意外断线到画面恢复不超过阈值。
+- 默认行为只增加指标输出，不改变连接流程，不改协议。
+- Mac client README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --expectReconnect --maxInitialVideoMs 8000 --maxReconnectRestoreMs 12000 --mockVideo --allowClipboardFallback --skipFileClipboard --timeoutMs 45000`
+验证结果：
+- 本机 mock Windows host 页面级自检通过：首次视频可见 `261ms`。
+- 杀掉临时 Windows host 后页面进入自动重连；同端口恢复后 `session_answer=2`，总恢复耗时 `3779ms`，低于 12s 阈值。
+- 重连恢复后继续通过显示设置、log 输入、Command+C -> Ctrl+C、文本剪贴板、Mac 本机剪贴板读取/发送和监听回归。
+遗留问题：
+- 该耗时是本机 mock host 数字；真实跨设备 Windows host 的首帧、音频和重连恢复耗时仍需后续真机验收。
+下一步建议：
+- 真机联调时给 `test-mac-client-browser.mjs --useExistingHost ...` 加 `--maxInitialVideoMs` 建立首帧基线；需要断线恢复体验时使用临时 host 加 `--expectReconnect --maxReconnectRestoreMs <阈值>`。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：补齐 Mac 控制 Windows Web 原型的意外断线自动重连，提升反控日常可用性。
 完成内容：
 - `apps/mac-client/app.js` 新增意外断线自动重连：非手动断开、非认证失败时最多重连 3 次，延迟按 1.2s 递增。
