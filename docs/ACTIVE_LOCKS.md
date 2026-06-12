@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/mac/check-mac-host-readiness.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 21:24 | Mac readiness 新增 `--profile default|deploy|deep`；默认行为不变，`deploy`/`deep` 用于部署/深度验收常用强校验组合。 |
 | Mac Codex | `scripts/mac/check-mac-host-readiness.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 21:08 | Mac readiness 新增 `--requireInputMonitoring`，默认 warning 行为不变，显式验收时可强制输入监控权限为 true。 |
 | Mac Codex | `scripts/windows/test-mac-client-browser.mjs`、`apps/mac-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 20:57 | Mac client 页面级自检新增短窗口视频持续来帧/FPS 指标；`--observeVideoMs`、`--minObservedVideoFrames`、`--minObservedVideoFps` 可量化反控画面连续性。 |
 | Mac Codex | `scripts/windows/test-mac-client-browser.mjs`、`apps/mac-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 20:46 | Mac client 页面级自检新增音频首帧和真实 PCM 播放耗时指标；`--maxAudioFrameMs` / `--maxAudioPlaybackMs` 可把反控音频体验转成强校验。 |

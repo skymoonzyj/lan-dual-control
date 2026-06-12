@@ -17,6 +17,45 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
+本轮目标：给 Mac host readiness 增加部署/深度验收 profile，降低真机联调命令记忆成本。
+完成内容：
+- `scripts/mac/check-mac-host-readiness.mjs` 新增 `--profile default|deploy|deep`。
+- 默认 profile 行为不变，仍只跑低风险检查，旧 build 和 inputMonitoring 只 warning。
+- `--profile deploy` 会强制要求 `/discovery` 可达、当前 git build、控制权限、输入监控，并串联 H.264、PCM、input-log 冒烟和 `--maxVideoFrameAgeMs 250`。
+- `--profile deep` 在 deploy 基础上额外跑启动助手临时端口自测。
+- JSON 摘要新增 `args.profile`，Mac host README、当前状态、下一步和任务板已同步。
+修改文件：
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-host-readiness.mjs`
+- `node scripts/mac/check-mac-host-readiness.mjs --help`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 45000`
+- `node scripts/mac/check-mac-host-readiness.mjs --profile deploy --timeoutMs 45000`
+- `node scripts/mac/check-mac-host-readiness.mjs --profile deep --timeoutMs 45000`
+- `node scripts/mac/check-mac-host-readiness.mjs --json --timeoutMs 45000`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 默认 readiness 9/9 通过，仍只提示主 `43770` 运行中 build `c2db37f` 落后当前 git `0cc7548`、`inputMonitoring=off`。
+- `--profile deploy` 和 `--profile deep` 均按预期失败在 Mac host discovery 强校验：当前主 `43770` 不是当前 build 且输入监控未开启；同时 H.264、PCM、input-log 均通过。
+- `--profile deep` 额外的 start-helper self-test 通过；JSON 模式输出 `profile=default` 且 9/9 通过。
+遗留问题：
+- 当前主 `43770` 仍是旧 build `c2db37f`，`inputMonitoring=off`；需要重启到新 build 并授予输入监控后，`--profile deploy/deep` 才会全绿。
+下一步建议：
+- 协调后重启真实 Mac host 到最新 build，再跑 `node scripts/mac/check-mac-host-readiness.mjs --profile deploy --timeoutMs 45000` 做部署验收。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12

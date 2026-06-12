@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 const defaults = {
+  profile: "default",
   host: "127.0.0.1",
   port: 43770,
   password: process.env.LAN_DUAL_PASSWORD || "demo-password",
@@ -26,6 +27,12 @@ const defaults = {
   probeStartHelper: false,
   strict: false,
   json: false,
+};
+
+const profileDescriptions = {
+  default: "default low-risk checks only",
+  deploy: "require reachable current-build host, control permissions, input monitoring, H.264, PCM, and safe input-log smoke",
+  deep: "deploy profile plus start-helper temporary-port self-test",
 };
 
 function parseArgs(argv) {
@@ -62,6 +69,7 @@ function parseArgs(argv) {
     }
   }
 
+  args.profile = normalizedText(args.profile || defaults.profile).toLowerCase();
   args.host = String(args.host || defaults.host).trim();
   args.port = clampInteger(args.port, 1, 65535, defaults.port);
   args.password = String(args.password || defaults.password);
@@ -74,14 +82,39 @@ function parseArgs(argv) {
   args.requireInputMonitoring = booleanArg(args.requireInputMonitoring);
   args.requireCurrentBuildId = booleanArg(args.requireCurrentBuildId);
   args.skipCurrentBuildCheck = booleanArg(args.skipCurrentBuildCheck);
-  args.probeHost = booleanArg(args.probeHost) || Boolean(args.expectBuildId);
-  args.probeVideo = booleanArg(args.probeVideo) || args.maxVideoFrameAgeMs > 0;
+  args.probeHost = booleanArg(args.probeHost);
+  args.probeVideo = booleanArg(args.probeVideo);
   args.probeAudio = booleanArg(args.probeAudio);
   args.probeInputLog = booleanArg(args.probeInputLog);
   args.probeStartHelper = booleanArg(args.probeStartHelper);
   args.strict = booleanArg(args.strict);
   args.json = booleanArg(args.json);
+  applyProfile(args);
+  args.probeHost = args.probeHost || Boolean(args.expectBuildId);
+  args.probeVideo = args.probeVideo || args.maxVideoFrameAgeMs > 0;
   return args;
+}
+
+function applyProfile(args) {
+  if (!Object.prototype.hasOwnProperty.call(profileDescriptions, args.profile)) {
+    throw new Error(`Unknown readiness profile "${args.profile}". Expected one of: ${Object.keys(profileDescriptions).join(", ")}`);
+  }
+  if (args.profile === "default") return;
+
+  args.requireOpen = true;
+  args.requireControlPermissions = true;
+  args.requireInputMonitoring = true;
+  args.requireCurrentBuildId = true;
+  args.probeHost = true;
+  args.probeVideo = true;
+  args.probeAudio = true;
+  args.probeInputLog = true;
+  if (args.maxVideoFrameAgeMs <= 0) {
+    args.maxVideoFrameAgeMs = 250;
+  }
+  if (args.profile === "deep") {
+    args.probeStartHelper = true;
+  }
 }
 
 function printHelp() {
@@ -93,6 +126,10 @@ defaults, helper syntax/dry-run, keymap coverage, and a non-failing
 /discovery status check.
 
 Options:
+  --profile <name>          Readiness preset: default, deploy, or deep.
+                            default: ${profileDescriptions.default}
+                            deploy: ${profileDescriptions.deploy}
+                            deep: ${profileDescriptions.deep}
   --host <host>             Mac host probe host. Default: 127.0.0.1
   --port <port>             Mac host port. Default: 43770
   --password <password>     Probe password. Default: LAN_DUAL_PASSWORD or demo-password
@@ -448,6 +485,10 @@ async function main() {
   const results = [];
   const node = process.execPath;
 
+  if (args.profile !== "default") {
+    print("INFO", `Using readiness profile "${args.profile}": ${profileDescriptions[args.profile]}`, args);
+  }
+
   await runStep(results, args, "Node.js", node, ["--version"], { timeoutMs: 5000 });
   await runStep(results, args, "macOS version", "sw_vers", [], { timeoutMs: 5000 });
   await runStep(results, args, "Swift", "swift", ["--version"], { timeoutMs: 10000 });
@@ -595,6 +636,7 @@ async function main() {
     ok,
     strict: args.strict,
     args: {
+      profile: args.profile,
       host: args.host,
       port: args.port,
       expectBuildId: args.expectBuildId,

@@ -61,6 +61,18 @@ node scripts/mac/check-mac-host-readiness.mjs
 
 默认体检只做低风险检查：Node/Swift、Mac host build、直接启动输入默认值、启动助手语法和干跑、键盘映射覆盖，以及当前 `/discovery` 状态。其中直接启动默认值检查会用临时本机端口确认未设置 `LAN_DUAL_INPUT_MODE` 时是 `log`、显式 `inject` 仍可覆盖，并顺手验证启动日志和 `/discovery.permissions` 的权限诊断格式。如果当前 host 没启动，默认只给出提示，不会失败；需要强制要求端口已打开时加 `--requireOpen`。脚本会把当前 `git rev-parse --short HEAD` 和运行中 `/discovery.runtime.buildId` 对比，不一致时默认只给 warning；部署后需要强制确认已是最新 build 时加 `--requireCurrentBuildId`。
 
+部署/真机联调常用组合可以直接使用 profile，避免手写一长串参数：
+
+```bash
+node scripts/mac/check-mac-host-readiness.mjs --profile deploy
+```
+
+`deploy` 会要求 `/discovery` 可达、运行中 host 是当前 git build、屏幕录制/辅助功能/输入监控权限已开启，并串联 H.264、PCM 和安全 `log` 输入冒烟；默认还会用 `--maxVideoFrameAgeMs 250` 检查帧时间戳新鲜度。如果还要顺带覆盖启动助手临时端口实启/关闭路径，可用：
+
+```bash
+node scripts/mac/check-mac-host-readiness.mjs --profile deep
+```
+
 如果需要确认当前 Mac 权限足够做真实视频和真实输入注入，可加：
 
 ```bash
@@ -72,7 +84,7 @@ node scripts/mac/check-mac-host-readiness.mjs --requireControlPermissions
 真机联调前可跑深度体检：
 
 ```bash
-node scripts/mac/check-mac-host-readiness.mjs --expectBuildId c2db37f --probeVideo --probeAudio --probeInputLog --probeStartHelper
+node scripts/mac/check-mac-host-readiness.mjs --profile deep
 ```
 
 其中 `--probeVideo` 会做短 H.264 时间线观察，`--probeAudio` 会做短 PCM 音频观察且不播放声音，`--probeInputLog` 会先确认 host 是 `log` 输入模式再发送安全冒烟事件，`--probeStartHelper` 会用临时端口启动/关闭一次启动助手自测。主机已重启到小数秒 timestamp build 后，可加 `--maxVideoFrameAgeMs 250` 强制要求 `video_frame.timestamp` 接收年龄足够新鲜；该参数会自动启用 `--probeVideo`。如果临时需要验收旧 build，可用 `--skipCurrentBuildCheck` 暂时关闭“运行中 build 与当前 git 不一致”的 warning。需要机器可读结果时可加 `--json`。
