@@ -19,6 +19,36 @@
 
 ## 2026-06-13 Windows Codex
 
+日期：2026-06-13 01:52
+开发端：Windows Codex
+本轮目标：把 Windows host 视频/音频帧新鲜度强校验接入一键 readiness，减少部署前漏测卡顿或旧帧的概率。
+完成内容：
+- `scripts/windows/check-windows-host-readiness.mjs` 新增 `--maxVideoFrameAgeMs` / `--maxAudioFrameAgeMs`，默认都是 `1000`，设为 `0` 可临时关闭对应年龄阈值。
+- readiness 的 `--probeVideo` / `--probeAudio` 现在会把 `--maxFrameAgeMs` 和 `--requireMonotonicTimestamp` 传给观察脚本；`--profile deploy` / `--profile deep` 也自动继承这套强校验。
+- Windows host README、当前状态、下一步和文件占用记录已同步。
+修改文件：
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-host-readiness.mjs`
+- `node scripts/windows/check-windows-host-readiness.mjs --help`
+- `node scripts/windows/check-windows-host-readiness.mjs --probeVideo --probeAudio --json`
+验证结果：
+- 帮助文本已显示 `--maxVideoFrameAgeMs` / `--maxAudioFrameAgeMs`。
+- readiness probe 通过：9/9 checks passed；视频观察和 WASAPI 音频观察均通过；当前没有常驻 43770 host，因此端口/防火墙项只给 warning，默认低风险模式仍通过。
+遗留问题：
+- 尚未在桌面 UI 面板单独暴露这两个阈值；当前桌面部署档使用 readiness 默认 1000ms。
+下一步建议：
+- 等真实 Mac 反控 Windows 时，用桌面部署档或 `--profile deploy` 做一次常驻 host 验收，确认当前 build、端口、防火墙、视频和 WASAPI 音频都一次通过。
+是否改了协议：否。
+是否需要另一端配合：不阻塞；真实 Mac 反控 Windows 前可让 Mac 端配合跑一次部署档验收。
+
+## 2026-06-13 Windows Codex
+
 日期：2026-06-13 01:45
 开发端：Windows Codex
 本轮目标：补齐 Windows host 音频观察脚本的纯帮助入口，避免查看参数时误启动临时 host。

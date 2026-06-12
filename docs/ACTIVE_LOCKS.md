@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/check-windows-host-readiness.mjs`, `apps/windows-host/README.md`, 交接 docs | 2026-06-13 01:52 | Windows host readiness 的视频/音频 probe 和 deploy/deep 档接入帧新鲜度与 timestamp 单调性强校验；默认阈值 1000ms，可用对应 maxFrameAge 选项设为 0 临时关闭。 |
 | Windows Codex | `scripts/windows/observe-windows-host-audio.mjs`, `apps/windows-host/README.md`, 交接 docs | 2026-06-13 01:45 | Windows host 音频观察脚本新增 `--help/-h` 纯帮助入口；README、当前状态和交接记录已同步。 |
 | Windows Codex | `scripts/windows/observe-windows-host-audio.mjs`、`apps/windows-host/README.md`、交接 docs | 2026-06-13 01:36 | Windows host 音频观察脚本新增 `audio_frame.timestamp` 接收年龄统计、`--maxFrameAgeMs` 和 `--requireMonotonicTimestamp` 强校验；WASAPI 正向短观察通过，倒退 timestamp 负向失败。 |
 | Mac Codex | `apps/mac-client/app.js`、`apps/mac-client/README.md`、`scripts/windows/test-mac-client-browser.mjs`、交接 docs | 2026-06-13 01:02 | Mac client 意外断线等待自动重连时清空“远端运行”runtime，重连恢复后页面自检断言新 runtime 重新出现。 |

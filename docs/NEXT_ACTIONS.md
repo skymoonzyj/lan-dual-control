@@ -1,6 +1,6 @@
 # 下一步行动
 
-最后更新：2026-06-12
+最后更新：2026-06-13
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。只放短期任务，长期计划继续放在 `docs/04-task-board.md`。
 
@@ -44,7 +44,7 @@
 
 - 优化 Windows 控制端远端文件托盘：桌面版文件剪贴板写入已升级为 1MB 原生分块并支持到 512MB，原生层已补总量保护、7 天旧临时目录清理、临时目录白名单和分块边界单测；系统剪贴板写入失败但文件已落盘时，本地日志和托盘状态会显示临时目录，桌面版可一键打开并可重试写入；清空托盘会清掉内存暂存和提示，但不会删除系统剪贴板仍可能需要的临时目录；后续重点是真实大文件/压缩包复制体验。
 - Windows 被控端 FFmpeg gdigrab 过渡层普通启动已可协商 60Hz，本机 720p/60Hz 观察约 56.9 FPS；下一步把该采集层升级为 Windows Graphics Capture 和正式编码管线，进一步提升帧率、延迟、带宽和资源占用表现。
-- Mac 控制 Windows 真机联调前，优先在 Windows 桌面版左侧“本机被控”面板选择低风险/部署/深度体检、预览防火墙命令，并用隐藏密码启动 Windows host；面板默认输入模式是“安全日志”，需要真实反控时再手动切到“真实控制”。命令行备用流程仍是先运行 `node scripts/windows/check-windows-host-readiness.mjs` 做低风险一键体检；Windows host 启动后可用 `--profile deploy` 要求端口可达、运行中 host build 与当前 git 一致，并跑视频/音频短验收，深度本机部署验收可用 `--profile deep` 额外串联 `test-windows-host.ps1`。正式让 Mac 连入时也可用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-windows-host.ps1 -PromptPassword -RequirePassword` 启动 Windows host，它会列出 Mac 端可填的局域网地址、自动做只读防火墙/端口检查，并通过 `LAN_DUAL_BUILD_ID` 暴露 `/discovery.runtime.buildId`；需要系统声音时再加 `-Wasapi`。脚本默认只读，不会自动改系统防火墙；需要预览放行命令时加 `-DryRunFirewallRule`，确认可信局域网且以管理员 PowerShell 运行时才加 `-AddFirewallRule`。如果 readiness 发现旧 build，会尽量列出旧 build 后变动过的 Windows host 运行源码文件；需要临时验收旧进程时可加 `--skipCurrentBuildCheck` 放宽 warning，正式部署验收不要放宽。
+- Mac 控制 Windows 真机联调前，优先在 Windows 桌面版左侧“本机被控”面板选择低风险/部署/深度体检、预览防火墙命令，并用隐藏密码启动 Windows host；面板默认输入模式是“安全日志”，需要真实反控时再手动切到“真实控制”。命令行备用流程仍是先运行 `node scripts/windows/check-windows-host-readiness.mjs` 做低风险一键体检；Windows host 启动后可用 `--profile deploy` 要求端口可达、运行中 host build 与当前 git 一致，并跑带 1000ms 帧新鲜度和 timestamp 单调性强校验的视频/音频短验收，深度本机部署验收可用 `--profile deep` 额外串联 `test-windows-host.ps1`。正式让 Mac 连入时也可用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-windows-host.ps1 -PromptPassword -RequirePassword` 启动 Windows host，它会列出 Mac 端可填的局域网地址、自动做只读防火墙/端口检查，并通过 `LAN_DUAL_BUILD_ID` 暴露 `/discovery.runtime.buildId`；需要系统声音时再加 `-Wasapi`。脚本默认只读，不会自动改系统防火墙；需要预览放行命令时加 `-DryRunFirewallRule`，确认可信局域网且以管理员 PowerShell 运行时才加 `-AddFirewallRule`。如果 readiness 发现旧 build，会尽量列出旧 build 后变动过的 Windows host 运行源码文件；需要临时验收旧进程时可加 `--skipCurrentBuildCheck` 放宽 warning，正式部署验收不要放宽。
 - Windows 被控端输入注入已升级为常驻 C# SendInput helper；可用 `node scripts/windows/measure-windows-input-helper.mjs` 安全干跑量化 cold/warm/p95 延迟；后续真实 `system` 模式仍需有人看屏幕时用 `test-windows-host.ps1 -InputEvents -InputMode system` 验收手感和安全边界。
 - 继续验证 Windows 被控端 WASAPI loopback：30 秒本机长稳已通过，短测试音电平强校验已通过；下一步重点看系统音量变化、60 秒以上长时间运行、Mac client 播放体验和无系统声音时的提示。可用 `node scripts/windows/observe-windows-host-audio.mjs --durationMs 30000 --minFrames 1200 --minFps 40 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp` 做持续帧观察并强校验音频帧新鲜度；需要确认有声电平时加 `--playTone --requireLevel --minLevel 0.02`。
 - 继续优化 Windows 控制端文件托盘和错误提示，重点看大文件复制后的粘贴可用性、失败恢复和用户可理解性。

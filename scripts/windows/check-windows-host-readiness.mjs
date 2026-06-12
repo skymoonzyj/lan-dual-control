@@ -16,6 +16,8 @@ const defaults = {
   host: "0.0.0.0",
   port: 43770,
   timeoutMs: 20000,
+  maxVideoFrameAgeMs: 1000,
+  maxAudioFrameAgeMs: 1000,
   ffmpeg: process.env.LAN_DUAL_FFMPEG || "",
   probeHost: false,
   probeAudio: false,
@@ -66,6 +68,8 @@ function parseArgs(argv) {
   applyProfile(args);
   args.port = Number(args.port) || defaults.port;
   args.timeoutMs = Math.max(3000, Number(args.timeoutMs) || defaults.timeoutMs);
+  args.maxVideoFrameAgeMs = Math.max(0, Number(args.maxVideoFrameAgeMs) || 0);
+  args.maxAudioFrameAgeMs = Math.max(0, Number(args.maxAudioFrameAgeMs) || 0);
   args.host = String(args.host || defaults.host).trim();
   args.ffmpeg = resolveFfmpegCommand(String(args.ffmpeg || "").trim());
   args.probeHost = booleanArg(args.probeHost);
@@ -117,6 +121,8 @@ Options:
   --host <host>       Windows host bind/probe host. Default: 0.0.0.0
   --port <port>       Windows host port. Default: 43770
   --ffmpeg <path>     FFmpeg path. Auto-detects C:\\DevTools\\ffmpeg\\bin\\ffmpeg.exe
+  --maxVideoFrameAgeMs <ms>  Video probe frame freshness limit. 0 disables. Default: 1000
+  --maxAudioFrameAgeMs <ms>  Audio probe frame freshness limit. 0 disables. Default: 1000
   --probeHost         Run Windows host PowerShell self-test.
   --probeVideo        Run short Windows host video observer.
   --probeAudio        Run short WASAPI audio observer. Does not play a tone.
@@ -552,6 +558,9 @@ async function main() {
         "20",
         "--minFps",
         "8",
+        ...(args.maxVideoFrameAgeMs > 0
+          ? ["--maxFrameAgeMs", String(args.maxVideoFrameAgeMs), "--requireMonotonicTimestamp"]
+          : []),
         ...(args.ffmpeg ? ["--ffmpeg", args.ffmpeg] : []),
       ],
       { timeoutMs: Math.max(args.timeoutMs, 35000), env: envWithFfmpeg },
@@ -572,6 +581,9 @@ async function main() {
         "60",
         "--minFps",
         "30",
+        ...(args.maxAudioFrameAgeMs > 0
+          ? ["--maxFrameAgeMs", String(args.maxAudioFrameAgeMs), "--requireMonotonicTimestamp"]
+          : []),
       ],
       { timeoutMs: Math.max(args.timeoutMs, 35000), env: envWithFfmpeg },
     );
@@ -589,6 +601,8 @@ async function main() {
       host: args.host,
       port: args.port,
       ffmpeg: args.ffmpeg,
+      maxVideoFrameAgeMs: args.maxVideoFrameAgeMs,
+      maxAudioFrameAgeMs: args.maxAudioFrameAgeMs,
       probeHost: args.probeHost,
       probeVideo: args.probeVideo,
       probeAudio: args.probeAudio,
