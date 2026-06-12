@@ -567,6 +567,7 @@ function disconnect() {
   state.authenticated = false;
   stopClipboardWatch("已断开，监听已停止");
   resetAudioPlayback();
+  resetSessionDiagnostics({ resetReconnects: true });
   setConnected(false);
   renderSessionDiagnostics();
 }
