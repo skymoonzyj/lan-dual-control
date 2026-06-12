@@ -14,6 +14,18 @@ const elements = {
   deviceList: document.querySelector("#deviceList"),
   exportLogButton: document.querySelector("#exportLogButton"),
   clearLogButton: document.querySelector("#clearLogButton"),
+  localHostBadge: document.querySelector("#localHostBadge"),
+  localHostPortInput: document.querySelector("#localHostPortInput"),
+  localHostPasswordInput: document.querySelector("#localHostPasswordInput"),
+  localHostScreenModeSelect: document.querySelector("#localHostScreenModeSelect"),
+  localHostAudioModeSelect: document.querySelector("#localHostAudioModeSelect"),
+  localHostInputModeSelect: document.querySelector("#localHostInputModeSelect"),
+  localHostReadinessButton: document.querySelector("#localHostReadinessButton"),
+  localHostStartButton: document.querySelector("#localHostStartButton"),
+  localHostFirewallButton: document.querySelector("#localHostFirewallButton"),
+  localHostStopButton: document.querySelector("#localHostStopButton"),
+  localHostStatusText: document.querySelector("#localHostStatusText"),
+  localHostOutput: document.querySelector("#localHostOutput"),
   historyList: document.querySelector("#historyList"),
   connectionBadge: document.querySelector("#connectionBadge"),
   eventLog: document.querySelector("#eventLog"),
@@ -307,6 +319,9 @@ const state = {
   audioDroppedFrames: 0,
   audioLastError: "",
   recentConnections: [],
+  localHostRunning: false,
+  localHostBusy: false,
+  localHostPollTimer: null,
   connectionState: "idle",
   remoteDisplays: fallbackDisplays,
   activeDisplayId: "main",
@@ -905,6 +920,10 @@ function collectPreferences() {
     clipboard: elements.clipboardToggle.checked,
     keyboardMapping: getKeyboardMapping(),
     shortcutCompatibility: elements.shortcutCompatToggle.checked,
+    localHostPort: elements.localHostPortInput.value.trim(),
+    localHostScreenMode: elements.localHostScreenModeSelect.value,
+    localHostAudioMode: elements.localHostAudioModeSelect.value,
+    localHostInputMode: elements.localHostInputModeSelect.value,
     recentConnections: state.recentConnections,
   };
 }
@@ -942,6 +961,10 @@ function applyPreferences() {
     typeof preferences.shortcutCompatibility === "boolean"
       ? preferences.shortcutCompatibility
       : true;
+  if (preferences.localHostPort) elements.localHostPortInput.value = preferences.localHostPort;
+  if (preferences.localHostScreenMode) elements.localHostScreenModeSelect.value = preferences.localHostScreenMode;
+  if (preferences.localHostAudioMode) elements.localHostAudioModeSelect.value = preferences.localHostAudioMode;
+  if (preferences.localHostInputMode) elements.localHostInputModeSelect.value = preferences.localHostInputMode;
   applyKeyboardMapping(preferences.keyboardMapping ?? defaultKeyboardMapping);
 
   state.recentConnections = Array.isArray(preferences.recentConnections)
@@ -2740,6 +2763,235 @@ function canUseDesktopFileClipboard() {
   return Boolean(getTauriInvoke());
 }
 
+function canUseDesktopHostControl() {
+  return Boolean(getTauriInvoke());
+}
+
+function getLocalHostPort() {
+  const port = Number(elements.localHostPortInput.value);
+  if (!Number.isFinite(port)) return 43770;
+  return Math.max(1025, Math.min(65535, Math.trunc(port)));
+}
+
+function buildLocalHostReadinessRequest(extra = {}) {
+  return {
+    host: "0.0.0.0",
+    port: getLocalHostPort(),
+    ...extra,
+  };
+}
+
+function buildLocalHostLaunchRequest() {
+  return {
+    host: "0.0.0.0",
+    port: getLocalHostPort(),
+    password: elements.localHostPasswordInput.value,
+    screenMode: elements.localHostScreenModeSelect.value,
+    audioMode: elements.localHostAudioModeSelect.value,
+    inputMode: elements.localHostInputModeSelect.value,
+  };
+}
+
+function setLocalHostBadge(mode, text) {
+  elements.localHostBadge.className = `status-badge ${mode}`;
+  elements.localHostBadge.textContent = text;
+}
+
+function setLocalHostStatus(text) {
+  elements.localHostStatusText.textContent = text;
+}
+
+function renderLocalHostOutput(lines = []) {
+  elements.localHostOutput.textContent = lines.slice(-80).join("\n");
+  elements.localHostOutput.scrollTop = elements.localHostOutput.scrollHeight;
+}
+
+function localHostCommandLines(result) {
+  const lines = [];
+  if (result?.stdout) lines.push(...result.stdout.trim().split(/\r?\n/).filter(Boolean));
+  if (result?.stderr) {
+    lines.push(...result.stderr.trim().split(/\r?\n/).filter(Boolean).map((line) => `[ERR] ${line}`));
+  }
+  return lines;
+}
+
+function readinessSummary(result) {
+  const details = result?.json;
+  if (!details || typeof details !== "object") {
+    return result?.ok ? "体检完成。" : "体检未能生成完整结果。";
+  }
+  const passed = Number(details.passed ?? 0);
+  const failed = Number(details.failed ?? 0);
+  const warnings = Number(details.warnings ?? 0);
+  return `体检：通过 ${passed} 项，失败 ${failed} 项，提醒 ${warnings} 条。`;
+}
+
+function readinessLines(result) {
+  const details = result?.json;
+  if (!details?.results) return localHostCommandLines(result);
+  return details.results.flatMap((item) => {
+    const marker = item.ok ? "[OK]" : "[FAIL]";
+    const lines = [`${marker} ${item.label} · ${item.summary || "无摘要"}`];
+    for (const warning of item.warnings || []) lines.push(warning);
+    for (const error of item.errors || []) lines.push(error);
+    return lines;
+  });
+}
+
+function updateLocalHostControls() {
+  const available = canUseDesktopHostControl();
+  const busy = state.localHostBusy;
+  elements.localHostReadinessButton.disabled = !available || busy;
+  elements.localHostStartButton.disabled = !available || busy || state.localHostRunning;
+  elements.localHostFirewallButton.disabled = !available || busy;
+  elements.localHostStopButton.disabled = !available || busy || !state.localHostRunning;
+  [
+    elements.localHostPortInput,
+    elements.localHostPasswordInput,
+    elements.localHostScreenModeSelect,
+    elements.localHostAudioModeSelect,
+    elements.localHostInputModeSelect,
+  ].forEach((element) => {
+    element.disabled = !available || busy || state.localHostRunning;
+  });
+
+  if (!available) {
+    setLocalHostBadge("offline", "需桌面版");
+    setLocalHostStatus("当前是浏览器预览版，桌面版可以启动本机 Windows 被控端。");
+    return;
+  }
+  if (busy) {
+    setLocalHostBadge("connecting", "处理中");
+    return;
+  }
+  if (state.localHostRunning) {
+    setLocalHostBadge("online", "运行中");
+    return;
+  }
+  setLocalHostBadge("offline", "可启动");
+}
+
+function setLocalHostBusy(busy, text = "") {
+  state.localHostBusy = busy;
+  if (text) setLocalHostStatus(text);
+  updateLocalHostControls();
+}
+
+function applyLocalHostSnapshot(snapshot) {
+  state.localHostRunning = Boolean(snapshot?.running);
+  renderLocalHostOutput(Array.isArray(snapshot?.logs) ? snapshot.logs : []);
+  const pidText = snapshot?.pid ? `PID ${snapshot.pid}` : "未运行";
+  const discovery = snapshot?.discovery || {};
+  const video = discovery.capturePipeline || discovery.source || discovery.hostMode || "";
+  const audio = discovery.audioMode || discovery.audioCodec || "";
+  const detail = [pidText, video && `画面 ${video}`, audio && `声音 ${audio}`].filter(Boolean).join(" · ");
+  setLocalHostStatus(snapshot?.message || (detail ? `本机被控：${detail}` : "本机被控状态已刷新。"));
+  if (detail && snapshot?.running) {
+    setLocalHostStatus(`本机被控正在运行：${detail}`);
+  }
+  updateLocalHostControls();
+}
+
+async function refreshLocalHostProcessStatus() {
+  const invoke = getTauriInvoke();
+  if (!invoke) {
+    updateLocalHostControls();
+    return;
+  }
+  try {
+    const snapshot = await invoke("get_windows_host_status");
+    applyLocalHostSnapshot(snapshot);
+  } catch (error) {
+    setLocalHostStatus(error?.message || "读取本机被控状态失败。");
+    updateLocalHostControls();
+  }
+}
+
+function startLocalHostPolling() {
+  if (state.localHostPollTimer || !canUseDesktopHostControl()) return;
+  state.localHostPollTimer = window.setInterval(() => {
+    void refreshLocalHostProcessStatus();
+  }, 2500);
+}
+
+async function runLocalHostReadiness() {
+  const invoke = getTauriInvoke();
+  if (!invoke) return;
+  setLocalHostBusy(true, "正在体检本机 Windows 被控端环境...");
+  renderLocalHostOutput([]);
+  try {
+    const result = await invoke("run_windows_host_readiness", {
+      request: buildLocalHostReadinessRequest(),
+    });
+    setLocalHostStatus(readinessSummary(result));
+    renderLocalHostOutput(readinessLines(result));
+    addLog("本机被控体检", readinessSummary(result));
+  } catch (error) {
+    setLocalHostStatus(error?.message || "本机被控体检失败。");
+    renderLocalHostOutput([error?.message || String(error)]);
+  } finally {
+    setLocalHostBusy(false);
+  }
+}
+
+async function previewLocalHostFirewallRule() {
+  const invoke = getTauriInvoke();
+  if (!invoke) return;
+  setLocalHostBusy(true, "正在生成防火墙放行预览...");
+  try {
+    const result = await invoke("preview_windows_firewall_rule", {
+      request: buildLocalHostReadinessRequest(),
+    });
+    setLocalHostStatus("防火墙放行预览已生成，不会修改系统设置。");
+    renderLocalHostOutput(localHostCommandLines(result));
+    addLog("本机防火墙预览", result.ok ? "已生成预览命令" : "预览检查返回提醒");
+  } catch (error) {
+    setLocalHostStatus(error?.message || "防火墙预览失败。");
+    renderLocalHostOutput([error?.message || String(error)]);
+  } finally {
+    setLocalHostBusy(false);
+  }
+}
+
+async function startLocalWindowsHost() {
+  const invoke = getTauriInvoke();
+  if (!invoke) return;
+  const request = buildLocalHostLaunchRequest();
+  if (!request.password.trim()) {
+    setLocalHostStatus("请先输入被控密码。");
+    return;
+  }
+  setLocalHostBusy(true, "正在启动本机 Windows 被控端...");
+  renderLocalHostOutput([]);
+  try {
+    const snapshot = await invoke("start_windows_host", { request });
+    applyLocalHostSnapshot(snapshot);
+    addLog("本机被控启动", snapshot?.message || "Windows 被控端已启动");
+  } catch (error) {
+    state.localHostRunning = false;
+    setLocalHostStatus(error?.message || "启动本机 Windows 被控端失败。");
+    renderLocalHostOutput([error?.message || String(error)]);
+  } finally {
+    setLocalHostBusy(false);
+  }
+}
+
+async function stopLocalWindowsHost() {
+  const invoke = getTauriInvoke();
+  if (!invoke) return;
+  setLocalHostBusy(true, "正在停止本机 Windows 被控端...");
+  try {
+    const snapshot = await invoke("stop_windows_host");
+    applyLocalHostSnapshot(snapshot);
+    addLog("本机被控停止", snapshot?.message || "Windows 被控端已停止");
+  } catch (error) {
+    setLocalHostStatus(error?.message || "停止本机 Windows 被控端失败。");
+    renderLocalHostOutput([error?.message || String(error)]);
+  } finally {
+    setLocalHostBusy(false);
+  }
+}
+
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
   const chunkSize = 0x8000;
@@ -3853,6 +4105,18 @@ elements.clearLogButton.addEventListener("click", () => {
   elements.eventLog.innerHTML = "";
   addLog("日志", "已清空");
 });
+elements.localHostReadinessButton.addEventListener("click", () => {
+  void runLocalHostReadiness();
+});
+elements.localHostFirewallButton.addEventListener("click", () => {
+  void previewLocalHostFirewallRule();
+});
+elements.localHostStartButton.addEventListener("click", () => {
+  void startLocalWindowsHost();
+});
+elements.localHostStopButton.addEventListener("click", () => {
+  void stopLocalWindowsHost();
+});
 
 elements.fullscreenButton.addEventListener("click", () => setFullscreen(true));
 elements.windowModeButton.addEventListener("click", () => setFullscreen(false));
@@ -3987,7 +4251,14 @@ elements.clearReceivedFilesButton.addEventListener("click", clearReceivedFiles);
 });
 elements.resetKeyMapButton.addEventListener("click", resetKeyboardMapping);
 
-[elements.hostInput, elements.portInput].forEach((input) => {
+[
+  elements.hostInput,
+  elements.portInput,
+  elements.localHostPortInput,
+  elements.localHostScreenModeSelect,
+  elements.localHostAudioModeSelect,
+  elements.localHostInputModeSelect,
+].forEach((input) => {
   input.addEventListener("change", savePreferences);
 });
 
@@ -4131,4 +4402,7 @@ updateMetrics();
 renderReceivedFiles();
 resetHostDiagnostics();
 updateReverseControlUi();
+updateLocalHostControls();
+startLocalHostPolling();
+void refreshLocalHostProcessStatus();
 addLog("控制端启动", "本地模拟模式，可切换 WebSocket");

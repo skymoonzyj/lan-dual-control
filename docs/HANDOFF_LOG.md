@@ -171,6 +171,46 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：给 Windows 桌面壳增加“本机被控”入口，让 Mac 反控 Windows 前可以直接在 UI 内体检、启动和停止 Windows host。
+完成内容：
+- `apps/windows-desktop/src-tauri/src/main.rs` 新增 Tauri 原生命令：运行 Windows host readiness、预览防火墙放行命令、启动/停止 Windows host、读取进程状态和日志。
+- 桌面壳启动 Windows host 时要求填写密码，通过环境变量传入，不在命令行打印；默认输入模式为 `log` 安全日志。
+- 停止时使用 Windows 进程树停止，避免由桌面壳启动的 Node/FFmpeg 子进程残留。
+- `apps/windows-client` 左侧新增“本机被控”面板：端口、密码、画面、声音、输入模式、体检、启动、停止、防火墙预览和日志输出；浏览器预览版保持禁用。
+- 本机被控面板会保存端口/模式，不保存密码。
+- README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `apps/windows-desktop/src-tauri/src/main.rs`
+- `apps/windows-client/index.html`
+- `apps/windows-client/styles.css`
+- `apps/windows-client/app.js`
+- `apps/windows-desktop/README.md`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `cargo check`
+- `cargo fmt`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/check-windows-host-readiness.mjs --json`
+- `npm.cmd run build`
+- `git diff --check`
+- 冲突标记搜索（apps/scripts/docs/shared）
+遗留问题：
+- 未在真实桌面 UI 中手动点击“启动/停止”；本轮已完成 Tauri release 构建和 readiness 自身验证，后续 Mac 反控 Windows 前建议人工点一次桌面面板确认体验。
+下一步建议：
+- 用桌面面板启动 Windows host 后，让 Mac client 连入 Windows 的局域网 IP，先保持输入模式“安全日志”，确认视频、音频和 input_ack；有人看屏幕后再切“真实控制”。
+是否改了协议：否。
+是否需要另一端配合：后续需要 Mac 端用 `apps/mac-client` 真机连入验证。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：为 Windows host 增加显式防火墙放行助手，让 Mac 反控 Windows 真机联调少一步手工复制命令，同时保持默认只读。
 完成内容：
 - `scripts/windows/check-windows-firewall.mjs` 新增 `--dryRunRule` 和 `--addRule`。

@@ -59,6 +59,7 @@ Windows 端：
 - [x] 增加文本剪贴板同步消息。
 - [x] 增加 Windows Tauri 桌面壳。
 - [x] 构建 Windows 桌面 exe。
+- [x] 桌面壳增加本机被控入口，可体检、预览防火墙命令、启动/停止 Windows host。
 - [x] 连接真实 Mac 被控端。
 
 共享：
@@ -183,7 +184,7 @@ Windows 端：
 - [x] 防火墙/局域网可达性只读检查脚本。
 - [x] Windows host 启动助手级防火墙友好提示和一键引导。
 - [x] Windows host 显式防火墙放行助手：默认干跑/只读，用户明确同意后才尝试新增 Private TCP 入站规则。
-- [ ] 桌面端防火墙友好提示和一键引导。
+- [x] 桌面端防火墙友好提示和一键引导。
 
 Mac 端：
 
@@ -218,6 +219,7 @@ Mac 端：
 - Windows 被控端已新增本机一键自检脚本 `scripts/windows/test-windows-host.ps1`，可临时启动服务并验证真实 JPEG 首帧、文本剪贴板和文件剪贴板接收；默认不发送输入事件。
 - Windows 被控端已新增 `scripts/windows/check-windows-firewall.mjs` 只读检查脚本，可列出本机局域网 IP、端口监听、TCP 探测、网络配置和 TCP 入站放行规则；默认不改系统防火墙，只在缺少放行时给出管理员 PowerShell 建议命令。
 - Windows 被控端已新增启动助手 `scripts/windows/start-windows-host.mjs` 和 `scripts/windows/start-windows-host.ps1`：启动服务后列出 Mac 端可填的局域网地址，等待 `/discovery` 就绪并自动跑只读防火墙/端口检查；需要系统声音时显式加 `--wasapi` 或 `-Wasapi`；真机联调建议加 `--promptPassword --requirePassword` 或 `-PromptPassword -RequirePassword`，避免退回 demo 密码；可加 `--dryRunFirewallRule` / `-DryRunFirewallRule` 预览放行命令，只有显式 `--addFirewallRule` / `-AddFirewallRule` 才会尝试新增 Private TCP 入站规则。`scripts/windows/test-windows-host-start-helper.mjs` 已覆盖启动助手密码安全、防火墙干跑和临时端口实启回归。
+- Windows 桌面壳已新增“本机被控”面板：通过 Tauri 原生命令运行 readiness、预览防火墙放行命令、要求隐藏密码后启动/停止 Windows host，并在 UI 内显示日志和 `/discovery` 状态；默认输入模式是安全日志。
 - Windows 被控端已新增视频持续帧观察脚本 `scripts/windows/observe-windows-host-video.mjs`，可统计实际 FPS、最大帧间隔、掉帧数、采集管线、请求码率和 `jpegQuality`；当前本机 FFmpeg gdigrab 普通启动已可协商 60Hz，720p/60Hz 观察约 56.9 FPS，System.Drawing 兜底仍约 3 FPS。
 - Windows 被控端已新增显式 WASAPI loopback 系统声音入口；设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi` 后可采集默认播放设备系统声音并发送 `pcm-f32le-base64`，默认未显式开启时继续发送模拟音频帧，避免误采。DirectShow PCM 入口仍保留给虚拟声卡/loopback 设备兼容验证。`observe-windows-host-audio.mjs` 已支持 30 秒稳态观察和 `--playTone --requireLevel` 短测试音电平强校验；本机 30 秒稳态 50 FPS、最大间隔 33ms，测试音最高电平 0.222。
 - Windows 侧已新增 `scripts/windows/test-mac-client-browser.mjs` 页面级自检，可自动启动 Windows host 和 `apps/mac-client`，确认真实 `windows-ffmpeg-gdigrab-mjpeg` 或 `windows-gdi-jpeg` 画面、默认 1080P/60Hz/20Mbps 和 2K/60Hz/40Mbps 的码率/JPEG 质量回执、`input_ack · log`、Mac `Command+C` 映射为 Windows `Ctrl+C`、最近连接保存/回填/清空且不保存密码、文本剪贴板 `clipboard_ack`、Mac 本机文本剪贴板读取/监听、文件剪贴板 `clipboard_file_result`，也可用 `--enableAudio` / `--expectAudioPayload` / `--expectAudioPlayback` 验收反控音频；Windows 本机强校验真实 WASAPI PCM 时可直接用 `--requireAudio`，认证失败可用 `--expectAuthFailure` 回归剩余次数提示。

@@ -187,6 +187,49 @@ button:disabled {
   gap: 8px;
 }
 
+.local-host-panel .field {
+  margin-bottom: 8px;
+}
+
+.local-host-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.local-host-secondary-row {
+  margin-top: 8px;
+}
+
+.local-host-status {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.local-host-output {
+  max-height: 132px;
+  overflow: auto;
+  margin: 8px 0 0;
+  border: 1px solid #dfe5eb;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family:
+    "Cascadia Mono",
+    "Consolas",
+    monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 8px;
+  white-space: pre-wrap;
+}
+
+.local-host-output:empty {
+  display: none;
+}
+
 .primary-action,
 .secondary-action,
 .tool-button,

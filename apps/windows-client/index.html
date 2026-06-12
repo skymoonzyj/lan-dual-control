@@ -74,6 +74,76 @@
           </div>
         </section>
 
+        <section class="panel local-host-panel" aria-labelledby="local-host-title">
+          <div class="panel-heading">
+            <h2 id="local-host-title">本机被控</h2>
+            <span id="localHostBadge" class="status-badge offline">需桌面版</span>
+          </div>
+
+          <label class="field">
+            <span>端口</span>
+            <input id="localHostPortInput" type="number" value="43770" min="1025" max="65535" />
+          </label>
+
+          <label class="field">
+            <span>被控密码</span>
+            <input id="localHostPasswordInput" type="password" autocomplete="off" />
+          </label>
+
+          <div class="local-host-options">
+            <label class="field">
+              <span>画面</span>
+              <select id="localHostScreenModeSelect">
+                <option value="auto" selected>自动</option>
+                <option value="ffmpeg">FFmpeg</option>
+                <option value="system">系统截图</option>
+                <option value="mock">模拟</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>声音</span>
+              <select id="localHostAudioModeSelect">
+                <option value="mock" selected>关闭</option>
+                <option value="wasapi">系统声音</option>
+              </select>
+            </label>
+          </div>
+
+          <label class="field">
+            <span>输入</span>
+            <select id="localHostInputModeSelect">
+              <option value="log" selected>安全日志</option>
+              <option value="system">真实控制</option>
+            </select>
+          </label>
+
+          <div class="button-row">
+            <button id="localHostReadinessButton" class="secondary-action" type="button" disabled>
+              <span aria-hidden="true">✓</span>
+              体检
+            </button>
+            <button id="localHostStartButton" class="primary-action" type="button" disabled>
+              <span aria-hidden="true">▶</span>
+              启动
+            </button>
+          </div>
+
+          <div class="button-row local-host-secondary-row">
+            <button id="localHostFirewallButton" class="secondary-action" type="button" disabled>
+              <span aria-hidden="true">⊕</span>
+              防火墙预览
+            </button>
+            <button id="localHostStopButton" class="secondary-action" type="button" disabled>
+              <span aria-hidden="true">■</span>
+              停止
+            </button>
+          </div>
+
+          <p id="localHostStatusText" class="local-host-status">桌面版可一键启动 Windows 被控端。</p>
+          <pre id="localHostOutput" class="local-host-output" aria-live="polite"></pre>
+        </section>
+
         <section class="panel keymap-panel" aria-labelledby="keymap-title">
           <div class="panel-heading">
             <h2 id="keymap-title">远控 macOS 按键映射</h2>
