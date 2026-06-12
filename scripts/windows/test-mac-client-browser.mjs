@@ -625,6 +625,8 @@ function buildSnapshotExpression() {
         };
       })(),
       input: text("#inputStatus"),
+      connectButtonDisabled: document.querySelector("#connectButton")?.disabled || false,
+      disconnectButtonDisabled: document.querySelector("#disconnectButton")?.disabled || false,
       clipboard: text("#clipboardStatus"),
       localClipboard: text("#localClipboardStatus"),
       fileClipboard: text("#fileClipboardStatus"),
@@ -824,7 +826,9 @@ async function run() {
         async () => {
           const value = await evaluate(session, buildSnapshotExpression());
           lastSnapshot = value;
-          return matchesExpectedAuthFailure(value, args) ? value : null;
+          const buttonsReset = !value.connectButtonDisabled && value.disconnectButtonDisabled;
+          const surfaceCleared = value.video === "无画面" && !value.imageVisible && !value.imageHasSource;
+          return matchesExpectedAuthFailure(value, args) && buttonsReset && surfaceCleared ? value : null;
         },
         args.timeoutMs,
         "Mac client auth failure state",
@@ -832,6 +836,7 @@ async function run() {
         if (lastSnapshot) {
           print("INFO", `Last connection: ${lastSnapshot.connection}`);
           print("INFO", `Last remote: ${lastSnapshot.remote}`);
+          print("INFO", `Last video: ${lastSnapshot.video}`);
           if (lastSnapshot.logs?.length) {
             print("INFO", `Last logs: ${lastSnapshot.logs.join(" | ")}`);
           }
@@ -840,6 +845,7 @@ async function run() {
       });
 
       print("OK", `Auth failure: ${authFailureSnapshot.connection}`);
+      print("OK", `Auth failure surface: ${authFailureSnapshot.video}`);
       if (authFailureSnapshot.logs.length > 0) {
         print("INFO", `Recent logs: ${authFailureSnapshot.logs.join(" | ")}`);
       }
