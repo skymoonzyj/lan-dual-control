@@ -132,6 +132,18 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-contro
 node E:\codex\lan-dual-control\scripts\windows\test-windows-input-helper.mjs
 ```
 
+需要量化输入 helper 冷启动和热路径耗时时，可以运行安全干跑测量。它同样只发送故意不支持的事件，不会真实移动鼠标或按键：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\measure-windows-input-helper.mjs
+```
+
+默认会输出 cold startup、warm avg、p50、p95 和 max。需要在回归里加阈值时可用：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\measure-windows-input-helper.mjs --samples 50 --warmup 5 --maxP95Ms 10
+```
+
 需要验证 Windows host 真实系统声音 PCM 时，可以临时开启 WASAPI loopback：
 
 ```powershell

@@ -21,6 +21,39 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：给 Windows host 常驻 input helper 增加低风险延迟测量入口，方便区分输入通道延迟和视频/网络延迟。
+完成内容：
+- 新增 `scripts/windows/measure-windows-input-helper.mjs`：复用 `WindowsInputInjector` 的 system 模式，发送故意不支持的 dry-run 事件，测量 C# SendInput helper 的冷启动和热路径 JSON 往返耗时。
+- 脚本不会发送真实鼠标键盘输入；它要求事件被 helper 明确拒绝，并确认常驻进程保持运行。
+- 支持 `--samples`、`--warmup`、`--timeoutMs`、`--maxP95Ms`、`--maxAvgMs`、`--json` 和 `--verbose`，后续可直接作为回归阈值使用。
+- Windows host README、当前状态、下一步和任务板已同步该测量入口。
+修改文件：
+- `scripts/windows/measure-windows-input-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/measure-windows-input-helper.mjs`
+- `node scripts/windows/measure-windows-input-helper.mjs --samples 20 --warmup 3`
+- `node scripts/windows/measure-windows-input-helper.mjs`
+验证结果：
+- 50 样本测量和 `--maxP95Ms 10` 阈值检查通过：cold startup + dry-run round trip 约 450.20ms；warm avg 0.10ms、p50 0.09ms、p95 0.17ms、max 0.33ms；56 个请求复用同一 helper 进程。
+遗留问题：
+- 该脚本只测输入 helper 管道耗时，不代表真实控制手感；真实 `system` 模式点击/按键仍需有人看屏幕时验收。
+- 用户感知卡顿仍可能来自视频采集/编码、浏览器事件频率、网络、坐标映射或远端权限。
+下一步建议：
+- 排查 Mac 反控 Windows 输入慢时，先跑该脚本确认 helper 热路径是否仍在毫秒级，再继续看视频和网络层。
+- 有人看屏幕后，再运行 `test-windows-host.ps1 -InputEvents -InputMode system` 做真实输入安全验收。
+是否改了协议：否。
+是否需要另一端配合：否；真实 system 输入手感验收以后需要另一端或人工配合。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：降低 Mac 反控 Windows 时输入注入启动开销，让 Windows host 不再每个输入事件都临时启动 PowerShell。
 完成内容：
 - `apps/windows-host/src/windows-input-injector.mjs` 新增常驻 C# SendInput helper：首次 system 输入时用 PowerShell 编译临时 exe，后续通过 JSON 行协议复用该进程调用 `SendInput`/`SetCursorPos`。
