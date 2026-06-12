@@ -21,6 +21,41 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：新增 Windows host 一键体检入口，把真机联调前常用的环境、局域网、音频、输入和可选采集检查聚合起来，减少手动排查。
+完成内容：
+- 新增 `scripts/windows/check-windows-host-readiness.mjs`。
+- 默认低风险检查：Node.js、FFmpeg、Windows host 语法、Windows input helper 安全干跑、音频设备/WASAPI 格式、局域网/防火墙只读检查。
+- 支持 `--probeVideo` 临时启动 Windows host 做短视频帧观察，支持 `--probeAudio` 临时启动 Windows host 做 WASAPI PCM 短观察；默认不播放测试音、不发送真实输入。
+- 支持 `--requireOpen`，在 Windows host 已手动监听 `0.0.0.0:43770` 后可强制要求端口可达。
+- 支持 `--json` 和 `--strict`，方便后续纳入自动回归。
+- Windows host README、当前状态、下一步和占用记录已同步。
+修改文件：
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-host-readiness.mjs`
+- `node scripts/windows/check-windows-host-readiness.mjs --timeoutMs 20000`
+- `node scripts/windows/check-windows-host-readiness.mjs --timeoutMs 20000 --json`
+- `node scripts/windows/check-windows-host-readiness.mjs --probeVideo --probeAudio --timeoutMs 25000`
+验证结果：
+- 默认体检 6/6 通过：Node v24.15.0、FFmpeg 8.1.1、Windows host syntax、input helper 安全干跑、WASAPI 48k/2ch/float32、LAN/firewall 只读检查。
+- 默认模式报告 `43770` 未监听为 warning，不视为失败；这是预期行为，因为未手动启动 Windows host。
+- 深度体检 8/8 通过，临时视频观察和 WASAPI 音频观察均完成。
+遗留问题：
+- `--requireOpen` 需要先手动启动 Windows host 到目标端口；当前默认检查不会自动修改防火墙。
+下一步建议：
+- Mac 反控 Windows 真机联调前，先跑默认一键体检；启动 Windows host 后再跑 `--requireOpen`；需要确认采集链路时加 `--probeVideo --probeAudio`。
+是否改了协议：否。
+是否需要另一端配合：不阻塞 Mac；这是 Windows host 侧联调前置检查入口。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：给 Windows 控制端页面级自检增加真实 `/discovery.runtime` UI 验收，方便 Mac host 重启后不用密码确认设备列表和诊断条显示的是目标 build。
 完成内容：
 - `scripts/windows/test-windows-client-browser.mjs` 新增 `--expectDiscoveryRuntimeBuildId <build-id>`。

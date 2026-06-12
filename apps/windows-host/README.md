@@ -114,6 +114,24 @@ node .\server.mjs 43772 127.0.0.1
 
 ## 一键自检
 
+Windows host 真机联调前，建议先跑一键体检。默认只做低风险检查：Node/FFmpeg、Windows host 语法、输入 helper 安全干跑、音频设备/WASAPI 格式，以及局域网/防火墙只读检查；不会播放声音、不会发真实鼠标键盘输入，也不要求 `43770` 已经有服务监听。
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs
+```
+
+需要把视频和系统声音短采集也纳入体检时，再显式加 probe。脚本会临时启动 Windows host，短时观察 FFmpeg 视频帧和 WASAPI PCM 音频帧，结束后自动关闭临时服务；默认不会播放测试音。
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --probeVideo --probeAudio
+```
+
+Mac 从另一台机器连入前，如果要求 `43770` 必须正在监听且局域网可达，可以加 `--requireOpen`；这通常应在你已经手动启动 `node .\server.mjs 43770 0.0.0.0` 后运行。
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --host 0.0.0.0 --port 43770 --requireOpen
+```
+
 Windows 本机可直接运行自检脚本。它会在 `127.0.0.1:43772` 临时启动 Windows 被控端，验证 `/discovery`、WebSocket 认证、真实视频首帧、文本剪贴板和文件剪贴板接收，结束后自动关闭临时服务。如果 `43772` 已被其他服务占用，脚本会自动换一个临时空闲端口；需要验证已运行的 Windows host 时再显式加 `-UseExisting -HostName 127.0.0.1 -Port 43770`。
 
 ```powershell
