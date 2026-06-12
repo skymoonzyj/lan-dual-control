@@ -75,7 +75,7 @@ node scripts/mac/check-mac-host-readiness.mjs --requireControlPermissions
 node scripts/mac/check-mac-host-readiness.mjs --expectBuildId c2db37f --probeVideo --probeAudio --probeInputLog --probeStartHelper
 ```
 
-其中 `--probeVideo` 会做短 H.264 时间线观察，`--probeAudio` 会做短 PCM 音频观察且不播放声音，`--probeInputLog` 会先确认 host 是 `log` 输入模式再发送安全冒烟事件，`--probeStartHelper` 会用临时端口启动/关闭一次启动助手自测。需要机器可读结果时可加 `--json`。
+其中 `--probeVideo` 会做短 H.264 时间线观察，`--probeAudio` 会做短 PCM 音频观察且不播放声音，`--probeInputLog` 会先确认 host 是 `log` 输入模式再发送安全冒烟事件，`--probeStartHelper` 会用临时端口启动/关闭一次启动助手自测。主机已重启到小数秒 timestamp build 后，可加 `--maxVideoFrameAgeMs 250` 强制要求 `video_frame.timestamp` 接收年龄足够新鲜；该参数会自动启用 `--probeVideo`。需要机器可读结果时可加 `--json`。
 
 进入目录：
 

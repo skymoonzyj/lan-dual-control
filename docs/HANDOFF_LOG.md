@@ -21,6 +21,39 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：增强 Mac host readiness 的视频时间戳新鲜度校验，方便一键确认运行中的真实 host 已是 fractional timestamp build。
+完成内容：
+- `scripts/mac/check-mac-host-readiness.mjs` 新增 `--maxVideoFrameAgeMs <ms>`。
+- 该参数大于 0 时会自动启用 `--probeVideo`，并透传到 `observe-mac-video --maxFrameAgeMs <ms>`，强制要求 `video_frame.timestamp` 接收年龄不超过阈值。
+- 默认 readiness 行为不变，未显式设置时不会收紧视频探针。
+- 同步 Mac host README、当前状态和下一步文档，并更正当前主 `43770` 已重启到 `c2db37f` fractional timestamp build 的事实。
+修改文件：
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-host-readiness.mjs`
+- `node scripts/mac/check-mac-host-readiness.mjs --help`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 45000 --expectBuildId c2db37f --maxVideoFrameAgeMs 250 --probeAudio --probeInputLog --requireControlPermissions`
+验证结果：
+- 语法检查通过，帮助输出包含 `--maxVideoFrameAgeMs`。
+- 真实 `43770` readiness 12/12 通过，`/discovery.runtime.buildId=c2db37f`，`screen=on`，`accessibility=on`，`inputMonitoring=off` 仍仅 warning。
+- H.264 视频探针 75 帧、约 29.6fps、最大接收间隔 37ms、`activeDisplayId=main`、`frameAge min/avg/max=0/0.2/1ms`，通过 `--maxVideoFrameAgeMs 250`。
+- PCM 音频 125 帧、约 49.7fps、最大间隔 22ms；input-log 16/16 ack 且未注入。
+遗留问题：
+- input monitoring 仍需人工在系统设置中确认；本轮不切 `inject`，不重启主 host。
+下一步建议：
+- Mac host 重启或部署后，可用 `node scripts/mac/check-mac-host-readiness.mjs --expectBuildId <build-id> --maxVideoFrameAgeMs 250 --probeAudio --probeInputLog --requireControlPermissions` 一次性确认 build、权限、H.264 低延迟 timestamp、PCM 和安全输入日志。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：增强 Mac host readiness 的 macOS 权限诊断，避免真机联调时才发现屏幕录制或辅助功能权限缺失。
 完成内容：
 - `scripts/mac/check-mac-host-readiness.mjs` 的 `/discovery` 步骤现在会汇总 `permissions.screenRecording`、`permissions.accessibility` 和 `permissions.inputMonitoring`。

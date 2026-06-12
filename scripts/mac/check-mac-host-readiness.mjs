@@ -16,6 +16,7 @@ const defaults = {
   requireControlPermissions: false,
   probeHost: false,
   probeVideo: false,
+  maxVideoFrameAgeMs: 0,
   probeAudio: false,
   probeInputLog: false,
   probeStartHelper: false,
@@ -59,10 +60,11 @@ function parseArgs(argv) {
   args.password = String(args.password || defaults.password);
   args.timeoutMs = clampInteger(args.timeoutMs, 3000, 120000, defaults.timeoutMs);
   args.expectBuildId = normalizedText(args.expectBuildId);
+  args.maxVideoFrameAgeMs = clampInteger(args.maxVideoFrameAgeMs, 0, 600000, defaults.maxVideoFrameAgeMs);
   args.requireOpen = booleanArg(args.requireOpen);
   args.requireControlPermissions = booleanArg(args.requireControlPermissions);
   args.probeHost = booleanArg(args.probeHost) || Boolean(args.expectBuildId);
-  args.probeVideo = booleanArg(args.probeVideo);
+  args.probeVideo = booleanArg(args.probeVideo) || args.maxVideoFrameAgeMs > 0;
   args.probeAudio = booleanArg(args.probeAudio);
   args.probeInputLog = booleanArg(args.probeInputLog);
   args.probeStartHelper = booleanArg(args.probeStartHelper);
@@ -89,6 +91,8 @@ Options:
                             Require screen recording and accessibility permissions.
   --probeHost               Run check-mac-displays runtime/display round-trip.
   --probeVideo              Run short H.264 video observation.
+  --maxVideoFrameAgeMs <ms> Require fresh video_frame.timestamp during --probeVideo.
+                            Implies --probeVideo. Default: off.
   --probeAudio              Run short PCM audio observation. Does not play a tone.
   --probeInputLog           Run safe input log smoke test; refuses non-log hosts.
   --probeStartHelper        Run start helper self-test on a temporary local port.
@@ -484,6 +488,7 @@ async function main() {
         "--expectActiveDisplayId",
         "main",
         "--requireFrameTimestamp",
+        ...(args.maxVideoFrameAgeMs > 0 ? ["--maxFrameAgeMs", String(args.maxVideoFrameAgeMs)] : []),
         "--requireMonotonicTimestampUs",
         "--maxTimestampGapUs",
         "1000000",
@@ -557,6 +562,7 @@ async function main() {
       requireControlPermissions: args.requireControlPermissions,
       probeHost: args.probeHost,
       probeVideo: args.probeVideo,
+      maxVideoFrameAgeMs: args.maxVideoFrameAgeMs,
       probeAudio: args.probeAudio,
       probeInputLog: args.probeInputLog,
       probeStartHelper: args.probeStartHelper,

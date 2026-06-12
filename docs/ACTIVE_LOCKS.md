@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/mac/check-mac-host-readiness.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md` | 2026-06-12 19:10 | 增强 Mac readiness 视频时间戳新鲜度校验：新增 `--maxVideoFrameAgeMs`，自动启用 `--probeVideo` 并要求 `video_frame.timestamp` 接收年龄不超过阈值；真实 `43770` 以 `--maxVideoFrameAgeMs 250` 通过，H.264 `frameAge max=1ms`。 |
 | Mac Codex | `scripts/mac/check-mac-host-readiness.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md` | 2026-06-12 19:04 | 增强 Mac readiness 权限诊断：汇总 `/discovery.permissions` 的屏幕录制、辅助功能和输入监控；新增 `--requireControlPermissions` 强制要求屏幕录制和辅助功能开启。 |
 | Mac Codex | `scripts/mac/check-mac-host-readiness.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 18:54 | 新增 Mac host 一键体检脚本：默认检查 Node/Swift、Mac host build、启动助手语法/干跑、keymap 和 `/discovery`；可选 `--probeVideo --probeAudio --probeInputLog --probeStartHelper` 做真实 H.264/PCM/log 输入和启动助手临时端口深度验收。 |
 | Mac Codex | `scripts/mac/start-mac-host.mjs`、`scripts/mac/test-mac-host-start-helper.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 18:39 | 新增 Mac host 日常安全启动助手：默认 `inputMode=log`，打印 Windows 可连接局域网地址，等待 `/discovery`，默认运行 runtime/display 只读校验；自测覆盖缺密码、`demo-password`、非交互提示、干跑和临时端口实启关闭。 |
