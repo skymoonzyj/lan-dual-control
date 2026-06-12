@@ -104,6 +104,18 @@ Mac 控制 Windows 的页面级自检可在 Windows 本机启动临时 Windows h
 node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs
 ```
 
+视频持续帧观察脚本可统计几秒内实际收到的帧数、平均 FPS、最大帧间隔、掉帧数和采集管线：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs
+```
+
+强制对照旧系统截图兜底路径：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --screenMode system --fps 4 --durationMs 2500 --minFrames 3 --minFps 1 --maxGapMs 2000
+```
+
 认证重试策略回归脚本会同时验证 Windows host 和假 Mac 服务：错误密码剩余 `2/1/0`、第三次断开、新连接正确密码通过。
 
 ```powershell

@@ -83,6 +83,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-win
 
 它会临时启动 Windows 被控端并验证真实 JPEG 首帧、文本剪贴板和文件剪贴板接收；默认不发送鼠标键盘事件。
 
+Windows 被控端视频持续帧观察可运行：
+
+```powershell
+node scripts\windows\observe-windows-host-video.mjs
+```
+
+它会临时启动 Windows 被控端并观察 5 秒真实视频帧，统计实际 FPS、最大帧间隔、掉帧数和采集管线。当前 Windows 本机 FFmpeg gdigrab 过渡层实测约 24 FPS，旧 System.Drawing 兜底约 2 FPS。
+
 认证重试策略回归可运行：
 
 ```powershell
