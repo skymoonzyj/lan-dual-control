@@ -115,6 +115,14 @@ node scripts\windows\test-mac-client-browser.mjs --expectAuthFailure --expectedA
 
 它会让临时 Windows 被控端使用正确密码，同时让 Mac 控制端填错密码，并断言页面显示剩余认证次数。
 
+Mac 控制端音频链路可选自检：
+
+```powershell
+node scripts\windows\test-mac-client-browser.mjs --enableAudio --expectAudioFrame
+```
+
+在 Windows 本机临时启动 WASAPI host 验收时，可加 `--audioMode wasapi --expectAudioPayload --expectAudioPlayback`；连接已运行的真实 Windows WASAPI host 时，可加 `--useExistingHost --host <Windows IP> --port <端口> --enableAudio --expectAudioPayload --expectAudioPlayback`，要求收到 PCM payload 并确认 Mac client 页面播放计数递增。
+
 Mac 真机被控端启动后，可在 Windows 上做一次联通自检：
 
 ```powershell

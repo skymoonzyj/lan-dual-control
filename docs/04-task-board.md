@@ -182,6 +182,7 @@ Mac 端：
 - [x] 发送鼠标键盘事件。
 - [x] 保存最近连接且不保存密码。
 - [x] 清空最近连接且不影响密码输入框。
+- [x] Mac client 页面级自检支持可选音频帧、PCM payload 和播放计数验收。
 - [x] 发送文本剪贴板到 Windows host。
 - [x] 发送文件剪贴板到 Windows host 的入口。
 - [x] Mac `Command` 到 Windows `Ctrl` 快捷键映射提示和页面级自检。
@@ -204,7 +205,7 @@ Mac 端：
 - Windows 被控端已新增本机一键自检脚本 `scripts/windows/test-windows-host.ps1`，可临时启动服务并验证真实 JPEG 首帧、文本剪贴板和文件剪贴板接收；默认不发送输入事件。
 - Windows 被控端已新增视频持续帧观察脚本 `scripts/windows/observe-windows-host-video.mjs`，可统计实际 FPS、最大帧间隔、掉帧数和采集管线；当前本机 FFmpeg gdigrab 过渡层约 29 FPS，System.Drawing 兜底约 3 FPS。
 - Windows 被控端已新增显式 WASAPI loopback 系统声音入口；设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi` 后可采集默认播放设备系统声音并发送 `pcm-f32le-base64`，默认未显式开启时继续发送模拟音频帧，避免误采。DirectShow PCM 入口仍保留给虚拟声卡/loopback 设备兼容验证。
-- Windows 侧已新增 `scripts/windows/test-mac-client-browser.mjs` 页面级自检，可自动启动 Windows host 和 `apps/mac-client`，确认真实 `windows-ffmpeg-gdigrab-mjpeg` 或 `windows-gdi-jpeg` 画面、`input_ack · log`、Mac `Command+C` 映射为 Windows `Ctrl+C`、最近连接保存/回填/清空且不保存密码、文本剪贴板 `clipboard_ack`、Mac 本机文本剪贴板读取/监听、文件剪贴板 `clipboard_file_result`，也可用 `--expectAuthFailure` 回归认证失败剩余次数提示。
+- Windows 侧已新增 `scripts/windows/test-mac-client-browser.mjs` 页面级自检，可自动启动 Windows host 和 `apps/mac-client`，确认真实 `windows-ffmpeg-gdigrab-mjpeg` 或 `windows-gdi-jpeg` 画面、`input_ack · log`、Mac `Command+C` 映射为 Windows `Ctrl+C`、最近连接保存/回填/清空且不保存密码、文本剪贴板 `clipboard_ack`、Mac 本机文本剪贴板读取/监听、文件剪贴板 `clipboard_file_result`，也可用 `--enableAudio` / `--expectAudioPayload` / `--expectAudioPlayback` 验收反控音频，用 `--expectAuthFailure` 回归认证失败剩余次数提示。
 - Windows 侧已新增 `scripts/windows/test-auth-retry-policy.mjs`，可同时回归 Windows host 和假 Mac 服务的 3 次认证失败断开策略。
 - Mac 控制 Windows 已新增 `apps/mac-client` Web 原型：可连接 Windows host、显示 JPEG/data-url 画面、认证失败时提示剩余尝试次数、成功连接后保存最近 host/port/时间并一键回填或清空且不保存密码、发送鼠标和键盘 `input_event`，页面提示 Mac `Command` 会按 Windows `Ctrl` 发送且自检覆盖该映射，也可手动发送文本 `clipboard_text` 并显示 `clipboard_ack`，读取/监听 Mac 本机文本剪贴板，以及选择文件后按 `clipboard_file_*` 分块发送；新增 PCM 音频播放入口，可播放 `pcm-f32le-base64` 过渡帧，mock 音频只显示状态；本机 mock/回退 Windows host 验证已通过，文件写入系统剪贴板可由 Windows 默认 `test-mac-client-browser.mjs` 强校验。
 - 当前屏幕采集默认优先 FFmpeg gdigrab 持续 MJPEG，PowerShell/System.Drawing 系统截图作为兜底，全部失败时会回退模拟帧；音频默认未配置时继续模拟，可显式设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi` 试用系统声音 loopback，或配置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 试用 DirectShow PCM；后续仍需升级 Windows Graphics Capture，输入注入可优化为高性能原生模块或常驻进程。

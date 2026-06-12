@@ -17,6 +17,45 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
+本轮目标：给 Mac client 页面级自检补可选音频验收模式，方便后续验证 Windows WASAPI host 到 Mac 控制端的 PCM 播放链路。
+完成内容：
+- `scripts/windows/test-mac-client-browser.mjs` 新增 `--enableAudio`、`--expectAudioFrame`、`--expectAudioPayload`、`--expectAudioPlayback` 和 `--audioMode <mode>`。
+- 断言级联：要求播放会自动要求 payload，要求 payload 会自动要求 audio_frame，要求 audio_frame 会自动开启页面音频开关。
+- 临时 Windows host 启动时可通过 `--audioMode wasapi` 传入 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi`。
+- 浏览器自检会记录页面收到的 WebSocket 消息，统计 `audio_frame` 数量、最后一帧 codec/encoding/sampleRate/channels/payload 信息，并用实际 `播放 N` 计数判断播放是否递增，避免把“等待播放”误判为已播放。
+- README、Mac client README、当前状态、下一步和任务板已补充音频验收参数。
+修改文件：
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `git diff --check`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --clientPort 5190 --debugPort 9341`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --enableAudio --expectAudioFrame --skipFileClipboard --clientPort 5192 --debugPort 9343`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3 --clientPort 5191 --debugPort 9342`
+验证结果：
+- mock 音频帧路径通过，输出 `Audio: pcm-f32le · level 55% / 接收 1 帧 · mock · payload=0`。
+- 完整页面回归通过：连接、最近连接保存/回填/清空、输入 ack、`Command+C` 映射、文本剪贴板、本机剪贴板读取/监听和文件剪贴板回退链路均通过。
+- 认证失败回归仍通过：`认证失败 · 剩余 2/3 次`。
+遗留问题：
+- Mac 本机只能验证 mock `audio_frame` 接收；PCM payload 和 WebAudio 播放计数需要连接真实 Windows WASAPI host 继续验收。
+下一步建议：
+- Windows 端启动真实 WASAPI host 后，Mac/Windows 任一端可运行 `node scripts/windows/test-mac-client-browser.mjs --useExistingHost --host <Windows IP> --port <端口> --enableAudio --expectAudioPayload --expectAudioPlayback`。
+- 在 Windows 本机临时启动 host 验收时，可运行 `node scripts/windows/test-mac-client-browser.mjs --audioMode wasapi --expectAudioPayload --expectAudioPlayback`。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端在真实 WASAPI host 上跑一次 payload/playback 强校验。
+
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12

@@ -23,6 +23,11 @@ const defaults = {
   expectAuthFailure: false,
   expectedAttemptsRemaining: "",
   expectedMaxAttempts: "",
+  audioMode: "",
+  enableAudio: false,
+  expectAudioFrame: false,
+  expectAudioPayload: false,
+  expectAudioPlayback: false,
   useExistingHost: false,
   mockVideo: false,
   headless: true,
@@ -72,6 +77,22 @@ function parseArgs(argv) {
       args.requireRealVideo = false;
       continue;
     }
+    if (key === "enableAudio") {
+      args.enableAudio = true;
+      continue;
+    }
+    if (key === "expectAudioFrame") {
+      args.expectAudioFrame = true;
+      continue;
+    }
+    if (key === "expectAudioPayload") {
+      args.expectAudioPayload = true;
+      continue;
+    }
+    if (key === "expectAudioPlayback") {
+      args.expectAudioPlayback = true;
+      continue;
+    }
     if (Object.prototype.hasOwnProperty.call(args, key) && next && !next.startsWith("--")) {
       args[key] = next;
       index += 1;
@@ -83,6 +104,15 @@ function parseArgs(argv) {
   args.timeoutMs = Number(args.timeoutMs);
   args.hostPassword = args.hostPassword || args.password;
   args.clientPassword = args.clientPassword || (args.expectAuthFailure ? `${args.password}-wrong` : args.password);
+  if (args.expectAudioPlayback) {
+    args.expectAudioPayload = true;
+  }
+  if (args.expectAudioPayload) {
+    args.expectAudioFrame = true;
+  }
+  if (args.expectAudioFrame) {
+    args.enableAudio = true;
+  }
   return args;
 }
 
@@ -328,6 +358,7 @@ async function startWindowsHost(args, repoRoot) {
     LAN_DUAL_WINDOWS_INPUT_MODE: args.inputMode,
     LAN_DUAL_WINDOWS_SCREEN_MODE: args.mockVideo ? "mock" : args.screenMode,
     LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: "4",
+    ...(args.audioMode ? { LAN_DUAL_WINDOWS_AUDIO_MODE: args.audioMode } : {}),
   };
   const child = startProcess(
     process.execPath,
@@ -352,6 +383,24 @@ function buildSnapshotExpression() {
       remote: text("#remoteStatus"),
       video: text("#videoStatus"),
       audio: text("#audioStatus"),
+      audioPlayback: text("#audioPlaybackStatus"),
+      audioToggleChecked: document.querySelector("#audioToggle")?.checked || false,
+      audioPlayedFrames: Number((text("#audioStatus").match(/播放\\s*(\\d+)/) || [])[1] || 0),
+      audioFrameCount: (window.__lanDualReceivedMessages || []).filter((message) => message.type === "audio_frame").length,
+      lastAudioFrame: (() => {
+        const frame = [...(window.__lanDualReceivedMessages || [])].reverse().find((message) => message.type === "audio_frame");
+        if (!frame) return null;
+        const payload = frame.payload || frame.data || frame.samples || frame.audioData || "";
+        return {
+          codec: frame.codec || "",
+          encoding: frame.encoding || "",
+          audioMode: frame.audioMode || frame.source || "",
+          sampleRate: frame.sampleRate || 0,
+          channels: frame.channels || 0,
+          payloadBytes: frame.payloadBytes || frame.bytes || 0,
+          payloadLength: String(payload).length,
+        };
+      })(),
       input: text("#inputStatus"),
       clipboard: text("#clipboardStatus"),
       localClipboard: text("#localClipboardStatus"),
@@ -374,11 +423,23 @@ function buildSnapshotExpression() {
 function installWebSocketSendRecorderExpression() {
   return `(() => {
     window.__lanDualSentMessages = [];
+    window.__lanDualReceivedMessages = [];
     if (window.__lanDualWebSocketSendHooked) return true;
     const OriginalWebSocket = window.WebSocket;
     function RecordingWebSocket(...args) {
       const socket = new OriginalWebSocket(...args);
       const originalSend = socket.send.bind(socket);
+      socket.addEventListener("message", (event) => {
+        try {
+          const parsed = JSON.parse(String(event.data));
+          window.__lanDualReceivedMessages.push(parsed);
+          if (window.__lanDualReceivedMessages.length > 400) {
+            window.__lanDualReceivedMessages.shift();
+          }
+        } catch {
+          window.__lanDualReceivedMessages.push({ raw: String(event.data) });
+        }
+      });
       socket.send = (data) => {
         try {
           const parsed = JSON.parse(String(data));
@@ -477,6 +538,12 @@ async function run() {
         setValue("#hostInput", ${JSON.stringify(args.host)});
         setValue("#portInput", ${JSON.stringify(String(args.port))});
         setValue("#passwordInput", ${JSON.stringify(args.clientPassword)});
+        if (${JSON.stringify(args.enableAudio)}) {
+          const audioToggle = document.querySelector("#audioToggle");
+          if (!audioToggle.checked) {
+            audioToggle.click();
+          }
+        }
         document.querySelector("#connectButton").click();
         return true;
       })()`,
@@ -540,6 +607,33 @@ async function run() {
     print("OK", `Connection: ${videoSnapshot.connection}`);
     print("OK", `Remote: ${videoSnapshot.remote}`);
     print("OK", `Video: ${videoSnapshot.video}`);
+
+    if (args.expectAudioFrame) {
+      const audioSnapshot = await waitFor(
+        async () => {
+          const value = await evaluate(session, buildSnapshotExpression());
+          lastSnapshot = value;
+          const hasFrame = value.audioFrameCount > 0 || value.audio.includes("接收") || value.audio.includes("level");
+          const hasPayload = Boolean(value.lastAudioFrame?.payloadLength || value.lastAudioFrame?.payloadBytes);
+          const played = value.audioPlayedFrames > 0;
+          const payloadOk = !args.expectAudioPayload || hasPayload;
+          const playbackOk = !args.expectAudioPlayback || played;
+          return hasFrame && payloadOk && playbackOk ? value : null;
+        },
+        args.timeoutMs,
+        "Mac client audio frame",
+      ).catch((error) => {
+        if (lastSnapshot) {
+          print("INFO", `Last audio: ${lastSnapshot.audio}`);
+          print("INFO", `Last audio playback: ${lastSnapshot.audioPlayback}`);
+          print("INFO", `Last audio frames: ${lastSnapshot.audioFrameCount}, played: ${lastSnapshot.audioPlayedFrames}`);
+        }
+        throw error;
+      });
+      const frame = audioSnapshot.lastAudioFrame;
+      const payloadText = frame ? ` · payload=${frame.payloadBytes || frame.payloadLength || 0}` : "";
+      print("OK", `Audio: ${audioSnapshot.audio} / ${audioSnapshot.audioPlayback}${payloadText}`);
+    }
 
     const endpoint = `${args.host}:${args.port}`;
     const recentConnectionSnapshot = await waitFor(
