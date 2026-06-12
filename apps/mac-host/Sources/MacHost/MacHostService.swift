@@ -284,7 +284,7 @@ final class MacHostService {
                 "inputMonitoring": snapshot.inputMonitoringGranted,
             ],
             "runtime": runtimeDiagnostics(),
-            "lastSeenAt": ISO8601DateFormatter().string(from: Date()),
+            "lastSeenAt": HostTimestamp.isoString(),
         ]
 
         sendHttpJson(body, status: "200 OK", closeAfterSend: true, to: context)
@@ -293,7 +293,7 @@ final class MacHostService {
     private func runtimeDiagnostics() -> [String: Any] {
         [
             "processId": Int(ProcessInfo.processInfo.processIdentifier),
-            "startedAt": ISO8601DateFormatter().string(from: runtimeStartedAt),
+            "startedAt": HostTimestamp.isoString(from: runtimeStartedAt),
             "uptimeSeconds": max(0, Int(Date().timeIntervalSince(runtimeStartedAt))),
             "buildId": configuration.buildId,
         ]
@@ -1387,7 +1387,7 @@ final class MacHostService {
                             context.frameId += 1
                             var message = frame.jsonObject(
                                 frameId: context.frameId,
-                                timestamp: ISO8601DateFormatter().string(from: Date())
+                                timestamp: HostTimestamp.isoString()
                             )
                             message["qualityPreset"] = sessionSnapshot.qualityPreset
                             self.addVideoDiagnostics(
@@ -1686,7 +1686,7 @@ final class MacHostService {
                     context.screenCaptureRetryAfter = nil
                     var frame = capturedFrame.jsonObject(
                         frameId: frameId,
-                        timestamp: ISO8601DateFormatter().string(from: Date()),
+                        timestamp: HostTimestamp.isoString(),
                         keyFrame: frameId == 1 || frameId % 30 == 0
                     )
                     frame["qualityPreset"] = sessionSnapshot.qualityPreset
@@ -1733,7 +1733,7 @@ final class MacHostService {
         fallbackFrame["droppedFrames"] = context.droppedVideoFrames
         fallbackFrame["screenCaptureFailureStreak"] = context.consecutiveVideoCaptureFailures
         if let retryAfter {
-            fallbackFrame["screenCaptureRetryAfter"] = ISO8601DateFormatter().string(from: retryAfter)
+            fallbackFrame["screenCaptureRetryAfter"] = HostTimestamp.isoString(from: retryAfter)
         }
         context.droppedVideoFrames = 0
         send(fallbackFrame, to: context)
@@ -1760,7 +1760,7 @@ final class MacHostService {
           <text x="\(Int(Double(session.width) * 0.15))" y="\(Int(Double(session.height) * 0.34))" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="44" font-weight="700" fill="#111827">macOS 被控端测试帧</text>
           <text x="\(Int(Double(session.width) * 0.15))" y="\(Int(Double(session.height) * 0.42))" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="30" fill="#4b5563">\(session.displayName)</text>
           <text x="\(Int(Double(session.width) * 0.15))" y="\(Int(Double(session.height) * 0.49))" font-family="Menlo, Consolas, monospace" font-size="30" fill="#4b5563">frame #\(frameId)</text>
-          <text x="\(Int(Double(session.width) * 0.15))" y="\(Int(Double(session.height) * 0.56))" font-family="Menlo, Consolas, monospace" font-size="26" fill="#4b5563">\(ISO8601DateFormatter().string(from: now))</text>
+          <text x="\(Int(Double(session.width) * 0.15))" y="\(Int(Double(session.height) * 0.56))" font-family="Menlo, Consolas, monospace" font-size="26" fill="#4b5563">\(HostTimestamp.isoString(from: now))</text>
         </svg>
         """
 
@@ -1768,7 +1768,7 @@ final class MacHostService {
         var frame: [String: Any] = [
             "type": "video_frame",
             "frameId": frameId,
-            "timestamp": ISO8601DateFormatter().string(from: now),
+            "timestamp": HostTimestamp.isoString(from: now),
             "width": session.width,
             "height": session.height,
             "codec": "mock-svg",
@@ -1948,7 +1948,7 @@ final class MacHostService {
         var envelope = message
         let type = stringValue(message["type"]) ?? "message"
         envelope["id"] = "\(type)-\(UUID().uuidString)"
-        envelope["timestamp"] = ISO8601DateFormatter().string(from: Date())
+        envelope["timestamp"] = HostTimestamp.isoString()
 
         guard JSONSerialization.isValidJSONObject(envelope),
               let data = try? JSONSerialization.data(withJSONObject: envelope),

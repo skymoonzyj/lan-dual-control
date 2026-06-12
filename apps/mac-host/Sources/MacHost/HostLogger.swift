@@ -14,8 +14,7 @@ final class HostLogger {
     }
 
     private func write(level: String, _ message: String) {
-        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let timestamp = HostTimestamp.isoString()
         print("[\(timestamp)] [\(level)] \(message)")
     }
 }
-

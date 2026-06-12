@@ -20,6 +20,47 @@
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12
+开发端：Mac Codex
+本轮目标：让 Mac host 输出带小数秒的 ISO timestamp，配合视频观察脚本做更可信的帧接收年龄和低延迟诊断。
+完成内容：
+- 新增 `HostTimestamp.isoString(from:)`，统一生成带小数秒的 ISO-8601 UTC 时间戳。
+- `/discovery.lastSeenAt`、`runtime.startedAt`、H.264/JPEG/mock `video_frame.timestamp`、fallback `screenCaptureRetryAfter`、WebSocket envelope `timestamp` 和 HostLogger 日志时间戳改用统一 formatter。
+- 该格式仍是 ISO-8601 字符串，属于向后兼容的精度增强，不新增必需协议字段。
+- 已基于 Windows 最新 `0a745d4 Add Windows host start helper` 合并，保留 Windows 启动助手文档和 ACTIVE_LOCKS 记录。
+- Mac host README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `apps/mac-host/Sources/MacHost/HostTimestamp.swift`
+- `apps/mac-host/Sources/MacHost/MacHostService.swift`
+- `apps/mac-host/Sources/MacHost/HostLogger.swift`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `swift build`（`apps/mac-host`）
+- `rg -n "ISO8601DateFormatter" apps/mac-host/Sources/MacHost`
+- 临时启动：`LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_PORT=43771 LAN_DUAL_INPUT_MODE=log LAN_DUAL_BONJOUR=0 LAN_DUAL_BUILD_ID=fractional-timestamp-test .build/debug/lan-dual-mac-host`
+- `node -e` fetch `http://127.0.0.1:43771/discovery` 并断言 `lastSeenAt` / `runtime.startedAt` 匹配 `.123Z` 小数秒格式、`buildId=fractional-timestamp-test`
+- `node scripts/mac/check-mac-displays.mjs --host 127.0.0.1 --port 43771 --timeoutMs 12000 --requireRuntime --expectBuildId fractional-timestamp-test`
+- `node scripts/mac/observe-mac-video.mjs --host 127.0.0.1 --port 43771 --durationMs 1200 --preferredVideoCodec mjpeg --minFrames 3 --maxGapMs 1000 --expectActiveDisplayId main --requireFrameTimestamp --maxFrameAgeMs 250`
+验证结果：
+- Swift build 通过；旧 `ISO8601DateFormatter` 直接调用只剩 `HostTimestamp.swift` 内部。
+- 临时 `43771` discovery 返回 `lastSeenAt=2026-06-12T10:05:33.915Z`、`runtime.startedAt=2026-06-12T10:05:18.167Z`、`buildId=fractional-timestamp-test`。
+- `check-mac-displays` runtime 强校验通过，`/discovery` 和 `hello_ack` 均显示同一 PID/build/startedAt。
+- 视频观察在临时第二 host 上通过 timestamp 强校验：38 帧、约 30.9fps，`frameAge max=0ms`，证明 `video_frame.timestamp` 不再是秒级；该临时第二 host 因资源竞争走 mock fallback，主 `43770` 未重启也未受影响。
+- 临时 `43771` 已关闭，主 `43770` 仍由 PID 97112 正常监听。
+遗留问题：
+- 主 `43770` 当前仍是旧 `db48055` 进程，需后续选择窗口重启到新 build 后，才会在真实 H.264/JPEG 帧上使用小数秒 timestamp。
+下一步建议：
+- 下一次重启主 Mac host 时设置新的 `LAN_DUAL_BUILD_ID`，跑 `check-mac-displays --requireRuntime --expectBuildId <id>`，再跑 `observe-mac-video --requireH264 --maxFrameAgeMs 250 --requireMonotonicTimestampUs` 确认真实 H.264 低延迟接收年龄。
+是否改了协议：否；仍是既有可选/已有 ISO timestamp 字符串，只有精度提升。
+是否需要另一端配合：否；Windows 端可正常消费 ISO 字符串，后续如 UI 显示时间会自动更精确。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
 开发端：Windows Codex
 本轮目标：新增 Windows host 日常启动助手，把启动、局域网地址提示和防火墙只读检查串起来，方便 Mac 反控 Windows 真机联调。
 完成内容：
