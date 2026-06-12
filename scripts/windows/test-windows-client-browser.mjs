@@ -16,6 +16,7 @@ const defaults = {
   requireH264: false,
   injectPcmAudio: false,
   diagnosticsOnly: false,
+  expectDiscoveryRuntimeBuildId: "",
   headless: true,
 };
 
@@ -610,6 +611,67 @@ async function verifyStreamFallbackDiagnostics(session) {
   return result;
 }
 
+async function verifyDiscoveryRuntimeDiagnostics(session, { host, port, buildId, timeoutMs }) {
+  const result = await evaluate(
+    session,
+    `(async () => {
+      if (
+        typeof refreshDevices !== "function" ||
+        typeof state !== "object" ||
+        typeof elements !== "object"
+      ) {
+        return { ok: false, reason: "missing discovery functions" };
+      }
+
+      const setValue = (selector, value) => {
+        const element = document.querySelector(selector);
+        if (!element) return false;
+        element.value = value;
+        element.dispatchEvent(new Event("change", { bubbles: true }));
+        element.dispatchEvent(new Event("input", { bubbles: true }));
+        return true;
+      };
+
+      setValue("#transportSelect", "websocket");
+      setValue("#hostInput", ${JSON.stringify(host)});
+      setValue("#portInput", ${JSON.stringify(port)});
+      await refreshDevices();
+
+      const targetHost = ${JSON.stringify(host)};
+      const targetPort = ${JSON.stringify(String(port))};
+      const buildId = ${JSON.stringify(buildId)};
+      const rows = [...document.querySelectorAll(".device-row")];
+      const row = rows.find((item) => item.dataset.host === targetHost && item.dataset.port === targetPort);
+      const detail = row?.innerText || "";
+      if (row) {
+        row.click();
+      }
+      const diagnostics = document.querySelector("#hostDiagnosticsText")?.textContent || "";
+      const device = state.discoveredDevices.find(
+        (item) => item.host === targetHost && String(item.port) === targetPort,
+      );
+      const runtime = device?.runtime || {};
+
+      return {
+        ok:
+          Boolean(row) &&
+          detail.includes(buildId) &&
+          diagnostics.includes("运行") &&
+          diagnostics.includes(buildId) &&
+          runtime.buildId === buildId,
+        detail,
+        diagnostics,
+        runtime,
+        rowCount: rows.length,
+      };
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`discovery runtime diagnostics check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function run() {
   const args = parseArgs(process.argv);
   const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -670,6 +732,18 @@ async function run() {
     );
     const streamFallbackCheck = await verifyStreamFallbackDiagnostics(session);
     print("OK", `Stream fallback diagnostics: ${streamFallbackCheck.fallbackText}`);
+    if (args.expectDiscoveryRuntimeBuildId) {
+      const discoveryRuntimeCheck = await verifyDiscoveryRuntimeDiagnostics(session, {
+        host: args.host,
+        port: args.port,
+        buildId: args.expectDiscoveryRuntimeBuildId,
+        timeoutMs: args.timeoutMs,
+      });
+      print(
+        "OK",
+        `Discovery runtime: ${discoveryRuntimeCheck.detail} / ${discoveryRuntimeCheck.diagnostics}`,
+      );
+    }
     if (args.diagnosticsOnly) {
       print("OK", "Diagnostics-only browser checks passed");
       return;

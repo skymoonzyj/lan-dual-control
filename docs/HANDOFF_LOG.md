@@ -21,6 +21,37 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：给 Windows 控制端页面级自检增加真实 `/discovery.runtime` UI 验收，方便 Mac host 重启后不用密码确认设备列表和诊断条显示的是目标 build。
+完成内容：
+- `scripts/windows/test-windows-client-browser.mjs` 新增 `--expectDiscoveryRuntimeBuildId <build-id>`。
+- 参数启用时，脚本会打开 Windows 控制端页面、填入 `--host/--port`、执行页面“刷新设备”，并断言在线设备列表和诊断条都显示目标 build。
+- 该检查可配合 `--diagnosticsOnly` 使用，不发送密码、不进入远控会话、不发送输入事件。
+- Windows client README、当前状态、下一步和占用记录已同步该命令。
+修改文件：
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node --check apps/windows-client/app.js`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --host 192.168.31.122 --port 43770 --expectDiscoveryRuntimeBuildId db48055 --timeoutMs 45000`
+验证结果：
+- 真实 Mac host 43770 无密码 discovery UI 验收通过。
+- 输出确认设备列表和诊断条均显示 `PID 97112`、`build db48055`，示例诊断条：`诊断：运行：PID 97112 / 已运行 7m / 启动 06/12 17:11 / build db48055`。
+遗留问题：
+- 该检查只覆盖 `/discovery.runtime` 到 Windows 控制端 UI 的显示，不进入真实远控会话；H.264/WebCodecs、PCM 播放和输入仍按既有真实连接脚本验收。
+下一步建议：
+- 每次 Mac host 设置新 `LAN_DUAL_BUILD_ID` 并重启后，先跑该无密码 UI 检查，再跑需要密码的真实连接/H.264/PCM 验收。
+是否改了协议：否。
+是否需要另一端配合：不阻塞；本轮已用 Mac 43770 `buildId=db48055` 验收通过。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：把 Mac host 新增的可选 `runtime` 诊断接入 Windows 控制端，方便判断当前连接是不是旧进程或旧 build。
 完成内容：
 - Windows 控制端连接 WebSocket 被控端前会轻量探测同地址 `/discovery`；如果返回 `runtime`，会写入设备列表并在连接成功后的诊断条显示。
