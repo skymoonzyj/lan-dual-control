@@ -19,6 +19,33 @@
 
 ## 2026-06-13 Windows Codex
 
+日期：2026-06-13 01:45
+开发端：Windows Codex
+本轮目标：补齐 Windows host 音频观察脚本的纯帮助入口，避免查看参数时误启动临时 host。
+完成内容：
+- `scripts/windows/observe-windows-host-audio.mjs` 新增 `--help/-h`，只打印用法并退出。
+- 帮助内容覆盖连接、WASAPI/DirectShow/mock 音频、稳态帧率、帧新鲜度、测试音和电平强校验等常用参数。
+- Windows host README 已补充音频观察脚本的 `--help` 查看参数命令。
+修改文件：
+- `scripts/windows/observe-windows-host-audio.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/observe-windows-host-audio.mjs`
+- `node scripts/windows/observe-windows-host-audio.mjs --help`
+- `node scripts/windows/observe-windows-host-audio.mjs --durationMs 2500 --minFrames 80 --minFps 40 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp --json`
+验证结果：
+- `--help` 返回 exit code 0，只打印帮助文本，未启动临时 Windows host。
+- WASAPI 短观察通过：收到 105 帧，稳态 100 帧约 49.88 FPS，最大间隔 33ms，稳态 `frameAge max=1ms`，timestamp 单调。
+遗留问题：无。
+下一步建议：可以继续把音频/视频观察脚本的新鲜度强校验接入 readiness deploy 档位，或做更长时间 WASAPI 长稳。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-13 Windows Codex
+
 日期：2026-06-13
 开发端：Windows Codex
 本轮目标：增强 Windows host 音频观察脚本，让 Mac 反控 Windows 前能量化音频帧新鲜度和 timestamp 单调性。

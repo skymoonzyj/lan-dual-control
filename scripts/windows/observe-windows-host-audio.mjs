@@ -47,6 +47,45 @@ const defaults = {
   minLevel: 0.01,
 };
 
+function printUsage() {
+  console.log(`Usage:
+  node scripts/windows/observe-windows-host-audio.mjs [options]
+
+Options:
+  --host <host>                         Windows host address (default: ${defaults.host})
+  --port <port>                         Windows host port (default: ${defaults.port})
+  --password <password>                 Windows host password (default: ${defaults.password})
+  --durationMs <ms>                     Observation duration (default: ${defaults.durationMs})
+  --warmupFrames <n>                    Frames ignored before steady-state checks
+  --audioMode <wasapi|directshow|mock>  Local temporary host audio mode
+  --audioDevice <name>                  Explicit local audio device name
+  --sampleRate <hz>                     Requested audio sample rate (default: ${defaults.sampleRate})
+  --channels <n>                        Requested channel count (default: ${defaults.channels})
+  --frameMs <ms>                        Requested audio frame size (default: ${defaults.frameMs})
+  --minFrames <n>                       Minimum received audio frames
+  --minFps <n>                          Minimum steady-state audio frame rate
+  --maxGapMs <ms>                       Fail if steady inter-frame receive gap is higher
+  --maxFrameAgeMs <ms>                  Fail if audio_frame.timestamp receive age is higher
+  --requireMonotonicTimestamp           Fail if audio_frame.timestamp goes backwards
+  --playTone                            Play a local test tone during observation
+  --requireLevel                        Fail if steady audio level stays below --minLevel
+  --minLevel <n>                        Minimum steady audio level when --requireLevel is set
+  --toneFrequency <hz>                  Test tone frequency (default: ${defaults.toneFrequency})
+  --toneDurationMs <ms>                 Test tone duration (default: ${defaults.toneDurationMs})
+  --toneDelayMs <ms>                    Delay before test tone playback (default: ${defaults.toneDelayMs})
+  --screenMode <mode>                   Local temporary host screen mode (default: ${defaults.screenMode})
+  --ffmpeg <path>                       Explicit FFmpeg path for local temporary host
+  --useExisting                         Connect to an already running Windows host
+  --json                                Print JSON result only
+  --verbose                             Print temporary Windows host logs
+  --help, -h                            Show this help without starting a host
+
+Examples:
+  node scripts/windows/observe-windows-host-audio.mjs --durationMs 2500 --maxFrameAgeMs 1000 --requireMonotonicTimestamp
+  node scripts/windows/observe-windows-host-audio.mjs --durationMs 4500 --playTone --requireLevel --minLevel 0.02
+`);
+}
+
 function parseArgs(argv) {
   const args = { ...defaults };
   for (let index = 2; index < argv.length; index += 1) {
@@ -613,6 +652,11 @@ function assertObservation(summary, args) {
 }
 
 async function main() {
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    printUsage();
+    return;
+  }
+
   const args = parseArgs(process.argv);
   let child = null;
   let socket = null;

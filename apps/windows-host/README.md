@@ -317,6 +317,12 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-audio.mjs
 ```
 
+需要先查看参数而不启动临时 host 时，可以运行：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-audio.mjs --help
+```
+
 需要把音频帧新鲜度纳入强校验时：
 
 ```powershell

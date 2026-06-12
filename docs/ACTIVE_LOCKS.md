@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/observe-windows-host-audio.mjs`, `apps/windows-host/README.md`, 交接 docs | 2026-06-13 01:45 | Windows host 音频观察脚本新增 `--help/-h` 纯帮助入口；README、当前状态和交接记录已同步。 |
 | Windows Codex | `scripts/windows/observe-windows-host-audio.mjs`、`apps/windows-host/README.md`、交接 docs | 2026-06-13 01:36 | Windows host 音频观察脚本新增 `audio_frame.timestamp` 接收年龄统计、`--maxFrameAgeMs` 和 `--requireMonotonicTimestamp` 强校验；WASAPI 正向短观察通过，倒退 timestamp 负向失败。 |
 | Mac Codex | `apps/mac-client/app.js`、`apps/mac-client/README.md`、`scripts/windows/test-mac-client-browser.mjs`、交接 docs | 2026-06-13 01:02 | Mac client 意外断线等待自动重连时清空“远端运行”runtime，重连恢复后页面自检断言新 runtime 重新出现。 |
 | Windows Codex | `scripts/windows/observe-windows-host-video.mjs`、`apps/windows-host/README.md`、交接 docs | 2026-06-13 01:10 | Windows host 视频观察脚本新增 `video_frame.timestamp` 接收年龄统计、`--maxFrameAgeMs` 和 `--requireMonotonicTimestamp` 强校验；720p/30Hz 临时 FFmpeg host 正向通过，过严阈值负向失败。 |
