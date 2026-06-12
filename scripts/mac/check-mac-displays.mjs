@@ -15,6 +15,9 @@ const defaults = {
   fps: 30,
   bandwidthKbps: 12000,
   allowMissingFrameDisplayDiagnostic: false,
+  requireRuntime: false,
+  expectBuildId: "",
+  maxRuntimeUptimeSeconds: 0,
 };
 
 function parseArgs(argv) {
@@ -48,6 +51,15 @@ function parseArgs(argv) {
     args.allowMissingFrameDisplayDiagnostic,
     defaults.allowMissingFrameDisplayDiagnostic,
   );
+  args.expectBuildId = normalizedText(args.expectBuildId);
+  args.maxRuntimeUptimeSeconds = nonNegativeInteger(
+    args.maxRuntimeUptimeSeconds,
+    defaults.maxRuntimeUptimeSeconds,
+  );
+  args.requireRuntime =
+    booleanArg(args.requireRuntime, defaults.requireRuntime) ||
+    Boolean(args.expectBuildId) ||
+    args.maxRuntimeUptimeSeconds > 0;
   return args;
 }
 
@@ -360,6 +372,65 @@ function assertFrameDisplay(frame, expectedDisplay, label, args) {
   print("OK", `${label}: frame display=${actual} / ${frame.displayName || expectedDisplay.name}`);
 }
 
+function normalizeRuntime(runtime) {
+  if (!runtime || typeof runtime !== "object") return null;
+  return {
+    processId: Number(runtime.processId),
+    startedAt: normalizedText(runtime.startedAt),
+    uptimeSeconds: Number(runtime.uptimeSeconds),
+    buildId: normalizedText(runtime.buildId),
+  };
+}
+
+function assertRuntime(runtime, args, label) {
+  const normalized = normalizeRuntime(runtime);
+  if (!normalized) {
+    if (args.requireRuntime) {
+      throw new Error(`${label} runtime missing; make sure the Mac host was restarted with a build containing runtime diagnostics`);
+    }
+    return null;
+  }
+
+  const missingFields = [];
+  if (!Number.isFinite(normalized.processId) || normalized.processId <= 0) missingFields.push("processId");
+  if (!normalized.startedAt) missingFields.push("startedAt");
+  if (!Number.isFinite(normalized.uptimeSeconds) || normalized.uptimeSeconds < 0) missingFields.push("uptimeSeconds");
+  if (!normalized.buildId) missingFields.push("buildId");
+  if (missingFields.length > 0) {
+    if (!args.requireRuntime) {
+      print("INFO", `${label} runtime incomplete: missing ${missingFields.join(", ")}`);
+      return null;
+    }
+    throw new Error(`${label} runtime missing fields: ${missingFields.join(", ")}`);
+  }
+
+  if (args.expectBuildId && normalized.buildId !== args.expectBuildId) {
+    throw new Error(`${label} runtime buildId mismatch: ${normalized.buildId} !== ${args.expectBuildId}`);
+  }
+
+  if (args.maxRuntimeUptimeSeconds > 0 && normalized.uptimeSeconds > args.maxRuntimeUptimeSeconds) {
+    throw new Error(
+      `${label} runtime uptime too high: ${normalized.uptimeSeconds}s > ${args.maxRuntimeUptimeSeconds}s`,
+    );
+  }
+
+  print(
+    "OK",
+    `${label} runtime: pid=${normalized.processId} build=${normalized.buildId} uptime=${normalized.uptimeSeconds}s startedAt=${normalized.startedAt}`,
+  );
+  return normalized;
+}
+
+function assertRuntimeConsistency(discoveryRuntime, helloRuntime) {
+  if (!discoveryRuntime || !helloRuntime) return;
+  if (discoveryRuntime.processId !== helloRuntime.processId) {
+    throw new Error(`runtime processId mismatch: discovery=${discoveryRuntime.processId} hello_ack=${helloRuntime.processId}`);
+  }
+  if (discoveryRuntime.buildId !== helloRuntime.buildId) {
+    throw new Error(`runtime buildId mismatch: discovery=${discoveryRuntime.buildId} hello_ack=${helloRuntime.buildId}`);
+  }
+}
+
 function printUsage() {
   console.log(`Usage:
   node scripts/mac/check-mac-displays.mjs [options]
@@ -374,11 +445,15 @@ Options:
   --preferredVideoCodec <codec>    Requested codec: mjpeg or h264. Default: mjpeg
   --allowMissingFrameDisplayDiagnostic
                                     Allow older hosts whose video_frame lacks activeDisplayId.
+  --requireRuntime                 Require /discovery and hello_ack runtime diagnostics.
+  --expectBuildId <id>             Require runtime.buildId to equal this value. Implies --requireRuntime.
+  --maxRuntimeUptimeSeconds <sec>  Fail if runtime.uptimeSeconds is greater than this value. Implies --requireRuntime.
   --timeoutMs <ms>                 Network timeout. Default: 8000
 
 Examples:
   node scripts/mac/check-mac-displays.mjs
-  node scripts/mac/check-mac-displays.mjs --displayId main --switchDisplayId display-123456`);
+  node scripts/mac/check-mac-displays.mjs --displayId main --switchDisplayId display-123456
+  node scripts/mac/check-mac-displays.mjs --requireRuntime --expectBuildId "$(git rev-parse --short HEAD)"`);
 }
 
 async function main() {
@@ -391,6 +466,7 @@ async function main() {
   print("INFO", `Target: ${args.host}:${args.port}`);
 
   const discovery = await fetchDiscovery(args);
+  const discoveryRuntime = assertRuntime(discovery.payload.runtime, args, "discovery");
   const socket = await openWebSocket(args);
   const client = createClient(socket, args);
   print("OK", "WebSocket connected");
@@ -403,6 +479,8 @@ async function main() {
   });
   const hello = await client.waitFor("hello_ack");
   print("OK", `hello_ack: ${hello.deviceName || hello.hostName || "unknown"}`);
+  const helloRuntime = assertRuntime(hello.runtime, args, "hello_ack");
+  assertRuntimeConsistency(discoveryRuntime, helloRuntime);
 
   client.send({
     type: "auth_request",

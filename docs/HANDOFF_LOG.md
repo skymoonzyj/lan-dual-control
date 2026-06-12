@@ -55,6 +55,43 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：让 Mac display 自检可强制校验 runtime 诊断，部署/重启后确认当前连接的是目标进程和 build。
+完成内容：
+- `scripts/mac/check-mac-displays.mjs` 新增 `--requireRuntime`，要求 `/discovery` 和 `hello_ack` 都返回完整 `runtime`。
+- 新增 `--expectBuildId <id>`，要求 `runtime.buildId` 匹配指定版本，并自动启用 runtime 强校验。
+- 新增 `--maxRuntimeUptimeSeconds <sec>`，可用于确认刚重启的是新进程。
+- 脚本会校验 `/discovery.runtime` 与 `hello_ack.runtime` 的 `processId` 和 `buildId` 一致。
+- Mac host README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `scripts/mac/check-mac-displays.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-displays.mjs`
+- `node scripts/mac/check-mac-displays.mjs --help`
+- 临时启动新 host：`LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_PORT=43771 LAN_DUAL_INPUT_MODE=log LAN_DUAL_BONJOUR=0 LAN_DUAL_BUILD_ID=runtime-assert-test .build/debug/lan-dual-mac-host`
+- `node scripts/mac/check-mac-displays.mjs --port 43771 --timeoutMs 12000 --requireRuntime --expectBuildId runtime-assert-test`
+- `node scripts/mac/check-mac-displays.mjs --port 43771 --timeoutMs 12000 --expectBuildId wrong-build` 预期失败
+验证结果：
+- 临时 `43771` 正向强校验通过：`/discovery` 和 `hello_ack` 均返回 `pid=67925`、`build=runtime-assert-test`、同一 `startedAt`，并完成 `main` 单屏 round-trip。
+- 故意传入 `--expectBuildId wrong-build` 按预期失败：`discovery runtime buildId mismatch: runtime-assert-test !== wrong-build`。
+- 主 `43770` 默认路径仍通过，输出 `runtime=missing`，说明当前主进程尚未重启到 runtime 版本，但默认兼容路径不受影响。
+- 临时 `43771` 已停止，端口无残留监听。
+遗留问题：
+- 主 `43770` 仍未在本轮重启；runtime 强校验用于后续计划内重启/部署验证。
+下一步建议：
+- 重启主 `43770` 时设置 `LAN_DUAL_BUILD_ID=$(git rev-parse --short HEAD)`，再运行 `check-mac-displays --requireRuntime --expectBuildId <hash> --maxRuntimeUptimeSeconds 120`。
+是否改了协议：否；只消费已有可选 runtime 诊断字段。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：给 Mac host 增加运行时诊断，方便判断当前连接的是不是旧进程/旧二进制。
 完成内容：
 - `HostConfiguration` 新增可选 `LAN_DUAL_BUILD_ID`，未设置时为 `dev`。

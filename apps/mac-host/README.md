@@ -88,6 +88,14 @@ node scripts/mac/smoke-mac-input-log.mjs
 
 `LAN_DUAL_BUILD_ID` 是可选运行时诊断标识，默认 `dev`。`/discovery` 和 `hello_ack` 会返回 `runtime.processId`、`runtime.startedAt`、`runtime.uptimeSeconds` 和 `runtime.buildId`，方便确认当前连到的是哪一个 Mac host 进程，避免旧二进制未重启时误判。
 
+部署或重启后可以让显示器自检同时强制检查运行时诊断：
+
+```bash
+node scripts/mac/check-mac-displays.mjs --requireRuntime --expectBuildId "$(git rev-parse --short HEAD)"
+```
+
+如果需要确认刚刚重启的是新进程，可再加 `--maxRuntimeUptimeSeconds 120`，要求 `/discovery` 和 `hello_ack` 返回同一个 `processId` / `buildId`，且运行时间不超过指定秒数。
+
 Windows 控制端选择“WebSocket 局域网”，地址填写 Mac 的局域网 IP，端口填写 `43770`，默认密码为：
 
 ```text
@@ -137,6 +145,8 @@ node scripts/mac/check-mac-displays.mjs
 ```
 
 该脚本会只读检查 `/discovery`、`session_answer.displays`、`session_answer.activeDisplayId`、`display_settings_ack.activeDisplayId`，并等待切换后的 `video_frame`。默认请求 MJPEG/JPEG 路径，适合快速确认多显示器选择不被 H.264 首帧节奏影响；需要专门检查 H.264 路径时可加 `--preferredVideoCodec h264`。脚本默认要求 `video_frame.activeDisplayId` 存在且匹配，用来发现主机还没重启到最新二进制的情况；如果只是调试旧 host，可显式加 `--allowMissingFrameDisplayDiagnostic` 放宽。当前真机单屏基线：`127.0.0.1:43770` 最新 host 通过 `main` 单屏 round-trip，首帧和切换后帧均带回 `activeDisplayId=main` / `displayName=主显示器`；显式 H.264 版本也通过；真实外接双屏切换仍需接显示器后再验收。
+
+部署校验时可加 `--requireRuntime` 要求 `/discovery` 和 `hello_ack` 都返回完整 runtime；`--expectBuildId <id>` 会要求 `runtime.buildId` 匹配并自动启用 runtime 强校验；`--maxRuntimeUptimeSeconds <sec>` 可用于确认刚刚重启的是新进程。
 
 验证真实系统声音采集和控制端播放：
 
