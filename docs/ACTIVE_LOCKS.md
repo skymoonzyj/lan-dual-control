@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/mac/check-mac-host-readiness.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md` | 2026-06-12 19:29 | Mac readiness 默认低风险体检新增直接启动输入默认值自测，自动确认未设置 `LAN_DUAL_INPUT_MODE` 时为 `log`、显式 `inject` 可覆盖。 |
 | Mac Codex | `apps/mac-host/Sources/MacHost/HostConfiguration.swift`、`scripts/mac/test-mac-host-defaults.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 19:19 | 收口 Mac host 直接启动安全默认值：未设置 `LAN_DUAL_INPUT_MODE` 时默认 `log`；新增自测确认默认 `log` 和显式 `inject` 覆盖。 |
 | Mac Codex | `scripts/mac/check-mac-host-readiness.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md` | 2026-06-12 19:10 | 增强 Mac readiness 视频时间戳新鲜度校验：新增 `--maxVideoFrameAgeMs`，自动启用 `--probeVideo` 并要求 `video_frame.timestamp` 接收年龄不超过阈值；真实 `43770` 以 `--maxVideoFrameAgeMs 250` 通过，H.264 `frameAge max=1ms`。 |
 | Mac Codex | `scripts/mac/check-mac-host-readiness.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md` | 2026-06-12 19:04 | 增强 Mac readiness 权限诊断：汇总 `/discovery.permissions` 的屏幕录制、辅助功能和输入监控；新增 `--requireControlPermissions` 强制要求屏幕录制和辅助功能开启。 |

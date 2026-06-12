@@ -77,8 +77,9 @@ function printHelp() {
   console.log(`Usage: node scripts/mac/check-mac-host-readiness.mjs [options]
 
 Runs a low-risk Mac host readiness check for LAN control work. Default checks
-are read-only: platform, Node/Swift, Mac host build, helper syntax/dry-run,
-keymap coverage, and a non-failing /discovery status check.
+are read-only: platform, Node/Swift, Mac host build, direct-start input
+defaults, helper syntax/dry-run, keymap coverage, and a non-failing
+/discovery status check.
 
 Options:
   --host <host>             Mac host probe host. Default: 127.0.0.1
@@ -416,6 +417,9 @@ async function main() {
   await runStep(results, args, "Swift", "swift", ["--version"], { timeoutMs: 10000 });
   await runStep(results, args, "Mac host build", "swift", ["build", "--package-path", "apps/mac-host"], {
     timeoutMs: args.timeoutMs,
+  });
+  await runStep(results, args, "Mac host direct-start defaults", node, ["scripts/mac/test-mac-host-defaults.mjs"], {
+    timeoutMs: Math.max(args.timeoutMs, 25000),
   });
   await runStep(results, args, "Mac host start helper syntax", node, ["--check", "scripts/mac/start-mac-host.mjs"], {
     timeoutMs: 8000,

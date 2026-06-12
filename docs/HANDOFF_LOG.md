@@ -21,6 +21,35 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：把 Mac host 直接启动输入默认值自测接入 readiness，避免安全默认值回归脚本被漏跑。
+完成内容：
+- `scripts/mac/check-mac-host-readiness.mjs` 默认低风险体检新增 `Mac host direct-start defaults` 步骤。
+- 该步骤会在 `swift build` 后运行 `scripts/mac/test-mac-host-defaults.mjs`，确认直接启动未设置 `LAN_DUAL_INPUT_MODE` 时为 `log`，显式 `inject` 仍可覆盖。
+- Mac host README、当前状态、下一步和文件占用已同步。
+修改文件：
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-host-readiness.mjs`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 45000`
+验证结果：
+- 默认 readiness 9/9 通过，新增步骤输出 `Mac host direct-start input defaults verified`。
+- 当前主 `43770` 仍为 `build=c2db37f`、`input=log`；input monitoring 仍为 warning，不影响默认通过。
+遗留问题：
+- 真实 `inject` 手感和输入法仍需人工确认安全后单独验收。
+下一步建议：
+- Mac host 相关改动后直接跑默认 readiness，即可同时覆盖构建、直接启动安全默认值、启动助手 dry-run、keymap 和当前 `/discovery`。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：收口 Mac host 直接启动的输入安全默认值，避免未显式配置时进入真实注入模式。
 完成内容：
 - `HostConfiguration` 的 `LAN_DUAL_INPUT_MODE` 缺省值从 `inject` 改为 `log`。
