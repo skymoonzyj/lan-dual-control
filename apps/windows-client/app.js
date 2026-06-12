@@ -3007,6 +3007,28 @@ async function blobToBase64(blob) {
   return arrayBufferToBase64(await blob.arrayBuffer());
 }
 
+function fileClipboardRecoveryText(result = {}) {
+  const rootDir = String(result.rootDir || "").trim();
+  if (rootDir) {
+    return `临时目录：${rootDir}`;
+  }
+
+  const paths = Array.isArray(result.paths) ? result.paths.filter(Boolean) : [];
+  if (paths.length === 1) {
+    return `临时文件：${paths[0]}`;
+  }
+  if (paths.length > 1) {
+    return `临时文件：${paths.length} 个，首个 ${paths[0]}`;
+  }
+  return "";
+}
+
+function fileClipboardLocalDetail(result = {}, fallback = "文件仍保留在远端文件托盘") {
+  const reason = result.reason || fallback;
+  const recovery = fileClipboardRecoveryText(result);
+  return recovery && !reason.includes(recovery) ? `${reason}；${recovery}` : reason;
+}
+
 async function writeReceivedFilesToSystemClipboard(files = state.receivedClipboardFiles) {
   const invoke = getTauriInvoke();
   if (!invoke) {
@@ -3120,10 +3142,13 @@ async function copyReceivedFilesToSystemClipboard() {
   const result = await writeReceivedFilesToSystemClipboard();
   if (result.clipboardWritten) {
     elements.clipboardText.textContent = `剪贴板：已写入系统文件剪贴板（${result.fileCount ?? state.receivedClipboardFiles.length} 个文件）`;
-    addLog("远端文件剪贴板", result.reason || "已写入 Windows 系统文件剪贴板");
+    addLog("远端文件剪贴板", fileClipboardLocalDetail(result, "已写入 Windows 系统文件剪贴板"));
   } else {
-    elements.clipboardText.textContent = "剪贴板：系统文件剪贴板写入失败";
-    addLog("远端文件剪贴板", result.reason || "文件仍保留在远端文件托盘");
+    const savedToTemp = result.saveMode === "temp" && Boolean(fileClipboardRecoveryText(result));
+    elements.clipboardText.textContent = savedToTemp
+      ? "剪贴板：系统写入失败，文件已保存在临时目录"
+      : "剪贴板：系统文件剪贴板写入失败";
+    addLog("远端文件剪贴板", fileClipboardLocalDetail(result));
   }
 }
 
@@ -3418,15 +3443,19 @@ async function handleClipboardFileComplete(message) {
   const reason = systemClipboardResult.clipboardWritten
     ? systemClipboardResult.reason || "Windows 系统文件剪贴板已写入。"
     : systemClipboardResult.reason || "Windows 控制端已在浏览器内存中接收文件，可在远端文件托盘下载。";
+  const localReason = fileClipboardLocalDetail(systemClipboardResult, reason);
+  const savedToTemp = saveMode === "temp" && Boolean(fileClipboardRecoveryText(systemClipboardResult));
 
   elements.clipboardText.textContent = systemClipboardResult.clipboardWritten
     ? `剪贴板：已接收并写入系统文件剪贴板（${files.length} 个文件）`
-    : `剪贴板：已接收远端 ${files.length} 个文件（内存暂存）`;
+    : savedToTemp
+      ? `剪贴板：已接收远端 ${files.length} 个文件（已保存到临时目录）`
+      : `剪贴板：已接收远端 ${files.length} 个文件（内存暂存）`;
   addLog(
     "文件剪贴板",
     systemClipboardResult.clipboardWritten
       ? `已接收远端 ${files.length} 个文件，共 ${formatBytes(receivedBytes)}，并写入 Windows 系统文件剪贴板`
-      : `已接收远端 ${files.length} 个文件，共 ${formatBytes(receivedBytes)}，可在远端文件托盘下载；${reason}`,
+      : `已接收远端 ${files.length} 个文件，共 ${formatBytes(receivedBytes)}，可在远端文件托盘下载；${localReason}`,
   );
   state.client?.sendClipboardFileResult({
     transferId,

@@ -92,6 +92,38 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：优化 Windows 控制端远端文件托盘失败恢复提示。
+完成内容：
+- `apps/windows-client/app.js` 新增本地恢复提示 helper：当桌面原生层返回 `saveMode=temp` 且带 `rootDir`/`paths` 时，本地日志会显示临时目录或临时文件。
+- 手动点击“写入系统文件剪贴板”失败时，如果文件已保存到临时目录，状态栏会显示“已保存在临时目录”，事件日志显示具体路径。
+- 自动接收远端文件后写系统文件剪贴板失败但已落盘时，状态栏从“内存暂存”改为“已保存到临时目录”，事件日志显示临时目录。
+- 发回对端的 `clipboard_file_result.reason` 仍保持原基础原因，不把 Windows 本机临时目录路径塞进协议消息。
+- 页面级 `--diagnosticsOnly` 自检新增文件剪贴板恢复提示断言。
+- README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 仍未做“打开临时目录”按钮；当前先通过本地事件日志暴露路径。
+下一步建议：
+- 真实大文件体验验收后，再考虑在桌面版加一键打开临时目录/重试写入按钮。
+是否改了协议：否。
+是否需要另一端配合：暂无；真实大文件体验验收仍需要 Mac 端复制文件触发。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：收口 Windows 桌面版远端文件剪贴板分块写入的原生层可靠性。
 完成内容：
 - `apps/windows-desktop/src-tauri/src/main.rs` 将 begin/chunk/finish/cancel 拆到可单测的原生辅助函数。

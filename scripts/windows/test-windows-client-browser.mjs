@@ -393,6 +393,51 @@ async function verifyDesktopOnlyHostPanel(session) {
   return result;
 }
 
+async function verifyFileClipboardRecoveryText(session) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      if (
+        typeof fileClipboardRecoveryText !== "function" ||
+        typeof fileClipboardLocalDetail !== "function"
+      ) {
+        return { ok: false, reason: "missing file clipboard recovery helpers" };
+      }
+
+      const tempResult = {
+        clipboardWritten: false,
+        saveMode: "temp",
+        reason: "系统文件剪贴板写入失败",
+        rootDir: "C:/Temp/lan-dual-control/clip-1",
+        paths: ["C:/Temp/lan-dual-control/clip-1/001-demo.zip"],
+      };
+      const memoryResult = {
+        clipboardWritten: false,
+        saveMode: "memory-only",
+        reason: "浏览器预览版只能保留内存托盘",
+      };
+      const recovery = fileClipboardRecoveryText(tempResult);
+      const detail = fileClipboardLocalDetail(tempResult, "fallback");
+      const memoryDetail = fileClipboardLocalDetail(memoryResult, "fallback");
+
+      return {
+        ok:
+          recovery === "临时目录：C:/Temp/lan-dual-control/clip-1" &&
+          detail.includes("系统文件剪贴板写入失败") &&
+          detail.includes("临时目录：C:/Temp/lan-dual-control/clip-1") &&
+          memoryDetail === "浏览器预览版只能保留内存托盘",
+        recovery,
+        detail,
+        memoryDetail,
+      };
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`file clipboard recovery text check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function verifyBlackBarInputGuard(session) {
   const result = await evaluate(
     session,
@@ -812,6 +857,8 @@ async function run() {
       "OK",
       `Desktop-only host panel: badge=${desktopOnlyPanelCheck.badge}, nativeLimit=${desktopOnlyPanelCheck.maxNativeClipboardFileBytes}, chunk=${desktopOnlyPanelCheck.nativeClipboardChunkSizeBytes}`,
     );
+    const fileClipboardRecoveryCheck = await verifyFileClipboardRecoveryText(session);
+    print("OK", `File clipboard recovery: ${fileClipboardRecoveryCheck.recovery}`);
     const blackBarCheck = await verifyBlackBarInputGuard(session);
     print(
       "OK",
