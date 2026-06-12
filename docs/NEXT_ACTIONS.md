@@ -38,7 +38,7 @@
 
 - 优化 Windows 控制端远端文件托盘，后续把桌面版文件剪贴板写入升级为原生分块，支持更大的文件。
 - Windows 被控端 FFmpeg gdigrab 过渡层当前已接近 30 FPS；下一步把该采集层升级为 Windows Graphics Capture 和正式编码管线，进一步提升帧率、延迟、带宽和资源占用表现。
-- 接入 WASAPI loopback，替换 Windows 被控端模拟音频帧。
+- 在当前 FFmpeg DirectShow PCM 过渡入口基础上接入 WASAPI loopback，替换 Windows 被控端默认模拟音频帧。
 - 优化 Windows 控制端文件托盘和错误提示。
 - Windows host 或假 Mac 认证相关改动后运行 `node scripts/windows/test-auth-retry-policy.mjs`，确认错误密码剩余次数、第三次断开和新连接正确认证未退化。
 - Windows host 相关改动后运行 `scripts/windows/test-windows-host.ps1`，确认真实视频首帧、文本剪贴板和文件剪贴板接收未退化；涉及 Mac 反控链路时再运行 `node scripts/windows/test-mac-client-browser.mjs`，确认 Mac client 页面可显示 Windows 画面并收到 `input_ack`。

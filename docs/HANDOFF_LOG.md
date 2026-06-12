@@ -21,6 +21,49 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：给 Windows host 增加显式配置的 FFmpeg DirectShow PCM 音频采集入口。
+完成内容：
+- `WindowsAudioCaptureCoordinator` 默认仍保持模拟音频帧，不会自动采集真实麦克风或系统声音。
+- 设置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 且 `LAN_DUAL_WINDOWS_AUDIO_MODE=dshow` 后，Windows host 会用 FFmpeg DirectShow 采集指定音频设备，输出 `pcm-f32le-base64`、48kHz、双声道、20ms PCM 帧。
+- `/discovery` 的音频能力会列出 DirectShow audio 设备、当前模式、配置设备、后端和错误信息。
+- Windows host 服务端已接入音频 `start/stop`，真实 PCM 按 20ms 发送；mock 音频仍按低频状态帧发送。
+- 文档已说明该入口适合先接 loopback/虚拟声卡设备，正式默认系统声音仍待 WASAPI loopback。
+修改文件：
+- `apps/windows-host/src/windows-audio-capture.mjs`
+- `apps/windows-host/src/windows-host-service.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check apps/windows-host/src/windows-audio-capture.mjs`
+- `node --check apps/windows-host/src/windows-host-service.mjs`
+- `npm.cmd run check` in `apps/windows-host`
+- `git diff --check`
+- 内存 PCM 打包验证：向音频模块注入 7680 字节静音 PCM，确认输出 `pcm-f32le-base64`。
+- 显式配置模式协商验证：设置临时 `LAN_DUAL_WINDOWS_AUDIO_DEVICE=unit-test-device` 和 `LAN_DUAL_WINDOWS_AUDIO_MODE=dshow`，确认 capabilities/answer 为 DirectShow PCM。
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-host.ps1 -Fps 30`
+- `node scripts/windows/test-auth-retry-policy.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs`
+验证结果：
+- 默认未配置设备时，Windows host 仍是安全 mock 音频；发现接口列出了本机可用 DirectShow audio 设备。
+- PCM 帧打包通过：`7680 bytes / 48000 Hz / 2 ch / 960 frames`。
+- 显式配置协商通过：`dshow-pcm / pcm-f32le / pcm-f32le-base64`。
+- Windows host 一键自检、认证回归和 Mac client 页面级自检均通过。
+遗留问题：
+- 没有主动打开真实音频设备实采，避免未经确认采集麦克风；需要用户明确选择 loopback/虚拟声卡设备后再做端到端声音验证。
+- 正式默认系统声音采集仍需 WASAPI loopback。
+下一步建议：
+- 用户确认可用 loopback/虚拟声卡设备名后，运行 Windows host 并用 Mac client 验证真实 PCM 播放。
+是否改了协议：否；复用已有 `pcm-f32le-base64` 音频帧字段。
+是否需要另一端配合：暂不需要；真机声音播放验收时需要 Mac client 连接 Windows host。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：给 Windows host 视频观察脚本增加临时端口冲突防护。
 完成内容：
 - `scripts/windows/observe-windows-host-video.mjs` 在临时启动 Windows host 前会先检查目标端口能否绑定。

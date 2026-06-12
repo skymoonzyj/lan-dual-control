@@ -37,7 +37,11 @@ function makeSessionAnswer(message, screen, audio, clipboard) {
     videoCodec: screen.videoCodec,
     videoEncoding: screen.videoEncoding,
     audioCodec: audio.audioCodec,
+    audioEncoding: audio.audioEncoding,
+    audioMode: audio.audioMode,
     audioEnabled: audio.audioEnabled,
+    audioFrameIntervalMs: audio.audioFrameIntervalMs,
+    audioDevice: audio.audioDevice,
     sampleRate: audio.sampleRate,
     channels: audio.channels,
     fps: screen.fps,
@@ -94,6 +98,7 @@ function createClient(socket, context) {
       clearInterval(audioTimer);
       audioTimer = null;
     }
+    context.audio.stop();
   }
 
   function startVideoFrames(nextSession) {
@@ -151,9 +156,21 @@ function createClient(socket, context) {
     if (!nextSession.audioEnabled || nextSession.audioCodec === "none") {
       return;
     }
+    context.audio.start(nextSession);
+    const intervalMs = Math.max(
+      20,
+      Math.min(
+        240,
+        Number(nextSession.audioFrameIntervalMs)
+          || (nextSession.audioEncoding === "pcm-f32le-base64" ? 20 : 240),
+      ),
+    );
     audioTimer = setInterval(() => {
-      send(context.audio.makeFrame(nextSession));
-    }, 240);
+      const frame = context.audio.makeFrame(nextSession);
+      if (frame) {
+        send(frame);
+      }
+    }, intervalMs);
   }
 
   function handleMessage(message) {
@@ -265,6 +282,7 @@ function createClient(socket, context) {
           audioEnabled: Boolean(message.enabled),
           audioVolume: Number(message.volume) || 0,
           audioCodec: message.enabled ? (message.codec ?? session.audioCodec ?? "opus") : "none",
+          audioEncoding: message.enabled ? (message.encoding ?? session.audioEncoding) : "none",
         };
       }
       if (message.enabled && !message.muted) {

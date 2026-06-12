@@ -196,10 +196,11 @@ Mac 端：
 - macOS 被控端、Windows 被控端和假 Mac 服务处理输入事件后都会返回 `input_ack`，控制端和探针可确认输入已注入、仅记录或被拒绝。
 - Windows 被控端已新增本机一键自检脚本 `scripts/windows/test-windows-host.ps1`，可临时启动服务并验证真实 JPEG 首帧、文本剪贴板和文件剪贴板接收；默认不发送输入事件。
 - Windows 被控端已新增视频持续帧观察脚本 `scripts/windows/observe-windows-host-video.mjs`，可统计实际 FPS、最大帧间隔、掉帧数和采集管线；当前本机 FFmpeg gdigrab 过渡层约 29 FPS，System.Drawing 兜底约 3 FPS。
+- Windows 被控端已新增显式 DirectShow PCM 音频入口；设置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 后可采集指定音频设备并发送 `pcm-f32le-base64`，默认未配置设备时继续发送模拟音频帧，避免误采真实麦克风。
 - Windows 侧已新增 `scripts/windows/test-mac-client-browser.mjs` 页面级自检，可自动启动 Windows host 和 `apps/mac-client`，确认真实 `windows-ffmpeg-gdigrab-mjpeg` 或 `windows-gdi-jpeg` 画面与 `input_ack · log`。
 - Windows 侧已新增 `scripts/windows/test-auth-retry-policy.mjs`，可同时回归 Windows host 和假 Mac 服务的 3 次认证失败断开策略。
 - Mac 控制 Windows 已新增 `apps/mac-client` Web 原型：可连接 Windows host、显示 JPEG/data-url 画面、发送鼠标和键盘 `input_event`，本机 mock/回退 Windows host 验证已通过。
-- 当前屏幕采集默认优先 FFmpeg gdigrab 持续 MJPEG，PowerShell/System.Drawing 系统截图作为兜底，全部失败时会回退模拟帧；后续仍需升级 Windows Graphics Capture，真实声音采集待接 WASAPI loopback，输入注入可优化为高性能原生模块或常驻进程。
+- 当前屏幕采集默认优先 FFmpeg gdigrab 持续 MJPEG，PowerShell/System.Drawing 系统截图作为兜底，全部失败时会回退模拟帧；后续仍需升级 Windows Graphics Capture，真实系统声音采集待接 WASAPI loopback，输入注入可优化为高性能原生模块或常驻进程。
 
 ## 里程碑 M4：一键反控
 
