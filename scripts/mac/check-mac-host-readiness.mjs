@@ -15,6 +15,7 @@ const defaults = {
   currentBuildId: "",
   requireOpen: false,
   requireControlPermissions: false,
+  requireInputMonitoring: false,
   requireCurrentBuildId: false,
   skipCurrentBuildCheck: false,
   probeHost: false,
@@ -41,6 +42,7 @@ function parseArgs(argv) {
     if (
       key === "requireOpen" ||
       key === "requireControlPermissions" ||
+      key === "requireInputMonitoring" ||
       key === "requireCurrentBuildId" ||
       key === "skipCurrentBuildCheck" ||
       key === "probeHost" ||
@@ -69,6 +71,7 @@ function parseArgs(argv) {
   args.maxVideoFrameAgeMs = clampInteger(args.maxVideoFrameAgeMs, 0, 600000, defaults.maxVideoFrameAgeMs);
   args.requireOpen = booleanArg(args.requireOpen);
   args.requireControlPermissions = booleanArg(args.requireControlPermissions);
+  args.requireInputMonitoring = booleanArg(args.requireInputMonitoring);
   args.requireCurrentBuildId = booleanArg(args.requireCurrentBuildId);
   args.skipCurrentBuildCheck = booleanArg(args.skipCurrentBuildCheck);
   args.probeHost = booleanArg(args.probeHost) || Boolean(args.expectBuildId);
@@ -100,6 +103,7 @@ Options:
   --requireOpen             Fail if /discovery is not reachable.
   --requireControlPermissions
                             Require screen recording and accessibility permissions.
+  --requireInputMonitoring  Require input monitoring permission to be granted.
   --probeHost               Run check-mac-displays runtime/display round-trip.
   --probeVideo              Run short H.264 video observation.
   --maxVideoFrameAgeMs <ms> Require fresh video_frame.timestamp during --probeVideo.
@@ -412,6 +416,9 @@ async function checkDiscovery(args) {
     if (permissions.inputMonitoring === false) {
       warnings.push("input monitoring permission is off or not yet confirmed; keyboard edge cases may need manual permission review");
     }
+    if (args.requireInputMonitoring && permissions.inputMonitoring !== true) {
+      errors.push("input monitoring permission is required");
+    }
     return {
       ok: errors.length === 0,
       summary: `${discovery.deviceName || discovery.hostName || "Mac host"} · input=${input} · ${formatRuntime(runtime)} · ${formatPermissions(permissions)}`,
@@ -596,6 +603,7 @@ async function main() {
       skipCurrentBuildCheck: args.skipCurrentBuildCheck,
       requireOpen: args.requireOpen,
       requireControlPermissions: args.requireControlPermissions,
+      requireInputMonitoring: args.requireInputMonitoring,
       probeHost: args.probeHost,
       probeVideo: args.probeVideo,
       maxVideoFrameAgeMs: args.maxVideoFrameAgeMs,

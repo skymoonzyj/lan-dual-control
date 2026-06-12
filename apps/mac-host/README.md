@@ -67,7 +67,7 @@ node scripts/mac/check-mac-host-readiness.mjs
 node scripts/mac/check-mac-host-readiness.mjs --requireControlPermissions
 ```
 
-该检查会要求 `/discovery.permissions.screenRecording=true` 和 `accessibility=true`。`inputMonitoring` 由 macOS `IOHIDCheckAccess` 只读探测，不会弹权限请求；`inputMonitoring=false` 当前只作为 warning，因为当前 `log` 模式和既有探针不依赖它，若想让任何 warning 都失败，可再加 `--strict`。
+该检查会要求 `/discovery.permissions.screenRecording=true` 和 `accessibility=true`。`inputMonitoring` 由 macOS `IOHIDCheckAccess` 只读探测，不会弹权限请求；`inputMonitoring=false` 默认只作为 warning，因为当前 `log` 模式和既有探针不依赖它。需要单独强制要求输入监控权限时可加 `--requireInputMonitoring`；若想让任何 warning 都失败，可再加 `--strict`。
 
 真机联调前可跑深度体检：
 

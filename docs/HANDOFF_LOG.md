@@ -59,6 +59,41 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：增强 Mac host readiness 权限强校验能力，给输入监控权限单独开关，方便后续真实控制验收。
+完成内容：
+- `scripts/mac/check-mac-host-readiness.mjs` 新增 `--requireInputMonitoring`。
+- 默认 readiness 行为不变：`inputMonitoring=false` 仍只作为 warning，不影响无人值守低风险体检。
+- 显式传 `--requireInputMonitoring` 时，`/discovery.permissions.inputMonitoring !== true` 会让 Mac host discovery 步骤失败。
+- `--json` 摘要里新增 `requireInputMonitoring` 参数回显，方便 CI/脚本消费。
+- Mac host README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-host-readiness.mjs`
+- `node scripts/mac/check-mac-host-readiness.mjs --help`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 45000`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 45000 --requireInputMonitoring`
+验证结果：
+- 默认 readiness 9/9 通过；当前主 `43770` 仍是旧运行进程 `build=c2db37f`，并提示 `inputMonitoring=off` warning，不影响默认低风险体检。
+- `--requireInputMonitoring` 在当前主 `43770` 上按预期失败：`Mac host readiness failed: 1 failed, 2 warnings`，因为运行中的 `/discovery.permissions.inputMonitoring=false`。
+- `--help` 已显示新参数，确认 CLI 入口可发现。
+遗留问题：
+- 如果主 `43770` 仍是旧 build 或系统未授予输入监控，`--requireInputMonitoring` 会按预期失败；默认 readiness 不会因此失败。
+下一步建议：
+- 主 Mac host 重启到最新源码后，部署验收可跑 `node scripts/mac/check-mac-host-readiness.mjs --requireControlPermissions --requireInputMonitoring --requireCurrentBuildId --strict`。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：给 Mac client 页面级自检补短窗口视频持续来帧/FPS 指标，避免只验证首帧而漏掉后续画面停顿。
 完成内容：
 - `scripts/windows/test-mac-client-browser.mjs` 新增 `--observeVideoMs`，连接成功后在指定短窗口内统计收到的 `video_frame` 数量和实收 FPS。
