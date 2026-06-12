@@ -34,6 +34,7 @@
 - Mac 端新增 `scripts/mac/stress-mac-host.mjs` 连续连接稳定性脚本，复用 canonical 探针验证 H.264 + PCM；真机 50 次循环已通过，RSS `79376->80656 KB`，FD 保持 `30->30`。
 - Mac 端新增 `scripts/mac/observe-mac-audio.mjs` 音频持续帧观察脚本；真机 30 秒收到 1501 帧，约 50fps，最大接收间隔 24ms，payload 恒定 7680 bytes。
 - Mac 端新增 `scripts/mac/check-input-keymap.mjs` 输入映射覆盖自检；当前 `KeyboardEvent.code` 115 项、`event.key` 113 项，常用键组、同义 code/key 和 `meta/command`、`alt/option`、`ctrl/control`、`shift` 修饰键 flag fallback 全覆盖。
+- Mac 端新增 `scripts/mac/smoke-mac-input-log.mjs` 输入事件安全冒烟脚本；脚本只允许 `/discovery` 显示 `inputMode=log` 时发送事件，真机 16 个鼠标/滚轮/键盘/快捷键事件全部收到 `input_ack`，且 `mode=log`、`injected=false`。
 
 ## 共享协议状态
 

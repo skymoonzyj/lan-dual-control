@@ -117,6 +117,7 @@ Windows 端：
 - Mac 端新增 `scripts/mac/stress-mac-host.mjs`，可循环复用 canonical 探针做 H.264 + PCM 连续连接稳定性检查；真机 50 次循环已通过，监听进程 RSS `79376->80656 KB`，FD 保持 `30->30`。
 - Mac 端新增 `scripts/mac/observe-mac-audio.mjs`，可持续观察系统声音 `audio_frame` 帧率、接收间隔、payload 和电平；真机 30 秒观察收到 1501 帧，约 50fps，最大间隔 24ms。
 - Mac 端新增 `scripts/mac/check-input-keymap.mjs`，可静态验证 CGEvent 键盘映射覆盖；当前常用 `KeyboardEvent.code`、`event.key`、同义 code/key 和修饰键 flag fallback 全覆盖。
+- Mac 端新增 `scripts/mac/smoke-mac-input-log.mjs`，可在真实 Mac host 的 `inputMode=log` 下发送鼠标/滚轮/键盘/快捷键冒烟事件并强制要求 `input_ack`；真机 16/16 通过，全部为 `mode=log`、`injected=false`。
 - Windows 控制端已增加 Mac 主机诊断状态条：会汇总 `permissions`、`hostMode`、`capturePipeline`、`source`、WebCodecs 解码状态、`droppedFrames`、`input_ack` 和剪贴板模式，真机权限、输入拒绝、解码失败或采集回退问题可直接在画面内看到。
 - Mac 端已兼容 Windows 端现有 `kind/action/remoteX/remoteY` 输入事件字段。
 - Windows 控制端已新增 Edge 页面级自检脚本 `scripts/windows/test-windows-client-browser.mjs`，可自动打开控制端、连接真实 Mac、读取诊断条并确认视频 surface；当前 Edge headless 不支持 `avc1.420029` 时已验证会自动请求 JPEG 兜底并显示真实 Mac 画面。

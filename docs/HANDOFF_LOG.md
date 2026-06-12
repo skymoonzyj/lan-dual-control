@@ -17,6 +17,41 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
+本轮目标：补一个只允许 `inputMode=log` 的 Mac 输入事件冒烟脚本，为后续真实 `inject` 验收加安全护栏。
+完成内容：
+- 新增 `scripts/mac/smoke-mac-input-log.mjs`。
+- 脚本会先读取 `/discovery`，只有发现 `inputMode=log` 时才会认证、建会话并发送输入事件；如果传入非 `log` 期望或 host 当前不是 `log`，会直接失败退出。
+- 冒烟事件覆盖鼠标移动、左键按下/抬起、右键按下/抬起、滚轮、`Ctrl+A`、`Command+C`、`metaKey` fallback、`Option+ArrowLeft`、`Shift+Tab`、`Return`/`Esc`/`ForwardDelete` 同义键、`F13` 和小键盘。
+- 每个事件都校验 `input_ack.inputId`、`sequence`、`event`、`accepted=true`、`mode=log`、`injected=false`。
+- Mac host README、当前状态、下一步和任务板已补充脚本用途。
+修改文件：
+- `scripts/mac/smoke-mac-input-log.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/smoke-mac-input-log.mjs`
+- `node scripts/mac/smoke-mac-input-log.mjs`
+- `node scripts/mac/smoke-mac-input-log.mjs --expectInputMode inject`
+验证结果：
+- 真机 `127.0.0.1:43770` / `inputMode=log` 冒烟通过：16/16 个输入事件全部收到 `input_ack`，且 `mode=log`、`injected=false`。
+- 非 log 期望拒绝路径通过：传 `--expectInputMode inject` 时，脚本在 discovery 后直接报错，不发送输入事件。
+遗留问题：
+- 这轮仍不切 `LAN_DUAL_INPUT_MODE=inject`，不会真实移动鼠标或按键；真实注入仍需人工在屏幕前确认安全环境后再做。
+- 该脚本验证 ack 和日志模式护栏，不验证 macOS 实际输入效果。
+下一步建议：
+- 每次准备做真实输入注入前先跑 `node scripts/mac/smoke-mac-input-log.mjs`，确认协议事件和 ack 仍正常。
+- 下一步可以设计人工确认式 `inject` 小步验收：单次鼠标移动到安全坐标、单键功能键、再到组合键，且每步都可立即停止。
+是否改了协议：否。
+是否需要另一端配合：否；后续真实 `inject` 验收建议人工或 Windows 端配合观察。
+
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12

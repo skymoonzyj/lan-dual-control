@@ -30,6 +30,7 @@
 
 - 继续验证真实 macOS 系统声音采集，30 秒只读观察已稳定到 1501 帧/约 50fps/最大间隔 24ms；下一步重点看非静音系统声音、音量变化、5-10 分钟长稳和 Windows 控制端真实听感。
 - 继续压测 ScreenCaptureKit + VideoToolbox H.264，30 秒 H.264 已稳定到 877 帧/约 29.2fps/最大间隔 45ms，50 次连续重连 FD 未增长；下一步重点看 5-10 分钟长稳、CPU 占用、端到端延迟和 Windows 控制端同时连接体验。
+- 真实输入注入前先跑 `node scripts/mac/smoke-mac-input-log.mjs`，确认当前 host 仍是 `inputMode=log` 且鼠标/滚轮/键盘/快捷键事件都会返回 `input_ack`；切 `inject` 前需要人工在屏幕前确认安全环境。
 - 扩展 CGEvent 键盘映射，重点验证中文输入法、Command 组合键和功能键；改映射前后先跑 `node scripts/mac/check-input-keymap.mjs`，它会覆盖常见 code/key、同义项和修饰键 flag fallback。
 - 增加真实多显示器枚举和采集切换。
 - 继续完善 `apps/mac-client` Mac 控制 Windows 原型：用 `test-mac-client-browser.mjs --useExistingHost --enableAudio --expectAudioPayload --expectAudioPlayback` 接真实 Windows WASAPI host 验收 PCM 播放；Windows 本机临时启动 host 验收可直接加 `--requireAudio`；视频参数控件已可请求 1080P/2K/4K、30-240 Hz 和 5-50 Mbps，后续重点看真机 Mac 控制 Windows 的 60 Hz 观感、延迟和键盘映射边界。
