@@ -60,7 +60,7 @@ node E:\codex\lan-dual-control\scripts\windows\test-coordinate-mapping.mjs
 ```
 
 真实 Mac 页面级自检可自动启动本地控制端页面、打开 Edge、连接 Mac，并确认诊断条和视频画面；加 `--requireH264` 可强制要求真实 H.264/WebCodecs 画布解码成功，加 `--injectPcmAudio` 可额外注入一帧 planar PCM，验证控制端音频播放入口：
-脚本会先回归画面内悬浮控制中心，确认悬浮层、摘要、画质、缩放、声音、音量、全屏和窗口按钮能同步到原工具栏与页面布局；随后会模拟适应窗口黑边输入，确认黑边移动、点击、滚轮不会发远控事件，画面内按下后移到黑边松开也能正常释放。
+脚本会先回归画面内悬浮控制中心，确认悬浮层、摘要、画质、缩放、声音、音量、全屏和窗口按钮能同步到原工具栏与页面布局；随后会模拟适应窗口黑边输入，确认黑边移动、点击、滚轮不会发远控事件，画面内按下后移到黑边松开也能正常释放。连接成功后还会等待刷新率卡片显示数值型“实收 FPS”和“协商 Hz”，避免把请求刷新率误当成真实帧率。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password

@@ -21,6 +21,32 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：把 Windows 控制端“实收 FPS / 协商 Hz”显示固化进页面级回归。
+完成内容：
+- `scripts/windows/test-windows-client-browser.mjs` 连接成功后现在会等待刷新率卡片出现数值型 `实收 FPS` 和 `协商 Hz`。
+- 失败快照会额外输出最后一次 FPS 文案，方便判断是无画面、低帧率，还是 UI 文案被改坏。
+- Windows 控制端 README 已同步该自检覆盖点。
+修改文件：
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `git diff --check`
+- 冲突标记搜索：docs/apps/scripts 范围无命中。
+- 本地假 Mac 页面级回归：`node scripts/windows/test-windows-client-browser.mjs --host 127.0.0.1 --port 43773 --password demo-password --timeoutMs 45000`，输出 `FPS: 实收 7.5 FPS · 协商 60 Hz`。
+遗留问题：
+- 这轮只固化诊断显示；实际帧率提升仍依赖 Mac host/Windows host 视频采集和编码链路。
+下一步建议：
+- 用户反馈“感觉没有 60Hz”时，先看刷新率卡片里的实收 FPS，再对照协商 Hz 和请求 Hz 定位问题层。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：把 Windows host 普通启动 60Hz 验证固化进 Mac client 页面级回归。
 完成内容：
 - `scripts/windows/test-mac-client-browser.mjs` 现在会断言 `session_answer.fps/requestedFps/maxScreenFps` 都是 60。

@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/test-windows-client-browser.mjs`、`apps/windows-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 14:57 | Windows 控制端页面级自检连接成功后要求刷新率卡片显示数值型“实收 FPS”和“协商 Hz”，避免 UI 退回只显示请求值。 |
 | Windows Codex | `scripts/windows/test-mac-client-browser.mjs`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 14:43 | Mac client 页面级自检显式断言 Windows host 普通启动会话和显示设置回执均为 60Hz，防止默认上限退回 30。 |
 | Windows Codex | `apps/windows-host/src/windows-screen-capture.mjs`、`apps/windows-host/README.md`、`scripts/windows/observe-windows-host-video.mjs`、`scripts/windows/test-mac-client-browser.mjs`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 14:40 | Windows host FFmpeg gdigrab 普通启动默认上限提升到 60Hz；观察脚本新增默认上限断言，页面级自检不再靠环境变量强制 60。 |
 | Windows Codex | `apps/windows-host/src/windows-screen-capture.mjs`、`apps/windows-host/src/windows-host-service.mjs`、`apps/windows-host/README.md`、`scripts/windows/observe-windows-host-video.mjs`、`scripts/windows/test-mac-client-browser.mjs`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 14:24 | Windows host 按既有 `qualityPreset`/`maxBandwidthKbps` 计算 MJPEG/JPEG `jpegQuality`，低码率更压缩、高码率更清晰；观察脚本和 Mac client 页面级自检已覆盖回执与帧诊断。 |

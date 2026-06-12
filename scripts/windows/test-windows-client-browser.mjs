@@ -618,10 +618,15 @@ async function run() {
           value.canvasHeight > 0 &&
           (diagnosticsLower.includes("h264") || remoteLower.includes("h.264")) &&
           !value.diagnostics.includes("JPEG 回退");
+        const hasFpsDiagnostics =
+          !args.requireVideoSurface ||
+          (/实收\s+(?!-)\d+(?:\.\d+)?\s+FPS/.test(value.metricFps) &&
+            /协商\s+\d+\s+Hz/.test(value.metricFps));
         if (
           value.status.includes("已连接") &&
           (!args.requireVideoSurface || hasVideoSurface) &&
-          (!args.requireH264 || hasH264Surface)
+          (!args.requireH264 || hasH264Surface) &&
+          hasFpsDiagnostics
         ) {
           return value;
         }
@@ -634,6 +639,7 @@ async function run() {
         print("INFO", `Last status: ${lastSnapshot.status}`);
         print("INFO", `Last remote: ${lastSnapshot.remote}`);
         print("INFO", `Last diagnostics: ${lastSnapshot.diagnostics}`);
+        print("INFO", `Last FPS: ${lastSnapshot.metricFps}`);
         print("INFO", `Last surface: canvas=${lastSnapshot.canvasVisible} ${lastSnapshot.canvasWidth}x${lastSnapshot.canvasHeight}, image=${lastSnapshot.imageVisible}`);
         if (lastSnapshot.logs?.length) {
           print("INFO", `Last logs: ${lastSnapshot.logs.join(" | ")}`);
