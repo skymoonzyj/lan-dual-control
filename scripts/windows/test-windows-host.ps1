@@ -51,6 +51,16 @@ function Test-PortOpen {
   }
 }
 
+function Get-TemporaryTcpPort {
+  $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+  try {
+    $listener.Start()
+    return $listener.LocalEndpoint.Port
+  } finally {
+    $listener.Stop()
+  }
+}
+
 function Start-LocalWindowsHost {
   $envBlock = @{
     "LAN_DUAL_PASSWORD" = $Password
@@ -102,10 +112,13 @@ Push-Location $repoRoot
 try {
   $portAlreadyOpen = Test-PortOpen $HostName $Port
   if ($portAlreadyOpen) {
-    if (-not $UseExisting) {
-      Write-Host "[INFO] $HostName`:$Port is already open; using existing Windows host. Pass -UseExisting to make this explicit."
-    } else {
+    if ($UseExisting) {
       Write-Host "[OK] Using existing Windows host on $HostName`:$Port"
+    } else {
+      $requestedPort = $Port
+      $Port = Get-TemporaryTcpPort
+      Write-Host "[INFO] $HostName`:$requestedPort is already open; using temporary Windows host port $Port. Pass -UseExisting to test the existing host."
+      $startedProcess = Start-LocalWindowsHost
     }
   } else {
     $startedProcess = Start-LocalWindowsHost

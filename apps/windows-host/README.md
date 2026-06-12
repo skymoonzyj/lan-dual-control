@@ -98,7 +98,7 @@ node .\server.mjs 43772 127.0.0.1
 
 ## 一键自检
 
-Windows 本机可直接运行自检脚本。它会在 `127.0.0.1:43772` 临时启动 Windows 被控端，验证 `/discovery`、WebSocket 认证、真实视频首帧、文本剪贴板和文件剪贴板接收，结束后自动关闭临时服务：
+Windows 本机可直接运行自检脚本。它会在 `127.0.0.1:43772` 临时启动 Windows 被控端，验证 `/discovery`、WebSocket 认证、真实视频首帧、文本剪贴板和文件剪贴板接收，结束后自动关闭临时服务。如果 `43772` 已被其他服务占用，脚本会自动换一个临时空闲端口；需要验证已运行的 Windows host 时再显式加 `-UseExisting -HostName 127.0.0.1 -Port 43770`。
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\test-windows-host.ps1

@@ -66,6 +66,34 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：给 Windows host 一键自检增加默认端口冲突防护。
+完成内容：
+- `scripts/windows/test-windows-host.ps1` 默认启动临时 Windows host 前会检查目标端口。
+- 如果 `127.0.0.1:43772` 已被其他服务占用，脚本会自动选择临时空闲端口并把探针连接目标切到该端口。
+- 只有显式传入 `-UseExisting` 时才复用已经运行的 Windows host，避免误连旧进程导致自检结论不准。
+- Windows host README 已补充该行为和 `-UseExisting` 用法。
+修改文件：
+- `scripts/windows/test-windows-host.ps1`
+- `apps/windows-host/README.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-windows-host.ps1 -Fps 30`
+- 临时占用 `127.0.0.1:43772` 后再次运行同一条自检命令
+验证结果：
+- 正常路径通过：真实 `windows-ffmpeg-gdigrab-mjpeg` 首帧、文本剪贴板和文件剪贴板均通过。
+- 端口占用路径通过：脚本输出临时端口并完成同样的真实视频和剪贴板验证。
+遗留问题：
+- 无。
+下一步建议：
+- 等 Mac client 文本剪贴板提交推送后，Windows 端可拉取并扩展 `test-mac-client-browser.mjs` 覆盖文本剪贴板 ack。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：给 Mac client 页面级自检增加 Windows host 临时端口冲突防护。
 完成内容：
 - `scripts/windows/test-mac-client-browser.mjs` 在临时启动 Windows host 前会检查目标端口能否绑定。
