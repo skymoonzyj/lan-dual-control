@@ -21,6 +21,34 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：让 Windows host 视频观察脚本也复用 FFmpeg 显式路径兜底，避免 PATH 继承差异导致观察脚本回退。
+完成内容：
+- `scripts/windows/observe-windows-host-video.mjs` 新增 `--ffmpeg` 参数。
+- 观察脚本会自动识别 `C:\DevTools\ffmpeg\bin\ffmpeg.exe`，并通过 `LAN_DUAL_FFMPEG` 传给临时 Windows host。
+- Windows host 文档补充观察脚本的 `--ffmpeg` 用法，并修正一处 `--useExistingHost` 为真实参数 `--useExisting`。
+修改文件：
+- `scripts/windows/observe-windows-host-video.mjs`
+- `apps/windows-host/README.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/observe-windows-host-video.mjs`
+- `npm.cmd run check` in `apps/windows-host`
+- `git diff --check`
+- `node scripts/windows/observe-windows-host-video.mjs --screenMode ffmpeg --fps 10 --durationMs 2500 --minFrames 12 --minFps 5 --maxGapMs 1200 --timeoutMs 25000`
+- 观察结果：24 帧 / 2578 ms，平均 9.31 FPS，最大间隔 110 ms，掉帧 0，管线 `windows-ffmpeg-gdigrab-mjpeg`，编码 `jpeg`。
+遗留问题：
+- 这仍是 FFmpeg gdigrab 过渡层；正式长期方案仍建议做 Windows Graphics Capture + 编码管线。
+下一步建议：
+- 继续跑 Mac client 默认强校验，确认 Mac 端文件剪贴板发送到 Windows host 时 `saveMode=clipboard`。
+- 后续推进 WASAPI loopback，替代当前 DirectShow 虚拟设备音频过渡入口。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：补齐 Windows 端 FFmpeg 环境，并让 Windows host 在 PATH 不稳定时也能可靠找到 FFmpeg。
 完成内容：
 - 已安装 FFmpeg 到 `C:\DevTools\ffmpeg`，当前账号 PATH 已加入 `C:\DevTools\ffmpeg\bin`。

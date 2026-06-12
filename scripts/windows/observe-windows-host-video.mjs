@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { createServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +9,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
 const windowsHostDir = resolve(repoRoot, "apps/windows-host");
 const windowsHostServer = resolve(windowsHostDir, "server.mjs");
+const defaultWindowsFfmpeg = "C:\\DevTools\\ffmpeg\\bin\\ffmpeg.exe";
 
 const defaults = {
   host: "127.0.0.1",
@@ -24,6 +26,7 @@ const defaults = {
   maxGapMs: 1000,
   screenMode: "auto",
   inputMode: "log",
+  ffmpeg: process.env.LAN_DUAL_FFMPEG || "",
   requireRealVideo: true,
   useExisting: false,
   keepRunning: false,
@@ -58,6 +61,10 @@ function parseArgs(argv) {
   args.maxGapMs = Number(args.maxGapMs) || defaults.maxGapMs;
   args.screenMode = String(args.screenMode || defaults.screenMode).trim().toLowerCase();
   args.inputMode = String(args.inputMode || defaults.inputMode).trim().toLowerCase();
+  args.ffmpeg = String(args.ffmpeg || "").trim();
+  if (!args.ffmpeg && process.platform === "win32" && existsSync(defaultWindowsFfmpeg)) {
+    args.ffmpeg = defaultWindowsFfmpeg;
+  }
   args.requireRealVideo = booleanArg(args.requireRealVideo);
   args.useExisting = booleanArg(args.useExisting);
   args.keepRunning = booleanArg(args.keepRunning);
@@ -128,6 +135,9 @@ function startLocalWindowsHost(args) {
     LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: String(Math.max(1, Math.min(args.fps, 60))),
     LAN_DUAL_WINDOWS_INPUT_MODE: args.inputMode,
   };
+  if (args.ffmpeg) {
+    env.LAN_DUAL_FFMPEG = args.ffmpeg;
+  }
 
   const child = spawn(process.execPath, [windowsHostServer, String(args.port), args.host], {
     cwd: windowsHostDir,
