@@ -5,6 +5,9 @@ const elements = {
   discoverButton: document.querySelector("#discoverButton"),
   connectButton: document.querySelector("#connectButton"),
   disconnectButton: document.querySelector("#disconnectButton"),
+  recentConnectionSelect: document.querySelector("#recentConnectionSelect"),
+  useRecentConnectionButton: document.querySelector("#useRecentConnectionButton"),
+  recentConnectionStatus: document.querySelector("#recentConnectionStatus"),
   connectionStatus: document.querySelector("#connectionStatus"),
   remoteStatus: document.querySelector("#remoteStatus"),
   videoStatus: document.querySelector("#videoStatus"),
@@ -56,8 +59,11 @@ const state = {
   clipboardWatchTimer: null,
   clipboardReadInFlight: false,
   lastLocalClipboardText: "",
+  recentConnections: [],
 };
 
+const recentConnectionsStorageKey = "lanDualMacClientRecentConnections";
+const maxRecentConnections = 8;
 const fileChunkSizeBytes = 64 * 1024;
 const maxClipboardFileBytes = 32 * 1024 * 1024;
 const clipboardWatchIntervalMs = 1200;
@@ -104,6 +110,116 @@ function targetWsUrl() {
   const host = elements.hostInput.value.trim() || "127.0.0.1";
   const port = elements.portInput.value.trim() || "43770";
   return `ws://${host}:${port}`;
+}
+
+function currentEndpoint() {
+  return {
+    host: elements.hostInput.value.trim() || "127.0.0.1",
+    port: elements.portInput.value.trim() || "43770",
+  };
+}
+
+function recentConnectionKey(connection) {
+  return `${connection.host}:${connection.port}`;
+}
+
+function formatRecentConnectionLabel(connection) {
+  const endpoint = recentConnectionKey(connection);
+  const date = connection.lastConnectedAt ? new Date(connection.lastConnectedAt) : null;
+  const timeText = date && !Number.isNaN(date.getTime())
+    ? date.toLocaleString("zh-CN", { hour12: false, month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : "最近";
+  return `${connection.label || endpoint} · ${timeText}`;
+}
+
+function loadRecentConnections() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(recentConnectionsStorageKey) || "[]");
+    state.recentConnections = Array.isArray(parsed)
+      ? parsed
+        .filter((connection) => connection && connection.host && connection.port)
+        .map((connection) => ({
+          host: String(connection.host),
+          port: String(connection.port),
+          label: connection.label ? String(connection.label) : "",
+          lastConnectedAt: connection.lastConnectedAt ? String(connection.lastConnectedAt) : "",
+        }))
+        .slice(0, maxRecentConnections)
+      : [];
+  } catch {
+    state.recentConnections = [];
+  }
+}
+
+function persistRecentConnections() {
+  try {
+    localStorage.setItem(recentConnectionsStorageKey, JSON.stringify(state.recentConnections));
+  } catch (error) {
+    logEvent("最近连接保存失败", error?.message || "localStorage unavailable");
+  }
+}
+
+function renderRecentConnections() {
+  elements.recentConnectionSelect.textContent = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = state.recentConnections.length ? "选择最近连接" : "暂无最近连接";
+  elements.recentConnectionSelect.append(placeholder);
+
+  for (const connection of state.recentConnections) {
+    const option = document.createElement("option");
+    option.value = recentConnectionKey(connection);
+    option.textContent = formatRecentConnectionLabel(connection);
+    elements.recentConnectionSelect.append(option);
+  }
+
+  const hasRecent = state.recentConnections.length > 0;
+  elements.recentConnectionSelect.disabled = !hasRecent;
+  elements.useRecentConnectionButton.disabled = !hasRecent;
+  elements.recentConnectionStatus.textContent = hasRecent
+    ? `${state.recentConnections.length} 条 · 不保存密码`
+    : "不保存密码";
+}
+
+function applyRecentConnection(connection) {
+  if (!connection) return;
+  elements.hostInput.value = connection.host;
+  elements.portInput.value = connection.port;
+  elements.recentConnectionStatus.textContent = `已填入 ${recentConnectionKey(connection)} · 不保存密码`;
+  logEvent("已填入最近连接", recentConnectionKey(connection));
+}
+
+function applySelectedRecentConnection() {
+  const value = elements.recentConnectionSelect.value;
+  if (!value) return;
+  const connection = state.recentConnections.find((item) => recentConnectionKey(item) === value);
+  applyRecentConnection(connection);
+}
+
+function saveRecentConnection(details = {}) {
+  const endpoint = currentEndpoint();
+  const connection = {
+    host: endpoint.host,
+    port: endpoint.port,
+    label: details.label || `${endpoint.host}:${endpoint.port}`,
+    lastConnectedAt: new Date().toISOString(),
+  };
+  state.recentConnections = [
+    connection,
+    ...state.recentConnections.filter((item) => recentConnectionKey(item) !== recentConnectionKey(connection)),
+  ].slice(0, maxRecentConnections);
+  persistRecentConnections();
+  renderRecentConnections();
+  elements.recentConnectionStatus.textContent = `已保存 ${recentConnectionKey(connection)} · 不保存密码`;
+}
+
+function initializeRecentConnections() {
+  loadRecentConnections();
+  renderRecentConnections();
+  if (state.recentConnections[0]) {
+    applyRecentConnection(state.recentConnections[0]);
+    elements.recentConnectionSelect.value = recentConnectionKey(state.recentConnections[0]);
+  }
 }
 
 function makeEnvelope(message) {
@@ -336,6 +452,7 @@ function handleSessionAnswer(message) {
   } else {
     elements.audioStatus.textContent = elements.audioToggle.checked ? "对端未开启" : "未开启";
   }
+  saveRecentConnection({ label: message.deviceName || message.hostName || message.hostMode || "" });
   logEvent("会话已协商", `${state.remoteWidth}x${state.remoteHeight} · ${message.videoCodec || "video"}`);
 }
 
@@ -974,6 +1091,8 @@ elements.connectButton.addEventListener("click", () => {
 });
 
 elements.disconnectButton.addEventListener("click", disconnect);
+elements.useRecentConnectionButton.addEventListener("click", applySelectedRecentConnection);
+elements.recentConnectionSelect.addEventListener("change", applySelectedRecentConnection);
 elements.focusButton.addEventListener("click", () => elements.remoteViewport.focus());
 elements.clearLogButton.addEventListener("click", () => {
   elements.eventLog.textContent = "";
@@ -1052,4 +1171,5 @@ elements.remoteViewport.addEventListener("keydown", (event) => {
 });
 
 updateAudioVolumeLabel();
+initializeRecentConnections();
 logEvent("Mac 控制端已就绪", "默认连接 127.0.0.1:43772，可改为 Windows 局域网 IP:43770");

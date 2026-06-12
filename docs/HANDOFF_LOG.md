@@ -17,6 +17,43 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
+本轮目标：给 Mac 控制 Windows 原型增加最近连接保存和回填，改善重复连接体验。
+完成内容：
+- `apps/mac-client` 连接面板新增最近连接下拉框和“使用最近”按钮。
+- 成功收到 `session_answer.ok` 后保存当前 host、port 和时间到 localStorage，最多保留 8 条。
+- 最近连接不保存连接密码；页面状态文案和自检都会明确检查“不保存密码”。
+- 页面加载时会自动填入最近一次成功连接；手动选择最近连接也会回填地址和端口。
+- `scripts/windows/test-mac-client-browser.mjs` 新增最近连接断言：确认选项出现、localStorage 包含 host/port、不包含页面密码，并验证回填。
+修改文件：
+- `apps/mac-client/index.html`
+- `apps/mac-client/styles.css`
+- `apps/mac-client/app.js`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `git diff --check`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --clientPort 5190 --debugPort 9341`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3 --clientPort 5191 --debugPort 9342`
+遗留问题：
+- 最近连接目前只有保存/选择回填；后续可补清空列表、重命名或从 discovery 设备名生成更友好的标签。
+下一步建议：
+- Mac 端继续打磨键盘映射和真实 Windows PCM 音频验收。
+- Windows 端后续改 Windows host 时继续跑默认 `test-mac-client-browser.mjs`，它会覆盖最近连接、文本、本机剪贴板监听和文件剪贴板。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12

@@ -28,6 +28,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -104,6 +105,21 @@ h1 {
   padding: 18px;
 }
 
+.recent-connection-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.recent-connection-row strong {
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 label {
   display: grid;
   gap: 8px;
@@ -112,7 +128,8 @@ label {
   font-weight: 700;
 }
 
-input {
+input,
+select {
   width: 100%;
   min-height: 46px;
   padding: 0 14px;
@@ -123,7 +140,8 @@ input {
   color: var(--ink);
 }
 
-input:focus {
+input:focus,
+select:focus {
   border-color: var(--forest);
   box-shadow: 0 0 0 4px rgba(28, 75, 60, 0.12);
 }
@@ -429,6 +447,11 @@ button:disabled {
 
   .button-row button {
     flex: 1 1 120px;
+  }
+
+  .recent-connection-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 
   .remote-card,

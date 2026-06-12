@@ -356,6 +356,11 @@ function buildSnapshotExpression() {
       clipboard: text("#clipboardStatus"),
       localClipboard: text("#localClipboardStatus"),
       fileClipboard: text("#fileClipboardStatus"),
+      recentConnection: text("#recentConnectionStatus"),
+      recentConnectionValue: document.querySelector("#recentConnectionSelect")?.value || "",
+      recentConnectionOptions: [...document.querySelectorAll("#recentConnectionSelect option")]
+        .map((option) => ({ value: option.value, text: option.textContent || "" })),
+      recentConnectionStorage: localStorage.getItem("lanDualMacClientRecentConnections") || "",
       clipboardTextValue: document.querySelector("#clipboardTextInput")?.value || "",
       imageVisible: image?.classList.contains("is-visible") || false,
       imageHasSource: Boolean(image?.getAttribute("src")),
@@ -498,6 +503,58 @@ async function run() {
     print("OK", `Connection: ${videoSnapshot.connection}`);
     print("OK", `Remote: ${videoSnapshot.remote}`);
     print("OK", `Video: ${videoSnapshot.video}`);
+
+    const endpoint = `${args.host}:${args.port}`;
+    const recentConnectionSnapshot = await waitFor(
+      async () => {
+        const value = await evaluate(session, buildSnapshotExpression());
+        lastSnapshot = value;
+        const hasEndpoint = value.recentConnectionOptions.some((option) => option.value === endpoint);
+        const storesEndpoint = value.recentConnectionStorage.includes(args.host) && value.recentConnectionStorage.includes(String(args.port));
+        const omitsPassword = !value.recentConnectionStorage.includes(args.clientPassword);
+        return hasEndpoint && storesEndpoint && omitsPassword ? value : null;
+      },
+      args.timeoutMs,
+      "Mac client recent connection save",
+    );
+    print("OK", `Recent connection: ${recentConnectionSnapshot.recentConnection}`);
+
+    await evaluate(
+      session,
+      `(() => {
+        const setValue = (selector, value) => {
+          const element = document.querySelector(selector);
+          element.value = value;
+          element.dispatchEvent(new Event("change", { bubbles: true }));
+          element.dispatchEvent(new Event("input", { bubbles: true }));
+        };
+        setValue("#hostInput", "");
+        setValue("#portInput", "");
+        const select = document.querySelector("#recentConnectionSelect");
+        select.value = ${JSON.stringify(endpoint)};
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        return {
+          host: document.querySelector("#hostInput").value,
+          port: document.querySelector("#portInput").value,
+        };
+      })()`,
+    );
+    const recentApplySnapshot = await waitFor(
+      async () => {
+        const value = await evaluate(
+          session,
+          `(() => ({
+            host: document.querySelector("#hostInput").value,
+            port: document.querySelector("#portInput").value,
+            status: document.querySelector("#recentConnectionStatus").textContent || ""
+          }))()`,
+        );
+        return value.host === args.host && value.port === String(args.port) ? value : null;
+      },
+      args.timeoutMs,
+      "Mac client recent connection apply",
+    );
+    print("OK", `Recent apply: ${recentApplySnapshot.host}:${recentApplySnapshot.port}`);
 
     await evaluate(
       session,
