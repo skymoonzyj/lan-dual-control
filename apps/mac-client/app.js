@@ -1668,6 +1668,7 @@ elements.clearLogButton.addEventListener("click", () => {
   elements.eventLog.textContent = "";
 });
 elements.audioToggle.addEventListener("change", () => {
+  resetAudioStatus();
   if (elements.audioToggle.checked) {
     primeAudioPlayback();
   } else {

@@ -1532,6 +1532,32 @@ async function run() {
       }
       print("OK", `Audio: ${audioSnapshot.audio} / ${audioSnapshot.audioPlayback}${payloadText}${timingText}`);
       print("OK", `Audio diagnostics: ${audioSnapshot.audioFlowMetric}`);
+
+      await clickElement(session, "#audioToggle");
+      const audioDisabledSnapshot = await waitFor(
+        async () => {
+          const value = await evaluate(session, buildSnapshotExpression());
+          lastSnapshot = value;
+          return !value.audioToggleChecked && value.audio === "未开启" && value.audioFlowMetric === "未开启"
+            ? value
+            : null;
+        },
+        args.timeoutMs,
+        "Mac client audio toggle off state",
+      );
+      await clickElement(session, "#audioToggle");
+      const audioReenabledSnapshot = await waitFor(
+        async () => {
+          const value = await evaluate(session, buildSnapshotExpression());
+          lastSnapshot = value;
+          return value.audioToggleChecked && value.audio === "未接收"
+            ? value
+            : null;
+        },
+        args.timeoutMs,
+        "Mac client audio toggle on reset state",
+      );
+      print("OK", `Audio toggle reset: ${audioDisabledSnapshot.audio} -> ${audioReenabledSnapshot.audio}`);
     }
 
     const endpoint = `${args.host}:${args.port}`;
