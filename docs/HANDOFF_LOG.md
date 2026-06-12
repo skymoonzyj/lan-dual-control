@@ -19,6 +19,27 @@
 
 ## 2026-06-13 Windows Codex
 
+日期：2026-06-13 01:55
+开发端：Windows Codex
+本轮目标：同步 Windows 桌面壳 README 的本机被控体检说明。
+完成内容：
+- `apps/windows-desktop/README.md` 现在明确说明部署档会跑带帧新鲜度和 timestamp 单调性强校验的视频/音频短观察。
+修改文件：
+- `apps/windows-desktop/README.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 文档检查通过，无冲突标记。
+遗留问题：无。
+下一步建议：无；这是上一轮 readiness 增强的文档补齐。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-13 Windows Codex
+
 日期：2026-06-13 01:52
 开发端：Windows Codex
 本轮目标：把 Windows host 视频/音频帧新鲜度强校验接入一键 readiness，减少部署前漏测卡顿或旧帧的概率。

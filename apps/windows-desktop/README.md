@@ -47,7 +47,7 @@ apps\windows-desktop\src-tauri\target\release\lan-dual-control-windows.exe
 
 桌面版左侧会显示“本机被控”面板。默认输入模式是“安全日志”，不会无人值守地把真实键鼠事件注入 Windows；需要让 Mac 真正反控这台 Windows 时，再手动切到“真实控制”。
 
-- `体检`：可选择低风险、部署、深度三档。低风险调用 `scripts/windows/check-windows-host-readiness.mjs --profile default --json`；部署档会要求端口可达、运行中 host build 与当前代码一致，并跑视频/音频短观察；深度档会额外串联 Windows host 本机自检。
+- `体检`：可选择低风险、部署、深度三档。低风险调用 `scripts/windows/check-windows-host-readiness.mjs --profile default --json`；部署档会要求端口可达、运行中 host build 与当前代码一致，并跑带帧新鲜度和 timestamp 单调性强校验的视频/音频短观察；深度档会额外串联 Windows host 本机自检。
 - `防火墙预览`：只生成放行命令预览，不修改系统设置。
 - `启动`：要求填写被控密码，通过桌面原生命令启动 `apps/windows-host/server.mjs`；桌面壳会自动把当前 git short hash 写入 `LAN_DUAL_BUILD_ID`，便于体检和 Mac 端确认没有连到旧进程。
 - `停止`：停止由桌面壳启动的 Windows host 进程树，避免留下 FFmpeg 或 Node 子进程。
