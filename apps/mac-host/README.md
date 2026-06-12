@@ -59,7 +59,7 @@ Mac host 日常一键体检：
 node scripts/mac/check-mac-host-readiness.mjs
 ```
 
-默认体检只做低风险检查：Node/Swift、Mac host build、直接启动输入默认值、启动助手语法和干跑、键盘映射覆盖，以及当前 `/discovery` 状态。其中直接启动默认值检查会用临时本机端口确认未设置 `LAN_DUAL_INPUT_MODE` 时是 `log`、显式 `inject` 仍可覆盖，并顺手验证启动日志和 `/discovery.permissions` 的权限诊断格式。如果当前 host 没启动，默认只给出提示，不会失败；需要强制要求端口已打开时加 `--requireOpen`。
+默认体检只做低风险检查：Node/Swift、Mac host build、直接启动输入默认值、启动助手语法和干跑、键盘映射覆盖，以及当前 `/discovery` 状态。其中直接启动默认值检查会用临时本机端口确认未设置 `LAN_DUAL_INPUT_MODE` 时是 `log`、显式 `inject` 仍可覆盖，并顺手验证启动日志和 `/discovery.permissions` 的权限诊断格式。如果当前 host 没启动，默认只给出提示，不会失败；需要强制要求端口已打开时加 `--requireOpen`。脚本会把当前 `git rev-parse --short HEAD` 和运行中 `/discovery.runtime.buildId` 对比，不一致时默认只给 warning；部署后需要强制确认已是最新 build 时加 `--requireCurrentBuildId`。
 
 如果需要确认当前 Mac 权限足够做真实视频和真实输入注入，可加：
 
@@ -75,7 +75,7 @@ node scripts/mac/check-mac-host-readiness.mjs --requireControlPermissions
 node scripts/mac/check-mac-host-readiness.mjs --expectBuildId c2db37f --probeVideo --probeAudio --probeInputLog --probeStartHelper
 ```
 
-其中 `--probeVideo` 会做短 H.264 时间线观察，`--probeAudio` 会做短 PCM 音频观察且不播放声音，`--probeInputLog` 会先确认 host 是 `log` 输入模式再发送安全冒烟事件，`--probeStartHelper` 会用临时端口启动/关闭一次启动助手自测。主机已重启到小数秒 timestamp build 后，可加 `--maxVideoFrameAgeMs 250` 强制要求 `video_frame.timestamp` 接收年龄足够新鲜；该参数会自动启用 `--probeVideo`。需要机器可读结果时可加 `--json`。
+其中 `--probeVideo` 会做短 H.264 时间线观察，`--probeAudio` 会做短 PCM 音频观察且不播放声音，`--probeInputLog` 会先确认 host 是 `log` 输入模式再发送安全冒烟事件，`--probeStartHelper` 会用临时端口启动/关闭一次启动助手自测。主机已重启到小数秒 timestamp build 后，可加 `--maxVideoFrameAgeMs 250` 强制要求 `video_frame.timestamp` 接收年龄足够新鲜；该参数会自动启用 `--probeVideo`。如果临时需要验收旧 build，可用 `--skipCurrentBuildCheck` 暂时关闭“运行中 build 与当前 git 不一致”的 warning。需要机器可读结果时可加 `--json`。
 
 进入目录：
 

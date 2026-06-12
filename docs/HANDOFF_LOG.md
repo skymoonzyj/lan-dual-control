@@ -17,6 +17,41 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
+本轮目标：增强 Mac host readiness 的运行中 build 新鲜度提示，避免真机仍连旧进程时被误判为最新。
+完成内容：
+- `scripts/mac/check-mac-host-readiness.mjs` 默认读取当前 `git rev-parse --short HEAD`，并与当前 `/discovery.runtime.buildId` 对比。
+- 默认不匹配只给 warning，不影响低风险 readiness 通过；新增 `--requireCurrentBuildId` 可在部署/重启验收时强制要求运行中 host 就是当前 git build。
+- 新增 `--skipCurrentBuildCheck`，允许临时验收旧 build 时关闭该 warning。
+- README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-host-readiness.mjs`
+- `node scripts/mac/check-mac-host-readiness.mjs --help`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 45000`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 45000 --requireCurrentBuildId`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 45000 --skipCurrentBuildCheck`
+验证结果：
+- 默认 readiness 9/9 通过，并提示主 `43770` 运行中 build `c2db37f` 落后当前 git `c5f2e86`，同时保留旧进程 `inputMonitoring=off` warning。
+- `--requireCurrentBuildId` 在当前旧主机上按预期失败：1 failed、2 warnings。
+- `--skipCurrentBuildCheck` 通过且不再输出 build mismatch warning，只保留旧进程 inputMonitoring warning。
+遗留问题：
+- 主 `43770` 仍未重启；需要原密码和安全窗口时再用 `start-mac-host` 升到最新 build。
+下一步建议：
+- 下一次主 Mac host 重启后，运行 `node scripts/mac/check-mac-host-readiness.mjs --requireCurrentBuildId --requireControlPermissions --strict`，确认 build 和权限 warning 都已收口。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import http from "node:http";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,8 +12,11 @@ const defaults = {
   password: process.env.LAN_DUAL_PASSWORD || "demo-password",
   timeoutMs: 20000,
   expectBuildId: "",
+  currentBuildId: "",
   requireOpen: false,
   requireControlPermissions: false,
+  requireCurrentBuildId: false,
+  skipCurrentBuildCheck: false,
   probeHost: false,
   probeVideo: false,
   maxVideoFrameAgeMs: 0,
@@ -38,6 +41,8 @@ function parseArgs(argv) {
     if (
       key === "requireOpen" ||
       key === "requireControlPermissions" ||
+      key === "requireCurrentBuildId" ||
+      key === "skipCurrentBuildCheck" ||
       key === "probeHost" ||
       key === "probeVideo" ||
       key === "probeAudio" ||
@@ -60,9 +65,12 @@ function parseArgs(argv) {
   args.password = String(args.password || defaults.password);
   args.timeoutMs = clampInteger(args.timeoutMs, 3000, 120000, defaults.timeoutMs);
   args.expectBuildId = normalizedText(args.expectBuildId);
+  args.currentBuildId = getGitBuildId();
   args.maxVideoFrameAgeMs = clampInteger(args.maxVideoFrameAgeMs, 0, 600000, defaults.maxVideoFrameAgeMs);
   args.requireOpen = booleanArg(args.requireOpen);
   args.requireControlPermissions = booleanArg(args.requireControlPermissions);
+  args.requireCurrentBuildId = booleanArg(args.requireCurrentBuildId);
+  args.skipCurrentBuildCheck = booleanArg(args.skipCurrentBuildCheck);
   args.probeHost = booleanArg(args.probeHost) || Boolean(args.expectBuildId);
   args.probeVideo = booleanArg(args.probeVideo) || args.maxVideoFrameAgeMs > 0;
   args.probeAudio = booleanArg(args.probeAudio);
@@ -87,6 +95,8 @@ Options:
   --password <password>     Probe password. Default: LAN_DUAL_PASSWORD or demo-password
   --timeoutMs <ms>          Per-step timeout. Default: 20000
   --expectBuildId <id>      Require running host runtime.buildId. Implies --probeHost.
+  --requireCurrentBuildId   Require running host runtime.buildId to match current git short hash.
+  --skipCurrentBuildCheck   Do not warn when running host build differs from current git.
   --requireOpen             Fail if /discovery is not reachable.
   --requireControlPermissions
                             Require screen recording and accessibility permissions.
@@ -114,6 +124,15 @@ function clampInteger(value, min, max, fallback) {
 
 function booleanArg(value) {
   return value === true || value === "true" || value === "1" || value === "yes" || value === "on";
+}
+
+function getGitBuildId() {
+  const result = spawnSync("git", ["rev-parse", "--short", "HEAD"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 3000,
+  });
+  return result.status === 0 ? normalizedText(result.stdout) : "";
 }
 
 function print(kind, text, args) {
@@ -365,6 +384,16 @@ async function checkDiscovery(args) {
         errors: [`runtime.buildId mismatch: ${runtime.buildId || "missing"} !== ${args.expectBuildId}`],
       };
     }
+    if (args.requireCurrentBuildId && !runtime.buildId) {
+      errors.push("runtime.buildId is required to check the running host against current git");
+    }
+    if (!args.skipCurrentBuildCheck && args.currentBuildId && runtime.buildId && runtime.buildId !== args.currentBuildId) {
+      const message = `running host build ${runtime.buildId} differs from current git ${args.currentBuildId}; restart with scripts/mac/start-mac-host.mjs after coordinating if you need the latest build`;
+      warnings.push(message);
+      if (args.requireCurrentBuildId) {
+        errors.push(message);
+      }
+    }
     if (input !== "log") {
       warnings.push(`input mode is ${input}; keep log mode for unattended readiness checks`);
     }
@@ -562,6 +591,9 @@ async function main() {
       host: args.host,
       port: args.port,
       expectBuildId: args.expectBuildId,
+      currentBuildId: args.currentBuildId,
+      requireCurrentBuildId: args.requireCurrentBuildId,
+      skipCurrentBuildCheck: args.skipCurrentBuildCheck,
       requireOpen: args.requireOpen,
       requireControlPermissions: args.requireControlPermissions,
       probeHost: args.probeHost,

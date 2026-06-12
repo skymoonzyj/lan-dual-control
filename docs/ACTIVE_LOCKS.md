@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/mac/check-mac-host-readiness.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 20:01 | Mac readiness 默认提示运行中 `/discovery.runtime.buildId` 是否落后当前 git short hash；新增 `--requireCurrentBuildId` 强制部署验收和 `--skipCurrentBuildCheck` 旧 build 调试放宽。 |
 | Mac Codex | `apps/mac-host/Sources/MacHost/MacPermissionCenter.swift`、`scripts/mac/test-mac-host-defaults.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 19:38 | Mac host 用 `IOHIDCheckAccess` 只读探测真实 Input Monitoring 状态，权限摘要显示“已开启/未开启”；direct-start defaults 自测验证 `/discovery.permissions.inputMonitoring` 与系统 API 一致。 |
 | Mac Codex | `scripts/mac/check-mac-host-readiness.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md` | 2026-06-12 19:29 | Mac readiness 默认低风险体检新增直接启动输入默认值自测，自动确认未设置 `LAN_DUAL_INPUT_MODE` 时为 `log`、显式 `inject` 可覆盖。 |
 | Mac Codex | `apps/mac-host/Sources/MacHost/HostConfiguration.swift`、`scripts/mac/test-mac-host-defaults.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 19:19 | 收口 Mac host 直接启动安全默认值：未设置 `LAN_DUAL_INPUT_MODE` 时默认 `log`；新增自测确认默认 `log` 和显式 `inject` 覆盖。 |
