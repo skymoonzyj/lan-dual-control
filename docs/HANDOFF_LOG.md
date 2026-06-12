@@ -21,6 +21,38 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：给 Mac client 页面级自检补短窗口视频持续来帧/FPS 指标，避免只验证首帧而漏掉后续画面停顿。
+完成内容：
+- `scripts/windows/test-mac-client-browser.mjs` 新增 `--observeVideoMs`，连接成功后在指定短窗口内统计收到的 `video_frame` 数量和实收 FPS。
+- 新增 `--minObservedVideoFrames` 与 `--minObservedVideoFps`，可把短窗口持续来帧能力转成强校验。
+- WebSocket 记录器新增累计 `videoFrames` / `audioFrames` 计数，不依赖只保留最近 400 条的消息数组。
+- 默认行为不强制观察；只有显式传观察窗口或阈值才会执行。
+- Mac client README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --observeVideoMs 1200 --minObservedVideoFrames 5 --minObservedVideoFps 5 --mockVideo --allowClipboardFallback --skipFileClipboard --timeoutMs 45000`
+验证结果：
+- 本机 mock Windows host 页面级自检通过：短窗口收到 `72` 帧，`1234ms` 内约 `58.3fps`，高于 5fps 阈值。
+- 后续显示设置、log 输入、Command+C -> Ctrl+C、文本剪贴板、Mac 本机剪贴板读取/发送和监听回归继续通过。
+遗留问题：
+- 真实 Windows host 的持续 FPS 阈值应按实际采集管线设定；mock 58fps 只能说明脚本和页面计数链路正常。
+下一步建议：
+- 真机联调时可从宽阈值开始，例如 `--observeVideoMs 3000 --minObservedVideoFrames 30 --minObservedVideoFps 10`，再根据 Windows Graphics Capture/FFmpeg 实测逐步收紧。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：把 Mac client 页面级自检的音频体验指标补齐，开始量化反控音频首帧和真实播放耗时。
 完成内容：
 - `scripts/windows/test-mac-client-browser.mjs` 新增 `--maxAudioFrameMs`，在 `--expectAudioFrame` 路径打印首条 `audio_frame` 到达耗时，参数大于 0 时超过阈值即失败。

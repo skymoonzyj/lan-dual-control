@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/windows/test-mac-client-browser.mjs`、`apps/mac-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 20:57 | Mac client 页面级自检新增短窗口视频持续来帧/FPS 指标；`--observeVideoMs`、`--minObservedVideoFrames`、`--minObservedVideoFps` 可量化反控画面连续性。 |
 | Mac Codex | `scripts/windows/test-mac-client-browser.mjs`、`apps/mac-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 20:46 | Mac client 页面级自检新增音频首帧和真实 PCM 播放耗时指标；`--maxAudioFrameMs` / `--maxAudioPlaybackMs` 可把反控音频体验转成强校验。 |
 | Mac Codex | `scripts/windows/test-mac-client-browser.mjs`、`apps/mac-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 20:31 | Mac client 页面级自检新增首次视频可见耗时和断线恢复耗时指标；`--maxInitialVideoMs` / `--maxReconnectRestoreMs` 可把体验耗时转成强校验。 |
 | Mac Codex | `apps/mac-client/app.js`、`apps/mac-client/README.md`、`scripts/windows/test-mac-client-browser.mjs`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 20:16 | Mac client 意外断线后最多自动重连 3 次；手动断开/认证失败不重连；页面级自检新增 `--expectReconnect`，覆盖临时 Windows host 被杀后同端口恢复连接。 |

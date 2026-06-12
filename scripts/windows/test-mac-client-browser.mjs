@@ -34,6 +34,9 @@ const defaults = {
   maxReconnectRestoreMs: 0,
   maxAudioFrameMs: 0,
   maxAudioPlaybackMs: 0,
+  observeVideoMs: 0,
+  minObservedVideoFrames: 0,
+  minObservedVideoFps: 0,
   useExistingHost: false,
   mockVideo: false,
   headless: true,
@@ -124,6 +127,9 @@ function parseArgs(argv) {
   args.maxReconnectRestoreMs = Number(args.maxReconnectRestoreMs);
   args.maxAudioFrameMs = Number(args.maxAudioFrameMs);
   args.maxAudioPlaybackMs = Number(args.maxAudioPlaybackMs);
+  args.observeVideoMs = Number(args.observeVideoMs);
+  args.minObservedVideoFrames = Number(args.minObservedVideoFrames);
+  args.minObservedVideoFps = Number(args.minObservedVideoFps);
   args.hostPassword = args.hostPassword || args.password;
   args.clientPassword = args.clientPassword || (args.expectAuthFailure ? `${args.password}-wrong` : args.password);
   if (args.requireAudio && !args.audioMode) {
@@ -535,6 +541,43 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
   return restartedHost;
 }
 
+async function observeMacClientVideo({ args, session }) {
+  const shouldObserve =
+    args.observeVideoMs > 0 ||
+    args.minObservedVideoFrames > 0 ||
+    args.minObservedVideoFps > 0;
+  if (!shouldObserve) return null;
+
+  const durationMs = args.observeVideoMs > 0 ? args.observeVideoMs : 1000;
+  const start = await evaluate(
+    session,
+    `(() => ({
+      at: performance.now(),
+      frames: Number(window.__lanDualCounters?.videoFrames || 0),
+    }))()`,
+  );
+  await delay(durationMs);
+  const end = await evaluate(
+    session,
+    `(() => ({
+      at: performance.now(),
+      frames: Number(window.__lanDualCounters?.videoFrames || 0),
+    }))()`,
+  );
+
+  const elapsedMs = Math.max(1, Math.round(end.at - start.at));
+  const frames = Math.max(0, Number(end.frames) - Number(start.frames));
+  const fps = frames / (elapsedMs / 1000);
+  if (args.minObservedVideoFrames > 0 && frames < args.minObservedVideoFrames) {
+    throw new Error(`Mac client observed ${frames} video frames, expected >= ${args.minObservedVideoFrames}`);
+  }
+  if (args.minObservedVideoFps > 0 && fps < args.minObservedVideoFps) {
+    throw new Error(`Mac client observed ${fps.toFixed(1)} video FPS, expected >= ${args.minObservedVideoFps}`);
+  }
+  print("OK", `Video observe: ${frames} frames / ${elapsedMs}ms / ${fps.toFixed(1)} fps`);
+  return { frames, elapsedMs, fps };
+}
+
 function buildSnapshotExpression() {
   return `(() => {
     const text = (selector) => document.querySelector(selector)?.textContent || "";
@@ -604,6 +647,10 @@ function installWebSocketSendRecorderExpression() {
   return `(() => {
     window.__lanDualSentMessages = [];
     window.__lanDualReceivedMessages = [];
+    window.__lanDualCounters = {
+      videoFrames: 0,
+      audioFrames: 0,
+    };
     window.__lanDualTimings = {
       installedAt: performance.now(),
       connectClickedAt: 0,
@@ -618,6 +665,12 @@ function installWebSocketSendRecorderExpression() {
         try {
           const parsed = JSON.parse(String(event.data));
           window.__lanDualReceivedMessages.push(parsed);
+          if (parsed.type === "video_frame") {
+            window.__lanDualCounters.videoFrames += 1;
+          }
+          if (parsed.type === "audio_frame") {
+            window.__lanDualCounters.audioFrames += 1;
+          }
           if (parsed.type === "audio_frame" && !window.__lanDualTimings?.firstAudioFrameAt) {
             window.__lanDualTimings.firstAudioFrameAt = performance.now();
           }
@@ -850,6 +903,8 @@ async function run() {
       throw new Error(`Windows host session video negotiation mismatch: ${JSON.stringify(sessionAnswer)}`);
     }
     print("OK", `Video settings: ${videoSnapshot.displaySettings}`);
+
+    await observeMacClientVideo({ args, session });
 
     if (args.expectReconnect) {
       windowsHost = await verifyMacClientReconnect({ args, repoRoot, session, windowsHost });
