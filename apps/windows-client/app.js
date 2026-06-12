@@ -293,6 +293,8 @@ const state = {
   h264DecoderErrorCount: 0,
   h264DecoderWarned: false,
   h264DecoderQueue: [],
+  h264DecoderNeedsKeyFrame: true,
+  h264SkippedDeltaFrames: 0,
   h264DecodedFrames: 0,
   h264FallbackActive: false,
   h264FallbackReason: "",
@@ -1767,6 +1769,8 @@ function resetVideoDecoder({ resetFallback = false } = {}) {
   state.h264DecoderErrorCount = 0;
   state.h264DecoderWarned = false;
   state.h264DecoderQueue = [];
+  state.h264DecoderNeedsKeyFrame = true;
+  state.h264SkippedDeltaFrames = 0;
   state.h264DecodedFrames = 0;
   if (resetFallback) {
     state.h264FallbackActive = false;
@@ -3566,6 +3570,60 @@ async function selectH264DecoderConfig(baseConfig, format) {
   throw new Error(`当前窗口环境不支持 ${baseConfig.codec}（${failures.join("；")}）`);
 }
 
+function findAnnexBStartCode(bytes, fromIndex = 0) {
+  for (let index = Math.max(0, fromIndex); index <= bytes.length - 3; index += 1) {
+    if (bytes[index] !== 0 || bytes[index + 1] !== 0) continue;
+    if (bytes[index + 2] === 1) {
+      return { index, length: 3 };
+    }
+    if (index <= bytes.length - 4 && bytes[index + 2] === 0 && bytes[index + 3] === 1) {
+      return { index, length: 4 };
+    }
+  }
+  return null;
+}
+
+function getAnnexBNalTypes(bytes) {
+  const nalTypes = [];
+  let start = findAnnexBStartCode(bytes, 0);
+  while (start) {
+    const nalStart = start.index + start.length;
+    const next = findAnnexBStartCode(bytes, nalStart);
+    const nalEnd = next ? next.index : bytes.length;
+    if (nalStart < nalEnd) {
+      nalTypes.push(bytes[nalStart] & 0x1f);
+    }
+    start = next;
+  }
+  return nalTypes;
+}
+
+function getLengthPrefixedNalTypes(bytes, lengthSize = 4) {
+  const nalTypes = [];
+  let index = 0;
+  while (index + lengthSize <= bytes.length) {
+    let nalLength = 0;
+    for (let offset = 0; offset < lengthSize; offset += 1) {
+      nalLength = (nalLength << 8) | bytes[index + offset];
+    }
+    index += lengthSize;
+    if (nalLength <= 0 || index + nalLength > bytes.length) {
+      break;
+    }
+    nalTypes.push(bytes[index] & 0x1f);
+    index += nalLength;
+  }
+  return nalTypes;
+}
+
+function isH264KeyFramePayload(bytes, encoding) {
+  const normalizedEncoding = String(encoding ?? "").toLowerCase();
+  const nalTypes = normalizedEncoding.includes("annexb")
+    ? getAnnexBNalTypes(bytes)
+    : getLengthPrefixedNalTypes(bytes);
+  return nalTypes.includes(5) || nalTypes.includes(7) || nalTypes.includes(8);
+}
+
 async function renderH264VideoFrame(frame) {
   if (!frame.payload) {
     addLog("视频帧", "收到 H.264 视频帧但缺少 payload");
@@ -3605,6 +3663,21 @@ async function renderH264VideoFrame(frame) {
 
   try {
     const decoder = await ensureH264Decoder(frame);
+    const payloadBytes = base64ToUint8Array(frame.payload);
+    const isKeyFrame = Boolean(frame.keyFrame) || isH264KeyFramePayload(payloadBytes, frame.encoding);
+    if (state.h264DecoderNeedsKeyFrame && !isKeyFrame) {
+      state.h264SkippedDeltaFrames += 1;
+      state.h264DecoderStatus = "waiting-keyframe";
+      updateH264DecoderDiagnostics();
+      elements.remoteStatusText.textContent = `等待 H.264 关键帧，已跳过 delta #${frame.frameId ?? state.videoFrames}`;
+      if (state.h264SkippedDeltaFrames % 30 === 0) {
+        addLog("H.264 等待关键帧", `跳过 delta 帧 #${frame.frameId ?? state.videoFrames}`);
+      }
+      return;
+    }
+    if (isKeyFrame) {
+      state.h264DecoderNeedsKeyFrame = false;
+    }
     const durationUs = Number(frame.durationUs) || Math.round(1_000_000 / Math.max(1, state.negotiatedFps || 30));
     const timestampUs =
       Number(frame.timestampUs) ||
@@ -3620,10 +3693,10 @@ async function renderH264VideoFrame(frame) {
     }
     updateH264DecoderDiagnostics();
     const chunk = new EncodedVideoChunk({
-      type: frame.keyFrame ? "key" : "delta",
+      type: isKeyFrame ? "key" : "delta",
       timestamp: timestampUs,
       duration: durationUs,
-      data: base64ToUint8Array(frame.payload),
+      data: payloadBytes,
     });
     decoder.decode(chunk);
   } catch (error) {

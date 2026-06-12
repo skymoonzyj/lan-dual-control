@@ -672,6 +672,37 @@ async function verifyDiscoveryRuntimeDiagnostics(session, { host, port, buildId,
   return result;
 }
 
+async function verifyH264KeyFrameDetection(session) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      if (typeof isH264KeyFramePayload !== "function") {
+        return { ok: false, reason: "missing H.264 key frame helper" };
+      }
+      const annexbKey = new Uint8Array([
+        0, 0, 0, 1, 0x67, 0x42, 0xe0, 0x1f,
+        0, 0, 0, 1, 0x68, 0xce, 0x06, 0xe2,
+        0, 0, 0, 1, 0x65, 0x88, 0x84,
+      ]);
+      const annexbDelta = new Uint8Array([0, 0, 0, 1, 0x41, 0x9a, 0x22]);
+      const avcKey = new Uint8Array([0, 0, 0, 3, 0x65, 0x88, 0x84]);
+      return {
+        ok:
+          isH264KeyFramePayload(annexbKey, "annexb-base64") &&
+          !isH264KeyFramePayload(annexbDelta, "annexb-base64") &&
+          isH264KeyFramePayload(avcKey, "avc"),
+        annexbKey: isH264KeyFramePayload(annexbKey, "annexb-base64"),
+        annexbDelta: isH264KeyFramePayload(annexbDelta, "annexb-base64"),
+        avcKey: isH264KeyFramePayload(avcKey, "avc"),
+      };
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`H.264 key frame detection check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function run() {
   const args = parseArgs(process.argv);
   const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -732,6 +763,11 @@ async function run() {
     );
     const streamFallbackCheck = await verifyStreamFallbackDiagnostics(session);
     print("OK", `Stream fallback diagnostics: ${streamFallbackCheck.fallbackText}`);
+    const keyFrameCheck = await verifyH264KeyFrameDetection(session);
+    print(
+      "OK",
+      `H.264 key frame detection: annexbKey=${keyFrameCheck.annexbKey}, annexbDelta=${keyFrameCheck.annexbDelta}, avcKey=${keyFrameCheck.avcKey}`,
+    );
     if (args.expectDiscoveryRuntimeBuildId) {
       const discoveryRuntimeCheck = await verifyDiscoveryRuntimeDiagnostics(session, {
         host: args.host,
@@ -789,6 +825,7 @@ async function run() {
               metricFps: text("#metricFps"),
               webCodecs: typeof VideoDecoder,
               encodedVideoChunk: typeof EncodedVideoChunk,
+              h264DecoderErrors: window.state?.h264DecoderErrorCount ?? 0,
               canvasVisible: canvas?.classList.contains("is-visible") || false,
               canvasWidth: canvas?.width || 0,
               canvasHeight: canvas?.height || 0,
@@ -814,6 +851,7 @@ async function run() {
           value.canvasHeight > 0 &&
           (diagnosticsLower.includes("h264") || remoteLower.includes("h.264")) &&
           !value.diagnostics.includes("JPEG 回退");
+        const hasNoH264DecodeErrors = Number(value.h264DecoderErrors || 0) === 0;
         const hasFpsDiagnostics =
           !args.requireVideoSurface ||
           (/实收\s+(?!-)\d+(?:\.\d+)?\s+FPS/.test(value.metricFps) &&
@@ -821,7 +859,7 @@ async function run() {
         if (
           value.status.includes("已连接") &&
           (!args.requireVideoSurface || hasVideoSurface) &&
-          (!args.requireH264 || hasH264Surface) &&
+          (!args.requireH264 || (hasH264Surface && hasNoH264DecodeErrors)) &&
           hasFpsDiagnostics
         ) {
           return value;
@@ -852,7 +890,10 @@ async function run() {
       "OK",
       `Surface: canvas=${snapshot.canvasVisible} ${snapshot.canvasWidth}x${snapshot.canvasHeight}, image=${snapshot.imageVisible}`,
     );
-    print("OK", `WebCodecs: VideoDecoder=${snapshot.webCodecs}, EncodedVideoChunk=${snapshot.encodedVideoChunk}`);
+    print(
+      "OK",
+      `WebCodecs: VideoDecoder=${snapshot.webCodecs}, EncodedVideoChunk=${snapshot.encodedVideoChunk}, H264Errors=${snapshot.h264DecoderErrors}`,
+    );
     if (snapshot.logs.length > 0) {
       print("INFO", `Recent logs: ${snapshot.logs.join(" | ")}`);
     }

@@ -17,6 +17,41 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
+本轮目标：消除 Windows 控制端连接真实 Mac H.264 时偶发的 WebCodecs 首帧非关键帧解码噪声。
+完成内容：
+- `apps/windows-client/app.js` 新增 Annex B start code 解析和 AVC 长度前缀 NAL 解析，用 IDR/SPS/PPS 判断 H.264 payload 是否关键帧。
+- H.264 decoder 新建或重配置后会进入等待关键帧状态；若先收到 delta 帧，会安静跳过并等待关键帧，避免 `A key frame is required after configure() or flush()` 被记录成解码失败。
+- 如果后端没有显式 `frame.keyFrame`，控制端也能从真实 `annexb-base64` payload 推断首帧为 key chunk。
+- `scripts/windows/test-windows-client-browser.mjs` 的 `--diagnosticsOnly` 增加 H.264 关键帧识别 helper 回归；`--requireH264` 现在要求本次连接 `H264Errors=0`。
+- Windows client README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --host 127.0.0.1 --port 43770 --password demo-password --requireH264 --timeoutMs 45000`
+验证结果：
+- diagnosticsOnly 通过：悬浮控制中心、黑边输入防护、stream fallback/runtime 诊断、H.264 key frame helper 均通过；helper 断言 `annexbKey=true`、`annexbDelta=false`、`avcKey=true`。
+- 真实 Mac `43770` / `build=db48055` H.264 强校验通过：诊断条显示 `PID 97112` / `build db48055`，`avc1.420029:annexb` 解码到 1920×1080 canvas，实收约 30.9 FPS，`H264Errors=0`，recent logs 无 H.264 解码失败。
+遗留问题：
+- 这轮只修控制端解码前关键帧判断；H.264 端到端延迟、动态画面和长时间观感仍需继续验收。
+下一步建议：
+- 后续改 Windows 控制端视频、缩放或输入路径时，继续跑 `test-windows-client-browser --requireH264`，确保真实 H.264 画布解码和 `H264Errors=0` 同时成立。
+是否改了协议：否。
+是否需要另一端配合：否；Windows 端可拉取后在真实控制端复跑同一命令确认。
+
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12
