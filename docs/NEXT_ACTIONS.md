@@ -32,7 +32,7 @@
 - 继续压测 ScreenCaptureKit + VideoToolbox H.264，重点看断开释放、连续重连、延迟和 CPU 占用；可用 `node scripts/mac/stress-mac-host.mjs --iterations 50 --expectInputMode log` 做连续连接回归。
 - 扩展 CGEvent 键盘映射，重点验证中文输入法、Command 组合键和功能键；改映射前后先跑 `node scripts/mac/check-input-keymap.mjs`。
 - 增加真实多显示器枚举和采集切换。
-- 继续完善 `apps/mac-client` Mac 控制 Windows 原型：用 Windows 默认 `node scripts/windows/test-mac-client-browser.mjs` 强校验文件剪贴板 `saveMode=clipboard`，接真实 Windows PCM 音频播放，打磨键盘映射、错误提示和自动剪贴板监听。
+- 继续完善 `apps/mac-client` Mac 控制 Windows 原型：用 Windows 默认 `node scripts/windows/test-mac-client-browser.mjs` 强校验文件剪贴板 `saveMode=clipboard`，接真实 Windows PCM 音频播放，打磨键盘映射和自动剪贴板监听。
 
 ## Windows Codex 可接任务
 
@@ -41,7 +41,7 @@
 - 在当前 FFmpeg DirectShow PCM 过渡入口基础上接入 WASAPI loopback，替换 Windows 被控端默认模拟音频帧。
 - 优化 Windows 控制端文件托盘和错误提示。
 - Windows host 或假 Mac 认证相关改动后运行 `node scripts/windows/test-auth-retry-policy.mjs`，确认错误密码剩余次数、第三次断开和新连接正确认证未退化。
-- Windows host 相关改动后运行 `scripts/windows/test-windows-host.ps1`，确认真实视频首帧、文本剪贴板和文件剪贴板接收未退化；涉及 Mac 反控链路时再运行 `node scripts/windows/test-mac-client-browser.mjs`，确认 Mac client 页面可显示 Windows 画面、收到 `input_ack`，并完成文本/文件剪贴板发送。
+- Windows host 相关改动后运行 `scripts/windows/test-windows-host.ps1`，确认真实视频首帧、文本剪贴板和文件剪贴板接收未退化；涉及 Mac 反控链路时再运行 `node scripts/windows/test-mac-client-browser.mjs`，确认 Mac client 页面可显示 Windows 画面、收到 `input_ack`，并完成文本/文件剪贴板发送；认证相关改动可加跑 `node scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3`。
 - Windows host 视频性能相关改动后运行 `node scripts/windows/observe-windows-host-video.mjs`，确认实际 FPS、最大帧间隔和采集管线符合预期。
 - 继续维护本机假 Mac 服务，用于快速回归和失败场景模拟。
 

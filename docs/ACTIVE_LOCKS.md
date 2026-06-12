@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/windows/test-mac-client-browser.mjs`、`apps/mac-client/README.md`、`README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 11:48 | Mac client 页面级自检新增 `--expectAuthFailure`，可断言认证失败剩余次数；错误密码模式和普通成功模式均通过。 |
 | Mac Codex | `apps/mac-client/app.js`、`apps/mac-client/README.md`、`README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/04-task-board.md` | 2026-06-12 11:38 | Mac client 认证失败 UX：显示剩余尝试次数，失败后关闭当前 WebSocket 并释放连接按钮；正常路径与错误密码路径均已验证。 |
 | Windows Codex | `apps/windows-client/index.html`、`apps/windows-client/styles.css`、`apps/windows-client/app.js`、`apps/windows-client/README.md`、`scripts/windows/test-windows-client-browser.mjs`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 11:34 | Windows 控制端悬浮控制中心改为更接近 UU 远程的右上角菜单样式，收起态显示刷新率/码率摘要；自检脚本已增加悬浮层和摘要断言。 |
 | Mac Codex | `scripts/windows/test-mac-client-browser.mjs`、`apps/mac-client/README.md`、`README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 11:30 | Mac client 页面级自检新增文件剪贴板自动化：CDP 注入临时小文件并等待 `clipboard_file_result`；Mac 本机 mock/回退链路通过，Windows 默认模式待系统剪贴板强校验。 |

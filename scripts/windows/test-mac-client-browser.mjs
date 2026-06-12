@@ -10,6 +10,8 @@ const defaults = {
   host: "127.0.0.1",
   port: "43772",
   password: "demo-password",
+  hostPassword: "",
+  clientPassword: "",
   clientPort: 5188,
   debugPort: 9340,
   timeoutMs: 30000,
@@ -18,6 +20,9 @@ const defaults = {
   requireRealVideo: true,
   requireSystemClipboard: process.platform === "win32",
   testFileClipboard: true,
+  expectAuthFailure: false,
+  expectedAttemptsRemaining: "",
+  expectedMaxAttempts: "",
   useExistingHost: false,
   mockVideo: false,
   headless: true,
@@ -61,6 +66,12 @@ function parseArgs(argv) {
       args.testFileClipboard = false;
       continue;
     }
+    if (key === "expectAuthFailure") {
+      args.expectAuthFailure = true;
+      args.testFileClipboard = false;
+      args.requireRealVideo = false;
+      continue;
+    }
     if (Object.prototype.hasOwnProperty.call(args, key) && next && !next.startsWith("--")) {
       args[key] = next;
       index += 1;
@@ -70,6 +81,8 @@ function parseArgs(argv) {
   args.clientPort = Number(args.clientPort);
   args.debugPort = Number(args.debugPort);
   args.timeoutMs = Number(args.timeoutMs);
+  args.hostPassword = args.hostPassword || args.password;
+  args.clientPassword = args.clientPassword || (args.expectAuthFailure ? `${args.password}-wrong` : args.password);
   return args;
 }
 
@@ -302,7 +315,7 @@ async function startWindowsHost(args, repoRoot) {
 
   const env = {
     ...process.env,
-    LAN_DUAL_PASSWORD: args.password,
+    LAN_DUAL_PASSWORD: args.hostPassword,
     LAN_DUAL_WINDOWS_INPUT_MODE: args.inputMode,
     LAN_DUAL_WINDOWS_SCREEN_MODE: args.mockVideo ? "mock" : args.screenMode,
     LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: "4",
@@ -338,6 +351,19 @@ function buildSnapshotExpression() {
       logs,
     };
   })()`;
+}
+
+function matchesExpectedAuthFailure(snapshot, args) {
+  if (!snapshot.connection.includes("认证失败")) {
+    return false;
+  }
+  if (args.expectedAttemptsRemaining !== "" && !snapshot.connection.includes(`剩余 ${args.expectedAttemptsRemaining}`)) {
+    return false;
+  }
+  if (args.expectedMaxAttempts !== "" && !snapshot.connection.includes(`/${args.expectedMaxAttempts} 次`)) {
+    return false;
+  }
+  return true;
 }
 
 async function run() {
@@ -396,13 +422,41 @@ async function run() {
         };
         setValue("#hostInput", ${JSON.stringify(args.host)});
         setValue("#portInput", ${JSON.stringify(String(args.port))});
-        setValue("#passwordInput", ${JSON.stringify(args.password)});
+        setValue("#passwordInput", ${JSON.stringify(args.clientPassword)});
         document.querySelector("#connectButton").click();
         return true;
       })()`,
     );
 
     let lastSnapshot = null;
+    if (args.expectAuthFailure) {
+      const authFailureSnapshot = await waitFor(
+        async () => {
+          const value = await evaluate(session, buildSnapshotExpression());
+          lastSnapshot = value;
+          return matchesExpectedAuthFailure(value, args) ? value : null;
+        },
+        args.timeoutMs,
+        "Mac client auth failure state",
+      ).catch((error) => {
+        if (lastSnapshot) {
+          print("INFO", `Last connection: ${lastSnapshot.connection}`);
+          print("INFO", `Last remote: ${lastSnapshot.remote}`);
+          if (lastSnapshot.logs?.length) {
+            print("INFO", `Last logs: ${lastSnapshot.logs.join(" | ")}`);
+          }
+        }
+        throw error;
+      });
+
+      print("OK", `Auth failure: ${authFailureSnapshot.connection}`);
+      if (authFailureSnapshot.logs.length > 0) {
+        print("INFO", `Recent logs: ${authFailureSnapshot.logs.join(" | ")}`);
+      }
+      print("OK", "Mac client auth failure self-test passed");
+      return;
+    }
+
     const videoSnapshot = await waitFor(
       async () => {
         const value = await evaluate(session, buildSnapshotExpression());

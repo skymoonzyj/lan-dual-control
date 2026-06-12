@@ -52,6 +52,41 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：把 Mac client 错误密码路径固化为页面级自检断言。
+完成内容：
+- `scripts/windows/test-mac-client-browser.mjs` 新增 `--expectAuthFailure` 模式，认证失败时不再把脚本判为失败，而是等待页面显示认证失败状态。
+- 新增 `--hostPassword` 和 `--clientPassword`，普通模式默认仍沿用 `--password`；错误密码模式默认让临时 host 使用正确密码、页面填入派生的错误密码。
+- 新增 `--expectedAttemptsRemaining` 和 `--expectedMaxAttempts`，可断言 `认证失败 · 剩余 2/3 次` 这类剩余次数提示。
+- README、当前状态、下一步和任务板已同步该自检入口。
+修改文件：
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `git diff --check`
+- 错误密码模式：`node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3 --clientPort 5191 --debugPort 9342`
+- 普通成功模式：`node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --clientPort 5190 --debugPort 9341`
+验证结果：
+- 错误密码模式通过：输出 `Auth failure: 认证失败 · 剩余 2/3 次` 和 `Mac client auth failure self-test passed`。
+- 普通成功模式仍通过：连接、mock 视频、`input_ack · log`、文本 `clipboard_ack · memory-only`、文件 `clipboard_file_result · temp` 均正常。
+遗留问题：
+- Windows 默认模式仍需 Windows 端跑一次系统文件剪贴板强校验 `saveMode=clipboard`。
+下一步建议：
+- Mac 端可继续做自动剪贴板监听或 Mac client 键盘映射打磨。
+- Windows 端涉及 Mac 反控认证 UX 时，可直接加跑 `--expectAuthFailure`。
+是否改了协议：否。
+是否需要另一端配合：Windows 系统文件剪贴板强校验仍需要 Windows 端执行默认页面级自检。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：改善 Mac 控制 Windows 原型的认证失败体验。
 完成内容：
 - `apps/mac-client` 会读取 `auth_result.attemptsRemaining/maxAttempts`，在连接状态里显示 `认证失败 · 剩余 2/3 次` 或无剩余尝试。
