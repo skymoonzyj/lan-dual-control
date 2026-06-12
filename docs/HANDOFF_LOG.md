@@ -17,6 +17,44 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
+本轮目标：给 Windows 桌面版远端文件托盘增加一键打开临时目录。
+完成内容：
+- `apps/windows-client/index.html` 远端文件工具栏新增“打开临时目录”按钮。
+- `apps/windows-client/app.js` 记录最近一次桌面原生文件剪贴板写入返回的 `rootDir`/`paths`；有远端文件、有临时目录且运行在桌面版时启用按钮。
+- 点击按钮会调用 Tauri `open_clipboard_temp_path`，成功/失败都会写入本地事件日志；清空远端文件时同步清除临时目录状态。
+- `apps/windows-desktop/src-tauri/src/main.rs` 新增 `open_clipboard_temp_path` 原生命令，使用 Windows 文件资源管理器打开目录或定位文件。
+- 原生命令会 canonicalize 路径并限制只能打开本应用文件剪贴板临时根目录下的路径，避免网页层打开任意系统目录。
+- 页面级 `--diagnosticsOnly` 自检新增按钮启用/禁用和原生命令调用参数断言；Rust 单测新增临时目录白名单通过/拒绝覆盖。
+- Windows client/desktop README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/app.js`
+- `apps/windows-desktop/src-tauri/src/main.rs`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `apps/windows-desktop/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `cargo fmt`
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `cargo test`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 尚未人工点真实桌面版按钮看资源管理器是否打开；当前已完成原生命令编译路径和白名单单测。
+下一步建议：
+- 真实大文件体验验收后，再补“重试写入系统文件剪贴板”和更细的托盘清理交互。
+是否改了协议：否。
+是否需要另一端配合：暂无；真实大文件体验验收仍需要 Mac 端复制文件触发。
+
 ## 2026-06-12 Mac Codex
 
 日期：2026-06-12

@@ -432,6 +432,24 @@ fn cancel_native_clipboard_transfer(
     }
 }
 
+fn validate_clipboard_temp_path(path: &str) -> Result<(PathBuf, bool), String> {
+    let raw_path = path.trim();
+    if raw_path.is_empty() {
+        return Err("临时目录路径为空。".to_string());
+    }
+
+    let base_dir = clipboard_base_temp_dir();
+    let base_dir = fs::canonicalize(&base_dir)
+        .map_err(|_| "当前没有可打开的文件剪贴板临时目录。".to_string())?;
+    let target = fs::canonicalize(PathBuf::from(raw_path))
+        .map_err(|error| format!("临时目录不存在或已被清理：{error}"))?;
+    if !target.starts_with(&base_dir) {
+        return Err("只能打开本应用生成的文件剪贴板临时目录。".to_string());
+    }
+    let metadata = fs::metadata(&target).map_err(|error| format!("读取临时路径失败：{error}"))?;
+    Ok((target, metadata.is_dir()))
+}
+
 fn file_entry_result_paths(paths: &[PathBuf]) -> Vec<String> {
     paths
         .iter()
@@ -1056,6 +1074,32 @@ fn cancel_clipboard_file_write(
 }
 
 #[tauri::command]
+fn open_clipboard_temp_path(path: String) -> Result<bool, String> {
+    let (target, is_dir) = validate_clipboard_temp_path(&path)?;
+
+    #[cfg(windows)]
+    {
+        let mut command = Command::new("explorer.exe");
+        if is_dir {
+            command.arg(&target);
+        } else {
+            command.arg(format!("/select,{}", target.to_string_lossy()));
+        }
+        add_hidden_flag(&mut command);
+        command
+            .spawn()
+            .map_err(|error| format!("打开临时目录失败：{error}"))?;
+        Ok(true)
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = (target, is_dir);
+        Err("当前平台暂不支持打开 Windows 临时目录。".to_string())
+    }
+}
+
+#[tauri::command]
 fn run_windows_host_readiness(
     request: WindowsHostReadinessRequest,
 ) -> Result<DesktopCommandResult, String> {
@@ -1404,6 +1448,46 @@ mod tests {
         assert!(err.contains("超过桌面版系统文件剪贴板写入上限"));
         assert!(transfers.is_empty());
     }
+
+    #[test]
+    fn validates_clipboard_temp_paths_under_app_temp_root() {
+        let transfer_id = make_clipboard_transfer_id().expect("transfer id");
+        let root_dir = make_clipboard_root_dir(&transfer_id);
+        fs::create_dir_all(&root_dir).expect("temp root");
+        let file_path = root_dir.join("001-demo.zip");
+        fs::write(&file_path, b"demo").expect("temp file");
+
+        let (validated_dir, is_dir) =
+            validate_clipboard_temp_path(&root_dir.to_string_lossy()).expect("dir valid");
+        assert!(is_dir);
+        assert_eq!(
+            validated_dir,
+            fs::canonicalize(&root_dir).expect("canonical root")
+        );
+
+        let (validated_file, is_dir) =
+            validate_clipboard_temp_path(&file_path.to_string_lossy()).expect("file valid");
+        assert!(!is_dir);
+        assert_eq!(
+            validated_file,
+            fs::canonicalize(&file_path).expect("canonical file")
+        );
+        let _ = fs::remove_dir_all(root_dir);
+    }
+
+    #[test]
+    fn rejects_clipboard_temp_paths_outside_app_temp_root() {
+        fs::create_dir_all(clipboard_base_temp_dir()).expect("clipboard base dir");
+        let outside = std::env::temp_dir().join(format!(
+            "lan-dual-control-outside-{}",
+            CLIPBOARD_TRANSFER_COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&outside).expect("outside dir");
+        let err = validate_clipboard_temp_path(&outside.to_string_lossy())
+            .expect_err("outside path should fail");
+        assert!(err.contains("只能打开本应用生成"));
+        let _ = fs::remove_dir_all(outside);
+    }
 }
 
 fn main() {
@@ -1416,6 +1500,7 @@ fn main() {
             append_clipboard_file_chunk,
             finish_clipboard_file_write,
             cancel_clipboard_file_write,
+            open_clipboard_temp_path,
             run_windows_host_readiness,
             preview_windows_firewall_rule,
             start_windows_host,

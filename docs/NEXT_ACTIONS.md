@@ -41,7 +41,7 @@
 
 ## Windows Codex 可接任务
 
-- 优化 Windows 控制端远端文件托盘：桌面版文件剪贴板写入已升级为 1MB 原生分块并支持到 512MB，原生层已补总量保护、7 天旧临时目录清理和分块边界单测；系统剪贴板写入失败但文件已落盘时，本地日志会显示临时目录；后续重点是真实大文件/压缩包复制体验和托盘清理交互。
+- 优化 Windows 控制端远端文件托盘：桌面版文件剪贴板写入已升级为 1MB 原生分块并支持到 512MB，原生层已补总量保护、7 天旧临时目录清理、临时目录白名单和分块边界单测；系统剪贴板写入失败但文件已落盘时，本地日志会显示临时目录，桌面版可一键打开；后续重点是真实大文件/压缩包复制体验、重试写入和托盘清理交互。
 - Windows 被控端 FFmpeg gdigrab 过渡层普通启动已可协商 60Hz，本机 720p/60Hz 观察约 56.9 FPS；下一步把该采集层升级为 Windows Graphics Capture 和正式编码管线，进一步提升帧率、延迟、带宽和资源占用表现。
 - Mac 控制 Windows 真机联调前，优先在 Windows 桌面版左侧“本机被控”面板运行体检、预览防火墙命令，并用隐藏密码启动 Windows host；面板默认输入模式是“安全日志”，需要真实反控时再手动切到“真实控制”。命令行备用流程仍是先运行 `node scripts/windows/check-windows-host-readiness.mjs` 做一键体检；需要短时验证真实视频/系统声音时加 `--probeVideo --probeAudio`。正式让 Mac 连入时也可用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-windows-host.ps1 -PromptPassword -RequirePassword` 启动 Windows host，它会列出 Mac 端可填的局域网地址并自动做只读防火墙/端口检查；需要系统声音时再加 `-Wasapi`。脚本默认只读，不会自动改系统防火墙；需要预览放行命令时加 `-DryRunFirewallRule`，确认可信局域网且以管理员 PowerShell 运行时才加 `-AddFirewallRule`。
 - Windows 被控端输入注入已升级为常驻 C# SendInput helper；可用 `node scripts/windows/measure-windows-input-helper.mjs` 安全干跑量化 cold/warm/p95 延迟；后续真实 `system` 模式仍需有人看屏幕时用 `test-windows-host.ps1 -InputEvents -InputMode system` 验收手感和安全边界。

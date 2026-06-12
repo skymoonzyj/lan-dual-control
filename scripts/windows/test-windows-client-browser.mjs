@@ -396,12 +396,17 @@ async function verifyDesktopOnlyHostPanel(session) {
 async function verifyFileClipboardRecoveryText(session) {
   const result = await evaluate(
     session,
-    `(() => {
+    `(async () => {
       if (
         typeof fileClipboardRecoveryText !== "function" ||
-        typeof fileClipboardLocalDetail !== "function"
+        typeof fileClipboardLocalDetail !== "function" ||
+        typeof renderReceivedFiles !== "function" ||
+        typeof openReceivedFilesTempPath !== "function"
       ) {
         return { ok: false, reason: "missing file clipboard recovery helpers" };
+      }
+      if (typeof state !== "object" || typeof elements !== "object") {
+        return { ok: false, reason: "missing app state" };
       }
 
       const tempResult = {
@@ -419,17 +424,66 @@ async function verifyFileClipboardRecoveryText(session) {
       const recovery = fileClipboardRecoveryText(tempResult);
       const detail = fileClipboardLocalDetail(tempResult, "fallback");
       const memoryDetail = fileClipboardLocalDetail(memoryResult, "fallback");
+      const openButton = document.querySelector("#openReceivedFilesTempButton");
 
-      return {
-        ok:
-          recovery === "临时目录：C:/Temp/lan-dual-control/clip-1" &&
-          detail.includes("系统文件剪贴板写入失败") &&
-          detail.includes("临时目录：C:/Temp/lan-dual-control/clip-1") &&
-          memoryDetail === "浏览器预览版只能保留内存托盘",
-        recovery,
-        detail,
-        memoryDetail,
-      };
+      const originalTauri = window.__TAURI__;
+      const originalFiles = state.receivedClipboardFiles;
+      const originalTempPath = state.receivedClipboardTempPath;
+      const calls = [];
+      try {
+        state.receivedClipboardFiles = [
+          {
+            name: "demo.zip",
+            size: 3,
+            mimeType: "application/zip",
+            blob: new Blob(["zip"]),
+            objectUrl: "",
+          },
+        ];
+        state.receivedClipboardTempPath = tempResult.rootDir;
+        window.__TAURI__ = {
+          core: {
+            invoke: async (command, payload) => {
+              calls.push({ command, payload });
+              return true;
+            },
+          },
+        };
+        renderReceivedFiles();
+        const enabledAfterTempPath = openButton && !openButton.disabled;
+        await openReceivedFilesTempPath();
+        state.receivedClipboardTempPath = "";
+        renderReceivedFiles();
+        const disabledWithoutTempPath = openButton?.disabled === true;
+
+        return {
+          ok:
+            recovery === "临时目录：C:/Temp/lan-dual-control/clip-1" &&
+            detail.includes("系统文件剪贴板写入失败") &&
+            detail.includes("临时目录：C:/Temp/lan-dual-control/clip-1") &&
+            memoryDetail === "浏览器预览版只能保留内存托盘" &&
+            enabledAfterTempPath &&
+            disabledWithoutTempPath &&
+            calls.length === 1 &&
+            calls[0].command === "open_clipboard_temp_path" &&
+            calls[0].payload?.path === tempResult.rootDir,
+          recovery,
+          detail,
+          memoryDetail,
+          enabledAfterTempPath,
+          disabledWithoutTempPath,
+          calls,
+        };
+      } finally {
+        if (typeof originalTauri === "undefined") {
+          delete window.__TAURI__;
+        } else {
+          window.__TAURI__ = originalTauri;
+        }
+        state.receivedClipboardFiles = originalFiles;
+        state.receivedClipboardTempPath = originalTempPath;
+        renderReceivedFiles();
+      }
     })()`,
   );
   if (!result?.ok) {
