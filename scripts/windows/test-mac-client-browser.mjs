@@ -727,6 +727,69 @@ function matchesExpectedAuthFailure(snapshot, args) {
   return true;
 }
 
+async function verifyMacClientConnectCancel({ args, session }) {
+  await evaluate(
+    session,
+    `(() => {
+      window.__lanDualSentMessages = [];
+      window.__lanDualReceivedMessages = [];
+      return true;
+    })()`,
+  );
+  await clickElement(session, "#connectButton");
+  await waitFor(
+    async () => {
+      const value = await evaluate(session, buildSnapshotExpression());
+      return value.connection === "连接中" && value.connectButtonDisabled && !value.disconnectButtonDisabled
+        ? value
+        : null;
+    },
+    args.timeoutMs,
+    "Mac client cancellable connecting state",
+  );
+  await clickElement(session, "#disconnectButton");
+  const canceledSnapshot = await waitFor(
+    async () => {
+      const value = await evaluate(session, buildSnapshotExpression());
+      const buttonsReset = !value.connectButtonDisabled && value.disconnectButtonDisabled;
+      const surfaceCleared = value.video === "无画面" && !value.imageVisible && !value.imageHasSource;
+      return value.connection === "未连接" && buttonsReset && surfaceCleared && value.remote !== "发现中"
+        ? value
+        : null;
+    },
+    args.timeoutMs,
+    "Mac client connecting cancel state",
+  );
+  const discoveryDelayMs = Number(await evaluate(session, "Number(window.__lanDualDiscoveryDelayMs || 0)"));
+  await delay(Math.max(500, discoveryDelayMs + 250));
+  const postCancelSnapshot = await evaluate(session, buildSnapshotExpression());
+  const messages = await evaluate(
+    session,
+    `(() => ({
+      sent: (window.__lanDualSentMessages || []).map((message) => message.type || "raw"),
+      received: (window.__lanDualReceivedMessages || []).map((message) => message.type || "raw"),
+    }))()`,
+  );
+  if (
+    postCancelSnapshot.connection !== "未连接" ||
+    postCancelSnapshot.connectButtonDisabled ||
+    !postCancelSnapshot.disconnectButtonDisabled ||
+    messages.sent.length > 0 ||
+    messages.received.length > 0
+  ) {
+    throw new Error(`Mac client connect cancel leaked connection: ${JSON.stringify({ postCancelSnapshot, messages })}`);
+  }
+  print("OK", `Connect cancel: ${canceledSnapshot.connection} · no WebSocket messages`);
+  await evaluate(
+    session,
+    `(() => {
+      window.__lanDualSentMessages = [];
+      window.__lanDualReceivedMessages = [];
+      return true;
+    })()`,
+  );
+}
+
 async function run() {
   const args = parseArgs(process.argv);
   const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -827,6 +890,7 @@ async function run() {
       })()`,
     );
     let lastSnapshot = null;
+    await verifyMacClientConnectCancel({ args, session });
     const connectStartedAt = Date.now();
     await evaluate(
       session,

@@ -75,6 +75,8 @@ const state = {
   fileTransfers: new Map(),
   closeStatusOverride: "",
   manualDisconnect: false,
+  connectAttemptId: 0,
+  discoveryAbortController: null,
   reconnectAttempts: 0,
   reconnectTimer: null,
   reconnectStableTimer: null,
@@ -219,6 +221,28 @@ function closeSocketSilently() {
   if (socket && socket.readyState !== WebSocket.CLOSED) {
     socket.close();
   }
+}
+
+function cancelPendingDiscovery() {
+  if (state.discoveryAbortController) {
+    state.discoveryAbortController.abort();
+    state.discoveryAbortController = null;
+  }
+}
+
+function beginConnectAttempt() {
+  cancelPendingDiscovery();
+  state.connectAttemptId += 1;
+  return state.connectAttemptId;
+}
+
+function cancelConnectAttempt() {
+  state.connectAttemptId += 1;
+  cancelPendingDiscovery();
+}
+
+function isConnectAttemptActive(attemptId) {
+  return state.connectAttemptId === attemptId && !state.manualDisconnect;
 }
 
 function targetBaseUrl() {
@@ -452,11 +476,11 @@ function markCustomVideoSettings() {
   sendDisplaySettings();
 }
 
-async function discover() {
+async function discover({ signal } = {}) {
   const url = `${targetBaseUrl()}/discovery`;
   elements.remoteStatus.textContent = "发现中";
   try {
-    const response = await fetch(url, { cache: "no-store" });
+    const response = await fetch(url, { cache: "no-store", signal });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -465,6 +489,9 @@ async function discover() {
     logEvent("发现成功", `${payload.host || elements.hostInput.value}:${payload.port || elements.portInput.value}`);
     return payload;
   } catch (error) {
+    if (signal?.aborted || error?.name === "AbortError") {
+      throw error;
+    }
     elements.remoteStatus.textContent = "发现失败";
     logEvent("发现失败", error.message);
     throw error;
@@ -472,6 +499,7 @@ async function discover() {
 }
 
 async function connect({ reconnect = false } = {}) {
+  const attemptId = beginConnectAttempt();
   if (!reconnect) {
     state.manualDisconnect = false;
     state.reconnectAttempts = 0;
@@ -489,10 +517,19 @@ async function connect({ reconnect = false } = {}) {
   elements.disconnectButton.disabled = false;
   resetVideoSurface("等待视频");
   primeAudioPlayback();
+  const discoveryAbortController = new AbortController();
+  state.discoveryAbortController = discoveryAbortController;
   try {
-    await discover();
+    await discover({ signal: discoveryAbortController.signal });
   } catch {
     // Discovery is helpful but not mandatory for direct WebSocket testing.
+  } finally {
+    if (state.discoveryAbortController === discoveryAbortController) {
+      state.discoveryAbortController = null;
+    }
+  }
+  if (!isConnectAttemptActive(attemptId)) {
+    return;
   }
 
   const endpoint = targetWsUrl();
@@ -570,6 +607,7 @@ function scheduleReconnect(reason) {
 }
 
 function disconnect() {
+  cancelConnectAttempt();
   state.manualDisconnect = true;
   clearReconnectTimers();
   state.closeStatusOverride = "";
@@ -579,6 +617,9 @@ function disconnect() {
   resetAudioPlayback();
   resetSessionDiagnostics({ resetReconnects: true });
   resetVideoSurface();
+  if (elements.remoteStatus.textContent === "发现中") {
+    elements.remoteStatus.textContent = "等待发现";
+  }
   setConnected(false);
   renderSessionDiagnostics();
 }
