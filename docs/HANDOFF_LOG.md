@@ -21,6 +21,36 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：给 Windows host 视频观察脚本增加临时端口冲突防护。
+完成内容：
+- `scripts/windows/observe-windows-host-video.mjs` 在临时启动 Windows host 前会先检查目标端口能否绑定。
+- 默认端口被占用时，脚本会自动申请一个临时空闲端口并改用该端口启动/观察。
+- `--useExisting` 模式保持原行为，用于连接已经运行的 Windows host。
+- Windows host README 已记录端口行为。
+修改文件：
+- `scripts/windows/observe-windows-host-video.mjs`
+- `apps/windows-host/README.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check scripts/windows/observe-windows-host-video.mjs`
+- `git diff --check`
+- `node scripts/windows/observe-windows-host-video.mjs --durationMs 1500 --minFrames 8 --minFps 6`
+- 临时占用 `127.0.0.1:43772` 后运行观察脚本，确认输出 `Port 43772 is busy; using temporary port ...` 并完成视频观察。
+验证结果：
+- 默认观察路径通过。
+- 端口占用场景通过：脚本自动换到临时端口，完成 FFmpeg gdigrab 观察。
+遗留问题：
+- 其他旧脚本仍使用固定端口；如果未来也需要并行跑，可逐步加同样的端口防护。
+下一步建议：
+- 后续需要并行跑多个本机自检时，优先使用已带端口防护的观察脚本，其他脚本串行运行。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：优化 Windows host 视频发送调度，让 FFmpeg MJPEG 更接近协商帧率。
 完成内容：
 - 将 Windows host 视频发送循环从固定 `setInterval` 改为上一帧完成后的自调度 `setTimeout`。

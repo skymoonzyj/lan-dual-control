@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -141,6 +142,46 @@ function startLocalWindowsHost(args) {
   }
 
   return child;
+}
+
+function canBindPort(host, port) {
+  return new Promise((resolveBind) => {
+    const server = createServer();
+    server.once("error", () => {
+      resolveBind(false);
+    });
+    server.once("listening", () => {
+      server.close(() => resolveBind(true));
+    });
+    server.listen(port, host);
+  });
+}
+
+function reserveEphemeralPort(host) {
+  return new Promise((resolvePort, rejectPort) => {
+    const server = createServer();
+    server.once("error", rejectPort);
+    server.once("listening", () => {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      server.close(() => resolvePort(port));
+    });
+    server.listen(0, host);
+  });
+}
+
+async function prepareLocalPort(args) {
+  if (args.useExisting) {
+    return;
+  }
+
+  if (await canBindPort(args.host, args.port)) {
+    return;
+  }
+
+  const fallbackPort = await reserveEphemeralPort(args.host);
+  print("INFO", `Port ${args.port} is busy; using temporary port ${fallbackPort}`, args);
+  args.port = fallbackPort;
 }
 
 async function closeSocket(socket) {
@@ -365,6 +406,8 @@ async function main() {
   let socket = null;
 
   try {
+    await prepareLocalPort(args);
+
     if (!args.useExisting) {
       child = startLocalWindowsHost(args);
       print("OK", `Started local Windows host PID ${child.pid} on ${args.host}:${args.port}`, args);

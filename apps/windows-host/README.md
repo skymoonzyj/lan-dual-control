@@ -110,6 +110,8 @@ node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs
 ```
 
+默认临时使用 `127.0.0.1:43772`；如果该端口已被其他自检占用，脚本会自动换一个临时空闲端口。需要连接已运行的 Windows host 时再加 `--useExisting --host 127.0.0.1 --port 43770`。
+
 强制对照旧系统截图兜底路径：
 
 ```powershell

@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/observe-windows-host-video.mjs`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 10:24 | Windows host 视频观察脚本增加临时端口冲突防护；默认端口被占用时自动换空闲端口，已用占位服务验证通过。 |
 | Windows Codex | `apps/windows-host/src/windows-host-service.mjs`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/04-task-board.md`、`docs/NEXT_ACTIONS.md` | 2026-06-12 10:19 | 优化 Windows host 视频发送调度；FFmpeg gdigrab 观察从约 23.99 FPS 提升到约 29.39 FPS，页面级自检、System.Drawing 兜底、一键自检和认证回归通过。 |
 | Windows Codex | `scripts/windows/observe-windows-host-video.mjs`、`apps/windows-host/README.md`、`README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 05:06 | 新增 Windows host 视频持续帧观察脚本；本机 FFmpeg gdigrab 路径 5 秒 120 帧、约 23.99 FPS，System.Drawing 兜底约 2.04 FPS。 |
 | Windows Codex | `apps/windows-host/src/windows-screen-capture.mjs`、`apps/windows-host/src/windows-host-service.mjs`、`apps/windows-host/src/windows-clipboard-bridge.mjs`、`scripts/windows/test-windows-host.ps1`、`scripts/windows/test-mac-client-browser.mjs`、`README.md`、`apps/windows-host/README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 04:56 | Windows host 新增 FFmpeg gdigrab MJPEG 持续采集管线；自检验证真实 `windows-ffmpeg-gdigrab-mjpeg` 首帧、文本剪贴板、文件剪贴板、Mac client 页面级连接和认证重试策略均通过。 |
