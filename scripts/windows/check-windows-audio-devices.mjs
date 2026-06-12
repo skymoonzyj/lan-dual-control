@@ -18,6 +18,29 @@ const defaults = {
   json: false,
 };
 
+function printUsage() {
+  console.log(`Usage:
+  node scripts/windows/check-windows-audio-devices.mjs [options]
+
+Options:
+  --ffmpeg <path>             FFmpeg command/path (default: ${defaultWindowsFfmpeg} on Windows when present, else ffmpeg)
+  --helper <path>             WASAPI helper PowerShell script (default: scripts/windows/wasapi-loopback-capture.ps1)
+  --device <name>             DirectShow audio device name to probe
+  --sampleRate <hz>           PCM sample rate (default: ${defaults.sampleRate})
+  --channels <n>              PCM channels (default: ${defaults.channels})
+  --durationMs <ms>           Probe duration (default: ${defaults.durationMs})
+  --probe                     Capture a short PCM sample; default only lists devices and WASAPI format
+  --wasapi                    Use WASAPI loopback for --probe instead of DirectShow
+  --json                      Print JSON result
+  --help, -h                  Show this help without listing devices or capturing audio
+
+Examples:
+  node scripts/windows/check-windows-audio-devices.mjs
+  node scripts/windows/check-windows-audio-devices.mjs --probe --wasapi
+  node scripts/windows/check-windows-audio-devices.mjs --probe --device "Stereo Mix"
+`);
+}
+
 function parseArgs(argv) {
   const args = { ...defaults };
   for (let index = 2; index < argv.length; index += 1) {
@@ -310,6 +333,11 @@ function summarizeEnv(args) {
 }
 
 async function run() {
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    printUsage();
+    return;
+  }
+
   const args = parseArgs(process.argv);
   const env = summarizeEnv(args);
   const list = listDshowDevices(args);

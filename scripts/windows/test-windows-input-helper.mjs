@@ -1,5 +1,22 @@
 import { WindowsInputInjector } from "../../apps/windows-host/src/windows-input-injector.mjs";
 
+function printUsage() {
+  console.log(`Usage:
+  node scripts/windows/test-windows-input-helper.mjs [options]
+
+Options:
+  --help, -h                  Show this help without creating an input injector
+
+Description:
+  Runs a safe Windows input-helper regression. It verifies log mode, unsupported-key
+  rejection, and the persistent SendInput helper dry-run path without sending real input.
+
+Examples:
+  node scripts/windows/test-windows-input-helper.mjs
+  node scripts/windows/test-windows-input-helper.mjs --help
+`);
+}
+
 function print(kind, text) {
   console.log(`[${kind}] ${text}`);
 }
@@ -20,6 +37,11 @@ const logger = {
 };
 
 async function run() {
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    printUsage();
+    return;
+  }
+
   const logInjector = new WindowsInputInjector({ logger, mode: "log" });
   const logResult = await logInjector.inject({
     type: "input_event",

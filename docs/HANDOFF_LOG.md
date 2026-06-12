@@ -19,6 +19,50 @@
 
 ## 2026-06-13 Windows Codex
 
+日期：2026-06-13 02:19
+开发端：Windows Codex
+本轮目标：补齐 Windows 常用检查/回归脚本的 `--help/-h` 纯帮助入口，避免查参数时误触发探测或临时服务。
+完成内容：
+- `check-windows-audio-devices.mjs` 新增帮助文本，`--help/-h` 时不会列设备、查询 WASAPI 或采集声音。
+- `check-windows-firewall.mjs` 新增帮助文本，`--help/-h` 时不会探测端口、查询防火墙或生成规则动作。
+- `test-auth-retry-policy.mjs` 新增帮助文本，`--help/-h` 时不会启动临时 Windows host 或假 Mac 服务。
+- `test-coordinate-mapping.mjs` 主体包成 `run()`，`--help/-h` 时只打印说明，不运行坐标断言。
+- `test-windows-input-helper.mjs` 新增帮助文本，`--help/-h` 时不会创建 input injector 或启动 helper。
+- Windows host/client README、当前状态和任务板已同步这些安全帮助入口。
+修改文件：
+- `scripts/windows/check-windows-audio-devices.mjs`
+- `scripts/windows/check-windows-firewall.mjs`
+- `scripts/windows/test-auth-retry-policy.mjs`
+- `scripts/windows/test-coordinate-mapping.mjs`
+- `scripts/windows/test-windows-input-helper.mjs`
+- `apps/windows-host/README.md`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check` 五个改动脚本。
+- 五个脚本分别运行 `--help` 和 `-h`。
+- `node scripts/windows/test-coordinate-mapping.mjs`
+- `node scripts/windows/test-windows-input-helper.mjs`
+- `node scripts/windows/check-windows-firewall.mjs --skipFirewall --json`
+- `node scripts/windows/check-windows-audio-devices.mjs --json`
+- `node scripts/windows/test-auth-retry-policy.mjs`
+验证结果：
+- 语法检查全部通过。
+- `--help/-h` 全部 exit code 0，且只打印帮助文本。
+- 坐标映射回归通过；input helper 安全干跑通过且没有发送真实输入。
+- 防火墙只读 JSON 路径通过；当前 43770 未监听只产生预期 warning。
+- 音频设备 JSON 路径通过，列出 4 个音频设备，WASAPI 格式检查通过。
+- 认证重试策略回归通过，Windows host 和假 Mac 都保持 3 次错误密码断开、新连接正确密码通过。
+遗留问题：无。
+下一步建议：如果后续新增 Windows 脚本，默认也按这个模式提供 `--help/-h`，避免查参数时误启动服务或系统动作。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-13 Windows Codex
+
 日期：2026-06-13 02:09
 开发端：Windows Codex
 本轮目标：把 Windows 控制端 readiness 输出头显示固化进页面自检。

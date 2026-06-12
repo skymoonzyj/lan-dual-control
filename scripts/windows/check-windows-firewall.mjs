@@ -17,6 +17,32 @@ const defaults = {
   ruleProfile: "Private",
 };
 
+function printUsage() {
+  console.log(`Usage:
+  node scripts/windows/check-windows-firewall.mjs [options]
+
+Options:
+  --host <host>              Windows host bind address to evaluate (default: ${defaults.host})
+  --port <port>              Windows host TCP port (default: ${defaults.port})
+  --timeoutMs <ms>           TCP probe timeout, 100-5000 (default: ${defaults.timeoutMs})
+  --ruleName <name>          Firewall display-name prefix (default: ${defaults.ruleName})
+  --ruleProfile <profile>    Any | Domain | Private | Public (default: ${defaults.ruleProfile})
+  --requireOpen              Fail when no TCP probe can reach the port
+  --requireRule              Fail when no matching inbound allow rule exists
+  --dryRunRule               Print the rule command that would be added
+  --addRule                  Add an inbound allow rule when missing; requires admin PowerShell
+  --skipFirewall             Skip Windows firewall/profile queries
+  --strict                   Treat warnings as failures
+  --json                     Print JSON result
+  --help, -h                 Show this help without probing ports or querying firewall state
+
+Examples:
+  node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770
+  node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --requireOpen
+  node scripts/windows/check-windows-firewall.mjs --port 43770 --dryRunRule
+`);
+}
+
 function parseArgs(argv) {
   const args = { ...defaults };
   for (let index = 2; index < argv.length; index += 1) {
@@ -455,6 +481,11 @@ function analyze({ args, lanAddresses, probeResults, networkState }) {
 }
 
 async function main() {
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    printUsage();
+    return;
+  }
+
   const args = parseArgs(process.argv);
   const lanAddresses = uniqueByAddress(getLanAddresses());
   const probeTargets = getProbeTargets(args, lanAddresses);

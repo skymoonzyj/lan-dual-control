@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/check-windows-audio-devices.mjs`, `scripts/windows/check-windows-firewall.mjs`, `scripts/windows/test-auth-retry-policy.mjs`, `scripts/windows/test-coordinate-mapping.mjs`, `scripts/windows/test-windows-input-helper.mjs`, Windows host/client README, 交接 docs | 2026-06-13 02:19 | 五个 Windows 常用检查/回归脚本新增 `--help/-h` 纯帮助入口，查参数时不会误触发设备枚举/端口探测/临时服务/input helper/断言；帮助、语法和安全回归均通过。 |
 | Windows Codex | `scripts/windows/test-windows-client-browser.mjs`, 交接 docs | 2026-06-13 02:09 | diagnosticsOnly 固化 Windows client readiness 输出头断言，覆盖 current build、视频/音频 frame age 阈值和视频观察项。 |
 | Windows Codex | `apps/windows-client/app.js`, `apps/windows-client/README.md`, 交接 docs | 2026-06-13 02:04 | Windows 控制端本机被控体检输出顶部显示体检档位、当前 build、视频/音频帧新鲜度阈值；diagnosticsOnly 和临时浏览器评估通过。 |
 | Windows Codex | `apps/windows-desktop/README.md`, 交接 docs | 2026-06-13 01:55 | Windows 桌面 README 同步本机被控部署档会跑带帧新鲜度和 timestamp 单调性强校验的视频/音频短观察。 |

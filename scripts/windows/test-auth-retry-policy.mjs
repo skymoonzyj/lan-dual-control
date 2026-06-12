@@ -10,6 +10,26 @@ const defaults = {
   targets: "windows-host,mock-mac",
 };
 
+function printUsage() {
+  console.log(`Usage:
+  node scripts/windows/test-auth-retry-policy.mjs [options]
+
+Options:
+  --host <host>                Host to bind/connect for temporary services (default: ${defaults.host})
+  --windowsPort <port>         Temporary Windows host port (default: ${defaults.windowsPort})
+  --mockMacPort <port>         Temporary mock Mac host port (default: ${defaults.mockMacPort})
+  --password <password>        Test password (default: ${defaults.password})
+  --timeoutMs <ms>             Per-step timeout (default: ${defaults.timeoutMs})
+  --targets <list>             Comma list: windows-host,mock-mac (default: ${defaults.targets})
+  --help, -h                   Show this help without starting any temporary service
+
+Examples:
+  node scripts/windows/test-auth-retry-policy.mjs
+  node scripts/windows/test-auth-retry-policy.mjs --targets windows-host
+  node scripts/windows/test-auth-retry-policy.mjs --targets mock-mac --mockMacPort 43775
+`);
+}
+
 function parseArgs(argv) {
   const args = { ...defaults };
   for (let index = 2; index < argv.length; index += 1) {
@@ -211,6 +231,11 @@ async function runMockMac(args) {
 }
 
 async function run() {
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    printUsage();
+    return;
+  }
+
   const args = parseArgs(process.argv);
   const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 
