@@ -18,7 +18,7 @@
    - 处理真实 Mac 连接中的中文错误提示和重连体验。
 
 3. 继续 H.264 流式视频链路验收。
-   - Mac 真机已通过 `--requireH264` 首帧强校验，下一步由 Windows 控制端验证真实解码、延迟和回退体验。
+   - Mac 真机已通过 `--requireH264` 首帧强校验，Windows 控制端页面级 `--requireH264` 也已验证真实 WebCodecs 解码；下一步继续观察延迟、长时间稳定性和 JPEG 回退体验。
    - JPEG 链路继续保留为兜底和权限调试。
    - Windows 控制端继续显示实收 FPS、协商帧率和请求帧率。
 
@@ -41,6 +41,7 @@
 - 继续验证 Windows 被控端 WASAPI loopback：重点看静音、系统音量变化、长时间运行、Mac client 播放体验和无系统声音时的提示；可用 `node scripts/windows/observe-windows-host-audio.mjs --durationMs 30000 --minFrames 1200 --minFps 40 --maxGapMs 1000` 做持续帧观察。
 - 优化 Windows 控制端文件托盘和错误提示。
 - Windows host 或假 Mac 认证相关改动后运行 `node scripts/windows/test-auth-retry-policy.mjs`，确认错误密码剩余次数、第三次断开和新连接正确认证未退化。
+- Windows 控制端视频相关改动后，用真实 Mac host 运行 `node scripts/windows/test-windows-client-browser.mjs --host <Mac IP> --port 43770 --password <密码> --requireH264`，确认 H.264/WebCodecs 画布解码未退回 JPEG。
 - Windows host 相关改动后运行 `scripts/windows/test-windows-host.ps1`，确认真实视频首帧、文本剪贴板和文件剪贴板接收未退化；涉及音频时可加 `-AudioMode wasapi -RequireAudio`；涉及 Mac 反控链路时再运行 `node scripts/windows/test-mac-client-browser.mjs`，确认 Mac client 页面可显示 Windows 画面、收到 `input_ack`，并完成 `Command+C` 到 `Ctrl+C` 映射、最近连接保存/回填/清空、文本/本机剪贴板监听/文件剪贴板发送；需要验收真实 PCM 播放时，本机临时 host 可加 `--requireAudio`，已运行 host 可加 `--useExistingHost --enableAudio --expectAudioPayload --expectAudioPlayback`；认证相关改动可加跑 `node scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3`。
 - Windows host 视频性能相关改动后运行 `node scripts/windows/observe-windows-host-video.mjs`，确认实际 FPS、最大帧间隔和采集管线符合预期。
 - 继续维护本机假 Mac 服务，用于快速回归和失败场景模拟。

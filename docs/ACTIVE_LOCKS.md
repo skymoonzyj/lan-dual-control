@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/test-windows-client-browser.mjs`、`apps/windows-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/09-streaming-video-plan.md` | 2026-06-12 13:34 | Windows 控制端页面级自检新增 `--requireH264` 强校验；修正 Edge 自动化启动参数，避免禁用 GPU/合成导致 `avc1.420029:annexb` 被误判不支持。真实 Mac host H.264、H.264+PCM 注入和普通真实 Mac 连接路径均通过。 |
 | Windows Codex | `scripts/windows/test-mac-client-browser.mjs`、`apps/mac-client/README.md`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 13:20 | 基于 Mac 的通用音频自检参数补 `--requireAudio`；临时启用 Windows WASAPI loopback，真实浏览器点击打开声音并断言收到/播放 `pcm-f32le-base64`。默认自检、真实音频自检和认证失败路径均通过。 |
 | Mac Codex | `scripts/mac/observe-mac-video.mjs`、`apps/mac-host/README.md`、`README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 13:20 | 新增 Mac host 视频持续帧观察脚本；真实 H.264 3 秒 89 帧约 29.2 FPS，JPEG 兜底 2 秒 37 帧约 17.9 FPS。 |
 | Windows Codex | `apps/windows-host/src/windows-audio-capture.mjs`、`apps/windows-host/src/windows-host-service.mjs`、`scripts/windows/observe-windows-host-audio.mjs`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md` | 2026-06-12 13:12 | 音频观察脚本新增预热/稳态统计；Windows host WASAPI PCM 队列和发送轮询优化后，6 秒观察 283 帧，稳态约 49.9 FPS，最大间隔 32 ms。 |

@@ -21,6 +21,45 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：把 Windows 控制端真实 Mac H.264/WebCodecs 页面级自检做成可靠强校验。
+完成内容：
+- `scripts/windows/test-windows-client-browser.mjs` 新增 `--requireH264`，要求远端画面必须走 canvas/WebCodecs H.264 解码，且诊断中不能出现 JPEG 回退。
+- 调整自动化浏览器启动参数，移除会让 Edge 判定 `avc1.420029:annexb` 不支持的 GPU/合成禁用参数；headless 模式保留视频解码所需的 GPU/合成能力。
+- 保留 `--disable-gpu-sandbox` 和局域网 WebSocket 测试参数，避免扩大权限面。
+- README、当前状态、下一步和 H.264 计划文档已同步，明确视频链路改动后应加跑 `--requireH264`。
+修改文件：
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/09-streaming-video-plan.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `git diff --check`
+- `node scripts/windows/test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password <本机测试密码> --timeoutMs 45000 --requireH264`
+- `node scripts/windows/test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password <本机测试密码> --timeoutMs 45000 --requireH264 --injectPcmAudio`
+- `node scripts/windows/test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password <本机测试密码> --timeoutMs 45000`
+验证结果：
+- 真实 Mac host 返回 `h264 / annexb-base64 / 真实屏幕`，Windows 控制端 canvas 为 `1920x1080`，image 回退未启用。
+- `--requireH264` 输出 canvas `1920x1080`，解码器为 `avc1.420029:annexb`，收到约 43.7 FPS，协商 30 Hz。
+- `--requireH264 --injectPcmAudio` 同时通过，页面声音状态出现 `播放 32`，H.264 画面仍保持 canvas 解码；连接初期若先收到非关键帧，会出现一次可恢复的“等待关键帧”提示。
+- 普通真实 Mac 连接路径也通过，输出 `H.264 已解码 #6`，说明不强制 H.264 的默认验收没有被新开关影响。
+遗留问题：
+- 当前 Mac host 协商仍是 30 Hz，Windows 请求 60 Hz 时实收约 24-26 FPS；后续要继续排查 Mac host 采集/编码节奏，而不是 Windows 解码器能力。
+- 直接运行 `node scripts/windows/test-windows-client-browser.mjs` 会默认连本机 `127.0.0.1:43770`，本机没有运行假 Mac/真实 host 时会超时；真实联调用 `--host` 指向 Mac。
+下一步建议：
+- 后续任何 Windows 控制端视频解码、浏览器启动参数、Mac host H.264 输出改动，都把 `--requireH264` 加入回归。
+- Mac 端可继续用 `scripts/mac/observe-mac-video.mjs` 观察 H.264 帧率和最大间隔；Windows 端再配合页面级 `--requireH264` 做端到端验收。
+是否改了协议：否。
+是否需要另一端配合：本轮不需要；已用正在运行的真实 Mac host 完成端到端验收。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：基于 Mac 的通用音频自检参数，补 Windows 本机 WASAPI 真实 PCM 强校验入口。
 完成内容：
 - 在 `scripts/windows/test-mac-client-browser.mjs` 增加 `--requireAudio` 便捷参数：等价于临时启动 WASAPI host，并要求 PCM payload 和页面播放计数。

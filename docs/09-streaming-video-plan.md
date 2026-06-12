@@ -116,6 +116,7 @@ H.264 帧第一版仍沿用 `video_frame`：
 - Mac 端已新增 `SCStream` + `VTCompressionSession` 的 H.264 输出入口。
 - Mac 真机已通过本机强校验：`probe-mac-host.mjs --requireH264 --expectInputMode log` 返回 `h264` / `annexb-base64` / `screencapturekit-h264`。
 - Windows 端已新增 WebCodecs `VideoDecoder` 渲染入口、显式 Annex B/默认配置探测、解码状态诊断和连续失败后的 JPEG 兜底请求。
+- Windows 端页面级自检新增 `--requireH264`，并保留浏览器 GPU/视频合成能力；真实 Mac 192.168.31.122:43770 已验证 `avc1.420029:annexb` 解码到 1920×1080 canvas。此前自检脚本的 `--disable-gpu-compositing` 会让 Edge WebCodecs 报 unsupported，已移除。
 - 过渡期仍通过 JSON `video_frame.payload` 传输 base64，后续再迁移到二进制 WebSocket 帧。
 
 ## Windows 端任务

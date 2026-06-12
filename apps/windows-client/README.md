@@ -58,13 +58,16 @@ E:\codex\lan-dual-control\apps\windows-client\index.html
 node E:\codex\lan-dual-control\scripts\windows\test-coordinate-mapping.mjs
 ```
 
-真实 Mac 页面级自检可自动启动本地控制端页面、打开 Edge、连接 Mac，并确认诊断条和视频画面；加 `--injectPcmAudio` 可额外注入一帧 planar PCM，验证控制端音频播放入口：
+真实 Mac 页面级自检可自动启动本地控制端页面、打开 Edge、连接 Mac，并确认诊断条和视频画面；加 `--requireH264` 可强制要求真实 H.264/WebCodecs 画布解码成功，加 `--injectPcmAudio` 可额外注入一帧 planar PCM，验证控制端音频播放入口：
 脚本会先回归画面内悬浮控制中心，确认悬浮层、摘要、画质、缩放、声音、音量、全屏和窗口按钮能同步到原工具栏与页面布局。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password
+node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password --requireH264
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password --injectPcmAudio
 ```
+
+该脚本会保留浏览器 GPU/视频合成能力，避免自检环境把 WebCodecs H.264 误判为不支持；真实 Mac 192.168.31.122:43770 已验证 `avc1.420029:annexb` 解码到 1920×1080 canvas。
 
 该脚本也可在 macOS 开发机上用 Chrome/Edge 跑；找不到浏览器时可设置 `BROWSER_PATH`、`MSEDGE_PATH` 或 `CHROME_PATH`。
 

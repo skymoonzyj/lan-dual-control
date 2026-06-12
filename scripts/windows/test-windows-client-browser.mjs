@@ -13,6 +13,7 @@ const defaults = {
   debugPort: 9337,
   timeoutMs: 30000,
   requireVideoSurface: true,
+  requireH264: false,
   injectPcmAudio: false,
   headless: true,
 };
@@ -31,6 +32,11 @@ function parseArgs(argv) {
     }
     if (key === "noRequireVideoSurface") {
       args.requireVideoSurface = false;
+      continue;
+    }
+    if (key === "requireH264") {
+      args.requireH264 = true;
+      args.requireVideoSurface = true;
       continue;
     }
     if (key === "injectPcmAudio") {
@@ -347,14 +353,12 @@ async function run() {
     "--disable-background-networking",
     "--disable-extensions",
     "--autoplay-policy=no-user-gesture-required",
-    "--disable-accelerated-2d-canvas",
-    "--disable-gpu-compositing",
     "--disable-gpu-sandbox",
     "--disable-features=BlockInsecurePrivateNetworkRequests,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults",
     "--window-size=1280,850",
   ];
   if (args.headless) {
-    edgeArgs.push("--headless=new", "--disable-gpu");
+    edgeArgs.push("--headless=new");
   }
   edgeArgs.push(clientUrl);
 
@@ -442,7 +446,19 @@ async function run() {
         const hasVideoSurface =
           (value.canvasVisible && value.canvasWidth > 0 && value.canvasHeight > 0) ||
           (value.imageVisible && value.imageHasSource);
-        if (value.status.includes("已连接") && (!args.requireVideoSurface || hasVideoSurface)) {
+        const diagnosticsLower = value.diagnostics.toLowerCase();
+        const remoteLower = value.remote.toLowerCase();
+        const hasH264Surface =
+          value.canvasVisible &&
+          value.canvasWidth > 0 &&
+          value.canvasHeight > 0 &&
+          (diagnosticsLower.includes("h264") || remoteLower.includes("h.264")) &&
+          !value.diagnostics.includes("JPEG 回退");
+        if (
+          value.status.includes("已连接") &&
+          (!args.requireVideoSurface || hasVideoSurface) &&
+          (!args.requireH264 || hasH264Surface)
+        ) {
           return value;
         }
         return null;

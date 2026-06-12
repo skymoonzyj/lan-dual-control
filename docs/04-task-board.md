@@ -120,6 +120,7 @@ Windows 端：
 - Mac 端已兼容 Windows 端现有 `kind/action/remoteX/remoteY` 输入事件字段。
 - Windows 控制端已新增 Edge 页面级自检脚本 `scripts/windows/test-windows-client-browser.mjs`，可自动打开控制端、连接真实 Mac、读取诊断条并确认视频 surface；当前 Edge headless 不支持 `avc1.420029` 时已验证会自动请求 JPEG 兜底并显示真实 Mac 画面。
 - Windows 控制端已接入真实 `pcm-f32le-base64` 音频播放，支持 planar/interleaved Float32 PCM 和音量滑块；页面级自检已验证真实 Mac 连接下音频播放计数递增。
+- Windows 控制端页面级 `--requireH264` 已在真实 Mac host 上验证 WebCodecs H.264 解码成功，`avc1.420029:annexb` 渲染到 1920×1080 canvas；脚本已移除会禁用 H.264 的浏览器 GPU/合成参数。
 - 真 Mac 后续继续做输入注入、真实音频长时间稳定性、低延迟稳定性和更完整的键盘/输入法兼容验证。
 - MSI/NSIS 安装包暂未开启，先保留桌面 exe 构建；安装包放到 M5 处理。
 
