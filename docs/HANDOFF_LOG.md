@@ -17,6 +17,37 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
+本轮目标：参考 UU 远程方式继续优化 Windows 控制端画面内悬浮控制中心。
+完成内容：
+- 将控制中心收起态改成更像远控软件的右上角悬浮入口，增加当前刷新率/码率摘要。
+- 展开菜单改为单列快捷控制项，保留显示屏、画质、窗口缩放、声音、音量、全屏、窗口和退出远控。
+- 控制中心悬浮层增加 `pointer-events` 隔离，减少覆盖画面时误挡非控制区域。
+- 页面级自检增加悬浮层和摘要断言，继续覆盖画质、缩放、声音、音量和全屏/窗口切换。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/styles.css`
+- `apps/windows-client/app.js`
+- `apps/windows-client/README.md`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `git diff --check`
+- 静态 UI 结构检查通过：确认 `floatingControlSummary`、悬浮层 pointer-events、摘要同步逻辑和页面级断言均存在。
+遗留问题：
+- 本机 Edge headless 自检在浏览器 GPU target 阶段崩溃；改用 Chrome 后仍卡在浏览器自动化启动阶段，未进入应用逻辑。后续可在非沙盒桌面会话或 Mac/Windows 真机浏览器环境再跑完整页面级自检。
+下一步建议：
+- 继续让 Windows 控制端连接真实 Mac host，观察 H.264/JPEG 回退、PCM 声音和悬浮控制中心在真实画面中的遮挡情况。
+- 后续可继续把控制中心扩展成更接近 UU 的分组菜单，例如“安全、更多、显示屏详情”，但不要复制对方素材。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；如果 Mac 端要改 `apps/windows-client` 或页面自检，请先在联络板预告。
+
 ## 2026-06-12 Mac Codex
 
 日期：2026-06-12

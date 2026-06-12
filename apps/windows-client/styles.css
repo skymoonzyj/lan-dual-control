@@ -644,66 +644,124 @@ button:disabled {
 
 .remote-control-center {
   position: absolute;
-  z-index: 3;
-  top: 14px;
-  right: 14px;
-  display: grid;
-  justify-items: end;
+  z-index: 4;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  max-width: min(430px, calc(100% - 24px));
+  flex-direction: column;
+  align-items: flex-end;
   gap: 8px;
+  pointer-events: none;
+}
+
+.remote-control-center > * {
+  pointer-events: auto;
 }
 
 .control-center-toggle {
   display: inline-flex;
-  min-height: 38px;
+  min-height: 42px;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(214, 220, 227, 0.82);
+  border: 1px solid rgba(226, 232, 240, 0.58);
   border-radius: 8px;
-  background: rgba(249, 250, 251, 0.94);
-  color: #1f2937;
-  box-shadow: 0 12px 30px rgba(8, 15, 24, 0.2);
-  padding: 0 12px;
+  background: rgba(17, 24, 39, 0.86);
+  color: #f8fafc;
+  box-shadow: 0 16px 38px rgba(8, 15, 24, 0.28);
+  padding: 6px 10px;
+  backdrop-filter: blur(14px);
 }
 
 .control-center-toggle:hover,
 .control-center-toggle.is-open {
-  border-color: rgba(20, 122, 108, 0.64);
-  background: #ffffff;
+  border-color: rgba(94, 234, 212, 0.72);
+  background: rgba(15, 23, 42, 0.94);
 }
 
-.control-center-toggle span {
-  color: var(--accent-strong);
+.control-center-icon {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(20, 184, 166, 0.18);
+  color: #99f6e4;
   font-size: 18px;
   line-height: 1;
 }
 
-.control-center-toggle strong {
+.control-center-copy {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.control-center-copy strong {
   font-size: 13px;
   line-height: 1;
 }
 
+.control-center-copy small {
+  color: rgba(226, 232, 240, 0.78);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.control-center-caret {
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 14px;
+  line-height: 1;
+  transition: transform 140ms ease;
+}
+
+.control-center-toggle.is-open .control-center-caret {
+  transform: rotate(180deg);
+}
+
 .control-center-panel {
-  width: min(360px, calc(100vw - 380px));
+  width: min(430px, calc(100vw - 52px));
+  max-height: min(640px, calc(100vh - 92px));
+  overflow: auto;
   border: 1px solid rgba(214, 220, 227, 0.88);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.97);
   box-shadow: 0 20px 55px rgba(8, 15, 24, 0.24);
   color: var(--text);
-  padding: 12px;
+  padding: 10px;
+  backdrop-filter: blur(14px);
 }
 
 .control-center-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 6px;
 }
 
 .control-center-grid label,
 .control-center-volume {
-  display: grid;
-  gap: 6px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.control-center-item {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border-radius: 7px;
+  padding: 8px;
+}
+
+.control-center-item:hover,
+.control-center-volume:hover {
+  background: rgba(241, 245, 249, 0.8);
+}
+
+.control-center-item > span,
+.control-center-volume > span {
+  color: #475569;
+  font-weight: 700;
 }
 
 .control-center-grid select {
@@ -718,9 +776,13 @@ button:disabled {
 }
 
 .control-center-volume {
+  display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  margin-top: 12px;
+  gap: 10px;
+  margin-top: 8px;
+  border-radius: 7px;
+  padding: 8px;
 }
 
 .control-center-volume input {
@@ -735,26 +797,29 @@ button:disabled {
 }
 
 .control-center-actions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 10px;
 }
 
-.control-center-actions button {
-  min-height: 34px;
+.control-center-action {
+  min-width: 72px;
+  min-height: 36px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fff;
   color: var(--text);
+  padding: 0 12px;
 }
 
-.control-center-actions button:hover {
+.control-center-action:hover {
   border-color: #aeb8c4;
   background: var(--panel-strong);
 }
 
-#floatingDisconnectButton {
+.control-center-action.danger {
   border-color: rgba(194, 65, 12, 0.38);
   color: var(--danger);
 }
@@ -956,6 +1021,36 @@ button:disabled {
   }
 
   .control-center-panel {
-    width: min(340px, calc(100vw - 340px));
+    width: min(390px, calc(100vw - 40px));
+  }
+}
+
+@media (max-width: 720px) {
+  .remote-control-center {
+    right: 8px;
+    top: 8px;
+    max-width: calc(100% - 16px);
+  }
+
+  .control-center-copy small {
+    display: none;
+  }
+
+  .control-center-panel {
+    width: calc(100vw - 28px);
+  }
+
+  .control-center-item,
+  .control-center-volume {
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
+
+  .control-center-actions {
+    justify-content: stretch;
+  }
+
+  .control-center-action {
+    flex: 1 1 0;
+    min-width: 0;
   }
 }

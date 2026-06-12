@@ -339,16 +339,20 @@
                   aria-controls="controlCenterPanel"
                   title="控制中心"
                 >
-                  <span aria-hidden="true">☷</span>
-                  <strong>控制中心</strong>
+                  <span class="control-center-icon" aria-hidden="true">☷</span>
+                  <span class="control-center-copy">
+                    <strong>控制中心</strong>
+                    <small id="floatingControlSummary">请求 60 Hz · 50 Mbps</small>
+                  </span>
+                  <span class="control-center-caret" aria-hidden="true">⌄</span>
                 </button>
                 <div id="controlCenterPanel" class="control-center-panel" hidden>
                   <div class="control-center-grid">
-                    <label>
+                    <label class="control-center-item">
                       <span>显示屏</span>
                       <select id="floatingDisplaySelect"></select>
                     </label>
-                    <label>
+                    <label class="control-center-item">
                       <span>画质</span>
                       <select id="floatingQualitySelect">
                         <option value="smooth">流畅</option>
@@ -357,7 +361,7 @@
                         <option value="custom">自定义</option>
                       </select>
                     </label>
-                    <label>
+                    <label class="control-center-item">
                       <span>窗口</span>
                       <select id="floatingScaleSelect">
                         <option value="fit">适应窗口</option>
@@ -365,7 +369,7 @@
                         <option value="stretch">拉伸填充</option>
                       </select>
                     </label>
-                    <label>
+                    <label class="control-center-item">
                       <span>声音</span>
                       <select id="floatingAudioSelect">
                         <option value="on">开启</option>
@@ -379,9 +383,9 @@
                     <output id="floatingAudioVolumeText">80%</output>
                   </label>
                   <div class="control-center-actions">
-                    <button id="floatingFullscreenButton" type="button">全屏</button>
-                    <button id="floatingWindowButton" type="button">窗口</button>
-                    <button id="floatingDisconnectButton" type="button">退出远控</button>
+                    <button id="floatingFullscreenButton" class="control-center-action" type="button">全屏</button>
+                    <button id="floatingWindowButton" class="control-center-action" type="button">窗口</button>
+                    <button id="floatingDisconnectButton" class="control-center-action danger" type="button">退出远控</button>
                   </div>
                 </div>
               </div>

@@ -52,6 +52,7 @@ const elements = {
   remoteControlCenter: document.querySelector("#remoteControlCenter"),
   controlCenterToggle: document.querySelector("#controlCenterToggle"),
   controlCenterPanel: document.querySelector("#controlCenterPanel"),
+  floatingControlSummary: document.querySelector("#floatingControlSummary"),
   floatingDisplaySelect: document.querySelector("#floatingDisplaySelect"),
   floatingQualitySelect: document.querySelector("#floatingQualitySelect"),
   floatingScaleSelect: document.querySelector("#floatingScaleSelect"),
@@ -1297,6 +1298,7 @@ function setUiConnecting(host, port) {
   elements.disconnectButton.disabled = false;
   elements.reverseButton.disabled = true;
   updateFileClipboardButton();
+  syncFloatingControlCenter();
 }
 
 function setUiConnected(answer) {
@@ -1356,6 +1358,7 @@ function setUiConnected(answer) {
   }
 
   updateReverseControlUi();
+  syncFloatingControlCenter();
 }
 
 function clearReconnectTimers() {
@@ -1393,6 +1396,7 @@ function setUiDisconnected(statusText = "未连接", logDetail = "会话已关�
   state.fileTransferActive = false;
   state.remoteFileTransfers.clear();
   updateFileClipboardButton();
+  syncFloatingControlCenter();
   addLog("断开连接", logDetail);
 }
 
@@ -1537,6 +1541,22 @@ function syncFloatingControlCenter() {
   }
   if (elements.floatingAudioVolumeText) {
     elements.floatingAudioVolumeText.textContent = `${elements.audioVolumeRange.value}%`;
+  }
+  if (elements.floatingControlSummary) {
+    const bandwidthText =
+      elements.metricBandwidth.textContent || `${elements.bandwidthSelect.value} Mbps`;
+    if (state.connected) {
+      const codec = String(state.hostDiagnostics.videoCodec || "").toLowerCase();
+      const codecText =
+        codec === "h264" ? "H.264" : codec === "jpeg" ? "JPEG" : codec ? codec.toUpperCase() : "视频";
+      const fpsText =
+        state.actualVideoFps > 0
+          ? `${state.actualVideoFps.toFixed(1)} FPS`
+          : `${state.negotiatedFps || elements.fpsSelect.value} Hz`;
+      elements.floatingControlSummary.textContent = `${codecText} · ${fpsText} · ${bandwidthText}`;
+    } else {
+      elements.floatingControlSummary.textContent = `请求 ${elements.fpsSelect.value} Hz · ${bandwidthText}`;
+    }
   }
   if (elements.floatingDisconnectButton) {
     elements.floatingDisconnectButton.disabled = !state.connected && !state.connecting;

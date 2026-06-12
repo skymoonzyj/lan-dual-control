@@ -213,8 +213,9 @@ async function verifyFloatingControlCenter(session) {
       const toggle = document.querySelector("#controlCenterToggle");
       const panel = document.querySelector("#controlCenterPanel");
       const remoteControlCenter = document.querySelector("#remoteControlCenter");
+      const summary = document.querySelector("#floatingControlSummary");
       const audioToggle = document.querySelector("#audioToggle");
-      if (!toggle || !panel || !remoteControlCenter) {
+      if (!toggle || !panel || !remoteControlCenter || !summary) {
         return { ok: false, reason: "missing control center elements" };
       }
 
@@ -231,6 +232,12 @@ async function verifyFloatingControlCenter(session) {
 
       if (panel.hidden) toggle.click();
       const opened = !panel.hidden && toggle.getAttribute("aria-expanded") === "true";
+      const centerStyles = getComputedStyle(remoteControlCenter);
+      const toggleStyles = getComputedStyle(toggle);
+      const floatingLayer =
+        centerStyles.position === "absolute" &&
+        centerStyles.pointerEvents === "none" &&
+        toggleStyles.pointerEvents === "auto";
 
       setValue("#floatingQualitySelect", "sharp");
       const qualitySynced =
@@ -238,6 +245,7 @@ async function verifyFloatingControlCenter(session) {
         valueOf("#resolutionSelect") === "3840x2160" &&
         valueOf("#fpsSelect") === "120" &&
         valueOf("#bandwidthSelect") === "50";
+      const summarySynced = summary.textContent.includes("120 Hz") && summary.textContent.includes("50 Mbps");
 
       setValue("#floatingScaleSelect", "stretch");
       const scaleSynced =
@@ -284,6 +292,8 @@ async function verifyFloatingControlCenter(session) {
       return {
         ok:
           opened &&
+          floatingLayer &&
+          summarySynced &&
           qualitySynced &&
           scaleSynced &&
           audioSynced &&
@@ -291,6 +301,9 @@ async function verifyFloatingControlCenter(session) {
           fullscreenEntered &&
           fullscreenExited,
         opened,
+        floatingLayer,
+        summarySynced,
+        summary: summary.textContent,
         qualitySynced,
         scaleSynced,
         audioSynced,
@@ -331,7 +344,12 @@ async function run() {
     `--user-data-dir=${userDataDir}`,
     "--no-first-run",
     "--disable-sync",
+    "--disable-background-networking",
+    "--disable-extensions",
     "--autoplay-policy=no-user-gesture-required",
+    "--disable-accelerated-2d-canvas",
+    "--disable-gpu-compositing",
+    "--disable-gpu-sandbox",
     "--disable-features=BlockInsecurePrivateNetworkRequests,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults",
     "--window-size=1280,850",
   ];
@@ -364,7 +382,7 @@ async function run() {
     const controlCenterCheck = await verifyFloatingControlCenter(session);
     print(
       "OK",
-      `Control center: open=${controlCenterCheck.opened}, quality=${controlCenterCheck.qualitySynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, fullscreen=${controlCenterCheck.fullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
+      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, fullscreen=${controlCenterCheck.fullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
     );
 
     await evaluate(
