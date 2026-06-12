@@ -17,6 +17,38 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-13 Windows Codex
+
+日期：2026-06-13
+开发端：Windows Codex
+本轮目标：收口 Windows 控制端远端文件托盘清理状态，避免清空托盘时误以为系统剪贴板临时目录也被删除。
+完成内容：
+- 远端文件托盘在存在临时目录时，清空按钮 tooltip 会提示“清空托盘（不删除系统剪贴板临时目录）”。
+- 点击清空会清理内存暂存文件、临时目录入口和写入状态提示；事件日志会说明系统剪贴板临时目录仍保留给 Windows 粘贴使用。
+- 页面级自检新增清空路径断言：失败落盘状态下清空后，文件列表、临时路径、打开目录按钮、清空按钮和状态行都会归零，同时保留临时目录说明日志。
+- Windows client README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `apps/windows-client/README.md`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly`
+验证结果：
+- 诊断-only 页面自检通过，文件托盘恢复检查、悬浮控制中心、桌面壳禁用态、黑边输入防护、H.264 key frame helper 和 fallback 诊断均通过。
+遗留问题：
+- 未做真实大文件/压缩包复制粘贴体验；仍需桌面版和真实 Mac 文件复制场景验收。
+下一步建议：
+- 用真实 Mac 复制 zip/大文件到 Windows 控制端，确认写入系统文件剪贴板后可粘贴，清空托盘后已写入剪贴板的临时目录仍能支撑粘贴直到原生层定期清理。
+是否改了协议：否。
+是否需要另一端配合：不阻塞；真实 Mac 文件复制体验后续可由 Mac 端配合。
+
 ## 2026-06-13 Mac Codex
 
 日期：2026-06-13

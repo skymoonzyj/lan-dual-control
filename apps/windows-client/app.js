@@ -3249,6 +3249,9 @@ function renderReceivedFiles() {
     ? "打开临时目录"
     : "桌面版写入系统文件剪贴板后可打开临时目录";
   elements.clearReceivedFilesButton.disabled = files.length === 0;
+  elements.clearReceivedFilesButton.title = state.receivedClipboardTempPath
+    ? "清空托盘（不删除系统剪贴板临时目录）"
+    : "清空远端文件";
   elements.receivedFilesStatus.hidden = files.length === 0 || !writeStatus.text;
   elements.receivedFilesStatus.textContent = writeStatus.text || "";
   elements.receivedFilesStatus.className = `received-files-status${writeStatus.kind ? ` is-${writeStatus.kind}` : ""}`;
@@ -3310,6 +3313,8 @@ function downloadAllReceivedFiles() {
 }
 
 function clearReceivedFiles() {
+  const clearedCount = state.receivedClipboardFiles.length;
+  const keptTempPath = state.receivedClipboardTempPath;
   for (const file of state.receivedClipboardFiles) {
     if (file.objectUrl && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
       URL.revokeObjectURL(file.objectUrl);
@@ -3320,7 +3325,12 @@ function clearReceivedFiles() {
   setReceivedFilesWriteStatus("", "");
   renderReceivedFiles();
   elements.clipboardText.textContent = elements.clipboardToggle.checked ? "剪贴板：已开启" : "剪贴板：已关闭";
-  addLog("远端文件", "已清空内存暂存文件");
+  addLog(
+    "远端文件",
+    keptTempPath
+      ? `已清空 ${clearedCount} 个内存暂存文件；系统剪贴板临时目录会保留给 Windows 粘贴使用`
+      : `已清空 ${clearedCount} 个内存暂存文件`,
+  );
 }
 
 async function openReceivedFilesTempPath() {

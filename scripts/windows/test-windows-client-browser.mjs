@@ -440,6 +440,7 @@ async function verifyFileClipboardRecoveryText(session) {
       const memoryDetail = fileClipboardLocalDetail(memoryResult, "fallback");
       const openButton = document.querySelector("#openReceivedFilesTempButton");
       const copyButton = document.querySelector("#copyReceivedFilesButton");
+      const clearButton = document.querySelector("#clearReceivedFilesButton");
       const status = document.querySelector("#receivedFilesStatus");
 
       const originalTauri = window.__TAURI__;
@@ -470,10 +471,28 @@ async function verifyFileClipboardRecoveryText(session) {
         renderReceivedFiles();
         const enabledAfterTempPath = openButton && !openButton.disabled;
         const retryTitleAfterFailure = copyButton?.title || "";
+        const clearTitleAfterFailure = clearButton?.title || "";
         const statusTextAfterFailure = status?.textContent || "";
         const statusClassAfterFailure = status?.className || "";
         const statusHiddenAfterFailure = Boolean(status?.hidden);
         await openReceivedFilesTempPath();
+        clearReceivedFiles();
+        const clearedFilesLength = state.receivedClipboardFiles.length;
+        const clearedTempPath = state.receivedClipboardTempPath;
+        const clearButtonDisabledAfterClear = clearButton?.disabled === true;
+        const openButtonDisabledAfterClear = openButton?.disabled === true;
+        const statusHiddenAfterClear = Boolean(status?.hidden);
+        const statusTextAfterClear = status?.textContent || "";
+        const clearLogDetail = state.logEntries[0]?.detail || "";
+        state.receivedClipboardFiles = [
+          {
+            name: "demo.zip",
+            size: 3,
+            mimeType: "application/zip",
+            blob: new Blob(["zip"]),
+            objectUrl: "",
+          },
+        ];
         state.receivedClipboardTempPath = "";
         updateReceivedFilesWriteStatusFromResult(
           {
@@ -496,10 +515,18 @@ async function verifyFileClipboardRecoveryText(session) {
             enabledAfterTempPath &&
             disabledWithoutTempPath &&
             retryTitleAfterFailure === "重试写入系统文件剪贴板" &&
+            clearTitleAfterFailure === "清空托盘（不删除系统剪贴板临时目录）" &&
             statusTextAfterFailure.includes("可打开临时目录或重试写入") &&
             statusClassAfterFailure.includes("is-warning") &&
             !statusHiddenAfterFailure &&
             statusTextAfterSuccess.includes("已写入 Windows 系统文件剪贴板") &&
+            clearedFilesLength === 0 &&
+            clearedTempPath === "" &&
+            clearButtonDisabledAfterClear &&
+            openButtonDisabledAfterClear &&
+            statusHiddenAfterClear &&
+            statusTextAfterClear === "" &&
+            clearLogDetail.includes("系统剪贴板临时目录会保留") &&
             calls.length === 1 &&
             calls[0].command === "open_clipboard_temp_path" &&
             calls[0].payload?.path === tempResult.rootDir,
@@ -509,9 +536,17 @@ async function verifyFileClipboardRecoveryText(session) {
           enabledAfterTempPath,
           disabledWithoutTempPath,
           retryTitleAfterFailure,
+          clearTitleAfterFailure,
           statusTextAfterFailure,
           statusClassAfterFailure,
           statusTextAfterSuccess,
+          clearedFilesLength,
+          clearedTempPath,
+          clearButtonDisabledAfterClear,
+          openButtonDisabledAfterClear,
+          statusHiddenAfterClear,
+          statusTextAfterClear,
+          clearLogDetail,
           calls,
         };
       } finally {
