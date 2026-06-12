@@ -498,10 +498,14 @@ export function createWindowsHostServer({
         server.listen(port, host, () => {
           logger.info(`Windows 被控端骨架已监听 ws://${host}:${port}`);
           const screenCapabilities = screen.getCapabilities();
+          const audioCapabilities = audio.getCapabilities();
+          const audioSummary = audioCapabilities.mockFrames
+            ? "音频为模拟帧"
+            : `音频使用 ${audioCapabilities.backend}`;
           logger.info(
             screenCapabilities.mode === "system-jpeg"
-              ? "当前使用 Windows 系统截图 JPEG 视频帧，音频仍为模拟帧；可注入输入并写入系统文本/文件剪贴板。"
-              : "当前为骨架模式：模拟视频帧和音频帧；Windows 上可注入输入并写入系统文本/文件剪贴板。",
+              ? `当前使用 Windows 系统截图 JPEG 视频帧，${audioSummary}；可注入输入并写入系统文本/文件剪贴板。`
+              : `当前视频管线为 ${screenCapabilities.capturePipeline ?? screenCapabilities.mode}，${audioSummary}；Windows 上可注入输入并写入系统文本/文件剪贴板。`,
           );
           resolve();
         });

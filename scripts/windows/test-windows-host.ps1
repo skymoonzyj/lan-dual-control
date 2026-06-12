@@ -14,12 +14,16 @@ param(
   [string] $ClipboardMode = "system",
   [ValidateSet("auto", "system", "log")]
   [string] $InputMode = "log",
+  [ValidateSet("auto", "mock", "dshow", "wasapi")]
+  [string] $AudioMode = "auto",
+  [string] $AudioDevice = $env:LAN_DUAL_WINDOWS_AUDIO_DEVICE,
   [string] $Ffmpeg = $env:LAN_DUAL_FFMPEG,
   [switch] $UseExisting,
   [switch] $KeepRunning,
   [switch] $MockVideo,
   [switch] $SkipClipboardText,
   [switch] $SkipClipboardFile,
+  [switch] $RequireAudio,
   [switch] $InputEvents
 )
 
@@ -76,6 +80,12 @@ function Start-LocalWindowsHost {
     "LAN_DUAL_WINDOWS_CLIPBOARD_MODE" = $ClipboardMode
     "LAN_DUAL_WINDOWS_INPUT_MODE" = $InputMode
     "LAN_DUAL_WINDOWS_MAX_SCREEN_FPS" = [string]([Math]::Max(1, [Math]::Min($Fps, 60)))
+  }
+  if ($AudioMode -ne "auto") {
+    $envBlock["LAN_DUAL_WINDOWS_AUDIO_MODE"] = $AudioMode
+  }
+  if ($AudioDevice) {
+    $envBlock["LAN_DUAL_WINDOWS_AUDIO_DEVICE"] = $AudioDevice
   }
   if ($Ffmpeg) {
     $envBlock["LAN_DUAL_FFMPEG"] = $Ffmpeg
@@ -156,6 +166,9 @@ try {
   }
   if (-not $SkipClipboardFile) {
     $nodeArgs += @("--clipboardFile", "--clipboardFileBytes", $ClipboardFileBytes)
+  }
+  if ($RequireAudio) {
+    $nodeArgs += "--requireAudio"
   }
   if ($InputEvents) {
     $nodeArgs += @("--inputEvents", "--expectInputMode", $InputMode)

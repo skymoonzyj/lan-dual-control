@@ -7,9 +7,9 @@
 - Node.js WebSocket 被控服务，默认端口 `43770`。
 - `hello`、`auth_request`、`session_offer`、`display_settings`、`input_event`、`input_ack`、`clipboard_text` 和 `reverse_control_request` 消息处理；未认证连接会被拒绝，同一连接内密码错误 3 次后会关闭连接。
 - Windows 屏幕 `video_frame` 输出：默认在 Windows 桌面会话中用 FFmpeg gdigrab 持续采集 MJPEG/JPEG data URL；无 FFmpeg 时回退 PowerShell/System.Drawing 系统截图，失败时再回退模拟帧。
-- 音频 `audio_frame` 输出：默认发送模拟帧；显式设置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 后可试用 FFmpeg DirectShow 采集指定音频设备并发送 `pcm-f32le-base64` PCM 帧。
+- 音频 `audio_frame` 输出：默认发送模拟帧；显式设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi` 后可用 Windows WASAPI loopback 采集默认播放设备的系统声音并发送 `pcm-f32le-base64` PCM 帧；也可设置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 试用 FFmpeg DirectShow 指定设备。
 - 屏幕采集当前是 FFmpeg gdigrab + PowerShell/System.Drawing 兜底的过渡实现，后续升级 Windows Graphics Capture 以继续降低延迟和资源占用。
-- WASAPI loopback 仍是正式系统声音采集目标；当前 DirectShow PCM 入口适合先接虚拟声卡/loopback 设备验证链路。
+- WASAPI loopback 是当前推荐的系统声音采集入口；DirectShow PCM 入口保留给虚拟声卡/loopback 设备做兼容验证。
 - SendInput 输入注入模块：在 Windows 上通过 PowerShell/C# 调用 `SendInput` 和 `SetCursorPos` 注入鼠标、滚轮和常用键盘事件，在非 Windows 开发环境只记录事件。
 - 输入事件处理后会返回 `input_ack`，便于控制端和联调脚本确认已注入、仅记录或被拒绝。
 - 文本剪贴板模块：在 Windows 上通过 PowerShell `Set-Clipboard` 写入系统剪贴板，在非 Windows 开发环境回退为内存保存。
@@ -83,19 +83,26 @@ $env:LAN_DUAL_WINDOWS_MAX_SCREEN_FPS="30"  # FFmpeg 默认上限 30，1-60；sys
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\check-windows-audio-devices.mjs
+$env:LAN_DUAL_WINDOWS_AUDIO_MODE="wasapi"                # 推荐：采集默认播放设备的系统声音 loopback
 $env:LAN_DUAL_WINDOWS_AUDIO_MODE="dshow"                 # 显式启用 FFmpeg DirectShow PCM
 $env:LAN_DUAL_WINDOWS_AUDIO_DEVICE="麦克风阵列 (网易虚拟音频设备)" # 改成上面列出的 loopback/虚拟声卡设备名
 $env:LAN_DUAL_WINDOWS_AUDIO_SAMPLE_RATE="48000"
 $env:LAN_DUAL_WINDOWS_AUDIO_CHANNELS="2"
 ```
 
-默认检查脚本只列出设备，不采集声音。需要短时验证某个设备能输出 PCM 时，再显式运行：
+默认检查脚本只列出设备和 WASAPI 格式，不采集声音。需要短时验证系统声音 loopback 能输出 PCM 时，再显式运行：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\check-windows-audio-devices.mjs --probe --wasapi
+```
+
+需要短时验证某个 DirectShow 设备能输出 PCM 时，再显式运行：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\check-windows-audio-devices.mjs --probe --device "麦克风阵列 (网易虚拟音频设备)"
 ```
 
-不要把真实麦克风设备作为默认项；需要采集系统声音时，优先选择 loopback 或虚拟声卡设备。未设置设备名时，Windows host 会继续发送模拟音频帧。
+不要把真实麦克风设备作为默认项；需要采集系统声音时，优先使用 WASAPI loopback。未显式设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi` 或 DirectShow 设备名时，Windows host 会继续发送模拟音频帧。
 
 本机调试时如果 `43770` 已被假 Mac 服务占用，可以临时使用：
 
@@ -115,6 +122,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-contro
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\test-windows-host.ps1 -InputEvents -InputMode system
+```
+
+需要验证 Windows host 真实系统声音 PCM 时，可以临时开启 WASAPI loopback：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\test-windows-host.ps1 -AudioMode wasapi -RequireAudio
 ```
 
 Mac 控制 Windows 的页面级自检可在 Windows 本机启动临时 Windows host 和 `apps/mac-client`，自动打开浏览器，确认真实视频画面、`input_ack` 和文本 `clipboard_ack`：
@@ -150,5 +163,5 @@ node E:\codex\lan-dual-control\scripts\windows\test-auth-retry-policy.mjs
 1. 使用 Mac 控制端连接 `ws://Windows-IP:43770`。
 2. 把当前 FFmpeg/System.Drawing 过渡采集层升级为 Windows Graphics Capture，提升帧率和延迟表现。
 3. 把当前 PowerShell/C# SendInput 桥升级为更高性能的原生模块或常驻进程。
-4. 把当前 DirectShow PCM 过渡入口升级为 WASAPI loopback，默认发送真实系统声音。
+4. 继续验证 WASAPI loopback 长时间稳定性、静音状态、系统音量变化和 Mac client 播放体验。
 5. 处理 Windows 防火墙提示和局域网放行说明。

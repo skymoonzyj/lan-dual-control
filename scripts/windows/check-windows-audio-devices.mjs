@@ -1,15 +1,20 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const defaultWindowsFfmpeg = "C:\\DevTools\\ffmpeg\\bin\\ffmpeg.exe";
+const defaultWasapiHelper = resolve(dirname(fileURLToPath(import.meta.url)), "wasapi-loopback-capture.ps1");
 
 const defaults = {
   ffmpeg: process.env.LAN_DUAL_FFMPEG || "",
+  helper: process.env.LAN_DUAL_WINDOWS_WASAPI_HELPER || defaultWasapiHelper,
   device: process.env.LAN_DUAL_WINDOWS_AUDIO_DEVICE || "",
   sampleRate: Number(process.env.LAN_DUAL_WINDOWS_AUDIO_SAMPLE_RATE) || 48000,
   channels: Number(process.env.LAN_DUAL_WINDOWS_AUDIO_CHANNELS) || 2,
   durationMs: 1200,
   probe: false,
+  wasapi: false,
   json: false,
 };
 
@@ -20,7 +25,7 @@ function parseArgs(argv) {
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
     const next = argv[index + 1];
-    if (key === "probe" || key === "json") {
+    if (key === "probe" || key === "wasapi" || key === "json") {
       args[key] = true;
       continue;
     }
@@ -34,6 +39,7 @@ function parseArgs(argv) {
   args.channels = Number(args.channels) || defaults.channels;
   args.durationMs = Number(args.durationMs) || defaults.durationMs;
   args.device = String(args.device || "").trim();
+  args.helper = String(args.helper || defaultWasapiHelper).trim();
   args.ffmpeg = resolveFfmpegCommand(String(args.ffmpeg || "").trim());
   return args;
 }
@@ -84,6 +90,47 @@ function listDshowDevices(args) {
     exitCode: result.status,
     devices: unique,
   };
+}
+
+function queryWasapiInfo(args) {
+  if (process.platform !== "win32") {
+    return { ok: false, error: "WASAPI loopback is only available on Windows." };
+  }
+  if (!existsSync(args.helper)) {
+    return { ok: false, error: `WASAPI helper not found: ${args.helper}` };
+  }
+
+  const result = spawnSync("powershell.exe", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    args.helper,
+    "-InfoOnly",
+    "-SampleRate",
+    String(args.sampleRate),
+    "-Channels",
+    String(args.channels),
+    "-FrameMs",
+    "20",
+  ], {
+    encoding: "utf8",
+    timeout: 10000,
+    windowsHide: true,
+  });
+  const stdout = (result.stdout || "").trim();
+  const stderr = (result.stderr || "").trim();
+  if (result.error || result.status !== 0) {
+    return {
+      ok: false,
+      error: result.error?.message || stderr || `powershell exited with ${result.status}`,
+    };
+  }
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    return { ok: false, error: stderr || stdout || "empty WASAPI helper response" };
+  }
 }
 
 function classifyDevice(name, kind) {
@@ -175,6 +222,69 @@ function probeDevice(args) {
   });
 }
 
+function probeWasapi(args) {
+  return new Promise((resolve) => {
+    const child = spawn("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      args.helper,
+      "-SampleRate",
+      String(args.sampleRate),
+      "-Channels",
+      String(args.channels),
+      "-FrameMs",
+      "20",
+      "-DurationMs",
+      String(args.durationMs),
+    ], {
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    const chunks = [];
+    const stderr = [];
+    let bytes = 0;
+    let settled = false;
+    const timer = setTimeout(() => {
+      child.kill();
+    }, args.durationMs + 10000);
+
+    child.stdout.on("data", (chunk) => {
+      chunks.push(chunk);
+      bytes += chunk.length;
+    });
+    child.stderr.on("data", (chunk) => stderr.push(String(chunk)));
+    child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({
+        ok: false,
+        backend: "wasapi-loopback",
+        bytes,
+        level: 0,
+        error: error.message,
+        stderr: stderr.join("").trim(),
+      });
+    });
+    child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      const buffer = Buffer.concat(chunks);
+      resolve({
+        ok: bytes > 0 && code === 0,
+        backend: "wasapi-loopback",
+        exitCode: code,
+        bytes,
+        level: computePcmLevel(buffer),
+        stderr: stderr.join("").trim(),
+      });
+    });
+  });
+}
+
 function computePcmLevel(buffer) {
   const alignedLength = buffer.length - (buffer.length % 4);
   let peak = 0;
@@ -190,6 +300,7 @@ function computePcmLevel(buffer) {
 function summarizeEnv(args) {
   return {
     ffmpeg: args.ffmpeg,
+    wasapiHelper: args.helper,
     mode: process.env.LAN_DUAL_WINDOWS_AUDIO_MODE || "",
     device: args.device,
     sampleRate: args.sampleRate,
@@ -202,24 +313,38 @@ async function run() {
   const args = parseArgs(process.argv);
   const env = summarizeEnv(args);
   const list = listDshowDevices(args);
+  const wasapi = queryWasapiInfo(args);
   const audioDevices = list.devices.filter((device) => device.kind === "audio");
   let probe = null;
 
   if (args.probe) {
-    if (!args.device) {
+    if (args.wasapi) {
+      probe = await probeWasapi(args);
+    } else if (!args.device) {
       throw new Error("Pass --device \"device name\" or set LAN_DUAL_WINDOWS_AUDIO_DEVICE before --probe.");
+    } else {
+      probe = await probeDevice(args);
     }
-    probe = await probeDevice(args);
   }
 
   if (args.json) {
-    console.log(JSON.stringify({ env, list, audioDevices, probe }, null, 2));
+    console.log(JSON.stringify({ env, list, audioDevices, wasapi, probe }, null, 2));
     return;
   }
 
   print("INFO", `FFmpeg: ${env.ffmpeg}`, args);
+  print("INFO", `WASAPI helper: ${env.wasapiHelper}`, args);
   print("INFO", `Configured device: ${env.device || "(none)"}`, args);
   print("INFO", `PCM target: ${env.sampleRate} Hz / ${env.channels} ch / ${env.durationMs} ms`, args);
+  if (wasapi.ok) {
+    print(
+      "OK",
+      `WASAPI loopback: ${wasapi.outputSampleRate} Hz / ${wasapi.outputChannels} ch / ${wasapi.inputFormat} input`,
+      args,
+    );
+  } else {
+    print("WARN", `WASAPI loopback unavailable: ${wasapi.error}`, args);
+  }
   if (list.error) {
     print("WARN", `Device listing error: ${list.error}`, args);
   }
@@ -229,11 +354,15 @@ async function run() {
     print("DEV", `${marker} ${device.name} [${device.hint}]`, args);
   }
   if (!args.probe) {
-    print("INFO", "No audio was captured. Add --probe --device \"name\" for a short in-memory PCM check.", args);
+    print(
+      "INFO",
+      "No audio was captured. Add --probe --wasapi for system loopback, or --probe --device \"name\" for DirectShow.",
+      args,
+    );
     return;
   }
   if (probe?.ok) {
-    print("OK", `Probe captured ${probe.bytes} bytes, peak=${probe.level}`, args);
+    print("OK", `${probe.backend ?? "dshow"} probe captured ${probe.bytes} bytes, peak=${probe.level}`, args);
   } else {
     print("FAIL", `Probe failed: ${probe?.error || probe?.stderr || `exit ${probe?.exitCode}`}`, args);
     process.exitCode = 1;

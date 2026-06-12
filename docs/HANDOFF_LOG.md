@@ -97,6 +97,51 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：给 Windows 被控端接入 WASAPI loopback 第一版，解决 Mac 反控 Windows 时真实系统声音来源问题。
+完成内容：
+- 新增 `scripts/windows/wasapi-loopback-capture.ps1`，用 Windows WASAPI loopback 读取默认播放设备系统声音，输出 `pcm-f32le` 交错 PCM 到 stdout。
+- Windows host 音频模块新增显式 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi`，默认仍为模拟音频，不会自动采集声音。
+- `/discovery` 音频能力会显示 `mode=wasapi-loopback`、WASAPI 格式、采样率、声道数和后端信息。
+- `scripts/windows/check-windows-audio-devices.mjs` 新增 WASAPI 格式检查；默认只读格式不采集，显式 `--probe --wasapi` 才短时读取系统输出 PCM。
+- `scripts/windows/test-windows-host.ps1` 新增 `-AudioMode wasapi` 和 `-RequireAudio`，可临时启动 Windows host 并强校验真实 PCM 音频帧。
+修改文件：
+- `scripts/windows/wasapi-loopback-capture.ps1`
+- `scripts/windows/check-windows-audio-devices.mjs`
+- `scripts/windows/test-windows-host.ps1`
+- `apps/windows-host/src/windows-audio-capture.mjs`
+- `apps/windows-host/src/windows-host-service.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\wasapi-loopback-capture.ps1 -InfoOnly`
+- `node --check apps/windows-host/src/windows-audio-capture.mjs`
+- `node --check scripts/windows/check-windows-audio-devices.mjs`
+- `node scripts/windows/check-windows-audio-devices.mjs`
+- `node scripts/windows/check-windows-audio-devices.mjs --probe --wasapi --durationMs 600`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-windows-host.ps1 -MockVideo -AudioMode wasapi -RequireAudio -TimeoutMs 25000`
+验证结果：
+- 本机 WASAPI 默认播放设备格式为 48000 Hz、2ch、float32。
+- `--probe --wasapi` 捕获 226560 bytes PCM，当前 peak=0，说明管道可读但当时系统输出为静音或无可听声音。
+- Windows host 自检通过：`audio_frame` 为 `pcm-f32le` / `pcm-f32le-base64` / `system-pcm`，sampleRate=48000、channels=2、frames=960、payloadBytes≈7680。
+遗留问题：
+- 还没有做长时间音频稳定性和 Mac client 真实播放验收。
+- 当前 WASAPI helper 由 PowerShell/C# 启动，适合第一版验证；后续可升级为常驻原生模块，降低启动开销。
+- 系统无声音或静音时可正常输出静音 PCM，后续 UI 需要把“管道正常但电平为 0”和“采集失败”区分开。
+下一步建议：
+- 用 Mac client 连接 Windows host，打开远端声音，确认 Mac 端能听到 Windows 系统声音。
+- 跑 30-60 秒音频观察，统计音频帧间隔、payload 和电平变化。
+- 后续继续做 Windows Graphics Capture，提升反控 Windows 视频体验。
+是否改了协议：否；复用现有 `audio_frame`、`audio_settings_update` 和 `audio_settings_ack`，后端信息只放在 `/discovery` 能力诊断里。
+是否需要另一端配合：需要 Mac 端后续做真实播放验收，但本轮 Windows 本机自检已通过。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：新增 Windows 音频设备检查入口，给后续真实系统声音采集和双路声音排查做准备。
 完成内容：
 - 新增 `scripts/windows/check-windows-audio-devices.mjs`。
