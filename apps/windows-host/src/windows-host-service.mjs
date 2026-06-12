@@ -83,7 +83,7 @@ function createClient(socket, context) {
     videoRunId += 1;
     captureBusy = false;
     if (frameTimer) {
-      clearInterval(frameTimer);
+      clearTimeout(frameTimer);
       frameTimer = null;
     }
     context.screen.stop();
@@ -107,6 +107,18 @@ function createClient(socket, context) {
       Math.min(Number(nextSession.fps) || 5, Number(nextSession.maxScreenFps) || 8),
     );
     const intervalMs = Math.max(16, Math.round(1000 / schedulerFps));
+    let nextDueAt = performance.now();
+
+    const scheduleNextFrame = (delayMs = 0) => {
+      if (runId !== videoRunId) {
+        return;
+      }
+      frameTimer = setTimeout(() => {
+        frameTimer = null;
+        void sendNextFrame();
+      }, Math.max(0, delayMs));
+    };
+
     const sendNextFrame = async () => {
       if (runId !== videoRunId || captureBusy) {
         return;
@@ -125,13 +137,12 @@ function createClient(socket, context) {
       } finally {
         if (runId === videoRunId) {
           captureBusy = false;
+          nextDueAt += intervalMs;
+          scheduleNextFrame(nextDueAt - performance.now());
         }
       }
     };
 
-    frameTimer = setInterval(() => {
-      void sendNextFrame();
-    }, intervalMs);
     void sendNextFrame();
   }
 

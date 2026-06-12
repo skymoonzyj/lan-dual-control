@@ -89,7 +89,7 @@ Windows 被控端视频持续帧观察可运行：
 node scripts\windows\observe-windows-host-video.mjs
 ```
 
-它会临时启动 Windows 被控端并观察 5 秒真实视频帧，统计实际 FPS、最大帧间隔、掉帧数和采集管线。当前 Windows 本机 FFmpeg gdigrab 过渡层实测约 24 FPS，旧 System.Drawing 兜底约 2 FPS。
+它会临时启动 Windows 被控端并观察 5 秒真实视频帧，统计实际 FPS、最大帧间隔、掉帧数和采集管线。当前 Windows 本机 FFmpeg gdigrab 过渡层实测约 29 FPS，旧 System.Drawing 兜底约 3 FPS。
 
 认证重试策略回归可运行：
 

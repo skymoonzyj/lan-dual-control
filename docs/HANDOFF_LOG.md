@@ -21,6 +21,43 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：优化 Windows host 视频发送调度，让 FFmpeg MJPEG 更接近协商帧率。
+完成内容：
+- 将 Windows host 视频发送循环从固定 `setInterval` 改为上一帧完成后的自调度 `setTimeout`。
+- 调度会按目标间隔追赶下一帧，避免 FFmpeg 等待新帧时跳过下一次定时器 tick。
+- 保留原有防重入逻辑，断开连接和重启会话时仍会停止当前视频循环。
+- 更新任务板、下一步行动、交接记录和文件占用记录。
+修改文件：
+- `apps/windows-host/src/windows-host-service.mjs`
+- `docs/04-task-board.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check apps/windows-host/src/windows-host-service.mjs`
+- `npm.cmd run check` in `apps/windows-host`
+- `git diff --check`
+- `node scripts/windows/observe-windows-host-video.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/observe-windows-host-video.mjs --screenMode system --fps 4 --durationMs 2500 --minFrames 3 --minFps 1 --maxGapMs 2000`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-host.ps1 -Fps 30`
+- `node scripts/windows/test-auth-retry-policy.mjs`
+验证结果：
+- FFmpeg gdigrab 默认路径从约 23.99 FPS 提升到约 29.39 FPS：5 秒收到 147 帧，最大帧间隔 52 ms，掉帧 0。
+- Mac client 页面级自检通过，仍能显示 `windows-host-ffmpeg-mjpeg` 并收到 `input_ack · log`。
+- System.Drawing 兜底路径串行重跑通过：约 2.91 FPS，最大帧间隔 354 ms，`capturePipeline=windows-gdi-jpeg`。
+- Windows host 一键自检和认证重试回归均通过。
+遗留问题：
+- FFmpeg MJPEG 仍是过渡方案；若要 60/120Hz 或更低带宽，还需要 Windows Graphics Capture 与正式编码管线。
+下一步建议：
+- 后续改视频采集时继续用 `observe-windows-host-video.mjs` 做量化，再用页面级自检确认 UI 体验。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：新增 Windows host 视频持续帧观察脚本，方便判断真实帧率和卡顿。
 完成内容：
 - 新增 `scripts/windows/observe-windows-host-video.mjs`。
