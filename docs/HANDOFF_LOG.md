@@ -56,6 +56,40 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：修复 H.264 启动阶段卡住时控制端长时间等首帧的问题。
+完成内容：
+- Mac host 新增 5 秒 H.264 启动 watchdog：如果 `SCStream` / `VTCompressionSession` 启动阶段迟迟没有建立 `videoStream`，自动回退 `background-jpeg`。
+- 回退时发送 `display_settings_ack`，带 `streamFallbackReason`、`capturePipeline=background-jpeg`、实际 FPS、画质和显示器诊断字段，方便控制端显示真实状态。
+- 复用上一轮 `videoStreamToken`：如果 H.264 在 watchdog 触发后才迟到启动成功，会被判定为旧流并立即停止，不会覆盖 JPEG 回退会话。
+- 更新 Mac host README、当前状态、下一步和任务板，说明该回退是启动阶段兜底，不是替代 H.264 正常链路验收。
+修改文件：
+- `apps/mac-host/Sources/MacHost/MacHostService.swift`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `swift build` in `apps/mac-host`
+- 临时启动新 Mac host：`LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_PORT=43771 LAN_DUAL_INPUT_MODE=log LAN_DUAL_BONJOUR=0 .build/debug/lan-dual-mac-host`
+- `node scripts/mac/check-mac-displays.mjs --port 43771 --timeoutMs 12000 --preferredVideoCodec h264`
+验证结果：
+- 显式 H.264 display 自检通过：脚本没有再 12 秒首帧超时，最终完成 `main` 单屏 round-trip。
+- 临时 host 日志显示：先进入 `screencapturekit-h264` 会话，5 秒 watchdog 触发回退 `background-jpeg`；随后迟到的 H.264 流启动成功又立即停止，说明 token 防护生效。
+遗留问题：
+- 这轮验证的是“启动阶段卡住时自动回退”，不是 H.264 正常性能提升。
+- 仍需在主 `43770` 单 host、动态画面和 Windows 控制端真实连接下确认正常 H.264 启动不被误回退，并继续观察端到端延迟。
+下一步建议：
+- Windows 控制端若看到 `streamFallbackReason`，应把它当作 H.264 启动失败/超时诊断，而不是纯网络断流。
+- Mac 端后续可继续排查为什么临时第二 host 的 H.264 启动会贴近 5 秒超时，优先区分第二实例资源竞争和主链路问题。
+是否改了协议：否，复用上一轮已新增的可选诊断字段，并沿用已有 `streamFallbackReason`。
+是否需要另一端配合：不阻塞；需要 Windows 后续真实连接观察是否正确展示回退原因。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：补强 Mac host 显示器切换安全性，并给真实多显示器验收准备脚本。
 完成内容：
 - Mac host 的 H.264 视频流启动、帧回调和失败回退增加 `videoStreamToken` generation 防护；切换 `display_settings` 或断开连接后，旧异步流迟到返回不会覆盖新会话。

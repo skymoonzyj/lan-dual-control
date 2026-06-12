@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `apps/mac-host/Sources/MacHost/MacHostService.swift`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 15:48 | Mac host H.264 启动新增 5 秒 watchdog，启动阶段未建立 `videoStream` 时自动回退 `background-jpeg` 并带 `streamFallbackReason`；迟到旧 H.264 流由 token 停止。 |
 | Mac Codex | `apps/mac-host/Sources/MacHost/MacHostService.swift`、`scripts/mac/check-mac-displays.mjs`、`docs/03-architecture-and-protocol.md`、`shared/protocol/messages.example.json`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 15:34 | Mac host H.264/音频异步流增加 generation token，避免显示器/设置切换后旧流回调覆盖新会话；`video_frame` 新增可选 display 诊断字段；新增单屏/多屏显示器 round-trip 自检脚本。 |
 | Windows Codex | `apps/windows-host/src/windows-input-injector.mjs`、`apps/windows-host/src/windows-host-service.mjs`、`scripts/windows/test-windows-input-helper.mjs`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 15:22 | Windows host 输入注入从每事件临时 PowerShell 升级为常驻 C# SendInput helper；新增安全自检脚本验证 helper JSON 往返但不发送真实输入。 |
 | Windows Codex | `scripts/windows/test-windows-client-browser.mjs`、`apps/windows-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 14:57 | Windows 控制端页面级自检连接成功后要求刷新率卡片显示数值型“实收 FPS”和“协商 Hz”，避免 UI 退回只显示请求值。 |

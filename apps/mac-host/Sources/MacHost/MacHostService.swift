@@ -99,6 +99,7 @@ final class MacHostService {
     private let bonjourAdvertiser: BonjourAdvertiser
     private let videoCaptureQueue = DispatchQueue(label: "lan-dual-control.mac-host.video-capture", qos: .userInteractive)
     private let videoCaptureTimeoutMs = 1500
+    private let videoStreamStartupTimeoutMs = 5000
     private let screenCaptureCooldownSeconds: TimeInterval = 4
     private let maxConsecutiveVideoCaptureFailuresBeforeCooldown = 3
     private let maxAuthAttempts = 3
@@ -1354,6 +1355,7 @@ final class MacHostService {
 
     private func startH264VideoStream(_ context: ClientContext, session: HostSession, streamToken: Int) {
         let sessionSnapshot = session
+        scheduleH264StartupWatchdog(context, streamToken: streamToken)
         Task { [weak self, weak context] in
             guard let self else { return }
             do {
@@ -1404,32 +1406,56 @@ final class MacHostService {
             } catch {
                 DispatchQueue.main.async { [weak self, weak context] in
                     guard let self, let context, !context.isClosed else { return }
-                    guard context.videoStreamToken == streamToken else { return }
-                    self.logger.warn("H.264 流式采集启动失败：\(error.localizedDescription)。已退回后台 JPEG。")
-                    if var fallbackSession = context.session {
-                        fallbackSession.videoCodec = "jpeg"
-                        fallbackSession.capturePipeline = "background-jpeg"
-                        context.session = fallbackSession
-                        self.send([
-                            "type": "display_settings_ack",
-                            "accepted": true,
-                            "videoCodec": "jpeg",
-                            "videoEncoding": self.videoEncodingForPipeline(fallbackSession.capturePipeline),
-                            "fps": self.effectiveVideoFps(for: fallbackSession),
-                            "requestedFps": fallbackSession.fps,
-                            "maxScreenFps": self.configuration.maxScreenFps,
-                            "frameIntervalMs": self.videoFrameIntervalMs(for: fallbackSession),
-                            "hostMode": self.hostModeForPipeline(fallbackSession.capturePipeline),
-                            "qualityPreset": fallbackSession.qualityPreset,
-                            "jpegQuality": fallbackSession.jpegQuality,
-                            "capturePipeline": fallbackSession.capturePipeline,
-                            "streamFallbackReason": error.localizedDescription,
-                        ], to: context)
-                    }
-                    self.startVideoFrames(context)
+                    self.fallbackH264VideoStream(context, streamToken: streamToken, reason: error.localizedDescription)
                 }
             }
         }
+    }
+
+    private func scheduleH264StartupWatchdog(_ context: ClientContext, streamToken: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(videoStreamStartupTimeoutMs)) { [weak self, weak context] in
+            guard let self, let context, !context.isClosed else { return }
+            guard context.videoStreamToken == streamToken,
+                  context.videoStream == nil,
+                  context.session?.capturePipeline == "screencapturekit-h264" else {
+                return
+            }
+
+            let reason = "H.264 流式采集启动超过 \(self.videoStreamStartupTimeoutMs) ms 未就绪"
+            self.fallbackH264VideoStream(context, streamToken: streamToken, reason: reason)
+        }
+    }
+
+    private func fallbackH264VideoStream(_ context: ClientContext, streamToken: Int, reason: String) {
+        guard context.videoStreamToken == streamToken,
+              context.session?.capturePipeline == "screencapturekit-h264" else {
+            return
+        }
+
+        logger.warn("H.264 流式采集启动失败：\(reason)。已退回后台 JPEG。")
+        if var fallbackSession = context.session {
+            fallbackSession.videoCodec = "jpeg"
+            fallbackSession.capturePipeline = "background-jpeg"
+            context.session = fallbackSession
+            send([
+                "type": "display_settings_ack",
+                "accepted": true,
+                "videoCodec": "jpeg",
+                "videoEncoding": videoEncodingForPipeline(fallbackSession.capturePipeline),
+                "fps": effectiveVideoFps(for: fallbackSession),
+                "requestedFps": fallbackSession.fps,
+                "maxScreenFps": configuration.maxScreenFps,
+                "frameIntervalMs": videoFrameIntervalMs(for: fallbackSession),
+                "hostMode": hostModeForPipeline(fallbackSession.capturePipeline),
+                "qualityPreset": fallbackSession.qualityPreset,
+                "jpegQuality": fallbackSession.jpegQuality,
+                "capturePipeline": fallbackSession.capturePipeline,
+                "activeDisplayId": fallbackSession.displayId,
+                "displayName": fallbackSession.displayName,
+                "streamFallbackReason": reason,
+            ], to: context)
+        }
+        startVideoFrames(context)
     }
 
     private func effectiveVideoFps(for session: HostSession) -> Int {
