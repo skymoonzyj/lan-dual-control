@@ -32,6 +32,8 @@ const defaults = {
   expectReconnect: false,
   maxInitialVideoMs: 0,
   maxReconnectRestoreMs: 0,
+  maxAudioFrameMs: 0,
+  maxAudioPlaybackMs: 0,
   useExistingHost: false,
   mockVideo: false,
   headless: true,
@@ -120,6 +122,8 @@ function parseArgs(argv) {
   args.timeoutMs = Number(args.timeoutMs);
   args.maxInitialVideoMs = Number(args.maxInitialVideoMs);
   args.maxReconnectRestoreMs = Number(args.maxReconnectRestoreMs);
+  args.maxAudioFrameMs = Number(args.maxAudioFrameMs);
+  args.maxAudioPlaybackMs = Number(args.maxAudioPlaybackMs);
   args.hostPassword = args.hostPassword || args.password;
   args.clientPassword = args.clientPassword || (args.expectAuthFailure ? `${args.password}-wrong` : args.password);
   if (args.requireAudio && !args.audioMode) {
@@ -547,6 +551,17 @@ function buildSnapshotExpression() {
       audioToggleChecked: document.querySelector("#audioToggle")?.checked || false,
       audioPlayedFrames: Number((text("#audioStatus").match(/播放\\s*(\\d+)/) || [])[1] || 0),
       audioFrameCount: (window.__lanDualReceivedMessages || []).filter((message) => message.type === "audio_frame").length,
+      audioFrameMs: (() => {
+        const timings = window.__lanDualTimings || {};
+        if (!timings.connectClickedAt || !timings.firstAudioFrameAt) return 0;
+        return Math.round(timings.firstAudioFrameAt - timings.connectClickedAt);
+      })(),
+      audioPlaybackMs: (() => {
+        const timings = window.__lanDualTimings || {};
+        const playedFrames = Number((text("#audioStatus").match(/播放\\s*(\\d+)/) || [])[1] || 0);
+        if (!timings.connectClickedAt || playedFrames <= 0) return 0;
+        return Math.round(performance.now() - timings.connectClickedAt);
+      })(),
       lastAudioFrame: (() => {
         const frame = [...(window.__lanDualReceivedMessages || [])].reverse().find((message) => message.type === "audio_frame");
         if (!frame) return null;
@@ -589,6 +604,11 @@ function installWebSocketSendRecorderExpression() {
   return `(() => {
     window.__lanDualSentMessages = [];
     window.__lanDualReceivedMessages = [];
+    window.__lanDualTimings = {
+      installedAt: performance.now(),
+      connectClickedAt: 0,
+      firstAudioFrameAt: 0,
+    };
     if (window.__lanDualWebSocketSendHooked) return true;
     const OriginalWebSocket = window.WebSocket;
     function RecordingWebSocket(...args) {
@@ -598,6 +618,9 @@ function installWebSocketSendRecorderExpression() {
         try {
           const parsed = JSON.parse(String(event.data));
           window.__lanDualReceivedMessages.push(parsed);
+          if (parsed.type === "audio_frame" && !window.__lanDualTimings?.firstAudioFrameAt) {
+            window.__lanDualTimings.firstAudioFrameAt = performance.now();
+          }
           if (window.__lanDualReceivedMessages.length > 400) {
             window.__lanDualReceivedMessages.shift();
           }
@@ -726,6 +749,15 @@ async function run() {
       );
     }
     const connectStartedAt = Date.now();
+    await evaluate(
+      session,
+      `(() => {
+        window.__lanDualTimings = window.__lanDualTimings || {};
+        window.__lanDualTimings.connectClickedAt = performance.now();
+        window.__lanDualTimings.firstAudioFrameAt = 0;
+        return true;
+      })()`,
+    );
     await clickElement(session, "#connectButton");
 
     let lastSnapshot = null;
@@ -886,13 +918,12 @@ async function run() {
     print("OK", `Display settings: ${displaySettingsSnapshot.displaySettings}`);
 
     if (args.expectAudioFrame) {
-      const audioSnapshot = await waitFor(
+      const audioFrameSnapshot = await waitFor(
         async () => {
           const value = await evaluate(session, buildSnapshotExpression());
           lastSnapshot = value;
           const hasFrame = value.audioFrameCount > 0 || value.audio.includes("接收") || value.audio.includes("level");
           const hasPayload = Boolean(value.lastAudioFrame?.payloadLength || value.lastAudioFrame?.payloadBytes);
-          const played = value.audioPlayedFrames > 0;
           const frame = value.lastAudioFrame;
           const realPcmOk = !args.requireAudio || (
             String(frame?.codec || "").toLowerCase().includes("pcm-f32le") &&
@@ -901,8 +932,7 @@ async function run() {
             Number(frame?.channels || 0) === 2
           );
           const payloadOk = !args.expectAudioPayload || hasPayload;
-          const playbackOk = !args.expectAudioPlayback || played;
-          return hasFrame && payloadOk && playbackOk && realPcmOk ? value : null;
+          return hasFrame && payloadOk && realPcmOk ? value : null;
         },
         args.timeoutMs,
         "Mac client audio frame",
@@ -914,9 +944,34 @@ async function run() {
         }
         throw error;
       });
+      requireWithinDuration("Mac client audio frame", audioFrameSnapshot.audioFrameMs, args.maxAudioFrameMs);
+
+      let audioSnapshot = audioFrameSnapshot;
+      if (args.expectAudioPlayback) {
+        audioSnapshot = await waitFor(
+          async () => {
+            const value = await evaluate(session, buildSnapshotExpression());
+            lastSnapshot = value;
+            return value.audioPlayedFrames > 0 ? value : null;
+          },
+          args.timeoutMs,
+          "Mac client audio playback",
+        ).catch((error) => {
+          if (lastSnapshot) {
+            print("INFO", `Last audio: ${lastSnapshot.audio}`);
+            print("INFO", `Last audio playback: ${lastSnapshot.audioPlayback}`);
+            print("INFO", `Last audio frames: ${lastSnapshot.audioFrameCount}, played: ${lastSnapshot.audioPlayedFrames}`);
+          }
+          throw error;
+        });
+        requireWithinDuration("Mac client audio playback", audioSnapshot.audioPlaybackMs, args.maxAudioPlaybackMs);
+      }
+
       const frame = audioSnapshot.lastAudioFrame;
       const payloadText = frame ? ` · payload=${frame.payloadBytes || frame.payloadLength || 0}` : "";
-      print("OK", `Audio: ${audioSnapshot.audio} / ${audioSnapshot.audioPlayback}${payloadText}`);
+      const timingText = ` · firstAudio=${audioFrameSnapshot.audioFrameMs}ms` +
+        (args.expectAudioPlayback ? ` · playback=${audioSnapshot.audioPlaybackMs}ms` : "");
+      print("OK", `Audio: ${audioSnapshot.audio} / ${audioSnapshot.audioPlayback}${payloadText}${timingText}`);
     }
 
     const endpoint = `${args.host}:${args.port}`;

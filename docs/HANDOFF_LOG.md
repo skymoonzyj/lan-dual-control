@@ -21,6 +21,39 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：把 Mac client 页面级自检的音频体验指标补齐，开始量化反控音频首帧和真实播放耗时。
+完成内容：
+- `scripts/windows/test-mac-client-browser.mjs` 新增 `--maxAudioFrameMs`，在 `--expectAudioFrame` 路径打印首条 `audio_frame` 到达耗时，参数大于 0 时超过阈值即失败。
+- 新增 `--maxAudioPlaybackMs`，在真实 PCM 播放路径 `--expectAudioPlayback` 下要求页面播放计数在阈值内出现。
+- WebSocket 记录器会用页面 `performance.now()` 记录首条音频帧，避免只靠 Node 侧等待时间。
+- 默认行为只增加指标输出，不改变协议、不改变页面连接流程。
+- Mac client README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --enableAudio --expectAudioFrame --maxAudioFrameMs 8000 --mockVideo --allowClipboardFallback --skipFileClipboard --timeoutMs 45000`
+- `node scripts/windows/test-mac-client-browser.mjs --requireAudio --maxAudioFrameMs 8000 --maxAudioPlaybackMs 10000 --mockVideo --allowClipboardFallback --skipFileClipboard --timeoutMs 45000`
+验证结果：
+- mock 音频首帧路径通过：页面收到 mock `audio_frame`，输出 `firstAudio=288ms`，低于 8s 阈值；后续显示设置、输入、快捷键、文本剪贴板和本机剪贴板监听均继续通过。
+- `--requireAudio` 在当前 Mac 本机临时 Windows host 上按预期失败：临时 host 只能发送 mock 音频，脚本没有把 mock 当作真实 PCM payload/播放计数，最后显示 `played: 0` 并超时。这说明真实播放阈值需要在 Windows 真机 WASAPI host 上验收。
+遗留问题：
+- `--maxAudioPlaybackMs` 还需要 Windows 端真实 WASAPI host 或已运行 Windows host 配合验证，当前 Mac 环境无法产生真实 Windows 系统声音 PCM payload。
+下一步建议：
+- Windows 真机启动 WASAPI host 后运行 `node scripts/windows/test-mac-client-browser.mjs --requireAudio --maxAudioFrameMs 8000 --maxAudioPlaybackMs 10000 --mockVideo --allowClipboardFallback --skipFileClipboard --timeoutMs 45000` 或使用 `--useExistingHost --enableAudio --expectAudioPayload --expectAudioPlayback --maxAudioFrameMs <阈值> --maxAudioPlaybackMs <阈值>` 建立音频体验基线。
+是否改了协议：否。
+是否需要另一端配合：后续真实 PCM 播放耗时阈值需要 Windows 真机 WASAPI host 配合。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：把 Mac 控制 Windows 页面级自检补上首帧和重连恢复耗时指标，开始把体验验收量化。
 完成内容：
 - `scripts/windows/test-mac-client-browser.mjs` 新增 `--maxInitialVideoMs`，首次视频可见耗时会默认打印；参数大于 0 时超过阈值即失败。
