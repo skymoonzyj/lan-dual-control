@@ -13,6 +13,10 @@ function parseArgs(argv) {
   const args = { ...defaults };
   for (let index = 2; index < argv.length; index += 1) {
     const token = argv[index];
+    if (token === "-h") {
+      args.help = true;
+      continue;
+    }
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
     const next = argv[index + 1];
@@ -34,6 +38,7 @@ function printHelp() {
 
 Options:
   --timeoutMs <ms>  Per-step timeout. Default: 12000
+  --help, -h        Show this help without running the start-helper self-test
 `);
 }
 

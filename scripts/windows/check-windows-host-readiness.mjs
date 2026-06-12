@@ -38,6 +38,10 @@ function parseArgs(argv) {
   const args = { ...defaults };
   for (let index = 2; index < argv.length; index += 1) {
     const token = argv[index];
+    if (token === "-h") {
+      args.help = true;
+      continue;
+    }
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
     const next = argv[index + 1];
@@ -132,6 +136,7 @@ Options:
   --requireOpen       Require LAN/firewall port probe to be open.
   --strict            Treat warnings as failure.
   --json              Print machine-readable JSON summary.
+  --help, -h          Show this help without running checks.
 
 Profiles:
   default             Low-risk checks only; no running host required.

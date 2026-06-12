@@ -34,6 +34,10 @@ function parseArgs(argv) {
   const args = { ...defaults };
   for (let index = 2; index < argv.length; index += 1) {
     const token = argv[index];
+    if (token === "-h") {
+      args.help = true;
+      continue;
+    }
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
     const next = argv[index + 1];
@@ -117,6 +121,7 @@ Options:
   --skipFirewallCheck     Start only, do not run the read-only firewall check.
   --noRequireOpen         Run firewall check but do not require the port probe to pass.
   --dryRun                Print the resolved launch plan and exit.
+  --help, -h              Show this help without starting Windows host.
 `);
 }
 

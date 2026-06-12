@@ -19,6 +19,40 @@
 
 ## 2026-06-13 Windows Codex
 
+日期：2026-06-13 02:27
+开发端：Windows Codex
+本轮目标：修正旧 Windows 脚本 `-h` 短帮助被忽略的问题，并把帮助入口覆盖做成统一回归。
+完成内容：
+- `check-windows-host-readiness.mjs`、`start-windows-host.mjs` 和 `test-windows-host-start-helper.mjs` 现在能在解析参数时正确识别单横线 `-h`，不会继续进入体检、启动或自测路径。
+- 上述三个脚本的帮助文本补充 `--help, -h` 说明。
+- 新增 `scripts/windows/test-windows-script-help.mjs`，统一验证 `scripts/windows/*.mjs` 的 `--help` 和 `-h` 都能快速 0 退出并输出 Usage/Options 风格帮助。
+- Windows host README、当前状态、任务板和文件占用记录已同步。
+修改文件：
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `scripts/windows/test-windows-script-help.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-windows-script-help.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --help`
+- `node scripts/windows/test-windows-script-help.mjs --script start-windows-host.mjs`
+- `node scripts/windows/test-windows-script-help.mjs`
+验证结果：
+- 新脚本语法检查通过，帮助文本正常。
+- 单脚本覆盖确认 `start-windows-host.mjs --help` 和 `-h` 均通过。
+- 全量覆盖通过：15 个 Windows `.mjs` 脚本、30 条帮助命令全部 0 退出并快速返回；覆盖包含 `check-windows-host-readiness.mjs -h`、`start-windows-host.mjs -h` 和 `test-windows-host-start-helper.mjs -h`。
+遗留问题：无。
+下一步建议：后续新增或修改 Windows `.mjs` 工具脚本时，把 `node scripts/windows/test-windows-script-help.mjs` 纳入轻量回归，防止帮助入口退化。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-13 Windows Codex
+
 日期：2026-06-13 02:19
 开发端：Windows Codex
 本轮目标：补齐 Windows 常用检查/回归脚本的 `--help/-h` 纯帮助入口，避免查参数时误触发探测或临时服务。
