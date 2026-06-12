@@ -17,6 +17,44 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
+本轮目标：新增 Windows host 日常启动助手，把启动、局域网地址提示和防火墙只读检查串起来，方便 Mac 反控 Windows 真机联调。
+完成内容：
+- 新增 `scripts/windows/start-windows-host.mjs`：启动 Windows host 后列出 Mac 端可填写的局域网地址，等待 `/discovery` 就绪，并自动运行只读 LAN/firewall 检查。
+- 新增 `scripts/windows/start-windows-host.ps1`：提供更像 Windows 工具的一键入口，支持 `-Wasapi`、`-LogInput`、`-SystemInput`、`-DryRun` 等参数。
+- 默认不改系统防火墙；如果端口不可达或缺少入站规则，继续复用 `check-windows-firewall.mjs` 的管理员建议命令。
+- README、当前状态、下一步和任务板已同步；任务板只标记“启动助手级”引导完成，完整桌面端图形提示仍保留为后续任务。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node scripts/windows/start-windows-host.mjs --dryRun`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-windows-host.ps1 -DryRun`
+- 临时端口 `127.0.0.1:43773` 实际启动 `start-windows-host.mjs --screenMode mock --inputMode log --skipFirewallCheck`，等到 `/discovery` 就绪后自动关闭。
+- `node scripts/windows/check-windows-host-readiness.mjs --timeoutMs 20000`
+- `git diff --check`
+验证结果：
+- Node 入口和 PowerShell 入口干跑均能列出 `192.168.31.68:43770` 和 FFmpeg 路径。
+- 临时端口实际启动/关闭通过，未占用默认 `43770`。
+- Windows host readiness 默认 6/6 通过；只提示当前默认 `43770` 未启动，这是预期提醒。
+遗留问题：
+- 本轮没有做 Tauri 桌面端防火墙弹窗，也没有自动修改系统防火墙。
+下一步建议：
+- 真机让 Mac 控制 Windows 时，先用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-windows-host.ps1` 启动；需要声音时加 `-Wasapi`。
+- 后续可把同样的检查结果接入 Windows 桌面壳，做图形化防火墙引导。
+是否改了协议：否。
+是否需要另一端配合：否；Mac 端后续真机联调时可直接按 README 使用该入口。
+
 ## 2026-06-12 Mac Codex
 
 日期：2026-06-12

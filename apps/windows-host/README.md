@@ -30,6 +30,30 @@ cd E:\codex\lan-dual-control\apps\windows-host
 node .\server.mjs
 ```
 
+更推荐的日常入口是 Windows host 启动助手。它会启动被控服务，列出 Mac 端应该填写的局域网地址，并在服务起来后自动跑一次只读端口/防火墙检查；如果 Mac 连不上，先看它打印的提示。
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs
+```
+
+PowerShell 入口等价，但参数更像 Windows 工具：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1
+```
+
+需要把 Windows 系统声音也发给 Mac 控制端时，显式开启 WASAPI：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -Wasapi
+```
+
+需要先确认会用什么地址和参数、但不真正启动服务时：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --dryRun
+```
+
 设备发现接口：
 
 ```text

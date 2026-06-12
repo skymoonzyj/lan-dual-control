@@ -41,7 +41,7 @@
 
 - 优化 Windows 控制端远端文件托盘，后续把桌面版文件剪贴板写入升级为原生分块，支持更大的文件。
 - Windows 被控端 FFmpeg gdigrab 过渡层普通启动已可协商 60Hz，本机 720p/60Hz 观察约 56.9 FPS；下一步把该采集层升级为 Windows Graphics Capture 和正式编码管线，进一步提升帧率、延迟、带宽和资源占用表现。
-- Mac 控制 Windows 真机联调前，先运行 `node scripts/windows/check-windows-host-readiness.mjs` 做 Windows host 一键体检；需要短时验证真实视频/系统声音时加 `--probeVideo --probeAudio`。Windows host 已手动监听 `0.0.0.0:43770` 后，再用 `node scripts/windows/check-windows-host-readiness.mjs --host 0.0.0.0 --port 43770 --requireOpen` 强校验局域网端口和防火墙；脚本默认只读，不会自动改系统防火墙。
+- Mac 控制 Windows 真机联调前，先运行 `node scripts/windows/check-windows-host-readiness.mjs` 做 Windows host 一键体检；需要短时验证真实视频/系统声音时加 `--probeVideo --probeAudio`。正式让 Mac 连入时优先用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-windows-host.ps1` 启动 Windows host，它会列出 Mac 端可填的局域网地址并自动做只读防火墙/端口检查；需要系统声音时加 `-Wasapi`。脚本默认只读，不会自动改系统防火墙。
 - Windows 被控端输入注入已升级为常驻 C# SendInput helper；可用 `node scripts/windows/measure-windows-input-helper.mjs` 安全干跑量化 cold/warm/p95 延迟；后续真实 `system` 模式仍需有人看屏幕时用 `test-windows-host.ps1 -InputEvents -InputMode system` 验收手感和安全边界。
 - 继续验证 Windows 被控端 WASAPI loopback：30 秒本机长稳已通过，短测试音电平强校验已通过；下一步重点看系统音量变化、60 秒以上长时间运行、Mac client 播放体验和无系统声音时的提示。可用 `node scripts/windows/observe-windows-host-audio.mjs --durationMs 30000 --minFrames 1200 --minFps 40 --maxGapMs 1000` 做持续帧观察；需要确认有声电平时加 `--playTone --requireLevel --minLevel 0.02`。
 - 优化 Windows 控制端文件托盘和错误提示。
