@@ -47,6 +47,7 @@ const elements = {
   fileClipboardInput: document.querySelector("#fileClipboardInput"),
   copyReceivedFilesButton: document.querySelector("#copyReceivedFilesButton"),
   receivedFilesList: document.querySelector("#receivedFilesList"),
+  receivedFilesStatus: document.querySelector("#receivedFilesStatus"),
   downloadAllReceivedFilesButton: document.querySelector("#downloadAllReceivedFilesButton"),
   openReceivedFilesTempButton: document.querySelector("#openReceivedFilesTempButton"),
   clearReceivedFilesButton: document.querySelector("#clearReceivedFilesButton"),
@@ -341,6 +342,10 @@ const state = {
   remoteFileTransfers: new Map(),
   receivedClipboardFiles: [],
   receivedClipboardTempPath: "",
+  receivedClipboardWriteStatus: {
+    kind: "",
+    text: "",
+  },
   lastRemotePointer: null,
   remotePointerButtonsDown: new Set(),
   pointerOutsideFrameNoticeAt: 0,
@@ -3038,6 +3043,36 @@ function fileClipboardLocalDetail(result = {}, fallback = "文件仍保留在远
   return recovery && !reason.includes(recovery) ? `${reason}；${recovery}` : reason;
 }
 
+function setReceivedFilesWriteStatus(kind = "", text = "") {
+  state.receivedClipboardWriteStatus = {
+    kind,
+    text,
+  };
+}
+
+function updateReceivedFilesWriteStatusFromResult(result = {}, fileCount = state.receivedClipboardFiles.length) {
+  if (result.clipboardWritten) {
+    setReceivedFilesWriteStatus(
+      "success",
+      `已写入 Windows 系统文件剪贴板（${result.fileCount ?? fileCount} 个文件），可直接粘贴。`,
+    );
+    return;
+  }
+
+  const recovery = fileClipboardRecoveryText(result);
+  if (result.saveMode === "temp" && recovery) {
+    setReceivedFilesWriteStatus("warning", "系统写入失败，但文件已保存到临时目录。可打开临时目录或重试写入。");
+    return;
+  }
+
+  if (result.saveMode === "memory-only") {
+    setReceivedFilesWriteStatus("warning", "未写入系统文件剪贴板，文件仍在内存托盘。可下载；桌面版可重试写入。");
+    return;
+  }
+
+  setReceivedFilesWriteStatus("warning", result.reason || "系统文件剪贴板写入失败，可重试。");
+}
+
 function rememberFileClipboardTempPath(result = {}) {
   const path = fileClipboardRecoveryPath(result);
   if (path) {
@@ -3156,8 +3191,12 @@ async function copyReceivedFilesToSystemClipboard() {
   }
 
   elements.clipboardText.textContent = "剪贴板：正在写入系统文件剪贴板";
+  setReceivedFilesWriteStatus("busy", "正在写入 Windows 系统文件剪贴板...");
+  renderReceivedFiles();
   const result = await writeReceivedFilesToSystemClipboard();
   rememberFileClipboardTempPath(result);
+  updateReceivedFilesWriteStatusFromResult(result);
+  renderReceivedFiles();
   if (result.clipboardWritten) {
     elements.clipboardText.textContent = `剪贴板：已写入系统文件剪贴板（${result.fileCount ?? state.receivedClipboardFiles.length} 个文件）`;
     addLog("远端文件剪贴板", fileClipboardLocalDetail(result, "已写入 Windows 系统文件剪贴板"));
@@ -3175,9 +3214,14 @@ function renderReceivedFiles() {
   const files = state.receivedClipboardFiles;
   const canWriteFileClipboard = canUseDesktopFileClipboard();
   const canOpenTempPath = Boolean(getTauriInvoke() && state.receivedClipboardTempPath && files.length > 0);
+  const writeStatus = state.receivedClipboardWriteStatus || {};
+  const canRetryWrite =
+    files.length > 0 && canWriteFileClipboard && writeStatus.kind === "warning" && Boolean(writeStatus.text);
   elements.copyReceivedFilesButton.disabled = files.length === 0 || !canWriteFileClipboard;
   elements.copyReceivedFilesButton.title = canWriteFileClipboard
-    ? "写入系统文件剪贴板"
+    ? canRetryWrite
+      ? "重试写入系统文件剪贴板"
+      : "写入系统文件剪贴板"
     : "桌面版支持写入系统文件剪贴板";
   elements.downloadAllReceivedFilesButton.disabled = files.length === 0;
   elements.openReceivedFilesTempButton.disabled = !canOpenTempPath;
@@ -3185,6 +3229,9 @@ function renderReceivedFiles() {
     ? "打开临时目录"
     : "桌面版写入系统文件剪贴板后可打开临时目录";
   elements.clearReceivedFilesButton.disabled = files.length === 0;
+  elements.receivedFilesStatus.hidden = files.length === 0 || !writeStatus.text;
+  elements.receivedFilesStatus.textContent = writeStatus.text || "";
+  elements.receivedFilesStatus.className = `received-files-status${writeStatus.kind ? ` is-${writeStatus.kind}` : ""}`;
 
   if (files.length === 0) {
     const empty = document.createElement("p");
@@ -3250,6 +3297,7 @@ function clearReceivedFiles() {
   }
   state.receivedClipboardFiles = [];
   state.receivedClipboardTempPath = "";
+  setReceivedFilesWriteStatus("", "");
   renderReceivedFiles();
   elements.clipboardText.textContent = elements.clipboardToggle.checked ? "剪贴板：已开启" : "剪贴板：已关闭";
   addLog("远端文件", "已清空内存暂存文件");
@@ -3476,6 +3524,7 @@ async function handleClipboardFileComplete(message) {
   }
   state.receivedClipboardFiles = files;
   state.receivedClipboardTempPath = "";
+  setReceivedFilesWriteStatus("busy", "已接收远端文件，正在准备写入 Windows 系统文件剪贴板...");
   renderReceivedFiles();
   let systemClipboardResult = {
     clipboardWritten: false,
@@ -3487,6 +3536,8 @@ async function handleClipboardFileComplete(message) {
     systemClipboardResult = await writeReceivedFilesToSystemClipboard(files);
   }
   rememberFileClipboardTempPath(systemClipboardResult);
+  updateReceivedFilesWriteStatusFromResult(systemClipboardResult, files.length);
+  renderReceivedFiles();
 
   const saveMode = systemClipboardResult.clipboardWritten ? "clipboard" : systemClipboardResult.saveMode || "memory-only";
   const reason = systemClipboardResult.clipboardWritten

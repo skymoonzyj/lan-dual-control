@@ -443,6 +443,35 @@ button:disabled {
   padding: 10px;
 }
 
+.received-files-status {
+  margin: 8px 0 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px;
+}
+
+.received-files-status.is-success {
+  border-color: #b7dfc2;
+  background: #f0faf3;
+  color: #276738;
+}
+
+.received-files-status.is-warning {
+  border-color: #f3d7a2;
+  background: #fff8e9;
+  color: #7a5317;
+}
+
+.received-files-status.is-busy {
+  border-color: #b9d5f5;
+  background: #eef6ff;
+  color: #235f9c;
+}
+
 .received-file-row {
   display: grid;
   grid-template-columns: 1fr auto;

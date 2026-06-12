@@ -401,7 +401,8 @@ async function verifyFileClipboardRecoveryText(session) {
         typeof fileClipboardRecoveryText !== "function" ||
         typeof fileClipboardLocalDetail !== "function" ||
         typeof renderReceivedFiles !== "function" ||
-        typeof openReceivedFilesTempPath !== "function"
+        typeof openReceivedFilesTempPath !== "function" ||
+        typeof updateReceivedFilesWriteStatusFromResult !== "function"
       ) {
         return { ok: false, reason: "missing file clipboard recovery helpers" };
       }
@@ -425,10 +426,13 @@ async function verifyFileClipboardRecoveryText(session) {
       const detail = fileClipboardLocalDetail(tempResult, "fallback");
       const memoryDetail = fileClipboardLocalDetail(memoryResult, "fallback");
       const openButton = document.querySelector("#openReceivedFilesTempButton");
+      const copyButton = document.querySelector("#copyReceivedFilesButton");
+      const status = document.querySelector("#receivedFilesStatus");
 
       const originalTauri = window.__TAURI__;
       const originalFiles = state.receivedClipboardFiles;
       const originalTempPath = state.receivedClipboardTempPath;
+      const originalWriteStatus = state.receivedClipboardWriteStatus;
       const calls = [];
       try {
         state.receivedClipboardFiles = [
@@ -441,6 +445,7 @@ async function verifyFileClipboardRecoveryText(session) {
           },
         ];
         state.receivedClipboardTempPath = tempResult.rootDir;
+        updateReceivedFilesWriteStatusFromResult(tempResult, 1);
         window.__TAURI__ = {
           core: {
             invoke: async (command, payload) => {
@@ -451,10 +456,23 @@ async function verifyFileClipboardRecoveryText(session) {
         };
         renderReceivedFiles();
         const enabledAfterTempPath = openButton && !openButton.disabled;
+        const retryTitleAfterFailure = copyButton?.title || "";
+        const statusTextAfterFailure = status?.textContent || "";
+        const statusClassAfterFailure = status?.className || "";
+        const statusHiddenAfterFailure = Boolean(status?.hidden);
         await openReceivedFilesTempPath();
         state.receivedClipboardTempPath = "";
+        updateReceivedFilesWriteStatusFromResult(
+          {
+            clipboardWritten: true,
+            saveMode: "clipboard",
+            fileCount: 1,
+          },
+          1,
+        );
         renderReceivedFiles();
         const disabledWithoutTempPath = openButton?.disabled === true;
+        const statusTextAfterSuccess = status?.textContent || "";
 
         return {
           ok:
@@ -464,6 +482,11 @@ async function verifyFileClipboardRecoveryText(session) {
             memoryDetail === "浏览器预览版只能保留内存托盘" &&
             enabledAfterTempPath &&
             disabledWithoutTempPath &&
+            retryTitleAfterFailure === "重试写入系统文件剪贴板" &&
+            statusTextAfterFailure.includes("可打开临时目录或重试写入") &&
+            statusClassAfterFailure.includes("is-warning") &&
+            !statusHiddenAfterFailure &&
+            statusTextAfterSuccess.includes("已写入 Windows 系统文件剪贴板") &&
             calls.length === 1 &&
             calls[0].command === "open_clipboard_temp_path" &&
             calls[0].payload?.path === tempResult.rootDir,
@@ -472,6 +495,10 @@ async function verifyFileClipboardRecoveryText(session) {
           memoryDetail,
           enabledAfterTempPath,
           disabledWithoutTempPath,
+          retryTitleAfterFailure,
+          statusTextAfterFailure,
+          statusClassAfterFailure,
+          statusTextAfterSuccess,
           calls,
         };
       } finally {
@@ -482,6 +509,7 @@ async function verifyFileClipboardRecoveryText(session) {
         }
         state.receivedClipboardFiles = originalFiles;
         state.receivedClipboardTempPath = originalTempPath;
+        state.receivedClipboardWriteStatus = originalWriteStatus;
         renderReceivedFiles();
       }
     })()`,

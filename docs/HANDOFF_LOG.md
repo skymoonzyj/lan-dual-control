@@ -95,6 +95,40 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：增强 Windows 控制端远端文件托盘的写入状态和重试提示。
+完成内容：
+- `apps/windows-client/index.html` 新增远端文件托盘状态行，用于显示最近一次系统文件剪贴板写入结果。
+- `apps/windows-client/styles.css` 增加成功、警告和处理中三种轻量状态样式。
+- `apps/windows-client/app.js` 在手动写入和自动接收写入路径中维护 `receivedClipboardWriteStatus`：成功显示可直接粘贴，失败落盘显示可打开临时目录或重试写入，浏览器内存模式显示可下载或重试。
+- 当上次写入失败且桌面版可用时，远端文件托盘的复制按钮悬停提示改为“重试写入系统文件剪贴板”。
+- 页面级 `--diagnosticsOnly` 自检覆盖失败落盘状态行、重试提示、打开临时目录按钮和成功状态切换。
+- Windows client README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/styles.css`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 仍未人工用真实大文件/压缩包在桌面版里验证重试后资源管理器粘贴体验。
+下一步建议：
+- 真实大文件体验验收后，再做更细的托盘清理交互，例如保留最近临时目录清单或按批次清理。
+是否改了协议：否。
+是否需要另一端配合：暂无；真实文件体验验收时需要 Mac 端复制文件触发。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：给 Windows 桌面版远端文件托盘增加一键打开临时目录。
 完成内容：
 - `apps/windows-client/index.html` 远端文件工具栏新增“打开临时目录”按钮。
