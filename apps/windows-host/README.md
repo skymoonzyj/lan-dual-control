@@ -74,6 +74,7 @@ $env:LAN_DUAL_WINDOWS_SCREEN_MODE="auto"   # 默认，Windows 优先 FFmpeg gdig
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="mock"   # 强制模拟视频帧
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="ffmpeg" # 强制 FFmpeg gdigrab MJPEG
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="system" # 强制 Windows 系统截图 JPEG
+$env:LAN_DUAL_FFMPEG="C:\DevTools\ffmpeg\bin\ffmpeg.exe" # 可选；PATH 不稳定时显式指定 FFmpeg
 $env:LAN_DUAL_WINDOWS_JPEG_QUALITY="70"    # JPEG 质量，35-92
 $env:LAN_DUAL_WINDOWS_MAX_SCREEN_FPS="30"  # FFmpeg 默认上限 30，1-60；system 模式默认 4，1-8
 ```

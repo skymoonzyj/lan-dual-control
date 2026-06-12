@@ -119,12 +119,12 @@ function loadWindowsDisplaysSync(logger) {
   return defaultDisplays;
 }
 
-function hasFfmpegGdigrabSync(logger) {
+function hasFfmpegGdigrabSync({ ffmpegCommand = "ffmpeg", logger } = {}) {
   if (process.platform !== "win32") {
     return false;
   }
 
-  const result = spawnSync("ffmpeg", ["-hide_banner", "-formats"], {
+  const result = spawnSync(ffmpegCommand, ["-hide_banner", "-formats"], {
     encoding: "utf8",
     timeout: 3000,
     windowsHide: true,
@@ -279,7 +279,8 @@ export class WindowsScreenCaptureCoordinator {
   constructor({ logger } = {}) {
     this.logger = logger;
     this.requestedMode = normalizeScreenMode(process.env.LAN_DUAL_WINDOWS_SCREEN_MODE);
-    this.ffmpegAvailable = hasFfmpegGdigrabSync(logger);
+    this.ffmpegCommand = process.env.LAN_DUAL_FFMPEG || "ffmpeg";
+    this.ffmpegAvailable = hasFfmpegGdigrabSync({ ffmpegCommand: this.ffmpegCommand, logger });
     this.mode = this.resolveMode();
     this.quality = clampNumber(process.env.LAN_DUAL_WINDOWS_JPEG_QUALITY, 35, 92, 70);
     this.captureTimeoutMs = clampNumber(process.env.LAN_DUAL_WINDOWS_CAPTURE_TIMEOUT_MS, 1000, 12000, 5000);
@@ -552,7 +553,7 @@ export class WindowsScreenCaptureCoordinator {
       "-",
     ];
 
-    const child = spawn("ffmpeg", args, {
+    const child = spawn(this.ffmpegCommand, args, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });

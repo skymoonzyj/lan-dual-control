@@ -14,6 +14,7 @@ param(
   [string] $ClipboardMode = "system",
   [ValidateSet("auto", "system", "log")]
   [string] $InputMode = "log",
+  [string] $Ffmpeg = $env:LAN_DUAL_FFMPEG,
   [switch] $UseExisting,
   [switch] $KeepRunning,
   [switch] $MockVideo,
@@ -28,6 +29,13 @@ $repoRoot = Resolve-Path (Join-Path $scriptRoot "..\..")
 $probeScript = Join-Path $scriptRoot "probe-mac-host.mjs"
 $serverScript = Join-Path $repoRoot "apps\windows-host\server.mjs"
 $startedProcess = $null
+
+if (-not $Ffmpeg) {
+  $defaultFfmpeg = "C:\DevTools\ffmpeg\bin\ffmpeg.exe"
+  if (Test-Path $defaultFfmpeg) {
+    $Ffmpeg = $defaultFfmpeg
+  }
+}
 
 function Test-PortOpen {
   param(
@@ -68,6 +76,9 @@ function Start-LocalWindowsHost {
     "LAN_DUAL_WINDOWS_CLIPBOARD_MODE" = $ClipboardMode
     "LAN_DUAL_WINDOWS_INPUT_MODE" = $InputMode
     "LAN_DUAL_WINDOWS_MAX_SCREEN_FPS" = [string]([Math]::Max(1, [Math]::Min($Fps, 60)))
+  }
+  if ($Ffmpeg) {
+    $envBlock["LAN_DUAL_FFMPEG"] = $Ffmpeg
   }
 
   $previousEnv = @{}

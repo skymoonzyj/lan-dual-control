@@ -21,6 +21,37 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：补齐 Windows 端 FFmpeg 环境，并让 Windows host 在 PATH 不稳定时也能可靠找到 FFmpeg。
+完成内容：
+- 已安装 FFmpeg 到 `C:\DevTools\ffmpeg`，当前账号 PATH 已加入 `C:\DevTools\ffmpeg\bin`。
+- Windows host 屏幕采集现在支持 `LAN_DUAL_FFMPEG`，可显式指定 `ffmpeg.exe` 路径。
+- `scripts/windows/test-windows-host.ps1` 新增 `-Ffmpeg` 参数，并会自动识别 `C:\DevTools\ffmpeg\bin\ffmpeg.exe`。
+- Windows host 文档补充 `LAN_DUAL_FFMPEG` 配置示例。
+修改文件：
+- `apps/windows-host/src/windows-screen-capture.mjs`
+- `scripts/windows/test-windows-host.ps1`
+- `apps/windows-host/README.md`
+验证方式：
+- `C:\DevTools\ffmpeg\bin\ffmpeg.exe -version` 通过，版本为 `8.1.1-essentials_build-www.gyan.dev`。
+- `ffmpeg -f dshow -list_devices true -i dummy` 可列出本机 DirectShow 音频设备。
+- `npm.cmd run check` in `apps/windows-host` 通过。
+- `node --check apps/windows-host/src/windows-screen-capture.mjs` 通过。
+- `git diff --check` 通过。
+- 普通沙盒进程直接 `gdigrab` 报 Windows `error 5`，授权系统上下文直接抓屏成功。
+- 授权系统上下文运行 `scripts/windows/test-windows-host.ps1 -ScreenMode ffmpeg -Fps 10 -TimeoutMs 25000` 通过：真实 `jpeg` 首帧、`windows-ffmpeg-gdigrab-mjpeg`、文本剪贴板和文件剪贴板均通过。
+遗留问题：
+- 系统级 Machine PATH 写入被注册表权限拒绝；已改为当前用户 PATH。当前已启动的 Codex 进程可能仍需手动追加 `C:\DevTools\ffmpeg\bin` 或使用 `LAN_DUAL_FFMPEG`。
+- 非授权沙盒进程无法抓取 Windows 桌面，FFmpeg `gdigrab` 会报 `error 5`；真实桌面/授权上下文可正常抓屏。
+下一步建议：
+- 后续 Windows host 启动脚本可默认设置 `LAN_DUAL_FFMPEG=C:\DevTools\ffmpeg\bin\ffmpeg.exe`，避免 PATH 继承差异。
+- 继续推进 WASAPI loopback，减少 DirectShow 虚拟设备依赖。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：参考 UU 远程方式继续优化 Windows 控制端画面内悬浮控制中心。
 完成内容：
 - 将控制中心收起态改成更像远控软件的右上角悬浮入口，增加当前刷新率/码率摘要。
