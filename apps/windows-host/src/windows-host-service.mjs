@@ -157,14 +157,11 @@ function createClient(socket, context) {
       return;
     }
     context.audio.start(nextSession);
-    const intervalMs = Math.max(
-      20,
-      Math.min(
-        240,
-        Number(nextSession.audioFrameIntervalMs)
-          || (nextSession.audioEncoding === "pcm-f32le-base64" ? 20 : 240),
-      ),
-    );
+    const requestedIntervalMs = Number(nextSession.audioFrameIntervalMs)
+      || (nextSession.audioEncoding === "pcm-f32le-base64" ? 20 : 240);
+    const intervalMs = nextSession.audioEncoding === "pcm-f32le-base64"
+      ? Math.max(8, Math.min(120, Math.round(requestedIntervalMs / 2)))
+      : Math.max(20, Math.min(240, requestedIntervalMs));
     audioTimer = setInterval(() => {
       const frame = context.audio.makeFrame(nextSession);
       if (frame) {

@@ -9,6 +9,8 @@ const wasapiMode = "wasapi-loopback";
 const defaultSampleRate = 48000;
 const defaultChannels = 2;
 const defaultDurationMs = 20;
+const defaultDshowQueueFrames = 24;
+const defaultWasapiQueueFrames = 96;
 const defaultWasapiScript = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../../../scripts/windows/wasapi-loopback-capture.ps1",
@@ -155,6 +157,12 @@ export class WindowsAudioCaptureCoordinator {
       })
       : null;
     this.mode = this.resolveMode();
+    this.queueFrames = clampNumber(
+      process.env.LAN_DUAL_WINDOWS_AUDIO_QUEUE_FRAMES,
+      4,
+      240,
+      this.mode === wasapiMode ? defaultWasapiQueueFrames : defaultDshowQueueFrames,
+    );
     this.settings = {
       enabled: false,
       volume: 80,
@@ -231,6 +239,7 @@ export class WindowsAudioCaptureCoordinator {
       sampleRate: this.settings.sampleRate,
       channels: this.settings.channels,
       durationMs: this.settings.durationMs,
+      queueFrames: this.queueFrames,
       configuredDevice: this.deviceName,
       wasapi: this.wasapiInfo ?? { ok: false, helper: this.wasapiScript },
       devices: this.audioDevices,
@@ -449,12 +458,12 @@ export class WindowsAudioCaptureCoordinator {
       const payload = this.captureBuffer.subarray(0, bytesPerFrame);
       this.captureBuffer = this.captureBuffer.subarray(bytesPerFrame);
       this.pcmFrames.push(Buffer.from(payload));
-      if (this.pcmFrames.length > 12) {
+      if (this.pcmFrames.length > this.queueFrames) {
         this.pcmFrames.shift();
       }
     }
 
-    const maxBufferBytes = bytesPerFrame * 24;
+    const maxBufferBytes = bytesPerFrame * Math.max(24, this.queueFrames * 2);
     if (this.captureBuffer.length > maxBufferBytes) {
       this.captureBuffer = this.captureBuffer.subarray(this.captureBuffer.length - maxBufferBytes);
     }

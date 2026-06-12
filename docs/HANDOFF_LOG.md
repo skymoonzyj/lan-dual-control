@@ -21,6 +21,40 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：修正 Windows host 音频观察口径，并优化 WASAPI PCM 发送节奏。
+完成内容：
+- `observe-windows-host-audio.mjs` 新增 `--warmupFrames`，默认丢掉前 5 帧再计算稳态 FPS，同时输出首帧延迟和整体 FPS。
+- Windows host PCM 队列上限改为可配置 `LAN_DUAL_WINDOWS_AUDIO_QUEUE_FRAMES`；WASAPI 默认 96 帧，DirectShow 默认 24 帧。
+- Windows host PCM 发送轮询从固定 20ms 下限改为 PCM 使用更小轮询间隔，避免 Windows 定时器粒度把 20ms 帧拖成约 31ms。
+- README 和下一步清单已更新观察脚本和队列配置说明。
+修改文件：
+- `apps/windows-host/src/windows-audio-capture.mjs`
+- `apps/windows-host/src/windows-host-service.mjs`
+- `scripts/windows/observe-windows-host-audio.mjs`
+- `apps/windows-host/README.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/NEXT_ACTIONS.md`
+验证方式：
+- `npm.cmd run check` in `apps/windows-host`
+- `node --check scripts/windows/observe-windows-host-audio.mjs`
+- `node scripts/windows/observe-windows-host-audio.mjs --durationMs 6000 --minFrames 220 --minFps 40 --maxGapMs 1000 --timeoutMs 30000`
+验证结果：
+- 修复前长测稳态约 32.17 FPS。
+- 修复后 6 秒观察收到 283 帧，稳态约 49.9 FPS，最大间隔 32 ms。
+- payload 固定 7680 bytes，sampleRate=48000，channels=2。
+- 当前系统输出电平仍为 0，说明测试时系统无可听输出或静音；音频帧节奏已正常。
+遗留问题：
+- 还需要在 Windows 实际播放系统声音时观察电平变化，并由 Mac client 做真实听感验收。
+下一步建议：
+- Mac client 打开远端声音时，Windows 端可同步跑 `observe-windows-host-audio --useExisting` 记录稳态帧率和电平。
+是否改了协议：否。
+是否需要另一端配合：后续听感验收需要 Mac 端配合，本轮 Windows 本机节奏验证已通过。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：新增 Windows host 音频持续帧观察脚本，便于排查 WASAPI/DirectShow 音频卡顿、静音和帧间隔问题。
 完成内容：
 - 新增 `scripts/windows/observe-windows-host-audio.mjs`。

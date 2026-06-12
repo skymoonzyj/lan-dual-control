@@ -20,6 +20,7 @@ const defaults = {
   minFrames: 50,
   minFps: 15,
   maxGapMs: 1000,
+  warmupFrames: 5,
   audioMode: "wasapi",
   audioDevice: process.env.LAN_DUAL_WINDOWS_AUDIO_DEVICE || "",
   sampleRate: Number(process.env.LAN_DUAL_WINDOWS_AUDIO_SAMPLE_RATE) || 48000,
@@ -56,6 +57,7 @@ function parseArgs(argv) {
   args.minFrames = Number(args.minFrames) || defaults.minFrames;
   args.minFps = Number(args.minFps) || defaults.minFps;
   args.maxGapMs = Number(args.maxGapMs) || defaults.maxGapMs;
+  args.warmupFrames = Math.max(0, Number(args.warmupFrames) || defaults.warmupFrames);
   args.sampleRate = Number(args.sampleRate) || defaults.sampleRate;
   args.channels = Number(args.channels) || defaults.channels;
   args.frameMs = Number(args.frameMs) || defaults.frameMs;
@@ -353,19 +355,19 @@ async function observeAudioFrames(client, args) {
   const frames = [];
   const startedAt = performance.now();
   let lastAt = startedAt;
-  let maxGapMs = 0;
 
   while (performance.now() - startedAt < args.durationMs) {
     const frame = await client.waitForMessage("audio_frame", args.timeoutMs);
     const now = performance.now();
     const gap = frames.length === 0 ? 0 : now - lastAt;
     lastAt = now;
-    maxGapMs = Math.max(maxGapMs, gap);
     if (args.requirePcm) {
       assertPcmAudioFrame(frame);
     }
     frames.push({
       atMs: now,
+      relativeMs: now - startedAt,
+      gapMs: gap,
       frameId: Number(frame.frameId) || frames.length + 1,
       codec: frame.codec || "",
       encoding: frame.encoding || "",
@@ -379,8 +381,29 @@ async function observeAudioFrames(client, args) {
     });
   }
 
-  const elapsedMs = Math.max(1, (frames.at(-1)?.atMs || performance.now()) - startedAt);
-  const fps = frames.length > 1 ? (frames.length * 1000) / elapsedMs : 0;
+  const warmupCount = Math.min(args.warmupFrames, Math.max(0, frames.length - 2));
+  const steadyFrames = frames.slice(warmupCount);
+  const overall = summarizeFrames(frames, startedAt);
+  const steady = summarizeFrames(steadyFrames, startedAt);
+
+  return {
+    ...overall,
+    frameCount: frames.length,
+    firstFrameDelayMs: Math.round(frames[0]?.relativeMs || 0),
+    warmupFrames: warmupCount,
+    steady,
+  };
+}
+
+function summarizeFrames(frames, startedAt) {
+  const first = frames[0];
+  const last = frames.at(-1);
+  const elapsedMs = first && last
+    ? Math.max(1, last.atMs - (first === last ? startedAt : first.atMs))
+    : 0;
+  const intervalCount = Math.max(0, frames.length - 1);
+  const fps = intervalCount > 0 ? (intervalCount * 1000) / elapsedMs : 0;
+  const gaps = frames.slice(1).map((frame) => frame.gapMs);
   const levels = frames.map((frame) => frame.level);
   const payloads = frames.map((frame) => frame.payloadBytes);
   const avgLevel = levels.length ? levels.reduce((sum, value) => sum + value, 0) / levels.length : 0;
@@ -390,9 +413,9 @@ async function observeAudioFrames(client, args) {
     frameCount: frames.length,
     elapsedMs: Math.round(elapsedMs),
     fps: Number(fps.toFixed(2)),
-    maxGapMs: Math.round(maxGapMs),
-    firstFrameId: frames[0]?.frameId || 0,
-    lastFrameId: frames.at(-1)?.frameId || 0,
+    maxGapMs: gaps.length ? Math.round(Math.max(...gaps)) : 0,
+    firstFrameId: first?.frameId || 0,
+    lastFrameId: last?.frameId || 0,
     avgPayloadBytes: Math.round(avgPayloadBytes),
     minPayloadBytes: payloads.length ? Math.min(...payloads) : 0,
     maxPayloadBytes: payloads.length ? Math.max(...payloads) : 0,
@@ -413,11 +436,11 @@ function assertObservation(summary, args) {
   if (summary.frameCount < args.minFrames) {
     problems.push(`frames ${summary.frameCount} < ${args.minFrames}`);
   }
-  if (summary.fps < args.minFps) {
-    problems.push(`fps ${summary.fps} < ${args.minFps}`);
+  if (summary.steady.fps < args.minFps) {
+    problems.push(`steadyFps ${summary.steady.fps} < ${args.minFps}`);
   }
-  if (summary.maxGapMs > args.maxGapMs) {
-    problems.push(`maxGapMs ${summary.maxGapMs} > ${args.maxGapMs}`);
+  if (summary.steady.maxGapMs > args.maxGapMs) {
+    problems.push(`steadyMaxGapMs ${summary.steady.maxGapMs} > ${args.maxGapMs}`);
   }
   if (problems.length > 0) {
     throw new Error(`audio observation failed: ${problems.join("; ")}`);
@@ -470,6 +493,7 @@ async function main() {
       requested: {
         audioMode: args.audioMode,
         durationMs: args.durationMs,
+        warmupFrames: args.warmupFrames,
         sampleRate: args.sampleRate,
         channels: args.channels,
         frameMs: args.frameMs,
@@ -490,9 +514,10 @@ async function main() {
       console.log(JSON.stringify(result, null, 2));
     } else {
       print("OK", `Observed ${summary.frameCount} audio frames in ${summary.elapsedMs} ms`, args);
-      print("OK", `Average FPS: ${summary.fps} / max gap: ${summary.maxGapMs} ms`, args);
-      print("INFO", `Payload bytes avg/min/max: ${summary.avgPayloadBytes}/${summary.minPayloadBytes}/${summary.maxPayloadBytes}`, args);
-      print("INFO", `Level min/avg/max: ${summary.minLevel}/${summary.avgLevel}/${summary.maxLevel}`, args);
+      print("OK", `Steady FPS: ${summary.steady.fps} / max gap: ${summary.steady.maxGapMs} ms / warmup frames: ${summary.warmupFrames}`, args);
+      print("INFO", `First frame delay: ${summary.firstFrameDelayMs} ms / overall FPS: ${summary.fps}`, args);
+      print("INFO", `Payload bytes avg/min/max: ${summary.steady.avgPayloadBytes}/${summary.steady.minPayloadBytes}/${summary.steady.maxPayloadBytes}`, args);
+      print("INFO", `Level min/avg/max: ${summary.steady.minLevel}/${summary.steady.avgLevel}/${summary.steady.maxLevel}`, args);
       print("INFO", `Codec: ${summary.codecs.join(", ") || "unknown"} / sampleRates: ${summary.sampleRates.join(", ") || "unknown"} / channels: ${summary.channels.join(", ") || "unknown"}`, args);
       print("OK", "Windows host audio observation passed", args);
     }

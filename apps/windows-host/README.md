@@ -88,6 +88,7 @@ $env:LAN_DUAL_WINDOWS_AUDIO_MODE="dshow"                 # 显式启用 FFmpeg D
 $env:LAN_DUAL_WINDOWS_AUDIO_DEVICE="麦克风阵列 (网易虚拟音频设备)" # 改成上面列出的 loopback/虚拟声卡设备名
 $env:LAN_DUAL_WINDOWS_AUDIO_SAMPLE_RATE="48000"
 $env:LAN_DUAL_WINDOWS_AUDIO_CHANNELS="2"
+$env:LAN_DUAL_WINDOWS_AUDIO_QUEUE_FRAMES="96"            # 可选；WASAPI 默认 96，DirectShow 默认 24
 ```
 
 默认检查脚本只列出设备和 WASAPI 格式，不采集声音。需要短时验证系统声音 loopback 能输出 PCM 时，再显式运行：
@@ -152,7 +153,7 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --screenMode system --fps 4 --durationMs 2500 --minFrames 3 --minFps 1 --maxGapMs 2000
 ```
 
-音频持续帧观察脚本可统计 Windows host 的 `audio_frame` 帧数、平均帧率、最大帧间隔、payload 大小和电平。默认临时启动 `screenMode=mock`、`audioMode=wasapi` 的 Windows host，只观察系统声音，不额外压视频：
+音频持续帧观察脚本可统计 Windows host 的 `audio_frame` 帧数、稳态帧率、最大帧间隔、payload 大小和电平。默认临时启动 `screenMode=mock`、`audioMode=wasapi` 的 Windows host，只观察系统声音，不额外压视频；默认会丢掉前 5 帧作为预热再计算稳态 FPS：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-audio.mjs
@@ -161,7 +162,7 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-audio.mjs
 需要缩短观察或连接已运行的 Windows host 时：
 
 ```powershell
-node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-audio.mjs --durationMs 3000 --useExisting --host 127.0.0.1 --port 43770
+node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-audio.mjs --durationMs 3000 --warmupFrames 5 --useExisting --host 127.0.0.1 --port 43770
 ```
 
 认证重试策略回归脚本会同时验证 Windows host 和假 Mac 服务：错误密码剩余 `2/1/0`、第三次断开、新连接正确密码通过。
