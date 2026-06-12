@@ -18,6 +18,7 @@ const defaults = {
   audioMode: process.env.LAN_DUAL_WINDOWS_AUDIO_MODE || "",
   inputMode: process.env.LAN_DUAL_WINDOWS_INPUT_MODE || "",
   ffmpeg: process.env.LAN_DUAL_FFMPEG || "",
+  buildId: process.env.LAN_DUAL_BUILD_ID || "",
   timeoutMs: 8000,
   skipFirewallCheck: false,
   noRequireOpen: false,
@@ -84,6 +85,7 @@ function parseArgs(argv) {
   args.audioMode = normalizeMode(args.audioMode, ["mock", "wasapi", "dshow"], "");
   args.inputMode = normalizeMode(args.inputMode, ["auto", "log", "system"], "");
   args.ffmpeg = resolveFfmpegCommand(String(args.ffmpeg || "").trim());
+  args.buildId = String(args.buildId || "").trim() || getGitBuildId() || "dev";
   args.promptPassword = Boolean(args.promptPassword);
   args.requirePassword = Boolean(args.requirePassword);
   return args;
@@ -104,6 +106,7 @@ Options:
   --audioMode <mode>      mock | wasapi | dshow
   --inputMode <mode>      auto | log | system
   --ffmpeg <path>         FFmpeg path. Auto-detects C:\\DevTools\\ffmpeg\\bin\\ffmpeg.exe
+  --buildId <id>          LAN_DUAL_BUILD_ID. Default: current git short hash.
   --promptPassword        Prompt for LAN_DUAL_PASSWORD without echoing it.
   --requirePassword       Refuse to start if no password/env password was set.
   --addFirewallRule       Try to add a Private TCP inbound firewall allow rule.
@@ -135,6 +138,16 @@ function resolveFfmpegCommand(value) {
     return defaultWindowsFfmpeg;
   }
   return "";
+}
+
+function getGitBuildId() {
+  const result = spawnSync("git", ["rev-parse", "--short", "HEAD"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (result.status !== 0) return "";
+  return String(result.stdout || "").trim();
 }
 
 function getLanAddresses() {
@@ -229,6 +242,7 @@ function makeLaunchEnv(args) {
     ...process.env,
     LAN_DUAL_HOST: args.host,
     LAN_DUAL_PORT: String(args.port),
+    LAN_DUAL_BUILD_ID: args.buildId,
   };
   if (args.password) env.LAN_DUAL_PASSWORD = String(args.password);
   if (args.screenMode) env.LAN_DUAL_WINDOWS_SCREEN_MODE = args.screenMode;
@@ -241,6 +255,7 @@ function makeLaunchEnv(args) {
 function printLaunchPlan(args) {
   const lanAddresses = getLanAddresses();
   console.log(`[INFO] Windows host bind: ${args.host}:${args.port}`);
+  console.log(`[INFO] Build ID: ${args.buildId}`);
   if (lanAddresses.length > 0) {
     for (const entry of lanAddresses) {
       console.log(`[OK] Mac side can try: ${entry.address}:${args.port} (${entry.name})`);

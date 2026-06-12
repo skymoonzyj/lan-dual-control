@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,6 +15,9 @@ const defaults = {
   probeHost: false,
   probeAudio: false,
   probeVideo: false,
+  expectBuildId: "",
+  requireCurrentBuildId: false,
+  skipCurrentBuildCheck: false,
   requireOpen: false,
   strict: false,
   json: false,
@@ -39,6 +42,8 @@ function parseArgs(argv) {
       key === "probeHost" ||
       key === "probeAudio" ||
       key === "probeVideo" ||
+      key === "requireCurrentBuildId" ||
+      key === "skipCurrentBuildCheck" ||
       key === "requireOpen" ||
       key === "strict" ||
       key === "json"
@@ -61,6 +66,10 @@ function parseArgs(argv) {
   args.probeHost = booleanArg(args.probeHost);
   args.probeAudio = booleanArg(args.probeAudio);
   args.probeVideo = booleanArg(args.probeVideo);
+  args.expectBuildId = String(args.expectBuildId || "").trim();
+  args.currentBuildId = getGitBuildId();
+  args.requireCurrentBuildId = booleanArg(args.requireCurrentBuildId);
+  args.skipCurrentBuildCheck = booleanArg(args.skipCurrentBuildCheck);
   args.requireOpen = booleanArg(args.requireOpen);
   args.strict = booleanArg(args.strict);
   args.json = booleanArg(args.json);
@@ -82,6 +91,7 @@ function applyProfile(args) {
 
   args.strict = true;
   args.requireOpen = true;
+  args.requireCurrentBuildId = true;
   args.probeVideo = true;
   args.probeAudio = true;
 
@@ -105,13 +115,16 @@ Options:
   --probeHost         Run Windows host PowerShell self-test.
   --probeVideo        Run short Windows host video observer.
   --probeAudio        Run short WASAPI audio observer. Does not play a tone.
+  --expectBuildId <id>      Require running host runtime.buildId to equal this value.
+  --requireCurrentBuildId   Require running host runtime.buildId to match current git short hash.
+  --skipCurrentBuildCheck   Do not warn when running host build differs from current git.
   --requireOpen       Require LAN/firewall port probe to be open.
   --strict            Treat warnings as failure.
   --json              Print machine-readable JSON summary.
 
 Profiles:
   default             Low-risk checks only; no running host required.
-  deploy              Require the configured port to be open, strict mode, plus video/audio probes.
+  deploy              Require the configured port/current build, strict mode, plus video/audio probes.
   deep                deploy profile plus Windows host PowerShell self-test.
 `);
 }
@@ -122,6 +135,16 @@ function resolveFfmpegCommand(value) {
     return defaultWindowsFfmpeg;
   }
   return "ffmpeg";
+}
+
+function getGitBuildId() {
+  const result = spawnSync("git", ["rev-parse", "--short", "HEAD"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (result.status !== 0) return "";
+  return String(result.stdout || "").trim();
 }
 
 function print(kind, text, args) {
@@ -259,6 +282,118 @@ function collectLines(text, marker) {
   return splitLines(text).filter((line) => line.startsWith(marker));
 }
 
+function normalizeDiscoveryHost(host) {
+  const normalized = String(host || "").trim();
+  if (!normalized || normalized === "0.0.0.0" || normalized === "::") {
+    return "127.0.0.1";
+  }
+  return normalized;
+}
+
+async function fetchJson(url, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function normalizeRuntime(runtime) {
+  if (!runtime || typeof runtime !== "object") return {};
+  return {
+    processId: runtime.processId == null ? "" : String(runtime.processId),
+    startedAt: runtime.startedAt == null ? "" : String(runtime.startedAt),
+    uptimeSeconds: Number.isFinite(Number(runtime.uptimeSeconds))
+      ? Math.max(0, Math.floor(Number(runtime.uptimeSeconds)))
+      : null,
+    buildId: runtime.buildId == null ? "" : String(runtime.buildId),
+  };
+}
+
+async function checkRunningHostRuntime(args) {
+  const startedAt = Date.now();
+  const discoveryHost = normalizeDiscoveryHost(args.host);
+  const url = `http://${discoveryHost}:${args.port}/discovery`;
+  const warnings = [];
+  const errors = [];
+  let summary = "";
+
+  try {
+    const discovery = await fetchJson(url, Math.min(2500, args.timeoutMs));
+    const runtime = normalizeRuntime(discovery.runtime);
+    const missingFields = [];
+    if (!runtime.processId) missingFields.push("processId");
+    if (!runtime.startedAt) missingFields.push("startedAt");
+    if (runtime.uptimeSeconds == null) missingFields.push("uptimeSeconds");
+    if (!runtime.buildId) missingFields.push("buildId");
+
+    if (missingFields.length > 0) {
+      const message = `discovery.runtime missing ${missingFields.join(", ")}`;
+      if (args.requireOpen || args.expectBuildId || args.requireCurrentBuildId) {
+        errors.push(message);
+      } else {
+        warnings.push(`[WARN] ${message}`);
+      }
+    }
+
+    if (args.expectBuildId && runtime.buildId !== args.expectBuildId) {
+      errors.push(`runtime.buildId mismatch: ${runtime.buildId || "missing"} !== ${args.expectBuildId}`);
+    }
+
+    if (args.requireCurrentBuildId && !args.currentBuildId) {
+      errors.push("current git build id is unavailable");
+    }
+    if (args.requireCurrentBuildId && args.currentBuildId && runtime.buildId !== args.currentBuildId) {
+      errors.push(`runtime.buildId mismatch: ${runtime.buildId || "missing"} !== current ${args.currentBuildId}`);
+    }
+
+    if (
+      !args.skipCurrentBuildCheck &&
+      args.currentBuildId &&
+      runtime.buildId &&
+      runtime.buildId !== args.currentBuildId
+    ) {
+      warnings.push(`[WARN] running host build ${runtime.buildId} differs from current git ${args.currentBuildId}`);
+    }
+
+    summary = runtime.buildId
+      ? `pid=${runtime.processId || "unknown"} build=${runtime.buildId} uptime=${runtime.uptimeSeconds ?? "?"}s`
+      : "Windows host discovery reached; runtime missing";
+    return {
+      label: "Windows host runtime",
+      ok: errors.length === 0,
+      exitCode: errors.length === 0 ? 0 : 1,
+      elapsedMs: Date.now() - startedAt,
+      summary,
+      warnings,
+      errors,
+    };
+  } catch (error) {
+    const message = `Windows host discovery runtime unavailable at ${url}: ${error.message}`;
+    if (args.requireOpen || args.expectBuildId || args.requireCurrentBuildId) {
+      errors.push(message);
+    }
+    return {
+      label: "Windows host runtime",
+      ok: errors.length === 0,
+      exitCode: errors.length === 0 ? 0 : 1,
+      elapsedMs: Date.now() - startedAt,
+      summary: args.requireOpen ? message : "Windows host is not running; runtime check skipped",
+      warnings,
+      errors,
+    };
+  }
+}
+
 function filterExpectedWarnings(label, warnings) {
   if (label === "Windows input helper safe dry-run") {
     return warnings.filter((line) => !line.includes("Unsupported input event: __dry_run_unsupported__"));
@@ -277,6 +412,21 @@ async function runStep(results, args, label, command, commandArgs, options = {})
   }
   for (const warning of result.warnings.slice(0, 3)) {
     print("WARN", `${label}: ${warning.replace(/^\[WARN\]\s*/, "")}`, args);
+  }
+  return result;
+}
+
+async function runRuntimeStep(results, args) {
+  print("INFO", "Running Windows host runtime", args);
+  const result = await checkRunningHostRuntime(args);
+  results.push(result);
+  if (result.ok) {
+    print("OK", `Windows host runtime: ${result.summary}`, args);
+  } else {
+    print("ERROR", `Windows host runtime: ${result.summary}`, args);
+  }
+  for (const warning of result.warnings.slice(0, 3)) {
+    print("WARN", `Windows host runtime: ${warning.replace(/^\[WARN\]\s*/, "")}`, args);
   }
   return result;
 }
@@ -328,6 +478,7 @@ async function main() {
     ],
     { timeoutMs: args.timeoutMs },
   );
+  await runRuntimeStep(results, args);
 
   if (args.probeHost) {
     await runStep(
@@ -402,6 +553,10 @@ async function main() {
       probeHost: args.probeHost,
       probeVideo: args.probeVideo,
       probeAudio: args.probeAudio,
+      expectBuildId: args.expectBuildId,
+      currentBuildId: args.currentBuildId,
+      requireCurrentBuildId: args.requireCurrentBuildId,
+      skipCurrentBuildCheck: args.skipCurrentBuildCheck,
       requireOpen: args.requireOpen,
     },
     passed: results.filter((result) => result.ok).length,

@@ -574,6 +574,32 @@ fn normalize_mode(value: Option<&String>, allowed: &[&str], fallback: &str) -> S
     }
 }
 
+fn git_build_id(repo: &Path) -> String {
+    if let Ok(value) = env::var("LAN_DUAL_BUILD_ID") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+
+    let output = Command::new("git")
+        .arg("rev-parse")
+        .arg("--short")
+        .arg("HEAD")
+        .current_dir(repo)
+        .output();
+    if let Ok(output) = output {
+        if output.status.success() {
+            let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !value.is_empty() {
+                return value;
+            }
+        }
+    }
+
+    "dev".to_string()
+}
+
 fn add_hidden_flag(command: &mut Command) {
     #[cfg(windows)]
     {
@@ -881,6 +907,7 @@ fn wait_for_discovery(port: u16, timeout: Duration) -> Result<Value, String> {
 }
 
 fn launch_env(
+    repo: &Path,
     host: &str,
     port: u16,
     password: &str,
@@ -891,6 +918,7 @@ fn launch_env(
     let mut envs = vec![
         ("LAN_DUAL_HOST".to_string(), host.to_string()),
         ("LAN_DUAL_PORT".to_string(), port.to_string()),
+        ("LAN_DUAL_BUILD_ID".to_string(), git_build_id(repo)),
         ("LAN_DUAL_PASSWORD".to_string(), password.to_string()),
         (
             "LAN_DUAL_WINDOWS_SCREEN_MODE".to_string(),
@@ -1201,6 +1229,7 @@ fn start_windows_host(
         "log",
     );
     let envs = launch_env(
+        &repo,
         &host,
         port,
         &password,

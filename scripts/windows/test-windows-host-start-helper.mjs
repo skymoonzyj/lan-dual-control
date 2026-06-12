@@ -150,13 +150,17 @@ async function assertPromptPasswordFailsWithoutTty(timeoutMs) {
 async function assertDryRunWithEnvPassword(timeoutMs) {
   const result = await runNode(["--requirePassword", "--dryRun"], {
     timeoutMs,
-    env: { LAN_DUAL_PASSWORD: "test-password" },
+    env: {
+      LAN_DUAL_PASSWORD: "test-password",
+      LAN_DUAL_BUILD_ID: "start-helper-test",
+    },
   });
   const output = `${result.stdout}\n${result.stderr}`;
   if (result.exitCode !== 0 || result.timedOut) {
     throw new Error(`Dry run with env password failed.\n${output}`);
   }
   assertIncludes(output, "Dry run finished", "dry run with env password");
+  assertIncludes(output, "Build ID: start-helper-test", "dry run with env password");
   assertNotIncludes(output, "demo password", "dry run with env password");
   print("OK", "Environment password allows dry run without demo warning");
 }

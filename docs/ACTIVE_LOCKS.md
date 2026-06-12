@@ -1,6 +1,6 @@
 # 当前文件占用
 
-最后更新：2026-06-12
+最后更新：2026-06-13
 
 用途：避免 Windows Codex 和 Mac Codex 同时重写同一片代码。占用不是永久所有权，只表示“我正在处理，另一端先别碰”。
 
@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-host/src/windows-host-service.mjs`、`scripts/windows/check-windows-host-readiness.mjs`、`scripts/windows/start-windows-host.mjs`、`scripts/windows/test-windows-host-start-helper.mjs`、`apps/windows-desktop/src-tauri/src/main.rs`、Windows host/desktop README 和交接 docs | 2026-06-13 00:09 | Windows host `/discovery` 和 `hello_ack` 新增 runtime/build 诊断；启动助手和桌面壳默认注入当前 git build；readiness 可 warning/强校验运行中 host 是否为当前 build。 |
 | Windows Codex | `apps/windows-client/index.html`、`apps/windows-client/app.js`、`apps/windows-client/README.md`、`apps/windows-desktop/src-tauri/src/main.rs`、`apps/windows-desktop/README.md`、`scripts/windows/test-windows-client-browser.mjs`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 22:45 | Windows 桌面“本机被控”面板新增低风险/部署/深度体检档位；Tauri 命令白名单化 profile 并传给 readiness 脚本，页面自检和桌面构建已覆盖。 |
 | Windows Codex | `scripts/windows/check-windows-host-readiness.mjs`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 22:10 | Windows host readiness 新增 `--profile default|deploy|deep`；默认低风险，`deploy` 要求端口可达并跑视频/音频短验收，`deep` 额外串联 Windows host 本机自检。 |
 | Mac Codex | `scripts/mac/check-mac-host-readiness.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 21:55 | Mac readiness 旧 build warning 会列出旧 build 后变动的 Mac host runtime 源码文件，方便判断是否需要重启。 |

@@ -11,6 +11,15 @@ const protocolVersion = 1;
 const defaultPassword = "demo-password";
 const maxAuthAttempts = 3;
 
+function makeRuntimeInfo(startedAtMs, buildId) {
+  return {
+    processId: process.pid,
+    startedAt: new Date(startedAtMs).toISOString(),
+    uptimeSeconds: Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000)),
+    buildId,
+  };
+}
+
 function makeMessageId(prefix = "winhost") {
   const random = Math.random().toString(16).slice(2, 8);
   return `${prefix}-${Date.now().toString(16)}-${random}`;
@@ -180,6 +189,7 @@ function createClient(socket, context) {
         protocolVersion,
         hostName: "Windows 被控端骨架",
         hostPlatform: "windows",
+        runtime: context.runtime(),
         capabilities: {
           screen: context.screen.getCapabilities(),
           audio: context.audio.getCapabilities(),
@@ -418,8 +428,11 @@ export function createWindowsHostServer({
   host = "0.0.0.0",
   port = 43770,
   password = defaultPassword,
+  buildId = process.env.LAN_DUAL_BUILD_ID || "dev",
   logger = new WindowsHostLogger(),
 } = {}) {
+  const startedAtMs = Date.now();
+  const runtime = () => makeRuntimeInfo(startedAtMs, buildId);
   const screen = new WindowsScreenCaptureCoordinator({ logger });
   const audio = new WindowsAudioCaptureCoordinator({ logger });
   const input = new WindowsInputInjector({ logger });
@@ -457,6 +470,7 @@ export function createWindowsHostServer({
         host: advertisedHost,
         port,
         controlPort: port,
+        runtime: runtime(),
         capabilities: {
           screen: screenCapabilities,
           audio: audio.getCapabilities(),
@@ -497,7 +511,7 @@ export function createWindowsHostServer({
     ].join("\r\n"));
 
     logger.info(`收到控制端连接：${request.socket.remoteAddress ?? "unknown"}`);
-    createClient(socket, { password, logger, screen, audio, input, clipboard });
+    createClient(socket, { password, logger, screen, audio, input, clipboard, runtime });
   });
 
   return {

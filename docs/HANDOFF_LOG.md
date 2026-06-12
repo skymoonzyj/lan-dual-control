@@ -17,6 +17,57 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-13 Windows Codex
+
+日期：2026-06-13
+开发端：Windows Codex
+本轮目标：给 Windows host 补 runtime/build 诊断，避免 Mac 反控 Windows 时误连旧进程。
+完成内容：
+- Windows host 的 `/discovery` 和 `hello_ack` 新增可选 `runtime`：`processId`、`startedAt`、`uptimeSeconds`、`buildId`。
+- `scripts/windows/start-windows-host.mjs` 会默认用当前 git short hash 设置 `LAN_DUAL_BUILD_ID`，并在启动计划里打印 Build ID；仍可用 `--buildId` 或环境变量覆盖。
+- Windows 桌面壳启动 Windows host 时也会把 `LAN_DUAL_BUILD_ID` 设置为当前 git short hash，保证桌面入口启动的 host 可被 readiness 识别 build。
+- `scripts/windows/check-windows-host-readiness.mjs` 新增运行中 host runtime 检查：默认低风险路径 host 不在线时跳过，host 在线但 build 落后当前 git 时 warning；`--expectBuildId`、`--requireCurrentBuildId` 可强校验，`--skipCurrentBuildCheck` 可临时放宽旧 build warning；`--profile deploy` 现在要求运行中 host 是当前 build。
+- Windows host/desktop README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-host/src/windows-host-service.mjs`
+- `apps/windows-host/README.md`
+- `apps/windows-desktop/src-tauri/src/main.rs`
+- `apps/windows-desktop/README.md`
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-host/src/windows-host-service.mjs`
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/check-windows-host-readiness.mjs`
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- `node scripts/windows/test-windows-host-start-helper.mjs`
+- `node scripts/windows/check-windows-host-readiness.mjs --help`
+- `node scripts/windows/check-windows-host-readiness.mjs --json`
+- 临时 Windows host runtime smoke：验证 `/discovery.runtime` 和 `hello_ack.runtime` 同 build/PID。
+- 临时 Windows host + `check-windows-host-readiness --requireOpen --requireCurrentBuildId --json`：验证 runtime build 强校验通过。
+- `cargo test` in `apps/windows-desktop/src-tauri`
+- `npm.cmd run build` in `apps/windows-desktop`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 默认 readiness 7/7 通过；当前默认 `43770` 未启动时 runtime 检查正常跳过。
+- 临时 runtime smoke 通过：`/discovery` 和 `hello_ack` 均返回 `build=runtime-test` 和同一 PID。
+- 当前 build 强校验通过：临时 host 使用当时 HEAD 的 git short hash，readiness runtime step 输出的 `build=...` 与当前 git short hash 匹配。
+- Rust 单测 6/6 通过；桌面 release build 通过并生成 `apps/windows-desktop/src-tauri/target/release/lan-dual-control-windows.exe`。
+遗留问题：
+- 还未在真实桌面 UI 中手动启动 Windows host 并让 Mac client 连入；本轮已用临时 host 覆盖 runtime 和 readiness 强校验链路。
+下一步建议：
+- Mac 反控 Windows 真机联调前，优先用 Windows 桌面版“本机被控”启动 host，再跑部署档体检确认 runtime build 与当前 git 一致。
+- 如果 Mac client 连入后仍显示旧 build，先停止旧 Windows host 进程，再从桌面壳或启动助手重启。
+是否改了协议：否；只新增向后兼容的可选 `runtime` 诊断字段。
+是否需要另一端配合：不阻塞；真实 Mac client 连接 Windows host 时可观察 `/discovery.runtime.buildId` 是否显示当前 build。
+
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12
