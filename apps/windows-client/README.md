@@ -31,9 +31,10 @@
 - 支持假 Mac 联调错误模拟：密码错误、权限不足、输入被拒绝、视频中断、连接后断开。
 - 支持认证门禁联调：未认证连接不能进入会话、输入、剪贴板或反控流程。
 - 支持非手动断线后自动重连，最多重试 3 次；遇到密码错误会停止重连，等待用户确认密码。
-- 支持声音接收：处理 `audio_settings_ack`、模拟 `audio_frame` 和真实 `pcm-f32le-base64` PCM 帧，状态栏显示音频帧、音量、延迟和播放计数。
+- 支持声音接收：处理 `audio_settings_ack`、模拟 `audio_frame` 和真实 `pcm-f32le-base64` PCM 帧，状态栏显示音频帧、音量、音频延迟和播放计数。
 - 支持真实 Mac 视频帧诊断：连接后可区分 `jpeg` 真实视频帧和 `mock-svg` 模拟帧，并记录图片解码失败。
 - 支持实收 FPS 统计：刷新率卡片会区分“实收 FPS、协商 Hz、请求 Hz”，避免把控制端请求值误认为真实帧率。
+- 支持视频帧延迟显示：顶部“帧延迟”卡片和诊断条会用 `video_frame.timestamp` 估算远端帧到达本机时的新鲜度；没有真实帧时间戳时显示等待，两端系统时钟明显不一致时显示“时钟偏差”，不再使用随机模拟延迟。
 - 支持 H.264 流式解码入口：当前窗口环境支持 WebCodecs 时会优先请求 `h264`，收到 `annexb-base64` 帧后用 `VideoDecoder` 渲染到视频画布；会依次探测显式 Annex B 和浏览器默认 H.264 配置，解析 Annex B/AVC NAL 类型识别 IDR/SPS/PPS 关键帧，重配置后会等待关键帧再喂给解码器，连续失败时自动请求 JPEG 兜底。
 - 支持 Mac 主机诊断状态条：显示主机模式、运行时 PID/启动时间/build、采集管线、视频来源、WebCodecs 解码状态、H.264 启动回退原因、丢帧、权限、输入模式和剪贴板通道。
 - 支持 `Ctrl+V` 粘贴前预同步本机剪贴板：文字走 `clipboard_text`，图片等可读剪贴板项走 `clipboard_file_*`，资源管理器文件路径后续接入桌面原生模块。
@@ -68,7 +69,7 @@ node E:\codex\lan-dual-control\scripts\windows\test-coordinate-mapping.mjs --hel
 
 真实 Mac 页面级自检可自动启动本地控制端页面、打开 Edge、连接 Mac，并确认诊断条和视频画面；加 `--requireH264` 可强制要求真实 H.264/WebCodecs 画布解码成功且本次连接 H.264 解码错误计数为 0，加 `--injectPcmAudio` 可额外注入一帧 planar PCM，验证控制端音频播放入口：
 脚本会先回归画面内悬浮控制中心，确认悬浮层、摘要、画质、缩放、声音、音量、全屏和窗口按钮能同步到原工具栏与页面布局；随后会模拟适应窗口黑边输入，确认黑边移动、点击、滚轮不会发远控事件，画面内按下后移到黑边松开也能正常释放。连接成功后还会等待刷新率卡片显示数值型“实收 FPS”和“协商 Hz”，避免把请求刷新率误当成真实帧率。
-只需要快速检查诊断条、悬浮控制中心和黑边输入防护时，可加 `--diagnosticsOnly`，不会连接被控端；该路径也会模拟 Mac host `runtime`，确认诊断条能显示 PID、运行时长和 build，并覆盖 H.264 Annex B/AVC 关键帧识别 helper。Mac host 重启后，可再加 `--expectDiscoveryRuntimeBuildId <build-id>`，通过真实 `/discovery` 无密码验收设备列表和诊断条显示的 runtime。
+只需要快速检查诊断条、悬浮控制中心和黑边输入防护时，可加 `--diagnosticsOnly`，不会连接被控端；该路径也会模拟 Mac host `runtime`，确认诊断条能显示 PID、运行时长和 build，并覆盖视频帧新鲜度显示、时钟偏差提示和 H.264 Annex B/AVC 关键帧识别 helper。Mac host 重启后，可再加 `--expectDiscoveryRuntimeBuildId <build-id>`，通过真实 `/discovery` 无密码验收设备列表和诊断条显示的 runtime。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --diagnosticsOnly

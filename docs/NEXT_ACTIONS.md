@@ -13,6 +13,7 @@
 
 2. Windows 端继续完善控制体验。
    - 保持诊断状态条准确显示真实视频、模拟回退、Mac host runtime、权限、输入注入和剪贴板状态。
+   - 真实连接时同时观察“实收 FPS”和“帧延迟”：帧延迟来自 `video_frame.timestamp` 接收年龄，可帮助区分采集/编码/网络/解码卡顿；若显示“时钟偏差”，先校准两端系统时间再判断延迟。
    - 继续验证 Mac 真实 `pcm-f32le-base64` 音频帧播放稳定性，重点看静音、音量变化、长时间运行和延迟。
    - 黑边输入防护已固化到 Windows 控制端页面级自检；后续改缩放、画布或输入层时保持该回归。
    - 处理真实 Mac 连接中的中文错误提示和重连体验。
@@ -21,7 +22,7 @@
    - Mac 真机已通过 `--requireH264` 首帧强校验，Windows 控制端页面级 `--requireH264` 也已验证真实 WebCodecs 解码；下一步继续观察延迟、长时间稳定性和 JPEG 回退体验。
    - Mac host 已增加 H.264 启动 5 秒 watchdog；若启动阶段卡住会回退 `background-jpeg` 并带 `streamFallbackReason`，Windows 控制端诊断条已能显示该原因；后续需要在主 43770 单 host、动态画面和 Windows 控制端真实连接下继续确认正常 H.264 不被误回退。
    - JPEG 链路继续保留为兜底和权限调试。
-   - Windows 控制端继续显示实收 FPS、协商帧率和请求帧率。
+   - Windows 控制端继续显示实收 FPS、协商帧率、请求帧率和帧延迟。
 
 4. 共享协议只做必要变更。
    - 任何协议字段变更都必须同步 Swift、Windows 控制端、Windows 被控端、假 Mac 服务和探针脚本。
@@ -49,7 +50,7 @@
 - 继续验证 Windows 被控端 WASAPI loopback：30 秒本机长稳已通过，短测试音电平强校验已通过；下一步重点看系统音量变化、60 秒以上长时间运行、Mac client 播放体验和无系统声音时的提示。可用 `node scripts/windows/observe-windows-host-audio.mjs --durationMs 30000 --minFrames 1200 --minFps 40 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp` 做持续帧观察并强校验音频帧新鲜度；需要确认有声电平时加 `--playTone --requireLevel --minLevel 0.02`。
 - 继续优化 Windows 控制端文件托盘和错误提示，重点看大文件复制后的粘贴可用性、失败恢复和用户可理解性。
 - Windows host 或假 Mac 认证相关改动后运行 `node scripts/windows/test-auth-retry-policy.mjs`，确认错误密码剩余次数、第三次断开和新连接正确认证未退化。
-- Windows 控制端视频、缩放或输入相关改动后，用真实 Mac host 运行 `node scripts/windows/test-windows-client-browser.mjs --host <Mac IP> --port 43770 --password <密码> --requireH264`，确认 H.264/WebCodecs 画布解码未退回 JPEG、`H264Errors=0`，并确认黑边输入防护回归通过。
+- Windows 控制端视频、缩放或输入相关改动后，用真实 Mac host 运行 `node scripts/windows/test-windows-client-browser.mjs --host <Mac IP> --port 43770 --password <密码> --requireH264`，确认 H.264/WebCodecs 画布解码未退回 JPEG、`H264Errors=0`，并确认黑边输入防护回归通过；同时看页面“帧延迟”和诊断条是否有 `到达 <ms>` 或“时钟偏差”提示，避免再把随机模拟数值当成真实延迟。
 - Windows host 相关改动后运行 `scripts/windows/test-windows-host.ps1`，确认真实视频首帧、文本剪贴板和文件剪贴板接收未退化；涉及启动/部署路径时，再跑 `node scripts/windows/check-windows-host-readiness.mjs --requireOpen --requireCurrentBuildId` 或桌面版部署档，确认 `/discovery.runtime.buildId` 不是旧进程；涉及音频时可加 `-AudioMode wasapi -RequireAudio`；涉及 Mac 反控链路时再运行 `node scripts/windows/test-mac-client-browser.mjs`，确认 Mac client 页面可显示 Windows 画面、收到 `input_ack`，并完成 `Command+C` 到 `Ctrl+C` 映射、最近连接保存/回填/清空、文本/本机剪贴板监听/文件剪贴板发送；需要验收真实 PCM 播放时，本机临时 host 可加 `--requireAudio --maxAudioFrameMs <毫秒> --maxAudioPlaybackMs <毫秒>`，已运行 host 可加 `--useExistingHost --enableAudio --expectAudioPayload --expectAudioPlayback --maxAudioFrameMs <毫秒> --maxAudioPlaybackMs <毫秒>`；需要体验阈值时加 `--maxInitialVideoMs` 和 `--observeVideoMs --minObservedVideoFrames --minObservedVideoFps`，需要断线恢复阈值时加 `--expectReconnect --maxReconnectRestoreMs`；认证相关改动可加跑 `node scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3`。
 - Windows host 或 Mac client 视频参数相关改动后运行 `node scripts/windows/observe-windows-host-video.mjs --fps 60 --useDefaultMaxScreenFps --expectSessionFps 60 --durationMs 4000 --minFrames 140 --minFps 35 --requireMonotonicTimestamp --maxFrameAgeMs 1000`，确认普通启动下 60 Hz 请求、实际 FPS、最大帧间隔、采集管线、请求码率、`jpegQuality` 和帧新鲜度符合预期；可再用 `--bandwidthKbps 5000 --qualityPreset smooth --json` 与 `--bandwidthKbps 40000 --qualityPreset sharp --json` 对照低/高码率；最后运行 `node scripts/windows/test-mac-client-browser.mjs` 确认 Mac client 默认 1080P/60Hz/20Mbps 和 2K/60Hz/40Mbps 更新路径未退化。
 - 继续维护本机假 Mac 服务，用于快速回归和失败场景模拟。

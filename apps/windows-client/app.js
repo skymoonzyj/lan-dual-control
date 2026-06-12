@@ -291,12 +291,14 @@ const state = {
   connecting: false,
   inputEvents: 0,
   fullscreen: false,
-  latencyTimer: null,
   client: null,
   activeHost: "",
   activePort: "",
   videoFrames: 0,
   videoFrameTimes: [],
+  lastVideoFrameAgeMs: null,
+  lastVideoFrameTimestamp: "",
+  videoFrameClockSkewed: false,
   requestedFps: 0,
   negotiatedFps: 0,
   actualVideoFps: 0,
@@ -374,6 +376,9 @@ const state = {
     videoEncoding: "",
     videoSource: "",
     droppedFrames: null,
+    videoFrameAgeMs: null,
+    videoFrameTimestamp: "",
+    videoFrameClockSkewed: false,
     qualityPreset: "",
     jpegQuality: null,
     videoDecoderStatus: "",
@@ -543,6 +548,9 @@ function getEmptyHostDiagnostics() {
     videoEncoding: "",
     videoSource: "",
     droppedFrames: null,
+    videoFrameAgeMs: null,
+    videoFrameTimestamp: "",
+    videoFrameClockSkewed: false,
     qualityPreset: "",
     jpegQuality: null,
     videoDecoderStatus: "",
@@ -715,6 +723,70 @@ function formatInputDiagnostics(diagnostics) {
   return parts.join(" / ");
 }
 
+function formatVideoFrameAge(ageMs, { clockSkewed = false, compact = false } = {}) {
+  if (clockSkewed) {
+    return "时钟偏差";
+  }
+  if (ageMs === null || ageMs === undefined || ageMs === "") {
+    return compact ? "-- ms" : "";
+  }
+  const age = Number(ageMs);
+  if (!Number.isFinite(age)) {
+    return compact ? "-- ms" : "";
+  }
+  if (age >= 1000) {
+    return `${(age / 1000).toFixed(age >= 10_000 ? 0 : 1)}s`;
+  }
+  return `${Math.max(0, Math.round(age))}ms`;
+}
+
+function parseFrameTimestampMs(value) {
+  if (value === null || value === undefined || value === "") {
+    return NaN;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value < 10_000_000_000 ? value * 1000 : value;
+  }
+  const normalized = String(value).trim();
+  if (/^-?\d+(\.\d+)?$/.test(normalized)) {
+    const numeric = Number(normalized);
+    return numeric < 10_000_000_000 ? numeric * 1000 : numeric;
+  }
+  return Date.parse(normalized);
+}
+
+function getVideoFrameAgeDiagnostics(frame) {
+  const rawTimestamp = frame?.timestamp ?? frame?.captureTimestamp ?? frame?.capturedAt ?? "";
+  const parsedTimestampMs = parseFrameTimestampMs(rawTimestamp);
+  if (!Number.isFinite(parsedTimestampMs)) {
+    return {
+      videoFrameAgeMs: null,
+      videoFrameTimestamp: rawTimestamp ? String(rawTimestamp) : "",
+      videoFrameClockSkewed: false,
+    };
+  }
+
+  const ageMs = Date.now() - parsedTimestampMs;
+  const clockSkewed = ageMs < -250;
+  return {
+    videoFrameAgeMs: clockSkewed ? null : Math.max(0, ageMs),
+    videoFrameTimestamp: String(rawTimestamp),
+    videoFrameClockSkewed: clockSkewed,
+  };
+}
+
+function updateVideoFrameAgeMetric(ageDiagnostics) {
+  state.lastVideoFrameAgeMs = ageDiagnostics.videoFrameAgeMs;
+  state.lastVideoFrameTimestamp = ageDiagnostics.videoFrameTimestamp;
+  state.videoFrameClockSkewed = ageDiagnostics.videoFrameClockSkewed;
+
+  const text = formatVideoFrameAge(ageDiagnostics.videoFrameAgeMs, {
+    clockSkewed: ageDiagnostics.videoFrameClockSkewed,
+    compact: true,
+  });
+  elements.metricLatency.textContent = text;
+}
+
 function formatVideoDecoderDiagnostics(diagnostics) {
   const status = diagnostics.videoDecoderStatus
     ? labelFromMap(diagnostics.videoDecoderStatus, videoDecoderStatusLabels)
@@ -795,6 +867,9 @@ function getHostDiagnosticsLevel(diagnostics = state.hostDiagnostics) {
   if (Number(diagnostics.videoDecoderErrors) > 0) {
     return "warning";
   }
+  if (diagnostics.videoFrameClockSkewed || Number(diagnostics.videoFrameAgeMs) > 1000) {
+    return "warning";
+  }
   if (warnings.length > 0 || hasCaptureFallback) {
     return "warning";
   }
@@ -834,6 +909,9 @@ function renderHostDiagnosticsText() {
   const streamFallbackText = diagnostics.streamFallbackReason || "";
   const runtimeText = formatHostRuntimeDiagnostics(diagnostics.runtime);
   const droppedFrames = Number(diagnostics.droppedFrames);
+  const frameAgeText = formatVideoFrameAge(diagnostics.videoFrameAgeMs, {
+    clockSkewed: diagnostics.videoFrameClockSkewed,
+  });
   const qualityText = formatJpegQuality(diagnostics.jpegQuality);
   const clipboardText = formatClipboardCapability(
     diagnostics.clipboardText,
@@ -855,6 +933,9 @@ function renderHostDiagnosticsText() {
     const frameParts = [...videoParts];
     if (Number.isFinite(droppedFrames)) {
       frameParts.push(`丢帧 ${droppedFrames}`);
+    }
+    if (frameAgeText) {
+      frameParts.push(diagnostics.videoFrameClockSkewed ? frameAgeText : `到达 ${frameAgeText}`);
     }
     if (qualityText) {
       frameParts.push(qualityText);
@@ -1525,7 +1606,6 @@ function setUiConnected(answer) {
     runtime: runtime ?? null,
   });
   elements.remoteCanvas.focus();
-  startLatencyLoop();
 
   if (answer.width && answer.height) {
     elements.metricResolution.textContent = `${answer.width} × ${answer.height}`;
@@ -1574,7 +1654,6 @@ function setUiDisconnected(statusText = "未连接", logDetail = "会话已关�
   state.connected = false;
   state.connecting = false;
   resetReverseControlState();
-  stopLatencyLoop();
   setConnectionState(statusText === "连接失败" ? "failed" : "disconnected", statusText);
   elements.remoteFrameImage.removeAttribute("src");
   elements.remoteFrameImage.classList.remove("is-visible");
@@ -1582,7 +1661,6 @@ function setUiDisconnected(statusText = "未连接", logDetail = "会话已关�
   elements.remoteCanvas.classList.remove("has-video-frame");
   resetVideoFrameStats();
   resetVideoDecoder({ resetFallback: true });
-  elements.metricLatency.textContent = "-- ms";
   resetHostDiagnostics(statusText === "未连接" ? defaultHostDiagnosticsText : `诊断：${statusText}`);
   state.audioFrames = 0;
   state.audioLevel = 0;
@@ -1608,14 +1686,12 @@ function handleUnexpectedClose(reason = "被控端关闭了连接") {
   state.client = null;
   state.connected = false;
   state.connecting = false;
-  stopLatencyLoop();
   elements.remoteFrameImage.removeAttribute("src");
   elements.remoteFrameImage.classList.remove("is-visible");
   elements.remoteVideoCanvas.classList.remove("is-visible");
   elements.remoteCanvas.classList.remove("has-video-frame");
   resetVideoFrameStats();
   resetVideoDecoder({ resetFallback: true });
-  elements.metricLatency.textContent = "-- ms";
   resetHostDiagnostics("诊断：连接中断，等待重连。");
   state.audioFrames = 0;
   state.audioLevel = 0;
@@ -1784,8 +1860,12 @@ function dispatchControlEvent(element, eventName = "change") {
 function resetVideoFrameStats() {
   state.videoFrameTimes = [];
   state.actualVideoFps = 0;
+  state.lastVideoFrameAgeMs = null;
+  state.lastVideoFrameTimestamp = "";
+  state.videoFrameClockSkewed = false;
   state.requestedFps = 0;
   state.negotiatedFps = 0;
+  elements.metricLatency.textContent = "-- ms";
 }
 
 function resetVideoDecoder({ resetFallback = false } = {}) {
@@ -2317,22 +2397,6 @@ function disconnect() {
     state.client = null;
   }
   setUiDisconnected();
-}
-
-function startLatencyLoop() {
-  stopLatencyLoop();
-  state.latencyTimer = window.setInterval(() => {
-    if (!state.connected) return;
-    const latency = 8 + Math.floor(Math.random() * 16);
-    elements.metricLatency.textContent = `${latency} ms`;
-  }, 1000);
-}
-
-function stopLatencyLoop() {
-  if (state.latencyTimer) {
-    window.clearInterval(state.latencyTimer);
-    state.latencyTimer = null;
-  }
 }
 
 function describeDisplaySettings() {
@@ -3914,6 +3978,8 @@ function renderVideoFrame(frame) {
   state.videoFrames += 1;
   recordVideoFrameTime();
   updateFpsMetric();
+  const frameAgeDiagnostics = getVideoFrameAgeDiagnostics(frame);
+  updateVideoFrameAgeMetric(frameAgeDiagnostics);
   const frameLabel = getVideoFrameLabel(frame);
   const frameCapturePipeline = frame.capturePipeline ?? state.hostDiagnostics.capturePipeline;
   const frameCodec = String(frame.codec ?? "").toLowerCase();
@@ -3923,6 +3989,7 @@ function renderVideoFrame(frame) {
     videoSource: frame.source ?? state.hostDiagnostics.videoSource,
     capturePipeline: frameCapturePipeline,
     droppedFrames: frame.droppedFrames ?? state.hostDiagnostics.droppedFrames,
+    ...frameAgeDiagnostics,
     qualityPreset: frame.qualityPreset ?? state.hostDiagnostics.qualityPreset,
     jpegQuality: frame.jpegQuality ?? state.hostDiagnostics.jpegQuality,
     streamFallbackReason: Object.prototype.hasOwnProperty.call(frame, "streamFallbackReason")
@@ -4112,12 +4179,15 @@ async function renderH264VideoFrame(frame) {
   state.videoFrames += 1;
   recordVideoFrameTime();
   updateFpsMetric();
+  const frameAgeDiagnostics = getVideoFrameAgeDiagnostics(frame);
+  updateVideoFrameAgeMetric(frameAgeDiagnostics);
   updateHostDiagnostics({
     videoCodec: "h264",
     videoEncoding: frame.encoding ?? "annexb-base64",
     videoSource: frame.source ?? state.hostDiagnostics.videoSource,
     capturePipeline: frame.capturePipeline ?? "screencapturekit-h264",
     droppedFrames: frame.droppedFrames ?? state.hostDiagnostics.droppedFrames,
+    ...frameAgeDiagnostics,
     qualityPreset: frame.qualityPreset ?? state.hostDiagnostics.qualityPreset,
   });
 

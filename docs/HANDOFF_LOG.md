@@ -19,6 +19,41 @@
 
 ## 2026-06-13 Windows Codex
 
+日期：2026-06-13 02:49
+开发端：Windows Codex
+本轮目标：让 Windows 控制端直接显示真实视频帧到达新鲜度，辅助排查卡顿和“看起来不像 60Hz”。
+完成内容：
+- 顶部指标从“延迟”改为“帧延迟”，不再用随机模拟数值。
+- 普通 JPEG/data-url 和 H.264 视频帧都会读取 `video_frame.timestamp`，估算远端帧到达本机时的新鲜度，并同步显示在诊断条里。
+- 如果被控端暂未提供真实帧时间戳，帧延迟保持等待；如果两端系统时钟明显不一致，会显示“时钟偏差”并把诊断条标为 warning。
+- `test-windows-client-browser.mjs --diagnosticsOnly` 新增页面级回归，覆盖正常帧年龄显示和未来时间戳的时钟偏差提示。
+- Windows client README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly`
+- `git diff --check`
+验证结果：
+- 语法检查通过。
+- diagnosticsOnly 页面自检通过，新增输出 `Video frame age diagnostics: 123ms / 时钟偏差`。
+- 空白检查通过。
+遗留问题：真实 Mac H.264/JPEG 长时间连接下仍需继续观察实际“帧延迟”和“实收 FPS”的组合表现。
+下一步建议：真实 Mac 联调时同时看实收 FPS、帧延迟、H.264 解码状态和 Mac host 自身观察脚本，定位卡顿发生在采集/编码/网络/解码哪一段。
+是否改了协议：否。
+是否需要另一端配合：后续真实 Mac 端配合长时间 H.264/JPEG 观察。
+
+## 2026-06-13 Windows Codex
+
 日期：2026-06-13 02:27
 开发端：Windows Codex
 本轮目标：修正旧 Windows 脚本 `-h` 短帮助被忽略的问题，并把帮助入口覆盖做成统一回归。

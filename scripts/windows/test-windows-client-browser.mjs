@@ -898,6 +898,137 @@ async function verifyStreamFallbackDiagnostics(session) {
   return result;
 }
 
+async function verifyVideoFrameAgeDiagnostics(session) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      if (
+        typeof handleProtocolMessage !== "function" ||
+        typeof resetHostDiagnostics !== "function" ||
+        typeof resetVideoFrameStats !== "function" ||
+        typeof state !== "object"
+      ) {
+        return { ok: false, reason: "missing video frame diagnostics functions" };
+      }
+
+      const diagnosticsElement = document.querySelector("#hostDiagnosticsText");
+      const latencyElement = document.querySelector("#metricLatency");
+      const fpsElement = document.querySelector("#metricFps");
+      const resolutionElement = document.querySelector("#metricResolution");
+      const remoteCanvas = document.querySelector("#remoteCanvas");
+      const image = document.querySelector("#remoteFrameImage");
+      if (!diagnosticsElement || !latencyElement || !fpsElement || !resolutionElement || !remoteCanvas || !image) {
+        return { ok: false, reason: "missing video frame diagnostics elements" };
+      }
+
+      const originalDiagnostics = { ...state.hostDiagnostics };
+      const originalText = diagnosticsElement.textContent;
+      const originalOk = diagnosticsElement.classList.contains("is-ok");
+      const originalWarning = diagnosticsElement.classList.contains("is-warning");
+      const originalLatency = latencyElement.textContent;
+      const originalFpsText = fpsElement.textContent;
+      const originalResolutionText = resolutionElement.textContent;
+      const originalVideoFrames = state.videoFrames;
+      const originalFrameTimes = [...state.videoFrameTimes];
+      const originalActualFps = state.actualVideoFps;
+      const originalRequestedFps = state.requestedFps;
+      const originalNegotiatedFps = state.negotiatedFps;
+      const originalFrameAgeMs = state.lastVideoFrameAgeMs;
+      const originalFrameTimestamp = state.lastVideoFrameTimestamp;
+      const originalClockSkewed = state.videoFrameClockSkewed;
+      const originalCanvasHasVideo = remoteCanvas.classList.contains("has-video-frame");
+      const originalImageVisible = image.classList.contains("is-visible");
+      const originalImageSrc = image.getAttribute("src");
+      const svgDataUrl = "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22320%22%20height%3D%22180%22%3E%3Crect%20width%3D%22320%22%20height%3D%22180%22%20fill%3D%22%230f172a%22/%3E%3C/svg%3E";
+
+      try {
+        resetHostDiagnostics();
+        resetVideoFrameStats();
+        handleProtocolMessage({
+          type: "video_frame",
+          frameId: 321,
+          timestamp: new Date(Date.now() - 123).toISOString(),
+          width: 320,
+          height: 180,
+          codec: "jpeg",
+          encoding: "data-url",
+          source: "screen",
+          capturePipeline: "background-jpeg",
+          droppedFrames: 0,
+          dataUrl: svgDataUrl,
+        });
+
+        const diagnostics = diagnosticsElement.textContent;
+        const latency = latencyElement.textContent;
+        const age = Number(state.hostDiagnostics.videoFrameAgeMs);
+        const normalOk =
+          diagnostics.includes("到达") &&
+          latency.includes("ms") &&
+          Number.isFinite(age) &&
+          age >= 0 &&
+          age < 5000;
+
+        handleProtocolMessage({
+          type: "video_frame",
+          frameId: 322,
+          timestamp: new Date(Date.now() + 2000).toISOString(),
+          width: 320,
+          height: 180,
+          codec: "jpeg",
+          encoding: "data-url",
+          source: "screen",
+          capturePipeline: "background-jpeg",
+          droppedFrames: 0,
+          dataUrl: svgDataUrl,
+        });
+
+        const skewText = diagnosticsElement.textContent;
+        const skewLatency = latencyElement.textContent;
+        const skewOk =
+          skewText.includes("时钟偏差") &&
+          skewLatency.includes("时钟偏差") &&
+          state.hostDiagnostics.videoFrameClockSkewed === true;
+
+        return {
+          ok: normalOk && skewOk,
+          diagnostics,
+          latency,
+          age,
+          skewText,
+          skewLatency,
+        };
+      } finally {
+        state.hostDiagnostics = originalDiagnostics;
+        state.videoFrames = originalVideoFrames;
+        state.videoFrameTimes = originalFrameTimes;
+        state.actualVideoFps = originalActualFps;
+        state.requestedFps = originalRequestedFps;
+        state.negotiatedFps = originalNegotiatedFps;
+        state.lastVideoFrameAgeMs = originalFrameAgeMs;
+        state.lastVideoFrameTimestamp = originalFrameTimestamp;
+        state.videoFrameClockSkewed = originalClockSkewed;
+        diagnosticsElement.textContent = originalText;
+        diagnosticsElement.classList.toggle("is-ok", originalOk);
+        diagnosticsElement.classList.toggle("is-warning", originalWarning);
+        latencyElement.textContent = originalLatency;
+        fpsElement.textContent = originalFpsText;
+        resolutionElement.textContent = originalResolutionText;
+        remoteCanvas.classList.toggle("has-video-frame", originalCanvasHasVideo);
+        image.classList.toggle("is-visible", originalImageVisible);
+        if (originalImageSrc) {
+          image.setAttribute("src", originalImageSrc);
+        } else {
+          image.removeAttribute("src");
+        }
+      }
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`video frame age diagnostics check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function verifyDiscoveryRuntimeDiagnostics(session, { host, port, buildId, timeoutMs }) {
   const result = await evaluate(
     session,
@@ -1062,6 +1193,8 @@ async function run() {
     );
     const streamFallbackCheck = await verifyStreamFallbackDiagnostics(session);
     print("OK", `Stream fallback diagnostics: ${streamFallbackCheck.fallbackText}`);
+    const frameAgeCheck = await verifyVideoFrameAgeDiagnostics(session);
+    print("OK", `Video frame age diagnostics: ${frameAgeCheck.latency} / ${frameAgeCheck.skewLatency}`);
     const keyFrameCheck = await verifyH264KeyFrameDetection(session);
     print(
       "OK",
