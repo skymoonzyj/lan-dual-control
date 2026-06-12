@@ -523,9 +523,28 @@ async function verifyStreamFallbackDiagnostics(session) {
       const originalOk = diagnosticsElement.classList.contains("is-ok");
       const originalWarning = diagnosticsElement.classList.contains("is-warning");
       const fallbackReason = "H.264 启动超时，已回退 JPEG";
+      const runtime = {
+        processId: 12345,
+        startedAt: "2026-06-12T08:00:00Z",
+        uptimeSeconds: 7322,
+        buildId: "runtime-test",
+      };
 
       try {
         resetHostDiagnostics();
+        handleProtocolMessage({
+          type: "display_settings_ack",
+          accepted: true,
+          hostMode: "mac-host-h264-stream",
+          videoCodec: "h264",
+          videoEncoding: "annexb-base64",
+          capturePipeline: "screencapturekit-h264",
+          runtime,
+        });
+
+        const runtimeText = diagnosticsElement.textContent;
+        const runtimeState = state.hostDiagnostics.runtime || {};
+
         handleProtocolMessage({
           type: "display_settings_ack",
           accepted: true,
@@ -539,6 +558,7 @@ async function verifyStreamFallbackDiagnostics(session) {
         const fallbackText = diagnosticsElement.textContent;
         const fallbackWarning = diagnosticsElement.classList.contains("is-warning");
         const fallbackState = state.hostDiagnostics.streamFallbackReason;
+        const fallbackRuntimeState = state.hostDiagnostics.runtime || {};
 
         handleProtocolMessage({
           type: "display_settings_ack",
@@ -556,13 +576,23 @@ async function verifyStreamFallbackDiagnostics(session) {
           ok:
             fallbackText.includes("视频回退") &&
             fallbackText.includes(fallbackReason) &&
+            runtimeText.includes("运行") &&
+            runtimeText.includes("PID 12345") &&
+            runtimeText.includes("runtime-test") &&
+            runtimeState.buildId === runtime.buildId &&
+            fallbackText.includes("runtime-test") &&
+            fallbackRuntimeState.processId === "12345" &&
             fallbackWarning &&
             fallbackState === fallbackReason &&
             !clearedText.includes(fallbackReason) &&
-            clearedState === "",
+            clearedState === "" &&
+            clearedText.includes("runtime-test"),
+          runtimeText,
+          runtimeState,
           fallbackText,
           fallbackWarning,
           fallbackState,
+          fallbackRuntimeState,
           clearedText,
           clearedState,
         };

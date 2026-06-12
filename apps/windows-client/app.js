@@ -358,6 +358,7 @@ const state = {
     h264DecoderLatencyMs: 0,
     h264FallbackReason: "",
     streamFallbackReason: "",
+    runtime: null,
     warnedMockFrame: false,
   },
 };
@@ -526,6 +527,7 @@ function getEmptyHostDiagnostics() {
     h264DecoderLatencyMs: 0,
     h264FallbackReason: "",
     streamFallbackReason: "",
+    runtime: null,
     warnedMockFrame: false,
   };
 }
@@ -575,6 +577,88 @@ function formatJpegQuality(value) {
     return "";
   }
   return `质量 ${Math.round(quality * 100)}%`;
+}
+
+function normalizeHostRuntime(runtime) {
+  if (!runtime || typeof runtime !== "object") {
+    return null;
+  }
+
+  const processId = runtime.processId ?? runtime.pid ?? "";
+  const startedAt = runtime.startedAt ? String(runtime.startedAt) : "";
+  const uptimeSeconds = Number(runtime.uptimeSeconds);
+  const buildId = runtime.buildId ? String(runtime.buildId) : "";
+  const normalized = {
+    processId: processId === null || processId === undefined ? "" : String(processId),
+    startedAt,
+    uptimeSeconds: Number.isFinite(uptimeSeconds) && uptimeSeconds >= 0 ? uptimeSeconds : null,
+    buildId,
+  };
+
+  if (
+    !normalized.processId &&
+    !normalized.startedAt &&
+    normalized.uptimeSeconds === null &&
+    !normalized.buildId
+  ) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function formatRuntimeUptime(seconds) {
+  const totalSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  if (totalMinutes < 60) {
+    return `${totalMinutes}m`;
+  }
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours < 24) {
+    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  }
+  const days = Math.floor(hours / 24);
+  const remainHours = hours % 24;
+  return remainHours > 0 ? `${days}d ${remainHours}h` : `${days}d`;
+}
+
+function formatRuntimeStartedAt(startedAt) {
+  const date = new Date(startedAt);
+  if (Number.isNaN(date.getTime())) {
+    return startedAt;
+  }
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatHostRuntimeDiagnostics(runtime) {
+  const normalized = normalizeHostRuntime(runtime);
+  if (!normalized) {
+    return "";
+  }
+
+  const parts = [];
+  if (normalized.processId) {
+    parts.push(`PID ${normalized.processId}`);
+  }
+  if (normalized.uptimeSeconds !== null) {
+    parts.push(`已运行 ${formatRuntimeUptime(normalized.uptimeSeconds)}`);
+  }
+  if (normalized.startedAt) {
+    parts.push(`启动 ${formatRuntimeStartedAt(normalized.startedAt)}`);
+  }
+  if (normalized.buildId) {
+    parts.push(`build ${normalized.buildId}`);
+  }
+  return parts.join(" / ");
 }
 
 function getInputAckDiagnostics(message) {
@@ -722,6 +806,7 @@ function renderHostDiagnosticsText() {
   const inputText = formatInputDiagnostics(diagnostics);
   const decoderText = formatVideoDecoderDiagnostics(diagnostics);
   const streamFallbackText = diagnostics.streamFallbackReason || "";
+  const runtimeText = formatHostRuntimeDiagnostics(diagnostics.runtime);
   const droppedFrames = Number(diagnostics.droppedFrames);
   const qualityText = formatJpegQuality(diagnostics.jpegQuality);
   const clipboardText = formatClipboardCapability(
@@ -736,6 +821,9 @@ function renderHostDiagnosticsText() {
 
   if (hostParts.length > 0) {
     parts.push(`主机：${hostParts.join(" / ")}`);
+  }
+  if (runtimeText) {
+    parts.push(`运行：${runtimeText}`);
   }
   if (videoParts.length > 0) {
     const frameParts = [...videoParts];
@@ -1117,6 +1205,7 @@ function normalizeDiscoveryDevice(payload, candidate) {
     status: "online",
     source: "自动发现",
     capabilities: payload.capabilities ?? {},
+    runtime: normalizeHostRuntime(payload.runtime),
     lastSeenAt: payload.lastSeenAt || new Date().toISOString(),
   };
 }
@@ -1161,6 +1250,47 @@ function buildDeviceList(discoveredDevices = []) {
   });
 }
 
+function upsertDiscoveredDevice(device) {
+  if (!device) return;
+  const key = makeDeviceKey(device);
+  const onlineDevices = state.discoveredDevices.filter(
+    (item) => item.status === "online" && makeDeviceKey(item) !== key,
+  );
+  state.discoveredDevices = buildDeviceList([device, ...onlineDevices]);
+  renderDiscoveredDevices();
+}
+
+function findDiscoveredDevice(host, port, transport = "websocket") {
+  const targetHost = String(host ?? "").trim();
+  const targetPort = String(port ?? "").trim();
+  const targetTransport = transport ?? "websocket";
+  if (!targetHost || !targetPort) return null;
+  return (
+    state.discoveredDevices.find(
+      (device) =>
+        device.host === targetHost &&
+        String(device.port) === targetPort &&
+        (device.transport ?? "websocket") === targetTransport,
+    ) ?? null
+  );
+}
+
+async function probeConnectionDiagnostics(host, port, transport = "websocket") {
+  if (transport !== "websocket") {
+    return null;
+  }
+  const candidate = makeDiscoveryCandidate(host, port);
+  if (!candidate) {
+    return null;
+  }
+  const device = await probeDiscoveryCandidate(candidate);
+  if (device) {
+    upsertDiscoveredDevice(device);
+    return device;
+  }
+  return null;
+}
+
 function selectDevice(device, button) {
   document.querySelectorAll(".device-row, .history-row").forEach((item) =>
     item.classList.remove("active"),
@@ -1170,6 +1300,9 @@ function selectDevice(device, button) {
   elements.portInput.value = device.port;
   elements.transportSelect.value = device.transport ?? "websocket";
   savePreferences();
+  if (!state.connected && !state.connecting) {
+    updateHostDiagnostics({ runtime: normalizeHostRuntime(device.runtime) });
+  }
   addLog("选择设备", `${device.deviceName} · ${device.host}:${device.port}`);
 }
 
@@ -1200,7 +1333,14 @@ function renderDiscoveredDevices() {
     title.textContent = device.deviceName;
     const detail = document.createElement("small");
     const statusText = device.status === "online" ? "在线" : device.source;
-    detail.textContent = `${device.host}:${device.port} · ${getPlatformLabel(device.platform)} · ${getRoleLabel(device.role)} · ${statusText}`;
+    const runtimeText = formatHostRuntimeDiagnostics(device.runtime);
+    detail.textContent = [
+      `${device.host}:${device.port}`,
+      getPlatformLabel(device.platform),
+      getRoleLabel(device.role),
+      statusText,
+      runtimeText,
+    ].filter(Boolean).join(" · ");
     textWrap.append(title, detail);
     button.append(dot, textWrap);
     button.addEventListener("click", () => selectDevice(device, button));
@@ -1324,6 +1464,12 @@ function setUiConnected(answer) {
   elements.reverseButton.disabled = false;
   updateDisplaysFromSession(answer);
   updateFileClipboardButton();
+  const selectedDevice = findDiscoveredDevice(
+    state.activeHost,
+    state.activePort,
+    elements.transportSelect.value,
+  );
+  const runtime = normalizeHostRuntime(answer.runtime) ?? selectedDevice?.runtime ?? state.hostDiagnostics.runtime;
   updateHostDiagnostics({
     hostMode: answer.hostMode ?? "",
     capturePipeline: answer.capturePipeline ?? "",
@@ -1338,6 +1484,7 @@ function setUiConnected(answer) {
     qualityPreset: answer.qualityPreset ?? "",
     jpegQuality: answer.jpegQuality ?? null,
     streamFallbackReason: answer.streamFallbackReason ?? "",
+    runtime: runtime ?? null,
   });
   elements.remoteCanvas.focus();
   startLatencyLoop();
@@ -2065,6 +2212,11 @@ async function connect({ reconnect = false } = {}) {
   }
   addLog(reconnect ? "执行重连" : "开始连接", `${transportLabel} · ${host}:${port}`);
 
+  const discoveredDevice = await probeConnectionDiagnostics(host, port, elements.transportSelect.value);
+  if (discoveredDevice?.runtime) {
+    updateHostDiagnostics({ runtime: discoveredDevice.runtime });
+  }
+
   const client = new ProtocolClient({
     transport: createTransport(),
     onState: setConnectionState,
@@ -2085,6 +2237,9 @@ async function connect({ reconnect = false } = {}) {
       password,
       sessionOffer: buildSessionOffer(),
     });
+    if (!normalizeHostRuntime(answer.runtime) && discoveredDevice?.runtime) {
+      answer.runtime = discoveredDevice.runtime;
+    }
     setUiConnected(answer);
     rememberCurrentConnection();
     addLog(
@@ -3145,6 +3300,7 @@ function handleProtocolMessage(message) {
       clipboardFileMode: message.clipboardFileMode ?? state.hostDiagnostics.clipboardFileMode,
       qualityPreset: message.qualityPreset ?? state.hostDiagnostics.qualityPreset,
       jpegQuality: message.jpegQuality ?? state.hostDiagnostics.jpegQuality,
+      runtime: normalizeHostRuntime(message.runtime) ?? state.hostDiagnostics.runtime,
     });
     if (message.streamFallbackReason) {
       addLog("视频回退", message.streamFallbackReason);

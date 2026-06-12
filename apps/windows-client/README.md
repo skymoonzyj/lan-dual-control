@@ -35,7 +35,7 @@
 - 支持真实 Mac 视频帧诊断：连接后可区分 `jpeg` 真实视频帧和 `mock-svg` 模拟帧，并记录图片解码失败。
 - 支持实收 FPS 统计：刷新率卡片会区分“实收 FPS、协商 Hz、请求 Hz”，避免把控制端请求值误认为真实帧率。
 - 支持 H.264 流式解码入口：当前窗口环境支持 WebCodecs 时会优先请求 `h264`，收到 `annexb-base64` 帧后用 `VideoDecoder` 渲染到视频画布；会依次探测显式 Annex B 和浏览器默认 H.264 配置，连续失败时自动请求 JPEG 兜底。
-- 支持 Mac 主机诊断状态条：显示主机模式、采集管线、视频来源、WebCodecs 解码状态、H.264 启动回退原因、丢帧、权限、输入模式和剪贴板通道。
+- 支持 Mac 主机诊断状态条：显示主机模式、运行时 PID/启动时间/build、采集管线、视频来源、WebCodecs 解码状态、H.264 启动回退原因、丢帧、权限、输入模式和剪贴板通道。
 - 支持 `Ctrl+V` 粘贴前预同步本机剪贴板：文字走 `clipboard_text`，图片等可读剪贴板项走 `clipboard_file_*`，资源管理器文件路径后续接入桌面原生模块。
 - 支持文件剪贴板发送骨架：可手动选择文件、压缩包或图片，按 `clipboard_file_*` 消息分块发送并显示进度。
 - 支持远端文件收件托盘：Mac 复制普通文件后，控制端可接收、查看、手动下载；Windows 桌面版会把不超过 128MB 的远端文件写入系统文件剪贴板，浏览器预览版保留内存暂存。
@@ -61,7 +61,7 @@ node E:\codex\lan-dual-control\scripts\windows\test-coordinate-mapping.mjs
 
 真实 Mac 页面级自检可自动启动本地控制端页面、打开 Edge、连接 Mac，并确认诊断条和视频画面；加 `--requireH264` 可强制要求真实 H.264/WebCodecs 画布解码成功，加 `--injectPcmAudio` 可额外注入一帧 planar PCM，验证控制端音频播放入口：
 脚本会先回归画面内悬浮控制中心，确认悬浮层、摘要、画质、缩放、声音、音量、全屏和窗口按钮能同步到原工具栏与页面布局；随后会模拟适应窗口黑边输入，确认黑边移动、点击、滚轮不会发远控事件，画面内按下后移到黑边松开也能正常释放。连接成功后还会等待刷新率卡片显示数值型“实收 FPS”和“协商 Hz”，避免把请求刷新率误当成真实帧率。
-只需要快速检查诊断条、悬浮控制中心和黑边输入防护时，可加 `--diagnosticsOnly`，不会连接被控端。
+只需要快速检查诊断条、悬浮控制中心和黑边输入防护时，可加 `--diagnosticsOnly`，不会连接被控端；该路径也会模拟 Mac host `runtime`，确认诊断条能显示 PID、运行时长和 build。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --diagnosticsOnly

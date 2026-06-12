@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`、`scripts/windows/test-windows-client-browser.mjs`、`apps/windows-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 17:08 | Windows 控制端连接前轻量探测 `/discovery.runtime`，设备列表和诊断条显示 Mac host PID、已运行时长、启动时间和 build；页面级 `--diagnosticsOnly` 已覆盖 runtime 显示与保持逻辑。 |
 | Mac Codex | `scripts/mac/check-mac-displays.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 16:58 | `check-mac-displays` 新增 `--requireRuntime`、`--expectBuildId` 和 `--maxRuntimeUptimeSeconds`，可强制校验 `/discovery` 与 `hello_ack` 的 runtime 来自目标进程/build。 |
 | Mac Codex | `apps/mac-host/Sources/MacHost/HostConfiguration.swift`、`apps/mac-host/Sources/MacHost/MacHostService.swift`、`scripts/mac/check-mac-displays.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md` | 2026-06-12 16:46 | Mac host `/discovery` 和 `hello_ack` 新增可选 `runtime` 诊断，含进程 PID、启动时间、运行秒数和 `LAN_DUAL_BUILD_ID`，方便识别旧进程。 |
 | Windows Codex | `scripts/windows/check-windows-firewall.mjs`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 16:45 | 新增 Windows host 防火墙/局域网可达性只读检查脚本：检查 LAN IP、端口监听、loopback/LAN TCP 探测、网络配置和 TCP 入站 allow 规则；默认不改系统，只输出管理员放行建议。 |

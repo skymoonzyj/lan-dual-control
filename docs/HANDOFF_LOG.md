@@ -21,6 +21,41 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：把 Mac host 新增的可选 `runtime` 诊断接入 Windows 控制端，方便判断当前连接是不是旧进程或旧 build。
+完成内容：
+- Windows 控制端连接 WebSocket 被控端前会轻量探测同地址 `/discovery`；如果返回 `runtime`，会写入设备列表并在连接成功后的诊断条显示。
+- 诊断条新增“运行”段，显示 `PID`、已运行时长、启动时间和 `build`；后续 `display_settings_ack` 如果带 `runtime` 也会更新，不带时保留已有信息。
+- 设备列表在线项会显示 runtime 摘要；未连接时选择设备可预览 runtime，已连接时不会误把其他设备 runtime 覆盖到当前诊断。
+- 页面级 `--diagnosticsOnly` 自检新增 runtime 显示和保持逻辑，确认 H.264 回退原因清除时不会把 runtime 清掉。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+验证结果：
+- 浏览器诊断自检通过：悬浮控制中心、黑边输入防护、`streamFallbackReason` 显示/清除和 runtime 显示/保持均通过。
+- 自检诊断条示例：`运行：PID 12345 / 已运行 2h 2m / 启动 06/12 16:00 / build runtime-test`。
+遗留问题：
+- 这轮没有改高冲突的 `protocol-client.js`，因此 `hello_ack.runtime` 仍由连接前 `/discovery` 快探承担显示来源；如果未来出现只支持 WebSocket hello、不提供 `/discovery` 的 host，可再考虑把 hello_ack 暴露给页面层。
+- 还需用真实 Mac host 43770 跑一次 Windows 控制端真实连接，确认主服务重启到 runtime build 后诊断条显示真实 PID/build。
+下一步建议：
+- Mac host 重启或设置 `LAN_DUAL_BUILD_ID` 后，在 Windows 控制端连接真实 43770，确认诊断条和设备列表能看到目标 build。
+- 继续做真实 H.264 动态画面、PCM 听感和输入注入安全验收。
+是否改了协议：否；只消费 Mac 已有的向后兼容可选 `runtime` 字段。
+是否需要另一端配合：不阻塞；真实 43770 runtime 展示验收需要 Mac host 运行最新 build。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：补 Windows host 防火墙和局域网可达性只读自检，方便 Mac 反控 Windows 真机联调前快速判断是不是服务监听地址或 Windows 防火墙问题。
 完成内容：
 - 新增 `scripts/windows/check-windows-firewall.mjs`，默认只读检查本机局域网 IPv4、目标端口监听地址、loopback/LAN TCP 探测、当前网络配置、防火墙 profile 和 TCP 入站 allow 规则。
