@@ -21,6 +21,37 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：新增 Windows 音频设备检查入口，给后续真实系统声音采集和双路声音排查做准备。
+完成内容：
+- 新增 `scripts/windows/check-windows-audio-devices.mjs`。
+- 默认只枚举 FFmpeg DirectShow 设备和当前音频环境变量，不采集声音。
+- 支持 `--probe --device "设备名"` 做短时内存 PCM 检测，不保存文件。
+- 自动识别 `C:\DevTools\ffmpeg\bin\ffmpeg.exe`，也兼容 `LAN_DUAL_FFMPEG`。
+- 对设备做轻量分类：`microphone`、`virtual-or-loopback`、`audio`。
+- Windows host README 改为优先使用该脚本列设备，并补充 `--probe` 用法。
+修改文件：
+- `scripts/windows/check-windows-audio-devices.mjs`
+- `apps/windows-host/README.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-audio-devices.mjs`
+- `node scripts/windows/check-windows-audio-devices.mjs`
+- `npm.cmd run check` in `apps/windows-host`
+- `git diff --check`
+- 本机列出 7 个 DirectShow 设备、4 个音频设备；未执行 `--probe`，没有采集声音。
+遗留问题：
+- 当前 DirectShow 列表里没有明确的系统 loopback 设备；`麦克风阵列 (网易虚拟音频设备)` 被识别为虚拟/loopback 候选，但真实效果需要后续显式 `--probe` 或接入 WASAPI loopback 验证。
+下一步建议：
+- 后续做 Windows 反控声音时，优先接 WASAPI loopback，减少虚拟声卡依赖。
+- 若临时使用 DirectShow 过渡，先用该脚本选定设备，再设置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE`。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：让 Windows host 视频观察脚本也复用 FFmpeg 显式路径兜底，避免 PATH 继承差异导致观察脚本回退。
 完成内容：
 - `scripts/windows/observe-windows-host-video.mjs` 新增 `--ffmpeg` 参数。

@@ -82,11 +82,17 @@ $env:LAN_DUAL_WINDOWS_MAX_SCREEN_FPS="30"  # FFmpeg 默认上限 30，1-60；sys
 调试音频采集时可选：
 
 ```powershell
-ffmpeg -hide_banner -f dshow -list_devices true -i dummy
+node E:\codex\lan-dual-control\scripts\windows\check-windows-audio-devices.mjs
 $env:LAN_DUAL_WINDOWS_AUDIO_MODE="dshow"                 # 显式启用 FFmpeg DirectShow PCM
 $env:LAN_DUAL_WINDOWS_AUDIO_DEVICE="麦克风阵列 (网易虚拟音频设备)" # 改成上面列出的 loopback/虚拟声卡设备名
 $env:LAN_DUAL_WINDOWS_AUDIO_SAMPLE_RATE="48000"
 $env:LAN_DUAL_WINDOWS_AUDIO_CHANNELS="2"
+```
+
+默认检查脚本只列出设备，不采集声音。需要短时验证某个设备能输出 PCM 时，再显式运行：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\check-windows-audio-devices.mjs --probe --device "麦克风阵列 (网易虚拟音频设备)"
 ```
 
 不要把真实麦克风设备作为默认项；需要采集系统声音时，优先选择 loopback 或虚拟声卡设备。未设置设备名时，Windows host 会继续发送模拟音频帧。
