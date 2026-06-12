@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/windows/test-mac-client-browser.mjs`、`apps/mac-client/README.md`、`README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 11:30 | Mac client 页面级自检新增文件剪贴板自动化：CDP 注入临时小文件并等待 `clipboard_file_result`；Mac 本机 mock/回退链路通过，Windows 默认模式待系统剪贴板强校验。 |
 | Windows Codex | `apps/windows-client/styles.css`、`apps/windows-client/README.md`、`scripts/windows/test-windows-client-browser.mjs`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 11:14 | Windows 控制端全屏模式改为隐藏顶部工具栏、由悬浮控制中心主导；页面级自检已覆盖悬浮全屏和窗口按钮。 |
 | Windows Codex | `scripts/windows/test-windows-client-browser.mjs`、`apps/windows-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 11:09 | Windows 控制端页面级自检已固化悬浮控制中心回归；验证展开、画质、缩放、声音和音量同步后再连接被控端。 |
 | Windows Codex | `apps/windows-client/index.html`、`apps/windows-client/styles.css`、`apps/windows-client/app.js`、`apps/windows-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 11:04 | Windows 控制端新增远控画面悬浮控制中心第一版；可在画面内快速切换显示屏、画质、缩放、声音、音量、全屏、窗口和退出远控，并同步复用现有顶部工具栏状态。 |

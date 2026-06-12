@@ -21,6 +21,41 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：把 Mac 控制 Windows 原型的文件剪贴板发送纳入页面级自动化自检。
+完成内容：
+- `scripts/windows/test-mac-client-browser.mjs` 新增浏览器 CDP 文件注入：自动创建临时小文件、设置到 `#clipboardFileInput`，点击发送并等待 `clipboard_file_result`。
+- 自检默认在 Windows 上要求系统剪贴板强校验：文本需返回 `system`，文件需返回 `saveMode=clipboard`。
+- 新增 `--allowClipboardFallback`，用于 Mac/Linux 开发环境验证 `memory-only` 文本和 `saveMode=temp` 文件回退链路；新增 `--skipFileClipboard` 便于临时跳过文件剪贴板段。
+- README 和状态/任务文档已说明 Mac client 页面级自检覆盖视频、输入、文本剪贴板和文件剪贴板。
+修改文件：
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node --check apps/mac-client/app.js`
+- `node --check apps/mac-client/server.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --clientPort 5190 --debugPort 9341`
+验证结果：
+- Mac 本机回退自检通过：连接、mock 视频、`input_ack · log`、文本 `clipboard_ack · memory-only` 均正常。
+- 文件剪贴板自动化通过：CDP 注入 88 B 临时文件，Mac client 分块发送后收到 `File clipboard: 已写入 · temp · 88 B`。
+遗留问题：
+- Mac 本机只能验证 `saveMode=temp` 回退；真实 Windows 系统文件剪贴板 `saveMode=clipboard` 需要 Windows 端运行默认 `node scripts/windows/test-mac-client-browser.mjs` 强校验。
+下一步建议：
+- Windows 端拉取后跑默认 Mac client 页面级自检，确认真实 Windows host 的文件剪贴板返回 `saveMode=clipboard`。
+- Mac 端可继续打磨 `apps/mac-client` 错误提示、真实 PCM 音频验收入口和自动剪贴板监听。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端跑默认自检确认系统文件剪贴板强校验。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：给 Mac 控制 Windows 原型增加文件剪贴板发送入口。
 完成内容：
 - `apps/mac-client` 文本剪贴板面板下新增文件选择和“发送文件”入口。

@@ -65,4 +65,4 @@ node --check apps/mac-client/app.js
 
 音频入口本机联调已验证：打开“播放远端声音”后，Windows host mock 音频帧会开始接收并更新状态；真实 PCM 播放需要在 Windows 机器上用 `pcm-f32le-base64` 音频设备继续验收。
 
-文件剪贴板入口本机联调已验证：页面显示文件选择和发送入口，未选择文件时不会误发送；真实文件写入 Windows 系统文件剪贴板需要在 Windows host 上手动选择小文件继续验收。
+文件剪贴板入口本机联调已验证：页面显示文件选择和发送入口，未选择文件时不会误发送；`scripts/windows/test-mac-client-browser.mjs` 会用浏览器调试协议注入临时小文件并等待 `clipboard_file_result`。在 Windows 上默认要求系统文件剪贴板 `saveMode=clipboard`，在 Mac/Linux 开发环境可加 `--allowClipboardFallback --mockVideo` 验证 `saveMode=temp` 回退链路。

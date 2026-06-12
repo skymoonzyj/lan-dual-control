@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,8 @@ const defaults = {
   inputMode: "log",
   screenMode: "auto",
   requireRealVideo: true,
+  requireSystemClipboard: process.platform === "win32",
+  testFileClipboard: true,
   useExistingHost: false,
   mockVideo: false,
   headless: true,
@@ -45,6 +47,18 @@ function parseArgs(argv) {
     }
     if (key === "noRequireRealVideo") {
       args.requireRealVideo = false;
+      continue;
+    }
+    if (key === "allowClipboardFallback") {
+      args.requireSystemClipboard = false;
+      continue;
+    }
+    if (key === "requireSystemClipboard") {
+      args.requireSystemClipboard = true;
+      continue;
+    }
+    if (key === "skipFileClipboard") {
+      args.testFileClipboard = false;
       continue;
     }
     if (Object.prototype.hasOwnProperty.call(args, key) && next && !next.startsWith("--")) {
@@ -251,6 +265,21 @@ async function evaluate(session, expression) {
   return result.result?.value;
 }
 
+async function setFileInputFiles(session, selector, files) {
+  const document = await session.send("DOM.getDocument", { depth: -1, pierce: true });
+  const result = await session.send("DOM.querySelector", {
+    nodeId: document.root.nodeId,
+    selector,
+  });
+  if (!result.nodeId) {
+    throw new Error(`file input not found: ${selector}`);
+  }
+  await session.send("DOM.setFileInputFiles", {
+    nodeId: result.nodeId,
+    files,
+  });
+}
+
 async function startWindowsHost(args, repoRoot) {
   await ensureTemporaryHostPort(args);
   const discoveryUrl = `http://${args.host}:${args.port}/discovery`;
@@ -303,6 +332,7 @@ function buildSnapshotExpression() {
       audio: text("#audioStatus"),
       input: text("#inputStatus"),
       clipboard: text("#clipboardStatus"),
+      fileClipboard: text("#fileClipboardStatus"),
       imageVisible: image?.classList.contains("is-visible") || false,
       imageHasSource: Boolean(image?.getAttribute("src")),
       logs,
@@ -319,6 +349,7 @@ async function run() {
   let macClientServer = null;
   let browser = null;
   let session = null;
+  let uploadDir = null;
 
   try {
     windowsHost = await startWindowsHost(args, repoRoot);
@@ -477,13 +508,51 @@ async function run() {
       async () => {
         const value = await evaluate(session, buildSnapshotExpression());
         lastSnapshot = value;
-        return value.clipboard.includes("已写入") && value.clipboard.includes("system") ? value : null;
+        const accepted = value.clipboard.includes("已写入");
+        const modeOk = !args.requireSystemClipboard || value.clipboard.includes("system");
+        return accepted && modeOk ? value : null;
       },
       args.timeoutMs,
       "Mac client clipboard ack",
     );
 
     print("OK", `Clipboard: ${clipboardSnapshot.clipboard}`);
+    if (args.testFileClipboard) {
+      uploadDir = await mkdtemp(join(tmpdir(), "lan-dual-mac-client-upload-"));
+      const uploadPath = join(uploadDir, `mac-client-file-clipboard-${Date.now()}.txt`);
+      const uploadText = [
+        "LAN Dual Control Mac client file clipboard self-test",
+        `createdAt=${new Date().toISOString()}`,
+        "",
+      ].join("\n");
+      await writeFile(uploadPath, uploadText, "utf8");
+
+      await setFileInputFiles(session, "#clipboardFileInput", [uploadPath]);
+      await evaluate(
+        session,
+        `(() => {
+          const input = document.querySelector("#clipboardFileInput");
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+          document.querySelector("#sendClipboardFilesButton").click();
+          return true;
+        })()`,
+      );
+
+      const fileClipboardSnapshot = await waitFor(
+        async () => {
+          const value = await evaluate(session, buildSnapshotExpression());
+          lastSnapshot = value;
+          const accepted = value.fileClipboard.includes("已写入");
+          const modeOk = !args.requireSystemClipboard || value.fileClipboard.includes("clipboard");
+          return accepted && modeOk ? value : null;
+        },
+        args.timeoutMs,
+        "Mac client file clipboard result",
+      );
+
+      print("OK", `File clipboard: ${fileClipboardSnapshot.fileClipboard}`);
+    }
     print("OK", "Mac client browser self-test passed");
   } finally {
     session?.close();
@@ -491,6 +560,9 @@ async function run() {
     macClientServer?.kill();
     windowsHost?.kill();
     await delay(500);
+    if (uploadDir) {
+      await rm(uploadDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }).catch(() => {});
+    }
     await rm(userDataDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }).catch(() => {});
   }
 }
