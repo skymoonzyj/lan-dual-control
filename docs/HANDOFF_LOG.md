@@ -17,6 +17,51 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
+本轮目标：给 Mac 控制 Windows 原型增加文本剪贴板发送入口。
+完成内容：
+- `apps/mac-client` 右侧新增“文本剪贴板”面板，可输入文字并发送到 Windows host。
+- 发送消息使用现有 `clipboard_text`，方向为 `client_to_host`，并显示远端返回的 `clipboard_ack`、写入模式和文本长度。
+- `session_offer.wantClipboardText` 已改为 `true`，让会话能力和页面实际能力一致。
+- Mac client 事件日志改为安全 DOM 拼接，不再用 `innerHTML` 拼远端字符串。
+- README、当前状态、下一步和任务板已同步，反方向“文本剪贴板可用”单独标为完成；文件剪贴板和音频播放仍是后续项。
+修改文件：
+- `apps/mac-client/app.js`
+- `apps/mac-client/index.html`
+- `apps/mac-client/styles.css`
+- `apps/mac-client/README.md`
+- `README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/server.mjs`
+- `node --check apps/mac-client/app.js`
+- `git diff --check`
+- 本机启动 Windows host 回退服务：`LAN_DUAL_PORT=43772 LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_WINDOWS_INPUT_MODE=log node server.mjs`
+- 本机启动 Mac client：`node server.mjs`
+- 内置浏览器打开 `http://127.0.0.1:5188/`，连接 `127.0.0.1:43772`。
+验证结果：
+- 页面发现、WebSocket 连接、认证、会话协商和视频显示通过。
+- 键盘 `a` 输入收到 `input_ack`：`已确认 · log`。
+- 文本剪贴板发送 `ABC` 后收到 `clipboard_ack`：`已写入 · memory-only · 3 字`。
+- Windows host 日志确认：`收到文本剪贴板：3 字 / memory-only`。
+- 临时 `43772` 和 `5188` 测试端口已关闭。
+遗留问题：
+- 本机 macOS 环境验证的是 Windows host 非 Windows 回退模式 `memory-only`；真实 Windows 机器上应显示 `system`。
+- 内置浏览器 `fill()` 受虚拟剪贴板限制，自动化验证改用逐键输入；页面手动输入不受影响。
+- 文件剪贴板、自动监听 Mac 本机剪贴板和 Windows 音频播放仍未接入 Mac client。
+下一步建议：
+- Windows 端可扩展 `scripts/windows/test-mac-client-browser.mjs`，把 Mac client 文本剪贴板发送纳入页面级自检，并在真实 Windows host 上确认 `mode=system`。
+- Mac 端后续继续补 Mac client 文件剪贴板、Windows 音频播放和真实 Windows host 端到端验收。
+是否改了协议：否；复用现有 `clipboard_text` / `clipboard_ack`。
+是否需要另一端配合：暂无阻塞；真实 Windows 系统剪贴板模式验证需要 Windows 端运行真实 Windows host。
+
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12

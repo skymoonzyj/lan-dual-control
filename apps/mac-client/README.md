@@ -7,6 +7,7 @@
 - 通过 WebSocket 完成 `hello`、`auth_request`、`session_offer`。
 - 显示 Windows host 的 JPEG `video_frame`。
 - 向 Windows host 发送鼠标移动、按钮、滚轮和键盘 `input_event`。
+- 手动发送文本 `clipboard_text` 到 Windows host，并显示 `clipboard_ack` 写入结果。
 - 显示 `input_ack`、视频帧和连接日志。
 
 ## 运行
@@ -46,6 +47,7 @@ LAN_DUAL_PORT=43772 LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_WINDOWS_INPUT_MODE=log node
 - 这是 Web 原型，不是 SwiftUI/原生桌面窗口。
 - 目前只显示 JPEG/data-url 视频帧；后续再接 H.264/WebCodecs 或原生解码。
 - 音频帧只显示状态，尚未播放 Windows host 音频。
+- 当前只支持手动发送文本剪贴板；文件剪贴板和自动监听本机剪贴板后续再接。
 - 键盘映射把 Mac `Command` 当作 Windows `Ctrl` 发送，方便 `Command+C/V` 控制 Windows 常用快捷键。
 - 浏览器安全限制下，必须点击远程画面后才会发送键盘事件。
 
@@ -55,3 +57,5 @@ LAN_DUAL_PORT=43772 LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_WINDOWS_INPUT_MODE=log node
 node --check apps/mac-client/server.mjs
 node --check apps/mac-client/app.js
 ```
+
+本机联调已验证：连接 `127.0.0.1:43772` Windows host 回退服务后，发送文本剪贴板会收到 `clipboard_ack`，非 Windows 环境显示 `memory-only` 回退模式。

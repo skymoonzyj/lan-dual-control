@@ -21,7 +21,7 @@
 - Windows 被控端新增 `scripts/windows/test-windows-host.ps1` 本机自检入口，可临时启动本机服务并验证真实 JPEG 首帧、文本剪贴板和文件剪贴板接收；`scripts/windows/observe-windows-host-video.mjs` 可观察持续视频帧并统计实际 FPS、最大间隔和采集管线；`scripts/windows/test-mac-client-browser.mjs` 可启动 Mac client 页面验证 Mac 反控 Windows 的真实 JPEG 画面和 `input_ack`；`scripts/windows/test-auth-retry-policy.mjs` 可回归 Windows host 和假 Mac 的 3 次认证失败断开策略。
 - Windows 被控端已限制同一 WebSocket 连接内最多 3 次密码认证失败，失败耗尽后返回 `LAN002` 并关闭连接。
 - Windows 被控端真实屏幕采集目前默认优先 FFmpeg gdigrab 持续 MJPEG，PowerShell/System.Drawing 系统截图作为兜底，全部失败时回退模拟帧；音频默认仍为模拟帧，但可显式配置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 试用 FFmpeg DirectShow PCM，后续仍需升级 Windows Graphics Capture 和 WASAPI loopback。
-- Mac 控制 Windows 的 Web 控制端原型已新增到 `apps/mac-client`：可发现/连接 Windows host、显示 JPEG/data-url 画面、发送鼠标/键盘输入事件并显示 `input_ack`；Windows 本机页面级自检已验证真实 `windows-ffmpeg-gdigrab-mjpeg` 画面和 log 模式输入确认。
+- Mac 控制 Windows 的 Web 控制端原型已新增到 `apps/mac-client`：可发现/连接 Windows host、显示 JPEG/data-url 画面、发送鼠标/键盘输入事件并显示 `input_ack`，也可手动发送文本 `clipboard_text` 并显示 `clipboard_ack`；Windows 本机页面级自检已验证真实 `windows-ffmpeg-gdigrab-mjpeg` 画面和 log 模式输入确认。
 
 ## Mac 端状态
 

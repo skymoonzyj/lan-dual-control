@@ -14,6 +14,9 @@ const elements = {
   remoteImage: document.querySelector("#remoteImage"),
   emptyState: document.querySelector("#emptyState"),
   focusButton: document.querySelector("#focusButton"),
+  clipboardTextInput: document.querySelector("#clipboardTextInput"),
+  sendClipboardButton: document.querySelector("#sendClipboardButton"),
+  clipboardStatus: document.querySelector("#clipboardStatus"),
   eventLog: document.querySelector("#eventLog"),
   clearLogButton: document.querySelector("#clearLogButton"),
 };
@@ -37,7 +40,15 @@ function nowText() {
 
 function logEvent(title, detail = "") {
   const item = document.createElement("li");
-  item.innerHTML = `<strong>${title}</strong>${detail ? ` · ${detail}` : ""} <span>${nowText()}</span>`;
+  const strong = document.createElement("strong");
+  strong.textContent = title;
+  item.append(strong);
+  if (detail) {
+    item.append(` · ${detail}`);
+  }
+  const time = document.createElement("span");
+  time.textContent = nowText();
+  item.append(" ", time);
   elements.eventLog.prepend(item);
   while (elements.eventLog.children.length > 80) {
     elements.eventLog.lastElementChild?.remove();
@@ -182,6 +193,9 @@ function handleMessage(rawData) {
         logEvent("输入被拒绝", message.reason || message.code || "unknown");
       }
       break;
+    case "clipboard_ack":
+      handleClipboardAck(message);
+      break;
     case "error":
       logEvent("远端错误", message.message || message.reason || message.code || "unknown");
       break;
@@ -214,7 +228,7 @@ function handleAuthResult(message) {
     protocolVersion: 1,
     wantVideo: true,
     wantAudio: true,
-    wantClipboardText: false,
+    wantClipboardText: true,
     wantClipboardFile: false,
     preferredVideoCodec: "mjpeg",
     preferredAudioCodec: "opus",
@@ -340,6 +354,40 @@ function sendKeyboardEvent(event) {
   }
 }
 
+function makeClipboardId() {
+  return `mac-client-clip-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function sendClipboardText() {
+  if (!state.authenticated) {
+    elements.clipboardStatus.textContent = "未连接";
+    logEvent("剪贴板未发送", "请先连接 Windows host");
+    return;
+  }
+  const text = elements.clipboardTextInput.value;
+  if (!text) {
+    elements.clipboardStatus.textContent = "内容为空";
+    return;
+  }
+  const clipboardId = makeClipboardId();
+  send({
+    type: "clipboard_text",
+    direction: "client_to_host",
+    clipboardId,
+    text,
+    textLength: text.length,
+    mode: "system",
+  });
+  elements.clipboardStatus.textContent = `已发送 ${text.length} 字`;
+  logEvent("剪贴板已发送", `${text.length} 字`);
+}
+
+function handleClipboardAck(message) {
+  const status = `${message.accepted ? "已写入" : "写入失败"} · ${message.mode || "unknown"} · ${message.textLength ?? 0} 字`;
+  elements.clipboardStatus.textContent = status;
+  logEvent(message.accepted ? "剪贴板确认" : "剪贴板失败", message.reason || status);
+}
+
 elements.discoverButton.addEventListener("click", () => {
   void discover();
 });
@@ -353,6 +401,7 @@ elements.focusButton.addEventListener("click", () => elements.remoteViewport.foc
 elements.clearLogButton.addEventListener("click", () => {
   elements.eventLog.textContent = "";
 });
+elements.sendClipboardButton.addEventListener("click", sendClipboardText);
 
 elements.remoteViewport.addEventListener("pointerdown", (event) => {
   elements.remoteViewport.focus();

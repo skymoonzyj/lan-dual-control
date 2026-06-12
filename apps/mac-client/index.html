@@ -75,12 +75,26 @@
           </div>
         </div>
 
-        <aside class="panel log-panel">
-          <div class="log-heading">
-            <h2>事件日志</h2>
-            <button id="clearLogButton" type="button">清空</button>
-          </div>
-          <ol id="eventLog" class="event-log"></ol>
+        <aside class="side-rail">
+          <section class="panel clipboard-panel" aria-label="文本剪贴板">
+            <div>
+              <h2>文本剪贴板</h2>
+              <p>把 Mac 上输入的文字发送到 Windows host，写入远端系统剪贴板或回退剪贴板。</p>
+            </div>
+            <textarea id="clipboardTextInput" rows="5" placeholder="输入要发送到 Windows 剪贴板的文字"></textarea>
+            <div class="button-row clipboard-actions">
+              <button id="sendClipboardButton" type="button" class="primary">发送文字</button>
+              <strong id="clipboardStatus">未发送</strong>
+            </div>
+          </section>
+
+          <section class="panel log-panel">
+            <div class="log-heading">
+              <h2>事件日志</h2>
+              <button id="clearLogButton" type="button">清空</button>
+            </div>
+            <ol id="eventLog" class="event-log"></ol>
+          </section>
         </aside>
       </section>
     </main>
