@@ -21,6 +21,28 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：把 Windows host 普通启动 60Hz 验证固化进 Mac client 页面级回归。
+完成内容：
+- `scripts/windows/test-mac-client-browser.mjs` 现在会断言 `session_answer.fps/requestedFps/maxScreenFps` 都是 60。
+- 切换高清预设后的 `display_settings_ack` 也会断言 `fps/requestedFps/maxScreenFps` 都是 60，页面状态必须显示 `60 Hz`。
+修改文件：
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --timeoutMs 45000`
+遗留问题：
+- 这轮只补页面级自动化断言；真实 Mac 端主观 60Hz 体验仍需真机连接 Windows host 观察。
+下一步建议：
+- 每次改 Windows host 视频默认值或 Mac client 视频参数控件后，都跑默认 `test-mac-client-browser.mjs`。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：让 Windows host 普通启动时也能默认响应 Mac client 的 60 Hz 请求，避免 60Hz 选项只在测试环境生效。
 完成内容：
 - FFmpeg gdigrab 模式的 `LAN_DUAL_WINDOWS_MAX_SCREEN_FPS` 默认值从 30 提升到 60；仍可显式设置环境变量降到 30 以节省资源。

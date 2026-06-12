@@ -699,11 +699,14 @@ async function run() {
     );
     const sessionJpegQuality = Number(sessionAnswer?.jpegQuality);
     if (
+      Number(sessionAnswer?.fps) !== 60 ||
+      Number(sessionAnswer?.requestedFps) !== 60 ||
+      Number(sessionAnswer?.maxScreenFps) !== 60 ||
       Number(sessionAnswer?.maxBandwidthKbps) !== 20000 ||
       sessionAnswer?.qualityPreset !== "balanced" ||
       !(sessionJpegQuality >= 0.5 && sessionJpegQuality <= 0.62)
     ) {
-      throw new Error(`Windows host session bandwidth/quality mismatch: ${JSON.stringify(sessionAnswer)}`);
+      throw new Error(`Windows host session video negotiation mismatch: ${JSON.stringify(sessionAnswer)}`);
     }
     print("OK", `Video settings: ${videoSnapshot.displaySettings}`);
 
@@ -747,7 +750,9 @@ async function run() {
           latestDisplayAck?.accepted === true &&
           Number(latestDisplayAck?.width) === 2560 &&
           Number(latestDisplayAck?.height) === 1440 &&
+          Number(latestDisplayAck?.fps) === 60 &&
           Number(latestDisplayAck?.requestedFps) === 60 &&
+          Number(latestDisplayAck?.maxScreenFps) === 60 &&
           Number(latestDisplayAck?.maxBandwidthKbps) === 40000 &&
           latestDisplayAck?.qualityPreset === "sharp" &&
           Number(latestDisplayAck?.jpegQuality) >= 0.74 &&
@@ -758,6 +763,7 @@ async function run() {
           value.fps === "60" &&
           value.bandwidth === "40" &&
           value.displaySettings.includes("2K") &&
+          value.displaySettings.includes("60 Hz") &&
           value.displaySettings.includes("40 Mbps");
         return messageOk && ackOk && statusOk ? { ...value, latestDisplaySettings, latestDisplayAck } : null;
       },
