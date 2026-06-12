@@ -401,6 +401,29 @@ async function verifyDesktopOnlyHostPanel(session) {
         typeof buildLocalHostReadinessRequest === "function"
           ? buildLocalHostReadinessRequest()
           : {};
+      const readinessHeaderLines =
+        typeof readinessLines === "function"
+          ? readinessLines({
+              json: {
+                args: {
+                  profile: "deploy",
+                  currentBuildId: "client-test",
+                  maxVideoFrameAgeMs: 1000,
+                  maxAudioFrameAgeMs: 750,
+                },
+                results: [
+                  {
+                    ok: true,
+                    label: "Windows host video observation",
+                    summary: "passed",
+                    warnings: [],
+                    errors: [],
+                  },
+                ],
+              },
+            })
+          : [];
+      const readinessHeaderText = readinessHeaderLines.join("\\n");
 
       return {
         ok:
@@ -419,12 +442,17 @@ async function verifyDesktopOnlyHostPanel(session) {
           profileSelect?.value === "default" &&
           profileOptions.join(",") === "default,deploy,deep" &&
           readinessRequest.profile === "default" &&
+          readinessHeaderText.includes("client-test") &&
+          readinessHeaderText.includes("1000 ms") &&
+          readinessHeaderText.includes("750 ms") &&
+          readinessHeaderText.includes("Windows host video observation") &&
           maxNativeClipboardFileBytes === maxClipboardFileBytes &&
           nativeClipboardChunkSizeBytes === 1024 * 1024,
         badge: badge?.textContent || "",
         status: status?.textContent || "",
         profile: profileSelect?.value || "",
         requestProfile: readinessRequest.profile || "",
+        readinessHeader: readinessHeaderLines.slice(0, 4),
         buttonsDisabled: buttons.map((button) => Boolean(button?.disabled)),
         inputsDisabled: inputs.map((input) => Boolean(input?.disabled)),
         maxNativeClipboardFileBytes,

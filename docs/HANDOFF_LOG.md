@@ -19,6 +19,28 @@
 
 ## 2026-06-13 Windows Codex
 
+日期：2026-06-13 02:09
+开发端：Windows Codex
+本轮目标：把 Windows 控制端 readiness 输出头显示固化进页面自检。
+完成内容：
+- `scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly` 的桌面壳面板检查现在会调用 `readinessLines`，断言输出包含 current build、视频 frame age 阈值、音频 frame age 阈值和视频观察项。
+修改文件：
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly`
+验证结果：
+- 语法检查通过。
+- diagnosticsOnly 页面自检通过，新的 readiness 输出头断言已随 `Desktop-only host panel` 检查执行。
+遗留问题：无。
+下一步建议：后续 Windows client readiness UI 改动继续跑 diagnosticsOnly，避免输出头退化。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-13 Windows Codex
+
 日期：2026-06-13 02:04
 开发端：Windows Codex
 本轮目标：让 Windows 控制端“本机被控”体检结果直接显示 readiness 帧新鲜度阈值。
