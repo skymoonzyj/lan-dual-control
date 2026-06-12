@@ -123,7 +123,7 @@ node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFra
 
 该脚本会只读统计 `video_frame` 帧数、接收 FPS、最大帧间隔、payload 大小、codec、encoding、`capturePipeline` 和 source，用于排查 H.264/JPEG 帧率不稳、回退到 mock 或采集管线漂移。JPEG 兜底链路可用 `--preferredVideoCodec mjpeg --requireRealVideo` 观察。
 
-当前真机基线：H.264 30 秒观察 877 帧、约 29.2fps、最大间隔 45ms，全部为 `h264` / `annexb-base64` / `screencapturekit-h264`；JPEG 兜底曾以 2 秒 37 帧、约 17.9fps 通过。
+当前真机基线：H.264 30 秒观察 877 帧、约 29.2fps、最大间隔 45ms，全部为 `h264` / `annexb-base64` / `screencapturekit-h264`；空闲/低变化桌面下，H.264 5 分钟观察收到 3168 帧、约 10.6fps，60 秒低门槛复测收到 654 帧、约 10.9fps、最大间隔 883ms；JPEG 60 秒对照收到 983 帧、约 16.4fps。后续做长时间视频强校验时，需要区分静态桌面和动态画面，静态桌面不要直接把 `--minFps 25` 当硬门槛。
 
 验证真实系统声音采集和控制端播放：
 
@@ -141,7 +141,7 @@ node scripts/mac/observe-mac-audio.mjs --durationMs 10000 --minFrames 80 --maxGa
 
 该脚本会只读统计 `audio_frame` 帧数、接收间隔、payload 大小和电平范围，用于排查无声、间断或格式漂移；它不会修改系统音量、输入或剪贴板。
 
-当前真机基线：系统声音 30 秒观察 1501 帧、约 50fps、最大间隔 24ms，payload 恒定 7680 bytes；本次测试窗口电平为 0，真实听感和音量变化仍需在有系统声音时继续验收。
+当前真机基线：系统声音 30 秒观察 1501 帧、约 50fps、最大间隔 24ms，payload 恒定 7680 bytes；5 分钟长稳观察 15001 帧、50.0fps、最大间隔 31ms，payload 仍恒定 7680 bytes；本次测试窗口电平为 0，真实听感和音量变化仍需在有系统声音时继续验收。
 
 在 Mac 本机做 H.264 和 PCM 音频连续重连稳定性检查：
 

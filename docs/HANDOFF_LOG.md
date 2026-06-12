@@ -17,6 +17,45 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
+本轮目标：把真实 Mac host 的 5 分钟只读长稳观察结果记录清楚，并区分 PCM 稳定性与空闲桌面视频实收 FPS。
+完成内容：
+- 对真实 Mac host `127.0.0.1:43770` 做 5 分钟系统声音 PCM 只读观察，确认长时间帧节奏稳定。
+- 对同一 host 做 5 分钟 H.264 只读观察；连接、认证和 H.264 管线均稳定，但空闲/低变化桌面下实收 FPS 明显低于协商 30Hz。
+- 追加 60 秒 H.264 低门槛复测和 60 秒 JPEG 对照，确认低实收 FPS 不是单次断链，而是当前空闲桌面下的稳定表现。
+- 明确后续不要把 `--minFps 25` 当作空闲桌面长观察硬门槛；需要动态画面或 Windows 控制端真实操作时再做高 FPS 强校验。
+修改文件：
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `curl -s http://127.0.0.1:43770/discovery`
+- `node scripts/mac/observe-mac-audio.mjs --durationMs 300000 --minFrames 14000 --maxGapMs 1000`
+- `node scripts/mac/observe-mac-video.mjs --durationMs 300000 --requireH264 --requireRealVideo --minFrames 8500 --minFps 25 --maxGapMs 1000`
+- `node scripts/mac/observe-mac-video.mjs --durationMs 60000 --requireH264 --requireRealVideo --minFrames 300 --minFps 5 --maxGapMs 1000`
+- `node scripts/mac/observe-mac-video.mjs --durationMs 60000 --preferredVideoCodec mjpeg --requireRealVideo --minFrames 1500 --minFps 25 --maxGapMs 1000`
+验证结果：
+- `/discovery` 正常：`inputMode=log`、`screenRecording=true`、`accessibility=true`、`h264Stream=true`、`audioMode=system-pcm`、主显示器 `1920x1080`。
+- 音频 5 分钟通过：15001 帧，50.0fps，平均/最大间隔 20.0/31ms，payload 恒定 7680 bytes，总 payload 约 115 MB，电平 0。
+- H.264 5 分钟高门槛观察未达 FPS 阈值：3168 帧，约 10.6fps，低于 `minFps 25`；这次作为空闲桌面实收 FPS 发现记录，不作为运行代码失败。
+- H.264 60 秒低门槛复测通过：654 帧，约 10.9fps，平均/最大间隔 91.6/883ms，全部为 `h264` / `annexb-base64` / `screencapturekit-h264` / `screen`。
+- JPEG 60 秒高门槛对照也未达 25fps：983 帧，约 16.4fps，说明当前空闲桌面下视频实收 FPS 会低于协商值，后续应继续看动态画面和端到端观感。
+遗留问题：
+- 需要在有持续画面变化的场景下重新跑 H.264 长观察，确认动态内容是否回到接近 30fps。
+- 需要 Windows 控制端真实连接时同步观察端到端延迟、WebCodecs 渲染、音频听感和 CPU/网络占用。
+- 系统音频本轮仍是静音电平 0，只能证明 PCM 帧节奏稳定，不能证明真实听感。
+下一步建议：
+- Mac 端继续跑动态画面 H.264 长稳和 CPU 采样；如果要用脚本强校验 FPS，应把空闲桌面和动态画面分开设阈值。
+- Windows 端连接真实 Mac 时继续显示实收 FPS，不要只看协商 `fps`；遇到静态桌面低 FPS 先确认是否仍有小 gap 和真实帧，而不是直接判定断流。
+是否改了协议：否。
+是否需要另一端配合：动态画面、端到端延迟和真实听感验收需要 Windows 控制端配合；本轮不阻塞。
+
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12
