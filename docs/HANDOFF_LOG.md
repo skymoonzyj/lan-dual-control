@@ -21,6 +21,37 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：让 Windows 控制端全屏体验由悬浮控制中心主导。
+完成内容：
+- Windows 控制端进入全屏后隐藏原顶部工具栏，不再占用远控画面上方空间。
+- 全屏时远控画面贴边显示，保留底部状态栏和右上角悬浮控制中心。
+- 悬浮控制中心的“全屏”和“窗口”按钮已纳入 `test-windows-client-browser.mjs` 回归。
+- Windows 控制端 README 已说明全屏后顶部工具栏隐藏，悬浮控制中心作为主要入口。
+修改文件：
+- `apps/windows-client/styles.css`
+- `apps/windows-client/README.md`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node --check apps/windows-client/app.js`
+- `node scripts/windows/test-coordinate-mapping.mjs`
+- 临时启动假 Mac 服务后运行 `node scripts/windows/test-windows-client-browser.mjs --noRequireVideoSurface`
+验证结果：
+- 控制中心回归通过：`open=true, quality=true, scale=true, audio=true, volume=true, fullscreen=true, window=true`。
+- 假 Mac 页面级自检仍通过：连接、诊断、模拟视频 surface 和 WebCodecs 环境检查均正常。
+遗留问题：
+- 还没有做悬浮控制中心拖动、自动收起或边缘吸附。
+下一步建议：
+- 后续可继续把“安全/更多/快捷键”做进悬浮控制中心，再逐步弱化顶部工具栏。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：把 Windows 控制端悬浮控制中心纳入页面级自检回归。
 完成内容：
 - `scripts/windows/test-windows-client-browser.mjs` 在连接被控端前会先展开 `#controlCenterToggle`。

@@ -923,19 +923,18 @@ button:disabled {
 }
 
 .is-fullscreen .topbar {
-  position: absolute;
-  z-index: 2;
-  left: 18px;
-  right: 18px;
-  top: 16px;
-  min-height: 58px;
-  border: 1px solid rgba(214, 220, 227, 0.8);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
+  display: none;
 }
 
 .is-fullscreen .remote-surface {
-  padding-top: 92px;
+  padding: 0;
+}
+
+.is-fullscreen .remote-canvas {
+  min-height: calc(100vh - 36px);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 @media (max-width: 1160px) {

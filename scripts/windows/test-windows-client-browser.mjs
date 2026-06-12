@@ -252,6 +252,22 @@ async function verifyFloatingControlCenter(session) {
         valueOf("#audioVolumeRange") === "33" &&
         document.querySelector("#floatingAudioVolumeText")?.textContent === "33%";
 
+      document.querySelector("#floatingFullscreenButton")?.click();
+      const shell = document.querySelector(".app-shell");
+      const topbar = document.querySelector(".topbar");
+      const remoteSurface = document.querySelector(".remote-surface");
+      const fullscreenEntered =
+        shell?.classList.contains("is-fullscreen") &&
+        getComputedStyle(topbar).display === "none" &&
+        getComputedStyle(remoteSurface).paddingTop === "0px";
+
+      if (panel.hidden) toggle.click();
+      document.querySelector("#floatingWindowButton")?.click();
+      const fullscreenExited =
+        !shell?.classList.contains("is-fullscreen") &&
+        getComputedStyle(topbar).display !== "none";
+      if (panel.hidden) toggle.click();
+
       document.querySelector("#qualityPresetSelect").value = original.quality;
       document.querySelector("#resolutionSelect").value = original.resolution;
       document.querySelector("#fpsSelect").value = original.fps;
@@ -266,12 +282,21 @@ async function verifyFloatingControlCenter(session) {
       toggle.click();
 
       return {
-        ok: opened && qualitySynced && scaleSynced && audioSynced && volumeSynced,
+        ok:
+          opened &&
+          qualitySynced &&
+          scaleSynced &&
+          audioSynced &&
+          volumeSynced &&
+          fullscreenEntered &&
+          fullscreenExited,
         opened,
         qualitySynced,
         scaleSynced,
         audioSynced,
         volumeSynced,
+        fullscreenEntered,
+        fullscreenExited,
         closed: panel.hidden,
         restored: {
           quality: valueOf("#qualityPresetSelect"),
@@ -339,7 +364,7 @@ async function run() {
     const controlCenterCheck = await verifyFloatingControlCenter(session);
     print(
       "OK",
-      `Control center: open=${controlCenterCheck.opened}, quality=${controlCenterCheck.qualitySynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}`,
+      `Control center: open=${controlCenterCheck.opened}, quality=${controlCenterCheck.qualitySynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, fullscreen=${controlCenterCheck.fullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
     );
 
     await evaluate(

@@ -11,7 +11,7 @@
 - 接收并渲染假 Mac 服务发送的模拟 `video_frame`。
 - 捕获远程画面区域内的鼠标移动、点击、滚轮和键盘事件。
 - 支持窗口化和全屏显示切换。
-- 支持远控画面内悬浮控制中心：可快速切换显示屏、画质、缩放、声音、音量、全屏、窗口和退出远控。
+- 支持远控画面内悬浮控制中心：可快速切换显示屏、画质、缩放、声音、音量、全屏、窗口和退出远控；全屏后会隐藏顶部工具栏，保留悬浮控制中心作为主要入口。
 - 支持画质预设、分辨率、刷新率、码率、声音、剪贴板控制项。
   - 画质预设：流畅、均衡、高清、自定义。
   - 分辨率：1080P、2K、4K。
@@ -59,7 +59,7 @@ node E:\codex\lan-dual-control\scripts\windows\test-coordinate-mapping.mjs
 ```
 
 真实 Mac 页面级自检可自动启动本地控制端页面、打开 Edge、连接 Mac，并确认诊断条和视频画面；加 `--injectPcmAudio` 可额外注入一帧 planar PCM，验证控制端音频播放入口：
-脚本会先回归画面内悬浮控制中心，确认画质、缩放、声音和音量能同步到原工具栏。
+脚本会先回归画面内悬浮控制中心，确认画质、缩放、声音、音量、全屏和窗口按钮能同步到原工具栏与页面布局。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password
