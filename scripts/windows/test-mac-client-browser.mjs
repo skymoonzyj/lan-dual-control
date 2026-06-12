@@ -876,7 +876,7 @@ async function verifyMacClientFileClipboardDisconnectCancel({ args, session, upl
       const value = await evaluate(session, buildSnapshotExpression());
       return value.connection === "未连接" &&
         value.fileClipboard.includes("文件发送已取消") &&
-        !value.sendClipboardFilesButtonDisabled
+        value.sendClipboardFilesButtonDisabled
         ? value
         : null;
     },
@@ -965,7 +965,8 @@ async function run() {
       defaultSettingsSnapshot.bandwidth !== "20" ||
       !defaultSettingsSnapshot.displaySettings.includes("1080P") ||
       !defaultSettingsSnapshot.displaySettings.includes("60 Hz") ||
-      !defaultSettingsSnapshot.displaySettings.includes("20 Mbps")
+      !defaultSettingsSnapshot.displaySettings.includes("20 Mbps") ||
+      !defaultSettingsSnapshot.sendClipboardFilesButtonDisabled
     ) {
       throw new Error(`Mac client default video settings mismatch: ${JSON.stringify(defaultSettingsSnapshot)}`);
     }
@@ -1085,6 +1086,9 @@ async function run() {
     print("OK", `Remote: ${videoSnapshot.remote}`);
     print("OK", `Video: ${videoSnapshot.video}`);
     print("OK", `Initial video ready: ${initialVideoMs}ms`);
+    if (!videoSnapshot.sendClipboardFilesButtonDisabled) {
+      throw new Error("Mac client file send button should stay disabled until files are selected");
+    }
     if (!videoSnapshot.firstVideoMetric.includes("ms") || videoSnapshot.videoFlowMetric.includes("等待")) {
       throw new Error(`Mac client diagnostics did not update after video: ${JSON.stringify({
         firstVideoMetric: videoSnapshot.firstVideoMetric,
@@ -1539,6 +1543,22 @@ async function run() {
           const input = document.querySelector("#clipboardFileInput");
           input.dispatchEvent(new Event("input", { bubbles: true }));
           input.dispatchEvent(new Event("change", { bubbles: true }));
+          return true;
+        })()`,
+      );
+      const fileReadySnapshot = await waitFor(
+        async () => {
+          const value = await evaluate(session, buildSnapshotExpression());
+          lastSnapshot = value;
+          return !value.sendClipboardFilesButtonDisabled && value.fileClipboard.includes("1 个") ? value : null;
+        },
+        args.timeoutMs,
+        "Mac client file clipboard ready button state",
+      );
+      print("OK", `File button ready: ${fileReadySnapshot.fileClipboard}`);
+      await evaluate(
+        session,
+        `(() => {
           document.querySelector("#sendClipboardFilesButton").click();
           return true;
         })()`,
@@ -1550,7 +1570,7 @@ async function run() {
           lastSnapshot = value;
           const accepted = value.fileClipboard.includes("已写入");
           const modeOk = !args.requireSystemClipboard || value.fileClipboard.includes("clipboard");
-          return accepted && modeOk ? value : null;
+          return accepted && modeOk && value.sendClipboardFilesButtonDisabled ? value : null;
         },
         args.timeoutMs,
         "Mac client file clipboard result",

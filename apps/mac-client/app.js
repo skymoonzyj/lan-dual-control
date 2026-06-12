@@ -137,6 +137,7 @@ function setConnected(connected) {
   elements.connectButton.disabled = connected;
   elements.disconnectButton.disabled = !connected;
   setConnectionStatus(connected ? "已连接" : "未连接");
+  updateFileClipboardButton();
   renderSessionDiagnostics();
 }
 
@@ -750,6 +751,7 @@ function handleAuthResult(message) {
     return;
   }
   state.authenticated = true;
+  updateFileClipboardButton();
   markConnectionStableLater();
   logEvent("认证通过");
   send({
@@ -1318,7 +1320,8 @@ function yieldToUi() {
 }
 
 function updateFileClipboardButton() {
-  elements.sendClipboardFilesButton.disabled = state.fileTransferActive;
+  const hasFiles = (elements.clipboardFileInput.files?.length || 0) > 0;
+  elements.sendClipboardFilesButton.disabled = state.fileTransferActive || !state.authenticated || !hasFiles;
 }
 
 function throwIfFileTransferCanceled(signal) {
@@ -1460,11 +1463,11 @@ async function sendClipboardFiles() {
     if (state.fileTransferAbortController === abortController) {
       state.fileTransferAbortController = null;
       state.fileTransferActive = false;
-      updateFileClipboardButton();
     }
     if (!state.fileTransferActive) {
       elements.clipboardFileInput.value = "";
     }
+    updateFileClipboardButton();
   }
 }
 
@@ -1549,6 +1552,7 @@ elements.clipboardFileInput.addEventListener("change", () => {
   elements.fileClipboardStatus.textContent = files.length
     ? `${files.length} 个 · ${formatBytes(totalBytes)}`
     : "未选择";
+  updateFileClipboardButton();
 });
 
 elements.remoteViewport.addEventListener("pointerdown", (event) => {
@@ -1593,5 +1597,6 @@ elements.remoteViewport.addEventListener("keydown", (event) => {
 updateAudioVolumeLabel();
 updateDisplaySettingsStatus();
 initializeRecentConnections();
+updateFileClipboardButton();
 renderSessionDiagnostics();
 logEvent("Mac 控制端已就绪", "默认连接 127.0.0.1:43772，可改为 Windows 局域网 IP:43770");
