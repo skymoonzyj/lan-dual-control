@@ -272,7 +272,7 @@ node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --req
 
 默认临时使用 `127.0.0.1:43772`；如果该端口已被其他自检占用，脚本会自动换一个临时空闲端口。需要连接已运行的 Windows host 时再加 `--useExisting --host 127.0.0.1 --port 43770`。
 
-视频持续帧观察脚本可统计几秒内实际收到的帧数、平均 FPS、最大帧间隔、掉帧数、采集管线、请求码率和实际 `jpegQuality`：
+视频持续帧观察脚本可统计几秒内实际收到的帧数、平均 FPS、最大帧间隔、掉帧数、采集管线、请求码率、实际 `jpegQuality` 和 `video_frame.timestamp` 接收年龄：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs
@@ -291,6 +291,12 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --fps 60 --useDefaultMaxScreenFps --expectSessionFps 60 --durationMs 4000 --minFrames 140 --minFps 35 --maxGapMs 1000
+```
+
+需要把低延迟帧新鲜度纳入强校验时：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --durationMs 2500 --minFrames 20 --minFps 8 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp
 ```
 
 强制对照旧系统截图兜底路径：

@@ -21,6 +21,38 @@
 
 日期：2026-06-13
 开发端：Windows Codex
+本轮目标：增强 Windows host 视频观察脚本，让 Mac 反控 Windows 前能量化帧新鲜度和时间戳单调性。
+完成内容：
+- `scripts/windows/observe-windows-host-video.mjs` 现在会解析每个 `video_frame.timestamp`，统计帧接收年龄 min/avg/max。
+- 新增 `--maxFrameAgeMs <ms>` 可把帧新鲜度变成强校验；新增 `--requireMonotonicTimestamp` 可要求视频帧时间戳单调。
+- JSON 输出的 `observation` 新增 `timestampFrameCount`、`minFrameAgeMs`、`avgFrameAgeMs`、`maxFrameAgeMs`、`timestampMonotonic` 和 `timestampMonotonicViolations`。
+- Windows host README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `scripts/windows/observe-windows-host-video.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/observe-windows-host-video.mjs`
+- `node scripts/windows/observe-windows-host-video.mjs --durationMs 2500 --minFrames 20 --minFps 8 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp --json`
+- `node scripts/windows/observe-windows-host-video.mjs --durationMs 1200 --minFrames 8 --minFps 5 --maxGapMs 1000 --maxFrameAgeMs 0.5 --json`
+验证结果：
+- 正向观察通过：临时 Windows host `127.0.0.1:43772` 使用 FFmpeg gdigrab MJPEG，720p/30Hz 收到 72 帧，约 28.66 FPS，最大帧间隔 47ms，`frameAge min/avg/max = 0/1/1ms`，时间戳单调。
+- 负向阈值按预期失败：`--maxFrameAgeMs 0.5` 返回 exit code 1，错误为 `maxFrameAgeMs 1 > 0.5`。
+遗留问题：
+- 还没有把该强校验默认接入 `check-windows-host-readiness --profile deploy`；当前先保持手动参数，避免部署体检过于敏感。
+下一步建议：
+- Windows host 或 Mac client 视频参数改动后，用 `--maxFrameAgeMs 1000 --requireMonotonicTimestamp` 做低延迟回归；后续升级 Windows Graphics Capture 后把阈值收紧到更贴近日常体验的范围。
+是否改了协议：否；只消费现有 `video_frame.timestamp` 字段。
+是否需要另一端配合：不阻塞；Mac 反控 Windows 真机联调时可复用该脚本做 Windows 侧基线。
+
+## 2026-06-13 Windows Codex
+
+日期：2026-06-13
+开发端：Windows Codex
 本轮目标：收口 Windows 控制端远端文件托盘清理状态，避免清空托盘时误以为系统剪贴板临时目录也被删除。
 完成内容：
 - 远端文件托盘在存在临时目录时，清空按钮 tooltip 会提示“清空托盘（不删除系统剪贴板临时目录）”。

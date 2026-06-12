@@ -25,11 +25,13 @@ const defaults = {
   minFrames: 20,
   minFps: 8,
   maxGapMs: 1000,
+  maxFrameAgeMs: 0,
   screenMode: "auto",
   inputMode: "log",
   ffmpeg: process.env.LAN_DUAL_FFMPEG || "",
   useDefaultMaxScreenFps: false,
   expectSessionFps: 0,
+  requireMonotonicTimestamp: false,
   requireRealVideo: true,
   useExisting: false,
   keepRunning: false,
@@ -63,6 +65,7 @@ function parseArgs(argv) {
   args.minFrames = Number(args.minFrames) || defaults.minFrames;
   args.minFps = Number(args.minFps) || defaults.minFps;
   args.maxGapMs = Number(args.maxGapMs) || defaults.maxGapMs;
+  args.maxFrameAgeMs = Math.max(0, Number(args.maxFrameAgeMs) || 0);
   args.screenMode = String(args.screenMode || defaults.screenMode).trim().toLowerCase();
   args.inputMode = String(args.inputMode || defaults.inputMode).trim().toLowerCase();
   args.ffmpeg = String(args.ffmpeg || "").trim();
@@ -71,6 +74,7 @@ function parseArgs(argv) {
   }
   args.useDefaultMaxScreenFps = booleanArg(args.useDefaultMaxScreenFps);
   args.expectSessionFps = Number(args.expectSessionFps) || 0;
+  args.requireMonotonicTimestamp = booleanArg(args.requireMonotonicTimestamp);
   args.requireRealVideo = booleanArg(args.requireRealVideo);
   args.useExisting = booleanArg(args.useExisting);
   args.keepRunning = booleanArg(args.keepRunning);
@@ -339,6 +343,11 @@ function estimateFrameBytes(frame) {
   return 0;
 }
 
+function parseFrameTimestampMs(frame) {
+  const parsed = Date.parse(String(frame.timestamp || ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function assertRealFrame(frame) {
   const pipeline = String(frame.capturePipeline || "").toLowerCase();
   const source = String(frame.source || "").toLowerCase();
@@ -353,18 +362,30 @@ async function observeFrames(client, args) {
   const startedAt = performance.now();
   let lastAt = startedAt;
   let maxGapMs = 0;
+  let previousTimestampMs = 0;
+  let timestampMonotonicViolations = 0;
 
   while (performance.now() - startedAt < args.durationMs) {
     const frame = await client.waitForMessage("video_frame", args.timeoutMs);
     const now = performance.now();
+    const receivedAtMs = Date.now();
     const gap = frames.length === 0 ? 0 : now - lastAt;
     lastAt = now;
     maxGapMs = Math.max(maxGapMs, gap);
     if (args.requireRealVideo) {
       assertRealFrame(frame);
     }
+    const timestampMs = parseFrameTimestampMs(frame);
+    if (timestampMs > 0 && previousTimestampMs > 0 && timestampMs < previousTimestampMs) {
+      timestampMonotonicViolations += 1;
+    }
+    if (timestampMs > 0) {
+      previousTimestampMs = timestampMs;
+    }
     frames.push({
       atMs: now,
+      timestampMs,
+      frameAgeMs: timestampMs > 0 ? Math.max(0, receivedAtMs - timestampMs) : null,
       frameId: Number(frame.frameId) || frames.length + 1,
       codec: frame.codec || "",
       encoding: frame.encoding || "",
@@ -384,6 +405,9 @@ async function observeFrames(client, args) {
   const fps = frames.length > 1 ? (frames.length * 1000) / elapsedMs : 0;
   const bytesTotal = frames.reduce((sum, frame) => sum + frame.bytes, 0);
   const droppedFrames = frames.reduce((sum, frame) => sum + frame.droppedFrames, 0);
+  const frameAges = frames
+    .map((frame) => frame.frameAgeMs)
+    .filter((age) => Number.isFinite(age));
   const firstFrame = frames[0] || {};
   const lastFrame = frames.at(-1) || {};
   const uniquePipelines = [...new Set(frames.map((frame) => frame.pipeline).filter(Boolean))];
@@ -407,6 +431,14 @@ async function observeFrames(client, args) {
     maxGapMs: Math.round(maxGapMs),
     avgPayloadBytes: frames.length ? Math.round(bytesTotal / frames.length) : 0,
     droppedFrames,
+    timestampFrameCount: frameAges.length,
+    minFrameAgeMs: frameAges.length ? Math.round(Math.min(...frameAges)) : null,
+    avgFrameAgeMs: frameAges.length
+      ? Math.round(frameAges.reduce((sum, age) => sum + age, 0) / frameAges.length)
+      : null,
+    maxFrameAgeMs: frameAges.length ? Math.round(Math.max(...frameAges)) : null,
+    timestampMonotonic: timestampMonotonicViolations === 0,
+    timestampMonotonicViolations,
     firstFrameId: firstFrame.frameId || 0,
     lastFrameId: lastFrame.frameId || 0,
     width: firstFrame.width || 0,
@@ -430,6 +462,16 @@ function assertObservation(summary, args) {
   }
   if (summary.maxGapMs > args.maxGapMs) {
     problems.push(`maxGapMs ${summary.maxGapMs} > ${args.maxGapMs}`);
+  }
+  if (args.maxFrameAgeMs > 0) {
+    if (!summary.timestampFrameCount) {
+      problems.push("no frame timestamps were observed");
+    } else if (summary.maxFrameAgeMs > args.maxFrameAgeMs) {
+      problems.push(`maxFrameAgeMs ${summary.maxFrameAgeMs} > ${args.maxFrameAgeMs}`);
+    }
+  }
+  if (args.requireMonotonicTimestamp && !summary.timestampMonotonic) {
+    problems.push(`timestamp monotonic violations ${summary.timestampMonotonicViolations}`);
   }
   if (args.expectSessionFps > 0 && summary.sessionFps !== args.expectSessionFps) {
     problems.push(`sessionFps ${summary.sessionFps} != ${args.expectSessionFps}`);
@@ -517,6 +559,15 @@ async function main() {
     } else {
       print("OK", `Observed ${summary.frameCount} frames in ${summary.elapsedMs} ms`, args);
       print("OK", `Average FPS: ${summary.fps} / max gap: ${summary.maxGapMs} ms / dropped: ${summary.droppedFrames}`, args);
+      if (summary.timestampFrameCount > 0) {
+        print(
+          "INFO",
+          `Frame age: min/avg/max ${summary.minFrameAgeMs}/${summary.avgFrameAgeMs}/${summary.maxFrameAgeMs} ms / monotonic=${summary.timestampMonotonic}`,
+          args,
+        );
+      } else {
+        print("WARN", "No video_frame.timestamp values observed", args);
+      }
       print("INFO", `Requested bandwidth: ${args.bandwidthKbps} Kbps / session: ${answer.maxBandwidthKbps || 0} Kbps / JPEG quality: ${answer.jpegQuality || "unknown"}`, args);
       print("INFO", `Pipeline: ${summary.pipelines.join(", ") || "unknown"} / codec: ${summary.codecs.join(", ") || "unknown"} / avg bytes: ${summary.avgPayloadBytes}`, args);
       print("OK", "Windows host video observation passed", args);
