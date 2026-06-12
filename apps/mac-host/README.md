@@ -97,7 +97,7 @@ export LAN_DUAL_PORT=43770
 export LAN_DUAL_DEVICE_NAME="macOS 被控端"
 export LAN_DUAL_PASSWORD=demo-password
 export LAN_DUAL_VIDEO_MODE=auto
-export LAN_DUAL_INPUT_MODE=inject
+export LAN_DUAL_INPUT_MODE=log
 export LAN_DUAL_MAX_SCREEN_FPS=30
 export LAN_DUAL_JPEG_QUALITY=0.58
 export LAN_DUAL_BONJOUR=1
@@ -117,8 +117,8 @@ swift run lan-dual-mac-host
 
 `LAN_DUAL_INPUT_MODE` 可选值：
 
-- `inject`：默认值。收到 Windows 控制端的 `input_event` 后调用 macOS `CGEvent` 执行输入。
-- `log`：只打印输入事件，不真正移动鼠标或按键，适合联调协议时避免误操作。
+- `log`：默认值。只打印输入事件，不真正移动鼠标或按键，适合联调协议时避免误操作。
+- `inject`：收到 Windows 控制端的 `input_event` 后调用 macOS `CGEvent` 执行输入；只在有人看屏幕并确认安全后显式启用。
 
 验证 Mac 键盘注入映射覆盖：
 
@@ -127,6 +127,15 @@ node scripts/mac/check-input-keymap.mjs
 ```
 
 该脚本会解析 `InputEventInjector.swift` 的 `KeyboardEvent.code` 和 `event.key` 映射表，确认常用字母、数字、符号、导航键、修饰键、F1-F20、小键盘、常见同义 code/key，以及 `eventFlags` 中 `meta/command`、`alt/option`、`ctrl/control`、`shift` 和布尔 fallback 都有覆盖。它只做源码静态检查，不会发送真实键盘事件。
+
+验证 Mac host 直接启动时的安全输入默认值：
+
+```bash
+swift build --package-path apps/mac-host
+node scripts/mac/test-mac-host-defaults.mjs
+```
+
+该脚本会用临时本机端口启动两次 Mac host 二进制，只读检查 `/discovery`：未设置 `LAN_DUAL_INPUT_MODE` 时必须是 `log`，显式设置 `LAN_DUAL_INPUT_MODE=inject` 时必须仍可覆盖为 `inject`。脚本不会发送输入事件。
 
 验证 Mac 输入事件在安全日志模式下可被确认：
 

@@ -33,7 +33,7 @@ struct HostConfiguration {
         let rawVideoMode = environment["LAN_DUAL_VIDEO_MODE"]?.lowercased() ?? ""
         let videoMode = VideoCaptureMode(rawValue: rawVideoMode) ?? .auto
         let rawInputMode = environment["LAN_DUAL_INPUT_MODE"]?.lowercased() ?? ""
-        let inputMode = InputInjectionMode(rawValue: rawInputMode) ?? .inject
+        let inputMode = InputInjectionMode(rawValue: rawInputMode) ?? .log
         let maxScreenFps = clampedInt(environment["LAN_DUAL_MAX_SCREEN_FPS"], defaultValue: 30, range: 1...60)
         let jpegQualityOverride = clampedDouble(environment["LAN_DUAL_JPEG_QUALITY"], range: 0.1...0.95)
         let bonjourEnabled = boolValue(environment["LAN_DUAL_BONJOUR"], defaultValue: true)

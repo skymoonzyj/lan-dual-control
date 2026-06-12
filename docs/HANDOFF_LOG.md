@@ -21,6 +21,43 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：收口 Mac host 直接启动的输入安全默认值，避免未显式配置时进入真实注入模式。
+完成内容：
+- `HostConfiguration` 的 `LAN_DUAL_INPUT_MODE` 缺省值从 `inject` 改为 `log`。
+- 显式设置 `LAN_DUAL_INPUT_MODE=inject`、启动助手 `--inputMode inject` 或 `--injectInput` 仍会启用真实 CGEvent 注入。
+- 新增 `scripts/mac/test-mac-host-defaults.mjs`，用临时本机端口启动 Mac host 二进制，只读验证默认 `log` 和显式 `inject` 覆盖。
+- Mac host README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `apps/mac-host/Sources/MacHost/HostConfiguration.swift`
+- `scripts/mac/test-mac-host-defaults.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/test-mac-host-defaults.mjs`
+- `node --check scripts/mac/start-mac-host.mjs`
+- `swift build --package-path apps/mac-host`
+- `node scripts/mac/test-mac-host-defaults.mjs --timeoutMs 20000`
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 30000`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 45000 --expectBuildId c2db37f --maxVideoFrameAgeMs 250 --probeAudio --probeInputLog --requireControlPermissions`
+验证结果：
+- 新默认值自测通过：未设置 `LAN_DUAL_INPUT_MODE` 时 `/discovery inputMode=log`；显式 `LAN_DUAL_INPUT_MODE=inject` 时 `/discovery inputMode=inject`。
+- 启动助手自测通过，仍默认 safe log 输入模式。
+- 主 `43770` 未重启，当前仍为 `build=c2db37f`、`input=log`；readiness 12/12 通过，H.264 `frameAge max=1ms`、PCM 和 input-log 通过。
+遗留问题：
+- 真实 `inject` 手感和输入法仍需有人在屏幕前确认安全后单独验收；本轮不发送真实输入。
+下一步建议：
+- 后续若要切真实注入，先跑 `node scripts/mac/check-mac-host-readiness.mjs --requireControlPermissions --strict`，再由人工明确启动 `LAN_DUAL_INPUT_MODE=inject` 或 `--injectInput`。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：增强 Mac host readiness 的视频时间戳新鲜度校验，方便一键确认运行中的真实 host 已是 fractional timestamp build。
 完成内容：
 - `scripts/mac/check-mac-host-readiness.mjs` 新增 `--maxVideoFrameAgeMs <ms>`。
