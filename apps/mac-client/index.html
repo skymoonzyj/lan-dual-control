@@ -43,6 +43,48 @@
         </div>
       </section>
 
+      <section class="panel video-settings-panel" aria-label="视频设置">
+        <label>
+          画质
+          <select id="qualityPresetSelect">
+            <option value="smooth">流畅</option>
+            <option value="balanced" selected>均衡</option>
+            <option value="sharp">高清</option>
+            <option value="custom">自定义</option>
+          </select>
+        </label>
+        <label>
+          分辨率
+          <select id="resolutionSelect">
+            <option value="1920x1080" selected>1080P</option>
+            <option value="2560x1440">2K</option>
+            <option value="3840x2160">4K</option>
+          </select>
+        </label>
+        <label>
+          刷新率
+          <select id="fpsSelect">
+            <option value="30">30 Hz</option>
+            <option value="60" selected>60 Hz</option>
+            <option value="120">120 Hz</option>
+            <option value="144">144 Hz</option>
+            <option value="240">240 Hz</option>
+          </select>
+        </label>
+        <label>
+          码率
+          <select id="bandwidthSelect">
+            <option value="5">5 Mbps</option>
+            <option value="10">10 Mbps</option>
+            <option value="15">15 Mbps</option>
+            <option value="20" selected>20 Mbps</option>
+            <option value="40">40 Mbps</option>
+            <option value="50">50 Mbps</option>
+          </select>
+        </label>
+        <strong id="displaySettingsStatus">1080P · 60 Hz · 20 Mbps</strong>
+      </section>
+
       <section class="status-grid" aria-label="连接状态">
         <article class="metric">
           <span>连接</span>

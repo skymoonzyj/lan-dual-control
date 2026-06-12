@@ -17,6 +17,51 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
+本轮目标：给 Mac 控制 Windows 原型补齐视频参数控制，让反控链路也能选择分辨率、刷新率和码率。
+完成内容：
+- `apps/mac-client` 新增画质、分辨率、刷新率和码率控件：1080P/2K/4K，30/60/120/144/240 Hz，5/10/15/20/40/50 Mbps。
+- 默认“均衡”为 1080P / 60 Hz / 20 Mbps；“高清”为 2K / 60 Hz / 40 Mbps；连接时 `session_offer` 使用当前控件值。
+- 连接中修改画质/视频参数会立即发送 `display_settings`，并保持当前音频开关和音量字段，避免调视频时误关声音。
+- `scripts/windows/test-mac-client-browser.mjs` 新增视频参数断言：默认会话请求 1080P/60Hz/20Mbps，切换高清后发送 2K/60Hz/40Mbps 并收到 `display_settings_ack`。
+- Windows host 视频观察确认 60 Hz 请求下 FFmpeg gdigrab 过渡层可到约 56 FPS。
+修改文件：
+- `apps/mac-client/index.html`
+- `apps/mac-client/styles.css`
+- `apps/mac-client/app.js`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `git diff --check`
+- `node scripts/windows/observe-windows-host-video.mjs --fps 30 --durationMs 4000 --minFrames 80 --minFps 20 --maxGapMs 1000 --timeoutMs 25000`
+- `node scripts/windows/observe-windows-host-video.mjs --fps 60 --durationMs 4000 --minFrames 120 --minFps 35 --maxGapMs 1000 --timeoutMs 25000`
+- `node scripts/windows/test-mac-client-browser.mjs --timeoutMs 45000`
+- `node scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3 --timeoutMs 30000 --clientPort 5191 --debugPort 9342`
+- `node scripts/windows/test-mac-client-browser.mjs --requireAudio --timeoutMs 45000 --clientPort 5192 --debugPort 9343 --skipFileClipboard`
+验证结果：
+- Windows host 30 Hz 观察：117 帧 / 29.18 FPS / 最大间隔 48 ms。
+- Windows host 60 Hz 观察：225 帧 / 56.18 FPS / 最大间隔 40 ms / 掉帧 8。
+- Mac client 完整页面回归通过：默认 1080P/60Hz/20Mbps，会话成功后切换 2K/60Hz/40Mbps，输入、快捷键、文本剪贴板、本机剪贴板监听和文件剪贴板均通过。
+- 认证失败路径仍通过：页面保留 `认证失败 · 剩余 2/3 次`。
+- `--requireAudio` 仍通过：真实 WASAPI PCM payload 7680 bytes，页面播放计数递增。
+遗留问题：
+- Mac client 仍只显示 JPEG/data-url；后续可接 H.264/WebCodecs 或原生解码。
+- 60 Hz 真实观感、延迟和 CPU 占用还需要 Mac 真机控制 Windows host 继续验收。
+下一步建议：
+- Mac 真机连接 Windows host 时优先试默认 1080P/60Hz/20Mbps，再试 2K/60Hz/40Mbps；Windows 端同步跑 `observe-windows-host-video --useExisting --fps 60` 记录实际帧率。
+是否改了协议：否；复用已有 `session_offer` 和 `display_settings` 字段。
+是否需要另一端配合：后续真实 Mac 操控 Windows 的观感验收需要 Mac 端配合，本轮 Windows 本机页面级回归已通过。
+
 ## 2026-06-12 Mac Codex
 
 日期：2026-06-12

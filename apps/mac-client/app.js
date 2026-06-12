@@ -9,6 +9,11 @@ const elements = {
   useRecentConnectionButton: document.querySelector("#useRecentConnectionButton"),
   clearRecentConnectionsButton: document.querySelector("#clearRecentConnectionsButton"),
   recentConnectionStatus: document.querySelector("#recentConnectionStatus"),
+  qualityPresetSelect: document.querySelector("#qualityPresetSelect"),
+  resolutionSelect: document.querySelector("#resolutionSelect"),
+  fpsSelect: document.querySelector("#fpsSelect"),
+  bandwidthSelect: document.querySelector("#bandwidthSelect"),
+  displaySettingsStatus: document.querySelector("#displaySettingsStatus"),
   connectionStatus: document.querySelector("#connectionStatus"),
   remoteStatus: document.querySelector("#remoteStatus"),
   videoStatus: document.querySelector("#videoStatus"),
@@ -68,6 +73,16 @@ const maxRecentConnections = 8;
 const fileChunkSizeBytes = 64 * 1024;
 const maxClipboardFileBytes = 32 * 1024 * 1024;
 const clipboardWatchIntervalMs = 1200;
+const videoQualityPresets = {
+  smooth: { resolution: "1920x1080", fps: "30", bandwidth: "10" },
+  balanced: { resolution: "1920x1080", fps: "60", bandwidth: "20" },
+  sharp: { resolution: "2560x1440", fps: "60", bandwidth: "40" },
+};
+const resolutionLabels = {
+  "1920x1080": "1080P",
+  "2560x1440": "2K",
+  "3840x2160": "4K",
+};
 
 function nowText() {
   return new Date().toLocaleTimeString("zh-CN", { hour12: false });
@@ -253,6 +268,85 @@ function send(message) {
   return envelope;
 }
 
+function currentVideoSettings() {
+  const [widthText, heightText] = String(elements.resolutionSelect.value || "1920x1080").split("x");
+  const width = Math.max(320, Math.min(3840, Number(widthText) || 1920));
+  const height = Math.max(180, Math.min(2160, Number(heightText) || 1080));
+  const fps = Math.max(1, Math.min(240, Number(elements.fpsSelect.value) || 60));
+  const bandwidthMbps = Math.max(1, Math.min(200, Number(elements.bandwidthSelect.value) || 20));
+  return {
+    width,
+    height,
+    fps,
+    bandwidthMbps,
+    maxBandwidthKbps: bandwidthMbps * 1000,
+    qualityPreset: elements.qualityPresetSelect.value || "balanced",
+  };
+}
+
+function describeVideoSettings(settings = currentVideoSettings()) {
+  const resolution = `${settings.width}x${settings.height}`;
+  const resolutionLabel = resolutionLabels[resolution] || resolution;
+  return `${resolutionLabel} · ${settings.fps} Hz · ${settings.bandwidthMbps} Mbps`;
+}
+
+function updateDisplaySettingsStatus(prefix = "请求") {
+  elements.displaySettingsStatus.textContent = `${prefix} ${describeVideoSettings()}`;
+}
+
+function makeDisplaySettingsMessage(type = "display_settings") {
+  const settings = currentVideoSettings();
+  return {
+    type,
+    width: settings.width,
+    height: settings.height,
+    fps: settings.fps,
+    maxFps: settings.fps,
+    maxBandwidthKbps: settings.maxBandwidthKbps,
+    qualityPreset: settings.qualityPreset,
+    displayMode: "window",
+    displayId: "main",
+    resolutionMode: "scaled",
+    preferredWidth: settings.width,
+    preferredHeight: settings.height,
+    audio: elements.audioToggle.checked,
+    audioVolume: audioVolume(),
+  };
+}
+
+function sendDisplaySettings() {
+  updateDisplaySettingsStatus("请求");
+  if (!state.authenticated) {
+    return;
+  }
+  const settings = makeDisplaySettingsMessage("display_settings");
+  send(settings);
+  logEvent("显示设置已发送", describeVideoSettings());
+}
+
+function applyQualityPreset() {
+  const preset = videoQualityPresets[elements.qualityPresetSelect.value];
+  if (!preset) {
+    updateDisplaySettingsStatus("请求");
+    return;
+  }
+  elements.resolutionSelect.value = preset.resolution;
+  elements.fpsSelect.value = preset.fps;
+  elements.bandwidthSelect.value = preset.bandwidth;
+  sendDisplaySettings();
+}
+
+function markCustomVideoSettings() {
+  const settings = currentVideoSettings();
+  const matchingPreset = Object.entries(videoQualityPresets).find(([, preset]) => (
+    preset.resolution === `${settings.width}x${settings.height}` &&
+    preset.fps === String(settings.fps) &&
+    preset.bandwidth === String(settings.bandwidthMbps)
+  ));
+  elements.qualityPresetSelect.value = matchingPreset?.[0] || "custom";
+  sendDisplaySettings();
+}
+
 async function discover() {
   const url = `${targetBaseUrl()}/discovery`;
   elements.remoteStatus.textContent = "发现中";
@@ -349,7 +443,7 @@ function handleMessage(rawData) {
       handleSessionAnswer(message);
       break;
     case "display_settings_ack":
-      logEvent("显示设置已确认", `${message.videoCodec || "?"} · ${message.fps || "?"} fps`);
+      handleDisplaySettingsAck(message);
       break;
     case "video_frame":
       handleVideoFrame(message);
@@ -434,7 +528,7 @@ function handleAuthResult(message) {
   state.authenticated = true;
   logEvent("认证通过");
   send({
-    type: "session_offer",
+    ...makeDisplaySettingsMessage("session_offer"),
     protocolVersion: 1,
     wantVideo: true,
     wantAudio: elements.audioToggle.checked,
@@ -442,13 +536,6 @@ function handleAuthResult(message) {
     wantClipboardFile: true,
     preferredVideoCodec: "mjpeg",
     preferredAudioCodec: "pcm-f32le",
-    maxFps: 8,
-    maxBandwidthKbps: 8000,
-    qualityPreset: "balanced",
-    displayMode: "window",
-    displayId: "main",
-    preferredWidth: 1280,
-    preferredHeight: 720,
     audioVolume: audioVolume(),
   });
 }
@@ -466,8 +553,26 @@ function handleSessionAnswer(message) {
   } else {
     elements.audioStatus.textContent = elements.audioToggle.checked ? "对端未开启" : "未开启";
   }
+  const acknowledged = {
+    width: state.remoteWidth,
+    height: state.remoteHeight,
+    fps: Number(message.fps) || currentVideoSettings().fps,
+    bandwidthMbps: Math.round((Number(message.maxBandwidthKbps) || currentVideoSettings().maxBandwidthKbps) / 1000),
+  };
+  elements.displaySettingsStatus.textContent = `已确认 ${describeVideoSettings(acknowledged)}`;
   saveRecentConnection({ label: message.deviceName || message.hostName || message.hostMode || "" });
   logEvent("会话已协商", `${state.remoteWidth}x${state.remoteHeight} · ${message.videoCodec || "video"}`);
+}
+
+function handleDisplaySettingsAck(message) {
+  const acknowledged = {
+    width: Number(message.width) || currentVideoSettings().width,
+    height: Number(message.height) || currentVideoSettings().height,
+    fps: Number(message.fps) || currentVideoSettings().fps,
+    bandwidthMbps: Math.round((Number(message.maxBandwidthKbps) || currentVideoSettings().maxBandwidthKbps) / 1000),
+  };
+  elements.displaySettingsStatus.textContent = `${message.accepted === false ? "未接受" : "已确认"} ${describeVideoSettings(acknowledged)}`;
+  logEvent("显示设置已确认", `${message.videoCodec || "?"} · ${message.fps || "?"} Hz`);
 }
 
 function handleVideoFrame(frame) {
@@ -1129,6 +1234,10 @@ elements.disconnectButton.addEventListener("click", disconnect);
 elements.useRecentConnectionButton.addEventListener("click", applySelectedRecentConnection);
 elements.recentConnectionSelect.addEventListener("change", applySelectedRecentConnection);
 elements.clearRecentConnectionsButton.addEventListener("click", clearRecentConnections);
+elements.qualityPresetSelect.addEventListener("change", applyQualityPreset);
+elements.resolutionSelect.addEventListener("change", markCustomVideoSettings);
+elements.fpsSelect.addEventListener("change", markCustomVideoSettings);
+elements.bandwidthSelect.addEventListener("change", markCustomVideoSettings);
 elements.focusButton.addEventListener("click", () => elements.remoteViewport.focus());
 elements.clearLogButton.addEventListener("click", () => {
   elements.eventLog.textContent = "";
@@ -1207,5 +1316,6 @@ elements.remoteViewport.addEventListener("keydown", (event) => {
 });
 
 updateAudioVolumeLabel();
+updateDisplaySettingsStatus();
 initializeRecentConnections();
 logEvent("Mac 控制端已就绪", "默认连接 127.0.0.1:43772，可改为 Windows 局域网 IP:43770");

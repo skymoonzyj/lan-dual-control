@@ -32,7 +32,7 @@
 - 继续压测 ScreenCaptureKit + VideoToolbox H.264，30 秒 H.264 已稳定到 877 帧/约 29.2fps/最大间隔 45ms，50 次连续重连 FD 未增长；下一步重点看 5-10 分钟长稳、CPU 占用、端到端延迟和 Windows 控制端同时连接体验。
 - 扩展 CGEvent 键盘映射，重点验证中文输入法、Command 组合键和功能键；改映射前后先跑 `node scripts/mac/check-input-keymap.mjs`，它会覆盖常见 code/key、同义项和修饰键 flag fallback。
 - 增加真实多显示器枚举和采集切换。
-- 继续完善 `apps/mac-client` Mac 控制 Windows 原型：用 `test-mac-client-browser.mjs --useExistingHost --enableAudio --expectAudioPayload --expectAudioPlayback` 接真实 Windows WASAPI host 验收 PCM 播放；Windows 本机临时启动 host 验收可直接加 `--requireAudio`，继续打磨键盘映射边界，后续可补最近连接重命名等小体验。
+- 继续完善 `apps/mac-client` Mac 控制 Windows 原型：用 `test-mac-client-browser.mjs --useExistingHost --enableAudio --expectAudioPayload --expectAudioPlayback` 接真实 Windows WASAPI host 验收 PCM 播放；Windows 本机临时启动 host 验收可直接加 `--requireAudio`；视频参数控件已可请求 1080P/2K/4K、30-240 Hz 和 5-50 Mbps，后续重点看真机 Mac 控制 Windows 的 60 Hz 观感、延迟和键盘映射边界。
 
 ## Windows Codex 可接任务
 
@@ -43,7 +43,7 @@
 - Windows host 或假 Mac 认证相关改动后运行 `node scripts/windows/test-auth-retry-policy.mjs`，确认错误密码剩余次数、第三次断开和新连接正确认证未退化。
 - Windows 控制端视频、缩放或输入相关改动后，用真实 Mac host 运行 `node scripts/windows/test-windows-client-browser.mjs --host <Mac IP> --port 43770 --password <密码> --requireH264`，确认 H.264/WebCodecs 画布解码未退回 JPEG，并确认黑边输入防护回归通过。
 - Windows host 相关改动后运行 `scripts/windows/test-windows-host.ps1`，确认真实视频首帧、文本剪贴板和文件剪贴板接收未退化；涉及音频时可加 `-AudioMode wasapi -RequireAudio`；涉及 Mac 反控链路时再运行 `node scripts/windows/test-mac-client-browser.mjs`，确认 Mac client 页面可显示 Windows 画面、收到 `input_ack`，并完成 `Command+C` 到 `Ctrl+C` 映射、最近连接保存/回填/清空、文本/本机剪贴板监听/文件剪贴板发送；需要验收真实 PCM 播放时，本机临时 host 可加 `--requireAudio`，已运行 host 可加 `--useExistingHost --enableAudio --expectAudioPayload --expectAudioPlayback`；认证相关改动可加跑 `node scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3`。
-- Windows host 视频性能相关改动后运行 `node scripts/windows/observe-windows-host-video.mjs`，确认实际 FPS、最大帧间隔和采集管线符合预期。
+- Windows host 或 Mac client 视频参数相关改动后运行 `node scripts/windows/observe-windows-host-video.mjs --fps 60 --durationMs 4000 --minFrames 120 --minFps 35`，确认 Windows host 60 Hz 请求下实际 FPS、最大帧间隔和采集管线符合预期；再运行 `node scripts/windows/test-mac-client-browser.mjs` 确认 Mac client 默认 1080P/60Hz/20Mbps 和 2K/60Hz/40Mbps 更新路径未退化。
 - 继续维护本机假 Mac 服务，用于快速回归和失败场景模拟。
 
 ## 暂不优先

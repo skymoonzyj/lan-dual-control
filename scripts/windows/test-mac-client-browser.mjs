@@ -413,7 +413,7 @@ async function startWindowsHost(args, repoRoot) {
     LAN_DUAL_PASSWORD: args.hostPassword,
     LAN_DUAL_WINDOWS_INPUT_MODE: args.inputMode,
     LAN_DUAL_WINDOWS_SCREEN_MODE: args.mockVideo ? "mock" : args.screenMode,
-    LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: "4",
+    LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: "60",
     ...(args.audioMode ? { LAN_DUAL_WINDOWS_AUDIO_MODE: args.audioMode } : {}),
   };
   const child = startProcess(
@@ -462,6 +462,11 @@ function buildSnapshotExpression() {
       localClipboard: text("#localClipboardStatus"),
       fileClipboard: text("#fileClipboardStatus"),
       recentConnection: text("#recentConnectionStatus"),
+      displaySettings: text("#displaySettingsStatus"),
+      qualityPreset: document.querySelector("#qualityPresetSelect")?.value || "",
+      resolution: document.querySelector("#resolutionSelect")?.value || "",
+      fps: document.querySelector("#fpsSelect")?.value || "",
+      bandwidth: document.querySelector("#bandwidthSelect")?.value || "",
       recentConnectionValue: document.querySelector("#recentConnectionSelect")?.value || "",
       recentConnectionDisabled: document.querySelector("#recentConnectionSelect")?.disabled || false,
       clearRecentConnectionsDisabled: document.querySelector("#clearRecentConnectionsButton")?.disabled || false,
@@ -597,6 +602,17 @@ async function run() {
         return true;
       })()`,
     );
+    const defaultSettingsSnapshot = await evaluate(session, buildSnapshotExpression());
+    if (
+      defaultSettingsSnapshot.resolution !== "1920x1080" ||
+      defaultSettingsSnapshot.fps !== "60" ||
+      defaultSettingsSnapshot.bandwidth !== "20" ||
+      !defaultSettingsSnapshot.displaySettings.includes("1080P") ||
+      !defaultSettingsSnapshot.displaySettings.includes("60 Hz") ||
+      !defaultSettingsSnapshot.displaySettings.includes("20 Mbps")
+    ) {
+      throw new Error(`Mac client default video settings mismatch: ${JSON.stringify(defaultSettingsSnapshot)}`);
+    }
     if (args.enableAudio) {
       await clickElement(session, "#audioToggle");
       await waitFor(
@@ -665,6 +681,73 @@ async function run() {
     print("OK", `Connection: ${videoSnapshot.connection}`);
     print("OK", `Remote: ${videoSnapshot.remote}`);
     print("OK", `Video: ${videoSnapshot.video}`);
+    const sessionSettings = await evaluate(
+      session,
+      `(() => [...(window.__lanDualSentMessages || [])].find((message) => message.type === "session_offer"))()`,
+    );
+    if (
+      Number(sessionSettings?.preferredWidth) !== 1920 ||
+      Number(sessionSettings?.preferredHeight) !== 1080 ||
+      Number(sessionSettings?.maxFps) !== 60 ||
+      Number(sessionSettings?.maxBandwidthKbps) !== 20000 ||
+      sessionSettings?.qualityPreset !== "balanced"
+    ) {
+      throw new Error(`Mac client session video settings mismatch: ${JSON.stringify(sessionSettings)}`);
+    }
+    print("OK", `Video settings: ${videoSnapshot.displaySettings}`);
+
+    await evaluate(
+      session,
+      `(() => {
+        const setValue = (selector, value) => {
+          const element = document.querySelector(selector);
+          element.value = value;
+          element.dispatchEvent(new Event("change", { bubbles: true }));
+          element.dispatchEvent(new Event("input", { bubbles: true }));
+        };
+        setValue("#qualityPresetSelect", "sharp");
+        return true;
+      })()`,
+    );
+    const displaySettingsSnapshot = await waitFor(
+      async () => {
+        const value = await evaluate(session, buildSnapshotExpression());
+        lastSnapshot = value;
+        const latestDisplaySettings = await evaluate(
+          session,
+          `(() => [...(window.__lanDualSentMessages || [])]
+            .reverse()
+            .find((message) => message.type === "display_settings"))()`,
+        );
+        const latestDisplayAck = await evaluate(
+          session,
+          `(() => [...(window.__lanDualReceivedMessages || [])]
+            .reverse()
+            .find((message) => message.type === "display_settings_ack"))()`,
+        );
+        const messageOk =
+          Number(latestDisplaySettings?.width) === 2560 &&
+          Number(latestDisplaySettings?.height) === 1440 &&
+          Number(latestDisplaySettings?.fps) === 60 &&
+          Number(latestDisplaySettings?.maxBandwidthKbps) === 40000 &&
+          latestDisplaySettings?.qualityPreset === "sharp" &&
+          latestDisplaySettings?.audio === Boolean(value.audioToggleChecked);
+        const ackOk =
+          latestDisplayAck?.accepted === true &&
+          Number(latestDisplayAck?.requestedFps) === 60;
+        const statusOk =
+          value.qualityPreset === "sharp" &&
+          value.resolution === "2560x1440" &&
+          value.fps === "60" &&
+          value.bandwidth === "40" &&
+          value.displaySettings.includes("2K") &&
+          value.displaySettings.includes("40 Mbps");
+        return messageOk && ackOk && statusOk ? { ...value, latestDisplaySettings, latestDisplayAck } : null;
+      },
+      args.timeoutMs,
+      "Mac client display settings update",
+    );
+    print("OK", `Display settings: ${displaySettingsSnapshot.displaySettings}`);
 
     if (args.expectAudioFrame) {
       const audioSnapshot = await waitFor(

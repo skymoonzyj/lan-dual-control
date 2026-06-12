@@ -8,6 +8,7 @@
 - 通过 WebSocket 完成 `hello`、`auth_request`、`session_offer`。
 - 认证失败时显示远端返回的剩余尝试次数，并自动释放连接按钮，方便改密码后重连。
 - 显示 Windows host 的 JPEG `video_frame`。
+- 支持画质、分辨率、刷新率和码率设置，当前可选 1080P/2K/4K、30/60/120/144/240 Hz、5/10/15/20/40/50 Mbps；成功连接后修改会立即发送 `display_settings`。
 - 向 Windows host 发送鼠标移动、按钮、滚轮和键盘 `input_event`；Mac `Command` 会按 Windows `Ctrl` 发送，方便常用快捷键。
 - 手动发送文本 `clipboard_text` 到 Windows host，并显示 `clipboard_ack` 写入结果。
 - 可读取 Mac 本机文本剪贴板；用户显式开启后可监听文本变化并自动发送到 Windows host。
@@ -51,6 +52,7 @@ LAN_DUAL_PORT=43772 LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_WINDOWS_INPUT_MODE=log node
 
 - 这是 Web 原型，不是 SwiftUI/原生桌面窗口。
 - 目前只显示 JPEG/data-url 视频帧；后续再接 H.264/WebCodecs 或原生解码。
+- 画质设置已能请求 60 Hz；Windows host FFmpeg gdigrab 本机观察 60 Hz 请求约 56 FPS，但真实 Mac 控制 Windows 的观感仍需真机确认。
 - 音频播放当前覆盖 PCM 过渡格式；真实 Windows 系统声音已可通过 Windows host WASAPI loopback 做页面级自检，真实听感还需要 Mac 真机连接 Windows host 继续确认。
 - 当前支持手动发送文本和文件剪贴板；Mac 本机文本剪贴板读取和自动监听默认关闭，需用户手动点击读取或开启监听。
 - 最近连接只写入浏览器 localStorage 的地址、端口和时间，不保存连接密码；“清空”只删除最近连接，不影响密码输入框。
@@ -70,6 +72,8 @@ node --check apps/mac-client/app.js
 Mac 本机文本剪贴板已纳入页面级自检：脚本会授权浏览器剪贴板、写入临时文本、点击“读取 Mac 剪贴板”并发送，再开启监听后写入新文本，确认自动发送收到 `clipboard_ack`。断开连接时监听会自动停止。
 
 最近连接已纳入页面级自检：成功协商后确认页面保存当前 host/port、localStorage 不包含连接密码，验证选择最近连接可回填地址和端口，再点击“清空”确认 localStorage 删除该记录且下拉框禁用。
+
+视频参数已纳入页面级自检：脚本会确认默认 `session_offer` 请求 1080P / 60 Hz / 20 Mbps，并切换到高清预设，断言页面发送 2K / 60 Hz / 40 Mbps 的 `display_settings` 且收到 `display_settings_ack`。
 
 快捷键映射已纳入页面级自检：脚本会模拟 `Command+C`，拦截页面发出的 `input_event`，断言发往 Windows 的 `ctrlKey=true`、`metaKey=false`，同时保留 `localMetaKey=true` 便于诊断。
 
