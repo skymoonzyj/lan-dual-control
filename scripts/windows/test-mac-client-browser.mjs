@@ -850,6 +850,35 @@ async function verifyMacClientConnectCancel({ args, session }) {
   );
 }
 
+async function verifyMacClientFileClipboardOversizedSelection({ args, session }) {
+  await evaluate(
+    session,
+    `(() => {
+      const input = document.querySelector("#clipboardFileInput");
+      const dataTransfer = new DataTransfer();
+      const oversizedBytes = 32 * 1024 * 1024 + 1;
+      dataTransfer.items.add(new File(
+        [new Blob([new ArrayBuffer(oversizedBytes)])],
+        "mac-client-oversized-file.bin",
+        { type: "application/octet-stream" },
+      ));
+      input.files = dataTransfer.files;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    })()`,
+  );
+  const oversizedSnapshot = await waitFor(
+    async () => {
+      const value = await evaluate(session, buildSnapshotExpression());
+      return value.sendClipboardFilesButtonDisabled && value.fileClipboard.includes("文件过大") ? value : null;
+    },
+    args.timeoutMs,
+    "Mac client oversized file clipboard disabled state",
+  );
+  print("OK", `File oversize guard: ${oversizedSnapshot.fileClipboard}`);
+}
+
 async function verifyMacClientFileClipboardRejectCancel({ args, session, uploadDir }) {
   const rejectPath = join(uploadDir, `mac-client-file-reject-${Date.now()}.txt`);
   const rejectText = [
@@ -1703,6 +1732,7 @@ async function run() {
 
     if (args.testFileClipboard) {
       uploadDir = await mkdtemp(join(tmpdir(), "lan-dual-mac-client-upload-"));
+      await verifyMacClientFileClipboardOversizedSelection({ args, session });
       await verifyMacClientFileClipboardRejectCancel({ args, session, uploadDir });
 
       const uploadPath = join(uploadDir, `mac-client-file-clipboard-${Date.now()}.txt`);

@@ -1328,9 +1328,15 @@ function yieldToUi() {
   });
 }
 
+function selectedClipboardFiles() {
+  const files = Array.from(elements.clipboardFileInput.files ?? []);
+  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+  return { files, totalBytes, tooLarge: totalBytes > maxClipboardFileBytes };
+}
+
 function updateFileClipboardButton() {
-  const hasFiles = (elements.clipboardFileInput.files?.length || 0) > 0;
-  elements.sendClipboardFilesButton.disabled = state.fileTransferActive || !state.authenticated || !hasFiles;
+  const { files, tooLarge } = selectedClipboardFiles();
+  elements.sendClipboardFilesButton.disabled = state.fileTransferActive || !state.authenticated || files.length === 0 || tooLarge;
 }
 
 function throwIfFileTransferCanceled(signal) {
@@ -1364,13 +1370,12 @@ async function sendClipboardFiles() {
     return;
   }
 
-  const files = Array.from(elements.clipboardFileInput.files ?? []);
+  const { files, totalBytes } = selectedClipboardFiles();
   if (files.length === 0) {
     elements.fileClipboardStatus.textContent = "未选择";
     return;
   }
 
-  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
   if (totalBytes > maxClipboardFileBytes) {
     const detail = `${formatBytes(totalBytes)} 超过上限 ${formatBytes(maxClipboardFileBytes)}`;
     elements.fileClipboardStatus.textContent = "文件过大";
@@ -1577,10 +1582,11 @@ elements.sendClipboardFilesButton.addEventListener("click", () => {
   void sendClipboardFiles();
 });
 elements.clipboardFileInput.addEventListener("change", () => {
-  const files = Array.from(elements.clipboardFileInput.files ?? []);
-  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+  const { files, totalBytes, tooLarge } = selectedClipboardFiles();
   elements.fileClipboardStatus.textContent = files.length
-    ? `${files.length} 个 · ${formatBytes(totalBytes)}`
+    ? tooLarge
+      ? `文件过大 · ${formatBytes(totalBytes)} / 上限 ${formatBytes(maxClipboardFileBytes)}`
+      : `${files.length} 个 · ${formatBytes(totalBytes)}`
     : "未选择";
   updateFileClipboardButton();
 });
