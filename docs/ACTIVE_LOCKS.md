@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 13:53 | 记录真实 Mac host 只读长观察：音频 30 秒 1501 帧、H.264 30 秒 877 帧、连续重连 50/50，FD 保持 `30->30`。 |
 | Windows Codex | `scripts/windows/observe-windows-host-audio.mjs`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 13:52 | Windows WASAPI 音频观察脚本新增显式 `--playTone --requireLevel` 有声电平强校验；30 秒长稳 1482 帧、稳态 50 FPS、最大间隔 33ms，测试音最高电平 0.222。 |
 | Windows Codex | `apps/windows-client/app.js`、`apps/windows-client/styles.css`、`scripts/windows/test-windows-client-browser.mjs`、`apps/windows-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 13:43 | Windows 控制端黑边区域不再发送鼠标/滚轮输入，拖拽到黑边松开会用最后有效坐标补发释放；页面级自检新增黑边移动、按下、释放和滚轮回归。 |
 | Mac Codex | `scripts/mac/check-input-keymap.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 13:35 | Mac 输入映射静态自检新增 code/key 同义项和修饰键 flag fallback 覆盖；未改真实注入行为。 |

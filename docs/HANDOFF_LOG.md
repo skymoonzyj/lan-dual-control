@@ -21,6 +21,41 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：对真实 Mac host 做只读长观察，确认 H.264、PCM 音频和连续重连在当前真机上更接近日常试用稳定性。
+完成内容：
+- 真实 Mac host `/discovery` 确认仍在 `127.0.0.1:43770`，`inputMode=log`，`screenRecording=true`，`accessibility=true`，`h264Stream=true`，`audioMode=system-pcm`，主显示器 `1920x1080`。
+- 使用 `observe-mac-audio` 做 30 秒只读系统声音帧观察，验证 `pcm-f32le-base64` 节奏稳定。
+- 使用 `observe-mac-video` 做 30 秒 H.264 只读视频帧观察，验证 `screencapturekit-h264` 帧节奏稳定。
+- 使用 `stress-mac-host` 做 50 次连续连接回归，验证每次都能拿到 H.264 首帧和真实 PCM 音频帧，且监听进程 FD 未增长。
+修改文件：
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `curl -sS http://127.0.0.1:43770/discovery`
+- `node scripts/mac/observe-mac-audio.mjs --durationMs 30000 --minFrames 250 --maxGapMs 1000`
+- `node scripts/mac/observe-mac-video.mjs --durationMs 30000 --requireH264 --minFrames 600 --minFps 20 --maxGapMs 1000`
+- `node scripts/mac/stress-mac-host.mjs --iterations 50 --expectInputMode log --requireH264 true --requireAudio true`
+验证结果：
+- 音频 30 秒通过：1501 帧，约 50.0fps，平均/最大间隔 20.0/24ms，payload 恒定 7680 bytes，电平 0。
+- H.264 30 秒通过：877 帧，约 29.2fps，平均/最大间隔 34.3/45ms，全部为 `h264` / `annexb-base64` / `screencapturekit-h264` / `screen`。
+- 连续重连 50/50 通过：每次首帧 H.264 都包含 SPS/PPS/IDR，每次音频帧均为 `pcm-f32le-base64`、48kHz、2ch、960 frames；监听进程 RSS `79376->80656 KB`，FD `30->30`。
+遗留问题：
+- 本轮系统音频电平为 0，说明测试窗口内无可听系统输出或处于静音；PCM 帧节奏稳定，但真实听感、音量变化和非静音内容仍需继续验收。
+- 仍未切到 `LAN_DUAL_INPUT_MODE=inject` 做真实输入注入；中文输入法、组合键时序和多显示器采集切换仍是后续重点。
+下一步建议：
+- Mac 端后续做 5-10 分钟 H.264/PCM 长稳观察，并补 CPU 占用记录；若 Windows 控制端同时连接，记录端到端延迟和听感。
+- 真实输入注入前先准备更细的安全脚本或人工步骤，继续默认用 `inputMode=log` 联调。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；若要验证真实听感和端到端延迟，需要 Windows 控制端配合连接。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：增强 Mac 输入映射静态自检，防止后续改键位时误删同义键或修饰键 fallback。
 完成内容：
 - `scripts/mac/check-input-keymap.mjs` 新增 `KeyboardEvent.code` 同义项覆盖：`Return`、`ForwardDelete`、`Help`、`OSLeft`、`OSRight`、`NumLock`。

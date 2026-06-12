@@ -115,6 +115,8 @@ node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFra
 
 该脚本会只读统计 `video_frame` 帧数、接收 FPS、最大帧间隔、payload 大小、codec、encoding、`capturePipeline` 和 source，用于排查 H.264/JPEG 帧率不稳、回退到 mock 或采集管线漂移。JPEG 兜底链路可用 `--preferredVideoCodec mjpeg --requireRealVideo` 观察。
 
+当前真机基线：H.264 30 秒观察 877 帧、约 29.2fps、最大间隔 45ms，全部为 `h264` / `annexb-base64` / `screencapturekit-h264`；JPEG 兜底曾以 2 秒 37 帧、约 17.9fps 通过。
+
 验证真实系统声音采集和控制端播放：
 
 ```powershell
@@ -131,6 +133,8 @@ node scripts/mac/observe-mac-audio.mjs --durationMs 10000 --minFrames 80 --maxGa
 
 该脚本会只读统计 `audio_frame` 帧数、接收间隔、payload 大小和电平范围，用于排查无声、间断或格式漂移；它不会修改系统音量、输入或剪贴板。
 
+当前真机基线：系统声音 30 秒观察 1501 帧、约 50fps、最大间隔 24ms，payload 恒定 7680 bytes；本次测试窗口电平为 0，真实听感和音量变化仍需在有系统声音时继续验收。
+
 在 Mac 本机做 H.264 和 PCM 音频连续重连稳定性检查：
 
 ```bash
@@ -138,6 +142,8 @@ node scripts/mac/stress-mac-host.mjs --iterations 20 --expectInputMode log
 ```
 
 该脚本会复用 `scripts/windows/probe-mac-host.mjs`，默认每次都要求 H.264 首帧和真实 `pcm-f32le` 音频帧通过，并在 macOS 上采样监听进程的 RSS/FD 变化，便于排查连续建连后的资源释放问题。
+
+当前真机基线：50 次连续连接全部通过，监听进程 RSS `79376->80656 KB`，FD `30->30`。
 
 在 Mac 本机验证文本剪贴板双向同步：
 
