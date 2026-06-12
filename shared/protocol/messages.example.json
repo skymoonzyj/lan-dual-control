@@ -172,6 +172,8 @@
     "requestedFps": 60,
     "maxScreenFps": 12,
     "frameIntervalMs": 83,
+    "activeDisplayId": "main",
+    "displayName": "内建显示器",
     "droppedFrames": 0,
     "dataUrl": "data:image/jpeg;base64,..."
   },
@@ -189,6 +191,8 @@
     "timestampUs": 3300000,
     "durationUs": 33333,
     "capturePipeline": "screencapturekit-h264",
+    "activeDisplayId": "main",
+    "displayName": "内建显示器",
     "payload": "AAAA..."
   },
   "audioSettingsUpdate": {

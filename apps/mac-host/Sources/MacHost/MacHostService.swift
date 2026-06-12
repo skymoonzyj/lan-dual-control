@@ -63,8 +63,10 @@ private final class ClientContext {
     var audioFrameId = 0
     var videoTimer: DispatchSourceTimer?
     var videoStream: ScreenVideoStream?
+    var videoStreamToken = 0
     var audioTimer: DispatchSourceTimer?
     var audioStream: SystemAudioStream?
+    var audioStreamToken = 0
     var clipboardTimer: DispatchSourceTimer?
     var fileTransfers: [String: FileTransferState] = [:]
     var outboundFileTransfers: [String: OutboundFileTransferState] = [:]
@@ -1306,7 +1308,7 @@ final class MacHostService {
             clipboardFileEnabled: false
         )
         if session.capturePipeline == "screencapturekit-h264" {
-            startH264VideoStream(context, session: session)
+            startH264VideoStream(context, session: session, streamToken: context.videoStreamToken)
             return
         }
 
@@ -1343,13 +1345,14 @@ final class MacHostService {
     }
 
     private func stopVideoFrames(_ context: ClientContext) {
+        context.videoStreamToken += 1
         context.videoTimer?.cancel()
         context.videoTimer = nil
         context.videoStream?.stop()
         context.videoStream = nil
     }
 
-    private func startH264VideoStream(_ context: ClientContext, session: HostSession) {
+    private func startH264VideoStream(_ context: ClientContext, session: HostSession, streamToken: Int) {
         let sessionSnapshot = session
         Task { [weak self, weak context] in
             guard let self else { return }
@@ -1363,7 +1366,10 @@ final class MacHostService {
                     onFrame: { [weak self, weak context] frame in
                         DispatchQueue.main.async { [weak self, weak context] in
                             guard let self, let context, !context.isClosed else { return }
-                            guard context.session?.capturePipeline == "screencapturekit-h264" else { return }
+                            guard context.videoStreamToken == streamToken,
+                                  context.session?.capturePipeline == "screencapturekit-h264" else {
+                                return
+                            }
                             context.frameId += 1
                             var message = frame.jsonObject(
                                 frameId: context.frameId,
@@ -1388,7 +1394,8 @@ final class MacHostService {
                         stream.stop()
                         return
                     }
-                    guard context.session?.capturePipeline == "screencapturekit-h264" else {
+                    guard context.videoStreamToken == streamToken,
+                          context.session?.capturePipeline == "screencapturekit-h264" else {
                         stream.stop()
                         return
                     }
@@ -1397,6 +1404,7 @@ final class MacHostService {
             } catch {
                 DispatchQueue.main.async { [weak self, weak context] in
                     guard let self, let context, !context.isClosed else { return }
+                    guard context.videoStreamToken == streamToken else { return }
                     self.logger.warn("H.264 流式采集启动失败：\(error.localizedDescription)。已退回后台 JPEG。")
                     if var fallbackSession = context.session {
                         fallbackSession.videoCodec = "jpeg"
@@ -1461,10 +1469,13 @@ final class MacHostService {
         frame["maxScreenFps"] = configuration.maxScreenFps
         frame["frameIntervalMs"] = videoFrameIntervalMs(for: session)
         frame["capturePipeline"] = pipeline
+        frame["activeDisplayId"] = session.displayId
+        frame["displayName"] = session.displayName
     }
 
     private func startAudioFrames(_ context: ClientContext) {
         stopAudioFrames(context)
+        let streamToken = context.audioStreamToken
         guard screenCapture.supportsSystemAudioCapture else {
             startMockAudioFrames(context)
             return
@@ -1481,7 +1492,10 @@ final class MacHostService {
                     onFrame: { [weak self, weak context] frame in
                         DispatchQueue.main.async { [weak self, weak context] in
                             guard let self, let context, !context.isClosed else { return }
-                            guard context.session?.audioEnabled == true else { return }
+                            guard context.audioStreamToken == streamToken,
+                                  context.session?.audioEnabled == true else {
+                                return
+                            }
                             context.audioFrameId += 1
                             let volume = max(0, min(100, context.session?.audioVolume ?? 80))
                             self.send(frame.jsonObject(frameId: context.audioFrameId, volume: volume), to: context)
@@ -1494,7 +1508,8 @@ final class MacHostService {
                         stream.stop()
                         return
                     }
-                    guard context.session?.audioEnabled == true else {
+                    guard context.audioStreamToken == streamToken,
+                          context.session?.audioEnabled == true else {
                         stream.stop()
                         return
                     }
@@ -1513,6 +1528,7 @@ final class MacHostService {
             } catch {
                 DispatchQueue.main.async { [weak self, weak context] in
                     guard let self, let context, !context.isClosed else { return }
+                    guard context.audioStreamToken == streamToken else { return }
                     self.logger.warn("系统声音采集启动失败：\(error.localizedDescription)。已退回模拟音频帧。")
                     self.send([
                         "type": "audio_status",
@@ -1556,6 +1572,7 @@ final class MacHostService {
     }
 
     private func stopAudioFrames(_ context: ClientContext) {
+        context.audioStreamToken += 1
         context.audioTimer?.cancel()
         context.audioTimer = nil
         context.audioStream?.stop()

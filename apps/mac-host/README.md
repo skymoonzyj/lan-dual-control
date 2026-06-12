@@ -125,6 +125,14 @@ node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFra
 
 当前真机基线：H.264 30 秒观察 877 帧、约 29.2fps、最大间隔 45ms，全部为 `h264` / `annexb-base64` / `screencapturekit-h264`；空闲/低变化桌面下，H.264 5 分钟观察收到 3168 帧、约 10.6fps，60 秒低门槛复测收到 654 帧、约 10.9fps、最大间隔 883ms；JPEG 60 秒对照收到 983 帧、约 16.4fps。后续做长时间视频强校验时，需要区分静态桌面和动态画面，静态桌面不要直接把 `--minFps 25` 当硬门槛。
 
+验证显示器枚举和 `displayId` 切换回执：
+
+```bash
+node scripts/mac/check-mac-displays.mjs
+```
+
+该脚本会只读检查 `/discovery`、`session_answer.displays`、`session_answer.activeDisplayId`、`display_settings_ack.activeDisplayId`，并等待切换后的 `video_frame`。默认请求 MJPEG/JPEG 路径，适合快速确认多显示器选择不被 H.264 首帧节奏影响；需要专门检查 H.264 路径时可加 `--preferredVideoCodec h264`。当前真机单屏基线：临时 `127.0.0.1:43771` host 通过 `main` 单屏 round-trip，首帧和切换后帧均带回 `activeDisplayId=main` / `displayName=主显示器`；真实外接双屏切换仍需接显示器后再验收。
+
 验证真实系统声音采集和控制端播放：
 
 ```powershell

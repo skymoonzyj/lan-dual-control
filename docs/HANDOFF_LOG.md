@@ -21,6 +21,47 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：补强 Mac host 显示器切换安全性，并给真实多显示器验收准备脚本。
+完成内容：
+- Mac host 的 H.264 视频流启动、帧回调和失败回退增加 `videoStreamToken` generation 防护；切换 `display_settings` 或断开连接后，旧异步流迟到返回不会覆盖新会话。
+- Mac host 的系统音频流增加 `audioStreamToken` generation 防护；切换音频/显示设置后旧音频流迟到帧或失败回退不会重新打开旧 mock/real 音频。
+- `video_frame` 增加向后兼容的可选诊断字段 `activeDisplayId` 和 `displayName`，用于确认当前帧来自哪个被控端显示器。
+- 新增 `scripts/mac/check-mac-displays.mjs`，只读验证 `/discovery`、`session_answer.displays`、`session_answer.activeDisplayId`、`display_settings_ack.activeDisplayId` 和切换后的 `video_frame` display 诊断；默认请求 MJPEG/JPEG，H.264 可显式加 `--preferredVideoCodec h264`。
+- 同步 Mac host README、当前状态、下一步和任务板；真实外接双屏切换仍保留为待验收项。
+修改文件：
+- `apps/mac-host/Sources/MacHost/MacHostService.swift`
+- `scripts/mac/check-mac-displays.mjs`
+- `docs/03-architecture-and-protocol.md`
+- `shared/protocol/messages.example.json`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-displays.mjs`
+- `swift build` in `apps/mac-host`
+- 临时启动新 Mac host：`LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_PORT=43771 LAN_DUAL_INPUT_MODE=log LAN_DUAL_BONJOUR=0 .build/debug/lan-dual-mac-host`
+- `node scripts/mac/check-mac-displays.mjs --port 43771 --timeoutMs 12000`
+验证结果：
+- Swift 编译通过。
+- 当前真机单屏环境识别 `displays=main*:1920x1080`。
+- 默认 MJPEG/JPEG 显示器脚本通过：`session_answer` active display 为 `main`，首帧带 `activeDisplayId=main` / `displayName=主显示器`，`display_settings_ack` 和切换后帧仍为 `main`。
+- 显式 H.264 版本在临时第二 host 上曾进入 `screencapturekit-h264` 会话但 12 秒内未收到首帧；本轮未把它作为显示器脚本默认门槛，后续应单独排查临时第二 host/H.264 首帧等待和动态画面触发。
+遗留问题：
+- 当前只有单屏真机证据，外接显示器后的真实 `main -> display-*` 采集切换仍待验收。
+- H.264 首帧在临时第二 host 上的 12 秒超时需要后续独立复查；主 43770 既有 H.264 基线不因此改判。
+下一步建议：
+- 接上外接显示器后运行 `node scripts/mac/check-mac-displays.mjs --switchDisplayId <display-id>`，再让 Windows 控制端用显示器下拉验证真实双屏切换画面。
+- 如果继续处理 H.264 首帧问题，优先用动态画面和单 host 环境复测，避免把第二实例资源竞争误判为主链路退化。
+是否改了协议：是，向后兼容新增 `video_frame.activeDisplayId` / `displayName` 可选诊断字段；旧控制端可忽略。
+是否需要另一端配合：不阻塞 Windows；真实双屏 UI 验收需要 Windows 控制端后续配合。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：把真实 Mac host 的 5 分钟只读长稳观察结果记录清楚，并区分 PCM 稳定性与空闲桌面视频实收 FPS。
 完成内容：
 - 对真实 Mac host `127.0.0.1:43770` 做 5 分钟系统声音 PCM 只读观察，确认长时间帧节奏稳定。

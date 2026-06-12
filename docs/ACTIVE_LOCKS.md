@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `apps/mac-host/Sources/MacHost/MacHostService.swift`、`scripts/mac/check-mac-displays.mjs`、`docs/03-architecture-and-protocol.md`、`shared/protocol/messages.example.json`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 15:34 | Mac host H.264/音频异步流增加 generation token，避免显示器/设置切换后旧流回调覆盖新会话；`video_frame` 新增可选 display 诊断字段；新增单屏/多屏显示器 round-trip 自检脚本。 |
 | Windows Codex | `scripts/windows/test-windows-client-browser.mjs`、`apps/windows-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 14:57 | Windows 控制端页面级自检连接成功后要求刷新率卡片显示数值型“实收 FPS”和“协商 Hz”，避免 UI 退回只显示请求值。 |
 | Mac Codex | `apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 14:50 | 记录真实 Mac host 5 分钟 PCM 长稳和空闲桌面视频实收 FPS：音频 15001 帧/50.0fps/max gap 31ms；空闲桌面 H.264 5 分钟约 10.6fps、60 秒约 10.9fps，JPEG 60 秒约 16.4fps。 |
 | Windows Codex | `scripts/windows/test-mac-client-browser.mjs`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 14:43 | Mac client 页面级自检显式断言 Windows host 普通启动会话和显示设置回执均为 60Hz，防止默认上限退回 30。 |

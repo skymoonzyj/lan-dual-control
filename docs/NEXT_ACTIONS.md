@@ -32,7 +32,7 @@
 - 继续压测 ScreenCaptureKit + VideoToolbox H.264：30 秒动态/活跃窗口曾稳定到 877 帧/约 29.2fps/最大间隔 45ms，空闲桌面 5 分钟实收约 10.6fps、60 秒复测约 10.9fps；下一步重点用动态画面、CPU 占用、端到端延迟和 Windows 控制端同时连接体验来判断真实观感，不要把静态桌面 `--minFps 25` 当硬门槛。
 - 真实输入注入前先跑 `node scripts/mac/smoke-mac-input-log.mjs`，确认当前 host 仍是 `inputMode=log` 且鼠标/滚轮/键盘/快捷键事件都会返回 `input_ack`；切 `inject` 前需要人工在屏幕前确认安全环境。
 - 扩展 CGEvent 键盘映射，重点验证中文输入法、Command 组合键和功能键；改映射前后先跑 `node scripts/mac/check-input-keymap.mjs`，它会覆盖常见 code/key、同义项和修饰键 flag fallback。
-- 增加真实多显示器枚举和采集切换。
+- Mac host 已有真实显示器枚举、`displayId` 回执和单屏 round-trip 自检；下一步接外接显示器后跑 `node scripts/mac/check-mac-displays.mjs --switchDisplayId <display-id>`，再让 Windows 控制端用显示器下拉做真实双屏切换验收。
 - 继续完善 `apps/mac-client` Mac 控制 Windows 原型：用 `test-mac-client-browser.mjs --useExistingHost --enableAudio --expectAudioPayload --expectAudioPlayback` 接真实 Windows WASAPI host 验收 PCM 播放；Windows 本机临时启动 host 验收可直接加 `--requireAudio`；视频参数控件已可请求 1080P/2K/4K、30-240 Hz 和 5-50 Mbps，Windows host 已按码率回传并应用 `jpegQuality`，后续重点看真机 Mac 控制 Windows 的 60 Hz 观感、延迟、画质和键盘映射边界。
 
 ## Windows Codex 可接任务

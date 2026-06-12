@@ -35,10 +35,12 @@
 - Mac 端新增 `scripts/mac/observe-mac-audio.mjs` 音频持续帧观察脚本；真机 30 秒收到 1501 帧，约 50fps，最大接收间隔 24ms，payload 恒定 7680 bytes；5 分钟长稳收到 15001 帧，50.0fps，最大接收间隔 31ms，payload 仍恒定 7680 bytes。
 - Mac 端新增 `scripts/mac/check-input-keymap.mjs` 输入映射覆盖自检；当前 `KeyboardEvent.code` 115 项、`event.key` 113 项，常用键组、同义 code/key 和 `meta/command`、`alt/option`、`ctrl/control`、`shift` 修饰键 flag fallback 全覆盖。
 - Mac 端新增 `scripts/mac/smoke-mac-input-log.mjs` 输入事件安全冒烟脚本；脚本只允许 `/discovery` 显示 `inputMode=log` 时发送事件，真机 16 个鼠标/滚轮/键盘/快捷键事件全部收到 `input_ack`，且 `mode=log`、`injected=false`。
+- Mac host 的 H.264 视频流和系统音频流已增加异步启动 generation token，切换显示器或重发显示/音频设置后，旧流迟到的启动成功、帧回调或失败回退不会覆盖新会话；`video_frame` 也会带可选 `activeDisplayId` / `displayName` 诊断字段。
+- Mac 端新增 `scripts/mac/check-mac-displays.mjs` 显示器枚举与 `displayId` 切换回执自检；当前单屏真机临时端口 `43771` 验证通过：`displays=main*:1920x1080`，`session_answer`、`display_settings_ack`、首帧和切换后帧均指向 `main`。真实外接双屏切换仍待实物验收。
 
 ## 共享协议状态
 
-- `hello/auth/session`、`video_frame`、`audio_frame`、`input_event`、`input_ack`、`display_settings`、`clipboard_text`、`clipboard_file_*` 已有基础定义和多端实现。
+- `hello/auth/session`、`video_frame`、`audio_frame`、`input_event`、`input_ack`、`display_settings`、`clipboard_text`、`clipboard_file_*` 已有基础定义和多端实现；`video_frame.activeDisplayId` / `displayName` 为向后兼容的可选诊断字段。
 - 修改共享协议前，必须先更新 `docs/03-architecture-and-protocol.md`，再同步修改两端实现。
 - 协议变更必须写入 `docs/HANDOFF_LOG.md`，并在 `docs/NEXT_ACTIONS.md` 留下对接项。
 

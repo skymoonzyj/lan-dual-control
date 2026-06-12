@@ -234,6 +234,8 @@ Both directions: clipboard_event loop
   "encoding": "data-url",
   "keyFrame": true,
   "capturePipeline": "mock-svg",
+  "activeDisplayId": "main",
+  "displayName": "内建显示器",
   "droppedFrames": 0,
   "dataUrl": "data:image/svg+xml;base64,..."
 }
@@ -246,6 +248,7 @@ Both directions: clipboard_event loop
 - macOS 被控端当前使用 `capturePipeline: "background-jpeg"` 表示截图和 JPEG 编码在后台队列执行；如果上一帧尚未完成，会丢弃调度并在后续 `video_frame.droppedFrames` 中带回数量。
 - FPS 诊断字段中，`requestedFps` 表示控制端请求帧率，`fps` 表示被控端当前实际目标帧率，`maxScreenFps` 表示被控端真实屏幕采集上限，`frameIntervalMs` 表示当前定时器间隔。当前 macOS 真实屏幕 JPEG 管线默认会把实际帧率限制到 `LAN_DUAL_MAX_SCREEN_FPS`。
 - `qualityPreset`、`jpegQuality` 可作为调试字段返回实际使用的画质预设和 JPEG 压缩质量。
+- `activeDisplayId`、`displayName` 是可选诊断字段，用于标记当前帧来自哪个被控端显示器；旧控制端可以忽略。
 - 性能不足时再把图像帧升级为二进制帧。
 - 每帧带一个小头部：frameId、timestamp、width、height、format、payloadLength。
 - payload 使用 JPEG 或 PNG，优先 JPEG。
@@ -273,6 +276,8 @@ H.264 过渡格式：
   "timestampUs": 3300000,
   "durationUs": 33333,
   "capturePipeline": "screencapturekit-h264",
+  "activeDisplayId": "main",
+  "displayName": "内建显示器",
   "payload": "AAAA..."
 }
 ```
