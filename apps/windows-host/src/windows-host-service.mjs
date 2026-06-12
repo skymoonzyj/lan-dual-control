@@ -172,7 +172,7 @@ function createClient(socket, context) {
     }, intervalMs);
   }
 
-  function handleMessage(message) {
+  async function handleMessage(message) {
     if (message.type === "hello") {
       const clipboardCapabilities = context.clipboard.getCapabilities();
       send({
@@ -300,7 +300,7 @@ function createClient(socket, context) {
     }
 
     if (message.type === "input_event") {
-      send(makeInputAck(message, context.input.inject(message)));
+      send(makeInputAck(message, await context.input.inject(message)));
       return;
     }
 
@@ -393,7 +393,12 @@ function createClient(socket, context) {
       }
 
       try {
-        handleMessage(JSON.parse(frame.body));
+        void handleMessage(JSON.parse(frame.body)).catch((error) => {
+          send({
+            type: "error",
+            message: `处理消息失败：${error.message}`,
+          });
+        });
       } catch (error) {
         send({
           type: "error",
@@ -520,6 +525,7 @@ export function createWindowsHostServer({
     close() {
       return new Promise((resolve, reject) => {
         server.close((error) => {
+          input.close();
           if (error) reject(error);
           else resolve();
         });

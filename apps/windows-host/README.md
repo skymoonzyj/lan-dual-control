@@ -10,7 +10,7 @@
 - 音频 `audio_frame` 输出：默认发送模拟帧；显式设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi` 后可用 Windows WASAPI loopback 采集默认播放设备的系统声音并发送 `pcm-f32le-base64` PCM 帧；也可设置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 试用 FFmpeg DirectShow 指定设备。
 - 屏幕采集当前是 FFmpeg gdigrab + PowerShell/System.Drawing 兜底的过渡实现，后续升级 Windows Graphics Capture 以继续降低延迟和资源占用。
 - WASAPI loopback 是当前推荐的系统声音采集入口；DirectShow PCM 入口保留给虚拟声卡/loopback 设备做兼容验证。
-- SendInput 输入注入模块：在 Windows 上通过 PowerShell/C# 调用 `SendInput` 和 `SetCursorPos` 注入鼠标、滚轮和常用键盘事件，在非 Windows 开发环境只记录事件。
+- SendInput 输入注入模块：在 Windows 上通过常驻 C# helper 调用 `SendInput` 和 `SetCursorPos` 注入鼠标、滚轮和常用键盘事件，避免每个事件重复启动 PowerShell；在非 Windows 开发环境只记录事件。
 - 输入事件处理后会返回 `input_ack`，便于控制端和联调脚本确认已注入、仅记录或被拒绝。
 - 文本剪贴板模块：在 Windows 上通过 PowerShell `Set-Clipboard` 写入系统剪贴板，在非 Windows 开发环境回退为内存保存。
 - 文件剪贴板接收模块：接收 `clipboard_file_*` 文件清单、分块、完成消息并返回进度；在 Windows 上通过 PowerShell `Set-Clipboard -Path` 写入系统文件剪贴板，在非 Windows 开发环境保存到临时目录。
@@ -64,7 +64,8 @@ $env:LAN_DUAL_WINDOWS_CLIPBOARD_MODE="system" # 强制使用 PowerShell Set-Clip
 ```powershell
 $env:LAN_DUAL_WINDOWS_INPUT_MODE="auto"   # 默认，Windows 使用 SendInput，其他平台只记录
 $env:LAN_DUAL_WINDOWS_INPUT_MODE="log"    # 强制只记录输入事件
-$env:LAN_DUAL_WINDOWS_INPUT_MODE="system" # 强制使用 PowerShell/C# SendInput
+$env:LAN_DUAL_WINDOWS_INPUT_MODE="system" # 强制使用常驻 C# SendInput helper
+$env:LAN_DUAL_WINDOWS_INPUT_HELPER_EXE="C:\DevTools\lan-dual-input-helper.exe" # 可选；复用已编译 helper
 ```
 
 调试屏幕采集时可选：
@@ -123,6 +124,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-contro
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\test-windows-host.ps1 -InputEvents -InputMode system
+```
+
+输入 helper 安全自检不会发送真实鼠标键盘事件；它只验证 log 模式、未知按键拒绝和常驻 C# helper 的 JSON 往返：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-windows-input-helper.mjs
 ```
 
 需要验证 Windows host 真实系统声音 PCM 时，可以临时开启 WASAPI loopback：
@@ -202,6 +209,6 @@ node E:\codex\lan-dual-control\scripts\windows\test-auth-retry-policy.mjs
 
 1. 使用 Mac 控制端连接 `ws://Windows-IP:43770`。
 2. 把当前 FFmpeg/System.Drawing 过渡采集层升级为 Windows Graphics Capture，提升帧率和延迟表现。
-3. 把当前 PowerShell/C# SendInput 桥升级为更高性能的原生模块或常驻进程。
+3. 在有人看屏幕时继续用 `-InputEvents -InputMode system` 验收真实 SendInput，并评估是否需要进一步升级为原生模块。
 4. 继续验证 WASAPI loopback 更长时间稳定性、系统音量变化和 Mac client 播放体验。
 5. 处理 Windows 防火墙提示和局域网放行说明。

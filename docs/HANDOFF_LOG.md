@@ -17,6 +17,41 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
+本轮目标：降低 Mac 反控 Windows 时输入注入启动开销，让 Windows host 不再每个输入事件都临时启动 PowerShell。
+完成内容：
+- `apps/windows-host/src/windows-input-injector.mjs` 新增常驻 C# SendInput helper：首次 system 输入时用 PowerShell 编译临时 exe，后续通过 JSON 行协议复用该进程调用 `SendInput`/`SetCursorPos`。
+- `apps/windows-host/src/windows-host-service.mjs` 的 `input_event` 处理改为等待异步注入结果再返回原有 `input_ack`，协议字段未变。
+- 新增 `scripts/windows/test-windows-input-helper.mjs`：验证 log 模式、未知按键拒绝和常驻 helper JSON 往返；该脚本故意使用未知事件干跑，不发送真实鼠标键盘输入。
+- Windows host README、当前状态、下一步和任务板已同步输入 helper 状态。
+修改文件：
+- `apps/windows-host/src/windows-input-injector.mjs`
+- `apps/windows-host/src/windows-host-service.mjs`
+- `scripts/windows/test-windows-input-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/windows/test-windows-input-helper.mjs`
+- `npm run check`（`apps/windows-host`）
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-host.ps1 -MockVideo -SkipClipboardText -SkipClipboardFile -InputEvents -InputMode log -TimeoutMs 15000`
+- `node scripts/windows/test-mac-client-browser.mjs --timeoutMs 45000`
+- `git diff --check`
+遗留问题：
+- 本轮没有发送真实 SendInput，避免无人值守误操作；真实 `system` 模式手感仍需有人看着屏幕时用 `test-windows-host.ps1 -InputEvents -InputMode system` 或 Mac client 真连验收。
+- 低延迟输入还可能继续受浏览器事件频率、网络、坐标映射和 Windows 会话权限影响。
+下一步建议：
+- Mac 端或人工准备好安全环境后，再发联络板 call 做真实输入注入验收。
+- Windows 端继续推进 Windows Graphics Capture / 正式编码管线，减少视频延迟。
+是否改了协议：否。
+是否需要另一端配合：真实 system 输入手感验收需要另一端或人工配合；本轮不阻塞。
+
 ## 2026-06-12 Mac Codex
 
 日期：2026-06-12
