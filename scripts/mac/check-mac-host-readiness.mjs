@@ -23,6 +23,7 @@ const defaults = {
   probeVideo: false,
   maxVideoFrameAgeMs: 0,
   probeAudio: false,
+  maxAudioFrameAgeMs: 0,
   probeInputLog: false,
   probeStartHelper: false,
   strict: false,
@@ -86,6 +87,7 @@ function parseArgs(argv) {
   args.expectBuildId = normalizedText(args.expectBuildId);
   args.currentBuildId = getGitBuildId();
   args.maxVideoFrameAgeMs = clampInteger(args.maxVideoFrameAgeMs, 0, 600000, defaults.maxVideoFrameAgeMs);
+  args.maxAudioFrameAgeMs = clampInteger(args.maxAudioFrameAgeMs, 0, 600000, defaults.maxAudioFrameAgeMs);
   args.requireOpen = booleanArg(args.requireOpen);
   args.requireControlPermissions = booleanArg(args.requireControlPermissions);
   args.requireInputMonitoring = booleanArg(args.requireInputMonitoring);
@@ -101,6 +103,7 @@ function parseArgs(argv) {
   applyProfile(args);
   args.probeHost = args.probeHost || Boolean(args.expectBuildId);
   args.probeVideo = args.probeVideo || args.maxVideoFrameAgeMs > 0;
+  args.probeAudio = args.probeAudio || args.maxAudioFrameAgeMs > 0;
   return args;
 }
 
@@ -120,6 +123,9 @@ function applyProfile(args) {
   args.probeInputLog = true;
   if (args.maxVideoFrameAgeMs <= 0) {
     args.maxVideoFrameAgeMs = 250;
+  }
+  if (args.maxAudioFrameAgeMs <= 0) {
+    args.maxAudioFrameAgeMs = 250;
   }
   if (args.profile === "deep") {
     args.probeStartHelper = true;
@@ -155,6 +161,8 @@ Options:
   --maxVideoFrameAgeMs <ms> Require fresh video_frame.timestamp during --probeVideo.
                             Implies --probeVideo. Default: off.
   --probeAudio              Run short PCM audio observation. Does not play a tone.
+  --maxAudioFrameAgeMs <ms> Require fresh audio_frame.timestamp during --probeAudio.
+                            Implies --probeAudio. Default: off.
   --probeInputLog           Run safe input log smoke test; refuses non-log hosts.
   --probeStartHelper        Run start helper self-test on a temporary local port.
   --strict                  Treat warnings as failure.
@@ -645,6 +653,8 @@ async function main() {
         "80",
         "--maxGapMs",
         "1000",
+        ...(args.maxAudioFrameAgeMs > 0 ? ["--maxFrameAgeMs", String(args.maxAudioFrameAgeMs)] : []),
+        "--requireMonotonicTimestamp",
       ],
       { timeoutMs: Math.max(args.timeoutMs, 35000) },
     );
@@ -695,6 +705,7 @@ async function main() {
       probeVideo: args.probeVideo,
       maxVideoFrameAgeMs: args.maxVideoFrameAgeMs,
       probeAudio: args.probeAudio,
+      maxAudioFrameAgeMs: args.maxAudioFrameAgeMs,
       probeInputLog: args.probeInputLog,
       probeStartHelper: args.probeStartHelper,
     },

@@ -93,7 +93,7 @@ node scripts/mac/check-mac-host-readiness.mjs --requireControlPermissions
 node scripts/mac/check-mac-host-readiness.mjs --profile deep
 ```
 
-其中 `--probeVideo` 会做短 H.264 时间线观察，`--probeAudio` 会做短 PCM 音频观察且不播放声音，`--probeInputLog` 会先确认 host 是 `log` 输入模式再发送安全冒烟事件，`--probeStartHelper` 会用临时端口启动/关闭一次启动助手自测。主机已重启到小数秒 timestamp build 后，可加 `--maxVideoFrameAgeMs 250` 强制要求 `video_frame.timestamp` 接收年龄足够新鲜；该参数会自动启用 `--probeVideo`。如果临时需要验收旧 build，可用 `--skipCurrentBuildCheck` 暂时关闭“运行中 build 与当前 git 不一致”的 warning。需要机器可读结果时可加 `--json`。
+其中 `--probeVideo` 会做短 H.264 时间线观察，`--probeAudio` 会做短 PCM 音频观察且不播放声音，`--probeInputLog` 会先确认 host 是 `log` 输入模式再发送安全冒烟事件，`--probeStartHelper` 会用临时端口启动/关闭一次启动助手自测。主机已重启到小数秒 timestamp build 后，可加 `--maxVideoFrameAgeMs 250` 强制要求 `video_frame.timestamp` 接收年龄足够新鲜；也可加 `--maxAudioFrameAgeMs 250` 强制要求 `audio_frame.timestamp` 新鲜且单调。两个参数会分别自动启用对应 probe。如果临时需要验收旧 build，可用 `--skipCurrentBuildCheck` 暂时关闭“运行中 build 与当前 git 不一致”的 warning。需要机器可读结果时可加 `--json`。
 
 进入目录：
 
@@ -247,7 +247,7 @@ scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireH264 -RequireAud
 node scripts/mac/observe-mac-audio.mjs --durationMs 10000 --minFrames 80 --maxGapMs 1000
 ```
 
-该脚本会只读统计 `audio_frame` 帧数、接收间隔、payload 大小和电平范围，用于排查无声、间断或格式漂移；默认不会播放声音、修改系统音量、输入或剪贴板。需要确认非静音系统声音时，可以在有人确认不打扰的场景下显式播放短测试音并要求电平：
+该脚本会只读统计 `audio_frame` 帧数、接收间隔、payload 大小、电平范围和 `timestamp` 接收年龄，用于排查无声、间断、格式漂移或旧音频帧；默认不会播放声音、修改系统音量、输入或剪贴板。需要把音频帧新鲜度变成强校验时，可加 `--maxFrameAgeMs 250 --requireMonotonicTimestamp`。需要确认非静音系统声音时，可以在有人确认不打扰的场景下显式播放短测试音并要求电平：
 
 ```bash
 node scripts/mac/observe-mac-audio.mjs --durationMs 4500 --minFrames 160 --maxGapMs 1000 --playTone --requireLevel --minLevel 0.01

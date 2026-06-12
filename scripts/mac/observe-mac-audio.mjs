@@ -17,6 +17,9 @@ const defaults = {
   expectedEncoding: "pcm-f32le-base64",
   expectedSampleRate: 48000,
   expectedChannels: 2,
+  requireFrameTimestamp: false,
+  maxFrameAgeMs: 0,
+  requireMonotonicTimestamp: false,
   requireLevel: false,
   minLevel: 0.01,
   playTone: false,
@@ -52,6 +55,9 @@ function parseArgs(argv) {
   args.expectedEncoding = String(args.expectedEncoding || defaults.expectedEncoding).trim().toLowerCase();
   args.expectedSampleRate = positiveInteger(args.expectedSampleRate, defaults.expectedSampleRate);
   args.expectedChannels = positiveInteger(args.expectedChannels, defaults.expectedChannels);
+  args.requireFrameTimestamp = booleanArg(args.requireFrameTimestamp, defaults.requireFrameTimestamp);
+  args.maxFrameAgeMs = nonNegativeInteger(args.maxFrameAgeMs, defaults.maxFrameAgeMs);
+  args.requireMonotonicTimestamp = booleanArg(args.requireMonotonicTimestamp, defaults.requireMonotonicTimestamp);
   args.requireLevel = booleanArg(args.requireLevel, defaults.requireLevel);
   args.minLevel = nonNegativeNumber(args.minLevel, defaults.minLevel);
   args.playTone = booleanArg(args.playTone, defaults.playTone);
@@ -59,6 +65,9 @@ function parseArgs(argv) {
   args.toneDurationMs = positiveInteger(args.toneDurationMs, defaults.toneDurationMs);
   args.toneDelayMs = nonNegativeInteger(args.toneDelayMs, defaults.toneDelayMs);
   args.toneVolume = clamp(nonNegativeNumber(args.toneVolume, defaults.toneVolume), 0, 1);
+  if (args.maxFrameAgeMs > 0) {
+    args.requireFrameTimestamp = true;
+  }
   return args;
 }
 
@@ -266,6 +275,13 @@ function createAudioStats(args) {
     maxLevel: 0,
     levelTotal: 0,
     gaps: [],
+    timestampFrames: 0,
+    missingTimestampFrames: 0,
+    frameAgeMinMs: Number.POSITIVE_INFINITY,
+    frameAgeMaxMs: Number.NEGATIVE_INFINITY,
+    frameAgeTotalMs: 0,
+    lastTimestampMs: null,
+    timestampRegressions: 0,
     invalidFrames: [],
     statuses: [],
   };
@@ -290,7 +306,10 @@ function createAudioStats(args) {
     stats.maxLevel = Math.max(stats.maxLevel, level);
     stats.levelTotal += level;
 
-    const problems = validateAudioFrame(frame, args);
+    const problems = [
+      ...validateAudioFrame(frame, args),
+      ...trackFrameTiming(stats, frame, now, args),
+    ];
     if (problems.length > 0 && stats.invalidFrames.length < 5) {
       stats.invalidFrames.push(`frame ${frame.frameId ?? "?"}: ${problems.join("; ")}`);
     }
@@ -301,6 +320,34 @@ function createAudioStats(args) {
   }
 
   return { stats, addFrame, addStatus };
+}
+
+function trackFrameTiming(stats, frame, now, args) {
+  const problems = [];
+  const timestampMs = Date.parse(String(frame.timestamp || ""));
+  if (Number.isFinite(timestampMs)) {
+    const ageMs = now - timestampMs;
+    stats.timestampFrames += 1;
+    stats.frameAgeMinMs = Math.min(stats.frameAgeMinMs, ageMs);
+    stats.frameAgeMaxMs = Math.max(stats.frameAgeMaxMs, ageMs);
+    stats.frameAgeTotalMs += ageMs;
+    if (args.maxFrameAgeMs > 0 && ageMs > args.maxFrameAgeMs) {
+      problems.push(`frame age ${Math.round(ageMs)} ms exceeds ${args.maxFrameAgeMs} ms`);
+    }
+    if (stats.lastTimestampMs !== null && timestampMs < stats.lastTimestampMs) {
+      stats.timestampRegressions += 1;
+      if (args.requireMonotonicTimestamp) {
+        problems.push(`timestamp regressed by ${Math.round(stats.lastTimestampMs - timestampMs)} ms`);
+      }
+    }
+    stats.lastTimestampMs = timestampMs;
+  } else {
+    stats.missingTimestampFrames += 1;
+    if (args.requireFrameTimestamp) {
+      problems.push("timestamp missing");
+    }
+  }
+  return problems;
 }
 
 function estimatePayloadBytes(payload) {
@@ -341,12 +388,30 @@ function summarizeStats(stats, args) {
     `payload min/max=${stats.minPayloadBytes === Number.POSITIVE_INFINITY ? 0 : stats.minPayloadBytes}/${stats.maxPayloadBytes} bytes`,
     `totalPayload=${stats.payloadBytes} bytes`,
     `level min/avg/max=${finiteLevel(stats.minLevel).toFixed(3)}/${avgLevel.toFixed(3)}/${finiteLevel(stats.maxLevel).toFixed(3)}`,
+    ...summarizeFrameTiming(stats),
     `frameId ${stats.firstFrameId ?? "?"}->${stats.lastFrameId ?? "?"}`,
   ].join(" / ");
 }
 
 function finiteLevel(value) {
   return Number.isFinite(value) ? value : 0;
+}
+
+function summarizeFrameTiming(stats) {
+  const parts = [];
+  if (stats.timestampFrames > 0) {
+    const avgAgeMs = stats.frameAgeTotalMs / stats.timestampFrames;
+    parts.push(
+      `frameAge min/avg/max=${Math.round(stats.frameAgeMinMs)}/${avgAgeMs.toFixed(1)}/${Math.round(stats.frameAgeMaxMs)} ms`,
+    );
+  }
+  if (stats.missingTimestampFrames > 0) {
+    parts.push(`timestamp missing=${stats.missingTimestampFrames}`);
+  }
+  if (stats.timestampRegressions > 0) {
+    parts.push(`timestamp regressions=${stats.timestampRegressions}`);
+  }
+  return parts;
 }
 
 function makeToneWav({
@@ -459,6 +524,9 @@ Options:
   --timeoutMs <ms>              Handshake timeout. Default: 8000
   --minFrames <count>           Minimum required audio frames. Default: durationMs / 100
   --maxGapMs <ms>               Maximum allowed receive gap. Default: 1000
+  --requireFrameTimestamp       Require every audio_frame timestamp to parse as ISO time.
+  --maxFrameAgeMs <ms>          Maximum receive-time age from audio_frame.timestamp. Default: off
+  --requireMonotonicTimestamp   Require audio_frame.timestamp to never move backwards.
   --requireLevel                Require observed max audio level to reach --minLevel.
   --minLevel <level>            Minimum max level for --requireLevel. Default: 0.01
   --playTone                    Play a short local test tone through macOS afplay. Default: off
