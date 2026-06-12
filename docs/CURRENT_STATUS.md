@@ -37,7 +37,7 @@
 - Mac 端新增 `scripts/mac/smoke-mac-input-log.mjs` 输入事件安全冒烟脚本；脚本只允许 `/discovery` 显示 `inputMode=log` 时发送事件，真机 16 个鼠标/滚轮/键盘/快捷键事件全部收到 `input_ack`，且 `mode=log`、`injected=false`。
 - Mac host 的 H.264 视频流和系统音频流已增加异步启动 generation token，切换显示器或重发显示/音频设置后，旧流迟到的启动成功、帧回调或失败回退不会覆盖新会话；`video_frame` 也会带可选 `activeDisplayId` / `displayName` 诊断字段。
 - Mac host H.264 流式启动新增 5 秒 watchdog；若启动阶段迟迟未建立 `videoStream`，会发送带 `streamFallbackReason` 的 `display_settings_ack` 并回退 `background-jpeg`。临时 `43771` 单屏显式 H.264 display 自检已复现：5 秒超时后拿到 JPEG 首帧，随后迟到启动的旧 H.264 流被 token 停止。
-- Mac 端新增 `scripts/mac/check-mac-displays.mjs` 显示器枚举与 `displayId` 切换回执自检；当前单屏真机临时端口 `43771` 验证通过：`displays=main*:1920x1080`，`session_answer`、`display_settings_ack`、首帧和切换后帧均指向 `main`。真实外接双屏切换仍待实物验收。
+- Mac 端新增 `scripts/mac/check-mac-displays.mjs` 显示器枚举与 `displayId` 切换回执自检；脚本默认要求 `video_frame.activeDisplayId` 存在且匹配，避免旧 host 未重启到最新二进制时误通过；调试旧 host 可显式加 `--allowMissingFrameDisplayDiagnostic`。当前单屏真机 `43770` 最新 host 验证通过：`displays=main*:1920x1080`，`session_answer`、`display_settings_ack`、首帧和切换后帧均指向 `main`，默认 MJPEG 和显式 H.264 路径均通过。真实外接双屏切换仍待实物验收。
 
 ## 共享协议状态
 

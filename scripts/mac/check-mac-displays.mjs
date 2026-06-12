@@ -14,6 +14,7 @@ const defaults = {
   height: 720,
   fps: 30,
   bandwidthKbps: 12000,
+  allowMissingFrameDisplayDiagnostic: false,
 };
 
 function parseArgs(argv) {
@@ -43,6 +44,10 @@ function parseArgs(argv) {
   args.height = positiveInteger(args.height, defaults.height);
   args.fps = positiveInteger(args.fps, defaults.fps);
   args.bandwidthKbps = positiveInteger(args.bandwidthKbps, defaults.bandwidthKbps);
+  args.allowMissingFrameDisplayDiagnostic = booleanArg(
+    args.allowMissingFrameDisplayDiagnostic,
+    defaults.allowMissingFrameDisplayDiagnostic,
+  );
   return args;
 }
 
@@ -58,6 +63,12 @@ function nonNegativeInteger(value, fallback) {
 
 function normalizedText(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function booleanArg(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  return ["1", "true", "yes", "on"].includes(String(value).trim().toLowerCase());
 }
 
 function print(status, text) {
@@ -322,11 +333,16 @@ function assertDisplayCount(displays, expectedCount) {
   }
 }
 
-function assertFrameDisplay(frame, expectedDisplay, label) {
+function assertFrameDisplay(frame, expectedDisplay, label, args) {
   const actual = activeDisplayId(frame);
   if (!actual) {
-    print("INFO", `${label}: frame has no activeDisplayId diagnostic; ack path already verified`);
-    return;
+    if (args.allowMissingFrameDisplayDiagnostic) {
+      print("INFO", `${label}: frame has no activeDisplayId diagnostic; ack path already verified`);
+      return;
+    }
+    throw new Error(
+      `${label} missing activeDisplayId diagnostic; run with --allowMissingFrameDisplayDiagnostic only when testing an older host`,
+    );
   }
   if (actual !== expectedDisplay.id) {
     throw new Error(`${label} frame activeDisplayId mismatch: ${actual} !== ${expectedDisplay.id}`);
@@ -346,6 +362,8 @@ Options:
   --switchDisplayId <id>           Display id to switch to. Default: first non-current display, or same display on single-screen Macs
   --expectDisplayCount <count>     Require an exact display count.
   --preferredVideoCodec <codec>    Requested codec: mjpeg or h264. Default: mjpeg
+  --allowMissingFrameDisplayDiagnostic
+                                    Allow older hosts whose video_frame lacks activeDisplayId.
   --timeoutMs <ms>                 Network timeout. Default: 8000
 
 Examples:
@@ -414,7 +432,7 @@ async function main() {
     (frame) => Boolean(frame.frameId),
     "Waiting first video_frame",
   );
-  assertFrameDisplay(firstFrame, activeInitialDisplay, "First frame");
+  assertFrameDisplay(firstFrame, activeInitialDisplay, "First frame", args);
 
   const switchDisplay = chooseSwitchDisplay(sessionDisplays, activeInitialDisplay, args.switchDisplayId);
   const previousFrameId = client.lastVideoFrameId;
@@ -435,7 +453,7 @@ async function main() {
     },
     "Waiting switched video_frame",
   );
-  assertFrameDisplay(switchedFrame, switchDisplay, "Switched frame");
+  assertFrameDisplay(switchedFrame, switchDisplay, "Switched frame", args);
 
   socket.close();
   print(

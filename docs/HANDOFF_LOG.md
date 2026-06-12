@@ -17,6 +17,37 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
+本轮目标：强化 Mac display 自检，避免旧 host 未重启到最新二进制时误通过。
+完成内容：
+- `scripts/mac/check-mac-displays.mjs` 默认要求 `video_frame.activeDisplayId` 存在且匹配当前显示器。
+- 如果帧缺少 `activeDisplayId`，脚本现在默认失败，提示只有调试旧 host 时才加 `--allowMissingFrameDisplayDiagnostic` 放宽。
+- 保留兼容开关 `--allowMissingFrameDisplayDiagnostic`，方便需要连接旧版本 host 时继续验证 discovery/session/display_settings ack 路径。
+- README、当前状态、下一步和文件占用已同步。
+修改文件：
+- `scripts/mac/check-mac-displays.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-displays.mjs`
+- `node scripts/mac/check-mac-displays.mjs --port 43770 --timeoutMs 12000`
+- `node scripts/mac/check-mac-displays.mjs --port 43770 --timeoutMs 12000 --preferredVideoCodec h264`
+验证结果：
+- 最新真实 Mac host `43770` 默认 MJPEG/JPEG 路径通过，首帧和切换后帧均带 `activeDisplayId=main`。
+- 显式 H.264 路径也通过，首帧和切换后帧均带 `activeDisplayId=main`。
+遗留问题：
+- 真实外接双屏切换仍需接显示器后再跑 `--switchDisplayId <display-id>`。
+下一步建议：
+- 后续重启或部署 Mac host 后先跑默认 `check-mac-displays`；如果它因缺少 `activeDisplayId` 失败，优先检查是否连到了旧进程。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12
