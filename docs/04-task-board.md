@@ -221,6 +221,7 @@ Mac 端：
 - Windows 被控端已接入常驻 C# SendInput helper：Windows 上通过 helper 调用 `SendInput`/`SetCursorPos` 注入鼠标、滚轮和常用键盘事件，避免每个事件重复启动 PowerShell；非 Windows 开发环境回退为日志模式。`scripts/windows/measure-windows-input-helper.mjs` 可用不支持事件安全干跑，量化 helper 冷启动和热路径延迟。
 - macOS 被控端、Windows 被控端和假 Mac 服务处理输入事件后都会返回 `input_ack`，控制端和探针可确认输入已注入、仅记录或被拒绝。
 - Windows 被控端已新增本机一键自检脚本 `scripts/windows/test-windows-host.ps1`，可临时启动服务并验证真实 JPEG 首帧、文本剪贴板和文件剪贴板接收；默认不发送输入事件。
+- Windows 被控端 readiness 已支持 `--profile default|deploy|deep`：默认低风险、不要求 host 正在监听；`deploy` 用于 host 已启动后的部署验收，要求端口可达并跑视频/音频短观察；`deep` 额外串联 Windows host PowerShell 本机自检。
 - Windows 被控端已新增 `scripts/windows/check-windows-firewall.mjs` 只读检查脚本，可列出本机局域网 IP、端口监听、TCP 探测、网络配置和 TCP 入站放行规则；默认不改系统防火墙，只在缺少放行时给出管理员 PowerShell 建议命令。
 - Windows 被控端已新增启动助手 `scripts/windows/start-windows-host.mjs` 和 `scripts/windows/start-windows-host.ps1`：启动服务后列出 Mac 端可填的局域网地址，等待 `/discovery` 就绪并自动跑只读防火墙/端口检查；需要系统声音时显式加 `--wasapi` 或 `-Wasapi`；真机联调建议加 `--promptPassword --requirePassword` 或 `-PromptPassword -RequirePassword`，避免退回 demo 密码；可加 `--dryRunFirewallRule` / `-DryRunFirewallRule` 预览放行命令，只有显式 `--addFirewallRule` / `-AddFirewallRule` 才会尝试新增 Private TCP 入站规则。`scripts/windows/test-windows-host-start-helper.mjs` 已覆盖启动助手密码安全、防火墙干跑和临时端口实启回归。
 - Windows 桌面壳已新增“本机被控”面板：通过 Tauri 原生命令运行 readiness、预览防火墙放行命令、要求隐藏密码后启动/停止 Windows host，并在 UI 内显示日志和 `/discovery` 状态；默认输入模式是安全日志。

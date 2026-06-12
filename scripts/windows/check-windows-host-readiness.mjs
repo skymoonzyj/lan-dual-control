@@ -7,6 +7,7 @@ const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const defaultWindowsFfmpeg = "C:\\DevTools\\ffmpeg\\bin\\ffmpeg.exe";
 
 const defaults = {
+  profile: "default",
   host: "0.0.0.0",
   port: 43770,
   timeoutMs: 20000,
@@ -51,6 +52,8 @@ function parseArgs(argv) {
     }
   }
 
+  args.profile = normalizeProfile(args.profile);
+  applyProfile(args);
   args.port = Number(args.port) || defaults.port;
   args.timeoutMs = Math.max(3000, Number(args.timeoutMs) || defaults.timeoutMs);
   args.host = String(args.host || defaults.host).trim();
@@ -64,6 +67,29 @@ function parseArgs(argv) {
   return args;
 }
 
+function normalizeProfile(value) {
+  const profile = String(value || defaults.profile).trim().toLowerCase();
+  if (profile === "deploy" || profile === "deep" || profile === "default") {
+    return profile;
+  }
+  throw new Error(`Unknown readiness profile: ${value}. Expected default, deploy, or deep.`);
+}
+
+function applyProfile(args) {
+  if (args.profile === "default") {
+    return;
+  }
+
+  args.strict = true;
+  args.requireOpen = true;
+  args.probeVideo = true;
+  args.probeAudio = true;
+
+  if (args.profile === "deep") {
+    args.probeHost = true;
+  }
+}
+
 function printHelp() {
   console.log(`Usage: node scripts/windows/check-windows-host-readiness.mjs [options]
 
@@ -72,6 +98,7 @@ Default checks are read-only: syntax, FFmpeg availability, LAN/firewall state,
 audio device listing, WASAPI format, and safe input helper dry-run.
 
 Options:
+  --profile <name>    Preset: default, deploy, deep. Default keeps low-risk checks.
   --host <host>       Windows host bind/probe host. Default: 0.0.0.0
   --port <port>       Windows host port. Default: 43770
   --ffmpeg <path>     FFmpeg path. Auto-detects C:\\DevTools\\ffmpeg\\bin\\ffmpeg.exe
@@ -81,6 +108,11 @@ Options:
   --requireOpen       Require LAN/firewall port probe to be open.
   --strict            Treat warnings as failure.
   --json              Print machine-readable JSON summary.
+
+Profiles:
+  default             Low-risk checks only; no running host required.
+  deploy              Require the configured port to be open, strict mode, plus video/audio probes.
+  deep                deploy profile plus Windows host PowerShell self-test.
 `);
 }
 
@@ -363,6 +395,7 @@ async function main() {
     ok,
     strict: args.strict,
     args: {
+      profile: args.profile,
       host: args.host,
       port: args.port,
       ffmpeg: args.ffmpeg,

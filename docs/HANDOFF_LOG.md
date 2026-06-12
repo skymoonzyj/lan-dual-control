@@ -17,6 +17,42 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
+本轮目标：给 Windows host readiness 增加常用 profile 预设，方便 Mac 反控 Windows 前做部署/深度验收。
+完成内容：
+- `scripts/windows/check-windows-host-readiness.mjs` 新增 `--profile default|deploy|deep`。
+- `default` 保持原低风险行为，不要求 Windows host 正在监听。
+- `deploy` 自动开启严格模式、要求配置端口可达，并跑视频/音频短观察。
+- `deep` 在 `deploy` 基础上额外跑 Windows host PowerShell 本机自检。
+- Windows host README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-host-readiness.mjs`
+- `node scripts/windows/check-windows-host-readiness.mjs --help`
+- `node scripts/windows/check-windows-host-readiness.mjs --json`
+- `node scripts/windows/check-windows-host-readiness.mjs --profile deploy --json`
+- `node scripts/windows/check-windows-host-readiness.mjs --profile deep --json`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 默认 profile 低风险体检通过；当前未启动 `43770`，所以 `deploy` / `deep` 按预期失败在端口未监听/未放行，但 profile 参数已正确展开为 strict、requireOpen、video/audio probes，`deep` 也会跑 Windows host 本机自检。
+遗留问题：
+- `deploy` / `deep` 真正全绿需要先启动 Windows host，并确保可信局域网防火墙端口可达。
+下一步建议：
+- Windows host 启动后运行 `node scripts/windows/check-windows-host-readiness.mjs --profile deploy --json`；需要完整本机链路时再跑 `--profile deep --json`。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-12 Mac Codex
 
 日期：2026-06-12
