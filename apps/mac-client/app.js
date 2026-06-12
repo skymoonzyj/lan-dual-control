@@ -335,6 +335,26 @@ function cancelPendingDiscovery() {
   state.discoveryRequestId += 1;
 }
 
+function resetEndpointDiscoveryState() {
+  if (state.connected || state.authenticated) {
+    elements.remoteStatus.textContent = "当前会话保持，地址下次连接生效";
+    return;
+  }
+  cancelConnectAttempt();
+  clearReconnectTimers();
+  state.manualDisconnect = true;
+  closeSocketSilently();
+  state.authenticated = false;
+  resetAudioPlayback();
+  cancelActiveFileTransfer("连接目标已变更，文件发送已取消");
+  updateRemoteRuntime(null);
+  resetSessionDiagnostics({ resetReconnects: true });
+  resetVideoSurface();
+  resetRemoteStatus();
+  setConnected(false);
+  setDiscoverButtonBusy(false);
+}
+
 function beginConnectAttempt() {
   cancelPendingDiscovery();
   state.connectAttemptId += 1;
@@ -436,6 +456,7 @@ function applyRecentConnection(connection) {
   if (!connection) return;
   elements.hostInput.value = connection.host;
   elements.portInput.value = connection.port;
+  resetEndpointDiscoveryState();
   elements.recentConnectionStatus.textContent = `已填入 ${recentConnectionKey(connection)} · 不保存密码`;
   logEvent("已填入最近连接", recentConnectionKey(connection));
 }
@@ -1656,6 +1677,8 @@ elements.connectButton.addEventListener("click", () => {
 });
 
 elements.disconnectButton.addEventListener("click", disconnect);
+elements.hostInput.addEventListener("input", () => resetEndpointDiscoveryState());
+elements.portInput.addEventListener("input", () => resetEndpointDiscoveryState());
 elements.useRecentConnectionButton.addEventListener("click", applySelectedRecentConnection);
 elements.recentConnectionSelect.addEventListener("change", applySelectedRecentConnection);
 elements.clearRecentConnectionsButton.addEventListener("click", clearRecentConnections);
