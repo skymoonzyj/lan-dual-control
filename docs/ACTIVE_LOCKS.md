@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/mac/check-mac-host-readiness.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 21:55 | Mac readiness 旧 build warning 会列出旧 build 后变动的 Mac host runtime 源码文件，方便判断是否需要重启。 |
 | Mac Codex | `scripts/mac/stress-mac-host.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 21:40 | Mac host 连续稳定性脚本新增完整 probe、首帧、H.264 确认和首音频耗时汇总及可选阈值。 |
 | Mac Codex | `scripts/mac/check-mac-host-readiness.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 21:24 | Mac readiness 新增 `--profile default|deploy|deep`；默认行为不变，`deploy`/`deep` 用于部署/深度验收常用强校验组合。 |
 | Windows Codex | `apps/windows-client/index.html`、`apps/windows-client/styles.css`、`apps/windows-client/app.js`、`scripts/windows/test-windows-client-browser.mjs`、Windows client README/docs | 2026-06-12 21:26 | Windows 控制端远端文件托盘新增最近一次系统剪贴板写入状态，失败落盘时提示可打开临时目录或重试写入；页面自检覆盖状态行和重试提示。 |

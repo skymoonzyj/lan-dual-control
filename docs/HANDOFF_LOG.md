@@ -21,6 +21,40 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：让 Mac readiness 的旧 build 提示更可判断，减少只看到 hash 不匹配时的猜测。
+完成内容：
+- `scripts/mac/check-mac-host-readiness.mjs` 在运行中 `/discovery.runtime.buildId` 与当前 git short hash 不一致时，会尝试解析旧 build commit。
+- 若旧 build commit 可解析，会用 `git diff --name-only <build>..HEAD -- apps/mac-host/Package.swift apps/mac-host/Sources` 列出 Mac host runtime 源码变更文件。
+- warning 和 `--requireCurrentBuildId` 失败信息都会带该源码变更摘要；默认低风险 readiness 仍不因旧 build 失败。
+- Mac host README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-host-readiness.mjs`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 45000`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 45000 --requireCurrentBuildId`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 默认 readiness 9/9 通过，旧 build warning 现在显示 `c2db37f` 之后 runtime 源码变更：`HostConfiguration.swift`、`MacPermissionCenter.swift`。
+- `--requireCurrentBuildId` 仍按预期失败在 Mac host discovery，并带同样的源码变更摘要，方便判断需要协调重启。
+遗留问题：
+- 当前主 `43770` 仍是 `build=c2db37f` 且 `inputMonitoring=off`；因 runtime 源码确有变化，部署 profile 仍应要求重启到最新 build 后再全绿。
+下一步建议：
+- 协调窗口合适时重启真实 Mac host 到最新 build，再跑 `check-mac-host-readiness --profile deploy --timeoutMs 45000`。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：增强 Mac host 连续稳定性脚本，让首帧/音频体验退化可被阈值回归抓到。
 完成内容：
 - `scripts/mac/stress-mac-host.mjs` 在运行 canonical `probe-mac-host` 时流式解析 stdout，到达 `First frame`、`H.264 video confirmed`、`Audio frame confirmed` 时记录耗时。

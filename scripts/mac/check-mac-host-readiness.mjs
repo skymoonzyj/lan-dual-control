@@ -35,6 +35,11 @@ const profileDescriptions = {
   deep: "deploy profile plus start-helper temporary-port self-test",
 };
 
+const hostRuntimePaths = [
+  "apps/mac-host/Package.swift",
+  "apps/mac-host/Sources",
+];
+
 function parseArgs(argv) {
   const args = { ...defaults };
   for (let index = 2; index < argv.length; index += 1) {
@@ -174,6 +179,32 @@ function getGitBuildId() {
     timeout: 3000,
   });
   return result.status === 0 ? normalizedText(result.stdout) : "";
+}
+
+function getChangedHostRuntimeFiles(fromBuildId, toBuildId) {
+  const from = normalizedText(fromBuildId);
+  const to = normalizedText(toBuildId || "HEAD") || "HEAD";
+  if (!from) return null;
+  const revParse = spawnSync("git", ["rev-parse", "--verify", "--quiet", `${from}^{commit}`], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 3000,
+  });
+  if (revParse.status !== 0) {
+    return null;
+  }
+  const diff = spawnSync("git", ["diff", "--name-only", `${from}..${to}`, "--", ...hostRuntimePaths], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 3000,
+  });
+  if (diff.status !== 0) {
+    return null;
+  }
+  return diff.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 function print(kind, text, args) {
@@ -429,7 +460,16 @@ async function checkDiscovery(args) {
       errors.push("runtime.buildId is required to check the running host against current git");
     }
     if (!args.skipCurrentBuildCheck && args.currentBuildId && runtime.buildId && runtime.buildId !== args.currentBuildId) {
-      const message = `running host build ${runtime.buildId} differs from current git ${args.currentBuildId}; restart with scripts/mac/start-mac-host.mjs after coordinating if you need the latest build`;
+      const changedHostFiles = getChangedHostRuntimeFiles(runtime.buildId, args.currentBuildId);
+      const hostSourceSummary =
+        Array.isArray(changedHostFiles) && changedHostFiles.length > 0
+          ? `; host runtime changes since ${runtime.buildId}: ${changedHostFiles.slice(0, 4).join(", ")}${
+              changedHostFiles.length > 4 ? ` (+${changedHostFiles.length - 4} more)` : ""
+            }`
+          : Array.isArray(changedHostFiles)
+            ? `; no Mac host runtime source changes since ${runtime.buildId}`
+            : "";
+      const message = `running host build ${runtime.buildId} differs from current git ${args.currentBuildId}${hostSourceSummary}; restart with scripts/mac/start-mac-host.mjs after coordinating if you need the latest build`;
       warnings.push(message);
       if (args.requireCurrentBuildId) {
         errors.push(message);
