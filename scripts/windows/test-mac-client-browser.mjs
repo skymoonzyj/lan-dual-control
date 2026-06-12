@@ -28,6 +28,7 @@ const defaults = {
   expectAudioFrame: false,
   expectAudioPayload: false,
   expectAudioPlayback: false,
+  requireAudio: false,
   useExistingHost: false,
   mockVideo: false,
   headless: true,
@@ -93,6 +94,14 @@ function parseArgs(argv) {
       args.expectAudioPlayback = true;
       continue;
     }
+    if (key === "requireAudio") {
+      args.requireAudio = true;
+      args.expectAudioPlayback = true;
+      if (!args.audioMode) {
+        args.audioMode = "wasapi";
+      }
+      continue;
+    }
     if (Object.prototype.hasOwnProperty.call(args, key) && next && !next.startsWith("--")) {
       args[key] = next;
       index += 1;
@@ -104,6 +113,12 @@ function parseArgs(argv) {
   args.timeoutMs = Number(args.timeoutMs);
   args.hostPassword = args.hostPassword || args.password;
   args.clientPassword = args.clientPassword || (args.expectAuthFailure ? `${args.password}-wrong` : args.password);
+  if (args.requireAudio && !args.audioMode) {
+    args.audioMode = "wasapi";
+  }
+  if (args.requireAudio) {
+    args.expectAudioPlayback = true;
+  }
   if (args.expectAudioPlayback) {
     args.expectAudioPayload = true;
   }
@@ -323,6 +338,47 @@ async function setFileInputFiles(session, selector, files) {
   });
 }
 
+async function clickElement(session, selector) {
+  const rect = await evaluate(
+    session,
+    `(() => {
+      const element = document.querySelector(${JSON.stringify(selector)});
+      if (!element) throw new Error("element not found: ${selector}");
+      element.scrollIntoView({ block: "center", inline: "center" });
+      const rect = element.getBoundingClientRect();
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        width: rect.width,
+        height: rect.height,
+      };
+    })()`,
+  );
+  if (!rect?.width || !rect?.height) {
+    throw new Error(`element has no visible box: ${selector}`);
+  }
+  await session.send("Input.dispatchMouseEvent", {
+    type: "mouseMoved",
+    x: rect.x,
+    y: rect.y,
+    button: "none",
+  });
+  await session.send("Input.dispatchMouseEvent", {
+    type: "mousePressed",
+    x: rect.x,
+    y: rect.y,
+    button: "left",
+    clickCount: 1,
+  });
+  await session.send("Input.dispatchMouseEvent", {
+    type: "mouseReleased",
+    x: rect.x,
+    y: rect.y,
+    button: "left",
+    clickCount: 1,
+  });
+}
+
 async function grantClipboardPermissions(session, origin) {
   await session.send("Browser.grantPermissions", {
     origin,
@@ -538,16 +594,18 @@ async function run() {
         setValue("#hostInput", ${JSON.stringify(args.host)});
         setValue("#portInput", ${JSON.stringify(String(args.port))});
         setValue("#passwordInput", ${JSON.stringify(args.clientPassword)});
-        if (${JSON.stringify(args.enableAudio)}) {
-          const audioToggle = document.querySelector("#audioToggle");
-          if (!audioToggle.checked) {
-            audioToggle.click();
-          }
-        }
-        document.querySelector("#connectButton").click();
         return true;
       })()`,
     );
+    if (args.enableAudio) {
+      await clickElement(session, "#audioToggle");
+      await waitFor(
+        () => evaluate(session, "document.querySelector('#audioToggle')?.checked === true"),
+        args.timeoutMs,
+        "Mac client audio toggle",
+      );
+    }
+    await clickElement(session, "#connectButton");
 
     let lastSnapshot = null;
     if (args.expectAuthFailure) {
@@ -616,9 +674,16 @@ async function run() {
           const hasFrame = value.audioFrameCount > 0 || value.audio.includes("接收") || value.audio.includes("level");
           const hasPayload = Boolean(value.lastAudioFrame?.payloadLength || value.lastAudioFrame?.payloadBytes);
           const played = value.audioPlayedFrames > 0;
+          const frame = value.lastAudioFrame;
+          const realPcmOk = !args.requireAudio || (
+            String(frame?.codec || "").toLowerCase().includes("pcm-f32le") &&
+            String(frame?.encoding || "").toLowerCase().includes("pcm-f32le-base64") &&
+            Number(frame?.sampleRate || 0) === 48000 &&
+            Number(frame?.channels || 0) === 2
+          );
           const payloadOk = !args.expectAudioPayload || hasPayload;
           const playbackOk = !args.expectAudioPlayback || played;
-          return hasFrame && payloadOk && playbackOk ? value : null;
+          return hasFrame && payloadOk && playbackOk && realPcmOk ? value : null;
         },
         args.timeoutMs,
         "Mac client audio frame",

@@ -137,6 +137,12 @@ Mac 控制 Windows 的页面级自检可在 Windows 本机启动临时 Windows h
 node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs
 ```
 
+需要把真实 Windows 系统声音也纳入 Mac 控制页验收时，加 `--requireAudio`；脚本会临时设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi`，打开页面声音开关，并等待 `pcm-f32le-base64` 播放计数：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --requireAudio
+```
+
 默认临时使用 `127.0.0.1:43772`；如果该端口已被其他自检占用，脚本会自动换一个临时空闲端口。需要连接已运行的 Windows host 时再加 `--useExisting --host 127.0.0.1 --port 43770`。
 
 视频持续帧观察脚本可统计几秒内实际收到的帧数、平均 FPS、最大帧间隔、掉帧数和采集管线：

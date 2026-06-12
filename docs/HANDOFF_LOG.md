@@ -17,6 +17,43 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
+本轮目标：基于 Mac 的通用音频自检参数，补 Windows 本机 WASAPI 真实 PCM 强校验入口。
+完成内容：
+- 在 `scripts/windows/test-mac-client-browser.mjs` 增加 `--requireAudio` 便捷参数：等价于临时启动 WASAPI host，并要求 PCM payload 和页面播放计数。
+- 页面连接前改用浏览器调试协议发送真实鼠标点击打开声音和连接按钮，避免 WebAudio 因自动化脚本点击缺少用户手势而停在“等待播放”。
+- `--requireAudio` 额外强校验最后一帧为 `pcm-f32le` / `pcm-f32le-base64` / 48kHz / 2ch。
+- 文档补充 `--requireAudio` 的 Windows 本机验收用法，同时保留 Mac 端已加入的 `--enableAudio` / `--expectAudio...` 通用参数说明。
+修改文件：
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `git diff --check`
+- `node scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --requireAudio --timeoutMs 30000`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3 --clientPort 5191 --debugPort 9342`
+验证结果：
+- 默认页面级自检通过：真实 `windows-ffmpeg-gdigrab-mjpeg` 画面、`input_ack · log`、`Command+C -> Ctrl`、文本剪贴板 `system`、本机文本剪贴板读取/监听、文件剪贴板 `clipboard`、最近连接保存/回填/清空均通过。
+- 真实音频页面级自检通过：Windows host 启动 WASAPI loopback，Mac client 显示 `pcm-f32le-base64 · 48000 Hz`，音频状态出现 `播放 18`。
+- 认证失败回归仍通过：`认证失败 · 剩余 2/3 次`。
+遗留问题：
+- 本机测试时系统输出电平为 0，说明测试时无可听系统声音或静音；PCM 管道和播放调度正常，但真实听感仍需要在有系统声音时由 Mac 真机连接 Windows host 确认。
+下一步建议：
+- 后续做 Windows host 音频或 Mac client 音频 UI 改动时，加跑 `node scripts/windows/test-mac-client-browser.mjs --requireAudio`。
+- 真机听感验收时，Windows 端可同时跑 `node scripts/windows/observe-windows-host-audio.mjs --useExisting` 记录帧率、电平和最大间隔。
+是否改了协议：否；复用现有 `audio_settings_update`、`audio_settings_ack` 和 `audio_frame`。
+是否需要另一端配合：后续真实听感需要 Mac 端配合，本轮 Windows 本机页面级验证已通过。
+
 ## 2026-06-12 Mac Codex
 
 日期：2026-06-12
