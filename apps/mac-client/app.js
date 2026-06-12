@@ -485,6 +485,8 @@ async function connect({ reconnect = false } = {}) {
     resetSessionDiagnostics();
   }
   setConnectionStatus("连接中");
+  elements.connectButton.disabled = true;
+  elements.disconnectButton.disabled = false;
   resetVideoSurface("等待视频");
   primeAudioPlayback();
   try {

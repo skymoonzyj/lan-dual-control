@@ -808,6 +808,25 @@ async function run() {
         "Mac client audio toggle",
       );
     }
+    await evaluate(
+      session,
+      `(() => {
+        window.__lanDualDiscoveryDelayMs = 300;
+        if (window.__lanDualFetchDelayInstalled) return true;
+        const originalFetch = window.fetch.bind(window);
+        window.fetch = async (...args) => {
+          const target = String(args[0]?.url || args[0] || "");
+          const delayMs = Number(window.__lanDualDiscoveryDelayMs || 0);
+          if (delayMs > 0 && target.includes("/discovery")) {
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          }
+          return originalFetch(...args);
+        };
+        window.__lanDualFetchDelayInstalled = true;
+        return true;
+      })()`,
+    );
+    let lastSnapshot = null;
     const connectStartedAt = Date.now();
     await evaluate(
       session,
@@ -819,8 +838,18 @@ async function run() {
       })()`,
     );
     await clickElement(session, "#connectButton");
-
-    let lastSnapshot = null;
+    const connectingSnapshot = await waitFor(
+      async () => {
+        const value = await evaluate(session, buildSnapshotExpression());
+        lastSnapshot = value;
+        return value.connection === "连接中" && value.connectButtonDisabled && !value.disconnectButtonDisabled
+          ? value
+          : null;
+      },
+      args.timeoutMs,
+      "Mac client connecting button state",
+    );
+    print("OK", `Connecting buttons: ${connectingSnapshot.connection}`);
     if (args.expectAuthFailure) {
       const authFailureSnapshot = await waitFor(
         async () => {
