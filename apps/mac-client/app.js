@@ -286,6 +286,10 @@ function resetRemoteStatus(status = "等待发现") {
   elements.remoteStatus.textContent = status;
 }
 
+function resetAudioStatus() {
+  elements.audioStatus.textContent = elements.audioToggle.checked ? "未接收" : "未开启";
+}
+
 function setDiscoverButtonBusy(busy) {
   elements.discoverButton.disabled = busy;
   elements.discoverButton.textContent = busy ? "发现中" : "发现";
@@ -1065,6 +1069,7 @@ function resetAudioPlayback() {
   state.audioFrames = 0;
   state.audioLevel = 0;
   state.firstAudioFrameMs = 0;
+  resetAudioStatus();
   elements.audioPlaybackStatus.textContent = elements.audioToggle.checked ? "等待音频帧" : "未开启";
   renderSessionDiagnostics();
 }

@@ -537,7 +537,8 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
       const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
       const runtimeCleared = value.remoteRuntime === "未提供";
       const remoteCleared = value.remote === "连接中断";
-      return (reconnecting || logVisible) && surfaceCleared && clipboardButtonsDisabled && runtimeCleared && remoteCleared ? value : null;
+      const audioCleared = value.audioToggleChecked ? value.audio === "未接收" : value.audio === "未开启";
+      return (reconnecting || logVisible) && surfaceCleared && clipboardButtonsDisabled && runtimeCleared && remoteCleared && audioCleared ? value : null;
     },
     args.timeoutMs,
     "Mac client reconnect scheduling",
@@ -1237,7 +1238,8 @@ async function run() {
           const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
           const runtimeCleared = value.remoteRuntime === "未提供";
           const remoteReset = value.remote === "等待发现";
-          return matchesExpectedAuthFailure(value, args) && buttonsReset && surfaceCleared && clipboardButtonsDisabled && runtimeCleared && remoteReset
+          const audioCleared = value.audioToggleChecked ? value.audio === "未接收" : value.audio === "未开启";
+          return matchesExpectedAuthFailure(value, args) && buttonsReset && surfaceCleared && clipboardButtonsDisabled && runtimeCleared && remoteReset && audioCleared
             ? value
             : null;
         },
@@ -1835,12 +1837,15 @@ async function run() {
         const audioFlowOk = value.audioToggleChecked
           ? value.audioFlowMetric === "等待音频"
           : value.audioFlowMetric === "未开启";
+        const audioStatusOk = value.audioToggleChecked
+          ? value.audio === "未接收"
+          : value.audio === "未开启";
         const reconnectOk = value.reconnectMetric === "0 次";
         const runtimeOk = value.remoteRuntime === "未提供";
         const remoteOk = value.remote === "等待发现";
         const surfaceCleared = !value.imageVisible && !value.imageHasSource;
         const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
-        return connectionOk && videoStatusOk && firstVideoOk && videoFlowOk && audioFlowOk && reconnectOk && runtimeOk && remoteOk && surfaceCleared && clipboardButtonsDisabled
+        return connectionOk && videoStatusOk && firstVideoOk && videoFlowOk && audioFlowOk && audioStatusOk && reconnectOk && runtimeOk && remoteOk && surfaceCleared && clipboardButtonsDisabled
           ? value
           : null;
       },
@@ -1849,7 +1854,7 @@ async function run() {
     );
     print(
       "OK",
-      `Disconnect reset: ${disconnectSnapshot.remote} / ${disconnectSnapshot.video} / ${disconnectSnapshot.firstVideoMetric} / ${disconnectSnapshot.videoFlowMetric} / ${disconnectSnapshot.audioFlowMetric} / ${disconnectSnapshot.reconnectMetric} / ${disconnectSnapshot.remoteRuntime}`,
+      `Disconnect reset: ${disconnectSnapshot.remote} / ${disconnectSnapshot.video} / ${disconnectSnapshot.firstVideoMetric} / ${disconnectSnapshot.videoFlowMetric} / ${disconnectSnapshot.audio} / ${disconnectSnapshot.audioFlowMetric} / ${disconnectSnapshot.reconnectMetric} / ${disconnectSnapshot.remoteRuntime}`,
     );
     print("OK", "Mac client browser self-test passed");
   } finally {
