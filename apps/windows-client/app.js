@@ -96,7 +96,8 @@ const discoveryProbeTimeoutMs = 650;
 const defaultControlPort = "43770";
 const fileChunkSizeBytes = 64 * 1024;
 const maxClipboardFileBytes = 512 * 1024 * 1024;
-const maxNativeClipboardFileBytes = 128 * 1024 * 1024;
+const nativeClipboardChunkSizeBytes = 1024 * 1024;
+const maxNativeClipboardFileBytes = maxClipboardFileBytes;
 const defaultHostDiagnosticsText = "诊断：等待连接。";
 const displayOptionDefaults = {
   resolution: "1920x1080",
@@ -3034,15 +3035,72 @@ async function writeReceivedFilesToSystemClipboard(files = state.receivedClipboa
   }
 
   elements.copyReceivedFilesButton.disabled = true;
+  let nativeTransferId = "";
   try {
-    const nativeFiles = await Promise.all(
-      files.map(async (file, index) => ({
-        name: makeSafeDownloadName(file.name, index),
-        dataBase64: await blobToBase64(file.blob),
-      })),
-    );
-    return await invoke("write_files_to_clipboard", { files: nativeFiles });
+    const nativeFiles = files.map((file, index) => ({
+      name: makeSafeDownloadName(file.name, index),
+      size: Number(file.size) || 0,
+    }));
+    const beginResult = await invoke("begin_clipboard_file_write", {
+      payload: {
+        files: nativeFiles,
+      },
+    });
+    nativeTransferId = beginResult?.transferId || "";
+    if (!nativeTransferId) {
+      throw new Error("桌面原生文件剪贴板传输没有返回 transferId。");
+    }
+
+    let writtenBytes = 0;
+    for (const [fileIndex, file] of files.entries()) {
+      let offset = 0;
+      while (offset < file.size) {
+        const chunk = file.blob.slice(offset, Math.min(offset + nativeClipboardChunkSizeBytes, file.size));
+        const dataBase64 = await blobToBase64(chunk);
+        const result = await invoke("append_clipboard_file_chunk", {
+          payload: {
+            transferId: nativeTransferId,
+            fileIndex,
+            offset,
+            dataBase64,
+          },
+        });
+        offset += chunk.size;
+        writtenBytes = Number(result?.totalWrittenBytes) || writtenBytes + chunk.size;
+        const percent = totalBytes === 0 ? 100 : Math.min(100, Math.round((writtenBytes / totalBytes) * 100));
+        elements.clipboardText.textContent = `剪贴板：正在写入系统文件剪贴板 ${percent}%`;
+        await yieldToUi();
+      }
+    }
+
+    return await invoke("finish_clipboard_file_write", {
+      payload: {
+        transferId: nativeTransferId,
+      },
+    });
   } catch (error) {
+    if (nativeTransferId) {
+      await invoke("cancel_clipboard_file_write", {
+        payload: {
+          transferId: nativeTransferId,
+        },
+      }).catch(() => {});
+    }
+
+    if (files.length > 0 && totalBytes <= 128 * 1024 * 1024) {
+      try {
+        const nativeFiles = await Promise.all(
+          files.map(async (file, index) => ({
+            name: makeSafeDownloadName(file.name, index),
+            dataBase64: await blobToBase64(file.blob),
+          })),
+        );
+        return await invoke("write_files_to_clipboard", { files: nativeFiles });
+      } catch {
+        // Fall through to the original chunked error below.
+      }
+    }
+
     return {
       clipboardWritten: false,
       saveMode: "memory-only",

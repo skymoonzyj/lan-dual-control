@@ -17,6 +17,45 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
+本轮目标：升级 Windows 桌面版远端文件剪贴板写入，避免大文件一次性 base64 调用造成卡顿和 128MB 上限。
+完成内容：
+- `apps/windows-desktop/src-tauri/src/main.rs` 新增原生分块文件剪贴板命令：begin/chunk/finish/cancel。
+- 原生层会为每次写入创建临时目录，校验分块偏移和最终字节数，完成后再调用 Windows 系统文件剪贴板。
+- `apps/windows-client/app.js` 改为优先按 1MB 分块把远端文件写入桌面原生层，写入时显示百分比。
+- 桌面版远端文件剪贴板上限从 128MB 放宽到 512MB，与当前远控文件传输上限一致。
+- 保留旧 `write_files_to_clipboard` 一次性命令作为小文件兼容回退。
+- 页面级自检新增浏览器预览版“本机被控”面板禁用和原生文件剪贴板上限/分块大小断言。
+- README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-desktop/src-tauri/src/main.rs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-desktop/README.md`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `cargo test`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `npm.cmd run build`
+- `git diff --check`
+- 冲突标记搜索（apps/scripts/docs/shared）
+遗留问题：
+- 未人工用真实大压缩包点击桌面版“写入系统文件剪贴板”；本轮已完成原生命令编译、单元测试和浏览器页面回归。后续真机体验建议用 100MB 以上压缩包从 Mac 复制到 Windows 控制端托盘，再写入系统文件剪贴板验证资源管理器粘贴。
+下一步建议：
+- 继续优化远端文件托盘失败恢复、临时文件清理和大文件进度提示；或进入 Windows Graphics Capture/正式编码管线。
+是否改了协议：否。
+是否需要另一端配合：后续需要 Mac 端真实复制大文件到 Windows 控制端做体验验收。
+
 ## 2026-06-12 Mac Codex
 
 日期：2026-06-12

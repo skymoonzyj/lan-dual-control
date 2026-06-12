@@ -4,6 +4,7 @@ use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
+    collections::HashMap,
     env, fs,
     io::{BufRead, BufReader, Read, Write},
     net::{SocketAddr, TcpStream},
@@ -29,6 +30,25 @@ struct WindowsHostProcessState {
     logs: Arc<Mutex<Vec<String>>>,
 }
 
+#[derive(Default)]
+struct ClipboardFileTransferState {
+    transfers: Mutex<HashMap<String, NativeClipboardTransfer>>,
+}
+
+#[derive(Debug)]
+struct NativeClipboardTransfer {
+    root_dir: PathBuf,
+    files: Vec<NativeClipboardFileEntry>,
+}
+
+#[derive(Debug)]
+struct NativeClipboardFileEntry {
+    name: String,
+    path: PathBuf,
+    expected_bytes: u64,
+    written_bytes: u64,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ClipboardFilePayload {
@@ -46,6 +66,60 @@ struct ClipboardFileWriteResult {
     root_dir: String,
     paths: Vec<String>,
     reason: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClipboardFileMetaPayload {
+    name: String,
+    size: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BeginClipboardFileWritePayload {
+    files: Vec<ClipboardFileMetaPayload>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BeginClipboardFileWriteResult {
+    transfer_id: String,
+    root_dir: String,
+    file_count: usize,
+    total_bytes: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AppendClipboardFileChunkPayload {
+    transfer_id: String,
+    file_index: usize,
+    offset: u64,
+    data_base64: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppendClipboardFileChunkResult {
+    transfer_id: String,
+    file_index: usize,
+    written_bytes: u64,
+    total_written_bytes: u64,
+    total_bytes: u64,
+    complete: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FinishClipboardFileWritePayload {
+    transfer_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CancelClipboardFileWritePayload {
+    transfer_id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -124,6 +198,41 @@ fn decode_base64_payload(data_base64: &str) -> Result<Vec<u8>, String> {
     general_purpose::STANDARD
         .decode(payload.as_bytes())
         .map_err(|error| format!("文件内容 base64 解码失败：{error}"))
+}
+
+fn make_clipboard_root_dir(transfer_id: &str) -> PathBuf {
+    std::env::temp_dir()
+        .join("lan-dual-control-windows-client-clipboard")
+        .join(transfer_id)
+}
+
+fn make_clipboard_transfer_id() -> Result<String, String> {
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_millis();
+    Ok(format!("clip-{stamp}"))
+}
+
+fn clipboard_transfer_totals(transfer: &NativeClipboardTransfer) -> (u64, u64) {
+    let total_bytes = transfer.files.iter().map(|file| file.expected_bytes).sum();
+    let total_written_bytes = transfer.files.iter().map(|file| file.written_bytes).sum();
+    (total_bytes, total_written_bytes)
+}
+
+fn clipboard_transfer_paths(transfer: &NativeClipboardTransfer) -> Vec<PathBuf> {
+    transfer
+        .files
+        .iter()
+        .map(|file| file.path.clone())
+        .collect()
+}
+
+fn file_entry_result_paths(paths: &[PathBuf]) -> Vec<String> {
+    paths
+        .iter()
+        .map(|path| path.to_string_lossy().to_string())
+        .collect::<Vec<_>>()
 }
 
 #[cfg(windows)]
@@ -662,6 +771,199 @@ fn write_files_to_clipboard(
 }
 
 #[tauri::command]
+fn begin_clipboard_file_write(
+    payload: BeginClipboardFileWritePayload,
+    state: tauri::State<'_, ClipboardFileTransferState>,
+) -> Result<BeginClipboardFileWriteResult, String> {
+    if payload.files.is_empty() {
+        return Err("没有可写入系统文件剪贴板的远端文件。".to_string());
+    }
+
+    let mut transfers = state
+        .transfers
+        .lock()
+        .map_err(|_| "文件剪贴板传输状态不可用。".to_string())?;
+    let base_id = make_clipboard_transfer_id()?;
+    let mut transfer_id = base_id.clone();
+    let mut suffix = 1_u32;
+    while transfers.contains_key(&transfer_id) {
+        suffix += 1;
+        transfer_id = format!("{base_id}-{suffix}");
+    }
+
+    let root_dir = make_clipboard_root_dir(&transfer_id);
+    fs::create_dir_all(&root_dir).map_err(|error| format!("创建临时目录失败：{error}"))?;
+
+    let mut entries = Vec::with_capacity(payload.files.len());
+    let mut total_bytes = 0_u64;
+    for (index, file) in payload.files.iter().enumerate() {
+        let name = safe_file_name(&file.name, index);
+        let path = root_dir.join(format!("{:03}-{}", index + 1, name));
+        fs::File::create(&path).map_err(|error| format!("创建临时文件失败：{error}"))?;
+        total_bytes = total_bytes.saturating_add(file.size);
+        entries.push(NativeClipboardFileEntry {
+            name,
+            path,
+            expected_bytes: file.size,
+            written_bytes: 0,
+        });
+    }
+
+    transfers.insert(
+        transfer_id.clone(),
+        NativeClipboardTransfer {
+            root_dir: root_dir.clone(),
+            files: entries,
+        },
+    );
+
+    Ok(BeginClipboardFileWriteResult {
+        transfer_id,
+        root_dir: root_dir.to_string_lossy().to_string(),
+        file_count: payload.files.len(),
+        total_bytes,
+    })
+}
+
+#[tauri::command]
+fn append_clipboard_file_chunk(
+    payload: AppendClipboardFileChunkPayload,
+    state: tauri::State<'_, ClipboardFileTransferState>,
+) -> Result<AppendClipboardFileChunkResult, String> {
+    let bytes = decode_base64_payload(&payload.data_base64)?;
+    let mut transfers = state
+        .transfers
+        .lock()
+        .map_err(|_| "文件剪贴板传输状态不可用。".to_string())?;
+    let transfer = transfers
+        .get_mut(&payload.transfer_id)
+        .ok_or_else(|| "文件剪贴板传输不存在或已结束。".to_string())?;
+    let file = transfer
+        .files
+        .get_mut(payload.file_index)
+        .ok_or_else(|| "文件索引无效。".to_string())?;
+
+    if payload.offset != file.written_bytes {
+        return Err(format!(
+            "文件 {} 分块偏移不连续：收到 {}，预期 {}。",
+            file.name, payload.offset, file.written_bytes
+        ));
+    }
+
+    let next_written = file
+        .written_bytes
+        .checked_add(bytes.len() as u64)
+        .ok_or_else(|| "文件大小超出可处理范围。".to_string())?;
+    if next_written > file.expected_bytes {
+        return Err(format!(
+            "文件 {} 写入超出预期大小：{} > {}。",
+            file.name, next_written, file.expected_bytes
+        ));
+    }
+
+    let mut handle = fs::OpenOptions::new()
+        .append(true)
+        .open(&file.path)
+        .map_err(|error| format!("打开临时文件失败：{error}"))?;
+    handle
+        .write_all(&bytes)
+        .map_err(|error| format!("写入临时文件失败：{error}"))?;
+    file.written_bytes = next_written;
+    let written_bytes = file.written_bytes;
+
+    let (total_bytes, total_written_bytes) = clipboard_transfer_totals(transfer);
+    Ok(AppendClipboardFileChunkResult {
+        transfer_id: payload.transfer_id,
+        file_index: payload.file_index,
+        written_bytes,
+        total_written_bytes,
+        total_bytes,
+        complete: total_written_bytes == total_bytes,
+    })
+}
+
+#[tauri::command]
+fn finish_clipboard_file_write(
+    payload: FinishClipboardFileWritePayload,
+    state: tauri::State<'_, ClipboardFileTransferState>,
+) -> Result<ClipboardFileWriteResult, String> {
+    let (paths, total_bytes, root_dir) = {
+        let transfers = state
+            .transfers
+            .lock()
+            .map_err(|_| "文件剪贴板传输状态不可用。".to_string())?;
+        let transfer = transfers
+            .get(&payload.transfer_id)
+            .ok_or_else(|| "文件剪贴板传输不存在或已结束。".to_string())?;
+        for file in &transfer.files {
+            if file.written_bytes != file.expected_bytes {
+                return Err(format!(
+                    "文件 {} 尚未写完：{} / {}。",
+                    file.name, file.written_bytes, file.expected_bytes
+                ));
+            }
+        }
+        let (total_bytes, _) = clipboard_transfer_totals(transfer);
+        (
+            clipboard_transfer_paths(transfer),
+            total_bytes,
+            transfer.root_dir.clone(),
+        )
+    };
+
+    {
+        let mut transfers = state
+            .transfers
+            .lock()
+            .map_err(|_| "文件剪贴板传输状态不可用。".to_string())?;
+        transfers.remove(&payload.transfer_id);
+    }
+
+    let path_strings = file_entry_result_paths(&paths);
+    match write_paths_to_clipboard(&paths) {
+        Ok(()) => Ok(ClipboardFileWriteResult {
+            save_mode: "clipboard".to_string(),
+            clipboard_written: true,
+            file_count: paths.len(),
+            total_bytes,
+            root_dir: root_dir.to_string_lossy().to_string(),
+            paths: path_strings,
+            reason: "Windows 系统文件剪贴板已写入。".to_string(),
+        }),
+        Err(reason) => Ok(ClipboardFileWriteResult {
+            save_mode: "temp".to_string(),
+            clipboard_written: false,
+            file_count: paths.len(),
+            total_bytes,
+            root_dir: root_dir.to_string_lossy().to_string(),
+            paths: path_strings,
+            reason: format!("文件已保存到临时目录，但系统文件剪贴板写入失败：{reason}"),
+        }),
+    }
+}
+
+#[tauri::command]
+fn cancel_clipboard_file_write(
+    payload: CancelClipboardFileWritePayload,
+    state: tauri::State<'_, ClipboardFileTransferState>,
+) -> Result<bool, String> {
+    let transfer = {
+        let mut transfers = state
+            .transfers
+            .lock()
+            .map_err(|_| "文件剪贴板传输状态不可用。".to_string())?;
+        transfers.remove(&payload.transfer_id)
+    };
+
+    if let Some(transfer) = transfer {
+        let _ = fs::remove_dir_all(&transfer.root_dir);
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+#[tauri::command]
 fn run_windows_host_readiness(
     request: WindowsHostReadinessRequest,
 ) -> Result<DesktopCommandResult, String> {
@@ -886,8 +1188,13 @@ mod tests {
 fn main() {
     tauri::Builder::default()
         .manage(WindowsHostProcessState::default())
+        .manage(ClipboardFileTransferState::default())
         .invoke_handler(tauri::generate_handler![
             write_files_to_clipboard,
+            begin_clipboard_file_write,
+            append_clipboard_file_chunk,
+            finish_clipboard_file_write,
+            cancel_clipboard_file_write,
             run_windows_host_readiness,
             preview_windows_firewall_rule,
             start_windows_host,

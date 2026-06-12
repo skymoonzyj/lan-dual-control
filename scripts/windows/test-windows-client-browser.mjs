@@ -342,6 +342,57 @@ async function verifyFloatingControlCenter(session) {
   return result;
 }
 
+async function verifyDesktopOnlyHostPanel(session) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      const badge = document.querySelector("#localHostBadge");
+      const status = document.querySelector("#localHostStatusText");
+      const buttons = [
+        "#localHostReadinessButton",
+        "#localHostStartButton",
+        "#localHostFirewallButton",
+        "#localHostStopButton",
+      ].map((selector) => document.querySelector(selector));
+      const inputs = [
+        "#localHostPortInput",
+        "#localHostPasswordInput",
+        "#localHostScreenModeSelect",
+        "#localHostAudioModeSelect",
+        "#localHostInputModeSelect",
+      ].map((selector) => document.querySelector(selector));
+
+      return {
+        ok:
+          typeof getTauriInvoke === "function" &&
+          typeof canUseDesktopHostControl === "function" &&
+          typeof maxNativeClipboardFileBytes === "number" &&
+          typeof maxClipboardFileBytes === "number" &&
+          typeof nativeClipboardChunkSizeBytes === "number" &&
+          getTauriInvoke() === null &&
+          canUseDesktopHostControl() === false &&
+          badge?.textContent === "需桌面版" &&
+          status?.textContent.includes("浏览器预览版") &&
+          buttons.every((button) => button?.disabled) &&
+          inputs.every((input) => input?.disabled) &&
+          maxNativeClipboardFileBytes === maxClipboardFileBytes &&
+          nativeClipboardChunkSizeBytes === 1024 * 1024,
+        badge: badge?.textContent || "",
+        status: status?.textContent || "",
+        buttonsDisabled: buttons.map((button) => Boolean(button?.disabled)),
+        inputsDisabled: inputs.map((input) => Boolean(input?.disabled)),
+        maxNativeClipboardFileBytes,
+        maxClipboardFileBytes,
+        nativeClipboardChunkSizeBytes,
+      };
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`desktop-only host panel check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function verifyBlackBarInputGuard(session) {
   const result = await evaluate(
     session,
@@ -755,6 +806,11 @@ async function run() {
     print(
       "OK",
       `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, fullscreen=${controlCenterCheck.fullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
+    );
+    const desktopOnlyPanelCheck = await verifyDesktopOnlyHostPanel(session);
+    print(
+      "OK",
+      `Desktop-only host panel: badge=${desktopOnlyPanelCheck.badge}, nativeLimit=${desktopOnlyPanelCheck.maxNativeClipboardFileBytes}, chunk=${desktopOnlyPanelCheck.nativeClipboardChunkSizeBytes}`,
     );
     const blackBarCheck = await verifyBlackBarInputGuard(session);
     print(
