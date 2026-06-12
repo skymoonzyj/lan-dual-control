@@ -129,7 +129,8 @@ input:focus {
 }
 
 input[type="checkbox"],
-input[type="range"] {
+input[type="range"],
+input[type="file"] {
   width: auto;
   min-height: auto;
   padding: 0;
@@ -147,6 +148,11 @@ input[type="checkbox"] {
 
 input[type="range"] {
   accent-color: var(--forest);
+}
+
+input[type="file"] {
+  width: 100%;
+  color: var(--muted);
 }
 
 textarea {
@@ -351,6 +357,13 @@ button:disabled {
 .clipboard-actions strong {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.file-transfer-box {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 
 .log-panel {

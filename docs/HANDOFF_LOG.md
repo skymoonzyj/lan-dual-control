@@ -17,6 +17,49 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
+本轮目标：给 Mac 控制 Windows 原型增加文件剪贴板发送入口。
+完成内容：
+- `apps/mac-client` 文本剪贴板面板下新增文件选择和“发送文件”入口。
+- 发送文件时复用现有 `clipboard_file_offer`、`clipboard_file_chunk`、`clipboard_file_complete` 流程，方向为 `client_to_host`。
+- 文件按 64KB 分块 base64 发送，单批默认限制 32MB，避免浏览器一次读取过大文件卡住页面。
+- 页面可显示对端 `clipboard_file_response`、`clipboard_file_progress` 和 `clipboard_file_result`，包括 `saveMode` 和接收进度。
+- 0 字节文件会发送一个空 chunk，确保接收端能创建对应空文件。
+修改文件：
+- `apps/mac-client/app.js`
+- `apps/mac-client/index.html`
+- `apps/mac-client/styles.css`
+- `apps/mac-client/README.md`
+- `README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/server.mjs`
+- `node --check apps/mac-client/app.js`
+- `git diff --check`
+- 本机启动 Windows host 回退服务：`LAN_DUAL_PORT=43772 LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_WINDOWS_INPUT_MODE=log node server.mjs`
+- 本机启动 Mac client：`node server.mjs`
+- 内置浏览器打开 `http://127.0.0.1:5188/`，连接 `127.0.0.1:43772`，确认文件剪贴板 UI 存在，未选择文件时点击“发送文件”不会误发送。
+验证结果：
+- 页面显示文件选择和发送入口。
+- 连接、认证、会话协商和视频显示仍通过。
+- 未选择文件时状态保持 `未选择`，没有向 Windows host 发送文件块。
+- 临时 `43772` 和 `5188` 测试端口已关闭。
+遗留问题：
+- 浏览器自动化不能无提示选择本机文件；真实小文件发送和 Windows 系统文件剪贴板 `saveMode=clipboard` 仍需要 Windows 端或人工手动验证。
+- 当前未实现自动监听 Mac 本机剪贴板文件变化。
+下一步建议：
+- Windows 端可扩展 `scripts/windows/test-mac-client-browser.mjs`，在真实 Windows host 上用临时小文件覆盖 Mac client 文件剪贴板发送。
+- Mac 端后续继续打磨错误提示、键盘映射和自动剪贴板监听。
+是否改了协议：否；复用现有 `clipboard_file_*`。
+是否需要另一端配合：真实文件写入 Windows 系统文件剪贴板验收需要 Windows 端配合。
+
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12

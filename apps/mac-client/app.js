@@ -21,6 +21,9 @@ const elements = {
   clipboardTextInput: document.querySelector("#clipboardTextInput"),
   sendClipboardButton: document.querySelector("#sendClipboardButton"),
   clipboardStatus: document.querySelector("#clipboardStatus"),
+  clipboardFileInput: document.querySelector("#clipboardFileInput"),
+  sendClipboardFilesButton: document.querySelector("#sendClipboardFilesButton"),
+  fileClipboardStatus: document.querySelector("#fileClipboardStatus"),
   eventLog: document.querySelector("#eventLog"),
   clearLogButton: document.querySelector("#clearLogButton"),
 };
@@ -44,7 +47,12 @@ const state = {
   audioPlayedFrames: 0,
   audioDroppedFrames: 0,
   audioLastError: "",
+  fileTransferActive: false,
+  fileTransfers: new Map(),
 };
+
+const fileChunkSizeBytes = 64 * 1024;
+const maxClipboardFileBytes = 32 * 1024 * 1024;
 
 function nowText() {
   return new Date().toLocaleTimeString("zh-CN", { hour12: false });
@@ -214,6 +222,15 @@ function handleMessage(rawData) {
     case "clipboard_ack":
       handleClipboardAck(message);
       break;
+    case "clipboard_file_response":
+      handleClipboardFileResponse(message);
+      break;
+    case "clipboard_file_progress":
+      handleClipboardFileProgress(message);
+      break;
+    case "clipboard_file_result":
+      handleClipboardFileResult(message);
+      break;
     case "error":
       logEvent("远端错误", message.message || message.reason || message.code || "unknown");
       break;
@@ -247,7 +264,7 @@ function handleAuthResult(message) {
     wantVideo: true,
     wantAudio: elements.audioToggle.checked,
     wantClipboardText: true,
-    wantClipboardFile: false,
+    wantClipboardFile: true,
     preferredVideoCodec: "mjpeg",
     preferredAudioCodec: "pcm-f32le",
     maxFps: 8,
@@ -630,6 +647,182 @@ function handleClipboardAck(message) {
   logEvent(message.accepted ? "剪贴板确认" : "剪贴板失败", message.reason || status);
 }
 
+function formatBytes(bytes) {
+  const value = Math.max(0, Number(bytes) || 0);
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function makeFileTransferId() {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  return `mac-client-file-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    const chunk = bytes.subarray(offset, offset + 0x8000);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+function yieldToUi() {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, 0);
+  });
+}
+
+function updateFileClipboardButton() {
+  elements.sendClipboardFilesButton.disabled = state.fileTransferActive;
+}
+
+async function sendClipboardFiles() {
+  if (!state.authenticated) {
+    elements.fileClipboardStatus.textContent = "未连接";
+    logEvent("文件剪贴板未发送", "请先连接 Windows host");
+    return;
+  }
+
+  const files = Array.from(elements.clipboardFileInput.files ?? []);
+  if (files.length === 0) {
+    elements.fileClipboardStatus.textContent = "未选择";
+    return;
+  }
+
+  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+  if (totalBytes > maxClipboardFileBytes) {
+    const detail = `${formatBytes(totalBytes)} 超过上限 ${formatBytes(maxClipboardFileBytes)}`;
+    elements.fileClipboardStatus.textContent = "文件过大";
+    logEvent("文件剪贴板过大", detail);
+    return;
+  }
+
+  const transferId = makeFileTransferId();
+  const fileMetas = files.map((file, index) => ({
+    index,
+    name: file.name,
+    size: file.size,
+    mimeType: file.type || "application/octet-stream",
+    lastModified: file.lastModified,
+  }));
+
+  let sentBytes = 0;
+  state.fileTransferActive = true;
+  state.fileTransfers.set(transferId, { fileCount: files.length, totalBytes, sentBytes: 0 });
+  updateFileClipboardButton();
+  elements.fileClipboardStatus.textContent = `准备发送 ${files.length} 个`;
+
+  try {
+    send({
+      type: "clipboard_file_offer",
+      transferId,
+      direction: "client_to_host",
+      totalBytes,
+      fileCount: files.length,
+      maxChunkBytes: fileChunkSizeBytes,
+      files: fileMetas,
+    });
+    logEvent("文件剪贴板", `开始发送 ${files.length} 个文件 · ${formatBytes(totalBytes)}`);
+
+    for (const [fileIndex, file] of files.entries()) {
+      let chunkIndex = 0;
+      if (file.size === 0) {
+        send({
+          type: "clipboard_file_chunk",
+          transferId,
+          fileIndex,
+          fileName: file.name,
+          chunkIndex,
+          offset: 0,
+          bytes: 0,
+          sentBytes,
+          totalBytes,
+          encoding: "base64",
+          dataBase64: "",
+        });
+        elements.fileClipboardStatus.textContent = "发送空文件";
+      }
+      for (let offset = 0; offset < file.size; offset += fileChunkSizeBytes) {
+        const chunk = file.slice(offset, Math.min(offset + fileChunkSizeBytes, file.size));
+        const dataBase64 = arrayBufferToBase64(await chunk.arrayBuffer());
+        const nextSentBytes = sentBytes + chunk.size;
+        send({
+          type: "clipboard_file_chunk",
+          transferId,
+          fileIndex,
+          fileName: file.name,
+          chunkIndex,
+          offset,
+          bytes: chunk.size,
+          sentBytes: nextSentBytes,
+          totalBytes,
+          encoding: "base64",
+          dataBase64,
+        });
+        sentBytes = nextSentBytes;
+        chunkIndex += 1;
+        state.fileTransfers.set(transferId, { fileCount: files.length, totalBytes, sentBytes });
+        const percent = totalBytes === 0 ? 100 : Math.round((sentBytes / totalBytes) * 100);
+        elements.fileClipboardStatus.textContent = `发送 ${percent}%`;
+        if (chunkIndex % 8 === 0) {
+          await yieldToUi();
+        }
+      }
+    }
+
+    send({
+      type: "clipboard_file_complete",
+      transferId,
+      totalBytes,
+      fileCount: files.length,
+    });
+    elements.fileClipboardStatus.textContent = `已发送 ${formatBytes(sentBytes)}`;
+    logEvent("文件剪贴板", `文件块发送完成，等待确认 · ${transferId}`);
+  } catch (error) {
+    const message = error?.message || "文件发送失败";
+    elements.fileClipboardStatus.textContent = "发送失败";
+    logEvent("文件剪贴板失败", message);
+  } finally {
+    state.fileTransferActive = false;
+    elements.clipboardFileInput.value = "";
+    updateFileClipboardButton();
+  }
+}
+
+function handleClipboardFileResponse(message) {
+  if (!message.accepted) {
+    elements.fileClipboardStatus.textContent = "对端拒绝";
+    logEvent("文件剪贴板拒绝", message.reason || message.code || "unknown");
+    state.fileTransfers.delete(message.transferId);
+    return;
+  }
+  const chunkText = message.maxChunkBytes ? ` · 块 ${formatBytes(message.maxChunkBytes)}` : "";
+  elements.fileClipboardStatus.textContent = `对端准备 · ${message.saveMode || "unknown"}${chunkText}`;
+}
+
+function handleClipboardFileProgress(message) {
+  const receivedBytes = Number(message.receivedBytes) || 0;
+  const totalBytes = Number(message.totalBytes) || 0;
+  const percent = totalBytes === 0 ? 100 : Math.round((receivedBytes / totalBytes) * 100);
+  elements.fileClipboardStatus.textContent = `对端接收 ${percent}%`;
+}
+
+function handleClipboardFileResult(message) {
+  const totalBytes = Number(message.totalBytes) || 0;
+  const receivedBytes = Number(message.receivedBytes) || 0;
+  const status = message.accepted
+    ? `已写入 · ${message.saveMode || "unknown"} · ${formatBytes(receivedBytes || totalBytes)}`
+    : `失败 · ${message.saveMode || "unknown"}`;
+  elements.fileClipboardStatus.textContent = status;
+  logEvent(message.accepted ? "文件剪贴板确认" : "文件剪贴板失败", message.reason || status);
+  state.fileTransfers.delete(message.transferId);
+}
+
 elements.discoverButton.addEventListener("click", () => {
   void discover();
 });
@@ -656,6 +849,16 @@ elements.audioVolumeRange.addEventListener("input", () => {
   sendAudioSettings();
 });
 elements.sendClipboardButton.addEventListener("click", sendClipboardText);
+elements.sendClipboardFilesButton.addEventListener("click", () => {
+  void sendClipboardFiles();
+});
+elements.clipboardFileInput.addEventListener("change", () => {
+  const files = Array.from(elements.clipboardFileInput.files ?? []);
+  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+  elements.fileClipboardStatus.textContent = files.length
+    ? `${files.length} 个 · ${formatBytes(totalBytes)}`
+    : "未选择";
+});
 
 elements.remoteViewport.addEventListener("pointerdown", (event) => {
   elements.remoteViewport.focus();
