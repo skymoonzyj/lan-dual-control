@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/mac/observe-mac-audio.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 16:36 | `observe-mac-audio` 新增显式 `--playTone --requireLevel --minLevel` 有声电平强校验；默认仍不播放声音，无人值守只用 `--toneVolume 0` 验证流程。 |
 | Mac Codex | `scripts/mac/observe-mac-video.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md` | 2026-06-12 16:23 | `observe-mac-video` 新增 `--displayId`、`--requireFrameDisplayDiagnostic` 和 `--expectActiveDisplayId`，可在 H.264/JPEG 长观察中统计并断言帧级显示器来源。 |
 | Windows Codex | `apps/windows-client/app.js`、`apps/windows-client/README.md`、`scripts/windows/test-windows-client-browser.mjs`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 16:15 | Windows 控制端诊断条显示 Mac H.264 启动回退 `streamFallbackReason`，正常回执/H.264 帧会清空旧原因；页面自检新增 `--diagnosticsOnly` 覆盖该诊断逻辑。 |
 | Mac Codex | `scripts/mac/check-mac-displays.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md` | 2026-06-12 16:12 | `check-mac-displays` 默认要求 `video_frame.activeDisplayId` 存在且匹配，避免旧 Mac host 未重启到最新二进制时误通过；保留 `--allowMissingFrameDisplayDiagnostic` 兼容旧 host 调试。 |

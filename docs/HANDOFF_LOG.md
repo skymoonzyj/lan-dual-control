@@ -21,6 +21,39 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：给 Mac 系统声音观察脚本补可选有声电平强校验，方便后续确认非静音系统声音确实进入 `audio_frame`。
+完成内容：
+- `scripts/mac/observe-mac-audio.mjs` 新增 `--requireLevel` 和 `--minLevel`，可要求观察窗口内最大电平达到阈值。
+- 新增显式 `--playTone`，通过 macOS `afplay` 播放临时生成的短 WAV 测试音；默认关闭，不会自动发声。
+- 新增 `--toneFrequency`、`--toneDurationMs`、`--toneDelayMs` 和 `--toneVolume`，并在结束时清理临时 WAV。
+- README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `scripts/mac/observe-mac-audio.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/observe-mac-audio.mjs`
+- `node scripts/mac/observe-mac-audio.mjs --help`
+- `node scripts/mac/observe-mac-audio.mjs --durationMs 2000 --minFrames 80 --maxGapMs 1000 --requireLevel --minLevel 0`
+- `node scripts/mac/observe-mac-audio.mjs --durationMs 2200 --minFrames 80 --maxGapMs 1000 --playTone --toneVolume 0 --requireLevel --minLevel 0`
+验证结果：
+- 默认不发声观察路径通过：101 帧、约 49.9fps、最大间隔 22ms、payload 7680 bytes，当前电平 0。
+- 静音测试音路径通过：111 帧、约 49.6fps、最大间隔 23ms，确认临时 WAV、`afplay` 调度和清理流程可跑通；由于 `toneVolume=0`，没有播放可听声音。
+遗留问题：
+- 真正的有声电平强校验还需要有人确认可发声后运行 `--playTone --requireLevel --minLevel 0.01`，并观察 Windows 控制端真实听感。
+下一步建议：
+- 有人看屏幕/可发声时，用 `node scripts/mac/observe-mac-audio.mjs --durationMs 4500 --minFrames 160 --maxGapMs 1000 --playTone --requireLevel --minLevel 0.01` 做本机有声强校验，再让 Windows 控制端连接 43770 评估听感和延迟。
+是否改了协议：否。
+是否需要另一端配合：不阻塞；真实听感和延迟验收需要 Windows 控制端后续配合。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：让 Mac 视频持续观察脚本也能校验帧级显示器来源，方便 H.264/JPEG 长观察同时确认没有采到错误显示器。
 完成内容：
 - `scripts/mac/observe-mac-video.mjs` 新增 `--displayId`，可指定 `session_offer.displayId`。

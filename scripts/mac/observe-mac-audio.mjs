@@ -1,5 +1,9 @@
 #!/usr/bin/env node
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const defaults = {
   host: "127.0.0.1",
@@ -13,6 +17,13 @@ const defaults = {
   expectedEncoding: "pcm-f32le-base64",
   expectedSampleRate: 48000,
   expectedChannels: 2,
+  requireLevel: false,
+  minLevel: 0.01,
+  playTone: false,
+  toneFrequency: 880,
+  toneDurationMs: 1500,
+  toneDelayMs: 750,
+  toneVolume: 0.22,
 };
 
 function parseArgs(argv) {
@@ -41,6 +52,13 @@ function parseArgs(argv) {
   args.expectedEncoding = String(args.expectedEncoding || defaults.expectedEncoding).trim().toLowerCase();
   args.expectedSampleRate = positiveInteger(args.expectedSampleRate, defaults.expectedSampleRate);
   args.expectedChannels = positiveInteger(args.expectedChannels, defaults.expectedChannels);
+  args.requireLevel = booleanArg(args.requireLevel, defaults.requireLevel);
+  args.minLevel = nonNegativeNumber(args.minLevel, defaults.minLevel);
+  args.playTone = booleanArg(args.playTone, defaults.playTone);
+  args.toneFrequency = positiveInteger(args.toneFrequency, defaults.toneFrequency);
+  args.toneDurationMs = positiveInteger(args.toneDurationMs, defaults.toneDurationMs);
+  args.toneDelayMs = nonNegativeInteger(args.toneDelayMs, defaults.toneDelayMs);
+  args.toneVolume = clamp(nonNegativeNumber(args.toneVolume, defaults.toneVolume), 0, 1);
   return args;
 }
 
@@ -52,6 +70,21 @@ function positiveInteger(value, fallback) {
 function nonNegativeInteger(value, fallback) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function nonNegativeNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function booleanArg(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  return ["1", "true", "yes", "on"].includes(String(value).trim().toLowerCase());
 }
 
 function print(status, text) {
@@ -316,6 +349,82 @@ function finiteLevel(value) {
   return Number.isFinite(value) ? value : 0;
 }
 
+function makeToneWav({
+  frequency,
+  durationMs,
+  sampleRate,
+  channels,
+  volume,
+}) {
+  const safeSampleRate = Math.max(8000, Math.min(192000, Math.round(sampleRate)));
+  const safeChannels = Math.max(1, Math.min(2, Math.round(channels)));
+  const samples = Math.max(1, Math.round((safeSampleRate * durationMs) / 1000));
+  const dataBytes = samples * safeChannels * 2;
+  const buffer = Buffer.alloc(44 + dataBytes);
+  const amplitude = clamp(volume, 0, 1) * 32767;
+
+  buffer.write("RIFF", 0, "ascii");
+  buffer.writeUInt32LE(36 + dataBytes, 4);
+  buffer.write("WAVE", 8, "ascii");
+  buffer.write("fmt ", 12, "ascii");
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(safeChannels, 22);
+  buffer.writeUInt32LE(safeSampleRate, 24);
+  buffer.writeUInt32LE(safeSampleRate * safeChannels * 2, 28);
+  buffer.writeUInt16LE(safeChannels * 2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write("data", 36, "ascii");
+  buffer.writeUInt32LE(dataBytes, 40);
+
+  for (let sample = 0; sample < samples; sample += 1) {
+    const t = sample / safeSampleRate;
+    const fadeIn = Math.min(1, sample / Math.max(1, safeSampleRate * 0.02));
+    const fadeOut = Math.min(1, (samples - sample) / Math.max(1, safeSampleRate * 0.04));
+    const value = Math.round(Math.sin(2 * Math.PI * frequency * t) * amplitude * fadeIn * fadeOut);
+    for (let channel = 0; channel < safeChannels; channel += 1) {
+      buffer.writeInt16LE(value, 44 + (sample * safeChannels + channel) * 2);
+    }
+  }
+
+  return buffer;
+}
+
+async function startTonePlayback(args) {
+  if (!args.playTone) {
+    return { stop: async () => {} };
+  }
+  if (process.platform !== "darwin") {
+    throw new Error("--playTone is only supported on macOS via afplay");
+  }
+
+  const tonePath = join(tmpdir(), `lan-dual-mac-audio-tone-${randomUUID()}.wav`);
+  await writeFile(tonePath, makeToneWav({
+    frequency: args.toneFrequency,
+    durationMs: args.toneDurationMs,
+    sampleRate: args.expectedSampleRate,
+    channels: args.expectedChannels,
+    volume: args.toneVolume,
+  }));
+
+  let player = null;
+  const timer = setTimeout(() => {
+    player = spawn("afplay", [tonePath], { stdio: "ignore" });
+    player.on("error", () => {});
+  }, args.toneDelayMs);
+
+  print("INFO", `Scheduled local test tone: ${args.toneFrequency} Hz / ${args.toneDurationMs} ms / volume=${args.toneVolume}`);
+  return {
+    stop: async () => {
+      clearTimeout(timer);
+      if (player && !player.killed) {
+        player.kill("SIGTERM");
+      }
+      await rm(tonePath, { force: true });
+    },
+  };
+}
+
 function assertStats(stats, args) {
   const problems = [];
   if (stats.frames < args.minFrames) {
@@ -329,6 +438,9 @@ function assertStats(stats, args) {
     if (maxGap > args.maxGapMs) {
       problems.push(`max audio gap ${maxGap} ms exceeds ${args.maxGapMs} ms`);
     }
+  }
+  if (args.requireLevel && finiteLevel(stats.maxLevel) < args.minLevel) {
+    problems.push(`max audio level ${finiteLevel(stats.maxLevel).toFixed(3)} below ${args.minLevel}`);
   }
   if (problems.length > 0) {
     throw new Error(problems.join("; "));
@@ -347,9 +459,17 @@ Options:
   --timeoutMs <ms>              Handshake timeout. Default: 8000
   --minFrames <count>           Minimum required audio frames. Default: durationMs / 100
   --maxGapMs <ms>               Maximum allowed receive gap. Default: 1000
+  --requireLevel                Require observed max audio level to reach --minLevel.
+  --minLevel <level>            Minimum max level for --requireLevel. Default: 0.01
+  --playTone                    Play a short local test tone through macOS afplay. Default: off
+  --toneFrequency <hz>          Test tone frequency. Default: 880
+  --toneDurationMs <ms>         Test tone duration. Default: 1500
+  --toneDelayMs <ms>            Delay after first audio frame before tone starts. Default: 750
+  --toneVolume <0..1>           Test tone volume. Default: 0.22
 
 Example:
-  node scripts/mac/observe-mac-audio.mjs --durationMs 10000 --minFrames 80 --maxGapMs 1000`);
+  node scripts/mac/observe-mac-audio.mjs --durationMs 10000 --minFrames 80 --maxGapMs 1000
+  node scripts/mac/observe-mac-audio.mjs --durationMs 4500 --minFrames 160 --playTone --requireLevel --minLevel 0.01`);
 }
 
 async function main() {
@@ -360,7 +480,10 @@ async function main() {
 
   const args = parseArgs(process.argv.slice(2));
   print("INFO", `Target: ${args.host}:${args.port}`);
-  print("INFO", `Observe audio for ${args.durationMs} ms, minFrames=${args.minFrames}, maxGapMs=${args.maxGapMs}`);
+  print(
+    "INFO",
+    `Observe audio for ${args.durationMs} ms, minFrames=${args.minFrames}, maxGapMs=${args.maxGapMs}, requireLevel=${args.requireLevel ? args.minLevel : "off"}`,
+  );
   await fetchDiscovery(args);
 
   const audio = createAudioStats(args);
@@ -408,8 +531,13 @@ async function main() {
     "First audio_frame",
   );
 
-  await delay(args.durationMs);
-  socket.close();
+  const tonePlayback = await startTonePlayback(args);
+  try {
+    await delay(args.durationMs);
+  } finally {
+    socket.close();
+    await tonePlayback.stop();
+  }
 
   assertStats(audio.stats, args);
   print("OK", `Audio observation passed: ${summarizeStats(audio.stats, args)}`);

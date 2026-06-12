@@ -149,9 +149,13 @@ scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireH264 -RequireAud
 node scripts/mac/observe-mac-audio.mjs --durationMs 10000 --minFrames 80 --maxGapMs 1000
 ```
 
-该脚本会只读统计 `audio_frame` 帧数、接收间隔、payload 大小和电平范围，用于排查无声、间断或格式漂移；它不会修改系统音量、输入或剪贴板。
+该脚本会只读统计 `audio_frame` 帧数、接收间隔、payload 大小和电平范围，用于排查无声、间断或格式漂移；默认不会播放声音、修改系统音量、输入或剪贴板。需要确认非静音系统声音时，可以在有人确认不打扰的场景下显式播放短测试音并要求电平：
 
-当前真机基线：系统声音 30 秒观察 1501 帧、约 50fps、最大间隔 24ms，payload 恒定 7680 bytes；5 分钟长稳观察 15001 帧、50.0fps、最大间隔 31ms，payload 仍恒定 7680 bytes；本次测试窗口电平为 0，真实听感和音量变化仍需在有系统声音时继续验收。
+```bash
+node scripts/mac/observe-mac-audio.mjs --durationMs 4500 --minFrames 160 --maxGapMs 1000 --playTone --requireLevel --minLevel 0.01
+```
+
+当前真机基线：系统声音 30 秒观察 1501 帧、约 50fps、最大间隔 24ms，payload 恒定 7680 bytes；5 分钟长稳观察 15001 帧、50.0fps、最大间隔 31ms，payload 仍恒定 7680 bytes；本次无人值守测试窗口电平为 0，并已用 `--playTone --toneVolume 0 --requireLevel --minLevel 0` 覆盖静音测试音流程。真实听感、音量变化和有声电平仍需在有人确认可发声时继续验收。
 
 在 Mac 本机做 H.264 和 PCM 音频连续重连稳定性检查：
 
