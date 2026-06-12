@@ -14,6 +14,8 @@ param(
   [switch] $SystemInput,
   [switch] $PromptPassword,
   [switch] $RequirePassword,
+  [switch] $AddFirewallRule,
+  [switch] $DryRunFirewallRule,
   [switch] $SkipFirewallCheck,
   [switch] $NoRequireOpen,
   [switch] $DryRun
@@ -38,6 +40,8 @@ if ($LogInput) { $nodeArgs += "--logInput" }
 if ($SystemInput) { $nodeArgs += "--systemInput" }
 if ($PromptPassword) { $nodeArgs += "--promptPassword" }
 if ($RequirePassword) { $nodeArgs += "--requirePassword" }
+if ($AddFirewallRule) { $nodeArgs += "--addFirewallRule" }
+if ($DryRunFirewallRule) { $nodeArgs += "--dryRunFirewallRule" }
 if ($SkipFirewallCheck) { $nodeArgs += "--skipFirewallCheck" }
 if ($NoRequireOpen) { $nodeArgs += "--noRequireOpen" }
 if ($DryRun) { $nodeArgs += "--dryRun" }

@@ -73,6 +73,18 @@ $env:LAN_DUAL_PASSWORD="<your-lan-password>"
 node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --requirePassword
 ```
 
+如果要先预览它会创建哪条防火墙规则，可以加干跑参数。它只打印命令，不改系统：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -PromptPassword -RequirePassword -DryRunFirewallRule
+```
+
+确认当前是可信局域网、并且以管理员 PowerShell 运行时，可以显式请求新增 Private TCP 入站规则：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -PromptPassword -RequirePassword -AddFirewallRule
+```
+
 设备发现接口：
 
 ```text

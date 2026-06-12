@@ -10,8 +10,11 @@ const defaults = {
   json: false,
   requireOpen: false,
   requireRule: false,
+  addRule: false,
+  dryRunRule: false,
   skipFirewall: false,
   strict: false,
+  ruleProfile: "Private",
 };
 
 function parseArgs(argv) {
@@ -21,7 +24,15 @@ function parseArgs(argv) {
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
     const next = argv[index + 1];
-    if (key === "json" || key === "requireOpen" || key === "requireRule" || key === "skipFirewall" || key === "strict") {
+    if (
+      key === "json" ||
+      key === "requireOpen" ||
+      key === "requireRule" ||
+      key === "addRule" ||
+      key === "dryRunRule" ||
+      key === "skipFirewall" ||
+      key === "strict"
+    ) {
       args[key] = true;
       continue;
     }
@@ -35,6 +46,7 @@ function parseArgs(argv) {
   args.timeoutMs = clampInteger(args.timeoutMs, 100, 5000, defaults.timeoutMs);
   args.host = String(args.host || defaults.host).trim();
   args.ruleName = String(args.ruleName || defaults.ruleName).trim();
+  args.ruleProfile = normalizeRuleProfile(args.ruleProfile);
   return args;
 }
 
@@ -288,6 +300,66 @@ function isLanListener(listener) {
   return address === "0.0.0.0" || address === "::" || address === "[::]" || address === "";
 }
 
+function normalizeRuleProfile(value) {
+  const normalized = String(value || defaults.ruleProfile).trim();
+  const allowed = new Set(["Any", "Domain", "Private", "Public"]);
+  const title = normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
+  return allowed.has(title) ? title : defaults.ruleProfile;
+}
+
+function addWindowsFirewallRule(args) {
+  const command = suggestedRuleCommand(args);
+  if (process.platform !== "win32") {
+    return {
+      ok: false,
+      skipped: true,
+      dryRun: false,
+      command,
+      error: "Windows firewall rules can only be added on Windows.",
+    };
+  }
+  if (args.dryRunRule) {
+    return {
+      ok: true,
+      skipped: true,
+      dryRun: true,
+      command,
+      error: "",
+    };
+  }
+
+  const script = `$ErrorActionPreference = "Stop"; ${command} | Out-Null`;
+  const result = spawnSync("powershell.exe", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    script,
+  ], {
+    encoding: "utf8",
+    timeout: 12000,
+    windowsHide: true,
+  });
+
+  const stderr = (result.stderr || "").trim();
+  if (result.error || result.status !== 0) {
+    return {
+      ok: false,
+      skipped: false,
+      dryRun: false,
+      command,
+      error: result.error?.message || stderr || `powershell exited with ${result.status}`,
+    };
+  }
+  return {
+    ok: true,
+    skipped: false,
+    dryRun: false,
+    command,
+    error: "",
+  };
+}
+
 function formatListener(listener) {
   const processText = listener.processName
     ? `${listener.processName} pid=${listener.owningProcess}`
@@ -309,7 +381,7 @@ function hasBlockingFirewallProfile(networkState) {
 
 function suggestedRuleCommand(args) {
   const displayName = `${args.ruleName} ${args.port}`;
-  return `New-NetFirewallRule -DisplayName '${escapePowerShellSingle(displayName)}' -Direction Inbound -Action Allow -Protocol TCP -LocalPort ${args.port} -Profile Private`;
+  return `New-NetFirewallRule -DisplayName '${escapePowerShellSingle(displayName)}' -Direction Inbound -Action Allow -Protocol TCP -LocalPort ${args.port} -Profile ${args.ruleProfile}`;
 }
 
 function escapePowerShellSingle(value) {
@@ -393,8 +465,23 @@ async function main() {
     probeResults.push({ label: target.label, ...result });
   }
 
-  const networkState = queryWindowsNetworkState(args);
+  let networkState = queryWindowsNetworkState(args);
+  let firewallRuleAction = null;
+  if (
+    !args.skipFirewall &&
+    (args.addRule || args.dryRunRule) &&
+    (!networkState.ok || (networkState.firewallRules || []).length === 0)
+  ) {
+    firewallRuleAction = addWindowsFirewallRule(args);
+    if (args.addRule && firewallRuleAction.ok && !firewallRuleAction.dryRun) {
+      networkState = queryWindowsNetworkState(args);
+    }
+  }
   const summary = analyze({ args, lanAddresses, probeResults, networkState });
+  if (firewallRuleAction && args.addRule && !firewallRuleAction.ok) {
+    summary.ok = false;
+    summary.errors.push(`Failed to add firewall rule: ${firewallRuleAction.error}`);
+  }
 
   if (args.json) {
     console.log(JSON.stringify({
@@ -406,6 +493,7 @@ async function main() {
       firewallProfiles: networkState.firewallProfiles || [],
       networkProfiles: networkState.networkProfiles || [],
       firewallRules: networkState.firewallRules || [],
+      firewallRuleAction,
       warnings: summary.warnings,
       errors: summary.errors,
       recommendations: summary.recommendations,
@@ -454,6 +542,15 @@ async function main() {
       } else {
         print("WARN", `No enabled inbound allow rule found for TCP ${args.port}.`, args);
       }
+    }
+
+    if (firewallRuleAction?.dryRun) {
+      print("INFO", `Dry run firewall rule command: ${firewallRuleAction.command}`, args);
+    } else if (firewallRuleAction && firewallRuleAction.ok) {
+      print("OK", `Firewall allow rule added: ${firewallRuleAction.command}`, args);
+    } else if (firewallRuleAction && !firewallRuleAction.ok) {
+      print("ERROR", `Failed to add firewall rule: ${firewallRuleAction.error}`, args);
+      print("INFO", `Admin PowerShell suggestion: ${firewallRuleAction.command}`, args);
     }
 
     for (const warning of summary.warnings) {

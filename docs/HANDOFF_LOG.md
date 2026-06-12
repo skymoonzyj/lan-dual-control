@@ -20,6 +20,50 @@
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12
+开发端：Windows Codex
+本轮目标：为 Windows host 增加显式防火墙放行助手，让 Mac 反控 Windows 真机联调少一步手工复制命令，同时保持默认只读。
+完成内容：
+- `scripts/windows/check-windows-firewall.mjs` 新增 `--dryRunRule` 和 `--addRule`。
+- `--dryRunRule` 只打印将要创建的 `New-NetFirewallRule` 命令，不改系统。
+- `--addRule` 会显式尝试新增 Private TCP 入站 allow 规则；默认仍只读，不自动改防火墙。
+- `scripts/windows/start-windows-host.mjs` 新增 `--dryRunFirewallRule` / `--addFirewallRule` 并转发到底层防火墙检查。
+- PowerShell 入口新增 `-DryRunFirewallRule` / `-AddFirewallRule`。
+- `test-windows-host-start-helper.mjs` 的临时端口实启回归加入防火墙干跑断言。
+- README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `scripts/windows/check-windows-firewall.mjs`
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-firewall.mjs`
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- `node scripts/windows/check-windows-firewall.mjs --host 127.0.0.1 --port 43999 --dryRunRule`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 20000`
+- `node scripts/windows/check-windows-host-readiness.mjs --timeoutMs 20000`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 防火墙干跑打印 `New-NetFirewallRule ... -Profile Private`，没有执行系统修改。
+- 启动助手自测通过：密码安全、非交互提示拒绝、环境密码干跑、临时端口实启和防火墙干跑均通过。
+- Windows host readiness 默认 6/6 通过；只提示当前默认 `43770` 未启动，这是预期提醒。
+遗留问题：
+- 本轮不做桌面壳图形化防火墙弹窗；仍需要用户显式加参数并在管理员 PowerShell 中执行才会添加规则。
+下一步建议：
+- 后续把 `-PromptPassword -RequirePassword -DryRunFirewallRule/-AddFirewallRule` 包成 Windows 桌面壳里的图形化启动向导。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
 开发端：Mac Codex
 本轮目标：让 Mac host 输出带小数秒的 ISO timestamp，配合视频观察脚本做更可信的帧接收年龄和低延迟诊断。
 完成内容：

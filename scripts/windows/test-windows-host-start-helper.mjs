@@ -174,7 +174,7 @@ async function assertLaunchWithEnvPassword(timeoutMs) {
     "--inputMode",
     "log",
     "--requirePassword",
-    "--skipFirewallCheck",
+    "--dryRunFirewallRule",
   ], {
     cwd: repoRoot,
     env: {
@@ -212,10 +212,14 @@ async function assertLaunchWithEnvPassword(timeoutMs) {
         rejectLaunch(new Error(`Start helper exited before ready: code=${code} signal=${signal || ""}\n${output}`));
         return;
       }
+      if (!output.includes("Dry run firewall rule command")) {
+        rejectLaunch(new Error(`Start helper did not print dry-run firewall rule command.\n${output}`));
+        return;
+      }
       resolveLaunch();
     });
   });
-  print("OK", `Environment password starts Windows host on temporary port ${port}`);
+  print("OK", `Environment password starts Windows host on temporary port ${port} with firewall dry run`);
 }
 
 async function main() {

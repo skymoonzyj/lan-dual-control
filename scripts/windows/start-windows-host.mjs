@@ -21,6 +21,8 @@ const defaults = {
   timeoutMs: 8000,
   skipFirewallCheck: false,
   noRequireOpen: false,
+  addFirewallRule: false,
+  dryRunFirewallRule: false,
   promptPassword: false,
   requirePassword: false,
   dryRun: false,
@@ -42,6 +44,8 @@ function parseArgs(argv) {
     if (
       key === "skipFirewallCheck" ||
       key === "noRequireOpen" ||
+      key === "addFirewallRule" ||
+      key === "dryRunFirewallRule" ||
       key === "promptPassword" ||
       key === "requirePassword" ||
       key === "dryRun"
@@ -102,6 +106,8 @@ Options:
   --ffmpeg <path>         FFmpeg path. Auto-detects C:\\DevTools\\ffmpeg\\bin\\ffmpeg.exe
   --promptPassword        Prompt for LAN_DUAL_PASSWORD without echoing it.
   --requirePassword       Refuse to start if no password/env password was set.
+  --addFirewallRule       Try to add a Private TCP inbound firewall allow rule.
+  --dryRunFirewallRule    Print the firewall rule command without adding it.
   --wasapi                Shortcut for --audioMode wasapi
   --logInput              Shortcut for --inputMode log
   --systemInput           Shortcut for --inputMode system
@@ -305,6 +311,8 @@ function runFirewallCheck(args, env) {
     "--port",
     String(args.port),
     ...(args.noRequireOpen ? [] : ["--requireOpen"]),
+    ...(args.addFirewallRule ? ["--addRule"] : []),
+    ...(args.dryRunFirewallRule ? ["--dryRunRule"] : []),
   ];
   console.log("[INFO] Running read-only LAN/firewall check...");
   const result = spawnSync(process.execPath, commandArgs, {
