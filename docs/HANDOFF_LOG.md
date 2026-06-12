@@ -62,6 +62,43 @@
 
 日期：2026-06-13
 开发端：Windows Codex
+本轮目标：增强 Windows host readiness 的旧 build 提示，让部署体检更容易判断是否必须重启 Windows host。
+完成内容：
+- `scripts/windows/check-windows-host-readiness.mjs` 新增 Windows host runtime 源码变更摘要。
+- 当运行中 `/discovery.runtime.buildId` 落后当前 git 且旧 build 可解析时，warning 会列出旧 build 后变动过的 `apps/windows-host` 运行源码文件。
+- 如果旧 build 后没有 Windows host runtime 源码变更，warning 会明确提示没有这类变更，避免只因 Mac client/docs 前进而误判必须重启。
+- 修正 `--skipCurrentBuildCheck` 与 `--requireCurrentBuildId` 同时使用时的边界：skip 只跳过 warning，不会让显式强校验失效。
+- Windows host README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-host-readiness.mjs`
+- `node scripts/windows/check-windows-host-readiness.mjs --help`
+- 临时 Windows host stale-build 回归：用 `HEAD^` 作为运行中 build，默认 readiness warning 必须包含 Windows host runtime 变更文件。
+- 临时 Windows host 强校验回归：`--requireCurrentBuildId --skipCurrentBuildCheck` 对旧 build 仍按预期失败，并在 errors 中包含变更文件摘要。
+- `node scripts/windows/check-windows-host-readiness.mjs --json`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- stale-build 回归通过，warning/error 中均包含 `Windows host runtime changes since ...` 和 `apps/windows-host/src/windows-host-service.mjs`。
+- 默认 readiness 仍保持低风险通过；当前 `43770` 未启动时 runtime 检查正常跳过。
+遗留问题：
+- 仍需真实 Mac client 连接 Windows host 时观察旧 build 提示是否能帮助现场判断重启时机。
+下一步建议：
+- 继续补 Windows host 启动/部署体验，优先把 Windows 桌面“本机被控”启动后的 runtime/build 摘要展示得更醒目，或继续推进 Windows Graphics Capture/正式编码管线。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-13 Windows Codex
+
+日期：2026-06-13
+开发端：Windows Codex
 本轮目标：给 Windows host 补 runtime/build 诊断，避免 Mac 反控 Windows 时误连旧进程。
 完成内容：
 - Windows host 的 `/discovery` 和 `hello_ack` 新增可选 `runtime`：`processId`、`startedAt`、`uptimeSeconds`、`buildId`。

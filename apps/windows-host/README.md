@@ -183,7 +183,7 @@ node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs 
 node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --profile deep
 ```
 
-如果刚重启或部署 Windows host，可以用 runtime build 强校验确认自己连到的是新进程；默认体检只在发现旧 build 时提示 warning，`--requireCurrentBuildId` 才会让旧 build 直接失败。
+如果刚重启或部署 Windows host，可以用 runtime build 强校验确认自己连到的是新进程；默认体检只在发现旧 build 时提示 warning，且旧 build 是可解析 git commit 时会列出之后变动过的 Windows host 运行源码文件，`--requireCurrentBuildId` 才会让旧 build 直接失败。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --requireOpen --requireCurrentBuildId

@@ -5,6 +5,11 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const defaultWindowsFfmpeg = "C:\\DevTools\\ffmpeg\\bin\\ffmpeg.exe";
+const hostRuntimePaths = [
+  "apps/windows-host/package.json",
+  "apps/windows-host/server.mjs",
+  "apps/windows-host/src",
+];
 
 const defaults = {
   profile: "default",
@@ -141,10 +146,38 @@ function getGitBuildId() {
   const result = spawnSync("git", ["rev-parse", "--short", "HEAD"], {
     cwd: repoRoot,
     encoding: "utf8",
+    timeout: 3000,
     windowsHide: true,
   });
   if (result.status !== 0) return "";
   return String(result.stdout || "").trim();
+}
+
+function getChangedHostRuntimeFiles(fromBuildId, toBuildId) {
+  const from = String(fromBuildId || "").trim();
+  const to = String(toBuildId || "HEAD").trim() || "HEAD";
+  if (!from) return null;
+
+  const revParse = spawnSync("git", ["rev-parse", "--verify", "--quiet", `${from}^{commit}`], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 3000,
+    windowsHide: true,
+  });
+  if (revParse.status !== 0) return null;
+
+  const diff = spawnSync("git", ["diff", "--name-only", `${from}..${to}`, "--", ...hostRuntimePaths], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 3000,
+    windowsHide: true,
+  });
+  if (diff.status !== 0) return null;
+
+  return String(diff.stdout || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 function print(kind, text, args) {
@@ -352,17 +385,23 @@ async function checkRunningHostRuntime(args) {
     if (args.requireCurrentBuildId && !args.currentBuildId) {
       errors.push("current git build id is unavailable");
     }
-    if (args.requireCurrentBuildId && args.currentBuildId && runtime.buildId !== args.currentBuildId) {
-      errors.push(`runtime.buildId mismatch: ${runtime.buildId || "missing"} !== current ${args.currentBuildId}`);
-    }
-
-    if (
-      !args.skipCurrentBuildCheck &&
-      args.currentBuildId &&
-      runtime.buildId &&
-      runtime.buildId !== args.currentBuildId
-    ) {
-      warnings.push(`[WARN] running host build ${runtime.buildId} differs from current git ${args.currentBuildId}`);
+    if (args.currentBuildId && runtime.buildId && runtime.buildId !== args.currentBuildId) {
+      const changedHostFiles = getChangedHostRuntimeFiles(runtime.buildId, args.currentBuildId);
+      const hostSourceSummary =
+        Array.isArray(changedHostFiles) && changedHostFiles.length > 0
+          ? `; Windows host runtime changes since ${runtime.buildId}: ${changedHostFiles.slice(0, 4).join(", ")}${
+              changedHostFiles.length > 4 ? ` (+${changedHostFiles.length - 4} more)` : ""
+            }`
+          : Array.isArray(changedHostFiles)
+            ? `; no Windows host runtime source changes since ${runtime.buildId}`
+            : "";
+      const message = `running host build ${runtime.buildId} differs from current git ${args.currentBuildId}${hostSourceSummary}`;
+      if (!args.skipCurrentBuildCheck) {
+        warnings.push(`[WARN] ${message}`);
+      }
+      if (args.requireCurrentBuildId) {
+        errors.push(message);
+      }
     }
 
     summary = runtime.buildId
