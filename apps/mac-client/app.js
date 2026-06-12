@@ -72,6 +72,7 @@ const state = {
   lastVideoCodec: "",
   reconnectTotal: 0,
   fileTransferActive: false,
+  fileTransferAbortController: null,
   fileTransfers: new Map(),
   closeStatusOverride: "",
   manualDisconnect: false,
@@ -579,6 +580,7 @@ async function connect({ reconnect = false } = {}) {
     state.authenticated = false;
     stopClipboardWatch("连接关闭，监听已停止");
     resetAudioPlayback();
+    cancelActiveFileTransfer("连接关闭，文件发送已取消");
     resetVideoSurface(closeStatusOverride ? "无画面" : "连接中断");
     logEvent("连接关闭");
 
@@ -635,6 +637,7 @@ function disconnect() {
   state.authenticated = false;
   stopClipboardWatch("已断开，监听已停止");
   resetAudioPlayback();
+  cancelActiveFileTransfer("已断开，文件发送已取消");
   resetSessionDiagnostics({ resetReconnects: true });
   resetVideoSurface();
   if (elements.remoteStatus.textContent === "发现中") {
@@ -1318,6 +1321,24 @@ function updateFileClipboardButton() {
   elements.sendClipboardFilesButton.disabled = state.fileTransferActive;
 }
 
+function throwIfFileTransferCanceled(signal) {
+  if (signal?.aborted || !state.authenticated) {
+    throw new DOMException("File transfer canceled", "AbortError");
+  }
+}
+
+function cancelActiveFileTransfer(status = "文件发送已取消") {
+  if (!state.fileTransferActive && !state.fileTransferAbortController) {
+    return;
+  }
+  state.fileTransferAbortController?.abort();
+  state.fileTransferAbortController = null;
+  state.fileTransferActive = false;
+  state.fileTransfers.clear();
+  elements.fileClipboardStatus.textContent = status;
+  updateFileClipboardButton();
+}
+
 async function sendClipboardFiles() {
   if (!state.authenticated) {
     elements.fileClipboardStatus.textContent = "未连接";
@@ -1349,7 +1370,9 @@ async function sendClipboardFiles() {
   }));
 
   let sentBytes = 0;
+  const abortController = new AbortController();
   state.fileTransferActive = true;
+  state.fileTransferAbortController = abortController;
   state.fileTransfers.set(transferId, { fileCount: files.length, totalBytes, sentBytes: 0 });
   updateFileClipboardButton();
   elements.fileClipboardStatus.textContent = `准备发送 ${files.length} 个`;
@@ -1367,8 +1390,10 @@ async function sendClipboardFiles() {
     logEvent("文件剪贴板", `开始发送 ${files.length} 个文件 · ${formatBytes(totalBytes)}`);
 
     for (const [fileIndex, file] of files.entries()) {
+      throwIfFileTransferCanceled(abortController.signal);
       let chunkIndex = 0;
       if (file.size === 0) {
+        throwIfFileTransferCanceled(abortController.signal);
         send({
           type: "clipboard_file_chunk",
           transferId,
@@ -1385,8 +1410,10 @@ async function sendClipboardFiles() {
         elements.fileClipboardStatus.textContent = "发送空文件";
       }
       for (let offset = 0; offset < file.size; offset += fileChunkSizeBytes) {
+        throwIfFileTransferCanceled(abortController.signal);
         const chunk = file.slice(offset, Math.min(offset + fileChunkSizeBytes, file.size));
         const dataBase64 = arrayBufferToBase64(await chunk.arrayBuffer());
+        throwIfFileTransferCanceled(abortController.signal);
         const nextSentBytes = sentBytes + chunk.size;
         send({
           type: "clipboard_file_chunk",
@@ -1412,6 +1439,7 @@ async function sendClipboardFiles() {
       }
     }
 
+    throwIfFileTransferCanceled(abortController.signal);
     send({
       type: "clipboard_file_complete",
       transferId,
@@ -1421,13 +1449,22 @@ async function sendClipboardFiles() {
     elements.fileClipboardStatus.textContent = `已发送 ${formatBytes(sentBytes)}`;
     logEvent("文件剪贴板", `文件块发送完成，等待确认 · ${transferId}`);
   } catch (error) {
+    if (error?.name === "AbortError") {
+      logEvent("文件剪贴板取消", elements.fileClipboardStatus.textContent || "文件发送已取消");
+      return;
+    }
     const message = error?.message || "文件发送失败";
     elements.fileClipboardStatus.textContent = "发送失败";
     logEvent("文件剪贴板失败", message);
   } finally {
-    state.fileTransferActive = false;
-    elements.clipboardFileInput.value = "";
-    updateFileClipboardButton();
+    if (state.fileTransferAbortController === abortController) {
+      state.fileTransferAbortController = null;
+      state.fileTransferActive = false;
+      updateFileClipboardButton();
+    }
+    if (!state.fileTransferActive) {
+      elements.clipboardFileInput.value = "";
+    }
   }
 }
 

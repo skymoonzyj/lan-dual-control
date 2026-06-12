@@ -629,6 +629,7 @@ function buildSnapshotExpression() {
       discoverButtonText: document.querySelector("#discoverButton")?.textContent || "",
       connectButtonDisabled: document.querySelector("#connectButton")?.disabled || false,
       disconnectButtonDisabled: document.querySelector("#disconnectButton")?.disabled || false,
+      sendClipboardFilesButtonDisabled: document.querySelector("#sendClipboardFilesButton")?.disabled || false,
       clipboard: text("#clipboardStatus"),
       localClipboard: text("#localClipboardStatus"),
       fileClipboard: text("#fileClipboardStatus"),
@@ -816,6 +817,83 @@ async function verifyMacClientConnectCancel({ args, session }) {
       return true;
     })()`,
   );
+}
+
+async function verifyMacClientFileClipboardDisconnectCancel({ args, session, uploadDir }) {
+  const cancelPath = join(uploadDir, `mac-client-file-cancel-${Date.now()}.txt`);
+  const cancelText = [
+    "LAN Dual Control Mac client file clipboard cancel self-test",
+    "This file is intentionally larger than one chunk.",
+    "0123456789abcdef".repeat(12000),
+    "",
+  ].join("\n");
+  await writeFile(cancelPath, cancelText, "utf8");
+
+  await setFileInputFiles(session, "#clipboardFileInput", [cancelPath]);
+  await evaluate(
+    session,
+    `(() => {
+      window.__lanDualSentMessages = [];
+      window.__lanDualReceivedMessages = [];
+      window.__lanDualFileReadDelayMs = 650;
+      if (!window.__lanDualOriginalBlobArrayBuffer) {
+        window.__lanDualOriginalBlobArrayBuffer = Blob.prototype.arrayBuffer;
+        Blob.prototype.arrayBuffer = async function(...args) {
+          const delayMs = Number(window.__lanDualFileReadDelayMs || 0);
+          if (delayMs > 0) {
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          }
+          return window.__lanDualOriginalBlobArrayBuffer.apply(this, args);
+        };
+      }
+      const input = document.querySelector("#clipboardFileInput");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      document.querySelector("#sendClipboardFilesButton").click();
+      return true;
+    })()`,
+  );
+  await waitFor(
+    async () => {
+      const value = await evaluate(session, buildSnapshotExpression());
+      return value.sendClipboardFilesButtonDisabled &&
+        (value.fileClipboard.includes("准备") || value.fileClipboard.includes("对端准备"))
+        ? value
+        : null;
+    },
+    args.timeoutMs,
+    "Mac client file clipboard sending state",
+  );
+  await evaluate(
+    session,
+    `(() => {
+      document.querySelector("#disconnectButton").click();
+      return true;
+    })()`,
+  );
+  const canceledSnapshot = await waitFor(
+    async () => {
+      const value = await evaluate(session, buildSnapshotExpression());
+      return value.connection === "未连接" &&
+        value.fileClipboard.includes("文件发送已取消") &&
+        !value.sendClipboardFilesButtonDisabled
+        ? value
+        : null;
+    },
+    args.timeoutMs,
+    "Mac client file clipboard cancel on disconnect",
+  );
+  await delay(1000);
+  const leakedComplete = await evaluate(
+    session,
+    `(() => (window.__lanDualSentMessages || [])
+      .some((message) => message.type === "clipboard_file_complete"))()`,
+  );
+  await evaluate(session, "window.__lanDualFileReadDelayMs = 0");
+  if (leakedComplete) {
+    throw new Error("Mac client sent clipboard_file_complete after disconnect canceled file transfer");
+  }
+  print("OK", `File clipboard cancel: ${canceledSnapshot.fileClipboard}`);
 }
 
 async function run() {
@@ -1479,6 +1557,7 @@ async function run() {
       );
 
       print("OK", `File clipboard: ${fileClipboardSnapshot.fileClipboard}`);
+      await verifyMacClientFileClipboardDisconnectCancel({ args, session, uploadDir });
     }
 
     await evaluate(
