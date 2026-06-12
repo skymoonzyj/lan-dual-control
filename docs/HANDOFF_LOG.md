@@ -17,6 +17,40 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
+本轮目标：增强 Mac 输入映射静态自检，防止后续改键位时误删同义键或修饰键 fallback。
+完成内容：
+- `scripts/mac/check-input-keymap.mjs` 新增 `KeyboardEvent.code` 同义项覆盖：`Return`、`ForwardDelete`、`Help`、`OSLeft`、`OSRight`、`NumLock`。
+- `event.key` 覆盖新增别名组：`return`、`esc`、`del`、`forwarddelete`、`help`、`command`、`option`、`ctrl`、`space`。
+- 新增 `eventFlags` 静态检查，确认 `meta/command`、`alt/option`、`ctrl/control`、`shift` 都有对应 `CGEventFlags`，并保留无 `remoteModifiers` 时的 `metaKey/altKey/ctrlKey/shiftKey` fallback。
+- JSON 输出中加入 `modifierFlags` 结果，便于后续自动化读取。
+- Mac host README、当前状态、下一步和任务板已同步说明。
+修改文件：
+- `scripts/mac/check-input-keymap.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-input-keymap.mjs`
+- `node scripts/mac/check-input-keymap.mjs`
+- `node scripts/mac/check-input-keymap.mjs --json`
+验证结果：
+- `KeyboardEvent.code` 覆盖通过：原有字母/数字/符号/导航/修饰键/F1-F20/小键盘全通过，新增 aliases 6/6。
+- `event.key` 覆盖通过：原有 text/navigation/modifiers/function/numpad 全通过，新增 aliases 9/9。
+- `modifier flag coverage` 通过：command 4/4、alternate 4/4、control 4/4、shift 3/3。
+遗留问题：
+- 这轮不改变真实输入注入行为；中文输入法、组合键时序和真实 `inject` 模式仍需人工或更高层探针验证。
+下一步建议：
+- 后续改 `InputEventInjector.swift` 键盘映射、快捷键兼容或修饰键逻辑时，把 `node scripts/mac/check-input-keymap.mjs` 作为必跑回归。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12

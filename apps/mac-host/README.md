@@ -73,7 +73,7 @@ swift run lan-dual-mac-host
 node scripts/mac/check-input-keymap.mjs
 ```
 
-该脚本会解析 `InputEventInjector.swift` 的 `KeyboardEvent.code` 和 `event.key` 映射表，确认常用字母、数字、符号、导航键、修饰键、F1-F20 和小键盘都有 CGKeyCode 覆盖。它只做源码静态检查，不会发送真实键盘事件。
+该脚本会解析 `InputEventInjector.swift` 的 `KeyboardEvent.code` 和 `event.key` 映射表，确认常用字母、数字、符号、导航键、修饰键、F1-F20、小键盘、常见同义 code/key，以及 `eventFlags` 中 `meta/command`、`alt/option`、`ctrl/control`、`shift` 和布尔 fallback 都有覆盖。它只做源码静态检查，不会发送真实键盘事件。
 
 `LAN_DUAL_DEVICE_NAME` 会用于 `/discovery`、`hello_ack` 和 Bonjour/mDNS 服务名。`LAN_DUAL_BONJOUR` 默认开启；设为 `0`、`false` 或 `off` 可关闭 `_lan-dual-control._tcp` 广播。
 

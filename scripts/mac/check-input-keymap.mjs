@@ -84,6 +84,17 @@ const requiredCodeGroups = [
       "NumpadClear",
     ],
   },
+  {
+    name: "aliases",
+    keys: [
+      "Return",
+      "ForwardDelete",
+      "Help",
+      "OSLeft",
+      "OSRight",
+      "NumLock",
+    ],
+  },
 ];
 
 const requiredKeyGroups = [
@@ -134,6 +145,47 @@ const requiredKeyGroups = [
   {
     name: "numpad",
     keys: ["clear", "numlock"],
+  },
+  {
+    name: "aliases",
+    keys: [
+      "return",
+      "esc",
+      "del",
+      "forwarddelete",
+      "help",
+      "command",
+      "option",
+      "ctrl",
+      "space",
+    ],
+  },
+];
+
+const requiredModifierFlagGroups = [
+  {
+    name: "command",
+    aliases: ["meta", "command"],
+    fallback: "metaKey",
+    mask: ".maskCommand",
+  },
+  {
+    name: "alternate",
+    aliases: ["alt", "option"],
+    fallback: "altKey",
+    mask: ".maskAlternate",
+  },
+  {
+    name: "control",
+    aliases: ["ctrl", "control"],
+    fallback: "ctrlKey",
+    mask: ".maskControl",
+  },
+  {
+    name: "shift",
+    aliases: ["shift"],
+    fallback: "shiftKey",
+    mask: ".maskShift",
   },
 ];
 
@@ -204,11 +256,56 @@ function flattenMissing(results) {
   return results.flatMap((result) => result.missing.map((key) => `${result.name}:${key}`));
 }
 
+function flattenFlagIssues(results) {
+  return results.flatMap((result) => result.issues.map((issue) => `${result.name}:${issue}`));
+}
+
 function printGroupResults(title, results) {
   print("INFO", title);
   for (const result of results) {
     const suffix = result.missing.length > 0 ? ` missing=${result.missing.join(",")}` : "";
     print(result.missing.length > 0 ? "ERROR" : "OK", `${result.name}: ${result.present}/${result.required}${suffix}`);
+  }
+}
+
+function extractFunctionSlice(source, functionName) {
+  const start = source.indexOf(`private func ${functionName}`);
+  if (start < 0) {
+    throw new Error(`Unable to find ${functionName} in InputEventInjector.swift`);
+  }
+  const nextFunction = source.indexOf("\n    private func ", start + 1);
+  return source.slice(start, nextFunction > start ? nextFunction : source.length);
+}
+
+function checkModifierFlagGroups(source) {
+  const body = extractFunctionSlice(source, "eventFlags");
+  return requiredModifierFlagGroups.map((group) => {
+    const issues = [];
+    for (const alias of group.aliases) {
+      if (!body.includes(`normalizedModifiers.contains("${alias}")`)) {
+        issues.push(`alias missing ${alias}`);
+      }
+    }
+    if (!body.includes(`!hasMappedModifiers && message.${group.fallback} == true`)) {
+      issues.push(`fallback missing ${group.fallback}`);
+    }
+    if (!body.includes(`flags.insert(${group.mask})`)) {
+      issues.push(`mask missing ${group.mask}`);
+    }
+    return {
+      name: group.name,
+      required: group.aliases.length + 2,
+      present: group.aliases.length + 2 - issues.length,
+      issues,
+    };
+  });
+}
+
+function printModifierFlagResults(results) {
+  print("INFO", "modifier flag coverage");
+  for (const result of results) {
+    const suffix = result.issues.length > 0 ? ` issues=${result.issues.join("; ")}` : "";
+    print(result.issues.length > 0 ? "ERROR" : "OK", `${result.name}: ${result.present}/${result.required}${suffix}`);
   }
 }
 
@@ -237,11 +334,17 @@ async function main() {
 
   const codeResults = checkGroups(requiredCodeGroups, codeMap);
   const keyResults = checkGroups(requiredKeyGroups, keyMap);
-  const missing = [...flattenMissing(codeResults), ...flattenMissing(keyResults)];
+  const modifierFlagResults = checkModifierFlagGroups(source);
+  const missing = [
+    ...flattenMissing(codeResults),
+    ...flattenMissing(keyResults),
+    ...flattenFlagIssues(modifierFlagResults).map((issue) => `modifierFlags:${issue}`),
+  ];
   const summary = {
     source: path.relative(repoRoot, args.source),
     codeEntries: codeMap.size,
     keyEntries: keyMap.size,
+    modifierFlags: modifierFlagResults,
     missing,
     ok: missing.length === 0,
   };
@@ -253,6 +356,7 @@ async function main() {
     print("INFO", `Parsed keyCodeByCode=${summary.codeEntries}, keyCodeByKey=${summary.keyEntries}`);
     printGroupResults("KeyboardEvent.code coverage", codeResults);
     printGroupResults("event.key coverage", keyResults);
+    printModifierFlagResults(modifierFlagResults);
   }
 
   if (missing.length > 0) {
