@@ -8,7 +8,7 @@
 - 成功连接后保存最近连接，供下次一键回填，也可一键清空；只保存 host、port 和时间，不保存密码。
 - 通过 `/discovery` 发现 Windows 被控端。
 - 通过 WebSocket 完成 `hello`、`auth_request`、`session_offer`。
-- 认证失败时显示远端返回的剩余尝试次数，清理远程画面，并自动释放连接按钮，方便改密码后重连。
+- 认证失败时显示远端返回的剩余尝试次数，清理远程画面、会话诊断和远端运行信息，并自动释放连接按钮，方便改密码后重连。
 - 意外断线后最多自动重连 3 次，并会在等待重连时清理上一帧远程画面和远端运行信息；手动断开和认证失败不会自动重连。
 - 手动断开会停止剪贴板监听、取消正在发送的文件、关闭音频播放、清理上一帧远程画面，并把会话诊断和远端运行信息重置为未就绪状态。
 - 显示 Windows host 的 JPEG `video_frame`。
@@ -95,7 +95,7 @@ Mac client 页面级自检可加 `--enableAudio --expectAudioFrame` 验证音频
 
 文件剪贴板入口本机联调已验证：页面显示文件选择和发送入口，未连接/未选择文件/发送中都会禁用发送按钮，超过 32MB 上限时会直接显示“文件过大”并禁用发送；`scripts/windows/test-mac-client-browser.mjs` 会用浏览器调试协议注入临时小文件并等待 `clipboard_file_result`。自检还会模拟超限文件选择、对端拒绝文件清单和文件读取中点击断开，确认页面取消当前文件发送且不会继续发出 `clipboard_file_complete`；取消后迟到的旧 `clipboard_file_*` 消息也不会覆盖当前状态。在 Windows 上默认要求系统文件剪贴板 `saveMode=clipboard`，在 Mac/Linux 开发环境可加 `--allowClipboardFallback --mockVideo` 验证 `saveMode=temp` 回退链路。
 
-认证失败路径已固化到页面级自检：`scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3` 会启动正确密码的临时 Windows host，并让 Mac 控制端填错密码，断言页面最终保留 `认证失败 · 剩余 2/3 次`，连接按钮可重试，且视频表面回到“无画面”。
+认证失败路径已固化到页面级自检：`scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3` 会启动正确密码的临时 Windows host，并让 Mac 控制端填错密码，断言页面最终保留 `认证失败 · 剩余 2/3 次`，连接按钮可重试，视频表面回到“无画面”，且远端运行信息回到“未提供”。
 
 意外断线自动重连可用 `scripts/windows/test-mac-client-browser.mjs --expectReconnect --mockVideo --allowClipboardFallback --skipFileClipboard --timeoutMs 45000` 做页面级自检：脚本会连接临时 Windows host，杀掉 host 等页面进入自动重连状态，确认旧画面已清理且剪贴板发送入口禁用，再用同一端口重启 host 并要求页面恢复到“已连接”。
 

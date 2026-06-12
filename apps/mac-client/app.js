@@ -828,12 +828,19 @@ function authAttemptText(message) {
 
 function closeAfterAuthFailure(status) {
   state.closeStatusOverride = status;
+  state.authenticated = false;
+  setConnected(false);
+  updateRemoteRuntime(null);
+  resetSessionDiagnostics({ resetReconnects: true });
+  stopClipboardWatch("认证失败，监听已停止");
+  resetAudioPlayback();
+  cancelActiveFileTransfer("认证失败，文件发送已取消");
+  resetVideoSurface();
+  setConnectionStatus(status);
   if (state.socket && state.socket.readyState === WebSocket.OPEN) {
     state.socket.close(1000, "auth failed");
     return;
   }
-  setConnected(false);
-  setConnectionStatus(status);
 }
 
 function handleAuthResult(message) {
