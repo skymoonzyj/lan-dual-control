@@ -22,6 +22,8 @@ const defaults = {
   minFrames: 50,
   minFps: 15,
   maxGapMs: 1000,
+  maxFrameAgeMs: 0,
+  requireMonotonicTimestamp: false,
   warmupFrames: 5,
   audioMode: "wasapi",
   audioDevice: process.env.LAN_DUAL_WINDOWS_AUDIO_DEVICE || "",
@@ -66,6 +68,7 @@ function parseArgs(argv) {
   args.minFrames = Number(args.minFrames) || defaults.minFrames;
   args.minFps = Number(args.minFps) || defaults.minFps;
   args.maxGapMs = Number(args.maxGapMs) || defaults.maxGapMs;
+  args.maxFrameAgeMs = Math.max(0, Number(args.maxFrameAgeMs) || 0);
   args.warmupFrames = Math.max(0, Number(args.warmupFrames) || defaults.warmupFrames);
   args.sampleRate = Number(args.sampleRate) || defaults.sampleRate;
   args.channels = Number(args.channels) || defaults.channels;
@@ -90,6 +93,7 @@ function parseArgs(argv) {
   args.verbose = booleanArg(args.verbose);
   args.playTone = booleanArg(args.playTone);
   args.requireLevel = booleanArg(args.requireLevel);
+  args.requireMonotonicTimestamp = booleanArg(args.requireMonotonicTimestamp);
   return args;
 }
 
@@ -468,6 +472,11 @@ function assertPcmAudioFrame(frame) {
   }
 }
 
+function parseFrameTimestampMs(frame) {
+  const parsed = Date.parse(String(frame.timestamp || ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 async function observeAudioFrames(client, args) {
   const frames = [];
   const startedAt = performance.now();
@@ -476,15 +485,19 @@ async function observeAudioFrames(client, args) {
   while (performance.now() - startedAt < args.durationMs) {
     const frame = await client.waitForMessage("audio_frame", args.timeoutMs);
     const now = performance.now();
+    const receivedAtMs = Date.now();
     const gap = frames.length === 0 ? 0 : now - lastAt;
     lastAt = now;
     if (args.requirePcm) {
       assertPcmAudioFrame(frame);
     }
+    const timestampMs = parseFrameTimestampMs(frame);
     frames.push({
       atMs: now,
       relativeMs: now - startedAt,
       gapMs: gap,
+      timestampMs,
+      frameAgeMs: timestampMs > 0 ? Math.max(0, receivedAtMs - timestampMs) : null,
       frameId: Number(frame.frameId) || frames.length + 1,
       codec: frame.codec || "",
       encoding: frame.encoding || "",
@@ -523,8 +536,20 @@ function summarizeFrames(frames, startedAt) {
   const gaps = frames.slice(1).map((frame) => frame.gapMs);
   const levels = frames.map((frame) => frame.level);
   const payloads = frames.map((frame) => frame.payloadBytes);
+  const frameAges = frames.map((frame) => frame.frameAgeMs).filter((value) => Number.isFinite(value));
+  let timestampMonotonicViolations = 0;
+  for (let index = 1; index < frames.length; index += 1) {
+    const previous = frames[index - 1].timestampMs;
+    const current = frames[index].timestampMs;
+    if (previous > 0 && current > 0 && current < previous) {
+      timestampMonotonicViolations += 1;
+    }
+  }
   const avgLevel = levels.length ? levels.reduce((sum, value) => sum + value, 0) / levels.length : 0;
   const avgPayloadBytes = payloads.length ? payloads.reduce((sum, value) => sum + value, 0) / payloads.length : 0;
+  const avgFrameAgeMs = frameAges.length
+    ? frameAges.reduce((sum, value) => sum + value, 0) / frameAges.length
+    : 0;
 
   return {
     frameCount: frames.length,
@@ -536,6 +561,12 @@ function summarizeFrames(frames, startedAt) {
     avgPayloadBytes: Math.round(avgPayloadBytes),
     minPayloadBytes: payloads.length ? Math.min(...payloads) : 0,
     maxPayloadBytes: payloads.length ? Math.max(...payloads) : 0,
+    timestampFrameCount: frameAges.length,
+    minFrameAgeMs: frameAges.length ? Math.round(Math.min(...frameAges)) : null,
+    avgFrameAgeMs: frameAges.length ? Math.round(avgFrameAgeMs) : null,
+    maxFrameAgeMs: frameAges.length ? Math.round(Math.max(...frameAges)) : null,
+    timestampMonotonic: timestampMonotonicViolations === 0,
+    timestampMonotonicViolations,
     minLevel: levels.length ? Number(Math.min(...levels).toFixed(4)) : 0,
     maxLevel: levels.length ? Number(Math.max(...levels).toFixed(4)) : 0,
     avgLevel: Number(avgLevel.toFixed(4)),
@@ -561,6 +592,20 @@ function assertObservation(summary, args) {
   }
   if (args.requireLevel && summary.steady.maxLevel < args.minLevel) {
     problems.push(`steadyMaxLevel ${summary.steady.maxLevel} < ${args.minLevel}`);
+  }
+  if (args.maxFrameAgeMs > 0) {
+    if (!summary.steady.timestampFrameCount) {
+      problems.push("no steady audio_frame.timestamp values were observed");
+    } else if (summary.steady.maxFrameAgeMs > args.maxFrameAgeMs) {
+      problems.push(`steadyMaxFrameAgeMs ${summary.steady.maxFrameAgeMs} > ${args.maxFrameAgeMs}`);
+    }
+  }
+  if (args.requireMonotonicTimestamp) {
+    if (!summary.timestampFrameCount) {
+      problems.push("no audio_frame.timestamp values were observed");
+    } else if (!summary.timestampMonotonic) {
+      problems.push(`timestamp monotonic violations ${summary.timestampMonotonicViolations}`);
+    }
   }
   if (problems.length > 0) {
     throw new Error(`audio observation failed: ${problems.join("; ")}`);
@@ -625,6 +670,8 @@ async function main() {
         playTone: args.playTone,
         requireLevel: args.requireLevel,
         minLevel: args.minLevel,
+        maxFrameAgeMs: args.maxFrameAgeMs,
+        requireMonotonicTimestamp: args.requireMonotonicTimestamp,
         toneFrequency: args.toneFrequency,
         toneDurationMs: args.toneDurationMs,
         toneDelayMs: args.toneDelayMs,
@@ -649,6 +696,15 @@ async function main() {
       print("INFO", `First frame delay: ${summary.firstFrameDelayMs} ms / overall FPS: ${summary.fps}`, args);
       print("INFO", `Payload bytes avg/min/max: ${summary.steady.avgPayloadBytes}/${summary.steady.minPayloadBytes}/${summary.steady.maxPayloadBytes}`, args);
       print("INFO", `Level min/avg/max: ${summary.steady.minLevel}/${summary.steady.avgLevel}/${summary.steady.maxLevel}`, args);
+      if (summary.steady.timestampFrameCount > 0) {
+        print(
+          "INFO",
+          `Frame age steady min/avg/max: ${summary.steady.minFrameAgeMs}/${summary.steady.avgFrameAgeMs}/${summary.steady.maxFrameAgeMs} ms / monotonic=${summary.timestampMonotonic}`,
+          args,
+        );
+      } else {
+        print("WARN", "No audio_frame.timestamp values observed", args);
+      }
       print("INFO", `Codec: ${summary.codecs.join(", ") || "unknown"} / sampleRates: ${summary.sampleRates.join(", ") || "unknown"} / channels: ${summary.channels.join(", ") || "unknown"}`, args);
       print("OK", "Windows host audio observation passed", args);
     }

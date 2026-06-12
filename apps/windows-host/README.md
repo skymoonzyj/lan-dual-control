@@ -311,10 +311,16 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --screenMode system --fps 4 --durationMs 2500 --minFrames 3 --minFps 1 --maxGapMs 2000
 ```
 
-音频持续帧观察脚本可统计 Windows host 的 `audio_frame` 帧数、稳态帧率、最大帧间隔、payload 大小和电平。默认临时启动 `screenMode=mock`、`audioMode=wasapi` 的 Windows host，只观察系统声音，不额外压视频；默认会丢掉前 5 帧作为预热再计算稳态 FPS：
+音频持续帧观察脚本可统计 Windows host 的 `audio_frame` 帧数、稳态帧率、最大帧间隔、payload 大小、电平和 `audio_frame.timestamp` 接收年龄。默认临时启动 `screenMode=mock`、`audioMode=wasapi` 的 Windows host，只观察系统声音，不额外压视频；默认会丢掉前 5 帧作为预热再计算稳态 FPS：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-audio.mjs
+```
+
+需要把音频帧新鲜度纳入强校验时：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-audio.mjs --durationMs 2500 --minFrames 80 --minFps 40 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp
 ```
 
 需要缩短观察或连接已运行的 Windows host 时：

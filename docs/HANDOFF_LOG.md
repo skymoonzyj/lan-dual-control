@@ -21,6 +21,38 @@
 
 日期：2026-06-13
 开发端：Windows Codex
+本轮目标：增强 Windows host 音频观察脚本，让 Mac 反控 Windows 前能量化音频帧新鲜度和 timestamp 单调性。
+完成内容：
+- `scripts/windows/observe-windows-host-audio.mjs` 现在会解析每个 `audio_frame.timestamp`，统计接收年龄 min/avg/max。
+- 新增 `--maxFrameAgeMs <ms>`，按稳态帧接收年龄做强校验；新增 `--requireMonotonicTimestamp`，要求音频帧 timestamp 单调。
+- JSON 输出的 `observation` 和 `observation.steady` 新增 `timestampFrameCount`、`minFrameAgeMs`、`avgFrameAgeMs`、`maxFrameAgeMs`、`timestampMonotonic` 和 `timestampMonotonicViolations`。
+- Windows host README、当前状态、下一步和任务板已同步。
+修改文件：
+- `scripts/windows/observe-windows-host-audio.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/observe-windows-host-audio.mjs`
+- `node scripts/windows/observe-windows-host-audio.mjs --durationMs 2500 --minFrames 80 --minFps 40 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp --json`
+- 临时内存假 host 故意发送倒退的 `audio_frame.timestamp`，再运行 `observe-windows-host-audio --requireMonotonicTimestamp --json`。
+验证结果：
+- 正向 WASAPI 观察通过：临时 Windows host `127.0.0.1:43772`，收到 108 帧，稳态 103 帧约 50.01 FPS，最大间隔 32ms，稳态 `frameAge min/avg/max = 0/0/1ms`，timestamp 单调。
+- 负向单调性按预期失败：临时假 host 返回 exit code 1，错误为 `timestamp monotonic violations 9`。
+遗留问题：
+- 当前 `audio_frame.timestamp` 是 host 发送时刻，不是 WASAPI 采集设备的硬件时间线；后续如果需要测真实端到端音频延迟，还要引入采集侧 timestamp 或播放端回声/电平对齐方案。
+下一步建议：
+- Windows 端做 60 秒以上 WASAPI 长稳时，加 `--maxFrameAgeMs 1000 --requireMonotonicTimestamp`；Mac client 播放体验测试时，Windows 端可同时跑该脚本记录音频帧率、电平和新鲜度。
+是否改了协议：否；只消费现有 `audio_frame.timestamp` 字段。
+是否需要另一端配合：不阻塞；真实 Mac client 听感验收时可配合。
+
+## 2026-06-13 Windows Codex
+
+日期：2026-06-13
+开发端：Windows Codex
 本轮目标：增强 Windows host 视频观察脚本，让 Mac 反控 Windows 前能量化帧新鲜度和时间戳单调性。
 完成内容：
 - `scripts/windows/observe-windows-host-video.mjs` 现在会解析每个 `video_frame.timestamp`，统计帧接收年龄 min/avg/max。

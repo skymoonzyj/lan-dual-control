@@ -14,6 +14,7 @@
 - 下一步入口：`docs/NEXT_ACTIONS.md`
 
 ## Windows 端状态
+- Windows 音频观察脚本已可统计 `audio_frame.timestamp` 接收年龄，并用 `--maxFrameAgeMs` / `--requireMonotonicTimestamp` 做音频帧新鲜度强校验；本机 WASAPI 短观察通过，倒退 timestamp 的临时假 host 会按预期失败。
 
 - Windows 控制端已有中文界面、局域网连接、连接历史、画质设置、缩放模式、适应窗口黑边输入防护、认证失败剩余次数提示、诊断状态条、Mac host 运行时 PID/启动时间/build 显示、Mac H.264 启动回退原因显示、真实 Mac H.264/WebCodecs 画布解码、重配置后 H.264 关键帧等待、真实 Mac 音频 PCM 播放、文本剪贴板、远端文件托盘、远端文件托盘清理提示、桌面版远端文件分块写入 Windows 系统文件剪贴板、桌面版本机被控启动/低风险/部署/深度体检入口和桌面壳。
 - Windows 控制端可连接本机假 Mac 服务，也可用脚本探测真实 Mac 被控端；`test-windows-client-browser.mjs --diagnosticsOnly --expectDiscoveryRuntimeBuildId <build-id>` 可不输入密码验证真实 `/discovery.runtime` 是否显示到设备列表和诊断条；假 Mac 服务已对齐 3 次认证失败断开行为。
