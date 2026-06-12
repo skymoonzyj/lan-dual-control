@@ -30,6 +30,10 @@ const defaults = {
   help: false,
 };
 
+function helpRequested(argv) {
+  return argv.includes("--help") || argv.includes("-h");
+}
+
 function parseArgs(argv) {
   const args = { ...defaults };
   for (let index = 2; index < argv.length; index += 1) {
@@ -121,6 +125,7 @@ Options:
   --requireRuntimeCheck      Stop startup if the runtime/display check fails.
   --allowExisting            Do not refuse when /discovery already answers on the port.
   --dryRun                   Print the resolved launch plan and exit.
+  --help, -h                 Show this help without starting Mac host.
 `);
 }
 
@@ -409,11 +414,11 @@ function spawnHost(env) {
 }
 
 async function main() {
-  const args = parseArgs(process.argv);
-  if (args.help) {
+  if (helpRequested(process.argv)) {
     printHelp();
     return;
   }
+  const args = parseArgs(process.argv);
 
   await preparePassword(args);
   const env = makeLaunchEnv(args);

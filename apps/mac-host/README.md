@@ -61,6 +61,12 @@ node scripts/mac/check-mac-host-readiness.mjs
 
 默认体检只做低风险检查：Node/Swift、Mac host build、直接启动输入默认值、启动助手语法和干跑、键盘映射覆盖，以及当前 `/discovery` 状态。其中直接启动默认值检查会用临时本机端口确认未设置 `LAN_DUAL_INPUT_MODE` 时是 `log`、显式 `inject` 仍可覆盖，并顺手验证启动日志和 `/discovery.permissions` 的权限诊断格式。如果当前 host 没启动，默认只给出提示，不会失败；需要强制要求端口已打开时加 `--requireOpen`。脚本会把当前 `git rev-parse --short HEAD` 和运行中 `/discovery.runtime.buildId` 对比，不一致时默认只给 warning，并在能解析旧 build commit 时列出之后变动的 Mac host runtime 源码文件；部署后需要强制确认已是最新 build 时加 `--requireCurrentBuildId`。
 
+查看 Mac 侧工具参数或新增脚本后，可用统一覆盖自检确认 `scripts/mac/*.mjs` 的 `--help/-h` 都只打印帮助、快速退出，不会误触发 Swift build、启动 host 或连接真实服务：
+
+```bash
+node scripts/mac/test-mac-script-help.mjs
+```
+
 部署/真机联调常用组合可以直接使用 profile，避免手写一长串参数：
 
 ```bash

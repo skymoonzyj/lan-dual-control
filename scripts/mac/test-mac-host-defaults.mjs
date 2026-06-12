@@ -15,6 +15,10 @@ const defaults = {
   timeoutMs: 20000,
 };
 
+function helpRequested(argv) {
+  return argv.includes("--help") || argv.includes("-h");
+}
+
 function parseArgs(argv) {
   const args = { ...defaults };
   for (let index = 2; index < argv.length; index += 1) {
@@ -40,6 +44,7 @@ function printHelp() {
 
 Options:
   --timeoutMs <ms>  Per temporary host timeout. Default: 20000
+  --help, -h        Show this help without running checks
 `);
 }
 
@@ -204,11 +209,11 @@ async function ensureBinaryExists() {
 }
 
 async function main() {
-  const args = parseArgs(process.argv);
-  if (args.help) {
+  if (helpRequested(process.argv)) {
     printHelp();
     return;
   }
+  const args = parseArgs(process.argv);
 
   await ensureBinaryExists();
   const expectedInputMonitoring = await readNativeInputMonitoringAccess();

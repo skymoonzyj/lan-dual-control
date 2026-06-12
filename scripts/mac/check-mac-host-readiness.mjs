@@ -40,6 +40,10 @@ const hostRuntimePaths = [
   "apps/mac-host/Sources",
 ];
 
+function helpRequested(argv) {
+  return argv.includes("--help") || argv.includes("-h");
+}
+
 function parseArgs(argv) {
   const args = { ...defaults };
   for (let index = 2; index < argv.length; index += 1) {
@@ -155,6 +159,7 @@ Options:
   --probeStartHelper        Run start helper self-test on a temporary local port.
   --strict                  Treat warnings as failure.
   --json                    Print machine-readable JSON summary.
+  --help, -h                Show this help without running checks.
 `);
 }
 
@@ -516,11 +521,11 @@ async function checkDiscovery(args) {
 }
 
 async function main() {
-  const args = parseArgs(process.argv);
-  if (args.help) {
+  if (helpRequested(process.argv)) {
     printHelp();
     return;
   }
+  const args = parseArgs(process.argv);
 
   const results = [];
   const node = process.execPath;
