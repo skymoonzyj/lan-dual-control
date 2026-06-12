@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-13 03:00 | 记录 Windows host 当前只读基线：FFmpeg gdigrab 720p/60Hz 4 秒 230 帧、57.1 FPS、最大间隔 41 ms、帧年龄最大 1 ms；WASAPI 30 秒 1482 帧、49.98 FPS、最大间隔 33 ms、帧年龄最大 1 ms。 |
 | Windows Codex | `apps/windows-client/index.html`, `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, 交接 docs | 2026-06-13 02:49 | Windows 控制端顶部指标从随机“延迟”改为真实“帧延迟”，基于 `video_frame.timestamp` 显示帧到达新鲜度；无时间戳保持等待，未来时间戳显示“时钟偏差”；diagnosticsOnly 已覆盖正常帧年龄和时钟偏差提示。 |
 | Windows Codex | `scripts/windows/check-windows-host-readiness.mjs`, `scripts/windows/start-windows-host.mjs`, `scripts/windows/test-windows-host-start-helper.mjs`, `scripts/windows/test-windows-script-help.mjs`, Windows host README, 交接 docs | 2026-06-13 02:27 | 修正旧脚本 `-h` 短帮助被忽略的问题，新增统一 Windows `.mjs` 帮助入口覆盖自检；15 个脚本、30 条 `--help/-h` 命令全部通过。 |
 | Windows Codex | `scripts/windows/check-windows-audio-devices.mjs`, `scripts/windows/check-windows-firewall.mjs`, `scripts/windows/test-auth-retry-policy.mjs`, `scripts/windows/test-coordinate-mapping.mjs`, `scripts/windows/test-windows-input-helper.mjs`, Windows host/client README, 交接 docs | 2026-06-13 02:19 | 五个 Windows 常用检查/回归脚本新增 `--help/-h` 纯帮助入口，查参数时不会误触发设备枚举/端口探测/临时服务/input helper/断言；帮助、语法和安全回归均通过。 |

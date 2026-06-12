@@ -323,6 +323,8 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --fps 60 --useDefaultMaxScreenFps --expectSessionFps 60 --durationMs 4000 --minFrames 140 --minFps 35 --maxGapMs 1000
 ```
 
+当前 FFmpeg gdigrab 60 Hz 基线：`2026-06-13 03:00` 本机临时 host 观察 4 秒收到 230 帧，平均 57.1 FPS，最大帧间隔 41 ms，`dropped=4`，`video_frame.timestamp` 接收年龄 min/avg/max `0/0/1 ms`，timestamp 单调；请求码率 50 Mbps，`jpegQuality=0.62`，平均帧大小约 45 KB。
+
 需要把低延迟帧新鲜度纳入强校验时：
 
 ```powershell
@@ -352,6 +354,8 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-audio.mjs --
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-audio.mjs --durationMs 2500 --minFrames 80 --minFps 40 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp
 ```
+
+当前 WASAPI loopback 稳态基线：`2026-06-13 03:00` 本机临时 host 30 秒观察收到 1482 帧，稳态 49.98 FPS，最大帧间隔 33 ms，首帧约 395 ms，payload 恒定 7680 bytes，`audio_frame.timestamp` 稳态接收年龄 min/avg/max `0/0/1 ms`，timestamp 单调；本次无人值守未播放测试音，系统电平为 0。
 
 需要缩短观察或连接已运行的 Windows host 时：
 

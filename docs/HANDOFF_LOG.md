@@ -19,6 +19,32 @@
 
 ## 2026-06-13 Windows Codex
 
+日期：2026-06-13 03:00
+开发端：Windows Codex
+本轮目标：补一条 Windows host 现有视频/音频链路基线，给后续 Windows Graphics Capture 和音频体验优化做对照。
+完成内容：
+- 只读运行 Windows host 60Hz 视频观察，记录 FFmpeg gdigrab 过渡层当前表现。
+- 只读运行 Windows host WASAPI 30 秒音频观察，记录系统声音采集当前稳态表现。
+- Windows host README、当前状态和下一步文档已同步基线数据。
+修改文件：
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/windows/observe-windows-host-video.mjs --fps 60 --useDefaultMaxScreenFps --expectSessionFps 60 --durationMs 4000 --minFrames 140 --minFps 35 --requireMonotonicTimestamp --maxFrameAgeMs 1000`
+- `node scripts/windows/observe-windows-host-audio.mjs --durationMs 30000 --minFrames 1200 --minFps 40 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp`
+验证结果：
+- 视频：4 秒 230 帧，57.1 FPS，最大帧间隔 41 ms，`dropped=4`，`video_frame.timestamp` 接收年龄 min/avg/max `0/0/1 ms`，timestamp 单调，pipeline=`windows-ffmpeg-gdigrab-mjpeg`。
+- 音频：30 秒 1482 帧，稳态 49.98 FPS，最大帧间隔 33 ms，首帧约 395 ms，payload 恒定 7680 bytes，`audio_frame.timestamp` 接收年龄 min/avg/max `0/0/1 ms`，timestamp 单调；本次无人值守未播放测试音，系统电平为 0。
+遗留问题：视频仍是 FFmpeg gdigrab + MJPEG 过渡层；后续升级 Windows Graphics Capture 时需要用同一观察脚本对比帧率、最大间隔、帧年龄、码率和资源占用。
+下一步建议：做 Windows Graphics Capture 前先记录 CPU/GPU/带宽占用；实现后用同样命令做 A/B 对比，再让 Mac client 做真实反控体验验收。
+是否改了协议：否。
+是否需要另一端配合：否，后续真实 Mac 反控 Windows 体验验收需要 Mac 端配合。
+
+## 2026-06-13 Windows Codex
+
 日期：2026-06-13 02:49
 开发端：Windows Codex
 本轮目标：让 Windows 控制端直接显示真实视频帧到达新鲜度，辅助排查卡顿和“看起来不像 60Hz”。
