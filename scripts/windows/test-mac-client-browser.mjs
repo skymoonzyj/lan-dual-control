@@ -503,12 +503,13 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
       const value = await evaluate(session, buildSnapshotExpression());
       const reconnecting = value.connection.includes("自动重连") || value.connection.includes("重连");
       const logVisible = value.logs.some((line) => line.includes("自动重连"));
-      return reconnecting || logVisible ? value : null;
+      const surfaceCleared = value.video === "连接中断" && !value.imageVisible && !value.imageHasSource;
+      return (reconnecting || logVisible) && surfaceCleared ? value : null;
     },
     args.timeoutMs,
     "Mac client reconnect scheduling",
   );
-  print("OK", `Reconnect scheduled: ${reconnectingSnapshot.connection}`);
+  print("OK", `Reconnect scheduled: ${reconnectingSnapshot.connection} · ${reconnectingSnapshot.video}`);
 
   await waitFor(
     () => canBindPort(args.host, args.port),

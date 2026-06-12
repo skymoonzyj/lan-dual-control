@@ -521,6 +521,7 @@ async function connect({ reconnect = false } = {}) {
     state.authenticated = false;
     stopClipboardWatch("连接关闭，监听已停止");
     resetAudioPlayback();
+    resetVideoSurface("连接中断");
     logEvent("连接关闭");
 
     if (closeStatusOverride) {
