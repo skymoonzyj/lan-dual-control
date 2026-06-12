@@ -55,6 +55,42 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：继续验证 Windows 被控端 WASAPI loopback 稳定性，并补有声电平强校验入口。
+完成内容：
+- `scripts/windows/observe-windows-host-audio.mjs` 新增显式 `--playTone`：运行观察时通过系统默认播放设备播放短 WAV 测试音，默认关闭。
+- 新增 `--requireLevel` / `--minLevel`：可要求稳态观察期间最大电平达到阈值，证明 WASAPI loopback 捕获到了真实系统输出，而不仅是静音 PCM 帧。
+- 测试音参数支持 `--toneFrequency`、`--toneDurationMs`、`--toneDelayMs`、`--toneVolume`。
+- Windows host README、当前状态、下一步和任务板已补充 30 秒长稳与测试音电平验收结果。
+修改文件：
+- `scripts/windows/observe-windows-host-audio.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/observe-windows-host-audio.mjs`
+- `node scripts/windows/observe-windows-host-audio.mjs --durationMs 30000 --minFrames 1200 --minFps 40 --maxGapMs 1000 --timeoutMs 45000`
+- `node scripts/windows/observe-windows-host-audio.mjs --durationMs 4500 --minFrames 160 --minFps 40 --maxGapMs 1000 --timeoutMs 25000 --playTone --requireLevel --minLevel 0.02`
+- `node scripts/windows/observe-windows-host-audio.mjs --durationMs 2500 --minFrames 80 --minFps 40 --maxGapMs 1000 --timeoutMs 20000`
+- `git diff --check`
+验证结果：
+- 30 秒 WASAPI 长稳观察通过：1482 帧，稳态 50 FPS，最大间隔 33 ms，payload 固定 7680 bytes。
+- 测试音强校验通过：208 帧，稳态 49.93 FPS，最大间隔 33 ms，电平 min/avg/max 为 `0/0.0815/0.222`。
+- 默认无测试音路径仍通过：107 帧，稳态 50.28 FPS，最大间隔 32 ms，电平为 0。
+遗留问题：
+- 还需要 Mac client 连接真实 Windows host 做主观听感、延迟和音量变化验收；本轮只证明 Windows host 采集、打包和电平检测正常。
+下一步建议：
+- 用 Mac client 连接 Windows host，并在 Windows 端同步运行 `observe-windows-host-audio --useExisting` 记录电平和帧间隔。
+- 后续可跑 60 秒以上长稳，确认没有偶发大间隔或队列堆积。
+是否改了协议：否。
+是否需要另一端配合：本轮不需要；后续真实听感需要 Mac 端配合。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：增强 Windows 控制端远控画面黑边输入防护，避免窗口化/等比缩放时误操作远端。
 完成内容：
 - Windows 控制端在适应窗口黑边区域移动鼠标时会隐藏远端鼠标点，不再保留一个容易误导的位置。

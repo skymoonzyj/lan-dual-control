@@ -171,6 +171,14 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-audio.mjs
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-audio.mjs --durationMs 3000 --warmupFrames 5 --useExisting --host 127.0.0.1 --port 43770
 ```
 
+需要确认默认播放设备真的有声音被 WASAPI loopback 捕获时，可显式播放短测试音并要求电平升高：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-audio.mjs --durationMs 4500 --minFrames 160 --minFps 40 --playTone --requireLevel --minLevel 0.02
+```
+
+`--playTone` 会通过系统默认播放设备播放一段短 WAV，默认关闭；无人值守长稳观察不要开启它。
+
 认证重试策略回归脚本会同时验证 Windows host 和假 Mac 服务：错误密码剩余 `2/1/0`、第三次断开、新连接正确密码通过。
 
 ```powershell
@@ -182,5 +190,5 @@ node E:\codex\lan-dual-control\scripts\windows\test-auth-retry-policy.mjs
 1. 使用 Mac 控制端连接 `ws://Windows-IP:43770`。
 2. 把当前 FFmpeg/System.Drawing 过渡采集层升级为 Windows Graphics Capture，提升帧率和延迟表现。
 3. 把当前 PowerShell/C# SendInput 桥升级为更高性能的原生模块或常驻进程。
-4. 继续验证 WASAPI loopback 长时间稳定性、静音状态、系统音量变化和 Mac client 播放体验。
+4. 继续验证 WASAPI loopback 更长时间稳定性、系统音量变化和 Mac client 播放体验。
 5. 处理 Windows 防火墙提示和局域网放行说明。

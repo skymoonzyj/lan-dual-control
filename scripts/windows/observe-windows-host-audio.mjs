@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
-import { dirname, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -34,6 +36,13 @@ const defaults = {
   keepRunning: false,
   json: false,
   verbose: false,
+  playTone: false,
+  requireLevel: false,
+  toneFrequency: 880,
+  toneDurationMs: 1500,
+  toneDelayMs: 750,
+  toneVolume: 0.22,
+  minLevel: 0.01,
 };
 
 function parseArgs(argv) {
@@ -61,6 +70,11 @@ function parseArgs(argv) {
   args.sampleRate = Number(args.sampleRate) || defaults.sampleRate;
   args.channels = Number(args.channels) || defaults.channels;
   args.frameMs = Number(args.frameMs) || defaults.frameMs;
+  args.toneFrequency = Number(args.toneFrequency) || defaults.toneFrequency;
+  args.toneDurationMs = Number(args.toneDurationMs) || defaults.toneDurationMs;
+  args.toneDelayMs = Number(args.toneDelayMs) || defaults.toneDelayMs;
+  args.toneVolume = Math.max(0, Math.min(1, Number(args.toneVolume) || defaults.toneVolume));
+  args.minLevel = Number(args.minLevel) || defaults.minLevel;
   args.audioMode = String(args.audioMode || defaults.audioMode).trim().toLowerCase();
   args.audioDevice = String(args.audioDevice || "").trim();
   args.screenMode = String(args.screenMode || defaults.screenMode).trim().toLowerCase();
@@ -74,6 +88,8 @@ function parseArgs(argv) {
   args.keepRunning = booleanArg(args.keepRunning);
   args.json = booleanArg(args.json);
   args.verbose = booleanArg(args.verbose);
+  args.playTone = booleanArg(args.playTone);
+  args.requireLevel = booleanArg(args.requireLevel);
   return args;
 }
 
@@ -127,6 +143,107 @@ function makeEnvelope(message) {
     timestamp: new Date().toISOString(),
     ...message,
   };
+}
+
+function makeToneWav({
+  frequency = 880,
+  durationMs = 1500,
+  sampleRate = 48000,
+  channels = 2,
+  volume = 0.22,
+} = {}) {
+  const safeSampleRate = Math.max(8000, Math.min(192000, Math.round(Number(sampleRate) || 48000)));
+  const safeChannels = Math.max(1, Math.min(2, Math.round(Number(channels) || 2)));
+  const samples = Math.max(1, Math.round((safeSampleRate * Math.max(50, Number(durationMs) || 1500)) / 1000));
+  const dataBytes = samples * safeChannels * 2;
+  const buffer = Buffer.alloc(44 + dataBytes);
+  const amplitude = Math.max(0, Math.min(1, Number(volume) || 0.22)) * 32767;
+
+  buffer.write("RIFF", 0, "ascii");
+  buffer.writeUInt32LE(36 + dataBytes, 4);
+  buffer.write("WAVE", 8, "ascii");
+  buffer.write("fmt ", 12, "ascii");
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(safeChannels, 22);
+  buffer.writeUInt32LE(safeSampleRate, 24);
+  buffer.writeUInt32LE(safeSampleRate * safeChannels * 2, 28);
+  buffer.writeUInt16LE(safeChannels * 2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write("data", 36, "ascii");
+  buffer.writeUInt32LE(dataBytes, 40);
+
+  for (let sample = 0; sample < samples; sample += 1) {
+    const t = sample / safeSampleRate;
+    const fadeIn = Math.min(1, sample / Math.max(1, safeSampleRate * 0.02));
+    const fadeOut = Math.min(1, (samples - sample) / Math.max(1, safeSampleRate * 0.04));
+    const value = Math.round(Math.sin(2 * Math.PI * frequency * t) * amplitude * fadeIn * fadeOut);
+    for (let channel = 0; channel < safeChannels; channel += 1) {
+      buffer.writeInt16LE(value, 44 + (sample * safeChannels + channel) * 2);
+    }
+  }
+
+  return buffer;
+}
+
+function powershellString(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function startTonePlayback(args) {
+  if (!args.playTone) {
+    return Promise.resolve();
+  }
+  if (process.platform !== "win32") {
+    throw new Error("--playTone requires Windows default audio output");
+  }
+
+  return (async () => {
+    const tonePath = join(tmpdir(), `lan-dual-wasapi-tone-${Date.now()}-${randomUUID()}.wav`);
+    await delay(args.toneDelayMs);
+    await writeFile(tonePath, makeToneWav({
+      frequency: args.toneFrequency,
+      durationMs: args.toneDurationMs,
+      sampleRate: args.sampleRate,
+      channels: Math.min(2, args.channels),
+      volume: args.toneVolume,
+    }));
+
+    const command = [
+      "Add-Type -AssemblyName System",
+      `$player = New-Object System.Media.SoundPlayer ${powershellString(tonePath)}`,
+      "$player.PlaySync()",
+    ].join("; ");
+
+    try {
+      await new Promise((resolveTone, rejectTone) => {
+        let stderr = "";
+        const child = spawn("powershell.exe", [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          command,
+        ], {
+          windowsHide: true,
+          stdio: ["ignore", "ignore", "pipe"],
+        });
+        child.stderr.on("data", (chunk) => {
+          stderr += String(chunk);
+        });
+        child.once("error", rejectTone);
+        child.once("close", (code) => {
+          if (code === 0) {
+            resolveTone();
+            return;
+          }
+          rejectTone(new Error(`test tone playback exited ${code}${stderr.trim() ? `: ${stderr.trim()}` : ""}`));
+        });
+      });
+    } finally {
+      await rm(tonePath, { force: true });
+    }
+  })();
 }
 
 function startLocalWindowsHost(args) {
@@ -442,6 +559,9 @@ function assertObservation(summary, args) {
   if (summary.steady.maxGapMs > args.maxGapMs) {
     problems.push(`steadyMaxGapMs ${summary.steady.maxGapMs} > ${args.maxGapMs}`);
   }
+  if (args.requireLevel && summary.steady.maxLevel < args.minLevel) {
+    problems.push(`steadyMaxLevel ${summary.steady.maxLevel} < ${args.minLevel}`);
+  }
   if (problems.length > 0) {
     throw new Error(`audio observation failed: ${problems.join("; ")}`);
   }
@@ -484,7 +604,12 @@ async function main() {
     }
     print("OK", `Session audio: ${answer.audioCodec || "unknown"} / ${answer.audioEncoding || "unknown"} / ${answer.audioMode || "unknown"}`, args);
 
+    const tonePlayback = startTonePlayback(args);
+    if (args.playTone) {
+      print("INFO", `Playing test tone ${args.toneFrequency} Hz for ${args.toneDurationMs} ms after ${args.toneDelayMs} ms`, args);
+    }
     const summary = await observeAudioFrames(client, args);
+    await tonePlayback;
     assertObservation(summary, args);
 
     const result = {
@@ -497,6 +622,12 @@ async function main() {
         sampleRate: args.sampleRate,
         channels: args.channels,
         frameMs: args.frameMs,
+        playTone: args.playTone,
+        requireLevel: args.requireLevel,
+        minLevel: args.minLevel,
+        toneFrequency: args.toneFrequency,
+        toneDurationMs: args.toneDurationMs,
+        toneDelayMs: args.toneDelayMs,
       },
       discoveryAudio: audio,
       session: {
