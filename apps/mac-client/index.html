@@ -76,6 +76,23 @@
         </div>
 
         <aside class="side-rail">
+          <section class="panel audio-panel" aria-label="音频播放">
+            <div>
+              <h2>Windows 声音</h2>
+              <p>播放 Windows host 发送的 PCM 音频帧；未开启时不会请求远端声音。</p>
+            </div>
+            <label class="toggle-row">
+              <input id="audioToggle" type="checkbox">
+              播放远端声音
+            </label>
+            <label class="range-row">
+              <span>音量</span>
+              <input id="audioVolumeRange" type="range" min="0" max="100" value="80">
+              <strong id="audioVolumeText">80%</strong>
+            </label>
+            <strong id="audioPlaybackStatus" class="panel-status">未开启</strong>
+          </section>
+
           <section class="panel clipboard-panel" aria-label="文本剪贴板">
             <div>
               <h2>文本剪贴板</h2>

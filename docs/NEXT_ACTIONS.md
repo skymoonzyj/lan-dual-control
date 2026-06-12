@@ -32,7 +32,7 @@
 - 继续压测 ScreenCaptureKit + VideoToolbox H.264，重点看断开释放、连续重连、延迟和 CPU 占用；可用 `node scripts/mac/stress-mac-host.mjs --iterations 50 --expectInputMode log` 做连续连接回归。
 - 扩展 CGEvent 键盘映射，重点验证中文输入法、Command 组合键和功能键；改映射前后先跑 `node scripts/mac/check-input-keymap.mjs`。
 - 增加真实多显示器枚举和采集切换。
-- 继续完善 `apps/mac-client` Mac 控制 Windows 原型：接真实 Windows host 验证、增加文件剪贴板/音频播放、打磨键盘映射和错误提示。
+- 继续完善 `apps/mac-client` Mac 控制 Windows 原型：接真实 Windows host 验证、增加文件剪贴板、验收真实 Windows PCM 音频播放、打磨键盘映射和错误提示。
 
 ## Windows Codex 可接任务
 

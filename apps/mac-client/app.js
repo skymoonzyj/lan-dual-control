@@ -9,6 +9,10 @@ const elements = {
   remoteStatus: document.querySelector("#remoteStatus"),
   videoStatus: document.querySelector("#videoStatus"),
   audioStatus: document.querySelector("#audioStatus"),
+  audioToggle: document.querySelector("#audioToggle"),
+  audioVolumeRange: document.querySelector("#audioVolumeRange"),
+  audioVolumeText: document.querySelector("#audioVolumeText"),
+  audioPlaybackStatus: document.querySelector("#audioPlaybackStatus"),
   inputStatus: document.querySelector("#inputStatus"),
   remoteViewport: document.querySelector("#remoteViewport"),
   remoteImage: document.querySelector("#remoteImage"),
@@ -32,6 +36,14 @@ const state = {
   frameWindowCount: 0,
   lastPointerSentAt: 0,
   inputSequence: 0,
+  audioFrames: 0,
+  audioLevel: 0,
+  audioContext: null,
+  audioGain: null,
+  audioNextPlayTime: 0,
+  audioPlayedFrames: 0,
+  audioDroppedFrames: 0,
+  audioLastError: "",
 };
 
 function nowText() {
@@ -118,6 +130,7 @@ async function connect() {
   disconnect();
   setConnectionStatus("连接中");
   elements.videoStatus.textContent = "等待视频";
+  primeAudioPlayback();
   try {
     await discover();
   } catch {
@@ -142,6 +155,7 @@ async function connect() {
   socket.addEventListener("close", () => {
     setConnected(false);
     state.authenticated = false;
+    resetAudioPlayback();
     logEvent("连接关闭");
   });
   socket.addEventListener("error", () => {
@@ -156,6 +170,7 @@ function disconnect() {
   }
   state.socket = null;
   state.authenticated = false;
+  resetAudioPlayback();
   setConnected(false);
 }
 
@@ -185,7 +200,10 @@ function handleMessage(rawData) {
       handleVideoFrame(message);
       break;
     case "audio_frame":
-      elements.audioStatus.textContent = `${message.codec || "mock"} · level ${Math.round(Number(message.level || 0) * 100)}%`;
+      handleAudioFrame(message);
+      break;
+    case "audio_settings_ack":
+      handleAudioSettingsAck(message);
       break;
     case "input_ack":
       elements.inputStatus.textContent = `${message.accepted ? "已确认" : "被拒绝"} · ${message.mode || "unknown"}`;
@@ -227,11 +245,11 @@ function handleAuthResult(message) {
     type: "session_offer",
     protocolVersion: 1,
     wantVideo: true,
-    wantAudio: true,
+    wantAudio: elements.audioToggle.checked,
     wantClipboardText: true,
     wantClipboardFile: false,
     preferredVideoCodec: "mjpeg",
-    preferredAudioCodec: "opus",
+    preferredAudioCodec: "pcm-f32le",
     maxFps: 8,
     maxBandwidthKbps: 8000,
     qualityPreset: "balanced",
@@ -239,7 +257,7 @@ function handleAuthResult(message) {
     displayId: "main",
     preferredWidth: 1280,
     preferredHeight: 720,
-    audioVolume: 80,
+    audioVolume: audioVolume(),
   });
 }
 
@@ -251,6 +269,11 @@ function handleSessionAnswer(message) {
   state.remoteWidth = Number(message.width || message.screenWidth || state.remoteWidth);
   state.remoteHeight = Number(message.height || message.screenHeight || state.remoteHeight);
   elements.remoteStatus.textContent = `${state.remoteWidth}x${state.remoteHeight} · ${message.hostMode || "windows-host"}`;
+  if (message.audioEnabled) {
+    elements.audioStatus.textContent = `${message.audioCodec || "audio"} · 已协商`;
+  } else {
+    elements.audioStatus.textContent = elements.audioToggle.checked ? "对端未开启" : "未开启";
+  }
   logEvent("会话已协商", `${state.remoteWidth}x${state.remoteHeight} · ${message.videoCodec || "video"}`);
 }
 
@@ -354,6 +377,225 @@ function sendKeyboardEvent(event) {
   }
 }
 
+function audioVolume() {
+  return Math.max(0, Math.min(100, Number(elements.audioVolumeRange.value) || 0));
+}
+
+function updateAudioVolumeLabel() {
+  elements.audioVolumeText.textContent = `${audioVolume()}%`;
+}
+
+function resetAudioPlayback() {
+  if (state.audioContext) {
+    state.audioContext.close().catch(() => {});
+  }
+  state.audioContext = null;
+  state.audioGain = null;
+  state.audioNextPlayTime = 0;
+  state.audioPlayedFrames = 0;
+  state.audioDroppedFrames = 0;
+  state.audioLastError = "";
+  state.audioFrames = 0;
+  state.audioLevel = 0;
+  elements.audioPlaybackStatus.textContent = elements.audioToggle.checked ? "等待音频帧" : "未开启";
+}
+
+async function ensureAudioPlayback(sampleRate = 48000) {
+  const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextConstructor) {
+    throw new Error("当前浏览器不支持 WebAudio");
+  }
+
+  if (!state.audioContext || state.audioContext.state === "closed") {
+    try {
+      state.audioContext = new AudioContextConstructor({ sampleRate });
+    } catch {
+      state.audioContext = new AudioContextConstructor();
+    }
+    state.audioGain = state.audioContext.createGain();
+    state.audioGain.connect(state.audioContext.destination);
+    state.audioNextPlayTime = state.audioContext.currentTime + 0.04;
+  }
+
+  if (state.audioContext.state === "suspended") {
+    await state.audioContext.resume();
+  }
+  if (state.audioGain) {
+    state.audioGain.gain.value = audioVolume() / 100;
+  }
+  return state.audioContext;
+}
+
+function primeAudioPlayback() {
+  if (!elements.audioToggle.checked || audioVolume() <= 0) {
+    return;
+  }
+  void ensureAudioPlayback(48000)
+    .then(() => {
+      elements.audioPlaybackStatus.textContent = "播放已准备";
+    })
+    .catch((error) => {
+      state.audioLastError = error?.message || String(error);
+      elements.audioPlaybackStatus.textContent = `准备失败 · ${state.audioLastError}`;
+      logEvent("声音播放准备失败", state.audioLastError);
+    });
+}
+
+function sendAudioSettings() {
+  updateAudioVolumeLabel();
+  if (state.audioGain) {
+    state.audioGain.gain.value = audioVolume() / 100;
+  }
+  if (!state.authenticated) {
+    elements.audioPlaybackStatus.textContent = elements.audioToggle.checked ? "等待连接" : "未开启";
+    return;
+  }
+  send({
+    type: "audio_settings_update",
+    enabled: elements.audioToggle.checked,
+    codec: "pcm-f32le",
+    sampleRate: 48000,
+    channels: 2,
+    volume: audioVolume(),
+    muted: !elements.audioToggle.checked || audioVolume() <= 0,
+  });
+}
+
+function handleAudioSettingsAck(message) {
+  elements.audioPlaybackStatus.textContent = message.enabled
+    ? `远端已开启 · ${message.codec || "audio"}`
+    : "远端已关闭";
+  logEvent("声音设置确认", message.enabled ? `${message.codec || "audio"} · ${message.volume ?? audioVolume()}%` : "已关闭");
+}
+
+function getAudioPayload(frame) {
+  return frame.payload || frame.data || frame.samples || frame.audioData || "";
+}
+
+function base64ToBytes(payload) {
+  const binary = atob(payload);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function decodePcmAudioFrame(frame) {
+  const payload = getAudioPayload(frame);
+  if (!payload) {
+    return null;
+  }
+
+  const codec = String(frame.codec ?? "").toLowerCase();
+  const encoding = String(frame.encoding ?? "").toLowerCase();
+  if (!codec.includes("pcm") && !codec.includes("f32") && !codec.includes("s16") && !encoding.includes("pcm")) {
+    return null;
+  }
+
+  const bytes = base64ToBytes(payload);
+  const channels = Math.max(1, Math.min(8, Number(frame.channels) || 2));
+  const sampleRate = Math.max(8000, Math.min(192000, Number(frame.sampleRate) || 48000));
+  const layout = String(frame.layout ?? "interleaved").toLowerCase() === "planar" ? "planar" : "interleaved";
+  let samples;
+
+  if (codec.includes("s16")) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    samples = new Float32Array(Math.floor(bytes.byteLength / 2));
+    for (let index = 0; index < samples.length; index += 1) {
+      samples[index] = Math.max(-1, Math.min(1, view.getInt16(index * 2, true) / 32768));
+    }
+  } else {
+    const alignedLength = bytes.byteLength - (bytes.byteLength % 4);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, alignedLength);
+    samples = new Float32Array(alignedLength / 4);
+    for (let index = 0; index < samples.length; index += 1) {
+      samples[index] = Math.max(-1, Math.min(1, view.getFloat32(index * 4, true)));
+    }
+  }
+
+  const frameCount = Math.floor(samples.length / channels);
+  if (frameCount <= 0) {
+    return null;
+  }
+  return { samples, channels, sampleRate, frameCount, layout };
+}
+
+async function playPcmAudioFrame(frame) {
+  if (!elements.audioToggle.checked || audioVolume() <= 0) {
+    return false;
+  }
+
+  const decoded = decodePcmAudioFrame(frame);
+  if (!decoded) {
+    return false;
+  }
+
+  const audioContext = await ensureAudioPlayback(decoded.sampleRate);
+  const buffer = audioContext.createBuffer(decoded.channels, decoded.frameCount, decoded.sampleRate);
+  for (let channel = 0; channel < decoded.channels; channel += 1) {
+    const channelData = buffer.getChannelData(channel);
+    for (let index = 0; index < decoded.frameCount; index += 1) {
+      const sampleIndex = decoded.layout === "planar"
+        ? channel * decoded.frameCount + index
+        : index * decoded.channels + channel;
+      channelData[index] = decoded.samples[sampleIndex] || 0;
+    }
+  }
+
+  const source = audioContext.createBufferSource();
+  source.buffer = buffer;
+  source.connect(state.audioGain);
+  const now = audioContext.currentTime;
+  const queuedSeconds = Math.max(0, state.audioNextPlayTime - now);
+  if (queuedSeconds > 0.35) {
+    state.audioDroppedFrames += 1;
+    state.audioNextPlayTime = now + 0.04;
+  }
+  const playAt = Math.max(audioContext.currentTime + 0.015, state.audioNextPlayTime);
+  source.start(playAt);
+  source.onended = () => source.disconnect();
+  state.audioNextPlayTime = playAt + buffer.duration;
+  state.audioPlayedFrames += 1;
+  return true;
+}
+
+function renderAudioFrameStatus(frame) {
+  const levelText = `${Math.round(state.audioLevel * 100)}%`;
+  const codec = frame.codec || "mock";
+  const payload = getAudioPayload(frame);
+  const playbackText = state.audioPlayedFrames > 0
+    ? ` · 播放 ${state.audioPlayedFrames}`
+    : payload
+      ? elements.audioToggle.checked ? " · 等待播放" : " · 未播放"
+      : "";
+  const droppedText = state.audioDroppedFrames > 0 ? ` · 丢 ${state.audioDroppedFrames}` : "";
+  elements.audioStatus.textContent = `${codec} · level ${levelText}${playbackText}${droppedText}`;
+  elements.audioPlaybackStatus.textContent = payload
+    ? `${frame.encoding || "pcm"} · ${frame.sampleRate || 48000} Hz`
+    : `接收 ${state.audioFrames} 帧 · ${frame.audioMode || "mock"}`;
+}
+
+function handleAudioFrame(frame) {
+  state.audioFrames += 1;
+  state.audioLevel = Math.max(0, Math.min(1, Number(frame.level ?? frame.peak ?? 0)));
+  renderAudioFrameStatus(frame);
+  if (!getAudioPayload(frame)) {
+    return;
+  }
+  void playPcmAudioFrame(frame)
+    .then((played) => {
+      if (played) {
+        renderAudioFrameStatus(frame);
+      }
+    })
+    .catch((error) => {
+      state.audioLastError = error?.message || String(error);
+      elements.audioPlaybackStatus.textContent = `播放失败 · ${state.audioLastError}`;
+      logEvent("声音播放失败", state.audioLastError);
+    });
+}
+
 function makeClipboardId() {
   return `mac-client-clip-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 8)}`;
 }
@@ -401,6 +643,18 @@ elements.focusButton.addEventListener("click", () => elements.remoteViewport.foc
 elements.clearLogButton.addEventListener("click", () => {
   elements.eventLog.textContent = "";
 });
+elements.audioToggle.addEventListener("change", () => {
+  if (elements.audioToggle.checked) {
+    primeAudioPlayback();
+  } else {
+    resetAudioPlayback();
+  }
+  sendAudioSettings();
+});
+elements.audioVolumeRange.addEventListener("input", () => {
+  updateAudioVolumeLabel();
+  sendAudioSettings();
+});
 elements.sendClipboardButton.addEventListener("click", sendClipboardText);
 
 elements.remoteViewport.addEventListener("pointerdown", (event) => {
@@ -442,4 +696,5 @@ elements.remoteViewport.addEventListener("keydown", (event) => {
   sendKeyboardEvent(event);
 });
 
+updateAudioVolumeLabel();
 logEvent("Mac 控制端已就绪", "默认连接 127.0.0.1:43772，可改为 Windows 局域网 IP:43770");

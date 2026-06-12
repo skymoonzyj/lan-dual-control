@@ -51,6 +51,50 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：给 Mac 控制 Windows 原型增加远端音频播放入口。
+完成内容：
+- `apps/mac-client` 右侧新增“Windows 声音”面板，默认关闭，不会主动请求远端声音。
+- 打开“播放远端声音”后会发送 `audio_settings_update`，并显示音量、远端确认和音频帧接收状态。
+- 新增 WebAudio PCM 播放队列，支持 `pcm-f32le-base64` 过渡音频帧，兼容 `planar` / `interleaved` 布局。
+- mock 音频帧只更新状态，不会假装播放真实系统声音。
+- 断开连接或关闭声音时会关闭 AudioContext，避免后台继续占用音频资源。
+修改文件：
+- `apps/mac-client/app.js`
+- `apps/mac-client/index.html`
+- `apps/mac-client/styles.css`
+- `apps/mac-client/README.md`
+- `README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/server.mjs`
+- `node --check apps/mac-client/app.js`
+- `git diff --check`
+- 本机启动 Windows host 回退服务：`LAN_DUAL_PORT=43772 LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_WINDOWS_INPUT_MODE=log node server.mjs`
+- 本机启动 Mac client：`node server.mjs`
+- 内置浏览器打开 `http://127.0.0.1:5188/`，连接 `127.0.0.1:43772`，再打开“播放远端声音”。
+验证结果：
+- 默认连接后音频状态为 `未开启`，说明未主动请求远端音频。
+- 打开声音后收到 `audio_settings_ack`：`mock-opus · 80%`。
+- 页面显示 mock 音频帧接收状态：`接收 5 帧 · mock`。
+- Windows host 日志确认：`音频设置已更新：开启 / 80%`。
+- 临时 `43772` 和 `5188` 测试端口已关闭。
+遗留问题：
+- 本机 macOS 只能验证 mock 音频帧和播放入口状态；真实 PCM 播放需要 Windows host 配置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 或后续 WASAPI loopback 后，在真实 Windows 上确认可听见声音。
+- 目前没有音频延迟/漂移 UI，只显示播放帧数和丢帧计数。
+下一步建议：
+- Windows 端可用真实 DirectShow loopback/虚拟声卡设备启动 Windows host，然后让 Mac client 打开“播放远端声音”，确认 `pcm-f32le-base64` 可播放。
+- Mac 端后续继续补文件剪贴板和更完整的错误提示。
+是否改了协议：否；复用现有 `audio_settings_update`、`audio_settings_ack` 和 `audio_frame`。
+是否需要另一端配合：真实 Windows PCM 播放验收需要 Windows 端提供真实 PCM 音频帧。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：给 Mac 控制 Windows 原型增加文本剪贴板发送入口。
 完成内容：
 - `apps/mac-client` 右侧新增“文本剪贴板”面板，可输入文字并发送到 Windows host。

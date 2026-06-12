@@ -27,7 +27,8 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
@@ -125,6 +126,27 @@ input {
 input:focus {
   border-color: var(--forest);
   box-shadow: 0 0 0 4px rgba(28, 75, 60, 0.12);
+}
+
+input[type="checkbox"],
+input[type="range"] {
+  width: auto;
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--forest);
+}
+
+input[type="range"] {
+  accent-color: var(--forest);
 }
 
 textarea {
@@ -277,21 +299,25 @@ button:disabled {
   display: none;
 }
 
+.audio-panel,
 .clipboard-panel,
 .log-panel {
   display: grid;
   padding: 18px;
 }
 
+.audio-panel,
 .clipboard-panel {
   gap: 14px;
 }
 
+.audio-panel h2,
 .clipboard-panel h2 {
   margin: 0;
   font-size: 1.1rem;
 }
 
+.audio-panel p,
 .clipboard-panel p {
   margin: 8px 0 0;
   color: var(--muted);
@@ -299,11 +325,29 @@ button:disabled {
   line-height: 1.6;
 }
 
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.range-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
 .clipboard-actions {
   align-items: center;
   justify-content: space-between;
 }
 
+.panel-status,
 .clipboard-actions strong {
   color: var(--muted);
   font-size: 0.85rem;

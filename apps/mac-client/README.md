@@ -8,6 +8,7 @@
 - 显示 Windows host 的 JPEG `video_frame`。
 - 向 Windows host 发送鼠标移动、按钮、滚轮和键盘 `input_event`。
 - 手动发送文本 `clipboard_text` 到 Windows host，并显示 `clipboard_ack` 写入结果。
+- 可手动开启远端声音，播放 `pcm-f32le-base64` PCM `audio_frame`，mock 音频帧只显示状态。
 - 显示 `input_ack`、视频帧和连接日志。
 
 ## 运行
@@ -46,7 +47,7 @@ LAN_DUAL_PORT=43772 LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_WINDOWS_INPUT_MODE=log node
 
 - 这是 Web 原型，不是 SwiftUI/原生桌面窗口。
 - 目前只显示 JPEG/data-url 视频帧；后续再接 H.264/WebCodecs 或原生解码。
-- 音频帧只显示状态，尚未播放 Windows host 音频。
+- 音频播放当前只覆盖 PCM 过渡格式；真实 Windows 系统声音需要 Windows host 配置 DirectShow loopback/虚拟声卡或后续 WASAPI loopback 后再端到端验收。
 - 当前只支持手动发送文本剪贴板；文件剪贴板和自动监听本机剪贴板后续再接。
 - 键盘映射把 Mac `Command` 当作 Windows `Ctrl` 发送，方便 `Command+C/V` 控制 Windows 常用快捷键。
 - 浏览器安全限制下，必须点击远程画面后才会发送键盘事件。
@@ -59,3 +60,5 @@ node --check apps/mac-client/app.js
 ```
 
 本机联调已验证：连接 `127.0.0.1:43772` Windows host 回退服务后，发送文本剪贴板会收到 `clipboard_ack`，非 Windows 环境显示 `memory-only` 回退模式。
+
+音频入口本机联调已验证：打开“播放远端声音”后，Windows host mock 音频帧会开始接收并更新状态；真实 PCM 播放需要在 Windows 机器上用 `pcm-f32le-base64` 音频设备继续验收。
