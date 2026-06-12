@@ -625,6 +625,8 @@ function buildSnapshotExpression() {
         };
       })(),
       input: text("#inputStatus"),
+      discoverButtonDisabled: document.querySelector("#discoverButton")?.disabled || false,
+      discoverButtonText: document.querySelector("#discoverButton")?.textContent || "",
       connectButtonDisabled: document.querySelector("#connectButton")?.disabled || false,
       disconnectButtonDisabled: document.querySelector("#disconnectButton")?.disabled || false,
       clipboard: text("#clipboardStatus"),
@@ -725,6 +727,32 @@ function matchesExpectedAuthFailure(snapshot, args) {
     return false;
   }
   return true;
+}
+
+async function verifyMacClientDiscoverButton({ args, session }) {
+  await clickElement(session, "#discoverButton");
+  const discoveringSnapshot = await waitFor(
+    async () => {
+      const value = await evaluate(session, buildSnapshotExpression());
+      return value.remote === "发现中" &&
+        value.discoverButtonDisabled &&
+        value.discoverButtonText === "发现中"
+        ? value
+        : null;
+    },
+    args.timeoutMs,
+    "Mac client discover button busy state",
+  );
+  const discoveredSnapshot = await waitFor(
+    async () => {
+      const value = await evaluate(session, buildSnapshotExpression());
+      const buttonReset = !value.discoverButtonDisabled && value.discoverButtonText === "发现";
+      return buttonReset && value.remote !== "发现中" && value.remote !== "发现失败" ? value : null;
+    },
+    args.timeoutMs,
+    "Mac client discover button reset",
+  );
+  print("OK", `Discover button: ${discoveringSnapshot.discoverButtonText} -> ${discoveredSnapshot.remote}`);
 }
 
 async function verifyMacClientConnectCancel({ args, session }) {
@@ -890,6 +918,7 @@ async function run() {
       })()`,
     );
     let lastSnapshot = null;
+    await verifyMacClientDiscoverButton({ args, session });
     await verifyMacClientConnectCancel({ args, session });
     const connectStartedAt = Date.now();
     await evaluate(

@@ -77,6 +77,7 @@ const state = {
   manualDisconnect: false,
   connectAttemptId: 0,
   discoveryAbortController: null,
+  discoveryRequestId: 0,
   reconnectAttempts: 0,
   reconnectTimer: null,
   reconnectStableTimer: null,
@@ -191,6 +192,11 @@ function resetVideoSurface(status = "无画面") {
   elements.videoStatus.textContent = status;
 }
 
+function setDiscoverButtonBusy(busy) {
+  elements.discoverButton.disabled = busy;
+  elements.discoverButton.textContent = busy ? "发现中" : "发现";
+}
+
 function clearReconnectTimers() {
   if (state.reconnectTimer) {
     window.clearTimeout(state.reconnectTimer);
@@ -228,6 +234,7 @@ function cancelPendingDiscovery() {
     state.discoveryAbortController.abort();
     state.discoveryAbortController = null;
   }
+  state.discoveryRequestId += 1;
 }
 
 function beginConnectAttempt() {
@@ -476,8 +483,12 @@ function markCustomVideoSettings() {
   sendDisplaySettings();
 }
 
-async function discover({ signal } = {}) {
+async function discover({ signal, lockButton = true } = {}) {
+  const requestId = ++state.discoveryRequestId;
   const url = `${targetBaseUrl()}/discovery`;
+  if (lockButton) {
+    setDiscoverButtonBusy(true);
+  }
   elements.remoteStatus.textContent = "发现中";
   try {
     const response = await fetch(url, { cache: "no-store", signal });
@@ -485,16 +496,24 @@ async function discover({ signal } = {}) {
       throw new Error(`HTTP ${response.status}`);
     }
     const payload = await response.json();
-    elements.remoteStatus.textContent = `${payload.deviceName || payload.hostName || "Windows"} · ${payload.platform || "unknown"}`;
-    logEvent("发现成功", `${payload.host || elements.hostInput.value}:${payload.port || elements.portInput.value}`);
+    if (requestId === state.discoveryRequestId) {
+      elements.remoteStatus.textContent = `${payload.deviceName || payload.hostName || "Windows"} · ${payload.platform || "unknown"}`;
+      logEvent("发现成功", `${payload.host || elements.hostInput.value}:${payload.port || elements.portInput.value}`);
+    }
     return payload;
   } catch (error) {
     if (signal?.aborted || error?.name === "AbortError") {
       throw error;
     }
-    elements.remoteStatus.textContent = "发现失败";
-    logEvent("发现失败", error.message);
+    if (requestId === state.discoveryRequestId) {
+      elements.remoteStatus.textContent = "发现失败";
+      logEvent("发现失败", error.message);
+    }
     throw error;
+  } finally {
+    if (lockButton && requestId === state.discoveryRequestId) {
+      setDiscoverButtonBusy(false);
+    }
   }
 }
 
@@ -608,6 +627,7 @@ function scheduleReconnect(reason) {
 
 function disconnect() {
   cancelConnectAttempt();
+  setDiscoverButtonBusy(false);
   state.manualDisconnect = true;
   clearReconnectTimers();
   state.closeStatusOverride = "";
@@ -1441,7 +1461,7 @@ function handleClipboardFileResult(message) {
 }
 
 elements.discoverButton.addEventListener("click", () => {
-  void discover();
+  void discover().catch(() => {});
 });
 
 elements.connectButton.addEventListener("click", () => {
