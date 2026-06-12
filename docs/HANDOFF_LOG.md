@@ -21,6 +21,38 @@
 
 日期：2026-06-13
 开发端：Mac Codex
+本轮目标：收口 Mac client 手动断开后的远端运行诊断，避免上一段 Windows host PID/build 残留。
+完成内容：
+- `apps/mac-client` 手动断开时会清空远端 runtime 状态，“远端运行”回到“未提供”。
+- `scripts/windows/test-mac-client-browser.mjs` 的手动断开诊断重置断言新增 `remoteRuntime === "未提供"`。
+- Mac client README 和任务板已同步该行为。
+修改文件：
+- `apps/mac-client/app.js`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/04-task-board.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard --clientPort 5235 --debugPort 9385 --timeoutMs 60000`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --clientPort 5236 --debugPort 9386 --timeoutMs 60000`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --expectReconnect --skipFileClipboard --clientPort 5237 --debugPort 9387 --timeoutMs 60000`
+验证结果：
+- 三条页面级回归均通过，断开输出均包含 `Disconnect reset: 无画面 / 未就绪 / 未接收 / 未开启 / 0 次 / 未提供`。
+- 完整文件剪贴板路径和自动重连路径均未回归。
+遗留问题：
+- 未连接真实 Windows host 验收该 UI 清理；临时 Windows host 已覆盖 runtime 从有值到断开清空的路径。
+下一步建议：
+- 继续推进真实 Windows host WASAPI 到 Mac client 的听感/延迟验收，或继续做 Mac host 真实输入安全验收。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-13 Mac Codex
+
+日期：2026-06-13
+开发端：Mac Codex
 本轮目标：让 Mac client 消费 Windows host 新增的可选 runtime/build 诊断，避免 Mac 反控 Windows 时误连旧进程。
 完成内容：
 - `apps/mac-client` 会在“会话诊断”里显示 Windows host 的可选 runtime 信息：PID、运行时长、启动时间和 build。

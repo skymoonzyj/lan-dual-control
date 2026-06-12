@@ -1825,9 +1825,10 @@ async function run() {
           ? value.audioFlowMetric === "等待音频"
           : value.audioFlowMetric === "未开启";
         const reconnectOk = value.reconnectMetric === "0 次";
+        const runtimeOk = value.remoteRuntime === "未提供";
         const surfaceCleared = !value.imageVisible && !value.imageHasSource;
         const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
-        return connectionOk && videoStatusOk && firstVideoOk && videoFlowOk && audioFlowOk && reconnectOk && surfaceCleared && clipboardButtonsDisabled
+        return connectionOk && videoStatusOk && firstVideoOk && videoFlowOk && audioFlowOk && reconnectOk && runtimeOk && surfaceCleared && clipboardButtonsDisabled
           ? value
           : null;
       },
@@ -1836,7 +1837,7 @@ async function run() {
     );
     print(
       "OK",
-      `Disconnect reset: ${disconnectSnapshot.video} / ${disconnectSnapshot.firstVideoMetric} / ${disconnectSnapshot.videoFlowMetric} / ${disconnectSnapshot.audioFlowMetric} / ${disconnectSnapshot.reconnectMetric}`,
+      `Disconnect reset: ${disconnectSnapshot.video} / ${disconnectSnapshot.firstVideoMetric} / ${disconnectSnapshot.videoFlowMetric} / ${disconnectSnapshot.audioFlowMetric} / ${disconnectSnapshot.reconnectMetric} / ${disconnectSnapshot.remoteRuntime}`,
     );
     print("OK", "Mac client browser self-test passed");
   } finally {

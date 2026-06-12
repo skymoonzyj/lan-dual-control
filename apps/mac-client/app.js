@@ -730,6 +730,7 @@ function disconnect() {
   stopClipboardWatch("已断开，监听已停止");
   resetAudioPlayback();
   cancelActiveFileTransfer("已断开，文件发送已取消");
+  updateRemoteRuntime(null);
   resetSessionDiagnostics({ resetReconnects: true });
   resetVideoSurface();
   if (elements.remoteStatus.textContent === "发现中") {
