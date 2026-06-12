@@ -25,6 +25,37 @@ function clampNumber(value, min, max, fallback) {
   return Math.min(max, Math.max(min, number));
 }
 
+function hasConfiguredValue(value) {
+  return String(value ?? "").trim() !== "";
+}
+
+function normalizeBandwidthKbps(value, fallback = 50000) {
+  return Math.round(clampNumber(value, 1000, 200000, fallback));
+}
+
+function normalizeJpegQuality(value, fallback = 0.7) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return fallback;
+  }
+  if (number > 1) {
+    return clampNumber(number, 35, 92, fallback * 100) / 100;
+  }
+  return clampNumber(number, 0.1, 0.95, fallback);
+}
+
+function jpegQualityPercent(jpegQuality) {
+  return Math.round(clampNumber(jpegQuality, 0.1, 0.95, 0.7) * 100);
+}
+
+function normalizeQualityPreset(value) {
+  const preset = String(value ?? "balanced").trim().toLowerCase();
+  if (["smooth", "balanced", "sharp", "custom"].includes(preset)) {
+    return preset;
+  }
+  return "balanced";
+}
+
 function normalizeScreenMode(value) {
   const mode = String(value ?? "auto").trim().toLowerCase();
   if (mode === "mock") {
@@ -139,8 +170,8 @@ function hasFfmpegGdigrabSync({ ffmpegCommand = "ffmpeg", logger } = {}) {
   return `${result.stdout}\n${result.stderr}`.includes("gdigrab");
 }
 
-function qscaleFromJpegQuality(quality) {
-  const normalized = (clampNumber(quality, 35, 92, 70) - 35) / (92 - 35);
+function qscaleFromJpegQuality(jpegQuality) {
+  const normalized = (jpegQualityPercent(jpegQuality) - 35) / (92 - 35);
   return Math.round(Math.min(31, Math.max(2, 31 - normalized * 26)));
 }
 
@@ -282,7 +313,9 @@ export class WindowsScreenCaptureCoordinator {
     this.ffmpegCommand = process.env.LAN_DUAL_FFMPEG || "ffmpeg";
     this.ffmpegAvailable = hasFfmpegGdigrabSync({ ffmpegCommand: this.ffmpegCommand, logger });
     this.mode = this.resolveMode();
-    this.quality = clampNumber(process.env.LAN_DUAL_WINDOWS_JPEG_QUALITY, 35, 92, 70);
+    this.jpegQualityOverride = hasConfiguredValue(process.env.LAN_DUAL_WINDOWS_JPEG_QUALITY)
+      ? normalizeJpegQuality(process.env.LAN_DUAL_WINDOWS_JPEG_QUALITY)
+      : null;
     this.captureTimeoutMs = clampNumber(process.env.LAN_DUAL_WINDOWS_CAPTURE_TIMEOUT_MS, 1000, 12000, 5000);
     this.maxScreenFps = this.mode === ffmpegMode
       ? clampNumber(process.env.LAN_DUAL_WINDOWS_MAX_SCREEN_FPS, 1, 60, 30)
@@ -388,13 +421,56 @@ export class WindowsScreenCaptureCoordinator {
     return Math.min(clampNumber(value, 1, 240, this.maxScreenFps), this.maxScreenFps);
   }
 
+  jpegQualityForSettings({ qualityPreset = "balanced", maxBandwidthKbps = 50000 } = {}) {
+    if (this.jpegQualityOverride !== null) {
+      return this.jpegQualityOverride;
+    }
+
+    const bandwidthKbps = normalizeBandwidthKbps(maxBandwidthKbps);
+    let baseQuality;
+    switch (normalizeQualityPreset(qualityPreset)) {
+      case "smooth":
+        baseQuality = 0.42;
+        break;
+      case "sharp":
+        baseQuality = 0.72;
+        break;
+      case "custom":
+        baseQuality = bandwidthKbps >= 40000 ? 0.68 : 0.56;
+        break;
+      default:
+        baseQuality = 0.56;
+        break;
+    }
+
+    if (bandwidthKbps <= 10000) {
+      return Math.max(0.35, baseQuality - 0.12);
+    }
+    if (bandwidthKbps >= 40000) {
+      return Math.min(0.82, baseQuality + 0.06);
+    }
+    return baseQuality;
+  }
+
+  jpegQualityForSession(session) {
+    return normalizeJpegQuality(
+      session.jpegQuality,
+      this.jpegQualityForSettings({
+        qualityPreset: session.qualityPreset,
+        maxBandwidthKbps: session.maxBandwidthKbps,
+      }),
+    );
+  }
+
   negotiate(message) {
     const activeDisplay = this.pickDisplay(message.displayId);
     const width = clampNumber(message.preferredWidth, 320, 3840, activeDisplay.width || 1920);
     const height = clampNumber(message.preferredHeight, 180, 2160, activeDisplay.height || 1080);
     const requestedFps = clampNumber(message.maxFps, 1, 240, this.maxScreenFps);
     const fps = this.normalizeFps(requestedFps);
-    const maxBandwidthKbps = Number(message.maxBandwidthKbps) || 50000;
+    const maxBandwidthKbps = normalizeBandwidthKbps(message.maxBandwidthKbps);
+    const qualityPreset = normalizeQualityPreset(message.qualityPreset);
+    const jpegQuality = this.jpegQualityForSettings({ qualityPreset, maxBandwidthKbps });
 
     return {
       width,
@@ -404,6 +480,8 @@ export class WindowsScreenCaptureCoordinator {
       maxScreenFps: this.maxScreenFps,
       frameIntervalMs: Math.round(1000 / fps),
       maxBandwidthKbps,
+      qualityPreset,
+      jpegQuality,
       videoCodec: this.getVideoCodec(),
       videoEncoding: "data-url",
       displays: this.getDisplays(),
@@ -418,6 +496,9 @@ export class WindowsScreenCaptureCoordinator {
     const activeDisplay = this.pickDisplay(message.displayId || session.activeDisplayId);
     const requestedFps = clampNumber(message.fps, 1, 240, session.requestedFps || session.fps);
     const fps = this.normalizeFps(requestedFps);
+    const maxBandwidthKbps = normalizeBandwidthKbps(message.maxBandwidthKbps, session.maxBandwidthKbps);
+    const qualityPreset = normalizeQualityPreset(message.qualityPreset || session.qualityPreset);
+    const jpegQuality = this.jpegQualityForSettings({ qualityPreset, maxBandwidthKbps });
 
     return {
       ...session,
@@ -435,7 +516,9 @@ export class WindowsScreenCaptureCoordinator {
       requestedFps,
       maxScreenFps: this.maxScreenFps,
       frameIntervalMs: Math.round(1000 / fps),
-      maxBandwidthKbps: Number(message.maxBandwidthKbps) || session.maxBandwidthKbps,
+      maxBandwidthKbps,
+      qualityPreset,
+      jpegQuality,
       videoCodec: this.getVideoCodec(),
       videoEncoding: "data-url",
       hostMode: this.makeHostMode(),
@@ -495,6 +578,7 @@ export class WindowsScreenCaptureCoordinator {
     const width = clampNumber(session.width, 320, 3840, activeDisplay.width || 1920);
     const height = clampNumber(session.height, 180, 2160, activeDisplay.height || 1080);
     const fps = this.normalizeFps(session.fps);
+    const jpegQuality = this.jpegQualityForSession(session);
     return [
       activeDisplay.id,
       activeDisplay.x,
@@ -504,7 +588,7 @@ export class WindowsScreenCaptureCoordinator {
       width,
       height,
       fps,
-      this.quality,
+      jpegQuality.toFixed(3),
     ].join(":");
   }
 
@@ -513,6 +597,7 @@ export class WindowsScreenCaptureCoordinator {
     const width = clampNumber(session.width, 320, 3840, activeDisplay.width || 1920);
     const height = clampNumber(session.height, 180, 2160, activeDisplay.height || 1080);
     const fps = this.normalizeFps(session.fps);
+    const jpegQuality = this.jpegQualityForSession(session);
     const key = this.makeFfmpegKey(session);
 
     if (this.ffmpegProcess && this.ffmpegKey === key) {
@@ -545,7 +630,7 @@ export class WindowsScreenCaptureCoordinator {
       "-vf",
       `scale=${width}:${height}:flags=fast_bilinear`,
       "-q:v",
-      String(qscaleFromJpegQuality(this.quality)),
+      String(qscaleFromJpegQuality(jpegQuality)),
       "-f",
       "image2pipe",
       "-vcodec",
@@ -679,6 +764,9 @@ export class WindowsScreenCaptureCoordinator {
       fps: session.fps,
       requestedFps: session.requestedFps,
       maxScreenFps: session.maxScreenFps,
+      maxBandwidthKbps: session.maxBandwidthKbps,
+      qualityPreset: session.qualityPreset,
+      jpegQuality: this.jpegQualityForSession(session),
       frameIntervalMs: session.frameIntervalMs ?? Math.round(1000 / (session.fps || 1)),
       codec: "jpeg",
       encoding: "data-url",
@@ -701,7 +789,7 @@ export class WindowsScreenCaptureCoordinator {
         displayIndex: Number(activeDisplay.index) || 0,
         targetWidth: width,
         targetHeight: height,
-        quality: this.quality,
+        quality: jpegQualityPercent(this.jpegQualityForSession(session)),
       }),
       { timeoutMs: this.captureTimeoutMs },
     );
@@ -722,6 +810,9 @@ export class WindowsScreenCaptureCoordinator {
       fps: session.fps,
       requestedFps: session.requestedFps,
       maxScreenFps: session.maxScreenFps,
+      maxBandwidthKbps: session.maxBandwidthKbps,
+      qualityPreset: session.qualityPreset,
+      jpegQuality: this.jpegQualityForSession(session),
       frameIntervalMs: session.frameIntervalMs ?? Math.round(1000 / (session.fps || 1)),
       codec: "jpeg",
       encoding: "data-url",
@@ -775,6 +866,9 @@ export class WindowsScreenCaptureCoordinator {
       fps: session.fps,
       requestedFps: session.requestedFps,
       maxScreenFps: session.maxScreenFps,
+      maxBandwidthKbps: session.maxBandwidthKbps,
+      qualityPreset: session.qualityPreset,
+      jpegQuality: this.jpegQualityForSession(session),
       frameIntervalMs: session.frameIntervalMs ?? Math.round(1000 / (session.fps || 1)),
       codec: "mock-svg",
       encoding: "data-url",

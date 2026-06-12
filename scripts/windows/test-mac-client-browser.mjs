@@ -694,6 +694,18 @@ async function run() {
     ) {
       throw new Error(`Mac client session video settings mismatch: ${JSON.stringify(sessionSettings)}`);
     }
+    const sessionAnswer = await evaluate(
+      session,
+      `(() => [...(window.__lanDualReceivedMessages || [])].find((message) => message.type === "session_answer"))()`,
+    );
+    const sessionJpegQuality = Number(sessionAnswer?.jpegQuality);
+    if (
+      Number(sessionAnswer?.maxBandwidthKbps) !== 20000 ||
+      sessionAnswer?.qualityPreset !== "balanced" ||
+      !(sessionJpegQuality >= 0.5 && sessionJpegQuality <= 0.62)
+    ) {
+      throw new Error(`Windows host session bandwidth/quality mismatch: ${JSON.stringify(sessionAnswer)}`);
+    }
     print("OK", `Video settings: ${videoSnapshot.displaySettings}`);
 
     await evaluate(
@@ -734,7 +746,13 @@ async function run() {
           latestDisplaySettings?.audio === Boolean(value.audioToggleChecked);
         const ackOk =
           latestDisplayAck?.accepted === true &&
-          Number(latestDisplayAck?.requestedFps) === 60;
+          Number(latestDisplayAck?.width) === 2560 &&
+          Number(latestDisplayAck?.height) === 1440 &&
+          Number(latestDisplayAck?.requestedFps) === 60 &&
+          Number(latestDisplayAck?.maxBandwidthKbps) === 40000 &&
+          latestDisplayAck?.qualityPreset === "sharp" &&
+          Number(latestDisplayAck?.jpegQuality) >= 0.74 &&
+          Number(latestDisplayAck?.jpegQuality) <= 0.82;
         const statusOk =
           value.qualityPreset === "sharp" &&
           value.resolution === "2560x1440" &&

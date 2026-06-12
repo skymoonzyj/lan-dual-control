@@ -17,6 +17,48 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
+本轮目标：让 Windows 被控端真正按控制端下发的码率/Mbps 调整 MJPEG/JPEG 压缩质量。
+完成内容：
+- Windows host 现在会把既有 `qualityPreset` 和 `maxBandwidthKbps` 换算为实际 `jpegQuality`，并用于 FFmpeg gdigrab MJPEG 的 `-q:v` 以及 System.Drawing JPEG 质量。
+- 未设置 `LAN_DUAL_WINDOWS_JPEG_QUALITY` 时自动按码率计算；设置该环境变量时仍可强制覆盖质量，便于后续排查。
+- `session_answer`、`display_settings_ack` 和 `video_frame` 现在会带回 `qualityPreset`、`maxBandwidthKbps` 和 `jpegQuality`，对齐既有协议诊断字段。
+- `observe-windows-host-video.mjs` 输出请求码率、实际会话码率和 JPEG 质量；`test-mac-client-browser.mjs` 增加 Windows host 回执断言，确认默认 20 Mbps 和高清 40 Mbps 真正被接收。
+修改文件：
+- `apps/windows-host/src/windows-screen-capture.mjs`
+- `apps/windows-host/src/windows-host-service.mjs`
+- `apps/windows-host/README.md`
+- `scripts/windows/observe-windows-host-video.mjs`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `npm.cmd run check` in `apps/windows-host`
+- `node --check scripts/windows/observe-windows-host-video.mjs`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/observe-windows-host-video.mjs --fps 30 --bandwidthKbps 5000 --qualityPreset smooth --durationMs 3000 --minFrames 60 --minFps 20 --maxGapMs 1000 --json`
+- `node scripts/windows/observe-windows-host-video.mjs --fps 30 --bandwidthKbps 40000 --qualityPreset sharp --durationMs 3000 --minFrames 60 --minFps 20 --maxGapMs 1000 --json`
+- `node scripts/windows/test-mac-client-browser.mjs --timeoutMs 45000`
+- `node scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3 --timeoutMs 30000 --clientPort 5191 --debugPort 9342`
+- `node scripts/windows/test-mac-client-browser.mjs --requireAudio --timeoutMs 45000 --clientPort 5192 --debugPort 9343 --skipFileClipboard`
+验证结果：
+- 5 Mbps / smooth 观察通过：87 帧、约 28.95 FPS、`maxBandwidthKbps=5000`、`jpegQuality=0.35`、平均帧约 43 KB。
+- 40 Mbps / sharp 观察通过：87 帧、约 28.99 FPS、`maxBandwidthKbps=40000`、`jpegQuality=0.78`、平均帧约 81 KB。
+- Mac client 页面级回归、认证失败回归和真实 WASAPI PCM 播放回归均通过。
+遗留问题：
+- 这仍是 JPEG/MJPEG 过渡管线，`maxBandwidthKbps` 现在用于压缩质量估算，不是严格恒定码率控制；正式恒定码率应放到 Windows Graphics Capture + 视频编码管线处理。
+下一步建议：
+- Mac 真机控制 Windows host 时对照 5/20/40 Mbps，观察画质、延迟、CPU 和网络占用。
+- 后续做 Windows Graphics Capture 或 H.264/Opus 管线时，把 `maxBandwidthKbps` 映射到编码器目标码率。
+是否改了协议：否；复用既有 `qualityPreset`、`maxBandwidthKbps` 和 `jpegQuality` 诊断字段。
+是否需要另一端配合：暂无阻塞；真机主观画质和延迟验收需要 Mac 端连接 Windows host。
+
 ## 2026-06-12 Mac Codex
 
 日期：2026-06-12

@@ -19,6 +19,7 @@ const defaults = {
   height: 720,
   fps: 30,
   bandwidthKbps: 50000,
+  qualityPreset: "balanced",
   durationMs: 5000,
   timeoutMs: 15000,
   minFrames: 20,
@@ -54,6 +55,7 @@ function parseArgs(argv) {
   args.height = Number(args.height) || defaults.height;
   args.fps = Number(args.fps) || defaults.fps;
   args.bandwidthKbps = Number(args.bandwidthKbps) || defaults.bandwidthKbps;
+  args.qualityPreset = String(args.qualityPreset || defaults.qualityPreset).trim();
   args.durationMs = Number(args.durationMs) || defaults.durationMs;
   args.timeoutMs = Number(args.timeoutMs) || defaults.timeoutMs;
   args.minFrames = Number(args.minFrames) || defaults.minFrames;
@@ -307,7 +309,7 @@ function makeSessionOffer(args) {
     preferredVideoCodec: "mjpeg",
     maxFps: args.fps,
     maxBandwidthKbps: args.bandwidthKbps,
-    qualityPreset: "diagnostic",
+    qualityPreset: args.qualityPreset,
     displayMode: "window",
     displayId: "main",
     preferredWidth: args.width,
@@ -366,6 +368,9 @@ async function observeFrames(client, args) {
       bytes: estimateFrameBytes(frame),
       width: Number(frame.width) || 0,
       height: Number(frame.height) || 0,
+      maxBandwidthKbps: Number(frame.maxBandwidthKbps) || 0,
+      qualityPreset: frame.qualityPreset || "",
+      jpegQuality: Number(frame.jpegQuality) || 0,
     });
   }
 
@@ -377,6 +382,17 @@ async function observeFrames(client, args) {
   const lastFrame = frames.at(-1) || {};
   const uniquePipelines = [...new Set(frames.map((frame) => frame.pipeline).filter(Boolean))];
   const uniqueCodecs = [...new Set(frames.map((frame) => frame.codec).filter(Boolean))];
+  const uniqueQualities = [...new Set(
+    frames
+      .map((frame) => frame.jpegQuality)
+      .filter((quality) => quality > 0)
+      .map((quality) => Number(quality.toFixed(3))),
+  )];
+  const uniqueBandwidths = [...new Set(
+    frames
+      .map((frame) => frame.maxBandwidthKbps)
+      .filter((bandwidth) => bandwidth > 0),
+  )];
 
   return {
     frameCount: frames.length,
@@ -389,6 +405,10 @@ async function observeFrames(client, args) {
     lastFrameId: lastFrame.frameId || 0,
     width: firstFrame.width || 0,
     height: firstFrame.height || 0,
+    maxBandwidthKbps: firstFrame.maxBandwidthKbps || 0,
+    qualityPreset: firstFrame.qualityPreset || "",
+    jpegQualities: uniqueQualities,
+    maxBandwidthsKbps: uniqueBandwidths,
     pipelines: uniquePipelines,
     codecs: uniqueCodecs,
   };
@@ -457,6 +477,8 @@ async function main() {
         width: args.width,
         height: args.height,
         fps: args.fps,
+        bandwidthKbps: args.bandwidthKbps,
+        qualityPreset: args.qualityPreset,
         durationMs: args.durationMs,
         screenMode: args.screenMode,
       },
@@ -470,6 +492,9 @@ async function main() {
         fps: answer.fps || 0,
         requestedFps: answer.requestedFps || args.fps,
         maxScreenFps: answer.maxScreenFps || 0,
+        maxBandwidthKbps: answer.maxBandwidthKbps || 0,
+        qualityPreset: answer.qualityPreset || "",
+        jpegQuality: answer.jpegQuality || 0,
         capturePipeline: answer.capturePipeline || "",
         hostMode: answer.hostMode || "",
       },
@@ -481,6 +506,7 @@ async function main() {
     } else {
       print("OK", `Observed ${summary.frameCount} frames in ${summary.elapsedMs} ms`, args);
       print("OK", `Average FPS: ${summary.fps} / max gap: ${summary.maxGapMs} ms / dropped: ${summary.droppedFrames}`, args);
+      print("INFO", `Requested bandwidth: ${args.bandwidthKbps} Kbps / session: ${answer.maxBandwidthKbps || 0} Kbps / JPEG quality: ${answer.jpegQuality || "unknown"}`, args);
       print("INFO", `Pipeline: ${summary.pipelines.join(", ") || "unknown"} / codec: ${summary.codecs.join(", ") || "unknown"} / avg bytes: ${summary.avgPayloadBytes}`, args);
       print("OK", "Windows host video observation passed", args);
     }
