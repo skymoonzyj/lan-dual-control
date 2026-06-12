@@ -182,6 +182,13 @@ function renderSessionDiagnostics() {
     : "0 次";
 }
 
+function resetVideoSurface(status = "无画面") {
+  elements.remoteImage.removeAttribute("src");
+  elements.remoteImage.classList.remove("is-visible");
+  elements.emptyState.classList.remove("is-hidden");
+  elements.videoStatus.textContent = status;
+}
+
 function clearReconnectTimers() {
   if (state.reconnectTimer) {
     window.clearTimeout(state.reconnectTimer);
@@ -478,7 +485,7 @@ async function connect({ reconnect = false } = {}) {
     resetSessionDiagnostics();
   }
   setConnectionStatus("连接中");
-  elements.videoStatus.textContent = "等待视频";
+  resetVideoSurface("等待视频");
   primeAudioPlayback();
   try {
     await discover();
@@ -568,6 +575,7 @@ function disconnect() {
   stopClipboardWatch("已断开，监听已停止");
   resetAudioPlayback();
   resetSessionDiagnostics({ resetReconnects: true });
+  resetVideoSurface();
   setConnected(false);
   renderSessionDiagnostics();
 }

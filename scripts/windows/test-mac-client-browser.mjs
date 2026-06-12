@@ -1364,20 +1364,24 @@ async function run() {
         const value = await evaluate(session, buildSnapshotExpression());
         lastSnapshot = value;
         const connectionOk = value.connection === "未连接";
+        const videoStatusOk = value.video === "无画面";
         const firstVideoOk = value.firstVideoMetric === "未就绪";
         const videoFlowOk = value.videoFlowMetric === "未接收";
         const audioFlowOk = value.audioToggleChecked
           ? value.audioFlowMetric === "等待音频"
           : value.audioFlowMetric === "未开启";
         const reconnectOk = value.reconnectMetric === "0 次";
-        return connectionOk && firstVideoOk && videoFlowOk && audioFlowOk && reconnectOk ? value : null;
+        const surfaceCleared = !value.imageVisible && !value.imageHasSource;
+        return connectionOk && videoStatusOk && firstVideoOk && videoFlowOk && audioFlowOk && reconnectOk && surfaceCleared
+          ? value
+          : null;
       },
       args.timeoutMs,
       "Mac client manual disconnect diagnostics reset",
     );
     print(
       "OK",
-      `Disconnect reset: ${disconnectSnapshot.firstVideoMetric} / ${disconnectSnapshot.videoFlowMetric} / ${disconnectSnapshot.audioFlowMetric} / ${disconnectSnapshot.reconnectMetric}`,
+      `Disconnect reset: ${disconnectSnapshot.video} / ${disconnectSnapshot.firstVideoMetric} / ${disconnectSnapshot.videoFlowMetric} / ${disconnectSnapshot.audioFlowMetric} / ${disconnectSnapshot.reconnectMetric}`,
     );
     print("OK", "Mac client browser self-test passed");
   } finally {
