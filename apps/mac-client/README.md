@@ -7,6 +7,7 @@
 - 通过 `/discovery` 发现 Windows 被控端。
 - 通过 WebSocket 完成 `hello`、`auth_request`、`session_offer`。
 - 认证失败时显示远端返回的剩余尝试次数，并自动释放连接按钮，方便改密码后重连。
+- 意外断线后最多自动重连 3 次；手动断开和认证失败不会自动重连。
 - 显示 Windows host 的 JPEG `video_frame`。
 - 支持画质、分辨率、刷新率和码率设置，当前可选 1080P/2K/4K、30/60/120/144/240 Hz、5/10/15/20/40/50 Mbps；成功连接后修改会立即发送 `display_settings`。
 - 向 Windows host 发送鼠标移动、按钮、滚轮和键盘 `input_event`；Mac `Command` 会按 Windows `Ctrl` 发送，方便常用快捷键。
@@ -56,6 +57,7 @@ LAN_DUAL_PORT=43772 LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_WINDOWS_INPUT_MODE=log node
 - 音频播放当前覆盖 PCM 过渡格式；真实 Windows 系统声音已可通过 Windows host WASAPI loopback 做页面级自检，真实听感还需要 Mac 真机连接 Windows host 继续确认。
 - 当前支持手动发送文本和文件剪贴板；Mac 本机文本剪贴板读取和自动监听默认关闭，需用户手动点击读取或开启监听。
 - 最近连接只写入浏览器 localStorage 的地址、端口和时间，不保存连接密码；“清空”只删除最近连接，不影响密码输入框。
+- 自动重连复用当前页面里的 host、port 和密码输入值；如果用户改了连接参数或点击手动断开，会停止本轮重连。
 - 浏览器文件选择需要用户手动授权，自动化脚本不能无提示选择本机文件。
 - 键盘映射把 Mac `Command` 当作 Windows `Ctrl` 发送，方便 `Command+C/V` 控制 Windows 常用快捷键；页面会在远控画面提示该映射，发送快捷键时输入状态和日志也会显示 `Command→Ctrl`。
 - 浏览器安全限制下，必须点击远程画面后才会发送键盘事件。
@@ -84,3 +86,5 @@ Mac client 页面级自检可加 `--enableAudio --expectAudioFrame` 验证音频
 文件剪贴板入口本机联调已验证：页面显示文件选择和发送入口，未选择文件时不会误发送；`scripts/windows/test-mac-client-browser.mjs` 会用浏览器调试协议注入临时小文件并等待 `clipboard_file_result`。在 Windows 上默认要求系统文件剪贴板 `saveMode=clipboard`，在 Mac/Linux 开发环境可加 `--allowClipboardFallback --mockVideo` 验证 `saveMode=temp` 回退链路。
 
 认证失败路径已固化到页面级自检：`scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3` 会启动正确密码的临时 Windows host，并让 Mac 控制端填错密码，断言页面最终保留 `认证失败 · 剩余 2/3 次`。
+
+意外断线自动重连可用 `scripts/windows/test-mac-client-browser.mjs --expectReconnect --mockVideo --allowClipboardFallback --skipFileClipboard --timeoutMs 45000` 做页面级自检：脚本会连接临时 Windows host，杀掉 host 等页面进入自动重连状态，再用同一端口重启 host 并要求页面恢复到“已连接”。

@@ -62,6 +62,10 @@ const state = {
   fileTransferActive: false,
   fileTransfers: new Map(),
   closeStatusOverride: "",
+  manualDisconnect: false,
+  reconnectAttempts: 0,
+  reconnectTimer: null,
+  reconnectStableTimer: null,
   clipboardWatchTimer: null,
   clipboardReadInFlight: false,
   lastLocalClipboardText: "",
@@ -73,6 +77,9 @@ const maxRecentConnections = 8;
 const fileChunkSizeBytes = 64 * 1024;
 const maxClipboardFileBytes = 32 * 1024 * 1024;
 const clipboardWatchIntervalMs = 1200;
+const maxReconnectAttempts = 3;
+const reconnectBaseDelayMs = 1200;
+const reconnectStableMs = 10000;
 const videoQualityPresets = {
   smooth: { resolution: "1920x1080", fps: "30", bandwidth: "10" },
   balanced: { resolution: "1920x1080", fps: "60", bandwidth: "20" },
@@ -114,6 +121,37 @@ function setConnected(connected) {
   elements.connectButton.disabled = connected;
   elements.disconnectButton.disabled = !connected;
   setConnectionStatus(connected ? "已连接" : "未连接");
+}
+
+function clearReconnectTimers() {
+  if (state.reconnectTimer) {
+    window.clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = null;
+  }
+  if (state.reconnectStableTimer) {
+    window.clearTimeout(state.reconnectStableTimer);
+    state.reconnectStableTimer = null;
+  }
+}
+
+function markConnectionStableLater() {
+  if (state.reconnectStableTimer) {
+    window.clearTimeout(state.reconnectStableTimer);
+  }
+  state.reconnectStableTimer = window.setTimeout(() => {
+    state.reconnectStableTimer = null;
+    if (state.connected && state.authenticated) {
+      state.reconnectAttempts = 0;
+    }
+  }, reconnectStableMs);
+}
+
+function closeSocketSilently() {
+  const socket = state.socket;
+  state.socket = null;
+  if (socket && socket.readyState !== WebSocket.CLOSED) {
+    socket.close();
+  }
 }
 
 function targetBaseUrl() {
@@ -366,8 +404,16 @@ async function discover() {
   }
 }
 
-async function connect() {
-  disconnect();
+async function connect({ reconnect = false } = {}) {
+  if (!reconnect) {
+    state.manualDisconnect = false;
+    state.reconnectAttempts = 0;
+    clearReconnectTimers();
+    closeSocketSilently();
+    state.authenticated = false;
+    stopClipboardWatch("正在重新连接，监听已停止");
+    resetAudioPlayback();
+  }
   setConnectionStatus("连接中");
   elements.videoStatus.textContent = "等待视频";
   primeAudioPlayback();
@@ -377,12 +423,14 @@ async function connect() {
     // Discovery is helpful but not mandatory for direct WebSocket testing.
   }
 
-  const socket = new WebSocket(targetWsUrl());
+  const endpoint = targetWsUrl();
+  const socket = new WebSocket(endpoint);
   state.socket = socket;
   socket.addEventListener("open", () => {
+    if (socket !== state.socket) return;
     state.closeStatusOverride = "";
     setConnected(true);
-    logEvent("WebSocket 已连接", targetWsUrl());
+    logEvent(reconnect ? "自动重连已连接" : "WebSocket 已连接", endpoint);
     send({
       type: "hello",
       clientName: "Mac 控制端 Web 原型",
@@ -391,32 +439,66 @@ async function connect() {
     });
   });
   socket.addEventListener("message", (event) => {
+    if (socket !== state.socket) return;
     handleMessage(event.data);
   });
   socket.addEventListener("close", () => {
+    if (socket !== state.socket) return;
     const closeStatusOverride = state.closeStatusOverride;
+    state.socket = null;
     setConnected(false);
-    if (closeStatusOverride) {
-      setConnectionStatus(closeStatusOverride);
-    }
     state.closeStatusOverride = "";
     state.authenticated = false;
     stopClipboardWatch("连接关闭，监听已停止");
     resetAudioPlayback();
     logEvent("连接关闭");
+
+    if (closeStatusOverride) {
+      setConnectionStatus(closeStatusOverride);
+      return;
+    }
+    if (state.manualDisconnect) {
+      setConnectionStatus("未连接");
+      return;
+    }
+    scheduleReconnect("连接意外关闭");
   });
   socket.addEventListener("error", () => {
+    if (socket !== state.socket) return;
     setConnectionStatus("连接错误");
-    logEvent("连接错误", targetWsUrl());
+    logEvent("连接错误", endpoint);
   });
 }
 
-function disconnect() {
-  state.closeStatusOverride = "";
-  if (state.socket) {
-    state.socket.close();
+function scheduleReconnect(reason) {
+  clearReconnectTimers();
+  if (state.manualDisconnect) return;
+  if (state.reconnectAttempts >= maxReconnectAttempts) {
+    setConnectionStatus(`连接失败 · 自动重连 ${maxReconnectAttempts} 次未恢复`);
+    elements.connectButton.disabled = false;
+    elements.disconnectButton.disabled = true;
+    logEvent("停止重连", reason);
+    return;
   }
-  state.socket = null;
+
+  state.reconnectAttempts += 1;
+  const delayMs = reconnectBaseDelayMs * state.reconnectAttempts;
+  setConnectionStatus(`连接中断，${Math.round(delayMs / 1000)} 秒后自动重连（${state.reconnectAttempts}/${maxReconnectAttempts}）`);
+  elements.connectButton.disabled = true;
+  elements.disconnectButton.disabled = false;
+  logEvent("自动重连", `${reason} · 第 ${state.reconnectAttempts}/${maxReconnectAttempts} 次`);
+
+  state.reconnectTimer = window.setTimeout(() => {
+    state.reconnectTimer = null;
+    void connect({ reconnect: true });
+  }, delayMs);
+}
+
+function disconnect() {
+  state.manualDisconnect = true;
+  clearReconnectTimers();
+  state.closeStatusOverride = "";
+  closeSocketSilently();
   state.authenticated = false;
   stopClipboardWatch("已断开，监听已停止");
   resetAudioPlayback();
@@ -526,6 +608,7 @@ function handleAuthResult(message) {
     return;
   }
   state.authenticated = true;
+  markConnectionStableLater();
   logEvent("认证通过");
   send({
     ...makeDisplaySettingsMessage("session_offer"),

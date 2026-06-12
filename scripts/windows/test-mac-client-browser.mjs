@@ -29,6 +29,7 @@ const defaults = {
   expectAudioPayload: false,
   expectAudioPlayback: false,
   requireAudio: false,
+  expectReconnect: false,
   useExistingHost: false,
   mockVideo: false,
   headless: true,
@@ -100,6 +101,10 @@ function parseArgs(argv) {
       if (!args.audioMode) {
         args.audioMode = "wasapi";
       }
+      continue;
+    }
+    if (key === "expectReconnect") {
+      args.expectReconnect = true;
       continue;
     }
     if (Object.prototype.hasOwnProperty.call(args, key) && next && !next.startsWith("--")) {
@@ -192,6 +197,26 @@ function attachProcessLog(child, name) {
   });
 }
 
+async function stopProcess(child, name) {
+  if (!child || child.exitCode !== null || child.killed) return;
+  const pid = child.pid;
+  child.kill();
+  await new Promise((resolveClose) => {
+    const forceTimer = setTimeout(() => {
+      if (child.exitCode === null) {
+        child.kill("SIGKILL");
+      }
+    }, 2500);
+    const fallbackTimer = setTimeout(resolveClose, 10000);
+    child.once("close", () => {
+      clearTimeout(forceTimer);
+      clearTimeout(fallbackTimer);
+      resolveClose();
+    });
+  });
+  print("OK", `Stopped ${name} PID ${pid}`);
+}
+
 async function getJson(url) {
   const response = await fetch(url);
   if (!response.ok) {
@@ -204,6 +229,17 @@ async function waitForHttpOk(url, timeoutMs, label) {
   return waitFor(async () => {
     const response = await fetch(url, { cache: "no-store" });
     return response.ok;
+  }, timeoutMs, label);
+}
+
+async function waitForHttpDown(url, timeoutMs, label) {
+  return waitFor(async () => {
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      return !response.ok;
+    } catch {
+      return true;
+    }
   }, timeoutMs, label);
 }
 
@@ -424,6 +460,58 @@ async function startWindowsHost(args, repoRoot) {
   await waitForHttpOk(discoveryUrl, args.timeoutMs, "Windows host discovery");
   print("OK", `Started temporary Windows host PID ${child.pid} on ${args.host}:${args.port}`);
   return child;
+}
+
+async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }) {
+  if (!windowsHost || args.useExistingHost) {
+    throw new Error("--expectReconnect requires a temporary Windows host managed by this script");
+  }
+
+  const discoveryUrl = `http://${args.host}:${args.port}/discovery`;
+  const sessionAnswersBefore = await evaluate(
+    session,
+    `(() => (window.__lanDualReceivedMessages || []).filter((message) => message.type === "session_answer").length)()`,
+  );
+
+  await stopProcess(windowsHost, "Windows host for reconnect");
+  await waitForHttpDown(discoveryUrl, args.timeoutMs, "Windows host discovery shutdown");
+
+  const reconnectingSnapshot = await waitFor(
+    async () => {
+      const value = await evaluate(session, buildSnapshotExpression());
+      const reconnecting = value.connection.includes("自动重连") || value.connection.includes("重连");
+      const logVisible = value.logs.some((line) => line.includes("自动重连"));
+      return reconnecting || logVisible ? value : null;
+    },
+    args.timeoutMs,
+    "Mac client reconnect scheduling",
+  );
+  print("OK", `Reconnect scheduled: ${reconnectingSnapshot.connection}`);
+
+  await waitFor(
+    () => canBindPort(args.host, args.port),
+    args.timeoutMs,
+    "temporary Windows host port release",
+  );
+  const restartedHost = await startWindowsHost(args, repoRoot);
+
+  const reconnectedSnapshot = await waitFor(
+    async () => {
+      const value = await evaluate(session, buildSnapshotExpression());
+      const sessionAnswers = await evaluate(
+        session,
+        `(() => (window.__lanDualReceivedMessages || []).filter((message) => message.type === "session_answer").length)()`,
+      );
+      const connected = value.connection.includes("已连接");
+      const hasNewSession = Number(sessionAnswers) > Number(sessionAnswersBefore);
+      const hasVideo = value.imageVisible && value.imageHasSource;
+      return connected && hasNewSession && hasVideo ? { ...value, sessionAnswers } : null;
+    },
+    args.timeoutMs,
+    "Mac client reconnect restore",
+  );
+  print("OK", `Reconnect restored: ${reconnectedSnapshot.connection} · sessions=${reconnectedSnapshot.sessionAnswers}`);
+  return restartedHost;
 }
 
 function buildSnapshotExpression() {
@@ -709,6 +797,10 @@ async function run() {
       throw new Error(`Windows host session video negotiation mismatch: ${JSON.stringify(sessionAnswer)}`);
     }
     print("OK", `Video settings: ${videoSnapshot.displaySettings}`);
+
+    if (args.expectReconnect) {
+      windowsHost = await verifyMacClientReconnect({ args, repoRoot, session, windowsHost });
+    }
 
     await evaluate(
       session,

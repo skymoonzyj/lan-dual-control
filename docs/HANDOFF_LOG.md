@@ -21,6 +21,42 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：补齐 Mac 控制 Windows Web 原型的意外断线自动重连，提升反控日常可用性。
+完成内容：
+- `apps/mac-client/app.js` 新增意外断线自动重连：非手动断开、非认证失败时最多重连 3 次，延迟按 1.2s 递增。
+- 手动断开会清理重连计时器；认证失败继续停留在认证失败状态，不触发重连。
+- 重连成功后保留现有会话流程，稳定 10 秒后重置重连计数。
+- `scripts/windows/test-mac-client-browser.mjs` 新增 `--expectReconnect`，可杀掉临时 Windows host、等待页面进入自动重连、同端口重启 host，并要求第二次 `session_answer` 和视频恢复。
+- Mac client README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `apps/mac-client/app.js`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --expectReconnect --mockVideo --allowClipboardFallback --skipFileClipboard --timeoutMs 45000`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 重连自检通过：首次连接成功后杀掉临时 Windows host，页面显示 `连接中断，1 秒后自动重连（1/3）`；同端口重启 host 后恢复到 `已连接`，`session_answer` 计数从 1 到 2。
+- 重连恢复后继续通过 2K/60Hz/40Mbps 显示设置、log 输入、Command+C -> Ctrl+C、文本剪贴板、Mac 本机剪贴板读取/发送和监听回归。
+遗留问题：
+- 本轮只验证本机临时 Windows host；真实跨设备 Windows host 断线/网络抖动体验仍需后续真机联调观察。
+下一步建议：
+- Windows 端或人工启动真实 Windows host 后，可运行 `scripts/windows/test-mac-client-browser.mjs --useExistingHost --host <Windows IP> --port <port> --enableAudio --expectAudioPayload --expectAudioPlayback` 验收真实音频和反控体验；需要本机断线回归时加 `--expectReconnect` 且使用临时 host。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：增强 Mac host readiness 的运行中 build 新鲜度提示，避免真机仍连旧进程时被误判为最新。
 完成内容：
 - `scripts/mac/check-mac-host-readiness.mjs` 默认读取当前 `git rev-parse --short HEAD`，并与当前 `/discovery.runtime.buildId` 对比。

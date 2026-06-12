@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `apps/mac-client/app.js`、`apps/mac-client/README.md`、`scripts/windows/test-mac-client-browser.mjs`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 20:16 | Mac client 意外断线后最多自动重连 3 次；手动断开/认证失败不重连；页面级自检新增 `--expectReconnect`，覆盖临时 Windows host 被杀后同端口恢复连接。 |
 | Mac Codex | `scripts/mac/check-mac-host-readiness.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 20:01 | Mac readiness 默认提示运行中 `/discovery.runtime.buildId` 是否落后当前 git short hash；新增 `--requireCurrentBuildId` 强制部署验收和 `--skipCurrentBuildCheck` 旧 build 调试放宽。 |
 | Windows Codex | `apps/windows-desktop/src-tauri/src/main.rs`、`apps/windows-desktop/README.md`、`apps/windows-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 19:58 | Windows 桌面版远端文件剪贴板分块写入可靠性收口：原生层 512MB 总量保护、7 天旧临时目录清理、同毫秒 transferId 防撞和分块边界单测。 |
 | Mac Codex | `apps/mac-host/Sources/MacHost/MacPermissionCenter.swift`、`scripts/mac/test-mac-host-defaults.mjs`、`apps/mac-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 19:38 | Mac host 用 `IOHIDCheckAccess` 只读探测真实 Input Monitoring 状态，权限摘要显示“已开启/未开启”；direct-start defaults 自测验证 `/discovery.permissions.inputMonitoring` 与系统 API 一致。 |
