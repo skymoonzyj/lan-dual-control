@@ -257,7 +257,13 @@ node scripts/mac/stress-mac-host.mjs --iterations 20 --expectInputMode log
 
 该脚本会复用 `scripts/windows/probe-mac-host.mjs`，默认每次都要求 H.264 首帧和真实 `pcm-f32le` 音频帧通过，并在 macOS 上采样监听进程的 RSS/FD 变化，便于排查连续建连后的资源释放问题。
 
-当前真机基线：50 次连续连接全部通过，监听进程 RSS `79376->80656 KB`，FD `30->30`。
+需要把连续建连体验变成强校验时，可加耗时阈值：
+
+```bash
+node scripts/mac/stress-mac-host.mjs --iterations 3 --maxProbeMs 8000 --maxFirstFrameMs 3000 --maxH264ConfirmMs 3000 --maxAudioFrameMs 3000 --expectInputMode log
+```
+
+脚本会按每轮 stdout 到达时间统计完整 probe、首帧、H.264 确认和首个音频帧的 min/avg/max；阈值默认关闭，只在显式传入时失败。当前真机基线：50 次连续连接全部通过，监听进程 RSS `79376->80656 KB`，FD `30->30`；3 次轻量体验阈值回归通过，完整 probe `243/249/255ms`、首帧 `157/162/169ms`、H.264 确认 `158/163/170ms`、音频 `237/244/250ms`。
 
 在 Mac 本机验证文本剪贴板双向同步：
 

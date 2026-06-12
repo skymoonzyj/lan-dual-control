@@ -116,7 +116,7 @@ Windows 端：
 - Windows 控制端当前已可区分真实 JPEG、H.264 视频帧和模拟视频帧，并记录图片或 WebCodecs 解码失败；`scripts/windows/test-mac-host.ps1` 可用于真机连通自检，显式加 `-ClipboardText -ClipboardFile` 可验证 macOS 文本和文件剪贴板写入。
 - 真 Mac 已通过强校验探针验证真实 JPEG 首帧、H.264 Annex B 首帧和 PCM 音频帧：`-RequireRealVideo` 会拒绝 mock/fallback 视频帧，`-RequireH264` 会确认 SPS/PPS/IDR，`-RequireAudio` 会确认 `pcm-f32le-base64` payload，`-ExpectInputMode log` 可确认安全输入模式。
 - Mac 端新增 `scripts/mac/observe-mac-video.mjs`，可持续观察 `video_frame` FPS、最大接收间隔、payload、codec、encoding、capturePipeline、source、显示器来源、帧 `timestamp` 接收年龄和 H.264 `timestampUs` / `durationUs` 媒体时间线；真机 H.264 30 秒 877 帧约 29.2fps，最大间隔 45ms；时间线短测 H.264 3 秒 89 帧约 29.2fps、媒体间隔平均/最大 `34281/41668us`、`durationUs=33333`；Mac host 最新代码会输出带小数秒的 ISO `timestamp`，临时 43771 build 已验证 discovery/runtime 为毫秒格式且 mock `video_frame` 接收年龄 max 0ms；空闲/低变化桌面 5 分钟 H.264 约 10.6fps、60 秒复测约 10.9fps，JPEG 60 秒对照约 16.4fps，后续高 FPS 强校验需要使用动态画面或真实控制场景。
-- Mac 端新增 `scripts/mac/stress-mac-host.mjs`，可循环复用 canonical 探针做 H.264 + PCM 连续连接稳定性检查；真机 50 次循环已通过，监听进程 RSS `79376->80656 KB`，FD 保持 `30->30`。
+- Mac 端新增 `scripts/mac/stress-mac-host.mjs`，可循环复用 canonical 探针做 H.264 + PCM 连续连接稳定性检查；真机 50 次循环已通过，监听进程 RSS `79376->80656 KB`，FD 保持 `30->30`。脚本现可统计并阈值化完整 probe、首帧、H.264 确认和首个音频帧耗时，便于把连续建连体验退化纳入回归。
 - Mac 端新增 `scripts/mac/observe-mac-audio.mjs`，可持续观察系统声音 `audio_frame` 帧率、接收间隔、payload 和电平；真机 30 秒观察收到 1501 帧，约 50fps，最大间隔 24ms；5 分钟长稳收到 15001 帧，50.0fps，最大间隔 31ms；脚本支持显式 `--playTone --requireLevel` 做本机有声电平强校验，默认不播放声音。
 - Mac 端新增 `scripts/mac/check-input-keymap.mjs`，可静态验证 CGEvent 键盘映射覆盖；当前常用 `KeyboardEvent.code`、`event.key`、同义 code/key 和修饰键 flag fallback 全覆盖。
 - Mac 端新增 `scripts/mac/smoke-mac-input-log.mjs`，可在真实 Mac host 的 `inputMode=log` 下发送鼠标/滚轮/键盘/快捷键冒烟事件并强制要求 `input_ack`；真机 16/16 通过，全部为 `mode=log`、`injected=false`。

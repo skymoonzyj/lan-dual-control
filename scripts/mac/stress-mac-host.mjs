@@ -14,6 +14,10 @@ const defaults = {
   iterations: 8,
   delayMs: 250,
   timeoutMs: 12000,
+  maxProbeMs: 0,
+  maxFirstFrameMs: 0,
+  maxH264ConfirmMs: 0,
+  maxAudioFrameMs: 0,
   requireH264: true,
   requireAudio: true,
   requireRealVideo: false,
@@ -43,6 +47,10 @@ function parseArgs(argv) {
   args.iterations = positiveInteger(args.iterations, defaults.iterations);
   args.delayMs = nonNegativeInteger(args.delayMs, defaults.delayMs);
   args.timeoutMs = positiveInteger(args.timeoutMs, defaults.timeoutMs);
+  args.maxProbeMs = nonNegativeInteger(args.maxProbeMs, defaults.maxProbeMs);
+  args.maxFirstFrameMs = nonNegativeInteger(args.maxFirstFrameMs, defaults.maxFirstFrameMs);
+  args.maxH264ConfirmMs = nonNegativeInteger(args.maxH264ConfirmMs, defaults.maxH264ConfirmMs);
+  args.maxAudioFrameMs = nonNegativeInteger(args.maxAudioFrameMs, defaults.maxAudioFrameMs);
   args.requireH264 = booleanArg(args.requireH264, defaults.requireH264);
   args.requireAudio = booleanArg(args.requireAudio, defaults.requireAudio);
   args.requireRealVideo = booleanArg(args.requireRealVideo, defaults.requireRealVideo);
@@ -82,17 +90,31 @@ function delay(ms) {
   });
 }
 
-function runCommand(command, commandArgs, { timeoutMs = 5000 } = {}) {
+function runCommand(command, commandArgs, { timeoutMs = 5000, onStdoutLine = null } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, commandArgs, { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] });
     const stdout = [];
     const stderr = [];
+    let lineBuffer = "";
+    const emitStdoutLines = (text, flush = false) => {
+      if (!onStdoutLine) return;
+      lineBuffer += text;
+      const lines = lineBuffer.split(/\r?\n/);
+      lineBuffer = flush ? "" : lines.pop() || "";
+      const completeLines = flush ? lines.filter(Boolean).concat(lineBuffer ? [lineBuffer] : []) : lines;
+      for (const line of completeLines) {
+        if (line) onStdoutLine(line);
+      }
+    };
     const timer = setTimeout(() => {
       child.kill("SIGTERM");
       reject(new Error(`${command} timed out after ${timeoutMs} ms`));
     }, timeoutMs);
 
-    child.stdout.on("data", (chunk) => stdout.push(chunk));
+    child.stdout.on("data", (chunk) => {
+      stdout.push(chunk);
+      emitStdoutLines(chunk.toString("utf8"));
+    });
     child.stderr.on("data", (chunk) => stderr.push(chunk));
     child.on("error", (error) => {
       clearTimeout(timer);
@@ -100,6 +122,7 @@ function runCommand(command, commandArgs, { timeoutMs = 5000 } = {}) {
     });
     child.on("close", (code) => {
       clearTimeout(timer);
+      emitStdoutLines("", true);
       resolve({
         code,
         stdout: Buffer.concat(stdout).toString("utf8"),
@@ -170,6 +193,36 @@ function formatDelta(start, end) {
   return deltas.join(", ");
 }
 
+function formatMetric(value) {
+  return Number.isFinite(value) ? formatMs(value) : "n/a";
+}
+
+function summarizeMetric(name, values) {
+  const finiteValues = values.filter(Number.isFinite);
+  if (finiteValues.length === 0) return `${name}=n/a`;
+  const min = Math.min(...finiteValues);
+  const max = Math.max(...finiteValues);
+  const avg = finiteValues.reduce((sum, value) => sum + value, 0) / finiteValues.length;
+  return `${name} min/avg/max=${formatMetric(min)}/${formatMetric(avg)}/${formatMetric(max)}`;
+}
+
+function formatTimings(timings) {
+  const parts = [];
+  if (Number.isFinite(timings.firstFrameMs)) parts.push(`firstFrame=${formatMetric(timings.firstFrameMs)}`);
+  if (Number.isFinite(timings.h264ConfirmMs)) parts.push(`h264=${formatMetric(timings.h264ConfirmMs)}`);
+  if (Number.isFinite(timings.audioFrameMs)) parts.push(`audio=${formatMetric(timings.audioFrameMs)}`);
+  return parts.join(", ");
+}
+
+function assertTimingThreshold(label, actualMs, thresholdMs) {
+  if (!thresholdMs) return;
+  if (!Number.isFinite(actualMs)) {
+    throw new Error(`${label} timing was not recorded`);
+  }
+  if (actualMs <= thresholdMs) return;
+  throw new Error(`${label} ${formatMetric(actualMs)} exceeded threshold ${formatMetric(thresholdMs)}`);
+}
+
 function buildProbeArgs(args) {
   const probeArgs = [
     args.probeScript,
@@ -199,14 +252,31 @@ function extractHighlights(output) {
 
 async function runProbe(iteration, args) {
   const started = performance.now();
-  const result = await runCommand(process.execPath, buildProbeArgs(args), { timeoutMs: args.timeoutMs + 5000 });
+  const timings = {};
+  const recordTiming = (key) => {
+    if (Number.isFinite(timings[key])) return;
+    timings[key] = performance.now() - started;
+  };
+  const result = await runCommand(process.execPath, buildProbeArgs(args), {
+    timeoutMs: args.timeoutMs + 5000,
+    onStdoutLine: (line) => {
+      if (/\[OK\] First frame:/.test(line)) recordTiming("firstFrameMs");
+      if (/\[OK\] H\.264 video confirmed:/.test(line)) recordTiming("h264ConfirmMs");
+      if (/\[OK\] Audio frame confirmed:/.test(line)) recordTiming("audioFrameMs");
+    },
+  });
   const durationMs = performance.now() - started;
   if (result.code !== 0) {
     const details = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n");
     throw new Error(`probe #${iteration} failed with exit ${result.code}\n${details}`);
   }
+  assertTimingThreshold(`probe #${iteration} total`, durationMs, args.maxProbeMs);
+  assertTimingThreshold(`probe #${iteration} first frame`, timings.firstFrameMs, args.maxFirstFrameMs);
+  assertTimingThreshold(`probe #${iteration} H.264 confirm`, timings.h264ConfirmMs, args.maxH264ConfirmMs);
+  assertTimingThreshold(`probe #${iteration} audio frame`, timings.audioFrameMs, args.maxAudioFrameMs);
   return {
     durationMs,
+    timings,
     highlights: extractHighlights(result.stdout),
   };
 }
@@ -222,6 +292,10 @@ Options:
   --iterations <count>          Number of sequential probe connections. Default: 8
   --delayMs <ms>                Delay between probe runs. Default: 250
   --timeoutMs <ms>              Per-probe timeout passed to probe-mac-host. Default: 12000
+  --maxProbeMs <ms>             Fail when any full probe takes longer than this. Default: off
+  --maxFirstFrameMs <ms>        Fail when first video frame takes longer than this. Default: off
+  --maxH264ConfirmMs <ms>       Fail when H.264 confirmation takes longer than this. Default: off
+  --maxAudioFrameMs <ms>        Fail when first audio frame takes longer than this. Default: off
   --requireH264 <true|false>    Require H.264 Annex B keyframe. Default: true
   --requireAudio <true|false>   Require pcm-f32le audio frame. Default: true
   --expectInputMode <mode>      Expected input mode. Default: log
@@ -253,9 +327,17 @@ async function main() {
   }
 
   const suiteStarted = performance.now();
+  const probeResults = [];
   for (let iteration = 1; iteration <= args.iterations; iteration += 1) {
     const result = await runProbe(iteration, args);
-    print("OK", `#${iteration}/${args.iterations} passed in ${formatMs(result.durationMs)}${result.highlights ? ` | ${result.highlights}` : ""}`);
+    probeResults.push(result);
+    const timingSummary = formatTimings(result.timings);
+    print(
+      "OK",
+      `#${iteration}/${args.iterations} passed in ${formatMs(result.durationMs)}${timingSummary ? ` (${timingSummary})` : ""}${
+        result.highlights ? ` | ${result.highlights}` : ""
+      }`,
+    );
     if (iteration < args.iterations && args.delayMs > 0) {
       await delay(args.delayMs);
     }
@@ -264,6 +346,27 @@ async function main() {
   const endSample = await sampleProcess(pid);
   const totalMs = performance.now() - suiteStarted;
   print("OK", `Completed ${args.iterations}/${args.iterations} probes in ${formatMs(totalMs)}`);
+  print(
+    "INFO",
+    [
+      summarizeMetric(
+        "probe",
+        probeResults.map((result) => result.durationMs),
+      ),
+      summarizeMetric(
+        "firstFrame",
+        probeResults.map((result) => result.timings.firstFrameMs),
+      ),
+      summarizeMetric(
+        "h264",
+        probeResults.map((result) => result.timings.h264ConfirmMs),
+      ),
+      summarizeMetric(
+        "audio",
+        probeResults.map((result) => result.timings.audioFrameMs),
+      ),
+    ].join(" / "),
+  );
   if (args.sampleProcess) {
     print("INFO", `End process: ${formatSample(endSample)}`);
     const delta = formatDelta(startSample, endSample);

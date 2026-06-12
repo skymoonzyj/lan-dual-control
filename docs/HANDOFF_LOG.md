@@ -21,6 +21,41 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：增强 Mac host 连续稳定性脚本，让首帧/音频体验退化可被阈值回归抓到。
+完成内容：
+- `scripts/mac/stress-mac-host.mjs` 在运行 canonical `probe-mac-host` 时流式解析 stdout，到达 `First frame`、`H.264 video confirmed`、`Audio frame confirmed` 时记录耗时。
+- 每轮输出完整 probe、首帧、H.264 确认和首个音频帧耗时，结束后汇总 min/avg/max。
+- 新增可选阈值 `--maxProbeMs`、`--maxFirstFrameMs`、`--maxH264ConfirmMs`、`--maxAudioFrameMs`，默认关闭，显式传入时任何一轮超时都会失败。
+- Mac host README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `scripts/mac/stress-mac-host.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/stress-mac-host.mjs`
+- `node scripts/mac/stress-mac-host.mjs --help`
+- `node scripts/mac/stress-mac-host.mjs --iterations 3 --delayMs 100 --timeoutMs 15000 --maxProbeMs 8000 --maxFirstFrameMs 3000 --maxH264ConfirmMs 3000 --maxAudioFrameMs 3000 --expectInputMode log`
+- `node scripts/mac/stress-mac-host.mjs --iterations 1 --delayMs 0 --timeoutMs 15000 --maxFirstFrameMs 1 --expectInputMode log`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 正向 3 轮真实 `43770` 通过：完整 probe min/avg/max `243/249/255ms`，首帧 `157/162/169ms`，H.264 `158/163/170ms`，音频 `237/244/250ms`；FD `29->29`。
+- 负向阈值按预期失败：`--maxFirstFrameMs 1` 报 `first frame 221 ms exceeded threshold 1 ms`。
+遗留问题：
+- 这些耗时是 Mac 本机到 `127.0.0.1:43770` 的 stdout 到达时间，适合守本机连续建连退化；真实 Windows 控制端端到端观感仍需 Windows 页面级自检继续验收。
+下一步建议：
+- 之后做 Mac host 采集/编码/音频改动时，除 readiness 外加跑 `stress-mac-host --maxProbeMs 8000 --maxFirstFrameMs 3000 --maxH264ConfirmMs 3000 --maxAudioFrameMs 3000`，防止首帧或首音频耗时回退。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：给 Mac host readiness 增加部署/深度验收 profile，降低真机联调命令记忆成本。
 完成内容：
 - `scripts/mac/check-mac-host-readiness.mjs` 新增 `--profile default|deploy|deep`。
