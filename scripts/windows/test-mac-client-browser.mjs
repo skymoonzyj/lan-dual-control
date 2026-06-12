@@ -302,6 +302,7 @@ function buildSnapshotExpression() {
       video: text("#videoStatus"),
       audio: text("#audioStatus"),
       input: text("#inputStatus"),
+      clipboard: text("#clipboardStatus"),
       imageVisible: image?.classList.contains("is-visible") || false,
       imageHasSource: Boolean(image?.getAttribute("src")),
       logs,
@@ -455,6 +456,34 @@ async function run() {
     if (inputSnapshot.logs.length > 0) {
       print("INFO", `Recent logs: ${inputSnapshot.logs.join(" | ")}`);
     }
+
+    const clipboardText = `Windows self-test clipboard ${Date.now()}`;
+    await evaluate(
+      session,
+      `(() => {
+        const setValue = (selector, value) => {
+          const element = document.querySelector(selector);
+          element.value = value;
+          element.dispatchEvent(new Event("change", { bubbles: true }));
+          element.dispatchEvent(new Event("input", { bubbles: true }));
+        };
+        setValue("#clipboardTextInput", ${JSON.stringify(clipboardText)});
+        document.querySelector("#sendClipboardButton").click();
+        return true;
+      })()`,
+    );
+
+    const clipboardSnapshot = await waitFor(
+      async () => {
+        const value = await evaluate(session, buildSnapshotExpression());
+        lastSnapshot = value;
+        return value.clipboard.includes("已写入") && value.clipboard.includes("system") ? value : null;
+      },
+      args.timeoutMs,
+      "Mac client clipboard ack",
+    );
+
+    print("OK", `Clipboard: ${clipboardSnapshot.clipboard}`);
     print("OK", "Mac client browser self-test passed");
   } finally {
     session?.close();

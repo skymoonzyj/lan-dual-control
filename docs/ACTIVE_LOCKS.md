@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/test-mac-client-browser.mjs`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 10:55 | Mac client 页面级自检已覆盖文本剪贴板发送；真实 Windows host 返回 `clipboard_ack · system`，视频画面和 `input_ack · log` 同时通过。 |
 | Windows Codex | `scripts/windows/test-windows-host.ps1`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 10:52 | Windows host 一键自检增加临时端口冲突防护；默认 43772 被占用时自动换空闲端口，普通路径和占位服务占用场景均通过。 |
 | Windows Codex | `scripts/windows/test-mac-client-browser.mjs`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 10:45 | Mac client 页面级自检增加 Windows host 临时端口冲突防护；默认 43772 被占用时自动换空闲端口，正常路径和占位服务占用场景均通过。 |
 | Windows Codex | `apps/windows-host/src/windows-audio-capture.mjs`、`apps/windows-host/src/windows-host-service.mjs`、`apps/windows-host/README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 10:39 | Windows host 新增显式 FFmpeg DirectShow PCM 音频采集入口；默认仍 mock，设置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 后可发送 `pcm-f32le-base64`，PCM 打包、协商、一键自检、认证回归和 Mac client 页面级自检通过。 |

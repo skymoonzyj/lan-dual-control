@@ -17,6 +17,36 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
+本轮目标：把 Mac client 文本剪贴板发送纳入 Windows 端页面级自检。
+完成内容：
+- `scripts/windows/test-mac-client-browser.mjs` 在视频和输入确认之后，会自动填写 Mac client 文本剪贴板输入框并点击发送。
+- 自检会等待页面收到 `clipboard_ack`，并要求真实 Windows host 返回 `system` 模式，覆盖 Mac 控制 Windows 的文本剪贴板端到端链路。
+- Windows host README 已更新，说明 Mac 控制 Windows 页面级自检覆盖真实视频、`input_ack` 和文本 `clipboard_ack`。
+- 未修改 `apps/mac-client` 本体，避免和 Mac 端正在做的音频播放入口冲突。
+修改文件：
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/windows-host/README.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs`
+验证结果：
+- 页面连接临时 Windows host 成功，显示真实 `windows-host-ffmpeg-mjpeg` 画面。
+- 鼠标和键盘事件收到 `input_ack`：`已确认 · log`。
+- 文本剪贴板发送后收到 `clipboard_ack`：`已写入 · system · 41 字`。
+遗留问题：
+- 该脚本仍只验证 Mac client 的 Web 原型；后续原生 Mac 控制端出现后要补同等回归。
+下一步建议：
+- 根据用户反馈，后续 Windows 控制端和 Mac 控制端都可以学习 UU 远程的“悬浮控制中心”方式：远控画面顶部或边缘放小型浮动入口，展开后提供显示屏、画质、窗口、声音、安全、快捷键、全屏和退出远控等菜单。
+- Mac 端当前可继续补 Windows 音频播放；Windows 端后续可继续补 Windows host WASAPI loopback 或控制端悬浮工具栏原型。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
 ## 2026-06-12 Mac Codex
 
 日期：2026-06-12

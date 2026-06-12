@@ -110,7 +110,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-contro
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\test-windows-host.ps1 -InputEvents -InputMode system
 ```
 
-Mac 控制 Windows 的页面级自检可在 Windows 本机启动临时 Windows host 和 `apps/mac-client`，自动打开浏览器，确认真实视频画面和 `input_ack`：
+Mac 控制 Windows 的页面级自检可在 Windows 本机启动临时 Windows host 和 `apps/mac-client`，自动打开浏览器，确认真实视频画面、`input_ack` 和文本 `clipboard_ack`：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs
