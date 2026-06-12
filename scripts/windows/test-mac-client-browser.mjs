@@ -536,12 +536,13 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
       const surfaceCleared = value.video === "连接中断" && !value.imageVisible && !value.imageHasSource;
       const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
       const runtimeCleared = value.remoteRuntime === "未提供";
-      return (reconnecting || logVisible) && surfaceCleared && clipboardButtonsDisabled && runtimeCleared ? value : null;
+      const remoteCleared = value.remote === "连接中断";
+      return (reconnecting || logVisible) && surfaceCleared && clipboardButtonsDisabled && runtimeCleared && remoteCleared ? value : null;
     },
     args.timeoutMs,
     "Mac client reconnect scheduling",
   );
-  print("OK", `Reconnect scheduled: ${reconnectingSnapshot.connection} · ${reconnectingSnapshot.video}`);
+  print("OK", `Reconnect scheduled: ${reconnectingSnapshot.connection} · ${reconnectingSnapshot.remote} · ${reconnectingSnapshot.video}`);
 
   await waitFor(
     () => canBindPort(args.host, args.port),
@@ -832,7 +833,8 @@ async function verifyMacClientConnectCancel({ args, session }) {
       const value = await evaluate(session, buildSnapshotExpression());
       const buttonsReset = !value.connectButtonDisabled && value.disconnectButtonDisabled;
       const surfaceCleared = value.video === "无画面" && !value.imageVisible && !value.imageHasSource;
-      return value.connection === "未连接" && buttonsReset && surfaceCleared && value.remote !== "发现中"
+      const remoteReset = value.remote === "等待发现";
+      return value.connection === "未连接" && buttonsReset && surfaceCleared && remoteReset
         ? value
         : null;
     },
@@ -1234,7 +1236,8 @@ async function run() {
           const surfaceCleared = value.video === "无画面" && !value.imageVisible && !value.imageHasSource;
           const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
           const runtimeCleared = value.remoteRuntime === "未提供";
-          return matchesExpectedAuthFailure(value, args) && buttonsReset && surfaceCleared && clipboardButtonsDisabled && runtimeCleared
+          const remoteReset = value.remote === "等待发现";
+          return matchesExpectedAuthFailure(value, args) && buttonsReset && surfaceCleared && clipboardButtonsDisabled && runtimeCleared && remoteReset
             ? value
             : null;
         },
@@ -1254,6 +1257,7 @@ async function run() {
       });
 
       print("OK", `Auth failure: ${authFailureSnapshot.connection}`);
+      print("OK", `Auth failure remote: ${authFailureSnapshot.remote}`);
       print("OK", `Auth failure surface: ${authFailureSnapshot.video}`);
       print("OK", `Auth failure runtime: ${authFailureSnapshot.remoteRuntime}`);
       if (authFailureSnapshot.logs.length > 0) {
@@ -1833,9 +1837,10 @@ async function run() {
           : value.audioFlowMetric === "未开启";
         const reconnectOk = value.reconnectMetric === "0 次";
         const runtimeOk = value.remoteRuntime === "未提供";
+        const remoteOk = value.remote === "等待发现";
         const surfaceCleared = !value.imageVisible && !value.imageHasSource;
         const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
-        return connectionOk && videoStatusOk && firstVideoOk && videoFlowOk && audioFlowOk && reconnectOk && runtimeOk && surfaceCleared && clipboardButtonsDisabled
+        return connectionOk && videoStatusOk && firstVideoOk && videoFlowOk && audioFlowOk && reconnectOk && runtimeOk && remoteOk && surfaceCleared && clipboardButtonsDisabled
           ? value
           : null;
       },
@@ -1844,7 +1849,7 @@ async function run() {
     );
     print(
       "OK",
-      `Disconnect reset: ${disconnectSnapshot.video} / ${disconnectSnapshot.firstVideoMetric} / ${disconnectSnapshot.videoFlowMetric} / ${disconnectSnapshot.audioFlowMetric} / ${disconnectSnapshot.reconnectMetric} / ${disconnectSnapshot.remoteRuntime}`,
+      `Disconnect reset: ${disconnectSnapshot.remote} / ${disconnectSnapshot.video} / ${disconnectSnapshot.firstVideoMetric} / ${disconnectSnapshot.videoFlowMetric} / ${disconnectSnapshot.audioFlowMetric} / ${disconnectSnapshot.reconnectMetric} / ${disconnectSnapshot.remoteRuntime}`,
     );
     print("OK", "Mac client browser self-test passed");
   } finally {

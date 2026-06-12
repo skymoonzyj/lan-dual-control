@@ -282,6 +282,10 @@ function resetVideoSurface(status = "无画面") {
   elements.videoStatus.textContent = status;
 }
 
+function resetRemoteStatus(status = "等待发现") {
+  elements.remoteStatus.textContent = status;
+}
+
 function setDiscoverButtonBusy(busy) {
   elements.discoverButton.disabled = busy;
   elements.discoverButton.textContent = busy ? "发现中" : "发现";
@@ -675,6 +679,7 @@ async function connect({ reconnect = false } = {}) {
     resetAudioPlayback();
     cancelActiveFileTransfer("连接关闭，文件发送已取消");
     resetVideoSurface(closeStatusOverride ? "无画面" : "连接中断");
+    resetRemoteStatus(closeStatusOverride ? "等待发现" : "连接中断");
     logEvent("连接关闭");
 
     if (closeStatusOverride) {
@@ -734,9 +739,7 @@ function disconnect() {
   updateRemoteRuntime(null);
   resetSessionDiagnostics({ resetReconnects: true });
   resetVideoSurface();
-  if (elements.remoteStatus.textContent === "发现中") {
-    elements.remoteStatus.textContent = "等待发现";
-  }
+  resetRemoteStatus();
   setConnected(false);
   renderSessionDiagnostics();
 }
@@ -836,6 +839,7 @@ function closeAfterAuthFailure(status) {
   resetAudioPlayback();
   cancelActiveFileTransfer("认证失败，文件发送已取消");
   resetVideoSurface();
+  resetRemoteStatus();
   setConnectionStatus(status);
   if (state.socket && state.socket.readyState === WebSocket.OPEN) {
     state.socket.close(1000, "auth failed");
