@@ -199,6 +199,98 @@ async function evaluate(session, expression) {
   return result.result?.value;
 }
 
+async function verifyFloatingControlCenter(session) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      const valueOf = (selector) => document.querySelector(selector)?.value ?? "";
+      const setValue = (selector, value, eventName = "change") => {
+        const element = document.querySelector(selector);
+        if (!element) return;
+        element.value = value;
+        element.dispatchEvent(new Event(eventName, { bubbles: true }));
+      };
+      const toggle = document.querySelector("#controlCenterToggle");
+      const panel = document.querySelector("#controlCenterPanel");
+      const remoteControlCenter = document.querySelector("#remoteControlCenter");
+      const audioToggle = document.querySelector("#audioToggle");
+      if (!toggle || !panel || !remoteControlCenter) {
+        return { ok: false, reason: "missing control center elements" };
+      }
+
+      const original = {
+        quality: valueOf("#qualityPresetSelect"),
+        resolution: valueOf("#resolutionSelect"),
+        fps: valueOf("#fpsSelect"),
+        bandwidth: valueOf("#bandwidthSelect"),
+        display: valueOf("#displaySelect"),
+        scale: valueOf("#scaleModeSelect"),
+        audio: Boolean(audioToggle?.checked),
+        volume: valueOf("#audioVolumeRange"),
+      };
+
+      if (panel.hidden) toggle.click();
+      const opened = !panel.hidden && toggle.getAttribute("aria-expanded") === "true";
+
+      setValue("#floatingQualitySelect", "sharp");
+      const qualitySynced =
+        valueOf("#qualityPresetSelect") === "sharp" &&
+        valueOf("#resolutionSelect") === "3840x2160" &&
+        valueOf("#fpsSelect") === "120" &&
+        valueOf("#bandwidthSelect") === "50";
+
+      setValue("#floatingScaleSelect", "stretch");
+      const scaleSynced =
+        valueOf("#scaleModeSelect") === "stretch" &&
+        document.querySelector("#remoteCanvas")?.classList.contains("scale-stretch");
+
+      setValue("#floatingAudioSelect", "off");
+      const audioSynced = !document.querySelector("#audioToggle")?.checked;
+
+      setValue("#floatingAudioVolumeRange", "33", "input");
+      const volumeSynced =
+        valueOf("#audioVolumeRange") === "33" &&
+        document.querySelector("#floatingAudioVolumeText")?.textContent === "33%";
+
+      document.querySelector("#qualityPresetSelect").value = original.quality;
+      document.querySelector("#resolutionSelect").value = original.resolution;
+      document.querySelector("#fpsSelect").value = original.fps;
+      document.querySelector("#bandwidthSelect").value = original.bandwidth;
+      document.querySelector("#displaySelect").value = original.display;
+      document.querySelector("#scaleModeSelect").value = original.scale;
+      document.querySelector("#audioToggle").checked = original.audio;
+      document.querySelector("#audioVolumeRange").value = original.volume;
+      if (typeof updateMetrics === "function") updateMetrics();
+      if (typeof applyScaleMode === "function") applyScaleMode();
+      if (typeof syncFloatingControlCenter === "function") syncFloatingControlCenter();
+      toggle.click();
+
+      return {
+        ok: opened && qualitySynced && scaleSynced && audioSynced && volumeSynced,
+        opened,
+        qualitySynced,
+        scaleSynced,
+        audioSynced,
+        volumeSynced,
+        closed: panel.hidden,
+        restored: {
+          quality: valueOf("#qualityPresetSelect"),
+          resolution: valueOf("#resolutionSelect"),
+          fps: valueOf("#fpsSelect"),
+          bandwidth: valueOf("#bandwidthSelect"),
+          scale: valueOf("#scaleModeSelect"),
+          audio: Boolean(document.querySelector("#audioToggle")?.checked),
+          volume: valueOf("#audioVolumeRange"),
+        },
+      };
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`floating control center check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function run() {
   const args = parseArgs(process.argv);
   const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -242,6 +334,12 @@ async function run() {
       () => evaluate(session, "document.readyState === 'complete'"),
       args.timeoutMs,
       "page load",
+    );
+
+    const controlCenterCheck = await verifyFloatingControlCenter(session);
+    print(
+      "OK",
+      `Control center: open=${controlCenterCheck.opened}, quality=${controlCenterCheck.qualitySynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}`,
     );
 
     await evaluate(

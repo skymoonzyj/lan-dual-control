@@ -59,6 +59,7 @@ node E:\codex\lan-dual-control\scripts\windows\test-coordinate-mapping.mjs
 ```
 
 真实 Mac 页面级自检可自动启动本地控制端页面、打开 Edge、连接 Mac，并确认诊断条和视频画面；加 `--injectPcmAudio` 可额外注入一帧 planar PCM，验证控制端音频播放入口：
+脚本会先回归画面内悬浮控制中心，确认画质、缩放、声音和音量能同步到原工具栏。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password

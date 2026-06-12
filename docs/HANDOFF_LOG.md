@@ -21,6 +21,36 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：把 Windows 控制端悬浮控制中心纳入页面级自检回归。
+完成内容：
+- `scripts/windows/test-windows-client-browser.mjs` 在连接被控端前会先展开 `#controlCenterToggle`。
+- 自动验证悬浮控制中心的画质、缩放、声音开关和音量会同步到原顶部工具栏。
+- 验证完成后会恢复页面初始显示设置，再继续执行原有 WebSocket 连接、诊断和视频 surface 检查。
+- Windows 控制端 README 已说明页面级自检会先回归悬浮控制中心。
+修改文件：
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node --check apps/windows-client/app.js`
+- `node scripts/windows/test-coordinate-mapping.mjs`
+- 临时启动假 Mac 服务后运行 `node scripts/windows/test-windows-client-browser.mjs --noRequireVideoSurface`
+验证结果：
+- 控制中心回归通过：`open=true, quality=true, scale=true, audio=true, volume=true`。
+- 假 Mac 页面级自检仍通过：连接、诊断、模拟视频 surface 和 WebCodecs 环境检查均正常。
+遗留问题：
+- 暂未把该检查拆成独立脚本；目前作为 Windows 控制端页面级自检的一部分执行。
+下一步建议：
+- 后续继续增强悬浮控制中心时，把新增菜单项同步补进同一个页面级回归。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：参考用户提供的 UU 远程控制中心思路，给 Windows 控制端增加画面内悬浮控制中心第一版。
 完成内容：
 - 在 Windows 控制端远控画面右上角新增“控制中心”悬浮入口。

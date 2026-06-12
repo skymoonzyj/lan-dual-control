@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/test-windows-client-browser.mjs`、`apps/windows-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 11:09 | Windows 控制端页面级自检已固化悬浮控制中心回归；验证展开、画质、缩放、声音和音量同步后再连接被控端。 |
 | Windows Codex | `apps/windows-client/index.html`、`apps/windows-client/styles.css`、`apps/windows-client/app.js`、`apps/windows-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 11:04 | Windows 控制端新增远控画面悬浮控制中心第一版；可在画面内快速切换显示屏、画质、缩放、声音、音量、全屏、窗口和退出远控，并同步复用现有顶部工具栏状态。 |
 | Windows Codex | `scripts/windows/test-mac-client-browser.mjs`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 10:55 | Mac client 页面级自检已覆盖文本剪贴板发送；真实 Windows host 返回 `clipboard_ack · system`，视频画面和 `input_ack · log` 同时通过。 |
 | Windows Codex | `scripts/windows/test-windows-host.ps1`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 10:52 | Windows host 一键自检增加临时端口冲突防护；默认 43772 被占用时自动换空闲端口，普通路径和占位服务占用场景均通过。 |
