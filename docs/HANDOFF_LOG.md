@@ -21,6 +21,46 @@
 
 日期：2026-06-12
 开发端：Windows Codex
+本轮目标：把 Windows host readiness profile 接到桌面版“本机被控”面板，减少命令行记忆成本。
+完成内容：
+- `apps/windows-client` 本机被控面板新增“体检档位”下拉：低风险、部署、深度。
+- 前端会保存该档位，并在运行体检时把 `profile` 传给 Tauri 原生命令；浏览器预览版仍禁用本机被控面板。
+- `apps/windows-desktop` 的 `run_windows_host_readiness` 命令会白名单化 `profile`，只允许 `default/deploy/deep`，并传给 `check-windows-host-readiness.mjs --profile <profile> --json`。
+- Windows client/desktop README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/app.js`
+- `apps/windows-client/README.md`
+- `apps/windows-desktop/src-tauri/src/main.rs`
+- `apps/windows-desktop/README.md`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly`
+- `cargo test` in `apps/windows-desktop/src-tauri`
+- `npm.cmd run build` in `apps/windows-desktop`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- diagnosticsOnly 页面自检通过，确认浏览器预览版本机被控面板仍禁用，新 profile 下拉默认 `default`，前端 readiness 请求会带 `profile=default`。
+- Rust 单测 6/6 通过；Tauri release build 通过并生成 `apps/windows-desktop/src-tauri/target/release/lan-dual-control-windows.exe`。
+遗留问题：
+- 尚未在真实桌面窗口中手动点击三档体检；自动化已覆盖前端请求和桌面构建链路。
+下一步建议：
+- 真机反控 Windows 前，桌面版先跑低风险体检；Windows host 启动后切到部署/深度档确认端口、视频、音频和本机自检。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
 本轮目标：给 Windows host readiness 增加常用 profile 预设，方便 Mac 反控 Windows 前做部署/深度验收。
 完成内容：
 - `scripts/windows/check-windows-host-readiness.mjs` 新增 `--profile default|deploy|deep`。

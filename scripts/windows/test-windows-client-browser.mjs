@@ -360,12 +360,20 @@ async function verifyDesktopOnlyHostPanel(session) {
         "#localHostScreenModeSelect",
         "#localHostAudioModeSelect",
         "#localHostInputModeSelect",
+        "#localHostReadinessProfileSelect",
       ].map((selector) => document.querySelector(selector));
+      const profileSelect = document.querySelector("#localHostReadinessProfileSelect");
+      const profileOptions = Array.from(profileSelect?.options || []).map((option) => option.value);
+      const readinessRequest =
+        typeof buildLocalHostReadinessRequest === "function"
+          ? buildLocalHostReadinessRequest()
+          : {};
 
       return {
         ok:
           typeof getTauriInvoke === "function" &&
           typeof canUseDesktopHostControl === "function" &&
+          typeof buildLocalHostReadinessRequest === "function" &&
           typeof maxNativeClipboardFileBytes === "number" &&
           typeof maxClipboardFileBytes === "number" &&
           typeof nativeClipboardChunkSizeBytes === "number" &&
@@ -375,10 +383,15 @@ async function verifyDesktopOnlyHostPanel(session) {
           status?.textContent.includes("浏览器预览版") &&
           buttons.every((button) => button?.disabled) &&
           inputs.every((input) => input?.disabled) &&
+          profileSelect?.value === "default" &&
+          profileOptions.join(",") === "default,deploy,deep" &&
+          readinessRequest.profile === "default" &&
           maxNativeClipboardFileBytes === maxClipboardFileBytes &&
           nativeClipboardChunkSizeBytes === 1024 * 1024,
         badge: badge?.textContent || "",
         status: status?.textContent || "",
+        profile: profileSelect?.value || "",
+        requestProfile: readinessRequest.profile || "",
         buttonsDisabled: buttons.map((button) => Boolean(button?.disabled)),
         inputsDisabled: inputs.map((input) => Boolean(input?.disabled)),
         maxNativeClipboardFileBytes,

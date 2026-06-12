@@ -20,6 +20,7 @@ const elements = {
   localHostScreenModeSelect: document.querySelector("#localHostScreenModeSelect"),
   localHostAudioModeSelect: document.querySelector("#localHostAudioModeSelect"),
   localHostInputModeSelect: document.querySelector("#localHostInputModeSelect"),
+  localHostReadinessProfileSelect: document.querySelector("#localHostReadinessProfileSelect"),
   localHostReadinessButton: document.querySelector("#localHostReadinessButton"),
   localHostStartButton: document.querySelector("#localHostStartButton"),
   localHostFirewallButton: document.querySelector("#localHostFirewallButton"),
@@ -932,6 +933,7 @@ function collectPreferences() {
     localHostScreenMode: elements.localHostScreenModeSelect.value,
     localHostAudioMode: elements.localHostAudioModeSelect.value,
     localHostInputMode: elements.localHostInputModeSelect.value,
+    localHostReadinessProfile: elements.localHostReadinessProfileSelect.value,
     recentConnections: state.recentConnections,
   };
 }
@@ -973,6 +975,9 @@ function applyPreferences() {
   if (preferences.localHostScreenMode) elements.localHostScreenModeSelect.value = preferences.localHostScreenMode;
   if (preferences.localHostAudioMode) elements.localHostAudioModeSelect.value = preferences.localHostAudioMode;
   if (preferences.localHostInputMode) elements.localHostInputModeSelect.value = preferences.localHostInputMode;
+  if (preferences.localHostReadinessProfile) {
+    elements.localHostReadinessProfileSelect.value = preferences.localHostReadinessProfile;
+  }
   applyKeyboardMapping(preferences.keyboardMapping ?? defaultKeyboardMapping);
 
   state.recentConnections = Array.isArray(preferences.recentConnections)
@@ -2785,6 +2790,7 @@ function buildLocalHostReadinessRequest(extra = {}) {
   return {
     host: "0.0.0.0",
     port: getLocalHostPort(),
+    profile: elements.localHostReadinessProfileSelect.value,
     ...extra,
   };
 }
@@ -2828,10 +2834,22 @@ function readinessSummary(result) {
   if (!details || typeof details !== "object") {
     return result?.ok ? "体检完成。" : "体检未能生成完整结果。";
   }
+  const profile = readinessProfileLabel(details.args?.profile || elements.localHostReadinessProfileSelect.value);
   const passed = Number(details.passed ?? 0);
   const failed = Number(details.failed ?? 0);
   const warnings = Number(details.warnings ?? 0);
-  return `体检：通过 ${passed} 项，失败 ${failed} 项，提醒 ${warnings} 条。`;
+  return `${profile}体检：通过 ${passed} 项，失败 ${failed} 项，提醒 ${warnings} 条。`;
+}
+
+function readinessProfileLabel(profile) {
+  switch (profile) {
+    case "deploy":
+      return "部署";
+    case "deep":
+      return "深度";
+    default:
+      return "低风险";
+  }
 }
 
 function readinessLines(result) {
@@ -2862,6 +2880,7 @@ function updateLocalHostControls() {
   ].forEach((element) => {
     element.disabled = !available || busy || state.localHostRunning;
   });
+  elements.localHostReadinessProfileSelect.disabled = !available || busy;
 
   if (!available) {
     setLocalHostBadge("offline", "需桌面版");
@@ -2925,7 +2944,8 @@ function startLocalHostPolling() {
 async function runLocalHostReadiness() {
   const invoke = getTauriInvoke();
   if (!invoke) return;
-  setLocalHostBusy(true, "正在体检本机 Windows 被控端环境...");
+  const profile = readinessProfileLabel(elements.localHostReadinessProfileSelect.value);
+  setLocalHostBusy(true, `正在运行${profile}体检...`);
   renderLocalHostOutput([]);
   try {
     const result = await invoke("run_windows_host_readiness", {
@@ -4446,6 +4466,7 @@ elements.resetKeyMapButton.addEventListener("click", resetKeyboardMapping);
   elements.localHostScreenModeSelect,
   elements.localHostAudioModeSelect,
   elements.localHostInputModeSelect,
+  elements.localHostReadinessProfileSelect,
 ].forEach((input) => {
   input.addEventListener("change", savePreferences);
 });

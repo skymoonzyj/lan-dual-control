@@ -133,6 +133,7 @@ struct CancelClipboardFileWritePayload {
 struct WindowsHostReadinessRequest {
     host: Option<String>,
     port: Option<u16>,
+    profile: Option<String>,
     probe_video: Option<bool>,
     probe_audio: Option<bool>,
     require_open: Option<bool>,
@@ -1110,8 +1111,15 @@ fn run_windows_host_readiness(
         .join("check-windows-host-readiness.mjs");
     let host = normalize_host(request.host.as_ref());
     let port = normalize_port(request.port);
+    let profile = normalize_mode(
+        request.profile.as_ref(),
+        &["default", "deploy", "deep"],
+        "default",
+    );
     let mut args = vec![
         "--json".to_string(),
+        "--profile".to_string(),
+        profile,
         "--host".to_string(),
         host,
         "--port".to_string(),
