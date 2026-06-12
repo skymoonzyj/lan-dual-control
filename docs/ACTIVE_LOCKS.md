@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `apps/mac-client/app.js`、`apps/mac-client/README.md`、`scripts/windows/test-mac-client-browser.mjs`、交接 docs | 2026-06-13 01:02 | Mac client 意外断线等待自动重连时清空“远端运行”runtime，重连恢复后页面自检断言新 runtime 重新出现。 |
 | Mac Codex | `apps/mac-client/app.js`、`apps/mac-client/README.md`、`scripts/windows/test-mac-client-browser.mjs`、交接 docs | 2026-06-13 00:56 | Mac client 手动断开后清空“远端运行”runtime，页面级自检断言断开后显示“未提供”。 |
 | Windows Codex | `apps/windows-client/app.js`、`apps/windows-client/README.md`、`scripts/windows/test-windows-client-browser.mjs`、交接 docs | 2026-06-13 00:56 | Windows 控制端远端文件托盘清空状态收口：存在系统剪贴板临时目录时清空按钮提示不会删除临时目录，清空后内存/状态归零并记录临时目录仍保留给 Windows 粘贴使用。 |
 | Mac Codex | `apps/mac-client/index.html`、`apps/mac-client/app.js`、`apps/mac-client/README.md`、`scripts/windows/test-mac-client-browser.mjs`、交接 docs | 2026-06-13 00:40 | Mac client 会话诊断显示 Windows host runtime/build；页面级自检断言临时 host PID 和 `mac-client-test` build 已显示。 |

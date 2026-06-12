@@ -669,6 +669,7 @@ async function connect({ reconnect = false } = {}) {
     state.socket = null;
     state.authenticated = false;
     setConnected(false);
+    updateRemoteRuntime(null);
     state.closeStatusOverride = "";
     stopClipboardWatch("连接关闭，监听已停止");
     resetAudioPlayback();

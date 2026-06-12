@@ -203,6 +203,7 @@ Mac 端：
 - [x] Mac client 页面级自检支持短窗口视频持续来帧/FPS 阈值验收。
 - [x] Mac client 会话诊断显示 Windows host runtime/build，并由页面级自检确认临时 host PID/build 已显示。
 - [x] Mac client 手动断开会清空远端运行 runtime，页面级自检覆盖断开后显示“未提供”。
+- [x] Mac client 意外断线等待自动重连时会清空远端运行 runtime，恢复连接后重新显示当前 host runtime。
 - [x] 发送文本剪贴板到 Windows host。
 - [x] 发送文件剪贴板到 Windows host 的入口。
 - [x] Mac `Command` 到 Windows `Ctrl` 快捷键映射提示和页面级自检。

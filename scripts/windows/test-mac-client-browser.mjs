@@ -535,7 +535,8 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
       const logVisible = value.logs.some((line) => line.includes("自动重连"));
       const surfaceCleared = value.video === "连接中断" && !value.imageVisible && !value.imageHasSource;
       const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
-      return (reconnecting || logVisible) && surfaceCleared && clipboardButtonsDisabled ? value : null;
+      const runtimeCleared = value.remoteRuntime === "未提供";
+      return (reconnecting || logVisible) && surfaceCleared && clipboardButtonsDisabled && runtimeCleared ? value : null;
     },
     args.timeoutMs,
     "Mac client reconnect scheduling",
@@ -570,6 +571,7 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
     "OK",
     `Reconnect restored: ${reconnectedSnapshot.connection} · sessions=${reconnectedSnapshot.sessionAnswers} · ${restoreMs}ms`,
   );
+  assertTemporaryRuntimeDiagnostics(reconnectedSnapshot, args, "Mac client reconnect");
   return restartedHost;
 }
 

@@ -53,6 +53,37 @@
 
 日期：2026-06-13
 开发端：Mac Codex
+本轮目标：收口 Mac client 意外断线等待重连时的远端运行诊断，避免旧 Windows host PID/build 在断线期间残留。
+完成内容：
+- WebSocket 意外关闭后会清空远端 runtime 状态，“远端运行”回到“未提供”。
+- 自动重连成功后，新的 `/discovery.runtime` 或 `hello_ack.runtime` 会重新显示当前 Windows host PID/build。
+- `--expectReconnect` 页面级自检会断言等待重连阶段 runtime 已清空，并在恢复连接后断言 runtime 重新出现。
+- Mac client README 和任务板已同步该行为。
+修改文件：
+- `apps/mac-client/app.js`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/04-task-board.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --expectReconnect --skipFileClipboard --clientPort 5238 --debugPort 9388 --timeoutMs 60000`
+验证结果：
+- 自动重连页面回归通过：断线后进入 1/3 自动重连，重启临时 host 后约 4042ms 恢复；等待重连阶段 runtime 已清空，恢复后重新显示临时 host runtime。
+- 最终手动断开仍输出 `Disconnect reset: 无画面 / 未就绪 / 未接收 / 未开启 / 0 次 / 未提供`。
+遗留问题：
+- 未连接真实 Windows host 验收该 UI 清理；临时 Windows host 已覆盖旧 runtime 清空和新 runtime 恢复。
+下一步建议：
+- 继续推进真实 Windows host WASAPI 到 Mac client 的听感/延迟验收，或继续做 Mac host 真实输入安全验收。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-13 Mac Codex
+
+日期：2026-06-13
+开发端：Mac Codex
 本轮目标：收口 Mac client 手动断开后的远端运行诊断，避免上一段 Windows host PID/build 残留。
 完成内容：
 - `apps/mac-client` 手动断开时会清空远端 runtime 状态，“远端运行”回到“未提供”。
