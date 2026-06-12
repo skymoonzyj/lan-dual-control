@@ -49,6 +49,7 @@ const state = {
   audioLastError: "",
   fileTransferActive: false,
   fileTransfers: new Map(),
+  closeStatusOverride: "",
 };
 
 const fileChunkSizeBytes = 64 * 1024;
@@ -148,6 +149,7 @@ async function connect() {
   const socket = new WebSocket(targetWsUrl());
   state.socket = socket;
   socket.addEventListener("open", () => {
+    state.closeStatusOverride = "";
     setConnected(true);
     logEvent("WebSocket 已连接", targetWsUrl());
     send({
@@ -161,7 +163,12 @@ async function connect() {
     handleMessage(event.data);
   });
   socket.addEventListener("close", () => {
+    const closeStatusOverride = state.closeStatusOverride;
     setConnected(false);
+    if (closeStatusOverride) {
+      setConnectionStatus(closeStatusOverride);
+    }
+    state.closeStatusOverride = "";
     state.authenticated = false;
     resetAudioPlayback();
     logEvent("连接关闭");
@@ -173,6 +180,7 @@ async function connect() {
 }
 
 function disconnect() {
+  state.closeStatusOverride = "";
   if (state.socket) {
     state.socket.close();
   }
@@ -250,10 +258,38 @@ function handleHelloAck(message) {
   });
 }
 
+function authAttemptText(message) {
+  const remaining = Number(message.attemptsRemaining);
+  const maxAttempts = Number(message.maxAttempts);
+  if (!Number.isFinite(remaining)) {
+    return "";
+  }
+  if (remaining <= 0) {
+    return Number.isFinite(maxAttempts) && maxAttempts > 0 ? `无剩余尝试 · 共 ${maxAttempts} 次` : "无剩余尝试";
+  }
+  return Number.isFinite(maxAttempts) && maxAttempts > 0
+    ? `剩余 ${remaining}/${maxAttempts} 次`
+    : `剩余 ${remaining} 次`;
+}
+
+function closeAfterAuthFailure(status) {
+  state.closeStatusOverride = status;
+  if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+    state.socket.close(1000, "auth failed");
+    return;
+  }
+  setConnected(false);
+  setConnectionStatus(status);
+}
+
 function handleAuthResult(message) {
   if (!message.ok) {
-    setConnectionStatus("认证失败");
-    logEvent("认证失败", message.reason || message.message || message.code || "unknown");
+    const attemptText = authAttemptText(message);
+    const status = attemptText ? `认证失败 · ${attemptText}` : "认证失败";
+    const reason = message.reason || message.message || message.code || "unknown";
+    setConnectionStatus(status);
+    logEvent("认证失败", attemptText ? `${reason} · ${attemptText}` : reason);
+    closeAfterAuthFailure(status);
     return;
   }
   state.authenticated = true;

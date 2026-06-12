@@ -21,6 +21,40 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：改善 Mac 控制 Windows 原型的认证失败体验。
+完成内容：
+- `apps/mac-client` 会读取 `auth_result.attemptsRemaining/maxAttempts`，在连接状态里显示 `认证失败 · 剩余 2/3 次` 或无剩余尝试。
+- 认证失败后会关闭当前 WebSocket 并释放连接按钮，避免页面停留在“连接中但不可重试”的状态，用户可改密码后重新连接。
+- WebSocket close 事件会保留认证失败状态，不再立刻覆盖成普通“未连接”。
+- README、当前状态和任务板已同步该能力。
+修改文件：
+- `apps/mac-client/app.js`
+- `apps/mac-client/README.md`
+- `README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `git diff --check`
+- 正常路径：`node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --clientPort 5190 --debugPort 9341`
+- 错误密码路径：临时启动 `43773` Windows host，使用 `--useExistingHost --password wrong-password --skipFileClipboard` 连接，预期脚本失败并输出认证失败快照。
+验证结果：
+- 正常路径通过：连接、mock 视频、`input_ack · log`、文本 `clipboard_ack · memory-only`、文件 `clipboard_file_result · temp` 均正常。
+- 错误密码路径输出 `Last connection: 认证失败 · 剩余 2/3 次`，事件日志包含 `认证失败 · 连接密码不正确 · 剩余 2/3 次` 和连接关闭。
+遗留问题：
+- 还没有把错误密码路径固化成独立自动化脚本断言；当前为临时命令验证。
+下一步建议：
+- 后续可给 `test-mac-client-browser.mjs` 增加 `--expectAuthFailure` 模式，把认证失败 UX 变成正式回归。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：把 Mac 控制 Windows 原型的文件剪贴板发送纳入页面级自动化自检。
 完成内容：
 - `scripts/windows/test-mac-client-browser.mjs` 新增浏览器 CDP 文件注入：自动创建临时小文件、设置到 `#clipboardFileInput`，点击发送并等待 `clipboard_file_result`。

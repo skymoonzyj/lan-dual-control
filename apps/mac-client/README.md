@@ -5,6 +5,7 @@
 - 输入 Windows host 地址、端口和密码。
 - 通过 `/discovery` 发现 Windows 被控端。
 - 通过 WebSocket 完成 `hello`、`auth_request`、`session_offer`。
+- 认证失败时显示远端返回的剩余尝试次数，并自动释放连接按钮，方便改密码后重连。
 - 显示 Windows host 的 JPEG `video_frame`。
 - 向 Windows host 发送鼠标移动、按钮、滚轮和键盘 `input_event`。
 - 手动发送文本 `clipboard_text` 到 Windows host，并显示 `clipboard_ack` 写入结果。
@@ -66,3 +67,5 @@ node --check apps/mac-client/app.js
 音频入口本机联调已验证：打开“播放远端声音”后，Windows host mock 音频帧会开始接收并更新状态；真实 PCM 播放需要在 Windows 机器上用 `pcm-f32le-base64` 音频设备继续验收。
 
 文件剪贴板入口本机联调已验证：页面显示文件选择和发送入口，未选择文件时不会误发送；`scripts/windows/test-mac-client-browser.mjs` 会用浏览器调试协议注入临时小文件并等待 `clipboard_file_result`。在 Windows 上默认要求系统文件剪贴板 `saveMode=clipboard`，在 Mac/Linux 开发环境可加 `--allowClipboardFallback --mockVideo` 验证 `saveMode=temp` 回退链路。
+
+认证失败路径本机联调已验证：临时 Windows host 使用正确密码，Mac 控制端填错密码时，页面最终保留 `认证失败 · 剩余 2/3 次`，并关闭当前 WebSocket 释放连接按钮。
