@@ -1352,6 +1352,11 @@ function cancelActiveFileTransfer(status = "文件发送已取消") {
   updateFileClipboardButton();
 }
 
+function isCurrentFileTransferMessage(message) {
+  const transferId = String(message.transferId || "");
+  return transferId && state.fileTransfers.has(transferId);
+}
+
 async function sendClipboardFiles() {
   if (!state.authenticated) {
     elements.fileClipboardStatus.textContent = "未连接";
@@ -1484,6 +1489,9 @@ async function sendClipboardFiles() {
 }
 
 function handleClipboardFileResponse(message) {
+  if (!isCurrentFileTransferMessage(message)) {
+    return;
+  }
   if (!message.accepted) {
     elements.fileClipboardStatus.textContent = "对端拒绝";
     logEvent("文件剪贴板拒绝", message.reason || message.code || "unknown");
@@ -1498,6 +1506,9 @@ function handleClipboardFileResponse(message) {
 }
 
 function handleClipboardFileProgress(message) {
+  if (!isCurrentFileTransferMessage(message)) {
+    return;
+  }
   const receivedBytes = Number(message.receivedBytes) || 0;
   const totalBytes = Number(message.totalBytes) || 0;
   const percent = totalBytes === 0 ? 100 : Math.round((receivedBytes / totalBytes) * 100);
@@ -1505,6 +1516,9 @@ function handleClipboardFileProgress(message) {
 }
 
 function handleClipboardFileResult(message) {
+  if (!isCurrentFileTransferMessage(message)) {
+    return;
+  }
   const totalBytes = Number(message.totalBytes) || 0;
   const receivedBytes = Number(message.receivedBytes) || 0;
   const status = message.accepted

@@ -923,6 +923,43 @@ async function verifyMacClientFileClipboardRejectCancel({ args, session, uploadD
     args.timeoutMs,
     "Mac client file clipboard rejection cancel",
   );
+  await evaluate(
+    session,
+    `(() => {
+      const socket = window.__lanDualLastSocket;
+      if (!socket) throw new Error("missing recorded WebSocket");
+      for (const message of [
+        {
+          type: "clipboard_file_response",
+          transferId: ${JSON.stringify(offerSnapshot.transferId)},
+          accepted: true,
+          saveMode: "temp",
+        },
+        {
+          type: "clipboard_file_progress",
+          transferId: ${JSON.stringify(offerSnapshot.transferId)},
+          receivedBytes: 64,
+          totalBytes: 128,
+        },
+        {
+          type: "clipboard_file_result",
+          transferId: ${JSON.stringify(offerSnapshot.transferId)},
+          accepted: true,
+          saveMode: "temp",
+          receivedBytes: 128,
+          totalBytes: 128,
+        },
+      ]) {
+        socket.dispatchEvent(new MessageEvent("message", { data: JSON.stringify(message) }));
+      }
+      return true;
+    })()`,
+  );
+  await delay(250);
+  const staleSnapshot = await evaluate(session, buildSnapshotExpression());
+  if (!staleSnapshot.fileClipboard.includes("对端拒绝")) {
+    throw new Error(`Mac client stale file transfer response overwrote rejection: ${JSON.stringify(staleSnapshot)}`);
+  }
   await delay(1000);
   const leakedComplete = await evaluate(
     session,
