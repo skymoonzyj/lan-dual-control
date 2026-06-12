@@ -577,9 +577,9 @@ async function connect({ reconnect = false } = {}) {
     if (socket !== state.socket) return;
     const closeStatusOverride = state.closeStatusOverride;
     state.socket = null;
+    state.authenticated = false;
     setConnected(false);
     state.closeStatusOverride = "";
-    state.authenticated = false;
     stopClipboardWatch("连接关闭，监听已停止");
     resetAudioPlayback();
     cancelActiveFileTransfer("连接关闭，文件发送已取消");

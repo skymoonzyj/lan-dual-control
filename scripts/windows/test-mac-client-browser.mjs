@@ -494,6 +494,34 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
     session,
     `(() => (window.__lanDualReceivedMessages || []).filter((message) => message.type === "session_answer").length)()`,
   );
+  await evaluate(
+    session,
+    `(() => {
+      const textInput = document.querySelector("#clipboardTextInput");
+      textInput.value = "reconnect clipboard button guard";
+      textInput.dispatchEvent(new Event("input", { bubbles: true }));
+      textInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+      const fileInput = document.querySelector("#clipboardFileInput");
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(new File(["reconnect-file-button-guard"], "reconnect-button-guard.txt", { type: "text/plain" }));
+      fileInput.files = dataTransfer.files;
+      fileInput.dispatchEvent(new Event("input", { bubbles: true }));
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    })()`,
+  );
+  const clipboardButtonsReadySnapshot = await waitFor(
+    async () => {
+      const value = await evaluate(session, buildSnapshotExpression());
+      const textReady = !value.sendClipboardButtonDisabled && value.clipboardTextValue.includes("reconnect clipboard");
+      const fileReady = !value.sendClipboardFilesButtonDisabled && value.fileClipboard.includes("1 个");
+      return textReady && fileReady ? value : null;
+    },
+    args.timeoutMs,
+    "Mac client reconnect clipboard buttons ready",
+  );
+  print("OK", `Reconnect clipboard buttons ready: ${clipboardButtonsReadySnapshot.fileClipboard}`);
 
   await stopProcess(windowsHost, "Windows host for reconnect");
   await waitForHttpDown(discoveryUrl, args.timeoutMs, "Windows host discovery shutdown");
@@ -504,7 +532,8 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
       const reconnecting = value.connection.includes("自动重连") || value.connection.includes("重连");
       const logVisible = value.logs.some((line) => line.includes("自动重连"));
       const surfaceCleared = value.video === "连接中断" && !value.imageVisible && !value.imageHasSource;
-      return (reconnecting || logVisible) && surfaceCleared ? value : null;
+      const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
+      return (reconnecting || logVisible) && surfaceCleared && clipboardButtonsDisabled ? value : null;
     },
     args.timeoutMs,
     "Mac client reconnect scheduling",

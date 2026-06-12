@@ -97,6 +97,6 @@ Mac client 页面级自检可加 `--enableAudio --expectAudioFrame` 验证音频
 
 认证失败路径已固化到页面级自检：`scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3` 会启动正确密码的临时 Windows host，并让 Mac 控制端填错密码，断言页面最终保留 `认证失败 · 剩余 2/3 次`，连接按钮可重试，且视频表面回到“无画面”。
 
-意外断线自动重连可用 `scripts/windows/test-mac-client-browser.mjs --expectReconnect --mockVideo --allowClipboardFallback --skipFileClipboard --timeoutMs 45000` 做页面级自检：脚本会连接临时 Windows host，杀掉 host 等页面进入自动重连状态，再用同一端口重启 host 并要求页面恢复到“已连接”。
+意外断线自动重连可用 `scripts/windows/test-mac-client-browser.mjs --expectReconnect --mockVideo --allowClipboardFallback --skipFileClipboard --timeoutMs 45000` 做页面级自检：脚本会连接临时 Windows host，杀掉 host 等页面进入自动重连状态，确认旧画面已清理且剪贴板发送入口禁用，再用同一端口重启 host 并要求页面恢复到“已连接”。
 
 体验耗时指标也已纳入页面级自检：脚本会打印首次视频可见耗时；加 `--maxInitialVideoMs <毫秒>` 可把首帧耗时变成强校验。搭配 `--expectReconnect` 时还会打印意外断线到恢复画面的总耗时；加 `--maxReconnectRestoreMs <毫秒>` 可强制要求自动恢复不超过指定阈值。
