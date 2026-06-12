@@ -8,7 +8,7 @@
 - `hello`、`auth_request`、`session_offer`、`display_settings`、`input_event`、`input_ack`、`clipboard_text` 和 `reverse_control_request` 消息处理；未认证连接会被拒绝，同一连接内密码错误 3 次后会关闭连接。
 - Windows 屏幕 `video_frame` 输出：默认在 Windows 桌面会话中用 FFmpeg gdigrab 持续采集 MJPEG/JPEG data URL；无 FFmpeg 时回退 PowerShell/System.Drawing 系统截图，失败时再回退模拟帧。控制端下发的 `qualityPreset` 和 `maxBandwidthKbps` 会换算为实际 `jpegQuality`，让 5/10/20/40/50 Mbps 对应不同压缩质量。
 - 音频 `audio_frame` 输出：默认发送模拟帧；显式设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi` 后可用 Windows WASAPI loopback 采集默认播放设备的系统声音并发送 `pcm-f32le-base64` PCM 帧；也可设置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 试用 FFmpeg DirectShow 指定设备。
-- 屏幕采集当前是 FFmpeg gdigrab + PowerShell/System.Drawing 兜底的过渡实现，后续升级 Windows Graphics Capture 以继续降低延迟和资源占用。
+- 屏幕采集当前是 FFmpeg gdigrab + PowerShell/System.Drawing 兜底的过渡实现；已新增 Windows Graphics Capture 支持预检脚本，但还没有替换现有采集管线，后续会用该预检结果和 FFmpeg 60 Hz 基线做对照升级。
 - WASAPI loopback 是当前推荐的系统声音采集入口；DirectShow PCM 入口保留给虚拟声卡/loopback 设备做兼容验证。
 - SendInput 输入注入模块：在 Windows 上通过常驻 C# helper 调用 `SendInput` 和 `SetCursorPos` 注入鼠标、滚轮和常用键盘事件，避免每个事件重复启动 PowerShell；在非 Windows 开发环境只记录事件。
 - 输入事件处理后会返回 `input_ack`，便于控制端和联调脚本确认已注入、仅记录或被拒绝。
@@ -176,7 +176,7 @@ node .\server.mjs 43772 127.0.0.1
 
 ## 一键自检
 
-Windows host 真机联调前，建议先跑一键体检。默认只做低风险检查：Node/FFmpeg、Windows host 语法、输入 helper 安全干跑、音频设备/WASAPI 格式，以及局域网/防火墙只读检查；不会播放声音、不会发真实鼠标键盘输入，也不要求 `43770` 已经有服务监听。
+Windows host 真机联调前，建议先跑一键体检。默认只做低风险检查：Node/FFmpeg、Windows Graphics Capture 支持预检、Windows host 语法、输入 helper 安全干跑、音频设备/WASAPI 格式，以及局域网/防火墙只读检查；不会播放声音、不会发真实鼠标键盘输入，也不要求 `43770` 已经有服务监听。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs
@@ -186,6 +186,19 @@ node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-script-help.mjs
+```
+
+需要单独确认这台 Windows 是否具备后续 WGC 采集条件时，可以运行只读预检。它只检查系统 build、WinRT 类型、`GraphicsCaptureSession.IsSupported()` 和显卡/虚拟显示适配器信息，不会启动采集，也不会改系统设置。当前这台 Windows 11 本机预检通过：build `26200`，WGC WinRT 类型齐全，`GraphicsCaptureSession.IsSupported()` 为 `true`，检测到 2 个硬件 GPU 和 5 个虚拟显示适配器。
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\check-windows-wgc-support.mjs
+node E:\codex\lan-dual-control\scripts\windows\check-windows-wgc-support.mjs --json
+```
+
+默认一键体检只把 WGC 预检作为信息项；等真正实现 WGC 采集后，再用 `--requireWgc` 把它变成强校验。
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --requireWgc
 ```
 
 常用预设可直接用 `--profile`：`default` 与上面的默认体检一致；`deploy` 用于 Windows host 已启动、准备让 Mac 连入前，会开启严格模式、要求配置端口可达、确认运行中 host 是当前 git build，并短时验证视频和系统声音；视频/音频短验收默认还会要求帧 `timestamp` 单调，且接收年龄不超过 1000ms；`deep` 在 `deploy` 基础上再跑 `test-windows-host.ps1` 本机自检。若 `43770` 没有服务正在监听，`deploy` / `deep` 失败是正常现象，先用启动助手或 `node .\server.mjs 43770 0.0.0.0` 启动 Windows host。
@@ -323,7 +336,7 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --fps 60 --useDefaultMaxScreenFps --expectSessionFps 60 --durationMs 4000 --minFrames 140 --minFps 35 --maxGapMs 1000
 ```
 
-当前 FFmpeg gdigrab 60 Hz 基线：`2026-06-13 03:00` 本机临时 host 观察 4 秒收到 230 帧，平均 57.1 FPS，最大帧间隔 41 ms，`dropped=4`，`video_frame.timestamp` 接收年龄 min/avg/max `0/0/1 ms`，timestamp 单调；请求码率 50 Mbps，`jpegQuality=0.62`，平均帧大小约 45 KB。
+当前 FFmpeg gdigrab 60 Hz 基线：`2026-06-13 03:00` 本机临时 host 观察 4 秒收到 230 帧，平均 57.1 FPS，最大帧间隔 41 ms，`dropped=4`，`video_frame.timestamp` 接收年龄 min/avg/max `0/0/1 ms`，timestamp 单调；请求码率 50 Mbps，`jpegQuality=0.62`，平均帧大小约 45 KB。后续 Windows Graphics Capture 采集实装后，至少要和这条基线对照帧率、最大帧间隔、帧新鲜度、码率/画质和资源占用。
 
 需要把低延迟帧新鲜度纳入强校验时：
 

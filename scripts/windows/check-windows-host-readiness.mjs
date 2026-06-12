@@ -19,6 +19,7 @@ const defaults = {
   maxVideoFrameAgeMs: 1000,
   maxAudioFrameAgeMs: 1000,
   ffmpeg: process.env.LAN_DUAL_FFMPEG || "",
+  requireWgc: false,
   probeHost: false,
   probeAudio: false,
   probeVideo: false,
@@ -53,6 +54,7 @@ function parseArgs(argv) {
       key === "probeHost" ||
       key === "probeAudio" ||
       key === "probeVideo" ||
+      key === "requireWgc" ||
       key === "requireCurrentBuildId" ||
       key === "skipCurrentBuildCheck" ||
       key === "requireOpen" ||
@@ -76,6 +78,7 @@ function parseArgs(argv) {
   args.maxAudioFrameAgeMs = Math.max(0, Number(args.maxAudioFrameAgeMs) || 0);
   args.host = String(args.host || defaults.host).trim();
   args.ffmpeg = resolveFfmpegCommand(String(args.ffmpeg || "").trim());
+  args.requireWgc = booleanArg(args.requireWgc);
   args.probeHost = booleanArg(args.probeHost);
   args.probeAudio = booleanArg(args.probeAudio);
   args.probeVideo = booleanArg(args.probeVideo);
@@ -118,7 +121,8 @@ function printHelp() {
 
 Runs a low-risk Windows host readiness check for local LAN reverse-control work.
 Default checks are read-only: syntax, FFmpeg availability, LAN/firewall state,
-audio device listing, WASAPI format, and safe input helper dry-run.
+audio device listing, WASAPI format, Windows Graphics Capture preflight, and
+safe input helper dry-run.
 
 Options:
   --profile <name>    Preset: default, deploy, deep. Default keeps low-risk checks.
@@ -127,6 +131,7 @@ Options:
   --ffmpeg <path>     FFmpeg path. Auto-detects C:\\DevTools\\ffmpeg\\bin\\ffmpeg.exe
   --maxVideoFrameAgeMs <ms>  Video probe frame freshness limit. 0 disables. Default: 1000
   --maxAudioFrameAgeMs <ms>  Audio probe frame freshness limit. 0 disables. Default: 1000
+  --requireWgc        Fail when Windows Graphics Capture preflight is unsupported.
   --probeHost         Run Windows host PowerShell self-test.
   --probeVideo        Run short Windows host video observer.
   --probeAudio        Run short WASAPI audio observer. Does not play a tone.
@@ -496,6 +501,17 @@ async function main() {
 
   await runStep(results, args, "Node.js", node, ["--version"], { timeoutMs: 5000 });
   await runStep(results, args, "FFmpeg", args.ffmpeg, ["-version"], { timeoutMs: 8000 });
+  await runStep(
+    results,
+    args,
+    "Windows Graphics Capture preflight",
+    node,
+    [
+      "scripts/windows/check-windows-wgc-support.mjs",
+      ...(args.requireWgc ? ["--requireSupported"] : []),
+    ],
+    { timeoutMs: args.timeoutMs },
+  );
   await runStep(results, args, "Windows host syntax", npmCommand, ["run", "check"], {
     cwd: resolve(repoRoot, "apps/windows-host"),
     timeoutMs: args.timeoutMs,
@@ -606,6 +622,7 @@ async function main() {
       host: args.host,
       port: args.port,
       ffmpeg: args.ffmpeg,
+      requireWgc: args.requireWgc,
       maxVideoFrameAgeMs: args.maxVideoFrameAgeMs,
       maxAudioFrameAgeMs: args.maxAudioFrameAgeMs,
       probeHost: args.probeHost,

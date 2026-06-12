@@ -19,6 +19,48 @@
 
 ## 2026-06-13 Windows Codex
 
+日期：2026-06-13 03:20
+开发端：Windows Codex
+本轮目标：为后续 Windows Graphics Capture 采集升级增加只读支持预检，并接入 Windows host readiness。
+完成内容：
+- 新增 `scripts/windows/check-windows-wgc-support.mjs`，只读检查 Windows build、WGC WinRT 类型、`GraphicsCaptureSession.IsSupported()`、硬件 GPU 和虚拟显示适配器。
+- `check-windows-host-readiness.mjs` 默认加入 “Windows Graphics Capture preflight” 步骤；默认只是信息项，`--requireWgc` 可显式强制失败。
+- Windows host README、当前状态、下一步和任务板已同步，明确 WGC 目前只是预检通过，尚未替换 FFmpeg gdigrab 采集管线。
+- Windows `.mjs` 帮助覆盖自检自动包含新脚本，当前覆盖提升到 16 个脚本、32 条 `--help/-h` 命令。
+修改文件：
+- `scripts/windows/check-windows-wgc-support.mjs`
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-wgc-support.mjs`
+- `node --check scripts/windows/check-windows-host-readiness.mjs`
+- `node scripts/windows/check-windows-wgc-support.mjs --json`
+- `node scripts/windows/check-windows-wgc-support.mjs --requireSupported`
+- `node scripts/windows/check-windows-host-readiness.mjs --help`
+- `node scripts/windows/check-windows-host-readiness.mjs --json`
+- `node scripts/windows/check-windows-host-readiness.mjs --requireWgc --json`
+- `node scripts/windows/test-windows-script-help.mjs`
+- `git diff --check`
+验证结果：
+- 本机 WGC 预检通过：Windows 11 build `26200`，WGC WinRT 类型齐全，`GraphicsCaptureSession.IsSupported()` 为 `true`，检测到 2 个硬件 GPU 和 5 个虚拟显示适配器。
+- 默认 readiness 新增 WGC preflight 后仍保持低风险通过；`--requireWgc` 在本机通过。
+- 帮助覆盖自检通过，16 个脚本、32 条帮助命令全部 0 退出。
+遗留问题：
+- WGC 尚未实装为采集 backend，Windows host 仍默认使用 FFmpeg gdigrab MJPEG + System.Drawing 兜底。
+- 后续实现 WGC/编码 helper 时，需要用当前 FFmpeg 60 Hz 基线做 A/B 对照。
+下一步建议：
+- 白天继续前先打开 Agent Link Board，和 Mac Codex 互通下一步。
+- 下一轮可先设计 WGC 原生 helper 的最小形态：枚举显示器/启动捕获/输出帧时间戳和编码前统计，先作为显式实验模式，不替换默认 FFmpeg。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；后续真实 Mac client 反控 Windows 体验验收需要 Mac 端配合。
+
+## 2026-06-13 Windows Codex
+
 日期：2026-06-13 03:00
 开发端：Windows Codex
 本轮目标：补一条 Windows host 现有视频/音频链路基线，给后续 Windows Graphics Capture 和音频体验优化做对照。
