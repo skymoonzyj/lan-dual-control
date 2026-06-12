@@ -17,6 +17,47 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-13 Mac Codex
+
+日期：2026-06-13
+开发端：Mac Codex
+本轮目标：让 Mac client 消费 Windows host 新增的可选 runtime/build 诊断，避免 Mac 反控 Windows 时误连旧进程。
+完成内容：
+- `apps/mac-client` 会在“会话诊断”里显示 Windows host 的可选 runtime 信息：PID、运行时长、启动时间和 build。
+- `/discovery.runtime` 会在发现成功时更新诊断；`hello_ack.runtime` 或未来 `session_answer.runtime` 存在时也会刷新；字段缺失时保持向后兼容并显示“未提供”。
+- `scripts/windows/test-mac-client-browser.mjs` 临时 Windows host 固定使用测试 build id `mac-client-test`，页面级自检会断言发现和连接后的 runtime 诊断都显示 PID 和 build，便于发现旧进程/旧构建。
+- `apps/mac-client/README.md`、任务板和交接文档已同步。
+修改文件：
+- `apps/mac-client/index.html`
+- `apps/mac-client/app.js`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --clientPort 5230 --debugPort 9380 --timeoutMs 60000`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --clientPort 5231 --debugPort 9381 --timeoutMs 60000`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --expectReconnect --skipFileClipboard --clientPort 5232 --debugPort 9382 --timeoutMs 60000`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3 --clientPort 5233 --debugPort 9383 --timeoutMs 60000`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 完整 mock 页面自检通过，输出示例：`Remote runtime: PID 3653 / 已运行 3s / 启动 06/13 00:35 / build mac-client-test`。
+- 文件超限保护、对端拒绝取消、正常文件发送和断开取消路径仍通过。
+- 自动重连回归通过，临时 host 重启后页面恢复到已连接；认证失败回归仍保留 `认证失败 · 剩余 2/3 次` 并清理画面。
+遗留问题：
+- 还未连接真实 Windows 桌面版启动的 host 验收真实 build id；本轮已用临时 Windows host 覆盖 UI 显示和测试断言。
+下一步建议：
+- Windows 端用启动助手或桌面壳启动真实 Windows host 后，Mac client 连接时观察“远端运行”是否显示当前 git build；若显示旧 build，先停止旧 host 进程再重启。
+- 继续用 `--useExistingHost --enableAudio --expectAudioPayload --expectAudioPlayback` 做真实 Windows WASAPI host 的听感和延迟验收。
+是否改了协议：否；只消费 Windows host 已有的向后兼容可选 `runtime` 字段。
+是否需要另一端配合：不阻塞；真实 Windows host build 展示可由 Windows 端后续配合验收。
+
 ## 2026-06-13 Windows Codex
 
 日期：2026-06-13

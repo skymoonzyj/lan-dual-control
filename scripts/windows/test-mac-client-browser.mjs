@@ -41,6 +41,7 @@ const defaults = {
   mockVideo: false,
   headless: true,
 };
+const temporaryWindowsHostBuildId = "mac-client-test";
 
 function parseArgs(argv) {
   const args = { ...defaults };
@@ -470,6 +471,7 @@ async function startWindowsHost(args, repoRoot) {
     LAN_DUAL_PASSWORD: args.hostPassword,
     LAN_DUAL_WINDOWS_INPUT_MODE: args.inputMode,
     LAN_DUAL_WINDOWS_SCREEN_MODE: args.mockVideo ? "mock" : args.screenMode,
+    LAN_DUAL_BUILD_ID: temporaryWindowsHostBuildId,
     ...(args.audioMode ? { LAN_DUAL_WINDOWS_AUDIO_MODE: args.audioMode } : {}),
   };
   const child = startProcess(
@@ -625,6 +627,7 @@ function buildSnapshotExpression() {
       videoFlowMetric: text("#videoFlowMetric"),
       audioFlowMetric: text("#audioFlowMetric"),
       reconnectMetric: text("#reconnectMetric"),
+      remoteRuntime: text("#remoteRuntimeMetric"),
       audioToggleChecked: document.querySelector("#audioToggle")?.checked || false,
       audioPlayedFrames: Number((text("#audioStatus").match(/播放\\s*(\\d+)/) || [])[1] || 0),
       audioFrameCount: (window.__lanDualReceivedMessages || []).filter((message) => message.type === "audio_frame").length,
@@ -681,6 +684,19 @@ function buildSnapshotExpression() {
       logs,
     };
   })()`;
+}
+
+function assertTemporaryRuntimeDiagnostics(snapshot, args, label) {
+  if (args.useExistingHost) {
+    return;
+  }
+  const text = snapshot.remoteRuntime || "";
+  if (!text.includes("PID ") || !text.includes(`build ${temporaryWindowsHostBuildId}`)) {
+    throw new Error(`${label} runtime diagnostics missing: ${JSON.stringify({
+      remoteRuntime: snapshot.remoteRuntime,
+      remote: snapshot.remote,
+    })}`);
+  }
 }
 
 function installWebSocketSendRecorderExpression() {
@@ -784,6 +800,7 @@ async function verifyMacClientDiscoverButton({ args, session }) {
     args.timeoutMs,
     "Mac client discover button reset",
   );
+  assertTemporaryRuntimeDiagnostics(discoveredSnapshot, args, "Mac client discovery");
   print("OK", `Discover button: ${discoveringSnapshot.discoverButtonText} -> ${discoveredSnapshot.remote}`);
 }
 
@@ -1270,6 +1287,8 @@ async function run() {
     print("OK", `Connection: ${videoSnapshot.connection}`);
     print("OK", `Remote: ${videoSnapshot.remote}`);
     print("OK", `Video: ${videoSnapshot.video}`);
+    assertTemporaryRuntimeDiagnostics(videoSnapshot, args, "Mac client session");
+    print("OK", `Remote runtime: ${videoSnapshot.remoteRuntime}`);
     print("OK", `Initial video ready: ${initialVideoMs}ms`);
     if (!videoSnapshot.sendClipboardFilesButtonDisabled) {
       throw new Error("Mac client file send button should stay disabled until files are selected");

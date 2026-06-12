@@ -26,6 +26,7 @@ const elements = {
   videoFlowMetric: document.querySelector("#videoFlowMetric"),
   audioFlowMetric: document.querySelector("#audioFlowMetric"),
   reconnectMetric: document.querySelector("#reconnectMetric"),
+  remoteRuntimeMetric: document.querySelector("#remoteRuntimeMetric"),
   inputStatus: document.querySelector("#inputStatus"),
   remoteViewport: document.querySelector("#remoteViewport"),
   remoteImage: document.querySelector("#remoteImage"),
@@ -83,6 +84,7 @@ const state = {
   reconnectAttempts: 0,
   reconnectTimer: null,
   reconnectStableTimer: null,
+  remoteRuntime: null,
   clipboardWatchTimer: null,
   clipboardReadInFlight: false,
   lastLocalClipboardText: "",
@@ -147,6 +149,89 @@ function formatMs(value) {
   return `${Math.max(0, Math.round(value))} ms`;
 }
 
+function normalizeRemoteRuntime(runtime) {
+  if (!runtime || typeof runtime !== "object") {
+    return null;
+  }
+  const processId = runtime.processId ?? runtime.pid ?? "";
+  const startedAt = runtime.startedAt ? String(runtime.startedAt) : "";
+  const uptimeSeconds = Number(runtime.uptimeSeconds);
+  const buildId = runtime.buildId ? String(runtime.buildId) : "";
+  const normalized = {
+    processId: processId === null || processId === undefined ? "" : String(processId),
+    startedAt,
+    uptimeSeconds: Number.isFinite(uptimeSeconds) && uptimeSeconds >= 0 ? uptimeSeconds : null,
+    buildId,
+  };
+  if (
+    !normalized.processId &&
+    !normalized.startedAt &&
+    normalized.uptimeSeconds === null &&
+    !normalized.buildId
+  ) {
+    return null;
+  }
+  return normalized;
+}
+
+function formatRuntimeUptime(seconds) {
+  const totalSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  if (totalMinutes < 60) {
+    return `${totalMinutes}m`;
+  }
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours < 24) {
+    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  }
+  const days = Math.floor(hours / 24);
+  const remainHours = hours % 24;
+  return remainHours > 0 ? `${days}d ${remainHours}h` : `${days}d`;
+}
+
+function formatRuntimeStartedAt(startedAt) {
+  const date = new Date(startedAt);
+  if (Number.isNaN(date.getTime())) {
+    return startedAt;
+  }
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatRemoteRuntimeDiagnostics(runtime) {
+  const normalized = normalizeRemoteRuntime(runtime);
+  if (!normalized) {
+    return "未提供";
+  }
+  const parts = [];
+  if (normalized.processId) {
+    parts.push(`PID ${normalized.processId}`);
+  }
+  if (normalized.uptimeSeconds !== null) {
+    parts.push(`已运行 ${formatRuntimeUptime(normalized.uptimeSeconds)}`);
+  }
+  if (normalized.startedAt) {
+    parts.push(`启动 ${formatRuntimeStartedAt(normalized.startedAt)}`);
+  }
+  if (normalized.buildId) {
+    parts.push(`build ${normalized.buildId}`);
+  }
+  return parts.join(" / ");
+}
+
+function updateRemoteRuntime(runtime) {
+  state.remoteRuntime = normalizeRemoteRuntime(runtime);
+  renderSessionDiagnostics();
+}
+
 function resetSessionDiagnostics({ resetReconnects = false } = {}) {
   state.connectionStartedAt = performance.now();
   state.firstVideoFrameMs = 0;
@@ -187,6 +272,7 @@ function renderSessionDiagnostics() {
   elements.reconnectMetric.textContent = state.reconnectTotal > 0
     ? `已尝试 ${state.reconnectTotal} 次 · 当前 ${state.reconnectAttempts}/${maxReconnectAttempts}`
     : "0 次";
+  elements.remoteRuntimeMetric.textContent = formatRemoteRuntimeDiagnostics(state.remoteRuntime);
 }
 
 function resetVideoSurface(status = "无画面") {
@@ -501,6 +587,7 @@ async function discover({ signal, lockButton = true } = {}) {
     }
     const payload = await response.json();
     if (requestId === state.discoveryRequestId) {
+      updateRemoteRuntime(payload.runtime);
       elements.remoteStatus.textContent = `${payload.deviceName || payload.hostName || "Windows"} · ${payload.platform || "unknown"}`;
       logEvent("发现成功", `${payload.host || elements.hostInput.value}:${payload.port || elements.portInput.value}`);
     }
@@ -510,6 +597,7 @@ async function discover({ signal, lockButton = true } = {}) {
       throw error;
     }
     if (requestId === state.discoveryRequestId) {
+      updateRemoteRuntime(null);
       elements.remoteStatus.textContent = "发现失败";
       logEvent("发现失败", error.message);
     }
@@ -529,6 +617,7 @@ async function connect({ reconnect = false } = {}) {
     clearReconnectTimers();
     closeSocketSilently();
     state.authenticated = false;
+    updateRemoteRuntime(null);
     resetSessionDiagnostics({ resetReconnects: true });
     stopClipboardWatch("正在重新连接，监听已停止");
     resetAudioPlayback();
@@ -709,6 +798,9 @@ function handleMessage(rawData) {
 }
 
 function handleHelloAck(message) {
+  if (message.runtime) {
+    updateRemoteRuntime(message.runtime);
+  }
   elements.remoteStatus.textContent = `${message.hostName || message.deviceName || "Windows"} · ${message.hostPlatform || "windows"}`;
   logEvent("握手成功", message.hostName || message.deviceName || "Windows 被控端");
   send({
@@ -777,6 +869,9 @@ function handleSessionAnswer(message) {
   }
   state.remoteWidth = Number(message.width || message.screenWidth || state.remoteWidth);
   state.remoteHeight = Number(message.height || message.screenHeight || state.remoteHeight);
+  if (message.runtime) {
+    updateRemoteRuntime(message.runtime);
+  }
   elements.remoteStatus.textContent = `${state.remoteWidth}x${state.remoteHeight} · ${message.hostMode || "windows-host"}`;
   if (message.audioEnabled) {
     elements.audioStatus.textContent = `${message.audioCodec || "audio"} · 已协商`;
