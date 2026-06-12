@@ -21,6 +21,45 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：新增 Mac host 一键体检聚合入口，把日常环境、构建、运行时和可选真实 host 探针串起来。
+完成内容：
+- 新增 `scripts/mac/check-mac-host-readiness.mjs`。
+- 默认低风险检查：Node.js、macOS 版本、Swift、Mac host build、Mac host 启动助手语法、启动助手 dry-run、输入键盘映射覆盖和当前 `/discovery` 状态。
+- `/discovery` 默认不强制要求 host 已启动；未启动时只给 warning。需要端口必须在线时可加 `--requireOpen`。
+- 支持 `--expectBuildId <id>` 强制运行中 host runtime build 匹配，并自动启用 `--probeHost`。
+- 可选深度探针：`--probeHost` 跑 runtime/display round-trip，`--probeVideo` 跑短 H.264 时间线观察，`--probeAudio` 跑短 PCM 音频观察且不播放声音，`--probeInputLog` 跑安全 input log 冒烟，`--probeStartHelper` 跑启动助手临时端口自测。
+- 支持 `--json` 机器可读摘要和 `--strict` warning 失败模式。
+- Mac host README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-host-readiness.mjs`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 30000`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 30000 --json`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 45000 --expectBuildId c2db37f --probeVideo --probeAudio --probeInputLog --probeStartHelper`
+验证结果：
+- 默认体检 8/8 通过：Node.js、macOS、Swift、Mac host build、启动助手语法/dry-run、keymap 和 `/discovery` 均正常；当前 `/discovery` 显示 PID 21491、build `c2db37f`、input `log`。
+- JSON 输出通过，包含 passed/failed/warnings 和每个步骤摘要。
+- 深度体检 13/13 通过：runtime/display single-display round-trip 通过；启动助手临时端口自测通过；H.264 2.5 秒 74 帧约 29.1fps、max gap 39ms、timestampUs 单调；PCM 2.5 秒 126 帧约 49.6fps、max gap 22ms；input-log 16/16 ack 且未注入。
+遗留问题：
+- `--probeAudio` 默认不播放声音，只验证 PCM 持续帧；非静音电平和真实听感仍需有人确认可发声时单独跑 `observe-mac-audio --playTone --requireLevel` 或让 Windows 控制端试听。
+- `--probeInputLog` 只验证 `log` 安全模式；真实 `inject` 仍需人工在屏幕前确认安全环境。
+下一步建议：
+- Mac host 改动、重启或联调前先跑默认 readiness；真实 host 已在线时加 `--expectBuildId <build> --probeVideo --probeAudio --probeInputLog`。
+- Windows 端若要验收真实 Mac host，可先让 Mac 端贴 readiness 摘要，再跑 Windows 控制端页面级 H.264 自检。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：新增 Mac host 日常安全启动助手，方便真机联调时用安全 `log` 模式启动、确认 runtime/build，并避免退回默认 demo 密码。
 完成内容：
 - 新增 `scripts/mac/start-mac-host.mjs`：默认绑定 `0.0.0.0:43770`、默认 `LAN_DUAL_INPUT_MODE=log`、自动设置 `LAN_DUAL_BUILD_ID` 为当前 git short hash、打印 Windows 端可填写的局域网地址、等待 `/discovery` 就绪。

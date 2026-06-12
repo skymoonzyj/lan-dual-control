@@ -121,6 +121,7 @@ Windows 端：
 - Mac 端新增 `scripts/mac/smoke-mac-input-log.mjs`，可在真实 Mac host 的 `inputMode=log` 下发送鼠标/滚轮/键盘/快捷键冒烟事件并强制要求 `input_ack`；真机 16/16 通过，全部为 `mode=log`、`injected=false`。
 - Mac 端新增 `scripts/mac/check-mac-displays.mjs`，可验证 `/discovery`、`session_answer.displays`、`activeDisplayId` 和 `display_settings_ack`；也可加 `--requireRuntime --expectBuildId <id>` 强制确认 `/discovery` 与 `hello_ack` 来自目标 Mac host 进程；当前单屏真机 `main` round-trip 已通过，真实外接双屏采集切换仍待实物验收。
 - Mac 端新增 `scripts/mac/start-mac-host.mjs` 日常安全启动助手：默认 `inputMode=log`，打印 Windows 端可填写的局域网地址，等待 `/discovery`，并默认运行 `check-mac-displays --requireRuntime --expectBuildId <build>`；真机局域网联调建议加 `--promptPassword --requirePassword`，避免空密码或 `demo-password`。
+- Mac 端新增 `scripts/mac/check-mac-host-readiness.mjs` 一键体检聚合脚本：默认只读检查 Node/Swift、Mac host build、启动助手语法/干跑、键盘映射覆盖和 `/discovery` 状态；可加 `--probeVideo --probeAudio --probeInputLog --probeStartHelper` 串联真实 H.264、PCM、log 输入和启动助手临时端口自测。
 - Windows 控制端已增加 Mac 主机诊断状态条：会汇总 `/discovery.runtime`、`permissions`、`hostMode`、`capturePipeline`、`source`、WebCodecs 解码状态、`streamFallbackReason`、`droppedFrames`、`input_ack` 和剪贴板模式，真机旧进程、权限、输入拒绝、解码失败或 H.264 启动回退问题可直接在画面内看到。
 - Mac 端已兼容 Windows 端现有 `kind/action/remoteX/remoteY` 输入事件字段。
 - Windows 控制端已新增 Edge 页面级自检脚本 `scripts/windows/test-windows-client-browser.mjs`，可自动打开控制端、连接真实 Mac、读取诊断条并确认视频 surface；当前 Edge headless 不支持 `avc1.420029` 时已验证会自动请求 JPEG 兜底并显示真实 Mac 画面。
@@ -136,6 +137,7 @@ Windows 端：
 - [x] 添加固定密码认证门禁。
 - [x] 添加 Windows 一键自检和联调启动脚本。
 - [x] 添加 Mac host 安全启动助手和 runtime/display 自检入口。
+- [x] 添加 Mac host 一键体检聚合脚本。
 - [x] 添加中文连接状态。
 - [x] 添加权限不足提示。
 - [x] 添加画质设置：流畅、均衡、高清、自定义预设，联动分辨率、刷新率和码率。

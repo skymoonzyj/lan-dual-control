@@ -53,6 +53,22 @@ node scripts/mac/test-mac-host-start-helper.mjs
 
 该脚本会覆盖缺密码拒绝、`demo-password` 拒绝、非交互密码提示拒绝、带环境密码干跑，以及临时端口真实启动后自动关闭。
 
+Mac host 日常一键体检：
+
+```bash
+node scripts/mac/check-mac-host-readiness.mjs
+```
+
+默认体检只做低风险检查：Node/Swift、Mac host build、启动助手语法和干跑、键盘映射覆盖，以及当前 `/discovery` 状态。如果当前 host 没启动，默认只给出提示，不会失败；需要强制要求端口已打开时加 `--requireOpen`。
+
+真机联调前可跑深度体检：
+
+```bash
+node scripts/mac/check-mac-host-readiness.mjs --expectBuildId c2db37f --probeVideo --probeAudio --probeInputLog --probeStartHelper
+```
+
+其中 `--probeVideo` 会做短 H.264 时间线观察，`--probeAudio` 会做短 PCM 音频观察且不播放声音，`--probeInputLog` 会先确认 host 是 `log` 输入模式再发送安全冒烟事件，`--probeStartHelper` 会用临时端口启动/关闭一次启动助手自测。需要机器可读结果时可加 `--json`。
+
 进入目录：
 
 ```bash
