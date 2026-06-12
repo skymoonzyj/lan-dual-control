@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/observe-windows-host-audio.mjs`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md` | 2026-06-12 13:00 | 新增 Windows host 音频持续帧观察脚本；2.5 秒收到 68 帧 PCM，最大间隔 32 ms，payload 固定 7680 bytes，当前系统输出电平为 0。 |
 | Windows Codex | `scripts/windows/wasapi-loopback-capture.ps1`、`scripts/windows/check-windows-audio-devices.mjs`、`scripts/windows/test-windows-host.ps1`、`apps/windows-host/src/windows-audio-capture.mjs`、`apps/windows-host/src/windows-host-service.mjs`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 12:45 | Windows host 新增显式 WASAPI loopback 系统声音采集第一版；默认仍 mock，`LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi` 时输出 `pcm-f32le-base64`。本机默认格式 48kHz/2ch/float32，FFmpeg 真实视频 + WASAPI 音频自检通过。 |
 | Mac Codex | `apps/mac-client/*`、`scripts/windows/test-mac-client-browser.mjs`、`README.md`、`apps/mac-client/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` | 2026-06-12 12:31 | Mac client 明确提示 `Command` 会按 Windows `Ctrl` 发送；页面级自检新增 `Command+C -> ctrlKey=true/metaKey=false` 断言。 |
 | Windows Codex | `scripts/windows/check-windows-audio-devices.mjs`、`apps/windows-host/README.md`、`docs/HANDOFF_LOG.md`、`docs/ACTIVE_LOCKS.md` | 2026-06-12 12:22 | 新增 Windows DirectShow 音频设备检查脚本；默认只列设备不采集，支持显式 `--probe` 短时 PCM 检测。本机列出 7 个设备、4 个音频设备。 |

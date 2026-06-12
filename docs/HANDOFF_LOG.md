@@ -17,6 +17,40 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Windows Codex
+
+日期：2026-06-12
+开发端：Windows Codex
+本轮目标：新增 Windows host 音频持续帧观察脚本，便于排查 WASAPI/DirectShow 音频卡顿、静音和帧间隔问题。
+完成内容：
+- 新增 `scripts/windows/observe-windows-host-audio.mjs`。
+- 默认临时启动 `screenMode=mock`、`audioMode=wasapi` 的 Windows host，只观察音频，不额外压视频。
+- 支持 `--useExisting` 连接已运行的 Windows host。
+- 统计 `audio_frame` 帧数、平均 FPS、最大帧间隔、payload 大小、codec/encoding/sampleRate/channels 和电平 min/avg/max。
+- Windows host README、当前状态和下一步清单已补充音频观察入口。
+修改文件：
+- `scripts/windows/observe-windows-host-audio.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/observe-windows-host-audio.mjs`
+- `node scripts/windows/observe-windows-host-audio.mjs --durationMs 2500 --minFrames 60 --minFps 20 --maxGapMs 1000 --timeoutMs 25000`
+验证结果：
+- 2.5 秒收到 68 个 `pcm-f32le-base64` 音频帧。
+- 平均约 27.16 FPS，最大间隔 32 ms。
+- payload 固定 7680 bytes，sampleRate=48000，channels=2。
+- 当前系统输出电平为 0，说明测试时系统无可听输出或静音；管道本身正常。
+遗留问题：
+- 后续还需要在有真实系统声音播放时观察电平变化。
+- 长时间 30-60 秒观察尚未跑。
+下一步建议：
+- Mac client 连接 Windows host 打开远端声音时，同时在 Windows 端跑观察脚本或用 `--useExisting` 记录帧节奏。
+是否改了协议：否。
+是否需要另一端配合：否；Mac 端后续做真实听感验收时可参考该脚本。
+
 ## 2026-06-12 Mac Codex
 
 日期：2026-06-12
