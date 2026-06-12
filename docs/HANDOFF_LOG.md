@@ -60,6 +60,41 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：修正 Mac host 输入监控权限诊断，避免 `/discovery.permissions.inputMonitoring` 被硬编码为 `false`。
+完成内容：
+- `MacPermissionCenter` 新增 macOS `IOHIDCheckAccess(kIOHIDRequestTypeListenEvent)` 只读探测，`inputMonitoringGranted` 现在反映系统真实 Input Monitoring 状态，不会弹权限请求。
+- 权限摘要里的“输入监控”从固定“待实测”改为“已开启/未开启”。
+- `scripts/mac/test-mac-host-defaults.mjs` 扩展为先用 Swift 读取本机真实 `IOHIDCheckAccess` 结果，再要求临时 host `/discovery.permissions.inputMonitoring` 与它一致，同时继续验证默认 `log` 和显式 `inject`。
+- Mac host README、当前状态、下一步、任务板和文件占用已同步。
+修改文件：
+- `apps/mac-host/Sources/MacHost/MacPermissionCenter.swift`
+- `scripts/mac/test-mac-host-defaults.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `swift -e 'import IOKit.hid; print(IOHIDCheckAccess(kIOHIDRequestTypeListenEvent).rawValue)'`
+- `node --check scripts/mac/test-mac-host-defaults.mjs`
+- `swift build --package-path apps/mac-host`
+- `node scripts/mac/test-mac-host-defaults.mjs --timeoutMs 20000`
+- `node scripts/mac/check-mac-host-readiness.mjs --timeoutMs 45000`
+验证结果：
+- 本机 `IOHIDCheckAccess` 返回 granted；临时 host 默认 `log` 与显式 `inject` 两条路径均返回 `inputMonitoring=true`，确认不再硬编码为 `false`。
+- 默认 readiness 9/9 通过；主 `43770` 未重启，仍是 `build=c2db37f` 旧进程，因此当前 `/discovery` 仍显示旧的 `inputMonitoring=off` warning。
+遗留问题：
+- 需要等下一次安全窗口重启主 `43770` 到新 build 后，Windows 端诊断条和 readiness 才会看到真实 `inputMonitoring=true`。
+下一步建议：
+- 下次重启主 Mac host 时，使用 `start-mac-host` 指定新 build，再跑 `check-mac-host-readiness --requireControlPermissions --strict` 确认 warning 消失。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：把 Mac host 直接启动输入默认值自测接入 readiness，避免安全默认值回归脚本被漏跑。
 完成内容：
 - `scripts/mac/check-mac-host-readiness.mjs` 默认低风险体检新增 `Mac host direct-start defaults` 步骤。

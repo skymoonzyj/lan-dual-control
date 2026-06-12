@@ -12,7 +12,7 @@
 - macOS 权限检查骨架：
   - 屏幕录制。
   - 辅助功能。
-  - 输入监控提示。
+  - 输入监控状态探测。
 - ScreenCaptureKit 资源预检。
 - 多显示器枚举。
 - 后台 JPEG `video_frame` 抓取；权限不足或采集失败时自动回退模拟 `video_frame`。
@@ -59,7 +59,7 @@ Mac host 日常一键体检：
 node scripts/mac/check-mac-host-readiness.mjs
 ```
 
-默认体检只做低风险检查：Node/Swift、Mac host build、直接启动输入默认值、启动助手语法和干跑、键盘映射覆盖，以及当前 `/discovery` 状态。其中直接启动默认值检查会用临时本机端口确认未设置 `LAN_DUAL_INPUT_MODE` 时是 `log`、显式 `inject` 仍可覆盖。如果当前 host 没启动，默认只给出提示，不会失败；需要强制要求端口已打开时加 `--requireOpen`。
+默认体检只做低风险检查：Node/Swift、Mac host build、直接启动输入默认值、启动助手语法和干跑、键盘映射覆盖，以及当前 `/discovery` 状态。其中直接启动默认值检查会用临时本机端口确认未设置 `LAN_DUAL_INPUT_MODE` 时是 `log`、显式 `inject` 仍可覆盖，并顺手验证启动日志和 `/discovery.permissions` 的权限诊断格式。如果当前 host 没启动，默认只给出提示，不会失败；需要强制要求端口已打开时加 `--requireOpen`。
 
 如果需要确认当前 Mac 权限足够做真实视频和真实输入注入，可加：
 
@@ -67,7 +67,7 @@ node scripts/mac/check-mac-host-readiness.mjs
 node scripts/mac/check-mac-host-readiness.mjs --requireControlPermissions
 ```
 
-该检查会要求 `/discovery.permissions.screenRecording=true` 和 `accessibility=true`。`inputMonitoring=false` 当前只作为 warning，因为 macOS 输入监控经常需要手工触发系统弹窗确认；若想让任何 warning 都失败，可再加 `--strict`。
+该检查会要求 `/discovery.permissions.screenRecording=true` 和 `accessibility=true`。`inputMonitoring` 由 macOS `IOHIDCheckAccess` 只读探测，不会弹权限请求；`inputMonitoring=false` 当前只作为 warning，因为当前 `log` 模式和既有探针不依赖它，若想让任何 warning 都失败，可再加 `--strict`。
 
 真机联调前可跑深度体检：
 

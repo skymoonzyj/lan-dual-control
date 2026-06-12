@@ -3,6 +3,7 @@ import Foundation
 #if os(macOS)
 import ApplicationServices
 import CoreGraphics
+import IOKit.hid
 #endif
 
 struct MacPermissionSnapshot {
@@ -18,7 +19,7 @@ struct MacPermissionSnapshot {
         [
             "屏幕录制：\(screenRecordingGranted ? "已开启" : "未开启")",
             "辅助功能：\(accessibilityGranted ? "已开启" : "未开启")",
-            "输入监控：\(inputMonitoringGranted ? "待实测" : "待实测")"
+            "输入监控：\(inputMonitoringGranted ? "已开启" : "未开启")"
         ].joined(separator: "，")
     }
 }
@@ -28,7 +29,7 @@ final class MacPermissionCenter {
         MacPermissionSnapshot(
             screenRecordingGranted: isScreenRecordingGranted(),
             accessibilityGranted: isAccessibilityGranted(),
-            inputMonitoringGranted: false
+            inputMonitoringGranted: isInputMonitoringGranted()
         )
     }
 
@@ -60,5 +61,15 @@ final class MacPermissionCenter {
         return false
         #endif
     }
-}
 
+    private func isInputMonitoringGranted() -> Bool {
+        #if os(macOS)
+        if #available(macOS 10.15, *) {
+            return IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
+        }
+        return true
+        #else
+        return false
+        #endif
+    }
+}

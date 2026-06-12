@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 import http from "node:http";
 import net from "node:net";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const binaryPath = resolve(repoRoot, "apps/mac-host/.build/debug/lan-dual-mac-host");
+const execFileAsync = promisify(execFile);
 
 const defaults = {
   timeoutMs: 20000,
@@ -108,7 +110,44 @@ function discoveryInputMode(discovery) {
   return discovery?.capabilities?.inputMode || discovery?.capabilities?.input?.mode || discovery?.inputMode || "";
 }
 
-async function runTemporaryHost({ label, expectedInputMode, inputMode, timeoutMs }) {
+function assertBooleanPermission(permissions, key, label) {
+  if (typeof permissions?.[key] !== "boolean") {
+    throw new Error(`${label}: expected permissions.${key} to be boolean, got ${typeof permissions?.[key]}`);
+  }
+}
+
+function assertPermissionDiagnostics({ label, discovery, expectedInputMonitoring }) {
+  const permissions = discovery?.permissions || {};
+  assertBooleanPermission(permissions, "screenRecording", label);
+  assertBooleanPermission(permissions, "accessibility", label);
+  assertBooleanPermission(permissions, "inputMonitoring", label);
+
+  if (permissions.inputMonitoring !== expectedInputMonitoring) {
+    throw new Error(
+      `${label}: expected permissions.inputMonitoring=${expectedInputMonitoring}, got ${permissions.inputMonitoring}`,
+    );
+  }
+}
+
+async function readNativeInputMonitoringAccess() {
+  const code = `
+import IOKit.hid
+let granted = IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
+print(granted ? "true" : "false")
+`;
+  const { stdout } = await execFileAsync("swift", ["-e", code], {
+    cwd: repoRoot,
+    timeout: 10000,
+    maxBuffer: 1024 * 1024,
+  });
+  const text = stdout.trim();
+  if (text !== "true" && text !== "false") {
+    throw new Error(`Unexpected native input monitoring probe output: ${text || "empty"}`);
+  }
+  return text === "true";
+}
+
+async function runTemporaryHost({ label, expectedInputMode, inputMode, expectedInputMonitoring, timeoutMs }) {
   const port = await getFreePort();
   const env = {
     ...process.env,
@@ -145,7 +184,8 @@ async function runTemporaryHost({ label, expectedInputMode, inputMode, timeoutMs
     if (actualInputMode !== expectedInputMode) {
       throw new Error(`${label}: expected inputMode=${expectedInputMode}, got ${actualInputMode || "missing"}\n${output}`);
     }
-    print("OK", `${label}: /discovery inputMode=${actualInputMode}`);
+    assertPermissionDiagnostics({ label, discovery, expectedInputMonitoring });
+    print("OK", `${label}: /discovery inputMode=${actualInputMode}, inputMonitoring=${discovery.permissions.inputMonitoring}`);
   } finally {
     child.kill();
     await new Promise((resolveClose) => {
@@ -171,16 +211,19 @@ async function main() {
   }
 
   await ensureBinaryExists();
+  const expectedInputMonitoring = await readNativeInputMonitoringAccess();
   await runTemporaryHost({
     label: "default-input-log",
     expectedInputMode: "log",
     inputMode: "",
+    expectedInputMonitoring,
     timeoutMs: args.timeoutMs,
   });
   await runTemporaryHost({
     label: "explicit-input-inject",
     expectedInputMode: "inject",
     inputMode: "inject",
+    expectedInputMonitoring,
     timeoutMs: args.timeoutMs,
   });
 
