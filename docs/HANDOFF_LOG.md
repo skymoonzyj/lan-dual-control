@@ -21,6 +21,38 @@
 
 日期：2026-06-12
 开发端：Mac Codex
+本轮目标：让 Mac 视频持续观察脚本也能校验帧级显示器来源，方便 H.264/JPEG 长观察同时确认没有采到错误显示器。
+完成内容：
+- `scripts/mac/observe-mac-video.mjs` 新增 `--displayId`，可指定 `session_offer.displayId`。
+- 新增 `--requireFrameDisplayDiagnostic`，要求每个 `video_frame` 带 `activeDisplayId` 或兼容的 `displayId`。
+- 新增 `--expectActiveDisplayId <id>`，自动开启帧级诊断要求，并要求每帧显示器 id 匹配。
+- 视频统计摘要新增 `activeDisplayId` 和 `displayName` 分布。
+- Mac host README、当前状态、下一步和文件占用已同步。
+修改文件：
+- `scripts/mac/observe-mac-video.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/observe-mac-video.mjs`
+- `node scripts/mac/observe-mac-video.mjs --durationMs 3000 --requireH264 --minFrames 20 --maxGapMs 1000 --expectActiveDisplayId main`
+- `node scripts/mac/observe-mac-video.mjs --durationMs 2000 --preferredVideoCodec mjpeg --requireRealVideo --minFrames 3 --maxGapMs 1000 --expectActiveDisplayId main`
+验证结果：
+- 真实 `43770` H.264 路径通过：88 帧、约 29.1fps、最大间隔 39ms，`activeDisplayId=main:88`、`displayName=主显示器:88`。
+- 真实 `43770` JPEG 路径通过：33 帧、约 15.9fps、最大间隔 74ms，`activeDisplayId=main:33`、`displayName=主显示器:33`。
+遗留问题：
+- 当前仍是单屏真机证据；外接显示器后需要用 `--displayId <id> --expectActiveDisplayId <id>` 做多屏长观察。
+下一步建议：
+- 后续 H.264 长稳或动态画面观察都可以附带 `--expectActiveDisplayId main`，把帧率、pipeline 和显示器来源一起纳入验收。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
 本轮目标：强化 Mac display 自检，避免旧 host 未重启到最新二进制时误通过。
 完成内容：
 - `scripts/mac/check-mac-displays.mjs` 默认要求 `video_frame.activeDisplayId` 存在且匹配当前显示器。

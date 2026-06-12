@@ -15,6 +15,9 @@ const defaults = {
   requireRealVideo: false,
   expectedCodec: "",
   expectedPipeline: "",
+  displayId: "main",
+  requireFrameDisplayDiagnostic: false,
+  expectActiveDisplayId: "",
   width: 1280,
   height: 720,
   fps: 30,
@@ -51,10 +54,16 @@ function parseArgs(argv) {
   args.requireRealVideo = booleanArg(args.requireRealVideo, defaults.requireRealVideo);
   args.expectedCodec = normalizedText(args.expectedCodec);
   args.expectedPipeline = normalizedText(args.expectedPipeline);
+  args.displayId = normalizedText(args.displayId || defaults.displayId) || "main";
+  args.requireFrameDisplayDiagnostic = booleanArg(args.requireFrameDisplayDiagnostic, defaults.requireFrameDisplayDiagnostic);
+  args.expectActiveDisplayId = normalizedText(args.expectActiveDisplayId);
   args.width = positiveInteger(args.width, defaults.width);
   args.height = positiveInteger(args.height, defaults.height);
   args.fps = positiveInteger(args.fps, defaults.fps);
   args.bandwidthKbps = positiveInteger(args.bandwidthKbps, defaults.bandwidthKbps);
+  if (args.expectActiveDisplayId) {
+    args.requireFrameDisplayDiagnostic = true;
+  }
   if (args.requireH264) {
     args.preferredVideoCodec = "h264";
     args.expectedCodec ||= "h264";
@@ -239,7 +248,7 @@ function makeSessionOffer(args) {
     maxBandwidthKbps: args.bandwidthKbps,
     qualityPreset: "diagnostic",
     displayMode: "window",
-    displayId: "main",
+    displayId: args.displayId,
     preferredWidth: args.width,
     preferredHeight: args.height,
     audioVolume: 0,
@@ -261,6 +270,8 @@ function createVideoStats(args) {
     encodings: new Map(),
     pipelines: new Map(),
     sources: new Map(),
+    activeDisplayIds: new Map(),
+    displayNames: new Map(),
     sizes: new Map(),
     invalidFrames: [],
   };
@@ -284,6 +295,8 @@ function createVideoStats(args) {
     countValue(stats.encodings, frame.encoding || frame.videoEncoding || "");
     countValue(stats.pipelines, frame.capturePipeline || "");
     countValue(stats.sources, frame.source || "");
+    countValue(stats.activeDisplayIds, frame.activeDisplayId || frame.displayId || "");
+    countValue(stats.displayNames, frame.displayName || "");
     countValue(stats.sizes, `${frame.width || "?"}x${frame.height || "?"}`);
 
     const problems = validateVideoFrame(frame, args);
@@ -325,10 +338,15 @@ function validateVideoFrame(frame, args) {
   const pipeline = normalizedText(frame.capturePipeline);
   const source = normalizedText(frame.source);
   const dataUrl = normalizedText(frame.dataUrl);
+  const activeDisplayId = normalizedText(frame.activeDisplayId || frame.displayId);
 
   if (!hasVideoPayload(frame)) problems.push("payload missing");
   if (args.expectedCodec && codec !== args.expectedCodec) problems.push(`codec=${frame.codec || frame.videoCodec || "missing"}`);
   if (args.expectedPipeline && pipeline !== args.expectedPipeline) problems.push(`capturePipeline=${frame.capturePipeline || "missing"}`);
+  if (args.requireFrameDisplayDiagnostic && !activeDisplayId) problems.push("activeDisplayId missing");
+  if (args.expectActiveDisplayId && activeDisplayId !== args.expectActiveDisplayId) {
+    problems.push(`activeDisplayId=${frame.activeDisplayId || frame.displayId || "missing"}`);
+  }
   if (args.requireH264) {
     if (codec !== "h264") problems.push(`codec=${frame.codec || "missing"}`);
     if (!encoding.includes("annexb")) problems.push(`encoding=${frame.encoding || "missing"}`);
@@ -360,6 +378,8 @@ function summarizeStats(stats, args) {
     `encoding=${formatCounts(stats.encodings)}`,
     `pipeline=${formatCounts(stats.pipelines)}`,
     `source=${formatCounts(stats.sources)}`,
+    `activeDisplayId=${formatCounts(stats.activeDisplayIds)}`,
+    `displayName=${formatCounts(stats.displayNames)}`,
     `size=${formatCounts(stats.sizes)}`,
     `frameId ${stats.firstFrameId ?? "?"}->${stats.lastFrameId ?? "?"}`,
   ].join(" / ");
@@ -419,9 +439,12 @@ Options:
   --requireRealVideo               Reject mock/svg video frames.
   --expectedCodec <codec>          Require an exact frame codec.
   --expectedPipeline <pipeline>    Require an exact capturePipeline.
+  --displayId <id>                 Requested display id in session_offer. Default: main
+  --requireFrameDisplayDiagnostic  Require video_frame.activeDisplayId/displayId to be present.
+  --expectActiveDisplayId <id>     Require every video_frame active display id to match.
 
 Examples:
-  node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFrames 100 --minFps 20
+  node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFrames 100 --minFps 20 --expectActiveDisplayId main
   node scripts/mac/observe-mac-video.mjs --preferredVideoCodec mjpeg --requireRealVideo --minFrames 20`);
 }
 

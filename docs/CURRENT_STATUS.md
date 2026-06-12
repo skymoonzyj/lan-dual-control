@@ -29,7 +29,7 @@
 - JPEG 调试链路默认真实采集上限已改为 30 FPS，控制端会显示实收 FPS、协商帧率和请求帧率。
 - 真 Mac 已用于验证真实 JPEG 首帧、文本剪贴板双向同步、文件剪贴板从 Mac 推送到控制端内存托盘。
 - ScreenCaptureKit + VideoToolbox H.264 输出入口已在真 Mac 上编译、启动并通过本机 `--requireH264` 强校验，实际返回 `videoCodec=h264`、`videoEncoding=annexb-base64`、`capturePipeline=screencapturekit-h264`。
-- Mac 端新增 `scripts/mac/observe-mac-video.mjs` 视频持续帧观察脚本；真机 H.264 30 秒收到 877 帧，约 29.2fps，最大接收间隔 45ms，全部为 `screencapturekit-h264`；空闲/低变化桌面下 5 分钟 H.264 收到 3168 帧、约 10.6fps，60 秒复测约 10.9fps、最大接收间隔 883ms，JPEG 60 秒对照约 16.4fps；后续高 FPS 强校验需要区分静态桌面和动态画面。
+- Mac 端新增 `scripts/mac/observe-mac-video.mjs` 视频持续帧观察脚本；真机 H.264 30 秒收到 877 帧，约 29.2fps，最大接收间隔 45ms，全部为 `screencapturekit-h264`；空闲/低变化桌面下 5 分钟 H.264 收到 3168 帧、约 10.6fps，60 秒复测约 10.9fps、最大接收间隔 883ms，JPEG 60 秒对照约 16.4fps；脚本也可统计并断言 `video_frame.activeDisplayId` / `displayName`，当前 43770 H.264 和 JPEG 短观察均确认帧级显示器为 `main`；后续高 FPS 强校验需要区分静态桌面和动态画面。
 - Mac 系统声音采集第一版已接入 ScreenCaptureKit，真机验证可输出 `pcm-f32le-base64`、48kHz、双声道、20ms 的真实 `audio_frame`；Windows 控制端已可播放该 PCM 帧，并通过页面级自检验证播放计数。
 - Mac 端新增 `scripts/mac/stress-mac-host.mjs` 连续连接稳定性脚本，复用 canonical 探针验证 H.264 + PCM；真机 50 次循环已通过，RSS `79376->80656 KB`，FD 保持 `30->30`。
 - Mac 端新增 `scripts/mac/observe-mac-audio.mjs` 音频持续帧观察脚本；真机 30 秒收到 1501 帧，约 50fps，最大接收间隔 24ms，payload 恒定 7680 bytes；5 分钟长稳收到 15001 帧，50.0fps，最大接收间隔 31ms，payload 仍恒定 7680 bytes。

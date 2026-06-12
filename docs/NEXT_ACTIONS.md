@@ -30,7 +30,7 @@
 ## Mac Codex 可接任务
 
 - 继续验证真实 macOS 系统声音采集，5 分钟只读观察已稳定到 15001 帧/50.0fps/最大间隔 31ms；下一步重点看非静音系统声音、音量变化、Windows 控制端真实听感和延迟。
-- 继续压测 ScreenCaptureKit + VideoToolbox H.264：30 秒动态/活跃窗口曾稳定到 877 帧/约 29.2fps/最大间隔 45ms，空闲桌面 5 分钟实收约 10.6fps、60 秒复测约 10.9fps；下一步重点用动态画面、CPU 占用、端到端延迟和 Windows 控制端同时连接体验来判断真实观感，不要把静态桌面 `--minFps 25` 当硬门槛。
+- 继续压测 ScreenCaptureKit + VideoToolbox H.264：30 秒动态/活跃窗口曾稳定到 877 帧/约 29.2fps/最大间隔 45ms，空闲桌面 5 分钟实收约 10.6fps、60 秒复测约 10.9fps；下一步重点用动态画面、CPU 占用、端到端延迟和 Windows 控制端同时连接体验来判断真实观感，不要把静态桌面 `--minFps 25` 当硬门槛。做长观察时可给 `scripts/mac/observe-mac-video.mjs` 加 `--expectActiveDisplayId main` 或外接屏对应 display id，同时确认帧率和显示器来源。
 - 真实输入注入前先跑 `node scripts/mac/smoke-mac-input-log.mjs`，确认当前 host 仍是 `inputMode=log` 且鼠标/滚轮/键盘/快捷键事件都会返回 `input_ack`；切 `inject` 前需要人工在屏幕前确认安全环境。
 - 扩展 CGEvent 键盘映射，重点验证中文输入法、Command 组合键和功能键；改映射前后先跑 `node scripts/mac/check-input-keymap.mjs`，它会覆盖常见 code/key、同义项和修饰键 flag fallback。
 - Mac host 已有真实显示器枚举、`displayId` 回执和单屏 round-trip 自检；`check-mac-displays` 默认会要求帧级 `activeDisplayId` 诊断，若主机没重启到最新二进制会失败。下一步接外接显示器后跑 `node scripts/mac/check-mac-displays.mjs --switchDisplayId <display-id>`，再让 Windows 控制端用显示器下拉做真实双屏切换验收。

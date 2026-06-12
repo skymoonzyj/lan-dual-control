@@ -118,10 +118,10 @@ scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireH264 -ExpectInpu
 在 Mac 本机持续观察视频帧稳定性：
 
 ```bash
-node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFrames 100 --minFps 20 --maxGapMs 1000
+node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFrames 100 --minFps 20 --maxGapMs 1000 --expectActiveDisplayId main
 ```
 
-该脚本会只读统计 `video_frame` 帧数、接收 FPS、最大帧间隔、payload 大小、codec、encoding、`capturePipeline` 和 source，用于排查 H.264/JPEG 帧率不稳、回退到 mock 或采集管线漂移。JPEG 兜底链路可用 `--preferredVideoCodec mjpeg --requireRealVideo` 观察。
+该脚本会只读统计 `video_frame` 帧数、接收 FPS、最大帧间隔、payload 大小、codec、encoding、`capturePipeline`、source、`activeDisplayId` 和 `displayName`，用于排查 H.264/JPEG 帧率不稳、回退到 mock、采集管线漂移或显示器来源漂移。需要长时间强校验显示器来源时可加 `--requireFrameDisplayDiagnostic` 或 `--expectActiveDisplayId main`；JPEG 兜底链路可用 `--preferredVideoCodec mjpeg --requireRealVideo --expectActiveDisplayId main` 观察。
 
 当前真机基线：H.264 30 秒观察 877 帧、约 29.2fps、最大间隔 45ms，全部为 `h264` / `annexb-base64` / `screencapturekit-h264`；空闲/低变化桌面下，H.264 5 分钟观察收到 3168 帧、约 10.6fps，60 秒低门槛复测收到 654 帧、约 10.9fps、最大间隔 883ms；JPEG 60 秒对照收到 983 帧、约 16.4fps。后续做长时间视频强校验时，需要区分静态桌面和动态画面，静态桌面不要直接把 `--minFps 25` 当硬门槛。
 
