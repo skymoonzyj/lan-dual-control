@@ -137,6 +137,7 @@ function setConnected(connected) {
   elements.connectButton.disabled = connected;
   elements.disconnectButton.disabled = !connected;
   setConnectionStatus(connected ? "已连接" : "未连接");
+  updateTextClipboardButton();
   updateFileClipboardButton();
   renderSessionDiagnostics();
 }
@@ -751,6 +752,7 @@ function handleAuthResult(message) {
     return;
   }
   state.authenticated = true;
+  updateTextClipboardButton();
   updateFileClipboardButton();
   markConnectionStableLater();
   logEvent("认证通过");
@@ -1162,6 +1164,11 @@ function makeClipboardId() {
   return `mac-client-clip-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 8)}`;
 }
 
+function updateTextClipboardButton() {
+  const hasText = elements.clipboardTextInput.value.length > 0;
+  elements.sendClipboardButton.disabled = !state.authenticated || !hasText;
+}
+
 function sendClipboardText({ source = "manual" } = {}) {
   if (!state.authenticated) {
     elements.clipboardStatus.textContent = "未连接";
@@ -1216,6 +1223,7 @@ async function readLocalClipboard({ silent = false } = {}) {
       return "";
     }
     elements.clipboardTextInput.value = text;
+    updateTextClipboardButton();
     elements.localClipboardStatus.textContent = `已读取 ${text.length} 字`;
     if (!silent) {
       logEvent("已读取 Mac 剪贴板", `${text.length} 字`);
@@ -1535,6 +1543,7 @@ elements.audioVolumeRange.addEventListener("input", () => {
 elements.readClipboardButton.addEventListener("click", () => {
   void readLocalClipboardIntoTextArea();
 });
+elements.clipboardTextInput.addEventListener("input", updateTextClipboardButton);
 elements.sendClipboardButton.addEventListener("click", () => sendClipboardText());
 elements.clipboardWatchToggle.addEventListener("change", () => {
   if (elements.clipboardWatchToggle.checked) {
@@ -1597,6 +1606,7 @@ elements.remoteViewport.addEventListener("keydown", (event) => {
 updateAudioVolumeLabel();
 updateDisplaySettingsStatus();
 initializeRecentConnections();
+updateTextClipboardButton();
 updateFileClipboardButton();
 renderSessionDiagnostics();
 logEvent("Mac 控制端已就绪", "默认连接 127.0.0.1:43772，可改为 Windows 局域网 IP:43770");

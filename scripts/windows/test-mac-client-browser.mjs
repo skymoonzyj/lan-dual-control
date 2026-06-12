@@ -629,6 +629,7 @@ function buildSnapshotExpression() {
       discoverButtonText: document.querySelector("#discoverButton")?.textContent || "",
       connectButtonDisabled: document.querySelector("#connectButton")?.disabled || false,
       disconnectButtonDisabled: document.querySelector("#disconnectButton")?.disabled || false,
+      sendClipboardButtonDisabled: document.querySelector("#sendClipboardButton")?.disabled || false,
       sendClipboardFilesButtonDisabled: document.querySelector("#sendClipboardFilesButton")?.disabled || false,
       clipboard: text("#clipboardStatus"),
       localClipboard: text("#localClipboardStatus"),
@@ -966,6 +967,7 @@ async function run() {
       !defaultSettingsSnapshot.displaySettings.includes("1080P") ||
       !defaultSettingsSnapshot.displaySettings.includes("60 Hz") ||
       !defaultSettingsSnapshot.displaySettings.includes("20 Mbps") ||
+      !defaultSettingsSnapshot.sendClipboardButtonDisabled ||
       !defaultSettingsSnapshot.sendClipboardFilesButtonDisabled
     ) {
       throw new Error(`Mac client default video settings mismatch: ${JSON.stringify(defaultSettingsSnapshot)}`);
@@ -1029,7 +1031,8 @@ async function run() {
           lastSnapshot = value;
           const buttonsReset = !value.connectButtonDisabled && value.disconnectButtonDisabled;
           const surfaceCleared = value.video === "无画面" && !value.imageVisible && !value.imageHasSource;
-          return matchesExpectedAuthFailure(value, args) && buttonsReset && surfaceCleared ? value : null;
+          const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
+          return matchesExpectedAuthFailure(value, args) && buttonsReset && surfaceCleared && clipboardButtonsDisabled ? value : null;
         },
         args.timeoutMs,
         "Mac client auth failure state",
@@ -1088,6 +1091,9 @@ async function run() {
     print("OK", `Initial video ready: ${initialVideoMs}ms`);
     if (!videoSnapshot.sendClipboardFilesButtonDisabled) {
       throw new Error("Mac client file send button should stay disabled until files are selected");
+    }
+    if (!videoSnapshot.sendClipboardButtonDisabled) {
+      throw new Error("Mac client text send button should stay disabled until text is entered");
     }
     if (!videoSnapshot.firstVideoMetric.includes("ms") || videoSnapshot.videoFlowMetric.includes("等待")) {
       throw new Error(`Mac client diagnostics did not update after video: ${JSON.stringify({
@@ -1444,6 +1450,22 @@ async function run() {
           element.dispatchEvent(new Event("input", { bubbles: true }));
         };
         setValue("#clipboardTextInput", ${JSON.stringify(clipboardText)});
+        return true;
+      })()`,
+    );
+    const clipboardReadySnapshot = await waitFor(
+      async () => {
+        const value = await evaluate(session, buildSnapshotExpression());
+        lastSnapshot = value;
+        return !value.sendClipboardButtonDisabled && value.clipboardTextValue === clipboardText ? value : null;
+      },
+      args.timeoutMs,
+      "Mac client text clipboard ready button state",
+    );
+    print("OK", `Text button ready: ${clipboardReadySnapshot.clipboardTextValue.length} 字`);
+    await evaluate(
+      session,
+      `(() => {
         document.querySelector("#sendClipboardButton").click();
         return true;
       })()`,
@@ -1476,7 +1498,7 @@ async function run() {
       async () => {
         const value = await evaluate(session, buildSnapshotExpression());
         lastSnapshot = value;
-        return value.clipboardTextValue === localClipboardText ? value : null;
+        return value.clipboardTextValue === localClipboardText && !value.sendClipboardButtonDisabled ? value : null;
       },
       args.timeoutMs,
       "Mac client local clipboard read",
@@ -1600,7 +1622,8 @@ async function run() {
           : value.audioFlowMetric === "未开启";
         const reconnectOk = value.reconnectMetric === "0 次";
         const surfaceCleared = !value.imageVisible && !value.imageHasSource;
-        return connectionOk && videoStatusOk && firstVideoOk && videoFlowOk && audioFlowOk && reconnectOk && surfaceCleared
+        const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
+        return connectionOk && videoStatusOk && firstVideoOk && videoFlowOk && audioFlowOk && reconnectOk && surfaceCleared && clipboardButtonsDisabled
           ? value
           : null;
       },
