@@ -17,6 +17,51 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-12 Mac Codex
+
+日期：2026-06-12
+开发端：Mac Codex
+本轮目标：新增 Mac host 日常安全启动助手，方便真机联调时用安全 `log` 模式启动、确认 runtime/build，并避免退回默认 demo 密码。
+完成内容：
+- 新增 `scripts/mac/start-mac-host.mjs`：默认绑定 `0.0.0.0:43770`、默认 `LAN_DUAL_INPUT_MODE=log`、自动设置 `LAN_DUAL_BUILD_ID` 为当前 git short hash、打印 Windows 端可填写的局域网地址、等待 `/discovery` 就绪。
+- 启动助手支持 `--promptPassword` 不回显输入密码，`--requirePassword` 会拒绝空密码和 `demo-password`，避免真机局域网联调误用默认密码。
+- 默认启动后运行 `check-mac-displays --requireRuntime --expectBuildId <build>` 做只读 runtime/display round-trip 校验；可用 `--skipRuntimeCheck` 跳过，可用 `--requireRuntimeCheck` 把检查失败升级为启动失败。
+- 启动前会检查 `127.0.0.1:<port>/discovery`，默认拒绝覆盖已有 Mac host，避免误踢当前 `43770` 主通道。
+- 新增 `scripts/mac/test-mac-host-start-helper.mjs` 自测，覆盖密码安全、非交互提示、干跑和临时端口实启关闭。
+- Mac host README、当前状态、下一步和任务板已同步。
+修改文件：
+- `scripts/mac/start-mac-host.mjs`
+- `scripts/mac/test-mac-host-start-helper.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/start-mac-host.mjs`
+- `node --check scripts/mac/test-mac-host-start-helper.mjs`
+- `node scripts/mac/start-mac-host.mjs --dryRun`
+- `node scripts/mac/start-mac-host.mjs --requirePassword --dryRun`
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 45000`
+- `swift build --package-path apps/mac-host`
+- 临时端口真实启动：`LAN_DUAL_PASSWORD=test-password node scripts/mac/start-mac-host.mjs --host 127.0.0.1 --port 60529 --videoMode mock --inputMode log --buildId start-helper-runtime-check --requirePassword --noBonjour --timeoutMs 15000`
+- `lsof -nP -iTCP -sTCP:LISTEN | rg 'lan-dual|60529|43770'`
+验证结果：
+- 语法检查通过；dry-run 显示默认 `Input mode: log (safe, no injection)`、build 为当前短 hash、未设置密码时只警告不会启动。
+- `--requirePassword --dryRun` 在无密码时失败且不打印堆栈。
+- 自测通过：缺密码拒绝、`demo-password` 拒绝、非交互 `--promptPassword` 拒绝、环境密码干跑、临时端口真实启动后关闭。
+- 临时 `60529` 带默认 runtime/display 校验真实启动通过：`/discovery` build 为 `start-helper-runtime-check`、input 为 `log`，`check-mac-displays` 单屏 round-trip 通过；随后 `SIGINT` 正常关闭。
+- 监听口检查确认临时端口无残留，只剩主 `43770` PID 21491。
+遗留问题：
+- 本轮未重启主 `43770`；主通道仍保持当前已上线的 `c2db37f`/`log` 进程。
+- 真机改成 `inject` 仍需要人工在屏幕前确认安全环境，助手不会自动切换。
+下一步建议：
+- 后续需要重启 Mac host 时优先用 `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword`，再用 Windows 控制端或脚本验证 runtime build。
+- 如果 Windows 端要做真实 Mac host 验收，先确认 `/discovery.runtime.buildId` 与联络板记录一致。
+是否改了协议：否。
+是否需要另一端配合：否；Windows 端可按 README 使用新启动入口。
+
 ## 2026-06-12 Windows Codex
 
 日期：2026-06-12
