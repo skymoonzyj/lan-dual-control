@@ -17,6 +17,37 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-14 Windows Codex
+
+日期：2026-06-14 03:25
+开发端：Windows Codex
+本轮目标：减少真机联调时“刷新设备后还要手动点设备”的步骤。
+完成内容：
+- Windows 控制端刷新设备后，如果发现真实在线 WebSocket 设备，会在未连接状态下自动选中最佳目标。
+- 自动选择优先级为 macOS 被控端，其次是其他在线 host；如果当前输入框已经是在线目标，则保留当前目标并刷新 runtime 诊断。
+- 自动选择会填入目标地址、端口和 WebSocket 连接方式，并把 `/discovery.runtime` 显示到诊断条。
+- 页面级自检 `test-windows-client-browser --diagnosticsOnly --expectDiscoveryRuntimeBuildId` 已从“手动点击设备行”升级为断言刷新后自动选中在线设备。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --host 192.168.31.122 --port 43770 --expectDiscoveryRuntimeBuildId edcde5e --timeoutMs 60000`
+验证结果：
+- 真实 Mac host `192.168.31.122:43770` 的 diagnosticsOnly 通过；设备列表显示 `PID 63007 / build edcde5e`，刷新后自动选中 WebSocket 目标，并把 runtime 显示到诊断条。
+遗留问题：
+- 当前 Mac host 仍使用一次性随机密码，只适合 discovery/runtime/UI 检查；真正连接控制需要用户输入正式密码或按约定密码重启。
+下一步建议：
+- 白天继续前先看 Agent Link Board；若用户准备真实控制测试，再用正式密码跑 Windows 控制端 `--requireH264` 端到端连接。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
 ## 2026-06-13 Mac Codex
 
 日期：2026-06-13 14:45

@@ -1,6 +1,6 @@
 # 下一步行动
 
-最后更新：2026-06-13
+最后更新：2026-06-14
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。只放短期任务，长期计划继续放在 `docs/04-task-board.md`。
 
@@ -12,7 +12,7 @@
    - 验证通过后，再切到 `LAN_DUAL_INPUT_MODE=inject` 做真实输入注入。
 
 2. Windows 端继续完善控制体验。
-   - 真机联调前优先用 Windows 桌面版“刷新设备”自动扫描同网段 `/discovery`；命令行可用 `node scripts/windows/discover-lan-hosts.mjs --requireFound` 快速确认当前 Mac IP。本轮真实扫描发现 `192.168.31.122:43770`，build `b2e3cdf`。
+   - 真机联调前优先用 Windows 桌面版“刷新设备”自动扫描同网段 `/discovery`；命令行可用 `node scripts/windows/discover-lan-hosts.mjs --requireFound` 快速确认当前 Mac IP。Windows 控制端刷新后会自动选中真实在线 WebSocket 设备并显示 runtime；本轮 diagnosticsOnly 发现并自动选中 `192.168.31.122:43770`，build `edcde5e`。
    - 保持诊断状态条准确显示真实视频、模拟回退、Mac host runtime、权限、输入注入和剪贴板状态。
    - 真实连接时同时观察“实收 FPS”和“帧延迟”：帧延迟来自 `video_frame.timestamp` 接收年龄，可帮助区分采集/编码/网络/解码卡顿；若显示“时钟偏差”，先校准两端系统时间再判断延迟。
    - 继续验证 Mac 真实 `pcm-f32le-base64` 音频帧播放稳定性，重点看静音、音量变化、长时间运行和延迟。
@@ -52,7 +52,7 @@
 - 继续验证 Windows 被控端 WASAPI loopback：当前 30 秒本机基线为 1482 帧、49.98 FPS、最大间隔 33 ms、首帧约 395 ms、帧年龄最大 1 ms；短测试音电平强校验旧基线也已通过。观察脚本现在会在本机 host 上输出资源摘要，3.5 秒 WASAPI 短对照为 135 帧、稳态 49.72 FPS、最大间隔 32 ms、主进程工作集峰值约 62.5 MiB；媒体汇总脚本的音频顺序路径 `2026-06-13 13:02` 通过：133 帧、稳态 49.94 FPS、最大间隔 43 ms、首帧约 877 ms、帧年龄最大 13 ms。下一步重点看系统音量变化、60 秒以上长时间运行、Mac client 播放体验和无系统声音时的提示。可用 `node scripts/windows/observe-windows-host-audio.mjs --durationMs 30000 --minFrames 1200 --minFps 40 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp` 做持续帧观察并强校验音频帧新鲜度；需要确认有声电平时加 `--playTone --requireLevel --minLevel 0.02`。
 - 继续优化 Windows 控制端文件托盘和错误提示，重点看大文件复制后的粘贴可用性、失败恢复和用户可理解性。
 - Windows host 或假 Mac 认证相关改动后运行 `node scripts/windows/test-auth-retry-policy.mjs`，确认错误密码剩余次数、第三次断开和新连接正确认证未退化。
-- Windows 控制端视频、缩放或输入相关改动后，用真实 Mac host 运行 `node scripts/windows/test-windows-client-browser.mjs --host <Mac IP> --port 43770 --password <密码> --requireH264`，确认 H.264/WebCodecs 画布解码未退回 JPEG、`H264Errors=0`，并确认黑边输入防护回归通过；同时看页面“帧延迟”和诊断条是否有 `到达 <ms>` 或“时钟偏差”提示，避免再把随机模拟数值当成真实延迟。
+- Windows 控制端视频、缩放、设备发现或输入相关改动后，先用 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --host <Mac IP> --port 43770 --expectDiscoveryRuntimeBuildId <build-id>` 做无密码 UI 验收，确认刷新设备会自动选中真实在线 WebSocket 目标并显示 runtime；再用真实 Mac host 运行 `node scripts/windows/test-windows-client-browser.mjs --host <Mac IP> --port 43770 --password <密码> --requireH264`，确认 H.264/WebCodecs 画布解码未退回 JPEG、`H264Errors=0`，并确认黑边输入防护回归通过；同时看页面“帧延迟”和诊断条是否有 `到达 <ms>` 或“时钟偏差”提示，避免再把随机模拟数值当成真实延迟。
 - Windows host 相关改动后运行 `scripts/windows/test-windows-host.ps1`，确认真实视频首帧、文本剪贴板和文件剪贴板接收未退化；涉及启动/部署路径时，再跑 `node scripts/windows/check-windows-host-readiness.mjs --requireOpen --requireCurrentBuildId` 或桌面版部署档，确认 `/discovery.runtime.buildId` 不是旧进程；涉及音频时可加 `-AudioMode wasapi -RequireAudio`；涉及 Mac 反控链路时再运行 `node scripts/windows/test-mac-client-browser.mjs`，确认 Mac client 页面可显示 Windows 画面、收到 `input_ack`，并完成 `Command+C` 到 `Ctrl+C` 映射、最近连接保存/回填/清空、文本/本机剪贴板监听/文件剪贴板发送；需要验收真实 PCM 播放时，本机临时 host 可加 `--requireAudio --maxAudioFrameMs <毫秒> --maxAudioPlaybackMs <毫秒>`，已运行 host 可加 `--useExistingHost --enableAudio --expectAudioPayload --expectAudioPlayback --maxAudioFrameMs <毫秒> --maxAudioPlaybackMs <毫秒>`；需要体验阈值时加 `--maxInitialVideoMs` 和 `--observeVideoMs --minObservedVideoFrames --minObservedVideoFps`，需要断线恢复阈值时加 `--expectReconnect --maxReconnectRestoreMs`；认证相关改动可加跑 `node scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3`。
 - Windows host 或 Mac client 视频参数相关改动后优先运行 `node scripts/windows/observe-windows-host-media.mjs --resourceSampleTree true --json`，顺序确认普通启动下 60 Hz 视频请求、实际 FPS、最大帧间隔、采集管线、请求码率、`jpegQuality`、帧新鲜度、WASAPI 音频帧和资源摘要；若只看视频，再运行 `node scripts/windows/observe-windows-host-video.mjs --fps 60 --useDefaultMaxScreenFps --expectSessionFps 60 --durationMs 4000 --minFrames 140 --minFps 35 --requireMonotonicTimestamp --maxFrameAgeMs 1000 --resourceSampleTree true`。可再用 `--bandwidthKbps 5000 --qualityPreset smooth --json` 与 `--bandwidthKbps 40000 --qualityPreset sharp --json` 对照低/高码率；最后运行 `node scripts/windows/test-mac-client-browser.mjs` 确认 Mac client 默认 1080P/60Hz/20Mbps 和 2K/60Hz/40Mbps 更新路径未退化。
 - 继续维护本机假 Mac 服务，用于快速回归和失败场景模拟。

@@ -1452,11 +1452,71 @@ async function probeConnectionDiagnostics(host, port, transport = "websocket") {
   return null;
 }
 
+function isCurrentConnectionDevice(device) {
+  if (!device) return false;
+  return (
+    elements.hostInput.value.trim() === String(device.host ?? "").trim() &&
+    elements.portInput.value.trim() === String(device.port ?? "").trim() &&
+    elements.transportSelect.value === (device.transport ?? "websocket")
+  );
+}
+
+function autoSelectDeviceRank(device) {
+  const platform = String(device.platform ?? "").toLowerCase();
+  const role = String(device.role ?? "").toLowerCase();
+  if (platform === "macos" && role === "host") return 0;
+  if (platform === "macos") return 1;
+  if (role === "host") return 2;
+  return 3;
+}
+
+function pickAutoSelectableDevice(devices) {
+  const onlineWebSocketDevices = devices.filter(
+    (device) => device.status === "online" && (device.transport ?? "websocket") === "websocket",
+  );
+  if (onlineWebSocketDevices.length === 0) {
+    return null;
+  }
+
+  const currentOnline = onlineWebSocketDevices.find(isCurrentConnectionDevice);
+  if (currentOnline) {
+    return currentOnline;
+  }
+
+  return onlineWebSocketDevices
+    .slice()
+    .sort((left, right) => autoSelectDeviceRank(left) - autoSelectDeviceRank(right))[0];
+}
+
+function autoSelectDiscoveredDevice(devices) {
+  if (state.connected || state.connecting) {
+    return null;
+  }
+
+  const device = pickAutoSelectableDevice(devices);
+  if (!device) {
+    return null;
+  }
+
+  const changed = !isCurrentConnectionDevice(device);
+  elements.hostInput.value = device.host;
+  elements.portInput.value = device.port;
+  elements.transportSelect.value = device.transport ?? "websocket";
+  updateHostDiagnostics({ runtime: normalizeHostRuntime(device.runtime) });
+  savePreferences();
+
+  if (changed) {
+    addLog("自动选择设备", `${device.deviceName} · ${device.host}:${device.port}`);
+  }
+
+  return device;
+}
+
 function selectDevice(device, button) {
   document.querySelectorAll(".device-row, .history-row").forEach((item) =>
     item.classList.remove("active"),
   );
-  button.classList.add("active");
+  button?.classList.add("active");
   elements.hostInput.value = device.host;
   elements.portInput.value = device.port;
   elements.transportSelect.value = device.transport ?? "websocket";
@@ -1536,13 +1596,14 @@ async function refreshDevices() {
     const browserDiscovered = await runDiscoveryCandidates(getDiscoveryCandidates());
     discovered = [...discovered, ...browserDiscovered];
     state.discoveredDevices = buildDeviceList(discovered);
+    const selectedDevice = autoSelectDiscoveredDevice(state.discoveredDevices);
     renderDiscoveredDevices();
 
     const onlineCount = state.discoveredDevices.filter((device) => device.status === "online").length;
     addLog(
       "刷新设备",
       onlineCount > 0
-        ? `发现 ${onlineCount} 台在线设备${usedDesktopScan ? "，已扫描局域网" : ""}`
+        ? `发现 ${onlineCount} 台在线设备${selectedDevice ? "，已自动选中可连接设备" : ""}${usedDesktopScan ? "，已扫描局域网" : ""}`
         : "暂未发现在线设备，保留手动和模拟入口",
     );
   } finally {

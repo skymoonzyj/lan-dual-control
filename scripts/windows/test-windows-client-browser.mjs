@@ -1050,7 +1050,7 @@ async function verifyDiscoveryRuntimeDiagnostics(session, { host, port, buildId,
         return true;
       };
 
-      setValue("#transportSelect", "websocket");
+      setValue("#transportSelect", "local");
       setValue("#hostInput", ${JSON.stringify(host)});
       setValue("#portInput", ${JSON.stringify(port)});
       await refreshDevices();
@@ -1061,10 +1061,10 @@ async function verifyDiscoveryRuntimeDiagnostics(session, { host, port, buildId,
       const rows = [...document.querySelectorAll(".device-row")];
       const row = rows.find((item) => item.dataset.host === targetHost && item.dataset.port === targetPort);
       const detail = row?.innerText || "";
-      if (row) {
-        row.click();
-      }
       const diagnostics = document.querySelector("#hostDiagnosticsText")?.textContent || "";
+      const selectedHost = document.querySelector("#hostInput")?.value || "";
+      const selectedPort = document.querySelector("#portInput")?.value || "";
+      const selectedTransport = document.querySelector("#transportSelect")?.value || "";
       const device = state.discoveredDevices.find(
         (item) => item.host === targetHost && String(item.port) === targetPort,
       );
@@ -1073,12 +1073,20 @@ async function verifyDiscoveryRuntimeDiagnostics(session, { host, port, buildId,
       return {
         ok:
           Boolean(row) &&
+          row.classList.contains("active") &&
+          selectedHost === targetHost &&
+          selectedPort === targetPort &&
+          selectedTransport === "websocket" &&
           detail.includes(buildId) &&
           diagnostics.includes("运行") &&
           diagnostics.includes(buildId) &&
           runtime.buildId === buildId,
         detail,
         diagnostics,
+        selectedHost,
+        selectedPort,
+        selectedTransport,
+        active: Boolean(row?.classList.contains("active")),
         runtime,
         rowCount: rows.length,
       };

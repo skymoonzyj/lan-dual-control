@@ -4,7 +4,7 @@
 
 ## 当前能力
 
-- 手动输入 Mac 局域网 IP 和端口，也可以用“刷新设备”探测本机服务、连接历史和局域网里的 `/discovery` 接口；桌面版会调用本机扫描工具自动扫当前 IPv4 网段，浏览器预览版只轻量探测已知地址，避免网页预览时大量并发探测。
+- 手动输入 Mac 局域网 IP 和端口，也可以用“刷新设备”探测本机服务、连接历史和局域网里的 `/discovery` 接口；桌面版会调用本机扫描工具自动扫当前 IPv4 网段，浏览器预览版只轻量探测已知地址，避免网页预览时大量并发探测。刷新后若发现真实在线设备，会优先自动选中 macOS 被控端，填入地址和端口，并把 runtime/build 显示到诊断条。
 - 支持本地模拟握手，也支持 WebSocket 协议连接。
 - 支持 hello、auth_request、session_offer、display_settings、video_frame、input_event、clipboard_text 和 reverse_control_request 消息。
 - 显示模拟远程桌面画面。
@@ -69,13 +69,13 @@ node E:\codex\lan-dual-control\scripts\windows\test-coordinate-mapping.mjs --hel
 
 真实 Mac 页面级自检可自动启动本地控制端页面、打开 Edge、连接 Mac，并确认诊断条和视频画面；加 `--requireH264` 可强制要求真实 H.264/WebCodecs 画布解码成功且本次连接 H.264 解码错误计数为 0，加 `--injectPcmAudio` 可额外注入一帧 planar PCM，验证控制端音频播放入口：
 脚本会先回归画面内悬浮控制中心，确认悬浮层、摘要、画质、缩放、声音、音量、全屏和窗口按钮能同步到原工具栏与页面布局；随后会模拟适应窗口黑边输入，确认黑边移动、点击、滚轮不会发远控事件，画面内按下后移到黑边松开也能正常释放。连接成功后还会等待刷新率卡片显示数值型“实收 FPS”和“协商 Hz”，避免把请求刷新率误当成真实帧率。
-只需要快速检查诊断条、悬浮控制中心和黑边输入防护时，可加 `--diagnosticsOnly`，不会连接被控端；该路径也会模拟 Mac host `runtime`，确认诊断条能显示 PID、运行时长和 build，并覆盖视频帧新鲜度显示、时钟偏差提示和 H.264 Annex B/AVC 关键帧识别 helper。Mac host 重启后，可再加 `--expectDiscoveryRuntimeBuildId <build-id>`，通过真实 `/discovery` 无密码验收设备列表和诊断条显示的 runtime。
+只需要快速检查诊断条、悬浮控制中心和黑边输入防护时，可加 `--diagnosticsOnly`，不会连接被控端；该路径也会模拟 Mac host `runtime`，确认诊断条能显示 PID、运行时长和 build，并覆盖视频帧新鲜度显示、时钟偏差提示和 H.264 Annex B/AVC 关键帧识别 helper。Mac host 重启后，可再加 `--expectDiscoveryRuntimeBuildId <build-id>`，通过真实 `/discovery` 无密码验收设备列表、刷新后自动选中 WebSocket 设备、以及诊断条显示的 runtime。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\discover-lan-hosts.mjs
 node E:\codex\lan-dual-control\scripts\windows\discover-lan-hosts.mjs --subnet 192.168.31.0/24 --requireFound
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --diagnosticsOnly
-node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --diagnosticsOnly --host 192.168.31.122 --port 43770 --expectDiscoveryRuntimeBuildId db48055
+node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --diagnosticsOnly --host 192.168.31.122 --port 43770 --expectDiscoveryRuntimeBuildId edcde5e
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password --requireH264
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password --injectPcmAudio
@@ -116,7 +116,7 @@ node E:\codex\lan-dual-control\apps\mock-mac-host\server.mjs 43770
 假 Mac 服务还会持续发送模拟 `video_frame`，用于提前验证 Windows 端画面渲染流程。
 如果假 Mac 断开连接，Windows 控制端会进入“重连中”状态并自动尝试恢复；点击“断开”会停止自动重连。
 模拟场景中的“输入被拒绝”可用于回归 `input_ack` 失败提示；“反控已同意 / 反控超时 / 对方向我发起反控”可用于提前联调反控状态机。
-点击左侧“刷新设备”后，如果假 Mac 服务正在运行，会显示为在线设备，点击即可自动填入地址、端口和 WebSocket 连接方式。
+点击左侧“刷新设备”后，如果假 Mac 服务或真实 Mac host 正在运行，会显示为在线设备；刷新结果里有真实在线设备时会自动填入地址、端口和 WebSocket 连接方式，也可以手动点击列表切换目标。
 
 ## 后续对接
 
