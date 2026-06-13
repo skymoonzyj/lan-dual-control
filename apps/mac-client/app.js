@@ -64,6 +64,7 @@ const state = {
   audioPlayedFrames: 0,
   audioDroppedFrames: 0,
   audioLastError: "",
+  lastAudioFrameAgeMs: null,
   connectionStartedAt: 0,
   firstVideoFrameMs: 0,
   firstAudioFrameMs: 0,
@@ -147,6 +148,27 @@ function setConnected(connected) {
 
 function formatMs(value) {
   return `${Math.max(0, Math.round(value))} ms`;
+}
+
+function calculateFrameAgeMs(timestamp) {
+  if (!timestamp) {
+    return null;
+  }
+  const parsed = Date.parse(String(timestamp));
+  if (Number.isNaN(parsed)) {
+    return null;
+  }
+  return Date.now() - parsed;
+}
+
+function formatFrameAge(ageMs) {
+  if (!Number.isFinite(ageMs)) {
+    return "";
+  }
+  if (ageMs < -50) {
+    return `时钟偏差 ${formatMs(Math.abs(ageMs))}`;
+  }
+  return `到达 ${formatMs(ageMs)}`;
 }
 
 function normalizeRemoteRuntime(runtime) {
@@ -264,7 +286,9 @@ function renderSessionDiagnostics() {
   if (state.audioFrames > 0) {
     const firstAudioText = state.firstAudioFrameMs > 0 ? `首帧 ${formatMs(state.firstAudioFrameMs)} · ` : "";
     const droppedText = state.audioDroppedFrames > 0 ? ` · 丢 ${state.audioDroppedFrames}` : "";
-    elements.audioFlowMetric.textContent = `${firstAudioText}接收 ${state.audioFrames} · 播放 ${state.audioPlayedFrames}${droppedText}`;
+    const ageText = formatFrameAge(state.lastAudioFrameAgeMs);
+    const ageMetricText = ageText ? ` · ${ageText}` : "";
+    elements.audioFlowMetric.textContent = `${firstAudioText}接收 ${state.audioFrames} · 播放 ${state.audioPlayedFrames}${droppedText}${ageMetricText}`;
   } else {
     elements.audioFlowMetric.textContent = elements.audioToggle.checked ? "等待音频" : "未开启";
   }
@@ -1089,6 +1113,7 @@ function resetAudioPlayback() {
   state.audioLastError = "";
   state.audioFrames = 0;
   state.audioLevel = 0;
+  state.lastAudioFrameAgeMs = null;
   state.firstAudioFrameMs = 0;
   resetAudioStatus();
   elements.audioPlaybackStatus.textContent = elements.audioToggle.checked ? "等待音频帧" : "未开启";
@@ -1259,16 +1284,18 @@ function renderAudioFrameStatus(frame) {
   const levelText = `${Math.round(state.audioLevel * 100)}%`;
   const codec = frame.codec || "mock";
   const payload = getAudioPayload(frame);
+  const ageText = formatFrameAge(state.lastAudioFrameAgeMs);
+  const ageStatusText = ageText ? ` · ${ageText}` : "";
   const playbackText = state.audioPlayedFrames > 0
     ? ` · 播放 ${state.audioPlayedFrames}`
     : payload
       ? elements.audioToggle.checked ? " · 等待播放" : " · 未播放"
       : "";
   const droppedText = state.audioDroppedFrames > 0 ? ` · 丢 ${state.audioDroppedFrames}` : "";
-  elements.audioStatus.textContent = `${codec} · level ${levelText}${playbackText}${droppedText}`;
+  elements.audioStatus.textContent = `${codec} · level ${levelText}${ageStatusText}${playbackText}${droppedText}`;
   elements.audioPlaybackStatus.textContent = payload
-    ? `${frame.encoding || "pcm"} · ${frame.sampleRate || 48000} Hz`
-    : `接收 ${state.audioFrames} 帧 · ${frame.audioMode || "mock"}`;
+    ? `${frame.encoding || "pcm"} · ${frame.sampleRate || 48000} Hz${ageStatusText}`
+    : `接收 ${state.audioFrames} 帧 · ${frame.audioMode || "mock"}${ageStatusText}`;
   renderSessionDiagnostics();
 }
 
@@ -1278,6 +1305,8 @@ function handleAudioFrame(frame) {
     state.firstAudioFrameMs = performance.now() - state.connectionStartedAt;
   }
   state.audioLevel = Math.max(0, Math.min(1, Number(frame.level ?? frame.peak ?? 0)));
+  const ageMs = calculateFrameAgeMs(frame.timestamp);
+  state.lastAudioFrameAgeMs = ageMs;
   renderAudioFrameStatus(frame);
   if (!getAudioPayload(frame)) {
     return;

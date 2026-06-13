@@ -694,6 +694,13 @@ function buildSnapshotExpression() {
         if (!timings.connectClickedAt || !timings.firstAudioFrameAt) return 0;
         return Math.round(timings.firstAudioFrameAt - timings.connectClickedAt);
       })(),
+      lastAudioFrameAgeMs: (() => {
+        const frame = [...(window.__lanDualReceivedMessages || [])].reverse().find((message) => message.type === "audio_frame");
+        if (!frame?.timestamp) return null;
+        const parsed = Date.parse(String(frame.timestamp));
+        if (Number.isNaN(parsed)) return null;
+        return Math.round(Date.now() - parsed);
+      })(),
       audioPlaybackMs: (() => {
         const timings = window.__lanDualTimings || {};
         const playedFrames = Number((text("#audioStatus").match(/播放\\s*(\\d+)/) || [])[1] || 0);
@@ -712,6 +719,7 @@ function buildSnapshotExpression() {
           channels: frame.channels || 0,
           payloadBytes: frame.payloadBytes || frame.bytes || 0,
           payloadLength: String(payload).length,
+          timestamp: frame.timestamp || "",
         };
       })(),
       input: text("#inputStatus"),
@@ -1530,8 +1538,21 @@ async function run() {
       if (!audioSnapshot.audioFlowMetric.includes("接收")) {
         throw new Error(`Mac client audio diagnostics did not update: ${audioSnapshot.audioFlowMetric}`);
       }
+      const hasAudioFrameAge = Number.isFinite(audioSnapshot.lastAudioFrameAgeMs);
+      const audioStatusShowsAge = audioSnapshot.audio.includes("到达") || audioSnapshot.audio.includes("时钟偏差");
+      const audioPlaybackShowsAge = audioSnapshot.audioPlayback.includes("到达") || audioSnapshot.audioPlayback.includes("时钟偏差");
+      const audioDiagnosticsShowsAge = audioSnapshot.audioFlowMetric.includes("到达") || audioSnapshot.audioFlowMetric.includes("时钟偏差");
+      if (hasAudioFrameAge && (!audioStatusShowsAge || !audioPlaybackShowsAge || !audioDiagnosticsShowsAge)) {
+        throw new Error(`Mac client audio frame age missing: ${JSON.stringify({
+          audio: audioSnapshot.audio,
+          audioPlayback: audioSnapshot.audioPlayback,
+          audioFlowMetric: audioSnapshot.audioFlowMetric,
+          lastAudioFrameAgeMs: audioSnapshot.lastAudioFrameAgeMs,
+        })}`);
+      }
+      const ageText = hasAudioFrameAge ? ` · frameAge=${audioSnapshot.lastAudioFrameAgeMs}ms` : "";
       print("OK", `Audio: ${audioSnapshot.audio} / ${audioSnapshot.audioPlayback}${payloadText}${timingText}`);
-      print("OK", `Audio diagnostics: ${audioSnapshot.audioFlowMetric}`);
+      print("OK", `Audio diagnostics: ${audioSnapshot.audioFlowMetric}${ageText}`);
 
       await clickElement(session, "#audioToggle");
       const audioDisabledSnapshot = await waitFor(
