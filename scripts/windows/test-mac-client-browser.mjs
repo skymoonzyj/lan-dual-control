@@ -686,6 +686,13 @@ function buildSnapshotExpression() {
       audioFlowMetric: text("#audioFlowMetric"),
       reconnectMetric: text("#reconnectMetric"),
       remoteRuntime: text("#remoteRuntimeMetric"),
+      lastVideoFrameAgeMs: (() => {
+        const frame = [...(window.__lanDualReceivedMessages || [])].reverse().find((message) => message.type === "video_frame");
+        if (!frame?.timestamp) return null;
+        const parsed = Date.parse(String(frame.timestamp));
+        if (Number.isNaN(parsed)) return null;
+        return Math.round(Date.now() - parsed);
+      })(),
       audioToggleChecked: document.querySelector("#audioToggle")?.checked || false,
       audioPlayedFrames: Number((text("#audioStatus").match(/播放\\s*(\\d+)/) || [])[1] || 0),
       audioFrameCount: (window.__lanDualReceivedMessages || []).filter((message) => message.type === "audio_frame").length,
@@ -1380,6 +1387,16 @@ async function run() {
       throw new Error(`Mac client diagnostics did not update after video: ${JSON.stringify({
         firstVideoMetric: videoSnapshot.firstVideoMetric,
         videoFlowMetric: videoSnapshot.videoFlowMetric,
+      })}`);
+    }
+    const hasVideoFrameAge = Number.isFinite(videoSnapshot.lastVideoFrameAgeMs);
+    const videoStatusShowsAge = videoSnapshot.video.includes("到达") || videoSnapshot.video.includes("时钟偏差");
+    const videoDiagnosticsShowsAge = videoSnapshot.videoFlowMetric.includes("到达") || videoSnapshot.videoFlowMetric.includes("时钟偏差");
+    if (hasVideoFrameAge && (!videoStatusShowsAge || !videoDiagnosticsShowsAge)) {
+      throw new Error(`Mac client video frame age missing: ${JSON.stringify({
+        video: videoSnapshot.video,
+        videoFlowMetric: videoSnapshot.videoFlowMetric,
+        lastVideoFrameAgeMs: videoSnapshot.lastVideoFrameAgeMs,
       })}`);
     }
     print("OK", `Diagnostics: ${videoSnapshot.firstVideoMetric} / ${videoSnapshot.videoFlowMetric}`);

@@ -72,6 +72,7 @@ const state = {
   maxVideoGapMs: 0,
   lastVideoFps: 0,
   lastVideoCodec: "",
+  lastVideoFrameAgeMs: null,
   reconnectTotal: 0,
   fileTransferActive: false,
   fileTransferId: "",
@@ -262,6 +263,7 @@ function resetSessionDiagnostics({ resetReconnects = false } = {}) {
   state.maxVideoGapMs = 0;
   state.lastVideoFps = 0;
   state.lastVideoCodec = "";
+  state.lastVideoFrameAgeMs = null;
   state.frameCount = 0;
   state.frameWindowStartedAt = 0;
   state.frameWindowCount = 0;
@@ -278,7 +280,9 @@ function renderSessionDiagnostics() {
 
   if (state.frameCount > 0) {
     const fpsText = state.lastVideoFps > 0 ? ` · ${state.lastVideoFps.toFixed(1)} fps` : "";
-    elements.videoFlowMetric.textContent = `${state.lastVideoCodec || "video"} · #${state.frameCount}${fpsText} · gap max ${formatMs(state.maxVideoGapMs)}`;
+    const ageText = formatFrameAge(state.lastVideoFrameAgeMs);
+    const ageMetricText = ageText ? ` · ${ageText}` : "";
+    elements.videoFlowMetric.textContent = `${state.lastVideoCodec || "video"} · #${state.frameCount}${fpsText} · gap max ${formatMs(state.maxVideoGapMs)}${ageMetricText}`;
   } else {
     elements.videoFlowMetric.textContent = state.connected ? "等待视频" : "未接收";
   }
@@ -981,6 +985,9 @@ function handleVideoFrame(frame) {
   }
   state.lastVideoFrameAt = now;
   state.lastVideoCodec = frame.codec || "jpeg";
+  state.lastVideoFrameAgeMs = calculateFrameAgeMs(frame.timestamp);
+  const ageText = formatFrameAge(state.lastVideoFrameAgeMs);
+  const ageStatusText = ageText ? ` · ${ageText}` : "";
   if (!state.frameWindowStartedAt) {
     state.frameWindowStartedAt = now;
   }
@@ -988,11 +995,11 @@ function handleVideoFrame(frame) {
   if (elapsed >= 1000) {
     const fps = (state.frameWindowCount * 1000) / elapsed;
     state.lastVideoFps = fps;
-    elements.videoStatus.textContent = `${frame.codec || "jpeg"} · #${frame.frameId || state.frameCount} · ${fps.toFixed(1)} fps`;
+    elements.videoStatus.textContent = `${frame.codec || "jpeg"} · #${frame.frameId || state.frameCount} · ${fps.toFixed(1)} fps${ageStatusText}`;
     state.frameWindowCount = 0;
     state.frameWindowStartedAt = now;
   } else {
-    elements.videoStatus.textContent = `${frame.codec || "jpeg"} · #${frame.frameId || state.frameCount}`;
+    elements.videoStatus.textContent = `${frame.codec || "jpeg"} · #${frame.frameId || state.frameCount}${ageStatusText}`;
   }
   renderSessionDiagnostics();
 }

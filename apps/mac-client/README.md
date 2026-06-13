@@ -12,7 +12,7 @@
 - 认证失败时显示远端返回的剩余尝试次数，清理远程画面、远端摘要、音频状态、会话诊断和远端运行信息，并自动释放连接按钮，方便改密码后重连。
 - 意外断线后最多自动重连 3 次，并会在等待重连时清理上一帧远程画面、音频状态和远端运行信息，远端摘要显示“连接中断”；手动断开和认证失败不会自动重连。
 - 手动断开会停止剪贴板监听、取消正在发送的文件、关闭音频播放、清理上一帧远程画面，并把远端摘要、音频状态、会话诊断和远端运行信息重置为未就绪状态。
-- 显示 Windows host 的 JPEG `video_frame`。
+- 显示 Windows host 的 JPEG `video_frame`；收到 `video_frame.timestamp` 时，视频状态和会话诊断会显示帧到达年龄或时钟偏差。
 - 支持画质、分辨率、刷新率和码率设置，当前可选 1080P/2K/4K、30/60/120/144/240 Hz、5/10/15/20/40/50 Mbps；成功连接后修改会立即发送 `display_settings`。
 - 向 Windows host 发送鼠标移动、按钮、滚轮和键盘 `input_event`；Mac `Command` 会按 Windows `Ctrl` 发送，方便常用快捷键。
 - 手动发送文本 `clipboard_text` 到 Windows host，并显示 `clipboard_ack` 写入结果。
@@ -86,7 +86,7 @@ Mac 本机文本剪贴板已纳入页面级自检：脚本会断言未连接/空
 
 持续视频体验也可量化：脚本加 `--observeVideoMs <毫秒>` 会在连接后统计短窗口内收到的 `video_frame` 数和实收 FPS；加 `--minObservedVideoFrames <帧数>` 或 `--minObservedVideoFps <FPS>` 可把持续来帧能力变成强校验。
 
-会话诊断面板已纳入页面级自检：连接成功并出现首帧后，脚本会断言“首帧”和“视频流”指标已从等待状态更新，临时 Windows host 也会断言 runtime 里显示 PID 和测试 build id，音频验收时也会断言音频诊断显示已接收帧；自检末尾会点击“断开”，确认连接状态、视频表面、音频状态和诊断指标回到干净初始态。
+会话诊断面板已纳入页面级自检：连接成功并出现首帧后，脚本会断言“首帧”和“视频流”指标已从等待状态更新，并在对端提供 `video_frame.timestamp` 时断言视频状态和诊断行显示“到达 <ms>”或“时钟偏差”；临时 Windows host 也会断言 runtime 里显示 PID 和测试 build id，音频验收时也会断言音频诊断显示已接收帧；自检末尾会点击“断开”，确认连接状态、视频表面、音频状态和诊断指标回到干净初始态。
 
 快捷键映射已纳入页面级自检：脚本会模拟 `Command+C`，拦截页面发出的 `input_event`，断言发往 Windows 的 `ctrlKey=true`、`metaKey=false`，同时保留 `localMetaKey=true` 便于诊断。
 

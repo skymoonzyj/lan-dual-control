@@ -19,6 +19,34 @@
 
 ## 2026-06-13 Mac Codex
 
+日期：2026-06-13 13:55
+开发端：Mac Codex
+本轮目标：让 Mac 控制 Windows 时的视频状态能显示真实 `video_frame.timestamp` 到达新鲜度，方便排查画面延迟或两端时钟偏差。
+完成内容：
+- Mac client 收到 `video_frame.timestamp` 后会估算帧到达本机时的新鲜度。
+- 顶部视频状态和会话诊断“视频流”行都会显示 `到达 <ms>`；如果对端时间戳明显来自未来，会显示 `时钟偏差`。
+- `test-mac-client-browser.mjs` 会从最后一条 `video_frame.timestamp` 计算 frame age，并在对端提供 timestamp 时断言视频状态和诊断行都显示到达年龄或时钟偏差。
+- Mac client README 已同步该自检行为。
+修改文件：
+- `apps/mac-client/app.js`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --observeVideoMs 1000 --minObservedVideoFrames 5 --minObservedVideoFps 5 --skipFileClipboard`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 页面级自检通过；输出包含顶部视频状态 `到达 1 ms`，诊断行 `到达 1 ms`，短窗口观察 59 帧 / 1002ms / 58.9fps。
+- 语法检查、空白检查和冲突标记搜索通过。
+遗留问题：真实 Windows host 的 60Hz 观感、FFmpeg/WGC 采集延迟和跨机时钟偏差仍需后续真机联调确认。
+下一步建议：Windows 端启动真实 host 后，Mac 端用 `test-mac-client-browser.mjs --useExistingHost --observeVideoMs <毫秒> --minObservedVideoFrames <帧数> --minObservedVideoFps <FPS>` 继续看首帧、实收 FPS 和页面显示的 video frame age。
+是否改了协议：否，只消费已有可选 `video_frame.timestamp`。
+是否需要另一端配合：暂不需要；后续真实 Windows host 画面延迟验收需要 Windows 端启动 host 配合。
+
+## 2026-06-13 Mac Codex
+
 日期：2026-06-13 13:05
 开发端：Mac Codex
 本轮目标：让 Mac 控制 Windows 时的音频状态能显示真实 `audio_frame.timestamp` 到达新鲜度，方便排查音频延迟。
