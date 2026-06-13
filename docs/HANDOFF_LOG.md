@@ -19,6 +19,37 @@
 
 ## 2026-06-13 Windows Codex
 
+日期：2026-06-13 13:19
+开发端：Windows Codex
+本轮目标：补强 Windows 视频观察脚本的 fallback 诊断，方便定位 FFmpeg gdigrab error 5、GDI 兜底失败和 mock 回退。
+完成内容：
+- `observe-windows-host-video.mjs` 现在会把 `video_frame.streamFallbackReason` / `fallbackReason` 以及 `/discovery.capabilities.screen.lastCaptureError` 带进真实视频失败错误信息。
+- 视频观察 JSON 汇总新增 `observation.fallbackReasons`，文本输出在观察到 fallback reason 时打印 `Fallback reason`。
+- fallback reason 会合并空白并压缩常见 `FFmpeg did not produce a JPEG frame` + `CopyFromScreen` 失败堆栈，避免错误信息被 PowerShell 堆栈或编码噪声淹没。
+- Windows host README 已说明遇到 `windows-ffmpeg-gdigrab-fallback-mock` 时优先查看 fallback reason，并记录 13:09 曾短暂恢复、13:18 又复现 fallback 的现状。
+修改文件：
+- `scripts/windows/observe-windows-host-video.mjs`
+- `apps/windows-host/README.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/observe-windows-host-video.mjs`
+- `node scripts/windows/observe-windows-host-video.mjs --screenMode mock --requireRealVideo false --durationMs 1000 --minFrames 5 --minFps 3 --maxGapMs 1000 --resourceSample false --json`
+- `node scripts/windows/test-windows-script-help.mjs --script observe-windows-host-video.mjs`
+- `node scripts/windows/observe-windows-host-video.mjs --fps 60 --useDefaultMaxScreenFps --expectSessionFps 60 --durationMs 1000 --minFrames 5 --minFps 3 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp --resourceSample false`
+验证结果：
+- 语法和单脚本帮助覆盖通过。
+- mock JSON 路径通过，输出 `observation.fallbackReasons` 数组。
+- 真实 FFmpeg 60Hz 短复测在当前桌面会话再次回退到 mock，失败信息已带出清晰原因：`reason=FFmpeg did not produce a JPEG frame within 5000 ms; System.Drawing CopyFromScreen fallback failed`。
+遗留问题：
+- 本轮没有修复 gdigrab 本身的偶发 `error 5` / 捕获失败；只是让复现时错误更可读。WGC 替换仍是更正方向。
+下一步建议：
+- 若媒体汇总脚本再次遇到 mock fallback，先查看子视频观察输出里的 `reason=` 或 JSON `fallbackReasons`，再决定是复测桌面捕获、切 System.Drawing 兜底，还是推进 WGC。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-13 Windows Codex
+
 日期：2026-06-13 13:05
 开发端：Windows Codex
 本轮目标：新增 Windows host 视频+音频顺序媒体基线入口，避免并发临时 host 互相影响，并为后续 WGC/正式编码管线提供统一对照报告。

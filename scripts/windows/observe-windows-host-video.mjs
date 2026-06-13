@@ -389,16 +389,32 @@ function parseFrameTimestampMs(frame) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function assertRealFrame(frame) {
+function normalizeFallbackReason(...values) {
+  const raw = values
+    .map((value) => String(value || "").trim())
+    .find(Boolean);
+  if (!raw) return "";
+
+  const normalized = raw.replace(/\s+/g, " ").trim();
+  const ffmpegTimeout = normalized.match(/FFmpeg did not produce a JPEG frame within \d+ ms/i)?.[0] || "";
+  if (ffmpegTimeout && /CopyFromScreen/i.test(normalized)) {
+    return `${ffmpegTimeout}; System.Drawing CopyFromScreen fallback failed`;
+  }
+
+  return normalized.length > 260 ? `${normalized.slice(0, 257)}...` : normalized;
+}
+
+function assertRealFrame(frame, context = {}) {
   const pipeline = String(frame.capturePipeline || "").toLowerCase();
   const source = String(frame.source || "").toLowerCase();
   const codec = String(frame.codec || "").toLowerCase();
   if (source === "mock" || pipeline.includes("mock") || codec === "mock-svg") {
-    throw new Error(`expected real video frame, got codec=${codec || "missing"} source=${source || "missing"} pipeline=${pipeline || "missing"}`);
+    const reason = normalizeFallbackReason(frame.streamFallbackReason, frame.fallbackReason, context.fallbackReason);
+    throw new Error(`expected real video frame, got codec=${codec || "missing"} source=${source || "missing"} pipeline=${pipeline || "missing"}${reason ? ` reason=${reason}` : ""}`);
   }
 }
 
-async function observeFrames(client, args, onFirstFrame = () => {}) {
+async function observeFrames(client, args, onFirstFrame = () => {}, context = {}) {
   const frames = [];
   const startedAt = performance.now();
   let lastAt = startedAt;
@@ -414,7 +430,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}) {
     lastAt = now;
     maxGapMs = Math.max(maxGapMs, gap);
     if (args.requireRealVideo) {
-      assertRealFrame(frame);
+      assertRealFrame(frame, context);
     }
     if (frames.length === 0) {
       onFirstFrame();
@@ -442,6 +458,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}) {
       maxBandwidthKbps: Number(frame.maxBandwidthKbps) || 0,
       qualityPreset: frame.qualityPreset || "",
       jpegQuality: Number(frame.jpegQuality) || 0,
+      fallbackReason: normalizeFallbackReason(frame.streamFallbackReason, frame.fallbackReason, context.fallbackReason),
     });
   }
 
@@ -456,6 +473,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}) {
   const lastFrame = frames.at(-1) || {};
   const uniquePipelines = [...new Set(frames.map((frame) => frame.pipeline).filter(Boolean))];
   const uniqueCodecs = [...new Set(frames.map((frame) => frame.codec).filter(Boolean))];
+  const fallbackReasons = [...new Set(frames.map((frame) => frame.fallbackReason).filter(Boolean))];
   const uniqueQualities = [...new Set(
     frames
       .map((frame) => frame.jpegQuality)
@@ -493,6 +511,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}) {
     maxBandwidthsKbps: uniqueBandwidths,
     pipelines: uniquePipelines,
     codecs: uniqueCodecs,
+    fallbackReasons,
   };
 }
 
@@ -581,7 +600,9 @@ async function main() {
     }
     print("OK", `Session: ${answer.width || args.width}x${answer.height || args.height} / ${answer.fps || "?"} Hz / ${answer.capturePipeline || answer.hostMode || "unknown"}`, args);
 
-    const summary = await observeFrames(client, args, startResourceSamplingOnce);
+    const summary = await observeFrames(client, args, startResourceSamplingOnce, {
+      fallbackReason: screen.lastCaptureError || "",
+    });
     summary.sessionFps = Number(answer.fps) || 0;
     const resource = resourceSampler ? await resourceSampler.stop() : {
       available: false,
@@ -610,6 +631,7 @@ async function main() {
       discoveryScreen: {
         mode: screen.mode || "",
         capturePipeline: screen.capturePipeline || "",
+        lastCaptureError: screen.lastCaptureError || "",
       },
       session: {
         width: answer.width || 0,
@@ -643,6 +665,9 @@ async function main() {
       }
       print("INFO", `Requested bandwidth: ${args.bandwidthKbps} Kbps / session: ${answer.maxBandwidthKbps || 0} Kbps / JPEG quality: ${answer.jpegQuality || "unknown"}`, args);
       print("INFO", `Pipeline: ${summary.pipelines.join(", ") || "unknown"} / codec: ${summary.codecs.join(", ") || "unknown"} / avg bytes: ${summary.avgPayloadBytes}`, args);
+      if (summary.fallbackReasons.length > 0) {
+        print("WARN", `Fallback reason: ${summary.fallbackReasons.join(" | ")}`, args);
+      }
       if (resource.available) {
         print(
           "INFO",

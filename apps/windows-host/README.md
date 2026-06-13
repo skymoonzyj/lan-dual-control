@@ -323,6 +323,8 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 
 默认临时使用 `127.0.0.1:43772`；如果该端口已被其他自检占用，脚本会自动换一个临时空闲端口。需要连接已运行的 Windows host 时再加 `--useExisting --host 127.0.0.1 --port 43770`。脚本会自动识别 `C:\DevTools\ffmpeg\bin\ffmpeg.exe`，也可以显式传入 `--ffmpeg C:\DevTools\ffmpeg\bin\ffmpeg.exe`。在本机临时 host 或本机已运行 host 上，脚本还会默认采样 Windows host 主进程的 CPU、工作集、私有内存、句柄和线程；需要把 FFmpeg 子进程也纳入总资源对照时，加 `--resourceSampleTree true`，不需要资源采样时加 `--resourceSample false`。
 
+如果视频回退到 mock 或系统截图兜底，观察脚本会在 JSON 的 `observation.fallbackReasons` 和文本输出里带出 `streamFallbackReason` / `lastCaptureError`。因此遇到 `windows-ffmpeg-gdigrab-fallback-mock` 时，优先看这里区分是 FFmpeg 超时、`gdigrab` 权限/桌面捕获错误，还是 System.Drawing 兜底也失败。
+
 需要对照码率和 JPEG 质量时：
 
 ```powershell
@@ -339,6 +341,8 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 当前 FFmpeg gdigrab 60 Hz 基线：`2026-06-13 03:00` 本机临时 host 观察 4 秒收到 230 帧，平均 57.1 FPS，最大帧间隔 41 ms，`dropped=4`，`video_frame.timestamp` 接收年龄 min/avg/max `0/0/1 ms`，timestamp 单调；请求码率 50 Mbps，`jpegQuality=0.62`，平均帧大小约 45 KB。后续 Windows Graphics Capture 采集实装后，至少要和这条基线对照帧率、最大帧间隔、帧新鲜度、码率/画质和资源占用。
 
 当前带资源采样的 60 Hz 对照：`2026-06-13 12:30` 使用 `--resourceSampleTree true` 观察 4 秒收到 198 帧，平均 49.49 FPS，最大帧间隔 43 ms，`dropped=35`，帧年龄最大 1 ms；进程树包含 `node`、`conhost`、`ffmpeg`，CPU 平均/峰值约 `4.5/5.4%`，工作集平均/峰值约 `308.4/309.3 MiB`，私有内存平均/峰值约 `437.2/440.9 MiB`。后续 WGC 或正式编码管线实装后，建议用同一命令加 `--resourceSampleTree true --json` 做 A/B 对照。
+
+`2026-06-13 13:09` 复测短视频观察曾恢复成功：1 秒收到 50 帧，约 49.54 FPS，最大帧间隔 38 ms，帧年龄最大 19 ms；`13:18` 同一桌面会话复测再次回退到 `windows-ffmpeg-gdigrab-fallback-mock`，新版诊断已能输出 `reason=FFmpeg did not produce a JPEG frame within 5000 ms; System.Drawing CopyFromScreen fallback failed`。这说明 `gdigrab error 5` 属于当前过渡采集层的不稳定现象，后续优先推进 WGC 采集替换。
 
 需要把低延迟帧新鲜度纳入强校验时：
 
