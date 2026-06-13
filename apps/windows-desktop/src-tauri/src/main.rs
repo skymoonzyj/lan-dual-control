@@ -151,6 +151,14 @@ struct WindowsHostLaunchRequest {
     input_mode: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LanDiscoveryRequest {
+    port: Option<u16>,
+    timeout_ms: Option<u64>,
+    require_found: Option<bool>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DesktopCommandResult {
@@ -1193,6 +1201,30 @@ fn preview_windows_firewall_rule(
 }
 
 #[tauri::command]
+fn discover_lan_hosts(request: LanDiscoveryRequest) -> Result<DesktopCommandResult, String> {
+    let repo = repo_root()?;
+    let script = repo
+        .join("scripts")
+        .join("windows")
+        .join("discover-lan-hosts.mjs");
+    let port = normalize_port(request.port);
+    let timeout_ms = request.timeout_ms.unwrap_or(650).clamp(100, 5000);
+    let mut args = vec![
+        "--json".to_string(),
+        "--port".to_string(),
+        port.to_string(),
+        "--timeoutMs".to_string(),
+        timeout_ms.to_string(),
+    ];
+
+    if request.require_found.unwrap_or(false) {
+        args.push("--requireFound".to_string());
+    }
+
+    run_node_script(&repo, &script, &args, &[])
+}
+
+#[tauri::command]
 fn start_windows_host(
     request: WindowsHostLaunchRequest,
     state: tauri::State<'_, WindowsHostProcessState>,
@@ -1540,6 +1572,7 @@ fn main() {
             open_clipboard_temp_path,
             run_windows_host_readiness,
             preview_windows_firewall_rule,
+            discover_lan_hosts,
             start_windows_host,
             stop_windows_host,
             get_windows_host_status

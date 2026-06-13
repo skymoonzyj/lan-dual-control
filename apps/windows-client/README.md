@@ -4,7 +4,7 @@
 
 ## 当前能力
 
-- 手动输入 Mac 局域网 IP 和端口，也可以用“刷新设备”探测本机服务和连接历史里的 `/discovery` 接口。
+- 手动输入 Mac 局域网 IP 和端口，也可以用“刷新设备”探测本机服务、连接历史和局域网里的 `/discovery` 接口；桌面版会调用本机扫描工具自动扫当前 IPv4 网段，浏览器预览版只轻量探测已知地址，避免网页预览时大量并发探测。
 - 支持本地模拟握手，也支持 WebSocket 协议连接。
 - 支持 hello、auth_request、session_offer、display_settings、video_frame、input_event、clipboard_text 和 reverse_control_request 消息。
 - 显示模拟远程桌面画面。
@@ -72,6 +72,8 @@ node E:\codex\lan-dual-control\scripts\windows\test-coordinate-mapping.mjs --hel
 只需要快速检查诊断条、悬浮控制中心和黑边输入防护时，可加 `--diagnosticsOnly`，不会连接被控端；该路径也会模拟 Mac host `runtime`，确认诊断条能显示 PID、运行时长和 build，并覆盖视频帧新鲜度显示、时钟偏差提示和 H.264 Annex B/AVC 关键帧识别 helper。Mac host 重启后，可再加 `--expectDiscoveryRuntimeBuildId <build-id>`，通过真实 `/discovery` 无密码验收设备列表和诊断条显示的 runtime。
 
 ```powershell
+node E:\codex\lan-dual-control\scripts\windows\discover-lan-hosts.mjs
+node E:\codex\lan-dual-control\scripts\windows\discover-lan-hosts.mjs --subnet 192.168.31.0/24 --requireFound
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --diagnosticsOnly
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --diagnosticsOnly --host 192.168.31.122 --port 43770 --expectDiscoveryRuntimeBuildId db48055
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password

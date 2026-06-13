@@ -60,6 +60,46 @@
 
 ## 2026-06-13 Windows Codex
 
+日期：2026-06-13 14:50
+开发端：Windows Codex
+本轮目标：降低真机联调时手动找 Mac IP 的摩擦，让 Windows 控制端刷新设备时能自动发现同局域网被控端。
+完成内容：
+- 新增 `scripts/windows/discover-lan-hosts.mjs`，可扫描本机 IPv4 局域网网段或指定 `--subnet` / `--host` 的 `/discovery`，输出文本或 JSON；脚本只做 HTTP discovery，不认证、不打开 WebSocket、不发送输入、不改系统设置。
+- Windows 桌面壳新增 Tauri 命令 `discover_lan_hosts`，调用上述脚本并把 JSON 结果回传给前端。
+- Windows 控制端“刷新设备”会在桌面版优先调用原生局域网扫描，并与浏览器轻量探测的本机/当前地址/连接历史结果合并去重；浏览器预览版不扫整段网段，避免网页预览时大量并发探测。
+- 刷新设备流程加了 `finally` 恢复按钮状态，扫描失败时不会让刷新按钮一直不可点。
+- Windows client README 已补充局域网发现说明和命令示例。
+修改文件：
+- `scripts/windows/discover-lan-hosts.mjs`
+- `apps/windows-client/app.js`
+- `apps/windows-client/README.md`
+- `apps/windows-desktop/src-tauri/src/main.rs`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+验证方式：
+- `node --check scripts/windows/discover-lan-hosts.mjs`
+- `node --check apps/windows-client/app.js`
+- `node scripts/windows/discover-lan-hosts.mjs --help`
+- `node scripts/windows/test-windows-script-help.mjs --script discover-lan-hosts.mjs`
+- `node scripts/windows/discover-lan-hosts.mjs --timeoutMs 350 --json --verbose`
+- `cargo check` in `apps/windows-desktop/src-tauri`
+验证结果：
+- 真实局域网扫描发现 Mac host：`192.168.31.122:43770`，`deviceName=macOS 被控端`，`runtime.buildId=b2e3cdf`，`processId=92813`，`inputMode=log`，`h264Stream=true`，`audioMode=system-pcm`。
+- 桌面壳 `cargo check` 通过。
+遗留问题：
+- `scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly` 在当前 Windows headless 浏览器环境出现 `Target crashed` / 超时波动；最小 `about:blank` headless 探针可以打开，说明需要单独排查页面级浏览器自检壳或本机浏览器环境。本轮未把该自检记为通过。
+- 这不是 UDP/mDNS 完整发现；当前桌面版是主动 HTTP `/discovery` 扫描，浏览器预览版只做已知地址轻量探测。
+下一步建议：
+- Windows 端可继续排查 `test-windows-client-browser.mjs` headless `Target crashed`，优先让 diagnosticsOnly 在当前机器恢复稳定。
+- 真机联调时优先点 Windows 桌面版“刷新设备”，应能自动出现 `192.168.31.122:43770` 或后续 DHCP 分配的新 Mac IP。
+是否改了协议：否。
+是否需要另一端配合：不需要；Mac 端保持 host 监听 `/discovery` 即可被扫描到。
+
+## 2026-06-13 Windows Codex
+
 日期：2026-06-13 14:00
 开发端：Windows Codex
 本轮目标：给 Windows host 增加可选 FFmpeg H.264 流式输出，用于后续 Mac client H.264 接收链路联调。

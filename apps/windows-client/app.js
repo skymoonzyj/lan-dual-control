@@ -96,6 +96,8 @@ const reconnectBaseDelayMs = 1200;
 const reverseControlTimeoutMs = 4800;
 const maxStoredLogEntries = 500;
 const discoveryProbeTimeoutMs = 650;
+const discoveryLanScanTimeoutMs = 650;
+const browserDiscoveryProbeConcurrency = 8;
 const defaultControlPort = "43770";
 const fileChunkSizeBytes = 64 * 1024;
 const maxClipboardFileBytes = 512 * 1024 * 1024;
@@ -1349,6 +1351,46 @@ async function probeDiscoveryCandidate(candidate) {
   }
 }
 
+async function runDiscoveryCandidates(candidates, concurrency = browserDiscoveryProbeConcurrency) {
+  const results = new Array(candidates.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, candidates.length) }, async () => {
+    while (cursor < candidates.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await probeDiscoveryCandidate(candidates[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results.filter(Boolean);
+}
+
+function normalizeDesktopDiscoveryDevice(item) {
+  if (!item || item.ok === false) {
+    return null;
+  }
+  const candidate = makeDiscoveryCandidate(item.host, item.port);
+  if (!candidate) {
+    return null;
+  }
+  const platform = item.platform || "unknown";
+  const role = item.role || "host";
+  return {
+    id: item.deviceId || `discovery:${platform}:${role}:${candidate.host}:${candidate.port}`,
+    deviceName: item.deviceName || `${getPlatformLabel(platform)} 被控端`,
+    host: candidate.host,
+    port: candidate.port,
+    platform,
+    role,
+    transport: "websocket",
+    status: "online",
+    source: "局域网扫描",
+    capabilities: item.capabilities ?? {},
+    runtime: normalizeHostRuntime(item.runtime),
+    lastSeenAt: item.lastSeenAt || new Date().toISOString(),
+  };
+}
+
 function buildDeviceList(discoveredDevices = []) {
   const devices = [...discoveredDevices.filter(Boolean), ...fallbackDevices];
   const byKey = new Map();
@@ -1469,20 +1511,43 @@ function renderDiscoveredDevices() {
 
 async function refreshDevices() {
   elements.refreshDevicesButton.disabled = true;
-  addLog("刷新设备", "正在探测本机、当前地址和连接历史");
+  addLog("刷新设备", "正在探测本机、连接历史和局域网设备");
 
-  const discovered = (await Promise.all(getDiscoveryCandidates().map(probeDiscoveryCandidate))).filter(
-    Boolean,
-  );
-  state.discoveredDevices = buildDeviceList(discovered);
-  renderDiscoveredDevices();
+  try {
+    const invoke = getTauriInvoke();
+    let discovered = [];
+    let usedDesktopScan = false;
+    if (invoke) {
+      try {
+        const result = await invoke("discover_lan_hosts", {
+          request: {
+            port: Number(elements.portInput.value) || Number(defaultControlPort),
+            timeoutMs: discoveryLanScanTimeoutMs,
+            requireFound: false,
+          },
+        });
+        discovered = (result?.json?.found || []).map(normalizeDesktopDiscoveryDevice).filter(Boolean);
+        usedDesktopScan = true;
+      } catch (error) {
+        addLog("局域网扫描", error?.message || "桌面扫描失败，改用浏览器轻量探测");
+      }
+    }
 
-  const onlineCount = state.discoveredDevices.filter((device) => device.status === "online").length;
-  addLog(
-    "刷新设备",
-    onlineCount > 0 ? `发现 ${onlineCount} 台在线设备` : "暂未发现在线设备，保留手动和模拟入口",
-  );
-  elements.refreshDevicesButton.disabled = false;
+    const browserDiscovered = await runDiscoveryCandidates(getDiscoveryCandidates());
+    discovered = [...discovered, ...browserDiscovered];
+    state.discoveredDevices = buildDeviceList(discovered);
+    renderDiscoveredDevices();
+
+    const onlineCount = state.discoveredDevices.filter((device) => device.status === "online").length;
+    addLog(
+      "刷新设备",
+      onlineCount > 0
+        ? `发现 ${onlineCount} 台在线设备${usedDesktopScan ? "，已扫描局域网" : ""}`
+        : "暂未发现在线设备，保留手动和模拟入口",
+    );
+  } finally {
+    elements.refreshDevicesButton.disabled = false;
+  }
 }
 
 function rememberCurrentConnection() {

@@ -12,6 +12,7 @@
    - 验证通过后，再切到 `LAN_DUAL_INPUT_MODE=inject` 做真实输入注入。
 
 2. Windows 端继续完善控制体验。
+   - 真机联调前优先用 Windows 桌面版“刷新设备”自动扫描同网段 `/discovery`；命令行可用 `node scripts/windows/discover-lan-hosts.mjs --requireFound` 快速确认当前 Mac IP。本轮真实扫描发现 `192.168.31.122:43770`，build `b2e3cdf`。
    - 保持诊断状态条准确显示真实视频、模拟回退、Mac host runtime、权限、输入注入和剪贴板状态。
    - 真实连接时同时观察“实收 FPS”和“帧延迟”：帧延迟来自 `video_frame.timestamp` 接收年龄，可帮助区分采集/编码/网络/解码卡顿；若显示“时钟偏差”，先校准两端系统时间再判断延迟。
    - 继续验证 Mac 真实 `pcm-f32le-base64` 音频帧播放稳定性，重点看静音、音量变化、长时间运行和延迟。
