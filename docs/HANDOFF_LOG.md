@@ -68,6 +68,45 @@
 
 ## 2026-06-13 Mac Codex
 
+日期：2026-06-13 14:15
+开发端：Mac Codex
+本轮目标：让 Mac 控制 Windows 的 Web 控制端提前具备 H.264 接收能力，配合 Windows host ffmpeg-h264 线后续真机验收。
+完成内容：
+- Mac client 在浏览器支持 WebCodecs 时，`session_offer` 和 `display_settings` 会请求 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb`。
+- 收到 `codec=h264`、`encoding=annexb-base64` 的 `video_frame` 后，会用 `VideoDecoder` 解码并绘制到新增的 `#remoteCanvas`，输入坐标会基于当前可见的 `<img>` 或 `<canvas>` 计算。
+- 会识别 Annex B/AVC NAL 类型，等待关键帧后再喂给解码器；连续解码失败 2 次会自动请求 MJPEG/JPEG 兜底。
+- 不支持 WebCodecs 的浏览器会自动请求 `mjpeg` / `data-url`，保持旧 JPEG/mock 路径可用。
+- `test-mac-client-browser.mjs` 已兼容 `<canvas>` 视频表面，并新增 `--disableWebCodecs` 分支覆盖 MJPEG 请求 fallback。
+- Mac client README、CURRENT_STATUS、NEXT_ACTIONS 和任务板已同步。
+修改文件：
+- `apps/mac-client/index.html`
+- `apps/mac-client/styles.css`
+- `apps/mac-client/app.js`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --observeVideoMs 1000 --minObservedVideoFrames 5 --minObservedVideoFps 5 --skipFileClipboard`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --disableWebCodecs --observeVideoMs 800 --minObservedVideoFrames 4 --minObservedVideoFps 4 --skipFileClipboard`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 默认浏览器能力路径通过；mock 视频 59 帧 / 1002ms / 58.9fps，并断言请求字段按 WebCodecs 能力选择 H.264 或 fallback。
+- 禁用 WebCodecs 路径通过；mock 视频 47 帧 / 801ms / 58.7fps，并断言请求 `mjpeg` / `data-url` fallback。
+- 语法检查、空白检查和冲突标记搜索通过。
+遗留问题：当前没有伪造真实可解码 H.264 码流；需要 Windows 端 ffmpeg-h264 host 推出后，用真实 `codec=h264` 帧验证 canvas 解码、延迟和失败回退。
+下一步建议：Windows 端推送 ffmpeg-h264 后，Mac 端用 `test-mac-client-browser.mjs --useExistingHost --host <Windows IP> --port <端口> --observeVideoMs <毫秒> --minObservedVideoFrames <帧数>` 做真实 H.264 canvas 验收，并记录是否需要 `--requireH264` 类强校验参数。
+是否改了协议：否，只使用既有 `preferredVideoCodec`、`preferredVideoEncoding` 和 H.264 `video_frame` 过渡字段。
+是否需要另一端配合：暂不需要；真实 H.264 canvas 验收需要 Windows 端启动 ffmpeg-h264 host。
+
+## 2026-06-13 Mac Codex
+
 日期：2026-06-13 13:55
 开发端：Mac Codex
 本轮目标：让 Mac 控制 Windows 时的视频状态能显示真实 `video_frame.timestamp` 到达新鲜度，方便排查画面延迟或两端时钟偏差。

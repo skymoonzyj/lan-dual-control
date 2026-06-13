@@ -40,6 +40,7 @@ const defaults = {
   useExistingHost: false,
   mockVideo: false,
   headless: true,
+  disableWebCodecs: false,
 };
 const temporaryWindowsHostBuildId = "mac-client-test";
 
@@ -89,6 +90,7 @@ Options:
   --observeVideoMs <ms>            Observe sustained video after connect. Default: off
   --minObservedVideoFrames <n>     Minimum frames during --observeVideoMs.
   --minObservedVideoFps <fps>      Minimum FPS during --observeVideoMs.
+  --disableWebCodecs               Hide VideoDecoder/EncodedVideoChunk and expect MJPEG request fallback.
 
 Examples:
   node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard
@@ -107,6 +109,10 @@ function parseArgs(argv) {
 
     if (key === "headed") {
       args.headless = false;
+      continue;
+    }
+    if (key === "disableWebCodecs") {
+      args.disableWebCodecs = true;
       continue;
     }
     if (key === "useExistingHost") {
@@ -587,7 +593,7 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
       const value = await evaluate(session, buildSnapshotExpression());
       const reconnecting = value.connection.includes("自动重连") || value.connection.includes("重连");
       const logVisible = value.logs.some((line) => line.includes("自动重连"));
-      const surfaceCleared = value.video === "连接中断" && !value.imageVisible && !value.imageHasSource;
+      const surfaceCleared = value.video === "连接中断" && !value.surfaceVisible && !value.surfaceHasFrame;
       const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
       const runtimeCleared = value.remoteRuntime === "未提供";
       const remoteCleared = value.remote === "连接中断";
@@ -615,7 +621,7 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
       );
       const connected = value.connection.includes("已连接");
       const hasNewSession = Number(sessionAnswers) > Number(sessionAnswersBefore);
-      const hasVideo = value.imageVisible && value.imageHasSource;
+      const hasVideo = value.surfaceVisible && value.surfaceHasFrame;
       return connected && hasNewSession && hasVideo ? { ...value, sessionAnswers } : null;
     },
     args.timeoutMs,
@@ -672,6 +678,10 @@ function buildSnapshotExpression() {
   return `(() => {
     const text = (selector) => document.querySelector(selector)?.textContent || "";
     const image = document.querySelector("#remoteImage");
+    const canvas = document.querySelector("#remoteCanvas");
+    const imageVisible = image?.classList.contains("is-visible") || false;
+    const canvasVisible = canvas?.classList.contains("is-visible") || false;
+    const canvasHasFrame = Boolean(canvas?.width && canvas?.height);
     const logs = [...document.querySelectorAll("#eventLog li")]
       .slice(0, 10)
       .map((item) => item.innerText.replace(/\\s+/g, " "));
@@ -752,8 +762,13 @@ function buildSnapshotExpression() {
         .map((option) => ({ value: option.value, text: option.textContent || "" })),
       recentConnectionStorage: localStorage.getItem("lanDualMacClientRecentConnections") || "",
       clipboardTextValue: document.querySelector("#clipboardTextInput")?.value || "",
-      imageVisible: image?.classList.contains("is-visible") || false,
+      supportsWebCodecsH264: typeof window.VideoDecoder === "function" && typeof window.EncodedVideoChunk === "function",
+      imageVisible,
       imageHasSource: Boolean(image?.getAttribute("src")),
+      canvasVisible,
+      canvasHasFrame,
+      surfaceVisible: imageVisible || canvasVisible,
+      surfaceHasFrame: Boolean(image?.getAttribute("src")) || canvasHasFrame,
       logs,
     };
   })()`;
@@ -902,7 +917,7 @@ async function verifyMacClientConnectCancel({ args, session }) {
     async () => {
       const value = await evaluate(session, buildSnapshotExpression());
       const buttonsReset = !value.connectButtonDisabled && value.disconnectButtonDisabled;
-      const surfaceCleared = value.video === "无画面" && !value.imageVisible && !value.imageHasSource;
+      const surfaceCleared = value.video === "无画面" && !value.surfaceVisible && !value.surfaceHasFrame;
       const remoteReset = value.remote === "等待发现";
       return value.connection === "未连接" && buttonsReset && surfaceCleared && remoteReset
         ? value
@@ -1213,6 +1228,12 @@ async function run() {
     await session.send("Runtime.enable");
     await session.send("Page.enable");
     await grantClipboardPermissions(session, clientUrl);
+    if (args.disableWebCodecs) {
+      await session.send("Page.addScriptToEvaluateOnNewDocument", {
+        source: `Object.defineProperty(window, "VideoDecoder", { value: undefined, configurable: true });
+Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configurable: true });`,
+      });
+    }
     await session.send("Page.navigate", { url: clientUrl });
     await session.waitForEvent("Page.loadEventFired", args.timeoutMs);
     await waitFor(
@@ -1308,7 +1329,7 @@ async function run() {
           const value = await evaluate(session, buildSnapshotExpression());
           lastSnapshot = value;
           const buttonsReset = !value.connectButtonDisabled && value.disconnectButtonDisabled;
-          const surfaceCleared = value.video === "无画面" && !value.imageVisible && !value.imageHasSource;
+          const surfaceCleared = value.video === "无画面" && !value.surfaceVisible && !value.surfaceHasFrame;
           const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
           const runtimeCleared = value.remoteRuntime === "未提供";
           const remoteReset = value.remote === "等待发现";
@@ -1350,7 +1371,7 @@ async function run() {
         if (value.connection.includes("认证失败") || value.connection.includes("连接错误")) {
           throw new Error(`${value.connection}: ${value.logs?.join(" | ")}`);
         }
-        const hasVideo = value.imageVisible && value.imageHasSource;
+        const hasVideo = value.surfaceVisible && value.surfaceHasFrame;
         const realVideoOk = !args.requireRealVideo || !value.video.includes("mock-svg");
         return value.connection.includes("已连接") && hasVideo && realVideoOk ? value : null;
       },
@@ -1404,12 +1425,16 @@ async function run() {
       session,
       `(() => [...(window.__lanDualSentMessages || [])].find((message) => message.type === "session_offer"))()`,
     );
+    const expectedVideoCodec = videoSnapshot.supportsWebCodecsH264 ? "h264" : "mjpeg";
+    const expectedVideoEncoding = expectedVideoCodec === "h264" ? "annexb" : "data-url";
     if (
       Number(sessionSettings?.preferredWidth) !== 1920 ||
       Number(sessionSettings?.preferredHeight) !== 1080 ||
       Number(sessionSettings?.maxFps) !== 60 ||
       Number(sessionSettings?.maxBandwidthKbps) !== 20000 ||
-      sessionSettings?.qualityPreset !== "balanced"
+      sessionSettings?.qualityPreset !== "balanced" ||
+      sessionSettings?.preferredVideoCodec !== expectedVideoCodec ||
+      sessionSettings?.preferredVideoEncoding !== expectedVideoEncoding
     ) {
       throw new Error(`Mac client session video settings mismatch: ${JSON.stringify(sessionSettings)}`);
     }
@@ -1471,6 +1496,8 @@ async function run() {
           Number(latestDisplaySettings?.fps) === 60 &&
           Number(latestDisplaySettings?.maxBandwidthKbps) === 40000 &&
           latestDisplaySettings?.qualityPreset === "sharp" &&
+          latestDisplaySettings?.preferredVideoCodec === (value.supportsWebCodecsH264 ? "h264" : "mjpeg") &&
+          latestDisplaySettings?.preferredVideoEncoding === (value.supportsWebCodecsH264 ? "annexb" : "data-url") &&
           latestDisplaySettings?.audio === Boolean(value.audioToggleChecked);
         const ackOk =
           latestDisplayAck?.accepted === true &&
@@ -1966,7 +1993,7 @@ async function run() {
         const reconnectOk = value.reconnectMetric === "0 次";
         const runtimeOk = value.remoteRuntime === "未提供";
         const remoteOk = value.remote === "等待发现";
-        const surfaceCleared = !value.imageVisible && !value.imageHasSource;
+        const surfaceCleared = !value.surfaceVisible && !value.surfaceHasFrame;
         const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
         return connectionOk && videoStatusOk && firstVideoOk && videoFlowOk && audioFlowOk && audioStatusOk && reconnectOk && runtimeOk && remoteOk && surfaceCleared && clipboardButtonsDisabled
           ? value

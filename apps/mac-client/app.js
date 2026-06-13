@@ -30,6 +30,7 @@ const elements = {
   inputStatus: document.querySelector("#inputStatus"),
   remoteViewport: document.querySelector("#remoteViewport"),
   remoteImage: document.querySelector("#remoteImage"),
+  remoteCanvas: document.querySelector("#remoteCanvas"),
   emptyState: document.querySelector("#emptyState"),
   focusButton: document.querySelector("#focusButton"),
   clipboardTextInput: document.querySelector("#clipboardTextInput"),
@@ -73,6 +74,19 @@ const state = {
   lastVideoFps: 0,
   lastVideoCodec: "",
   lastVideoFrameAgeMs: null,
+  h264Decoder: null,
+  h264DecoderKey: "",
+  h264DecoderConfigPromise: null,
+  h264DecoderStatus: "idle",
+  h264DecoderErrorCount: 0,
+  h264DecoderLastError: "",
+  h264DecoderQueue: [],
+  h264DecoderNeedsKeyFrame: true,
+  h264SkippedDeltaFrames: 0,
+  h264DecodedFrames: 0,
+  h264FallbackActive: false,
+  h264FallbackReason: "",
+  h264DecoderLatencyMs: 0,
   reconnectTotal: 0,
   fileTransferActive: false,
   fileTransferId: "",
@@ -304,8 +318,12 @@ function renderSessionDiagnostics() {
 }
 
 function resetVideoSurface(status = "无画面") {
+  resetVideoDecoder({ resetFallback: true });
   elements.remoteImage.removeAttribute("src");
   elements.remoteImage.classList.remove("is-visible");
+  elements.remoteCanvas.classList.remove("is-visible");
+  elements.remoteCanvas.width = 0;
+  elements.remoteCanvas.height = 0;
   elements.emptyState.classList.remove("is-hidden");
   elements.videoStatus.textContent = status;
 }
@@ -567,6 +585,21 @@ function currentVideoSettings() {
   };
 }
 
+function supportsWebCodecsH264() {
+  return typeof window.VideoDecoder === "function" && typeof window.EncodedVideoChunk === "function";
+}
+
+function preferredVideoCodec() {
+  if (state.h264FallbackActive) {
+    return "mjpeg";
+  }
+  return supportsWebCodecsH264() ? "h264" : "mjpeg";
+}
+
+function preferredVideoEncoding() {
+  return preferredVideoCodec() === "h264" ? "annexb" : "data-url";
+}
+
 function describeVideoSettings(settings = currentVideoSettings()) {
   const resolution = `${settings.width}x${settings.height}`;
   const resolutionLabel = resolutionLabels[resolution] || resolution;
@@ -592,6 +625,8 @@ function makeDisplaySettingsMessage(type = "display_settings") {
     resolutionMode: "scaled",
     preferredWidth: settings.width,
     preferredHeight: settings.height,
+    preferredVideoCodec: preferredVideoCodec(),
+    preferredVideoEncoding: preferredVideoEncoding(),
     audio: elements.audioToggle.checked,
     audioVolume: audioVolume(),
   };
@@ -922,7 +957,8 @@ function handleAuthResult(message) {
     wantAudio: elements.audioToggle.checked,
     wantClipboardText: true,
     wantClipboardFile: true,
-    preferredVideoCodec: "mjpeg",
+    preferredVideoCodec: preferredVideoCodec(),
+    preferredVideoEncoding: preferredVideoEncoding(),
     preferredAudioCodec: "pcm-f32le",
     audioVolume: audioVolume(),
   });
@@ -967,11 +1003,22 @@ function handleDisplaySettingsAck(message) {
 }
 
 function handleVideoFrame(frame) {
+  if (String(frame.codec ?? "").toLowerCase() === "h264") {
+    void handleH264VideoFrame(frame);
+    return;
+  }
+
   if (frame.dataUrl) {
+    resetVideoDecoder();
     elements.remoteImage.src = frame.dataUrl;
     elements.remoteImage.classList.add("is-visible");
+    elements.remoteCanvas.classList.remove("is-visible");
     elements.emptyState.classList.add("is-hidden");
   }
+  recordVideoFrameStats(frame);
+}
+
+function recordVideoFrameStats(frame) {
   state.remoteWidth = Number(frame.width || state.remoteWidth);
   state.remoteHeight = Number(frame.height || state.remoteHeight);
   state.frameCount += 1;
@@ -1004,9 +1051,308 @@ function handleVideoFrame(frame) {
   renderSessionDiagnostics();
 }
 
+function resetVideoDecoder({ resetFallback = false } = {}) {
+  if (state.h264Decoder && state.h264Decoder.state !== "closed") {
+    try {
+      state.h264Decoder.close();
+    } catch {
+      // Best-effort cleanup; a closing decoder should not block reconnect.
+    }
+  }
+  state.h264Decoder = null;
+  state.h264DecoderKey = "";
+  state.h264DecoderConfigPromise = null;
+  state.h264DecoderStatus = "idle";
+  state.h264DecoderErrorCount = 0;
+  state.h264DecoderLastError = "";
+  state.h264DecoderQueue = [];
+  state.h264DecoderNeedsKeyFrame = true;
+  state.h264SkippedDeltaFrames = 0;
+  state.h264DecodedFrames = 0;
+  state.h264DecoderLatencyMs = 0;
+  if (resetFallback) {
+    state.h264FallbackActive = false;
+    state.h264FallbackReason = "";
+  }
+}
+
+function requestJpegVideoFallback(reason) {
+  if (state.h264FallbackActive) {
+    return;
+  }
+  const errorCount = state.h264DecoderErrorCount;
+  const lastError = state.h264DecoderLastError;
+  state.h264FallbackActive = true;
+  state.h264FallbackReason = reason || "H.264 解码失败";
+  resetVideoDecoder();
+  state.h264FallbackActive = true;
+  state.h264FallbackReason = reason || "H.264 解码失败";
+  state.h264DecoderStatus = "fallback";
+  state.h264DecoderErrorCount = errorCount;
+  state.h264DecoderLastError = lastError;
+  elements.videoStatus.textContent = `H.264 回退 · ${state.h264FallbackReason}`;
+  logEvent("视频回退", `${state.h264FallbackReason}，已请求 JPEG 兜底`);
+  if (state.authenticated) {
+    sendDisplaySettings();
+  }
+}
+
+function recordH264DecodeError(error) {
+  state.h264DecoderErrorCount += 1;
+  state.h264DecoderStatus = "error";
+  state.h264DecoderLastError = error?.message || String(error);
+  logEvent("H.264 解码失败", state.h264DecoderLastError);
+  if (state.h264DecoderErrorCount >= 2) {
+    requestJpegVideoFallback(state.h264DecoderLastError);
+  }
+}
+
+function base64ToUint8Array(value) {
+  const binary = window.atob(String(value));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function findAnnexBStartCode(bytes, fromIndex = 0) {
+  for (let index = Math.max(0, fromIndex); index <= bytes.length - 3; index += 1) {
+    if (bytes[index] !== 0 || bytes[index + 1] !== 0) continue;
+    if (bytes[index + 2] === 1) {
+      return { index, length: 3 };
+    }
+    if (index <= bytes.length - 4 && bytes[index + 2] === 0 && bytes[index + 3] === 1) {
+      return { index, length: 4 };
+    }
+  }
+  return null;
+}
+
+function getAnnexBNalTypes(bytes) {
+  const nalTypes = [];
+  let start = findAnnexBStartCode(bytes, 0);
+  while (start) {
+    const nalStart = start.index + start.length;
+    const next = findAnnexBStartCode(bytes, nalStart);
+    const nalEnd = next ? next.index : bytes.length;
+    if (nalStart < nalEnd) {
+      nalTypes.push(bytes[nalStart] & 0x1f);
+    }
+    start = next;
+  }
+  return nalTypes;
+}
+
+function getLengthPrefixedNalTypes(bytes, lengthSize = 4) {
+  const nalTypes = [];
+  let index = 0;
+  while (index + lengthSize <= bytes.length) {
+    let nalLength = 0;
+    for (let offset = 0; offset < lengthSize; offset += 1) {
+      nalLength = (nalLength << 8) | bytes[index + offset];
+    }
+    index += lengthSize;
+    if (nalLength <= 0 || index + nalLength > bytes.length) {
+      break;
+    }
+    nalTypes.push(bytes[index] & 0x1f);
+    index += nalLength;
+  }
+  return nalTypes;
+}
+
+function isH264KeyFramePayload(bytes, encoding) {
+  const normalizedEncoding = String(encoding ?? "").toLowerCase();
+  const nalTypes = normalizedEncoding.includes("annexb")
+    ? getAnnexBNalTypes(bytes)
+    : getLengthPrefixedNalTypes(bytes);
+  return nalTypes.includes(5) || nalTypes.includes(7) || nalTypes.includes(8);
+}
+
+async function selectH264DecoderConfig(baseConfig, format) {
+  const candidates = [
+    { label: format, config: { ...baseConfig, avc: { format } } },
+    { label: "default", config: baseConfig },
+  ];
+  if (typeof window.VideoDecoder.isConfigSupported !== "function") {
+    return candidates[0];
+  }
+  const failures = [];
+  for (const candidate of candidates) {
+    try {
+      const support = await window.VideoDecoder.isConfigSupported(candidate.config);
+      if (support.supported) {
+        return candidate;
+      }
+      failures.push(`${candidate.label}=unsupported`);
+    } catch (error) {
+      failures.push(`${candidate.label}=${error?.message || "error"}`);
+    }
+  }
+  throw new Error(`当前窗口环境不支持 ${baseConfig.codec}（${failures.join("；")}）`);
+}
+
+async function ensureH264Decoder(frame) {
+  if (!supportsWebCodecsH264()) {
+    throw new Error("当前窗口环境不支持 WebCodecs H.264 解码");
+  }
+  const codec = frame.codecString || "avc1.42E01F";
+  const format = String(frame.encoding ?? "annexb-base64").toLowerCase().includes("annexb")
+    ? "annexb"
+    : "avc";
+  const decoderKey = `${codec}:${format}`;
+  if (state.h264Decoder && state.h264Decoder.state !== "closed" && state.h264DecoderKey === decoderKey) {
+    return state.h264Decoder;
+  }
+  if (state.h264DecoderConfigPromise && state.h264DecoderKey === decoderKey) {
+    return state.h264DecoderConfigPromise;
+  }
+
+  const previousErrorCount = state.h264DecoderErrorCount;
+  const previousLastError = state.h264DecoderLastError;
+  resetVideoDecoder();
+  state.h264DecoderStatus = "configuring";
+  state.h264DecoderKey = decoderKey;
+  state.h264DecoderErrorCount = previousErrorCount;
+  state.h264DecoderLastError = previousLastError;
+  const baseConfig = {
+    codec,
+    hardwareAcceleration: "prefer-hardware",
+    optimizeForLatency: true,
+  };
+  state.h264DecoderConfigPromise = (async () => {
+    const { config, label } = await selectH264DecoderConfig(baseConfig, format);
+    const decoder = new VideoDecoder({
+      output: drawDecodedVideoFrame,
+      error: (error) => recordH264DecodeError(error),
+    });
+    decoder.configure(config);
+    if (state.h264DecoderKey !== decoderKey) {
+      decoder.close();
+      throw new Error("H.264 解码器配置已被新会话替换");
+    }
+    state.h264Decoder = decoder;
+    state.h264DecoderStatus = "configured";
+    state.h264DecoderConfigPromise = null;
+    logEvent("H.264 解码器", `${codec}:${label}`);
+    return decoder;
+  })();
+  try {
+    return await state.h264DecoderConfigPromise;
+  } catch (error) {
+    if (state.h264DecoderKey === decoderKey) {
+      state.h264DecoderConfigPromise = null;
+    }
+    throw error;
+  }
+}
+
+async function handleH264VideoFrame(frame) {
+  if (!frame.payload) {
+    logEvent("视频帧", "收到 H.264 视频帧但缺少 payload");
+    return;
+  }
+  recordVideoFrameStats({ ...frame, codec: "h264" });
+  elements.videoStatus.textContent = `h264 · #${frame.frameId || state.frameCount} · ${state.h264DecoderStatus}`;
+
+  if (state.h264FallbackActive) {
+    elements.videoStatus.textContent = `H.264 回退 · 等待 JPEG`;
+    return;
+  }
+
+  try {
+    const decoder = await ensureH264Decoder(frame);
+    const payloadBytes = base64ToUint8Array(frame.payload);
+    const isKeyFrame = Boolean(frame.keyFrame) || isH264KeyFramePayload(payloadBytes, frame.encoding);
+    if (state.h264DecoderNeedsKeyFrame && !isKeyFrame) {
+      state.h264SkippedDeltaFrames += 1;
+      state.h264DecoderStatus = "waiting-keyframe";
+      elements.videoStatus.textContent = `h264 · 等待关键帧 · 跳过 ${state.h264SkippedDeltaFrames}`;
+      return;
+    }
+    if (isKeyFrame) {
+      state.h264DecoderNeedsKeyFrame = false;
+    }
+    const durationUs = Number(frame.durationUs) || Math.round(1_000_000 / Math.max(1, state.lastVideoFps || currentVideoSettings().fps || 30));
+    const timestampUs =
+      Number(frame.timestampUs) ||
+      Math.max(0, Number(frame.frameId ?? state.frameCount) - 1) * durationUs;
+    state.h264DecoderQueue.push({
+      frameId: frame.frameId ?? state.frameCount,
+      queuedAt: performance.now(),
+      timestampUs,
+    });
+    if (state.h264DecoderQueue.length > 120) {
+      state.h264DecoderQueue.shift();
+    }
+    state.h264DecoderStatus = "decoding";
+    decoder.decode(new EncodedVideoChunk({
+      type: isKeyFrame ? "key" : "delta",
+      timestamp: timestampUs,
+      duration: durationUs,
+      data: payloadBytes,
+    }));
+  } catch (error) {
+    recordH264DecodeError(error);
+  }
+}
+
+function drawDecodedVideoFrame(videoFrame) {
+  const decodedMeta = state.h264DecoderQueue.shift();
+  const width = videoFrame.displayWidth || videoFrame.codedWidth || state.remoteWidth;
+  const height = videoFrame.displayHeight || videoFrame.codedHeight || state.remoteHeight;
+  if (width && height) {
+    state.remoteWidth = width;
+    state.remoteHeight = height;
+  }
+  const canvas = elements.remoteCanvas;
+  if (canvas.width !== state.remoteWidth) {
+    canvas.width = state.remoteWidth;
+  }
+  if (canvas.height !== state.remoteHeight) {
+    canvas.height = state.remoteHeight;
+  }
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) {
+    videoFrame.close();
+    recordH264DecodeError(new Error("无法取得视频画布上下文"));
+    return;
+  }
+  context.drawImage(videoFrame, 0, 0, canvas.width, canvas.height);
+  videoFrame.close();
+  state.h264DecodedFrames += 1;
+  state.h264DecoderStatus = "rendering";
+  state.h264DecoderLatencyMs = decodedMeta?.queuedAt
+    ? performance.now() - decodedMeta.queuedAt
+    : state.h264DecoderLatencyMs;
+  elements.remoteImage.classList.remove("is-visible");
+  elements.remoteImage.removeAttribute("src");
+  canvas.classList.add("is-visible");
+  elements.emptyState.classList.add("is-hidden");
+  const ageText = formatFrameAge(state.lastVideoFrameAgeMs);
+  const ageStatusText = ageText ? ` · ${ageText}` : "";
+  elements.videoStatus.textContent = `h264 · 解码 #${decodedMeta?.frameId ?? state.h264DecodedFrames} · ${formatMs(state.h264DecoderLatencyMs)}${ageStatusText}`;
+  renderSessionDiagnostics();
+}
+
+function visibleRemoteFrameElement() {
+  if (elements.remoteCanvas.classList.contains("is-visible")) {
+    return elements.remoteCanvas;
+  }
+  if (elements.remoteImage.classList.contains("is-visible")) {
+    return elements.remoteImage;
+  }
+  return null;
+}
+
 function imagePointFromEvent(event) {
-  const rect = elements.remoteImage.getBoundingClientRect();
-  if (!rect.width || !rect.height || !elements.remoteImage.classList.contains("is-visible")) {
+  const frameElement = visibleRemoteFrameElement();
+  if (!frameElement) {
+    return null;
+  }
+  const rect = frameElement.getBoundingClientRect();
+  if (!rect.width || !rect.height) {
     return null;
   }
   const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
