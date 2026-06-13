@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import http from "node:http";
 import os from "node:os";
+import crypto from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,6 +24,7 @@ const defaults = {
   timeoutMs: 12000,
   promptPassword: false,
   requirePassword: false,
+  ephemeralPassword: false,
   skipRuntimeCheck: false,
   requireRuntimeCheck: false,
   allowExisting: false,
@@ -49,6 +51,7 @@ function parseArgs(argv) {
     if (
       key === "promptPassword" ||
       key === "requirePassword" ||
+      key === "ephemeralPassword" ||
       key === "skipRuntimeCheck" ||
       key === "requireRuntimeCheck" ||
       key === "allowExisting" ||
@@ -111,6 +114,7 @@ Options:
   --port <port>              Port. Default: 43770
   --password <value>         Set LAN_DUAL_PASSWORD for this run. The value is not printed.
   --promptPassword           Prompt for LAN_DUAL_PASSWORD without echoing it.
+  --ephemeralPassword        Generate a one-time random password for this run. It is not printed.
   --requirePassword          Refuse empty or demo-password credentials.
   --deviceName <name>        Set LAN_DUAL_DEVICE_NAME.
   --videoMode <mode>         auto | screen | mock. Default: auto
@@ -198,6 +202,19 @@ function getLanAddresses() {
 }
 
 async function preparePassword(args) {
+  if (args.ephemeralPassword && args.password) {
+    throw new Error("--ephemeralPassword cannot be combined with --password.");
+  }
+  if (args.ephemeralPassword && args.promptPassword) {
+    throw new Error("--ephemeralPassword cannot be combined with --promptPassword.");
+  }
+  if (args.ephemeralPassword && process.env.LAN_DUAL_PASSWORD) {
+    throw new Error("--ephemeralPassword refuses to override an existing LAN_DUAL_PASSWORD. Unset it or omit --ephemeralPassword.");
+  }
+  if (args.ephemeralPassword) {
+    args.password = makeEphemeralPassword();
+  }
+
   if (args.promptPassword && !args.password && !process.env.LAN_DUAL_PASSWORD) {
     args.password = await promptHidden("Mac host password: ");
     if (!args.password) {
@@ -212,6 +229,10 @@ async function preparePassword(args) {
   if (args.requirePassword && effectivePassword === "demo-password") {
     throw new Error("Refusing to start with demo-password when --requirePassword is used.");
   }
+}
+
+function makeEphemeralPassword() {
+  return `ephemeral-${crypto.randomBytes(24).toString("base64url")}`;
 }
 
 function promptHidden(label) {
@@ -310,6 +331,9 @@ function printLaunchPlan(args) {
   console.log(`[INFO] JPEG quality override: ${args.jpegQuality || "auto"}`);
   console.log(`[INFO] Bonjour: ${args.bonjour ? "enabled" : "disabled"}`);
   console.log(`[INFO] Build ID: ${args.buildId}`);
+  if (args.ephemeralPassword) {
+    console.log("[INFO] Password: ephemeral random value for this process only (not printed)");
+  }
   console.log("[INFO] Launch command: swift run --package-path apps/mac-host lan-dual-mac-host");
   if (!args.password && !process.env.LAN_DUAL_PASSWORD) {
     console.log("[WARN] No LAN_DUAL_PASSWORD was set; mac-host will use its demo password for this run.");

@@ -17,6 +17,47 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-13 Mac Codex
+
+日期：2026-06-13 14:45
+开发端：Mac Codex
+本轮目标：恢复真实 Mac host 的 discovery/runtime 通道，并让启动助手支持不泄露密码的一次性临时启动。
+完成内容：
+- 确认本机默认 43770 起初未监听，导致 Windows 侧探测 `192.168.31.122:43770` 失败。
+- 用安全 `log` 输入模式启动 Mac host 到 `0.0.0.0:43770`，当前 LAN 地址 `192.168.31.122:43770`，runtime `pid=92813`、`build=b2e3cdf`、`startedAt=2026-06-13T06:30:20.099Z`。
+- 提权 `curl` 确认 `127.0.0.1:43770/discovery` 和 `192.168.31.122:43770/discovery` 均可达；普通沙盒 `curl` 的失败是本地沙盒网络权限假阴性。
+- `scripts/mac/start-mac-host.mjs` 新增 `--ephemeralPassword`，会生成一次性随机 `LAN_DUAL_PASSWORD` 并只传给本次 host 进程，不打印密码；与 `--password`、`--promptPassword` 和已有 `LAN_DUAL_PASSWORD` 互斥。
+- 启动助手自测覆盖一次性随机密码干跑、拒绝覆盖已有环境密码，以及用一次性随机密码启动临时端口。
+- Mac host README、CURRENT_STATUS、NEXT_ACTIONS 和任务板已同步该临时 discovery/runtime 恢复方式。
+修改文件：
+- `scripts/mac/start-mac-host.mjs`
+- `scripts/mac/test-mac-host-start-helper.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/mac/check-mac-host-readiness.mjs --requireOpen --skipCurrentBuildCheck --timeoutMs 12000`
+- `curl -sS --max-time 3 http://127.0.0.1:43770/discovery`
+- `curl -sS --max-time 3 http://192.168.31.122:43770/discovery`
+- `node scripts/mac/test-mac-script-help.mjs`
+- `node --check scripts/mac/start-mac-host.mjs`
+- `node --check scripts/mac/test-mac-host-start-helper.mjs`
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 45000`
+验证结果：
+- Mac host 低风险 readiness 9/9 通过；`/discovery` 显示 `inputMode=log`、`screenRecording/accessibility/inputMonitoring=true`、`h264Stream=true`、`audioMode=system-pcm`、build `b2e3cdf`。
+- Mac 脚本帮助入口覆盖 11 个脚本、22 条 `--help/-h` 命令通过。
+- 启动助手自测通过：缺密码、`demo-password`、非交互密码提示、环境密码干跑、一次性随机密码干跑、拒绝覆盖已有环境密码、环境密码临时端口实启、一次性随机密码临时端口实启均通过。
+遗留问题：
+- 当前运行中的 43770 使用一次性随机密码，密码不会共享；Windows 端可以做无密码 discovery/runtime/UI 检查，但不能做 WebSocket 认证联调。
+- 真正端到端 H.264/PCM/输入联调需要用户醒来后输入正式密码，或按约定密码重启 Mac host。
+下一步建议：
+- Windows 端可先运行无密码 diagnostics/discovery 检查确认 `build=b2e3cdf`；需要认证联调时在联络板发 call，Mac 端用正式密码重启。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；认证联调需要用户提供正式密码或重新授权启动方式。
+
 ## 2026-06-13 Windows Codex
 
 日期：2026-06-13 14:00

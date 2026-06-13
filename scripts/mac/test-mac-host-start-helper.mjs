@@ -180,9 +180,37 @@ async function assertDryRunWithEnvPassword(timeoutMs) {
   print("OK", "Environment password allows dry run with safe log input mode");
 }
 
-async function assertLaunchWithEnvPassword(timeoutMs) {
+async function assertEphemeralPasswordDryRun(timeoutMs) {
+  const result = await runNode(["--ephemeralPassword", "--requirePassword", "--dryRun"], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "" },
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (result.exitCode !== 0 || result.timedOut) {
+    throw new Error(`Ephemeral password dry run failed.\n${output}`);
+  }
+  assertIncludes(output, "Password: ephemeral random value", "ephemeral password dry run");
+  assertNotIncludes(output, "demo password", "ephemeral password dry run");
+  assertNotIncludes(output, "ephemeral-", "ephemeral password dry run");
+  print("OK", "Ephemeral password dry run avoids demo credentials and does not print the value");
+}
+
+async function assertEphemeralPasswordRefusesEnvOverride(timeoutMs) {
+  const result = await runNode(["--ephemeralPassword", "--requirePassword", "--dryRun"], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "existing-password" },
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (result.exitCode === 0 || result.timedOut) {
+    throw new Error(`Ephemeral password should refuse to override an environment password.\n${output}`);
+  }
+  assertIncludes(output, "refuses to override an existing LAN_DUAL_PASSWORD", "ephemeral env override failure");
+  print("OK", "Ephemeral password refuses to override an existing environment password");
+}
+
+async function assertLaunchWithPasswordMode(timeoutMs, mode) {
   const port = await getFreePort();
-  const child = spawn(process.execPath, [
+  const commandArgs = [
     helperScript,
     "--host",
     "127.0.0.1",
@@ -199,12 +227,17 @@ async function assertLaunchWithEnvPassword(timeoutMs) {
     "--noBonjour",
     "--timeoutMs",
     String(timeoutMs),
-  ], {
+  ];
+  const env = { ...process.env };
+  if (mode === "ephemeral") {
+    commandArgs.push("--ephemeralPassword");
+    env.LAN_DUAL_PASSWORD = "";
+  } else {
+    env.LAN_DUAL_PASSWORD = "test-password";
+  }
+  const child = spawn(process.execPath, commandArgs, {
     cwd: repoRoot,
-    env: {
-      ...process.env,
-      LAN_DUAL_PASSWORD: "test-password",
-    },
+    env,
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -240,7 +273,21 @@ async function assertLaunchWithEnvPassword(timeoutMs) {
   });
   assertIncludes(output, "input=log", "temporary host discovery");
   assertIncludes(output, "build=start-helper-test", "temporary host discovery");
-  print("OK", `Environment password starts Mac host on temporary port ${port}`);
+  if (mode === "ephemeral") {
+    assertIncludes(output, "Password: ephemeral random value", "temporary host discovery");
+    assertNotIncludes(output, "ephemeral-", "temporary host discovery");
+    print("OK", `Ephemeral password starts Mac host on temporary port ${port}`);
+  } else {
+    print("OK", `Environment password starts Mac host on temporary port ${port}`);
+  }
+}
+
+async function assertLaunchWithEnvPassword(timeoutMs) {
+  await assertLaunchWithPasswordMode(timeoutMs, "env");
+}
+
+async function assertLaunchWithEphemeralPassword(timeoutMs) {
+  await assertLaunchWithPasswordMode(timeoutMs, "ephemeral");
 }
 
 async function main() {
@@ -254,7 +301,10 @@ async function main() {
   await assertDemoPasswordFails(args.timeoutMs);
   await assertPromptPasswordFailsWithoutTty(args.timeoutMs);
   await assertDryRunWithEnvPassword(args.timeoutMs);
+  await assertEphemeralPasswordDryRun(args.timeoutMs);
+  await assertEphemeralPasswordRefusesEnvOverride(args.timeoutMs);
   await assertLaunchWithEnvPassword(args.timeoutMs);
+  await assertLaunchWithEphemeralPassword(args.timeoutMs);
   print("OK", "Mac host start helper self-test passed");
 }
 
