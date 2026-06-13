@@ -19,6 +19,48 @@
 
 ## 2026-06-13 Windows Codex
 
+日期：2026-06-13 13:05
+开发端：Windows Codex
+本轮目标：新增 Windows host 视频+音频顺序媒体基线入口，避免并发临时 host 互相影响，并为后续 WGC/正式编码管线提供统一对照报告。
+完成内容：
+- 新增 `scripts/windows/observe-windows-host-media.mjs`，默认先跑 720p/60Hz 视频观察，再跑 WASAPI 音频观察，最后输出统一 JSON/文本报告。
+- 媒体汇总脚本复用现有 `observe-windows-host-video.mjs` 和 `observe-windows-host-audio.mjs`，默认要求真实视频帧、帧时间戳新鲜度和 timestamp 单调性；视频临时捕获失败时默认重试一次，但最终仍不会把 mock fallback 算作通过。
+- 支持 `--skipVideo` / `--skipAudio` 单独跑一条链路，`--resourceSampleTree true` 可把视频和音频观察都切到进程树资源采样，`--debugCommands` 可打印子观察命令方便复现。
+- Windows host README、当前状态、下一步和任务板已同步新入口、帮助覆盖数量和本轮本机现象。
+修改文件：
+- `scripts/windows/observe-windows-host-media.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/observe-windows-host-media.mjs`
+- `node scripts/windows/observe-windows-host-media.mjs --help`
+- `node scripts/windows/test-windows-script-help.mjs --script observe-windows-host-media.mjs`
+- `node scripts/windows/observe-windows-host-media.mjs --skipVideo --audioDurationMs 3500 --audioMinFrames 100 --audioMinFps 35 --resourceSampleIntervalMs 500 --json`
+- `node scripts/windows/observe-windows-host-media.mjs --skipAudio --videoDurationMs 1200 --videoMinFrames 10 --videoMinFps 5 --resourceSample false`
+- `node scripts/windows/observe-windows-host-media.mjs --videoDurationMs 2500 --videoMinFrames 60 --videoMinFps 20 --audioDurationMs 2500 --audioMinFrames 70 --audioMinFps 35 --resourceSampleIntervalMs 500 --json`
+- `C:\DevTools\ffmpeg\bin\ffmpeg.exe -hide_banner -loglevel error -f gdigrab -framerate 1 -offset_x 0 -offset_y 0 -video_size 640x360 -i desktop -frames:v 1 -f null -`
+验证结果：
+- 语法检查通过。
+- 新脚本 `--help/-h` 纯帮助覆盖通过；全量 Windows 帮助覆盖已验证为 17 个脚本、34 条命令。
+- 音频顺序路径通过：3.5 秒收到 133 帧，稳态 49.94 FPS，最大间隔 43ms，首帧约 877ms，payload 7680 bytes，帧年龄最大 13ms，timestamp 单调。
+- 当前桌面会话的 FFmpeg gdigrab 视频路径不稳定：媒体汇总视频阶段和单独完整视频命令均多次回退到 `windows-ffmpeg-gdigrab-fallback-mock`；直跑 FFmpeg gdigrab 也出现 `Failed to capture image (error 5)`。较短的一次单独视频观察曾通过 64 帧/53.26 FPS/最大间隔 39ms，但随后同会话复测又回退。
+遗留问题：
+- 本轮没有把真实视频失败放宽为通过；当前环境需要在桌面捕获恢复稳定后复测媒体汇总完整默认路径。
+- FFmpeg gdigrab `error 5` 进一步说明当前过渡采集层不够可靠，WGC 采集替换仍是高优先级。
+- 资源采样短窗口样本少时 CPU 数值只能作参考；需要正式对照时保持 `--resourceSampleTree true` 和足够长的观察窗口。
+下一步建议：
+- 先复测 `node scripts/windows/observe-windows-host-media.mjs --resourceSampleTree true --json`，确认视频+音频完整顺序路径恢复。
+- 如果 FFmpeg gdigrab 仍持续 error 5，优先推进 Windows Graphics Capture backend，而不是继续堆 FFmpeg 过渡层补丁。
+- Mac 反控 Windows 真实体验时，优先使用媒体汇总脚本或 `--useExisting` 的视频/音频观察脚本记录同口径基线。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真实 Mac 反控 Windows 体验验收时需要 Mac 端连接 Windows host。
+
+## 2026-06-13 Windows Codex
+
 日期：2026-06-13 12:30
 开发端：Windows Codex
 本轮目标：给 Windows host 视频/音频观察脚本补本机资源采样，方便后续 WGC/正式编码管线和现有 FFmpeg/WASAPI 基线做 A/B 对照。
