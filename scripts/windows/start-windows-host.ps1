@@ -2,7 +2,7 @@
 param(
   [string] $HostName = "0.0.0.0",
   [int] $Port = 43770,
-  [ValidateSet("", "auto", "ffmpeg", "system", "mock", "wgc")]
+  [ValidateSet("", "auto", "ffmpeg", "ffmpeg-h264", "h264", "system", "mock", "wgc")]
   [string] $ScreenMode = "",
   [ValidateSet("", "mock", "wasapi", "dshow")]
   [string] $AudioMode = "",

@@ -6,9 +6,9 @@
 
 - Node.js WebSocket 被控服务，默认端口 `43770`。
 - `hello`、`auth_request`、`session_offer`、`display_settings`、`input_event`、`input_ack`、`clipboard_text` 和 `reverse_control_request` 消息处理；未认证连接会被拒绝，同一连接内密码错误 3 次后会关闭连接。
-- Windows 屏幕 `video_frame` 输出：默认在 Windows 桌面会话中用 FFmpeg gdigrab 持续采集 MJPEG/JPEG data URL；无 FFmpeg 时回退 PowerShell/System.Drawing 系统截图，失败时再回退模拟帧。控制端下发的 `qualityPreset` 和 `maxBandwidthKbps` 会换算为实际 `jpegQuality`，让 5/10/20/40/50 Mbps 对应不同压缩质量。
+- Windows 屏幕 `video_frame` 输出：默认在 Windows 桌面会话中用 FFmpeg gdigrab 持续采集 MJPEG/JPEG data URL；也可显式使用 `ffmpeg-h264` 让 FFmpeg/libx264 输出 H.264 Annex B base64 帧；无 FFmpeg 或采集失败时回退 PowerShell/System.Drawing 系统截图，失败时再回退模拟帧。控制端下发的 `qualityPreset` 和 `maxBandwidthKbps` 会换算为实际 `jpegQuality`，让 5/10/20/40/50 Mbps 对应不同压缩质量。
 - 音频 `audio_frame` 输出：默认发送模拟帧；显式设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi` 后可用 Windows WASAPI loopback 采集默认播放设备的系统声音并发送 `pcm-f32le-base64` PCM 帧；也可设置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 试用 FFmpeg DirectShow 指定设备。
-- 屏幕采集当前是 FFmpeg gdigrab + PowerShell/System.Drawing 兜底的过渡实现；已新增 Windows Graphics Capture 支持预检脚本，但还没有替换现有采集管线，后续会用该预检结果和 FFmpeg 60 Hz 基线做对照升级。
+- 屏幕采集当前是 FFmpeg gdigrab + PowerShell/System.Drawing 兜底的过渡实现；`ffmpeg-h264` 是可选流式编码模式，主要用于和 Mac client H.264 接收链路联调，不替代后续 Windows Graphics Capture。已新增 Windows Graphics Capture 支持预检脚本，但还没有替换现有采集管线，后续会用该预检结果和 FFmpeg 60 Hz / H.264 基线做对照升级。
 - WASAPI loopback 是当前推荐的系统声音采集入口；DirectShow PCM 入口保留给虚拟声卡/loopback 设备做兼容验证。
 - SendInput 输入注入模块：在 Windows 上通过常驻 C# helper 调用 `SendInput` 和 `SetCursorPos` 注入鼠标、滚轮和常用键盘事件，避免每个事件重复启动 PowerShell；在非 Windows 开发环境只记录事件。
 - 输入事件处理后会返回 `input_ack`，便于控制端和联调脚本确认已注入、仅记录或被拒绝。
@@ -130,9 +130,11 @@ $env:LAN_DUAL_WINDOWS_INPUT_HELPER_EXE="C:\DevTools\lan-dual-input-helper.exe" #
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="auto"   # 默认，Windows 优先 FFmpeg gdigrab，失败再回退系统截图 JPEG
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="mock"   # 强制模拟视频帧
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="ffmpeg" # 强制 FFmpeg gdigrab MJPEG
+$env:LAN_DUAL_WINDOWS_SCREEN_MODE="ffmpeg-h264" # 强制 FFmpeg gdigrab + libx264，输出 H.264 Annex B base64
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="system" # 强制 Windows 系统截图 JPEG
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="wgc"    # 显式请求 Windows Graphics Capture；当前只做预检和降级诊断
 $env:LAN_DUAL_FFMPEG="C:\DevTools\ffmpeg\bin\ffmpeg.exe" # 可选；PATH 不稳定时显式指定 FFmpeg
+$env:LAN_DUAL_WINDOWS_H264_CODEC_STRING="avc1.42E01F" # 可选；默认会从 SPS 更新，缺失时用该 baseline codecString
 $env:LAN_DUAL_WINDOWS_JPEG_QUALITY="70"    # 强制覆盖 JPEG 质量，35-92；不设置时按 qualityPreset/maxBandwidthKbps 自动计算
 $env:LAN_DUAL_WINDOWS_MAX_SCREEN_FPS="30"  # 可选：FFmpeg 默认上限 60，1-60；想省资源时可降到 30；system 模式默认 4，1-8
 ```
@@ -331,6 +333,15 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-mode.mjs
 ```
+
+需要验证 Windows host 的可选 H.264 流式模式时，可以使用 `ffmpeg-h264`。该模式仍使用 FFmpeg `gdigrab` 采集桌面，但输出 `video_frame.codec=h264`、`encoding=annexb-base64`、`capturePipeline=windows-ffmpeg-gdigrab-h264`，`session_answer` / `display_settings_ack` / `video_frame` 会带 `codecString`。它用于提前联调 Mac client H.264 接收链路；真正低延迟 Windows 采集仍优先推进 WGC backend。
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-windows-h264-mode.mjs
+node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --screenMode ffmpeg-h264 --preferredVideoCodec h264 --width 1280 --height 720 --fps 30 --durationMs 2500 --minFrames 10 --minFps 5 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp --resourceSample false --json
+```
+
+当前 H.264 短基线：`2026-06-13 14:18` 在真实桌面权限下运行 `test-windows-h264-mode`，本机临时 host 720p/30Hz 观察 2.5 秒收到 73 帧，平均 28.83 FPS，最大帧间隔 53 ms，timestamp 单调，管线为 `windows-ffmpeg-gdigrab-h264`，codec 为 `h264`。普通沙盒上下文仍可能遇到 FFmpeg `gdigrab error 5` / mock fallback；这属于桌面抓屏权限/会话限制，不应误判为 H.264 管线不可用。当前实现使用 `libx264` 软件编码和 JSON/base64 过渡传输，后续仍需 WebSocket 二进制帧、WGC 采集和硬件编码优化。
 
 需要对照码率和 JPEG 质量时：
 

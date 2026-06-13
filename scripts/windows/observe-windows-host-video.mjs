@@ -28,6 +28,7 @@ const defaults = {
   maxGapMs: 1000,
   maxFrameAgeMs: 0,
   screenMode: "auto",
+  preferredVideoCodec: "",
   inputMode: "log",
   ffmpeg: process.env.LAN_DUAL_FFMPEG || "",
   useDefaultMaxScreenFps: false,
@@ -62,6 +63,7 @@ Options:
   --requireMonotonicTimestamp           Fail if video_frame.timestamp goes backwards
   --requireRealVideo false              Allow mock-svg frames for local smoke checks
   --screenMode <auto|ffmpeg|system|mock|wgc>
+  --preferredVideoCodec <mjpeg|h264>    Preferred codec in session_offer
   --ffmpeg <path>                       Explicit FFmpeg path for local temporary host
   --useExisting                         Connect to an already running Windows host
   --resourceSample false                Disable local Windows host CPU/memory sampling
@@ -105,6 +107,7 @@ function parseArgs(argv) {
   args.maxGapMs = Number(args.maxGapMs) || defaults.maxGapMs;
   args.maxFrameAgeMs = Math.max(0, Number(args.maxFrameAgeMs) || 0);
   args.screenMode = String(args.screenMode || defaults.screenMode).trim().toLowerCase();
+  args.preferredVideoCodec = String(args.preferredVideoCodec || "").trim().toLowerCase();
   args.inputMode = String(args.inputMode || defaults.inputMode).trim().toLowerCase();
   args.ffmpeg = String(args.ffmpeg || "").trim();
   if (!args.ffmpeg && process.platform === "win32" && existsSync(defaultWindowsFfmpeg)) {
@@ -351,6 +354,8 @@ function makeMessageClient(socket) {
 }
 
 function makeSessionOffer(args) {
+  const preferredVideoCodec = args.preferredVideoCodec ||
+    (args.screenMode === "ffmpeg-h264" || args.screenMode === "h264" ? "h264" : "mjpeg");
   return {
     type: "session_offer",
     protocolVersion: 1,
@@ -358,7 +363,8 @@ function makeSessionOffer(args) {
     wantAudio: false,
     wantClipboardText: false,
     wantClipboardFile: false,
-    preferredVideoCodec: "mjpeg",
+    preferredVideoCodec,
+    preferredVideoEncoding: preferredVideoCodec === "h264" ? "annexb" : "data-url",
     maxFps: args.fps,
     maxBandwidthKbps: args.bandwidthKbps,
     qualityPreset: args.qualityPreset,
@@ -397,7 +403,7 @@ function normalizeFallbackReason(...values) {
   if (!raw) return "";
 
   const normalized = raw.replace(/\s+/g, " ").trim();
-  const ffmpegTimeout = normalized.match(/FFmpeg did not produce a JPEG frame within \d+ ms/i)?.[0] || "";
+  const ffmpegTimeout = normalized.match(/FFmpeg did not produce a (?:JPEG|H\.264) frame within \d+ ms/i)?.[0] || "";
   if (ffmpegTimeout && /CopyFromScreen/i.test(normalized)) {
     return `${ffmpegTimeout}; System.Drawing CopyFromScreen fallback failed`;
   }

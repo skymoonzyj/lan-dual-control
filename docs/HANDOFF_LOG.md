@@ -17,6 +17,55 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-13 Windows Codex
+
+日期：2026-06-13 14:00
+开发端：Windows Codex
+本轮目标：给 Windows host 增加可选 FFmpeg H.264 流式输出，用于后续 Mac client H.264 接收链路联调。
+完成内容：
+- Windows host 新增显式 `LAN_DUAL_WINDOWS_SCREEN_MODE=ffmpeg-h264` / `h264` 模式，使用 FFmpeg `gdigrab` 采集桌面并通过 `libx264` 输出 H.264 Annex B。
+- `video_frame` 在该模式下输出 `codec=h264`、`encoding=annexb-base64`、`payload`、`payloadBytes`、`codecString`、`timestampUs`、`durationUs`、`capturePipeline=windows-ffmpeg-gdigrab-h264` 和 `hostMode=windows-host-ffmpeg-h264`。
+- `session_answer` 和 `display_settings_ack` 现在会带 `codecString`，方便 WebCodecs 接收端配置。
+- `observe-windows-host-video.mjs` 支持 `--preferredVideoCodec h264`，并在 `--screenMode ffmpeg-h264` / `h264` 时自动请求 H.264/Annex B。
+- 新增 `scripts/windows/test-windows-h264-mode.mjs`，作为 Windows host H.264 输出回归入口，内部调用视频观察脚本并断言 codec、pipeline、hostMode、requestedMode、帧数、FPS 和 timestamp 单调；脚本默认做多次短尝试，避免把 `gdigrab` 偶发启动波动当成第一次即失败。
+- Windows host README、CURRENT_STATUS、NEXT_ACTIONS 和任务板已同步可选 H.264 模式、复测命令和短基线。
+修改文件：
+- `apps/windows-host/src/windows-screen-capture.mjs`
+- `apps/windows-host/src/windows-host-service.mjs`
+- `scripts/windows/observe-windows-host-video.mjs`
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/test-windows-h264-mode.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-host/src/windows-screen-capture.mjs`
+- `node --check apps/windows-host/src/windows-host-service.mjs`
+- `node --check scripts/windows/observe-windows-host-video.mjs`
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/test-windows-h264-mode.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script observe-windows-host-video.mjs --script start-windows-host.mjs --script test-windows-h264-mode.mjs`
+- `node scripts/windows/start-windows-host.mjs --screenMode ffmpeg-h264 --password test-password --requirePassword --dryRun`
+- `$env:LAN_DUAL_PASSWORD='test-password'; powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-windows-host.ps1 -ScreenMode ffmpeg-h264 -RequirePassword -DryRun`
+- `node scripts/windows/observe-windows-host-video.mjs --screenMode ffmpeg-h264 --preferredVideoCodec h264 --width 1280 --height 720 --fps 30 --durationMs 2500 --minFrames 10 --minFps 5 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp --resourceSample false --json`
+- `node scripts/windows/test-windows-h264-mode.mjs --durationMs 2500 --minFrames 20 --minFps 15`，用真实桌面权限运行
+验证结果：
+- 普通沙盒下 720p/30Hz H.264 短观察曾通过一次：71 帧 / 2502ms，约 28.37 FPS，最大帧间隔 78ms，`frameAge max=28ms`，管线 `windows-ffmpeg-gdigrab-h264`，codec `h264`；随后普通沙盒多次复测回退 mock，直跑 FFmpeg `gdigrab` 也报 `Failed to capture image (error 5)`。
+- 真实桌面权限下 `test-windows-h264-mode` 标准窗口通过：73 帧 / 2.5 秒，约 28.83 FPS，最大帧间隔 53ms，管线 `windows-ffmpeg-gdigrab-h264`，codec `h264`。
+- dry-run 启动助手和 PowerShell 包装均接受 `ffmpeg-h264`。
+遗留问题：
+- 当前实现仍是 FFmpeg `gdigrab` + `libx264` 软件编码 + JSON/base64 过渡传输，不是 WGC 真采集，也不是硬件编码最终形态。
+- 普通沙盒上下文仍可能出现 `gdigrab error 5` / mock fallback；真实桌面权限下通过，说明主要是桌面抓屏权限/会话限制。后续正式低延迟 Windows 被控仍应优先推进 WGC capture backend、WebSocket 二进制帧和硬件编码。
+下一步建议：
+- Mac client H.264 接收落库后，Windows 端启动 `ffmpeg-h264` host，Mac 端用真实连接验证 WebCodecs 解码、JPEG 回退、首帧耗时、实收 FPS 和 frame age。
+- Windows 端后续实现 WGC backend 时，继续保留 `ffmpeg-h264` 作为编码/接收链路对照。
+是否改了协议：否；复用已有 H.264 过渡字段，并补充向后兼容的 `codecString` 回执。
+是否需要另一端配合：暂不需要；等 Mac client H.264 接收准备推送后，需要 Mac 端连接 Windows `ffmpeg-h264` host 做端到端验收。
+
 ## 2026-06-13 Mac Codex
 
 日期：2026-06-13 13:55
