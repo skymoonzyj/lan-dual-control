@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { createServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isLikelyLocalHost, startProcessResourceSampling } from "./lib/process-resource-sampler.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
@@ -37,6 +38,10 @@ const defaults = {
   keepRunning: false,
   json: false,
   verbose: false,
+  resourceSample: true,
+  resourceSampleIntervalMs: 1000,
+  resourceSampleTree: false,
+  resourceSampleTimeoutMs: 3000,
 };
 
 function printUsage() {
@@ -58,6 +63,9 @@ Options:
   --screenMode <auto|ffmpeg|system|mock>
   --ffmpeg <path>                       Explicit FFmpeg path for local temporary host
   --useExisting                         Connect to an already running Windows host
+  --resourceSample false                Disable local Windows host CPU/memory sampling
+  --resourceSampleIntervalMs <ms>       Resource sample interval (default: ${defaults.resourceSampleIntervalMs})
+  --resourceSampleTree true             Include child processes such as FFmpeg
   --json                                Print JSON result only
   --verbose                             Print temporary Windows host logs
   --help, -h                            Show this help without starting a host
@@ -109,6 +117,10 @@ function parseArgs(argv) {
   args.keepRunning = booleanArg(args.keepRunning);
   args.json = booleanArg(args.json);
   args.verbose = booleanArg(args.verbose);
+  args.resourceSample = booleanArg(args.resourceSample);
+  args.resourceSampleIntervalMs = Math.max(250, Number(args.resourceSampleIntervalMs) || defaults.resourceSampleIntervalMs);
+  args.resourceSampleTree = booleanArg(args.resourceSampleTree);
+  args.resourceSampleTimeoutMs = Math.max(1000, Number(args.resourceSampleTimeoutMs) || defaults.resourceSampleTimeoutMs);
   return args;
 }
 
@@ -386,7 +398,7 @@ function assertRealFrame(frame) {
   }
 }
 
-async function observeFrames(client, args) {
+async function observeFrames(client, args, onFirstFrame = () => {}) {
   const frames = [];
   const startedAt = performance.now();
   let lastAt = startedAt;
@@ -403,6 +415,9 @@ async function observeFrames(client, args) {
     maxGapMs = Math.max(maxGapMs, gap);
     if (args.requireRealVideo) {
       assertRealFrame(frame);
+    }
+    if (frames.length === 0) {
+      onFirstFrame();
     }
     const timestampMs = parseFrameTimestampMs(frame);
     if (timestampMs > 0 && previousTimestampMs > 0 && timestampMs < previousTimestampMs) {
@@ -519,6 +534,7 @@ async function main() {
   const args = parseArgs(process.argv);
   let child = null;
   let socket = null;
+  let resourceSampler = null;
 
   try {
     await prepareLocalPort(args);
@@ -531,6 +547,19 @@ async function main() {
     const discovery = await waitFor(() => fetchDiscovery(args), args.timeoutMs, "Windows host discovery");
     const screen = discovery.capabilities?.screen || {};
     print("OK", `Discovery: ${discovery.deviceName || discovery.hostName || "Windows host"} / ${screen.mode || "unknown"} / ${screen.capturePipeline || "unknown"}`, args);
+    const resourcePid = child?.pid || (args.useExisting && isLikelyLocalHost(args.host) ? Number(discovery.runtime?.processId) || 0 : 0);
+    function startResourceSamplingOnce() {
+      if (!resourcePid || !args.resourceSample || resourceSampler) {
+        return;
+      }
+      resourceSampler = startProcessResourceSampling({
+        pid: resourcePid,
+        intervalMs: args.resourceSampleIntervalMs,
+        includeTree: args.resourceSampleTree,
+        timeoutMs: args.resourceSampleTimeoutMs,
+      });
+      print("INFO", `Resource sampling: PID ${resourcePid}${args.resourceSampleTree ? " process tree" : ""}`, args);
+    }
 
     socket = await openSocket(args);
     const client = makeMessageClient(socket);
@@ -552,8 +581,14 @@ async function main() {
     }
     print("OK", `Session: ${answer.width || args.width}x${answer.height || args.height} / ${answer.fps || "?"} Hz / ${answer.capturePipeline || answer.hostMode || "unknown"}`, args);
 
-    const summary = await observeFrames(client, args);
+    const summary = await observeFrames(client, args, startResourceSamplingOnce);
     summary.sessionFps = Number(answer.fps) || 0;
+    const resource = resourceSampler ? await resourceSampler.stop() : {
+      available: false,
+      rootPid: 0,
+      sampleCount: 0,
+      errors: [args.resourceSample ? "no local Windows host process id available" : "resource sampling disabled"],
+    };
     assertObservation(summary, args);
 
     const result = {
@@ -568,6 +603,9 @@ async function main() {
         useDefaultMaxScreenFps: args.useDefaultMaxScreenFps,
         durationMs: args.durationMs,
         screenMode: args.screenMode,
+        resourceSample: args.resourceSample,
+        resourceSampleIntervalMs: args.resourceSampleIntervalMs,
+        resourceSampleTree: args.resourceSampleTree,
       },
       discoveryScreen: {
         mode: screen.mode || "",
@@ -586,6 +624,7 @@ async function main() {
         hostMode: answer.hostMode || "",
       },
       observation: summary,
+      resource,
     };
 
     if (args.json) {
@@ -604,9 +643,21 @@ async function main() {
       }
       print("INFO", `Requested bandwidth: ${args.bandwidthKbps} Kbps / session: ${answer.maxBandwidthKbps || 0} Kbps / JPEG quality: ${answer.jpegQuality || "unknown"}`, args);
       print("INFO", `Pipeline: ${summary.pipelines.join(", ") || "unknown"} / codec: ${summary.codecs.join(", ") || "unknown"} / avg bytes: ${summary.avgPayloadBytes}`, args);
+      if (resource.available) {
+        print(
+          "INFO",
+          `Resource: CPU avg/max ${resource.avgCpuPercent}/${resource.maxCpuPercent}% / working set avg/peak ${resource.avgWorkingSetMiB}/${resource.peakWorkingSetMiB} MiB / samples ${resource.sampleCount}`,
+          args,
+        );
+      } else {
+        print("WARN", `Resource sampling unavailable: ${(resource.errors || []).join("; ") || "unknown"}`, args);
+      }
       print("OK", "Windows host video observation passed", args);
     }
   } finally {
+    if (resourceSampler) {
+      await resourceSampler.stop();
+    }
     if (socket) {
       await closeSocket(socket);
     }

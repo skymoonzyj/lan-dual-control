@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/lib/process-resource-sampler.mjs`, `scripts/windows/observe-windows-host-video.mjs`, `scripts/windows/observe-windows-host-audio.mjs`, `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-13 12:30 | Windows 视频/音频观察脚本新增本机 host 资源采样；默认采主进程，可加 `--resourceSampleTree true` 纳入 FFmpeg/PowerShell 子进程；记录 60Hz FFmpeg 进程树资源对照和 WASAPI 短资源对照。 |
 | Windows Codex | `scripts/windows/check-windows-wgc-support.mjs`, `scripts/windows/check-windows-host-readiness.mjs`, `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-13 03:24 | 新增 Windows Graphics Capture 只读支持预检并接入 readiness；默认不替换 FFmpeg 采集，`--requireWgc` 可强制预检；本机 WGC 预检通过，帮助覆盖更新为 16 个脚本/32 条命令。 |
 | Windows Codex | `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-13 03:00 | 记录 Windows host 当前只读基线：FFmpeg gdigrab 720p/60Hz 4 秒 230 帧、57.1 FPS、最大间隔 41 ms、帧年龄最大 1 ms；WASAPI 30 秒 1482 帧、49.98 FPS、最大间隔 33 ms、帧年龄最大 1 ms。 |
 | Windows Codex | `apps/windows-client/index.html`, `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, 交接 docs | 2026-06-13 02:49 | Windows 控制端顶部指标从随机“延迟”改为真实“帧延迟”，基于 `video_frame.timestamp` 显示帧到达新鲜度；无时间戳保持等待，未来时间戳显示“时钟偏差”；diagnosticsOnly 已覆盖正常帧年龄和时钟偏差提示。 |

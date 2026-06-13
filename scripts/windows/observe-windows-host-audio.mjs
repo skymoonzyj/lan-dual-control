@@ -6,6 +6,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isLikelyLocalHost, startProcessResourceSampling } from "./lib/process-resource-sampler.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
@@ -40,6 +41,10 @@ const defaults = {
   verbose: false,
   playTone: false,
   requireLevel: false,
+  resourceSample: true,
+  resourceSampleIntervalMs: 1000,
+  resourceSampleTree: false,
+  resourceSampleTimeoutMs: 3000,
   toneFrequency: 880,
   toneDurationMs: 1500,
   toneDelayMs: 750,
@@ -76,6 +81,9 @@ Options:
   --screenMode <mode>                   Local temporary host screen mode (default: ${defaults.screenMode})
   --ffmpeg <path>                       Explicit FFmpeg path for local temporary host
   --useExisting                         Connect to an already running Windows host
+  --resourceSample false                Disable local Windows host CPU/memory sampling
+  --resourceSampleIntervalMs <ms>       Resource sample interval (default: ${defaults.resourceSampleIntervalMs})
+  --resourceSampleTree true             Include child processes such as FFmpeg/PowerShell
   --json                                Print JSON result only
   --verbose                             Print temporary Windows host logs
   --help, -h                            Show this help without starting a host
@@ -133,6 +141,10 @@ function parseArgs(argv) {
   args.playTone = booleanArg(args.playTone);
   args.requireLevel = booleanArg(args.requireLevel);
   args.requireMonotonicTimestamp = booleanArg(args.requireMonotonicTimestamp);
+  args.resourceSample = booleanArg(args.resourceSample);
+  args.resourceSampleIntervalMs = Math.max(250, Number(args.resourceSampleIntervalMs) || defaults.resourceSampleIntervalMs);
+  args.resourceSampleTree = booleanArg(args.resourceSampleTree);
+  args.resourceSampleTimeoutMs = Math.max(1000, Number(args.resourceSampleTimeoutMs) || defaults.resourceSampleTimeoutMs);
   return args;
 }
 
@@ -516,7 +528,7 @@ function parseFrameTimestampMs(frame) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-async function observeAudioFrames(client, args) {
+async function observeAudioFrames(client, args, onFirstFrame = () => {}) {
   const frames = [];
   const startedAt = performance.now();
   let lastAt = startedAt;
@@ -529,6 +541,9 @@ async function observeAudioFrames(client, args) {
     lastAt = now;
     if (args.requirePcm) {
       assertPcmAudioFrame(frame);
+    }
+    if (frames.length === 0) {
+      onFirstFrame();
     }
     const timestampMs = parseFrameTimestampMs(frame);
     frames.push({
@@ -660,6 +675,7 @@ async function main() {
   const args = parseArgs(process.argv);
   let child = null;
   let socket = null;
+  let resourceSampler = null;
 
   try {
     await prepareLocalPort(args);
@@ -672,6 +688,19 @@ async function main() {
     const discovery = await waitFor(() => fetchDiscovery(args), args.timeoutMs, "Windows host discovery");
     const audio = discovery.capabilities?.audio || {};
     print("OK", `Discovery: ${discovery.deviceName || discovery.hostName || "Windows host"} / ${audio.mode || "unknown"} / ${audio.backend || "unknown"}`, args);
+    const resourcePid = child?.pid || (args.useExisting && isLikelyLocalHost(args.host) ? Number(discovery.runtime?.processId) || 0 : 0);
+    function startResourceSamplingOnce() {
+      if (!resourcePid || !args.resourceSample || resourceSampler) {
+        return;
+      }
+      resourceSampler = startProcessResourceSampling({
+        pid: resourcePid,
+        intervalMs: args.resourceSampleIntervalMs,
+        includeTree: args.resourceSampleTree,
+        timeoutMs: args.resourceSampleTimeoutMs,
+      });
+      print("INFO", `Resource sampling: PID ${resourcePid}${args.resourceSampleTree ? " process tree" : ""}`, args);
+    }
 
     socket = await openSocket(args);
     const client = makeMessageClient(socket);
@@ -697,8 +726,14 @@ async function main() {
     if (args.playTone) {
       print("INFO", `Playing test tone ${args.toneFrequency} Hz for ${args.toneDurationMs} ms after ${args.toneDelayMs} ms`, args);
     }
-    const summary = await observeAudioFrames(client, args);
+    const summary = await observeAudioFrames(client, args, startResourceSamplingOnce);
     await tonePlayback;
+    const resource = resourceSampler ? await resourceSampler.stop() : {
+      available: false,
+      rootPid: 0,
+      sampleCount: 0,
+      errors: [args.resourceSample ? "no local Windows host process id available" : "resource sampling disabled"],
+    };
     assertObservation(summary, args);
 
     const result = {
@@ -719,6 +754,9 @@ async function main() {
         toneFrequency: args.toneFrequency,
         toneDurationMs: args.toneDurationMs,
         toneDelayMs: args.toneDelayMs,
+        resourceSample: args.resourceSample,
+        resourceSampleIntervalMs: args.resourceSampleIntervalMs,
+        resourceSampleTree: args.resourceSampleTree,
       },
       discoveryAudio: audio,
       session: {
@@ -730,6 +768,7 @@ async function main() {
         audioFrameIntervalMs: answer.audioFrameIntervalMs || 0,
       },
       observation: summary,
+      resource,
     };
 
     if (args.json) {
@@ -750,9 +789,21 @@ async function main() {
         print("WARN", "No audio_frame.timestamp values observed", args);
       }
       print("INFO", `Codec: ${summary.codecs.join(", ") || "unknown"} / sampleRates: ${summary.sampleRates.join(", ") || "unknown"} / channels: ${summary.channels.join(", ") || "unknown"}`, args);
+      if (resource.available) {
+        print(
+          "INFO",
+          `Resource: CPU avg/max ${resource.avgCpuPercent}/${resource.maxCpuPercent}% / working set avg/peak ${resource.avgWorkingSetMiB}/${resource.peakWorkingSetMiB} MiB / samples ${resource.sampleCount}`,
+          args,
+        );
+      } else {
+        print("WARN", `Resource sampling unavailable: ${(resource.errors || []).join("; ") || "unknown"}`, args);
+      }
       print("OK", "Windows host audio observation passed", args);
     }
   } finally {
+    if (resourceSampler) {
+      await resourceSampler.stop();
+    }
     if (socket) {
       await closeSocket(socket);
     }

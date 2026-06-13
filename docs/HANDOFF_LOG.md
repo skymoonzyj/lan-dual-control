@@ -19,6 +19,54 @@
 
 ## 2026-06-13 Windows Codex
 
+日期：2026-06-13 12:30
+开发端：Windows Codex
+本轮目标：给 Windows host 视频/音频观察脚本补本机资源采样，方便后续 WGC/正式编码管线和现有 FFmpeg/WASAPI 基线做 A/B 对照。
+完成内容：
+- 新增 `scripts/windows/lib/process-resource-sampler.mjs`，在 Windows 本机用只读 PowerShell 采样目标 PID 的 CPU、工作集、私有内存、句柄、线程和进程名。
+- `observe-windows-host-video.mjs` 和 `observe-windows-host-audio.mjs` 现在会在收到首帧后启动资源采样；默认只采 Windows host 主进程，避免干扰采集启动，需要把 FFmpeg/PowerShell 子进程纳入总资源时显式加 `--resourceSampleTree true`。
+- 两个观察脚本 JSON 输出新增 `resource` 摘要，文本输出也会显示 CPU 和内存摘要；可用 `--resourceSample false` 关闭。
+- Windows host README、当前状态、下一步和任务板已同步资源采样用法和本机对照数据。
+修改文件：
+- `scripts/windows/lib/process-resource-sampler.mjs`
+- `scripts/windows/observe-windows-host-video.mjs`
+- `scripts/windows/observe-windows-host-audio.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/lib/process-resource-sampler.mjs`
+- `node --check scripts/windows/observe-windows-host-video.mjs`
+- `node --check scripts/windows/observe-windows-host-audio.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script observe-windows-host-video.mjs --script observe-windows-host-audio.mjs`
+- `node scripts/windows/observe-windows-host-video.mjs --durationMs 2500 --minFrames 20 --minFps 8 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp --resourceSampleIntervalMs 500 --json`
+- `node scripts/windows/observe-windows-host-video.mjs --durationMs 2500 --minFrames 20 --minFps 8 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp --resourceSampleIntervalMs 500 --resourceSampleTree true --json`
+- `node scripts/windows/observe-windows-host-video.mjs --fps 60 --useDefaultMaxScreenFps --expectSessionFps 60 --durationMs 4000 --minFrames 140 --minFps 35 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp --resourceSampleIntervalMs 500 --resourceSampleTree true --json`
+- `node scripts/windows/observe-windows-host-audio.mjs --durationMs 5000 --minFrames 20 --minFps 3 --maxGapMs 2000 --requirePcm false --audioMode mock --resourceSampleIntervalMs 500 --json`
+- `node scripts/windows/check-windows-audio-devices.mjs --json`
+- `node scripts/windows/observe-windows-host-audio.mjs --durationMs 3500 --minFrames 80 --minFps 30 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp --resourceSampleIntervalMs 500 --json`
+验证结果：
+- 语法检查和两个观察脚本帮助入口覆盖通过。
+- 视频主进程资源短测通过：2.5 秒 73 帧、28.95 FPS、最大帧间隔 48ms、帧年龄最大 0ms；资源摘要 `node` 主进程 CPU 平均/峰值 0.1/0.1%，工作集峰值 58.3 MiB。
+- 视频进程树短测通过：2.5 秒 73 帧、28.84 FPS、最大帧间隔 47ms、帧年龄最大 2ms；进程树包含 `node`、`conhost`、`ffmpeg`，CPU 平均/峰值 0.8/0.8%，工作集峰值 308.7 MiB。
+- 60Hz 资源对照通过：4 秒 198 帧、49.49 FPS、最大帧间隔 43ms、`dropped=35`、帧年龄最大 1ms；进程树 CPU 平均/峰值 4.5/5.4%，工作集平均/峰值 308.4/309.3 MiB，私有内存平均/峰值 437.2/440.9 MiB。
+- 音频 mock 资源路径通过：5 秒 21 帧、稳态 4.01 FPS，主进程工作集峰值 56 MiB。
+- WASAPI 只读设备检查通过；真实 WASAPI 资源短测通过：3.5 秒 135 帧、稳态 49.72 FPS、最大间隔 32ms、首帧约 841ms、payload 7680 bytes、帧年龄最大 0ms；主进程工作集峰值 62.5 MiB。
+遗留问题：
+- 默认资源采样只统计 Windows host 主进程；要把 FFmpeg 子进程纳入资源总账，必须显式加 `--resourceSampleTree true`。
+- 资源采样当前统计 CPU/内存/句柄/线程，没有 GPU 占用；后续 WGC 实装时如需 GPU 对照，要另接 GPU 计数器或 ETW/PresentMon 类工具。
+- 并发同时启动视频/音频观察时曾出现临时采集回退/音频超时；顺序复测均通过，后续自动化最好避免多个临时 host 同时抢 43772 和桌面/音频采集。
+下一步建议：
+- 实装 WGC backend 前，先用 `observe-windows-host-video --fps 60 ... --resourceSampleTree true --json` 记录当前 FFmpeg 对照；WGC 完成后用同命令比较 FPS、最大间隔、帧年龄、码率/画质和 CPU/内存。
+- 如果要看真实 Mac 反控 Windows 听感，Mac 端连接时 Windows 端可并行跑 `observe-windows-host-audio --useExisting --resourceSampleTree true` 记录资源和音频帧状态。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；后续 WGC/反控体验验收需要 Mac 端配合真实连接。
+
+## 2026-06-13 Windows Codex
+
 日期：2026-06-13 03:20
 开发端：Windows Codex
 本轮目标：为后续 Windows Graphics Capture 采集升级增加只读支持预检，并接入 Windows host readiness。

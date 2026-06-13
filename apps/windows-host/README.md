@@ -321,7 +321,7 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --help
 ```
 
-默认临时使用 `127.0.0.1:43772`；如果该端口已被其他自检占用，脚本会自动换一个临时空闲端口。需要连接已运行的 Windows host 时再加 `--useExisting --host 127.0.0.1 --port 43770`。脚本会自动识别 `C:\DevTools\ffmpeg\bin\ffmpeg.exe`，也可以显式传入 `--ffmpeg C:\DevTools\ffmpeg\bin\ffmpeg.exe`。
+默认临时使用 `127.0.0.1:43772`；如果该端口已被其他自检占用，脚本会自动换一个临时空闲端口。需要连接已运行的 Windows host 时再加 `--useExisting --host 127.0.0.1 --port 43770`。脚本会自动识别 `C:\DevTools\ffmpeg\bin\ffmpeg.exe`，也可以显式传入 `--ffmpeg C:\DevTools\ffmpeg\bin\ffmpeg.exe`。在本机临时 host 或本机已运行 host 上，脚本还会默认采样 Windows host 主进程的 CPU、工作集、私有内存、句柄和线程；需要把 FFmpeg 子进程也纳入总资源对照时，加 `--resourceSampleTree true`，不需要资源采样时加 `--resourceSample false`。
 
 需要对照码率和 JPEG 质量时：
 
@@ -338,6 +338,8 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 
 当前 FFmpeg gdigrab 60 Hz 基线：`2026-06-13 03:00` 本机临时 host 观察 4 秒收到 230 帧，平均 57.1 FPS，最大帧间隔 41 ms，`dropped=4`，`video_frame.timestamp` 接收年龄 min/avg/max `0/0/1 ms`，timestamp 单调；请求码率 50 Mbps，`jpegQuality=0.62`，平均帧大小约 45 KB。后续 Windows Graphics Capture 采集实装后，至少要和这条基线对照帧率、最大帧间隔、帧新鲜度、码率/画质和资源占用。
 
+当前带资源采样的 60 Hz 对照：`2026-06-13 12:30` 使用 `--resourceSampleTree true` 观察 4 秒收到 198 帧，平均 49.49 FPS，最大帧间隔 43 ms，`dropped=35`，帧年龄最大 1 ms；进程树包含 `node`、`conhost`、`ffmpeg`，CPU 平均/峰值约 `4.5/5.4%`，工作集平均/峰值约 `308.4/309.3 MiB`，私有内存平均/峰值约 `437.2/440.9 MiB`。后续 WGC 或正式编码管线实装后，建议用同一命令加 `--resourceSampleTree true --json` 做 A/B 对照。
+
 需要把低延迟帧新鲜度纳入强校验时：
 
 ```powershell
@@ -350,7 +352,7 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --screenMode system --fps 4 --durationMs 2500 --minFrames 3 --minFps 1 --maxGapMs 2000
 ```
 
-音频持续帧观察脚本可统计 Windows host 的 `audio_frame` 帧数、稳态帧率、最大帧间隔、payload 大小、电平和 `audio_frame.timestamp` 接收年龄。默认临时启动 `screenMode=mock`、`audioMode=wasapi` 的 Windows host，只观察系统声音，不额外压视频；默认会丢掉前 5 帧作为预热再计算稳态 FPS：
+音频持续帧观察脚本可统计 Windows host 的 `audio_frame` 帧数、稳态帧率、最大帧间隔、payload 大小、电平和 `audio_frame.timestamp` 接收年龄。默认临时启动 `screenMode=mock`、`audioMode=wasapi` 的 Windows host，只观察系统声音，不额外压视频；默认会丢掉前 5 帧作为预热再计算稳态 FPS；在本机临时 host 或本机已运行 host 上，也会默认采样 Windows host 主进程资源，必要时可用 `--resourceSampleTree true` 把子进程纳入总资源对照：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-audio.mjs
@@ -369,6 +371,8 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-audio.mjs --
 ```
 
 当前 WASAPI loopback 稳态基线：`2026-06-13 03:00` 本机临时 host 30 秒观察收到 1482 帧，稳态 49.98 FPS，最大帧间隔 33 ms，首帧约 395 ms，payload 恒定 7680 bytes，`audio_frame.timestamp` 稳态接收年龄 min/avg/max `0/0/1 ms`，timestamp 单调；本次无人值守未播放测试音，系统电平为 0。
+
+当前带资源采样的 WASAPI 短对照：`2026-06-13 12:30` 本机临时 host 3.5 秒观察收到 135 帧，稳态 49.72 FPS，最大帧间隔 32 ms，首帧约 841 ms，payload 恒定 7680 bytes，帧年龄最大 0 ms，主进程 CPU 平均/峰值 `0/0%`，工作集平均/峰值约 `62.1/62.5 MiB`。
 
 需要缩短观察或连接已运行的 Windows host 时：
 
