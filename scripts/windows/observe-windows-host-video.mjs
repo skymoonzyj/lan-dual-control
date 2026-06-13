@@ -57,10 +57,11 @@ Options:
   --bandwidthKbps <kbps>                Requested max bandwidth (default: ${defaults.bandwidthKbps})
   --qualityPreset <name>                smooth | balanced | sharp | custom
   --maxGapMs <ms>                       Fail if inter-frame receive gap is higher
+  --minFps <n>                          Minimum observed FPS; use 0 for diagnostic-only fallback checks
   --maxFrameAgeMs <ms>                  Fail if video_frame.timestamp receive age is higher
   --requireMonotonicTimestamp           Fail if video_frame.timestamp goes backwards
   --requireRealVideo false              Allow mock-svg frames for local smoke checks
-  --screenMode <auto|ffmpeg|system|mock>
+  --screenMode <auto|ffmpeg|system|mock|wgc>
   --ffmpeg <path>                       Explicit FFmpeg path for local temporary host
   --useExisting                         Connect to an already running Windows host
   --resourceSample false                Disable local Windows host CPU/memory sampling
@@ -100,7 +101,7 @@ function parseArgs(argv) {
   args.durationMs = Number(args.durationMs) || defaults.durationMs;
   args.timeoutMs = Number(args.timeoutMs) || defaults.timeoutMs;
   args.minFrames = Number(args.minFrames) || defaults.minFrames;
-  args.minFps = Number(args.minFps) || defaults.minFps;
+  args.minFps = Number.isFinite(Number(args.minFps)) ? Number(args.minFps) : defaults.minFps;
   args.maxGapMs = Number(args.maxGapMs) || defaults.maxGapMs;
   args.maxFrameAgeMs = Math.max(0, Number(args.maxFrameAgeMs) || 0);
   args.screenMode = String(args.screenMode || defaults.screenMode).trim().toLowerCase();
@@ -459,6 +460,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
       qualityPreset: frame.qualityPreset || "",
       jpegQuality: Number(frame.jpegQuality) || 0,
       fallbackReason: normalizeFallbackReason(frame.streamFallbackReason, frame.fallbackReason, context.fallbackReason),
+      requestedScreenMode: String(frame.requestedScreenMode || context.requestedScreenMode || "").trim(),
     });
   }
 
@@ -474,6 +476,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
   const uniquePipelines = [...new Set(frames.map((frame) => frame.pipeline).filter(Boolean))];
   const uniqueCodecs = [...new Set(frames.map((frame) => frame.codec).filter(Boolean))];
   const fallbackReasons = [...new Set(frames.map((frame) => frame.fallbackReason).filter(Boolean))];
+  const requestedScreenModes = [...new Set(frames.map((frame) => frame.requestedScreenMode).filter(Boolean))];
   const uniqueQualities = [...new Set(
     frames
       .map((frame) => frame.jpegQuality)
@@ -512,6 +515,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
     pipelines: uniquePipelines,
     codecs: uniqueCodecs,
     fallbackReasons,
+    requestedScreenModes,
   };
 }
 
@@ -602,6 +606,7 @@ async function main() {
 
     const summary = await observeFrames(client, args, startResourceSamplingOnce, {
       fallbackReason: screen.lastCaptureError || "",
+      requestedScreenMode: screen.requestedMode || "",
     });
     summary.sessionFps = Number(answer.fps) || 0;
     const resource = resourceSampler ? await resourceSampler.stop() : {
@@ -630,8 +635,10 @@ async function main() {
       },
       discoveryScreen: {
         mode: screen.mode || "",
+        requestedMode: screen.requestedMode || "",
         capturePipeline: screen.capturePipeline || "",
         lastCaptureError: screen.lastCaptureError || "",
+        wgc: screen.wgc || null,
       },
       session: {
         width: answer.width || 0,
@@ -644,6 +651,8 @@ async function main() {
         jpegQuality: answer.jpegQuality || 0,
         capturePipeline: answer.capturePipeline || "",
         hostMode: answer.hostMode || "",
+        requestedScreenMode: answer.requestedScreenMode || "",
+        wgcFallbackReason: answer.wgcFallbackReason || "",
       },
       observation: summary,
       resource,
@@ -665,6 +674,9 @@ async function main() {
       }
       print("INFO", `Requested bandwidth: ${args.bandwidthKbps} Kbps / session: ${answer.maxBandwidthKbps || 0} Kbps / JPEG quality: ${answer.jpegQuality || "unknown"}`, args);
       print("INFO", `Pipeline: ${summary.pipelines.join(", ") || "unknown"} / codec: ${summary.codecs.join(", ") || "unknown"} / avg bytes: ${summary.avgPayloadBytes}`, args);
+      if (summary.requestedScreenModes.length > 0 && !summary.requestedScreenModes.includes(screen.mode || "")) {
+        print("INFO", `Requested screen mode: ${summary.requestedScreenModes.join(", ")} / active: ${screen.mode || "unknown"}`, args);
+      }
       if (summary.fallbackReasons.length > 0) {
         print("WARN", `Fallback reason: ${summary.fallbackReasons.join(" | ")}`, args);
       }

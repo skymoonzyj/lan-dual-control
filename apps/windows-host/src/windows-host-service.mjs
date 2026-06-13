@@ -70,6 +70,8 @@ function makeSessionAnswer(message, screen, audio, clipboard) {
     clipboardFileMode: clipboardCapabilities.fileMode,
     hostMode: screen.hostMode ?? "windows-host-skeleton",
     capturePipeline: screen.capturePipeline ?? "mock-svg",
+    requestedScreenMode: screen.requestedScreenMode ?? "",
+    wgcFallbackReason: screen.wgcFallbackReason ?? "",
   };
 }
 
@@ -282,6 +284,8 @@ function createClient(socket, context) {
         jpegQuality: session?.jpegQuality,
         hostMode: session?.hostMode ?? "windows-host-skeleton",
         capturePipeline: session?.capturePipeline ?? "mock-svg",
+        requestedScreenMode: session?.requestedScreenMode ?? "",
+        wgcFallbackReason: session?.wgcFallbackReason ?? "",
         clipboardText: Boolean(message.clipboardText ?? session?.clipboardText ?? true),
         clipboardTextMode: clipboardCapabilities.textMode,
         clipboardFile: Boolean(message.clipboardFile ?? session?.clipboardFile ?? true),

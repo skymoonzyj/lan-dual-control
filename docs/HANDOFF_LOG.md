@@ -19,6 +19,54 @@
 
 ## 2026-06-13 Windows Codex
 
+日期：2026-06-13 13:34
+开发端：Windows Codex
+本轮目标：给 Windows host 打通显式 WGC screenMode 入口和可验证降级诊断，为后续真实 WGC 采集 backend 接入做前置。
+完成内容：
+- Windows host 现在识别 `LAN_DUAL_WINDOWS_SCREEN_MODE=wgc`，并在 `/discovery.capabilities.screen.requestedMode`、`screen.wgc`、`session_answer.requestedScreenMode`、`wgcFallbackReason` 和 `video_frame.requestedScreenMode` 中暴露请求状态。
+- 当前不会伪装成真正 WGC 采集：`screen.wgc.backendImplemented=false`，预检通过时也会明确说明 WGC backend 尚未实装并降级到 FFmpeg/System.Drawing/mock。
+- `check-windows-wgc-support.mjs` 的 WMI OS/GPU 详情读取失败现在只作为 note，不再让 WGC WinRT 预检整体失败。
+- `start-windows-host.mjs`、`start-windows-host.ps1`、`observe-windows-host-video.mjs`、`observe-windows-host-media.mjs` 已接受/记录 `wgc` 模式；视频观察脚本支持 `--minFps 0` 用于诊断-only fallback 检查。
+- Windows host README、CURRENT_STATUS、NEXT_ACTIONS 和 ACTIVE_LOCKS 已同步 WGC 入口状态。
+修改文件：
+- `apps/windows-host/src/windows-screen-capture.mjs`
+- `apps/windows-host/src/windows-host-service.mjs`
+- `scripts/windows/check-windows-wgc-support.mjs`
+- `scripts/windows/observe-windows-host-video.mjs`
+- `scripts/windows/observe-windows-host-media.mjs`
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/test-windows-wgc-mode.mjs`
+- `apps/windows-host/README.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-wgc-support.mjs`
+- `node scripts/windows/check-windows-wgc-support.mjs --json`
+- `node scripts/windows/check-windows-wgc-support.mjs --requireSupported`
+- `npm.cmd run check` in `apps/windows-host`
+- `node scripts/windows/test-windows-wgc-mode.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-wgc-support.mjs --script observe-windows-host-video.mjs --script observe-windows-host-media.mjs --script start-windows-host.mjs`
+- `node scripts/windows/test-windows-script-help.mjs`
+- `node scripts/windows/start-windows-host.mjs --screenMode wgc --password test-password --requirePassword --dryRun`
+- `$env:LAN_DUAL_PASSWORD='test-password'; powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-windows-host.ps1 -ScreenMode wgc -RequirePassword -DryRun`
+- `node scripts/windows/observe-windows-host-video.mjs --screenMode wgc --requireRealVideo false --durationMs 6500 --minFrames 1 --minFps 0 --maxGapMs 7000 --resourceSample false --json`
+验证结果：
+- 独立 WGC 预检通过，OS/GPU/WGC IsSupported 权限或服务问题以 notes 输出，不再阻塞 requiredTypes 判断。
+- 新增 WGC 模式入口回归通过；全量 Windows 脚本 help 覆盖更新为 18 个脚本 / 36 条命令。
+- `--screenMode wgc` 观察输出 `requestedMode=wgc`、`screen.wgc.supported=true`、`backendImplemented=false`、`wgcFallbackReason=Windows Graphics Capture backend is not implemented yet (preflight passed); using FFmpeg gdigrab fallback`。
+- 当前桌面会话里的 FFmpeg/GDI 仍回退 mock，观察脚本按预期输出 `FFmpeg did not produce a JPEG frame within 5000 ms; System.Drawing CopyFromScreen fallback failed`。
+遗留问题：
+- 真实 WGC 帧采集 backend 尚未实装；本轮只打通显式模式入口、诊断和降级路径。
+下一步建议：
+- 新增真正的 WGC capture backend 时，复用现在的 `requestedMode=wgc` 和 `screen.wgc` 诊断字段，把 `backendImplemented/active` 切为 true，并用同一观察脚本对照 FFmpeg 60Hz/资源基线。
+是否改了协议：否；只新增向后兼容的可选诊断字段。
+是否需要另一端配合：暂不需要；后续真实 Mac 反控 Windows 体验验收时需要 Mac client 连接 Windows host。
+
+## 2026-06-13 Windows Codex
+
 日期：2026-06-13 13:19
 开发端：Windows Codex
 本轮目标：补强 Windows 视频观察脚本的 fallback 诊断，方便定位 FFmpeg gdigrab error 5、GDI 兜底失败和 mock 回退。

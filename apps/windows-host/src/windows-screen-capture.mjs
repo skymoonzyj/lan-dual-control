@@ -16,6 +16,7 @@ const defaultDisplays = [
 const ffmpegMode = "ffmpeg-mjpeg";
 const systemMode = "system-jpeg";
 const mockMode = "mock";
+const wgcMode = "wgc";
 
 function clampNumber(value, min, max, fallback) {
   const number = Number(value);
@@ -61,6 +62,9 @@ function normalizeScreenMode(value) {
   if (mode === "mock") {
     return mockMode;
   }
+  if (mode === "wgc" || mode === "windows-graphics-capture" || mode === "windowsgraphicscapture") {
+    return wgcMode;
+  }
   if (mode === "ffmpeg" || mode === "ffmpeg-mjpeg" || mode === "gdigrab") {
     return ffmpegMode;
   }
@@ -76,6 +80,136 @@ function parseJsonOutput(output) {
     return null;
   }
   return JSON.parse(text);
+}
+
+function makeWgcPreflightScript() {
+  return `
+$ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+function Test-WinRtType {
+  param([string]$Name, [scriptblock]$Resolver)
+  try {
+    $type = & $Resolver
+    [pscustomobject]@{ name = $Name; available = [bool]($null -ne $type); error = "" }
+  } catch {
+    [pscustomobject]@{ name = $Name; available = $false; error = [string]$_.Exception.Message }
+  }
+}
+
+$osCaption = ""
+$osVersion = ""
+$osBuild = 0
+$osError = ""
+try {
+  $os = Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
+  $osCaption = [string]$os.Caption
+  $osVersion = [string]$os.Version
+  $osBuild = [int]$os.BuildNumber
+} catch {
+  $osError = [string]$_.Exception.Message
+}
+
+$graphicsCaptureItem = Test-WinRtType "Windows.Graphics.Capture.GraphicsCaptureItem" {
+  [Windows.Graphics.Capture.GraphicsCaptureItem, Windows.Graphics.Capture, ContentType=WindowsRuntime]
+}
+$graphicsCaptureSession = Test-WinRtType "Windows.Graphics.Capture.GraphicsCaptureSession" {
+  [Windows.Graphics.Capture.GraphicsCaptureSession, Windows.Graphics.Capture, ContentType=WindowsRuntime]
+}
+$captureFramePool = Test-WinRtType "Windows.Graphics.Capture.Direct3D11CaptureFramePool" {
+  [Windows.Graphics.Capture.Direct3D11CaptureFramePool, Windows.Graphics.Capture, ContentType=WindowsRuntime]
+}
+$direct3dDevice = Test-WinRtType "Windows.Graphics.DirectX.Direct3D11.IDirect3DDevice" {
+  [Windows.Graphics.DirectX.Direct3D11.IDirect3DDevice, Windows.Graphics.DirectX.Direct3D11, ContentType=WindowsRuntime]
+}
+$sessionSupported = $null
+$sessionSupportedError = ""
+try {
+  if ($graphicsCaptureSession.available) {
+    $sessionSupported = [Windows.Graphics.Capture.GraphicsCaptureSession, Windows.Graphics.Capture, ContentType=WindowsRuntime]::IsSupported()
+  }
+} catch {
+  $sessionSupportedError = [string]$_.Exception.Message
+}
+
+[pscustomobject]@{
+  osBuild = [int]$osBuild
+  osCaption = [string]$osCaption
+  osVersion = [string]$osVersion
+  osError = [string]$osError
+  winrtTypes = @($graphicsCaptureItem, $graphicsCaptureSession, $captureFramePool, $direct3dDevice)
+  graphicsCaptureSessionIsSupported = $sessionSupported
+  graphicsCaptureSessionIsSupportedError = $sessionSupportedError
+} | ConvertTo-Json -Depth 5 -Compress
+`;
+}
+
+function checkWgcSupportSync(logger) {
+  const requiredTypes = [
+    "Windows.Graphics.Capture.GraphicsCaptureItem",
+    "Windows.Graphics.Capture.GraphicsCaptureSession",
+    "Windows.Graphics.Capture.Direct3D11CaptureFramePool",
+    "Windows.Graphics.DirectX.Direct3D11.IDirect3DDevice",
+  ];
+  const result = {
+    supported: false,
+    osBuild: 0,
+    sessionSupported: null,
+    missingTypes: [],
+    blockers: [],
+    notes: [],
+  };
+
+  if (process.platform !== "win32") {
+    result.blockers.push(`platform ${process.platform} is not Windows`);
+    return result;
+  }
+
+  const probe = spawnSync(
+    "powershell.exe",
+    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", makeWgcPreflightScript()],
+    {
+      encoding: "utf8",
+      timeout: 4000,
+      windowsHide: true,
+    },
+  );
+
+  if (probe.error || probe.status !== 0) {
+    const message = probe.error?.message || probe.stderr?.trim() || `exit ${probe.status}`;
+    result.blockers.push(`WGC preflight failed: ${message}`);
+    logger?.warn(`Windows Graphics Capture 检查失败，继续使用过渡采集层：${message}`);
+    return result;
+  }
+
+  try {
+    const parsed = parseJsonOutput(probe.stdout) || {};
+    const osBuild = Number(parsed.osBuild) || 0;
+    const types = Array.isArray(parsed.winrtTypes) ? parsed.winrtTypes : [];
+    result.osBuild = osBuild;
+    result.sessionSupported = parsed.graphicsCaptureSessionIsSupported ?? null;
+    result.missingTypes = requiredTypes.filter((name) => !types.find((type) => type.name === name && type.available));
+    if (osBuild > 0 && osBuild < 17134) {
+      result.blockers.push(`Windows build ${osBuild} < 17134`);
+    }
+    if (result.missingTypes.length > 0) {
+      result.blockers.push(`missing WinRT type(s): ${result.missingTypes.join(", ")}`);
+    }
+    if (parsed.graphicsCaptureSessionIsSupported === false) {
+      result.blockers.push("GraphicsCaptureSession.IsSupported() returned false");
+    }
+    if (parsed.graphicsCaptureSessionIsSupportedError) {
+      result.notes.push(`GraphicsCaptureSession.IsSupported() check unavailable: ${parsed.graphicsCaptureSessionIsSupportedError}`);
+    }
+    if (parsed.osError) {
+      result.notes.push(`Windows OS detail unavailable: ${parsed.osError}`);
+    }
+    result.supported = result.blockers.length === 0;
+  } catch (error) {
+    result.blockers.push(`WGC preflight JSON parse failed: ${error.message}`);
+  }
+
+  return result;
 }
 
 function makePowerShellDisplayScript() {
@@ -312,6 +446,8 @@ export class WindowsScreenCaptureCoordinator {
     this.requestedMode = normalizeScreenMode(process.env.LAN_DUAL_WINDOWS_SCREEN_MODE);
     this.ffmpegCommand = process.env.LAN_DUAL_FFMPEG || "ffmpeg";
     this.ffmpegAvailable = hasFfmpegGdigrabSync({ ffmpegCommand: this.ffmpegCommand, logger });
+    this.wgcPreflight = this.requestedMode === wgcMode ? checkWgcSupportSync(logger) : null;
+    this.wgcFallbackReason = "";
     this.mode = this.resolveMode();
     this.jpegQualityOverride = hasConfiguredValue(process.env.LAN_DUAL_WINDOWS_JPEG_QUALITY)
       ? normalizeJpegQuality(process.env.LAN_DUAL_WINDOWS_JPEG_QUALITY)
@@ -338,6 +474,19 @@ export class WindowsScreenCaptureCoordinator {
 
   resolveMode() {
     if (this.requestedMode === mockMode) {
+      return mockMode;
+    }
+
+    if (this.requestedMode === wgcMode) {
+      const blockers = this.wgcPreflight?.blockers || [];
+      const supportStatus = this.wgcPreflight?.supported
+        ? "preflight passed"
+        : `preflight blocked: ${blockers.join("; ") || "unknown reason"}`;
+      this.wgcFallbackReason = `Windows Graphics Capture backend is not implemented yet (${supportStatus}); using ${this.ffmpegAvailable ? "FFmpeg gdigrab" : "PowerShell/System.Drawing"} fallback`;
+      this.logger?.warn(this.wgcFallbackReason);
+      if (process.platform === "win32") {
+        return this.ffmpegAvailable ? ffmpegMode : systemMode;
+      }
       return mockMode;
     }
 
@@ -370,19 +519,42 @@ export class WindowsScreenCaptureCoordinator {
     return {
       available: usingFfmpegCapture || usingSystemCapture,
       mode: this.mode,
+      requestedMode: this.requestedMode,
       capturePipeline: usingFfmpegCapture
         ? "windows-ffmpeg-gdigrab-mjpeg"
         : usingSystemCapture
           ? "windows-gdi-jpeg"
           : "mock-svg",
       plannedBackend: "Windows Graphics Capture",
+      wgc: this.wgcPreflight
+        ? {
+            requested: this.requestedMode === wgcMode,
+            supported: Boolean(this.wgcPreflight.supported),
+            active: false,
+            backendImplemented: false,
+            fallbackReason: this.wgcFallbackReason,
+            osBuild: this.wgcPreflight.osBuild,
+            sessionSupported: this.wgcPreflight.sessionSupported,
+            missingTypes: this.wgcPreflight.missingTypes,
+            blockers: this.wgcPreflight.blockers,
+            notes: this.wgcPreflight.notes,
+          }
+        : {
+            requested: false,
+            supported: false,
+            active: false,
+            backendImplemented: false,
+            fallbackReason: "",
+            blockers: [],
+            notes: [],
+          },
       displays: this.getDisplays(),
       message: usingFfmpegCapture
         ? "当前使用 FFmpeg gdigrab 持续采集 MJPEG 帧；后续可升级为 Windows Graphics Capture。"
         : usingSystemCapture
           ? "当前使用 Windows 系统截图 JPEG 帧；后续可升级为 Windows Graphics Capture。"
           : "当前为骨架模式，先发送模拟视频帧。",
-      lastCaptureError: this.lastFailure,
+      lastCaptureError: this.lastFailure || this.wgcFallbackReason,
     };
   }
 
@@ -489,6 +661,8 @@ export class WindowsScreenCaptureCoordinator {
       displayName: activeDisplay.name,
       hostMode: this.makeHostMode(),
       capturePipeline: this.getCapturePipeline(),
+      requestedScreenMode: this.requestedMode,
+      wgcFallbackReason: this.wgcFallbackReason,
     };
   }
 
@@ -523,6 +697,8 @@ export class WindowsScreenCaptureCoordinator {
       videoEncoding: "data-url",
       hostMode: this.makeHostMode(),
       capturePipeline: this.getCapturePipeline(),
+      requestedScreenMode: this.requestedMode,
+      wgcFallbackReason: this.wgcFallbackReason,
     };
   }
 
@@ -773,6 +949,8 @@ export class WindowsScreenCaptureCoordinator {
       keyFrame: true,
       source: "screen",
       capturePipeline: "windows-ffmpeg-gdigrab-mjpeg",
+      requestedScreenMode: this.requestedMode,
+      streamFallbackReason: this.wgcFallbackReason,
       droppedFrames: Math.max(0, sourceFrameId - previousServedFrameId - 1),
       payloadBytes: payload.length,
       dataUrl: `data:image/jpeg;base64,${payload.toString("base64")}`,
@@ -819,6 +997,8 @@ export class WindowsScreenCaptureCoordinator {
       keyFrame: true,
       source: "screen",
       capturePipeline: "windows-gdi-jpeg",
+      requestedScreenMode: this.requestedMode,
+      streamFallbackReason: this.wgcFallbackReason,
       droppedFrames: 0,
       payloadBytes: Number(frame.payloadBytes) || 0,
       dataUrl: `data:image/jpeg;base64,${frame.dataBase64}`,
@@ -876,6 +1056,7 @@ export class WindowsScreenCaptureCoordinator {
       source: "mock",
       capturePipeline,
       streamFallbackReason: fallbackReason,
+      requestedScreenMode: this.requestedMode,
       droppedFrames: 0,
       dataUrl: `data:image/svg+xml;base64,${Buffer.from(svg, "utf8").toString("base64")}`,
     };

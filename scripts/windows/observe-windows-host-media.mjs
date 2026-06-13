@@ -85,7 +85,7 @@ Options:
   --maxGapMs <ms>                       Fail if max receive gap is higher
   --maxFrameAgeMs <ms>                  Fail if frame timestamp age is higher
   --requireMonotonicTimestamp false     Disable timestamp monotonicity checks
-  --videoScreenMode <auto|ffmpeg|system|mock>
+  --videoScreenMode <auto|ffmpeg|system|mock|wgc>
   --audioMode <wasapi|directshow|mock>
   --audioScreenMode <mode>              Temporary audio host screen mode
   --resourceSample false                Disable local Windows host resource sampling

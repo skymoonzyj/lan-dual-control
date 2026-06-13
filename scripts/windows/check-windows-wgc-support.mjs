@@ -89,22 +89,34 @@ function Test-WinRtType {
   }
 }
 
-$os = Get-CimInstance Win32_OperatingSystem |
-  Select-Object Caption, Version, BuildNumber, OSArchitecture
+$os = $null
+$osError = ""
+try {
+  $os = Get-CimInstance Win32_OperatingSystem |
+    Select-Object Caption, Version, BuildNumber, OSArchitecture
+} catch {
+  $osError = [string]$_.Exception.Message
+}
 
-$gpus = @(Get-CimInstance Win32_VideoController | ForEach-Object {
-  $pnp = [string]$_.PNPDeviceID
-  $name = [string]$_.Name
-  $virtual = ($pnp -like "ROOT\DISPLAY\*") -or ($name -match "Virtual|Parsec|ToDesk|Oray|GameViewer|MuMu")
-  [pscustomobject]@{
-    name = $name
-    driverVersion = [string]$_.DriverVersion
-    adapterRam = if ($null -ne $_.AdapterRAM) { [int64]$_.AdapterRAM } else { $null }
-    pnpDeviceId = $pnp
-    hardwareAdapter = [bool]($pnp -like "PCI\*")
-    virtualAdapter = [bool]$virtual
-  }
-})
+$gpuError = ""
+$gpus = @()
+try {
+  $gpus = @(Get-CimInstance Win32_VideoController | ForEach-Object {
+    $pnp = [string]$_.PNPDeviceID
+    $name = [string]$_.Name
+    $virtual = ($pnp -like "ROOT\DISPLAY\*") -or ($name -match "Virtual|Parsec|ToDesk|Oray|GameViewer|MuMu")
+    [pscustomobject]@{
+      name = $name
+      driverVersion = [string]$_.DriverVersion
+      adapterRam = if ($null -ne $_.AdapterRAM) { [int64]$_.AdapterRAM } else { $null }
+      pnpDeviceId = $pnp
+      hardwareAdapter = [bool]($pnp -like "PCI\*")
+      virtualAdapter = [bool]$virtual
+    }
+  })
+} catch {
+  $gpuError = [string]$_.Exception.Message
+}
 
 $graphicsCaptureItem = Test-WinRtType "Windows.Graphics.Capture.GraphicsCaptureItem" {
   [Windows.Graphics.Capture.GraphicsCaptureItem, Windows.Graphics.Capture, ContentType=WindowsRuntime]
@@ -132,15 +144,17 @@ try {
 [pscustomobject]@{
   platform = "win32"
   os = [pscustomobject]@{
-    caption = [string]$os.Caption
-    version = [string]$os.Version
-    buildNumber = [int]$os.BuildNumber
-    architecture = [string]$os.OSArchitecture
+    caption = if ($null -ne $os) { [string]$os.Caption } else { "" }
+    version = if ($null -ne $os) { [string]$os.Version } else { "" }
+    buildNumber = if ($null -ne $os) { [int]$os.BuildNumber } else { 0 }
+    architecture = if ($null -ne $os) { [string]$os.OSArchitecture } else { "" }
+    error = [string]$osError
   }
   winrtTypes = @($graphicsCaptureItem, $graphicsCaptureSession, $captureFramePool, $direct3dDevice)
   graphicsCaptureSessionIsSupported = $sessionSupported
   graphicsCaptureSessionIsSupportedError = $sessionSupportedError
   gpus = $gpus
+  gpuError = [string]$gpuError
 } | ConvertTo-Json -Depth 6 -Compress
 `;
 }
@@ -234,11 +248,17 @@ function summarizeProbe(probe) {
   if (osBuild === 0) {
     notes.push("Windows build number was not reported");
   }
+  if (probe.os?.error) {
+    notes.push(`Windows OS detail unavailable: ${probe.os.error}`);
+  }
   if (sessionSupported == null && !probe.graphicsCaptureSessionIsSupportedError) {
     notes.push("GraphicsCaptureSession.IsSupported() did not return a value");
   }
   if (probe.graphicsCaptureSessionIsSupportedError) {
     notes.push(`GraphicsCaptureSession.IsSupported() check unavailable: ${probe.graphicsCaptureSessionIsSupportedError}`);
+  }
+  if (probe.gpuError) {
+    notes.push(`GPU detail unavailable: ${probe.gpuError}`);
   }
   if (gpus.length === 0) {
     notes.push("No Win32 video controllers were reported");

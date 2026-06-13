@@ -85,7 +85,7 @@ function parseArgs(argv) {
   args.host = String(args.host || defaults.host).trim();
   args.port = clampInteger(args.port, 1, 65535, defaults.port);
   args.timeoutMs = clampInteger(args.timeoutMs, 1000, 60000, defaults.timeoutMs);
-  args.screenMode = normalizeMode(args.screenMode, ["auto", "ffmpeg", "system", "mock"], "");
+  args.screenMode = normalizeMode(args.screenMode, ["auto", "ffmpeg", "system", "mock", "wgc"], "");
   args.audioMode = normalizeMode(args.audioMode, ["mock", "wasapi", "dshow"], "");
   args.inputMode = normalizeMode(args.inputMode, ["auto", "log", "system"], "");
   args.ffmpeg = resolveFfmpegCommand(String(args.ffmpeg || "").trim());
@@ -106,7 +106,7 @@ Options:
   --host <host>           Bind host. Default: 0.0.0.0
   --port <port>           Port. Default: 43770
   --password <value>      Set LAN_DUAL_PASSWORD for this run. The value is not printed.
-  --screenMode <mode>     auto | ffmpeg | system | mock
+  --screenMode <mode>     auto | ffmpeg | system | mock | wgc
   --audioMode <mode>      mock | wasapi | dshow
   --inputMode <mode>      auto | log | system
   --ffmpeg <path>         FFmpeg path. Auto-detects C:\\DevTools\\ffmpeg\\bin\\ffmpeg.exe

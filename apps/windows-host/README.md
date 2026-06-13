@@ -131,6 +131,7 @@ $env:LAN_DUAL_WINDOWS_SCREEN_MODE="auto"   # 默认，Windows 优先 FFmpeg gdig
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="mock"   # 强制模拟视频帧
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="ffmpeg" # 强制 FFmpeg gdigrab MJPEG
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="system" # 强制 Windows 系统截图 JPEG
+$env:LAN_DUAL_WINDOWS_SCREEN_MODE="wgc"    # 显式请求 Windows Graphics Capture；当前只做预检和降级诊断
 $env:LAN_DUAL_FFMPEG="C:\DevTools\ffmpeg\bin\ffmpeg.exe" # 可选；PATH 不稳定时显式指定 FFmpeg
 $env:LAN_DUAL_WINDOWS_JPEG_QUALITY="70"    # 强制覆盖 JPEG 质量，35-92；不设置时按 qualityPreset/maxBandwidthKbps 自动计算
 $env:LAN_DUAL_WINDOWS_MAX_SCREEN_FPS="30"  # 可选：FFmpeg 默认上限 60，1-60；想省资源时可降到 30；system 模式默认 4，1-8
@@ -324,6 +325,12 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 默认临时使用 `127.0.0.1:43772`；如果该端口已被其他自检占用，脚本会自动换一个临时空闲端口。需要连接已运行的 Windows host 时再加 `--useExisting --host 127.0.0.1 --port 43770`。脚本会自动识别 `C:\DevTools\ffmpeg\bin\ffmpeg.exe`，也可以显式传入 `--ffmpeg C:\DevTools\ffmpeg\bin\ffmpeg.exe`。在本机临时 host 或本机已运行 host 上，脚本还会默认采样 Windows host 主进程的 CPU、工作集、私有内存、句柄和线程；需要把 FFmpeg 子进程也纳入总资源对照时，加 `--resourceSampleTree true`，不需要资源采样时加 `--resourceSample false`。
 
 如果视频回退到 mock 或系统截图兜底，观察脚本会在 JSON 的 `observation.fallbackReasons` 和文本输出里带出 `streamFallbackReason` / `lastCaptureError`。因此遇到 `windows-ffmpeg-gdigrab-fallback-mock` 时，优先看这里区分是 FFmpeg 超时、`gdigrab` 权限/桌面捕获错误，还是 System.Drawing 兜底也失败。
+
+需要验证 WGC 切换入口时，可以先用 `--screenMode wgc --requireRealVideo false --json`。当前不会把过渡采集伪装成真正 WGC：`/discovery.capabilities.screen.requestedMode` 会显示 `wgc`，`screen.wgc.backendImplemented=false`，`wgcFallbackReason` 会说明 WGC 预检结果以及已降级到 FFmpeg/System.Drawing/mock。真正 WGC 后端接入后，再用同一观察脚本对照 FFmpeg 基线。
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-mode.mjs
+```
 
 需要对照码率和 JPEG 质量时：
 
