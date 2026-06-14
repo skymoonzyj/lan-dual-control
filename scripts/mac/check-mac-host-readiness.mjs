@@ -1,7 +1,5 @@
 #!/usr/bin/env node
-import http from "node:http";
 import { spawn, spawnSync } from "node:child_process";
-import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -35,11 +33,6 @@ const profileDescriptions = {
   deploy: "require reachable current-build host, control permissions, input monitoring, H.264, PCM, and safe input-log smoke",
   deep: "deploy profile plus start-helper temporary-port self-test",
 };
-
-const hostRuntimePaths = [
-  "apps/mac-host/Package.swift",
-  "apps/mac-host/Sources",
-];
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -192,32 +185,6 @@ function getGitBuildId() {
     timeout: 3000,
   });
   return result.status === 0 ? normalizedText(result.stdout) : "";
-}
-
-function getChangedHostRuntimeFiles(fromBuildId, toBuildId) {
-  const from = normalizedText(fromBuildId);
-  const to = normalizedText(toBuildId || "HEAD") || "HEAD";
-  if (!from) return null;
-  const revParse = spawnSync("git", ["rev-parse", "--verify", "--quiet", `${from}^{commit}`], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    timeout: 3000,
-  });
-  if (revParse.status !== 0) {
-    return null;
-  }
-  const diff = spawnSync("git", ["diff", "--name-only", `${from}..${to}`, "--", ...hostRuntimePaths], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    timeout: 3000,
-  });
-  if (diff.status !== 0) {
-    return null;
-  }
-  return diff.stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
 }
 
 function print(kind, text, args) {
@@ -400,33 +367,6 @@ async function runCustomStep(results, args, label, callback) {
   }
 }
 
-function requestJson(url, timeoutMs) {
-  return new Promise((resolveRequest, rejectRequest) => {
-    const request = http.get(url, { timeout: timeoutMs }, (response) => {
-      let body = "";
-      response.setEncoding("utf8");
-      response.on("data", (chunk) => {
-        body += chunk;
-      });
-      response.on("end", () => {
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-          rejectRequest(new Error(`HTTP ${response.statusCode}`));
-          return;
-        }
-        try {
-          resolveRequest(JSON.parse(body));
-        } catch {
-          rejectRequest(new Error("discovery returned invalid JSON"));
-        }
-      });
-    });
-    request.on("timeout", () => {
-      request.destroy(new Error(`timeout after ${timeoutMs}ms`));
-    });
-    request.on("error", rejectRequest);
-  });
-}
-
 function formatRuntime(runtime) {
   if (!runtime || typeof runtime !== "object") return "runtime=missing";
   const parts = [];
@@ -454,12 +394,74 @@ function discoveryInputMode(discovery) {
   return discovery?.capabilities?.inputMode || discovery?.capabilities?.input?.mode || discovery?.inputMode || "unknown";
 }
 
+function parseJsonOutput(text, label) {
+  try {
+    return JSON.parse(String(text || "").trim());
+  } catch (error) {
+    throw new Error(`${label} did not print valid JSON: ${error.message}`);
+  }
+}
+
+function buildMismatchMessage(buildDiff) {
+  if (!buildDiff || buildDiff.differs !== true) return "";
+  const from = buildDiff.fromBuildId || "missing";
+  const to = buildDiff.toBuildId || "missing";
+  const rawDetail = normalizedText(buildDiff.message).replace(/[.。]+$/, "");
+  const detail = rawDetail ? `; ${rawDetail.charAt(0).toLowerCase()}${rawDetail.slice(1)}` : "";
+  return `running host build ${from} differs from current git ${to}${detail}; restart with scripts/mac/start-mac-host.mjs after coordinating if you need the latest build`;
+}
+
+async function getStatusPayload(args) {
+  const statusArgs = [
+    "scripts/mac/start-mac-host.mjs",
+    "--status",
+    "--json",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--timeoutMs",
+    String(args.timeoutMs),
+  ];
+  if (args.currentBuildId) {
+    statusArgs.push("--buildId", args.currentBuildId);
+  }
+
+  const result = await runCommand("Mac host status helper JSON", process.execPath, statusArgs, {
+    timeoutMs: Math.max(args.timeoutMs, 8000),
+  });
+  const stdout = String(result.stdout || "").trim();
+  if (!stdout) {
+    throw new Error(`Mac host status helper printed no JSON output: ${result.summary || `exit ${result.exitCode}`}`);
+  }
+  return {
+    payload: parseJsonOutput(stdout, "Mac host status helper"),
+    result,
+  };
+}
+
 async function checkDiscovery(args) {
   try {
-    const discovery = await requestJson(`http://${args.host}:${args.port}/discovery`, Math.min(args.timeoutMs, 3000));
-    const input = discoveryInputMode(discovery);
-    const runtime = discovery.runtime || {};
-    const permissions = discovery.permissions || {};
+    const { payload: statusPayload } = await getStatusPayload(args);
+    if (statusPayload.online !== true) {
+      const probe = statusPayload.probe || { host: args.host, port: args.port };
+      const errorMessage = statusPayload.error?.message || "offline";
+      const summary = `/discovery not reachable on ${probe.host}:${probe.port}: ${errorMessage}`;
+      if (args.requireOpen) {
+        return { ok: false, summary, errors: [summary] };
+      }
+      return {
+        ok: true,
+        summary: `${summary}; start with scripts/mac/start-mac-host.mjs when ready`,
+        warnings: [summary],
+      };
+    }
+
+    const discovery = statusPayload.discovery || {};
+    const input = statusPayload.inputMode || discoveryInputMode(discovery);
+    const runtime = statusPayload.runtime || discovery.runtime || {};
+    const permissions = statusPayload.permissions || discovery.permissions || {};
+    const buildDiff = statusPayload.buildDiff || {};
     const warnings = [];
     const errors = [];
     if (args.expectBuildId && runtime.buildId !== args.expectBuildId) {
@@ -472,17 +474,8 @@ async function checkDiscovery(args) {
     if (args.requireCurrentBuildId && !runtime.buildId) {
       errors.push("runtime.buildId is required to check the running host against current git");
     }
-    if (!args.skipCurrentBuildCheck && args.currentBuildId && runtime.buildId && runtime.buildId !== args.currentBuildId) {
-      const changedHostFiles = getChangedHostRuntimeFiles(runtime.buildId, args.currentBuildId);
-      const hostSourceSummary =
-        Array.isArray(changedHostFiles) && changedHostFiles.length > 0
-          ? `; host runtime changes since ${runtime.buildId}: ${changedHostFiles.slice(0, 4).join(", ")}${
-              changedHostFiles.length > 4 ? ` (+${changedHostFiles.length - 4} more)` : ""
-            }`
-          : Array.isArray(changedHostFiles)
-            ? `; no Mac host runtime source changes since ${runtime.buildId}`
-            : "";
-      const message = `running host build ${runtime.buildId} differs from current git ${args.currentBuildId}${hostSourceSummary}; restart with scripts/mac/start-mac-host.mjs after coordinating if you need the latest build`;
+    if (!args.skipCurrentBuildCheck && buildDiff.differs === true) {
+      const message = buildMismatchMessage(buildDiff);
       warnings.push(message);
       if (args.requireCurrentBuildId) {
         errors.push(message);
