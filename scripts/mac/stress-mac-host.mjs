@@ -24,6 +24,22 @@ const defaults = {
   expectInputMode: "log",
   sampleProcess: os.platform() === "darwin",
   probeScript: path.join(repoRoot, "scripts", "windows", "probe-mac-host.mjs"),
+  json: false,
+};
+
+const runState = {
+  args: null,
+  target: null,
+  probeScript: null,
+  process: {
+    listenerPid: null,
+    startSample: null,
+    endSample: null,
+    delta: null,
+  },
+  results: [],
+  summary: null,
+  suiteStartedAt: null,
 };
 
 function parseArgs(argv) {
@@ -57,6 +73,7 @@ function parseArgs(argv) {
   args.sampleProcess = booleanArg(args.sampleProcess, defaults.sampleProcess);
   args.expectInputMode = String(args.expectInputMode || "").trim().toLowerCase();
   args.probeScript = path.resolve(String(args.probeScript || defaults.probeScript));
+  args.json = booleanArg(args.json, defaults.json);
   return args;
 }
 
@@ -77,7 +94,12 @@ function booleanArg(value, fallback = false) {
 }
 
 function print(status, text) {
-  console.log(`[${status}] ${text}`);
+  const line = `[${status}] ${text}`;
+  if (runState.args?.json) {
+    console.error(line);
+    return;
+  }
+  console.log(line);
 }
 
 function formatMs(ms) {
@@ -181,6 +203,18 @@ function formatSample(sample) {
   return details.join(", ");
 }
 
+function makeProcessDelta(start, end) {
+  if (!start || !end) return null;
+  const delta = {};
+  if (Number.isFinite(start.rssKb) && Number.isFinite(end.rssKb)) {
+    delta.rssKb = end.rssKb - start.rssKb;
+  }
+  if (Number.isFinite(start.fdCount) && Number.isFinite(end.fdCount)) {
+    delta.fdCount = end.fdCount - start.fdCount;
+  }
+  return Object.keys(delta).length > 0 ? delta : null;
+}
+
 function formatDelta(start, end) {
   if (!start || !end) return "";
   const deltas = [];
@@ -206,6 +240,27 @@ function summarizeMetric(name, values) {
   return `${name} min/avg/max=${formatMetric(min)}/${formatMetric(avg)}/${formatMetric(max)}`;
 }
 
+function summarizeMetricObject(values) {
+  const finiteValues = values.filter(Number.isFinite);
+  if (finiteValues.length === 0) {
+    return {
+      count: 0,
+      minMs: null,
+      avgMs: null,
+      maxMs: null,
+    };
+  }
+  const min = Math.min(...finiteValues);
+  const max = Math.max(...finiteValues);
+  const avg = finiteValues.reduce((sum, value) => sum + value, 0) / finiteValues.length;
+  return {
+    count: finiteValues.length,
+    minMs: Math.round(min),
+    avgMs: Number(avg.toFixed(2)),
+    maxMs: Math.round(max),
+  };
+}
+
 function formatTimings(timings) {
   const parts = [];
   if (Number.isFinite(timings.firstFrameMs)) parts.push(`firstFrame=${formatMetric(timings.firstFrameMs)}`);
@@ -221,6 +276,23 @@ function assertTimingThreshold(label, actualMs, thresholdMs) {
   }
   if (actualMs <= thresholdMs) return;
   throw new Error(`${label} ${formatMetric(actualMs)} exceeded threshold ${formatMetric(thresholdMs)}`);
+}
+
+function redactSensitiveText(text, args) {
+  let output = String(text || "");
+  const password = String(args?.password || "");
+  if (password) {
+    output = output.split(password).join("[redacted-password]");
+  }
+  return output;
+}
+
+function outputTail(text, args) {
+  return redactSensitiveText(text, args)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(-8);
 }
 
 function buildProbeArgs(args) {
@@ -257,28 +329,125 @@ async function runProbe(iteration, args) {
     if (Number.isFinite(timings[key])) return;
     timings[key] = performance.now() - started;
   };
-  const result = await runCommand(process.execPath, buildProbeArgs(args), {
-    timeoutMs: args.timeoutMs + 5000,
-    onStdoutLine: (line) => {
-      if (/\[OK\] First frame:/.test(line)) recordTiming("firstFrameMs");
-      if (/\[OK\] H\.264 video confirmed:/.test(line)) recordTiming("h264ConfirmMs");
-      if (/\[OK\] Audio frame confirmed:/.test(line)) recordTiming("audioFrameMs");
-    },
-  });
+  let result;
+  try {
+    result = await runCommand(process.execPath, buildProbeArgs(args), {
+      timeoutMs: args.timeoutMs + 5000,
+      onStdoutLine: (line) => {
+        if (/\[OK\] First frame:/.test(line)) recordTiming("firstFrameMs");
+        if (/\[OK\] H\.264 video confirmed:/.test(line)) recordTiming("h264ConfirmMs");
+        if (/\[OK\] Audio frame confirmed:/.test(line)) recordTiming("audioFrameMs");
+      },
+    });
+  } catch (error) {
+    error.probeResult = {
+      iteration,
+      ok: false,
+      exitCode: null,
+      durationMs: Math.round(performance.now() - started),
+      timings: sanitizeTimings(timings),
+      highlights: "",
+      stdoutTail: [],
+      stderrTail: [redactSensitiveText(error.message, args)].filter(Boolean),
+    };
+    throw error;
+  }
   const durationMs = performance.now() - started;
+  const probeResult = {
+    iteration,
+    ok: result.code === 0,
+    exitCode: result.code,
+    durationMs: Math.round(durationMs),
+    timings: sanitizeTimings(timings),
+    highlights: extractHighlights(result.stdout),
+    stdoutTail: outputTail(result.stdout, args),
+    stderrTail: outputTail(result.stderr, args),
+  };
   if (result.code !== 0) {
     const details = [result.stdout.trim(), result.stderr.trim()].filter(Boolean).join("\n");
-    throw new Error(`probe #${iteration} failed with exit ${result.code}\n${details}`);
+    const error = new Error(`probe #${iteration} failed with exit ${result.code}\n${redactSensitiveText(details, args)}`);
+    error.probeResult = probeResult;
+    throw error;
   }
-  assertTimingThreshold(`probe #${iteration} total`, durationMs, args.maxProbeMs);
-  assertTimingThreshold(`probe #${iteration} first frame`, timings.firstFrameMs, args.maxFirstFrameMs);
-  assertTimingThreshold(`probe #${iteration} H.264 confirm`, timings.h264ConfirmMs, args.maxH264ConfirmMs);
-  assertTimingThreshold(`probe #${iteration} audio frame`, timings.audioFrameMs, args.maxAudioFrameMs);
+  try {
+    assertTimingThreshold(`probe #${iteration} total`, durationMs, args.maxProbeMs);
+    assertTimingThreshold(`probe #${iteration} first frame`, timings.firstFrameMs, args.maxFirstFrameMs);
+    assertTimingThreshold(`probe #${iteration} H.264 confirm`, timings.h264ConfirmMs, args.maxH264ConfirmMs);
+    assertTimingThreshold(`probe #${iteration} audio frame`, timings.audioFrameMs, args.maxAudioFrameMs);
+  } catch (error) {
+    probeResult.ok = false;
+    error.probeResult = probeResult;
+    throw error;
+  }
+  delete probeResult.stdoutTail;
+  delete probeResult.stderrTail;
+  return probeResult;
+}
+
+function sanitizeTimings(timings) {
   return {
-    durationMs,
-    timings,
-    highlights: extractHighlights(result.stdout),
+    firstFrameMs: Number.isFinite(timings.firstFrameMs) ? Math.round(timings.firstFrameMs) : null,
+    h264ConfirmMs: Number.isFinite(timings.h264ConfirmMs) ? Math.round(timings.h264ConfirmMs) : null,
+    audioFrameMs: Number.isFinite(timings.audioFrameMs) ? Math.round(timings.audioFrameMs) : null,
   };
+}
+
+function sanitizeArgs(args) {
+  return {
+    host: args.host,
+    port: String(args.port),
+    iterations: args.iterations,
+    delayMs: args.delayMs,
+    timeoutMs: args.timeoutMs,
+    maxProbeMs: args.maxProbeMs,
+    maxFirstFrameMs: args.maxFirstFrameMs,
+    maxH264ConfirmMs: args.maxH264ConfirmMs,
+    maxAudioFrameMs: args.maxAudioFrameMs,
+    requireH264: args.requireH264,
+    requireAudio: args.requireAudio,
+    requireRealVideo: args.requireRealVideo,
+    expectInputMode: args.expectInputMode,
+    sampleProcess: args.sampleProcess,
+    json: args.json,
+  };
+}
+
+function summarizeSuite(probeResults, totalMs) {
+  const passedIterations = probeResults.filter((result) => result.ok === true).length;
+  const failedIterations = probeResults.filter((result) => result.ok === false).length;
+  return {
+    requestedIterations: runState.args?.iterations ?? null,
+    attemptedIterations: probeResults.length,
+    completedIterations: passedIterations,
+    failedIterations,
+    totalMs: Math.round(totalMs),
+    probe: summarizeMetricObject(probeResults.map((result) => result.durationMs)),
+    firstFrame: summarizeMetricObject(probeResults.map((result) => result.timings.firstFrameMs)),
+    h264Confirm: summarizeMetricObject(probeResults.map((result) => result.timings.h264ConfirmMs)),
+    audioFrame: summarizeMetricObject(probeResults.map((result) => result.timings.audioFrameMs)),
+  };
+}
+
+function makeJsonPayload(ok, error = null) {
+  return {
+    ok,
+    target: runState.target,
+    args: runState.args ? sanitizeArgs(runState.args) : null,
+    probeScript: runState.probeScript,
+    process: runState.process,
+    results: runState.results,
+    summary: runState.summary,
+    error: error
+      ? {
+          message: error.message,
+          name: error.name,
+        }
+      : null,
+  };
+}
+
+function printJsonPayload(payload) {
+  console.log(JSON.stringify(payload, null, 2));
 }
 
 function printUsage() {
@@ -301,6 +470,7 @@ Options:
   --expectInputMode <mode>      Expected input mode. Default: log
   --sampleProcess <true|false>  Sample listener RSS/FDs with lsof/ps. Default: true on macOS
   --probeScript <path>          Override canonical probe script path.
+  --json                        Print one machine-readable JSON object to stdout.
 
 Example:
   node scripts/mac/stress-mac-host.mjs --iterations 20 --requireH264 true --requireAudio true --expectInputMode log`);
@@ -313,6 +483,12 @@ async function main() {
   }
 
   const args = parseArgs(process.argv.slice(2));
+  runState.args = args;
+  runState.target = { host: args.host, port: String(args.port) };
+  runState.probeScript = {
+    path: args.probeScript,
+    relativePath: path.relative(repoRoot, args.probeScript),
+  };
   print("INFO", `Target: ${args.host}:${args.port}`);
   print("INFO", `Probe: ${path.relative(repoRoot, args.probeScript)}`);
   print(
@@ -321,16 +497,20 @@ async function main() {
   );
 
   const pid = await findListenerPid(args);
+  runState.process.listenerPid = pid;
   const startSample = await sampleProcess(pid);
+  runState.process.startSample = startSample;
   if (args.sampleProcess) {
     print("INFO", `Start process: ${formatSample(startSample)}`);
   }
 
   const suiteStarted = performance.now();
+  runState.suiteStartedAt = suiteStarted;
   const probeResults = [];
   for (let iteration = 1; iteration <= args.iterations; iteration += 1) {
     const result = await runProbe(iteration, args);
     probeResults.push(result);
+    runState.results = probeResults;
     const timingSummary = formatTimings(result.timings);
     print(
       "OK",
@@ -344,7 +524,10 @@ async function main() {
   }
 
   const endSample = await sampleProcess(pid);
+  runState.process.endSample = endSample;
+  runState.process.delta = makeProcessDelta(startSample, endSample);
   const totalMs = performance.now() - suiteStarted;
+  runState.summary = summarizeSuite(probeResults, totalMs);
   print("OK", `Completed ${args.iterations}/${args.iterations} probes in ${formatMs(totalMs)}`);
   print(
     "INFO",
@@ -372,9 +555,19 @@ async function main() {
     const delta = formatDelta(startSample, endSample);
     if (delta) print("INFO", `Process delta: ${delta}`);
   }
+  if (args.json) printJsonPayload(makeJsonPayload(true));
 }
 
 main().catch((error) => {
+  if (error.probeResult && !runState.results.includes(error.probeResult)) {
+    runState.results = [...runState.results, error.probeResult];
+  }
+  if (!runState.summary && Number.isFinite(runState.suiteStartedAt)) {
+    runState.summary = summarizeSuite(runState.results, performance.now() - runState.suiteStartedAt);
+  }
   print("ERROR", error.message);
+  if (runState.args?.json) {
+    printJsonPayload(makeJsonPayload(false, error));
+  }
   process.exitCode = 1;
 });
