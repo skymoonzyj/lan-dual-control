@@ -88,6 +88,8 @@ Mac 本机文本剪贴板已纳入页面级自检：脚本会断言未连接/空
 
 会话诊断面板已纳入页面级自检：连接成功并出现首帧后，脚本会断言“首帧”和“视频流”指标已从等待状态更新，并在对端提供 `video_frame.timestamp` 时断言视频状态和诊断行显示“到达 <ms>”或“时钟偏差”；视频表面可以是 JPEG `<img>` 或 H.264 `<canvas>`，自检会统一识别；加 `--requireH264Video` 时，脚本会启动 `ffmpeg-h264` host 并要求页面显示 H.264 canvas，不允许回退 JPEG；加 `--expectBinaryH264Video` 时，脚本会要求页面收到 `binary-h264` 帧并保持 H.264 canvas 可见；加 `--expectBinaryVideo` 时，脚本会启动 WGC JPEG helper 并要求页面收到 `binary-jpeg` 视频帧、保持画面可见且诊断显示“二进制”；加 `--disableBinaryVideo` 时，脚本会用 `?binaryVideo=0` 关闭二进制视频并要求旧 JSON/base64 路径仍可显示；加 `--expectRepeatSignalVideo` 时，脚本会启动 WGC mock helper 并要求 `repeatPreviousFrame` 轻量重复帧保持画面可见且诊断显示“重复”；加 `--expectH264Fallback` 时，脚本会显式模拟 H.264 配置不支持，要求页面发送 MJPEG/JPEG fallback 请求并最终显示 `jpeg` 画面；临时 Windows host 也会断言 runtime 里显示 PID 和测试 build id，音频验收时也会断言音频诊断显示已接收帧；自检末尾会点击“断开”，确认连接状态、视频表面、音频状态和诊断指标回到干净初始态。
 
+视频传输矩阵已封装成 `scripts/windows/test-mac-client-video-transports.mjs`：它会顺序跑 `binary-h264`、H.264 JSON/base64 兼容路径、H.264 unsupported fallback 和 `binary-jpeg` 四组页面自检，并自动分配独立 host/client/debug 端口，避免并发抢端口。视频传输、H.264、fallback 或 binary frame 相关改动后优先跑这个脚本；本轮 Windows 本机矩阵 4/4 通过。
+
 快捷键映射已纳入页面级自检：脚本会模拟 `Command+C`，拦截页面发出的 `input_event`，断言发往 Windows 的 `ctrlKey=true`、`metaKey=false`，同时保留 `localMetaKey=true` 便于诊断。
 
 音频入口本机联调已验证：打开“播放远端声音”后，Windows host mock 音频帧会开始接收并更新状态；Windows 端可运行 `scripts/windows/test-mac-client-browser.mjs --requireAudio` 临时启用 WASAPI loopback，断言页面收到 `pcm-f32le-base64` 并出现播放计数。

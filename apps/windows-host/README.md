@@ -320,6 +320,14 @@ Mac 控制 Windows 的页面级自检可在 Windows 本机启动临时 Windows h
 node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs
 ```
 
+如果本轮改到了视频传输、H.264、fallback 或 WebSocket binary frame，优先跑视频传输矩阵。它会顺序启动 4 组临时 host/client/browser，并覆盖 `binary-h264`、H.264 JSON/base64 兼容路径、H.264 unsupported 后的 MJPEG/JPEG fallback，以及 `binary-jpeg`：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-mac-client-video-transports.mjs
+```
+
+本轮 `2026-06-14 23:55` 矩阵复验 4/4 通过：`binary-h264` 54 帧 / 909 ms / 59.4 FPS，21 个二进制 H.264 帧；H.264 JSON/base64 54 帧 / 905 ms / 59.7 FPS；H.264 fallback 53 帧 / 911 ms / 58.2 FPS；`binary-jpeg` 11 帧 / 1202 ms / 9.2 FPS。
+
 需要把真实 Windows 系统声音也纳入 Mac 控制页验收时，加 `--requireAudio`；脚本会临时设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi`，打开页面声音开关，并等待 `pcm-f32le-base64` 播放计数：
 
 ```powershell

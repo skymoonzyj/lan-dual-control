@@ -19,6 +19,48 @@
 
 ## 2026-06-14 Windows Codex
 
+日期：2026-06-14 23:55
+开发端：Windows Codex
+本轮目标：把 Mac client 视频传输四条关键路径封装成一个顺序矩阵回归，降低后续 WGC/H.264/二进制传输改动的漏测概率。
+完成内容：
+- 新增 `scripts/windows/test-mac-client-video-transports.mjs`。
+- 默认顺序运行 4 个 `test-mac-client-browser.mjs` 页面级自检：`binary-h264`、H.264 JSON/base64 兼容路径、H.264 unsupported 后 MJPEG/JPEG fallback、`binary-jpeg`。
+- 每个 case 自动分配独立 Windows host 端口、Mac client HTTP 端口和浏览器 debug 端口，避免并发或连续测试时端口互抢。
+- 支持 `--case <id>`、`--skip <id>`、`--json`、`--verbose`、`--basePort`、`--clientPort`、`--debugPort`、`--timeoutMs` 和观察窗口/阈值参数。
+- Windows host README、Mac client README、CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已同步。
+修改文件：
+- `scripts/windows/test-mac-client-video-transports.mjs`
+- `apps/windows-host/README.md`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-video-transports.mjs`
+- `node scripts/windows/test-mac-client-video-transports.mjs --help`
+- `node scripts/windows/test-windows-script-help.mjs --script test-mac-client-video-transports.mjs`
+- `node scripts/windows/test-mac-client-video-transports.mjs --timeoutMs 45000`
+- `node scripts/windows/test-mac-client-video-transports.mjs --case h264-json --json --timeoutMs 45000`
+验证结果：
+- 单脚本 help 覆盖通过：`--help` 和 `-h` 都快速 0 退出。
+- 完整视频传输矩阵 4/4 通过：
+  - `binary-h264`：54 帧 / 909ms / 59.4 FPS，21 个二进制 H.264 帧。
+  - H.264 JSON/base64：54 帧 / 905ms / 59.7 FPS。
+  - H.264 unsupported fallback：53 帧 / 911ms / 58.2 FPS。
+  - `binary-jpeg`：11 帧 / 1202ms / 9.2 FPS。
+- `--json` 单项输出通过：`h264-json` case 返回纯 JSON 摘要，56 帧 / 908ms / 61.7 FPS。
+遗留问题：
+- 这是 Windows 本机临时 host + Mac client 页面级矩阵；真实 Mac 连接真实 Windows host 的观感、带宽、延迟和 CPU 对照仍需双机联调。
+- `binary-jpeg` 仍受当前 WGC helper 静态桌面源帧节奏限制，矩阵只证明传输路径没坏，不代表源帧率已达到 60Hz。
+下一步建议：
+- 后续改视频传输、H.264、fallback、WGC repeat 或 binary frame 时优先跑 `test-mac-client-video-transports.mjs`，再继续推进 WGC H.264/硬编和真实 Mac client 观感验收。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真机观感验收需要 Mac 端后续配合。
+
+## 2026-06-14 Windows Codex
+
 日期：2026-06-14 23:20
 开发端：Windows Codex
 本轮目标：把可选 WebSocket 二进制视频帧从 JPEG 扩展到 H.264 Annex B payload，减少 `ffmpeg-h264` 路径的 base64 文本开销，同时保留旧 JSON/base64 兼容路径。
