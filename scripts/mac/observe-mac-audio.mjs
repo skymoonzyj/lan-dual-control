@@ -27,6 +27,17 @@ const defaults = {
   toneDurationMs: 1500,
   toneDelayMs: 750,
   toneVolume: 0.22,
+  json: false,
+};
+
+const runState = {
+  args: null,
+  target: null,
+  discovery: null,
+  hello: null,
+  auth: null,
+  session: null,
+  observation: null,
 };
 
 function parseArgs(argv) {
@@ -65,6 +76,7 @@ function parseArgs(argv) {
   args.toneDurationMs = positiveInteger(args.toneDurationMs, defaults.toneDurationMs);
   args.toneDelayMs = nonNegativeInteger(args.toneDelayMs, defaults.toneDelayMs);
   args.toneVolume = clamp(nonNegativeNumber(args.toneVolume, defaults.toneVolume), 0, 1);
+  args.json = booleanArg(args.json, defaults.json);
   if (args.maxFrameAgeMs > 0) {
     args.requireFrameTimestamp = true;
   }
@@ -97,7 +109,12 @@ function booleanArg(value, fallback = false) {
 }
 
 function print(status, text) {
-  console.log(`[${status}] ${text}`);
+  const line = `[${status}] ${text}`;
+  if (runState.args?.json) {
+    console.error(line);
+    return;
+  }
+  console.log(line);
 }
 
 function normalizedText(value) {
@@ -148,6 +165,7 @@ async function fetchDiscovery(args) {
     const payload = await response.json();
     const name = payload.deviceName || payload.hostName || "unknown";
     const platform = payload.platform || "unknown";
+    runState.discovery = summarizeDiscovery(payload);
     print("OK", `Discovery: ${name} / ${platform} / ${args.host}:${args.port}`);
     return payload;
   } finally {
@@ -284,6 +302,11 @@ function createAudioStats(args) {
     timestampRegressions: 0,
     invalidFrames: [],
     statuses: [],
+    codecs: new Map(),
+    encodings: new Map(),
+    sampleRates: new Map(),
+    channels: new Map(),
+    frameSizes: new Map(),
   };
 
   function addFrame(frame) {
@@ -305,6 +328,11 @@ function createAudioStats(args) {
     stats.minLevel = Math.min(stats.minLevel, level);
     stats.maxLevel = Math.max(stats.maxLevel, level);
     stats.levelTotal += level;
+    countValue(stats.codecs, frame.codec || "unknown");
+    countValue(stats.encodings, frame.encoding || "");
+    countValue(stats.sampleRates, frame.sampleRate || "");
+    countValue(stats.channels, frame.channels || "");
+    countValue(stats.frameSizes, frame.frames || "");
 
     const problems = [
       ...validateAudioFrame(frame, args),
@@ -412,6 +440,188 @@ function summarizeFrameTiming(stats) {
     parts.push(`timestamp regressions=${stats.timestampRegressions}`);
   }
   return parts;
+}
+
+function countValue(map, value) {
+  const key = String(value || "missing");
+  map.set(key, (map.get(key) || 0) + 1);
+}
+
+function countsToObject(map) {
+  return Object.fromEntries([...map.entries()].filter(([key]) => key && key !== "missing"));
+}
+
+function summarizeNumberList(values) {
+  if (!values.length) {
+    return { min: 0, avg: 0, max: 0 };
+  }
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return {
+    min: Math.min(...values),
+    avg: total / values.length,
+    max: Math.max(...values),
+  };
+}
+
+function actualFps(stats, args) {
+  const elapsedMs = stats.firstReceivedAt && stats.lastReceivedAt
+    ? Math.max(1, stats.lastReceivedAt - stats.firstReceivedAt)
+    : args.durationMs;
+  return stats.frames > 1 ? ((stats.frames - 1) * 1000) / elapsedMs : 0;
+}
+
+function makeObservation(stats, args) {
+  const elapsedMs = stats.firstReceivedAt && stats.lastReceivedAt
+    ? Math.max(1, stats.lastReceivedAt - stats.firstReceivedAt)
+    : args.durationMs;
+  const gaps = summarizeNumberList(stats.gaps);
+  const avgLevel = stats.frames > 0 ? stats.levelTotal / stats.frames : 0;
+
+  return {
+    frameCount: stats.frames,
+    firstFrameId: stats.firstFrameId,
+    lastFrameId: stats.lastFrameId,
+    elapsedMs,
+    fps: Number(actualFps(stats, args).toFixed(2)),
+    gapAvgMs: Number(gaps.avg.toFixed(2)),
+    maxGapMs: Math.round(gaps.max),
+    payloadBytes: {
+      total: stats.payloadBytes,
+      min: stats.minPayloadBytes === Number.POSITIVE_INFINITY ? 0 : stats.minPayloadBytes,
+      max: stats.maxPayloadBytes,
+      avg: stats.frames > 0 ? Math.round(stats.payloadBytes / stats.frames) : 0,
+    },
+    level: {
+      min: Number(finiteLevel(stats.minLevel).toFixed(4)),
+      avg: Number(avgLevel.toFixed(4)),
+      max: Number(finiteLevel(stats.maxLevel).toFixed(4)),
+    },
+    codecs: countsToObject(stats.codecs),
+    encodings: countsToObject(stats.encodings),
+    sampleRates: countsToObject(stats.sampleRates),
+    channels: countsToObject(stats.channels),
+    frameSizes: countsToObject(stats.frameSizes),
+    timestamp: {
+      frames: stats.timestampFrames,
+      missingFrames: stats.missingTimestampFrames,
+      ageMinMs: stats.timestampFrames > 0 ? Math.round(stats.frameAgeMinMs) : null,
+      ageAvgMs: stats.timestampFrames > 0 ? Number((stats.frameAgeTotalMs / stats.timestampFrames).toFixed(2)) : null,
+      ageMaxMs: stats.timestampFrames > 0 ? Math.round(stats.frameAgeMaxMs) : null,
+      regressions: stats.timestampRegressions,
+    },
+    audioStatusCount: stats.statuses.length,
+    lastAudioStatus: summarizeAudioStatus(stats.statuses.at(-1)),
+    invalidFrames: stats.invalidFrames,
+  };
+}
+
+function summarizeDiscovery(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const capabilities = payload.capabilities && typeof payload.capabilities === "object"
+    ? payload.capabilities
+    : {};
+  return {
+    deviceName: String(payload.deviceName || payload.hostName || "unknown"),
+    platform: String(payload.platform || "unknown"),
+    runtime: payload.runtime || null,
+    audio: {
+      available: capabilities.audio === true || capabilities.audio?.available === true,
+      mode: String(capabilities.audioMode || capabilities.audio?.mode || ""),
+      codec: String(capabilities.audioCodec || capabilities.audio?.codec || ""),
+    },
+  };
+}
+
+function summarizeHello(message) {
+  if (!message || typeof message !== "object") return null;
+  return {
+    deviceName: String(message.deviceName || message.hostName || "unknown"),
+    platform: String(message.hostPlatform || message.platform || ""),
+    runtime: message.runtime || null,
+  };
+}
+
+function summarizeAuth(message) {
+  if (!message || typeof message !== "object") return null;
+  return {
+    ok: message.ok === true,
+    reason: String(message.reason || message.message || ""),
+    code: String(message.code || ""),
+    attemptsRemaining: Number.isFinite(Number(message.attemptsRemaining)) ? Number(message.attemptsRemaining) : null,
+    maxAttempts: Number.isFinite(Number(message.maxAttempts)) ? Number(message.maxAttempts) : null,
+  };
+}
+
+function summarizeSession(answer) {
+  if (!answer || typeof answer !== "object") return null;
+  return {
+    ok: answer.ok !== false,
+    audioEnabled: answer.audioEnabled === true,
+    audioCodec: String(answer.audioCodec || ""),
+    audioMode: String(answer.audioMode || ""),
+    reason: String(answer.reason || answer.message || ""),
+    code: String(answer.code || ""),
+  };
+}
+
+function summarizeAudioStatus(status) {
+  if (!status || typeof status !== "object") return null;
+  return {
+    audioMode: String(status.audioMode || ""),
+    audioCodec: String(status.audioCodec || ""),
+    status: String(status.status || status.state || ""),
+    message: String(status.message || status.reason || ""),
+    code: String(status.code || ""),
+  };
+}
+
+function summarizeArgs(args) {
+  return {
+    host: args.host,
+    port: String(args.port),
+    durationMs: args.durationMs,
+    timeoutMs: args.timeoutMs,
+    minFrames: args.minFrames,
+    maxGapMs: args.maxGapMs,
+    expectedCodec: args.expectedCodec,
+    expectedEncoding: args.expectedEncoding,
+    expectedSampleRate: args.expectedSampleRate,
+    expectedChannels: args.expectedChannels,
+    requireFrameTimestamp: args.requireFrameTimestamp,
+    maxFrameAgeMs: args.maxFrameAgeMs,
+    requireMonotonicTimestamp: args.requireMonotonicTimestamp,
+    requireLevel: args.requireLevel,
+    minLevel: args.minLevel,
+    playTone: args.playTone,
+    toneFrequency: args.toneFrequency,
+    toneDurationMs: args.toneDurationMs,
+    toneDelayMs: args.toneDelayMs,
+    toneVolume: args.toneVolume,
+    json: args.json,
+  };
+}
+
+function makeJsonPayload(ok, error = null) {
+  return {
+    ok,
+    target: runState.target,
+    args: runState.args ? summarizeArgs(runState.args) : null,
+    discovery: runState.discovery,
+    hello: runState.hello,
+    auth: runState.auth,
+    session: runState.session,
+    observation: runState.observation,
+    error: error
+      ? {
+          message: error.message,
+          name: error.name,
+        }
+      : null,
+  };
+}
+
+function printJsonPayload(payload) {
+  console.log(JSON.stringify(payload, null, 2));
 }
 
 function makeToneWav({
@@ -534,6 +744,7 @@ Options:
   --toneDurationMs <ms>         Test tone duration. Default: 1500
   --toneDelayMs <ms>            Delay after first audio frame before tone starts. Default: 750
   --toneVolume <0..1>           Test tone volume. Default: 0.22
+  --json                        Print one machine-readable JSON object to stdout.
 
 Example:
   node scripts/mac/observe-mac-audio.mjs --durationMs 10000 --minFrames 80 --maxGapMs 1000
@@ -547,6 +758,8 @@ async function main() {
   }
 
   const args = parseArgs(process.argv.slice(2));
+  runState.args = args;
+  runState.target = { host: args.host, port: String(args.port) };
   print("INFO", `Target: ${args.host}:${args.port}`);
   print(
     "INFO",
@@ -566,6 +779,7 @@ async function main() {
     protocolVersion: 1,
   });
   const hello = await client.waitFor("hello_ack", args.timeoutMs);
+  runState.hello = summarizeHello(hello);
   print("OK", `hello_ack: ${hello.deviceName || hello.hostName || "unknown"}`);
 
   client.send({
@@ -574,6 +788,7 @@ async function main() {
     password: args.password,
   });
   const auth = await client.waitFor("auth_result", args.timeoutMs);
+  runState.auth = summarizeAuth(auth);
   if (!auth.ok) {
     throw new Error(`auth failed: ${auth.reason || auth.message || auth.code || "unknown"}`);
   }
@@ -581,6 +796,7 @@ async function main() {
 
   client.send(makeSessionOffer());
   const answer = await client.waitFor("session_answer", args.timeoutMs);
+  runState.session = summarizeSession(answer);
   if (!answer.ok) {
     throw new Error(`session failed: ${answer.reason || answer.message || "unknown"}`);
   }
@@ -607,14 +823,19 @@ async function main() {
     await tonePlayback.stop();
   }
 
+  runState.observation = makeObservation(audio.stats, args);
   assertStats(audio.stats, args);
   print("OK", `Audio observation passed: ${summarizeStats(audio.stats, args)}`);
   if (audio.stats.statuses.length > 0) {
     print("INFO", `audio_status messages: ${audio.stats.statuses.length}`);
   }
+  if (args.json) printJsonPayload(makeJsonPayload(true));
 }
 
 main().catch((error) => {
   print("ERROR", error.message);
+  if (runState.args?.json) {
+    printJsonPayload(makeJsonPayload(false, error));
+  }
   process.exitCode = 1;
 });
