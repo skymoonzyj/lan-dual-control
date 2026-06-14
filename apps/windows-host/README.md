@@ -66,11 +66,11 @@ node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --dryRun
 node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --status
 ```
 
-需要给脚本或联络板消费时，加 `--json` 输出纯机器可读 JSON；PowerShell 包装也可以用 `-Status` 走同一条只读检查：
+需要给脚本或联络板消费时，加 `--json` 输出纯机器可读 JSON；PowerShell 包装也可以用 `-Status -Json` 走同一条只读检查：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --status --json
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -Status
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -Status -Json
 ```
 
 Node 入口同样支持：

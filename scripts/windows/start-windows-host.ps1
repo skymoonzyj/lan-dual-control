@@ -19,6 +19,7 @@ param(
   [switch] $SkipFirewallCheck,
   [switch] $NoRequireOpen,
   [switch] $Status,
+  [switch] $Json,
   [switch] $DryRun
 )
 
@@ -46,6 +47,7 @@ if ($DryRunFirewallRule) { $nodeArgs += "--dryRunFirewallRule" }
 if ($SkipFirewallCheck) { $nodeArgs += "--skipFirewallCheck" }
 if ($NoRequireOpen) { $nodeArgs += "--noRequireOpen" }
 if ($Status) { $nodeArgs += "--status" }
+if ($Json) { $nodeArgs += "--json" }
 if ($DryRun) { $nodeArgs += "--dryRun" }
 
 Push-Location $repoRoot

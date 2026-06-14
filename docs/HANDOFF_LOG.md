@@ -19,6 +19,35 @@
 
 ## 2026-06-14 Windows Codex
 
+日期：2026-06-14 18:40
+开发端：Windows Codex
+本轮目标：让 Windows PowerShell 启动助手也能直接输出机器可读状态 JSON。
+完成内容：
+- `scripts/windows/start-windows-host.ps1` 新增 `-Json`，可与 `-Status` 组合透传到 Node `--status --json`。
+- Windows host README、CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已同步 `-Status -Json` 用法。
+修改文件：
+- `scripts/windows/start-windows-host.ps1`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\start-windows-host.ps1 -Status -Json -HostName 127.0.0.1 -Port 43770`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 当前本机 `127.0.0.1:43770` 未运行 Windows host，`-Status -Json` 按预期返回非 0 和纯 JSON 离线状态，没有启动服务、没有要求密码。
+遗留问题：
+- 桌面壳尚未消费该 JSON 状态入口。
+下一步建议：
+- 后续桌面壳“本机被控”状态刷新可调用 PowerShell `-Status -Json` 或 Node `--status --json`。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-14 Windows Codex
+
 日期：2026-06-14 18:20
 开发端：Windows Codex
 本轮目标：对齐 Mac host 状态助手 JSON 输出，让 Windows host 状态也能被脚本、桌面壳或联络板稳定消费。
