@@ -59,7 +59,7 @@ LAN_DUAL_PORT=43772 LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_WINDOWS_INPUT_MODE=log node
 ## 当前限制
 
 - 这是 Web 原型，不是 SwiftUI/原生桌面窗口。
-- H.264 当前使用浏览器 WebCodecs 解码；不支持 WebCodecs 或不支持当前 `codecString` 的浏览器会自动请求 MJPEG/JPEG。Windows host 的 `ffmpeg-h264` 模式已能在收到 `preferredVideoCodec=mjpeg` 或 `preferredVideoEncoding=data-url` 后切回 JPEG 输出，避免页面无画面；H.264 成功解码、失败回退和真机观感仍需继续验收。
+- H.264 当前使用浏览器 WebCodecs 解码；不支持 WebCodecs 或不支持当前 `codecString` 的浏览器会自动请求 MJPEG/JPEG。Windows host 的 `ffmpeg-h264` 模式已能在收到 `preferredVideoCodec=mjpeg` 或 `preferredVideoEncoding=data-url` 后切回 JPEG 输出，避免页面无画面；Windows 本机页面级 `--requireH264Video` 已验证 H.264 canvas 解码可见，真机 Mac 控制真实 Windows host 的观感仍需继续验收。
 - 画质设置已能请求 60 Hz；Windows host FFmpeg gdigrab 本机观察 60 Hz 请求约 56 FPS，但真实 Mac 控制 Windows 的观感仍需真机确认。
 - 音频播放当前覆盖 PCM 过渡格式；真实 Windows 系统声音已可通过 Windows host WASAPI loopback 做页面级自检，真实听感还需要 Mac 真机连接 Windows host 继续确认。
 - 当前支持手动发送文本和文件剪贴板；Mac 本机文本剪贴板读取和自动监听默认关闭，需用户手动点击读取或开启监听。
@@ -86,7 +86,7 @@ Mac 本机文本剪贴板已纳入页面级自检：脚本会断言未连接/空
 
 持续视频体验也可量化：脚本加 `--observeVideoMs <毫秒>` 会在连接后统计短窗口内收到的 `video_frame` 数和实收 FPS；加 `--minObservedVideoFrames <帧数>` 或 `--minObservedVideoFps <FPS>` 可把持续来帧能力变成强校验。
 
-会话诊断面板已纳入页面级自检：连接成功并出现首帧后，脚本会断言“首帧”和“视频流”指标已从等待状态更新，并在对端提供 `video_frame.timestamp` 时断言视频状态和诊断行显示“到达 <ms>”或“时钟偏差”；视频表面可以是 JPEG `<img>` 或 H.264 `<canvas>`，自检会统一识别；加 `--expectBinaryVideo` 时，脚本会启动 WGC JPEG helper 并要求页面收到 `binary-jpeg` 视频帧、保持画面可见且诊断显示“二进制”；加 `--expectRepeatSignalVideo` 时，脚本会启动 WGC mock helper 并要求 `repeatPreviousFrame` 轻量重复帧保持画面可见且诊断显示“重复”；加 `--expectH264Fallback` 时，脚本会启动 `ffmpeg-h264` host，要求页面在浏览器拒绝 H.264 后发送 MJPEG/JPEG fallback 请求，并最终显示 `jpeg` 画面；临时 Windows host 也会断言 runtime 里显示 PID 和测试 build id，音频验收时也会断言音频诊断显示已接收帧；自检末尾会点击“断开”，确认连接状态、视频表面、音频状态和诊断指标回到干净初始态。
+会话诊断面板已纳入页面级自检：连接成功并出现首帧后，脚本会断言“首帧”和“视频流”指标已从等待状态更新，并在对端提供 `video_frame.timestamp` 时断言视频状态和诊断行显示“到达 <ms>”或“时钟偏差”；视频表面可以是 JPEG `<img>` 或 H.264 `<canvas>`，自检会统一识别；加 `--requireH264Video` 时，脚本会启动 `ffmpeg-h264` host 并要求页面显示 H.264 canvas，不允许回退 JPEG；加 `--expectBinaryVideo` 时，脚本会启动 WGC JPEG helper 并要求页面收到 `binary-jpeg` 视频帧、保持画面可见且诊断显示“二进制”；加 `--expectRepeatSignalVideo` 时，脚本会启动 WGC mock helper 并要求 `repeatPreviousFrame` 轻量重复帧保持画面可见且诊断显示“重复”；加 `--expectH264Fallback` 时，脚本会显式模拟 H.264 配置不支持，要求页面发送 MJPEG/JPEG fallback 请求并最终显示 `jpeg` 画面；临时 Windows host 也会断言 runtime 里显示 PID 和测试 build id，音频验收时也会断言音频诊断显示已接收帧；自检末尾会点击“断开”，确认连接状态、视频表面、音频状态和诊断指标回到干净初始态。
 
 快捷键映射已纳入页面级自检：脚本会模拟 `Command+C`，拦截页面发出的 `input_event`，断言发往 Windows 的 `ctrlKey=true`、`metaKey=false`，同时保留 `localMetaKey=true` 便于诊断。
 

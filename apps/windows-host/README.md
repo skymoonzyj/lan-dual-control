@@ -374,7 +374,15 @@ node E:\codex\lan-dual-control\scripts\windows\test-windows-h264-mode.mjs
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --screenMode ffmpeg-h264 --preferredVideoCodec h264 --width 1280 --height 720 --fps 30 --durationMs 2500 --minFrames 10 --minFps 5 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp --resourceSample false --json
 ```
 
+调 H.264 前可以先探测当前浏览器 WebCodecs 对各个 `avc1.*` 的支持，避免把浏览器启动参数问题误判成编码器问题：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A
+```
+
 当前 H.264 短基线：`2026-06-13 14:18` 在真实桌面权限下运行 `test-windows-h264-mode`，本机临时 host 720p/30Hz 观察 2.5 秒收到 73 帧，平均 28.83 FPS，最大帧间隔 53 ms，timestamp 单调，管线为 `windows-ffmpeg-gdigrab-h264`，codec 为 `h264`。普通沙盒上下文仍可能遇到 FFmpeg `gdigrab error 5` / mock fallback；这属于桌面抓屏权限/会话限制，不应误判为 H.264 管线不可用。当前实现使用 `libx264` 软件编码和 JSON/base64 过渡传输，后续仍需 WebSocket 二进制帧、WGC 采集和硬件编码优化。
+
+`2026-06-14 22:55` 本机 Edge WebCodecs 探针确认 `avc1.42C02A` 的 `annexb` 和默认 AVC 配置都支持；Mac client 页面自检已移除 headless 默认 `--disable-gpu`，`--screenMode ffmpeg-h264 --requireH264Video` 通过：页面显示 `h264 · 解码 #4 · 8 ms · 到达 2 ms`，短窗口 55 帧 / 906 ms / 60.7 FPS。后续如果要故意复现旧的 H.264 不支持环境，可给页面自检加 `--forceH264Unsupported` 或 `--disableWebCodecs`，不要再依赖禁 GPU 的偶然副作用。
 
 如果 Mac client 所在浏览器不支持当前 H.264 `codecString`，页面会发送 `display_settings` 请求 `preferredVideoCodec=mjpeg` / `preferredVideoEncoding=data-url`。Windows host 即使以 `ffmpeg-h264` 启动，也会按这次请求把当前会话改为 `windows-ffmpeg-gdigrab-mjpeg`，避免页面卡在“等待 JPEG”。可用下面的页面级自检同时覆盖“先尝试 H.264、失败后自动切 JPEG”的路径：
 

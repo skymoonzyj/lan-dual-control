@@ -40,9 +40,12 @@ const defaults = {
   expectRepeatSignalVideo: false,
   expectBinaryVideo: false,
   expectH264Fallback: false,
+  requireH264Video: false,
+  forceH264Unsupported: false,
   useExistingHost: false,
   mockVideo: false,
   headless: true,
+  disableGpu: false,
   disableWebCodecs: false,
 };
 const temporaryWindowsHostBuildId = "mac-client-test";
@@ -96,6 +99,9 @@ Options:
   --expectRepeatSignalVideo        Start WGC mock helper with repeat signal frames and require Mac client diagnostics.
   --expectBinaryVideo              Start WGC JPEG helper and require binary JPEG video transport.
   --expectH264Fallback             Start ffmpeg-h264 mode and require Mac client to request MJPEG fallback.
+  --requireH264Video               Require the Mac client to render H.264 video instead of JPEG fallback.
+  --forceH264Unsupported           Force VideoDecoder.isConfigSupported to reject H.264 configs.
+  --disableGpu                     Launch headless browser with --disable-gpu for old fallback reproduction.
   --disableWebCodecs               Hide VideoDecoder/EncodedVideoChunk and expect MJPEG request fallback.
 
 Examples:
@@ -119,6 +125,18 @@ function parseArgs(argv) {
     }
     if (key === "disableWebCodecs") {
       args.disableWebCodecs = true;
+      continue;
+    }
+    if (key === "disableGpu") {
+      args.disableGpu = true;
+      continue;
+    }
+    if (key === "forceH264Unsupported") {
+      args.forceH264Unsupported = true;
+      continue;
+    }
+    if (key === "requireH264Video") {
+      args.requireH264Video = true;
       continue;
     }
     if (key === "useExistingHost") {
@@ -193,6 +211,7 @@ function parseArgs(argv) {
     }
     if (key === "expectH264Fallback") {
       args.expectH264Fallback = true;
+      args.forceH264Unsupported = true;
       args.screenMode = "ffmpeg-h264";
       continue;
     }
@@ -1346,7 +1365,10 @@ async function run() {
       "--window-size=1280,850",
     ];
     if (args.headless) {
-      browserArgs.push("--headless=new", "--disable-gpu");
+      browserArgs.push("--headless=new");
+    }
+    if (args.disableGpu) {
+      browserArgs.push("--disable-gpu");
     }
     browserArgs.push(clientUrl);
 
@@ -1360,6 +1382,27 @@ async function run() {
       await session.send("Page.addScriptToEvaluateOnNewDocument", {
         source: `Object.defineProperty(window, "VideoDecoder", { value: undefined, configurable: true });
 Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configurable: true });`,
+      });
+    }
+    if (args.forceH264Unsupported) {
+      await session.send("Page.addScriptToEvaluateOnNewDocument", {
+        source: `(() => {
+  const install = () => {
+    if (!window.VideoDecoder || typeof window.VideoDecoder.isConfigSupported !== "function") return;
+    const original = window.VideoDecoder.isConfigSupported.bind(window.VideoDecoder);
+    Object.defineProperty(window.VideoDecoder, "isConfigSupported", {
+      configurable: true,
+      value: async (config) => {
+        const codec = String(config?.codec || "").toLowerCase();
+        if (codec.startsWith("avc1.") || codec === "h264") {
+          return { supported: false, config };
+        }
+        return original(config);
+      },
+    });
+  };
+  install();
+})();`,
       });
     }
     await session.send("Page.navigate", { url: clientUrl });
@@ -1538,17 +1581,57 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
         videoFlowMetric: videoSnapshot.videoFlowMetric,
       })}`);
     }
-    const hasVideoFrameAge = Number.isFinite(videoSnapshot.lastVideoFrameAgeMs);
-    const videoStatusShowsAge = videoSnapshot.video.includes("到达") || videoSnapshot.video.includes("时钟偏差");
-    const videoDiagnosticsShowsAge = videoSnapshot.videoFlowMetric.includes("到达") || videoSnapshot.videoFlowMetric.includes("时钟偏差");
-    if (hasVideoFrameAge && (!videoStatusShowsAge || !videoDiagnosticsShowsAge)) {
-      throw new Error(`Mac client video frame age missing: ${JSON.stringify({
-        video: videoSnapshot.video,
-        videoFlowMetric: videoSnapshot.videoFlowMetric,
-        lastVideoFrameAgeMs: videoSnapshot.lastVideoFrameAgeMs,
-      })}`);
+    let diagnosticsSnapshot = videoSnapshot;
+    if (Number.isFinite(videoSnapshot.lastVideoFrameAgeMs)) {
+      diagnosticsSnapshot = await waitFor(
+        async () => {
+          const value = await evaluate(session, buildSnapshotExpression());
+          lastSnapshot = value;
+          const hasVideoFrameAge = Number.isFinite(value.lastVideoFrameAgeMs);
+          const videoStatusShowsAge = value.video.includes("到达") || value.video.includes("时钟偏差");
+          const videoDiagnosticsShowsAge = value.videoFlowMetric.includes("到达") || value.videoFlowMetric.includes("时钟偏差");
+          return !hasVideoFrameAge || (videoStatusShowsAge && videoDiagnosticsShowsAge) ? value : null;
+        },
+        Math.min(args.timeoutMs, 5000),
+        "Mac client video frame age diagnostics",
+      ).catch((error) => {
+        if (lastSnapshot) {
+          print("INFO", `Last video: ${lastSnapshot.video}`);
+          print("INFO", `Last diagnostics: ${lastSnapshot.videoFlowMetric}`);
+          print("INFO", `Last video frame age: ${lastSnapshot.lastVideoFrameAgeMs}`);
+        }
+        throw error;
+      });
     }
-    print("OK", `Diagnostics: ${videoSnapshot.firstVideoMetric} / ${videoSnapshot.videoFlowMetric}`);
+    print("OK", `Diagnostics: ${diagnosticsSnapshot.firstVideoMetric} / ${diagnosticsSnapshot.videoFlowMetric}`);
+    if (args.requireH264Video) {
+      const h264Snapshot = await waitFor(
+        async () => {
+          const value = await evaluate(session, buildSnapshotExpression());
+          lastSnapshot = value;
+          const hasH264Surface = value.surfaceVisible &&
+            value.surfaceHasFrame &&
+            value.video.toLowerCase().includes("h264") &&
+            !value.video.includes("回退");
+          const h264FallbackRequested = await evaluate(
+            session,
+            `(() => [...(window.__lanDualSentMessages || [])]
+              .some((message) => message.type === "display_settings" && message.preferredVideoCodec === "mjpeg"))()`,
+          );
+          return hasH264Surface && !h264FallbackRequested ? value : null;
+        },
+        args.timeoutMs,
+        "Mac client H.264 video surface",
+      ).catch((error) => {
+        if (lastSnapshot) {
+          print("INFO", `Last video: ${lastSnapshot.video}`);
+          print("INFO", `Last display settings: ${lastSnapshot.displaySettings}`);
+          print("INFO", `Last logs: ${(lastSnapshot.logs || []).join(" | ")}`);
+        }
+        throw error;
+      });
+      print("OK", `H.264 video: ${h264Snapshot.video} / ${h264Snapshot.displaySettings}`);
+    }
     if (args.expectH264Fallback) {
       const fallbackSnapshot = await waitFor(
         async () => {

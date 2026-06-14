@@ -19,6 +19,50 @@
 
 ## 2026-06-14 Windows Codex
 
+日期：2026-06-14 22:55
+开发端：Windows Codex
+本轮目标：确认 Windows `ffmpeg-h264` 的 WebCodecs 支持真相，并把 Mac client 页面级 H.264/Fallback 自检改成稳定、可解释的强校验。
+完成内容：
+- 新增 `scripts/windows/check-webcodecs-h264-support.mjs`：临时启动本机 Edge/Chrome 和一个 `127.0.0.1` 探针页面，调用 `VideoDecoder.isConfigSupported` 检查多组 `avc1.*` codecString 的 `annexb` 与默认 AVC 支持；支持 `--json`、`--requireAny`、`--requireCodec`。
+- `scripts/windows/test-mac-client-browser.mjs` headless 默认不再追加 `--disable-gpu`，避免把 WebCodecs H.264 能力误判为 unsupported；需要复现旧环境时可显式用 `--disableGpu`。
+- 页面自检新增 `--requireH264Video`，可要求 Mac client 必须显示 H.264 canvas，不允许回退 JPEG。
+- 页面自检新增 `--forceH264Unsupported`，`--expectH264Fallback` 会自动启用它：保留 WebCodecs 对象，但让 `VideoDecoder.isConfigSupported` 对 H.264 返回 unsupported，从而稳定测试“浏览器拒绝 H.264 后请求 JPEG fallback”的路径，不再依赖禁 GPU 的偶然副作用。
+- H.264 视频 frame age 断言改为等待诊断稳定后再检查，避免刚进入 `rendering` 状态时误判顶部状态还没来得及显示 `到达 <ms>`。
+- Windows host README、Mac client README、CURRENT_STATUS、NEXT_ACTIONS 和 ACTIVE_LOCKS 已同步。
+修改文件：
+- `scripts/windows/check-webcodecs-h264-support.mjs`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/windows-host/README.md`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-webcodecs-h264-support.mjs`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A`
+- `node scripts/windows/check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A --json`
+- `node scripts/windows/test-mac-client-browser.mjs --screenMode ffmpeg-h264 --requireH264Video --allowClipboardFallback --skipFileClipboard --observeVideoMs 900 --minObservedVideoFrames 4 --minObservedVideoFps 4 --timeoutMs 45000`
+- `node scripts/windows/test-mac-client-browser.mjs --expectH264Fallback --allowClipboardFallback --skipFileClipboard --observeVideoMs 900 --minObservedVideoFrames 4 --minObservedVideoFps 4 --timeoutMs 45000`
+- `node scripts/windows/test-mac-client-browser.mjs --screenMode ffmpeg-h264 --disableWebCodecs --allowClipboardFallback --skipFileClipboard --observeVideoMs 900 --minObservedVideoFrames 4 --minObservedVideoFps 4 --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs`
+验证结果：
+- WebCodecs 探针通过：当前 Edge Headless `149.0.0.0` 对 `avc1.42C02A` 的 `annexb` 和默认 AVC 均返回 supported；默认列表里的 `avc1.420029`、`avc1.42E01F`、`avc1.42001E`、`avc1.42E01E`、`avc1.4D4029`、`avc1.640029` 也均 supported。
+- H.264 canvas 强校验通过：页面显示 `h264 · 解码 #4 · 8 ms · 到达 2 ms`，短窗口 `55` 帧 / `906 ms` / `60.7 FPS`。
+- 显式模拟 H.264 unsupported 的 fallback 通过：页面显示 `jpeg/binary`，短窗口 `54` 帧 / `903 ms` / `59.8 FPS`。
+- 完全禁用 WebCodecs 的 fallback 通过：页面显示 `jpeg/binary`，短窗口 `52` 帧 / `902 ms` / `57.6 FPS`。
+- Windows 脚本帮助覆盖已包含新探针：`23` 个脚本、`46` 条 `--help/-h` 命令通过。
+遗留问题：
+- 这轮确认的是 Windows 本机 Edge + 临时 Windows host 的 H.264 canvas 路径；真实 Mac 机器上的 Mac client 连接真实 Windows host 观感、延迟、带宽和 CPU 仍需双机联调。
+- Windows `ffmpeg-h264` 仍是 FFmpeg/libx264 + JSON/base64 过渡路径；正式低延迟路线仍应推进 WGC H.264/硬编。
+下一步建议：
+- 继续做 WGC H.264/硬编，或让 Mac 端用真实 Mac client 连接 Windows host，对比 `--requireH264Video`、MJPEG fallback、binary-jpeg、WGC repeat signal 的观感与资源。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真机观感对照需要 Mac 端连接 Windows host。
+
+## 2026-06-14 Windows Codex
+
 日期：2026-06-14 22:30
 开发端：Windows Codex
 本轮目标：修复 Mac client 在浏览器不支持 Windows `ffmpeg-h264` 输出时触发 MJPEG/JPEG 回退后仍无画面的问题。
