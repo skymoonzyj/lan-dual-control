@@ -400,6 +400,14 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 node E:\codex\lan-dual-control\scripts\windows\check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A
 ```
 
+继续往 WGC + H.264/硬编推进前，建议先跑一遍 Windows 视频编码能力体检。它只读汇总 FFmpeg H.264 软件/硬件编码器、WGC 预检和浏览器 WebCodecs 解码能力，不启动 Windows host、不抓屏、不改系统设置；需要给自动化消费时可加 `--json`。本机 `2026-06-15 00:05` 强校验已通过：FFmpeg `8.1.1` 检测到 `libx264`、`h264_nvenc`、`h264_qsv`、`h264_amf`、`h264_mf`、`h264_d3d12va` 等 H.264 编码入口，WGC 预检通过，Edge WebCodecs H.264 支持通过；推荐下一步是 WGC 采集接 NVENC 硬编原型。
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-support.mjs
+node E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-support.mjs --requireAnyH264 --requireHardwareH264 --requireWgc --requireWebCodecsH264
+node E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-support.mjs --json
+```
+
 当前 H.264 短基线：`2026-06-13 14:18` 在真实桌面权限下运行 `test-windows-h264-mode`，本机临时 host 720p/30Hz 观察 2.5 秒收到 73 帧，平均 28.83 FPS，最大帧间隔 53 ms，timestamp 单调，管线为 `windows-ffmpeg-gdigrab-h264`，codec 为 `h264`。普通沙盒上下文仍可能遇到 FFmpeg `gdigrab error 5` / mock fallback；这属于桌面抓屏权限/会话限制，不应误判为 H.264 管线不可用。当前实现使用 `libx264` 软件编码，可按客户端能力在 JSON/base64 和 `binary-h264` 二进制传输之间切换；后续仍需 WGC 采集和硬件编码优化。
 
 `2026-06-14 22:55` 本机 Edge WebCodecs 探针确认 `avc1.42C02A` 的 `annexb` 和默认 AVC 配置都支持；Mac client 页面自检已移除 headless 默认 `--disable-gpu`，`--screenMode ffmpeg-h264 --requireH264Video` 通过：页面显示 `h264 · 解码 #4 · 8 ms · 到达 2 ms`，短窗口 55 帧 / 906 ms / 60.7 FPS。后续如果要故意复现旧的 H.264 不支持环境，可给页面自检加 `--forceH264Unsupported` 或 `--disableWebCodecs`，不要再依赖禁 GPU 的偶然副作用。

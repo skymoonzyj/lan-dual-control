@@ -17,6 +17,43 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Windows Codex
+
+日期：2026-06-15 00:15
+开发端：Windows Codex
+本轮目标：把 Windows 端 H.264/硬编路线的前置判断做成一键只读体检，避免后续 WGC 硬编原型靠猜。
+完成内容：
+- 新增 `scripts/windows/check-windows-video-encoder-support.mjs`。
+- 脚本会汇总 FFmpeg H.264 编码器列表、Windows Graphics Capture 预检和浏览器 WebCodecs H.264 解码能力。
+- 支持 `--json` 机器可读输出，支持 `--requireAnyH264`、`--requireHardwareH264`、`--requireWgc`、`--requireWebCodecsH264` 做强校验。
+- 本机强校验确认 FFmpeg `8.1.1` 同时具备 `libx264` 软件编码和 `h264_nvenc`、`h264_qsv`、`h264_amf`、`h264_mf`、`h264_d3d12va` 等硬编入口；WGC 预检通过；Edge WebCodecs H.264 支持通过。
+- 推荐下一步：WGC 采集接 NVENC H.264 原型，继续用 `test-mac-client-video-transports.mjs` 守住 binary-h264、JSON/base64、fallback 和 binary-jpeg 四条回归。
+修改文件：
+- `scripts/windows/check-windows-video-encoder-support.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-video-encoder-support.mjs`
+- `node scripts/windows/check-windows-video-encoder-support.mjs --help`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-video-encoder-support.mjs`
+- `node scripts/windows/check-windows-video-encoder-support.mjs --requireAnyH264 --requireHardwareH264 --requireWgc --requireWebCodecsH264`
+- `node scripts/windows/check-windows-video-encoder-support.mjs --json`
+- `node scripts/windows/test-windows-script-help.mjs`
+- `git diff --check`
+- 冲突标记搜索
+遗留问题：
+- 这轮只是能力体检和路线判断；还没有把 WGC 帧接到 NVENC/MediaFoundation/D3D12VA 编码器。
+- FFmpeg 列出多个硬编入口不等于全部都能在当前屏幕采集路径上稳定工作，下一轮需要做最小 NVENC 原型并用矩阵回归确认。
+下一步建议：
+- Windows 端下一轮优先做 WGC + NVENC H.264 最小原型；若 NVENC 初始化失败，再按体检结果回退 QSV/AMF/MF/D3D12VA 或保留 libx264。
+- 改编码路径后先跑 `check-windows-video-encoder-support`，再跑 `test-windows-h264-mode` 和 `test-mac-client-video-transports`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真机观感和 Mac client 双机验收阶段需要 Mac 端配合。
+
 ## 2026-06-14 Windows Codex
 
 日期：2026-06-14 23:55
