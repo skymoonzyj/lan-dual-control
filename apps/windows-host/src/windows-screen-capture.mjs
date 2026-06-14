@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 
 const defaultDisplays = [
   {
@@ -89,6 +90,68 @@ function parseJsonOutput(output) {
     return null;
   }
   return JSON.parse(text);
+}
+
+function splitCommandLineArgs(value) {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return [];
+  }
+
+  const args = [];
+  let current = "";
+  let quote = "";
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (char === "\\" && text[index + 1] === quote) {
+        current += text[index + 1];
+        index += 1;
+        continue;
+      }
+      if (char === quote) {
+        quote = "";
+      } else {
+        current += char;
+      }
+      continue;
+    }
+    if (char === "\"" || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      if (current) {
+        args.push(current);
+        current = "";
+      }
+      continue;
+    }
+    current += char;
+  }
+
+  if (current) {
+    args.push(current);
+  }
+  return args;
+}
+
+function commandLooksLikePath(value) {
+  return /^[A-Za-z]:[\\/]/.test(value) || value.includes("/") || value.includes("\\");
+}
+
+function commandExistsOrIsPathCommand(value) {
+  const command = String(value ?? "").trim();
+  if (!command) {
+    return false;
+  }
+  return commandLooksLikePath(command) ? existsSync(command) : true;
+}
+
+function truthyEnv(value) {
+  const text = String(value ?? "").trim().toLowerCase();
+  return text === "1" || text === "true" || text === "yes" || text === "on";
 }
 
 function makeWgcPreflightScript() {
@@ -456,6 +519,11 @@ export class WindowsScreenCaptureCoordinator {
     this.ffmpegCommand = process.env.LAN_DUAL_FFMPEG || "ffmpeg";
     this.ffmpegAvailable = hasFfmpegGdigrabSync({ ffmpegCommand: this.ffmpegCommand, logger });
     this.h264CodecString = normalizeH264CodecString(process.env.LAN_DUAL_WINDOWS_H264_CODEC_STRING);
+    this.wgcHelperCommand = String(process.env.LAN_DUAL_WINDOWS_WGC_HELPER || "").trim();
+    this.wgcHelperArgs = splitCommandLineArgs(process.env.LAN_DUAL_WINDOWS_WGC_HELPER_ARGS);
+    this.wgcHelperConfigured = Boolean(this.wgcHelperCommand);
+    this.wgcHelperAvailable = commandExistsOrIsPathCommand(this.wgcHelperCommand);
+    this.wgcHelperAllowUnsupported = truthyEnv(process.env.LAN_DUAL_WINDOWS_WGC_ALLOW_UNSUPPORTED);
     this.wgcPreflight = this.requestedMode === wgcMode ? checkWgcSupportSync(logger) : null;
     this.wgcFallbackReason = "";
     this.mode = this.resolveMode();
@@ -465,10 +533,12 @@ export class WindowsScreenCaptureCoordinator {
     this.captureTimeoutMs = clampNumber(process.env.LAN_DUAL_WINDOWS_CAPTURE_TIMEOUT_MS, 1000, 12000, 5000);
     this.maxScreenFps = this.mode === ffmpegMode || this.mode === ffmpegH264Mode
       ? clampNumber(process.env.LAN_DUAL_WINDOWS_MAX_SCREEN_FPS, 1, 60, 60)
-      : this.mode === systemMode
+      : this.mode === wgcMode
+        ? clampNumber(process.env.LAN_DUAL_WINDOWS_MAX_SCREEN_FPS, 1, 240, 60)
+        : this.mode === systemMode
         ? clampNumber(process.env.LAN_DUAL_WINDOWS_MAX_SCREEN_FPS, 1, 8, 4)
         : 60;
-    this.displays = this.mode === ffmpegMode || this.mode === ffmpegH264Mode || this.mode === systemMode
+    this.displays = this.mode === ffmpegMode || this.mode === ffmpegH264Mode || this.mode === systemMode || this.mode === wgcMode
       ? loadWindowsDisplaysSync(logger)
       : defaultDisplays;
     this.lastFailure = "";
@@ -484,6 +554,14 @@ export class WindowsScreenCaptureCoordinator {
     this.ffmpegPendingH264Nals = [];
     this.ffmpegPendingH264NalTypes = [];
     this.ffmpegH264SawAud = false;
+    this.wgcHelperProcess = null;
+    this.wgcHelperKey = "";
+    this.wgcHelperLineBuffer = "";
+    this.wgcHelperFrame = null;
+    this.wgcHelperFrameId = 0;
+    this.wgcHelperFrameWaiters = [];
+    this.lastServedWgcHelperFrameId = 0;
+    this.wgcHelperInfo = null;
   }
 
   resolveMode() {
@@ -496,7 +574,21 @@ export class WindowsScreenCaptureCoordinator {
       const supportStatus = this.wgcPreflight?.supported
         ? "preflight passed"
         : `preflight blocked: ${blockers.join("; ") || "unknown reason"}`;
-      this.wgcFallbackReason = `Windows Graphics Capture backend is not implemented yet (${supportStatus}); using ${this.ffmpegAvailable ? "FFmpeg gdigrab" : "PowerShell/System.Drawing"} fallback`;
+      const helperStatus = this.wgcHelperConfigured
+        ? this.wgcHelperAvailable
+          ? "helper configured"
+          : `helper not found: ${this.wgcHelperCommand}`
+        : "LAN_DUAL_WINDOWS_WGC_HELPER is not configured";
+      const helperMayRun = this.wgcHelperConfigured
+        && this.wgcHelperAvailable
+        && (this.wgcPreflight?.supported || this.wgcHelperAllowUnsupported);
+      if (helperMayRun) {
+        if (!this.wgcPreflight?.supported) {
+          this.logger?.warn(`Windows Graphics Capture helper is allowed despite preflight block: ${supportStatus}`);
+        }
+        return wgcMode;
+      }
+      this.wgcFallbackReason = `Windows Graphics Capture helper is not active (${supportStatus}; ${helperStatus}); using ${this.ffmpegAvailable ? "FFmpeg gdigrab" : "PowerShell/System.Drawing"} fallback`;
       this.logger?.warn(this.wgcFallbackReason);
       if (process.platform === "win32") {
         return this.ffmpegAvailable ? ffmpegMode : systemMode;
@@ -539,8 +631,9 @@ export class WindowsScreenCaptureCoordinator {
     const usingFfmpegCapture = this.mode === ffmpegMode;
     const usingFfmpegH264Capture = this.mode === ffmpegH264Mode;
     const usingSystemCapture = this.mode === systemMode;
+    const usingWgcHelperCapture = this.mode === wgcMode;
     return {
-      available: usingFfmpegCapture || usingFfmpegH264Capture || usingSystemCapture,
+      available: usingFfmpegCapture || usingFfmpegH264Capture || usingSystemCapture || usingWgcHelperCapture,
       mode: this.mode,
       requestedMode: this.requestedMode,
       capturePipeline: this.getCapturePipeline(),
@@ -552,8 +645,15 @@ export class WindowsScreenCaptureCoordinator {
         ? {
             requested: this.requestedMode === wgcMode,
             supported: Boolean(this.wgcPreflight.supported),
-            active: false,
-            backendImplemented: false,
+            active: usingWgcHelperCapture,
+            backendImplemented: this.wgcHelperAvailable,
+            helperConfigured: this.wgcHelperConfigured,
+            helperAvailable: this.wgcHelperAvailable,
+            helperCommand: this.wgcHelperCommand,
+            helperArgs: this.wgcHelperArgs,
+            helperProtocol: "json-lines-v1",
+            helperInfo: this.wgcHelperInfo,
+            preflightBypassed: usingWgcHelperCapture && !this.wgcPreflight.supported && this.wgcHelperAllowUnsupported,
             fallbackReason: this.wgcFallbackReason,
             osBuild: this.wgcPreflight.osBuild,
             sessionSupported: this.wgcPreflight.sessionSupported,
@@ -565,7 +665,14 @@ export class WindowsScreenCaptureCoordinator {
             requested: false,
             supported: false,
             active: false,
-            backendImplemented: false,
+            backendImplemented: this.wgcHelperAvailable,
+            helperConfigured: this.wgcHelperConfigured,
+            helperAvailable: this.wgcHelperAvailable,
+            helperCommand: this.wgcHelperCommand,
+            helperArgs: this.wgcHelperArgs,
+            helperProtocol: "json-lines-v1",
+            helperInfo: this.wgcHelperInfo,
+            preflightBypassed: false,
             fallbackReason: "",
             blockers: [],
             notes: [],
@@ -573,7 +680,9 @@ export class WindowsScreenCaptureCoordinator {
       displays: this.getDisplays(),
       message: usingFfmpegCapture
         ? "当前使用 FFmpeg gdigrab 持续采集 MJPEG 帧；后续可升级为 Windows Graphics Capture。"
-        : usingSystemCapture
+        : usingWgcHelperCapture
+          ? "当前使用 Windows Graphics Capture helper JSON 行协议接收 JPEG 帧。"
+          : usingSystemCapture
           ? "当前使用 Windows 系统截图 JPEG 帧；后续可升级为 Windows Graphics Capture。"
           : "当前为骨架模式，先发送模拟视频帧。",
       lastCaptureError: this.lastFailure || this.wgcFallbackReason,
@@ -597,7 +706,7 @@ export class WindowsScreenCaptureCoordinator {
     if (this.mode === ffmpegH264Mode) {
       return "h264";
     }
-    return this.mode === ffmpegMode || this.mode === systemMode ? "jpeg" : "mock-svg";
+    return this.mode === ffmpegMode || this.mode === systemMode || this.mode === wgcMode ? "jpeg" : "mock-svg";
   }
 
   getVideoEncoding() {
@@ -608,6 +717,9 @@ export class WindowsScreenCaptureCoordinator {
   }
 
   getCapturePipeline() {
+    if (this.mode === wgcMode) {
+      return "windows-wgc-helper-jpeg";
+    }
     if (this.mode === ffmpegH264Mode) {
       return "windows-ffmpeg-gdigrab-h264";
     }
@@ -618,6 +730,9 @@ export class WindowsScreenCaptureCoordinator {
   }
 
   makeHostMode() {
+    if (this.mode === wgcMode) {
+      return "windows-host-wgc-helper";
+    }
     if (this.mode === ffmpegH264Mode) {
       return "windows-host-ffmpeg-h264";
     }
@@ -748,15 +863,35 @@ export class WindowsScreenCaptureCoordinator {
     );
     if (this.mode === ffmpegMode || this.mode === ffmpegH264Mode) {
       this.startFfmpegCapture(session);
+    } else if (this.mode === wgcMode) {
+      this.startWgcHelperCapture(session);
     }
   }
 
   stop() {
     this.stopFfmpegCapture();
+    this.stopWgcHelperCapture();
     this.logger?.info("屏幕采集已停止");
   }
 
   async makeFrame(frameId, session) {
+    if (this.mode === wgcMode) {
+      try {
+        return await this.makeWgcHelperJpegFrame(frameId, session);
+      } catch (error) {
+        this.recordCaptureFailure(error);
+        try {
+          return await this.makeSystemJpegFrame(frameId, session);
+        } catch (fallbackError) {
+          this.recordCaptureFailure(fallbackError);
+          return this.makeMockFrame(frameId, session, {
+            capturePipeline: "windows-wgc-helper-fallback-mock",
+            fallbackReason: `${error.message}; ${fallbackError.message}`,
+          });
+        }
+      }
+    }
+
     if (this.mode === ffmpegH264Mode) {
       try {
         return await this.makeFfmpegH264Frame(frameId, session);
@@ -804,6 +939,282 @@ export class WindowsScreenCaptureCoordinator {
     }
 
     return this.makeMockFrame(frameId, session);
+  }
+
+  makeWgcHelperKey(session) {
+    const activeDisplay = this.pickDisplay(session.activeDisplayId);
+    const width = clampNumber(session.width, 320, 3840, activeDisplay.width || 1920);
+    const height = clampNumber(session.height, 180, 2160, activeDisplay.height || 1080);
+    const fps = this.normalizeFps(session.fps);
+    const jpegQuality = this.jpegQualityForSession(session);
+    const bandwidthKbps = normalizeBandwidthKbps(session.maxBandwidthKbps);
+    return [
+      this.wgcHelperCommand,
+      this.wgcHelperArgs.join("\u001f"),
+      activeDisplay.id,
+      activeDisplay.x,
+      activeDisplay.y,
+      activeDisplay.width,
+      activeDisplay.height,
+      width,
+      height,
+      fps,
+      jpegQuality.toFixed(3),
+      bandwidthKbps,
+    ].join(":");
+  }
+
+  startWgcHelperCapture(session) {
+    if (!this.wgcHelperCommand) {
+      throw new Error("LAN_DUAL_WINDOWS_WGC_HELPER is not configured");
+    }
+    if (!this.wgcHelperAvailable) {
+      throw new Error(`WGC helper not found: ${this.wgcHelperCommand}`);
+    }
+
+    const activeDisplay = this.pickDisplay(session.activeDisplayId);
+    const width = clampNumber(session.width, 320, 3840, activeDisplay.width || 1920);
+    const height = clampNumber(session.height, 180, 2160, activeDisplay.height || 1080);
+    const fps = this.normalizeFps(session.fps);
+    const jpegQuality = this.jpegQualityForSession(session);
+    const bandwidthKbps = normalizeBandwidthKbps(session.maxBandwidthKbps);
+    const key = this.makeWgcHelperKey(session);
+
+    if (this.wgcHelperProcess && this.wgcHelperKey === key) {
+      return;
+    }
+
+    this.stopWgcHelperCapture({ silent: true });
+    this.wgcHelperKey = key;
+    this.wgcHelperLineBuffer = "";
+    this.wgcHelperFrame = null;
+    this.wgcHelperFrameId = 0;
+    this.lastServedWgcHelperFrameId = 0;
+    this.wgcHelperInfo = null;
+
+    const child = spawn(this.wgcHelperCommand, this.wgcHelperArgs, {
+      env: {
+        ...process.env,
+        LAN_DUAL_WGC_HELPER_PROTOCOL: "json-lines-v1",
+        LAN_DUAL_WGC_DISPLAY_ID: activeDisplay.id,
+        LAN_DUAL_WGC_DISPLAY_INDEX: String(Number(activeDisplay.index) || 0),
+        LAN_DUAL_WGC_DISPLAY_X: String(Number(activeDisplay.x) || 0),
+        LAN_DUAL_WGC_DISPLAY_Y: String(Number(activeDisplay.y) || 0),
+        LAN_DUAL_WGC_SOURCE_WIDTH: String(activeDisplay.width || width),
+        LAN_DUAL_WGC_SOURCE_HEIGHT: String(activeDisplay.height || height),
+        LAN_DUAL_WGC_WIDTH: String(width),
+        LAN_DUAL_WGC_HEIGHT: String(height),
+        LAN_DUAL_WGC_FPS: String(fps),
+        LAN_DUAL_WGC_JPEG_QUALITY: String(jpegQuality),
+        LAN_DUAL_WGC_MAX_BANDWIDTH_KBPS: String(bandwidthKbps),
+        LAN_DUAL_WGC_QUALITY_PRESET: String(session.qualityPreset || "balanced"),
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    this.wgcHelperProcess = child;
+
+    child.stdout.on("data", (chunk) => this.handleWgcHelperChunk(chunk));
+    child.stderr.on("data", (chunk) => {
+      const detail = String(chunk).trim();
+      if (detail) {
+        this.lastFailure = detail;
+      }
+    });
+    child.on("error", (error) => {
+      if (this.wgcHelperProcess === child) {
+        this.recordCaptureFailure(error);
+        this.rejectWgcHelperFrameWaiters(error);
+        this.wgcHelperProcess = null;
+      }
+    });
+    child.on("close", (code, signal) => {
+      if (this.wgcHelperProcess === child) {
+        this.wgcHelperProcess = null;
+        if (code !== 0 && signal !== "SIGTERM") {
+          const error = new Error(`WGC helper exited with ${code ?? signal ?? "unknown"}`);
+          this.recordCaptureFailure(error);
+          this.rejectWgcHelperFrameWaiters(error);
+        } else {
+          this.rejectWgcHelperFrameWaiters(new Error("WGC helper stopped before another frame was available"));
+        }
+      }
+    });
+  }
+
+  stopWgcHelperCapture({ silent = false } = {}) {
+    if (!this.wgcHelperProcess) {
+      return;
+    }
+    const child = this.wgcHelperProcess;
+    this.wgcHelperProcess = null;
+    child.kill();
+    if (!silent) {
+      this.wgcHelperKey = "";
+    }
+    this.wgcHelperLineBuffer = "";
+    this.wgcHelperFrame = null;
+    this.rejectWgcHelperFrameWaiters(new Error("WGC helper stopped"));
+  }
+
+  handleWgcHelperChunk(chunk) {
+    this.wgcHelperLineBuffer += String(chunk);
+    while (this.wgcHelperLineBuffer.length > 0) {
+      const newlineIndex = this.wgcHelperLineBuffer.indexOf("\n");
+      if (newlineIndex < 0) {
+        if (this.wgcHelperLineBuffer.length > 4 * 1024 * 1024) {
+          this.wgcHelperLineBuffer = "";
+          this.recordCaptureFailure(new Error("WGC helper line buffer exceeded 4MB before newline"));
+        }
+        return;
+      }
+
+      const line = this.wgcHelperLineBuffer.slice(0, newlineIndex).trim();
+      this.wgcHelperLineBuffer = this.wgcHelperLineBuffer.slice(newlineIndex + 1);
+      if (!line) {
+        continue;
+      }
+      this.handleWgcHelperLine(line);
+    }
+  }
+
+  handleWgcHelperLine(line) {
+    let message;
+    try {
+      message = JSON.parse(line.replace(/^\uFEFF/, ""));
+    } catch (error) {
+      this.recordCaptureFailure(new Error(`WGC helper emitted non-JSON line: ${error.message}`));
+      return;
+    }
+
+    const type = String(message.type || "").toLowerCase();
+    if (type === "hello" || type === "ready" || type === "metadata") {
+      this.wgcHelperInfo = {
+        backend: String(message.backend || "unknown"),
+        codec: String(message.codec || "jpeg"),
+        encoding: String(message.encoding || "base64"),
+        width: Number(message.width) || 0,
+        height: Number(message.height) || 0,
+        fps: Number(message.fps) || 0,
+      };
+      this.lastFailure = "";
+      return;
+    }
+
+    if (type === "error") {
+      this.recordCaptureFailure(new Error(String(message.message || message.error || "WGC helper reported an error")));
+      return;
+    }
+
+    if (type && type !== "frame") {
+      return;
+    }
+
+    const dataUrl = String(message.dataUrl || "").trim();
+    const dataBase64 = String(message.dataBase64 || message.data || message.payload || "").trim();
+    const normalizedDataUrl = dataUrl || (dataBase64 ? `data:image/jpeg;base64,${dataBase64}` : "");
+    if (!normalizedDataUrl.startsWith("data:image/jpeg;base64,")) {
+      this.recordCaptureFailure(new Error("WGC helper frame did not contain JPEG base64 data"));
+      return;
+    }
+
+    this.wgcHelperFrame = {
+      dataUrl: normalizedDataUrl,
+      width: Number(message.width) || 0,
+      height: Number(message.height) || 0,
+      sourceWidth: Number(message.sourceWidth) || 0,
+      sourceHeight: Number(message.sourceHeight) || 0,
+      helperFrameId: Number(message.frameId) || 0,
+      timestamp: String(message.timestamp || "").trim(),
+      payloadBytes: Number(message.payloadBytes) || Math.max(0, Math.floor((normalizedDataUrl.length * 3) / 4)),
+    };
+    this.wgcHelperFrameId += 1;
+    this.lastFailure = "";
+    this.resolveWgcHelperFrameWaiters();
+  }
+
+  resolveWgcHelperFrameWaiters() {
+    const remaining = [];
+    for (const waiter of this.wgcHelperFrameWaiters) {
+      if (this.wgcHelperFrameId > waiter.afterFrameId && this.wgcHelperFrame) {
+        waiter.resolve();
+      } else {
+        remaining.push(waiter);
+      }
+    }
+    this.wgcHelperFrameWaiters = remaining;
+  }
+
+  rejectWgcHelperFrameWaiters(error) {
+    const waiters = this.wgcHelperFrameWaiters.splice(0);
+    for (const waiter of waiters) {
+      waiter.reject(error);
+    }
+  }
+
+  waitForWgcHelperFrame(afterFrameId, timeoutMs) {
+    if (this.wgcHelperFrameId > afterFrameId && this.wgcHelperFrame) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+      const waiter = {
+        afterFrameId,
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      };
+      const timer = setTimeout(() => {
+        this.wgcHelperFrameWaiters = this.wgcHelperFrameWaiters.filter((item) => item !== waiter);
+        reject(new Error(`WGC helper did not produce a JPEG frame within ${timeoutMs} ms`));
+      }, timeoutMs);
+      this.wgcHelperFrameWaiters.push(waiter);
+    });
+  }
+
+  async makeWgcHelperJpegFrame(frameId, session) {
+    if (!this.wgcHelperProcess) {
+      this.startWgcHelperCapture(session);
+    }
+    await this.waitForWgcHelperFrame(this.lastServedWgcHelperFrameId, Math.max(1000, this.captureTimeoutMs));
+    const activeDisplay = this.pickDisplay(session.activeDisplayId);
+    const payload = this.wgcHelperFrame || {};
+    const sourceFrameId = this.wgcHelperFrameId;
+    const previousServedFrameId = this.lastServedWgcHelperFrameId;
+    this.lastServedWgcHelperFrameId = sourceFrameId;
+    const now = new Date();
+
+    return {
+      type: "video_frame",
+      frameId,
+      timestamp: payload.timestamp || now.toISOString(),
+      width: Number(payload.width) || clampNumber(session.width, 320, 3840, activeDisplay.width || 1920),
+      height: Number(payload.height) || clampNumber(session.height, 180, 2160, activeDisplay.height || 1080),
+      sourceWidth: Number(payload.sourceWidth) || activeDisplay.width,
+      sourceHeight: Number(payload.sourceHeight) || activeDisplay.height,
+      fps: session.fps,
+      requestedFps: session.requestedFps,
+      maxScreenFps: session.maxScreenFps,
+      maxBandwidthKbps: session.maxBandwidthKbps,
+      qualityPreset: session.qualityPreset,
+      jpegQuality: this.jpegQualityForSession(session),
+      frameIntervalMs: session.frameIntervalMs ?? Math.round(1000 / (session.fps || 1)),
+      codec: "jpeg",
+      encoding: "data-url",
+      keyFrame: true,
+      source: "screen",
+      capturePipeline: "windows-wgc-helper-jpeg",
+      requestedScreenMode: this.requestedMode,
+      streamFallbackReason: "",
+      droppedFrames: Math.max(0, sourceFrameId - previousServedFrameId - 1),
+      payloadBytes: Number(payload.payloadBytes) || 0,
+      helperFrameId: Number(payload.helperFrameId) || sourceFrameId,
+      dataUrl: payload.dataUrl,
+    };
   }
 
   makeFfmpegKey(session) {

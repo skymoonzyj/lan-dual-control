@@ -19,6 +19,49 @@
 
 ## 2026-06-14 Windows Codex
 
+日期：2026-06-14 19:45
+开发端：Windows Codex
+本轮目标：给 Windows WGC 模式补上原生 helper 接入边界和可验证的出帧合同。
+完成内容：
+- `apps/windows-host/src/windows-screen-capture.mjs` 新增 `LAN_DUAL_WINDOWS_WGC_HELPER` / `LAN_DUAL_WINDOWS_WGC_HELPER_ARGS` 接入点。
+- `LAN_DUAL_WINDOWS_SCREEN_MODE=wgc` 现在会在 WGC 预检通过且 helper 可用时启动 helper，并从 stdout 读取 `json-lines-v1` 帧；helper 输出 JPEG base64 frame 后，host 会发出既有 `video_frame`，`capturePipeline=windows-wgc-helper-jpeg`。
+- 未配置 helper 时不会伪装成 WGC，仍明确降级到 FFmpeg/System.Drawing/mock，并在 `/discovery.capabilities.screen.wgc` 里显示 `helperConfigured/helperAvailable/active/backendImplemented/fallbackReason`。
+- `scripts/windows/test-windows-wgc-mode.mjs` 新增 `--mockHelper`，用临时 JSON 行 helper 验证 helper 合同可出帧；默认模式继续验证无 helper 降级诊断。
+- Windows host README、CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已同步，明确下一步是实现真正原生 `lan-dual-wgc-helper`。
+修改文件：
+- `apps/windows-host/src/windows-screen-capture.mjs`
+- `scripts/windows/test-windows-wgc-mode.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-host/src/windows-screen-capture.mjs`
+- `node --check scripts/windows/test-windows-wgc-mode.mjs`
+- `node scripts/windows/test-windows-wgc-mode.mjs --durationMs 1200 --timeoutMs 20000`
+- `node scripts/windows/test-windows-wgc-mode.mjs --mockHelper --durationMs 1200 --minFrames 5 --timeoutMs 20000`
+- `npm run check`（`apps/windows-host`）
+- `node scripts/windows/check-windows-host-readiness.mjs --json --timeoutMs 20000`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-wgc-mode.mjs`
+- `node scripts/windows/test-windows-script-help.mjs`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 默认 WGC 模式在无 helper 时通过：`active=false`、WGC 预检支持、实际回退管线为 `windows-ffmpeg-gdigrab-mjpeg`。
+- `--mockHelper` 通过：25 帧来自 `windows-wgc-helper-jpeg`，`screen.wgc.active=true`。
+- Windows host 包语法检查通过；默认 readiness 8 项通过、0 失败，当前 43770 未启动只产生预期 warning。
+- 全量 Windows 脚本帮助覆盖 20 个脚本、40 条命令通过；diff check 和冲突标记搜索通过。
+遗留问题：
+- 这还不是原生 WGC 采集本体；本机当前只有 .NET runtime、没有 .NET SDK/Visual Studio C++ build toolchain，后续写 `lan-dual-wgc-helper` 前需要确定/安装原生构建环境。
+下一步建议：
+- 实现真正的 Windows 原生 WGC helper，让它按 `json-lines-v1` 输出 JPEG 帧；接入后用 `observe-windows-host-video --screenMode wgc --resourceSampleTree true --json` 对照 FFmpeg 60Hz 基线。
+是否改了协议：否；复用现有 `video_frame`，只新增 Windows host 内部 helper 合同和诊断字段。
+是否需要另一端配合：暂不需要；原生 helper 完成后再请 Mac 端用 Mac client 做真实观感/延迟验收。
+
+## 2026-06-14 Windows Codex
+
 日期：2026-06-14 19:05
 开发端：Windows Codex
 本轮目标：让 Windows host readiness 消费统一的 Windows host 状态 JSON。

@@ -145,11 +145,13 @@ $env:LAN_DUAL_WINDOWS_SCREEN_MODE="mock"   # 强制模拟视频帧
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="ffmpeg" # 强制 FFmpeg gdigrab MJPEG
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="ffmpeg-h264" # 强制 FFmpeg gdigrab + libx264，输出 H.264 Annex B base64
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="system" # 强制 Windows 系统截图 JPEG
-$env:LAN_DUAL_WINDOWS_SCREEN_MODE="wgc"    # 显式请求 Windows Graphics Capture；当前只做预检和降级诊断
+$env:LAN_DUAL_WINDOWS_SCREEN_MODE="wgc"    # 显式请求 Windows Graphics Capture helper；未配置 helper 时仍降级
+$env:LAN_DUAL_WINDOWS_WGC_HELPER="C:\DevTools\lan-dual-wgc-helper.exe" # 可选；原生 WGC helper 路径
+$env:LAN_DUAL_WINDOWS_WGC_HELPER_ARGS=""   # 可选；传给 helper 的额外参数，支持引号包裹含空格路径
 $env:LAN_DUAL_FFMPEG="C:\DevTools\ffmpeg\bin\ffmpeg.exe" # 可选；PATH 不稳定时显式指定 FFmpeg
 $env:LAN_DUAL_WINDOWS_H264_CODEC_STRING="avc1.42E01F" # 可选；默认会从 SPS 更新，缺失时用该 baseline codecString
 $env:LAN_DUAL_WINDOWS_JPEG_QUALITY="70"    # 强制覆盖 JPEG 质量，35-92；不设置时按 qualityPreset/maxBandwidthKbps 自动计算
-$env:LAN_DUAL_WINDOWS_MAX_SCREEN_FPS="30"  # 可选：FFmpeg 默认上限 60，1-60；想省资源时可降到 30；system 模式默认 4，1-8
+$env:LAN_DUAL_WINDOWS_MAX_SCREEN_FPS="30"  # 可选：FFmpeg 默认上限 60，1-60；WGC helper 1-240；system 模式默认 4，1-8
 ```
 
 调试音频采集时可选：
@@ -341,10 +343,13 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 
 如果视频回退到 mock 或系统截图兜底，观察脚本会在 JSON 的 `observation.fallbackReasons` 和文本输出里带出 `streamFallbackReason` / `lastCaptureError`。因此遇到 `windows-ffmpeg-gdigrab-fallback-mock` 时，优先看这里区分是 FFmpeg 超时、`gdigrab` 权限/桌面捕获错误，还是 System.Drawing 兜底也失败。
 
-需要验证 WGC 切换入口时，可以先用 `--screenMode wgc --requireRealVideo false --json`。当前不会把过渡采集伪装成真正 WGC：`/discovery.capabilities.screen.requestedMode` 会显示 `wgc`，`screen.wgc.backendImplemented=false`，`wgcFallbackReason` 会说明 WGC 预检结果以及已降级到 FFmpeg/System.Drawing/mock。真正 WGC 后端接入后，再用同一观察脚本对照 FFmpeg 基线。
+需要验证 WGC 切换入口时，可以先用 `--screenMode wgc --requireRealVideo false --json`。当前不会把过渡采集伪装成真正 WGC：未配置 `LAN_DUAL_WINDOWS_WGC_HELPER` 时，`/discovery.capabilities.screen.requestedMode` 会显示 `wgc`，`screen.wgc.backendImplemented=false`，`wgcFallbackReason` 会说明 WGC 预检结果以及已降级到 FFmpeg/System.Drawing/mock。
+
+WGC helper 接入点已经落地：当 `LAN_DUAL_WINDOWS_SCREEN_MODE=wgc`、WGC 预检通过、且 `LAN_DUAL_WINDOWS_WGC_HELPER` 指向可执行 helper 时，Windows host 会启动该 helper，并按 `json-lines-v1` 协议从 stdout 接收 JPEG 帧。helper 启动时会收到 `LAN_DUAL_WGC_WIDTH`、`LAN_DUAL_WGC_HEIGHT`、`LAN_DUAL_WGC_FPS`、`LAN_DUAL_WGC_DISPLAY_ID`、`LAN_DUAL_WGC_JPEG_QUALITY` 等环境变量；每行可输出 `{"type":"hello","backend":"windows-graphics-capture","codec":"jpeg","encoding":"base64"}` 或 `{"type":"frame","frameId":1,"timestamp":"...","width":1280,"height":720,"dataBase64":"..."}`。接入成功时 `/discovery.capabilities.screen.wgc.active=true`，`capturePipeline=windows-wgc-helper-jpeg`。真正的原生 WGC helper 尚未完成；下一步要实现这个 helper，而不是改前端协议。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-mode.mjs
+node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-mode.mjs --mockHelper --durationMs 1200 --minFrames 5
 ```
 
 需要验证 Windows host 的可选 H.264 流式模式时，可以使用 `ffmpeg-h264`。该模式仍使用 FFmpeg `gdigrab` 采集桌面，但输出 `video_frame.codec=h264`、`encoding=annexb-base64`、`capturePipeline=windows-ffmpeg-gdigrab-h264`，`session_answer` / `display_settings_ack` / `video_frame` 会带 `codecString`。它用于提前联调 Mac client H.264 接收链路；真正低延迟 Windows 采集仍优先推进 WGC backend。
