@@ -7,7 +7,7 @@ use std::time::Duration;
 use base64::Engine;
 use chrono::{SecondsFormat, Utc};
 use serde_json::json;
-use windows::core::{factory, IInspectable, IUnknown, Interface};
+use windows::core::{factory, IInspectable, IUnknown, Interface, PWSTR};
 use windows::Foundation::TypedEventHandler;
 use windows::Graphics::Capture::{
     Direct3D11CaptureFrame, Direct3D11CaptureFramePool, GraphicsCaptureItem, GraphicsCaptureSession,
@@ -32,10 +32,11 @@ use windows::Win32::Graphics::Imaging::{
     IWICBitmapFrameEncode, IWICImagingFactory, WICBitmapEncoderNoCache,
 };
 use windows::Win32::System::Com::StructuredStorage::{
-    CreateStreamOnHGlobal, GetHGlobalFromStream, IPropertyBag2,
+    CreateStreamOnHGlobal, GetHGlobalFromStream, IPropertyBag2, PROPBAG2,
 };
 use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER};
 use windows::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
+use windows::Win32::System::Variant::{VARIANT, VT_R4};
 use windows::Win32::System::WinRT::Direct3D11::{
     CreateDirect3D11DeviceFromDXGIDevice, IDirect3DDxgiInterfaceAccess,
 };
@@ -54,6 +55,7 @@ struct Args {
     fps: u32,
     width: i32,
     height: i32,
+    jpeg_quality: f32,
     display_x: i32,
     display_y: i32,
 }
@@ -69,6 +71,7 @@ impl Default for Args {
             fps: env_number("LAN_DUAL_WGC_FPS", 30, 1, 240) as u32,
             width: env_number("LAN_DUAL_WGC_WIDTH", 1280, 1, 7680),
             height: env_number("LAN_DUAL_WGC_HEIGHT", 720, 1, 4320),
+            jpeg_quality: env_jpeg_quality("LAN_DUAL_WGC_JPEG_QUALITY", 0.62),
             display_x: env_number("LAN_DUAL_WGC_DISPLAY_X", 0, -32768, 32767),
             display_y: env_number("LAN_DUAL_WGC_DISPLAY_Y", 0, -32768, 32767),
         }
@@ -88,6 +91,7 @@ Options:
   --fps <n>           Frame pacing target. Default: LAN_DUAL_WGC_FPS or 30
   --width <px>        Requested width. Default: LAN_DUAL_WGC_WIDTH or 1280
   --height <px>       Requested height. Default: LAN_DUAL_WGC_HEIGHT or 720
+  --jpegQuality <n>   JPEG quality as 0.01-1.0 or 1-100. Default: LAN_DUAL_WGC_JPEG_QUALITY or 0.62
   --displayX <px>     Monitor lookup point X. Default: LAN_DUAL_WGC_DISPLAY_X or 0
   --displayY <px>     Monitor lookup point Y. Default: LAN_DUAL_WGC_DISPLAY_Y or 0
   --help, -h          Show this help
@@ -114,6 +118,10 @@ fn parse_args() -> Result<Args, String> {
             "--fps" => args.fps = parse_next::<u32>(&mut iter, "--fps")?.clamp(1, 240),
             "--width" => args.width = parse_next::<i32>(&mut iter, "--width")?.clamp(1, 7680),
             "--height" => args.height = parse_next::<i32>(&mut iter, "--height")?.clamp(1, 4320),
+            "--jpegQuality" => {
+                let value = parse_next::<f32>(&mut iter, "--jpegQuality")?;
+                args.jpeg_quality = normalize_jpeg_quality(value);
+            }
             "--displayX" => args.display_x = parse_next(&mut iter, "--displayX")?,
             "--displayY" => args.display_y = parse_next(&mut iter, "--displayY")?,
             _ => return Err(format!("Unknown argument: {token}")),
@@ -142,6 +150,19 @@ fn env_number(name: &str, fallback: i32, min: i32, max: i32) -> i32 {
         .clamp(min, max)
 }
 
+fn env_jpeg_quality(name: &str, fallback: f32) -> f32 {
+    env::var(name)
+        .ok()
+        .and_then(|value| value.parse::<f32>().ok())
+        .map(normalize_jpeg_quality)
+        .unwrap_or_else(|| normalize_jpeg_quality(fallback))
+}
+
+fn normalize_jpeg_quality(value: f32) -> f32 {
+    let normalized = if value > 1.0 { value / 100.0 } else { value };
+    normalized.clamp(0.01, 1.0)
+}
+
 fn now_iso_like() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
@@ -163,6 +184,7 @@ fn run_mock(args: &Args) -> Result<(), String> {
         "width": args.width,
         "height": args.height,
         "fps": args.fps,
+        "jpegQuality": args.jpeg_quality,
     }))?;
 
     let payload_bytes = base64::engine::general_purpose::STANDARD
@@ -181,6 +203,8 @@ fn run_mock(args: &Args) -> Result<(), String> {
             "height": args.height,
             "sourceWidth": args.width,
             "sourceHeight": args.height,
+            "jpegQuality": args.jpeg_quality,
+            "scaled": false,
             "dataBase64": ONE_PIXEL_JPEG,
             "payloadBytes": payload_bytes,
         }))?;
@@ -266,6 +290,7 @@ unsafe fn probe_wgc(args: &Args) -> Result<serde_json::Value, String> {
         "requestedWidth": args.width,
         "requestedHeight": args.height,
         "requestedFps": args.fps,
+        "requestedJpegQuality": args.jpeg_quality,
         "helperProtocol": "json-lines-v1",
         "nextStep": "run helper without --probe/--mock to emit real JPEG frames",
     }))
@@ -288,6 +313,12 @@ unsafe fn capture_wgc(args: &Args) -> Result<(), String> {
         .map_err(|error| format!("CreateCaptureSession failed: {error}"))?;
     let _ = session.SetIsCursorCaptureEnabled(false);
     let _ = session.SetIsBorderRequired(false);
+    let (output_width, output_height) = target_dimensions(
+        objects.item_size.Width.max(1) as u32,
+        objects.item_size.Height.max(1) as u32,
+        args.width.max(1) as u32,
+        args.height.max(1) as u32,
+    );
 
     print_json_line(json!({
         "type": "hello",
@@ -296,13 +327,15 @@ unsafe fn capture_wgc(args: &Args) -> Result<(), String> {
         "encoding": "base64",
         "protocol": "json-lines-v1",
         "displayName": objects.display_name,
-        "width": objects.item_size.Width,
-        "height": objects.item_size.Height,
+        "width": output_width,
+        "height": output_height,
         "sourceWidth": objects.item_size.Width,
         "sourceHeight": objects.item_size.Height,
         "requestedWidth": args.width,
         "requestedHeight": args.height,
         "fps": args.fps,
+        "jpegQuality": args.jpeg_quality,
+        "scaled": output_width != objects.item_size.Width.max(1) as u32 || output_height != objects.item_size.Height.max(1) as u32,
     }))?;
 
     let (tx, rx) = mpsc::channel::<()>();
@@ -328,7 +361,8 @@ unsafe fn capture_wgc(args: &Args) -> Result<(), String> {
         let frame = pool
             .TryGetNextFrame()
             .map_err(|error| format!("TryGetNextFrame failed: {error}"))?;
-        let captured = capture_frame_to_jpeg(&objects.d3d_device, &objects.d3d_context, &frame)?;
+        let captured =
+            capture_frame_to_jpeg(&objects.d3d_device, &objects.d3d_context, &frame, args)?;
         frame
             .Close()
             .map_err(|error| format!("Direct3D11CaptureFrame.Close failed: {error}"))?;
@@ -342,6 +376,8 @@ unsafe fn capture_wgc(args: &Args) -> Result<(), String> {
             "height": captured.height,
             "sourceWidth": captured.source_width,
             "sourceHeight": captured.source_height,
+            "jpegQuality": args.jpeg_quality,
+            "scaled": captured.width != captured.source_width || captured.height != captured.source_height,
             "dataBase64": base64::engine::general_purpose::STANDARD.encode(&captured.jpeg),
             "payloadBytes": captured.jpeg.len(),
         }))?;
@@ -430,6 +466,7 @@ unsafe fn capture_frame_to_jpeg(
     device: &ID3D11Device,
     context: &ID3D11DeviceContext,
     frame: &Direct3D11CaptureFrame,
+    args: &Args,
 ) -> Result<CapturedJpeg, String> {
     let surface = frame
         .Surface()
@@ -450,8 +487,14 @@ unsafe fn capture_frame_to_jpeg(
     let content_size = frame
         .ContentSize()
         .map_err(|error| format!("Direct3D11CaptureFrame.ContentSize failed: {error}"))?;
-    let width = (content_size.Width.max(1) as u32).min(desc.Width.max(1));
-    let height = (content_size.Height.max(1) as u32).min(desc.Height.max(1));
+    let source_width = (content_size.Width.max(1) as u32).min(desc.Width.max(1));
+    let source_height = (content_size.Height.max(1) as u32).min(desc.Height.max(1));
+    let (width, height) = target_dimensions(
+        source_width,
+        source_height,
+        args.width.max(1) as u32,
+        args.height.max(1) as u32,
+    );
 
     let staging_desc = D3D11_TEXTURE2D_DESC {
         Width: desc.Width,
@@ -487,32 +530,62 @@ unsafe fn capture_frame_to_jpeg(
     context
         .Map(&staging_resource, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
         .map_err(|error| format!("ID3D11DeviceContext.Map staging texture failed: {error}"))?;
-    let bgr_pixels = copy_mapped_bgra_to_bgr(&mapped, width, height);
+    let bgr_pixels = copy_mapped_bgra_to_bgr(&mapped, source_width, source_height, width, height);
     context.Unmap(&staging_resource, 0);
     let bgr_pixels = bgr_pixels?;
-    let jpeg = encode_bgr_to_jpeg(width, height, &bgr_pixels, width * 3)?;
+    let jpeg = encode_bgr_to_jpeg(width, height, &bgr_pixels, width * 3, args.jpeg_quality)?;
 
     Ok(CapturedJpeg {
         width,
         height,
-        source_width: desc.Width,
-        source_height: desc.Height,
+        source_width,
+        source_height,
         jpeg,
     })
 }
 
+fn target_dimensions(
+    source_width: u32,
+    source_height: u32,
+    requested_width: u32,
+    requested_height: u32,
+) -> (u32, u32) {
+    let requested_width = requested_width.max(1);
+    let requested_height = requested_height.max(1);
+    if requested_width >= source_width && requested_height >= source_height {
+        return (source_width.max(1), source_height.max(1));
+    }
+    let scale = (requested_width as f64 / source_width.max(1) as f64)
+        .min(requested_height as f64 / source_height.max(1) as f64)
+        .min(1.0)
+        .max(0.001);
+    let width = ((source_width as f64 * scale).round() as u32)
+        .max(1)
+        .min(source_width)
+        .min(requested_width);
+    let height = ((source_height as f64 * scale).round() as u32)
+        .max(1)
+        .min(source_height)
+        .min(requested_height);
+    (width, height)
+}
+
 unsafe fn copy_mapped_bgra_to_bgr(
     mapped: &D3D11_MAPPED_SUBRESOURCE,
-    width: u32,
-    height: u32,
+    source_width: u32,
+    source_height: u32,
+    target_width: u32,
+    target_height: u32,
 ) -> Result<Vec<u8>, String> {
     if mapped.pData.is_null() {
         return Err("Mapped WGC texture returned null data".to_string());
     }
     let row_pitch = mapped.RowPitch as usize;
-    let width = width as usize;
-    let height = height as usize;
-    let source_row_bytes = width
+    let source_width = source_width as usize;
+    let source_height = source_height as usize;
+    let target_width = target_width as usize;
+    let target_height = target_height as usize;
+    let source_row_bytes = source_width
         .checked_mul(4)
         .ok_or_else(|| "WGC frame width overflow".to_string())?;
     if row_pitch < source_row_bytes {
@@ -521,19 +594,47 @@ unsafe fn copy_mapped_bgra_to_bgr(
         ));
     }
     let source_len = row_pitch
-        .checked_mul(height)
+        .checked_mul(source_height)
         .ok_or_else(|| "WGC mapped source length overflow".to_string())?;
     let source = std::slice::from_raw_parts(mapped.pData as *const u8, source_len);
-    let mut output = vec![0u8; width * height * 3];
-    for y in 0..height {
-        let source_row = &source[y * row_pitch..y * row_pitch + source_row_bytes];
-        let output_row = &mut output[y * width * 3..(y + 1) * width * 3];
-        for x in 0..width {
-            let source_index = x * 4;
-            let output_index = x * 3;
-            output_row[output_index] = source_row[source_index];
-            output_row[output_index + 1] = source_row[source_index + 1];
-            output_row[output_index + 2] = source_row[source_index + 2];
+    let mut output = vec![0u8; target_width * target_height * 3];
+    if target_width == source_width && target_height == source_height {
+        for y in 0..target_height {
+            let source_row = &source[y * row_pitch..y * row_pitch + source_row_bytes];
+            let output_row = &mut output[y * target_width * 3..(y + 1) * target_width * 3];
+            for x in 0..target_width {
+                let source_index = x * 4;
+                let output_index = x * 3;
+                output_row[output_index] = source_row[source_index];
+                output_row[output_index + 1] = source_row[source_index + 1];
+                output_row[output_index + 2] = source_row[source_index + 2];
+            }
+        }
+        return Ok(output);
+    }
+
+    let scale_x = source_width as f64 / target_width as f64;
+    let scale_y = source_height as f64 / target_height as f64;
+    for y in 0..target_height {
+        let source_y = ((y as f64 + 0.5) * scale_y - 0.5).clamp(0.0, (source_height - 1) as f64);
+        let y0 = source_y.floor() as usize;
+        let y1 = (y0 + 1).min(source_height - 1);
+        let wy = source_y - y0 as f64;
+        for x in 0..target_width {
+            let source_x = ((x as f64 + 0.5) * scale_x - 0.5).clamp(0.0, (source_width - 1) as f64);
+            let x0 = source_x.floor() as usize;
+            let x1 = (x0 + 1).min(source_width - 1);
+            let wx = source_x - x0 as f64;
+            let output_index = (y * target_width + x) * 3;
+            for channel in 0..3 {
+                let p00 = source[y0 * row_pitch + x0 * 4 + channel] as f64;
+                let p10 = source[y0 * row_pitch + x1 * 4 + channel] as f64;
+                let p01 = source[y1 * row_pitch + x0 * 4 + channel] as f64;
+                let p11 = source[y1 * row_pitch + x1 * 4 + channel] as f64;
+                let top = p00 + (p10 - p00) * wx;
+                let bottom = p01 + (p11 - p01) * wx;
+                output[output_index + channel] = (top + (bottom - top) * wy).round() as u8;
+            }
         }
     }
     Ok(output)
@@ -544,6 +645,7 @@ unsafe fn encode_bgr_to_jpeg(
     height: u32,
     pixels: &[u8],
     stride: u32,
+    jpeg_quality: f32,
 ) -> Result<Vec<u8>, String> {
     let expected_len = stride as usize * height as usize;
     if pixels.len() < expected_len {
@@ -574,6 +676,9 @@ unsafe fn encode_bgr_to_jpeg(
         .CreateNewFrame(&mut frame, &mut options)
         .map_err(|error| format!("JPEG encoder CreateNewFrame failed: {error}"))?;
     let frame = frame.ok_or_else(|| "JPEG encoder returned no frame".to_string())?;
+    if let Some(options) = options.as_ref() {
+        set_jpeg_quality(options, jpeg_quality)?;
+    }
     frame
         .Initialize(options.as_ref())
         .map_err(|error| format!("JPEG frame Initialize failed: {error}"))?;
@@ -613,6 +718,22 @@ unsafe fn encode_bgr_to_jpeg(
     let bytes = std::slice::from_raw_parts(ptr as *const u8, size).to_vec();
     let _ = GlobalUnlock(hglobal);
     Ok(bytes)
+}
+
+unsafe fn set_jpeg_quality(options: &IPropertyBag2, jpeg_quality: f32) -> Result<(), String> {
+    let mut name: Vec<u16> = "ImageQuality"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let prop = PROPBAG2 {
+        vt: VT_R4,
+        pstrName: PWSTR(name.as_mut_ptr()),
+        ..Default::default()
+    };
+    let value = VARIANT::from(normalize_jpeg_quality(jpeg_quality));
+    options
+        .Write(1, &prop, &value)
+        .map_err(|error| format!("JPEG encoder ImageQuality option failed: {error}"))
 }
 
 unsafe fn create_winrt_direct3d_device(device: &ID3D11Device) -> Result<IDirect3DDevice, String> {

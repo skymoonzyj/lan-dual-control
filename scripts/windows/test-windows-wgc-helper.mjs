@@ -14,6 +14,11 @@ const defaults = {
   observerDurationMs: 1200,
   minObserverFrames: 5,
   realCaptureFrames: 1,
+  realCaptureWidth: 1280,
+  realCaptureHeight: 720,
+  realCaptureJpegQuality: 0.55,
+  realHostDurationMs: 1500,
+  realHostMinFrames: 1,
 };
 
 function printHelp() {
@@ -25,7 +30,13 @@ Options:
   --observerDurationMs <ms> Node host integration observation window. Default: ${defaults.observerDurationMs}
   --minObserverFrames <n>   Minimum frames in Node host integration check. Default: ${defaults.minObserverFrames}
   --realCaptureFrames <n>   Real WGC frames to capture directly. Default: ${defaults.realCaptureFrames}
+  --realCaptureWidth <px>   Requested real WGC capture width. Default: ${defaults.realCaptureWidth}
+  --realCaptureHeight <px>  Requested real WGC capture height. Default: ${defaults.realCaptureHeight}
+  --realCaptureJpegQuality <n> Real WGC JPEG quality. Default: ${defaults.realCaptureJpegQuality}
+  --realHostDurationMs <ms> Real Windows host WGC observation window. Default: ${defaults.realHostDurationMs}
+  --realHostMinFrames <n>   Minimum real Windows host WGC frames. Default: ${defaults.realHostMinFrames}
   --skipRealCapture         Skip direct real WGC frame readback check
+  --skipRealHostIntegration Skip real Windows host + real WGC helper integration check
   --skipObserver            Skip Node host integration check
   --json                    Print JSON summary
   --help, -h                Show this help without building
@@ -33,13 +44,21 @@ Options:
 Description:
   Builds apps/windows-wgc-helper, verifies --probe creates WGC/D3D objects,
   verifies --mock emits json-lines-v1 frames with parseable timestamps, verifies
-  default capture emits real JPEG frames, then points the Windows host WGC helper
-  mode at the built Rust helper in mock mode for a stable contract check.
+  real capture emits scaled JPEG frames with quality applied, points the Windows
+  host WGC helper mode at mock helper output for a stable contract check, then
+  verifies a temporary Windows host can receive real WGC helper frames.
 `);
 }
 
 function parseArgs(argv) {
-  const args = { ...defaults, skipRealCapture: false, skipObserver: false, json: false, help: false };
+  const args = {
+    ...defaults,
+    skipRealCapture: false,
+    skipRealHostIntegration: false,
+    skipObserver: false,
+    json: false,
+    help: false,
+  };
   for (let index = 2; index < argv.length; index += 1) {
     const token = argv[index];
     const next = argv[index + 1];
@@ -53,6 +72,10 @@ function parseArgs(argv) {
     }
     if (token === "--skipRealCapture") {
       args.skipRealCapture = true;
+      continue;
+    }
+    if (token === "--skipRealHostIntegration") {
+      args.skipRealHostIntegration = true;
       continue;
     }
     if (token === "--json") {
@@ -76,6 +99,31 @@ function parseArgs(argv) {
     }
     if (token === "--realCaptureFrames" && next && !next.startsWith("--")) {
       args.realCaptureFrames = Math.max(1, Number(next) || defaults.realCaptureFrames);
+      index += 1;
+      continue;
+    }
+    if (token === "--realCaptureWidth" && next && !next.startsWith("--")) {
+      args.realCaptureWidth = Math.max(1, Number(next) || defaults.realCaptureWidth);
+      index += 1;
+      continue;
+    }
+    if (token === "--realCaptureHeight" && next && !next.startsWith("--")) {
+      args.realCaptureHeight = Math.max(1, Number(next) || defaults.realCaptureHeight);
+      index += 1;
+      continue;
+    }
+    if (token === "--realCaptureJpegQuality" && next && !next.startsWith("--")) {
+      args.realCaptureJpegQuality = Math.min(1, Math.max(0.01, Number(next) || defaults.realCaptureJpegQuality));
+      index += 1;
+      continue;
+    }
+    if (token === "--realHostDurationMs" && next && !next.startsWith("--")) {
+      args.realHostDurationMs = Math.max(500, Number(next) || defaults.realHostDurationMs);
+      index += 1;
+      continue;
+    }
+    if (token === "--realHostMinFrames" && next && !next.startsWith("--")) {
+      args.realHostMinFrames = Math.max(1, Number(next) || defaults.realHostMinFrames);
       index += 1;
       continue;
     }
@@ -209,7 +257,18 @@ function assertJpegBase64(frame, label) {
 }
 
 async function checkRealCaptureFrames(args) {
-  const result = await runRequired(helperExe, ["--frames", String(args.realCaptureFrames), "--fps", "10"], {
+  const result = await runRequired(helperExe, [
+    "--frames",
+    String(args.realCaptureFrames),
+    "--fps",
+    "10",
+    "--width",
+    String(args.realCaptureWidth),
+    "--height",
+    String(args.realCaptureHeight),
+    "--jpegQuality",
+    String(args.realCaptureJpegQuality),
+  ], {
     cwd: helperDir,
     timeoutMs: args.timeoutMs,
   });
@@ -220,6 +279,9 @@ async function checkRealCaptureFrames(args) {
   assert(hello?.protocol === "json-lines-v1", `missing real capture hello protocol: ${JSON.stringify(hello)}`);
   assert(hello?.codec === "jpeg", `expected real capture codec=jpeg, got ${hello?.codec || "missing"}`);
   assert(hello?.encoding === "base64", `expected real capture encoding=base64, got ${hello?.encoding || "missing"}`);
+  assert(Number(hello?.width) > 0 && Number(hello?.height) > 0, `invalid real capture hello dimensions: ${JSON.stringify(hello)}`);
+  assert(Number(hello.width) <= args.realCaptureWidth && Number(hello.height) <= args.realCaptureHeight, `real capture hello did not honor requested bounds: ${JSON.stringify(hello)}`);
+  assert(Math.abs(Number(hello.jpegQuality) - args.realCaptureJpegQuality) < 0.001, `real capture hello did not echo jpegQuality=${args.realCaptureJpegQuality}: ${JSON.stringify(hello)}`);
   assert(frames.length === args.realCaptureFrames, `expected ${args.realCaptureFrames} real frame(s), got ${frames.length}`);
 
   let totalPayloadBytes = 0;
@@ -227,6 +289,13 @@ async function checkRealCaptureFrames(args) {
     const label = `real frame ${index + 1}`;
     assert(Date.parse(String(frame.timestamp || "")) > 0, `${label} timestamp is not parseable: ${JSON.stringify(frame)}`);
     assert(Number(frame.width) > 0 && Number(frame.height) > 0, `${label} has invalid dimensions: ${JSON.stringify(frame)}`);
+    assert(Number(frame.width) <= args.realCaptureWidth && Number(frame.height) <= args.realCaptureHeight, `${label} did not honor requested bounds: ${JSON.stringify(frame)}`);
+    assert(Number(frame.sourceWidth) >= Number(frame.width) && Number(frame.sourceHeight) >= Number(frame.height), `${label} source dimensions should be at least output dimensions: ${JSON.stringify(frame)}`);
+    if (Number(frame.sourceWidth) > args.realCaptureWidth || Number(frame.sourceHeight) > args.realCaptureHeight) {
+      assert(frame.scaled === true, `${label} should report scaled=true: ${JSON.stringify(frame)}`);
+      assert(Number(frame.width) * Number(frame.height) < Number(frame.sourceWidth) * Number(frame.sourceHeight), `${label} did not reduce pixel count: ${JSON.stringify(frame)}`);
+    }
+    assert(Math.abs(Number(frame.jpegQuality) - args.realCaptureJpegQuality) < 0.001, `${label} did not echo jpegQuality=${args.realCaptureJpegQuality}: ${JSON.stringify(frame)}`);
     const decodedLength = assertJpegBase64(frame, label);
     totalPayloadBytes += decodedLength;
     if (Number(frame.payloadBytes) > 0) {
@@ -240,12 +309,16 @@ async function checkRealCaptureFrames(args) {
     frameCount: frames.length,
     width: Number(firstFrame.width) || 0,
     height: Number(firstFrame.height) || 0,
+    sourceWidth: Number(firstFrame.sourceWidth) || 0,
+    sourceHeight: Number(firstFrame.sourceHeight) || 0,
+    jpegQuality: Number(firstFrame.jpegQuality) || 0,
+    scaled: firstFrame.scaled === true,
     payloadBytes: Number(firstFrame.payloadBytes) || assertJpegBase64(firstFrame, "first real frame"),
     totalPayloadBytes,
   };
 }
 
-async function checkNodeHostIntegration(args) {
+async function checkMockNodeHostIntegration(args) {
   const env = {
     ...process.env,
     LAN_DUAL_WINDOWS_WGC_HELPER: helperExe,
@@ -286,6 +359,61 @@ async function checkNodeHostIntegration(args) {
   return { frameCount: observation.frameCount, fps: observation.fps, pipeline: screen.capturePipeline };
 }
 
+async function checkRealNodeHostIntegration(args) {
+  const env = {
+    ...process.env,
+    LAN_DUAL_WINDOWS_WGC_HELPER: helperExe,
+  };
+  delete env.LAN_DUAL_WINDOWS_WGC_HELPER_ARGS;
+  const result = await runRequired(process.execPath, [
+    observeScript,
+    "--screenMode",
+    "wgc",
+    "--requireRealVideo",
+    "true",
+    "--width",
+    String(args.realCaptureWidth),
+    "--height",
+    String(args.realCaptureHeight),
+    "--durationMs",
+    String(args.realHostDurationMs),
+    "--minFrames",
+    String(args.realHostMinFrames),
+    "--minFps",
+    "0",
+    "--maxGapMs",
+    String(Math.max(10000, args.realHostDurationMs + 6000)),
+    "--resourceSample",
+    "false",
+    "--json",
+  ], {
+    cwd: repoRoot,
+    env,
+    timeoutMs: args.timeoutMs,
+  });
+  const report = JSON.parse(result.stdout.trim().replace(/^\uFEFF/, ""));
+  const screen = report.discoveryScreen || {};
+  const wgc = screen.wgc || {};
+  const observation = report.observation || {};
+  assert(report.ok === true, "real host observer report was not ok");
+  assert(screen.capturePipeline === "windows-wgc-helper-jpeg", `expected real WGC helper pipeline, got ${screen.capturePipeline || "missing"}`);
+  assert(wgc.active === true, `expected real screen.wgc.active=true, got ${JSON.stringify(wgc)}`);
+  assert(wgc.helperCommand === helperExe, `expected real helper command ${helperExe}, got ${wgc.helperCommand || "missing"}`);
+  assert(Array.isArray(observation.pipelines) && observation.pipelines.includes("windows-wgc-helper-jpeg"), "real observer did not receive WGC helper frames");
+  assert(Number(observation.frameCount) >= args.realHostMinFrames, `expected at least ${args.realHostMinFrames} real host frame(s), got ${observation.frameCount || 0}`);
+  assert(Number(observation.width) <= args.realCaptureWidth && Number(observation.height) <= args.realCaptureHeight, `real host output did not honor requested bounds: ${JSON.stringify(observation)}`);
+  assert(Array.isArray(observation.jpegQualities) && observation.jpegQualities.length > 0, "real host did not report JPEG quality");
+  return {
+    frameCount: observation.frameCount,
+    fps: observation.fps,
+    width: observation.width,
+    height: observation.height,
+    avgPayloadBytes: observation.avgPayloadBytes,
+    maxFrameAgeMs: observation.maxFrameAgeMs,
+    pipeline: screen.capturePipeline,
+  };
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -297,8 +425,9 @@ async function main() {
   const probe = await probeHelper(args);
   const mock = await checkMockFrames(args);
   const realCapture = args.skipRealCapture ? null : await checkRealCaptureFrames(args);
-  const observer = args.skipObserver ? null : await checkNodeHostIntegration(args);
-  const summary = { ok: true, helperPath, probe, mock, realCapture, observer };
+  const mockObserver = args.skipObserver ? null : await checkMockNodeHostIntegration(args);
+  const realHost = args.skipObserver || args.skipRealHostIntegration ? null : await checkRealNodeHostIntegration(args);
+  const summary = { ok: true, helperPath, probe, mock, realCapture, mockObserver, realHost };
   if (args.json) {
     console.log(JSON.stringify(summary, null, 2));
   } else {
@@ -306,10 +435,13 @@ async function main() {
     console.log(`[OK] WGC probe: ${probe.displayName || "display"} ${probe.width}x${probe.height}`);
     console.log(`[OK] Mock contract frames: ${mock.frameCount}`);
     if (realCapture) {
-      console.log(`[OK] Real WGC capture: ${realCapture.frameCount} frame(s) ${realCapture.width}x${realCapture.height}, ${realCapture.payloadBytes} bytes first JPEG`);
+      console.log(`[OK] Real WGC capture: ${realCapture.frameCount} frame(s) ${realCapture.width}x${realCapture.height} from ${realCapture.sourceWidth}x${realCapture.sourceHeight}, q=${realCapture.jpegQuality}, ${realCapture.payloadBytes} bytes first JPEG`);
     }
-    if (observer) {
-      console.log(`[OK] Node host integration: ${observer.frameCount} frames via ${observer.pipeline}`);
+    if (mockObserver) {
+      console.log(`[OK] Mock Node host integration: ${mockObserver.frameCount} frames via ${mockObserver.pipeline}`);
+    }
+    if (realHost) {
+      console.log(`[OK] Real Windows host WGC integration: ${realHost.frameCount} frame(s) ${realHost.width}x${realHost.height}, avg ${Math.round(realHost.avgPayloadBytes || 0)} bytes via ${realHost.pipeline}`);
     }
   }
 }

@@ -19,6 +19,46 @@
 
 ## 2026-06-14 Windows Codex
 
+日期：2026-06-14 21:05
+开发端：Windows Codex
+本轮目标：让 Windows WGC Rust helper 消费请求分辨率和 JPEG quality，并验证真实 Windows host 能走真实 helper 出帧。
+完成内容：
+- `lan-dual-wgc-helper` 新增 `--jpegQuality` 参数和 `LAN_DUAL_WGC_JPEG_QUALITY` 环境变量，兼容 `0.01-1.0` 和 `1-100` 两种写法。
+- 默认 capture 模式现在会按请求宽高等比缩放且不放大；例如 `2560x1440` 源请求 `1280x720` 会输出 `1280x720`。
+- WIC JPEG encoder 现在写入 `ImageQuality`，frame/hello JSON 会带 `jpegQuality`、`scaled`、`sourceWidth/sourceHeight` 诊断。
+- `scripts/windows/test-windows-wgc-helper.mjs` 升级为三段验证：直接缩放真帧 JPEG、mock helper 合同接入、真实 Windows host + 真实 helper 出帧。
+- Windows WGC helper README、Windows host README、CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已同步。
+修改文件：
+- `apps/windows-wgc-helper/Cargo.toml`
+- `apps/windows-wgc-helper/src/main.rs`
+- `apps/windows-wgc-helper/README.md`
+- `scripts/windows/test-windows-wgc-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `cargo fmt --check`（`apps/windows-wgc-helper`）
+- `cargo check --quiet`（`apps/windows-wgc-helper`）
+- `node --check scripts/windows/test-windows-wgc-helper.mjs`
+- `node scripts/windows/test-windows-wgc-helper.mjs --timeoutMs 120000`
+- 真实 host 额外观察：`observe-windows-host-video --screenMode wgc --requireRealVideo true --durationMs 1500 --minFrames 1 --resourceSample false --json`
+验证结果：
+- WGC probe 通过，主显示器为 `显示 1`，源尺寸 `2560x1440`。
+- 直接 helper 真帧通过：请求 `1280x720`、q=`0.55`，输出 `1280x720`，本轮复验首帧约 `96 KB`。
+- mock Node host 合同通过：36 帧 `windows-wgc-helper-jpeg`。
+- 真实 Windows host + 真实 helper 通过：14 帧 `1280x720`，平均约 `84 KB`。
+遗留问题：
+- 当前 WGC helper 仍是事件驱动 + JPEG/base64 过渡形态；还需要连续帧 pacing、资源占用对照、码率 A/B 和 Mac client 真连观感验收。
+下一步建议：
+- 运行更长的 `observe-windows-host-video --screenMode wgc --resourceSampleTree true --json`，和 FFmpeg 60Hz 基线对照 FPS、最大间隔、CPU/内存、payload 和 frame age；再请 Mac 端用 Mac client 真连看观感和延迟。
+是否改了协议：否；只扩展 Windows 内部 helper 输出诊断字段，复用既有 `video_frame`。
+是否需要另一端配合：暂不需要；下一轮做完资源对照后再请 Mac client 真机验收。
+
+## 2026-06-14 Windows Codex
+
 日期：2026-06-14 20:35
 开发端：Windows Codex
 本轮目标：让 Windows WGC Rust helper 输出真实屏幕 JPEG 帧，并把自测升级为真帧校验。
