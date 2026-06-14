@@ -113,6 +113,14 @@ function assertNotIncludes(text, expected, label) {
   }
 }
 
+function parseJsonOutput(text, label) {
+  try {
+    return JSON.parse(String(text).trim());
+  } catch (error) {
+    throw new Error(`${label} did not print valid JSON: ${error.message}\nOutput:\n${text}`);
+  }
+}
+
 async function getFreePort() {
   return new Promise((resolvePort, rejectPort) => {
     const server = net.createServer();
@@ -225,6 +233,25 @@ async function assertStatusOffline(timeoutMs) {
   print("OK", "Status reports offline hosts without starting or requiring a password");
 }
 
+async function assertStatusOfflineJson(timeoutMs) {
+  const port = await getFreePort();
+  const result = await runNode(["--status", "--json", "--host", "127.0.0.1", "--port", String(port)], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "" },
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (result.exitCode !== 1 || result.timedOut) {
+    throw new Error(`Offline JSON status should exit 1 without starting a host.\n${output}`);
+  }
+  const json = parseJsonOutput(result.stdout, "offline JSON status");
+  if (json.online !== false || json.ok !== false || json.probe?.port !== port) {
+    throw new Error(`Offline JSON status had unexpected shape.\n${result.stdout}`);
+  }
+  assertNotIncludes(output, "[INFO]", "offline JSON status");
+  assertNotIncludes(output, "Starting Mac host", "offline JSON status");
+  print("OK", "Status reports offline hosts as machine-readable JSON");
+}
+
 async function assertStatusOnline(timeoutMs) {
   const port = await getFreePort();
   const commandArgs = [
@@ -295,6 +322,25 @@ async function assertStatusOnline(timeoutMs) {
     assertIncludes(statusOutput, "Windows side can try", "online status");
     assertIncludes(statusOutput, "Could not inspect Mac host runtime changes since status-helper-test", "online status");
     assertNotIncludes(statusOutput, "Starting Mac host", "online status");
+    const jsonStatus = await runNode(["--status", "--json", "--host", "127.0.0.1", "--port", String(port)], {
+      timeoutMs,
+      env: { LAN_DUAL_PASSWORD: "" },
+    });
+    const jsonOutput = `${jsonStatus.stdout}\n${jsonStatus.stderr}`;
+    if (jsonStatus.exitCode !== 0 || jsonStatus.timedOut) {
+      throw new Error(`Online JSON status should exit 0.\n${jsonOutput}`);
+    }
+    const json = parseJsonOutput(jsonStatus.stdout, "online JSON status");
+    if (json.online !== true || json.ok !== true || json.runtime?.buildId !== "status-helper-test") {
+      throw new Error(`Online JSON status had unexpected runtime shape.\n${jsonStatus.stdout}`);
+    }
+    if (json.buildDiff?.comparable !== false || json.buildDiff?.fromBuildId !== "status-helper-test") {
+      throw new Error(`Online JSON status had unexpected buildDiff shape.\n${jsonStatus.stdout}`);
+    }
+    if (!Array.isArray(json.lanAddresses)) {
+      throw new Error(`Online JSON status should include lanAddresses array.\n${jsonStatus.stdout}`);
+    }
+    assertNotIncludes(jsonOutput, "[INFO]", "online JSON status");
     print("OK", `Status reports running Mac host on temporary port ${port}`);
   } finally {
     child.kill();
@@ -398,6 +444,7 @@ async function main() {
   await assertEphemeralPasswordDryRun(args.timeoutMs);
   await assertEphemeralPasswordRefusesEnvOverride(args.timeoutMs);
   await assertStatusOffline(args.timeoutMs);
+  await assertStatusOfflineJson(args.timeoutMs);
   await assertStatusOnline(args.timeoutMs);
   await assertLaunchWithEnvPassword(args.timeoutMs);
   await assertLaunchWithEphemeralPassword(args.timeoutMs);

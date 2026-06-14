@@ -33,6 +33,7 @@ const defaults = {
   requireRuntimeCheck: false,
   allowExisting: false,
   status: false,
+  json: false,
   dryRun: false,
   help: false,
 };
@@ -61,6 +62,7 @@ function parseArgs(argv) {
       key === "requireRuntimeCheck" ||
       key === "allowExisting" ||
       key === "status" ||
+      key === "json" ||
       key === "dryRun"
     ) {
       args[key] = true;
@@ -136,6 +138,7 @@ Options:
   --allowExisting            Do not refuse when /discovery already answers on the port.
   --status                   Print current /discovery runtime status and stale-build source diff,
                              then exit without starting.
+  --json                     With --status, print machine-readable JSON only.
   --dryRun                   Print the resolved launch plan and exit.
   --help, -h                 Show this help without starting Mac host.
 `);
@@ -222,20 +225,56 @@ function getChangedHostRuntimeFiles(fromBuildId, toBuildId) {
     .filter(Boolean);
 }
 
-function printBuildMismatchStatus(fromBuildId, toBuildId) {
-  console.log(`[WARN] Running host build ${fromBuildId} differs from current git ${toBuildId}; restart if you need the latest build.`);
+function getBuildDiffStatus(fromBuildId, toBuildId) {
   const changedHostFiles = getChangedHostRuntimeFiles(fromBuildId, toBuildId);
   if (!Array.isArray(changedHostFiles)) {
-    console.log(`[INFO] Could not inspect Mac host runtime changes since ${fromBuildId}; old build is not available in local git history.`);
-    return;
+    return {
+      differs: true,
+      fromBuildId,
+      toBuildId,
+      comparable: false,
+      changedHostRuntimeFiles: null,
+      changedHostRuntimeFileCount: null,
+      message: `Could not inspect Mac host runtime changes since ${fromBuildId}; old build is not available in local git history.`,
+    };
   }
   if (changedHostFiles.length === 0) {
-    console.log(`[INFO] No Mac host runtime source changes since ${fromBuildId}; the running service behavior is likely current, but build metadata is stale.`);
+    return {
+      differs: true,
+      fromBuildId,
+      toBuildId,
+      comparable: true,
+      changedHostRuntimeFiles: [],
+      changedHostRuntimeFileCount: 0,
+      message: `No Mac host runtime source changes since ${fromBuildId}; the running service behavior is likely current, but build metadata is stale.`,
+    };
+  }
+  return {
+    differs: true,
+    fromBuildId,
+    toBuildId,
+    comparable: true,
+    changedHostRuntimeFiles: changedHostFiles,
+    changedHostRuntimeFileCount: changedHostFiles.length,
+    message: `Mac host runtime source changed since ${fromBuildId}: ${changedHostFiles.slice(0, 4).join(", ")}${
+      changedHostFiles.length > 4 ? ` (+${changedHostFiles.length - 4} more)` : ""
+    }`,
+  };
+}
+
+function printBuildMismatchStatus(buildDiff) {
+  console.log(
+    `[WARN] Running host build ${buildDiff.fromBuildId} differs from current git ${buildDiff.toBuildId}; restart if you need the latest build.`,
+  );
+  if (!buildDiff.comparable) {
+    console.log(`[INFO] ${buildDiff.message}`);
     return;
   }
-  const shown = changedHostFiles.slice(0, 4).join(", ");
-  const more = changedHostFiles.length > 4 ? ` (+${changedHostFiles.length - 4} more)` : "";
-  console.log(`[WARN] Mac host runtime source changed since ${fromBuildId}: ${shown}${more}`);
+  if (buildDiff.changedHostRuntimeFileCount === 0) {
+    console.log(`[INFO] ${buildDiff.message}`);
+    return;
+  }
+  console.log(`[WARN] ${buildDiff.message}`);
 }
 
 function getLanAddresses() {
@@ -299,32 +338,83 @@ function discoveryPermissionSummary(discovery) {
 
 async function printStatus(args) {
   const probeHost = statusProbeHost(args);
-  console.log(`[INFO] Mac host status probe: ${probeHost}:${args.port}`);
   try {
     const discovery = await requestJson(`http://${probeHost}:${args.port}/discovery`, Math.min(args.timeoutMs, 3000));
     const runtime = discovery.runtime || {};
     const input = discoveryInputMode(discovery);
-    console.log(`[OK] /discovery online: ${discovery.deviceName || discovery.hostName || "Mac host"} · input=${input} · ${discoveryRuntimeSummary(runtime)}`);
+    const lanAddresses = getLanAddresses();
+    const inputModeWarning = input !== "log" ? `Input mode is ${input}; keep log mode for unattended readiness checks.` : "";
+    const buildDiff = runtime.buildId && args.buildId && runtime.buildId !== args.buildId
+      ? getBuildDiffStatus(runtime.buildId, args.buildId)
+      : {
+          differs: false,
+          fromBuildId: runtime.buildId || "",
+          toBuildId: args.buildId || "",
+          comparable: true,
+          changedHostRuntimeFiles: [],
+          changedHostRuntimeFileCount: 0,
+          message: runtime.buildId && args.buildId
+            ? "Running host build matches current git."
+            : "Build comparison unavailable because runtime.buildId or current git build is missing.",
+        };
+    const payload = {
+      ok: true,
+      online: true,
+      probe: { host: probeHost, port: args.port },
+      deviceName: discovery.deviceName || discovery.hostName || "Mac host",
+      inputMode: input,
+      inputModeWarning,
+      runtime,
+      permissions: discovery.permissions || {},
+      capabilities: discovery.capabilities || {},
+      lanAddresses: lanAddresses.map((entry) => ({ ...entry, port: args.port })),
+      currentBuildId: args.buildId,
+      buildDiff,
+      discovery,
+    };
+    if (args.json) {
+      console.log(JSON.stringify(payload, null, 2));
+      return payload;
+    }
+    console.log(`[INFO] Mac host status probe: ${probeHost}:${args.port}`);
+    console.log(`[OK] /discovery online: ${payload.deviceName} · input=${input} · ${discoveryRuntimeSummary(runtime)}`);
     console.log(`[INFO] Permissions: ${discoveryPermissionSummary(discovery)}`);
     console.log(`[INFO] Capabilities: ${discoveryCapabilitySummary(discovery)}`);
-    const lanAddresses = getLanAddresses();
     if (lanAddresses.length > 0) {
       for (const entry of lanAddresses) {
         console.log(`[OK] Windows side can try: ${entry.address}:${args.port} (${entry.name})`);
       }
     }
-    if (input !== "log") {
-      console.log(`[WARN] Input mode is ${input}; keep log mode for unattended readiness checks.`);
+    if (inputModeWarning) {
+      console.log(`[WARN] ${inputModeWarning}`);
     }
     if (runtime.buildId && args.buildId && runtime.buildId !== args.buildId) {
-      printBuildMismatchStatus(runtime.buildId, args.buildId);
+      printBuildMismatchStatus(buildDiff);
     }
-    return true;
+    return payload;
   } catch (error) {
+    const payload = {
+      ok: false,
+      online: false,
+      probe: { host: probeHost, port: args.port },
+      currentBuildId: args.buildId,
+      error: {
+        message: error.message,
+      },
+      suggestions: [
+        "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword",
+        "node scripts/mac/start-mac-host.mjs --ephemeralPassword --requirePassword",
+      ],
+    };
+    if (args.json) {
+      console.log(JSON.stringify(payload, null, 2));
+      return payload;
+    }
+    console.log(`[INFO] Mac host status probe: ${probeHost}:${args.port}`);
     console.log(`[WARN] /discovery offline on ${probeHost}:${args.port}: ${error.message}`);
     console.log("[INFO] Start safely with: node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword");
     console.log("[INFO] For temporary discovery/runtime diagnostics without sharing a password: node scripts/mac/start-mac-host.mjs --ephemeralPassword --requirePassword");
-    return false;
+    return payload;
   }
 }
 
@@ -572,8 +662,8 @@ async function main() {
   const args = parseArgs(process.argv);
 
   if (args.status) {
-    const online = await printStatus(args);
-    process.exitCode = online ? 0 : 1;
+    const status = await printStatus(args);
+    process.exitCode = status.online ? 0 : 1;
     return;
   }
 

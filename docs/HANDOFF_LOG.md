@@ -62,6 +62,48 @@
 
 ## 2026-06-14 Mac Codex
 
+日期：2026-06-14 16:50
+开发端：Mac Codex
+本轮目标：让 Mac host 状态检查可被脚本/联络板稳定消费，减少自动化解析人类日志的脆弱性。
+完成内容：
+- `scripts/mac/start-mac-host.mjs --status` 新增 `--json`：在线/离线都只输出机器可读 JSON，不混入 `[INFO]`/`[WARN]` 日志行。
+- JSON 在线对象包含 `online`、`probe`、`deviceName`、`inputMode`、`runtime`、`permissions`、`capabilities`、`lanAddresses`、`currentBuildId`、`buildDiff` 和原始 `discovery`。
+- JSON 离线对象包含 `online=false`、`probe`、`currentBuildId`、`error.message` 和安全启动建议；仍按原有约定返回非 0。
+- 旧 build 诊断改为先生成 `buildDiff` 对象，再分别渲染文本/JSON，避免两种输出事实不一致。
+- 启动助手自测补充 `--status --json` 在线/离线覆盖，断言 JSON 可解析、在线包含 runtime/buildDiff/lanAddresses，且 JSON 输出不混入日志行。
+- Mac host README、CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已同步 `--status --json` 用法。
+修改文件：
+- `scripts/mac/start-mac-host.mjs`
+- `scripts/mac/test-mac-host-start-helper.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/start-mac-host.mjs`
+- `node --check scripts/mac/test-mac-host-start-helper.mjs`
+- `node scripts/mac/start-mac-host.mjs --help`
+- `node scripts/mac/test-mac-script-help.mjs --script start-mac-host.mjs`
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/mac/start-mac-host.mjs --status --json --host 127.0.0.1 --port 43770`
+- `node scripts/mac/check-mac-host-readiness.mjs --requireOpen --skipCurrentBuildCheck --timeoutMs 12000`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 语法、帮助入口、启动助手完整自测通过；`--status --json` 在线/离线路径均能输出纯 JSON。
+- 真实 `--status --json` 成功读取当前 43770：`online=true`、runtime `buildId=1506dcd`、当前源码 `currentBuildId=90d1c5d`，且 `buildDiff.changedHostRuntimeFileCount=0`。
+- Mac readiness 9/9 通过；本轮只改状态助手/自测/文档，不改协议，不要求重启当前 host。
+遗留问题：
+- 当前 Mac host 仍使用一次性随机密码，只适合 `/discovery`、runtime 和 UI diagnostics；认证联调仍需要用户输入正式密码或按约定密码重启。
+下一步建议：
+- 后续联络板或脚本需要判断 Mac host 是否在线、权限是否齐、运行 build 是否旧时，优先消费 `node scripts/mac/start-mac-host.mjs --status --json`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-14 Mac Codex
+
 日期：2026-06-14 16:05
 开发端：Mac Codex
 本轮目标：增强 Mac host 状态检查，让旧 build 提醒能区分“服务运行源码已变”与“只是 build 元数据落后”。

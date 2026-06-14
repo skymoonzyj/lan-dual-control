@@ -43,7 +43,13 @@ node scripts/mac/start-mac-host.mjs --dryRun
 node scripts/mac/start-mac-host.mjs --status
 ```
 
-在线时它会显示 `/discovery`、runtime build/PID、权限摘要、能力摘要和 Windows 可尝试的局域网地址；如果运行中 build 落后当前 git，还会只比较 `apps/mac-host` 运行源码并提示是否有 host 行为相关改动，避免把文档或启动脚本变化误判成必须重启。离线时会返回非 0 并打印安全启动建议。
+在线时它会显示 `/discovery`、runtime build/PID、权限摘要、能力摘要和 Windows 可尝试的局域网地址；如果运行中 build 落后当前 git，还会只比较 `apps/mac-host` 运行源码并提示是否有 host 行为相关改动，避免把文档或启动脚本变化误判成必须重启。离线时会返回非 0 并打印安全启动建议。脚本或联络板自动化需要稳定字段时可加 `--json`：
+
+```bash
+node scripts/mac/start-mac-host.mjs --status --json
+```
+
+JSON 模式只输出机器可读对象，包含 `online`、`runtime`、`permissions`、`capabilities`、`lanAddresses` 和 `buildDiff`，不会混入日志行。
 
 启动助手会：
 
@@ -51,7 +57,7 @@ node scripts/mac/start-mac-host.mjs --status
 - 默认设置 `LAN_DUAL_INPUT_MODE=log`，避免无人值守时真实注入输入。
 - `--requirePassword` 会拒绝空密码和 `demo-password`，真机局域网联调建议始终打开。
 - `--ephemeralPassword` 会为本次进程生成一次性随机 `LAN_DUAL_PASSWORD` 且不打印密码；适合先恢复 `/discovery`、runtime/build 和权限诊断通道，但不能用于另一端认证联调，因为密码不会被共享。
-- `--status` 只读取 `/discovery` 并退出，不会启动 Swift host，不会读取或打印密码；运行中 build 与当前 git 不一致时，会列出旧 build 后变动过的 Mac host 运行源码文件，若没有运行源码变化则说明服务行为大概率仍是当前的，只是 build 元数据落后。
+- `--status` 只读取 `/discovery` 并退出，不会启动 Swift host，不会读取或打印密码；运行中 build 与当前 git 不一致时，会列出旧 build 后变动过的 Mac host 运行源码文件，若没有运行源码变化则说明服务行为大概率仍是当前的，只是 build 元数据落后；加 `--json` 可让脚本稳定读取同一份状态对象。
 - 等待 `/discovery` 就绪后，默认运行 `check-mac-displays --requireRuntime --expectBuildId <build>` 做只读 runtime/display round-trip 校验。
 - 如需真实输入注入，必须有人在屏幕前确认安全后，再显式传 `--inputMode inject` 或 `--injectInput`。
 
@@ -61,7 +67,7 @@ node scripts/mac/start-mac-host.mjs --status
 node scripts/mac/test-mac-host-start-helper.mjs
 ```
 
-该脚本会覆盖缺密码拒绝、`demo-password` 拒绝、非交互密码提示拒绝、带环境密码干跑、一次性随机密码干跑、`--status` 在线/离线检查和临时端口真实启动后自动关闭。
+该脚本会覆盖缺密码拒绝、`demo-password` 拒绝、非交互密码提示拒绝、带环境密码干跑、一次性随机密码干跑、`--status` 在线/离线检查、`--status --json` 在线/离线机器可读输出和临时端口真实启动后自动关闭。
 
 Mac host 日常一键体检：
 
