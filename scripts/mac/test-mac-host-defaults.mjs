@@ -13,6 +13,14 @@ const execFileAsync = promisify(execFile);
 
 const defaults = {
   timeoutMs: 20000,
+  json: false,
+};
+
+const runState = {
+  args: null,
+  binary: null,
+  nativeInputMonitoring: null,
+  cases: [],
 };
 
 function helpRequested(argv) {
@@ -30,13 +38,29 @@ function parseArgs(argv) {
       args.help = true;
       continue;
     }
+    if (key === "json") {
+      args.json = next && !next.startsWith("--") ? booleanArg(next, defaults.json) : true;
+      if (next && !next.startsWith("--")) index += 1;
+      continue;
+    }
     if (Object.prototype.hasOwnProperty.call(args, key) && next && !next.startsWith("--")) {
       args[key] = next;
       index += 1;
     }
   }
   args.timeoutMs = Math.max(5000, Number(args.timeoutMs) || defaults.timeoutMs);
+  args.json = booleanArg(args.json, defaults.json);
   return args;
+}
+
+function booleanArg(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  return ["1", "true", "yes", "on"].includes(String(value).trim().toLowerCase());
+}
+
+function wantsJson(argv) {
+  return argv.includes("--json") || argv.some((arg) => arg.startsWith("--json="));
 }
 
 function printHelp() {
@@ -44,12 +68,18 @@ function printHelp() {
 
 Options:
   --timeoutMs <ms>  Per temporary host timeout. Default: 20000
+  --json            Print exactly one machine-readable JSON object to stdout
   --help, -h        Show this help without running checks
 `);
 }
 
 function print(kind, text) {
-  console.log(`[${kind}] ${text}`);
+  const line = `[${kind}] ${text}`;
+  if (runState.args?.json) {
+    console.error(line);
+    return;
+  }
+  console.log(line);
 }
 
 async function getFreePort() {
@@ -134,6 +164,25 @@ function assertPermissionDiagnostics({ label, discovery, expectedInputMonitoring
   }
 }
 
+function normalizePermissions(discovery) {
+  const permissions = discovery?.permissions || {};
+  return {
+    screenRecording: typeof permissions.screenRecording === "boolean" ? permissions.screenRecording : null,
+    accessibility: typeof permissions.accessibility === "boolean" ? permissions.accessibility : null,
+    inputMonitoring: typeof permissions.inputMonitoring === "boolean" ? permissions.inputMonitoring : null,
+  };
+}
+
+function normalizeRuntime(discovery) {
+  const runtime = discovery?.runtime || {};
+  return {
+    processId: Number(runtime.processId) || null,
+    buildId: typeof runtime.buildId === "string" ? runtime.buildId : "",
+    startedAt: typeof runtime.startedAt === "string" ? runtime.startedAt : "",
+    uptimeSeconds: typeof runtime.uptimeSeconds === "number" ? runtime.uptimeSeconds : null,
+  };
+}
+
 async function readNativeInputMonitoringAccess() {
   const code = `
 import IOKit.hid
@@ -191,6 +240,18 @@ async function runTemporaryHost({ label, expectedInputMode, inputMode, expectedI
     }
     assertPermissionDiagnostics({ label, discovery, expectedInputMonitoring });
     print("OK", `${label}: /discovery inputMode=${actualInputMode}, inputMonitoring=${discovery.permissions.inputMonitoring}`);
+    const result = {
+      label,
+      ok: true,
+      expectedInputMode,
+      actualInputMode,
+      envInputMode: inputMode || "",
+      permissions: normalizePermissions(discovery),
+      expectedInputMonitoring,
+      runtime: normalizeRuntime(discovery),
+    };
+    runState.cases.push(result);
+    return result;
   } finally {
     child.kill();
     await new Promise((resolveClose) => {
@@ -203,9 +264,46 @@ async function runTemporaryHost({ label, expectedInputMode, inputMode, expectedI
 async function ensureBinaryExists() {
   try {
     await access(binaryPath);
+    runState.binary = {
+      path: "apps/mac-host/.build/debug/lan-dual-mac-host",
+      exists: true,
+    };
   } catch {
+    runState.binary = {
+      path: "apps/mac-host/.build/debug/lan-dual-mac-host",
+      exists: false,
+    };
     throw new Error(`Mac host binary is missing at ${binaryPath}. Run: swift build --package-path apps/mac-host`);
   }
+}
+
+function redact(value) {
+  return String(value || "")
+    .replaceAll("test-password", "[redacted]")
+    .replaceAll(process.env.LAN_DUAL_PASSWORD || "\u0000", "[redacted]");
+}
+
+function buildJsonResult(ok, error = null) {
+  const cases = [...runState.cases];
+  return {
+    ok,
+    args: {
+      timeoutMs: runState.args?.timeoutMs || defaults.timeoutMs,
+    },
+    binary: runState.binary,
+    nativeInputMonitoring: runState.nativeInputMonitoring,
+    cases,
+    summary: {
+      verified: cases.length,
+      defaultInputMode: cases.find((item) => item.label === "default-input-log")?.actualInputMode || "",
+      explicitInputMode: cases.find((item) => item.label === "explicit-input-inject")?.actualInputMode || "",
+    },
+    ...(error ? { error: { message: redact(error.message) } } : {}),
+  };
+}
+
+function printJsonResult(payload) {
+  console.log(JSON.stringify(payload, null, 2));
 }
 
 async function main() {
@@ -214,9 +312,11 @@ async function main() {
     return;
   }
   const args = parseArgs(process.argv);
+  runState.args = args;
 
   await ensureBinaryExists();
   const expectedInputMonitoring = await readNativeInputMonitoringAccess();
+  runState.nativeInputMonitoring = expectedInputMonitoring;
   await runTemporaryHost({
     label: "default-input-log",
     expectedInputMode: "log",
@@ -232,10 +332,17 @@ async function main() {
     timeoutMs: args.timeoutMs,
   });
 
+  if (args.json) {
+    printJsonResult(buildJsonResult(true));
+  }
   print("OK", "Mac host direct-start input defaults verified");
 }
 
 main().catch((error) => {
-  console.error(`[FAIL] ${error.message}`);
+  if (wantsJson(process.argv)) {
+    printJsonResult(buildJsonResult(false, error));
+  } else {
+    console.error(`[FAIL] ${error.message}`);
+  }
   process.exitCode = 1;
 });
