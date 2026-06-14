@@ -19,6 +19,47 @@
 
 ## 2026-06-14 Windows Codex
 
+日期：2026-06-14 20:35
+开发端：Windows Codex
+本轮目标：让 Windows WGC Rust helper 输出真实屏幕 JPEG 帧，并把自测升级为真帧校验。
+完成内容：
+- `lan-dual-wgc-helper` 默认 capture 模式已能订阅 WGC `FrameArrived`，读取 `Direct3D11CaptureFrame.Surface`，转成 `ID3D11Texture2D`。
+- 新增 D3D11 CPU-readable staging texture readback，把 BGRA 拷贝成 BGR，并通过 WIC JPEG encoder 输出真实 JPEG。
+- helper 继续按既有 `json-lines-v1` 输出 `hello` 和 `frame`，不改共享协议；`--probe` 和 `--mock` 仍保留。
+- `scripts/windows/test-windows-wgc-helper.mjs` 新增默认真帧检查，解码 base64 并校验 JPEG SOI/EOI、payloadBytes、时间戳和尺寸；Node host 合同检查仍用 helper mock mode，避免静态桌面 WGC 事件稀疏导致自测不稳定。
+- Windows WGC helper README、Windows host README、CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已同步。
+修改文件：
+- `apps/windows-wgc-helper/Cargo.toml`
+- `apps/windows-wgc-helper/src/main.rs`
+- `apps/windows-wgc-helper/README.md`
+- `scripts/windows/test-windows-wgc-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `cargo fmt --check`（`apps/windows-wgc-helper`）
+- `cargo check --quiet`（`apps/windows-wgc-helper`）
+- `node --check scripts/windows/test-windows-wgc-helper.mjs`
+- `node scripts/windows/test-windows-wgc-helper.mjs --timeoutMs 90000`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-wgc-helper.mjs`
+- `node scripts/windows/test-windows-script-help.mjs`
+验证结果：
+- WGC probe 通过，主显示器为 `显示 1`，尺寸 `2560x1440`。
+- 直接真帧检查通过：输出 1 帧真实 `2560x1440` JPEG，最终复验首帧约 `508640` bytes。
+- Node host 集成观察通过：mock helper 合同路径收到 37 帧，管线为 `windows-wgc-helper-jpeg`。
+- 全量 Windows 脚本帮助覆盖 21 个脚本、42 条命令通过。
+遗留问题：
+- helper 目前仍输出原始捕获尺寸，尚未应用请求宽高、JPEG 质量、码率和连续帧 pacing；当前 2K/1440p JPEG payload 偏大，不宜直接当最终低延迟管线。
+下一步建议：
+- 在 Rust helper 内增加缩放和 JPEG quality 参数，接入 `LAN_DUAL_WGC_WIDTH` / `HEIGHT` / `JPEG_QUALITY`，再用 `observe-windows-host-video --screenMode wgc --resourceSampleTree true --json` 与 FFmpeg 60Hz 基线对照，最后请 Mac 端用 Mac client 真连看画面、延迟和资源占用。
+是否改了协议：否；复用现有 Windows host 内部 helper 合同和既有 `video_frame`。
+是否需要另一端配合：暂不需要；缩放/质量控制完成后再请 Mac 端做真实观感验收。
+
+## 2026-06-14 Windows Codex
+
 日期：2026-06-14 20:10
 开发端：Windows Codex
 本轮目标：新增 Windows WGC Rust helper 初始化链路和自测入口。

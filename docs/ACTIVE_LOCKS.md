@@ -1,6 +1,6 @@
 # 当前文件占用
 
-最后更新：2026-06-13
+最后更新：2026-06-14
 
 用途：避免 Windows Codex 和 Mac Codex 同时重写同一片代码。占用不是永久所有权，只表示“我正在处理，另一端先别碰”。
 
@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-wgc-helper/`, `scripts/windows/test-windows-wgc-helper.mjs`, `apps/windows-host/README.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md` | 2026-06-14 20:35 | Windows WGC helper 默认 capture 已能读取真实 `Direct3D11CaptureFrame.Surface`，通过 D3D11 staging texture 做 CPU readback，并用 WIC 编码 JPEG 输出 JSON 行 frame；自测新增真帧 JPEG 校验，Node host 合同仍用 mock mode 稳定验证 `windows-wgc-helper-jpeg`。 |
 | Windows Codex | `apps/windows-wgc-helper/`, `scripts/windows/test-windows-wgc-helper.mjs`, `apps/windows-host/README.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md` | 2026-06-14 20:10 | 新增 Rust WGC helper 项目：`--probe` 已能初始化 D3D11 device、WinRT Direct3D device、主显示器 capture item、frame pool/session；`--mock` 输出 JSON 行测试帧；自测脚本会构建 helper 并验证 Node host 接入后收到 `windows-wgc-helper-jpeg` 帧。 |
 | Windows Codex | `apps/windows-host/src/windows-screen-capture.mjs`, `scripts/windows/test-windows-wgc-mode.mjs`, `apps/windows-host/README.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md` | 2026-06-14 19:45 | Windows WGC 模式新增 `LAN_DUAL_WINDOWS_WGC_HELPER` JSON 行 helper 接入点；未配置 helper 时继续明确降级，配置 helper 且预检通过时走 `windows-wgc-helper-jpeg` 管线；WGC 自测新增 `--mockHelper` 验证 helper 出帧接入。 |
 | Windows Codex | `scripts/windows/check-windows-host-readiness.mjs`, `apps/windows-host/README.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md` | 2026-06-14 19:05 | Windows readiness 的 runtime 步骤改为消费 `start-windows-host --status --json`，统一 runtime/buildDiff/capabilities 状态来源；默认离线仍 warning，显式 requireOpen/currentBuild/expectBuild 时失败。 |

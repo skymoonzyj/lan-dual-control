@@ -13,6 +13,7 @@ const defaults = {
   timeoutMs: 90000,
   observerDurationMs: 1200,
   minObserverFrames: 5,
+  realCaptureFrames: 1,
 };
 
 function printHelp() {
@@ -23,19 +24,22 @@ Options:
   --timeoutMs <ms>          Per command timeout. Default: ${defaults.timeoutMs}
   --observerDurationMs <ms> Node host integration observation window. Default: ${defaults.observerDurationMs}
   --minObserverFrames <n>   Minimum frames in Node host integration check. Default: ${defaults.minObserverFrames}
+  --realCaptureFrames <n>   Real WGC frames to capture directly. Default: ${defaults.realCaptureFrames}
+  --skipRealCapture         Skip direct real WGC frame readback check
   --skipObserver            Skip Node host integration check
   --json                    Print JSON summary
   --help, -h                Show this help without building
 
 Description:
   Builds apps/windows-wgc-helper, verifies --probe creates WGC/D3D objects,
-  verifies --mock emits json-lines-v1 frames with parseable timestamps, then
-  points the Windows host WGC helper mode at the built Rust helper.
+  verifies --mock emits json-lines-v1 frames with parseable timestamps, verifies
+  default capture emits real JPEG frames, then points the Windows host WGC helper
+  mode at the built Rust helper in mock mode for a stable contract check.
 `);
 }
 
 function parseArgs(argv) {
-  const args = { ...defaults, skipObserver: false, json: false, help: false };
+  const args = { ...defaults, skipRealCapture: false, skipObserver: false, json: false, help: false };
   for (let index = 2; index < argv.length; index += 1) {
     const token = argv[index];
     const next = argv[index + 1];
@@ -45,6 +49,10 @@ function parseArgs(argv) {
     }
     if (token === "--skipObserver") {
       args.skipObserver = true;
+      continue;
+    }
+    if (token === "--skipRealCapture") {
+      args.skipRealCapture = true;
       continue;
     }
     if (token === "--json") {
@@ -63,6 +71,11 @@ function parseArgs(argv) {
     }
     if (token === "--minObserverFrames" && next && !next.startsWith("--")) {
       args.minObserverFrames = Math.max(1, Number(next) || defaults.minObserverFrames);
+      index += 1;
+      continue;
+    }
+    if (token === "--realCaptureFrames" && next && !next.startsWith("--")) {
+      args.realCaptureFrames = Math.max(1, Number(next) || defaults.realCaptureFrames);
       index += 1;
       continue;
     }
@@ -187,6 +200,51 @@ async function checkMockFrames(args) {
   return { hello, frameCount: frames.length };
 }
 
+function assertJpegBase64(frame, label) {
+  const bytes = Buffer.from(String(frame.dataBase64 || ""), "base64");
+  assert(bytes.length > 32, `${label} JPEG payload too small: ${bytes.length} bytes`);
+  assert(bytes[0] === 0xff && bytes[1] === 0xd8, `${label} JPEG missing SOI marker`);
+  assert(bytes[bytes.length - 2] === 0xff && bytes[bytes.length - 1] === 0xd9, `${label} JPEG missing EOI marker`);
+  return bytes.length;
+}
+
+async function checkRealCaptureFrames(args) {
+  const result = await runRequired(helperExe, ["--frames", String(args.realCaptureFrames), "--fps", "10"], {
+    cwd: helperDir,
+    timeoutMs: args.timeoutMs,
+  });
+  const lines = parseJsonLines(result.stdout);
+  const hello = lines.find((line) => line.type === "hello");
+  const frames = lines.filter((line) => line.type === "frame");
+  assert(hello?.backend === "windows-graphics-capture", `missing real capture hello backend: ${JSON.stringify(hello)}`);
+  assert(hello?.protocol === "json-lines-v1", `missing real capture hello protocol: ${JSON.stringify(hello)}`);
+  assert(hello?.codec === "jpeg", `expected real capture codec=jpeg, got ${hello?.codec || "missing"}`);
+  assert(hello?.encoding === "base64", `expected real capture encoding=base64, got ${hello?.encoding || "missing"}`);
+  assert(frames.length === args.realCaptureFrames, `expected ${args.realCaptureFrames} real frame(s), got ${frames.length}`);
+
+  let totalPayloadBytes = 0;
+  for (const [index, frame] of frames.entries()) {
+    const label = `real frame ${index + 1}`;
+    assert(Date.parse(String(frame.timestamp || "")) > 0, `${label} timestamp is not parseable: ${JSON.stringify(frame)}`);
+    assert(Number(frame.width) > 0 && Number(frame.height) > 0, `${label} has invalid dimensions: ${JSON.stringify(frame)}`);
+    const decodedLength = assertJpegBase64(frame, label);
+    totalPayloadBytes += decodedLength;
+    if (Number(frame.payloadBytes) > 0) {
+      assert(Number(frame.payloadBytes) === decodedLength, `${label} payloadBytes ${frame.payloadBytes} did not match decoded JPEG size ${decodedLength}`);
+    }
+  }
+
+  const firstFrame = frames[0] || {};
+  return {
+    hello,
+    frameCount: frames.length,
+    width: Number(firstFrame.width) || 0,
+    height: Number(firstFrame.height) || 0,
+    payloadBytes: Number(firstFrame.payloadBytes) || assertJpegBase64(firstFrame, "first real frame"),
+    totalPayloadBytes,
+  };
+}
+
 async function checkNodeHostIntegration(args) {
   const env = {
     ...process.env,
@@ -238,14 +296,18 @@ async function main() {
   const helperPath = await buildHelper(args);
   const probe = await probeHelper(args);
   const mock = await checkMockFrames(args);
+  const realCapture = args.skipRealCapture ? null : await checkRealCaptureFrames(args);
   const observer = args.skipObserver ? null : await checkNodeHostIntegration(args);
-  const summary = { ok: true, helperPath, probe, mock, observer };
+  const summary = { ok: true, helperPath, probe, mock, realCapture, observer };
   if (args.json) {
     console.log(JSON.stringify(summary, null, 2));
   } else {
     console.log(`[OK] Rust WGC helper built: ${helperPath}`);
     console.log(`[OK] WGC probe: ${probe.displayName || "display"} ${probe.width}x${probe.height}`);
     console.log(`[OK] Mock contract frames: ${mock.frameCount}`);
+    if (realCapture) {
+      console.log(`[OK] Real WGC capture: ${realCapture.frameCount} frame(s) ${realCapture.width}x${realCapture.height}, ${realCapture.payloadBytes} bytes first JPEG`);
+    }
     if (observer) {
       console.log(`[OK] Node host integration: ${observer.frameCount} frames via ${observer.pipeline}`);
     }
