@@ -14,6 +14,7 @@ const defaults = {
   height: 720,
   fps: 30,
   bandwidthKbps: 12000,
+  discoveryOnly: false,
   allowMissingFrameDisplayDiagnostic: false,
   requireRuntime: false,
   expectBuildId: "",
@@ -47,6 +48,7 @@ function parseArgs(argv) {
   args.height = positiveInteger(args.height, defaults.height);
   args.fps = positiveInteger(args.fps, defaults.fps);
   args.bandwidthKbps = positiveInteger(args.bandwidthKbps, defaults.bandwidthKbps);
+  args.discoveryOnly = booleanArg(args.discoveryOnly, defaults.discoveryOnly);
   args.allowMissingFrameDisplayDiagnostic = booleanArg(
     args.allowMissingFrameDisplayDiagnostic,
     defaults.allowMissingFrameDisplayDiagnostic,
@@ -442,6 +444,7 @@ Options:
   --displayId <id>                 Initial display id. Default: primary/main
   --switchDisplayId <id>           Display id to switch to. Default: first non-current display, or same display on single-screen Macs
   --expectDisplayCount <count>     Require an exact display count.
+  --discoveryOnly                  Only verify /discovery displays/runtime; no password or WebSocket auth.
   --preferredVideoCodec <codec>    Requested codec: mjpeg or h264. Default: mjpeg
   --allowMissingFrameDisplayDiagnostic
                                     Allow older hosts whose video_frame lacks activeDisplayId.
@@ -467,6 +470,16 @@ async function main() {
 
   const discovery = await fetchDiscovery(args);
   const discoveryRuntime = assertRuntime(discovery.payload.runtime, args, "discovery");
+  const initialDiscoveryDisplays = discovery.displays;
+  assertDisplayCount(initialDiscoveryDisplays, args.expectDisplayCount);
+  if (initialDiscoveryDisplays.length === 0) {
+    throw new Error("discovery returned no displays");
+  }
+  if (args.discoveryOnly) {
+    print("OK", `Discovery displays verified: ${formatDisplays(initialDiscoveryDisplays)}`);
+    return;
+  }
+
   const socket = await openWebSocket(args);
   const client = createClient(socket, args);
   print("OK", "WebSocket connected");
@@ -493,11 +506,6 @@ async function main() {
   }
   print("OK", "Auth passed");
 
-  const initialDiscoveryDisplays = discovery.displays;
-  assertDisplayCount(initialDiscoveryDisplays, args.expectDisplayCount);
-  if (initialDiscoveryDisplays.length === 0) {
-    throw new Error("discovery returned no displays");
-  }
   const initialDisplay = chooseDisplay(initialDiscoveryDisplays, args.displayId, "initial");
 
   client.send(makeSessionOffer(args, initialDisplay));
