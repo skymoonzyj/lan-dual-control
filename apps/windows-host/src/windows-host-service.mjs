@@ -50,10 +50,26 @@ function wantsBinaryJpegVideo(message = {}) {
   return values.some((value) => ["binary", "binary-jpeg", "jpeg-binary", "binary-jpeg-v1"].includes(value));
 }
 
+function wantsBinaryH264Video(message = {}) {
+  const values = [
+    message.preferredVideoTransport,
+    message.videoTransport,
+    message.preferredVideoEncoding,
+    message.videoEncoding,
+    ...(Array.isArray(message.supportedVideoTransports) ? message.supportedVideoTransports : []),
+  ].map((value) => String(value ?? "").trim().toLowerCase());
+  return values.some((value) => ["binary", "binary-h264", "h264-binary", "annexb-binary", "binary-h264-v1"].includes(value));
+}
+
 function withVideoTransport(session, message) {
+  const codec = String(session.videoCodec ?? "").trim().toLowerCase();
   return {
     ...session,
-    videoTransport: wantsBinaryJpegVideo(message) ? "binary-jpeg" : "json",
+    videoTransport: codec === "h264" && wantsBinaryH264Video(message)
+      ? "binary-h264"
+      : codec === "jpeg" && wantsBinaryJpegVideo(message)
+        ? "binary-jpeg"
+        : "json",
   };
 }
 
@@ -117,31 +133,60 @@ function parseDataUrlPayload(dataUrl) {
   return { mimeType, payload };
 }
 
+function parseBase64Payload(value) {
+  const payload = Buffer.from(String(value || ""), "base64");
+  return payload.length > 0 ? payload : null;
+}
+
 function makeBinaryVideoEnvelope(envelope) {
   if (envelope.type !== "video_frame") {
     return null;
   }
-  if (String(envelope.codec ?? "").toLowerCase() !== "jpeg") {
-    return null;
-  }
-  if (!envelope.dataUrl || envelope.repeatPreviousFrame === true) {
+  if (envelope.repeatPreviousFrame === true) {
     return null;
   }
 
-  const parsed = parseDataUrlPayload(envelope.dataUrl);
-  if (!parsed || !parsed.mimeType.toLowerCase().includes("jpeg")) {
+  const codec = String(envelope.codec ?? "").toLowerCase();
+  const videoTransport = String(envelope.videoTransport ?? "").toLowerCase();
+  let parsed = null;
+  let headerOverrides = {};
+
+  if (codec === "jpeg" && videoTransport === "binary-jpeg" && envelope.dataUrl) {
+    parsed = parseDataUrlPayload(envelope.dataUrl);
+    if (!parsed || !parsed.mimeType.toLowerCase().includes("jpeg")) {
+      return null;
+    }
+    headerOverrides = {
+      encoding: "binary-jpeg",
+      videoTransport: "binary-jpeg",
+      mimeType: parsed.mimeType,
+    };
+  } else if (codec === "h264" && videoTransport === "binary-h264" && envelope.payload) {
+    const payload = parseBase64Payload(envelope.payload);
+    if (!payload) {
+      return null;
+    }
+    parsed = {
+      mimeType: "video/avc",
+      payload,
+    };
+    headerOverrides = {
+      encoding: "annexb-binary",
+      videoTransport: "binary-h264",
+      mimeType: parsed.mimeType,
+    };
+  } else {
     return null;
   }
 
   const header = {
     ...envelope,
-    encoding: "binary-jpeg",
-    videoTransport: "binary-jpeg",
-    mimeType: parsed.mimeType,
+    ...headerOverrides,
     payloadBytes: parsed.payload.length,
     binaryPayloadBytes: parsed.payload.length,
   };
   delete header.dataUrl;
+  delete header.payload;
 
   const headerBuffer = Buffer.from(JSON.stringify(header), "utf8");
   const lengthBuffer = Buffer.alloc(4);
@@ -166,12 +211,13 @@ function createClient(socket, context) {
 
   function sendVideoFrame(message, nextSession) {
     const envelope = makeEnvelope(message);
-    if (nextSession?.videoTransport === "binary-jpeg") {
-      const binaryEnvelope = makeBinaryVideoEnvelope(envelope);
-      if (binaryEnvelope) {
-        socket.write(encodeBinaryFrame(binaryEnvelope));
-        return;
-      }
+    const binaryEnvelope = makeBinaryVideoEnvelope({
+      ...envelope,
+      videoTransport: nextSession?.videoTransport ?? envelope.videoTransport,
+    });
+    if (binaryEnvelope) {
+      socket.write(encodeBinaryFrame(binaryEnvelope));
+      return;
     }
     socket.write(encodeTextFrame(JSON.stringify(envelope)));
   }
@@ -566,7 +612,7 @@ export function createWindowsHostServer({
           clipboardFile: true,
           clipboardFileMode: clipboardCapabilities.fileMode,
           clipboard: clipboardCapabilities,
-          videoTransports: ["json", "binary-jpeg"],
+          videoTransports: ["json", "binary-jpeg", "binary-h264"],
           reverseControl: true,
           mock: screenCapabilities.mode === "mock",
         },

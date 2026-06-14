@@ -6,7 +6,7 @@
 
 - Node.js WebSocket 被控服务，默认端口 `43770`。
 - `hello`、`auth_request`、`session_offer`、`display_settings`、`input_event`、`input_ack`、`clipboard_text` 和 `reverse_control_request` 消息处理；未认证连接会被拒绝，同一连接内密码错误 3 次后会关闭连接。
-- Windows 屏幕 `video_frame` 输出：默认在 Windows 桌面会话中用 FFmpeg gdigrab 持续采集 MJPEG/JPEG；也可显式使用 `ffmpeg-h264` 让 FFmpeg/libx264 输出 H.264 Annex B base64 帧。`ffmpeg-h264` 模式下，如果控制端明确请求 `preferredVideoCodec=mjpeg` 或 `preferredVideoEncoding=data-url`，当前会话会切回 FFmpeg MJPEG/JPEG，保证浏览器 H.264 解码不可用时仍有画面；无 FFmpeg 或采集失败时回退 PowerShell/System.Drawing 系统截图，失败时再回退模拟帧。控制端下发的 `qualityPreset` 和 `maxBandwidthKbps` 会换算为实际 `jpegQuality`，让 5/10/20/40/50 Mbps 对应不同压缩质量。若控制端声明 `preferredVideoTransport=binary-jpeg`，JPEG 帧会优先走 WebSocket 二进制帧，减少 data URL/base64 文本重发成本；不支持时仍回退旧 JSON 文本帧。
+- Windows 屏幕 `video_frame` 输出：默认在 Windows 桌面会话中用 FFmpeg gdigrab 持续采集 MJPEG/JPEG；也可显式使用 `ffmpeg-h264` 让 FFmpeg/libx264 输出 H.264 Annex B 帧。`ffmpeg-h264` 模式下，如果控制端明确请求 `preferredVideoCodec=mjpeg` 或 `preferredVideoEncoding=data-url`，当前会话会切回 FFmpeg MJPEG/JPEG，保证浏览器 H.264 解码不可用时仍有画面；无 FFmpeg 或采集失败时回退 PowerShell/System.Drawing 系统截图，失败时再回退模拟帧。控制端下发的 `qualityPreset` 和 `maxBandwidthKbps` 会换算为实际 `jpegQuality`，让 5/10/20/40/50 Mbps 对应不同压缩质量。若控制端声明 `preferredVideoTransport=binary-jpeg`，JPEG 帧会优先走 WebSocket 二进制帧；若 H.264 会话声明 `binary-h264`，Annex B payload 会走 WebSocket 二进制帧，减少 data URL/base64 文本重发成本；不支持时仍回退旧 JSON 文本帧。
 - 音频 `audio_frame` 输出：默认发送模拟帧；显式设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi` 后可用 Windows WASAPI loopback 采集默认播放设备的系统声音并发送 `pcm-f32le-base64` PCM 帧；也可设置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 试用 FFmpeg DirectShow 指定设备。
 - 屏幕采集当前是 FFmpeg gdigrab + PowerShell/System.Drawing 兜底的过渡实现；`ffmpeg-h264` 是可选流式编码模式，主要用于和 Mac client H.264 接收链路联调，不替代后续 Windows Graphics Capture。已新增 Windows Graphics Capture 支持预检和 Rust helper 项目；helper 目前可完成 WGC/D3D 初始化、读取真实 `Direct3D11CaptureFrame.Surface`、CPU readback、请求分辨率缩放，并通过 WIC 按请求 JPEG 质量编码后按 JSON 行合同接入 Node host。下一步是连续帧 pacing、资源对照和 Mac client 真连观感验收。
 - WASAPI loopback 是当前推荐的系统声音采集入口；DirectShow PCM 入口保留给虚拟声卡/loopback 设备做兼容验证。
@@ -15,7 +15,7 @@
 - 文本剪贴板模块：在 Windows 上通过 PowerShell `Set-Clipboard` 写入系统剪贴板，在非 Windows 开发环境回退为内存保存。
 - 文件剪贴板接收模块：接收 `clipboard_file_*` 文件清单、分块、完成消息并返回进度；在 Windows 上通过 PowerShell `Set-Clipboard -Path` 写入系统文件剪贴板，在非 Windows 开发环境保存到临时目录。
 - `/discovery` 设备发现接口，供 Windows 控制端或未来 Mac 控制端扫描局域网设备列表；`/discovery` 和 `hello_ack` 会带可选 `runtime` 诊断，显示当前进程 PID、启动时间、运行时长和 build id，方便确认没有连到旧进程。
-- `/discovery.capabilities.videoTransports` 会声明当前 Windows host 支持 `json` 和 `binary-jpeg`；`session_answer` / `display_settings_ack` 会回传实际 `videoTransport`，方便 Mac client 和自检脚本确认是否启用了二进制视频路径。
+- `/discovery.capabilities.videoTransports` 会声明当前 Windows host 支持 `json`、`binary-jpeg` 和 `binary-h264`；`session_answer` / `display_settings_ack` 会回传实际 `videoTransport`，方便 Mac client 和自检脚本确认是否启用了二进制视频路径。
 
 ## 运行
 
@@ -332,6 +332,18 @@ node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --req
 node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --expectBinaryVideo --allowClipboardFallback --skipFileClipboard --observeVideoMs 1200 --minObservedVideoFrames 5 --minObservedVideoFps 5
 ```
 
+需要单独验证 H.264 Annex B payload 也走 WebSocket 二进制帧时，加 `--expectBinaryH264Video`；脚本会启动临时 `ffmpeg-h264` Windows host，要求页面显示 `h264/binary`、H.264 canvas 可见、诊断出现二进制 H.264 帧：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --expectBinaryH264Video --allowClipboardFallback --skipFileClipboard --observeVideoMs 900 --minObservedVideoFrames 4 --minObservedVideoFps 4
+```
+
+需要回归旧 JSON/base64 兼容路径时，可关闭页面二进制视频传输：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --screenMode ffmpeg-h264 --requireH264Video --disableBinaryVideo --allowClipboardFallback --skipFileClipboard --observeVideoMs 900 --minObservedVideoFrames 4 --minObservedVideoFps 4
+```
+
 默认临时使用 `127.0.0.1:43772`；如果该端口已被其他自检占用，脚本会自动换一个临时空闲端口。需要连接已运行的 Windows host 时再加 `--useExisting --host 127.0.0.1 --port 43770`。
 
 视频持续帧观察脚本可统计几秒内实际收到的帧数、平均 FPS、最大帧间隔、掉帧数、采集管线、请求码率、实际 `jpegQuality` 和 `video_frame.timestamp` 接收年龄：
@@ -367,7 +379,7 @@ node E:\codex\lan-dual-control\scripts\windows\benchmark-windows-wgc-settings.mj
 node E:\codex\lan-dual-control\scripts\windows\benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1600 --repeatLastFrame --repeatLastFrameMode signal --json
 ```
 
-需要验证 Windows host 的可选 H.264 流式模式时，可以使用 `ffmpeg-h264`。该模式仍使用 FFmpeg `gdigrab` 采集桌面，但输出 `video_frame.codec=h264`、`encoding=annexb-base64`、`capturePipeline=windows-ffmpeg-gdigrab-h264`，`session_answer` / `display_settings_ack` / `video_frame` 会带 `codecString`。它用于提前联调 Mac client H.264 接收链路；真正低延迟 Windows 采集仍优先推进 WGC backend。
+需要验证 Windows host 的可选 H.264 流式模式时，可以使用 `ffmpeg-h264`。该模式仍使用 FFmpeg `gdigrab` 采集桌面，输出 `video_frame.codec=h264`、`capturePipeline=windows-ffmpeg-gdigrab-h264` 和 `codecString`；默认兼容路径为 `encoding=annexb-base64` JSON 文本帧，双方声明支持后可升级为 `encoding=annexb-binary` / `videoTransport=binary-h264` WebSocket 二进制帧。它用于提前联调 Mac client H.264 接收链路；真正低延迟 Windows 采集仍优先推进 WGC backend。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-h264-mode.mjs
@@ -380,9 +392,11 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 node E:\codex\lan-dual-control\scripts\windows\check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A
 ```
 
-当前 H.264 短基线：`2026-06-13 14:18` 在真实桌面权限下运行 `test-windows-h264-mode`，本机临时 host 720p/30Hz 观察 2.5 秒收到 73 帧，平均 28.83 FPS，最大帧间隔 53 ms，timestamp 单调，管线为 `windows-ffmpeg-gdigrab-h264`，codec 为 `h264`。普通沙盒上下文仍可能遇到 FFmpeg `gdigrab error 5` / mock fallback；这属于桌面抓屏权限/会话限制，不应误判为 H.264 管线不可用。当前实现使用 `libx264` 软件编码和 JSON/base64 过渡传输，后续仍需 WebSocket 二进制帧、WGC 采集和硬件编码优化。
+当前 H.264 短基线：`2026-06-13 14:18` 在真实桌面权限下运行 `test-windows-h264-mode`，本机临时 host 720p/30Hz 观察 2.5 秒收到 73 帧，平均 28.83 FPS，最大帧间隔 53 ms，timestamp 单调，管线为 `windows-ffmpeg-gdigrab-h264`，codec 为 `h264`。普通沙盒上下文仍可能遇到 FFmpeg `gdigrab error 5` / mock fallback；这属于桌面抓屏权限/会话限制，不应误判为 H.264 管线不可用。当前实现使用 `libx264` 软件编码，可按客户端能力在 JSON/base64 和 `binary-h264` 二进制传输之间切换；后续仍需 WGC 采集和硬件编码优化。
 
 `2026-06-14 22:55` 本机 Edge WebCodecs 探针确认 `avc1.42C02A` 的 `annexb` 和默认 AVC 配置都支持；Mac client 页面自检已移除 headless 默认 `--disable-gpu`，`--screenMode ffmpeg-h264 --requireH264Video` 通过：页面显示 `h264 · 解码 #4 · 8 ms · 到达 2 ms`，短窗口 55 帧 / 906 ms / 60.7 FPS。后续如果要故意复现旧的 H.264 不支持环境，可给页面自检加 `--forceH264Unsupported` 或 `--disableWebCodecs`，不要再依赖禁 GPU 的偶然副作用。
+
+`2026-06-14 23:33` 本机页面级复验确认 H.264 也能走 WebSocket 二进制帧：`--expectBinaryH264Video` 显示 `h264/binary`，短窗口 55 帧 / 911 ms / 60.4 FPS，收到 23 个二进制 H.264 帧；旧 JSON/base64 兼容路径用 `--disableBinaryVideo` 通过，短窗口 54 帧 / 914 ms / 59.1 FPS；WGC JPEG 的 `binary-jpeg` 回归也通过，短窗口 11 帧 / 1213 ms / 9.1 FPS。
 
 如果 Mac client 所在浏览器不支持当前 H.264 `codecString`，页面会发送 `display_settings` 请求 `preferredVideoCodec=mjpeg` / `preferredVideoEncoding=data-url`。Windows host 即使以 `ffmpeg-h264` 启动，也会按这次请求把当前会话改为 `windows-ffmpeg-gdigrab-mjpeg`，避免页面卡在“等待 JPEG”。可用下面的页面级自检同时覆盖“先尝试 H.264、失败后自动切 JPEG”的路径：
 

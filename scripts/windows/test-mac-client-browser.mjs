@@ -39,6 +39,7 @@ const defaults = {
   minObservedVideoFps: 0,
   expectRepeatSignalVideo: false,
   expectBinaryVideo: false,
+  expectBinaryH264Video: false,
   expectH264Fallback: false,
   requireH264Video: false,
   forceH264Unsupported: false,
@@ -46,6 +47,7 @@ const defaults = {
   mockVideo: false,
   headless: true,
   disableGpu: false,
+  disableBinaryVideo: false,
   disableWebCodecs: false,
 };
 const temporaryWindowsHostBuildId = "mac-client-test";
@@ -98,9 +100,11 @@ Options:
   --minObservedVideoFps <fps>      Minimum FPS during --observeVideoMs.
   --expectRepeatSignalVideo        Start WGC mock helper with repeat signal frames and require Mac client diagnostics.
   --expectBinaryVideo              Start WGC JPEG helper and require binary JPEG video transport.
+  --expectBinaryH264Video          Start ffmpeg-h264 mode and require binary H.264 video transport.
   --expectH264Fallback             Start ffmpeg-h264 mode and require Mac client to request MJPEG fallback.
   --requireH264Video               Require the Mac client to render H.264 video instead of JPEG fallback.
   --forceH264Unsupported           Force VideoDecoder.isConfigSupported to reject H.264 configs.
+  --disableBinaryVideo             Open Mac client with ?binaryVideo=0 and require JSON/base64 video transport.
   --disableGpu                     Launch headless browser with --disable-gpu for old fallback reproduction.
   --disableWebCodecs               Hide VideoDecoder/EncodedVideoChunk and expect MJPEG request fallback.
 
@@ -129,6 +133,10 @@ function parseArgs(argv) {
     }
     if (key === "disableGpu") {
       args.disableGpu = true;
+      continue;
+    }
+    if (key === "disableBinaryVideo") {
+      args.disableBinaryVideo = true;
       continue;
     }
     if (key === "forceH264Unsupported") {
@@ -207,6 +215,12 @@ function parseArgs(argv) {
     if (key === "expectBinaryVideo") {
       args.expectBinaryVideo = true;
       args.screenMode = "wgc";
+      continue;
+    }
+    if (key === "expectBinaryH264Video") {
+      args.expectBinaryH264Video = true;
+      args.requireH264Video = true;
+      args.screenMode = "ffmpeg-h264";
       continue;
     }
     if (key === "expectH264Fallback") {
@@ -796,6 +810,7 @@ function buildSnapshotExpression() {
       repeatSignalVideoFrames: (window.__lanDualReceivedMessages || [])
         .filter((message) => message.type === "video_frame" && message.repeatPreviousFrame === true).length,
       binaryVideoFrames: Number(window.__lanDualCounters?.binaryVideoFrames || 0),
+      binaryH264VideoFrames: Number(window.__lanDualCounters?.binaryH264VideoFrames || 0),
       audioToggleChecked: document.querySelector("#audioToggle")?.checked || false,
       audioPlayedFrames: Number((text("#audioStatus").match(/播放\\s*(\\d+)/) || [])[1] || 0),
       audioFrameCount: (window.__lanDualReceivedMessages || []).filter((message) => message.type === "audio_frame").length,
@@ -888,6 +903,7 @@ function installWebSocketSendRecorderExpression() {
       videoFrames: 0,
       audioFrames: 0,
       binaryVideoFrames: 0,
+      binaryH264VideoFrames: 0,
     };
     window.__lanDualTimings = {
       installedAt: performance.now(),
@@ -903,6 +919,12 @@ function installWebSocketSendRecorderExpression() {
         window.__lanDualCounters.videoFrames += 1;
         if (String(parsed.encoding || "").toLowerCase() === "binary-jpeg" || parsed.binaryPayloadBytes > 0) {
           window.__lanDualCounters.binaryVideoFrames += 1;
+        }
+        if (
+          String(parsed.videoTransport || "").toLowerCase() === "binary-h264" ||
+          String(parsed.encoding || "").toLowerCase() === "annexb-binary"
+        ) {
+          window.__lanDualCounters.binaryH264VideoFrames += 1;
         }
       }
       if (parsed.type === "audio_frame") {
@@ -945,7 +967,7 @@ function installWebSocketSendRecorderExpression() {
       const payloadBytes = bytes.length - payloadStart;
       return {
         ...parsed,
-        encoding: parsed.encoding || "binary-jpeg",
+        encoding: parsed.encoding || parsed.videoTransport || "binary-jpeg",
         videoTransport: parsed.videoTransport || "binary-jpeg",
         binaryPayloadBytes: payloadBytes,
         payloadBytes: Number(parsed.payloadBytes) || payloadBytes,
@@ -1335,7 +1357,8 @@ async function run() {
 
   const args = parseArgs(process.argv);
   const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
-  const clientUrl = `http://127.0.0.1:${args.clientPort}/`;
+  const clientOrigin = `http://127.0.0.1:${args.clientPort}`;
+  const clientUrl = `http://127.0.0.1:${args.clientPort}/${args.disableBinaryVideo ? "?binaryVideo=0" : ""}`;
   const userDataDir = await mkdtemp(join(tmpdir(), "lan-dual-mac-client-edge-"));
   let windowsHost = null;
   let macClientServer = null;
@@ -1377,7 +1400,7 @@ async function run() {
     session = await connectCdp(args.debugPort, args.timeoutMs);
     await session.send("Runtime.enable");
     await session.send("Page.enable");
-    await grantClipboardPermissions(session, clientUrl);
+    await grantClipboardPermissions(session, clientOrigin);
     if (args.disableWebCodecs) {
       await session.send("Page.addScriptToEvaluateOnNewDocument", {
         source: `Object.defineProperty(window, "VideoDecoder", { value: undefined, configurable: true });
@@ -1632,6 +1655,33 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       });
       print("OK", `H.264 video: ${h264Snapshot.video} / ${h264Snapshot.displaySettings}`);
     }
+    if (args.expectBinaryH264Video) {
+      const binaryH264Snapshot = await waitFor(
+        async () => {
+          const value = await evaluate(session, buildSnapshotExpression());
+          lastSnapshot = value;
+          const hasBinaryH264Frame = Number(value.binaryH264VideoFrames) > 0;
+          const hasH264Surface = value.surfaceVisible &&
+            value.surfaceHasFrame &&
+            value.video.toLowerCase().includes("h264") &&
+            !value.video.includes("回退");
+          return hasBinaryH264Frame && hasH264Surface ? value : null;
+        },
+        args.timeoutMs,
+        "Mac client binary H.264 video diagnostics",
+      ).catch((error) => {
+        if (lastSnapshot) {
+          print("INFO", `Last video: ${lastSnapshot.video}`);
+          print("INFO", `Last video diagnostics: ${lastSnapshot.videoFlowMetric}`);
+          print("INFO", `Last binary H.264 frames: ${lastSnapshot.binaryH264VideoFrames}`);
+        }
+        throw error;
+      });
+      print(
+        "OK",
+        `Binary H.264 video: ${binaryH264Snapshot.binaryH264VideoFrames} frames / ${binaryH264Snapshot.videoFlowMetric}`,
+      );
+    }
     if (args.expectH264Fallback) {
       const fallbackSnapshot = await waitFor(
         async () => {
@@ -1713,6 +1763,12 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     );
     const expectedVideoCodec = videoSnapshot.supportsWebCodecsH264 ? "h264" : "mjpeg";
     const expectedVideoEncoding = expectedVideoCodec === "h264" ? "annexb" : "data-url";
+    const expectedVideoTransport = args.disableBinaryVideo
+      ? "json"
+      : expectedVideoCodec === "h264" ? "binary-h264" : "binary-jpeg";
+    const expectedSupportedTransports = args.disableBinaryVideo
+      ? ["json"]
+      : ["json", "binary-jpeg", "binary-h264"];
     if (
       Number(sessionSettings?.preferredWidth) !== 1920 ||
       Number(sessionSettings?.preferredHeight) !== 1080 ||
@@ -1721,9 +1777,11 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       sessionSettings?.qualityPreset !== "balanced" ||
       sessionSettings?.preferredVideoCodec !== expectedVideoCodec ||
       sessionSettings?.preferredVideoEncoding !== expectedVideoEncoding ||
-      sessionSettings?.preferredVideoTransport !== "binary-jpeg" ||
+      sessionSettings?.preferredVideoTransport !== expectedVideoTransport ||
       !Array.isArray(sessionSettings?.supportedVideoTransports) ||
-      !sessionSettings.supportedVideoTransports.includes("binary-jpeg")
+      expectedSupportedTransports.some((transport) => !sessionSettings.supportedVideoTransports.includes(transport)) ||
+      (!args.disableBinaryVideo && sessionSettings.supportedVideoTransports.length < 3) ||
+      (args.disableBinaryVideo && sessionSettings.supportedVideoTransports.some((transport) => transport !== "json"))
     ) {
       throw new Error(`Mac client session video settings mismatch: ${JSON.stringify(sessionSettings)}`);
     }
@@ -1788,6 +1846,19 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
           ? "mjpeg"
           : value.supportsWebCodecsH264 ? "h264" : "mjpeg";
         const expectedDisplayVideoEncoding = expectedDisplayVideoCodec === "h264" ? "annexb" : "data-url";
+        const expectedDisplayVideoTransport = args.disableBinaryVideo
+          ? "json"
+          : expectedDisplayVideoCodec === "h264" ? "binary-h264" : "binary-jpeg";
+        const expectedAckVideoTransport = String(latestDisplayAck?.videoCodec || "").toLowerCase() === "h264"
+          ? (args.disableBinaryVideo ? "json" : "binary-h264")
+          : (args.disableBinaryVideo ? "json" : "binary-jpeg");
+        const displaySupportedTransportsOk = args.disableBinaryVideo
+          ? Array.isArray(latestDisplaySettings?.supportedVideoTransports) &&
+            latestDisplaySettings.supportedVideoTransports.length === 1 &&
+            latestDisplaySettings.supportedVideoTransports[0] === "json"
+          : Array.isArray(latestDisplaySettings?.supportedVideoTransports) &&
+            latestDisplaySettings.supportedVideoTransports.includes("binary-jpeg") &&
+            latestDisplaySettings.supportedVideoTransports.includes("binary-h264");
         const messageOk =
           Number(latestDisplaySettings?.width) === 2560 &&
           Number(latestDisplaySettings?.height) === 1440 &&
@@ -1796,9 +1867,8 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
           latestDisplaySettings?.qualityPreset === "sharp" &&
           latestDisplaySettings?.preferredVideoCodec === expectedDisplayVideoCodec &&
           latestDisplaySettings?.preferredVideoEncoding === expectedDisplayVideoEncoding &&
-          latestDisplaySettings?.preferredVideoTransport === "binary-jpeg" &&
-          Array.isArray(latestDisplaySettings?.supportedVideoTransports) &&
-          latestDisplaySettings.supportedVideoTransports.includes("binary-jpeg") &&
+          latestDisplaySettings?.preferredVideoTransport === expectedDisplayVideoTransport &&
+          displaySupportedTransportsOk &&
           latestDisplaySettings?.audio === Boolean(value.audioToggleChecked);
         const ackOk =
           latestDisplayAck?.accepted === true &&
@@ -1808,7 +1878,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
           Number(latestDisplayAck?.requestedFps) === 60 &&
           Number(latestDisplayAck?.maxScreenFps) === 60 &&
           Number(latestDisplayAck?.maxBandwidthKbps) === 40000 &&
-          latestDisplayAck?.videoTransport === "binary-jpeg" &&
+          latestDisplayAck?.videoTransport === expectedAckVideoTransport &&
           latestDisplayAck?.qualityPreset === "sharp" &&
           Number(latestDisplayAck?.jpegQuality) >= 0.74 &&
           Number(latestDisplayAck?.jpegQuality) <= 0.82;

@@ -19,6 +19,53 @@
 
 ## 2026-06-14 Windows Codex
 
+日期：2026-06-14 23:20
+开发端：Windows Codex
+本轮目标：把可选 WebSocket 二进制视频帧从 JPEG 扩展到 H.264 Annex B payload，减少 `ffmpeg-h264` 路径的 base64 文本开销，同时保留旧 JSON/base64 兼容路径。
+完成内容：
+- Windows host 根据当前会话实际 `videoCodec` 选择视频传输：JPEG 会话可用 `binary-jpeg`，H.264 会话可用 `binary-h264`，否则继续 `json`。
+- H.264 二进制帧沿用 `LDCV1\n + header length + JSON header + binary payload` 封装；JSON 头保留 `video_frame` 元数据并改为 `encoding=annexb-binary` / `videoTransport=binary-h264`，不再包含 base64 `payload`，payload 为原始 Annex B 字节。
+- `/discovery.capabilities.videoTransports` 现在声明 `json`、`binary-jpeg`、`binary-h264`。
+- Mac client 在支持二进制视频时，H.264 请求 `preferredVideoTransport=binary-h264`，JPEG/MJPEG 请求 `binary-jpeg`；`?binaryVideo=0` 或自检 `--disableBinaryVideo` 会只声明 `json`，回归旧 H.264 JSON/base64 路径。
+- Mac client 可解析 H.264 binary frame，把二进制 Annex B payload 直接喂给 WebCodecs canvas；视频状态会显示 `h264/binary` 并统计二进制帧。
+- `scripts/windows/test-mac-client-browser.mjs` 新增 `--expectBinaryH264Video` 和 `--disableBinaryVideo`，并修正实际 codec 为 JPEG fallback 时的 `display_settings_ack.videoTransport` 断言。
+- 协议文档、Windows host README、Mac client README、CURRENT_STATUS、NEXT_ACTIONS 和任务板已同步。
+修改文件：
+- `apps/windows-host/src/windows-host-service.mjs`
+- `apps/mac-client/app.js`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/03-architecture-and-protocol.md`
+- `apps/windows-host/README.md`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-host/src/windows-host-service.mjs`
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `npm.cmd --prefix apps/windows-host run check`
+- `node scripts/windows/test-mac-client-browser.mjs --expectBinaryH264Video --allowClipboardFallback --skipFileClipboard --observeVideoMs 900 --minObservedVideoFrames 4 --minObservedVideoFps 4 --timeoutMs 45000`
+- `node scripts/windows/test-mac-client-browser.mjs --expectH264Fallback --allowClipboardFallback --skipFileClipboard --observeVideoMs 900 --minObservedVideoFrames 4 --minObservedVideoFps 4 --timeoutMs 45000`
+- `node scripts/windows/test-mac-client-browser.mjs --expectBinaryVideo --allowClipboardFallback --skipFileClipboard --observeVideoMs 1200 --minObservedVideoFrames 5 --minObservedVideoFps 5 --timeoutMs 45000`
+- `node scripts/windows/test-mac-client-browser.mjs --screenMode ffmpeg-h264 --requireH264Video --disableBinaryVideo --allowClipboardFallback --skipFileClipboard --observeVideoMs 900 --minObservedVideoFrames 4 --minObservedVideoFps 4 --timeoutMs 45000`
+验证结果：
+- H.264 二进制路径通过：页面显示 `h264/binary`，短窗口 55 帧 / 911ms / 60.4 FPS，收到 23 个 binary H.264 帧。
+- H.264 unsupported fallback 仍通过：最终显示 `jpeg/binary`，短窗口 52 帧 / 912ms / 57.0 FPS。
+- WGC JPEG `binary-jpeg` 回归通过：短窗口 11 帧 / 1213ms / 9.1 FPS。
+- H.264 JSON/base64 兼容路径通过：短窗口 54 帧 / 914ms / 59.1 FPS。
+遗留问题：
+- 这轮仍是 Windows 本机临时 host + Mac client 页面级自检；真实 Mac 上连接 Windows host 的观感、延迟、带宽和 CPU 对照仍需双机联调。
+- `ffmpeg-h264` 仍使用软件编码；正式低延迟方向仍应推进 WGC H.264/硬编。
+下一步建议：
+- 继续推进 WGC H.264/硬编或轻量 repeat signal 与 `binary-h264` 的组合验证；让 Mac 端真实连接 Windows host 做观感、带宽、延迟和资源对照。
+是否改了协议：是，向后兼容新增可选 `binary-h264` video transport 和 `annexb-binary` H.264 帧编码；旧 `annexb-base64` JSON 路径保留。
+是否需要另一端配合：暂不需要；真实 Mac client 观感验收需要 Mac 端后续配合。
+
+## 2026-06-14 Windows Codex
+
 日期：2026-06-14 22:55
 开发端：Windows Codex
 本轮目标：确认 Windows `ffmpeg-h264` 的 WebCodecs 支持真相，并把 Mac client 页面级 H.264/Fallback 自检改成稳定、可解释的强校验。

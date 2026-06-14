@@ -174,8 +174,8 @@ Both directions: clipboard_event loop
   "preferredHeight": 1080,
   "preferredVideoCodec": "h264",
   "preferredVideoEncoding": "annexb",
-  "preferredVideoTransport": "binary-jpeg",
-  "supportedVideoTransports": ["json", "binary-jpeg"],
+  "preferredVideoTransport": "binary-h264",
+  "supportedVideoTransports": ["json", "binary-jpeg", "binary-h264"],
   "preferredAudioCodec": "opus",
   "audioVolume": 80
 }
@@ -189,7 +189,7 @@ Both directions: clipboard_event loop
   "ok": true,
   "videoCodec": "h264",
   "videoEncoding": "annexb",
-  "videoTransport": "json",
+  "videoTransport": "binary-h264",
   "audioCodec": "pcm-f32le",
   "requestedAudioCodec": "opus",
   "audioMode": "system-pcm",
@@ -252,9 +252,10 @@ Both directions: clipboard_event loop
 - FPS 诊断字段中，`requestedFps` 表示控制端请求帧率，`fps` 表示被控端当前实际目标帧率，`maxScreenFps` 表示被控端真实屏幕采集上限，`frameIntervalMs` 表示当前定时器间隔。当前 macOS 真实屏幕 JPEG 管线默认会把实际帧率限制到 `LAN_DUAL_MAX_SCREEN_FPS`。
 - `qualityPreset`、`jpegQuality` 可作为调试字段返回实际使用的画质预设和 JPEG 压缩质量。
 - `activeDisplayId`、`displayName` 是可选诊断字段，用于标记当前帧来自哪个被控端显示器；旧控制端可以忽略。
-- `preferredVideoTransport` / `videoTransport` 是可选传输方式字段；缺省或 `json` 表示继续用 WebSocket 文本 JSON 发送完整 `video_frame`，`binary-jpeg` 表示 JPEG 帧可用 WebSocket binary frame 发送。
+- `preferredVideoTransport` / `videoTransport` 是可选传输方式字段；缺省或 `json` 表示继续用 WebSocket 文本 JSON 发送完整 `video_frame`，`binary-jpeg` 表示 JPEG 帧可用 WebSocket binary frame 发送，`binary-h264` 表示 H.264 Annex B payload 可用 WebSocket binary frame 发送。
 - `supportedVideoTransports` 可声明控制端兼容的传输方式；旧被控端可以忽略。
 - `binary-jpeg` 帧仍保留 JSON 元数据，但从文本帧中移出大体积图片数据。二进制帧 payload 结构为 ASCII magic `LDCV1\n`、4 字节大端 JSON 头长度、UTF-8 JSON 头、原始 JPEG 字节。JSON 头等价于 `video_frame` 元数据，`encoding` 为 `binary-jpeg`，不再包含 `dataUrl`，并带 `mimeType`、`payloadBytes` 或 `binaryPayloadBytes`。
+- `binary-h264` 使用同一个 `LDCV1\n` 二进制帧封装，JSON 头等价于 `video_frame` 元数据，`codec` 为 `h264`，`encoding` 为 `annexb-binary`，`videoTransport` 为 `binary-h264`，不再包含 base64 `payload`，二进制 payload 是原始 Annex B 字节；旧客户端仍可继续使用 `annexb-base64` JSON 文本帧。
 - `repeatPreviousFrame=true` 这类轻量重复帧没有图片 payload，仍可继续走 JSON 文本帧。
 - 控制端可在 `session_offer` 或后续 `display_settings` 里用 `preferredVideoCodec` / `preferredVideoEncoding` 请求视频编码；如果控制端在 H.264 解码不可用或失败后改发 `preferredVideoCodec=mjpeg` 或 `preferredVideoEncoding=data-url`，被控端应尽量把当前会话切回 JPEG/MJPEG，并通过后续 `display_settings_ack` / `video_frame` 返回实际 `videoCodec`、`videoEncoding`、`capturePipeline` 和 `hostMode`。
 
@@ -262,7 +263,7 @@ Both directions: clipboard_event loop
 
 - 使用 ScreenCaptureKit `SCStream` 做连续采集。
 - 使用 VideoToolbox 输出 H.264 Annex B。
-- `video_frame.codec` 使用 `h264`，`encoding` 第一版使用 `annexb-base64`，后续切到 WebSocket 二进制帧。
+- `video_frame.codec` 使用 `h264`，`encoding` 可为兼容旧路径的 `annexb-base64`，也可在双方声明支持后使用 `annexb-binary` / `binary-h264` WebSocket 二进制帧。
 - 支持硬件编码、动态码率和关键帧请求。
 
 H.264 过渡格式：
@@ -305,8 +306,8 @@ H.264 过渡格式：
   "maxBandwidthKbps": 50000,
   "preferredVideoCodec": "h264",
   "preferredVideoEncoding": "annexb",
-  "preferredVideoTransport": "binary-jpeg",
-  "supportedVideoTransports": ["json", "binary-jpeg"],
+  "preferredVideoTransport": "binary-h264",
+  "supportedVideoTransports": ["json", "binary-jpeg", "binary-h264"],
   "audio": true,
   "audioVolume": 80,
   "clipboardText": true,
@@ -335,7 +336,7 @@ H.264 过渡格式：
   "accepted": true,
   "videoCodec": "h264",
   "videoEncoding": "annexb",
-  "videoTransport": "json",
+  "videoTransport": "binary-h264",
   "width": 1920,
   "height": 1080,
   "fps": 30,

@@ -615,7 +615,14 @@ function binaryVideoTransportEnabled() {
 }
 
 function preferredVideoTransport() {
-  return binaryVideoTransportEnabled() ? "binary-jpeg" : "json";
+  if (!binaryVideoTransportEnabled()) {
+    return "json";
+  }
+  return preferredVideoCodec() === "h264" ? "binary-h264" : "binary-jpeg";
+}
+
+function supportedVideoTransports() {
+  return binaryVideoTransportEnabled() ? ["json", "binary-jpeg", "binary-h264"] : ["json"];
 }
 
 function describeVideoSettings(settings = currentVideoSettings()) {
@@ -646,7 +653,7 @@ function makeDisplaySettingsMessage(type = "display_settings") {
     preferredVideoCodec: preferredVideoCodec(),
     preferredVideoEncoding: preferredVideoEncoding(),
     preferredVideoTransport: preferredVideoTransport(),
-    supportedVideoTransports: ["json", "binary-jpeg"],
+    supportedVideoTransports: supportedVideoTransports(),
     audio: elements.audioToggle.checked,
     audioVolume: audioVolume(),
   };
@@ -901,6 +908,20 @@ async function parseBinaryMessage(rawData) {
     return header;
   }
 
+  const codec = String(header.codec || "").toLowerCase();
+  const videoTransport = String(header.videoTransport || "").toLowerCase();
+  if (codec === "h264" || videoTransport === "binary-h264") {
+    return {
+      ...header,
+      encoding: header.encoding || "annexb-binary",
+      videoTransport: "binary-h264",
+      mimeType: header.mimeType || "video/avc",
+      binaryPayload: payload,
+      binaryPayloadBytes: payload.byteLength,
+      payloadBytes: Number(header.payloadBytes) || payload.byteLength,
+    };
+  }
+
   const mimeType = header.mimeType || "image/jpeg";
   const objectUrl = URL.createObjectURL(new Blob([payload], { type: mimeType }));
   return {
@@ -1132,7 +1153,11 @@ function handleVideoFrame(frame) {
 
 function recordVideoFrameStats(frame) {
   const isRepeatSignal = frame.repeatPreviousFrame === true && !frame.dataUrl && !frame.objectUrl;
-  const isBinaryFrame = String(frame.encoding ?? "").toLowerCase() === "binary-jpeg" || Boolean(frame.objectUrl);
+  const normalizedEncoding = String(frame.encoding ?? "").toLowerCase();
+  const isBinaryFrame = normalizedEncoding.includes("binary") ||
+    String(frame.videoTransport ?? "").toLowerCase().startsWith("binary-") ||
+    Boolean(frame.objectUrl) ||
+    Boolean(frame.binaryPayload);
   const codecLabel = `${frame.codec || "jpeg"}${isBinaryFrame ? "/binary" : ""}`;
   state.remoteWidth = Number(frame.width || state.remoteWidth);
   state.remoteHeight = Number(frame.height || state.remoteHeight);
@@ -1236,6 +1261,22 @@ function base64ToUint8Array(value) {
     bytes[index] = binary.charCodeAt(index);
   }
   return bytes;
+}
+
+function h264PayloadBytes(frame) {
+  if (frame.binaryPayload instanceof Uint8Array) {
+    return frame.binaryPayload;
+  }
+  if (frame.binaryPayload instanceof ArrayBuffer) {
+    return new Uint8Array(frame.binaryPayload);
+  }
+  if (ArrayBuffer.isView(frame.binaryPayload)) {
+    return new Uint8Array(frame.binaryPayload.buffer, frame.binaryPayload.byteOffset, frame.binaryPayload.byteLength);
+  }
+  if (frame.payload) {
+    return base64ToUint8Array(frame.payload);
+  }
+  return null;
 }
 
 function findAnnexBStartCode(bytes, fromIndex = 0) {
@@ -1371,7 +1412,8 @@ async function ensureH264Decoder(frame) {
 }
 
 async function handleH264VideoFrame(frame) {
-  if (!frame.payload) {
+  const payloadBytes = h264PayloadBytes(frame);
+  if (!payloadBytes?.byteLength) {
     logEvent("视频帧", "收到 H.264 视频帧但缺少 payload");
     return;
   }
@@ -1385,7 +1427,6 @@ async function handleH264VideoFrame(frame) {
 
   try {
     const decoder = await ensureH264Decoder(frame);
-    const payloadBytes = base64ToUint8Array(frame.payload);
     const isKeyFrame = Boolean(frame.keyFrame) || isH264KeyFramePayload(payloadBytes, frame.encoding);
     if (state.h264DecoderNeedsKeyFrame && !isKeyFrame) {
       state.h264SkippedDeltaFrames += 1;
