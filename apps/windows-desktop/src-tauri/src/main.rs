@@ -1225,6 +1225,35 @@ fn discover_lan_hosts(request: LanDiscoveryRequest) -> Result<DesktopCommandResu
 }
 
 #[tauri::command]
+fn get_windows_host_helper_status(
+    request: WindowsHostReadinessRequest,
+) -> Result<DesktopCommandResult, String> {
+    let repo = repo_root()?;
+    let script = repo
+        .join("scripts")
+        .join("windows")
+        .join("start-windows-host.mjs");
+    let host = request
+        .host
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .unwrap_or("127.0.0.1")
+        .to_string();
+    let port = normalize_port(request.port);
+    let args = vec![
+        "--status".to_string(),
+        "--json".to_string(),
+        "--host".to_string(),
+        host,
+        "--port".to_string(),
+        port.to_string(),
+    ];
+
+    run_node_script(&repo, &script, &args, &[])
+}
+
+#[tauri::command]
 fn start_windows_host(
     request: WindowsHostLaunchRequest,
     state: tauri::State<'_, WindowsHostProcessState>,
@@ -1573,6 +1602,7 @@ fn main() {
             run_windows_host_readiness,
             preview_windows_firewall_rule,
             discover_lan_hosts,
+            get_windows_host_helper_status,
             start_windows_host,
             stop_windows_host,
             get_windows_host_status

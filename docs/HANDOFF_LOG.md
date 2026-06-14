@@ -19,6 +19,41 @@
 
 ## 2026-06-14 Windows Codex
 
+日期：2026-06-14 18:55
+开发端：Windows Codex
+本轮目标：让 Windows 桌面壳“本机被控”面板消费统一的 Windows host 只读状态 JSON。
+完成内容：
+- Windows 桌面壳新增 Tauri 命令 `get_windows_host_helper_status`，调用 `scripts/windows/start-windows-host.mjs --status --json`，只读查看本机端口上的 `/discovery`，不启动服务、不认证、不要求密码。
+- Windows 控制端“本机被控”面板刷新时同时读取桌面壳托管进程状态和 helper status，显示真实 runtime/build、视频/音频/输入/剪贴板能力、在线/离线原因和旧 build 提示。
+- 面板新增“已在线”状态：如果端口上已有非桌面壳启动的 Windows host，会禁止重复启动，但停止按钮仍只针对桌面壳自己启动的进程。
+- 页面自检补充 helper status 在线/离线摘要、能力行和日志行断言。
+修改文件：
+- `apps/windows-client/app.js`
+- `apps/windows-desktop/src-tauri/src/main.rs`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `apps/windows-desktop/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly`
+- `cargo check`（`apps/windows-desktop/src-tauri`）
+验证结果：
+- 前端语法、页面级 diagnosticsOnly 和桌面壳 Rust 编译检查均通过。
+遗留问题：
+- 还未用真实桌面窗口手动观察面板视觉效果；当前已由页面自检覆盖摘要/按钮/日志逻辑。
+下一步建议：
+- 后续启动真实 Windows host 后，在桌面壳面板确认“已在线/运行中”状态、runtime build 和 capabilities 与命令行 `--status --json` 一致。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-14 Windows Codex
+
 日期：2026-06-14 18:40
 开发端：Windows Codex
 本轮目标：让 Windows PowerShell 启动助手也能直接输出机器可读状态 JSON。

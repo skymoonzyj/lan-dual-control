@@ -401,6 +401,10 @@ async function verifyDesktopOnlyHostPanel(session) {
         typeof buildLocalHostReadinessRequest === "function"
           ? buildLocalHostReadinessRequest()
           : {};
+      const statusRequest =
+        typeof buildLocalHostStatusRequest === "function"
+          ? buildLocalHostStatusRequest()
+          : {};
       const readinessHeaderLines =
         typeof readinessLines === "function"
           ? readinessLines({
@@ -424,12 +428,86 @@ async function verifyDesktopOnlyHostPanel(session) {
             })
           : [];
       const readinessHeaderText = readinessHeaderLines.join("\\n");
+      const helperResult = {
+        json: {
+          ok: true,
+          probe: {
+            url: "http://127.0.0.1:43770/discovery",
+          },
+          runtime: {
+            processId: 2468,
+            uptimeSeconds: 65,
+            buildId: "helper-test",
+          },
+          capabilities: {
+            screen: {
+              capturePipeline: "windows-ffmpeg-gdigrab-h264",
+              videoCodec: "h264",
+              videoEncoding: "annexb-base64",
+            },
+            audio: {
+              mode: "wasapi",
+              backend: "wasapi",
+              mockFrames: false,
+              sampleRate: 48000,
+              channels: 2,
+            },
+            input: {
+              mode: "log",
+              backend: "sendinput-helper",
+              helper: true,
+            },
+            clipboard: {
+              text: true,
+              textMode: "system",
+              file: true,
+              fileMode: "clipboard",
+            },
+          },
+          warnings: ["WGC fallback: demo"],
+          buildDiff: {
+            changed: false,
+            message: "No Windows host runtime source changes since old-build.",
+          },
+        },
+      };
+      const helperStatus =
+        typeof normalizeLocalHostHelperStatus === "function"
+          ? normalizeLocalHostHelperStatus(helperResult)
+          : null;
+      const helperSummary =
+        typeof localHostHelperStatusSummary === "function"
+          ? localHostHelperStatusSummary(helperStatus, { managedPid: "2468" })
+          : "";
+      const helperLinesText =
+        typeof localHostHelperStatusLines === "function"
+          ? localHostHelperStatusLines(helperResult).join("\\n")
+          : "";
+      const offlineHelperLinesText =
+        typeof localHostHelperStatusLines === "function"
+          ? localHostHelperStatusLines({
+              json: {
+                ok: false,
+                probe: {
+                  host: "127.0.0.1",
+                  port: 43770,
+                },
+                error: {
+                  message: "connect ECONNREFUSED 127.0.0.1:43770",
+                },
+              },
+            }).join("\\n")
+          : "";
 
       return {
         ok:
           typeof getTauriInvoke === "function" &&
           typeof canUseDesktopHostControl === "function" &&
           typeof buildLocalHostReadinessRequest === "function" &&
+          typeof buildLocalHostStatusRequest === "function" &&
+          typeof normalizeLocalHostHelperStatus === "function" &&
+          typeof localHostHelperStatusSummary === "function" &&
+          typeof localHostHelperStatusLines === "function" &&
           typeof maxNativeClipboardFileBytes === "number" &&
           typeof maxClipboardFileBytes === "number" &&
           typeof nativeClipboardChunkSizeBytes === "number" &&
@@ -442,17 +520,33 @@ async function verifyDesktopOnlyHostPanel(session) {
           profileSelect?.value === "default" &&
           profileOptions.join(",") === "default,deploy,deep" &&
           readinessRequest.profile === "default" &&
+          statusRequest.host === "127.0.0.1" &&
+          statusRequest.port === readinessRequest.port &&
           readinessHeaderText.includes("client-test") &&
           readinessHeaderText.includes("1000 ms") &&
           readinessHeaderText.includes("750 ms") &&
           readinessHeaderText.includes("Windows host video observation") &&
+          helperStatus?.runtime?.buildId === "helper-test" &&
+          helperSummary.includes("PID 2468") &&
+          helperSummary.includes("FFmpeg gdigrab H.264") &&
+          helperSummary.includes("WASAPI") &&
+          helperLinesText.includes("状态助手") &&
+          helperLinesText.includes("build helper-test") &&
+          helperLinesText.includes("剪贴板") &&
+          helperLinesText.includes("WGC fallback") &&
+          offlineHelperLinesText.includes("离线") &&
+          offlineHelperLinesText.includes("ECONNREFUSED") &&
           maxNativeClipboardFileBytes === maxClipboardFileBytes &&
           nativeClipboardChunkSizeBytes === 1024 * 1024,
         badge: badge?.textContent || "",
         status: status?.textContent || "",
         profile: profileSelect?.value || "",
         requestProfile: readinessRequest.profile || "",
+        statusRequest,
         readinessHeader: readinessHeaderLines.slice(0, 4),
+        helperSummary,
+        helperLinesText,
+        offlineHelperLinesText,
         buttonsDisabled: buttons.map((button) => Boolean(button?.disabled)),
         inputsDisabled: inputs.map((input) => Boolean(input?.disabled)),
         maxNativeClipboardFileBytes,

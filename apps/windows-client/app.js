@@ -160,6 +160,8 @@ const capturePipelineLabels = {
   "screencapturekit-h264": "流式 H.264",
   "windows-gdi-jpeg": "Windows 系统截图",
   "windows-gdi-jpeg-fallback-mock": "Windows 截图回退",
+  "windows-ffmpeg-gdigrab-mjpeg": "FFmpeg gdigrab MJPEG",
+  "windows-ffmpeg-gdigrab-h264": "FFmpeg gdigrab H.264",
   "mock-svg": "模拟画面",
   "screen-fallback-mock": "采集回退",
   "screen-timeout-mock": "采集超时",
@@ -328,6 +330,7 @@ const state = {
   audioLastError: "",
   recentConnections: [],
   localHostRunning: false,
+  localHostOnline: false,
   localHostBusy: false,
   localHostPollTimer: null,
   connectionState: "idle",
@@ -2985,6 +2988,14 @@ function buildLocalHostReadinessRequest(extra = {}) {
   };
 }
 
+function buildLocalHostStatusRequest(extra = {}) {
+  return {
+    host: "127.0.0.1",
+    port: getLocalHostPort(),
+    ...extra,
+  };
+}
+
 function buildLocalHostLaunchRequest() {
   return {
     host: "0.0.0.0",
@@ -3064,11 +3075,114 @@ function readinessLines(result) {
   ];
 }
 
+function normalizeLocalHostHelperStatus(result) {
+  if (result?.json && typeof result.json === "object") return result.json;
+  if (result && typeof result === "object" && Object.prototype.hasOwnProperty.call(result, "ok")) return result;
+  return null;
+}
+
+function formatLocalHostScreenStatus(screen = {}) {
+  const pipeline = screen.capturePipeline || screen.mode || screen.requestedMode || "";
+  const wgc = screen.wgc || {};
+  const parts = [
+    pipeline ? labelFromMap(pipeline, capturePipelineLabels) : "",
+    screen.videoCodec || "",
+    screen.videoEncoding || "",
+  ].filter(Boolean);
+  if (screen.codecString) parts.push(screen.codecString);
+  if (wgc.active) {
+    parts.push("WGC 已启用");
+  } else if (wgc.backendImplemented) {
+    parts.push("WGC 已实现");
+  } else if (wgc.supported) {
+    parts.push("WGC 可用");
+  }
+  return parts.join(" / ");
+}
+
+function formatLocalHostAudioStatus(audio = {}) {
+  const parts = [
+    audio.mode ? labelFromMap(audio.mode, { mock: "模拟", wasapi: "WASAPI", dshow: "DirectShow" }) : "",
+    audio.mockFrames === false ? "真实 PCM" : audio.mockFrames === true ? "模拟帧" : "",
+    audio.sampleRate ? `${audio.sampleRate}Hz` : "",
+    audio.channels ? `${audio.channels}ch` : "",
+  ].filter(Boolean);
+  if (audio.backend && !parts.includes(audio.backend)) parts.push(audio.backend);
+  return parts.join(" / ");
+}
+
+function formatLocalHostInputStatus(input = {}) {
+  const parts = [
+    input.mode ? labelFromMap(input.mode, inputModeLabels) : "",
+    input.backend || "",
+    input.helper ? "helper" : "",
+  ].filter(Boolean);
+  return parts.join(" / ");
+}
+
+function formatLocalHostClipboardStatus(clipboard = {}) {
+  const text = formatClipboardCapability(clipboard.text, clipboard.textMode);
+  const file = formatClipboardCapability(clipboard.file, clipboard.fileMode);
+  return [
+    text ? `文字 ${text}` : "",
+    file ? `文件 ${file}` : "",
+  ].filter(Boolean).join(" / ");
+}
+
+function localHostHelperStatusSummary(status, { managedPid = "" } = {}) {
+  if (!status) return "";
+  if (!status.ok) {
+    const reason = status.error?.message || "端口没有响应";
+    return `本机被控未在线：${reason}`;
+  }
+
+  const runtimeText = formatHostRuntimeDiagnostics(status.runtime);
+  const screenText = formatLocalHostScreenStatus(status.capabilities?.screen || {});
+  const audioText = formatLocalHostAudioStatus(status.capabilities?.audio || {});
+  const parts = [
+    managedPid ? `PID ${managedPid}` : runtimeText,
+    screenText ? `画面 ${screenText}` : "",
+    audioText ? `声音 ${audioText}` : "",
+  ].filter(Boolean);
+  return `本机被控${managedPid ? "正在运行" : "已在线"}：${parts.join(" · ") || "/discovery 在线"}`;
+}
+
+function localHostHelperStatusLines(result) {
+  const status = normalizeLocalHostHelperStatus(result);
+  if (!status) return [];
+
+  const target = status.probe?.url || `${status.probe?.host || "127.0.0.1"}:${status.probe?.port || getLocalHostPort()}`;
+  if (!status.ok) {
+    return [
+      `[WARN] 状态助手：/discovery 离线 ${target}`,
+      status.error?.message ? `[WARN] ${status.error.message}` : "",
+      ...(status.suggestions || []).map((line) => `[INFO] ${line}`),
+    ].filter(Boolean);
+  }
+
+  const lines = [`[OK] 状态助手：/discovery 在线 ${target}`];
+  const runtimeText = formatHostRuntimeDiagnostics(status.runtime);
+  const screenText = formatLocalHostScreenStatus(status.capabilities?.screen || {});
+  const audioText = formatLocalHostAudioStatus(status.capabilities?.audio || {});
+  const inputText = formatLocalHostInputStatus(status.capabilities?.input || {});
+  const clipboardText = formatLocalHostClipboardStatus(status.capabilities?.clipboard || {});
+  if (runtimeText) lines.push(`运行：${runtimeText}`);
+  if (screenText) lines.push(`画面：${screenText}`);
+  if (audioText) lines.push(`声音：${audioText}`);
+  if (inputText) lines.push(`输入：${inputText}`);
+  if (clipboardText) lines.push(`剪贴板：${clipboardText}`);
+  for (const warning of status.warnings || []) lines.push(`[WARN] ${warning}`);
+  if (status.buildDiff?.message) {
+    lines.push(status.buildDiff.changed ? `[WARN] ${status.buildDiff.message}` : `[INFO] ${status.buildDiff.message}`);
+  }
+  return lines;
+}
+
 function updateLocalHostControls() {
   const available = canUseDesktopHostControl();
   const busy = state.localHostBusy;
   elements.localHostReadinessButton.disabled = !available || busy;
-  elements.localHostStartButton.disabled = !available || busy || state.localHostRunning;
+  elements.localHostStartButton.disabled = !available || busy || state.localHostRunning || state.localHostOnline;
   elements.localHostFirewallButton.disabled = !available || busy;
   elements.localHostStopButton.disabled = !available || busy || !state.localHostRunning;
   [
@@ -3095,6 +3209,10 @@ function updateLocalHostControls() {
     setLocalHostBadge("online", "运行中");
     return;
   }
+  if (state.localHostOnline) {
+    setLocalHostBadge("online", "已在线");
+    return;
+  }
   setLocalHostBadge("offline", "可启动");
 }
 
@@ -3106,15 +3224,21 @@ function setLocalHostBusy(busy, text = "") {
 
 function applyLocalHostSnapshot(snapshot) {
   state.localHostRunning = Boolean(snapshot?.running);
-  renderLocalHostOutput(Array.isArray(snapshot?.logs) ? snapshot.logs : []);
+  const helperStatus = normalizeLocalHostHelperStatus(snapshot?.helperStatusResult);
+  state.localHostOnline = Boolean(helperStatus?.ok || snapshot?.discovery);
+  const logs = Array.isArray(snapshot?.logs) ? snapshot.logs : [];
+  const helperLines = localHostHelperStatusLines(snapshot?.helperStatusResult);
+  const helperErrorLine = snapshot?.helperStatusError ? [`[WARN] 状态助手读取失败：${snapshot.helperStatusError}`] : [];
+  renderLocalHostOutput([...logs, ...helperLines, ...helperErrorLine]);
   const pidText = snapshot?.pid ? `PID ${snapshot.pid}` : "未运行";
   const discovery = snapshot?.discovery || {};
   const video = discovery.capturePipeline || discovery.source || discovery.hostMode || "";
   const audio = discovery.audioMode || discovery.audioCodec || "";
   const detail = [pidText, video && `画面 ${video}`, audio && `声音 ${audio}`].filter(Boolean).join(" · ");
-  setLocalHostStatus(snapshot?.message || (detail ? `本机被控：${detail}` : "本机被控状态已刷新。"));
+  const helperSummary = localHostHelperStatusSummary(helperStatus, { managedPid: snapshot?.pid || "" });
+  setLocalHostStatus(helperSummary || snapshot?.message || (detail ? `本机被控：${detail}` : "本机被控状态已刷新。"));
   if (detail && snapshot?.running) {
-    setLocalHostStatus(`本机被控正在运行：${detail}`);
+    setLocalHostStatus(helperSummary || `本机被控正在运行：${detail}`);
   }
   updateLocalHostControls();
 }
@@ -3126,7 +3250,27 @@ async function refreshLocalHostProcessStatus() {
     return;
   }
   try {
-    const snapshot = await invoke("get_windows_host_status");
+    const [snapshotResult, helperResult] = await Promise.allSettled([
+      invoke("get_windows_host_status"),
+      invoke("get_windows_host_helper_status", {
+        request: buildLocalHostStatusRequest(),
+      }),
+    ]);
+    if (snapshotResult.status === "rejected" && helperResult.status === "rejected") {
+      throw snapshotResult.reason;
+    }
+    const snapshot = snapshotResult.status === "fulfilled"
+      ? snapshotResult.value
+      : {
+          running: false,
+          logs: [],
+          message: snapshotResult.reason?.message || "读取本机被控进程状态失败。",
+        };
+    if (helperResult.status === "fulfilled") {
+      snapshot.helperStatusResult = helperResult.value;
+    } else {
+      snapshot.helperStatusError = helperResult.reason?.message || String(helperResult.reason || "");
+    }
     applyLocalHostSnapshot(snapshot);
   } catch (error) {
     setLocalHostStatus(error?.message || "读取本机被控状态失败。");
