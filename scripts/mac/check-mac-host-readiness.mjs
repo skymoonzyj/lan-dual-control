@@ -231,8 +231,8 @@ function filterExpectedWarnings(label, warnings) {
   return warnings;
 }
 
-function makeResult({ label, ok, exitCode = 0, elapsedMs = 0, summary = "", stdout = "", stderr = "", warnings = [], errors = [] }) {
-  return {
+function makeResult({ label, ok, exitCode = 0, elapsedMs = 0, summary = "", stdout = "", stderr = "", warnings = [], errors = [], details }) {
+  const result = {
     label,
     ok,
     exitCode,
@@ -243,6 +243,10 @@ function makeResult({ label, ok, exitCode = 0, elapsedMs = 0, summary = "", stdo
     warnings,
     errors,
   };
+  if (details !== undefined) {
+    result.details = details;
+  }
+  return result;
 }
 
 function runCommand(label, command, commandArgs, options = {}) {
@@ -345,6 +349,7 @@ async function runCustomStep(results, args, label, callback) {
       summary: payload.summary,
       warnings: payload.warnings || [],
       errors: payload.errors || [],
+      details: payload.details,
     });
     results.push(result);
     print(payload.ok ? "OK" : "ERROR", `${label}: ${payload.summary}`, args);
@@ -440,20 +445,46 @@ async function getStatusPayload(args) {
   };
 }
 
+function statusDetails(statusPayload, args) {
+  const discovery = statusPayload.discovery || {};
+  const online = statusPayload.online === true;
+  const details = {
+    online,
+    probe: statusPayload.probe || { host: args.host, port: args.port },
+    currentBuildId: statusPayload.currentBuildId || args.currentBuildId || "",
+  };
+  if (online) {
+    details.deviceName = statusPayload.deviceName || discovery.deviceName || discovery.hostName || "Mac host";
+    details.inputMode = statusPayload.inputMode || discoveryInputMode(discovery);
+    details.runtime = statusPayload.runtime || discovery.runtime || {};
+    details.permissions = statusPayload.permissions || discovery.permissions || {};
+    details.capabilities = statusPayload.capabilities || discovery.capabilities || {};
+    details.lanAddresses = Array.isArray(statusPayload.lanAddresses) ? statusPayload.lanAddresses : [];
+    details.buildDiff = statusPayload.buildDiff || {};
+    details.discovery = discovery;
+  } else {
+    details.error = statusPayload.error || null;
+    details.suggestions = Array.isArray(statusPayload.suggestions) ? statusPayload.suggestions : [];
+  }
+  return details;
+}
+
 async function checkDiscovery(args) {
   try {
     const { payload: statusPayload } = await getStatusPayload(args);
+    const details = statusDetails(statusPayload, args);
     if (statusPayload.online !== true) {
       const probe = statusPayload.probe || { host: args.host, port: args.port };
       const errorMessage = statusPayload.error?.message || "offline";
       const summary = `/discovery not reachable on ${probe.host}:${probe.port}: ${errorMessage}`;
       if (args.requireOpen) {
-        return { ok: false, summary, errors: [summary] };
+        return { ok: false, summary, errors: [summary], details };
       }
       return {
         ok: true,
         summary: `${summary}; start with scripts/mac/start-mac-host.mjs when ready`,
         warnings: [summary],
+        details,
       };
     }
 
@@ -507,16 +538,25 @@ async function checkDiscovery(args) {
       summary: `${discovery.deviceName || discovery.hostName || "Mac host"} · input=${input} · ${formatRuntime(runtime)} · ${formatPermissions(permissions)}`,
       warnings,
       errors,
+      details,
     };
   } catch (error) {
     const summary = `/discovery not reachable on ${args.host}:${args.port}: ${error.message}`;
+    const details = {
+      online: false,
+      probe: { host: args.host, port: args.port },
+      currentBuildId: args.currentBuildId || "",
+      error: { message: error.message },
+      suggestions: ["node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword"],
+    };
     if (args.requireOpen) {
-      return { ok: false, summary, errors: [summary] };
+      return { ok: false, summary, errors: [summary], details };
     }
     return {
       ok: true,
       summary: `${summary}; start with scripts/mac/start-mac-host.mjs when ready`,
       warnings: [summary],
+      details,
     };
   }
 }
@@ -713,6 +753,7 @@ async function main() {
       summary: result.summary,
       warnings: result.warnings,
       errors: result.errors,
+      details: result.details,
     })),
   };
 
