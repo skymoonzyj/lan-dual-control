@@ -256,6 +256,7 @@ Both directions: clipboard_event loop
 - `supportedVideoTransports` 可声明控制端兼容的传输方式；旧被控端可以忽略。
 - `binary-jpeg` 帧仍保留 JSON 元数据，但从文本帧中移出大体积图片数据。二进制帧 payload 结构为 ASCII magic `LDCV1\n`、4 字节大端 JSON 头长度、UTF-8 JSON 头、原始 JPEG 字节。JSON 头等价于 `video_frame` 元数据，`encoding` 为 `binary-jpeg`，不再包含 `dataUrl`，并带 `mimeType`、`payloadBytes` 或 `binaryPayloadBytes`。
 - `repeatPreviousFrame=true` 这类轻量重复帧没有图片 payload，仍可继续走 JSON 文本帧。
+- 控制端可在 `session_offer` 或后续 `display_settings` 里用 `preferredVideoCodec` / `preferredVideoEncoding` 请求视频编码；如果控制端在 H.264 解码不可用或失败后改发 `preferredVideoCodec=mjpeg` 或 `preferredVideoEncoding=data-url`，被控端应尽量把当前会话切回 JPEG/MJPEG，并通过后续 `display_settings_ack` / `video_frame` 返回实际 `videoCodec`、`videoEncoding`、`capturePipeline` 和 `hostMode`。
 
 第二版升级：
 

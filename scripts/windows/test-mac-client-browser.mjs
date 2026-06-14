@@ -39,6 +39,7 @@ const defaults = {
   minObservedVideoFps: 0,
   expectRepeatSignalVideo: false,
   expectBinaryVideo: false,
+  expectH264Fallback: false,
   useExistingHost: false,
   mockVideo: false,
   headless: true,
@@ -94,6 +95,7 @@ Options:
   --minObservedVideoFps <fps>      Minimum FPS during --observeVideoMs.
   --expectRepeatSignalVideo        Start WGC mock helper with repeat signal frames and require Mac client diagnostics.
   --expectBinaryVideo              Start WGC JPEG helper and require binary JPEG video transport.
+  --expectH264Fallback             Start ffmpeg-h264 mode and require Mac client to request MJPEG fallback.
   --disableWebCodecs               Hide VideoDecoder/EncodedVideoChunk and expect MJPEG request fallback.
 
 Examples:
@@ -187,6 +189,11 @@ function parseArgs(argv) {
     if (key === "expectBinaryVideo") {
       args.expectBinaryVideo = true;
       args.screenMode = "wgc";
+      continue;
+    }
+    if (key === "expectH264Fallback") {
+      args.expectH264Fallback = true;
+      args.screenMode = "ffmpeg-h264";
       continue;
     }
     if (Object.prototype.hasOwnProperty.call(args, key) && next && !next.startsWith("--")) {
@@ -1542,6 +1549,31 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       })}`);
     }
     print("OK", `Diagnostics: ${videoSnapshot.firstVideoMetric} / ${videoSnapshot.videoFlowMetric}`);
+    if (args.expectH264Fallback) {
+      const fallbackSnapshot = await waitFor(
+        async () => {
+          const value = await evaluate(session, buildSnapshotExpression());
+          lastSnapshot = value;
+          const hasJpegSurface = value.surfaceVisible && value.surfaceHasFrame && value.video.includes("jpeg");
+          const sentJpegFallback = await evaluate(
+            session,
+            `(() => [...(window.__lanDualSentMessages || [])]
+              .some((message) => message.type === "display_settings" && message.preferredVideoCodec === "mjpeg"))()`,
+          );
+          return hasJpegSurface && sentJpegFallback ? value : null;
+        },
+        args.timeoutMs,
+        "Mac client H.264 to MJPEG fallback",
+      ).catch((error) => {
+        if (lastSnapshot) {
+          print("INFO", `Last video: ${lastSnapshot.video}`);
+          print("INFO", `Last display settings: ${lastSnapshot.displaySettings}`);
+          print("INFO", `Last logs: ${(lastSnapshot.logs || []).join(" | ")}`);
+        }
+        throw error;
+      });
+      print("OK", `H.264 fallback: ${fallbackSnapshot.video} / ${fallbackSnapshot.displaySettings}`);
+    }
     if (args.expectRepeatSignalVideo) {
       const repeatSignalSnapshot = await waitFor(
         async () => {
@@ -1664,14 +1696,23 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
             .reverse()
             .find((message) => message.type === "display_settings_ack"))()`,
         );
+        const h264FallbackActive = await evaluate(
+          session,
+          `(() => [...(window.__lanDualSentMessages || [])]
+            .some((message) => message.type === "display_settings" && message.preferredVideoCodec === "mjpeg"))()`,
+        );
+        const expectedDisplayVideoCodec = h264FallbackActive
+          ? "mjpeg"
+          : value.supportsWebCodecsH264 ? "h264" : "mjpeg";
+        const expectedDisplayVideoEncoding = expectedDisplayVideoCodec === "h264" ? "annexb" : "data-url";
         const messageOk =
           Number(latestDisplaySettings?.width) === 2560 &&
           Number(latestDisplaySettings?.height) === 1440 &&
           Number(latestDisplaySettings?.fps) === 60 &&
           Number(latestDisplaySettings?.maxBandwidthKbps) === 40000 &&
           latestDisplaySettings?.qualityPreset === "sharp" &&
-          latestDisplaySettings?.preferredVideoCodec === (value.supportsWebCodecsH264 ? "h264" : "mjpeg") &&
-          latestDisplaySettings?.preferredVideoEncoding === (value.supportsWebCodecsH264 ? "annexb" : "data-url") &&
+          latestDisplaySettings?.preferredVideoCodec === expectedDisplayVideoCodec &&
+          latestDisplaySettings?.preferredVideoEncoding === expectedDisplayVideoEncoding &&
           latestDisplaySettings?.preferredVideoTransport === "binary-jpeg" &&
           Array.isArray(latestDisplaySettings?.supportedVideoTransports) &&
           latestDisplaySettings.supportedVideoTransports.includes("binary-jpeg") &&

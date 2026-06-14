@@ -6,7 +6,7 @@
 
 - Node.js WebSocket 被控服务，默认端口 `43770`。
 - `hello`、`auth_request`、`session_offer`、`display_settings`、`input_event`、`input_ack`、`clipboard_text` 和 `reverse_control_request` 消息处理；未认证连接会被拒绝，同一连接内密码错误 3 次后会关闭连接。
-- Windows 屏幕 `video_frame` 输出：默认在 Windows 桌面会话中用 FFmpeg gdigrab 持续采集 MJPEG/JPEG；也可显式使用 `ffmpeg-h264` 让 FFmpeg/libx264 输出 H.264 Annex B base64 帧；无 FFmpeg 或采集失败时回退 PowerShell/System.Drawing 系统截图，失败时再回退模拟帧。控制端下发的 `qualityPreset` 和 `maxBandwidthKbps` 会换算为实际 `jpegQuality`，让 5/10/20/40/50 Mbps 对应不同压缩质量。若控制端声明 `preferredVideoTransport=binary-jpeg`，JPEG 帧会优先走 WebSocket 二进制帧，减少 data URL/base64 文本重发成本；不支持时仍回退旧 JSON 文本帧。
+- Windows 屏幕 `video_frame` 输出：默认在 Windows 桌面会话中用 FFmpeg gdigrab 持续采集 MJPEG/JPEG；也可显式使用 `ffmpeg-h264` 让 FFmpeg/libx264 输出 H.264 Annex B base64 帧。`ffmpeg-h264` 模式下，如果控制端明确请求 `preferredVideoCodec=mjpeg` 或 `preferredVideoEncoding=data-url`，当前会话会切回 FFmpeg MJPEG/JPEG，保证浏览器 H.264 解码不可用时仍有画面；无 FFmpeg 或采集失败时回退 PowerShell/System.Drawing 系统截图，失败时再回退模拟帧。控制端下发的 `qualityPreset` 和 `maxBandwidthKbps` 会换算为实际 `jpegQuality`，让 5/10/20/40/50 Mbps 对应不同压缩质量。若控制端声明 `preferredVideoTransport=binary-jpeg`，JPEG 帧会优先走 WebSocket 二进制帧，减少 data URL/base64 文本重发成本；不支持时仍回退旧 JSON 文本帧。
 - 音频 `audio_frame` 输出：默认发送模拟帧；显式设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi` 后可用 Windows WASAPI loopback 采集默认播放设备的系统声音并发送 `pcm-f32le-base64` PCM 帧；也可设置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 试用 FFmpeg DirectShow 指定设备。
 - 屏幕采集当前是 FFmpeg gdigrab + PowerShell/System.Drawing 兜底的过渡实现；`ffmpeg-h264` 是可选流式编码模式，主要用于和 Mac client H.264 接收链路联调，不替代后续 Windows Graphics Capture。已新增 Windows Graphics Capture 支持预检和 Rust helper 项目；helper 目前可完成 WGC/D3D 初始化、读取真实 `Direct3D11CaptureFrame.Surface`、CPU readback、请求分辨率缩放，并通过 WIC 按请求 JPEG 质量编码后按 JSON 行合同接入 Node host。下一步是连续帧 pacing、资源对照和 Mac client 真连观感验收。
 - WASAPI loopback 是当前推荐的系统声音采集入口；DirectShow PCM 入口保留给虚拟声卡/loopback 设备做兼容验证。
@@ -375,6 +375,20 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 ```
 
 当前 H.264 短基线：`2026-06-13 14:18` 在真实桌面权限下运行 `test-windows-h264-mode`，本机临时 host 720p/30Hz 观察 2.5 秒收到 73 帧，平均 28.83 FPS，最大帧间隔 53 ms，timestamp 单调，管线为 `windows-ffmpeg-gdigrab-h264`，codec 为 `h264`。普通沙盒上下文仍可能遇到 FFmpeg `gdigrab error 5` / mock fallback；这属于桌面抓屏权限/会话限制，不应误判为 H.264 管线不可用。当前实现使用 `libx264` 软件编码和 JSON/base64 过渡传输，后续仍需 WebSocket 二进制帧、WGC 采集和硬件编码优化。
+
+如果 Mac client 所在浏览器不支持当前 H.264 `codecString`，页面会发送 `display_settings` 请求 `preferredVideoCodec=mjpeg` / `preferredVideoEncoding=data-url`。Windows host 即使以 `ffmpeg-h264` 启动，也会按这次请求把当前会话改为 `windows-ffmpeg-gdigrab-mjpeg`，避免页面卡在“等待 JPEG”。可用下面的页面级自检同时覆盖“先尝试 H.264、失败后自动切 JPEG”的路径：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --expectH264Fallback --allowClipboardFallback --skipFileClipboard --observeVideoMs 900 --minObservedVideoFrames 4 --minObservedVideoFps 4
+```
+
+需要强制从一开始就走 MJPEG/JPEG fallback 时，可禁用页面 WebCodecs：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --screenMode ffmpeg-h264 --disableWebCodecs --allowClipboardFallback --skipFileClipboard --observeVideoMs 900 --minObservedVideoFrames 4 --minObservedVideoFps 4
+```
+
+`2026-06-14 22:40` 本机复验结果：动态 H.264 fallback 路径最终显示 `jpeg/binary`，短窗口 52 帧 / 907 ms / 57.3 FPS；禁用 WebCodecs 的直接 MJPEG fallback 路径 55 帧 / 915 ms / 60.1 FPS；独立 `test-windows-h264-mode` 仍能收到 H.264 42 帧 / 1.5 秒 / 27.73 FPS。
 
 需要对照码率和 JPEG 质量时：
 

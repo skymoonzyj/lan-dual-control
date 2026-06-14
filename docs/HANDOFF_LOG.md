@@ -19,6 +19,48 @@
 
 ## 2026-06-14 Windows Codex
 
+日期：2026-06-14 22:30
+开发端：Windows Codex
+本轮目标：修复 Mac client 在浏览器不支持 Windows `ffmpeg-h264` 输出时触发 MJPEG/JPEG 回退后仍无画面的问题。
+完成内容：
+- `apps/windows-host/src/windows-screen-capture.mjs` 让 `ffmpeg-h264` 模式不再死守 H.264：当 `session_offer` 或后续 `display_settings` 明确请求 `preferredVideoCodec=mjpeg`、`videoCodec=mjpeg`、`preferredVideoEncoding=data-url` 等非 H.264 偏好时，当前会话会按 FFmpeg MJPEG/JPEG 管线输出。
+- H.264 仍是默认行为：显式 `ffmpeg-h264` 启动且客户端没有 codec fallback 偏好时，仍返回 `h264` / `annexb-base64` / `windows-ffmpeg-gdigrab-h264`。
+- `makeFfmpegKey` 增加 stream kind，避免同一 host 从 H.264 切 MJPEG 时复用旧 FFmpeg 进程。
+- `scripts/windows/test-mac-client-browser.mjs` 新增 `--expectH264Fallback`，验证页面先尝试 H.264，浏览器拒绝当前 `codecString` 后发送 MJPEG fallback，并最终显示 JPEG 画面。
+- 页面级高清设置断言会在 H.264 fallback 已发生时继续要求后续 `display_settings` 保持 `mjpeg/data-url`，避免切换分辨率后又回到不可解码的 H.264。
+- Windows host README、Mac client README、协议文档、CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已同步。
+修改文件：
+- `apps/windows-host/src/windows-screen-capture.mjs`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/windows-host/README.md`
+- `apps/mac-client/README.md`
+- `docs/03-architecture-and-protocol.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-host/src/windows-screen-capture.mjs`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `npm.cmd --prefix apps/windows-host run check`
+- `node scripts/windows/test-mac-client-browser.mjs --screenMode ffmpeg-h264 --disableWebCodecs --allowClipboardFallback --skipFileClipboard --observeVideoMs 900 --minObservedVideoFrames 4 --minObservedVideoFps 4 --timeoutMs 45000`
+- `node scripts/windows/test-mac-client-browser.mjs --expectH264Fallback --allowClipboardFallback --skipFileClipboard --observeVideoMs 900 --minObservedVideoFrames 4 --minObservedVideoFps 4 --timeoutMs 45000`
+- `node scripts/windows/test-windows-h264-mode.mjs --durationMs 1500 --minFrames 5 --minFps 5 --timeoutMs 45000`
+验证结果：
+- 禁用 WebCodecs 的直接 MJPEG fallback 通过：页面显示 `jpeg/binary`，短窗口 `55` 帧 / `915 ms` / `60.1 FPS`。
+- 动态 H.264 fallback 通过：Edge/WebCodecs 拒绝 `avc1.42C02A` 后页面请求 MJPEG，Windows host 切到 `windows-ffmpeg-gdigrab-mjpeg`，页面显示 `jpeg/binary`，短窗口 `52` 帧 / `907 ms` / `57.3 FPS`。
+- 独立 H.264 输出仍通过：`test-windows-h264-mode` 收到 `42` 帧 / `1.5s` / `27.73 FPS`，最大间隔 `55 ms`。
+遗留问题：
+- 当前 Windows H.264 仍是 FFmpeg/libx264 + JSON/base64 过渡路径；低延迟正式路线仍应推进 WGC H.264/硬编或更高效的二进制视频 payload。
+- 本轮修复的是“解码失败后仍有画面”的可靠性，不代表当前浏览器环境已经能解码所有 H.264 `codecString`。
+下一步建议：
+- 继续做 Windows WGC H.264/硬编，或在真实 Mac client 连接真实 Windows host 时对照 MJPEG、binary-jpeg、H.264 和 fallback 的画面、延迟、带宽与 CPU。
+是否改了协议：否；只更严格地消费已有 `preferredVideoCodec` / `videoCodec` / `preferredVideoEncoding` / `videoEncoding` 字段，并补充协议文档说明运行中 fallback 语义。
+是否需要另一端配合：暂不需要；后续真机观感对照需要 Mac 端连接 Windows host。
+
+## 2026-06-14 Windows Codex
+
 日期：2026-06-14 22:15
 开发端：Windows Codex
 本轮目标：给 Windows host 和 Mac client 增加可选 WebSocket `binary-jpeg` 视频传输，减少 JPEG 帧 data URL/base64 文本开销。

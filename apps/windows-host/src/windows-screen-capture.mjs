@@ -86,6 +86,22 @@ function normalizeH264CodecString(value) {
   return /^avc1\.[0-9a-f]{6}$/i.test(codec) ? codec : "avc1.42E01F";
 }
 
+function wantsH264Video(settings = {}) {
+  const codec = String(settings.preferredVideoCodec ?? settings.videoCodec ?? "").trim().toLowerCase();
+  if (codec) {
+    return ["h264", "avc", "avc1"].includes(codec);
+  }
+  const encoding = String(settings.preferredVideoEncoding ?? settings.videoEncoding ?? "").trim().toLowerCase();
+  return encoding.includes("annexb") || encoding.includes("h264");
+}
+
+function hasVideoCodecPreference(settings = {}) {
+  return hasConfiguredValue(settings.preferredVideoCodec) ||
+    hasConfiguredValue(settings.videoCodec) ||
+    hasConfiguredValue(settings.preferredVideoEncoding) ||
+    hasConfiguredValue(settings.videoEncoding);
+}
+
 function normalizeWgcRepeatLastFrameMode(value) {
   const mode = String(value ?? wgcRepeatFullMode).trim().toLowerCase();
   if (["signal", "light", "lightweight", "thin"].includes(mode)) {
@@ -718,44 +734,51 @@ export class WindowsScreenCaptureCoordinator {
     );
   }
 
-  getVideoCodec() {
-    if (this.mode === ffmpegH264Mode) {
-      return "h264";
+  effectiveModeForSettings(settings = {}) {
+    if (this.mode === ffmpegH264Mode && hasVideoCodecPreference(settings) && !wantsH264Video(settings)) {
+      return ffmpegMode;
     }
-    return this.mode === ffmpegMode || this.mode === systemMode || this.mode === wgcMode ? "jpeg" : "mock-svg";
+    return this.mode;
   }
 
-  getVideoEncoding() {
-    if (this.mode === ffmpegH264Mode) {
+  getVideoCodec(mode = this.mode) {
+    if (mode === ffmpegH264Mode) {
+      return "h264";
+    }
+    return mode === ffmpegMode || mode === systemMode || mode === wgcMode ? "jpeg" : "mock-svg";
+  }
+
+  getVideoEncoding(mode = this.mode) {
+    if (mode === ffmpegH264Mode) {
       return "annexb-base64";
     }
     return "data-url";
   }
 
-  getCapturePipeline() {
-    if (this.mode === wgcMode) {
+  getCapturePipeline(mode = this.mode) {
+    if (mode === wgcMode) {
       return "windows-wgc-helper-jpeg";
     }
-    if (this.mode === ffmpegH264Mode) {
+    if (mode === ffmpegH264Mode) {
       return "windows-ffmpeg-gdigrab-h264";
     }
-    if (this.mode === ffmpegMode) {
+    if (mode === ffmpegMode) {
       return "windows-ffmpeg-gdigrab-mjpeg";
     }
-    return this.mode === systemMode ? "windows-gdi-jpeg" : "mock-svg";
+    return mode === systemMode ? "windows-gdi-jpeg" : "mock-svg";
   }
 
-  makeHostMode() {
-    if (this.mode === wgcMode) {
+  makeHostMode(mode = this.mode) {
+    if (mode === wgcMode) {
       return "windows-host-wgc-helper";
     }
-    if (this.mode === ffmpegH264Mode) {
+    if (mode === ffmpegH264Mode) {
       return "windows-host-ffmpeg-h264";
     }
-    if (this.mode === ffmpegMode) {
+    if (mode === ffmpegMode) {
       return "windows-host-ffmpeg-mjpeg";
     }
-    return this.mode === systemMode ? "windows-host-system-jpeg" : "windows-host-skeleton";
+    return mode === systemMode ? "windows-host-system-jpeg" : "windows-host-skeleton";
   }
 
   normalizeFps(value) {
@@ -805,6 +828,7 @@ export class WindowsScreenCaptureCoordinator {
 
   negotiate(message) {
     const activeDisplay = this.pickDisplay(message.displayId);
+    const effectiveMode = this.effectiveModeForSettings(message);
     const width = clampNumber(message.preferredWidth, 320, 3840, activeDisplay.width || 1920);
     const height = clampNumber(message.preferredHeight, 180, 2160, activeDisplay.height || 1080);
     const requestedFps = clampNumber(message.maxFps, 1, 240, this.maxScreenFps);
@@ -823,14 +847,14 @@ export class WindowsScreenCaptureCoordinator {
       maxBandwidthKbps,
       qualityPreset,
       jpegQuality,
-      videoCodec: this.getVideoCodec(),
-      videoEncoding: this.getVideoEncoding(),
-      codecString: this.mode === ffmpegH264Mode ? this.h264CodecString : "",
+      videoCodec: this.getVideoCodec(effectiveMode),
+      videoEncoding: this.getVideoEncoding(effectiveMode),
+      codecString: effectiveMode === ffmpegH264Mode ? this.h264CodecString : "",
       displays: this.getDisplays(),
       activeDisplayId: activeDisplay.id,
       displayName: activeDisplay.name,
-      hostMode: this.makeHostMode(),
-      capturePipeline: this.getCapturePipeline(),
+      hostMode: this.makeHostMode(effectiveMode),
+      capturePipeline: this.getCapturePipeline(effectiveMode),
       requestedScreenMode: this.requestedMode,
       wgcFallbackReason: this.wgcFallbackReason,
     };
@@ -838,6 +862,10 @@ export class WindowsScreenCaptureCoordinator {
 
   updateSessionDisplay(session, message) {
     const activeDisplay = this.pickDisplay(message.displayId || session.activeDisplayId);
+    const effectiveMode = this.effectiveModeForSettings({
+      preferredVideoCodec: message.preferredVideoCodec ?? message.videoCodec ?? session.videoCodec,
+      preferredVideoEncoding: message.preferredVideoEncoding ?? message.videoEncoding ?? session.videoEncoding,
+    });
     const requestedFps = clampNumber(message.fps, 1, 240, session.requestedFps || session.fps);
     const fps = this.normalizeFps(requestedFps);
     const maxBandwidthKbps = normalizeBandwidthKbps(message.maxBandwidthKbps, session.maxBandwidthKbps);
@@ -863,11 +891,11 @@ export class WindowsScreenCaptureCoordinator {
       maxBandwidthKbps,
       qualityPreset,
       jpegQuality,
-      videoCodec: this.getVideoCodec(),
-      videoEncoding: this.getVideoEncoding(),
-      codecString: this.mode === ffmpegH264Mode ? this.h264CodecString : "",
-      hostMode: this.makeHostMode(),
-      capturePipeline: this.getCapturePipeline(),
+      videoCodec: this.getVideoCodec(effectiveMode),
+      videoEncoding: this.getVideoEncoding(effectiveMode),
+      codecString: effectiveMode === ffmpegH264Mode ? this.h264CodecString : "",
+      hostMode: this.makeHostMode(effectiveMode),
+      capturePipeline: this.getCapturePipeline(effectiveMode),
       requestedScreenMode: this.requestedMode,
       wgcFallbackReason: this.wgcFallbackReason,
     };
@@ -910,7 +938,10 @@ export class WindowsScreenCaptureCoordinator {
 
     if (this.mode === ffmpegH264Mode) {
       try {
-        return await this.makeFfmpegH264Frame(frameId, session);
+        if (String(session.videoCodec || "").toLowerCase() === "h264") {
+          return await this.makeFfmpegH264Frame(frameId, session);
+        }
+        return await this.makeFfmpegMjpegFrame(frameId, session);
       } catch (error) {
         this.recordCaptureFailure(error);
         try {
@@ -918,7 +949,9 @@ export class WindowsScreenCaptureCoordinator {
         } catch (fallbackError) {
           this.recordCaptureFailure(fallbackError);
           return this.makeMockFrame(frameId, session, {
-            capturePipeline: "windows-ffmpeg-gdigrab-h264-fallback-mock",
+            capturePipeline: String(session.videoCodec || "").toLowerCase() === "h264"
+              ? "windows-ffmpeg-gdigrab-h264-fallback-mock"
+              : "windows-ffmpeg-gdigrab-fallback-mock",
             fallbackReason: `${error.message}; ${fallbackError.message}`,
           });
         }
@@ -1274,8 +1307,10 @@ export class WindowsScreenCaptureCoordinator {
     const fps = this.normalizeFps(session.fps);
     const jpegQuality = this.jpegQualityForSession(session);
     const bandwidthKbps = normalizeBandwidthKbps(session.maxBandwidthKbps);
+    const streamKind = String(session.videoCodec || "").toLowerCase() === "h264" ? "h264" : "mjpeg";
     return [
       this.mode,
+      streamKind,
       activeDisplay.id,
       activeDisplay.x,
       activeDisplay.y,
@@ -1298,6 +1333,7 @@ export class WindowsScreenCaptureCoordinator {
     const jpegQuality = this.jpegQualityForSession(session);
     const bandwidthKbps = normalizeBandwidthKbps(session.maxBandwidthKbps);
     const key = this.makeFfmpegKey(session);
+    const streamKind = String(session.videoCodec || "").toLowerCase() === "h264" ? "h264" : "mjpeg";
 
     if (this.ffmpegProcess && this.ffmpegKey === key) {
       return;
@@ -1309,7 +1345,7 @@ export class WindowsScreenCaptureCoordinator {
     this.ffmpegFrame = null;
     this.ffmpegFrameId = 0;
     this.lastServedFfmpegFrameId = 0;
-    this.ffmpegStreamKind = this.mode === ffmpegH264Mode ? "h264" : "mjpeg";
+    this.ffmpegStreamKind = streamKind;
     this.ffmpegPendingH264Nals = [];
     this.ffmpegPendingH264NalTypes = [];
     this.ffmpegH264SawAud = false;
@@ -1333,7 +1369,7 @@ export class WindowsScreenCaptureCoordinator {
       "-vf",
       `scale=${width}:${height}:flags=fast_bilinear`,
     ];
-    const outputArgs = this.mode === ffmpegH264Mode
+    const outputArgs = streamKind === "h264"
       ? [
           "-an",
           "-c:v",
