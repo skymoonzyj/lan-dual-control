@@ -37,6 +37,7 @@ const defaults = {
   observeVideoMs: 0,
   minObservedVideoFrames: 0,
   minObservedVideoFps: 0,
+  expectRepeatSignalVideo: false,
   useExistingHost: false,
   mockVideo: false,
   headless: true,
@@ -90,6 +91,7 @@ Options:
   --observeVideoMs <ms>            Observe sustained video after connect. Default: off
   --minObservedVideoFrames <n>     Minimum frames during --observeVideoMs.
   --minObservedVideoFps <fps>      Minimum FPS during --observeVideoMs.
+  --expectRepeatSignalVideo        Start WGC mock helper with repeat signal frames and require Mac client diagnostics.
   --disableWebCodecs               Hide VideoDecoder/EncodedVideoChunk and expect MJPEG request fallback.
 
 Examples:
@@ -173,6 +175,11 @@ function parseArgs(argv) {
     }
     if (key === "expectReconnect") {
       args.expectReconnect = true;
+      continue;
+    }
+    if (key === "expectRepeatSignalVideo") {
+      args.expectRepeatSignalVideo = true;
+      args.screenMode = "wgc";
       continue;
     }
     if (Object.prototype.hasOwnProperty.call(args, key) && next && !next.startsWith("--")) {
@@ -506,6 +513,42 @@ async function grantClipboardPermissions(session, origin) {
   });
 }
 
+async function createRepeatSignalWgcHelper() {
+  const dir = await mkdtemp(join(tmpdir(), "lan-dual-repeat-signal-wgc-helper-"));
+  const helperPath = join(dir, "mock-wgc-helper.mjs");
+  const onePixelJpegBase64 =
+    "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/AUf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/AUf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Al//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/IV//2gAMAwEAAgADAAAAEP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QUf/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QUf/EABQQAQAAAAAAAAAAAAAAAAAAABD/2gAIAQEAAT8QUf/Z";
+  const source = `
+const width = Number(process.env.LAN_DUAL_WGC_WIDTH) || 1280;
+const height = Number(process.env.LAN_DUAL_WGC_HEIGHT) || 720;
+const fps = Math.max(1, Math.min(10, Number(process.env.LAN_DUAL_WGC_FPS) || 8));
+const intervalMs = Math.max(100, Math.round(1000 / fps));
+const dataBase64 = ${JSON.stringify(onePixelJpegBase64)};
+console.log(JSON.stringify({ type: "hello", backend: "repeat-signal-test-wgc-helper", codec: "jpeg", encoding: "base64", width, height, fps }));
+let frameId = 0;
+setInterval(() => {
+  frameId += 1;
+  console.log(JSON.stringify({
+    type: "frame",
+    frameId,
+    timestamp: new Date().toISOString(),
+    width,
+    height,
+    sourceWidth: width,
+    sourceHeight: height,
+    dataBase64,
+    payloadBytes: Buffer.byteLength(dataBase64, "base64"),
+  }));
+}, intervalMs);
+`;
+  await writeFile(helperPath, source, "utf8");
+  return {
+    dir,
+    helperPath,
+    cleanup: () => rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }),
+  };
+}
+
 async function startWindowsHost(args, repoRoot) {
   await ensureTemporaryHostPort(args);
   const discoveryUrl = `http://${args.host}:${args.port}/discovery`;
@@ -530,9 +573,19 @@ async function startWindowsHost(args, repoRoot) {
     ...process.env,
     LAN_DUAL_PASSWORD: args.hostPassword,
     LAN_DUAL_WINDOWS_INPUT_MODE: args.inputMode,
-    LAN_DUAL_WINDOWS_SCREEN_MODE: args.mockVideo ? "mock" : args.screenMode,
+    LAN_DUAL_WINDOWS_SCREEN_MODE: args.expectRepeatSignalVideo ? "wgc" : args.mockVideo ? "mock" : args.screenMode,
     LAN_DUAL_BUILD_ID: temporaryWindowsHostBuildId,
     ...(args.audioMode ? { LAN_DUAL_WINDOWS_AUDIO_MODE: args.audioMode } : {}),
+    ...(args.expectRepeatSignalVideo && args.repeatSignalWgcHelperPath
+      ? {
+          LAN_DUAL_WINDOWS_WGC_HELPER: process.execPath,
+          LAN_DUAL_WINDOWS_WGC_HELPER_ARGS: args.repeatSignalWgcHelperPath,
+          LAN_DUAL_WINDOWS_WGC_ALLOW_UNSUPPORTED: "1",
+          LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME: "1",
+          LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE: "signal",
+          LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: "60",
+        }
+      : {}),
   };
   const child = startProcess(
     process.execPath,
@@ -703,6 +756,8 @@ function buildSnapshotExpression() {
         if (Number.isNaN(parsed)) return null;
         return Math.round(Date.now() - parsed);
       })(),
+      repeatSignalVideoFrames: (window.__lanDualReceivedMessages || [])
+        .filter((message) => message.type === "video_frame" && message.repeatPreviousFrame === true).length,
       audioToggleChecked: document.querySelector("#audioToggle")?.checked || false,
       audioPlayedFrames: Number((text("#audioStatus").match(/播放\\s*(\\d+)/) || [])[1] || 0),
       audioFrameCount: (window.__lanDualReceivedMessages || []).filter((message) => message.type === "audio_frame").length,
@@ -1200,8 +1255,13 @@ async function run() {
   let browser = null;
   let session = null;
   let uploadDir = null;
+  let repeatSignalHelper = null;
 
   try {
+    if (args.expectRepeatSignalVideo && !args.useExistingHost) {
+      repeatSignalHelper = await createRepeatSignalWgcHelper();
+      args.repeatSignalWgcHelperPath = repeatSignalHelper.helperPath;
+    }
     windowsHost = await startWindowsHost(args, repoRoot);
     macClientServer = startProcess(process.execPath, ["apps/mac-client/server.mjs", String(args.clientPort)], {
       cwd: repoRoot,
@@ -1421,6 +1481,31 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       })}`);
     }
     print("OK", `Diagnostics: ${videoSnapshot.firstVideoMetric} / ${videoSnapshot.videoFlowMetric}`);
+    if (args.expectRepeatSignalVideo) {
+      const repeatSignalSnapshot = await waitFor(
+        async () => {
+          const value = await evaluate(session, buildSnapshotExpression());
+          lastSnapshot = value;
+          const hasRepeat = Number(value.repeatSignalVideoFrames) > 0;
+          const surfaceOk = value.surfaceVisible && value.surfaceHasFrame;
+          const diagnosticsOk = value.video.includes("重复") || value.videoFlowMetric.includes("重复");
+          return hasRepeat && surfaceOk && diagnosticsOk ? value : null;
+        },
+        args.timeoutMs,
+        "Mac client repeat signal video diagnostics",
+      ).catch((error) => {
+        if (lastSnapshot) {
+          print("INFO", `Last video: ${lastSnapshot.video}`);
+          print("INFO", `Last video diagnostics: ${lastSnapshot.videoFlowMetric}`);
+          print("INFO", `Last repeat signal frames: ${lastSnapshot.repeatSignalVideoFrames}`);
+        }
+        throw error;
+      });
+      print(
+        "OK",
+        `Repeat signal video: ${repeatSignalSnapshot.repeatSignalVideoFrames} frames / ${repeatSignalSnapshot.videoFlowMetric}`,
+      );
+    }
     const sessionSettings = await evaluate(
       session,
       `(() => [...(window.__lanDualSentMessages || [])].find((message) => message.type === "session_offer"))()`,
@@ -2016,6 +2101,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     if (uploadDir) {
       await rm(uploadDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }).catch(() => {});
     }
+    await repeatSignalHelper?.cleanup().catch(() => {});
     await rm(userDataDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }).catch(() => {});
   }
 }

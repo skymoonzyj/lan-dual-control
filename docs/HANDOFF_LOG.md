@@ -19,6 +19,39 @@
 
 ## 2026-06-14 Windows Codex
 
+日期：2026-06-14 21:50
+开发端：Windows Codex
+本轮目标：让 Mac client 显式兼容 Windows WGC `repeatPreviousFrame` 轻量重复帧，并补页面级自检。
+完成内容：
+- `apps/mac-client/app.js` 新增 repeat signal 计数：收到 `repeatPreviousFrame=true` 且无 `dataUrl` 的 JPEG 重复帧时保留上一帧画面、继续更新视频统计，并在顶部视频状态和会话诊断里显示“重复 N”。
+- 如果 repeat signal 在首个可显示视频帧前到达，Mac client 会忽略该重复帧并记录日志，避免把空画面误计为首帧。
+- `scripts/windows/test-mac-client-browser.mjs` 新增 `--expectRepeatSignalVideo`：临时启动 Windows host + WGC mock helper，启用 `LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME=1` 和 `LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE=signal`，验证 Mac client 画面保持可见且诊断显示重复计数。
+- Mac client README、CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已同步。
+修改文件：
+- `apps/mac-client/app.js`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --expectRepeatSignalVideo --allowClipboardFallback --skipFileClipboard --observeVideoMs 1200 --minObservedVideoFrames 10 --minObservedVideoFps 8 --timeoutMs 45000`
+验证结果：
+- 页面级自检通过：首帧约 `789 ms`，视频状态显示 `jpeg · #12 · 到达 1 ms · 重复 9`，诊断行显示 `重复 9`，短窗口观察 `46` 帧 / `1205 ms` / `38.2 FPS`。
+- 自检同时覆盖默认 `1080P / 60Hz / 20Mbps`、切换 `2K / 60Hz / 40Mbps`、输入 ack、Command→Ctrl、文本剪贴板和手动断开清理。
+遗留问题：
+- 这轮使用本机 WGC mock helper 证明客户端兼容性；真实 Mac 控制真实 Windows WGC signal/full repeat 观感仍需后续双机联调。
+下一步建议：
+- 请 Mac 端或 Windows 端用真实 Windows host 对照 WGC `full` / `signal`，观察画面连续性、延迟、带宽和资源；随后继续推进 WebSocket 二进制帧或 H.264/硬编。
+是否改了协议：否；只消费 Windows WGC 已有可选 `repeatPreviousFrame` 字段。
+是否需要另一端配合：暂不需要；真机观感对照需要 Mac 端连接 Windows host。
+
+## 2026-06-14 Windows Codex
+
 日期：2026-06-14 21:20
 开发端：Windows Codex
 本轮目标：给 Windows WGC repeat-last-frame 增加轻量信令模式，降低重复帧重复发送 JPEG/base64 的成本。

@@ -74,6 +74,7 @@ const state = {
   lastVideoFps: 0,
   lastVideoCodec: "",
   lastVideoFrameAgeMs: null,
+  repeatSignalVideoFrames: 0,
   h264Decoder: null,
   h264DecoderKey: "",
   h264DecoderConfigPromise: null,
@@ -278,6 +279,7 @@ function resetSessionDiagnostics({ resetReconnects = false } = {}) {
   state.lastVideoFps = 0;
   state.lastVideoCodec = "";
   state.lastVideoFrameAgeMs = null;
+  state.repeatSignalVideoFrames = 0;
   state.frameCount = 0;
   state.frameWindowStartedAt = 0;
   state.frameWindowCount = 0;
@@ -296,7 +298,8 @@ function renderSessionDiagnostics() {
     const fpsText = state.lastVideoFps > 0 ? ` · ${state.lastVideoFps.toFixed(1)} fps` : "";
     const ageText = formatFrameAge(state.lastVideoFrameAgeMs);
     const ageMetricText = ageText ? ` · ${ageText}` : "";
-    elements.videoFlowMetric.textContent = `${state.lastVideoCodec || "video"} · #${state.frameCount}${fpsText} · gap max ${formatMs(state.maxVideoGapMs)}${ageMetricText}`;
+    const repeatText = state.repeatSignalVideoFrames > 0 ? ` · 重复 ${state.repeatSignalVideoFrames}` : "";
+    elements.videoFlowMetric.textContent = `${state.lastVideoCodec || "video"} · #${state.frameCount}${fpsText} · gap max ${formatMs(state.maxVideoGapMs)}${ageMetricText}${repeatText}`;
   } else {
     elements.videoFlowMetric.textContent = state.connected ? "等待视频" : "未接收";
   }
@@ -1008,6 +1011,12 @@ function handleVideoFrame(frame) {
     return;
   }
 
+  const isRepeatSignal = frame.repeatPreviousFrame === true && !frame.dataUrl;
+  if (isRepeatSignal && !visibleRemoteFrameElement()) {
+    logEvent("忽略重复帧", "尚未收到可显示的视频帧");
+    return;
+  }
+
   if (frame.dataUrl) {
     resetVideoDecoder();
     elements.remoteImage.src = frame.dataUrl;
@@ -1019,9 +1028,13 @@ function handleVideoFrame(frame) {
 }
 
 function recordVideoFrameStats(frame) {
+  const isRepeatSignal = frame.repeatPreviousFrame === true && !frame.dataUrl;
   state.remoteWidth = Number(frame.width || state.remoteWidth);
   state.remoteHeight = Number(frame.height || state.remoteHeight);
   state.frameCount += 1;
+  if (isRepeatSignal) {
+    state.repeatSignalVideoFrames += 1;
+  }
   state.frameWindowCount += 1;
   const now = performance.now();
   if (!state.firstVideoFrameMs && state.connectionStartedAt) {
@@ -1035,6 +1048,7 @@ function recordVideoFrameStats(frame) {
   state.lastVideoFrameAgeMs = calculateFrameAgeMs(frame.timestamp);
   const ageText = formatFrameAge(state.lastVideoFrameAgeMs);
   const ageStatusText = ageText ? ` · ${ageText}` : "";
+  const repeatText = isRepeatSignal ? ` · 重复 ${state.repeatSignalVideoFrames}` : "";
   if (!state.frameWindowStartedAt) {
     state.frameWindowStartedAt = now;
   }
@@ -1042,11 +1056,11 @@ function recordVideoFrameStats(frame) {
   if (elapsed >= 1000) {
     const fps = (state.frameWindowCount * 1000) / elapsed;
     state.lastVideoFps = fps;
-    elements.videoStatus.textContent = `${frame.codec || "jpeg"} · #${frame.frameId || state.frameCount} · ${fps.toFixed(1)} fps${ageStatusText}`;
+    elements.videoStatus.textContent = `${frame.codec || "jpeg"} · #${frame.frameId || state.frameCount} · ${fps.toFixed(1)} fps${ageStatusText}${repeatText}`;
     state.frameWindowCount = 0;
     state.frameWindowStartedAt = now;
   } else {
-    elements.videoStatus.textContent = `${frame.codec || "jpeg"} · #${frame.frameId || state.frameCount}${ageStatusText}`;
+    elements.videoStatus.textContent = `${frame.codec || "jpeg"} · #${frame.frameId || state.frameCount}${ageStatusText}${repeatText}`;
   }
   renderSessionDiagnostics();
 }
