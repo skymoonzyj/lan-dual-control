@@ -19,6 +19,48 @@
 
 ## 2026-06-14 Windows Codex
 
+日期：2026-06-14 21:20
+开发端：Windows Codex
+本轮目标：给 Windows WGC repeat-last-frame 增加轻量信令模式，降低重复帧重复发送 JPEG/base64 的成本。
+完成内容：
+- `apps/windows-host/src/windows-screen-capture.mjs` 新增 `LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE=full|signal`。默认 `full` 保持旧行为；`signal` 只在重复帧发送 `repeatPreviousFrame=true`、`payloadBytes=0` 和尺寸/时间戳诊断，不重发 `dataUrl`。
+- `/discovery.capabilities.screen.wgc.repeatLastFrameMode` 暴露当前模式；`video_frame` 新增可选 `repeatPreviousFrame`、`repeatLastFrameMode`、`sourcePayloadBytes` 诊断字段。
+- `observe-windows-host-video.mjs` 新增 `--wgcRepeatLastFrameMode <full|signal>`，JSON 统计 `repeatSignalFrames` 和 `repeatLastFrameModes`。
+- `benchmark-windows-wgc-settings.mjs` 新增 `--repeatLastFrameMode <full|signal>`，文本/JSON 报告 signal 重复帧数量。
+- Windows host README、CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已同步结论。
+修改文件：
+- `apps/windows-host/src/windows-screen-capture.mjs`
+- `scripts/windows/observe-windows-host-video.mjs`
+- `scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-host/src/windows-screen-capture.mjs`
+- `node --check scripts/windows/observe-windows-host-video.mjs`
+- `node --check scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `npm.cmd run check`（`apps/windows-host`）
+- `node scripts/windows/test-windows-wgc-mode.mjs --durationMs 1200 --minFrames 1`
+- `node scripts/windows/test-windows-wgc-mode.mjs --mockHelper --durationMs 1200 --minFrames 5`
+- `node scripts/windows/test-windows-script-help.mjs`
+- `node scripts/windows/benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1600 --timeoutMs 45000 --repeatLastFrame --repeatLastFrameMode signal --json`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 60Hz/20M/signal repeat 两轮短基准：约 `31-32 FPS`，重复帧 `33-35`，全部为 signal 重复帧，新鲜 helper 帧 `17`，平均图片 payload 约 `17-23 KB`，内容年龄最大 `79-82 ms`，timestamp 单调。
+- 对比上一轮 full repeat 的 60Hz/20M：FPS 近似，但 signal 模式不再为重复帧携带 JPEG/base64，平均图片 payload 从约 `63.4 KB` 降到约 `17-23 KB`。
+遗留问题：
+- signal 模式降低重复帧传输/解析成本，但不会增加真实源帧；当前静态桌面下 WGC helper 真实新帧仍受 `FrameArrived` 节奏限制。
+下一步建议：
+- 继续推进 WebSocket 二进制视频帧、Windows WGC H.264/硬编，或让 Mac client 真实连接 Windows WGC signal/full repeat 对照观感、延迟、带宽和资源占用。
+是否改了协议：未改共享必需字段；Windows WGC `video_frame` 增加可选轻量 repeat 诊断字段，默认 `full` 兼容旧行为。
+是否需要另一端配合：暂不需要；真连观感验收需要 Mac 端连接 Windows host。
+
+## 2026-06-14 Windows Codex
+
 日期：2026-06-14 20:55
 开发端：Windows Codex
 本轮目标：给 Windows WGC helper 管线增加可选 repeat-last-frame pacing 诊断模式，并量化它对帧率/间隔/带宽的影响。

@@ -19,6 +19,8 @@ const ffmpegH264Mode = "ffmpeg-h264";
 const systemMode = "system-jpeg";
 const mockMode = "mock";
 const wgcMode = "wgc";
+const wgcRepeatFullMode = "full";
+const wgcRepeatSignalMode = "signal";
 
 function clampNumber(value, min, max, fallback) {
   const number = Number(value);
@@ -82,6 +84,14 @@ function normalizeScreenMode(value) {
 function normalizeH264CodecString(value) {
   const codec = String(value ?? "").trim();
   return /^avc1\.[0-9a-f]{6}$/i.test(codec) ? codec : "avc1.42E01F";
+}
+
+function normalizeWgcRepeatLastFrameMode(value) {
+  const mode = String(value ?? wgcRepeatFullMode).trim().toLowerCase();
+  if (["signal", "light", "lightweight", "thin"].includes(mode)) {
+    return wgcRepeatSignalMode;
+  }
+  return wgcRepeatFullMode;
 }
 
 function parseJsonOutput(output) {
@@ -525,6 +535,7 @@ export class WindowsScreenCaptureCoordinator {
     this.wgcHelperAvailable = commandExistsOrIsPathCommand(this.wgcHelperCommand);
     this.wgcHelperAllowUnsupported = truthyEnv(process.env.LAN_DUAL_WINDOWS_WGC_ALLOW_UNSUPPORTED);
     this.wgcRepeatLastFrame = truthyEnv(process.env.LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME);
+    this.wgcRepeatLastFrameMode = normalizeWgcRepeatLastFrameMode(process.env.LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE);
     this.wgcPreflight = this.requestedMode === wgcMode ? checkWgcSupportSync(logger) : null;
     this.wgcFallbackReason = "";
     this.mode = this.resolveMode();
@@ -655,6 +666,7 @@ export class WindowsScreenCaptureCoordinator {
             helperProtocol: "json-lines-v1",
             helperInfo: this.wgcHelperInfo,
             repeatLastFrame: this.wgcRepeatLastFrame,
+            repeatLastFrameMode: this.wgcRepeatLastFrameMode,
             preflightBypassed: usingWgcHelperCapture && !this.wgcPreflight.supported && this.wgcHelperAllowUnsupported,
             fallbackReason: this.wgcFallbackReason,
             osBuild: this.wgcPreflight.osBuild,
@@ -675,6 +687,7 @@ export class WindowsScreenCaptureCoordinator {
             helperProtocol: "json-lines-v1",
             helperInfo: this.wgcHelperInfo,
             repeatLastFrame: this.wgcRepeatLastFrame,
+            repeatLastFrameMode: this.wgcRepeatLastFrameMode,
             preflightBypassed: false,
             fallbackReason: "",
             blockers: [],
@@ -964,7 +977,7 @@ export class WindowsScreenCaptureCoordinator {
       fps,
       jpegQuality.toFixed(3),
       bandwidthKbps,
-      this.wgcRepeatLastFrame ? "repeat" : "fresh",
+      this.wgcRepeatLastFrame ? `repeat-${this.wgcRepeatLastFrameMode}` : "fresh",
     ].join(":");
   }
 
@@ -1210,14 +1223,18 @@ export class WindowsScreenCaptureCoordinator {
     const contentAgeMs = Number.isFinite(sourceTimestampMs)
       ? Math.max(0, now.getTime() - sourceTimestampMs)
       : null;
+    const repeatPreviousFrame = repeatedFrame && this.wgcRepeatLastFrameMode === wgcRepeatSignalMode;
+    const sourcePayloadBytes = Number(payload.payloadBytes) || 0;
 
-    return {
+    const frame = {
       type: "video_frame",
       frameId,
       timestamp: now.toISOString(),
       sourceTimestamp: sourceTimestamp || "",
       contentAgeMs,
       repeatedFrame,
+      repeatPreviousFrame,
+      repeatLastFrameMode: this.wgcRepeatLastFrameMode,
       width: Number(payload.width) || clampNumber(session.width, 320, 3840, activeDisplay.width || 1920),
       height: Number(payload.height) || clampNumber(session.height, 180, 2160, activeDisplay.height || 1080),
       sourceWidth: Number(payload.sourceWidth) || activeDisplay.width,
@@ -1237,10 +1254,17 @@ export class WindowsScreenCaptureCoordinator {
       requestedScreenMode: this.requestedMode,
       streamFallbackReason: "",
       droppedFrames: Math.max(0, sourceFrameId - previousServedFrameId - 1),
-      payloadBytes: Number(payload.payloadBytes) || 0,
+      payloadBytes: repeatPreviousFrame ? 0 : sourcePayloadBytes,
       helperFrameId: Number(payload.helperFrameId) || sourceFrameId,
-      dataUrl: payload.dataUrl,
     };
+
+    if (repeatPreviousFrame) {
+      frame.sourcePayloadBytes = sourcePayloadBytes;
+    } else {
+      frame.dataUrl = payload.dataUrl;
+    }
+
+    return frame;
   }
 
   makeFfmpegKey(session) {

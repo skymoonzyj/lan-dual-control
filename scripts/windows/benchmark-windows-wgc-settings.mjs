@@ -33,6 +33,7 @@ const defaults = {
   resourceSampleIntervalMs: 1000,
   resourceSampleTimeoutMs: 4000,
   repeatLastFrame: false,
+  repeatLastFrameMode: "full",
   skipBuild: false,
   json: false,
   verbose: false,
@@ -62,6 +63,7 @@ Options:
   --resourceSample false                Disable local host resource sampling
   --resourceSampleTree false            Sample only the host process, not helper children
   --repeatLastFrame                     Enable WGC repeat-last-frame pacing diagnostics
+  --repeatLastFrameMode <full|signal>   full resends JPEG, signal sends repeat markers
   --json                                Print JSON result
   --verbose                             Print child command stderr/stdout on failure
   --help, -h                            Show this help without starting a host
@@ -116,6 +118,7 @@ function parseArgs(argv) {
   args.resourceSampleIntervalMs = Math.max(250, Number(args.resourceSampleIntervalMs) || defaults.resourceSampleIntervalMs);
   args.resourceSampleTimeoutMs = Math.max(1000, Number(args.resourceSampleTimeoutMs) || defaults.resourceSampleTimeoutMs);
   args.repeatLastFrame = booleanArg(args.repeatLastFrame);
+  args.repeatLastFrameMode = normalizeRepeatLastFrameMode(args.repeatLastFrameMode);
   args.skipBuild = booleanArg(args.skipBuild);
   args.json = booleanArg(args.json);
   args.verbose = booleanArg(args.verbose);
@@ -139,6 +142,14 @@ function parseProfile(value) {
     bandwidthKbps,
     qualityPreset,
   };
+}
+
+function normalizeRepeatLastFrameMode(value) {
+  const mode = String(value ?? defaults.repeatLastFrameMode).trim().toLowerCase();
+  if (["signal", "light", "lightweight", "thin"].includes(mode)) {
+    return "signal";
+  }
+  return "full";
 }
 
 function booleanArg(value, defaultValue = false) {
@@ -287,6 +298,8 @@ async function runProfile(args, profile, index) {
     String(args.resourceSampleTimeoutMs),
     "--wgcRepeatLastFrame",
     String(args.repeatLastFrame),
+    "--wgcRepeatLastFrameMode",
+    args.repeatLastFrameMode,
     "--json",
   ];
 
@@ -347,6 +360,7 @@ function compactResult(result) {
     avgPayloadBytes: observation.avgPayloadBytes || 0,
     freshFrames: observation.freshFrames || 0,
     repeatedFrames: observation.repeatedFrames || 0,
+    repeatSignalFrames: observation.repeatSignalFrames || 0,
     uniqueHelperFrameCount: observation.uniqueHelperFrameCount || 0,
     maxFrameAgeMs: observation.maxFrameAgeMs ?? null,
     maxContentAgeMs: observation.maxContentAgeMs ?? null,
@@ -366,7 +380,8 @@ function printProfile(result) {
   console.log(
     `[OK] ${summary.profile.name}: session ${summary.sessionFps}Hz, ` +
     `${summary.frames} frames / ${summary.fps}fps, gap ${summary.maxGapMs}ms, ` +
-    `avg ${summary.avgPayloadBytes} bytes, repeated ${summary.repeatedFrames}, ` +
+    `avg ${summary.avgPayloadBytes} bytes, repeated ${summary.repeatedFrames}` +
+    `${summary.repeatSignalFrames ? ` (${summary.repeatSignalFrames} signal)` : ""}, ` +
     `content age max ${summary.maxContentAgeMs ?? "?"}ms, ` +
     `CPU avg/max ${summary.avgCpuPercent ?? "?"}/${summary.maxCpuPercent ?? "?"}%, ` +
     `WS peak ${summary.peakWorkingSetMiB ?? "?"} MiB`,
@@ -408,6 +423,7 @@ async function main() {
       resourceSample: args.resourceSample,
       resourceSampleTree: args.resourceSampleTree,
       repeatLastFrame: args.repeatLastFrame,
+      repeatLastFrameMode: args.repeatLastFrameMode,
     },
     profiles: results.map(compactResult),
     results,

@@ -44,6 +44,7 @@ const defaults = {
   resourceSampleTree: false,
   resourceSampleTimeoutMs: 3000,
   wgcRepeatLastFrame: false,
+  wgcRepeatLastFrameMode: "full",
 };
 
 function printUsage() {
@@ -65,6 +66,8 @@ Options:
   --requireRealVideo false              Allow mock-svg frames for local smoke checks
   --screenMode <auto|ffmpeg|system|mock|wgc>
   --wgcRepeatLastFrame true             Repeat the last WGC helper frame when no fresh frame arrives
+  --wgcRepeatLastFrameMode <full|signal>
+                                        full resends the JPEG; signal sends a tiny repeat marker
   --preferredVideoCodec <mjpeg|h264>    Preferred codec in session_offer
   --ffmpeg <path>                       Explicit FFmpeg path for local temporary host
   --useExisting                         Connect to an already running Windows host
@@ -128,11 +131,20 @@ function parseArgs(argv) {
   args.resourceSampleTree = booleanArg(args.resourceSampleTree);
   args.resourceSampleTimeoutMs = Math.max(1000, Number(args.resourceSampleTimeoutMs) || defaults.resourceSampleTimeoutMs);
   args.wgcRepeatLastFrame = booleanArg(args.wgcRepeatLastFrame);
+  args.wgcRepeatLastFrameMode = normalizeWgcRepeatLastFrameMode(args.wgcRepeatLastFrameMode);
   return args;
 }
 
 function booleanArg(value) {
   return value === true || value === "true" || value === "1" || value === "yes";
+}
+
+function normalizeWgcRepeatLastFrameMode(value) {
+  const mode = String(value ?? defaults.wgcRepeatLastFrameMode).trim().toLowerCase();
+  if (["signal", "light", "lightweight", "thin"].includes(mode)) {
+    return "signal";
+  }
+  return "full";
 }
 
 function print(kind, text, args) {
@@ -195,6 +207,7 @@ function startLocalWindowsHost(args) {
     LAN_DUAL_WINDOWS_SCREEN_MODE: args.screenMode,
     LAN_DUAL_WINDOWS_INPUT_MODE: args.inputMode,
     LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME: args.wgcRepeatLastFrame ? "1" : "0",
+    LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE: args.wgcRepeatLastFrameMode,
     ...(args.useDefaultMaxScreenFps
       ? {}
       : { LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: String(maxScreenFps) }),
@@ -467,7 +480,10 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
       source: frame.source || "",
       droppedFrames: Number(frame.droppedFrames) || 0,
       repeatedFrame: frame.repeatedFrame === true,
+      repeatPreviousFrame: frame.repeatPreviousFrame === true,
+      repeatLastFrameMode: String(frame.repeatLastFrameMode || "").trim(),
       bytes: estimateFrameBytes(frame),
+      sourcePayloadBytes: Number(frame.sourcePayloadBytes) || 0,
       width: Number(frame.width) || 0,
       height: Number(frame.height) || 0,
       maxBandwidthKbps: Number(frame.maxBandwidthKbps) || 0,
@@ -485,6 +501,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
   const bytesTotal = frames.reduce((sum, frame) => sum + frame.bytes, 0);
   const droppedFrames = frames.reduce((sum, frame) => sum + frame.droppedFrames, 0);
   const repeatedFrames = frames.filter((frame) => frame.repeatedFrame).length;
+  const repeatSignalFrames = frames.filter((frame) => frame.repeatPreviousFrame).length;
   const freshFrames = frames.length - repeatedFrames;
   const frameAges = frames
     .map((frame) => frame.frameAgeMs)
@@ -501,6 +518,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
   const uniqueCodecs = [...new Set(frames.map((frame) => frame.codec).filter(Boolean))];
   const fallbackReasons = [...new Set(frames.map((frame) => frame.fallbackReason).filter(Boolean))];
   const requestedScreenModes = [...new Set(frames.map((frame) => frame.requestedScreenMode).filter(Boolean))];
+  const repeatLastFrameModes = [...new Set(frames.map((frame) => frame.repeatLastFrameMode).filter(Boolean))];
   const uniqueQualities = [...new Set(
     frames
       .map((frame) => frame.jpegQuality)
@@ -521,6 +539,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
     avgPayloadBytes: frames.length ? Math.round(bytesTotal / frames.length) : 0,
     droppedFrames,
     repeatedFrames,
+    repeatSignalFrames,
     freshFrames,
     uniqueHelperFrameCount: new Set(helperFrameIds).size,
     timestampFrameCount: frameAges.length,
@@ -547,6 +566,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
     codecs: uniqueCodecs,
     fallbackReasons,
     requestedScreenModes,
+    repeatLastFrameModes,
   };
 }
 
@@ -664,6 +684,7 @@ async function main() {
         resourceSampleIntervalMs: args.resourceSampleIntervalMs,
         resourceSampleTree: args.resourceSampleTree,
         wgcRepeatLastFrame: args.wgcRepeatLastFrame,
+        wgcRepeatLastFrameMode: args.wgcRepeatLastFrameMode,
       },
       discoveryScreen: {
         mode: screen.mode || "",
@@ -698,7 +719,7 @@ async function main() {
       if (summary.repeatedFrames > 0 || args.wgcRepeatLastFrame) {
         print(
           "INFO",
-          `WGC repeat: repeated ${summary.repeatedFrames} / fresh ${summary.freshFrames} / unique helper frames ${summary.uniqueHelperFrameCount} / content age max ${summary.maxContentAgeMs ?? "?"} ms`,
+          `WGC repeat: mode ${args.wgcRepeatLastFrameMode}, repeated ${summary.repeatedFrames} / signal ${summary.repeatSignalFrames} / fresh ${summary.freshFrames} / unique helper frames ${summary.uniqueHelperFrameCount} / content age max ${summary.maxContentAgeMs ?? "?"} ms`,
           args,
         );
       }
