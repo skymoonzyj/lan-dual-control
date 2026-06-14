@@ -37,12 +37,21 @@ node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword
 node scripts/mac/start-mac-host.mjs --dryRun
 ```
 
+如果只想确认当前默认端口有没有 Mac host 在线，不启动服务、不认证 WebSocket、不要求密码，可以用：
+
+```bash
+node scripts/mac/start-mac-host.mjs --status
+```
+
+在线时它会显示 `/discovery`、runtime build/PID、权限摘要、能力摘要和 Windows 可尝试的局域网地址；离线时会返回非 0 并打印安全启动建议。
+
 启动助手会：
 
 - 默认绑定 `0.0.0.0:43770`，打印 Windows 端可填写的局域网地址。
 - 默认设置 `LAN_DUAL_INPUT_MODE=log`，避免无人值守时真实注入输入。
 - `--requirePassword` 会拒绝空密码和 `demo-password`，真机局域网联调建议始终打开。
 - `--ephemeralPassword` 会为本次进程生成一次性随机 `LAN_DUAL_PASSWORD` 且不打印密码；适合先恢复 `/discovery`、runtime/build 和权限诊断通道，但不能用于另一端认证联调，因为密码不会被共享。
+- `--status` 只读取 `/discovery` 并退出，不会启动 Swift host，不会读取或打印密码。
 - 等待 `/discovery` 就绪后，默认运行 `check-mac-displays --requireRuntime --expectBuildId <build>` 做只读 runtime/display round-trip 校验。
 - 如需真实输入注入，必须有人在屏幕前确认安全后，再显式传 `--inputMode inject` 或 `--injectInput`。
 
@@ -52,7 +61,7 @@ node scripts/mac/start-mac-host.mjs --dryRun
 node scripts/mac/test-mac-host-start-helper.mjs
 ```
 
-该脚本会覆盖缺密码拒绝、`demo-password` 拒绝、非交互密码提示拒绝、带环境密码干跑、一次性随机密码干跑和临时端口真实启动后自动关闭。
+该脚本会覆盖缺密码拒绝、`demo-password` 拒绝、非交互密码提示拒绝、带环境密码干跑、一次性随机密码干跑、`--status` 在线/离线检查和临时端口真实启动后自动关闭。
 
 Mac host 日常一键体检：
 

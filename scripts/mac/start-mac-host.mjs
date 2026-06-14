@@ -28,6 +28,7 @@ const defaults = {
   skipRuntimeCheck: false,
   requireRuntimeCheck: false,
   allowExisting: false,
+  status: false,
   dryRun: false,
   help: false,
 };
@@ -55,6 +56,7 @@ function parseArgs(argv) {
       key === "skipRuntimeCheck" ||
       key === "requireRuntimeCheck" ||
       key === "allowExisting" ||
+      key === "status" ||
       key === "dryRun"
     ) {
       args[key] = true;
@@ -128,6 +130,7 @@ Options:
   --skipRuntimeCheck         Skip check-mac-displays after /discovery is ready.
   --requireRuntimeCheck      Stop startup if the runtime/display check fails.
   --allowExisting            Do not refuse when /discovery already answers on the port.
+  --status                   Print current /discovery runtime status and exit without starting.
   --dryRun                   Print the resolved launch plan and exit.
   --help, -h                 Show this help without starting Mac host.
 `);
@@ -199,6 +202,83 @@ function getLanAddresses() {
     }
   }
   return result;
+}
+
+function statusValue(value) {
+  if (value === true) return "on";
+  if (value === false) return "off";
+  return "unknown";
+}
+
+function statusProbeHost(args) {
+  return args.host === "0.0.0.0" || args.host === "::" ? "127.0.0.1" : args.host;
+}
+
+function discoveryInputMode(discovery) {
+  return discovery?.capabilities?.inputMode || discovery?.capabilities?.input?.mode || discovery?.inputMode || "unknown";
+}
+
+function discoveryRuntimeSummary(runtime = {}) {
+  const parts = [];
+  if (runtime.processId) parts.push(`pid=${runtime.processId}`);
+  if (runtime.buildId) parts.push(`build=${runtime.buildId}`);
+  if (runtime.uptimeSeconds !== undefined) parts.push(`uptime=${runtime.uptimeSeconds}s`);
+  if (runtime.startedAt) parts.push(`startedAt=${runtime.startedAt}`);
+  return parts.length > 0 ? parts.join(" ") : "runtime=missing";
+}
+
+function discoveryCapabilitySummary(discovery) {
+  const capabilities = discovery?.capabilities || {};
+  const parts = [
+    `video=${statusValue(capabilities.video)}`,
+    `h264=${statusValue(capabilities.h264Stream)}`,
+    `audio=${capabilities.audioMode || statusValue(capabilities.audio)}`,
+    `clipboardText=${statusValue(capabilities.clipboardText)}`,
+    `clipboardFile=${statusValue(capabilities.clipboardFile)}`,
+  ];
+  if (capabilities.capturePipeline) parts.push(`pipeline=${capabilities.capturePipeline}`);
+  if (capabilities.maxScreenFps) parts.push(`maxFps=${capabilities.maxScreenFps}`);
+  return parts.join(" ");
+}
+
+function discoveryPermissionSummary(discovery) {
+  const permissions = discovery?.permissions || {};
+  return [
+    `screen=${statusValue(permissions.screenRecording)}`,
+    `accessibility=${statusValue(permissions.accessibility)}`,
+    `inputMonitoring=${statusValue(permissions.inputMonitoring)}`,
+  ].join(" ");
+}
+
+async function printStatus(args) {
+  const probeHost = statusProbeHost(args);
+  console.log(`[INFO] Mac host status probe: ${probeHost}:${args.port}`);
+  try {
+    const discovery = await requestJson(`http://${probeHost}:${args.port}/discovery`, Math.min(args.timeoutMs, 3000));
+    const runtime = discovery.runtime || {};
+    const input = discoveryInputMode(discovery);
+    console.log(`[OK] /discovery online: ${discovery.deviceName || discovery.hostName || "Mac host"} · input=${input} · ${discoveryRuntimeSummary(runtime)}`);
+    console.log(`[INFO] Permissions: ${discoveryPermissionSummary(discovery)}`);
+    console.log(`[INFO] Capabilities: ${discoveryCapabilitySummary(discovery)}`);
+    const lanAddresses = getLanAddresses();
+    if (lanAddresses.length > 0) {
+      for (const entry of lanAddresses) {
+        console.log(`[OK] Windows side can try: ${entry.address}:${args.port} (${entry.name})`);
+      }
+    }
+    if (input !== "log") {
+      console.log(`[WARN] Input mode is ${input}; keep log mode for unattended readiness checks.`);
+    }
+    if (runtime.buildId && args.buildId && runtime.buildId !== args.buildId) {
+      console.log(`[WARN] Running host build ${runtime.buildId} differs from current git ${args.buildId}; restart if you need the latest build.`);
+    }
+    return true;
+  } catch (error) {
+    console.log(`[WARN] /discovery offline on ${probeHost}:${args.port}: ${error.message}`);
+    console.log("[INFO] Start safely with: node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword");
+    console.log("[INFO] For temporary discovery/runtime diagnostics without sharing a password: node scripts/mac/start-mac-host.mjs --ephemeralPassword --requirePassword");
+    return false;
+  }
 }
 
 async function preparePassword(args) {
@@ -443,6 +523,12 @@ async function main() {
     return;
   }
   const args = parseArgs(process.argv);
+
+  if (args.status) {
+    const online = await printStatus(args);
+    process.exitCode = online ? 0 : 1;
+    return;
+  }
 
   await preparePassword(args);
   const env = makeLaunchEnv(args);

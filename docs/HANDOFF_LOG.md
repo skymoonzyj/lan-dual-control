@@ -17,6 +17,53 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-14 Mac Codex
+
+日期：2026-06-14 14:32
+开发端：Mac Codex
+本轮目标：恢复真实 Mac host 在线诊断面，并让启动助手支持不启动服务的状态检查，减少开工/联调前确认成本。
+完成内容：
+- 已同步 Windows 最新 `1506dcd Auto-select discovered Windows client host`，本地 main 与 origin/main 对齐后继续开发。
+- 当前 Mac host 已用 `--ephemeralPassword --requirePassword` 恢复到 `0.0.0.0:43770`，LAN 地址 `192.168.31.122:43770`，runtime `pid=74165`、`build=1506dcd`、`inputMode=log`，密码为一次性随机值且未打印/未共享。
+- `scripts/mac/start-mac-host.mjs` 新增 `--status`：只读探测 `/discovery`，在线时打印 runtime、权限、能力摘要和 Windows 可尝试地址；离线时返回非 0 并打印安全启动建议。该入口不会启动 Swift host，不会要求或打印密码。
+- 启动助手自测补充 `--status` 离线/在线覆盖，确保离线不会误启动，在线临时 host 会显示 runtime/权限/Windows 可连地址。
+- Mac host README、CURRENT_STATUS、NEXT_ACTIONS 和任务板已同步 `--status` 用法。
+修改文件：
+- `scripts/mac/start-mac-host.mjs`
+- `scripts/mac/test-mac-host-start-helper.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/start-mac-host.mjs`
+- `node --check scripts/mac/test-mac-host-start-helper.mjs`
+- `node scripts/mac/start-mac-host.mjs --help`
+- `node scripts/mac/test-mac-script-help.mjs --script start-mac-host.mjs`
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/mac/start-mac-host.mjs --status --host 127.0.0.1 --port 43770`
+- `node scripts/mac/check-mac-host-readiness.mjs --requireOpen --requireCurrentBuildId --timeoutMs 12000`
+- `node scripts/windows/discover-lan-hosts.mjs --host 192.168.31.122 --port 43770 --requireFound --json`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --host 192.168.31.122 --port 43770 --expectDiscoveryRuntimeBuildId 1506dcd --timeoutMs 60000`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 语法、帮助入口、启动助手自测通过；`--status` 授权只读查询当前真实 host 成功，显示 `pid=74165 build=1506dcd`、权限 screen/accessibility/inputMonitoring 全 on、H.264/PCM/剪贴板能力在线。
+- Mac readiness 9/9 通过，且强制当前 build 为 `1506dcd`。
+- Windows 局域网发现脚本发现 `192.168.31.122:43770` 和 `127.0.0.1:43770`，runtime build 均为 `1506dcd`。
+- Windows 控制端 diagnosticsOnly 无密码 UI 验收通过：设备列表/诊断条显示当前 Mac host，刷新设备自动选中真实 WebSocket 目标，runtime build 为 `1506dcd`。
+- 普通沙盒下 `start-mac-host --status` 和早前 readiness 会因本机网络权限出现 `EPERM` 假阴性；授权只读路径通过，已按环境限制处理。
+遗留问题：
+- 当前 Mac host 使用一次性随机密码，只适合 `/discovery`、runtime 和 UI diagnostics；真正 WebSocket 认证联调仍需要用户输入正式密码或按约定密码重启。
+- Agent Link Board 当前 `http://192.168.31.68:17888` 连接失败，暂无法发板上状态；需要恢复通讯板后补发本轮结果。
+下一步建议：
+- Windows 端可先继续无密码 diagnostics/discovery 检查 `192.168.31.122:43770` / build `1506dcd`。
+- 若用户准备真实控制测试，先在 Mac 端用正式密码重启 host，再让 Windows 端跑 `test-windows-client-browser --requireH264` 端到端验收。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；认证联调需要用户提供正式密码或重启到约定密码。
+
 ## 2026-06-14 Windows Codex
 
 日期：2026-06-14 03:25

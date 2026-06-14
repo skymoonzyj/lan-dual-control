@@ -208,6 +208,99 @@ async function assertEphemeralPasswordRefusesEnvOverride(timeoutMs) {
   print("OK", "Ephemeral password refuses to override an existing environment password");
 }
 
+async function assertStatusOffline(timeoutMs) {
+  const port = await getFreePort();
+  const result = await runNode(["--status", "--host", "127.0.0.1", "--port", String(port)], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "" },
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (result.exitCode !== 1 || result.timedOut) {
+    throw new Error(`Offline status should exit 1 without starting a host.\n${output}`);
+  }
+  assertIncludes(output, "/discovery offline", "offline status");
+  assertIncludes(output, "start-mac-host.mjs --promptPassword --requirePassword", "offline status");
+  assertNotIncludes(output, "Starting Mac host", "offline status");
+  assertNotIncludes(output, "LAN_DUAL_PASSWORD is required", "offline status");
+  print("OK", "Status reports offline hosts without starting or requiring a password");
+}
+
+async function assertStatusOnline(timeoutMs) {
+  const port = await getFreePort();
+  const commandArgs = [
+    helperScript,
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(port),
+    "--videoMode",
+    "mock",
+    "--inputMode",
+    "log",
+    "--buildId",
+    "status-helper-test",
+    "--requirePassword",
+    "--skipRuntimeCheck",
+    "--noBonjour",
+    "--timeoutMs",
+    String(timeoutMs),
+  ];
+  const child = spawn(process.execPath, commandArgs, {
+    cwd: repoRoot,
+    env: { ...process.env, LAN_DUAL_PASSWORD: "test-password" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let output = "";
+  let ready = false;
+  await new Promise((resolveLaunch, rejectLaunch) => {
+    const timer = setTimeout(() => {
+      child.kill();
+      rejectLaunch(new Error(`Status test helper host did not become ready in time.\n${output}`));
+    }, timeoutMs);
+    const onData = (chunk) => {
+      output += String(chunk);
+      if (!ready && output.includes("Mac host is running")) {
+        ready = true;
+        clearTimeout(timer);
+        resolveLaunch();
+      }
+    };
+    child.stdout.on("data", onData);
+    child.stderr.on("data", onData);
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      rejectLaunch(error);
+    });
+    child.on("exit", (code, signal) => {
+      clearTimeout(timer);
+      if (!ready) {
+        rejectLaunch(new Error(`Status test helper host exited before ready: code=${code} signal=${signal || ""}\n${output}`));
+      }
+    });
+  });
+
+  try {
+    const status = await runNode(["--status", "--host", "127.0.0.1", "--port", String(port)], {
+      timeoutMs,
+      env: { LAN_DUAL_PASSWORD: "" },
+    });
+    const statusOutput = `${status.stdout}\n${status.stderr}`;
+    if (status.exitCode !== 0 || status.timedOut) {
+      throw new Error(`Online status should exit 0.\n${statusOutput}`);
+    }
+    assertIncludes(statusOutput, "/discovery online", "online status");
+    assertIncludes(statusOutput, "build=status-helper-test", "online status");
+    assertIncludes(statusOutput, "Permissions:", "online status");
+    assertIncludes(statusOutput, "Windows side can try", "online status");
+    assertNotIncludes(statusOutput, "Starting Mac host", "online status");
+    print("OK", `Status reports running Mac host on temporary port ${port}`);
+  } finally {
+    child.kill();
+    await new Promise((resolveExit) => child.once("exit", resolveExit));
+  }
+}
+
 async function assertLaunchWithPasswordMode(timeoutMs, mode) {
   const port = await getFreePort();
   const commandArgs = [
@@ -303,6 +396,8 @@ async function main() {
   await assertDryRunWithEnvPassword(args.timeoutMs);
   await assertEphemeralPasswordDryRun(args.timeoutMs);
   await assertEphemeralPasswordRefusesEnvOverride(args.timeoutMs);
+  await assertStatusOffline(args.timeoutMs);
+  await assertStatusOnline(args.timeoutMs);
   await assertLaunchWithEnvPassword(args.timeoutMs);
   await assertLaunchWithEphemeralPassword(args.timeoutMs);
   print("OK", "Mac host start helper self-test passed");
