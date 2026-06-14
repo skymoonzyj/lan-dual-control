@@ -156,6 +156,14 @@ function assertIncludes(text, expected, label) {
   }
 }
 
+function parseJsonOutput(stdout, label) {
+  try {
+    return JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`${label} did not print parseable JSON: ${error.message}\nStdout:\n${stdout}`);
+  }
+}
+
 async function assertDiscoveryOnlyPasses(timeoutMs) {
   await withDiscoveryServer(async (port) => {
     const result = await runCheck(port, ["--expectDisplayCount", "2"], timeoutMs);
@@ -167,6 +175,34 @@ async function assertDiscoveryOnlyPasses(timeoutMs) {
     assertIncludes(output, "main*", "discovery-only success");
     assertIncludes(output, "display-4", "discovery-only success");
     print("OK", "discovery-only display check passes without WebSocket auth");
+  });
+}
+
+async function assertDiscoveryOnlyJsonPasses(timeoutMs) {
+  await withDiscoveryServer(async (port) => {
+    const result = await runCheck(port, ["--expectDisplayCount", "2", "--json"], timeoutMs);
+    const output = `${result.stdout}\n${result.stderr}`;
+    if (result.exitCode !== 0 || result.timedOut) {
+      throw new Error(`discovery-only JSON check should pass.\n${output}`);
+    }
+    const payload = parseJsonOutput(result.stdout, "discovery-only JSON success");
+    if (payload.ok !== true) {
+      throw new Error(`discovery-only JSON should report ok=true.\n${result.stdout}`);
+    }
+    if (payload.result?.mode !== "discoveryOnly") {
+      throw new Error(`discovery-only JSON result.mode mismatch.\n${result.stdout}`);
+    }
+    if (payload.discovery?.displayCount !== 2 || payload.result?.displayCount !== 2) {
+      throw new Error(`discovery-only JSON displayCount mismatch.\n${result.stdout}`);
+    }
+    if (payload.discovery?.runtime?.buildId !== "display-discovery-test") {
+      throw new Error(`discovery-only JSON runtime buildId missing.\n${result.stdout}`);
+    }
+    if (String(result.stdout).includes("[OK]")) {
+      throw new Error(`discovery-only JSON stdout should not include text logs.\n${result.stdout}`);
+    }
+    assertIncludes(result.stderr, "Discovery displays verified", "discovery-only JSON stderr logs");
+    print("OK", "discovery-only JSON output is parseable and keeps logs off stdout");
   });
 }
 
@@ -182,6 +218,27 @@ async function assertDisplayCountMismatchFails(timeoutMs) {
   });
 }
 
+async function assertDisplayCountMismatchJsonFails(timeoutMs) {
+  await withDiscoveryServer(async (port) => {
+    const result = await runCheck(port, ["--expectDisplayCount", "3", "--json"], timeoutMs);
+    const output = `${result.stdout}\n${result.stderr}`;
+    if (result.exitCode === 0 || result.timedOut) {
+      throw new Error(`display count mismatch JSON should fail.\n${output}`);
+    }
+    const payload = parseJsonOutput(result.stdout, "display count mismatch JSON");
+    if (payload.ok !== false) {
+      throw new Error(`display count mismatch JSON should report ok=false.\n${result.stdout}`);
+    }
+    if (!String(payload.error?.message || "").includes("display count mismatch")) {
+      throw new Error(`display count mismatch JSON error message missing.\n${result.stdout}`);
+    }
+    if (payload.discovery?.displayCount !== 2) {
+      throw new Error(`display count mismatch JSON should retain discovery details.\n${result.stdout}`);
+    }
+    print("OK", "discovery-only display count mismatch prints structured JSON failure");
+  });
+}
+
 async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -189,7 +246,9 @@ async function main() {
   }
   const args = parseArgs(process.argv);
   await assertDiscoveryOnlyPasses(args.timeoutMs);
+  await assertDiscoveryOnlyJsonPasses(args.timeoutMs);
   await assertDisplayCountMismatchFails(args.timeoutMs);
+  await assertDisplayCountMismatchJsonFails(args.timeoutMs);
   print("OK", "Mac display discovery-only self-test passed");
 }
 

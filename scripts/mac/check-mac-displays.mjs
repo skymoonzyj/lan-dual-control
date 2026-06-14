@@ -15,10 +15,24 @@ const defaults = {
   fps: 30,
   bandwidthKbps: 12000,
   discoveryOnly: false,
+  json: false,
   allowMissingFrameDisplayDiagnostic: false,
   requireRuntime: false,
   expectBuildId: "",
   maxRuntimeUptimeSeconds: 0,
+};
+
+const runState = {
+  args: null,
+  target: null,
+  discovery: null,
+  hello: null,
+  auth: null,
+  session: null,
+  firstFrame: null,
+  displaySettings: null,
+  switchedFrame: null,
+  result: null,
 };
 
 function parseArgs(argv) {
@@ -49,6 +63,7 @@ function parseArgs(argv) {
   args.fps = positiveInteger(args.fps, defaults.fps);
   args.bandwidthKbps = positiveInteger(args.bandwidthKbps, defaults.bandwidthKbps);
   args.discoveryOnly = booleanArg(args.discoveryOnly, defaults.discoveryOnly);
+  args.json = booleanArg(args.json, defaults.json);
   args.allowMissingFrameDisplayDiagnostic = booleanArg(
     args.allowMissingFrameDisplayDiagnostic,
     defaults.allowMissingFrameDisplayDiagnostic,
@@ -86,7 +101,12 @@ function booleanArg(value, fallback = false) {
 }
 
 function print(status, text) {
-  console.log(`[${status}] ${text}`);
+  const line = `[${status}] ${text}`;
+  if (runState.args?.json) {
+    console.error(line);
+    return;
+  }
+  console.log(line);
 }
 
 function makeEnvelope(message) {
@@ -126,6 +146,12 @@ async function fetchDiscovery(args) {
     }
     const payload = await response.json();
     const displays = normalizeDisplays(payload?.capabilities?.displays ?? payload?.displays ?? []);
+    runState.discovery = {
+      deviceName: normalizedText(payload.deviceName || payload.hostName || "unknown"),
+      displays,
+      displayCount: displays.length,
+      runtime: normalizeRuntime(payload.runtime),
+    };
     print("OK", `Discovery: ${payload.deviceName || payload.hostName || "unknown"} / displays=${formatDisplays(displays)} / ${formatRuntime(payload.runtime)}`);
     return { payload, displays };
   } finally {
@@ -359,10 +385,11 @@ function assertDisplayCount(displays, expectedCount) {
 
 function assertFrameDisplay(frame, expectedDisplay, label, args) {
   const actual = activeDisplayId(frame);
+  const summary = summarizeVideoFrame(frame);
   if (!actual) {
     if (args.allowMissingFrameDisplayDiagnostic) {
       print("INFO", `${label}: frame has no activeDisplayId diagnostic; ack path already verified`);
-      return;
+      return { ...summary, activeDisplayId: "", matched: false, missingDiagnosticAllowed: true };
     }
     throw new Error(
       `${label} missing activeDisplayId diagnostic; run with --allowMissingFrameDisplayDiagnostic only when testing an older host`,
@@ -372,6 +399,7 @@ function assertFrameDisplay(frame, expectedDisplay, label, args) {
     throw new Error(`${label} frame activeDisplayId mismatch: ${actual} !== ${expectedDisplay.id}`);
   }
   print("OK", `${label}: frame display=${actual} / ${frame.displayName || expectedDisplay.name}`);
+  return { ...summary, activeDisplayId: actual, matched: true, missingDiagnosticAllowed: false };
 }
 
 function normalizeRuntime(runtime) {
@@ -382,6 +410,110 @@ function normalizeRuntime(runtime) {
     uptimeSeconds: Number(runtime.uptimeSeconds),
     buildId: normalizedText(runtime.buildId),
   };
+}
+
+function summarizeVideoFrame(frame) {
+  if (!frame || typeof frame !== "object") return null;
+  return {
+    frameId: Number(frame.frameId) || 0,
+    activeDisplayId: activeDisplayId(frame),
+    displayName: normalizedText(frame.displayName),
+    codec: normalizedText(frame.codec || frame.videoCodec),
+    encoding: normalizedText(frame.encoding || frame.videoEncoding),
+    capturePipeline: normalizedText(frame.capturePipeline),
+    timestamp: normalizedText(frame.timestamp),
+  };
+}
+
+function summarizeAck(ack) {
+  if (!ack || typeof ack !== "object") return null;
+  return {
+    accepted: ack.accepted !== false,
+    activeDisplayId: activeDisplayId(ack),
+    displayName: normalizedText(ack.displayName),
+    codec: normalizedText(ack.videoCodec || ack.codec),
+    encoding: normalizedText(ack.videoEncoding || ack.encoding),
+    capturePipeline: normalizedText(ack.capturePipeline),
+    streamFallbackReason: normalizedText(ack.streamFallbackReason),
+    reason: normalizedText(ack.reason || ack.message),
+    code: normalizedText(ack.code),
+  };
+}
+
+function summarizeAuthResult(auth) {
+  if (!auth || typeof auth !== "object") return null;
+  return {
+    ok: auth.ok === true,
+    code: normalizedText(auth.code),
+    reason: normalizedText(auth.reason || auth.message),
+    attemptsRemaining: Number.isFinite(Number(auth.attemptsRemaining)) ? Number(auth.attemptsRemaining) : null,
+    maxAttempts: Number.isFinite(Number(auth.maxAttempts)) ? Number(auth.maxAttempts) : null,
+  };
+}
+
+function summarizeSessionAnswer(answer) {
+  if (!answer || typeof answer !== "object") return null;
+  const displays = normalizeDisplays(answer.displays);
+  return {
+    ok: answer.ok === true,
+    activeDisplayId: activeDisplayId(answer),
+    displayName: normalizedText(answer.displayName),
+    displays,
+    displayCount: displays.length,
+    codec: normalizedText(answer.videoCodec || answer.codec),
+    encoding: normalizedText(answer.videoEncoding || answer.encoding),
+    capturePipeline: normalizedText(answer.capturePipeline),
+    reason: normalizedText(answer.reason || answer.message),
+    code: normalizedText(answer.code),
+  };
+}
+
+function summarizeArgs(args) {
+  return {
+    host: args.host,
+    port: String(args.port),
+    timeoutMs: args.timeoutMs,
+    displayId: args.displayId,
+    switchDisplayId: args.switchDisplayId,
+    expectDisplayCount: args.expectDisplayCount,
+    preferredVideoCodec: args.preferredVideoCodec,
+    width: args.width,
+    height: args.height,
+    fps: args.fps,
+    bandwidthKbps: args.bandwidthKbps,
+    discoveryOnly: args.discoveryOnly,
+    json: args.json,
+    allowMissingFrameDisplayDiagnostic: args.allowMissingFrameDisplayDiagnostic,
+    requireRuntime: args.requireRuntime,
+    expectBuildId: args.expectBuildId,
+    maxRuntimeUptimeSeconds: args.maxRuntimeUptimeSeconds,
+  };
+}
+
+function makeJsonPayload(ok, error = null) {
+  return {
+    ok,
+    target: runState.target,
+    args: runState.args ? summarizeArgs(runState.args) : null,
+    discovery: runState.discovery,
+    hello: runState.hello,
+    auth: runState.auth,
+    session: runState.session,
+    firstFrame: runState.firstFrame,
+    displaySettings: runState.displaySettings,
+    switchedFrame: runState.switchedFrame,
+    result: runState.result,
+    error: error
+      ? {
+          message: error.message,
+          name: error.name,
+        }
+      : null,
+  };
+}
+
+function printJsonPayload(payload) {
+  console.log(JSON.stringify(payload, null, 2));
 }
 
 function assertRuntime(runtime, args, label) {
@@ -446,6 +578,7 @@ Options:
   --switchDisplayId <id>           Display id to switch to. Default: first non-current display, or same display on single-screen Macs
   --expectDisplayCount <count>     Require an exact display count.
   --discoveryOnly                  Only verify /discovery displays/runtime; no password or WebSocket auth.
+  --json                           Print one machine-readable JSON object to stdout.
   --preferredVideoCodec <codec>    Requested codec: mjpeg or h264. Default: mjpeg
   --allowMissingFrameDisplayDiagnostic
                                     Allow older hosts whose video_frame lacks activeDisplayId.
@@ -467,17 +600,29 @@ async function main() {
   }
 
   const args = parseArgs(process.argv.slice(2));
+  runState.args = args;
+  runState.target = { host: args.host, port: String(args.port) };
   print("INFO", `Target: ${args.host}:${args.port}`);
 
   const discovery = await fetchDiscovery(args);
   const discoveryRuntime = assertRuntime(discovery.payload.runtime, args, "discovery");
+  if (runState.discovery) {
+    runState.discovery.runtime = discoveryRuntime;
+  }
   const initialDiscoveryDisplays = discovery.displays;
   assertDisplayCount(initialDiscoveryDisplays, args.expectDisplayCount);
   if (initialDiscoveryDisplays.length === 0) {
     throw new Error("discovery returned no displays");
   }
   if (args.discoveryOnly) {
+    runState.result = {
+      mode: "discoveryOnly",
+      verified: true,
+      displayCount: initialDiscoveryDisplays.length,
+      displays: initialDiscoveryDisplays,
+    };
     print("OK", `Discovery displays verified: ${formatDisplays(initialDiscoveryDisplays)}`);
+    if (args.json) printJsonPayload(makeJsonPayload(true));
     return;
   }
 
@@ -494,6 +639,10 @@ async function main() {
   const hello = await client.waitFor("hello_ack");
   print("OK", `hello_ack: ${hello.deviceName || hello.hostName || "unknown"}`);
   const helloRuntime = assertRuntime(hello.runtime, args, "hello_ack");
+  runState.hello = {
+    deviceName: normalizedText(hello.deviceName || hello.hostName || "unknown"),
+    runtime: helloRuntime,
+  };
   assertRuntimeConsistency(discoveryRuntime, helloRuntime);
 
   client.send({
@@ -502,6 +651,7 @@ async function main() {
     password: args.password,
   });
   const auth = await client.waitFor("auth_result");
+  runState.auth = summarizeAuthResult(auth);
   if (!auth.ok) {
     throw new Error(`auth failed: ${auth.reason || auth.message || auth.code || "unknown"}`);
   }
@@ -511,7 +661,9 @@ async function main() {
 
   client.send(makeSessionOffer(args, initialDisplay));
   const answer = await client.waitFor("session_answer");
+  const sessionAnswer = summarizeSessionAnswer(answer);
   if (!answer.ok) {
+    runState.session = { ok: false, answer: sessionAnswer };
     throw new Error(`session failed: ${answer.reason || answer.message || "unknown"}`);
   }
 
@@ -523,22 +675,40 @@ async function main() {
 
   const activeInitialDisplay = chooseDisplay(sessionDisplays, initialDisplay.id, "session");
   assertActiveDisplay(answer, activeInitialDisplay, "session_answer");
+  runState.session = {
+    ok: true,
+    activeDisplay: activeInitialDisplay,
+    activeDisplayId: activeInitialDisplay.id,
+    displays: sessionDisplays,
+    displayCount: sessionDisplays.length,
+    answer: sessionAnswer,
+  };
   print("OK", `Session active display: ${activeInitialDisplay.id} / ${activeInitialDisplay.name} / displays=${formatDisplays(sessionDisplays)}`);
 
   const firstFrame = await client.waitForVideoFrame(
     (frame) => Boolean(frame.frameId),
     "Waiting first video_frame",
   );
-  assertFrameDisplay(firstFrame, activeInitialDisplay, "First frame", args);
+  runState.firstFrame = assertFrameDisplay(firstFrame, activeInitialDisplay, "First frame", args);
 
   const switchDisplay = chooseSwitchDisplay(sessionDisplays, activeInitialDisplay, args.switchDisplayId);
   const previousFrameId = client.lastVideoFrameId;
   client.send(makeDisplaySettings(args, switchDisplay));
   const ack = await client.waitFor("display_settings_ack");
+  runState.displaySettings = {
+    requestedDisplay: switchDisplay,
+    activeDisplayId: activeDisplayId(ack),
+    ack: summarizeAck(ack),
+  };
   if (ack.accepted === false) {
     throw new Error(`display_settings rejected: ${ack.reason || ack.code || "unknown"}`);
   }
   assertActiveDisplay(ack, switchDisplay, "display_settings_ack");
+  runState.displaySettings = {
+    requestedDisplay: switchDisplay,
+    activeDisplayId: switchDisplay.id,
+    ack: summarizeAck(ack),
+  };
   print("OK", `Display settings ack: ${switchDisplay.id} / ${ack.displayName || switchDisplay.name}`);
 
   const switchedFrame = await client.waitForVideoFrame(
@@ -550,18 +720,29 @@ async function main() {
     },
     "Waiting switched video_frame",
   );
-  assertFrameDisplay(switchedFrame, switchDisplay, "Switched frame", args);
+  runState.switchedFrame = assertFrameDisplay(switchedFrame, switchDisplay, "Switched frame", args);
 
   socket.close();
+  runState.result = {
+    mode: sessionDisplays.length > 1 ? "displaySwitch" : "singleDisplayRoundTrip",
+    verified: true,
+    initialDisplay: activeInitialDisplay,
+    switchDisplay,
+    displayCount: sessionDisplays.length,
+  };
   print(
     "OK",
     sessionDisplays.length > 1
       ? `Display switch verified: ${activeInitialDisplay.id} -> ${switchDisplay.id}`
       : `Single-display round-trip verified: ${switchDisplay.id}`,
   );
+  if (args.json) printJsonPayload(makeJsonPayload(true));
 }
 
 main().catch((error) => {
   print("ERROR", error.message);
+  if (runState.args?.json) {
+    printJsonPayload(makeJsonPayload(false, error));
+  }
   process.exitCode = 1;
 });
