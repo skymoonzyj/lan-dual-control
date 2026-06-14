@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 const defaults = {
   host: "127.0.0.1",
   port: "43770",
-  password: "demo-password",
+  password: process.env.LAN_DUAL_PASSWORD || "demo-password",
   timeoutMs: 8000,
   displayId: "",
   switchDisplayId: "",
@@ -440,7 +440,8 @@ function printUsage() {
 Options:
   --host <host>                    Mac host address. Default: 127.0.0.1
   --port <port>                    Mac host port. Default: 43770
-  --password <password>            Host password. Default: demo-password
+  --password <password>            Host password. Default: LAN_DUAL_PASSWORD or demo-password.
+                                    The value is never printed.
   --displayId <id>                 Initial display id. Default: primary/main
   --switchDisplayId <id>           Display id to switch to. Default: first non-current display, or same display on single-screen Macs
   --expectDisplayCount <count>     Require an exact display count.

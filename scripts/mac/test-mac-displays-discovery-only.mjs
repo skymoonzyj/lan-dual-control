@@ -122,6 +122,7 @@ function runCheck(port, extraArgs, timeoutMs) {
       ],
       {
         cwd: repoRoot,
+        env: { ...process.env, LAN_DUAL_PASSWORD: "unused-discovery-only-password" },
         stdio: ["ignore", "pipe", "pipe"],
       },
     );
