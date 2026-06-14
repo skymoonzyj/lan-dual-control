@@ -211,6 +211,10 @@ function parseArgs(argv) {
   return args;
 }
 
+function wantsJson(argv) {
+  return argv.includes("--json");
+}
+
 function print(status, text) {
   console.log(`[${status}] ${text}`);
 }
@@ -315,10 +319,12 @@ function printUsage() {
 
 Options:
   --source <path>   InputEventInjector.swift path. Default: apps/mac-host/Sources/MacHost/InputEventInjector.swift
-  --json            Print machine-readable summary.
+  --json            Print exactly one machine-readable JSON object to stdout.
+  --help, -h        Show this help without running checks
 
 Example:
-  node scripts/mac/check-input-keymap.mjs`);
+  node scripts/mac/check-input-keymap.mjs
+  node scripts/mac/check-input-keymap.mjs --json`);
 }
 
 async function main() {
@@ -341,12 +347,14 @@ async function main() {
     ...flattenFlagIssues(modifierFlagResults).map((issue) => `modifierFlags:${issue}`),
   ];
   const summary = {
+    ok: missing.length === 0,
     source: path.relative(repoRoot, args.source),
     codeEntries: codeMap.size,
     keyEntries: keyMap.size,
+    codeGroups: codeResults,
+    keyGroups: keyResults,
     modifierFlags: modifierFlagResults,
     missing,
-    ok: missing.length === 0,
   };
 
   if (args.json) {
@@ -373,6 +381,15 @@ async function main() {
 }
 
 main().catch((error) => {
-  print("ERROR", error.message);
+  if (wantsJson(process.argv.slice(2))) {
+    console.log(JSON.stringify({
+      ok: false,
+      error: {
+        message: error.message,
+      },
+    }, null, 2));
+  } else {
+    print("ERROR", error.message);
+  }
   process.exitCode = 1;
 });
