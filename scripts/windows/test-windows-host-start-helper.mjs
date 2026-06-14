@@ -113,6 +113,14 @@ function assertNotIncludes(text, expected, label) {
   }
 }
 
+function parseJsonOutput(text, label) {
+  try {
+    return JSON.parse(String(text || "").trim());
+  } catch (error) {
+    throw new Error(`${label} did not produce valid JSON: ${error.message}\nOutput:\n${text}`);
+  }
+}
+
 async function getFreePort() {
   return new Promise((resolvePort, rejectPort) => {
     const server = net.createServer();
@@ -186,6 +194,24 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   assertNotIncludes(output, "LAN_DUAL_PASSWORD is required", "offline status");
   assertNotIncludes(output, "Starting Windows host", "offline status");
   assertNotIncludes(output, "at printStatus", "offline status");
+
+  const jsonResult = await runNode(["--status", "--json", "--host", "127.0.0.1", "--port", String(port), "--requirePassword"], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "" },
+  });
+  const jsonOutput = `${jsonResult.stdout}\n${jsonResult.stderr}`;
+  if (jsonResult.exitCode === 0 || jsonResult.timedOut) {
+    throw new Error(`Offline JSON status check should fail quickly without starting host.\n${jsonOutput}`);
+  }
+  const parsed = parseJsonOutput(jsonResult.stdout, "offline JSON status");
+  if (parsed.ok !== false || parsed.probe?.port !== port || !parsed.error?.message) {
+    throw new Error(`Offline JSON status did not include expected failure shape.\n${jsonResult.stdout}`);
+  }
+  if (!Array.isArray(parsed.suggestions) || parsed.suggestions.length < 2) {
+    throw new Error(`Offline JSON status did not include startup suggestions.\n${jsonResult.stdout}`);
+  }
+  assertNotIncludes(jsonOutput, "[INFO]", "offline JSON status");
+  assertNotIncludes(jsonOutput, "LAN_DUAL_PASSWORD is required", "offline JSON status");
   print("OK", "Status mode reports offline host without requiring a password");
 }
 
@@ -258,6 +284,27 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         assertIncludes(statusOutput, "differs from current git", "online status");
         assertIncludes(statusOutput, "Could not inspect Windows host runtime changes", "online status");
         assertNotIncludes(statusOutput, "test-password", "online status");
+
+        const jsonResult = await runNode(["--status", "--json", "--host", "127.0.0.1", "--port", String(port)], {
+          timeoutMs,
+          env: { LAN_DUAL_PASSWORD: "" },
+        });
+        const jsonOutput = `${jsonResult.stdout}\n${jsonResult.stderr}`;
+        if (jsonResult.exitCode !== 0 || jsonResult.timedOut) {
+          throw new Error(`Online JSON status check failed.\n${jsonOutput}\nHost output:\n${output}`);
+        }
+        const parsed = parseJsonOutput(jsonResult.stdout, "online JSON status");
+        if (parsed.ok !== true || parsed.runtime?.buildId !== runtimeBuildId) {
+          throw new Error(`Online JSON status did not include expected runtime build.\n${jsonResult.stdout}`);
+        }
+        if (!parsed.capabilities?.screen || !parsed.capabilities?.audio || !parsed.capabilities?.input || !parsed.capabilities?.clipboard) {
+          throw new Error(`Online JSON status did not include expected capability groups.\n${jsonResult.stdout}`);
+        }
+        if (parsed.buildDiff?.checked !== false || !String(parsed.buildDiff?.message || "").includes("Could not inspect")) {
+          throw new Error(`Online JSON status did not include expected uninspectable build diff.\n${jsonResult.stdout}`);
+        }
+        assertNotIncludes(jsonOutput, "[INFO]", "online JSON status");
+        assertNotIncludes(jsonOutput, "test-password", "online JSON status");
         finish();
       } catch (error) {
         finish(error);

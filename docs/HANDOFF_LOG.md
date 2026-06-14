@@ -19,6 +19,49 @@
 
 ## 2026-06-14 Windows Codex
 
+日期：2026-06-14 18:20
+开发端：Windows Codex
+本轮目标：对齐 Mac host 状态助手 JSON 输出，让 Windows host 状态也能被脚本、桌面壳或联络板稳定消费。
+完成内容：
+- `scripts/windows/start-windows-host.mjs --status` 新增 `--json`，在线/离线都只输出机器可读 JSON，不混入 `[INFO]`/`[WARN]` 日志行。
+- JSON 在线对象包含 probe、currentBuildId、device、runtime、capabilities、lanAddresses、warnings 和 buildDiff；能力分组覆盖 screen、audio、input、clipboard、reverseControl 和 mock。
+- JSON 离线对象包含 `ok=false`、probe、currentBuildId、lanAddresses、error.message 和安全启动建议；仍按原有约定返回非 0。
+- 旧 build 诊断改为先生成 `buildDiff` 对象，再分别渲染文本/JSON，避免两种输出事实不一致。
+- PowerShell 包装 `scripts/windows/start-windows-host.ps1` 新增 `-Status`，透传到 Node `--status`。
+- 启动助手自测补充 `--status --json` 在线/离线覆盖，断言 JSON 可解析、在线包含 runtime/buildDiff/能力分组，且 JSON 输出不混入日志行。
+- Windows host README、CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已同步 `--status --json` 与 PowerShell `-Status` 用法。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\start-windows-host.ps1 -Status -HostName 127.0.0.1 -Port 43770`
+- `node scripts/windows/start-windows-host.mjs --status --json --host 127.0.0.1 --port 43770`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 语法、启动助手完整自测和全量 Windows 脚本帮助覆盖通过；当前覆盖 20 个脚本、40 条 `--help/-h` 命令。
+- 启动助手自测通过：`--status` 和 `--status --json` 的离线/临时在线 host 路径均通过，且不泄露测试密码。
+- 当前本机 `127.0.0.1:43770` 未运行 Windows host，PowerShell `-Status` 和 Node `--status --json` 均按预期返回离线建议和非 0；JSON 输出为纯 JSON，`currentBuildId=1ff0808`。
+遗留问题：
+- 桌面壳尚未直接消费 `--status --json`；下一轮可把“本机被控”面板的状态刷新切到该 JSON 入口，减少解析日志。
+下一步建议：
+- 反控 Windows 联调前优先用 `node scripts/windows/start-windows-host.mjs --status --json` 或 PowerShell `-Status` 做只读状态确认；若离线，再启动 host。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Mac 端拉取后可消费 Windows 状态 JSON。
+
+## 2026-06-14 Windows Codex
+
 日期：2026-06-14 16:50
 开发端：Windows Codex
 本轮目标：给 Windows host 启动助手补齐与 Mac host 对等的只读状态检查入口，减少反控 Windows 联调前的盲目重启。

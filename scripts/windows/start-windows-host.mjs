@@ -32,6 +32,7 @@ const defaults = {
   promptPassword: false,
   requirePassword: false,
   status: false,
+  json: false,
   dryRun: false,
   help: false,
 };
@@ -60,6 +61,7 @@ function parseArgs(argv) {
       key === "promptPassword" ||
       key === "requirePassword" ||
       key === "status" ||
+      key === "json" ||
       key === "dryRun"
     ) {
       args[key] = true;
@@ -129,6 +131,7 @@ Options:
   --noRequireOpen         Run firewall check but do not require the port probe to pass.
   --status                Print current /discovery runtime status and stale-build source diff,
                           then exit without starting.
+  --json                  With --status, print pure machine-readable JSON.
   --dryRun                Print the resolved launch plan and exit.
   --help, -h              Show this help without starting Windows host.
 `);
@@ -191,19 +194,56 @@ function getChangedHostRuntimeFiles(fromBuildId, toBuildId) {
     .filter(Boolean);
 }
 
-function printBuildMismatchStatus(fromBuildId, toBuildId) {
-  console.log(`[WARN] Running Windows host build ${fromBuildId} differs from current git ${toBuildId}; restart if you need the latest build.`);
+function inspectBuildDiff(fromBuildId, toBuildId) {
+  const from = String(fromBuildId || "").trim();
+  const to = String(toBuildId || "").trim();
+  if (!from || !to || from === to) {
+    return null;
+  }
   const changedHostFiles = getChangedHostRuntimeFiles(fromBuildId, toBuildId);
   if (!Array.isArray(changedHostFiles)) {
-    console.log(`[INFO] Could not inspect Windows host runtime changes since ${fromBuildId}; old build is not available in local git history.`);
-    return;
+    return {
+      fromBuildId: from,
+      toBuildId: to,
+      checked: false,
+      changed: null,
+      changedFiles: [],
+      message: `Could not inspect Windows host runtime changes since ${from}; old build is not available in local git history.`,
+    };
   }
   if (changedHostFiles.length === 0) {
-    console.log(`[INFO] No Windows host runtime source changes since ${fromBuildId}; the running service behavior is likely current, but build metadata is stale.`);
+    return {
+      fromBuildId: from,
+      toBuildId: to,
+      checked: true,
+      changed: false,
+      changedFiles: [],
+      message: `No Windows host runtime source changes since ${from}; the running service behavior is likely current, but build metadata is stale.`,
+    };
+  }
+  return {
+    fromBuildId: from,
+    toBuildId: to,
+    checked: true,
+    changed: true,
+    changedFiles: changedHostFiles,
+    message: `Windows host runtime source changed since ${from}.`,
+  };
+}
+
+function printBuildMismatchStatus(fromBuildId, toBuildId, buildDiff = inspectBuildDiff(fromBuildId, toBuildId)) {
+  console.log(`[WARN] Running Windows host build ${fromBuildId} differs from current git ${toBuildId}; restart if you need the latest build.`);
+  if (!buildDiff) return;
+  if (!buildDiff.checked) {
+    console.log(`[INFO] ${buildDiff.message}`);
     return;
   }
-  const shown = changedHostFiles.slice(0, 4).join(", ");
-  const more = changedHostFiles.length > 4 ? ` (+${changedHostFiles.length - 4} more)` : "";
+  if (!buildDiff.changed) {
+    console.log(`[INFO] ${buildDiff.message}`);
+    return;
+  }
+  const shown = buildDiff.changedFiles.slice(0, 4).join(", ");
+  const more = buildDiff.changedFiles.length > 4 ? ` (+${buildDiff.changedFiles.length - 4} more)` : "";
   console.log(`[WARN] Windows host runtime source changed since ${fromBuildId}: ${shown}${more}`);
 }
 
@@ -305,46 +345,135 @@ function discoveryClipboardSummary(discovery) {
   ].join(" ");
 }
 
-async function printStatus(args) {
-  const probeHost = statusProbeHost(args);
-  console.log(`[INFO] Windows host status probe: ${probeHost}:${args.port}`);
-  try {
-    const discovery = await requestJson(`http://${probeHost}:${args.port}/discovery`, Math.min(args.timeoutMs, 3000));
-    const runtime = discovery.runtime || {};
-    console.log(`[OK] /discovery online: ${discovery.deviceName || discovery.hostName || discovery.name || "Windows host"} · ${discoveryRuntimeSummary(runtime)}`);
-    console.log(`[INFO] Screen: ${discoveryScreenSummary(discovery)}`);
-    console.log(`[INFO] Audio: ${discoveryAudioSummary(discovery)}`);
-    console.log(`[INFO] Input: ${discoveryInputSummary(discovery)}`);
-    console.log(`[INFO] Clipboard: ${discoveryClipboardSummary(discovery)}`);
+function discoveryClipboardStatus(discovery) {
+  const capabilities = discovery?.capabilities || {};
+  const clipboard = capabilities.clipboard || {};
+  return {
+    text: Boolean(capabilities.clipboardText ?? clipboard.text),
+    textMode: capabilities.clipboardTextMode ?? clipboard.textMode ?? "",
+    file: Boolean(capabilities.clipboardFile ?? clipboard.file),
+    fileMode: capabilities.clipboardFileMode ?? clipboard.fileMode ?? "",
+    backend: clipboard.backend ?? "",
+  };
+}
 
+async function getStatus(args) {
+  const probeHost = statusProbeHost(args);
+  const status = {
+    ok: false,
+    probe: {
+      host: probeHost,
+      port: args.port,
+      url: `http://${probeHost}:${args.port}/discovery`,
+    },
+    currentBuildId: args.buildId,
+    device: null,
+    runtime: null,
+    capabilities: null,
+    lanAddresses: getLanAddresses(),
+    buildDiff: null,
+    warnings: [],
+    suggestions: [],
+    error: null,
+  };
+
+  try {
+    const discovery = await requestJson(status.probe.url, Math.min(args.timeoutMs, 3000));
+    const runtime = discovery.runtime || {};
+    status.ok = true;
+    status.device = {
+      type: discovery.type || "",
+      deviceId: discovery.deviceId || "",
+      deviceName: discovery.deviceName || discovery.hostName || discovery.name || "Windows host",
+      platform: discovery.platform || "windows",
+      role: discovery.role || "host",
+      host: discovery.host || "",
+      port: discovery.port || args.port,
+      controlPort: discovery.controlPort || discovery.port || args.port,
+      lastSeenAt: discovery.lastSeenAt || "",
+    };
+    status.runtime = runtime;
+    status.capabilities = {
+      screen: discovery?.capabilities?.screen || {},
+      audio: discovery?.capabilities?.audio || {},
+      input: discovery?.capabilities?.input || {},
+      clipboard: discoveryClipboardStatus(discovery),
+      reverseControl: Boolean(discovery?.capabilities?.reverseControl),
+      mock: Boolean(discovery?.capabilities?.mock),
+    };
     const screen = discovery?.capabilities?.screen || {};
     const wgcFallbackReason = screen.wgc?.fallbackReason || screen.wgcFallbackReason || "";
     if (wgcFallbackReason) {
-      console.log(`[WARN] WGC fallback: ${compactText(wgcFallbackReason)}`);
+      status.warnings.push(`WGC fallback: ${compactText(wgcFallbackReason)}`);
     }
     if (screen.lastCaptureError) {
-      console.log(`[WARN] Last capture error: ${compactText(screen.lastCaptureError)}`);
+      status.warnings.push(`Last capture error: ${compactText(screen.lastCaptureError)}`);
+    }
+    if (status.lanAddresses.length === 0) {
+      status.warnings.push("No LAN IPv4 address was detected. Mac may not be able to connect yet.");
     }
 
-    const lanAddresses = getLanAddresses();
-    if (lanAddresses.length > 0) {
-      for (const entry of lanAddresses) {
-        console.log(`[OK] Mac side can try: ${entry.address}:${args.port} (${entry.name})`);
+    if (runtime.buildId && args.buildId && runtime.buildId !== args.buildId) {
+      status.buildDiff = inspectBuildDiff(runtime.buildId, args.buildId);
+      status.warnings.push(`Running Windows host build ${runtime.buildId} differs from current git ${args.buildId}; restart if you need the latest build.`);
+    }
+    return status;
+  } catch (error) {
+    status.error = {
+      message: error.message,
+    };
+    status.suggestions = [
+      "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword",
+      "Add --wasapi when Mac should receive Windows system sound.",
+    ];
+    return status;
+  }
+}
+
+async function printStatus(args) {
+  const status = await getStatus(args);
+  if (args.json) {
+    console.log(JSON.stringify(status, null, 2));
+    return status.ok;
+  }
+
+  console.log(`[INFO] Windows host status probe: ${status.probe.host}:${status.probe.port}`);
+  if (status.ok) {
+    console.log(`[OK] /discovery online: ${status.device?.deviceName || "Windows host"} · ${discoveryRuntimeSummary(status.runtime || {})}`);
+    const discoveryLike = { capabilities: {
+      screen: status.capabilities?.screen || {},
+      audio: status.capabilities?.audio || {},
+      input: status.capabilities?.input || {},
+      clipboardText: status.capabilities?.clipboard?.text,
+      clipboardTextMode: status.capabilities?.clipboard?.textMode,
+      clipboardFile: status.capabilities?.clipboard?.file,
+      clipboardFileMode: status.capabilities?.clipboard?.fileMode,
+      clipboard: status.capabilities?.clipboard || {},
+    } };
+    console.log(`[INFO] Screen: ${discoveryScreenSummary(discoveryLike)}`);
+    console.log(`[INFO] Audio: ${discoveryAudioSummary(discoveryLike)}`);
+    console.log(`[INFO] Input: ${discoveryInputSummary(discoveryLike)}`);
+    console.log(`[INFO] Clipboard: ${discoveryClipboardSummary(discoveryLike)}`);
+    for (const warning of status.warnings.filter((line) => !line.startsWith("Running Windows host build "))) {
+      console.log(`[WARN] ${warning}`);
+    }
+    if (status.lanAddresses.length > 0) {
+      for (const entry of status.lanAddresses) {
+        console.log(`[OK] Mac side can try: ${entry.address}:${status.probe.port} (${entry.name})`);
       }
     } else {
       console.log("[WARN] No LAN IPv4 address was detected. Mac may not be able to connect yet.");
     }
-
-    if (runtime.buildId && args.buildId && runtime.buildId !== args.buildId) {
-      printBuildMismatchStatus(runtime.buildId, args.buildId);
+    if (status.buildDiff) {
+      printBuildMismatchStatus(status.buildDiff.fromBuildId, status.buildDiff.toBuildId, status.buildDiff);
     }
     return true;
-  } catch (error) {
-    console.log(`[WARN] /discovery offline on ${probeHost}:${args.port}: ${error.message}`);
-    console.log("[INFO] Start safely with: node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword");
-    console.log("[INFO] Add --wasapi when Mac should receive Windows system sound.");
-    return false;
   }
+
+  console.log(`[WARN] /discovery offline on ${status.probe.host}:${status.probe.port}: ${status.error?.message || "unknown error"}`);
+  console.log(`[INFO] Start safely with: ${status.suggestions[0]}`);
+  console.log(`[INFO] ${status.suggestions[1]}`);
+  return false;
 }
 
 async function preparePassword(args) {
