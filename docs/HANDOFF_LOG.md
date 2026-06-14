@@ -17,6 +17,49 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-14 Windows Codex
+
+日期：2026-06-14 16:50
+开发端：Windows Codex
+本轮目标：给 Windows host 启动助手补齐与 Mac host 对等的只读状态检查入口，减少反控 Windows 联调前的盲目重启。
+完成内容：
+- `scripts/windows/start-windows-host.mjs` 新增 `--status`，在密码处理之前只读探测 `/discovery`，在线时打印 runtime、视频、音频、输入、剪贴板能力和 Mac 端可尝试的局域网地址。
+- `--status` 遇到运行中 `/discovery.runtime.buildId` 与当前 git 不一致时，会只比较 `apps/windows-host/package.json`、`apps/windows-host/server.mjs` 和 `apps/windows-host/src`，提示旧 build 后是否有 Windows host 运行源码变化。
+- `--status` 离线时返回非 0 并给安全启动建议，不启动服务、不认证、不要求或打印密码；若要让 Mac 接收 Windows 系统声音，提示启动时加 `--wasapi`。
+- 启动助手自测新增 `--status` 离线和临时在线 host 覆盖，确认不会泄露密码，也不会误启动。
+- Windows host README、CURRENT_STATUS、NEXT_ACTIONS 和任务板已同步 `--status` 用法。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- `node scripts/windows/start-windows-host.mjs --help`
+- `node scripts/windows/test-windows-script-help.mjs --script start-windows-host.mjs`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port 43770`
+- `node scripts/windows/test-windows-script-help.mjs`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 语法、帮助入口和全量 Windows 脚本帮助覆盖通过；当前覆盖 20 个脚本、40 条 `--help/-h` 命令。
+- 启动助手完整自测通过：缺密码拒绝、非交互密码提示拒绝、环境密码干跑、`--status` 离线无密码、`--status` 临时在线 host、环境密码临时启动和防火墙干跑均通过。
+- 当前本机 `127.0.0.1:43770` 未运行 Windows host，`--status` 按预期返回离线并给安全启动建议。
+遗留问题：
+- `--status` 目前是 Node 启动助手入口；PowerShell 包装尚未加 `-Status` 短入口，后续可以补到桌面/PowerShell 日常流程。
+- 当前没有真实 Mac 控制 Windows 认证联调；待用户提供正式密码或启动 Windows host 后再跑 Mac client 端到端验收。
+下一步建议：
+- 反控 Windows 联调前先运行 `node scripts/windows/start-windows-host.mjs --status`；若离线再用 `--promptPassword --requirePassword` 启动，需要系统声音时加 `--wasapi`。
+- 下一轮 Windows 侧可继续推进 PowerShell `-Status`、桌面壳状态按钮，或真正 WGC backend。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Mac 端拉取后可只读使用该状态入口。
+
 ## 2026-06-14 Mac Codex
 
 日期：2026-06-14 16:05

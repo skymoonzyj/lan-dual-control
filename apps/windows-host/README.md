@@ -60,6 +60,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-contro
 node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --dryRun
 ```
 
+需要只读查看当前 Windows host 是否已经在线、运行的是哪个 PID/build、当前视频/音频/输入/剪贴板能力，以及运行中 build 是否落后当前 git 时，可以用状态入口。它不会启动服务、不会认证，也不会要求或打印密码；如果离线，会给出安全启动建议：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --status
+```
+
 Node 入口同样支持：
 
 ```powershell

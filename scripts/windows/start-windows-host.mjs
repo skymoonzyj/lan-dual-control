@@ -9,6 +9,11 @@ const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const serverPath = resolve(repoRoot, "apps/windows-host/server.mjs");
 const firewallCheckPath = resolve(repoRoot, "scripts/windows/check-windows-firewall.mjs");
 const defaultWindowsFfmpeg = "C:\\DevTools\\ffmpeg\\bin\\ffmpeg.exe";
+const hostRuntimePaths = [
+  "apps/windows-host/package.json",
+  "apps/windows-host/server.mjs",
+  "apps/windows-host/src",
+];
 
 const defaults = {
   host: process.env.LAN_DUAL_HOST || "0.0.0.0",
@@ -26,6 +31,7 @@ const defaults = {
   dryRunFirewallRule: false,
   promptPassword: false,
   requirePassword: false,
+  status: false,
   dryRun: false,
   help: false,
 };
@@ -53,6 +59,7 @@ function parseArgs(argv) {
       key === "dryRunFirewallRule" ||
       key === "promptPassword" ||
       key === "requirePassword" ||
+      key === "status" ||
       key === "dryRun"
     ) {
       args[key] = true;
@@ -120,6 +127,8 @@ Options:
   --systemInput           Shortcut for --inputMode system
   --skipFirewallCheck     Start only, do not run the read-only firewall check.
   --noRequireOpen         Run firewall check but do not require the port probe to pass.
+  --status                Print current /discovery runtime status and stale-build source diff,
+                          then exit without starting.
   --dryRun                Print the resolved launch plan and exit.
   --help, -h              Show this help without starting Windows host.
 `);
@@ -155,6 +164,49 @@ function getGitBuildId() {
   return String(result.stdout || "").trim();
 }
 
+function getChangedHostRuntimeFiles(fromBuildId, toBuildId) {
+  const from = String(fromBuildId || "").trim();
+  const to = String(toBuildId || "HEAD").trim() || "HEAD";
+  if (!from) return null;
+
+  const revParse = spawnSync("git", ["rev-parse", "--verify", "--quiet", `${from}^{commit}`], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 3000,
+    windowsHide: true,
+  });
+  if (revParse.status !== 0) return null;
+
+  const diff = spawnSync("git", ["diff", "--name-only", `${from}..${to}`, "--", ...hostRuntimePaths], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 3000,
+    windowsHide: true,
+  });
+  if (diff.status !== 0) return null;
+
+  return String(diff.stdout || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function printBuildMismatchStatus(fromBuildId, toBuildId) {
+  console.log(`[WARN] Running Windows host build ${fromBuildId} differs from current git ${toBuildId}; restart if you need the latest build.`);
+  const changedHostFiles = getChangedHostRuntimeFiles(fromBuildId, toBuildId);
+  if (!Array.isArray(changedHostFiles)) {
+    console.log(`[INFO] Could not inspect Windows host runtime changes since ${fromBuildId}; old build is not available in local git history.`);
+    return;
+  }
+  if (changedHostFiles.length === 0) {
+    console.log(`[INFO] No Windows host runtime source changes since ${fromBuildId}; the running service behavior is likely current, but build metadata is stale.`);
+    return;
+  }
+  const shown = changedHostFiles.slice(0, 4).join(", ");
+  const more = changedHostFiles.length > 4 ? ` (+${changedHostFiles.length - 4} more)` : "";
+  console.log(`[WARN] Windows host runtime source changed since ${fromBuildId}: ${shown}${more}`);
+}
+
 function getLanAddresses() {
   const result = [];
   const interfaces = os.networkInterfaces();
@@ -166,6 +218,133 @@ function getLanAddresses() {
     }
   }
   return result;
+}
+
+function statusValue(value) {
+  if (value === true) return "on";
+  if (value === false) return "off";
+  if (value === undefined || value === null || value === "") return "unknown";
+  return String(value);
+}
+
+function compactText(value, maxLength = 140) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 3)}...`;
+}
+
+function statusProbeHost(args) {
+  return args.host === "0.0.0.0" || args.host === "::" ? "127.0.0.1" : args.host;
+}
+
+function discoveryRuntimeSummary(runtime = {}) {
+  const parts = [];
+  if (runtime.processId) parts.push(`pid=${runtime.processId}`);
+  if (runtime.buildId) parts.push(`build=${runtime.buildId}`);
+  if (runtime.uptimeSeconds !== undefined) parts.push(`uptime=${runtime.uptimeSeconds}s`);
+  if (runtime.startedAt) parts.push(`startedAt=${runtime.startedAt}`);
+  return parts.length > 0 ? parts.join(" ") : "runtime=missing";
+}
+
+function discoveryScreenSummary(discovery) {
+  const screen = discovery?.capabilities?.screen || {};
+  const wgc = screen.wgc || {};
+  const parts = [
+    `mode=${statusValue(screen.mode)}`,
+    `requested=${statusValue(screen.requestedMode)}`,
+    `codec=${statusValue(screen.videoCodec)}`,
+    `encoding=${statusValue(screen.videoEncoding)}`,
+  ];
+  if (screen.capturePipeline) parts.push(`pipeline=${screen.capturePipeline}`);
+  if (screen.codecString) parts.push(`codecString=${screen.codecString}`);
+  if (wgc.backendImplemented !== undefined || wgc.supported !== undefined || wgc.active !== undefined) {
+    const wgcState = wgc.active
+      ? "active"
+      : wgc.backendImplemented
+        ? "implemented"
+        : wgc.supported
+          ? "supported"
+          : "off";
+    parts.push(`wgc=${wgcState}`);
+  }
+  if (screen.displays?.length) parts.push(`displays=${screen.displays.length}`);
+  return parts.join(" ");
+}
+
+function discoveryAudioSummary(discovery) {
+  const audio = discovery?.capabilities?.audio || {};
+  const parts = [
+    `mode=${statusValue(audio.mode)}`,
+    `backend=${statusValue(audio.backend)}`,
+    `realPcm=${audio.mockFrames === false ? "on" : "off"}`,
+  ];
+  if (audio.sampleRate) parts.push(`sampleRate=${audio.sampleRate}`);
+  if (audio.channels) parts.push(`channels=${audio.channels}`);
+  if (audio.queueFrames) parts.push(`queueFrames=${audio.queueFrames}`);
+  if (audio.configuredDevice) parts.push(`device=${compactText(audio.configuredDevice, 60)}`);
+  return parts.join(" ");
+}
+
+function discoveryInputSummary(discovery) {
+  const input = discovery?.capabilities?.input || {};
+  return [
+    `mode=${statusValue(input.mode)}`,
+    `backend=${statusValue(input.backend)}`,
+    `helper=${statusValue(input.helper)}`,
+  ].join(" ");
+}
+
+function discoveryClipboardSummary(discovery) {
+  const capabilities = discovery?.capabilities || {};
+  const clipboard = capabilities.clipboard || {};
+  return [
+    `text=${statusValue(capabilities.clipboardText ?? clipboard.text)}`,
+    `textMode=${statusValue(capabilities.clipboardTextMode ?? clipboard.textMode)}`,
+    `file=${statusValue(capabilities.clipboardFile ?? clipboard.file)}`,
+    `fileMode=${statusValue(capabilities.clipboardFileMode ?? clipboard.fileMode)}`,
+  ].join(" ");
+}
+
+async function printStatus(args) {
+  const probeHost = statusProbeHost(args);
+  console.log(`[INFO] Windows host status probe: ${probeHost}:${args.port}`);
+  try {
+    const discovery = await requestJson(`http://${probeHost}:${args.port}/discovery`, Math.min(args.timeoutMs, 3000));
+    const runtime = discovery.runtime || {};
+    console.log(`[OK] /discovery online: ${discovery.deviceName || discovery.hostName || discovery.name || "Windows host"} · ${discoveryRuntimeSummary(runtime)}`);
+    console.log(`[INFO] Screen: ${discoveryScreenSummary(discovery)}`);
+    console.log(`[INFO] Audio: ${discoveryAudioSummary(discovery)}`);
+    console.log(`[INFO] Input: ${discoveryInputSummary(discovery)}`);
+    console.log(`[INFO] Clipboard: ${discoveryClipboardSummary(discovery)}`);
+
+    const screen = discovery?.capabilities?.screen || {};
+    const wgcFallbackReason = screen.wgc?.fallbackReason || screen.wgcFallbackReason || "";
+    if (wgcFallbackReason) {
+      console.log(`[WARN] WGC fallback: ${compactText(wgcFallbackReason)}`);
+    }
+    if (screen.lastCaptureError) {
+      console.log(`[WARN] Last capture error: ${compactText(screen.lastCaptureError)}`);
+    }
+
+    const lanAddresses = getLanAddresses();
+    if (lanAddresses.length > 0) {
+      for (const entry of lanAddresses) {
+        console.log(`[OK] Mac side can try: ${entry.address}:${args.port} (${entry.name})`);
+      }
+    } else {
+      console.log("[WARN] No LAN IPv4 address was detected. Mac may not be able to connect yet.");
+    }
+
+    if (runtime.buildId && args.buildId && runtime.buildId !== args.buildId) {
+      printBuildMismatchStatus(runtime.buildId, args.buildId);
+    }
+    return true;
+  } catch (error) {
+    console.log(`[WARN] /discovery offline on ${probeHost}:${args.port}: ${error.message}`);
+    console.log("[INFO] Start safely with: node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword");
+    console.log("[INFO] Add --wasapi when Mac should receive Windows system sound.");
+    return false;
+  }
 }
 
 async function preparePassword(args) {
@@ -366,6 +545,12 @@ async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
     printHelp();
+    return;
+  }
+
+  if (args.status) {
+    const online = await printStatus(args);
+    process.exitCode = online ? 0 : 1;
     return;
   }
 

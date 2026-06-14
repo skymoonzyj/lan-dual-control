@@ -170,6 +170,121 @@ async function assertDryRunWithEnvPassword(timeoutMs) {
   print("OK", "Environment password allows dry run without demo warning");
 }
 
+async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
+  const port = await getFreePort();
+  const result = await runNode(["--status", "--host", "127.0.0.1", "--port", String(port), "--requirePassword"], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "" },
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (result.exitCode === 0 || result.timedOut) {
+    throw new Error(`Offline status check should fail quickly without starting host.\n${output}`);
+  }
+  assertIncludes(output, "Windows host status probe", "offline status");
+  assertIncludes(output, "/discovery offline", "offline status");
+  assertIncludes(output, "Start safely", "offline status");
+  assertNotIncludes(output, "LAN_DUAL_PASSWORD is required", "offline status");
+  assertNotIncludes(output, "Starting Windows host", "offline status");
+  assertNotIncludes(output, "at printStatus", "offline status");
+  print("OK", "Status mode reports offline host without requiring a password");
+}
+
+async function assertStatusOnlineWithTempHost(timeoutMs) {
+  const port = await getFreePort();
+  const runtimeBuildId = "status-helper-test-old-build";
+  const child = spawn(process.execPath, [
+    helperScript,
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(port),
+    "--screenMode",
+    "mock",
+    "--inputMode",
+    "log",
+    "--buildId",
+    runtimeBuildId,
+    "--requirePassword",
+    "--skipFirewallCheck",
+  ], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      LAN_DUAL_PASSWORD: "test-password",
+    },
+    windowsHide: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let output = "";
+  let ready = false;
+  let settled = false;
+  await new Promise((resolveLaunch, rejectLaunch) => {
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill();
+      rejectLaunch(new Error(`Status temp host did not become ready in time.\n${output}`));
+    }, timeoutMs);
+
+    const finish = (error = null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.kill();
+      if (error) {
+        rejectLaunch(error);
+      } else {
+        resolveLaunch();
+      }
+    };
+
+    const runStatus = async () => {
+      const result = await runNode(["--status", "--host", "127.0.0.1", "--port", String(port)], {
+        timeoutMs,
+        env: { LAN_DUAL_PASSWORD: "" },
+      });
+      const statusOutput = `${result.stdout}\n${result.stderr}`;
+      try {
+        if (result.exitCode !== 0 || result.timedOut) {
+          throw new Error(`Online status check failed.\n${statusOutput}\nHost output:\n${output}`);
+        }
+        assertIncludes(statusOutput, "/discovery online", "online status");
+        assertIncludes(statusOutput, `build=${runtimeBuildId}`, "online status");
+        assertIncludes(statusOutput, "Screen:", "online status");
+        assertIncludes(statusOutput, "Audio:", "online status");
+        assertIncludes(statusOutput, "Input:", "online status");
+        assertIncludes(statusOutput, "Clipboard:", "online status");
+        assertIncludes(statusOutput, "differs from current git", "online status");
+        assertIncludes(statusOutput, "Could not inspect Windows host runtime changes", "online status");
+        assertNotIncludes(statusOutput, "test-password", "online status");
+        finish();
+      } catch (error) {
+        finish(error);
+      }
+    };
+
+    const onData = (chunk) => {
+      output += String(chunk);
+      if (!ready && output.includes("Windows host is running")) {
+        ready = true;
+        void runStatus();
+      }
+    };
+    child.stdout.on("data", onData);
+    child.stderr.on("data", onData);
+    child.on("error", (error) => {
+      finish(error);
+    });
+    child.on("exit", (code, signal) => {
+      if (!settled && !ready) {
+        finish(new Error(`Status temp host exited before ready: code=${code} signal=${signal || ""}\n${output}`));
+      }
+    });
+  });
+  print("OK", `Status mode reads temporary Windows host on port ${port} without printing secrets`);
+}
+
 async function assertLaunchWithEnvPassword(timeoutMs) {
   const port = await getFreePort();
   const child = spawn(process.execPath, [
@@ -241,6 +356,8 @@ async function main() {
   await assertMissingPasswordFails(args.timeoutMs);
   await assertPromptPasswordFailsWithoutTty(args.timeoutMs);
   await assertDryRunWithEnvPassword(args.timeoutMs);
+  await assertStatusOfflineNeedsNoPassword(args.timeoutMs);
+  await assertStatusOnlineWithTempHost(args.timeoutMs);
   await assertLaunchWithEnvPassword(args.timeoutMs);
   print("OK", "Windows host start helper self-test passed");
 }
