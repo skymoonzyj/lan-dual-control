@@ -181,6 +181,9 @@ function makeEnvelope(message) {
 }
 
 function startLocalWindowsHost(args) {
+  const maxScreenFps = args.screenMode === "wgc"
+    ? Math.max(1, Math.min(args.fps, 240))
+    : Math.max(1, Math.min(args.fps, 60));
   const env = {
     ...process.env,
     LAN_DUAL_HOST: args.host,
@@ -190,7 +193,7 @@ function startLocalWindowsHost(args) {
     LAN_DUAL_WINDOWS_INPUT_MODE: args.inputMode,
     ...(args.useDefaultMaxScreenFps
       ? {}
-      : { LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: String(Math.max(1, Math.min(args.fps, 60))) }),
+      : { LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: String(maxScreenFps) }),
   };
   if (args.ffmpeg) {
     env.LAN_DUAL_FFMPEG = args.ffmpeg;

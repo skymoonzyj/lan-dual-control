@@ -19,7 +19,41 @@
 
 ## 2026-06-14 Windows Codex
 
-日期：2026-06-14 21:05
+日期：2026-06-14 20:35
+开发端：Windows Codex
+本轮目标：新增 Windows WGC 刷新率/码率基准脚本，并确认高刷新请求在测试链路里不会被 60Hz 上限误挡。
+完成内容：
+- 新增 `scripts/windows/benchmark-windows-wgc-settings.mjs`：自动构建或复用 `apps/windows-wgc-helper`，顺序启动临时 Windows host，用 WGC 模式跑多档刷新率/码率/quality 基准。
+- `observe-windows-host-video.mjs` 在本机临时 host 且 `--screenMode wgc` 时，`LAN_DUAL_WINDOWS_MAX_SCREEN_FPS` 上限改为按请求最高 240；FFmpeg/系统路径仍按 60Hz 上限保护。
+- Windows host README、CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已记录 30/60/120Hz 短基准。
+修改文件：
+- `scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `scripts/windows/observe-windows-host-video.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `node --check scripts/windows/observe-windows-host-video.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script benchmark-windows-wgc-settings.mjs --script observe-windows-host-video.mjs`
+- `node scripts/windows/benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1500 --timeoutMs 45000 --json`
+- `node scripts/windows/benchmark-windows-wgc-settings.mjs --durationMs 2200 --timeoutMs 45000`
+验证结果：
+- 单 profile 60Hz/20M 通过：会话 `60Hz`，15 帧/1.56 秒，约 `9.62 FPS`，平均约 `85.8 KB`，帧年龄最大 `4 ms`，管线为 `windows-wgc-helper-jpeg`。
+- 默认三档通过：30Hz/10M 为 21 帧、约 `9.25 FPS`、平均约 `78 KB`；60Hz/20M 为 25 帧、约 `11.11 FPS`、平均约 `83 KB`；120Hz/40M sharp 为 27 帧、约 `12.22 FPS`、平均约 `121 KB`。
+遗留问题：
+- 会话刷新率已经可以协商到 120Hz，但当前 WGC helper/host 仍等待 `FrameArrived` 新事件，静态桌面实际帧率只有约 9-12 FPS。
+下一步建议：
+- 先设计可选 repeat-last-frame pacing 诊断模式，量化“观感提升 vs 带宽增加”；随后推进正式 H.264/硬编或二进制帧管线。
+是否改了协议：否；只新增 Windows 本机基准脚本，并调整临时 host 测试入口的 WGC FPS 上限。
+是否需要另一端配合：暂不需要；pacing 策略落地后再请 Mac client 真连验收。
+
+## 2026-06-14 Windows Codex
+
+日期：2026-06-14 20:22
 开发端：Windows Codex
 本轮目标：让 Windows WGC Rust helper 消费请求分辨率和 JPEG quality，并验证真实 Windows host 能走真实 helper 出帧。
 完成内容：

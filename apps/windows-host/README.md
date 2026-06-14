@@ -349,10 +349,13 @@ WGC helper 接入点已经落地：当 `LAN_DUAL_WINDOWS_SCREEN_MODE=wgc`、WGC 
 
 Rust helper 项目位于 `apps/windows-wgc-helper`。当前 `cargo run -- --probe` 已能真正初始化 WGC 链路：D3D11 device、WinRT Direct3D device、主显示器 `GraphicsCaptureItem`、frame pool 和 capture session；本机 probe 识别到 `显示 1`、`2560x1440`。默认运行 helper 会等待 WGC `FrameArrived`，从 `Direct3D11CaptureFrame.Surface` 取出 D3D11 texture，复制到 CPU 可读 staging texture，按请求宽高等比缩放且不放大，并用 WIC `ImageQuality` 编码 JPEG 后输出 `json-lines-v1` frame；本机 `cargo run -- --frames 1 --fps 10 --width 1280 --height 720 --jpegQuality 0.55` 已输出 1 帧真实 `1280x720` JPEG，源尺寸 `2560x1440`，本轮复验首帧约 96 KB，实际体积会随桌面内容波动。`--mock` 仍会输出同一 JSON 行合同的测试 JPEG 帧，`scripts/windows/test-windows-wgc-helper.mjs` 会构建 helper、跑 probe/mock、直接验证缩放真帧 JPEG，把构建出的 exe 以 mock mode 接入 Node host 验证合同，并额外启动临时 Windows host + 真实 helper 验证 `windows-wgc-helper-jpeg` 真帧管线；本轮真实 host 观察收到 14 帧 `1280x720`，平均约 84 KB。下一步是继续做连续帧 pacing、`--resourceSampleTree true` 资源对照、低/高码率 A/B 和 Mac client 真连观感验收。
 
+WGC 参数基准脚本位于 `scripts/windows/benchmark-windows-wgc-settings.mjs`。它会构建或复用本地 Rust helper，顺序启动临时 Windows host，并用 `observe-windows-host-video --screenMode wgc --resourceSampleTree true --json` 跑多档刷新率/码率对照。`2026-06-14 20:35` 本机 `1280x720`、每档 2.2 秒短基准已确认 30/60/120Hz 都能协商到对应会话刷新率，但当前 WGC 仍是 `FrameArrived` 事件驱动，静态桌面实收约 9-12 FPS：30Hz/10M 为 21 帧、9.25 FPS、平均约 78 KB；60Hz/20M 为 25 帧、11.11 FPS、平均约 83 KB；120Hz/40M sharp 为 27 帧、12.22 FPS、平均约 121 KB。下一步要决定是否在 host/helper 层增加“重复最后一帧”或更正式的视频编码 pacing 策略，并权衡带宽开销。
+
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-mode.mjs
 node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-mode.mjs --mockHelper --durationMs 1200 --minFrames 5
 node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-helper.mjs
+node E:\codex\lan-dual-control\scripts\windows\benchmark-windows-wgc-settings.mjs --durationMs 2200
 ```
 
 需要验证 Windows host 的可选 H.264 流式模式时，可以使用 `ffmpeg-h264`。该模式仍使用 FFmpeg `gdigrab` 采集桌面，但输出 `video_frame.codec=h264`、`encoding=annexb-base64`、`capturePipeline=windows-ffmpeg-gdigrab-h264`，`session_answer` / `display_settings_ack` / `video_frame` 会带 `codecString`。它用于提前联调 Mac client H.264 接收链路；真正低延迟 Windows 采集仍优先推进 WGC backend。
