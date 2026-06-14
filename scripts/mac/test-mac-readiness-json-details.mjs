@@ -152,6 +152,12 @@ function assertOnlineDetails(summary, expectedPort) {
   if (!details.capabilities || typeof details.capabilities !== "object") {
     throw new Error("online readiness details should include capabilities");
   }
+  if (!Array.isArray(details.displays)) {
+    throw new Error("online readiness details should include displays array");
+  }
+  if (details.displayCount !== details.displays.length) {
+    throw new Error("online readiness details should keep displayCount aligned with displays length");
+  }
   if (!Array.isArray(details.lanAddresses)) {
     throw new Error("online readiness details should include lanAddresses array");
   }
@@ -193,7 +199,7 @@ function main() {
   if (online.status !== 0) {
     print("WARN", "Online readiness reported unrelated failed checks; discovery details shape is still valid");
   }
-  print("OK", "Online readiness JSON details include runtime, permissions, capabilities, LAN addresses, and buildDiff");
+  print("OK", "Online readiness JSON details include runtime, permissions, capabilities, displays, LAN addresses, and buildDiff");
   print("OK", "Mac readiness JSON details coverage passed");
 }
 

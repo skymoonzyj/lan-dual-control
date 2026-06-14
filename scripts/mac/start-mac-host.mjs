@@ -327,6 +327,33 @@ function discoveryCapabilitySummary(discovery) {
   return parts.join(" ");
 }
 
+function normalizeDisplays(displays) {
+  return (Array.isArray(displays) ? displays : [])
+    .map((display, index) => ({
+      id: normalizedText(display?.id || `display-${index + 1}`),
+      name: normalizedText(display?.name || `Display ${index + 1}`),
+      width: clampInteger(display?.width, 0, 100000, 0),
+      height: clampInteger(display?.height, 0, 100000, 0),
+      primary: Boolean(display?.primary),
+    }))
+    .filter((display) => display.id);
+}
+
+function discoveryDisplays(discovery) {
+  return normalizeDisplays(discovery?.capabilities?.displays ?? discovery?.displays ?? []);
+}
+
+function formatDisplays(displays) {
+  if (!Array.isArray(displays) || displays.length === 0) return "none";
+  return displays
+    .map((display) => {
+      const marker = display.primary ? "*" : "";
+      const size = display.width && display.height ? `:${display.width}x${display.height}` : "";
+      return `${display.id}${marker}${size}`;
+    })
+    .join(", ");
+}
+
 function discoveryPermissionSummary(discovery) {
   const permissions = discovery?.permissions || {};
   return [
@@ -343,6 +370,7 @@ async function printStatus(args) {
     const runtime = discovery.runtime || {};
     const input = discoveryInputMode(discovery);
     const lanAddresses = getLanAddresses();
+    const displays = discoveryDisplays(discovery);
     const inputModeWarning = input !== "log" ? `Input mode is ${input}; keep log mode for unattended readiness checks.` : "";
     const buildDiff = runtime.buildId && args.buildId && runtime.buildId !== args.buildId
       ? getBuildDiffStatus(runtime.buildId, args.buildId)
@@ -367,6 +395,8 @@ async function printStatus(args) {
       runtime,
       permissions: discovery.permissions || {},
       capabilities: discovery.capabilities || {},
+      displays,
+      displayCount: displays.length,
       lanAddresses: lanAddresses.map((entry) => ({ ...entry, port: args.port })),
       currentBuildId: args.buildId,
       buildDiff,
@@ -380,6 +410,7 @@ async function printStatus(args) {
     console.log(`[OK] /discovery online: ${payload.deviceName} · input=${input} · ${discoveryRuntimeSummary(runtime)}`);
     console.log(`[INFO] Permissions: ${discoveryPermissionSummary(discovery)}`);
     console.log(`[INFO] Capabilities: ${discoveryCapabilitySummary(discovery)}`);
+    console.log(`[INFO] Displays: ${formatDisplays(displays)}`);
     if (lanAddresses.length > 0) {
       for (const entry of lanAddresses) {
         console.log(`[OK] Windows side can try: ${entry.address}:${args.port} (${entry.name})`);
@@ -401,6 +432,8 @@ async function printStatus(args) {
       error: {
         message: error.message,
       },
+      displays: [],
+      displayCount: 0,
       suggestions: [
         "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword",
         "node scripts/mac/start-mac-host.mjs --ephemeralPassword --requirePassword",

@@ -399,6 +399,18 @@ function discoveryInputMode(discovery) {
   return discovery?.capabilities?.inputMode || discovery?.capabilities?.input?.mode || discovery?.inputMode || "unknown";
 }
 
+function normalizeDisplays(displays) {
+  return (Array.isArray(displays) ? displays : [])
+    .map((display, index) => ({
+      id: normalizedText(display?.id || `display-${index + 1}`),
+      name: normalizedText(display?.name || `Display ${index + 1}`),
+      width: clampInteger(display?.width, 0, 100000, 0),
+      height: clampInteger(display?.height, 0, 100000, 0),
+      primary: Boolean(display?.primary),
+    }))
+    .filter((display) => display.id);
+}
+
 function parseJsonOutput(text, label) {
   try {
     return JSON.parse(String(text || "").trim());
@@ -459,11 +471,17 @@ function statusDetails(statusPayload, args) {
     details.runtime = statusPayload.runtime || discovery.runtime || {};
     details.permissions = statusPayload.permissions || discovery.permissions || {};
     details.capabilities = statusPayload.capabilities || discovery.capabilities || {};
+    details.displays = normalizeDisplays(statusPayload.displays ?? details.capabilities.displays ?? discovery.displays ?? []);
+    details.displayCount = Number.isInteger(statusPayload.displayCount)
+      ? statusPayload.displayCount
+      : details.displays.length;
     details.lanAddresses = Array.isArray(statusPayload.lanAddresses) ? statusPayload.lanAddresses : [];
     details.buildDiff = statusPayload.buildDiff || {};
     details.discovery = discovery;
   } else {
     details.error = statusPayload.error || null;
+    details.displays = [];
+    details.displayCount = 0;
     details.suggestions = Array.isArray(statusPayload.suggestions) ? statusPayload.suggestions : [];
   }
   return details;

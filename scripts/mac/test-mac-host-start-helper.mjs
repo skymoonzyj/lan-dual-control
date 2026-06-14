@@ -320,6 +320,7 @@ async function assertStatusOnline(timeoutMs) {
     assertIncludes(statusOutput, "build=status-helper-test", "online status");
     assertIncludes(statusOutput, "Permissions:", "online status");
     assertIncludes(statusOutput, "Windows side can try", "online status");
+    assertIncludes(statusOutput, "Displays:", "online status");
     assertIncludes(statusOutput, "Could not inspect Mac host runtime changes since status-helper-test", "online status");
     assertNotIncludes(statusOutput, "Starting Mac host", "online status");
     const jsonStatus = await runNode(["--status", "--json", "--host", "127.0.0.1", "--port", String(port)], {
@@ -339,6 +340,12 @@ async function assertStatusOnline(timeoutMs) {
     }
     if (!Array.isArray(json.lanAddresses)) {
       throw new Error(`Online JSON status should include lanAddresses array.\n${jsonStatus.stdout}`);
+    }
+    if (!Array.isArray(json.displays)) {
+      throw new Error(`Online JSON status should include displays array.\n${jsonStatus.stdout}`);
+    }
+    if (json.displayCount !== json.displays.length) {
+      throw new Error(`Online JSON status should keep displayCount aligned with displays length.\n${jsonStatus.stdout}`);
     }
     assertNotIncludes(jsonOutput, "[INFO]", "online JSON status");
     print("OK", `Status reports running Mac host on temporary port ${port}`);
