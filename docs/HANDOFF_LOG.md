@@ -19,6 +19,41 @@
 
 ## 2026-06-14 Windows Codex
 
+日期：2026-06-14 19:05
+开发端：Windows Codex
+本轮目标：让 Windows host readiness 消费统一的 Windows host 状态 JSON。
+完成内容：
+- `scripts/windows/check-windows-host-readiness.mjs` 的 “Windows host runtime” 步骤改为调用 `scripts/windows/start-windows-host.mjs --status --json`。
+- readiness 现在统一消费状态助手的 runtime、buildDiff、capabilities 和 warning；默认档 host 离线仍只作为 warning，显式 `--requireOpen` / `--requireCurrentBuildId` / `--expectBuildId` 时按原规则失败。
+- 移除了 readiness 内部重复维护的旧 build 源码 diff 逻辑，避免与启动助手状态 JSON 分叉。
+- Windows host README、CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已同步。
+修改文件：
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-host-readiness.mjs`
+- `node scripts/windows/check-windows-host-readiness.mjs --help`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-host-readiness.mjs`
+- `node scripts/windows/check-windows-host-readiness.mjs --json --timeoutMs 20000`
+- `node scripts/windows/check-windows-host-readiness.mjs --json --requireOpen --timeoutMs 20000`
+验证结果：
+- 语法、帮助入口和单脚本 help 覆盖通过。
+- 默认 readiness 在当前 `43770` 未启动时 8 项通过、0 失败，runtime 步骤通过状态助手给出离线 warning。
+- 显式 `--requireOpen` 在当前 `43770` 未启动时按预期失败，LAN/firewall 与 runtime 两步都报告端口不可达。
+遗留问题：
+- 未启动真实 Windows host 做在线 readiness 路径复验；状态助手在线路径已有启动助手自测覆盖，后续启动真实 host 后可用 `--profile deploy` 验证。
+下一步建议：
+- 下一步继续推进 WGC 真采集 backend，或在真实 Windows host 启动后跑桌面壳面板 + readiness deploy 的一致性验收。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-14 Windows Codex
+
 日期：2026-06-14 18:55
 开发端：Windows Codex
 本轮目标：让 Windows 桌面壳“本机被控”面板消费统一的 Windows host 只读状态 JSON。

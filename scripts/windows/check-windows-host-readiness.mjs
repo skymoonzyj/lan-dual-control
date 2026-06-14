@@ -5,11 +5,6 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const defaultWindowsFfmpeg = "C:\\DevTools\\ffmpeg\\bin\\ffmpeg.exe";
-const hostRuntimePaths = [
-  "apps/windows-host/package.json",
-  "apps/windows-host/server.mjs",
-  "apps/windows-host/src",
-];
 
 const defaults = {
   profile: "default",
@@ -169,33 +164,6 @@ function getGitBuildId() {
   return String(result.stdout || "").trim();
 }
 
-function getChangedHostRuntimeFiles(fromBuildId, toBuildId) {
-  const from = String(fromBuildId || "").trim();
-  const to = String(toBuildId || "HEAD").trim() || "HEAD";
-  if (!from) return null;
-
-  const revParse = spawnSync("git", ["rev-parse", "--verify", "--quiet", `${from}^{commit}`], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    timeout: 3000,
-    windowsHide: true,
-  });
-  if (revParse.status !== 0) return null;
-
-  const diff = spawnSync("git", ["diff", "--name-only", `${from}..${to}`, "--", ...hostRuntimePaths], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    timeout: 3000,
-    windowsHide: true,
-  });
-  if (diff.status !== 0) return null;
-
-  return String(diff.stdout || "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
 function print(kind, text, args) {
   if (args.json) return;
   console.log(`[${kind}] ${text}`);
@@ -339,20 +307,11 @@ function normalizeDiscoveryHost(host) {
   return normalized;
 }
 
-async function fetchJson(url, timeoutMs) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+function parseJsonOutput(text, label) {
   try {
-    const response = await fetch(url, {
-      cache: "no-store",
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    return await response.json();
-  } finally {
-    clearTimeout(timer);
+    return JSON.parse(String(text || "").trim());
+  } catch (error) {
+    throw new Error(`${label} did not print valid JSON: ${error.message}`);
   }
 }
 
@@ -368,17 +327,117 @@ function normalizeRuntime(runtime) {
   };
 }
 
+function formatRuntime(runtime) {
+  const normalized = normalizeRuntime(runtime);
+  const parts = [];
+  if (normalized.processId) parts.push(`pid=${normalized.processId}`);
+  if (normalized.buildId) parts.push(`build=${normalized.buildId}`);
+  if (normalized.uptimeSeconds !== null) parts.push(`uptime=${normalized.uptimeSeconds}s`);
+  return parts.length > 0 ? parts.join(" ") : "runtime=missing";
+}
+
+function formatCapabilities(capabilities = {}) {
+  const screen = capabilities.screen || {};
+  const audio = capabilities.audio || {};
+  const input = capabilities.input || {};
+  const clipboard = capabilities.clipboard || {};
+  const parts = [
+    `screen=${screen.capturePipeline || screen.mode || screen.requestedMode || "unknown"}`,
+    `audio=${audio.mode || audio.backend || "unknown"}`,
+    `input=${input.mode || input.backend || "unknown"}`,
+    `clipboard=${clipboard.text || clipboard.file ? "on" : "unknown"}`,
+  ];
+  return parts.join(" ");
+}
+
+function normalizeWarning(message) {
+  const text = String(message || "").trim();
+  if (!text) return "";
+  return text.startsWith("[WARN]") ? text : `[WARN] ${text}`;
+}
+
+function buildMismatchMessage(statusPayload, runtime, args) {
+  const buildDiff = statusPayload?.buildDiff || null;
+  const from = buildDiff?.fromBuildId || runtime.buildId || "missing";
+  const to = buildDiff?.toBuildId || args.currentBuildId || "missing";
+  if (buildDiff?.checked === true && buildDiff.changed === true) {
+    const files = Array.isArray(buildDiff.changedFiles) ? buildDiff.changedFiles : [];
+    const shown = files.slice(0, 4).join(", ");
+    const more = files.length > 4 ? ` (+${files.length - 4} more)` : "";
+    return `running host build ${from} differs from current git ${to}; Windows host runtime changes since ${from}${shown ? `: ${shown}${more}` : ""}`;
+  }
+  if (buildDiff?.checked === true && buildDiff.changed === false) {
+    return `running host build ${from} differs from current git ${to}; no Windows host runtime source changes since ${from}`;
+  }
+  if (buildDiff?.message) {
+    return `running host build ${from} differs from current git ${to}; ${buildDiff.message}`;
+  }
+  return `running host build ${runtime.buildId || "missing"} differs from current git ${args.currentBuildId}`;
+}
+
+async function getStatusPayload(args) {
+  const discoveryHost = normalizeDiscoveryHost(args.host);
+  const statusArgs = [
+    "scripts/windows/start-windows-host.mjs",
+    "--status",
+    "--json",
+    "--host",
+    discoveryHost,
+    "--port",
+    String(args.port),
+    "--timeoutMs",
+    String(Math.min(args.timeoutMs, 8000)),
+  ];
+  if (args.currentBuildId) {
+    statusArgs.push("--buildId", args.currentBuildId);
+  }
+
+  const result = await runCommand("Windows host status helper JSON", process.execPath, statusArgs, {
+    timeoutMs: Math.max(8000, Math.min(args.timeoutMs, 15000)),
+  });
+  const stdout = String(result.stdout || "").trim();
+  if (!stdout) {
+    throw new Error(`Windows host status helper printed no JSON output: ${result.summary || `exit ${result.exitCode}`}`);
+  }
+  return {
+    payload: parseJsonOutput(stdout, "Windows host status helper"),
+    result,
+  };
+}
+
 async function checkRunningHostRuntime(args) {
   const startedAt = Date.now();
   const discoveryHost = normalizeDiscoveryHost(args.host);
-  const url = `http://${discoveryHost}:${args.port}/discovery`;
   const warnings = [];
   const errors = [];
   let summary = "";
 
   try {
-    const discovery = await fetchJson(url, Math.min(2500, args.timeoutMs));
-    const runtime = normalizeRuntime(discovery.runtime);
+    const { payload: statusPayload } = await getStatusPayload(args);
+    const probe = statusPayload.probe || {
+      host: discoveryHost,
+      port: args.port,
+      url: `http://${discoveryHost}:${args.port}/discovery`,
+    };
+    if (statusPayload.ok !== true) {
+      const message = `Windows host discovery runtime unavailable at ${probe.url || `${probe.host}:${probe.port}`}: ${statusPayload.error?.message || "offline"}`;
+      if (args.requireOpen || args.expectBuildId || args.requireCurrentBuildId) {
+        errors.push(message);
+      } else {
+        warnings.push(`[WARN] ${message}`);
+      }
+      return {
+        label: "Windows host runtime",
+        ok: errors.length === 0,
+        exitCode: errors.length === 0 ? 0 : 1,
+        elapsedMs: Date.now() - startedAt,
+        summary: args.requireOpen ? message : "Windows host is not running; runtime check skipped",
+        warnings,
+        errors,
+      };
+    }
+
+    const runtime = normalizeRuntime(statusPayload.runtime);
     const missingFields = [];
     if (!runtime.processId) missingFields.push("processId");
     if (!runtime.startedAt) missingFields.push("startedAt");
@@ -402,16 +461,7 @@ async function checkRunningHostRuntime(args) {
       errors.push("current git build id is unavailable");
     }
     if (args.currentBuildId && runtime.buildId && runtime.buildId !== args.currentBuildId) {
-      const changedHostFiles = getChangedHostRuntimeFiles(runtime.buildId, args.currentBuildId);
-      const hostSourceSummary =
-        Array.isArray(changedHostFiles) && changedHostFiles.length > 0
-          ? `; Windows host runtime changes since ${runtime.buildId}: ${changedHostFiles.slice(0, 4).join(", ")}${
-              changedHostFiles.length > 4 ? ` (+${changedHostFiles.length - 4} more)` : ""
-            }`
-          : Array.isArray(changedHostFiles)
-            ? `; no Windows host runtime source changes since ${runtime.buildId}`
-            : "";
-      const message = `running host build ${runtime.buildId} differs from current git ${args.currentBuildId}${hostSourceSummary}`;
+      const message = buildMismatchMessage(statusPayload, runtime, args);
       if (!args.skipCurrentBuildCheck) {
         warnings.push(`[WARN] ${message}`);
       }
@@ -419,9 +469,13 @@ async function checkRunningHostRuntime(args) {
         errors.push(message);
       }
     }
+    for (const warning of statusPayload.warnings || []) {
+      const normalized = normalizeWarning(warning);
+      if (normalized) warnings.push(normalized);
+    }
 
-    summary = runtime.buildId
-      ? `pid=${runtime.processId || "unknown"} build=${runtime.buildId} uptime=${runtime.uptimeSeconds ?? "?"}s`
+    summary = runtime.buildId || runtime.processId
+      ? `${formatRuntime(runtime)} · ${formatCapabilities(statusPayload.capabilities || {})}`
       : "Windows host discovery reached; runtime missing";
     return {
       label: "Windows host runtime",
@@ -433,7 +487,7 @@ async function checkRunningHostRuntime(args) {
       errors,
     };
   } catch (error) {
-    const message = `Windows host discovery runtime unavailable at ${url}: ${error.message}`;
+    const message = `Windows host discovery runtime unavailable at http://${discoveryHost}:${args.port}/discovery: ${error.message}`;
     if (args.requireOpen || args.expectBuildId || args.requireCurrentBuildId) {
       errors.push(message);
     }

@@ -192,7 +192,7 @@ node .\server.mjs 43772 127.0.0.1
 
 ## 一键自检
 
-Windows host 真机联调前，建议先跑一键体检。默认只做低风险检查：Node/FFmpeg、Windows Graphics Capture 支持预检、Windows host 语法、输入 helper 安全干跑、音频设备/WASAPI 格式，以及局域网/防火墙只读检查；不会播放声音、不会发真实鼠标键盘输入，也不要求 `43770` 已经有服务监听。
+Windows host 真机联调前，建议先跑一键体检。默认只做低风险检查：Node/FFmpeg、Windows Graphics Capture 支持预检、Windows host 语法、输入 helper 安全干跑、音频设备/WASAPI 格式、局域网/防火墙只读检查，以及通过 `start-windows-host --status --json` 做运行中 host 状态检查；不会播放声音、不会发真实鼠标键盘输入，也不要求 `43770` 已经有服务监听。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs
@@ -224,7 +224,7 @@ node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs 
 node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --profile deep
 ```
 
-如果刚重启或部署 Windows host，可以用 runtime build 强校验确认自己连到的是新进程；默认体检只在发现旧 build 时提示 warning，且旧 build 是可解析 git commit 时会列出之后变动过的 Windows host 运行源码文件，`--requireCurrentBuildId` 才会让旧 build 直接失败。
+如果刚重启或部署 Windows host，可以用 runtime build 强校验确认自己连到的是新进程；默认体检会消费 `start-windows-host --status --json` 的 `runtime` / `buildDiff` / `capabilities`，只在发现旧 build 时提示 warning，`--requireCurrentBuildId` 才会让旧 build 直接失败。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --requireOpen --requireCurrentBuildId
