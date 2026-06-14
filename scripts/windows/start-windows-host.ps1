@@ -18,6 +18,7 @@ param(
   [switch] $DryRunFirewallRule,
   [switch] $SkipFirewallCheck,
   [switch] $NoRequireOpen,
+  [switch] $Status,
   [switch] $DryRun
 )
 
@@ -44,6 +45,7 @@ if ($AddFirewallRule) { $nodeArgs += "--addFirewallRule" }
 if ($DryRunFirewallRule) { $nodeArgs += "--dryRunFirewallRule" }
 if ($SkipFirewallCheck) { $nodeArgs += "--skipFirewallCheck" }
 if ($NoRequireOpen) { $nodeArgs += "--noRequireOpen" }
+if ($Status) { $nodeArgs += "--status" }
 if ($DryRun) { $nodeArgs += "--dryRun" }
 
 Push-Location $repoRoot
