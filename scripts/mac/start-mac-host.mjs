@@ -9,6 +9,10 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const macHostPath = resolve(repoRoot, "apps/mac-host");
 const displayCheckPath = resolve(repoRoot, "scripts/mac/check-mac-displays.mjs");
+const hostRuntimePaths = [
+  "apps/mac-host/Package.swift",
+  "apps/mac-host/Sources",
+];
 
 const defaults = {
   host: process.env.LAN_DUAL_HOST || "0.0.0.0",
@@ -130,7 +134,8 @@ Options:
   --skipRuntimeCheck         Skip check-mac-displays after /discovery is ready.
   --requireRuntimeCheck      Stop startup if the runtime/display check fails.
   --allowExisting            Do not refuse when /discovery already answers on the port.
-  --status                   Print current /discovery runtime status and exit without starting.
+  --status                   Print current /discovery runtime status and stale-build source diff,
+                             then exit without starting.
   --dryRun                   Print the resolved launch plan and exit.
   --help, -h                 Show this help without starting Mac host.
 `);
@@ -189,6 +194,48 @@ function getGitBuildId() {
   });
   const value = normalizedText(result.stdout);
   return value || "local-dev";
+}
+
+function getChangedHostRuntimeFiles(fromBuildId, toBuildId) {
+  const from = normalizedText(fromBuildId);
+  const to = normalizedText(toBuildId || "HEAD") || "HEAD";
+  if (!from) return null;
+  const revParse = spawnSync("git", ["rev-parse", "--verify", "--quiet", `${from}^{commit}`], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 3000,
+  });
+  if (revParse.status !== 0) {
+    return null;
+  }
+  const diff = spawnSync("git", ["diff", "--name-only", `${from}..${to}`, "--", ...hostRuntimePaths], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 3000,
+  });
+  if (diff.status !== 0) {
+    return null;
+  }
+  return diff.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function printBuildMismatchStatus(fromBuildId, toBuildId) {
+  console.log(`[WARN] Running host build ${fromBuildId} differs from current git ${toBuildId}; restart if you need the latest build.`);
+  const changedHostFiles = getChangedHostRuntimeFiles(fromBuildId, toBuildId);
+  if (!Array.isArray(changedHostFiles)) {
+    console.log(`[INFO] Could not inspect Mac host runtime changes since ${fromBuildId}; old build is not available in local git history.`);
+    return;
+  }
+  if (changedHostFiles.length === 0) {
+    console.log(`[INFO] No Mac host runtime source changes since ${fromBuildId}; the running service behavior is likely current, but build metadata is stale.`);
+    return;
+  }
+  const shown = changedHostFiles.slice(0, 4).join(", ");
+  const more = changedHostFiles.length > 4 ? ` (+${changedHostFiles.length - 4} more)` : "";
+  console.log(`[WARN] Mac host runtime source changed since ${fromBuildId}: ${shown}${more}`);
 }
 
 function getLanAddresses() {
@@ -270,7 +317,7 @@ async function printStatus(args) {
       console.log(`[WARN] Input mode is ${input}; keep log mode for unattended readiness checks.`);
     }
     if (runtime.buildId && args.buildId && runtime.buildId !== args.buildId) {
-      console.log(`[WARN] Running host build ${runtime.buildId} differs from current git ${args.buildId}; restart if you need the latest build.`);
+      printBuildMismatchStatus(runtime.buildId, args.buildId);
     }
     return true;
   } catch (error) {

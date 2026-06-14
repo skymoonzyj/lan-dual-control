@@ -293,6 +293,7 @@ async function assertStatusOnline(timeoutMs) {
     assertIncludes(statusOutput, "build=status-helper-test", "online status");
     assertIncludes(statusOutput, "Permissions:", "online status");
     assertIncludes(statusOutput, "Windows side can try", "online status");
+    assertIncludes(statusOutput, "Could not inspect Mac host runtime changes since status-helper-test", "online status");
     assertNotIncludes(statusOutput, "Starting Mac host", "online status");
     print("OK", `Status reports running Mac host on temporary port ${port}`);
   } finally {

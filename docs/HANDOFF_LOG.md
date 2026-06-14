@@ -19,6 +19,48 @@
 
 ## 2026-06-14 Mac Codex
 
+日期：2026-06-14 16:05
+开发端：Mac Codex
+本轮目标：增强 Mac host 状态检查，让旧 build 提醒能区分“服务运行源码已变”与“只是 build 元数据落后”。
+完成内容：
+- `scripts/mac/start-mac-host.mjs --status` 遇到运行中 `/discovery.runtime.buildId` 与当前 git 不一致时，会只比较 `apps/mac-host/Package.swift` 和 `apps/mac-host/Sources`，输出旧 build 后是否有 Mac host 运行源码变化。
+- 若旧 build 可解析且没有运行源码变化，会提示服务行为大概率仍是当前的，只是 build 元数据落后；若有变化，会列出最多 4 个变动文件并提示重启必要性；若旧 build 不在本地 git 历史，会明确说明无法比较。
+- 启动助手自测补充旧 build 不可解析时的 `--status` 输出断言。
+- Mac host README、CURRENT_STATUS、NEXT_ACTIONS 和任务板同步 `--status` 旧 build 诊断说明。
+- 当前真实 Mac host 仍在线 `192.168.31.122:43770`，runtime `pid=74165`、`build=1506dcd`、`inputMode=log`；`--status` 已确认 `1506dcd..407bd92` 之间没有 Mac host 运行源码变化，因此暂不需要为了服务行为重启。
+修改文件：
+- `scripts/mac/start-mac-host.mjs`
+- `scripts/mac/test-mac-host-start-helper.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/start-mac-host.mjs`
+- `node --check scripts/mac/test-mac-host-start-helper.mjs`
+- `node scripts/mac/start-mac-host.mjs --help`
+- `node scripts/mac/test-mac-script-help.mjs --script start-mac-host.mjs`
+- `node scripts/mac/start-mac-host.mjs --status --host 127.0.0.1 --port 43770`
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/mac/check-mac-host-readiness.mjs --requireOpen --skipCurrentBuildCheck --timeoutMs 12000`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- 语法、帮助入口、启动助手完整自测通过。
+- 真实 `--status` 成功显示当前 43770 在线、权限全开、H.264/PCM/剪贴板能力在线，并提示 `No Mac host runtime source changes since 1506dcd`。
+- Mac readiness 9/9 通过，当前 host 仍是安全 `log` 输入模式。
+遗留问题：
+- 当前 Mac host 仍使用一次性随机密码，只适合 `/discovery`、runtime 和 UI diagnostics；认证联调仍需要用户输入正式密码或按约定密码重启。
+下一步建议：
+- 如果后续只是查状态，优先运行 `node scripts/mac/start-mac-host.mjs --status`；只有它提示 Mac host 运行源码有变化，或需要正式密码认证联调时，再协调重启。
+- 白天用户在场后，再考虑正式密码下的 Windows 控制 Mac H.264/WebCodecs、PCM 音频、真实输入注入验收。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；推送前已通过联络板发预告。
+
+## 2026-06-14 Mac Codex
+
 日期：2026-06-14 14:32
 开发端：Mac Codex
 本轮目标：恢复真实 Mac host 在线诊断面，并让启动助手支持不启动服务的状态检查，减少开工/联调前确认成本。
