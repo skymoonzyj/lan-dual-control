@@ -8,7 +8,7 @@
 - `hello`、`auth_request`、`session_offer`、`display_settings`、`input_event`、`input_ack`、`clipboard_text` 和 `reverse_control_request` 消息处理；未认证连接会被拒绝，同一连接内密码错误 3 次后会关闭连接。
 - Windows 屏幕 `video_frame` 输出：默认在 Windows 桌面会话中用 FFmpeg gdigrab 持续采集 MJPEG/JPEG data URL；也可显式使用 `ffmpeg-h264` 让 FFmpeg/libx264 输出 H.264 Annex B base64 帧；无 FFmpeg 或采集失败时回退 PowerShell/System.Drawing 系统截图，失败时再回退模拟帧。控制端下发的 `qualityPreset` 和 `maxBandwidthKbps` 会换算为实际 `jpegQuality`，让 5/10/20/40/50 Mbps 对应不同压缩质量。
 - 音频 `audio_frame` 输出：默认发送模拟帧；显式设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi` 后可用 Windows WASAPI loopback 采集默认播放设备的系统声音并发送 `pcm-f32le-base64` PCM 帧；也可设置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 试用 FFmpeg DirectShow 指定设备。
-- 屏幕采集当前是 FFmpeg gdigrab + PowerShell/System.Drawing 兜底的过渡实现；`ffmpeg-h264` 是可选流式编码模式，主要用于和 Mac client H.264 接收链路联调，不替代后续 Windows Graphics Capture。已新增 Windows Graphics Capture 支持预检脚本，但还没有替换现有采集管线，后续会用该预检结果和 FFmpeg 60 Hz / H.264 基线做对照升级。
+- 屏幕采集当前是 FFmpeg gdigrab + PowerShell/System.Drawing 兜底的过渡实现；`ffmpeg-h264` 是可选流式编码模式，主要用于和 Mac client H.264 接收链路联调，不替代后续 Windows Graphics Capture。已新增 Windows Graphics Capture 支持预检和 Rust helper 项目；helper 目前可完成 WGC/D3D 初始化并通过 JSON 行合同接入 Node host，下一步是读取真实 `Direct3D11CaptureFrame` 并编码 JPEG。
 - WASAPI loopback 是当前推荐的系统声音采集入口；DirectShow PCM 入口保留给虚拟声卡/loopback 设备做兼容验证。
 - SendInput 输入注入模块：在 Windows 上通过常驻 C# helper 调用 `SendInput` 和 `SetCursorPos` 注入鼠标、滚轮和常用键盘事件，避免每个事件重复启动 PowerShell；在非 Windows 开发环境只记录事件。
 - 输入事件处理后会返回 `input_ack`，便于控制端和联调脚本确认已注入、仅记录或被拒绝。
@@ -345,11 +345,14 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 
 需要验证 WGC 切换入口时，可以先用 `--screenMode wgc --requireRealVideo false --json`。当前不会把过渡采集伪装成真正 WGC：未配置 `LAN_DUAL_WINDOWS_WGC_HELPER` 时，`/discovery.capabilities.screen.requestedMode` 会显示 `wgc`，`screen.wgc.backendImplemented=false`，`wgcFallbackReason` 会说明 WGC 预检结果以及已降级到 FFmpeg/System.Drawing/mock。
 
-WGC helper 接入点已经落地：当 `LAN_DUAL_WINDOWS_SCREEN_MODE=wgc`、WGC 预检通过、且 `LAN_DUAL_WINDOWS_WGC_HELPER` 指向可执行 helper 时，Windows host 会启动该 helper，并按 `json-lines-v1` 协议从 stdout 接收 JPEG 帧。helper 启动时会收到 `LAN_DUAL_WGC_WIDTH`、`LAN_DUAL_WGC_HEIGHT`、`LAN_DUAL_WGC_FPS`、`LAN_DUAL_WGC_DISPLAY_ID`、`LAN_DUAL_WGC_JPEG_QUALITY` 等环境变量；每行可输出 `{"type":"hello","backend":"windows-graphics-capture","codec":"jpeg","encoding":"base64"}` 或 `{"type":"frame","frameId":1,"timestamp":"...","width":1280,"height":720,"dataBase64":"..."}`。接入成功时 `/discovery.capabilities.screen.wgc.active=true`，`capturePipeline=windows-wgc-helper-jpeg`。真正的原生 WGC helper 尚未完成；下一步要实现这个 helper，而不是改前端协议。
+WGC helper 接入点已经落地：当 `LAN_DUAL_WINDOWS_SCREEN_MODE=wgc`、WGC 预检通过、且 `LAN_DUAL_WINDOWS_WGC_HELPER` 指向可执行 helper 时，Windows host 会启动该 helper，并按 `json-lines-v1` 协议从 stdout 接收 JPEG 帧。helper 启动时会收到 `LAN_DUAL_WGC_WIDTH`、`LAN_DUAL_WGC_HEIGHT`、`LAN_DUAL_WGC_FPS`、`LAN_DUAL_WGC_DISPLAY_ID`、`LAN_DUAL_WGC_JPEG_QUALITY` 等环境变量；每行可输出 `{"type":"hello","backend":"windows-graphics-capture","codec":"jpeg","encoding":"base64"}` 或 `{"type":"frame","frameId":1,"timestamp":"...","width":1280,"height":720,"dataBase64":"..."}`。接入成功时 `/discovery.capabilities.screen.wgc.active=true`，`capturePipeline=windows-wgc-helper-jpeg`。
+
+Rust helper 项目位于 `apps/windows-wgc-helper`。当前 `cargo run -- --probe` 已能真正初始化 WGC 链路：D3D11 device、WinRT Direct3D device、主显示器 `GraphicsCaptureItem`、frame pool 和 capture session；本机 probe 识别到 `显示 1`、`2560x1440`。`--mock` 会输出同一 JSON 行合同的测试 JPEG 帧，`scripts/windows/test-windows-wgc-helper.mjs` 会构建 helper、跑 probe/mock，并把构建出的 exe 接入 Node host 验证 `windows-wgc-helper-jpeg` 管线。下一步是从 `Direct3D11CaptureFrame.Surface` 做真实帧 readback 和 JPEG 编码。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-mode.mjs
 node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-mode.mjs --mockHelper --durationMs 1200 --minFrames 5
+node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-helper.mjs
 ```
 
 需要验证 Windows host 的可选 H.264 流式模式时，可以使用 `ffmpeg-h264`。该模式仍使用 FFmpeg `gdigrab` 采集桌面，但输出 `video_frame.codec=h264`、`encoding=annexb-base64`、`capturePipeline=windows-ffmpeg-gdigrab-h264`，`session_answer` / `display_settings_ack` / `video_frame` 会带 `codecString`。它用于提前联调 Mac client H.264 接收链路；真正低延迟 Windows 采集仍优先推进 WGC backend。

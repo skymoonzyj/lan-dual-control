@@ -19,6 +19,47 @@
 
 ## 2026-06-14 Windows Codex
 
+日期：2026-06-14 20:10
+开发端：Windows Codex
+本轮目标：新增 Windows WGC Rust helper 初始化链路和自测入口。
+完成内容：
+- 新增 `apps/windows-wgc-helper` Rust 项目，作为后续真正 WGC 采集的原生 helper。
+- `lan-dual-wgc-helper --probe` 会真实初始化 D3D11 device、WinRT Direct3D device、主显示器 `GraphicsCaptureItem`、frame pool 和 capture session，并输出机器可读 JSON 诊断。
+- `lan-dual-wgc-helper --mock` 按 `json-lines-v1` 输出 JPEG 测试帧，用于先验证 Node host helper 合同。
+- 新增 `scripts/windows/test-windows-wgc-helper.mjs`，覆盖 helper 构建、WGC probe、mock 帧合同，以及把 helper 接入 Windows host 后收到 `windows-wgc-helper-jpeg` 帧。
+- Windows host README、CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已同步，明确下一步是真正读取 `Direct3D11CaptureFrame.Surface` 并编码 JPEG。
+修改文件：
+- `apps/windows-wgc-helper/Cargo.toml`
+- `apps/windows-wgc-helper/Cargo.lock`
+- `apps/windows-wgc-helper/src/main.rs`
+- `apps/windows-wgc-helper/README.md`
+- `scripts/windows/test-windows-wgc-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `cargo check`（`apps/windows-wgc-helper`）
+- `cargo run -- --probe`
+- `cargo run -- --mock --frames 2 --fps 30 --width 640 --height 360`
+- `node --check scripts/windows/test-windows-wgc-helper.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-wgc-helper.mjs`
+- `node scripts/windows/test-windows-wgc-helper.mjs`
+验证结果：
+- WGC probe 通过，显示器为 `显示 1`，尺寸 `2560x1440`，`sessionSupported=true`。
+- mock 合同输出带 ISO 时间戳的 JPEG 测试帧。
+- Node host 集成观察收到 36 帧，管线为 `windows-wgc-helper-jpeg`。
+遗留问题：
+- 目前还没有把真实 `Direct3D11CaptureFrame.Surface` 读回并编码成 JPEG；Node 集成测试仍使用 helper 的 mock 合同帧。
+下一步建议：
+- 在 Rust helper 内实现 surface readback/staging texture + WIC/JPEG 编码，再用 `observe-windows-host-video --screenMode wgc --resourceSampleTree true --json` 对照 FFmpeg 基线，并请 Mac 端做真实控制端观感验收。
+是否改了协议：否；只新增 Windows 内部 helper 项目、自测入口和文档。
+是否需要另一端配合：暂不需要；真实 WGC 帧输出后再请 Mac 端验收。
+
+## 2026-06-14 Windows Codex
+
 日期：2026-06-14 19:45
 开发端：Windows Codex
 本轮目标：给 Windows WGC 模式补上原生 helper 接入边界和可验证的出帧合同。
