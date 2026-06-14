@@ -6,7 +6,7 @@
 
 - Node.js WebSocket 被控服务，默认端口 `43770`。
 - `hello`、`auth_request`、`session_offer`、`display_settings`、`input_event`、`input_ack`、`clipboard_text` 和 `reverse_control_request` 消息处理；未认证连接会被拒绝，同一连接内密码错误 3 次后会关闭连接。
-- Windows 屏幕 `video_frame` 输出：默认在 Windows 桌面会话中用 FFmpeg gdigrab 持续采集 MJPEG/JPEG；也可显式使用 `ffmpeg-h264` 让 FFmpeg/libx264 输出 H.264 Annex B 帧。`ffmpeg-h264` 模式下，如果控制端明确请求 `preferredVideoCodec=mjpeg` 或 `preferredVideoEncoding=data-url`，当前会话会切回 FFmpeg MJPEG/JPEG，保证浏览器 H.264 解码不可用时仍有画面；无 FFmpeg 或采集失败时回退 PowerShell/System.Drawing 系统截图，失败时再回退模拟帧。控制端下发的 `qualityPreset` 和 `maxBandwidthKbps` 会换算为实际 `jpegQuality`，让 5/10/20/40/50 Mbps 对应不同压缩质量。若控制端声明 `preferredVideoTransport=binary-jpeg`，JPEG 帧会优先走 WebSocket 二进制帧；若 H.264 会话声明 `binary-h264`，Annex B payload 会走 WebSocket 二进制帧，减少 data URL/base64 文本重发成本；不支持时仍回退旧 JSON 文本帧。
+- Windows 屏幕 `video_frame` 输出：默认在 Windows 桌面会话中用 FFmpeg gdigrab 持续采集 MJPEG/JPEG；也可显式使用 `ffmpeg-h264` 让 FFmpeg 输出 H.264 Annex B 帧，默认编码器为 `libx264`，也可用 `LAN_DUAL_WINDOWS_H264_ENCODER` 或启动/测试脚本的 `--h264Encoder` 选择 `h264_nvenc` 等 FFmpeg H.264 编码器。`ffmpeg-h264` 模式下，如果控制端明确请求 `preferredVideoCodec=mjpeg` 或 `preferredVideoEncoding=data-url`，当前会话会切回 FFmpeg MJPEG/JPEG，保证浏览器 H.264 解码不可用时仍有画面；无 FFmpeg 或采集失败时回退 PowerShell/System.Drawing 系统截图，失败时再回退模拟帧。控制端下发的 `qualityPreset` 和 `maxBandwidthKbps` 会换算为实际 `jpegQuality`，让 5/10/20/40/50 Mbps 对应不同压缩质量。若控制端声明 `preferredVideoTransport=binary-jpeg`，JPEG 帧会优先走 WebSocket 二进制帧；若 H.264 会话声明 `binary-h264`，Annex B payload 会走 WebSocket 二进制帧，减少 data URL/base64 文本重发成本；不支持时仍回退旧 JSON 文本帧。
 - 音频 `audio_frame` 输出：默认发送模拟帧；显式设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi` 后可用 Windows WASAPI loopback 采集默认播放设备的系统声音并发送 `pcm-f32le-base64` PCM 帧；也可设置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 试用 FFmpeg DirectShow 指定设备。
 - 屏幕采集当前是 FFmpeg gdigrab + PowerShell/System.Drawing 兜底的过渡实现；`ffmpeg-h264` 是可选流式编码模式，主要用于和 Mac client H.264 接收链路联调，不替代后续 Windows Graphics Capture。已新增 Windows Graphics Capture 支持预检和 Rust helper 项目；helper 目前可完成 WGC/D3D 初始化、读取真实 `Direct3D11CaptureFrame.Surface`、CPU readback、请求分辨率缩放，并通过 WIC 按请求 JPEG 质量编码后按 JSON 行合同接入 Node host。下一步是连续帧 pacing、资源对照和 Mac client 真连观感验收。
 - WASAPI loopback 是当前推荐的系统声音采集入口；DirectShow PCM 入口保留给虚拟声卡/loopback 设备做兼容验证。
@@ -144,7 +144,8 @@ $env:LAN_DUAL_WINDOWS_INPUT_HELPER_EXE="C:\DevTools\lan-dual-input-helper.exe" #
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="auto"   # 默认，Windows 优先 FFmpeg gdigrab，失败再回退系统截图 JPEG
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="mock"   # 强制模拟视频帧
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="ffmpeg" # 强制 FFmpeg gdigrab MJPEG
-$env:LAN_DUAL_WINDOWS_SCREEN_MODE="ffmpeg-h264" # 强制 FFmpeg gdigrab + libx264，输出 H.264 Annex B base64
+$env:LAN_DUAL_WINDOWS_SCREEN_MODE="ffmpeg-h264" # 强制 FFmpeg gdigrab + H.264 encoder，输出 H.264 Annex B
+$env:LAN_DUAL_WINDOWS_H264_ENCODER="h264_nvenc" # 可选；默认 libx264，也可试 h264_qsv / h264_amf / h264_mf / h264_d3d12va
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="system" # 强制 Windows 系统截图 JPEG
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="wgc"    # 显式请求 Windows Graphics Capture helper；未配置 helper 时仍降级
 $env:LAN_DUAL_WINDOWS_WGC_HELPER="C:\DevTools\lan-dual-wgc-helper.exe" # 可选；原生 WGC helper 路径
@@ -324,6 +325,7 @@ node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-mac-client-video-transports.mjs
+node E:\codex\lan-dual-control\scripts\windows\test-mac-client-video-transports.mjs --h264Encoder h264_nvenc
 ```
 
 本轮 `2026-06-14 23:55` 矩阵复验 4/4 通过：`binary-h264` 54 帧 / 909 ms / 59.4 FPS，21 个二进制 H.264 帧；H.264 JSON/base64 54 帧 / 905 ms / 59.7 FPS；H.264 fallback 53 帧 / 911 ms / 58.2 FPS；`binary-jpeg` 11 帧 / 1202 ms / 9.2 FPS。
@@ -340,10 +342,11 @@ node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --req
 node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --expectBinaryVideo --allowClipboardFallback --skipFileClipboard --observeVideoMs 1200 --minObservedVideoFrames 5 --minObservedVideoFps 5
 ```
 
-需要单独验证 H.264 Annex B payload 也走 WebSocket 二进制帧时，加 `--expectBinaryH264Video`；脚本会启动临时 `ffmpeg-h264` Windows host，要求页面显示 `h264/binary`、H.264 canvas 可见、诊断出现二进制 H.264 帧：
+需要单独验证 H.264 Annex B payload 也走 WebSocket 二进制帧时，加 `--expectBinaryH264Video`；脚本会启动临时 `ffmpeg-h264` Windows host，要求页面显示 `h264/binary`、H.264 canvas 可见、诊断出现二进制 H.264 帧。要验证 NVENC 路径时再加 `--h264Encoder h264_nvenc`：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --expectBinaryH264Video --allowClipboardFallback --skipFileClipboard --observeVideoMs 900 --minObservedVideoFrames 4 --minObservedVideoFps 4
+node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --expectBinaryH264Video --h264Encoder h264_nvenc --allowClipboardFallback --skipFileClipboard --observeVideoMs 900 --minObservedVideoFrames 4 --minObservedVideoFps 4
 ```
 
 需要回归旧 JSON/base64 兼容路径时，可关闭页面二进制视频传输：
@@ -387,11 +390,13 @@ node E:\codex\lan-dual-control\scripts\windows\benchmark-windows-wgc-settings.mj
 node E:\codex\lan-dual-control\scripts\windows\benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1600 --repeatLastFrame --repeatLastFrameMode signal --json
 ```
 
-需要验证 Windows host 的可选 H.264 流式模式时，可以使用 `ffmpeg-h264`。该模式仍使用 FFmpeg `gdigrab` 采集桌面，输出 `video_frame.codec=h264`、`capturePipeline=windows-ffmpeg-gdigrab-h264` 和 `codecString`；默认兼容路径为 `encoding=annexb-base64` JSON 文本帧，双方声明支持后可升级为 `encoding=annexb-binary` / `videoTransport=binary-h264` WebSocket 二进制帧。它用于提前联调 Mac client H.264 接收链路；真正低延迟 Windows 采集仍优先推进 WGC backend。
+需要验证 Windows host 的可选 H.264 流式模式时，可以使用 `ffmpeg-h264`。该模式仍使用 FFmpeg `gdigrab` 采集桌面，输出 `video_frame.codec=h264`、`capturePipeline=windows-ffmpeg-gdigrab-h264`、`codecString` 和实际 `h264Encoder`；默认兼容路径为 `encoding=annexb-base64` JSON 文本帧，双方声明支持后可升级为 `encoding=annexb-binary` / `videoTransport=binary-h264` WebSocket 二进制帧。默认编码器是 `libx264`；需要验证 NVIDIA 硬编时可传 `--h264Encoder h264_nvenc`，启动助手同样支持该参数。它用于提前联调 Mac client H.264 接收链路；真正低延迟 Windows 采集仍优先推进 WGC backend。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-h264-mode.mjs
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --screenMode ffmpeg-h264 --preferredVideoCodec h264 --width 1280 --height 720 --fps 30 --durationMs 2500 --minFrames 10 --minFps 5 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp --resourceSample false --json
+node E:\codex\lan-dual-control\scripts\windows\test-windows-h264-mode.mjs --h264Encoder h264_nvenc
+node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --screenMode ffmpeg-h264 --preferredVideoCodec h264 --h264Encoder h264_nvenc --width 1280 --height 720 --fps 30 --durationMs 1500 --minFrames 8 --minFps 5 --maxGapMs 1000 --maxFrameAgeMs 1000 --requireMonotonicTimestamp --resourceSample false --json
 ```
 
 调 H.264 前可以先探测当前浏览器 WebCodecs 对各个 `avc1.*` 的支持，避免把浏览器启动参数问题误判成编码器问题：
@@ -408,7 +413,9 @@ node E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-suppo
 node E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-support.mjs --json
 ```
 
-当前 H.264 短基线：`2026-06-13 14:18` 在真实桌面权限下运行 `test-windows-h264-mode`，本机临时 host 720p/30Hz 观察 2.5 秒收到 73 帧，平均 28.83 FPS，最大帧间隔 53 ms，timestamp 单调，管线为 `windows-ffmpeg-gdigrab-h264`，codec 为 `h264`。普通沙盒上下文仍可能遇到 FFmpeg `gdigrab error 5` / mock fallback；这属于桌面抓屏权限/会话限制，不应误判为 H.264 管线不可用。当前实现使用 `libx264` 软件编码，可按客户端能力在 JSON/base64 和 `binary-h264` 二进制传输之间切换；后续仍需 WGC 采集和硬件编码优化。
+当前 H.264 短基线：`2026-06-13 14:18` 在真实桌面权限下运行 `test-windows-h264-mode`，本机临时 host 720p/30Hz 观察 2.5 秒收到 73 帧，平均 28.83 FPS，最大帧间隔 53 ms，timestamp 单调，管线为 `windows-ffmpeg-gdigrab-h264`，codec 为 `h264`。普通沙盒上下文仍可能遇到 FFmpeg `gdigrab error 5` / mock fallback；这属于桌面抓屏权限/会话限制，不应误判为 H.264 管线不可用。当前实现默认使用 `libx264` 软件编码，也支持显式 `h264_nvenc` 等 FFmpeg encoder，并会在 discovery/session/frame/观察脚本中带出实际 `h264Encoder`；可按客户端能力在 JSON/base64 和 `binary-h264` 二进制传输之间切换。后续仍需把 WGC 采集源接入硬件编码，减少 gdigrab 过渡层限制。
+
+`2026-06-15 00:50` 本机 NVENC 过渡路径复验通过：`test-windows-h264-mode --h264Encoder h264_nvenc` 收到 55 帧 / 约 27.38 FPS；`observe-windows-host-video --h264Encoder h264_nvenc` 收到 40 帧 / 1508 ms / 26.52 FPS，最大帧间隔 51 ms，`h264Encoder=h264_nvenc` 出现在 discovery、session 和帧观察里；Mac client 页面级 `--expectBinaryH264Video --h264Encoder h264_nvenc` 观察 53 帧 / 911 ms / 58.2 FPS；视频传输矩阵加 `--h264Encoder h264_nvenc` 后 4/4 通过，`binary-h264` 约 57.0 FPS，旧 JSON/base64、fallback 和 `binary-jpeg` 均未退化。`libx264` 默认路径也复验通过，1.5 秒 42 帧 / 27.77 FPS。
 
 `2026-06-14 22:55` 本机 Edge WebCodecs 探针确认 `avc1.42C02A` 的 `annexb` 和默认 AVC 配置都支持；Mac client 页面自检已移除 headless 默认 `--disable-gpu`，`--screenMode ffmpeg-h264 --requireH264Video` 通过：页面显示 `h264 · 解码 #4 · 8 ms · 到达 2 ms`，短窗口 55 帧 / 906 ms / 60.7 FPS。后续如果要故意复现旧的 H.264 不支持环境，可给页面自检加 `--forceH264Unsupported` 或 `--disableWebCodecs`，不要再依赖禁 GPU 的偶然副作用。
 

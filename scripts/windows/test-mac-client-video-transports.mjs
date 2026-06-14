@@ -17,6 +17,7 @@ const defaults = {
   minObservedVideoFps: 4,
   binaryJpegMinObservedVideoFrames: 5,
   binaryJpegMinObservedVideoFps: 5,
+  h264Encoder: "",
 };
 
 const cases = [
@@ -71,6 +72,7 @@ const cases = [
   {
     id: "binary-jpeg",
     label: "JPEG binary transport",
+    h264: false,
     args: (settings) => [
       "--expectBinaryVideo",
       "--allowClipboardFallback",
@@ -100,6 +102,7 @@ Options:
   --binaryJpegObserveVideoMs <ms>  JPEG binary observation window. Default: ${defaults.binaryJpegObserveVideoMs}
   --minObservedVideoFrames <n>     H.264/fallback minimum frames. Default: ${defaults.minObservedVideoFrames}
   --minObservedVideoFps <fps>      H.264/fallback minimum FPS. Default: ${defaults.minObservedVideoFps}
+  --h264Encoder <name>             Optional encoder for H.264 cases, for example h264_nvenc
   --json                  Print machine-readable summary only
   --verbose               Print each child self-test output
   --help, -h              Show this help without starting browsers or hosts
@@ -148,6 +151,11 @@ function parseArgs(argv) {
       args.verbose = true;
       continue;
     }
+    if (token === "--h264Encoder" && next && !next.startsWith("--")) {
+      args.h264Encoder = next.trim().toLowerCase();
+      index += 1;
+      continue;
+    }
     if (token === "--case" && next && !next.startsWith("--")) {
       args.selectedCases.push(next);
       index += 1;
@@ -178,6 +186,7 @@ function parseArgs(argv) {
   args.minObservedVideoFps = Math.max(0, Number(args.minObservedVideoFps) || defaults.minObservedVideoFps);
   args.binaryJpegMinObservedVideoFrames = Math.max(1, Number(args.binaryJpegMinObservedVideoFrames) || defaults.binaryJpegMinObservedVideoFrames);
   args.binaryJpegMinObservedVideoFps = Math.max(0, Number(args.binaryJpegMinObservedVideoFps) || defaults.binaryJpegMinObservedVideoFps);
+  args.h264Encoder = String(args.h264Encoder || "").trim().toLowerCase();
   return args;
 }
 
@@ -227,6 +236,7 @@ function runCase(testCase, args, index) {
       String(debugPort),
       "--timeoutMs",
       String(args.timeoutMs),
+      ...(args.h264Encoder && testCase.h264 !== false ? ["--h264Encoder", args.h264Encoder] : []),
       ...testCase.args(args),
     ];
 
@@ -351,6 +361,7 @@ async function main() {
     casesRequested: selectedCases.map((item) => item.id),
     casesCompleted: results.length,
     casesPassed: results.filter((result) => result.ok).length,
+    h264Encoder: args.h264Encoder,
     timeoutMs: args.timeoutMs,
     results: results.map((result) => ({
       id: result.id,

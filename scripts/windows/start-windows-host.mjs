@@ -20,6 +20,7 @@ const defaults = {
   port: Number(process.env.LAN_DUAL_PORT) || 43770,
   password: "",
   screenMode: process.env.LAN_DUAL_WINDOWS_SCREEN_MODE || "",
+  h264Encoder: process.env.LAN_DUAL_WINDOWS_H264_ENCODER || "",
   audioMode: process.env.LAN_DUAL_WINDOWS_AUDIO_MODE || "",
   inputMode: process.env.LAN_DUAL_WINDOWS_INPUT_MODE || "",
   ffmpeg: process.env.LAN_DUAL_FFMPEG || "",
@@ -95,6 +96,7 @@ function parseArgs(argv) {
   args.port = clampInteger(args.port, 1, 65535, defaults.port);
   args.timeoutMs = clampInteger(args.timeoutMs, 1000, 60000, defaults.timeoutMs);
   args.screenMode = normalizeMode(args.screenMode, ["auto", "ffmpeg", "ffmpeg-h264", "h264", "system", "mock", "wgc"], "");
+  args.h264Encoder = String(args.h264Encoder || "").trim().toLowerCase();
   args.audioMode = normalizeMode(args.audioMode, ["mock", "wasapi", "dshow"], "");
   args.inputMode = normalizeMode(args.inputMode, ["auto", "log", "system"], "");
   args.ffmpeg = resolveFfmpegCommand(String(args.ffmpeg || "").trim());
@@ -116,6 +118,7 @@ Options:
   --port <port>           Port. Default: 43770
   --password <value>      Set LAN_DUAL_PASSWORD for this run. The value is not printed.
   --screenMode <mode>     auto | ffmpeg | ffmpeg-h264 | h264 | system | mock | wgc
+  --h264Encoder <name>    Optional FFmpeg H.264 encoder, for example h264_nvenc
   --audioMode <mode>      mock | wasapi | dshow
   --inputMode <mode>      auto | log | system
   --ffmpeg <path>         FFmpeg path. Auto-detects C:\\DevTools\\ffmpeg\\bin\\ffmpeg.exe
@@ -297,6 +300,7 @@ function discoveryScreenSummary(discovery) {
   ];
   if (screen.capturePipeline) parts.push(`pipeline=${screen.capturePipeline}`);
   if (screen.codecString) parts.push(`codecString=${screen.codecString}`);
+  if (screen.h264Encoder) parts.push(`h264Encoder=${screen.h264Encoder}`);
   if (wgc.backendImplemented !== undefined || wgc.supported !== undefined || wgc.active !== undefined) {
     const wgcState = wgc.active
       ? "active"
@@ -559,6 +563,7 @@ function makeLaunchEnv(args) {
   };
   if (args.password) env.LAN_DUAL_PASSWORD = String(args.password);
   if (args.screenMode) env.LAN_DUAL_WINDOWS_SCREEN_MODE = args.screenMode;
+  if (args.h264Encoder) env.LAN_DUAL_WINDOWS_H264_ENCODER = args.h264Encoder;
   if (args.audioMode) env.LAN_DUAL_WINDOWS_AUDIO_MODE = args.audioMode;
   if (args.inputMode) env.LAN_DUAL_WINDOWS_INPUT_MODE = args.inputMode;
   if (args.ffmpeg) env.LAN_DUAL_FFMPEG = args.ffmpeg;
@@ -569,6 +574,9 @@ function printLaunchPlan(args) {
   const lanAddresses = getLanAddresses();
   console.log(`[INFO] Windows host bind: ${args.host}:${args.port}`);
   console.log(`[INFO] Build ID: ${args.buildId}`);
+  if (args.h264Encoder) {
+    console.log(`[INFO] H.264 encoder: ${args.h264Encoder}`);
+  }
   if (lanAddresses.length > 0) {
     for (const entry of lanAddresses) {
       console.log(`[OK] Mac side can try: ${entry.address}:${args.port} (${entry.name})`);

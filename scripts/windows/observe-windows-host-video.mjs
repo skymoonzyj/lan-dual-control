@@ -29,6 +29,7 @@ const defaults = {
   maxFrameAgeMs: 0,
   screenMode: "auto",
   preferredVideoCodec: "",
+  h264Encoder: "",
   inputMode: "log",
   ffmpeg: process.env.LAN_DUAL_FFMPEG || "",
   useDefaultMaxScreenFps: false,
@@ -69,6 +70,7 @@ Options:
   --wgcRepeatLastFrameMode <full|signal>
                                         full resends the JPEG; signal sends a tiny repeat marker
   --preferredVideoCodec <mjpeg|h264>    Preferred codec in session_offer
+  --h264Encoder <name>                  Optional H.264 encoder for temporary ffmpeg-h264 host
   --ffmpeg <path>                       Explicit FFmpeg path for local temporary host
   --useExisting                         Connect to an already running Windows host
   --resourceSample false                Disable local Windows host CPU/memory sampling
@@ -113,6 +115,7 @@ function parseArgs(argv) {
   args.maxFrameAgeMs = Math.max(0, Number(args.maxFrameAgeMs) || 0);
   args.screenMode = String(args.screenMode || defaults.screenMode).trim().toLowerCase();
   args.preferredVideoCodec = String(args.preferredVideoCodec || "").trim().toLowerCase();
+  args.h264Encoder = String(args.h264Encoder || "").trim().toLowerCase();
   args.inputMode = String(args.inputMode || defaults.inputMode).trim().toLowerCase();
   args.ffmpeg = String(args.ffmpeg || "").trim();
   if (!args.ffmpeg && process.platform === "win32" && existsSync(defaultWindowsFfmpeg)) {
@@ -214,6 +217,9 @@ function startLocalWindowsHost(args) {
   };
   if (args.ffmpeg) {
     env.LAN_DUAL_FFMPEG = args.ffmpeg;
+  }
+  if (args.h264Encoder) {
+    env.LAN_DUAL_WINDOWS_H264_ENCODER = args.h264Encoder;
   }
 
   const child = spawn(process.execPath, [windowsHostServer, String(args.port), args.host], {
@@ -493,6 +499,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
       contentAgeMs: Number.isFinite(Number(frame.contentAgeMs)) ? Number(frame.contentAgeMs) : null,
       fallbackReason: normalizeFallbackReason(frame.streamFallbackReason, frame.fallbackReason, context.fallbackReason),
       requestedScreenMode: String(frame.requestedScreenMode || context.requestedScreenMode || "").trim(),
+      h264Encoder: String(frame.h264Encoder || context.h264Encoder || "").trim(),
     });
   }
 
@@ -518,6 +525,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
   const uniqueCodecs = [...new Set(frames.map((frame) => frame.codec).filter(Boolean))];
   const fallbackReasons = [...new Set(frames.map((frame) => frame.fallbackReason).filter(Boolean))];
   const requestedScreenModes = [...new Set(frames.map((frame) => frame.requestedScreenMode).filter(Boolean))];
+  const h264Encoders = [...new Set(frames.map((frame) => frame.h264Encoder).filter(Boolean))];
   const repeatLastFrameModes = [...new Set(frames.map((frame) => frame.repeatLastFrameMode).filter(Boolean))];
   const uniqueQualities = [...new Set(
     frames
@@ -566,6 +574,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
     codecs: uniqueCodecs,
     fallbackReasons,
     requestedScreenModes,
+    h264Encoders,
     repeatLastFrameModes,
   };
 }
@@ -658,6 +667,7 @@ async function main() {
     const summary = await observeFrames(client, args, startResourceSamplingOnce, {
       fallbackReason: screen.lastCaptureError || "",
       requestedScreenMode: screen.requestedMode || "",
+      h264Encoder: screen.h264Encoder || "",
     });
     summary.sessionFps = Number(answer.fps) || 0;
     const resource = resourceSampler ? await resourceSampler.stop() : {
@@ -680,6 +690,7 @@ async function main() {
         useDefaultMaxScreenFps: args.useDefaultMaxScreenFps,
         durationMs: args.durationMs,
         screenMode: args.screenMode,
+        h264Encoder: args.h264Encoder,
         resourceSample: args.resourceSample,
         resourceSampleIntervalMs: args.resourceSampleIntervalMs,
         resourceSampleTree: args.resourceSampleTree,
@@ -690,6 +701,7 @@ async function main() {
         mode: screen.mode || "",
         requestedMode: screen.requestedMode || "",
         capturePipeline: screen.capturePipeline || "",
+        h264Encoder: screen.h264Encoder || "",
         lastCaptureError: screen.lastCaptureError || "",
         wgc: screen.wgc || null,
       },
@@ -703,6 +715,7 @@ async function main() {
         qualityPreset: answer.qualityPreset || "",
         jpegQuality: answer.jpegQuality || 0,
         capturePipeline: answer.capturePipeline || "",
+        h264Encoder: answer.h264Encoder || "",
         hostMode: answer.hostMode || "",
         requestedScreenMode: answer.requestedScreenMode || "",
         wgcFallbackReason: answer.wgcFallbackReason || "",
@@ -734,6 +747,9 @@ async function main() {
       }
       print("INFO", `Requested bandwidth: ${args.bandwidthKbps} Kbps / session: ${answer.maxBandwidthKbps || 0} Kbps / JPEG quality: ${answer.jpegQuality || "unknown"}`, args);
       print("INFO", `Pipeline: ${summary.pipelines.join(", ") || "unknown"} / codec: ${summary.codecs.join(", ") || "unknown"} / avg bytes: ${summary.avgPayloadBytes}`, args);
+      if (summary.h264Encoders.length > 0) {
+        print("INFO", `H.264 encoder: ${summary.h264Encoders.join(", ")}`, args);
+      }
       if (summary.requestedScreenModes.length > 0 && !summary.requestedScreenModes.includes(screen.mode || "")) {
         print("INFO", `Requested screen mode: ${summary.requestedScreenModes.join(", ")} / active: ${screen.mode || "unknown"}`, args);
       }

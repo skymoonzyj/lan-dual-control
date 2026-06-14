@@ -86,6 +86,110 @@ function normalizeH264CodecString(value) {
   return /^avc1\.[0-9a-f]{6}$/i.test(codec) ? codec : "avc1.42E01F";
 }
 
+function normalizeH264Encoder(value) {
+  const encoder = String(value ?? "").trim().toLowerCase();
+  const aliases = new Map([
+    ["", "libx264"],
+    ["x264", "libx264"],
+    ["software", "libx264"],
+    ["soft", "libx264"],
+    ["nvenc", "h264_nvenc"],
+    ["nvidia", "h264_nvenc"],
+    ["qsv", "h264_qsv"],
+    ["quick-sync", "h264_qsv"],
+    ["quicksync", "h264_qsv"],
+    ["amf", "h264_amf"],
+    ["amd", "h264_amf"],
+    ["mf", "h264_mf"],
+    ["mediafoundation", "h264_mf"],
+    ["media-foundation", "h264_mf"],
+    ["d3d12", "h264_d3d12va"],
+    ["d3d12va", "h264_d3d12va"],
+  ]);
+  const normalized = aliases.get(encoder) || encoder;
+  return /^[a-z0-9_]+$/.test(normalized) ? normalized : "libx264";
+}
+
+function h264EncoderArgs({ encoder, bandwidthKbps, fps }) {
+  const gop = String(Math.max(1, fps));
+  const common = [
+    "-an",
+    "-c:v",
+    encoder,
+    "-pix_fmt",
+    "yuv420p",
+    "-b:v",
+    `${bandwidthKbps}k`,
+    "-maxrate",
+    `${bandwidthKbps}k`,
+    "-bufsize",
+    `${Math.max(1000, Math.round(bandwidthKbps / 2))}k`,
+    "-g",
+    gop,
+    "-bf",
+    "0",
+  ];
+
+  if (encoder === "libx264") {
+    return [
+      ...common,
+      "-preset",
+      "ultrafast",
+      "-tune",
+      "zerolatency",
+      "-threads",
+      "1",
+      "-profile:v",
+      "baseline",
+      "-level:v",
+      "4.2",
+      "-keyint_min",
+      gop,
+      "-sc_threshold",
+      "0",
+      "-x264-params",
+      "repeat-headers=1:aud=1:sliced-threads=0:slices=1",
+      "-f",
+      "h264",
+      "-",
+    ];
+  }
+
+  if (encoder === "h264_nvenc") {
+    return [
+      ...common,
+      "-preset",
+      "p1",
+      "-tune",
+      "ull",
+      "-rc",
+      "cbr",
+      "-zerolatency",
+      "1",
+      "-forced-idr",
+      "1",
+      "-profile:v",
+      "main",
+      "-level:v",
+      "4.2",
+      "-f",
+      "h264",
+      "-",
+    ];
+  }
+
+  return [
+    ...common,
+    "-profile:v",
+    "main",
+    "-level:v",
+    "4.2",
+    "-f",
+    "h264",
+    "-",
+  ];
+}
+
 function wantsH264Video(settings = {}) {
   const codec = String(settings.preferredVideoCodec ?? settings.videoCodec ?? "").trim().toLowerCase();
   if (codec) {
@@ -545,6 +649,7 @@ export class WindowsScreenCaptureCoordinator {
     this.ffmpegCommand = process.env.LAN_DUAL_FFMPEG || "ffmpeg";
     this.ffmpegAvailable = hasFfmpegGdigrabSync({ ffmpegCommand: this.ffmpegCommand, logger });
     this.h264CodecString = normalizeH264CodecString(process.env.LAN_DUAL_WINDOWS_H264_CODEC_STRING);
+    this.h264Encoder = normalizeH264Encoder(process.env.LAN_DUAL_WINDOWS_H264_ENCODER);
     this.wgcHelperCommand = String(process.env.LAN_DUAL_WINDOWS_WGC_HELPER || "").trim();
     this.wgcHelperArgs = splitCommandLineArgs(process.env.LAN_DUAL_WINDOWS_WGC_HELPER_ARGS);
     this.wgcHelperConfigured = Boolean(this.wgcHelperCommand);
@@ -668,6 +773,7 @@ export class WindowsScreenCaptureCoordinator {
       videoCodec: this.getVideoCodec(),
       videoEncoding: this.getVideoEncoding(),
       codecString: usingFfmpegH264Capture ? this.h264CodecString : "",
+      h264Encoder: usingFfmpegH264Capture ? this.h264Encoder : "",
       plannedBackend: "Windows Graphics Capture",
       wgc: this.wgcPreflight
         ? {
@@ -850,6 +956,7 @@ export class WindowsScreenCaptureCoordinator {
       videoCodec: this.getVideoCodec(effectiveMode),
       videoEncoding: this.getVideoEncoding(effectiveMode),
       codecString: effectiveMode === ffmpegH264Mode ? this.h264CodecString : "",
+      h264Encoder: effectiveMode === ffmpegH264Mode ? this.h264Encoder : "",
       displays: this.getDisplays(),
       activeDisplayId: activeDisplay.id,
       displayName: activeDisplay.name,
@@ -894,6 +1001,7 @@ export class WindowsScreenCaptureCoordinator {
       videoCodec: this.getVideoCodec(effectiveMode),
       videoEncoding: this.getVideoEncoding(effectiveMode),
       codecString: effectiveMode === ffmpegH264Mode ? this.h264CodecString : "",
+      h264Encoder: effectiveMode === ffmpegH264Mode ? this.h264Encoder : "",
       hostMode: this.makeHostMode(effectiveMode),
       capturePipeline: this.getCapturePipeline(effectiveMode),
       requestedScreenMode: this.requestedMode,
@@ -1322,6 +1430,7 @@ export class WindowsScreenCaptureCoordinator {
       jpegQuality.toFixed(3),
       bandwidthKbps,
       this.h264CodecString,
+      this.h264Encoder,
     ].join(":");
   }
 
@@ -1370,42 +1479,7 @@ export class WindowsScreenCaptureCoordinator {
       `scale=${width}:${height}:flags=fast_bilinear`,
     ];
     const outputArgs = streamKind === "h264"
-      ? [
-          "-an",
-          "-c:v",
-          "libx264",
-          "-preset",
-          "ultrafast",
-          "-tune",
-          "zerolatency",
-          "-threads",
-          "1",
-          "-profile:v",
-          "baseline",
-          "-level:v",
-          "4.2",
-          "-pix_fmt",
-          "yuv420p",
-          "-b:v",
-          `${bandwidthKbps}k`,
-          "-maxrate",
-          `${bandwidthKbps}k`,
-          "-bufsize",
-          `${Math.max(1000, Math.round(bandwidthKbps / 2))}k`,
-          "-g",
-          String(Math.max(1, fps)),
-          "-keyint_min",
-          String(Math.max(1, fps)),
-          "-sc_threshold",
-          "0",
-          "-bf",
-          "0",
-          "-x264-params",
-          "repeat-headers=1:aud=1:sliced-threads=0:slices=1",
-          "-f",
-          "h264",
-          "-",
-        ]
+      ? h264EncoderArgs({ encoder: this.h264Encoder, bandwidthKbps, fps })
       : [
           "-q:v",
           String(qscaleFromJpegQuality(jpegQuality)),
@@ -1725,6 +1799,7 @@ export class WindowsScreenCaptureCoordinator {
       frameIntervalMs: session.frameIntervalMs ?? Math.round(1000 / Math.max(1, session.fps || 1)),
       codec: "h264",
       codecString: this.h264CodecString,
+      h264Encoder: this.h264Encoder,
       encoding: "annexb-base64",
       keyFrame: Boolean(frame.keyFrame),
       source: "screen",

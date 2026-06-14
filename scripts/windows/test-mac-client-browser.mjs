@@ -17,6 +17,7 @@ const defaults = {
   timeoutMs: 30000,
   inputMode: "log",
   screenMode: "auto",
+  h264Encoder: "",
   requireRealVideo: true,
   requireSystemClipboard: process.platform === "win32",
   testFileClipboard: true,
@@ -76,6 +77,7 @@ Options:
   --useExistingHost                Do not start a temporary Windows host.
   --mockVideo                      Start temporary host with mock video and disable real-video requirement.
   --screenMode <mode>              Temporary host screen mode. Default: ${defaults.screenMode}
+  --h264Encoder <name>             Optional temporary host H.264 encoder, for example h264_nvenc
   --inputMode <mode>               Temporary host input mode. Default: ${defaults.inputMode}
   --noRequireRealVideo             Allow mock/svg video frames.
   --allowClipboardFallback         Allow memory/temp clipboard fallback on non-Windows systems.
@@ -238,6 +240,7 @@ function parseArgs(argv) {
   args.clientPort = Number(args.clientPort);
   args.debugPort = Number(args.debugPort);
   args.timeoutMs = Number(args.timeoutMs);
+  args.h264Encoder = String(args.h264Encoder || "").trim().toLowerCase();
   args.maxInitialVideoMs = Number(args.maxInitialVideoMs);
   args.maxReconnectRestoreMs = Number(args.maxReconnectRestoreMs);
   args.maxAudioFrameMs = Number(args.maxAudioFrameMs);
@@ -622,6 +625,7 @@ async function startWindowsHost(args, repoRoot) {
     LAN_DUAL_WINDOWS_INPUT_MODE: args.inputMode,
     LAN_DUAL_WINDOWS_SCREEN_MODE: (args.expectRepeatSignalVideo || args.expectBinaryVideo) ? "wgc" : args.mockVideo ? "mock" : args.screenMode,
     LAN_DUAL_BUILD_ID: temporaryWindowsHostBuildId,
+    ...(args.h264Encoder ? { LAN_DUAL_WINDOWS_H264_ENCODER: args.h264Encoder } : {}),
     ...(args.audioMode ? { LAN_DUAL_WINDOWS_AUDIO_MODE: args.audioMode } : {}),
     ...((args.expectRepeatSignalVideo || args.expectBinaryVideo) && args.repeatSignalWgcHelperPath
       ? {

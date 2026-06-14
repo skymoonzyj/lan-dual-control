@@ -1,6 +1,6 @@
 # 当前文件占用
 
-最后更新：2026-06-14
+最后更新：2026-06-15
 
 用途：避免 Windows Codex 和 Mac Codex 同时重写同一片代码。占用不是永久所有权，只表示“我正在处理，另一端先别碰”。
 
@@ -15,6 +15,7 @@
 
 | 端 | 文件或目录 | 原因 | 开始时间 | 状态 |
 | --- | --- | --- | --- | --- |
+| 无 | 无 | 当前没有登记中的文件占用。 | - | - |
 
 ## 高冲突区域
 
@@ -31,6 +32,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-host/src/windows-screen-capture.mjs`, `apps/windows-host/src/windows-host-service.mjs`, `scripts/windows/observe-windows-host-video.mjs`, `scripts/windows/test-windows-h264-mode.mjs`, `scripts/windows/start-windows-host.mjs`, `scripts/windows/start-windows-host.ps1`, `scripts/windows/test-mac-client-browser.mjs`, `scripts/windows/test-mac-client-video-transports.mjs`, `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 01:00 | Windows `ffmpeg-h264` 过渡路径新增可选 H.264 encoder：默认 `libx264`，可用 `h264_nvenc` 等；实际 encoder 写入 discovery/session/frame/观察诊断；NVENC H.264 短流、Mac client 视频传输矩阵和默认 libx264 回归通过。 |
 | Windows Codex | `scripts/windows/check-windows-video-encoder-support.mjs`, `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 00:20 | 新增 Windows 视频编码能力体检：汇总 FFmpeg H.264 软件/硬件编码器、WGC 预检和 WebCodecs H.264 解码支持；本机强校验通过，发现 NVENC/QSV/AMF/MF/D3D12VA/libx264，推荐下一步 WGC + NVENC H.264 原型。 |
 | Windows Codex | `scripts/windows/test-mac-client-video-transports.mjs`, `apps/windows-host/README.md`, `apps/mac-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-14 23:55 | 新增 Mac client 视频传输矩阵回归脚本：顺序覆盖 `binary-h264`、H.264 JSON/base64、H.264 unsupported fallback 和 `binary-jpeg`，自动分配独立端口；完整矩阵 4/4 通过，全量 Windows help 48 条通过。 |
 | Windows Codex | `apps/windows-host/src/windows-host-service.mjs`, `apps/mac-client/app.js`, `scripts/windows/test-mac-client-browser.mjs`, `docs/03-architecture-and-protocol.md`, `apps/windows-host/README.md`, `apps/mac-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-14 23:20 | Windows host / Mac client 新增可选 `binary-h264` WebSocket 二进制视频帧：H.264 JSON 头保留在 `LDCV1` binary frame，Annex B payload 改走原始字节；`--expectBinaryH264Video`、`--disableBinaryVideo` 兼容回归和 `binary-jpeg` 回归通过。 |

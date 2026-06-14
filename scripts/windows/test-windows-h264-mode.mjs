@@ -14,6 +14,7 @@ const defaults = {
   width: 1280,
   height: 720,
   fps: 30,
+  h264Encoder: "",
   attempts: 4,
   retryDelayMs: 1500,
   captureTimeoutMs: 10000,
@@ -31,6 +32,7 @@ Options:
   --width <px>           Requested width. Default: ${defaults.width}
   --height <px>          Requested height. Default: ${defaults.height}
   --fps <n>              Requested FPS. Default: ${defaults.fps}
+  --h264Encoder <name>   Optional FFmpeg H.264 encoder, for example h264_nvenc
   --attempts <n>         Retry attempts for intermittent gdigrab startup. Default: ${defaults.attempts}
   --retryDelayMs <ms>    Delay between attempts. Default: ${defaults.retryDelayMs}
   --captureTimeoutMs <ms> Host FFmpeg first-frame timeout. Default: ${defaults.captureTimeoutMs}
@@ -53,6 +55,11 @@ function parseArgs(argv) {
       continue;
     }
     const key = token.slice(2);
+    if (key === "h264Encoder" && next && !next.startsWith("--")) {
+      args.h264Encoder = next.trim();
+      index += 1;
+      continue;
+    }
     if (Object.prototype.hasOwnProperty.call(args, key) && next && !next.startsWith("--")) {
       args[key] = Number(next) || args[key];
       index += 1;
@@ -68,6 +75,7 @@ function parseArgs(argv) {
   args.width = Math.max(320, Number(args.width) || defaults.width);
   args.height = Math.max(180, Number(args.height) || defaults.height);
   args.fps = Math.max(1, Number(args.fps) || defaults.fps);
+  args.h264Encoder = String(args.h264Encoder || "").trim().toLowerCase();
   args.attempts = Math.max(1, Number(args.attempts) || defaults.attempts);
   args.retryDelayMs = Math.max(0, Number(args.retryDelayMs) || defaults.retryDelayMs);
   args.captureTimeoutMs = Math.max(1000, Number(args.captureTimeoutMs) || defaults.captureTimeoutMs);
@@ -82,6 +90,7 @@ function runObserver(args) {
       "ffmpeg-h264",
       "--preferredVideoCodec",
       "h264",
+      ...(args.h264Encoder ? ["--h264Encoder", args.h264Encoder] : []),
       "--width",
       String(args.width),
       "--height",
@@ -161,6 +170,7 @@ function validateReport(report, args) {
   const codecs = Array.isArray(observation.codecs) ? observation.codecs : [];
   const pipelines = Array.isArray(observation.pipelines) ? observation.pipelines : [];
   const requestedModes = Array.isArray(observation.requestedScreenModes) ? observation.requestedScreenModes : [];
+  const h264Encoders = Array.isArray(observation.h264Encoders) ? observation.h264Encoders : [];
 
   assert(report.ok === true, "observer report was not ok");
   assert(screen.mode === "ffmpeg-h264", `expected discovery mode ffmpeg-h264, got ${screen.mode || "missing"}`);
@@ -170,6 +180,11 @@ function validateReport(report, args) {
   assert(codecs.includes("h264"), `expected observed h264 codec, got ${codecs.join(", ") || "none"}`);
   assert(pipelines.includes("windows-ffmpeg-gdigrab-h264"), `expected H.264 pipeline in frames, got ${pipelines.join(", ") || "none"}`);
   assert(requestedModes.includes("ffmpeg-h264"), `expected requestedScreenMode ffmpeg-h264, got ${requestedModes.join(", ") || "none"}`);
+  if (args.h264Encoder) {
+    assert(screen.h264Encoder === args.h264Encoder, `expected discovery h264Encoder ${args.h264Encoder}, got ${screen.h264Encoder || "missing"}`);
+    assert(session.h264Encoder === args.h264Encoder, `expected session h264Encoder ${args.h264Encoder}, got ${session.h264Encoder || "missing"}`);
+    assert(h264Encoders.includes(args.h264Encoder), `expected observed h264Encoder ${args.h264Encoder}, got ${h264Encoders.join(", ") || "none"}`);
+  }
   assert(Number(observation.frameCount) >= args.minFrames, `expected at least ${args.minFrames} frame(s), got ${observation.frameCount || 0}`);
   assert(Number(observation.fps) >= args.minFps, `expected fps >= ${args.minFps}, got ${observation.fps || 0}`);
   assert(observation.timestampMonotonic === true, "expected monotonic video_frame.timestamp values");

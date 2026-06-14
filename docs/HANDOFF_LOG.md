@@ -19,6 +19,54 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 00:58
+开发端：Windows Codex
+本轮目标：把现有 Windows `ffmpeg-h264` 过渡路径从固定 `libx264` 扩展为可选 FFmpeg H.264 encoder，并先验证 `h264_nvenc`，为下一步 WGC 采集源接 NVENC 做准备。
+完成内容：
+- Windows host 新增 `LAN_DUAL_WINDOWS_H264_ENCODER`，默认仍为 `libx264`，可显式选择 `h264_nvenc`、`h264_qsv`、`h264_amf`、`h264_mf`、`h264_d3d12va` 等 FFmpeg encoder。
+- `ffmpeg-h264` 的 FFmpeg 输出参数按 encoder 分流：`libx264` 保持原有 ultrafast/zerolatency/baseline/repeat headers；`h264_nvenc` 使用低延迟 CBR 参数；其他硬编入口走保守通用参数。
+- `/discovery.capabilities.screen`、`session_answer`、`display_settings_ack` 和 H.264 `video_frame` 都会带 `h264Encoder`，方便确认实际运行的编码器。
+- Windows 启动助手、PowerShell 包装、视频观察脚本、H.264 自检、Mac client 页面自检和视频传输矩阵都支持 `--h264Encoder` / `-H264Encoder`。
+- Windows host README、CURRENT_STATUS、NEXT_ACTIONS 和任务板已同步：明确本轮是 gdigrab H.264 过渡路径的 encoder 选择与 NVENC 验证，真正低延迟路线仍是 WGC 采集源接 NVENC。
+修改文件：
+- `apps/windows-host/src/windows-screen-capture.mjs`
+- `apps/windows-host/src/windows-host-service.mjs`
+- `scripts/windows/observe-windows-host-video.mjs`
+- `scripts/windows/test-windows-h264-mode.mjs`
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `scripts/windows/test-mac-client-video-transports.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check` 相关 Windows host 与脚本文件
+- `npm.cmd --prefix apps/windows-host run check`
+- `node scripts/windows/start-windows-host.mjs --dryRun --screenMode ffmpeg-h264 --h264Encoder h264_nvenc`
+- `node scripts/windows/test-windows-h264-mode.mjs --h264Encoder h264_nvenc --durationMs 2000 --minFrames 10 --minFps 5 --timeoutMs 60000 --captureTimeoutMs 12000`
+- `node scripts/windows/test-mac-client-video-transports.mjs --h264Encoder h264_nvenc --timeoutMs 60000`
+- `node scripts/windows/test-windows-script-help.mjs`
+- `git diff --check`
+- 冲突标记搜索
+验证结果：
+- NVENC H.264 短流通过：54 帧 / 26.99 FPS / 最大间隔 76ms，且 discovery/session/frame 诊断均能断言 `h264Encoder=h264_nvenc`。
+- NVENC 视频传输矩阵 4/4 通过：`binary-h264` 页面观察 51 帧 / 907ms / 56.2 FPS，H.264 JSON/base64 54 帧 / 914ms / 59.1 FPS，H.264 fallback 53 帧 / 910ms / 58.2 FPS，`binary-jpeg` 11 帧 / 1208ms / 9.1 FPS。
+- 默认 `libx264` 回归也已通过，未发现 H.264 基线路径退化。
+遗留问题：
+- 这轮仍使用 FFmpeg `gdigrab` 作为采集源，只验证 encoder 选择和 Mac client 接收链路；还不是 WGC + NVENC 真正低延迟原型。
+- `scripts/codex-link-server.mjs` 当前有本地联络板提醒功能改动，属于另一条本地 WIP，本轮不会提交。
+下一步建议：
+- 下一轮 Windows 端优先把 WGC helper 的真实帧源接到 H.264/NVENC 输出，继续用 `test-mac-client-video-transports.mjs --h264Encoder h264_nvenc` 守住四条接收/回退路径。
+- 做 WGC+NVENC 前后对照 `observe-windows-host-video --resourceSampleTree true --json`，记录帧率、最大间隔、帧新鲜度、带宽和资源占用。
+是否改了协议：否；只向现有 discovery/session/frame 诊断增加向后兼容的 `h264Encoder` 字段。
+是否需要另一端配合：暂不需要；真机 Mac client 连接 Windows host 做观感/延迟/带宽对照时需要 Mac 端配合。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 00:15
 开发端：Windows Codex
 本轮目标：把 Windows 端 H.264/硬编路线的前置判断做成一键只读体检，避免后续 WGC 硬编原型靠猜。
