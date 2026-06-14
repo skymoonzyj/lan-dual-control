@@ -19,6 +19,48 @@
 
 ## 2026-06-14 Windows Codex
 
+日期：2026-06-14 20:55
+开发端：Windows Codex
+本轮目标：给 Windows WGC helper 管线增加可选 repeat-last-frame pacing 诊断模式，并量化它对帧率/间隔/带宽的影响。
+完成内容：
+- `apps/windows-host/src/windows-screen-capture.mjs` 新增 `LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME=1`：默认关闭；开启后，已有上一帧且一个调度周期内没有新 WGC helper 帧时复用上一张 JPEG。
+- WGC `video_frame` 新增诊断字段 `repeatedFrame`、`sourceTimestamp`、`contentAgeMs`；`timestamp` 统一为发送时刻，避免 repeat/fresh 混合时 timestamp 单调性误判。
+- `/discovery.capabilities.screen.wgc.repeatLastFrame` 会显示当前 repeat 模式是否开启。
+- `observe-windows-host-video.mjs` 新增 `--wgcRepeatLastFrame true`，并统计 `freshFrames`、`repeatedFrames`、`uniqueHelperFrameCount`、`avg/maxContentAgeMs`。
+- `benchmark-windows-wgc-settings.mjs` 新增 `--repeatLastFrame`，报告 repeat 帧数和内容年龄。
+- Windows host README、CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已同步结论。
+修改文件：
+- `apps/windows-host/src/windows-screen-capture.mjs`
+- `scripts/windows/observe-windows-host-video.mjs`
+- `scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-host/src/windows-screen-capture.mjs`
+- `node --check scripts/windows/observe-windows-host-video.mjs`
+- `node --check scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script observe-windows-host-video.mjs --script benchmark-windows-wgc-settings.mjs`
+- `npm.cmd run check`（`apps/windows-host`）
+- `node scripts/windows/benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1600 --timeoutMs 45000 --json`
+- `node scripts/windows/benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1600 --timeoutMs 45000 --repeatLastFrame --json`
+- `node scripts/windows/benchmark-windows-wgc-settings.mjs --durationMs 1800 --timeoutMs 45000 --repeatLastFrame`
+验证结果：
+- 不 repeat 的 60Hz/20M 对照：17 帧/1.63 秒，约 `10.45 FPS`，重复帧 `0`，最大间隔 `85 ms`。
+- repeat 的 60Hz/20M 对照：50 帧/1.60 秒，约 `31.16 FPS`，新鲜帧 `17`，重复帧 `33`，最大间隔 `32 ms`，内容年龄最大 `80 ms`。
+- repeat 默认三档：30Hz/10M 为 56 帧、约 `30.45 FPS`、重复 40；60Hz/20M 为 62 帧、约 `33.92 FPS`、重复 42；120Hz/40M sharp 为 68 帧、约 `37.78 FPS`、重复 46；内容年龄最大约 `80-96 ms`。
+遗留问题：
+- repeat 能改善视觉连续性并降低最大间隔，但仍无法达到 60/120Hz；瓶颈已经转向 JSON/base64 重发 JPEG 的网络/序列化成本和 Node/WebSocket 发送节奏。
+下一步建议：
+- 优先设计 WebSocket 二进制视频帧，或把 Windows WGC 管线升级到 H.264/硬编；如果保留 JPEG，可增加轻量重复帧信令，避免重复发送完整 base64 payload。
+是否改了协议：未改共享必需字段；Windows WGC `video_frame` 增加可选诊断字段。
+是否需要另一端配合：暂不需要；下一步若做 Mac client 真连观感，需要 Mac 端配合连接 Windows host。
+
+## 2026-06-14 Windows Codex
+
 日期：2026-06-14 20:35
 开发端：Windows Codex
 本轮目标：新增 Windows WGC 刷新率/码率基准脚本，并确认高刷新请求在测试链路里不会被 60Hz 上限误挡。

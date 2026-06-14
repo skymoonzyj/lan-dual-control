@@ -32,6 +32,7 @@ const defaults = {
   resourceSampleTree: true,
   resourceSampleIntervalMs: 1000,
   resourceSampleTimeoutMs: 4000,
+  repeatLastFrame: false,
   skipBuild: false,
   json: false,
   verbose: false,
@@ -60,6 +61,7 @@ Options:
   --maxFrameAgeMs <ms>                  Max timestamp receive age. Default: ${defaults.maxFrameAgeMs}
   --resourceSample false                Disable local host resource sampling
   --resourceSampleTree false            Sample only the host process, not helper children
+  --repeatLastFrame                     Enable WGC repeat-last-frame pacing diagnostics
   --json                                Print JSON result
   --verbose                             Print child command stderr/stdout on failure
   --help, -h                            Show this help without starting a host
@@ -113,6 +115,7 @@ function parseArgs(argv) {
   args.resourceSampleTree = booleanArg(args.resourceSampleTree, true);
   args.resourceSampleIntervalMs = Math.max(250, Number(args.resourceSampleIntervalMs) || defaults.resourceSampleIntervalMs);
   args.resourceSampleTimeoutMs = Math.max(1000, Number(args.resourceSampleTimeoutMs) || defaults.resourceSampleTimeoutMs);
+  args.repeatLastFrame = booleanArg(args.repeatLastFrame);
   args.skipBuild = booleanArg(args.skipBuild);
   args.json = booleanArg(args.json);
   args.verbose = booleanArg(args.verbose);
@@ -282,6 +285,8 @@ async function runProfile(args, profile, index) {
     String(args.resourceSampleIntervalMs),
     "--resourceSampleTimeoutMs",
     String(args.resourceSampleTimeoutMs),
+    "--wgcRepeatLastFrame",
+    String(args.repeatLastFrame),
     "--json",
   ];
 
@@ -340,7 +345,11 @@ function compactResult(result) {
     fps: observation.fps || 0,
     maxGapMs: observation.maxGapMs ?? null,
     avgPayloadBytes: observation.avgPayloadBytes || 0,
+    freshFrames: observation.freshFrames || 0,
+    repeatedFrames: observation.repeatedFrames || 0,
+    uniqueHelperFrameCount: observation.uniqueHelperFrameCount || 0,
     maxFrameAgeMs: observation.maxFrameAgeMs ?? null,
+    maxContentAgeMs: observation.maxContentAgeMs ?? null,
     avgCpuPercent: resource.avgCpuPercent ?? null,
     maxCpuPercent: resource.maxCpuPercent ?? null,
     peakWorkingSetMiB: resource.peakWorkingSetMiB ?? null,
@@ -357,7 +366,9 @@ function printProfile(result) {
   console.log(
     `[OK] ${summary.profile.name}: session ${summary.sessionFps}Hz, ` +
     `${summary.frames} frames / ${summary.fps}fps, gap ${summary.maxGapMs}ms, ` +
-    `avg ${summary.avgPayloadBytes} bytes, CPU avg/max ${summary.avgCpuPercent ?? "?"}/${summary.maxCpuPercent ?? "?"}%, ` +
+    `avg ${summary.avgPayloadBytes} bytes, repeated ${summary.repeatedFrames}, ` +
+    `content age max ${summary.maxContentAgeMs ?? "?"}ms, ` +
+    `CPU avg/max ${summary.avgCpuPercent ?? "?"}/${summary.maxCpuPercent ?? "?"}%, ` +
     `WS peak ${summary.peakWorkingSetMiB ?? "?"} MiB`,
   );
 }
@@ -396,6 +407,7 @@ async function main() {
       durationMs: args.durationMs,
       resourceSample: args.resourceSample,
       resourceSampleTree: args.resourceSampleTree,
+      repeatLastFrame: args.repeatLastFrame,
     },
     profiles: results.map(compactResult),
     results,

@@ -524,6 +524,7 @@ export class WindowsScreenCaptureCoordinator {
     this.wgcHelperConfigured = Boolean(this.wgcHelperCommand);
     this.wgcHelperAvailable = commandExistsOrIsPathCommand(this.wgcHelperCommand);
     this.wgcHelperAllowUnsupported = truthyEnv(process.env.LAN_DUAL_WINDOWS_WGC_ALLOW_UNSUPPORTED);
+    this.wgcRepeatLastFrame = truthyEnv(process.env.LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME);
     this.wgcPreflight = this.requestedMode === wgcMode ? checkWgcSupportSync(logger) : null;
     this.wgcFallbackReason = "";
     this.mode = this.resolveMode();
@@ -653,6 +654,7 @@ export class WindowsScreenCaptureCoordinator {
             helperArgs: this.wgcHelperArgs,
             helperProtocol: "json-lines-v1",
             helperInfo: this.wgcHelperInfo,
+            repeatLastFrame: this.wgcRepeatLastFrame,
             preflightBypassed: usingWgcHelperCapture && !this.wgcPreflight.supported && this.wgcHelperAllowUnsupported,
             fallbackReason: this.wgcFallbackReason,
             osBuild: this.wgcPreflight.osBuild,
@@ -672,6 +674,7 @@ export class WindowsScreenCaptureCoordinator {
             helperArgs: this.wgcHelperArgs,
             helperProtocol: "json-lines-v1",
             helperInfo: this.wgcHelperInfo,
+            repeatLastFrame: this.wgcRepeatLastFrame,
             preflightBypassed: false,
             fallbackReason: "",
             blockers: [],
@@ -961,6 +964,7 @@ export class WindowsScreenCaptureCoordinator {
       fps,
       jpegQuality.toFixed(3),
       bandwidthKbps,
+      this.wgcRepeatLastFrame ? "repeat" : "fresh",
     ].join(":");
   }
 
@@ -1180,18 +1184,40 @@ export class WindowsScreenCaptureCoordinator {
     if (!this.wgcHelperProcess) {
       this.startWgcHelperCapture(session);
     }
-    await this.waitForWgcHelperFrame(this.lastServedWgcHelperFrameId, Math.max(1000, this.captureTimeoutMs));
+    const frameIntervalMs = session.frameIntervalMs ?? Math.round(1000 / (session.fps || 1));
+    const waitTimeoutMs = this.wgcRepeatLastFrame && this.wgcHelperFrame
+      ? 1
+      : Math.max(1000, this.captureTimeoutMs);
+    let repeatedFrame = false;
+    try {
+      await this.waitForWgcHelperFrame(this.lastServedWgcHelperFrameId, waitTimeoutMs);
+    } catch (error) {
+      if (!this.wgcRepeatLastFrame || !this.wgcHelperFrame) {
+        throw error;
+      }
+      repeatedFrame = true;
+    }
     const activeDisplay = this.pickDisplay(session.activeDisplayId);
     const payload = this.wgcHelperFrame || {};
     const sourceFrameId = this.wgcHelperFrameId;
     const previousServedFrameId = this.lastServedWgcHelperFrameId;
-    this.lastServedWgcHelperFrameId = sourceFrameId;
+    if (!repeatedFrame) {
+      this.lastServedWgcHelperFrameId = sourceFrameId;
+    }
     const now = new Date();
+    const sourceTimestamp = String(payload.timestamp || "").trim();
+    const sourceTimestampMs = Date.parse(sourceTimestamp);
+    const contentAgeMs = Number.isFinite(sourceTimestampMs)
+      ? Math.max(0, now.getTime() - sourceTimestampMs)
+      : null;
 
     return {
       type: "video_frame",
       frameId,
-      timestamp: payload.timestamp || now.toISOString(),
+      timestamp: now.toISOString(),
+      sourceTimestamp: sourceTimestamp || "",
+      contentAgeMs,
+      repeatedFrame,
       width: Number(payload.width) || clampNumber(session.width, 320, 3840, activeDisplay.width || 1920),
       height: Number(payload.height) || clampNumber(session.height, 180, 2160, activeDisplay.height || 1080),
       sourceWidth: Number(payload.sourceWidth) || activeDisplay.width,
@@ -1202,7 +1228,7 @@ export class WindowsScreenCaptureCoordinator {
       maxBandwidthKbps: session.maxBandwidthKbps,
       qualityPreset: session.qualityPreset,
       jpegQuality: this.jpegQualityForSession(session),
-      frameIntervalMs: session.frameIntervalMs ?? Math.round(1000 / (session.fps || 1)),
+      frameIntervalMs,
       codec: "jpeg",
       encoding: "data-url",
       keyFrame: true,

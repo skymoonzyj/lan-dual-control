@@ -43,6 +43,7 @@ const defaults = {
   resourceSampleIntervalMs: 1000,
   resourceSampleTree: false,
   resourceSampleTimeoutMs: 3000,
+  wgcRepeatLastFrame: false,
 };
 
 function printUsage() {
@@ -63,6 +64,7 @@ Options:
   --requireMonotonicTimestamp           Fail if video_frame.timestamp goes backwards
   --requireRealVideo false              Allow mock-svg frames for local smoke checks
   --screenMode <auto|ffmpeg|system|mock|wgc>
+  --wgcRepeatLastFrame true             Repeat the last WGC helper frame when no fresh frame arrives
   --preferredVideoCodec <mjpeg|h264>    Preferred codec in session_offer
   --ffmpeg <path>                       Explicit FFmpeg path for local temporary host
   --useExisting                         Connect to an already running Windows host
@@ -125,6 +127,7 @@ function parseArgs(argv) {
   args.resourceSampleIntervalMs = Math.max(250, Number(args.resourceSampleIntervalMs) || defaults.resourceSampleIntervalMs);
   args.resourceSampleTree = booleanArg(args.resourceSampleTree);
   args.resourceSampleTimeoutMs = Math.max(1000, Number(args.resourceSampleTimeoutMs) || defaults.resourceSampleTimeoutMs);
+  args.wgcRepeatLastFrame = booleanArg(args.wgcRepeatLastFrame);
   return args;
 }
 
@@ -191,6 +194,7 @@ function startLocalWindowsHost(args) {
     LAN_DUAL_PASSWORD: args.password,
     LAN_DUAL_WINDOWS_SCREEN_MODE: args.screenMode,
     LAN_DUAL_WINDOWS_INPUT_MODE: args.inputMode,
+    LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME: args.wgcRepeatLastFrame ? "1" : "0",
     ...(args.useDefaultMaxScreenFps
       ? {}
       : { LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: String(maxScreenFps) }),
@@ -462,12 +466,15 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
       pipeline: frame.capturePipeline || "",
       source: frame.source || "",
       droppedFrames: Number(frame.droppedFrames) || 0,
+      repeatedFrame: frame.repeatedFrame === true,
       bytes: estimateFrameBytes(frame),
       width: Number(frame.width) || 0,
       height: Number(frame.height) || 0,
       maxBandwidthKbps: Number(frame.maxBandwidthKbps) || 0,
       qualityPreset: frame.qualityPreset || "",
       jpegQuality: Number(frame.jpegQuality) || 0,
+      helperFrameId: Number(frame.helperFrameId) || 0,
+      contentAgeMs: Number.isFinite(Number(frame.contentAgeMs)) ? Number(frame.contentAgeMs) : null,
       fallbackReason: normalizeFallbackReason(frame.streamFallbackReason, frame.fallbackReason, context.fallbackReason),
       requestedScreenMode: String(frame.requestedScreenMode || context.requestedScreenMode || "").trim(),
     });
@@ -477,9 +484,17 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
   const fps = frames.length > 1 ? (frames.length * 1000) / elapsedMs : 0;
   const bytesTotal = frames.reduce((sum, frame) => sum + frame.bytes, 0);
   const droppedFrames = frames.reduce((sum, frame) => sum + frame.droppedFrames, 0);
+  const repeatedFrames = frames.filter((frame) => frame.repeatedFrame).length;
+  const freshFrames = frames.length - repeatedFrames;
   const frameAges = frames
     .map((frame) => frame.frameAgeMs)
     .filter((age) => Number.isFinite(age));
+  const contentAges = frames
+    .map((frame) => frame.contentAgeMs)
+    .filter((age) => Number.isFinite(age));
+  const helperFrameIds = frames
+    .map((frame) => frame.helperFrameId)
+    .filter((id) => id > 0);
   const firstFrame = frames[0] || {};
   const lastFrame = frames.at(-1) || {};
   const uniquePipelines = [...new Set(frames.map((frame) => frame.pipeline).filter(Boolean))];
@@ -505,12 +520,19 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
     maxGapMs: Math.round(maxGapMs),
     avgPayloadBytes: frames.length ? Math.round(bytesTotal / frames.length) : 0,
     droppedFrames,
+    repeatedFrames,
+    freshFrames,
+    uniqueHelperFrameCount: new Set(helperFrameIds).size,
     timestampFrameCount: frameAges.length,
     minFrameAgeMs: frameAges.length ? Math.round(Math.min(...frameAges)) : null,
     avgFrameAgeMs: frameAges.length
       ? Math.round(frameAges.reduce((sum, age) => sum + age, 0) / frameAges.length)
       : null,
     maxFrameAgeMs: frameAges.length ? Math.round(Math.max(...frameAges)) : null,
+    avgContentAgeMs: contentAges.length
+      ? Math.round(contentAges.reduce((sum, age) => sum + age, 0) / contentAges.length)
+      : null,
+    maxContentAgeMs: contentAges.length ? Math.round(Math.max(...contentAges)) : null,
     timestampMonotonic: timestampMonotonicViolations === 0,
     timestampMonotonicViolations,
     firstFrameId: firstFrame.frameId || 0,
@@ -641,6 +663,7 @@ async function main() {
         resourceSample: args.resourceSample,
         resourceSampleIntervalMs: args.resourceSampleIntervalMs,
         resourceSampleTree: args.resourceSampleTree,
+        wgcRepeatLastFrame: args.wgcRepeatLastFrame,
       },
       discoveryScreen: {
         mode: screen.mode || "",
@@ -672,6 +695,13 @@ async function main() {
     } else {
       print("OK", `Observed ${summary.frameCount} frames in ${summary.elapsedMs} ms`, args);
       print("OK", `Average FPS: ${summary.fps} / max gap: ${summary.maxGapMs} ms / dropped: ${summary.droppedFrames}`, args);
+      if (summary.repeatedFrames > 0 || args.wgcRepeatLastFrame) {
+        print(
+          "INFO",
+          `WGC repeat: repeated ${summary.repeatedFrames} / fresh ${summary.freshFrames} / unique helper frames ${summary.uniqueHelperFrameCount} / content age max ${summary.maxContentAgeMs ?? "?"} ms`,
+          args,
+        );
+      }
       if (summary.timestampFrameCount > 0) {
         print(
           "INFO",
