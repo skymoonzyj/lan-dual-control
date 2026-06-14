@@ -23,10 +23,21 @@ const defaults = {
   requireTimestampUs: false,
   requireMonotonicTimestampUs: false,
   maxTimestampGapUs: 0,
+  json: false,
   width: 1280,
   height: 720,
   fps: 30,
   bandwidthKbps: 12000,
+};
+
+const runState = {
+  args: null,
+  target: null,
+  discovery: null,
+  hello: null,
+  auth: null,
+  session: null,
+  observation: null,
 };
 
 function parseArgs(argv) {
@@ -67,6 +78,7 @@ function parseArgs(argv) {
   args.requireTimestampUs = booleanArg(args.requireTimestampUs, defaults.requireTimestampUs);
   args.requireMonotonicTimestampUs = booleanArg(args.requireMonotonicTimestampUs, defaults.requireMonotonicTimestampUs);
   args.maxTimestampGapUs = nonNegativeInteger(args.maxTimestampGapUs, defaults.maxTimestampGapUs);
+  args.json = booleanArg(args.json, defaults.json);
   args.width = positiveInteger(args.width, defaults.width);
   args.height = positiveInteger(args.height, defaults.height);
   args.fps = positiveInteger(args.fps, defaults.fps);
@@ -110,7 +122,12 @@ function booleanArg(value, fallback = false) {
 }
 
 function print(status, text) {
-  console.log(`[${status}] ${text}`);
+  const line = `[${status}] ${text}`;
+  if (runState.args?.json) {
+    console.error(line);
+    return;
+  }
+  console.log(line);
 }
 
 function normalizedText(value) {
@@ -161,6 +178,7 @@ async function fetchDiscovery(args) {
     const payload = await response.json();
     const name = payload.deviceName || payload.hostName || "unknown";
     const platform = payload.platform || "unknown";
+    runState.discovery = summarizeDiscovery(payload);
     print("OK", `Discovery: ${name} / ${platform} / ${args.host}:${args.port}`);
     return payload;
   } finally {
@@ -482,6 +500,182 @@ function summarizeStats(stats, args) {
   ].join(" / ");
 }
 
+function makeObservation(stats, args) {
+  const elapsedMs = stats.firstReceivedAt && stats.lastReceivedAt
+    ? Math.max(1, stats.lastReceivedAt - stats.firstReceivedAt)
+    : args.durationMs;
+  const gaps = summarizeNumberList(stats.gaps);
+  const mediaGaps = summarizeNumberList(stats.timestampUsDeltas);
+  const timestampUsDurationUs = stats.firstTimestampUs !== null && stats.lastTimestampUs !== null
+    ? stats.lastTimestampUs - stats.firstTimestampUs
+    : 0;
+  const durationAvg = stats.durationUsFrames > 0 ? stats.durationUsTotal / stats.durationUsFrames : 0;
+
+  return {
+    frameCount: stats.frames,
+    firstFrameId: stats.firstFrameId,
+    lastFrameId: stats.lastFrameId,
+    elapsedMs,
+    fps: Number(actualFps(stats, args).toFixed(2)),
+    gapAvgMs: Number(gaps.avg.toFixed(2)),
+    maxGapMs: Math.round(gaps.max),
+    payloadBytes: {
+      total: stats.payloadBytes,
+      min: stats.minPayloadBytes === Number.POSITIVE_INFINITY ? 0 : stats.minPayloadBytes,
+      max: stats.maxPayloadBytes,
+      avg: stats.frames > 0 ? Math.round(stats.payloadBytes / stats.frames) : 0,
+    },
+    codecs: countsToObject(stats.codecs),
+    encodings: countsToObject(stats.encodings),
+    pipelines: countsToObject(stats.pipelines),
+    sources: countsToObject(stats.sources),
+    activeDisplayIds: countsToObject(stats.activeDisplayIds),
+    displayNames: countsToObject(stats.displayNames),
+    sizes: countsToObject(stats.sizes),
+    timestamp: {
+      frames: stats.timestampFrames,
+      missingFrames: stats.missingTimestampFrames,
+      ageMinMs: stats.timestampFrames > 0 ? Math.round(stats.frameAgeMinMs) : null,
+      ageAvgMs: stats.timestampFrames > 0 ? Number((stats.frameAgeTotalMs / stats.timestampFrames).toFixed(2)) : null,
+      ageMaxMs: stats.timestampFrames > 0 ? Math.round(stats.frameAgeMaxMs) : null,
+    },
+    timestampUs: {
+      frames: stats.timestampUsFrames,
+      missingFrames: stats.missingTimestampUsFrames,
+      first: stats.firstTimestampUs,
+      last: stats.lastTimestampUs,
+      durationUs: timestampUsDurationUs,
+      mediaGapAvgUs: Math.round(mediaGaps.avg),
+      mediaGapMaxUs: Math.round(mediaGaps.max),
+      regressions: stats.timestampUsRegressions,
+    },
+    durationUs: {
+      frames: stats.durationUsFrames,
+      min: stats.durationUsFrames > 0 ? Math.round(stats.minDurationUs) : null,
+      avg: stats.durationUsFrames > 0 ? Math.round(durationAvg) : null,
+      max: stats.durationUsFrames > 0 ? Math.round(stats.maxDurationUs) : null,
+    },
+    invalidFrames: stats.invalidFrames,
+  };
+}
+
+function countsToObject(map) {
+  return Object.fromEntries([...map.entries()].filter(([key]) => key && key !== "missing"));
+}
+
+function summarizeDiscovery(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const displays = Array.isArray(payload.capabilities?.displays)
+    ? payload.capabilities.displays.map((display) => ({
+        id: String(display?.id || ""),
+        name: String(display?.name || ""),
+        width: Number(display?.width) || 0,
+        height: Number(display?.height) || 0,
+        primary: Boolean(display?.primary),
+      }))
+    : [];
+  return {
+    deviceName: String(payload.deviceName || payload.hostName || "unknown"),
+    platform: String(payload.platform || "unknown"),
+    runtime: payload.runtime || null,
+    displays,
+    displayCount: displays.length,
+  };
+}
+
+function summarizeHello(message) {
+  if (!message || typeof message !== "object") return null;
+  return {
+    deviceName: String(message.deviceName || message.hostName || "unknown"),
+    platform: String(message.hostPlatform || message.platform || ""),
+    runtime: message.runtime || null,
+  };
+}
+
+function summarizeAuth(message) {
+  if (!message || typeof message !== "object") return null;
+  return {
+    ok: message.ok === true,
+    reason: String(message.reason || message.message || ""),
+    code: String(message.code || ""),
+    attemptsRemaining: Number.isFinite(Number(message.attemptsRemaining)) ? Number(message.attemptsRemaining) : null,
+    maxAttempts: Number.isFinite(Number(message.maxAttempts)) ? Number(message.maxAttempts) : null,
+  };
+}
+
+function summarizeSession(answer) {
+  if (!answer || typeof answer !== "object") return null;
+  return {
+    ok: answer.ok !== false,
+    width: Number(answer.width || answer.screenWidth) || 0,
+    height: Number(answer.height || answer.screenHeight) || 0,
+    fps: Number(answer.fps) || 0,
+    requestedFps: Number(answer.requestedFps) || 0,
+    maxBandwidthKbps: Number(answer.maxBandwidthKbps) || 0,
+    videoCodec: String(answer.videoCodec || answer.codec || ""),
+    videoEncoding: String(answer.videoEncoding || answer.encoding || ""),
+    capturePipeline: String(answer.capturePipeline || ""),
+    activeDisplayId: String(answer.activeDisplayId || answer.displayId || ""),
+    displayName: String(answer.displayName || ""),
+    streamFallbackReason: String(answer.streamFallbackReason || ""),
+    reason: String(answer.reason || answer.message || ""),
+    code: String(answer.code || ""),
+  };
+}
+
+function summarizeArgs(args) {
+  return {
+    host: args.host,
+    port: String(args.port),
+    durationMs: args.durationMs,
+    timeoutMs: args.timeoutMs,
+    minFrames: args.minFrames,
+    minFps: args.minFps,
+    maxGapMs: args.maxGapMs,
+    preferredVideoCodec: args.preferredVideoCodec,
+    requireH264: args.requireH264,
+    requireRealVideo: args.requireRealVideo,
+    expectedCodec: args.expectedCodec,
+    expectedPipeline: args.expectedPipeline,
+    displayId: args.displayId,
+    requireFrameDisplayDiagnostic: args.requireFrameDisplayDiagnostic,
+    expectActiveDisplayId: args.expectActiveDisplayId,
+    requireFrameTimestamp: args.requireFrameTimestamp,
+    maxFrameAgeMs: args.maxFrameAgeMs,
+    requireTimestampUs: args.requireTimestampUs,
+    requireMonotonicTimestampUs: args.requireMonotonicTimestampUs,
+    maxTimestampGapUs: args.maxTimestampGapUs,
+    json: args.json,
+    width: args.width,
+    height: args.height,
+    fps: args.fps,
+    bandwidthKbps: args.bandwidthKbps,
+  };
+}
+
+function makeJsonPayload(ok, error = null) {
+  return {
+    ok,
+    target: runState.target,
+    args: runState.args ? summarizeArgs(runState.args) : null,
+    discovery: runState.discovery,
+    hello: runState.hello,
+    auth: runState.auth,
+    session: runState.session,
+    observation: runState.observation,
+    error: error
+      ? {
+          message: error.message,
+          name: error.name,
+        }
+      : null,
+  };
+}
+
+function printJsonPayload(payload) {
+  console.log(JSON.stringify(payload, null, 2));
+}
+
 function summarizeFrameTiming(stats) {
   const parts = [];
   if (stats.timestampFrames > 0) {
@@ -589,6 +783,7 @@ Options:
   --requireTimestampUs             Require every video_frame to include numeric timestampUs.
   --requireMonotonicTimestampUs    Require timestampUs to never move backwards.
   --maxTimestampGapUs <us>         Maximum allowed timestampUs delta between frames. Default: off
+  --json                           Print one machine-readable JSON object to stdout.
 
 Examples:
   node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFrames 100 --minFps 20 --expectActiveDisplayId main --requireMonotonicTimestampUs
@@ -602,6 +797,8 @@ async function main() {
   }
 
   const args = parseArgs(process.argv.slice(2));
+  runState.args = args;
+  runState.target = { host: args.host, port: String(args.port) };
   print("INFO", `Target: ${args.host}:${args.port}`);
   print(
     "INFO",
@@ -621,6 +818,7 @@ async function main() {
     protocolVersion: 1,
   });
   const hello = await client.waitFor("hello_ack", args.timeoutMs);
+  runState.hello = summarizeHello(hello);
   print("OK", `hello_ack: ${hello.deviceName || hello.hostName || "unknown"}`);
 
   client.send({
@@ -629,6 +827,7 @@ async function main() {
     password: args.password,
   });
   const auth = await client.waitFor("auth_result", args.timeoutMs);
+  runState.auth = summarizeAuth(auth);
   if (!auth.ok) {
     throw new Error(`auth failed: ${auth.reason || auth.message || auth.code || "unknown"}`);
   }
@@ -636,6 +835,7 @@ async function main() {
 
   client.send(makeSessionOffer(args));
   const answer = await client.waitFor("session_answer", args.timeoutMs);
+  runState.session = summarizeSession(answer);
   if (!answer.ok) {
     throw new Error(`session failed: ${answer.reason || answer.message || "unknown"}`);
   }
@@ -660,11 +860,16 @@ async function main() {
   await delay(args.durationMs);
   socket.close();
 
+  runState.observation = makeObservation(video.stats, args);
   assertStats(video.stats, args);
   print("OK", `Video observation passed: ${summarizeStats(video.stats, args)}`);
+  if (args.json) printJsonPayload(makeJsonPayload(true));
 }
 
 main().catch((error) => {
   print("ERROR", error.message);
+  if (runState.args?.json) {
+    printJsonPayload(makeJsonPayload(false, error));
+  }
   process.exitCode = 1;
 });
