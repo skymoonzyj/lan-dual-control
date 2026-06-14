@@ -19,6 +19,50 @@
 
 ## 2026-06-14 Windows Codex
 
+日期：2026-06-14 22:15
+开发端：Windows Codex
+本轮目标：给 Windows host 和 Mac client 增加可选 WebSocket `binary-jpeg` 视频传输，减少 JPEG 帧 data URL/base64 文本开销。
+完成内容：
+- `apps/windows-host/src/websocket-codec.mjs` 新增 WebSocket binary frame 编码能力，文本控制消息仍走原有 JSON 文本帧。
+- `apps/windows-host/src/windows-host-service.mjs` 新增 `preferredVideoTransport=binary-jpeg` 协商：客户端声明支持时，JPEG `video_frame` 会用 `LDCV1\n` magic + JSON 头长度 + JSON 元数据 + 原始 JPEG 字节发送；H.264、音频、输入、剪贴板和无图片 payload 的 repeat signal 仍保持原逻辑。
+- `/discovery.capabilities.videoTransports` 暴露 `json` / `binary-jpeg`，`session_answer` 和 `display_settings_ack` 回传实际 `videoTransport`。
+- `apps/mac-client/app.js` 声明 `preferredVideoTransport=binary-jpeg`，接收 WebSocket ArrayBuffer，解析 `binary-jpeg` 后用 object URL 显示 JPEG，并在视频状态/会话诊断中显示 `jpeg/binary` 和“二进制 N”；切 H.264、断开或重置时会释放旧 object URL。
+- `scripts/windows/test-mac-client-browser.mjs` 新增 `--expectBinaryVideo`，浏览器侧 WebSocket 记录器可解析二进制视频头并统计 binary 帧；默认 session/display 设置断言也覆盖 `preferredVideoTransport`。
+- 协议文档、Mac client README、Windows host README、CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已同步。
+修改文件：
+- `apps/windows-host/src/websocket-codec.mjs`
+- `apps/windows-host/src/windows-host-service.mjs`
+- `apps/mac-client/app.js`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/03-architecture-and-protocol.md`
+- `apps/windows-host/README.md`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-host/src/websocket-codec.mjs`
+- `node --check apps/windows-host/src/windows-host-service.mjs`
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `npm.cmd --prefix apps/windows-host run check`
+- `node scripts/windows/test-mac-client-browser.mjs --expectBinaryVideo --allowClipboardFallback --skipFileClipboard --observeVideoMs 1200 --minObservedVideoFrames 5 --minObservedVideoFps 5 --timeoutMs 45000`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard --disableWebCodecs --observeVideoMs 900 --minObservedVideoFrames 4 --minObservedVideoFps 4 --timeoutMs 45000`
+验证结果：
+- `--expectBinaryVideo` 通过：页面显示 `jpeg/binary`，初始视频约 `525 ms`，持续观察 `11` 帧 / `1211 ms` / `9.1 FPS`，诊断显示“二进制 1”。
+- 普通 mock 回归通过：短窗口 `54` 帧 / `907 ms` / `59.5 FPS`，并覆盖输入 ack、Command→Ctrl、文本剪贴板和断开清理。
+遗留问题：
+- 当前二进制传输只覆盖 JPEG 图片 payload；H.264 仍是 `annexb-base64` 过渡格式。
+- WGC 真实源帧仍受 `FrameArrived` 节奏影响，二进制传输主要减少文本/base64 负担，不会凭空增加真实源帧。
+下一步建议：
+- 继续推进 Windows WGC H.264/硬编或更高效的视频 payload，并用真实 Mac client 连接真实 Windows host 对照 full/signal/binary/H.264 的延迟、带宽、CPU 和观感。
+是否改了协议：是，新增向后兼容的可选 `preferredVideoTransport`、`supportedVideoTransports`、`videoTransport` 和 `binary-jpeg` WebSocket binary frame 封包；旧 JSON/data-url 路径保持可用。
+是否需要另一端配合：暂不需要；后续真机观感验收需要 Mac 端连接 Windows host。
+
+## 2026-06-14 Windows Codex
+
 日期：2026-06-14 21:50
 开发端：Windows Codex
 本轮目标：让 Mac client 显式兼容 Windows WGC `repeatPreviousFrame` 轻量重复帧，并补页面级自检。

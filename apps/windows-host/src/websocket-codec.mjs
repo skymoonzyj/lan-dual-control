@@ -8,26 +8,32 @@ export function makeAcceptKey(key) {
     .digest("base64");
 }
 
-export function encodeTextFrame(payload) {
-  const body = Buffer.from(payload, "utf8");
-
+function encodeFramePayload(body, opcode) {
   if (body.length < 126) {
-    return Buffer.concat([Buffer.from([0x81, body.length]), body]);
+    return Buffer.concat([Buffer.from([0x80 | opcode, body.length]), body]);
   }
 
   if (body.length <= 0xffff) {
     const header = Buffer.alloc(4);
-    header[0] = 0x81;
+    header[0] = 0x80 | opcode;
     header[1] = 126;
     header.writeUInt16BE(body.length, 2);
     return Buffer.concat([header, body]);
   }
 
   const header = Buffer.alloc(10);
-  header[0] = 0x81;
+  header[0] = 0x80 | opcode;
   header[1] = 127;
   header.writeBigUInt64BE(BigInt(body.length), 2);
   return Buffer.concat([header, body]);
+}
+
+export function encodeTextFrame(payload) {
+  return encodeFramePayload(Buffer.from(payload, "utf8"), 0x1);
+}
+
+export function encodeBinaryFrame(payload) {
+  return encodeFramePayload(Buffer.isBuffer(payload) ? payload : Buffer.from(payload), 0x2);
 }
 
 export function decodeFrames(buffer) {

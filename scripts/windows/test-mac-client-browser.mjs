@@ -38,6 +38,7 @@ const defaults = {
   minObservedVideoFrames: 0,
   minObservedVideoFps: 0,
   expectRepeatSignalVideo: false,
+  expectBinaryVideo: false,
   useExistingHost: false,
   mockVideo: false,
   headless: true,
@@ -92,6 +93,7 @@ Options:
   --minObservedVideoFrames <n>     Minimum frames during --observeVideoMs.
   --minObservedVideoFps <fps>      Minimum FPS during --observeVideoMs.
   --expectRepeatSignalVideo        Start WGC mock helper with repeat signal frames and require Mac client diagnostics.
+  --expectBinaryVideo              Start WGC JPEG helper and require binary JPEG video transport.
   --disableWebCodecs               Hide VideoDecoder/EncodedVideoChunk and expect MJPEG request fallback.
 
 Examples:
@@ -179,6 +181,11 @@ function parseArgs(argv) {
     }
     if (key === "expectRepeatSignalVideo") {
       args.expectRepeatSignalVideo = true;
+      args.screenMode = "wgc";
+      continue;
+    }
+    if (key === "expectBinaryVideo") {
+      args.expectBinaryVideo = true;
       args.screenMode = "wgc";
       continue;
     }
@@ -573,17 +580,21 @@ async function startWindowsHost(args, repoRoot) {
     ...process.env,
     LAN_DUAL_PASSWORD: args.hostPassword,
     LAN_DUAL_WINDOWS_INPUT_MODE: args.inputMode,
-    LAN_DUAL_WINDOWS_SCREEN_MODE: args.expectRepeatSignalVideo ? "wgc" : args.mockVideo ? "mock" : args.screenMode,
+    LAN_DUAL_WINDOWS_SCREEN_MODE: (args.expectRepeatSignalVideo || args.expectBinaryVideo) ? "wgc" : args.mockVideo ? "mock" : args.screenMode,
     LAN_DUAL_BUILD_ID: temporaryWindowsHostBuildId,
     ...(args.audioMode ? { LAN_DUAL_WINDOWS_AUDIO_MODE: args.audioMode } : {}),
-    ...(args.expectRepeatSignalVideo && args.repeatSignalWgcHelperPath
+    ...((args.expectRepeatSignalVideo || args.expectBinaryVideo) && args.repeatSignalWgcHelperPath
       ? {
           LAN_DUAL_WINDOWS_WGC_HELPER: process.execPath,
           LAN_DUAL_WINDOWS_WGC_HELPER_ARGS: args.repeatSignalWgcHelperPath,
           LAN_DUAL_WINDOWS_WGC_ALLOW_UNSUPPORTED: "1",
-          LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME: "1",
-          LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE: "signal",
           LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: "60",
+          ...(args.expectRepeatSignalVideo
+            ? {
+                LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME: "1",
+                LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE: "signal",
+              }
+            : {}),
         }
       : {}),
   };
@@ -758,6 +769,7 @@ function buildSnapshotExpression() {
       })(),
       repeatSignalVideoFrames: (window.__lanDualReceivedMessages || [])
         .filter((message) => message.type === "video_frame" && message.repeatPreviousFrame === true).length,
+      binaryVideoFrames: Number(window.__lanDualCounters?.binaryVideoFrames || 0),
       audioToggleChecked: document.querySelector("#audioToggle")?.checked || false,
       audioPlayedFrames: Number((text("#audioStatus").match(/播放\\s*(\\d+)/) || [])[1] || 0),
       audioFrameCount: (window.__lanDualReceivedMessages || []).filter((message) => message.type === "audio_frame").length,
@@ -849,6 +861,7 @@ function installWebSocketSendRecorderExpression() {
     window.__lanDualCounters = {
       videoFrames: 0,
       audioFrames: 0,
+      binaryVideoFrames: 0,
     };
     window.__lanDualTimings = {
       installedAt: performance.now(),
@@ -857,29 +870,77 @@ function installWebSocketSendRecorderExpression() {
     };
     if (window.__lanDualWebSocketSendHooked) return true;
     const OriginalWebSocket = window.WebSocket;
+    const binaryVideoMagic = [76, 68, 67, 86, 49, 10];
+    const rememberReceivedMessage = (parsed) => {
+      window.__lanDualReceivedMessages.push(parsed);
+      if (parsed.type === "video_frame") {
+        window.__lanDualCounters.videoFrames += 1;
+        if (String(parsed.encoding || "").toLowerCase() === "binary-jpeg" || parsed.binaryPayloadBytes > 0) {
+          window.__lanDualCounters.binaryVideoFrames += 1;
+        }
+      }
+      if (parsed.type === "audio_frame") {
+        window.__lanDualCounters.audioFrames += 1;
+      }
+      if (parsed.type === "audio_frame" && !window.__lanDualTimings?.firstAudioFrameAt) {
+        window.__lanDualTimings.firstAudioFrameAt = performance.now();
+      }
+      if (window.__lanDualReceivedMessages.length > 400) {
+        window.__lanDualReceivedMessages.shift();
+      }
+    };
+    const parseBinaryMessage = async (data) => {
+      const arrayBuffer = data instanceof ArrayBuffer
+        ? data
+        : data instanceof Blob
+          ? await data.arrayBuffer()
+          : data?.buffer instanceof ArrayBuffer
+            ? data.buffer.slice(data.byteOffset || 0, (data.byteOffset || 0) + data.byteLength)
+            : null;
+      if (!arrayBuffer) {
+        throw new Error("unsupported binary message");
+      }
+      const bytes = new Uint8Array(arrayBuffer);
+      if (bytes.length < binaryVideoMagic.length + 4) {
+        throw new Error("binary message too small");
+      }
+      for (let index = 0; index < binaryVideoMagic.length; index += 1) {
+        if (bytes[index] !== binaryVideoMagic[index]) {
+          throw new Error("unknown binary magic");
+        }
+      }
+      const headerLength = new DataView(arrayBuffer).getUint32(binaryVideoMagic.length);
+      const headerStart = binaryVideoMagic.length + 4;
+      const payloadStart = headerStart + headerLength;
+      if (headerLength <= 0 || payloadStart > bytes.length) {
+        throw new Error("invalid binary header length");
+      }
+      const parsed = JSON.parse(new TextDecoder().decode(bytes.slice(headerStart, payloadStart)));
+      const payloadBytes = bytes.length - payloadStart;
+      return {
+        ...parsed,
+        encoding: parsed.encoding || "binary-jpeg",
+        videoTransport: parsed.videoTransport || "binary-jpeg",
+        binaryPayloadBytes: payloadBytes,
+        payloadBytes: Number(parsed.payloadBytes) || payloadBytes,
+      };
+    };
     function RecordingWebSocket(...args) {
       const socket = new OriginalWebSocket(...args);
       window.__lanDualLastSocket = socket;
       const originalSend = socket.send.bind(socket);
       socket.addEventListener("message", (event) => {
-        try {
-          const parsed = JSON.parse(String(event.data));
-          window.__lanDualReceivedMessages.push(parsed);
-          if (parsed.type === "video_frame") {
-            window.__lanDualCounters.videoFrames += 1;
+        if (typeof event.data === "string") {
+          try {
+            rememberReceivedMessage(JSON.parse(event.data));
+          } catch {
+            window.__lanDualReceivedMessages.push({ raw: String(event.data) });
           }
-          if (parsed.type === "audio_frame") {
-            window.__lanDualCounters.audioFrames += 1;
-          }
-          if (parsed.type === "audio_frame" && !window.__lanDualTimings?.firstAudioFrameAt) {
-            window.__lanDualTimings.firstAudioFrameAt = performance.now();
-          }
-          if (window.__lanDualReceivedMessages.length > 400) {
-            window.__lanDualReceivedMessages.shift();
-          }
-        } catch {
-          window.__lanDualReceivedMessages.push({ raw: String(event.data) });
+          return;
         }
+        parseBinaryMessage(event.data)
+          .then((parsed) => rememberReceivedMessage(parsed))
+          .catch((error) => window.__lanDualReceivedMessages.push({ raw: "[binary]", error: error?.message || "" }));
       });
       socket.send = (data) => {
         try {
@@ -1258,7 +1319,7 @@ async function run() {
   let repeatSignalHelper = null;
 
   try {
-    if (args.expectRepeatSignalVideo && !args.useExistingHost) {
+    if ((args.expectRepeatSignalVideo || args.expectBinaryVideo) && !args.useExistingHost) {
       repeatSignalHelper = await createRepeatSignalWgcHelper();
       args.repeatSignalWgcHelperPath = repeatSignalHelper.helperPath;
     }
@@ -1506,6 +1567,31 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
         `Repeat signal video: ${repeatSignalSnapshot.repeatSignalVideoFrames} frames / ${repeatSignalSnapshot.videoFlowMetric}`,
       );
     }
+    if (args.expectBinaryVideo) {
+      const binaryVideoSnapshot = await waitFor(
+        async () => {
+          const value = await evaluate(session, buildSnapshotExpression());
+          lastSnapshot = value;
+          const hasBinaryFrame = Number(value.binaryVideoFrames) > 0;
+          const surfaceOk = value.surfaceVisible && value.surfaceHasFrame;
+          const diagnosticsOk = value.video.includes("binary") || value.videoFlowMetric.includes("二进制");
+          return hasBinaryFrame && surfaceOk && diagnosticsOk ? value : null;
+        },
+        args.timeoutMs,
+        "Mac client binary JPEG video diagnostics",
+      ).catch((error) => {
+        if (lastSnapshot) {
+          print("INFO", `Last video: ${lastSnapshot.video}`);
+          print("INFO", `Last video diagnostics: ${lastSnapshot.videoFlowMetric}`);
+          print("INFO", `Last binary video frames: ${lastSnapshot.binaryVideoFrames}`);
+        }
+        throw error;
+      });
+      print(
+        "OK",
+        `Binary JPEG video: ${binaryVideoSnapshot.binaryVideoFrames} frames / ${binaryVideoSnapshot.videoFlowMetric}`,
+      );
+    }
     const sessionSettings = await evaluate(
       session,
       `(() => [...(window.__lanDualSentMessages || [])].find((message) => message.type === "session_offer"))()`,
@@ -1519,7 +1605,10 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       Number(sessionSettings?.maxBandwidthKbps) !== 20000 ||
       sessionSettings?.qualityPreset !== "balanced" ||
       sessionSettings?.preferredVideoCodec !== expectedVideoCodec ||
-      sessionSettings?.preferredVideoEncoding !== expectedVideoEncoding
+      sessionSettings?.preferredVideoEncoding !== expectedVideoEncoding ||
+      sessionSettings?.preferredVideoTransport !== "binary-jpeg" ||
+      !Array.isArray(sessionSettings?.supportedVideoTransports) ||
+      !sessionSettings.supportedVideoTransports.includes("binary-jpeg")
     ) {
       throw new Error(`Mac client session video settings mismatch: ${JSON.stringify(sessionSettings)}`);
     }
@@ -1583,6 +1672,9 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
           latestDisplaySettings?.qualityPreset === "sharp" &&
           latestDisplaySettings?.preferredVideoCodec === (value.supportsWebCodecsH264 ? "h264" : "mjpeg") &&
           latestDisplaySettings?.preferredVideoEncoding === (value.supportsWebCodecsH264 ? "annexb" : "data-url") &&
+          latestDisplaySettings?.preferredVideoTransport === "binary-jpeg" &&
+          Array.isArray(latestDisplaySettings?.supportedVideoTransports) &&
+          latestDisplaySettings.supportedVideoTransports.includes("binary-jpeg") &&
           latestDisplaySettings?.audio === Boolean(value.audioToggleChecked);
         const ackOk =
           latestDisplayAck?.accepted === true &&
@@ -1592,6 +1684,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
           Number(latestDisplayAck?.requestedFps) === 60 &&
           Number(latestDisplayAck?.maxScreenFps) === 60 &&
           Number(latestDisplayAck?.maxBandwidthKbps) === 40000 &&
+          latestDisplayAck?.videoTransport === "binary-jpeg" &&
           latestDisplayAck?.qualityPreset === "sharp" &&
           Number(latestDisplayAck?.jpegQuality) >= 0.74 &&
           Number(latestDisplayAck?.jpegQuality) <= 0.82;

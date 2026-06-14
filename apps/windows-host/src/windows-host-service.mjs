@@ -5,11 +5,12 @@ import { WindowsClipboardBridge } from "./windows-clipboard-bridge.mjs";
 import { WindowsHostLogger } from "./windows-host-logger.mjs";
 import { WindowsInputInjector } from "./windows-input-injector.mjs";
 import { WindowsScreenCaptureCoordinator } from "./windows-screen-capture.mjs";
-import { decodeFrames, encodeTextFrame, makeAcceptKey } from "./websocket-codec.mjs";
+import { decodeFrames, encodeBinaryFrame, encodeTextFrame, makeAcceptKey } from "./websocket-codec.mjs";
 
 const protocolVersion = 1;
 const defaultPassword = "demo-password";
 const maxAuthAttempts = 3;
+const binaryVideoMagic = Buffer.from("LDCV1\n", "ascii");
 
 function makeRuntimeInfo(startedAtMs, buildId) {
   return {
@@ -38,6 +39,24 @@ function makeInputAck(message, result) {
   };
 }
 
+function wantsBinaryJpegVideo(message = {}) {
+  const values = [
+    message.preferredVideoTransport,
+    message.videoTransport,
+    message.preferredVideoEncoding,
+    message.videoEncoding,
+    ...(Array.isArray(message.supportedVideoTransports) ? message.supportedVideoTransports : []),
+  ].map((value) => String(value ?? "").trim().toLowerCase());
+  return values.some((value) => ["binary", "binary-jpeg", "jpeg-binary", "binary-jpeg-v1"].includes(value));
+}
+
+function withVideoTransport(session, message) {
+  return {
+    ...session,
+    videoTransport: wantsBinaryJpegVideo(message) ? "binary-jpeg" : "json",
+  };
+}
+
 function makeSessionAnswer(message, screen, audio, clipboard) {
   const clipboardCapabilities = clipboard.getCapabilities();
   return {
@@ -46,6 +65,7 @@ function makeSessionAnswer(message, screen, audio, clipboard) {
     videoCodec: screen.videoCodec,
     videoEncoding: screen.videoEncoding,
     codecString: screen.codecString ?? "",
+    videoTransport: screen.videoTransport ?? "json",
     audioCodec: audio.audioCodec,
     audioEncoding: audio.audioEncoding,
     audioMode: audio.audioMode,
@@ -76,6 +96,59 @@ function makeSessionAnswer(message, screen, audio, clipboard) {
   };
 }
 
+function makeEnvelope(message) {
+  return {
+    id: makeMessageId(message.type),
+    timestamp: new Date().toISOString(),
+    ...message,
+  };
+}
+
+function parseDataUrlPayload(dataUrl) {
+  const match = /^data:([^;,]+)?;base64,(.*)$/s.exec(String(dataUrl || ""));
+  if (!match) {
+    return null;
+  }
+  const mimeType = match[1] || "application/octet-stream";
+  const payload = Buffer.from(match[2], "base64");
+  if (payload.length === 0) {
+    return null;
+  }
+  return { mimeType, payload };
+}
+
+function makeBinaryVideoEnvelope(envelope) {
+  if (envelope.type !== "video_frame") {
+    return null;
+  }
+  if (String(envelope.codec ?? "").toLowerCase() !== "jpeg") {
+    return null;
+  }
+  if (!envelope.dataUrl || envelope.repeatPreviousFrame === true) {
+    return null;
+  }
+
+  const parsed = parseDataUrlPayload(envelope.dataUrl);
+  if (!parsed || !parsed.mimeType.toLowerCase().includes("jpeg")) {
+    return null;
+  }
+
+  const header = {
+    ...envelope,
+    encoding: "binary-jpeg",
+    videoTransport: "binary-jpeg",
+    mimeType: parsed.mimeType,
+    payloadBytes: parsed.payload.length,
+    binaryPayloadBytes: parsed.payload.length,
+  };
+  delete header.dataUrl;
+
+  const headerBuffer = Buffer.from(JSON.stringify(header), "utf8");
+  const lengthBuffer = Buffer.alloc(4);
+  lengthBuffer.writeUInt32BE(headerBuffer.length, 0);
+  return Buffer.concat([binaryVideoMagic, lengthBuffer, headerBuffer, parsed.payload]);
+}
+
 function createClient(socket, context) {
   let buffer = Buffer.alloc(0);
   let session = null;
@@ -88,13 +161,19 @@ function createClient(socket, context) {
   let failedAuthAttempts = 0;
 
   function send(message) {
-    socket.write(
-      encodeTextFrame(JSON.stringify({
-        id: makeMessageId(message.type),
-        timestamp: new Date().toISOString(),
-        ...message,
-      })),
-    );
+    socket.write(encodeTextFrame(JSON.stringify(makeEnvelope(message))));
+  }
+
+  function sendVideoFrame(message, nextSession) {
+    const envelope = makeEnvelope(message);
+    if (nextSession?.videoTransport === "binary-jpeg") {
+      const binaryEnvelope = makeBinaryVideoEnvelope(envelope);
+      if (binaryEnvelope) {
+        socket.write(encodeBinaryFrame(binaryEnvelope));
+        return;
+      }
+    }
+    socket.write(encodeTextFrame(JSON.stringify(envelope)));
   }
 
   function stopVideoFrames() {
@@ -149,7 +228,7 @@ function createClient(socket, context) {
         const frame = await context.screen.makeFrame(nextFrameId, nextSession);
         if (runId === videoRunId) {
           frameId = nextFrameId;
-          send(frame);
+          sendVideoFrame(frame, nextSession);
         }
       } catch (error) {
         context.logger.warn(`视频帧生成失败：${error.message}`);
@@ -239,7 +318,7 @@ function createClient(socket, context) {
     }
 
     if (message.type === "session_offer") {
-      const screen = context.screen.negotiate(message);
+      const screen = withVideoTransport(context.screen.negotiate(message), message);
       const audio = context.audio.negotiate(message);
       session = makeSessionAnswer(message, screen, audio, context.clipboard);
       send(session);
@@ -253,7 +332,7 @@ function createClient(socket, context) {
 
     if (message.type === "display_settings") {
       if (session) {
-        session = context.screen.updateSessionDisplay(session, message);
+        session = withVideoTransport(context.screen.updateSessionDisplay(session, message), message);
         session = {
           ...session,
           audioEnabled: Boolean(message.audio),
@@ -273,6 +352,7 @@ function createClient(socket, context) {
         videoCodec: session?.videoCodec ?? "mock-svg",
         videoEncoding: session?.videoEncoding ?? "data-url",
         codecString: session?.codecString ?? "",
+        videoTransport: session?.videoTransport ?? "json",
         width: session?.width ?? (Number(message.width) || 1920),
         height: session?.height ?? (Number(message.height) || 1080),
         fps: session?.fps ?? (Number(message.fps) || 60),
@@ -486,6 +566,7 @@ export function createWindowsHostServer({
           clipboardFile: true,
           clipboardFileMode: clipboardCapabilities.fileMode,
           clipboard: clipboardCapabilities,
+          videoTransports: ["json", "binary-jpeg"],
           reverseControl: true,
           mock: screenCapabilities.mode === "mock",
         },

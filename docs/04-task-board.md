@@ -288,6 +288,7 @@ Mac 端：
 - [x] Windows WGC repeat-last-frame pacing 诊断模式。（默认关闭；开启后 60Hz/20M 短基准约 31 FPS，三档 repeat 约 30-38 FPS，已暴露 JSON/base64 重发瓶颈。）
 - [x] Windows WGC repeat-last-frame 轻量信令模式。（`--repeatLastFrameMode signal` 时重复帧只发 `repeatPreviousFrame=true`，60Hz/20M 短基准约 31-32 FPS，平均图片 payload 降到约 17-23 KB。）
 - [x] Mac client 接收 Windows WGC 轻量重复帧。（`--expectRepeatSignalVideo` 会启动 WGC mock helper，验证 `repeatPreviousFrame` 无 `dataUrl` 时保持上一帧可见并显示“重复”计数。）
-- [ ] Windows WGC 二进制帧 / H.264 硬编，以及 Mac client 真连观感验收。
+- [x] Windows host 可选 `binary-jpeg` WebSocket 二进制视频帧。（Mac client 声明 `preferredVideoTransport=binary-jpeg` 后，JPEG 元数据保留 JSON 头、图片改走原始 JPEG 字节；`--expectBinaryVideo` 页面级自检通过。）
+- [ ] Windows WGC H.264/硬编，以及 Mac client 真连观感验收。
 - [ ] 安装包。
 - [ ] 开机自启。

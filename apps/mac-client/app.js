@@ -75,6 +75,8 @@ const state = {
   lastVideoCodec: "",
   lastVideoFrameAgeMs: null,
   repeatSignalVideoFrames: 0,
+  binaryVideoFrames: 0,
+  remoteImageObjectUrl: "",
   h264Decoder: null,
   h264DecoderKey: "",
   h264DecoderConfigPromise: null,
@@ -116,6 +118,7 @@ const clipboardWatchIntervalMs = 1200;
 const maxReconnectAttempts = 3;
 const reconnectBaseDelayMs = 1200;
 const reconnectStableMs = 10000;
+const binaryVideoMagic = "LDCV1\n";
 const videoQualityPresets = {
   smooth: { resolution: "1920x1080", fps: "30", bandwidth: "10" },
   balanced: { resolution: "1920x1080", fps: "60", bandwidth: "20" },
@@ -280,6 +283,7 @@ function resetSessionDiagnostics({ resetReconnects = false } = {}) {
   state.lastVideoCodec = "";
   state.lastVideoFrameAgeMs = null;
   state.repeatSignalVideoFrames = 0;
+  state.binaryVideoFrames = 0;
   state.frameCount = 0;
   state.frameWindowStartedAt = 0;
   state.frameWindowCount = 0;
@@ -299,7 +303,8 @@ function renderSessionDiagnostics() {
     const ageText = formatFrameAge(state.lastVideoFrameAgeMs);
     const ageMetricText = ageText ? ` · ${ageText}` : "";
     const repeatText = state.repeatSignalVideoFrames > 0 ? ` · 重复 ${state.repeatSignalVideoFrames}` : "";
-    elements.videoFlowMetric.textContent = `${state.lastVideoCodec || "video"} · #${state.frameCount}${fpsText} · gap max ${formatMs(state.maxVideoGapMs)}${ageMetricText}${repeatText}`;
+    const binaryText = state.binaryVideoFrames > 0 ? ` · 二进制 ${state.binaryVideoFrames}` : "";
+    elements.videoFlowMetric.textContent = `${state.lastVideoCodec || "video"} · #${state.frameCount}${fpsText} · gap max ${formatMs(state.maxVideoGapMs)}${ageMetricText}${repeatText}${binaryText}`;
   } else {
     elements.videoFlowMetric.textContent = state.connected ? "等待视频" : "未接收";
   }
@@ -322,6 +327,7 @@ function renderSessionDiagnostics() {
 
 function resetVideoSurface(status = "无画面") {
   resetVideoDecoder({ resetFallback: true });
+  releaseRemoteImageObjectUrl();
   elements.remoteImage.removeAttribute("src");
   elements.remoteImage.classList.remove("is-visible");
   elements.remoteCanvas.classList.remove("is-visible");
@@ -603,6 +609,15 @@ function preferredVideoEncoding() {
   return preferredVideoCodec() === "h264" ? "annexb" : "data-url";
 }
 
+function binaryVideoTransportEnabled() {
+  const value = String(new URLSearchParams(window.location.search).get("binaryVideo") ?? "").toLowerCase();
+  return !["0", "false", "off"].includes(value);
+}
+
+function preferredVideoTransport() {
+  return binaryVideoTransportEnabled() ? "binary-jpeg" : "json";
+}
+
 function describeVideoSettings(settings = currentVideoSettings()) {
   const resolution = `${settings.width}x${settings.height}`;
   const resolutionLabel = resolutionLabels[resolution] || resolution;
@@ -630,6 +645,8 @@ function makeDisplaySettingsMessage(type = "display_settings") {
     preferredHeight: settings.height,
     preferredVideoCodec: preferredVideoCodec(),
     preferredVideoEncoding: preferredVideoEncoding(),
+    preferredVideoTransport: preferredVideoTransport(),
+    supportedVideoTransports: ["json", "binary-jpeg"],
     audio: elements.audioToggle.checked,
     audioVolume: audioVolume(),
   };
@@ -741,6 +758,7 @@ async function connect({ reconnect = false } = {}) {
 
   const endpoint = targetWsUrl();
   const socket = new WebSocket(endpoint);
+  socket.binaryType = "arraybuffer";
   state.socket = socket;
   socket.addEventListener("open", () => {
     if (socket !== state.socket) return;
@@ -756,7 +774,7 @@ async function connect({ reconnect = false } = {}) {
   });
   socket.addEventListener("message", (event) => {
     if (socket !== state.socket) return;
-    handleMessage(event.data);
+    void handleMessage(event.data);
   });
   socket.addEventListener("close", () => {
     if (socket !== state.socket) return;
@@ -835,12 +853,75 @@ function disconnect() {
   renderSessionDiagnostics();
 }
 
-function handleMessage(rawData) {
+function isBinaryMessage(rawData) {
+  return rawData instanceof ArrayBuffer || ArrayBuffer.isView(rawData) || rawData instanceof Blob;
+}
+
+async function arrayBufferFromWebSocketData(rawData) {
+  if (rawData instanceof ArrayBuffer) {
+    return rawData;
+  }
+  if (ArrayBuffer.isView(rawData)) {
+    return rawData.buffer.slice(rawData.byteOffset, rawData.byteOffset + rawData.byteLength);
+  }
+  if (rawData instanceof Blob) {
+    return rawData.arrayBuffer();
+  }
+  throw new Error("unsupported binary payload");
+}
+
+async function parseBinaryMessage(rawData) {
+  const arrayBuffer = await arrayBufferFromWebSocketData(rawData);
+  const bytes = new Uint8Array(arrayBuffer);
+  const magicBytes = new TextEncoder().encode(binaryVideoMagic);
+  if (bytes.length < magicBytes.length + 4) {
+    throw new Error("binary frame too small");
+  }
+  for (let index = 0; index < magicBytes.length; index += 1) {
+    if (bytes[index] !== magicBytes[index]) {
+      throw new Error("unknown binary frame magic");
+    }
+  }
+
+  const view = new DataView(arrayBuffer);
+  const headerLength = view.getUint32(magicBytes.length);
+  const headerStart = magicBytes.length + 4;
+  const payloadStart = headerStart + headerLength;
+  if (headerLength <= 0 || payloadStart > bytes.length) {
+    throw new Error("invalid binary frame header length");
+  }
+
+  const decoder = new TextDecoder();
+  const header = JSON.parse(decoder.decode(bytes.slice(headerStart, payloadStart)));
+  const payload = bytes.slice(payloadStart);
+  if (header.type !== "video_frame") {
+    return header;
+  }
+  if (payload.length <= 0) {
+    return header;
+  }
+
+  const mimeType = header.mimeType || "image/jpeg";
+  const objectUrl = URL.createObjectURL(new Blob([payload], { type: mimeType }));
+  return {
+    ...header,
+    encoding: header.encoding || "binary-jpeg",
+    videoTransport: header.videoTransport || "binary-jpeg",
+    mimeType,
+    objectUrl,
+    binaryPayloadBytes: payload.byteLength,
+    payloadBytes: Number(header.payloadBytes) || payload.byteLength,
+  };
+}
+
+async function handleMessage(rawData) {
   let message;
   try {
-    message = JSON.parse(rawData);
-  } catch {
-    logEvent("收到无法解析的消息");
+    message = isBinaryMessage(rawData)
+      ? await parseBinaryMessage(rawData)
+      : JSON.parse(rawData);
+  } catch (error) {
+    logEvent("收到无法解析的消息", error?.message || "");
     return;
   }
 
@@ -1005,35 +1086,62 @@ function handleDisplaySettingsAck(message) {
   logEvent("显示设置已确认", `${message.videoCodec || "?"} · ${message.fps || "?"} Hz`);
 }
 
+function releaseRemoteImageObjectUrl() {
+  if (!state.remoteImageObjectUrl) {
+    return;
+  }
+  URL.revokeObjectURL(state.remoteImageObjectUrl);
+  state.remoteImageObjectUrl = "";
+}
+
+function showRemoteImageFrame(source, { objectUrl = false } = {}) {
+  if (objectUrl) {
+    if (state.remoteImageObjectUrl && state.remoteImageObjectUrl !== source) {
+      releaseRemoteImageObjectUrl();
+    }
+    state.remoteImageObjectUrl = source;
+  } else {
+    releaseRemoteImageObjectUrl();
+  }
+  resetVideoDecoder();
+  elements.remoteImage.src = source;
+  elements.remoteImage.classList.add("is-visible");
+  elements.remoteCanvas.classList.remove("is-visible");
+  elements.emptyState.classList.add("is-hidden");
+}
+
 function handleVideoFrame(frame) {
   if (String(frame.codec ?? "").toLowerCase() === "h264") {
     void handleH264VideoFrame(frame);
     return;
   }
 
-  const isRepeatSignal = frame.repeatPreviousFrame === true && !frame.dataUrl;
+  const isRepeatSignal = frame.repeatPreviousFrame === true && !frame.dataUrl && !frame.objectUrl;
   if (isRepeatSignal && !visibleRemoteFrameElement()) {
     logEvent("忽略重复帧", "尚未收到可显示的视频帧");
     return;
   }
 
-  if (frame.dataUrl) {
-    resetVideoDecoder();
-    elements.remoteImage.src = frame.dataUrl;
-    elements.remoteImage.classList.add("is-visible");
-    elements.remoteCanvas.classList.remove("is-visible");
-    elements.emptyState.classList.add("is-hidden");
+  if (frame.objectUrl) {
+    showRemoteImageFrame(frame.objectUrl, { objectUrl: true });
+  } else if (frame.dataUrl) {
+    showRemoteImageFrame(frame.dataUrl);
   }
   recordVideoFrameStats(frame);
 }
 
 function recordVideoFrameStats(frame) {
-  const isRepeatSignal = frame.repeatPreviousFrame === true && !frame.dataUrl;
+  const isRepeatSignal = frame.repeatPreviousFrame === true && !frame.dataUrl && !frame.objectUrl;
+  const isBinaryFrame = String(frame.encoding ?? "").toLowerCase() === "binary-jpeg" || Boolean(frame.objectUrl);
+  const codecLabel = `${frame.codec || "jpeg"}${isBinaryFrame ? "/binary" : ""}`;
   state.remoteWidth = Number(frame.width || state.remoteWidth);
   state.remoteHeight = Number(frame.height || state.remoteHeight);
   state.frameCount += 1;
   if (isRepeatSignal) {
     state.repeatSignalVideoFrames += 1;
+  }
+  if (isBinaryFrame) {
+    state.binaryVideoFrames += 1;
   }
   state.frameWindowCount += 1;
   const now = performance.now();
@@ -1044,7 +1152,7 @@ function recordVideoFrameStats(frame) {
     state.maxVideoGapMs = Math.max(state.maxVideoGapMs, now - state.lastVideoFrameAt);
   }
   state.lastVideoFrameAt = now;
-  state.lastVideoCodec = frame.codec || "jpeg";
+  state.lastVideoCodec = codecLabel;
   state.lastVideoFrameAgeMs = calculateFrameAgeMs(frame.timestamp);
   const ageText = formatFrameAge(state.lastVideoFrameAgeMs);
   const ageStatusText = ageText ? ` · ${ageText}` : "";
@@ -1056,11 +1164,11 @@ function recordVideoFrameStats(frame) {
   if (elapsed >= 1000) {
     const fps = (state.frameWindowCount * 1000) / elapsed;
     state.lastVideoFps = fps;
-    elements.videoStatus.textContent = `${frame.codec || "jpeg"} · #${frame.frameId || state.frameCount} · ${fps.toFixed(1)} fps${ageStatusText}${repeatText}`;
+    elements.videoStatus.textContent = `${codecLabel} · #${frame.frameId || state.frameCount} · ${fps.toFixed(1)} fps${ageStatusText}${repeatText}`;
     state.frameWindowCount = 0;
     state.frameWindowStartedAt = now;
   } else {
-    elements.videoStatus.textContent = `${frame.codec || "jpeg"} · #${frame.frameId || state.frameCount}${ageStatusText}${repeatText}`;
+    elements.videoStatus.textContent = `${codecLabel} · #${frame.frameId || state.frameCount}${ageStatusText}${repeatText}`;
   }
   renderSessionDiagnostics();
 }
@@ -1340,6 +1448,7 @@ function drawDecodedVideoFrame(videoFrame) {
   state.h264DecoderLatencyMs = decodedMeta?.queuedAt
     ? performance.now() - decodedMeta.queuedAt
     : state.h264DecoderLatencyMs;
+  releaseRemoteImageObjectUrl();
   elements.remoteImage.classList.remove("is-visible");
   elements.remoteImage.removeAttribute("src");
   canvas.classList.add("is-visible");

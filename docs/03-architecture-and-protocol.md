@@ -174,6 +174,8 @@ Both directions: clipboard_event loop
   "preferredHeight": 1080,
   "preferredVideoCodec": "h264",
   "preferredVideoEncoding": "annexb",
+  "preferredVideoTransport": "binary-jpeg",
+  "supportedVideoTransports": ["json", "binary-jpeg"],
   "preferredAudioCodec": "opus",
   "audioVolume": 80
 }
@@ -187,6 +189,7 @@ Both directions: clipboard_event loop
   "ok": true,
   "videoCodec": "h264",
   "videoEncoding": "annexb",
+  "videoTransport": "json",
   "audioCodec": "pcm-f32le",
   "requestedAudioCodec": "opus",
   "audioMode": "system-pcm",
@@ -249,9 +252,10 @@ Both directions: clipboard_event loop
 - FPS 诊断字段中，`requestedFps` 表示控制端请求帧率，`fps` 表示被控端当前实际目标帧率，`maxScreenFps` 表示被控端真实屏幕采集上限，`frameIntervalMs` 表示当前定时器间隔。当前 macOS 真实屏幕 JPEG 管线默认会把实际帧率限制到 `LAN_DUAL_MAX_SCREEN_FPS`。
 - `qualityPreset`、`jpegQuality` 可作为调试字段返回实际使用的画质预设和 JPEG 压缩质量。
 - `activeDisplayId`、`displayName` 是可选诊断字段，用于标记当前帧来自哪个被控端显示器；旧控制端可以忽略。
-- 性能不足时再把图像帧升级为二进制帧。
-- 每帧带一个小头部：frameId、timestamp、width、height、format、payloadLength。
-- payload 使用 JPEG 或 PNG，优先 JPEG。
+- `preferredVideoTransport` / `videoTransport` 是可选传输方式字段；缺省或 `json` 表示继续用 WebSocket 文本 JSON 发送完整 `video_frame`，`binary-jpeg` 表示 JPEG 帧可用 WebSocket binary frame 发送。
+- `supportedVideoTransports` 可声明控制端兼容的传输方式；旧被控端可以忽略。
+- `binary-jpeg` 帧仍保留 JSON 元数据，但从文本帧中移出大体积图片数据。二进制帧 payload 结构为 ASCII magic `LDCV1\n`、4 字节大端 JSON 头长度、UTF-8 JSON 头、原始 JPEG 字节。JSON 头等价于 `video_frame` 元数据，`encoding` 为 `binary-jpeg`，不再包含 `dataUrl`，并带 `mimeType`、`payloadBytes` 或 `binaryPayloadBytes`。
+- `repeatPreviousFrame=true` 这类轻量重复帧没有图片 payload，仍可继续走 JSON 文本帧。
 
 第二版升级：
 
@@ -300,6 +304,8 @@ H.264 过渡格式：
   "maxBandwidthKbps": 50000,
   "preferredVideoCodec": "h264",
   "preferredVideoEncoding": "annexb",
+  "preferredVideoTransport": "binary-jpeg",
+  "supportedVideoTransports": ["json", "binary-jpeg"],
   "audio": true,
   "audioVolume": 80,
   "clipboardText": true,
@@ -328,6 +334,7 @@ H.264 过渡格式：
   "accepted": true,
   "videoCodec": "h264",
   "videoEncoding": "annexb",
+  "videoTransport": "json",
   "width": 1920,
   "height": 1080,
   "fps": 30,

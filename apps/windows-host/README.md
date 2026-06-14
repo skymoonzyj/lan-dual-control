@@ -6,7 +6,7 @@
 
 - Node.js WebSocket 被控服务，默认端口 `43770`。
 - `hello`、`auth_request`、`session_offer`、`display_settings`、`input_event`、`input_ack`、`clipboard_text` 和 `reverse_control_request` 消息处理；未认证连接会被拒绝，同一连接内密码错误 3 次后会关闭连接。
-- Windows 屏幕 `video_frame` 输出：默认在 Windows 桌面会话中用 FFmpeg gdigrab 持续采集 MJPEG/JPEG data URL；也可显式使用 `ffmpeg-h264` 让 FFmpeg/libx264 输出 H.264 Annex B base64 帧；无 FFmpeg 或采集失败时回退 PowerShell/System.Drawing 系统截图，失败时再回退模拟帧。控制端下发的 `qualityPreset` 和 `maxBandwidthKbps` 会换算为实际 `jpegQuality`，让 5/10/20/40/50 Mbps 对应不同压缩质量。
+- Windows 屏幕 `video_frame` 输出：默认在 Windows 桌面会话中用 FFmpeg gdigrab 持续采集 MJPEG/JPEG；也可显式使用 `ffmpeg-h264` 让 FFmpeg/libx264 输出 H.264 Annex B base64 帧；无 FFmpeg 或采集失败时回退 PowerShell/System.Drawing 系统截图，失败时再回退模拟帧。控制端下发的 `qualityPreset` 和 `maxBandwidthKbps` 会换算为实际 `jpegQuality`，让 5/10/20/40/50 Mbps 对应不同压缩质量。若控制端声明 `preferredVideoTransport=binary-jpeg`，JPEG 帧会优先走 WebSocket 二进制帧，减少 data URL/base64 文本重发成本；不支持时仍回退旧 JSON 文本帧。
 - 音频 `audio_frame` 输出：默认发送模拟帧；显式设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi` 后可用 Windows WASAPI loopback 采集默认播放设备的系统声音并发送 `pcm-f32le-base64` PCM 帧；也可设置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 试用 FFmpeg DirectShow 指定设备。
 - 屏幕采集当前是 FFmpeg gdigrab + PowerShell/System.Drawing 兜底的过渡实现；`ffmpeg-h264` 是可选流式编码模式，主要用于和 Mac client H.264 接收链路联调，不替代后续 Windows Graphics Capture。已新增 Windows Graphics Capture 支持预检和 Rust helper 项目；helper 目前可完成 WGC/D3D 初始化、读取真实 `Direct3D11CaptureFrame.Surface`、CPU readback、请求分辨率缩放，并通过 WIC 按请求 JPEG 质量编码后按 JSON 行合同接入 Node host。下一步是连续帧 pacing、资源对照和 Mac client 真连观感验收。
 - WASAPI loopback 是当前推荐的系统声音采集入口；DirectShow PCM 入口保留给虚拟声卡/loopback 设备做兼容验证。
@@ -15,6 +15,7 @@
 - 文本剪贴板模块：在 Windows 上通过 PowerShell `Set-Clipboard` 写入系统剪贴板，在非 Windows 开发环境回退为内存保存。
 - 文件剪贴板接收模块：接收 `clipboard_file_*` 文件清单、分块、完成消息并返回进度；在 Windows 上通过 PowerShell `Set-Clipboard -Path` 写入系统文件剪贴板，在非 Windows 开发环境保存到临时目录。
 - `/discovery` 设备发现接口，供 Windows 控制端或未来 Mac 控制端扫描局域网设备列表；`/discovery` 和 `hello_ack` 会带可选 `runtime` 诊断，显示当前进程 PID、启动时间、运行时长和 build id，方便确认没有连到旧进程。
+- `/discovery.capabilities.videoTransports` 会声明当前 Windows host 支持 `json` 和 `binary-jpeg`；`session_answer` / `display_settings_ack` 会回传实际 `videoTransport`，方便 Mac client 和自检脚本确认是否启用了二进制视频路径。
 
 ## 运行
 
@@ -323,6 +324,12 @@ node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --requireAudio
+```
+
+需要单独验证 Mac 控制页收到 Windows host 的 WebSocket 二进制 JPEG 视频帧时，加 `--expectBinaryVideo`；脚本会启动临时 WGC JPEG helper，要求页面显示 `jpeg/binary`、诊断出现“二进制”，并继续做持续帧观察：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --expectBinaryVideo --allowClipboardFallback --skipFileClipboard --observeVideoMs 1200 --minObservedVideoFrames 5 --minObservedVideoFps 5
 ```
 
 默认临时使用 `127.0.0.1:43772`；如果该端口已被其他自检占用，脚本会自动换一个临时空闲端口。需要连接已运行的 Windows host 时再加 `--useExisting --host 127.0.0.1 --port 43770`。
