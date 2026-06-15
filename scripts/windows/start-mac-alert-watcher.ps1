@@ -4,7 +4,9 @@ param(
     [string]$WatchPattern = "(?i)mac|macOS",
     [int]$IntervalSeconds = 15,
     [int]$StaleMinutes = 5,
-    [int]$PopupTimeoutSeconds = 0
+    [int]$PopupTimeoutSeconds = 0,
+    [switch]$AlertExistingEvents,
+    [switch]$NoPopup
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,6 +18,11 @@ $outLog = Join-Path $logDir "mac-alert-watcher.out.log"
 $errLog = Join-Path $logDir "mac-alert-watcher.err.log"
 
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+
+$powerShellExe = "powershell"
+if (Get-Command "pwsh" -ErrorAction SilentlyContinue) {
+    $powerShellExe = "pwsh"
+}
 
 $arguments = @(
     "-NoProfile",
@@ -31,9 +38,15 @@ $arguments = @(
 if ($Token) {
     $arguments += @("-Token", $Token)
 }
+if ($AlertExistingEvents) {
+    $arguments += "-AlertExistingEvents"
+}
+if ($NoPopup) {
+    $arguments += "-NoPopup"
+}
 
 $process = Start-Process `
-    -FilePath "powershell" `
+    -FilePath $powerShellExe `
     -ArgumentList $arguments `
     -WorkingDirectory $repoRoot `
     -WindowStyle Hidden `
@@ -44,6 +57,7 @@ $process = Start-Process `
 Write-Host "Mac alert watcher started."
 Write-Host ("Process ID: {0}" -f $process.Id)
 Write-Host ("Server: {0}" -f $Server)
+Write-Host ("PowerShell: {0}" -f $powerShellExe)
 Write-Host ("Stale threshold: {0} minute(s)" -f $StaleMinutes)
 Write-Host ("Output log: {0}" -f $outLog)
 Write-Host ("Error log: {0}" -f $errLog)

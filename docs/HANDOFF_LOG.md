@@ -58,6 +58,42 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 23:00
+开发端：Windows Codex
+本轮目标：补强 Windows 本机 Mac 联络板提醒 watcher，支撑 Mac 窗口最小化时的授权/卡住透传提醒。
+完成内容：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1` 恢复并扩展提醒规则：`NEED_USER_AUTH`、`USER_ACTION_REQUIRED`、权限/授权、502/Bad Gateway、`blocked` 状态和长时间无更新都会触发提醒。
+- watcher 新增 `-Once`、`-NoPopup`、`-AlertExistingEvents`，可做无弹窗单次调试；默认仍把历史已有事件视为已看过，避免启动时重复弹旧消息。
+- watcher 启动时设置 UTF-8 输出，并用 code point 组装中文关键词，兼容 PowerShell 7 和 Windows PowerShell 的脚本编码差异。
+- `scripts/windows/start-mac-alert-watcher.ps1` 后台启动器优先使用 PowerShell 7 `pwsh`，找不到再回退 Windows PowerShell；同步透传 `-AlertExistingEvents` / `-NoPopup`。
+- 新增 `scripts/windows/test-mac-alert-watcher.mjs`：用本机假 Agent Link Board 和 `-Once -NoPopup` 覆盖默认跳过历史事件、Mac 授权事件、中文权限提示、502、非 Mac 事件忽略、blocked 状态和 stale 状态。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/start-mac-alert-watcher.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `docs/LAN_CODEX_LINK.md`
+- `docs/TEST_COORDINATION.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- PowerShell 7 AST parse `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- PowerShell 7 AST parse `scripts/windows/start-mac-alert-watcher.ps1`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 20000`
+遗留问题：
+- 这只是 Agent Link Board 层的提醒透传；未来产品内的“Mac 远控窗口最小化后通知浮窗”仍需要正式应用层事件/通知协议设计。
+- 正式 Mac E2E 长测仍等待用户在 Windows 本机隐藏输入 Mac host 正式密码；本轮没有认证、没有发送密码、没有执行 `inject`。
+下一步建议：
+- 白天继续前可先运行 `scripts\windows\start-mac-alert-watcher.ps1 -Server http://192.168.31.68:17888`，让 Windows 本机接住 Mac 端授权/卡住提醒。
+- 用户准备好正式密码后，继续 `scripts/windows/check-mac-formal-e2e.ps1 -Discover -PromptPassword` 或 Node 等价命令跑正式长测。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；正式 E2E 仍需要用户在 Windows 本机输入密码，Mac host 当前 ready。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 22:45
 开发端：Windows Codex
 本轮目标：响应 Mac formal E2E call，完成 Windows 无密预检，并让 formal runner 能安全向通讯板发送用户授权提示。

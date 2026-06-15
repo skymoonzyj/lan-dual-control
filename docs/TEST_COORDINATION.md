@@ -12,7 +12,8 @@
    - 适合实时发消息、更新在线状态和发起测试呼叫。
    - Codex 可以用 `scripts/codex-link-client.mjs watch` 监控消息，用 `send/status/call` 给联络板发送信息。
    - 浏览器里点击“开启声音/桌面提醒”后，`NEED_USER_AUTH`、`USER_ACTION_REQUIRED`、`BLOCKED_BY_PERMISSION`、502/Bad Gateway 和长时间未更新状态会触发提醒。
-   - Windows 侧可以运行 `scripts\windows\start-mac-alert-watcher.ps1 -Server http://联络板主机:17888`，在 Mac 端需要授权、卡住或 502 时弹出本机提醒。
+   - Windows 侧可以运行 `scripts\windows\start-mac-alert-watcher.ps1 -Server http://联络板主机:17888`，在 Mac 端需要授权、卡住或 502 时弹出本机提醒；启动器优先使用 PowerShell 7 `pwsh`，并把日志写到 `.dev-lab/mac-alert-watcher.*.log`。
+   - 不想弹窗、只想回归提醒规则时运行 `node scripts\windows\test-mac-alert-watcher.mjs --timeoutMs 20000`，它会用本机假联络板和 `-Once -NoPopup` 验证授权、中文权限提示、502、blocked 和长时间未更新状态。
 
 2. 人类即时消息负责兜底提醒。
    - 例如：在微信或飞书发一句“Mac Codex 需要 Windows 端配合，看联络板和 `docs/TEST_COORDINATION.md` 最新呼叫”。

@@ -15,8 +15,9 @@
 
 ## Windows 端状态
 - Windows 常用检查/回归脚本已继续补齐 `--help/-h` 纯帮助入口：`check-windows-audio-devices`、`check-windows-firewall`、`test-auth-retry-policy`、`test-coordinate-mapping` 和 `test-windows-input-helper` 查参数时不会列设备、探测端口、启动临时服务、创建 input helper 或运行断言。
-- Windows `.mjs` 工具脚本新增统一帮助入口覆盖自检 `scripts/windows/test-windows-script-help.mjs`，会逐个验证 `scripts/windows/*.mjs` 的 `--help` 和 `-h` 都快速 0 退出并打印 Usage/Options 帮助；当前 40 个脚本、80 条帮助命令全部通过，也修正了 `check-windows-host-readiness`、`start-windows-host` 和 `test-windows-host-start-helper` 的 `-h` 短写误忽略问题。
+- Windows `.mjs` 工具脚本新增统一帮助入口覆盖自检 `scripts/windows/test-windows-script-help.mjs`，会逐个验证 `scripts/windows/*.mjs` 的 `--help` 和 `-h` 都快速 0 退出并打印 Usage/Options 帮助；当前 41 个脚本、82 条帮助命令全部通过，也修正了 `check-windows-host-readiness`、`start-windows-host` 和 `test-windows-host-start-helper` 的 `-h` 短写误忽略问题。
 - Windows 音频观察脚本已可用 `--help/-h` 纯查看参数，不会启动临时 host；也可统计 `audio_frame.timestamp` 接收年龄，并用 `--maxFrameAgeMs` / `--requireMonotonicTimestamp` 做音频帧新鲜度强校验；本机 WASAPI 短观察通过，倒退 timestamp 的临时假 host 会按预期失败。
+- Windows 侧 Mac 联络板提醒 watcher 已整理为可回归工具：`scripts/windows/start-mac-alert-watcher.ps1` 后台启动时优先使用 PowerShell 7 `pwsh`，读取 Agent Link Board 后在 Mac 端 `NEED_USER_AUTH`、`USER_ACTION_REQUIRED`、权限/授权、502/Bad Gateway、`blocked` 状态或长时间无更新时弹 Windows 本机提醒；`watch-codex-link-mac-alerts.ps1 -Once -NoPopup -AlertExistingEvents` 可前台无弹窗调试，`scripts/windows/test-mac-alert-watcher.mjs` 用本机假联络板覆盖授权、中文权限提示、502、blocked、stale 和默认跳过历史事件。
 
 - Windows 控制端已有中文界面、局域网连接、连接历史、刷新设备桌面版自动扫描同网段 `/discovery`、发现真实在线设备后自动选中最佳 WebSocket 目标、画质设置、缩放模式、适应窗口黑边输入防护、认证失败剩余次数提示、诊断状态条、Mac host 运行时 PID/启动时间/build 显示、Mac H.264 启动回退原因显示、真实 Mac H.264/WebCodecs 画布解码、重配置后 H.264 关键帧等待、真实视频帧延迟显示、真实 Mac 音频 PCM 播放、文本剪贴板、远端文件托盘、远端文件托盘清理提示、桌面版远端文件分块写入 Windows 系统文件剪贴板、桌面版本机被控启动/低风险/部署/深度体检入口和桌面壳。
 - Windows 控制端顶部“帧延迟”卡片和诊断条现在会用 `video_frame.timestamp` 估算远端帧到达本机时的新鲜度；没有真实帧时间戳时保持等待，两端系统时钟明显不一致时显示“时钟偏差”，不再显示随机模拟延迟。`test-windows-client-browser.mjs --diagnosticsOnly` 已固化该显示、时钟偏差提示和诊断条 warning 回归。
