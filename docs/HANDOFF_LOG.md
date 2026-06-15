@@ -17,6 +17,44 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Windows Codex
+
+日期：2026-06-15 20:20
+开发端：Windows Codex
+本轮目标：处理 Supervisor 审查发现的 Windows host 文件剪贴板接收完整性风险。
+完成内容：
+- `apps/windows-host/src/windows-clipboard-bridge.mjs` 加固文件接收状态机：`clipboard_file_chunk` 必须先有已接受的 `clipboard_file_offer`，不再自动创建传输。
+- offer 阶段校验 `transferId`、文件数量、文件索引连续性、清单 size 与 `totalBytes` 一致、文件数上限和 512MB 总量上限；chunk 阶段校验 `fileIndex`、`chunkIndex`、`offset`、声明 bytes、协商分块大小、不越界且不重叠。
+- 完成阶段按每个文件的真实覆盖区间和 expected size 判断完整性；重复/重叠 chunk 不再能通过累计 receivedBytes 让损坏文件被当作完整。
+- 保留 0 字节文件兼容：合法空文件会创建空文件并可完成；非空文件的 0 字节 chunk 会被拒绝。
+- 新增 `scripts/windows/test-windows-clipboard-bridge.mjs` 专项回归，覆盖无 offer、超大 chunk、重复/重叠 chunk、不完整文件、超过总大小/文件数、空文件和乱序合法分片。
+- 暂停并临时保存了未完成的 WGC NV12 快速转换 WIP，未混入本次提交。
+修改文件：
+- `apps/windows-host/src/windows-clipboard-bridge.mjs`
+- `scripts/windows/test-windows-clipboard-bridge.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `npm --prefix apps/windows-host run check`
+- `node --check scripts/windows/test-windows-clipboard-bridge.mjs`
+- `node scripts/windows/test-windows-clipboard-bridge.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-clipboard-bridge.mjs --timeoutMs 10000`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-host.ps1`
+- `node scripts/windows/test-windows-script-help.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps/windows-host/src/windows-clipboard-bridge.mjs scripts/windows/test-windows-clipboard-bridge.mjs apps/windows-host/README.md docs`
+遗留问题：
+- 本轮没有继续 WGC NV12 快速转换优化；WGC WIP 已存入本地 stash，后续需在 Supervisor 复审通过后再恢复。
+- 本地仍有一个无关未提交改动 `scripts/windows/watch-codex-link-mac-alerts.ps1`，未纳入本轮。
+下一步建议：
+- 请 Supervisor/Windows 审查机复跑 `node scripts/windows/test-windows-clipboard-bridge.mjs` 和 `scripts/windows/test-windows-host.ps1` 复审；通过后再恢复 WGC 性能优化。
+是否改了协议：否，仍使用原 `clipboard_file_*` 消息；只是更严格校验和拒绝坏输入。
+是否需要另一端配合：暂不需要；正式 Mac client 真连文件复制体验可在复审后再协调。
+
 ## 2026-06-15 Mac Codex
 
 日期：2026-06-15 20:05
