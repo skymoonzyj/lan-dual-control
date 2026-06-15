@@ -19,6 +19,40 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 20:35
+开发端：Windows Codex
+本轮目标：在 Windows 文件剪贴板完整性整改后，补真实 WebSocket 服务级坏包回归。
+完成内容：
+- 新增 `scripts/windows/test-windows-host-clipboard-security.mjs`：本进程启动临时 Windows host，走真实 `/discovery`、WebSocket `hello/auth` 和 `clipboard_file_*` 消息，不写系统剪贴板、不发送输入。
+- 服务级覆盖无 offer 分片、超过总大小上限、超过文件数上限、超大 chunk、重复 chunk、重叠 chunk、不完整完成、bytes 声明不一致和错误 `fileIndex`。
+- 合法场景保留：重复/重叠被拒绝后，后续合法 tail chunk 仍可完成，证明拒绝坏包不会破坏同一传输中的有效分片。
+- Windows host README、CURRENT_STATUS、NEXT_ACTIONS、04-task-board 已同步新脚本用途和后续回归顺序。
+修改文件：
+- `scripts/windows/test-windows-host-clipboard-security.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-windows-host-clipboard-security.mjs`
+- `node scripts/windows/test-windows-host-clipboard-security.mjs --timeoutMs 15000`
+- `node scripts/windows/test-windows-clipboard-bridge.mjs`
+- `npm --prefix apps/windows-host run check`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-host.ps1`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-host-clipboard-security.mjs --timeoutMs 10000`
+遗留问题：
+- Supervisor 对 `924eb36` 的复审尚未在通讯板出现；本轮只是继续加固 Windows 回归证据。
+- 本地仍有无关未提交改动 `scripts/windows/watch-codex-link-mac-alerts.ps1`，未纳入本轮。
+- WGC NV12 快速转换 WIP 仍保留在本地 stash，等待复审/协调后再恢复。
+下一步建议：
+- 等 Mac 端对称文件剪贴板加固推送后，Windows 可拉取并复跑相关跨平台测试；随后再恢复 WGC 性能优化或正式 Mac E2E。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；等待 Supervisor/Mac 端后续复审和对称修复。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 20:20
 开发端：Windows Codex
 本轮目标：处理 Supervisor 审查发现的 Windows host 文件剪贴板接收完整性风险。

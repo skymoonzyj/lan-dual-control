@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/test-windows-host-clipboard-security.mjs`, `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 20:35 | 新增 Windows host 文件剪贴板服务级坏包回归：通过真实 WebSocket 覆盖无 offer、超总量/文件数、超大 chunk、重复/重叠、未接收完整、bytes 不一致和错误 fileIndex；不写系统剪贴板、不发送输入。 |
 | Mac Codex | `scripts/mac/check-mac-formal-e2e-status.mjs`, `scripts/mac/test-mac-formal-e2e-status.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 20:05 | Mac formal `--sendCall` 发送前检测通讯板 currentCall；已有 active call 时默认拒绝覆盖，只有显式 `--forceCall` 才允许替换；测试覆盖默认拒绝和强制覆盖。 |
 | Windows Codex | `apps/windows-host/src/windows-clipboard-bridge.mjs`, `scripts/windows/test-windows-clipboard-bridge.mjs`, `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 20:20 | Windows 文件剪贴板接收完整性整改：必须先 offer，校验文件数量/总大小/分块上限/fileIndex/offset/不重叠区间，完成时按逐文件 expected size 判断完整；新增专项回归覆盖 Supervisor 点名的坏输入。 |
 | Mac Codex | `scripts/mac/check-mac-formal-e2e-status.mjs`, `scripts/mac/test-mac-formal-e2e-status.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 19:55 | Mac formal E2E checklist 新增显式 `--sendCall`：ready 时才向 Agent Link Board 发送无密 formal E2E call，未 ready 拒绝发送；自测用假 Mac host + 假通讯板覆盖发送路径和不泄密。 |
