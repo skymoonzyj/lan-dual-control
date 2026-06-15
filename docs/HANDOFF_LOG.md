@@ -19,6 +19,40 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 12:25
+开发端：Mac Codex
+本轮目标：给 Mac 控制 Windows 的正式真连/观感验收增加只读清单，减少发起跨机测试前的手工判断。
+完成内容：
+- 新增 `scripts/mac/check-mac-client-formal-status.mjs`，复用 `check-mac-client-readiness --json`，输出正式真连前 `checklist`、`counts`、`readyToCall`、`callText` 和 `boardSummary`。
+- 清单默认要求 repo 干净、本地 Mac client 页面在线、Windows host `/discovery` 在线、Agent Link Board 可读；同时汇总 H.264/视频传输、音频、input-log、剪贴板能力，并明确 `inject` 跳过。
+- 脚本只读：不启动 Mac client、不启动 Windows host、不认证 WebSocket、不要求或打印密码、不发送输入事件、不执行 `inject`；本地诊断可用 `--allowDirty`、`--allowClientServerOffline`、`--allowWindowsHostOffline` 放宽为 warning，但 `readyToCall` 仍不会因此变 true。
+- 新增 `scripts/mac/test-mac-client-formal-status.mjs`，覆盖帮助、离线 blocker、allow warning、无密 board summary、临时 Mac client server + mock Windows discovery 的 ready shape。
+- 文档同步到 Mac client README、当前状态、下一步和任务板。
+修改文件：
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-client-formal-status.mjs`
+- `node --check scripts/mac/test-mac-client-formal-status.mjs`
+- `node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 15000`
+- `node scripts/mac/check-mac-client-formal-status.mjs --skipBoard --allowDirty --allowClientServerOffline --allowWindowsHostOffline --boardSummary --timeoutMs 1200`
+- 待收尾前再跑 Mac help、diff check 和冲突标记搜索。
+遗留问题：
+- 真实 Mac client 连接 Windows host 的观感/延迟/资源对照仍需要 Windows host 在线并由双方在通讯板发起测试；本轮只做无密清单和 mock 形状回归。
+下一步建议：
+- Windows host 在线后，Mac 侧先启动本地 `apps/mac-client/server.mjs`，再运行 `node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary`。
+- 如果 `readyToCall=true`，把摘要发通讯板后再做页面级或人工真连，对比 WGC NV12 H.264、ffmpeg-h264、binary-jpeg/JPEG fallback 的首帧、FPS、frame age、音频播放、剪贴板、input-log、带宽和 CPU。
+是否改了协议：否。
+是否需要另一端配合：真连验收需要 Windows 端启动 Windows host 并同步 IP/端口；密码不要发联络板。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 12:00
 开发端：Mac Codex
 本轮目标：补齐 Mac 控制 Windows 真连前的只读预检工具，并按用户反馈继续加固 Mac 侧密码弹窗可见性。

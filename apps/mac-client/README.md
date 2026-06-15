@@ -72,6 +72,14 @@ node scripts/mac/check-mac-client-readiness.mjs --host <Windows IP> --port 43770
 
 该脚本不会启动 Mac client、不会启动或认证 Windows host、不会要求或打印密码、不会发送输入事件。它只检查 repo、Mac client 静态文件和语法、可选本地 Mac client HTTP 页面、可选 Windows host `/discovery` 及 Agent Link Board，并输出可直接发到通讯板的无密摘要。需要机器可读结果时加 `--json`；本地页面已启动时可加 `--probeClientServer`；正式要求目标 Windows host 在线时可加 `--requireWindowsHost`。
 
+正式做 Mac 控制 Windows 真连观感验收前，可跑更严格的清单：
+
+```bash
+node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary
+```
+
+该清单会复用 readiness，并把 repo 干净、本地 Mac client 页面在线、Windows host `/discovery` 在线、通讯板可读、H.264/音频/输入/剪贴板能力可见整理成 `readyToCall`、`callText` 和 `boardSummary`。它仍然只读：不会认证 WebSocket、不会要求或打印密码、不会发送输入，也不会执行 `inject`。
+
 ## 当前限制
 
 - 这是 Web 原型，不是 SwiftUI/原生桌面窗口。
@@ -91,6 +99,7 @@ node scripts/mac/check-mac-client-readiness.mjs --host <Windows IP> --port 43770
 node --check apps/mac-client/server.mjs
 node --check apps/mac-client/app.js
 node scripts/mac/test-mac-client-readiness.mjs
+node scripts/mac/test-mac-client-formal-status.mjs
 ```
 
 本机联调已验证：连接 `127.0.0.1:43772` Windows host 回退服务后，发送文本剪贴板会收到 `clipboard_ack`，非 Windows 环境显示 `memory-only` 回退模式。
