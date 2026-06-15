@@ -32,6 +32,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/check-mac-formal-e2e.mjs`, `scripts/windows/test-mac-formal-e2e-preflight.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 11:10 | Windows formal E2E runner 新增 `--boardSummary`，可在无密码预检或正式完成后输出可直接发 Agent Link Board 的秘密安全摘要；JSON 预检同步带 `boardSummary`；回归覆盖离线/在线摘要和 mock 快速路径摘要，真实 Mac host 只读摘要 ready。 |
 | Windows Codex | `scripts/windows/test-mac-formal-e2e-preflight.mjs`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 10:55 | 新增 Windows formal E2E preflight 回归脚本，覆盖离线文本/JSON、JSON 防呆、mock JSON、成功预检后的密码守卫和 mock 快速路径，避免后续改动破坏无密码正式验收准备流程。 |
 | Windows Codex | `scripts/windows/check-mac-formal-e2e.mjs`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 10:45 | Windows formal E2E runner 新增无密码 `--preflightOnly` 和 `--preflightOnly --json`，可只读检查 Mac host `/discovery`、能力、inputMode 和正式验收命令；正式长测前会先预检，失败时不提示输入密码。 |
 | Mac Codex | `scripts/mac/check-mac-formal-local-smoke.mjs`, `scripts/mac/test-mac-formal-local-smoke.mjs`, `apps/mac-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 10:45 | 新增 Mac 正式 E2E 前本机安全短验收聚合脚本：串联 H.264、系统 PCM 和 input-log 探针，要求正式密码经环境变量/隐藏输入传递，默认拒绝空密码和 `demo-password`，不启动 host、不执行 inject；新增临时假 Mac host 自测。 |

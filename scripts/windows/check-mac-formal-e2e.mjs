@@ -32,6 +32,7 @@ const defaults = {
   skipInputLog: false,
   preflightOnly: false,
   json: false,
+  boardSummary: false,
   fastProfile: false,
 };
 
@@ -79,10 +80,12 @@ Options:
   --skipInputLog                 Skip safe input-log probe.
   --preflightOnly                Only read /discovery and print a readiness summary.
   --json                         With --preflightOnly, print a single machine-readable JSON object.
+  --boardSummary                 Print a short secret-free Agent Link Board summary.
   --help, -h                     Show this help.
 
 Examples:
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly
+  node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --boardSummary
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --promptPassword
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --promptPassword --fastProfile
   node scripts/windows/check-mac-formal-e2e.mjs --host 127.0.0.1 --allowDemoPassword --allowMockVideo --skipAudio --skipBrowser
@@ -113,6 +116,7 @@ function parseArgs(argv) {
       key === "skipInputLog" ||
       key === "preflightOnly" ||
       key === "json" ||
+      key === "boardSummary" ||
       key === "fastProfile"
     ) {
       args[key] = true;
@@ -169,6 +173,55 @@ function makeFormalCommand(args) {
     "--port", String(args.port),
     "--promptPassword",
   ].join(" ");
+}
+
+function statusFlag(value) {
+  if (value === true) return "on";
+  if (value === false) return "off";
+  return "unknown";
+}
+
+function summarizeDisplays(report) {
+  const displays = report.capabilities?.displays || [];
+  if (!Array.isArray(displays) || displays.length === 0) return "none";
+  return displays
+    .map((display) => `${display.id || "display"}${display.primary ? "*" : ""}:${display.width || "?"}x${display.height || "?"}`)
+    .join(",");
+}
+
+function makeBoardSummary(report, outcome = "preflight") {
+  const prefix = outcome === "formal-success"
+    ? "Windows formal Mac E2E finished"
+    : "Windows formal Mac E2E preflight";
+  if (!report.online) {
+    return [
+      `${prefix}: offline; target=${report.target.host}:${report.target.port}; error=${report.error?.message || "unknown"}.`,
+      "Password was not requested and is not included.",
+      `Next safe command after Mac host is online: ${report.command}.`,
+      "Inject was not used and still needs explicit user confirmation.",
+    ].join(" ");
+  }
+
+  const failedChecks = Array.isArray(report.failedChecks) && report.failedChecks.length > 0
+    ? report.failedChecks.map((check) => check.name).join(",")
+    : "none";
+  const state = outcome === "formal-success"
+    ? "completed"
+    : report.ok
+      ? "ready"
+      : `blocked(${failedChecks})`;
+  const permissions = report.permissions || {};
+  return [
+    `${prefix}: ${state}; target=${report.target.host}:${report.target.port}; runtimeBuild=${report.runtime?.buildId || "unknown"}; runtimePid=${report.runtime?.processId || "unknown"}.`,
+    `Capabilities h264=${statusFlag(report.capabilities?.h264Stream)} audio=${report.capabilities?.audioMode || statusFlag(report.capabilities?.audio)} clipboardText=${statusFlag(report.capabilities?.clipboardText)} clipboardFile=${statusFlag(report.capabilities?.clipboardFile)} inputMode=${report.capabilities?.inputMode || "missing"} mock=${statusFlag(report.capabilities?.mock)} maxScreenFps=${report.capabilities?.maxScreenFps || "unknown"}.`,
+    `Permissions screen=${statusFlag(permissions.screenRecording)} accessibility=${statusFlag(permissions.accessibility)} inputMonitoring=${statusFlag(permissions.inputMonitoring)}; displays=${summarizeDisplays(report)}; failedChecks=${failedChecks}.`,
+    `Safe formal command: ${report.command}. Password is not included; inject was not used and still needs explicit user confirmation.`,
+  ].join(" ");
+}
+
+function attachBoardSummary(report, outcome = "preflight") {
+  report.boardSummary = makeBoardSummary(report, outcome);
+  return report;
 }
 
 async function fetchDiscovery(args) {
@@ -231,7 +284,7 @@ function makePreflightReport(args, discoveryResult) {
   }
 
   const failed = checks.filter((check) => !check.ok);
-  return {
+  return attachBoardSummary({
     ok: failed.length === 0,
     online: true,
     target: { host: args.host, port: Number(args.port) },
@@ -261,11 +314,11 @@ function makePreflightReport(args, discoveryResult) {
     checks,
     failedChecks: failed,
     command: makeFormalCommand(args),
-  };
+  });
 }
 
 function makeOfflinePreflightReport(args, error) {
-  return {
+  return attachBoardSummary({
     ok: false,
     online: false,
     target: { host: args.host, port: Number(args.port) },
@@ -288,7 +341,7 @@ function makeOfflinePreflightReport(args, error) {
       },
     ],
     command: makeFormalCommand(args),
-  };
+  });
 }
 
 function printPreflightReport(report) {
@@ -328,6 +381,8 @@ async function runPreflight(args) {
   }
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
+  } else if (args.boardSummary) {
+    console.log(report.boardSummary);
   } else {
     printPreflightReport(report);
   }
@@ -510,7 +565,7 @@ async function main() {
     return;
   }
 
-  const preflightReport = await runPreflight({ ...args, json: false });
+  const preflightReport = await runPreflight({ ...args, json: false, boardSummary: false });
   if (!preflightReport.ok) {
     throw new Error("Preflight failed. Fix the Mac host readiness issue before entering the password.");
   }
@@ -535,6 +590,9 @@ async function main() {
   }
 
   print("OK", "Formal Mac E2E checks finished.");
+  if (args.boardSummary) {
+    console.log(attachBoardSummary(preflightReport, "formal-success").boardSummary);
+  }
 }
 
 main().catch((error) => {

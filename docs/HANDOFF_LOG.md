@@ -17,6 +17,41 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Windows Codex
+
+日期：2026-06-15 11:10
+开发端：Windows Codex
+本轮目标：给 Windows 正式 Mac E2E 预检/聚合脚本增加可直接发联络板的无密摘要，减少双端手工同步。
+完成内容：
+- `scripts/windows/check-mac-formal-e2e.mjs` 新增 `--boardSummary`；`--preflightOnly --boardSummary` 只读 `/discovery` 后输出一段 Agent Link Board 可用摘要，不要求密码、不认证、不执行输入。
+- `--preflightOnly --json` 同步包含 `boardSummary` 字段，方便自动化或联络板脚本消费。
+- 正式聚合路径带 `--boardSummary` 时，全部子探针完成后会输出完成摘要；密码仍只通过 `LAN_DUAL_PASSWORD` 传给子进程，不放命令参数。
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs` 增加离线 board summary、mock board summary、JSON summary 字段和 mock 快速路径完成摘要回归，并验证不泄露密码。
+- 真实 Mac host 只读预检摘要通过：`192.168.31.122:43770` ready，runtime build `d807536`，权限全绿，H.264/系统 PCM/文本剪贴板/文件剪贴板开启，`inputMode=log`，`mock=off`。
+修改文件：
+- `scripts/windows/check-mac-formal-e2e.mjs`
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-mac-formal-e2e.mjs`
+- `node --check scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script check-mac-formal-e2e.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script test-mac-formal-e2e-preflight.mjs`
+- `node scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --boardSummary`
+遗留问题：
+- 本轮仍未跑正式认证和 5-10 分钟长测，因为需要用户在 Windows 本机安全输入 Mac host 正式密码；密码不要发到聊天或联络板。
+- 未执行 `inject`，仍需用户明确确认并在屏幕前看护后才可做真实注入验收。
+下一步建议：
+- 用户准备好时，在 Windows 本机运行 `node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --promptPassword`，隐藏输入正式密码后执行正式 E2E。
+- 执行前可先把 `--preflightOnly --boardSummary` 输出发到联络板，确认 Mac 侧状态仍 ready。
+是否改了协议：否。
+是否需要另一端配合：代码改动本身不需要；正式 E2E 仍需要用户输入正式密码，并需要 Mac host 保持在线。
+
 ## 2026-06-15 Mac Codex
 
 日期：2026-06-15 10:45

@@ -130,7 +130,18 @@ async function testOfflineJson(args) {
   const payload = JSON.parse(result.stdout);
   assert(payload.ok === false && payload.online === false, "offline JSON preflight shape mismatch");
   assert(payload.command.includes("--promptPassword"), "offline JSON should include safe command");
+  assert(String(payload.boardSummary || "").includes("offline"), "offline JSON should include board summary");
   print("OK", "Offline JSON preflight is parseable");
+}
+
+async function testOfflineBoardSummary(args) {
+  const result = await runRunner(["--host", "127.0.0.1", "--port", "9", "--preflightOnly", "--boardSummary"], args);
+  assert(result.exitCode !== 0, "offline board summary preflight should fail");
+  assertIncludes(result.stdout, "Windows formal Mac E2E preflight: offline", "offline board summary");
+  assertIncludes(result.stdout, "Password was not requested", "offline board summary");
+  assertIncludes(result.stdout, "--promptPassword", "offline board summary");
+  assertNotIncludes(result.stdout + result.stderr, "Mac host password", "offline board summary");
+  print("OK", "Offline board summary is secret-free");
 }
 
 async function testJsonRequiresPreflight(args) {
@@ -157,7 +168,29 @@ async function testMockPreflightJson(args) {
     assert(payload.ok === true && payload.online === true, "mock preflight JSON shape mismatch");
     assert(payload.capabilities.mock === true, "mock preflight should identify mock host");
     assert(payload.command.includes("--promptPassword"), "mock preflight should include safe command");
+    assert(String(payload.boardSummary || "").includes("failedChecks=none"), "mock preflight JSON should include board summary");
     print("OK", "Mock JSON preflight passes");
+  });
+}
+
+async function testMockPreflightBoardSummary(args) {
+  await withMockHost(async (port) => {
+    const result = await runRunner([
+      "--host", "127.0.0.1",
+      "--port", String(port),
+      "--preflightOnly",
+      "--boardSummary",
+      "--allowMockVideo",
+      "--skipInputLog",
+      "--skipAudio",
+      "--skipClipboard",
+    ], args);
+    assert(result.exitCode === 0, `mock preflight board summary failed\n${result.stdout}\n${result.stderr}`);
+    assertIncludes(result.stdout, "Windows formal Mac E2E preflight: ready", "mock board summary");
+    assertIncludes(result.stdout, "failedChecks=none", "mock board summary");
+    assertIncludes(result.stdout, "Password is not included", "mock board summary");
+    assertNotIncludes(result.stdout + result.stderr, "test-password", "mock board summary");
+    print("OK", "Mock board summary passes without leaking password");
   });
 }
 
@@ -189,12 +222,14 @@ async function testMockFastPath(args) {
       "--skipInputLog",
       "--skipAudio",
       "--skipBrowser",
+      "--boardSummary",
     ], {
       ...args,
       env: { LAN_DUAL_PASSWORD: "test-password" },
     });
     assert(result.exitCode === 0, `mock fast path failed\n${result.stdout}\n${result.stderr}`);
     assertIncludes(result.stdout, "Formal Mac E2E checks finished", "mock fast path");
+    assertIncludes(result.stdout, "Windows formal Mac E2E finished: completed", "mock fast path");
     assertIncludes(result.stdout, "Clipboard file accepted", "mock fast path");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "mock fast path");
     print("OK", "Mock fast path passes without leaking password");
@@ -210,8 +245,10 @@ async function main() {
   const args = parseArgs(process.argv);
   await testOfflinePreflight(args);
   await testOfflineJson(args);
+  await testOfflineBoardSummary(args);
   await testJsonRequiresPreflight(args);
   await testMockPreflightJson(args);
+  await testMockPreflightBoardSummary(args);
   await testMockRequiresPasswordAfterPreflight(args);
   await testMockFastPath(args);
   print("OK", "Windows formal E2E preflight regression passed");
