@@ -32,6 +32,7 @@ const defaults = {
   skipInputLog: false,
   preflightOnly: false,
   checkClientDiagnostics: false,
+  userAuthRequest: false,
   json: false,
   boardSummary: false,
   fastProfile: false,
@@ -81,6 +82,7 @@ Options:
   --skipInputLog                 Skip safe input-log probe.
   --preflightOnly                Only read /discovery and print a readiness summary.
   --checkClientDiagnostics       With preflight, also run Windows client diagnostics against discovery runtime.
+  --userAuthRequest              With preflight, print a NEED_USER_AUTH reminder for the next password step.
   --json                         With --preflightOnly, print a single machine-readable JSON object.
   --boardSummary                 Print a short secret-free Agent Link Board summary.
   --help, -h                     Show this help.
@@ -88,6 +90,7 @@ Options:
 Examples:
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --boardSummary
+  node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --userAuthRequest
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --promptPassword
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --promptPassword --fastProfile
   node scripts/windows/check-mac-formal-e2e.mjs --host 127.0.0.1 --allowDemoPassword --allowMockVideo --skipAudio --skipBrowser
@@ -118,6 +121,7 @@ function parseArgs(argv) {
       key === "skipInputLog" ||
       key === "preflightOnly" ||
       key === "checkClientDiagnostics" ||
+      key === "userAuthRequest" ||
       key === "json" ||
       key === "boardSummary" ||
       key === "fastProfile"
@@ -227,8 +231,30 @@ function makeBoardSummary(report, outcome = "preflight") {
   ].join(" ");
 }
 
+function makeUserAuthRequest(report) {
+  const target = `${report.target.host}:${report.target.port}`;
+  if (!report.ok) {
+    const failedChecks = Array.isArray(report.failedChecks) && report.failedChecks.length > 0
+      ? report.failedChecks.map((check) => check.name).join(",")
+      : "unknown";
+    return [
+      `NEED_USER_AUTH: 暂时不要输入正式密码，Windows 侧正式 Mac E2E 预检尚未 ready，target=${target}，failedChecks=${failedChecks}。`,
+      `位置/步骤：先处理预检问题后重跑 node scripts/windows/check-mac-formal-e2e.mjs --host ${report.target.host} --port ${report.target.port} --preflightOnly --checkClientDiagnostics --boardSummary。`,
+      "处理后请回复 预检已通过。",
+    ].join(" ");
+  }
+
+  return [
+    `NEED_USER_AUTH: 正式 Mac 端到端验收需要你在 Windows 本机隐藏输入 Mac host 正式密码，target=${target}。`,
+    `位置/步骤：在 E:\\codex\\lan-dual-control 运行 ${report.command}。`,
+    "不要把密码发到联络板；本命令默认不执行 inject，inject 仍需你另行明确确认。",
+    "处理后请回复 已输入密码并开始验收。",
+  ].join(" ");
+}
+
 function attachBoardSummary(report, outcome = "preflight") {
   report.boardSummary = makeBoardSummary(report, outcome);
+  report.userAuthRequest = makeUserAuthRequest(report);
   return report;
 }
 
@@ -527,6 +553,8 @@ async function runPreflight(args) {
 
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
+  } else if (args.userAuthRequest) {
+    console.log(report.userAuthRequest);
   } else if (args.boardSummary) {
     console.log(report.boardSummary);
   } else {
@@ -705,6 +733,9 @@ async function main() {
   const args = parseArgs(process.argv);
   if (args.json && !args.preflightOnly) {
     throw new Error("--json is only supported with --preflightOnly.");
+  }
+  if (args.userAuthRequest && !args.preflightOnly) {
+    throw new Error("--userAuthRequest is only supported with --preflightOnly.");
   }
   if (args.preflightOnly) {
     await runPreflight(args);

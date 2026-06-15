@@ -144,11 +144,28 @@ async function testOfflineBoardSummary(args) {
   print("OK", "Offline board summary is secret-free");
 }
 
+async function testOfflineUserAuthRequest(args) {
+  const result = await runRunner(["--host", "127.0.0.1", "--port", "9", "--preflightOnly", "--userAuthRequest"], args);
+  assert(result.exitCode !== 0, "offline user auth request preflight should fail");
+  assertIncludes(result.stdout, "NEED_USER_AUTH:", "offline user auth request");
+  assertIncludes(result.stdout, "暂时不要输入正式密码", "offline user auth request");
+  assertIncludes(result.stdout, "--checkClientDiagnostics --boardSummary", "offline user auth request");
+  assertNotIncludes(result.stdout + result.stderr, "Mac host password", "offline user auth request");
+  print("OK", "Offline user auth request points back to preflight");
+}
+
 async function testJsonRequiresPreflight(args) {
   const result = await runRunner(["--json", "--host", "127.0.0.1", "--port", "9"], args);
   assert(result.exitCode !== 0, "--json without --preflightOnly should fail");
   assertIncludes(result.stderr, "--json is only supported with --preflightOnly", "json guard");
   print("OK", "JSON guard prevents mixed child-process logs");
+}
+
+async function testUserAuthRequestRequiresPreflight(args) {
+  const result = await runRunner(["--userAuthRequest", "--host", "127.0.0.1", "--port", "9"], args);
+  assert(result.exitCode !== 0, "--userAuthRequest without --preflightOnly should fail");
+  assertIncludes(result.stderr, "--userAuthRequest is only supported with --preflightOnly", "user auth guard");
+  print("OK", "User auth request guard prevents accidental formal run");
 }
 
 async function testMockPreflightJson(args) {
@@ -169,6 +186,7 @@ async function testMockPreflightJson(args) {
     assert(payload.capabilities.mock === true, "mock preflight should identify mock host");
     assert(payload.command.includes("--promptPassword"), "mock preflight should include safe command");
     assert(String(payload.boardSummary || "").includes("failedChecks=none"), "mock preflight JSON should include board summary");
+    assert(String(payload.userAuthRequest || "").includes("NEED_USER_AUTH:"), "mock preflight JSON should include user auth request");
     print("OK", "Mock JSON preflight passes");
   });
 }
@@ -191,6 +209,28 @@ async function testMockPreflightBoardSummary(args) {
     assertIncludes(result.stdout, "Password is not included", "mock board summary");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "mock board summary");
     print("OK", "Mock board summary passes without leaking password");
+  });
+}
+
+async function testMockPreflightUserAuthRequest(args) {
+  await withMockHost(async (port) => {
+    const result = await runRunner([
+      "--host", "127.0.0.1",
+      "--port", String(port),
+      "--preflightOnly",
+      "--userAuthRequest",
+      "--allowMockVideo",
+      "--skipInputLog",
+      "--skipAudio",
+      "--skipClipboard",
+    ], args);
+    assert(result.exitCode === 0, `mock preflight user auth request failed\n${result.stdout}\n${result.stderr}`);
+    assertIncludes(result.stdout, "NEED_USER_AUTH:", "mock user auth request");
+    assertIncludes(result.stdout, "--promptPassword", "mock user auth request");
+    assertIncludes(result.stdout, "不要把密码发到联络板", "mock user auth request");
+    assertIncludes(result.stdout, "inject", "mock user auth request");
+    assertNotIncludes(result.stdout + result.stderr, "test-password", "mock user auth request");
+    print("OK", "Mock user auth request is secret-free");
   });
 }
 
@@ -270,9 +310,12 @@ async function main() {
   await testOfflinePreflight(args);
   await testOfflineJson(args);
   await testOfflineBoardSummary(args);
+  await testOfflineUserAuthRequest(args);
   await testJsonRequiresPreflight(args);
+  await testUserAuthRequestRequiresPreflight(args);
   await testMockPreflightJson(args);
   await testMockPreflightBoardSummary(args);
+  await testMockPreflightUserAuthRequest(args);
   await testMockPreflightClientDiagnostics(args);
   await testMockRequiresPasswordAfterPreflight(args);
   await testMockFastPath(args);
