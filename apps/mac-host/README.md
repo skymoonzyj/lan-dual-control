@@ -31,7 +31,7 @@
 node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword
 ```
 
-`--promptPassword` 会先播放提示音，再通过 SystemUIServer 把 macOS 隐藏密码对话框激活到前台；密码只保存在本次进程内，不会写入命令参数、日志或联络板。默认不会退回到终端隐藏输入，避免用户看不到输入位置；如果环境里已有 `LAN_DUAL_PASSWORD`，显式 `--promptPassword` 会要求先清掉环境变量再弹窗，避免悄悄复用旧密码。自动化测试可显式关闭弹窗来验证失败路径，人工正式联调不要关闭。
+`--promptPassword` 会先播放提示音，再打开前台置顶的原生 macOS 隐藏密码框；如果原生弹窗打不开，才退回 AppleScript 前台隐藏密码框。密码只保存在本次进程内，不会写入命令参数、日志或联络板。默认不会退回到终端隐藏输入，避免用户看不到输入位置；如果环境里已有 `LAN_DUAL_PASSWORD`，显式 `--promptPassword` 会要求先清掉环境变量再弹窗，避免悄悄复用旧密码。自动化测试可显式关闭弹窗来验证失败路径，人工正式联调不要关闭。
 
 如果只是本机开发快速试跑，可以先干跑查看即将使用的端口、build、局域网地址和输入模式：
 
@@ -89,7 +89,7 @@ node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary
 node scripts/mac/check-mac-formal-local-smoke.mjs --promptPassword
 ```
 
-该脚本会复用 `observe-mac-video`、`observe-mac-audio` 和 `smoke-mac-input-log`，默认要求正式密码来源为 `LAN_DUAL_PASSWORD` 或 `--promptPassword`，并拒绝空密码和 `demo-password`。`--promptPassword` 会先播放提示音，再把 macOS 隐藏密码对话框激活到前台；密码只通过子进程环境变量传递，不放进命令参数；脚本不会启动 Mac host、不会切 `inject`，也不会打印密码。自动化需要机器可读结果时可加 `--json`，需要本地假服务回归时才显式加 `--allowDemoPassword`。
+该脚本会复用 `observe-mac-video`、`observe-mac-audio` 和 `smoke-mac-input-log`，默认要求正式密码来源为 `LAN_DUAL_PASSWORD` 或 `--promptPassword`，并拒绝空密码和 `demo-password`。`--promptPassword` 会先播放提示音，再打开前台置顶的原生 macOS 隐藏密码框；密码只通过子进程环境变量传递，不放进命令参数；脚本不会启动 Mac host、不会切 `inject`，也不会打印密码。自动化需要机器可读结果时可加 `--json`，需要本地假服务回归时才显式加 `--allowDemoPassword`。
 
 启动助手会：
 

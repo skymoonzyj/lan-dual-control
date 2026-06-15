@@ -19,6 +19,47 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 13:00
+开发端：Mac Codex
+本轮目标：按用户现场反馈“没有看到输入密码的地方”，再次加固 Mac 侧 `--promptPassword` 的可见性，确保需要用户输入密码时先响铃再弹出真正前台窗口。
+完成内容：
+- `scripts/mac/password-prompt.mjs` 首选改为原生 Swift/AppKit 隐藏密码框：运行时会激活当前进程、窗口置顶、跨 Space 可见，并把密码框设为第一响应者，避免藏在后台。
+- 如果原生 AppKit 弹窗打不开，才退回 AppleScript 前台隐藏密码框；如果用户取消，则直接停止，不会再弹第二个备用窗口。
+- 默认仍不退回终端隐藏输入，只有显式 `LAN_DUAL_ALLOW_TERMINAL_PASSWORD_PROMPT=1` 才允许本地人工 fallback；密码仍不打印、不进 argv、不发联络板。
+- `scripts/mac/test-mac-password-prompt.mjs` 增加假 `swift`，覆盖提示音、原生 AppKit 前台/置顶/聚焦脚本、取消不 fallback、原生失败后 AppleScript fallback 和全部失败路径。
+- 更新 `start-mac-host`、`check-mac-host-readiness`、`check-mac-formal-local-smoke` 的帮助文字，以及 Mac host README、当前状态、下一步和任务板中的弹窗说明。
+修改文件：
+- `scripts/mac/password-prompt.mjs`
+- `scripts/mac/test-mac-password-prompt.mjs`
+- `scripts/mac/start-mac-host.mjs`
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `scripts/mac/check-mac-formal-local-smoke.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/password-prompt.mjs`
+- `node --check scripts/mac/test-mac-password-prompt.mjs`
+- `node scripts/mac/test-mac-password-prompt.mjs --timeoutMs 10000`
+- 抽取 `password-prompt.mjs` 内嵌 Swift/AppKit 脚本后用 `swift -frontend -parse -` 解析通过
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-readiness-prompt-password.mjs --timeoutMs 10000`
+- `node scripts/mac/test-mac-formal-local-smoke.mjs --timeoutMs 12000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 8000`
+- `git diff --check`
+- 冲突标记搜索
+遗留问题：
+- 本轮未弹真实正式密码框，避免在未进入正式验收时打扰用户；下次任何真实 `--promptPassword` 都会先响铃，再显示前台置顶原生密码框。
+下一步建议：
+- 若还需要真实启动 Mac host，使用 `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword`；用户应能看到前台密码框。如果仍不可见，下一步考虑改为短生命周期 `.app` 包或使用 `osascript display dialog` 绑定当前前台应用。
+是否改了协议：否。
+是否需要另一端配合：无需 Windows 修改；只需 Windows Codex 知道 Mac 侧密码弹窗体验已再次加固。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 13:05
 开发端：Mac Codex
 本轮目标：补齐 Mac 控制 Windows 前的本地 Mac client 页面启动/状态入口，让正式清单不再依赖人工记命令。
