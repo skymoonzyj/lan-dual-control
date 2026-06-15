@@ -19,6 +19,33 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 19:25
+开发端：Mac Codex
+本轮目标：同步 Mac 测试兼容修复和当前无密 formal readiness 状态到开工文档。
+完成内容：
+- `docs/CURRENT_STATUS.md` 记录 `test-mac-password-prompt` 已支持 Windows 审查机 fake `.cmd` shim/PATH/PATHEXT，以及 `test-mac-host-start-helper` 非 macOS 真实 Swift 启动段明确 `[SKIP]`。
+- `docs/CURRENT_STATUS.md` 和 `docs/NEXT_ACTIONS.md` 记录当前无密 Mac formal E2E 状态：repo `f858eda` 干净，Mac host `192.168.31.122:43770` 在线，runtime build `d807536`，权限全开，H.264/系统 PCM/剪贴板开启，`inputMode=log`，仅 build 元数据落后且 Mac host runtime 源码变化数为 0。
+- `docs/NEXT_ACTIONS.md` 补充 Supervisor/Windows 审查机复跑 Mac 测试时的预期：密码弹窗测试不打开真实系统弹窗，启动助手测试在非 macOS 上跳过真实 Swift host 启动段。
+修改文件：
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary`
+- `node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary`
+- `node scripts/mac/start-mac-host.mjs --status --json`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" .`
+遗留问题：
+- 正式认证仍需用户在本机隐藏输入密码；`inject` 仍需另行明确确认。
+下一步建议：
+- 等 Supervisor/Windows 审查机复跑 Mac 测试；Windows 侧剪贴板完整性整改完成后，再协调正式 E2E 或 Mac client 真连观感对照。
+是否改了协议：否。
+是否需要另一端配合：需要 Supervisor/Windows 审查机复审；正式 E2E 需要用户授权输入密码。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 19:15
 开发端：Mac Codex
 本轮目标：修复 Mac 测试在 Windows 审查机上的兼容问题。
