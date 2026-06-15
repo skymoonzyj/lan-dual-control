@@ -19,6 +19,39 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 01:20
+开发端：Windows Codex
+本轮目标：把联络板里的“需要用户授权/卡住”提醒收口，减少 Mac 端出现授权弹窗、502 或长时间无状态更新时 Windows 端错过消息。
+完成内容：
+- 联络板网页新增授权/卡住提醒面板，可开启声音和浏览器桌面通知。
+- 网页会识别 `NEED_USER_AUTH`、`USER_ACTION_REQUIRED`、`BLOCKED_BY_PERMISSION`、授权/权限关键词、502、Bad Gateway 和 Gateway Timeout。
+- 网页会把 `coding`、`testing`、`waiting`、`ready` 状态超过阈值未更新的设备标红，并触发顶部提醒；默认阈值 5 分钟，可在页面调整。
+- 新增 Windows watcher：`scripts/windows/start-mac-alert-watcher.ps1` 后台启动，`scripts/windows/watch-codex-link-mac-alerts.ps1` 前台调试；用于在 Windows 本机弹窗提醒 Mac 侧需要处理或长时间无更新。
+- `docs/LAN_CODEX_LINK.md` 和 `docs/TEST_COORDINATION.md` 已补高优先级提醒格式、触发词和 watcher 使用方式。
+修改文件：
+- `scripts/codex-link-server.mjs`
+- `scripts/windows/start-mac-alert-watcher.ps1`
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `docs/LAN_CODEX_LINK.md`
+- `docs/TEST_COORDINATION.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/codex-link-server.mjs`
+- PowerShell AST 解析两个 watcher 脚本
+- 静态搜索确认没有把真实 token、密码或密钥打印到日志/文档
+- `git diff --check`
+- 冲突标记搜索
+遗留问题：
+- 浏览器桌面通知需要用户在联络板页面点击“开启声音/桌面提醒”并授权浏览器通知。
+- watcher 若传入 `-Token`，token 会作为本机进程参数存在；只在可信个人机器上使用，不要把 token 写入联络板消息或文档。
+下一步建议：
+- 白天恢复工作时，两端先打开联络板；Windows 浏览器点一次“开启声音/桌面提醒”，再用 `USER_ACTION_REQUIRED` 发测试消息确认提醒能弹出。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端后续按新格式发送 `NEED_USER_AUTH` / `USER_ACTION_REQUIRED` 类消息；不需要立即联调。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 00:58
 开发端：Windows Codex
 本轮目标：把现有 Windows `ffmpeg-h264` 过渡路径从固定 `libx264` 扩展为可选 FFmpeg H.264 encoder，并先验证 `h264_nvenc`，为下一步 WGC 采集源接 NVENC 做准备。
@@ -58,7 +91,7 @@
 - 默认 `libx264` 回归也已通过，未发现 H.264 基线路径退化。
 遗留问题：
 - 这轮仍使用 FFmpeg `gdigrab` 作为采集源，只验证 encoder 选择和 Mac client 接收链路；还不是 WGC + NVENC 真正低延迟原型。
-- `scripts/codex-link-server.mjs` 当前有本地联络板提醒功能改动，属于另一条本地 WIP，本轮不会提交。
+- 联络板提醒功能已在后一轮独立收口，避免和 H.264 encoder 提交混在一起。
 下一步建议：
 - 下一轮 Windows 端优先把 WGC helper 的真实帧源接到 H.264/NVENC 输出，继续用 `test-mac-client-video-transports.mjs --h264Encoder h264_nvenc` 守住四条接收/回退路径。
 - 做 WGC+NVENC 前后对照 `observe-windows-host-video --resourceSampleTree true --json`，记录帧率、最大间隔、帧新鲜度、带宽和资源占用。

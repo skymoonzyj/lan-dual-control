@@ -1,22 +1,24 @@
 # 双端测试联络规则
 
-最后更新：2026-06-12
+最后更新：2026-06-15
 
-用途：当一方正在测试，需要另一方及时配合时，用这个文件记录“正在呼叫谁、需要什么、当前卡在哪里”。真正的即时提醒建议通过微信、飞书、钉钉、Telegram 或 GitHub Issue 通知人；这个文件负责保留项目内的事实记录。
+用途：当一方正在测试，需要另一方及时配合时，用这个文件记录“正在呼叫谁、需要什么、当前卡在哪里”。真正的即时提醒优先使用局域网联络板的授权/卡住提醒，必要时再用微信、飞书、钉钉、Telegram 或 GitHub Issue 兜底；这个文件负责保留项目内的事实记录。
 
 ## 最推荐的联络方式
 
-1. 人类即时消息负责提醒。
-   - 例如：在微信或飞书发一句“Mac Codex 需要 Windows 端配合，看 `docs/TEST_COORDINATION.md` 最新呼叫”。
-   - Codex 本身不会自动收到另一台机器的本地文件变化，所以要有人或外部通知把另一端叫醒。
-
-2. 同一局域网内可以使用项目自带的联络板。
+1. 同一局域网内优先使用项目自带的联络板。
    - 启动方式见 `docs/LAN_CODEX_LINK.md`。
    - 一台设备启动服务，两台设备都打开同一个网页。
    - 适合实时发消息、更新在线状态和发起测试呼叫。
    - Codex 可以用 `scripts/codex-link-client.mjs watch` 监控消息，用 `send/status/call` 给联络板发送信息。
+   - 浏览器里点击“开启声音/桌面提醒”后，`NEED_USER_AUTH`、`USER_ACTION_REQUIRED`、`BLOCKED_BY_PERMISSION`、502/Bad Gateway 和长时间未更新状态会触发提醒。
+   - Windows 侧可以运行 `scripts\windows\start-mac-alert-watcher.ps1 -Server http://联络板主机:17888`，在 Mac 端需要授权、卡住或 502 时弹出本机提醒。
 
-3. GitHub Issue 负责跨设备提醒。
+2. 人类即时消息负责兜底提醒。
+   - 例如：在微信或飞书发一句“Mac Codex 需要 Windows 端配合，看联络板和 `docs/TEST_COORDINATION.md` 最新呼叫”。
+   - 如果联络板没有打开、浏览器通知没授权，或两台机器不在同一局域网，用外部通知把另一端叫醒。
+
+3. GitHub Issue 负责跨设备长期提醒。
    - 开一个固定 Issue，例如：`Test coordination / 双端联调呼叫`。
    - 测试方在 Issue 评论里贴同一份呼叫内容。
    - 另一台机器收到 GitHub 通知后，让对应 Codex 拉最新代码并查看本文件。
@@ -38,6 +40,25 @@
 | `BLOCKED` | 测试阻塞，需要另一方处理 |
 | `DONE` | 本轮测试完成 |
 | `CANCELLED` | 本轮测试取消 |
+
+## 高优先级提醒格式
+
+需要用户授权、系统弹窗、权限缺失、502/Bad Gateway 或无人值守卡住时，不要只写普通状态，必须发一条带关键词的联络板消息：
+
+```text
+NEED_USER_AUTH: <需要用户做什么>。位置/步骤：<具体路径>。处理后请回复 <如何确认>。
+```
+
+可用关键词：
+
+- `NEED_USER_AUTH`
+- `USER_ACTION_REQUIRED`
+- `BLOCKED_BY_PERMISSION`
+- `AUTHORIZATION_REQUIRED`
+- `PERMISSION_REQUIRED`
+- `502` / `Bad Gateway` / `Gateway Timeout`
+
+不要在高优先级提醒里写连接密码、系统账号、Apple ID、GitHub token 或其他密钥。
 
 ## 呼叫模板
 

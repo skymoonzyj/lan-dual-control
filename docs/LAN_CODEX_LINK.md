@@ -38,8 +38,45 @@ http://192.168.1.x:17888
 - “发消息”：发普通文字消息。
 - “测试呼叫”：发起一轮需要另一端配合的联调。
 - “当前呼叫”：两端共同看到最新测试请求。
+- “授权提醒”：在浏览器里开启声音/桌面提醒后，联络板会突出显示需要用户处理、502/Bad Gateway、权限/授权阻塞和长时间未更新状态。
 
 网页本身是实时刷新的：打开页面后，它会通过浏览器的实时事件连接接收服务端推送，不需要手动刷新。
+
+## 授权和卡住提醒
+
+如果一端遇到需要用户处理的弹窗、系统授权、502/Bad Gateway、权限缺失或长时间卡住，必须在联络板发一条带高优先级关键词的消息。推荐格式：
+
+```text
+NEED_USER_AUTH: <需要用户做什么>。位置/步骤：<具体路径>。处理后请回复 <如何确认>。
+```
+
+也可以使用这些关键词：
+
+```text
+USER_ACTION_REQUIRED
+BLOCKED_BY_PERMISSION
+AUTHORIZATION_REQUIRED
+PERMISSION_REQUIRED
+502
+Bad Gateway
+Gateway Timeout
+```
+
+Windows 浏览器打开联络板后，点击“开启声音/桌面提醒”，以后这些消息会触发顶部红色提醒、标题闪烁、提示音和浏览器桌面通知。页面也会把 `coding`、`testing`、`waiting`、`ready` 状态超过阈值未更新的设备标红，默认阈值 5 分钟，可在页面里调整。
+
+如果希望 Windows 即使没有盯着浏览器也能弹窗提醒 Mac 侧异常，可以启动本机 watcher。它只读取联络板状态，不会发送密码或密钥：
+
+```powershell
+scripts\windows\start-mac-alert-watcher.ps1 -Server http://192.168.1.x:17888
+```
+
+需要前台调试时直接运行：
+
+```powershell
+scripts\windows\watch-codex-link-mac-alerts.ps1 -Server http://192.168.1.x:17888
+```
+
+如果联络板启用了令牌，可以加 `-Token`；不要把令牌贴到联络板消息或项目文档里。
 
 ## Codex 命令行收发
 

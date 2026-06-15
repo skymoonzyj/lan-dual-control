@@ -287,6 +287,9 @@ const html = String.raw`<!doctype html>
       --accent: #1769e0;
       --accent-soft: #e8f1ff;
       --danger: #b42318;
+      --danger-soft: #fff1f0;
+      --warning: #b54708;
+      --warning-soft: #fff7e6;
       --ok: #067647;
     }
     * { box-sizing: border-box; }
@@ -309,6 +312,42 @@ const html = String.raw`<!doctype html>
     }
     h1 { font-size: 18px; margin: 0; }
     .connection { color: var(--muted); font-size: 13px; }
+    .urgent-banner {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 20px;
+      border-bottom: 1px solid #f0b8ae;
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+    .urgent-banner.hidden { display: none; }
+    .urgent-title {
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+    .urgent-text {
+      color: #7a271a;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 13px;
+    }
+    .urgent-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .urgent-actions button {
+      width: auto;
+      margin: 0;
+      white-space: nowrap;
+    }
+    .urgent-actions .secondary {
+      background: #fff;
+      color: var(--danger);
+      border-color: #f0b8ae;
+    }
     main {
       display: grid;
       grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
@@ -361,6 +400,19 @@ const html = String.raw`<!doctype html>
       color: var(--accent);
       border: 1px solid #b8d3ff;
     }
+    button.danger {
+      background: var(--danger);
+    }
+    .alert-panel {
+      border-left: 4px solid var(--warning);
+      background: var(--warning-soft);
+    }
+    .alert-status {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 8px;
+      line-height: 1.45;
+    }
     .grid2 {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -387,6 +439,14 @@ const html = String.raw`<!doctype html>
     }
     .event-card.call { border-left: 4px solid var(--accent); }
     .event-card.status { border-left: 4px solid var(--ok); }
+    .event-card.urgent {
+      border-left: 4px solid var(--danger);
+      background: var(--danger-soft);
+    }
+    .status-card.stale {
+      border-left: 4px solid var(--danger);
+      background: var(--danger-soft);
+    }
     .event-meta, .status-meta {
       color: var(--muted);
       font-size: 12px;
@@ -407,6 +467,16 @@ const html = String.raw`<!doctype html>
     <h1>Codex LAN Link</h1>
     <div id="connection" class="connection">连接中...</div>
   </header>
+  <div id="urgentBanner" class="urgent-banner hidden">
+    <div>
+      <div id="urgentTitle" class="urgent-title">需要用户处理</div>
+      <div id="urgentText" class="urgent-text"></div>
+    </div>
+    <div class="urgent-actions">
+      <button id="enableAlertsTop" class="danger">开启提醒</button>
+      <button id="ackAlertTop" class="secondary">已处理</button>
+    </div>
+  </div>
   <main>
     <div>
       <section>
@@ -439,6 +509,18 @@ const html = String.raw`<!doctype html>
         <label for="message">消息</label>
         <textarea id="message" placeholder="Mac 端服务已启动，等 Windows 连接。"></textarea>
         <button id="sendMessage">发送</button>
+      </section>
+
+      <section class="alert-panel" style="margin-top:16px">
+        <h2>授权提醒</h2>
+        <div class="grid2">
+          <button id="enableAlerts">开启声音/桌面提醒</button>
+          <button id="testAlert" class="secondary">测试提醒</button>
+        </div>
+        <label for="staleMinutes">卡住提醒阈值（分钟）</label>
+        <input id="staleMinutes" type="number" min="3" max="240" step="1" />
+        <button id="ackAlert" class="secondary">标记当前提醒已处理</button>
+        <div id="alertStatus" class="alert-status"></div>
       </section>
 
       <section style="margin-top:16px">
@@ -493,6 +575,27 @@ const html = String.raw`<!doctype html>
     const tokenFromUrl = qs.get("token");
     if (tokenFromUrl) localStorage.setItem("codexLinkToken", tokenFromUrl);
     const token = localStorage.getItem("codexLinkToken") || "";
+    const baseTitle = document.title;
+    const urgentPatterns = [
+      /NEED_USER_AUTH/i,
+      /USER_ACTION_REQUIRED/i,
+      /BLOCKED_BY_PERMISSION/i,
+      /AUTHORIZATION_REQUIRED/i,
+      /PERMISSION_REQUIRED/i,
+      /\b(HTTP\s*)?502\b/i,
+      /Bad Gateway/i,
+      /Gateway Timeout/i,
+      /(接口|请求|网络).{0,16}(502|Bad Gateway|超时|失败)/i,
+      /需要.{0,12}(授权|权限|用户|人工|确认|处理)/i,
+      /(授权|权限).{0,12}(卡住|阻塞|缺失|失败|需要)/i,
+    ];
+    let alertsEnabled = localStorage.getItem("codexLinkAlertsEnabled") === "true";
+    let staleMinutes = clampNumber(localStorage.getItem("codexLinkStaleMinutes"), 3, 240, 5);
+    let lastAckUrgentId = localStorage.getItem("codexLinkLastAckUrgentId") || "";
+    let lastNotifiedUrgentId = "";
+    let currentUrgent = null;
+    let titleTimer = null;
+    let audioContext = null;
     const headers = () => ({
       "Content-Type": "application/json",
       ...(token ? { "X-Codex-Link-Token": token } : {}),
@@ -503,6 +606,8 @@ const html = String.raw`<!doctype html>
     const savedRole = localStorage.getItem("codexLinkRole") || "";
     $("device").value = savedDevice;
     $("role").value = savedRole;
+    $("staleMinutes").value = String(staleMinutes);
+    updateAlertStatus();
 
     async function post(path, body) {
       const response = await fetch(path, {
@@ -550,11 +655,32 @@ const html = String.raw`<!doctype html>
       await post("/api/clear-call", {});
     };
 
+    $("enableAlerts").onclick = enableAlerts;
+    $("enableAlertsTop").onclick = enableAlerts;
+    $("testAlert").onclick = async () => {
+      await enableAlerts();
+      notifyUrgent({
+        id: "local-test-" + Date.now(),
+        from: "Codex LAN Link",
+        text: "这是一条本机测试提醒。以后 Mac 端发 NEED_USER_AUTH / USER_ACTION_REQUIRED / BLOCKED_BY_PERMISSION 时会触发同样提醒。",
+        at: new Date().toISOString(),
+      }, true);
+    };
+    $("ackAlert").onclick = acknowledgeUrgent;
+    $("ackAlertTop").onclick = acknowledgeUrgent;
+    $("staleMinutes").onchange = () => {
+      staleMinutes = clampNumber($("staleMinutes").value, 3, 240, 5);
+      $("staleMinutes").value = String(staleMinutes);
+      localStorage.setItem("codexLinkStaleMinutes", String(staleMinutes));
+      updateAlertStatus();
+    };
+
     function render(state) {
       $("connection").textContent = "已连接，最后更新 " + new Date(state.updatedAt).toLocaleTimeString();
       renderCall(state.currentCall);
       renderStatuses(state.statuses || {});
       renderEvents(state.events || []);
+      updateUrgent(state);
     }
 
     function renderCall(call) {
@@ -580,21 +706,198 @@ const html = String.raw`<!doctype html>
     function renderStatuses(statuses) {
       const items = Object.entries(statuses).sort((a, b) => String(b[1].updatedAt).localeCompare(String(a[1].updatedAt)));
       $("statuses").innerHTML = items.length ? items.map(([device, item]) =>
-        '<div class="status-card">' +
+        '<div class="status-card' + (isStaleStatus(item) ? ' stale' : '') + '">' +
           '<div class="status-meta">' + escapeHtml(item.role || "") + ' · ' + new Date(item.updatedAt).toLocaleString() + '</div>' +
           '<strong>' + escapeHtml(device) + '</strong>：' + escapeHtml(item.status || "") +
           '<div>' + escapeHtml(item.note || "") + '</div>' +
+          (isStaleStatus(item) ? '<div class="event-meta">超过 ' + staleMinutes + ' 分钟未更新，可能已卡住或离线</div>' : '') +
         '</div>'
       ).join("") : '<div class="empty">暂无状态</div>';
     }
 
     function renderEvents(events) {
       $("events").innerHTML = events.slice().reverse().map((event) =>
-        '<div class="event-card ' + escapeHtml(event.type) + '">' +
+        '<div class="event-card ' + escapeHtml(event.type) + (isUrgentEvent(event) ? ' urgent' : '') + '">' +
           '<div class="event-meta">' + escapeHtml(event.type) + ' · ' + escapeHtml(event.from) + ' · ' + new Date(event.at).toLocaleString() + '</div>' +
           '<div class="event-text">' + escapeHtml(event.text) + '</div>' +
         '</div>'
       ).join("");
+    }
+
+    function urgentMatch(text) {
+      return urgentPatterns.some((pattern) => pattern.test(String(text || "")));
+    }
+
+    function isUrgentEvent(event) {
+      return event?.type === "alert" || urgentMatch(event?.text);
+    }
+
+    function latestUrgent(state) {
+      const candidates = [];
+      for (const event of state.events || []) {
+        if (isUrgentEvent(event)) {
+          candidates.push({
+            id: "event:" + event.id,
+            from: event.from || "unknown",
+            text: event.text || "",
+            at: event.at || "",
+          });
+        }
+      }
+
+      const call = state.currentCall;
+      const callText = [
+        call?.status,
+        call?.goal,
+        call?.blockedBy,
+        call?.ask,
+        call?.actual,
+      ].filter(Boolean).join("\n");
+      if (call && (String(call.status || "").toUpperCase() === "BLOCKED" || urgentMatch(callText))) {
+        candidates.push({
+          id: "call:" + (call.updatedAt || call.startedAt || ""),
+          from: call.from || "unknown",
+          text: callText,
+          at: call.updatedAt || call.startedAt || "",
+        });
+      }
+
+      for (const [device, item] of Object.entries(state.statuses || {})) {
+        const statusText = [item.status, item.note].filter(Boolean).join(": ");
+        if (String(item.status || "").toLowerCase() === "blocked" || urgentMatch(statusText)) {
+          candidates.push({
+            id: "status:" + device + ":" + (item.updatedAt || ""),
+            from: device,
+            text: statusText,
+            at: item.updatedAt || "",
+          });
+        }
+        if (isStaleStatus(item)) {
+          candidates.push({
+            id: "stale:" + device + ":" + (item.updatedAt || "") + ":" + staleMinutes,
+            from: device,
+            text: "AGENT_STALE: " + device + " 超过 " + staleMinutes + " 分钟没有更新状态。上次状态：" + statusText + "。可能是 502、网络错误、授权弹窗或任务卡住；请检查对应机器的 Codex 窗口。",
+            at: new Date().toISOString(),
+          });
+        }
+      }
+
+      return candidates
+        .filter((item) => item.id && item.id !== lastAckUrgentId)
+        .sort((a, b) => String(b.at).localeCompare(String(a.at)))[0] || null;
+    }
+
+    function updateUrgent(state) {
+      const urgent = latestUrgent(state);
+      if (!urgent) {
+        currentUrgent = null;
+        hideUrgent();
+        return;
+      }
+
+      currentUrgent = urgent;
+      $("urgentBanner").classList.remove("hidden");
+      $("urgentTitle").textContent = "需要用户处理 · " + (urgent.from || "unknown");
+      $("urgentText").textContent = urgent.text || "";
+      startTitleFlash();
+      if (alertsEnabled && urgent.id !== lastNotifiedUrgentId) {
+        notifyUrgent(urgent);
+      }
+    }
+
+    async function enableAlerts() {
+      alertsEnabled = true;
+      localStorage.setItem("codexLinkAlertsEnabled", "true");
+      if ("Notification" in window && Notification.permission === "default") {
+        try {
+          await Notification.requestPermission();
+        } catch {}
+      }
+      await playBeep();
+      updateAlertStatus();
+    }
+
+    function updateAlertStatus() {
+      const notificationState = "Notification" in window ? Notification.permission : "unsupported";
+      $("alertStatus").textContent = alertsEnabled
+        ? "提醒已开启。触发词：NEED_USER_AUTH、USER_ACTION_REQUIRED、BLOCKED_BY_PERMISSION、502、Bad Gateway。coding/testing/waiting 超过 " + staleMinutes + " 分钟未更新也会提醒。浏览器通知状态：" + notificationState + "。"
+        : "提醒未开启。点击开启后，Windows 浏览器会在 Mac 需要授权、502 停住或长时间未更新时播放提示音并弹出桌面通知。";
+    }
+
+    function acknowledgeUrgent() {
+      if (currentUrgent?.id) {
+        lastAckUrgentId = currentUrgent.id;
+        localStorage.setItem("codexLinkLastAckUrgentId", lastAckUrgentId);
+      }
+      currentUrgent = null;
+      hideUrgent();
+    }
+
+    function hideUrgent() {
+      $("urgentBanner").classList.add("hidden");
+      stopTitleFlash();
+    }
+
+    function notifyUrgent(urgent, force = false) {
+      lastNotifiedUrgentId = urgent.id;
+      playBeep();
+      if ("Notification" in window && Notification.permission === "granted") {
+        const title = force ? "Codex LAN Link 测试提醒" : "Codex LAN Link 需要处理";
+        new Notification(title, {
+          body: (urgent.from ? urgent.from + ": " : "") + String(urgent.text || "").slice(0, 180),
+          tag: "codex-link-urgent",
+        });
+      }
+    }
+
+    async function playBeep() {
+      try {
+        audioContext = audioContext || new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === "suspended") await audioContext.resume();
+        const now = audioContext.currentTime;
+        for (let index = 0; index < 3; index += 1) {
+          const oscillator = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          oscillator.type = "sine";
+          oscillator.frequency.value = index % 2 ? 660 : 880;
+          gain.gain.setValueAtTime(0.0001, now + index * 0.22);
+          gain.gain.exponentialRampToValueAtTime(0.16, now + index * 0.22 + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + index * 0.22 + 0.16);
+          oscillator.connect(gain);
+          gain.connect(audioContext.destination);
+          oscillator.start(now + index * 0.22);
+          oscillator.stop(now + index * 0.22 + 0.17);
+        }
+      } catch {}
+    }
+
+    function startTitleFlash() {
+      if (titleTimer) return;
+      let active = false;
+      titleTimer = setInterval(() => {
+        active = !active;
+        document.title = active ? "[需要处理] " + baseTitle : baseTitle;
+      }, 900);
+    }
+
+    function stopTitleFlash() {
+      if (titleTimer) clearInterval(titleTimer);
+      titleTimer = null;
+      document.title = baseTitle;
+    }
+
+    function isStaleStatus(item) {
+      const status = String(item?.status || "").toLowerCase();
+      if (!["coding", "testing", "waiting", "ready"].includes(status)) return false;
+      const updatedAt = Date.parse(item?.updatedAt || "");
+      if (!Number.isFinite(updatedAt)) return false;
+      return Date.now() - updatedAt > staleMinutes * 60 * 1000;
+    }
+
+    function clampNumber(value, min, max, fallback) {
+      const number = Number(value);
+      if (!Number.isFinite(number)) return fallback;
+      return Math.min(max, Math.max(min, Math.round(number)));
     }
 
     function escapeHtml(value) {
