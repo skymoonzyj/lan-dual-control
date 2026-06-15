@@ -65,7 +65,13 @@ function makeFakeOsascript(dir) {
 import { appendFileSync } from "node:fs";
 const log = process.env.FAKE_OSASCRIPT_LOG;
 const joined = process.argv.slice(2).join("\\n");
-if (log) appendFileSync(log, joined.includes("beep") ? "beep\\n" : "dialog\\n");
+if (log) {
+  if (joined.includes("beep")) {
+    appendFileSync(log, "beep\\n");
+  } else {
+    appendFileSync(log, \`dialog\\n\${joined.includes("activate") ? "activate\\n" : ""}\`);
+  }
+}
 if (joined.includes("beep")) process.exit(0);
 if (process.env.FAKE_OSASCRIPT_MODE === "cancel") {
   console.error("execution error: Password prompt cancelled. (-128)");
@@ -137,6 +143,7 @@ function checkDialogSuccess(tmp, timeoutMs) {
   const log = safeRead(logPath);
   assertIncludes(log, "beep", "dialog success osascript log");
   assertIncludes(log, "dialog", "dialog success osascript log");
+  assertIncludes(log, "activate", "dialog success osascript log");
   console.log("[OK] Password helper rings and reads a hidden macOS dialog value");
 }
 
@@ -162,7 +169,7 @@ function checkDialogFailureNoTty(tmp, timeoutMs) {
   assert(result.status !== 0, `dialog failure should fail without hanging.\n${output}`);
   const payload = parseJson(result.stdout, "dialog failure");
   assert(payload.ok === false, "dialog failure should report ok=false");
-  assertIncludes(payload.message, "could not open a macOS password dialog", "dialog failure message");
+  assertIncludes(payload.message, "could not open a frontmost macOS password dialog", "dialog failure message");
   console.log("[OK] Password helper fails fast when no dialog or terminal is available");
 }
 

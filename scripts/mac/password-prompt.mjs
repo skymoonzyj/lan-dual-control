@@ -15,19 +15,24 @@ export async function promptPassword({
   terminalLabel = "Password: ",
   output = process.stdout,
   timeoutMs = defaultTimeoutMs,
+  allowTerminalFallback = process.env.LAN_DUAL_ALLOW_TERMINAL_PASSWORD_PROMPT === "1",
 } = {}) {
   playAttentionSound();
   if (!dialogDisabled()) {
     try {
       return await promptWithMacDialog({ title, message, prompt, timeoutMs });
     } catch (error) {
-      if (!canPromptInTerminal(output)) {
-        throw new Error(`${error.message} --promptPassword could not open a macOS password dialog.`);
+      if (allowTerminalFallback && canPromptInTerminal(output)) {
+        safeWrite(output, `[WARN] macOS password dialog failed: ${error.message}\n`);
+        return promptHiddenInTerminal(terminalLabel, output);
       }
-      safeWrite(output, `[WARN] macOS password dialog failed: ${error.message}\n`);
+      throw new Error(`${error.message} --promptPassword could not open a frontmost macOS password dialog.`);
     }
   }
-  return promptHiddenInTerminal(terminalLabel, output);
+  if (allowTerminalFallback && canPromptInTerminal(output)) {
+    return promptHiddenInTerminal(terminalLabel, output);
+  }
+  throw new Error("--promptPassword requires a macOS password dialog. Terminal password input is disabled by default; set LAN_DUAL_ALLOW_TERMINAL_PASSWORD_PROMPT=1 only for local manual fallback.");
 }
 
 export function playAttentionSound() {
@@ -55,8 +60,12 @@ set dialogTitle to ${appleScriptString(title)}
 set dialogMessage to ${appleScriptString(message)}
 set promptLabel to ${appleScriptString(prompt)}
 try
-  display dialog (dialogMessage & return & return & promptLabel) default answer "" with title dialogTitle with hidden answer buttons {"Cancel", "Continue"} default button "Continue" cancel button "Cancel"
-  set passwordValue to text returned of result
+  tell current application
+    activate
+    delay 0.1
+    set dialogResult to display dialog (dialogMessage & return & return & promptLabel) default answer "" with title dialogTitle with hidden answer buttons {"Cancel", "Continue"} default button "Continue" cancel button "Cancel"
+  end tell
+  set passwordValue to text returned of dialogResult
   return passwordValue
 on error number -128
   error "Password prompt cancelled."
@@ -118,7 +127,7 @@ function appleScriptString(value) {
 
 function promptHiddenInTerminal(label, output = process.stdout) {
   if (!canPromptInTerminal(output)) {
-    return Promise.reject(new Error("--promptPassword requires a macOS password dialog or an interactive terminal."));
+    return Promise.reject(new Error("Terminal password fallback requires an interactive terminal."));
   }
 
   return new Promise((resolvePrompt, rejectPrompt) => {
@@ -198,12 +207,13 @@ Shared helper used by Mac scripts that need a password prompt.
 
 Behavior:
   - Rings before asking for a password.
-  - Opens a macOS hidden password dialog for --promptPassword callers.
-  - Falls back to hidden terminal input only when a terminal is available.
+  - Opens and activates a macOS hidden password dialog for --promptPassword callers.
+  - Does not fall back to terminal input unless explicitly allowed for local manual fallback.
   - Never prints the password.
 
 Environment:
-  LAN_DUAL_DISABLE_PASSWORD_BEEP=1      Disable the attention sound.
-  LAN_DUAL_DISABLE_PASSWORD_DIALOG=1    Disable macOS dialog fallback for tests.
+  LAN_DUAL_DISABLE_PASSWORD_BEEP=1             Disable the attention sound.
+  LAN_DUAL_DISABLE_PASSWORD_DIALOG=1           Disable macOS dialog for tests.
+  LAN_DUAL_ALLOW_TERMINAL_PASSWORD_PROMPT=1    Allow hidden terminal fallback if the dialog fails.
 `);
 }

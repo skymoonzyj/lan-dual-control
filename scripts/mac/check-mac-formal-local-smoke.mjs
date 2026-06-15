@@ -50,8 +50,8 @@ Options:
   --host <host>              Mac host address. Default: 127.0.0.1
   --port <port>              Mac host port. Default: 43770
   --password <password>      Probe password. Prefer LAN_DUAL_PASSWORD instead.
-  --promptPassword           Ring first, then prompt for probe password in a macOS
-                             hidden password dialog.
+  --promptPassword           Ring first, then prompt for probe password in a
+                             frontmost macOS hidden password dialog.
   --requirePassword          Refuse empty/demo password. Default: true
   --allowDemoPassword        Allow demo-password for local fake-host tests only.
   --timeoutMs <ms>           Default child probe timeout. Default: 12000

@@ -123,7 +123,7 @@ Options:
   --port <port>              Port. Default: 43770
   --password <value>         Set LAN_DUAL_PASSWORD for this run. The value is not printed.
   --promptPassword           Ring first, then prompt for LAN_DUAL_PASSWORD in a
-                             macOS hidden password dialog.
+                             frontmost macOS hidden password dialog.
   --ephemeralPassword        Generate a one-time random password for this run. It is not printed.
   --requirePassword          Refuse empty or demo-password credentials.
   --deviceName <name>        Set LAN_DUAL_DEVICE_NAME.

@@ -56,6 +56,22 @@ LAN_DUAL_PORT=43772 LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_WINDOWS_INPUT_MODE=log node
 
 真实 Windows 联调时，Windows 端运行 `apps/windows-host`，Mac 控制端填写 Windows 局域网 IP 和端口 `43770`。
 
+## 真连前预检
+
+Mac 控制真实 Windows host 前，先做只读预检：
+
+```bash
+node scripts/mac/check-mac-client-readiness.mjs --checkBoard --boardSummary
+```
+
+如果 Windows host 已经启动，把地址也带上：
+
+```bash
+node scripts/mac/check-mac-client-readiness.mjs --host <Windows IP> --port 43770 --checkBoard --boardSummary
+```
+
+该脚本不会启动 Mac client、不会启动或认证 Windows host、不会要求或打印密码、不会发送输入事件。它只检查 repo、Mac client 静态文件和语法、可选本地 Mac client HTTP 页面、可选 Windows host `/discovery` 及 Agent Link Board，并输出可直接发到通讯板的无密摘要。需要机器可读结果时加 `--json`；本地页面已启动时可加 `--probeClientServer`；正式要求目标 Windows host 在线时可加 `--requireWindowsHost`。
+
 ## 当前限制
 
 - 这是 Web 原型，不是 SwiftUI/原生桌面窗口。
@@ -74,6 +90,7 @@ LAN_DUAL_PORT=43772 LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_WINDOWS_INPUT_MODE=log node
 ```bash
 node --check apps/mac-client/server.mjs
 node --check apps/mac-client/app.js
+node scripts/mac/test-mac-client-readiness.mjs
 ```
 
 本机联调已验证：连接 `127.0.0.1:43772` Windows host 回退服务后，发送文本剪贴板会收到 `clipboard_ack`，非 Windows 环境显示 `memory-only` 回退模式。

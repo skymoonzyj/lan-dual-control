@@ -17,6 +17,55 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Mac Codex
+
+日期：2026-06-15 12:00
+开发端：Mac Codex
+本轮目标：补齐 Mac 控制 Windows 真连前的只读预检工具，并按用户反馈继续加固 Mac 侧密码弹窗可见性。
+完成内容：
+- 新增 `scripts/mac/check-mac-client-readiness.mjs`：真连 Windows 前只读检查 repo、Mac client 静态文件和 JS 语法，可选检查本地 Mac client HTTP 页面、Windows host `/discovery` 和 Agent Link Board。
+- 预检脚本支持 `--boardSummary` 输出可直接发通讯板的无密摘要，也支持 `--json` 给自动化消费；`--requireClientServer`、`--requireWindowsHost`、`--requireClean` 可把对应问题升级为 blocker。
+- 新增 `scripts/mac/test-mac-client-readiness.mjs`，覆盖 help、离线 JSON、require 失败、board summary 不泄露 secret-like server 文本、临时 Mac client server 和 mock Windows discovery。
+- `scripts/mac/password-prompt.mjs` 继续加固：`--promptPassword` 先响铃，再 `activate` 前台 macOS hidden answer 对话框；默认不再退回终端隐藏输入，避免用户看不到输入位置。只有显式 `LAN_DUAL_ALLOW_TERMINAL_PASSWORD_PROMPT=1` 才允许本地手工终端 fallback。
+- 同步更新 Mac README、当前状态、下一步和任务板，说明正式密码输入会激活到前台，且密码不打印、不进 argv、不发联络板。
+修改文件：
+- `scripts/mac/check-mac-client-readiness.mjs`
+- `scripts/mac/test-mac-client-readiness.mjs`
+- `scripts/mac/password-prompt.mjs`
+- `scripts/mac/start-mac-host.mjs`
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `scripts/mac/check-mac-formal-local-smoke.mjs`
+- `scripts/mac/test-mac-password-prompt.mjs`
+- `scripts/mac/test-mac-host-start-helper.mjs`
+- `scripts/mac/test-mac-readiness-prompt-password.mjs`
+- `scripts/mac/test-mac-formal-local-smoke.mjs`
+- `apps/mac-client/README.md`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check` 覆盖本轮 Mac 脚本。
+- `node scripts/mac/test-mac-client-readiness.mjs --timeoutMs 12000`
+- `node scripts/mac/check-mac-client-readiness.mjs --boardSummary --timeoutMs 1200`
+- `node scripts/mac/test-mac-password-prompt.mjs --timeoutMs 8000`
+- `node scripts/mac/test-mac-readiness-prompt-password.mjs --timeoutMs 8000`
+- `node scripts/mac/test-mac-formal-local-smoke.mjs --timeoutMs 20000`
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 5000`
+- `git diff --check`
+- 冲突标记搜索
+遗留问题：
+- 本轮未做真实 Mac client 连接 Windows host 的观感/延迟/资源对照，因为需要 Windows host 保持在线并按双方约定发起真连测试。
+- 本轮未执行任何真实输入注入，也未收集或发送密码。
+下一步建议：
+- Windows host 在线后，Mac 侧先跑 `node scripts/mac/check-mac-client-readiness.mjs --host <Windows IP> --port 43770 --checkBoard --boardSummary`，把摘要发 Agent Link Board。
+- 预检 ready 后，再用现有页面级脚本或手动 Mac client 真连 Windows host，对比 WGC NV12 H.264、raw-bgra、ffmpeg-h264、binary-jpeg 的首帧、FPS、frame age、音频播放、带宽和 CPU。
+是否改了协议：否。
+是否需要另一端配合：真连观感/资源验收需要 Windows 端启动目标 Windows host 并同步地址；密码不要发联络板。
+
 ## 2026-06-15 Windows Codex
 
 日期：2026-06-15 12:20
@@ -108,7 +157,7 @@
 开发端：Mac Codex
 本轮目标：按用户反馈修正 Mac 侧 `--promptPassword` 在 Codex 桌面里只等终端隐藏输入、用户看不到输入位置的问题。
 完成内容：
-- 新增 `scripts/mac/password-prompt.mjs` 共享 helper：需要密码时先播放提示音，再弹出 macOS 隐藏密码对话框；密码只返回给当前 Node 进程，不打印、不写命令参数、不发联络板。
+- 新增 `scripts/mac/password-prompt.mjs` 共享 helper：需要密码时先播放提示音，再把 macOS 隐藏密码对话框激活到前台；密码只返回给当前 Node 进程，不打印、不写命令参数、不发联络板。
 - `scripts/mac/start-mac-host.mjs`、`scripts/mac/check-mac-host-readiness.mjs`、`scripts/mac/check-mac-formal-local-smoke.mjs` 的 `--promptPassword` 已统一接入该 helper；`--json` 路径不会把提示文字写到 stdout。
 - 新增 `scripts/mac/test-mac-password-prompt.mjs`，用假的 `osascript` 覆盖提示音、弹窗成功、用户取消和弹窗失败路径；测试只校验密码长度/哈希，不输出密码正文。
 - 旧的自动化非交互失败测试改为显式设置 `LAN_DUAL_DISABLE_PASSWORD_DIALOG=1` / `LAN_DUAL_DISABLE_PASSWORD_BEEP=1`，避免回归测试时误弹真实系统窗口；人工正式运行不设置这些变量，会正常响铃并弹窗。
@@ -134,7 +183,7 @@
 - `node scripts/mac/test-mac-readiness-prompt-password.mjs --timeoutMs 8000`
 - `node scripts/mac/test-mac-formal-local-smoke.mjs --timeoutMs 20000`
 遗留问题：
-- 本轮未跑真实正式密码 smoke，避免在用户未明确要求时触发真实认证链路；如需执行，可运行 `node scripts/mac/check-mac-formal-local-smoke.mjs --promptPassword --json`，此时会先响铃再弹 macOS 密码框。
+- 本轮未跑真实正式密码 smoke，避免在用户未明确要求时触发真实认证链路；如需执行，可运行 `node scripts/mac/check-mac-formal-local-smoke.mjs --promptPassword --json`，此时会先响铃并把 macOS 密码框激活到前台。
 - 不执行 `inject`；真实注入仍需用户明确确认正在看屏幕。
 下一步建议：
 - 正式 E2E 前先跑 `node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary`，再根据需要运行 Mac 本机 smoke 或通知 Windows 端用 formal runner。
