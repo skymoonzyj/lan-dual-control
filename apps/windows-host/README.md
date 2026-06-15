@@ -150,6 +150,9 @@ $env:LAN_DUAL_WINDOWS_SCREEN_MODE="system" # 强制 Windows 系统截图 JPEG
 $env:LAN_DUAL_WINDOWS_SCREEN_MODE="wgc"    # 显式请求 Windows Graphics Capture helper；未配置 helper 时仍降级
 $env:LAN_DUAL_WINDOWS_WGC_HELPER="C:\DevTools\lan-dual-wgc-helper.exe" # 可选；原生 WGC helper 路径
 $env:LAN_DUAL_WINDOWS_WGC_HELPER_ARGS=""   # 可选；传给 helper 的额外参数，支持引号包裹含空格路径
+$env:LAN_DUAL_WINDOWS_WGC_H264_BRIDGE="1"  # 可选；WGC helper JPEG 帧桥接 FFmpeg H.264 编码
+$env:LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME="1" # 可选；WGC 静态画面下重复上一帧维持稳定 pacing
+$env:LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE="full" # full | signal；H.264 桥接会内部复用上一帧
 $env:LAN_DUAL_FFMPEG="C:\DevTools\ffmpeg\bin\ffmpeg.exe" # 可选；PATH 不稳定时显式指定 FFmpeg
 $env:LAN_DUAL_WINDOWS_H264_CODEC_STRING="avc1.42E01F" # 可选；默认会从 SPS 更新，缺失时用该 baseline codecString
 $env:LAN_DUAL_WINDOWS_JPEG_QUALITY="70"    # 强制覆盖 JPEG 质量，35-92；不设置时按 qualityPreset/maxBandwidthKbps 自动计算
@@ -377,6 +380,15 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 
 WGC helper 接入点已经落地：当 `LAN_DUAL_WINDOWS_SCREEN_MODE=wgc`、WGC 预检通过、且 `LAN_DUAL_WINDOWS_WGC_HELPER` 指向可执行 helper 时，Windows host 会启动该 helper，并按 `json-lines-v1` 协议从 stdout 接收 JPEG 帧。helper 启动时会收到 `LAN_DUAL_WGC_WIDTH`、`LAN_DUAL_WGC_HEIGHT`、`LAN_DUAL_WGC_FPS`、`LAN_DUAL_WGC_DISPLAY_ID`、`LAN_DUAL_WGC_JPEG_QUALITY` 等环境变量；每行可输出 `{"type":"hello","backend":"windows-graphics-capture","codec":"jpeg","encoding":"base64"}` 或 `{"type":"frame","frameId":1,"timestamp":"...","width":1280,"height":720,"dataBase64":"..."}`。接入成功时 `/discovery.capabilities.screen.wgc.active=true`，`capturePipeline=windows-wgc-helper-jpeg`。
 
+WGC H.264 桥接原型已落地：显式开启 `LAN_DUAL_WINDOWS_WGC_H264_BRIDGE=1`，并且会话请求 `h264/annexb` 时，Windows host 会把 WGC helper 输出的 JPEG 帧喂给 FFmpeg stdin，再输出 `capturePipeline=windows-wgc-helper-ffmpeg-h264` 的 H.264 Annex B 帧；可继续用 `LAN_DUAL_WINDOWS_H264_ENCODER=h264_nvenc` 选择 NVENC。启动助手等价参数如下：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --screenMode wgc --wgcHelper E:\codex\lan-dual-control\apps\windows-wgc-helper\target\debug\lan-dual-wgc-helper.exe --wgcH264Bridge --wgcRepeatLastFrame --wgcRepeatLastFrameMode full --h264Encoder h264_nvenc
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -ScreenMode wgc -WgcHelper E:\codex\lan-dual-control\apps\windows-wgc-helper\target\debug\lan-dual-wgc-helper.exe -WgcH264Bridge -WgcRepeatLastFrame -WgcRepeatLastFrameMode full -H264Encoder h264_nvenc
+```
+
+`2026-06-15` 本机真实 helper + NVENC 短观察通过：`1280x720`、30Hz、50Mbps、repeat full，3 秒收到 91 帧、约 30.29 FPS、最大间隔 59ms、平均帧年龄 1ms，`h264Encoder=h264_nvenc`，pipeline 为 `windows-wgc-helper-ffmpeg-h264`。这仍是过渡桥：WGC helper 先 JPEG 编码、Node 再交给 FFmpeg 解码/重编码，性能和延迟不代表最终方案；下一步更应该让 helper 输出 raw BGRA/NV12 或直接原生编码，减少重复 JPEG 编解码。
+
 Rust helper 项目位于 `apps/windows-wgc-helper`。当前 `cargo run -- --probe` 已能真正初始化 WGC 链路：D3D11 device、WinRT Direct3D device、主显示器 `GraphicsCaptureItem`、frame pool 和 capture session；本机 probe 识别到 `显示 1`、`2560x1440`。默认运行 helper 会等待 WGC `FrameArrived`，从 `Direct3D11CaptureFrame.Surface` 取出 D3D11 texture，复制到 CPU 可读 staging texture，按请求宽高等比缩放且不放大，并用 WIC `ImageQuality` 编码 JPEG 后输出 `json-lines-v1` frame；本机 `cargo run -- --frames 1 --fps 10 --width 1280 --height 720 --jpegQuality 0.55` 已输出 1 帧真实 `1280x720` JPEG，源尺寸 `2560x1440`，本轮复验首帧约 96 KB，实际体积会随桌面内容波动。`--mock` 仍会输出同一 JSON 行合同的测试 JPEG 帧，`scripts/windows/test-windows-wgc-helper.mjs` 会构建 helper、跑 probe/mock、直接验证缩放真帧 JPEG，把构建出的 exe 以 mock mode 接入 Node host 验证合同，并额外启动临时 Windows host + 真实 helper 验证 `windows-wgc-helper-jpeg` 真帧管线；本轮真实 host 观察收到 14 帧 `1280x720`，平均约 84 KB。下一步是继续做连续帧 pacing、`--resourceSampleTree true` 资源对照、低/高码率 A/B 和 Mac client 真连观感验收。
 
 WGC 参数基准脚本位于 `scripts/windows/benchmark-windows-wgc-settings.mjs`。它会构建或复用本地 Rust helper，顺序启动临时 Windows host，并用 `observe-windows-host-video --screenMode wgc --resourceSampleTree true --json` 跑多档刷新率/码率对照。`2026-06-14 20:35` 本机 `1280x720`、每档 2.2 秒短基准已确认 30/60/120Hz 都能协商到对应会话刷新率，但当前 WGC 仍是 `FrameArrived` 事件驱动，静态桌面实收约 9-12 FPS：30Hz/10M 为 21 帧、9.25 FPS、平均约 78 KB；60Hz/20M 为 25 帧、11.11 FPS、平均约 83 KB；120Hz/40M sharp 为 27 帧、12.22 FPS、平均约 121 KB。`LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME=1` 或观察/基准脚本 `--wgcRepeatLastFrame true` / `--repeatLastFrame` 可启用重复最后一帧诊断模式，host 会在没有新 WGC 帧时复用上一帧，并在 `video_frame` 带 `repeatedFrame`、`sourceTimestamp`、`contentAgeMs`。默认 `LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE=full` 保持旧行为，会重发完整 JPEG；显式设为 `signal` 或脚本加 `--wgcRepeatLastFrameMode signal` / `--repeatLastFrameMode signal` 时，重复帧只发 `repeatPreviousFrame=true`、`payloadBytes=0` 和尺寸/时间戳诊断，不再重发 base64 图片。`2026-06-14 20:55` full repeat 短基准显示 30Hz/10M 可到 56 帧、30.45 FPS，60Hz/20M 到 62 帧、33.92 FPS，120Hz/40M sharp 到 68 帧、37.78 FPS，内容年龄最大约 80-96 ms；`2026-06-14 21:20` signal repeat 的 60Hz/20M 两轮短基准约 31-32 FPS、重复信令帧 33-35、平均图片 payload 约 17-23 KB、内容年龄最大 79-82 ms。signal 模式主要降低重复帧带宽和 JSON/base64 解析压力，不会生成更多真实源帧；后续仍应推进 WebSocket 二进制帧、H.264/硬编和 Mac client 真连观感验收。
@@ -384,6 +396,7 @@ WGC 参数基准脚本位于 `scripts/windows/benchmark-windows-wgc-settings.mjs
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-mode.mjs
 node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-mode.mjs --mockHelper --durationMs 1200 --minFrames 5
+node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-mode.mjs --mockHelper --h264Bridge --durationMs 3000 --minFrames 5
 node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-helper.mjs
 node E:\codex\lan-dual-control\scripts\windows\benchmark-windows-wgc-settings.mjs --durationMs 2200
 node E:\codex\lan-dual-control\scripts\windows\benchmark-windows-wgc-settings.mjs --durationMs 1800 --repeatLastFrame
@@ -405,7 +418,7 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 node E:\codex\lan-dual-control\scripts\windows\check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A
 ```
 
-继续往 WGC + H.264/硬编推进前，建议先跑一遍 Windows 视频编码能力体检。它只读汇总 FFmpeg H.264 软件/硬件编码器、WGC 预检和浏览器 WebCodecs 解码能力，不启动 Windows host、不抓屏、不改系统设置；需要给自动化消费时可加 `--json`。本机 `2026-06-15 00:05` 强校验已通过：FFmpeg `8.1.1` 检测到 `libx264`、`h264_nvenc`、`h264_qsv`、`h264_amf`、`h264_mf`、`h264_d3d12va` 等 H.264 编码入口，WGC 预检通过，Edge WebCodecs H.264 支持通过；推荐下一步是 WGC 采集接 NVENC 硬编原型。
+继续往 WGC + H.264/硬编推进前，建议先跑一遍 Windows 视频编码能力体检。它只读汇总 FFmpeg H.264 软件/硬件编码器、WGC 预检和浏览器 WebCodecs 解码能力，不启动 Windows host、不抓屏、不改系统设置；需要给自动化消费时可加 `--json`。本机 `2026-06-15 00:05` 强校验已通过：FFmpeg `8.1.1` 检测到 `libx264`、`h264_nvenc`、`h264_qsv`、`h264_amf`、`h264_mf`、`h264_d3d12va` 等 H.264 编码入口，WGC 预检通过，Edge WebCodecs H.264 支持通过；当前 WGC JPEG 桥接 H.264/NVENC 正确性原型已通过，下一步应改 raw BGRA/NV12 或原生硬编。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-support.mjs
@@ -413,7 +426,7 @@ node E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-suppo
 node E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-support.mjs --json
 ```
 
-当前 H.264 短基线：`2026-06-13 14:18` 在真实桌面权限下运行 `test-windows-h264-mode`，本机临时 host 720p/30Hz 观察 2.5 秒收到 73 帧，平均 28.83 FPS，最大帧间隔 53 ms，timestamp 单调，管线为 `windows-ffmpeg-gdigrab-h264`，codec 为 `h264`。普通沙盒上下文仍可能遇到 FFmpeg `gdigrab error 5` / mock fallback；这属于桌面抓屏权限/会话限制，不应误判为 H.264 管线不可用。当前实现默认使用 `libx264` 软件编码，也支持显式 `h264_nvenc` 等 FFmpeg encoder，并会在 discovery/session/frame/观察脚本中带出实际 `h264Encoder`；可按客户端能力在 JSON/base64 和 `binary-h264` 二进制传输之间切换。后续仍需把 WGC 采集源接入硬件编码，减少 gdigrab 过渡层限制。
+当前 H.264 短基线：`2026-06-13 14:18` 在真实桌面权限下运行 `test-windows-h264-mode`，本机临时 host 720p/30Hz 观察 2.5 秒收到 73 帧，平均 28.83 FPS，最大帧间隔 53 ms，timestamp 单调，管线为 `windows-ffmpeg-gdigrab-h264`，codec 为 `h264`。普通沙盒上下文仍可能遇到 FFmpeg `gdigrab error 5` / mock fallback；这属于桌面抓屏权限/会话限制，不应误判为 H.264 管线不可用。当前实现默认使用 `libx264` 软件编码，也支持显式 `h264_nvenc` 等 FFmpeg encoder，并会在 discovery/session/frame/观察脚本中带出实际 `h264Encoder`；可按客户端能力在 JSON/base64 和 `binary-h264` 二进制传输之间切换。WGC helper JPEG -> FFmpeg H.264 桥接已能验证 WGC 源接硬编的正确性，但后续仍需 raw BGRA/NV12 或原生硬编来减少 gdigrab 与 JPEG 桥接限制。
 
 `2026-06-15 00:50` 本机 NVENC 过渡路径复验通过：`test-windows-h264-mode --h264Encoder h264_nvenc` 收到 55 帧 / 约 27.38 FPS；`observe-windows-host-video --h264Encoder h264_nvenc` 收到 40 帧 / 1508 ms / 26.52 FPS，最大帧间隔 51 ms，`h264Encoder=h264_nvenc` 出现在 discovery、session 和帧观察里；Mac client 页面级 `--expectBinaryH264Video --h264Encoder h264_nvenc` 观察 53 帧 / 911 ms / 58.2 FPS；视频传输矩阵加 `--h264Encoder h264_nvenc` 后 4/4 通过，`binary-h264` 约 57.0 FPS，旧 JSON/base64、fallback 和 `binary-jpeg` 均未退化。`libx264` 默认路径也复验通过，1.5 秒 42 帧 / 27.77 FPS。
 

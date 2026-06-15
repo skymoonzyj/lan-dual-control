@@ -19,6 +19,8 @@ const ffmpegH264Mode = "ffmpeg-h264";
 const systemMode = "system-jpeg";
 const mockMode = "mock";
 const wgcMode = "wgc";
+const wgcH264BridgeMode = "wgc-h264";
+const wgcH264BridgeInputSource = "wgc-helper-jpeg";
 const wgcRepeatFullMode = "full";
 const wgcRepeatSignalMode = "signal";
 
@@ -204,6 +206,10 @@ function hasVideoCodecPreference(settings = {}) {
     hasConfiguredValue(settings.videoCodec) ||
     hasConfiguredValue(settings.preferredVideoEncoding) ||
     hasConfiguredValue(settings.videoEncoding);
+}
+
+function isH264EffectiveMode(mode) {
+  return mode === ffmpegH264Mode || mode === wgcH264BridgeMode;
 }
 
 function normalizeWgcRepeatLastFrameMode(value) {
@@ -511,6 +517,19 @@ function qscaleFromJpegQuality(jpegQuality) {
   return Math.round(Math.min(31, Math.max(2, 31 - normalized * 26)));
 }
 
+function jpegDataUrlToBuffer(dataUrl) {
+  const text = String(dataUrl || "").trim();
+  const prefix = "data:image/jpeg;base64,";
+  if (!text.startsWith(prefix)) {
+    throw new Error("WGC helper frame did not contain a JPEG data URL");
+  }
+  const payload = Buffer.from(text.slice(prefix.length), "base64");
+  if (payload.length === 0) {
+    throw new Error("WGC helper JPEG payload was empty");
+  }
+  return payload;
+}
+
 function makePowerShellCaptureScript({ displayIndex, targetWidth, targetHeight, quality }) {
   return `
 $ErrorActionPreference = "Stop"
@@ -657,6 +676,7 @@ export class WindowsScreenCaptureCoordinator {
     this.wgcHelperAllowUnsupported = truthyEnv(process.env.LAN_DUAL_WINDOWS_WGC_ALLOW_UNSUPPORTED);
     this.wgcRepeatLastFrame = truthyEnv(process.env.LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME);
     this.wgcRepeatLastFrameMode = normalizeWgcRepeatLastFrameMode(process.env.LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE);
+    this.wgcH264BridgeEnabled = truthyEnv(process.env.LAN_DUAL_WINDOWS_WGC_H264_BRIDGE);
     this.wgcPreflight = this.requestedMode === wgcMode ? checkWgcSupportSync(logger) : null;
     this.wgcFallbackReason = "";
     this.mode = this.resolveMode();
@@ -684,9 +704,12 @@ export class WindowsScreenCaptureCoordinator {
     this.ffmpegFrameWaiters = [];
     this.lastServedFfmpegFrameId = 0;
     this.ffmpegStreamKind = "";
+    this.ffmpegInputSource = "";
     this.ffmpegPendingH264Nals = [];
     this.ffmpegPendingH264NalTypes = [];
     this.ffmpegH264SawAud = false;
+    this.wgcH264BridgeFedWgcFrameId = 0;
+    this.wgcH264BridgePendingFrameInfos = [];
     this.wgcHelperProcess = null;
     this.wgcHelperKey = "";
     this.wgcHelperLineBuffer = "";
@@ -765,6 +788,7 @@ export class WindowsScreenCaptureCoordinator {
     const usingFfmpegH264Capture = this.mode === ffmpegH264Mode;
     const usingSystemCapture = this.mode === systemMode;
     const usingWgcHelperCapture = this.mode === wgcMode;
+    const wgcH264BridgeAvailable = usingWgcHelperCapture && this.wgcH264BridgeEnabled && this.ffmpegAvailable;
     return {
       available: usingFfmpegCapture || usingFfmpegH264Capture || usingSystemCapture || usingWgcHelperCapture,
       mode: this.mode,
@@ -772,8 +796,8 @@ export class WindowsScreenCaptureCoordinator {
       capturePipeline: this.getCapturePipeline(),
       videoCodec: this.getVideoCodec(),
       videoEncoding: this.getVideoEncoding(),
-      codecString: usingFfmpegH264Capture ? this.h264CodecString : "",
-      h264Encoder: usingFfmpegH264Capture ? this.h264Encoder : "",
+      codecString: usingFfmpegH264Capture || wgcH264BridgeAvailable ? this.h264CodecString : "",
+      h264Encoder: usingFfmpegH264Capture || wgcH264BridgeAvailable ? this.h264Encoder : "",
       plannedBackend: "Windows Graphics Capture",
       wgc: this.wgcPreflight
         ? {
@@ -787,6 +811,10 @@ export class WindowsScreenCaptureCoordinator {
             helperArgs: this.wgcHelperArgs,
             helperProtocol: "json-lines-v1",
             helperInfo: this.wgcHelperInfo,
+            h264BridgeEnabled: this.wgcH264BridgeEnabled,
+            h264BridgeAvailable: wgcH264BridgeAvailable,
+            h264BridgeEncoder: wgcH264BridgeAvailable ? this.h264Encoder : "",
+            h264BridgePipeline: "windows-wgc-helper-ffmpeg-h264",
             repeatLastFrame: this.wgcRepeatLastFrame,
             repeatLastFrameMode: this.wgcRepeatLastFrameMode,
             preflightBypassed: usingWgcHelperCapture && !this.wgcPreflight.supported && this.wgcHelperAllowUnsupported,
@@ -808,6 +836,10 @@ export class WindowsScreenCaptureCoordinator {
             helperArgs: this.wgcHelperArgs,
             helperProtocol: "json-lines-v1",
             helperInfo: this.wgcHelperInfo,
+            h264BridgeEnabled: this.wgcH264BridgeEnabled,
+            h264BridgeAvailable: false,
+            h264BridgeEncoder: this.wgcH264BridgeEnabled ? this.h264Encoder : "",
+            h264BridgePipeline: "windows-wgc-helper-ffmpeg-h264",
             repeatLastFrame: this.wgcRepeatLastFrame,
             repeatLastFrameMode: this.wgcRepeatLastFrameMode,
             preflightBypassed: false,
@@ -819,7 +851,9 @@ export class WindowsScreenCaptureCoordinator {
       message: usingFfmpegCapture
         ? "当前使用 FFmpeg gdigrab 持续采集 MJPEG 帧；后续可升级为 Windows Graphics Capture。"
         : usingWgcHelperCapture
-          ? "当前使用 Windows Graphics Capture helper JSON 行协议接收 JPEG 帧。"
+          ? wgcH264BridgeAvailable
+            ? "当前使用 Windows Graphics Capture helper 接收 JPEG 帧；会话请求 H.264 时可桥接 FFmpeg 编码。"
+            : "当前使用 Windows Graphics Capture helper JSON 行协议接收 JPEG 帧。"
           : usingSystemCapture
           ? "当前使用 Windows 系统截图 JPEG 帧；后续可升级为 Windows Graphics Capture。"
           : "当前为骨架模式，先发送模拟视频帧。",
@@ -844,24 +878,37 @@ export class WindowsScreenCaptureCoordinator {
     if (this.mode === ffmpegH264Mode && hasVideoCodecPreference(settings) && !wantsH264Video(settings)) {
       return ffmpegMode;
     }
+    if (this.shouldUseWgcH264Bridge(settings)) {
+      return wgcH264BridgeMode;
+    }
     return this.mode;
   }
 
+  shouldUseWgcH264Bridge(settings = {}) {
+    return this.mode === wgcMode
+      && this.wgcH264BridgeEnabled
+      && this.ffmpegAvailable
+      && wantsH264Video(settings);
+  }
+
   getVideoCodec(mode = this.mode) {
-    if (mode === ffmpegH264Mode) {
+    if (isH264EffectiveMode(mode)) {
       return "h264";
     }
     return mode === ffmpegMode || mode === systemMode || mode === wgcMode ? "jpeg" : "mock-svg";
   }
 
   getVideoEncoding(mode = this.mode) {
-    if (mode === ffmpegH264Mode) {
+    if (isH264EffectiveMode(mode)) {
       return "annexb-base64";
     }
     return "data-url";
   }
 
   getCapturePipeline(mode = this.mode) {
+    if (mode === wgcH264BridgeMode) {
+      return "windows-wgc-helper-ffmpeg-h264";
+    }
     if (mode === wgcMode) {
       return "windows-wgc-helper-jpeg";
     }
@@ -875,6 +922,9 @@ export class WindowsScreenCaptureCoordinator {
   }
 
   makeHostMode(mode = this.mode) {
+    if (mode === wgcH264BridgeMode) {
+      return "windows-host-wgc-h264-bridge";
+    }
     if (mode === wgcMode) {
       return "windows-host-wgc-helper";
     }
@@ -935,6 +985,7 @@ export class WindowsScreenCaptureCoordinator {
   negotiate(message) {
     const activeDisplay = this.pickDisplay(message.displayId);
     const effectiveMode = this.effectiveModeForSettings(message);
+    const usingH264 = isH264EffectiveMode(effectiveMode);
     const width = clampNumber(message.preferredWidth, 320, 3840, activeDisplay.width || 1920);
     const height = clampNumber(message.preferredHeight, 180, 2160, activeDisplay.height || 1080);
     const requestedFps = clampNumber(message.maxFps, 1, 240, this.maxScreenFps);
@@ -955,8 +1006,8 @@ export class WindowsScreenCaptureCoordinator {
       jpegQuality,
       videoCodec: this.getVideoCodec(effectiveMode),
       videoEncoding: this.getVideoEncoding(effectiveMode),
-      codecString: effectiveMode === ffmpegH264Mode ? this.h264CodecString : "",
-      h264Encoder: effectiveMode === ffmpegH264Mode ? this.h264Encoder : "",
+      codecString: usingH264 ? this.h264CodecString : "",
+      h264Encoder: usingH264 ? this.h264Encoder : "",
       displays: this.getDisplays(),
       activeDisplayId: activeDisplay.id,
       displayName: activeDisplay.name,
@@ -973,6 +1024,7 @@ export class WindowsScreenCaptureCoordinator {
       preferredVideoCodec: message.preferredVideoCodec ?? message.videoCodec ?? session.videoCodec,
       preferredVideoEncoding: message.preferredVideoEncoding ?? message.videoEncoding ?? session.videoEncoding,
     });
+    const usingH264 = isH264EffectiveMode(effectiveMode);
     const requestedFps = clampNumber(message.fps, 1, 240, session.requestedFps || session.fps);
     const fps = this.normalizeFps(requestedFps);
     const maxBandwidthKbps = normalizeBandwidthKbps(message.maxBandwidthKbps, session.maxBandwidthKbps);
@@ -1000,8 +1052,8 @@ export class WindowsScreenCaptureCoordinator {
       jpegQuality,
       videoCodec: this.getVideoCodec(effectiveMode),
       videoEncoding: this.getVideoEncoding(effectiveMode),
-      codecString: effectiveMode === ffmpegH264Mode ? this.h264CodecString : "",
-      h264Encoder: effectiveMode === ffmpegH264Mode ? this.h264Encoder : "",
+      codecString: usingH264 ? this.h264CodecString : "",
+      h264Encoder: usingH264 ? this.h264Encoder : "",
       hostMode: this.makeHostMode(effectiveMode),
       capturePipeline: this.getCapturePipeline(effectiveMode),
       requestedScreenMode: this.requestedMode,
@@ -1017,6 +1069,9 @@ export class WindowsScreenCaptureCoordinator {
       this.startFfmpegCapture(session);
     } else if (this.mode === wgcMode) {
       this.startWgcHelperCapture(session);
+      if (this.shouldUseWgcH264Bridge(session)) {
+        this.startWgcH264BridgeCapture(session);
+      }
     }
   }
 
@@ -1029,6 +1084,12 @@ export class WindowsScreenCaptureCoordinator {
   async makeFrame(frameId, session) {
     if (this.mode === wgcMode) {
       try {
+        if (this.shouldUseWgcH264Bridge(session)) {
+          return await this.makeWgcHelperH264Frame(frameId, session);
+        }
+        if (this.ffmpegInputSource === wgcH264BridgeInputSource) {
+          this.stopFfmpegCapture({ silent: true });
+        }
         return await this.makeWgcHelperJpegFrame(frameId, session);
       } catch (error) {
         this.recordCaptureFailure(error);
@@ -1148,6 +1209,7 @@ export class WindowsScreenCaptureCoordinator {
     this.wgcHelperFrame = null;
     this.wgcHelperFrameId = 0;
     this.lastServedWgcHelperFrameId = 0;
+    this.wgcH264BridgeFedWgcFrameId = 0;
     this.wgcHelperInfo = null;
 
     const child = spawn(this.wgcHelperCommand, this.wgcHelperArgs, {
@@ -1212,6 +1274,7 @@ export class WindowsScreenCaptureCoordinator {
     }
     this.wgcHelperLineBuffer = "";
     this.wgcHelperFrame = null;
+    this.wgcH264BridgeFedWgcFrameId = 0;
     this.rejectWgcHelperFrameWaiters(new Error("WGC helper stopped"));
   }
 
@@ -1408,6 +1471,272 @@ export class WindowsScreenCaptureCoordinator {
     return frame;
   }
 
+  makeWgcH264BridgeKey(session) {
+    const fps = this.normalizeFps(session.fps);
+    const bandwidthKbps = normalizeBandwidthKbps(session.maxBandwidthKbps);
+    return [
+      wgcH264BridgeMode,
+      this.ffmpegCommand,
+      this.makeWgcHelperKey(session),
+      fps,
+      bandwidthKbps,
+      this.h264CodecString,
+      this.h264Encoder,
+    ].join(":");
+  }
+
+  startWgcH264BridgeCapture(session) {
+    if (!this.ffmpegAvailable) {
+      throw new Error("FFmpeg is not available for WGC H.264 bridge");
+    }
+
+    const fps = this.normalizeFps(session.fps);
+    const bandwidthKbps = normalizeBandwidthKbps(session.maxBandwidthKbps);
+    const key = this.makeWgcH264BridgeKey(session);
+
+    if (this.ffmpegProcess && this.ffmpegKey === key && this.ffmpegInputSource === wgcH264BridgeInputSource) {
+      return;
+    }
+
+    this.stopFfmpegCapture({ silent: true });
+    this.ffmpegKey = key;
+    this.ffmpegBuffer = Buffer.alloc(0);
+    this.ffmpegFrame = null;
+    this.ffmpegFrameId = 0;
+    this.lastServedFfmpegFrameId = 0;
+    this.ffmpegStreamKind = "h264";
+    this.ffmpegInputSource = wgcH264BridgeInputSource;
+    this.ffmpegPendingH264Nals = [];
+    this.ffmpegPendingH264NalTypes = [];
+    this.ffmpegH264SawAud = false;
+    this.wgcH264BridgeFedWgcFrameId = 0;
+    this.wgcH264BridgePendingFrameInfos = [];
+
+    const inputArgs = [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-analyzeduration",
+      "0",
+      "-probesize",
+      "32",
+      "-f",
+      "image2pipe",
+      "-framerate",
+      String(fps),
+      "-vcodec",
+      "mjpeg",
+      "-i",
+      "pipe:0",
+    ];
+    const args = [
+      ...inputArgs,
+      ...h264EncoderArgs({ encoder: this.h264Encoder, bandwidthKbps, fps }),
+    ];
+
+    const child = spawn(this.ffmpegCommand, args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    this.ffmpegProcess = child;
+
+    child.stdout.on("data", (chunk) => this.handleFfmpegChunk(chunk));
+    child.stderr.on("data", (chunk) => {
+      const detail = String(chunk).trim();
+      if (detail) {
+        this.lastFailure = detail;
+      }
+    });
+    child.stdin.on("error", (error) => {
+      if (this.ffmpegProcess === child) {
+        this.recordCaptureFailure(error);
+      }
+    });
+    child.on("error", (error) => {
+      if (this.ffmpegProcess === child) {
+        this.recordCaptureFailure(error);
+        this.ffmpegProcess = null;
+      }
+    });
+    child.on("close", (code, signal) => {
+      if (this.ffmpegProcess === child) {
+        this.ffmpegProcess = null;
+        if (code !== 0 && signal !== "SIGTERM") {
+          this.recordCaptureFailure(new Error(`FFmpeg WGC H.264 bridge exited with ${code ?? signal ?? "unknown"}`));
+        }
+      }
+    });
+  }
+
+  writeWgcH264BridgeInput(payload) {
+    const child = this.ffmpegProcess;
+    if (!child?.stdin || child.stdin.destroyed || child.exitCode !== null) {
+      return Promise.reject(new Error("FFmpeg WGC H.264 bridge is not running"));
+    }
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        child.stdin.off("error", onError);
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
+      };
+      const onError = (error) => finish(error);
+      const timer = setTimeout(() => finish(new Error("Timed out writing WGC JPEG frame to FFmpeg")), Math.max(1000, this.captureTimeoutMs));
+      child.stdin.once("error", onError);
+      child.stdin.write(payload, finish);
+    });
+  }
+
+  async feedWgcH264BridgeFrame(info, payload) {
+    this.wgcH264BridgePendingFrameInfos.push(info);
+    if (this.wgcH264BridgePendingFrameInfos.length > 240) {
+      this.wgcH264BridgePendingFrameInfos.splice(0, this.wgcH264BridgePendingFrameInfos.length - 240);
+    }
+    try {
+      await this.writeWgcH264BridgeInput(payload);
+    } catch (error) {
+      const tail = this.wgcH264BridgePendingFrameInfos.at(-1);
+      if (tail === info) {
+        this.wgcH264BridgePendingFrameInfos.pop();
+      }
+      throw error;
+    }
+  }
+
+  async feedNextWgcH264BridgeSourceFrame(session, timeoutMs) {
+    const waitTimeoutMs = this.wgcRepeatLastFrame && this.wgcHelperFrame
+      ? 1
+      : Math.max(1, timeoutMs);
+    let repeatedFrame = false;
+    try {
+      await this.waitForWgcHelperFrame(this.wgcH264BridgeFedWgcFrameId, waitTimeoutMs);
+    } catch (error) {
+      if (!this.wgcRepeatLastFrame || !this.wgcHelperFrame) {
+        throw error;
+      }
+      repeatedFrame = true;
+    }
+
+    const activeDisplay = this.pickDisplay(session.activeDisplayId);
+    const payload = this.wgcHelperFrame || {};
+    const sourceFrameId = this.wgcHelperFrameId;
+    const previousFedFrameId = this.wgcH264BridgeFedWgcFrameId;
+    if (!repeatedFrame) {
+      this.wgcH264BridgeFedWgcFrameId = sourceFrameId;
+    }
+
+    const sourceTimestamp = String(payload.timestamp || "").trim();
+    const sourceTimestampMs = Date.parse(sourceTimestamp);
+    const nowBeforeEncode = Date.now();
+    const sourceInfo = {
+      sourceTimestamp,
+      contentAgeMs: Number.isFinite(sourceTimestampMs)
+        ? Math.max(0, nowBeforeEncode - sourceTimestampMs)
+        : null,
+      repeatedFrame,
+      repeatLastFrameMode: this.wgcRepeatLastFrameMode,
+      sourceWidth: Number(payload.sourceWidth) || activeDisplay.width,
+      sourceHeight: Number(payload.sourceHeight) || activeDisplay.height,
+      width: Number(payload.width) || clampNumber(session.width, 320, 3840, activeDisplay.width || 1920),
+      height: Number(payload.height) || clampNumber(session.height, 180, 2160, activeDisplay.height || 1080),
+      helperFrameId: Number(payload.helperFrameId) || sourceFrameId,
+      sourcePayloadBytes: Number(payload.payloadBytes) || 0,
+      droppedSourceFrames: repeatedFrame ? 0 : Math.max(0, sourceFrameId - previousFedFrameId - 1),
+    };
+
+    await this.feedWgcH264BridgeFrame(sourceInfo, jpegDataUrlToBuffer(payload.dataUrl));
+    return sourceInfo;
+  }
+
+  async makeWgcHelperH264Frame(frameId, session) {
+    if (!this.wgcHelperProcess) {
+      this.startWgcHelperCapture(session);
+    }
+    if (!this.ffmpegProcess || this.ffmpegInputSource !== wgcH264BridgeInputSource) {
+      this.startWgcH264BridgeCapture(session);
+    }
+
+    const deadline = Date.now() + Math.max(1000, this.captureTimeoutMs);
+    const frameIntervalMs = session.frameIntervalMs ?? Math.round(1000 / Math.max(1, session.fps || 1));
+    let latestSourceInfo = null;
+    while (this.ffmpegFrameId <= this.lastServedFfmpegFrameId) {
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) {
+        throw new Error("FFmpeg WGC H.264 bridge did not produce a frame before timeout");
+      }
+      latestSourceInfo = await this.feedNextWgcH264BridgeSourceFrame(session, remainingMs);
+      const waitMs = Math.min(Math.max(20, frameIntervalMs + 25), Math.max(1, deadline - Date.now()));
+      try {
+        await this.waitForFfmpegFrame(this.lastServedFfmpegFrameId, waitMs);
+      } catch (error) {
+        if (Date.now() >= deadline) {
+          throw error;
+        }
+      }
+    }
+
+    const frame = this.ffmpegFrame || {};
+    const encodedPayload = frame.payload;
+    if (!Buffer.isBuffer(encodedPayload) || encodedPayload.length === 0) {
+      throw new Error("FFmpeg WGC H.264 bridge did not return payload data");
+    }
+
+    const sourceEncodedFrameId = this.ffmpegFrameId;
+    const previousServedFrameId = this.lastServedFfmpegFrameId;
+    this.lastServedFfmpegFrameId = sourceEncodedFrameId;
+    const now = new Date();
+    const fps = this.normalizeFps(session.fps);
+    const durationUs = Math.round(1_000_000 / Math.max(1, fps));
+    const frameInfo = frame.sourceInfo || latestSourceInfo || {};
+
+    return {
+      type: "video_frame",
+      frameId,
+      timestamp: now.toISOString(),
+      sourceTimestamp: frameInfo.sourceTimestamp || "",
+      contentAgeMs: Number.isFinite(frameInfo.contentAgeMs) ? frameInfo.contentAgeMs : null,
+      repeatedFrame: frameInfo.repeatedFrame === true,
+      repeatLastFrameMode: frameInfo.repeatLastFrameMode || this.wgcRepeatLastFrameMode,
+      width: Number(frameInfo.width) || clampNumber(session.width, 320, 3840, activeDisplay.width || 1920),
+      height: Number(frameInfo.height) || clampNumber(session.height, 180, 2160, activeDisplay.height || 1080),
+      sourceWidth: Number(frameInfo.sourceWidth) || activeDisplay.width,
+      sourceHeight: Number(frameInfo.sourceHeight) || activeDisplay.height,
+      fps: session.fps,
+      requestedFps: session.requestedFps,
+      maxScreenFps: session.maxScreenFps,
+      maxBandwidthKbps: session.maxBandwidthKbps,
+      qualityPreset: session.qualityPreset,
+      frameIntervalMs: session.frameIntervalMs ?? Math.round(1000 / Math.max(1, session.fps || 1)),
+      codec: "h264",
+      codecString: this.h264CodecString,
+      h264Encoder: this.h264Encoder,
+      encoding: "annexb-base64",
+      keyFrame: Boolean(frame.keyFrame),
+      source: "screen",
+      capturePipeline: "windows-wgc-helper-ffmpeg-h264",
+      requestedScreenMode: this.requestedMode,
+      streamFallbackReason: "",
+      droppedFrames: Math.max(0, sourceEncodedFrameId - previousServedFrameId - 1),
+      droppedSourceFrames: Number(frameInfo.droppedSourceFrames) || 0,
+      payloadBytes: encodedPayload.length,
+      sourcePayloadBytes: Number(frameInfo.sourcePayloadBytes) || 0,
+      helperFrameId: Number(frameInfo.helperFrameId) || 0,
+      payload: encodedPayload.toString("base64"),
+      timestampUs: Math.max(0, (frameId - 1) * durationUs),
+      durationUs,
+      nalTypes: Array.isArray(frame.nalTypes) ? frame.nalTypes : [],
+    };
+  }
+
   makeFfmpegKey(session) {
     const activeDisplay = this.pickDisplay(session.activeDisplayId);
     const width = clampNumber(session.width, 320, 3840, activeDisplay.width || 1920);
@@ -1455,6 +1784,7 @@ export class WindowsScreenCaptureCoordinator {
     this.ffmpegFrameId = 0;
     this.lastServedFfmpegFrameId = 0;
     this.ffmpegStreamKind = streamKind;
+    this.ffmpegInputSource = "gdigrab";
     this.ffmpegPendingH264Nals = [];
     this.ffmpegPendingH264NalTypes = [];
     this.ffmpegH264SawAud = false;
@@ -1532,9 +1862,12 @@ export class WindowsScreenCaptureCoordinator {
     }
     this.ffmpegBuffer = Buffer.alloc(0);
     this.ffmpegFrame = null;
+    this.ffmpegInputSource = "";
     this.ffmpegPendingH264Nals = [];
     this.ffmpegPendingH264NalTypes = [];
     this.ffmpegH264SawAud = false;
+    this.wgcH264BridgeFedWgcFrameId = 0;
+    this.wgcH264BridgePendingFrameInfos = [];
   }
 
   handleFfmpegChunk(chunk) {
@@ -1666,10 +1999,14 @@ export class WindowsScreenCaptureCoordinator {
     if (spsIndex >= 0) {
       this.updateH264CodecStringFromSps(nals[spsIndex]);
     }
+    const sourceInfo = this.ffmpegInputSource === wgcH264BridgeInputSource
+      ? this.wgcH264BridgePendingFrameInfos.shift()
+      : null;
     this.ffmpegFrame = {
       payload,
       nalTypes,
       keyFrame: nalTypes.includes(5) || nalTypes.includes(7) || nalTypes.includes(8),
+      sourceInfo,
     };
     this.ffmpegFrameId += 1;
     this.lastFailure = "";

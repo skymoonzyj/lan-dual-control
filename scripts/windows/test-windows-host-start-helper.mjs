@@ -178,6 +178,39 @@ async function assertDryRunWithEnvPassword(timeoutMs) {
   print("OK", "Environment password allows dry run without demo warning");
 }
 
+async function assertDryRunWgcH264BridgeOptions(timeoutMs) {
+  const result = await runNode([
+    "--requirePassword",
+    "--dryRun",
+    "--screenMode",
+    "wgc",
+    "--h264Encoder",
+    "h264_nvenc",
+    "--wgcHelper",
+    "C:\\DevTools\\lan-dual-wgc-helper.exe",
+    "--wgcH264Bridge",
+    "--wgcRepeatLastFrame",
+    "--wgcRepeatLastFrameMode",
+    "full",
+  ], {
+    timeoutMs,
+    env: {
+      LAN_DUAL_PASSWORD: "test-password",
+      LAN_DUAL_BUILD_ID: "start-helper-wgc-bridge-test",
+    },
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (result.exitCode !== 0 || result.timedOut) {
+    throw new Error(`WGC H.264 bridge dry run failed.\n${output}`);
+  }
+  assertIncludes(output, "Screen mode: wgc", "WGC H.264 bridge dry run");
+  assertIncludes(output, "H.264 encoder: h264_nvenc", "WGC H.264 bridge dry run");
+  assertIncludes(output, "WGC helper: C:\\DevTools\\lan-dual-wgc-helper.exe", "WGC H.264 bridge dry run");
+  assertIncludes(output, "WGC H.264 bridge: enabled", "WGC H.264 bridge dry run");
+  assertIncludes(output, "WGC repeat-last-frame: full", "WGC H.264 bridge dry run");
+  print("OK", "Dry run shows WGC H.264 bridge launch options");
+}
+
 async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   const port = await getFreePort();
   const result = await runNode(["--status", "--host", "127.0.0.1", "--port", String(port), "--requirePassword"], {
@@ -403,6 +436,7 @@ async function main() {
   await assertMissingPasswordFails(args.timeoutMs);
   await assertPromptPasswordFailsWithoutTty(args.timeoutMs);
   await assertDryRunWithEnvPassword(args.timeoutMs);
+  await assertDryRunWgcH264BridgeOptions(args.timeoutMs);
   await assertStatusOfflineNeedsNoPassword(args.timeoutMs);
   await assertStatusOnlineWithTempHost(args.timeoutMs);
   await assertLaunchWithEnvPassword(args.timeoutMs);

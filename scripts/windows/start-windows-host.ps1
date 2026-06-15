@@ -10,6 +10,11 @@ param(
   [string] $InputMode = "",
   [string] $Ffmpeg = "",
   [string] $H264Encoder = "",
+  [string] $WgcHelper = "",
+  [switch] $WgcH264Bridge,
+  [switch] $WgcRepeatLastFrame,
+  [ValidateSet("", "full", "signal")]
+  [string] $WgcRepeatLastFrameMode = "",
   [switch] $Wasapi,
   [switch] $LogInput,
   [switch] $SystemInput,
@@ -39,6 +44,10 @@ if ($AudioMode) { $nodeArgs += @("--audioMode", $AudioMode) }
 if ($InputMode) { $nodeArgs += @("--inputMode", $InputMode) }
 if ($Ffmpeg) { $nodeArgs += @("--ffmpeg", $Ffmpeg) }
 if ($H264Encoder) { $nodeArgs += @("--h264Encoder", $H264Encoder) }
+if ($WgcHelper) { $nodeArgs += @("--wgcHelper", $WgcHelper) }
+if ($WgcH264Bridge) { $nodeArgs += "--wgcH264Bridge" }
+if ($WgcRepeatLastFrame) { $nodeArgs += "--wgcRepeatLastFrame" }
+if ($WgcRepeatLastFrameMode) { $nodeArgs += @("--wgcRepeatLastFrameMode", $WgcRepeatLastFrameMode) }
 if ($Wasapi) { $nodeArgs += "--wasapi" }
 if ($LogInput) { $nodeArgs += "--logInput" }
 if ($SystemInput) { $nodeArgs += "--systemInput" }

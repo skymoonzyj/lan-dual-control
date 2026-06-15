@@ -21,6 +21,10 @@ const defaults = {
   password: "",
   screenMode: process.env.LAN_DUAL_WINDOWS_SCREEN_MODE || "",
   h264Encoder: process.env.LAN_DUAL_WINDOWS_H264_ENCODER || "",
+  wgcHelper: process.env.LAN_DUAL_WINDOWS_WGC_HELPER || "",
+  wgcH264Bridge: ["1", "true", "yes", "on"].includes(String(process.env.LAN_DUAL_WINDOWS_WGC_H264_BRIDGE || "").trim().toLowerCase()),
+  wgcRepeatLastFrame: ["1", "true", "yes", "on"].includes(String(process.env.LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME || "").trim().toLowerCase()),
+  wgcRepeatLastFrameMode: process.env.LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE || "",
   audioMode: process.env.LAN_DUAL_WINDOWS_AUDIO_MODE || "",
   inputMode: process.env.LAN_DUAL_WINDOWS_INPUT_MODE || "",
   ffmpeg: process.env.LAN_DUAL_FFMPEG || "",
@@ -61,6 +65,8 @@ function parseArgs(argv) {
       key === "dryRunFirewallRule" ||
       key === "promptPassword" ||
       key === "requirePassword" ||
+      key === "wgcH264Bridge" ||
+      key === "wgcRepeatLastFrame" ||
       key === "status" ||
       key === "json" ||
       key === "dryRun"
@@ -97,6 +103,10 @@ function parseArgs(argv) {
   args.timeoutMs = clampInteger(args.timeoutMs, 1000, 60000, defaults.timeoutMs);
   args.screenMode = normalizeMode(args.screenMode, ["auto", "ffmpeg", "ffmpeg-h264", "h264", "system", "mock", "wgc"], "");
   args.h264Encoder = String(args.h264Encoder || "").trim().toLowerCase();
+  args.wgcHelper = String(args.wgcHelper || "").trim();
+  args.wgcH264Bridge = Boolean(args.wgcH264Bridge);
+  args.wgcRepeatLastFrame = Boolean(args.wgcRepeatLastFrame);
+  args.wgcRepeatLastFrameMode = normalizeMode(args.wgcRepeatLastFrameMode, ["full", "signal"], "");
   args.audioMode = normalizeMode(args.audioMode, ["mock", "wasapi", "dshow"], "");
   args.inputMode = normalizeMode(args.inputMode, ["auto", "log", "system"], "");
   args.ffmpeg = resolveFfmpegCommand(String(args.ffmpeg || "").trim());
@@ -119,6 +129,10 @@ Options:
   --password <value>      Set LAN_DUAL_PASSWORD for this run. The value is not printed.
   --screenMode <mode>     auto | ffmpeg | ffmpeg-h264 | h264 | system | mock | wgc
   --h264Encoder <name>    Optional FFmpeg H.264 encoder, for example h264_nvenc
+  --wgcHelper <path>      Native Windows Graphics Capture helper executable
+  --wgcH264Bridge         In WGC mode, encode helper JPEG frames through FFmpeg H.264
+  --wgcRepeatLastFrame    In WGC mode, repeat the last helper frame for steady pacing
+  --wgcRepeatLastFrameMode <mode>  full | signal
   --audioMode <mode>      mock | wasapi | dshow
   --inputMode <mode>      auto | log | system
   --ffmpeg <path>         FFmpeg path. Auto-detects C:\\DevTools\\ffmpeg\\bin\\ffmpeg.exe
@@ -564,6 +578,10 @@ function makeLaunchEnv(args) {
   if (args.password) env.LAN_DUAL_PASSWORD = String(args.password);
   if (args.screenMode) env.LAN_DUAL_WINDOWS_SCREEN_MODE = args.screenMode;
   if (args.h264Encoder) env.LAN_DUAL_WINDOWS_H264_ENCODER = args.h264Encoder;
+  if (args.wgcHelper) env.LAN_DUAL_WINDOWS_WGC_HELPER = args.wgcHelper;
+  if (args.wgcH264Bridge) env.LAN_DUAL_WINDOWS_WGC_H264_BRIDGE = "1";
+  if (args.wgcRepeatLastFrame) env.LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME = "1";
+  if (args.wgcRepeatLastFrameMode) env.LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE = args.wgcRepeatLastFrameMode;
   if (args.audioMode) env.LAN_DUAL_WINDOWS_AUDIO_MODE = args.audioMode;
   if (args.inputMode) env.LAN_DUAL_WINDOWS_INPUT_MODE = args.inputMode;
   if (args.ffmpeg) env.LAN_DUAL_FFMPEG = args.ffmpeg;
@@ -576,6 +594,15 @@ function printLaunchPlan(args) {
   console.log(`[INFO] Build ID: ${args.buildId}`);
   if (args.h264Encoder) {
     console.log(`[INFO] H.264 encoder: ${args.h264Encoder}`);
+  }
+  if (args.wgcHelper) {
+    console.log(`[INFO] WGC helper: ${args.wgcHelper}`);
+  }
+  if (args.wgcH264Bridge) {
+    console.log(`[INFO] WGC H.264 bridge: enabled`);
+  }
+  if (args.wgcRepeatLastFrame) {
+    console.log(`[INFO] WGC repeat-last-frame: ${args.wgcRepeatLastFrameMode || "full"}`);
   }
   if (lanAddresses.length > 0) {
     for (const entry of lanAddresses) {

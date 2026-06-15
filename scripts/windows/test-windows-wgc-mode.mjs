@@ -12,6 +12,7 @@ const defaults = {
   timeoutMs: 45000,
   durationMs: 6500,
   minFrames: 1,
+  h264Encoder: "",
 };
 
 function printHelp() {
@@ -23,18 +24,22 @@ Options:
   --durationMs <ms>      WGC-mode observation window. Default: ${defaults.durationMs}
   --minFrames <n>        Minimum frames required from the fallback path. Default: ${defaults.minFrames}
   --mockHelper           Use a temporary JSON-lines helper to verify WGC helper frame ingestion
+  --h264Bridge           With --mockHelper, request H.264 and enable the WGC->FFmpeg bridge
+  --h264Encoder <name>   Optional H.264 encoder for --h264Bridge, for example h264_nvenc
   --help, -h             Show this help without starting a host
 
 Description:
   Starts the Windows video observer with --screenMode wgc and verifies the
   transitional WGC entrypoint reports requestedMode=wgc, screen.wgc diagnostics,
   and an explicit fallback reason. With --mockHelper it also verifies the
-  helper contract can drive the windows-wgc-helper-jpeg pipeline.
+  helper contract can drive the windows-wgc-helper-jpeg pipeline. With
+  --mockHelper --h264Bridge it also verifies the explicit WGC JPEG to
+  FFmpeg H.264 bridge pipeline without requiring real WGC permissions.
 `);
 }
 
 function parseArgs(argv) {
-  const args = { ...defaults, help: false, mockHelper: false };
+  const args = { ...defaults, help: false, mockHelper: false, h264Bridge: false };
   for (let index = 2; index < argv.length; index += 1) {
     const token = argv[index];
     const next = argv[index + 1];
@@ -44,6 +49,15 @@ function parseArgs(argv) {
     }
     if (token === "--mockHelper") {
       args.mockHelper = true;
+      continue;
+    }
+    if (token === "--h264Bridge") {
+      args.h264Bridge = true;
+      continue;
+    }
+    if (token === "--h264Encoder" && next && !next.startsWith("--")) {
+      args.h264Encoder = next.trim().toLowerCase();
+      index += 1;
       continue;
     }
     if (token === "--timeoutMs" && next && !next.startsWith("--")) {
@@ -70,7 +84,7 @@ function createMockWgcHelper() {
   const dir = mkdtempSync(resolve(tmpdir(), "lan-dual-wgc-helper-"));
   const helperPath = resolve(dir, "mock-wgc-helper.mjs");
   const onePixelJpegBase64 =
-    "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/AUf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/AUf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Al//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/IV//2gAMAwEAAgADAAAAEP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QUf/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QUf/EABQQAQAAAAAAAAAAAAAAAAAAABD/2gAIAQEAAT8QUf/Z";
+    "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAAQABADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwCv+zl+zl/w0B/wkP8AxUP9g/2T9n/5cvtPm+b5v/TRNuPK9857Y5P2jf2cv+Gf/wDhHv8Aiof7e/tb7R/y5fZvK8ryv+mj7s+b7Yx3zwfs5ftG/wDDP/8AwkP/ABT39vf2t9n/AOX37N5Xleb/ANM33Z832xjvng/aN/aN/wCGgP8AhHv+Ke/sH+yftH/L79p83zfK/wCmabceV75z2xz+3/8ACj/aP/Tj/t3+X/wL4v6sfmH+w/Uf+n3z7/dt/Vz/2Q==";
   const source = `
 const width = Number(process.env.LAN_DUAL_WGC_WIDTH) || 1280;
 const height = Number(process.env.LAN_DUAL_WGC_HEIGHT) || 720;
@@ -110,7 +124,10 @@ function runObserver(args) {
       env.LAN_DUAL_WINDOWS_WGC_HELPER_ARGS = args.mockHelper.helperPath;
       env.LAN_DUAL_WINDOWS_WGC_ALLOW_UNSUPPORTED = "1";
     }
-    const child = spawn(process.execPath, [
+    if (args.h264Bridge) {
+      env.LAN_DUAL_WINDOWS_WGC_H264_BRIDGE = "1";
+    }
+    const observerArgs = [
       observeScript,
       "--screenMode",
       "wgc",
@@ -127,7 +144,14 @@ function runObserver(args) {
       "--resourceSample",
       "false",
       "--json",
-    ], {
+    ];
+    if (args.h264Bridge) {
+      observerArgs.push("--preferredVideoCodec", "h264", "--wgcH264Bridge", "true");
+      if (args.h264Encoder) {
+        observerArgs.push("--h264Encoder", args.h264Encoder);
+      }
+    }
+    const child = spawn(process.execPath, observerArgs, {
       cwd: repoRoot,
       env,
       stdio: ["ignore", "pipe", "pipe"],
@@ -193,6 +217,7 @@ async function main() {
 
     const report = parseObserverJson(result.stdout);
     const screen = report.discoveryScreen || {};
+    const session = report.session || {};
     const wgc = screen.wgc || {};
     const observation = report.observation || {};
 
@@ -202,7 +227,20 @@ async function main() {
     assert(Array.isArray(observation.requestedScreenModes) && observation.requestedScreenModes.includes("wgc"), "expected observed frames to carry requestedScreenMode=wgc");
     assert(Number(observation.frameCount) >= args.minFrames, `expected at least ${args.minFrames} frame(s), got ${observation.frameCount || 0}`);
 
-    if (args.mockHelper) {
+    if (args.mockHelper && args.h264Bridge) {
+      assert(wgc.active === true, `expected mock helper WGC backend to be active; got ${JSON.stringify(wgc)}`);
+      assert(wgc.h264BridgeEnabled === true, `expected WGC H.264 bridge to be enabled; got ${JSON.stringify(wgc)}`);
+      assert(wgc.h264BridgeAvailable === true, `expected WGC H.264 bridge to be available; got ${JSON.stringify(wgc)}`);
+      assert(session.videoCodec === "h264", `expected negotiated videoCodec=h264, got ${session.videoCodec || "missing"}`);
+      assert(session.videoEncoding === "annexb-base64", `expected annexb-base64, got ${session.videoEncoding || "missing"}`);
+      assert(session.capturePipeline === "windows-wgc-helper-ffmpeg-h264", `expected WGC H.264 bridge pipeline, got ${session.capturePipeline || "missing"}`);
+      assert(Array.isArray(observation.pipelines) && observation.pipelines.includes("windows-wgc-helper-ffmpeg-h264"), "expected observed frames from windows-wgc-helper-ffmpeg-h264");
+      assert(Array.isArray(observation.codecs) && observation.codecs.includes("h264"), "expected observed H.264 frames");
+      if (args.h264Encoder) {
+        assert(Array.isArray(observation.h264Encoders) && observation.h264Encoders.includes(args.h264Encoder), `expected h264Encoder=${args.h264Encoder}`);
+      }
+      console.log(`[OK] WGC H.264 bridge contract produced frames: active=${wgc.active}, pipeline=${session.capturePipeline}, frames=${observation.frameCount}, encoder=${session.h264Encoder || "default"}`);
+    } else if (args.mockHelper) {
       assert(wgc.active === true, `expected mock helper WGC backend to be active; got ${JSON.stringify(wgc)}`);
       assert(wgc.backendImplemented === true, `expected helper-backed WGC backendImplemented=true; got ${JSON.stringify(wgc)}`);
       assert(wgc.helperAvailable === true, `expected screen.wgc.helperAvailable=true; got ${JSON.stringify(wgc)}`);

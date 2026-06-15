@@ -57,6 +57,45 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 09:35
+开发端：Windows Codex
+本轮目标：做一个低风险 WGC helper 接 FFmpeg/NVENC H.264 的最小原型，验证“WGC 来源 + H.264 输出”链路是否能通。
+完成内容：
+- Windows host 新增显式 `LAN_DUAL_WINDOWS_WGC_H264_BRIDGE=1` / `--wgcH264Bridge` 开关；仅在 `screenMode=wgc` 且会话请求 H.264 时启用。
+- 新增 `windows-wgc-helper-ffmpeg-h264` 管线：从 WGC helper JSON 行 JPEG 帧读取，写入 FFmpeg stdin，再复用现有 H.264 Annex B 分包、`codecString`、`h264Encoder` 和 binary-h264 传输能力。
+- WGC diagnostics 新增 `h264BridgeEnabled`、`h264BridgeAvailable`、`h264BridgeEncoder`、`h264BridgePipeline`，session/frame 会回传实际 pipeline 和 encoder。
+- `observe-windows-host-video` 新增 `--wgcH264Bridge true`；`test-windows-wgc-mode` 新增 `--h264Bridge` 合同自测。
+- `start-windows-host.mjs` 和 `start-windows-host.ps1` 新增 `--wgcHelper` / `-WgcHelper`、`--wgcH264Bridge` / `-WgcH264Bridge`、`--wgcRepeatLastFrame` / `-WgcRepeatLastFrame` 和 repeat mode 参数。
+修改文件：
+- `apps/windows-host/src/windows-screen-capture.mjs`
+- `scripts/windows/observe-windows-host-video.mjs`
+- `scripts/windows/test-windows-wgc-mode.mjs`
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check` 相关 Windows host/脚本文件
+- PowerShell AST 解析 `start-windows-host.ps1`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-wgc-mode.mjs --mockHelper --h264Bridge --durationMs 3000 --minFrames 5`
+- PowerShell 包装 dry run 验证 WGC bridge 参数透传
+- 真实 WGC helper + `h264_nvenc` 短观察：1280x720、30Hz、50Mbps、repeat full，3 秒 91 帧、约 30.29 FPS、最大间隔 59ms、平均帧年龄 1ms，pipeline=`windows-wgc-helper-ffmpeg-h264`
+遗留问题：
+- 这是 JPEG 桥接原型：WGC helper 先编码 JPEG，FFmpeg 再解码并编码 H.264，存在重复编解码开销，不应作为最终低延迟实现。
+- 16x16 mock helper 对 NVENC 不具代表性；真实 720p helper + NVENC 已通过短测。
+下一步建议：
+- 优先让 WGC helper 输出 raw BGRA/NV12 给 FFmpeg，或直接在原生层接硬件编码；随后跑 Mac client 真连观感、资源和 5-10 分钟长稳。
+是否改了协议：否。新增字段均为 capabilities/session/frame 诊断兼容字段。
+是否需要另一端配合：暂不需要；后续 Mac client 真连观感验收需要 Mac 端配合。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 01:20
 开发端：Windows Codex
 本轮目标：把联络板里的“需要用户授权/卡住”提醒收口，减少 Mac 端出现授权弹窗、502 或长时间无状态更新时 Windows 端错过消息。

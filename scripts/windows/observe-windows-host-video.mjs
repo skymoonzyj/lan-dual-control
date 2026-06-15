@@ -46,6 +46,7 @@ const defaults = {
   resourceSampleTimeoutMs: 3000,
   wgcRepeatLastFrame: false,
   wgcRepeatLastFrameMode: "full",
+  wgcH264Bridge: false,
 };
 
 function printUsage() {
@@ -69,6 +70,7 @@ Options:
   --wgcRepeatLastFrame true             Repeat the last WGC helper frame when no fresh frame arrives
   --wgcRepeatLastFrameMode <full|signal>
                                         full resends the JPEG; signal sends a tiny repeat marker
+  --wgcH264Bridge true                  In WGC mode, bridge helper JPEG frames into FFmpeg H.264
   --preferredVideoCodec <mjpeg|h264>    Preferred codec in session_offer
   --h264Encoder <name>                  Optional H.264 encoder for temporary ffmpeg-h264 host
   --ffmpeg <path>                       Explicit FFmpeg path for local temporary host
@@ -135,6 +137,7 @@ function parseArgs(argv) {
   args.resourceSampleTimeoutMs = Math.max(1000, Number(args.resourceSampleTimeoutMs) || defaults.resourceSampleTimeoutMs);
   args.wgcRepeatLastFrame = booleanArg(args.wgcRepeatLastFrame);
   args.wgcRepeatLastFrameMode = normalizeWgcRepeatLastFrameMode(args.wgcRepeatLastFrameMode);
+  args.wgcH264Bridge = booleanArg(args.wgcH264Bridge);
   return args;
 }
 
@@ -211,6 +214,7 @@ function startLocalWindowsHost(args) {
     LAN_DUAL_WINDOWS_INPUT_MODE: args.inputMode,
     LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME: args.wgcRepeatLastFrame ? "1" : "0",
     LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE: args.wgcRepeatLastFrameMode,
+    LAN_DUAL_WINDOWS_WGC_H264_BRIDGE: args.wgcH264Bridge ? "1" : "0",
     ...(args.useDefaultMaxScreenFps
       ? {}
       : { LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: String(maxScreenFps) }),
@@ -667,7 +671,7 @@ async function main() {
     const summary = await observeFrames(client, args, startResourceSamplingOnce, {
       fallbackReason: screen.lastCaptureError || "",
       requestedScreenMode: screen.requestedMode || "",
-      h264Encoder: screen.h264Encoder || "",
+      h264Encoder: answer.h264Encoder || screen.h264Encoder || "",
     });
     summary.sessionFps = Number(answer.fps) || 0;
     const resource = resourceSampler ? await resourceSampler.stop() : {
@@ -696,6 +700,7 @@ async function main() {
         resourceSampleTree: args.resourceSampleTree,
         wgcRepeatLastFrame: args.wgcRepeatLastFrame,
         wgcRepeatLastFrameMode: args.wgcRepeatLastFrameMode,
+        wgcH264Bridge: args.wgcH264Bridge,
       },
       discoveryScreen: {
         mode: screen.mode || "",
@@ -714,6 +719,9 @@ async function main() {
         maxBandwidthKbps: answer.maxBandwidthKbps || 0,
         qualityPreset: answer.qualityPreset || "",
         jpegQuality: answer.jpegQuality || 0,
+        videoCodec: answer.videoCodec || "",
+        videoEncoding: answer.videoEncoding || "",
+        codecString: answer.codecString || "",
         capturePipeline: answer.capturePipeline || "",
         h264Encoder: answer.h264Encoder || "",
         hostMode: answer.hostMode || "",
