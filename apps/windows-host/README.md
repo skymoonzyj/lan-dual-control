@@ -353,6 +353,14 @@ node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --exp
 node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --expectBinaryH264Video --h264Encoder h264_nvenc --allowClipboardFallback --skipFileClipboard --observeVideoMs 900 --minObservedVideoFrames 4 --minObservedVideoFps 4
 ```
 
+需要把真实 WGC helper 的 NV12 H.264 bridge 也打到 Mac 控制页时，加 `--expectWgcNv12H264Video`；脚本会启动 WGC helper、启用 `LAN_DUAL_WINDOWS_WGC_H264_SOURCE=nv12` 和 `h264_nvenc`，要求页面显示 `h264/binary`，并断言 session pipeline 为 `windows-wgc-helper-nv12-ffmpeg-h264`：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --expectWgcNv12H264Video --skipFileClipboard --observeVideoMs 1200 --minObservedVideoFrames 5 --minObservedVideoFps 10 --maxInitialVideoMs 15000 --timeoutMs 45000
+```
+
+`2026-06-15` 本机页面级短验收通过：最近复验首帧约 5033ms，页面诊断显示 `h264` canvas，收到 127 个 `binary-h264` 诊断帧，持续观察 1207ms 收到 42 帧、约 34.8 FPS，且 2K / 60 Hz / 40 Mbps display settings ack 通过。
+
 需要回归旧 JSON/base64 兼容路径时，可关闭页面二进制视频传输：
 
 ```powershell

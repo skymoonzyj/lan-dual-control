@@ -18,6 +18,8 @@ const defaults = {
   inputMode: "log",
   screenMode: "auto",
   h264Encoder: "",
+  wgcHelper: "",
+  wgcH264Source: "",
   requireRealVideo: true,
   requireSystemClipboard: process.platform === "win32",
   testFileClipboard: true,
@@ -41,6 +43,7 @@ const defaults = {
   expectRepeatSignalVideo: false,
   expectBinaryVideo: false,
   expectBinaryH264Video: false,
+  expectWgcNv12H264Video: false,
   expectH264Fallback: false,
   requireH264Video: false,
   forceH264Unsupported: false,
@@ -78,6 +81,9 @@ Options:
   --mockVideo                      Start temporary host with mock video and disable real-video requirement.
   --screenMode <mode>              Temporary host screen mode. Default: ${defaults.screenMode}
   --h264Encoder <name>             Optional temporary host H.264 encoder, for example h264_nvenc
+  --wgcHelper <path>               WGC helper exe for WGC H.264 bridge tests
+  --wgcH264Source <jpeg|raw-bgra|nv12>
+                                   WGC helper H.264 bridge source. Default: auto per test
   --inputMode <mode>               Temporary host input mode. Default: ${defaults.inputMode}
   --noRequireRealVideo             Allow mock/svg video frames.
   --allowClipboardFallback         Allow memory/temp clipboard fallback on non-Windows systems.
@@ -103,6 +109,7 @@ Options:
   --expectRepeatSignalVideo        Start WGC mock helper with repeat signal frames and require Mac client diagnostics.
   --expectBinaryVideo              Start WGC JPEG helper and require binary JPEG video transport.
   --expectBinaryH264Video          Start ffmpeg-h264 mode and require binary H.264 video transport.
+  --expectWgcNv12H264Video         Start real WGC helper NV12 bridge and require binary H.264 page video.
   --expectH264Fallback             Start ffmpeg-h264 mode and require Mac client to request MJPEG fallback.
   --requireH264Video               Require the Mac client to render H.264 video instead of JPEG fallback.
   --forceH264Unsupported           Force VideoDecoder.isConfigSupported to reject H.264 configs.
@@ -225,6 +232,14 @@ function parseArgs(argv) {
       args.screenMode = "ffmpeg-h264";
       continue;
     }
+    if (key === "expectWgcNv12H264Video") {
+      args.expectWgcNv12H264Video = true;
+      args.expectBinaryH264Video = true;
+      args.requireH264Video = true;
+      args.screenMode = "wgc";
+      args.wgcH264Source = "nv12";
+      continue;
+    }
     if (key === "expectH264Fallback") {
       args.expectH264Fallback = true;
       args.forceH264Unsupported = true;
@@ -241,6 +256,11 @@ function parseArgs(argv) {
   args.debugPort = Number(args.debugPort);
   args.timeoutMs = Number(args.timeoutMs);
   args.h264Encoder = String(args.h264Encoder || "").trim().toLowerCase();
+  args.wgcHelper = String(args.wgcHelper || "").trim();
+  args.wgcH264Source = normalizeWgcH264Source(args.wgcH264Source);
+  if (args.expectWgcNv12H264Video && !args.h264Encoder) {
+    args.h264Encoder = "h264_nvenc";
+  }
   args.maxInitialVideoMs = Number(args.maxInitialVideoMs);
   args.maxReconnectRestoreMs = Number(args.maxReconnectRestoreMs);
   args.maxAudioFrameMs = Number(args.maxAudioFrameMs);
@@ -266,6 +286,20 @@ function parseArgs(argv) {
     args.enableAudio = true;
   }
   return args;
+}
+
+function normalizeWgcH264Source(value) {
+  const source = String(value || "").trim().toLowerCase();
+  if (["raw", "bgra", "raw-bgra", "raw_bgra"].includes(source)) {
+    return "raw-bgra";
+  }
+  if (["nv12", "raw-nv12", "raw_nv12", "yuv", "yuv420"].includes(source)) {
+    return "nv12";
+  }
+  if (["jpeg", "jpg", "mjpeg"].includes(source)) {
+    return "jpeg";
+  }
+  return "";
 }
 
 function print(kind, text) {
@@ -619,14 +653,28 @@ async function startWindowsHost(args, repoRoot) {
     throw new Error(`Windows host is not reachable on ${args.host}:${args.port}`);
   }
 
+  const wgcNv12Helper = args.expectWgcNv12H264Video
+    ? resolveWgcHelperPath(args, repoRoot)
+    : "";
   const env = {
     ...process.env,
     LAN_DUAL_PASSWORD: args.hostPassword,
     LAN_DUAL_WINDOWS_INPUT_MODE: args.inputMode,
-    LAN_DUAL_WINDOWS_SCREEN_MODE: (args.expectRepeatSignalVideo || args.expectBinaryVideo) ? "wgc" : args.mockVideo ? "mock" : args.screenMode,
+    LAN_DUAL_WINDOWS_SCREEN_MODE: (args.expectRepeatSignalVideo || args.expectBinaryVideo || args.expectWgcNv12H264Video) ? "wgc" : args.mockVideo ? "mock" : args.screenMode,
     LAN_DUAL_BUILD_ID: temporaryWindowsHostBuildId,
     ...(args.h264Encoder ? { LAN_DUAL_WINDOWS_H264_ENCODER: args.h264Encoder } : {}),
     ...(args.audioMode ? { LAN_DUAL_WINDOWS_AUDIO_MODE: args.audioMode } : {}),
+    ...(args.expectWgcNv12H264Video
+      ? {
+          LAN_DUAL_WINDOWS_WGC_HELPER: wgcNv12Helper,
+          LAN_DUAL_WINDOWS_WGC_ALLOW_UNSUPPORTED: "1",
+          LAN_DUAL_WINDOWS_WGC_H264_BRIDGE: "1",
+          LAN_DUAL_WINDOWS_WGC_H264_SOURCE: args.wgcH264Source || "nv12",
+          LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME: "1",
+          LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE: "full",
+          LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: "60",
+        }
+      : {}),
     ...((args.expectRepeatSignalVideo || args.expectBinaryVideo) && args.repeatSignalWgcHelperPath
       ? {
           LAN_DUAL_WINDOWS_WGC_HELPER: process.execPath,
@@ -651,6 +699,16 @@ async function startWindowsHost(args, repoRoot) {
   await waitForHttpOk(discoveryUrl, args.timeoutMs, "Windows host discovery");
   print("OK", `Started temporary Windows host PID ${child.pid} on ${args.host}:${args.port}`);
   return child;
+}
+
+function resolveWgcHelperPath(args, repoRoot) {
+  const helperPath = args.wgcHelper ||
+    process.env.LAN_DUAL_WINDOWS_WGC_HELPER ||
+    join(repoRoot, "apps", "windows-wgc-helper", "target", "debug", "lan-dual-wgc-helper.exe");
+  if (!existsSync(helperPath)) {
+    throw new Error(`WGC helper not found for --expectWgcNv12H264Video: ${helperPath}. Build it with cargo build in apps/windows-wgc-helper or pass --wgcHelper.`);
+  }
+  return helperPath;
 }
 
 async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }) {
@@ -1803,6 +1861,17 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       !(sessionJpegQuality >= 0.5 && sessionJpegQuality <= 0.62)
     ) {
       throw new Error(`Windows host session video negotiation mismatch: ${JSON.stringify(sessionAnswer)}`);
+    }
+    if (args.expectWgcNv12H264Video) {
+      if (
+        sessionAnswer?.capturePipeline !== "windows-wgc-helper-nv12-ffmpeg-h264" ||
+        sessionAnswer?.videoCodec !== "h264" ||
+        sessionAnswer?.videoTransport !== (args.disableBinaryVideo ? "json" : "binary-h264") ||
+        sessionAnswer?.h264Encoder !== args.h264Encoder
+      ) {
+        throw new Error(`Windows host WGC NV12 H.264 session mismatch: ${JSON.stringify(sessionAnswer)}`);
+      }
+      print("OK", `WGC NV12 H.264 session: ${sessionAnswer.capturePipeline} / ${sessionAnswer.h264Encoder}`);
     }
     print("OK", `Video settings: ${videoSnapshot.displaySettings}`);
 
