@@ -49,6 +49,37 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 21:00
+开发端：Mac Codex
+本轮目标：把 Mac host 文件剪贴板接收完整性回归接入 Mac readiness，方便收工和部署前自动覆盖。
+完成内容：
+- `scripts/mac/check-mac-host-readiness.mjs` 新增显式 `--probeClipboardSecurity`，会串联 `scripts/mac/test-mac-host-clipboard-file-integrity.mjs`。
+- `--profile deep` 现在会在部署检查、媒体/input-log 探针和启动助手自测之外，自动包含 Mac host 文件剪贴板安全回归。
+- 新增 `scripts/mac/test-mac-readiness-clipboard-security.mjs`，覆盖帮助文本、源码 wiring、`--probeClipboardSecurity --json` 聚合结果、`--profile deep --json` 自动启用，以及不泄露密码形态。
+- 同步 Mac host README、CURRENT_STATUS、NEXT_ACTIONS、04-task-board 和 ACTIVE_LOCKS。
+修改文件：
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `scripts/mac/test-mac-readiness-clipboard-security.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-host-readiness.mjs`
+- `node --check scripts/mac/test-mac-readiness-clipboard-security.mjs`
+- `node scripts/mac/test-mac-readiness-clipboard-security.mjs --timeoutMs 45000`
+- `node scripts/mac/test-mac-script-help.mjs --script check-mac-host-readiness.mjs --script test-mac-readiness-clipboard-security.mjs --timeoutMs 10000`
+遗留问题：
+- 本轮只接入本地安全回归；正式 Windows -> Mac 文件剪贴板仍需后续由 Windows 侧用 `--clipboardFile` / `-ClipboardFile` 在真机 E2E 中验证。
+下一步建议：
+- Mac host 或文件剪贴板相关改动后，可运行 `node scripts/mac/check-mac-host-readiness.mjs --probeClipboardSecurity` 做低风险安全回归；部署深检继续用 `--profile deep`。
+是否改了协议：否。
+是否需要另一端配合：不需要立即配合；Windows/Supervisor 可在复审时跑新增 Mac readiness 测试或真机文件剪贴板探针。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 20:30
 开发端：Mac Codex
 本轮目标：对称加固 Mac host 文件剪贴板接收完整性，避免坏分块误完成。

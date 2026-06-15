@@ -143,7 +143,7 @@ node scripts/mac/test-mac-resume-status.mjs
 node scripts/mac/check-mac-host-readiness.mjs --profile deploy
 ```
 
-`deploy` 会要求 `/discovery` 可达、运行中 host 是当前 git build、屏幕录制/辅助功能/输入监控权限已开启，并串联 H.264、PCM 和安全 `log` 输入冒烟；默认还会用 `--maxVideoFrameAgeMs 250` 检查帧时间戳新鲜度。如果还要顺带覆盖启动助手临时端口实启/关闭路径，可用：
+`deploy` 会要求 `/discovery` 可达、运行中 host 是当前 git build、屏幕录制/辅助功能/输入监控权限已开启，并串联 H.264、PCM 和安全 `log` 输入冒烟；默认还会用 `--maxVideoFrameAgeMs 250` 检查帧时间戳新鲜度。如果还要顺带覆盖启动助手临时端口实启/关闭路径和文件剪贴板接收安全回归，可用：
 
 ```bash
 node scripts/mac/check-mac-host-readiness.mjs --profile deep
@@ -163,7 +163,7 @@ node scripts/mac/check-mac-host-readiness.mjs --requireControlPermissions
 node scripts/mac/check-mac-host-readiness.mjs --profile deep
 ```
 
-其中 `--probeVideo` 会做短 H.264 时间线观察，`--probeAudio` 会做短 PCM 音频观察且不播放声音，`--probeInputLog` 会先确认 host 是 `log` 输入模式再发送安全冒烟事件，`--probeStartHelper` 会用临时端口启动/关闭一次启动助手自测。主机已重启到小数秒 timestamp build 后，可加 `--maxVideoFrameAgeMs 250` 强制要求 `video_frame.timestamp` 接收年龄足够新鲜；也可加 `--maxAudioFrameAgeMs 250` 强制要求 `audio_frame.timestamp` 新鲜且单调。两个参数会分别自动启用对应 probe。如果临时需要验收旧 build，可用 `--skipCurrentBuildCheck` 暂时关闭“运行中 build 与当前 git 不一致”的 warning。需要机器可读结果时可加 `--json`。
+其中 `--probeVideo` 会做短 H.264 时间线观察，`--probeAudio` 会做短 PCM 音频观察且不播放声音，`--probeInputLog` 会先确认 host 是 `log` 输入模式再发送安全冒烟事件，`--probeStartHelper` 会用临时端口启动/关闭一次启动助手自测，`--probeClipboardSecurity` 会运行本地文件剪贴板接收完整性回归。主机已重启到小数秒 timestamp build 后，可加 `--maxVideoFrameAgeMs 250` 强制要求 `video_frame.timestamp` 接收年龄足够新鲜；也可加 `--maxAudioFrameAgeMs 250` 强制要求 `audio_frame.timestamp` 新鲜且单调。两个参数会分别自动启用对应 probe。如果只想单跑文件剪贴板安全回归，可用 `node scripts/mac/check-mac-host-readiness.mjs --probeClipboardSecurity`；该路径不会启动 host、写系统剪贴板、要求密码或执行输入。如果临时需要验收旧 build，可用 `--skipCurrentBuildCheck` 暂时关闭“运行中 build 与当前 git 不一致”的 warning。需要机器可读结果时可加 `--json`。
 
 进入目录：
 

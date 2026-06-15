@@ -25,6 +25,7 @@ const defaults = {
   probeAudio: false,
   maxAudioFrameAgeMs: 0,
   probeInputLog: false,
+  probeClipboardSecurity: false,
   probeStartHelper: false,
   strict: false,
   json: false,
@@ -63,6 +64,7 @@ function parseArgs(argv) {
       key === "probeVideo" ||
       key === "probeAudio" ||
       key === "probeInputLog" ||
+      key === "probeClipboardSecurity" ||
       key === "probeStartHelper" ||
       key === "strict" ||
       key === "json"
@@ -98,6 +100,7 @@ function parseArgs(argv) {
   args.probeVideo = booleanArg(args.probeVideo);
   args.probeAudio = booleanArg(args.probeAudio);
   args.probeInputLog = booleanArg(args.probeInputLog);
+  args.probeClipboardSecurity = booleanArg(args.probeClipboardSecurity);
   args.probeStartHelper = booleanArg(args.probeStartHelper);
   args.strict = booleanArg(args.strict);
   args.json = booleanArg(args.json);
@@ -129,6 +132,7 @@ function applyProfile(args) {
     args.maxAudioFrameAgeMs = 250;
   }
   if (args.profile === "deep") {
+    args.probeClipboardSecurity = true;
     args.probeStartHelper = true;
   }
 }
@@ -168,6 +172,9 @@ Options:
   --maxAudioFrameAgeMs <ms> Require fresh audio_frame.timestamp during --probeAudio.
                             Implies --probeAudio. Default: off.
   --probeInputLog           Run safe input log smoke test; refuses non-log hosts.
+  --probeClipboardSecurity  Run Mac host file clipboard receive integrity guards.
+                            This is local-only: it does not start the host, write
+                            the system clipboard, require a password, or inject input.
   --probeStartHelper        Run start helper self-test on a temporary local port.
   --strict                  Treat warnings as failure.
   --json                    Print machine-readable JSON summary.
@@ -680,6 +687,17 @@ async function main() {
     );
   }
 
+  if (args.probeClipboardSecurity) {
+    await runStep(
+      results,
+      args,
+      "Mac host file clipboard security",
+      node,
+      ["scripts/mac/test-mac-host-clipboard-file-integrity.mjs"],
+      { timeoutMs: Math.max(args.timeoutMs, 15000) },
+    );
+  }
+
   if (args.probeVideo) {
     await runStep(
       results,
@@ -786,6 +804,7 @@ async function main() {
       probeAudio: args.probeAudio,
       maxAudioFrameAgeMs: args.maxAudioFrameAgeMs,
       probeInputLog: args.probeInputLog,
+      probeClipboardSecurity: args.probeClipboardSecurity,
       probeStartHelper: args.probeStartHelper,
     },
     passed: results.filter((result) => result.ok).length,
