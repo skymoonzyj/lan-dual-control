@@ -17,6 +17,44 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Mac Codex
+
+日期：2026-06-15 09:00
+开发端：Mac Codex
+本轮目标：补一个恢复开工/正式验收前的 Mac 侧轻量总览，减少双方早上恢复时靠聊天猜当前状态。
+完成内容：
+- 新增 `scripts/mac/check-mac-resume-status.mjs`。
+- 脚本只读汇总当前 git 分支/干净状态、可选 Agent Link Board 快照、Mac host `/discovery` 在线状态、runtime、权限、能力、显示器、LAN 地址，以及运行中 build 到当前 git 的 Mac host runtime 源码差异。
+- 支持 `--json` 输出机器可读报告；支持 `--requireClean`、`--requireOnline`、`--requireNoRuntimeChanges` 把未提交改动、离线 host 或运行源码变化升级为失败。
+- 不启动服务、不认证 WebSocket、不要求或打印密码、不发送输入事件，适合恢复工作前、发状态前或正式密码端到端验收前先跑。
+- 新增 `scripts/mac/test-mac-resume-status.mjs`，覆盖帮助、离线 JSON、`--requireOnline` 失败、在线 JSON 字段形状和输出不回显无关 secret-like 文本。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- `node scripts/mac/check-mac-resume-status.mjs --json --timeoutMs 5000`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 10000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 5000`
+- `node scripts/mac/check-mac-resume-status.mjs --checkBoard --timeoutMs 8000`
+- `git diff --check`
+- 冲突标记搜索
+遗留问题：
+- 当前本机 `127.0.0.1:43770` 报告为离线；脚本按预期给出安全启动建议。正式端到端验收前需要用户确认/输入正式密码后用 `start-mac-host --promptPassword --requirePassword` 启动。
+- 该脚本只是轻量总览，不替代 `check-mac-host-readiness --profile deploy/deep` 或 Windows 控制端正式认证验收。
+下一步建议：
+- 白天恢复时先跑 `node scripts/mac/check-mac-resume-status.mjs --checkBoard` 并把结果同步到联络板。
+- 如果 host 离线，先正式密码启动 Mac host；如果 host 在线且无 runtime 源码差异，再按联络板顺序做 Windows 发现、正式认证、H.264 5-10 分钟、音频、剪贴板和 input log。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；正式密码 E2E 验收时需要 Windows 端配合。
+
 ## 2026-06-15 Windows Codex
 
 日期：2026-06-15 01:20
