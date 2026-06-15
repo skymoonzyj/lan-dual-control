@@ -81,6 +81,14 @@ node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary
 
 正式清单同样只读：不会启动服务、不会认证 WebSocket、不会要求或打印密码、不会发送输入事件；`inject` 会明确标为跳过，只有用户明确确认正在看屏幕后才允许另行验收。
 
+如果正式 call Windows 前想先在 Mac 本机短验收 H.264、系统 PCM 和安全 input-log，可跑本机聚合 smoke：
+
+```bash
+node scripts/mac/check-mac-formal-local-smoke.mjs --promptPassword
+```
+
+该脚本会复用 `observe-mac-video`、`observe-mac-audio` 和 `smoke-mac-input-log`，默认要求正式密码来源为 `LAN_DUAL_PASSWORD` 或 `--promptPassword`，并拒绝空密码和 `demo-password`。密码只通过子进程环境变量传递，不放进命令参数；脚本不会启动 Mac host、不会切 `inject`，也不会打印密码。自动化需要机器可读结果时可加 `--json`，需要本地假服务回归时才显式加 `--allowDemoPassword`。
+
 启动助手会：
 
 - 默认绑定 `0.0.0.0:43770`，打印 Windows 端可填写的局域网地址。

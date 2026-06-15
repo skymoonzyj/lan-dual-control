@@ -19,6 +19,39 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 10:45
+开发端：Mac Codex
+本轮目标：新增正式 Windows E2E 前的 Mac 本机安全短验收聚合脚本，先在 Mac 侧串 H.264、PCM 和 input-log。
+完成内容：
+- 新增 `scripts/mac/check-mac-formal-local-smoke.mjs`，复用 `observe-mac-video`、`observe-mac-audio` 和 `smoke-mac-input-log`，默认串联 H.264、系统 PCM 和安全 `inputMode=log` 输入 ack。
+- 默认要求正式密码来自 `LAN_DUAL_PASSWORD` 或 `--promptPassword`，拒绝空密码和 `demo-password`；密码只通过 `LAN_DUAL_PASSWORD` 环境变量传给子探针，不放进命令参数。
+- 支持 `--json` 输出结构化报告和 `boardSummary`；失败 JSON 可解析，错误文本会 redaction 环境密码或显式 `--password`。
+- 不启动 Mac host、不重启当前正式 host、不切 `inject`、不打印密码；`--allowDemoPassword` 只建议用于本地假服务测试。
+- 新增 `scripts/mac/test-mac-formal-local-smoke.mjs`，用临时假 Mac host 覆盖帮助、密码安全失败、demo 密码默认拒绝、全跳过 JSON、显式 fake demo 放行和三探针聚合成功。
+修改文件：
+- `scripts/mac/check-mac-formal-local-smoke.mjs`
+- `scripts/mac/test-mac-formal-local-smoke.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-formal-local-smoke.mjs`
+- `node --check scripts/mac/test-mac-formal-local-smoke.mjs`
+- `node scripts/mac/test-mac-formal-local-smoke.mjs --timeoutMs 30000`
+遗留问题：
+- 本轮未对真实 `192.168.31.122:43770` 跑正式本机 smoke，因为需要用户输入正式密码；若要执行，先提醒用户并用 `--promptPassword` 隐藏输入。
+- 本轮未执行 `inject`，仍需用户明确确认后才可做真实注入验收。
+下一步建议：
+- 正式 call Windows 前：先跑 `node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary`；如需 Mac 本机也先短验收，再跑 `node scripts/mac/check-mac-formal-local-smoke.mjs --promptPassword`。
+- Windows 端已具备 `scripts/windows/check-mac-formal-e2e.mjs`，用户在 Windows 本机安全输入正式密码后可继续正式 E2E。
+是否改了协议：否。
+是否需要另一端配合：代码改动本身不需要；正式 E2E 仍需要 Windows 端用正式密码配合。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 10:20
 开发端：Mac Codex
 本轮目标：新增正式端到端验收前的 Mac 侧清单状态工具，减少白天恢复时手工判断是否可以 call Windows。
