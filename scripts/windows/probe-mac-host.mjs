@@ -3,10 +3,17 @@ import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 const defaults = {
   host: "127.0.0.1",
   port: "43770",
+  hostProvided: false,
+  discover: false,
+  discoverNoLocalSubnets: false,
+  discoverTimeoutMs: 1200,
   password: process.env.LAN_DUAL_PASSWORD || "demo-password",
   passwordProvided: false,
   promptPassword: false,
@@ -52,6 +59,9 @@ hello/auth/session negotiation and waits for the first video frame.
 Options:
   --host <host>                       Mac host address. Default: ${defaults.host}
   --port <port>                       Mac host port. Default: ${defaults.port}
+  --discover                          Find the best Mac host with discover-lan-hosts before probing.
+  --discoverNoLocalSubnets            With --discover, only probe 127.0.0.1 and explicit --host targets.
+  --discoverTimeoutMs <ms>            Per-host discovery timeout. Default: ${defaults.discoverTimeoutMs}
   --password <password>               Probe password. Default: LAN_DUAL_PASSWORD or demo-password.
   --promptPassword                    Prompt for the probe password without echoing it.
   --requirePassword                   Refuse empty/demo-password credentials before connecting.
@@ -84,6 +94,7 @@ Options:
   --clipboardFileBytes <bytes>        Size of synthetic clipboard file. Default: ${defaults.clipboardFileBytes}
 
 Examples:
+  node scripts/windows/probe-mac-host.mjs --discover --promptPassword --requirePassword --requireH264 --expectInputMode log
   node scripts/windows/probe-mac-host.mjs --host 127.0.0.1 --port 43770 --promptPassword --requirePassword --requireH264 --expectInputMode log
   node scripts/windows/probe-mac-host.mjs --host 192.168.1.20 --port 43770 --promptPassword --requirePassword --requireAudio
   node scripts/windows/probe-mac-host.mjs --host 192.168.1.20 --port 43770 --promptPassword --requirePassword --requireH264 --durationMs 300000 --minVideoFps 5 --maxVideoGapMs 3000
@@ -108,10 +119,16 @@ function parseArgs(argv) {
     if (key === "password") {
       args.passwordProvided = true;
     }
+    if (key === "host") {
+      args.hostProvided = true;
+    }
     args[key] = next;
     index += 1;
   }
   args.port = String(args.port);
+  args.discover = booleanArg(args.discover);
+  args.discoverNoLocalSubnets = booleanArg(args.discoverNoLocalSubnets);
+  args.discoverTimeoutMs = Math.max(250, Number(args.discoverTimeoutMs) || defaults.discoverTimeoutMs);
   args.promptPassword = booleanArg(args.promptPassword);
   args.requirePassword = booleanArg(args.requirePassword);
   args.timeoutMs = Number(args.timeoutMs) || defaults.timeoutMs;
@@ -218,6 +235,116 @@ function runCommand(command, { input = "", args = [] } = {}) {
     }
     child.stdin.end();
   });
+}
+
+function runCapturedProcess(command, args, options = {}) {
+  return new Promise((resolveRun) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const startedAt = performance.now();
+    const timer = setTimeout(() => {
+      child.kill();
+      finish({ exitCode: null, signal: "timeout", timedOut: true, ok: false });
+    }, options.timeoutMs ?? 15000);
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolveRun({
+        ...result,
+        stdout,
+        stderr: result.stderr ?? stderr,
+        durationMs: Math.round(performance.now() - startedAt),
+      });
+    };
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      finish({
+        exitCode: null,
+        signal: "error",
+        timedOut: false,
+        ok: false,
+        stderr: `${stderr}\n${error.message}`.trim(),
+      });
+    });
+    child.on("close", (exitCode, signal) => {
+      finish({
+        exitCode,
+        signal,
+        timedOut: false,
+        ok: exitCode === 0,
+      });
+    });
+  });
+}
+
+function tailLines(text, limit = 8) {
+  const lines = String(text || "").trim().split(/\r?\n/).filter(Boolean);
+  return lines.slice(-limit).join("\n");
+}
+
+function discoveryScannerArgs(args) {
+  const scannerArgs = [
+    "scripts/windows/discover-lan-hosts.mjs",
+    "--json",
+    "--requireMacHost",
+    "--timeoutMs",
+    String(args.discoverTimeoutMs),
+    "--port",
+    String(args.port),
+  ];
+  if (args.discoverNoLocalSubnets) {
+    scannerArgs.push("--noLocalSubnets");
+  }
+  if (args.hostProvided) {
+    scannerArgs.push("--host", args.host);
+  }
+  return scannerArgs;
+}
+
+async function resolveDiscoveryTarget(args) {
+  if (!args.discover) return null;
+  const childArgs = discoveryScannerArgs(args);
+  const result = await runCapturedProcess(process.execPath, childArgs, {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      LAN_DUAL_PASSWORD: "",
+    },
+    timeoutMs: Math.max(15000, Number(args.discoverTimeoutMs) * 12 + 8000),
+  });
+  let payload;
+  try {
+    payload = JSON.parse(String(result.stdout || "").trim());
+  } catch (error) {
+    throw new Error(
+      `Mac host discovery did not print valid JSON: ${error.message}; exit=${result.exitCode ?? "null"}; stdout=${tailLines(result.stdout)}; stderr=${tailLines(result.stderr)}`,
+    );
+  }
+  const best = payload.bestMacHost || null;
+  if (!result.ok || !best) {
+    const detail = payload.boardSummary || `no Mac host found; exit=${result.exitCode ?? "null"}`;
+    throw new Error(`Mac host discovery failed: ${detail}`);
+  }
+  args.host = String(best.host);
+  args.port = String(best.port);
+  return {
+    target: `${args.host}:${args.port}`,
+    foundMacHosts: Array.isArray(payload.macHosts) ? payload.macHosts.length : 1,
+    runtimeBuild: best.runtime?.buildId || "",
+  };
 }
 
 async function readLocalMacClipboardText() {
@@ -1238,6 +1365,19 @@ async function main() {
   }
 
   const args = parseArgs(process.argv.slice(2));
+  try {
+    const discoverySelection = await resolveDiscoveryTarget(args);
+    if (discoverySelection) {
+      const runtimeText = discoverySelection.runtimeBuild ? ` runtimeBuild=${discoverySelection.runtimeBuild}` : "";
+      print(
+        "OK",
+        `Discovery target: ${discoverySelection.target}; macHosts=${discoverySelection.foundMacHosts}${runtimeText}`,
+      );
+    }
+  } catch (error) {
+    fail(error.message);
+    return;
+  }
   try {
     await preparePassword(args);
   } catch (error) {

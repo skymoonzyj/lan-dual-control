@@ -70,6 +70,7 @@ Windows 端：
 - [x] 正式 Mac E2E 无密预检可输出执行计划、耗时和安全边界。
 - [x] 正式 Mac E2E 支持自动发现最佳 Mac host，预检 JSON 会记录选址结果。
 - [x] Windows 控制端页面自检支持自动发现最佳 Mac host 后再跑无密 UI runtime 验收。
+- [x] 底层 Mac host 探针支持自动发现最佳 Mac host 后再做认证、媒体、剪贴板和 input-log 验收。
 
 共享：
 

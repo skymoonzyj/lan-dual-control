@@ -19,6 +19,37 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 17:45
+开发端：Windows Codex
+本轮目标：让底层 Mac host 探针也能自动发现 Mac host，方便单独做 H.264、音频、剪贴板和 input-log 验收。
+完成内容：
+- `scripts/windows/probe-mac-host.mjs` 新增 `--discover`、`--discoverNoLocalSubnets` 和 `--discoverTimeoutMs`。
+- probe 会在密码检查前先调用 `scripts/windows/discover-lan-hosts.mjs --json --requireMacHost`，选中 `bestMacHost` 后再进入原 `/discovery`、WebSocket、认证、session 和媒体/剪贴板/input 探针。
+- 发现失败会先退出，不会弹出或要求密码；发现成功后再使用原有 `LAN_DUAL_PASSWORD`、`--promptPassword` 或 `--password` 路径。
+- 新增 `scripts/windows/test-probe-mac-host-discover.mjs`，用本机 mock Mac 覆盖自动发现、认证、会话和首帧，并覆盖离线 discovery 不触发密码提示。
+- `CURRENT_STATUS`、`NEXT_ACTIONS` 和任务板同步新命令。
+修改文件：
+- `scripts/windows/probe-mac-host.mjs`
+- `scripts/windows/test-probe-mac-host-discover.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/probe-mac-host.mjs`
+- `node --check scripts/windows/test-probe-mac-host-discover.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script probe-mac-host.mjs --script test-probe-mac-host-discover.mjs`
+- `node scripts/windows/test-probe-mac-host-discover.mjs --timeoutMs 30000`
+遗留问题：
+- 真实 Mac 的正式长测仍需要用户在 Windows 本机隐藏输入正式密码；本轮只用 mock host 做认证/首帧回归，没有对真实正式密码通道认证。
+下一步建议：
+- 用户准备好输入正式密码后，可先单跑 `node scripts/windows/probe-mac-host.mjs --discover --promptPassword --requirePassword --requireH264 --expectInputMode log`，再按需要加音频/剪贴板/长测参数；完整正式验收继续用 `check-mac-formal-e2e --discover --promptPassword`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真实正式密码验收需要用户在 Windows 本机输入密码，`inject` 仍需另行明确确认。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 17:25
 开发端：Windows Codex
 本轮目标：让 Windows 控制端页面级自检也能自动发现 Mac host，减少 UI 验收前手工复制 IP/端口。
