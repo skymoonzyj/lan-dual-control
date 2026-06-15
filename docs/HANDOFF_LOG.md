@@ -53,6 +53,41 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 18:55
+开发端：Windows Codex
+本轮目标：给 Windows 正式 Mac E2E 聚合脚本增加 PowerShell 包装入口，让用户后续更容易做无密码预检和正式隐藏密码验收。
+完成内容：
+- 新增 `scripts/windows/check-mac-formal-e2e.ps1`，薄包装 `node scripts/windows/check-mac-formal-e2e.mjs`。
+- PowerShell 入口支持 `-Discover`、`-DiscoverNoLocalSubnets`、`-PreflightOnly`、`-CheckClientDiagnostics`、`-BoardSummary`、`-UserAuthRequest`、`-PromptPassword`、`-FastProfile`、各项时长/阈值和 `-Skip*` 参数。
+- 常用流程变成：先 `check-mac-formal-e2e.ps1 -Discover -PreflightOnly -CheckClientDiagnostics -BoardSummary` 无密码预检；用户准备好正式密码后再 `check-mac-formal-e2e.ps1 -Discover -PromptPassword`。
+- 新增 `scripts/windows/test-mac-formal-e2e-powershell.mjs`，用本机 mock Mac 覆盖 PowerShell 帮助、自动发现 JSON 预检、离线发现不弹密码和 mock 快速正式路径。
+- Windows 环境说明、当前状态、下一步和任务板同步 PowerShell 正式入口。
+修改文件：
+- `scripts/windows/check-mac-formal-e2e.ps1`
+- `scripts/windows/test-mac-formal-e2e-powershell.mjs`
+- `docs/07-windows-dev-environment.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-formal-e2e-powershell.mjs`
+- PowerShell AST parse `scripts/windows/check-mac-formal-e2e.ps1`
+- `node scripts/windows/test-windows-script-help.mjs --script test-mac-formal-e2e-powershell.mjs`
+- `node scripts/windows/test-mac-formal-e2e-powershell.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-script-help.mjs`
+- `git diff --check`
+- 行首冲突标记扫描
+遗留问题：
+- 真实 Mac 的正式长测仍需要用户在 Windows 本机隐藏输入正式密码；本轮不认证真实 Mac、不发送输入、不执行 `inject`。
+下一步建议：
+- 用户准备好正式密码后，优先 PowerShell 入口：先 `-Discover -PreflightOnly -CheckClientDiagnostics -BoardSummary`，ready 后再 `-Discover -PromptPassword` 跑正式 E2E。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真实正式密码验收需要用户在 Windows 本机输入密码，`inject` 仍需另行明确确认。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 18:20
 开发端：Windows Codex
 本轮目标：让 PowerShell Mac host 验收入口也能自动发现 Mac host，减少正式探针前手工复制 IP/端口。

@@ -69,6 +69,7 @@ Windows 端：
 - [x] 连接真实 Mac 被控端。
 - [x] 正式 Mac E2E 无密预检可输出执行计划、耗时和安全边界。
 - [x] 正式 Mac E2E 支持自动发现最佳 Mac host，预检 JSON 会记录选址结果。
+- [x] 正式 Mac E2E 增加 PowerShell 包装入口，可用 `-Discover -PreflightOnly -BoardSummary` 做无密码预检，或用 `-Discover -PromptPassword` 在 Windows 本机隐藏输入正式密码后跑完整验收。
 - [x] Windows 控制端页面自检支持自动发现最佳 Mac host 后再跑无密 UI runtime 验收。
 - [x] 底层 Mac host 探针支持自动发现最佳 Mac host 后再做认证、媒体、剪贴板和 input-log 验收。
 - [x] PowerShell Mac host 验收入口支持 `-Discover` 自动发现；发现失败先退出，不弹密码框，方便 Windows 端无手填 IP 做 H.264、音频、剪贴板和 input-log 探针。

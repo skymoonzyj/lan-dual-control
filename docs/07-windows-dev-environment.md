@@ -142,6 +142,29 @@ node scripts/windows/probe-mac-host.mjs --host 127.0.0.1 --port 43770 --clipboar
 
 说明：`--clipboardHostToClient` / `--clipboardRoundTrip` 会临时改写 Mac 本机文本剪贴板，探测结束后会恢复原文本内容；该方向需要在 Mac 本机运行，因为 Windows 机器不能直接改 Mac 的本机剪贴板。
 
+## 正式 Mac 端到端验收
+
+正式验收优先用 PowerShell 包装入口，先做无密码预检：
+
+```powershell
+cd E:\codex\lan-dual-control
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\check-mac-formal-e2e.ps1 -Discover -PreflightOnly -CheckClientDiagnostics -BoardSummary
+```
+
+如果已经知道 Mac IP 且不想扫整段局域网：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
+```
+
+准备好正式密码后，再在 Windows 本机隐藏输入密码并执行正式验收：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\check-mac-formal-e2e.ps1 -Discover -PromptPassword
+```
+
+该包装入口会调用 `node scripts/windows/check-mac-formal-e2e.mjs`，默认串联发现、认证、H.264 长测、系统声音 PCM、文本/文件剪贴板、`inputMode=log` 和 Windows 控制端页面 H.264 自检；密码只走隐藏输入或 `LAN_DUAL_PASSWORD` 环境变量，不放进命令参数，不发送到联络板，也不会执行 `inject`。
+
 ## 当前项目运行
 
 Windows 控制端页面：
