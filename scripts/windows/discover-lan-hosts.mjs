@@ -305,7 +305,8 @@ async function fetchDiscovery(candidate, timeoutMs) {
       throw new Error(`unexpected discovery type ${payload?.type || "missing"}`);
     }
     const host = payload.host && payload.host !== "0.0.0.0" ? String(payload.host) : candidate.host;
-    const port = String(payload.controlPort ?? payload.port ?? candidate.port);
+    const discoveredPort = Number(payload.controlPort ?? payload.port);
+    const port = String(Number.isInteger(discoveredPort) && discoveredPort > 0 ? discoveredPort : candidate.port);
     return {
       ok: true,
       host,

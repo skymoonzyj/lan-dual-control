@@ -67,6 +67,42 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 17:05
+开发端：Windows Codex
+本轮目标：让 Windows formal E2E 脚本能自动发现并选中 Mac host，减少正式验收前手工复制 IP/端口。
+完成内容：
+- `scripts/windows/check-mac-formal-e2e.mjs` 新增 `--discover`，会先只读调用 `scripts/windows/discover-lan-hosts.mjs --json --requireMacHost`，选中 `bestMacHost` 后再进入原 preflight/formal 流程。
+- 新增 `--discoverNoLocalSubnets` 和 `--discoverTimeoutMs`，方便已知 IP 时限定扫描范围。
+- 预检 JSON 新增 `discoverySelection`，记录是否请求 discovery、选中的 host/port、扫描摘要和 discovery board summary；正式安全命令仍输出显式 `--host <Mac IP> --port <port> --promptPassword`。
+- 修复 `discover-lan-hosts` 对 `/discovery` 返回 `port/controlPort=0` 时误信端口的问题，现在会回退到实际探测端口；本地假 Mac 也能被自动选中。
+- `test-mac-formal-e2e-preflight` 覆盖 discovery 自动选中 mock Mac host、discovery 离线无密失败、且不泄露密码。
+修改文件：
+- `scripts/windows/check-mac-formal-e2e.mjs`
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `scripts/windows/discover-lan-hosts.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-mac-formal-e2e.mjs`
+- `node --check scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 90000`
+- `node scripts/windows/test-discover-lan-hosts.mjs --timeoutMs 15000`
+- `node scripts/windows/check-mac-formal-e2e.mjs --discover --preflightOnly --boardSummary --timeoutMs 12000 --discoverTimeoutMs 1200`
+- `node scripts/windows/test-windows-script-help.mjs --timeoutMs 8000`
+- `git diff --check`
+- 冲突标记搜索通过
+遗留问题：
+- `--discover` 只解决正式 E2E 前的选址和无密预检；真正认证和长测仍需要用户在 Windows 本机隐藏输入正式密码。
+下一步建议：
+- 白天继续正式 E2E 时，先运行 `check-mac-formal-e2e --discover --preflightOnly --checkClientDiagnostics --boardSummary`，ready 后用 `--discover --preflightOnly --checkClientDiagnostics --userAuthRequest` 生成用户授权提醒。
+是否改了协议：否。
+是否需要另一端配合：不需要；正式认证仍需要用户输入密码，`inject` 仍需另行明确确认。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 16:35
 开发端：Windows Codex
 本轮目标：让 Windows 侧 Mac host 发现摘要同时判断运行中 Mac host 是否需要因旧 build 重启。

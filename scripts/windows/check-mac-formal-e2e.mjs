@@ -1,13 +1,19 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
+
 const defaults = {
   host: "127.0.0.1",
   port: "43770",
+  hostProvided: false,
   password: process.env.LAN_DUAL_PASSWORD || "demo-password",
   passwordProvided: false,
   promptPassword: false,
   requirePassword: true,
+  discover: false,
+  discoverNoLocalSubnets: false,
+  discoverTimeoutMs: 1200,
   timeoutMs: 30000,
   videoDurationMs: 300000,
   audioDurationMs: 30000,
@@ -53,6 +59,9 @@ password to child probes through LAN_DUAL_PASSWORD, and never sends inject.
 Options:
   --host <host>                  Mac host address. Default: ${defaults.host}
   --port <port>                  Mac host port. Default: ${defaults.port}
+  --discover                     Find the best Mac host with discover-lan-hosts before running.
+  --discoverNoLocalSubnets       With --discover, only probe 127.0.0.1 and explicit --host targets.
+  --discoverTimeoutMs <ms>       Per-host discovery timeout. Default: ${defaults.discoverTimeoutMs}
   --password <password>          Probe password. Prefer LAN_DUAL_PASSWORD or --promptPassword.
   --promptPassword               Prompt once for the password without echoing it.
   --requirePassword              Refuse empty/demo-password credentials. Default: on.
@@ -89,6 +98,7 @@ Options:
 
 Examples:
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly
+  node scripts/windows/check-mac-formal-e2e.mjs --discover --preflightOnly --boardSummary
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --boardSummary
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --userAuthRequest
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --promptPassword
@@ -112,6 +122,8 @@ function parseArgs(argv) {
     if (
       key === "promptPassword" ||
       key === "requirePassword" ||
+      key === "discover" ||
+      key === "discoverNoLocalSubnets" ||
       key === "allowMockVideo" ||
       key === "skipProbe" ||
       key === "skipBrowser" ||
@@ -132,6 +144,9 @@ function parseArgs(argv) {
     if (Object.prototype.hasOwnProperty.call(args, key) && next && !next.startsWith("--")) {
       if (key === "password") {
         args.passwordProvided = true;
+      }
+      if (key === "host") {
+        args.hostProvided = true;
       }
       args[key] = next;
       index += 1;
@@ -154,6 +169,7 @@ function parseArgs(argv) {
     "bandwidthKbps",
     "clientPort",
     "debugPort",
+    "discoverTimeoutMs",
   ]) {
     args[key] = Number(args[key]);
   }
@@ -342,6 +358,101 @@ function attachBoardSummary(report, outcome = "preflight") {
   report.boardSummary = makeBoardSummary(report, outcome);
   report.userAuthRequest = makeUserAuthRequest(report);
   return report;
+}
+
+function discoveryScannerArgs(args) {
+  const scannerArgs = [
+    "scripts/windows/discover-lan-hosts.mjs",
+    "--json",
+    "--requireMacHost",
+    "--timeoutMs",
+    String(args.discoverTimeoutMs),
+    "--port",
+    String(args.port),
+  ];
+  if (args.discoverNoLocalSubnets) {
+    scannerArgs.push("--noLocalSubnets");
+  }
+  if (args.hostProvided) {
+    scannerArgs.push("--host", args.host);
+  }
+  return scannerArgs;
+}
+
+function parseDiscoveryJson(text) {
+  try {
+    return JSON.parse(String(text || "").trim());
+  } catch (error) {
+    throw new Error(`Discovery did not print valid JSON: ${error.message}`);
+  }
+}
+
+async function resolveTarget(args) {
+  if (!args.discover) {
+    return {
+      requested: false,
+      ok: true,
+      source: "explicit",
+      target: { host: args.host, port: Number(args.port) },
+      command: "",
+    };
+  }
+
+  const childArgs = discoveryScannerArgs(args);
+  const command = `node ${childArgs.join(" ")}`;
+  const result = await runCapturedNode(childArgs, {
+    cwd: repoRoot,
+    timeoutMs: Math.max(15000, Number(args.discoverTimeoutMs) * 12 + 8000),
+  });
+  let payload = null;
+  try {
+    payload = parseDiscoveryJson(result.stdout);
+  } catch (error) {
+    return {
+      requested: true,
+      ok: false,
+      source: "discover-lan-hosts",
+      command,
+      error: {
+        message: `${error.message}; scannerExit=${result.exitCode ?? "null"}; timedOut=${result.timedOut}`,
+      },
+      stdoutTail: tailLines(result.stdout),
+      stderrTail: tailLines(result.stderr),
+    };
+  }
+
+  const best = payload.bestMacHost || null;
+  if (!result.ok || !best) {
+    return {
+      requested: true,
+      ok: false,
+      source: "discover-lan-hosts",
+      command,
+      scanned: payload.scanned || 0,
+      foundMacHosts: Array.isArray(payload.macHosts) ? payload.macHosts.length : 0,
+      boardSummary: payload.boardSummary || "",
+      error: {
+        message: payload.boardSummary || `No Mac host found by discovery; scannerExit=${result.exitCode ?? "null"}`,
+      },
+      raw: payload,
+      stdoutTail: tailLines(result.stdout),
+      stderrTail: tailLines(result.stderr),
+    };
+  }
+
+  args.host = String(best.host);
+  args.port = String(best.port);
+  return {
+    requested: true,
+    ok: true,
+    source: "discover-lan-hosts",
+    command,
+    target: { host: args.host, port: Number(args.port) },
+    scanned: payload.scanned || 0,
+    foundMacHosts: Array.isArray(payload.macHosts) ? payload.macHosts.length : 1,
+    selected: best,
+    boardSummary: payload.boardSummary || "",
+  };
 }
 
 async function fetchDiscovery(args) {
@@ -638,12 +749,31 @@ function tailLines(text, limit = 8) {
 }
 
 async function runPreflight(args) {
+  const discoverySelection = await resolveTarget(args);
+  if (discoverySelection.requested && !discoverySelection.ok) {
+    const report = makeOfflinePreflightReport(args, new Error(discoverySelection.error?.message || "Mac host discovery failed"));
+    report.discoverySelection = discoverySelection;
+    attachBoardSummary(report);
+    if (args.json) {
+      console.log(JSON.stringify(report, null, 2));
+    } else if (args.userAuthRequest) {
+      console.log(report.userAuthRequest);
+    } else if (args.boardSummary) {
+      console.log(report.boardSummary);
+    } else {
+      printPreflightReport(report);
+    }
+    process.exitCode = 1;
+    return report;
+  }
+
   let report;
   try {
     report = makePreflightReport(args, await fetchDiscovery(args));
   } catch (error) {
     report = makeOfflinePreflightReport(args, error);
   }
+  report.discoverySelection = discoverySelection;
   if (report.online && args.checkClientDiagnostics) {
     report.clientDiagnostics = await runClientDiagnostics(args, report);
     report.checks.push({
@@ -654,6 +784,7 @@ async function runPreflight(args) {
     report.failedChecks = report.checks.filter((check) => !check.ok);
     report.ok = report.failedChecks.length === 0;
     attachBoardSummary(report);
+    report.discoverySelection = discoverySelection;
   }
 
   if (args.json) {

@@ -219,6 +219,55 @@ async function testMockPreflightJson(args) {
   });
 }
 
+async function testDiscoverMockPreflightJson(args) {
+  await withMockHost(async (port) => {
+    const result = await runRunner([
+      "--discover",
+      "--discoverNoLocalSubnets",
+      "--host", "127.0.0.1",
+      "--port", String(port),
+      "--preflightOnly",
+      "--json",
+      "--allowMockVideo",
+      "--skipInputLog",
+      "--skipAudio",
+      "--skipClipboard",
+    ], args);
+    assert(result.exitCode === 0, `discover mock preflight JSON failed\n${result.stdout}\n${result.stderr}`);
+    const payload = JSON.parse(result.stdout);
+    assert(payload.ok === true && payload.online === true, "discover mock preflight JSON shape mismatch");
+    assert(payload.target.host === "127.0.0.1", "discover mock preflight should target localhost");
+    assert(payload.target.port === port, "discover mock preflight should target discovered port");
+    assert(payload.discoverySelection?.requested === true, "discover selection should be requested");
+    assert(payload.discoverySelection?.ok === true, "discover selection should pass");
+    assert(payload.discoverySelection?.source === "discover-lan-hosts", "discover selection source mismatch");
+    assert(payload.discoverySelection?.foundMacHosts >= 1, "discover selection should report Mac hosts");
+    assert(payload.command.includes(`--port ${port}`), "safe command should use discovered port");
+    assertRunPlanSafe(payload, "discover mock JSON run plan", { audioSkipped: true, clipboardText: false, inputMode: "skipped" });
+    assertNotIncludes(result.stdout + result.stderr, "test-password", "discover mock JSON");
+    print("OK", "Discovery-backed mock JSON preflight selects the Mac host");
+  });
+}
+
+async function testDiscoverOfflineJson(args) {
+  const result = await runRunner([
+    "--discover",
+    "--discoverNoLocalSubnets",
+    "--host", "127.0.0.1",
+    "--port", "9",
+    "--preflightOnly",
+    "--json",
+  ], args);
+  assert(result.exitCode !== 0, "discover offline JSON should fail");
+  const payload = JSON.parse(result.stdout);
+  assert(payload.ok === false && payload.online === false, "discover offline JSON shape mismatch");
+  assert(payload.discoverySelection?.requested === true, "discover offline should include discovery selection");
+  assert(payload.discoverySelection?.ok === false, "discover offline selection should fail");
+  assert(String(payload.discoverySelection?.error?.message || "").includes("no Mac host found"), "discover offline should explain missing Mac host");
+  assertNotIncludes(result.stdout + result.stderr, "Mac host password", "discover offline JSON");
+  print("OK", "Discovery-backed offline preflight fails before password");
+}
+
 async function testMockPreflightBoardSummary(args) {
   await withMockHost(async (port) => {
     const result = await runRunner([
@@ -346,6 +395,8 @@ async function main() {
   await testMockPreflightBoardSummary(args);
   await testMockPreflightUserAuthRequest(args);
   await testMockPreflightClientDiagnostics(args);
+  await testDiscoverMockPreflightJson(args);
+  await testDiscoverOfflineJson(args);
   await testMockRequiresPasswordAfterPreflight(args);
   await testMockFastPath(args);
   print("OK", "Windows formal E2E preflight regression passed");
