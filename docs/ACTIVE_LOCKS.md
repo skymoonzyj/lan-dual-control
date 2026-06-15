@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/start-windows-host.mjs`, `scripts/windows/test-windows-host-start-helper.mjs`, `apps/windows-host/README.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 14:30 | Windows host 真启动后 `/discovery` ready 时直接打印 Mac readiness/formal checklist 下一步命令和无密 Agent Link Board summary；启动助手自测已覆盖真实临时 host 输出。 |
 | Windows Codex | `scripts/windows/start-windows-host.mjs`, `scripts/windows/test-windows-host-start-helper.mjs`, `apps/windows-host/README.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 14:15 | Windows host `--status`/`--boardSummary` 在线时新增 Mac formal checklist 下一步命令，同时保留原 readiness 命令；JSON `macClientReadinessCommands[]` 新增 `formalCommand` 字段，方便 Mac 反控 Windows 真连前检查。 |
 | Windows Codex | `scripts/windows/test-mac-client-video-transports.mjs`, `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 13:55 | 视频传输矩阵新增失败自动重试：默认单 case 失败后重试 1 次并换用新临时端口；`--json` 输出 attempts 摘要，`--retries 0` 可严格复现首败；默认矩阵和 WGC NV12 单项均通过。 |
 | Windows Codex | `scripts/windows/test-mac-client-video-transports.mjs`, `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 13:21 | Mac client 视频传输矩阵新增可选 `wgc-nv12-h264` case：真实 WGC helper + NV12 + `h264_nvenc` 页面级验证 `h264/binary-h264`、2K 设置切换和 `windows-wgc-helper-nv12-ffmpeg-h264` pipeline；默认四项矩阵保持轻量。 |

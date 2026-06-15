@@ -428,9 +428,52 @@ function makeBoardSummary(status) {
   return `Windows host readiness: online targets=${targetText}; runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness} Do not send passwords on Agent Link Board.`;
 }
 
-async function getStatus(args) {
-  const probeHost = statusProbeHost(args);
-  const status = {
+function applyDiscoveryStatus(status, discovery, args) {
+  const runtime = discovery.runtime || {};
+  status.ok = true;
+  status.device = {
+    type: discovery.type || "",
+    deviceId: discovery.deviceId || "",
+    deviceName: discovery.deviceName || discovery.hostName || discovery.name || "Windows host",
+    platform: discovery.platform || "windows",
+    role: discovery.role || "host",
+    host: discovery.host || "",
+    port: discovery.port || args.port,
+    controlPort: discovery.controlPort || discovery.port || args.port,
+    lastSeenAt: discovery.lastSeenAt || "",
+  };
+  status.runtime = runtime;
+  status.capabilities = {
+    screen: discovery?.capabilities?.screen || {},
+    audio: discovery?.capabilities?.audio || {},
+    input: discovery?.capabilities?.input || {},
+    clipboard: discoveryClipboardStatus(discovery),
+    reverseControl: Boolean(discovery?.capabilities?.reverseControl),
+    mock: Boolean(discovery?.capabilities?.mock),
+  };
+  const screen = discovery?.capabilities?.screen || {};
+  const wgcFallbackReason = screen.wgc?.fallbackReason || screen.wgcFallbackReason || "";
+  if (wgcFallbackReason) {
+    status.warnings.push(`WGC fallback: ${compactText(wgcFallbackReason)}`);
+  }
+  if (screen.lastCaptureError) {
+    status.warnings.push(`Last capture error: ${compactText(screen.lastCaptureError)}`);
+  }
+  if (status.lanAddresses.length === 0) {
+    status.warnings.push("No LAN IPv4 address was detected. Mac may not be able to connect yet.");
+  }
+
+  if (runtime.buildId && args.buildId && runtime.buildId !== args.buildId) {
+    status.buildDiff = inspectBuildDiff(runtime.buildId, args.buildId);
+    status.warnings.push(`Running Windows host build ${runtime.buildId} differs from current git ${args.buildId}; restart if you need the latest build.`);
+  }
+  status.macClientReadinessCommands = macReadinessTargets(status);
+  status.boardSummary = makeBoardSummary(status);
+  return status;
+}
+
+function makeStatusShell(args, probeHost = statusProbeHost(args)) {
+  return {
     ok: false,
     probe: {
       host: probeHost,
@@ -449,50 +492,15 @@ async function getStatus(args) {
     suggestions: [],
     error: null,
   };
+}
+
+async function getStatus(args) {
+  const probeHost = statusProbeHost(args);
+  const status = makeStatusShell(args, probeHost);
 
   try {
     const discovery = await requestJson(status.probe.url, Math.min(args.timeoutMs, 3000));
-    const runtime = discovery.runtime || {};
-    status.ok = true;
-    status.device = {
-      type: discovery.type || "",
-      deviceId: discovery.deviceId || "",
-      deviceName: discovery.deviceName || discovery.hostName || discovery.name || "Windows host",
-      platform: discovery.platform || "windows",
-      role: discovery.role || "host",
-      host: discovery.host || "",
-      port: discovery.port || args.port,
-      controlPort: discovery.controlPort || discovery.port || args.port,
-      lastSeenAt: discovery.lastSeenAt || "",
-    };
-    status.runtime = runtime;
-    status.capabilities = {
-      screen: discovery?.capabilities?.screen || {},
-      audio: discovery?.capabilities?.audio || {},
-      input: discovery?.capabilities?.input || {},
-      clipboard: discoveryClipboardStatus(discovery),
-      reverseControl: Boolean(discovery?.capabilities?.reverseControl),
-      mock: Boolean(discovery?.capabilities?.mock),
-    };
-    const screen = discovery?.capabilities?.screen || {};
-    const wgcFallbackReason = screen.wgc?.fallbackReason || screen.wgcFallbackReason || "";
-    if (wgcFallbackReason) {
-      status.warnings.push(`WGC fallback: ${compactText(wgcFallbackReason)}`);
-    }
-    if (screen.lastCaptureError) {
-      status.warnings.push(`Last capture error: ${compactText(screen.lastCaptureError)}`);
-    }
-    if (status.lanAddresses.length === 0) {
-      status.warnings.push("No LAN IPv4 address was detected. Mac may not be able to connect yet.");
-    }
-
-    if (runtime.buildId && args.buildId && runtime.buildId !== args.buildId) {
-      status.buildDiff = inspectBuildDiff(runtime.buildId, args.buildId);
-      status.warnings.push(`Running Windows host build ${runtime.buildId} differs from current git ${args.buildId}; restart if you need the latest build.`);
-    }
-    status.macClientReadinessCommands = macReadinessTargets(status);
-    status.boardSummary = makeBoardSummary(status);
-    return status;
+    return applyDiscoveryStatus(status, discovery, args);
   } catch (error) {
     status.error = {
       message: error.message,
@@ -739,6 +747,22 @@ async function waitForDiscovery(port, timeoutMs) {
   throw new Error(lastError || `Windows host did not answer /discovery within ${timeoutMs}ms`);
 }
 
+function printMacNextSteps(status) {
+  const firstTarget = status.macClientReadinessCommands[0] || null;
+  if (firstTarget?.command) {
+    console.log(`[INFO] Mac readiness command: ${firstTarget.command}`);
+  }
+  if (firstTarget?.formalCommand) {
+    console.log(`[INFO] Mac formal checklist command: ${firstTarget.formalCommand}`);
+  }
+  if (status.boardSummary) {
+    console.log(`[INFO] Agent Link Board summary: ${status.boardSummary}`);
+  }
+  for (const warning of status.warnings.filter(Boolean)) {
+    console.log(`[WARN] ${warning}`);
+  }
+}
+
 function runFirewallCheck(args, env) {
   const commandArgs = [
     firewallCheckPath,
@@ -845,6 +869,8 @@ async function main() {
     const source = discovery.capturePipeline || discovery.source || discovery.hostMode || "unknown";
     const audio = discovery.audioMode || discovery.audioCodec || "unknown";
     console.log(`[OK] /discovery is ready: ${discovery.name || "Windows host"} · video=${source} · audio=${audio}`);
+    const status = applyDiscoveryStatus(makeStatusShell(args), discovery, args);
+    printMacNextSteps(status);
   } catch (error) {
     console.log(`[ERROR] ${error.message}`);
     stop();

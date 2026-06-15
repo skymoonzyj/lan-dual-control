@@ -31,7 +31,7 @@ cd E:\codex\lan-dual-control\apps\windows-host
 node .\server.mjs
 ```
 
-更推荐的日常入口是 Windows host 启动助手。它会启动被控服务，自动把当前 git short hash 作为 `LAN_DUAL_BUILD_ID`，列出 Mac 端应该填写的局域网地址，并在服务起来后自动跑一次只读端口/防火墙检查；如果 Mac 连不上，先看它打印的提示。
+更推荐的日常入口是 Windows host 启动助手。它会启动被控服务，自动把当前 git short hash 作为 `LAN_DUAL_BUILD_ID`，列出 Mac 端应该填写的局域网地址，并在服务起来后自动跑一次只读端口/防火墙检查；`/discovery` 就绪后还会打印 Mac 端可直接运行的 readiness、formal checklist 命令和一行无密 Agent Link Board 摘要。如果 Mac 连不上，先看它打印的提示。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs

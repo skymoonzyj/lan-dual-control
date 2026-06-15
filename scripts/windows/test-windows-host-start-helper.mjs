@@ -464,6 +464,18 @@ async function assertLaunchWithEnvPassword(timeoutMs) {
         rejectLaunch(new Error(`Start helper did not print dry-run firewall rule command.\n${output}`));
         return;
       }
+      if (!output.includes("Mac readiness command:") || !output.includes("check-mac-client-readiness.mjs")) {
+        rejectLaunch(new Error(`Start helper did not print Mac readiness command.\n${output}`));
+        return;
+      }
+      if (!output.includes("Mac formal checklist command:") || !output.includes("check-mac-client-formal-status.mjs")) {
+        rejectLaunch(new Error(`Start helper did not print Mac formal checklist command.\n${output}`));
+        return;
+      }
+      if (!output.includes("Agent Link Board summary:") || !output.includes("Do not send passwords")) {
+        rejectLaunch(new Error(`Start helper did not print secret-safe board summary.\n${output}`));
+        return;
+      }
       resolveLaunch();
     });
   });

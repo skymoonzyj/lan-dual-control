@@ -19,6 +19,34 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 14:30
+开发端：Windows Codex
+本轮目标：让 Windows host 真启动成功后，直接把 Mac 端下一步 readiness / formal checklist 命令和联络板摘要打印出来。
+完成内容：
+- `start-windows-host.mjs` 抽出共享在线 status 构造逻辑，`--status` 和启动成功后的 `/discovery` ready 路径共用同一套能力、runtime、Mac next 命令和 boardSummary 生成。
+- 启动助手在 `/discovery` ready 后会打印 `Mac readiness command`、`Mac formal checklist command` 和一行无密 `Agent Link Board summary`。
+- `test-windows-host-start-helper.mjs` 的真实临时启动路径新增断言，确认启动成功输出包含 readiness、formal checklist 和无密通讯板摘要。
+- Windows host README 同步说明启动助手 ready 后会直接给出 Mac 端可运行的两类下一步命令。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`
+- `$env:LAN_DUAL_PASSWORD='test-password'; node scripts/windows/start-windows-host.mjs --requirePassword --dryRun`
+遗留问题：
+- 这只改善启动输出和联络效率；真正 Mac 反控 Windows 还需要 Windows host 正式启动后，由 Mac 端连接并跑 formal checklist / 真连验收。
+下一步建议：
+- 下次需要让 Mac 反控 Windows 时，Windows 端用 `start-windows-host --promptPassword --requirePassword` 启动后，把它打印的 Agent Link Board summary 发到通讯板。
+是否改了协议：否。
+是否需要另一端配合：不需要；后续真连验收需要 Mac 端按输出命令连接。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 14:15
 开发端：Windows Codex
 本轮目标：让 Windows host 在线状态直接给 Mac 端 formal checklist 下一步命令，减少 Mac 反控 Windows 真连前的手工拼命令。
