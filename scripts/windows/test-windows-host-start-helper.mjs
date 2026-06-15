@@ -248,6 +248,19 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   }
   assertNotIncludes(jsonOutput, "[INFO]", "offline JSON status");
   assertNotIncludes(jsonOutput, "LAN_DUAL_PASSWORD is required", "offline JSON status");
+
+  const boardResult = await runNode(["--status", "--boardSummary", "--host", "127.0.0.1", "--port", String(port), "--requirePassword"], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "" },
+  });
+  const boardOutput = `${boardResult.stdout}\n${boardResult.stderr}`;
+  if (boardResult.exitCode === 0 || boardResult.timedOut) {
+    throw new Error(`Offline board summary status check should fail quickly without starting host.\n${boardOutput}`);
+  }
+  assertIncludes(boardResult.stdout, "Windows host readiness: offline", "offline board summary");
+  assertIncludes(boardResult.stdout, "start safely", "offline board summary");
+  assertIncludes(boardResult.stdout, "Do not send passwords", "offline board summary");
+  assertNotIncludes(boardOutput, "LAN_DUAL_PASSWORD is required", "offline board summary");
   print("OK", "Status mode reports offline host without requiring a password");
 }
 
@@ -336,11 +349,33 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         if (!parsed.capabilities?.screen || !parsed.capabilities?.audio || !parsed.capabilities?.input || !parsed.capabilities?.clipboard) {
           throw new Error(`Online JSON status did not include expected capability groups.\n${jsonResult.stdout}`);
         }
+        if (!String(parsed.boardSummary || "").includes("Windows host readiness: online") || !String(parsed.boardSummary || "").includes("Do not send passwords")) {
+          throw new Error(`Online JSON status did not include expected board summary.\n${jsonResult.stdout}`);
+        }
+        if (!Array.isArray(parsed.macClientReadinessCommands) || parsed.macClientReadinessCommands.length < 1) {
+          throw new Error(`Online JSON status did not include Mac client readiness commands.\n${jsonResult.stdout}`);
+        }
+        if (!String(parsed.macClientReadinessCommands[0].command || "").includes("check-mac-client-readiness.mjs")) {
+          throw new Error(`Online JSON status did not include expected Mac readiness command.\n${jsonResult.stdout}`);
+        }
         if (parsed.buildDiff?.checked !== false || !String(parsed.buildDiff?.message || "").includes("Could not inspect")) {
           throw new Error(`Online JSON status did not include expected uninspectable build diff.\n${jsonResult.stdout}`);
         }
         assertNotIncludes(jsonOutput, "[INFO]", "online JSON status");
         assertNotIncludes(jsonOutput, "test-password", "online JSON status");
+
+        const boardResult = await runNode(["--status", "--boardSummary", "--host", "127.0.0.1", "--port", String(port)], {
+          timeoutMs,
+          env: { LAN_DUAL_PASSWORD: "" },
+        });
+        const boardOutput = `${boardResult.stdout}\n${boardResult.stderr}`;
+        if (boardResult.exitCode !== 0 || boardResult.timedOut) {
+          throw new Error(`Online board summary status check failed.\n${boardOutput}\nHost output:\n${output}`);
+        }
+        assertIncludes(boardResult.stdout, "Windows host readiness: online", "online board summary");
+        assertIncludes(boardResult.stdout, "check-mac-client-readiness.mjs", "online board summary");
+        assertIncludes(boardResult.stdout, "Do not send passwords", "online board summary");
+        assertNotIncludes(boardOutput, "test-password", "online board summary");
         finish();
       } catch (error) {
         finish(error);

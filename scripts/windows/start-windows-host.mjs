@@ -38,6 +38,7 @@ const defaults = {
   promptPassword: false,
   requirePassword: false,
   status: false,
+  boardSummary: false,
   json: false,
   dryRun: false,
   help: false,
@@ -69,6 +70,7 @@ function parseArgs(argv) {
       key === "wgcH264Bridge" ||
       key === "wgcRepeatLastFrame" ||
       key === "status" ||
+      key === "boardSummary" ||
       key === "json" ||
       key === "dryRun"
     ) {
@@ -157,6 +159,7 @@ Options:
   --noRequireOpen         Run firewall check but do not require the port probe to pass.
   --status                Print current /discovery runtime status and stale-build source diff,
                           then exit without starting.
+  --boardSummary          With --status, print a short secret-free Agent Link Board summary.
   --json                  With --status, print pure machine-readable JSON.
   --dryRun                Print the resolved launch plan and exit.
   --help, -h              Show this help without starting Windows host.
@@ -384,6 +387,40 @@ function discoveryClipboardStatus(discovery) {
   };
 }
 
+function macReadinessCommand(host, port) {
+  return `node scripts/mac/check-mac-client-readiness.mjs --host ${host} --port ${port} --checkBoard --boardSummary`;
+}
+
+function macReadinessTargets(status) {
+  const port = status.device?.controlPort || status.probe?.port || defaults.port;
+  const lanHosts = Array.isArray(status.lanAddresses)
+    ? status.lanAddresses.map((entry) => entry.address).filter(Boolean)
+    : [];
+  const probeHost = status.probe?.host || "";
+  const fallbackHosts = probeHost && !["0.0.0.0", "::"].includes(probeHost) ? [probeHost] : [];
+  return [...new Set([...lanHosts, ...fallbackHosts])].map((host) => ({
+    host,
+    port,
+    command: macReadinessCommand(host, port),
+  }));
+}
+
+function makeBoardSummary(status) {
+  if (!status.ok) {
+    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port}; start safely with ${status.suggestions[0] || "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword"}. Do not send passwords on Agent Link Board.`;
+  }
+  const targets = macReadinessTargets(status);
+  const targetText = targets.length > 0
+    ? targets.map((target) => `${target.host}:${target.port}`).join(", ")
+    : "no LAN IPv4 target";
+  const screen = status.capabilities?.screen || {};
+  const audio = status.capabilities?.audio || {};
+  const input = status.capabilities?.input || {};
+  const clipboard = status.capabilities?.clipboard || {};
+  const next = targets[0]?.command || "Mac should rerun readiness after a LAN IPv4 address is available.";
+  return `Windows host readiness: online targets=${targetText}; runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}. Do not send passwords on Agent Link Board.`;
+}
+
 async function getStatus(args) {
   const probeHost = statusProbeHost(args);
   const status = {
@@ -399,6 +436,8 @@ async function getStatus(args) {
     capabilities: null,
     lanAddresses: getLanAddresses(),
     buildDiff: null,
+    macClientReadinessCommands: [],
+    boardSummary: "",
     warnings: [],
     suggestions: [],
     error: null,
@@ -444,6 +483,8 @@ async function getStatus(args) {
       status.buildDiff = inspectBuildDiff(runtime.buildId, args.buildId);
       status.warnings.push(`Running Windows host build ${runtime.buildId} differs from current git ${args.buildId}; restart if you need the latest build.`);
     }
+    status.macClientReadinessCommands = macReadinessTargets(status);
+    status.boardSummary = makeBoardSummary(status);
     return status;
   } catch (error) {
     status.error = {
@@ -453,6 +494,8 @@ async function getStatus(args) {
       "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword",
       "Add --wasapi when Mac should receive Windows system sound.",
     ];
+    status.macClientReadinessCommands = [];
+    status.boardSummary = makeBoardSummary(status);
     return status;
   }
 }
@@ -461,6 +504,11 @@ async function printStatus(args) {
   const status = await getStatus(args);
   if (args.json) {
     console.log(JSON.stringify(status, null, 2));
+    return status.ok;
+  }
+
+  if (args.boardSummary) {
+    console.log(status.boardSummary);
     return status.ok;
   }
 
@@ -490,6 +538,10 @@ async function printStatus(args) {
       }
     } else {
       console.log("[WARN] No LAN IPv4 address was detected. Mac may not be able to connect yet.");
+    }
+    if (status.macClientReadinessCommands.length > 0) {
+      console.log(`[INFO] Mac readiness command: ${status.macClientReadinessCommands[0].command}`);
+      console.log("[INFO] Board summary: node scripts/windows/start-windows-host.mjs --status --boardSummary");
     }
     if (status.buildDiff) {
       printBuildMismatchStatus(status.buildDiff.fromBuildId, status.buildDiff.toBuildId, status.buildDiff);

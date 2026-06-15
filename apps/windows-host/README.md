@@ -74,6 +74,13 @@ node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --status -
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -Status -Json
 ```
 
+需要把当前 Windows host 在线状态同步到 Agent Link Board，或让 Mac 端直接跑真连前 readiness，可以用无密摘要输出。它会给出 `check-mac-client-readiness` 下一步命令，不会启动服务、不会认证、不会打印密码：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --status --boardSummary
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -Status -BoardSummary
+```
+
 Node 入口同样支持：
 
 ```powershell
