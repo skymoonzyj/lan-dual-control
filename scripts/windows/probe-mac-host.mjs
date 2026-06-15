@@ -844,6 +844,9 @@ async function observeVideoFrames(client, args, answer, firstFrame) {
       }
       recordMediaFrame(stats, frame, answer);
     } catch (error) {
+      if (performance.now() >= deadline) {
+        break;
+      }
       if (args.maxVideoGapMs > 0) {
         throw new Error(`video observation timed out before next frame: ${error.message}`);
       }
@@ -882,6 +885,9 @@ async function observeAudioFrames(client, args, answer, firstAudioFrame = null) 
       assertAudioFrame(frame, answer, { silent: true });
       recordMediaFrame(stats, frame, answer);
     } catch (error) {
+      if (performance.now() >= deadline) {
+        break;
+      }
       if (args.maxAudioGapMs > 0) {
         throw new Error(`audio observation timed out before next frame: ${error.message}`);
       }
