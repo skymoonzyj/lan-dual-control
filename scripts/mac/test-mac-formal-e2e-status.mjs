@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import http from "node:http";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -81,6 +82,48 @@ function run(args, extraArgs = []) {
   });
 }
 
+function runAsync(args, extraArgs = []) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [script, ...extraArgs], {
+      cwd: repoRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+    }, args.timeoutMs);
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("close", (status, signal) => {
+      clearTimeout(timer);
+      resolve({
+        status,
+        signal,
+        stdout,
+        stderr,
+        error: signal === "SIGTERM" ? { message: `timeout after ${args.timeoutMs}ms` } : null,
+      });
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolve({
+        status: null,
+        signal: null,
+        stdout,
+        stderr,
+        error,
+      });
+    });
+  });
+}
+
 function parseJson(stdout, label) {
   try {
     return JSON.parse(String(stdout || "").trim());
@@ -109,11 +152,141 @@ function assertBoardSummaryShape(text, label) {
   assertNoSecretLikeText(text, label);
 }
 
+function listen(server, host = "127.0.0.1") {
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, host, () => {
+      server.off("error", reject);
+      resolve(server.address());
+    });
+  });
+}
+
+function closeServer(server) {
+  return new Promise((resolve, reject) => {
+    server.close((error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
+async function readRequestBody(request) {
+  const chunks = [];
+  for await (const chunk of request) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+async function withFakeMacHost(callback) {
+  const currentBuildId = spawnSync("git", ["rev-parse", "--short", "HEAD"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 3000,
+  }).stdout.trim();
+  const discovery = {
+    platform: "macos",
+    deviceName: "Fake Formal Mac",
+    inputMode: "log",
+    runtime: {
+      buildId: currentBuildId || "test-build",
+      processId: 12345,
+      startedAt: new Date().toISOString(),
+    },
+    permissions: {
+      screenRecording: true,
+      accessibility: true,
+      inputMonitoring: true,
+    },
+    capabilities: {
+      inputMode: "log",
+      h264Stream: true,
+      audio: true,
+      audioMode: "system-pcm",
+      clipboardText: true,
+      clipboardFile: true,
+      capturePipeline: "screencapturekit-h264",
+      displays: [
+        {
+          id: "main",
+          name: "Main Display",
+          width: 1920,
+          height: 1080,
+          primary: true,
+        },
+      ],
+    },
+  };
+  const server = http.createServer((request, response) => {
+    if (request.method === "GET" && request.url === "/discovery") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify(discovery));
+      return;
+    }
+    response.writeHead(404, { "Content-Type": "text/plain" });
+    response.end("not found");
+  });
+  const address = await listen(server);
+  try {
+    return await callback({
+      host: address.address,
+      port: address.port,
+      discovery,
+    });
+  } finally {
+    await closeServer(server);
+  }
+}
+
+async function withFakeBoard(callback) {
+  const calls = [];
+  const server = http.createServer(async (request, response) => {
+    if (request.method === "GET" && request.url === "/api/state") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({
+        updatedAt: new Date().toISOString(),
+        currentCall: null,
+        statuses: {},
+        events: [
+          {
+            id: "fake-board-event-1",
+            at: new Date().toISOString(),
+            type: "message",
+            from: "Fake Board",
+            text: "ready",
+          },
+        ],
+      }));
+      return;
+    }
+    if (request.method === "POST" && request.url === "/api/call") {
+      const body = await readRequestBody(request);
+      calls.push(JSON.parse(body || "{}"));
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    response.writeHead(404, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ ok: false, error: "not found" }));
+  });
+  const address = await listen(server);
+  try {
+    return await callback({
+      serverUrl: `http://${address.address}:${address.port}`,
+      calls,
+    });
+  } finally {
+    await closeServer(server);
+  }
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run(args, [flag]);
     assert(result.status === 0, `${script} ${flag} should exit 0`);
     assert(/\bUsage\b/.test(result.stdout), `${script} ${flag} should print Usage`);
+    assert(/--sendCall/.test(result.stdout), `${script} ${flag} should document --sendCall`);
     assert(!/Mac host probe password/.test(result.stdout), `${script} ${flag} should not prompt for password`);
   }
   print("OK", "Formal E2E status help exits quickly");
@@ -158,6 +331,74 @@ function checkOfflineBoardSummary(args) {
   assertBoardSummaryShape(text, "offline board summary");
   assert(/Mac host offline/.test(text), "offline board summary should mention host offline");
   print("OK", "Offline board summary is short, secret-free, and actionable");
+}
+
+function checkOfflineSendCallRefuses(args) {
+  const result = run(args, [
+    "--sendCall",
+    "--skipBoard",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "9",
+    "--timeoutMs",
+    "1200",
+  ]);
+  assert(result.status !== 0, "offline sendCall should fail because formal E2E is not ready");
+  assert(/Refusing to send formal E2E call/.test(result.stderr), "offline sendCall should explain refusal");
+  assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "offline sendCall refusal");
+  print("OK", "Offline --sendCall refuses before touching the board");
+}
+
+async function checkReadySendCall(args) {
+  await withFakeMacHost(async (macHost) => {
+    await withFakeBoard(async (board) => {
+      const localTimeoutMs = String(Math.min(args.timeoutMs, 5000));
+      const result = await runAsync(args, [
+        "--json",
+        "--allowDirty",
+        "--sendCall",
+        "--host",
+        macHost.host,
+        "--port",
+        String(macHost.port),
+        "--server",
+        board.serverUrl,
+        "--timeoutMs",
+        localTimeoutMs,
+      ]);
+      assert(!result.error, `ready sendCall process should not time out: ${result.error?.message || ""}\n${result.stdout}\n${result.stderr}`);
+      const payload = parseJson(result.stdout, "ready sendCall formal E2E status");
+      assert(result.status === 0, `ready sendCall should exit 0:\n${result.stdout}\n${result.stderr}`);
+      assert(payload.ok === true, "ready sendCall payload should report ok=true");
+      assert(payload.readyToCall === true, "ready sendCall payload should be readyToCall");
+      assert(payload.sentCall?.ok === true, "ready sendCall payload should include sentCall.ok");
+      assert(board.calls.length === 1, `fake board should receive exactly one call, got ${board.calls.length}`);
+
+      const call = board.calls[0];
+      assert(call.status === "CALLING", "call should use CALLING status");
+      assert(call.from === "Mac Codex", "call should identify Mac Codex as sender");
+      assert(call.need === "Windows Codex", "call should request Windows Codex");
+      assert(call.goal === "正式端到端验收 Mac host", "call should describe formal Mac host E2E goal");
+      assert(new RegExp(`:${macHost.port}$`).test(call.connection), "call should use the probed fake Mac host port");
+      assert(call.command.includes("--host"), "call command should include a host flag");
+      assert(call.command.includes(`--port ${macHost.port}`), "call command should include explicit port");
+      assert(!call.command.includes("--host unknown"), "call command should not use an unknown host");
+      assert(call.command.includes("--promptPassword"), "call command should keep formal password entry on Windows side");
+      assert(/H\.264 5-10 分钟/.test(call.expected), "call expected text should include H.264 long validation");
+      assert(/系统音频/.test(call.expected), "call expected text should include system audio");
+      assert(/剪贴板/.test(call.expected), "call expected text should include clipboard");
+      assert(/input-log/.test(call.expected), "call expected text should include input-log");
+      assert(/不要执行 inject/.test(call.expected), "call expected text should prohibit inject");
+      assert(/密码不要发在联络板/.test(call.ask), "call ask should keep passwords off the board");
+      assert(/明确确认/.test(call.ask), "call ask should require explicit user confirmation for inject");
+      assertNoSecretLikeText(JSON.stringify(call), "ready sendCall board call");
+      for (const field of ["status", "from", "need", "goal", "environment", "connection", "command", "expected", "ask", "owner", "timeout"]) {
+        assert(call[field] === payload.sentCall.payload[field], `sentCall payload should match fake board call field ${field}`);
+      }
+      print("OK", "Ready --sendCall posts one secret-free formal E2E call to a fake board");
+    });
+  });
 }
 
 function checkOnlineJson(args) {
@@ -234,7 +475,7 @@ function checkSecretRedaction(args) {
   print("OK", "Formal E2E status output does not echo unrelated secret-like server text");
 }
 
-function main() {
+async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
     return;
@@ -243,6 +484,8 @@ function main() {
   checkHelp(args);
   checkOfflineJson(args);
   checkOfflineBoardSummary(args);
+  checkOfflineSendCallRefuses(args);
+  await checkReadySendCall(args);
   checkOnlineJson(args);
   checkOnlineBoardSummary(args);
   checkSecretRedaction(args);
@@ -250,7 +493,7 @@ function main() {
 }
 
 try {
-  main();
+  await main();
 } catch (error) {
   console.error(`[FAIL] ${error.message}`);
   process.exitCode = 1;

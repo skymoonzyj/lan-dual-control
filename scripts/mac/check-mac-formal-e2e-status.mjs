@@ -14,6 +14,7 @@ const defaults = {
   requireCurrentBuildId: false,
   json: false,
   boardSummary: false,
+  sendCall: false,
 };
 
 function helpRequested(argv) {
@@ -37,12 +38,14 @@ Options:
   --allowDirty              Report dirty git state as a warning instead of a blocker.
   --requireCurrentBuildId   Treat stale runtime build metadata as a blocker.
   --boardSummary            Print a short secret-free Agent Link Board summary.
+  --sendCall                Send a formal E2E test call to Agent Link Board only when ready.
   --json                    Print one machine-readable JSON object.
   --help, -h                Show this help without probing anything.
 
 Examples:
   node scripts/mac/check-mac-formal-e2e-status.mjs
   node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary
+  node scripts/mac/check-mac-formal-e2e-status.mjs --sendCall
   node scripts/mac/check-mac-formal-e2e-status.mjs --json --skipBoard
 `);
 }
@@ -61,6 +64,7 @@ function parseArgs(argv) {
       token === "--allowDirty" ||
       token === "--requireCurrentBuildId" ||
       token === "--boardSummary" ||
+      token === "--sendCall" ||
       token === "--json"
     ) {
       args[token.slice(2)] = true;
@@ -172,6 +176,20 @@ function formatHostAddress(host) {
   if (lan?.address && lan?.port) return `${lan.address}:${lan.port}`;
   if (host?.probe?.host && host?.probe?.port) return `${host.probe.host}:${host.probe.port}`;
   return "unknown";
+}
+
+function getCallTarget(report) {
+  const host = report.resume.host || {};
+  const lan = Array.isArray(host.lanAddresses) && host.lanAddresses.length > 0
+    ? host.lanAddresses[0]
+    : null;
+  const targetHost = normalizedText(lan?.address || host.probe?.host || report.args.host) || "192.168.31.122";
+  const targetPort = lan?.port || host.probe?.port || report.args.port || 43770;
+  return {
+    host: targetHost,
+    port: targetPort,
+    address: `${targetHost}:${targetPort}`,
+  };
 }
 
 function formatBuildDiff(buildDiff) {
@@ -347,6 +365,79 @@ function makeBoardSummary(report) {
   ].join(" ");
 }
 
+function makeCallPayload(report) {
+  const host = report.resume.host || {};
+  const target = getCallTarget(report);
+  const command = [
+    "node scripts/windows/check-mac-formal-e2e.mjs",
+    "--discover",
+    "--discoverNoLocalSubnets",
+    "--host",
+    target.host,
+    "--port",
+    String(target.port),
+    "--promptPassword",
+  ].join(" ");
+  return {
+    status: "CALLING",
+    from: "Mac Codex",
+    need: "Windows Codex",
+    goal: "正式端到端验收 Mac host",
+    environment: `Mac host ${target.address}; runtimeBuild=${host.runtime?.buildId || "unknown"}; inputMode=${host.inputMode || "unknown"}`,
+    connection: target.address,
+    command,
+    expected: "Windows 发现 Mac host 后由用户本机隐藏输入正式密码，执行 H.264 5-10 分钟、系统音频、文本/文件剪贴板和 input-log 验收；不要执行 inject。",
+    ask: "请连接该正式 Mac host 做无密发现和正式验收；密码不要发在联络板，inject 只有用户另行明确确认后才可执行。",
+    owner: "Windows Codex",
+    timeout: "用户在场时执行",
+  };
+}
+
+function sendCall(report, args) {
+  if (!report.readyToCall) {
+    throw new Error(`Refusing to send formal E2E call because checklist is not ready: blockers=${report.counts.blockers}, warnings=${report.counts.warnings}.`);
+  }
+  const payload = report.callPayload || makeCallPayload(report);
+  const commandArgs = [
+    "scripts/codex-link-client.mjs",
+    "--server",
+    args.server,
+    "call",
+    "--status",
+    payload.status,
+    "--from",
+    payload.from,
+    "--need",
+    payload.need,
+    "--goal",
+    payload.goal,
+    "--environment",
+    payload.environment,
+    "--connection",
+    payload.connection,
+    "--command",
+    payload.command,
+    "--expected",
+    payload.expected,
+    "--ask",
+    payload.ask,
+    "--owner",
+    payload.owner,
+    "--timeout",
+    payload.timeout,
+  ];
+  const result = spawnSync(process.execPath, commandArgs, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: Math.max(args.timeoutMs + 2000, 5000),
+    maxBuffer: 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    throw new Error(`Could not send Agent Link Board call: ${String(result.stderr || result.stdout || "").trim()}`);
+  }
+  return String(result.stdout || "").trim();
+}
+
 function printReport(report) {
   console.log(`[INFO] Mac formal E2E status · ${new Date(report.checkedAt).toLocaleString()}`);
   for (const entry of report.checklist) {
@@ -393,6 +484,7 @@ function buildReport(args) {
   };
   report.callText = makeCallText(report);
   report.boardSummary = makeBoardSummary(report);
+  report.callPayload = makeCallPayload(report);
   return report;
 }
 
@@ -403,10 +495,21 @@ function main() {
   }
   const args = parseArgs(process.argv);
   const report = buildReport(args);
+  if (args.sendCall) {
+    const sendResult = sendCall(report, args);
+    report.sentCall = {
+      ok: true,
+      result: sendResult || "ok",
+      payload: report.callPayload,
+    };
+  }
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
   } else if (args.boardSummary) {
     console.log(report.boardSummary);
+  } else if (args.sendCall) {
+    console.log(`[OK] Sent formal E2E call to Agent Link Board: ${report.callPayload.connection}`);
+    console.log(report.callText);
   } else {
     printReport(report);
   }

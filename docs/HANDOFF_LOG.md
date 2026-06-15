@@ -19,6 +19,39 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 19:55
+开发端：Mac Codex
+本轮目标：给 Mac formal E2E checklist 增加显式通讯板呼叫发送能力，避免手工拼 call 和未 ready 误呼叫。
+完成内容：
+- `scripts/mac/check-mac-formal-e2e-status.mjs` 新增 `--sendCall`：只有 `readyToCall=true` 时才调用 Agent Link Board `call`，未 ready 会拒绝发送并失败。
+- JSON 报告新增 `callPayload`，发送成功后新增 `sentCall`，包含实际无密呼叫内容，方便审查。
+- 呼叫内容固定提醒 Windows 端做 discovery/auth/H.264 5-10 分钟/系统音频/剪贴板/input-log，并明确密码不要发联络板、不要执行 `inject`，除非用户另行明确确认。
+- `scripts/mac/test-mac-formal-e2e-status.mjs` 新增本地假 Mac host 和假 Agent Link Board：覆盖离线 `--sendCall` 拒绝、ready 时只发送一条无密 call、payload 不泄露 secret-like 文本。
+- `docs/CURRENT_STATUS.md` 和 `docs/NEXT_ACTIONS.md` 同步 `--sendCall` 的安全边界。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-formal-e2e-status.mjs`
+- `node --check scripts/mac/test-mac-formal-e2e-status.mjs`
+- `node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 60000`
+- `node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary`，预期因本轮未提交改动显示 dirty blocker。
+- `node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary --allowDirty`，只读预览显示真实 Mac host 仍 ready。
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" .`
+遗留问题：
+- 本轮未向真实 Agent Link Board 发 formal E2E call，只用假通讯板验证发送路径；真实 call 应在准备正式测试且确认 Windows 端可配合时再显式运行 `--sendCall`。
+下一步建议：
+- Windows 剪贴板完整性整改和 Supervisor 复审完成后，Mac 侧先跑 `check-mac-formal-e2e-status --boardSummary`，如仍 ready，再用 `--sendCall` 呼叫 Windows 正式 E2E。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；正式 E2E 时需要 Windows 端配合和用户本机隐藏输入密码。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 19:25
 开发端：Mac Codex
 本轮目标：同步 Mac 测试兼容修复和当前无密 formal readiness 状态到开工文档。
