@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 const defaults = {
   host: "127.0.0.1",
   port: "43770",
-  password: "demo-password",
+  password: process.env.LAN_DUAL_PASSWORD || "demo-password",
   timeoutMs: 8000,
   expectInputMode: "log",
   json: false,
@@ -445,7 +445,7 @@ function printUsage() {
 Options:
   --host <host>                 Mac host address. Default: 127.0.0.1
   --port <port>                 Mac host port. Default: 43770
-  --password <password>         Probe password. Default: demo-password
+  --password <password>         Probe password. Default: LAN_DUAL_PASSWORD or demo-password
   --timeoutMs <ms>              Per-step timeout. Default: 8000
   --expectInputMode <mode>      Required discovery input mode. Default: log
   --json                        Print one machine-readable JSON object to stdout.

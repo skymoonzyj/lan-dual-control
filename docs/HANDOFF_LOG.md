@@ -19,6 +19,52 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 09:45
+开发端：Mac Codex
+本轮目标：修正正式密码 Mac host 深度 readiness 容易被默认 `demo-password` 误判的问题，并减少探针密码暴露面。
+完成内容：
+- `scripts/mac/check-mac-host-readiness.mjs` 新增 `--promptPassword`，可在交互终端隐藏输入探针密码，适合正式密码 host 的 `--probeVideo` / `--probeAudio` / `--probeInputLog` / `--profile deploy`。
+- readiness 子探针不再通过 `--password <value>` argv 传递密码，改用 `LAN_DUAL_PASSWORD` 环境变量传给 `check-mac-displays`、`observe-mac-video`、`observe-mac-audio` 和 `smoke-mac-input-log`。
+- `observe-mac-video`、`observe-mac-audio`、`smoke-mac-input-log` 默认读取 `LAN_DUAL_PASSWORD`，仍保留显式 `--password` 兼容旧调用。
+- 新增 `scripts/mac/test-mac-readiness-prompt-password.mjs`，覆盖非交互提示失败、JSON stdout 不混入提示、互斥参数不泄露密码、JSON 摘要不含密码、readiness 不再把密码放进子探针 argv。
+- 文档同步说明正式密码深度验收可用 `--promptPassword`，避免刚才默认 demo 密码导致的 H.264/audio/input-log 误报超时。
+修改文件：
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `scripts/mac/observe-mac-video.mjs`
+- `scripts/mac/observe-mac-audio.mjs`
+- `scripts/mac/smoke-mac-input-log.mjs`
+- `scripts/mac/test-mac-readiness-prompt-password.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-host-readiness.mjs`
+- `node --check scripts/mac/observe-mac-video.mjs`
+- `node --check scripts/mac/observe-mac-audio.mjs`
+- `node --check scripts/mac/smoke-mac-input-log.mjs`
+- `node --check scripts/mac/test-mac-readiness-prompt-password.mjs`
+- `node scripts/mac/test-mac-readiness-prompt-password.mjs --timeoutMs 10000`
+- `node scripts/mac/test-mac-video-json-output.mjs --timeoutMs 10000`
+- `node scripts/mac/test-mac-audio-json-output.mjs --timeoutMs 10000`
+- `node scripts/mac/test-mac-input-log-json-output.mjs --timeoutMs 10000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 5000`
+- `node scripts/mac/test-mac-readiness-json-details.mjs --timeoutMs 12000`
+- `node scripts/mac/check-mac-host-readiness.mjs --requireOpen --requireControlPermissions --requireInputMonitoring --requireCurrentBuildId --timeoutMs 20000`
+- `git diff --check`
+- 冲突标记搜索
+遗留问题：
+- 当前正式 Mac host 仍在线 `192.168.31.122:43770`，`build=d807536`，`inputMode=log`，权限全绿；本轮未重启 host，也未执行真实 `inject`。
+- 真正的 Windows 侧 E2E 长测还在等待 Windows Codex 从 WGC raw WIP 切换或回复。
+下一步建议：
+- Windows 端准备验收时，继续连接 `192.168.31.122:43770` 做发现、正式认证、H.264 5-10 分钟、音频、剪贴板和 input-log；`inject` 仍需用户明确确认。
+- Mac 端若需本机正式密码深度验收，可运行 `node scripts/mac/check-mac-host-readiness.mjs --promptPassword --profile deploy --timeoutMs 30000`。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端继续正式 E2E 验收 call；本轮代码改动本身不需要 Windows 端修改。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 09:00
 开发端：Mac Codex
 本轮目标：补一个恢复开工/正式验收前的 Mac 侧轻量总览，减少双方早上恢复时靠聊天猜当前状态。

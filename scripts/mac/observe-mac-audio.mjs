@@ -8,7 +8,7 @@ import { join } from "node:path";
 const defaults = {
   host: "127.0.0.1",
   port: "43770",
-  password: "demo-password",
+  password: process.env.LAN_DUAL_PASSWORD || "demo-password",
   durationMs: 5000,
   timeoutMs: 8000,
   minFrames: 0,
@@ -729,7 +729,7 @@ function printUsage() {
 Options:
   --host <host>                 Mac host address. Default: 127.0.0.1
   --port <port>                 Mac host port. Default: 43770
-  --password <password>         Probe password. Default: demo-password
+  --password <password>         Probe password. Default: LAN_DUAL_PASSWORD or demo-password
   --durationMs <ms>             Audio observation window. Default: 5000
   --timeoutMs <ms>              Handshake timeout. Default: 8000
   --minFrames <count>           Minimum required audio frames. Default: durationMs / 100

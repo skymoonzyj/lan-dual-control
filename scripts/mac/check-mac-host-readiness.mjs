@@ -9,6 +9,7 @@ const defaults = {
   host: "127.0.0.1",
   port: 43770,
   password: process.env.LAN_DUAL_PASSWORD || "demo-password",
+  promptPassword: false,
   timeoutMs: 20000,
   expectBuildId: "",
   currentBuildId: "",
@@ -40,6 +41,7 @@ function helpRequested(argv) {
 
 function parseArgs(argv) {
   const args = { ...defaults };
+  args.passwordFromArg = false;
   for (let index = 2; index < argv.length; index += 1) {
     const token = argv[index];
     if (!token.startsWith("--")) continue;
@@ -55,6 +57,7 @@ function parseArgs(argv) {
       key === "requireInputMonitoring" ||
       key === "requireCurrentBuildId" ||
       key === "skipCurrentBuildCheck" ||
+      key === "promptPassword" ||
       key === "probeHost" ||
       key === "probeVideo" ||
       key === "probeAudio" ||
@@ -68,6 +71,9 @@ function parseArgs(argv) {
     }
     if (Object.prototype.hasOwnProperty.call(args, key) && next && !next.startsWith("--")) {
       args[key] = next;
+      if (key === "password") {
+        args.passwordFromArg = true;
+      }
       index += 1;
     }
   }
@@ -76,6 +82,7 @@ function parseArgs(argv) {
   args.host = String(args.host || defaults.host).trim();
   args.port = clampInteger(args.port, 1, 65535, defaults.port);
   args.password = String(args.password || defaults.password);
+  args.promptPassword = booleanArg(args.promptPassword);
   args.timeoutMs = clampInteger(args.timeoutMs, 3000, 120000, defaults.timeoutMs);
   args.expectBuildId = normalizedText(args.expectBuildId);
   args.currentBuildId = getGitBuildId();
@@ -141,6 +148,8 @@ Options:
   --host <host>             Mac host probe host. Default: 127.0.0.1
   --port <port>             Mac host port. Default: 43770
   --password <password>     Probe password. Default: LAN_DUAL_PASSWORD or demo-password
+  --promptPassword          Prompt for probe password without echoing it. Useful for
+                            formal-password deep probes; the value is not printed.
   --timeoutMs <ms>          Per-step timeout. Default: 20000
   --expectBuildId <id>      Require running host runtime.buildId. Implies --probeHost.
   --requireCurrentBuildId   Require running host runtime.buildId to match current git short hash.
@@ -176,6 +185,82 @@ function clampInteger(value, min, max, fallback) {
 
 function booleanArg(value) {
   return value === true || value === "true" || value === "1" || value === "yes" || value === "on";
+}
+
+async function preparePassword(args) {
+  if (!args.promptPassword) return;
+  if (args.passwordFromArg) {
+    throw new Error("--promptPassword cannot be combined with --password.");
+  }
+  if (process.env.LAN_DUAL_PASSWORD) {
+    throw new Error("--promptPassword refuses to override an existing LAN_DUAL_PASSWORD. Unset it or omit --promptPassword.");
+  }
+  args.password = await promptHidden("Mac host probe password: ", args.json ? process.stderr : process.stdout);
+  if (!args.password) {
+    throw new Error("Password cannot be empty when --promptPassword is used.");
+  }
+}
+
+function promptHidden(label, output = process.stdout) {
+  if (!process.stdin.isTTY || !output.isTTY) {
+    return Promise.reject(new Error("--promptPassword requires an interactive terminal."));
+  }
+
+  return new Promise((resolvePrompt, rejectPrompt) => {
+    const stdin = process.stdin;
+    const promptOutput = output;
+    const previousRawMode = stdin.isRaw;
+    let value = "";
+    let settled = false;
+
+    const cleanup = () => {
+      stdin.off("data", onData);
+      if (typeof stdin.setRawMode === "function") {
+        stdin.setRawMode(Boolean(previousRawMode));
+      }
+      stdin.pause();
+    };
+    const finish = (result, error = null) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      promptOutput.write("\n");
+      if (error) {
+        rejectPrompt(error);
+      } else {
+        resolvePrompt(result);
+      }
+    };
+    const onData = (chunk) => {
+      const text = String(chunk);
+      for (const char of text) {
+        const code = char.charCodeAt(0);
+        if (char === "\r" || char === "\n") {
+          finish(value);
+          return;
+        }
+        if (code === 3) {
+          finish("", new Error("Password prompt cancelled."));
+          return;
+        }
+        if (code === 8 || code === 127) {
+          value = value.slice(0, -1);
+          continue;
+        }
+        if (code >= 32) {
+          value += char;
+        }
+      }
+    };
+
+    promptOutput.write(label);
+    stdin.resume();
+    stdin.setEncoding("utf8");
+    if (typeof stdin.setRawMode === "function") {
+      stdin.setRawMode(true);
+    }
+    stdin.on("data", onData);
+  });
 }
 
 function getGitBuildId() {
@@ -334,6 +419,12 @@ async function runStep(results, args, label, command, commandArgs, options = {})
     print("WARN", `${label}: ${warning.replace(/^\[WARN\]\s*/, "")}`, args);
   }
   return result;
+}
+
+function probeEnv(args) {
+  return {
+    LAN_DUAL_PASSWORD: args.password,
+  };
 }
 
 async function runCustomStep(results, args, label, callback) {
@@ -585,6 +676,7 @@ async function main() {
     return;
   }
   const args = parseArgs(process.argv);
+  await preparePassword(args);
 
   const results = [];
   const node = process.execPath;
@@ -625,14 +717,12 @@ async function main() {
         args.host,
         "--port",
         String(args.port),
-        "--password",
-        args.password,
         "--requireRuntime",
         ...(args.expectBuildId ? ["--expectBuildId", args.expectBuildId] : []),
         "--timeoutMs",
         String(args.timeoutMs),
       ],
-      { timeoutMs: Math.max(args.timeoutMs, 25000) },
+      { timeoutMs: Math.max(args.timeoutMs, 25000), env: probeEnv(args) },
     );
   }
 
@@ -659,8 +749,6 @@ async function main() {
         args.host,
         "--port",
         String(args.port),
-        "--password",
-        args.password,
         "--durationMs",
         "2500",
         "--timeoutMs",
@@ -678,7 +766,7 @@ async function main() {
         "--maxTimestampGapUs",
         "1000000",
       ],
-      { timeoutMs: Math.max(args.timeoutMs, 35000) },
+      { timeoutMs: Math.max(args.timeoutMs, 35000), env: probeEnv(args) },
     );
   }
 
@@ -694,8 +782,6 @@ async function main() {
         args.host,
         "--port",
         String(args.port),
-        "--password",
-        args.password,
         "--durationMs",
         "2500",
         "--timeoutMs",
@@ -707,7 +793,7 @@ async function main() {
         ...(args.maxAudioFrameAgeMs > 0 ? ["--maxFrameAgeMs", String(args.maxAudioFrameAgeMs)] : []),
         "--requireMonotonicTimestamp",
       ],
-      { timeoutMs: Math.max(args.timeoutMs, 35000) },
+      { timeoutMs: Math.max(args.timeoutMs, 35000), env: probeEnv(args) },
     );
   }
 
@@ -723,14 +809,12 @@ async function main() {
         args.host,
         "--port",
         String(args.port),
-        "--password",
-        args.password,
         "--timeoutMs",
         String(args.timeoutMs),
         "--expectInputMode",
         "log",
       ],
-      { timeoutMs: Math.max(args.timeoutMs, 25000) },
+      { timeoutMs: Math.max(args.timeoutMs, 25000), env: probeEnv(args) },
     );
   }
 
@@ -745,6 +829,7 @@ async function main() {
       profile: args.profile,
       host: args.host,
       port: args.port,
+      promptPassword: args.promptPassword,
       expectBuildId: args.expectBuildId,
       currentBuildId: args.currentBuildId,
       requireCurrentBuildId: args.requireCurrentBuildId,
