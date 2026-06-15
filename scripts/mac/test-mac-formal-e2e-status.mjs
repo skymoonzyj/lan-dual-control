@@ -179,18 +179,42 @@ async function readRequestBody(request) {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-async function withFakeMacHost(callback) {
-  const currentBuildId = spawnSync("git", ["rev-parse", "--short", "HEAD"], {
+function gitOutput(args, label) {
+  const result = spawnSync("git", args, {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: 3000,
-  }).stdout.trim();
+  });
+  if (result.status !== 0) {
+    throw new Error(`${label} failed: ${String(result.stderr || result.stdout || "").trim()}`);
+  }
+  return result.stdout.trim();
+}
+
+function getCurrentBuildId() {
+  return gitOutput(["rev-parse", "--short", "HEAD"], "git rev-parse HEAD");
+}
+
+function getBuildBeforeLatestMacHostRuntimeChange() {
+  const latestRuntimeChange = gitOutput([
+    "log",
+    "-1",
+    "--format=%H",
+    "--",
+    "apps/mac-host/Package.swift",
+    "apps/mac-host/Sources",
+  ], "git log latest Mac host runtime change");
+  return gitOutput(["rev-parse", "--short", `${latestRuntimeChange}^`], "git rev-parse previous Mac host runtime build");
+}
+
+async function withFakeMacHost(callback, options = {}) {
+  const runtimeBuildId = options.runtimeBuildId || getCurrentBuildId() || "test-build";
   const discovery = {
     platform: "macos",
     deviceName: "Fake Formal Mac",
     inputMode: "log",
     runtime: {
-      buildId: currentBuildId || "test-build",
+      buildId: runtimeBuildId,
       processId: 12345,
       startedAt: new Date().toISOString(),
     },
@@ -350,6 +374,43 @@ function checkOfflineSendCallRefuses(args) {
   assert(/Refusing to send formal E2E call/.test(result.stderr), "offline sendCall should explain refusal");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "offline sendCall refusal");
   print("OK", "Offline --sendCall refuses before touching the board");
+}
+
+async function checkStaleRuntimeSendCallRefuses(args) {
+  const staleRuntimeBuildId = getBuildBeforeLatestMacHostRuntimeChange();
+  await withFakeMacHost(async (macHost) => {
+    await withFakeBoard(async (board) => {
+      const localTimeoutMs = String(Math.min(args.timeoutMs, 5000));
+      const result = await runAsync(args, [
+        "--json",
+        "--allowDirty",
+        "--sendCall",
+        "--host",
+        macHost.host,
+        "--port",
+        String(macHost.port),
+        "--server",
+        board.serverUrl,
+        "--timeoutMs",
+        localTimeoutMs,
+      ]);
+      const payload = parseJson(result.stdout, "stale-runtime sendCall refusal");
+      assert(result.status !== 0, "stale runtime sendCall should fail because runtime source changed");
+      assert(payload.ok === false, "stale runtime refusal should report ok=false");
+      assert(payload.readyToCall === false, "stale runtime refusal should not be readyToCall");
+      assert(/Refusing to send formal E2E call/.test(payload.error?.message || ""), "stale runtime refusal should explain sendCall refusal");
+      assert(/Runtime Build/.test(payload.error?.message || ""), "stale runtime refusal should identify the build blocker");
+      assert(/restart recommended/.test(payload.error?.message || ""), "stale runtime refusal should say restart is recommended");
+      assert(/Restart Mac host before deploy-style validation/.test(payload.error?.message || ""), "stale runtime refusal should give the restart next step");
+      assert(/apps\/mac-host\/Sources\/MacHost\/MacHostService\.swift/.test(payload.error?.message || ""), "stale runtime refusal should name changed runtime files");
+      assert(payload.counts?.blockers >= 1, "stale runtime refusal should include blocker count");
+      assert(payload.checklist?.some((entry) => entry.id === "build" && entry.status === "blocker"), "stale runtime checklist should block on build");
+      assert(payload.boardCallBeforeSend === undefined, "stale runtime refusal should not read board current call after readiness failed");
+      assert(board.calls.length === 0, "stale runtime refusal should not post a board call");
+      assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "stale-runtime sendCall refusal");
+      print("OK", `Stale runtime build ${staleRuntimeBuildId} blocks --sendCall with restart guidance`);
+    });
+  }, { runtimeBuildId: staleRuntimeBuildId });
 }
 
 async function checkReadySendCall(args) {
@@ -559,6 +620,7 @@ async function main() {
   checkOfflineJson(args);
   checkOfflineBoardSummary(args);
   checkOfflineSendCallRefuses(args);
+  await checkStaleRuntimeSendCallRefuses(args);
   await checkReadySendCall(args);
   await checkExistingBoardCallProtection(args);
   await checkForceSendCall(args);

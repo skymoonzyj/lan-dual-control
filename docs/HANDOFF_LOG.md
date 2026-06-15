@@ -17,6 +17,36 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Mac Codex
+
+日期：2026-06-15 21:15
+开发端：Mac Codex
+本轮目标：加固 Mac formal E2E 呼叫前的旧 runtime 保护，避免把已变更的旧 Mac host 误叫去正式长测。
+完成内容：
+- `scripts/mac/check-mac-formal-e2e-status.mjs --sendCall` 未 ready 时不再只报 blocker 数字，会输出具体 blocker、下一步建议和变动的 Mac host runtime 文件；`--json --sendCall` 失败时保留完整 report，便于自动化/通讯板读取原因。
+- `scripts/mac/test-mac-formal-e2e-status.mjs` 新增旧 runtime 源码变化回归：假 Mac host 返回最近一次 runtime 变更前的 build，确认 `--sendCall` 拒绝、JSON 带 `Runtime Build` blocker、提示重启、列出 `apps/mac-host/Sources/MacHost/MacHostService.swift`，且不会读取/覆盖通讯板 call。
+- 当前真实只读检查显示 Mac host `192.168.31.122:43770` 在线、runtime build `d807536`、权限/H.264/系统 PCM/剪贴板/inputMode=log 均可见，但 repo `06d1908` 相对该 runtime 有 1 个 Mac host runtime 源码变化；formal E2E 前应先重启 Mac host。
+- 同步 CURRENT_STATUS / NEXT_ACTIONS / 04-task-board，把旧的 “formal E2E ready” 当前事实改为“需先重启 Mac host”。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-formal-e2e-status.mjs`
+- `node --check scripts/mac/test-mac-formal-e2e-status.mjs`
+- `node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 60000`
+- `node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary`
+遗留问题：
+- 未重启真实 Mac host；当前 `--boardSummary` 仍会正确失败并提示先重启。重启需要用户在场输入正式密码或使用安全启动流程。
+下一步建议：
+- 用户在场时，先运行 `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword` 重启到当前 build，再跑 `node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary`；ready 后再协调 Windows 做无密预检和正式密码验收。
+是否改了协议：否。
+是否需要另一端配合：重启后需要 Windows 端重新发现/预检；现在先不要催用户输入正式密码。
+
 ## 2026-06-15 Windows Codex
 
 日期：2026-06-15 20:56

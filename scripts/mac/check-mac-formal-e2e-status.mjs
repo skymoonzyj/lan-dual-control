@@ -340,6 +340,37 @@ function summarizeCounts(checklist) {
   };
 }
 
+function formatGateItem(entry) {
+  const summary = normalizedText(entry.summary);
+  const detail = normalizedText(entry.detail);
+  const next = normalizedText(entry.next);
+  const parts = [`${entry.label || entry.id}: ${summary || entry.status}`];
+  if (detail) parts.push(detail);
+  if (next) parts.push(`Next: ${next}`);
+  return parts.join("; ");
+}
+
+function formatSendCallRefusal(report) {
+  const blockers = report.checklist.filter((entry) => entry.status === "blocker");
+  const warnings = report.checklist.filter((entry) => entry.status === "warning");
+  const blockerText = blockers.length > 0
+    ? blockers.slice(0, 5).map(formatGateItem).join(" | ")
+    : "none";
+  const warningText = warnings.length > 0
+    ? ` Warnings: ${warnings.slice(0, 3).map(formatGateItem).join(" | ")}.`
+    : "";
+  const buildDiff = report.resume.host?.buildDiff || {};
+  const changedFiles = Array.isArray(buildDiff.changedHostRuntimeFiles) && buildDiff.changedHostRuntimeFiles.length > 0
+    ? ` Changed runtime files: ${buildDiff.changedHostRuntimeFiles.slice(0, 6).join(", ")}.`
+    : "";
+  return [
+    `Refusing to send formal E2E call because checklist is not ready: blockers=${report.counts.blockers}, warnings=${report.counts.warnings}.`,
+    `Blockers: ${blockerText}.`,
+    changedFiles,
+    warningText,
+  ].join(" ").replace(/\s+/g, " ").trim();
+}
+
 function makeCallText(report) {
   const host = report.resume.host || {};
   if (!host.online) {
@@ -450,7 +481,7 @@ function getCurrentBoardCall(args) {
 
 function sendCall(report, args) {
   if (!report.readyToCall) {
-    throw new Error(`Refusing to send formal E2E call because checklist is not ready: blockers=${report.counts.blockers}, warnings=${report.counts.warnings}.`);
+    throw new Error(formatSendCallRefusal(report));
   }
   const currentCall = getCurrentBoardCall(args);
   report.boardCallBeforeSend = currentCall;
@@ -559,12 +590,20 @@ function main() {
   const args = parseArgs(process.argv);
   const report = buildReport(args);
   if (args.sendCall) {
-    const sendResult = sendCall(report, args);
-    report.sentCall = {
-      ok: true,
-      result: sendResult || "ok",
-      payload: report.callPayload,
-    };
+    try {
+      const sendResult = sendCall(report, args);
+      report.sentCall = {
+        ok: true,
+        result: sendResult || "ok",
+        payload: report.callPayload,
+      };
+    } catch (error) {
+      report.ok = false;
+      report.error = { message: error.message };
+      if (!args.json) {
+        throw error;
+      }
+    }
   }
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
