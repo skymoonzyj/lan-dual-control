@@ -803,7 +803,7 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
   return restartedHost;
 }
 
-async function observeMacClientVideo({ args, session }) {
+async function observeMacClientVideo({ args, session, label = "Video observe" }) {
   const shouldObserve =
     args.observeVideoMs > 0 ||
     args.minObservedVideoFrames > 0 ||
@@ -836,7 +836,7 @@ async function observeMacClientVideo({ args, session }) {
   if (args.minObservedVideoFps > 0 && fps < args.minObservedVideoFps) {
     throw new Error(`Mac client observed ${fps.toFixed(1)} video FPS, expected >= ${args.minObservedVideoFps}`);
   }
-  print("OK", `Video observe: ${frames} frames / ${elapsedMs}ms / ${fps.toFixed(1)} fps`);
+  print("OK", `${label}: ${frames} frames / ${elapsedMs}ms / ${fps.toFixed(1)} fps`);
   return { frames, elapsedMs, fps };
 }
 
@@ -862,6 +862,23 @@ function buildSnapshotExpression() {
       audioFlowMetric: text("#audioFlowMetric"),
       reconnectMetric: text("#reconnectMetric"),
       remoteRuntime: text("#remoteRuntimeMetric"),
+      lastVideoFrame: (() => {
+        const frame = [...(window.__lanDualReceivedMessages || [])].reverse().find((message) => message.type === "video_frame");
+        if (!frame) return null;
+        return {
+          frameId: frame.frameId || 0,
+          codec: frame.codec || "",
+          encoding: frame.encoding || "",
+          videoTransport: frame.videoTransport || "",
+          h264Level: frame.h264Level || "",
+          width: frame.width || 0,
+          height: frame.height || 0,
+          capturePipeline: frame.capturePipeline || "",
+          keyFrame: frame.keyFrame === true,
+          timestamp: frame.timestamp || "",
+          binaryPayloadBytes: frame.binaryPayloadBytes || frame.payloadBytes || 0,
+        };
+      })(),
       lastVideoFrameAgeMs: (() => {
         const frame = [...(window.__lanDualReceivedMessages || [])].reverse().find((message) => message.type === "video_frame");
         if (!frame?.timestamp) return null;
@@ -1867,11 +1884,12 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
         sessionAnswer?.capturePipeline !== "windows-wgc-helper-nv12-ffmpeg-h264" ||
         sessionAnswer?.videoCodec !== "h264" ||
         sessionAnswer?.videoTransport !== (args.disableBinaryVideo ? "json" : "binary-h264") ||
-        sessionAnswer?.h264Encoder !== args.h264Encoder
+        sessionAnswer?.h264Encoder !== args.h264Encoder ||
+        sessionAnswer?.h264Level !== "4.2"
       ) {
         throw new Error(`Windows host WGC NV12 H.264 session mismatch: ${JSON.stringify(sessionAnswer)}`);
       }
-      print("OK", `WGC NV12 H.264 session: ${sessionAnswer.capturePipeline} / ${sessionAnswer.h264Encoder}`);
+      print("OK", `WGC NV12 H.264 session: ${sessionAnswer.capturePipeline} / ${sessionAnswer.h264Encoder} / level ${sessionAnswer.h264Level}`);
     }
     print("OK", `Video settings: ${videoSnapshot.displaySettings}`);
 
@@ -1925,6 +1943,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
         const expectedAckVideoTransport = String(latestDisplayAck?.videoCodec || "").toLowerCase() === "h264"
           ? (args.disableBinaryVideo ? "json" : "binary-h264")
           : (args.disableBinaryVideo ? "json" : "binary-jpeg");
+        const expectedAckH264Level = String(latestDisplayAck?.videoCodec || "").toLowerCase() === "h264" ? "5.1" : "";
         const displaySupportedTransportsOk = args.disableBinaryVideo
           ? Array.isArray(latestDisplaySettings?.supportedVideoTransports) &&
             latestDisplaySettings.supportedVideoTransports.length === 1 &&
@@ -1952,6 +1971,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
           Number(latestDisplayAck?.maxScreenFps) === 60 &&
           Number(latestDisplayAck?.maxBandwidthKbps) === 40000 &&
           latestDisplayAck?.videoTransport === expectedAckVideoTransport &&
+          (!expectedAckH264Level || latestDisplayAck?.h264Level === expectedAckH264Level) &&
           latestDisplayAck?.qualityPreset === "sharp" &&
           Number(latestDisplayAck?.jpegQuality) >= 0.74 &&
           Number(latestDisplayAck?.jpegQuality) <= 0.82;
@@ -1969,6 +1989,39 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       "Mac client display settings update",
     );
     print("OK", `Display settings: ${displaySettingsSnapshot.displaySettings}`);
+
+    const postSettingsObserve = await observeMacClientVideo({
+      args,
+      session,
+      label: "Post-settings video observe",
+    });
+    if (postSettingsObserve) {
+      const expectedPostSettingsCodec = String(displaySettingsSnapshot.latestDisplayAck?.videoCodec || "").toLowerCase();
+      const expectedPostSettingsTransport = String(displaySettingsSnapshot.latestDisplayAck?.videoTransport || "").toLowerCase();
+      const postSettingsFrameSnapshot = await waitFor(
+        async () => {
+          const value = await evaluate(session, buildSnapshotExpression());
+          lastSnapshot = value;
+          const frame = value.lastVideoFrame || {};
+          const codec = String(frame.codec || "").toLowerCase();
+          const transport = String(frame.videoTransport || "json").toLowerCase();
+          const dimensionsOk = Number(frame.width) === 2560 && Number(frame.height) === 1440;
+          const codecOk = expectedPostSettingsCodec ? codec === expectedPostSettingsCodec : true;
+          const transportOk = expectedPostSettingsTransport ? transport === expectedPostSettingsTransport : true;
+          const h264LevelOk = expectedPostSettingsCodec === "h264" ? frame.h264Level === "5.1" : true;
+          const surfaceOk = expectedPostSettingsCodec === "h264"
+            ? value.canvasVisible && value.canvasHasFrame
+            : value.surfaceVisible && value.surfaceHasFrame;
+          return dimensionsOk && codecOk && transportOk && h264LevelOk && surfaceOk ? value : null;
+        },
+        args.timeoutMs,
+        "Mac client post-settings video frame",
+      );
+      print(
+        "OK",
+        `Post-settings video frame: ${postSettingsFrameSnapshot.lastVideoFrame.width}x${postSettingsFrameSnapshot.lastVideoFrame.height} / ${postSettingsFrameSnapshot.lastVideoFrame.codec}/${postSettingsFrameSnapshot.lastVideoFrame.videoTransport || "json"} / level ${postSettingsFrameSnapshot.lastVideoFrame.h264Level || "n/a"}`,
+      );
+    }
 
     if (args.expectAudioFrame) {
       const audioFrameSnapshot = await waitFor(

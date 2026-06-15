@@ -31,6 +31,18 @@ const wgcRepeatSignalMode = "signal";
 const wgcHelperProtocolJsonLines = "json-lines-v1";
 const wgcHelperProtocolBinaryFrame = "binary-frame-v1";
 
+class CaptureCancelledError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "CaptureCancelledError";
+    this.code = "LAN_CAPTURE_CANCELLED";
+  }
+}
+
+function isCaptureCancelledError(error) {
+  return error?.code === "LAN_CAPTURE_CANCELLED" || error?.name === "CaptureCancelledError";
+}
+
 function clampNumber(value, min, max, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) {
@@ -130,8 +142,26 @@ function normalizeWgcH264Source(value) {
   return wgcH264SourceJpeg;
 }
 
-function h264EncoderArgs({ encoder, bandwidthKbps, fps }) {
+function h264LevelForVideo({ width, height, fps }) {
+  const macroblockWidth = Math.ceil(Math.max(1, Number(width) || 1) / 16);
+  const macroblockHeight = Math.ceil(Math.max(1, Number(height) || 1) / 16);
+  const macroblocksPerFrame = macroblockWidth * macroblockHeight;
+  const macroblocksPerSecond = macroblocksPerFrame * Math.max(1, Number(fps) || 1);
+  if (macroblocksPerFrame > 36864 || macroblocksPerSecond > 2073600) {
+    return "6.2";
+  }
+  if (macroblocksPerSecond > 983040) {
+    return "5.2";
+  }
+  if (macroblocksPerFrame > 8704 || macroblocksPerSecond > 522240) {
+    return "5.1";
+  }
+  return "4.2";
+}
+
+function h264EncoderArgs({ encoder, bandwidthKbps, fps, width, height }) {
   const gop = String(Math.max(1, fps));
+  const level = h264LevelForVideo({ width, height, fps });
   const common = [
     "-an",
     "-c:v",
@@ -162,7 +192,7 @@ function h264EncoderArgs({ encoder, bandwidthKbps, fps }) {
       "-profile:v",
       "baseline",
       "-level:v",
-      "4.2",
+      level,
       "-keyint_min",
       gop,
       "-sc_threshold",
@@ -191,7 +221,7 @@ function h264EncoderArgs({ encoder, bandwidthKbps, fps }) {
       "-profile:v",
       "main",
       "-level:v",
-      "4.2",
+      level,
       "-f",
       "h264",
       "-",
@@ -203,7 +233,7 @@ function h264EncoderArgs({ encoder, bandwidthKbps, fps }) {
     "-profile:v",
     "main",
     "-level:v",
-    "4.2",
+    level,
     "-f",
     "h264",
     "-",
@@ -1130,6 +1160,7 @@ export class WindowsScreenCaptureCoordinator {
     const maxBandwidthKbps = normalizeBandwidthKbps(message.maxBandwidthKbps);
     const qualityPreset = normalizeQualityPreset(message.qualityPreset);
     const jpegQuality = this.jpegQualityForSettings({ qualityPreset, maxBandwidthKbps });
+    const h264Level = h264LevelForVideo({ width, height, fps });
 
     return {
       width,
@@ -1145,6 +1176,7 @@ export class WindowsScreenCaptureCoordinator {
       videoEncoding: this.getVideoEncoding(effectiveMode),
       codecString: usingH264 ? this.h264CodecString : "",
       h264Encoder: usingH264 ? this.h264Encoder : "",
+      h264Level: usingH264 ? h264Level : "",
       displays: this.getDisplays(),
       activeDisplayId: activeDisplay.id,
       displayName: activeDisplay.name,
@@ -1167,19 +1199,20 @@ export class WindowsScreenCaptureCoordinator {
     const maxBandwidthKbps = normalizeBandwidthKbps(message.maxBandwidthKbps, session.maxBandwidthKbps);
     const qualityPreset = normalizeQualityPreset(message.qualityPreset || session.qualityPreset);
     const jpegQuality = this.jpegQualityForSettings({ qualityPreset, maxBandwidthKbps });
+    const width = message.resolutionMode === "native"
+      ? activeDisplay.width
+      : clampNumber(message.width, 320, 3840, session.width);
+    const height = message.resolutionMode === "native"
+      ? activeDisplay.height
+      : clampNumber(message.height, 180, 2160, session.height);
+    const h264Level = h264LevelForVideo({ width, height, fps });
 
     return {
       ...session,
       activeDisplayId: activeDisplay.id,
       displayName: activeDisplay.name,
-      width:
-        message.resolutionMode === "native"
-          ? activeDisplay.width
-          : clampNumber(message.width, 320, 3840, session.width),
-      height:
-        message.resolutionMode === "native"
-          ? activeDisplay.height
-          : clampNumber(message.height, 180, 2160, session.height),
+      width,
+      height,
       fps,
       requestedFps,
       maxScreenFps: this.maxScreenFps,
@@ -1191,6 +1224,7 @@ export class WindowsScreenCaptureCoordinator {
       videoEncoding: this.getVideoEncoding(effectiveMode),
       codecString: usingH264 ? this.h264CodecString : "",
       h264Encoder: usingH264 ? this.h264Encoder : "",
+      h264Level: usingH264 ? h264Level : "",
       hostMode: this.makeHostMode(effectiveMode),
       capturePipeline: this.getCapturePipeline(effectiveMode),
       requestedScreenMode: this.requestedMode,
@@ -1229,6 +1263,9 @@ export class WindowsScreenCaptureCoordinator {
         }
         return await this.makeWgcHelperJpegFrame(frameId, session);
       } catch (error) {
+        if (isCaptureCancelledError(error)) {
+          throw error;
+        }
         this.recordCaptureFailure(error);
         try {
           return await this.makeSystemJpegFrame(frameId, session);
@@ -1422,7 +1459,7 @@ export class WindowsScreenCaptureCoordinator {
     this.wgcHelperBinaryFrameHeader = null;
     this.wgcHelperFrame = null;
     this.wgcH264BridgeFedWgcFrameId = 0;
-    this.rejectWgcHelperFrameWaiters(new Error("WGC helper stopped"));
+    this.rejectWgcHelperFrameWaiters(new CaptureCancelledError("WGC helper stopped"));
   }
 
   handleWgcHelperChunk(chunk) {
@@ -1688,6 +1725,9 @@ export class WindowsScreenCaptureCoordinator {
     try {
       await this.waitForWgcHelperFrame(this.lastServedWgcHelperFrameId, waitTimeoutMs);
     } catch (error) {
+      if (isCaptureCancelledError(error)) {
+        throw error;
+      }
       if (!this.wgcRepeatLastFrame || !this.wgcHelperFrame) {
         throw error;
       }
@@ -1848,7 +1888,13 @@ export class WindowsScreenCaptureCoordinator {
         ];
     const args = [
       ...inputArgs,
-      ...h264EncoderArgs({ encoder: this.h264Encoder, bandwidthKbps, fps }),
+      ...h264EncoderArgs({
+        encoder: this.h264Encoder,
+        bandwidthKbps,
+        fps,
+        width: rawDimensions.width,
+        height: rawDimensions.height,
+      }),
     ];
 
     const child = spawn(this.ffmpegCommand, args, {
@@ -1976,6 +2022,9 @@ export class WindowsScreenCaptureCoordinator {
     try {
       await this.waitForWgcHelperFrame(this.wgcH264BridgeFedWgcFrameId, waitTimeoutMs);
     } catch (error) {
+      if (isCaptureCancelledError(error)) {
+        throw error;
+      }
       if (!this.wgcRepeatLastFrame || !this.wgcHelperFrame) {
         throw error;
       }
@@ -2057,6 +2106,8 @@ export class WindowsScreenCaptureCoordinator {
     const fps = this.normalizeFps(session.fps);
     const durationUs = Math.round(1_000_000 / Math.max(1, fps));
     const frameInfo = frame.sourceInfo || latestSourceInfo || {};
+    const width = Number(frameInfo.width) || clampNumber(session.width, 320, 3840, activeDisplay.width || 1920);
+    const height = Number(frameInfo.height) || clampNumber(session.height, 180, 2160, activeDisplay.height || 1080);
 
     return {
       type: "video_frame",
@@ -2066,8 +2117,8 @@ export class WindowsScreenCaptureCoordinator {
       contentAgeMs: Number.isFinite(frameInfo.contentAgeMs) ? frameInfo.contentAgeMs : null,
       repeatedFrame: frameInfo.repeatedFrame === true,
       repeatLastFrameMode: frameInfo.repeatLastFrameMode || this.wgcRepeatLastFrameMode,
-      width: Number(frameInfo.width) || clampNumber(session.width, 320, 3840, activeDisplay.width || 1920),
-      height: Number(frameInfo.height) || clampNumber(session.height, 180, 2160, activeDisplay.height || 1080),
+      width,
+      height,
       sourceWidth: Number(frameInfo.sourceWidth) || activeDisplay.width,
       sourceHeight: Number(frameInfo.sourceHeight) || activeDisplay.height,
       fps: session.fps,
@@ -2079,6 +2130,7 @@ export class WindowsScreenCaptureCoordinator {
       codec: "h264",
       codecString: this.h264CodecString,
       h264Encoder: this.h264Encoder,
+      h264Level: h264LevelForVideo({ width, height, fps }),
       encoding: "annexb-base64",
       keyFrame: Boolean(frame.keyFrame),
       source: "screen",
@@ -2172,7 +2224,7 @@ export class WindowsScreenCaptureCoordinator {
       `scale=${width}:${height}:flags=fast_bilinear`,
     ];
     const outputArgs = streamKind === "h264"
-      ? h264EncoderArgs({ encoder: this.h264Encoder, bandwidthKbps, fps })
+      ? h264EncoderArgs({ encoder: this.h264Encoder, bandwidthKbps, fps, width, height })
       : [
           "-q:v",
           String(qscaleFromJpegQuality(jpegQuality)),
@@ -2482,13 +2534,15 @@ export class WindowsScreenCaptureCoordinator {
     const now = new Date();
     const fps = this.normalizeFps(session.fps);
     const durationUs = Math.round(1_000_000 / Math.max(1, fps));
+    const width = clampNumber(session.width, 320, 3840, activeDisplay.width || 1920);
+    const height = clampNumber(session.height, 180, 2160, activeDisplay.height || 1080);
 
     return {
       type: "video_frame",
       frameId,
       timestamp: now.toISOString(),
-      width: clampNumber(session.width, 320, 3840, activeDisplay.width || 1920),
-      height: clampNumber(session.height, 180, 2160, activeDisplay.height || 1080),
+      width,
+      height,
       sourceWidth: activeDisplay.width,
       sourceHeight: activeDisplay.height,
       fps: session.fps,
@@ -2500,6 +2554,7 @@ export class WindowsScreenCaptureCoordinator {
       codec: "h264",
       codecString: this.h264CodecString,
       h264Encoder: this.h264Encoder,
+      h264Level: h264LevelForVideo({ width, height, fps }),
       encoding: "annexb-base64",
       keyFrame: Boolean(frame.keyFrame),
       source: "screen",

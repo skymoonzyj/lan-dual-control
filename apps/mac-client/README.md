@@ -99,7 +99,7 @@ Mac 本机文本剪贴板已纳入页面级自检：脚本会断言未连接/空
 
 最近连接已纳入页面级自检：成功协商后确认页面保存当前 host/port、localStorage 不包含连接密码，验证选择最近连接可回填地址和端口，再点击“清空”确认 localStorage 删除该记录且下拉框禁用。
 
-视频参数已纳入页面级自检：脚本会确认默认 `session_offer` 请求 1080P / 60 Hz / 20 Mbps，并根据浏览器能力断言支持 WebCodecs 时请求 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb` / `preferredVideoTransport=binary-h264`，禁用 WebCodecs 时请求 `mjpeg` / `data-url` / `binary-jpeg` 兜底；同时断言 `supportedVideoTransports` 会随 `session_offer`、`display_settings` 一起发送并包含 `json`、`binary-jpeg`、`binary-h264`。页面 URL 带 `?binaryVideo=0` 或自检加 `--disableBinaryVideo` 时，只声明 `json` 并回归 H.264 JSON/base64 兼容路径；切换到高清预设后，脚本会断言页面发送 2K / 60 Hz / 40 Mbps 的 `display_settings` 且保留对应视频编码和传输偏好，并收到 `display_settings_ack`。
+视频参数已纳入页面级自检：脚本会确认默认 `session_offer` 请求 1080P / 60 Hz / 20 Mbps，并根据浏览器能力断言支持 WebCodecs 时请求 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb` / `preferredVideoTransport=binary-h264`，禁用 WebCodecs 时请求 `mjpeg` / `data-url` / `binary-jpeg` 兜底；同时断言 `supportedVideoTransports` 会随 `session_offer`、`display_settings` 一起发送并包含 `json`、`binary-jpeg`、`binary-h264`。页面 URL 带 `?binaryVideo=0` 或自检加 `--disableBinaryVideo` 时，只声明 `json` 并回归 H.264 JSON/base64 兼容路径；切换到高清预设后，脚本会断言页面发送 2K / 60 Hz / 40 Mbps 的 `display_settings` 且保留对应视频编码和传输偏好，并收到 `display_settings_ack`；如果启用了持续视频观察，还会继续要求切换后收到新的视频帧，且最后一帧尺寸、编码和传输方式与新设置一致。
 
 持续视频体验也可量化：脚本加 `--observeVideoMs <毫秒>` 会在连接后统计短窗口内收到的 `video_frame` 数和实收 FPS；加 `--minObservedVideoFrames <帧数>` 或 `--minObservedVideoFps <FPS>` 可把持续来帧能力变成强校验。
 

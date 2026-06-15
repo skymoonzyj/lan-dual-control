@@ -1103,6 +1103,9 @@ function handleDisplaySettingsAck(message) {
     fps: Number(message.fps) || currentVideoSettings().fps,
     bandwidthMbps: Math.round((Number(message.maxBandwidthKbps) || currentVideoSettings().maxBandwidthKbps) / 1000),
   };
+  if (message.accepted !== false && String(message.videoCodec || "").toLowerCase() === "h264") {
+    resetVideoDecoder();
+  }
   elements.displaySettingsStatus.textContent = `${message.accepted === false ? "未接受" : "已确认"} ${describeVideoSettings(acknowledged)}`;
   logEvent("显示设置已确认", `${message.videoCodec || "?"} · ${message.fps || "?"} Hz`);
 }

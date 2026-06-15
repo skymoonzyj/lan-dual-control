@@ -82,6 +82,7 @@ function makeSessionAnswer(message, screen, audio, clipboard) {
     videoEncoding: screen.videoEncoding,
     codecString: screen.codecString ?? "",
     h264Encoder: screen.h264Encoder ?? "",
+    h264Level: screen.h264Level ?? "",
     videoTransport: screen.videoTransport ?? "json",
     audioCodec: audio.audioCodec,
     audioEncoding: audio.audioEncoding,
@@ -278,7 +279,9 @@ function createClient(socket, context) {
           sendVideoFrame(frame, nextSession);
         }
       } catch (error) {
-        context.logger.warn(`视频帧生成失败：${error.message}`);
+        if (runId === videoRunId) {
+          context.logger.warn(`视频帧生成失败：${error.message}`);
+        }
       } finally {
         if (runId === videoRunId) {
           captureBusy = false;
@@ -400,6 +403,7 @@ function createClient(socket, context) {
         videoEncoding: session?.videoEncoding ?? "data-url",
         codecString: session?.codecString ?? "",
         h264Encoder: session?.h264Encoder ?? "",
+        h264Level: session?.h264Level ?? "",
         videoTransport: session?.videoTransport ?? "json",
         width: session?.width ?? (Number(message.width) || 1920),
         height: session?.height ?? (Number(message.height) || 1080),
