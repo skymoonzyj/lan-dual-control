@@ -327,6 +327,14 @@ async function main() {
     assert(wgc.requested === true, "expected screen.wgc.requested=true");
     assert(Array.isArray(observation.requestedScreenModes) && observation.requestedScreenModes.includes("wgc"), "expected observed frames to carry requestedScreenMode=wgc");
     assert(Number(observation.frameCount) >= args.minFrames, `expected at least ${args.minFrames} frame(s), got ${observation.frameCount || 0}`);
+    assert(Number.isFinite(Number(observation.freshFps)), `expected observation.freshFps metric, got ${JSON.stringify(observation)}`);
+    assert(Number.isFinite(Number(observation.uniqueHelperFps)), `expected observation.uniqueHelperFps metric, got ${JSON.stringify(observation)}`);
+    assert(Number.isFinite(Number(observation.repeatedFrameRatio)), `expected observation.repeatedFrameRatio metric, got ${JSON.stringify(observation)}`);
+    assert(Number.isFinite(Number(observation.repeatedFramePercent)), `expected observation.repeatedFramePercent metric, got ${JSON.stringify(observation)}`);
+    assert(Number(observation.freshFrames) + Number(observation.repeatedFrames || 0) === Number(observation.frameCount), "fresh/repeated frame counts should add up to total frame count");
+    if (Number(observation.uniqueHelperFrameCount || 0) > 0) {
+      assert(Number(observation.uniqueHelperFps) > 0, "uniqueHelperFps should be positive when helper frames were observed");
+    }
 
     if (args.mockHelper && args.h264Bridge) {
       assert(wgc.active === true, `expected mock helper WGC backend to be active; got ${JSON.stringify(wgc)}`);

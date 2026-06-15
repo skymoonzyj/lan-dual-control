@@ -19,6 +19,42 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 18:25
+开发端：Windows Codex
+本轮目标：增强 Windows WGC/NV12 H.264 帧节奏诊断，避免把请求 60Hz、重复帧和真实新源帧混在一起判断。
+完成内容：
+- `scripts/windows/observe-windows-host-video.mjs` 新增 `freshFps`、`uniqueHelperFps`、`repeatedFrameRatio`、`repeatedFramePercent`、`repeatSignalFramePercent` 等 JSON 指标，并新增 `--minFreshFps`、`--minUniqueHelperFps`、`--maxRepeatedFrameRatio`、`--maxContentAgeMs` 阈值。
+- `scripts/windows/benchmark-windows-wgc-settings.mjs` 透传上述阈值，profile 摘要现在会直接显示实收 FPS、真实新帧 FPS、唯一 helper 源帧 FPS、重复帧比例和内容年龄。
+- `scripts/windows/test-windows-wgc-mode.mjs` 回归断言新指标存在，且 fresh/repeated 数量与总帧数一致。
+- 真实短测显示：60Hz/20M/NV12/`h264_nvenc`/repeat-full 会话协商 60Hz，但 1.5 秒实收 35 帧、约 22.94 FPS，真实新帧约 3.93 FPS、唯一 helper 源帧约 4.59 FPS、重复帧 82.9%、内容年龄最大 152ms。后续判断卡顿要同时看实收 FPS 和源帧 FPS。
+修改文件：
+- `scripts/windows/observe-windows-host-video.mjs`
+- `scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `scripts/windows/test-windows-wgc-mode.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/observe-windows-host-video.mjs`
+- `node --check scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `node --check scripts/windows/test-windows-wgc-mode.mjs`
+- `node scripts/windows/test-windows-wgc-mode.mjs --mockHelper --h264Bridge --h264Source nv12 --durationMs 1500 --minFrames 5 --timeoutMs 30000`
+- `node scripts/windows/test-windows-wgc-mode.mjs --durationMs 800 --minFrames 1 --timeoutMs 20000`
+- `node scripts/windows/observe-windows-host-video.mjs --screenMode mock --requireRealVideo false --durationMs 700 --minFrames 2 --minFreshFps 1 --maxRepeatedFrameRatio 0 --resourceSample false --json`
+- `node scripts/windows/benchmark-windows-wgc-settings.mjs --skipBuild --profile 60:20000:balanced --durationMs 1500 --timeoutMs 45000 --minFrames 5 --minFps 0 --maxGapMs 10000 --maxFrameAgeMs 1000 --resourceSample false --resourceSampleTree false --repeatLastFrame --h264Bridge --h264Source nv12 --h264Encoder h264_nvenc --json`
+- `node scripts/windows/test-windows-script-help.mjs --script observe-windows-host-video.mjs --script benchmark-windows-wgc-settings.mjs --script test-windows-wgc-mode.mjs`
+遗留问题：
+- 本轮只增强诊断和阈值，没有改变采集/编码管线。静态桌面下 WGC 源帧 FPS 仍明显低于请求 60Hz，真正优化仍要继续做 helper 原生硬编、动态画面源帧节奏和 Mac client 真连观感对照。
+下一步建议：
+- 后续 WGC/NV12/H.264 性能测试不要只看 `fps`，同时看 `freshFps`、`uniqueHelperFps`、`repeatedFramePercent` 和 `maxContentAgeMs`。
+- 若要把 60Hz 做成真实观感，优先推进 helper 原生硬编或 GPU 侧 NV12/编码，配合动态画面测试。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Mac 端真连观感对照时再配合。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 18:18
 开发端：Windows Codex
 本轮目标：让 Windows 恢复开工总览可显式把安全授权提示发送到 Agent Link Board，同时避免未 ready 时误发。

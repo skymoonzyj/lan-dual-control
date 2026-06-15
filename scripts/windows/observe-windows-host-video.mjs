@@ -25,8 +25,12 @@ const defaults = {
   timeoutMs: 15000,
   minFrames: 20,
   minFps: 8,
+  minFreshFps: 0,
+  minUniqueHelperFps: 0,
+  maxRepeatedFrameRatio: 1,
   maxGapMs: 1000,
   maxFrameAgeMs: 0,
+  maxContentAgeMs: 0,
   screenMode: "auto",
   preferredVideoCodec: "",
   h264Encoder: "",
@@ -64,7 +68,11 @@ Options:
   --qualityPreset <name>                smooth | balanced | sharp | custom
   --maxGapMs <ms>                       Fail if inter-frame receive gap is higher
   --minFps <n>                          Minimum observed FPS; use 0 for diagnostic-only fallback checks
+  --minFreshFps <n>                     Minimum non-repeated frame FPS; useful with WGC repeat-last-frame
+  --minUniqueHelperFps <n>              Minimum unique helper source FPS; useful for WGC source pacing
+  --maxRepeatedFrameRatio <n>           Max repeated frame ratio, 0-1 or 0-100 percent. Default: ${defaults.maxRepeatedFrameRatio}
   --maxFrameAgeMs <ms>                  Fail if video_frame.timestamp receive age is higher
+  --maxContentAgeMs <ms>                Fail if repeated WGC content age is higher
   --requireMonotonicTimestamp           Fail if video_frame.timestamp goes backwards
   --requireRealVideo false              Allow mock-svg frames for local smoke checks
   --screenMode <auto|ffmpeg|system|mock|wgc>
@@ -115,8 +123,12 @@ function parseArgs(argv) {
   args.timeoutMs = Number(args.timeoutMs) || defaults.timeoutMs;
   args.minFrames = Number(args.minFrames) || defaults.minFrames;
   args.minFps = Number.isFinite(Number(args.minFps)) ? Number(args.minFps) : defaults.minFps;
+  args.minFreshFps = Math.max(0, Number(args.minFreshFps) || defaults.minFreshFps);
+  args.minUniqueHelperFps = Math.max(0, Number(args.minUniqueHelperFps) || defaults.minUniqueHelperFps);
+  args.maxRepeatedFrameRatio = normalizeRatioArg(args.maxRepeatedFrameRatio, defaults.maxRepeatedFrameRatio);
   args.maxGapMs = Number(args.maxGapMs) || defaults.maxGapMs;
   args.maxFrameAgeMs = Math.max(0, Number(args.maxFrameAgeMs) || 0);
+  args.maxContentAgeMs = Math.max(0, Number(args.maxContentAgeMs) || 0);
   args.screenMode = String(args.screenMode || defaults.screenMode).trim().toLowerCase();
   args.preferredVideoCodec = String(args.preferredVideoCodec || "").trim().toLowerCase();
   args.h264Encoder = String(args.h264Encoder || "").trim().toLowerCase();
@@ -146,6 +158,17 @@ function parseArgs(argv) {
 
 function booleanArg(value) {
   return value === true || value === "true" || value === "1" || value === "yes";
+}
+
+function normalizeRatioArg(value, fallback = 1) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return fallback;
+  }
+  if (number > 1) {
+    return Math.max(0, Math.min(1, number / 100));
+  }
+  return Math.max(0, Math.min(1, number));
 }
 
 function normalizeWgcRepeatLastFrameMode(value) {
@@ -546,6 +569,11 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
   const requestedScreenModes = [...new Set(frames.map((frame) => frame.requestedScreenMode).filter(Boolean))];
   const h264Encoders = [...new Set(frames.map((frame) => frame.h264Encoder).filter(Boolean))];
   const repeatLastFrameModes = [...new Set(frames.map((frame) => frame.repeatLastFrameMode).filter(Boolean))];
+  const uniqueHelperFrameCount = new Set(helperFrameIds).size;
+  const freshFps = freshFrames > 0 ? (freshFrames * 1000) / elapsedMs : 0;
+  const repeatedFrameRatio = frames.length > 0 ? repeatedFrames / frames.length : 0;
+  const repeatSignalFrameRatio = frames.length > 0 ? repeatSignalFrames / frames.length : 0;
+  const uniqueHelperFps = uniqueHelperFrameCount > 0 ? (uniqueHelperFrameCount * 1000) / elapsedMs : 0;
   const uniqueQualities = [...new Set(
     frames
       .map((frame) => frame.jpegQuality)
@@ -568,7 +596,13 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
     repeatedFrames,
     repeatSignalFrames,
     freshFrames,
-    uniqueHelperFrameCount: new Set(helperFrameIds).size,
+    freshFps: Number(freshFps.toFixed(2)),
+    repeatedFrameRatio: Number(repeatedFrameRatio.toFixed(4)),
+    repeatedFramePercent: Number((repeatedFrameRatio * 100).toFixed(1)),
+    repeatSignalFrameRatio: Number(repeatSignalFrameRatio.toFixed(4)),
+    repeatSignalFramePercent: Number((repeatSignalFrameRatio * 100).toFixed(1)),
+    uniqueHelperFrameCount,
+    uniqueHelperFps: Number(uniqueHelperFps.toFixed(2)),
     timestampFrameCount: frameAges.length,
     minFrameAgeMs: frameAges.length ? Math.round(Math.min(...frameAges)) : null,
     avgFrameAgeMs: frameAges.length
@@ -606,6 +640,15 @@ function assertObservation(summary, args) {
   if (summary.fps < args.minFps) {
     problems.push(`fps ${summary.fps} < ${args.minFps}`);
   }
+  if (args.minFreshFps > 0 && summary.freshFps < args.minFreshFps) {
+    problems.push(`freshFps ${summary.freshFps} < ${args.minFreshFps}`);
+  }
+  if (args.minUniqueHelperFps > 0 && summary.uniqueHelperFps < args.minUniqueHelperFps) {
+    problems.push(`uniqueHelperFps ${summary.uniqueHelperFps} < ${args.minUniqueHelperFps}`);
+  }
+  if (summary.repeatedFrameRatio > args.maxRepeatedFrameRatio) {
+    problems.push(`repeatedFrameRatio ${summary.repeatedFrameRatio} > ${args.maxRepeatedFrameRatio}`);
+  }
   if (summary.maxGapMs > args.maxGapMs) {
     problems.push(`maxGapMs ${summary.maxGapMs} > ${args.maxGapMs}`);
   }
@@ -618,6 +661,13 @@ function assertObservation(summary, args) {
   }
   if (args.requireMonotonicTimestamp && !summary.timestampMonotonic) {
     problems.push(`timestamp monotonic violations ${summary.timestampMonotonicViolations}`);
+  }
+  if (args.maxContentAgeMs > 0) {
+    if (summary.maxContentAgeMs === null) {
+      problems.push("no WGC content age values were observed");
+    } else if (summary.maxContentAgeMs > args.maxContentAgeMs) {
+      problems.push(`maxContentAgeMs ${summary.maxContentAgeMs} > ${args.maxContentAgeMs}`);
+    }
   }
   if (args.expectSessionFps > 0 && summary.sessionFps !== args.expectSessionFps) {
     problems.push(`sessionFps ${summary.sessionFps} != ${args.expectSessionFps}`);
@@ -708,6 +758,10 @@ async function main() {
         qualityPreset: args.qualityPreset,
         useDefaultMaxScreenFps: args.useDefaultMaxScreenFps,
         durationMs: args.durationMs,
+        minFreshFps: args.minFreshFps,
+        minUniqueHelperFps: args.minUniqueHelperFps,
+        maxRepeatedFrameRatio: args.maxRepeatedFrameRatio,
+        maxContentAgeMs: args.maxContentAgeMs,
         screenMode: args.screenMode,
         h264Encoder: args.h264Encoder,
         resourceSample: args.resourceSample,
@@ -752,11 +806,11 @@ async function main() {
       console.log(JSON.stringify(result, null, 2));
     } else {
       print("OK", `Observed ${summary.frameCount} frames in ${summary.elapsedMs} ms`, args);
-      print("OK", `Average FPS: ${summary.fps} / max gap: ${summary.maxGapMs} ms / dropped: ${summary.droppedFrames}`, args);
+      print("OK", `Average FPS: ${summary.fps} / fresh FPS: ${summary.freshFps} / max gap: ${summary.maxGapMs} ms / dropped: ${summary.droppedFrames}`, args);
       if (summary.repeatedFrames > 0 || args.wgcRepeatLastFrame) {
         print(
           "INFO",
-          `WGC repeat: mode ${args.wgcRepeatLastFrameMode}, repeated ${summary.repeatedFrames} / signal ${summary.repeatSignalFrames} / fresh ${summary.freshFrames} / unique helper frames ${summary.uniqueHelperFrameCount} / content age max ${summary.maxContentAgeMs ?? "?"} ms`,
+          `WGC repeat: mode ${args.wgcRepeatLastFrameMode}, repeated ${summary.repeatedFrames} (${summary.repeatedFramePercent}%) / signal ${summary.repeatSignalFrames} (${summary.repeatSignalFramePercent}%) / fresh ${summary.freshFrames} @ ${summary.freshFps}fps / unique helper ${summary.uniqueHelperFrameCount} @ ${summary.uniqueHelperFps}fps / content age max ${summary.maxContentAgeMs ?? "?"} ms`,
           args,
         );
       }

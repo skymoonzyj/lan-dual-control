@@ -26,8 +26,12 @@ const defaults = {
   timeoutMs: 45000,
   minFrames: 1,
   minFps: 0,
+  minFreshFps: 0,
+  minUniqueHelperFps: 0,
+  maxRepeatedFrameRatio: 1,
   maxGapMs: 10000,
   maxFrameAgeMs: 1000,
+  maxContentAgeMs: 0,
   resourceSample: true,
   resourceSampleTree: true,
   resourceSampleIntervalMs: 1000,
@@ -61,8 +65,12 @@ Options:
   --durationMs <ms>                     Per-profile observation duration. Default: ${defaults.durationMs}
   --timeoutMs <ms>                      Per child command timeout. Default: ${defaults.timeoutMs}
   --minFrames <n> --minFps <n>          Diagnostic thresholds. Defaults: ${defaults.minFrames} frame, ${defaults.minFps} FPS
+  --minFreshFps <n>                     Minimum non-repeated frame FPS per profile
+  --minUniqueHelperFps <n>              Minimum unique WGC helper source FPS per profile
+  --maxRepeatedFrameRatio <n>           Max repeated frame ratio, 0-1 or 0-100 percent. Default: ${defaults.maxRepeatedFrameRatio}
   --maxGapMs <ms>                       Max receive gap before a profile fails. Default: ${defaults.maxGapMs}
   --maxFrameAgeMs <ms>                  Max timestamp receive age. Default: ${defaults.maxFrameAgeMs}
+  --maxContentAgeMs <ms>                Max repeated WGC content age; 0 disables. Default: ${defaults.maxContentAgeMs}
   --resourceSample false                Disable local host resource sampling
   --resourceSampleTree false            Sample only the host process, not helper children
   --repeatLastFrame                     Enable WGC repeat-last-frame pacing diagnostics
@@ -117,8 +125,12 @@ function parseArgs(argv) {
   args.timeoutMs = Math.max(10000, Number(args.timeoutMs) || defaults.timeoutMs);
   args.minFrames = Math.max(0, Number(args.minFrames) || defaults.minFrames);
   args.minFps = Math.max(0, Number(args.minFps) || defaults.minFps);
+  args.minFreshFps = Math.max(0, Number(args.minFreshFps) || defaults.minFreshFps);
+  args.minUniqueHelperFps = Math.max(0, Number(args.minUniqueHelperFps) || defaults.minUniqueHelperFps);
+  args.maxRepeatedFrameRatio = normalizeRatioArg(args.maxRepeatedFrameRatio, defaults.maxRepeatedFrameRatio);
   args.maxGapMs = Math.max(1000, Number(args.maxGapMs) || defaults.maxGapMs);
   args.maxFrameAgeMs = Math.max(0, Number(args.maxFrameAgeMs) || defaults.maxFrameAgeMs);
+  args.maxContentAgeMs = Math.max(0, Number(args.maxContentAgeMs) || defaults.maxContentAgeMs);
   args.resourceSample = booleanArg(args.resourceSample, true);
   args.resourceSampleTree = booleanArg(args.resourceSampleTree, true);
   args.resourceSampleIntervalMs = Math.max(250, Number(args.resourceSampleIntervalMs) || defaults.resourceSampleIntervalMs);
@@ -179,6 +191,17 @@ function booleanArg(value, defaultValue = false) {
   if (["1", "true", "yes", "on"].includes(normalized)) return true;
   if (["0", "false", "no", "off"].includes(normalized)) return false;
   return defaultValue;
+}
+
+function normalizeRatioArg(value, fallback = 1) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return fallback;
+  }
+  if (number > 1) {
+    return Math.max(0, Math.min(1, number / 100));
+  }
+  return Math.max(0, Math.min(1, number));
 }
 
 function addArg(argv, name, value) {
@@ -302,10 +325,18 @@ async function runProfile(args, profile, index) {
     String(args.minFrames),
     "--minFps",
     String(args.minFps),
+    "--minFreshFps",
+    String(args.minFreshFps),
+    "--minUniqueHelperFps",
+    String(args.minUniqueHelperFps),
+    "--maxRepeatedFrameRatio",
+    String(args.maxRepeatedFrameRatio),
     "--maxGapMs",
     String(args.maxGapMs),
     "--maxFrameAgeMs",
     String(args.maxFrameAgeMs),
+    "--maxContentAgeMs",
+    String(args.maxContentAgeMs),
     "--expectSessionFps",
     String(profile.fps),
     "--resourceSample",
@@ -392,11 +423,15 @@ function compactResult(result) {
     wgcH264Source: result.session?.wgcH264Source || result.discoveryScreen?.wgc?.h264BridgeSource || "",
     frames: observation.frameCount || 0,
     fps: observation.fps || 0,
+    freshFps: observation.freshFps || 0,
+    uniqueHelperFps: observation.uniqueHelperFps || 0,
     maxGapMs: observation.maxGapMs ?? null,
     avgPayloadBytes: observation.avgPayloadBytes || 0,
     freshFrames: observation.freshFrames || 0,
     repeatedFrames: observation.repeatedFrames || 0,
+    repeatedFramePercent: observation.repeatedFramePercent ?? null,
     repeatSignalFrames: observation.repeatSignalFrames || 0,
+    repeatSignalFramePercent: observation.repeatSignalFramePercent ?? null,
     uniqueHelperFrameCount: observation.uniqueHelperFrameCount || 0,
     maxFrameAgeMs: observation.maxFrameAgeMs ?? null,
     maxContentAgeMs: observation.maxContentAgeMs ?? null,
@@ -416,9 +451,11 @@ function printProfile(result) {
   console.log(
     `[OK] ${summary.profile.name}: session ${summary.sessionFps}Hz, ` +
     `${summary.capturePipeline || "unknown-pipeline"}${summary.h264Encoder ? `/${summary.h264Encoder}` : ""}, ` +
-    `${summary.frames} frames / ${summary.fps}fps, gap ${summary.maxGapMs}ms, ` +
+    `${summary.frames} frames / ${summary.fps}fps, fresh ${summary.freshFps}fps, ` +
+    `source ${summary.uniqueHelperFrameCount}@${summary.uniqueHelperFps}fps, gap ${summary.maxGapMs}ms, ` +
     `avg ${summary.avgPayloadBytes} bytes, repeated ${summary.repeatedFrames}` +
-    `${summary.repeatSignalFrames ? ` (${summary.repeatSignalFrames} signal)` : ""}, ` +
+    `${summary.repeatedFramePercent !== null ? ` (${summary.repeatedFramePercent}%)` : ""}` +
+    `${summary.repeatSignalFrames ? ` / signal ${summary.repeatSignalFrames} (${summary.repeatSignalFramePercent ?? "?"}%)` : ""}, ` +
     `content age max ${summary.maxContentAgeMs ?? "?"}ms, ` +
     `CPU avg/max ${summary.avgCpuPercent ?? "?"}/${summary.maxCpuPercent ?? "?"}%, ` +
     `WS peak ${summary.peakWorkingSetMiB ?? "?"} MiB`,
@@ -459,6 +496,10 @@ async function main() {
       durationMs: args.durationMs,
       resourceSample: args.resourceSample,
       resourceSampleTree: args.resourceSampleTree,
+      minFreshFps: args.minFreshFps,
+      minUniqueHelperFps: args.minUniqueHelperFps,
+      maxRepeatedFrameRatio: args.maxRepeatedFrameRatio,
+      maxContentAgeMs: args.maxContentAgeMs,
       repeatLastFrame: args.repeatLastFrame,
       repeatLastFrameMode: args.repeatLastFrameMode,
       h264Bridge: args.h264Bridge,
