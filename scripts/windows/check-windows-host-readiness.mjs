@@ -23,6 +23,7 @@ const defaults = {
   skipCurrentBuildCheck: false,
   requireOpen: false,
   strict: false,
+  boardSummary: false,
   json: false,
 };
 
@@ -54,6 +55,7 @@ function parseArgs(argv) {
       key === "skipCurrentBuildCheck" ||
       key === "requireOpen" ||
       key === "strict" ||
+      key === "boardSummary" ||
       key === "json"
     ) {
       args[key] = true;
@@ -83,6 +85,7 @@ function parseArgs(argv) {
   args.skipCurrentBuildCheck = booleanArg(args.skipCurrentBuildCheck);
   args.requireOpen = booleanArg(args.requireOpen);
   args.strict = booleanArg(args.strict);
+  args.boardSummary = booleanArg(args.boardSummary);
   args.json = booleanArg(args.json);
   return args;
 }
@@ -135,6 +138,7 @@ Options:
   --skipCurrentBuildCheck   Do not warn when running host build differs from current git.
   --requireOpen       Require LAN/firewall port probe to be open.
   --strict            Treat warnings as failure.
+  --boardSummary      Print a short secret-free Agent Link Board summary.
   --json              Print machine-readable JSON summary.
   --help, -h          Show this help without running checks.
 
@@ -165,12 +169,18 @@ function getGitBuildId() {
 }
 
 function print(kind, text, args) {
-  if (args.json) return;
+  if (args.json || args.boardSummary) return;
   console.log(`[${kind}] ${text}`);
 }
 
 function stripAnsi(text) {
   return String(text || "").replace(/\u001b\[[0-9;]*m/g, "");
+}
+
+function compactText(value, maxLength = 360) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 3)}...`;
 }
 
 function splitLines(text) {
@@ -432,6 +442,8 @@ async function checkRunningHostRuntime(args) {
         exitCode: errors.length === 0 ? 0 : 1,
         elapsedMs: Date.now() - startedAt,
         summary: args.requireOpen ? message : "Windows host is not running; runtime check skipped",
+        boardSummary: statusPayload.boardSummary || "",
+        macClientReadinessCommands: statusPayload.macClientReadinessCommands || [],
         warnings,
         errors,
       };
@@ -483,6 +495,8 @@ async function checkRunningHostRuntime(args) {
       exitCode: errors.length === 0 ? 0 : 1,
       elapsedMs: Date.now() - startedAt,
       summary,
+      boardSummary: statusPayload.boardSummary || "",
+      macClientReadinessCommands: statusPayload.macClientReadinessCommands || [],
       warnings,
       errors,
     };
@@ -497,10 +511,33 @@ async function checkRunningHostRuntime(args) {
       exitCode: errors.length === 0 ? 0 : 1,
       elapsedMs: Date.now() - startedAt,
       summary: args.requireOpen ? message : "Windows host is not running; runtime check skipped",
+      boardSummary: "",
+      macClientReadinessCommands: [],
       warnings,
       errors,
     };
   }
+}
+
+function makeReadinessBoardSummary(summary) {
+  const runtimeResult = summary.results.find((result) => result.label === "Windows host runtime") || null;
+  const state = summary.ok ? "passed" : "failed";
+  const mode = summary.strict ? "strict" : summary.args.profile;
+  const hasRuntimeBoardSummary = Boolean(runtimeResult?.boardSummary);
+  const runtimeText = hasRuntimeBoardSummary
+    ? compactText(runtimeResult.boardSummary)
+    : `runtime=${compactText(runtimeResult?.summary || "not checked", 180)}`;
+  let next = "";
+  if (!hasRuntimeBoardSummary) {
+    next = summary.macClientReadinessCommands[0]?.command
+      ? `Mac next: ${summary.macClientReadinessCommands[0].command}.`
+      : "Next: start Windows host safely with node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword, then rerun this readiness check.";
+  }
+  const safety = runtimeText.includes("Do not send passwords")
+    ? ""
+    : " Do not send passwords on Agent Link Board.";
+  const runtimeSentence = runtimeText.endsWith(".") ? runtimeText : `${runtimeText}.`;
+  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${runtimeSentence}${next ? ` ${next}` : ""}${safety}`;
 }
 
 function filterExpectedWarnings(label, warnings) {
@@ -667,6 +704,9 @@ async function main() {
   const failed = results.filter((result) => !result.ok);
   const warnings = results.flatMap((result) => result.warnings);
   const ok = failed.length === 0 && (!args.strict || warnings.length === 0);
+  const macClientReadinessCommands = results.flatMap((result) =>
+    Array.isArray(result.macClientReadinessCommands) ? result.macClientReadinessCommands : [],
+  );
 
   const summary = {
     ok,
@@ -687,23 +727,32 @@ async function main() {
       requireCurrentBuildId: args.requireCurrentBuildId,
       skipCurrentBuildCheck: args.skipCurrentBuildCheck,
       requireOpen: args.requireOpen,
+      boardSummary: args.boardSummary,
     },
     passed: results.filter((result) => result.ok).length,
     failed: failed.length,
     warnings: warnings.length,
+    macClientReadinessCommands,
     results: results.map((result) => ({
       label: result.label,
       ok: result.ok,
       exitCode: result.exitCode,
       elapsedMs: result.elapsedMs,
       summary: result.summary,
+      boardSummary: result.boardSummary || "",
+      macClientReadinessCommands: Array.isArray(result.macClientReadinessCommands)
+        ? result.macClientReadinessCommands
+        : [],
       warnings: result.warnings,
       errors: result.errors,
     })),
   };
+  summary.boardSummary = makeReadinessBoardSummary(summary);
 
   if (args.json) {
     console.log(JSON.stringify(summary, null, 2));
+  } else if (args.boardSummary) {
+    console.log(summary.boardSummary);
   } else {
     print(
       ok ? "OK" : "ERROR",
