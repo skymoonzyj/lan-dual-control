@@ -155,30 +155,65 @@ function parseJson(stdout, label) {
   }
 }
 
-function checkNativeDialogSuccess(tmp, timeoutMs) {
+function checkSystemDialogSuccess(tmp, timeoutMs) {
   const osascriptLogPath = join(tmp, "osascript-success.log");
   const swiftLogPath = join(tmp, "swift-success.log");
+  const secret = "fake-secret-from-system";
+  const result = runPromptSnippet({
+    PATH: `${tmp}:${process.env.PATH}`,
+    FAKE_OSASCRIPT_LOG: osascriptLogPath,
+    FAKE_SWIFT_LOG: swiftLogPath,
+    FAKE_OSASCRIPT_PASSWORD: secret,
+  }, timeoutMs);
+  const output = `${result.stdout || ""}\n${result.stderr || ""}`;
+  assert(result.status === 0, `system dialog success should exit 0.\n${output}`);
+  const payload = parseJson(result.stdout, "system dialog success");
+  assert(payload.ok === true, "system dialog success should report ok=true");
+  assert(payload.length === secret.length, "system dialog success should return the fake password length");
+  assert(payload.sha256 === createHash("sha256").update(secret).digest("hex"), "system dialog success should return the fake password hash");
+  assertNotIncludes(output, secret, "system dialog success output");
+  const osascriptLog = safeRead(osascriptLogPath);
+  const swiftLog = safeRead(swiftLogPath);
+  assertIncludes(output, "[ACTION] Password required", "system dialog success output");
+  assertIncludes(output, "look for the macOS password pop-up", "system dialog success output");
+  assertIncludes(osascriptLog, "beep", "system dialog success osascript log");
+  assertIncludes(osascriptLog, "beep-twice", "system dialog success osascript log");
+  assertIncludes(osascriptLog, "dialog", "system dialog success osascript log");
+  assertIncludes(osascriptLog, "system-ui-server", "system dialog success osascript log");
+  assertIncludes(osascriptLog, "system-events", "system dialog success osascript log");
+  assertIncludes(osascriptLog, "frontmost-process", "system dialog success osascript log");
+  assertIncludes(osascriptLog, "display-dialog", "system dialog success osascript log");
+  assertIncludes(osascriptLog, "hidden-answer", "system dialog success osascript log");
+  assertIncludes(osascriptLog, "caution-icon", "system dialog success osascript log");
+  assertNotIncludes(swiftLog, "swift", "system dialog success should not need native fallback");
+  console.log("[OK] Password helper rings and reads the visible system hidden dialog value");
+}
+
+function checkPreferNativeDialogSuccess(tmp, timeoutMs) {
+  const osascriptLogPath = join(tmp, "osascript-prefer-native.log");
+  const swiftLogPath = join(tmp, "swift-prefer-native.log");
   const secret = "fake-secret-from-native";
   const result = runPromptSnippet({
     PATH: `${tmp}:${process.env.PATH}`,
+    LAN_DUAL_PREFER_NATIVE_PASSWORD_DIALOG: "1",
     FAKE_OSASCRIPT_LOG: osascriptLogPath,
     FAKE_SWIFT_LOG: swiftLogPath,
     FAKE_SWIFT_PASSWORD: secret,
   }, timeoutMs);
   const output = `${result.stdout || ""}\n${result.stderr || ""}`;
-  assert(result.status === 0, `native dialog success should exit 0.\n${output}`);
-  const payload = parseJson(result.stdout, "native dialog success");
-  assert(payload.ok === true, "native dialog success should report ok=true");
-  assert(payload.length === secret.length, "native dialog success should return the fake password length");
-  assert(payload.sha256 === createHash("sha256").update(secret).digest("hex"), "native dialog success should return the fake password hash");
-  assertNotIncludes(output, secret, "native dialog success output");
+  assert(result.status === 0, `prefer native dialog success should exit 0.\n${output}`);
+  const payload = parseJson(result.stdout, "prefer native dialog success");
+  assert(payload.ok === true, "prefer native dialog success should report ok=true");
+  assert(payload.length === secret.length, "prefer native dialog success should return the fake password length");
+  assert(payload.sha256 === createHash("sha256").update(secret).digest("hex"), "prefer native dialog success should return the fake password hash");
+  assertNotIncludes(output, secret, "prefer native dialog success output");
   const osascriptLog = safeRead(osascriptLogPath);
   const swiftLog = safeRead(swiftLogPath);
-  assertIncludes(output, "[ACTION] Password required", "native dialog success output");
-  assertIncludes(osascriptLog, "beep", "native dialog success osascript log");
-  assertIncludes(osascriptLog, "beep-twice", "native dialog success osascript log");
-  assertIncludes(osascriptLog, "fronting", "native dialog success osascript log");
-  assertNotIncludes(osascriptLog, "dialog", "native dialog success should not use AppleScript dialog first");
+  assertIncludes(output, "[ACTION] Password required", "prefer native dialog success output");
+  assertIncludes(osascriptLog, "beep", "prefer native dialog success osascript log");
+  assertIncludes(osascriptLog, "beep-twice", "prefer native dialog success osascript log");
+  assertIncludes(osascriptLog, "fronting", "prefer native dialog success osascript log");
+  assertNotIncludes(osascriptLog, "dialog", "prefer native dialog success should not use AppleScript dialog first");
   assertIncludes(swiftLog, "swift", "native dialog success native log");
   assertIncludes(swiftLog, "appkit", "native dialog success native log");
   assertIncludes(swiftLog, "core-graphics", "native dialog success native log");
@@ -200,7 +235,7 @@ function checkNativeDialogSuccess(tmp, timeoutMs) {
   assertIncludes(swiftLog, "refocus-300", "native dialog success native log");
   assertIncludes(swiftLog, "ignore-other-apps", "native dialog success native log");
   assertIncludes(swiftLog, "unhide", "native dialog success native log");
-  console.log("[OK] Password helper rings and reads a frontmost native hidden dialog value");
+  console.log("[OK] Password helper can still use the frontmost native hidden dialog when requested");
 }
 
 function checkDialogCancel(tmp, timeoutMs) {
@@ -216,40 +251,35 @@ function checkDialogCancel(tmp, timeoutMs) {
   const payload = parseJson(result.stdout, "dialog cancel");
   assert(payload.ok === false, "dialog cancel should report ok=false");
   assertIncludes(payload.message, "Password prompt cancelled", "dialog cancel message");
-  assertIncludes(safeRead(join(tmp, "swift-cancel.log")), "swift", "dialog cancel should use native dialog first");
-  assertNotIncludes(safeRead(join(tmp, "osascript-cancel.log")), "dialog", "dialog cancel should not fall back after cancellation");
+  assertIncludes(safeRead(join(tmp, "osascript-cancel.log")), "dialog", "dialog cancel should use system dialog first");
+  assertNotIncludes(safeRead(join(tmp, "swift-cancel.log")), "swift", "dialog cancel should not fall back after cancellation");
   console.log("[OK] Password helper reports dialog cancellation cleanly");
 }
 
-function checkNativeFailureFallsBackToAppleScript(tmp, timeoutMs) {
+function checkSystemFailureFallsBackToNative(tmp, timeoutMs) {
   const swiftLogPath = join(tmp, "swift-fallback.log");
   const osascriptLogPath = join(tmp, "osascript-fallback.log");
-  const secret = "fake-secret-from-applescript-fallback";
+  const secret = "fake-secret-from-native-fallback";
   const result = runPromptSnippet({
     PATH: `${tmp}:${process.env.PATH}`,
-    FAKE_SWIFT_MODE: "fail",
+    FAKE_OSASCRIPT_MODE: "fail",
+    FAKE_SWIFT_PASSWORD: secret,
     FAKE_SWIFT_LOG: swiftLogPath,
-    FAKE_OSASCRIPT_PASSWORD: secret,
     FAKE_OSASCRIPT_LOG: osascriptLogPath,
   }, timeoutMs);
   const output = `${result.stdout || ""}\n${result.stderr || ""}`;
-  assert(result.status === 0, `native failure should fall back to AppleScript.\n${output}`);
-  const payload = parseJson(result.stdout, "native failure fallback");
-  assert(payload.ok === true, "native failure fallback should report ok=true");
-  assert(payload.length === secret.length, "native failure fallback should return the fallback password length");
-  assert(payload.sha256 === createHash("sha256").update(secret).digest("hex"), "native failure fallback should return the fallback password hash");
-  assertNotIncludes(output, secret, "native failure fallback output");
+  assert(result.status === 0, `system failure should fall back to native dialog.\n${output}`);
+  const payload = parseJson(result.stdout, "system failure fallback");
+  assert(payload.ok === true, "system failure fallback should report ok=true");
+  assert(payload.length === secret.length, "system failure fallback should return the fallback password length");
+  assert(payload.sha256 === createHash("sha256").update(secret).digest("hex"), "system failure fallback should return the fallback password hash");
+  assertNotIncludes(output, secret, "system failure fallback output");
   const osascriptLog = safeRead(osascriptLogPath);
   const swiftLog = safeRead(swiftLogPath);
-  assertIncludes(swiftLog, "swift", "native failure fallback native log");
-  assertIncludes(osascriptLog, "dialog", "native failure fallback osascript log");
-  assertIncludes(osascriptLog, "system-ui-server", "native failure fallback osascript log");
-  assertIncludes(osascriptLog, "system-events", "native failure fallback osascript log");
-  assertIncludes(osascriptLog, "frontmost-process", "native failure fallback osascript log");
-  assertIncludes(osascriptLog, "display-dialog", "native failure fallback osascript log");
-  assertIncludes(osascriptLog, "hidden-answer", "native failure fallback osascript log");
-  assertIncludes(osascriptLog, "caution-icon", "native failure fallback osascript log");
-  console.log("[OK] Password helper falls back to system dialog only when native AppKit cannot open");
+  assertIncludes(osascriptLog, "dialog", "system failure fallback osascript log");
+  assertIncludes(swiftLog, "swift", "system failure fallback native log");
+  assertIncludes(swiftLog, "appkit", "system failure fallback native log");
+  console.log("[OK] Password helper falls back to native AppKit only when the system dialog cannot open");
 }
 
 function checkDialogFailureNoTty(tmp, timeoutMs) {
@@ -284,9 +314,10 @@ function main() {
   try {
     makeFakeOsascript(tmp);
     makeFakeSwift(tmp);
-    checkNativeDialogSuccess(tmp, args.timeoutMs);
+    checkSystemDialogSuccess(tmp, args.timeoutMs);
+    checkPreferNativeDialogSuccess(tmp, args.timeoutMs);
     checkDialogCancel(tmp, args.timeoutMs);
-    checkNativeFailureFallsBackToAppleScript(tmp, args.timeoutMs);
+    checkSystemFailureFallsBackToNative(tmp, args.timeoutMs);
     checkDialogFailureNoTty(tmp, args.timeoutMs);
     console.log("[OK] Mac password prompt helper checks passed");
   } finally {

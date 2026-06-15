@@ -21,19 +21,14 @@ export async function promptPassword({
   printPromptNotice(output);
   if (!dialogDisabled()) {
     const dialogErrors = [];
-    if (!nativeDialogDisabled()) {
+    for (const dialog of orderedDialogAttempts()) {
+      if (dialog.disabled()) continue;
       try {
-        return await promptWithNativeMacDialog({ title, message, prompt, timeoutMs });
+        return await dialog.prompt({ title, message, prompt, timeoutMs });
       } catch (error) {
         if (isDialogCancellation(error)) throw error;
-        dialogErrors.push(`native macOS dialog: ${error.message}`);
+        dialogErrors.push(`${dialog.label}: ${error.message}`);
       }
-    }
-    try {
-      return await promptWithMacDialog({ title, message, prompt, timeoutMs });
-    } catch (error) {
-      if (isDialogCancellation(error)) throw error;
-      dialogErrors.push(`AppleScript dialog: ${error.message}`);
     }
     if (allowTerminalFallback && canPromptInTerminal(output)) {
       safeWrite(output, `[WARN] macOS password dialog failed: ${dialogErrors.join("; ")}\n`);
@@ -66,6 +61,28 @@ function nativeDialogDisabled() {
   return process.env.LAN_DUAL_DISABLE_NATIVE_PASSWORD_DIALOG === "1";
 }
 
+function systemDialogDisabled() {
+  return process.env.LAN_DUAL_DISABLE_SYSTEM_PASSWORD_DIALOG === "1";
+}
+
+function preferNativeDialog() {
+  return process.env.LAN_DUAL_PREFER_NATIVE_PASSWORD_DIALOG === "1";
+}
+
+function orderedDialogAttempts() {
+  const systemDialog = {
+    label: "system macOS dialog",
+    disabled: systemDialogDisabled,
+    prompt: promptWithMacDialog,
+  };
+  const nativeDialog = {
+    label: "native macOS dialog",
+    disabled: nativeDialogDisabled,
+    prompt: promptWithNativeMacDialog,
+  };
+  return preferNativeDialog() ? [nativeDialog, systemDialog] : [systemDialog, nativeDialog];
+}
+
 function frontingDisabled() {
   return process.env.LAN_DUAL_DISABLE_PASSWORD_FRONTING === "1";
 }
@@ -80,7 +97,7 @@ function canPromptInTerminal(output) {
 
 function printPromptNotice(output) {
   if (promptNoticeDisabled()) return;
-  safeWrite(output, "[ACTION] Password required: a secure macOS password window is opening now.\n");
+  safeWrite(output, "[ACTION] Password required: look for the macOS password pop-up in front of this screen.\n");
 }
 
 function promptWithNativeMacDialog({ title, message, prompt, timeoutMs }) {
@@ -448,8 +465,8 @@ Shared helper used by Mac scripts that need a password prompt.
 
 Behavior:
   - Rings before asking for a password.
-  - Prints a short action notice, then opens a native AppKit frontmost hidden password dialog for --promptPassword callers.
-  - Falls back to a system macOS hidden dialog only if the native dialog cannot open.
+  - Prints a short action notice, then opens a visible macOS hidden password dialog for --promptPassword callers.
+  - Can use the native AppKit high-level dialog for local debugging via LAN_DUAL_PREFER_NATIVE_PASSWORD_DIALOG=1.
   - Does not fall back to terminal input unless explicitly allowed for local manual fallback.
   - Never prints the password.
 
@@ -457,7 +474,9 @@ Environment:
   LAN_DUAL_DISABLE_PASSWORD_BEEP=1             Disable the attention sound.
   LAN_DUAL_DISABLE_PASSWORD_PROMPT_NOTICE=1    Disable the non-secret action notice.
   LAN_DUAL_DISABLE_PASSWORD_DIALOG=1           Disable macOS dialog for tests.
+  LAN_DUAL_DISABLE_SYSTEM_PASSWORD_DIALOG=1    Disable the system macOS dialog for tests.
   LAN_DUAL_DISABLE_NATIVE_PASSWORD_DIALOG=1    Disable the native AppKit dialog for tests.
+  LAN_DUAL_PREFER_NATIVE_PASSWORD_DIALOG=1     Prefer the native AppKit dialog instead of the system dialog.
   LAN_DUAL_DISABLE_PASSWORD_FRONTING=1         Disable extra foreground activation for tests.
   LAN_DUAL_ALLOW_TERMINAL_PASSWORD_PROMPT=1    Allow hidden terminal fallback if the dialog fails.
 `);

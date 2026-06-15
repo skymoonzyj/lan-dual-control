@@ -17,6 +17,45 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Mac Codex
+
+日期：2026-06-15 18:48
+开发端：Mac Codex
+本轮目标：按用户反馈“没有看到显示输入密码的地方”，继续加固 Mac 侧 `--promptPassword` 的真实可见性。
+完成内容：
+- `scripts/mac/password-prompt.mjs` 调整弹窗优先级：每次需要人工密码时仍先播放两声提示音并输出不含密码的 `[ACTION]` 提示，但默认优先打开 macOS 系统隐藏密码弹窗；系统弹窗打不开时，才尝试原生 AppKit 前台高层级隐藏密码框作为备用。
+- 用户取消系统弹窗后会直接停止，不会再弹第二个备用窗口，避免“我明明点了取消又冒出一个”的困惑。
+- 保留 `LAN_DUAL_PREFER_NATIVE_PASSWORD_DIALOG=1` 作为本地调试开关，可显式优先测试原生 AppKit 高层级窗口；默认仍禁止终端隐藏输入 fallback，避免用户找不到输入位置。
+- `scripts/mac/test-mac-password-prompt.mjs` 同步覆盖默认系统弹窗成功、显式原生弹窗成功、取消不 fallback、系统失败后原生 fallback、全部失败和密码不泄露。
+- Mac host/client README、当前状态、下一步和任务板同步新行为：默认系统密码弹窗优先，原生高层级窗口备用，密码不进 argv/日志/Agent Link Board。
+修改文件：
+- `scripts/mac/password-prompt.mjs`
+- `scripts/mac/test-mac-password-prompt.mjs`
+- `apps/mac-host/README.md`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/password-prompt.mjs`
+- `node --check scripts/mac/test-mac-password-prompt.mjs`
+- `node --check scripts/mac/start-mac-host.mjs`
+- `node --check scripts/mac/run-mac-client-formal-smoke.mjs`
+- `node scripts/mac/test-mac-password-prompt.mjs --timeoutMs 10000`
+- `node scripts/mac/test-mac-readiness-prompt-password.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 30000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" .`
+遗留问题：
+- 本轮不主动弹真实正式密码框，避免在非正式验收时打扰用户。下一次真实 `--promptPassword` 应先响两声，再出现 macOS 系统隐藏密码弹窗；如果系统策略仍遮挡弹窗，再考虑短生命周期 `.app` 包方案。
+下一步建议：
+- 需要正式密码时优先用现有 `--promptPassword` 入口，不要把密码写到命令或联络板。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
 ## 2026-06-15 Windows Codex
 
 日期：2026-06-15 18:36
