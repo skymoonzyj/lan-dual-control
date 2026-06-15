@@ -106,9 +106,12 @@ function parseArgs(argv) {
   args.h264Encoder = String(args.h264Encoder || "").trim().toLowerCase();
   args.wgcHelper = String(args.wgcHelper || "").trim();
   args.wgcH264Bridge = Boolean(args.wgcH264Bridge);
-  args.wgcH264Source = normalizeMode(args.wgcH264Source, ["jpeg", "raw-bgra", "bgra", "raw"], "");
+  args.wgcH264Source = normalizeMode(args.wgcH264Source, ["jpeg", "raw-bgra", "bgra", "raw", "nv12", "raw-nv12", "raw_nv12", "yuv", "yuv420"], "");
   if (args.wgcH264Source === "bgra" || args.wgcH264Source === "raw") {
     args.wgcH264Source = "raw-bgra";
+  }
+  if (args.wgcH264Source === "raw-nv12" || args.wgcH264Source === "raw_nv12" || args.wgcH264Source === "yuv" || args.wgcH264Source === "yuv420") {
+    args.wgcH264Source = "nv12";
   }
   args.wgcRepeatLastFrame = Boolean(args.wgcRepeatLastFrame);
   args.wgcRepeatLastFrameMode = normalizeMode(args.wgcRepeatLastFrameMode, ["full", "signal"], "");
@@ -136,7 +139,7 @@ Options:
   --h264Encoder <name>    Optional FFmpeg H.264 encoder, for example h264_nvenc
   --wgcHelper <path>      Native Windows Graphics Capture helper executable
   --wgcH264Bridge         In WGC mode, encode helper JPEG frames through FFmpeg H.264
-  --wgcH264Source <src>   jpeg | raw-bgra. Default: LAN_DUAL_WINDOWS_WGC_H264_SOURCE or jpeg
+  --wgcH264Source <src>   jpeg | raw-bgra | nv12. Default: LAN_DUAL_WINDOWS_WGC_H264_SOURCE or jpeg
   --wgcRepeatLastFrame    In WGC mode, repeat the last helper frame for steady pacing
   --wgcRepeatLastFrameMode <mode>  full | signal
   --audioMode <mode>      mock | wasapi | dshow

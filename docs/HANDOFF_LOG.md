@@ -19,6 +19,52 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 12:20
+开发端：Windows Codex
+本轮目标：把 WGC H.264 bridge 从 raw BGRA 继续推进到 NV12，降低 helper 到 host 的 raw 像素 payload，并补齐启动/观察/基准入口。
+完成内容：
+- `apps/windows-wgc-helper` 新增 `--outputFormat nv12` / `LAN_DUAL_WGC_OUTPUT_FORMAT=nv12`；NV12 输出会调整为偶数宽高，payload 大小为 `width*height*3/2`。
+- Windows host 新增 `LAN_DUAL_WINDOWS_WGC_H264_SOURCE=nv12` / `--wgcH264Source nv12`，会让 helper 使用 `binary-frame-v1` 输出 raw NV12，并用 FFmpeg `rawvideo -pix_fmt nv12` 接入 H.264/NVENC。
+- `/discovery.capabilities.screen.wgc.h264BridgeSource` 和 session/frame 的 `capturePipeline` 可显示 `windows-wgc-helper-nv12-ffmpeg-h264`。
+- `observe-windows-host-video`、`start-windows-host`、`start-windows-host.ps1`、`benchmark-windows-wgc-settings` 均支持 `nv12` 入口；基准脚本也可直接加 `--h264Bridge --h264Source nv12 --h264Encoder h264_nvenc`。
+- `test-windows-wgc-helper` 新增 helper mock binary NV12 合同；`test-windows-wgc-mode` 新增 mock NV12 H.264 bridge 合同。
+修改文件：
+- `apps/windows-wgc-helper/src/main.rs`
+- `apps/windows-host/src/windows-screen-capture.mjs`
+- `scripts/windows/observe-windows-host-video.mjs`
+- `scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `scripts/windows/test-windows-wgc-helper.mjs`
+- `scripts/windows/test-windows-wgc-mode.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `cargo fmt --check` / `cargo check --quiet` in `apps/windows-wgc-helper`
+- `npm.cmd run check` in `apps/windows-host`
+- `node --check` 覆盖本轮改动的 Windows 脚本
+- `node scripts/windows/test-windows-wgc-helper.mjs --skipRealCapture --skipRealHostIntegration --observerDurationMs 1400 --minObserverFrames 2`：helper build/probe、mock JPEG、mock binary BGRA 192 bytes、mock binary NV12 72 bytes、mock Node host JPEG 43 帧通过。
+- `node scripts/windows/test-windows-wgc-mode.mjs --mockHelper --h264Bridge --durationMs 2200 --minFrames 2 --h264Source nv12 --width 320 --height 180`：66 帧通过，pipeline=`windows-wgc-helper-nv12-ffmpeg-h264`。
+- raw-bgra 回归同脚本 67 帧通过。
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`：启动助手 dry-run/status/临时 host 自测通过，并验证 `--wgcH264Source nv12`。
+- 真实 helper + `h264_nvenc` NV12 短观察：`320x180` 2.2 秒 67 帧、约 30.12 FPS、fresh helper frame 42；`1280x720` 2.2 秒 67 帧、约 30.06 FPS、fresh helper frame 12、repeat full 55、最大间隔 60ms，pipeline=`windows-wgc-helper-nv12-ffmpeg-h264`。
+- `benchmark-windows-wgc-settings --skipBuild --profile 30:50000:balanced --durationMs 1200 --minFrames 1 --resourceSample false --resourceSampleTree false --repeatLastFrame --h264Bridge --h264Source nv12 --h264Encoder h264_nvenc --width 320 --height 180`：36 帧、约 29.65 FPS，确认基准入口可用。
+遗留问题：
+- NV12 当前仍是 D3D11 staging CPU readback 后 CPU 转 NV12，再交给 FFmpeg/NVENC，不是最终的 GPU 零拷贝或 helper 原生硬编。
+- 还未做 Mac client 真连 Windows host 的主观观感、延迟和资源对照。
+下一步建议：
+- 推进 helper 原生硬编或 GPU 侧 NV12/VideoProcessor 转换，减少 CPU readback/转换开销。
+- 用 Mac client 真实连接 Windows host，对比 `ffmpeg-h264`、WGC JPEG bridge、WGC raw-bgra binary、WGC NV12 binary 的画质、延迟、带宽和 CPU。
+是否改了协议：否。只改 Windows host 与 WGC helper 的内部 stdout 合同和启动/观察参数，远控 WebSocket 协议未变。
+是否需要另一端配合：代码改动本身不需要；真连观感和资源验收需要 Mac client 连接 Windows host。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 11:35
 开发端：Windows Codex
 本轮目标：把 WGC raw-bgra H.264 bridge 的 helper 内部传输从 JSON/base64 推进到二进制 payload，减少 raw 像素承载开销。

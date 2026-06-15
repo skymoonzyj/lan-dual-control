@@ -12,7 +12,7 @@ param(
   [string] $H264Encoder = "",
   [string] $WgcHelper = "",
   [switch] $WgcH264Bridge,
-  [ValidateSet("", "jpeg", "raw-bgra", "bgra", "raw")]
+  [ValidateSet("", "jpeg", "raw-bgra", "bgra", "raw", "nv12", "raw-nv12", "raw_nv12", "yuv", "yuv420")]
   [string] $WgcH264Source = "",
   [switch] $WgcRepeatLastFrame,
   [ValidateSet("", "full", "signal")]

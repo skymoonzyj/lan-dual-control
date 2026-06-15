@@ -34,6 +34,9 @@ const defaults = {
   resourceSampleTimeoutMs: 4000,
   repeatLastFrame: false,
   repeatLastFrameMode: "full",
+  h264Bridge: false,
+  h264Source: "jpeg",
+  h264Encoder: "",
   skipBuild: false,
   json: false,
   verbose: false,
@@ -64,6 +67,9 @@ Options:
   --resourceSampleTree false            Sample only the host process, not helper children
   --repeatLastFrame                     Enable WGC repeat-last-frame pacing diagnostics
   --repeatLastFrameMode <full|signal>   full resends JPEG, signal sends repeat markers
+  --h264Bridge                          Request H.264 and enable the WGC helper -> FFmpeg bridge
+  --h264Source <jpeg|raw-bgra|nv12>     Helper source for --h264Bridge. Default: ${defaults.h264Source}
+  --h264Encoder <name>                  Optional FFmpeg H.264 encoder, for example h264_nvenc
   --json                                Print JSON result
   --verbose                             Print child command stderr/stdout on failure
   --help, -h                            Show this help without starting a host
@@ -119,6 +125,9 @@ function parseArgs(argv) {
   args.resourceSampleTimeoutMs = Math.max(1000, Number(args.resourceSampleTimeoutMs) || defaults.resourceSampleTimeoutMs);
   args.repeatLastFrame = booleanArg(args.repeatLastFrame);
   args.repeatLastFrameMode = normalizeRepeatLastFrameMode(args.repeatLastFrameMode);
+  args.h264Bridge = booleanArg(args.h264Bridge);
+  args.h264Source = normalizeH264Source(args.h264Source);
+  args.h264Encoder = String(args.h264Encoder || "").trim().toLowerCase();
   args.skipBuild = booleanArg(args.skipBuild);
   args.json = booleanArg(args.json);
   args.verbose = booleanArg(args.verbose);
@@ -150,6 +159,17 @@ function normalizeRepeatLastFrameMode(value) {
     return "signal";
   }
   return "full";
+}
+
+function normalizeH264Source(value) {
+  const source = String(value ?? defaults.h264Source).trim().toLowerCase();
+  if (["raw", "bgra", "raw-bgra", "raw_bgra"].includes(source)) {
+    return "raw-bgra";
+  }
+  if (["nv12", "raw-nv12", "raw_nv12", "yuv", "yuv420"].includes(source)) {
+    return "nv12";
+  }
+  return "jpeg";
 }
 
 function booleanArg(value, defaultValue = false) {
@@ -302,6 +322,19 @@ async function runProfile(args, profile, index) {
     args.repeatLastFrameMode,
     "--json",
   ];
+  if (args.h264Bridge) {
+    argv.push(
+      "--preferredVideoCodec",
+      "h264",
+      "--wgcH264Bridge",
+      "true",
+      "--wgcH264Source",
+      args.h264Source,
+    );
+    if (args.h264Encoder) {
+      argv.push("--h264Encoder", args.h264Encoder);
+    }
+  }
 
   const result = await runCommand(process.execPath, argv, {
     cwd: repoRoot,
@@ -354,6 +387,9 @@ function compactResult(result) {
     ok: result.ok,
     profile: result.profile,
     sessionFps: result.session?.fps || 0,
+    capturePipeline: result.session?.capturePipeline || "",
+    h264Encoder: result.session?.h264Encoder || "",
+    wgcH264Source: result.session?.wgcH264Source || result.discoveryScreen?.wgc?.h264BridgeSource || "",
     frames: observation.frameCount || 0,
     fps: observation.fps || 0,
     maxGapMs: observation.maxGapMs ?? null,
@@ -379,6 +415,7 @@ function printProfile(result) {
   }
   console.log(
     `[OK] ${summary.profile.name}: session ${summary.sessionFps}Hz, ` +
+    `${summary.capturePipeline || "unknown-pipeline"}${summary.h264Encoder ? `/${summary.h264Encoder}` : ""}, ` +
     `${summary.frames} frames / ${summary.fps}fps, gap ${summary.maxGapMs}ms, ` +
     `avg ${summary.avgPayloadBytes} bytes, repeated ${summary.repeatedFrames}` +
     `${summary.repeatSignalFrames ? ` (${summary.repeatSignalFrames} signal)` : ""}, ` +
@@ -424,6 +461,9 @@ async function main() {
       resourceSampleTree: args.resourceSampleTree,
       repeatLastFrame: args.repeatLastFrame,
       repeatLastFrameMode: args.repeatLastFrameMode,
+      h264Bridge: args.h264Bridge,
+      h264Source: args.h264Bridge ? args.h264Source : "",
+      h264Encoder: args.h264Bridge ? args.h264Encoder : "",
     },
     profiles: results.map(compactResult),
     results,

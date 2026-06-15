@@ -322,6 +322,43 @@ async function checkMockBinaryRawFrames(args) {
   return { hello, frameCount: frames.length, payloadBytes: frames[0].payloadBuffer.length };
 }
 
+async function checkMockBinaryNv12Frames(args) {
+  const result = await runRequired(helperExe, [
+    "--mock",
+    "--frames",
+    "2",
+    "--fps",
+    "30",
+    "--width",
+    "8",
+    "--height",
+    "6",
+    "--outputFormat",
+    "nv12",
+    "--protocol",
+    "binary-frame-v1",
+  ], {
+    cwd: helperDir,
+    timeoutMs: args.timeoutMs,
+  });
+  const messages = parseBinaryFrames(result.stdoutBuffer);
+  const hello = messages.find((line) => line.type === "hello");
+  const frames = messages.filter((line) => line.type === "frame");
+  assert(hello?.protocol === "binary-frame-v1", `missing helper binary protocol: ${JSON.stringify(hello)}`);
+  assert(hello?.codec === "raw-nv12", `expected raw-nv12 hello, got ${JSON.stringify(hello)}`);
+  assert(hello?.pixelFormat === "nv12", `expected nv12 pixel format, got ${JSON.stringify(hello)}`);
+  assert(hello?.encoding === "binary", `expected binary hello encoding, got ${JSON.stringify(hello)}`);
+  assert(frames.length === 2, `expected 2 binary NV12 mock frames, got ${frames.length}`);
+  for (const frame of frames) {
+    assert(frame.codec === "raw-nv12", `expected raw-nv12 binary frame, got ${JSON.stringify(frame)}`);
+    assert(frame.pixelFormat === "nv12", `expected nv12 binary frame, got ${JSON.stringify(frame)}`);
+    assert(frame.encoding === "binary", `expected binary frame encoding, got ${JSON.stringify(frame)}`);
+    assert(frame.payloadBuffer?.length === 8 * 6 * 3 / 2, `binary NV12 payload length mismatch: ${frame.payloadBuffer?.length}`);
+    assert(Number(frame.payloadBytes) === frame.payloadBuffer.length, "binary NV12 payloadBytes did not match actual bytes");
+  }
+  return { hello, frameCount: frames.length, payloadBytes: frames[0].payloadBuffer.length };
+}
+
 function assertJpegBase64(frame, label) {
   const bytes = Buffer.from(String(frame.dataBase64 || ""), "base64");
   assert(bytes.length > 32, `${label} JPEG payload too small: ${bytes.length} bytes`);
@@ -499,10 +536,11 @@ async function main() {
   const probe = await probeHelper(args);
   const mock = await checkMockFrames(args);
   const mockBinaryRaw = await checkMockBinaryRawFrames(args);
+  const mockBinaryNv12 = await checkMockBinaryNv12Frames(args);
   const realCapture = args.skipRealCapture ? null : await checkRealCaptureFrames(args);
   const mockObserver = args.skipObserver ? null : await checkMockNodeHostIntegration(args);
   const realHost = args.skipObserver || args.skipRealHostIntegration ? null : await checkRealNodeHostIntegration(args);
-  const summary = { ok: true, helperPath, probe, mock, mockBinaryRaw, realCapture, mockObserver, realHost };
+  const summary = { ok: true, helperPath, probe, mock, mockBinaryRaw, mockBinaryNv12, realCapture, mockObserver, realHost };
   if (args.json) {
     console.log(JSON.stringify(summary, null, 2));
   } else {
@@ -510,6 +548,7 @@ async function main() {
     console.log(`[OK] WGC probe: ${probe.displayName || "display"} ${probe.width}x${probe.height}`);
     console.log(`[OK] Mock contract frames: ${mock.frameCount}`);
     console.log(`[OK] Mock binary raw BGRA frames: ${mockBinaryRaw.frameCount}, ${mockBinaryRaw.payloadBytes} bytes each`);
+    console.log(`[OK] Mock binary raw NV12 frames: ${mockBinaryNv12.frameCount}, ${mockBinaryNv12.payloadBytes} bytes each`);
     if (realCapture) {
       console.log(`[OK] Real WGC capture: ${realCapture.frameCount} frame(s) ${realCapture.width}x${realCapture.height} from ${realCapture.sourceWidth}x${realCapture.sourceHeight}, q=${realCapture.jpegQuality}, ${realCapture.payloadBytes} bytes first JPEG`);
     }

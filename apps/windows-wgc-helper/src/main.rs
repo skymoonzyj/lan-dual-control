@@ -66,6 +66,7 @@ struct Args {
 enum OutputFormat {
     Jpeg,
     Bgra,
+    Nv12,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,6 +80,7 @@ impl OutputFormat {
         match self {
             OutputFormat::Jpeg => "jpeg",
             OutputFormat::Bgra => "raw-bgra",
+            OutputFormat::Nv12 => "raw-nv12",
         }
     }
 
@@ -86,6 +88,7 @@ impl OutputFormat {
         match self {
             OutputFormat::Jpeg => "bgr24",
             OutputFormat::Bgra => "bgra",
+            OutputFormat::Nv12 => "nv12",
         }
     }
 }
@@ -142,7 +145,7 @@ Options:
   --fps <n>           Frame pacing target. Default: LAN_DUAL_WGC_FPS or 30
   --width <px>        Requested width. Default: LAN_DUAL_WGC_WIDTH or 1280
   --height <px>       Requested height. Default: LAN_DUAL_WGC_HEIGHT or 720
-  --outputFormat <f>  jpeg | bgra. Default: LAN_DUAL_WGC_OUTPUT_FORMAT or jpeg
+  --outputFormat <f>  jpeg | bgra | nv12. Default: LAN_DUAL_WGC_OUTPUT_FORMAT or jpeg
   --protocol <p>      json-lines-v1 | binary-frame-v1. Default: LAN_DUAL_WGC_HELPER_PROTOCOL or json-lines-v1
   --jpegQuality <n>   JPEG quality as 0.01-1.0 or 1-100. Default: LAN_DUAL_WGC_JPEG_QUALITY or 0.62
   --displayX <px>     Monitor lookup point X. Default: LAN_DUAL_WGC_DISPLAY_X or 0
@@ -152,7 +155,7 @@ Options:
 Description:
   This helper is the native Windows side of LAN_DUAL_WINDOWS_WGC_HELPER.
   Default capture mode reads Direct3D11CaptureFrame surfaces, copies them to a
-  CPU-readable D3D11 staging texture, and emits JPEG or raw BGRA frames over
+  CPU-readable D3D11 staging texture, and emits JPEG, raw BGRA, or NV12 frames over
   json-lines-v1 or binary-frame-v1 consumed by apps/windows-host.
 "#
     );
@@ -237,6 +240,7 @@ fn parse_output_format(value: &str) -> Result<OutputFormat, String> {
     match value.trim().to_ascii_lowercase().as_str() {
         "" | "jpeg" | "jpg" | "mjpeg" => Ok(OutputFormat::Jpeg),
         "bgra" | "raw-bgra" | "raw_bgra" | "raw" => Ok(OutputFormat::Bgra),
+        "nv12" | "raw-nv12" | "raw_nv12" | "yuv420" | "yuv" => Ok(OutputFormat::Nv12),
         other => Err(format!("Unsupported --outputFormat: {other}")),
     }
 }
@@ -279,26 +283,33 @@ fn print_binary_frame(mut header: serde_json::Value, payload: &[u8]) -> Result<(
 }
 
 fn run_mock(args: &Args) -> Result<(), String> {
+    let (frame_width, frame_height) = output_dimensions_for_format(
+        args.output_format,
+        args.width.max(1) as u32,
+        args.height.max(1) as u32,
+        args.width.max(1) as u32,
+        args.height.max(1) as u32,
+    )?;
     print_json_line(json!({
         "type": "hello",
         "backend": "rust-wgc-helper-contract",
         "codec": args.output_format.helper_codec(),
         "encoding": args.helper_protocol.frame_encoding(),
         "protocol": args.helper_protocol.label(),
-        "width": args.width,
-        "height": args.height,
+        "width": frame_width,
+        "height": frame_height,
         "pixelFormat": args.output_format.pixel_format(),
         "fps": args.fps,
         "jpegQuality": args.jpeg_quality,
     }))?;
 
-    let raw_mock_frame = if args.output_format == OutputFormat::Bgra {
-        Some(make_mock_bgra_frame(
-            args.width.max(1) as u32,
-            args.height.max(1) as u32,
-        ))
-    } else {
-        None
+    let raw_mock_frame = match args.output_format {
+        OutputFormat::Bgra => Some(make_mock_bgra_frame(frame_width, frame_height)),
+        OutputFormat::Nv12 => {
+            let bgra = make_mock_bgra_frame(frame_width, frame_height);
+            Some(bgra_to_nv12(frame_width, frame_height, &bgra)?)
+        }
+        OutputFormat::Jpeg => None,
     };
     let jpeg_mock_frame = base64::engine::general_purpose::STANDARD
         .decode(ONE_PIXEL_JPEG)
@@ -316,10 +327,10 @@ fn run_mock(args: &Args) -> Result<(), String> {
             "type": "frame",
             "frameId": frame_id,
             "timestamp": now_iso_like(),
-            "width": args.width,
-            "height": args.height,
-            "sourceWidth": args.width,
-            "sourceHeight": args.height,
+            "width": frame_width,
+            "height": frame_height,
+            "sourceWidth": frame_width,
+            "sourceHeight": frame_height,
             "codec": args.output_format.helper_codec(),
             "encoding": args.helper_protocol.frame_encoding(),
             "pixelFormat": args.output_format.pixel_format(),
@@ -456,12 +467,13 @@ unsafe fn capture_wgc(args: &Args) -> Result<(), String> {
         .map_err(|error| format!("CreateCaptureSession failed: {error}"))?;
     let _ = session.SetIsCursorCaptureEnabled(false);
     let _ = session.SetIsBorderRequired(false);
-    let (output_width, output_height) = target_dimensions(
+    let (output_width, output_height) = output_dimensions_for_format(
+        args.output_format,
         objects.item_size.Width.max(1) as u32,
         objects.item_size.Height.max(1) as u32,
         args.width.max(1) as u32,
         args.height.max(1) as u32,
-    );
+    )?;
 
     print_json_line(json!({
         "type": "hello",
@@ -642,12 +654,13 @@ unsafe fn capture_frame_to_output(
         .map_err(|error| format!("Direct3D11CaptureFrame.ContentSize failed: {error}"))?;
     let source_width = (content_size.Width.max(1) as u32).min(desc.Width.max(1));
     let source_height = (content_size.Height.max(1) as u32).min(desc.Height.max(1));
-    let (width, height) = target_dimensions(
+    let (width, height) = output_dimensions_for_format(
+        args.output_format,
         source_width,
         source_height,
         args.width.max(1) as u32,
         args.height.max(1) as u32,
-    );
+    )?;
 
     let staging_desc = D3D11_TEXTURE2D_DESC {
         Width: desc.Width,
@@ -694,6 +707,10 @@ unsafe fn capture_frame_to_output(
         OutputFormat::Bgra => {
             copy_mapped_bgra_to_bgra(&mapped, source_width, source_height, width, height)
         }
+        OutputFormat::Nv12 => {
+            copy_mapped_bgra_to_bgra(&mapped, source_width, source_height, width, height)
+                .and_then(|bgra_pixels| bgra_to_nv12(width, height, &bgra_pixels))
+        }
     };
     context.Unmap(&staging_resource, 0);
     let bytes = bytes?;
@@ -731,6 +748,31 @@ fn target_dimensions(
         .min(source_height)
         .min(requested_height);
     (width, height)
+}
+
+fn output_dimensions_for_format(
+    output_format: OutputFormat,
+    source_width: u32,
+    source_height: u32,
+    requested_width: u32,
+    requested_height: u32,
+) -> Result<(u32, u32), String> {
+    let (mut width, mut height) = target_dimensions(
+        source_width,
+        source_height,
+        requested_width,
+        requested_height,
+    );
+    if output_format == OutputFormat::Nv12 {
+        width -= width % 2;
+        height -= height % 2;
+        if width < 2 || height < 2 {
+            return Err(format!(
+                "NV12 output requires even dimensions >= 2x2, got {width}x{height}"
+            ));
+        }
+    }
+    Ok((width, height))
 }
 
 unsafe fn copy_mapped_bgra_to_bgr(
@@ -865,6 +907,80 @@ unsafe fn copy_mapped_bgra_to_bgra(
         }
     }
     Ok(output)
+}
+
+fn bgra_to_nv12(width: u32, height: u32, pixels: &[u8]) -> Result<Vec<u8>, String> {
+    if width < 2 || height < 2 || width % 2 != 0 || height % 2 != 0 {
+        return Err(format!(
+            "NV12 conversion requires even dimensions >= 2x2, got {width}x{height}"
+        ));
+    }
+    let width = width as usize;
+    let height = height as usize;
+    let expected_len = width
+        .checked_mul(height)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| "BGRA pixel buffer length overflow".to_string())?;
+    if pixels.len() < expected_len {
+        return Err(format!(
+            "BGRA pixel buffer too small for NV12 conversion: {} < {expected_len}",
+            pixels.len()
+        ));
+    }
+
+    let y_plane_len = width * height;
+    let mut output = vec![0u8; y_plane_len + y_plane_len / 2];
+
+    for y in 0..height {
+        for x in 0..width {
+            let source_index = (y * width + x) * 4;
+            let (luma, _, _) = bgra_to_yuv(
+                pixels[source_index],
+                pixels[source_index + 1],
+                pixels[source_index + 2],
+            );
+            output[y * width + x] = luma;
+        }
+    }
+
+    let uv_offset = y_plane_len;
+    for y in (0..height).step_by(2) {
+        for x in (0..width).step_by(2) {
+            let mut u_total = 0u32;
+            let mut v_total = 0u32;
+            for dy in 0..2 {
+                for dx in 0..2 {
+                    let source_index = ((y + dy) * width + (x + dx)) * 4;
+                    let (_, chroma_u, chroma_v) = bgra_to_yuv(
+                        pixels[source_index],
+                        pixels[source_index + 1],
+                        pixels[source_index + 2],
+                    );
+                    u_total += chroma_u as u32;
+                    v_total += chroma_v as u32;
+                }
+            }
+            let uv_index = uv_offset + (y / 2) * width + x;
+            output[uv_index] = ((u_total + 2) / 4) as u8;
+            output[uv_index + 1] = ((v_total + 2) / 4) as u8;
+        }
+    }
+
+    Ok(output)
+}
+
+fn bgra_to_yuv(b: u8, g: u8, r: u8) -> (u8, u8, u8) {
+    let b = b as i32;
+    let g = g as i32;
+    let r = r as i32;
+    let y = ((66 * r + 129 * g + 25 * b + 128) >> 8) + 16;
+    let u = ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128;
+    let v = ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128;
+    (clamp_u8(y), clamp_u8(u), clamp_u8(v))
+}
+
+fn clamp_u8(value: i32) -> u8 {
+    value.clamp(0, 255) as u8
 }
 
 unsafe fn encode_bgr_to_jpeg(

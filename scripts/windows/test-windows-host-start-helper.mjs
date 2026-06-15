@@ -190,7 +190,7 @@ async function assertDryRunWgcH264BridgeOptions(timeoutMs) {
     "C:\\DevTools\\lan-dual-wgc-helper.exe",
     "--wgcH264Bridge",
     "--wgcH264Source",
-    "raw-bgra",
+    "nv12",
     "--wgcRepeatLastFrame",
     "--wgcRepeatLastFrameMode",
     "full",
@@ -209,7 +209,7 @@ async function assertDryRunWgcH264BridgeOptions(timeoutMs) {
   assertIncludes(output, "H.264 encoder: h264_nvenc", "WGC H.264 bridge dry run");
   assertIncludes(output, "WGC helper: C:\\DevTools\\lan-dual-wgc-helper.exe", "WGC H.264 bridge dry run");
   assertIncludes(output, "WGC H.264 bridge: enabled", "WGC H.264 bridge dry run");
-  assertIncludes(output, "WGC H.264 source: raw-bgra", "WGC H.264 bridge dry run");
+  assertIncludes(output, "WGC H.264 source: nv12", "WGC H.264 bridge dry run");
   assertIncludes(output, "WGC repeat-last-frame: full", "WGC H.264 bridge dry run");
   print("OK", "Dry run shows WGC H.264 bridge launch options");
 }

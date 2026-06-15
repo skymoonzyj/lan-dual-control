@@ -72,7 +72,7 @@ Options:
   --wgcRepeatLastFrameMode <full|signal>
                                         full resends the JPEG; signal sends a tiny repeat marker
   --wgcH264Bridge true                  In WGC mode, bridge helper JPEG frames into FFmpeg H.264
-  --wgcH264Source <jpeg|raw-bgra>       Source frames for the WGC H.264 bridge
+  --wgcH264Source <jpeg|raw-bgra|nv12>  Source frames for the WGC H.264 bridge
   --preferredVideoCodec <mjpeg|h264>    Preferred codec in session_offer
   --h264Encoder <name>                  Optional H.264 encoder for temporary ffmpeg-h264 host
   --ffmpeg <path>                       Explicit FFmpeg path for local temporary host
@@ -160,6 +160,9 @@ function normalizeWgcH264Source(value) {
   const source = String(value ?? defaults.wgcH264Source).trim().toLowerCase();
   if (["raw", "bgra", "raw-bgra", "raw_bgra"].includes(source)) {
     return "raw-bgra";
+  }
+  if (["nv12", "raw-nv12", "raw_nv12", "yuv", "yuv420"].includes(source)) {
+    return "nv12";
   }
   return "jpeg";
 }

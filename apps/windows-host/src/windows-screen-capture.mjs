@@ -22,8 +22,10 @@ const wgcMode = "wgc";
 const wgcH264BridgeMode = "wgc-h264";
 const wgcH264BridgeInputSource = "wgc-helper-jpeg";
 const wgcRawBgraH264BridgeInputSource = "wgc-helper-raw-bgra";
+const wgcNv12H264BridgeInputSource = "wgc-helper-nv12";
 const wgcH264SourceJpeg = "jpeg";
 const wgcH264SourceRawBgra = "raw-bgra";
+const wgcH264SourceNv12 = "nv12";
 const wgcRepeatFullMode = "full";
 const wgcRepeatSignalMode = "signal";
 const wgcHelperProtocolJsonLines = "json-lines-v1";
@@ -121,6 +123,9 @@ function normalizeWgcH264Source(value) {
   const source = String(value ?? "").trim().toLowerCase();
   if (["raw", "bgra", "raw-bgra", "raw_bgra", "wgc-raw-bgra"].includes(source)) {
     return wgcH264SourceRawBgra;
+  }
+  if (["nv12", "raw-nv12", "raw_nv12", "yuv", "yuv420", "wgc-nv12"].includes(source)) {
+    return wgcH264SourceNv12;
   }
   return wgcH264SourceJpeg;
 }
@@ -226,7 +231,9 @@ function isH264EffectiveMode(mode) {
 }
 
 function isWgcH264BridgeInputSource(source) {
-  return source === wgcH264BridgeInputSource || source === wgcRawBgraH264BridgeInputSource;
+  return source === wgcH264BridgeInputSource ||
+    source === wgcRawBgraH264BridgeInputSource ||
+    source === wgcNv12H264BridgeInputSource;
 }
 
 function normalizeWgcRepeatLastFrameMode(value) {
@@ -589,6 +596,24 @@ function assertRawBgraPayloadSize({ payload, width, height }) {
   return payload;
 }
 
+function rawNv12Base64ToBuffer({ dataBase64, width, height }) {
+  const payload = Buffer.from(String(dataBase64 || "").trim(), "base64");
+  return assertRawNv12PayloadSize({ payload, width, height });
+}
+
+function assertRawNv12PayloadSize({ payload, width, height }) {
+  const normalizedWidth = Math.max(1, Number(width) || 0);
+  const normalizedHeight = Math.max(1, Number(height) || 0);
+  if (normalizedWidth % 2 !== 0 || normalizedHeight % 2 !== 0) {
+    throw new Error(`WGC helper raw NV12 dimensions must be even, got ${width}x${height}`);
+  }
+  const expectedBytes = normalizedWidth * normalizedHeight * 3 / 2;
+  if (payload.length !== expectedBytes) {
+    throw new Error(`WGC helper raw NV12 payload size ${payload.length} did not match ${width}x${height}x3/2=${expectedBytes}`);
+  }
+  return payload;
+}
+
 function makePowerShellCaptureScript({ displayIndex, targetWidth, targetHeight, quality }) {
   return `
 $ErrorActionPreference = "Stop"
@@ -774,7 +799,7 @@ export class WindowsScreenCaptureCoordinator {
     this.wgcHelperProcess = null;
     this.wgcHelperKey = "";
     this.wgcHelperProtocol = this.wgcHelperProtocolOverride ||
-      (this.wgcH264BridgeEnabled && this.wgcH264Source === wgcH264SourceRawBgra
+      (this.wgcH264BridgeEnabled && this.wgcH264Source !== wgcH264SourceJpeg
         ? wgcHelperProtocolBinaryFrame
         : wgcHelperProtocolJsonLines);
     this.wgcHelperBuffer = Buffer.alloc(0);
@@ -922,7 +947,7 @@ export class WindowsScreenCaptureCoordinator {
         ? "当前使用 FFmpeg gdigrab 持续采集 MJPEG 帧；后续可升级为 Windows Graphics Capture。"
         : usingWgcHelperCapture
           ? wgcH264BridgeAvailable
-            ? `当前使用 Windows Graphics Capture helper 接收 ${this.wgcH264Source === wgcH264SourceRawBgra ? "raw BGRA" : "JPEG"} 帧；会话请求 H.264 时可桥接 FFmpeg 编码。`
+              ? `当前使用 Windows Graphics Capture helper 接收 ${this.wgcH264Source === wgcH264SourceNv12 ? "NV12" : this.wgcH264Source === wgcH264SourceRawBgra ? "raw BGRA" : "JPEG"} 帧；会话请求 H.264 时可桥接 FFmpeg 编码。`
             : "当前使用 Windows Graphics Capture helper JSON 行协议接收 JPEG 帧。"
           : usingSystemCapture
           ? "当前使用 Windows 系统截图 JPEG 帧；后续可升级为 Windows Graphics Capture。"
@@ -992,28 +1017,43 @@ export class WindowsScreenCaptureCoordinator {
   }
 
   getWgcH264BridgePipeline() {
-    return this.wgcH264Source === wgcH264SourceRawBgra
-      ? "windows-wgc-helper-raw-bgra-ffmpeg-h264"
-      : "windows-wgc-helper-ffmpeg-h264";
+    if (this.wgcH264Source === wgcH264SourceNv12) {
+      return "windows-wgc-helper-nv12-ffmpeg-h264";
+    }
+    if (this.wgcH264Source === wgcH264SourceRawBgra) {
+      return "windows-wgc-helper-raw-bgra-ffmpeg-h264";
+    }
+    return "windows-wgc-helper-ffmpeg-h264";
   }
 
   getWgcH264BridgeInputSource() {
-    return this.wgcH264Source === wgcH264SourceRawBgra
-      ? wgcRawBgraH264BridgeInputSource
-      : wgcH264BridgeInputSource;
+    if (this.wgcH264Source === wgcH264SourceNv12) {
+      return wgcNv12H264BridgeInputSource;
+    }
+    if (this.wgcH264Source === wgcH264SourceRawBgra) {
+      return wgcRawBgraH264BridgeInputSource;
+    }
+    return wgcH264BridgeInputSource;
   }
 
   getWgcHelperOutputFormat(session) {
-    return this.shouldUseWgcH264Bridge(session) && this.wgcH264Source === wgcH264SourceRawBgra
-      ? "bgra"
-      : "jpeg";
+    if (!this.shouldUseWgcH264Bridge(session)) {
+      return "jpeg";
+    }
+    if (this.wgcH264Source === wgcH264SourceNv12) {
+      return "nv12";
+    }
+    if (this.wgcH264Source === wgcH264SourceRawBgra) {
+      return "bgra";
+    }
+    return "jpeg";
   }
 
   getWgcHelperProtocol(session) {
     if (this.wgcHelperProtocolOverride) {
       return this.wgcHelperProtocolOverride;
     }
-    return this.getWgcHelperOutputFormat(session) === "bgra"
+    return this.getWgcHelperOutputFormat(session) !== "jpeg"
       ? wgcHelperProtocolBinaryFrame
       : wgcHelperProtocolJsonLines;
   }
@@ -1471,18 +1511,29 @@ export class WindowsScreenCaptureCoordinator {
     const codec = String(message.codec || this.wgcHelperInfo?.codec || "jpeg").trim().toLowerCase();
     const pixelFormat = String(message.pixelFormat || this.wgcHelperInfo?.pixelFormat || "").trim().toLowerCase();
     const isRawBgra = codec === "raw-bgra" || pixelFormat === "bgra";
+    const isRawNv12 = codec === "raw-nv12" || pixelFormat === "nv12";
     const width = Number(message.width) || 0;
     const height = Number(message.height) || 0;
-    if (isRawBgra) {
+    if (isRawBgra || isRawNv12) {
       if (!dataBase64) {
-        this.recordCaptureFailure(new Error("WGC helper raw BGRA frame did not contain base64 data"));
+        this.recordCaptureFailure(new Error(`WGC helper ${isRawNv12 ? "raw NV12" : "raw BGRA"} frame did not contain base64 data`));
+        return;
+      }
+      try {
+        if (isRawNv12) {
+          rawNv12Base64ToBuffer({ dataBase64, width, height });
+        } else {
+          rawBgraBase64ToBuffer({ dataBase64, width, height });
+        }
+      } catch (error) {
+        this.recordCaptureFailure(error);
         return;
       }
       this.wgcHelperFrame = {
         dataBase64,
-        codec: "raw-bgra",
+        codec: isRawNv12 ? "raw-nv12" : "raw-bgra",
         encoding: "base64",
-        pixelFormat: "bgra",
+        pixelFormat: isRawNv12 ? "nv12" : "bgra",
         width,
         height,
         sourceWidth: Number(message.sourceWidth) || 0,
@@ -1499,7 +1550,7 @@ export class WindowsScreenCaptureCoordinator {
 
     const normalizedDataUrl = dataUrl || (dataBase64 ? `data:image/jpeg;base64,${dataBase64}` : "");
     if (!normalizedDataUrl.startsWith("data:image/jpeg;base64,")) {
-      this.recordCaptureFailure(new Error("WGC helper frame did not contain JPEG or raw BGRA base64 data"));
+      this.recordCaptureFailure(new Error("WGC helper frame did not contain JPEG, raw BGRA, or raw NV12 base64 data"));
       return;
     }
 
@@ -1525,21 +1576,26 @@ export class WindowsScreenCaptureCoordinator {
     const codec = String(message.codec || this.wgcHelperInfo?.codec || "jpeg").trim().toLowerCase();
     const pixelFormat = String(message.pixelFormat || this.wgcHelperInfo?.pixelFormat || "").trim().toLowerCase();
     const isRawBgra = codec === "raw-bgra" || pixelFormat === "bgra";
+    const isRawNv12 = codec === "raw-nv12" || pixelFormat === "nv12";
     const width = Number(message.width) || 0;
     const height = Number(message.height) || 0;
     const payload = Buffer.from(payloadBuffer);
-    if (isRawBgra) {
+    if (isRawBgra || isRawNv12) {
       try {
-        assertRawBgraPayloadSize({ payload, width, height });
+        if (isRawNv12) {
+          assertRawNv12PayloadSize({ payload, width, height });
+        } else {
+          assertRawBgraPayloadSize({ payload, width, height });
+        }
       } catch (error) {
         this.recordCaptureFailure(error);
         return;
       }
       this.wgcHelperFrame = {
         dataBuffer: payload,
-        codec: "raw-bgra",
+        codec: isRawNv12 ? "raw-nv12" : "raw-bgra",
         encoding: "binary",
-        pixelFormat: "bgra",
+        pixelFormat: isRawNv12 ? "nv12" : "bgra",
         width,
         height,
         sourceWidth: Number(message.sourceWidth) || 0,
@@ -1741,8 +1797,19 @@ export class WindowsScreenCaptureCoordinator {
     const activeDisplay = this.pickDisplay(session.activeDisplayId);
     const requestedWidth = clampNumber(session.width, 320, 3840, activeDisplay.width || 1920);
     const requestedHeight = clampNumber(session.height, 180, 2160, activeDisplay.height || 1080);
-    const rawDimensions = targetDimensions(activeDisplay.width || requestedWidth, activeDisplay.height || requestedHeight, requestedWidth, requestedHeight);
-    const inputArgs = inputSource === wgcRawBgraH264BridgeInputSource
+    const rawInputPixFmt = inputSource === wgcRawBgraH264BridgeInputSource
+      ? "bgra"
+      : inputSource === wgcNv12H264BridgeInputSource
+        ? "nv12"
+        : "";
+    let rawDimensions = targetDimensions(activeDisplay.width || requestedWidth, activeDisplay.height || requestedHeight, requestedWidth, requestedHeight);
+    if (rawInputPixFmt === "nv12") {
+      rawDimensions = {
+        width: Math.max(2, rawDimensions.width - (rawDimensions.width % 2)),
+        height: Math.max(2, rawDimensions.height - (rawDimensions.height % 2)),
+      };
+    }
+    const inputArgs = rawInputPixFmt
       ? [
           "-hide_banner",
           "-loglevel",
@@ -1754,7 +1821,7 @@ export class WindowsScreenCaptureCoordinator {
           "-f",
           "rawvideo",
           "-pix_fmt",
-          "bgra",
+          rawInputPixFmt,
           "-video_size",
           `${rawDimensions.width}x${rawDimensions.height}`,
           "-framerate",
@@ -1847,7 +1914,8 @@ export class WindowsScreenCaptureCoordinator {
   }
 
   wgcH264BridgePayloadBuffer(payload) {
-    if (this.getWgcH264BridgeInputSource() === wgcRawBgraH264BridgeInputSource) {
+    const inputSource = this.getWgcH264BridgeInputSource();
+    if (inputSource === wgcRawBgraH264BridgeInputSource) {
       if (payload.codec !== "raw-bgra" && payload.pixelFormat !== "bgra") {
         throw new Error(`WGC H.264 raw bridge expected raw BGRA, got ${payload.codec || payload.pixelFormat || "unknown"}`);
       }
@@ -1859,6 +1927,23 @@ export class WindowsScreenCaptureCoordinator {
         });
       }
       return rawBgraBase64ToBuffer({
+        dataBase64: payload.dataBase64,
+        width: Number(payload.width) || 0,
+        height: Number(payload.height) || 0,
+      });
+    }
+    if (inputSource === wgcNv12H264BridgeInputSource) {
+      if (payload.codec !== "raw-nv12" && payload.pixelFormat !== "nv12") {
+        throw new Error(`WGC H.264 NV12 bridge expected raw NV12, got ${payload.codec || payload.pixelFormat || "unknown"}`);
+      }
+      if (Buffer.isBuffer(payload.dataBuffer)) {
+        return assertRawNv12PayloadSize({
+          payload: payload.dataBuffer,
+          width: Number(payload.width) || 0,
+          height: Number(payload.height) || 0,
+        });
+      }
+      return rawNv12Base64ToBuffer({
         dataBase64: payload.dataBase64,
         width: Number(payload.width) || 0,
         height: Number(payload.height) || 0,
