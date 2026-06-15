@@ -25,6 +25,7 @@ const defaults = {
   json: false,
   boardSummary: false,
   userAuthRequest: false,
+  sendUserAuthRequest: false,
 };
 
 function helpRequested(argv) {
@@ -59,12 +60,14 @@ Options:
   --requireMacReady             Exit non-zero if Mac formal preflight is not ready.
   --boardSummary                Print a one-line secret-free Agent Link Board summary.
   --userAuthRequest             Print a secret-free NEED_USER_AUTH message for Agent Link Board.
+  --sendUserAuthRequest         Send NEED_USER_AUTH to Agent Link Board only when preflight is ready.
   --json                        Print one machine-readable JSON object.
   --help, -h                    Show this help without probing anything.
 
 Examples:
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --userAuthRequest
+  node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --sendUserAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
 `);
 }
@@ -96,6 +99,7 @@ function parseArgs(argv) {
       token === "--requireMacReady" ||
       token === "--boardSummary" ||
       token === "--userAuthRequest" ||
+      token === "--sendUserAuthRequest" ||
       token === "--json"
     ) {
       args[token.slice(2)] = true;
@@ -391,6 +395,43 @@ function makeUserAuthRequest(report) {
   ].join(" ");
 }
 
+function sendUserAuthRequest(args, report) {
+  if (!args.sendUserAuthRequest) {
+    return {
+      requested: false,
+      ok: null,
+      status: null,
+      error: "",
+      detail: "not requested",
+    };
+  }
+
+  if (!report.macPreflight?.payload?.ok) {
+    return {
+      requested: true,
+      ok: false,
+      status: null,
+      error: "",
+      detail: "Mac formal preflight is not ready; user auth request was not sent.",
+    };
+  }
+
+  const result = command(process.execPath, [
+    "scripts/codex-link-client.mjs",
+    "--server", args.server,
+    "send",
+    "--from", "Windows Codex",
+    "--text", report.userAuthRequest,
+  ], { timeoutMs: Math.min(Math.max(args.timeoutMs, 5000), 30000) });
+  return {
+    requested: true,
+    ok: result.ok,
+    status: result.status,
+    error: normalizedText(result.error || result.stderr),
+    detail: result.ok ? "sent" : normalizedText(result.error || result.stderr || `exit ${result.status}`),
+  };
+}
+
 function makeReport(args) {
   const git = getGitStatus();
   const board = getBoardSnapshot(args);
@@ -417,9 +458,8 @@ function makeReport(args) {
       detail: macPreflight.payload?.ok ? "ready" : "not ready",
     });
   }
-  const failedChecks = checks.filter((check) => !check.ok);
   const report = {
-    ok: failedChecks.length === 0,
+    ok: false,
     generatedAt: new Date().toISOString(),
     args: {
       host: args.host,
@@ -430,16 +470,27 @@ function makeReport(args) {
       checkClientDiagnostics: args.checkClientDiagnostics,
       requireClean: args.requireClean,
       requireMacReady: args.requireMacReady,
+      sendUserAuthRequest: args.sendUserAuthRequest,
     },
     git,
     board,
     macPreflight,
     commands,
     checks,
-    failedChecks,
+    failedChecks: [],
   };
   report.boardSummary = makeBoardSummary(report);
   report.userAuthRequest = makeUserAuthRequest(report);
+  report.sentUserAuthRequest = sendUserAuthRequest(args, report);
+  if (args.sendUserAuthRequest) {
+    checks.push({
+      name: "sendUserAuthRequest",
+      ok: report.sentUserAuthRequest.ok,
+      detail: report.sentUserAuthRequest.detail,
+    });
+  }
+  report.failedChecks = checks.filter((check) => !check.ok);
+  report.ok = report.failedChecks.length === 0;
   return report;
 }
 
@@ -479,6 +530,9 @@ function printHuman(report) {
   console.log(`  ${report.boardSummary}`);
   console.log("- User auth request:");
   console.log(`  ${report.userAuthRequest}`);
+  if (report.sentUserAuthRequest.requested) {
+    console.log(`- Sent user auth request: ${report.sentUserAuthRequest.ok ? "ok" : "failed"} (${report.sentUserAuthRequest.detail})`);
+  }
 }
 
 function flag(value) {

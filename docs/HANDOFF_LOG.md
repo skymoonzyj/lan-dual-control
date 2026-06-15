@@ -19,6 +19,42 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 18:18
+开发端：Windows Codex
+本轮目标：让 Windows 恢复开工总览可显式把安全授权提示发送到 Agent Link Board，同时避免未 ready 时误发。
+完成内容：
+- `scripts/windows/check-windows-resume-status.mjs` 新增 `--sendUserAuthRequest`，PowerShell 包装新增 `-SendUserAuthRequest`。
+- 只有 formal preflight ready 时才调用 `scripts/codex-link-client.mjs send` 发出无密 `NEED_USER_AUTH` 文本；preflight 不 ready 时不会发送，并把 `sendUserAuthRequest` 作为失败检查。
+- JSON 输出新增 `sentUserAuthRequest`，记录是否请求发送、是否成功和失败原因。
+- Node 和 PowerShell 回归都用本机假 Agent Link Board 覆盖 ready 时发送一条消息、不泄露密码；Node 回归额外覆盖离线时不发送。
+- 真实只读 `-UserAuthRequest` 打印路径仍通过，未对真实联络板执行 `-SendUserAuthRequest`，避免重复刷授权请求。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- PowerShell AST parse `scripts/windows/check-windows-resume-status.ps1`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 30000`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-resume-status.ps1 -CheckBoard -CheckClientDiagnostics -UserAuthRequest`
+遗留问题：
+- 真实正式 E2E 仍需用户在 Windows 本机输入 Mac host 正式密码；`inject` 仍需另行明确确认。
+下一步建议：
+- 需要请求用户输入密码时，先用 `-UserAuthRequest` 预览文本；确认要代发到联络板时再用 `-SendUserAuthRequest`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 18:12
 开发端：Windows Codex
 本轮目标：让 Windows 恢复开工总览能直接输出正式验收前的安全授权提示，减少手工拼联络板消息。

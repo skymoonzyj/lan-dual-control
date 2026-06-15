@@ -19,6 +19,7 @@ param(
   [switch] $Json,
   [switch] $BoardSummary,
   [switch] $UserAuthRequest,
+  [switch] $SendUserAuthRequest,
   [switch] $Help
 )
 
@@ -36,6 +37,7 @@ Common examples:
   scripts\windows\check-windows-resume-status.ps1 -CheckBoard -BoardSummary
   scripts\windows\check-windows-resume-status.ps1 -CheckBoard -CheckClientDiagnostics -BoardSummary
   scripts\windows\check-windows-resume-status.ps1 -CheckBoard -CheckClientDiagnostics -UserAuthRequest
+  scripts\windows\check-windows-resume-status.ps1 -CheckBoard -CheckClientDiagnostics -SendUserAuthRequest
   scripts\windows\check-windows-resume-status.ps1 -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -Json
   scripts\windows\check-windows-resume-status.ps1 -NoDiscover -HostName 127.0.0.1 -Port 9 -Json -RequireMacReady
 
@@ -119,6 +121,9 @@ try {
   }
   if ($UserAuthRequest) {
     $nodeArgs += "--userAuthRequest"
+  }
+  if ($SendUserAuthRequest) {
+    $nodeArgs += "--sendUserAuthRequest"
   }
 
   & node @nodeArgs

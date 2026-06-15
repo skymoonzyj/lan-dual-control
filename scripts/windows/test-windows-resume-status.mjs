@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import http from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -116,6 +117,46 @@ async function withMockHost(callback) {
   }
 }
 
+async function withMockLinkBoard(callback) {
+  const messages = [];
+  const server = http.createServer((request, response) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => {
+      body += chunk;
+    });
+    request.on("end", () => {
+      if (request.method === "POST" && request.url === "/api/message") {
+        try {
+          messages.push(JSON.parse(body || "{}"));
+        } catch {
+          messages.push({ parseError: true, body });
+        }
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      if (request.method === "GET" && request.url === "/api/state") {
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ currentCall: null, statuses: {}, events: [] }));
+        return;
+      }
+      response.writeHead(404, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ ok: false, error: "not found" }));
+    });
+  });
+  await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  const address = server.address();
+  try {
+    await callback({
+      url: `http://127.0.0.1:${address.port}`,
+      messages,
+    });
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose));
+  }
+}
+
 async function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = await run([flag], args);
@@ -209,6 +250,57 @@ async function checkUserAuthRequest(args) {
   });
 }
 
+async function checkSendUserAuthRequest(args) {
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--sendUserAuthRequest",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock sendUserAuthRequest failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.sentUserAuthRequest?.requested === true, "sendUserAuthRequest should be requested");
+      assert(payload.sentUserAuthRequest?.ok === true, "sendUserAuthRequest should pass");
+      assert(board.messages.length === 1, `expected one board message, got ${board.messages.length}`);
+      assert(board.messages[0].from === "Windows Codex", "board message should use Windows Codex sender");
+      assertIncludes(board.messages[0].text, "NEED_USER_AUTH", "sent userAuthRequest");
+      assertIncludes(board.messages[0].text, "-PromptPassword", "sent userAuthRequest");
+      assertNotIncludes(JSON.stringify(board.messages), "test-password", "sent userAuthRequest");
+      console.log("[OK] Windows resume status can send a secret-free user auth request");
+    });
+  });
+}
+
+async function checkSendUserAuthRequestOffline(args) {
+  await withMockLinkBoard(async (board) => {
+    const result = await run([
+      "--noDiscover",
+      "--host", "127.0.0.1",
+      "--port", "9",
+      "--server", board.url,
+      "--sendUserAuthRequest",
+      "--json",
+    ], args);
+    assert(result.exitCode !== 0, "offline sendUserAuthRequest should fail");
+    const payload = JSON.parse(result.stdout);
+    assert(payload.sentUserAuthRequest?.requested === true, "offline send should be requested");
+    assert(payload.sentUserAuthRequest?.ok === false, "offline send should fail");
+    assert(payload.failedChecks?.some((check) => check.name === "sendUserAuthRequest"), "offline send failure should be named");
+    assert(board.messages.length === 0, `offline send should not post a board message, got ${board.messages.length}`);
+    assertNotIncludes(result.stdout + result.stderr, "Mac host password", "offline sendUserAuthRequest");
+    console.log("[OK] Windows resume status refuses to send user auth request before preflight is ready");
+  });
+}
+
 async function checkOfflineJson(args) {
   const result = await run([
     "--noDiscover",
@@ -252,6 +344,8 @@ async function main() {
   await checkMockJson(args);
   await checkBoardSummary(args);
   await checkUserAuthRequest(args);
+  await checkSendUserAuthRequest(args);
+  await checkSendUserAuthRequestOffline(args);
   await checkOfflineJson(args);
   await checkRequireMacReady(args);
   console.log("[OK] Windows resume status regression passed");

@@ -76,6 +76,7 @@ Windows 端：
 - [x] Windows 端新增恢复开工总览 `scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`：只读汇总 git、通讯板、Mac formal preflight、自动发现目标和下一步命令；不认证、不要求密码、不发送输入、不执行 `inject`。
 - [x] Windows 恢复开工总览新增 PowerShell 包装入口 `scripts/windows/check-windows-resume-status.ps1 -CheckBoard -BoardSummary`，并可加 `-CheckClientDiagnostics` 做无密 Windows 控制端页面诊断。
 - [x] Windows 恢复开工总览支持 `--userAuthRequest` / PowerShell `-UserAuthRequest`，预检 ready 后直接输出可发 Agent Link Board 的 `NEED_USER_AUTH` 文本和固定目标 PowerShell 正式验收命令。
+- [x] Windows 恢复开工总览支持显式 `--sendUserAuthRequest` / PowerShell `-SendUserAuthRequest`，只在 formal preflight ready 时把无密授权提示发到 Agent Link Board，未 ready 时拒绝发送。
 
 共享：
 

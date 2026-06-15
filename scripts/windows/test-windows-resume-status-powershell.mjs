@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import http from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -125,6 +126,41 @@ async function withMockHost(callback) {
   }
 }
 
+async function withMockLinkBoard(callback) {
+  const messages = [];
+  const server = http.createServer((request, response) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => {
+      body += chunk;
+    });
+    request.on("end", () => {
+      if (request.method === "POST" && request.url === "/api/message") {
+        try {
+          messages.push(JSON.parse(body || "{}"));
+        } catch {
+          messages.push({ parseError: true, body });
+        }
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      response.writeHead(404, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ ok: false, error: "not found" }));
+    });
+  });
+  await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  const address = server.address();
+  try {
+    await callback({
+      url: `http://127.0.0.1:${address.port}`,
+      messages,
+    });
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose));
+  }
+}
+
 async function checkWrapperHelp(args) {
   const result = await runPowerShell(["-Help"], args);
   const output = `${result.stdout}\n${result.stderr}`;
@@ -217,6 +253,36 @@ async function checkUserAuthRequest(args) {
   });
 }
 
+async function checkSendUserAuthRequest(args) {
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-SendUserAuthRequest",
+        "-Json",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell sendUserAuthRequest failed\n${output}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.sentUserAuthRequest?.ok === true, "PowerShell send should pass");
+      assert(board.messages.length === 1, `expected one board message, got ${board.messages.length}`);
+      assert(board.messages[0].from === "Windows Codex", "PowerShell board sender mismatch");
+      assertIncludes(board.messages[0].text, "NEED_USER_AUTH", "PowerShell sent userAuthRequest");
+      assertIncludes(board.messages[0].text, "-PromptPassword", "PowerShell sent userAuthRequest");
+      assertNotIncludes(JSON.stringify(board.messages), "test-password", "PowerShell sent userAuthRequest");
+      console.log("[OK] PowerShell resume-status wrapper can send a secret-free user auth request");
+    });
+  });
+}
+
 async function checkOfflineDefaults(args) {
   const result = await runPowerShell([
     "-NoDiscover",
@@ -261,6 +327,7 @@ async function main() {
   await checkMockJson(args);
   await checkBoardSummary(args);
   await checkUserAuthRequest(args);
+  await checkSendUserAuthRequest(args);
   await checkOfflineDefaults(args);
   await checkRequireMacReady(args);
   console.log("[OK] PowerShell resume-status wrapper regression passed");
