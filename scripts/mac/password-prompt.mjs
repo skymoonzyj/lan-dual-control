@@ -60,9 +60,9 @@ set dialogTitle to ${appleScriptString(title)}
 set dialogMessage to ${appleScriptString(message)}
 set promptLabel to ${appleScriptString(prompt)}
 try
-  tell current application
+  tell application "SystemUIServer"
     activate
-    delay 0.1
+    delay 0.2
     set dialogResult to display dialog (dialogMessage & return & return & promptLabel) default answer "" with title dialogTitle with hidden answer buttons {"Cancel", "Continue"} default button "Continue" cancel button "Cancel"
   end tell
   set passwordValue to text returned of dialogResult

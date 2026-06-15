@@ -173,6 +173,20 @@ async function assertPromptPasswordFailsWithoutTty(timeoutMs) {
   print("OK", "Password prompt refuses non-interactive automation when dialog is disabled");
 }
 
+async function assertPromptPasswordRefusesEnvOverride(timeoutMs) {
+  const result = await runNode(["--promptPassword", "--dryRun"], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "existing-password" },
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (result.exitCode === 0 || result.timedOut) {
+    throw new Error(`Prompt password should refuse to reuse environment password.\n${output}`);
+  }
+  assertIncludes(output, "frontmost password dialog is shown", "prompt password env override failure");
+  assertNotIncludes(output, "existing-password", "prompt password env override failure");
+  print("OK", "Prompt password refuses environment reuse so the dialog is shown");
+}
+
 async function assertDryRunWithEnvPassword(timeoutMs) {
   const result = await runNode(["--requirePassword", "--dryRun"], {
     timeoutMs,
@@ -447,6 +461,7 @@ async function main() {
   await assertMissingPasswordFails(args.timeoutMs);
   await assertDemoPasswordFails(args.timeoutMs);
   await assertPromptPasswordFailsWithoutTty(args.timeoutMs);
+  await assertPromptPasswordRefusesEnvOverride(args.timeoutMs);
   await assertDryRunWithEnvPassword(args.timeoutMs);
   await assertEphemeralPasswordDryRun(args.timeoutMs);
   await assertEphemeralPasswordRefusesEnvOverride(args.timeoutMs);

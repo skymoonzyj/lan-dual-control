@@ -69,7 +69,7 @@ if (log) {
   if (joined.includes("beep")) {
     appendFileSync(log, "beep\\n");
   } else {
-    appendFileSync(log, \`dialog\\n\${joined.includes("activate") ? "activate\\n" : ""}\`);
+    appendFileSync(log, \`dialog\\n\${joined.includes("SystemUIServer") ? "system-ui-server\\n" : ""}\${joined.includes("activate") ? "activate\\n" : ""}\`);
   }
 }
 if (joined.includes("beep")) process.exit(0);
@@ -143,6 +143,7 @@ function checkDialogSuccess(tmp, timeoutMs) {
   const log = safeRead(logPath);
   assertIncludes(log, "beep", "dialog success osascript log");
   assertIncludes(log, "dialog", "dialog success osascript log");
+  assertIncludes(log, "system-ui-server", "dialog success osascript log");
   assertIncludes(log, "activate", "dialog success osascript log");
   console.log("[OK] Password helper rings and reads a hidden macOS dialog value");
 }

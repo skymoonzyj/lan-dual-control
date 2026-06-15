@@ -19,6 +19,7 @@ const defaults = {
   host: process.env.LAN_DUAL_HOST || "0.0.0.0",
   port: Number(process.env.LAN_DUAL_PORT) || 43770,
   password: "",
+  passwordFromArg: false,
   deviceName: process.env.LAN_DUAL_DEVICE_NAME || "",
   videoMode: process.env.LAN_DUAL_VIDEO_MODE || "auto",
   inputMode: process.env.LAN_DUAL_INPUT_MODE || "log",
@@ -93,6 +94,9 @@ function parseArgs(argv) {
 
     if (Object.prototype.hasOwnProperty.call(args, key) && next && !next.startsWith("--")) {
       args[key] = next;
+      if (key === "password") {
+        args.passwordFromArg = true;
+      }
       index += 1;
     }
   }
@@ -467,7 +471,13 @@ async function preparePassword(args) {
     args.password = makeEphemeralPassword();
   }
 
-  if (args.promptPassword && !args.password && !process.env.LAN_DUAL_PASSWORD) {
+  if (args.promptPassword && args.passwordFromArg) {
+    throw new Error("--promptPassword cannot be combined with --password.");
+  }
+  if (args.promptPassword && process.env.LAN_DUAL_PASSWORD) {
+    throw new Error("--promptPassword refuses to reuse an existing LAN_DUAL_PASSWORD. Unset it first so the frontmost password dialog is shown.");
+  }
+  if (args.promptPassword) {
     args.password = await promptMacPassword({
       title: "LAN Dual Control",
       message: "Enter the formal Mac host password. It stays in this process and is not printed.",

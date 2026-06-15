@@ -19,6 +19,45 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 12:45
+开发端：Mac Codex
+本轮目标：按用户反馈继续修正 Mac 侧需要输入密码时看不到输入框的问题，并把本地 Mac formal checklist 基于 Windows 最新提交重放。
+完成内容：
+- 已先同步远端并把 `c78fbdd Add Mac client formal status checklist` 变基到 Windows 最新 `743de0b Add Windows host board summary status` 之后，避免覆盖 Windows 端 boardSummary 工作。
+- `scripts/mac/password-prompt.mjs` 的 macOS 隐藏密码框改为通过 SystemUIServer 激活前台，再显示 hidden answer 对话框；仍然先响铃，默认不退回终端隐藏输入。
+- `scripts/mac/start-mac-host.mjs --promptPassword` 现在语义更明确：显式要求弹窗时，不允许和 `--password` 或已有 `LAN_DUAL_PASSWORD` 混用，避免悄悄复用旧密码导致用户等不到输入框。
+- 更新 `apps/mac-host/README.md`、`docs/CURRENT_STATUS.md` 和 `docs/NEXT_ACTIONS.md`，记录 SystemUIServer 前置弹窗和“想弹窗先不要预设环境密码”的规则。
+- 扩展 `scripts/mac/test-mac-password-prompt.mjs` 和 `scripts/mac/test-mac-host-start-helper.mjs`，覆盖 SystemUIServer 前置脚本和 `--promptPassword` 拒绝复用环境密码。
+修改文件：
+- `scripts/mac/password-prompt.mjs`
+- `scripts/mac/start-mac-host.mjs`
+- `scripts/mac/test-mac-password-prompt.mjs`
+- `scripts/mac/test-mac-host-start-helper.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/password-prompt.mjs`
+- `node --check scripts/mac/start-mac-host.mjs`
+- `node --check scripts/mac/test-mac-password-prompt.mjs`
+- `node --check scripts/mac/test-mac-host-start-helper.mjs`
+- `node scripts/mac/test-mac-password-prompt.mjs --timeoutMs 8000`
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-readiness-prompt-password.mjs --timeoutMs 5000`
+- `node scripts/mac/test-mac-formal-local-smoke.mjs --timeoutMs 12000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 5000`
+- `git diff --check`
+遗留问题：
+- 未触发真实正式密码输入，避免在用户未明确要求启动/验收时弹真实密码框；下次如需输入密码，会先响铃再弹前台 macOS 隐藏密码框。
+下一步建议：
+- 白天继续前先看 Agent Link Board；若要启动真实 Mac host，用 `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword`，并确保没有预设 `LAN_DUAL_PASSWORD`，这样会强制弹窗。
+是否改了协议：否。
+是否需要另一端配合：无需 Windows 修改；Windows 端只需知道 Mac 侧密码弹窗可见性已加固。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 12:25
 开发端：Mac Codex
 本轮目标：给 Mac 控制 Windows 的正式真连/观感验收增加只读清单，减少发起跨机测试前的手工判断。
