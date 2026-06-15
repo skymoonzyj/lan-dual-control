@@ -17,6 +17,39 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Windows Codex
+
+日期：2026-06-15 13:08
+开发端：Windows Codex
+本轮目标：给正式 Windows 控制 Mac E2E 增加无密执行计划输出，让用户输入正式密码前能看到将要执行的步骤、耗时和安全边界。
+完成内容：
+- `scripts/windows/check-mac-formal-e2e.mjs` 的预检报告新增 `runPlan`：包含目标、正式/快速 profile、视频分辨率/FPS/码率/时长阈值、音频阈值、剪贴板范围、子步骤命令、预计耗时、密码只走 `LAN_DUAL_PASSWORD` 环境变量和 `inject=false`。
+- 普通 `--preflightOnly` 输出现在会在 readiness 后打印 `Formal run plan`，离线时也会给出同一份计划；`--preflightOnly --json` 则输出机器可读 `runPlan`。
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs` 新增 runPlan 安全形状断言，覆盖离线 JSON、mock JSON 和 mock UI diagnostics，确认不泄露 `test-password`/`demo-password`。
+- `CURRENT_STATUS`、`NEXT_ACTIONS` 和任务板同步记录 runPlan 用法。
+修改文件：
+- `scripts/windows/check-mac-formal-e2e.mjs`
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-mac-formal-e2e.mjs`
+- `node --check scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `node scripts/windows/check-mac-formal-e2e.mjs --help`
+- `node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly`
+- `node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --json`
+- `node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 90000`
+- `node scripts/windows/test-windows-script-help.mjs`
+遗留问题：
+- 正式认证、5-10 分钟真实 E2E 长测和页面真实控制仍需要用户在 Windows 本机运行 `--promptPassword` 并隐藏输入 Mac host 正式密码；`inject` 仍需用户另行明确确认。
+下一步建议：
+- 用户准备好后运行 `node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --promptPassword`，先完成不含 inject 的正式 H.264/音频/剪贴板/input-log 验收。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac host 继续在线；正式验收需要用户本机输入密码，密码不要发联络板。
+
 ## 2026-06-15 Mac Codex
 
 日期：2026-06-15 13:00

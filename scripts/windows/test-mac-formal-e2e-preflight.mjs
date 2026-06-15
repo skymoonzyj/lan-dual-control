@@ -66,6 +66,31 @@ function assertNotIncludes(text, unexpected, label) {
   assert(!text.includes(unexpected), `${label} leaked unexpected text: ${unexpected}\n${text}`);
 }
 
+function assertRunPlanSafe(payload, label, expectations = {}) {
+  const plan = payload.runPlan;
+  assert(plan && typeof plan === "object", `${label} missing runPlan`);
+  assert(plan.requiresPassword === true, `${label} should require a password for the formal run`);
+  assert(plan.passwordInCommandArguments === false, `${label} should keep passwords out of argv`);
+  assert(plan.passwordTransport === "LAN_DUAL_PASSWORD environment only", `${label} password transport mismatch`);
+  assert(plan.inject === false, `${label} should not plan inject`);
+  assert(Array.isArray(plan.steps) && plan.steps.length > 0, `${label} should include planned steps`);
+  assert(plan.steps.every((step) => typeof step.command === "string" && step.command.startsWith("node ")), `${label} step commands should be displayable node commands`);
+  assert(plan.steps.some((step) => step.id === "protocol-media-clipboard-input-log"), `${label} should include the protocol probe`);
+  assert(plan.steps.some((step) => step.id === "windows-client-browser-h264"), `${label} should include the browser probe`);
+  if (Object.prototype.hasOwnProperty.call(expectations, "audioSkipped")) {
+    assert(plan.audio?.skipped === expectations.audioSkipped, `${label} audio skipped mismatch`);
+  }
+  if (Object.prototype.hasOwnProperty.call(expectations, "clipboardText")) {
+    assert(plan.clipboard?.text === expectations.clipboardText, `${label} clipboard text mismatch`);
+  }
+  if (Object.prototype.hasOwnProperty.call(expectations, "inputMode")) {
+    assert(plan.inputMode === expectations.inputMode, `${label} input mode mismatch`);
+  }
+  const serialized = JSON.stringify(plan);
+  assertNotIncludes(serialized, "test-password", label);
+  assertNotIncludes(serialized, "demo-password", label);
+}
+
 function runRunner(args, { env = {}, timeoutMs = defaults.timeoutMs } = {}) {
   return new Promise((resolveRun) => {
     const child = spawn(process.execPath, [runnerScript, ...args], {
@@ -131,6 +156,7 @@ async function testOfflineJson(args) {
   assert(payload.ok === false && payload.online === false, "offline JSON preflight shape mismatch");
   assert(payload.command.includes("--promptPassword"), "offline JSON should include safe command");
   assert(String(payload.boardSummary || "").includes("offline"), "offline JSON should include board summary");
+  assertRunPlanSafe(payload, "offline JSON run plan", { audioSkipped: false, clipboardText: true, inputMode: "log" });
   print("OK", "Offline JSON preflight is parseable");
 }
 
@@ -187,6 +213,8 @@ async function testMockPreflightJson(args) {
     assert(payload.command.includes("--promptPassword"), "mock preflight should include safe command");
     assert(String(payload.boardSummary || "").includes("failedChecks=none"), "mock preflight JSON should include board summary");
     assert(String(payload.userAuthRequest || "").includes("NEED_USER_AUTH:"), "mock preflight JSON should include user auth request");
+    assertRunPlanSafe(payload, "mock JSON run plan", { audioSkipped: true, clipboardText: false, inputMode: "skipped" });
+    assert(payload.runPlan.video?.allowMockVideo === true, "mock JSON run plan should mark mock video allowed");
     print("OK", "Mock JSON preflight passes");
   });
 }
@@ -253,6 +281,7 @@ async function testMockPreflightClientDiagnostics(args) {
     assert(payload.clientDiagnostics?.ok === true, "client diagnostics should pass");
     assert(String(payload.boardSummary || "").includes("clientDiagnostics=passed"), "board summary should include client diagnostics state");
     assert(payload.checks.some((check) => check.name === "windowsClientDiagnostics" && check.ok === true), "checks should include client diagnostics");
+    assertRunPlanSafe(payload, "mock client diagnostics run plan", { audioSkipped: true, clipboardText: false, inputMode: "skipped" });
     assertNotIncludes(result.stdout + result.stderr, "test-password", "mock client diagnostics");
     print("OK", "Mock client diagnostics preflight passes without leaking password");
   });

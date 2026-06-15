@@ -80,10 +80,10 @@ Options:
   --skipClipboard                Skip text and file clipboard probes.
   --skipFileClipboard            Skip file clipboard probe only.
   --skipInputLog                 Skip safe input-log probe.
-  --preflightOnly                Only read /discovery and print a readiness summary.
+  --preflightOnly                Only read /discovery and print readiness plus the formal run plan.
   --checkClientDiagnostics       With preflight, also run Windows client diagnostics against discovery runtime.
   --userAuthRequest              With preflight, print a NEED_USER_AUTH reminder for the next password step.
-  --json                         With --preflightOnly, print a single machine-readable JSON object.
+  --json                         With --preflightOnly, print a single JSON object including runPlan.
   --boardSummary                 Print a short secret-free Agent Link Board summary.
   --help, -h                     Show this help.
 
@@ -180,6 +180,92 @@ function makeFormalCommand(args) {
     "--port", String(args.port),
     "--promptPassword",
   ].join(" ");
+}
+
+function quoteCommandArg(value) {
+  const text = String(value);
+  return /^[A-Za-z0-9_./:=@-]+$/.test(text) ? text : JSON.stringify(text);
+}
+
+function makeDisplayCommand(script, args) {
+  return ["node", script, ...args].map(quoteCommandArg).join(" ");
+}
+
+function makeFormalRunPlan(args) {
+  const probeExpectedMs = Math.max(
+    Number(args.videoDurationMs) || 0,
+    args.skipAudio ? 0 : Number(args.audioDurationMs) || 0,
+  );
+  const browserTimeoutMs = Math.max(args.timeoutMs, 45000);
+  const steps = [];
+  if (!args.skipProbe) {
+    steps.push({
+      id: "protocol-media-clipboard-input-log",
+      label: "Protocol, H.264, audio, clipboard, and input-log probe",
+      script: "scripts/windows/probe-mac-host.mjs",
+      command: makeDisplayCommand("scripts/windows/probe-mac-host.mjs", makeProbeArgs(args)),
+      timeoutMs: args.timeoutMs,
+      expectedDurationMs: probeExpectedMs,
+      checks: {
+        h264: !args.allowMockVideo,
+        realVideo: !args.allowMockVideo,
+        audio: !args.skipAudio,
+        clipboardText: !args.skipClipboard,
+        clipboardFile: !args.skipClipboard && !args.skipFileClipboard,
+        inputLog: !args.skipInputLog,
+        inject: false,
+      },
+    });
+  }
+  if (!args.skipBrowser) {
+    steps.push({
+      id: "windows-client-browser-h264",
+      label: "Windows client browser discovery and H.264 canvas check",
+      script: "scripts/windows/test-windows-client-browser.mjs",
+      command: makeDisplayCommand("scripts/windows/test-windows-client-browser.mjs", makeBrowserArgs(args)),
+      timeoutMs: browserTimeoutMs,
+      expectedDurationMs: browserTimeoutMs,
+      checks: {
+        discoveryUi: true,
+        h264: !args.allowMockVideo,
+        inject: false,
+      },
+    });
+  }
+
+  return {
+    target: { host: args.host, port: Number(args.port) },
+    requiresPassword: true,
+    passwordTransport: "LAN_DUAL_PASSWORD environment only",
+    passwordInCommandArguments: false,
+    inject: false,
+    inputMode: args.skipInputLog ? "skipped" : "log",
+    profile: args.fastProfile ? "fast" : "formal",
+    video: {
+      width: args.width,
+      height: args.height,
+      fps: args.fps,
+      bandwidthKbps: args.bandwidthKbps,
+      durationMs: args.videoDurationMs,
+      minFrames: args.minVideoFrames,
+      minFps: args.minVideoFps,
+      maxGapMs: args.maxVideoGapMs,
+      allowMockVideo: args.allowMockVideo,
+    },
+    audio: {
+      skipped: args.skipAudio,
+      durationMs: args.skipAudio ? 0 : args.audioDurationMs,
+      minFrames: args.skipAudio ? 0 : args.minAudioFrames,
+      minFps: args.skipAudio ? 0 : args.minAudioFps,
+      maxGapMs: args.skipAudio ? null : args.maxAudioGapMs,
+    },
+    clipboard: {
+      text: !args.skipClipboard,
+      file: !args.skipClipboard && !args.skipFileClipboard,
+    },
+    steps,
+    estimatedDurationMs: steps.reduce((total, step) => total + (Number(step.expectedDurationMs) || 0), 0),
+  };
 }
 
 function statusFlag(value) {
@@ -353,6 +439,7 @@ function makePreflightReport(args, discoveryResult) {
       detail: "not requested",
     },
     command: makeFormalCommand(args),
+    runPlan: makeFormalRunPlan(args),
   });
 }
 
@@ -385,7 +472,23 @@ function makeOfflinePreflightReport(args, error) {
       detail: "not requested",
     },
     command: makeFormalCommand(args),
+    runPlan: makeFormalRunPlan(args),
   });
+}
+
+function printRunPlan(runPlan) {
+  if (!runPlan) return;
+  const video = runPlan.video || {};
+  const audio = runPlan.audio || {};
+  const steps = Array.isArray(runPlan.steps) ? runPlan.steps : [];
+  print(
+    "INFO",
+    `Formal run plan: steps=${steps.length} profile=${runPlan.profile || "formal"} video=${video.width || "?"}x${video.height || "?"}@${video.fps || "?"}Hz/${Math.round((Number(video.bandwidthKbps) || 0) / 1000)}Mbps audio=${audio.skipped ? "skipped" : `${audio.durationMs}ms`} inject=${runPlan.inject}.`,
+  );
+  print("INFO", `Password handling: ${runPlan.passwordTransport}; passwordInCommandArguments=${runPlan.passwordInCommandArguments}.`);
+  for (const [index, step] of steps.entries()) {
+    print("INFO", `Plan ${index + 1}: ${step.label}; timeout=${step.timeoutMs}ms; command=${step.command}`);
+  }
 }
 
 function printPreflightReport(report) {
@@ -393,6 +496,7 @@ function printPreflightReport(report) {
     print("ERROR", `Mac host discovery offline: ${report.error?.message || "unknown error"}`);
     print("INFO", `Target: ${report.target.host}:${report.target.port}`);
     print("INFO", "Ask Mac side to confirm the host is running before entering the password.");
+    printRunPlan(report.runPlan);
     return;
   }
 
@@ -414,6 +518,7 @@ function printPreflightReport(report) {
     print(check.ok ? "OK" : "WARN", `${check.name}: ${check.detail}`);
   }
   print("INFO", `Formal command: ${report.command}`);
+  printRunPlan(report.runPlan);
 }
 
 function summarizeDiagnosticsOutput(text) {
