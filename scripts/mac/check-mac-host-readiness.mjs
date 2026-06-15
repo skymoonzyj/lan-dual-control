@@ -150,7 +150,7 @@ Options:
   --port <port>             Mac host port. Default: 43770
   --password <password>     Probe password. Default: LAN_DUAL_PASSWORD or demo-password
   --promptPassword          Ring first, then prompt for probe password in a frontmost
-                            native macOS hidden password dialog. Useful for formal-password
+                            macOS hidden password dialog. Useful for formal-password
                             deep probes; the value is not printed.
   --timeoutMs <ms>          Per-step timeout. Default: 20000
   --expectBuildId <id>      Require running host runtime.buildId. Implies --probeHost.

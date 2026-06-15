@@ -45,7 +45,7 @@ Options:
   --allowClientServerOffline      Let local Mac client page offline remain a warning.
   --allowWindowsHostOffline       Let Windows host discovery offline remain a warning.
   --boardSummary                  Print a short secret-free Agent Link Board summary.
-  --json                          Print one machine-readable JSON object.
+  --json                          Print one machine-readable JSON object, including runPlan.
   --help, -h                      Show this help without probing anything.
 
 Examples:
@@ -308,6 +308,120 @@ function makeCallText(report) {
   ].join(" ");
 }
 
+function makeChecklistCommand(args) {
+  const parts = [
+    "node scripts/mac/check-mac-client-formal-status.mjs",
+    "--host",
+    args.windowsHost || "<Windows IP>",
+    "--port",
+    String(args.windowsPort || defaults.windowsPort),
+    "--boardSummary",
+  ];
+  return parts.join(" ");
+}
+
+function makeBrowserTestCommand(report, args) {
+  const host = report.readiness.windowsHost || {};
+  if (host.recommendedCommand) return host.recommendedCommand;
+  const targetHost = host.probe?.host || args.windowsHost || "<Windows IP>";
+  const targetPort = host.probe?.port || args.windowsPort || defaults.windowsPort;
+  return [
+    "node scripts/windows/test-mac-client-browser.mjs",
+    "--useExistingHost",
+    "--host",
+    targetHost,
+    "--port",
+    String(targetPort),
+    "--enableAudio",
+    "--expectAudioPayload",
+    "--expectAudioPlayback",
+  ].join(" ");
+}
+
+function makeRunPlan(report, args) {
+  const host = report.readiness.windowsHost || {};
+  const clientServer = report.readiness.clientServer || {};
+  const targetHost = host.probe?.host || args.windowsHost || "";
+  const targetPort = host.probe?.port || args.windowsPort || defaults.windowsPort;
+  const targetAddress = targetHost ? `${targetHost}:${targetPort}` : `<Windows IP>:${targetPort}`;
+  const browserTestCommand = makeBrowserTestCommand(report, args);
+  return {
+    name: "Mac controls Windows formal run plan",
+    profile: "mac-client-windows-formal",
+    target: {
+      host: targetHost,
+      port: targetPort,
+      address: targetAddress,
+      online: Boolean(host.online),
+      runtimeBuild: host.runtime?.buildId || "",
+      inputMode: host.capabilities?.input?.mode || "",
+    },
+    localClient: {
+      url: clientServer.url || `http://${args.clientHost}:${args.clientPort}/`,
+      online: Boolean(clientServer.online),
+    },
+    estimatedDuration: {
+      preflight: "under 1 minute",
+      browserSmoke: "2-5 minutes",
+      optionalVideoSoak: "5-10 minutes when both sides are watching",
+    },
+    safety: {
+      readOnlyPreflight: true,
+      startsMacClient: false,
+      startsWindowsHost: false,
+      authenticatesWebSocket: false,
+      passwordRequestedByThisScript: false,
+      passwordInCommandArguments: false,
+      passwordOnAgentLinkBoard: false,
+      inject: false,
+      requiresExplicitUserConfirmationForInject: true,
+    },
+    commands: {
+      discoverWindowsHost: "node scripts/mac/discover-windows-hosts.mjs --boardSummary",
+      ensureMacClient: "node scripts/mac/start-mac-client.mjs --status --boardSummary",
+      rerunFormalChecklist: makeChecklistCommand(args),
+      browserSmoke: browserTestCommand,
+    },
+    steps: [
+      {
+        id: "local-client",
+        title: "Confirm the Mac client page is online",
+        command: "node scripts/mac/start-mac-client.mjs --status --boardSummary",
+        success: "Mac client page is reachable and serving apps/mac-client.",
+      },
+      {
+        id: "discover-windows-host",
+        title: "Find or confirm the Windows host /discovery endpoint",
+        command: targetHost ? makeChecklistCommand(args) : "node scripts/mac/discover-windows-hosts.mjs --boardSummary",
+        success: "Windows host discovery is online and reports runtime/capabilities.",
+      },
+      {
+        id: "formal-checklist",
+        title: "Run the read-only formal checklist",
+        command: makeChecklistCommand(args),
+        success: "Repo, board, local page, Windows discovery, H.264/audio/input-log/clipboard readiness are visible.",
+      },
+      {
+        id: "browser-smoke",
+        title: "Run the true Mac client browser smoke against Windows host",
+        command: browserTestCommand,
+        success: "First frame, H.264/JPEG fallback, frame age, audio payload/playback, clipboard and input-log ack are checked.",
+      },
+      {
+        id: "observe-and-compare",
+        title: "Compare user-visible quality and resource impact",
+        command: "",
+        success: "Record first frame time, observed FPS, frame age, audio delay, bandwidth/CPU/memory, and any reconnect issues.",
+      },
+    ],
+    notes: [
+      "Do not send passwords, tokens, or system account details on Agent Link Board.",
+      "Only enter the Windows host password in the Mac client UI or a dedicated local test command when intentionally running auth.",
+      "Do not run real input injection unless the user explicitly confirms they are watching.",
+    ],
+  };
+}
+
 function makeBoardSummary(report) {
   const host = report.readiness.windowsHost || {};
   const repo = report.readiness.git?.clean ? "clean" : `dirty(${report.readiness.git?.changes?.length || 0})`;
@@ -323,8 +437,20 @@ function makeBoardSummary(report) {
     report.readyToCall
       ? `Next: run Mac client true test against ${host.probe?.host}:${host.probe?.port}; compare first frame, FPS, frame age, audio playback, clipboard, input-log, bandwidth/CPU.`
       : "Next: clear blockers, run node scripts/mac/start-mac-client.mjs, discover/start Windows host, then rerun with --host <Windows IP> --port 43770 --boardSummary.",
+    "RunPlan: local client -> Windows discovery -> formal checklist -> browser smoke -> observe quality/resources.",
     "Do not send passwords on Agent Link Board; do not run inject unless the user explicitly confirms they are watching.",
   ].join(" ");
+}
+
+function printRunPlan(runPlan) {
+  console.log("Formal run plan");
+  for (const step of runPlan.steps) {
+    console.log(`- ${step.id}: ${step.title}`);
+    if (step.command) console.log(`  Command: ${step.command}`);
+    console.log(`  Success: ${step.success}`);
+  }
+  console.log(`- safety: passwordInCommandArguments=${runPlan.safety.passwordInCommandArguments}; inject=${runPlan.safety.inject}; passwordOnAgentLinkBoard=${runPlan.safety.passwordOnAgentLinkBoard}`);
+  console.log("");
 }
 
 function printHuman(report) {
@@ -339,6 +465,7 @@ function printHuman(report) {
     if (entry.next) console.log(`      Next: ${entry.next}`);
   }
   console.log("");
+  printRunPlan(report.runPlan);
   console.log(report.boardSummary);
 }
 
@@ -370,6 +497,7 @@ function buildReport(args) {
     checklist,
     readiness,
   };
+  report.runPlan = makeRunPlan(report, args);
   report.callText = makeCallText(report);
   report.boardSummary = makeBoardSummary(report);
   return report;

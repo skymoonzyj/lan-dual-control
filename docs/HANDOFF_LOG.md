@@ -17,6 +17,54 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Mac Codex
+
+日期：2026-06-15 16:24
+开发端：Mac Codex
+本轮目标：继续按用户反馈加固 Mac 侧密码输入可见性，并给 Mac 控制 Windows formal checklist 增加无密执行计划。
+完成内容：
+- `scripts/mac/password-prompt.mjs` 调整 `--promptPassword` 弹窗顺序：先响铃，再优先打开系统 macOS 前台隐藏密码框，并额外尝试把弹窗进程/SystemUIServer 拉到前台；系统弹窗打不开时才退回前台置顶的 AppKit 隐藏密码框。
+- 用户取消系统密码框时直接取消，不再继续弹备用窗口；默认仍不退回终端隐藏输入，避免用户看不到输入位置。
+- 显式 `--promptPassword` 仍不复用已有 `LAN_DUAL_PASSWORD`，必须弹前台窗口重新输入；密码不进 argv、不打印、不发联络板。
+- `scripts/mac/check-mac-client-formal-status.mjs` 新增 `runPlan`，普通输出、JSON 和 boardSummary 均能展示 Mac 控制 Windows 真连前的安全执行路径：本地 Mac client 页面、Windows discovery、formal checklist、浏览器 smoke、质量/资源观察。
+- runPlan 明确 `passwordInCommandArguments=false`、`passwordOnAgentLinkBoard=false`、`inject=false`，并提醒 `inject` 仍需用户明确确认。
+- `apps/mac-host/README.md`、`apps/mac-client/README.md`、`CURRENT_STATUS`、`NEXT_ACTIONS` 和任务板同步当前行为。
+修改文件：
+- `scripts/mac/password-prompt.mjs`
+- `scripts/mac/test-mac-password-prompt.mjs`
+- `scripts/mac/start-mac-host.mjs`
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `scripts/mac/check-mac-formal-local-smoke.mjs`
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `apps/mac-host/README.md`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/password-prompt.mjs`
+- `node --check scripts/mac/test-mac-password-prompt.mjs`
+- `node scripts/mac/test-mac-password-prompt.mjs --timeoutMs 10000`
+- `node --check scripts/mac/check-mac-client-formal-status.mjs`
+- `node --check scripts/mac/test-mac-client-formal-status.mjs`
+- `node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 15000`
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 15000`
+- `node scripts/mac/test-mac-readiness-prompt-password.mjs --timeoutMs 12000`
+- `node scripts/mac/test-mac-formal-local-smoke.mjs --timeoutMs 15000`
+- `node scripts/mac/test-mac-script-help.mjs --script password-prompt.mjs --script start-mac-host.mjs --script check-mac-host-readiness.mjs --script check-mac-formal-local-smoke.mjs --script check-mac-client-formal-status.mjs --script test-mac-password-prompt.mjs --script test-mac-client-formal-status.mjs --timeoutMs 8000`
+- `git diff --check`
+- 冲突标记搜索通过
+遗留问题：
+- 本轮没有弹真实正式密码框，避免在未进入正式验收时打扰用户；下次真实 `--promptPassword` 会先响铃再显示系统 macOS 前台隐藏密码框。
+- GitHub fetch 偶发卡住；本轮已基于 Windows 最新 `c486fc6` 合并，推送前仍需最后 fetch 确认。
+下一步建议：
+- Windows host 启动后，Mac 侧运行 `node scripts/mac/discover-windows-hosts.mjs --boardSummary`，再运行 `node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary`；ready 后按 runPlan 做浏览器 smoke 和观感/资源记录。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端启动正式 Windows host 并同步 IP/端口；密码不要发联络板，`inject` 仍需用户另行明确确认。
+
 ## 2026-06-15 Windows Codex
 
 日期：2026-06-15 16:35
@@ -78,7 +126,7 @@
 - `node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host 192.168.31.122 --port 43770 --requireMacHost --json --timeoutMs 1200`
 - `node scripts/windows/test-windows-script-help.mjs --timeoutMs 8000`
 - `git diff --check`
-- `rg -n "<<<<<<<|=======|>>>>>>>" scripts/windows docs apps/windows-client`
+- 冲突标记搜索通过
 遗留问题：
 - 当前真实 Mac host `/discovery.runtime.buildId=d807536`，仓库已继续前进；这轮只做发现/命令生成，不重启 Mac host，也不跑正式认证。
 下一步建议：
@@ -144,7 +192,6 @@
 - Windows host 正式启动后，先发 `start-windows-host --status --boardSummary` 到联络板；Mac 端可直接运行摘要里的 `check-mac-client-formal-status`。
 是否改了协议：否。
 是否需要另一端配合：不需要；后续真连验收需要 Mac 端连接已启动的 Windows host。
-
 ## 2026-06-15 Windows Codex
 
 日期：2026-06-15 13:55

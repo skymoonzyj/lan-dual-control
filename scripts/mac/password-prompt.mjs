@@ -20,6 +20,12 @@ export async function promptPassword({
   playAttentionSound();
   if (!dialogDisabled()) {
     const dialogErrors = [];
+    try {
+      return await promptWithMacDialog({ title, message, prompt, timeoutMs });
+    } catch (error) {
+      if (isDialogCancellation(error)) throw error;
+      dialogErrors.push(`AppleScript dialog: ${error.message}`);
+    }
     if (!nativeDialogDisabled()) {
       try {
         return await promptWithNativeMacDialog({ title, message, prompt, timeoutMs });
@@ -28,17 +34,11 @@ export async function promptPassword({
         dialogErrors.push(`native macOS dialog: ${error.message}`);
       }
     }
-    try {
-      return await promptWithMacDialog({ title, message, prompt, timeoutMs });
-    } catch (error) {
-      if (isDialogCancellation(error)) throw error;
-      if (allowTerminalFallback && canPromptInTerminal(output)) {
-        safeWrite(output, `[WARN] macOS password dialog failed: ${[...dialogErrors, error.message].join("; ")}\n`);
-        return promptHiddenInTerminal(terminalLabel, output);
-      }
-      dialogErrors.push(`AppleScript dialog: ${error.message}`);
-      throw new Error(`${dialogErrors.join("; ")} --promptPassword could not open a frontmost macOS password dialog.`);
+    if (allowTerminalFallback && canPromptInTerminal(output)) {
+      safeWrite(output, `[WARN] macOS password dialog failed: ${dialogErrors.join("; ")}\n`);
+      return promptHiddenInTerminal(terminalLabel, output);
     }
+    throw new Error(`${dialogErrors.join("; ")} --promptPassword could not open a frontmost macOS password dialog.`);
   }
   if (allowTerminalFallback && canPromptInTerminal(output)) {
     return promptHiddenInTerminal(terminalLabel, output);
@@ -186,17 +186,30 @@ exit(1)
 
 function promptWithMacDialog({ title, message, prompt, timeoutMs }) {
   const script = `
+on bringPasswordPromptToFront(dialogProcessId)
+  try
+    tell application "System Events"
+      set frontmost of first process whose unix id is dialogProcessId to true
+    end tell
+  end try
+  try
+    tell application "SystemUIServer" to activate
+  end try
+  try
+    tell application "Finder" to activate
+  end try
+  try
+    tell application "SystemUIServer" to activate
+  end try
+end bringPasswordPromptToFront
+
 set dialogTitle to ${appleScriptString(title)}
 set dialogMessage to ${appleScriptString(message)}
 set promptLabel to ${appleScriptString(prompt)}
-try
-  tell application "System Events"
-    set frontmost of first process whose unix id is (system attribute "pid") to true
-  end tell
-on error
-  tell application "SystemUIServer" to activate
-end try
-delay 0.2
+set dialogProcessId to (system attribute "pid") as integer
+bringPasswordPromptToFront(dialogProcessId)
+delay 0.15
+bringPasswordPromptToFront(dialogProcessId)
 try
   set dialogResult to display dialog (dialogMessage & return & return & promptLabel) default answer "" with title dialogTitle with hidden answer buttons {"Cancel", "Continue"} default button "Continue" cancel button "Cancel"
   set passwordValue to text returned of dialogResult
@@ -345,8 +358,8 @@ Shared helper used by Mac scripts that need a password prompt.
 
 Behavior:
   - Rings before asking for a password.
-  - Opens a frontmost native AppKit password dialog for --promptPassword callers.
-  - Falls back to an AppleScript frontmost hidden dialog only if the native dialog cannot open.
+  - Opens a frontmost macOS hidden password dialog for --promptPassword callers.
+  - Falls back to a native AppKit frontmost hidden dialog only if the system dialog cannot open.
   - Does not fall back to terminal input unless explicitly allowed for local manual fallback.
   - Never prints the password.
 

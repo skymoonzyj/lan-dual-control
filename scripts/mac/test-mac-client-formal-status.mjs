@@ -110,7 +110,13 @@ function checkOfflineJson(args) {
   assert(payload.checklist.some((entry) => entry.id === "windows-host" && entry.status === "blocker"), "offline payload should block on Windows host");
   assert(payload.checklist.some((entry) => entry.id === "inject" && entry.status === "skip"), "offline payload should explicitly skip inject");
   assert(payload.checklist.some((entry) => entry.id === "windows-host" && String(entry.next || "").includes("discover-windows-hosts.mjs")), "offline Windows host next step should suggest discovery helper");
+  assert(payload.runPlan?.safety?.passwordRequestedByThisScript === false, "offline runPlan should not request passwords");
+  assert(payload.runPlan?.safety?.passwordInCommandArguments === false, "offline runPlan should keep passwords out of argv");
+  assert(payload.runPlan?.safety?.inject === false, "offline runPlan should not run inject");
+  assert(payload.runPlan?.commands?.discoverWindowsHost?.includes("discover-windows-hosts.mjs"), "offline runPlan should include discovery command");
+  assert(payload.runPlan?.steps?.some((step) => step.id === "browser-smoke"), "offline runPlan should include browser smoke step");
   assertIncludes(payload.boardSummary || "", "Do not send passwords", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "RunPlan:", "offline board summary");
   assertIncludes(payload.callText || "", "not ready", "offline call text");
   assertNotIncludes(payload.boardSummary || "", "--checkBoard", "offline board summary");
   assertNotIncludes(payload.callText || "", "--checkBoard", "offline call text");
@@ -153,9 +159,32 @@ function checkBoardSummarySecretFree(args) {
   const output = `${result.stdout}\n${result.stderr}`;
   assert(result.status === 0, "board summary with allow flags should exit 0");
   assertIncludes(result.stdout, "Mac client formal Windows test:", "board summary");
+  assertIncludes(result.stdout, "RunPlan:", "board summary");
   assertIncludes(result.stdout, "Do not send passwords", "board summary");
   assertNotIncludes(output, secret, "board summary");
   print("OK", "Board summary is short and does not echo secret-like server text");
+}
+
+function checkHumanRunPlan(args) {
+  const result = run([
+    "--skipBoard",
+    "--allowDirty",
+    "--allowClientServerOffline",
+    "--allowWindowsHostOffline",
+    "--clientPort",
+    "9",
+    "--timeoutMs",
+    "1200",
+  ], args);
+  const output = `${result.stdout}\n${result.stderr}`;
+  assert(result.status === 0, "human output with allow flags should exit 0");
+  assertIncludes(result.stdout, "Formal run plan", "human runPlan");
+  assertIncludes(result.stdout, "local-client", "human runPlan");
+  assertIncludes(result.stdout, "browser-smoke", "human runPlan");
+  assertIncludes(result.stdout, "passwordInCommandArguments=false", "human runPlan safety");
+  assertIncludes(result.stdout, "inject=false", "human runPlan safety");
+  assertNotIncludes(output, "LAN_DUAL_PASSWORD", "human runPlan output");
+  print("OK", "Human output includes formal run plan and safety boundaries");
 }
 
 async function getFreePort() {
@@ -316,6 +345,11 @@ async function checkReadyShape(args) {
       assert(payload.checklist.some((entry) => entry.id === "audio" && entry.status === "ok"), "audio should be ok");
       assert(payload.checklist.some((entry) => entry.id === "clipboard" && entry.status === "ok"), "clipboard should be ok");
       assert(payload.checklist.some((entry) => entry.id === "inject" && entry.status === "skip"), "inject should be skipped");
+      assert(payload.runPlan?.target?.host === "127.0.0.1", "ready runPlan should include target host");
+      assert(payload.runPlan?.target?.runtimeBuild === "mock-formal-win-build", "ready runPlan should include runtime build");
+      assert(payload.runPlan?.commands?.browserSmoke?.includes("--useExistingHost"), "ready runPlan should include browser smoke command");
+      assert(payload.runPlan?.safety?.authenticatesWebSocket === false, "formal checklist runPlan itself should not authenticate");
+      assert(payload.runPlan?.safety?.requiresExplicitUserConfirmationForInject === true, "runPlan should require explicit inject confirmation");
       assertIncludes(payload.boardSummary || "", "windowsHost=online 127.0.0.1", "ready board summary");
       assertIncludes(payload.callText || "", "Suggested browser test:", "ready call text");
       assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "ready output");
@@ -334,6 +368,7 @@ async function main() {
   checkOfflineJson(args);
   checkAllowOfflineWarnings(args);
   checkBoardSummarySecretFree(args);
+  checkHumanRunPlan(args);
   await checkReadyShape(args);
   print("OK", "Mac client formal status self-test passed");
 }
