@@ -148,6 +148,10 @@ async function checkMockJson(args) {
     assert(payload.macPreflight?.payload?.target?.port === port, "mock JSON should use discovered mock port");
     assert(payload.macPreflight?.payload?.discoverySelection?.requested === true, "preflight should record discovery");
     assert(String(payload.boardSummary || "").includes("Windows resume:"), "mock JSON should include board summary");
+    assert(String(payload.userAuthRequest || "").includes("NEED_USER_AUTH"), "mock JSON should include user auth request");
+    assert(String(payload.userAuthRequest || "").includes("正式 Mac 端到端验收需要你在 Windows 本机隐藏输入"), "mock JSON should include formal auth wording");
+    assert(String(payload.userAuthRequest || "").includes("powershell.exe"), "mock JSON user auth request should prefer PowerShell");
+    assert(String(payload.userAuthRequest || "").includes("-PromptPassword"), "mock JSON user auth request should prompt for password");
     assert(String(payload.commands?.formalRun || "").includes("-PromptPassword"), "mock JSON should include formal command");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "mock JSON");
     console.log("[OK] Windows resume status JSON summarizes mock Mac preflight");
@@ -175,6 +179,33 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "mac=ready", "board summary");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "board summary");
     console.log("[OK] Windows resume status board summary is one-line and secret-free");
+  });
+}
+
+async function checkUserAuthRequest(args) {
+  await withMockHost(async (port) => {
+    const result = await run([
+      "--discover",
+      "--discoverNoLocalSubnets",
+      "--host", "127.0.0.1",
+      "--port", String(port),
+      "--userAuthRequest",
+      "--allowMockVideo",
+      "--skipAudio",
+      "--skipClipboard",
+      "--skipInputLog",
+    ], args);
+    assert(result.exitCode === 0, `mock userAuthRequest failed\n${result.stdout}\n${result.stderr}`);
+    const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean);
+    assert(lines.length === 1, `userAuthRequest should be one line, got ${lines.length}`);
+    assertIncludes(result.stdout, "NEED_USER_AUTH", "userAuthRequest");
+    assertIncludes(result.stdout, "Windows 本机隐藏输入 Mac host 正式密码", "userAuthRequest");
+    assertIncludes(result.stdout, "powershell.exe", "userAuthRequest");
+    assertIncludes(result.stdout, "-PromptPassword", "userAuthRequest");
+    assertIncludes(result.stdout, "inject 仍需", "userAuthRequest");
+    assertIncludes(result.stdout, "另行明确确认", "userAuthRequest");
+    assertNotIncludes(result.stdout + result.stderr, "test-password", "userAuthRequest");
+    console.log("[OK] Windows resume status can print a secret-free user auth request");
   });
 }
 
@@ -220,6 +251,7 @@ async function main() {
   await checkHelp(args);
   await checkMockJson(args);
   await checkBoardSummary(args);
+  await checkUserAuthRequest(args);
   await checkOfflineJson(args);
   await checkRequireMacReady(args);
   console.log("[OK] Windows resume status regression passed");

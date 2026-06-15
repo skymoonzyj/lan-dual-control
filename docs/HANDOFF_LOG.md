@@ -19,6 +19,42 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 18:12
+开发端：Windows Codex
+本轮目标：让 Windows 恢复开工总览能直接输出正式验收前的安全授权提示，减少手工拼联络板消息。
+完成内容：
+- `scripts/windows/check-windows-resume-status.mjs` 新增 `--userAuthRequest`，JSON 报告也新增 `userAuthRequest` 字段。
+- `scripts/windows/check-windows-resume-status.ps1` 新增 `-UserAuthRequest`。
+- 当 formal preflight ready 时，输出 `NEED_USER_AUTH` 文本，提示用户在 Windows 本机隐藏输入 Mac host 正式密码，并给出固定目标的 PowerShell 正式验收命令：`check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName <host> -Port <port> -PromptPassword`。
+- 当 preflight 不可用或不 ready 时，仍输出“暂时不要输入正式密码”的安全提示；不认证、不请求密码、不发送输入、不执行 `inject`。
+- Node 和 PowerShell 回归都覆盖 `userAuthRequest` 不泄露密码。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- PowerShell AST parse `scripts/windows/check-windows-resume-status.ps1`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 30000`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-resume-status.ps1 -CheckBoard -CheckClientDiagnostics -UserAuthRequest`
+遗留问题：
+- 仍未执行正式 E2E，因为需要用户在 Windows 本机输入 Mac host 正式密码；`inject` 仍需另行明确确认。
+下一步建议：
+- 用户准备好密码时，先运行 `check-windows-resume-status.ps1 -CheckBoard -CheckClientDiagnostics -UserAuthRequest` 生成联络板授权提示，再按提示运行正式 PowerShell 验收。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；正式验收需要用户输入密码。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 18:00
 开发端：Windows Codex
 本轮目标：给 Windows 恢复开工总览补 PowerShell 包装入口，方便 Windows 日常用一条 `.ps1` 命令做只读状态同步。

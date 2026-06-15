@@ -24,6 +24,7 @@ const defaults = {
   requireMacReady: false,
   json: false,
   boardSummary: false,
+  userAuthRequest: false,
 };
 
 function helpRequested(argv) {
@@ -57,11 +58,13 @@ Options:
   --requireClean                Exit non-zero if git worktree is dirty.
   --requireMacReady             Exit non-zero if Mac formal preflight is not ready.
   --boardSummary                Print a one-line secret-free Agent Link Board summary.
+  --userAuthRequest             Print a secret-free NEED_USER_AUTH message for Agent Link Board.
   --json                        Print one machine-readable JSON object.
   --help, -h                    Show this help without probing anything.
 
 Examples:
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary
+  node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --userAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
 `);
 }
@@ -92,6 +95,7 @@ function parseArgs(argv) {
       token === "--requireClean" ||
       token === "--requireMacReady" ||
       token === "--boardSummary" ||
+      token === "--userAuthRequest" ||
       token === "--json"
     ) {
       args[token.slice(2)] = true;
@@ -359,6 +363,34 @@ function makeBoardSummary(report) {
   ].join(" ");
 }
 
+function makeUserAuthRequest(report) {
+  const mac = report.macPreflight?.payload;
+  if (mac?.ok) {
+    const target = mac.target
+      ? `${mac.target.host}:${mac.target.port}`
+      : `${report.args.host}:${report.args.port}`;
+    return [
+      `NEED_USER_AUTH: 正式 Mac 端到端验收需要你在 Windows 本机隐藏输入 Mac host 正式密码，target=${target}。`,
+      `位置/步骤：在 ${repoRoot.replace(/[\\/]+$/, "")} 运行 ${report.commands.formalRunFixedTarget}。`,
+      "不要把密码发到联络板；本命令默认不执行 inject，inject 仍需你另行明确确认。",
+      "处理后请回复 已输入密码并开始验收。",
+    ].join(" ");
+  }
+
+  const preflightRequest = normalizedText(report.macPreflight?.payload?.userAuthRequest);
+  if (preflightRequest) return preflightRequest;
+
+  const target = report.macPreflight?.payload?.target
+    ? `${report.macPreflight.payload.target.host}:${report.macPreflight.payload.target.port}`
+    : `${report.args.host}:${report.args.port}`;
+  const detail = report.macPreflight?.parseError || report.macPreflight?.error || "preflight unavailable";
+  return [
+    `NEED_USER_AUTH: 暂时不要输入正式密码，Windows 侧恢复总览尚未拿到可用 formal preflight，target=${target}。`,
+    `位置/步骤：先处理预检问题后重跑 ${report.commands.preflightBoardSummary}。`,
+    `当前细节：${detail}。密码不要发到联络板；inject 仍需用户另行明确确认。`,
+  ].join(" ");
+}
+
 function makeReport(args) {
   const git = getGitStatus();
   const board = getBoardSnapshot(args);
@@ -407,6 +439,7 @@ function makeReport(args) {
     failedChecks,
   };
   report.boardSummary = makeBoardSummary(report);
+  report.userAuthRequest = makeUserAuthRequest(report);
   return report;
 }
 
@@ -444,6 +477,8 @@ function printHuman(report) {
   console.log(`  ${report.commands.formalRun}`);
   console.log("- Board summary:");
   console.log(`  ${report.boardSummary}`);
+  console.log("- User auth request:");
+  console.log(`  ${report.userAuthRequest}`);
 }
 
 function flag(value) {
@@ -461,6 +496,8 @@ async function main() {
   const report = makeReport(args);
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
+  } else if (args.userAuthRequest) {
+    console.log(report.userAuthRequest);
   } else if (args.boardSummary) {
     console.log(report.boardSummary);
   } else {

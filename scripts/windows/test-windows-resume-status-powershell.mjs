@@ -131,6 +131,7 @@ async function checkWrapperHelp(args) {
   assert(result.exitCode === 0, `PowerShell wrapper help failed\n${output}`);
   assertIncludes(output, "Usage:", "PowerShell wrapper help");
   assertIncludes(output, "-CheckBoard -BoardSummary", "PowerShell wrapper help");
+  assertIncludes(output, "-UserAuthRequest", "PowerShell wrapper help");
   assertIncludes(output, "does not ask for or print", "PowerShell wrapper help");
   assertIncludes(output, "passwords", "PowerShell wrapper help");
   console.log("[OK] PowerShell resume-status wrapper help is safe");
@@ -157,6 +158,8 @@ async function checkMockJson(args) {
     assert(payload.macPreflight?.payload?.target?.port === port, "mock JSON should use discovered mock port");
     assert(payload.macPreflight?.payload?.discoverySelection?.requested === true, "preflight should record discovery");
     assertIncludes(payload.boardSummary, "Windows resume:", "mock JSON board summary");
+    assertIncludes(payload.userAuthRequest, "NEED_USER_AUTH", "mock JSON userAuthRequest");
+    assertIncludes(payload.userAuthRequest, "powershell.exe", "mock JSON userAuthRequest");
     assertNotIncludes(output, "test-password", "PowerShell mock JSON");
     console.log("[OK] PowerShell resume-status wrapper supports mock JSON discovery");
   });
@@ -183,6 +186,34 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "No password was requested or sent", "PowerShell board summary");
     assertNotIncludes(output, "test-password", "PowerShell board summary");
     console.log("[OK] PowerShell resume-status wrapper prints one-line board summary");
+  });
+}
+
+async function checkUserAuthRequest(args) {
+  await withMockHost(async (port) => {
+    const result = await runPowerShell([
+      "-Discover",
+      "-DiscoverNoLocalSubnets",
+      "-HostName", "127.0.0.1",
+      "-Port", String(port),
+      "-UserAuthRequest",
+      "-AllowMockVideo",
+      "-SkipAudio",
+      "-SkipClipboard",
+      "-SkipInputLog",
+    ], args);
+    const output = `${result.stdout}\n${result.stderr}`;
+    assert(result.exitCode === 0, `PowerShell userAuthRequest failed\n${output}`);
+    const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean);
+    assert(lines.length === 1, `PowerShell userAuthRequest should be one line, got ${lines.length}`);
+    assertIncludes(output, "NEED_USER_AUTH", "PowerShell userAuthRequest");
+    assertIncludes(output, "Windows 本机隐藏输入 Mac host 正式密码", "PowerShell userAuthRequest");
+    assertIncludes(output, "powershell.exe", "PowerShell userAuthRequest");
+    assertIncludes(output, "-PromptPassword", "PowerShell userAuthRequest");
+    assertIncludes(output, "inject 仍需", "PowerShell userAuthRequest");
+    assertIncludes(output, "另行明确确认", "PowerShell userAuthRequest");
+    assertNotIncludes(output, "test-password", "PowerShell userAuthRequest");
+    console.log("[OK] PowerShell resume-status wrapper prints a secret-free user auth request");
   });
 }
 
@@ -229,6 +260,7 @@ async function main() {
   await checkWrapperHelp(args);
   await checkMockJson(args);
   await checkBoardSummary(args);
+  await checkUserAuthRequest(args);
   await checkOfflineDefaults(args);
   await checkRequireMacReady(args);
   console.log("[OK] PowerShell resume-status wrapper regression passed");
