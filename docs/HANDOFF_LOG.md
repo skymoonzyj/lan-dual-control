@@ -19,6 +19,38 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 13:21
+开发端：Windows Codex
+本轮目标：把真实 WGC helper + NV12 + NVENC H.264 路线接入 Mac client 视频传输矩阵，作为 Mac 反控 Windows 真连前的页面级守门项。
+完成内容：
+- `scripts/windows/test-mac-client-video-transports.mjs` 新增可选 case `wgc-nv12-h264`，可用 `--case wgc-nv12-h264` 单独跑，也可用 `--includeWgcNv12` 加入默认四项矩阵。
+- 新 case 复用 `test-mac-client-browser --expectWgcNv12H264Video`，默认用 `h264_nvenc`，启动真实 WGC helper，要求页面显示 `h264/binary-h264`，并断言 session pipeline 为 `windows-wgc-helper-nv12-ffmpeg-h264`。
+- 默认矩阵仍保持四项，不强制要求 WGC helper 或桌面捕获上下文，避免没有 helper 的机器误失败。
+- `apps/windows-host/README.md`、`CURRENT_STATUS`、`NEXT_ACTIONS` 和任务板同步记录默认四项与可选 WGC NV12 第五项的用法和本机结果。
+修改文件：
+- `scripts/windows/test-mac-client-video-transports.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-video-transports.mjs`
+- `node scripts/windows/test-mac-client-video-transports.mjs --help`
+- `node scripts/windows/test-mac-client-video-transports.mjs --case wgc-nv12-h264 --timeoutMs 90000 --wgcNv12ObserveVideoMs 1500 --wgcNv12MinObservedVideoFrames 5 --wgcNv12MinObservedVideoFps 3 --verbose`
+- `node scripts/windows/test-mac-client-video-transports.mjs --case binary-h264 --timeoutMs 90000 --h264Encoder h264_nvenc --verbose`
+- `node scripts/windows/test-mac-client-video-transports.mjs --timeoutMs 90000 --h264Encoder h264_nvenc`
+遗留问题：
+- 真实 Mac 控制 Windows 跨机器观感、延迟、资源占用仍需要 Windows host 正式启动后由 Mac 端真连验收；当前只是 Windows 本机页面级守门。
+- WGC NV12 仍是 CPU readback/转换 + FFmpeg/NVENC 桥接，低延迟主线下一步仍应推进 helper 原生硬编。
+下一步建议：
+- 涉及 WGC NV12/H.264 的 Windows host 或 Mac client 改动后，跑 `test-mac-client-video-transports --case wgc-nv12-h264`；日常 H.264/transport 改动继续跑默认四项矩阵。
+是否改了协议：否。
+是否需要另一端配合：不需要；后续真连观感验收需要 Mac 端连接正式 Windows host。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 13:08
 开发端：Windows Codex
 本轮目标：给正式 Windows 控制 Mac E2E 增加无密执行计划输出，让用户输入正式密码前能看到将要执行的步骤、耗时和安全边界。

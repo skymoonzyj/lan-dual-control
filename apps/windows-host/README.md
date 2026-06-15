@@ -339,14 +339,21 @@ Mac 控制 Windows 的页面级自检可在 Windows 本机启动临时 Windows h
 node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs
 ```
 
-如果本轮改到了视频传输、H.264、fallback 或 WebSocket binary frame，优先跑视频传输矩阵。它会顺序启动 4 组临时 host/client/browser，并覆盖 `binary-h264`、H.264 JSON/base64 兼容路径、H.264 unsupported 后的 MJPEG/JPEG fallback，以及 `binary-jpeg`：
+如果本轮改到了视频传输、H.264、fallback 或 WebSocket binary frame，优先跑视频传输矩阵。默认会顺序启动 4 组临时 host/client/browser，并覆盖 `binary-h264`、H.264 JSON/base64 兼容路径、H.264 unsupported 后的 MJPEG/JPEG fallback，以及 `binary-jpeg`：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-mac-client-video-transports.mjs
 node E:\codex\lan-dual-control\scripts\windows\test-mac-client-video-transports.mjs --h264Encoder h264_nvenc
 ```
 
-本轮 `2026-06-14 23:55` 矩阵复验 4/4 通过：`binary-h264` 54 帧 / 909 ms / 59.4 FPS，21 个二进制 H.264 帧；H.264 JSON/base64 54 帧 / 905 ms / 59.7 FPS；H.264 fallback 53 帧 / 911 ms / 58.2 FPS；`binary-jpeg` 11 帧 / 1202 ms / 9.2 FPS。
+真实 WGC helper + NV12 + NVENC H.264 路径需要可用的桌面捕获上下文和已构建的 helper，默认矩阵不会强制跑；需要时显式选择第五个 case，或把它加入默认四项：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-mac-client-video-transports.mjs --case wgc-nv12-h264 --timeoutMs 90000
+node E:\codex\lan-dual-control\scripts\windows\test-mac-client-video-transports.mjs --includeWgcNv12 --h264Encoder h264_nvenc --timeoutMs 90000
+```
+
+本轮 `2026-06-15 13:17` 默认矩阵复验 4/4 通过：`binary-h264` 48 帧 / 907 ms / 52.9 FPS；H.264 JSON/base64 54 帧 / 913 ms / 59.1 FPS；H.264 fallback 49 帧 / 916 ms / 53.5 FPS；`binary-jpeg` 11 帧 / 1207 ms / 9.1 FPS。可选 `wgc-nv12-h264` 单项也通过：1080P 持续观察 49 帧 / 1516 ms / 32.3 FPS，切到 2K / 60 Hz / 40 Mbps 后 46 帧 / 1502 ms / 30.6 FPS，session pipeline 为 `windows-wgc-helper-nv12-ffmpeg-h264`、`h264_nvenc`、level `4.2`/`5.1`。
 
 需要把真实 Windows 系统声音也纳入 Mac 控制页验收时，加 `--requireAudio`；脚本会临时设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi`，打开页面声音开关，并等待 `pcm-f32le-base64` 播放计数：
 
@@ -373,7 +380,7 @@ node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --exp
 node E:\codex\lan-dual-control\scripts\windows\test-mac-client-browser.mjs --expectWgcNv12H264Video --skipFileClipboard --observeVideoMs 1200 --minObservedVideoFrames 5 --minObservedVideoFps 10 --maxInitialVideoMs 15000 --timeoutMs 45000
 ```
 
-`2026-06-15` 本机页面级短验收通过：最近复验首帧约 1595ms，页面诊断显示 `h264` canvas，收到 8 个 `binary-h264` 诊断帧，1080P 持续观察 1216ms 收到 39 帧、约 32.1 FPS；切到 2K / 60 Hz / 40 Mbps 后继续观察 1205ms 收到 30 帧、约 24.9 FPS，最后一帧为 `2560x1440 / h264/binary-h264 / level 5.1`。本轮同时修复了 H.264 level 固定为 4.2 导致 2K@60 下 NVENC/FFmpeg 退出的问题，2K 会话会提升到合适的 level。
+`2026-06-15` 本机页面级短验收通过：最近矩阵单项复验首帧约 1576ms，页面诊断显示 `h264` canvas，收到 `binary-h264` 诊断帧，1080P 持续观察 1516ms 收到 49 帧、约 32.3 FPS；切到 2K / 60 Hz / 40 Mbps 后继续观察 1502ms 收到 46 帧、约 30.6 FPS，最后一帧为 `2560x1440 / h264/binary-h264 / level 5.1`。本轮同时修复了 H.264 level 固定为 4.2 导致 2K@60 下 NVENC/FFmpeg 退出的问题，2K 会话会提升到合适的 level。
 
 需要回归旧 JSON/base64 兼容路径时，可关闭页面二进制视频传输：
 

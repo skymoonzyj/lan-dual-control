@@ -299,13 +299,14 @@ Mac 端：
 - [x] Windows host 可选 `binary-jpeg` WebSocket 二进制视频帧。（Mac client 声明 `preferredVideoTransport=binary-jpeg` 后，JPEG 元数据保留 JSON 头、图片改走原始 JPEG 字节；`--expectBinaryVideo` 页面级自检通过。）
 - [x] Windows host `ffmpeg-h264` 模式的 MJPEG/JPEG fallback。（Mac client/WebCodecs 拒绝当前 H.264 `codecString` 后发送 `preferredVideoCodec=mjpeg` / `preferredVideoEncoding=data-url`，同一个 host 会切到 `windows-ffmpeg-gdigrab-mjpeg` 并恢复 JPEG 画面；`--expectH264Fallback` 页面级自检通过。）
 - [x] Windows host 可选 `binary-h264` WebSocket 二进制视频帧。（Mac client 声明 `preferredVideoTransport=binary-h264` 后，H.264 JSON 头保留在 `LDCV1` binary frame，Annex B payload 改走原始字节；`--expectBinaryH264Video`、`--disableBinaryVideo` 兼容回归和 `binary-jpeg` 回归通过。）
-- [x] Mac client 视频传输矩阵回归脚本。（`test-mac-client-video-transports.mjs` 顺序覆盖 `binary-h264`、H.264 JSON/base64、H.264 unsupported fallback 和 `binary-jpeg`，当前 4/4 通过，避免后续手动四连测和端口互抢。）
+- [x] Mac client 视频传输矩阵回归脚本。（`test-mac-client-video-transports.mjs` 默认顺序覆盖 `binary-h264`、H.264 JSON/base64、H.264 unsupported fallback 和 `binary-jpeg`，当前 4/4 通过，避免后续手动四连测和端口互抢。）
 - [x] Windows 视频编码能力体检脚本。（`check-windows-video-encoder-support.mjs` 汇总 FFmpeg H.264 软件/硬件编码器、WGC 预检和浏览器 WebCodecs；本机强校验通过，已用于推进 WGC H.264 桥接原型。）
 - [x] Windows host `ffmpeg-h264` 可选 H.264 encoder。（默认 `libx264`，支持 `LAN_DUAL_WINDOWS_H264_ENCODER` / `--h264Encoder h264_nvenc`，discovery/session/frame/观察脚本回传实际 `h264Encoder`；NVENC 路径和默认 libx264 回归均通过。）
 - [x] Windows WGC H.264/硬编桥接原型。（显式 `--wgcH264Bridge`，真实 helper + `h264_nvenc` 短观察通过，pipeline=`windows-wgc-helper-ffmpeg-h264`。）
 - [x] Windows WGC raw-bgra -> FFmpeg/NVENC H.264 正确性原型。（`--wgcH264Source raw-bgra` / `LAN_DUAL_WINDOWS_WGC_H264_SOURCE=raw-bgra`，真实 helper + `h264_nvenc` 短观察通过，pipeline=`windows-wgc-helper-raw-bgra-ffmpeg-h264`。）
 - [x] Windows WGC raw-bgra helper 内部二进制管道。（raw-bgra H.264 bridge 默认 `binary-frame-v1`，真实 helper + `h264_nvenc` 720p 短观察约 30 FPS；静态桌面源帧仍偏稀疏。）
 - [x] Windows WGC NV12 helper 内部二进制管道。（`--wgcH264Source nv12` / `LAN_DUAL_WINDOWS_WGC_H264_SOURCE=nv12`，真实 helper + `h264_nvenc` 720p 短观察约 30 FPS，pipeline=`windows-wgc-helper-nv12-ffmpeg-h264`。）
+- [x] Mac client 视频传输矩阵可选覆盖真实 WGC NV12 H.264。（`test-mac-client-video-transports --case wgc-nv12-h264` 启动真实 WGC helper + `h264_nvenc`，页面级验证 `h264/binary-h264`、1080P/2K 设置切换和 `windows-wgc-helper-nv12-ffmpeg-h264` session pipeline。）
 - [ ] Windows WGC helper 原生硬编，以及 Mac client 真连观感/资源验收。
 - [ ] 安装包。
 - [ ] 开机自启。
