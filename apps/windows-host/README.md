@@ -239,6 +239,12 @@ node E:\codex\lan-dual-control\scripts\windows\check-windows-wgc-support.mjs --j
 node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --requireWgc
 ```
 
+需要把 WGC H.264 raw-bgra / NV12 源格式短对照也纳入体检时，显式加 `--probeWgcH264Sources`。它会启动本机临时 Windows host 和 WGC helper，跑一组 30Hz/10Mbps 的短对照并把结果汇总进 readiness；首次失败会换一个临时端口自动重试一次。该探针较重，所以不会被默认体检或 `--profile deep` 自动触发。
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --probeWgcH264Sources
+```
+
 常用预设可直接用 `--profile`：`default` 与上面的默认体检一致；`deploy` 用于 Windows host 已启动、准备让 Mac 连入前，会开启严格模式、要求配置端口可达、确认运行中 host 是当前 git build，并短时验证视频和系统声音；视频/音频短验收默认还会要求帧 `timestamp` 单调，且接收年龄不超过 1000ms；`deep` 在 `deploy` 基础上再跑 `test-windows-host.ps1` 本机自检和文件剪贴板服务级坏包回归。若 `43770` 没有服务正在监听，`deploy` / `deep` 失败是正常现象，先用启动助手或 `node .\server.mjs 43770 0.0.0.0` 启动 Windows host。
 
 ```powershell
@@ -438,7 +444,7 @@ Rust helper 项目位于 `apps/windows-wgc-helper`。当前 `cargo run -- --prob
 
 WGC 参数基准脚本位于 `scripts/windows/benchmark-windows-wgc-settings.mjs`。它会构建或复用本地 Rust helper，顺序启动临时 Windows host，并用 `observe-windows-host-video --screenMode wgc --resourceSampleTree true --json` 跑多档刷新率/码率对照。`2026-06-14 20:35` 本机 `1280x720`、每档 2.2 秒短基准已确认 30/60/120Hz 都能协商到对应会话刷新率，但当前 WGC 仍是 `FrameArrived` 事件驱动，静态桌面实收约 9-12 FPS：30Hz/10M 为 21 帧、9.25 FPS、平均约 78 KB；60Hz/20M 为 25 帧、11.11 FPS、平均约 83 KB；120Hz/40M sharp 为 27 帧、12.22 FPS、平均约 121 KB。`LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME=1` 或观察/基准脚本 `--wgcRepeatLastFrame true` / `--repeatLastFrame` 可启用重复最后一帧诊断模式，host 会在没有新 WGC 帧时复用上一帧，并在 `video_frame` 带 `repeatedFrame`、`sourceTimestamp`、`contentAgeMs`。默认 `LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE=full` 保持旧行为，会重发完整 JPEG；显式设为 `signal` 或脚本加 `--wgcRepeatLastFrameMode signal` / `--repeatLastFrameMode signal` 时，重复帧只发 `repeatPreviousFrame=true`、`payloadBytes=0` 和尺寸/时间戳诊断，不再重发 base64 图片。`2026-06-14 20:55` full repeat 短基准显示 30Hz/10M 可到 56 帧、30.45 FPS，60Hz/20M 到 62 帧、33.92 FPS，120Hz/40M sharp 到 68 帧、37.78 FPS，内容年龄最大约 80-96 ms；`2026-06-14 21:20` signal repeat 的 60Hz/20M 两轮短基准约 31-32 FPS、重复信令帧 33-35、平均图片 payload 约 17-23 KB、内容年龄最大 79-82 ms。signal 模式主要降低重复帧带宽和 JSON/base64 解析压力，不会生成更多真实源帧；后续仍应推进 WebSocket 二进制帧、H.264/硬编和 Mac client 真连观感验收。
 
-需要快速比较 WGC H.264 raw-bgra 与 NV12 两条内部源格式时，使用 `scripts/windows/compare-windows-wgc-h264-sources.mjs`。它只是包装现有 benchmark，默认顺序跑 raw-bgra 和 NV12，并输出普通摘要、`--json` 或可发 Agent Link Board 的 `--boardSummary`；不会连接 Mac、不会认证正式密码、不会发送输入或执行 `inject`。
+需要快速比较 WGC H.264 raw-bgra 与 NV12 两条内部源格式时，使用 `scripts/windows/compare-windows-wgc-h264-sources.mjs`。它只是包装现有 benchmark，默认顺序跑 raw-bgra 和 NV12，并输出普通摘要、`--json` 或可发 Agent Link Board 的 `--boardSummary`；不会连接 Mac、不会认证正式密码、不会发送输入或执行 `inject`。日常收口也可以用 `check-windows-host-readiness --probeWgcH264Sources` 跑一组更短的 30Hz/10Mbps readiness 探针。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-mode.mjs

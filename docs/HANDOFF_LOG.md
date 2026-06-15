@@ -17,6 +17,42 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Windows Codex
+
+日期：2026-06-15 22:20
+开发端：Windows Codex
+本轮目标：把 WGC H.264 raw-bgra/NV12 源格式对照接入 Windows readiness，方便后续一键收口卡顿/帧率排查。
+完成内容：
+- `scripts/windows/check-windows-host-readiness.mjs` 新增显式 `--probeWgcH264Sources`，默认关闭，`--profile deep` 也不会自动启用，避免普通体检变重。
+- 开启该探针时，readiness 会启动本机临时 Windows host/WGC helper，跑一组 30Hz/10Mbps raw-bgra vs NV12 H.264 短对照，并把结果纳入普通输出、JSON 和无密 `--boardSummary`；首次失败会换临时端口自动重试一次，降低 WGC/helper 瞬时波动造成的误报。
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs` 更新帮助/JSON 形状断言，确认新探针默认关闭且帮助文本可见。
+- Windows host README、当前状态、下一步和任务板已同步，说明该探针是 WGC 性能排查的轻量入口；更长窗口或多 profile 仍用 `compare-windows-wgc-h264-sources.mjs`。
+修改文件：
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-host-readiness.mjs`
+- `node --check scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `node scripts/windows/check-windows-host-readiness.mjs --help`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-host-readiness.mjs --script test-windows-host-readiness-board-summary.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 90000`
+- `node scripts/windows/check-windows-host-readiness.mjs --probeWgcH264Sources --json --timeoutMs 60000`
+- `node scripts/windows/check-windows-host-readiness.mjs --probeWgcH264Sources --boardSummary --timeoutMs 60000`
+遗留问题：
+- `--probeWgcH264Sources` 仍是诊断入口，不是最终优化；真实高帧率路线仍要继续做 helper 原生硬编、GPU/SIMD 转换或 Mac client 真连资源/观感对照。
+- 本地仍有无关未提交改动 `scripts/windows/watch-codex-link-mac-alerts.ps1`，未纳入本轮。
+下一步建议：
+- Windows 侧后续做 WGC/H.264 性能收口时，先用 `check-windows-host-readiness --probeWgcH264Sources --boardSummary` 做短摘要；需要更详细数据再跑 `compare-windows-wgc-h264-sources --profile 60:20000:balanced --durationMs 1800 --boardSummary`。
+- Mac formal E2E 仍等待 Mac host 重启到当前 build 后，再由 Windows 侧重新无密预检和用户授权。
+是否改了协议：否。
+是否需要另一端配合：不需要；正式 E2E 仍等 Mac host 重启。
+
 ## 2026-06-15 Mac Codex
 
 日期：2026-06-15 21:55

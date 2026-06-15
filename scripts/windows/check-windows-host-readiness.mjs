@@ -19,6 +19,7 @@ const defaults = {
   probeAudio: false,
   probeVideo: false,
   probeClipboardSecurity: false,
+  probeWgcH264Sources: false,
   expectBuildId: "",
   requireCurrentBuildId: false,
   skipCurrentBuildCheck: false,
@@ -52,6 +53,7 @@ function parseArgs(argv) {
       key === "probeAudio" ||
       key === "probeVideo" ||
       key === "probeClipboardSecurity" ||
+      key === "probeWgcH264Sources" ||
       key === "requireWgc" ||
       key === "requireCurrentBuildId" ||
       key === "skipCurrentBuildCheck" ||
@@ -82,6 +84,7 @@ function parseArgs(argv) {
   args.probeAudio = booleanArg(args.probeAudio);
   args.probeVideo = booleanArg(args.probeVideo);
   args.probeClipboardSecurity = booleanArg(args.probeClipboardSecurity);
+  args.probeWgcH264Sources = booleanArg(args.probeWgcH264Sources);
   args.expectBuildId = String(args.expectBuildId || "").trim();
   args.currentBuildId = getGitBuildId();
   args.requireCurrentBuildId = booleanArg(args.requireCurrentBuildId);
@@ -139,6 +142,8 @@ Options:
   --probeAudio        Run short WASAPI audio observer. Does not play a tone.
   --probeClipboardSecurity
                        Run the Windows host file clipboard WebSocket abuse regression.
+  --probeWgcH264Sources
+                       Run short WGC H.264 raw-bgra vs NV12 source comparison.
   --expectBuildId <id>      Require running host runtime.buildId to equal this value.
   --requireCurrentBuildId   Require running host runtime.buildId to match current git short hash.
   --skipCurrentBuildCheck   Do not warn when running host build differs from current git.
@@ -152,6 +157,7 @@ Profiles:
   default             Low-risk checks only; no running host required.
   deploy              Require the configured port/current build, strict mode, plus video/audio probes.
   deep                deploy profile plus Windows host self-test and file clipboard security regression.
+                      WGC H.264 source comparison stays explicit via --probeWgcH264Sources.
 `);
 }
 
@@ -527,6 +533,7 @@ async function checkRunningHostRuntime(args) {
 
 function makeReadinessBoardSummary(summary) {
   const runtimeResult = summary.results.find((result) => result.label === "Windows host runtime") || null;
+  const wgcSourceResult = summary.results.find((result) => result.label === "Windows WGC H.264 source comparison") || null;
   const state = summary.ok ? "passed" : "failed";
   const mode = summary.strict ? "strict" : summary.args.profile;
   const hasRuntimeBoardSummary = Boolean(runtimeResult?.boardSummary);
@@ -543,7 +550,17 @@ function makeReadinessBoardSummary(summary) {
     ? ""
     : " Do not send passwords on Agent Link Board.";
   const runtimeSentence = runtimeText.endsWith(".") ? runtimeText : `${runtimeText}.`;
-  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${runtimeSentence}${next ? ` ${next}` : ""}${safety}`;
+  const probeSentences = [];
+  if (wgcSourceResult) {
+    const probeState = wgcSourceResult.ok ? "passed" : "failed";
+    probeSentences.push(
+      `WGC H264 sources ${probeState}: ${compactText(wgcSourceResult.summary || "", 220)}`,
+    );
+  }
+  const probeText = probeSentences
+    .map((sentence) => (sentence.endsWith(".") ? sentence : `${sentence}.`))
+    .join(" ");
+  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${runtimeSentence}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
 }
 
 function filterExpectedWarnings(label, warnings) {
@@ -581,6 +598,84 @@ async function runRuntimeStep(results, args) {
     print("WARN", `Windows host runtime: ${warning.replace(/^\[WARN\]\s*/, "")}`, args);
   }
   return result;
+}
+
+function buildWgcH264SourceComparisonArgs(compareTimeoutMs, port) {
+  return [
+    "scripts/windows/compare-windows-wgc-h264-sources.mjs",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(port),
+    "--profile",
+    "30:10000:balanced",
+    "--durationMs",
+    "1200",
+    "--timeoutMs",
+    String(compareTimeoutMs),
+    "--minFrames",
+    "1",
+    "--minFps",
+    "0",
+    "--maxGapMs",
+    "10000",
+    "--resourceSample",
+    "false",
+    "--resourceSampleTree",
+    "false",
+    "--boardSummary",
+  ];
+}
+
+async function runWgcH264SourceComparisonStep(results, args, node, envWithFfmpeg) {
+  const label = "Windows WGC H.264 source comparison";
+  const compareTimeoutMs = Math.max(45000, Math.min(args.timeoutMs, 90000));
+  const stepTimeoutMs = compareTimeoutMs * 2 + 45000;
+  const maxAttempts = 2;
+  const attempts = [];
+  print("INFO", `Running ${label}`, args);
+
+  for (let attemptIndex = 0; attemptIndex < maxAttempts; attemptIndex += 1) {
+    const result = await runCommand(
+      label,
+      node,
+      buildWgcH264SourceComparisonArgs(compareTimeoutMs, 43824 + attemptIndex * 80),
+      { timeoutMs: stepTimeoutMs, env: envWithFfmpeg },
+    );
+    attempts.push(result);
+    if (result.ok) {
+      const retryWarnings = attempts.slice(0, -1).map((attempt, index) =>
+        `[WARN] WGC H.264 source comparison attempt ${index + 1} failed before retry: ${compactText(
+          attempt.summary || attempt.stderr || attempt.stdout || `exit ${attempt.exitCode}`,
+          220,
+        )}`,
+      );
+      const finalResult = {
+        ...result,
+        summary: attempts.length > 1
+          ? `${result.summary || "passed"} (passed after ${attempts.length} attempts)`
+          : result.summary,
+        warnings: retryWarnings.concat(result.warnings),
+      };
+      results.push(finalResult);
+      print("OK", `${label}: ${finalResult.summary || "passed"}`, args);
+      for (const warning of finalResult.warnings.slice(0, 3)) {
+        print("WARN", `${label}: ${warning.replace(/^\[WARN\]\s*/, "")}`, args);
+      }
+      return finalResult;
+    }
+    if (attemptIndex < maxAttempts - 1) {
+      print("WARN", `${label}: attempt ${attemptIndex + 1} failed; retrying on a fresh temporary port`, args);
+    }
+  }
+
+  const failedResult = attempts.at(-1);
+  results.push(failedResult);
+  print("ERROR", `${label}: ${failedResult.summary || `exit ${failedResult.exitCode}`}`, args);
+  for (const warning of failedResult.warnings.slice(0, 3)) {
+    print("WARN", `${label}: ${warning.replace(/^\[WARN\]\s*/, "")}`, args);
+  }
+  return failedResult;
 }
 
 async function main() {
@@ -677,6 +772,10 @@ async function main() {
     );
   }
 
+  if (args.probeWgcH264Sources) {
+    await runWgcH264SourceComparisonStep(results, args, node, envWithFfmpeg);
+  }
+
   if (args.probeVideo) {
     await runStep(
       results,
@@ -744,6 +843,7 @@ async function main() {
       probeVideo: args.probeVideo,
       probeAudio: args.probeAudio,
       probeClipboardSecurity: args.probeClipboardSecurity,
+      probeWgcH264Sources: args.probeWgcH264Sources,
       expectBuildId: args.expectBuildId,
       currentBuildId: args.currentBuildId,
       requireCurrentBuildId: args.requireCurrentBuildId,
@@ -784,7 +884,11 @@ async function main() {
       args,
     );
     if (!ok && !args.probeHost) {
-      print("INFO", "For deeper validation, rerun with --probeHost, --probeVideo, or --probeAudio as needed.", args);
+      print(
+        "INFO",
+        "For deeper validation, rerun with --probeHost, --probeVideo, --probeAudio, or --probeWgcH264Sources as needed.",
+        args,
+      );
     }
   }
 

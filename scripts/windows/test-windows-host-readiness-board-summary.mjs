@@ -156,6 +156,7 @@ async function main() {
   assert(help.exitCode === 0, `readiness --help exited ${help.exitCode}`);
   assert(help.stdout.includes("--boardSummary"), "readiness --help does not mention --boardSummary");
   assert(help.stdout.includes("--probeClipboardSecurity"), "readiness --help does not mention --probeClipboardSecurity");
+  assert(help.stdout.includes("--probeWgcH264Sources"), "readiness --help does not mention --probeWgcH264Sources");
 
   const jsonRun = await runNode(
     "readiness JSON board summary",
@@ -170,6 +171,7 @@ async function main() {
   assert(jsonSummary.boardSummary.includes("Do not send passwords"), "JSON boardSummary is missing board safety reminder");
   assert(Array.isArray(jsonSummary.macClientReadinessCommands), "JSON macClientReadinessCommands must be an array");
   assert(Array.isArray(jsonSummary.results), "JSON results must be an array");
+  assert(jsonSummary.args?.probeWgcH264Sources === false, "default JSON should keep WGC H.264 source probe disabled");
   assert(jsonSummary.results.some((result) => result.label === "Windows host runtime"), "JSON results missing runtime check");
   assertNoSecretLeak(jsonRun.stdout, "readiness --json stdout");
   assertNoSecretLeak(jsonRun.stderr, "readiness --json stderr");
