@@ -31,6 +31,7 @@ const defaults = {
   skipFileClipboard: false,
   skipInputLog: false,
   preflightOnly: false,
+  checkClientDiagnostics: false,
   json: false,
   boardSummary: false,
   fastProfile: false,
@@ -79,6 +80,7 @@ Options:
   --skipFileClipboard            Skip file clipboard probe only.
   --skipInputLog                 Skip safe input-log probe.
   --preflightOnly                Only read /discovery and print a readiness summary.
+  --checkClientDiagnostics       With preflight, also run Windows client diagnostics against discovery runtime.
   --json                         With --preflightOnly, print a single machine-readable JSON object.
   --boardSummary                 Print a short secret-free Agent Link Board summary.
   --help, -h                     Show this help.
@@ -115,6 +117,7 @@ function parseArgs(argv) {
       key === "skipFileClipboard" ||
       key === "skipInputLog" ||
       key === "preflightOnly" ||
+      key === "checkClientDiagnostics" ||
       key === "json" ||
       key === "boardSummary" ||
       key === "fastProfile"
@@ -210,11 +213,16 @@ function makeBoardSummary(report, outcome = "preflight") {
     : report.ok
       ? "ready"
       : `blocked(${failedChecks})`;
+  const clientDiagnostics = report.clientDiagnostics?.requested
+    ? report.clientDiagnostics.ok
+      ? "passed"
+      : "failed"
+    : "skipped";
   const permissions = report.permissions || {};
   return [
     `${prefix}: ${state}; target=${report.target.host}:${report.target.port}; runtimeBuild=${report.runtime?.buildId || "unknown"}; runtimePid=${report.runtime?.processId || "unknown"}.`,
     `Capabilities h264=${statusFlag(report.capabilities?.h264Stream)} audio=${report.capabilities?.audioMode || statusFlag(report.capabilities?.audio)} clipboardText=${statusFlag(report.capabilities?.clipboardText)} clipboardFile=${statusFlag(report.capabilities?.clipboardFile)} inputMode=${report.capabilities?.inputMode || "missing"} mock=${statusFlag(report.capabilities?.mock)} maxScreenFps=${report.capabilities?.maxScreenFps || "unknown"}.`,
-    `Permissions screen=${statusFlag(permissions.screenRecording)} accessibility=${statusFlag(permissions.accessibility)} inputMonitoring=${statusFlag(permissions.inputMonitoring)}; displays=${summarizeDisplays(report)}; failedChecks=${failedChecks}.`,
+    `Permissions screen=${statusFlag(permissions.screenRecording)} accessibility=${statusFlag(permissions.accessibility)} inputMonitoring=${statusFlag(permissions.inputMonitoring)}; displays=${summarizeDisplays(report)}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
     `Safe formal command: ${report.command}. Password is not included; inject was not used and still needs explicit user confirmation.`,
   ].join(" ");
 }
@@ -313,6 +321,11 @@ function makePreflightReport(args, discoveryResult) {
     },
     checks,
     failedChecks: failed,
+    clientDiagnostics: {
+      requested: false,
+      ok: null,
+      detail: "not requested",
+    },
     command: makeFormalCommand(args),
   });
 }
@@ -340,6 +353,11 @@ function makeOfflinePreflightReport(args, error) {
         detail: error.message,
       },
     ],
+    clientDiagnostics: {
+      requested: false,
+      ok: null,
+      detail: "not requested",
+    },
     command: makeFormalCommand(args),
   });
 }
@@ -372,6 +390,122 @@ function printPreflightReport(report) {
   print("INFO", `Formal command: ${report.command}`);
 }
 
+function summarizeDiagnosticsOutput(text) {
+  const lines = String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines
+    .filter((line) => line.startsWith("[OK]") || line.startsWith("[FAIL]"))
+    .slice(-3)
+    .join("; ") || lines.at(-1) || "";
+}
+
+async function runClientDiagnostics(args, report) {
+  const childArgs = [
+    "scripts/windows/test-windows-client-browser.mjs",
+    "--diagnosticsOnly",
+    "--host", args.host,
+    "--port", String(args.port),
+    "--clientPort", String(args.clientPort),
+    "--debugPort", String(args.debugPort),
+    "--timeoutMs", String(Math.max(args.timeoutMs, 45000)),
+  ];
+  const runtimeBuildId = String(report.runtime?.buildId || "").trim();
+  if (runtimeBuildId) {
+    childArgs.push("--expectDiscoveryRuntimeBuildId", runtimeBuildId);
+  }
+
+  const startedAt = performance.now();
+  const result = await runCapturedNode(childArgs, {
+    cwd: fileURLToPath(new URL("../../", import.meta.url)),
+    timeoutMs: Math.max(args.timeoutMs + 15000, 60000),
+  });
+  const detail = result.ok
+    ? runtimeBuildId
+      ? `passed; runtimeBuild=${runtimeBuildId}; ${summarizeDiagnosticsOutput(result.stdout)}`
+      : `passed; runtime build unavailable so runtime-id check was skipped; ${summarizeDiagnosticsOutput(result.stdout)}`
+    : `failed; ${summarizeDiagnosticsOutput(`${result.stdout}\n${result.stderr}`) || `exit ${result.exitCode}`}`;
+  return {
+    requested: true,
+    ok: result.ok,
+    exitCode: result.exitCode,
+    timedOut: result.timedOut,
+    elapsedMs: Math.round(performance.now() - startedAt),
+    runtimeBuildId: runtimeBuildId || "",
+    command: `node ${childArgs.join(" ")}`,
+    detail,
+    stdoutTail: tailLines(result.stdout),
+    stderrTail: tailLines(result.stderr),
+  };
+}
+
+function runCapturedNode(childArgs, { cwd, timeoutMs }) {
+  return new Promise((resolveRun) => {
+    const child = spawn(process.execPath, childArgs, {
+      cwd,
+      env: {
+        ...process.env,
+        LAN_DUAL_PASSWORD: "",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      resolveRun(result);
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish({
+        ok: false,
+        exitCode: null,
+        timedOut: true,
+        stdout,
+        stderr,
+      });
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      finish({
+        ok: false,
+        exitCode: null,
+        timedOut: false,
+        stdout,
+        stderr: `${stderr}\n${error.message}`.trim(),
+      });
+    });
+    child.on("close", (exitCode) => {
+      clearTimeout(timer);
+      finish({
+        ok: exitCode === 0,
+        exitCode,
+        timedOut: false,
+        stdout,
+        stderr,
+      });
+    });
+  });
+}
+
+function tailLines(text, limit = 8) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(-limit);
+}
+
 async function runPreflight(args) {
   let report;
   try {
@@ -379,6 +513,18 @@ async function runPreflight(args) {
   } catch (error) {
     report = makeOfflinePreflightReport(args, error);
   }
+  if (report.online && args.checkClientDiagnostics) {
+    report.clientDiagnostics = await runClientDiagnostics(args, report);
+    report.checks.push({
+      name: "windowsClientDiagnostics",
+      ok: report.clientDiagnostics.ok,
+      detail: report.clientDiagnostics.detail,
+    });
+    report.failedChecks = report.checks.filter((check) => !check.ok);
+    report.ok = report.failedChecks.length === 0;
+    attachBoardSummary(report);
+  }
+
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
   } else if (args.boardSummary) {

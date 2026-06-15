@@ -194,6 +194,30 @@ async function testMockPreflightBoardSummary(args) {
   });
 }
 
+async function testMockPreflightClientDiagnostics(args) {
+  await withMockHost(async (port) => {
+    const result = await runRunner([
+      "--host", "127.0.0.1",
+      "--port", String(port),
+      "--preflightOnly",
+      "--json",
+      "--checkClientDiagnostics",
+      "--allowMockVideo",
+      "--skipInputLog",
+      "--skipAudio",
+      "--skipClipboard",
+    ], { ...args, timeoutMs: Math.max(args.timeoutMs, 70000) });
+    assert(result.exitCode === 0, `mock preflight client diagnostics failed\n${result.stdout}\n${result.stderr}`);
+    const payload = JSON.parse(result.stdout);
+    assert(payload.clientDiagnostics?.requested === true, "client diagnostics should be requested");
+    assert(payload.clientDiagnostics?.ok === true, "client diagnostics should pass");
+    assert(String(payload.boardSummary || "").includes("clientDiagnostics=passed"), "board summary should include client diagnostics state");
+    assert(payload.checks.some((check) => check.name === "windowsClientDiagnostics" && check.ok === true), "checks should include client diagnostics");
+    assertNotIncludes(result.stdout + result.stderr, "test-password", "mock client diagnostics");
+    print("OK", "Mock client diagnostics preflight passes without leaking password");
+  });
+}
+
 async function testMockRequiresPasswordAfterPreflight(args) {
   await withMockHost(async (port) => {
     const result = await runRunner([
@@ -249,6 +273,7 @@ async function main() {
   await testJsonRequiresPreflight(args);
   await testMockPreflightJson(args);
   await testMockPreflightBoardSummary(args);
+  await testMockPreflightClientDiagnostics(args);
   await testMockRequiresPasswordAfterPreflight(args);
   await testMockFastPath(args);
   print("OK", "Windows formal E2E preflight regression passed");
