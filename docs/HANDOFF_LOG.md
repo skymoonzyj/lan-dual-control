@@ -17,6 +17,42 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Windows Codex
+
+日期：2026-06-15 17:50
+开发端：Windows Codex
+本轮目标：新增 Windows 侧恢复开工总览，方便每天开工先安全汇总 repo、通讯板、Mac formal preflight 和下一步命令。
+完成内容：
+- 新增 `scripts/windows/check-windows-resume-status.mjs`：默认自动发现最佳 Mac host，汇总 git 状态、可选 Agent Link Board 快照、Mac formal E2E 无密预检、下一步 PowerShell/Node 安全命令和一行 `--boardSummary`。
+- 默认只读、不认证 WebSocket、不要求或打印密码、不发送输入、不执行 `inject`；Mac host 离线默认是 warning，`--requireMacReady` 才会失败，`--requireClean` 可让脏工作区失败。
+- 新增 `scripts/windows/test-windows-resume-status.mjs`，用本机 mock Mac 覆盖 help、在线 JSON、通讯板摘要、离线默认非失败和 `--requireMacReady` 严格失败路径。
+- 当前真实只读 `--checkBoard --boardSummary` 可自动发现 `192.168.31.122:43770`，显示 Mac ready、runtime build `d807536`、`inputMode=log`；没有请求密码、没有认证、没有 inject。
+- 当前状态、下一步行动和任务板已同步每天恢复 Windows 侧工作时优先运行该脚本。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --script test-windows-resume-status.mjs`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 30000`
+- `node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`
+- `node scripts/windows/check-windows-resume-status.mjs --noDiscover --host 127.0.0.1 --port 9 --json`
+- `node scripts/windows/test-windows-script-help.mjs`
+- `git diff --check`
+- 行首冲突标记扫描
+遗留问题：
+- 这只是恢复开工/预检总览，不替代正式 E2E。正式 Windows 控制 Mac 验收仍需用户在 Windows 本机隐藏输入正式密码；`inject` 仍需用户另行明确确认。
+下一步建议：
+- 白天继续前先运行 `node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`，把摘要同步到 Agent Link Board；若 ready，再按 `check-mac-formal-e2e.ps1 -Discover -PromptPassword` 进入正式验收。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Mac 端只需知道 Windows 侧已有对等恢复总览入口。
+
 ## 2026-06-15 Mac Codex
 
 日期：2026-06-15 17:33

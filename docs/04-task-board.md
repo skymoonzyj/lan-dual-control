@@ -73,6 +73,7 @@ Windows 端：
 - [x] Windows 控制端页面自检支持自动发现最佳 Mac host 后再跑无密 UI runtime 验收。
 - [x] 底层 Mac host 探针支持自动发现最佳 Mac host 后再做认证、媒体、剪贴板和 input-log 验收。
 - [x] PowerShell Mac host 验收入口支持 `-Discover` 自动发现；发现失败先退出，不弹密码框，方便 Windows 端无手填 IP 做 H.264、音频、剪贴板和 input-log 探针。
+- [x] Windows 端新增恢复开工总览 `scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`：只读汇总 git、通讯板、Mac formal preflight、自动发现目标和下一步命令；不认证、不要求密码、不发送输入、不执行 `inject`。
 
 共享：
 
