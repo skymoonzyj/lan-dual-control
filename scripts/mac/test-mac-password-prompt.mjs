@@ -59,6 +59,16 @@ function assertNotIncludes(text, expected, label) {
   assert(!String(text).includes(expected), `${label} unexpectedly included ${JSON.stringify(expected)}.\n${text}`);
 }
 
+function formatRunFailure(result, output) {
+  const details = [
+    `status=${result.status}`,
+    `signal=${result.signal || ""}`,
+    result.error ? `error=${result.error.message}` : "",
+    output ? `output:\n${output}` : "",
+  ].filter(Boolean);
+  return details.join("\n");
+}
+
 function shellQuote(value) {
   return `'${String(value).replaceAll("'", "'\\''")}'`;
 }
@@ -201,7 +211,7 @@ function checkSystemDialogSuccess(tmp, timeoutMs) {
     FAKE_OSASCRIPT_PASSWORD: secret,
   }, timeoutMs);
   const output = `${result.stdout || ""}\n${result.stderr || ""}`;
-  assert(result.status === 0, `system dialog success should exit 0.\n${output}`);
+  assert(result.status === 0, `system dialog success should exit 0.\n${formatRunFailure(result, output)}`);
   const payload = parseJson(result.stdout, "system dialog success");
   assert(payload.ok === true, "system dialog success should report ok=true");
   assert(payload.length === secret.length, "system dialog success should return the fake password length");
@@ -236,7 +246,7 @@ function checkPreferNativeDialogSuccess(tmp, timeoutMs) {
     FAKE_SWIFT_PASSWORD: secret,
   }, timeoutMs);
   const output = `${result.stdout || ""}\n${result.stderr || ""}`;
-  assert(result.status === 0, `prefer native dialog success should exit 0.\n${output}`);
+  assert(result.status === 0, `prefer native dialog success should exit 0.\n${formatRunFailure(result, output)}`);
   const payload = parseJson(result.stdout, "prefer native dialog success");
   assert(payload.ok === true, "prefer native dialog success should report ok=true");
   assert(payload.length === secret.length, "prefer native dialog success should return the fake password length");
@@ -282,7 +292,7 @@ function checkDialogCancel(tmp, timeoutMs) {
     FAKE_SWIFT_LOG: join(tmp, "swift-cancel.log"),
   }, timeoutMs);
   const output = `${result.stdout || ""}\n${result.stderr || ""}`;
-  assert(result.status !== 0, `dialog cancel should fail.\n${output}`);
+  assert(result.status !== 0, `dialog cancel should fail.\n${formatRunFailure(result, output)}`);
   const payload = parseJson(result.stdout, "dialog cancel");
   assert(payload.ok === false, "dialog cancel should report ok=false");
   assertIncludes(payload.message, "Password prompt cancelled", "dialog cancel message");
@@ -303,7 +313,7 @@ function checkSystemFailureFallsBackToNative(tmp, timeoutMs) {
     FAKE_OSASCRIPT_LOG: osascriptLogPath,
   }, timeoutMs);
   const output = `${result.stdout || ""}\n${result.stderr || ""}`;
-  assert(result.status === 0, `system failure should fall back to native dialog.\n${output}`);
+  assert(result.status === 0, `system failure should fall back to native dialog.\n${formatRunFailure(result, output)}`);
   const payload = parseJson(result.stdout, "system failure fallback");
   assert(payload.ok === true, "system failure fallback should report ok=true");
   assert(payload.length === secret.length, "system failure fallback should return the fallback password length");
@@ -324,7 +334,7 @@ function checkDialogFailureNoTty(tmp, timeoutMs) {
     FAKE_OSASCRIPT_MODE: "fail",
   }, timeoutMs);
   const output = `${result.stdout || ""}\n${result.stderr || ""}`;
-  assert(result.status !== 0, `dialog failure should fail without hanging.\n${output}`);
+  assert(result.status !== 0, `dialog failure should fail without hanging.\n${formatRunFailure(result, output)}`);
   const payload = parseJson(result.stdout, "dialog failure");
   assert(payload.ok === false, "dialog failure should report ok=false");
   assertIncludes(payload.message, "could not open a frontmost macOS password dialog", "dialog failure message");

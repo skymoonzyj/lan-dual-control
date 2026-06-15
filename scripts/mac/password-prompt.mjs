@@ -1,4 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const defaultTimeoutMs = 120000;
@@ -44,10 +46,9 @@ export async function promptPassword({
 
 export function playAttentionSound() {
   if (process.env.LAN_DUAL_DISABLE_PASSWORD_BEEP === "1") return;
-  const result = spawnSync("osascript", ["-e", "beep 2"], {
+  const result = spawnMacToolSync("osascript", ["-e", "beep 2"], {
     encoding: "utf8",
     timeout: 3000,
-    ...macToolSpawnOptions(),
   });
   if (result.status !== 0) {
     process.stderr.write("\x07");
@@ -208,7 +209,7 @@ exit(1)
 `;
 
   return new Promise((resolvePrompt, rejectPrompt) => {
-    const child = spawn("swift", ["-"], {
+    const child = spawnMacTool("swift", ["-"], {
       env: {
         ...process.env,
         LAN_DUAL_PASSWORD_PROMPT_TITLE: title,
@@ -216,7 +217,6 @@ exit(1)
         LAN_DUAL_PASSWORD_PROMPT_LABEL: prompt,
       },
       stdio: ["pipe", "pipe", "pipe"],
-      ...macToolSpawnOptions(),
     });
     const frontTimers = scheduleNativePromptFronting(child.pid);
     let stdout = "";
@@ -286,11 +286,10 @@ on run argv
   end try
 end run
 `;
-  spawnSync("osascript", ["-e", script, String(pid)], {
+  spawnMacToolSync("osascript", ["-e", script, String(pid)], {
     encoding: "utf8",
     stdio: "ignore",
     timeout: 1200,
-    ...macToolSpawnOptions(),
   });
 }
 
@@ -330,9 +329,8 @@ end try
 `;
 
   return new Promise((resolvePrompt, rejectPrompt) => {
-    const child = spawn("osascript", ["-e", script], {
+    const child = spawnMacTool("osascript", ["-e", script], {
       stdio: ["ignore", "pipe", "pipe"],
-      ...macToolSpawnOptions(),
     });
     let stdout = "";
     let stderr = "";
@@ -372,6 +370,46 @@ end try
 
 function macToolSpawnOptions() {
   return process.platform === "win32" ? { shell: true } : {};
+}
+
+function spawnMacTool(command, args, options = {}) {
+  const fakeModule = resolveWindowsFakeMacTool(command, options.env);
+  if (fakeModule) {
+    return spawn(process.execPath, [fakeModule, ...args], options);
+  }
+  return spawn(command, args, {
+    ...options,
+    ...macToolSpawnOptions(),
+  });
+}
+
+function spawnMacToolSync(command, args, options = {}) {
+  const fakeModule = resolveWindowsFakeMacTool(command, options.env);
+  if (fakeModule) {
+    return spawnSync(process.execPath, [fakeModule, ...args], options);
+  }
+  return spawnSync(command, args, {
+    ...options,
+    ...macToolSpawnOptions(),
+  });
+}
+
+function resolveWindowsFakeMacTool(command, env = process.env) {
+  if (process.platform !== "win32") return "";
+  const pathValue = getPathEnvValue(env);
+  for (const dir of pathValue.split(delimiter)) {
+    if (!dir) continue;
+    const candidate = join(dir, `${command}.mjs`);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return "";
+}
+
+function getPathEnvValue(env = process.env) {
+  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path") || "PATH";
+  return String(env[pathKey] || "");
 }
 
 function normalizeDialogError(text) {

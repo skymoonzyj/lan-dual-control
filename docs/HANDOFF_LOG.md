@@ -52,6 +52,43 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 20:43
+开发端：Windows Codex
+本轮目标：复跑并修复 Mac 密码弹窗测试在 Windows 审查机上的 fake shim 路径。
+完成内容：
+- Windows 审查机复跑 `node scripts/mac/test-mac-password-prompt.mjs --timeoutMs 10000` 初始失败，增强测试输出后确认普通 Codex 沙盒会因 fake shim 再启动 `node.exe` 报 `EPERM`。
+- `scripts/mac/password-prompt.mjs` 在 Windows 平台发现 PATH 中存在 fake `osascript.mjs` / `swift.mjs` 时，优先直接用当前 Node 进程启动该 `.mjs` 执行体，避开 `cmd.exe` / `.cmd %*` 对多行 AppleScript 参数的重新解释；未发现 fake `.mjs` 时仍回到原有 Windows shell 查找路径，macOS 真机逻辑不变。
+- `scripts/mac/test-mac-password-prompt.mjs` 的失败断言现在会打印 `status`、`signal` 和 `error`，以后 Windows 审查机再失败时能区分 fake shim、参数转义和权限问题。
+- 授权子进程后，Windows 审查机复跑 `test-mac-password-prompt` 通过；`test-mac-host-start-helper` 也通过，非 macOS 真实 Swift host 启动段按预期 `[SKIP]`。
+修改文件：
+- `scripts/mac/password-prompt.mjs`
+- `scripts/mac/test-mac-password-prompt.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/password-prompt.mjs`
+- `node --check scripts/mac/test-mac-password-prompt.mjs`
+- `node --check scripts/mac/test-mac-host-clipboard-file-integrity.mjs`
+- `node scripts/mac/test-mac-host-clipboard-file-integrity.mjs`
+- `node scripts/mac/test-mac-password-prompt.mjs --timeoutMs 10000`
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-script-help.mjs --script password-prompt.mjs --script test-mac-password-prompt.mjs --script test-mac-host-start-helper.mjs --timeoutMs 8000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 8000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/mac/password-prompt.mjs scripts/mac/test-mac-password-prompt.mjs docs/CURRENT_STATUS.md docs/NEXT_ACTIONS.md docs/HANDOFF_LOG.md docs/ACTIVE_LOCKS.md`
+遗留问题：
+- 当前 Codex 沙盒普通权限会拦截 fake shim 再启动 `node.exe`，表现为 `spawnSync ... EPERM`；这不是 Mac helper 逻辑失败，复跑时需要允许子进程。
+- 本地仍有无关未提交改动 `scripts/windows/watch-codex-link-mac-alerts.ps1`，未纳入本轮。
+- Mac host 文件剪贴板对称加固已拉取到 `ca8d648` 并在 Windows 审查机复跑 `test-mac-host-clipboard-file-integrity` 通过；等待 Supervisor 最终复审。
+下一步建议：
+- Supervisor 可复审 Windows/Mac 双端剪贴板整改和 Mac 测试兼容；通过后再恢复 WGC 性能优化或正式 Mac E2E。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端同步对称剪贴板加固结果；Supervisor 可复审。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 20:34
 开发端：Windows Codex
 本轮目标：把 Windows host 文件剪贴板服务级坏包回归接入一键 readiness，方便收工和部署前自动覆盖。
