@@ -118,7 +118,7 @@ Windows 端：
 - 已完成文本剪贴板协议打通，文件剪贴板仍按文件传输通道单独开发。
 - macOS 被控端已接入系统文本剪贴板：远端文本写入 `NSPasteboard`，本机复制新文本会按 `host_to_client` 推送。
 - 真 Mac 已通过 `--clipboardRoundTrip` 验证文本剪贴板双向同步：控制端文本可写入 Mac 系统剪贴板，Mac 本机复制的新文本可按 `host_to_client` 推回控制端。
-- macOS 被控端已接入系统文件剪贴板接收：Windows 发送的文件块会落到临时目录，并写入 `NSPasteboard` 文件 URL。
+- macOS 被控端已接入系统文件剪贴板接收：Windows 发送的文件块会落到临时目录，并写入 `NSPasteboard` 文件 URL；接收端已加固为必须先 offer、校验文件数/总大小/清单一致性、连续 offset、分块大小和逐文件磁盘大小，重复/重叠/不完整分块不能误完成，空文件仍兼容。
 - 已统一 `display_settings`、`display_settings_ack`、`video_frame` 协议命名，假 Mac 服务可持续发送模拟帧。
 - 已完成 Windows Tauri 桌面壳，已验证可构建 `lan-dual-control-windows.exe`。
 - 已完成本机假 Mac WebSocket 联调服务；当前真 Mac 已到位，后续功能完成以真实 macOS 被控端验证为准，假 Mac 只做快速回归和失败场景模拟，并已对齐 3 次认证失败断开行为。

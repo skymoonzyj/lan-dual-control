@@ -25,6 +25,7 @@ private struct FileTransferState {
         var name: String
         var expectedBytes: Int
         var receivedBytes: Int
+        var receivedRanges: [Range<Int>]
         var url: URL
     }
 
@@ -105,6 +106,9 @@ final class MacHostService {
     private let maxAuthAttempts = 3
     private let outboundClipboardFileChunkBytes = 64 * 1024
     private let maxOutboundClipboardFileBytes = 64 * 1024 * 1024
+    private let inboundClipboardFileChunkBytes = 256 * 1024
+    private let maxInboundClipboardFileBytes = 64 * 1024 * 1024
+    private let maxInboundClipboardFileCount = 64
     private let runtimeStartedAt = Date()
 
     private var listener: NWListener?
@@ -1059,7 +1063,7 @@ final class MacHostService {
 
     private func handleClipboardFileOffer(_ message: [String: Any], to context: ClientContext) {
         let transferId = stringValue(message["transferId"]) ?? UUID().uuidString
-        let totalBytes = positiveInt(message["totalBytes"]) ?? 0
+        let totalBytes = nonNegativeInt(message["totalBytes"]) ?? -1
         let fileCount = positiveInt(message["fileCount"]) ?? 0
         guard context.session?.clipboardFileEnabled != false else {
             send([
@@ -1072,9 +1076,57 @@ final class MacHostService {
             return
         }
 
+        guard fileCount > 0, fileCount <= maxInboundClipboardFileCount else {
+            send([
+                "type": "clipboard_file_response",
+                "transferId": transferId,
+                "accepted": false,
+                "code": "LAN006",
+                "reason": "macOS 文件剪贴板清单文件数无效或超过上限。",
+            ], to: context)
+            return
+        }
+        guard totalBytes >= 0, totalBytes <= maxInboundClipboardFileBytes else {
+            send([
+                "type": "clipboard_file_response",
+                "transferId": transferId,
+                "accepted": false,
+                "code": "LAN006",
+                "reason": "macOS 文件剪贴板总大小无效或超过上限。",
+            ], to: context)
+            return
+        }
+
         do {
             let directoryURL = try makeFileTransferDirectory(transferId: transferId)
-            let files = makeInitialFileStates(from: message, directoryURL: directoryURL)
+            guard let files = makeInitialFileStates(from: message, expectedFileCount: fileCount, directoryURL: directoryURL) else {
+                try? FileManager.default.removeItem(at: directoryURL)
+                send([
+                    "type": "clipboard_file_response",
+                    "transferId": transferId,
+                    "accepted": false,
+                    "code": "LAN006",
+                    "reason": "macOS 文件剪贴板清单文件索引或大小无效。",
+                ], to: context)
+                return
+            }
+            let expectedTotalBytes = files.values.reduce(0) { $0 + max(0, $1.expectedBytes) }
+            guard files.count == fileCount,
+                  expectedTotalBytes == totalBytes,
+                  files.values.allSatisfy({ $0.expectedBytes >= 0 }) else {
+                try? FileManager.default.removeItem(at: directoryURL)
+                send([
+                    "type": "clipboard_file_response",
+                    "transferId": transferId,
+                    "accepted": false,
+                    "code": "LAN006",
+                    "reason": "macOS 文件剪贴板清单和总大小不一致。",
+                ], to: context)
+                return
+            }
+            for file in files.values where file.expectedBytes == 0 {
+                FileManager.default.createFile(atPath: file.url.path, contents: nil)
+            }
             context.fileTransfers[transferId] = FileTransferState(
                 transferId: transferId,
                 totalBytes: totalBytes,
@@ -1100,7 +1152,7 @@ final class MacHostService {
             "transferId": transferId,
             "accepted": true,
             "saveMode": "clipboard",
-            "maxChunkBytes": positiveInt(message["maxChunkBytes"]) ?? 256 * 1024,
+            "maxChunkBytes": inboundClipboardFileChunkBytes,
             "reason": "macOS 被控端已准备接收文件块并写入系统文件剪贴板。",
         ], to: context)
     }
@@ -1112,28 +1164,80 @@ final class MacHostService {
             return
         }
 
-        let fileIndex = positiveInt(message["fileIndex"]) ?? 0
-        let fileName = stringValue(message["fileName"]) ?? transfer.files[fileIndex]?.name ?? "clipboard-\(fileIndex + 1)"
+        func failTransfer(_ message: String) {
+            cleanupFileTransfer(transferId, in: context)
+            sendError(code: "LAN006", message: message, to: context)
+        }
+
+        let fileIndex: Int
+        if let rawFileIndex = message["fileIndex"] {
+            guard let parsedFileIndex = nonNegativeInt(rawFileIndex) else {
+                failTransfer("文件剪贴板块 fileIndex 无效。")
+                return
+            }
+            fileIndex = parsedFileIndex
+        } else {
+            fileIndex = 0
+        }
+        guard var fileState = transfer.files[fileIndex] else {
+            failTransfer("文件剪贴板块引用了未声明的文件索引：\(fileIndex)")
+            return
+        }
         guard let dataBase64 = stringValue(message["dataBase64"]),
               let chunkData = Data(base64Encoded: dataBase64) else {
-            sendError(code: "LAN006", message: "文件剪贴板块缺少 base64 数据", to: context)
+            failTransfer("文件剪贴板块缺少 base64 数据")
+            return
+        }
+        guard chunkData.count <= inboundClipboardFileChunkBytes else {
+            failTransfer("文件剪贴板块大小无效或超过上限。")
+            return
+        }
+        let offset: Int
+        if let rawOffset = message["offset"] {
+            guard let parsedOffset = nonNegativeInt(rawOffset) else {
+                failTransfer("文件剪贴板块 offset 无效。")
+                return
+            }
+            offset = parsedOffset
+        } else {
+            offset = fileState.receivedBytes
+        }
+        guard offset == fileState.receivedBytes else {
+            failTransfer("文件剪贴板块 offset 不连续或重复：\(offset)，预期 \(fileState.receivedBytes)。")
+            return
+        }
+        if chunkData.isEmpty {
+            guard fileState.expectedBytes == 0, offset == 0 else {
+                failTransfer("文件剪贴板空块只能用于空文件。")
+                return
+            }
+            context.fileTransfers[transferId] = transfer
+            send([
+                "type": "clipboard_file_progress",
+                "transferId": transferId,
+                "receivedBytes": transfer.receivedBytes,
+                "totalBytes": transfer.totalBytes,
+            ], to: context)
+            return
+        }
+        guard offset <= fileState.expectedBytes,
+              chunkData.count <= fileState.expectedBytes - offset else {
+            failTransfer("文件剪贴板块超过声明文件大小。")
             return
         }
 
         do {
-            let offset = positiveInt(message["offset"]) ?? transfer.files[fileIndex]?.receivedBytes ?? 0
-            var fileState = transfer.files[fileIndex] ?? makeFileState(
-                index: fileIndex,
-                name: fileName,
-                expectedBytes: positiveInt(message["totalBytes"]) ?? 0,
-                directoryURL: transfer.directoryURL
-            )
             try writeFileChunk(chunkData, to: fileState.url, offset: UInt64(offset))
-            fileState.receivedBytes = max(fileState.receivedBytes, offset + chunkData.count)
+            fileState.receivedRanges = mergedRanges(fileState.receivedRanges + [offset..<(offset + chunkData.count)])
+            fileState.receivedBytes = contiguousReceivedBytes(fileState.receivedRanges)
             transfer.files[fileIndex] = fileState
             transfer.receivedBytes = transfer.files.values.reduce(0) { $0 + $1.receivedBytes }
+            guard transfer.receivedBytes <= transfer.totalBytes else {
+                failTransfer("文件剪贴板接收字节超过声明总大小。")
+                return
+            }
         } catch {
-            sendError(code: "LAN006", message: "写入文件剪贴板块失败：\(error.localizedDescription)", to: context)
+            failTransfer("写入文件剪贴板块失败：\(error.localizedDescription)")
             return
         }
 
@@ -1170,11 +1274,15 @@ final class MacHostService {
             "transferId": transferId,
             "accepted": accepted,
             "receivedBytes": transfer.receivedBytes,
-            "totalBytes": transfer.totalBytes > 0 ? transfer.totalBytes : positiveInt(message["totalBytes"]) ?? transfer.receivedBytes,
+            "totalBytes": transfer.totalBytes,
             "fileCount": urls.count,
             "saveMode": accepted ? "clipboard" : "failed",
             "reason": accepted ? "macOS 系统文件剪贴板已写入。" : (isComplete ? "macOS 系统文件剪贴板写入失败。" : "文件剪贴板块未接收完整。"),
         ], to: context)
+        if !accepted {
+            cleanupFileTransfer(transferId, in: context)
+            return
+        }
         if accepted {
             context.lastClipboardFileSignature = clipboardFileSignature(urls)
             context.lastClipboardChangeCount = clipboardBridge.changeCount()
@@ -1183,17 +1291,13 @@ final class MacHostService {
     }
 
     private func isFileTransferComplete(_ transfer: FileTransferState, urls: [URL]) -> Bool {
-        guard !urls.isEmpty else {
-            return false
-        }
-        if transfer.fileCount > 0, urls.count < transfer.fileCount {
-            return false
-        }
-        if transfer.totalBytes > 0, transfer.receivedBytes < transfer.totalBytes {
+        guard urls.count == transfer.fileCount,
+              transfer.files.count == transfer.fileCount,
+              transfer.receivedBytes == transfer.totalBytes else {
             return false
         }
         return transfer.files.values.allSatisfy { file in
-            file.expectedBytes <= 0 || file.receivedBytes >= file.expectedBytes
+            file.receivedBytes == file.expectedBytes && fileSize(at: file.url) == file.expectedBytes
         }
     }
 
@@ -1207,33 +1311,66 @@ final class MacHostService {
         return directoryURL
     }
 
-    private func makeInitialFileStates(from message: [String: Any], directoryURL: URL) -> [Int: FileTransferState.FileState] {
-        guard let files = message["files"] as? [[String: Any]] else {
-            return [:]
+    private func makeInitialFileStates(
+        from message: [String: Any],
+        expectedFileCount: Int,
+        directoryURL: URL
+    ) -> [Int: FileTransferState.FileState]? {
+        guard let files = message["files"] as? [[String: Any]], files.count == expectedFileCount else {
+            return nil
         }
 
         var states: [Int: FileTransferState.FileState] = [:]
+        var reservedFileNames = Set<String>()
         for (fallbackIndex, file) in files.enumerated() {
-            let index = positiveInt(file["index"]) ?? fallbackIndex
+            let index: Int
+            if let rawIndex = file["index"] {
+                guard let parsedIndex = nonNegativeInt(rawIndex),
+                      parsedIndex < expectedFileCount,
+                      states[parsedIndex] == nil else {
+                    return nil
+                }
+                index = parsedIndex
+            } else {
+                index = fallbackIndex
+            }
+            guard let expectedBytes = nonNegativeInt(file["size"]) else {
+                return nil
+            }
             let name = stringValue(file["name"]) ?? "clipboard-\(index + 1)"
-            states[index] = makeFileState(
+            let fileState = makeFileState(
                 index: index,
                 name: name,
-                expectedBytes: positiveInt(file["size"]) ?? 0,
-                directoryURL: directoryURL
+                expectedBytes: expectedBytes,
+                directoryURL: directoryURL,
+                reservedFileNames: reservedFileNames
             )
+            reservedFileNames.insert(fileState.name.lowercased())
+            states[index] = fileState
         }
 
         return states
     }
 
-    private func makeFileState(index: Int, name: String, expectedBytes: Int, directoryURL: URL) -> FileTransferState.FileState {
-        let safeName = uniqueFileName(sanitizeFileName(name), index: index, directoryURL: directoryURL)
+    private func makeFileState(
+        index: Int,
+        name: String,
+        expectedBytes: Int,
+        directoryURL: URL,
+        reservedFileNames: Set<String> = []
+    ) -> FileTransferState.FileState {
+        let safeName = uniqueFileName(
+            sanitizeFileName(name),
+            index: index,
+            directoryURL: directoryURL,
+            reservedFileNames: reservedFileNames
+        )
         return FileTransferState.FileState(
             index: index,
             name: safeName,
             expectedBytes: expectedBytes,
             receivedBytes: 0,
+            receivedRanges: [],
             url: directoryURL.appendingPathComponent(safeName)
         )
     }
@@ -1251,12 +1388,18 @@ final class MacHostService {
         try handle.write(contentsOf: data)
     }
 
-    private func uniqueFileName(_ name: String, index: Int, directoryURL: URL) -> String {
+    private func uniqueFileName(
+        _ name: String,
+        index: Int,
+        directoryURL: URL,
+        reservedFileNames: Set<String> = []
+    ) -> String {
         let fallbackName = "clipboard-\(index + 1)"
         let baseName = name.isEmpty ? fallbackName : name
         var candidate = baseName
         var suffix = 1
-        while FileManager.default.fileExists(atPath: directoryURL.appendingPathComponent(candidate).path) {
+        while FileManager.default.fileExists(atPath: directoryURL.appendingPathComponent(candidate).path)
+            || reservedFileNames.contains(candidate.lowercased()) {
             let url = URL(fileURLWithPath: baseName)
             let stem = url.deletingPathExtension().lastPathComponent
             let ext = url.pathExtension
@@ -1284,6 +1427,13 @@ final class MacHostService {
         for directoryURL in directories {
             try? FileManager.default.removeItem(at: directoryURL)
         }
+    }
+
+    private func cleanupFileTransfer(_ transferId: String, in context: ClientContext) {
+        guard let transfer = context.fileTransfers.removeValue(forKey: transferId) else {
+            return
+        }
+        try? FileManager.default.removeItem(at: transfer.directoryURL)
     }
 
     private func handleReverseControlRequest(_ message: [String: Any], to context: ClientContext) {
@@ -2007,6 +2157,63 @@ final class MacHostService {
             return parsed
         }
         return nil
+    }
+
+    private func nonNegativeInt(_ value: Any?) -> Int? {
+        if let value = value as? Int, value >= 0 {
+            return value
+        }
+        if let value = value as? Double, value >= 0 {
+            return Int(value)
+        }
+        if let value = value as? NSNumber, value.intValue >= 0 {
+            return value.intValue
+        }
+        if let value = value as? String, let parsed = Int(value), parsed >= 0 {
+            return parsed
+        }
+        return nil
+    }
+
+    private func mergedRanges(_ ranges: [Range<Int>]) -> [Range<Int>] {
+        let sortedRanges = ranges
+            .filter { $0.lowerBound <= $0.upperBound }
+            .sorted { left, right in
+                left.lowerBound == right.lowerBound ? left.upperBound < right.upperBound : left.lowerBound < right.lowerBound
+            }
+
+        var merged: [Range<Int>] = []
+        for range in sortedRanges {
+            guard let last = merged.last else {
+                merged.append(range)
+                continue
+            }
+            if range.lowerBound <= last.upperBound {
+                merged[merged.count - 1] = last.lowerBound..<max(last.upperBound, range.upperBound)
+            } else {
+                merged.append(range)
+            }
+        }
+        return merged
+    }
+
+    private func contiguousReceivedBytes(_ ranges: [Range<Int>]) -> Int {
+        var cursor = 0
+        for range in mergedRanges(ranges) {
+            if range.lowerBound > cursor {
+                break
+            }
+            cursor = max(cursor, range.upperBound)
+        }
+        return cursor
+    }
+
+    private func fileSize(at url: URL) -> Int {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attributes[.size] as? NSNumber else {
+            return -1
+        }
+        return size.intValue
     }
 
     private func stringValue(_ value: Any?) -> String? {

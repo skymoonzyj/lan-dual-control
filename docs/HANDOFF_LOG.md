@@ -17,6 +17,39 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Mac Codex
+
+日期：2026-06-15 20:30
+开发端：Mac Codex
+本轮目标：对称加固 Mac host 文件剪贴板接收完整性，避免坏分块误完成。
+完成内容：
+- `apps/mac-host/Sources/MacHost/MacHostService.swift` 加固 `clipboard_file_offer`：校验文件数上限、总大小上限、清单文件数、文件索引、逐文件 size 与 `totalBytes` 一致；合法 0 字节文件会在 offer 阶段创建空文件。
+- `clipboard_file_chunk` 必须引用已有 transfer 和已声明 fileIndex；拒绝负数/无效 offset、超大分块、非空文件空块、重复/重叠/不连续 offset、越界写入和累计总字节超声明值；异常分块会清理该 transfer，要求对端重新开始干净传输。
+- 完成阶段要求 URL 数量、声明文件数、总 receivedBytes、逐文件 receivedBytes 和实际磁盘文件大小全部精确匹配，不再用 `>=` 让重复/重叠分块蒙混通过；同一批重名文件会先在内存里去重，避免非空文件覆盖。
+- 新增 `scripts/mac/test-mac-host-clipboard-file-integrity.mjs`，用 Swift 源码守卫检查和小型区间模型覆盖无自动创建 file state、chunk 上限、offset 连续、逐文件完整性、磁盘大小检查、空文件和同批重名保护。
+- 同步当前状态、下一步、任务板和锁文件；未改共享协议、未发送密码、未执行 `inject`。
+修改文件：
+- `apps/mac-host/Sources/MacHost/MacHostService.swift`
+- `scripts/mac/test-mac-host-clipboard-file-integrity.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `swift build --package-path apps/mac-host`
+- `node --check scripts/mac/test-mac-host-clipboard-file-integrity.mjs`
+- `node scripts/mac/test-mac-host-clipboard-file-integrity.mjs`
+- `node scripts/mac/test-mac-script-help.mjs --script test-mac-host-clipboard-file-integrity.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" .`
+遗留问题：
+- 本轮是源码构建和专项回归，未用真实 Windows 控制端发送文件到 Mac 系统剪贴板；正式 E2E 时仍需 Windows 侧用 `--clipboardFile` / `-ClipboardFile` 真机验证。
+下一步建议：
+- Supervisor/Windows 可复跑 `node scripts/mac/test-mac-host-clipboard-file-integrity.mjs` 做审查；正式 Mac E2E 恢复后，Windows 侧继续跑无密预检，再由用户本机隐藏输入密码执行含文件剪贴板的正式验收。
+是否改了协议：否，仍使用现有 `clipboard_file_*` 消息；只是 Mac 接收端更严格拒绝坏输入。
+是否需要另一端配合：需要 Windows 侧在正式 E2E 或专项探针里复测 Windows -> Mac 文件剪贴板真机路径。
+
 ## 2026-06-15 Windows Codex
 
 日期：2026-06-15 20:34

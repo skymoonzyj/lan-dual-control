@@ -49,7 +49,7 @@
 
 ## Mac 端状态
 
-- macOS 被控端已有 Swift WebSocket 服务、`/discovery`、认证、会话协商、真实 JPEG 屏幕帧、模拟帧回退、CGEvent 输入注入、文本剪贴板双向同步和文件剪贴板接收。
+- macOS 被控端已有 Swift WebSocket 服务、`/discovery`、认证、会话协商、真实 JPEG 屏幕帧、模拟帧回退、CGEvent 输入注入、文本剪贴板双向同步和文件剪贴板接收。Mac host 文件剪贴板接收已对齐完成完整性加固：必须先有 `clipboard_file_offer`，offer 校验文件数、总大小和清单一致性，chunk 校验 `fileIndex`、`offset`、分块大小、连续 offset 和不越界；完成时要求逐文件 received/expected/disk size 完全一致，重复/重叠/不完整分块不能误完成，并保留空文件兼容。新增 `scripts/mac/test-mac-host-clipboard-file-integrity.mjs` 锁定这些守卫。
 - JPEG 调试链路默认真实采集上限已改为 30 FPS，控制端会显示实收 FPS、协商帧率和请求帧率。
 - 真 Mac 已用于验证真实 JPEG 首帧、文本剪贴板双向同步、文件剪贴板从 Mac 推送到控制端内存托盘。
 - ScreenCaptureKit + VideoToolbox H.264 输出入口已在真 Mac 上编译、启动并通过本机 `--requireH264` 强校验，实际返回 `videoCodec=h264`、`videoEncoding=annexb-base64`、`capturePipeline=screencapturekit-h264`。
