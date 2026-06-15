@@ -69,7 +69,7 @@ node E:\codex\lan-dual-control\scripts\windows\test-coordinate-mapping.mjs --hel
 
 真实 Mac 页面级自检可自动启动本地控制端页面、打开 Edge、连接 Mac，并确认诊断条和视频画面；加 `--requireH264` 可强制要求真实 H.264/WebCodecs 画布解码成功且本次连接 H.264 解码错误计数为 0，加 `--injectPcmAudio` 可额外注入一帧 planar PCM，验证控制端音频播放入口：
 脚本会先回归画面内悬浮控制中心，确认悬浮层、摘要、画质、缩放、声音、音量、全屏和窗口按钮能同步到原工具栏与页面布局；随后会模拟适应窗口黑边输入，确认黑边移动、点击、滚轮不会发远控事件，画面内按下后移到黑边松开也能正常释放。连接成功后还会等待刷新率卡片显示数值型“实收 FPS”和“协商 Hz”，避免把请求刷新率误当成真实帧率。
-只需要快速检查诊断条、悬浮控制中心和黑边输入防护时，可加 `--diagnosticsOnly`，不会连接被控端；该路径也会模拟 Mac host `runtime`，确认诊断条能显示 PID、运行时长和 build，并覆盖视频帧新鲜度显示、时钟偏差提示和 H.264 Annex B/AVC 关键帧识别 helper。Mac host 重启后，可再加 `--expectDiscoveryRuntimeBuildId <build-id>`，通过真实 `/discovery` 无密码验收设备列表、刷新后自动选中 WebSocket 设备、以及诊断条显示的 runtime。
+只需要快速检查诊断条、悬浮控制中心和黑边输入防护时，可加 `--diagnosticsOnly`，不会连接被控端；该路径也会模拟 Mac host `runtime`，确认诊断条能显示 PID、运行时长和 build，并覆盖视频帧新鲜度显示、时钟偏差提示和 H.264 Annex B/AVC 关键帧识别 helper。Mac host 重启后，可再加 `--discover --expectDiscoveryRuntimeBuildId <build-id>`，脚本会先用 `discover-lan-hosts` 自动选中最佳 Mac host，再通过真实 `/discovery` 无密码验收设备列表、刷新后自动选中 WebSocket 设备、以及诊断条显示的 runtime。已知 IP 且不想扫整段局域网时，可组合 `--discover --discoverNoLocalSubnets --host <Mac IP> --port 43770`。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\discover-lan-hosts.mjs
@@ -77,7 +77,10 @@ node E:\codex\lan-dual-control\scripts\windows\discover-lan-hosts.mjs --boardSum
 node E:\codex\lan-dual-control\scripts\windows\discover-lan-hosts.mjs --noLocalSubnets --host 192.168.31.122 --port 43770 --requireMacHost --boardSummary
 node E:\codex\lan-dual-control\scripts\windows\discover-lan-hosts.mjs --subnet 192.168.31.0/24 --requireFound
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --diagnosticsOnly
+node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --discover --diagnosticsOnly --expectDiscoveryRuntimeBuildId d807536
+node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --discover --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --diagnosticsOnly --expectDiscoveryRuntimeBuildId d807536
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --diagnosticsOnly --host 192.168.31.122 --port 43770 --expectDiscoveryRuntimeBuildId edcde5e
+node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --discover --promptPassword --requirePassword --requireH264
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password --requireH264
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password --injectPcmAudio

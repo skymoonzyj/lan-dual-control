@@ -5,9 +5,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
+
 const defaults = {
   host: "127.0.0.1",
   port: "43770",
+  hostProvided: false,
+  discover: false,
+  discoverNoLocalSubnets: false,
+  discoverTimeoutMs: 1200,
   password: process.env.LAN_DUAL_PASSWORD || "demo-password",
   passwordProvided: false,
   promptPassword: false,
@@ -38,6 +44,9 @@ surface, diagnostics, input guards, and optional audio injection.
 Options:
   --host <host>                         Mac host address. Default: ${defaults.host}
   --port <port>                         Mac host port. Default: ${defaults.port}
+  --discover                            Find the best Mac host with discover-lan-hosts before testing.
+  --discoverNoLocalSubnets              With --discover, only probe 127.0.0.1 and explicit --host targets.
+  --discoverTimeoutMs <ms>              Per-host discovery timeout. Default: ${defaults.discoverTimeoutMs}
   --password <password>                 Probe password. Default: LAN_DUAL_PASSWORD or demo-password.
   --promptPassword                      Prompt for the probe password without echoing it.
   --requirePassword                     Refuse empty/demo-password credentials before connecting.
@@ -53,7 +62,9 @@ Options:
 
 Examples:
   node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly
+  node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --expectDiscoveryRuntimeBuildId <build-id>
   node scripts/windows/test-windows-client-browser.mjs --host 192.168.1.20 --port 43770 --promptPassword --requirePassword --requireH264
+  node scripts/windows/test-windows-client-browser.mjs --discover --promptPassword --requirePassword --requireH264
   node scripts/windows/test-windows-client-browser.mjs --host 127.0.0.1 --port 43770 --injectPcmAudio
 `);
 }
@@ -68,6 +79,14 @@ function parseArgs(argv) {
 
     if (key === "headed") {
       args.headless = false;
+      continue;
+    }
+    if (key === "discover") {
+      args.discover = true;
+      continue;
+    }
+    if (key === "discoverNoLocalSubnets") {
+      args.discoverNoLocalSubnets = true;
       continue;
     }
     if (key === "noRequireVideoSurface") {
@@ -100,6 +119,9 @@ function parseArgs(argv) {
       if (key === "password") {
         args.passwordProvided = true;
       }
+      if (key === "host") {
+        args.hostProvided = true;
+      }
       args[key] = next;
       index += 1;
     }
@@ -108,6 +130,7 @@ function parseArgs(argv) {
   args.clientPort = Number(args.clientPort);
   args.debugPort = Number(args.debugPort);
   args.timeoutMs = Number(args.timeoutMs);
+  args.discoverTimeoutMs = Math.max(250, Number(args.discoverTimeoutMs) || defaults.discoverTimeoutMs);
   return args;
 }
 
@@ -245,6 +268,59 @@ function startProcess(command, args, options = {}) {
   });
 }
 
+function runCapturedProcess(command, args, options = {}) {
+  return new Promise((resolveRun) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const startedAt = performance.now();
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolveRun({
+        ...result,
+        stdout,
+        stderr: result.stderr ?? stderr,
+        durationMs: Math.round(performance.now() - startedAt),
+      });
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish({ exitCode: null, signal: "timeout", timedOut: true, ok: false });
+    }, options.timeoutMs ?? 15000);
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      finish({
+        exitCode: null,
+        signal: "error",
+        timedOut: false,
+        ok: false,
+        stderr: `${stderr}\n${error.message}`.trim(),
+      });
+    });
+    child.on("close", (exitCode, signal) => {
+      finish({
+        exitCode,
+        signal,
+        timedOut: false,
+        ok: exitCode === 0,
+      });
+    });
+  });
+}
+
 function attachProcessLog(child, name) {
   child.stdout?.on("data", (chunk) => {
     const text = String(chunk).trim();
@@ -254,6 +330,65 @@ function attachProcessLog(child, name) {
     const text = String(chunk).trim();
     if (text) print(`${name}:err`, text);
   });
+}
+
+function tailLines(text, limit = 8) {
+  const lines = String(text || "").trim().split(/\r?\n/).filter(Boolean);
+  return lines.slice(-limit).join("\n");
+}
+
+function discoveryScannerArgs(args) {
+  const scannerArgs = [
+    "scripts/windows/discover-lan-hosts.mjs",
+    "--json",
+    "--requireMacHost",
+    "--timeoutMs",
+    String(args.discoverTimeoutMs),
+    "--port",
+    String(args.port),
+  ];
+  if (args.discoverNoLocalSubnets) {
+    scannerArgs.push("--noLocalSubnets");
+  }
+  if (args.hostProvided) {
+    scannerArgs.push("--host", args.host);
+  }
+  return scannerArgs;
+}
+
+async function resolveDiscoveryTarget(args) {
+  if (!args.discover) return null;
+  const childArgs = discoveryScannerArgs(args);
+  const result = await runCapturedProcess(process.execPath, childArgs, {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      LAN_DUAL_PASSWORD: "",
+    },
+    timeoutMs: Math.max(15000, Number(args.discoverTimeoutMs) * 12 + 8000),
+  });
+  let payload;
+  try {
+    payload = JSON.parse(String(result.stdout || "").trim());
+  } catch (error) {
+    throw new Error(
+      `Mac host discovery did not print valid JSON: ${error.message}; exit=${result.exitCode ?? "null"}; stdout=${tailLines(result.stdout)}; stderr=${tailLines(result.stderr)}`,
+    );
+  }
+  const best = payload.bestMacHost || null;
+  if (!result.ok || !best) {
+    const detail = payload.boardSummary || `no Mac host found; exit=${result.exitCode ?? "null"}`;
+    throw new Error(`Mac host discovery failed: ${detail}`);
+  }
+  args.host = String(best.host);
+  args.port = String(best.port);
+  return {
+    command: `node ${childArgs.join(" ")}`,
+    target: `${args.host}:${args.port}`,
+    foundMacHosts: Array.isArray(payload.macHosts) ? payload.macHosts.length : 1,
+    runtimeBuild: best.runtime?.buildId || "",
+    boardSummary: payload.boardSummary || "",
+  };
 }
 
 async function getJson(url) {
@@ -1331,8 +1466,15 @@ async function run() {
   }
 
   const args = parseArgs(process.argv);
+  const discoverySelection = await resolveDiscoveryTarget(args);
+  if (discoverySelection) {
+    const runtimeText = discoverySelection.runtimeBuild ? ` runtimeBuild=${discoverySelection.runtimeBuild}` : "";
+    print(
+      "OK",
+      `Discovery target: ${discoverySelection.target}; macHosts=${discoverySelection.foundMacHosts}${runtimeText}`,
+    );
+  }
   await preparePassword(args);
-  const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
   const clientUrl = `http://127.0.0.1:${args.clientPort}/`;
   const userDataDir = await mkdtemp(join(tmpdir(), "lan-dual-edge-"));
   const clientServer = startProcess(process.execPath, ["apps/windows-client/server.mjs", String(args.clientPort)], {

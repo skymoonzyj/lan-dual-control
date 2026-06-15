@@ -17,6 +17,38 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Windows Codex
+
+日期：2026-06-15 17:25
+开发端：Windows Codex
+本轮目标：让 Windows 控制端页面级自检也能自动发现 Mac host，减少 UI 验收前手工复制 IP/端口。
+完成内容：
+- `scripts/windows/test-windows-client-browser.mjs` 新增 `--discover`、`--discoverNoLocalSubnets` 和 `--discoverTimeoutMs`。
+- 页面自检会在密码检查和浏览器启动前先调用 `scripts/windows/discover-lan-hosts.mjs --json --requireMacHost`，选中 `bestMacHost` 后再进入原 `diagnosticsOnly` 或正式连接流程。
+- `--diagnosticsOnly --discover --expectDiscoveryRuntimeBuildId <build-id>` 可不输入密码验证真实 Mac `/discovery.runtime`、设备列表自动选中和诊断条 runtime 显示。
+- 新增 `scripts/windows/test-windows-client-browser-discover.mjs`，用本机带 CORS 的假 `/discovery` 服务 + Edge diagnosticsOnly 覆盖 `--discover` 到 UI runtime 验收的完整无密路径。
+- Windows client README、当前状态、下一步和任务板同步新命令。
+修改文件：
+- `scripts/windows/test-windows-client-browser.mjs`
+- `scripts/windows/test-windows-client-browser-discover.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node --check scripts/windows/test-windows-client-browser-discover.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-client-browser.mjs --script test-windows-client-browser-discover.mjs`
+- `node scripts/windows/test-windows-client-browser-discover.mjs --timeoutMs 60000`
+遗留问题：
+- 正式连接真实 Mac 的 H.264 页面验收仍需要用户在 Windows 本机隐藏输入正式密码；本轮没有认证、没有发送输入、没有执行 `inject`。
+下一步建议：
+- 用户准备好输入正式密码后，可直接跑 `node scripts/windows/test-windows-client-browser.mjs --discover --promptPassword --requirePassword --requireH264` 做页面级正式 H.264 验收；正式聚合长测仍走 `check-mac-formal-e2e --discover --promptPassword`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；如果 Mac host 重启到新 build，Windows 侧可用 `--discover --diagnosticsOnly --expectDiscoveryRuntimeBuildId <build-id>` 先做无密 UI 验收。
+
 ## 2026-06-15 Mac Codex
 
 日期：2026-06-15 16:24
