@@ -19,6 +19,37 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 14:15
+开发端：Windows Codex
+本轮目标：让 Windows host 在线状态直接给 Mac 端 formal checklist 下一步命令，减少 Mac 反控 Windows 真连前的手工拼命令。
+完成内容：
+- `start-windows-host --status` 的 Mac 下一步目标保留原 `check-mac-client-readiness` 命令，同时新增 `formalCommand`：`check-mac-client-formal-status --host <Windows IP> --port <port> --boardSummary`。
+- `--status --boardSummary` 在线时优先提示 Mac formal checklist 命令，并附带 readiness 命令；离线摘要保持安全启动建议。
+- 普通 status 输出新增 `Mac formal checklist command` 行，JSON 输出的 `macClientReadinessCommands[]` 新增 `readinessCommand` 和 `formalCommand` 字段，向后兼容原 `command` 字段。
+- Windows host README 同步说明 `--status --boardSummary` / readiness board summary 会给出 Mac readiness 与 formal checklist 两类下一步命令。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- `node scripts/windows/start-windows-host.mjs --help`
+- `node scripts/windows/start-windows-host.mjs --status --boardSummary --host 127.0.0.1 --port 43999`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 90000 --readinessTimeoutMs 8000`
+- `node scripts/windows/test-windows-script-help.mjs --script start-windows-host.mjs --script test-windows-host-start-helper.mjs --script check-windows-host-readiness.mjs`
+遗留问题：
+- 这只是状态/联络体验增强，不会启动 Windows host，也不替代用户输入正式密码或 Mac 端真连验收。
+下一步建议：
+- Windows host 正式启动后，先发 `start-windows-host --status --boardSummary` 到联络板；Mac 端可直接运行摘要里的 `check-mac-client-formal-status`。
+是否改了协议：否。
+是否需要另一端配合：不需要；后续真连验收需要 Mac 端连接已启动的 Windows host。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 13:55
 开发端：Windows Codex
 本轮目标：让 Mac client 视频传输矩阵在浏览器或临时 host 端口瞬时释放失败时自动恢复，减少误报。

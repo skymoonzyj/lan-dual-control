@@ -330,6 +330,8 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         assertIncludes(statusOutput, "Audio:", "online status");
         assertIncludes(statusOutput, "Input:", "online status");
         assertIncludes(statusOutput, "Clipboard:", "online status");
+        assertIncludes(statusOutput, "Mac formal checklist command:", "online status");
+        assertIncludes(statusOutput, "check-mac-client-formal-status.mjs", "online status");
         assertIncludes(statusOutput, "differs from current git", "online status");
         assertIncludes(statusOutput, "Could not inspect Windows host runtime changes", "online status");
         assertNotIncludes(statusOutput, "test-password", "online status");
@@ -358,6 +360,9 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         if (!String(parsed.macClientReadinessCommands[0].command || "").includes("check-mac-client-readiness.mjs")) {
           throw new Error(`Online JSON status did not include expected Mac readiness command.\n${jsonResult.stdout}`);
         }
+        if (!String(parsed.macClientReadinessCommands[0].formalCommand || "").includes("check-mac-client-formal-status.mjs")) {
+          throw new Error(`Online JSON status did not include expected Mac formal checklist command.\n${jsonResult.stdout}`);
+        }
         if (parsed.buildDiff?.checked !== false || !String(parsed.buildDiff?.message || "").includes("Could not inspect")) {
           throw new Error(`Online JSON status did not include expected uninspectable build diff.\n${jsonResult.stdout}`);
         }
@@ -374,6 +379,7 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         }
         assertIncludes(boardResult.stdout, "Windows host readiness: online", "online board summary");
         assertIncludes(boardResult.stdout, "check-mac-client-readiness.mjs", "online board summary");
+        assertIncludes(boardResult.stdout, "check-mac-client-formal-status.mjs", "online board summary");
         assertIncludes(boardResult.stdout, "Do not send passwords", "online board summary");
         assertNotIncludes(boardOutput, "test-password", "online board summary");
         finish();
