@@ -1,4 +1,12 @@
+import { spawnSync } from "node:child_process";
 import os from "node:os";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
+const macHostRuntimePaths = [
+  "apps/mac-host/Package.swift",
+  "apps/mac-host/Sources",
+];
 
 const defaults = {
   port: 43770,
@@ -362,6 +370,113 @@ function dedupeFound(found) {
   });
 }
 
+function normalizedText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function splitLines(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function command(commandName, commandArgs, options = {}) {
+  const result = spawnSync(commandName, commandArgs, {
+    cwd: options.cwd || repoRoot,
+    encoding: "utf8",
+    timeout: options.timeoutMs || 3000,
+    maxBuffer: options.maxBuffer || 4 * 1024 * 1024,
+  });
+  return {
+    ok: result.status === 0,
+    stdout: String(result.stdout || ""),
+    stderr: String(result.stderr || ""),
+    error: result.error ? result.error.message : "",
+  };
+}
+
+function getCurrentBuildId() {
+  const result = command("git", ["rev-parse", "--short", "HEAD"], { timeoutMs: 3000 });
+  return result.ok ? normalizedText(result.stdout) : "";
+}
+
+function getChangedMacHostRuntimeFiles(fromBuildId, toBuildId) {
+  const from = normalizedText(fromBuildId);
+  const to = normalizedText(toBuildId || "HEAD") || "HEAD";
+  if (!from) return null;
+  const revParse = command("git", ["rev-parse", "--verify", "--quiet", `${from}^{commit}`], { timeoutMs: 3000 });
+  if (!revParse.ok) return null;
+  const diff = command("git", ["diff", "--name-only", `${from}..${to}`, "--", ...macHostRuntimePaths], { timeoutMs: 3000 });
+  if (!diff.ok) return null;
+  return splitLines(diff.stdout);
+}
+
+function makeMacHostBuildDiff(runtimeBuildId, currentBuildId) {
+  const from = normalizedText(runtimeBuildId);
+  const to = normalizedText(currentBuildId);
+  if (!from || !to) {
+    return {
+      differs: false,
+      fromBuildId: from,
+      toBuildId: to,
+      comparable: false,
+      changedHostRuntimeFiles: null,
+      changedHostRuntimeFileCount: null,
+      severity: "unknown",
+      message: "Build comparison unavailable because runtime.buildId or current git build is missing.",
+    };
+  }
+  if (from === to) {
+    return {
+      differs: false,
+      fromBuildId: from,
+      toBuildId: to,
+      comparable: true,
+      changedHostRuntimeFiles: [],
+      changedHostRuntimeFileCount: 0,
+      severity: "ok",
+      message: "Running Mac host build matches current git.",
+    };
+  }
+
+  const changedFiles = getChangedMacHostRuntimeFiles(from, to);
+  if (!Array.isArray(changedFiles)) {
+    return {
+      differs: true,
+      fromBuildId: from,
+      toBuildId: to,
+      comparable: false,
+      changedHostRuntimeFiles: null,
+      changedHostRuntimeFileCount: null,
+      severity: "warning",
+      message: `Running Mac host build ${from} differs from current git ${to}; local git history cannot prove whether Mac host runtime changed.`,
+    };
+  }
+  if (changedFiles.length === 0) {
+    return {
+      differs: true,
+      fromBuildId: from,
+      toBuildId: to,
+      comparable: true,
+      changedHostRuntimeFiles: [],
+      changedHostRuntimeFileCount: 0,
+      severity: "stale-metadata",
+      message: `No Mac host runtime source changes since ${from}; behavior is likely current, but build metadata is stale.`,
+    };
+  }
+  return {
+    differs: true,
+    fromBuildId: from,
+    toBuildId: to,
+    comparable: true,
+    changedHostRuntimeFiles: changedFiles,
+    changedHostRuntimeFileCount: changedFiles.length,
+    severity: "restart-recommended",
+    message: `Mac host runtime source changed since ${from}; restart before deploy-style validation.`,
+  };
+}
+
 function isMacHost(item) {
   return String(item?.platform || "").toLowerCase() === "macos";
 }
@@ -386,6 +501,20 @@ function summarizeMacHost(item) {
   return `${item.deviceName || "Mac host"} at ${item.host}:${item.port}${runtime} h264=${h264} audio=${audio} clipboardFile=${clipboardFile} input=${input} maxScreenFps=${fps}`;
 }
 
+function formatMacBuildDiff(buildDiff) {
+  if (!buildDiff || buildDiff.severity === "ok") return "build=current";
+  if (buildDiff.severity === "stale-metadata") {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} stale metadata only, hostRuntimeChanges=0`;
+  }
+  if (buildDiff.severity === "restart-recommended") {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} restart recommended, hostRuntimeChanges=${buildDiff.changedHostRuntimeFileCount ?? "unknown"}`;
+  }
+  if (buildDiff.differs) {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} differs from repo=${buildDiff.toBuildId || "unknown"}`;
+  }
+  return "build comparison unavailable";
+}
+
 function makeMacFormalCommands(item) {
   if (!item) return null;
   const base = `node scripts/windows/check-mac-formal-e2e.mjs --host ${item.host} --port ${item.port}`;
@@ -400,6 +529,7 @@ function makeMacBoardSummary(report) {
   if (report.bestMacHost) {
     return [
       `Windows-side Mac host discovery: found ${report.macHosts.length} Mac host(s); best=${summarizeMacHost(report.bestMacHost)}.`,
+      `Build diff: ${formatMacBuildDiff(report.bestMacHost.buildDiff)}.`,
       `Next preflight: ${report.macFormalE2e.preflightCommand}.`,
       `User auth request when ready: ${report.macFormalE2e.userAuthRequestCommand}.`,
       `Formal command: ${report.macFormalE2e.formalCommand}.`,
@@ -416,8 +546,13 @@ function makeMacBoardSummary(report) {
   ].join(" ");
 }
 
-function buildMacDiscoveryReport(found, candidates, args) {
-  const macHosts = found.filter(isMacHost);
+function buildMacDiscoveryReport(found, candidates, args, currentBuildId) {
+  const macHosts = found
+    .filter(isMacHost)
+    .map((item) => ({
+      ...item,
+      buildDiff: makeMacHostBuildDiff(item?.runtime?.buildId || "", currentBuildId),
+    }));
   const nonMacHosts = found.filter((item) => !isMacHost(item));
   const bestMacHost = macHosts[0] || null;
   const macFormalE2e = makeMacFormalCommands(bestMacHost);
@@ -426,6 +561,7 @@ function buildMacDiscoveryReport(found, candidates, args) {
     nonMacHosts,
     bestMacHost,
     macFormalE2e,
+    currentBuildId,
     macHostRequired: args.requireMacHost,
     scanned: candidates.length,
     boardSummary: "",
@@ -454,7 +590,8 @@ async function main() {
   );
   const found = dedupeFound(rawResults.filter((result) => result.ok));
   const failed = rawResults.filter((result) => !result.ok);
-  const macDiscovery = buildMacDiscoveryReport(found, candidates, args);
+  const currentBuildId = getCurrentBuildId();
+  const macDiscovery = buildMacDiscoveryReport(found, candidates, args, currentBuildId);
   const ok = (found.length > 0 || !args.requireFound) && (macDiscovery.macHosts.length > 0 || !args.requireMacHost);
 
   if (args.json) {
@@ -465,6 +602,7 @@ async function main() {
       nonMacHosts: macDiscovery.nonMacHosts,
       bestMacHost: macDiscovery.bestMacHost,
       macFormalE2e: macDiscovery.macFormalE2e,
+      currentBuildId,
       boardSummary: macDiscovery.boardSummary,
       scanned: candidates.length,
       ports: args.ports,
@@ -483,6 +621,7 @@ async function main() {
       );
     }
     if (macDiscovery.bestMacHost) {
+      print("INFO", `Mac host build diff: ${macDiscovery.bestMacHost.buildDiff.message}`, args);
       print("INFO", `Mac formal preflight command: ${macDiscovery.macFormalE2e.preflightCommand}`, args);
       print("INFO", `Mac user auth request command: ${macDiscovery.macFormalE2e.userAuthRequestCommand}`, args);
       print("INFO", `Mac formal E2E command: ${macDiscovery.macFormalE2e.formalCommand}`, args);

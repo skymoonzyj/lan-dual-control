@@ -19,6 +19,37 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 16:35
+开发端：Windows Codex
+本轮目标：让 Windows 侧 Mac host 发现摘要同时判断运行中 Mac host 是否需要因旧 build 重启。
+完成内容：
+- `scripts/windows/discover-lan-hosts.mjs` 对发现到的 Mac host 增加 `buildDiff`，比较 `/discovery.runtime.buildId` 到当前 git 的 `apps/mac-host/Package.swift` 与 `apps/mac-host/Sources` 变化。
+- `--json` 的 `macHosts[]` / `bestMacHost` 现在带 `buildDiff`，顶层新增 `currentBuildId`；通用 `found` 保持未扩展，方便旧消费方继续使用。
+- `--boardSummary` 现在会输出 `build=current`、`stale metadata only, hostRuntimeChanges=0` 或 `restart recommended`，帮助正式 E2E 前判断是否要请 Mac 端重启 host。
+- `scripts/windows/test-discover-lan-hosts.mjs` 补 buildDiff 字段和无密摘要断言。
+修改文件：
+- `scripts/windows/discover-lan-hosts.mjs`
+- `scripts/windows/test-discover-lan-hosts.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/discover-lan-hosts.mjs`
+- `node --check scripts/windows/test-discover-lan-hosts.mjs`
+- `node scripts/windows/test-discover-lan-hosts.mjs --timeoutMs 15000`
+- `node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host 192.168.31.122 --port 43770 --requireMacHost --boardSummary --timeoutMs 1200`
+- `node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host 192.168.31.122 --port 43770 --requireMacHost --json --timeoutMs 1200`
+遗留问题：
+- 这仍是只读 discovery/git diff 判断，不会重启 Mac host、不认证、不执行正式长测。
+- 当前真实 Mac host `runtimeBuild=d807536`，到本轮开发前的 Windows repo `207e9b9` 没有 Mac host runtime 源码变化，因此摘要显示 `stale metadata only, hostRuntimeChanges=0`。
+下一步建议：
+- 正式 E2E 前先看 discovery 摘要：若 `restart recommended`，先让 Mac 端安全重启；若 `stale metadata only` 且 formal preflight ready，可继续进入用户本机密码输入流程。
+是否改了协议：否。
+是否需要另一端配合：不需要；仅当摘要提示 `restart recommended` 时，后续正式长测前需要 Mac 端重启 host。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 16:20
 开发端：Windows Codex
 本轮目标：增强 Windows 侧 Mac host 发现入口，让正式 E2E 前少手工拼 IP、端口和命令。

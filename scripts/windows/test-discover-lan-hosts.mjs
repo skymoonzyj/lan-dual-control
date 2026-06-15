@@ -207,6 +207,9 @@ async function checkFoundJson(macPort, windowsPort, args) {
   assert(payload.macHosts.length === 1, "found payload should include one Mac host");
   assert(payload.nonMacHosts.length === 1, "found payload should include one non-Mac host");
   assert(payload.bestMacHost.port === String(macPort), "bestMacHost should use the Mac server port");
+  assert(typeof payload.currentBuildId === "string", "found payload should include currentBuildId");
+  assert(payload.bestMacHost.buildDiff?.differs === true, "bestMacHost should include buildDiff for stale/non-comparable runtime builds");
+  assert(payload.bestMacHost.buildDiff?.severity === "warning", "fake mac-build should be non-comparable and warn");
   assertIncludes(payload.macFormalE2e.preflightCommand, "--preflightOnly --checkClientDiagnostics --boardSummary", "preflight command");
   assertIncludes(payload.macFormalE2e.userAuthRequestCommand, "--userAuthRequest", "user auth command");
   assertIncludes(payload.macFormalE2e.formalCommand, "--promptPassword", "formal command");
@@ -221,6 +224,8 @@ async function checkBoardSummary(macPort, windowsPort, args) {
   const result = await run(["--boardSummary", ...baseProbeArgs(macPort, windowsPort)], args);
   assert(result.status === 0, `board summary should exit 0.\n${result.stdout}\n${result.stderr}`);
   assertIncludes(result.stdout, "Windows-side Mac host discovery: found 1 Mac host", "board summary");
+  assertIncludes(result.stdout, "Build diff:", "board summary");
+  assertIncludes(result.stdout, "differs from repo", "board summary");
   assertIncludes(result.stdout, "check-mac-formal-e2e.mjs --host 127.0.0.1", "board summary");
   assertIncludes(result.stdout, "--userAuthRequest", "board summary");
   assertIncludes(result.stdout, "--promptPassword", "board summary");
