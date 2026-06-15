@@ -6,8 +6,11 @@ const defaults = {
   concurrency: 64,
   maxHostsPerSubnet: 254,
   json: false,
+  boardSummary: false,
   verbose: false,
   requireFound: false,
+  requireMacHost: false,
+  noLocalSubnets: false,
 };
 
 function printHelp() {
@@ -22,6 +25,9 @@ Options:
   --concurrency <n>       Parallel probe count, 1-256. Default: ${defaults.concurrency}
   --maxHostsPerSubnet <n> Safety cap per subnet, 1-1024. Default: ${defaults.maxHostsPerSubnet}
   --requireFound          Exit non-zero when no LAN dual-control host is found.
+  --requireMacHost        Exit non-zero when no Mac host is found.
+  --noLocalSubnets        Only probe 127.0.0.1, --host, and --subnet targets.
+  --boardSummary          Print a short secret-free Agent Link Board summary.
   --json                  Print machine-readable JSON summary.
   --verbose               Include failed probe details in JSON and text output.
   --help, -h              Show this help without scanning.
@@ -33,8 +39,9 @@ Description:
 
 Examples:
   node scripts/windows/discover-lan-hosts.mjs
+  node scripts/windows/discover-lan-hosts.mjs --boardSummary
   node scripts/windows/discover-lan-hosts.mjs --subnet 192.168.31.0/24 --requireFound
-  node scripts/windows/discover-lan-hosts.mjs --host 192.168.31.122 --port 43770 --json
+  node scripts/windows/discover-lan-hosts.mjs --host 192.168.31.122 --port 43770 --requireMacHost --json
 `);
 }
 
@@ -47,8 +54,11 @@ function parseArgs(argv) {
     concurrency: defaults.concurrency,
     maxHostsPerSubnet: defaults.maxHostsPerSubnet,
     json: defaults.json,
+    boardSummary: defaults.boardSummary,
     verbose: defaults.verbose,
     requireFound: defaults.requireFound,
+    requireMacHost: defaults.requireMacHost,
+    noLocalSubnets: defaults.noLocalSubnets,
     help: false,
   };
 
@@ -63,12 +73,24 @@ function parseArgs(argv) {
       args.json = true;
       continue;
     }
+    if (token === "--boardSummary") {
+      args.boardSummary = true;
+      continue;
+    }
     if (token === "--verbose") {
       args.verbose = true;
       continue;
     }
     if (token === "--requireFound") {
       args.requireFound = true;
+      continue;
+    }
+    if (token === "--requireMacHost") {
+      args.requireMacHost = true;
+      continue;
+    }
+    if (token === "--noLocalSubnets") {
+      args.noLocalSubnets = true;
       continue;
     }
     if (token === "--port" && next && !next.startsWith("--")) {
@@ -121,7 +143,7 @@ function clampInteger(value, min, max, fallback) {
 }
 
 function print(kind, text, args) {
-  if (!args.json) {
+  if (!args.json && !args.boardSummary) {
     console.log(`[${kind}] ${text}`);
   }
 }
@@ -221,7 +243,7 @@ function hostsForSubnet(subnet) {
 function makeCandidates(args) {
   const hostSet = new Set(["127.0.0.1", ...args.hosts]);
   const subnetSources = [
-    ...getLocalSubnets(args.maxHostsPerSubnet),
+    ...(args.noLocalSubnets ? [] : getLocalSubnets(args.maxHostsPerSubnet)),
     ...args.subnets.map((item) => normalizeSubnet(item, args.maxHostsPerSubnet)).filter(Boolean),
   ];
 
@@ -340,6 +362,78 @@ function dedupeFound(found) {
   });
 }
 
+function isMacHost(item) {
+  return String(item?.platform || "").toLowerCase() === "macos";
+}
+
+function statusFlag(value) {
+  if (value === true) return "on";
+  if (value === false) return "off";
+  return "unknown";
+}
+
+function inputModeOf(item) {
+  return item?.capabilities?.input?.mode || item?.capabilities?.inputMode || "";
+}
+
+function summarizeMacHost(item) {
+  const runtime = item.runtime?.buildId ? ` build=${item.runtime.buildId}` : "";
+  const h264 = statusFlag(item.capabilities?.h264Stream);
+  const audio = item.capabilities?.audioMode || statusFlag(item.capabilities?.audio);
+  const clipboardFile = statusFlag(item.capabilities?.clipboardFile);
+  const input = inputModeOf(item) || "missing";
+  const fps = item.capabilities?.maxScreenFps || "unknown";
+  return `${item.deviceName || "Mac host"} at ${item.host}:${item.port}${runtime} h264=${h264} audio=${audio} clipboardFile=${clipboardFile} input=${input} maxScreenFps=${fps}`;
+}
+
+function makeMacFormalCommands(item) {
+  if (!item) return null;
+  const base = `node scripts/windows/check-mac-formal-e2e.mjs --host ${item.host} --port ${item.port}`;
+  return {
+    preflightCommand: `${base} --preflightOnly --checkClientDiagnostics --boardSummary`,
+    userAuthRequestCommand: `${base} --preflightOnly --checkClientDiagnostics --userAuthRequest`,
+    formalCommand: `${base} --promptPassword`,
+  };
+}
+
+function makeMacBoardSummary(report) {
+  if (report.bestMacHost) {
+    return [
+      `Windows-side Mac host discovery: found ${report.macHosts.length} Mac host(s); best=${summarizeMacHost(report.bestMacHost)}.`,
+      `Next preflight: ${report.macFormalE2e.preflightCommand}.`,
+      `User auth request when ready: ${report.macFormalE2e.userAuthRequestCommand}.`,
+      `Formal command: ${report.macFormalE2e.formalCommand}.`,
+      "No password was requested or sent; no WebSocket/input/inject was attempted.",
+    ].join(" ");
+  }
+  const nonMacNote = report.nonMacHosts.length > 0
+    ? ` Saw ${report.nonMacHosts.length} non-Mac host(s), likely Windows/self.`
+    : "";
+  return [
+    `Windows-side Mac host discovery: no Mac host found after scanning ${report.scanned} candidate(s).${nonMacNote}`,
+    "Ask Mac Codex to start Mac host and confirm IP/port, then rerun discovery or formal preflight.",
+    "No password was requested or sent; no WebSocket/input/inject was attempted.",
+  ].join(" ");
+}
+
+function buildMacDiscoveryReport(found, candidates, args) {
+  const macHosts = found.filter(isMacHost);
+  const nonMacHosts = found.filter((item) => !isMacHost(item));
+  const bestMacHost = macHosts[0] || null;
+  const macFormalE2e = makeMacFormalCommands(bestMacHost);
+  const report = {
+    macHosts,
+    nonMacHosts,
+    bestMacHost,
+    macFormalE2e,
+    macHostRequired: args.requireMacHost,
+    scanned: candidates.length,
+    boardSummary: "",
+  };
+  report.boardSummary = makeMacBoardSummary(report);
+  return report;
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -360,17 +454,25 @@ async function main() {
   );
   const found = dedupeFound(rawResults.filter((result) => result.ok));
   const failed = rawResults.filter((result) => !result.ok);
-  const ok = found.length > 0 || !args.requireFound;
+  const macDiscovery = buildMacDiscoveryReport(found, candidates, args);
+  const ok = (found.length > 0 || !args.requireFound) && (macDiscovery.macHosts.length > 0 || !args.requireMacHost);
 
   if (args.json) {
     console.log(JSON.stringify({
       ok,
       found,
+      macHosts: macDiscovery.macHosts,
+      nonMacHosts: macDiscovery.nonMacHosts,
+      bestMacHost: macDiscovery.bestMacHost,
+      macFormalE2e: macDiscovery.macFormalE2e,
+      boardSummary: macDiscovery.boardSummary,
       scanned: candidates.length,
       ports: args.ports,
       subnets,
       failed: args.verbose ? failed : undefined,
     }, null, 2));
+  } else if (args.boardSummary) {
+    console.log(macDiscovery.boardSummary);
   } else if (found.length > 0) {
     for (const item of found) {
       const runtime = item.runtime?.buildId ? ` build=${item.runtime.buildId}` : "";
@@ -379,6 +481,13 @@ async function main() {
         `${item.deviceName || "LAN dual-control host"} at ${item.host}:${item.port} (${item.platform || "unknown"} ${item.role || "host"}, ${item.latencyMs}ms${runtime})`,
         args,
       );
+    }
+    if (macDiscovery.bestMacHost) {
+      print("INFO", `Mac formal preflight command: ${macDiscovery.macFormalE2e.preflightCommand}`, args);
+      print("INFO", `Mac user auth request command: ${macDiscovery.macFormalE2e.userAuthRequestCommand}`, args);
+      print("INFO", `Mac formal E2E command: ${macDiscovery.macFormalE2e.formalCommand}`, args);
+    } else {
+      print("INFO", "No Mac host was found. Use --requireMacHost for formal Mac E2E prep checks.", args);
     }
   } else {
     print("WARN", "No LAN dual-control /discovery endpoint was found.", args);

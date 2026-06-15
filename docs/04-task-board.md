@@ -279,7 +279,7 @@ Mac 端：
 
 ## 里程碑 M5：文件剪贴板和增强体验
 
-- [x] 局域网自动发现骨架：控制端刷新设备并探测 `/discovery`，假 Mac 和 Windows 被控端已返回设备信息；Windows 桌面版已可通过 `scripts/windows/discover-lan-hosts.mjs` 扫描当前 IPv4 网段并合并到设备列表。刷新后若发现真实在线 WebSocket 设备，会自动选中最佳目标并显示 runtime；真实 Mac `192.168.31.122:43770` / build `edcde5e` 已由 diagnosticsOnly 验证。
+- [x] 局域网自动发现骨架：控制端刷新设备并探测 `/discovery`，假 Mac 和 Windows 被控端已返回设备信息；Windows 桌面版已可通过 `scripts/windows/discover-lan-hosts.mjs` 扫描当前 IPv4 网段并合并到设备列表。命令行发现脚本已支持 `--boardSummary`、`--requireMacHost` 和 `--noLocalSubnets`，可输出 Mac formal E2E 预检、授权提醒和正式验收命令；刷新后若发现真实在线 WebSocket 设备，会自动选中最佳目标并显示 runtime。当前真实 Mac `192.168.31.122:43770` / runtime build `d807536` 已由只读 discovery 验证。
 - [ ] 跨设备 UDP/mDNS 自动发现。
 - [x] macOS 被控端 Bonjour/mDNS 广播：发布 `_lan-dual-control._tcp`，TXT 记录指向 `/discovery` 和控制端口。
 - [ ] Windows/Tauri 原生层浏览 `_lan-dual-control._tcp` 并回填设备列表。

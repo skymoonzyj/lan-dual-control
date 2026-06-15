@@ -19,6 +19,44 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 16:20
+开发端：Windows Codex
+本轮目标：增强 Windows 侧 Mac host 发现入口，让正式 E2E 前少手工拼 IP、端口和命令。
+完成内容：
+- `scripts/windows/discover-lan-hosts.mjs` 新增 `--boardSummary`、`--requireMacHost` 和 `--noLocalSubnets`。
+- `--json` 保持原通用 `found` 字段，同时新增 `macHosts`、`nonMacHosts`、`bestMacHost`、`macFormalE2e` 和 `boardSummary`。
+- 发现 Mac host 后会输出三条下一步命令：无密 formal preflight、标准 `NEED_USER_AUTH` 提醒、正式 `--promptPassword` E2E；摘要明确不认证、不发密码、不打开 WebSocket、不发送输入、不执行 `inject`。
+- 新增 `scripts/windows/test-discover-lan-hosts.mjs`，用本机临时假 `/discovery` 服务覆盖 JSON 字段、board summary、`--requireMacHost` 失败路径和无 secret-like 泄露。
+- Windows 控制端 README、当前状态、下一步和任务板同步记录新入口。
+修改文件：
+- `scripts/windows/discover-lan-hosts.mjs`
+- `scripts/windows/test-discover-lan-hosts.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/discover-lan-hosts.mjs`
+- `node --check scripts/windows/test-discover-lan-hosts.mjs`
+- `node scripts/windows/discover-lan-hosts.mjs --help`
+- `node scripts/windows/test-discover-lan-hosts.mjs --timeoutMs 15000`
+- `node scripts/windows/test-windows-script-help.mjs --script discover-lan-hosts.mjs --script test-discover-lan-hosts.mjs`
+- `node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host 192.168.31.122 --port 43770 --requireMacHost --boardSummary --timeoutMs 1200`
+- `node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host 192.168.31.122 --port 43770 --requireMacHost --json --timeoutMs 1200`
+- `node scripts/windows/test-windows-script-help.mjs --timeoutMs 8000`
+- `git diff --check`
+- `rg -n "<<<<<<<|=======|>>>>>>>" scripts/windows docs apps/windows-client`
+遗留问题：
+- 当前真实 Mac host `/discovery.runtime.buildId=d807536`，仓库已继续前进；这轮只做发现/命令生成，不重启 Mac host，也不跑正式认证。
+下一步建议：
+- 正式 Windows 控制 Mac E2E 前，先运行新发现摘要命令确认 Mac IP/port 和 runtime，再跑 `check-mac-formal-e2e --preflightOnly --checkClientDiagnostics --boardSummary`。用户准备好时再用 `--userAuthRequest` 提醒本机隐藏输入正式密码，最后执行 `--promptPassword` 正式验收。
+是否改了协议：否。
+是否需要另一端配合：不需要；正式 E2E 仍需要用户输入密码和 Mac host 保持在线，`inject` 仍需用户另行明确确认。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 14:30
 开发端：Windows Codex
 本轮目标：让 Windows host 真启动成功后，直接把 Mac 端下一步 readiness / formal checklist 命令和联络板摘要打印出来。
