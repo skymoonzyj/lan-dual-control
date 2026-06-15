@@ -23,6 +23,7 @@ const defaults = {
   h264Encoder: process.env.LAN_DUAL_WINDOWS_H264_ENCODER || "",
   wgcHelper: process.env.LAN_DUAL_WINDOWS_WGC_HELPER || "",
   wgcH264Bridge: ["1", "true", "yes", "on"].includes(String(process.env.LAN_DUAL_WINDOWS_WGC_H264_BRIDGE || "").trim().toLowerCase()),
+  wgcH264Source: process.env.LAN_DUAL_WINDOWS_WGC_H264_SOURCE || "",
   wgcRepeatLastFrame: ["1", "true", "yes", "on"].includes(String(process.env.LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME || "").trim().toLowerCase()),
   wgcRepeatLastFrameMode: process.env.LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE || "",
   audioMode: process.env.LAN_DUAL_WINDOWS_AUDIO_MODE || "",
@@ -105,6 +106,10 @@ function parseArgs(argv) {
   args.h264Encoder = String(args.h264Encoder || "").trim().toLowerCase();
   args.wgcHelper = String(args.wgcHelper || "").trim();
   args.wgcH264Bridge = Boolean(args.wgcH264Bridge);
+  args.wgcH264Source = normalizeMode(args.wgcH264Source, ["jpeg", "raw-bgra", "bgra", "raw"], "");
+  if (args.wgcH264Source === "bgra" || args.wgcH264Source === "raw") {
+    args.wgcH264Source = "raw-bgra";
+  }
   args.wgcRepeatLastFrame = Boolean(args.wgcRepeatLastFrame);
   args.wgcRepeatLastFrameMode = normalizeMode(args.wgcRepeatLastFrameMode, ["full", "signal"], "");
   args.audioMode = normalizeMode(args.audioMode, ["mock", "wasapi", "dshow"], "");
@@ -131,6 +136,7 @@ Options:
   --h264Encoder <name>    Optional FFmpeg H.264 encoder, for example h264_nvenc
   --wgcHelper <path>      Native Windows Graphics Capture helper executable
   --wgcH264Bridge         In WGC mode, encode helper JPEG frames through FFmpeg H.264
+  --wgcH264Source <src>   jpeg | raw-bgra. Default: LAN_DUAL_WINDOWS_WGC_H264_SOURCE or jpeg
   --wgcRepeatLastFrame    In WGC mode, repeat the last helper frame for steady pacing
   --wgcRepeatLastFrameMode <mode>  full | signal
   --audioMode <mode>      mock | wasapi | dshow
@@ -580,6 +586,7 @@ function makeLaunchEnv(args) {
   if (args.h264Encoder) env.LAN_DUAL_WINDOWS_H264_ENCODER = args.h264Encoder;
   if (args.wgcHelper) env.LAN_DUAL_WINDOWS_WGC_HELPER = args.wgcHelper;
   if (args.wgcH264Bridge) env.LAN_DUAL_WINDOWS_WGC_H264_BRIDGE = "1";
+  if (args.wgcH264Source) env.LAN_DUAL_WINDOWS_WGC_H264_SOURCE = args.wgcH264Source;
   if (args.wgcRepeatLastFrame) env.LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME = "1";
   if (args.wgcRepeatLastFrameMode) env.LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE = args.wgcRepeatLastFrameMode;
   if (args.audioMode) env.LAN_DUAL_WINDOWS_AUDIO_MODE = args.audioMode;
@@ -600,6 +607,7 @@ function printLaunchPlan(args) {
   }
   if (args.wgcH264Bridge) {
     console.log(`[INFO] WGC H.264 bridge: enabled`);
+    console.log(`[INFO] WGC H.264 source: ${args.wgcH264Source || "jpeg"}`);
   }
   if (args.wgcRepeatLastFrame) {
     console.log(`[INFO] WGC repeat-last-frame: ${args.wgcRepeatLastFrameMode || "full"}`);

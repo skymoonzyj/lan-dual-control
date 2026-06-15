@@ -17,6 +17,48 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Windows Codex
+
+日期：2026-06-15 09:40
+开发端：Windows Codex
+本轮目标：把 WGC H.264 桥从 JPEG 正确性原型推进到 raw-bgra 正确性原型，先跳过 helper 侧 JPEG 编码/FFmpeg 侧 JPEG 解码。
+完成内容：
+- `apps/windows-wgc-helper` 新增 `--outputFormat jpeg|bgra` 和 `LAN_DUAL_WGC_OUTPUT_FORMAT`；默认仍是 JPEG，显式 `bgra` 时输出 `codec=raw-bgra`、`pixelFormat=bgra` 的 JSON 行 base64 raw 像素。
+- Windows host 新增 `LAN_DUAL_WINDOWS_WGC_H264_SOURCE=jpeg|raw-bgra`，`raw-bgra` 时 helper 环境自动切到 `LAN_DUAL_WGC_OUTPUT_FORMAT=bgra`，FFmpeg stdin 使用 `-f rawvideo -pix_fmt bgra -video_size WxH`，输出 `capturePipeline=windows-wgc-helper-raw-bgra-ffmpeg-h264`。
+- `observe-windows-host-video` 新增 `--wgcH264Source`，`start-windows-host.mjs` / PowerShell 包装新增 `--wgcH264Source` / `-WgcH264Source`。
+- `test-windows-wgc-mode` 的 mock helper 可输出 raw BGRA，并覆盖 raw-bgra H.264 bridge 合同。
+- 文档更新为：raw-bgra JSON/base64 原型已完成，下一步应做二进制 raw 管道、NV12 或 helper 原生硬编。
+修改文件：
+- `apps/windows-wgc-helper/src/main.rs`
+- `apps/windows-host/src/windows-screen-capture.mjs`
+- `scripts/windows/observe-windows-host-video.mjs`
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `scripts/windows/test-windows-wgc-mode.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check`：Windows screen capture、observe、start helper、WGC mode test、start helper test。
+- `cargo check`、`cargo build` in `apps/windows-wgc-helper`。
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`。
+- `node scripts/windows/test-windows-wgc-mode.mjs --mockHelper --h264Bridge --durationMs 2000 --minFrames 3 --h264Source jpeg`。
+- `node scripts/windows/test-windows-wgc-mode.mjs --mockHelper --h264Bridge --durationMs 2000 --minFrames 3 --h264Source raw-bgra --width 320 --height 180`。
+- `apps/windows-wgc-helper/target/debug/lan-dual-wgc-helper.exe --mock --frames 1 --width 16 --height 16 --outputFormat bgra`。
+- 真实 helper + `h264_nvenc` raw-bgra 短观察：`320x180` 2.5 秒 76 帧、约 30.23 FPS；`1280x720` 1.8 秒最终复验 44 帧、约 24.29 FPS，pipeline=`windows-wgc-helper-raw-bgra-ffmpeg-h264`。
+遗留问题：
+- raw-bgra 当前仍通过 JSON/base64 传输 raw 像素，720p 下 fresh helper frame 只有 6 帧，其余依赖 repeat full 补 pacing；这是正确性原型，不是最终性能形态。
+- 仍未做 Mac client 真连观感、5-10 分钟长稳、资源占用和动态画面对照。
+下一步建议：
+- 不要继续深调 JSON raw；优先做 helper -> host 的二进制 raw 管道，或直接改 NV12 / helper 原生 H.264 硬编。
+- 待 Mac 正式密码通道在线后，再做 Windows 控制端发现、正式认证、H.264 5-10 分钟、音频、剪贴板和 input log 验收。
+是否改了协议：没有改共享远控协议；仅新增 Windows 端本机 helper/启动/观察参数和诊断字段。
+是否需要另一端配合：暂不需要；下一步 Mac client 真连观感验收需要 Mac 端配合。
+
 ## 2026-06-15 Mac Codex
 
 日期：2026-06-15 09:45

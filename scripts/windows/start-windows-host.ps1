@@ -12,6 +12,8 @@ param(
   [string] $H264Encoder = "",
   [string] $WgcHelper = "",
   [switch] $WgcH264Bridge,
+  [ValidateSet("", "jpeg", "raw-bgra", "bgra", "raw")]
+  [string] $WgcH264Source = "",
   [switch] $WgcRepeatLastFrame,
   [ValidateSet("", "full", "signal")]
   [string] $WgcRepeatLastFrameMode = "",
@@ -46,6 +48,7 @@ if ($Ffmpeg) { $nodeArgs += @("--ffmpeg", $Ffmpeg) }
 if ($H264Encoder) { $nodeArgs += @("--h264Encoder", $H264Encoder) }
 if ($WgcHelper) { $nodeArgs += @("--wgcHelper", $WgcHelper) }
 if ($WgcH264Bridge) { $nodeArgs += "--wgcH264Bridge" }
+if ($WgcH264Source) { $nodeArgs += @("--wgcH264Source", $WgcH264Source) }
 if ($WgcRepeatLastFrame) { $nodeArgs += "--wgcRepeatLastFrame" }
 if ($WgcRepeatLastFrameMode) { $nodeArgs += @("--wgcRepeatLastFrameMode", $WgcRepeatLastFrameMode) }
 if ($Wasapi) { $nodeArgs += "--wasapi" }

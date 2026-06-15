@@ -47,6 +47,7 @@ const defaults = {
   wgcRepeatLastFrame: false,
   wgcRepeatLastFrameMode: "full",
   wgcH264Bridge: false,
+  wgcH264Source: "jpeg",
 };
 
 function printUsage() {
@@ -71,6 +72,7 @@ Options:
   --wgcRepeatLastFrameMode <full|signal>
                                         full resends the JPEG; signal sends a tiny repeat marker
   --wgcH264Bridge true                  In WGC mode, bridge helper JPEG frames into FFmpeg H.264
+  --wgcH264Source <jpeg|raw-bgra>       Source frames for the WGC H.264 bridge
   --preferredVideoCodec <mjpeg|h264>    Preferred codec in session_offer
   --h264Encoder <name>                  Optional H.264 encoder for temporary ffmpeg-h264 host
   --ffmpeg <path>                       Explicit FFmpeg path for local temporary host
@@ -138,6 +140,7 @@ function parseArgs(argv) {
   args.wgcRepeatLastFrame = booleanArg(args.wgcRepeatLastFrame);
   args.wgcRepeatLastFrameMode = normalizeWgcRepeatLastFrameMode(args.wgcRepeatLastFrameMode);
   args.wgcH264Bridge = booleanArg(args.wgcH264Bridge);
+  args.wgcH264Source = normalizeWgcH264Source(args.wgcH264Source);
   return args;
 }
 
@@ -151,6 +154,14 @@ function normalizeWgcRepeatLastFrameMode(value) {
     return "signal";
   }
   return "full";
+}
+
+function normalizeWgcH264Source(value) {
+  const source = String(value ?? defaults.wgcH264Source).trim().toLowerCase();
+  if (["raw", "bgra", "raw-bgra", "raw_bgra"].includes(source)) {
+    return "raw-bgra";
+  }
+  return "jpeg";
 }
 
 function print(kind, text, args) {
@@ -215,6 +226,7 @@ function startLocalWindowsHost(args) {
     LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME: args.wgcRepeatLastFrame ? "1" : "0",
     LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE: args.wgcRepeatLastFrameMode,
     LAN_DUAL_WINDOWS_WGC_H264_BRIDGE: args.wgcH264Bridge ? "1" : "0",
+    LAN_DUAL_WINDOWS_WGC_H264_SOURCE: args.wgcH264Source,
     ...(args.useDefaultMaxScreenFps
       ? {}
       : { LAN_DUAL_WINDOWS_MAX_SCREEN_FPS: String(maxScreenFps) }),
@@ -701,6 +713,7 @@ async function main() {
         wgcRepeatLastFrame: args.wgcRepeatLastFrame,
         wgcRepeatLastFrameMode: args.wgcRepeatLastFrameMode,
         wgcH264Bridge: args.wgcH264Bridge,
+        wgcH264Source: args.wgcH264Source,
       },
       discoveryScreen: {
         mode: screen.mode || "",

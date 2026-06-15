@@ -12,7 +12,10 @@ const defaults = {
   timeoutMs: 45000,
   durationMs: 6500,
   minFrames: 1,
+  width: 640,
+  height: 360,
   h264Encoder: "",
+  h264Source: "jpeg",
 };
 
 function printHelp() {
@@ -26,6 +29,9 @@ Options:
   --mockHelper           Use a temporary JSON-lines helper to verify WGC helper frame ingestion
   --h264Bridge           With --mockHelper, request H.264 and enable the WGC->FFmpeg bridge
   --h264Encoder <name>   Optional H.264 encoder for --h264Bridge, for example h264_nvenc
+  --h264Source <source>  jpeg | raw-bgra for --h264Bridge. Default: ${defaults.h264Source}
+  --width <px>           Observer request width. Default: ${defaults.width}
+  --height <px>          Observer request height. Default: ${defaults.height}
   --help, -h             Show this help without starting a host
 
 Description:
@@ -34,7 +40,8 @@ Description:
   and an explicit fallback reason. With --mockHelper it also verifies the
   helper contract can drive the windows-wgc-helper-jpeg pipeline. With
   --mockHelper --h264Bridge it also verifies the explicit WGC JPEG to
-  FFmpeg H.264 bridge pipeline without requiring real WGC permissions.
+  FFmpeg H.264 bridge pipeline without requiring real WGC permissions. The
+  bridge can be contract-tested with JPEG source frames or raw BGRA frames.
 `);
 }
 
@@ -57,6 +64,22 @@ function parseArgs(argv) {
     }
     if (token === "--h264Encoder" && next && !next.startsWith("--")) {
       args.h264Encoder = next.trim().toLowerCase();
+      index += 1;
+      continue;
+    }
+    if (token === "--h264Source" && next && !next.startsWith("--")) {
+      const source = next.trim().toLowerCase();
+      args.h264Source = ["raw", "bgra", "raw-bgra", "raw_bgra"].includes(source) ? "raw-bgra" : "jpeg";
+      index += 1;
+      continue;
+    }
+    if (token === "--width" && next && !next.startsWith("--")) {
+      args.width = Math.max(320, Number(next) || defaults.width);
+      index += 1;
+      continue;
+    }
+    if (token === "--height" && next && !next.startsWith("--")) {
+      args.height = Math.max(180, Number(next) || defaults.height);
       index += 1;
       continue;
     }
@@ -91,7 +114,31 @@ const height = Number(process.env.LAN_DUAL_WGC_HEIGHT) || 720;
 const fps = Math.max(1, Math.min(120, Number(process.env.LAN_DUAL_WGC_FPS) || 30));
 const intervalMs = Math.max(8, Math.round(1000 / fps));
 const dataBase64 = ${JSON.stringify(onePixelJpegBase64)};
-console.log(JSON.stringify({ type: "hello", backend: "contract-test-wgc-helper", codec: "jpeg", encoding: "base64", width, height, fps }));
+const outputFormat = String(process.env.LAN_DUAL_WGC_OUTPUT_FORMAT || "jpeg").toLowerCase();
+const rawBgra = outputFormat === "bgra" || outputFormat === "raw-bgra" || outputFormat === "raw";
+const rawFrame = rawBgra ? Buffer.alloc(width * height * 4) : null;
+if (rawFrame) {
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const offset = (y * width + x) * 4;
+      rawFrame[offset] = x % 256;
+      rawFrame[offset + 1] = y % 256;
+      rawFrame[offset + 2] = (x + y) % 256;
+      rawFrame[offset + 3] = 255;
+    }
+  }
+}
+const rawBase64 = rawFrame ? rawFrame.toString("base64") : "";
+console.log(JSON.stringify({
+  type: "hello",
+  backend: "contract-test-wgc-helper",
+  codec: rawBgra ? "raw-bgra" : "jpeg",
+  encoding: "base64",
+  pixelFormat: rawBgra ? "bgra" : "jpeg",
+  width,
+  height,
+  fps,
+}));
 let frameId = 0;
 setInterval(() => {
   frameId += 1;
@@ -103,8 +150,11 @@ setInterval(() => {
     height,
     sourceWidth: width,
     sourceHeight: height,
-    dataBase64,
-    payloadBytes: Buffer.byteLength(dataBase64, "base64"),
+    codec: rawBgra ? "raw-bgra" : "jpeg",
+    encoding: "base64",
+    pixelFormat: rawBgra ? "bgra" : "jpeg",
+    dataBase64: rawBgra ? rawBase64 : dataBase64,
+    payloadBytes: rawBgra ? rawFrame.length : Buffer.byteLength(dataBase64, "base64"),
   }));
 }, intervalMs);
 `;
@@ -126,6 +176,7 @@ function runObserver(args) {
     }
     if (args.h264Bridge) {
       env.LAN_DUAL_WINDOWS_WGC_H264_BRIDGE = "1";
+      env.LAN_DUAL_WINDOWS_WGC_H264_SOURCE = args.h264Source;
     }
     const observerArgs = [
       observeScript,
@@ -135,6 +186,10 @@ function runObserver(args) {
       "false",
       "--durationMs",
       String(args.durationMs),
+      "--width",
+      String(args.width),
+      "--height",
+      String(args.height),
       "--minFrames",
       String(args.minFrames),
       "--minFps",
@@ -146,7 +201,14 @@ function runObserver(args) {
       "--json",
     ];
     if (args.h264Bridge) {
-      observerArgs.push("--preferredVideoCodec", "h264", "--wgcH264Bridge", "true");
+      observerArgs.push(
+        "--preferredVideoCodec",
+        "h264",
+        "--wgcH264Bridge",
+        "true",
+        "--wgcH264Source",
+        args.h264Source,
+      );
       if (args.h264Encoder) {
         observerArgs.push("--h264Encoder", args.h264Encoder);
       }
@@ -231,15 +293,19 @@ async function main() {
       assert(wgc.active === true, `expected mock helper WGC backend to be active; got ${JSON.stringify(wgc)}`);
       assert(wgc.h264BridgeEnabled === true, `expected WGC H.264 bridge to be enabled; got ${JSON.stringify(wgc)}`);
       assert(wgc.h264BridgeAvailable === true, `expected WGC H.264 bridge to be available; got ${JSON.stringify(wgc)}`);
+      assert(wgc.h264BridgeSource === args.h264Source, `expected h264BridgeSource=${args.h264Source}, got ${wgc.h264BridgeSource || "missing"}`);
       assert(session.videoCodec === "h264", `expected negotiated videoCodec=h264, got ${session.videoCodec || "missing"}`);
       assert(session.videoEncoding === "annexb-base64", `expected annexb-base64, got ${session.videoEncoding || "missing"}`);
-      assert(session.capturePipeline === "windows-wgc-helper-ffmpeg-h264", `expected WGC H.264 bridge pipeline, got ${session.capturePipeline || "missing"}`);
-      assert(Array.isArray(observation.pipelines) && observation.pipelines.includes("windows-wgc-helper-ffmpeg-h264"), "expected observed frames from windows-wgc-helper-ffmpeg-h264");
+      const expectedPipeline = args.h264Source === "raw-bgra"
+        ? "windows-wgc-helper-raw-bgra-ffmpeg-h264"
+        : "windows-wgc-helper-ffmpeg-h264";
+      assert(session.capturePipeline === expectedPipeline, `expected WGC H.264 bridge pipeline ${expectedPipeline}, got ${session.capturePipeline || "missing"}`);
+      assert(Array.isArray(observation.pipelines) && observation.pipelines.includes(expectedPipeline), `expected observed frames from ${expectedPipeline}`);
       assert(Array.isArray(observation.codecs) && observation.codecs.includes("h264"), "expected observed H.264 frames");
       if (args.h264Encoder) {
         assert(Array.isArray(observation.h264Encoders) && observation.h264Encoders.includes(args.h264Encoder), `expected h264Encoder=${args.h264Encoder}`);
       }
-      console.log(`[OK] WGC H.264 bridge contract produced frames: active=${wgc.active}, pipeline=${session.capturePipeline}, frames=${observation.frameCount}, encoder=${session.h264Encoder || "default"}`);
+      console.log(`[OK] WGC H.264 bridge contract produced frames: active=${wgc.active}, source=${args.h264Source}, pipeline=${session.capturePipeline}, frames=${observation.frameCount}, encoder=${session.h264Encoder || "default"}`);
     } else if (args.mockHelper) {
       assert(wgc.active === true, `expected mock helper WGC backend to be active; got ${JSON.stringify(wgc)}`);
       assert(wgc.backendImplemented === true, `expected helper-backed WGC backendImplemented=true; got ${JSON.stringify(wgc)}`);
