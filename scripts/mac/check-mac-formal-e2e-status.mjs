@@ -15,6 +15,7 @@ const defaults = {
   json: false,
   boardSummary: false,
   sendCall: false,
+  forceCall: false,
 };
 
 function helpRequested(argv) {
@@ -39,6 +40,7 @@ Options:
   --requireCurrentBuildId   Treat stale runtime build metadata as a blocker.
   --boardSummary            Print a short secret-free Agent Link Board summary.
   --sendCall                Send a formal E2E test call to Agent Link Board only when ready.
+  --forceCall               Allow --sendCall to replace an existing board call.
   --json                    Print one machine-readable JSON object.
   --help, -h                Show this help without probing anything.
 
@@ -65,6 +67,7 @@ function parseArgs(argv) {
       token === "--requireCurrentBuildId" ||
       token === "--boardSummary" ||
       token === "--sendCall" ||
+      token === "--forceCall" ||
       token === "--json"
     ) {
       args[token.slice(2)] = true;
@@ -105,6 +108,13 @@ function clampInteger(value, min, max, fallback) {
 
 function normalizedText(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function splitLines(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 function statusValue(value) {
@@ -393,9 +403,61 @@ function makeCallPayload(report) {
   };
 }
 
+function parseCurrentBoardCall(output) {
+  const lines = splitLines(output);
+  const callIndex = lines.findIndex((line) => line.startsWith("[call]"));
+  if (callIndex < 0 || /^\[call\]\s+none\b/i.test(lines[callIndex])) {
+    return {
+      active: false,
+      raw: callIndex >= 0 ? lines[callIndex] : "",
+    };
+  }
+  const header = lines[callIndex];
+  const headerMatch = header.match(/^\[call\]\s+([^:]*):?\s*(.*)$/);
+  const currentCall = {
+    active: true,
+    status: normalizedText(headerMatch?.[1] || ""),
+    goal: normalizedText(headerMatch?.[2] || ""),
+    raw: header,
+  };
+  for (const line of lines.slice(callIndex + 1)) {
+    if (line.startsWith("[")) break;
+    const fieldMatch = line.match(/^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/);
+    if (!fieldMatch) continue;
+    currentCall[fieldMatch[1]] = normalizedText(fieldMatch[2]);
+  }
+  return currentCall;
+}
+
+function getCurrentBoardCall(args) {
+  const result = spawnSync(process.execPath, [
+    "scripts/codex-link-client.mjs",
+    "--server",
+    args.server,
+    "watch",
+    "--once",
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: Math.max(args.timeoutMs + 2000, 5000),
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    throw new Error(`Could not confirm Agent Link Board current call before sending: ${String(result.stderr || result.stdout || "").trim()}`);
+  }
+  return parseCurrentBoardCall(result.stdout);
+}
+
 function sendCall(report, args) {
   if (!report.readyToCall) {
     throw new Error(`Refusing to send formal E2E call because checklist is not ready: blockers=${report.counts.blockers}, warnings=${report.counts.warnings}.`);
+  }
+  const currentCall = getCurrentBoardCall(args);
+  report.boardCallBeforeSend = currentCall;
+  if (currentCall.active && !args.forceCall) {
+    const owner = currentCall.from || currentCall.need || currentCall.owner || "unknown";
+    const goal = currentCall.goal || currentCall.raw || "unknown goal";
+    throw new Error(`Refusing to replace existing Agent Link Board call from ${owner}: ${goal}. Clear it or rerun with --forceCall only after coordinating on the board.`);
   }
   const payload = report.callPayload || makeCallPayload(report);
   const commandArgs = [
@@ -477,6 +539,7 @@ function buildReport(args) {
       skipBoard: args.skipBoard,
       allowDirty: args.allowDirty,
       requireCurrentBuildId: args.requireCurrentBuildId,
+      forceCall: args.forceCall,
     },
     counts,
     checklist,

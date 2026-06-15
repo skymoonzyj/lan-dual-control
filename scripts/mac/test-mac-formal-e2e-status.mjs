@@ -239,14 +239,15 @@ async function withFakeMacHost(callback) {
   }
 }
 
-async function withFakeBoard(callback) {
+async function withFakeBoard(callback, options = {}) {
   const calls = [];
+  const currentCall = options.currentCall || null;
   const server = http.createServer(async (request, response) => {
     if (request.method === "GET" && request.url === "/api/state") {
       response.writeHead(200, { "Content-Type": "application/json" });
       response.end(JSON.stringify({
         updatedAt: new Date().toISOString(),
-        currentCall: null,
+        currentCall,
         statuses: {},
         events: [
           {
@@ -287,6 +288,7 @@ function checkHelp(args) {
     assert(result.status === 0, `${script} ${flag} should exit 0`);
     assert(/\bUsage\b/.test(result.stdout), `${script} ${flag} should print Usage`);
     assert(/--sendCall/.test(result.stdout), `${script} ${flag} should document --sendCall`);
+    assert(/--forceCall/.test(result.stdout), `${script} ${flag} should document --forceCall`);
     assert(!/Mac host probe password/.test(result.stdout), `${script} ${flag} should not prompt for password`);
   }
   print("OK", "Formal E2E status help exits quickly");
@@ -401,6 +403,78 @@ async function checkReadySendCall(args) {
   });
 }
 
+async function checkExistingBoardCallProtection(args) {
+  const existingCall = {
+    status: "CALLING",
+    from: "Windows Codex",
+    need: "Mac Codex",
+    goal: "Windows clipboard integrity recheck",
+    ask: "Please wait for review.",
+  };
+  await withFakeMacHost(async (macHost) => {
+    await withFakeBoard(async (board) => {
+      const localTimeoutMs = String(Math.min(args.timeoutMs, 5000));
+      const result = await runAsync(args, [
+        "--json",
+        "--allowDirty",
+        "--sendCall",
+        "--host",
+        macHost.host,
+        "--port",
+        String(macHost.port),
+        "--server",
+        board.serverUrl,
+        "--timeoutMs",
+        localTimeoutMs,
+      ]);
+      const payload = parseJson(result.stdout, "existing-call sendCall refusal");
+      assert(result.status !== 0, "sendCall should fail when a board call already exists");
+      assert(payload.ok === false, "existing-call refusal should report ok=false");
+      assert(/Refusing to replace existing Agent Link Board call/.test(payload.error?.message || ""), "existing-call refusal should explain overwrite guard");
+      assert(/Windows clipboard integrity recheck/.test(payload.error?.message || ""), "existing-call refusal should name the existing call");
+      assert(board.calls.length === 0, "existing-call refusal should not post a replacement call");
+      assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "existing-call sendCall refusal");
+      print("OK", "Ready --sendCall refuses to overwrite an existing board call");
+    }, { currentCall: existingCall });
+  });
+}
+
+async function checkForceSendCall(args) {
+  const existingCall = {
+    status: "CALLING",
+    from: "Windows Codex",
+    need: "Mac Codex",
+    goal: "Old coordinated test call",
+  };
+  await withFakeMacHost(async (macHost) => {
+    await withFakeBoard(async (board) => {
+      const localTimeoutMs = String(Math.min(args.timeoutMs, 5000));
+      const result = await runAsync(args, [
+        "--json",
+        "--allowDirty",
+        "--sendCall",
+        "--forceCall",
+        "--host",
+        macHost.host,
+        "--port",
+        String(macHost.port),
+        "--server",
+        board.serverUrl,
+        "--timeoutMs",
+        localTimeoutMs,
+      ]);
+      const payload = parseJson(result.stdout, "force sendCall formal E2E status");
+      assert(result.status === 0, `force sendCall should exit 0:\n${result.stdout}\n${result.stderr}`);
+      assert(payload.sentCall?.ok === true, "force sendCall payload should include sentCall.ok");
+      assert(payload.boardCallBeforeSend?.active === true, "force sendCall should record existing board call");
+      assert(payload.boardCallBeforeSend?.goal === existingCall.goal, "force sendCall should record existing board call goal");
+      assert(board.calls.length === 1, `force sendCall should post exactly one replacement call, got ${board.calls.length}`);
+      assertNoSecretLikeText(JSON.stringify(board.calls[0]), "force sendCall board call");
+      print("OK", "Ready --sendCall --forceCall can replace an existing board call explicitly");
+    }, { currentCall: existingCall });
+  });
+}
+
 function checkOnlineJson(args) {
   const result = run(args, [
     "--json",
@@ -486,6 +560,8 @@ async function main() {
   checkOfflineBoardSummary(args);
   checkOfflineSendCallRefuses(args);
   await checkReadySendCall(args);
+  await checkExistingBoardCallProtection(args);
+  await checkForceSendCall(args);
   checkOnlineJson(args);
   checkOnlineBoardSummary(args);
   checkSecretRedaction(args);

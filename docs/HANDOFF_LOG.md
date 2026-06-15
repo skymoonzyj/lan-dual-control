@@ -19,6 +19,38 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 20:05
+开发端：Mac Codex
+本轮目标：加固 Mac formal E2E `--sendCall`，避免通讯板已有测试呼叫时被静默覆盖。
+完成内容：
+- `scripts/mac/check-mac-formal-e2e-status.mjs` 的 `--sendCall` 发送前会重新读取 Agent Link Board 当前 `currentCall`。
+- 如果通讯板已有 active call，默认拒绝发送并失败，错误信息会标出已有 call 的来源/目标，提示先清理或协调。
+- 新增显式 `--forceCall`，只有人工确认要替换旧呼叫后才允许覆盖；JSON 会记录 `boardCallBeforeSend` 方便审查。
+- `scripts/mac/test-mac-formal-e2e-status.mjs` 的假通讯板新增 currentCall 模拟，覆盖默认拒绝覆盖和 `--forceCall` 显式覆盖。
+- `docs/CURRENT_STATUS.md` 和 `docs/NEXT_ACTIONS.md` 同步 currentCall 保护和 `--forceCall` 使用边界。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-formal-e2e-status.mjs`
+- `node --check scripts/mac/test-mac-formal-e2e-status.mjs`
+- `node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 60000`
+- 真实 `node scripts/mac/check-mac-formal-e2e-status.mjs --sendCall --allowDirty --json`，因当前通讯板已有 Mac formal call 按预期拒绝覆盖且未发送新 call。
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" .`
+遗留问题：
+- 本轮仍未向真实 Agent Link Board 发送 formal E2E call；当前板上旧 call 需要正式测试前由双方决定清理、复用或显式覆盖。
+下一步建议：
+- Windows 剪贴板整改/Supervisor 复审完成后，先确认通讯板 currentCall 状态，再决定是否清理旧 call 或用 `--forceCall` 发新 formal E2E call。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；正式 E2E 时需要 Windows 端配合和用户本机隐藏输入密码。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 19:55
 开发端：Mac Codex
 本轮目标：给 Mac formal E2E checklist 增加显式通讯板呼叫发送能力，避免手工拼 call 和未 ready 误呼叫。

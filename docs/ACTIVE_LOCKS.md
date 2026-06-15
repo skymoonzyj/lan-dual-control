@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/mac/check-mac-formal-e2e-status.mjs`, `scripts/mac/test-mac-formal-e2e-status.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 20:05 | Mac formal `--sendCall` 发送前检测通讯板 currentCall；已有 active call 时默认拒绝覆盖，只有显式 `--forceCall` 才允许替换；测试覆盖默认拒绝和强制覆盖。 |
 | Mac Codex | `scripts/mac/check-mac-formal-e2e-status.mjs`, `scripts/mac/test-mac-formal-e2e-status.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 19:55 | Mac formal E2E checklist 新增显式 `--sendCall`：ready 时才向 Agent Link Board 发送无密 formal E2E call，未 ready 拒绝发送；自测用假 Mac host + 假通讯板覆盖发送路径和不泄密。 |
 | Mac Codex | `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 19:25 | 同步 Mac 测试 Windows 审查机兼容修复和当前无密 formal readiness 状态：Mac host 当前只读检查 ready，Windows 审查机复跑 Mac 测试应命中 fake `.cmd` shim，非 macOS 真实 Swift 启动段应 `[SKIP]`。 |
 | Mac Codex | `scripts/mac/password-prompt.mjs`, `scripts/mac/test-mac-password-prompt.mjs`, `scripts/mac/test-mac-host-start-helper.mjs`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 19:15 | 修复 Mac 测试在 Windows 审查机上的兼容：fake `osascript`/`swift` 同时生成 `.cmd` 包装器并处理 PATH/PATHEXT；密码 helper 仅在 Windows 平台用 shell 查找 fake Mac 工具；真实 Swift Mac host 启动段在非 macOS 明确 `[SKIP]`。 |
