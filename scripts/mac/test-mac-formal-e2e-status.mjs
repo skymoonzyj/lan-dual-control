@@ -265,7 +265,8 @@ async function withFakeMacHost(callback, options = {}) {
 
 async function withFakeBoard(callback, options = {}) {
   const calls = [];
-  const currentCall = options.currentCall || null;
+  const clears = [];
+  let currentCall = options.currentCall || null;
   const server = http.createServer(async (request, response) => {
     if (request.method === "GET" && request.url === "/api/state") {
       response.writeHead(200, { "Content-Type": "application/json" });
@@ -287,7 +288,15 @@ async function withFakeBoard(callback, options = {}) {
     }
     if (request.method === "POST" && request.url === "/api/call") {
       const body = await readRequestBody(request);
-      calls.push(JSON.parse(body || "{}"));
+      currentCall = JSON.parse(body || "{}");
+      calls.push(currentCall);
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    if (request.method === "POST" && request.url === "/api/clear-call") {
+      clears.push(currentCall);
+      currentCall = null;
       response.writeHead(200, { "Content-Type": "application/json" });
       response.end(JSON.stringify({ ok: true }));
       return;
@@ -300,6 +309,7 @@ async function withFakeBoard(callback, options = {}) {
     return await callback({
       serverUrl: `http://${address.address}:${address.port}`,
       calls,
+      clears,
     });
   } finally {
     await closeServer(server);
@@ -313,6 +323,7 @@ function checkHelp(args) {
     assert(/\bUsage\b/.test(result.stdout), `${script} ${flag} should print Usage`);
     assert(/--sendCall/.test(result.stdout), `${script} ${flag} should document --sendCall`);
     assert(/--forceCall/.test(result.stdout), `${script} ${flag} should document --forceCall`);
+    assert(/--clearStaleCall/.test(result.stdout), `${script} ${flag} should document --clearStaleCall`);
     assert(!/Mac host probe password/.test(result.stdout), `${script} ${flag} should not prompt for password`);
   }
   print("OK", "Formal E2E status help exits quickly");
@@ -374,6 +385,109 @@ function checkOfflineSendCallRefuses(args) {
   assert(/Refusing to send formal E2E call/.test(result.stderr), "offline sendCall should explain refusal");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "offline sendCall refusal");
   print("OK", "Offline --sendCall refuses before touching the board");
+}
+
+async function checkClearStaleFormalCall(args) {
+  const existingCall = {
+    status: "CALLING",
+    from: "Mac Codex",
+    need: "Windows Codex",
+    goal: "正式端到端验收 Mac host",
+    ask: "Please run formal E2E.",
+  };
+  await withFakeBoard(async (board) => {
+    const result = await runAsync(args, [
+      "--json",
+      "--clearStaleCall",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--server",
+      board.serverUrl,
+      "--timeoutMs",
+      "1200",
+    ]);
+    const payload = parseJson(result.stdout, "clear stale formal call");
+    assert(result.status === 0, `clearStaleCall should exit 0 when clearing a matching stale formal call:\n${result.stdout}\n${result.stderr}`);
+    assert(payload.readyToCall === false, "clear stale formal call payload should still report formal E2E not ready");
+    assert(payload.clearedStaleCall?.cleared === true, "clear stale formal call should report cleared=true");
+    assert(payload.clearedStaleCall?.previousCall?.goal === existingCall.goal, "clear stale formal call should include previous call identity");
+    assert(board.clears.length === 1, `fake board should receive exactly one clear-call, got ${board.clears.length}`);
+    assert(board.calls.length === 0, "clear stale formal call should not post a replacement call");
+    assert(/Mac host\b.*offline/i.test(payload.callText || ""), "clear stale formal call should keep blocker guidance");
+    assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "clear stale formal call");
+    print("OK", "Matching stale Mac formal E2E call can be cleared while preserving blocker guidance");
+  }, { currentCall: existingCall });
+}
+
+async function checkClearStaleCallLeavesOtherCalls(args) {
+  const existingCall = {
+    status: "CALLING",
+    from: "Windows Codex",
+    need: "Mac Codex",
+    goal: "Windows clipboard integrity recheck",
+    ask: "Please wait for review.",
+  };
+  await withFakeBoard(async (board) => {
+    const result = await runAsync(args, [
+      "--json",
+      "--clearStaleCall",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--server",
+      board.serverUrl,
+      "--timeoutMs",
+      "1200",
+    ]);
+    const payload = parseJson(result.stdout, "clear stale leaves other calls");
+    assert(result.status === 0, `clearStaleCall should exit 0 when leaving another active call untouched:\n${result.stdout}\n${result.stderr}`);
+    assert(payload.clearedStaleCall?.cleared === false, "clear stale should report cleared=false for non-matching calls");
+    assert(/does not match Mac formal E2E/.test(payload.clearedStaleCall?.reason || ""), "clear stale should explain why non-matching calls are untouched");
+    assert(board.clears.length === 0, "clear stale should not clear non-matching calls");
+    assert(board.calls.length === 0, "clear stale should not post a replacement call");
+    assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "clear stale non-matching call");
+    print("OK", "Clear-stale guard leaves non-Mac-formal board calls untouched");
+  }, { currentCall: existingCall });
+}
+
+async function checkClearStaleCallKeepsReadyFormalCall(args) {
+  const existingCall = {
+    status: "CALLING",
+    from: "Mac Codex",
+    need: "Windows Codex",
+    goal: "正式端到端验收 Mac host",
+    ask: "Please run formal E2E.",
+  };
+  await withFakeMacHost(async (macHost) => {
+    await withFakeBoard(async (board) => {
+      const localTimeoutMs = String(Math.min(args.timeoutMs, 5000));
+      const result = await runAsync(args, [
+        "--json",
+        "--allowDirty",
+        "--clearStaleCall",
+        "--host",
+        macHost.host,
+        "--port",
+        String(macHost.port),
+        "--server",
+        board.serverUrl,
+        "--timeoutMs",
+        localTimeoutMs,
+      ]);
+      const payload = parseJson(result.stdout, "clear stale keeps ready formal call");
+      assert(result.status === 0, `clearStaleCall should exit 0 when ready call is still valid:\n${result.stdout}\n${result.stderr}`);
+      assert(payload.readyToCall === true, "ready clear stale payload should be readyToCall");
+      assert(payload.clearedStaleCall?.cleared === false, "ready formal call should not be cleared");
+      assert(/still valid/.test(payload.clearedStaleCall?.reason || ""), "ready formal call should explain why it was kept");
+      assert(board.clears.length === 0, "ready formal call should not hit clear-call");
+      assert(board.calls.length === 0, "ready formal call should not post a replacement call");
+      assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "clear stale ready formal call");
+      print("OK", "Clear-stale guard keeps a matching formal call when checklist is ready");
+    }, { currentCall: existingCall });
+  });
 }
 
 async function checkStaleRuntimeSendCallRefuses(args) {
@@ -620,6 +734,9 @@ async function main() {
   checkOfflineJson(args);
   checkOfflineBoardSummary(args);
   checkOfflineSendCallRefuses(args);
+  await checkClearStaleFormalCall(args);
+  await checkClearStaleCallLeavesOtherCalls(args);
+  await checkClearStaleCallKeepsReadyFormalCall(args);
   await checkStaleRuntimeSendCallRefuses(args);
   await checkReadySendCall(args);
   await checkExistingBoardCallProtection(args);

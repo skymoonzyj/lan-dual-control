@@ -19,6 +19,39 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 21:55
+开发端：Mac Codex
+本轮目标：给 Mac formal E2E 增加安全清理过期通讯板 call 的入口，并清掉当前误导性的旧 formal call。
+完成内容：
+- 基于 Windows 最新 `9a52ca9` 继续开发，保留 Windows 端 WGC H.264 source comparison 交接内容。
+- `scripts/mac/check-mac-formal-e2e-status.mjs` 新增 `--clearStaleCall`：仅当 checklist 不 ready 且当前 Agent Link Board call 精确匹配 Mac Codex -> Windows Codex 的“正式端到端验收 Mac host”时，才调用 `clear-call` 清理；如果当前 call 属于其他端/其他目标，或 formal checklist 已 ready，则只报告原因并保持不动。
+- `--sendCall` 和 `--clearStaleCall` 互斥，避免同一轮既发送又清理；JSON 输出会包含 `boardCallBeforeClear` 和 `clearedStaleCall`，方便自动化/交接判断。
+- `scripts/mac/test-mac-formal-e2e-status.mjs` 的假通讯板新增 `/api/clear-call` 模拟，回归覆盖：过期 Mac formal call 可清理、非 Mac formal call 不清理、ready 状态下匹配 formal call 不清理。
+- 已对真实 Agent Link Board 执行 `node scripts/mac/check-mac-formal-e2e-status.mjs --clearStaleCall --json --server http://192.168.31.68:17888`，旧的 formal E2E call 被清空；随后 `watch --once` 显示 `[call] none`。
+- 文档同步 `--clearStaleCall` 使用边界和当前事实：真实 Mac host `192.168.31.122:43770` 仍在线但 runtime build `d807536` 偏旧，`d807536..9a52ca9` 仍有 `apps/mac-host/Sources/MacHost/MacHostService.swift` runtime 源码变化，formal E2E 前仍需先重启 Mac host。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-formal-e2e-status.mjs`
+- `node --check scripts/mac/test-mac-formal-e2e-status.mjs`
+- `node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 60000`
+- `node scripts/mac/check-mac-formal-e2e-status.mjs --clearStaleCall --json --server http://192.168.31.68:17888`
+- `node scripts/codex-link-client.mjs --server http://192.168.31.68:17888 watch --once`，确认 `[call] none`
+遗留问题：
+- 未重启真实 Mac host；当前 formal E2E 仍因旧 runtime build 和 Mac host runtime 源码变化而不 ready。
+下一步建议：
+- 用户在场时运行 `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword` 重启 Mac host 到当前 build；重启后再跑 `node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary`，ready 后再用 `--sendCall` 或通讯板通知 Windows 做无密预检/正式验收。
+是否改了协议：否。
+是否需要另一端配合：现在不需要；重启 Mac host 后需要 Windows 端重新发现/预检。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 21:15
 开发端：Mac Codex
 本轮目标：加固 Mac formal E2E 呼叫前的旧 runtime 保护，避免把已变更的旧 Mac host 误叫去正式长测。

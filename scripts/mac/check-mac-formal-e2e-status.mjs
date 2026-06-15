@@ -16,6 +16,13 @@ const defaults = {
   boardSummary: false,
   sendCall: false,
   forceCall: false,
+  clearStaleCall: false,
+};
+
+const formalE2eCallIdentity = {
+  from: "Mac Codex",
+  need: "Windows Codex",
+  goal: "正式端到端验收 Mac host",
 };
 
 function helpRequested(argv) {
@@ -41,6 +48,9 @@ Options:
   --boardSummary            Print a short secret-free Agent Link Board summary.
   --sendCall                Send a formal E2E test call to Agent Link Board only when ready.
   --forceCall               Allow --sendCall to replace an existing board call.
+  --clearStaleCall          Clear the existing Mac formal E2E board call only when
+                            this checklist is not ready and the active call matches
+                            Mac Codex -> Windows Codex formal Mac host E2E.
   --json                    Print one machine-readable JSON object.
   --help, -h                Show this help without probing anything.
 
@@ -48,6 +58,7 @@ Examples:
   node scripts/mac/check-mac-formal-e2e-status.mjs
   node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary
   node scripts/mac/check-mac-formal-e2e-status.mjs --sendCall
+  node scripts/mac/check-mac-formal-e2e-status.mjs --clearStaleCall
   node scripts/mac/check-mac-formal-e2e-status.mjs --json --skipBoard
 `);
 }
@@ -68,6 +79,7 @@ function parseArgs(argv) {
       token === "--boardSummary" ||
       token === "--sendCall" ||
       token === "--forceCall" ||
+      token === "--clearStaleCall" ||
       token === "--json"
     ) {
       args[token.slice(2)] = true;
@@ -421,9 +433,9 @@ function makeCallPayload(report) {
   ].join(" ");
   return {
     status: "CALLING",
-    from: "Mac Codex",
-    need: "Windows Codex",
-    goal: "正式端到端验收 Mac host",
+    from: formalE2eCallIdentity.from,
+    need: formalE2eCallIdentity.need,
+    goal: formalE2eCallIdentity.goal,
     environment: `Mac host ${target.address}; runtimeBuild=${host.runtime?.buildId || "unknown"}; inputMode=${host.inputMode || "unknown"}`,
     connection: target.address,
     command,
@@ -477,6 +489,84 @@ function getCurrentBoardCall(args) {
     throw new Error(`Could not confirm Agent Link Board current call before sending: ${String(result.stderr || result.stdout || "").trim()}`);
   }
   return parseCurrentBoardCall(result.stdout);
+}
+
+function isMatchingMacFormalE2eCall(call) {
+  return Boolean(
+    call?.active &&
+    normalizedText(call.from) === formalE2eCallIdentity.from &&
+    normalizedText(call.need) === formalE2eCallIdentity.need &&
+    normalizedText(call.goal) === formalE2eCallIdentity.goal
+  );
+}
+
+function formatBoardCallLabel(call) {
+  if (!call?.active) return "none";
+  const parts = [
+    call.status || "status unknown",
+    call.from ? `from=${call.from}` : "",
+    call.need ? `need=${call.need}` : "",
+    call.goal ? `goal=${call.goal}` : call.raw || "",
+  ].filter(Boolean);
+  return parts.join(" ");
+}
+
+function clearCurrentBoardCall(args) {
+  const result = spawnSync(process.execPath, [
+    "scripts/codex-link-client.mjs",
+    "--server",
+    args.server,
+    "clear-call",
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: Math.max(args.timeoutMs + 2000, 5000),
+    maxBuffer: 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    throw new Error(`Could not clear Agent Link Board call: ${String(result.stderr || result.stdout || "").trim()}`);
+  }
+  return String(result.stdout || "").trim();
+}
+
+function clearStaleCall(report, args) {
+  if (args.skipBoard) {
+    throw new Error("Cannot clear a stale Agent Link Board call when --skipBoard is set.");
+  }
+  const currentCall = getCurrentBoardCall(args);
+  report.boardCallBeforeClear = currentCall;
+  if (!currentCall.active) {
+    return {
+      ok: true,
+      cleared: false,
+      reason: "No active Agent Link Board call to clear.",
+      previousCall: currentCall,
+    };
+  }
+  if (!isMatchingMacFormalE2eCall(currentCall)) {
+    return {
+      ok: true,
+      cleared: false,
+      reason: `Active call does not match Mac formal E2E; left it untouched: ${formatBoardCallLabel(currentCall)}.`,
+      previousCall: currentCall,
+    };
+  }
+  if (report.readyToCall) {
+    return {
+      ok: true,
+      cleared: false,
+      reason: "Mac formal E2E checklist is ready, so the matching board call is still valid.",
+      previousCall: currentCall,
+    };
+  }
+  const clearResult = clearCurrentBoardCall(args);
+  return {
+    ok: true,
+    cleared: true,
+    reason: `Cleared stale Mac formal E2E board call because checklist is not ready: blockers=${report.counts.blockers}, warnings=${report.counts.warnings}.`,
+    previousCall: currentCall,
+    result: clearResult || "ok",
+  };
 }
 
 function sendCall(report, args) {
@@ -553,6 +643,19 @@ function printReport(report) {
   console.log(`[INFO] ${report.callText}`);
 }
 
+function printClearStaleCallResult(report) {
+  const result = report.clearedStaleCall || {};
+  const prefix = result.cleared ? "OK" : "INFO";
+  console.log(`[${prefix}] ${result.reason || "Stale call clear check completed."}`);
+  if (result.previousCall?.active) {
+    console.log(`[INFO] Previous call: ${formatBoardCallLabel(result.previousCall)}`);
+  }
+  if (!report.readyToCall) {
+    console.log(`[WARN] Formal E2E still not ready: blockers=${report.counts.blockers}, warnings=${report.counts.warnings}`);
+    console.log(`[INFO] ${report.callText}`);
+  }
+}
+
 function buildReport(args) {
   const resume = runResumeStatus(args);
   const checklist = buildChecklist(resume, args);
@@ -571,6 +674,7 @@ function buildReport(args) {
       allowDirty: args.allowDirty,
       requireCurrentBuildId: args.requireCurrentBuildId,
       forceCall: args.forceCall,
+      clearStaleCall: args.clearStaleCall,
     },
     counts,
     checklist,
@@ -588,7 +692,26 @@ function main() {
     return;
   }
   const args = parseArgs(process.argv);
+  if (args.sendCall && args.clearStaleCall) {
+    throw new Error("--sendCall and --clearStaleCall cannot be used together.");
+  }
   const report = buildReport(args);
+  if (args.clearStaleCall) {
+    try {
+      report.clearedStaleCall = clearStaleCall(report, args);
+    } catch (error) {
+      report.ok = false;
+      report.clearedStaleCall = {
+        ok: false,
+        cleared: false,
+        error: { message: error.message },
+      };
+      report.error = { message: error.message };
+      if (!args.json) {
+        throw error;
+      }
+    }
+  }
   if (args.sendCall) {
     try {
       const sendResult = sendCall(report, args);
@@ -609,13 +732,16 @@ function main() {
     console.log(JSON.stringify(report, null, 2));
   } else if (args.boardSummary) {
     console.log(report.boardSummary);
+  } else if (args.clearStaleCall) {
+    printClearStaleCallResult(report);
   } else if (args.sendCall) {
     console.log(`[OK] Sent formal E2E call to Agent Link Board: ${report.callPayload.connection}`);
     console.log(report.callText);
   } else {
     printReport(report);
   }
-  process.exitCode = report.ok ? 0 : 1;
+  const operationOk = args.clearStaleCall ? report.clearedStaleCall?.ok === true : report.ok;
+  process.exitCode = operationOk ? 0 : 1;
 }
 
 try {
