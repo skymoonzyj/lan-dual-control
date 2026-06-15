@@ -19,6 +19,37 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 18:00
+开发端：Windows Codex
+本轮目标：给 Windows 恢复开工总览补 PowerShell 包装入口，方便 Windows 日常用一条 `.ps1` 命令做只读状态同步。
+完成内容：
+- 新增 `scripts/windows/check-windows-resume-status.ps1`，薄包装 `check-windows-resume-status.mjs`，支持 `-CheckBoard`、`-CheckClientDiagnostics`、`-BoardSummary`、`-Json`、`-RequireMacReady`、`-RequireClean`、`-DiscoverNoLocalSubnets`、`-NoDiscover` 等参数。
+- 新增 `scripts/windows/test-windows-resume-status-powershell.mjs`，用本机 mock Mac 覆盖 PowerShell 帮助、mock discovery JSON、单行 board summary、离线默认非失败和 `-RequireMacReady` 失败路径。
+- 真实只读 PowerShell 路径 `-CheckBoard -CheckClientDiagnostics -BoardSummary` 已通过：自动选中 `192.168.31.122:43770`，Mac ready，runtime build `d807536`，`inputMode=log`，Windows 控制端诊断 `passed`；没有请求密码、没有认证、没有发送输入、没有执行 `inject`。
+- 当前状态、下一步行动和任务板已同步 PowerShell 用法。
+修改文件：
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- PowerShell AST parse `scripts/windows/check-windows-resume-status.ps1`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 30000`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-resume-status.ps1 -CheckBoard -CheckClientDiagnostics -BoardSummary`
+遗留问题：
+- 这仍是无密码恢复/预检工具，不替代正式 E2E。正式验收仍需用户在 Windows 本机隐藏输入 Mac host 正式密码；`inject` 仍需用户另行明确确认。
+下一步建议：
+- 后续 Windows 开工优先运行 `check-windows-resume-status.ps1 -CheckBoard -BoardSummary`；正式验收前加 `-CheckClientDiagnostics`，ready 后再走 `check-mac-formal-e2e.ps1 -Discover -PromptPassword`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 17:50
 开发端：Windows Codex
 本轮目标：新增 Windows 侧恢复开工总览，方便每天开工先安全汇总 repo、通讯板、Mac formal preflight 和下一步命令。

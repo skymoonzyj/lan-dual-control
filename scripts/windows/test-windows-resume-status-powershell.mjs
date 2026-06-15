@@ -1,0 +1,240 @@
+import { spawn } from "node:child_process";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { createMockMacHostServer } from "../../apps/mock-mac-host/server.mjs";
+
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(scriptDir, "../..");
+const wrapperScript = "scripts/windows/check-windows-resume-status.ps1";
+
+const defaults = {
+  timeoutMs: 30000,
+};
+
+function helpRequested(argv) {
+  return argv.includes("--help") || argv.includes("-h");
+}
+
+function printHelp() {
+  console.log(`Usage:
+  node scripts/windows/test-windows-resume-status-powershell.mjs [options]
+
+Options:
+  --timeoutMs <ms>  Per PowerShell wrapper timeout. Default: ${defaults.timeoutMs}
+  --help, -h        Show this help without running checks
+
+Description:
+  Verifies check-windows-resume-status.ps1 safely wraps the Node resume-status
+  script. It never authenticates a real Mac, never requests passwords, and never
+  executes inject.
+`);
+}
+
+function parseArgs(argv) {
+  const args = { ...defaults };
+  for (let index = 2; index < argv.length; index += 1) {
+    const token = argv[index];
+    const next = argv[index + 1];
+    if (token === "--help" || token === "-h") {
+      args.help = true;
+      continue;
+    }
+    if (token === "--timeoutMs" && next && !next.startsWith("--")) {
+      args.timeoutMs = Math.max(10000, Number(next) || defaults.timeoutMs);
+      index += 1;
+      continue;
+    }
+    throw new Error(`Unknown argument: ${token}`);
+  }
+  return args;
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+function assertIncludes(text, expected, label) {
+  assert(String(text).includes(expected), `${label} did not include ${JSON.stringify(expected)}.\n${text}`);
+}
+
+function assertNotIncludes(text, expected, label) {
+  assert(!String(text).includes(expected), `${label} unexpectedly included ${JSON.stringify(expected)}.\n${text}`);
+}
+
+function runPowerShell(extraArgs, args) {
+  return new Promise((resolveRun) => {
+    const child = spawn("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      wrapperScript,
+      ...extraArgs,
+    ], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        LAN_DUAL_PASSWORD: "",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      resolveRun({ exitCode: null, timedOut: true, stdout, stderr });
+    }, args.timeoutMs);
+
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolveRun({
+        exitCode: null,
+        timedOut: false,
+        stdout,
+        stderr: `${stderr}\n${error.message}`.trim(),
+      });
+    });
+    child.on("close", (exitCode) => {
+      clearTimeout(timer);
+      resolveRun({ exitCode, timedOut: false, stdout, stderr });
+    });
+  });
+}
+
+async function withMockHost(callback) {
+  const service = createMockMacHostServer({
+    host: "127.0.0.1",
+    port: 0,
+    password: "test-password",
+  });
+  await service.listen();
+  const address = service.server.address();
+  try {
+    await callback(Number(address.port));
+  } finally {
+    await service.close().catch(() => {});
+  }
+}
+
+async function checkWrapperHelp(args) {
+  const result = await runPowerShell(["-Help"], args);
+  const output = `${result.stdout}\n${result.stderr}`;
+  assert(result.exitCode === 0, `PowerShell wrapper help failed\n${output}`);
+  assertIncludes(output, "Usage:", "PowerShell wrapper help");
+  assertIncludes(output, "-CheckBoard -BoardSummary", "PowerShell wrapper help");
+  assertIncludes(output, "does not ask for or print", "PowerShell wrapper help");
+  assertIncludes(output, "passwords", "PowerShell wrapper help");
+  console.log("[OK] PowerShell resume-status wrapper help is safe");
+}
+
+async function checkMockJson(args) {
+  await withMockHost(async (port) => {
+    const result = await runPowerShell([
+      "-Discover",
+      "-DiscoverNoLocalSubnets",
+      "-HostName", "127.0.0.1",
+      "-Port", String(port),
+      "-Json",
+      "-AllowMockVideo",
+      "-SkipAudio",
+      "-SkipClipboard",
+      "-SkipInputLog",
+    ], args);
+    const output = `${result.stdout}\n${result.stderr}`;
+    assert(result.exitCode === 0, `PowerShell mock JSON failed\n${output}`);
+    const payload = JSON.parse(result.stdout);
+    assert(payload.ok === true, "mock JSON should be ok");
+    assert(payload.macPreflight?.payload?.online === true, "mock JSON should include online preflight");
+    assert(payload.macPreflight?.payload?.target?.port === port, "mock JSON should use discovered mock port");
+    assert(payload.macPreflight?.payload?.discoverySelection?.requested === true, "preflight should record discovery");
+    assertIncludes(payload.boardSummary, "Windows resume:", "mock JSON board summary");
+    assertNotIncludes(output, "test-password", "PowerShell mock JSON");
+    console.log("[OK] PowerShell resume-status wrapper supports mock JSON discovery");
+  });
+}
+
+async function checkBoardSummary(args) {
+  await withMockHost(async (port) => {
+    const result = await runPowerShell([
+      "-Discover",
+      "-DiscoverNoLocalSubnets",
+      "-HostName", "127.0.0.1",
+      "-Port", String(port),
+      "-BoardSummary",
+      "-AllowMockVideo",
+      "-SkipAudio",
+      "-SkipClipboard",
+      "-SkipInputLog",
+    ], args);
+    const output = `${result.stdout}\n${result.stderr}`;
+    assert(result.exitCode === 0, `PowerShell board summary failed\n${output}`);
+    const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean);
+    assert(lines.length === 1, `board summary should be one line, got ${lines.length}`);
+    assertIncludes(output, "mac=ready", "PowerShell board summary");
+    assertIncludes(output, "No password was requested or sent", "PowerShell board summary");
+    assertNotIncludes(output, "test-password", "PowerShell board summary");
+    console.log("[OK] PowerShell resume-status wrapper prints one-line board summary");
+  });
+}
+
+async function checkOfflineDefaults(args) {
+  const result = await runPowerShell([
+    "-NoDiscover",
+    "-HostName", "127.0.0.1",
+    "-Port", "9",
+    "-Json",
+  ], args);
+  const output = `${result.stdout}\n${result.stderr}`;
+  assert(result.exitCode === 0, `offline JSON should stay non-failing without -RequireMacReady\n${output}`);
+  const payload = JSON.parse(result.stdout);
+  assert(payload.ok === true, "offline JSON should be ok=true without RequireMacReady");
+  assert(payload.macPreflight?.payload?.online === false, "offline JSON should report offline Mac");
+  assertIncludes(payload.boardSummary, "mac=offline", "offline JSON board summary");
+  assertNotIncludes(output, "Mac host password", "offline JSON");
+  console.log("[OK] PowerShell resume-status wrapper keeps offline Mac non-failing by default");
+}
+
+async function checkRequireMacReady(args) {
+  const result = await runPowerShell([
+    "-NoDiscover",
+    "-HostName", "127.0.0.1",
+    "-Port", "9",
+    "-Json",
+    "-RequireMacReady",
+  ], args);
+  const output = `${result.stdout}\n${result.stderr}`;
+  assert(result.exitCode !== 0, "RequireMacReady offline path should fail");
+  const payload = JSON.parse(result.stdout);
+  assert(payload.ok === false, "RequireMacReady offline JSON should be ok=false");
+  assert(payload.failedChecks?.some((check) => check.name === "requireMacReady"), "RequireMacReady failure should be named");
+  assertNotIncludes(output, "Mac host password", "RequireMacReady JSON");
+  console.log("[OK] PowerShell resume-status wrapper honors -RequireMacReady");
+}
+
+async function main() {
+  if (helpRequested(process.argv)) {
+    printHelp();
+    return;
+  }
+  const args = parseArgs(process.argv);
+  await checkWrapperHelp(args);
+  await checkMockJson(args);
+  await checkBoardSummary(args);
+  await checkOfflineDefaults(args);
+  await checkRequireMacReady(args);
+  console.log("[OK] PowerShell resume-status wrapper regression passed");
+}
+
+main().catch((error) => {
+  console.error(`[FAIL] ${error.message}`);
+  process.exitCode = 1;
+});

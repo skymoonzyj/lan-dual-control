@@ -1,0 +1,123 @@
+param(
+  [string] $HostName = "127.0.0.1",
+  [int] $Port = 43770,
+  [switch] $Discover,
+  [switch] $NoDiscover,
+  [switch] $DiscoverNoLocalSubnets,
+  [int] $DiscoverTimeoutMs = 1200,
+  [int] $TimeoutMs = 12000,
+  [string] $Server = "http://192.168.31.68:17888",
+  [switch] $CheckBoard,
+  [switch] $CheckClientDiagnostics,
+  [switch] $AllowMockVideo,
+  [switch] $SkipAudio,
+  [switch] $SkipClipboard,
+  [switch] $SkipFileClipboard,
+  [switch] $SkipInputLog,
+  [switch] $RequireClean,
+  [switch] $RequireMacReady,
+  [switch] $Json,
+  [switch] $BoardSummary,
+  [switch] $Help
+)
+
+$ErrorActionPreference = "Stop"
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot = Resolve-Path (Join-Path $scriptRoot "..\..")
+$runnerScript = Join-Path $scriptRoot "check-windows-resume-status.mjs"
+
+function Show-Usage {
+  Write-Host @"
+Usage:
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\check-windows-resume-status.ps1 [options]
+
+Common examples:
+  scripts\windows\check-windows-resume-status.ps1 -CheckBoard -BoardSummary
+  scripts\windows\check-windows-resume-status.ps1 -CheckBoard -CheckClientDiagnostics -BoardSummary
+  scripts\windows\check-windows-resume-status.ps1 -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -Json
+  scripts\windows\check-windows-resume-status.ps1 -NoDiscover -HostName 127.0.0.1 -Port 9 -Json -RequireMacReady
+
+This wrapper calls node scripts/windows/check-windows-resume-status.mjs. It is
+read-only: it does not authenticate a WebSocket, does not ask for or print
+passwords, does not send input, and does not execute inject.
+"@
+}
+
+if ($Help) {
+  Show-Usage
+  exit 0
+}
+
+if ($Discover -and $NoDiscover) {
+  Write-Host "[ERROR] Use either -Discover or -NoDiscover, not both."
+  exit 1
+}
+
+$node = Get-Command node -ErrorAction SilentlyContinue
+if (-not $node) {
+  Write-Host "[ERROR] node not found"
+  exit 1
+}
+
+Push-Location $repoRoot
+try {
+  $nodeArgs = @(
+    $runnerScript,
+    "--port", $Port,
+    "--discoverTimeoutMs", $DiscoverTimeoutMs,
+    "--timeoutMs", $TimeoutMs,
+    "--server", $Server
+  )
+
+  $hostProvided = $PSBoundParameters.ContainsKey("HostName")
+  if ($NoDiscover -or $hostProvided -or $DiscoverNoLocalSubnets) {
+    $nodeArgs += @("--host", $HostName)
+  }
+  if ($Discover) {
+    $nodeArgs += "--discover"
+  }
+  if ($NoDiscover) {
+    $nodeArgs += "--noDiscover"
+  }
+  if ($DiscoverNoLocalSubnets) {
+    $nodeArgs += "--discoverNoLocalSubnets"
+  }
+  if ($CheckBoard) {
+    $nodeArgs += "--checkBoard"
+  }
+  if ($CheckClientDiagnostics) {
+    $nodeArgs += "--checkClientDiagnostics"
+  }
+  if ($AllowMockVideo) {
+    $nodeArgs += "--allowMockVideo"
+  }
+  if ($SkipAudio) {
+    $nodeArgs += "--skipAudio"
+  }
+  if ($SkipClipboard) {
+    $nodeArgs += "--skipClipboard"
+  }
+  if ($SkipFileClipboard) {
+    $nodeArgs += "--skipFileClipboard"
+  }
+  if ($SkipInputLog) {
+    $nodeArgs += "--skipInputLog"
+  }
+  if ($RequireClean) {
+    $nodeArgs += "--requireClean"
+  }
+  if ($RequireMacReady) {
+    $nodeArgs += "--requireMacReady"
+  }
+  if ($Json) {
+    $nodeArgs += "--json"
+  }
+  if ($BoardSummary) {
+    $nodeArgs += "--boardSummary"
+  }
+
+  & node @nodeArgs
+  exit $LASTEXITCODE
+} finally {
+  Pop-Location
+}
