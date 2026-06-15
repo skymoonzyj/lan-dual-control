@@ -17,6 +17,36 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Windows Codex
+
+日期：2026-06-15 20:56
+开发端：Windows Codex
+本轮目标：新增 Windows 审查机双端剪贴板完整性聚合回归，方便 Supervisor 一条命令复审。
+完成内容：
+- 新增 `scripts/windows/test-clipboard-integrity-suite.mjs`，顺序串联三条已有专项检查：Windows clipboard bridge 模块级完整性、Windows host WebSocket 服务级坏包回归、Mac host Swift 源码文件剪贴板接收完整性检查。
+- 支持 `--json` 输出机器可读结果，支持 `--boardSummary` 输出一行无密 Agent Link Board 摘要：会标明 Windows module / Windows service / Mac source 三项状态。
+- 聚合脚本不要求正式密码、不发送输入、不执行 `inject`；Windows 服务级子检查只启动临时本机 in-process host 并使用测试密码。
+- CURRENT_STATUS / NEXT_ACTIONS 已把该脚本记录为双端剪贴板整改复审的优先入口。
+修改文件：
+- `scripts/windows/test-clipboard-integrity-suite.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-clipboard-integrity-suite.mjs`
+- `node scripts/windows/test-clipboard-integrity-suite.mjs --timeoutMs 45000`
+- `node scripts/windows/test-clipboard-integrity-suite.mjs --boardSummary --timeoutMs 45000`
+- `node scripts/windows/test-clipboard-integrity-suite.mjs --json --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script test-clipboard-integrity-suite.mjs --timeoutMs 10000`
+遗留问题：
+- 当前 Codex 普通沙盒会拦截该聚合脚本启动子测试进程，表现为 `spawn EPERM`；这不是测试逻辑失败，Windows 审查机复跑时需允许本机子进程。
+- 本地仍有无关未提交改动 `scripts/windows/watch-codex-link-mac-alerts.ps1`，未纳入本轮。
+下一步建议：
+- Supervisor 可直接运行 `node scripts/windows/test-clipboard-integrity-suite.mjs --boardSummary --timeoutMs 45000` 复审 Windows/Mac 双端剪贴板整改；通过后恢复 WGC 性能优化或正式 Mac E2E。
+是否改了协议：否。
+是否需要另一端配合：不需要；等待 Supervisor/Mac readiness 探针后续同步。
+
 ## 2026-06-15 Mac Codex
 
 日期：2026-06-15 20:30
