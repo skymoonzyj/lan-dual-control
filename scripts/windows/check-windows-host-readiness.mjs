@@ -18,6 +18,7 @@ const defaults = {
   probeHost: false,
   probeAudio: false,
   probeVideo: false,
+  probeClipboardSecurity: false,
   expectBuildId: "",
   requireCurrentBuildId: false,
   skipCurrentBuildCheck: false,
@@ -50,6 +51,7 @@ function parseArgs(argv) {
       key === "probeHost" ||
       key === "probeAudio" ||
       key === "probeVideo" ||
+      key === "probeClipboardSecurity" ||
       key === "requireWgc" ||
       key === "requireCurrentBuildId" ||
       key === "skipCurrentBuildCheck" ||
@@ -79,6 +81,7 @@ function parseArgs(argv) {
   args.probeHost = booleanArg(args.probeHost);
   args.probeAudio = booleanArg(args.probeAudio);
   args.probeVideo = booleanArg(args.probeVideo);
+  args.probeClipboardSecurity = booleanArg(args.probeClipboardSecurity);
   args.expectBuildId = String(args.expectBuildId || "").trim();
   args.currentBuildId = getGitBuildId();
   args.requireCurrentBuildId = booleanArg(args.requireCurrentBuildId);
@@ -111,6 +114,7 @@ function applyProfile(args) {
 
   if (args.profile === "deep") {
     args.probeHost = true;
+    args.probeClipboardSecurity = true;
   }
 }
 
@@ -133,6 +137,8 @@ Options:
   --probeHost         Run Windows host PowerShell self-test.
   --probeVideo        Run short Windows host video observer.
   --probeAudio        Run short WASAPI audio observer. Does not play a tone.
+  --probeClipboardSecurity
+                       Run the Windows host file clipboard WebSocket abuse regression.
   --expectBuildId <id>      Require running host runtime.buildId to equal this value.
   --requireCurrentBuildId   Require running host runtime.buildId to match current git short hash.
   --skipCurrentBuildCheck   Do not warn when running host build differs from current git.
@@ -145,7 +151,7 @@ Options:
 Profiles:
   default             Low-risk checks only; no running host required.
   deploy              Require the configured port/current build, strict mode, plus video/audio probes.
-  deep                deploy profile plus Windows host PowerShell self-test.
+  deep                deploy profile plus Windows host self-test and file clipboard security regression.
 `);
 }
 
@@ -656,6 +662,21 @@ async function main() {
     );
   }
 
+  if (args.probeClipboardSecurity) {
+    await runStep(
+      results,
+      args,
+      "Windows host clipboard security",
+      node,
+      [
+        "scripts/windows/test-windows-host-clipboard-security.mjs",
+        "--timeoutMs",
+        String(Math.max(8000, Math.min(args.timeoutMs, 30000))),
+      ],
+      { timeoutMs: Math.max(args.timeoutMs, 45000), env: envWithFfmpeg },
+    );
+  }
+
   if (args.probeVideo) {
     await runStep(
       results,
@@ -722,6 +743,7 @@ async function main() {
       probeHost: args.probeHost,
       probeVideo: args.probeVideo,
       probeAudio: args.probeAudio,
+      probeClipboardSecurity: args.probeClipboardSecurity,
       expectBuildId: args.expectBuildId,
       currentBuildId: args.currentBuildId,
       requireCurrentBuildId: args.requireCurrentBuildId,

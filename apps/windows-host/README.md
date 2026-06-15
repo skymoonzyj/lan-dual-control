@@ -239,7 +239,7 @@ node E:\codex\lan-dual-control\scripts\windows\check-windows-wgc-support.mjs --j
 node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --requireWgc
 ```
 
-常用预设可直接用 `--profile`：`default` 与上面的默认体检一致；`deploy` 用于 Windows host 已启动、准备让 Mac 连入前，会开启严格模式、要求配置端口可达、确认运行中 host 是当前 git build，并短时验证视频和系统声音；视频/音频短验收默认还会要求帧 `timestamp` 单调，且接收年龄不超过 1000ms；`deep` 在 `deploy` 基础上再跑 `test-windows-host.ps1` 本机自检。若 `43770` 没有服务正在监听，`deploy` / `deep` 失败是正常现象，先用启动助手或 `node .\server.mjs 43770 0.0.0.0` 启动 Windows host。
+常用预设可直接用 `--profile`：`default` 与上面的默认体检一致；`deploy` 用于 Windows host 已启动、准备让 Mac 连入前，会开启严格模式、要求配置端口可达、确认运行中 host 是当前 git build，并短时验证视频和系统声音；视频/音频短验收默认还会要求帧 `timestamp` 单调，且接收年龄不超过 1000ms；`deep` 在 `deploy` 基础上再跑 `test-windows-host.ps1` 本机自检和文件剪贴板服务级坏包回归。若 `43770` 没有服务正在监听，`deploy` / `deep` 失败是正常现象，先用启动助手或 `node .\server.mjs 43770 0.0.0.0` 启动 Windows host。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --profile deploy
@@ -275,6 +275,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-contro
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-host-clipboard-security.mjs
+```
+
+也可以把这项坏包回归接入一键体检：`--probeClipboardSecurity` 会在默认体检后额外跑一次服务级 WebSocket 安全回归；`--profile deep` 会自动包含它。
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --probeClipboardSecurity
 ```
 
 Mac 从另一台机器连接 Windows 前，可以先做一次局域网和防火墙只读检查。它会列出本机局域网 IP、端口监听地址、TCP 探测结果、当前网络配置和匹配的入站放行规则；默认不会修改系统防火墙。

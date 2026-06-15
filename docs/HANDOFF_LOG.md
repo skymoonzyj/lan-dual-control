@@ -19,6 +19,44 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 20:34
+开发端：Windows Codex
+本轮目标：把 Windows host 文件剪贴板服务级坏包回归接入一键 readiness，方便收工和部署前自动覆盖。
+完成内容：
+- `scripts/windows/check-windows-host-readiness.mjs` 新增显式 `--probeClipboardSecurity`；该探针会串联 `test-windows-host-clipboard-security.mjs`，走真实 WebSocket host 文件剪贴板坏包回归。
+- `--profile deep` 现在在 deploy 检查、Windows host PowerShell 本机自检之外，自动包含文件剪贴板服务级安全回归。
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs` 增加帮助文本和 JSON 聚合形状回归，确认 readiness 输出 `probeClipboardSecurity=true` 且结果包含 `Windows host clipboard security`。
+- Windows host README、CURRENT_STATUS、NEXT_ACTIONS、04-task-board 已同步新入口和回归顺序。
+修改文件：
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-host-readiness.mjs`
+- `node --check scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `node scripts/windows/test-windows-host-clipboard-security.mjs --timeoutMs 15000`
+- `node scripts/windows/check-windows-host-readiness.mjs --probeClipboardSecurity --json --timeoutMs 12000`
+- `node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 120000 --readinessTimeoutMs 12000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-host-readiness.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-host-readiness-board-summary.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-script-help.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows/check-windows-host-readiness.mjs scripts/windows/test-windows-host-readiness-board-summary.mjs apps/windows-host/README.md docs/CURRENT_STATUS.md docs/NEXT_ACTIONS.md docs/04-task-board.md docs/HANDOFF_LOG.md docs/ACTIVE_LOCKS.md`
+遗留问题：
+- 本地仍有无关未提交改动 `scripts/windows/watch-codex-link-mac-alerts.ps1`，未纳入本轮。
+- WGC NV12 快速转换 WIP 仍在 stash，等待剪贴板整改复审后再恢复。
+下一步建议：
+- Mac 对称剪贴板加固推送后，Windows 侧拉取并复跑 Mac 相关测试；随后可恢复 WGC 性能优化或正式 Mac E2E。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；等待 Mac/Supervisor 后续同步。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 20:35
 开发端：Windows Codex
 本轮目标：在 Windows 文件剪贴板完整性整改后，补真实 WebSocket 服务级坏包回归。

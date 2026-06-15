@@ -155,6 +155,7 @@ async function main() {
   assert(!help.timedOut, "readiness --help timed out");
   assert(help.exitCode === 0, `readiness --help exited ${help.exitCode}`);
   assert(help.stdout.includes("--boardSummary"), "readiness --help does not mention --boardSummary");
+  assert(help.stdout.includes("--probeClipboardSecurity"), "readiness --help does not mention --probeClipboardSecurity");
 
   const jsonRun = await runNode(
     "readiness JSON board summary",
@@ -172,6 +173,28 @@ async function main() {
   assert(jsonSummary.results.some((result) => result.label === "Windows host runtime"), "JSON results missing runtime check");
   assertNoSecretLeak(jsonRun.stdout, "readiness --json stdout");
   assertNoSecretLeak(jsonRun.stderr, "readiness --json stderr");
+
+  const clipboardRun = await runNode(
+    "readiness clipboard security probe",
+    [
+      readinessScript,
+      "--json",
+      "--probeClipboardSecurity",
+      "--timeoutMs",
+      String(Math.max(args.readinessTimeoutMs, 12000)),
+    ],
+    args.timeoutMs,
+  );
+  results.push(clipboardRun);
+  assert(!clipboardRun.timedOut, "readiness --probeClipboardSecurity --json timed out");
+  const clipboardSummary = parseJson(clipboardRun.stdout, "readiness --probeClipboardSecurity --json");
+  assert(clipboardSummary.args?.probeClipboardSecurity === true, "clipboard security probe flag missing from JSON args");
+  assert(
+    clipboardSummary.results?.some((result) => result.label === "Windows host clipboard security"),
+    "JSON results missing clipboard security check",
+  );
+  assertNoSecretLeak(clipboardRun.stdout, "readiness --probeClipboardSecurity stdout");
+  assertNoSecretLeak(clipboardRun.stderr, "readiness --probeClipboardSecurity stderr");
 
   const boardRun = await runNode(
     "readiness board summary",
@@ -191,6 +214,7 @@ async function main() {
   const summary = {
     ok: true,
     readinessJsonExitCode: jsonRun.exitCode,
+    readinessClipboardProbeExitCode: clipboardRun.exitCode,
     readinessBoardSummaryExitCode: boardRun.exitCode,
     boardSummary: lines[0],
     results: results.map((result) => ({

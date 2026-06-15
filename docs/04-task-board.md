@@ -250,7 +250,7 @@ Mac 端：
 - Windows 被控端已接入常驻 C# SendInput helper：Windows 上通过 helper 调用 `SendInput`/`SetCursorPos` 注入鼠标、滚轮和常用键盘事件，避免每个事件重复启动 PowerShell；非 Windows 开发环境回退为日志模式。`scripts/windows/measure-windows-input-helper.mjs` 可用不支持事件安全干跑，量化 helper 冷启动和热路径延迟。
 - macOS 被控端、Windows 被控端和假 Mac 服务处理输入事件后都会返回 `input_ack`，控制端和探针可确认输入已注入、仅记录或被拒绝。
 - Windows 被控端已新增本机一键自检脚本 `scripts/windows/test-windows-host.ps1`，可临时启动服务并验证真实 JPEG 首帧、文本剪贴板和文件剪贴板接收；默认不发送输入事件。
-- Windows 被控端 readiness 已支持 `--profile default|deploy|deep`：默认低风险、不要求 host 正在监听；默认也会跑 Windows Graphics Capture 支持预检，但在采集管线正式切换前只作为信息项，`--requireWgc` 可显式强制。`deploy` 用于 host 已启动后的部署验收，要求端口可达、运行中 build 与当前 git 一致，并跑视频/音频短观察；`deep` 额外串联 Windows host PowerShell 本机自检。也可单独用 `--expectBuildId`、`--requireCurrentBuildId` 和 `--skipCurrentBuildCheck` 控制 runtime build 校验强度；发现旧 build 时会尽量列出之后变动过的 Windows host 运行源码文件，方便判断是否必须重启。
+- Windows 被控端 readiness 已支持 `--profile default|deploy|deep`：默认低风险、不要求 host 正在监听；默认也会跑 Windows Graphics Capture 支持预检，但在采集管线正式切换前只作为信息项，`--requireWgc` 可显式强制。`deploy` 用于 host 已启动后的部署验收，要求端口可达、运行中 build 与当前 git 一致，并跑视频/音频短观察；`deep` 额外串联 Windows host PowerShell 本机自检和文件剪贴板服务级坏包回归，单独加 `--probeClipboardSecurity` 也可把该回归纳入默认体检。也可单独用 `--expectBuildId`、`--requireCurrentBuildId` 和 `--skipCurrentBuildCheck` 控制 runtime build 校验强度；发现旧 build 时会尽量列出之后变动过的 Windows host 运行源码文件，方便判断是否必须重启。
 - Windows 被控端已新增 `scripts/windows/check-windows-firewall.mjs` 只读检查脚本，可列出本机局域网 IP、端口监听、TCP 探测、网络配置和 TCP 入站放行规则；默认不改系统防火墙，只在缺少放行时给出管理员 PowerShell 建议命令。
 - Windows 被控端已新增启动助手 `scripts/windows/start-windows-host.mjs` 和 `scripts/windows/start-windows-host.ps1`：启动服务后列出 Mac 端可填的局域网地址，等待 `/discovery` 就绪并自动跑只读防火墙/端口检查；Node 入口可用 `--status` 只读查看当前 Windows host `/discovery`、runtime/build、视频/音频/输入/剪贴板能力和旧 build 源码差异，离线时只给安全启动建议，不启动、不认证、不要求密码；`--status --json` 输出纯机器可读 JSON，PowerShell 包装也可用 `-Status` / `-Status -Json`，Windows readiness 和桌面壳面板均消费该 JSON 作为统一状态来源；需要系统声音时显式加 `--wasapi` 或 `-Wasapi`；真机联调建议加 `--promptPassword --requirePassword` 或 `-PromptPassword -RequirePassword`，避免退回 demo 密码；可加 `--dryRunFirewallRule` / `-DryRunFirewallRule` 预览放行命令，只有显式 `--addFirewallRule` / `-AddFirewallRule` 才会尝试新增 Private TCP 入站规则。`scripts/windows/test-windows-host-start-helper.mjs` 已覆盖启动助手密码安全、`--status`/`--status --json` 在线/离线、防火墙干跑和临时端口实启回归。
 - Windows 桌面壳已新增“本机被控”面板：通过 Tauri 原生命令选择低风险/部署/深度 readiness、预览防火墙放行命令、要求隐藏密码后启动/停止 Windows host，并在 UI 内显示日志和 `/discovery` 状态；面板会消费 `start-windows-host --status --json` 显示真实 runtime/build、视频/音频/输入/剪贴板能力，端口已有非托管 host 时显示“已在线”但不误启用停止按钮；默认输入模式是安全日志。
@@ -296,7 +296,7 @@ Mac 端：
 - [x] 文件、压缩包、图片等剪贴板传输骨架：控制端可选择文件并按 `clipboard_file_*` 分块发送，假 Mac 和 Windows 被控端可确认进度。
 - [x] macOS 被控端文件剪贴板读写第一版：可接收 Windows 文件块并写入 `NSPasteboard`，也可读取 Mac 本机普通文件剪贴板并推送给控制端内存接收。
 - [x] Windows 被控端文件剪贴板接收完整性加固：必须先 offer，再按文件数量/总大小/分块上限/fileIndex/offset/不重叠区间/逐文件 expected size 校验，拒绝无 offer、超大、重复重叠和不完整传输。
-- [x] Windows 被控端文件剪贴板服务级坏包回归：`test-windows-host-clipboard-security.mjs` 通过真实 WebSocket host 覆盖无 offer、超总量/文件数、超大 chunk、重复/重叠、未接收完整、bytes 不一致和错误 fileIndex。
+- [x] Windows 被控端文件剪贴板服务级坏包回归：`test-windows-host-clipboard-security.mjs` 通过真实 WebSocket host 覆盖无 offer、超总量/文件数、超大 chunk、重复/重叠、未接收完整、bytes 不一致和错误 fileIndex；`check-windows-host-readiness --probeClipboardSecurity` 和 `--profile deep` 已能自动串联该安全回归。
 - [x] Windows 控制端为远端文件提供安全保存 UI：最近一批远端文件可在收件托盘查看、单个下载、全部下载或清空；清空会清理内存暂存和状态提示，并明确不删除系统剪贴板仍可能需要的临时目录。
 - [x] Windows 控制端把远端文件写入 Windows 系统文件剪贴板：桌面版接收完成后按 1MB 原生分块保存到临时目录并调用系统文件剪贴板，原生层校验 512MB 总量、分块偏移、最终字节数并清理 7 天以上旧临时目录；系统写入失败但文件已落盘时，本地日志和托盘状态显示临时目录，可一键打开该目录并重试写入；浏览器预览版保留内存托盘。
 - [ ] 大文件传输速度、剩余时间和断点续传。
