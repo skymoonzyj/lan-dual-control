@@ -18,6 +18,7 @@ export async function promptPassword({
   allowTerminalFallback = process.env.LAN_DUAL_ALLOW_TERMINAL_PASSWORD_PROMPT === "1",
 } = {}) {
   playAttentionSound();
+  printPromptNotice(output);
   if (!dialogDisabled()) {
     const dialogErrors = [];
     if (!nativeDialogDisabled()) {
@@ -48,7 +49,7 @@ export async function promptPassword({
 
 export function playAttentionSound() {
   if (process.env.LAN_DUAL_DISABLE_PASSWORD_BEEP === "1") return;
-  const result = spawnSync("osascript", ["-e", "beep"], {
+  const result = spawnSync("osascript", ["-e", "beep 2"], {
     encoding: "utf8",
     timeout: 3000,
   });
@@ -69,13 +70,23 @@ function frontingDisabled() {
   return process.env.LAN_DUAL_DISABLE_PASSWORD_FRONTING === "1";
 }
 
+function promptNoticeDisabled() {
+  return process.env.LAN_DUAL_DISABLE_PASSWORD_PROMPT_NOTICE === "1";
+}
+
 function canPromptInTerminal(output) {
   return Boolean(process.stdin.isTTY && output?.isTTY);
+}
+
+function printPromptNotice(output) {
+  if (promptNoticeDisabled()) return;
+  safeWrite(output, "[ACTION] Password required: a secure macOS password window is opening now.\n");
 }
 
 function promptWithNativeMacDialog({ title, message, prompt, timeoutMs }) {
   const script = `
 import AppKit
+import CoreGraphics
 import Foundation
 
 let environment = ProcessInfo.processInfo.environment
@@ -85,8 +96,10 @@ let promptLabel = environment["LAN_DUAL_PASSWORD_PROMPT_LABEL"] ?? "Password:"
 
 let app = NSApplication.shared
 app.setActivationPolicy(.regular)
+app.unhide(nil)
 app.activate(ignoringOtherApps: true)
 let attentionRequest = app.requestUserAttention(.criticalRequest)
+let promptWindowLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow)))
 
 let width = CGFloat(380)
 let label = NSTextField(labelWithString: promptLabel)
@@ -106,48 +119,62 @@ secureField.widthAnchor.constraint(equalToConstant: width).isActive = true
 let alert = NSAlert()
 alert.messageText = dialogTitle
 alert.informativeText = dialogMessage
-alert.alertStyle = .informational
+alert.alertStyle = .warning
 alert.accessoryView = stack
 alert.addButton(withTitle: "Continue")
 alert.addButton(withTitle: "Cancel")
 
 let window = alert.window
 window.title = dialogTitle
-window.level = .modalPanel
+window.level = promptWindowLevel
 window.collectionBehavior.insert(.canJoinAllSpaces)
 window.collectionBehavior.insert(.fullScreenAuxiliary)
 window.collectionBehavior.insert(.stationary)
+window.collectionBehavior.insert(.transient)
 window.center()
 
 NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+NSRunningApplication.current.unhide()
+app.unhide(nil)
 app.activate(ignoringOtherApps: true)
+window.deminiaturize(nil)
 window.makeKeyAndOrderFront(nil)
+window.makeKey()
 window.orderFrontRegardless()
+secureField.becomeFirstResponder()
 
 DispatchQueue.main.async {
   NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+  NSRunningApplication.current.unhide()
+  app.unhide(nil)
   app.activate(ignoringOtherApps: true)
+  window.deminiaturize(nil)
+  window.level = promptWindowLevel
   window.makeKeyAndOrderFront(nil)
+  window.makeKey()
   window.orderFrontRegardless()
   window.makeFirstResponder(secureField)
+  secureField.becomeFirstResponder()
 }
 
-DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+func refocusPasswordWindow() {
   NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+  NSRunningApplication.current.unhide()
+  app.unhide(nil)
   app.activate(ignoringOtherApps: true)
-  window.level = .modalPanel
+  window.deminiaturize(nil)
+  window.level = promptWindowLevel
   window.makeKeyAndOrderFront(nil)
+  window.makeKey()
   window.orderFrontRegardless()
   window.makeFirstResponder(secureField)
+  secureField.becomeFirstResponder()
 }
 
-DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
-  NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
-  app.activate(ignoringOtherApps: true)
-  window.level = .modalPanel
-  window.makeKeyAndOrderFront(nil)
-  window.orderFrontRegardless()
-  window.makeFirstResponder(secureField)
+for delay in [0.15, 0.35, 0.75, 1.50, 3.00] {
+  DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+    refocusPasswordWindow()
+  }
 }
 
 let response = alert.runModal()
@@ -215,7 +242,7 @@ exit(1)
 function scheduleNativePromptFronting(pid) {
   if (!pid || frontingDisabled()) return [];
   bringNativePromptToFront(pid);
-  return [150, 450, 1000].map((delayMs) => {
+  return [100, 300, 700, 1500, 3000].map((delayMs) => {
     const timer = setTimeout(() => bringNativePromptToFront(pid), delayMs);
     timer.unref?.();
     return timer;
@@ -274,7 +301,7 @@ bringPasswordPromptToFront(dialogProcessId)
 delay 0.15
 bringPasswordPromptToFront(dialogProcessId)
 try
-  set dialogResult to display dialog (dialogMessage & return & return & promptLabel) default answer "" with title dialogTitle with hidden answer buttons {"Cancel", "Continue"} default button "Continue" cancel button "Cancel"
+  set dialogResult to display dialog (dialogMessage & return & return & promptLabel) default answer "" with title dialogTitle with hidden answer buttons {"Cancel", "Continue"} default button "Continue" cancel button "Cancel" with icon caution
   set passwordValue to text returned of dialogResult
   return passwordValue
 on error number -128
@@ -421,13 +448,14 @@ Shared helper used by Mac scripts that need a password prompt.
 
 Behavior:
   - Rings before asking for a password.
-  - Opens a native AppKit frontmost hidden password dialog for --promptPassword callers.
+  - Prints a short action notice, then opens a native AppKit frontmost hidden password dialog for --promptPassword callers.
   - Falls back to a system macOS hidden dialog only if the native dialog cannot open.
   - Does not fall back to terminal input unless explicitly allowed for local manual fallback.
   - Never prints the password.
 
 Environment:
   LAN_DUAL_DISABLE_PASSWORD_BEEP=1             Disable the attention sound.
+  LAN_DUAL_DISABLE_PASSWORD_PROMPT_NOTICE=1    Disable the non-secret action notice.
   LAN_DUAL_DISABLE_PASSWORD_DIALOG=1           Disable macOS dialog for tests.
   LAN_DUAL_DISABLE_NATIVE_PASSWORD_DIALOG=1    Disable the native AppKit dialog for tests.
   LAN_DUAL_DISABLE_PASSWORD_FRONTING=1         Disable extra foreground activation for tests.

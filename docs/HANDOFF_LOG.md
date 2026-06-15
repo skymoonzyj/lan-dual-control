@@ -122,6 +122,47 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 18:05
+开发端：Mac Codex
+本轮目标：按用户反馈“没有看到显示输入密码的地方”，继续加固 Mac 侧所有 `--promptPassword` 人工密码入口，确保需要输入密码时先响铃、再显示清楚的前台密码窗口。
+完成内容：
+- `scripts/mac/password-prompt.mjs` 改为先播放两声提示音，并输出一行不含密码的 `[ACTION] Password required...` 提示，再打开原生 AppKit 隐藏密码框。
+- 原生密码框改为 warning 样式、高窗口层级、跨 Space、unhide、deminiaturize、多次前置并聚焦输入框；默认仍不回退终端隐藏输入，避免用户看不到输入位置。
+- 真实可见性测试发现 `NSAlert` 窗口调用 `makeMain()` 会在当前 macOS/Xcode 组合下崩溃，已移除该调用并在测试里防回归；修复后真实测试窗口可正常显示/返回，且不打印输入内容。
+- AppleScript fallback 也补了 caution 图标；原生弹窗打不开时才使用 fallback，用户取消仍直接停止，不会连续弹第二个窗口。
+- `scripts/mac/test-mac-password-prompt.mjs` 覆盖两声提示音、不含密码提示、高层级前台窗口、禁止 `makeMain()` 回归、fallback caution 图标和秘密不泄露。
+- Mac host/client README、当前状态、下一步和任务板同步新行为：两声提示音、不含密码提示、前台高层级隐藏密码框、密码不进 argv/日志/联络板。
+修改文件：
+- `scripts/mac/password-prompt.mjs`
+- `scripts/mac/test-mac-password-prompt.mjs`
+- `apps/mac-host/README.md`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/password-prompt.mjs`
+- `node --check scripts/mac/test-mac-password-prompt.mjs`
+- `node scripts/mac/test-mac-password-prompt.mjs --timeoutMs 10000`
+- 抽取内嵌 Swift 脚本后运行 `swiftc -parse /tmp/lan-dual-password-prompt.swift`
+- 真实可见性测试：只弹测试密码框，不认证服务、不发送密码；修复前复现 `makeMain()` 崩溃，修复后窗口可正常返回且不打印输入内容。
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-readiness-prompt-password.mjs --timeoutMs 10000`
+- `node scripts/mac/test-mac-formal-local-smoke.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-script-help.mjs --script password-prompt.mjs --script start-mac-host.mjs --script check-mac-host-readiness.mjs --script check-mac-formal-local-smoke.mjs --script run-mac-client-formal-smoke.mjs --timeoutMs 10000`
+遗留问题：
+- 本轮未认证真实 host、未启动正式长测、未执行 `inject`；正式密码仍只能由用户在本机弹窗输入，不能发联络板。
+下一步建议：
+- 下次需要人工密码时直接运行对应 `--promptPassword` 入口；应先听到两声提示音，再看到前台隐藏密码框和不含密码的 action 提示。
+- 若仍遇到系统层遮挡，再考虑短生命周期 `.app` 包或绑定当前前台应用的系统 dialog；当前原生 Swift 弹窗已通过真实可见性冒烟。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Windows 端只需知道 Mac 侧密码弹窗体验已加固，密码仍不要发联络板，`inject` 仍需用户另行明确确认。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 17:33
 开发端：Mac Codex
 本轮目标：让 Mac 控制 Windows 的 formal browser smoke 也能自动发现 Windows host，减少正式联调前手工复制 IP/端口。

@@ -67,11 +67,11 @@ const log = process.env.FAKE_OSASCRIPT_LOG;
 const joined = process.argv.slice(2).join("\\n");
 if (log) {
   if (joined.includes("beep")) {
-    appendFileSync(log, "beep\\n");
+    appendFileSync(log, \`beep\\n\${joined.includes("beep 2") ? "beep-twice\\n" : ""}\`);
   } else if (joined.includes("targetPid")) {
     appendFileSync(log, \`fronting\\n\${joined.includes("System Events") ? "system-events\\n" : ""}\${joined.includes("frontmost of first process") ? "frontmost-process\\n" : ""}\`);
   } else {
-    appendFileSync(log, \`dialog\\n\${joined.includes("SystemUIServer") ? "system-ui-server\\n" : ""}\${joined.includes("System Events") ? "system-events\\n" : ""}\${joined.includes("frontmost of first process") ? "frontmost-process\\n" : ""}\${joined.includes("display dialog") ? "display-dialog\\n" : ""}\${joined.includes("with hidden answer") ? "hidden-answer\\n" : ""}\${joined.includes("activate") ? "activate\\n" : ""}\`);
+    appendFileSync(log, \`dialog\\n\${joined.includes("SystemUIServer") ? "system-ui-server\\n" : ""}\${joined.includes("System Events") ? "system-events\\n" : ""}\${joined.includes("frontmost of first process") ? "frontmost-process\\n" : ""}\${joined.includes("display dialog") ? "display-dialog\\n" : ""}\${joined.includes("with hidden answer") ? "hidden-answer\\n" : ""}\${joined.includes("with icon caution") ? "caution-icon\\n" : ""}\${joined.includes("activate") ? "activate\\n" : ""}\`);
   }
 }
 if (joined.includes("beep")) process.exit(0);
@@ -100,7 +100,7 @@ process.stdin.on("data", (chunk) => {
 process.stdin.on("end", () => {
   const log = process.env.FAKE_SWIFT_LOG;
   if (log) {
-    appendFileSync(log, \`swift\\n\${source.includes("NSApplication.shared") ? "appkit\\n" : ""}\${source.includes("requestUserAttention(.criticalRequest)") ? "critical-attention\\n" : ""}\${source.includes("window.level = .modalPanel") ? "modal-panel\\n" : ""}\${source.includes(".canJoinAllSpaces") ? "all-spaces\\n" : ""}\${source.includes("orderFrontRegardless") ? "order-front\\n" : ""}\${source.includes("makeFirstResponder") ? "first-responder\\n" : ""}\${source.includes("asyncAfter(deadline: .now() + 0.25)") ? "refocus-025\\n" : ""}\${source.includes("asyncAfter(deadline: .now() + 0.75)") ? "refocus-075\\n" : ""}\${source.includes("activate(ignoringOtherApps: true)") && source.includes(".activateIgnoringOtherApps") ? "ignore-other-apps\\n" : ""}\`);
+    appendFileSync(log, \`swift\\n\${source.includes("NSApplication.shared") ? "appkit\\n" : ""}\${source.includes("import CoreGraphics") ? "core-graphics\\n" : ""}\${source.includes("requestUserAttention(.criticalRequest)") ? "critical-attention\\n" : ""}\${source.includes("alert.alertStyle = .warning") ? "warning-alert\\n" : ""}\${source.includes("CGWindowLevelForKey(.screenSaverWindow)") ? "screen-saver-level\\n" : ""}\${source.includes("window.level = promptWindowLevel") ? "prompt-window-level\\n" : ""}\${source.includes(".canJoinAllSpaces") ? "all-spaces\\n" : ""}\${source.includes(".transient") ? "transient\\n" : ""}\${source.includes("window.deminiaturize") ? "deminiaturize\\n" : ""}\${source.includes("orderFrontRegardless") ? "order-front\\n" : ""}\${source.includes("makeKey()") ? "make-key\\n" : ""}\${source.includes("makeMain()") ? "unsafe-make-main\\n" : ""}\${source.includes("makeFirstResponder") ? "first-responder\\n" : ""}\${source.includes("becomeFirstResponder") ? "become-first-responder\\n" : ""}\${source.includes("0.15") ? "refocus-015\\n" : ""}\${source.includes("0.35") ? "refocus-035\\n" : ""}\${source.includes("1.50") ? "refocus-150\\n" : ""}\${source.includes("3.00") ? "refocus-300\\n" : ""}\${source.includes("activate(ignoringOtherApps: true)") && source.includes(".activateIgnoringOtherApps") ? "ignore-other-apps\\n" : ""}\${source.includes("unhide") ? "unhide\\n" : ""}\`);
   }
   if (process.env.FAKE_SWIFT_MODE === "cancel") {
     console.error("Password prompt cancelled.");
@@ -174,19 +174,32 @@ function checkNativeDialogSuccess(tmp, timeoutMs) {
   assertNotIncludes(output, secret, "native dialog success output");
   const osascriptLog = safeRead(osascriptLogPath);
   const swiftLog = safeRead(swiftLogPath);
+  assertIncludes(output, "[ACTION] Password required", "native dialog success output");
   assertIncludes(osascriptLog, "beep", "native dialog success osascript log");
+  assertIncludes(osascriptLog, "beep-twice", "native dialog success osascript log");
   assertIncludes(osascriptLog, "fronting", "native dialog success osascript log");
   assertNotIncludes(osascriptLog, "dialog", "native dialog success should not use AppleScript dialog first");
   assertIncludes(swiftLog, "swift", "native dialog success native log");
   assertIncludes(swiftLog, "appkit", "native dialog success native log");
+  assertIncludes(swiftLog, "core-graphics", "native dialog success native log");
   assertIncludes(swiftLog, "critical-attention", "native dialog success native log");
-  assertIncludes(swiftLog, "modal-panel", "native dialog success native log");
+  assertIncludes(swiftLog, "warning-alert", "native dialog success native log");
+  assertIncludes(swiftLog, "screen-saver-level", "native dialog success native log");
+  assertIncludes(swiftLog, "prompt-window-level", "native dialog success native log");
   assertIncludes(swiftLog, "all-spaces", "native dialog success native log");
+  assertIncludes(swiftLog, "transient", "native dialog success native log");
+  assertIncludes(swiftLog, "deminiaturize", "native dialog success native log");
   assertIncludes(swiftLog, "order-front", "native dialog success native log");
+  assertIncludes(swiftLog, "make-key", "native dialog success native log");
+  assertNotIncludes(swiftLog, "unsafe-make-main", "native dialog success native log");
   assertIncludes(swiftLog, "first-responder", "native dialog success native log");
-  assertIncludes(swiftLog, "refocus-025", "native dialog success native log");
-  assertIncludes(swiftLog, "refocus-075", "native dialog success native log");
+  assertIncludes(swiftLog, "become-first-responder", "native dialog success native log");
+  assertIncludes(swiftLog, "refocus-015", "native dialog success native log");
+  assertIncludes(swiftLog, "refocus-035", "native dialog success native log");
+  assertIncludes(swiftLog, "refocus-150", "native dialog success native log");
+  assertIncludes(swiftLog, "refocus-300", "native dialog success native log");
   assertIncludes(swiftLog, "ignore-other-apps", "native dialog success native log");
+  assertIncludes(swiftLog, "unhide", "native dialog success native log");
   console.log("[OK] Password helper rings and reads a frontmost native hidden dialog value");
 }
 
@@ -235,6 +248,7 @@ function checkNativeFailureFallsBackToAppleScript(tmp, timeoutMs) {
   assertIncludes(osascriptLog, "frontmost-process", "native failure fallback osascript log");
   assertIncludes(osascriptLog, "display-dialog", "native failure fallback osascript log");
   assertIncludes(osascriptLog, "hidden-answer", "native failure fallback osascript log");
+  assertIncludes(osascriptLog, "caution-icon", "native failure fallback osascript log");
   console.log("[OK] Password helper falls back to system dialog only when native AppKit cannot open");
 }
 

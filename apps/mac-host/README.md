@@ -31,7 +31,7 @@
 node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword
 ```
 
-`--promptPassword` 会先播放提示音，再优先打开原生 AppKit 前台模态隐藏密码框，并额外请求系统注意、跨 Space 显示和多次拉前台；如果原生窗口打不开，才退回系统 macOS 隐藏密码框。密码只保存在本次进程内，不会写入命令参数、日志或联络板。默认不会退回到终端隐藏输入，避免用户看不到输入位置；即使环境里已有 `LAN_DUAL_PASSWORD`，显式 `--promptPassword` 也会要求用户在前台弹窗里重新输入，避免悄悄复用旧密码。自动化测试可显式关闭弹窗来验证失败路径，人工正式联调不要关闭。
+`--promptPassword` 会先播放两声提示音，并在终端/日志输出一行不含密码的“正在打开密码窗口”提示，再优先打开原生 AppKit 前台警告式隐藏密码框。该窗口会用更高层级、跨 Space 显示、系统注意请求和多次前置来避免落到后台；如果原生窗口打不开，才退回系统 macOS 隐藏密码框。密码只保存在本次进程内，不会写入命令参数、日志或联络板。默认不会退回到终端隐藏输入，避免用户看不到输入位置；即使环境里已有 `LAN_DUAL_PASSWORD`，显式 `--promptPassword` 也会要求用户在前台弹窗里重新输入，避免悄悄复用旧密码。自动化测试可显式关闭弹窗来验证失败路径，人工正式联调不要关闭。
 
 如果只是本机开发快速试跑，可以先干跑查看即将使用的端口、build、局域网地址和输入模式：
 
@@ -89,7 +89,7 @@ node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary
 node scripts/mac/check-mac-formal-local-smoke.mjs --promptPassword
 ```
 
-该脚本会复用 `observe-mac-video`、`observe-mac-audio` 和 `smoke-mac-input-log`，默认要求正式密码来源为 `LAN_DUAL_PASSWORD` 或 `--promptPassword`，并拒绝空密码和 `demo-password`。`--promptPassword` 会先播放提示音，再打开原生 AppKit 前台置顶隐藏密码框；密码只通过子进程环境变量传递，不放进命令参数；脚本不会启动 Mac host、不会切 `inject`，也不会打印密码。自动化需要机器可读结果时可加 `--json`，需要本地假服务回归时才显式加 `--allowDemoPassword`。
+该脚本会复用 `observe-mac-video`、`observe-mac-audio` 和 `smoke-mac-input-log`，默认要求正式密码来源为 `LAN_DUAL_PASSWORD` 或 `--promptPassword`，并拒绝空密码和 `demo-password`。`--promptPassword` 会先播放两声提示音并打印不含密码的弹窗提示，再打开原生 AppKit 前台高层级隐藏密码框；密码只通过子进程环境变量传递，不放进命令参数；脚本不会启动 Mac host、不会切 `inject`，也不会打印密码。自动化需要机器可读结果时可加 `--json`，需要本地假服务回归时才显式加 `--allowDemoPassword`。
 
 启动助手会：
 
@@ -115,7 +115,7 @@ node scripts/mac/test-mac-host-start-helper.mjs
 node scripts/mac/test-mac-password-prompt.mjs
 ```
 
-该脚本使用假的 `osascript`/`swift` 验证提示音、原生前台模态隐藏密码框、额外拉前台、取消和失败路径，不会打开真实系统弹窗，也不会输出密码正文。
+该脚本使用假的 `osascript`/`swift` 验证两声提示音、不含密码的弹窗提示、原生前台高层级隐藏密码框、额外拉前台、取消和失败路径，不会打开真实系统弹窗，也不会输出密码正文。
 
 Mac host 日常一键体检：
 
