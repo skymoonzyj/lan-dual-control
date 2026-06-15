@@ -234,9 +234,9 @@ function buildChecklist(readiness, args) {
   if (clientServer.online && clientServer.titleFound) {
     checklist.push(okItem("client-server", `Mac client page online at ${clientServer.url}`));
   } else if (args.allowClientServerOffline) {
-    checklist.push(warnItem("client-server", `Mac client page offline/unverified at ${clientServer.url || `${args.clientHost}:${args.clientPort}`}`, clientServer.error?.message || "", "Start node apps/mac-client/server.mjs before manual formal validation."));
+    checklist.push(warnItem("client-server", `Mac client page offline/unverified at ${clientServer.url || `${args.clientHost}:${args.clientPort}`}`, clientServer.error?.message || "", "Start with node scripts/mac/start-mac-client.mjs, then rerun this checklist."));
   } else {
-    checklist.push(blockItem("client-server", `Mac client page offline/unverified at ${clientServer.url || `${args.clientHost}:${args.clientPort}`}`, clientServer.error?.message || "", "Start node apps/mac-client/server.mjs, then rerun this checklist."));
+    checklist.push(blockItem("client-server", `Mac client page offline/unverified at ${clientServer.url || `${args.clientHost}:${args.clientPort}`}`, clientServer.error?.message || "", "Start with node scripts/mac/start-mac-client.mjs, then rerun this checklist."));
   }
 
   if (args.skipBoard) {
@@ -321,7 +321,7 @@ function makeBoardSummary(report) {
     `Mac client formal Windows test: ${report.readyToCall ? "ready" : `needs attention (${report.counts.blocker} blocker(s), ${report.counts.warning} warning(s))`}; repo=${repo}; client=${client}; localServer=${localServer}; windowsHost=${hostText}.`,
     report.readyToCall
       ? `Next: run Mac client true test against ${host.probe?.host}:${host.probe?.port}; compare first frame, FPS, frame age, audio playback, clipboard, input-log, bandwidth/CPU.`
-      : "Next: clear blockers, start Mac client page and Windows host, then rerun with --host <Windows IP> --port 43770 --checkBoard --boardSummary.",
+      : "Next: clear blockers, run node scripts/mac/start-mac-client.mjs, start Windows host, then rerun with --host <Windows IP> --port 43770 --checkBoard --boardSummary.",
     "Do not send passwords on Agent Link Board; do not run inject unless the user explicitly confirms they are watching.",
   ].join(" ");
 }

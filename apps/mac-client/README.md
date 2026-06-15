@@ -29,8 +29,7 @@
 在 Mac 上启动控制端页面：
 
 ```bash
-cd apps/mac-client
-node server.mjs
+node scripts/mac/start-mac-client.mjs
 ```
 
 打开：
@@ -38,6 +37,14 @@ node server.mjs
 ```text
 http://127.0.0.1:5188/
 ```
+
+只想检查页面是否已经在线，可运行：
+
+```bash
+node scripts/mac/start-mac-client.mjs --status --boardSummary
+```
+
+该助手只启动/检查本地 Mac 控制端页面，不会连接 Windows host、不会认证、不会要求或打印密码，也不会发送输入事件。需要机器可读结果时可加 `--json`；如果端口上已有页面并希望直接复用，可加 `--allowExisting`；想自动打开浏览器可加 `--open`。
 
 本机联调时，如果不想占用真实 Mac host 的 `43770`，可以在另一个终端启动 Windows host 的 mock/回退服务：
 
@@ -98,6 +105,7 @@ node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 4
 ```bash
 node --check apps/mac-client/server.mjs
 node --check apps/mac-client/app.js
+node scripts/mac/test-mac-client-start-helper.mjs
 node scripts/mac/test-mac-client-readiness.mjs
 node scripts/mac/test-mac-client-formal-status.mjs
 ```

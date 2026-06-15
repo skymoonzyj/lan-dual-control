@@ -19,6 +19,36 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 13:05
+开发端：Mac Codex
+本轮目标：补齐 Mac 控制 Windows 前的本地 Mac client 页面启动/状态入口，让正式清单不再依赖人工记命令。
+完成内容：
+- 新增 `scripts/mac/start-mac-client.mjs`：默认启动 `apps/mac-client/server.mjs` 并等待页面可访问；`--status` 只读检查页面是否在线；`--json` 输出机器可读结果；`--boardSummary` 输出可发联络板的无密摘要；`--allowExisting` 可复用已在线页面；`--open` 可启动后打开浏览器。
+- 新增 `scripts/mac/test-mac-client-start-helper.mjs`，覆盖 help、离线 status JSON、启动成功、重复启动拒绝、`--allowExisting` 复用和不泄露密码。
+- `check-mac-client-formal-status` 在本地页面离线时提示使用 `node scripts/mac/start-mac-client.mjs`，减少正式真连前的手工步骤。
+- `apps/mac-client/README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md` 同步记录新 helper 和推荐流程。
+修改文件：
+- `scripts/mac/start-mac-client.mjs`
+- `scripts/mac/test-mac-client-start-helper.mjs`
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/start-mac-client.mjs`
+- `node --check scripts/mac/test-mac-client-start-helper.mjs`
+- `node scripts/mac/test-mac-client-start-helper.mjs --timeoutMs 12000`
+遗留问题：
+- 该 helper 只启动/检查本地 Mac client 页面；真实连接 Windows host、认证、媒体/剪贴板/input-log 仍需 Windows host 在线后按 formal checklist 发起。
+下一步建议：
+- Windows host 给出 IP/端口后，Mac 侧运行 `node scripts/mac/start-mac-client.mjs --allowExisting`，再运行 `node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary`，ready 后再发 call 做真连观感/延迟/资源对照。
+是否改了协议：否。
+是否需要另一端配合：不需要 Windows 端改代码；真连验收仍需要 Windows 端启动 Windows host 并同步 IP/端口。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 12:45
 开发端：Mac Codex
 本轮目标：按用户反馈继续修正 Mac 侧需要输入密码时看不到输入框的问题，并把本地 Mac formal checklist 基于 Windows 最新提交重放。
