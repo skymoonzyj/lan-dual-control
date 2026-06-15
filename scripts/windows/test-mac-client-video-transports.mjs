@@ -20,6 +20,8 @@ const defaults = {
   wgcNv12ObserveVideoMs: 1200,
   wgcNv12MinObservedVideoFrames: 5,
   wgcNv12MinObservedVideoFps: 4,
+  retries: 1,
+  retryDelayMs: 1500,
   h264Encoder: "",
   wgcHelper: "",
   includeWgcNv12: false,
@@ -121,6 +123,8 @@ Options:
   --clientPort <port>     First Mac client HTTP port. Default: ${defaults.clientPort}
   --debugPort <port>      First browser debugging port. Default: ${defaults.debugPort}
   --timeoutMs <ms>        Per-case browser self-test timeout. Default: ${defaults.timeoutMs}
+  --retries <count>       Retry a failed case before stopping. Default: ${defaults.retries}
+  --retryDelayMs <ms>     Delay before retrying a failed case. Default: ${defaults.retryDelayMs}
   --observeVideoMs <ms>   H.264/fallback observation window. Default: ${defaults.observeVideoMs}
   --binaryJpegObserveVideoMs <ms>  JPEG binary observation window. Default: ${defaults.binaryJpegObserveVideoMs}
   --wgcNv12ObserveVideoMs <ms>     WGC NV12 H.264 observation window. Default: ${defaults.wgcNv12ObserveVideoMs}
@@ -157,6 +161,19 @@ Examples:
   node scripts/windows/test-mac-client-video-transports.mjs --includeWgcNv12 --h264Encoder h264_nvenc
   node scripts/windows/test-mac-client-video-transports.mjs --json
 `);
+}
+
+function finiteNumberOrDefault(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function integerAtLeast(value, fallback, min) {
+  return Math.max(min, Math.trunc(finiteNumberOrDefault(value, fallback)));
+}
+
+function numberAtLeast(value, fallback, min) {
+  return Math.max(min, finiteNumberOrDefault(value, fallback));
 }
 
 function parseArgs(argv) {
@@ -211,26 +228,28 @@ function parseArgs(argv) {
 
     const key = token.startsWith("--") ? token.slice(2) : "";
     if (Object.prototype.hasOwnProperty.call(defaults, key) && next && !next.startsWith("--")) {
-      args[key] = Number(next) || defaults[key];
+      args[key] = Number(next);
       index += 1;
       continue;
     }
     throw new Error(`Unknown argument: ${token}`);
   }
 
-  args.basePort = Math.max(1024, Number(args.basePort) || defaults.basePort);
-  args.clientPort = Math.max(1024, Number(args.clientPort) || defaults.clientPort);
-  args.debugPort = Math.max(1024, Number(args.debugPort) || defaults.debugPort);
-  args.timeoutMs = Math.max(5000, Number(args.timeoutMs) || defaults.timeoutMs);
-  args.observeVideoMs = Math.max(500, Number(args.observeVideoMs) || defaults.observeVideoMs);
-  args.binaryJpegObserveVideoMs = Math.max(500, Number(args.binaryJpegObserveVideoMs) || defaults.binaryJpegObserveVideoMs);
-  args.wgcNv12ObserveVideoMs = Math.max(500, Number(args.wgcNv12ObserveVideoMs) || defaults.wgcNv12ObserveVideoMs);
-  args.minObservedVideoFrames = Math.max(1, Number(args.minObservedVideoFrames) || defaults.minObservedVideoFrames);
-  args.minObservedVideoFps = Math.max(0, Number(args.minObservedVideoFps) || defaults.minObservedVideoFps);
-  args.binaryJpegMinObservedVideoFrames = Math.max(1, Number(args.binaryJpegMinObservedVideoFrames) || defaults.binaryJpegMinObservedVideoFrames);
-  args.binaryJpegMinObservedVideoFps = Math.max(0, Number(args.binaryJpegMinObservedVideoFps) || defaults.binaryJpegMinObservedVideoFps);
-  args.wgcNv12MinObservedVideoFrames = Math.max(1, Number(args.wgcNv12MinObservedVideoFrames) || defaults.wgcNv12MinObservedVideoFrames);
-  args.wgcNv12MinObservedVideoFps = Math.max(0, Number(args.wgcNv12MinObservedVideoFps) || defaults.wgcNv12MinObservedVideoFps);
+  args.basePort = integerAtLeast(args.basePort, defaults.basePort, 1024);
+  args.clientPort = integerAtLeast(args.clientPort, defaults.clientPort, 1024);
+  args.debugPort = integerAtLeast(args.debugPort, defaults.debugPort, 1024);
+  args.timeoutMs = integerAtLeast(args.timeoutMs, defaults.timeoutMs, 5000);
+  args.retries = integerAtLeast(args.retries, defaults.retries, 0);
+  args.retryDelayMs = integerAtLeast(args.retryDelayMs, defaults.retryDelayMs, 0);
+  args.observeVideoMs = integerAtLeast(args.observeVideoMs, defaults.observeVideoMs, 500);
+  args.binaryJpegObserveVideoMs = integerAtLeast(args.binaryJpegObserveVideoMs, defaults.binaryJpegObserveVideoMs, 500);
+  args.wgcNv12ObserveVideoMs = integerAtLeast(args.wgcNv12ObserveVideoMs, defaults.wgcNv12ObserveVideoMs, 500);
+  args.minObservedVideoFrames = integerAtLeast(args.minObservedVideoFrames, defaults.minObservedVideoFrames, 1);
+  args.minObservedVideoFps = numberAtLeast(args.minObservedVideoFps, defaults.minObservedVideoFps, 0);
+  args.binaryJpegMinObservedVideoFrames = integerAtLeast(args.binaryJpegMinObservedVideoFrames, defaults.binaryJpegMinObservedVideoFrames, 1);
+  args.binaryJpegMinObservedVideoFps = numberAtLeast(args.binaryJpegMinObservedVideoFps, defaults.binaryJpegMinObservedVideoFps, 0);
+  args.wgcNv12MinObservedVideoFrames = integerAtLeast(args.wgcNv12MinObservedVideoFrames, defaults.wgcNv12MinObservedVideoFrames, 1);
+  args.wgcNv12MinObservedVideoFps = numberAtLeast(args.wgcNv12MinObservedVideoFps, defaults.wgcNv12MinObservedVideoFps, 0);
   args.h264Encoder = String(args.h264Encoder || "").trim().toLowerCase();
   args.wgcHelper = String(args.wgcHelper || "").trim();
   return args;
@@ -267,11 +286,29 @@ function extractHighlights(output) {
     .map((line) => line.trim());
 }
 
-function runCase(testCase, args, index) {
+function delay(ms) {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, Math.max(0, ms)));
+}
+
+function summarizeAttempt(result) {
+  return {
+    attempt: result.attempt,
+    ok: result.ok,
+    exitCode: result.exitCode,
+    timedOut: result.timedOut,
+    durationMs: result.durationMs,
+    ports: result.ports,
+    highlights: result.highlights,
+    tail: result.ok ? "" : tail(`${result.stdout}\n${result.stderr}`, 12),
+  };
+}
+
+function runCase(testCase, args, index, attempt) {
   return new Promise((resolveRun) => {
-    const port = args.basePort + index;
-    const clientPort = args.clientPort + index;
-    const debugPort = args.debugPort + index;
+    const portOffset = index * (args.retries + 1) + (attempt - 1);
+    const port = args.basePort + portOffset;
+    const clientPort = args.clientPort + portOffset;
+    const debugPort = args.debugPort + portOffset;
     const h264Encoder = typeof testCase.h264Encoder === "function"
       ? testCase.h264Encoder(args)
       : args.h264Encoder;
@@ -304,6 +341,7 @@ function runCase(testCase, args, index) {
       resolveRun({
         id: testCase.id,
         label: testCase.label,
+        attempt,
         ok: false,
         exitCode: null,
         timedOut: true,
@@ -334,6 +372,7 @@ function runCase(testCase, args, index) {
       resolveRun({
         id: testCase.id,
         label: testCase.label,
+        attempt,
         ok: false,
         exitCode: null,
         timedOut: false,
@@ -349,6 +388,7 @@ function runCase(testCase, args, index) {
       resolveRun({
         id: testCase.id,
         label: testCase.label,
+        attempt,
         ok: exitCode === 0,
         exitCode,
         timedOut: false,
@@ -360,6 +400,35 @@ function runCase(testCase, args, index) {
       });
     });
   });
+}
+
+async function runCaseWithRetries(testCase, args, index) {
+  const maxAttempts = args.retries + 1;
+  const attempts = [];
+  let lastResult = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    lastResult = await runCase(testCase, args, index, attempt);
+    attempts.push(summarizeAttempt(lastResult));
+    if (lastResult.ok) {
+      return {
+        ...lastResult,
+        attempts,
+      };
+    }
+
+    if (attempt < maxAttempts) {
+      if (!args.json) {
+        console.log(`[WARN] ${testCase.id}: attempt ${attempt}/${maxAttempts} failed; retrying in ${args.retryDelayMs}ms`);
+      }
+      await delay(args.retryDelayMs);
+    }
+  }
+
+  return {
+    ...lastResult,
+    attempts,
+  };
 }
 
 async function main() {
@@ -384,11 +453,12 @@ async function main() {
     if (!args.json) {
       console.log(`[RUN] ${testCase.id}: ${testCase.label}`);
     }
-    const result = await runCase(testCase, args, index);
+    const result = await runCaseWithRetries(testCase, args, index);
     results.push(result);
     if (!args.json) {
       const status = result.ok ? "OK" : "FAIL";
-      console.log(`[${status}] ${testCase.id}: ${result.durationMs}ms`);
+      const attemptText = result.attempts.length > 1 ? ` after ${result.attempts.length} attempts` : "";
+      console.log(`[${status}] ${testCase.id}: ${result.durationMs}ms${attemptText}`);
       for (const line of result.highlights) {
         console.log(`      ${line}`);
       }
@@ -414,15 +484,19 @@ async function main() {
     includeWgcNv12: args.includeWgcNv12,
     wgcHelper: args.wgcHelper,
     timeoutMs: args.timeoutMs,
+    retries: args.retries,
+    retryDelayMs: args.retryDelayMs,
     results: results.map((result) => ({
       id: result.id,
       label: result.label,
       ok: result.ok,
+      attempt: result.attempt,
       exitCode: result.exitCode,
       timedOut: result.timedOut,
       durationMs: result.durationMs,
       ports: result.ports,
       highlights: result.highlights,
+      attempts: result.attempts,
       tail: result.ok ? "" : tail(`${result.stdout}\n${result.stderr}`),
     })),
   };

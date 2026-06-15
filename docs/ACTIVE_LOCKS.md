@@ -15,7 +15,6 @@
 
 | 端 | 文件或目录 | 原因 | 开始时间 | 状态 |
 | --- | --- | --- | --- | --- |
-| 无 | 无 | 当前没有登记中的文件占用。 | - | - |
 
 ## 高冲突区域
 
@@ -32,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/test-mac-client-video-transports.mjs`, `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 13:55 | 视频传输矩阵新增失败自动重试：默认单 case 失败后重试 1 次并换用新临时端口；`--json` 输出 attempts 摘要，`--retries 0` 可严格复现首败；默认矩阵和 WGC NV12 单项均通过。 |
 | Windows Codex | `scripts/windows/test-mac-client-video-transports.mjs`, `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 13:21 | Mac client 视频传输矩阵新增可选 `wgc-nv12-h264` case：真实 WGC helper + NV12 + `h264_nvenc` 页面级验证 `h264/binary-h264`、2K 设置切换和 `windows-wgc-helper-nv12-ffmpeg-h264` pipeline；默认四项矩阵保持轻量。 |
 | Mac Codex | `scripts/mac/discover-windows-hosts.mjs`, `scripts/mac/test-discover-windows-hosts.mjs`, `scripts/mac/password-prompt.mjs`, `scripts/mac/start-mac-host.mjs`, `scripts/mac/check-mac-host-readiness.mjs`, `scripts/mac/check-mac-formal-local-smoke.mjs`, `scripts/mac/test-mac-password-prompt.mjs`, `scripts/mac/test-mac-host-start-helper.mjs`, `scripts/mac/test-mac-readiness-prompt-password.mjs`, `scripts/mac/test-mac-formal-local-smoke.mjs`, `scripts/mac/check-mac-client-formal-status.mjs`, `scripts/mac/test-mac-client-formal-status.mjs`, `apps/mac-host/README.md`, `apps/mac-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 13:20 | 新增 Mac 侧 Windows host 发现入口：复用 LAN `/discovery` 扫描并过滤 `platform=windows`，输出 formal checklist 下一步命令；formal checklist 离线提示改为先运行发现脚本，不再手工猜 IP。同时按用户反馈调整 `--promptPassword`：即使已有 `LAN_DUAL_PASSWORD` 也会重新弹前台密码框，避免静默复用旧密码。 |
 | Windows Codex | `scripts/windows/check-mac-formal-e2e.mjs`, `scripts/windows/test-mac-formal-e2e-preflight.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 13:08 | formal E2E 无密预检新增 `runPlan`，普通输出和 JSON 都能展示正式验收步骤、耗时、密码传递方式和 `inject=false` 安全边界；回归覆盖 runPlan 不泄露密码。 |

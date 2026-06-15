@@ -19,6 +19,38 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 13:55
+开发端：Windows Codex
+本轮目标：让 Mac client 视频传输矩阵在浏览器或临时 host 端口瞬时释放失败时自动恢复，减少误报。
+完成内容：
+- `scripts/windows/test-mac-client-video-transports.mjs` 新增 `--retries` 和 `--retryDelayMs`，默认单个 case 失败后自动重试 1 次。
+- 每次重试会分配新的临时 Windows host、Mac client 和浏览器 debug 端口，避免上一轮进程释放慢导致继续撞端口。
+- 人类输出会显示失败尝试和最终是否经过重试；`--json` 输出新增 `retries`、`retryDelayMs`、最终 `attempt` 和每次 `attempts` 摘要。
+- README 同步记录默认重试行为；需要严格复现首次失败时可加 `--retries 0`。
+修改文件：
+- `scripts/windows/test-mac-client-video-transports.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-video-transports.mjs`
+- `node scripts/windows/test-mac-client-video-transports.mjs --help`
+- `node scripts/windows/test-windows-script-help.mjs --script test-mac-client-video-transports.mjs`
+- `node scripts/windows/test-mac-client-video-transports.mjs --case binary-h264 --timeoutMs 90000 --h264Encoder h264_nvenc --retries 1 --retryDelayMs 1000`
+- `node scripts/windows/test-mac-client-video-transports.mjs --case h264-json --json --timeoutMs 90000 --h264Encoder h264_nvenc --retries 0`
+- `node scripts/windows/test-mac-client-video-transports.mjs --timeoutMs 90000 --h264Encoder h264_nvenc`
+- `node scripts/windows/test-mac-client-video-transports.mjs --case wgc-nv12-h264 --timeoutMs 90000 --wgcNv12ObserveVideoMs 1500 --wgcNv12MinObservedVideoFrames 5 --wgcNv12MinObservedVideoFps 3 --retries 1`
+遗留问题：
+- 这只是测试矩阵稳定性加固，不改变 Windows host 实际视频管线；真实 Mac 控制 Windows 的观感、延迟和资源仍要真连验证。
+下一步建议：
+- 后续视频传输、H.264 或 WGC NV12 改动继续跑默认矩阵；若要复现首败现场，临时加 `--retries 0`。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 13:21
 开发端：Windows Codex
 本轮目标：把真实 WGC helper + NV12 + NVENC H.264 路线接入 Mac client 视频传输矩阵，作为 Mac 反控 Windows 真连前的页面级守门项。
