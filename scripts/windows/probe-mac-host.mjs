@@ -7,12 +7,24 @@ import path from "node:path";
 const defaults = {
   host: "127.0.0.1",
   port: "43770",
-  password: "demo-password",
+  password: process.env.LAN_DUAL_PASSWORD || "demo-password",
+  passwordProvided: false,
+  promptPassword: false,
+  requirePassword: false,
   timeoutMs: 8000,
   width: 1920,
   height: 1080,
   fps: 60,
   bandwidthKbps: 50000,
+  durationMs: 0,
+  observeVideoMs: 0,
+  observeAudioMs: 0,
+  minVideoFrames: 0,
+  minVideoFps: 0,
+  maxVideoGapMs: 0,
+  minAudioFrames: 0,
+  minAudioFps: 0,
+  maxAudioGapMs: 0,
   clipboardText: false,
   clipboardHostToClient: false,
   clipboardFile: false,
@@ -40,12 +52,23 @@ hello/auth/session negotiation and waits for the first video frame.
 Options:
   --host <host>                       Mac host address. Default: ${defaults.host}
   --port <port>                       Mac host port. Default: ${defaults.port}
-  --password <password>               Probe password. Default: ${defaults.password}
+  --password <password>               Probe password. Default: LAN_DUAL_PASSWORD or demo-password.
+  --promptPassword                    Prompt for the probe password without echoing it.
+  --requirePassword                   Refuse empty/demo-password credentials before connecting.
   --timeoutMs <ms>                    Per-step timeout. Default: ${defaults.timeoutMs}
   --width <px>                        Requested video width. Default: ${defaults.width}
   --height <px>                       Requested video height. Default: ${defaults.height}
   --fps <fps>                         Requested FPS. Default: ${defaults.fps}
   --bandwidthKbps <kbps>              Requested max bandwidth. Default: ${defaults.bandwidthKbps}
+  --durationMs <ms>                   Observe video frames after the first frame. Default: off.
+  --observeVideoMs <ms>               Same as --durationMs, explicit video name.
+  --observeAudioMs <ms>               Observe audio frames after the first audio frame. Default: off.
+  --minVideoFrames <count>            Require at least this many video frames during observation.
+  --minVideoFps <fps>                 Require observed video FPS during observation.
+  --maxVideoGapMs <ms>                Fail if video frame arrival gap exceeds this value.
+  --minAudioFrames <count>            Require at least this many audio frames during observation.
+  --minAudioFps <fps>                 Require observed audio FPS during observation.
+  --maxAudioGapMs <ms>                Fail if audio frame arrival gap exceeds this value.
   --preferredVideoCodec <codec>       Requested codec: mjpeg or h264. Default: ${defaults.preferredVideoCodec}
   --requireRealVideo                  Reject mock/svg video frames.
   --requireH264                       Require H.264 Annex B video; implies preferred codec h264.
@@ -61,8 +84,9 @@ Options:
   --clipboardFileBytes <bytes>        Size of synthetic clipboard file. Default: ${defaults.clipboardFileBytes}
 
 Examples:
-  node scripts/windows/probe-mac-host.mjs --host 127.0.0.1 --port 43770 --requireH264 --expectInputMode log
-  node scripts/windows/probe-mac-host.mjs --host 192.168.1.20 --port 43770 --requireAudio
+  node scripts/windows/probe-mac-host.mjs --host 127.0.0.1 --port 43770 --promptPassword --requirePassword --requireH264 --expectInputMode log
+  node scripts/windows/probe-mac-host.mjs --host 192.168.1.20 --port 43770 --promptPassword --requirePassword --requireAudio
+  node scripts/windows/probe-mac-host.mjs --host 192.168.1.20 --port 43770 --promptPassword --requirePassword --requireH264 --durationMs 300000 --minVideoFps 5 --maxVideoGapMs 3000
   node scripts/windows/probe-mac-host.mjs --clipboardRoundTrip --expectInputMode log
 `);
 }
@@ -75,18 +99,35 @@ function parseArgs(argv) {
     const key = item.slice(2);
     const next = argv[index + 1];
     if (!next || next.startsWith("--")) {
+      if (key === "password") {
+        args.passwordProvided = true;
+      }
       args[key] = true;
       continue;
+    }
+    if (key === "password") {
+      args.passwordProvided = true;
     }
     args[key] = next;
     index += 1;
   }
   args.port = String(args.port);
+  args.promptPassword = booleanArg(args.promptPassword);
+  args.requirePassword = booleanArg(args.requirePassword);
   args.timeoutMs = Number(args.timeoutMs) || defaults.timeoutMs;
   args.width = Number(args.width) || defaults.width;
   args.height = Number(args.height) || defaults.height;
   args.fps = Number(args.fps) || defaults.fps;
   args.bandwidthKbps = Number(args.bandwidthKbps) || defaults.bandwidthKbps;
+  args.durationMs = Math.max(0, Number(args.durationMs) || 0);
+  args.observeVideoMs = Math.max(0, Number(args.observeVideoMs) || args.durationMs || 0);
+  args.observeAudioMs = Math.max(0, Number(args.observeAudioMs) || 0);
+  args.minVideoFrames = Math.max(0, Number(args.minVideoFrames) || 0);
+  args.minVideoFps = Math.max(0, Number(args.minVideoFps) || 0);
+  args.maxVideoGapMs = Math.max(0, Number(args.maxVideoGapMs) || 0);
+  args.minAudioFrames = Math.max(0, Number(args.minAudioFrames) || 0);
+  args.minAudioFps = Math.max(0, Number(args.minAudioFps) || 0);
+  args.maxAudioGapMs = Math.max(0, Number(args.maxAudioGapMs) || 0);
   const clipboardRoundTrip = booleanArg(args.clipboardRoundTrip);
   const clipboardFileRoundTrip = booleanArg(args.clipboardFileRoundTrip);
   args.clipboardText = booleanArg(args.clipboardText) || booleanArg(args.clipboard) || clipboardRoundTrip;
@@ -261,12 +302,9 @@ function createSocketClient(socket, args) {
       return;
     }
 
-    if (message.type === "audio_frame") {
-      return;
-    }
-
     const queue = queues.get(message.type) || [];
-    if (message.type === "video_frame" && queue.length >= 2) {
+    const maxQueued = message.type === "video_frame" || message.type === "audio_frame" ? 10 : 50;
+    if (queue.length >= maxQueued) {
       queue.shift();
     }
     queue.push(message);
@@ -404,6 +442,90 @@ function normalizedText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+async function preparePassword(args) {
+  if (args.promptPassword && args.passwordProvided) {
+    throw new Error("--promptPassword cannot be combined with --password.");
+  }
+  if (args.promptPassword && process.env.LAN_DUAL_PASSWORD) {
+    throw new Error("--promptPassword refuses to override an existing LAN_DUAL_PASSWORD. Unset it or omit --promptPassword.");
+  }
+  if (args.promptPassword) {
+    args.password = await promptHidden("Mac host password: ");
+    if (!args.password) {
+      throw new Error("Password cannot be empty when --promptPassword is used.");
+    }
+  }
+  const effectivePassword = String(args.password || "");
+  if (args.requirePassword && !effectivePassword) {
+    throw new Error("LAN_DUAL_PASSWORD is required. Set it in the environment, pass --password, or use --promptPassword.");
+  }
+  if (args.requirePassword && effectivePassword === "demo-password") {
+    throw new Error("Refusing to use demo-password when --requirePassword is used.");
+  }
+}
+
+function promptHidden(label) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return Promise.reject(new Error("--promptPassword requires an interactive terminal."));
+  }
+
+  return new Promise((resolvePrompt, rejectPrompt) => {
+    const stdin = process.stdin;
+    const stdout = process.stdout;
+    const previousRawMode = stdin.isRaw;
+    let value = "";
+    let settled = false;
+
+    const cleanup = () => {
+      stdin.off("data", onData);
+      if (typeof stdin.setRawMode === "function") {
+        stdin.setRawMode(Boolean(previousRawMode));
+      }
+      stdin.pause();
+    };
+    const finish = (result, error = null) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      stdout.write("\n");
+      if (error) {
+        rejectPrompt(error);
+      } else {
+        resolvePrompt(result);
+      }
+    };
+    const onData = (chunk) => {
+      const text = String(chunk);
+      for (const char of text) {
+        const code = char.charCodeAt(0);
+        if (char === "\r" || char === "\n") {
+          finish(value);
+          return;
+        }
+        if (code === 3) {
+          finish("", new Error("Password prompt cancelled."));
+          return;
+        }
+        if (code === 8 || code === 127) {
+          value = value.slice(0, -1);
+          continue;
+        }
+        if (code >= 32) {
+          value += char;
+        }
+      }
+    };
+
+    stdout.write(label);
+    stdin.resume();
+    stdin.setEncoding("utf8");
+    if (typeof stdin.setRawMode === "function") {
+      stdin.setRawMode(true);
+    }
+    stdin.on("data", onData);
+  });
+}
+
 function assertExpectedInputMode({ args, discovery, hello, answer }) {
   if (!args.expectInputMode) return;
 
@@ -425,7 +547,7 @@ function assertExpectedInputMode({ args, discovery, hello, answer }) {
   print("OK", `Input mode: ${args.expectInputMode}`);
 }
 
-function assertRealVideoFrame(frame, answer) {
+function assertRealVideoFrame(frame, answer, { silent = false } = {}) {
   const codec = normalizedText(frame.codec).toLowerCase();
   const answerCodec = normalizedText(answer?.videoCodec).toLowerCase();
   const dataUrl = normalizedText(frame.dataUrl).toLowerCase();
@@ -461,10 +583,12 @@ function assertRealVideoFrame(frame, answer) {
     throw new Error(`real video required but got ${summarizeFrame(frame)} (${problems.join("; ")})`);
   }
 
-  print("OK", `Real video confirmed: ${codec} / ${pipeline || "pipeline unknown"} / source=${source || "unknown"}`);
+  if (!silent) {
+    print("OK", `Real video confirmed: ${codec} / ${pipeline || "pipeline unknown"} / source=${source || "unknown"}`);
+  }
 }
 
-function assertH264VideoFrame(frame, answer) {
+function assertH264VideoFrame(frame, answer, { silent = false } = {}) {
   const codec = normalizedText(frame.codec).toLowerCase();
   const answerCodec = normalizedText(answer?.videoCodec).toLowerCase();
   const encoding = normalizedText(frame.encoding).toLowerCase();
@@ -531,7 +655,9 @@ function assertH264VideoFrame(frame, answer) {
     throw new Error(`H.264 required but got ${summarizeFrame(frame)} (${problems.join("; ")})`);
   }
 
-  print("OK", `H.264 video confirmed: ${encoding} / ${pipeline} / codecString=${codecString} / nalTypes=${summarizeNalTypes(nalUnits)}`);
+  if (!silent) {
+    print("OK", `H.264 video confirmed: ${encoding} / ${pipeline} / codecString=${codecString} / nalTypes=${summarizeNalTypes(nalUnits)}`);
+  }
 }
 
 function summarizeAudioFrame(frame) {
@@ -549,7 +675,7 @@ function summarizeAudioFrame(frame) {
   ].filter(Boolean).join(" / ");
 }
 
-function assertAudioFrame(frame, answer) {
+function assertAudioFrame(frame, answer, { silent = false } = {}) {
   const codec = normalizedText(frame.codec).toLowerCase();
   const encoding = normalizedText(frame.encoding).toLowerCase();
   const audioMode = normalizedText(frame.audioMode || answer?.audioMode).toLowerCase();
@@ -607,7 +733,173 @@ function assertAudioFrame(frame, answer) {
     throw new Error(`PCM audio required but got ${summarizeAudioFrame(frame)} (${problems.join("; ")})`);
   }
 
-  print("OK", `Audio frame confirmed: ${summarizeAudioFrame(frame)}`);
+  if (!silent) {
+    print("OK", `Audio frame confirmed: ${summarizeAudioFrame(frame)}`);
+  }
+}
+
+function estimateFrameBytes(frame) {
+  const payload = typeof frame.payload === "string" ? frame.payload.trim() : "";
+  if (payload) {
+    return Math.round((payload.length * 3) / 4);
+  }
+  const dataUrl = typeof frame.dataUrl === "string" ? frame.dataUrl : "";
+  const comma = dataUrl.indexOf(",");
+  const encoded = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  return encoded ? Math.round((encoded.length * 3) / 4) : 0;
+}
+
+function createMediaStats(kind, maxGapMs) {
+  return {
+    kind,
+    maxGapLimitMs: maxGapMs,
+    frames: 0,
+    startedAt: performance.now(),
+    firstAt: 0,
+    lastAt: 0,
+    maxGapMs: 0,
+    totalBytes: 0,
+    codecs: new Map(),
+    pipelines: new Map(),
+  };
+}
+
+function incrementCount(map, value) {
+  const key = normalizedText(value) || "unknown";
+  map.set(key, (map.get(key) || 0) + 1);
+}
+
+function recordMediaFrame(stats, frame, answer) {
+  const now = performance.now();
+  if (!stats.firstAt) {
+    stats.firstAt = now;
+  }
+  if (stats.lastAt) {
+    const gapMs = now - stats.lastAt;
+    stats.maxGapMs = Math.max(stats.maxGapMs, gapMs);
+    if (stats.maxGapLimitMs > 0 && gapMs > stats.maxGapLimitMs) {
+      throw new Error(`${stats.kind} frame gap ${Math.round(gapMs)} ms exceeded ${stats.maxGapLimitMs} ms`);
+    }
+  }
+  stats.lastAt = now;
+  stats.frames += 1;
+  stats.totalBytes += estimateFrameBytes(frame);
+  incrementCount(stats.codecs, frame.codec || answer?.videoCodec || answer?.audioCodec);
+  incrementCount(stats.pipelines, frame.capturePipeline || frame.audioMode || answer?.capturePipeline || answer?.audioMode);
+}
+
+function summarizeCounts(map) {
+  return [...map.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .map(([name, count]) => `${name}:${count}`)
+    .join(", ");
+}
+
+function finishMediaStats(stats) {
+  const endedAt = performance.now();
+  const elapsedMs = Math.max(1, endedAt - stats.startedAt);
+  const fps = (stats.frames * 1000) / elapsedMs;
+  return {
+    ...stats,
+    elapsedMs,
+    fps,
+    averageBytes: stats.frames > 0 ? Math.round(stats.totalBytes / stats.frames) : 0,
+  };
+}
+
+function assertMediaStats(summary, { minFrames, minFps, label }) {
+  const problems = [];
+  if (minFrames > 0 && summary.frames < minFrames) {
+    problems.push(`frames=${summary.frames}/${minFrames}`);
+  }
+  if (minFps > 0 && summary.fps < minFps) {
+    problems.push(`fps=${summary.fps.toFixed(2)}/${minFps}`);
+  }
+  if (problems.length > 0) {
+    throw new Error(`${label} observation failed: ${problems.join("; ")}`);
+  }
+}
+
+async function observeVideoFrames(client, args, answer, firstFrame) {
+  if (!args.observeVideoMs) return;
+
+  const stats = createMediaStats("video", args.maxVideoGapMs);
+  if (args.requireH264) {
+    assertH264VideoFrame(firstFrame, answer, { silent: true });
+  } else if (args.requireRealVideo) {
+    assertRealVideoFrame(firstFrame, answer, { silent: true });
+  }
+  recordMediaFrame(stats, firstFrame, answer);
+
+  const deadline = performance.now() + args.observeVideoMs;
+  while (performance.now() < deadline) {
+    const remainingMs = deadline - performance.now();
+    const waitMs = Math.max(1, Math.min(remainingMs, args.maxVideoGapMs || args.timeoutMs));
+    try {
+      const frame = await client.waitFor("video_frame", waitMs);
+      if (args.requireH264) {
+        assertH264VideoFrame(frame, answer, { silent: true });
+      } else if (args.requireRealVideo) {
+        assertRealVideoFrame(frame, answer, { silent: true });
+      }
+      recordMediaFrame(stats, frame, answer);
+    } catch (error) {
+      if (args.maxVideoGapMs > 0) {
+        throw new Error(`video observation timed out before next frame: ${error.message}`);
+      }
+    }
+  }
+
+  const summary = finishMediaStats(stats);
+  assertMediaStats(summary, {
+    minFrames: args.minVideoFrames,
+    minFps: args.minVideoFps,
+    label: "video",
+  });
+  print(
+    "OK",
+    `Video observed: ${summary.frames} frames / ${(summary.elapsedMs / 1000).toFixed(1)}s / ${summary.fps.toFixed(2)} FPS / max gap ${Math.round(summary.maxGapMs)} ms / avg ${summary.averageBytes} bytes / codecs ${summarizeCounts(summary.codecs)} / pipelines ${summarizeCounts(summary.pipelines)}`,
+  );
+}
+
+async function observeAudioFrames(client, args, answer, firstAudioFrame = null) {
+  if (!args.observeAudioMs) return firstAudioFrame;
+
+  const stats = createMediaStats("audio", args.maxAudioGapMs);
+  let audioFrame = firstAudioFrame;
+  if (!audioFrame) {
+    audioFrame = await client.waitFor("audio_frame", Math.max(args.timeoutMs, args.maxAudioGapMs || 0, 10000));
+    assertAudioFrame(audioFrame, answer, { silent: true });
+  }
+  recordMediaFrame(stats, audioFrame, answer);
+
+  const deadline = performance.now() + args.observeAudioMs;
+  while (performance.now() < deadline) {
+    const remainingMs = deadline - performance.now();
+    const waitMs = Math.max(1, Math.min(remainingMs, args.maxAudioGapMs || args.timeoutMs));
+    try {
+      const frame = await client.waitFor("audio_frame", waitMs);
+      assertAudioFrame(frame, answer, { silent: true });
+      recordMediaFrame(stats, frame, answer);
+    } catch (error) {
+      if (args.maxAudioGapMs > 0) {
+        throw new Error(`audio observation timed out before next frame: ${error.message}`);
+      }
+    }
+  }
+
+  const summary = finishMediaStats(stats);
+  assertMediaStats(summary, {
+    minFrames: args.minAudioFrames,
+    minFps: args.minAudioFps,
+    label: "audio",
+  });
+  print(
+    "OK",
+    `Audio observed: ${summary.frames} frames / ${(summary.elapsedMs / 1000).toFixed(1)}s / ${summary.fps.toFixed(2)} FPS / max gap ${Math.round(summary.maxGapMs)} ms / avg ${summary.averageBytes} bytes / codecs ${summarizeCounts(summary.codecs)} / modes ${summarizeCounts(summary.pipelines)}`,
+  );
+
+  return audioFrame;
 }
 
 async function probeClipboardText(client, args) {
@@ -940,6 +1232,13 @@ async function main() {
   }
 
   const args = parseArgs(process.argv.slice(2));
+  try {
+    await preparePassword(args);
+  } catch (error) {
+    fail(error.message);
+    return;
+  }
+
   print("INFO", `Target: ${args.host}:${args.port}`);
 
   let discovery;
@@ -1008,10 +1307,14 @@ async function main() {
     } else if (args.requireRealVideo) {
       assertRealVideoFrame(frame, answer);
     }
+    await observeVideoFrames(client, args, answer, frame);
+
+    let audioFrame = null;
     if (args.requireAudio) {
-      const audioFrame = await client.waitFor("audio_frame", Math.max(args.timeoutMs, 10000));
+      audioFrame = await client.waitFor("audio_frame", Math.max(args.timeoutMs, 10000));
       assertAudioFrame(audioFrame, answer);
     }
+    await observeAudioFrames(client, args, answer, audioFrame);
 
     if (args.clipboardText) {
       await probeClipboardText(client, args);
