@@ -30,6 +30,8 @@ const defaults = {
   skipClipboard: false,
   skipFileClipboard: false,
   skipInputLog: false,
+  preflightOnly: false,
+  json: false,
   fastProfile: false,
 };
 
@@ -75,9 +77,12 @@ Options:
   --skipClipboard                Skip text and file clipboard probes.
   --skipFileClipboard            Skip file clipboard probe only.
   --skipInputLog                 Skip safe input-log probe.
+  --preflightOnly                Only read /discovery and print a readiness summary.
+  --json                         With --preflightOnly, print a single machine-readable JSON object.
   --help, -h                     Show this help.
 
 Examples:
+  node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --promptPassword
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --promptPassword --fastProfile
   node scripts/windows/check-mac-formal-e2e.mjs --host 127.0.0.1 --allowDemoPassword --allowMockVideo --skipAudio --skipBrowser
@@ -106,6 +111,8 @@ function parseArgs(argv) {
       key === "skipClipboard" ||
       key === "skipFileClipboard" ||
       key === "skipInputLog" ||
+      key === "preflightOnly" ||
+      key === "json" ||
       key === "fastProfile"
     ) {
       args[key] = true;
@@ -152,6 +159,180 @@ function parseArgs(argv) {
 
 function print(kind, text) {
   console.log(`[${kind}] ${text}`);
+}
+
+function makeFormalCommand(args) {
+  return [
+    "node",
+    "scripts/windows/check-mac-formal-e2e.mjs",
+    "--host", args.host,
+    "--port", String(args.port),
+    "--promptPassword",
+  ].join(" ");
+}
+
+async function fetchDiscovery(args) {
+  const startedAt = performance.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), args.timeoutMs);
+  try {
+    const response = await fetch(`http://${args.host}:${args.port}/discovery`, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const discovery = await response.json();
+    return {
+      ok: true,
+      latencyMs: Math.round(performance.now() - startedAt),
+      discovery,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function makePreflightReport(args, discoveryResult) {
+  const discovery = discoveryResult.discovery || null;
+  const capabilities = discovery?.capabilities || {};
+  const runtime = discovery?.runtime || null;
+  const permissions = discovery?.permissions || capabilities.permissions || null;
+  const displays = Array.isArray(capabilities.displays) ? capabilities.displays : [];
+  const checks = [];
+  const addCheck = (name, ok, detail = "") => {
+    checks.push({ name, ok: Boolean(ok), detail });
+  };
+
+  addCheck("platform", discovery?.platform === "macos", discovery?.platform || "missing");
+  addCheck("video", capabilities.video === true, `video=${String(capabilities.video)}`);
+  addCheck(
+    "h264",
+    args.allowMockVideo || capabilities.h264Stream === true,
+    `h264Stream=${String(capabilities.h264Stream)}${args.allowMockVideo ? " (mock allowed)" : ""}`,
+  );
+  addCheck(
+    "realVideo",
+    args.allowMockVideo || capabilities.mock !== true,
+    `mock=${String(capabilities.mock)}${args.allowMockVideo ? " (mock allowed)" : ""}`,
+  );
+  if (!args.skipAudio) {
+    addCheck("audio", capabilities.audio === true, `audio=${String(capabilities.audio)} / ${capabilities.audioMode || "mode unknown"}`);
+  }
+  if (!args.skipClipboard) {
+    addCheck("clipboardText", capabilities.clipboardText === true, `clipboardText=${String(capabilities.clipboardText)}`);
+    if (!args.skipFileClipboard) {
+      addCheck("clipboardFile", capabilities.clipboardFile === true, `clipboardFile=${String(capabilities.clipboardFile)}`);
+    }
+  }
+  if (!args.skipInputLog) {
+    addCheck("inputMode", String(capabilities.inputMode || "").toLowerCase() === "log", `inputMode=${capabilities.inputMode || "missing"}`);
+  }
+
+  const failed = checks.filter((check) => !check.ok);
+  return {
+    ok: failed.length === 0,
+    online: true,
+    target: { host: args.host, port: Number(args.port) },
+    latencyMs: discoveryResult.latencyMs,
+    device: {
+      id: discovery?.deviceId || "",
+      name: discovery?.deviceName || discovery?.hostName || "",
+      platform: discovery?.platform || "",
+      role: discovery?.role || "",
+    },
+    runtime,
+    permissions,
+    capabilities: {
+      video: capabilities.video === true,
+      h264Stream: capabilities.h264Stream === true,
+      audio: capabilities.audio === true,
+      audioMode: capabilities.audioMode || "",
+      clipboardText: capabilities.clipboardText === true,
+      clipboardFile: capabilities.clipboardFile === true,
+      inputMode: capabilities.inputMode || "",
+      mock: capabilities.mock === true,
+      capturePipeline: capabilities.capturePipeline || "",
+      maxScreenFps: Number(capabilities.maxScreenFps) || null,
+      displayCount: displays.length,
+      displays,
+    },
+    checks,
+    failedChecks: failed,
+    command: makeFormalCommand(args),
+  };
+}
+
+function makeOfflinePreflightReport(args, error) {
+  return {
+    ok: false,
+    online: false,
+    target: { host: args.host, port: Number(args.port) },
+    error: {
+      message: error.message,
+      name: error.name || "Error",
+    },
+    checks: [
+      {
+        name: "discovery",
+        ok: false,
+        detail: error.message,
+      },
+    ],
+    failedChecks: [
+      {
+        name: "discovery",
+        ok: false,
+        detail: error.message,
+      },
+    ],
+    command: makeFormalCommand(args),
+  };
+}
+
+function printPreflightReport(report) {
+  if (!report.online) {
+    print("ERROR", `Mac host discovery offline: ${report.error?.message || "unknown error"}`);
+    print("INFO", `Target: ${report.target.host}:${report.target.port}`);
+    print("INFO", "Ask Mac side to confirm the host is running before entering the password.");
+    return;
+  }
+
+  print("OK", `Mac host discovery: ${report.device.name || "Mac host"} / ${report.target.host}:${report.target.port} / ${report.latencyMs}ms`);
+  if (report.runtime) {
+    print("INFO", `Runtime: pid=${report.runtime.processId || "?"} build=${report.runtime.buildId || "?"} uptime=${report.runtime.uptimeSeconds || "?"}s`);
+  }
+  print(
+    "INFO",
+    `Capabilities: h264=${report.capabilities.h264Stream} audio=${report.capabilities.audio} clipboardText=${report.capabilities.clipboardText} clipboardFile=${report.capabilities.clipboardFile} inputMode=${report.capabilities.inputMode || "missing"} mock=${report.capabilities.mock}`,
+  );
+  if (report.capabilities.displayCount > 0) {
+    const displays = report.capabilities.displays
+      .map((display) => `${display.id || "display"}${display.primary ? "*" : ""}:${display.width || "?"}x${display.height || "?"}`)
+      .join(", ");
+    print("INFO", `Displays: ${displays}`);
+  }
+  for (const check of report.checks) {
+    print(check.ok ? "OK" : "WARN", `${check.name}: ${check.detail}`);
+  }
+  print("INFO", `Formal command: ${report.command}`);
+}
+
+async function runPreflight(args) {
+  let report;
+  try {
+    report = makePreflightReport(args, await fetchDiscovery(args));
+  } catch (error) {
+    report = makeOfflinePreflightReport(args, error);
+  }
+  if (args.json) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    printPreflightReport(report);
+  }
+  process.exitCode = report.ok ? 0 : 1;
+  return report;
 }
 
 async function preparePassword(args) {
@@ -321,6 +502,19 @@ async function main() {
   }
 
   const args = parseArgs(process.argv);
+  if (args.json && !args.preflightOnly) {
+    throw new Error("--json is only supported with --preflightOnly.");
+  }
+  if (args.preflightOnly) {
+    await runPreflight(args);
+    return;
+  }
+
+  const preflightReport = await runPreflight({ ...args, json: false });
+  if (!preflightReport.ok) {
+    throw new Error("Preflight failed. Fix the Mac host readiness issue before entering the password.");
+  }
+
   await preparePassword(args);
   const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
   const childEnv = {

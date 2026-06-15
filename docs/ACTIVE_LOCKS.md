@@ -32,6 +32,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/check-mac-formal-e2e.mjs`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 10:45 | Windows formal E2E runner 新增无密码 `--preflightOnly` 和 `--preflightOnly --json`，可只读检查 Mac host `/discovery`、能力、inputMode 和正式验收命令；正式长测前会先预检，失败时不提示输入密码。 |
 | Windows Codex | `scripts/windows/check-mac-formal-e2e.mjs`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 10:36 | 新增 Windows 侧正式 Mac E2E 聚合脚本：一次安全取密码，顺序运行协议/媒体/剪贴板/input-log 探针和页面级 H.264 自检；密码只通过环境变量传给子进程，不放命令参数。 |
 | Windows Codex | `scripts/windows/test-windows-client-browser.mjs`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 10:28 | Windows 控制端页面级自检支持 `LAN_DUAL_PASSWORD`、`--promptPassword`、`--requirePassword`，正式 Mac host 页面验收可避免把密码放进命令参数。 |
 | Windows Codex | `scripts/windows/probe-mac-host.mjs`, `scripts/windows/test-mac-host.ps1`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 10:18 | Windows 正式 Mac host 探针支持 `LAN_DUAL_PASSWORD`、`--promptPassword`、`--requirePassword`，并新增视频/音频持续观察参数；本机假 Mac Node/PowerShell 路径通过，未执行 inject。 |
