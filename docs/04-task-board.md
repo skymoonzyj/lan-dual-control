@@ -53,6 +53,12 @@ Windows 端：
 - [x] 保存连接方式、地址、端口和画质设置。
 - [x] 增加最近连接列表。
 - [x] 增加连接状态机。
+
+## Mac 反控 Windows 真连准备
+
+- [x] 新增 Mac 控制端本地页面启动/状态助手。
+- [x] 新增 Mac 控制 Windows 前的只读 readiness 和 formal checklist。
+- [x] 新增 Mac 侧 Windows host 发现入口：`scripts/mac/discover-windows-hosts.mjs --boardSummary` 只读扫描 `/discovery`，过滤 `platform=windows`，输出下一步 formal checklist 命令；不认证、不要求密码、不发送输入、不执行 `inject`。
 - [x] 增加中文错误提示。
 - [x] 增加假 Mac 错误模拟。
 - [x] 增加意外断线自动重连。

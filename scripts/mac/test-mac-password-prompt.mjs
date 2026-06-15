@@ -98,7 +98,7 @@ process.stdin.on("data", (chunk) => {
 process.stdin.on("end", () => {
   const log = process.env.FAKE_SWIFT_LOG;
   if (log) {
-    appendFileSync(log, \`swift\\n\${source.includes("NSApplication.shared") ? "appkit\\n" : ""}\${source.includes("window.level = .floating") ? "floating\\n" : ""}\${source.includes("orderFrontRegardless") ? "order-front\\n" : ""}\${source.includes("makeFirstResponder") ? "first-responder\\n" : ""}\`);
+    appendFileSync(log, \`swift\\n\${source.includes("NSApplication.shared") ? "appkit\\n" : ""}\${source.includes("window.level = .floating") ? "floating\\n" : ""}\${source.includes("orderFrontRegardless") ? "order-front\\n" : ""}\${source.includes("makeFirstResponder") ? "first-responder\\n" : ""}\${source.includes("activate(ignoringOtherApps: true)") && source.includes(".activateIgnoringOtherApps") ? "ignore-other-apps\\n" : ""}\`);
   }
   if (process.env.FAKE_SWIFT_MODE === "cancel") {
     console.error("Password prompt cancelled.");
@@ -177,6 +177,7 @@ function checkDialogSuccess(tmp, timeoutMs) {
   assertIncludes(swiftLog, "floating", "dialog success native log");
   assertIncludes(swiftLog, "order-front", "dialog success native log");
   assertIncludes(swiftLog, "first-responder", "dialog success native log");
+  assertIncludes(swiftLog, "ignore-other-apps", "dialog success native log");
   assertIncludes(osascriptLog, "beep", "dialog success osascript log");
   assertNotIncludes(osascriptLog, "dialog", "dialog success should not use fallback dialog");
   console.log("[OK] Password helper rings and reads a frontmost native macOS dialog value");

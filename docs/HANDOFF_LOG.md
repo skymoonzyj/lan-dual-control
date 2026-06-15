@@ -84,6 +84,65 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 13:20
+开发端：Mac Codex
+本轮目标：减少 Mac 控制 Windows 真连前手工猜 Windows IP 的步骤，补一个 Mac 侧只读 Windows host 发现入口；同时按用户反馈让显式密码输入每次都弹出可见前台窗口。
+完成内容：
+- `--promptPassword` 继续先响铃再打开前台置顶原生 AppKit 隐藏密码框；显式要求弹窗时，即使环境里已有 `LAN_DUAL_PASSWORD`，也不会静默复用旧值，而是要求用户在弹窗里重新输入。
+- 新增 `scripts/mac/discover-windows-hosts.mjs`：复用现有 `scripts/windows/discover-lan-hosts.mjs` 扫描 `/discovery`，但只保留 `platform=windows` 的目标。
+- 发现到 Windows host 时，输出可直接运行的 `node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port <port> --boardSummary`；未发现时说明只看到非 Windows/self host 或没有 Windows host，并提示让 Windows Codex 启动 host 后重试。
+- 支持 `--json`、`--boardSummary`、`--requireFound`、`--host`、`--subnet`、`--port`、`--timeoutMs` 等参数；脚本只读，不认证 WebSocket、不要求或打印密码、不发送输入、不执行 `inject`。
+- 新增 `scripts/mac/test-discover-windows-hosts.mjs`，用假底层扫描器覆盖发现 Windows、过滤 Mac/self、无 Windows 时 `--requireFound` 失败和摘要不泄密。
+- `check-mac-client-formal-status` 的 help、离线 checklist、callText 和 boardSummary 改为优先提示运行 `discover-windows-hosts`，并修正旧提示里不存在的 `--checkBoard` 参数。
+- `apps/mac-client/README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md`、`docs/ACTIVE_LOCKS.md` 已同步。
+修改文件：
+- `scripts/mac/discover-windows-hosts.mjs`
+- `scripts/mac/test-discover-windows-hosts.mjs`
+- `scripts/mac/password-prompt.mjs`
+- `scripts/mac/start-mac-host.mjs`
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `scripts/mac/check-mac-formal-local-smoke.mjs`
+- `scripts/mac/test-mac-password-prompt.mjs`
+- `scripts/mac/test-mac-host-start-helper.mjs`
+- `scripts/mac/test-mac-readiness-prompt-password.mjs`
+- `scripts/mac/test-mac-formal-local-smoke.mjs`
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `apps/mac-host/README.md`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/discover-windows-hosts.mjs`
+- `node --check scripts/mac/test-discover-windows-hosts.mjs`
+- `node --check scripts/mac/password-prompt.mjs`
+- `node --check scripts/mac/start-mac-host.mjs`
+- `node --check scripts/mac/check-mac-host-readiness.mjs`
+- `node --check scripts/mac/check-mac-formal-local-smoke.mjs`
+- `node --check scripts/mac/test-mac-password-prompt.mjs`
+- `node --check scripts/mac/test-mac-host-start-helper.mjs`
+- `node --check scripts/mac/test-mac-readiness-prompt-password.mjs`
+- `node --check scripts/mac/test-mac-formal-local-smoke.mjs`
+- `node scripts/mac/test-mac-password-prompt.mjs --timeoutMs 8000`
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-readiness-prompt-password.mjs --timeoutMs 8000`
+- `node scripts/mac/test-mac-formal-local-smoke.mjs --timeoutMs 20000`
+- `node scripts/mac/test-discover-windows-hosts.mjs --timeoutMs 10000`
+- `node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 15000`
+- `node scripts/mac/test-mac-script-help.mjs --script discover-windows-hosts.mjs --script test-discover-windows-hosts.mjs --script check-mac-client-formal-status.mjs --timeoutMs 8000`
+遗留问题：
+- 当前真实局域网发现仍取决于 Windows host 是否启动；脚本不会替 Windows 启动 host，只负责 Mac 侧发现和下一步命令生成。
+下一步建议：
+- Windows host 启动后，Mac 侧先运行 `node scripts/mac/discover-windows-hosts.mjs --boardSummary`，再用输出的 formal checklist 命令确认 `readyToCall`，随后发 Agent Link Board call 做真连观感/延迟/资源对照。
+- 任何真实 `--promptPassword` 前仍会先响铃；需要系统授权/点击时再用 `NEED_USER_AUTH`/提示音叫用户，不在联络板发送密码。
+是否改了协议：否。
+是否需要另一端配合：真连验收需要 Windows 端启动 Windows host；代码改动不需要 Windows 修改。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 13:00
 开发端：Mac Codex
 本轮目标：按用户现场反馈“没有看到输入密码的地方”，再次加固 Mac 侧 `--promptPassword` 的可见性，确保需要用户输入密码时先响铃再弹出真正前台窗口。

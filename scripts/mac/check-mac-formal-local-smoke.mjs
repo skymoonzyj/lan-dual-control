@@ -190,9 +190,6 @@ async function preparePassword(args) {
     if (args.passwordFromArg) {
       throw new Error("--promptPassword cannot be combined with --password.");
     }
-    if (process.env.LAN_DUAL_PASSWORD) {
-      throw new Error("--promptPassword refuses to override LAN_DUAL_PASSWORD. Unset it or omit --promptPassword.");
-    }
     args.password = await promptMacPassword({
       title: "LAN Dual Control",
       message: "Enter the formal Mac host smoke password. It is only used for this local smoke check and is not printed.",

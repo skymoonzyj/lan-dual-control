@@ -50,6 +50,7 @@ Options:
 
 Examples:
   node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.50 --port 43770 --boardSummary
+  node scripts/mac/discover-windows-hosts.mjs --boardSummary
   node scripts/mac/check-mac-client-formal-status.mjs --json --skipBoard --allowWindowsHostOffline
 `);
 }
@@ -249,12 +250,12 @@ function buildChecklist(readiness, args) {
 
   if (!windowsHost.checked) {
     checklist.push(args.allowWindowsHostOffline
-      ? warnItem("windows-host", "Windows host discovery not checked", "", "Ask Windows Codex for the Windows host IP, then rerun with --host <Windows IP> --port 43770.")
-      : blockItem("windows-host", "Windows host discovery not checked", "", "Ask Windows Codex for the Windows host IP, then rerun with --host <Windows IP> --port 43770."));
+      ? warnItem("windows-host", "Windows host discovery not checked", "", "Run node scripts/mac/discover-windows-hosts.mjs --boardSummary, or ask Windows Codex for the Windows host IP, then rerun with --host <Windows IP> --port 43770.")
+      : blockItem("windows-host", "Windows host discovery not checked", "", "Run node scripts/mac/discover-windows-hosts.mjs --boardSummary, or ask Windows Codex for the Windows host IP, then rerun with --host <Windows IP> --port 43770."));
   } else if (!windowsHost.online) {
     checklist.push(args.allowWindowsHostOffline
-      ? warnItem("windows-host", `Windows host offline at ${windowsHost.probe?.host}:${windowsHost.probe?.port}`, windowsHost.error?.message || "", "Ask Windows Codex to start Windows host, then rerun.")
-      : blockItem("windows-host", `Windows host offline at ${windowsHost.probe?.host}:${windowsHost.probe?.port}`, windowsHost.error?.message || "", "Ask Windows Codex to start Windows host, then rerun."));
+      ? warnItem("windows-host", `Windows host offline at ${windowsHost.probe?.host}:${windowsHost.probe?.port}`, windowsHost.error?.message || "", "Run node scripts/mac/discover-windows-hosts.mjs --boardSummary, or ask Windows Codex to start Windows host and share IP/port, then rerun.")
+      : blockItem("windows-host", `Windows host offline at ${windowsHost.probe?.host}:${windowsHost.probe?.port}`, windowsHost.error?.message || "", "Run node scripts/mac/discover-windows-hosts.mjs --boardSummary, or ask Windows Codex to start Windows host and share IP/port, then rerun."));
   } else {
     const runtime = windowsHost.runtime?.buildId ? ` build=${windowsHost.runtime.buildId}` : "";
     checklist.push(okItem("windows-host", `${windowsHost.device?.name || "Windows host"} online at ${windowsHost.probe?.host}:${windowsHost.probe?.port}${runtime}`));
@@ -295,7 +296,7 @@ function countChecklist(checklist, status) {
 function makeCallText(report) {
   const host = report.readiness.windowsHost || {};
   if (!host.online) {
-    return "Mac client formal Windows test is not ready: Windows host discovery is offline or not checked. Ask Windows Codex to start Windows host, then rerun with --host <Windows IP> --port 43770 --checkBoard.";
+    return "Mac client formal Windows test is not ready: Windows host discovery is offline or not checked. Run node scripts/mac/discover-windows-hosts.mjs --boardSummary, or ask Windows Codex to start Windows host, then rerun with --host <Windows IP> --port 43770 --boardSummary.";
   }
   const address = `${host.probe?.host}:${host.probe?.port}`;
   return [
@@ -321,7 +322,7 @@ function makeBoardSummary(report) {
     `Mac client formal Windows test: ${report.readyToCall ? "ready" : `needs attention (${report.counts.blocker} blocker(s), ${report.counts.warning} warning(s))`}; repo=${repo}; client=${client}; localServer=${localServer}; windowsHost=${hostText}.`,
     report.readyToCall
       ? `Next: run Mac client true test against ${host.probe?.host}:${host.probe?.port}; compare first frame, FPS, frame age, audio playback, clipboard, input-log, bandwidth/CPU.`
-      : "Next: clear blockers, run node scripts/mac/start-mac-client.mjs, start Windows host, then rerun with --host <Windows IP> --port 43770 --checkBoard --boardSummary.",
+      : "Next: clear blockers, run node scripts/mac/start-mac-client.mjs, discover/start Windows host, then rerun with --host <Windows IP> --port 43770 --boardSummary.",
     "Do not send passwords on Agent Link Board; do not run inject unless the user explicitly confirms they are watching.",
   ].join(" ");
 }

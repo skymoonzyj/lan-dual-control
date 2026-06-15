@@ -81,6 +81,7 @@ let promptLabel = environment["LAN_DUAL_PASSWORD_PROMPT_LABEL"] ?? "Password:"
 
 let app = NSApplication.shared
 app.setActivationPolicy(.regular)
+app.activate(ignoringOtherApps: true)
 
 let width = CGFloat(380)
 let label = NSTextField(labelWithString: promptLabel)
@@ -112,12 +113,14 @@ window.collectionBehavior.insert(.canJoinAllSpaces)
 window.collectionBehavior.insert(.fullScreenAuxiliary)
 window.center()
 
-NSRunningApplication.current.activate(options: [.activateAllWindows])
+NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+app.activate(ignoringOtherApps: true)
 window.makeKeyAndOrderFront(nil)
 window.orderFrontRegardless()
 
 DispatchQueue.main.async {
-  NSRunningApplication.current.activate(options: [.activateAllWindows])
+  NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+  app.activate(ignoringOtherApps: true)
   window.makeKeyAndOrderFront(nil)
   window.orderFrontRegardless()
   window.makeFirstResponder(secureField)

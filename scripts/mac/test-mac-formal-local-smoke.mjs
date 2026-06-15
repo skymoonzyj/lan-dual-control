@@ -126,6 +126,12 @@ function checkPasswordSafety(args) {
   assert(!String(prompt.stdout || "").includes("Mac host formal smoke password:"), "JSON prompt failure should not pollute stdout");
 
   const secret = "super-secret-formal-local-smoke";
+  const promptWithEnvPassword = runSmoke(["--json", "--promptPassword"], args, { LAN_DUAL_PASSWORD: secret });
+  const promptEnvPayload = parseJson(promptWithEnvPassword.stdout, "prompt with environment password failure");
+  assert(promptWithEnvPassword.status !== 0, "--promptPassword with LAN_DUAL_PASSWORD should still fail when dialog is disabled");
+  assert(/requires a macOS password dialog/.test(promptEnvPayload.error?.message || ""), "prompt with environment password should still require dialog");
+  assertNoSecretLikeText(outputOf(promptWithEnvPassword), "prompt with environment password failure");
+
   const promptWithPassword = runSmoke(["--json", "--promptPassword", "--password", secret], args);
   const promptPasswordPayload = parseJson(promptWithPassword.stdout, "prompt with password failure");
   assert(promptWithPassword.status !== 0, "--promptPassword with --password should fail");

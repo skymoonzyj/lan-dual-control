@@ -65,6 +65,14 @@ LAN_DUAL_PORT=43772 LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_WINDOWS_INPUT_MODE=log node
 
 ## 真连前预检
 
+如果还不知道 Windows host 的局域网地址，先在 Mac 侧只读扫描 `/discovery`：
+
+```bash
+node scripts/mac/discover-windows-hosts.mjs --boardSummary
+```
+
+该发现脚本复用现有 LAN 扫描，只保留 `platform=windows` 的目标，并输出下一步可直接运行的 `check-mac-client-formal-status` 命令。它不会认证 WebSocket、不会要求或打印密码、不会发送输入事件，也不会执行 `inject`。没发现 Windows host 时，先让 Windows Codex 启动 Windows host 并同步 IP/端口。
+
 Mac 控制真实 Windows host 前，先做只读预检：
 
 ```bash

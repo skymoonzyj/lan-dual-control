@@ -474,9 +474,6 @@ async function preparePassword(args) {
   if (args.promptPassword && args.passwordFromArg) {
     throw new Error("--promptPassword cannot be combined with --password.");
   }
-  if (args.promptPassword && process.env.LAN_DUAL_PASSWORD) {
-    throw new Error("--promptPassword refuses to reuse an existing LAN_DUAL_PASSWORD. Unset it first so the frontmost password dialog is shown.");
-  }
   if (args.promptPassword) {
     args.password = await promptMacPassword({
       title: "LAN Dual Control",

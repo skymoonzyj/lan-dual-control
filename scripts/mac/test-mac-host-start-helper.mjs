@@ -173,18 +173,22 @@ async function assertPromptPasswordFailsWithoutTty(timeoutMs) {
   print("OK", "Password prompt refuses non-interactive automation when dialog is disabled");
 }
 
-async function assertPromptPasswordRefusesEnvOverride(timeoutMs) {
+async function assertPromptPasswordIgnoresEnvAndStillRequiresDialog(timeoutMs) {
   const result = await runNode(["--promptPassword", "--dryRun"], {
     timeoutMs,
-    env: { LAN_DUAL_PASSWORD: "existing-password" },
+    env: {
+      LAN_DUAL_PASSWORD: "existing-password",
+      LAN_DUAL_DISABLE_PASSWORD_DIALOG: "1",
+      LAN_DUAL_DISABLE_PASSWORD_BEEP: "1",
+    },
   });
   const output = `${result.stdout}\n${result.stderr}`;
   if (result.exitCode === 0 || result.timedOut) {
-    throw new Error(`Prompt password should refuse to reuse environment password.\n${output}`);
+    throw new Error(`Prompt password should still require a visible dialog instead of reusing the environment password.\n${output}`);
   }
-  assertIncludes(output, "frontmost password dialog is shown", "prompt password env override failure");
+  assertIncludes(output, "--promptPassword requires a macOS password dialog", "prompt password env override failure");
   assertNotIncludes(output, "existing-password", "prompt password env override failure");
-  print("OK", "Prompt password refuses environment reuse so the dialog is shown");
+  print("OK", "Prompt password does not reuse an environment password when a visible dialog was requested");
 }
 
 async function assertDryRunWithEnvPassword(timeoutMs) {
@@ -461,7 +465,7 @@ async function main() {
   await assertMissingPasswordFails(args.timeoutMs);
   await assertDemoPasswordFails(args.timeoutMs);
   await assertPromptPasswordFailsWithoutTty(args.timeoutMs);
-  await assertPromptPasswordRefusesEnvOverride(args.timeoutMs);
+  await assertPromptPasswordIgnoresEnvAndStillRequiresDialog(args.timeoutMs);
   await assertDryRunWithEnvPassword(args.timeoutMs);
   await assertEphemeralPasswordDryRun(args.timeoutMs);
   await assertEphemeralPasswordRefusesEnvOverride(args.timeoutMs);

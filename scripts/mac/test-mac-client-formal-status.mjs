@@ -109,8 +109,11 @@ function checkOfflineJson(args) {
   assert(payload.checklist.some((entry) => entry.id === "client-server" && entry.status === "blocker"), "offline payload should block on local client server");
   assert(payload.checklist.some((entry) => entry.id === "windows-host" && entry.status === "blocker"), "offline payload should block on Windows host");
   assert(payload.checklist.some((entry) => entry.id === "inject" && entry.status === "skip"), "offline payload should explicitly skip inject");
+  assert(payload.checklist.some((entry) => entry.id === "windows-host" && String(entry.next || "").includes("discover-windows-hosts.mjs")), "offline Windows host next step should suggest discovery helper");
   assertIncludes(payload.boardSummary || "", "Do not send passwords", "offline board summary");
   assertIncludes(payload.callText || "", "not ready", "offline call text");
+  assertNotIncludes(payload.boardSummary || "", "--checkBoard", "offline board summary");
+  assertNotIncludes(payload.callText || "", "--checkBoard", "offline call text");
   print("OK", "Offline JSON blocks formal Windows test and remains secret-free");
 }
 

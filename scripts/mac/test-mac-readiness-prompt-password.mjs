@@ -114,14 +114,14 @@ function assertPromptPasswordRefusesExplicitPassword(args) {
   console.log("[OK] --promptPassword refuses explicit --password without leaking it");
 }
 
-function assertPromptPasswordRefusesEnvPassword(args) {
+function assertPromptPasswordIgnoresEnvPassword(args) {
   const secret = "super-secret-env-readiness-password";
   const result = runReadiness(["--promptPassword"], args, { LAN_DUAL_PASSWORD: secret });
   const output = outputOf(result);
   assertFails(result, "--promptPassword with LAN_DUAL_PASSWORD");
-  assertIncludes(output, "refuses to override an existing LAN_DUAL_PASSWORD", "--promptPassword with LAN_DUAL_PASSWORD");
+  assertIncludes(output, "--promptPassword requires a macOS password dialog", "--promptPassword with LAN_DUAL_PASSWORD");
   assertNotIncludes(output, secret, "--promptPassword with LAN_DUAL_PASSWORD");
-  console.log("[OK] --promptPassword refuses existing LAN_DUAL_PASSWORD without leaking it");
+  console.log("[OK] --promptPassword ignores existing LAN_DUAL_PASSWORD and still requires a visible dialog");
 }
 
 function assertJsonSummaryDoesNotExposePassword(args) {
@@ -168,7 +168,7 @@ function main() {
   assertNonInteractivePromptFails(args);
   assertJsonPromptDoesNotPolluteStdout(args);
   assertPromptPasswordRefusesExplicitPassword(args);
-  assertPromptPasswordRefusesEnvPassword(args);
+  assertPromptPasswordIgnoresEnvPassword(args);
   assertJsonSummaryDoesNotExposePassword(args);
   assertReadinessDoesNotPassPasswordArgs();
   console.log("[OK] Mac readiness prompt password safety checks passed");
