@@ -2,7 +2,7 @@ use std::env;
 use std::io::{self, Write};
 use std::sync::mpsc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use base64::Engine;
 use chrono::{SecondsFormat, Utc};
@@ -404,6 +404,58 @@ struct CapturedFrame {
     source_width: u32,
     source_height: u32,
     bytes: Vec<u8>,
+    timing_ms: HelperFrameTimingMs,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct HelperFrameTimingMs {
+    wait_frame_ms: f64,
+    try_get_frame_ms: f64,
+    surface_ms: f64,
+    get_interface_ms: f64,
+    describe_ms: f64,
+    content_size_ms: f64,
+    create_staging_ms: f64,
+    cast_resource_ms: f64,
+    copy_resource_ms: f64,
+    map_ms: f64,
+    convert_encode_ms: f64,
+    unmap_ms: f64,
+    output_total_ms: f64,
+    close_frame_ms: f64,
+    frame_total_before_emit_ms: f64,
+}
+
+fn elapsed_ms(started_at: Instant) -> f64 {
+    started_at.elapsed().as_secs_f64() * 1000.0
+}
+
+fn round_ms(value: f64) -> f64 {
+    if value.is_finite() {
+        (value * 1000.0).round() / 1000.0
+    } else {
+        0.0
+    }
+}
+
+fn helper_timing_json(timing: &HelperFrameTimingMs) -> serde_json::Value {
+    json!({
+        "waitFrameMs": round_ms(timing.wait_frame_ms),
+        "tryGetFrameMs": round_ms(timing.try_get_frame_ms),
+        "surfaceMs": round_ms(timing.surface_ms),
+        "getInterfaceMs": round_ms(timing.get_interface_ms),
+        "describeMs": round_ms(timing.describe_ms),
+        "contentSizeMs": round_ms(timing.content_size_ms),
+        "createStagingMs": round_ms(timing.create_staging_ms),
+        "castResourceMs": round_ms(timing.cast_resource_ms),
+        "copyResourceMs": round_ms(timing.copy_resource_ms),
+        "mapMs": round_ms(timing.map_ms),
+        "convertEncodeMs": round_ms(timing.convert_encode_ms),
+        "unmapMs": round_ms(timing.unmap_ms),
+        "outputTotalMs": round_ms(timing.output_total_ms),
+        "closeFrameMs": round_ms(timing.close_frame_ms),
+        "frameTotalBeforeEmitMs": round_ms(timing.frame_total_before_emit_ms),
+    })
 }
 
 unsafe fn probe_wgc(args: &Args) -> Result<serde_json::Value, String> {
@@ -512,16 +564,26 @@ unsafe fn capture_wgc(args: &Args) -> Result<(), String> {
     let frame_delay = Duration::from_millis((1000 / args.fps.max(1) as u64).max(1));
     let mut emitted = 0u32;
     loop {
+        let frame_started_at = Instant::now();
+        let wait_started_at = Instant::now();
         rx.recv_timeout(Duration::from_millis(8000))
             .map_err(|_| "Timed out waiting for a WGC frame".to_string())?;
+        let wait_frame_ms = elapsed_ms(wait_started_at);
+        let try_get_started_at = Instant::now();
         let frame = pool
             .TryGetNextFrame()
             .map_err(|error| format!("TryGetNextFrame failed: {error}"))?;
-        let captured =
+        let try_get_frame_ms = elapsed_ms(try_get_started_at);
+        let mut captured =
             capture_frame_to_output(&objects.d3d_device, &objects.d3d_context, &frame, args)?;
+        let close_started_at = Instant::now();
         frame
             .Close()
             .map_err(|error| format!("Direct3D11CaptureFrame.Close failed: {error}"))?;
+        captured.timing_ms.wait_frame_ms = wait_frame_ms;
+        captured.timing_ms.try_get_frame_ms = try_get_frame_ms;
+        captured.timing_ms.close_frame_ms = elapsed_ms(close_started_at);
+        captured.timing_ms.frame_total_before_emit_ms = elapsed_ms(frame_started_at);
 
         emitted += 1;
         let mut header = json!({
@@ -538,6 +600,7 @@ unsafe fn capture_wgc(args: &Args) -> Result<(), String> {
             "jpegQuality": args.jpeg_quality,
             "scaled": captured.width != captured.source_width || captured.height != captured.source_height,
             "payloadBytes": captured.bytes.len(),
+            "helperTimingMs": helper_timing_json(&captured.timing_ms),
         });
         if args.helper_protocol == HelperProtocol::BinaryFrame {
             print_binary_frame(header, &captured.bytes)?;
@@ -633,22 +696,33 @@ unsafe fn capture_frame_to_output(
     frame: &Direct3D11CaptureFrame,
     args: &Args,
 ) -> Result<CapturedFrame, String> {
+    let output_started_at = Instant::now();
+    let mut timing_ms = HelperFrameTimingMs::default();
+
+    let surface_started_at = Instant::now();
     let surface = frame
         .Surface()
         .map_err(|error| format!("Direct3D11CaptureFrame.Surface failed: {error}"))?;
+    timing_ms.surface_ms = elapsed_ms(surface_started_at);
+
+    let interface_started_at = Instant::now();
     let access: IDirect3DDxgiInterfaceAccess = surface.cast().map_err(|error| {
         format!("IDirect3DSurface cast to IDirect3DDxgiInterfaceAccess failed: {error}")
     })?;
     let texture: ID3D11Texture2D = access.GetInterface().map_err(|error| {
         format!("IDirect3DDxgiInterfaceAccess.GetInterface<ID3D11Texture2D> failed: {error}")
     })?;
+    timing_ms.get_interface_ms = elapsed_ms(interface_started_at);
 
+    let describe_started_at = Instant::now();
     let mut desc = D3D11_TEXTURE2D_DESC::default();
     texture.GetDesc(&mut desc);
     if desc.Format != DXGI_FORMAT_B8G8R8A8_UNORM {
         return Err(format!("Unsupported WGC texture format: {:?}", desc.Format));
     }
+    timing_ms.describe_ms = elapsed_ms(describe_started_at);
 
+    let content_size_started_at = Instant::now();
     let content_size = frame
         .ContentSize()
         .map_err(|error| format!("Direct3D11CaptureFrame.ContentSize failed: {error}"))?;
@@ -661,6 +735,7 @@ unsafe fn capture_frame_to_output(
         args.width.max(1) as u32,
         args.height.max(1) as u32,
     )?;
+    timing_ms.content_size_ms = elapsed_ms(content_size_started_at);
 
     let staging_desc = D3D11_TEXTURE2D_DESC {
         Width: desc.Width,
@@ -678,24 +753,35 @@ unsafe fn capture_frame_to_output(
         MiscFlags: 0,
     };
     let mut staging: Option<ID3D11Texture2D> = None;
+    let staging_started_at = Instant::now();
     device
         .CreateTexture2D(&staging_desc, None, Some(&mut staging))
         .map_err(|error| format!("CreateTexture2D staging texture failed: {error}"))?;
     let staging =
         staging.ok_or_else(|| "CreateTexture2D returned no staging texture".to_string())?;
+    timing_ms.create_staging_ms = elapsed_ms(staging_started_at);
 
+    let cast_resource_started_at = Instant::now();
     let source_resource: ID3D11Resource = texture
         .cast()
         .map_err(|error| format!("ID3D11Texture2D cast to ID3D11Resource failed: {error}"))?;
     let staging_resource: ID3D11Resource = staging.cast().map_err(|error| {
         format!("staging ID3D11Texture2D cast to ID3D11Resource failed: {error}")
     })?;
+    timing_ms.cast_resource_ms = elapsed_ms(cast_resource_started_at);
+
+    let copy_started_at = Instant::now();
     context.CopyResource(&staging_resource, &source_resource);
+    timing_ms.copy_resource_ms = elapsed_ms(copy_started_at);
 
     let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+    let map_started_at = Instant::now();
     context
         .Map(&staging_resource, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
         .map_err(|error| format!("ID3D11DeviceContext.Map staging texture failed: {error}"))?;
+    timing_ms.map_ms = elapsed_ms(map_started_at);
+
+    let convert_started_at = Instant::now();
     let bytes = match args.output_format {
         OutputFormat::Jpeg => {
             copy_mapped_bgra_to_bgr(&mapped, source_width, source_height, width, height).and_then(
@@ -712,8 +798,12 @@ unsafe fn capture_frame_to_output(
                 .and_then(|bgra_pixels| bgra_to_nv12(width, height, &bgra_pixels))
         }
     };
+    timing_ms.convert_encode_ms = elapsed_ms(convert_started_at);
+    let unmap_started_at = Instant::now();
     context.Unmap(&staging_resource, 0);
+    timing_ms.unmap_ms = elapsed_ms(unmap_started_at);
     let bytes = bytes?;
+    timing_ms.output_total_ms = elapsed_ms(output_started_at);
 
     Ok(CapturedFrame {
         width,
@@ -721,6 +811,7 @@ unsafe fn capture_frame_to_output(
         source_width,
         source_height,
         bytes,
+        timing_ms,
     })
 }
 

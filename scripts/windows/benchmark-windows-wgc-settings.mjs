@@ -232,6 +232,23 @@ function normalizeRatioArg(value, fallback = 1) {
   return Math.max(0, Math.min(1, number));
 }
 
+function formatHelperTimingSummary(timing) {
+  if (!timing || typeof timing !== "object" || Object.keys(timing).length === 0) {
+    return "";
+  }
+  const parts = [
+    ["frame", timing.frameTotalBeforeEmitMs],
+    ["wait", timing.waitFrameMs],
+    ["output", timing.outputTotalMs],
+    ["map", timing.mapMs],
+    ["convert", timing.convertEncodeMs],
+    ["copy", timing.copyResourceMs],
+  ]
+    .filter(([, stat]) => stat && Number.isFinite(Number(stat.avgMs)) && Number.isFinite(Number(stat.maxMs)))
+    .map(([label, stat]) => `${label} avg/max ${stat.avgMs}/${stat.maxMs}ms`);
+  return parts.join(" / ");
+}
+
 function delay(ms) {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }
@@ -719,6 +736,9 @@ function compactResult(result) {
     uniqueHelperFrameCount: observation.uniqueHelperFrameCount || 0,
     maxFrameAgeMs: observation.maxFrameAgeMs ?? null,
     maxContentAgeMs: observation.maxContentAgeMs ?? null,
+    helperTimingMs: observation.helperTimingMs || null,
+    helperFrameTotalAvgMs: observation.helperTimingMs?.frameTotalBeforeEmitMs?.avgMs ?? null,
+    helperFrameTotalMaxMs: observation.helperTimingMs?.frameTotalBeforeEmitMs?.maxMs ?? null,
     avgCpuPercent: resource.avgCpuPercent ?? null,
     maxCpuPercent: resource.maxCpuPercent ?? null,
     peakWorkingSetMiB: resource.peakWorkingSetMiB ?? null,
@@ -744,6 +764,10 @@ function printProfile(result) {
     `CPU avg/max ${summary.avgCpuPercent ?? "?"}/${summary.maxCpuPercent ?? "?"}%, ` +
     `WS peak ${summary.peakWorkingSetMiB ?? "?"} MiB`,
   );
+  const helperTimingLine = formatHelperTimingSummary(summary.helperTimingMs);
+  if (helperTimingLine) {
+    console.log(`[INFO] ${summary.profile.name}: helper timing ${helperTimingLine}`);
+  }
 }
 
 async function main() {

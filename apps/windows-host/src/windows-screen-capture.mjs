@@ -288,6 +288,23 @@ function normalizeWgcHelperProtocol(value, fallback = wgcHelperProtocolJsonLines
   return fallback;
 }
 
+function normalizeHelperTimingMs(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const result = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(key)) {
+      continue;
+    }
+    const number = Number(raw);
+    if (Number.isFinite(number) && number >= 0 && number < 600000) {
+      result[key] = Number(number.toFixed(3));
+    }
+  }
+  return Object.keys(result).length > 0 ? result : null;
+}
+
 function parseJsonOutput(output) {
   const text = String(output ?? "").trim().replace(/^\uFEFF/, "");
   if (!text) {
@@ -1551,6 +1568,7 @@ export class WindowsScreenCaptureCoordinator {
     const isRawNv12 = codec === "raw-nv12" || pixelFormat === "nv12";
     const width = Number(message.width) || 0;
     const height = Number(message.height) || 0;
+    const helperTimingMs = normalizeHelperTimingMs(message.helperTimingMs);
     if (isRawBgra || isRawNv12) {
       if (!dataBase64) {
         this.recordCaptureFailure(new Error(`WGC helper ${isRawNv12 ? "raw NV12" : "raw BGRA"} frame did not contain base64 data`));
@@ -1578,6 +1596,7 @@ export class WindowsScreenCaptureCoordinator {
         helperFrameId: Number(message.frameId) || 0,
         timestamp: String(message.timestamp || "").trim(),
         payloadBytes: Number(message.payloadBytes) || Buffer.byteLength(dataBase64, "base64"),
+        ...(helperTimingMs ? { helperTimingMs } : {}),
       };
       this.wgcHelperFrameId += 1;
       this.lastFailure = "";
@@ -1603,6 +1622,7 @@ export class WindowsScreenCaptureCoordinator {
       helperFrameId: Number(message.frameId) || 0,
       timestamp: String(message.timestamp || "").trim(),
       payloadBytes: Number(message.payloadBytes) || Math.max(0, Math.floor((normalizedDataUrl.length * 3) / 4)),
+      ...(helperTimingMs ? { helperTimingMs } : {}),
     };
     this.wgcHelperFrameId += 1;
     this.lastFailure = "";
@@ -1616,6 +1636,7 @@ export class WindowsScreenCaptureCoordinator {
     const isRawNv12 = codec === "raw-nv12" || pixelFormat === "nv12";
     const width = Number(message.width) || 0;
     const height = Number(message.height) || 0;
+    const helperTimingMs = normalizeHelperTimingMs(message.helperTimingMs);
     const payload = Buffer.from(payloadBuffer);
     if (isRawBgra || isRawNv12) {
       try {
@@ -1640,6 +1661,7 @@ export class WindowsScreenCaptureCoordinator {
         helperFrameId: Number(message.frameId) || 0,
         timestamp: String(message.timestamp || "").trim(),
         payloadBytes: payload.length,
+        ...(helperTimingMs ? { helperTimingMs } : {}),
       };
       this.wgcHelperFrameId += 1;
       this.lastFailure = "";
@@ -1664,6 +1686,7 @@ export class WindowsScreenCaptureCoordinator {
       helperFrameId: Number(message.frameId) || 0,
       timestamp: String(message.timestamp || "").trim(),
       payloadBytes: payload.length,
+      ...(helperTimingMs ? { helperTimingMs } : {}),
     };
     this.wgcHelperFrameId += 1;
     this.lastFailure = "";
@@ -1779,6 +1802,7 @@ export class WindowsScreenCaptureCoordinator {
       droppedFrames: Math.max(0, sourceFrameId - previousServedFrameId - 1),
       payloadBytes: repeatPreviousFrame ? 0 : sourcePayloadBytes,
       helperFrameId: Number(payload.helperFrameId) || sourceFrameId,
+      ...(payload.helperTimingMs ? { helperTimingMs: payload.helperTimingMs } : {}),
     };
 
     if (repeatPreviousFrame) {
@@ -2059,6 +2083,7 @@ export class WindowsScreenCaptureCoordinator {
       sourcePixelFormat: String(payload.pixelFormat || "").trim(),
       sourceEncoding: String(payload.encoding || "").trim(),
       droppedSourceFrames: repeatedFrame ? 0 : Math.max(0, sourceFrameId - previousFedFrameId - 1),
+      ...(payload.helperTimingMs ? { helperTimingMs: payload.helperTimingMs } : {}),
     };
 
     await this.feedWgcH264BridgeFrame(sourceInfo, this.wgcH264BridgePayloadBuffer(payload));
@@ -2145,6 +2170,7 @@ export class WindowsScreenCaptureCoordinator {
       sourceCodec: frameInfo.sourceCodec || "",
       sourcePixelFormat: frameInfo.sourcePixelFormat || "",
       helperFrameId: Number(frameInfo.helperFrameId) || 0,
+      ...(frameInfo.helperTimingMs ? { helperTimingMs: frameInfo.helperTimingMs } : {}),
       payload: encodedPayload.toString("base64"),
       timestampUs: Math.max(0, (frameId - 1) * durationUs),
       durationUs,

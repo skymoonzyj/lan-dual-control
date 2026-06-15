@@ -313,6 +313,7 @@ Mac 端：
 - [x] Windows WGC repeat-last-frame 轻量信令模式。（`--repeatLastFrameMode signal` 时重复帧只发 `repeatPreviousFrame=true`，60Hz/20M 短基准约 31-32 FPS，平均图片 payload 降到约 17-23 KB。）
 - [x] Windows WGC 帧节奏诊断指标。（`observe-windows-host-video` / `benchmark-windows-wgc-settings` 输出实收 FPS、真实新帧 FPS、唯一 helper 源帧 FPS、重复帧比例和内容年龄，并支持对应阈值，避免把请求 60Hz、重复帧和真实新画面混在一起。）
 - [x] Windows WGC 动态画面 benchmark 刺激源。（`benchmark-windows-wgc-settings --motionStimulus` 可短暂打开 WinForms 或 browser 动画窗口；本机动态短测仍未显著提高 unique helper source FPS，指向 helper 读回/事件节奏而非单纯静态桌面。）
+- [x] Windows WGC helper 内部阶段耗时诊断。（helper frame header 新增 `helperTimingMs`，Windows host 透传到 JPEG/H.264 `video_frame`，observer/benchmark 汇总 wait/try/copy/map/convert 等阶段；真实 NV12/H.264 短测显示瓶颈集中在 CPU BGRA→NV12 转换/缩放。）
 - [x] Mac client 接收 Windows WGC 轻量重复帧。（`--expectRepeatSignalVideo` 会启动 WGC mock helper，验证 `repeatPreviousFrame` 无 `dataUrl` 时保持上一帧可见并显示“重复”计数。）
 - [x] Windows host 可选 `binary-jpeg` WebSocket 二进制视频帧。（Mac client 声明 `preferredVideoTransport=binary-jpeg` 后，JPEG 元数据保留 JSON 头、图片改走原始 JPEG 字节；`--expectBinaryVideo` 页面级自检通过。）
 - [x] Windows host `ffmpeg-h264` 模式的 MJPEG/JPEG fallback。（Mac client/WebCodecs 拒绝当前 H.264 `codecString` 后发送 `preferredVideoCodec=mjpeg` / `preferredVideoEncoding=data-url`，同一个 host 会切到 `windows-ffmpeg-gdigrab-mjpeg` 并恢复 JPEG 画面；`--expectH264Fallback` 页面级自检通过。）

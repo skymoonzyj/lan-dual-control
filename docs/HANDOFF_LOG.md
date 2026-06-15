@@ -58,6 +58,45 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 19:10
+开发端：Windows Codex
+本轮目标：给 WGC helper 增加内部阶段耗时诊断，定位 60Hz/NV12/H.264 低源帧瓶颈。
+完成内容：
+- `apps/windows-wgc-helper` 真实 capture frame header 新增 `helperTimingMs`，记录 wait frame、TryGetNextFrame、surface/interface、staging create、CopyResource、Map、BGRA/NV12/JPEG 转换/编码、Unmap、CloseFrame 和 frame total before emit。
+- `apps/windows-host/src/windows-screen-capture.mjs` 安全归一化并透传 `helperTimingMs`：JPEG helper、raw BGRA/NV12 binary helper、WGC H.264 bridge 输出的 `video_frame` 都能带该诊断字段。
+- `scripts/windows/observe-windows-host-video.mjs` 会汇总 helper timing 每个阶段的 samples/avg/min/max，并在普通输出打印关键 `frame/wait/output/map/convert/copy avg/max`。
+- `scripts/windows/benchmark-windows-wgc-settings.mjs` 在 compact profile/JSON 中保留 `helperTimingMs`，普通 profile 输出后额外打印 helper timing 摘要。
+- 真实 720p/60Hz/20M/NV12/`h264_nvenc`/repeat-full 短测显示 helper 整帧平均约 127.5ms，`convertEncodeMs` 平均约 126.3ms，`mapMs` 约 0.6ms，`copyResourceMs` 约 0.004ms；瓶颈集中在 helper CPU BGRA→NV12 转换/缩放。
+修改文件：
+- `apps/windows-wgc-helper/src/main.rs`
+- `apps/windows-host/src/windows-screen-capture.mjs`
+- `scripts/windows/observe-windows-host-video.mjs`
+- `scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `cargo fmt`
+- `cargo check`
+- `node --check apps/windows-host/src/windows-screen-capture.mjs`
+- `node --check scripts/windows/observe-windows-host-video.mjs`
+- `node --check scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script observe-windows-host-video.mjs --script benchmark-windows-wgc-settings.mjs`
+- `node scripts/windows/test-windows-wgc-helper.mjs --skipRealCapture`
+- `node scripts/windows/test-windows-wgc-mode.mjs`
+- `node scripts/windows/benchmark-windows-wgc-settings.mjs --skipBuild --profile 60:20000:balanced --durationMs 1500 --timeoutMs 50000 --minFrames 5 --minFps 0 --maxGapMs 10000 --maxFrameAgeMs 1000 --resourceSample false --resourceSampleTree false --repeatLastFrame --h264Bridge --h264Source nv12 --h264Encoder h264_nvenc --json`
+- `node scripts/windows/benchmark-windows-wgc-settings.mjs --skipBuild --profile 60:20000:balanced --durationMs 900 --timeoutMs 50000 --minFrames 3 --minFps 0 --maxGapMs 10000 --maxFrameAgeMs 1000 --resourceSample false --resourceSampleTree false --repeatLastFrame --h264Bridge --h264Source nv12 --h264Encoder h264_nvenc`
+遗留问题：
+- 这轮只定位瓶颈，没有优化转换管线；NV12/H.264 仍主要卡在 helper 端 CPU BGRA→NV12 转换/缩放。
+下一步建议：
+- 优先做 CPU 转换优化或替代：对照 raw BGRA 交给 FFmpeg/GPU 转换、SIMD/多线程 BGRA→NV12、D3D/GPU shader 转 NV12，或直接 helper 原生 D3D11/NVENC 硬编。
+是否改了协议：否。`helperTimingMs` 是 Windows helper/host/observer 内部可选诊断字段，不要求 Mac 端实现。
+是否需要另一端配合：暂不需要；Mac client 真连观感/资源对照时再呼叫 Mac 端。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 18:36
 开发端：Windows Codex
 本轮目标：给 WGC benchmark 增加动态画面刺激源，用真实桌面变化对照静态桌面下的源帧 FPS。

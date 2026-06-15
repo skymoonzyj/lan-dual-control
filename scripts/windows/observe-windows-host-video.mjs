@@ -479,6 +479,74 @@ function normalizeFallbackReason(...values) {
   return normalized.length > 260 ? `${normalized.slice(0, 257)}...` : normalized;
 }
 
+function normalizeHelperTimingMs(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const result = {};
+  for (const [key, raw] of Object.entries(value)) {
+    const number = Number(raw);
+    if (/^[A-Za-z][A-Za-z0-9_]*$/.test(key) && Number.isFinite(number) && number >= 0) {
+      result[key] = Number(number.toFixed(3));
+    }
+  }
+  return Object.keys(result).length > 0 ? result : null;
+}
+
+function summarizeHelperTimingMs(frames) {
+  const stats = new Map();
+  for (const frame of frames) {
+    const timing = frame.helperTimingMs;
+    if (!timing) {
+      continue;
+    }
+    for (const [key, value] of Object.entries(timing)) {
+      const number = Number(value);
+      if (!Number.isFinite(number)) {
+        continue;
+      }
+      const stat = stats.get(key) || {
+        samples: 0,
+        totalMs: 0,
+        minMs: Number.POSITIVE_INFINITY,
+        maxMs: 0,
+      };
+      stat.samples += 1;
+      stat.totalMs += number;
+      stat.minMs = Math.min(stat.minMs, number);
+      stat.maxMs = Math.max(stat.maxMs, number);
+      stats.set(key, stat);
+    }
+  }
+  return Object.fromEntries(
+    [...stats.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, stat]) => [key, {
+        samples: stat.samples,
+        avgMs: Number((stat.totalMs / Math.max(1, stat.samples)).toFixed(3)),
+        minMs: Number(stat.minMs.toFixed(3)),
+        maxMs: Number(stat.maxMs.toFixed(3)),
+      }]),
+  );
+}
+
+function formatHelperTimingSummary(timing) {
+  if (!timing || Object.keys(timing).length === 0) {
+    return "";
+  }
+  const parts = [
+    ["frame", timing.frameTotalBeforeEmitMs],
+    ["wait", timing.waitFrameMs],
+    ["output", timing.outputTotalMs],
+    ["map", timing.mapMs],
+    ["convert", timing.convertEncodeMs],
+    ["copy", timing.copyResourceMs],
+  ]
+    .filter(([, stat]) => stat && Number.isFinite(Number(stat.avgMs)) && Number.isFinite(Number(stat.maxMs)))
+    .map(([label, stat]) => `${label} avg/max ${stat.avgMs}/${stat.maxMs}ms`);
+  return parts.join(" / ");
+}
+
 function assertRealFrame(frame, context = {}) {
   const pipeline = String(frame.capturePipeline || "").toLowerCase();
   const source = String(frame.source || "").toLowerCase();
@@ -538,6 +606,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
       qualityPreset: frame.qualityPreset || "",
       jpegQuality: Number(frame.jpegQuality) || 0,
       helperFrameId: Number(frame.helperFrameId) || 0,
+      helperTimingMs: normalizeHelperTimingMs(frame.helperTimingMs),
       contentAgeMs: Number.isFinite(Number(frame.contentAgeMs)) ? Number(frame.contentAgeMs) : null,
       fallbackReason: normalizeFallbackReason(frame.streamFallbackReason, frame.fallbackReason, context.fallbackReason),
       requestedScreenMode: String(frame.requestedScreenMode || context.requestedScreenMode || "").trim(),
@@ -569,6 +638,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
   const requestedScreenModes = [...new Set(frames.map((frame) => frame.requestedScreenMode).filter(Boolean))];
   const h264Encoders = [...new Set(frames.map((frame) => frame.h264Encoder).filter(Boolean))];
   const repeatLastFrameModes = [...new Set(frames.map((frame) => frame.repeatLastFrameMode).filter(Boolean))];
+  const helperTimingMs = summarizeHelperTimingMs(frames);
   const uniqueHelperFrameCount = new Set(helperFrameIds).size;
   const freshFps = freshFrames > 0 ? (freshFrames * 1000) / elapsedMs : 0;
   const repeatedFrameRatio = frames.length > 0 ? repeatedFrames / frames.length : 0;
@@ -629,6 +699,7 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
     requestedScreenModes,
     h264Encoders,
     repeatLastFrameModes,
+    helperTimingMs,
   };
 }
 
@@ -813,6 +884,10 @@ async function main() {
           `WGC repeat: mode ${args.wgcRepeatLastFrameMode}, repeated ${summary.repeatedFrames} (${summary.repeatedFramePercent}%) / signal ${summary.repeatSignalFrames} (${summary.repeatSignalFramePercent}%) / fresh ${summary.freshFrames} @ ${summary.freshFps}fps / unique helper ${summary.uniqueHelperFrameCount} @ ${summary.uniqueHelperFps}fps / content age max ${summary.maxContentAgeMs ?? "?"} ms`,
           args,
         );
+      }
+      const helperTimingLine = formatHelperTimingSummary(summary.helperTimingMs);
+      if (helperTimingLine) {
+        print("INFO", `WGC helper timing: ${helperTimingLine}`, args);
       }
       if (summary.timestampFrameCount > 0) {
         print(
