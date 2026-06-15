@@ -32,6 +32,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/test-windows-client-browser.mjs`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 10:28 | Windows 控制端页面级自检支持 `LAN_DUAL_PASSWORD`、`--promptPassword`、`--requirePassword`，正式 Mac host 页面验收可避免把密码放进命令参数。 |
 | Windows Codex | `scripts/windows/probe-mac-host.mjs`, `scripts/windows/test-mac-host.ps1`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 10:18 | Windows 正式 Mac host 探针支持 `LAN_DUAL_PASSWORD`、`--promptPassword`、`--requirePassword`，并新增视频/音频持续观察参数；本机假 Mac Node/PowerShell 路径通过，未执行 inject。 |
 | Mac Codex | `scripts/mac/check-mac-resume-status.mjs`, `scripts/mac/test-mac-resume-status.mjs`, `apps/mac-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 09:58 | `check-mac-resume-status --boardSummary` 输出可直接发 Agent Link Board 的秘密安全摘要；JSON 报告同步带 `boardSummary`；自测覆盖离线/在线摘要和无 secret-like 泄露。 |
 | Mac Codex | `scripts/mac/check-mac-host-readiness.mjs`, `scripts/mac/observe-mac-video.mjs`, `scripts/mac/observe-mac-audio.mjs`, `scripts/mac/smoke-mac-input-log.mjs`, `scripts/mac/test-mac-readiness-prompt-password.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 09:45 | Mac readiness 新增隐藏 `--promptPassword`，正式密码深度探针可一次性输入探针密码；子探针改用 `LAN_DUAL_PASSWORD` 环境变量，避免把密码放进 argv。 |

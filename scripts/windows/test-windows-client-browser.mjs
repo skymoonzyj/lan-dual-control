@@ -8,7 +8,10 @@ import { fileURLToPath } from "node:url";
 const defaults = {
   host: "127.0.0.1",
   port: "43770",
-  password: "demo-password",
+  password: process.env.LAN_DUAL_PASSWORD || "demo-password",
+  passwordProvided: false,
+  promptPassword: false,
+  requirePassword: false,
   clientPort: 5197,
   debugPort: 9337,
   timeoutMs: 30000,
@@ -35,7 +38,9 @@ surface, diagnostics, input guards, and optional audio injection.
 Options:
   --host <host>                         Mac host address. Default: ${defaults.host}
   --port <port>                         Mac host port. Default: ${defaults.port}
-  --password <password>                 Probe password. Default: ${defaults.password}
+  --password <password>                 Probe password. Default: LAN_DUAL_PASSWORD or demo-password.
+  --promptPassword                      Prompt for the probe password without echoing it.
+  --requirePassword                     Refuse empty/demo-password credentials before connecting.
   --clientPort <port>                   Local Windows client web port. Default: ${defaults.clientPort}
   --debugPort <port>                    Browser remote debugging port. Default: ${defaults.debugPort}
   --timeoutMs <ms>                      Per-step timeout. Default: ${defaults.timeoutMs}
@@ -48,7 +53,7 @@ Options:
 
 Examples:
   node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly
-  node scripts/windows/test-windows-client-browser.mjs --host 192.168.1.20 --port 43770 --password demo-password --requireH264
+  node scripts/windows/test-windows-client-browser.mjs --host 192.168.1.20 --port 43770 --promptPassword --requirePassword --requireH264
   node scripts/windows/test-windows-client-browser.mjs --host 127.0.0.1 --port 43770 --injectPcmAudio
 `);
 }
@@ -83,7 +88,18 @@ function parseArgs(argv) {
       args.requireVideoSurface = false;
       continue;
     }
+    if (key === "promptPassword") {
+      args.promptPassword = true;
+      continue;
+    }
+    if (key === "requirePassword") {
+      args.requirePassword = true;
+      continue;
+    }
     if (Object.prototype.hasOwnProperty.call(args, key) && next && !next.startsWith("--")) {
+      if (key === "password") {
+        args.passwordProvided = true;
+      }
       args[key] = next;
       index += 1;
     }
@@ -93,6 +109,91 @@ function parseArgs(argv) {
   args.debugPort = Number(args.debugPort);
   args.timeoutMs = Number(args.timeoutMs);
   return args;
+}
+
+async function preparePassword(args) {
+  if (args.diagnosticsOnly) return;
+  if (args.promptPassword && args.passwordProvided) {
+    throw new Error("--promptPassword cannot be combined with --password.");
+  }
+  if (args.promptPassword && process.env.LAN_DUAL_PASSWORD) {
+    throw new Error("--promptPassword refuses to override an existing LAN_DUAL_PASSWORD. Unset it or omit --promptPassword.");
+  }
+  if (args.promptPassword) {
+    args.password = await promptHidden("Mac host password: ");
+    if (!args.password) {
+      throw new Error("Password cannot be empty when --promptPassword is used.");
+    }
+  }
+  const effectivePassword = String(args.password || "");
+  if (args.requirePassword && !effectivePassword) {
+    throw new Error("LAN_DUAL_PASSWORD is required. Set it in the environment, pass --password, or use --promptPassword.");
+  }
+  if (args.requirePassword && effectivePassword === "demo-password") {
+    throw new Error("Refusing to use demo-password when --requirePassword is used.");
+  }
+}
+
+function promptHidden(label) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return Promise.reject(new Error("--promptPassword requires an interactive terminal."));
+  }
+
+  return new Promise((resolvePrompt, rejectPrompt) => {
+    const stdin = process.stdin;
+    const stdout = process.stdout;
+    const previousRawMode = stdin.isRaw;
+    let value = "";
+    let settled = false;
+
+    const cleanup = () => {
+      stdin.off("data", onData);
+      if (typeof stdin.setRawMode === "function") {
+        stdin.setRawMode(Boolean(previousRawMode));
+      }
+      stdin.pause();
+    };
+    const finish = (result, error = null) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      stdout.write("\n");
+      if (error) {
+        rejectPrompt(error);
+      } else {
+        resolvePrompt(result);
+      }
+    };
+    const onData = (chunk) => {
+      const text = String(chunk);
+      for (const char of text) {
+        const code = char.charCodeAt(0);
+        if (char === "\r" || char === "\n") {
+          finish(value);
+          return;
+        }
+        if (code === 3) {
+          finish("", new Error("Password prompt cancelled."));
+          return;
+        }
+        if (code === 8 || code === 127) {
+          value = value.slice(0, -1);
+          continue;
+        }
+        if (code >= 32) {
+          value += char;
+        }
+      }
+    };
+
+    stdout.write(label);
+    stdin.resume();
+    stdin.setEncoding("utf8");
+    if (typeof stdin.setRawMode === "function") {
+      stdin.setRawMode(true);
+    }
+    stdin.on("data", onData);
+  });
 }
 
 function print(kind, text) {
@@ -1230,6 +1331,7 @@ async function run() {
   }
 
   const args = parseArgs(process.argv);
+  await preparePassword(args);
   const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
   const clientUrl = `http://127.0.0.1:${args.clientPort}/`;
   const userDataDir = await mkdtemp(join(tmpdir(), "lan-dual-edge-"));
