@@ -61,6 +61,44 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 09:55
+开发端：Mac Codex
+本轮目标：给 Mac 恢复状态脚本补一个可直接发送到联络板的秘密安全摘要，减少正式验收前手工拼状态。
+完成内容：
+- `scripts/mac/check-mac-resume-status.mjs` 新增 `--boardSummary`，在不启动服务、不认证 WebSocket、不要求密码、不发送输入事件的前提下，输出一段适合直接发到 Agent Link Board 的短摘要。
+- 摘要包含 repo clean/dirty、Mac host 地址、runtime build、inputMode、权限、H.264、音频、采集管线、显示器、buildDiff 和正式验收下一步。
+- 离线 host 时摘要会提示先用 `start-mac-host --promptPassword --requirePassword` 正式安全启动。
+- JSON 报告新增 `boardSummary` 字段，便于脚本自动化读取同一段摘要；摘要不包含密码、系统账号、联络板 token 或 server URL。
+- `scripts/mac/test-mac-resume-status.mjs` 补离线/在线 `--boardSummary`、JSON 内嵌摘要和 secret-like 文本不泄露断言。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- `node scripts/mac/check-mac-resume-status.mjs --boardSummary --timeoutMs 3000`
+- `node scripts/mac/check-mac-resume-status.mjs --json --timeoutMs 3000`
+- `node scripts/mac/test-mac-resume-status.mjs --requireOnline --timeoutMs 10000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 5000`
+- `git diff --check`
+- 冲突标记搜索
+遗留问题：
+- 当前正式 Mac host 仍在线 `192.168.31.122:43770`，runtime build 仍是 `d807536`，repo 当前为 `186cb45`，但 `d807536..186cb45` 无 Mac host runtime 源码变化；本轮未重启 host，也未执行 `inject`。
+- Windows 端正式 E2E 仍等待 Windows Codex 从 WGC raw/NVENC 工作切换或回复。
+下一步建议：
+- 需要同步状态时可直接运行 `node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary`，再把输出发给 Windows Codex。
+- Windows 可继续按现有 call 连接 `192.168.31.122:43770` 做发现、正式认证、H.264 5-10 分钟、音频、剪贴板和 input-log；`inject` 仍需用户明确确认。
+是否改了协议：否。
+是否需要另一端配合：代码改动本身不需要；正式 E2E 仍需要 Windows 端配合。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 09:45
 开发端：Mac Codex
 本轮目标：修正正式密码 Mac host 深度 readiness 容易被默认 `demo-password` 误判的问题，并减少探针密码暴露面。

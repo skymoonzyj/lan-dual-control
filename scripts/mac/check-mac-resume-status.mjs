@@ -20,6 +20,7 @@ const defaults = {
   requireOnline: false,
   requireNoRuntimeChanges: false,
   json: false,
+  boardSummary: false,
 };
 
 function helpRequested(argv) {
@@ -43,6 +44,8 @@ Options:
   --requireOnline            Fail if Mac host /discovery is offline.
   --requireNoRuntimeChanges  Fail if current git has Mac host runtime source
                              changes after the running host build.
+  --boardSummary             Print a short secret-free summary for Agent Link
+                             Board instead of the full human report.
   --json                     Print one machine-readable JSON object.
   --help, -h                 Show this help without probing anything.
 
@@ -66,6 +69,7 @@ function parseArgs(argv) {
       token === "--requireClean" ||
       token === "--requireOnline" ||
       token === "--requireNoRuntimeChanges" ||
+      token === "--boardSummary" ||
       token === "--json"
     ) {
       args[token.slice(2)] = true;
@@ -472,6 +476,63 @@ function formatDisplays(displays) {
     .join(", ");
 }
 
+function formatBoardHostAddress(host) {
+  const lan = Array.isArray(host.lanAddresses) && host.lanAddresses.length > 0
+    ? host.lanAddresses[0]
+    : null;
+  if (lan?.address && lan?.port) return `${lan.address}:${lan.port}`;
+  return `${host.probe.host}:${host.probe.port}`;
+}
+
+function formatBoardBuildDiff(buildDiff) {
+  if (!buildDiff || buildDiff.severity === "ok") return "build=current";
+  if (buildDiff.severity === "stale-metadata") {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} stale metadata only, hostRuntimeChanges=0`;
+  }
+  if (buildDiff.severity === "restart-recommended") {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} restart recommended, hostRuntimeChanges=${buildDiff.changedHostRuntimeFileCount ?? "unknown"}`;
+  }
+  if (buildDiff.differs) {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} differs from repo=${buildDiff.toBuildId || "unknown"}`;
+  }
+  return "build comparison unavailable";
+}
+
+function formatBoardSummary(report) {
+  const { git, host, currentBuildId, recommendations } = report;
+  const repoState = `${currentBuildId || "unknown"} ${git.clean ? "clean" : `dirty:${git.changes.length}`}`;
+  const blockers = recommendations.filter((item) => item.level === "blocker").length;
+  const warnings = recommendations.filter((item) => item.level === "warning").length;
+  const attention = blockers > 0
+    ? `attention=${blockers} blocker(s)`
+    : warnings > 0
+      ? `attention=${warnings} warning(s)`
+      : "attention=none";
+
+  if (!host.online) {
+    return [
+      `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${attention}.`,
+      "Next: start formal host with start-mac-host --promptPassword --requirePassword before Windows E2E.",
+      "Do not send passwords on Agent Link Board; inject still requires explicit user confirmation.",
+    ].join(" ");
+  }
+
+  const permissions = formatPermissions(host.permissions || {});
+  const h264 = statusValue(host.capabilities?.h264Stream);
+  const audio = host.capabilities?.audioMode || statusValue(host.capabilities?.audio);
+  const pipeline = host.capabilities?.capturePipeline || "unknown";
+  const displays = formatDisplays(host.displays);
+  const runtimeBuild = host.runtime?.buildId || "unknown";
+  const buildDiff = formatBoardBuildDiff(host.buildDiff);
+
+  return [
+    `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}.`,
+    `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}.`,
+    "Next formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log.",
+    "Do not send passwords on Agent Link Board; inject still requires explicit user confirmation.",
+  ].join(" ");
+}
+
 function printReport(report) {
   const { git, host, board, recommendations } = report;
   console.log(`[INFO] Mac resume status · ${new Date(report.checkedAt).toLocaleString()}`);
@@ -534,6 +595,7 @@ async function main() {
       requireClean: args.requireClean,
       requireOnline: args.requireOnline,
       requireNoRuntimeChanges: args.requireNoRuntimeChanges,
+      boardSummary: args.boardSummary,
     },
     currentBuildId,
     git,
@@ -541,8 +603,11 @@ async function main() {
     host,
     recommendations,
   };
+  report.boardSummary = formatBoardSummary(report);
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
+  } else if (args.boardSummary) {
+    console.log(report.boardSummary);
   } else {
     printReport(report);
   }

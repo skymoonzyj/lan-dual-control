@@ -102,6 +102,13 @@ function assertNoPasswordLeak(result, label) {
   assert(!combined.includes("super-secret-resume-password"), `${label} leaked password text`);
 }
 
+function assertBoardSummaryShape(text, label) {
+  assert(/Mac resume:/.test(text), `${label} should start with Mac resume summary`);
+  assert(/repo=/.test(text), `${label} should include repo state`);
+  assert(/Do not send passwords/.test(text), `${label} should include password safety note`);
+  assert(!/super-secret-resume-password/.test(text), `${label} should not leak secret-like text`);
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run(args, [flag]);
@@ -126,6 +133,7 @@ function checkOfflineJson(args) {
   assert(payload.host?.probe?.port === 9, "offline payload should keep probe port");
   assert(payload.host?.error?.message, "offline payload should include error.message");
   assert(Array.isArray(payload.recommendations), "offline payload should include recommendations");
+  assertBoardSummaryShape(payload.boardSummary || "", "offline JSON boardSummary");
   assert(payload.recommendations.some((item) => /start-mac-host/.test(item.text)), "offline recommendations should include startup guidance");
   print("OK", "Offline resume status JSON includes probe, error, and next-step guidance");
 }
@@ -146,6 +154,24 @@ function checkRequireOnlineFails(args) {
   assert(payload.ok === false, "requireOnline offline payload should report ok=false");
   assert(payload.recommendations.some((item) => item.level === "blocker"), "requireOnline offline payload should include a blocker");
   print("OK", "requireOnline turns offline Mac host into a failing JSON report");
+}
+
+function checkOfflineBoardSummary(args) {
+  const result = run(args, [
+    "--boardSummary",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "9",
+    "--timeoutMs",
+    "1200",
+  ]);
+  assert(result.status === 0, "offline board summary should stay non-failing without requireOnline");
+  const text = String(result.stdout || "").trim();
+  assertBoardSummaryShape(text, "offline board summary");
+  assert(/Mac host offline/.test(text), "offline board summary should mention host offline");
+  assert(/start formal host/.test(text), "offline board summary should include formal host start guidance");
+  print("OK", "Offline board summary is short, secret-free, and actionable");
 }
 
 function checkOnlineJson(args) {
@@ -175,7 +201,34 @@ function checkOnlineJson(args) {
   assert(Array.isArray(payload.host.lanAddresses), "online payload should include lanAddresses");
   assert(payload.host.buildDiff && typeof payload.host.buildDiff === "object", "online payload should include buildDiff");
   assert(Array.isArray(payload.recommendations), "online payload should include recommendations");
+  assertBoardSummaryShape(payload.boardSummary || "", "online JSON boardSummary");
   print("OK", "Online resume status JSON includes runtime, permissions, capabilities, displays, LAN addresses, and buildDiff");
+}
+
+function checkOnlineBoardSummary(args) {
+  const result = run(args, [
+    "--boardSummary",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--timeoutMs",
+    String(args.timeoutMs),
+  ]);
+  const text = String(result.stdout || "").trim();
+  assertBoardSummaryShape(text, "online board summary");
+  if (/Mac host offline/.test(text)) {
+    if (args.requireOnline) {
+      throw new Error(`online board summary required but host is offline:\n${result.stdout}\n${result.stderr}`);
+    }
+    print("WARN", "Online board summary host-specific assertions skipped because Mac host is offline");
+    return;
+  }
+  assert(/host=/.test(text), "online board summary should include host address");
+  assert(/inputMode=/.test(text), "online board summary should include inputMode");
+  assert(/Permissions/.test(text), "online board summary should include permissions");
+  assert(/Next formal path/.test(text), "online board summary should include formal path");
+  print("OK", "Online board summary includes host, permissions, build, and formal-path status");
 }
 
 function checkPasswordRedaction(args) {
@@ -189,6 +242,7 @@ function checkPasswordRedaction(args) {
     "1200",
     "--server",
     "http://super-secret-resume-password.invalid",
+    "--boardSummary",
   ]);
   assertNoPasswordLeak(result, "resume status JSON");
   print("OK", "Resume status output does not echo unrelated secret-like server text in normal offline mode");
@@ -203,7 +257,9 @@ function main() {
   checkHelp(args);
   checkOfflineJson(args);
   checkRequireOnlineFails(args);
+  checkOfflineBoardSummary(args);
   checkOnlineJson(args);
+  checkOnlineBoardSummary(args);
   checkPasswordRedaction(args);
   print("OK", "Mac resume status self-test passed");
 }

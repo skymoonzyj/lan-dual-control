@@ -59,6 +59,14 @@ node scripts/mac/check-mac-resume-status.mjs --checkBoard
 
 该脚本只读：不会启动服务、不会认证 WebSocket、不会要求或打印密码，也不会发送输入事件。它适合在正式密码端到端验收前先判断当前 Mac host 是否在线、工作区是否干净、运行中 build 是否只是元数据落后，或是否已经有 Mac host 运行源码变化需要先重启。脚本自动化需要稳定字段时可加 `--json`；如果希望把离线 host 或未提交改动变成失败，可加 `--requireOnline` / `--requireClean`。
 
+需要把状态同步到 Agent Link Board 时，可用短摘要模式：
+
+```bash
+node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary
+```
+
+`--boardSummary` 只输出一段适合直接发送到联络板的秘密安全摘要，包含 repo 状态、Mac host 地址、权限、H.264/音频、显示器、build 差异和正式验收下一步；不会输出密码、系统账号或联络板 token。
+
 启动助手会：
 
 - 默认绑定 `0.0.0.0:43770`，打印 Windows 端可填写的局域网地址。
