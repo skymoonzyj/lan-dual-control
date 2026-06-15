@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
@@ -41,6 +43,12 @@ const defaults = {
   h264Bridge: false,
   h264Source: "jpeg",
   h264Encoder: "",
+  motionStimulus: false,
+  motionStimulusBackend: "winforms",
+  motionStimulusWidth: 960,
+  motionStimulusHeight: 540,
+  motionStimulusWarmupMs: 1200,
+  motionStimulusBrowser: "",
   skipBuild: false,
   json: false,
   verbose: false,
@@ -78,6 +86,12 @@ Options:
   --h264Bridge                          Request H.264 and enable the WGC helper -> FFmpeg bridge
   --h264Source <jpeg|raw-bgra|nv12>     Helper source for --h264Bridge. Default: ${defaults.h264Source}
   --h264Encoder <name>                  Optional FFmpeg H.264 encoder, for example h264_nvenc
+  --motionStimulus                      Open a temporary visible animated window before probing
+  --motionStimulusBackend <name>        winforms | browser. Default: ${defaults.motionStimulusBackend}
+  --motionStimulusWidth <px>            Animated window width. Default: ${defaults.motionStimulusWidth}
+  --motionStimulusHeight <px>           Animated window height. Default: ${defaults.motionStimulusHeight}
+  --motionStimulusWarmupMs <ms>         Wait after opening the animation. Default: ${defaults.motionStimulusWarmupMs}
+  --motionStimulusBrowser <path>        Browser exe for the animation window. Default: auto-detect Edge
   --json                                Print JSON result
   --verbose                             Print child command stderr/stdout on failure
   --help, -h                            Show this help without starting a host
@@ -140,6 +154,12 @@ function parseArgs(argv) {
   args.h264Bridge = booleanArg(args.h264Bridge);
   args.h264Source = normalizeH264Source(args.h264Source);
   args.h264Encoder = String(args.h264Encoder || "").trim().toLowerCase();
+  args.motionStimulus = booleanArg(args.motionStimulus);
+  args.motionStimulusBackend = normalizeMotionStimulusBackend(args.motionStimulusBackend);
+  args.motionStimulusWidth = Math.max(320, Number(args.motionStimulusWidth) || defaults.motionStimulusWidth);
+  args.motionStimulusHeight = Math.max(240, Number(args.motionStimulusHeight) || defaults.motionStimulusHeight);
+  args.motionStimulusWarmupMs = Math.max(300, Number(args.motionStimulusWarmupMs) || defaults.motionStimulusWarmupMs);
+  args.motionStimulusBrowser = String(args.motionStimulusBrowser || process.env.LAN_DUAL_MOTION_STIMULUS_BROWSER || "").trim();
   args.skipBuild = booleanArg(args.skipBuild);
   args.json = booleanArg(args.json);
   args.verbose = booleanArg(args.verbose);
@@ -184,6 +204,14 @@ function normalizeH264Source(value) {
   return "jpeg";
 }
 
+function normalizeMotionStimulusBackend(value) {
+  const backend = String(value ?? defaults.motionStimulusBackend).trim().toLowerCase();
+  if (["browser", "edge", "chrome", "chromium"].includes(backend)) {
+    return "browser";
+  }
+  return "winforms";
+}
+
 function booleanArg(value, defaultValue = false) {
   if (value === undefined || value === null || value === "") return defaultValue;
   if (value === true || value === false) return value;
@@ -202,6 +230,10 @@ function normalizeRatioArg(value, fallback = 1) {
     return Math.max(0, Math.min(1, number / 100));
   }
   return Math.max(0, Math.min(1, number));
+}
+
+function delay(ms) {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }
 
 function addArg(argv, name, value) {
@@ -264,6 +296,258 @@ function runCommand(command, commandArgs, { cwd = repoRoot, env = process.env, t
       resolveRun(result);
     });
   });
+}
+
+function findMotionStimulusBrowser(args) {
+  const configured = String(args.motionStimulusBrowser || "").trim();
+  if (configured) {
+    if (!existsSync(configured)) {
+      throw new Error(`motion stimulus browser not found: ${configured}`);
+    }
+    return configured;
+  }
+
+  const candidates = [
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+  ];
+  const browser = candidates.find((candidate) => existsSync(candidate));
+  if (!browser) {
+    throw new Error("motion stimulus requires Microsoft Edge or Chrome; pass --motionStimulusBrowser <path>");
+  }
+  return browser;
+}
+
+function makeMotionStimulusHtml(args) {
+  const targetFps = Math.max(1, Math.min(240, Number(args.profiles?.[0]?.fps) || 60));
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>LAN Dual Control WGC Motion Stimulus</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #05070b; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d", { alpha: false });
+let frame = 0;
+function resize() {
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  canvas.width = Math.max(1, Math.floor(window.innerWidth * dpr));
+  canvas.height = Math.max(1, Math.floor(window.innerHeight * dpr));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", resize);
+resize();
+function draw(now) {
+  frame += 1;
+  const w = window.innerWidth || 1;
+  const h = window.innerHeight || 1;
+  const t = now / 1000;
+  const hue = (t * 90) % 360;
+  ctx.fillStyle = "hsl(" + hue + " 80% 8%)";
+  ctx.fillRect(0, 0, w, h);
+  for (let i = 0; i < 24; i += 1) {
+    const x = ((t * (80 + i * 7)) + i * 97) % (w + 260) - 130;
+    const y = (i * 41 + Math.sin(t * 2 + i) * 80 + h * 0.45) % h;
+    ctx.fillStyle = "hsl(" + ((hue + i * 31) % 360) + " 90% 58%)";
+    ctx.fillRect(x, y, 180 + (i % 5) * 24, 18 + (i % 4) * 12);
+  }
+  for (let i = 0; i < 9; i += 1) {
+    const radius = 34 + i * 9;
+    const x = w * 0.5 + Math.cos(t * (1.3 + i * 0.08) + i) * (w * 0.32);
+    const y = h * 0.5 + Math.sin(t * (1.1 + i * 0.11) + i * 2) * (h * 0.34);
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = "hsla(" + ((hue + 180 + i * 19) % 360) + " 90% 60% / 0.7)";
+    ctx.fill();
+  }
+  ctx.fillStyle = "rgba(255,255,255,0.94)";
+  ctx.font = "700 34px Segoe UI, Arial, sans-serif";
+  ctx.fillText("WGC MOTION STIMULUS", 28, 52);
+  ctx.font = "22px Consolas, monospace";
+  ctx.fillText("target " + ${JSON.stringify(targetFps)} + "Hz  frame " + frame, 30, 86);
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
+`;
+}
+
+function makeMotionStimulusPowerShell(args) {
+  const width = Math.round(args.motionStimulusWidth);
+  const height = Math.round(args.motionStimulusHeight);
+  const targetFps = Math.max(1, Math.min(240, Number(args.profiles?.[0]?.fps) || 60));
+  return `$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+[System.Windows.Forms.Application]::EnableVisualStyles()
+$form = New-Object System.Windows.Forms.Form
+$form.Text = 'LAN Dual Control WGC Motion Stimulus'
+$form.StartPosition = 'Manual'
+$form.Location = New-Object System.Drawing.Point(64, 64)
+$form.Size = New-Object System.Drawing.Size(${width}, ${height})
+$form.TopMost = $true
+$form.BackColor = [System.Drawing.Color]::FromArgb(5, 7, 11)
+$form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::SizableToolWindow
+try {
+  $prop = $form.GetType().GetProperty('DoubleBuffered', [System.Reflection.BindingFlags]'NonPublic,Instance')
+  if ($prop) { $prop.SetValue($form, $true, $null) }
+} catch {}
+$script:Frame = 0
+$script:StartedAt = [DateTime]::UtcNow
+$fontTitle = New-Object System.Drawing.Font('Segoe UI', 24, [System.Drawing.FontStyle]::Bold)
+$fontMono = New-Object System.Drawing.Font('Consolas', 14, [System.Drawing.FontStyle]::Regular)
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = [Math]::Max(8, [Math]::Round(1000 / ${targetFps}))
+$form.Add_Paint({
+  param($sender, $event)
+  $g = $event.Graphics
+  $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighSpeed
+  $g.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighSpeed
+  $w = [Math]::Max(1, $sender.ClientSize.Width)
+  $h = [Math]::Max(1, $sender.ClientSize.Height)
+  $elapsed = ([DateTime]::UtcNow - $script:StartedAt).TotalSeconds
+  $base = [int](($elapsed * 110) % 360)
+  $g.Clear([System.Drawing.Color]::FromArgb(5, 7, 11))
+  for ($i = 0; $i -lt 30; $i++) {
+    $x = [int]((($elapsed * (90 + $i * 8)) + $i * 101) % ($w + 280) - 140)
+    $y = [int](($i * 37 + [Math]::Sin($elapsed * 2.4 + $i) * 88 + $h * 0.48) % $h)
+    $color = [System.Drawing.Color]::FromArgb(230, (($base + $i * 23) % 255), ((90 + $i * 41) % 255), ((210 + $i * 17) % 255))
+    $brush = New-Object System.Drawing.SolidBrush($color)
+    $g.FillRectangle($brush, $x, $y, 180 + (($i % 5) * 28), 18 + (($i % 4) * 12))
+    $brush.Dispose()
+  }
+  for ($i = 0; $i -lt 8; $i++) {
+    $radius = 32 + $i * 10
+    $x = [int]($w * 0.5 + [Math]::Cos($elapsed * (1.5 + $i * 0.12) + $i) * ($w * 0.34))
+    $y = [int]($h * 0.5 + [Math]::Sin($elapsed * (1.2 + $i * 0.15) + $i * 2) * ($h * 0.34))
+    $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(180, ((230 + $i * 19) % 255), ((70 + $i * 31) % 255), ((120 + $i * 43) % 255)))
+    $g.FillEllipse($brush, $x - $radius, $y - $radius, $radius * 2, $radius * 2)
+    $brush.Dispose()
+  }
+  $white = [System.Drawing.Brushes]::White
+  $g.DrawString('WGC MOTION STIMULUS', $fontTitle, $white, 24, 24)
+  $g.DrawString(('target ${targetFps}Hz  frame ' + $script:Frame), $fontMono, $white, 28, 68)
+})
+$timer.Add_Tick({
+  $script:Frame += 1
+  $form.Invalidate()
+})
+$form.Add_Shown({
+  $timer.Start()
+  $form.Activate()
+})
+$form.Add_FormClosed({
+  $timer.Stop()
+  $fontTitle.Dispose()
+  $fontMono.Dispose()
+})
+[System.Windows.Forms.Application]::Run($form)
+`;
+}
+
+async function startMotionStimulus(args) {
+  if (!args.motionStimulus) {
+    return {
+      enabled: false,
+      ok: true,
+      pid: 0,
+      browser: "",
+      cleanup: async () => {},
+    };
+  }
+
+  const dir = await mkdtemp(join(tmpdir(), "lan-dual-wgc-motion-"));
+  let child;
+  let browser = "";
+  let htmlPath = "";
+  let scriptPath = "";
+  if (args.motionStimulusBackend === "browser") {
+    browser = findMotionStimulusBrowser(args);
+    htmlPath = join(dir, "motion.html");
+    await writeFile(htmlPath, makeMotionStimulusHtml(args), "utf8");
+    const userDataDir = join(dir, "profile");
+    child = spawn(browser, [
+      `--user-data-dir=${userDataDir}`,
+      "--no-first-run",
+      "--disable-session-crashed-bubble",
+      "--disable-features=Translate",
+      "--new-window",
+      `--window-size=${Math.round(args.motionStimulusWidth)},${Math.round(args.motionStimulusHeight)}`,
+      "--window-position=64,64",
+      `--app=${pathToFileURL(htmlPath).href}`,
+    ], {
+      stdio: "ignore",
+      windowsHide: false,
+    });
+  } else {
+    scriptPath = join(dir, "motion.ps1");
+    await writeFile(scriptPath, makeMotionStimulusPowerShell(args), "utf8");
+    child = spawn("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      scriptPath,
+    ], {
+      stdio: "ignore",
+      windowsHide: false,
+    });
+  }
+
+  let started = false;
+  await new Promise((resolveStart, rejectStart) => {
+    const timer = setTimeout(() => {
+      started = true;
+      resolveStart();
+    }, args.motionStimulusWarmupMs);
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      rejectStart(error);
+    });
+    child.once("exit", (code, signal) => {
+      if (!started) {
+        clearTimeout(timer);
+        rejectStart(new Error(`motion stimulus browser exited early: ${code ?? signal ?? "unknown"}`));
+      }
+    });
+  }).catch(async (error) => {
+    if (child.exitCode === null) {
+      child.kill();
+    }
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  });
+
+  return {
+    enabled: true,
+    ok: true,
+    backend: args.motionStimulusBackend,
+    pid: child.pid || 0,
+    browser,
+    htmlPath,
+    scriptPath,
+    width: args.motionStimulusWidth,
+    height: args.motionStimulusHeight,
+    warmupMs: args.motionStimulusWarmupMs,
+    cleanup: async () => {
+      if (child.exitCode === null) {
+        child.kill();
+      }
+      await delay(350);
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
+    },
+  };
 }
 
 async function buildHelper(args) {
@@ -469,22 +753,37 @@ async function main() {
     return;
   }
 
+  let motionStimulus = {
+    enabled: false,
+    ok: true,
+    cleanup: async () => {},
+  };
+  const results = [];
+
   const build = await buildHelper(args);
   if (!args.json) {
     console.log(`[OK] WGC helper ready: ${args.helper}${build.skipped ? " (build skipped)" : ""}`);
   }
 
-  const results = [];
-  for (let index = 0; index < args.profiles.length; index += 1) {
-    const profile = args.profiles[index];
-    if (!args.json) {
-      console.log(`[RUN] ${profile.name}`);
+  try {
+    motionStimulus = await startMotionStimulus(args);
+    if (motionStimulus.enabled && !args.json) {
+      console.log(`[OK] Motion stimulus ready: PID ${motionStimulus.pid}, ${Math.round(motionStimulus.width)}x${Math.round(motionStimulus.height)}`);
     }
-    const result = await runProfile(args, profile, index);
-    results.push(result);
-    if (!args.json) {
-      printProfile(result);
+
+    for (let index = 0; index < args.profiles.length; index += 1) {
+      const profile = args.profiles[index];
+      if (!args.json) {
+        console.log(`[RUN] ${profile.name}`);
+      }
+      const result = await runProfile(args, profile, index);
+      results.push(result);
+      if (!args.json) {
+        printProfile(result);
+      }
     }
+  } finally {
+    await motionStimulus.cleanup();
   }
 
   const summary = {
@@ -505,6 +804,20 @@ async function main() {
       h264Bridge: args.h264Bridge,
       h264Source: args.h264Bridge ? args.h264Source : "",
       h264Encoder: args.h264Bridge ? args.h264Encoder : "",
+      motionStimulus: args.motionStimulus,
+      motionStimulusBackend: args.motionStimulusBackend,
+      motionStimulusWidth: args.motionStimulusWidth,
+      motionStimulusHeight: args.motionStimulusHeight,
+      motionStimulusWarmupMs: args.motionStimulusWarmupMs,
+    },
+    motionStimulus: {
+      enabled: motionStimulus.enabled,
+      backend: motionStimulus.backend || "",
+      pid: motionStimulus.pid || 0,
+      browser: motionStimulus.browser || "",
+      width: motionStimulus.width || 0,
+      height: motionStimulus.height || 0,
+      warmupMs: motionStimulus.warmupMs || 0,
     },
     profiles: results.map(compactResult),
     results,

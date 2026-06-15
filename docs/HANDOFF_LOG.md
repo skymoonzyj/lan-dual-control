@@ -19,6 +19,36 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 18:36
+开发端：Windows Codex
+本轮目标：给 WGC benchmark 增加动态画面刺激源，用真实桌面变化对照静态桌面下的源帧 FPS。
+完成内容：
+- `scripts/windows/benchmark-windows-wgc-settings.mjs` 新增 `--motionStimulus`，默认短暂打开 WinForms/GDI 动画窗口；也可用 `--motionStimulusBackend browser` 打开 Edge/Chrome 动画窗口。
+- 新增 `--motionStimulusWidth`、`--motionStimulusHeight`、`--motionStimulusWarmupMs`、`--motionStimulusBrowser` 参数；JSON 输出增加 `motionStimulus` 摘要。
+- 动画窗口会在 benchmark 前启动、等待 warmup，测试结束自动关闭；启动失败时会清理临时目录。
+- 真实对照：WinForms 动态窗口 60Hz/20M/NV12/`h264_nvenc`/repeat-full 短测实收 43 帧、约 23.52 FPS，真实新帧约 4.92 FPS、唯一 helper 源帧约 4.92 FPS、重复帧 79.1%、内容年龄最大 180ms；browser 动态窗口短测约 25.40 FPS、唯一源帧约 4.97 FPS。与静态桌面差距不大，说明当前瓶颈更像 helper 读回/事件节奏，而不是单纯桌面静态。
+修改文件：
+- `scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script benchmark-windows-wgc-settings.mjs`
+- `node scripts/windows/benchmark-windows-wgc-settings.mjs --skipBuild --profile 60:20000:balanced --durationMs 1800 --timeoutMs 50000 --minFrames 5 --minFps 0 --maxGapMs 10000 --maxFrameAgeMs 1000 --resourceSample false --resourceSampleTree false --repeatLastFrame --h264Bridge --h264Source nv12 --h264Encoder h264_nvenc --motionStimulus --motionStimulusBackend winforms --motionStimulusWarmupMs 1200 --json`
+- 早一轮也跑过 `--motionStimulus --motionStimulusBackend browser` 的 Edge 动态窗口短测。
+遗留问题：
+- 动态窗口没有显著提高 WGC helper 源帧 FPS；后续不能继续把低 FPS 归因于静态桌面，应转向 helper 内部采集节奏、D3D readback/转换开销或原生硬编路线。
+下一步建议：
+- 优先做 helper 内部阶段耗时诊断：FrameArrived 间隔、TryGetNextFrame、CopyResource/Map、BGRA->NV12、stdout 写出耗时。
+- 再考虑 helper 原生 H.264/NVENC，减少 Node->FFmpeg 往返和重复帧兜底。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 18:25
 开发端：Windows Codex
 本轮目标：增强 Windows WGC/NV12 H.264 帧节奏诊断，避免把请求 60Hz、重复帧和真实新源帧混在一起判断。
