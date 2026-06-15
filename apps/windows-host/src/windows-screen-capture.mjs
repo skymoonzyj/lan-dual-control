@@ -26,6 +26,8 @@ const wgcH264SourceJpeg = "jpeg";
 const wgcH264SourceRawBgra = "raw-bgra";
 const wgcRepeatFullMode = "full";
 const wgcRepeatSignalMode = "signal";
+const wgcHelperProtocolJsonLines = "json-lines-v1";
+const wgcHelperProtocolBinaryFrame = "binary-frame-v1";
 
 function clampNumber(value, min, max, fallback) {
   const number = Number(value);
@@ -233,6 +235,20 @@ function normalizeWgcRepeatLastFrameMode(value) {
     return wgcRepeatSignalMode;
   }
   return wgcRepeatFullMode;
+}
+
+function normalizeWgcHelperProtocol(value, fallback = wgcHelperProtocolJsonLines) {
+  const protocol = String(value ?? "").trim().toLowerCase();
+  if (!protocol) {
+    return fallback;
+  }
+  if (["binary", "binary-frame", "binary-frame-v1"].includes(protocol)) {
+    return wgcHelperProtocolBinaryFrame;
+  }
+  if (["json", "json-lines", "json-lines-v1"].includes(protocol)) {
+    return wgcHelperProtocolJsonLines;
+  }
+  return fallback;
 }
 
 function parseJsonOutput(output) {
@@ -562,6 +578,10 @@ function targetDimensions(sourceWidth, sourceHeight, requestedWidth, requestedHe
 
 function rawBgraBase64ToBuffer({ dataBase64, width, height }) {
   const payload = Buffer.from(String(dataBase64 || "").trim(), "base64");
+  return assertRawBgraPayloadSize({ payload, width, height });
+}
+
+function assertRawBgraPayloadSize({ payload, width, height }) {
   const expectedBytes = Math.max(1, Number(width) || 0) * Math.max(1, Number(height) || 0) * 4;
   if (payload.length !== expectedBytes) {
     throw new Error(`WGC helper raw BGRA payload size ${payload.length} did not match ${width}x${height}x4=${expectedBytes}`);
@@ -710,6 +730,7 @@ export class WindowsScreenCaptureCoordinator {
     this.h264Encoder = normalizeH264Encoder(process.env.LAN_DUAL_WINDOWS_H264_ENCODER);
     this.wgcHelperCommand = String(process.env.LAN_DUAL_WINDOWS_WGC_HELPER || "").trim();
     this.wgcHelperArgs = splitCommandLineArgs(process.env.LAN_DUAL_WINDOWS_WGC_HELPER_ARGS);
+    this.wgcHelperProtocolOverride = normalizeWgcHelperProtocol(process.env.LAN_DUAL_WINDOWS_WGC_HELPER_PROTOCOL, "");
     this.wgcHelperConfigured = Boolean(this.wgcHelperCommand);
     this.wgcHelperAvailable = commandExistsOrIsPathCommand(this.wgcHelperCommand);
     this.wgcHelperAllowUnsupported = truthyEnv(process.env.LAN_DUAL_WINDOWS_WGC_ALLOW_UNSUPPORTED);
@@ -752,7 +773,12 @@ export class WindowsScreenCaptureCoordinator {
     this.wgcH264BridgePendingFrameInfos = [];
     this.wgcHelperProcess = null;
     this.wgcHelperKey = "";
-    this.wgcHelperLineBuffer = "";
+    this.wgcHelperProtocol = this.wgcHelperProtocolOverride ||
+      (this.wgcH264BridgeEnabled && this.wgcH264Source === wgcH264SourceRawBgra
+        ? wgcHelperProtocolBinaryFrame
+        : wgcHelperProtocolJsonLines);
+    this.wgcHelperBuffer = Buffer.alloc(0);
+    this.wgcHelperBinaryFrameHeader = null;
     this.wgcHelperFrame = null;
     this.wgcHelperFrameId = 0;
     this.wgcHelperFrameWaiters = [];
@@ -849,7 +875,8 @@ export class WindowsScreenCaptureCoordinator {
             helperAvailable: this.wgcHelperAvailable,
             helperCommand: this.wgcHelperCommand,
             helperArgs: this.wgcHelperArgs,
-            helperProtocol: "json-lines-v1",
+            helperProtocol: this.wgcHelperProtocol || wgcHelperProtocolJsonLines,
+            helperProtocolOverride: this.wgcHelperProtocolOverride,
             helperInfo: this.wgcHelperInfo,
             h264BridgeEnabled: this.wgcH264BridgeEnabled,
             h264BridgeAvailable: wgcH264BridgeAvailable,
@@ -875,7 +902,8 @@ export class WindowsScreenCaptureCoordinator {
             helperAvailable: this.wgcHelperAvailable,
             helperCommand: this.wgcHelperCommand,
             helperArgs: this.wgcHelperArgs,
-            helperProtocol: "json-lines-v1",
+            helperProtocol: this.wgcHelperProtocol || wgcHelperProtocolJsonLines,
+            helperProtocolOverride: this.wgcHelperProtocolOverride,
             helperInfo: this.wgcHelperInfo,
             h264BridgeEnabled: this.wgcH264BridgeEnabled,
             h264BridgeAvailable: false,
@@ -979,6 +1007,15 @@ export class WindowsScreenCaptureCoordinator {
     return this.shouldUseWgcH264Bridge(session) && this.wgcH264Source === wgcH264SourceRawBgra
       ? "bgra"
       : "jpeg";
+  }
+
+  getWgcHelperProtocol(session) {
+    if (this.wgcHelperProtocolOverride) {
+      return this.wgcHelperProtocolOverride;
+    }
+    return this.getWgcHelperOutputFormat(session) === "bgra"
+      ? wgcHelperProtocolBinaryFrame
+      : wgcHelperProtocolJsonLines;
   }
 
   makeHostMode(mode = this.mode) {
@@ -1227,9 +1264,11 @@ export class WindowsScreenCaptureCoordinator {
     const jpegQuality = this.jpegQualityForSession(session);
     const bandwidthKbps = normalizeBandwidthKbps(session.maxBandwidthKbps);
     const outputFormat = this.getWgcHelperOutputFormat(session);
+    const helperProtocol = this.getWgcHelperProtocol(session);
     return [
       this.wgcHelperCommand,
       this.wgcHelperArgs.join("\u001f"),
+      helperProtocol,
       outputFormat,
       activeDisplay.id,
       activeDisplay.x,
@@ -1260,6 +1299,7 @@ export class WindowsScreenCaptureCoordinator {
     const jpegQuality = this.jpegQualityForSession(session);
     const bandwidthKbps = normalizeBandwidthKbps(session.maxBandwidthKbps);
     const outputFormat = this.getWgcHelperOutputFormat(session);
+    const helperProtocol = this.getWgcHelperProtocol(session);
     const key = this.makeWgcHelperKey(session);
 
     if (this.wgcHelperProcess && this.wgcHelperKey === key) {
@@ -1268,7 +1308,9 @@ export class WindowsScreenCaptureCoordinator {
 
     this.stopWgcHelperCapture({ silent: true });
     this.wgcHelperKey = key;
-    this.wgcHelperLineBuffer = "";
+    this.wgcHelperProtocol = helperProtocol;
+    this.wgcHelperBuffer = Buffer.alloc(0);
+    this.wgcHelperBinaryFrameHeader = null;
     this.wgcHelperFrame = null;
     this.wgcHelperFrameId = 0;
     this.lastServedWgcHelperFrameId = 0;
@@ -1278,7 +1320,7 @@ export class WindowsScreenCaptureCoordinator {
     const child = spawn(this.wgcHelperCommand, this.wgcHelperArgs, {
       env: {
         ...process.env,
-        LAN_DUAL_WGC_HELPER_PROTOCOL: "json-lines-v1",
+        LAN_DUAL_WGC_HELPER_PROTOCOL: helperProtocol,
         LAN_DUAL_WGC_DISPLAY_ID: activeDisplay.id,
         LAN_DUAL_WGC_DISPLAY_INDEX: String(Number(activeDisplay.index) || 0),
         LAN_DUAL_WGC_DISPLAY_X: String(Number(activeDisplay.x) || 0),
@@ -1336,26 +1378,45 @@ export class WindowsScreenCaptureCoordinator {
     if (!silent) {
       this.wgcHelperKey = "";
     }
-    this.wgcHelperLineBuffer = "";
+    this.wgcHelperBuffer = Buffer.alloc(0);
+    this.wgcHelperBinaryFrameHeader = null;
     this.wgcHelperFrame = null;
     this.wgcH264BridgeFedWgcFrameId = 0;
     this.rejectWgcHelperFrameWaiters(new Error("WGC helper stopped"));
   }
 
   handleWgcHelperChunk(chunk) {
-    this.wgcHelperLineBuffer += String(chunk);
-    while (this.wgcHelperLineBuffer.length > 0) {
-      const newlineIndex = this.wgcHelperLineBuffer.indexOf("\n");
+    this.wgcHelperBuffer = Buffer.concat([this.wgcHelperBuffer, Buffer.from(chunk)]);
+    while (this.wgcHelperBuffer.length > 0) {
+      if (this.wgcHelperBinaryFrameHeader) {
+        const payloadBytes = Number(this.wgcHelperBinaryFrameHeader.payloadBytes) || 0;
+        if (payloadBytes < 0) {
+          this.wgcHelperBinaryFrameHeader = null;
+          this.recordCaptureFailure(new Error("WGC helper binary frame declared a negative payload size"));
+          continue;
+        }
+        if (this.wgcHelperBuffer.length < payloadBytes) {
+          return;
+        }
+        const payload = this.wgcHelperBuffer.subarray(0, payloadBytes);
+        this.wgcHelperBuffer = this.wgcHelperBuffer.subarray(payloadBytes);
+        const header = this.wgcHelperBinaryFrameHeader;
+        this.wgcHelperBinaryFrameHeader = null;
+        this.handleWgcHelperBinaryFrame(header, payload);
+        continue;
+      }
+
+      const newlineIndex = this.wgcHelperBuffer.indexOf(0x0a);
       if (newlineIndex < 0) {
-        if (this.wgcHelperLineBuffer.length > 64 * 1024 * 1024) {
-          this.wgcHelperLineBuffer = "";
-          this.recordCaptureFailure(new Error("WGC helper line buffer exceeded 64MB before newline"));
+        if (this.wgcHelperBuffer.length > 64 * 1024 * 1024) {
+          this.wgcHelperBuffer = Buffer.alloc(0);
+          this.recordCaptureFailure(new Error("WGC helper buffer exceeded 64MB before newline"));
         }
         return;
       }
 
-      const line = this.wgcHelperLineBuffer.slice(0, newlineIndex).trim();
-      this.wgcHelperLineBuffer = this.wgcHelperLineBuffer.slice(newlineIndex + 1);
+      const line = this.wgcHelperBuffer.subarray(0, newlineIndex).toString("utf8").trim();
+      this.wgcHelperBuffer = this.wgcHelperBuffer.subarray(newlineIndex + 1);
       if (!line) {
         continue;
       }
@@ -1378,11 +1439,13 @@ export class WindowsScreenCaptureCoordinator {
         backend: String(message.backend || "unknown"),
         codec: String(message.codec || "jpeg"),
         encoding: String(message.encoding || "base64"),
+        protocol: normalizeWgcHelperProtocol(message.protocol, this.wgcHelperProtocol || wgcHelperProtocolJsonLines),
         pixelFormat: String(message.pixelFormat || "").trim().toLowerCase(),
         width: Number(message.width) || 0,
         height: Number(message.height) || 0,
         fps: Number(message.fps) || 0,
       };
+      this.wgcHelperProtocol = this.wgcHelperInfo.protocol;
       this.lastFailure = "";
       return;
     }
@@ -1393,6 +1456,13 @@ export class WindowsScreenCaptureCoordinator {
     }
 
     if (type && type !== "frame") {
+      return;
+    }
+
+    const encoding = String(message.encoding || this.wgcHelperInfo?.encoding || "").trim().toLowerCase();
+    const declaredPayloadBytes = Number(message.payloadBytes) || 0;
+    if ((encoding === "binary" || message.binaryPayload === true) && declaredPayloadBytes > 0) {
+      this.wgcHelperBinaryFrameHeader = message;
       return;
     }
 
@@ -1445,6 +1515,62 @@ export class WindowsScreenCaptureCoordinator {
       helperFrameId: Number(message.frameId) || 0,
       timestamp: String(message.timestamp || "").trim(),
       payloadBytes: Number(message.payloadBytes) || Math.max(0, Math.floor((normalizedDataUrl.length * 3) / 4)),
+    };
+    this.wgcHelperFrameId += 1;
+    this.lastFailure = "";
+    this.resolveWgcHelperFrameWaiters();
+  }
+
+  handleWgcHelperBinaryFrame(message, payloadBuffer) {
+    const codec = String(message.codec || this.wgcHelperInfo?.codec || "jpeg").trim().toLowerCase();
+    const pixelFormat = String(message.pixelFormat || this.wgcHelperInfo?.pixelFormat || "").trim().toLowerCase();
+    const isRawBgra = codec === "raw-bgra" || pixelFormat === "bgra";
+    const width = Number(message.width) || 0;
+    const height = Number(message.height) || 0;
+    const payload = Buffer.from(payloadBuffer);
+    if (isRawBgra) {
+      try {
+        assertRawBgraPayloadSize({ payload, width, height });
+      } catch (error) {
+        this.recordCaptureFailure(error);
+        return;
+      }
+      this.wgcHelperFrame = {
+        dataBuffer: payload,
+        codec: "raw-bgra",
+        encoding: "binary",
+        pixelFormat: "bgra",
+        width,
+        height,
+        sourceWidth: Number(message.sourceWidth) || 0,
+        sourceHeight: Number(message.sourceHeight) || 0,
+        helperFrameId: Number(message.frameId) || 0,
+        timestamp: String(message.timestamp || "").trim(),
+        payloadBytes: payload.length,
+      };
+      this.wgcHelperFrameId += 1;
+      this.lastFailure = "";
+      this.resolveWgcHelperFrameWaiters();
+      return;
+    }
+
+    if (payload.length < 2 || payload[0] !== 0xff || payload[1] !== 0xd8) {
+      this.recordCaptureFailure(new Error("WGC helper binary JPEG frame did not start with a JPEG SOI marker"));
+      return;
+    }
+    this.wgcHelperFrame = {
+      dataUrl: `data:image/jpeg;base64,${payload.toString("base64")}`,
+      dataBuffer: payload,
+      codec: "jpeg",
+      encoding: "binary",
+      pixelFormat: "jpeg",
+      width,
+      height,
+      sourceWidth: Number(message.sourceWidth) || 0,
+      sourceHeight: Number(message.sourceHeight) || 0,
+      helperFrameId: Number(message.frameId) || 0,
+      timestamp: String(message.timestamp || "").trim(),
+      payloadBytes: payload.length,
     };
     this.wgcHelperFrameId += 1;
     this.lastFailure = "";
@@ -1725,6 +1851,13 @@ export class WindowsScreenCaptureCoordinator {
       if (payload.codec !== "raw-bgra" && payload.pixelFormat !== "bgra") {
         throw new Error(`WGC H.264 raw bridge expected raw BGRA, got ${payload.codec || payload.pixelFormat || "unknown"}`);
       }
+      if (Buffer.isBuffer(payload.dataBuffer)) {
+        return assertRawBgraPayloadSize({
+          payload: payload.dataBuffer,
+          width: Number(payload.width) || 0,
+          height: Number(payload.height) || 0,
+        });
+      }
       return rawBgraBase64ToBuffer({
         dataBase64: payload.dataBase64,
         width: Number(payload.width) || 0,
@@ -1790,6 +1923,7 @@ export class WindowsScreenCaptureCoordinator {
       sourcePayloadBytes: Number(payload.payloadBytes) || 0,
       sourceCodec: String(payload.codec || "").trim(),
       sourcePixelFormat: String(payload.pixelFormat || "").trim(),
+      sourceEncoding: String(payload.encoding || "").trim(),
       droppedSourceFrames: repeatedFrame ? 0 : Math.max(0, sourceFrameId - previousFedFrameId - 1),
     };
 

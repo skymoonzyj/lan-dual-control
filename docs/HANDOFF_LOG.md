@@ -19,6 +19,45 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 11:35
+开发端：Windows Codex
+本轮目标：把 WGC raw-bgra H.264 bridge 的 helper 内部传输从 JSON/base64 推进到二进制 payload，减少 raw 像素承载开销。
+完成内容：
+- `apps/windows-wgc-helper` 新增 `--protocol json-lines-v1|binary-frame-v1` 和 `LAN_DUAL_WGC_HELPER_PROTOCOL`；旧 `json-lines-v1` 保持不变，`binary-frame-v1` 会输出一行 JSON header 后紧跟原始 payload。
+- Windows host 为普通 WGC JPEG helper 保持 `json-lines-v1`；当会话走 `--wgcH264Source raw-bgra` 时默认请求 `binary-frame-v1`，并在 `/discovery.capabilities.screen.wgc.helperProtocol` 暴露计划协议。
+- Node host stdout parser 同时兼容 JSON 行和 binary-frame，raw-bgra binary payload 直接作为 `Buffer` 喂给 FFmpeg，不再先 base64 解码。
+- `test-windows-wgc-mode` 的 mock helper 支持 `binary-frame-v1`，raw-bgra H.264 bridge 合同会断言 helperProtocol；`test-windows-wgc-helper` 新增 helper mock binary raw 合同解析。
+- 文档同步为：raw 二进制管道已完成，下一步转 NV12/helper 原生硬编和 Mac client 真连观感/资源对照。
+修改文件：
+- `apps/windows-wgc-helper/src/main.rs`
+- `apps/windows-host/src/windows-screen-capture.mjs`
+- `scripts/windows/test-windows-wgc-mode.mjs`
+- `scripts/windows/test-windows-wgc-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `cargo fmt --check` / `cargo check --quiet` in `apps/windows-wgc-helper`
+- `node --check apps/windows-host/src/windows-screen-capture.mjs`
+- `node --check scripts/windows/test-windows-wgc-mode.mjs`
+- `node --check scripts/windows/test-windows-wgc-helper.mjs`
+- `node scripts/windows/test-windows-wgc-mode.mjs --mockHelper --h264Bridge --durationMs 2200 --minFrames 2 --h264Source raw-bgra --width 320 --height 180`：45 帧通过，pipeline=`windows-wgc-helper-raw-bgra-ffmpeg-h264`。
+- `node scripts/windows/test-windows-wgc-helper.mjs --skipRealCapture --skipRealHostIntegration --observerDurationMs 1400 --minObserverFrames 2`：helper build/probe、mock JSON、mock binary raw 2 帧、mock Node host 43 帧通过。
+- 真实 helper + `h264_nvenc` raw-bgra binary 短观察：`320x180` 2.5 秒 46 帧、约 18.28 FPS；`1280x720` 两轮 2.2 秒短测均为 66 帧、约 29.6-30.0 FPS，`helperProtocol=binary-frame-v1`，pipeline=`windows-wgc-helper-raw-bgra-ffmpeg-h264`。
+遗留问题：
+- 这仍然是 helper CPU readback + raw BGRA stdin + FFmpeg/NVENC 桥接，不是最终最省资源形态；最新 720p 静态桌面复验 fresh helper frame 2、repeat full 64，pacing 能补到约 30 FPS，但真实源帧仍受桌面变化和 WGC `FrameArrived` 节奏影响。
+- 未做 Mac client 真连主观观感和资源对照；也未改共享 WebSocket 协议。
+下一步建议：
+- 继续推进 WGC helper 输出 NV12 或 helper 原生硬编，减少 BGRA->FFmpeg 转换成本。
+- 让 Mac client 真实连接 Windows host，对比 WGC raw-bgra binary H.264、ffmpeg-h264、binary-h264 和 JPEG fallback 的画质、延迟、带宽、CPU。
+是否改了协议：否。只改 Windows host 与 WGC helper 的内部 stdout 合同，远控 WebSocket 协议未变。
+是否需要另一端配合：代码改动本身不需要；真连观感验收需要 Mac client 连接 Windows host。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 11:10
 开发端：Windows Codex
 本轮目标：给 Windows 正式 Mac E2E 预检/聚合脚本增加可直接发联络板的无密摘要，减少双端手工同步。

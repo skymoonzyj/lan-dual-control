@@ -116,6 +116,9 @@ const intervalMs = Math.max(8, Math.round(1000 / fps));
 const dataBase64 = ${JSON.stringify(onePixelJpegBase64)};
 const outputFormat = String(process.env.LAN_DUAL_WGC_OUTPUT_FORMAT || "jpeg").toLowerCase();
 const rawBgra = outputFormat === "bgra" || outputFormat === "raw-bgra" || outputFormat === "raw";
+const protocol = String(process.env.LAN_DUAL_WGC_HELPER_PROTOCOL || "json-lines-v1").toLowerCase();
+const binaryProtocol = protocol === "binary-frame-v1" || protocol === "binary-frame" || protocol === "binary";
+const jpegFrame = Buffer.from(dataBase64, "base64");
 const rawFrame = rawBgra ? Buffer.alloc(width * height * 4) : null;
 if (rawFrame) {
   for (let y = 0; y < height; y += 1) {
@@ -129,20 +132,28 @@ if (rawFrame) {
   }
 }
 const rawBase64 = rawFrame ? rawFrame.toString("base64") : "";
-console.log(JSON.stringify({
+function emit(message, payload = null) {
+  process.stdout.write(JSON.stringify(message) + "\\n");
+  if (payload) {
+    process.stdout.write(payload);
+  }
+}
+emit({
   type: "hello",
   backend: "contract-test-wgc-helper",
   codec: rawBgra ? "raw-bgra" : "jpeg",
-  encoding: "base64",
+  encoding: binaryProtocol ? "binary" : "base64",
+  protocol: binaryProtocol ? "binary-frame-v1" : "json-lines-v1",
   pixelFormat: rawBgra ? "bgra" : "jpeg",
   width,
   height,
   fps,
-}));
+});
 let frameId = 0;
 setInterval(() => {
   frameId += 1;
-  console.log(JSON.stringify({
+  const payload = rawBgra ? rawFrame : jpegFrame;
+  const frame = {
     type: "frame",
     frameId,
     timestamp: new Date().toISOString(),
@@ -151,11 +162,17 @@ setInterval(() => {
     sourceWidth: width,
     sourceHeight: height,
     codec: rawBgra ? "raw-bgra" : "jpeg",
-    encoding: "base64",
+    encoding: binaryProtocol ? "binary" : "base64",
     pixelFormat: rawBgra ? "bgra" : "jpeg",
-    dataBase64: rawBgra ? rawBase64 : dataBase64,
-    payloadBytes: rawBgra ? rawFrame.length : Buffer.byteLength(dataBase64, "base64"),
-  }));
+    payloadBytes: payload.length,
+  };
+  if (binaryProtocol) {
+    frame.binaryPayload = true;
+    emit(frame, payload);
+  } else {
+    frame.dataBase64 = rawBgra ? rawBase64 : dataBase64;
+    emit(frame);
+  }
 }, intervalMs);
 `;
   writeFileSync(helperPath, source, "utf8");
@@ -294,6 +311,8 @@ async function main() {
       assert(wgc.h264BridgeEnabled === true, `expected WGC H.264 bridge to be enabled; got ${JSON.stringify(wgc)}`);
       assert(wgc.h264BridgeAvailable === true, `expected WGC H.264 bridge to be available; got ${JSON.stringify(wgc)}`);
       assert(wgc.h264BridgeSource === args.h264Source, `expected h264BridgeSource=${args.h264Source}, got ${wgc.h264BridgeSource || "missing"}`);
+      const expectedHelperProtocol = args.h264Source === "raw-bgra" ? "binary-frame-v1" : "json-lines-v1";
+      assert(wgc.helperProtocol === expectedHelperProtocol, `expected helperProtocol=${expectedHelperProtocol}, got ${wgc.helperProtocol || "missing"}`);
       assert(session.videoCodec === "h264", `expected negotiated videoCodec=h264, got ${session.videoCodec || "missing"}`);
       assert(session.videoEncoding === "annexb-base64", `expected annexb-base64, got ${session.videoEncoding || "missing"}`);
       const expectedPipeline = args.h264Source === "raw-bgra"

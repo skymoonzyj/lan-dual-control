@@ -141,50 +141,62 @@ function runCommand(command, args, { cwd = repoRoot, env = process.env, timeoutM
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
-    let stdout = "";
-    let stderr = "";
+    const stdoutChunks = [];
+    const stderrChunks = [];
     const timer = setTimeout(() => {
       child.kill();
+      const stdoutBuffer = Buffer.concat(stdoutChunks);
+      const stderrBuffer = Buffer.concat(stderrChunks);
       resolveRun({
         command,
         args,
         cwd,
         exitCode: null,
         timedOut: true,
-        stdout,
-        stderr,
+        stdout: stdoutBuffer.toString("utf8"),
+        stderr: stderrBuffer.toString("utf8"),
+        stdoutBuffer,
+        stderrBuffer,
         elapsedMs: Math.round(performance.now() - startedAt),
       });
     }, timeoutMs);
     child.stdout.on("data", (chunk) => {
-      stdout += String(chunk);
+      stdoutChunks.push(Buffer.from(chunk));
     });
     child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
+      stderrChunks.push(Buffer.from(chunk));
     });
     child.on("error", (error) => {
       clearTimeout(timer);
+      const stdoutBuffer = Buffer.concat(stdoutChunks);
+      const stderrBuffer = Buffer.concat(stderrChunks);
       resolveRun({
         command,
         args,
         cwd,
         exitCode: null,
         timedOut: false,
-        stdout,
-        stderr: `${stderr}\n${error.message}`.trim(),
+        stdout: stdoutBuffer.toString("utf8"),
+        stderr: `${stderrBuffer.toString("utf8")}\n${error.message}`.trim(),
+        stdoutBuffer,
+        stderrBuffer,
         elapsedMs: Math.round(performance.now() - startedAt),
       });
     });
     child.on("close", (exitCode) => {
       clearTimeout(timer);
+      const stdoutBuffer = Buffer.concat(stdoutChunks);
+      const stderrBuffer = Buffer.concat(stderrChunks);
       resolveRun({
         command,
         args,
         cwd,
         exitCode,
         timedOut: false,
-        stdout,
-        stderr,
+        stdout: stdoutBuffer.toString("utf8"),
+        stderr: stderrBuffer.toString("utf8"),
+        stdoutBuffer,
+        stderrBuffer,
         elapsedMs: Math.round(performance.now() - startedAt),
       });
     });
@@ -211,6 +223,33 @@ function parseJsonLines(output) {
     .map((line) => line.trim())
     .filter((line) => line.startsWith("{"))
     .map((line) => JSON.parse(line));
+}
+
+function parseBinaryFrames(buffer) {
+  const messages = [];
+  let offset = 0;
+  while (offset < buffer.length) {
+    const newlineIndex = buffer.indexOf(0x0a, offset);
+    if (newlineIndex < 0) {
+      throw new Error(`binary helper output ended before JSON header newline at offset ${offset}`);
+    }
+    const line = buffer.subarray(offset, newlineIndex).toString("utf8").trim();
+    offset = newlineIndex + 1;
+    if (!line) {
+      continue;
+    }
+    const message = JSON.parse(line.replace(/^\uFEFF/, ""));
+    const payloadBytes = Number(message.payloadBytes) || 0;
+    if (String(message.encoding || "").toLowerCase() === "binary" || message.binaryPayload === true) {
+      if (offset + payloadBytes > buffer.length) {
+        throw new Error(`binary helper payload truncated: need ${payloadBytes}, have ${buffer.length - offset}`);
+      }
+      message.payloadBuffer = buffer.subarray(offset, offset + payloadBytes);
+      offset += payloadBytes;
+    }
+    messages.push(message);
+  }
+  return messages;
 }
 
 async function buildHelper(args) {
@@ -246,6 +285,41 @@ async function checkMockFrames(args) {
     assert(String(frame.dataBase64 || "").length > 0, "mock frame missing dataBase64");
   }
   return { hello, frameCount: frames.length };
+}
+
+async function checkMockBinaryRawFrames(args) {
+  const result = await runRequired(helperExe, [
+    "--mock",
+    "--frames",
+    "2",
+    "--fps",
+    "30",
+    "--width",
+    "8",
+    "--height",
+    "6",
+    "--outputFormat",
+    "bgra",
+    "--protocol",
+    "binary-frame-v1",
+  ], {
+    cwd: helperDir,
+    timeoutMs: args.timeoutMs,
+  });
+  const messages = parseBinaryFrames(result.stdoutBuffer);
+  const hello = messages.find((line) => line.type === "hello");
+  const frames = messages.filter((line) => line.type === "frame");
+  assert(hello?.protocol === "binary-frame-v1", `missing helper binary protocol: ${JSON.stringify(hello)}`);
+  assert(hello?.codec === "raw-bgra", `expected raw-bgra hello, got ${JSON.stringify(hello)}`);
+  assert(hello?.encoding === "binary", `expected binary hello encoding, got ${JSON.stringify(hello)}`);
+  assert(frames.length === 2, `expected 2 binary raw mock frames, got ${frames.length}`);
+  for (const frame of frames) {
+    assert(frame.codec === "raw-bgra", `expected raw-bgra binary frame, got ${JSON.stringify(frame)}`);
+    assert(frame.encoding === "binary", `expected binary frame encoding, got ${JSON.stringify(frame)}`);
+    assert(frame.payloadBuffer?.length === 8 * 6 * 4, `binary raw payload length mismatch: ${frame.payloadBuffer?.length}`);
+    assert(Number(frame.payloadBytes) === frame.payloadBuffer.length, "binary raw payloadBytes did not match actual bytes");
+  }
+  return { hello, frameCount: frames.length, payloadBytes: frames[0].payloadBuffer.length };
 }
 
 function assertJpegBase64(frame, label) {
@@ -424,16 +498,18 @@ async function main() {
   const helperPath = await buildHelper(args);
   const probe = await probeHelper(args);
   const mock = await checkMockFrames(args);
+  const mockBinaryRaw = await checkMockBinaryRawFrames(args);
   const realCapture = args.skipRealCapture ? null : await checkRealCaptureFrames(args);
   const mockObserver = args.skipObserver ? null : await checkMockNodeHostIntegration(args);
   const realHost = args.skipObserver || args.skipRealHostIntegration ? null : await checkRealNodeHostIntegration(args);
-  const summary = { ok: true, helperPath, probe, mock, realCapture, mockObserver, realHost };
+  const summary = { ok: true, helperPath, probe, mock, mockBinaryRaw, realCapture, mockObserver, realHost };
   if (args.json) {
     console.log(JSON.stringify(summary, null, 2));
   } else {
     console.log(`[OK] Rust WGC helper built: ${helperPath}`);
     console.log(`[OK] WGC probe: ${probe.displayName || "display"} ${probe.width}x${probe.height}`);
     console.log(`[OK] Mock contract frames: ${mock.frameCount}`);
+    console.log(`[OK] Mock binary raw BGRA frames: ${mockBinaryRaw.frameCount}, ${mockBinaryRaw.payloadBytes} bytes each`);
     if (realCapture) {
       console.log(`[OK] Real WGC capture: ${realCapture.frameCount} frame(s) ${realCapture.width}x${realCapture.height} from ${realCapture.sourceWidth}x${realCapture.sourceHeight}, q=${realCapture.jpegQuality}, ${realCapture.payloadBytes} bytes first JPEG`);
     }

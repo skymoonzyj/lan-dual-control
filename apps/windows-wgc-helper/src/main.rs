@@ -56,6 +56,7 @@ struct Args {
     width: i32,
     height: i32,
     output_format: OutputFormat,
+    helper_protocol: HelperProtocol,
     jpeg_quality: f32,
     display_x: i32,
     display_y: i32,
@@ -65,6 +66,12 @@ struct Args {
 enum OutputFormat {
     Jpeg,
     Bgra,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HelperProtocol {
+    JsonLines,
+    BinaryFrame,
 }
 
 impl OutputFormat {
@@ -83,6 +90,22 @@ impl OutputFormat {
     }
 }
 
+impl HelperProtocol {
+    fn label(self) -> &'static str {
+        match self {
+            HelperProtocol::JsonLines => "json-lines-v1",
+            HelperProtocol::BinaryFrame => "binary-frame-v1",
+        }
+    }
+
+    fn frame_encoding(self) -> &'static str {
+        match self {
+            HelperProtocol::JsonLines => "base64",
+            HelperProtocol::BinaryFrame => "binary",
+        }
+    }
+}
+
 impl Default for Args {
     fn default() -> Self {
         Self {
@@ -95,6 +118,10 @@ impl Default for Args {
             width: env_number("LAN_DUAL_WGC_WIDTH", 1280, 1, 7680),
             height: env_number("LAN_DUAL_WGC_HEIGHT", 720, 1, 4320),
             output_format: env_output_format("LAN_DUAL_WGC_OUTPUT_FORMAT", OutputFormat::Jpeg),
+            helper_protocol: env_helper_protocol(
+                "LAN_DUAL_WGC_HELPER_PROTOCOL",
+                HelperProtocol::JsonLines,
+            ),
             jpeg_quality: env_jpeg_quality("LAN_DUAL_WGC_JPEG_QUALITY", 0.62),
             display_x: env_number("LAN_DUAL_WGC_DISPLAY_X", 0, -32768, 32767),
             display_y: env_number("LAN_DUAL_WGC_DISPLAY_Y", 0, -32768, 32767),
@@ -116,6 +143,7 @@ Options:
   --width <px>        Requested width. Default: LAN_DUAL_WGC_WIDTH or 1280
   --height <px>       Requested height. Default: LAN_DUAL_WGC_HEIGHT or 720
   --outputFormat <f>  jpeg | bgra. Default: LAN_DUAL_WGC_OUTPUT_FORMAT or jpeg
+  --protocol <p>      json-lines-v1 | binary-frame-v1. Default: LAN_DUAL_WGC_HELPER_PROTOCOL or json-lines-v1
   --jpegQuality <n>   JPEG quality as 0.01-1.0 or 1-100. Default: LAN_DUAL_WGC_JPEG_QUALITY or 0.62
   --displayX <px>     Monitor lookup point X. Default: LAN_DUAL_WGC_DISPLAY_X or 0
   --displayY <px>     Monitor lookup point Y. Default: LAN_DUAL_WGC_DISPLAY_Y or 0
@@ -125,7 +153,7 @@ Description:
   This helper is the native Windows side of LAN_DUAL_WINDOWS_WGC_HELPER.
   Default capture mode reads Direct3D11CaptureFrame surfaces, copies them to a
   CPU-readable D3D11 staging texture, and emits JPEG or raw BGRA frames over
-  the json-lines-v1 contract consumed by apps/windows-host.
+  json-lines-v1 or binary-frame-v1 consumed by apps/windows-host.
 "#
     );
 }
@@ -146,6 +174,10 @@ fn parse_args() -> Result<Args, String> {
             "--outputFormat" => {
                 let value = parse_next::<String>(&mut iter, "--outputFormat")?;
                 args.output_format = parse_output_format(&value)?;
+            }
+            "--protocol" => {
+                let value = parse_next::<String>(&mut iter, "--protocol")?;
+                args.helper_protocol = parse_helper_protocol(&value)?;
             }
             "--jpegQuality" => {
                 let value = parse_next::<f32>(&mut iter, "--jpegQuality")?;
@@ -194,11 +226,26 @@ fn env_output_format(name: &str, fallback: OutputFormat) -> OutputFormat {
         .unwrap_or(fallback)
 }
 
+fn env_helper_protocol(name: &str, fallback: HelperProtocol) -> HelperProtocol {
+    env::var(name)
+        .ok()
+        .and_then(|value| parse_helper_protocol(&value).ok())
+        .unwrap_or(fallback)
+}
+
 fn parse_output_format(value: &str) -> Result<OutputFormat, String> {
     match value.trim().to_ascii_lowercase().as_str() {
         "" | "jpeg" | "jpg" | "mjpeg" => Ok(OutputFormat::Jpeg),
         "bgra" | "raw-bgra" | "raw_bgra" | "raw" => Ok(OutputFormat::Bgra),
         other => Err(format!("Unsupported --outputFormat: {other}")),
+    }
+}
+
+fn parse_helper_protocol(value: &str) -> Result<HelperProtocol, String> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "" | "json" | "json-lines" | "json-lines-v1" => Ok(HelperProtocol::JsonLines),
+        "binary" | "binary-frame" | "binary-frame-v1" => Ok(HelperProtocol::BinaryFrame),
+        other => Err(format!("Unsupported --protocol: {other}")),
     }
 }
 
@@ -218,13 +265,26 @@ fn print_json_line(value: serde_json::Value) -> Result<(), String> {
     stdout.flush().map_err(|error| error.to_string())
 }
 
+fn print_binary_frame(mut header: serde_json::Value, payload: &[u8]) -> Result<(), String> {
+    header["encoding"] = json!("binary");
+    header["binaryPayload"] = json!(true);
+    header["payloadBytes"] = json!(payload.len());
+    let mut stdout = io::stdout().lock();
+    serde_json::to_writer(&mut stdout, &header).map_err(|error| error.to_string())?;
+    stdout.write_all(b"\n").map_err(|error| error.to_string())?;
+    stdout
+        .write_all(payload)
+        .map_err(|error| error.to_string())?;
+    stdout.flush().map_err(|error| error.to_string())
+}
+
 fn run_mock(args: &Args) -> Result<(), String> {
     print_json_line(json!({
         "type": "hello",
         "backend": "rust-wgc-helper-contract",
         "codec": args.output_format.helper_codec(),
-        "encoding": "base64",
-        "protocol": "json-lines-v1",
+        "encoding": args.helper_protocol.frame_encoding(),
+        "protocol": args.helper_protocol.label(),
         "width": args.width,
         "height": args.height,
         "pixelFormat": args.output_format.pixel_format(),
@@ -240,18 +300,14 @@ fn run_mock(args: &Args) -> Result<(), String> {
     } else {
         None
     };
+    let jpeg_mock_frame = base64::engine::general_purpose::STANDARD
+        .decode(ONE_PIXEL_JPEG)
+        .map_err(|error| format!("built-in mock JPEG base64 decode failed: {error}"))?;
+    let payload = raw_mock_frame.as_deref().unwrap_or(&jpeg_mock_frame);
     let raw_mock_frame_base64 = raw_mock_frame
         .as_ref()
         .map(|bytes| base64::engine::general_purpose::STANDARD.encode(bytes));
-    let payload_bytes = raw_mock_frame
-        .as_ref()
-        .map(|bytes| bytes.len())
-        .unwrap_or_else(|| {
-            base64::engine::general_purpose::STANDARD
-                .decode(ONE_PIXEL_JPEG)
-                .map(|bytes| bytes.len())
-                .unwrap_or(0)
-        });
+    let payload_bytes = payload.len();
     let frame_delay = Duration::from_millis((1000 / args.fps.max(1) as u64).max(1));
     let mut frame_id = 0u32;
     loop {
@@ -265,14 +321,18 @@ fn run_mock(args: &Args) -> Result<(), String> {
             "sourceWidth": args.width,
             "sourceHeight": args.height,
             "codec": args.output_format.helper_codec(),
-            "encoding": "base64",
+            "encoding": args.helper_protocol.frame_encoding(),
             "pixelFormat": args.output_format.pixel_format(),
             "jpegQuality": args.jpeg_quality,
             "scaled": false,
             "payloadBytes": payload_bytes,
         });
-        frame["dataBase64"] = json!(raw_mock_frame_base64.as_deref().unwrap_or(ONE_PIXEL_JPEG));
-        print_json_line(frame)?;
+        if args.helper_protocol == HelperProtocol::BinaryFrame {
+            print_binary_frame(frame, payload)?;
+        } else {
+            frame["dataBase64"] = json!(raw_mock_frame_base64.as_deref().unwrap_or(ONE_PIXEL_JPEG));
+            print_json_line(frame)?;
+        }
         if args.frames > 0 && frame_id >= args.frames {
             break;
         }
@@ -374,7 +434,7 @@ unsafe fn probe_wgc(args: &Args) -> Result<serde_json::Value, String> {
         "outputFormat": args.output_format.helper_codec(),
         "pixelFormat": args.output_format.pixel_format(),
         "requestedJpegQuality": args.jpeg_quality,
-        "helperProtocol": "json-lines-v1",
+        "helperProtocol": args.helper_protocol.label(),
         "nextStep": "run helper without --probe/--mock to emit real capture frames",
     }))
 }
@@ -407,8 +467,8 @@ unsafe fn capture_wgc(args: &Args) -> Result<(), String> {
         "type": "hello",
         "backend": "windows-graphics-capture",
         "codec": args.output_format.helper_codec(),
-        "encoding": "base64",
-        "protocol": "json-lines-v1",
+        "encoding": args.helper_protocol.frame_encoding(),
+        "protocol": args.helper_protocol.label(),
         "pixelFormat": args.output_format.pixel_format(),
         "displayName": objects.display_name,
         "width": output_width,
@@ -452,7 +512,7 @@ unsafe fn capture_wgc(args: &Args) -> Result<(), String> {
             .map_err(|error| format!("Direct3D11CaptureFrame.Close failed: {error}"))?;
 
         emitted += 1;
-        print_json_line(json!({
+        let mut header = json!({
             "type": "frame",
             "frameId": emitted,
             "timestamp": now_iso_like(),
@@ -461,13 +521,19 @@ unsafe fn capture_wgc(args: &Args) -> Result<(), String> {
             "sourceWidth": captured.source_width,
             "sourceHeight": captured.source_height,
             "codec": args.output_format.helper_codec(),
-            "encoding": "base64",
+            "encoding": args.helper_protocol.frame_encoding(),
             "pixelFormat": args.output_format.pixel_format(),
             "jpegQuality": args.jpeg_quality,
             "scaled": captured.width != captured.source_width || captured.height != captured.source_height,
-            "dataBase64": base64::engine::general_purpose::STANDARD.encode(&captured.bytes),
             "payloadBytes": captured.bytes.len(),
-        }))?;
+        });
+        if args.helper_protocol == HelperProtocol::BinaryFrame {
+            print_binary_frame(header, &captured.bytes)?;
+        } else {
+            header["dataBase64"] =
+                json!(base64::engine::general_purpose::STANDARD.encode(&captured.bytes));
+            print_json_line(header)?;
+        }
 
         if args.frames > 0 && emitted >= args.frames {
             break;

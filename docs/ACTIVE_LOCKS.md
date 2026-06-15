@@ -32,6 +32,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-wgc-helper/`, `apps/windows-host/src/windows-screen-capture.mjs`, `scripts/windows/test-windows-wgc-mode.mjs`, `scripts/windows/test-windows-wgc-helper.mjs`, `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 11:35 | WGC raw-bgra H.264 bridge 默认使用 helper 内部 `binary-frame-v1`，helper stdout 发送 JSON header + 原始 BGRA payload，避免 raw 像素走 JSON/base64；mock 合同、helper binary raw 合同和真实 helper + NVENC 720p 短观察通过。 |
 | Windows Codex | `scripts/windows/check-mac-formal-e2e.mjs`, `scripts/windows/test-mac-formal-e2e-preflight.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 11:10 | Windows formal E2E runner 新增 `--boardSummary`，可在无密码预检或正式完成后输出可直接发 Agent Link Board 的秘密安全摘要；JSON 预检同步带 `boardSummary`；回归覆盖离线/在线摘要和 mock 快速路径摘要，真实 Mac host 只读摘要 ready。 |
 | Windows Codex | `scripts/windows/test-mac-formal-e2e-preflight.mjs`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 10:55 | 新增 Windows formal E2E preflight 回归脚本，覆盖离线文本/JSON、JSON 防呆、mock JSON、成功预检后的密码守卫和 mock 快速路径，避免后续改动破坏无密码正式验收准备流程。 |
 | Windows Codex | `scripts/windows/check-mac-formal-e2e.mjs`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 10:45 | Windows formal E2E runner 新增无密码 `--preflightOnly` 和 `--preflightOnly --json`，可只读检查 Mac host `/discovery`、能力、inputMode 和正式验收命令；正式长测前会先预检，失败时不提示输入密码。 |
