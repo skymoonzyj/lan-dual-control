@@ -17,6 +17,40 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Mac Codex
+
+日期：2026-06-15 10:20
+开发端：Mac Codex
+本轮目标：新增正式端到端验收前的 Mac 侧清单状态工具，减少白天恢复时手工判断是否可以 call Windows。
+完成内容：
+- 新增 `scripts/mac/check-mac-formal-e2e-status.mjs`：复用 `check-mac-resume-status --json`，只读生成正式 E2E checklist，覆盖 repo、Agent Link Board、Mac host、LAN 地址、`inputMode=log`、屏幕录制/辅助功能/输入监控、H.264、系统 PCM、剪贴板、显示器和 buildDiff。
+- 输出 `readyToCall`、`counts`、`checklist`、`callText` 和 `boardSummary`；`--boardSummary` 可直接发送到联络板，`--json` 可供自动化读取。
+- 默认检查 Agent Link Board；离线 host、脏工作区、不可读联络板、缺权限/能力会形成 blocker 或 warning。开发中本地预览可用 `--allowDirty`，正式 call 前不应放宽。
+- 脚本不启动服务、不认证 WebSocket、不要求或打印密码、不发送输入事件；`inject` 明确标为跳过，仍需用户另行明确确认。
+- 新增 `scripts/mac/test-mac-formal-e2e-status.mjs`，覆盖帮助、离线 blocker、在线 checklist shape、board summary 和 secret-like 文本不泄露。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-formal-e2e-status.mjs`
+- `node --check scripts/mac/test-mac-formal-e2e-status.mjs`
+- `node scripts/mac/test-mac-formal-e2e-status.mjs --requireOnline --timeoutMs 12000`
+- `node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary --allowDirty --timeoutMs 8000`
+遗留问题：
+- 当前正式 Mac host 仍在线 `192.168.31.122:43770`，runtime build 是 `d807536`，repo 当前为 `24e588f` 加本轮 WIP；`d807536..24e588f` 无 Mac host runtime 源码变化，清单会把它作为 stale metadata warning。
+- 正式 Windows 侧发现/认证/H.264 5-10 分钟/音频/剪贴板/input-log 仍需 Windows Codex 下一轮配合；本轮未执行 inject。
+下一步建议：
+- 白天恢复后先跑 `node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary`，如果 `readyToCall=true` 再把摘要发联络板并 call Windows。
+- Windows 端继续连接 `192.168.31.122:43770` 做正式发现、认证、H.264 5-10 分钟、音频、剪贴板和 input-log；inject 仍需用户明确确认。
+是否改了协议：否。
+是否需要另一端配合：代码改动本身不需要；正式 E2E 仍需要 Windows 端配合。
+
 ## 2026-06-15 Windows Codex
 
 日期：2026-06-15 09:40

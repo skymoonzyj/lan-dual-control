@@ -67,6 +67,20 @@ node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary
 
 `--boardSummary` 只输出一段适合直接发送到联络板的秘密安全摘要，包含 repo 状态、Mac host 地址、权限、H.264/音频、显示器、build 差异和正式验收下一步；不会输出密码、系统账号或联络板 token。
 
+准备正式呼叫 Windows 端做端到端验收前，可再跑正式清单：
+
+```bash
+node scripts/mac/check-mac-formal-e2e-status.mjs
+```
+
+该脚本复用恢复状态总览，但会把正式验收需要的 repo、联络板、Mac host、LAN 地址、`inputMode=log`、权限、H.264、系统音频、剪贴板、显示器和 build 差异整理成 checklist。默认会读取 Agent Link Board；如果有 blocker，就不建议发起 Windows call。需要发联络板时可用：
+
+```bash
+node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary
+```
+
+正式清单同样只读：不会启动服务、不会认证 WebSocket、不会要求或打印密码、不会发送输入事件；`inject` 会明确标为跳过，只有用户明确确认正在看屏幕后才允许另行验收。
+
 启动助手会：
 
 - 默认绑定 `0.0.0.0:43770`，打印 Windows 端可填写的局域网地址。
