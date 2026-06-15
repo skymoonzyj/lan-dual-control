@@ -65,6 +65,10 @@ function nativeDialogDisabled() {
   return process.env.LAN_DUAL_DISABLE_NATIVE_PASSWORD_DIALOG === "1";
 }
 
+function frontingDisabled() {
+  return process.env.LAN_DUAL_DISABLE_PASSWORD_FRONTING === "1";
+}
+
 function canPromptInTerminal(output) {
   return Boolean(process.stdin.isTTY && output?.isTTY);
 }
@@ -82,6 +86,7 @@ let promptLabel = environment["LAN_DUAL_PASSWORD_PROMPT_LABEL"] ?? "Password:"
 let app = NSApplication.shared
 app.setActivationPolicy(.regular)
 app.activate(ignoringOtherApps: true)
+let attentionRequest = app.requestUserAttention(.criticalRequest)
 
 let width = CGFloat(380)
 let label = NSTextField(labelWithString: promptLabel)
@@ -108,9 +113,10 @@ alert.addButton(withTitle: "Cancel")
 
 let window = alert.window
 window.title = dialogTitle
-window.level = .floating
+window.level = .modalPanel
 window.collectionBehavior.insert(.canJoinAllSpaces)
 window.collectionBehavior.insert(.fullScreenAuxiliary)
+window.collectionBehavior.insert(.stationary)
 window.center()
 
 NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
@@ -126,7 +132,26 @@ DispatchQueue.main.async {
   window.makeFirstResponder(secureField)
 }
 
+DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+  NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+  app.activate(ignoringOtherApps: true)
+  window.level = .modalPanel
+  window.makeKeyAndOrderFront(nil)
+  window.orderFrontRegardless()
+  window.makeFirstResponder(secureField)
+}
+
+DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+  NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+  app.activate(ignoringOtherApps: true)
+  window.level = .modalPanel
+  window.makeKeyAndOrderFront(nil)
+  window.orderFrontRegardless()
+  window.makeFirstResponder(secureField)
+}
+
 let response = alert.runModal()
+app.cancelUserAttentionRequest(attentionRequest)
 if response == .alertFirstButtonReturn {
   let password = secureField.stringValue
   FileHandle.standardOutput.write((password + "\\n").data(using: .utf8)!)
@@ -147,6 +172,7 @@ exit(1)
       },
       stdio: ["pipe", "pipe", "pipe"],
     });
+    const frontTimers = scheduleNativePromptFronting(child.pid);
     let stdout = "";
     let stderr = "";
     let timedOut = false;
@@ -166,10 +192,12 @@ exit(1)
     });
     child.on("error", (error) => {
       clearTimeout(timer);
+      clearTimers(frontTimers);
       rejectPrompt(error);
     });
     child.on("close", (exitCode) => {
       clearTimeout(timer);
+      clearTimers(frontTimers);
       if (timedOut) {
         rejectPrompt(new Error(`Password prompt timed out after ${timeoutMs}ms.`));
         return;
@@ -181,6 +209,41 @@ exit(1)
       resolvePrompt(String(stdout).replace(/\r?\n$/, ""));
     });
     child.stdin.end(script);
+  });
+}
+
+function scheduleNativePromptFronting(pid) {
+  if (!pid || frontingDisabled()) return [];
+  bringNativePromptToFront(pid);
+  return [150, 450, 1000].map((delayMs) => {
+    const timer = setTimeout(() => bringNativePromptToFront(pid), delayMs);
+    timer.unref?.();
+    return timer;
+  });
+}
+
+function clearTimers(timers) {
+  for (const timer of timers) {
+    clearTimeout(timer);
+  }
+}
+
+function bringNativePromptToFront(pid) {
+  if (!pid || frontingDisabled()) return;
+  const script = `
+on run argv
+  set targetPid to (item 1 of argv) as integer
+  try
+    tell application "System Events"
+      set frontmost of first process whose unix id is targetPid to true
+    end tell
+  end try
+end run
+`;
+  spawnSync("osascript", ["-e", script, String(pid)], {
+    encoding: "utf8",
+    stdio: "ignore",
+    timeout: 1200,
   });
 }
 
@@ -367,6 +430,7 @@ Environment:
   LAN_DUAL_DISABLE_PASSWORD_BEEP=1             Disable the attention sound.
   LAN_DUAL_DISABLE_PASSWORD_DIALOG=1           Disable macOS dialog for tests.
   LAN_DUAL_DISABLE_NATIVE_PASSWORD_DIALOG=1    Disable the native AppKit dialog for tests.
+  LAN_DUAL_DISABLE_PASSWORD_FRONTING=1         Disable extra foreground activation for tests.
   LAN_DUAL_ALLOW_TERMINAL_PASSWORD_PROMPT=1    Allow hidden terminal fallback if the dialog fails.
 `);
 }

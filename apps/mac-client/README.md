@@ -146,7 +146,7 @@ Mac 侧正式真连浏览器冒烟优先用包装器，而不是直接手写 Win
 node scripts/mac/run-mac-client-formal-smoke.mjs --host <Windows IP> --port 43770 --promptPassword
 ```
 
-该包装器会先运行无密 formal checklist；ready 后才认证浏览器页面。`--promptPassword` 会先响铃，再打开原生 AppKit 前台置顶隐藏密码框；也可用 `LAN_DUAL_PASSWORD` 环境变量给自动化提供正式密码。密码只通过环境变量传给子进程，不放进命令参数、不打印、不发 Agent Link Board；脚本不会执行 `inject`。需要只读同步状态时用 `--preflightOnly --boardSummary`，需要查看命令形状但不认证时用 `--dryRun --json`。
+该包装器会先运行无密 formal checklist；ready 后才认证浏览器页面。`--promptPassword` 会先响铃，再打开原生 AppKit 前台模态隐藏密码框，并额外请求系统注意、跨 Space 显示和多次拉前台；也可用 `LAN_DUAL_PASSWORD` 环境变量给自动化提供正式密码。密码只通过环境变量传给子进程，不放进命令参数、不打印、不发 Agent Link Board；脚本不会执行 `inject`。需要只读同步状态时用 `--preflightOnly --boardSummary`，需要查看命令形状但不认证时用 `--dryRun --json`。
 
 文件剪贴板入口本机联调已验证：页面显示文件选择和发送入口，未连接/未选择文件/发送中都会禁用发送按钮，超过 32MB 上限时会直接显示“文件过大”并禁用发送；`scripts/windows/test-mac-client-browser.mjs` 会用浏览器调试协议注入临时小文件并等待 `clipboard_file_result`。自检还会模拟超限文件选择、对端拒绝文件清单和文件读取中点击断开，确认页面取消当前文件发送且不会继续发出 `clipboard_file_complete`；取消后迟到的旧 `clipboard_file_*` 消息也不会覆盖当前状态。在 Windows 上默认要求系统文件剪贴板 `saveMode=clipboard`，在 Mac/Linux 开发环境可加 `--allowClipboardFallback --mockVideo` 验证 `saveMode=temp` 回退链路。
 

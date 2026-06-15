@@ -17,6 +17,40 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Mac Codex
+
+日期：2026-06-15 17:12
+开发端：Mac Codex
+本轮目标：按用户现场反馈“没有看到显示输入密码的地方”，继续加固 Mac 侧真实密码输入弹窗可见性。
+完成内容：
+- `scripts/mac/password-prompt.mjs` 的原生 AppKit 密码框从 floating 提升为 modal panel，并在弹出前后请求系统注意、跨 Space 显示、设置第一响应者、外部通过 System Events 多次拉前台。
+- `--promptPassword` 仍保持先响铃再弹窗；显式要求弹窗时不静默复用旧环境密码，默认也不回退终端隐藏输入，避免用户看不到输入位置。
+- `scripts/mac/test-mac-password-prompt.mjs` 的假 `swift`/`osascript` 回归同步覆盖 critical attention、modal panel、跨 Space、二次 refocus 和外部前台拉起。
+- Mac host/client README、当前状态和下一步说明已同步“前台模态、多次拉前台、密码不进 argv/日志/联络板”的行为。
+修改文件：
+- `scripts/mac/password-prompt.mjs`
+- `scripts/mac/test-mac-password-prompt.mjs`
+- `apps/mac-host/README.md`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/password-prompt.mjs`
+- `node --check scripts/mac/test-mac-password-prompt.mjs`
+- `node scripts/mac/test-mac-password-prompt.mjs --timeoutMs 8000`
+- `node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 20000`
+- `node scripts/mac/test-mac-script-help.mjs --script password-prompt.mjs --script start-mac-host.mjs --script check-mac-host-readiness.mjs --script check-mac-formal-local-smoke.mjs --script run-mac-client-formal-smoke.mjs --timeoutMs 8000`
+- `git diff --check`
+- 行首冲突标记扫描
+遗留问题：
+- 本轮不会弹真实密码框、不会认证真实 host、不会执行 `inject`；下次真实 `--promptPassword` 应先响铃并弹出更强前台的隐藏密码框。
+下一步建议：
+- 如果用户确认要重新启动或正式验收，优先使用 `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword` 或 `node scripts/mac/run-mac-client-formal-smoke.mjs --host <Windows IP> --port 43770 --promptPassword`，观察是否能看到前台密码框；若仍被系统层遮挡，再考虑短生命周期 `.app` 包或直接绑定前台应用的系统 dialog。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Windows 端只需知道 Mac 侧密码弹窗体验已继续加固，密码仍不要发联络板。
+
 ## 2026-06-15 Windows Codex
 
 日期：2026-06-15 18:20
