@@ -19,6 +19,37 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 19:15
+开发端：Mac Codex
+本轮目标：修复 Mac 测试在 Windows 审查机上的兼容问题。
+完成内容：
+- `scripts/mac/test-mac-password-prompt.mjs` 的 fake `osascript`/`swift` 现在同时生成 Unix shim、`.mjs` 执行体和 Windows `.cmd` 包装器。
+- fake 命令 PATH 注入改用 Node 平台分隔符，并在 Windows 上补 `PATHEXT=.CMD`，避免 Windows `spawn("osascript")` / `spawn("swift")` 找不到无扩展名 shim。
+- `scripts/mac/password-prompt.mjs` 只在 Windows 平台为 `osascript`/`swift` 调用启用 shell 查找，方便 Windows 审查机命中 `.cmd` fake shim；macOS 真机仍保持直接调用真实系统工具。
+- `scripts/mac/test-mac-host-start-helper.mjs` 保留 dry-run/status/密码安全检查；只有真实启动 Swift Mac host 的 online/status 和 launch 段在非 macOS 上明确输出 `[SKIP]`，避免 Windows 审查机误跑 `swift run`。
+修改文件：
+- `scripts/mac/password-prompt.mjs`
+- `scripts/mac/test-mac-password-prompt.mjs`
+- `scripts/mac/test-mac-host-start-helper.mjs`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/password-prompt.mjs`
+- `node --check scripts/mac/test-mac-password-prompt.mjs`
+- `node --check scripts/mac/test-mac-host-start-helper.mjs`
+- `node scripts/mac/test-mac-password-prompt.mjs --timeoutMs 10000`
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 30000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" .`
+遗留问题：
+- 本机是 macOS，无法直接执行 Windows 审查机真实 `cmd.exe` 路径；已通过生成 `.cmd` 包装器、平台 PATH/PATHEXT 和非 macOS skip 逻辑降低跨平台风险，需 Supervisor/Windows 审查机复跑确认。
+下一步建议：
+- Supervisor 在 Windows 审查机复跑 `node scripts/mac/test-mac-password-prompt.mjs` 和 `node scripts/mac/test-mac-host-start-helper.mjs`。
+是否改了协议：否。
+是否需要另一端配合：需要 Supervisor/Windows 审查机复审。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 18:54
 开发端：Mac Codex
 本轮目标：修复 Mac client formal smoke 在 discovery 失败时输出空 host 认证命令的问题。

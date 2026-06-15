@@ -47,6 +47,10 @@ function print(kind, text) {
   console.log(`[${kind}] ${text}`);
 }
 
+function canLaunchRealMacHost() {
+  return process.platform === "darwin";
+}
+
 function runNode(args, options = {}) {
   return run(process.execPath, [helperScript, ...args], options);
 }
@@ -271,6 +275,10 @@ async function assertStatusOfflineJson(timeoutMs) {
 }
 
 async function assertStatusOnline(timeoutMs) {
+  if (!canLaunchRealMacHost()) {
+    print("SKIP", `Status online check starts the real Swift Mac host and only runs on macOS; current platform is ${process.platform}`);
+    return;
+  }
   const port = await getFreePort();
   const commandArgs = [
     helperScript,
@@ -374,6 +382,10 @@ async function assertStatusOnline(timeoutMs) {
 }
 
 async function assertLaunchWithPasswordMode(timeoutMs, mode) {
+  if (!canLaunchRealMacHost()) {
+    print("SKIP", `Real Swift Mac host launch (${mode}) only runs on macOS; current platform is ${process.platform}`);
+    return;
+  }
   const port = await getFreePort();
   const commandArgs = [
     helperScript,

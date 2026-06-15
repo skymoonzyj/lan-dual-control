@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -59,9 +59,47 @@ function assertNotIncludes(text, expected, label) {
   assert(!String(text).includes(expected), `${label} unexpectedly included ${JSON.stringify(expected)}.\n${text}`);
 }
 
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", "'\\''")}'`;
+}
+
+function cmdQuotePath(value) {
+  return String(value).replaceAll('"', '""');
+}
+
+function makeFakeNodeCommand(dir, name, source) {
+  const modulePath = join(dir, `${name}.mjs`);
+  const unixPath = join(dir, name);
+  const cmdPath = join(dir, `${name}.cmd`);
+  writeFileSync(modulePath, source);
+  writeFileSync(unixPath, `#!/bin/sh\nexec ${shellQuote(process.execPath)} ${shellQuote(modulePath)} "$@"\n`, { mode: 0o755 });
+  writeFileSync(cmdPath, `@echo off\r\n"${cmdQuotePath(process.execPath)}" "${cmdQuotePath(modulePath)}" %*\r\n`, { mode: 0o755 });
+  return { modulePath, unixPath, cmdPath };
+}
+
+function pathEnvironmentForFakeCommands(dir) {
+  const pathKey = process.platform === "win32"
+    ? Object.keys(process.env).find((key) => key.toLowerCase() === "path") || "Path"
+    : "PATH";
+  const pathValue = process.env[pathKey] || process.env.PATH || "";
+  const env = {
+    [pathKey]: pathValue ? `${dir}${delimiter}${pathValue}` : dir,
+  };
+  if (process.platform === "win32") {
+    const pathext = new Set(
+      String(process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD")
+        .split(";")
+        .map((entry) => entry.trim().toUpperCase())
+        .filter(Boolean),
+    );
+    pathext.add(".CMD");
+    env.PATHEXT = [...pathext].join(";");
+  }
+  return env;
+}
+
 function makeFakeOsascript(dir) {
-  const path = join(dir, "osascript");
-  writeFileSync(path, `#!/usr/bin/env node
+  return makeFakeNodeCommand(dir, "osascript", `
 import { appendFileSync } from "node:fs";
 const log = process.env.FAKE_OSASCRIPT_LOG;
 const joined = process.argv.slice(2).join("\\n");
@@ -84,13 +122,11 @@ if (process.env.FAKE_OSASCRIPT_MODE === "fail") {
   process.exit(1);
 }
 process.stdout.write(process.env.FAKE_OSASCRIPT_PASSWORD || "fake-dialog-password");
-`, { mode: 0o755 });
-  return path;
+`);
 }
 
 function makeFakeSwift(dir) {
-  const path = join(dir, "swift");
-  writeFileSync(path, `#!/usr/bin/env node
+  return makeFakeNodeCommand(dir, "swift", `
 import { appendFileSync } from "node:fs";
 let source = "";
 process.stdin.setEncoding("utf8");
@@ -112,8 +148,7 @@ process.stdin.on("end", () => {
   }
   process.stdout.write(process.env.FAKE_SWIFT_PASSWORD || "fake-native-password");
 });
-`, { mode: 0o755 });
-  return path;
+`);
 }
 
 function runPromptSnippet(extraEnv, timeoutMs) {
@@ -160,7 +195,7 @@ function checkSystemDialogSuccess(tmp, timeoutMs) {
   const swiftLogPath = join(tmp, "swift-success.log");
   const secret = "fake-secret-from-system";
   const result = runPromptSnippet({
-    PATH: `${tmp}:${process.env.PATH}`,
+    ...pathEnvironmentForFakeCommands(tmp),
     FAKE_OSASCRIPT_LOG: osascriptLogPath,
     FAKE_SWIFT_LOG: swiftLogPath,
     FAKE_OSASCRIPT_PASSWORD: secret,
@@ -194,7 +229,7 @@ function checkPreferNativeDialogSuccess(tmp, timeoutMs) {
   const swiftLogPath = join(tmp, "swift-prefer-native.log");
   const secret = "fake-secret-from-native";
   const result = runPromptSnippet({
-    PATH: `${tmp}:${process.env.PATH}`,
+    ...pathEnvironmentForFakeCommands(tmp),
     LAN_DUAL_PREFER_NATIVE_PASSWORD_DIALOG: "1",
     FAKE_OSASCRIPT_LOG: osascriptLogPath,
     FAKE_SWIFT_LOG: swiftLogPath,
@@ -240,7 +275,7 @@ function checkPreferNativeDialogSuccess(tmp, timeoutMs) {
 
 function checkDialogCancel(tmp, timeoutMs) {
   const result = runPromptSnippet({
-    PATH: `${tmp}:${process.env.PATH}`,
+    ...pathEnvironmentForFakeCommands(tmp),
     FAKE_SWIFT_MODE: "cancel",
     FAKE_OSASCRIPT_MODE: "cancel",
     FAKE_OSASCRIPT_LOG: join(tmp, "osascript-cancel.log"),
@@ -261,7 +296,7 @@ function checkSystemFailureFallsBackToNative(tmp, timeoutMs) {
   const osascriptLogPath = join(tmp, "osascript-fallback.log");
   const secret = "fake-secret-from-native-fallback";
   const result = runPromptSnippet({
-    PATH: `${tmp}:${process.env.PATH}`,
+    ...pathEnvironmentForFakeCommands(tmp),
     FAKE_OSASCRIPT_MODE: "fail",
     FAKE_SWIFT_PASSWORD: secret,
     FAKE_SWIFT_LOG: swiftLogPath,
@@ -284,7 +319,7 @@ function checkSystemFailureFallsBackToNative(tmp, timeoutMs) {
 
 function checkDialogFailureNoTty(tmp, timeoutMs) {
   const result = runPromptSnippet({
-    PATH: `${tmp}:${process.env.PATH}`,
+    ...pathEnvironmentForFakeCommands(tmp),
     FAKE_SWIFT_MODE: "fail",
     FAKE_OSASCRIPT_MODE: "fail",
   }, timeoutMs);
@@ -312,8 +347,10 @@ function main() {
   const args = parseArgs(process.argv);
   const tmp = mkdtempSync(join(tmpdir(), "lan-dual-password-prompt-"));
   try {
-    makeFakeOsascript(tmp);
-    makeFakeSwift(tmp);
+    const osascriptShim = makeFakeOsascript(tmp);
+    const swiftShim = makeFakeSwift(tmp);
+    assert(safeRead(osascriptShim.cmdPath).includes("osascript.mjs"), "fake osascript should include a Windows .cmd wrapper");
+    assert(safeRead(swiftShim.cmdPath).includes("swift.mjs"), "fake swift should include a Windows .cmd wrapper");
     checkSystemDialogSuccess(tmp, args.timeoutMs);
     checkPreferNativeDialogSuccess(tmp, args.timeoutMs);
     checkDialogCancel(tmp, args.timeoutMs);

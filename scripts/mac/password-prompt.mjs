@@ -47,6 +47,7 @@ export function playAttentionSound() {
   const result = spawnSync("osascript", ["-e", "beep 2"], {
     encoding: "utf8",
     timeout: 3000,
+    ...macToolSpawnOptions(),
   });
   if (result.status !== 0) {
     process.stderr.write("\x07");
@@ -215,6 +216,7 @@ exit(1)
         LAN_DUAL_PASSWORD_PROMPT_LABEL: prompt,
       },
       stdio: ["pipe", "pipe", "pipe"],
+      ...macToolSpawnOptions(),
     });
     const frontTimers = scheduleNativePromptFronting(child.pid);
     let stdout = "";
@@ -288,6 +290,7 @@ end run
     encoding: "utf8",
     stdio: "ignore",
     timeout: 1200,
+    ...macToolSpawnOptions(),
   });
 }
 
@@ -329,6 +332,7 @@ end try
   return new Promise((resolvePrompt, rejectPrompt) => {
     const child = spawn("osascript", ["-e", script], {
       stdio: ["ignore", "pipe", "pipe"],
+      ...macToolSpawnOptions(),
     });
     let stdout = "";
     let stderr = "";
@@ -364,6 +368,10 @@ end try
       resolvePrompt(String(stdout).replace(/\r?\n$/, ""));
     });
   });
+}
+
+function macToolSpawnOptions() {
+  return process.platform === "win32" ? { shell: true } : {};
 }
 
 function normalizeDialogError(text) {
