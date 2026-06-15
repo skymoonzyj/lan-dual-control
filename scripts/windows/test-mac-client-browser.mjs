@@ -12,6 +12,8 @@ const defaults = {
   password: "demo-password",
   hostPassword: "",
   clientPassword: "",
+  useEnvPassword: false,
+  requirePassword: false,
   clientPort: 5188,
   debugPort: 9340,
   timeoutMs: 30000,
@@ -73,6 +75,8 @@ Options:
   --password <password>            Shared password. Default: ${defaults.password}
   --hostPassword <password>        Password used by the temporary Windows host.
   --clientPassword <password>      Password typed into the Mac client page.
+  --useEnvPassword                 Read shared/client password from LAN_DUAL_PASSWORD.
+  --requirePassword                Refuse empty/demo password before connecting.
   --clientPort <port>              Local Mac client web port. Default: ${defaults.clientPort}
   --debugPort <port>               Browser remote debugging port. Default: ${defaults.debugPort}
   --timeoutMs <ms>                 Per-step timeout. Default: ${defaults.timeoutMs}
@@ -134,6 +138,14 @@ function parseArgs(argv) {
 
     if (key === "headed") {
       args.headless = false;
+      continue;
+    }
+    if (key === "useEnvPassword") {
+      args.useEnvPassword = true;
+      continue;
+    }
+    if (key === "requirePassword") {
+      args.requirePassword = true;
       continue;
     }
     if (key === "disableWebCodecs") {
@@ -268,8 +280,17 @@ function parseArgs(argv) {
   args.observeVideoMs = Number(args.observeVideoMs);
   args.minObservedVideoFrames = Number(args.minObservedVideoFrames);
   args.minObservedVideoFps = Number(args.minObservedVideoFps);
+  if (args.useEnvPassword) {
+    args.password = process.env.LAN_DUAL_PASSWORD || "";
+  }
   args.hostPassword = args.hostPassword || args.password;
   args.clientPassword = args.clientPassword || (args.expectAuthFailure ? `${args.password}-wrong` : args.password);
+  if (args.requirePassword && !args.clientPassword) {
+    throw new Error("LAN_DUAL_PASSWORD is required. Set it in the environment, pass --password, or use a wrapper with --promptPassword.");
+  }
+  if (args.requirePassword && args.clientPassword === "demo-password") {
+    throw new Error("Refusing to use demo-password when --requirePassword is set.");
+  }
   if (args.requireAudio && !args.audioMode) {
     args.audioMode = "wasapi";
   }

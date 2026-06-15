@@ -20,12 +20,6 @@ export async function promptPassword({
   playAttentionSound();
   if (!dialogDisabled()) {
     const dialogErrors = [];
-    try {
-      return await promptWithMacDialog({ title, message, prompt, timeoutMs });
-    } catch (error) {
-      if (isDialogCancellation(error)) throw error;
-      dialogErrors.push(`AppleScript dialog: ${error.message}`);
-    }
     if (!nativeDialogDisabled()) {
       try {
         return await promptWithNativeMacDialog({ title, message, prompt, timeoutMs });
@@ -33,6 +27,12 @@ export async function promptPassword({
         if (isDialogCancellation(error)) throw error;
         dialogErrors.push(`native macOS dialog: ${error.message}`);
       }
+    }
+    try {
+      return await promptWithMacDialog({ title, message, prompt, timeoutMs });
+    } catch (error) {
+      if (isDialogCancellation(error)) throw error;
+      dialogErrors.push(`AppleScript dialog: ${error.message}`);
     }
     if (allowTerminalFallback && canPromptInTerminal(output)) {
       safeWrite(output, `[WARN] macOS password dialog failed: ${dialogErrors.join("; ")}\n`);
@@ -358,8 +358,8 @@ Shared helper used by Mac scripts that need a password prompt.
 
 Behavior:
   - Rings before asking for a password.
-  - Opens a frontmost macOS hidden password dialog for --promptPassword callers.
-  - Falls back to a native AppKit frontmost hidden dialog only if the system dialog cannot open.
+  - Opens a native AppKit frontmost hidden password dialog for --promptPassword callers.
+  - Falls back to a system macOS hidden dialog only if the native dialog cannot open.
   - Does not fall back to terminal input unless explicitly allowed for local manual fallback.
   - Never prints the password.
 

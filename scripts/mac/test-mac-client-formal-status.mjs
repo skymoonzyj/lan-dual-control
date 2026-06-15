@@ -347,7 +347,10 @@ async function checkReadyShape(args) {
       assert(payload.checklist.some((entry) => entry.id === "inject" && entry.status === "skip"), "inject should be skipped");
       assert(payload.runPlan?.target?.host === "127.0.0.1", "ready runPlan should include target host");
       assert(payload.runPlan?.target?.runtimeBuild === "mock-formal-win-build", "ready runPlan should include runtime build");
-      assert(payload.runPlan?.commands?.browserSmoke?.includes("--useExistingHost"), "ready runPlan should include browser smoke command");
+      assert(payload.runPlan?.commands?.browserSmoke?.includes("run-mac-client-formal-smoke.mjs"), "ready runPlan should include Mac browser smoke wrapper");
+      assert(payload.runPlan?.commands?.browserSmoke?.includes("--host 127.0.0.1"), "ready runPlan should include target host");
+      assert(payload.runPlan?.commands?.browserSmoke?.includes(`--port ${windowsPort}`), "ready runPlan should include target port");
+      assert(payload.runPlan?.commands?.browserSmoke?.includes("--promptPassword"), "ready runPlan should use visible password prompt");
       assert(payload.runPlan?.safety?.authenticatesWebSocket === false, "formal checklist runPlan itself should not authenticate");
       assert(payload.runPlan?.safety?.requiresExplicitUserConfirmationForInject === true, "runPlan should require explicit inject confirmation");
       assertIncludes(payload.boardSummary || "", "windowsHost=online 127.0.0.1", "ready board summary");

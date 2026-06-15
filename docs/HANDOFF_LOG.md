@@ -51,12 +51,57 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 16:55
+开发端：Mac Codex
+本轮目标：收口 Mac 控制 Windows formal browser smoke 执行器，并再次修正用户反馈的密码输入窗口可见性。
+完成内容：
+- 新增 `scripts/mac/run-mac-client-formal-smoke.mjs`：先跑无密 `check-mac-client-formal-status --json` 预检，ready 后才用 Mac client 页面连接真实 Windows host；正式密码只来自 `LAN_DUAL_PASSWORD` 或 `--promptPassword`，并通过环境变量传给子页面自检，不放 argv、不打印、不发 Agent Link Board。
+- 新增 `scripts/mac/test-mac-client-formal-smoke.mjs`：用本地 Mac client server 和 mock Windows `/discovery` 覆盖 help、缺 host、preflight/dryRun 秘密安全、空密码和 `demo-password` 拒绝；测试不会打开真实密码框、不会认证真实 host、不会发送输入。
+- `scripts/windows/test-mac-client-browser.mjs` 新增 `--useEnvPassword` / `--requirePassword`，供 Mac 包装器安全调用；默认旧 mock 行为不变，正式模式会在联网前拒绝空密码和 `demo-password`。
+- `scripts/mac/password-prompt.mjs` 改为先响铃，再优先打开原生 AppKit 前台置顶隐藏密码框；原生窗口打不开时才退回系统 macOS 隐藏密码框，取消不弹第二个备用窗口。这样需要用户输入密码时更容易看到窗口。
+- `scripts/mac/check-mac-client-formal-status.mjs` 的建议命令改为 `run-mac-client-formal-smoke --promptPassword`，避免后续直接手写 Windows 页面自检命令时绕过 Mac 侧密码弹窗体验。
+- Mac client README、当前状态、下一步和任务板同步新增正式 smoke 用法及密码安全边界。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `scripts/mac/password-prompt.mjs`
+- `scripts/mac/test-mac-password-prompt.mjs`
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-host/README.md`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/password-prompt.mjs`
+- `node --check scripts/mac/test-mac-password-prompt.mjs`
+- `node --check scripts/mac/run-mac-client-formal-smoke.mjs`
+- `node --check scripts/mac/test-mac-client-formal-smoke.mjs`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/mac/test-mac-password-prompt.mjs --timeoutMs 8000`
+- `node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 20000`
+- `LAN_DUAL_PASSWORD= node scripts/windows/test-mac-client-browser.mjs --useExistingHost --host 127.0.0.1 --port 9 --useEnvPassword --requirePassword --timeoutMs 5000`
+- `LAN_DUAL_PASSWORD=demo-password node scripts/windows/test-mac-client-browser.mjs --useExistingHost --host 127.0.0.1 --port 9 --useEnvPassword --requirePassword --timeoutMs 5000`
+- 待最终提交前再跑 Mac/Windows help、formal status、diff check 和冲突标记搜索。
+遗留问题：
+- 本轮仍未执行真实 Windows host 认证和浏览器真连冒烟；需要 Windows host 在线并由用户输入正式密码后运行 `run-mac-client-formal-smoke --promptPassword`。
+- `inject` 仍未执行，且必须等用户明确确认正在看屏幕后才允许另行验收。
+下一步建议：
+- 白天继续时先看 Agent Link Board，再启动/确认 Windows host，Mac 侧运行 `node scripts/mac/discover-windows-hosts.mjs --boardSummary` 和 `node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary`；ready 后运行 `node scripts/mac/run-mac-client-formal-smoke.mjs --host <Windows IP> --port 43770 --promptPassword`。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端启动正式 Windows host 并同步 IP/端口；密码不要发联络板。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 16:24
 开发端：Mac Codex
 本轮目标：继续按用户反馈加固 Mac 侧密码输入可见性，并给 Mac 控制 Windows formal checklist 增加无密执行计划。
 完成内容：
-- `scripts/mac/password-prompt.mjs` 调整 `--promptPassword` 弹窗顺序：先响铃，再优先打开系统 macOS 前台隐藏密码框，并额外尝试把弹窗进程/SystemUIServer 拉到前台；系统弹窗打不开时才退回前台置顶的 AppKit 隐藏密码框。
-- 用户取消系统密码框时直接取消，不再继续弹备用窗口；默认仍不退回终端隐藏输入，避免用户看不到输入位置。
+- `scripts/mac/password-prompt.mjs` 调整 `--promptPassword` 弹窗顺序：先响铃，再优先打开原生 AppKit 前台置顶隐藏密码框；原生窗口打不开时才退回系统 macOS 隐藏密码框。
+- 用户取消前台密码框时直接取消，不再继续弹备用窗口；默认仍不退回终端隐藏输入，避免用户看不到输入位置。
 - 显式 `--promptPassword` 仍不复用已有 `LAN_DUAL_PASSWORD`，必须弹前台窗口重新输入；密码不进 argv、不打印、不发联络板。
 - `scripts/mac/check-mac-client-formal-status.mjs` 新增 `runPlan`，普通输出、JSON 和 boardSummary 均能展示 Mac 控制 Windows 真连前的安全执行路径：本地 Mac client 页面、Windows discovery、formal checklist、浏览器 smoke、质量/资源观察。
 - runPlan 明确 `passwordInCommandArguments=false`、`passwordOnAgentLinkBoard=false`、`inject=false`，并提醒 `inject` 仍需用户明确确认。
@@ -90,7 +135,7 @@
 - `git diff --check`
 - 冲突标记搜索通过
 遗留问题：
-- 本轮没有弹真实正式密码框，避免在未进入正式验收时打扰用户；下次真实 `--promptPassword` 会先响铃再显示系统 macOS 前台隐藏密码框。
+- 本轮没有弹真实正式密码框，避免在未进入正式验收时打扰用户；下次真实 `--promptPassword` 会先响铃再显示原生 AppKit 前台置顶隐藏密码框。
 - GitHub fetch 偶发卡住；本轮已基于 Windows 最新 `c486fc6` 合并，推送前仍需最后 fetch 确认。
 下一步建议：
 - Windows host 启动后，Mac 侧运行 `node scripts/mac/discover-windows-hosts.mjs --boardSummary`，再运行 `node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary`；ready 后按 runPlan 做浏览器 smoke 和观感/资源记录。

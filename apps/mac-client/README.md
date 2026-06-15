@@ -140,6 +140,14 @@ Mac 本机文本剪贴板已纳入页面级自检：脚本会断言未连接/空
 
 Mac client 页面级自检可加 `--enableAudio --expectAudioFrame` 验证音频请求和 audio_frame 接收，脚本会打印首条音频帧耗时，并在对端提供 `audio_frame.timestamp` 时断言顶部音频状态和播放状态显示“到达 <ms>”或“时钟偏差”；音频开关关闭/重新开启后顶部状态会从“未开启”回到“未接收”。加 `--maxAudioFrameMs <毫秒>` 可把首条音频帧耗时变成强校验。在 Windows 本机临时启动 WASAPI host 验收时，可加 `--audioMode wasapi --expectAudioPayload --expectAudioPlayback --maxAudioPlaybackMs <毫秒>`；连接已运行的真实 Windows WASAPI host 时，可加 `--useExistingHost --host <Windows IP> --port <端口> --enableAudio --expectAudioPayload --expectAudioPlayback --maxAudioFrameMs <毫秒> --maxAudioPlaybackMs <毫秒>`，要求收到带 PCM payload 的音频帧并确认页面播放计数递增。
 
+Mac 侧正式真连浏览器冒烟优先用包装器，而不是直接手写 Windows 页面自检命令：
+
+```bash
+node scripts/mac/run-mac-client-formal-smoke.mjs --host <Windows IP> --port 43770 --promptPassword
+```
+
+该包装器会先运行无密 formal checklist；ready 后才认证浏览器页面。`--promptPassword` 会先响铃，再打开原生 AppKit 前台置顶隐藏密码框；也可用 `LAN_DUAL_PASSWORD` 环境变量给自动化提供正式密码。密码只通过环境变量传给子进程，不放进命令参数、不打印、不发 Agent Link Board；脚本不会执行 `inject`。需要只读同步状态时用 `--preflightOnly --boardSummary`，需要查看命令形状但不认证时用 `--dryRun --json`。
+
 文件剪贴板入口本机联调已验证：页面显示文件选择和发送入口，未连接/未选择文件/发送中都会禁用发送按钮，超过 32MB 上限时会直接显示“文件过大”并禁用发送；`scripts/windows/test-mac-client-browser.mjs` 会用浏览器调试协议注入临时小文件并等待 `clipboard_file_result`。自检还会模拟超限文件选择、对端拒绝文件清单和文件读取中点击断开，确认页面取消当前文件发送且不会继续发出 `clipboard_file_complete`；取消后迟到的旧 `clipboard_file_*` 消息也不会覆盖当前状态。在 Windows 上默认要求系统文件剪贴板 `saveMode=clipboard`，在 Mac/Linux 开发环境可加 `--allowClipboardFallback --mockVideo` 验证 `saveMode=temp` 回退链路。
 
 认证失败路径已固化到页面级自检：`scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3` 会启动正确密码的临时 Windows host，并让 Mac 控制端填错密码，断言页面最终保留 `认证失败 · 剩余 2/3 次`，连接按钮可重试，远端摘要回到“等待发现”，视频表面回到“无画面”，且远端运行信息回到“未提供”。

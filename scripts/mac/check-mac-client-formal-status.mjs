@@ -303,7 +303,7 @@ function makeCallText(report) {
     `Mac client formal Windows test ${report.readyToCall ? "ready" : "needs attention"}: windowsHost=${address}, runtimeBuild=${host.runtime?.buildId || "unknown"}.`,
     `Screen ${screenSummary(host.capabilities?.screen || {})}; audio ${audioSummary(host.capabilities?.audio || {})}; inputMode=${host.capabilities?.input?.mode || "unknown"}; clipboard text=${statusValue(host.capabilities?.clipboard?.text)} file=${statusValue(host.capabilities?.clipboard?.file)}.`,
     `Checklist blockers=${report.counts.blocker}, warnings=${report.counts.warning}.`,
-    `Suggested browser test: ${host.recommendedCommand || `node scripts/windows/test-mac-client-browser.mjs --useExistingHost --host ${address.split(":")[0]} --port ${address.split(":")[1]} --enableAudio --expectAudioPayload --expectAudioPlayback`}.`,
+    `Suggested browser test: ${host.recommendedCommand || `node scripts/mac/run-mac-client-formal-smoke.mjs --host ${address.split(":")[0]} --port ${address.split(":")[1]} --promptPassword`}.`,
     "Do not send passwords on Agent Link Board; no inject unless the user explicitly confirms they are watching.",
   ].join(" ");
 }
@@ -322,19 +322,15 @@ function makeChecklistCommand(args) {
 
 function makeBrowserTestCommand(report, args) {
   const host = report.readiness.windowsHost || {};
-  if (host.recommendedCommand) return host.recommendedCommand;
   const targetHost = host.probe?.host || args.windowsHost || "<Windows IP>";
   const targetPort = host.probe?.port || args.windowsPort || defaults.windowsPort;
   return [
-    "node scripts/windows/test-mac-client-browser.mjs",
-    "--useExistingHost",
+    "node scripts/mac/run-mac-client-formal-smoke.mjs",
     "--host",
     targetHost,
     "--port",
     String(targetPort),
-    "--enableAudio",
-    "--expectAudioPayload",
-    "--expectAudioPlayback",
+    "--promptPassword",
   ].join(" ");
 }
 
@@ -416,7 +412,7 @@ function makeRunPlan(report, args) {
     ],
     notes: [
       "Do not send passwords, tokens, or system account details on Agent Link Board.",
-      "Only enter the Windows host password in the Mac client UI or a dedicated local test command when intentionally running auth.",
+      "Only enter the Windows host password in the Mac client UI or run-mac-client-formal-smoke --promptPassword when intentionally running auth.",
       "Do not run real input injection unless the user explicitly confirms they are watching.",
     ],
   };
