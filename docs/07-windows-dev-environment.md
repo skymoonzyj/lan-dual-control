@@ -157,13 +157,19 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\check-ma
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
 ```
 
+预检 ready 后，如果要把“请用户在 Windows 本机隐藏输入正式密码”的无密提示发到 Agent Link Board：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -CheckClientDiagnostics -SendUserAuthRequest
+```
+
 准备好正式密码后，再在 Windows 本机隐藏输入密码并执行正式验收：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\check-mac-formal-e2e.ps1 -Discover -PromptPassword
 ```
 
-该包装入口会调用 `node scripts/windows/check-mac-formal-e2e.mjs`，默认串联发现、认证、H.264 长测、系统声音 PCM、文本/文件剪贴板、`inputMode=log` 和 Windows 控制端页面 H.264 自检；密码只走隐藏输入或 `LAN_DUAL_PASSWORD` 环境变量，不放进命令参数，不发送到联络板，也不会执行 `inject`。
+该包装入口会调用 `node scripts/windows/check-mac-formal-e2e.mjs`，默认串联发现、认证、H.264 长测、系统声音 PCM、文本/文件剪贴板、`inputMode=log` 和 Windows 控制端页面 H.264 自检；密码只走隐藏输入或 `LAN_DUAL_PASSWORD` 环境变量，不放进命令参数，不发送到联络板，也不会执行 `inject`。`-SendUserAuthRequest` 只发送无密提示，不会发送密码。
 
 ## 当前项目运行
 

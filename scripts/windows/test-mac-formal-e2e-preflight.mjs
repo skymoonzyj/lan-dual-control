@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createServer } from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createMockMacHostServer } from "../../apps/mock-mac-host/server.mjs";
@@ -141,6 +142,39 @@ async function withMockHost(fn) {
   }
 }
 
+async function withFakeLinkBoard(fn) {
+  const requests = [];
+  const server = createServer((request, response) => {
+    let body = "";
+    request.on("data", (chunk) => {
+      body += String(chunk);
+    });
+    request.on("end", () => {
+      let parsed = {};
+      try {
+        parsed = body ? JSON.parse(body) : {};
+      } catch (error) {
+        parsed = { parseError: error.message, raw: body };
+      }
+      requests.push({
+        method: request.method,
+        path: request.url,
+        body: parsed,
+      });
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ ok: true }));
+    });
+  });
+  await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  const address = server.address();
+  const url = `http://127.0.0.1:${address.port}`;
+  try {
+    return await fn(url, requests);
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose));
+  }
+}
+
 async function testOfflinePreflight(args) {
   const result = await runRunner(["--host", "127.0.0.1", "--port", "9", "--preflightOnly"], args);
   assert(result.exitCode !== 0, "offline preflight should fail");
@@ -192,6 +226,13 @@ async function testUserAuthRequestRequiresPreflight(args) {
   assert(result.exitCode !== 0, "--userAuthRequest without --preflightOnly should fail");
   assertIncludes(result.stderr, "--userAuthRequest is only supported with --preflightOnly", "user auth guard");
   print("OK", "User auth request guard prevents accidental formal run");
+}
+
+async function testSendUserAuthRequestRequiresPreflight(args) {
+  const result = await runRunner(["--sendUserAuthRequest", "--host", "127.0.0.1", "--port", "9"], args);
+  assert(result.exitCode !== 0, "--sendUserAuthRequest without --preflightOnly should fail");
+  assertIncludes(result.stderr, "--sendUserAuthRequest is only supported with --preflightOnly", "send user auth guard");
+  print("OK", "Send user auth request guard prevents accidental formal run");
 }
 
 async function testMockPreflightJson(args) {
@@ -311,6 +352,53 @@ async function testMockPreflightUserAuthRequest(args) {
   });
 }
 
+async function testOfflineSendUserAuthRequestDoesNotPost(args) {
+  await withFakeLinkBoard(async (serverUrl, requests) => {
+    const result = await runRunner([
+      "--host", "127.0.0.1",
+      "--port", "9",
+      "--preflightOnly",
+      "--sendUserAuthRequest",
+      "--server", serverUrl,
+    ], args);
+    assert(result.exitCode !== 0, "offline send user auth request should fail");
+    assertIncludes(result.stdout, "NEED_USER_AUTH:", "offline send user auth request");
+    assertIncludes(result.stdout, "暂时不要输入正式密码", "offline send user auth request");
+    assert(requests.length === 0, `offline send user auth request should not post, got ${requests.length}`);
+    assertNotIncludes(result.stdout + result.stderr, "Mac host password", "offline send user auth request");
+    print("OK", "Offline send user auth request does not post to Agent Link Board");
+  });
+}
+
+async function testMockPreflightSendUserAuthRequest(args) {
+  await withMockHost(async (port) => {
+    await withFakeLinkBoard(async (serverUrl, requests) => {
+      const result = await runRunner([
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--preflightOnly",
+        "--sendUserAuthRequest",
+        "--server", serverUrl,
+        "--allowMockVideo",
+        "--skipInputLog",
+        "--skipAudio",
+        "--skipClipboard",
+      ], args);
+      assert(result.exitCode === 0, `mock preflight send user auth request failed\n${result.stdout}\n${result.stderr}`);
+      assertIncludes(result.stdout, "NEED_USER_AUTH:", "mock send user auth request");
+      assert(requests.length === 1, `mock send user auth request should post once, got ${requests.length}`);
+      assert(requests[0].method === "POST", "mock send should POST");
+      assert(requests[0].path === "/api/message", `mock send path mismatch: ${requests[0].path}`);
+      assert(requests[0].body.from === "Windows Codex", "mock send from mismatch");
+      assert(String(requests[0].body.text || "").includes("NEED_USER_AUTH:"), "mock send text missing auth request");
+      assert(String(requests[0].body.text || "").includes("--promptPassword"), "mock send text missing safe formal command");
+      assertNotIncludes(JSON.stringify(requests[0].body), "test-password", "mock send user auth request body");
+      assertNotIncludes(result.stdout + result.stderr, "test-password", "mock send user auth request output");
+      print("OK", "Mock send user auth request posts a secret-free Agent Link Board message");
+    });
+  });
+}
+
 async function testMockPreflightClientDiagnostics(args) {
   await withMockHost(async (port) => {
     const result = await runRunner([
@@ -391,9 +479,12 @@ async function main() {
   await testOfflineUserAuthRequest(args);
   await testJsonRequiresPreflight(args);
   await testUserAuthRequestRequiresPreflight(args);
+  await testSendUserAuthRequestRequiresPreflight(args);
   await testMockPreflightJson(args);
   await testMockPreflightBoardSummary(args);
   await testMockPreflightUserAuthRequest(args);
+  await testOfflineSendUserAuthRequestDoesNotPost(args);
+  await testMockPreflightSendUserAuthRequest(args);
   await testMockPreflightClientDiagnostics(args);
   await testDiscoverMockPreflightJson(args);
   await testDiscoverOfflineJson(args);

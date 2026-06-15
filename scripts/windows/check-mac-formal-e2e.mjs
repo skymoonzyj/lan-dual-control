@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 const defaults = {
+  server: process.env.CODEX_LINK_SERVER || "http://192.168.31.68:17888",
   host: "127.0.0.1",
   port: "43770",
   hostProvided: false,
@@ -39,6 +40,7 @@ const defaults = {
   preflightOnly: false,
   checkClientDiagnostics: false,
   userAuthRequest: false,
+  sendUserAuthRequest: false,
   json: false,
   boardSummary: false,
   fastProfile: false,
@@ -92,6 +94,8 @@ Options:
   --preflightOnly                Only read /discovery and print readiness plus the formal run plan.
   --checkClientDiagnostics       With preflight, also run Windows client diagnostics against discovery runtime.
   --userAuthRequest              With preflight, print a NEED_USER_AUTH reminder for the next password step.
+  --sendUserAuthRequest          With preflight, send NEED_USER_AUTH to Agent Link Board only when ready.
+  --server <url>                 Agent Link Board URL for --sendUserAuthRequest. Default: ${defaults.server}
   --json                         With --preflightOnly, print a single JSON object including runPlan.
   --boardSummary                 Print a short secret-free Agent Link Board summary.
   --help, -h                     Show this help.
@@ -101,6 +105,7 @@ Examples:
   node scripts/windows/check-mac-formal-e2e.mjs --discover --preflightOnly --boardSummary
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --boardSummary
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --userAuthRequest
+  node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --sendUserAuthRequest
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --promptPassword
   node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --promptPassword --fastProfile
   node scripts/windows/check-mac-formal-e2e.mjs --host 127.0.0.1 --allowDemoPassword --allowMockVideo --skipAudio --skipBrowser
@@ -134,6 +139,7 @@ function parseArgs(argv) {
       key === "preflightOnly" ||
       key === "checkClientDiagnostics" ||
       key === "userAuthRequest" ||
+      key === "sendUserAuthRequest" ||
       key === "json" ||
       key === "boardSummary" ||
       key === "fastProfile"
@@ -358,6 +364,47 @@ function attachBoardSummary(report, outcome = "preflight") {
   report.boardSummary = makeBoardSummary(report, outcome);
   report.userAuthRequest = makeUserAuthRequest(report);
   return report;
+}
+
+async function sendUserAuthRequest(args, report) {
+  if (!args.sendUserAuthRequest) {
+    return {
+      requested: false,
+      ok: null,
+      exitCode: null,
+      detail: "not requested",
+      error: "",
+    };
+  }
+
+  if (!report.ok) {
+    return {
+      requested: true,
+      ok: false,
+      exitCode: null,
+      detail: "preflight is not ready; user auth request was not sent",
+      error: "",
+    };
+  }
+
+  const result = await runCapturedNode([
+    "scripts/codex-link-client.mjs",
+    "--server", args.server,
+    "send",
+    "--from", "Windows Codex",
+    "--text", report.userAuthRequest,
+  ], {
+    cwd: repoRoot,
+    timeoutMs: Math.min(Math.max(Number(args.timeoutMs) || defaults.timeoutMs, 5000), 30000),
+  });
+  const detail = result.ok ? "sent" : tailLines(`${result.stderr}\n${result.stdout}`, 3).join("; ") || `exit ${result.exitCode}`;
+  return {
+    requested: true,
+    ok: result.ok,
+    exitCode: result.exitCode,
+    detail,
+    error: result.ok ? "" : detail,
+  };
 }
 
 function discoveryScannerArgs(args) {
@@ -754,9 +801,10 @@ async function runPreflight(args) {
     const report = makeOfflinePreflightReport(args, new Error(discoverySelection.error?.message || "Mac host discovery failed"));
     report.discoverySelection = discoverySelection;
     attachBoardSummary(report);
+    report.sentUserAuthRequest = await sendUserAuthRequest(args, report);
     if (args.json) {
       console.log(JSON.stringify(report, null, 2));
-    } else if (args.userAuthRequest) {
+    } else if (args.userAuthRequest || args.sendUserAuthRequest) {
       console.log(report.userAuthRequest);
     } else if (args.boardSummary) {
       console.log(report.boardSummary);
@@ -787,16 +835,17 @@ async function runPreflight(args) {
     report.discoverySelection = discoverySelection;
   }
 
+  report.sentUserAuthRequest = await sendUserAuthRequest(args, report);
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
-  } else if (args.userAuthRequest) {
+  } else if (args.userAuthRequest || args.sendUserAuthRequest) {
     console.log(report.userAuthRequest);
   } else if (args.boardSummary) {
     console.log(report.boardSummary);
   } else {
     printPreflightReport(report);
   }
-  process.exitCode = report.ok ? 0 : 1;
+  process.exitCode = report.ok && (!args.sendUserAuthRequest || report.sentUserAuthRequest.ok) ? 0 : 1;
   return report;
 }
 
@@ -972,6 +1021,9 @@ async function main() {
   }
   if (args.userAuthRequest && !args.preflightOnly) {
     throw new Error("--userAuthRequest is only supported with --preflightOnly.");
+  }
+  if (args.sendUserAuthRequest && !args.preflightOnly) {
+    throw new Error("--sendUserAuthRequest is only supported with --preflightOnly.");
   }
   if (args.preflightOnly) {
     await runPreflight(args);

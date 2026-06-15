@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createServer } from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -139,12 +140,45 @@ async function withMockHost(callback) {
   }
 }
 
+async function withFakeLinkBoard(callback) {
+  const requests = [];
+  const server = createServer((request, response) => {
+    let body = "";
+    request.on("data", (chunk) => {
+      body += String(chunk);
+    });
+    request.on("end", () => {
+      let parsed = {};
+      try {
+        parsed = body ? JSON.parse(body) : {};
+      } catch (error) {
+        parsed = { parseError: error.message, raw: body };
+      }
+      requests.push({
+        method: request.method,
+        path: request.url,
+        body: parsed,
+      });
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ ok: true }));
+    });
+  });
+  await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  const address = server.address();
+  try {
+    await callback(`http://127.0.0.1:${address.port}`, requests);
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose));
+  }
+}
+
 async function checkWrapperHelp(args) {
   const result = await runPowerShell(["-Help"], args);
   const output = `${result.stdout}\n${result.stderr}`;
   assert(result.exitCode === 0, `PowerShell wrapper help failed\n${output}`);
   assertIncludes(output, "Usage:", "PowerShell wrapper help");
   assertIncludes(output, "-Discover -PreflightOnly -BoardSummary", "PowerShell wrapper help");
+  assertIncludes(output, "-SendUserAuthRequest", "PowerShell wrapper help");
   console.log("[OK] PowerShell formal E2E wrapper help is safe");
 }
 
@@ -224,6 +258,34 @@ async function checkMockFastFormalPath(args) {
   });
 }
 
+async function checkMockSendUserAuthRequest(args) {
+  await withMockHost(async (port) => {
+    await withFakeLinkBoard(async (serverUrl, requests) => {
+      const result = await runPowerShell([
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-PreflightOnly",
+        "-SendUserAuthRequest",
+        "-Server", serverUrl,
+        "-AllowMockVideo",
+        "-SkipInputLog",
+        "-SkipAudio",
+        "-SkipClipboard",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell send user auth request failed\n${output}`);
+      assertIncludes(output, "NEED_USER_AUTH:", "PowerShell send user auth request");
+      assert(requests.length === 1, `PowerShell send user auth request should post once, got ${requests.length}`);
+      assert(requests[0].method === "POST", "PowerShell send should POST");
+      assert(requests[0].path === "/api/message", `PowerShell send path mismatch: ${requests[0].path}`);
+      assert(String(requests[0].body.text || "").includes("NEED_USER_AUTH:"), "PowerShell send body missing auth request");
+      assertNotIncludes(JSON.stringify(requests[0].body), "test-password", "PowerShell send user auth request body");
+      assertNotIncludes(output, "test-password", "PowerShell send user auth request");
+      console.log("[OK] PowerShell formal E2E wrapper sends secret-free user auth request");
+    });
+  });
+}
+
 async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -233,6 +295,7 @@ async function main() {
   await checkWrapperHelp(args);
   await checkDiscoverMockPreflightJson(args);
   await checkDiscoverOfflineBeforePassword(args);
+  await checkMockSendUserAuthRequest(args);
   await checkMockFastFormalPath(args);
   console.log("[OK] PowerShell formal E2E wrapper regression passed");
 }

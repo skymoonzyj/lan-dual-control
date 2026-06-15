@@ -34,6 +34,8 @@ param(
   [switch] $PreflightOnly,
   [switch] $CheckClientDiagnostics,
   [switch] $UserAuthRequest,
+  [switch] $SendUserAuthRequest,
+  [string] $Server = "http://192.168.31.68:17888",
   [switch] $Json,
   [switch] $BoardSummary,
   [switch] $Help
@@ -52,6 +54,7 @@ Usage:
 Common examples:
   scripts\windows\check-mac-formal-e2e.ps1 -Discover -PreflightOnly -BoardSummary
   scripts\windows\check-mac-formal-e2e.ps1 -Discover -PreflightOnly -CheckClientDiagnostics -UserAuthRequest
+  scripts\windows\check-mac-formal-e2e.ps1 -Discover -PreflightOnly -CheckClientDiagnostics -SendUserAuthRequest
   scripts\windows\check-mac-formal-e2e.ps1 -Discover -PromptPassword
   scripts\windows\check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -BoardSummary
 
@@ -150,6 +153,9 @@ try {
   }
   if ($UserAuthRequest) {
     $nodeArgs += "--userAuthRequest"
+  }
+  if ($SendUserAuthRequest) {
+    $nodeArgs += @("--sendUserAuthRequest", "--server", $Server)
   }
   if ($Json) {
     $nodeArgs += "--json"

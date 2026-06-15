@@ -19,6 +19,46 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 22:45
+开发端：Windows Codex
+本轮目标：响应 Mac formal E2E call，完成 Windows 无密预检，并让 formal runner 能安全向通讯板发送用户授权提示。
+完成内容：
+- 收到 Mac formal E2E call 后，Windows 侧对真实 `192.168.31.122:43770` 跑无密 `check-mac-formal-e2e --discover --discoverNoLocalSubnets --preflightOnly --checkClientDiagnostics --boardSummary`：ready，runtimeBuild=`b28c42c`，H.264/系统 PCM/文本剪贴板/文件剪贴板/input-log/权限/client diagnostics 全通过。
+- `scripts/windows/check-mac-formal-e2e.mjs` 新增 `--sendUserAuthRequest` 和 `--server`：只在 `--preflightOnly` 且预检 ready 时向 Agent Link Board 发送无密 `NEED_USER_AUTH`；未 ready 时不会发送，避免误催用户输入正式密码。
+- `scripts/windows/check-mac-formal-e2e.ps1` 新增 `-SendUserAuthRequest` / `-Server`，同步包装 Node 能力。
+- 回归测试新增假 Agent Link Board：验证离线时不 POST、mock ready 时只向 `/api/message` POST 一条不含密码的 `NEED_USER_AUTH`。
+- 已对真实 Mac host 执行一次 `--sendUserAuthRequest`，通讯板已收到无密授权提示；密码未打印/未上板，未执行 `inject`。
+修改文件：
+- `scripts/windows/check-mac-formal-e2e.mjs`
+- `scripts/windows/check-mac-formal-e2e.ps1`
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `scripts/windows/test-mac-formal-e2e-powershell.mjs`
+- `docs/07-windows-dev-environment.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-mac-formal-e2e.mjs`
+- `node --check scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `node --check scripts/windows/test-mac-formal-e2e-powershell.mjs`
+- PowerShell AST parse `scripts/windows/check-mac-formal-e2e.ps1`
+- `node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 90000`
+- `node scripts/windows/test-mac-formal-e2e-powershell.mjs --timeoutMs 90000`
+- 真实无密预检 + 发送授权提示：`node scripts/windows/check-mac-formal-e2e.mjs --discover --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --sendUserAuthRequest`
+遗留问题：
+- 正式 E2E 长测仍需要用户在 Windows 本机隐藏输入 Mac host 正式密码；当前 Codex 不会也不应在通讯板发送密码。
+- `inject` 未执行，仍需用户另行明确确认。
+- 本地仍有无关未提交改动 `scripts/windows/watch-codex-link-mac-alerts.ps1`，未纳入本轮。
+下一步建议：
+- 用户在 Windows 本机准备好后运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -PromptPassword`，或 Node 等价 `node scripts/windows/check-mac-formal-e2e.mjs --discover --promptPassword`，开始正式 H.264/音频/剪贴板/input-log 长测。
+- 正式长测通过后，再讨论是否进入真实 `inject` 输入验收。
+是否改了协议：否。
+是否需要另一端配合：需要用户在 Windows 本机输入正式密码后继续正式 E2E；Mac host 当前已 ready。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 22:20
 开发端：Windows Codex
 本轮目标：把 WGC H.264 raw-bgra/NV12 源格式对照接入 Windows readiness，方便后续一键收口卡顿/帧率排查。
