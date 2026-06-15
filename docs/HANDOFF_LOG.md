@@ -19,6 +19,40 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 18:20
+开发端：Windows Codex
+本轮目标：让 PowerShell Mac host 验收入口也能自动发现 Mac host，减少正式探针前手工复制 IP/端口。
+完成内容：
+- `scripts/windows/test-mac-host.ps1` 新增 `-Discover`、`-DiscoverNoLocalSubnets` 和 `-DiscoverTimeoutMs`，并在 `-Discover` 未显式传 `-HostName` 时允许自动扫描局域网。
+- PowerShell wrapper 发现成功后才继续原有密码、认证、session、H.264、音频、剪贴板和 input-log 探针；发现失败会先退出，不弹密码框。
+- 新增 `scripts/windows/test-mac-host-powershell-discover.mjs`，用本机 mock Mac 覆盖 PowerShell `-Discover` 到 WebSocket/auth/session/首帧路径，并覆盖离线 discovery 不触发密码提示。
+- Windows 环境说明、当前状态、下一步和任务板同步新命令。
+修改文件：
+- `scripts/windows/test-mac-host.ps1`
+- `scripts/windows/test-mac-host-powershell-discover.mjs`
+- `docs/07-windows-dev-environment.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-host-powershell-discover.mjs`
+- PowerShell AST parse `scripts/windows/test-mac-host.ps1`
+- `node scripts/windows/test-windows-script-help.mjs --script test-mac-host-powershell-discover.mjs`
+- `node scripts/windows/test-mac-host-powershell-discover.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-script-help.mjs`
+- `git diff --check`
+- 行首冲突标记扫描
+遗留问题：
+- 真实 Mac 的正式长测仍需要用户在 Windows 本机隐藏输入正式密码；本轮不认证真实 Mac、不发送输入、不执行 `inject`。
+下一步建议：
+- 用户准备好正式密码后，可运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-mac-host.ps1 -Discover -PromptPassword -RequirePassword -RequireH264 -ExpectInputMode log` 做底层正式探针；完整正式验收仍走 `check-mac-formal-e2e --discover --promptPassword`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真实正式密码验收需要用户在 Windows 本机输入密码，`inject` 仍需另行明确确认。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 17:45
 开发端：Windows Codex
 本轮目标：让底层 Mac host 探针也能自动发现 Mac host，方便单独做 H.264、音频、剪贴板和 input-log 验收。

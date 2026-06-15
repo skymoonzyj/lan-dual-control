@@ -1,7 +1,9 @@
 param(
-  [Parameter(Mandatory = $true)]
-  [string] $HostName,
+  [string] $HostName = "127.0.0.1",
   [int] $Port = 43770,
+  [switch] $Discover,
+  [switch] $DiscoverNoLocalSubnets,
+  [int] $DiscoverTimeoutMs = 1200,
   [string] $Password = "",
   [switch] $PromptPassword,
   [switch] $RequirePassword,
@@ -46,7 +48,6 @@ Push-Location $repoRoot
 try {
   $nodeArgs = @(
     $probeScript,
-    "--host", $HostName,
     "--port", $Port,
     "--timeoutMs", $TimeoutMs,
     "--width", $Width,
@@ -54,6 +55,19 @@ try {
     "--fps", $Fps,
     "--bandwidthKbps", $BandwidthKbps
   )
+  $hostProvided = $PSBoundParameters.ContainsKey("HostName")
+  if ((-not $Discover) -or $hostProvided -or $DiscoverNoLocalSubnets) {
+    $nodeArgs += @("--host", $HostName)
+  }
+  if ($Discover) {
+    $nodeArgs += "--discover"
+  }
+  if ($DiscoverNoLocalSubnets) {
+    $nodeArgs += "--discoverNoLocalSubnets"
+  }
+  if ($DiscoverTimeoutMs -gt 0) {
+    $nodeArgs += @("--discoverTimeoutMs", $DiscoverTimeoutMs)
+  }
   if ($Password) {
     $nodeArgs += @("--password", $Password)
   }
