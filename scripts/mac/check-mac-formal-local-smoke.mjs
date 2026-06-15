@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { promptPassword as promptMacPassword } from "./password-prompt.mjs";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -49,7 +50,8 @@ Options:
   --host <host>              Mac host address. Default: 127.0.0.1
   --port <port>              Mac host port. Default: 43770
   --password <password>      Probe password. Prefer LAN_DUAL_PASSWORD instead.
-  --promptPassword           Prompt for probe password without echoing it.
+  --promptPassword           Ring first, then prompt for probe password in a macOS
+                             hidden password dialog.
   --requirePassword          Refuse empty/demo password. Default: true
   --allowDemoPassword        Allow demo-password for local fake-host tests only.
   --timeoutMs <ms>           Default child probe timeout. Default: 12000
@@ -191,7 +193,13 @@ async function preparePassword(args) {
     if (process.env.LAN_DUAL_PASSWORD) {
       throw new Error("--promptPassword refuses to override LAN_DUAL_PASSWORD. Unset it or omit --promptPassword.");
     }
-    args.password = await promptHidden("Mac host formal smoke password: ", args.json ? process.stderr : process.stdout);
+    args.password = await promptMacPassword({
+      title: "LAN Dual Control",
+      message: "Enter the formal Mac host smoke password. It is only used for this local smoke check and is not printed.",
+      prompt: "Formal smoke password:",
+      terminalLabel: "Mac host formal smoke password: ",
+      output: args.json ? process.stderr : process.stdout,
+    });
   }
   if (!args.requirePassword) return;
   if (!args.password) {
@@ -200,59 +208,6 @@ async function preparePassword(args) {
   if (!args.allowDemoPassword && args.password === "demo-password") {
     throw new Error("Formal local smoke refuses demo-password. Use the formal password or pass --allowDemoPassword only for fake-host tests.");
   }
-}
-
-function promptHidden(label, output = process.stdout) {
-  if (!process.stdin.isTTY || !output.isTTY) {
-    return Promise.reject(new Error("--promptPassword requires an interactive terminal."));
-  }
-
-  return new Promise((resolvePrompt, rejectPrompt) => {
-    const stdin = process.stdin;
-    const previousRawMode = stdin.isRaw;
-    let value = "";
-    let settled = false;
-
-    const cleanup = () => {
-      stdin.off("data", onData);
-      if (typeof stdin.setRawMode === "function") {
-        stdin.setRawMode(Boolean(previousRawMode));
-      }
-      stdin.pause();
-    };
-    const finish = (result, error = null) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      output.write("\n");
-      if (error) rejectPrompt(error);
-      else resolvePrompt(result);
-    };
-    const onData = (chunk) => {
-      for (const char of String(chunk)) {
-        const code = char.charCodeAt(0);
-        if (char === "\r" || char === "\n") {
-          finish(value);
-          return;
-        }
-        if (code === 3) {
-          finish("", new Error("Password prompt cancelled."));
-          return;
-        }
-        if (code === 8 || code === 127) {
-          value = value.slice(0, -1);
-          continue;
-        }
-        if (code >= 32) value += char;
-      }
-    };
-
-    output.write(label);
-    stdin.resume();
-    stdin.setEncoding("utf8");
-    if (typeof stdin.setRawMode === "function") stdin.setRawMode(true);
-    stdin.on("data", onData);
-  });
 }
 
 function runChild(script, childArgs, args, timeoutMs) {

@@ -56,6 +56,45 @@
 是否改了协议：否。只改 Windows host 与 WGC helper 的内部 stdout 合同，远控 WebSocket 协议未变。
 是否需要另一端配合：代码改动本身不需要；真连观感验收需要 Mac client 连接 Windows host。
 
+## 2026-06-15 Mac Codex
+
+日期：2026-06-15 11:33
+开发端：Mac Codex
+本轮目标：按用户反馈修正 Mac 侧 `--promptPassword` 在 Codex 桌面里只等终端隐藏输入、用户看不到输入位置的问题。
+完成内容：
+- 新增 `scripts/mac/password-prompt.mjs` 共享 helper：需要密码时先播放提示音，再弹出 macOS 隐藏密码对话框；密码只返回给当前 Node 进程，不打印、不写命令参数、不发联络板。
+- `scripts/mac/start-mac-host.mjs`、`scripts/mac/check-mac-host-readiness.mjs`、`scripts/mac/check-mac-formal-local-smoke.mjs` 的 `--promptPassword` 已统一接入该 helper；`--json` 路径不会把提示文字写到 stdout。
+- 新增 `scripts/mac/test-mac-password-prompt.mjs`，用假的 `osascript` 覆盖提示音、弹窗成功、用户取消和弹窗失败路径；测试只校验密码长度/哈希，不输出密码正文。
+- 旧的自动化非交互失败测试改为显式设置 `LAN_DUAL_DISABLE_PASSWORD_DIALOG=1` / `LAN_DUAL_DISABLE_PASSWORD_BEEP=1`，避免回归测试时误弹真实系统窗口；人工正式运行不设置这些变量，会正常响铃并弹窗。
+- 文档同步说明 Mac 侧正式密码输入会弹 macOS 隐藏密码框，避免再让用户去终端里找输入位置。
+修改文件：
+- `scripts/mac/password-prompt.mjs`
+- `scripts/mac/start-mac-host.mjs`
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `scripts/mac/check-mac-formal-local-smoke.mjs`
+- `scripts/mac/test-mac-password-prompt.mjs`
+- `scripts/mac/test-mac-host-start-helper.mjs`
+- `scripts/mac/test-mac-readiness-prompt-password.mjs`
+- `scripts/mac/test-mac-formal-local-smoke.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check` 覆盖上述新增/修改脚本。
+- `node scripts/mac/test-mac-password-prompt.mjs --timeoutMs 8000`
+- `node scripts/mac/test-mac-readiness-prompt-password.mjs --timeoutMs 8000`
+- `node scripts/mac/test-mac-formal-local-smoke.mjs --timeoutMs 20000`
+遗留问题：
+- 本轮未跑真实正式密码 smoke，避免在用户未明确要求时触发真实认证链路；如需执行，可运行 `node scripts/mac/check-mac-formal-local-smoke.mjs --promptPassword --json`，此时会先响铃再弹 macOS 密码框。
+- 不执行 `inject`；真实注入仍需用户明确确认正在看屏幕。
+下一步建议：
+- 正式 E2E 前先跑 `node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary`，再根据需要运行 Mac 本机 smoke 或通知 Windows 端用 formal runner。
+是否改了协议：否。
+是否需要另一端配合：不需要；这是 Mac 侧用户输入体验与安全回归改进。
+
 ## 2026-06-15 Windows Codex
 
 日期：2026-06-15 11:10

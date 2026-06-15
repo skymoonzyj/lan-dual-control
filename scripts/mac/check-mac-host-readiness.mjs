@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { promptPassword as promptMacPassword } from "./password-prompt.mjs";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -148,8 +149,9 @@ Options:
   --host <host>             Mac host probe host. Default: 127.0.0.1
   --port <port>             Mac host port. Default: 43770
   --password <password>     Probe password. Default: LAN_DUAL_PASSWORD or demo-password
-  --promptPassword          Prompt for probe password without echoing it. Useful for
-                            formal-password deep probes; the value is not printed.
+  --promptPassword          Ring first, then prompt for probe password in a macOS
+                            hidden password dialog. Useful for formal-password
+                            deep probes; the value is not printed.
   --timeoutMs <ms>          Per-step timeout. Default: 20000
   --expectBuildId <id>      Require running host runtime.buildId. Implies --probeHost.
   --requireCurrentBuildId   Require running host runtime.buildId to match current git short hash.
@@ -195,72 +197,16 @@ async function preparePassword(args) {
   if (process.env.LAN_DUAL_PASSWORD) {
     throw new Error("--promptPassword refuses to override an existing LAN_DUAL_PASSWORD. Unset it or omit --promptPassword.");
   }
-  args.password = await promptHidden("Mac host probe password: ", args.json ? process.stderr : process.stdout);
+  args.password = await promptMacPassword({
+    title: "LAN Dual Control",
+    message: "Enter the Mac host probe password. It is only used for this readiness probe and is not printed.",
+    prompt: "Probe password:",
+    terminalLabel: "Mac host probe password: ",
+    output: args.json ? process.stderr : process.stdout,
+  });
   if (!args.password) {
     throw new Error("Password cannot be empty when --promptPassword is used.");
   }
-}
-
-function promptHidden(label, output = process.stdout) {
-  if (!process.stdin.isTTY || !output.isTTY) {
-    return Promise.reject(new Error("--promptPassword requires an interactive terminal."));
-  }
-
-  return new Promise((resolvePrompt, rejectPrompt) => {
-    const stdin = process.stdin;
-    const promptOutput = output;
-    const previousRawMode = stdin.isRaw;
-    let value = "";
-    let settled = false;
-
-    const cleanup = () => {
-      stdin.off("data", onData);
-      if (typeof stdin.setRawMode === "function") {
-        stdin.setRawMode(Boolean(previousRawMode));
-      }
-      stdin.pause();
-    };
-    const finish = (result, error = null) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      promptOutput.write("\n");
-      if (error) {
-        rejectPrompt(error);
-      } else {
-        resolvePrompt(result);
-      }
-    };
-    const onData = (chunk) => {
-      const text = String(chunk);
-      for (const char of text) {
-        const code = char.charCodeAt(0);
-        if (char === "\r" || char === "\n") {
-          finish(value);
-          return;
-        }
-        if (code === 3) {
-          finish("", new Error("Password prompt cancelled."));
-          return;
-        }
-        if (code === 8 || code === 127) {
-          value = value.slice(0, -1);
-          continue;
-        }
-        if (code >= 32) {
-          value += char;
-        }
-      }
-    };
-
-    promptOutput.write(label);
-    stdin.resume();
-    stdin.setEncoding("utf8");
-    if (typeof stdin.setRawMode === "function") {
-      stdin.setRawMode(true);
-    }
-    stdin.on("data", onData);
-  });
 }
 
 function getGitBuildId() {

@@ -31,6 +31,8 @@
 node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword
 ```
 
+`--promptPassword` 会先播放提示音，再弹出 macOS 隐藏密码对话框；密码只保存在本次进程内，不会写入命令参数、日志或联络板。自动化测试可显式关闭弹窗来验证失败路径，人工正式联调不要关闭。
+
 如果只是本机开发快速试跑，可以先干跑查看即将使用的端口、build、局域网地址和输入模式：
 
 ```bash
@@ -87,7 +89,7 @@ node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary
 node scripts/mac/check-mac-formal-local-smoke.mjs --promptPassword
 ```
 
-该脚本会复用 `observe-mac-video`、`observe-mac-audio` 和 `smoke-mac-input-log`，默认要求正式密码来源为 `LAN_DUAL_PASSWORD` 或 `--promptPassword`，并拒绝空密码和 `demo-password`。密码只通过子进程环境变量传递，不放进命令参数；脚本不会启动 Mac host、不会切 `inject`，也不会打印密码。自动化需要机器可读结果时可加 `--json`，需要本地假服务回归时才显式加 `--allowDemoPassword`。
+该脚本会复用 `observe-mac-video`、`observe-mac-audio` 和 `smoke-mac-input-log`，默认要求正式密码来源为 `LAN_DUAL_PASSWORD` 或 `--promptPassword`，并拒绝空密码和 `demo-password`。`--promptPassword` 会先播放提示音，再弹出 macOS 隐藏密码对话框；密码只通过子进程环境变量传递，不放进命令参数；脚本不会启动 Mac host、不会切 `inject`，也不会打印密码。自动化需要机器可读结果时可加 `--json`，需要本地假服务回归时才显式加 `--allowDemoPassword`。
 
 启动助手会：
 
@@ -106,6 +108,14 @@ node scripts/mac/test-mac-host-start-helper.mjs
 ```
 
 该脚本会覆盖缺密码拒绝、`demo-password` 拒绝、非交互密码提示拒绝、带环境密码干跑、一次性随机密码干跑、`--status` 在线/离线检查、`--status --json` 在线/离线机器可读输出和临时端口真实启动后自动关闭。
+
+密码弹窗 helper 自检：
+
+```bash
+node scripts/mac/test-mac-password-prompt.mjs
+```
+
+该脚本使用假的 `osascript` 验证提示音、macOS 隐藏密码弹窗、取消和失败路径，不会打开真实系统弹窗，也不会输出密码正文。
 
 Mac host 日常一键体检：
 

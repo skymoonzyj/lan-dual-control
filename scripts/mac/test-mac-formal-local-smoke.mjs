@@ -90,6 +90,8 @@ function runSmoke(extraArgs, args, env = {}) {
     env: {
       ...process.env,
       LAN_DUAL_PASSWORD: "",
+      LAN_DUAL_DISABLE_PASSWORD_DIALOG: "1",
+      LAN_DUAL_DISABLE_PASSWORD_BEEP: "1",
       ...env,
     },
   });
@@ -120,7 +122,7 @@ function checkPasswordSafety(args) {
   const prompt = runSmoke(["--json", "--promptPassword"], args);
   const promptPayload = parseJson(prompt.stdout, "non-interactive prompt failure");
   assert(prompt.status !== 0, "non-interactive --promptPassword should fail");
-  assert(/requires an interactive terminal/.test(promptPayload.error?.message || ""), "prompt failure should explain non-interactive terminal");
+  assert(/requires a macOS password dialog or an interactive terminal/.test(promptPayload.error?.message || ""), "prompt failure should explain unavailable prompt UI");
   assert(!String(prompt.stdout || "").includes("Mac host formal smoke password:"), "JSON prompt failure should not pollute stdout");
 
   const secret = "super-secret-formal-local-smoke";

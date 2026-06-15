@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promptPassword as promptMacPassword } from "./password-prompt.mjs";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const macHostPath = resolve(repoRoot, "apps/mac-host");
@@ -121,7 +122,8 @@ Options:
   --host <host>              Bind host. Default: 0.0.0.0
   --port <port>              Port. Default: 43770
   --password <value>         Set LAN_DUAL_PASSWORD for this run. The value is not printed.
-  --promptPassword           Prompt for LAN_DUAL_PASSWORD without echoing it.
+  --promptPassword           Ring first, then prompt for LAN_DUAL_PASSWORD in a
+                             macOS hidden password dialog.
   --ephemeralPassword        Generate a one-time random password for this run. It is not printed.
   --requirePassword          Refuse empty or demo-password credentials.
   --deviceName <name>        Set LAN_DUAL_DEVICE_NAME.
@@ -466,7 +468,12 @@ async function preparePassword(args) {
   }
 
   if (args.promptPassword && !args.password && !process.env.LAN_DUAL_PASSWORD) {
-    args.password = await promptHidden("Mac host password: ");
+    args.password = await promptMacPassword({
+      title: "LAN Dual Control",
+      message: "Enter the formal Mac host password. It stays in this process and is not printed.",
+      prompt: "Mac host password:",
+      terminalLabel: "Mac host password: ",
+    });
     if (!args.password) {
       throw new Error("Password cannot be empty when --promptPassword is used.");
     }
@@ -483,68 +490,6 @@ async function preparePassword(args) {
 
 function makeEphemeralPassword() {
   return `ephemeral-${crypto.randomBytes(24).toString("base64url")}`;
-}
-
-function promptHidden(label) {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    return Promise.reject(new Error("--promptPassword requires an interactive terminal."));
-  }
-
-  return new Promise((resolvePrompt, rejectPrompt) => {
-    const stdin = process.stdin;
-    const stdout = process.stdout;
-    const previousRawMode = stdin.isRaw;
-    let value = "";
-    let settled = false;
-
-    const cleanup = () => {
-      stdin.off("data", onData);
-      if (typeof stdin.setRawMode === "function") {
-        stdin.setRawMode(Boolean(previousRawMode));
-      }
-      stdin.pause();
-    };
-    const finish = (result, error = null) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      stdout.write("\n");
-      if (error) {
-        rejectPrompt(error);
-      } else {
-        resolvePrompt(result);
-      }
-    };
-    const onData = (chunk) => {
-      const text = String(chunk);
-      for (const char of text) {
-        const code = char.charCodeAt(0);
-        if (char === "\r" || char === "\n") {
-          finish(value);
-          return;
-        }
-        if (code === 3) {
-          finish("", new Error("Password prompt cancelled."));
-          return;
-        }
-        if (code === 8 || code === 127) {
-          value = value.slice(0, -1);
-          continue;
-        }
-        if (code >= 32) {
-          value += char;
-        }
-      }
-    };
-
-    stdout.write(label);
-    stdin.resume();
-    stdin.setEncoding("utf8");
-    if (typeof stdin.setRawMode === "function") {
-      stdin.setRawMode(true);
-    }
-    stdin.on("data", onData);
-  });
 }
 
 function makeLaunchEnv(args) {

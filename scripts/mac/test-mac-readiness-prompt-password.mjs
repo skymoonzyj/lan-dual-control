@@ -22,8 +22,8 @@ Options:
   --help, -h        Show this help without running checks
 
 Verifies check-mac-host-readiness --promptPassword is safe for automation:
-non-interactive runs fail fast, JSON stdout is not polluted by prompts, and
-explicit passwords are not leaked in errors.
+when the macOS dialog is explicitly disabled, non-interactive runs fail fast,
+JSON stdout is not polluted by prompts, and explicit passwords are not leaked.
 `);
 }
 
@@ -54,6 +54,8 @@ function runReadiness(extraArgs, args, env = {}) {
     env: {
       ...process.env,
       LAN_DUAL_PASSWORD: "",
+      LAN_DUAL_DISABLE_PASSWORD_DIALOG: "1",
+      LAN_DUAL_DISABLE_PASSWORD_BEEP: "1",
       ...env,
     },
   });
@@ -88,8 +90,8 @@ function assertNonInteractivePromptFails(args) {
   const result = runReadiness(["--promptPassword"], args);
   const output = outputOf(result);
   assertFails(result, "non-interactive --promptPassword");
-  assertIncludes(output, "--promptPassword requires an interactive terminal", "non-interactive --promptPassword");
-  console.log("[OK] Non-interactive --promptPassword fails fast");
+  assertIncludes(output, "--promptPassword requires a macOS password dialog or an interactive terminal", "non-interactive --promptPassword");
+  console.log("[OK] Non-interactive --promptPassword fails fast when dialog is disabled");
 }
 
 function assertJsonPromptDoesNotPolluteStdout(args) {
@@ -98,7 +100,7 @@ function assertJsonPromptDoesNotPolluteStdout(args) {
   if (String(result.stdout || "").trim()) {
     throw new Error(`--json --promptPassword should not print prompt text to stdout.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
   }
-  assertIncludes(result.stderr, "--promptPassword requires an interactive terminal", "--json --promptPassword");
+  assertIncludes(result.stderr, "--promptPassword requires a macOS password dialog or an interactive terminal", "--json --promptPassword");
   console.log("[OK] JSON prompt failures keep stdout empty");
 }
 

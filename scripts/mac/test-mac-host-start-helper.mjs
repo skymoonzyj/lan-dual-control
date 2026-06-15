@@ -163,14 +163,14 @@ async function assertDemoPasswordFails(timeoutMs) {
 async function assertPromptPasswordFailsWithoutTty(timeoutMs) {
   const result = await runNode(["--promptPassword", "--dryRun"], {
     timeoutMs,
-    env: { LAN_DUAL_PASSWORD: "" },
+    env: { LAN_DUAL_PASSWORD: "", LAN_DUAL_DISABLE_PASSWORD_DIALOG: "1", LAN_DUAL_DISABLE_PASSWORD_BEEP: "1" },
   });
   const output = `${result.stdout}\n${result.stderr}`;
   if (result.exitCode === 0 || result.timedOut) {
     throw new Error(`Non-interactive prompt password should fail.\n${output}`);
   }
-  assertIncludes(output, "--promptPassword requires an interactive terminal", "non-interactive prompt failure");
-  print("OK", "Password prompt refuses non-interactive terminals");
+  assertIncludes(output, "--promptPassword requires a macOS password dialog or an interactive terminal", "non-interactive prompt failure");
+  print("OK", "Password prompt refuses non-interactive automation when dialog is disabled");
 }
 
 async function assertDryRunWithEnvPassword(timeoutMs) {
