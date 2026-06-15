@@ -49,6 +49,40 @@
 
 ## 2026-06-15 Windows Codex
 
+日期：2026-06-15 21:20
+开发端：Windows Codex
+本轮目标：新增 Windows WGC H.264 raw-bgra vs NV12 源格式对照入口，辅助下一步性能优化取舍。
+完成内容：
+- 新增 `scripts/windows/compare-windows-wgc-h264-sources.mjs`，包装现有 `benchmark-windows-wgc-settings.mjs`，默认同条件顺序跑 raw-bgra 和 NV12 两条 WGC H.264 源格式。
+- 输出普通对照摘要、`--json` 机器可读结果和 `--boardSummary` 无密联络板摘要；结果包含 FPS、fresh FPS、unique helper FPS、重复帧比例、helper frame/convert avg、CPU/工作集 delta 和 winner。
+- 默认只启动本机临时 Windows host / WGC helper / FFmpeg，不连接 Mac、不认证正式密码、不发送输入、不执行 `inject`。
+- 本机短测 `1280x720`、30Hz、10M、repeat-full、`h264_nvenc`、1.2 秒通过：raw-bgra 19 帧/15.58 FPS、helper frame avg 72.086ms、convert avg 70.696ms；NV12 28 帧/23.03 FPS、helper frame avg 68.805ms、convert avg 67.741ms；本次短测 winner=NV12。
+- Windows host README、当前状态、下一步和任务板已同步，下一步继续优先做 helper 原生硬编或 GPU/SIMD 转换，避免继续在 CPU 桥上深调。
+修改文件：
+- `scripts/windows/compare-windows-wgc-h264-sources.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/compare-windows-wgc-h264-sources.mjs`
+- `node scripts/windows/compare-windows-wgc-h264-sources.mjs --help`
+- `node scripts/windows/test-windows-script-help.mjs --script compare-windows-wgc-h264-sources.mjs --timeoutMs 10000`
+- `node scripts/windows/compare-windows-wgc-h264-sources.mjs --profile 30:10000:balanced --durationMs 1200 --timeoutMs 60000 --minFrames 1 --minFps 0 --maxGapMs 10000 --resourceSample false --skipBuild --boardSummary`
+- `node scripts/windows/compare-windows-wgc-h264-sources.mjs --profile 30:10000:balanced --durationMs 1200 --timeoutMs 60000 --minFrames 1 --minFps 0 --maxGapMs 10000 --resourceSample false --skipBuild --json`
+遗留问题：
+- 该脚本是性能对照入口，不是最终优化；真实 60Hz 日常观感仍需要 helper 原生硬编、动态画面源帧节奏和 Mac client 真连验收。
+- 本地仍有无关未提交改动 `scripts/windows/watch-codex-link-mac-alerts.ps1`，未纳入本轮。
+下一步建议：
+- Windows 侧下一轮优先基于该脚本跑 `--profile 60:20000:balanced --durationMs 1800 --boardSummary`，再推进 helper 原生 D3D11/NVENC 编码或 GPU/SIMD 转换。
+- Mac 真连验收仍等用户在 Windows 本机隐藏输入正式密码；不要在联络板发送密码，`inject` 仍需另行明确确认。
+是否改了协议：否。
+是否需要另一端配合：不需要；后续 Mac client 真连观感验收需要 Mac 端配合。
+
+## 2026-06-15 Windows Codex
+
 日期：2026-06-15 20:56
 开发端：Windows Codex
 本轮目标：新增 Windows 审查机双端剪贴板完整性聚合回归，方便 Supervisor 一条命令复审。
