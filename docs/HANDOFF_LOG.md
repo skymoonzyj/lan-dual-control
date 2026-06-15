@@ -17,6 +17,45 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-15 Mac Codex
+
+日期：2026-06-15 22:35
+开发端：Mac Codex
+本轮目标：给 Mac host 启动助手补显式后台常驻模式，减少正式联调时终端会话占用，同时保持密码和健康检查边界。
+完成内容：
+- `scripts/mac/start-mac-host.mjs` 新增 `--background` 和 `--logFile <path>`；显式后台模式会先按原流程准备密码、拒绝已占用端口、启动 Swift host、等待 `/discovery`，并在 runtime/display 校验通过后才 detach 退出启动助手。
+- 后台日志默认写入 `.dev-lab/mac-host/lan-dual-mac-host-<port>.log`，也可用 `--logFile` 指定；默认前台启动行为保持不变。
+- 后台模式如果 runtime/display 校验失败会停掉刚启动的 host 并返回失败；只有显式 `--skipRuntimeCheck` 才跳过该校验。
+- runtime/display 子校验不再通过 `--password` 命令参数传递密码，改为继承启动环境里的 `LAN_DUAL_PASSWORD`，避免密码出现在 argv。
+- `scripts/mac/test-mac-host-start-helper.mjs` 新增后台启动临时端口回归、后台校验失败不脱离静态守卫，以及 runtime/display 子校验不传 `--password` 的静态守卫。
+- Mac host README、CURRENT_STATUS、NEXT_ACTIONS 和任务板同步 `--background` 使用方式；文档当前事实更新为：真实 Mac host `192.168.31.122:43770` 已在 `b28c42c` 运行，Windows 无密预检已通过，下一步等待用户在 Windows 本机隐藏输入正式密码。
+修改文件：
+- `scripts/mac/start-mac-host.mjs`
+- `scripts/mac/test-mac-host-start-helper.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/start-mac-host.mjs`
+- `node --check scripts/mac/test-mac-host-start-helper.mjs`
+- `node scripts/mac/start-mac-host.mjs --help`
+- `node scripts/mac/start-mac-host.mjs --status --json`
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 60000`
+- `node scripts/mac/test-mac-script-help.mjs --script start-mac-host.mjs --script test-mac-host-start-helper.mjs --timeoutMs 10000`
+- `git diff --check`
+- 行首冲突标记扫描
+遗留问题：
+- 本轮没有执行 Windows 侧正式长测；formal E2E 仍等待用户在 Windows 本机隐藏输入 Mac host 正式密码。
+- 真实 43770 runtime build 为 `b28c42c`，相对当前 repo `1598357` 只有 build metadata stale，`changedHostRuntimeFileCount=0`；若后续 Mac host runtime 源码再变化，正式长测前仍需重启 host。
+下一步建议：
+- Windows 端用户授权后继续跑 `check-mac-formal-e2e --discover --promptPassword` 完整验收；不要在联络板发送密码，`inject` 仍需另行明确确认。
+- 后续需要长期启动 Mac host 时可用 `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --background`，启动助手确认健康后会退出，host 日志留在 `.dev-lab/mac-host/`。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端在用户授权后继续 formal E2E；本轮代码改动本身不需要 Windows 端修改。
+
 ## 2026-06-15 Windows Codex
 
 日期：2026-06-15 22:45

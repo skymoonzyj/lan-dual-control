@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import net from "node:net";
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -467,6 +468,96 @@ async function assertLaunchWithEphemeralPassword(timeoutMs) {
   await assertLaunchWithPasswordMode(timeoutMs, "ephemeral");
 }
 
+async function assertBackgroundLaunchWithEnvPassword(timeoutMs) {
+  if (!canLaunchRealMacHost()) {
+    print("SKIP", `Background Swift Mac host launch only runs on macOS; current platform is ${process.platform}`);
+    return;
+  }
+  const port = await getFreePort();
+  const logPath = `.dev-lab/test-mac-host-start-helper/background-${port}.log`;
+  const result = await runNode([
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(port),
+    "--videoMode",
+    "mock",
+    "--inputMode",
+    "log",
+    "--buildId",
+    "background-helper-test",
+    "--requirePassword",
+    "--skipRuntimeCheck",
+    "--noBonjour",
+    "--background",
+    "--logFile",
+    logPath,
+    "--timeoutMs",
+    String(timeoutMs),
+  ], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "test-password" },
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (result.exitCode !== 0 || result.timedOut) {
+    throw new Error(`Background launch should exit 0 after /discovery is ready.\n${output}`);
+  }
+  assertIncludes(output, "Background: enabled", "background launch");
+  assertIncludes(output, "Mac host is running in background", "background launch");
+  assertIncludes(output, `background-${port}.log`, "background launch");
+  assertIncludes(output, "input=log", "background launch");
+  assertIncludes(output, "build=background-helper-test", "background launch");
+
+  const status = await runNode(["--status", "--json", "--host", "127.0.0.1", "--port", String(port)], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "" },
+  });
+  const statusOutput = `${status.stdout}\n${status.stderr}`;
+  let pid = 0;
+  try {
+    if (status.exitCode !== 0 || status.timedOut) {
+      throw new Error(`Background host status should exit 0.\n${statusOutput}`);
+    }
+    const json = parseJsonOutput(status.stdout, "background JSON status");
+    pid = Number(json.runtime?.processId || 0);
+    if (json.online !== true || json.runtime?.buildId !== "background-helper-test" || !pid) {
+      throw new Error(`Background JSON status had unexpected runtime shape.\n${status.stdout}`);
+    }
+  } finally {
+    if (pid) {
+      try {
+        process.kill(pid, "SIGTERM");
+      } catch {
+        // Process may already be gone.
+      }
+    }
+  }
+  print("OK", `Background start keeps Mac host alive on temporary port ${port} until cleaned up`);
+}
+
+function assertRuntimeCheckDoesNotPassPasswordArgv() {
+  const source = readFileSync(new URL("./start-mac-host.mjs", import.meta.url), "utf8");
+  const runtimeCheckIndex = source.indexOf("function runRuntimeCheck");
+  const spawnIndex = source.indexOf("spawnSync(process.execPath, commandArgs", runtimeCheckIndex);
+  if (runtimeCheckIndex < 0 || spawnIndex < 0) {
+    throw new Error("Could not locate runRuntimeCheck command construction in start-mac-host.mjs");
+  }
+  const window = source.slice(runtimeCheckIndex, spawnIndex);
+  if (window.includes('"--password"') || window.includes("'--password'")) {
+    throw new Error("start-mac-host runtime/display check must not pass the host password via argv.");
+  }
+  print("OK", "Runtime/display check keeps the host password out of child argv");
+}
+
+function assertBackgroundRequiresRuntimeCheckSuccess() {
+  const source = readFileSync(new URL("./start-mac-host.mjs", import.meta.url), "utf8");
+  const guardPattern = /!runtimeCheckPassed\s*&&\s*\(\s*args\.requireRuntimeCheck\s*\|\|\s*args\.background\s*\)/;
+  if (!guardPattern.test(source)) {
+    throw new Error("start-mac-host --background must stop and fail when the runtime/display check fails.");
+  }
+  print("OK", "Background start refuses to detach after a failed runtime/display check");
+}
+
 async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -486,6 +577,9 @@ async function main() {
   await assertStatusOnline(args.timeoutMs);
   await assertLaunchWithEnvPassword(args.timeoutMs);
   await assertLaunchWithEphemeralPassword(args.timeoutMs);
+  await assertBackgroundLaunchWithEnvPassword(args.timeoutMs);
+  assertRuntimeCheckDoesNotPassPasswordArgv();
+  assertBackgroundRequiresRuntimeCheckSuccess();
   print("OK", "Mac host start helper self-test passed");
 }
 

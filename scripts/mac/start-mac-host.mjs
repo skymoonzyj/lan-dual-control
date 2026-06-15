@@ -3,7 +3,8 @@ import http from "node:http";
 import os from "node:os";
 import crypto from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
-import { resolve } from "node:path";
+import { closeSync, mkdirSync, openSync, writeSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promptPassword as promptMacPassword } from "./password-prompt.mjs";
 
@@ -34,6 +35,8 @@ const defaults = {
   skipRuntimeCheck: false,
   requireRuntimeCheck: false,
   allowExisting: false,
+  background: false,
+  logFile: "",
   status: false,
   json: false,
   dryRun: false,
@@ -63,6 +66,7 @@ function parseArgs(argv) {
       key === "skipRuntimeCheck" ||
       key === "requireRuntimeCheck" ||
       key === "allowExisting" ||
+      key === "background" ||
       key === "status" ||
       key === "json" ||
       key === "dryRun"
@@ -142,6 +146,9 @@ Options:
   --skipRuntimeCheck         Skip check-mac-displays after /discovery is ready.
   --requireRuntimeCheck      Stop startup if the runtime/display check fails.
   --allowExisting            Do not refuse when /discovery already answers on the port.
+  --background               Detach the Mac host after /discovery and runtime checks pass.
+  --logFile <path>           With --background, append Mac host logs here.
+                             Default: .dev-lab/mac-host/lan-dual-mac-host-<port>.log
   --status                   Print current /discovery runtime status and stale-build source diff,
                              then exit without starting.
   --json                     With --status, print machine-readable JSON only.
@@ -533,6 +540,9 @@ function printLaunchPlan(args) {
   console.log(`[INFO] JPEG quality override: ${args.jpegQuality || "auto"}`);
   console.log(`[INFO] Bonjour: ${args.bonjour ? "enabled" : "disabled"}`);
   console.log(`[INFO] Build ID: ${args.buildId}`);
+  if (args.background) {
+    console.log(`[INFO] Background: enabled; log file: ${resolveBackgroundLogFile(args)}`);
+  }
   if (args.ephemeralPassword) {
     console.log("[INFO] Password: ephemeral random value for this process only (not printed)");
   }
@@ -605,8 +615,6 @@ function runRuntimeCheck(args, env) {
     "127.0.0.1",
     "--port",
     String(args.port),
-    "--password",
-    args.password || process.env.LAN_DUAL_PASSWORD || "demo-password",
     "--requireRuntime",
     "--expectBuildId",
     args.buildId,
@@ -631,11 +639,27 @@ function runRuntimeCheck(args, env) {
   return true;
 }
 
-function spawnHost(env) {
+function resolveBackgroundLogFile(args) {
+  return resolve(repoRoot, args.logFile || `.dev-lab/mac-host/lan-dual-mac-host-${args.port}.log`);
+}
+
+function openBackgroundLog(args) {
+  const logFile = resolveBackgroundLogFile(args);
+  mkdirSync(dirname(logFile), { recursive: true });
+  const fd = openSync(logFile, "a");
+  writeSync(
+    fd,
+    `\n[${new Date().toISOString()}] start-mac-host --background launching port=${args.port} build=${args.buildId} inputMode=${args.inputMode}\n`,
+  );
+  return { fd, logFile };
+}
+
+function spawnHost(env, launch = {}) {
   return spawn("swift", ["run", "--package-path", macHostPath, "lan-dual-mac-host"], {
     cwd: repoRoot,
     env,
-    stdio: "inherit",
+    detached: launch.background === true,
+    stdio: launch.background ? ["ignore", launch.logFd, launch.logFd] : "inherit",
   });
 }
 
@@ -663,7 +687,17 @@ async function main() {
   await assertNoExistingHost(args);
 
   console.log("[INFO] Starting Mac host...");
-  const child = spawnHost(env);
+  let backgroundLog = null;
+  if (args.background) {
+    backgroundLog = openBackgroundLog(args);
+  }
+  const child = spawnHost(env, {
+    background: args.background,
+    logFd: backgroundLog?.fd,
+  });
+  if (backgroundLog) {
+    closeSync(backgroundLog.fd);
+  }
   let exited = false;
   let childExitInfo = null;
   const childExit = new Promise((resolveExit) => {
@@ -718,9 +752,14 @@ async function main() {
   }
 
   const runtimeCheckPassed = runRuntimeCheck(args, env);
-  if (!runtimeCheckPassed && args.requireRuntimeCheck) {
+  if (!runtimeCheckPassed && (args.requireRuntimeCheck || args.background)) {
     stop();
     process.exitCode = 1;
+    return;
+  }
+  if (args.background) {
+    child.unref();
+    console.log(`[OK] Mac host is running in background: pid=${child.pid} log=${backgroundLog?.logFile || resolveBackgroundLogFile(args)}`);
     return;
   }
   console.log("[OK] Mac host is running. Press Ctrl+C to stop it.");
