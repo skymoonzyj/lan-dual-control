@@ -354,6 +354,9 @@ async function checkDiscoverFailureNoPasswordPrompt(args) {
   assertIncludes(payload.error?.message || "", "Windows host discovery", "discover failure error");
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--promptPassword requires", "discover failure should not reach password prompt");
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, "Password cannot be empty", "discover failure should not prompt for password");
+  assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--host  --port", "discover failure should not print an empty host auth command");
+  assert(!payload.commands?.browserSmoke, "discover failure should not provide a browser auth command without a host");
+  assertIncludes(payload.commands?.discoverPreflight || "", "--discover", "discover failure should provide a safe discovery preflight retry command");
   print("OK", "Discovery failure exits before password prompt");
 }
 

@@ -371,6 +371,41 @@ function makeBrowserArgs(args) {
   return browserArgs;
 }
 
+function hasWindowsHost(args) {
+  return Boolean(String(args.host || "").trim());
+}
+
+function makeBrowserSmokeCommand(args) {
+  if (!hasWindowsHost(args)) return "";
+  return makeBrowserArgs(args).join(" ");
+}
+
+function makePreflightCommand(args) {
+  return [
+    "node scripts/mac/check-mac-client-formal-status.mjs",
+    ...(args.host ? ["--host", args.host, "--port", String(args.port)] : []),
+    "--boardSummary",
+  ].join(" ");
+}
+
+function makeDiscoveryRetryCommand(args) {
+  const command = [
+    "node scripts/mac/run-mac-client-formal-smoke.mjs",
+    "--discover",
+    "--preflightOnly",
+    "--boardSummary",
+  ];
+  if (args.discoverNoLocalSubnets) command.push("--discoverNoLocalSubnets");
+  for (const host of args.discoverHosts || []) {
+    command.push("--discoverHost", host);
+  }
+  for (const subnet of args.discoverSubnets || []) {
+    command.push("--discoverSubnet", subnet);
+  }
+  if (args.port) command.push("--port", String(args.port));
+  return command.join(" ");
+}
+
 async function preparePassword(args) {
   if (args.preflightOnly || args.dryRun) return "";
   if (args.promptPassword) {
@@ -461,9 +496,12 @@ function makeBoardSummary(report) {
     ].join(" ");
   }
   if (report.preflightOnly || report.dryRun) {
+    const nextText = report.commands?.browserSmoke
+      ? `Next: run with --promptPassword when ready to authenticate; command=${report.commands.browserSmoke}.`
+      : `Next: start or discover a Windows host, then rerun safe preflight; command=${report.commands?.discoverPreflight || ""}.`;
     return [
       `Mac client browser smoke preflight for ${target}: ok=${report.preflight?.ok ? "yes" : "no"} ready=${report.preflight?.readyToCall ? "yes" : "no"}.${discoveryText}`,
-      `Next: run with --promptPassword when ready to authenticate; command=${report.commands?.browserSmoke || ""}.`,
+      nextText,
       "No password was requested or sent; inject was not executed.",
     ].join(" ");
   }
@@ -521,12 +559,9 @@ function makeReport(args, preflight) {
       allowClipboardFallback: args.allowClipboardFallback,
     },
     commands: {
-      preflight: [
-        "node scripts/mac/check-mac-client-formal-status.mjs",
-        ...(args.host ? ["--host", args.host, "--port", String(args.port)] : []),
-        "--boardSummary",
-      ].join(" "),
-      browserSmoke: makeBrowserArgs(args).join(" "),
+      preflight: makePreflightCommand(args),
+      discoverPreflight: makeDiscoveryRetryCommand(args),
+      browserSmoke: makeBrowserSmokeCommand(args),
     },
     preflight: preflight.payload,
     preflightRaw: {

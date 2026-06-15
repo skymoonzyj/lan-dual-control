@@ -19,6 +19,35 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 18:54
+开发端：Mac Codex
+本轮目标：修复 Mac client formal smoke 在 discovery 失败时输出空 host 认证命令的问题。
+完成内容：
+- 复现 `run-mac-client-formal-smoke --discover --preflightOnly --boardSummary` 在未发现 Windows host 时输出 `--host  --port ...` 浏览器认证命令。
+- `scripts/mac/run-mac-client-formal-smoke.mjs` 现在只有存在有效 Windows host 时才生成 `commands.browserSmoke`；缺 host 时 boardSummary 改为提示先启动/发现 Windows host，再重跑无密安全预检。
+- `commands.discoverPreflight` 新增安全重跑命令，发现失败时不会给出会认证的浏览器 smoke 命令。
+- `scripts/mac/test-mac-client-formal-smoke.mjs` 新增断言：discovery 失败不打印 `--host  --port`，JSON 不包含无 host 的 `browserSmoke`，但包含安全 `discoverPreflight`。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/run-mac-client-formal-smoke.mjs`
+- `node --check scripts/mac/test-mac-client-formal-smoke.mjs`
+- `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --discoverNoLocalSubnets --preflightOnly --boardSummary --timeoutMs 3000`
+- `node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 30000`
+- 待跑：`git diff --check`
+- 待跑：`rg -n "^(<<<<<<<|=======|>>>>>>>)" .`
+遗留问题：
+- 未做真实 Windows host 认证，也未弹密码框；这是预期，本轮只修无密失败摘要。
+下一步建议：
+- Windows host 在线后再跑 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --preflightOnly --boardSummary` 做只读预检；ready 后再由用户用 `--promptPassword` 正式认证。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 18:48
 开发端：Mac Codex
 本轮目标：按用户反馈“没有看到显示输入密码的地方”，继续加固 Mac 侧 `--promptPassword` 的真实可见性。
