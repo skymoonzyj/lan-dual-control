@@ -19,6 +19,43 @@
 
 ## 2026-06-15 Mac Codex
 
+日期：2026-06-15 17:33
+开发端：Mac Codex
+本轮目标：让 Mac 控制 Windows 的 formal browser smoke 也能自动发现 Windows host，减少正式联调前手工复制 IP/端口。
+完成内容：
+- `scripts/mac/run-mac-client-formal-smoke.mjs` 新增 `--discover`，会先只读调用 `scripts/mac/discover-windows-hosts.mjs --json --requireFound` 自动选中最佳 Windows host，再进入原 formal checklist 或正式浏览器 smoke。
+- 新增 `--discoverHost`、`--discoverSubnet`、`--discoverNoLocalSubnets`、`--discoverTimeoutMs` 和 `--discoverScanTimeoutMs`，已知 Windows IP 时可只探明确目标，避免扫整段局域网。
+- 发现失败会先输出失败报告并退出，不会弹 `--promptPassword` 密码框；发现结果会写入 JSON 的 `discovery` 字段和 board summary。
+- `scripts/mac/discover-windows-hosts.mjs` 新增 `--noLocalSubnets` 透传到底层 LAN scanner。
+- `scripts/mac/test-mac-client-formal-smoke.mjs` 覆盖 discover 自动选中 mock Windows host、发现失败不触发密码提示、preflight/dryRun 不泄露密码和 demo/空密码拒绝。
+- Mac client README、当前状态、下一步和任务板同步新推荐命令：`run-mac-client-formal-smoke --discover --preflightOnly --boardSummary` 和 `--discover --promptPassword`。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `scripts/mac/discover-windows-hosts.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/discover-windows-hosts.mjs`
+- `node --check scripts/mac/run-mac-client-formal-smoke.mjs`
+- `node --check scripts/mac/test-mac-client-formal-smoke.mjs`
+- `node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-script-help.mjs --script discover-windows-hosts.mjs --script run-mac-client-formal-smoke.mjs --script test-mac-client-formal-smoke.mjs --timeoutMs 8000`
+- `git diff --check`
+- 行首冲突标记扫描
+遗留问题：
+- 本轮没有认证真实 Windows host、没有输入正式密码、没有执行 `inject`；真实 smoke 仍需 Windows host 在线并由用户输入正式密码。
+下一步建议：
+- Windows host 启动后，Mac 侧先跑 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --preflightOnly --boardSummary`；ready 后跑 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --promptPassword`。已知 Windows IP 时加 `--discoverNoLocalSubnets --discoverHost <Windows IP>`。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端启动正式 Windows host；密码不要发联络板，`inject` 仍需用户另行明确确认。
+
+## 2026-06-15 Mac Codex
+
 日期：2026-06-15 17:12
 开发端：Mac Codex
 本轮目标：按用户现场反馈“没有看到显示输入密码的地方”，继续加固 Mac 侧真实密码输入弹窗可见性。

@@ -156,7 +156,9 @@ const server = createServer((request, response) => {
   }
   response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
   response.end(JSON.stringify({
+    type: "lan_dual_discovery",
     name: "Mock Windows Host Smoke",
+    deviceName: "Mock Windows Host Smoke",
     platform: "windows",
     host: "127.0.0.1",
     port,
@@ -225,6 +227,7 @@ function checkHelp(args) {
     assert(result.status === 0, `${script} ${flag} should exit 0`);
     assertIncludes(result.stdout, "Usage:", `${script} ${flag}`);
     assertIncludes(result.stdout, "--promptPassword", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--discover", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "LAN_DUAL_PASSWORD=", `${script} ${flag}`);
   }
   print("OK", "Formal smoke help exits quickly");
@@ -289,6 +292,71 @@ async function checkPreflightAndDryRun(args) {
   print("OK", "Preflight/dryRun are secret-free and do not authenticate");
 }
 
+async function checkDiscoverPreflight(args) {
+  const secret = "super-secret-discover-smoke-password";
+  await withMacClientServer(args, async (clientPort) => {
+    await withWindowsDiscoveryServer(async (windowsPort) => {
+      const result = run([
+        "--json",
+        "--skipBoard",
+        "--preflightOnly",
+        "--discover",
+        "--discoverHost",
+        "127.0.0.1",
+        "--discoverNoLocalSubnets",
+        "--discoverTimeoutMs",
+        "300",
+        "--discoverScanTimeoutMs",
+        "5000",
+        "--port",
+        String(windowsPort),
+        "--clientPort",
+        String(clientPort),
+        "--timeoutMs",
+        "10000",
+      ], args, { LAN_DUAL_PASSWORD: secret });
+      const payload = parseJson(result.stdout, "discover preflight JSON");
+      assert(result.status === 0, `discover preflight should pass.\n${result.stdout}\n${result.stderr}`);
+      assert(payload.ok === true, "discover preflight should be ok=true");
+      assert(payload.args?.discover === true, "discover preflight should record discover=true");
+      assert(payload.args?.host === "127.0.0.1", "discover preflight should select mock Windows host");
+      assert(payload.args?.port === windowsPort, "discover preflight should select mock Windows port");
+      assert(payload.discovery?.ok === true, "discover preflight should report discovery ok");
+      assert(payload.discovery?.selected?.host === "127.0.0.1", "discover preflight selected host mismatch");
+      assert(payload.commands?.browserSmoke?.includes("--host 127.0.0.1"), "browser command should use discovered host");
+      assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "discover preflight output");
+    });
+  });
+  print("OK", "Discovery preflight selects a Windows host without authenticating");
+}
+
+async function checkDiscoverFailureNoPasswordPrompt(args) {
+  const unusedPort = await getFreePort();
+  const result = run([
+    "--json",
+    "--discover",
+    "--discoverHost",
+    "127.0.0.1",
+    "--discoverNoLocalSubnets",
+    "--discoverTimeoutMs",
+    "200",
+    "--discoverScanTimeoutMs",
+    "4000",
+    "--port",
+    String(unusedPort),
+    "--promptPassword",
+    "--requirePassword",
+  ], args);
+  const payload = parseJson(result.stdout, "discover failure JSON");
+  assert(result.status !== 0, "discover failure should fail");
+  assert(payload.ok === false, "discover failure payload should be ok=false");
+  assert(payload.discovery?.requested === true, "discover failure should record discovery requested");
+  assertIncludes(payload.error?.message || "", "Windows host discovery", "discover failure error");
+  assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--promptPassword requires", "discover failure should not reach password prompt");
+  assertNotIncludes(`${result.stdout}\n${result.stderr}`, "Password cannot be empty", "discover failure should not prompt for password");
+  print("OK", "Discovery failure exits before password prompt");
+}
+
 async function checkPasswordSafety(args) {
   await withMacClientServer(args, async (clientPort) => {
     await withWindowsDiscoveryServer(async (windowsPort) => {
@@ -338,6 +406,8 @@ async function main() {
   checkHelp(args);
   checkMissingHost(args);
   await checkPreflightAndDryRun(args);
+  await checkDiscoverPreflight(args);
+  await checkDiscoverFailureNoPasswordPrompt(args);
   await checkPasswordSafety(args);
   print("OK", "Mac client formal smoke wrapper self-test passed");
 }

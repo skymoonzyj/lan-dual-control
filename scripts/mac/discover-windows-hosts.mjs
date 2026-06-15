@@ -10,6 +10,7 @@ const defaults = {
   concurrency: 64,
   maxHostsPerSubnet: 254,
   requireFound: false,
+  noLocalSubnets: false,
   json: false,
   boardSummary: false,
   verbose: false,
@@ -36,6 +37,7 @@ Options:
   --concurrency <n>       Parallel probe count. Default: ${defaults.concurrency}
   --maxHostsPerSubnet <n> Safety cap per subnet. Default: ${defaults.maxHostsPerSubnet}
   --requireFound          Exit non-zero when no Windows host is found.
+  --noLocalSubnets        Only probe 127.0.0.1, --host, and --subnet targets.
   --boardSummary          Print a short secret-free Agent Link Board summary.
   --json                  Print one machine-readable JSON object.
   --verbose               Include scanner misses.
@@ -58,6 +60,7 @@ function parseArgs(argv) {
     concurrency: defaults.concurrency,
     maxHostsPerSubnet: defaults.maxHostsPerSubnet,
     requireFound: defaults.requireFound,
+    noLocalSubnets: defaults.noLocalSubnets,
     json: defaults.json,
     boardSummary: defaults.boardSummary,
     verbose: defaults.verbose,
@@ -71,7 +74,7 @@ function parseArgs(argv) {
       args.help = true;
       continue;
     }
-    if (token === "--json" || token === "--boardSummary" || token === "--verbose" || token === "--requireFound") {
+    if (token === "--json" || token === "--boardSummary" || token === "--verbose" || token === "--requireFound" || token === "--noLocalSubnets") {
       args[token.slice(2)] = true;
       continue;
     }
@@ -146,6 +149,9 @@ function scannerArgs(args) {
   }
   for (const subnet of args.subnets) {
     result.push("--subnet", subnet);
+  }
+  if (args.noLocalSubnets) {
+    result.push("--noLocalSubnets");
   }
   if (args.verbose) {
     result.push("--verbose");

@@ -19,6 +19,12 @@ const defaults = {
   maxAudioFrameMs: 15000,
   maxAudioPlaybackMs: 20000,
   server: "http://192.168.31.68:17888",
+  discover: false,
+  discoverHosts: [],
+  discoverSubnets: [],
+  discoverNoLocalSubnets: false,
+  discoverTimeoutMs: 650,
+  discoverScanTimeoutMs: 0,
   skipBoard: false,
   allowDirty: false,
   allowPreflightWarnings: false,
@@ -62,6 +68,12 @@ Options:
   --maxAudioFrameMs <ms>         Maximum first audio frame time. Default: ${defaults.maxAudioFrameMs}
   --maxAudioPlaybackMs <ms>      Maximum audio playback count time. Default: ${defaults.maxAudioPlaybackMs}
   --server <url>                 Agent Link Board URL. Default: ${defaults.server}
+  --discover                     Find the best Windows host before preflight/auth.
+  --discoverHost <host>          With --discover, probe this host directly. Repeatable.
+  --discoverSubnet <cidr>        With --discover, scan this IPv4 subnet. Repeatable.
+  --discoverNoLocalSubnets       With --discover, only probe 127.0.0.1 and explicit targets.
+  --discoverTimeoutMs <ms>       Per-host discovery timeout. Default: ${defaults.discoverTimeoutMs}
+  --discoverScanTimeoutMs <ms>   Overall discovery timeout. Default: auto
   --skipBoard                    Do not read Agent Link Board in preflight.
   --allowDirty                   Allow dirty git worktree as a preflight warning.
   --allowPreflightWarnings       Allow ok-but-not-ready preflight warnings before auth.
@@ -81,7 +93,9 @@ Options:
 
 Examples:
   node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.50 --port 43770 --preflightOnly --boardSummary
+  node scripts/mac/run-mac-client-formal-smoke.mjs --discover --preflightOnly --boardSummary
   node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.50 --port 43770 --promptPassword
+  node scripts/mac/run-mac-client-formal-smoke.mjs --discover --promptPassword
 `);
 }
 
@@ -101,6 +115,8 @@ function parseArgs(argv) {
       token === "--preflightOnly" ||
       token === "--promptPassword" ||
       token === "--requirePassword" ||
+      token === "--discover" ||
+      token === "--discoverNoLocalSubnets" ||
       token === "--allowDemoPassword" ||
       token === "--skipAudio" ||
       token === "--skipFileClipboard" ||
@@ -122,6 +138,16 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if ((token === "--discoverHost" || token === "--discoverWindowsHost") && next && !next.startsWith("--")) {
+      args.discoverHosts.push(next.trim());
+      index += 1;
+      continue;
+    }
+    if (token === "--discoverSubnet" && next && !next.startsWith("--")) {
+      args.discoverSubnets.push(next.trim());
+      index += 1;
+      continue;
+    }
     if (token === "--clientHost" && next && !next.startsWith("--")) {
       args.clientHost = next;
       index += 1;
@@ -138,6 +164,8 @@ function parseArgs(argv) {
       "maxInitialVideoMs",
       "maxAudioFrameMs",
       "maxAudioPlaybackMs",
+      "discoverTimeoutMs",
+      "discoverScanTimeoutMs",
     ]);
     if (token.startsWith("--") && numericKeys.has(token.slice(2)) && next && !next.startsWith("--")) {
       args[token.slice(2)] = next;
@@ -155,6 +183,8 @@ function parseArgs(argv) {
   args.host = String(args.host || "").trim();
   args.clientHost = String(args.clientHost || defaults.clientHost).trim();
   args.server = String(args.server || defaults.server).trim();
+  args.discoverHosts = [...new Set((args.discoverHosts || []).filter(Boolean))];
+  args.discoverSubnets = [...new Set((args.discoverSubnets || []).filter(Boolean))];
   args.port = clampInteger(args.port, 1, 65535, defaults.port);
   args.clientPort = clampInteger(args.clientPort, 1, 65535, defaults.clientPort);
   args.debugPort = clampInteger(args.debugPort, 1, 65535, defaults.debugPort);
@@ -165,6 +195,8 @@ function parseArgs(argv) {
   args.maxInitialVideoMs = clampInteger(args.maxInitialVideoMs, 0, 600000, defaults.maxInitialVideoMs);
   args.maxAudioFrameMs = clampInteger(args.maxAudioFrameMs, 0, 600000, defaults.maxAudioFrameMs);
   args.maxAudioPlaybackMs = clampInteger(args.maxAudioPlaybackMs, 0, 600000, defaults.maxAudioPlaybackMs);
+  args.discoverTimeoutMs = clampInteger(args.discoverTimeoutMs, 100, 5000, defaults.discoverTimeoutMs);
+  args.discoverScanTimeoutMs = clampInteger(args.discoverScanTimeoutMs, 0, 300000, defaults.discoverScanTimeoutMs);
   return args;
 }
 
@@ -226,6 +258,71 @@ function runPreflight(args) {
     payload,
     parseError,
   };
+}
+
+function runDiscovery(args) {
+  if (!args.discover) return { requested: false };
+  const discoverArgs = [
+    "scripts/mac/discover-windows-hosts.mjs",
+    "--json",
+    "--requireFound",
+    "--timeoutMs",
+    String(args.discoverTimeoutMs),
+  ];
+  if (args.discoverScanTimeoutMs > 0) {
+    discoverArgs.push("--scanTimeoutMs", String(args.discoverScanTimeoutMs));
+  }
+  if (args.discoverNoLocalSubnets) {
+    discoverArgs.push("--noLocalSubnets");
+  }
+  for (const host of args.discoverHosts) {
+    discoverArgs.push("--host", host);
+  }
+  for (const subnet of args.discoverSubnets) {
+    discoverArgs.push("--subnet", subnet);
+  }
+  if (args.port) discoverArgs.push("--port", String(args.port));
+  const result = spawnSync(process.execPath, discoverArgs, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: Math.max(args.discoverScanTimeoutMs || 30000, 10000),
+    maxBuffer: 12 * 1024 * 1024,
+    env: {
+      ...process.env,
+      LAN_DUAL_PASSWORD: "",
+    },
+  });
+  const stdout = String(result.stdout || "").trim();
+  let payload = null;
+  let parseError = "";
+  try {
+    payload = JSON.parse(stdout);
+  } catch (error) {
+    parseError = error.message;
+  }
+  return {
+    requested: true,
+    exitCode: result.status,
+    stdout,
+    stderr: String(result.stderr || ""),
+    payload,
+    parseError,
+  };
+}
+
+function applyDiscovery(args, discovery) {
+  if (!discovery?.requested) return;
+  if (!discovery.payload) {
+    throw new Error(`Windows host discovery did not produce JSON: ${discovery.parseError || "unknown parse error"}`);
+  }
+  if (!discovery.payload.ok || !discovery.payload.best) {
+    throw new Error(`Windows host discovery found no usable Windows host (${discovery.payload.found?.length || 0} found).`);
+  }
+  args.host = String(discovery.payload.best.host || "").trim();
+  args.port = clampInteger(discovery.payload.best.port, 1, 65535, args.port);
+  if (!args.host) {
+    throw new Error("Windows host discovery returned an empty host.");
+  }
 }
 
 function makeBrowserArgs(args) {
@@ -353,16 +450,19 @@ function runBrowserSmoke(args, password) {
 
 function makeBoardSummary(report) {
   const target = report.args.host ? `${report.args.host}:${report.args.port}` : "<missing Windows host>";
+  const discoveryText = report.discovery?.requested
+    ? ` Discovery=${report.discovery.selected ? `${report.discovery.selected.host}:${report.discovery.selected.port}` : "requested"}.`
+    : "";
   if (report.ok && report.browserSmoke?.ran) {
     return [
-      `Mac client browser smoke passed against ${target}; duration=${report.browserSmoke.durationMs}ms.`,
+      `Mac client browser smoke passed against ${target}; duration=${report.browserSmoke.durationMs}ms.${discoveryText}`,
       `Preflight ready=${report.preflight?.readyToCall ? "yes" : "no"}; command used environment password, not argv.`,
       "No password was sent to Agent Link Board; inject was not executed.",
     ].join(" ");
   }
   if (report.preflightOnly || report.dryRun) {
     return [
-      `Mac client browser smoke preflight for ${target}: ok=${report.preflight?.ok ? "yes" : "no"} ready=${report.preflight?.readyToCall ? "yes" : "no"}.`,
+      `Mac client browser smoke preflight for ${target}: ok=${report.preflight?.ok ? "yes" : "no"} ready=${report.preflight?.readyToCall ? "yes" : "no"}.${discoveryText}`,
       `Next: run with --promptPassword when ready to authenticate; command=${report.commands?.browserSmoke || ""}.`,
       "No password was requested or sent; inject was not executed.",
     ].join(" ");
@@ -377,6 +477,9 @@ function makeBoardSummary(report) {
 function printHuman(report) {
   console.log("Mac client formal browser smoke");
   console.log(`- target: ${report.args.host || "<missing>"}:${report.args.port}`);
+  if (report.discovery?.requested) {
+    console.log(`- discovery: ${report.discovery.ok ? "ok" : "failed"}${report.discovery.selected ? ` selected=${report.discovery.selected.host}:${report.discovery.selected.port}` : ""}`);
+  }
   console.log(`- preflight: ok=${report.preflight?.ok ? "yes" : "no"} ready=${report.preflight?.readyToCall ? "yes" : "no"}`);
   if (report.preflight?.counts) {
     console.log(`- checklist: ${report.preflight.counts.blocker} blockers, ${report.preflight.counts.warning} warnings`);
@@ -401,6 +504,12 @@ function makeReport(args, preflight) {
     args: {
       host: args.host,
       port: args.port,
+      discover: args.discover,
+      discoverHosts: args.discoverHosts,
+      discoverSubnets: args.discoverSubnets,
+      discoverNoLocalSubnets: args.discoverNoLocalSubnets,
+      discoverTimeoutMs: args.discoverTimeoutMs,
+      discoverScanTimeoutMs: args.discoverScanTimeoutMs,
       clientHost: args.clientHost,
       clientPort: args.clientPort,
       debugPort: args.debugPort,
@@ -433,8 +542,32 @@ async function main() {
     return;
   }
   const args = parseArgs(process.argv);
+  let discovery = { requested: false };
+  try {
+    discovery = runDiscovery(args);
+    applyDiscovery(args, discovery);
+  } catch (error) {
+    const report = makeReport(args, {
+      exitCode: null,
+      payload: null,
+      parseError: "",
+    });
+    report.discovery = summarizeDiscovery(discovery);
+    report.error = { message: redact(error.message, process.env.LAN_DUAL_PASSWORD || "") };
+    report.boardSummary = makeBoardSummary(report);
+    if (args.json) {
+      console.log(JSON.stringify(report, null, 2));
+    } else if (args.boardSummary) {
+      console.log(report.boardSummary);
+    } else {
+      printHuman(report);
+    }
+    process.exitCode = 1;
+    return;
+  }
   const preflight = runPreflight(args);
   const report = makeReport(args, preflight);
+  report.discovery = summarizeDiscovery(discovery);
   try {
     if (!args.host) {
       throw new Error("--host <Windows IP> is required. Run scripts/mac/discover-windows-hosts.mjs --boardSummary first if needed.");
@@ -483,6 +616,29 @@ async function main() {
     printHuman(report);
   }
   if (!report.ok) process.exitCode = 1;
+}
+
+function summarizeDiscovery(discovery) {
+  if (!discovery?.requested) return { requested: false };
+  const best = discovery.payload?.best || null;
+  return {
+    requested: true,
+    ok: Boolean(discovery.payload?.ok && best),
+    exitCode: discovery.exitCode,
+    foundCount: Array.isArray(discovery.payload?.found) ? discovery.payload.found.length : 0,
+    ignoredCount: Array.isArray(discovery.payload?.ignored) ? discovery.payload.ignored.length : 0,
+    selected: best
+      ? {
+          host: best.host,
+          port: best.port,
+          deviceName: best.deviceName || best.name || "",
+          buildId: best.runtime?.buildId || "",
+          inputMode: best.capabilities?.input?.mode || best.capabilities?.inputMode || "",
+        }
+      : null,
+    boardSummary: discovery.payload?.boardSummary || "",
+    parseError: discovery.parseError || "",
+  };
 }
 
 main().catch((error) => {
