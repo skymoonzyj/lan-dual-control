@@ -285,6 +285,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "Usage:", `${script} ${flag}`);
     assertIncludes(result.stdout, "--promptPassword", `${script} ${flag}`);
     assertIncludes(result.stdout, "--discover", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--ensureClient", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "LAN_DUAL_PASSWORD=", `${script} ${flag}`);
   }
   print("OK", "Formal smoke help exits quickly");
@@ -427,6 +428,45 @@ async function checkDiscoverPreflight(args) {
   print("OK", "Discovery preflight selects a Windows host without authenticating");
 }
 
+async function checkEnsureClientPreflight(args) {
+  const secret = "super-secret-ensure-client-password";
+  const clientPort = await getFreePort();
+  await withWindowsDiscoveryServer(async (windowsPort) => {
+    const result = run([
+      "--json",
+      "--skipBoard",
+      "--preflightOnly",
+      "--ensureClient",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(windowsPort),
+      "--clientPort",
+      String(clientPort),
+      "--timeoutMs",
+      "10000",
+    ], args, { LAN_DUAL_PASSWORD: secret });
+    const payload = parseJson(result.stdout, "ensure client preflight JSON");
+    assert(result.status === 0, `ensure client preflight should pass.\n${result.stdout}\n${result.stderr}`);
+    assert(payload.ok === true, "ensure client preflight should be ok=true");
+    assert(payload.args?.ensureClient === true, "ensure client flag should be recorded");
+    assert(payload.ensuredClient?.attempted === true, "ensure client should be attempted");
+    assert(payload.ensuredClient?.ok === true, "ensure client should report ok");
+    assert(payload.ensuredClient?.online === true, "ensure client should report page online");
+    assert(payload.preflight?.ok === true, "ensure client preflight should be ok");
+    assert(payload.preflight?.counts?.blocker === 0, "ensure client preflight should have no blockers");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "ensure client output");
+    if (payload.ensuredClient?.processId) {
+      try {
+        process.kill(payload.ensuredClient.processId, "SIGTERM");
+      } catch {
+        // The helper may already have exited.
+      }
+    }
+  });
+  print("OK", "ensureClient safely starts the local Mac client before preflight");
+}
+
 async function checkDiscoverSendCall(args) {
   const secret = "super-secret-discover-send-call-password";
   await withMacClientServer(args, async (clientPort) => {
@@ -551,6 +591,7 @@ async function main() {
   checkSendCallRequiresPreflight(args);
   await checkPreflightAndDryRun(args);
   await checkDiscoverPreflight(args);
+  await checkEnsureClientPreflight(args);
   await checkDiscoverSendCall(args);
   await checkDiscoverFailureNoPasswordPrompt(args);
   await checkPasswordSafety(args);

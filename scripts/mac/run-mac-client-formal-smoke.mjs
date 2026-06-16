@@ -28,6 +28,7 @@ const defaults = {
   skipBoard: false,
   allowDirty: false,
   allowPreflightWarnings: false,
+  ensureClient: false,
   preflightOnly: false,
   promptPassword: false,
   requirePassword: true,
@@ -79,6 +80,7 @@ Options:
   --skipBoard                    Do not read Agent Link Board in preflight.
   --allowDirty                   Allow dirty git worktree as a preflight warning.
   --allowPreflightWarnings       Allow ok-but-not-ready preflight warnings before auth.
+  --ensureClient                 Safely start/reuse the local Mac client page before preflight.
   --preflightOnly                Only run the read-only checklist; no password/browser auth.
   --promptPassword               Ring first, then ask for password in a frontmost macOS dialog.
   --requirePassword              Refuse empty/demo password for real smoke. Default: true
@@ -117,6 +119,7 @@ function parseArgs(argv) {
       token === "--skipBoard" ||
       token === "--allowDirty" ||
       token === "--allowPreflightWarnings" ||
+      token === "--ensureClient" ||
       token === "--preflightOnly" ||
       token === "--promptPassword" ||
       token === "--requirePassword" ||
@@ -227,6 +230,53 @@ function redact(value, secret) {
   const envSecret = process.env.LAN_DUAL_PASSWORD || "";
   if (envSecret) text = text.split(envSecret).join("[redacted]");
   return text;
+}
+
+function ensureClientServer(args) {
+  if (!args.ensureClient) return { attempted: false };
+  const ensureArgs = [
+    "scripts/mac/start-mac-client.mjs",
+    "--json",
+    "--allowExisting",
+    "--host",
+    args.clientHost,
+    "--port",
+    String(args.clientPort),
+    "--timeoutMs",
+    String(Math.min(args.timeoutMs, 60000)),
+  ];
+  const result = spawnSync(process.execPath, ensureArgs, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: Math.max(Math.min(args.timeoutMs, 60000) + 5000, 10000),
+    maxBuffer: 4 * 1024 * 1024,
+    env: {
+      ...process.env,
+      LAN_DUAL_PASSWORD: "",
+    },
+  });
+  const stdout = String(result.stdout || "").trim();
+  const stderr = String(result.stderr || "");
+  const spawnError = result.error?.message || "";
+  const signalError = result.status === null && result.signal ? `terminated by signal ${result.signal}` : "";
+  let payload = null;
+  let parseError = "";
+  try {
+    payload = JSON.parse(stdout);
+  } catch (error) {
+    parseError = error.message;
+  }
+  return {
+    attempted: true,
+    ok: result.status === 0 && Boolean(payload?.ok),
+    exitCode: result.status,
+    signal: result.signal || null,
+    payload,
+    parseError,
+    stdout,
+    stderr,
+    error: payload?.error?.message || spawnError || signalError || stderr.trim() || parseError,
+  };
 }
 
 function runPreflight(args) {
@@ -657,6 +707,7 @@ function makeReport(args, preflight) {
       skipBoard: args.skipBoard,
       allowDirty: args.allowDirty,
       allowPreflightWarnings: args.allowPreflightWarnings,
+      ensureClient: args.ensureClient,
       sendCall: args.sendCall,
       forceCall: args.forceCall,
       skipAudio: args.skipAudio,
@@ -701,8 +752,13 @@ async function main() {
     process.exitCode = 1;
     return;
   }
+  let ensuredClient = { attempted: false };
   let discovery = { requested: false };
   try {
+    ensuredClient = ensureClientServer(args);
+    if (ensuredClient.attempted && !ensuredClient.ok) {
+      throw new Error(`Mac client page could not be ensured: ${ensuredClient.error || "unknown error"}`);
+    }
     discovery = runDiscovery(args);
     applyDiscovery(args, discovery);
   } catch (error) {
@@ -711,6 +767,7 @@ async function main() {
       payload: null,
       parseError: "",
     });
+    report.ensuredClient = summarizeEnsuredClient(ensuredClient);
     report.discovery = summarizeDiscovery(discovery);
     report.error = { message: redact(error.message, process.env.LAN_DUAL_PASSWORD || "") };
     report.boardSummary = makeBoardSummary(report);
@@ -726,6 +783,7 @@ async function main() {
   }
   const preflight = runPreflight(args);
   const report = makeReport(args, preflight);
+  report.ensuredClient = summarizeEnsuredClient(ensuredClient);
   report.discovery = summarizeDiscovery(discovery);
   try {
     if (!args.host) {
@@ -814,6 +872,22 @@ function summarizeDiscovery(discovery) {
       : null,
     boardSummary: discovery.payload?.boardSummary || "",
     parseError: discovery.parseError || "",
+  };
+}
+
+function summarizeEnsuredClient(ensuredClient) {
+  if (!ensuredClient?.attempted) return { attempted: false };
+  const payload = ensuredClient.payload || {};
+  return {
+    attempted: true,
+    ok: Boolean(ensuredClient.ok),
+    exitCode: ensuredClient.exitCode,
+    signal: ensuredClient.signal || null,
+    url: payload.url || "",
+    online: Boolean(payload.online),
+    processId: payload.processId || null,
+    reusedExisting: payload.processId === null && Boolean(payload.online),
+    error: ensuredClient.ok ? "" : ensuredClient.error || "",
   };
 }
 

@@ -19,6 +19,40 @@
 
 ## 2026-06-16 Mac Codex
 
+日期：2026-06-16 11:21
+开发端：Mac Codex
+本轮目标：给 Mac 控制 Windows formal smoke 增加安全 `--ensureClient`，减少真连前忘开本地 Mac client 页面的问题。
+完成内容：
+- `scripts/mac/run-mac-client-formal-smoke.mjs` 新增 `--ensureClient`：在 discovery/preflight 前调用 `scripts/mac/start-mac-client.mjs --json --allowExisting --host <clientHost> --port <clientPort>`，安全启动或复用本机 Mac client 页面。
+- `--ensureClient` 会清空传给启动助手的 `LAN_DUAL_PASSWORD`，只启动/检查本机 Web 页面；不会连接 Windows host、不会认证 WebSocket、不会要求或打印密码、不会发送输入事件、不会执行 `inject`。
+- JSON 输出新增 `ensuredClient` 摘要：`attempted`、`ok`、`exitCode`、`signal`、`url`、`online`、`processId`、`reusedExisting` 和 `error`，方便自动化判断本地页面是新启还是复用。
+- 本地页面启动失败时，错误摘要优先保留子进程异常、信号或 stderr，再回退到 JSON parseError，避免只看到“解析失败”。
+- 自测新增 `--ensureClient` help 断言和临时端口 preflight 覆盖：会启动临时 Mac client 页面，跑无密 formal checklist，并确认测试密码没有泄露；测试结束会清理临时进程。
+- Mac client README、CURRENT_STATUS、NEXT_ACTIONS、04-task-board 和 ACTIVE_LOCKS 已同步推荐命令：`node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --sendCall`。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/run-mac-client-formal-smoke.mjs`
+- `node --check scripts/mac/test-mac-client-formal-smoke.mjs`
+- `node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 60000`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮只验证本机临时页面和 mock Windows discovery；真实 Mac 控制 Windows 浏览器 smoke 仍需要 Windows host 在线，并由用户在 Mac 本机隐藏输入正式 Windows host 密码后执行。
+下一步建议：
+- Windows host 启动后，Mac 侧优先运行 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --sendCall`；它会先确保本地页面在线，再 ready 后发无密 call。随后用户在 Mac 本机隐藏输入正式密码，运行 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword` 做真实观感/音画/剪贴板 smoke。
+是否改了协议：否。
+是否需要另一端配合：当前不需要；后续真实 Mac 控制 Windows 验收需要 Windows host 在线。
+
+## 2026-06-16 Mac Codex
+
 日期：2026-06-16 11:06
 开发端：Mac Codex
 本轮目标：把 Mac 控制 Windows formal smoke 的发现、只读预检和通讯板呼叫收成一条安全命令。

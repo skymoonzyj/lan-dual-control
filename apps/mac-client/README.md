@@ -144,14 +144,14 @@ Mac 侧正式真连浏览器冒烟优先用包装器，而不是直接手写 Win
 
 ```bash
 node scripts/mac/run-mac-client-formal-smoke.mjs --discover --preflightOnly --boardSummary
-node scripts/mac/run-mac-client-formal-smoke.mjs --discover --preflightOnly --sendCall
-node scripts/mac/run-mac-client-formal-smoke.mjs --host <Windows IP> --port 43770 --promptPassword
-node scripts/mac/run-mac-client-formal-smoke.mjs --discover --promptPassword
+node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --sendCall
+node scripts/mac/run-mac-client-formal-smoke.mjs --host <Windows IP> --port 43770 --ensureClient --promptPassword
+node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword
 ```
 
-该包装器会先运行无密 formal checklist；加 `--discover` 时会先只读扫描 Windows `/discovery` 并自动选中最佳 Windows host，发现失败会先退出且不会弹密码框。ready 后才认证浏览器页面。`--promptPassword` 会先响两声，并输出一行不含密码的“请看前台密码弹窗”提示，再优先打开 macOS 系统隐藏密码弹窗；如果系统弹窗打不开，才尝试原生 AppKit 前台高层级隐藏密码框作为备用。也可用 `LAN_DUAL_PASSWORD` 环境变量给自动化提供正式密码。密码只通过环境变量传给子进程，不放进命令参数、不打印、不发 Agent Link Board；脚本不会执行 `inject`。需要只读同步状态时用 `--preflightOnly --boardSummary`，需要查看命令形状但不认证时用 `--dryRun --json`。已知 Windows IP 且不想扫整段局域网时，可加 `--discoverNoLocalSubnets --discoverHost <Windows IP>`。
+该包装器会先运行无密 formal checklist；加 `--discover` 时会先只读扫描 Windows `/discovery` 并自动选中最佳 Windows host，发现失败会先退出且不会弹密码框。加 `--ensureClient` 时，会在预检前调用 `start-mac-client --allowExisting --json` 安全启动或复用本地 Mac client 页面，并在 JSON 里记录 `ensuredClient`；这一步只碰本机 Web 页面，不连接 Windows host、不认证、不要求或打印密码、不发送输入。ready 后才认证浏览器页面。`--promptPassword` 会先响两声，并输出一行不含密码的“请看前台密码弹窗”提示，再优先打开 macOS 系统隐藏密码弹窗；如果系统弹窗打不开，才尝试原生 AppKit 前台高层级隐藏密码框作为备用。也可用 `LAN_DUAL_PASSWORD` 环境变量给自动化提供正式密码。密码只通过环境变量传给子进程，不放进命令参数、不打印、不发 Agent Link Board；脚本不会执行 `inject`。需要只读同步状态时用 `--preflightOnly --boardSummary`，需要查看命令形状但不认证时用 `--dryRun --json`。已知 Windows IP 且不想扫整段局域网时，可加 `--discoverNoLocalSubnets --discoverHost <Windows IP>`。
 
-`--preflightOnly --boardSummary` 或 `--dryRun --json` 在已有 Windows host 时会同步给出 ready 后可运行的 `check-mac-client-formal-status --sendCall` 命令；如果想一条命令完成发现、只读预检并在 ready 后发通讯板呼叫，可用 `--discover --preflightOnly --sendCall`。`--sendCall` 只能和 `--preflightOnly` 同用，未 ready 或没有 Windows host 时会拒绝发送；如果使用备用 Agent Link Board，可加 `--server <url>`，包装器会把该地址传给内部 formal checklist、输出的 `sendCall` 命令和实际发送 call 的子流程。
+`--preflightOnly --boardSummary` 或 `--dryRun --json` 在已有 Windows host 时会同步给出 ready 后可运行的 `check-mac-client-formal-status --sendCall` 命令；如果想一条命令完成发现、确保本地页面、只读预检并在 ready 后发通讯板呼叫，可用 `--discover --ensureClient --preflightOnly --sendCall`。`--sendCall` 只能和 `--preflightOnly` 同用，未 ready 或没有 Windows host 时会拒绝发送；如果使用备用 Agent Link Board，可加 `--server <url>`，包装器会把该地址传给内部 formal checklist、输出的 `sendCall` 命令和实际发送 call 的子流程。
 
 文件剪贴板入口本机联调已验证：页面显示文件选择和发送入口，未连接/未选择文件/发送中都会禁用发送按钮，超过 32MB 上限时会直接显示“文件过大”并禁用发送；`scripts/windows/test-mac-client-browser.mjs` 会用浏览器调试协议注入临时小文件并等待 `clipboard_file_result`。自检还会模拟超限文件选择、对端拒绝文件清单和文件读取中点击断开，确认页面取消当前文件发送且不会继续发出 `clipboard_file_complete`；取消后迟到的旧 `clipboard_file_*` 消息也不会覆盖当前状态。在 Windows 上默认要求系统文件剪贴板 `saveMode=clipboard`，在 Mac/Linux 开发环境可加 `--allowClipboardFallback --mockVideo` 验证 `saveMode=temp` 回退链路。
 
