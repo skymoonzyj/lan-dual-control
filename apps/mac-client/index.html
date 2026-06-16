@@ -206,7 +206,10 @@
           <section class="panel log-panel">
             <div class="log-heading">
               <h2>事件日志</h2>
-              <button id="clearLogButton" type="button">清空</button>
+              <div class="log-actions">
+                <button id="exportLogButton" type="button" title="导出日志">导出</button>
+                <button id="clearLogButton" type="button">清空</button>
+              </div>
             </div>
             <ol id="eventLog" class="event-log"></ol>
           </section>

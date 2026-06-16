@@ -44,6 +44,7 @@ const elements = {
   sendClipboardFilesButton: document.querySelector("#sendClipboardFilesButton"),
   fileClipboardStatus: document.querySelector("#fileClipboardStatus"),
   eventLog: document.querySelector("#eventLog"),
+  exportLogButton: document.querySelector("#exportLogButton"),
   clearLogButton: document.querySelector("#clearLogButton"),
 };
 
@@ -112,6 +113,7 @@ const state = {
   clipboardReadInFlight: false,
   lastLocalClipboardText: "",
   recentConnections: [],
+  logEntries: [],
 };
 
 const recentConnectionsStorageKey = "lanDualMacClientRecentConnections";
@@ -143,6 +145,15 @@ function nowText() {
 }
 
 function logEvent(title, detail = "") {
+  const entry = {
+    time: nowText(),
+    title,
+    detail,
+  };
+  state.logEntries.unshift(entry);
+  while (state.logEntries.length > 80) {
+    state.logEntries.pop();
+  }
   const item = document.createElement("li");
   const strong = document.createElement("strong");
   strong.textContent = title;
@@ -151,7 +162,7 @@ function logEvent(title, detail = "") {
     item.append(` · ${detail}`);
   }
   const time = document.createElement("span");
-  time.textContent = nowText();
+  time.textContent = entry.time;
   item.append(" ", time);
   elements.eventLog.prepend(item);
   while (elements.eventLog.children.length > 80) {
@@ -917,6 +928,113 @@ function reconnectNow() {
   renderSessionDiagnostics();
   logEvent("立即重连", reason);
   void connect({ reconnect: true });
+}
+
+function makeLogFileName() {
+  const stamp = new Date()
+    .toISOString()
+    .replaceAll("-", "")
+    .replaceAll(":", "")
+    .replace(/\.\d{3}Z$/, "Z");
+  return `lan-dual-mac-client-log-${stamp}.txt`;
+}
+
+function getReconnectExportStatus(now = Date.now()) {
+  const attemptText = `${state.reconnectAttempts}/${maxReconnectAttempts}`;
+  const reason = state.reconnectReason || "-";
+  if (state.reconnectTimer && state.reconnectNextAt) {
+    const remainingSeconds = Math.max(0, Math.ceil((state.reconnectNextAt - now) / 1000));
+    return {
+      status: `等待自动重连（${attemptText}，${remainingSeconds} 秒后）`,
+      reason,
+      next: `${new Date(state.reconnectNextAt).toISOString()}（约 ${remainingSeconds} 秒后）`,
+    };
+  }
+  if (state.reconnectAttempts > 0) {
+    return {
+      status: `未等待（已尝试 ${attemptText}）`,
+      reason,
+      next: "-",
+    };
+  }
+  return {
+    status: "未等待",
+    reason: "-",
+    next: "-",
+  };
+}
+
+function buildLogExportText() {
+  const settings = currentVideoSettings();
+  const reconnectExport = getReconnectExportStatus();
+  const eventLines = state.logEntries.map((entry, index) => {
+    const detail = entry.detail ? ` | ${entry.detail}` : "";
+    return `${String(index + 1).padStart(3, "0")} | ${entry.time} | ${entry.title}${detail}`;
+  });
+
+  return [
+    "LAN Dual Control Mac 控制端日志",
+    `导出时间：${new Date().toISOString()}`,
+    "",
+    "连接状态",
+    `- 当前状态：${elements.connectionStatus.textContent || "-"}`,
+    `- 远端摘要：${elements.remoteStatus.textContent || "-"}`,
+    `- 目标地址：${currentEndpoint().host}:${currentEndpoint().port}`,
+    `- 远端运行：${elements.remoteRuntimeMetric.textContent || "-"}`,
+    `- 重连状态：${reconnectExport.status}`,
+    `- 重连原因：${reconnectExport.reason}`,
+    `- 下次重连：${reconnectExport.next}`,
+    "",
+    "显示与媒体",
+    `- 画质预设：${elements.qualityPresetSelect.selectedOptions[0]?.textContent || settings.qualityPreset}`,
+    `- 分辨率：${settings.width} × ${settings.height}`,
+    `- 刷新率：${settings.fps} Hz`,
+    `- 码率：${settings.bandwidthMbps} Mbps`,
+    `- 视频状态：${elements.videoStatus.textContent || "-"}`,
+    `- 视频诊断：${elements.videoFlowMetric.textContent || "-"}`,
+    `- 音频状态：${elements.audioStatus.textContent || "-"}`,
+    `- 音频诊断：${elements.audioFlowMetric.textContent || "-"}`,
+    `- 远端声音：${elements.audioToggle.checked ? `开启 · ${audioVolume()}%` : "关闭"}`,
+    "",
+    "输入与剪贴板",
+    `- 输入状态：${elements.inputStatus.textContent || "-"}`,
+    `- 文本剪贴板：${elements.clipboardStatus.textContent || "-"}`,
+    `- 本机剪贴板监听：${elements.clipboardWatchToggle.checked ? "开启" : "关闭"}`,
+    `- 本机剪贴板状态：${elements.localClipboardStatus.textContent || "-"}`,
+    `- 文件剪贴板：${elements.fileClipboardStatus.textContent || "-"}`,
+    "",
+    "运行统计",
+    `- 视频帧：${state.frameCount}`,
+    `- 音频帧：${state.audioFrames}`,
+    `- 音频播放帧：${state.audioPlayedFrames}`,
+    `- 二进制视频帧：${state.binaryVideoFrames}`,
+    `- H.264 解码帧：${state.h264DecodedFrames}`,
+    `- H.264 错误：${state.h264DecoderErrorCount}`,
+    `- 重连次数：${state.reconnectTotal}`,
+    "",
+    "事件记录",
+    ...(eventLines.length ? eventLines : ["暂无事件记录"]),
+    "",
+  ].join("\n");
+}
+
+function exportLogs() {
+  try {
+    const text = buildLogExportText();
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = makeLogFileName();
+    link.style.display = "none";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    logEvent("日志导出", link.download);
+  } catch (error) {
+    logEvent("日志导出失败", error?.message || "当前环境不允许导出文件");
+  }
 }
 
 function disconnect() {
@@ -2315,8 +2433,10 @@ elements.resolutionSelect.addEventListener("change", markCustomVideoSettings);
 elements.fpsSelect.addEventListener("change", markCustomVideoSettings);
 elements.bandwidthSelect.addEventListener("change", markCustomVideoSettings);
 elements.focusButton.addEventListener("click", () => elements.remoteViewport.focus());
+elements.exportLogButton.addEventListener("click", exportLogs);
 elements.clearLogButton.addEventListener("click", () => {
   elements.eventLog.textContent = "";
+  state.logEntries = [];
 });
 elements.audioToggle.addEventListener("change", () => {
   resetAudioStatus();

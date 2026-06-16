@@ -479,6 +479,17 @@ button:disabled {
   font-size: 1.1rem;
 }
 
+.log-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.log-actions button {
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 13px;
+}
+
 .event-log {
   display: flex;
   flex-direction: column-reverse;

@@ -966,6 +966,110 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
   return restartedHost;
 }
 
+async function verifyMacClientLogExport({ args, session }) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      if (typeof buildLogExportText !== "function" || typeof scheduleReconnect !== "function") {
+        throw new Error("Mac client log export helpers are not available");
+      }
+      const previous = {
+        connect,
+        connectionStatus: elements.connectionStatus.textContent,
+        connectButtonDisabled: elements.connectButton.disabled,
+        disconnectButtonDisabled: elements.disconnectButton.disabled,
+        reconnectNowHidden: elements.reconnectNowButton.hidden,
+        reconnectNowDisabled: elements.reconnectNowButton.disabled,
+        eventLogHtml: elements.eventLog.innerHTML,
+        logEntries: state.logEntries.slice(),
+        reconnectTimer: state.reconnectTimer,
+        reconnectCountdownTimer: state.reconnectCountdownTimer,
+        reconnectNextAt: state.reconnectNextAt,
+        reconnectReason: state.reconnectReason,
+        reconnectAttempts: state.reconnectAttempts,
+        reconnectTotal: state.reconnectTotal,
+        manualDisconnect: state.manualDisconnect,
+      };
+      try {
+        if (state.reconnectTimer) window.clearTimeout(state.reconnectTimer);
+        if (state.reconnectCountdownTimer) window.clearInterval(state.reconnectCountdownTimer);
+        state.reconnectTimer = null;
+        state.reconnectCountdownTimer = null;
+        state.reconnectNextAt = 0;
+        state.reconnectReason = "";
+        state.reconnectAttempts = 0;
+        state.reconnectTotal = 0;
+        state.manualDisconnect = false;
+        connect = async () => {
+          window.__lanDualLogExportConnectStubbed = true;
+        };
+        scheduleReconnect("测试断线");
+        const text = buildLogExportText();
+        const required = [
+          "LAN Dual Control Mac 控制端日志",
+          "- 当前状态：",
+          "- 目标地址：${args.host}:${args.port}",
+          "- 重连状态：等待自动重连（1/3",
+          "- 重连原因：测试断线",
+          "- 下次重连：",
+          "- 远端运行：",
+          "- 视频状态：",
+          "- 文本剪贴板：",
+          "事件记录",
+        ];
+        const missing = required.filter((item) => !text.includes(item));
+        const forbidden = [
+          ${JSON.stringify(args.clientPassword || "")},
+          "password",
+          "密码：",
+        ].filter((item) => item && text.toLowerCase().includes(String(item).toLowerCase()));
+        return {
+          ok: missing.length === 0 && forbidden.length === 0,
+          missing,
+          forbidden,
+          hasDownloadButton: Boolean(elements.exportLogButton),
+          exportLogButtonDisabled: elements.exportLogButton?.disabled || false,
+          preview: text.split("\\n").slice(0, 16).join("\\n"),
+        };
+      } finally {
+        if (state.reconnectTimer) window.clearTimeout(state.reconnectTimer);
+        if (state.reconnectCountdownTimer) window.clearInterval(state.reconnectCountdownTimer);
+        connect = previous.connect;
+        state.reconnectTimer = null;
+        state.reconnectCountdownTimer = null;
+        state.reconnectNextAt = previous.reconnectNextAt;
+        state.reconnectReason = previous.reconnectReason;
+        state.reconnectAttempts = previous.reconnectAttempts;
+        state.reconnectTotal = previous.reconnectTotal;
+        state.manualDisconnect = previous.manualDisconnect;
+        elements.eventLog.innerHTML = previous.eventLogHtml;
+        state.logEntries = previous.logEntries;
+        elements.connectButton.disabled = previous.connectButtonDisabled;
+        elements.disconnectButton.disabled = previous.disconnectButtonDisabled;
+        setConnectionStatus(previous.connectionStatus);
+        renderReconnectCountdown();
+        renderSessionDiagnostics();
+        setReconnectNowVisible(Boolean(state.reconnectTimer));
+        if (!state.reconnectTimer) {
+          elements.reconnectNowButton.hidden = previous.reconnectNowHidden;
+          elements.reconnectNowButton.disabled = previous.reconnectNowDisabled;
+        }
+      }
+    })()`,
+  );
+
+  if (!result?.hasDownloadButton) {
+    throw new Error("Mac client log export button is missing");
+  }
+  if (result.exportLogButtonDisabled) {
+    throw new Error("Mac client log export button is disabled");
+  }
+  if (!result.ok) {
+    throw new Error(`Mac client log export mismatch: ${JSON.stringify(result)}`);
+  }
+  print("OK", `Log export snapshot: ${compactProgressText(result.preview, 140)}`);
+}
+
 async function observeMacClientVideo({ args, session, label = "Video observe" }) {
   const shouldObserve =
     args.observeVideoMs > 0 ||
@@ -1119,6 +1223,7 @@ function buildSnapshotExpression() {
       connectButtonDisabled: document.querySelector("#connectButton")?.disabled || false,
       reconnectNowHidden: document.querySelector("#reconnectNowButton")?.hidden !== false,
       reconnectNowDisabled: document.querySelector("#reconnectNowButton")?.disabled !== false,
+      exportLogButtonDisabled: document.querySelector("#exportLogButton")?.disabled || false,
       disconnectButtonDisabled: document.querySelector("#disconnectButton")?.disabled || false,
       sendClipboardButtonDisabled: document.querySelector("#sendClipboardButton")?.disabled || false,
       sendClipboardFilesButtonDisabled: document.querySelector("#sendClipboardFilesButton")?.disabled || false,
@@ -2116,6 +2221,8 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     if (args.expectReconnect) {
       windowsHost = await verifyMacClientReconnect({ args, repoRoot, session, windowsHost });
     }
+
+    await verifyMacClientLogExport({ args, session });
 
     await evaluate(
       session,
