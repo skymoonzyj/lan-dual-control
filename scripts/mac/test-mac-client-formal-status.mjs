@@ -71,11 +71,46 @@ function run(extraArgs, args) {
   });
 }
 
+function runAsync(extraArgs, args) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [script, ...extraArgs], {
+      cwd: repoRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        LAN_DUAL_PASSWORD: "",
+      },
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve({ status: null, stdout, stderr, error: new Error(`timed out after ${args.timeoutMs}ms`) });
+    }, args.timeoutMs);
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.once("close", (status, signal) => {
+      clearTimeout(timer);
+      resolve({ status, signal, stdout, stderr, error: null });
+    });
+  });
+}
+
 function parseJson(stdout, label) {
   try {
     return JSON.parse(String(stdout || "").trim());
   } catch (error) {
     throw new Error(`${label} did not print valid JSON: ${error.message}\n${stdout}`);
+  }
+}
+
+function assertNoSecretLikeText(text, label) {
+  for (const secret of ["LAN_DUAL_PASSWORD", "super-secret", "demo-password", "token=", "password="]) {
+    assertNotIncludes(text, secret, label);
   }
 }
 
@@ -88,6 +123,8 @@ function checkHelp(args) {
     const result = run([flag], args);
     assert(result.status === 0, `${script} ${flag} should exit 0`);
     assertIncludes(result.stdout, "Usage:", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--sendCall", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--forceCall", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
   print("OK", "Mac client formal status help exits quickly");
@@ -311,12 +348,94 @@ server.listen(port, "127.0.0.1");
   }
 }
 
+function readRequestBody(request) {
+  return new Promise((resolveRead, rejectRead) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > 1024 * 1024) {
+        request.destroy(new Error("request body too large"));
+      }
+    });
+    request.on("end", () => resolveRead(body));
+    request.on("error", rejectRead);
+  });
+}
+
+async function withFakeBoard(callback, options = {}) {
+  const calls = [];
+  let currentCall = options.currentCall || null;
+  const server = createServer(async (request, response) => {
+    if (request.method === "GET" && request.url === "/api/state") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({
+        updatedAt: new Date().toISOString(),
+        currentCall,
+        statuses: {},
+        events: [
+          {
+            id: "fake-board-client-formal-1",
+            at: new Date().toISOString(),
+            type: "message",
+            from: "Fake Board",
+            text: "ready",
+          },
+        ],
+      }));
+      return;
+    }
+    if (request.method === "POST" && request.url === "/api/call") {
+      const body = await readRequestBody(request);
+      currentCall = JSON.parse(body || "{}");
+      calls.push(currentCall);
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    response.writeHead(404, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ ok: false, error: "not found" }));
+  });
+  const address = await listenServer(server);
+  try {
+    await callback({
+      serverUrl: `http://${address.address}:${address.port}`,
+      calls,
+    });
+  } finally {
+    await closeServer(server);
+  }
+}
+
 async function waitForClose(child) {
   await new Promise((resolve) => {
     const timer = setTimeout(resolve, 1000);
     child.once("close", () => {
       clearTimeout(timer);
       resolve();
+    });
+  });
+}
+
+function listenServer(server) {
+  return new Promise((resolveListen, rejectListen) => {
+    server.on("error", rejectListen);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address !== "object") {
+        rejectListen(new Error("server did not expose an address"));
+        return;
+      }
+      resolveListen(address);
+    });
+  });
+}
+
+function closeServer(server) {
+  return new Promise((resolveClose, rejectClose) => {
+    server.close((error) => {
+      if (error) rejectClose(error);
+      else resolveClose();
     });
   });
 }
@@ -361,6 +480,147 @@ async function checkReadyShape(args) {
   print("OK", "Mock ready shape includes client/server/h264/audio/clipboard and skips inject");
 }
 
+async function checkOfflineSendCallRefuses(args) {
+  await withFakeBoard(async (board) => {
+    const result = await runAsync([
+      "--json",
+      "--sendCall",
+      "--allowDirty",
+      "--clientPort",
+      "9",
+      "--server",
+      board.serverUrl,
+      "--timeoutMs",
+      "1200",
+    ], args);
+    const payload = parseJson(result.stdout, "offline sendCall JSON");
+    assert(result.status !== 0, "offline sendCall should fail");
+    assert(payload.ok === false, "offline sendCall payload should report ok=false");
+    assert(/Refusing to send Windows host formal call/.test(payload.error?.message || ""), "offline sendCall should explain refusal");
+    assert(board.calls.length === 0, "offline sendCall should not post a board call");
+    assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "offline sendCall refusal");
+  });
+  print("OK", "Offline --sendCall refuses before posting to Agent Link Board");
+}
+
+async function checkReadySendCall(args) {
+  await withMacClientServer(args, async (clientPort) => {
+    await withWindowsDiscoveryServer(async (windowsPort) => {
+      await withFakeBoard(async (board) => {
+        const result = await runAsync([
+          "--json",
+          "--allowDirty",
+          "--sendCall",
+          "--clientPort",
+          String(clientPort),
+          "--host",
+          "127.0.0.1",
+          "--port",
+          String(windowsPort),
+          "--server",
+          board.serverUrl,
+        ], args);
+        const payload = parseJson(result.stdout, "ready sendCall JSON");
+        assert(result.status === 0, `ready sendCall should exit 0:\n${result.stdout}\n${result.stderr}`);
+        assert(payload.readyToCall === true, "ready sendCall payload should be readyToCall");
+        assert(payload.sentCall?.ok === true, "ready sendCall should include sentCall.ok");
+        assert(board.calls.length === 1, `fake board should receive exactly one call, got ${board.calls.length}`);
+        const call = board.calls[0];
+        assert(call.status === "CALLING", "call should use CALLING status");
+        assert(call.from === "Mac Codex", "call should identify Mac Codex as sender");
+        assert(call.need === "Windows Codex", "call should request Windows Codex");
+        assert(call.goal === "正式端到端验收 Windows host", "call should describe Windows host formal goal");
+        assert(call.connection === `127.0.0.1:${windowsPort}`, "call should use discovered Windows host address");
+        assert(call.command === "node scripts/windows/start-windows-host.mjs --status --json", "call command should be executable on Windows side");
+        assertIncludes(call.expected, "run-mac-client-formal-smoke.mjs", "ready call expected");
+        assertIncludes(call.expected, `--port ${windowsPort}`, "ready call expected");
+        assertIncludes(call.expected, "不要执行 inject", "ready call expected");
+        assertIncludes(call.ask, "密码不要发在联络板", "ready call ask");
+        assertIncludes(call.ask, "明确确认", "ready call ask");
+        assertNoSecretLikeText(JSON.stringify(call), "ready sendCall board call");
+        for (const field of ["status", "from", "need", "goal", "environment", "connection", "command", "expected", "ask", "owner", "timeout"]) {
+          assert(call[field] === payload.sentCall.payload[field], `sentCall payload should match fake board call field ${field}`);
+        }
+      });
+    });
+  });
+  print("OK", "Ready --sendCall posts one Windows-host formal call to a fake board");
+}
+
+async function checkExistingBoardCallProtection(args) {
+  const existingCall = {
+    status: "CALLING",
+    from: "Windows Codex",
+    need: "Mac Codex",
+    goal: "Windows input status review",
+    ask: "Please wait for this review.",
+  };
+  await withMacClientServer(args, async (clientPort) => {
+    await withWindowsDiscoveryServer(async (windowsPort) => {
+      await withFakeBoard(async (board) => {
+        const result = await runAsync([
+          "--json",
+          "--allowDirty",
+          "--sendCall",
+          "--clientPort",
+          String(clientPort),
+          "--host",
+          "127.0.0.1",
+          "--port",
+          String(windowsPort),
+          "--server",
+          board.serverUrl,
+        ], args);
+        const payload = parseJson(result.stdout, "existing call sendCall JSON");
+        assert(result.status !== 0, "sendCall should fail when a board call already exists");
+        assert(payload.ok === false, "existing-call refusal should report ok=false");
+        assert(/Refusing to replace existing Agent Link Board call/.test(payload.error?.message || ""), "existing-call refusal should explain overwrite guard");
+        assert(/Windows input status review/.test(payload.error?.message || ""), "existing-call refusal should name the existing call");
+        assert(board.calls.length === 0, "existing-call refusal should not post a replacement call");
+        assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "existing-call sendCall refusal");
+      }, { currentCall: existingCall });
+    });
+  });
+  print("OK", "Ready --sendCall refuses to overwrite an existing board call");
+}
+
+async function checkForceSendCall(args) {
+  const existingCall = {
+    status: "CALLING",
+    from: "Windows Codex",
+    need: "Mac Codex",
+    goal: "Old coordinated test call",
+  };
+  await withMacClientServer(args, async (clientPort) => {
+    await withWindowsDiscoveryServer(async (windowsPort) => {
+      await withFakeBoard(async (board) => {
+        const result = await runAsync([
+          "--json",
+          "--allowDirty",
+          "--sendCall",
+          "--forceCall",
+          "--clientPort",
+          String(clientPort),
+          "--host",
+          "127.0.0.1",
+          "--port",
+          String(windowsPort),
+          "--server",
+          board.serverUrl,
+        ], args);
+        const payload = parseJson(result.stdout, "force sendCall JSON");
+        assert(result.status === 0, `force sendCall should exit 0:\n${result.stdout}\n${result.stderr}`);
+        assert(payload.sentCall?.ok === true, "force sendCall should include sentCall.ok");
+        assert(payload.boardCallBeforeSend?.active === true, "force sendCall should record existing board call");
+        assert(payload.boardCallBeforeSend?.goal === existingCall.goal, "force sendCall should record existing board call goal");
+        assert(board.calls.length === 1, `force sendCall should post exactly one replacement call, got ${board.calls.length}`);
+        assertNoSecretLikeText(JSON.stringify(board.calls[0]), "force sendCall board call");
+      }, { currentCall: existingCall });
+    });
+  });
+  print("OK", "Ready --sendCall --forceCall can replace an existing board call explicitly");
+}
+
 async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -373,6 +633,10 @@ async function main() {
   checkBoardSummarySecretFree(args);
   checkHumanRunPlan(args);
   await checkReadyShape(args);
+  await checkOfflineSendCallRefuses(args);
+  await checkReadySendCall(args);
+  await checkExistingBoardCallProtection(args);
+  await checkForceSendCall(args);
   print("OK", "Mac client formal status self-test passed");
 }
 

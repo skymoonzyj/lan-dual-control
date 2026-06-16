@@ -19,6 +19,39 @@
 
 ## 2026-06-16 Mac Codex
 
+日期：2026-06-16 10:22
+开发端：Mac Codex
+本轮目标：补齐 Mac 控制 Windows formal checklist 的无密通讯板呼叫入口，减少真连验收前手工协调失误。
+完成内容：
+- `scripts/mac/check-mac-client-formal-status.mjs` 新增 `--sendCall` / `--forceCall`：只有 `readyToCall=true` 时才向 Agent Link Board 发送 Mac Codex -> Windows Codex 的正式 Windows host 验收 call。
+- 发送前会先读取通讯板 current call；如果已有 active call，默认拒绝覆盖并提示先协调，只有显式 `--forceCall` 才允许替换。
+- call payload 不包含密码、token 或系统账号；`command` 字段给 Windows 端可执行的 `start-windows-host --status --json` 状态确认命令，Mac 端真连命令放在 `expected/ask` 里说明。
+- `scripts/mac/test-mac-client-formal-status.mjs` 增加假 Agent Link Board 覆盖：离线 `--sendCall` 不发板、ready 发送一条、已有 call 拒绝覆盖、`--forceCall` 显式覆盖。
+- 本轮未启动/停止真实服务，未认证 WebSocket，未要求或发送密码，未执行 `inject`，未改协议。
+修改文件：
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-client-formal-status.mjs`
+- `node --check scripts/mac/test-mac-client-formal-status.mjs`
+- `node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 60000`
+- `node scripts/mac/check-mac-client-formal-status.mjs --skipBoard --allowDirty --allowClientServerOffline --allowWindowsHostOffline --boardSummary --timeoutMs 1200`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮只补安全协调入口，没有执行真实 Mac 控制 Windows 跨机验收；需要 Windows host 在线、Mac client 页面在线并由用户在 Mac 本机隐藏输入正式密码后再跑 `run-mac-client-formal-smoke`。
+下一步建议：
+- Windows host 准备好后，Mac 侧先运行 `node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary`；ready 且需要另一端配合时再运行同命令加 `--sendCall`。
+是否改了协议：否。
+是否需要另一端配合：当前不需要；后续真实 Mac 控制 Windows 验收需要 Windows 端保持 host 在线。
+
+## 2026-06-16 Mac Codex
+
 日期：2026-06-16 09:52
 开发端：Mac Codex
 本轮目标：让 Mac 恢复开工摘要直接携带真实 inject 启动硬护栏，减少联络板转述时的歧义。

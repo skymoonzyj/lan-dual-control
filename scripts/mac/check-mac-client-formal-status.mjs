@@ -17,6 +17,14 @@ const defaults = {
   allowWindowsHostOffline: false,
   json: false,
   boardSummary: false,
+  sendCall: false,
+  forceCall: false,
+};
+
+const formalWindowsCallIdentity = {
+  from: "Mac Codex",
+  need: "Windows Codex",
+  goal: "正式端到端验收 Windows host",
 };
 
 function helpRequested(argv) {
@@ -45,11 +53,14 @@ Options:
   --allowClientServerOffline      Let local Mac client page offline remain a warning.
   --allowWindowsHostOffline       Let Windows host discovery offline remain a warning.
   --boardSummary                  Print a short secret-free Agent Link Board summary.
+  --sendCall                      Send a Windows host formal test call to Agent Link Board only when ready.
+  --forceCall                     Allow --sendCall to replace an existing board call.
   --json                          Print one machine-readable JSON object, including runPlan.
   --help, -h                      Show this help without probing anything.
 
 Examples:
   node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.50 --port 43770 --boardSummary
+  node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.50 --port 43770 --sendCall
   node scripts/mac/discover-windows-hosts.mjs --boardSummary
   node scripts/mac/check-mac-client-formal-status.mjs --json --skipBoard --allowWindowsHostOffline
 `);
@@ -70,6 +81,8 @@ function parseArgs(argv) {
       token === "--allowClientServerOffline" ||
       token === "--allowWindowsHostOffline" ||
       token === "--boardSummary" ||
+      token === "--sendCall" ||
+      token === "--forceCall" ||
       token === "--json"
     ) {
       args[token.slice(2)] = true;
@@ -121,6 +134,13 @@ function clampInteger(value, min, max, fallback) {
 
 function normalizedText(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function splitLines(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 function statusValue(value) {
@@ -334,6 +354,28 @@ function makeBrowserTestCommand(report, args) {
   ].join(" ");
 }
 
+function makeCallPayload(report, args) {
+  const host = report.readiness.windowsHost || {};
+  const targetHost = host.probe?.host || args.windowsHost || "<Windows IP>";
+  const targetPort = host.probe?.port || args.windowsPort || defaults.windowsPort;
+  const address = `${targetHost}:${targetPort}`;
+  const browserSmoke = makeBrowserTestCommand(report, args);
+  const windowsStatusCommand = "node scripts/windows/start-windows-host.mjs --status --json";
+  return {
+    status: "CALLING",
+    from: formalWindowsCallIdentity.from,
+    need: formalWindowsCallIdentity.need,
+    goal: formalWindowsCallIdentity.goal,
+    environment: `Windows host ${address}; runtimeBuild=${host.runtime?.buildId || "unknown"}; inputMode=${host.capabilities?.input?.mode || "unknown"}`,
+    connection: address,
+    command: windowsStatusCommand,
+    expected: `Windows 端确认 Windows host 在线且保持 ${address} 可连；Mac 端随后运行 ${browserSmoke}，在本机隐藏输入正式密码后验证首帧/H.264 或 JPEG fallback、帧延迟、系统音频播放、文本/文件剪贴板和 input-log ack；不要执行 inject。`,
+    ask: `请确认 Windows host 保持在线并观察 Windows 屏幕/日志；Mac 端下一步 smoke 命令：${browserSmoke}。密码不要发在联络板，inject 只有用户另行明确确认后才可执行。`,
+    owner: "Mac Codex",
+    timeout: "用户在场时执行",
+  };
+}
+
 function makeRunPlan(report, args) {
   const host = report.readiness.windowsHost || {};
   const clientServer = report.readiness.clientServer || {};
@@ -438,6 +480,129 @@ function makeBoardSummary(report) {
   ].join(" ");
 }
 
+function formatGateItem(entry) {
+  const summary = normalizedText(entry.summary);
+  const detail = normalizedText(entry.detail);
+  const next = normalizedText(entry.next);
+  const parts = [`${entry.id}: ${summary || entry.status}`];
+  if (detail) parts.push(detail);
+  if (next) parts.push(`Next: ${next}`);
+  return parts.join("; ");
+}
+
+function formatSendCallRefusal(report) {
+  const blockers = report.checklist.filter((entry) => entry.status === "blocker");
+  const warnings = report.checklist.filter((entry) => entry.status === "warning");
+  const blockerText = blockers.length > 0
+    ? blockers.slice(0, 5).map(formatGateItem).join(" | ")
+    : "none";
+  const warningText = warnings.length > 0
+    ? ` Warnings: ${warnings.slice(0, 3).map(formatGateItem).join(" | ")}.`
+    : "";
+  return [
+    `Refusing to send Windows host formal call because checklist is not ready: blockers=${report.counts.blocker}, warnings=${report.counts.warning}.`,
+    `Blockers: ${blockerText}.`,
+    warningText,
+  ].join(" ").replace(/\s+/g, " ").trim();
+}
+
+function parseCurrentBoardCall(output) {
+  const lines = splitLines(output);
+  const callIndex = lines.findIndex((line) => line.startsWith("[call]"));
+  if (callIndex < 0 || /^\[call\]\s+none\b/i.test(lines[callIndex])) {
+    return {
+      active: false,
+      raw: callIndex >= 0 ? lines[callIndex] : "",
+    };
+  }
+  const header = lines[callIndex];
+  const headerMatch = header.match(/^\[call\]\s+([^:]*):?\s*(.*)$/);
+  const currentCall = {
+    active: true,
+    status: normalizedText(headerMatch?.[1] || ""),
+    goal: normalizedText(headerMatch?.[2] || ""),
+    raw: header,
+  };
+  for (const line of lines.slice(callIndex + 1)) {
+    if (line.startsWith("[")) break;
+    const fieldMatch = line.match(/^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/);
+    if (!fieldMatch) continue;
+    currentCall[fieldMatch[1]] = normalizedText(fieldMatch[2]);
+  }
+  return currentCall;
+}
+
+function getCurrentBoardCall(args) {
+  const result = spawnSync(process.execPath, [
+    "scripts/codex-link-client.mjs",
+    "--server",
+    args.server,
+    "watch",
+    "--once",
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: Math.max(args.timeoutMs + 3000, 6000),
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    throw new Error(`Could not confirm Agent Link Board current call before sending: ${String(result.stderr || result.stdout || "").trim()}`);
+  }
+  return parseCurrentBoardCall(result.stdout);
+}
+
+function sendCall(report, args) {
+  if (!report.readyToCall) {
+    throw new Error(formatSendCallRefusal(report));
+  }
+  const currentCall = getCurrentBoardCall(args);
+  report.boardCallBeforeSend = currentCall;
+  if (currentCall.active && !args.forceCall) {
+    const owner = currentCall.from || currentCall.need || currentCall.owner || "unknown";
+    const goal = currentCall.goal || currentCall.raw || "unknown goal";
+    throw new Error(`Refusing to replace existing Agent Link Board call from ${owner}: ${goal}. Clear it or rerun with --forceCall only after coordinating on the board.`);
+  }
+  const payload = report.callPayload || makeCallPayload(report, args);
+  const commandArgs = [
+    "scripts/codex-link-client.mjs",
+    "--server",
+    args.server,
+    "call",
+    "--status",
+    payload.status,
+    "--from",
+    payload.from,
+    "--need",
+    payload.need,
+    "--goal",
+    payload.goal,
+    "--environment",
+    payload.environment,
+    "--connection",
+    payload.connection,
+    "--command",
+    payload.command,
+    "--expected",
+    payload.expected,
+    "--ask",
+    payload.ask,
+    "--owner",
+    payload.owner,
+    "--timeout",
+    payload.timeout,
+  ];
+  const result = spawnSync(process.execPath, commandArgs, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: Math.max(args.timeoutMs + 3000, 6000),
+    maxBuffer: 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    throw new Error(`Could not send Agent Link Board call: ${String(result.stderr || result.stdout || "").trim()}`);
+  }
+  return String(result.stdout || "").trim();
+}
+
 function printRunPlan(runPlan) {
   console.log("Formal run plan");
   for (const step of runPlan.steps) {
@@ -488,6 +653,8 @@ function buildReport(args) {
       allowDirty: args.allowDirty,
       allowClientServerOffline: args.allowClientServerOffline,
       allowWindowsHostOffline: args.allowWindowsHostOffline,
+      sendCall: args.sendCall,
+      forceCall: args.forceCall,
     },
     counts,
     checklist,
@@ -496,6 +663,7 @@ function buildReport(args) {
   report.runPlan = makeRunPlan(report, args);
   report.callText = makeCallText(report);
   report.boardSummary = makeBoardSummary(report);
+  report.callPayload = makeCallPayload(report, args);
   return report;
 }
 
@@ -506,14 +674,33 @@ async function main() {
   }
   const args = parseArgs(process.argv);
   const report = buildReport(args);
+  if (args.sendCall) {
+    try {
+      const sendResult = sendCall(report, args);
+      report.sentCall = {
+        ok: true,
+        result: sendResult || "ok",
+        payload: report.callPayload,
+      };
+    } catch (error) {
+      report.ok = false;
+      report.error = { message: error.message };
+      if (!args.json) {
+        throw error;
+      }
+    }
+  }
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
   } else if (args.boardSummary) {
     console.log(report.boardSummary);
+  } else if (args.sendCall) {
+    console.log(`[OK] Sent Windows host formal call to Agent Link Board: ${report.callPayload.connection}`);
+    console.log(report.callText);
   } else {
     printHuman(report);
   }
-  if (!report.ok) process.exitCode = 1;
+  process.exitCode = report.ok ? 0 : 1;
 }
 
 main().catch((error) => {
