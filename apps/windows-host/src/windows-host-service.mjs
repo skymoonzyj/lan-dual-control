@@ -11,6 +11,7 @@ const protocolVersion = 1;
 const defaultPassword = "demo-password";
 const maxAuthAttempts = 3;
 const binaryVideoMagic = Buffer.from("LDCV1\n", "ascii");
+const reverseControlRequestRetentionMs = 120000;
 
 function normalizeReverseControlMode(value) {
   const normalized = String(value || "").trim().toLowerCase();
@@ -31,6 +32,12 @@ function makeReverseControlCapabilities(mode) {
     requiresConfirmation: normalized !== "accept",
     autoAccept: normalized === "accept",
   };
+}
+
+function compactReverseControlText(value, maxLength = 80) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1))}...`;
 }
 
 function makeRuntimeInfo(startedAtMs, buildId) {
@@ -150,6 +157,24 @@ function makeReverseControlGrantManager() {
     consumedAt: "",
     revokedAt: "",
   };
+  let lastRequest = null;
+  const publicLastRequest = () => {
+    if (!lastRequest) return null;
+    const now = Date.now();
+    const ageMs = Math.max(0, now - lastRequest.requestedAtMs);
+    const active = lastRequest.status === "rejected_needs_grant" && ageMs <= reverseControlRequestRetentionMs;
+    return {
+      active,
+      status: lastRequest.status,
+      requestId: lastRequest.requestId,
+      requester: lastRequest.requester,
+      requestedAt: lastRequest.requestedAt,
+      updatedAt: lastRequest.updatedAt,
+      reason: lastRequest.reason,
+      ageMs,
+      expiresAt: active ? new Date(lastRequest.requestedAtMs + reverseControlRequestRetentionMs).toISOString() : "",
+    };
+  };
   const status = () => {
     const now = Date.now();
     const active = grant.expiresAtMs > now;
@@ -161,10 +186,24 @@ function makeReverseControlGrantManager() {
       remainingMs: active ? Math.max(0, grant.expiresAtMs - now) : 0,
       consumedAt: grant.consumedAt,
       revokedAt: grant.revokedAt,
+      lastRequest: publicLastRequest(),
     };
   };
   return {
     status,
+    recordRequest({ requestId = "", requester = "", status: requestStatus = "", reason = "" } = {}) {
+      const now = Date.now();
+      lastRequest = {
+        requestId: compactReverseControlText(requestId),
+        requester: compactReverseControlText(requester || "对方"),
+        status: compactReverseControlText(requestStatus || "unknown"),
+        reason: compactReverseControlText(reason),
+        requestedAt: new Date(now).toISOString(),
+        updatedAt: new Date(now).toISOString(),
+        requestedAtMs: now,
+      };
+      return publicLastRequest();
+    },
     grant(durationMs = 30000) {
       const now = Date.now();
       const safeDurationMs = Math.max(5000, Math.min(120000, Number(durationMs) || 30000));
@@ -202,6 +241,12 @@ function makeReverseControlResponse({ message, mode, state, grantManager }) {
       updatedAt: now,
       reason: "缺少 requestId",
     });
+    grantManager?.recordRequest?.({
+      requestId: "",
+      requester,
+      status: "rejected_invalid",
+      reason: "missing requestId",
+    });
     return {
       type: "reverse_control_response",
       requestId: "",
@@ -228,6 +273,12 @@ function makeReverseControlResponse({ message, mode, state, grantManager }) {
       updatedAt: new Date().toISOString(),
       reason: "disabled",
     });
+    grantManager?.recordRequest?.({
+      requestId,
+      requester,
+      status: "rejected_disabled",
+      reason: "disabled",
+    });
     return {
       type: "reverse_control_response",
       requestId,
@@ -244,6 +295,12 @@ function makeReverseControlResponse({ message, mode, state, grantManager }) {
       status: "accepted",
       updatedAt: new Date().toISOString(),
       reason: "explicit lab auto-accept",
+    });
+    grantManager?.recordRequest?.({
+      requestId,
+      requester,
+      status: "accepted_by_policy",
+      reason: "accept policy",
     });
     return {
       type: "reverse_control_response",
@@ -263,6 +320,12 @@ function makeReverseControlResponse({ message, mode, state, grantManager }) {
         updatedAt: new Date().toISOString(),
         reason: "local temporary grant consumed",
       });
+      grantManager?.recordRequest?.({
+        requestId,
+        requester,
+        status: "accepted_by_temporary_grant",
+        reason: "temporary grant consumed",
+      });
       return {
         type: "reverse_control_response",
         requestId,
@@ -278,6 +341,12 @@ function makeReverseControlResponse({ message, mode, state, grantManager }) {
   Object.assign(state, {
     status: "rejected",
     updatedAt: new Date().toISOString(),
+    reason: "confirmation required",
+  });
+  grantManager?.recordRequest?.({
+    requestId,
+    requester,
+    status: "rejected_needs_grant",
     reason: "confirmation required",
   });
   return {

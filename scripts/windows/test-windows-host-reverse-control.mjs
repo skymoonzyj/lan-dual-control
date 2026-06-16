@@ -236,11 +236,22 @@ async function verifyDefaultDenied(args) {
       assert.equal(response.reverseControlState, "rejected");
       assert.match(response.reason, /用户确认|默认安全拒绝/);
       assert.doesNotMatch(response.reason, /尚未实装/);
+
+      const afterDiscovery = await waitForDiscovery(host, port, args.timeoutMs);
+      const lastRequest = afterDiscovery.capabilities.reverseControlGrant?.lastRequest || {};
+      assert.equal(lastRequest.active, true);
+      assert.equal(lastRequest.status, "rejected_needs_grant");
+      assert.equal(lastRequest.requestId, "default-deny");
+      assert.equal(lastRequest.requester, "Mac client");
+      assert.match(lastRequest.reason, /confirmation required/);
+      assert.ok(Number(lastRequest.ageMs) >= 0);
+      assert.ok(lastRequest.expiresAt);
+      assert.doesNotMatch(JSON.stringify(lastRequest), /请求切换控制方向/);
     } finally {
       socket.close();
     }
   });
-  print("OK", "Default reverse control policy rejects safely with LAN008");
+  print("OK", "Default reverse control policy rejects safely and exposes the recent request");
 }
 
 async function verifyLocalTemporaryGrant(args) {
@@ -270,6 +281,10 @@ async function verifyLocalTemporaryGrant(args) {
 
       const afterDiscovery = await waitForDiscovery(host, port, args.timeoutMs);
       assert.equal(afterDiscovery.capabilities.reverseControlGrant.active, false);
+      const acceptedRequest = afterDiscovery.capabilities.reverseControlGrant.lastRequest || {};
+      assert.equal(acceptedRequest.active, false);
+      assert.equal(acceptedRequest.status, "accepted_by_temporary_grant");
+      assert.equal(acceptedRequest.requestId, "temporary-grant");
 
       socket.send(JSON.stringify({
         type: "reverse_control_request",

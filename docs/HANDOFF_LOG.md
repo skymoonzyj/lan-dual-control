@@ -56,6 +56,50 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 23:59
+开发端：Windows Codex
+本轮目标：让 Windows host 在默认安全拒绝 Mac 反控请求后，Windows 本机能看到“刚收到请求”，再临时授权并让 Mac 重试。
+完成内容：
+- Windows host 的一次性授权状态新增 `lastRequest`：默认 `deny` 拒绝反控请求时，会短时记录 requestId、来源、时间、状态和原因，不保存请求正文或密码。
+- `/discovery.capabilities.reverseControlGrant.lastRequest` 现在可让本机 UI 看到最近一次被拒绝请求；`start-windows-host --status` 普通输出会显示 `pendingRequest=on`，`--boardSummary` 会把反控状态标成 `pending-request`。
+- Windows 桌面“本机被控”面板状态会显示 `反控：刚收到请求`，详情行提示“已安全拒绝；可点击临时允许反控后让对方重试”。
+- 反控专项回归覆盖默认拒绝后的最近请求状态、临时授权消耗后不再保持待处理，以及页面 diagnostics 对“刚收到请求”的显示。
+- Windows host/client README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-host/src/windows-host-service.mjs`
+- `scripts/windows/start-windows-host.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-host-reverse-control.mjs`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-host/README.md`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-host/src/windows-host-service.mjs`
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-host-reverse-control.mjs`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-host-reverse-control.mjs --timeoutMs 15000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --progressIntervalMs 0`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script start-windows-host.mjs --script test-windows-host-reverse-control.mjs --script test-windows-client-browser.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" <本轮文件>`（无冲突标记）
+遗留问题：
+- 这仍不是完整的 Windows 本机弹窗确认队列；现在的现场流程是：Mac 先请求会被安全拒绝并留下提示，Windows 点“临时允许反控”，Mac 端再重试一次。
+下一步建议：
+- Mac client 可读取 Windows `/discovery.capabilities.reverseControlGrant.lastRequest` 或 `reverseControlGrant.active`，在 Mac 侧给出“Windows 刚看到请求/已临时允许，请重试”的更直观提示。
+- 下一轮可继续做 Windows 本机真正的请求弹窗队列：收到请求后在桌面壳弹出同意/拒绝，按钮直接打开一次性授权并通知 Mac 重试。
+是否改了协议：未改共享消息协议；新增 Windows host 可选 discovery 能力字段 `reverseControlGrant.lastRequest`，旧客户端可忽略。
+是否需要另一端配合：暂不强制需要；Mac 端如要优化体验，可读取新的 discovery 字段。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 23:45
 开发端：Windows Codex
 本轮目标：让 Mac 反控 Windows 不必只能在长期 `accept` 实验模式下通过，先补一个安全的一次性本机临时授权窗口。

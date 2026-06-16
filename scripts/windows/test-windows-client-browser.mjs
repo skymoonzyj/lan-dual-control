@@ -1006,9 +1006,20 @@ async function verifyDesktopOnlyHostPanel(session) {
                 mode: "deny",
               },
               grant: {
-                active: true,
-                remainingMs: 30000,
+                active: false,
+                remainingMs: 0,
                 oneTime: true,
+                lastRequest: {
+                  active: true,
+                  status: "rejected_needs_grant",
+                  requestId: "reverse-request-ui",
+                  requester: "Mac client",
+                  requestedAt: "2026-06-16T12:00:00.000Z",
+                  updatedAt: "2026-06-16T12:00:00.000Z",
+                  reason: "confirmation required",
+                  ageMs: 23000,
+                  expiresAt: "2026-06-16T12:02:00.000Z",
+                },
               },
             },
             clipboard: {
@@ -1050,6 +1061,19 @@ async function verifyDesktopOnlyHostPanel(session) {
       const helperLinesText =
         typeof localHostHelperStatusLines === "function"
           ? localHostHelperStatusLines(helperResult).join("\\n")
+          : "";
+      const grantReverseText =
+        typeof formatLocalHostReverseControlStatus === "function"
+          ? formatLocalHostReverseControlStatus({
+              supported: true,
+              mode: "deny",
+              requiresConfirmation: true,
+              grant: {
+                active: true,
+                remainingMs: 30000,
+                oneTime: true,
+              },
+            })
           : "";
       const offlineHelperLinesText =
         typeof localHostHelperStatusLines === "function"
@@ -1126,14 +1150,17 @@ async function verifyDesktopOnlyHostPanel(session) {
           helperSummary.includes("PID 2468") &&
           helperSummary.includes("FFmpeg gdigrab H.264") &&
           helperSummary.includes("WASAPI") &&
-          helperSummary.includes("反控 临时允许 30 秒") &&
+          helperSummary.includes("反控 刚收到请求") &&
+          grantReverseText.includes("临时允许 30 秒") &&
           helperSummary.includes("通讯板有 Mac→Windows 呼叫") &&
           helperLinesText.includes("状态助手") &&
           helperLinesText.includes("[CALL] 通讯板") &&
           helperLinesText.includes("正式 Windows host 验收") &&
           !helperLinesText.includes("should-not-render") &&
           helperLinesText.includes("build helper-test") &&
-          helperLinesText.includes("反控：临时允许 30 秒") &&
+          helperLinesText.includes("反控：刚收到请求") &&
+          helperLinesText.includes("反控请求：Mac client") &&
+          helperLinesText.includes("临时允许反控") &&
           helperLinesText.includes("剪贴板") &&
           helperLinesText.includes("WGC fallback") &&
           offlineHelperLinesText.includes("离线") &&

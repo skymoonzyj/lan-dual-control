@@ -3233,6 +3233,26 @@ function normalizeReverseControlMode(value) {
   return Object.prototype.hasOwnProperty.call(reverseControlModeLabels, mode) ? mode : "deny";
 }
 
+function localHostReverseControlLastRequest(reverse = {}) {
+  const request = reverse?.grant?.lastRequest;
+  return request && typeof request === "object" && request.active ? request : null;
+}
+
+function formatReverseControlRequestAge(request = {}) {
+  const ageMs = Number(request.ageMs);
+  if (!Number.isFinite(ageMs) || ageMs < 1000) return "刚刚";
+  const seconds = Math.max(1, Math.floor(ageMs / 1000));
+  if (seconds < 60) return `${seconds} 秒前`;
+  return `${Math.floor(seconds / 60)} 分钟前`;
+}
+
+function formatLocalHostReverseControlRequestLine(reverse = {}) {
+  const request = localHostReverseControlLastRequest(reverse);
+  if (!request) return "";
+  const requester = request.requester || "Mac";
+  return `反控请求：${requester} ${formatReverseControlRequestAge(request)}请求过，已安全拒绝；可点击“临时允许反控”后让对方重试。`;
+}
+
 function formatLocalHostReverseControlStatus(reverse = {}) {
   if (!reverse || typeof reverse !== "object" || Object.keys(reverse).length === 0) return "";
   const policy = reverse.policy && typeof reverse.policy === "object" ? reverse.policy : {};
@@ -3242,6 +3262,7 @@ function formatLocalHostReverseControlStatus(reverse = {}) {
     const seconds = Math.max(1, Math.ceil((Number(reverse.grant.remainingMs) || 0) / 1000));
     return `临时允许 ${seconds} 秒`;
   }
+  if (localHostReverseControlLastRequest(reverse)) return "刚收到请求";
   if (reverse.autoAccept || policy.autoAccept || mode === "accept") return reverseControlModeLabels.accept;
   if (reverse.requiresConfirmation || policy.requiresConfirmation || mode === "deny") return reverseControlModeLabels.deny;
   return labelFromMap(mode, reverseControlModeLabels);
@@ -3353,12 +3374,14 @@ function localHostHelperStatusLines(result) {
   const audioText = formatLocalHostAudioStatus(status.capabilities?.audio || {});
   const inputText = formatLocalHostInputStatus(status.capabilities?.input || {});
   const reverseText = formatLocalHostReverseControlStatus(status.capabilities?.reverseControl || {});
+  const reverseRequestLine = formatLocalHostReverseControlRequestLine(status.capabilities?.reverseControl || {});
   const clipboardText = formatLocalHostClipboardStatus(status.capabilities?.clipboard || {});
   if (runtimeText) lines.push(`运行：${runtimeText}`);
   if (screenText) lines.push(`画面：${screenText}`);
   if (audioText) lines.push(`声音：${audioText}`);
   if (inputText) lines.push(`输入：${inputText}`);
   if (reverseText) lines.push(`反控：${reverseText}`);
+  if (reverseRequestLine) lines.push(reverseRequestLine);
   if (clipboardText) lines.push(`剪贴板：${clipboardText}`);
   for (const warning of status.warnings || []) lines.push(`[WARN] ${warning}`);
   if (status.buildDiff?.message) {

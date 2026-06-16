@@ -566,6 +566,13 @@ function reverseControlSummary(reverse = normalizeReverseControlStatus()) {
   if (reverse.grant?.active) {
     return `mode=${reverse.mode} supported=on temporaryGrant=on remainingMs=${Math.max(0, Math.round(Number(reverse.grant.remainingMs) || 0))}`;
   }
+  if (reverse.grant?.lastRequest?.active) {
+    const requester = reverse.grant.lastRequest.requester
+      ? ` requester=${compactText(reverse.grant.lastRequest.requester, 60)}`
+      : "";
+    const ageMs = Math.max(0, Math.round(Number(reverse.grant.lastRequest.ageMs) || 0));
+    return `mode=${reverse.mode} supported=on pendingRequest=on${requester} ageMs=${ageMs} requiresConfirmation=on`;
+  }
   if (reverse.autoAccept || reverse.mode === "accept") {
     return "mode=accept supported=on autoAccept=on labOnly=on";
   }
@@ -575,6 +582,7 @@ function reverseControlSummary(reverse = normalizeReverseControlStatus()) {
 function reverseControlBoardToken(reverse = normalizeReverseControlStatus()) {
   if (!reverse.supported || reverse.mode === "disabled") return "disabled";
   if (reverse.grant?.active) return "temporary-grant";
+  if (reverse.grant?.lastRequest?.active) return "pending-request";
   if (reverse.autoAccept || reverse.mode === "accept") return "accept-lab";
   return "deny-confirm";
 }
