@@ -232,6 +232,23 @@ const server = createServer((request, response) => {
     response.end(JSON.stringify(state));
     return;
   }
+  if (pathname === "/api/call" && request.method === "POST") {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => {
+      body += chunk;
+    });
+    request.on("end", () => {
+      try {
+        state.currentCall = JSON.parse(body);
+      } catch {
+        state.currentCall = { status: "CALLING" };
+      }
+      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify({ ok: true }));
+    });
+    return;
+  }
   response.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
   response.end(JSON.stringify({ ok: false, error: "not found" }));
 });
@@ -282,6 +299,14 @@ function checkMissingHost(args) {
   print("OK", "Missing host is rejected before any browser auth");
 }
 
+function checkSendCallRequiresPreflight(args) {
+  const result = run(["--json", "--sendCall", "--host", "127.0.0.1"], args);
+  const payload = parseJson(result.stdout, "sendCall without preflight JSON");
+  assert(result.status !== 0, "sendCall without preflight should fail");
+  assertIncludes(payload.error?.message || "", "--preflightOnly", "sendCall without preflight error");
+  print("OK", "sendCall cannot accidentally enter auth mode");
+}
+
 async function checkPreflightAndDryRun(args) {
   const secret = "super-secret-smoke-password";
   await withMacClientServer(args, async (clientPort) => {
@@ -312,6 +337,30 @@ async function checkPreflightAndDryRun(args) {
         assertIncludes(preflightPayload.boardSummary || "", "Coordinate first", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "--sendCall", "preflight board summary");
         assertNotIncludes(`${preflight.stdout}\n${preflight.stderr}`, secret, "preflight output");
+
+        const sendCall = run([
+          "--json",
+          "--preflightOnly",
+          "--sendCall",
+          "--allowDirty",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          String(windowsPort),
+          "--clientPort",
+          String(clientPort),
+          "--server",
+          boardServer,
+          "--timeoutMs",
+          "10000",
+        ], args, { LAN_DUAL_PASSWORD: secret });
+        const sendCallPayload = parseJson(sendCall.stdout, "sendCall JSON");
+        assert(sendCall.status === 0, `sendCall should pass.\n${sendCall.stdout}\n${sendCall.stderr}`);
+        assert(sendCallPayload.ok === true, "sendCall payload should be ok=true");
+        assert(sendCallPayload.sentCall?.ok === true, "sendCall should report sentCall ok");
+        assert(sendCallPayload.sentCall?.payload?.goal === "正式端到端验收 Windows host", "sendCall payload should keep formal goal");
+        assertIncludes(sendCallPayload.boardSummary || "", "Agent Link Board call was sent", "sendCall board summary");
+        assertNotIncludes(`${sendCall.stdout}\n${sendCall.stderr}`, secret, "sendCall output");
       });
 
       const dryRun = run([
@@ -376,6 +425,48 @@ async function checkDiscoverPreflight(args) {
     });
   });
   print("OK", "Discovery preflight selects a Windows host without authenticating");
+}
+
+async function checkDiscoverSendCall(args) {
+  const secret = "super-secret-discover-send-call-password";
+  await withMacClientServer(args, async (clientPort) => {
+    await withWindowsDiscoveryServer(async (windowsPort) => {
+      await withBoardServer(async (boardServer) => {
+        const result = run([
+          "--json",
+          "--preflightOnly",
+          "--sendCall",
+          "--allowDirty",
+          "--discover",
+          "--discoverHost",
+          "127.0.0.1",
+          "--discoverNoLocalSubnets",
+          "--discoverTimeoutMs",
+          "300",
+          "--discoverScanTimeoutMs",
+          "5000",
+          "--port",
+          String(windowsPort),
+          "--clientPort",
+          String(clientPort),
+          "--server",
+          boardServer,
+          "--timeoutMs",
+          "10000",
+        ], args, { LAN_DUAL_PASSWORD: secret });
+        const payload = parseJson(result.stdout, "discover sendCall JSON");
+        assert(result.status === 0, `discover sendCall should pass.\n${result.stdout}\n${result.stderr}`);
+        assert(payload.ok === true, "discover sendCall should be ok=true");
+        assert(payload.args?.discover === true, "discover sendCall should record discover=true");
+        assert(payload.discovery?.selected?.host === "127.0.0.1", "discover sendCall should select mock host");
+        assert(payload.sentCall?.ok === true, "discover sendCall should report sentCall ok");
+        assert(payload.sentCall?.payload?.connection === `127.0.0.1:${windowsPort}`, "discover sendCall should call selected Windows host");
+        assertIncludes(payload.boardSummary || "", "Agent Link Board call was sent", "discover sendCall board summary");
+        assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "discover sendCall output");
+      });
+    });
+  });
+  print("OK", "Discovery sendCall selects a Windows host and sends one safe call");
 }
 
 async function checkDiscoverFailureNoPasswordPrompt(args) {
@@ -457,8 +548,10 @@ async function main() {
   const args = parseArgs(process.argv);
   checkHelp(args);
   checkMissingHost(args);
+  checkSendCallRequiresPreflight(args);
   await checkPreflightAndDryRun(args);
   await checkDiscoverPreflight(args);
+  await checkDiscoverSendCall(args);
   await checkDiscoverFailureNoPasswordPrompt(args);
   await checkPasswordSafety(args);
   print("OK", "Mac client formal smoke wrapper self-test passed");

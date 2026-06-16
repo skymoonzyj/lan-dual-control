@@ -17,6 +17,40 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-16 Mac Codex
+
+日期：2026-06-16 11:06
+开发端：Mac Codex
+本轮目标：把 Mac 控制 Windows formal smoke 的发现、只读预检和通讯板呼叫收成一条安全命令。
+完成内容：
+- `scripts/mac/run-mac-client-formal-smoke.mjs` 新增显式 `--sendCall` / `--forceCall` 参数，其中 `--sendCall` 只能和 `--preflightOnly` 同用，避免误进入浏览器认证或密码流程。
+- `--preflightOnly --sendCall` 会先跑原有无密 formal checklist，只有 `readyToCall=true` 时才委托 `check-mac-client-formal-status --sendCall` 发送 Agent Link Board call；未 ready、没有 Windows host、或通讯板发送失败都会拒绝并返回错误。
+- `--discover --preflightOnly --sendCall` 可先只读扫描 Windows `/discovery`、自动选中最佳 Windows host，再发送同一条无密正式 Windows host 验收 call；发送结果会写入 JSON `sentCall`，boardSummary 成功时显示 `Agent Link Board call was sent`。
+- 参数解析错误现在也能按 `--json` 输出机器可读错误，避免自动化遇到 `--sendCall` 漏 `--preflightOnly` 时拿到空 stdout。
+- README、CURRENT_STATUS、NEXT_ACTIONS、04-task-board 和 ACTIVE_LOCKS 已同步推荐命令：`node scripts/mac/run-mac-client-formal-smoke.mjs --discover --preflightOnly --sendCall`。
+- 本轮只用本机假 Windows host 和假 Agent Link Board 自测；未连接真实 Windows host、未认证 WebSocket、未要求或发送密码、未向真实通讯板发 formal call、未执行 `inject`。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/run-mac-client-formal-smoke.mjs`
+- `node --check scripts/mac/test-mac-client-formal-smoke.mjs`
+- `node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 60000`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 真实 Mac 控制 Windows 浏览器 smoke 仍需要 Windows host 在线，并由用户在 Mac 本机隐藏输入正式 Windows host 密码后执行 `--discover --promptPassword`。
+下一步建议：
+- Windows host 启动后，Mac 侧先运行 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --preflightOnly --sendCall`；它 ready 才会发 call 给 Windows。随后用户在 Mac 本机隐藏输入正式密码，运行 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --promptPassword` 做真实观感/音画/剪贴板 smoke。
+是否改了协议：否。
+是否需要另一端配合：当前不需要；后续真实 Mac 控制 Windows 验收需要 Windows host 在线。
+
 ## 2026-06-16 Windows Codex
 
 日期：2026-06-16 10:55

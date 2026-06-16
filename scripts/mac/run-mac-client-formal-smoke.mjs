@@ -39,6 +39,8 @@ const defaults = {
   json: false,
   boardSummary: false,
   dryRun: false,
+  sendCall: false,
+  forceCall: false,
 };
 
 function helpRequested(argv) {
@@ -87,6 +89,8 @@ Options:
   --allowClipboardFallback       Allow temp/memory clipboard fallback. Default: ${defaults.allowClipboardFallback}
   --headed                       Run browser headed instead of headless.
   --dryRun                       Print the command shape without running browser auth.
+  --sendCall                     With --preflightOnly, send the formal Windows test call only when ready.
+  --forceCall                    Allow --sendCall to replace an existing board call after coordination.
   --boardSummary                 Print a short secret-free Agent Link Board summary.
   --json                         Print one machine-readable JSON object.
   --help, -h                     Show this help without probing anything.
@@ -94,6 +98,7 @@ Options:
 Examples:
   node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.50 --port 43770 --preflightOnly --boardSummary
   node scripts/mac/run-mac-client-formal-smoke.mjs --discover --preflightOnly --boardSummary
+  node scripts/mac/run-mac-client-formal-smoke.mjs --discover --preflightOnly --sendCall
   node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.50 --port 43770 --promptPassword
   node scripts/mac/run-mac-client-formal-smoke.mjs --discover --promptPassword
 `);
@@ -123,6 +128,8 @@ function parseArgs(argv) {
       token === "--allowClipboardFallback" ||
       token === "--headed" ||
       token === "--dryRun" ||
+      token === "--sendCall" ||
+      token === "--forceCall" ||
       token === "--boardSummary" ||
       token === "--json"
     ) {
@@ -197,6 +204,9 @@ function parseArgs(argv) {
   args.maxAudioPlaybackMs = clampInteger(args.maxAudioPlaybackMs, 0, 600000, defaults.maxAudioPlaybackMs);
   args.discoverTimeoutMs = clampInteger(args.discoverTimeoutMs, 100, 5000, defaults.discoverTimeoutMs);
   args.discoverScanTimeoutMs = clampInteger(args.discoverScanTimeoutMs, 0, 300000, defaults.discoverScanTimeoutMs);
+  if (args.sendCall && !args.preflightOnly) {
+    throw new Error("--sendCall is only allowed with --preflightOnly so it cannot accidentally authenticate.");
+  }
   return args;
 }
 
@@ -406,6 +416,30 @@ function makeSendCallCommand(args) {
   return parts.join(" ");
 }
 
+function makeSendCallArgs(args) {
+  if (!hasWindowsHost(args)) return [];
+  const sendArgs = [
+    "scripts/mac/check-mac-client-formal-status.mjs",
+    "--json",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--sendCall",
+    "--clientHost",
+    args.clientHost,
+    "--clientPort",
+    String(args.clientPort),
+    "--timeoutMs",
+    String(Math.min(args.timeoutMs, 60000)),
+    "--server",
+    args.server,
+  ];
+  if (args.forceCall) sendArgs.push("--forceCall");
+  if (args.allowDirty) sendArgs.push("--allowDirty");
+  return sendArgs;
+}
+
 function makeDiscoveryRetryCommand(args) {
   const command = [
     "node scripts/mac/run-mac-client-formal-smoke.mjs",
@@ -501,6 +535,50 @@ function runBrowserSmoke(args, password) {
   });
 }
 
+function runSendCall(args) {
+  const sendArgs = makeSendCallArgs(args);
+  if (sendArgs.length === 0) {
+    return {
+      attempted: false,
+      ok: false,
+      exitCode: null,
+      payload: null,
+      parseError: "",
+      stdout: "",
+      stderr: "",
+      error: "Windows host is required before sending a board call.",
+    };
+  }
+  const result = spawnSync(process.execPath, sendArgs, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: Math.max(Math.min(args.timeoutMs, 60000) + 5000, 10000),
+    maxBuffer: 8 * 1024 * 1024,
+    env: {
+      ...process.env,
+      LAN_DUAL_PASSWORD: "",
+    },
+  });
+  const stdout = String(result.stdout || "").trim();
+  let payload = null;
+  let parseError = "";
+  try {
+    payload = JSON.parse(stdout);
+  } catch (error) {
+    parseError = error.message;
+  }
+  return {
+    attempted: true,
+    ok: result.status === 0 && Boolean(payload?.sentCall?.ok),
+    exitCode: result.status,
+    payload,
+    parseError,
+    stdout,
+    stderr: String(result.stderr || ""),
+    error: payload?.error?.message || parseError || String(result.stderr || "").trim(),
+  };
+}
+
 function makeBoardSummary(report) {
   const target = report.args.host ? `${report.args.host}:${report.args.port}` : "<missing Windows host>";
   const discoveryText = report.discovery?.requested
@@ -515,7 +593,11 @@ function makeBoardSummary(report) {
   }
   if (report.preflightOnly || report.dryRun) {
     const sendCallText = report.commands?.sendCall && report.preflight?.readyToCall
-      ? ` Coordinate first if Windows needs a board call: ${report.commands.sendCall}.`
+      ? report.sentCall?.ok
+        ? " Agent Link Board call was sent."
+        : report.sentCall?.attempted
+          ? ` Agent Link Board call was not sent: ${report.sentCall.error || "sendCall failed"}.`
+        : ` Coordinate first if Windows needs a board call: ${report.commands.sendCall}.`
       : "";
     const nextText = report.commands?.browserSmoke
       ? `Next: run with --promptPassword when ready to authenticate; command=${report.commands.browserSmoke}.${sendCallText}`
@@ -575,6 +657,8 @@ function makeReport(args, preflight) {
       skipBoard: args.skipBoard,
       allowDirty: args.allowDirty,
       allowPreflightWarnings: args.allowPreflightWarnings,
+      sendCall: args.sendCall,
+      forceCall: args.forceCall,
       skipAudio: args.skipAudio,
       skipFileClipboard: args.skipFileClipboard,
       allowClipboardFallback: args.allowClipboardFallback,
@@ -598,7 +682,25 @@ async function main() {
     printHelp();
     return;
   }
-  const args = parseArgs(process.argv);
+  let args;
+  try {
+    args = parseArgs(process.argv);
+  } catch (error) {
+    const message = redact(error.message, process.env.LAN_DUAL_PASSWORD || "");
+    if (process.argv.includes("--json")) {
+      console.log(JSON.stringify({
+        ok: false,
+        checkedAt: new Date().toISOString(),
+        error: { message },
+      }, null, 2));
+    } else if (process.argv.includes("--boardSummary")) {
+      console.log(`Mac client browser smoke blocked: ${message}. No password was requested or sent; inject was not executed.`);
+    } else {
+      console.error(`[FAIL] ${message}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
   let discovery = { requested: false };
   try {
     discovery = runDiscovery(args);
@@ -640,6 +742,23 @@ async function main() {
     }
     if (args.preflightOnly) {
       report.ok = preflight.exitCode === 0;
+      if (args.sendCall) {
+        if (!preflight.payload?.readyToCall) {
+          throw new Error("formal checklist is not readyToCall; refusing to send Agent Link Board call.");
+        }
+        const sentCall = runSendCall(args);
+        report.sentCall = {
+          attempted: sentCall.attempted,
+          ok: sentCall.ok,
+          exitCode: sentCall.exitCode,
+          payload: sentCall.payload?.sentCall?.payload || sentCall.payload?.callPayload || null,
+          boardCallBeforeSend: sentCall.payload?.boardCallBeforeSend || null,
+          error: sentCall.ok ? "" : redact(sentCall.error || "sendCall failed", process.env.LAN_DUAL_PASSWORD || ""),
+        };
+        if (!sentCall.ok) {
+          throw new Error(`sendCall failed: ${report.sentCall.error}`);
+        }
+      }
     } else if (args.dryRun) {
       report.ok = true;
     } else {
