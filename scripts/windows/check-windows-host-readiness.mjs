@@ -496,10 +496,13 @@ function formatCapabilities(capabilities = {}) {
   const audio = capabilities.audio || {};
   const input = capabilities.input || {};
   const clipboard = capabilities.clipboard || {};
+  const reverse = capabilities.reverseControl || {};
+  const reverseMode = reverse.mode || (reverse.supported === false ? "disabled" : "unknown");
   const parts = [
     `screen=${screen.capturePipeline || screen.mode || screen.requestedMode || "unknown"}`,
     `audio=${audio.mode || audio.backend || "unknown"}`,
     `input=${input.mode || input.backend || "unknown"}`,
+    `reverse=${reverseMode}`,
     `clipboard=${clipboard.text || clipboard.file ? "on" : "unknown"}`,
   ];
   return parts.join(" ");

@@ -248,6 +248,10 @@ async function main() {
   assert(jsonSummary.boardSummary.includes("call=CALLING Mac Codex->Windows Codex"), "JSON boardSummary should include active currentCall");
   assert(!jsonSummary.boardSummary.includes("--status --json"), "JSON boardSummary should not echo call command");
   assert(jsonSummary.results.some((result) => result.label === "Windows host runtime"), "JSON results missing runtime check");
+  const runtimeResult = jsonSummary.results.find((result) => result.label === "Windows host runtime");
+  if (runtimeResult?.summary?.includes("screen=")) {
+    assert(runtimeResult.summary.includes("reverse="), `runtime summary missing reverse-control policy: ${runtimeResult.summary}`);
+  }
   assertNoSecretLeak(jsonRun.stdout, "readiness --json stdout");
   assertNoSecretLeak(jsonRun.stderr, "readiness --json stderr");
 

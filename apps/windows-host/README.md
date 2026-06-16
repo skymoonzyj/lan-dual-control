@@ -56,6 +56,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-contro
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -PromptPassword -RequirePassword -Wasapi
 ```
 
+一键反控接收策略默认是安全 `deny`：认证后的反控请求会返回 `LAN008`，提示需要用户确认，控制方向不会自动切换。需要可信局域网实验短测自动同意时，必须显式传 `--reverseControlMode accept` / `-ReverseControlMode accept`；需要完全关闭反控能力声明时，用 `disabled`。启动计划、`--status --json` 和 `--status --boardSummary` 都会显示当前策略。
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --promptPassword --requirePassword --reverseControlMode deny
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -PromptPassword -RequirePassword -ReverseControlMode accept
+```
+
 需要先确认会用什么地址和参数、但不真正启动服务时：
 
 ```powershell
@@ -130,7 +137,7 @@ $env:LAN_DUAL_HOST="0.0.0.0"
 $env:LAN_DUAL_PORT="43770"
 $env:LAN_DUAL_PASSWORD="demo-password"
 $env:LAN_DUAL_BUILD_ID="my-build-id" # 可选；不设置时启动助手会用当前 git short hash
-$env:LAN_DUAL_WINDOWS_REVERSE_CONTROL_MODE="deny" # 默认安全拒绝；accept 仅用于可信局域网实验短测
+$env:LAN_DUAL_WINDOWS_REVERSE_CONTROL_MODE="deny" # deny 默认安全拒绝；accept 仅用于可信局域网实验短测；disabled 声明不支持反控
 node .\server.mjs
 ```
 

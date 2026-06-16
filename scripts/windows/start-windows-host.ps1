@@ -8,6 +8,8 @@ param(
   [string] $AudioMode = "",
   [ValidateSet("", "auto", "log", "system")]
   [string] $InputMode = "",
+  [ValidateSet("deny", "accept", "disabled")]
+  [string] $ReverseControlMode = "deny",
   [string] $Ffmpeg = "",
   [string] $H264Encoder = "",
   [string] $WgcHelper = "",
@@ -47,6 +49,7 @@ $nodeArgs = @(
 if ($ScreenMode) { $nodeArgs += @("--screenMode", $ScreenMode) }
 if ($AudioMode) { $nodeArgs += @("--audioMode", $AudioMode) }
 if ($InputMode) { $nodeArgs += @("--inputMode", $InputMode) }
+if ($ReverseControlMode) { $nodeArgs += @("--reverseControlMode", $ReverseControlMode) }
 if ($Ffmpeg) { $nodeArgs += @("--ffmpeg", $Ffmpeg) }
 if ($H264Encoder) { $nodeArgs += @("--h264Encoder", $H264Encoder) }
 if ($WgcHelper) { $nodeArgs += @("--wgcHelper", $WgcHelper) }

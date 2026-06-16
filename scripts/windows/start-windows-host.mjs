@@ -28,6 +28,7 @@ const defaults = {
   wgcRepeatLastFrameMode: process.env.LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE || "",
   audioMode: process.env.LAN_DUAL_WINDOWS_AUDIO_MODE || "",
   inputMode: process.env.LAN_DUAL_WINDOWS_INPUT_MODE || "",
+  reverseControlMode: process.env.LAN_DUAL_WINDOWS_REVERSE_CONTROL_MODE || "deny",
   ffmpeg: process.env.LAN_DUAL_FFMPEG || "",
   buildId: process.env.LAN_DUAL_BUILD_ID || "",
   timeoutMs: 8000,
@@ -122,6 +123,7 @@ function parseArgs(argv) {
   args.wgcRepeatLastFrameMode = normalizeMode(args.wgcRepeatLastFrameMode, ["full", "signal"], "");
   args.audioMode = normalizeMode(args.audioMode, ["mock", "wasapi", "dshow"], "");
   args.inputMode = normalizeMode(args.inputMode, ["auto", "log", "system"], "");
+  args.reverseControlMode = normalizeReverseControlMode(args.reverseControlMode);
   args.ffmpeg = resolveFfmpegCommand(String(args.ffmpeg || "").trim());
   args.buildId = String(args.buildId || "").trim() || getGitBuildId() || "dev";
   args.server = String(args.server || defaults.server).trim() || defaults.server;
@@ -151,6 +153,8 @@ Options:
   --wgcRepeatLastFrameMode <mode>  full | signal
   --audioMode <mode>      mock | wasapi | dshow
   --inputMode <mode>      auto | log | system
+  --reverseControlMode <mode>  deny | accept | disabled. Default: deny.
+                          accept is only for trusted LAN lab tests.
   --ffmpeg <path>         FFmpeg path. Auto-detects C:\\DevTools\\ffmpeg\\bin\\ffmpeg.exe
   --buildId <id>          LAN_DUAL_BUILD_ID. Default: current git short hash.
   --promptPassword        Prompt for LAN_DUAL_PASSWORD without echoing it.
@@ -186,6 +190,17 @@ function normalizeMode(value, allowed, fallback) {
   const normalized = String(value || "").trim().toLowerCase();
   if (!normalized) return fallback;
   return allowed.includes(normalized) ? normalized : fallback;
+}
+
+function normalizeReverseControlMode(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["accept", "auto-accept", "auto_accept", "lab-accept", "test-accept"].includes(normalized)) {
+    return "accept";
+  }
+  if (["disabled", "disable", "off", "false", "0"].includes(normalized)) {
+    return "disabled";
+  }
+  return "deny";
 }
 
 function resolveFfmpegCommand(value) {
@@ -515,6 +530,47 @@ function discoveryInputSummary(discovery) {
   ].join(" ");
 }
 
+function normalizeReverseControlStatus(capabilities = {}) {
+  const policy = capabilities.reverseControlPolicy && typeof capabilities.reverseControlPolicy === "object"
+    ? capabilities.reverseControlPolicy
+    : {};
+  const mode = normalizeReverseControlMode(capabilities.reverseControlMode || policy.mode || "");
+  const supported = capabilities.reverseControl !== undefined
+    ? Boolean(capabilities.reverseControl)
+    : policy.supported !== undefined
+      ? Boolean(policy.supported)
+      : mode !== "disabled";
+  const requiresConfirmation = policy.requiresConfirmation !== undefined
+    ? Boolean(policy.requiresConfirmation)
+    : mode !== "accept";
+  const autoAccept = policy.autoAccept !== undefined
+    ? Boolean(policy.autoAccept)
+    : mode === "accept";
+  return {
+    supported,
+    mode,
+    requiresConfirmation,
+    autoAccept,
+    policy,
+  };
+}
+
+function reverseControlSummary(reverse = normalizeReverseControlStatus()) {
+  if (!reverse.supported || reverse.mode === "disabled") {
+    return "mode=disabled supported=off";
+  }
+  if (reverse.autoAccept || reverse.mode === "accept") {
+    return "mode=accept supported=on autoAccept=on labOnly=on";
+  }
+  return "mode=deny supported=on requiresConfirmation=on";
+}
+
+function reverseControlBoardToken(reverse = normalizeReverseControlStatus()) {
+  if (!reverse.supported || reverse.mode === "disabled") return "disabled";
+  if (reverse.autoAccept || reverse.mode === "accept") return "accept-lab";
+  return "deny-confirm";
+}
+
 function discoveryClipboardSummary(discovery) {
   const capabilities = discovery?.capabilities || {};
   const clipboard = capabilities.clipboard || {};
@@ -584,10 +640,11 @@ function makeBoardSummary(status) {
   const audio = status.capabilities?.audio || {};
   const input = status.capabilities?.input || {};
   const clipboard = status.capabilities?.clipboard || {};
+  const reverse = status.capabilities?.reverseControl || normalizeReverseControlStatus();
   const next = targets[0]?.formalCommand || targets[0]?.command || "Mac should rerun readiness after a LAN IPv4 address is available.";
   const readiness = targets[0]?.command ? ` Readiness: ${targets[0].command}.` : "";
   const sendCall = targets[0]?.sendCallCommand ? ` SendCall when ready: ${targets[0].sendCallCommand}.` : "";
-  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness}${sendCall} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. Do not send passwords on Agent Link Board.`;
+  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness}${sendCall} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. Do not send passwords on Agent Link Board.`;
 }
 
 function applyDiscoveryStatus(status, discovery, args) {
@@ -610,7 +667,7 @@ function applyDiscoveryStatus(status, discovery, args) {
     audio: discovery?.capabilities?.audio || {},
     input: discovery?.capabilities?.input || {},
     clipboard: discoveryClipboardStatus(discovery),
-    reverseControl: Boolean(discovery?.capabilities?.reverseControl),
+    reverseControl: normalizeReverseControlStatus(discovery?.capabilities || {}),
     mock: Boolean(discovery?.capabilities?.mock),
   };
   const screen = discovery?.capabilities?.screen || {};
@@ -730,6 +787,7 @@ async function printStatus(args) {
     console.log(`[INFO] Screen: ${discoveryScreenSummary(discoveryLike)}`);
     console.log(`[INFO] Audio: ${discoveryAudioSummary(discoveryLike)}`);
     console.log(`[INFO] Input: ${discoveryInputSummary(discoveryLike)}`);
+    console.log(`[INFO] Reverse control: ${reverseControlSummary(status.capabilities?.reverseControl)}`);
     console.log(`[INFO] Clipboard: ${discoveryClipboardSummary(discoveryLike)}`);
     for (const warning of status.warnings.filter((line) => !line.startsWith("Running Windows host build "))) {
       console.log(`[WARN] ${warning}`);
@@ -856,6 +914,7 @@ function makeLaunchEnv(args) {
   if (args.wgcRepeatLastFrameMode) env.LAN_DUAL_WINDOWS_WGC_REPEAT_LAST_FRAME_MODE = args.wgcRepeatLastFrameMode;
   if (args.audioMode) env.LAN_DUAL_WINDOWS_AUDIO_MODE = args.audioMode;
   if (args.inputMode) env.LAN_DUAL_WINDOWS_INPUT_MODE = args.inputMode;
+  env.LAN_DUAL_WINDOWS_REVERSE_CONTROL_MODE = args.reverseControlMode;
   if (args.ffmpeg) env.LAN_DUAL_FFMPEG = args.ffmpeg;
   return env;
 }
@@ -888,6 +947,7 @@ function printLaunchPlan(args) {
   console.log(`[INFO] Screen mode: ${args.screenMode || "auto"}`);
   console.log(`[INFO] Audio mode: ${args.audioMode || "default mock; use --wasapi for system audio"}`);
   console.log(`[INFO] Input mode: ${args.inputMode || "auto"}`);
+  console.log(`[INFO] Reverse control mode: ${args.reverseControlMode}${args.reverseControlMode === "accept" ? " (trusted LAN lab auto-accept)" : ""}`);
   if (args.ffmpeg) {
     console.log(`[INFO] FFmpeg: ${args.ffmpeg}`);
   } else {

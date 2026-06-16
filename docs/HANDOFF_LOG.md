@@ -19,6 +19,52 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16
+开发端：Windows Codex
+本轮目标：把 Windows host 反控策略接入启动器、状态诊断和 readiness 摘要，避免 Mac 反控 Windows 前看不出当前是否会自动同意。
+完成内容：
+- `start-windows-host.mjs` 新增 `--reverseControlMode deny|accept|disabled`，默认仍是安全 `deny`。
+- `start-windows-host.ps1` 新增 `-ReverseControlMode` 参数，并透传给 Node 启动助手。
+- 启动 dry-run 会显示当前反控策略；`accept` 会标注为 trusted LAN lab auto-accept，避免误当成默认安全路径。
+- `--status` 普通输出新增 `Reverse control` 行；`--status --json` 的 `capabilities.reverseControl` 现在包含 `supported/mode/requiresConfirmation/autoAccept/policy`。
+- `--status --boardSummary` 在线摘要新增 `reverse=deny-confirm|accept-lab|disabled`，readiness runtime 摘要同步显示 `reverse=<mode>`。
+- 启动助手和 readiness 专项回归已补反控策略断言。
+- Windows host README、当前状态、下一步和任务板已同步；默认不会自动同意反控，完整确认 UI 仍未产品化。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/check-windows-host-readiness.mjs`
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- `node --check scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `node scripts/windows/start-windows-host.mjs --help`
+- `pwsh -NoProfile -Command '$tokens = $null; $errors = $null; [System.Management.Automation.Language.Parser]::ParseFile("E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1", [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count -gt 0) { exit 1 }; "parse-ok"'`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 90000 --readinessTimeoutMs 8000`
+- `node scripts/windows/test-windows-script-help.mjs --timeoutMs 10000`（全量 90 条帮助命令通过）
+- `node scripts/windows/start-windows-host.mjs --dryRun --reverseControlMode accept`
+- `node scripts/windows/start-windows-host.mjs --status --json --host 127.0.0.1 --port 43770`（当前本机离线，按预期 exit 1 并输出离线 JSON）
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows apps/windows-host docs`（无冲突标记）
+遗留问题：
+- 本轮只做策略可见化和启动参数；真正由 Windows 桌面确认后临时同意、并让 Mac 端自动打开/接管 Windows 的完整产品流仍待后续实现。
+下一步建议：
+- 后续接 Windows 桌面“收到 Mac 反控请求”确认入口时，继续保持默认 `deny-confirm`，只在用户本机确认后短时允许。
+是否改了协议：否。只消费已有 `reverseControlMode` / `reverseControlPolicy` 能力字段，并扩展本地工具输出。
+是否需要另一端配合：当前不需要；Mac 端真连验收时只需读取摘要中的 `reverse=...`。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 22:55
 开发端：Windows Codex
 本轮目标：让 Windows host 的 `reverse_control_request` 不再停留在“尚未实装”的模糊拒绝，而是有明确安全策略和可回归状态回执。

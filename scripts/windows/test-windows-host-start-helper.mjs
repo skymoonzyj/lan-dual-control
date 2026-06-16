@@ -203,8 +203,26 @@ async function assertDryRunWithEnvPassword(timeoutMs) {
   }
   assertIncludes(output, "Dry run finished", "dry run with env password");
   assertIncludes(output, "Build ID: start-helper-test", "dry run with env password");
+  assertIncludes(output, "Reverse control mode: deny", "dry run with env password");
   assertNotIncludes(output, "demo password", "dry run with env password");
   print("OK", "Environment password allows dry run without demo warning");
+}
+
+async function assertDryRunReverseControlMode(timeoutMs) {
+  const result = await runNode(["--requirePassword", "--dryRun", "--reverseControlMode", "accept"], {
+    timeoutMs,
+    env: {
+      LAN_DUAL_PASSWORD: "test-password",
+      LAN_DUAL_BUILD_ID: "start-helper-reverse-control-test",
+    },
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (result.exitCode !== 0 || result.timedOut) {
+    throw new Error(`Reverse control mode dry run failed.\n${output}`);
+  }
+  assertIncludes(output, "Reverse control mode: accept (trusted LAN lab auto-accept)", "reverse control dry run");
+  assertNotIncludes(output, "test-password", "reverse control dry run");
+  print("OK", "Dry run shows explicit reverse-control policy");
 }
 
 async function assertDryRunWgcH264BridgeOptions(timeoutMs) {
@@ -480,6 +498,7 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         assertIncludes(statusOutput, "Screen:", "online status");
         assertIncludes(statusOutput, "Audio:", "online status");
         assertIncludes(statusOutput, "Input:", "online status");
+        assertIncludes(statusOutput, "Reverse control: mode=deny supported=on requiresConfirmation=on", "online status");
         assertIncludes(statusOutput, "Clipboard:", "online status");
         assertIncludes(statusOutput, "Mac formal checklist command:", "online status");
         assertIncludes(statusOutput, "check-mac-client-formal-status.mjs", "online status");
@@ -506,8 +525,14 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         if (!parsed.capabilities?.screen || !parsed.capabilities?.audio || !parsed.capabilities?.input || !parsed.capabilities?.clipboard) {
           throw new Error(`Online JSON status did not include expected capability groups.\n${jsonResult.stdout}`);
         }
+        if (parsed.capabilities?.reverseControl?.mode !== "deny" || parsed.capabilities?.reverseControl?.requiresConfirmation !== true) {
+          throw new Error(`Online JSON status did not include default reverse-control policy.\n${jsonResult.stdout}`);
+        }
         if (!String(parsed.boardSummary || "").includes("Windows host readiness: online") || !String(parsed.boardSummary || "").includes("Do not send passwords")) {
           throw new Error(`Online JSON status did not include expected board summary.\n${jsonResult.stdout}`);
+        }
+        if (!String(parsed.boardSummary || "").includes("reverse=deny-confirm")) {
+          throw new Error(`Online JSON board summary did not include reverse-control policy.\n${jsonResult.stdout}`);
         }
         if (!Array.isArray(parsed.macClientReadinessCommands) || parsed.macClientReadinessCommands.length < 1) {
           throw new Error(`Online JSON status did not include Mac client readiness commands.\n${jsonResult.stdout}`);
@@ -542,6 +567,7 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
           throw new Error(`Online board summary status check failed.\n${boardOutput}\nHost output:\n${output}`);
         }
         assertIncludes(boardResult.stdout, "Windows host readiness: online", "online board summary");
+        assertIncludes(boardResult.stdout, "reverse=deny-confirm", "online board summary");
         assertIncludes(boardResult.stdout, "check-mac-client-readiness.mjs", "online board summary");
         assertIncludes(boardResult.stdout, "check-mac-client-formal-status.mjs", "online board summary");
         assertIncludes(boardResult.stdout, "--sendCall", "online board summary");
@@ -667,6 +693,7 @@ async function main() {
   await assertMissingPasswordFails(args.timeoutMs);
   await assertPromptPasswordFailsWithoutTty(args.timeoutMs);
   await assertDryRunWithEnvPassword(args.timeoutMs);
+  await assertDryRunReverseControlMode(args.timeoutMs);
   await assertDryRunWgcH264BridgeOptions(args.timeoutMs);
   await assertStatusOfflineNeedsNoPassword(args.timeoutMs);
   await assertStatusCheckBoardCurrentCall(args.timeoutMs);
