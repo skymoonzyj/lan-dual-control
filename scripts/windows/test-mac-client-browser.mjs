@@ -40,6 +40,7 @@ const defaults = {
   maxAudioFrameMs: 0,
   maxAudioPlaybackMs: 0,
   observeVideoMs: 0,
+  testReconnectNow: false,
   minObservedVideoFrames: 0,
   minObservedVideoFps: 0,
   expectRepeatSignalVideo: false,
@@ -108,6 +109,7 @@ Options:
   --maxReconnectRestoreMs <ms>     Maximum reconnect restore time. Default: off
   --maxInitialVideoMs <ms>         Maximum initial visible video time. Default: off
   --observeVideoMs <ms>            Observe sustained video after connect. Default: off
+  --testReconnectNow               In --expectReconnect, click the Mac client "立即重连" button before the auto timer fires.
   --minObservedVideoFrames <n>     Minimum frames during --observeVideoMs.
   --minObservedVideoFps <fps>      Minimum FPS during --observeVideoMs.
   --expectRepeatSignalVideo        Start WGC mock helper with repeat signal frames and require Mac client diagnostics.
@@ -225,6 +227,11 @@ function parseArgs(argv) {
       continue;
     }
     if (key === "expectReconnect") {
+      args.expectReconnect = true;
+      continue;
+    }
+    if (key === "testReconnectNow") {
+      args.testReconnectNow = true;
       args.expectReconnect = true;
       continue;
     }
@@ -779,13 +786,15 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
     async () => {
       const value = await evaluate(session, buildSnapshotExpression());
       const reconnecting = value.connection.includes("自动重连") || value.connection.includes("重连");
+      const countdownVisible = value.connection.includes("秒后自动重连") && value.reconnectMetric.includes("秒后重连");
+      const reconnectButtonVisible = !value.reconnectNowHidden && !value.reconnectNowDisabled;
       const logVisible = value.logs.some((line) => line.includes("自动重连"));
       const surfaceCleared = value.video === "连接中断" && !value.surfaceVisible && !value.surfaceHasFrame;
       const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
       const runtimeCleared = value.remoteRuntime === "未提供";
       const remoteCleared = value.remote === "连接中断";
       const audioCleared = value.audioToggleChecked ? value.audio === "未接收" : value.audio === "未开启";
-      return (reconnecting || logVisible) && surfaceCleared && clipboardButtonsDisabled && runtimeCleared && remoteCleared && audioCleared ? value : null;
+      return (reconnecting || logVisible) && countdownVisible && reconnectButtonVisible && surfaceCleared && clipboardButtonsDisabled && runtimeCleared && remoteCleared && audioCleared ? value : null;
     },
     args.timeoutMs,
     "Mac client reconnect scheduling",
@@ -798,6 +807,20 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
     "temporary Windows host port release",
   );
   const restartedHost = await startWindowsHost(args, repoRoot);
+  if (args.testReconnectNow) {
+    await clickElement(session, "#reconnectNowButton");
+    const reconnectNowSnapshot = await waitFor(
+      async () => {
+        const value = await evaluate(session, buildSnapshotExpression());
+        const clicked = value.logs.some((line) => line.includes("立即重连"));
+        const reconnectStartedOrRestored = value.connection.includes("重连") || value.connection.includes("已连接");
+        return clicked && value.reconnectNowHidden && reconnectStartedOrRestored ? value : null;
+      },
+      args.timeoutMs,
+      "Mac client reconnect-now click",
+    );
+    print("OK", `Reconnect now clicked: ${reconnectNowSnapshot.connection}`);
+  }
 
   const reconnectedSnapshot = await waitFor(
     async () => {
@@ -951,6 +974,8 @@ function buildSnapshotExpression() {
       discoverButtonDisabled: document.querySelector("#discoverButton")?.disabled || false,
       discoverButtonText: document.querySelector("#discoverButton")?.textContent || "",
       connectButtonDisabled: document.querySelector("#connectButton")?.disabled || false,
+      reconnectNowHidden: document.querySelector("#reconnectNowButton")?.hidden !== false,
+      reconnectNowDisabled: document.querySelector("#reconnectNowButton")?.disabled !== false,
       disconnectButtonDisabled: document.querySelector("#disconnectButton")?.disabled || false,
       sendClipboardButtonDisabled: document.querySelector("#sendClipboardButton")?.disabled || false,
       sendClipboardFilesButtonDisabled: document.querySelector("#sendClipboardFilesButton")?.disabled || false,
@@ -999,6 +1024,7 @@ function installWebSocketSendRecorderExpression() {
   return `(() => {
     window.__lanDualSentMessages = [];
     window.__lanDualReceivedMessages = [];
+    window.__lanDualLastReceivedByType = {};
     window.__lanDualCounters = {
       videoFrames: 0,
       audioFrames: 0,
@@ -1015,6 +1041,9 @@ function installWebSocketSendRecorderExpression() {
     const binaryVideoMagic = [76, 68, 67, 86, 49, 10];
     const rememberReceivedMessage = (parsed) => {
       window.__lanDualReceivedMessages.push(parsed);
+      if (parsed?.type) {
+        window.__lanDualLastReceivedByType[parsed.type] = parsed;
+      }
       if (parsed.type === "video_frame") {
         window.__lanDualCounters.videoFrames += 1;
         if (String(parsed.encoding || "").toLowerCase() === "binary-jpeg" || parsed.binaryPayloadBytes > 0) {
@@ -1162,6 +1191,7 @@ async function verifyMacClientConnectCancel({ args, session }) {
     `(() => {
       window.__lanDualSentMessages = [];
       window.__lanDualReceivedMessages = [];
+      window.__lanDualLastReceivedByType = {};
       return true;
     })()`,
   );
@@ -1215,6 +1245,7 @@ async function verifyMacClientConnectCancel({ args, session }) {
     `(() => {
       window.__lanDualSentMessages = [];
       window.__lanDualReceivedMessages = [];
+      window.__lanDualLastReceivedByType = {};
       return true;
     })()`,
   );
@@ -1265,6 +1296,7 @@ async function verifyMacClientFileClipboardRejectCancel({ args, session, uploadD
     `(() => {
       window.__lanDualSentMessages = [];
       window.__lanDualReceivedMessages = [];
+      window.__lanDualLastReceivedByType = {};
       window.__lanDualFileReadDelayMs = 650;
       if (!window.__lanDualOriginalBlobArrayBuffer) {
         window.__lanDualOriginalBlobArrayBuffer = Blob.prototype.arrayBuffer;
@@ -1388,6 +1420,7 @@ async function verifyMacClientFileClipboardDisconnectCancel({ args, session, upl
     `(() => {
       window.__lanDualSentMessages = [];
       window.__lanDualReceivedMessages = [];
+      window.__lanDualLastReceivedByType = {};
       window.__lanDualFileReadDelayMs = 650;
       if (!window.__lanDualOriginalBlobArrayBuffer) {
         window.__lanDualOriginalBlobArrayBuffer = Blob.prototype.arrayBuffer;
@@ -1458,7 +1491,14 @@ async function run() {
   const args = parseArgs(process.argv);
   const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
   const clientOrigin = `http://127.0.0.1:${args.clientPort}`;
-  const clientUrl = `http://127.0.0.1:${args.clientPort}/${args.disableBinaryVideo ? "?binaryVideo=0" : ""}`;
+  const clientParams = new URLSearchParams();
+  if (args.disableBinaryVideo) {
+    clientParams.set("binaryVideo", "0");
+  }
+  if (args.testReconnectNow) {
+    clientParams.set("reconnectDelayScale", "60");
+  }
+  const clientUrl = `http://127.0.0.1:${args.clientPort}/${clientParams.toString() ? `?${clientParams.toString()}` : ""}`;
   const userDataDir = await mkdtemp(join(tmpdir(), "lan-dual-mac-client-edge-"));
   let windowsHost = null;
   let macClientServer = null;
@@ -1947,7 +1987,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
           session,
           `(() => [...(window.__lanDualReceivedMessages || [])]
             .reverse()
-            .find((message) => message.type === "display_settings_ack"))()`,
+            .find((message) => message.type === "display_settings_ack") || window.__lanDualLastReceivedByType?.display_settings_ack)()`,
         );
         const h264FallbackActive = await evaluate(
           session,
@@ -1961,10 +2001,13 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
         const expectedDisplayVideoTransport = args.disableBinaryVideo
           ? "json"
           : expectedDisplayVideoCodec === "h264" ? "binary-h264" : "binary-jpeg";
-        const expectedAckVideoTransport = String(latestDisplayAck?.videoCodec || "").toLowerCase() === "h264"
+        const latestAckVideoCodec = String(latestDisplayAck?.videoCodec || "").toLowerCase();
+        const expectedAckVideoTransport = latestAckVideoCodec === "h264"
           ? (args.disableBinaryVideo ? "json" : "binary-h264")
-          : (args.disableBinaryVideo ? "json" : "binary-jpeg");
-        const expectedAckH264Level = String(latestDisplayAck?.videoCodec || "").toLowerCase() === "h264" ? "5.1" : "";
+          : ["jpeg", "mjpeg"].includes(latestAckVideoCodec)
+            ? (args.disableBinaryVideo ? "json" : "binary-jpeg")
+            : "json";
+        const expectedAckH264Level = latestAckVideoCodec === "h264" ? "5.1" : "";
         const displaySupportedTransportsOk = args.disableBinaryVideo
           ? Array.isArray(latestDisplaySettings?.supportedVideoTransports) &&
             latestDisplaySettings.supportedVideoTransports.length === 1 &&
@@ -2008,7 +2051,27 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       },
       args.timeoutMs,
       "Mac client display settings update",
-    );
+    ).catch(async (error) => {
+      const latestDisplaySettings = await evaluate(
+        session,
+        `(() => [...(window.__lanDualSentMessages || [])]
+          .reverse()
+          .find((message) => message.type === "display_settings"))()`,
+      ).catch(() => null);
+      const latestDisplayAck = await evaluate(
+        session,
+        `(() => [...(window.__lanDualReceivedMessages || [])]
+          .reverse()
+          .find((message) => message.type === "display_settings_ack") || window.__lanDualLastReceivedByType?.display_settings_ack)()`,
+      ).catch(() => null);
+      if (lastSnapshot) {
+        print("INFO", `Last display settings status: ${lastSnapshot.displaySettings}`);
+        print("INFO", `Last selected settings: ${lastSnapshot.qualityPreset}/${lastSnapshot.resolution}/${lastSnapshot.fps}/${lastSnapshot.bandwidth}`);
+      }
+      print("INFO", `Latest display_settings: ${JSON.stringify(latestDisplaySettings)}`);
+      print("INFO", `Latest display_settings_ack: ${JSON.stringify(latestDisplayAck)}`);
+      throw error;
+    });
     print("OK", `Display settings: ${displaySettingsSnapshot.displaySettings}`);
 
     const postSettingsObserve = await observeMacClientVideo({

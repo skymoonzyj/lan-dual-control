@@ -4,6 +4,7 @@ const elements = {
   passwordInput: document.querySelector("#passwordInput"),
   discoverButton: document.querySelector("#discoverButton"),
   connectButton: document.querySelector("#connectButton"),
+  reconnectNowButton: document.querySelector("#reconnectNowButton"),
   disconnectButton: document.querySelector("#disconnectButton"),
   recentConnectionSelect: document.querySelector("#recentConnectionSelect"),
   useRecentConnectionButton: document.querySelector("#useRecentConnectionButton"),
@@ -102,6 +103,9 @@ const state = {
   discoveryRequestId: 0,
   reconnectAttempts: 0,
   reconnectTimer: null,
+  reconnectCountdownTimer: null,
+  reconnectNextAt: 0,
+  reconnectReason: "",
   reconnectStableTimer: null,
   remoteRuntime: null,
   clipboardWatchTimer: null,
@@ -118,6 +122,10 @@ const clipboardWatchIntervalMs = 1200;
 const maxReconnectAttempts = 3;
 const reconnectBaseDelayMs = 1200;
 const reconnectStableMs = 10000;
+const reconnectDelayScale = (() => {
+  const value = Number(new URLSearchParams(window.location.search).get("reconnectDelayScale") || "1");
+  return Number.isFinite(value) && value > 0 ? value : 1;
+})();
 const binaryVideoMagic = "LDCV1\n";
 const videoQualityPresets = {
   smooth: { resolution: "1920x1080", fps: "30", bandwidth: "10" },
@@ -155,10 +163,18 @@ function setConnectionStatus(text) {
   elements.connectionStatus.textContent = text;
 }
 
+function setReconnectNowVisible(visible) {
+  elements.reconnectNowButton.hidden = !visible;
+  elements.reconnectNowButton.disabled = !visible;
+}
+
 function setConnected(connected) {
   state.connected = connected;
   elements.connectButton.disabled = connected;
   elements.disconnectButton.disabled = !connected;
+  if (connected) {
+    setReconnectNowVisible(false);
+  }
   setConnectionStatus(connected ? "已连接" : "未连接");
   updateTextClipboardButton();
   updateFileClipboardButton();
@@ -320,9 +336,36 @@ function renderSessionDiagnostics() {
   }
 
   elements.reconnectMetric.textContent = state.reconnectTotal > 0
-    ? `已尝试 ${state.reconnectTotal} 次 · 当前 ${state.reconnectAttempts}/${maxReconnectAttempts}`
+    ? `已尝试 ${state.reconnectTotal} 次 · 当前 ${state.reconnectAttempts}/${maxReconnectAttempts}${formatReconnectCountdownSuffix()}`
     : "0 次";
   elements.remoteRuntimeMetric.textContent = formatRemoteRuntimeDiagnostics(state.remoteRuntime);
+}
+
+function reconnectDelayForAttempt(attempt) {
+  return Math.max(1, Math.round(reconnectBaseDelayMs * attempt * reconnectDelayScale));
+}
+
+function reconnectSecondsRemaining() {
+  if (!state.reconnectNextAt) {
+    return 0;
+  }
+  return Math.max(0, Math.ceil((state.reconnectNextAt - Date.now()) / 1000));
+}
+
+function formatReconnectCountdownSuffix() {
+  const remainingSeconds = reconnectSecondsRemaining();
+  return remainingSeconds > 0 ? ` · ${remainingSeconds} 秒后重连` : "";
+}
+
+function renderReconnectCountdown() {
+  if (!state.reconnectNextAt) return;
+  const remainingSeconds = reconnectSecondsRemaining();
+  if (remainingSeconds <= 0) {
+    setConnectionStatus(`正在重连（${state.reconnectAttempts}/${maxReconnectAttempts}）`);
+  } else {
+    setConnectionStatus(`连接中断，${remainingSeconds} 秒后自动重连（${state.reconnectAttempts}/${maxReconnectAttempts}）`);
+  }
+  renderSessionDiagnostics();
 }
 
 function resetVideoSurface(status = "无画面") {
@@ -355,6 +398,13 @@ function clearReconnectTimers() {
     window.clearTimeout(state.reconnectTimer);
     state.reconnectTimer = null;
   }
+  if (state.reconnectCountdownTimer) {
+    window.clearInterval(state.reconnectCountdownTimer);
+    state.reconnectCountdownTimer = null;
+  }
+  state.reconnectNextAt = 0;
+  state.reconnectReason = "";
+  setReconnectNowVisible(false);
   if (state.reconnectStableTimer) {
     window.clearTimeout(state.reconnectStableTimer);
     state.reconnectStableTimer = null;
@@ -828,8 +878,11 @@ function scheduleReconnect(reason) {
 
   state.reconnectAttempts += 1;
   state.reconnectTotal += 1;
-  const delayMs = reconnectBaseDelayMs * state.reconnectAttempts;
-  setConnectionStatus(`连接中断，${Math.round(delayMs / 1000)} 秒后自动重连（${state.reconnectAttempts}/${maxReconnectAttempts}）`);
+  const delayMs = reconnectDelayForAttempt(state.reconnectAttempts);
+  state.reconnectNextAt = Date.now() + delayMs;
+  state.reconnectReason = reason;
+  setReconnectNowVisible(true);
+  renderReconnectCountdown();
   elements.connectButton.disabled = true;
   elements.disconnectButton.disabled = false;
   renderSessionDiagnostics();
@@ -837,8 +890,33 @@ function scheduleReconnect(reason) {
 
   state.reconnectTimer = window.setTimeout(() => {
     state.reconnectTimer = null;
+    if (state.reconnectCountdownTimer) {
+      window.clearInterval(state.reconnectCountdownTimer);
+      state.reconnectCountdownTimer = null;
+    }
+    state.reconnectNextAt = 0;
+    setReconnectNowVisible(false);
     void connect({ reconnect: true });
   }, delayMs);
+  state.reconnectCountdownTimer = window.setInterval(renderReconnectCountdown, 250);
+}
+
+function reconnectNow() {
+  if (!state.reconnectTimer) return;
+  const reason = state.reconnectReason || "手动立即重连";
+  window.clearTimeout(state.reconnectTimer);
+  state.reconnectTimer = null;
+  if (state.reconnectCountdownTimer) {
+    window.clearInterval(state.reconnectCountdownTimer);
+    state.reconnectCountdownTimer = null;
+  }
+  state.reconnectNextAt = 0;
+  state.reconnectReason = "";
+  setReconnectNowVisible(false);
+  setConnectionStatus(`正在重连（${state.reconnectAttempts}/${maxReconnectAttempts}）`);
+  renderSessionDiagnostics();
+  logEvent("立即重连", reason);
+  void connect({ reconnect: true });
 }
 
 function disconnect() {
@@ -2225,6 +2303,7 @@ elements.connectButton.addEventListener("click", () => {
   void connect();
 });
 
+elements.reconnectNowButton.addEventListener("click", reconnectNow);
 elements.disconnectButton.addEventListener("click", disconnect);
 elements.hostInput.addEventListener("input", () => resetEndpointDiscoveryState());
 elements.portInput.addEventListener("input", () => resetEndpointDiscoveryState());

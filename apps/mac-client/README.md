@@ -10,7 +10,7 @@
 - 通过 `/discovery` 发现 Windows 被控端。
 - 通过 WebSocket 完成 `hello`、`auth_request`、`session_offer`。
 - 认证失败时显示远端返回的剩余尝试次数，清理远程画面、远端摘要、音频状态、会话诊断和远端运行信息，并自动释放连接按钮，方便改密码后重连。
-- 意外断线后最多自动重连 3 次，并会在等待重连时清理上一帧远程画面、音频状态和远端运行信息，远端摘要显示“连接中断”；手动断开和认证失败不会自动重连。
+- 意外断线后最多自动重连 3 次，等待期间会显示倒计时和“立即重连”按钮，并会清理上一帧远程画面、音频状态和远端运行信息，远端摘要显示“连接中断”；手动断开和认证失败不会自动重连。
 - 手动断开会停止剪贴板监听、取消正在发送的文件、关闭音频播放、清理上一帧远程画面，并把远端摘要、音频状态、会话诊断和远端运行信息重置为未就绪状态。
 - 显示 Windows host 的 `video_frame`；浏览器支持 WebCodecs 时会优先请求 `h264` / `annexb` 并渲染到 canvas，不支持或连续解码失败时自动请求 MJPEG/JPEG 兜底；二进制视频默认开启，H.264 会声明 `preferredVideoTransport=binary-h264`，JPEG/MJPEG 会声明 `binary-jpeg`，Windows host 支持时可用 WebSocket 二进制帧传输，减少 base64 文本开销；收到 `video_frame.timestamp` 时，视频状态和会话诊断会显示帧到达年龄或时钟偏差；收到 Windows WGC `repeatPreviousFrame` 轻量重复帧时会保持上一帧画面并显示重复计数。
 - 支持画质、分辨率、刷新率和码率设置，当前可选 1080P/2K/4K、30/60/120/144/240 Hz、5/10/15/20/40/50 Mbps；成功连接后修改会立即发送 `display_settings`。
@@ -157,6 +157,6 @@ node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --pro
 
 认证失败路径已固化到页面级自检：`scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3` 会启动正确密码的临时 Windows host，并让 Mac 控制端填错密码，断言页面最终保留 `认证失败 · 剩余 2/3 次`，连接按钮可重试，远端摘要回到“等待发现”，视频表面回到“无画面”，且远端运行信息回到“未提供”。
 
-意外断线自动重连可用 `scripts/windows/test-mac-client-browser.mjs --expectReconnect --mockVideo --allowClipboardFallback --skipFileClipboard --timeoutMs 45000` 做页面级自检：脚本会连接临时 Windows host，杀掉 host 等页面进入自动重连状态，确认远端摘要显示“连接中断”、旧画面已清理且剪贴板发送入口禁用，再用同一端口重启 host 并要求页面恢复到“已连接”。
+意外断线自动重连可用 `scripts/windows/test-mac-client-browser.mjs --expectReconnect --testReconnectNow --mockVideo --allowClipboardFallback --skipFileClipboard --timeoutMs 45000` 做页面级自检：脚本会连接临时 Windows host，杀掉 host 等页面进入带倒计时的自动重连状态，确认“立即重连”可见、远端摘要显示“连接中断”、旧画面已清理且剪贴板发送入口禁用，再用同一端口重启 host，点击立即重连并要求页面恢复到“已连接”。
 
 体验耗时指标也已纳入页面级自检：脚本会打印首次视频可见耗时；加 `--maxInitialVideoMs <毫秒>` 可把首帧耗时变成强校验。搭配 `--expectReconnect` 时还会打印意外断线到恢复画面的总耗时；加 `--maxReconnectRestoreMs <毫秒>` 可强制要求自动恢复不超过指定阈值。
