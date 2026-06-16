@@ -19,6 +19,7 @@ const defaults = {
   qualityPreset: "balanced",
   videoDurationMs: 4000,
   videoTimeoutMs: 25000,
+  progressIntervalMs: 10000,
   videoMinFrames: 140,
   videoMinFps: 35,
   videoRetries: 1,
@@ -77,6 +78,7 @@ Options:
   --qualityPreset <name>                smooth | balanced | sharp | custom
   --videoDurationMs <ms>                Video observation duration (default: ${defaults.videoDurationMs})
   --audioDurationMs <ms>                Audio observation duration (default: ${defaults.audioDurationMs})
+  --progressIntervalMs <ms>             Print per-probe progress every N ms; 0 disables. Default: ${defaults.progressIntervalMs}
   --videoMinFrames <n>                  Minimum video frames (default: ${defaults.videoMinFrames})
   --audioMinFrames <n>                  Minimum audio frames (default: ${defaults.audioMinFrames})
   --videoMinFps <n>                     Minimum video FPS (default: ${defaults.videoMinFps})
@@ -143,6 +145,10 @@ function parseArgs(argv) {
   args.bandwidthKbps = Number(args.bandwidthKbps) || defaults.bandwidthKbps;
   args.videoDurationMs = Number(args.videoDurationMs) || defaults.videoDurationMs;
   args.videoTimeoutMs = Number(args.videoTimeoutMs) || defaults.videoTimeoutMs;
+  const progressIntervalMs = Number(args.progressIntervalMs);
+  args.progressIntervalMs = Number.isFinite(progressIntervalMs)
+    ? Math.max(0, progressIntervalMs)
+    : defaults.progressIntervalMs;
   args.videoMinFrames = Number(args.videoMinFrames) || defaults.videoMinFrames;
   args.videoMinFps = Number(args.videoMinFps) || defaults.videoMinFps;
   args.videoRetries = Math.max(0, Number(args.videoRetries) || 0);
@@ -231,6 +237,7 @@ function makeVideoArgs(args) {
   addArg(argv, "--password", args.password);
   addArg(argv, "--durationMs", args.videoDurationMs);
   addArg(argv, "--timeoutMs", args.videoTimeoutMs);
+  addArg(argv, "--progressIntervalMs", args.progressIntervalMs);
   addArg(argv, "--width", args.width);
   addArg(argv, "--height", args.height);
   addArg(argv, "--fps", args.fps);
@@ -263,6 +270,7 @@ function makeAudioArgs(args) {
   addArg(argv, "--password", args.password);
   addArg(argv, "--durationMs", args.audioDurationMs);
   addArg(argv, "--timeoutMs", args.audioTimeoutMs);
+  addArg(argv, "--progressIntervalMs", args.progressIntervalMs);
   addArg(argv, "--minFrames", args.audioMinFrames);
   addArg(argv, "--minFps", args.audioMinFps);
   addArg(argv, "--maxGapMs", args.maxGapMs);
@@ -289,7 +297,15 @@ function makeAudioArgs(args) {
   return argv;
 }
 
-function runJsonScript(label, scriptPath, argv, timeoutMs) {
+function formatSeconds(ms) {
+  return `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
+}
+
+function progressEveryText(args) {
+  return args.progressIntervalMs > 0 ? formatSeconds(args.progressIntervalMs) : "off";
+}
+
+function runJsonScript(label, scriptPath, argv, timeoutMs, options = {}) {
   return new Promise((resolveRun, rejectRun) => {
     const startedAt = performance.now();
     const child = spawn(process.execPath, [scriptPath, ...argv], {
@@ -301,10 +317,35 @@ function runJsonScript(label, scriptPath, argv, timeoutMs) {
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    const progressIntervalMs = Math.max(0, Number(options.progressIntervalMs) || 0);
+    const progressArgs = options.args;
+    const expectedDurationMs = Math.max(0, Number(options.expectedDurationMs) || 0);
+    const cleanupTimers = () => {
+      clearTimeout(timer);
+      if (progressTimer) {
+        clearInterval(progressTimer);
+      }
+    };
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill();
     }, timeoutMs);
+    const progressTimer = progressIntervalMs > 0
+      ? setInterval(() => {
+        const elapsedMs = Math.round(performance.now() - startedAt);
+        const expectedLeftMs = expectedDurationMs > 0 ? Math.max(0, expectedDurationMs - elapsedMs) : 0;
+        const timeoutLeftMs = Math.max(0, timeoutMs - elapsedMs);
+        const leftText = expectedDurationMs > 0
+          ? `${formatSeconds(expectedLeftMs)} expected left`
+          : `${formatSeconds(timeoutLeftMs)} timeout left`;
+        print(
+          "INFO",
+          `${label} observation progress: ${formatSeconds(elapsedMs)} elapsed / ${leftText} / timeout=${formatSeconds(timeoutMs)}.`,
+          progressArgs,
+        );
+      }, progressIntervalMs)
+      : null;
+    progressTimer?.unref?.();
 
     child.stdout.on("data", (chunk) => {
       stdout += String(chunk);
@@ -313,11 +354,11 @@ function runJsonScript(label, scriptPath, argv, timeoutMs) {
       stderr += String(chunk);
     });
     child.on("error", (error) => {
-      clearTimeout(timer);
+      cleanupTimers();
       rejectRun(error);
     });
     child.on("close", (exitCode) => {
-      clearTimeout(timer);
+      cleanupTimers();
       const durationMs = Math.round(performance.now() - startedAt);
       if (timedOut) {
         rejectRun(new Error(`${label} observation timed out after ${timeoutMs} ms`));
@@ -350,7 +391,7 @@ function delay(ms) {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }
 
-async function runJsonScriptWithRetries(label, scriptPath, argv, timeoutMs, retries, retryDelayMs, args) {
+async function runJsonScriptWithRetries(label, scriptPath, argv, timeoutMs, retries, retryDelayMs, args, options = {}) {
   let lastError = null;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     if (attempt > 0) {
@@ -360,7 +401,7 @@ async function runJsonScriptWithRetries(label, scriptPath, argv, timeoutMs, retr
       }
     }
     try {
-      return await runJsonScript(label, scriptPath, argv, timeoutMs);
+      return await runJsonScript(label, scriptPath, argv, timeoutMs, options);
     } catch (error) {
       lastError = error;
     }
@@ -469,6 +510,7 @@ function makeRequested(args) {
       bandwidthKbps: args.bandwidthKbps,
       qualityPreset: args.qualityPreset,
       durationMs: args.videoDurationMs,
+      progressIntervalMs: args.progressIntervalMs,
       minFrames: args.videoMinFrames,
       minFps: args.videoMinFps,
       resourceSampleTree: args.videoResourceSampleTree,
@@ -476,6 +518,7 @@ function makeRequested(args) {
     audio: args.skipAudio ? null : {
       audioMode: args.audioMode,
       durationMs: args.audioDurationMs,
+      progressIntervalMs: args.progressIntervalMs,
       minFrames: args.audioMinFrames,
       minFps: args.audioMinFps,
       resourceSampleTree: args.audioResourceSampleTree,
@@ -486,6 +529,7 @@ function makeRequested(args) {
     maxFrameAgeMs: args.maxFrameAgeMs,
     requireMonotonicTimestamp: args.requireMonotonicTimestamp,
     resourceSample: args.resourceSample,
+    progressIntervalMs: args.progressIntervalMs,
   };
 }
 
@@ -673,7 +717,7 @@ async function main() {
   const failures = [];
 
   if (!args.skipVideo) {
-    print("RUN", `Video baseline ${args.width}x${args.height}/${args.fps}Hz for ${args.videoDurationMs} ms`, args);
+    print("RUN", `Video baseline ${args.width}x${args.height}/${args.fps}Hz for ${args.videoDurationMs} ms, progressEvery=${progressEveryText(args)}`, args);
     const videoArgs = makeVideoArgs(args);
     if (args.debugCommands) {
       print("DEBUG", formatCommand(videoScript, videoArgs), args);
@@ -687,6 +731,11 @@ async function main() {
         args.videoRetries,
         args.retryDelayMs,
         args,
+        {
+          args,
+          expectedDurationMs: args.videoDurationMs,
+          progressIntervalMs: args.progressIntervalMs,
+        },
       );
       const observation = videoRun.result.observation;
       print(
@@ -703,13 +752,17 @@ async function main() {
   }
 
   if (!args.skipAudio) {
-    print("RUN", `Audio baseline ${args.audioMode} for ${args.audioDurationMs} ms`, args);
+    print("RUN", `Audio baseline ${args.audioMode} for ${args.audioDurationMs} ms, progressEvery=${progressEveryText(args)}`, args);
     const audioArgs = makeAudioArgs(args);
     if (args.debugCommands) {
       print("DEBUG", formatCommand(audioScript, audioArgs), args);
     }
     try {
-      audioRun = await runJsonScript("audio", audioScript, audioArgs, args.commandTimeoutMs);
+      audioRun = await runJsonScript("audio", audioScript, audioArgs, args.commandTimeoutMs, {
+        args,
+        expectedDurationMs: args.audioDurationMs,
+        progressIntervalMs: args.progressIntervalMs,
+      });
       const observation = audioRun.result.observation;
       print(
         "OK",

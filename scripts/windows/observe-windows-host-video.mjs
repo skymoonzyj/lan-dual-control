@@ -23,6 +23,7 @@ const defaults = {
   qualityPreset: "balanced",
   durationMs: 5000,
   timeoutMs: 15000,
+  progressIntervalMs: 10000,
   minFrames: 20,
   minFps: 8,
   minFreshFps: 0,
@@ -63,6 +64,7 @@ Options:
   --port <port>                         Windows host port (default: ${defaults.port})
   --password <password>                 Windows host password (default: ${defaults.password})
   --durationMs <ms>                     Observation duration (default: ${defaults.durationMs})
+  --progressIntervalMs <ms>             Print observation progress every N ms; 0 disables. Default: ${defaults.progressIntervalMs}
   --width <px> --height <px> --fps <n>  Requested video size/FPS
   --bandwidthKbps <kbps>                Requested max bandwidth (default: ${defaults.bandwidthKbps})
   --qualityPreset <name>                smooth | balanced | sharp | custom
@@ -121,6 +123,10 @@ function parseArgs(argv) {
   args.qualityPreset = String(args.qualityPreset || defaults.qualityPreset).trim();
   args.durationMs = Number(args.durationMs) || defaults.durationMs;
   args.timeoutMs = Number(args.timeoutMs) || defaults.timeoutMs;
+  const progressIntervalMs = Number(args.progressIntervalMs);
+  args.progressIntervalMs = Number.isFinite(progressIntervalMs)
+    ? Math.max(0, progressIntervalMs)
+    : defaults.progressIntervalMs;
   args.minFrames = Number(args.minFrames) || defaults.minFrames;
   args.minFps = Number.isFinite(Number(args.minFps)) ? Number(args.minFps) : defaults.minFps;
   args.minFreshFps = Math.max(0, Number(args.minFreshFps) || defaults.minFreshFps);
@@ -193,6 +199,14 @@ function normalizeWgcH264Source(value) {
 function print(kind, text, args) {
   if (args?.json) return;
   console.log(`[${kind}] ${text}`);
+}
+
+function formatSeconds(ms) {
+  return `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
+}
+
+function progressEveryText(args) {
+  return args.progressIntervalMs > 0 ? formatSeconds(args.progressIntervalMs) : "off";
 }
 
 function delay(ms) {
@@ -560,13 +574,30 @@ function assertRealFrame(frame, context = {}) {
 async function observeFrames(client, args, onFirstFrame = () => {}, context = {}) {
   const frames = [];
   const startedAt = performance.now();
+  const deadline = startedAt + args.durationMs;
   let lastAt = startedAt;
   let maxGapMs = 0;
   let previousTimestampMs = 0;
   let timestampMonotonicViolations = 0;
+  let nextProgressAt = args.progressIntervalMs > 0 ? startedAt + args.progressIntervalMs : 0;
 
-  while (performance.now() - startedAt < args.durationMs) {
-    const frame = await client.waitForMessage("video_frame", args.timeoutMs);
+  print(
+    "INFO",
+    `Video observation started: target=${formatSeconds(args.durationMs)}, progressEvery=${progressEveryText(args)}, maxGap=${args.maxGapMs}ms.`,
+    args,
+  );
+
+  while (performance.now() < deadline) {
+    const waitMs = Math.min(args.timeoutMs, Math.max(1, deadline - performance.now()));
+    let frame;
+    try {
+      frame = await client.waitForMessage("video_frame", waitMs);
+    } catch (error) {
+      if (frames.length > 0 && (waitMs < args.timeoutMs || performance.now() >= deadline)) {
+        break;
+      }
+      throw error;
+    }
     const now = performance.now();
     const receivedAtMs = Date.now();
     const gap = frames.length === 0 ? 0 : now - lastAt;
@@ -612,6 +643,13 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
       requestedScreenMode: String(frame.requestedScreenMode || context.requestedScreenMode || "").trim(),
       h264Encoder: String(frame.h264Encoder || context.h264Encoder || "").trim(),
     });
+
+    if (nextProgressAt > 0 && now >= nextProgressAt && now < deadline) {
+      printVideoProgress(frames, startedAt, deadline, maxGapMs, args);
+      do {
+        nextProgressAt += args.progressIntervalMs;
+      } while (nextProgressAt <= now);
+    }
   }
 
   const elapsedMs = Math.max(1, (frames.at(-1)?.atMs || performance.now()) - startedAt);
@@ -701,6 +739,26 @@ async function observeFrames(client, args, onFirstFrame = () => {}, context = {}
     repeatLastFrameModes,
     helperTimingMs,
   };
+}
+
+function printVideoProgress(frames, startedAt, deadline, maxGapMs, args) {
+  const now = performance.now();
+  const elapsedMs = Math.max(1, now - startedAt);
+  const remainingMs = Math.max(0, deadline - now);
+  const fps = frames.length > 1 ? (frames.length * 1000) / elapsedMs : 0;
+  const repeatedFrames = frames.filter((frame) => frame.repeatedFrame).length;
+  const freshFrames = frames.length - repeatedFrames;
+  const frameAges = frames
+    .map((frame) => frame.frameAgeMs)
+    .filter((age) => Number.isFinite(age));
+  const latest = frames.at(-1) || {};
+  const ageText = frameAges.length ? ` / ageMax=${Math.round(Math.max(...frameAges))}ms` : "";
+  const helperText = latest.helperFrameId ? ` / helper=${latest.helperFrameId}` : "";
+  print(
+    "INFO",
+    `Video progress: ${formatSeconds(elapsedMs)} elapsed / ${formatSeconds(remainingMs)} left / frames=${frames.length} / fps=${fps.toFixed(2)} / fresh=${freshFrames} / repeated=${repeatedFrames} / maxGap=${Math.round(maxGapMs)}ms${ageText} / codec=${latest.codec || "unknown"} / pipeline=${latest.pipeline || "unknown"}${helperText}`,
+    args,
+  );
 }
 
 function assertObservation(summary, args) {
@@ -829,6 +887,7 @@ async function main() {
         qualityPreset: args.qualityPreset,
         useDefaultMaxScreenFps: args.useDefaultMaxScreenFps,
         durationMs: args.durationMs,
+        progressIntervalMs: args.progressIntervalMs,
         minFreshFps: args.minFreshFps,
         minUniqueHelperFps: args.minUniqueHelperFps,
         maxRepeatedFrameRatio: args.maxRepeatedFrameRatio,

@@ -19,6 +19,47 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 22:05
+开发端：Windows Codex
+本轮目标：让 Windows host 视频、音频和媒体聚合观察在长时间基线时有进度反馈。
+完成内容：
+- `observe-windows-host-video.mjs` 新增 `--progressIntervalMs`，普通输出会打印开始目标和周期进度，包含已收帧、剩余时间、FPS、fresh/repeated、最大间隔、帧年龄、codec/pipeline。
+- `observe-windows-host-audio.mjs` 新增 `--progressIntervalMs`，普通输出会打印开始目标和周期进度，包含已收帧、剩余时间、FPS、最大间隔、帧年龄、电平、codec/mode。
+- `observe-windows-host-media.mjs` 新增同名参数并透传给视频/音频子探针；普通输出会显示聚合子任务进度，`--json` 和 `--boardSummary` 保持干净，不混入进度行。
+- 修复视频/音频观察循环尾段等待：如果目标观察时长已到且已有帧，会正常结束，不再因为最后一次等帧跨过窗口而多等完整 timeout。
+- `test-windows-host-media-board-summary.mjs` 新增普通进度输出回归，并继续覆盖 JSON、一行摘要、失败和 partial failure 不泄密。
+- Windows host README、当前状态、下一步和任务板已同步。
+修改文件：
+- `scripts/windows/observe-windows-host-video.mjs`
+- `scripts/windows/observe-windows-host-audio.mjs`
+- `scripts/windows/observe-windows-host-media.mjs`
+- `scripts/windows/test-windows-host-media-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/observe-windows-host-video.mjs`
+- `node --check scripts/windows/observe-windows-host-audio.mjs`
+- `node --check scripts/windows/observe-windows-host-media.mjs`
+- `node --check scripts/windows/test-windows-host-media-board-summary.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script observe-windows-host-video.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-script-help.mjs --script observe-windows-host-audio.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-script-help.mjs --script observe-windows-host-media.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-host-media-board-summary.mjs --timeoutMs 60000`
+- `node scripts/windows/observe-windows-host-video.mjs --screenMode mock --requireRealVideo false --durationMs 1200 --progressIntervalMs 200 --minFrames 2 --minFps 1 --resourceSample false`
+- `node scripts/windows/observe-windows-host-audio.mjs --audioMode mock --screenMode mock --requirePcm false --durationMs 1200 --progressIntervalMs 200 --minFrames 2 --minFps 1 --resourceSample false`
+遗留问题：
+- 本轮只跑本机 mock 视频/音频观察，未启动正式 Windows host，未认证真实服务，未发送输入或执行 `inject`。
+下一步建议：
+- Mac 反控 Windows 前的长媒体基线可保留默认 10 秒心跳；现场等待时可加 `--progressIntervalMs 5000`，通讯板摘要仍用 `--boardSummary`。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 22:00
 开发端：Windows Codex
 本轮目标：让 Windows 控制 Mac 页面自检的连接、视频和音频等待都有现场进度反馈。

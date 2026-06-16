@@ -179,6 +179,7 @@ async function verifyHelp(args) {
   assert(result.exitCode === 0, `help should exit 0, got ${result.exitCode}`);
   assertIncludes(result.stdout, "--boardSummary", "help");
   assertIncludes(result.stdout, "--json", "help");
+  assertIncludes(result.stdout, "--progressIntervalMs", "help");
 }
 
 async function verifyJsonSummary(args) {
@@ -214,6 +215,22 @@ async function verifyOneLineBoardSummary(args) {
   assertIncludes(lines[0], "no input/inject", "boardSummary");
   assertNoSecretLeak(lines[0], "boardSummary line");
   assertNoSecretLeak(result.stderr, "boardSummary stderr");
+}
+
+async function verifyPlainProgressOutput(args) {
+  const port = await getFreePort();
+  const result = await runMedia([
+    ...mockVideoArgs(port),
+    "--videoDurationMs", "1200",
+    "--progressIntervalMs", "200",
+  ], args);
+  assert(!result.timedOut, "plain progress video run timed out");
+  assert(result.exitCode === 0, `plain progress video run failed: ${result.stderr || result.stdout}`);
+  assertIncludes(result.stdout, "progressEvery=0.2s", "plain progress output");
+  assertIncludes(result.stdout, "video observation progress:", "plain progress output");
+  assertIncludes(result.stdout, "Windows host media baseline passed", "plain progress output");
+  assertNoSecretLeak(result.stdout, "plain progress stdout");
+  assertNoSecretLeak(result.stderr, "plain progress stderr");
 }
 
 async function verifyFailureBoardSummary(args) {
@@ -283,6 +300,7 @@ async function main() {
   await verifyHelp(args);
   await verifyJsonSummary(args);
   await verifyOneLineBoardSummary(args);
+  await verifyPlainProgressOutput(args);
   await verifyFailureBoardSummary(args);
   await verifyFailureJsonSummary(args);
   await verifyPartialFailureContinues(args);

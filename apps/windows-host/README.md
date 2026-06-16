@@ -271,6 +271,7 @@ node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs 
 ```
 
 如果想要一行统一的媒体状态，优先用 `--probeMedia --boardSummary`。它会顺序复用 Windows 媒体聚合脚本，JSON 里保留 `Windows host media aggregate` 详情，通讯板摘要直接显示 `media=ok`、`media=partial(passed=X,failed=Y)` 或 `media=failed(passed=X,failed=Y)`，方便 Mac 端判断是视频、音频还是两者都需要复测。
+普通输出模式下，视频、音频和聚合观察都会默认每 10 秒打印一次进度；长时间基线可用 `--progressIntervalMs <ms>` 调整频率，传 `0` 可关闭。`--json` 和 `--boardSummary` 会保持机器可读/一行摘要输出，不混入进度行。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --probeMedia --boardSummary
@@ -580,7 +581,7 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-audio.mjs --
 
 `--playTone` 会通过系统默认播放设备播放一段短 WAV，默认关闭；无人值守长稳观察不要开启它。
 
-需要一次顺序跑完视频和音频基线时，可以使用媒体汇总脚本。它会先跑视频观察，再跑 WASAPI 音频观察，最后输出一个 JSON 或文本汇总；默认避免同时启动两个临时 Windows host 抢屏幕/音频采集资源。视频阶段默认要求真实 FFmpeg/GDI 帧，不会把 mock 回退算作通过，并且遇到临时 FFmpeg 启动波动时会重试一次：
+需要一次顺序跑完视频和音频基线时，可以使用媒体汇总脚本。它会先跑视频观察，再跑 WASAPI 音频观察，最后输出一个 JSON 或文本汇总；默认避免同时启动两个临时 Windows host 抢屏幕/音频采集资源。普通输出会默认每 10 秒打印视频/音频观察进度，长测时可用 `--progressIntervalMs 5000` 改成 5 秒一次，传 `0` 可关闭。视频阶段默认要求真实 FFmpeg/GDI 帧，不会把 mock 回退算作通过，并且遇到临时 FFmpeg 启动波动时会重试一次：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-media.mjs
@@ -588,7 +589,7 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-media.mjs --
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-media.mjs --resourceSampleTree true --boardSummary
 ```
 
-`--boardSummary` 会输出一行可直接发到 Agent Link Board 的无密摘要，包含请求分辨率/Hz/Mbps、视频 FPS/最大间隔/帧年龄、音频稳态 FPS/最大间隔/帧年龄和资源采样摘要；失败时也会输出脱敏摘要，单路成功单路失败标为 `Windows media: partial`，全部执行链路失败才标为 `Windows media: failed`，`--json` 失败路径同样返回可解析报告和 `boardSummary`，并在 `summary.status` 给出机器可读的 `ok` / `partial` / `failed`。视频或音频其中一路失败时，脚本会继续尝试未跳过的另一条链路，并在报告里保留已成功的结果，方便把 FFmpeg/GDI/WASAPI 波动同步给另一端排障；不会输出密码、系统账号、输入事件或 `inject` 命令。如果只想看其中一条链路，可以加 `--skipVideo` 或 `--skipAudio`。本轮 `2026-06-13 13:02` 音频顺序路径通过：3.5 秒收到 133 帧，稳态 49.94 FPS，最大间隔 43 ms，首帧约 877 ms，payload 7680 bytes，帧年龄最大 13 ms。当前同机 FFmpeg gdigrab 视频短验收偶发回退到 `windows-ffmpeg-gdigrab-fallback-mock`，直接 FFmpeg `gdigrab` 也出现过 `Failed to capture image (error 5)`；因此真实视频基线应在桌面捕获恢复稳定后复测，或继续推进 WGC 采集替换。
+`--boardSummary` 会输出一行可直接发到 Agent Link Board 的无密摘要，包含请求分辨率/Hz/Mbps、视频 FPS/最大间隔/帧年龄、音频稳态 FPS/最大间隔/帧年龄和资源采样摘要；失败时也会输出脱敏摘要，单路成功单路失败标为 `Windows media: partial`，全部执行链路失败才标为 `Windows media: failed`，`--json` 失败路径同样返回可解析报告和 `boardSummary`，并在 `summary.status` 给出机器可读的 `ok` / `partial` / `failed`。视频或音频其中一路失败时，脚本会继续尝试未跳过的另一条链路，并在报告里保留已成功的结果，方便把 FFmpeg/GDI/WASAPI 波动同步给另一端排障；不会输出密码、系统账号、输入事件或 `inject` 命令。`--json` 和 `--boardSummary` 不打印进度心跳，确保自动化和通讯板摘要可直接解析。如果只想看其中一条链路，可以加 `--skipVideo` 或 `--skipAudio`。本轮 `2026-06-13 13:02` 音频顺序路径通过：3.5 秒收到 133 帧，稳态 49.94 FPS，最大间隔 43 ms，首帧约 877 ms，payload 7680 bytes，帧年龄最大 13 ms。当前同机 FFmpeg gdigrab 视频短验收偶发回退到 `windows-ffmpeg-gdigrab-fallback-mock`，直接 FFmpeg `gdigrab` 也出现过 `Failed to capture image (error 5)`；因此真实视频基线应在桌面捕获恢复稳定后复测，或继续推进 WGC 采集替换。
 
 认证重试策略回归脚本会同时验证 Windows host 和假 Mac 服务：错误密码剩余 `2/1/0`、第三次断开、新连接正确密码通过。
 

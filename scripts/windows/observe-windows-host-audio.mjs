@@ -20,6 +20,7 @@ const defaults = {
   password: "demo-password",
   durationMs: 5000,
   timeoutMs: 15000,
+  progressIntervalMs: 10000,
   minFrames: 50,
   minFps: 15,
   maxGapMs: 1000,
@@ -61,6 +62,7 @@ Options:
   --port <port>                         Windows host port (default: ${defaults.port})
   --password <password>                 Windows host password (default: ${defaults.password})
   --durationMs <ms>                     Observation duration (default: ${defaults.durationMs})
+  --progressIntervalMs <ms>             Print observation progress every N ms; 0 disables. Default: ${defaults.progressIntervalMs}
   --warmupFrames <n>                    Frames ignored before steady-state checks
   --audioMode <wasapi|directshow|mock>  Local temporary host audio mode
   --audioDevice <name>                  Explicit local audio device name
@@ -112,6 +114,10 @@ function parseArgs(argv) {
   args.port = Number(args.port) || defaults.port;
   args.durationMs = Number(args.durationMs) || defaults.durationMs;
   args.timeoutMs = Number(args.timeoutMs) || defaults.timeoutMs;
+  const progressIntervalMs = Number(args.progressIntervalMs);
+  args.progressIntervalMs = Number.isFinite(progressIntervalMs)
+    ? Math.max(0, progressIntervalMs)
+    : defaults.progressIntervalMs;
   args.minFrames = Number(args.minFrames) || defaults.minFrames;
   args.minFps = Number(args.minFps) || defaults.minFps;
   args.maxGapMs = Number(args.maxGapMs) || defaults.maxGapMs;
@@ -155,6 +161,14 @@ function booleanArg(value) {
 function print(kind, text, args) {
   if (args?.json) return;
   console.log(`[${kind}] ${text}`);
+}
+
+function formatSeconds(ms) {
+  return `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
+}
+
+function progressEveryText(args) {
+  return args.progressIntervalMs > 0 ? formatSeconds(args.progressIntervalMs) : "off";
 }
 
 function delay(ms) {
@@ -531,10 +545,27 @@ function parseFrameTimestampMs(frame) {
 async function observeAudioFrames(client, args, onFirstFrame = () => {}) {
   const frames = [];
   const startedAt = performance.now();
+  const deadline = startedAt + args.durationMs;
   let lastAt = startedAt;
+  let nextProgressAt = args.progressIntervalMs > 0 ? startedAt + args.progressIntervalMs : 0;
 
-  while (performance.now() - startedAt < args.durationMs) {
-    const frame = await client.waitForMessage("audio_frame", args.timeoutMs);
+  print(
+    "INFO",
+    `Audio observation started: target=${formatSeconds(args.durationMs)}, progressEvery=${progressEveryText(args)}, maxGap=${args.maxGapMs}ms.`,
+    args,
+  );
+
+  while (performance.now() < deadline) {
+    const waitMs = Math.min(args.timeoutMs, Math.max(1, deadline - performance.now()));
+    let frame;
+    try {
+      frame = await client.waitForMessage("audio_frame", waitMs);
+    } catch (error) {
+      if (frames.length > 0 && (waitMs < args.timeoutMs || performance.now() >= deadline)) {
+        break;
+      }
+      throw error;
+    }
     const now = performance.now();
     const receivedAtMs = Date.now();
     const gap = frames.length === 0 ? 0 : now - lastAt;
@@ -563,6 +594,13 @@ async function observeAudioFrames(client, args, onFirstFrame = () => {}) {
       level: Number(frame.level) || 0,
       payloadBytes: estimatePayloadBytes(frame),
     });
+
+    if (nextProgressAt > 0 && now >= nextProgressAt && now < deadline) {
+      printAudioProgress(frames, startedAt, deadline, args);
+      do {
+        nextProgressAt += args.progressIntervalMs;
+      } while (nextProgressAt <= now);
+    }
   }
 
   const warmupCount = Math.min(args.warmupFrames, Math.max(0, frames.length - 2));
@@ -577,6 +615,26 @@ async function observeAudioFrames(client, args, onFirstFrame = () => {}) {
     warmupFrames: warmupCount,
     steady,
   };
+}
+
+function printAudioProgress(frames, startedAt, deadline, args) {
+  const now = performance.now();
+  const elapsedMs = Math.max(1, now - startedAt);
+  const remainingMs = Math.max(0, deadline - now);
+  const fps = frames.length > 1 ? ((frames.length - 1) * 1000) / elapsedMs : 0;
+  const gaps = frames.slice(1).map((frame) => frame.gapMs).filter((gap) => Number.isFinite(gap));
+  const frameAges = frames
+    .map((frame) => frame.frameAgeMs)
+    .filter((age) => Number.isFinite(age));
+  const latest = frames.at(-1) || {};
+  const gapText = gaps.length ? ` / maxGap=${Math.round(Math.max(...gaps))}ms` : "";
+  const ageText = frameAges.length ? ` / ageMax=${Math.round(Math.max(...frameAges))}ms` : "";
+  const levelText = Number.isFinite(Number(latest.level)) ? ` / level=${Number(latest.level).toFixed(3)}` : "";
+  print(
+    "INFO",
+    `Audio progress: ${formatSeconds(elapsedMs)} elapsed / ${formatSeconds(remainingMs)} left / frames=${frames.length} / fps=${fps.toFixed(2)}${gapText}${ageText}${levelText} / codec=${latest.codec || "unknown"} / mode=${latest.audioMode || "unknown"}`,
+    args,
+  );
 }
 
 function summarizeFrames(frames, startedAt) {
@@ -742,6 +800,7 @@ async function main() {
       requested: {
         audioMode: args.audioMode,
         durationMs: args.durationMs,
+        progressIntervalMs: args.progressIntervalMs,
         warmupFrames: args.warmupFrames,
         sampleRate: args.sampleRate,
         channels: args.channels,
