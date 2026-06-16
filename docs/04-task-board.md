@@ -350,6 +350,7 @@ Mac 端：
 - [x] Windows host `ffmpeg-h264` 模式的 MJPEG/JPEG fallback。（Mac client/WebCodecs 拒绝当前 H.264 `codecString` 后发送 `preferredVideoCodec=mjpeg` / `preferredVideoEncoding=data-url`，同一个 host 会切到 `windows-ffmpeg-gdigrab-mjpeg` 并恢复 JPEG 画面；`--expectH264Fallback` 页面级自检通过。）
 - [x] Windows host 可选 `binary-h264` WebSocket 二进制视频帧。（Mac client 声明 `preferredVideoTransport=binary-h264` 后，H.264 JSON 头保留在 `LDCV1` binary frame，Annex B payload 改走原始字节；`--expectBinaryH264Video`、`--disableBinaryVideo` 兼容回归和 `binary-jpeg` 回归通过。）
 - [x] Mac client 视频传输矩阵回归脚本。（`test-mac-client-video-transports.mjs` 默认顺序覆盖 `binary-h264`、H.264 JSON/base64、H.264 unsupported fallback 和 `binary-jpeg`，当前 4/4 通过，避免后续手动四连测和端口互抢。）
+- [x] Mac client 视频传输矩阵外层进度心跳。（矩阵普通输出默认每 10 秒报告当前 case/attempt、临时端口和子进程超时剩余，并透传 `--progressIntervalMs` 给页面自检；`--json` 保持干净。）
 - [x] Windows 视频编码能力体检脚本。（`check-windows-video-encoder-support.mjs` 汇总 FFmpeg H.264 软件/硬件编码器、WGC 预检和浏览器 WebCodecs；本机强校验通过，已用于推进 WGC H.264 桥接原型。）
 - [x] Windows host `ffmpeg-h264` 可选 H.264 encoder。（默认 `libx264`，支持 `LAN_DUAL_WINDOWS_H264_ENCODER` / `--h264Encoder h264_nvenc`，discovery/session/frame/观察脚本回传实际 `h264Encoder`；NVENC 路径和默认 libx264 回归均通过。）
 - [x] Windows WGC H.264/硬编桥接原型。（显式 `--wgcH264Bridge`，真实 helper + `h264_nvenc` 短观察通过，pipeline=`windows-wgc-helper-ffmpeg-h264`。）

@@ -378,6 +378,8 @@ node E:\codex\lan-dual-control\scripts\windows\test-mac-client-video-transports.
 
 矩阵默认会在单个 case 失败后自动重试 1 次，并为重试分配新的临时端口，减少浏览器或临时 host 尚未释放导致的误报；需要严格复现首次失败时可加 `--retries 0`。
 
+普通输出模式下，矩阵外层会默认每 10 秒报告当前 case、attempt、临时 host/client/debug 端口和剩余子进程超时，同时把 `--progressIntervalMs` 透传给每个页面自检，让内层连接/视频/音频等待也继续输出页面快照；现场想更快看进度可加 `--progressIntervalMs 5000`，传 `0` 可关闭。`--json` 仍保持纯机器输出，不混入进度行。
+
 真实 WGC helper + NV12 + NVENC H.264 路径需要可用的桌面捕获上下文和已构建的 helper，默认矩阵不会强制跑；需要时显式选择第五个 case，或把它加入默认四项：
 
 ```powershell

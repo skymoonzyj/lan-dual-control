@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
-const browserTestScript = resolve(scriptDir, "test-mac-client-browser.mjs");
+const browserTestScript = process.env.LAN_DUAL_MAC_CLIENT_BROWSER_TEST_SCRIPT
+  ? resolve(process.env.LAN_DUAL_MAC_CLIENT_BROWSER_TEST_SCRIPT)
+  : resolve(scriptDir, "test-mac-client-browser.mjs");
 
 const defaults = {
   basePort: 43820,
@@ -22,6 +24,7 @@ const defaults = {
   wgcNv12MinObservedVideoFps: 4,
   retries: 1,
   retryDelayMs: 1500,
+  progressIntervalMs: 10000,
   h264Encoder: "",
   wgcHelper: "",
   includeWgcNv12: false,
@@ -125,6 +128,7 @@ Options:
   --timeoutMs <ms>        Per-case browser self-test timeout. Default: ${defaults.timeoutMs}
   --retries <count>       Retry a failed case before stopping. Default: ${defaults.retries}
   --retryDelayMs <ms>     Delay before retrying a failed case. Default: ${defaults.retryDelayMs}
+  --progressIntervalMs <ms> Print per-case wait progress every N ms; 0 disables. Default: ${defaults.progressIntervalMs}
   --observeVideoMs <ms>   H.264/fallback observation window. Default: ${defaults.observeVideoMs}
   --binaryJpegObserveVideoMs <ms>  JPEG binary observation window. Default: ${defaults.binaryJpegObserveVideoMs}
   --wgcNv12ObserveVideoMs <ms>     WGC NV12 H.264 observation window. Default: ${defaults.wgcNv12ObserveVideoMs}
@@ -241,6 +245,7 @@ function parseArgs(argv) {
   args.timeoutMs = integerAtLeast(args.timeoutMs, defaults.timeoutMs, 5000);
   args.retries = integerAtLeast(args.retries, defaults.retries, 0);
   args.retryDelayMs = integerAtLeast(args.retryDelayMs, defaults.retryDelayMs, 0);
+  args.progressIntervalMs = integerAtLeast(args.progressIntervalMs, defaults.progressIntervalMs, 0);
   args.observeVideoMs = integerAtLeast(args.observeVideoMs, defaults.observeVideoMs, 500);
   args.binaryJpegObserveVideoMs = integerAtLeast(args.binaryJpegObserveVideoMs, defaults.binaryJpegObserveVideoMs, 500);
   args.wgcNv12ObserveVideoMs = integerAtLeast(args.wgcNv12ObserveVideoMs, defaults.wgcNv12ObserveVideoMs, 500);
@@ -290,6 +295,18 @@ function delay(ms) {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, Math.max(0, ms)));
 }
 
+function formatSeconds(ms) {
+  const seconds = Math.max(0, Number(ms) || 0) / 1000;
+  if (seconds >= 10) {
+    return `${seconds.toFixed(0)}s`;
+  }
+  return `${seconds.toFixed(1)}s`;
+}
+
+function progressEveryText(args) {
+  return args.progressIntervalMs > 0 ? formatSeconds(args.progressIntervalMs) : "off";
+}
+
 function summarizeAttempt(result) {
   return {
     attempt: result.attempt,
@@ -322,6 +339,8 @@ function runCase(testCase, args, index, attempt) {
       String(debugPort),
       "--timeoutMs",
       String(args.timeoutMs),
+      "--progressIntervalMs",
+      String(args.progressIntervalMs),
       ...(h264Encoder && testCase.h264 !== false ? ["--h264Encoder", h264Encoder] : []),
       ...testCase.args(args),
     ];
@@ -336,9 +355,21 @@ function runCase(testCase, args, index, attempt) {
     let stdout = "";
     let stderr = "";
     const killAfterMs = args.timeoutMs + 20000;
+    let settled = false;
+    const finish = (result) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      if (progressTimer) {
+        clearInterval(progressTimer);
+      }
+      resolveRun(result);
+    };
     const timer = setTimeout(() => {
       child.kill();
-      resolveRun({
+      finish({
         id: testCase.id,
         label: testCase.label,
         attempt,
@@ -352,6 +383,19 @@ function runCase(testCase, args, index, attempt) {
         highlights: extractHighlights(`${stdout}\n${stderr}`),
       });
     }, killAfterMs);
+    const progressMs = Math.max(0, Number(args.progressIntervalMs) || 0);
+    const progressTimer = !args.json && progressMs > 0
+      ? setInterval(() => {
+        const elapsedMs = performance.now() - startedAt;
+        const timeoutLeftMs = Math.max(0, killAfterMs - elapsedMs);
+        console.log(
+          `[INFO] case ${testCase.id} attempt ${attempt}/${args.retries + 1} progress: ` +
+          `elapsed ${formatSeconds(elapsedMs)} / child timeout left ${formatSeconds(timeoutLeftMs)} ` +
+          `/ ports host=${port} client=${clientPort} debug=${debugPort}`,
+        );
+      }, progressMs)
+      : null;
+    progressTimer?.unref?.();
 
     child.stdout.on("data", (chunk) => {
       const text = String(chunk);
@@ -368,8 +412,7 @@ function runCase(testCase, args, index, attempt) {
       }
     });
     child.on("error", (error) => {
-      clearTimeout(timer);
-      resolveRun({
+      finish({
         id: testCase.id,
         label: testCase.label,
         attempt,
@@ -384,8 +427,7 @@ function runCase(testCase, args, index, attempt) {
       });
     });
     child.on("close", (exitCode) => {
-      clearTimeout(timer);
-      resolveRun({
+      finish({
         id: testCase.id,
         label: testCase.label,
         attempt,
@@ -445,13 +487,19 @@ async function main() {
 
   const results = [];
   if (!args.json) {
-    console.log(`[INFO] Running ${selectedCases.length} Mac client video transport case(s) sequentially`);
+    console.log(
+      `[INFO] Running ${selectedCases.length} Mac client video transport case(s) sequentially; ` +
+      `progressEvery=${progressEveryText(args)}`,
+    );
   }
 
   for (let index = 0; index < selectedCases.length; index += 1) {
     const testCase = selectedCases[index];
     if (!args.json) {
-      console.log(`[RUN] ${testCase.id}: ${testCase.label}`);
+      console.log(
+        `[RUN] ${testCase.id} (${index + 1}/${selectedCases.length}): ${testCase.label}; ` +
+        `attempts=${args.retries + 1}`,
+      );
     }
     const result = await runCaseWithRetries(testCase, args, index);
     results.push(result);
@@ -486,6 +534,7 @@ async function main() {
     timeoutMs: args.timeoutMs,
     retries: args.retries,
     retryDelayMs: args.retryDelayMs,
+    progressIntervalMs: args.progressIntervalMs,
     results: results.map((result) => ({
       id: result.id,
       label: result.label,

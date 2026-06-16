@@ -19,6 +19,38 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 22:33
+开发端：Windows Codex
+本轮目标：让 Mac client 视频传输矩阵在多 case 浏览器自检等待时有外层进度反馈。
+完成内容：
+- `test-mac-client-video-transports.mjs` 新增 `--progressIntervalMs`，普通输出默认每 10 秒显示当前 case、attempt、临时 host/client/debug 端口和子进程超时剩余。
+- 矩阵会把 `--progressIntervalMs` 透传给每个 `test-mac-client-browser.mjs` 子自检，让内层连接、视频、音频等待继续输出页面快照。
+- `--json` 保持纯 JSON，不混入进度行，并在摘要里记录 `progressIntervalMs`。
+- 新增 `test-mac-client-video-transports-progress.mjs`，用 fake 子自检覆盖普通外层进度、参数透传和 JSON 纯净。
+- Windows host README、当前状态、下一步和任务板已同步。
+修改文件：
+- `scripts/windows/test-mac-client-video-transports.mjs`
+- `scripts/windows/test-mac-client-video-transports-progress.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-video-transports.mjs`
+- `node --check scripts/windows/test-mac-client-video-transports-progress.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script test-mac-client-video-transports.mjs --script test-mac-client-video-transports-progress.mjs --timeoutMs 10000`
+- `node scripts/windows/test-mac-client-video-transports-progress.mjs`（普通沙盒需允许临时 Node 子进程，已按允许子进程方式通过）
+遗留问题：
+- 本轮只验证矩阵调度层和 fake 子自检输出，未启动真实 Windows host/browser/WGC helper，未连接 Mac、未认证正式服务、未发送输入或执行 `inject`。
+下一步建议：
+- 后续改 H.264、fallback、binary-jpeg/binary-h264 或 WGC NV12 页面接收时，跑矩阵可保留默认 10 秒心跳；现场需要更密集反馈时加 `--progressIntervalMs 5000`。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 22:25
 开发端：Windows Codex
 本轮目标：让 Windows WGC benchmark/compare 在长时间子进程等待时有进度反馈，避免现场误判卡住。
