@@ -614,6 +614,41 @@ async function checkExistingBoardCallProtection(args) {
   });
 }
 
+async function checkDoneBoardCallDoesNotBlock(args) {
+  const doneCall = {
+    status: "done",
+    from: "Windows Codex",
+    need: "Mac Codex",
+    goal: "Completed safe probe",
+  };
+  await withFakeMacHost(async (macHost) => {
+    await withFakeBoard(async (board) => {
+      const localTimeoutMs = String(Math.min(args.timeoutMs, 5000));
+      const result = await runAsync(args, [
+        "--json",
+        "--allowDirty",
+        "--sendCall",
+        "--host",
+        macHost.host,
+        "--port",
+        String(macHost.port),
+        "--server",
+        board.serverUrl,
+        "--timeoutMs",
+        localTimeoutMs,
+      ]);
+      const payload = parseJson(result.stdout, "done call formal E2E sendCall");
+      assert(result.status === 0, `DONE board call should not block formal E2E sendCall:\n${result.stdout}\n${result.stderr}`);
+      assert(payload.boardCallBeforeSend?.active === false, "DONE board call should be recorded as inactive");
+      assert(payload.boardCallBeforeSend?.status === doneCall.status, "DONE board call status should be preserved");
+      assert(payload.sentCall?.ok === true, "formal E2E sendCall should succeed after DONE board call");
+      assert(board.calls.length === 1, `DONE board call path should post one new call, got ${board.calls.length}`);
+      assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "done-call formal E2E sendCall");
+      print("OK", "Ready formal E2E --sendCall ignores completed Agent Link Board calls");
+    }, { currentCall: doneCall });
+  });
+}
+
 async function checkForceSendCall(args) {
   const existingCall = {
     status: "CALLING",
@@ -740,6 +775,7 @@ async function main() {
   await checkStaleRuntimeSendCallRefuses(args);
   await checkReadySendCall(args);
   await checkExistingBoardCallProtection(args);
+  await checkDoneBoardCallDoesNotBlock(args);
   await checkForceSendCall(args);
   checkOnlineJson(args);
   checkOnlineBoardSummary(args);

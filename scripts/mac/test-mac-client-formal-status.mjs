@@ -593,6 +593,42 @@ async function checkExistingBoardCallProtection(args) {
   print("OK", "Ready --sendCall refuses to overwrite an existing board call");
 }
 
+async function checkDoneBoardCallDoesNotBlock(args) {
+  const doneCall = {
+    status: "done",
+    from: "Windows Codex",
+    need: "Mac Codex",
+    goal: "Completed safe probe",
+  };
+  await withMacClientServer(args, async (clientPort) => {
+    await withWindowsDiscoveryServer(async (windowsPort) => {
+      await withFakeBoard(async (board) => {
+        const result = await runAsync([
+          "--json",
+          "--allowDirty",
+          "--sendCall",
+          "--clientPort",
+          String(clientPort),
+          "--host",
+          "127.0.0.1",
+          "--port",
+          String(windowsPort),
+          "--server",
+          board.serverUrl,
+        ], args);
+        const payload = parseJson(result.stdout, "done call sendCall JSON");
+        assert(result.status === 0, `DONE board call should not block sendCall:\n${result.stdout}\n${result.stderr}`);
+        assert(payload.boardCallBeforeSend?.active === false, "DONE board call should be recorded as inactive");
+        assert(payload.boardCallBeforeSend?.status === doneCall.status, "DONE board call status should be preserved");
+        assert(payload.sentCall?.ok === true, "sendCall should succeed after DONE board call");
+        assert(board.calls.length === 1, `DONE board call path should post one new call, got ${board.calls.length}`);
+        assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "done-call sendCall");
+      }, { currentCall: doneCall });
+    });
+  });
+  print("OK", "Ready --sendCall ignores completed Agent Link Board calls");
+}
+
 async function checkForceSendCall(args) {
   const existingCall = {
     status: "CALLING",
@@ -645,6 +681,7 @@ async function main() {
   await checkOfflineSendCallRefuses(args);
   await checkReadySendCall(args);
   await checkExistingBoardCallProtection(args);
+  await checkDoneBoardCallDoesNotBlock(args);
   await checkForceSendCall(args);
   print("OK", "Mac client formal status self-test passed");
 }

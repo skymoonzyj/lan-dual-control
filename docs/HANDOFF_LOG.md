@@ -56,6 +56,42 @@
 
 ## 2026-06-16 Mac Codex
 
+日期：2026-06-16 11:57
+开发端：Mac Codex
+本轮目标：让 Mac formal `--sendCall` / `--clearStaleCall` 守卫直接结构化读取 Agent Link Board 状态，避免完成呼叫误阻塞。
+完成内容：
+- `scripts/mac/check-mac-formal-e2e-status.mjs` 和 `scripts/mac/check-mac-client-formal-status.mjs` 的发 call 前守卫改为直接读取 Agent Link Board `/api/state` JSON，不再解析 `codex-link-client watch --once` 的人类可读文本。
+- `done`、`completed`、`complete`、`cancelled`、`canceled`、`resolved`、`closed` 状态的 `currentCall` 会记录在 `boardCallBeforeSend` 中，但视为 inactive，不再阻塞新的正式 `--sendCall`。
+- 没有状态或仍处于 active 状态的 `currentCall` 继续默认阻塞覆盖，除非显式 `--forceCall`；formal E2E 的 `--clearStaleCall` 仍只清理精确匹配的 Mac formal E2E 旧 call。
+- 两组自测新增 DONE call 不阻塞回归，并保留已有 active call 默认拒绝、`--forceCall` 覆盖和秘密安全断言。
+修改文件：
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-client-formal-status.mjs`
+- `node --check scripts/mac/test-mac-client-formal-status.mjs`
+- `node --check scripts/mac/check-mac-formal-e2e-status.mjs`
+- `node --check scripts/mac/test-mac-formal-e2e-status.mjs`
+- `node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 45000`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮只改 Mac 端 formal call 守卫和文档，不启动服务、不认证、不发送密码、不执行 `inject`。
+下一步建议：
+- Mac 侧后续发正式 call 前继续优先跑 `--boardSummary` / `--json` 看 `boardCallBeforeSend`；如果联络板显示 active call，先协调再决定是否 `--forceCall`。
+是否改了协议：否。
+是否需要另一端配合：当前不需要；Windows 端可继续做对称结构化读取或真实 Mac 控制 Windows 验收。
+
+## 2026-06-16 Mac Codex
+
 日期：2026-06-16 11:48
 开发端：Mac Codex
 本轮目标：让 Mac 恢复开工总览也能看到 Agent Link Board 当前测试呼叫。

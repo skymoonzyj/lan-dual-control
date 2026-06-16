@@ -446,39 +446,56 @@ function makeCallPayload(report) {
   };
 }
 
-function parseCurrentBoardCall(output) {
-  const lines = splitLines(output);
-  const callIndex = lines.findIndex((line) => line.startsWith("[call]"));
-  if (callIndex < 0 || /^\[call\]\s+none\b/i.test(lines[callIndex])) {
+function isActiveBoardCall(call) {
+  if (!call) return false;
+  const status = normalizedText(call.status).toLowerCase();
+  if (!status) return true;
+  return !["done", "completed", "complete", "cancelled", "canceled", "resolved", "closed"].includes(status);
+}
+
+function normalizeCurrentBoardCall(call) {
+  if (!call || typeof call !== "object") {
     return {
       active: false,
-      raw: callIndex >= 0 ? lines[callIndex] : "",
+      raw: "",
     };
   }
-  const header = lines[callIndex];
-  const headerMatch = header.match(/^\[call\]\s+([^:]*):?\s*(.*)$/);
   const currentCall = {
-    active: true,
-    status: normalizedText(headerMatch?.[1] || ""),
-    goal: normalizedText(headerMatch?.[2] || ""),
-    raw: header,
+    active: isActiveBoardCall(call),
+    raw: JSON.stringify(call),
   };
-  for (const line of lines.slice(callIndex + 1)) {
-    if (line.startsWith("[")) break;
-    const fieldMatch = line.match(/^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/);
-    if (!fieldMatch) continue;
-    currentCall[fieldMatch[1]] = normalizedText(fieldMatch[2]);
+  for (const key of ["status", "goal", "from", "need", "environment", "connection", "command", "expected", "actual", "ask", "blockedBy", "owner", "timeout", "updatedAt"]) {
+    const value = normalizedText(call[key]);
+    if (value) currentCall[key] = value;
   }
   return currentCall;
 }
 
 function getCurrentBoardCall(args) {
+  const stateReader = `
+const server = process.argv[1];
+const timeoutMs = Number(process.argv[2] || 5000);
+const token = process.env.CODEX_LINK_TOKEN || "";
+const controller = new AbortController();
+const timer = setTimeout(() => controller.abort(), timeoutMs);
+try {
+  const response = await fetch(new URL("/api/state", server), {
+    cache: "no-store",
+    signal: controller.signal,
+    headers: token ? { "X-Codex-Link-Token": token } : {},
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(response.status + ": " + text);
+  console.log(text || "{}");
+} finally {
+  clearTimeout(timer);
+}
+`;
   const result = spawnSync(process.execPath, [
-    "scripts/codex-link-client.mjs",
-    "--server",
+    "-e",
+    stateReader,
     args.server,
-    "watch",
-    "--once",
+    String(Math.max(args.timeoutMs + 2000, 5000)),
   ], {
     cwd: repoRoot,
     encoding: "utf8",
@@ -488,7 +505,12 @@ function getCurrentBoardCall(args) {
   if (result.status !== 0) {
     throw new Error(`Could not confirm Agent Link Board current call before sending: ${String(result.stderr || result.stdout || "").trim()}`);
   }
-  return parseCurrentBoardCall(result.stdout);
+  try {
+    const state = JSON.parse(String(result.stdout || "{}"));
+    return normalizeCurrentBoardCall(state.currentCall);
+  } catch (error) {
+    throw new Error(`Could not parse Agent Link Board state before sending: ${error.message}`);
+  }
 }
 
 function isMatchingMacFormalE2eCall(call) {
