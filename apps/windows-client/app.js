@@ -29,6 +29,7 @@ const elements = {
   localHostAudioModeSelect: document.querySelector("#localHostAudioModeSelect"),
   localHostInputModeSelect: document.querySelector("#localHostInputModeSelect"),
   localHostReadinessProfileSelect: document.querySelector("#localHostReadinessProfileSelect"),
+  localHostProbeMediaToggle: document.querySelector("#localHostProbeMediaToggle"),
   localHostReadinessButton: document.querySelector("#localHostReadinessButton"),
   localHostStartButton: document.querySelector("#localHostStartButton"),
   localHostFirewallButton: document.querySelector("#localHostFirewallButton"),
@@ -2904,6 +2905,7 @@ function buildLocalHostReadinessRequest(extra = {}) {
     host: "0.0.0.0",
     port: getLocalHostPort(),
     profile: elements.localHostReadinessProfileSelect.value,
+    probeMedia: Boolean(elements.localHostProbeMediaToggle?.checked),
     checkBoard: true,
     ...extra,
   };
@@ -2961,7 +2963,8 @@ function readinessSummary(result) {
   const passed = Number(details.passed ?? 0);
   const failed = Number(details.failed ?? 0);
   const warnings = Number(details.warnings ?? 0);
-  return `${profile}体检：通过 ${passed} 项，失败 ${failed} 项，提醒 ${warnings} 条。`;
+  const media = readinessMediaStatusText(details);
+  return `${profile}体检：通过 ${passed} 项，失败 ${failed} 项，提醒 ${warnings} 条${media ? `；${media}` : ""}。`;
 }
 
 function readinessProfileLabel(profile) {
@@ -2975,6 +2978,65 @@ function readinessProfileLabel(profile) {
   }
 }
 
+function readinessMediaAggregateResult(details = {}) {
+  if (!details.args?.probeMedia) return null;
+  return Array.isArray(details.results)
+    ? details.results.find((item) => item.label === "Windows host media aggregate") || null
+    : null;
+}
+
+function normalizeReadinessMediaStatus(value, ok, passed, failed) {
+  if (value === "ok" || value === "partial" || value === "failed") return value;
+  if (ok) return "ok";
+  const safePassed = Number.isFinite(passed) ? passed : 0;
+  const safeFailed = Number.isFinite(failed) ? failed : 0;
+  if (Number.isFinite(passed) || Number.isFinite(failed)) {
+    return safeFailed === 0 ? "ok" : safePassed > 0 ? "partial" : "failed";
+  }
+  return "failed";
+}
+
+function readinessMediaStatusText(details = {}) {
+  if (!details.args?.probeMedia) return "";
+  const result = readinessMediaAggregateResult(details);
+  if (!result) return "媒体基线缺少结果";
+  const summary = result.details?.summary || {};
+  const passed = Number(summary.passed);
+  const failed = Number(summary.failed);
+  const status = normalizeReadinessMediaStatus(summary.status, result.ok, passed, failed);
+  if (status === "ok") return "媒体基线正常";
+  const countText = Number.isFinite(passed) || Number.isFinite(failed)
+    ? `（通过 ${Number.isFinite(passed) ? passed : 0}，失败 ${Number.isFinite(failed) ? failed : 0}）`
+    : "";
+  return status === "partial" ? `媒体基线部分通过${countText}` : `媒体基线失败${countText}`;
+}
+
+function formatReadinessMediaObservation(prefix, observation = {}) {
+  if (!observation || typeof observation !== "object") return "";
+  const parts = [];
+  if (Number.isFinite(Number(observation.frameCount))) parts.push(`${observation.frameCount} 帧`);
+  if (Number.isFinite(Number(observation.fps))) parts.push(`${observation.fps} FPS`);
+  if (observation.steady?.fps != null) parts.push(`稳态 ${observation.steady.fps} FPS`);
+  if (Number.isFinite(Number(observation.maxGapMs))) parts.push(`最大间隔 ${observation.maxGapMs} ms`);
+  if (Number.isFinite(Number(observation.maxFrameAgeMs))) parts.push(`帧年龄 ${observation.maxFrameAgeMs} ms`);
+  return parts.length > 0 ? `${prefix}${parts.join(" / ")}` : "";
+}
+
+function readinessMediaAggregateSummary(item = {}) {
+  const details = item.details || {};
+  const summary = details.summary || {};
+  const passed = Number(summary.passed);
+  const failed = Number(summary.failed);
+  const status = normalizeReadinessMediaStatus(summary.status, item.ok, passed, failed);
+  const statusText = status === "ok" ? "正常" : status === "partial" ? "部分通过" : "失败";
+  const countText = Number.isFinite(passed) || Number.isFinite(failed)
+    ? `通过 ${Number.isFinite(passed) ? passed : 0}，失败 ${Number.isFinite(failed) ? failed : 0}`
+    : "";
+  const video = formatReadinessMediaObservation("视频 ", details.video?.observation);
+  const audio = formatReadinessMediaObservation("音频 ", details.audio?.observation);
+  return [statusText, countText, video, audio].filter(Boolean).join(" · ");
+}
+
 function readinessLines(result) {
   const details = result?.json;
   if (!details?.results) return localHostCommandLines(result);
@@ -2985,13 +3047,18 @@ function readinessLines(result) {
   if (args.currentBuildId) header.push(`当前代码：${args.currentBuildId}`);
   if (args.maxVideoFrameAgeMs != null) header.push(`视频帧新鲜度阈值：${args.maxVideoFrameAgeMs} ms`);
   if (args.maxAudioFrameAgeMs != null) header.push(`音频帧新鲜度阈值：${args.maxAudioFrameAgeMs} ms`);
+  const media = readinessMediaStatusText(details);
+  if (media) header.push(`媒体基线：${media.replace(/^媒体基线/, "")}`);
   const boardLine = localHostBoardCallLine(details);
   if (boardLine) header.push(boardLine);
   return [
     ...header,
     ...details.results.flatMap((item) => {
       const marker = item.ok ? "[OK]" : "[FAIL]";
-      const lines = [`${marker} ${item.label} · ${item.summary || "无摘要"}`];
+      const summary = item.label === "Windows host media aggregate"
+        ? readinessMediaAggregateSummary(item)
+        : item.summary || "无摘要";
+      const lines = [`${marker} ${item.label} · ${summary}`];
       for (const warning of item.warnings || []) lines.push(warning);
       for (const error of item.errors || []) lines.push(error);
       return lines;
@@ -3177,6 +3244,9 @@ function updateLocalHostControls() {
     element.disabled = !available || busy || state.localHostRunning;
   });
   elements.localHostReadinessProfileSelect.disabled = !available || busy;
+  if (elements.localHostProbeMediaToggle) {
+    elements.localHostProbeMediaToggle.disabled = !available || busy;
+  }
 
   if (!available) {
     setLocalHostBadge("offline", "需桌面版");

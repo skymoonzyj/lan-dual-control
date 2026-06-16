@@ -713,13 +713,21 @@ async function verifyDesktopOnlyHostPanel(session) {
         "#localHostAudioModeSelect",
         "#localHostInputModeSelect",
         "#localHostReadinessProfileSelect",
+        "#localHostProbeMediaToggle",
       ].map((selector) => document.querySelector(selector));
       const profileSelect = document.querySelector("#localHostReadinessProfileSelect");
+      const probeMediaToggle = document.querySelector("#localHostProbeMediaToggle");
       const profileOptions = Array.from(profileSelect?.options || []).map((option) => option.value);
       const readinessRequest =
         typeof buildLocalHostReadinessRequest === "function"
           ? buildLocalHostReadinessRequest()
           : {};
+      if (probeMediaToggle) probeMediaToggle.checked = true;
+      const mediaReadinessRequest =
+        typeof buildLocalHostReadinessRequest === "function"
+          ? buildLocalHostReadinessRequest()
+          : {};
+      if (probeMediaToggle) probeMediaToggle.checked = false;
       const statusRequest =
         typeof buildLocalHostStatusRequest === "function"
           ? buildLocalHostStatusRequest()
@@ -733,6 +741,7 @@ async function verifyDesktopOnlyHostPanel(session) {
                   currentBuildId: "client-test",
                   maxVideoFrameAgeMs: 1000,
                   maxAudioFrameAgeMs: 750,
+                  probeMedia: true,
                 },
                 board: {
                   requested: true,
@@ -756,11 +765,73 @@ async function verifyDesktopOnlyHostPanel(session) {
                     warnings: [],
                     errors: [],
                   },
+                  {
+                    ok: true,
+                    label: "Windows host media aggregate",
+                    summary: "Windows media: ok | target=127.0.0.1:43772 | No passwords in summary; no input/inject.",
+                    details: {
+                      summary: {
+                        status: "ok",
+                        passed: 2,
+                        failed: 0,
+                      },
+                      video: {
+                        observation: {
+                          frameCount: 144,
+                          fps: 57.33,
+                          maxGapMs: 39,
+                          maxFrameAgeMs: 2,
+                        },
+                      },
+                      audio: {
+                        observation: {
+                          frameCount: 108,
+                          fps: 50.2,
+                          maxGapMs: 32,
+                          maxFrameAgeMs: 10,
+                          steady: {
+                            fps: 50,
+                          },
+                        },
+                      },
+                    },
+                    warnings: [],
+                    errors: [],
+                  },
                 ],
               },
             })
           : [];
       const readinessHeaderText = readinessHeaderLines.join("\\n");
+      const readinessSummaryText =
+        typeof readinessSummary === "function"
+          ? readinessSummary({
+              json: {
+                args: {
+                  profile: "default",
+                  probeMedia: true,
+                },
+                passed: 9,
+                failed: 0,
+                warnings: 1,
+                results: [
+                  {
+                    ok: true,
+                    label: "Windows host media aggregate",
+                    details: {
+                      summary: {
+                        status: "ok",
+                        passed: 2,
+                        failed: 0,
+                      },
+                    },
+                    warnings: [],
+                    errors: [],
+                  },
+                ],
+              },
+            })
+          : "";
       const helperResult = {
         json: {
           ok: true,
@@ -879,8 +950,11 @@ async function verifyDesktopOnlyHostPanel(session) {
           buttons.every((button) => button?.disabled) &&
           inputs.every((input) => input?.disabled) &&
           profileSelect?.value === "default" &&
+          probeMediaToggle?.checked === false &&
           profileOptions.join(",") === "default,deploy,deep" &&
           readinessRequest.profile === "default" &&
+          readinessRequest.probeMedia === false &&
+          mediaReadinessRequest.probeMedia === true &&
           readinessRequest.checkBoard === true &&
           statusRequest.host === "127.0.0.1" &&
           statusRequest.port === readinessRequest.port &&
@@ -888,9 +962,13 @@ async function verifyDesktopOnlyHostPanel(session) {
           readinessHeaderText.includes("client-test") &&
           readinessHeaderText.includes("1000 ms") &&
           readinessHeaderText.includes("750 ms") &&
+          readinessHeaderText.includes("媒体基线：正常") &&
+          readinessHeaderText.includes("视频 144 帧") &&
+          readinessHeaderText.includes("音频 108 帧") &&
           readinessHeaderText.includes("Windows host video observation") &&
           readinessHeaderText.includes("Mac 正在请求 Windows 配合") &&
           !readinessHeaderText.includes("should-not-render") &&
+          readinessSummaryText.includes("媒体基线正常") &&
           helperStatus?.runtime?.buildId === "helper-test" &&
           helperSummary.includes("PID 2468") &&
           helperSummary.includes("FFmpeg gdigrab H.264") &&
@@ -913,8 +991,11 @@ async function verifyDesktopOnlyHostPanel(session) {
         status: status?.textContent || "",
         profile: profileSelect?.value || "",
         requestProfile: readinessRequest.profile || "",
+        requestProbeMedia: readinessRequest.probeMedia,
+        mediaRequestProbeMedia: mediaReadinessRequest.probeMedia,
         statusRequest,
         readinessHeader: readinessHeaderLines.slice(0, 4),
+        readinessSummaryText,
         helperSummary,
         helperLinesText,
         offlineHelperLinesText,

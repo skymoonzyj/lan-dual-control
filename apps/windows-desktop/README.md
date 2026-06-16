@@ -39,7 +39,7 @@ apps\windows-desktop\src-tauri\target\release\lan-dual-control-windows.exe
 - 已支持本地模拟和 WebSocket 局域网连接方式。
 - 已支持分辨率、刷新率、码率、声音、剪贴板等控制项。
 - 已增加桌面原生命令：远端文件接收完成后可分块保存到本机临时目录，并写入 Windows 系统文件剪贴板。
-- 已增加“本机被控”桌面入口：可在桌面壳里体检 Windows host 环境、预览防火墙放行命令、用隐藏密码启动/停止 Windows 被控端，并通过 `start-windows-host --status --json --checkBoard` 只读查看真实 `/discovery`、runtime build、视频/音频/输入/剪贴板能力、Agent Link Board 当前呼叫和启动日志。
+- 已增加“本机被控”桌面入口：可在桌面壳里体检 Windows host 环境，勾选“媒体基线”后会把 `--probeMedia` 纳入体检并显示 `media=ok|partial|failed`，也可预览防火墙放行命令、用隐藏密码启动/停止 Windows 被控端，并通过 `start-windows-host --status --json --checkBoard` 只读查看真实 `/discovery`、runtime build、视频/音频/输入/剪贴板能力、Agent Link Board 当前呼叫和启动日志。
 - 已验证可构建 Windows 桌面 exe。
 - 下一步再接入原生窗口菜单、托盘、配置存储、正式图标、安装包和自动启动。
 
@@ -47,7 +47,7 @@ apps\windows-desktop\src-tauri\target\release\lan-dual-control-windows.exe
 
 桌面版左侧会显示“本机被控”面板。默认输入模式是“安全日志”，不会无人值守地把真实键鼠事件注入 Windows；需要让 Mac 真正反控这台 Windows 时，再手动切到“真实控制”。
 
-- `体检`：可选择低风险、部署、深度三档。低风险调用 `scripts/windows/check-windows-host-readiness.mjs --profile default --json --checkBoard`；部署档会要求端口可达、运行中 host build 与当前代码一致，并跑带帧新鲜度和 timestamp 单调性强校验的视频/音频短观察；深度档会额外串联 Windows host 本机自检。面板只显示通讯板呼叫方向和目标，不回显 call command。
+- `体检`：可选择低风险、部署、深度三档。低风险调用 `scripts/windows/check-windows-host-readiness.mjs --profile default --json --checkBoard`；勾选“媒体基线”时会额外传 `--probeMedia`，顺序跑视频+音频媒体聚合，并在状态区显示“媒体基线正常/部分通过/失败”；部署档会要求端口可达、运行中 host build 与当前代码一致，并跑带帧新鲜度和 timestamp 单调性强校验的视频/音频短观察；深度档会额外串联 Windows host 本机自检。面板只显示通讯板呼叫方向和目标，不回显 call command。
 - `防火墙预览`：只生成放行命令预览，不修改系统设置。
 - `启动`：要求填写被控密码，通过桌面原生命令启动 `apps/windows-host/server.mjs`；桌面壳会自动把当前 git short hash 写入 `LAN_DUAL_BUILD_ID`，便于体检和 Mac 端确认没有连到旧进程。
 - `停止`：停止由桌面壳启动的 Windows host 进程树，避免留下 FFmpeg 或 Node 子进程。

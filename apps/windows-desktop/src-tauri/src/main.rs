@@ -134,6 +134,7 @@ struct WindowsHostReadinessRequest {
     host: Option<String>,
     port: Option<u16>,
     profile: Option<String>,
+    probe_media: Option<bool>,
     probe_video: Option<bool>,
     probe_audio: Option<bool>,
     require_open: Option<bool>,
@@ -1166,6 +1167,9 @@ fn run_windows_host_readiness(
 
     if request.probe_video.unwrap_or(false) {
         args.push("--probeVideo".to_string());
+    }
+    if request.probe_media.unwrap_or(false) {
+        args.push("--probeMedia".to_string());
     }
     if request.probe_audio.unwrap_or(false) {
         args.push("--probeAudio".to_string());

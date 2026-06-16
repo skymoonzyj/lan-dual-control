@@ -19,6 +19,44 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 20:03
+开发端：Windows Codex
+本轮目标：把 Windows readiness `--probeMedia` 接入 Windows 桌面“本机被控”体检面板。
+完成内容：
+- Windows 控制端“本机被控”面板新增“媒体基线”复选框，默认不勾选，避免普通低风险体检变慢。
+- 前端 `buildLocalHostReadinessRequest` 会在勾选时传 `probeMedia=true`；Tauri 后端 `run_windows_host_readiness` 会把它转成 `check-windows-host-readiness --probeMedia`。
+- 体检摘要新增“媒体基线正常/部分通过/失败”；详情行把 `Windows host media aggregate` 压缩为视频 FPS、音频 FPS、最大间隔和帧年龄，避免整条媒体 boardSummary 挤满面板。
+- 页面 diagnostics-only 回归锁定：浏览器预览版面板仍禁用、默认请求 `probeMedia=false`、勾选后请求 `probeMedia=true`，媒体摘要和详情能正确显示。
+- Windows client / desktop README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-desktop/src-tauri/src/main.rs`
+- `apps/windows-client/index.html`
+- `apps/windows-client/app.js`
+- `apps/windows-client/styles.css`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-desktop/README.md`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `cargo check --manifest-path apps/windows-desktop/src-tauri/Cargo.toml`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps docs scripts shared`
+遗留问题：
+- 本轮没有在真实桌面窗口里人工点击“媒体基线”按钮；已用页面级 diagnostics-only 和 Tauri 编译检查覆盖请求形状和展示逻辑。
+下一步建议：
+- 后续 Mac 控制 Windows 前，可直接在 Windows 桌面“本机被控”面板勾选“媒体基线”跑体检；如果 UI 显示部分通过，再用命令行 `--probeMedia --json` 看具体视频/音频失败细节。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 19:49
 开发端：Windows Codex
 本轮目标：给 Windows host readiness 增加统一媒体聚合状态，方便 Mac 控制 Windows 前用一行摘要判断视频/音频基线。
