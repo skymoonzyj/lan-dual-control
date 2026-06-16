@@ -97,10 +97,19 @@ Options:
   --json                         Print one machine-readable JSON object.
   --help, -h                     Show this help without probing anything.
 
+Machine-readable JSON fields:
+  commands.preflight             Secret-free read-only formal checklist command.
+  commands.sendCall              Secret-free --preflightOnly call sender; only set after a Windows host is known.
+  commands.discoverPreflight     Safe discovery + preflight retry command when no host is known.
+  commands.browserSmoke          Browser smoke command shape; uses --useEnvPassword, never embeds passwords.
+  ensuredClient                  Result from --ensureClient start/reuse of the local Mac client page.
+  discovery                      Selected Windows host details when --discover is used.
+  sentCall                       Present only with --preflightOnly --sendCall; secret-free Agent Link Board result.
+
 Examples:
   node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.50 --port 43770 --preflightOnly --boardSummary
   node scripts/mac/run-mac-client-formal-smoke.mjs --discover --preflightOnly --boardSummary
-  node scripts/mac/run-mac-client-formal-smoke.mjs --discover --preflightOnly --sendCall
+  node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --sendCall
   node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.50 --port 43770 --promptPassword
   node scripts/mac/run-mac-client-formal-smoke.mjs --discover --promptPassword
 `);

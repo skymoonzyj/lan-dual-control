@@ -286,6 +286,13 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "--promptPassword", `${script} ${flag}`);
     assertIncludes(result.stdout, "--discover", `${script} ${flag}`);
     assertIncludes(result.stdout, "--ensureClient", `${script} ${flag}`);
+    assertIncludes(result.stdout, "Machine-readable JSON fields", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.preflight", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.sendCall", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.browserSmoke", `${script} ${flag}`);
+    assertIncludes(result.stdout, "ensuredClient", `${script} ${flag}`);
+    assertIncludes(result.stdout, "sentCall", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--discover --ensureClient --preflightOnly --sendCall", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "LAN_DUAL_PASSWORD=", `${script} ${flag}`);
   }
   print("OK", "Formal smoke help exits quickly");
@@ -333,8 +340,12 @@ async function checkPreflightAndDryRun(args) {
         assert(preflightPayload.preflightOnly === true, "preflightOnly should be recorded");
         assert(preflightPayload.preflight?.ok === true, "nested formal preflight should be ok=true");
         assert(preflightPayload.preflight?.readyToCall === true, "custom board server should allow readyToCall");
+        assert(preflightPayload.ensuredClient?.attempted === false, "preflight without ensureClient should record no ensure attempt");
+        assert(preflightPayload.commands?.preflight?.includes("check-mac-client-formal-status.mjs"), "preflight should expose formal checklist command");
         assert(preflightPayload.commands?.sendCall?.includes("--sendCall"), "preflight should expose sendCall command");
         assert(preflightPayload.commands?.sendCall?.includes(`--server ${boardServer}`), "sendCall command should preserve custom board server");
+        assert(preflightPayload.commands?.discoverPreflight?.includes("--discover"), "preflight should expose safe discovery retry command");
+        assert(preflightPayload.commands?.browserSmoke?.includes("--useEnvPassword"), "preflight should expose env-password browser command shape");
         assertIncludes(preflightPayload.boardSummary || "", "Coordinate first", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "--sendCall", "preflight board summary");
         assertNotIncludes(`${preflight.stdout}\n${preflight.stderr}`, secret, "preflight output");
@@ -358,7 +369,9 @@ async function checkPreflightAndDryRun(args) {
         const sendCallPayload = parseJson(sendCall.stdout, "sendCall JSON");
         assert(sendCall.status === 0, `sendCall should pass.\n${sendCall.stdout}\n${sendCall.stderr}`);
         assert(sendCallPayload.ok === true, "sendCall payload should be ok=true");
+        assert(sendCallPayload.sentCall?.attempted === true, "sendCall should record an attempted board call");
         assert(sendCallPayload.sentCall?.ok === true, "sendCall should report sentCall ok");
+        assert("boardCallBeforeSend" in sendCallPayload.sentCall, "sendCall should expose prior board call state");
         assert(sendCallPayload.sentCall?.payload?.goal === "正式端到端验收 Windows host", "sendCall payload should keep formal goal");
         assertIncludes(sendCallPayload.boardSummary || "", "Agent Link Board call was sent", "sendCall board summary");
         assertNotIncludes(`${sendCall.stdout}\n${sendCall.stderr}`, secret, "sendCall output");
@@ -380,7 +393,10 @@ async function checkPreflightAndDryRun(args) {
       const dryRunPayload = parseJson(dryRun.stdout, "dryRun JSON");
       assert(dryRun.status === 0, `dryRun should pass.\n${dryRun.stdout}\n${dryRun.stderr}`);
       assert(dryRunPayload.ok === true, "dryRun should be ok=true");
+      assert(dryRunPayload.ensuredClient?.attempted === false, "dryRun without ensureClient should record no ensure attempt");
+      assert(dryRunPayload.commands?.preflight?.includes("check-mac-client-formal-status.mjs"), "dryRun should expose preflight command");
       assert(dryRunPayload.commands?.sendCall?.includes("--sendCall"), "dryRun should expose sendCall command");
+      assert(dryRunPayload.commands?.discoverPreflight?.includes("--discover"), "dryRun should expose safe discovery command");
       assert(dryRunPayload.commands?.browserSmoke?.includes("--useEnvPassword"), "dryRun should use environment password flag");
       assert(dryRunPayload.commands?.browserSmoke?.includes("--requirePassword"), "dryRun should require password in child command");
       assertNotIncludes(dryRunPayload.commands?.browserSmoke || "", secret, "dryRun command");
@@ -421,6 +437,8 @@ async function checkDiscoverPreflight(args) {
       assert(payload.args?.port === windowsPort, "discover preflight should select mock Windows port");
       assert(payload.discovery?.ok === true, "discover preflight should report discovery ok");
       assert(payload.discovery?.selected?.host === "127.0.0.1", "discover preflight selected host mismatch");
+      assert(payload.commands?.sendCall?.includes("--sendCall"), "discover preflight should expose selected-host sendCall command");
+      assert(payload.commands?.sendCall?.includes(`--port ${windowsPort}`), "discover preflight sendCall should use selected port");
       assert(payload.commands?.browserSmoke?.includes("--host 127.0.0.1"), "browser command should use discovered host");
       assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "discover preflight output");
     });
@@ -453,6 +471,7 @@ async function checkEnsureClientPreflight(args) {
     assert(payload.ensuredClient?.attempted === true, "ensure client should be attempted");
     assert(payload.ensuredClient?.ok === true, "ensure client should report ok");
     assert(payload.ensuredClient?.online === true, "ensure client should report page online");
+    assert(payload.ensuredClient?.url?.includes(`:${clientPort}`), "ensure client should report the local client URL");
     assert(payload.preflight?.ok === true, "ensure client preflight should be ok");
     assert(payload.preflight?.counts?.blocker === 0, "ensure client preflight should have no blockers");
     assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "ensure client output");
