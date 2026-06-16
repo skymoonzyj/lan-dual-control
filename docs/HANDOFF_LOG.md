@@ -19,6 +19,40 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 13:35
+开发端：Windows Codex
+本轮目标：给 Windows host 媒体聚合 JSON 增加机器可读状态字段。
+完成内容：
+- `scripts/windows/observe-windows-host-media.mjs` 的 JSON `summary` 新增 `status` 字段，取值为 `ok`、`partial` 或 `failed`，和 `boardSummary` 的 `Windows media: ok/partial/failed` 保持一致。
+- `summary.status=partial` 表示视频/音频其中一路成功、另一路失败；`failed` 只表示全部执行链路失败；自动化可直接读 JSON，不必解析一行摘要。
+- `scripts/windows/test-windows-host-media-board-summary.mjs` 新增成功、全失败、partial failure 三种 `summary.status` 回归，并继续确认摘要不泄密。
+- Windows host README、当前状态、下一步和任务板同步说明 `summary.status`。
+修改文件：
+- `scripts/windows/observe-windows-host-media.mjs`
+- `scripts/windows/test-windows-host-media-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/observe-windows-host-media.mjs`
+- `node --check scripts/windows/test-windows-host-media-board-summary.mjs`
+- `node scripts/windows/test-windows-host-media-board-summary.mjs --timeoutMs 60000`
+- `node scripts/windows/test-windows-script-help.mjs --script observe-windows-host-media.mjs --script test-windows-host-media-board-summary.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-script-help.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps docs scripts shared`
+遗留问题：
+- 本轮只增强 Windows media JSON；Mac media 聚合如需同名 `summary.status`，可由 Mac 端按相同语义补齐。
+下一步建议：
+- 后续桌面面板或 Agent Link Board 自动化消费媒体基线时，优先读 `summary.status`，再展示 `boardSummary` 给人看。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 13:30
 开发端：Windows Codex
 本轮目标：让 Windows host 媒体观察摘要区分 partial failure 和全失败。

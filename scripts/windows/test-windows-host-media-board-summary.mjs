@@ -190,6 +190,7 @@ async function verifyJsonSummary(args) {
   assertNoSecretLeak(result.stderr, "JSON stderr");
   const payload = parseJson(result.stdout, "media JSON");
   assert(payload.ok === true, "JSON ok should be true");
+  assert(payload.summary?.status === "ok", `JSON summary.status should be ok: ${result.stdout}`);
   assert(payload.video?.observation?.frameCount >= 2, "JSON should include video frames");
   assert(typeof payload.boardSummary === "string" && payload.boardSummary.length > 0, "JSON boardSummary missing");
   assertIncludes(payload.boardSummary, "Windows media: ok", "JSON boardSummary");
@@ -241,6 +242,7 @@ async function verifyFailureJsonSummary(args) {
   assertNoSecretLeak(result.stderr, "failure JSON stderr");
   const payload = parseJson(result.stdout, "failure media JSON");
   assert(payload.ok === false, "failure JSON ok should be false");
+  assert(payload.summary?.status === "failed", `failure JSON summary.status should be failed: ${result.stdout}`);
   assert(payload.error?.summary === "video observation failed", "failure JSON summary mismatch");
   assert(typeof payload.error?.message === "string" && payload.error.message.length > 0, "failure JSON should include sanitized error message");
   assert(typeof payload.boardSummary === "string" && payload.boardSummary.length > 0, "failure JSON boardSummary missing");
@@ -259,6 +261,7 @@ async function verifyPartialFailureContinues(args) {
   assertNoSecretLeak(result.stderr, "partial failure JSON stderr");
   const payload = parseJson(result.stdout, "partial failure media JSON");
   assert(payload.ok === false, "partial failure JSON ok should be false");
+  assert(payload.summary?.status === "partial", `partial failure JSON summary.status should be partial: ${result.stdout}`);
   assert(payload.summary?.passed === 1, `partial failure should keep one passed probe: ${result.stdout}`);
   assert(payload.summary?.failed === 1, `partial failure should record one failed probe: ${result.stdout}`);
   assert(payload.summary?.failures?.[0]?.id === "video", "partial failure should identify video failure");

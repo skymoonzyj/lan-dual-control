@@ -566,11 +566,18 @@ function probeBoardFragment(report, id, fragment) {
   return fragment;
 }
 
+function mediaStatusFromCounts(ok, passed, failed) {
+  if (ok) return "ok";
+  return Number(passed) > 0 && Number(failed) > 0 ? "partial" : "failed";
+}
+
 function mediaStatus(report) {
-  if (report.ok) return "ok";
+  if (typeof report.summary?.status === "string" && report.summary.status) {
+    return report.summary.status;
+  }
   const passed = Number(report.summary?.passed) || 0;
   const failed = Number(report.summary?.failed) || 0;
-  return passed > 0 && failed > 0 ? "partial" : "failed";
+  return mediaStatusFromCounts(report.ok, passed, failed);
 }
 
 function makeBoardSummary(report) {
@@ -613,8 +620,10 @@ function resourceSummary(resource) {
 
 function makeReport(args, videoRun, audioRun, failures, startedAtIso, finishedAtIso, elapsedMs) {
   const failed = Array.isArray(failures) ? failures : [];
+  const passedCount = [videoRun, audioRun].filter(Boolean).length;
+  const failedCount = failed.length;
   const report = {
-    ok: failed.length === 0,
+    ok: failedCount === 0,
     startedAt: startedAtIso,
     finishedAt: finishedAtIso,
     elapsedMs,
@@ -624,8 +633,9 @@ function makeReport(args, videoRun, audioRun, failures, startedAtIso, finishedAt
     video: observationFragment(videoRun),
     audio: observationFragment(audioRun),
     summary: {
-      passed: [videoRun, audioRun].filter(Boolean).length,
-      failed: failed.length,
+      status: mediaStatusFromCounts(failedCount === 0, passedCount, failedCount),
+      passed: passedCount,
+      failed: failedCount,
       failures: failed.map((failure) => ({
         id: failure.id,
         label: failure.label,
