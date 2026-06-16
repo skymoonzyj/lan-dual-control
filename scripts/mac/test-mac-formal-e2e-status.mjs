@@ -152,6 +152,21 @@ function assertBoardSummaryShape(text, label) {
   assertNoSecretLikeText(text, label);
 }
 
+function assertMediaReadinessCommand(command, label, expectedPort = null) {
+  const text = String(command || "");
+  assert(/node scripts\/mac\/check-mac-host-readiness\.mjs/.test(text), `${label} should use check-mac-host-readiness`);
+  assert(/--checkBoard/.test(text), `${label} should check Agent Link Board`);
+  assert(/--probeMedia/.test(text), `${label} should enable media probe`);
+  assert(/--probeMediaResourceSample/.test(text), `${label} should enable resource sample`);
+  assert(/--promptPassword/.test(text), `${label} should prompt locally instead of embedding a password`);
+  assert(/--boardSummary/.test(text), `${label} should produce boardSummary`);
+  assert(!/(^|\s)--password(\s|=|$)/.test(text), `${label} should not embed --password`);
+  assert(!/super-secret-formal-password/.test(text), `${label} should not echo server-like secret text`);
+  if (expectedPort !== null) {
+    assert(text.includes(`--port ${expectedPort}`), `${label} should target expected port ${expectedPort}`);
+  }
+}
+
 function listen(server, host = "127.0.0.1") {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -349,6 +364,8 @@ function checkOfflineJson(args) {
   assert(payload.checklist.some((entry) => entry.id === "inject" && entry.status === "skip"), "offline checklist should explicitly skip inject");
   assertBoardSummaryShape(payload.boardSummary || "", "offline JSON boardSummary");
   assert(/start-mac-host --promptPassword --requirePassword/.test(payload.callText || ""), "offline callText should include safe start command");
+  assert(/check-mac-host-readiness --probeMedia --boardSummary/.test(payload.boardSummary || ""), "offline boardSummary should mention media precheck");
+  assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "offline media readiness command", 9);
   print("OK", "Offline formal E2E JSON blocks the call and keeps safety guidance");
 }
 
@@ -367,6 +384,7 @@ function checkOfflineBoardSummary(args) {
   const text = String(result.stdout || "").trim();
   assertBoardSummaryShape(text, "offline board summary");
   assert(/Mac host offline/.test(text), "offline board summary should mention host offline");
+  assert(/Media precheck/.test(text), "offline board summary should mention media precheck");
   print("OK", "Offline board summary is short, secret-free, and actionable");
 }
 
@@ -573,6 +591,7 @@ async function checkReadySendCall(args) {
       for (const field of ["status", "from", "need", "goal", "environment", "connection", "command", "expected", "ask", "owner", "timeout"]) {
         assert(call[field] === payload.sentCall.payload[field], `sentCall payload should match fake board call field ${field}`);
       }
+      assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "ready sendCall media readiness command", macHost.port);
       print("OK", "Ready --sendCall posts one secret-free formal E2E call to a fake board");
     });
   });
@@ -713,6 +732,7 @@ function checkOnlineJson(args) {
   assert(payload.checklist.some((entry) => entry.id === "inject" && entry.status === "skip"), "online checklist should explicitly skip inject");
   assertBoardSummaryShape(payload.boardSummary || "", "online JSON boardSummary");
   assert(/discovery -> auth -> H\.264 5-10 min/.test(payload.callText || ""), "online callText should include formal path");
+  assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "online media readiness command", args.port);
   print("OK", "Online formal E2E JSON includes video/audio/clipboard/input-log/inject safety checklist");
 }
 
@@ -738,6 +758,7 @@ function checkOnlineBoardSummary(args) {
   }
   assert(/host=/.test(text), "online board summary should include host address");
   assert(/Permissions/.test(text), "online board summary should include permissions");
+  assert(/Media precheck/.test(text), "online board summary should include media precheck");
   assert(/Formal path:/.test(text), "online board summary should include formal path");
   print("OK", "Online board summary includes host, permissions, and formal path");
 }
@@ -756,6 +777,8 @@ function checkSecretRedaction(args) {
     "http://super-secret-formal-password.invalid",
   ]);
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "formal E2E JSON");
+  const payload = parseJson(result.stdout, "secret-redaction formal E2E JSON");
+  assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "secret-redaction media readiness command", 9);
   print("OK", "Formal E2E status output does not echo unrelated secret-like server text");
 }
 

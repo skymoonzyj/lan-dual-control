@@ -122,6 +122,12 @@ function normalizedText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function shellArg(value) {
+  const text = String(value ?? "");
+  if (/^[A-Za-z0-9_./:@=-]+$/.test(text)) return text;
+  return `'${text.replace(/'/g, "'\\''")}'`;
+}
+
 function splitLines(value) {
   return String(value || "")
     .split(/\r?\n/)
@@ -386,13 +392,18 @@ function formatSendCallRefusal(report) {
 function makeCallText(report) {
   const host = report.resume.host || {};
   if (!host.online) {
-    return "Mac formal E2E is not ready: Mac host is offline. Start with start-mac-host --promptPassword --requirePassword, then rerun the checklist.";
+    return [
+      "Mac formal E2E is not ready: Mac host is offline.",
+      "Start with start-mac-host --promptPassword --requirePassword, then rerun the checklist.",
+      `When the host is online, refresh the media baseline with: ${report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
+    ].join(" ");
   }
   const address = formatHostAddress(host);
   return [
     `Mac formal E2E ${report.readyToCall ? "ready" : "needs attention"}: host=${address}, repo=${report.resume.currentBuildId || "unknown"}, runtimeBuild=${host.runtime?.buildId || "unknown"}, inputMode=${host.inputMode || "unknown"}.`,
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)} audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}.`,
     `Checklist blockers=${report.counts.blockers}, warnings=${report.counts.warnings}.`,
+    `Before long formal runs, refresh the Mac media baseline with: ${report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
     "If ready, Windows should run discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log. Do not run inject unless the user explicitly confirms they are watching.",
   ].join(" ");
 }
@@ -407,15 +418,38 @@ function makeBoardSummary(report) {
       `Mac formal E2E: ${state}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}.`,
       `Mac host offline at ${host.probe?.host || report.args.host}:${host.probe?.port || report.args.port}.`,
       "Next: start with start-mac-host --promptPassword --requirePassword, then rerun checklist.",
+      "Media precheck after host is online: check-mac-host-readiness --probeMedia --boardSummary.",
       "Do not send passwords on Agent Link Board; inject requires explicit user confirmation.",
     ].join(" ");
   }
   return [
     `Mac formal E2E: ${state}; host=${formatHostAddress(host)}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}; runtimeBuild=${host.runtime?.buildId || "unknown"}; inputMode=${host.inputMode || "unknown"}.`,
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)}; audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}; ${formatBuildDiff(host.buildDiff)}.`,
+    "Media precheck: check-mac-host-readiness --probeMedia --boardSummary before long formal runs.",
     "Formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log; no inject without explicit user confirmation.",
     "Do not send passwords on Agent Link Board.",
   ].join(" ");
+}
+
+function makeCommands(report) {
+  const host = report.resume.host || {};
+  const probeHost = normalizedText(host.probe?.host || report.args.host) || defaults.host;
+  const probePort = host.probe?.port || report.args.port || defaults.port;
+  return {
+    mediaReadinessBoardSummary: [
+      "node",
+      "scripts/mac/check-mac-host-readiness.mjs",
+      "--host",
+      shellArg(probeHost),
+      "--port",
+      String(probePort),
+      "--checkBoard",
+      "--probeMedia",
+      "--probeMediaResourceSample",
+      "--promptPassword",
+      "--boardSummary",
+    ].join(" "),
+  };
 }
 
 function makeCallPayload(report) {
@@ -702,6 +736,7 @@ function buildReport(args) {
     checklist,
     resume,
   };
+  report.commands = makeCommands(report);
   report.callText = makeCallText(report);
   report.boardSummary = makeBoardSummary(report);
   report.callPayload = makeCallPayload(report);
