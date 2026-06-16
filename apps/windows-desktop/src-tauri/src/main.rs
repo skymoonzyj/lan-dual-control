@@ -138,6 +138,8 @@ struct WindowsHostReadinessRequest {
     probe_audio: Option<bool>,
     require_open: Option<bool>,
     strict: Option<bool>,
+    check_board: Option<bool>,
+    server: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1174,6 +1176,18 @@ fn run_windows_host_readiness(
     if request.strict.unwrap_or(false) {
         args.push("--strict".to_string());
     }
+    if request.check_board.unwrap_or(false) {
+        args.push("--checkBoard".to_string());
+    }
+    if let Some(server) = request
+        .server
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        args.push("--server".to_string());
+        args.push(server.to_string());
+    }
 
     run_node_script(&repo, &script, &args, &[])
 }
@@ -1241,7 +1255,7 @@ fn get_windows_host_helper_status(
         .unwrap_or("127.0.0.1")
         .to_string();
     let port = normalize_port(request.port);
-    let args = vec![
+    let mut args = vec![
         "--status".to_string(),
         "--json".to_string(),
         "--host".to_string(),
@@ -1249,6 +1263,18 @@ fn get_windows_host_helper_status(
         "--port".to_string(),
         port.to_string(),
     ];
+    if request.check_board.unwrap_or(false) {
+        args.push("--checkBoard".to_string());
+    }
+    if let Some(server) = request
+        .server
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        args.push("--server".to_string());
+        args.push(server.to_string());
+    }
 
     run_node_script(&repo, &script, &args, &[])
 }

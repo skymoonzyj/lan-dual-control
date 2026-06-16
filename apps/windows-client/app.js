@@ -2904,6 +2904,7 @@ function buildLocalHostReadinessRequest(extra = {}) {
     host: "0.0.0.0",
     port: getLocalHostPort(),
     profile: elements.localHostReadinessProfileSelect.value,
+    checkBoard: true,
     ...extra,
   };
 }
@@ -2912,6 +2913,7 @@ function buildLocalHostStatusRequest(extra = {}) {
   return {
     host: "127.0.0.1",
     port: getLocalHostPort(),
+    checkBoard: true,
     ...extra,
   };
 }
@@ -2983,6 +2985,8 @@ function readinessLines(result) {
   if (args.currentBuildId) header.push(`当前代码：${args.currentBuildId}`);
   if (args.maxVideoFrameAgeMs != null) header.push(`视频帧新鲜度阈值：${args.maxVideoFrameAgeMs} ms`);
   if (args.maxAudioFrameAgeMs != null) header.push(`音频帧新鲜度阈值：${args.maxAudioFrameAgeMs} ms`);
+  const boardLine = localHostBoardCallLine(details);
+  if (boardLine) header.push(boardLine);
   return [
     ...header,
     ...details.results.flatMap((item) => {
@@ -3049,11 +3053,65 @@ function formatLocalHostClipboardStatus(clipboard = {}) {
   ].filter(Boolean).join(" / ");
 }
 
+function localHostBoardCallStatus(status = {}) {
+  const board = status.board || {};
+  if (!board.requested) return null;
+  if (!board.ok) {
+    return {
+      level: "warn",
+      activeMacToWindows: false,
+      text: `通讯板不可用：${board.error || "读取失败"}`,
+    };
+  }
+
+  const call = board.currentCall || {};
+  if (!call.present) {
+    return {
+      level: "ok",
+      activeMacToWindows: false,
+      text: "通讯板：没有待处理呼叫",
+    };
+  }
+
+  const direction = [call.from, call.need].filter(Boolean).join(" → ");
+  const goal = call.goal || "";
+  const summary = [direction, goal].filter(Boolean).join(" · ");
+  const activeMacToWindows = Boolean(call.active && call.needsWindows && call.fromMacSide);
+  if (activeMacToWindows) {
+    return {
+      level: "call",
+      activeMacToWindows: true,
+      text: `通讯板：Mac 正在请求 Windows 配合${summary ? ` · ${summary}` : ""}`,
+    };
+  }
+
+  return {
+    level: "info",
+    activeMacToWindows: false,
+    text: `通讯板：currentCall ${call.active ? "非 Windows 待办" : "已完成/非待办"}${summary ? ` · ${summary}` : ""}`,
+  };
+}
+
+function localHostBoardCallLine(status = {}) {
+  const callStatus = localHostBoardCallStatus(status);
+  if (!callStatus) return "";
+  const prefix = callStatus.level === "call"
+    ? "[CALL]"
+    : callStatus.level === "warn"
+      ? "[WARN]"
+      : callStatus.level === "ok"
+        ? "[OK]"
+        : "[INFO]";
+  return `${prefix} ${callStatus.text}`;
+}
+
 function localHostHelperStatusSummary(status, { managedPid = "" } = {}) {
   if (!status) return "";
+  const boardCall = localHostBoardCallStatus(status);
+  const boardText = boardCall?.activeMacToWindows ? "通讯板有 Mac→Windows 呼叫" : "";
   if (!status.ok) {
     const reason = status.error?.message || "端口没有响应";
-    return `本机被控未在线：${reason}`;
+    return `本机被控未在线：${reason}${boardText ? ` · ${boardText}` : ""}`;
   }
 
   const runtimeText = formatHostRuntimeDiagnostics(status.runtime);
@@ -3063,6 +3121,7 @@ function localHostHelperStatusSummary(status, { managedPid = "" } = {}) {
     managedPid ? `PID ${managedPid}` : runtimeText,
     screenText ? `画面 ${screenText}` : "",
     audioText ? `声音 ${audioText}` : "",
+    boardText,
   ].filter(Boolean);
   return `本机被控${managedPid ? "正在运行" : "已在线"}：${parts.join(" · ") || "/discovery 在线"}`;
 }
@@ -3072,15 +3131,18 @@ function localHostHelperStatusLines(result) {
   if (!status) return [];
 
   const target = status.probe?.url || `${status.probe?.host || "127.0.0.1"}:${status.probe?.port || getLocalHostPort()}`;
+  const boardLine = localHostBoardCallLine(status);
   if (!status.ok) {
     return [
       `[WARN] 状态助手：/discovery 离线 ${target}`,
+      boardLine,
       status.error?.message ? `[WARN] ${status.error.message}` : "",
       ...(status.suggestions || []).map((line) => `[INFO] ${line}`),
     ].filter(Boolean);
   }
 
   const lines = [`[OK] 状态助手：/discovery 在线 ${target}`];
+  if (boardLine) lines.push(boardLine);
   const runtimeText = formatHostRuntimeDiagnostics(status.runtime);
   const screenText = formatLocalHostScreenStatus(status.capabilities?.screen || {});
   const audioText = formatLocalHostAudioStatus(status.capabilities?.audio || {});

@@ -17,6 +17,39 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-16 Windows Codex
+
+日期：2026-06-16 12:45
+开发端：Windows Codex
+本轮目标：让 Windows 桌面版“本机被控”面板也能显示 Agent Link Board 当前测试呼叫。
+完成内容：
+- Tauri 桌面壳的 Windows host readiness/status 原生命令支持透传 `checkBoard` 和 `server` 到 Node helper。
+- Windows 控制端本机被控面板默认在体检和状态刷新时启用 `--checkBoard`，状态区和日志区会提示 active Mac -> Windows call 为“Mac 正在请求 Windows 配合”。
+- DONE/完成态 call 只显示为非待办，不会误当作 Windows 当前要处理的呼叫；UI 不回显 call command。
+- 页面级 diagnostics-only 回归补充 fake board active/DONE currentCall，断言请求携带 `checkBoard=true`、提示文案出现且 secret-like command 不渲染。
+修改文件：
+- `apps/windows-desktop/src-tauri/src/main.rs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-desktop/README.md`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `cargo check --manifest-path apps/windows-desktop/src-tauri/Cargo.toml`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 本轮只做桌面 UI 可见提示，不自动响应/清理通讯板 call，不启动 Windows host，不认证、不发送密码、不执行真实输入。
+下一步建议：
+- Mac 侧准备控制 Windows 前，可先发 formal call；Windows 桌面版“本机被控”面板会直接显示该呼叫，再由用户决定启动/体检 Windows host。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
 ## 2026-06-16 Mac Codex
 
 日期：2026-06-16 12:35

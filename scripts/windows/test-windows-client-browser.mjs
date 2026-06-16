@@ -734,6 +734,20 @@ async function verifyDesktopOnlyHostPanel(session) {
                   maxVideoFrameAgeMs: 1000,
                   maxAudioFrameAgeMs: 750,
                 },
+                board: {
+                  requested: true,
+                  ok: true,
+                  currentCall: {
+                    present: true,
+                    active: true,
+                    from: "Mac Codex",
+                    need: "Windows Codex",
+                    goal: "正式 Windows host 验收",
+                    needsWindows: true,
+                    fromMacSide: true,
+                    command: "node scripts/mac/check-mac-client-formal-status.mjs --sendCall --secret should-not-render",
+                  },
+                },
                 results: [
                   {
                     ok: true,
@@ -784,6 +798,20 @@ async function verifyDesktopOnlyHostPanel(session) {
             },
           },
           warnings: ["WGC fallback: demo"],
+          board: {
+            requested: true,
+            ok: true,
+            currentCall: {
+              present: true,
+              active: true,
+              from: "Mac Codex",
+              need: "Windows Codex",
+              goal: "正式 Windows host 验收",
+              needsWindows: true,
+              fromMacSide: true,
+              command: "node scripts/mac/check-mac-client-formal-status.mjs --sendCall --secret should-not-render",
+            },
+          },
           buildDiff: {
             changed: false,
             message: "No Windows host runtime source changes since old-build.",
@@ -814,6 +842,20 @@ async function verifyDesktopOnlyHostPanel(session) {
                 error: {
                   message: "connect ECONNREFUSED 127.0.0.1:43770",
                 },
+                board: {
+                  requested: true,
+                  ok: true,
+                  currentCall: {
+                    present: true,
+                    active: false,
+                    from: "Mac Codex",
+                    need: "Windows Codex",
+                    goal: "已完成的 Windows host 验收",
+                    needsWindows: true,
+                    fromMacSide: true,
+                    command: "done command should-not-render",
+                  },
+                },
               },
             }).join("\\n")
           : "";
@@ -839,22 +881,32 @@ async function verifyDesktopOnlyHostPanel(session) {
           profileSelect?.value === "default" &&
           profileOptions.join(",") === "default,deploy,deep" &&
           readinessRequest.profile === "default" &&
+          readinessRequest.checkBoard === true &&
           statusRequest.host === "127.0.0.1" &&
           statusRequest.port === readinessRequest.port &&
+          statusRequest.checkBoard === true &&
           readinessHeaderText.includes("client-test") &&
           readinessHeaderText.includes("1000 ms") &&
           readinessHeaderText.includes("750 ms") &&
           readinessHeaderText.includes("Windows host video observation") &&
+          readinessHeaderText.includes("Mac 正在请求 Windows 配合") &&
+          !readinessHeaderText.includes("should-not-render") &&
           helperStatus?.runtime?.buildId === "helper-test" &&
           helperSummary.includes("PID 2468") &&
           helperSummary.includes("FFmpeg gdigrab H.264") &&
           helperSummary.includes("WASAPI") &&
+          helperSummary.includes("通讯板有 Mac→Windows 呼叫") &&
           helperLinesText.includes("状态助手") &&
+          helperLinesText.includes("[CALL] 通讯板") &&
+          helperLinesText.includes("正式 Windows host 验收") &&
+          !helperLinesText.includes("should-not-render") &&
           helperLinesText.includes("build helper-test") &&
           helperLinesText.includes("剪贴板") &&
           helperLinesText.includes("WGC fallback") &&
           offlineHelperLinesText.includes("离线") &&
           offlineHelperLinesText.includes("ECONNREFUSED") &&
+          offlineHelperLinesText.includes("currentCall 已完成/非待办") &&
+          !offlineHelperLinesText.includes("should-not-render") &&
           maxNativeClipboardFileBytes === maxClipboardFileBytes &&
           nativeClipboardChunkSizeBytes === 1024 * 1024,
         badge: badge?.textContent || "",
