@@ -19,6 +19,41 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 20:37
+开发端：Windows Codex
+本轮目标：让 Windows host 状态助手也提示本机媒体基线命令。
+完成内容：
+- `scripts/windows/start-windows-host.mjs --status` 的 JSON 新增 `windowsHostMediaReadinessCommand`，指向 `check-windows-host-readiness --checkBoard --probeMedia --boardSummary`。
+- 普通 status 输出、离线/在线 `--boardSummary` 和启动后 ready 输出都会提示 `Windows host media baseline command` / `WindowsHostMedia=`。
+- `scripts/windows/test-windows-host-start-helper.mjs` 覆盖离线、在线、JSON、boardSummary、fake board currentCall 和临时端口真实启动路径中的媒体命令，同时继续确认不泄露测试密码。
+- Windows host README、当前状态、下一步和任务板已同步。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- PowerShell 7 AST 解析 `scripts/windows/start-windows-host.ps1`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script start-windows-host.mjs --script test-windows-host-start-helper.mjs --timeoutMs 10000`
+- 离线 `start-windows-host --status --boardSummary` 确认输出 `WindowsHostMedia=`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮只补状态提示，不启动正式 Windows host，不做真实媒体长测。
+下一步建议：
+- Mac 端用 `start-windows-host --status --checkBoard --boardSummary` 确认 Windows host 状态时，可直接复制摘要里的 `WindowsHostMedia=` 命令让 Windows 侧刷新视频/音频基线。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 20:18
 开发端：Windows Codex
 本轮目标：让 Windows 恢复开工总览直接提示本机 Windows host 媒体基线命令。

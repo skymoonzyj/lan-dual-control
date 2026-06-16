@@ -76,7 +76,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-contro
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -Status -Json -CheckBoard
 ```
 
-需要把当前 Windows host 在线状态同步到 Agent Link Board，或让 Mac 端直接跑真连前 readiness / formal checklist，可以用无密摘要输出。它会给出 `check-mac-client-readiness`、`check-mac-client-formal-status` 和 ready 后可用的 `check-mac-client-formal-status --sendCall` 下一步命令；加 `--checkBoard` / `-CheckBoard` 时，摘要还会提示 active Mac -> Windows `currentCall`，DONE call 不会当作待办。状态入口不会启动服务、不会认证、不会打印密码：
+需要把当前 Windows host 在线状态同步到 Agent Link Board，或让 Mac 端直接跑真连前 readiness / formal checklist，可以用无密摘要输出。它会给出 `check-mac-client-readiness`、`check-mac-client-formal-status`、ready 后可用的 `check-mac-client-formal-status --sendCall`，以及本机 `WindowsHostMedia=check-windows-host-readiness --checkBoard --probeMedia --boardSummary` 媒体基线命令；加 `--checkBoard` / `-CheckBoard` 时，摘要还会提示 active Mac -> Windows `currentCall`，DONE call 不会当作待办。状态入口不会启动服务、不会认证、不会打印密码：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --status --boardSummary

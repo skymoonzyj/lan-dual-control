@@ -256,6 +256,8 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   assertIncludes(output, "Windows host status probe", "offline status");
   assertIncludes(output, "/discovery offline", "offline status");
   assertIncludes(output, "Start safely", "offline status");
+  assertIncludes(output, "Windows host media baseline command:", "offline status");
+  assertIncludes(output, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "offline status");
   assertNotIncludes(output, "LAN_DUAL_PASSWORD is required", "offline status");
   assertNotIncludes(output, "Starting Windows host", "offline status");
   assertNotIncludes(output, "at printStatus", "offline status");
@@ -275,6 +277,12 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   if (!Array.isArray(parsed.suggestions) || parsed.suggestions.length < 2) {
     throw new Error(`Offline JSON status did not include startup suggestions.\n${jsonResult.stdout}`);
   }
+  if (!String(parsed.windowsHostMediaReadinessCommand || "").includes("check-windows-host-readiness.mjs") || !String(parsed.windowsHostMediaReadinessCommand || "").includes("--probeMedia")) {
+    throw new Error(`Offline JSON status did not include Windows host media readiness command.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.boardSummary || "").includes("WindowsHostMedia=")) {
+    throw new Error(`Offline JSON board summary did not include WindowsHostMedia command.\n${jsonResult.stdout}`);
+  }
   assertNotIncludes(jsonOutput, "[INFO]", "offline JSON status");
   assertNotIncludes(jsonOutput, "LAN_DUAL_PASSWORD is required", "offline JSON status");
 
@@ -288,6 +296,8 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   }
   assertIncludes(boardResult.stdout, "Windows host readiness: offline", "offline board summary");
   assertIncludes(boardResult.stdout, "start safely", "offline board summary");
+  assertIncludes(boardResult.stdout, "WindowsHostMedia=", "offline board summary");
+  assertIncludes(boardResult.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "offline board summary");
   assertIncludes(boardResult.stdout, "Do not send passwords", "offline board summary");
   assertNotIncludes(boardOutput, "LAN_DUAL_PASSWORD is required", "offline board summary");
   print("OK", "Status mode reports offline host without requiring a password");
@@ -336,6 +346,7 @@ async function assertStatusCheckBoardCurrentCall(timeoutMs) {
     }
     assertIncludes(parsed.boardSummary, "call=CALLING Mac Codex->Windows Codex", "offline checkBoard JSON board summary");
     assertIncludes(parsed.boardSummary, "Mac formal Windows host 验收", "offline checkBoard JSON board summary");
+    assertIncludes(parsed.boardSummary, "WindowsHostMedia=", "offline checkBoard JSON board summary");
     assertNotIncludes(parsed.boardSummary, "--sendCall", "offline checkBoard JSON board summary");
     assertNotIncludes(parsed.boardSummary, "should-not-leak", "offline checkBoard JSON board summary");
 
@@ -474,6 +485,8 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         assertIncludes(statusOutput, "check-mac-client-formal-status.mjs", "online status");
         assertIncludes(statusOutput, "Mac formal send-call command:", "online status");
         assertIncludes(statusOutput, "--sendCall", "online status");
+        assertIncludes(statusOutput, "Windows host media baseline command:", "online status");
+        assertIncludes(statusOutput, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "online status");
         assertIncludes(statusOutput, "differs from current git", "online status");
         assertIncludes(statusOutput, "Could not inspect Windows host runtime changes", "online status");
         assertNotIncludes(statusOutput, "test-password", "online status");
@@ -508,6 +521,12 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         if (!String(parsed.macClientReadinessCommands[0].sendCallCommand || "").includes("--sendCall")) {
           throw new Error(`Online JSON status did not include expected Mac formal send-call command.\n${jsonResult.stdout}`);
         }
+        if (!String(parsed.windowsHostMediaReadinessCommand || "").includes("check-windows-host-readiness.mjs") || !String(parsed.windowsHostMediaReadinessCommand || "").includes("--probeMedia")) {
+          throw new Error(`Online JSON status did not include Windows host media readiness command.\n${jsonResult.stdout}`);
+        }
+        if (!String(parsed.boardSummary || "").includes("WindowsHostMedia=")) {
+          throw new Error(`Online JSON board summary did not include WindowsHostMedia command.\n${jsonResult.stdout}`);
+        }
         if (parsed.buildDiff?.checked !== false || !String(parsed.buildDiff?.message || "").includes("Could not inspect")) {
           throw new Error(`Online JSON status did not include expected uninspectable build diff.\n${jsonResult.stdout}`);
         }
@@ -526,6 +545,8 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         assertIncludes(boardResult.stdout, "check-mac-client-readiness.mjs", "online board summary");
         assertIncludes(boardResult.stdout, "check-mac-client-formal-status.mjs", "online board summary");
         assertIncludes(boardResult.stdout, "--sendCall", "online board summary");
+        assertIncludes(boardResult.stdout, "WindowsHostMedia=", "online board summary");
+        assertIncludes(boardResult.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "online board summary");
         assertIncludes(boardResult.stdout, "Do not send passwords", "online board summary");
         assertNotIncludes(boardOutput, "test-password", "online board summary");
         finish();
@@ -620,6 +641,10 @@ async function assertLaunchWithEnvPassword(timeoutMs) {
       }
       if (!output.includes("Mac formal send-call command:") || !output.includes("--sendCall")) {
         rejectLaunch(new Error(`Start helper did not print Mac formal send-call command.\n${output}`));
+        return;
+      }
+      if (!output.includes("Windows host media baseline command:") || !output.includes("check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary")) {
+        rejectLaunch(new Error(`Start helper did not print Windows host media baseline command.\n${output}`));
         return;
       }
       if (!output.includes("Agent Link Board summary:") || !output.includes("Do not send passwords")) {

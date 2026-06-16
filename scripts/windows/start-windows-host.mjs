@@ -168,6 +168,8 @@ Options:
                           and surface active Mac -> Windows currentCall.
   --server <url>          Agent Link Board URL. Default: ${defaults.server}
   --boardSummary          With --status, print a short secret-free Agent Link Board summary.
+                          The summary includes a WindowsHostMedia command for local
+                          video/audio baseline checks before Mac reverse control.
   --json                  With --status, print pure machine-readable JSON.
   --dryRun                Print the resolved launch plan and exit.
   --help, -h              Show this help without starting Windows host.
@@ -548,6 +550,10 @@ function macFormalSendCallCommand(host, port) {
   return `node scripts/mac/check-mac-client-formal-status.mjs --host ${host} --port ${port} --sendCall`;
 }
 
+function windowsHostMediaReadinessCommand() {
+  return "node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary";
+}
+
 function macReadinessTargets(status) {
   const port = status.device?.controlPort || status.probe?.port || defaults.port;
   const lanHosts = Array.isArray(status.lanAddresses)
@@ -568,7 +574,7 @@ function macReadinessTargets(status) {
 function makeBoardSummary(status) {
   const board = boardSummaryFragment(status);
   if (!status.ok) {
-    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${status.suggestions[0] || "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword"}. Do not send passwords on Agent Link Board.`;
+    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${status.suggestions[0] || "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword"}. WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. Do not send passwords on Agent Link Board.`;
   }
   const targets = macReadinessTargets(status);
   const targetText = targets.length > 0
@@ -581,7 +587,7 @@ function makeBoardSummary(status) {
   const next = targets[0]?.formalCommand || targets[0]?.command || "Mac should rerun readiness after a LAN IPv4 address is available.";
   const readiness = targets[0]?.command ? ` Readiness: ${targets[0].command}.` : "";
   const sendCall = targets[0]?.sendCallCommand ? ` SendCall when ready: ${targets[0].sendCallCommand}.` : "";
-  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness}${sendCall} Do not send passwords on Agent Link Board.`;
+  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness}${sendCall} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. Do not send passwords on Agent Link Board.`;
 }
 
 function applyDiscoveryStatus(status, discovery, args) {
@@ -643,6 +649,7 @@ function makeStatusShell(args, probeHost = statusProbeHost(args)) {
     lanAddresses: getLanAddresses(),
     buildDiff: null,
     macClientReadinessCommands: [],
+    windowsHostMediaReadinessCommand: windowsHostMediaReadinessCommand(),
     board: skippedBoardSnapshot(),
     boardSummary: "",
     warnings: [],
@@ -742,6 +749,7 @@ async function printStatus(args) {
       if (status.macClientReadinessCommands[0].sendCallCommand) {
         console.log(`[INFO] Mac formal send-call command: ${status.macClientReadinessCommands[0].sendCallCommand}`);
       }
+      console.log(`[INFO] Windows host media baseline command: ${status.windowsHostMediaReadinessCommand}`);
       console.log("[INFO] Board summary: node scripts/windows/start-windows-host.mjs --status --boardSummary");
     }
     if (status.buildDiff) {
@@ -753,6 +761,7 @@ async function printStatus(args) {
   console.log(`[WARN] /discovery offline on ${status.probe.host}:${status.probe.port}: ${status.error?.message || "unknown error"}`);
   console.log(`[INFO] Start safely with: ${status.suggestions[0]}`);
   console.log(`[INFO] ${status.suggestions[1]}`);
+  console.log(`[INFO] Windows host media baseline command: ${status.windowsHostMediaReadinessCommand}`);
   return false;
 }
 
@@ -940,6 +949,9 @@ function printMacNextSteps(status) {
   }
   if (firstTarget?.sendCallCommand) {
     console.log(`[INFO] Mac formal send-call command: ${firstTarget.sendCallCommand}`);
+  }
+  if (status.windowsHostMediaReadinessCommand) {
+    console.log(`[INFO] Windows host media baseline command: ${status.windowsHostMediaReadinessCommand}`);
   }
   if (status.boardSummary) {
     console.log(`[INFO] Agent Link Board summary: ${status.boardSummary}`);
