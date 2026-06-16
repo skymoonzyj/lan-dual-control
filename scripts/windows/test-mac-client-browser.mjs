@@ -113,7 +113,7 @@ Options:
   --testReconnectNow               In --expectReconnect, click the Mac client "立即重连" button before the auto timer fires.
   --minObservedVideoFrames <n>     Minimum frames during --observeVideoMs.
   --minObservedVideoFps <fps>      Minimum FPS during --observeVideoMs.
-  --progressIntervalMs <ms>        Print long video/reconnect progress every N ms; 0 disables. Default: ${defaults.progressIntervalMs}
+  --progressIntervalMs <ms>        Print page wait progress every N ms for video/audio/reconnect/auth waits; 0 disables. Default: ${defaults.progressIntervalMs}
   --expectRepeatSignalVideo        Start WGC mock helper with repeat signal frames and require Mac client diagnostics.
   --expectBinaryVideo              Start WGC JPEG helper and require binary JPEG video transport.
   --expectBinaryH264Video          Start ffmpeg-h264 mode and require binary H.264 video transport.
@@ -360,6 +360,71 @@ function printTimedProgress(label, startedAt, deadline, details = "") {
   const percent = Math.min(100, Math.max(0, (elapsedMs / totalMs) * 100));
   const suffix = details ? ` · ${details}` : "";
   print("INFO", `${label}: ${formatSeconds(elapsedMs)} elapsed / ${formatSeconds(remainingMs)} left / ${percent.toFixed(0)}%${suffix}`);
+}
+
+function compactProgressText(value, maxLength = 90) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
+}
+
+function snapshotProgressDetails(snapshot, extra = "") {
+  if (!snapshot) return extra || "snapshot=pending";
+  const parts = [];
+  const add = (label, value) => {
+    const text = compactProgressText(value);
+    if (text) parts.push(`${label}=${text}`);
+  };
+  add("connection", snapshot.connection);
+  add("remote", snapshot.remote);
+  add("video", snapshot.video);
+  if (snapshot.audioToggleChecked || snapshot.audioFrameCount > 0 || snapshot.audioPlayedFrames > 0) {
+    add("audio", snapshot.audio);
+    add("playback", snapshot.audioPlayback);
+  }
+  if (Number(snapshot.binaryH264VideoFrames) > 0) {
+    add("binaryH264", snapshot.binaryH264VideoFrames);
+  }
+  if (Number(snapshot.binaryVideoFrames) > 0) {
+    add("binaryJpeg", snapshot.binaryVideoFrames);
+  }
+  if (Number(snapshot.repeatSignalVideoFrames) > 0) {
+    add("repeat", snapshot.repeatSignalVideoFrames);
+  }
+  if (Number(snapshot.audioFrameCount) > 0) {
+    add("audioFrames", snapshot.audioFrameCount);
+  }
+  if (Number(snapshot.audioPlayedFrames) > 0) {
+    add("played", snapshot.audioPlayedFrames);
+  }
+  if (extra) parts.push(compactProgressText(extra));
+  return parts.join(" · ") || "snapshot=pending";
+}
+
+async function waitForPageSnapshot({ args, session, label, timeoutMs, check, onSnapshot, summarize }) {
+  const effectiveTimeoutMs = timeoutMs ?? args.timeoutMs;
+  let latestSnapshot = null;
+  print("INFO", `${label} waiting: timeout=${formatSeconds(effectiveTimeoutMs)}, progressEvery=${progressEveryText(args)}.`);
+  return waitFor(
+    async () => {
+      const value = await evaluate(session, buildSnapshotExpression());
+      latestSnapshot = value;
+      onSnapshot?.(value);
+      return check(value);
+    },
+    effectiveTimeoutMs,
+    label,
+    {
+      progressIntervalMs: args.progressIntervalMs,
+      onProgress: ({ startedAt, deadline, lastError }) => {
+        const errorText = lastError ? `lastError=${lastError.message}` : "";
+        const details = summarize
+          ? summarize(latestSnapshot, errorText)
+          : snapshotProgressDetails(latestSnapshot, errorText);
+        printTimedProgress(`${label} progress`, startedAt, deadline, details);
+      },
+    },
+  );
 }
 
 function requireWithinDuration(label, elapsedMs, maxMs) {
@@ -1736,10 +1801,14 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     );
     print("OK", `Connecting buttons: ${connectingSnapshot.connection}`);
     if (args.expectAuthFailure) {
-      const authFailureSnapshot = await waitFor(
-        async () => {
-          const value = await evaluate(session, buildSnapshotExpression());
+      const authFailureSnapshot = await waitForPageSnapshot({
+        args,
+        session,
+        label: "Mac client auth failure state",
+        onSnapshot: (value) => {
           lastSnapshot = value;
+        },
+        check: async (value) => {
           const buttonsReset = !value.connectButtonDisabled && value.disconnectButtonDisabled;
           const surfaceCleared = value.video === "无画面" && !value.surfaceVisible && !value.surfaceHasFrame;
           const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
@@ -1750,9 +1819,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
             ? value
             : null;
         },
-        args.timeoutMs,
-        "Mac client auth failure state",
-      ).catch((error) => {
+      }).catch((error) => {
         if (lastSnapshot) {
           print("INFO", `Last connection: ${lastSnapshot.connection}`);
           print("INFO", `Last remote: ${lastSnapshot.remote}`);
@@ -1776,10 +1843,14 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       return;
     }
 
-    const videoSnapshot = await waitFor(
-      async () => {
-        const value = await evaluate(session, buildSnapshotExpression());
+    const videoSnapshot = await waitForPageSnapshot({
+      args,
+      session,
+      label: "Mac client video surface",
+      onSnapshot: (value) => {
         lastSnapshot = value;
+      },
+      check: async (value) => {
         if (value.connection.includes("认证失败") || value.connection.includes("连接错误")) {
           throw new Error(`${value.connection}: ${value.logs?.join(" | ")}`);
         }
@@ -1787,9 +1858,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
         const realVideoOk = !args.requireRealVideo || !value.video.includes("mock-svg");
         return value.connection.includes("已连接") && hasVideo && realVideoOk ? value : null;
       },
-      args.timeoutMs,
-      "Mac client video surface",
-    ).catch((error) => {
+    }).catch((error) => {
       if (lastSnapshot) {
         print("INFO", `Last connection: ${lastSnapshot.connection}`);
         print("INFO", `Last remote: ${lastSnapshot.remote}`);
@@ -1846,10 +1915,14 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     }
     print("OK", `Diagnostics: ${diagnosticsSnapshot.firstVideoMetric} / ${diagnosticsSnapshot.videoFlowMetric}`);
     if (args.requireH264Video) {
-      const h264Snapshot = await waitFor(
-        async () => {
-          const value = await evaluate(session, buildSnapshotExpression());
+      const h264Snapshot = await waitForPageSnapshot({
+        args,
+        session,
+        label: "Mac client H.264 video surface",
+        onSnapshot: (value) => {
           lastSnapshot = value;
+        },
+        check: async (value) => {
           const hasH264Surface = value.surfaceVisible &&
             value.surfaceHasFrame &&
             value.video.toLowerCase().includes("h264") &&
@@ -1861,9 +1934,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
           );
           return hasH264Surface && !h264FallbackRequested ? value : null;
         },
-        args.timeoutMs,
-        "Mac client H.264 video surface",
-      ).catch((error) => {
+      }).catch((error) => {
         if (lastSnapshot) {
           print("INFO", `Last video: ${lastSnapshot.video}`);
           print("INFO", `Last display settings: ${lastSnapshot.displaySettings}`);
@@ -1874,10 +1945,14 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       print("OK", `H.264 video: ${h264Snapshot.video} / ${h264Snapshot.displaySettings}`);
     }
     if (args.expectBinaryH264Video) {
-      const binaryH264Snapshot = await waitFor(
-        async () => {
-          const value = await evaluate(session, buildSnapshotExpression());
+      const binaryH264Snapshot = await waitForPageSnapshot({
+        args,
+        session,
+        label: "Mac client binary H.264 video diagnostics",
+        onSnapshot: (value) => {
           lastSnapshot = value;
+        },
+        check: async (value) => {
           const hasBinaryH264Frame = Number(value.binaryH264VideoFrames) > 0;
           const hasH264Surface = value.surfaceVisible &&
             value.surfaceHasFrame &&
@@ -1885,9 +1960,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
             !value.video.includes("回退");
           return hasBinaryH264Frame && hasH264Surface ? value : null;
         },
-        args.timeoutMs,
-        "Mac client binary H.264 video diagnostics",
-      ).catch((error) => {
+      }).catch((error) => {
         if (lastSnapshot) {
           print("INFO", `Last video: ${lastSnapshot.video}`);
           print("INFO", `Last video diagnostics: ${lastSnapshot.videoFlowMetric}`);
@@ -1901,10 +1974,14 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       );
     }
     if (args.expectH264Fallback) {
-      const fallbackSnapshot = await waitFor(
-        async () => {
-          const value = await evaluate(session, buildSnapshotExpression());
+      const fallbackSnapshot = await waitForPageSnapshot({
+        args,
+        session,
+        label: "Mac client H.264 to MJPEG fallback",
+        onSnapshot: (value) => {
           lastSnapshot = value;
+        },
+        check: async (value) => {
           const hasJpegSurface = value.surfaceVisible && value.surfaceHasFrame && value.video.includes("jpeg");
           const sentJpegFallback = await evaluate(
             session,
@@ -1913,9 +1990,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
           );
           return hasJpegSurface && sentJpegFallback ? value : null;
         },
-        args.timeoutMs,
-        "Mac client H.264 to MJPEG fallback",
-      ).catch((error) => {
+      }).catch((error) => {
         if (lastSnapshot) {
           print("INFO", `Last video: ${lastSnapshot.video}`);
           print("INFO", `Last display settings: ${lastSnapshot.displaySettings}`);
@@ -1926,18 +2001,20 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       print("OK", `H.264 fallback: ${fallbackSnapshot.video} / ${fallbackSnapshot.displaySettings}`);
     }
     if (args.expectRepeatSignalVideo) {
-      const repeatSignalSnapshot = await waitFor(
-        async () => {
-          const value = await evaluate(session, buildSnapshotExpression());
+      const repeatSignalSnapshot = await waitForPageSnapshot({
+        args,
+        session,
+        label: "Mac client repeat signal video diagnostics",
+        onSnapshot: (value) => {
           lastSnapshot = value;
+        },
+        check: async (value) => {
           const hasRepeat = Number(value.repeatSignalVideoFrames) > 0;
           const surfaceOk = value.surfaceVisible && value.surfaceHasFrame;
           const diagnosticsOk = value.video.includes("重复") || value.videoFlowMetric.includes("重复");
           return hasRepeat && surfaceOk && diagnosticsOk ? value : null;
         },
-        args.timeoutMs,
-        "Mac client repeat signal video diagnostics",
-      ).catch((error) => {
+      }).catch((error) => {
         if (lastSnapshot) {
           print("INFO", `Last video: ${lastSnapshot.video}`);
           print("INFO", `Last video diagnostics: ${lastSnapshot.videoFlowMetric}`);
@@ -1951,18 +2028,20 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       );
     }
     if (args.expectBinaryVideo) {
-      const binaryVideoSnapshot = await waitFor(
-        async () => {
-          const value = await evaluate(session, buildSnapshotExpression());
+      const binaryVideoSnapshot = await waitForPageSnapshot({
+        args,
+        session,
+        label: "Mac client binary JPEG video diagnostics",
+        onSnapshot: (value) => {
           lastSnapshot = value;
+        },
+        check: async (value) => {
           const hasBinaryFrame = Number(value.binaryVideoFrames) > 0;
           const surfaceOk = value.surfaceVisible && value.surfaceHasFrame;
           const diagnosticsOk = value.video.includes("binary") || value.videoFlowMetric.includes("二进制");
           return hasBinaryFrame && surfaceOk && diagnosticsOk ? value : null;
         },
-        args.timeoutMs,
-        "Mac client binary JPEG video diagnostics",
-      ).catch((error) => {
+      }).catch((error) => {
         if (lastSnapshot) {
           print("INFO", `Last video: ${lastSnapshot.video}`);
           print("INFO", `Last video diagnostics: ${lastSnapshot.videoFlowMetric}`);
@@ -2186,10 +2265,14 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     }
 
     if (args.expectAudioFrame) {
-      const audioFrameSnapshot = await waitFor(
-        async () => {
-          const value = await evaluate(session, buildSnapshotExpression());
+      const audioFrameSnapshot = await waitForPageSnapshot({
+        args,
+        session,
+        label: "Mac client audio frame",
+        onSnapshot: (value) => {
           lastSnapshot = value;
+        },
+        check: async (value) => {
           const hasFrame = value.audioFrameCount > 0 || value.audio.includes("接收") || value.audio.includes("level");
           const hasPayload = Boolean(value.lastAudioFrame?.payloadLength || value.lastAudioFrame?.payloadBytes);
           const frame = value.lastAudioFrame;
@@ -2202,9 +2285,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
           const payloadOk = !args.expectAudioPayload || hasPayload;
           return hasFrame && payloadOk && realPcmOk ? value : null;
         },
-        args.timeoutMs,
-        "Mac client audio frame",
-      ).catch((error) => {
+      }).catch((error) => {
         if (lastSnapshot) {
           print("INFO", `Last audio: ${lastSnapshot.audio}`);
           print("INFO", `Last audio playback: ${lastSnapshot.audioPlayback}`);
@@ -2216,15 +2297,17 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
 
       let audioSnapshot = audioFrameSnapshot;
       if (args.expectAudioPlayback) {
-        audioSnapshot = await waitFor(
-          async () => {
-            const value = await evaluate(session, buildSnapshotExpression());
+        audioSnapshot = await waitForPageSnapshot({
+          args,
+          session,
+          label: "Mac client audio playback",
+          onSnapshot: (value) => {
             lastSnapshot = value;
+          },
+          check: async (value) => {
             return value.audioPlayedFrames > 0 ? value : null;
           },
-          args.timeoutMs,
-          "Mac client audio playback",
-        ).catch((error) => {
+        }).catch((error) => {
           if (lastSnapshot) {
             print("INFO", `Last audio: ${lastSnapshot.audio}`);
             print("INFO", `Last audio playback: ${lastSnapshot.audioPlayback}`);

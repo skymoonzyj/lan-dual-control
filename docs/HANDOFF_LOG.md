@@ -19,6 +19,39 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 21:55
+开发端：Windows Codex
+本轮目标：让 Mac client 页面自检的连接、认证、视频和音频等待都有进度反馈。
+完成内容：
+- `scripts/windows/test-mac-client-browser.mjs` 新增通用页面等待心跳包装，会输出连接状态、远端摘要、视频状态、音频状态、二进制/重复帧/音频帧计数等当前页面快照。
+- 连接首帧、认证失败、H.264 视频、二进制 H.264、H.264 fallback、重复帧、二进制 JPEG、音频首帧和音频播放等待都接入 `--progressIntervalMs`。
+- 既有长视频观察和重连恢复心跳保留；`--progressIntervalMs 0` 仍可关闭。
+- Mac client README、当前状态、下一步和任务板已同步。
+修改文件：
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script test-mac-client-browser.mjs --timeoutMs 10000`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard --progressIntervalMs 200 --timeoutMs 45000 --clientPort 5200 --debugPort 9344`
+- `node scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3 --progressIntervalMs 200 --timeoutMs 45000 --clientPort 5201 --debugPort 9345`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard --enableAudio --expectAudioFrame --progressIntervalMs 200 --timeoutMs 45000 --clientPort 5202 --debugPort 9346`
+- `node scripts/windows/test-mac-client-browser.mjs --screenMode ffmpeg-h264 --requireH264Video --expectBinaryH264Video --allowClipboardFallback --skipFileClipboard --progressIntervalMs 200 --timeoutMs 45000 --clientPort 5203 --debugPort 9347`
+- `node scripts/windows/test-mac-client-browser.mjs --screenMode ffmpeg-h264 --expectH264Fallback --forceH264Unsupported --allowClipboardFallback --skipFileClipboard --progressIntervalMs 200 --timeoutMs 45000 --clientPort 5204 --debugPort 9348`
+遗留问题：
+- 本轮只跑本机临时 Windows host 和本机浏览器自检，未连接真实 Windows host、未认证真实服务、未执行 `inject`。
+下一步建议：
+- 真实 Mac 控制 Windows smoke 现场可保留默认 10 秒心跳；若用户在旁边等待，建议临时加 `--progressIntervalMs 5000` 或更短，方便判断卡在连接、视频、音频还是重连。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 21:40
 开发端：Windows Codex
 本轮目标：让 Mac client 页面自检的长视频观察和重连等待也有进度反馈。
