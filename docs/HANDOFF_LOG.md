@@ -19,6 +19,43 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 09:30
+开发端：Windows Codex
+本轮目标：把 Windows 控制 Mac 的快捷键兼容映射从页面内联逻辑抽成可测试共享工具，降低后续真实键盘/文本编辑验收的误判风险。
+完成内容：
+- `apps/windows-client/mapping-utils.js` 新增键盘映射共享函数和常量：默认 Win→Command、Alt→Option、Ctrl→Control；Windows 快捷键兼容开启时，Ctrl+C/V/X/A/Z/F/S/P/O/N/W/T/R 会按 macOS Command 快捷键发送，Ctrl+Y 和 Ctrl+Shift+Z 都映射为 Command+Shift+Z。
+- `apps/windows-client/app.js` 改为复用共享映射函数，保留原有 UI、偏好保存、兼容开关和自定义 Win/Alt/Ctrl 下拉框行为。
+- `scripts/windows/test-coordinate-mapping.mjs` 扩展为坐标 + 键盘映射双回归：覆盖 Ctrl+C/V/X/A/Z/Y、Ctrl+Shift+Z、兼容关闭后的 Ctrl→Control、自定义 Win/Alt/Ctrl 映射和描述文字。
+- `scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly` 新增页面级键盘映射断言，确认真实页面路径里 Ctrl+C -> Command+C，自定义映射仍生效。
+- `apps/windows-client/README.md` 和状态/下一步/任务文档已同步该回归入口。
+修改文件：
+- `apps/windows-client/mapping-utils.js`
+- `apps/windows-client/app.js`
+- `apps/windows-client/README.md`
+- `scripts/windows/test-coordinate-mapping.mjs`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/mapping-utils.js`
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-coordinate-mapping.mjs`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-coordinate-mapping.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script test-coordinate-mapping.mjs --script test-windows-client-browser.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 本轮没有执行真实 Mac 输入注入，也没有扩大到点击/滚轮/full event set；真机编辑器/文本框验收仍需要用户在场，并由 Mac 端提供安全测试页面或空白可撤销场景。
+下一步建议：
+- 真机键盘体验验收前先跑本轮两条回归，再让 Mac host 在用户确认后短时间切 `inject`，从安全文本框验证复制、粘贴、撤销、重做和中文输入法边界。
+是否改了协议：否。
+是否需要另一端配合：当前不需要；后续真机键盘体验验收需要 Mac 端准备安全场景。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 09:15
 开发端：Windows Codex
 本轮目标：在用户确认人在现场后，完成真实 Mac input inject 小范围验收，并补上 Windows 探针的真注入强校验，避免把日志模式误判为真注入。

@@ -84,9 +84,148 @@
     };
   }
 
+  const defaultKeyboardMapping = {
+    win: "meta",
+    alt: "alt",
+    ctrl: "ctrl",
+  };
+
+  const remoteModifierLabels = {
+    meta: "⌘ Command",
+    alt: "⌥ Option",
+    ctrl: "^ Control",
+    shift: "⇧ Shift",
+    none: "不映射",
+  };
+
+  const windowsShortcutMap = {
+    a: { key: "a", code: "KeyA", action: "select_all", label: "全选" },
+    c: { key: "c", code: "KeyC", action: "copy", label: "复制" },
+    f: { key: "f", code: "KeyF", action: "find", label: "查找" },
+    n: { key: "n", code: "KeyN", action: "new", label: "新建" },
+    o: { key: "o", code: "KeyO", action: "open", label: "打开" },
+    p: { key: "p", code: "KeyP", action: "print", label: "打印" },
+    r: { key: "r", code: "KeyR", action: "reload", label: "刷新" },
+    s: { key: "s", code: "KeyS", action: "save", label: "保存" },
+    t: { key: "t", code: "KeyT", action: "new_tab", label: "新建标签" },
+    v: { key: "v", code: "KeyV", action: "paste", label: "粘贴" },
+    w: { key: "w", code: "KeyW", action: "close", label: "关闭" },
+    x: { key: "x", code: "KeyX", action: "cut", label: "剪切" },
+    y: { key: "z", code: "KeyZ", action: "redo", label: "重做", forceShift: true },
+    z: { key: "z", code: "KeyZ", action: "undo", label: "撤销" },
+  };
+
+  function normalizeKeyMapValue(value, fallback) {
+    return Object.prototype.hasOwnProperty.call(remoteModifierLabels, value) ? value : fallback;
+  }
+
+  function normalizeKeyboardMapping(mapping = defaultKeyboardMapping) {
+    return {
+      win: normalizeKeyMapValue(mapping.win, defaultKeyboardMapping.win),
+      alt: normalizeKeyMapValue(mapping.alt, defaultKeyboardMapping.alt),
+      ctrl: normalizeKeyMapValue(mapping.ctrl, defaultKeyboardMapping.ctrl),
+    };
+  }
+
+  function addMappedModifier(modifiers, modifier) {
+    if (modifier && modifier !== "none") {
+      modifiers.add(modifier);
+    }
+  }
+
+  function getMacShortcutOverride(event, { shortcutCompatibility = true } = {}) {
+    if (!shortcutCompatibility || !event?.ctrlKey || event.altKey || event.metaKey) {
+      return null;
+    }
+
+    const key = String(event.key ?? "").toLowerCase();
+    const shortcut = windowsShortcutMap[key];
+    if (!shortcut) {
+      return null;
+    }
+
+    const modifiers = new Set(["meta"]);
+    if (event.shiftKey || shortcut.forceShift) {
+      modifiers.add("shift");
+    }
+
+    const action = key === "z" && event.shiftKey ? "redo" : shortcut.action;
+    const label = key === "z" && event.shiftKey ? "重做" : shortcut.label;
+    return {
+      ...shortcut,
+      action,
+      label,
+      modifiers: [...modifiers],
+    };
+  }
+
+  function mapKeyboardInput(event, {
+    keyboardMapping = defaultKeyboardMapping,
+    shortcutCompatibility = true,
+  } = {}) {
+    const mapping = normalizeKeyboardMapping(keyboardMapping);
+    const shortcut = getMacShortcutOverride(event, { shortcutCompatibility });
+    if (shortcut) {
+      const modifiers = shortcut.modifiers;
+      return {
+        mapping,
+        modifiers,
+        key: shortcut.key,
+        code: shortcut.code,
+        ctrlKey: false,
+        altKey: false,
+        shiftKey: modifiers.includes("shift"),
+        metaKey: true,
+        shortcutProfile: "windows_to_macos",
+        shortcutAction: shortcut.action,
+        shortcutLabel: shortcut.label,
+      };
+    }
+
+    const remoteModifiers = new Set();
+    if (event?.shiftKey) {
+      remoteModifiers.add("shift");
+    }
+    if (event?.metaKey) {
+      addMappedModifier(remoteModifiers, mapping.win);
+    }
+    if (event?.altKey) {
+      addMappedModifier(remoteModifiers, mapping.alt);
+    }
+    if (event?.ctrlKey) {
+      addMappedModifier(remoteModifiers, mapping.ctrl);
+    }
+
+    const modifiers = [...remoteModifiers];
+    return {
+      mapping,
+      modifiers,
+      ctrlKey: modifiers.includes("ctrl"),
+      altKey: modifiers.includes("alt"),
+      shiftKey: modifiers.includes("shift"),
+      metaKey: modifiers.includes("meta"),
+    };
+  }
+
+  function describeKeyboardInput(event, mapped) {
+    const prefix = (mapped?.modifiers || [])
+      .map((modifier) => remoteModifierLabels[modifier] ?? modifier)
+      .join("+");
+    const key = mapped?.key ?? event?.key ?? "";
+    const label = mapped?.shortcutLabel ? ` · ${mapped.shortcutLabel}` : "";
+    return `${prefix ? `${prefix}+` : ""}${key}${label}`;
+  }
+
   const api = {
     computeDisplayedFrameRect,
     mapClientPointToRemote,
+    defaultKeyboardMapping,
+    remoteModifierLabels,
+    windowsShortcutMap,
+    normalizeKeyMapValue,
+    normalizeKeyboardMapping,
+    mapKeyboardInput,
+    describeKeyboardInput,
   };
 
   global.LanDualMapping = api;

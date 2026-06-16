@@ -1459,6 +1459,106 @@ async function verifyH264KeyFrameDetection(session) {
   return result;
 }
 
+async function verifyWindowsToMacKeyboardMapping(session) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      if (
+        typeof mapKeyboardModifiers !== "function" ||
+        typeof describeKeyboardInput !== "function" ||
+        typeof elements !== "object"
+      ) {
+        return { ok: false, reason: "missing keyboard mapping functions" };
+      }
+
+      const originalWin = elements.keyMapWinSelect.value;
+      const originalAlt = elements.keyMapAltSelect.value;
+      const originalCtrl = elements.keyMapCtrlSelect.value;
+      const originalCompatibility = elements.shortcutCompatToggle.checked;
+      const event = (key, code, flags = {}) =>
+        new KeyboardEvent("keydown", {
+          key,
+          code,
+          ctrlKey: Boolean(flags.ctrlKey),
+          altKey: Boolean(flags.altKey),
+          shiftKey: Boolean(flags.shiftKey),
+          metaKey: Boolean(flags.metaKey),
+          bubbles: true,
+          cancelable: true,
+        });
+
+      try {
+        elements.keyMapWinSelect.value = "meta";
+        elements.keyMapAltSelect.value = "alt";
+        elements.keyMapCtrlSelect.value = "ctrl";
+        elements.shortcutCompatToggle.checked = true;
+
+        const copy = mapKeyboardModifiers(event("c", "KeyC", { ctrlKey: true }));
+        const paste = mapKeyboardModifiers(event("v", "KeyV", { ctrlKey: true }));
+        const redoShift = mapKeyboardModifiers(event("z", "KeyZ", { ctrlKey: true, shiftKey: true }));
+        const redoY = mapKeyboardModifiers(event("y", "KeyY", { ctrlKey: true }));
+        const copyDescription = describeKeyboardInput(event("c", "KeyC", { ctrlKey: true }), copy);
+
+        elements.shortcutCompatToggle.checked = false;
+        const plainCtrl = mapKeyboardModifiers(event("c", "KeyC", { ctrlKey: true }));
+
+        elements.shortcutCompatToggle.checked = true;
+        elements.keyMapWinSelect.value = "none";
+        elements.keyMapAltSelect.value = "meta";
+        elements.keyMapCtrlSelect.value = "alt";
+        const custom = mapKeyboardModifiers(event("k", "KeyK", {
+          ctrlKey: true,
+          altKey: true,
+          metaKey: true,
+        }));
+
+        return {
+          ok:
+            copy.shortcutProfile === "windows_to_macos" &&
+            copy.shortcutAction === "copy" &&
+            copy.key === "c" &&
+            copy.code === "KeyC" &&
+            copy.metaKey === true &&
+            copy.ctrlKey === false &&
+            copy.modifiers.join("+") === "meta" &&
+            paste.shortcutAction === "paste" &&
+            redoShift.shortcutAction === "redo" &&
+            redoShift.modifiers.join("+") === "meta+shift" &&
+            redoY.shortcutAction === "redo" &&
+            redoY.key === "z" &&
+            redoY.modifiers.join("+") === "meta+shift" &&
+            plainCtrl.shortcutProfile === undefined &&
+            plainCtrl.ctrlKey === true &&
+            plainCtrl.metaKey === false &&
+            plainCtrl.modifiers.join("+") === "ctrl" &&
+            custom.modifiers.join("+") === "meta+alt" &&
+            custom.metaKey === true &&
+            custom.altKey === true &&
+            custom.ctrlKey === false &&
+            copyDescription.includes("⌘ Command+c") &&
+            copyDescription.includes("复制"),
+          copy,
+          paste,
+          redoShift,
+          redoY,
+          plainCtrl,
+          custom,
+          copyDescription,
+        };
+      } finally {
+        elements.keyMapWinSelect.value = originalWin;
+        elements.keyMapAltSelect.value = originalAlt;
+        elements.keyMapCtrlSelect.value = originalCtrl;
+        elements.shortcutCompatToggle.checked = originalCompatibility;
+      }
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`Windows-to-Mac keyboard mapping check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function run() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -1545,6 +1645,11 @@ async function run() {
     print(
       "OK",
       `H.264 key frame detection: annexbKey=${keyFrameCheck.annexbKey}, annexbDelta=${keyFrameCheck.annexbDelta}, avcKey=${keyFrameCheck.avcKey}`,
+    );
+    const keyboardMappingCheck = await verifyWindowsToMacKeyboardMapping(session);
+    print(
+      "OK",
+      `Keyboard mapping: Ctrl+C -> ${keyboardMappingCheck.copy.modifiers.join("+")} / ${keyboardMappingCheck.copy.shortcutAction}; custom=${keyboardMappingCheck.custom.modifiers.join("+")}`,
     );
     if (args.expectDiscoveryRuntimeBuildId) {
       const discoveryRuntimeCheck = await verifyDiscoveryRuntimeDiagnostics(session, {

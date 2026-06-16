@@ -43,6 +43,7 @@ Windows 端：
 - [x] 捕获键盘输入。
 - [x] 增加远控 macOS 默认按键映射。
 - [x] 增加 Windows 常用快捷键兼容：Ctrl+C/V 等按 macOS Command 快捷键发送。
+- [x] Windows 控制 Mac 快捷键映射抽成共享可测工具：`mapping-utils.js` 统一页面和测试逻辑，回归覆盖 Ctrl+C/V/X/A/Z/Y、Ctrl+Shift+Z、兼容开关、自定义 Win/Alt/Ctrl 映射，以及页面 diagnostics-only 实际调用路径。
 - [x] 映射窗口坐标到远程屏幕坐标。
 - [x] 增加窗口缩放模式。
 - [x] 按实际视频区域映射鼠标坐标。
