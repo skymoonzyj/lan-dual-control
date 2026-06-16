@@ -275,6 +275,104 @@ async function assertStatusOfflineJson(timeoutMs) {
   print("OK", "Status reports offline hosts as machine-readable JSON");
 }
 
+async function assertStopOffline(timeoutMs) {
+  const port = await getFreePort();
+  const result = await runNode(["--stop", "--host", "127.0.0.1", "--port", String(port)], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "" },
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (result.exitCode !== 0 || result.timedOut) {
+    throw new Error(`Offline stop should exit 0 without starting a host or requiring a password.\n${output}`);
+  }
+  assertIncludes(output, "nothing to stop", "offline stop");
+  assertNotIncludes(output, "LAN_DUAL_PASSWORD is required", "offline stop");
+  assertNotIncludes(output, "Starting Mac host", "offline stop");
+
+  const jsonResult = await runNode(["--stop", "--json", "--host", "127.0.0.1", "--port", String(port)], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "" },
+  });
+  const jsonOutput = `${jsonResult.stdout}\n${jsonResult.stderr}`;
+  if (jsonResult.exitCode !== 0 || jsonResult.timedOut) {
+    throw new Error(`Offline JSON stop should exit 0.\n${jsonOutput}`);
+  }
+  const json = parseJsonOutput(jsonResult.stdout, "offline JSON stop");
+  if (json.ok !== true || json.alreadyStopped !== true || json.stopped !== false || json.probe?.port !== port) {
+    throw new Error(`Offline JSON stop had unexpected shape.\n${jsonResult.stdout}`);
+  }
+  assertNotIncludes(jsonOutput, "[INFO]", "offline JSON stop");
+  print("OK", "Stop treats an offline Mac host as already stopped without reading a password");
+}
+
+async function assertStopRefusesNonLocalHost(timeoutMs) {
+  const result = await runNode(["--stop", "--json", "--host", "192.0.2.55", "--port", "43770"], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "" },
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (result.exitCode === 0 || result.timedOut) {
+    throw new Error(`Stop should refuse non-local hosts.\n${output}`);
+  }
+  const json = parseJsonOutput(result.stdout, "non-local JSON stop");
+  if (json.error?.code !== "non_local_host" || json.stopped !== false) {
+    throw new Error(`Non-local JSON stop had unexpected shape.\n${result.stdout}`);
+  }
+  assertNotIncludes(output, "LAN_DUAL_PASSWORD is required", "non-local stop");
+  print("OK", "Stop refuses non-local hosts before probing or requiring a password");
+}
+
+async function withMockDiscoveryServer(payload, fn) {
+  const server = net.createServer((socket) => {
+    socket.once("data", () => {
+      const body = JSON.stringify(payload);
+      socket.end([
+        "HTTP/1.1 200 OK",
+        "Content-Type: application/json",
+        `Content-Length: ${Buffer.byteLength(body)}`,
+        "Connection: close",
+        "",
+        body,
+      ].join("\r\n"));
+    });
+  });
+  await new Promise((resolveListen, rejectListen) => {
+    server.once("error", rejectListen);
+    server.listen(0, "127.0.0.1", resolveListen);
+  });
+  const address = server.address();
+  const port = address && typeof address === "object" ? address.port : 0;
+  try {
+    return await fn(port);
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose));
+  }
+}
+
+async function assertStopRefusesNonMacDiscovery(timeoutMs) {
+  await withMockDiscoveryServer({
+    type: "lan_dual_discovery",
+    deviceName: "Mock Windows Host",
+    platform: "windows",
+    runtime: { processId: 987654, buildId: "mock-win" },
+  }, async (port) => {
+    const result = await runNode(["--stop", "--json", "--host", "127.0.0.1", "--port", String(port)], {
+      timeoutMs,
+      env: { LAN_DUAL_PASSWORD: "" },
+    });
+    const output = `${result.stdout}\n${result.stderr}`;
+    if (result.exitCode === 0 || result.timedOut) {
+      throw new Error(`Stop should refuse non-Mac /discovery targets.\n${output}`);
+    }
+    const json = parseJsonOutput(result.stdout, "non-Mac JSON stop");
+    if (json.error?.code !== "not_mac_host" || json.platform !== "windows" || json.stopped !== false) {
+      throw new Error(`Non-Mac JSON stop had unexpected shape.\n${result.stdout}`);
+    }
+    assertNotIncludes(output, "LAN_DUAL_PASSWORD is required", "non-Mac stop");
+  });
+  print("OK", "Stop refuses non-macOS discovery targets");
+}
+
 async function assertStatusOnline(timeoutMs) {
   if (!canLaunchRealMacHost()) {
     print("SKIP", `Status online check starts the real Swift Mac host and only runs on macOS; current platform is ${process.platform}`);
@@ -535,6 +633,95 @@ async function assertBackgroundLaunchWithEnvPassword(timeoutMs) {
   print("OK", `Background start keeps Mac host alive on temporary port ${port} until cleaned up`);
 }
 
+async function assertStopBackgroundHost(timeoutMs) {
+  if (!canLaunchRealMacHost()) {
+    print("SKIP", `Background stop check starts the real Swift Mac host and only runs on macOS; current platform is ${process.platform}`);
+    return;
+  }
+  const port = await getFreePort();
+  const logPath = `.dev-lab/test-mac-host-start-helper/stop-background-${port}.log`;
+  const start = await runNode([
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(port),
+    "--videoMode",
+    "mock",
+    "--inputMode",
+    "log",
+    "--buildId",
+    "stop-helper-test",
+    "--requirePassword",
+    "--skipRuntimeCheck",
+    "--noBonjour",
+    "--background",
+    "--logFile",
+    logPath,
+    "--timeoutMs",
+    String(timeoutMs),
+  ], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "test-password" },
+  });
+  const startOutput = `${start.stdout}\n${start.stderr}`;
+  if (start.exitCode !== 0 || start.timedOut) {
+    throw new Error(`Background launch before stop should exit 0.\n${startOutput}`);
+  }
+
+  let pid = 0;
+  try {
+    const status = await runNode(["--status", "--json", "--host", "127.0.0.1", "--port", String(port)], {
+      timeoutMs,
+      env: { LAN_DUAL_PASSWORD: "" },
+    });
+    const statusOutput = `${status.stdout}\n${status.stderr}`;
+    if (status.exitCode !== 0 || status.timedOut) {
+      throw new Error(`Background host status before stop should exit 0.\n${statusOutput}`);
+    }
+    const statusJson = parseJsonOutput(status.stdout, "background status before stop");
+    pid = Number(statusJson.runtime?.processId || 0);
+    if (statusJson.online !== true || statusJson.runtime?.buildId !== "stop-helper-test" || !pid) {
+      throw new Error(`Background status before stop had unexpected shape.\n${status.stdout}`);
+    }
+
+    const stop = await runNode(["--stop", "--json", "--host", "127.0.0.1", "--port", String(port), "--timeoutMs", String(timeoutMs)], {
+      timeoutMs,
+      env: { LAN_DUAL_PASSWORD: "" },
+    });
+    const stopOutput = `${stop.stdout}\n${stop.stderr}`;
+    if (stop.exitCode !== 0 || stop.timedOut) {
+      throw new Error(`Stop background host should exit 0.\n${stopOutput}`);
+    }
+    const stopJson = parseJsonOutput(stop.stdout, "background JSON stop");
+    if (stopJson.ok !== true || stopJson.stopped !== true || stopJson.targetPid !== pid || stopJson.runtime?.buildId !== "stop-helper-test") {
+      throw new Error(`Background JSON stop had unexpected shape.\n${stop.stdout}`);
+    }
+    assertNotIncludes(stopOutput, "test-password", "background stop");
+
+    const offline = await runNode(["--status", "--json", "--host", "127.0.0.1", "--port", String(port)], {
+      timeoutMs,
+      env: { LAN_DUAL_PASSWORD: "" },
+    });
+    const offlineOutput = `${offline.stdout}\n${offline.stderr}`;
+    if (offline.exitCode !== 1 || offline.timedOut) {
+      throw new Error(`Status after stop should report offline.\n${offlineOutput}`);
+    }
+    const offlineJson = parseJsonOutput(offline.stdout, "status after stop");
+    if (offlineJson.online !== false) {
+      throw new Error(`Status after stop should be offline.\n${offline.stdout}`);
+    }
+  } finally {
+    if (pid) {
+      try {
+        process.kill(pid, "SIGTERM");
+      } catch {
+        // Process should already be gone.
+      }
+    }
+  }
+  print("OK", `Stop safely terminates a background Mac host on temporary port ${port}`);
+}
+
 function assertRuntimeCheckDoesNotPassPasswordArgv() {
   const source = readFileSync(new URL("./start-mac-host.mjs", import.meta.url), "utf8");
   const runtimeCheckIndex = source.indexOf("function runRuntimeCheck");
@@ -574,10 +761,14 @@ async function main() {
   await assertEphemeralPasswordRefusesEnvOverride(args.timeoutMs);
   await assertStatusOffline(args.timeoutMs);
   await assertStatusOfflineJson(args.timeoutMs);
+  await assertStopOffline(args.timeoutMs);
+  await assertStopRefusesNonLocalHost(args.timeoutMs);
+  await assertStopRefusesNonMacDiscovery(args.timeoutMs);
   await assertStatusOnline(args.timeoutMs);
   await assertLaunchWithEnvPassword(args.timeoutMs);
   await assertLaunchWithEphemeralPassword(args.timeoutMs);
   await assertBackgroundLaunchWithEnvPassword(args.timeoutMs);
+  await assertStopBackgroundHost(args.timeoutMs);
   assertRuntimeCheckDoesNotPassPasswordArgv();
   assertBackgroundRequiresRuntimeCheckSuccess();
   print("OK", "Mac host start helper self-test passed");

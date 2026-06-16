@@ -17,6 +17,44 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-16 Mac Codex
+
+日期：2026-06-16 08:31
+开发端：Mac Codex
+本轮目标：给 Mac host 后台常驻启动补安全停止入口，让 `--background` 有对称的日常收尾命令。
+完成内容：
+- `scripts/mac/start-mac-host.mjs` 新增 `--stop`；它只读取本机 `/discovery`，确认目标是 macOS host 且存在 `runtime.processId` 后，才向该 PID 发送 `SIGTERM` 并等待 `/discovery` 离线。
+- `--stop` 不读取密码、不弹密码框、不认证 WebSocket；离线时视为已经停止；非本机 host、非 macOS discovery、缺 runtime PID 或 PID 异常时拒绝停止，避免误杀未知服务。
+- `--stop --json` 输出机器可读结果，包含 `ok`、`stopped`、`alreadyStopped`、`probe`、`targetPid`、`runtime` 和错误 code，方便后续桌面壳或联络板自动化消费。
+- `scripts/mac/test-mac-host-start-helper.mjs` 增加离线 stop、非本机拒绝、非 Mac discovery 拒绝、后台临时 host 由 `--stop --json` 停止并确认离线的回归。
+- Mac host README、CURRENT_STATUS、NEXT_ACTIONS 和任务板同步 `--stop` 的使用和安全边界。
+修改文件：
+- `scripts/mac/start-mac-host.mjs`
+- `scripts/mac/test-mac-host-start-helper.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/start-mac-host.mjs`
+- `node --check scripts/mac/test-mac-host-start-helper.mjs`
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 60000`
+- `node scripts/mac/test-mac-script-help.mjs --script start-mac-host.mjs --script test-mac-host-start-helper.mjs --timeoutMs 10000`
+- `node scripts/mac/start-mac-host.mjs --status --json`（当前默认 43770 离线，预期返回非 0 JSON）
+- `node scripts/mac/start-mac-host.mjs --stop --json --host 192.0.2.55 --port 43770`（预期拒绝非本机 host）
+- `git diff --check`
+- 行首冲突标记扫描
+遗留问题：
+- 当前默认 `127.0.0.1:43770` 没有 Mac host 在线；本轮未启动正式 Mac host，也未触发密码弹窗。
+- Windows formal E2E 仍需要用户在 Windows 本机隐藏输入 Mac host 正式密码后继续；`inject` 仍需另行明确确认。
+下一步建议：
+- 需要后台启动时继续用 `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --background`；需要收尾时用 `node scripts/mac/start-mac-host.mjs --stop`。
+- 若后续要把 Mac host 启停接进桌面壳或 Agent Link Board，优先消费 `--status --json` 与 `--stop --json`，不要手动按端口盲杀进程。
+是否改了协议：否。
+是否需要另一端配合：本轮代码改动不需要 Windows 端修改；正式 E2E 仍等待 Windows 端在用户授权后继续。
+
 ## 2026-06-15 Mac Codex
 
 日期：2026-06-15 22:35

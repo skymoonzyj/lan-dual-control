@@ -38,6 +38,7 @@ const defaults = {
   background: false,
   logFile: "",
   status: false,
+  stop: false,
   json: false,
   dryRun: false,
   help: false,
@@ -68,6 +69,7 @@ function parseArgs(argv) {
       key === "allowExisting" ||
       key === "background" ||
       key === "status" ||
+      key === "stop" ||
       key === "json" ||
       key === "dryRun"
     ) {
@@ -151,7 +153,10 @@ Options:
                              Default: .dev-lab/mac-host/lan-dual-mac-host-<port>.log
   --status                   Print current /discovery runtime status and stale-build source diff,
                              then exit without starting.
+  --stop                     Stop the local Mac host that answers /discovery on this port.
+                             Requires macOS /discovery and runtime.processId; no password is read.
   --json                     With --status, print machine-readable JSON only.
+                             With --stop, print machine-readable JSON only.
   --dryRun                   Print the resolved launch plan and exit.
   --help, -h                 Show this help without starting Mac host.
 `);
@@ -313,6 +318,14 @@ function statusProbeHost(args) {
   return args.host === "0.0.0.0" || args.host === "::" ? "127.0.0.1" : args.host;
 }
 
+function isLocalProbeHost(host) {
+  const value = normalizedText(host).toLowerCase();
+  if (!value) return false;
+  if (value === "localhost" || value === "::1") return true;
+  if (value === "127.0.0.1" || value.startsWith("127.")) return true;
+  return getLanAddresses().some((entry) => entry.address === value);
+}
+
 function discoveryInputMode(discovery) {
   return discovery?.capabilities?.inputMode || discovery?.capabilities?.input?.mode || discovery?.inputMode || "unknown";
 }
@@ -374,6 +387,189 @@ function discoveryPermissionSummary(discovery) {
     `accessibility=${statusValue(permissions.accessibility)}`,
     `inputMonitoring=${statusValue(permissions.inputMonitoring)}`,
   ].join(" ");
+}
+
+function isMacHostDiscovery(discovery) {
+  const platform = normalizedText(discovery?.platform).toLowerCase();
+  if (platform === "macos" || platform === "darwin") return true;
+  const hostMarkers = [
+    discovery?.hostMode,
+    discovery?.capturePipeline,
+    discovery?.source,
+  ].map((value) => normalizedText(value).toLowerCase());
+  return hostMarkers.some((value) => value.includes("mac-host"));
+}
+
+function discoveryRuntimePid(discovery) {
+  const pid = Number(discovery?.runtime?.processId ?? discovery?.runtime?.pid ?? 0);
+  if (!Number.isSafeInteger(pid) || pid <= 1) return 0;
+  return pid;
+}
+
+function printStopPayload(payload, args) {
+  if (args.json) {
+    console.log(JSON.stringify(payload, null, 2));
+    return;
+  }
+  if (payload.alreadyStopped) {
+    console.log(`[OK] No Mac host answers /discovery on ${payload.probe.host}:${payload.probe.port}; nothing to stop.`);
+    return;
+  }
+  if (!payload.ok) {
+    console.log(`[ERROR] ${payload.error?.message || "Mac host stop failed."}`);
+    return;
+  }
+  console.log(`[OK] Stopped Mac host pid=${payload.runtime?.processId || payload.targetPid} on ${payload.probe.host}:${payload.probe.port}.`);
+}
+
+async function waitForStoppedDiscovery({ host, port, targetPid, timeoutMs }) {
+  const deadline = Date.now() + timeoutMs;
+  let lastDiscovery = null;
+  while (Date.now() < deadline) {
+    try {
+      const discovery = await requestJson(`http://${host}:${port}/discovery`, Math.min(1000, timeoutMs));
+      lastDiscovery = discovery;
+      const pid = discoveryRuntimePid(discovery);
+      if (pid && pid !== targetPid) {
+        return { offline: false, replaced: true, discovery };
+      }
+    } catch (error) {
+      return { offline: true, replaced: false, error: error.message };
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
+  }
+  return { offline: false, replaced: false, discovery: lastDiscovery };
+}
+
+async function stopHost(args) {
+  const probeHost = statusProbeHost(args);
+  const payloadBase = {
+    ok: false,
+    stopped: false,
+    alreadyStopped: false,
+    probe: { host: probeHost, port: args.port },
+    targetPid: 0,
+  };
+
+  if (!isLocalProbeHost(probeHost)) {
+    const payload = {
+      ...payloadBase,
+      error: {
+        code: "non_local_host",
+        message: `Refusing to stop a non-local host (${probeHost}). Use 127.0.0.1 or this Mac's LAN IP.`,
+      },
+    };
+    printStopPayload(payload, args);
+    return payload;
+  }
+
+  let discovery = null;
+  try {
+    discovery = await requestJson(`http://${probeHost}:${args.port}/discovery`, Math.min(args.timeoutMs, 3000));
+  } catch (error) {
+    const payload = {
+      ...payloadBase,
+      ok: true,
+      alreadyStopped: true,
+      online: false,
+      error: { message: error.message },
+    };
+    printStopPayload(payload, args);
+    return payload;
+  }
+
+  const runtime = discovery.runtime || {};
+  const targetPid = discoveryRuntimePid(discovery);
+  const payloadTarget = {
+    ...payloadBase,
+    online: true,
+    targetPid,
+    deviceName: discovery.deviceName || discovery.hostName || discovery.name || "Mac host",
+    platform: discovery.platform || "",
+    runtime,
+  };
+
+  if (!isMacHostDiscovery(discovery)) {
+    const payload = {
+      ...payloadTarget,
+      error: {
+        code: "not_mac_host",
+        message: `Refusing to stop /discovery target because platform is ${discovery.platform || "unknown"}, not macOS.`,
+      },
+    };
+    printStopPayload(payload, args);
+    return payload;
+  }
+  if (!targetPid) {
+    const payload = {
+      ...payloadTarget,
+      error: {
+        code: "missing_runtime_pid",
+        message: "Refusing to stop Mac host because /discovery.runtime.processId is missing.",
+      },
+    };
+    printStopPayload(payload, args);
+    return payload;
+  }
+  if (targetPid === process.pid) {
+    const payload = {
+      ...payloadTarget,
+      error: {
+        code: "self_pid",
+        message: "Refusing to stop because /discovery.runtime.processId matches this helper process.",
+      },
+    };
+    printStopPayload(payload, args);
+    return payload;
+  }
+
+  try {
+    process.kill(targetPid, "SIGTERM");
+  } catch (error) {
+    if (error.code !== "ESRCH") {
+      const payload = {
+        ...payloadTarget,
+        error: {
+          code: error.code || "kill_failed",
+          message: `Failed to send SIGTERM to Mac host pid=${targetPid}: ${error.message}`,
+        },
+      };
+      printStopPayload(payload, args);
+      return payload;
+    }
+  }
+
+  const stopped = await waitForStoppedDiscovery({
+    host: probeHost,
+    port: args.port,
+    targetPid,
+    timeoutMs: Math.max(1000, args.timeoutMs),
+  });
+  if (stopped.offline) {
+    const payload = {
+      ...payloadTarget,
+      ok: true,
+      stopped: true,
+      online: false,
+      signal: "SIGTERM",
+    };
+    printStopPayload(payload, args);
+    return payload;
+  }
+
+  const stillPid = discoveryRuntimePid(stopped.discovery);
+  const payload = {
+    ...payloadTarget,
+    error: {
+      code: stopped.replaced ? "host_replaced" : "stop_timeout",
+      message: stopped.replaced
+        ? `Sent SIGTERM to pid=${targetPid}, but /discovery is still online with pid=${stillPid || "unknown"}.`
+        : `Sent SIGTERM to pid=${targetPid}, but /discovery did not go offline within ${args.timeoutMs}ms.`,
+    },
+    latestDiscovery: stopped.discovery || null,
+  };
+  printStopPayload(payload, args);
+  return payload;
 }
 
 async function printStatus(args) {
@@ -669,6 +865,12 @@ async function main() {
     return;
   }
   const args = parseArgs(process.argv);
+
+  if (args.stop) {
+    const result = await stopHost(args);
+    process.exitCode = result.ok ? 0 : 1;
+    return;
+  }
 
   if (args.status) {
     const status = await printStatus(args);

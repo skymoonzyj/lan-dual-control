@@ -41,6 +41,14 @@ node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --backgro
 
 后台模式仍然默认使用 `inputMode=log`，仍会先等待 `/discovery` 并运行只读 runtime/display 校验；通过后会打印后台进程 PID 和日志路径，默认日志写到 `.dev-lab/mac-host/lan-dual-mac-host-43770.log`。如需指定日志文件，可加 `--logFile <path>`。密码不会写入日志，也不会作为子校验命令参数传递。
 
+需要停止后台 Mac host 时，用安全停止入口：
+
+```bash
+node scripts/mac/start-mac-host.mjs --stop
+```
+
+`--stop` 只读取本机 `/discovery`，确认目标是 macOS host 且带有 `runtime.processId` 后才向该 PID 发送 `SIGTERM`，不会要求或读取密码，也不会认证 WebSocket。离线时会把结果视为“已经停止”；脚本自动化可加 `--json`。
+
 如果只是本机开发快速试跑，可以先干跑查看即将使用的端口、build、局域网地址和输入模式：
 
 ```bash
@@ -106,6 +114,7 @@ node scripts/mac/check-mac-formal-local-smoke.mjs --promptPassword
 - `--requirePassword` 会拒绝空密码和 `demo-password`，真机局域网联调建议始终打开。
 - `--ephemeralPassword` 会为本次进程生成一次性随机 `LAN_DUAL_PASSWORD` 且不打印密码；适合先恢复 `/discovery`、runtime/build 和权限诊断通道，但不能用于另一端认证联调，因为密码不会被共享。
 - `--status` 只读取 `/discovery` 并退出，不会启动 Swift host，不会读取或打印密码；运行中 build 与当前 git 不一致时，会列出旧 build 后变动过的 Mac host 运行源码文件，若没有运行源码变化则说明服务行为大概率仍是当前的，只是 build 元数据落后；加 `--json` 可让脚本稳定读取同一份状态对象。
+- `--stop` 只停止本机 `/discovery` 对应的 macOS host 进程；它要求目标看起来是 Mac host 且提供 `runtime.processId`，不会因为端口上有 Windows host 或未知服务就误杀进程。
 - 等待 `/discovery` 就绪后，默认运行 `check-mac-displays --requireRuntime --expectBuildId <build>` 做只读 runtime/display round-trip 校验；如果需要密码，会通过子进程环境变量传递，不会放进 `--password` 命令参数。
 - `--background` 会在 `/discovery` 和 runtime/display 校验通过后退出启动助手，并让 Mac host 在后台继续运行；默认日志路径在 `.dev-lab/mac-host/`，该目录不会提交到仓库。
 - 如需真实输入注入，必须有人在屏幕前确认安全后，再显式传 `--inputMode inject` 或 `--injectInput`。
@@ -116,7 +125,7 @@ node scripts/mac/check-mac-formal-local-smoke.mjs --promptPassword
 node scripts/mac/test-mac-host-start-helper.mjs
 ```
 
-该脚本会覆盖缺密码拒绝、`demo-password` 拒绝、非交互密码提示拒绝、带环境密码干跑、一次性随机密码干跑、`--status` 在线/离线检查、`--status --json` 在线/离线机器可读输出、临时端口真实启动后自动关闭、后台启动后仍可查询 `/discovery`，以及 runtime/display 校验不通过 argv 传密码。
+该脚本会覆盖缺密码拒绝、`demo-password` 拒绝、非交互密码提示拒绝、带环境密码干跑、一次性随机密码干跑、`--status` 在线/离线检查、`--status --json` 在线/离线机器可读输出、`--stop` 离线/非本机/非 Mac 目标拒绝、临时端口真实启动后自动关闭、后台启动后仍可查询 `/discovery`、后台 host 可由 `--stop --json` 安全停止，以及 runtime/display 校验不通过 argv 传密码。
 
 密码弹窗 helper 自检：
 
