@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -268,6 +268,84 @@ function startProcess(command, args, options = {}) {
   });
 }
 
+function stopWindowsProcessesByCommandLine(matchText) {
+  if (!matchText || process.platform !== "win32") return;
+  spawnSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      [
+        "$match = $env:LAN_DUAL_PROCESS_MATCH",
+        "Get-CimInstance Win32_Process |",
+          "Where-Object { $_.CommandLine -and $_.CommandLine.Contains($match) } |",
+          "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }",
+      ].join(" "),
+    ],
+    {
+      env: { ...process.env, LAN_DUAL_PROCESS_MATCH: matchText },
+      stdio: "ignore",
+      timeout: 10000,
+      windowsHide: true,
+    },
+  );
+}
+
+function stopProcessTree(child, { commandLineMatch = "" } = {}) {
+  if (!child?.pid) return;
+  if (process.platform === "win32") {
+    stopWindowsProcessesByCommandLine(commandLineMatch);
+    spawnSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `Stop-Process -Id ${child.pid} -Force -ErrorAction SilentlyContinue`,
+      ],
+      {
+        stdio: "ignore",
+        timeout: 10000,
+        windowsHide: true,
+      },
+    );
+  } else if (child.exitCode === null && child.signalCode === null) {
+    child.kill();
+  }
+  if (child.exitCode === null && child.signalCode === null) {
+    child.kill("SIGKILL");
+  }
+  child.unref?.();
+  child.stdout?.destroy();
+  child.stderr?.destroy();
+}
+
+async function removeDirectoryBestEffort(path) {
+  if (!path) return;
+  if (process.platform === "win32") {
+    spawnSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "Remove-Item -LiteralPath $env:LAN_DUAL_REMOVE_PATH -Recurse -Force -ErrorAction SilentlyContinue",
+      ],
+      {
+        env: { ...process.env, LAN_DUAL_REMOVE_PATH: path },
+        stdio: "ignore",
+        timeout: 10000,
+        windowsHide: true,
+      },
+    );
+    return;
+  }
+  await rm(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }).catch(() => {});
+}
+
 function runCapturedProcess(command, args, options = {}) {
   return new Promise((resolveRun) => {
     const child = spawn(command, args, {
@@ -462,6 +540,11 @@ async function connectCdp(debugPort, timeoutMs) {
     socket.addEventListener("error", () => reject(new Error("CDP WebSocket error")), { once: true });
   });
   return new CdpSession(socket);
+}
+
+async function closeBrowserBestEffort(session) {
+  if (!session) return;
+  await Promise.race([session.send("Browser.close").catch(() => {}), delay(1000)]).catch(() => {});
 }
 
 async function evaluate(session, expression) {
@@ -1459,6 +1542,83 @@ async function verifyH264KeyFrameDetection(session) {
   return result;
 }
 
+async function verifyInputModeStatusText(session) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      if (
+        typeof updateHostDiagnostics !== "function" ||
+        typeof resetHostDiagnostics !== "function" ||
+        typeof updateInputStatus !== "function"
+      ) {
+        return { ok: false, reason: "missing input status functions" };
+      }
+
+      const inputText = () => document.querySelector("#inputText")?.textContent || "";
+      const reset = () => {
+        resetHostDiagnostics();
+        updateInputStatus();
+      };
+
+      try {
+        reset();
+        const initial = inputText();
+        updateHostDiagnostics({
+          inputMode: "log",
+          inputAckStatus: "",
+          inputAckCode: "",
+          inputAckReason: "",
+        });
+        const logMode = inputText();
+        updateHostDiagnostics({
+          inputMode: "log",
+          inputAckStatus: "logged",
+          inputAckCode: "",
+          inputAckReason: "",
+        });
+        const logged = inputText();
+        updateHostDiagnostics({
+          inputMode: "inject",
+          inputAckStatus: "injected",
+          inputAckCode: "",
+          inputAckReason: "",
+        });
+        const injected = inputText();
+        updateHostDiagnostics({
+          inputMode: "log",
+          inputAckStatus: "rejected",
+          inputAckCode: "LAN403",
+          inputAckReason: "permission missing",
+        });
+        const rejected = inputText();
+
+        return {
+          ok:
+            /^输入事件：\\d+$/.test(initial) &&
+            logMode.includes("安全日志") &&
+            logMode.includes("不会真正控制") &&
+            logged.includes("已记录") &&
+            injected.includes("真实控制") &&
+            injected.includes("已注入") &&
+            rejected.includes("被拒绝") &&
+            rejected.includes("LAN403"),
+          initial,
+          logMode,
+          logged,
+          injected,
+          rejected,
+        };
+      } finally {
+        reset();
+      }
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`Input mode status text check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function verifyWindowsToMacKeyboardMapping(session) {
   const result = await evaluate(
     session,
@@ -1646,6 +1806,11 @@ async function run() {
       "OK",
       `H.264 key frame detection: annexbKey=${keyFrameCheck.annexbKey}, annexbDelta=${keyFrameCheck.annexbDelta}, avcKey=${keyFrameCheck.avcKey}`,
     );
+    const inputStatusCheck = await verifyInputModeStatusText(session);
+    print(
+      "OK",
+      `Input status text: ${inputStatusCheck.logMode} / ${inputStatusCheck.injected} / ${inputStatusCheck.rejected}`,
+    );
     const keyboardMappingCheck = await verifyWindowsToMacKeyboardMapping(session);
     print(
       "OK",
@@ -1826,11 +1991,18 @@ async function run() {
       print("OK", `Audio: ${audioSnapshot.audioText}`);
     }
   } finally {
-    session?.close();
-    edge.kill();
-    clientServer.kill();
+    await closeBrowserBestEffort(session);
+    try {
+      session?.close();
+    } catch {}
+    const edgeDebugPortMatch = `--remote-debugging-port=${args.debugPort}`;
+    stopWindowsProcessesByCommandLine(edgeDebugPortMatch);
+    stopProcessTree(edge, { commandLineMatch: userDataDir });
+    stopProcessTree(clientServer, { commandLineMatch: `apps\\windows-client\\server.mjs ${args.clientPort}` });
     await delay(500);
-    await rm(userDataDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }).catch(() => {});
+    stopWindowsProcessesByCommandLine(edgeDebugPortMatch);
+    stopWindowsProcessesByCommandLine(userDataDir);
+    await removeDirectoryBestEffort(userDataDir);
   }
 }
 

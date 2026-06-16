@@ -140,6 +140,40 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 09:40
+开发端：Windows Codex
+本轮目标：增强 Windows 控制端输入模式提示，避免 Mac host 处于安全 `inputMode=log` 时，用户看到“已连接但不能点击/控制”后误判为故障。
+完成内容：
+- `apps/windows-client/app.js` 新增顶部输入状态详情：`inputMode=log` 显示“安全日志，不会真正控制”，`inject` 显示“真实控制”，`input_ack` 会同步显示“已记录 / 已注入 / 被拒绝”和错误码。
+- `updateHostDiagnostics` / `resetHostDiagnostics` 会同步刷新顶部“输入事件”卡片，连接成功后无需先移动鼠标就能看到当前输入模式。
+- 诊断导出里的输入事件行改为复用页面当前文案，保留安全日志/真实控制/拒绝等上下文。
+- `scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly` 新增页面级输入状态断言，覆盖安全日志、已记录、真实控制、已注入和被拒绝提示。
+- `apps/windows-client/README.md`、当前状态、下一步和任务板已同步该提示与回归入口。
+修改文件：
+- `apps/windows-client/app.js`
+- `apps/windows-client/README.md`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-client-browser.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps/windows-client/app.js scripts/windows/test-windows-client-browser.mjs apps/windows-client/README.md docs/CURRENT_STATUS.md docs/NEXT_ACTIONS.md docs/04-task-board.md docs/HANDOFF_LOG.md docs/ACTIVE_LOCKS.md`
+遗留问题：
+- 本轮不连接真实 Mac、不发送密码、不执行真实 `inject`；只是把安全日志模式在 Windows UI 上讲清楚。
+下一步建议：
+- 后续真机控制体验验收时，先看顶部“输入事件”是否显示安全日志或真实控制，再决定是否需要 Mac 端在用户看屏幕时短时间切 `inject`。
+是否改了协议：否。
+是否需要另一端配合：否；后续真实输入体验验收才需要 Mac 端配合。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 09:30
 开发端：Windows Codex
 本轮目标：把 Windows 控制 Mac 的快捷键兼容映射从页面内联逻辑抽成可测试共享工具，降低后续真实键盘/文本编辑验收的误判风险。

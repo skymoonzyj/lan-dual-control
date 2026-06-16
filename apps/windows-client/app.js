@@ -446,18 +446,39 @@ function getNextControlDirection(direction = state.controlDirection) {
   return direction === "mac_to_windows" ? "windows_to_mac" : "mac_to_windows";
 }
 
+function getInputModeStatusText(inputMode) {
+  if (inputMode === "log") return "安全日志，不会真正控制";
+  if (inputMode === "inject") return "真实控制";
+  if (inputMode === "mock") return "模拟记录";
+  if (inputMode === "auth") return "等待认证";
+  return inputMode ? labelFromMap(inputMode, inputModeLabels) : "";
+}
+
+function getInputAckStatusText(diagnostics = state.hostDiagnostics) {
+  if (!diagnostics.inputAckStatus) return "";
+  const text = labelFromMap(diagnostics.inputAckStatus, inputAckStatusLabels);
+  if (diagnostics.inputAckStatus !== "rejected") return text;
+  const detail = [diagnostics.inputAckCode, diagnostics.inputAckReason].filter(Boolean).join(" ");
+  return detail ? `${text} ${detail}` : text;
+}
+
+function formatInputStatusDetail(diagnostics = state.hostDiagnostics) {
+  const parts = [];
+  const modeText = getInputModeStatusText(diagnostics.inputMode);
+  const ackText = getInputAckStatusText(diagnostics);
+  if (modeText) parts.push(modeText);
+  if (ackText) parts.push(ackText);
+  return parts.join(" / ");
+}
+
 function updateInputStatus() {
   if (state.connected && state.controlDirection === "mac_to_windows") {
     elements.inputText.textContent = "输入事件：暂停（当前由 Mac 控制）";
     return;
   }
 
-  if (state.hostDiagnostics.inputAckStatus === "rejected") {
-    elements.inputText.textContent = `输入事件：${state.inputEvents}（被拒绝）`;
-    return;
-  }
-
-  elements.inputText.textContent = `输入事件：${state.inputEvents}`;
+  const detail = formatInputStatusDetail();
+  elements.inputText.textContent = `输入事件：${state.inputEvents}${detail ? `（${detail}）` : ""}`;
 }
 
 function updateReverseControlUi() {
@@ -953,12 +974,14 @@ function updateHostDiagnostics(nextDiagnostics = {}) {
   };
   elements.hostDiagnosticsText.textContent = renderHostDiagnosticsText();
   setHostDiagnosticsLevel(getHostDiagnosticsLevel());
+  updateInputStatus();
 }
 
 function resetHostDiagnostics(text = defaultHostDiagnosticsText) {
   state.hostDiagnostics = getEmptyHostDiagnostics();
   elements.hostDiagnosticsText.textContent = text;
   setHostDiagnosticsLevel("idle");
+  updateInputStatus();
 }
 
 function readPreferences() {
@@ -2208,7 +2231,7 @@ function buildLogExportText() {
     `- Windows 快捷键兼容：${elements.shortcutCompatToggle.checked ? "开启" : "关闭"}`,
     "",
     "运行统计",
-    `- 输入事件：${state.inputEvents}`,
+    `- 输入事件：${elements.inputText.textContent.replace(/^输入事件：/, "") || state.inputEvents}`,
     `- 视频帧：${state.videoFrames}`,
     `- 音频帧：${state.audioFrames}`,
     `- 重连次数：${state.reconnectAttempts}/${maxReconnectAttempts}`,
