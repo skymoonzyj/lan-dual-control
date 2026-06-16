@@ -157,6 +157,13 @@ struct WindowsHostLaunchRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct WindowsHostReverseGrantRequest {
+    port: Option<u16>,
+    duration_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct LanDiscoveryRequest {
     port: Option<u16>,
     timeout_ms: Option<u64>,
@@ -838,13 +845,43 @@ fn request_discovery(port: u16) -> Result<Value, String> {
     stream
         .read_to_string(&mut response)
         .map_err(|error| error.to_string())?;
+    parse_local_json_response(&response, "discovery")
+}
+
+fn post_local_json(port: u16, path: &str, body: &str, label: &str) -> Result<Value, String> {
+    let address = SocketAddr::from(([127, 0, 0, 1], port));
+    let mut stream = TcpStream::connect_timeout(&address, Duration::from_millis(700))
+        .map_err(|error| error.to_string())?;
+    stream
+        .set_read_timeout(Some(Duration::from_millis(900)))
+        .map_err(|error| error.to_string())?;
+    stream
+        .set_write_timeout(Some(Duration::from_millis(900)))
+        .map_err(|error| error.to_string())?;
+    let request = format!(
+        "POST {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.as_bytes().len(),
+        body
+    );
+    stream
+        .write_all(request.as_bytes())
+        .map_err(|error| error.to_string())?;
+
+    let mut response = String::new();
+    stream
+        .read_to_string(&mut response)
+        .map_err(|error| error.to_string())?;
+    parse_local_json_response(&response, label)
+}
+
+fn parse_local_json_response(response: &str, label: &str) -> Result<Value, String> {
     if !(response.starts_with("HTTP/1.1 200") || response.starts_with("HTTP/1.0 200")) {
         let first_line = response.lines().next().unwrap_or("empty response");
-        return Err(format!("discovery HTTP 异常：{first_line}"));
+        return Err(format!("{label} HTTP 异常：{first_line}"));
     }
     let (headers, body) = response
         .split_once("\r\n\r\n")
-        .ok_or_else(|| "discovery HTTP 响应缺少正文。".to_string())?;
+        .ok_or_else(|| format!("{label} HTTP 响应缺少正文。"))?;
     let body = if headers
         .to_ascii_lowercase()
         .contains("transfer-encoding: chunked")
@@ -854,7 +891,7 @@ fn request_discovery(port: u16) -> Result<Value, String> {
         body.to_string()
     };
     serde_json::from_str::<Value>(body.trim())
-        .map_err(|error| format!("discovery JSON 解析失败：{error}"))
+        .map_err(|error| format!("{label} JSON 解析失败：{error}"))
 }
 
 fn decode_chunked_body(body: &str) -> Result<String, String> {
@@ -1457,6 +1494,33 @@ fn get_windows_host_status(
     get_process_snapshot(&state, None, "Windows 被控端状态已刷新。")
 }
 
+#[tauri::command]
+fn grant_windows_host_reverse_control(
+    request: WindowsHostReverseGrantRequest,
+) -> Result<DesktopCommandResult, String> {
+    let port = normalize_port(request.port);
+    let duration_ms = request.duration_ms.unwrap_or(30_000).clamp(5_000, 120_000);
+    let body = serde_json::json!({
+        "durationMs": duration_ms,
+    })
+    .to_string();
+    let json = post_local_json(
+        port,
+        "/reverse-control/grant",
+        &body,
+        "reverse-control grant",
+    )?;
+    let stdout = serde_json::to_string_pretty(&json)
+        .unwrap_or_else(|_| "{\"ok\":true}".to_string());
+    Ok(DesktopCommandResult {
+        ok: json.get("ok").and_then(Value::as_bool).unwrap_or(true),
+        exit_code: Some(0),
+        stdout,
+        stderr: String::new(),
+        json: Some(json),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1657,7 +1721,8 @@ fn main() {
             get_windows_host_helper_status,
             start_windows_host,
             stop_windows_host,
-            get_windows_host_status
+            get_windows_host_status,
+            grant_windows_host_reverse_control
         ])
         .on_window_event(|window, event| {
             if matches!(event, WindowEvent::CloseRequested { .. }) {

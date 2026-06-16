@@ -102,6 +102,23 @@ async function waitForDiscovery(host, port, timeoutMs) {
   throw new Error(`discovery did not become ready${lastError ? `: ${lastError.message}` : ""}`);
 }
 
+async function grantReverseControl(host, port, durationMs, timeoutMs) {
+  const response = await withTimeout(fetch(`http://${host}:${port}/reverse-control/grant`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ durationMs }),
+  }), timeoutMs, "grant reverse control");
+  assert.equal(response.status, 200, `grant failed with HTTP ${response.status}`);
+  const json = await response.json();
+  assert.equal(json.ok, true);
+  assert.equal(json.reverseControlMode, "deny");
+  assert.equal(json.reverseControlGrant?.active, true);
+  assert.ok(Number(json.reverseControlGrant?.remainingMs) > 0);
+  return json;
+}
+
 function makeQueue(socket) {
   const queue = [];
   const waiters = [];
@@ -226,6 +243,51 @@ async function verifyDefaultDenied(args) {
   print("OK", "Default reverse control policy rejects safely with LAN008");
 }
 
+async function verifyLocalTemporaryGrant(args) {
+  await withHost({ ...args, reverseControlMode: "deny" }, async ({ host, port }) => {
+    const grant = await grantReverseControl(host, port, 30000, args.timeoutMs);
+    assert.equal(grant.reverseControlGrant.oneTime, true);
+    const discovery = await waitForDiscovery(host, port, args.timeoutMs);
+    assert.equal(discovery.capabilities.reverseControlMode, "deny");
+    assert.equal(discovery.capabilities.reverseControlGrant.active, true);
+
+    const { socket, messages } = await openSocket({ host, port, timeoutMs: args.timeoutMs });
+    try {
+      await authenticate(socket, messages, args.password, args.timeoutMs);
+      socket.send(JSON.stringify({
+        type: "reverse_control_request",
+        requestId: "temporary-grant",
+        from: "Mac client",
+      }));
+      const accepted = await messages.next(args.timeoutMs, "temporary grant reverse response");
+      assert.equal(accepted.type, "reverse_control_response");
+      assert.equal(accepted.requestId, "temporary-grant");
+      assert.equal(accepted.accepted, true);
+      assert.equal(accepted.reverseControlMode, "deny");
+      assert.equal(accepted.reverseControlState, "accepted");
+      assert.equal(accepted.reverseControlGrant, "consumed");
+      assert.match(accepted.reason, /短时允许|授权已使用/);
+
+      const afterDiscovery = await waitForDiscovery(host, port, args.timeoutMs);
+      assert.equal(afterDiscovery.capabilities.reverseControlGrant.active, false);
+
+      socket.send(JSON.stringify({
+        type: "reverse_control_request",
+        requestId: "temporary-grant-consumed",
+        from: "Mac client",
+      }));
+      const rejected = await messages.next(args.timeoutMs, "consumed grant reverse response");
+      assert.equal(rejected.type, "reverse_control_response");
+      assert.equal(rejected.accepted, false);
+      assert.equal(rejected.code, "LAN008");
+      assert.equal(rejected.reverseControlState, "rejected");
+    } finally {
+      socket.close();
+    }
+  });
+  print("OK", "Local temporary reverse control grant accepts once and is consumed");
+}
+
 async function verifyMissingRequestIdRejected(args) {
   await withHost({ ...args, reverseControlMode: "deny" }, async ({ host, port }) => {
     const { socket, messages } = await openSocket({ host, port, timeoutMs: args.timeoutMs });
@@ -314,6 +376,7 @@ async function main() {
 
   await verifyUnauthenticatedRejected(args);
   await verifyDefaultDenied(args);
+  await verifyLocalTemporaryGrant(args);
   await verifyMissingRequestIdRejected(args);
   await verifyExplicitAcceptMode(args);
   await verifyDisabledMode(args);

@@ -37,6 +37,7 @@ const elements = {
   localHostStartButton: document.querySelector("#localHostStartButton"),
   localHostFirewallButton: document.querySelector("#localHostFirewallButton"),
   localHostStopButton: document.querySelector("#localHostStopButton"),
+  localHostReverseGrantButton: document.querySelector("#localHostReverseGrantButton"),
   localHostStatusText: document.querySelector("#localHostStatusText"),
   localHostOutput: document.querySelector("#localHostOutput"),
   historyList: document.querySelector("#historyList"),
@@ -3237,6 +3238,10 @@ function formatLocalHostReverseControlStatus(reverse = {}) {
   const policy = reverse.policy && typeof reverse.policy === "object" ? reverse.policy : {};
   const mode = normalizeReverseControlMode(reverse.mode || reverse.reverseControlMode || policy.mode);
   if (reverse.supported === false || mode === "disabled") return reverseControlModeLabels.disabled;
+  if (reverse.grant?.active) {
+    const seconds = Math.max(1, Math.ceil((Number(reverse.grant.remainingMs) || 0) / 1000));
+    return `临时允许 ${seconds} 秒`;
+  }
   if (reverse.autoAccept || policy.autoAccept || mode === "accept") return reverseControlModeLabels.accept;
   if (reverse.requiresConfirmation || policy.requiresConfirmation || mode === "deny") return reverseControlModeLabels.deny;
   return labelFromMap(mode, reverseControlModeLabels);
@@ -3369,6 +3374,7 @@ function updateLocalHostControls() {
   elements.localHostStartButton.disabled = !available || busy || state.localHostRunning || state.localHostOnline;
   elements.localHostFirewallButton.disabled = !available || busy;
   elements.localHostStopButton.disabled = !available || busy || !state.localHostRunning;
+  elements.localHostReverseGrantButton.disabled = !available || busy || !state.localHostOnline;
   [
     elements.localHostPortInput,
     elements.localHostPasswordInput,
@@ -3546,6 +3552,31 @@ async function stopLocalWindowsHost() {
     addLog("本机被控停止", snapshot?.message || "Windows 被控端已停止");
   } catch (error) {
     setLocalHostStatus(error?.message || "停止本机 Windows 被控端失败。");
+    renderLocalHostOutput([error?.message || String(error)]);
+  } finally {
+    setLocalHostBusy(false);
+  }
+}
+
+async function grantLocalHostReverseControl() {
+  const invoke = getTauriInvoke();
+  if (!invoke) return;
+  setLocalHostBusy(true, "正在短时允许下一次反控请求...");
+  try {
+    const result = await invoke("grant_windows_host_reverse_control", {
+      request: {
+        port: getLocalHostPort(),
+        durationMs: 30000,
+      },
+    });
+    const grant = result?.json?.reverseControlGrant || {};
+    const seconds = Math.max(1, Math.ceil((Number(grant.remainingMs) || 30000) / 1000));
+    setLocalHostStatus(`已临时允许下一次 Mac 反控请求，约 ${seconds} 秒内有效，使用后自动关闭。`);
+    renderLocalHostOutput(localHostCommandLines(result));
+    addLog("本机反控授权", `已临时允许下一次请求，约 ${seconds} 秒有效`);
+    await refreshLocalHostProcessStatus();
+  } catch (error) {
+    setLocalHostStatus(error?.message || "临时允许反控失败。");
     renderLocalHostOutput([error?.message || String(error)]);
   } finally {
     setLocalHostBusy(false);
@@ -4875,6 +4906,9 @@ elements.localHostStartButton.addEventListener("click", () => {
 });
 elements.localHostStopButton.addEventListener("click", () => {
   void stopLocalWindowsHost();
+});
+elements.localHostReverseGrantButton.addEventListener("click", () => {
+  void grantLocalHostReverseControl();
 });
 
 elements.fullscreenButton.addEventListener("click", () => setFullscreen(true));

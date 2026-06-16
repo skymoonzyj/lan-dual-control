@@ -89,6 +89,7 @@ Windows 端：
 - [x] Mac host 启动/状态助手也支持 `--status --checkBoard`：只读读取 Agent Link Board `/api/state.currentCall`，JSON、普通输出和 `--boardSummary` 会提示 active call，DONE call 标为 inactive，摘要不回显 command；`--boardSummary --checkBoard` 会自动走 status，不会误启动 host。
 - [x] Windows 桌面版“本机被控”面板的体检和状态刷新也会启用 `--checkBoard`：UI 会提示 active Mac -> Windows call 为“Mac 正在请求 Windows 配合”，DONE call 不当作待办，且不回显 call command。
 - [x] Windows 桌面版“本机被控”面板接入反控策略选择和状态显示：启动前可选“需确认 / 实验同意 / 关闭”，默认“需确认”并透传给 `start-windows-host --reverseControlMode deny`；状态区会显示实际 `capabilities.reverseControl`，避免 Mac 反控 Windows 前误开自动同意。
+- [x] Windows host 和桌面“本机被控”面板支持一次性临时反控授权：Windows 本机点击“临时允许反控”后打开约 30 秒窗口，下一次 Mac `reverse_control_request` 会通过并立即消耗；默认 `deny-confirm`、实验 `accept-lab` 和禁用 `disabled` 语义保持不变，授权管理端点只允许回环访问。
 - [x] Mac 恢复开工总览也可解析 Agent Link Board `currentCall`：`--checkBoard --json`、普通输出和 `--boardSummary` 会显示 `call=active/done/none`，DONE 呼叫不会误当作待办，摘要不回显 call command。
 - [x] Windows 恢复开工总览支持 `--userAuthRequest` / PowerShell `-UserAuthRequest`，预检 ready 后直接输出可发 Agent Link Board 的 `NEED_USER_AUTH` 文本和固定目标 PowerShell 正式验收命令。
 - [x] Windows 恢复开工总览支持显式 `--sendUserAuthRequest` / PowerShell `-SendUserAuthRequest`，只在 formal preflight ready 时把无密授权提示发到 Agent Link Board，未 ready 时拒绝发送。

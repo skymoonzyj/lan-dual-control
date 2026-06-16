@@ -143,7 +143,53 @@ function makeEnvelope(message) {
   };
 }
 
-function makeReverseControlResponse({ message, mode, state }) {
+function makeReverseControlGrantManager() {
+  const grant = {
+    expiresAtMs: 0,
+    grantedAt: "",
+    consumedAt: "",
+    revokedAt: "",
+  };
+  const status = () => {
+    const now = Date.now();
+    const active = grant.expiresAtMs > now;
+    return {
+      active,
+      oneTime: true,
+      grantedAt: grant.grantedAt,
+      expiresAt: active ? new Date(grant.expiresAtMs).toISOString() : "",
+      remainingMs: active ? Math.max(0, grant.expiresAtMs - now) : 0,
+      consumedAt: grant.consumedAt,
+      revokedAt: grant.revokedAt,
+    };
+  };
+  return {
+    status,
+    grant(durationMs = 30000) {
+      const now = Date.now();
+      const safeDurationMs = Math.max(5000, Math.min(120000, Number(durationMs) || 30000));
+      grant.expiresAtMs = now + safeDurationMs;
+      grant.grantedAt = new Date(now).toISOString();
+      grant.consumedAt = "";
+      grant.revokedAt = "";
+      return status();
+    },
+    revoke() {
+      grant.expiresAtMs = 0;
+      grant.revokedAt = new Date().toISOString();
+      return status();
+    },
+    consume() {
+      const current = status();
+      if (!current.active) return null;
+      grant.expiresAtMs = 0;
+      grant.consumedAt = new Date().toISOString();
+      return current;
+    },
+  };
+}
+
+function makeReverseControlResponse({ message, mode, state, grantManager }) {
   const reverseMode = normalizeReverseControlMode(mode);
   const requestId = String(message.requestId ?? "").trim();
   const requester = String(message.from || "对方").trim() || "对方";
@@ -209,6 +255,26 @@ function makeReverseControlResponse({ message, mode, state }) {
     };
   }
 
+  if (reverseMode === "deny") {
+    const consumedGrant = grantManager?.consume?.();
+    if (consumedGrant?.active) {
+      Object.assign(state, {
+        status: "accepted",
+        updatedAt: new Date().toISOString(),
+        reason: "local temporary grant consumed",
+      });
+      return {
+        type: "reverse_control_response",
+        requestId,
+        accepted: true,
+        reason: "Windows 本机用户已短时允许下一次反控请求，本次授权已使用。",
+        reverseControlMode: reverseMode,
+        reverseControlState: state.status,
+        reverseControlGrant: "consumed",
+      };
+    }
+  }
+
   Object.assign(state, {
     status: "rejected",
     updatedAt: new Date().toISOString(),
@@ -223,6 +289,52 @@ function makeReverseControlResponse({ message, mode, state }) {
     reverseControlMode: reverseMode,
     reverseControlState: state.status,
   };
+}
+
+function isLoopbackAddress(address = "") {
+  const value = String(address || "").trim().toLowerCase();
+  return value === "::1"
+    || value === "127.0.0.1"
+    || value.startsWith("127.")
+    || value === "::ffff:127.0.0.1"
+    || value.startsWith("::ffff:127.");
+}
+
+function sendJson(response, statusCode, payload, headers = {}) {
+  response.writeHead(statusCode, {
+    ...headers,
+    "Content-Type": "application/json; charset=utf-8",
+  });
+  response.end(JSON.stringify(payload));
+}
+
+function readJsonBody(request, maxBytes = 4096) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let total = 0;
+    request.on("data", (chunk) => {
+      total += chunk.length;
+      if (total > maxBytes) {
+        reject(new Error("请求正文过大。"));
+        request.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("end", () => {
+      const text = Buffer.concat(chunks).toString("utf8").trim();
+      if (!text) {
+        resolve({});
+        return;
+      }
+      try {
+        resolve(JSON.parse(text));
+      } catch (error) {
+        reject(new Error(`JSON 解析失败：${error.message}`));
+      }
+    });
+    request.on("error", reject);
+  });
 }
 
 function parseDataUrlPayload(dataUrl) {
@@ -592,6 +704,7 @@ function createClient(socket, context) {
         message,
         mode: reverseControlMode,
         state: reverseControlState,
+        grantManager: context.reverseControlGrant,
       });
       context.logger.info(response.accepted
         ? `一键反控请求已同意：requestId=${response.requestId}`
@@ -707,13 +820,15 @@ export function createWindowsHostServer({
   const clipboard = new WindowsClipboardBridge({ logger });
   const normalizedReverseControlMode = normalizeReverseControlMode(reverseControlMode);
   const reverseControlPolicy = makeReverseControlCapabilities(normalizedReverseControlMode);
+  const reverseControlGrant = makeReverseControlGrantManager();
 
   const server = createServer((request, response) => {
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     };
+    const pathname = (request.url ?? "").split("?")[0];
 
     if (request.method === "OPTIONS") {
       response.writeHead(204, corsHeaders);
@@ -721,7 +836,7 @@ export function createWindowsHostServer({
       return;
     }
 
-    if ((request.url ?? "").split("?")[0] === "/discovery") {
+    if (pathname === "/discovery") {
       const requestHost = request.headers.host?.split(":")[0];
       const advertisedHost = host === "0.0.0.0" ? (requestHost ?? host) : host;
       const clipboardCapabilities = clipboard.getCapabilities();
@@ -754,10 +869,62 @@ export function createWindowsHostServer({
           reverseControl: reverseControlPolicy.supported,
           reverseControlMode: normalizedReverseControlMode,
           reverseControlPolicy,
+          reverseControlGrant: reverseControlGrant.status(),
           mock: screenCapabilities.mode === "mock",
         },
         lastSeenAt: new Date().toISOString(),
       }));
+      return;
+    }
+
+    if (pathname === "/reverse-control/status" || pathname === "/reverse-control/grant" || pathname === "/reverse-control/revoke") {
+      if (!isLoopbackAddress(request.socket.remoteAddress)) {
+        sendJson(response, 403, {
+          ok: false,
+          code: "LAN403",
+          message: "反控授权管理只允许 Windows 本机访问。",
+        }, corsHeaders);
+        return;
+      }
+      if (pathname === "/reverse-control/status") {
+        sendJson(response, 200, {
+          ok: true,
+          reverseControlMode: normalizedReverseControlMode,
+          reverseControlPolicy,
+          reverseControlGrant: reverseControlGrant.status(),
+        }, corsHeaders);
+        return;
+      }
+      if (request.method !== "POST") {
+        sendJson(response, 405, {
+          ok: false,
+          code: "LAN405",
+          message: "该反控授权端点只接受 POST。",
+        }, corsHeaders);
+        return;
+      }
+      void readJsonBody(request)
+        .then((body) => {
+          const grant = pathname === "/reverse-control/grant"
+            ? reverseControlGrant.grant(body.durationMs)
+            : reverseControlGrant.revoke();
+          logger.info(pathname === "/reverse-control/grant"
+            ? `Windows 本机已短时允许下一次反控请求：remainingMs=${grant.remainingMs}`
+            : "Windows 本机已撤销临时反控授权。");
+          sendJson(response, 200, {
+            ok: true,
+            reverseControlMode: normalizedReverseControlMode,
+            reverseControlPolicy,
+            reverseControlGrant: grant,
+          }, corsHeaders);
+        })
+        .catch((error) => {
+          sendJson(response, 400, {
+            ok: false,
+            code: "LAN400",
+            message: error.message,
+          }, corsHeaders);
+        });
       return;
     }
 
@@ -793,6 +960,7 @@ export function createWindowsHostServer({
       clipboard,
       runtime,
       reverseControlMode: normalizedReverseControlMode,
+      reverseControlGrant,
     });
   });
 
@@ -819,7 +987,7 @@ export function createWindowsHostServer({
               ? "一键反控策略：显式实验同意。仅用于可信局域网联调。"
               : normalizedReverseControlMode === "disabled"
                 ? "一键反控策略：已禁用。"
-                : "一键反控策略：默认安全拒绝，需要后续桌面确认入口显式同意。",
+                : "一键反控策略：默认安全拒绝；Windows 本机可临时允许下一次反控请求。",
           );
           resolve();
         });

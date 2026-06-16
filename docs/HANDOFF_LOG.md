@@ -19,6 +19,52 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 23:45
+开发端：Windows Codex
+本轮目标：让 Mac 反控 Windows 不必只能在长期 `accept` 实验模式下通过，先补一个安全的一次性本机临时授权窗口。
+完成内容：
+- Windows host 新增一次性临时反控授权管理器：默认 `deny` 仍拒绝，Windows 本机打开授权后，下一次 `reverse_control_request` 会 accepted 并立即消耗授权。
+- 新增本机 HTTP 管理端点 `/reverse-control/status`、`/reverse-control/grant`、`/reverse-control/revoke`；授权/撤销只允许回环地址访问，局域网其他设备不能直接打开授权窗口。
+- `/discovery.capabilities.reverseControlGrant` 会暴露授权窗口是否 active、剩余时间和一次性属性。
+- `start-windows-host --status --json` / 普通输出 / boardSummary 现在能看到 `temporary-grant` 状态。
+- Windows 桌面 Tauri 新增 `grant_windows_host_reverse_control` 命令，向本机 host 打开约 30 秒一次性授权。
+- Windows 控制端“本机被控”面板新增“临时允许反控”按钮；host 在线时可用，点击后状态区显示临时允许倒计时，使用或超时后自动回到默认安全语义。
+- 专项回归新增“本机临时授权只接受一次并消耗”的覆盖；页面 diagnostics 覆盖临时授权状态文案。
+- Windows host/client README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-host/src/windows-host-service.mjs`
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/test-windows-host-reverse-control.mjs`
+- `apps/windows-client/index.html`
+- `apps/windows-client/app.js`
+- `apps/windows-client/styles.css`
+- `apps/windows-desktop/src-tauri/src/main.rs`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-host/README.md`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-host/src/windows-host-service.mjs`
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-host-reverse-control.mjs`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-host-reverse-control.mjs --timeoutMs 15000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --progressIntervalMs 0`
+- `cargo check --manifest-path apps/windows-desktop/src-tauri/Cargo.toml`
+遗留问题：
+- 这还不是完整“收到请求弹窗、用户点同意/拒绝”的交互；当前是先由 Windows 本机点击按钮打开一次性窗口，再让 Mac 发起反控请求。
+下一步建议：
+- 下一步可让 Mac client 在发现 `reverseControlGrant.active` 后优先提示“Windows 已允许一次反控，请立即请求”，或进一步做 Windows 本机真正的请求弹窗队列。
+是否改了协议：未改共享协议；只新增 Windows host 可选 discovery 能力字段和本机管理端点，原有 `reverse_control_request/response` 消息形状保持兼容。
+是否需要另一端配合：暂不需要；Mac 端如果要优化体验，可读取 `reverseControlGrant.active` 做提示。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 23:25
 开发端：Windows Codex
 本轮目标：把 Windows 桌面“本机被控”面板接上反控策略选择和状态显示，延续默认安全拒绝。

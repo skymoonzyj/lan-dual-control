@@ -829,6 +829,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         "#localHostStartButton",
         "#localHostFirewallButton",
         "#localHostStopButton",
+        "#localHostReverseGrantButton",
       ].map((selector) => document.querySelector(selector));
       const inputs = [
         "#localHostPortInput",
@@ -1004,6 +1005,11 @@ async function verifyDesktopOnlyHostPanel(session) {
               policy: {
                 mode: "deny",
               },
+              grant: {
+                active: true,
+                remainingMs: 30000,
+                oneTime: true,
+              },
             },
             clipboard: {
               text: true,
@@ -1084,6 +1090,7 @@ async function verifyDesktopOnlyHostPanel(session) {
           typeof normalizeLocalHostHelperStatus === "function" &&
           typeof localHostHelperStatusSummary === "function" &&
           typeof localHostHelperStatusLines === "function" &&
+          typeof grantLocalHostReverseControl === "function" &&
           typeof maxNativeClipboardFileBytes === "number" &&
           typeof maxClipboardFileBytes === "number" &&
           typeof nativeClipboardChunkSizeBytes === "number" &&
@@ -1119,14 +1126,14 @@ async function verifyDesktopOnlyHostPanel(session) {
           helperSummary.includes("PID 2468") &&
           helperSummary.includes("FFmpeg gdigrab H.264") &&
           helperSummary.includes("WASAPI") &&
-          helperSummary.includes("反控 需确认") &&
+          helperSummary.includes("反控 临时允许 30 秒") &&
           helperSummary.includes("通讯板有 Mac→Windows 呼叫") &&
           helperLinesText.includes("状态助手") &&
           helperLinesText.includes("[CALL] 通讯板") &&
           helperLinesText.includes("正式 Windows host 验收") &&
           !helperLinesText.includes("should-not-render") &&
           helperLinesText.includes("build helper-test") &&
-          helperLinesText.includes("反控：需确认") &&
+          helperLinesText.includes("反控：临时允许 30 秒") &&
           helperLinesText.includes("剪贴板") &&
           helperLinesText.includes("WGC fallback") &&
           offlineHelperLinesText.includes("离线") &&

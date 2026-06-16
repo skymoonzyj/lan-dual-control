@@ -230,6 +230,11 @@ button:disabled {
   margin-top: 8px;
 }
 
+.local-host-reverse-row {
+  grid-template-columns: 1fr;
+  margin-top: 8px;
+}
+
 .local-host-status {
   margin: 10px 0 0;
   color: var(--muted);
