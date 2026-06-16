@@ -280,6 +280,38 @@ async function checkBoardCurrentCallSummary(args) {
   });
 }
 
+async function checkBoardCurrentCallJson(args) {
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-CheckBoard",
+        "-Json",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell currentCall JSON failed\n${output}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.source === "api-state", "PowerShell currentCall should be read from Agent Link Board /api/state");
+      assert(payload.board?.currentCall?.active === true, "PowerShell currentCall JSON should mark call active");
+      assert(payload.board?.currentCall?.needsWindows === true, "PowerShell currentCall JSON should mark Windows need");
+      assertIncludes(payload.boardSummary, "call=CALLING Mac Codex->Windows Codex", "PowerShell currentCall JSON board summary");
+      assertIncludes(payload.boardSummary, "正式 Windows host 验收", "PowerShell currentCall JSON board summary");
+      assertNotIncludes(output, "test-password", "PowerShell currentCall JSON");
+      console.log("[OK] PowerShell resume-status wrapper reads Agent Link currentCall from /api/state");
+    }, {
+      currentCall: macCallForWindows(),
+    });
+  });
+}
+
 async function checkUserAuthRequest(args) {
   await withMockHost(async (port) => {
     const result = await runPowerShell([
@@ -382,6 +414,7 @@ async function main() {
   await checkMockJson(args);
   await checkBoardSummary(args);
   await checkBoardCurrentCallSummary(args);
+  await checkBoardCurrentCallJson(args);
   await checkUserAuthRequest(args);
   await checkSendUserAuthRequest(args);
   await checkOfflineDefaults(args);

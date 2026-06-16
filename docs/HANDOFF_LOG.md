@@ -17,6 +17,43 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-16 Windows Codex
+
+日期：2026-06-16 12:05
+开发端：Windows Codex
+本轮目标：让 Windows 恢复开工总览与 Mac 侧一样优先结构化读取 Agent Link Board 当前测试呼叫。
+完成内容：
+- `scripts/windows/check-windows-resume-status.mjs` 的 `--checkBoard` 现在优先直接读取 Agent Link Board `/api/state`，把 `currentCall` 结构化写入 JSON；读取失败时仍保留旧的 `codex-link-client watch --once` 输出解析兜底。
+- JSON `board.source` 会标记 `api-state` / `codex-link-client` / `skipped`，便于后续自动化判断读取路径；active Mac -> Windows call 仍会进入普通输出和 `--boardSummary`。
+- DONE/完成类 call 会保留在 JSON 的 `board.currentCall` 中并标记 `active=false`，但不会进入待办摘要，避免恢复开工时误把已完成呼叫当作新任务。
+- Node 与 PowerShell 回归都锁定 fake Agent Link Board `/api/state` 读取路径；Node 回归额外覆盖 DONE call 不进入 board summary。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- PowerShell 7 AST 语法解析 `check-windows-resume-status.ps1`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --script test-windows-resume-status.mjs --script test-windows-resume-status-powershell.mjs --timeoutMs 10000`
+- `node scripts/windows/check-windows-resume-status.mjs --checkBoard --noDiscover --host 127.0.0.1 --port 9 --boardSummary --timeoutMs 12000`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮不改变通讯板协议，也不自动发送/清理 call；只改 Windows 恢复总览读取方式和提示稳定性。
+下一步建议：
+- Windows 侧恢复开工继续先跑 `check-windows-resume-status --checkBoard --boardSummary`；如果出现 active Mac -> Windows call，先响应该 call，再启动新的正式验收。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
 ## 2026-06-16 Mac Codex
 
 日期：2026-06-16 11:48

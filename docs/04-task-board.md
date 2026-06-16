@@ -80,7 +80,7 @@ Windows 端：
 - [x] 真实 Windows 控制 Mac safe inject 小验收通过：2026-06-16 连接 `192.168.31.122:43770` / runtime build `d398d64` / `inputMode=inject`，Windows 本机隐藏输入密码后 safe set 2 个事件均 `input_ack injected=true`，未执行点击、Delete、Ctrl+A 或 full event set；后续复跑 Mac 端启动 inject host 必须带 `--confirmUserWatching`。
 - [x] Windows 端新增恢复开工总览 `scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`：只读汇总 git、通讯板、Mac formal preflight、自动发现目标和下一步命令；不认证、不要求密码、不发送输入、不执行 `inject`。
 - [x] Windows 恢复开工总览新增 PowerShell 包装入口 `scripts/windows/check-windows-resume-status.ps1 -CheckBoard -BoardSummary`，并可加 `-CheckClientDiagnostics` 做无密 Windows 控制端页面诊断。
-- [x] Windows 恢复开工总览可解析 Agent Link Board active `currentCall`：`--checkBoard --json`、普通输出和 `--boardSummary` 会显示 Mac -> Windows 呼叫方向/目标，方便 Windows 接手时直接响应 Mac 端正式测试请求。
+- [x] Windows 恢复开工总览优先结构化读取 Agent Link Board `/api/state` 的 `currentCall`，失败时才退回旧命令输出解析：`--checkBoard --json`、普通输出和 `--boardSummary` 会显示 active Mac -> Windows 呼叫方向/目标，DONE call 不会误当作待办，方便 Windows 接手时直接响应 Mac 端正式测试请求。
 - [x] Mac 恢复开工总览也可解析 Agent Link Board `currentCall`：`--checkBoard --json`、普通输出和 `--boardSummary` 会显示 `call=active/done/none`，DONE 呼叫不会误当作待办，摘要不回显 call command。
 - [x] Windows 恢复开工总览支持 `--userAuthRequest` / PowerShell `-UserAuthRequest`，预检 ready 后直接输出可发 Agent Link Board 的 `NEED_USER_AUTH` 文本和固定目标 PowerShell 正式验收命令。
 - [x] Windows 恢复开工总览支持显式 `--sendUserAuthRequest` / PowerShell `-SendUserAuthRequest`，只在 formal preflight ready 时把无密授权提示发到 Agent Link Board，未 ready 时拒绝发送。

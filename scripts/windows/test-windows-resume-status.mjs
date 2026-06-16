@@ -178,6 +178,15 @@ function macCallForWindows() {
   };
 }
 
+function doneMacCallForWindows() {
+  return {
+    ...macCallForWindows(),
+    status: "DONE",
+    goal: "正式 Windows host 验收已完成",
+    actual: "Windows confirmed readiness and posted results.",
+  };
+}
+
 async function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = await run([flag], args);
@@ -262,6 +271,7 @@ async function checkBoardCurrentCallJson(args) {
       ], args);
       assert(result.exitCode === 0, `mock currentCall JSON failed\n${result.stdout}\n${result.stderr}`);
       const payload = JSON.parse(result.stdout);
+      assert(payload.board?.source === "api-state", "currentCall should be read from Agent Link Board /api/state");
       assert(payload.board?.currentCall?.present === true, "currentCall should be present");
       assert(payload.board?.currentCall?.active === true, "currentCall should be active");
       assert(payload.board?.currentCall?.from === "Mac Codex", "currentCall from mismatch");
@@ -274,6 +284,38 @@ async function checkBoardCurrentCallJson(args) {
       console.log("[OK] Windows resume status JSON includes active Agent Link currentCall");
     }, {
       currentCall: macCallForWindows(),
+    });
+  });
+}
+
+async function checkBoardDoneCallJson(args) {
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock DONE currentCall JSON failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.source === "api-state", "DONE currentCall should be read from Agent Link Board /api/state");
+      assert(payload.board?.currentCall?.present === true, "DONE currentCall should be present");
+      assert(payload.board?.currentCall?.active === false, "DONE currentCall should not be active");
+      assertIncludes(payload.board.currentCall.summary, "DONE Mac Codex->Windows Codex", "DONE currentCall summary");
+      assertNotIncludes(payload.boardSummary, "call=DONE", "DONE currentCall board summary");
+      assertNotIncludes(payload.boardSummary, "start-windows-host", "DONE currentCall board summary");
+      assertNotIncludes(result.stdout + result.stderr, "test-password", "DONE currentCall JSON");
+      console.log("[OK] Windows resume status keeps DONE Agent Link currentCall out of board summary");
+    }, {
+      currentCall: doneMacCallForWindows(),
     });
   });
 }
@@ -428,6 +470,7 @@ async function main() {
   await checkMockJson(args);
   await checkBoardSummary(args);
   await checkBoardCurrentCallJson(args);
+  await checkBoardDoneCallJson(args);
   await checkBoardCurrentCallSummary(args);
   await checkUserAuthRequest(args);
   await checkSendUserAuthRequest(args);

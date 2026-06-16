@@ -277,6 +277,93 @@ function parseBoardCurrentCall(output) {
   return parsed;
 }
 
+function normalizeBoardCurrentCall(call) {
+  if (!call || typeof call !== "object") {
+    return {
+      present: false,
+      active: false,
+      summary: "none",
+    };
+  }
+  const parsed = {
+    present: true,
+    status: normalizedText(call.status),
+    from: normalizedText(call.from),
+    need: normalizedText(call.need),
+    goal: normalizedText(call.goal),
+    environment: normalizedText(call.environment),
+    connection: normalizedText(call.connection),
+    command: normalizedText(call.command),
+    expected: normalizedText(call.expected),
+    actual: normalizedText(call.actual),
+    ask: normalizedText(call.ask),
+    blockedBy: normalizedText(call.blockedBy),
+    owner: normalizedText(call.owner),
+    timeout: normalizedText(call.timeout),
+    startedAt: normalizedText(call.startedAt),
+    updatedAt: normalizedText(call.updatedAt),
+    active: false,
+    needsWindows: false,
+    fromMacSide: false,
+    summary: "",
+  };
+  const text = [
+    parsed.goal,
+    parsed.environment,
+    parsed.connection,
+    parsed.command,
+    parsed.expected,
+    parsed.actual,
+    parsed.ask,
+    parsed.blockedBy,
+  ].join("\n");
+  parsed.active = isActiveCallStatus(parsed.status);
+  parsed.needsWindows = isWindowsText(parsed.need) || isWindowsText(text);
+  parsed.fromMacSide = isMacText(parsed.from) || isMacText(text);
+  const direction = [parsed.from || "unknown", parsed.need || "unknown"].join("->");
+  parsed.summary = `${parsed.status || "CALL"} ${direction}${parsed.goal ? ` ${parsed.goal}` : ""}`;
+  return parsed;
+}
+
+function countBoardStateItems(state) {
+  if (!state || typeof state !== "object") return 0;
+  const statusCount = state.statuses && typeof state.statuses === "object"
+    ? Object.keys(state.statuses).length
+    : 0;
+  const eventCount = Array.isArray(state.events) ? state.events.length : 0;
+  const messageCount = Array.isArray(state.messages) ? state.messages.length : 0;
+  const callCount = state.currentCall ? 1 : 0;
+  return statusCount + eventCount + messageCount + callCount;
+}
+
+async function getBoardState(args) {
+  const controller = new AbortController();
+  const timeoutMs = Math.min(Math.max(args.timeoutMs, 5000), 30000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(new URL("/api/state", args.server), {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        ...(process.env.CODEX_LINK_TOKEN ? { "X-Codex-Link-Token": process.env.CODEX_LINK_TOKEN } : {}),
+      },
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      return { ok: false, status: response.status, state: null, error: `${response.status}: ${text}` };
+    }
+    try {
+      return { ok: true, status: response.status, state: text ? JSON.parse(text) : {}, error: "" };
+    } catch (error) {
+      return { ok: false, status: response.status, state: null, error: `invalid JSON: ${error.message}` };
+    }
+  } catch (error) {
+    return { ok: false, status: null, state: null, error: error.message };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function getGitStatus() {
   const branch = command("git", ["status", "--short", "--branch"], { timeoutMs: 5000 });
   const head = command("git", ["log", "--oneline", "--decorate", "-1"], { timeoutMs: 5000 });
@@ -297,12 +384,13 @@ function getGitStatus() {
   };
 }
 
-function getBoardSnapshot(args) {
+async function getBoardSnapshot(args) {
   if (!args.checkBoard) {
     return {
       requested: false,
       ok: null,
       status: null,
+      source: "skipped",
       lineCount: 0,
       tail: [],
       currentCall: {
@@ -313,6 +401,21 @@ function getBoardSnapshot(args) {
       error: "",
     };
   }
+
+  const stateResult = await getBoardState(args);
+  if (stateResult.ok) {
+    return {
+      requested: true,
+      ok: true,
+      status: stateResult.status,
+      source: "api-state",
+      lineCount: countBoardStateItems(stateResult.state),
+      tail: [],
+      currentCall: normalizeBoardCurrentCall(stateResult.state?.currentCall),
+      error: "",
+    };
+  }
+
   const result = command(process.execPath, [
     "scripts/codex-link-client.mjs",
     "--server", args.server,
@@ -323,11 +426,13 @@ function getBoardSnapshot(args) {
   return {
     requested: true,
     ok: result.ok,
-    status: result.status,
+    status: stateResult.status ?? result.status,
+    source: result.ok ? "codex-link-client" : "unavailable",
     lineCount: splitLines(output).length,
     tail: tailLines(output, 8),
     currentCall: parseBoardCurrentCall(output),
-    error: normalizedText(result.error || result.stderr),
+    apiStateError: normalizedText(stateResult.error),
+    error: result.ok ? "" : normalizedText(stateResult.error || result.error || result.stderr),
   };
 }
 
@@ -536,9 +641,9 @@ function sendUserAuthRequest(args, report) {
   };
 }
 
-function makeReport(args) {
+async function makeReport(args) {
   const git = getGitStatus();
-  const board = getBoardSnapshot(args);
+  const board = await getBoardSnapshot(args);
   const macPreflight = runFormalPreflight(args);
   const commands = makeCommands(args, macPreflight);
   const checks = [
@@ -660,7 +765,7 @@ async function main() {
     return;
   }
   const args = parseArgs(process.argv);
-  const report = makeReport(args);
+  const report = await makeReport(args);
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
   } else if (args.userAuthRequest) {
