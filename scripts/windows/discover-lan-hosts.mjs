@@ -522,6 +522,7 @@ function makeMacFormalCommands(item) {
   return {
     preflightCommand: `${base} --preflightOnly --checkClientDiagnostics --boardSummary`,
     userAuthRequestCommand: `${base} --preflightOnly --checkClientDiagnostics --userAuthRequest`,
+    sendUserAuthRequestCommand: `${base} --preflightOnly --checkClientDiagnostics --sendUserAuthRequest`,
     formalCommand: `${base} --promptPassword`,
   };
 }
@@ -533,6 +534,7 @@ function makeMacBoardSummary(report) {
       `Build diff: ${formatMacBuildDiff(report.bestMacHost.buildDiff)}.`,
       `Next preflight: ${report.macFormalE2e.preflightCommand}.`,
       `User auth request when ready: ${report.macFormalE2e.userAuthRequestCommand}.`,
+      `Send auth request when ready: ${report.macFormalE2e.sendUserAuthRequestCommand}.`,
       `Formal command: ${report.macFormalE2e.formalCommand}.`,
       "No password was requested or sent; no WebSocket/input/inject was attempted.",
     ].join(" ");
@@ -625,6 +627,7 @@ async function main() {
       print("INFO", `Mac host build diff: ${macDiscovery.bestMacHost.buildDiff.message}`, args);
       print("INFO", `Mac formal preflight command: ${macDiscovery.macFormalE2e.preflightCommand}`, args);
       print("INFO", `Mac user auth request command: ${macDiscovery.macFormalE2e.userAuthRequestCommand}`, args);
+      print("INFO", `Mac send user auth request command: ${macDiscovery.macFormalE2e.sendUserAuthRequestCommand}`, args);
       print("INFO", `Mac formal E2E command: ${macDiscovery.macFormalE2e.formalCommand}`, args);
     } else {
       print("INFO", "No Mac host was found. Use --requireMacHost for formal Mac E2E prep checks.", args);

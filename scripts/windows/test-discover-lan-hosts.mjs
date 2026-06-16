@@ -212,6 +212,7 @@ async function checkFoundJson(macPort, windowsPort, args) {
   assert(payload.bestMacHost.buildDiff?.severity === "warning", "fake mac-build should be non-comparable and warn");
   assertIncludes(payload.macFormalE2e.preflightCommand, "--preflightOnly --checkClientDiagnostics --boardSummary", "preflight command");
   assertIncludes(payload.macFormalE2e.userAuthRequestCommand, "--userAuthRequest", "user auth command");
+  assertIncludes(payload.macFormalE2e.sendUserAuthRequestCommand, "--sendUserAuthRequest", "send user auth command");
   assertIncludes(payload.macFormalE2e.formalCommand, "--promptPassword", "formal command");
   assertIncludes(payload.boardSummary, "No password was requested or sent", "board summary");
   assertIncludes(payload.boardSummary, "no WebSocket/input/inject", "board summary");
@@ -228,6 +229,7 @@ async function checkBoardSummary(macPort, windowsPort, args) {
   assertIncludes(result.stdout, "differs from repo", "board summary");
   assertIncludes(result.stdout, "check-mac-formal-e2e.mjs --host 127.0.0.1", "board summary");
   assertIncludes(result.stdout, "--userAuthRequest", "board summary");
+  assertIncludes(result.stdout, "--sendUserAuthRequest", "board summary");
   assertIncludes(result.stdout, "--promptPassword", "board summary");
   assertNotIncludes(result.stdout, "demo-password", "board summary");
   console.log("[OK] Board summary prints secret-free preflight/auth/formal commands");

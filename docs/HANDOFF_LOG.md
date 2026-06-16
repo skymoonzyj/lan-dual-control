@@ -17,6 +17,38 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-16 Windows Codex
+
+日期：2026-06-16 10:55
+开发端：Windows Codex
+本轮目标：让 Windows 侧发现 Mac host 后也能直接给出 ready 后的无密授权提醒发送命令，减少正式 Mac E2E 前手工拼接通讯板消息。
+完成内容：
+- `scripts/windows/discover-lan-hosts.mjs` 在发现 Mac host 后新增 `macFormalE2e.sendUserAuthRequestCommand`，对应 `check-mac-formal-e2e --preflightOnly --checkClientDiagnostics --sendUserAuthRequest`。
+- `--boardSummary` 和普通文本输出现在同时给出预检、只生成授权提醒、自动发送授权提醒和正式 `--promptPassword` 命令。
+- 发现脚本仍只读 `/discovery`，不认证 WebSocket、不要求或发送密码、不发送输入、不执行 `inject`；真正发送授权提醒仍由后续 `check-mac-formal-e2e` 在 preflight ready 时守卫。
+- `scripts/windows/test-discover-lan-hosts.mjs` 增加 JSON 和 board summary 断言，锁定 `--sendUserAuthRequest` 命令出现且输出不含 `LAN_DUAL_PASSWORD` / 测试密码。
+修改文件：
+- `scripts/windows/discover-lan-hosts.mjs`
+- `scripts/windows/test-discover-lan-hosts.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/discover-lan-hosts.mjs`
+- `node --check scripts/windows/test-discover-lan-hosts.mjs`
+- `node scripts/windows/test-discover-lan-hosts.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-script-help.mjs --script discover-lan-hosts.mjs --timeoutMs 10000`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮未扫描真实局域网、未启动或认证真实 Mac host；只用本机假 `/discovery` 验证发现摘要和下一步命令。
+下一步建议：
+- 后续 Windows 控制 Mac 复跑前，可先运行 `node scripts/windows/discover-lan-hosts.mjs --boardSummary --requireMacHost`，若摘要确认 buildDiff 可接受，再按摘要里的 `--sendUserAuthRequest` 命令触发无密授权提醒。
+是否改了协议：否。
+是否需要另一端配合：当前不需要；真实 formal E2E 复跑时再由 Mac host 在线配合。
+
 ## 2026-06-16 Mac Codex
 
 日期：2026-06-16 10:47
