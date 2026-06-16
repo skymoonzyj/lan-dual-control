@@ -114,13 +114,24 @@
             </label>
           </div>
 
-          <label class="field">
-            <span>输入</span>
-            <select id="localHostInputModeSelect">
-              <option value="log" selected>安全日志</option>
-              <option value="system">真实控制</option>
-            </select>
-          </label>
+          <div class="local-host-options">
+            <label class="field">
+              <span>输入</span>
+              <select id="localHostInputModeSelect">
+                <option value="log" selected>安全日志</option>
+                <option value="system">真实控制</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>反控策略</span>
+              <select id="localHostReverseControlModeSelect">
+                <option value="deny" selected>需确认</option>
+                <option value="accept">实验同意</option>
+                <option value="disabled">关闭</option>
+              </select>
+            </label>
+          </div>
 
           <label class="field">
             <span>体检档位</span>

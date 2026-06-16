@@ -19,6 +19,41 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 23:25
+开发端：Windows Codex
+本轮目标：把 Windows 桌面“本机被控”面板接上反控策略选择和状态显示，延续默认安全拒绝。
+完成内容：
+- 本机被控面板新增“反控策略”下拉：需确认、实验同意、关闭；默认仍是“需确认”。
+- `buildLocalHostLaunchRequest()` 会把 `reverseControlMode` 交给桌面壳。
+- Tauri `start_windows_host` 接收 `reverseControlMode`，规范化为 `deny|accept|disabled`，同时传入 `LAN_DUAL_WINDOWS_REVERSE_CONTROL_MODE` 和启动助手 dry-run 参数。
+- 状态助手摘要会读取 `capabilities.reverseControl`，在本机被控概要和详情里显示“反控：需确认 / 实验自动同意 / 关闭”。
+- Windows client 页面自测覆盖默认策略、切换到实验同意、状态摘要显示和不泄露通讯板 call command。
+- Windows client README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/app.js`
+- `apps/windows-desktop/src-tauri/src/main.rs`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --progressIntervalMs 0`
+- `cargo check --manifest-path apps/windows-desktop/src-tauri/Cargo.toml`
+遗留问题：
+- 真正产品化的 Windows 本机确认弹窗和短时授权窗口仍未做；当前“实验同意”只适合可信局域网短测。
+下一步建议：
+- 后续接收 Mac 反控 Windows 请求时，把默认 `deny-confirm` 变成“弹 Windows 本机确认 -> 短时 accept -> 自动回到 deny”的完整产品流。
+是否改了协议：否。只把既有 Windows host 反控策略接入 Windows 桌面 UI 和启动链路。
+是否需要另一端配合：不需要；Mac 端真连前读取 Windows 状态摘要即可看到当前策略。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16
 开发端：Windows Codex
 本轮目标：把 Windows host 反控策略接入启动器、状态诊断和 readiness 摘要，避免 Mac 反控 Windows 前看不出当前是否会自动同意。

@@ -30,6 +30,7 @@ const elements = {
   localHostScreenModeSelect: document.querySelector("#localHostScreenModeSelect"),
   localHostAudioModeSelect: document.querySelector("#localHostAudioModeSelect"),
   localHostInputModeSelect: document.querySelector("#localHostInputModeSelect"),
+  localHostReverseControlModeSelect: document.querySelector("#localHostReverseControlModeSelect"),
   localHostReadinessProfileSelect: document.querySelector("#localHostReadinessProfileSelect"),
   localHostProbeMediaToggle: document.querySelector("#localHostProbeMediaToggle"),
   localHostReadinessButton: document.querySelector("#localHostReadinessButton"),
@@ -175,6 +176,11 @@ const inputModeLabels = {
   log: "安全日志",
   mock: "模拟记录",
   auth: "等待认证",
+};
+const reverseControlModeLabels = {
+  deny: "需确认",
+  accept: "实验自动同意",
+  disabled: "关闭",
 };
 const inputAckStatusLabels = {
   injected: "已注入",
@@ -1028,6 +1034,7 @@ function collectPreferences() {
     localHostScreenMode: elements.localHostScreenModeSelect.value,
     localHostAudioMode: elements.localHostAudioModeSelect.value,
     localHostInputMode: elements.localHostInputModeSelect.value,
+    localHostReverseControlMode: elements.localHostReverseControlModeSelect.value,
     localHostReadinessProfile: elements.localHostReadinessProfileSelect.value,
     recentConnections: state.recentConnections,
   };
@@ -1070,6 +1077,9 @@ function applyPreferences() {
   if (preferences.localHostScreenMode) elements.localHostScreenModeSelect.value = preferences.localHostScreenMode;
   if (preferences.localHostAudioMode) elements.localHostAudioModeSelect.value = preferences.localHostAudioMode;
   if (preferences.localHostInputMode) elements.localHostInputModeSelect.value = preferences.localHostInputMode;
+  if (preferences.localHostReverseControlMode) {
+    elements.localHostReverseControlModeSelect.value = preferences.localHostReverseControlMode;
+  }
   if (preferences.localHostReadinessProfile) {
     elements.localHostReadinessProfileSelect.value = preferences.localHostReadinessProfile;
   }
@@ -3033,6 +3043,7 @@ function buildLocalHostLaunchRequest() {
     screenMode: elements.localHostScreenModeSelect.value,
     audioMode: elements.localHostAudioModeSelect.value,
     inputMode: elements.localHostInputModeSelect.value,
+    reverseControlMode: elements.localHostReverseControlModeSelect.value,
   };
 }
 
@@ -3216,6 +3227,21 @@ function formatLocalHostInputStatus(input = {}) {
   return parts.join(" / ");
 }
 
+function normalizeReverseControlMode(value) {
+  const mode = String(value ?? "").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(reverseControlModeLabels, mode) ? mode : "deny";
+}
+
+function formatLocalHostReverseControlStatus(reverse = {}) {
+  if (!reverse || typeof reverse !== "object" || Object.keys(reverse).length === 0) return "";
+  const policy = reverse.policy && typeof reverse.policy === "object" ? reverse.policy : {};
+  const mode = normalizeReverseControlMode(reverse.mode || reverse.reverseControlMode || policy.mode);
+  if (reverse.supported === false || mode === "disabled") return reverseControlModeLabels.disabled;
+  if (reverse.autoAccept || policy.autoAccept || mode === "accept") return reverseControlModeLabels.accept;
+  if (reverse.requiresConfirmation || policy.requiresConfirmation || mode === "deny") return reverseControlModeLabels.deny;
+  return labelFromMap(mode, reverseControlModeLabels);
+}
+
 function formatLocalHostClipboardStatus(clipboard = {}) {
   const text = formatClipboardCapability(clipboard.text, clipboard.textMode);
   const file = formatClipboardCapability(clipboard.file, clipboard.fileMode);
@@ -3289,10 +3315,12 @@ function localHostHelperStatusSummary(status, { managedPid = "" } = {}) {
   const runtimeText = formatHostRuntimeDiagnostics(status.runtime);
   const screenText = formatLocalHostScreenStatus(status.capabilities?.screen || {});
   const audioText = formatLocalHostAudioStatus(status.capabilities?.audio || {});
+  const reverseText = formatLocalHostReverseControlStatus(status.capabilities?.reverseControl || {});
   const parts = [
     managedPid ? `PID ${managedPid}` : runtimeText,
     screenText ? `画面 ${screenText}` : "",
     audioText ? `声音 ${audioText}` : "",
+    reverseText ? `反控 ${reverseText}` : "",
     boardText,
   ].filter(Boolean);
   return `本机被控${managedPid ? "正在运行" : "已在线"}：${parts.join(" · ") || "/discovery 在线"}`;
@@ -3319,11 +3347,13 @@ function localHostHelperStatusLines(result) {
   const screenText = formatLocalHostScreenStatus(status.capabilities?.screen || {});
   const audioText = formatLocalHostAudioStatus(status.capabilities?.audio || {});
   const inputText = formatLocalHostInputStatus(status.capabilities?.input || {});
+  const reverseText = formatLocalHostReverseControlStatus(status.capabilities?.reverseControl || {});
   const clipboardText = formatLocalHostClipboardStatus(status.capabilities?.clipboard || {});
   if (runtimeText) lines.push(`运行：${runtimeText}`);
   if (screenText) lines.push(`画面：${screenText}`);
   if (audioText) lines.push(`声音：${audioText}`);
   if (inputText) lines.push(`输入：${inputText}`);
+  if (reverseText) lines.push(`反控：${reverseText}`);
   if (clipboardText) lines.push(`剪贴板：${clipboardText}`);
   for (const warning of status.warnings || []) lines.push(`[WARN] ${warning}`);
   if (status.buildDiff?.message) {
@@ -3345,6 +3375,7 @@ function updateLocalHostControls() {
     elements.localHostScreenModeSelect,
     elements.localHostAudioModeSelect,
     elements.localHostInputModeSelect,
+    elements.localHostReverseControlModeSelect,
   ].forEach((element) => {
     element.disabled = !available || busy || state.localHostRunning;
   });
@@ -4987,6 +5018,7 @@ elements.resetKeyMapButton.addEventListener("click", resetKeyboardMapping);
   elements.localHostScreenModeSelect,
   elements.localHostAudioModeSelect,
   elements.localHostInputModeSelect,
+  elements.localHostReverseControlModeSelect,
   elements.localHostReadinessProfileSelect,
 ].forEach((input) => {
   input.addEventListener("change", savePreferences);

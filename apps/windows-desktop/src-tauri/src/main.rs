@@ -152,6 +152,7 @@ struct WindowsHostLaunchRequest {
     screen_mode: Option<String>,
     audio_mode: Option<String>,
     input_mode: Option<String>,
+    reverse_control_mode: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -925,6 +926,7 @@ fn launch_env(
     screen_mode: &str,
     audio_mode: &str,
     input_mode: &str,
+    reverse_control_mode: &str,
 ) -> Vec<(String, String)> {
     let mut envs = vec![
         ("LAN_DUAL_HOST".to_string(), host.to_string()),
@@ -942,6 +944,10 @@ fn launch_env(
         (
             "LAN_DUAL_WINDOWS_INPUT_MODE".to_string(),
             input_mode.to_string(),
+        ),
+        (
+            "LAN_DUAL_WINDOWS_REVERSE_CONTROL_MODE".to_string(),
+            reverse_control_mode.to_string(),
         ),
     ];
 
@@ -961,6 +967,7 @@ fn mode_args(
     screen_mode: &str,
     audio_mode: &str,
     input_mode: &str,
+    reverse_control_mode: &str,
 ) -> Vec<String> {
     vec![
         "--host".to_string(),
@@ -973,6 +980,8 @@ fn mode_args(
         audio_mode.to_string(),
         "--inputMode".to_string(),
         input_mode.to_string(),
+        "--reverseControlMode".to_string(),
+        reverse_control_mode.to_string(),
     ]
 }
 
@@ -1319,6 +1328,11 @@ fn start_windows_host(
         &["log", "system", "auto"],
         "log",
     );
+    let reverse_control_mode = normalize_mode(
+        request.reverse_control_mode.as_ref(),
+        &["deny", "accept", "disabled"],
+        "deny",
+    );
     let envs = launch_env(
         &repo,
         &host,
@@ -1327,6 +1341,7 @@ fn start_windows_host(
         &screen_mode,
         &audio_mode,
         &input_mode,
+        &reverse_control_mode,
     );
     clear_host_logs(&state)?;
     push_host_log(
@@ -1338,7 +1353,14 @@ fn start_windows_host(
         .join("scripts")
         .join("windows")
         .join("start-windows-host.mjs");
-    let mut dry_run_args = mode_args(&host, port, &screen_mode, &audio_mode, &input_mode);
+    let mut dry_run_args = mode_args(
+        &host,
+        port,
+        &screen_mode,
+        &audio_mode,
+        &input_mode,
+        &reverse_control_mode,
+    );
     dry_run_args.push("--requirePassword".to_string());
     dry_run_args.push("--dryRun".to_string());
     let launch_plan = run_node_script(&repo, &start_script, &dry_run_args, &envs)?;

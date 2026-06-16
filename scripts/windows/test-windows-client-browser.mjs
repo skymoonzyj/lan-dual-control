@@ -836,12 +836,23 @@ async function verifyDesktopOnlyHostPanel(session) {
         "#localHostScreenModeSelect",
         "#localHostAudioModeSelect",
         "#localHostInputModeSelect",
+        "#localHostReverseControlModeSelect",
         "#localHostReadinessProfileSelect",
         "#localHostProbeMediaToggle",
       ].map((selector) => document.querySelector(selector));
       const profileSelect = document.querySelector("#localHostReadinessProfileSelect");
       const probeMediaToggle = document.querySelector("#localHostProbeMediaToggle");
+      const reverseSelect = document.querySelector("#localHostReverseControlModeSelect");
       const profileOptions = Array.from(profileSelect?.options || []).map((option) => option.value);
+      const defaultLaunchRequest =
+        typeof buildLocalHostLaunchRequest === "function"
+          ? buildLocalHostLaunchRequest()
+          : {};
+      if (reverseSelect) reverseSelect.value = "accept";
+      const acceptLaunchRequest =
+        typeof buildLocalHostLaunchRequest === "function"
+          ? buildLocalHostLaunchRequest()
+          : {};
       const readinessRequest =
         typeof buildLocalHostReadinessRequest === "function"
           ? buildLocalHostReadinessRequest()
@@ -985,6 +996,15 @@ async function verifyDesktopOnlyHostPanel(session) {
               backend: "sendinput-helper",
               helper: true,
             },
+            reverseControl: {
+              supported: true,
+              mode: "deny",
+              requiresConfirmation: true,
+              autoAccept: false,
+              policy: {
+                mode: "deny",
+              },
+            },
             clipboard: {
               text: true,
               textMode: "system",
@@ -1076,6 +1096,8 @@ async function verifyDesktopOnlyHostPanel(session) {
           profileSelect?.value === "default" &&
           probeMediaToggle?.checked === false &&
           profileOptions.join(",") === "default,deploy,deep" &&
+          defaultLaunchRequest.reverseControlMode === "deny" &&
+          acceptLaunchRequest.reverseControlMode === "accept" &&
           readinessRequest.profile === "default" &&
           readinessRequest.probeMedia === false &&
           mediaReadinessRequest.probeMedia === true &&
@@ -1097,12 +1119,14 @@ async function verifyDesktopOnlyHostPanel(session) {
           helperSummary.includes("PID 2468") &&
           helperSummary.includes("FFmpeg gdigrab H.264") &&
           helperSummary.includes("WASAPI") &&
+          helperSummary.includes("反控 需确认") &&
           helperSummary.includes("通讯板有 Mac→Windows 呼叫") &&
           helperLinesText.includes("状态助手") &&
           helperLinesText.includes("[CALL] 通讯板") &&
           helperLinesText.includes("正式 Windows host 验收") &&
           !helperLinesText.includes("should-not-render") &&
           helperLinesText.includes("build helper-test") &&
+          helperLinesText.includes("反控：需确认") &&
           helperLinesText.includes("剪贴板") &&
           helperLinesText.includes("WGC fallback") &&
           offlineHelperLinesText.includes("离线") &&
@@ -1117,6 +1141,8 @@ async function verifyDesktopOnlyHostPanel(session) {
         requestProfile: readinessRequest.profile || "",
         requestProbeMedia: readinessRequest.probeMedia,
         mediaRequestProbeMedia: mediaReadinessRequest.probeMedia,
+        defaultLaunchRequest,
+        acceptLaunchRequest,
         statusRequest,
         readinessHeader: readinessHeaderLines.slice(0, 4),
         readinessSummaryText,
