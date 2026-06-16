@@ -53,6 +53,37 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 11:05
+开发端：Windows Codex
+本轮目标：让 Windows host `--status` 输出 Mac 侧 formal `--sendCall` 协调命令，方便 Mac 反控 Windows 前安全发起无密 call。
+完成内容：
+- `scripts/windows/start-windows-host.mjs` 的 Mac 下一步目标新增 `sendCallCommand`，对应 `node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port <port> --sendCall`。
+- `--status` 普通输出、`--status --json`、`--status --boardSummary` 以及启动后 ready 输出都会带 Mac formal send-call 命令。
+- 该命令只用于 Mac formal checklist ready 后向 Agent Link Board 发起无密协调 call；Windows status 本身仍只读 `/discovery`，不启动、不认证、不要求或发送密码、不执行 `inject`。
+- `scripts/windows/test-windows-host-start-helper.mjs` 增加普通输出、JSON、boardSummary 和启动后 ready 输出中的 `--sendCall` 断言。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script start-windows-host.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`
+遗留问题：
+- 本轮只用临时本机 Windows host 自测，没有启动正式常驻 Windows host，也没有执行真实 Mac 控制 Windows 浏览器 smoke。
+下一步建议：
+- 后续 Mac 控制 Windows 真连前，Windows 侧先运行 `node scripts/windows/start-windows-host.mjs --status --boardSummary`；若在线且 build 可接受，Mac 侧可按摘要先跑 formal checklist，ready 后再用 `--sendCall` 发起协调。
+是否改了协议：否。
+是否需要另一端配合：当前不需要；真实 Mac 控制 Windows 验收时需要 Windows host 在线、Mac client 页面在线，并由用户在 Mac 本机隐藏输入正式密码。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 10:55
 开发端：Windows Codex
 本轮目标：让 Windows 侧发现 Mac host 后也能直接给出 ready 后的无密授权提醒发送命令，减少正式 Mac E2E 前手工拼接通讯板消息。

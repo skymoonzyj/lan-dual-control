@@ -395,6 +395,10 @@ function macFormalCommand(host, port) {
   return `node scripts/mac/check-mac-client-formal-status.mjs --host ${host} --port ${port} --boardSummary`;
 }
 
+function macFormalSendCallCommand(host, port) {
+  return `node scripts/mac/check-mac-client-formal-status.mjs --host ${host} --port ${port} --sendCall`;
+}
+
 function macReadinessTargets(status) {
   const port = status.device?.controlPort || status.probe?.port || defaults.port;
   const lanHosts = Array.isArray(status.lanAddresses)
@@ -408,6 +412,7 @@ function macReadinessTargets(status) {
     command: macReadinessCommand(host, port),
     readinessCommand: macReadinessCommand(host, port),
     formalCommand: macFormalCommand(host, port),
+    sendCallCommand: macFormalSendCallCommand(host, port),
   }));
 }
 
@@ -425,7 +430,8 @@ function makeBoardSummary(status) {
   const clipboard = status.capabilities?.clipboard || {};
   const next = targets[0]?.formalCommand || targets[0]?.command || "Mac should rerun readiness after a LAN IPv4 address is available.";
   const readiness = targets[0]?.command ? ` Readiness: ${targets[0].command}.` : "";
-  return `Windows host readiness: online targets=${targetText}; runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness} Do not send passwords on Agent Link Board.`;
+  const sendCall = targets[0]?.sendCallCommand ? ` SendCall when ready: ${targets[0].sendCallCommand}.` : "";
+  return `Windows host readiness: online targets=${targetText}; runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness}${sendCall} Do not send passwords on Agent Link Board.`;
 }
 
 function applyDiscoveryStatus(status, discovery, args) {
@@ -558,6 +564,9 @@ async function printStatus(args) {
       console.log(`[INFO] Mac readiness command: ${status.macClientReadinessCommands[0].command}`);
       if (status.macClientReadinessCommands[0].formalCommand) {
         console.log(`[INFO] Mac formal checklist command: ${status.macClientReadinessCommands[0].formalCommand}`);
+      }
+      if (status.macClientReadinessCommands[0].sendCallCommand) {
+        console.log(`[INFO] Mac formal send-call command: ${status.macClientReadinessCommands[0].sendCallCommand}`);
       }
       console.log("[INFO] Board summary: node scripts/windows/start-windows-host.mjs --status --boardSummary");
     }
@@ -754,6 +763,9 @@ function printMacNextSteps(status) {
   }
   if (firstTarget?.formalCommand) {
     console.log(`[INFO] Mac formal checklist command: ${firstTarget.formalCommand}`);
+  }
+  if (firstTarget?.sendCallCommand) {
+    console.log(`[INFO] Mac formal send-call command: ${firstTarget.sendCallCommand}`);
   }
   if (status.boardSummary) {
     console.log(`[INFO] Agent Link Board summary: ${status.boardSummary}`);
