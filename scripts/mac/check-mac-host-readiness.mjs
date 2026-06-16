@@ -616,11 +616,28 @@ function formatReadinessBoardSummary(summary) {
       ? `attention=${warnings} warning(s)`
       : "attention=none";
   const probe = `${summary.args?.host || "127.0.0.1"}:${summary.args?.port || 43770}`;
+  const media = formatMediaBoardSummary(summary);
   return [
-    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${formatBoardCallSummary(summary.board)}.`,
+    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${media}; ${formatBoardCallSummary(summary.board)}.`,
     "Next: fix failed checks before formal E2E; keep inputMode=log for unattended checks.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
+}
+
+function formatMediaBoardSummary(summary) {
+  if (!summary.args?.probeMedia) return "media=not-checked";
+  const result = Array.isArray(summary.results)
+    ? summary.results.find((item) => item.label === "Mac host media aggregate")
+    : null;
+  if (!result) return "media=missing";
+  const details = result.details || {};
+  if (result.ok) return "media=passed";
+  const failed = Number(details.summary?.failed);
+  const passed = Number(details.summary?.passed);
+  if (Number.isFinite(failed) || Number.isFinite(passed)) {
+    return `media=failed(passed=${Number.isFinite(passed) ? passed : 0},failed=${Number.isFinite(failed) ? failed : 0})`;
+  }
+  return "media=failed";
 }
 
 async function getBoardStatus(args) {

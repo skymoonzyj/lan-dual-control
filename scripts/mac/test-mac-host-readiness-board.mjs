@@ -232,6 +232,27 @@ function checkProbeMediaResourceSampleImpliesProbeMedia(args) {
   print("OK", "Mac host readiness probeMediaResourceSample implies probeMedia");
 }
 
+function checkProbeMediaBoardSummary(args) {
+  const result = run([
+    "--boardSummary",
+    "--probeMedia",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "9",
+    "--timeoutMs",
+    "5000",
+    "--skipCurrentBuildCheck",
+  ], args);
+  assert(result.status !== 0, "offline --probeMedia boardSummary should fail readiness");
+  const lines = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean);
+  assert(lines.length === 1, `offline --probeMedia boardSummary should print one line, got ${lines.length}`);
+  assert(lines[0].includes("media=failed("), "offline --probeMedia boardSummary should include failed media status");
+  assert(lines[0].includes("Do not send passwords"), "offline --probeMedia boardSummary should keep password safety note");
+  assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "offline probeMedia boardSummary");
+  print("OK", "Mac host readiness boardSummary includes probeMedia status safely");
+}
+
 async function checkActiveBoardCall(args) {
   const call = {
     status: "CALLING",
@@ -347,6 +368,7 @@ async function main() {
   checkDefaultDoesNotReadBoard(args);
   checkProbeMediaOfflineJson(args);
   checkProbeMediaResourceSampleImpliesProbeMedia(args);
+  checkProbeMediaBoardSummary(args);
   await checkActiveBoardCall(args);
   await checkDoneBoardCall(args);
   await checkBoardSummary(args);
