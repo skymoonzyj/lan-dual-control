@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
+import { rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const watcherScript = resolve(repoRoot, "scripts/windows/watch-codex-link-mac-alerts.ps1");
+const startWrapperScript = resolve(repoRoot, "scripts/windows/start-mac-alert-watcher.ps1");
 
 function printHelp() {
   console.log(`Usage:
@@ -14,6 +16,10 @@ function printHelp() {
 
 Options:
   --timeoutMs <ms>  Per PowerShell watcher run timeout. Default: 15000
+  --includeLifecycle
+                    Also start a temporary background watcher and test duplicate/status/stop.
+                    This is off by default because some Windows hosts keep stdio handles open
+                    for detached PowerShell aliases.
   --help, -h        Show this help.
 
 This regression uses a local fake Agent Link Board and runs the PowerShell
@@ -29,6 +35,8 @@ function parseArgs(argv) {
     const arg = argv[index];
     if (arg === "--help" || arg === "-h") {
       args.help = true;
+    } else if (arg === "--includeLifecycle") {
+      args.includeLifecycle = true;
     } else if (arg === "--timeoutMs") {
       args.timeoutMs = Number(argv[++index] || args.timeoutMs);
     } else {
@@ -121,6 +129,8 @@ async function withFakeBoard(state, fn) {
   try {
     return await fn(`http://127.0.0.1:${port}`);
   } finally {
+    server.closeAllConnections?.();
+    server.closeIdleConnections?.();
     await new Promise((resolveClose) => server.close(resolveClose));
   }
 }
@@ -260,6 +270,74 @@ async function checkStaleStatusAlerts(args) {
   console.log("[OK] Stale Mac status alerts");
 }
 
+async function checkStartWrapperLifecycle(args) {
+  const basePath = resolve(repoRoot, ".dev-lab", `mac-alert-watcher-test-${process.pid}-${Date.now()}`);
+  const pidFile = `${basePath}.pid`;
+  const outLog = `${basePath}.out.log`;
+  const errLog = `${basePath}.err.log`;
+  let started = false;
+  await withFakeBoard(baseState(), async (serverUrl) => {
+    try {
+      const common = [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", startWrapperScript,
+        "-Server", serverUrl,
+        "-NoPopup",
+        "-StaleMinutes", "60",
+        "-PidFile", pidFile,
+        "-OutLog", outLog,
+        "-ErrLog", errLog,
+      ];
+      const start = await runPowerShell(args.powerShellExe, common, args);
+      const startOutput = `${start.stdout}\n${start.stderr}`;
+      assert(start.exitCode === 0, `start wrapper should start watcher\n${startOutput}`);
+      assertIncludes(startOutput, "Mac alert watcher started.", "start wrapper");
+      const pidMatch = startOutput.match(/Process ID:\s*(\d+)/);
+      assert(pidMatch, `start wrapper should print process id\n${startOutput}`);
+      const firstPid = pidMatch[1];
+      started = true;
+
+      const duplicate = await runPowerShell(args.powerShellExe, common, args);
+      const duplicateOutput = `${duplicate.stdout}\n${duplicate.stderr}`;
+      assert(duplicate.exitCode === 0, `duplicate start should exit 0\n${duplicateOutput}`);
+      assertIncludes(duplicateOutput, "already running", "duplicate start");
+      assertIncludes(duplicateOutput, firstPid, "duplicate start process id");
+
+      const status = await runPowerShell(args.powerShellExe, [...common, "-Status"], args);
+      const statusOutput = `${status.stdout}\n${status.stderr}`;
+      assert(status.exitCode === 0, `status should exit 0\n${statusOutput}`);
+      assertIncludes(statusOutput, "is running", "status");
+      assertIncludes(statusOutput, firstPid, "status process id");
+
+      const stop = await runPowerShell(args.powerShellExe, [...common, "-Stop"], args);
+      const stopOutput = `${stop.stdout}\n${stop.stderr}`;
+      assert(stop.exitCode === 0, `stop should exit 0\n${stopOutput}`);
+      assertIncludes(stopOutput, "stopped", "stop");
+      started = false;
+      console.log("[OK] Start wrapper status/duplicate/stop lifecycle works");
+    } finally {
+      if (started) {
+        await runPowerShell(args.powerShellExe, [
+          "-NoProfile",
+          "-ExecutionPolicy", "Bypass",
+          "-File", startWrapperScript,
+          "-Server", serverUrl,
+          "-PidFile", pidFile,
+          "-OutLog", outLog,
+          "-ErrLog", errLog,
+          "-Stop",
+        ], args).catch(() => null);
+      }
+      await Promise.all([
+        rm(pidFile, { force: true }),
+        rm(outLog, { force: true }),
+        rm(errLog, { force: true }),
+      ]);
+    }
+  });
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -279,6 +357,9 @@ async function main() {
   await checkNonMacEventIgnored(args);
   await checkBlockedStatusAlerts(args);
   await checkStaleStatusAlerts(args);
+  if (args.includeLifecycle) {
+    await checkStartWrapperLifecycle(args);
+  }
   console.log("[OK] Mac alert watcher regression passed");
 }
 

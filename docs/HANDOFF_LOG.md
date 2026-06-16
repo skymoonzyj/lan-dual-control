@@ -55,6 +55,41 @@
 是否改了协议：否。
 是否需要另一端配合：本轮代码改动不需要 Windows 端修改；正式 E2E 仍等待 Windows 端在用户授权后继续。
 
+## 2026-06-16 Windows Codex
+
+日期：2026-06-16 08:35
+开发端：Windows Codex
+本轮目标：白天恢复工作后检查正式 E2E 状态，并补强 Windows Mac alert watcher 的后台生命周期管理。
+完成内容：
+- 开工检查 Agent Link Board：当前无 active call；`git pull --rebase --autostash` 后本地与远端对齐。
+- Windows 恢复总览显示 repo clean、head=`b00d02d`、board ok，但 Mac host 当前离线；已向通讯板发起无密 call，请 Mac 端启动 `192.168.31.122:43770` Mac host 后再继续 Windows 无密 preflight / 正式 E2E。
+- 已启动 Windows 本机 Mac alert watcher，并确认正式 watcher 可被 `-Status` 找到。
+- `scripts/windows/start-mac-alert-watcher.ps1` 新增 `-Status`、`-Stop`、`-Restart`，默认防重复启动；使用 `.dev-lab/mac-alert-watcher.pid` 记录 PID，同时通过 watcher 脚本路径和 `-Server` 命令行兜底查找长驻进程，避免 PowerShell 7 WindowsApps 启动别名导致 PID 文件不可靠。
+- 启动器新增测试专用 `-PidFile`、`-OutLog`、`-ErrLog`，便于手动或后续自动化验证生命周期而不碰正式 watcher。
+- `scripts/windows/test-mac-alert-watcher.mjs` 保持默认无弹窗提醒规则回归；生命周期启动/停止测试改为可选 `--includeLifecycle`，避免某些 Windows PowerShell 别名保留 stdio 句柄导致常规回归悬挂。
+修改文件：
+- `scripts/windows/start-mac-alert-watcher.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `docs/LAN_CODEX_LINK.md`
+- `docs/TEST_COORDINATION.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server http://192.168.31.68:17888 -Status`
+- 手动独立 PID/log lifecycle：测试 watcher 启动、重复启动提示 already running、`-Status` 找到同一 PID、`-Stop` 成功停止。
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 20000`
+遗留问题：
+- Mac host 当前离线，正式 E2E 仍需 Mac 端先启动 host；不要在通讯板发送密码。
+- `--includeLifecycle` 自动测试在当前 Windows/Codex 运行方式下可能因后台 PowerShell stdio 句柄悬挂，默认不纳入常规回归；生命周期已用独立 PID/log 手动验证。
+下一步建议：
+- Mac host 在线后，Windows 端先跑 `node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary --checkClientDiagnostics` 或正式 `check-mac-formal-e2e --discover --preflightOnly --checkClientDiagnostics --boardSummary`。
+- 用户在 Windows 本机准备好正式密码后，再运行 `scripts/windows/check-mac-formal-e2e.ps1 -Discover -PromptPassword`。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端启动/确认 Mac host 在线；Windows 已发 Agent Link Board call。
+
 ## 2026-06-15 Mac Codex
 
 日期：2026-06-15 22:35
