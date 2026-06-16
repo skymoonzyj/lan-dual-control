@@ -43,6 +43,7 @@ const defaults = {
   testReconnectNow: false,
   minObservedVideoFrames: 0,
   minObservedVideoFps: 0,
+  progressIntervalMs: 10000,
   expectRepeatSignalVideo: false,
   expectBinaryVideo: false,
   expectBinaryH264Video: false,
@@ -112,6 +113,7 @@ Options:
   --testReconnectNow               In --expectReconnect, click the Mac client "立即重连" button before the auto timer fires.
   --minObservedVideoFrames <n>     Minimum frames during --observeVideoMs.
   --minObservedVideoFps <fps>      Minimum FPS during --observeVideoMs.
+  --progressIntervalMs <ms>        Print long video/reconnect progress every N ms; 0 disables. Default: ${defaults.progressIntervalMs}
   --expectRepeatSignalVideo        Start WGC mock helper with repeat signal frames and require Mac client diagnostics.
   --expectBinaryVideo              Start WGC JPEG helper and require binary JPEG video transport.
   --expectBinaryH264Video          Start ffmpeg-h264 mode and require binary H.264 video transport.
@@ -287,6 +289,10 @@ function parseArgs(argv) {
   args.observeVideoMs = Number(args.observeVideoMs);
   args.minObservedVideoFrames = Number(args.minObservedVideoFrames);
   args.minObservedVideoFps = Number(args.minObservedVideoFps);
+  const progressIntervalMs = Number(args.progressIntervalMs);
+  args.progressIntervalMs = Number.isFinite(progressIntervalMs)
+    ? Math.max(0, progressIntervalMs)
+    : defaults.progressIntervalMs;
   if (args.useEnvPassword) {
     args.password = process.env.LAN_DUAL_PASSWORD || "";
   }
@@ -338,6 +344,24 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function formatSeconds(ms) {
+  return `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
+}
+
+function progressEveryText(args) {
+  return args.progressIntervalMs > 0 ? formatSeconds(args.progressIntervalMs) : "off";
+}
+
+function printTimedProgress(label, startedAt, deadline, details = "") {
+  const now = Date.now();
+  const elapsedMs = Math.max(0, now - startedAt);
+  const remainingMs = Math.max(0, deadline - now);
+  const totalMs = Math.max(1, deadline - startedAt);
+  const percent = Math.min(100, Math.max(0, (elapsedMs / totalMs) * 100));
+  const suffix = details ? ` · ${details}` : "";
+  print("INFO", `${label}: ${formatSeconds(elapsedMs)} elapsed / ${formatSeconds(remainingMs)} left / ${percent.toFixed(0)}%${suffix}`);
+}
+
 function requireWithinDuration(label, elapsedMs, maxMs) {
   if (!Number.isFinite(maxMs) || maxMs <= 0) return;
   if (elapsedMs > maxMs) {
@@ -345,8 +369,11 @@ function requireWithinDuration(label, elapsedMs, maxMs) {
   }
 }
 
-async function waitFor(fn, timeoutMs, label) {
-  const deadline = Date.now() + timeoutMs;
+async function waitFor(fn, timeoutMs, label, options = {}) {
+  const startedAt = Date.now();
+  const deadline = startedAt + timeoutMs;
+  const progressIntervalMs = Math.max(0, Number(options.progressIntervalMs) || 0);
+  let nextProgressAt = progressIntervalMs > 0 ? startedAt + progressIntervalMs : 0;
   let lastError;
   while (Date.now() < deadline) {
     try {
@@ -354,6 +381,14 @@ async function waitFor(fn, timeoutMs, label) {
       if (value) return value;
     } catch (error) {
       lastError = error;
+    }
+    if (nextProgressAt > 0 && Date.now() >= nextProgressAt && Date.now() < deadline) {
+      try {
+        options.onProgress?.({ startedAt, deadline, lastError });
+      } catch {}
+      do {
+        nextProgressAt += progressIntervalMs;
+      } while (nextProgressAt <= Date.now());
     }
     await delay(250);
   }
@@ -822,13 +857,18 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
     print("OK", `Reconnect now clicked: ${reconnectNowSnapshot.connection}`);
   }
 
+  let lastReconnectSnapshot = null;
+  let lastReconnectSessionAnswers = sessionAnswersBefore;
+  print("INFO", `Reconnect restore waiting: timeout=${formatSeconds(args.timeoutMs)}, progressEvery=${progressEveryText(args)}.`);
   const reconnectedSnapshot = await waitFor(
     async () => {
       const value = await evaluate(session, buildSnapshotExpression());
+      lastReconnectSnapshot = value;
       const sessionAnswers = await evaluate(
         session,
         `(() => (window.__lanDualReceivedMessages || []).filter((message) => message.type === "session_answer").length)()`,
       );
+      lastReconnectSessionAnswers = Number(sessionAnswers);
       const connected = value.connection.includes("已连接");
       const hasNewSession = Number(sessionAnswers) > Number(sessionAnswersBefore);
       const hasVideo = value.surfaceVisible && value.surfaceHasFrame;
@@ -836,6 +876,20 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
     },
     args.timeoutMs,
     "Mac client reconnect restore",
+    {
+      progressIntervalMs: args.progressIntervalMs,
+      onProgress: ({ startedAt, deadline }) => {
+        const snapshot = lastReconnectSnapshot || {};
+        const hasVideo = Boolean(snapshot.surfaceVisible && snapshot.surfaceHasFrame);
+        const sessions = `${lastReconnectSessionAnswers} (before=${sessionAnswersBefore})`;
+        printTimedProgress(
+          "Reconnect restore progress",
+          startedAt,
+          deadline,
+          `connection=${snapshot.connection || "?"} · remote=${snapshot.remote || "?"} · sessions=${sessions} · video=${hasVideo ? "yes" : "no"}`,
+        );
+      },
+    },
   );
   const restoreMs = Date.now() - restoreStartedAt;
   requireWithinDuration("Mac client reconnect restore", restoreMs, args.maxReconnectRestoreMs);
@@ -862,7 +916,31 @@ async function observeMacClientVideo({ args, session, label = "Video observe" })
       frames: Number(window.__lanDualCounters?.videoFrames || 0),
     }))()`,
   );
-  await delay(durationMs);
+  const startedAt = Date.now();
+  const deadline = startedAt + durationMs;
+  let nextProgressAt = args.progressIntervalMs > 0 ? startedAt + args.progressIntervalMs : 0;
+  print("INFO", `${label} started: target=${formatSeconds(durationMs)}, progressEvery=${progressEveryText(args)}.`);
+  while (Date.now() < deadline) {
+    const now = Date.now();
+    const nextWake = nextProgressAt > 0 ? Math.min(deadline, Math.max(now + 1, nextProgressAt)) : deadline;
+    await delay(Math.max(1, Math.min(250, nextWake - now)));
+    if (nextProgressAt > 0 && Date.now() >= nextProgressAt && Date.now() < deadline) {
+      const current = await evaluate(
+        session,
+        `(() => ({
+          at: performance.now(),
+          frames: Number(window.__lanDualCounters?.videoFrames || 0),
+        }))()`,
+      );
+      const elapsedMs = Math.max(1, Math.round(current.at - start.at));
+      const frames = Math.max(0, Number(current.frames) - Number(start.frames));
+      const fps = frames / (elapsedMs / 1000);
+      printTimedProgress(label, startedAt, deadline, `${frames} frames · ${fps.toFixed(1)} fps`);
+      do {
+        nextProgressAt += args.progressIntervalMs;
+      } while (nextProgressAt <= Date.now());
+    }
+  }
   const end = await evaluate(
     session,
     `(() => ({

@@ -245,6 +245,7 @@ Mac 端：
 - [x] Mac client 页面级自检支持首次视频可见和断线恢复耗时阈值验收。
 - [x] Mac client 页面级自检支持音频首帧和真实 PCM 播放耗时阈值验收。
 - [x] Mac client 页面级自检支持短窗口视频持续来帧/FPS 阈值验收。
+- [x] Mac client 页面级自检长等待新增进度心跳：`--observeVideoMs` 持续视频观察和 `--expectReconnect` 恢复等待会默认每 10 秒输出进度；`--progressIntervalMs` 可调整或关闭，避免现场验收误判卡住。
 - [x] Mac client 会话诊断显示 Windows host runtime/build，并由页面级自检确认临时 host PID/build 已显示。
 - [x] Mac client 音频状态和会话诊断显示 `audio_frame.timestamp` 到达新鲜度，并由页面级自检覆盖。
 - [x] Mac client 手动断开会清空远端运行 runtime，页面级自检覆盖断开后显示“未提供”。

@@ -19,6 +19,36 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 21:40
+开发端：Windows Codex
+本轮目标：让 Mac client 页面自检的长视频观察和重连等待也有进度反馈。
+完成内容：
+- `scripts/windows/test-mac-client-browser.mjs` 新增 `--progressIntervalMs`，默认 10 秒，传 `0` 可关闭。
+- `--observeVideoMs` 持续视频观察会打印开始目标，并按间隔输出已收帧数、剩余时间和当前 FPS；连接后和切换 2K 后的观察都会使用同一心跳。
+- `--expectReconnect` 的恢复等待会打印等待目标，并按间隔输出当前连接状态、远端状态、session 数和画面是否恢复。
+- Mac client README、当前状态、下一步和任务板已同步。
+修改文件：
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script test-mac-client-browser.mjs --timeoutMs 10000`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard --observeVideoMs 800 --minObservedVideoFrames 2 --progressIntervalMs 200 --timeoutMs 45000 --clientPort 5198 --debugPort 9342`
+- `node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard --expectReconnect --testReconnectNow --progressIntervalMs 200 --timeoutMs 45000 --clientPort 5199 --debugPort 9343`
+遗留问题：
+- 本轮只跑本机临时 Windows host 和本机浏览器自检，未连接真实 Windows host、未认证真实服务、未执行 `inject`。
+下一步建议：
+- 真实 Mac 控制 Windows 观感验收时，长窗口可加 `--observeVideoMs 30000 --progressIntervalMs 5000`，断线恢复可加 `--expectReconnect --maxReconnectRestoreMs <ms>` 同时看心跳和最终恢复耗时。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 21:25
 开发端：Windows Codex
 本轮目标：解决正式 Mac E2E 长测中间无输出、现场看起来像卡住的问题。

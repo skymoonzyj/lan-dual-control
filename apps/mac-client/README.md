@@ -126,7 +126,7 @@ Mac 本机文本剪贴板已纳入页面级自检：脚本会断言未连接/空
 
 视频参数已纳入页面级自检：脚本会确认默认 `session_offer` 请求 1080P / 60 Hz / 20 Mbps，并根据浏览器能力断言支持 WebCodecs 时请求 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb` / `preferredVideoTransport=binary-h264`，禁用 WebCodecs 时请求 `mjpeg` / `data-url` / `binary-jpeg` 兜底；同时断言 `supportedVideoTransports` 会随 `session_offer`、`display_settings` 一起发送并包含 `json`、`binary-jpeg`、`binary-h264`。页面 URL 带 `?binaryVideo=0` 或自检加 `--disableBinaryVideo` 时，只声明 `json` 并回归 H.264 JSON/base64 兼容路径；切换到高清预设后，脚本会断言页面发送 2K / 60 Hz / 40 Mbps 的 `display_settings` 且保留对应视频编码和传输偏好，并收到 `display_settings_ack`；如果启用了持续视频观察，还会继续要求切换后收到新的视频帧，且最后一帧尺寸、编码和传输方式与新设置一致。
 
-持续视频体验也可量化：脚本加 `--observeVideoMs <毫秒>` 会在连接后统计短窗口内收到的 `video_frame` 数和实收 FPS；加 `--minObservedVideoFrames <帧数>` 或 `--minObservedVideoFps <FPS>` 可把持续来帧能力变成强校验。
+持续视频体验也可量化：脚本加 `--observeVideoMs <毫秒>` 会在连接后统计短窗口内收到的 `video_frame` 数和实收 FPS；加 `--minObservedVideoFrames <帧数>` 或 `--minObservedVideoFps <FPS>` 可把持续来帧能力变成强校验。长窗口观察默认每 10 秒输出一次进度心跳，包含已收帧数、剩余时间和当前 FPS；可用 `--progressIntervalMs <毫秒>` 调整，传 `0` 可关闭。
 
 会话诊断面板已纳入页面级自检：连接成功并出现首帧后，脚本会断言“首帧”和“视频流”指标已从等待状态更新，并在对端提供 `video_frame.timestamp` 时断言视频状态和诊断行显示“到达 <ms>”或“时钟偏差”；视频表面可以是 JPEG `<img>` 或 H.264 `<canvas>`，自检会统一识别；加 `--requireH264Video` 时，脚本会启动 `ffmpeg-h264` host 并要求页面显示 H.264 canvas，不允许回退 JPEG；加 `--expectBinaryH264Video` 时，脚本会要求页面收到 `binary-h264` 帧并保持 H.264 canvas 可见；加 `--expectBinaryVideo` 时，脚本会启动 WGC JPEG helper 并要求页面收到 `binary-jpeg` 视频帧、保持画面可见且诊断显示“二进制”；加 `--disableBinaryVideo` 时，脚本会用 `?binaryVideo=0` 关闭二进制视频并要求旧 JSON/base64 路径仍可显示；加 `--expectRepeatSignalVideo` 时，脚本会启动 WGC mock helper 并要求 `repeatPreviousFrame` 轻量重复帧保持画面可见且诊断显示“重复”；加 `--expectH264Fallback` 时，脚本会显式模拟 H.264 配置不支持，要求页面发送 MJPEG/JPEG fallback 请求并最终显示 `jpeg` 画面；临时 Windows host 也会断言 runtime 里显示 PID 和测试 build id，音频验收时也会断言音频诊断显示已接收帧；自检末尾会点击“断开”，确认连接状态、视频表面、音频状态和诊断指标回到干净初始态。
 
@@ -157,6 +157,6 @@ node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --pro
 
 认证失败路径已固化到页面级自检：`scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3` 会启动正确密码的临时 Windows host，并让 Mac 控制端填错密码，断言页面最终保留 `认证失败 · 剩余 2/3 次`，连接按钮可重试，远端摘要回到“等待发现”，视频表面回到“无画面”，且远端运行信息回到“未提供”。
 
-意外断线自动重连可用 `scripts/windows/test-mac-client-browser.mjs --expectReconnect --testReconnectNow --mockVideo --allowClipboardFallback --skipFileClipboard --timeoutMs 45000` 做页面级自检：脚本会连接临时 Windows host，杀掉 host 等页面进入带倒计时的自动重连状态，确认“立即重连”可见、远端摘要显示“连接中断”、旧画面已清理且剪贴板发送入口禁用，再用同一端口重启 host，点击立即重连并要求页面恢复到“已连接”。
+意外断线自动重连可用 `scripts/windows/test-mac-client-browser.mjs --expectReconnect --testReconnectNow --mockVideo --allowClipboardFallback --skipFileClipboard --timeoutMs 45000` 做页面级自检：脚本会连接临时 Windows host，杀掉 host 等页面进入带倒计时的自动重连状态，确认“立即重连”可见、远端摘要显示“连接中断”、旧画面已清理且剪贴板发送入口禁用，再用同一端口重启 host，点击立即重连并要求页面恢复到“已连接”；恢复等待也会按 `--progressIntervalMs` 输出当前连接状态、session 数和画面状态。
 
 体验耗时指标也已纳入页面级自检：脚本会打印首次视频可见耗时；加 `--maxInitialVideoMs <毫秒>` 可把首帧耗时变成强校验。搭配 `--expectReconnect` 时还会打印意外断线到恢复画面的总耗时；加 `--maxReconnectRestoreMs <毫秒>` 可强制要求自动恢复不超过指定阈值。
