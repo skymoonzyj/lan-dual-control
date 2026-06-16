@@ -196,6 +196,7 @@ async function main() {
   assert(help.stdout.includes("--boardSummary"), "readiness --help does not mention --boardSummary");
   assert(help.stdout.includes("--checkBoard"), "readiness --help does not mention --checkBoard");
   assert(help.stdout.includes("--server"), "readiness --help does not mention --server");
+  assert(help.stdout.includes("--probeMedia"), "readiness --help does not mention --probeMedia");
   assert(help.stdout.includes("--probeClipboardSecurity"), "readiness --help does not mention --probeClipboardSecurity");
   assert(help.stdout.includes("--probeWgcH264Sources"), "readiness --help does not mention --probeWgcH264Sources");
 
@@ -272,6 +273,31 @@ async function main() {
   assertNoSecretLeak(clipboardRun.stdout, "readiness --probeClipboardSecurity stdout");
   assertNoSecretLeak(clipboardRun.stderr, "readiness --probeClipboardSecurity stderr");
 
+  const mediaRun = await runNode(
+    "readiness media aggregate probe",
+    [
+      readinessScript,
+      "--json",
+      "--probeMedia",
+      "--timeoutMs",
+      String(args.readinessTimeoutMs),
+    ],
+    args.timeoutMs,
+  );
+  results.push(mediaRun);
+  assert(!mediaRun.timedOut, "readiness --probeMedia --json timed out");
+  const mediaSummary = parseJson(mediaRun.stdout, "readiness --probeMedia --json");
+  assert(mediaSummary.args?.probeMedia === true, "media aggregate probe flag missing from JSON args");
+  const mediaResult = mediaSummary.results?.find((result) => result.label === "Windows host media aggregate");
+  assert(mediaResult, "JSON results missing Windows host media aggregate check");
+  assert(mediaSummary.boardSummary.includes("media="), "media readiness boardSummary should include media status");
+  assert(
+    /media=(ok|partial|failed)(\(|;|\s|\.)/.test(`${mediaSummary.boardSummary} `),
+    `media readiness boardSummary has unexpected media status: ${mediaSummary.boardSummary}`,
+  );
+  assertNoSecretLeak(mediaRun.stdout, "readiness --probeMedia stdout");
+  assertNoSecretLeak(mediaRun.stderr, "readiness --probeMedia stderr");
+
   results.push(boardRun);
   assert(!boardRun.timedOut, "readiness --boardSummary timed out");
   const lines = boardRun.stdout.trim().split(/\r?\n/).filter(Boolean);
@@ -279,6 +305,7 @@ async function main() {
   assert(lines[0].includes("Windows readiness"), "board summary has unexpected text");
   assert(lines[0].includes("call=CALLING Mac Codex->Windows Codex"), "board summary is missing active currentCall");
   assert(!lines[0].includes("--status --json"), "board summary should not echo call command");
+  assert(lines[0].includes("media=not-checked"), "board summary should show media=not-checked by default");
   assert(lines[0].includes("Do not send passwords"), "board summary is missing board safety reminder");
   assert(!/\[(INFO|OK|WARN|ERROR|FAIL)\]/.test(lines[0]), "board summary should be plain one-line text");
   assertNoSecretLeak(boardRun.stdout, "readiness --boardSummary stdout");
@@ -288,6 +315,7 @@ async function main() {
     ok: true,
     readinessJsonExitCode: jsonRun.exitCode,
     readinessClipboardProbeExitCode: clipboardRun.exitCode,
+    readinessMediaProbeExitCode: mediaRun.exitCode,
     readinessBoardSummaryExitCode: boardRun.exitCode,
     boardSummary: lines[0],
     results: results.map((result) => ({

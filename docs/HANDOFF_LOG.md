@@ -19,6 +19,43 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 19:49
+开发端：Windows Codex
+本轮目标：给 Windows host readiness 增加统一媒体聚合状态，方便 Mac 控制 Windows 前用一行摘要判断视频/音频基线。
+完成内容：
+- `scripts/windows/check-windows-host-readiness.mjs` 新增显式 `--probeMedia`，复用 `observe-windows-host-media --json` 顺序跑视频+音频媒体聚合。
+- readiness JSON 新增 `Windows host media aggregate` 结果详情，保留媒体 `summary.status=ok|partial|failed`、video/audio/resource 片段和脱敏 `boardSummary`。
+- readiness `--boardSummary` 会显示 `media=ok`、`media=partial(passed=X,failed=Y)` 或 `media=failed(passed=X,failed=Y)`；默认未跑媒体时显示 `media=not-checked`。
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs` 增加帮助、`--probeMedia --json`、默认 `media=not-checked` 和不泄密断言。
+- Windows host README、当前状态、下一步和任务板同步了 `--probeMedia --boardSummary` 用法。
+修改文件：
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-host-readiness.mjs`
+- `node --check scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `node scripts/windows/check-windows-host-readiness.mjs --json --probeMedia --timeoutMs 8000`
+- `node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 90000 --readinessTimeoutMs 8000`
+- `node scripts/windows/check-windows-host-readiness.mjs --boardSummary --probeMedia --timeoutMs 8000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-host-readiness.mjs --script test-windows-host-readiness-board-summary.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-script-help.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps docs scripts shared`
+遗留问题：
+- 本轮只做本机 Windows 临时 host 媒体聚合；正式 Mac 控制 Windows 真机连接仍需等 Windows host 用正式密码启动后由 Mac 端验收。
+下一步建议：
+- Mac 端准备控制 Windows 前，可先让 Windows 端运行 `node scripts/windows/check-windows-host-readiness.mjs --probeMedia --boardSummary`，根据 `media=ok|partial|failed` 决定是否继续 formal smoke。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 19:08
 开发端：Windows Codex
 本轮目标：把 Mac media `summary.status` 接入 Mac readiness 的一行媒体摘要。

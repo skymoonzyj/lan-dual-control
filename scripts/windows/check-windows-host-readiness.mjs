@@ -17,6 +17,7 @@ const defaults = {
   requireWgc: false,
   probeHost: false,
   probeAudio: false,
+  probeMedia: false,
   probeVideo: false,
   probeClipboardSecurity: false,
   probeWgcH264Sources: false,
@@ -53,6 +54,7 @@ function parseArgs(argv) {
     if (
       key === "probeHost" ||
       key === "probeAudio" ||
+      key === "probeMedia" ||
       key === "probeVideo" ||
       key === "probeClipboardSecurity" ||
       key === "probeWgcH264Sources" ||
@@ -85,6 +87,7 @@ function parseArgs(argv) {
   args.requireWgc = booleanArg(args.requireWgc);
   args.probeHost = booleanArg(args.probeHost);
   args.probeAudio = booleanArg(args.probeAudio);
+  args.probeMedia = booleanArg(args.probeMedia);
   args.probeVideo = booleanArg(args.probeVideo);
   args.probeClipboardSecurity = booleanArg(args.probeClipboardSecurity);
   args.probeWgcH264Sources = booleanArg(args.probeWgcH264Sources);
@@ -143,6 +146,7 @@ Options:
   --maxAudioFrameAgeMs <ms>  Audio probe frame freshness limit. 0 disables. Default: 1000
   --requireWgc        Fail when Windows Graphics Capture preflight is unsupported.
   --probeHost         Run Windows host PowerShell self-test.
+  --probeMedia        Run one combined Windows host video + audio media baseline.
   --probeVideo        Run short Windows host video observer.
   --probeAudio        Run short WASAPI audio observer. Does not play a tone.
   --probeClipboardSecurity
@@ -663,6 +667,7 @@ async function checkRunningHostRuntime(args) {
 function makeReadinessBoardSummary(summary) {
   const runtimeResult = summary.results.find((result) => result.label === "Windows host runtime") || null;
   const wgcSourceResult = summary.results.find((result) => result.label === "Windows WGC H.264 source comparison") || null;
+  const media = formatMediaBoardSummary(summary);
   const state = summary.ok ? "passed" : "failed";
   const mode = summary.strict ? "strict" : summary.args.profile;
   const activeCall = summary.board?.currentCall?.active && summary.board.currentCall.needsWindows && summary.board.currentCall.fromMacSide
@@ -692,7 +697,39 @@ function makeReadinessBoardSummary(summary) {
   const probeText = probeSentences
     .map((sentence) => (sentence.endsWith(".") ? sentence : `${sentence}.`))
     .join(" ");
-  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port};${activeCall} ${runtimeSentence}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
+  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
+}
+
+function formatMediaBoardSummary(summary) {
+  if (!summary.args?.probeMedia) return "media=not-checked";
+  const result = Array.isArray(summary.results)
+    ? summary.results.find((item) => item.label === "Windows host media aggregate")
+    : null;
+  if (!result) return "media=missing";
+  const details = result.details || {};
+  const failed = Number(details.summary?.failed);
+  const passed = Number(details.summary?.passed);
+  const status = normalizeMediaStatus(details.summary?.status, result.ok, passed, failed);
+  if (status === "ok") return "media=ok";
+  if (status === "partial") {
+    return `media=partial(passed=${Number.isFinite(passed) ? passed : 0},failed=${Number.isFinite(failed) ? failed : 0})`;
+  }
+  if (status === "failed" && (Number.isFinite(failed) || Number.isFinite(passed))) {
+    return `media=failed(passed=${Number.isFinite(passed) ? passed : 0},failed=${Number.isFinite(failed) ? failed : 0})`;
+  }
+  if (result.ok) return "media=ok";
+  return "media=failed";
+}
+
+function normalizeMediaStatus(value, ok, passed, failed) {
+  if (value === "ok" || value === "partial" || value === "failed") return value;
+  if (ok) return "ok";
+  if (Number.isFinite(failed) || Number.isFinite(passed)) {
+    const safeFailed = Number.isFinite(failed) ? failed : 0;
+    const safePassed = Number.isFinite(passed) ? passed : 0;
+    return safeFailed === 0 ? "ok" : safePassed > 0 ? "partial" : "failed";
+  }
+  return "failed";
 }
 
 function filterExpectedWarnings(label, warnings) {
@@ -810,6 +847,123 @@ async function runWgcH264SourceComparisonStep(results, args, node, envWithFfmpeg
   return failedResult;
 }
 
+function mediaCommandArgs(args) {
+  const maxFrameAgeMs = Math.max(args.maxVideoFrameAgeMs, args.maxAudioFrameAgeMs);
+  const probeTimeoutMs = Math.max(args.timeoutMs, 15000);
+  const commandTimeoutMs = Math.max(args.timeoutMs, 35000);
+  const mediaArgs = [
+    "scripts/windows/observe-windows-host-media.mjs",
+    "--json",
+    "--videoDurationMs",
+    "2500",
+    "--videoTimeoutMs",
+    String(probeTimeoutMs),
+    "--videoMinFrames",
+    "20",
+    "--videoMinFps",
+    "8",
+    "--videoRetries",
+    "0",
+    "--audioDurationMs",
+    "2500",
+    "--audioTimeoutMs",
+    String(probeTimeoutMs),
+    "--audioMinFrames",
+    "60",
+    "--audioMinFps",
+    "30",
+    "--maxGapMs",
+    "1000",
+    "--commandTimeoutMs",
+    String(commandTimeoutMs),
+  ];
+  if (maxFrameAgeMs > 0) {
+    mediaArgs.push("--maxFrameAgeMs", String(maxFrameAgeMs), "--requireMonotonicTimestamp");
+  } else {
+    mediaArgs.push("--requireMonotonicTimestamp", "false");
+  }
+  if (args.ffmpeg) {
+    mediaArgs.push("--ffmpeg", args.ffmpeg);
+  }
+  return mediaArgs;
+}
+
+async function checkMediaAggregate(args, node, envWithFfmpeg) {
+  const label = "Windows host media aggregate";
+  const result = await runCommand(
+    label,
+    node,
+    mediaCommandArgs(args),
+    { timeoutMs: Math.max(args.timeoutMs, 45000), env: envWithFfmpeg },
+  );
+  let payload = null;
+  try {
+    payload = parseJsonOutput(result.stdout, label);
+  } catch (error) {
+    return {
+      label,
+      ok: false,
+      exitCode: result.exitCode,
+      elapsedMs: result.elapsedMs,
+      summary: result.summary || error.message,
+      boardSummary: "",
+      warnings: result.warnings,
+      errors: result.errors.length > 0 ? result.errors : [error.message],
+      details: {
+        parseError: error.message,
+        exitCode: result.exitCode,
+      },
+    };
+  }
+
+  const failures = Array.isArray(payload.summary?.failures)
+    ? payload.summary.failures
+    : [];
+  const ok = result.ok && payload.ok === true;
+  const failureMessages = failures.map((failure) =>
+    `${failure.id || failure.label || "probe"}: ${failure.summary || failure.message || "failed"}`,
+  );
+  return {
+    label,
+    ok,
+    exitCode: result.exitCode,
+    elapsedMs: result.elapsedMs,
+    summary: payload.boardSummary || result.summary || (payload.ok ? "media aggregate passed" : "media aggregate failed"),
+    boardSummary: payload.boardSummary || "",
+    warnings: result.warnings,
+    errors: ok ? [] : (failureMessages.length > 0 ? failureMessages : result.errors),
+    details: {
+      ok: payload.ok === true,
+      target: payload.target || null,
+      boardSummary: payload.boardSummary || "",
+      summary: payload.summary || null,
+      resource: payload.resource || null,
+      video: payload.video
+        ? { ok: payload.video.ok, observation: payload.video.observation || null, error: payload.video.error || null }
+        : null,
+      audio: payload.audio
+        ? { ok: payload.audio.ok, observation: payload.audio.observation || null, error: payload.audio.error || null }
+        : null,
+    },
+  };
+}
+
+async function runMediaAggregateStep(results, args, node, envWithFfmpeg) {
+  const label = "Windows host media aggregate";
+  print("INFO", `Running ${label}`, args);
+  const result = await checkMediaAggregate(args, node, envWithFfmpeg);
+  results.push(result);
+  if (result.ok) {
+    print("OK", `${label}: ${result.summary || "passed"}`, args);
+  } else {
+    print("ERROR", `${label}: ${result.summary || `exit ${result.exitCode}`}`, args);
+  }
+  for (const warning of result.warnings.slice(0, 3)) {
+    print("WARN", `${label}: ${warning.replace(/^\[WARN\]\s*/, "")}`, args);
+  }
+  return result;
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -921,6 +1075,10 @@ async function main() {
     await runWgcH264SourceComparisonStep(results, args, node, envWithFfmpeg);
   }
 
+  if (args.probeMedia) {
+    await runMediaAggregateStep(results, args, node, envWithFfmpeg);
+  }
+
   if (args.probeVideo) {
     await runStep(
       results,
@@ -986,6 +1144,7 @@ async function main() {
       maxVideoFrameAgeMs: args.maxVideoFrameAgeMs,
       maxAudioFrameAgeMs: args.maxAudioFrameAgeMs,
       probeHost: args.probeHost,
+      probeMedia: args.probeMedia,
       probeVideo: args.probeVideo,
       probeAudio: args.probeAudio,
       probeClipboardSecurity: args.probeClipboardSecurity,
@@ -1011,6 +1170,7 @@ async function main() {
       elapsedMs: result.elapsedMs,
       summary: result.summary,
       boardSummary: result.boardSummary || "",
+      details: result.details || null,
       macClientReadinessCommands: Array.isArray(result.macClientReadinessCommands)
         ? result.macClientReadinessCommands
         : [],
@@ -1035,7 +1195,7 @@ async function main() {
     if (!ok && !args.probeHost) {
       print(
         "INFO",
-        "For deeper validation, rerun with --probeHost, --probeVideo, --probeAudio, or --probeWgcH264Sources as needed.",
+        "For deeper validation, rerun with --probeHost, --probeMedia, --probeVideo, --probeAudio, or --probeWgcH264Sources as needed.",
         args,
       );
     }

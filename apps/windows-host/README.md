@@ -270,6 +270,12 @@ node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs 
 node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --probeVideo --probeAudio
 ```
 
+如果想要一行统一的媒体状态，优先用 `--probeMedia --boardSummary`。它会顺序复用 Windows 媒体聚合脚本，JSON 里保留 `Windows host media aggregate` 详情，通讯板摘要直接显示 `media=ok`、`media=partial(passed=X,failed=Y)` 或 `media=failed(passed=X,failed=Y)`，方便 Mac 端判断是视频、音频还是两者都需要复测。
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --probeMedia --boardSummary
+```
+
 Mac 从另一台机器连入前，如果要求 `43770` 必须正在监听且局域网可达，可以加 `--requireOpen`；这通常应在你已经手动启动 `node .\server.mjs 43770 0.0.0.0` 后运行。
 
 ```powershell
