@@ -17,6 +17,37 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-16 Windows Codex
+
+日期：2026-06-16 08:58
+开发端：Windows Codex
+本轮目标：响应 Mac 端正式 E2E 呼叫，在用户在场时完成真实 Windows 控制 Mac formal E2E，并把结果同步到联络板和文档。
+完成内容：
+- 开工前读取 Agent Link Board，确认 Mac host 已由 Mac Codex 启动并 ready：`192.168.31.122:43770`，runtime build `c5e5009`，`inputMode=log`，屏幕录制/辅助功能/输入监控权限全开，H.264、系统 PCM、文本/文件剪贴板可用。
+- Windows 侧先跑无密 `check-mac-formal-e2e --discover --discoverNoLocalSubnets --preflightOnly --checkClientDiagnostics --boardSummary`，确认 discovery、权限、能力和 Windows 控制端诊断均通过；摘要已发 Agent Link Board，未包含密码。
+- 由于 Codex 内部终端不是交互 TTY，正式 `--promptPassword` 改为可见 PowerShell 7 窗口运行，由用户在 Windows 本机隐藏输入正式 Mac host 密码；密码只经环境变量传给子探针，未上通讯板、未放入命令参数。
+- 正式验收完成且 node exit code 0：H.264/WebCodecs 解码 OK，canvas 1920x1080，`H264Errors=0`；页面显示实收约 52.4 FPS、协商 30 Hz、请求 60 Hz；系统 PCM 音频帧可播放；文本/文件剪贴板、input-log、黑边防护、stream fallback 诊断和 frame age 诊断均 OK。
+- Agent Link Board 已补发正式验收结果摘要；Supervisor 已把 call 标记 DONE。
+修改文件：
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/windows/check-mac-formal-e2e.mjs --discover --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --boardSummary`
+- 可见 PowerShell 7 正式验收窗口运行 `node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --promptPassword`
+- 正式 transcript：`.dev-lab/formal-e2e-windows-20260616-084744.transcript.txt`
+- transcript 结尾包含 `[OK] Formal Mac E2E checks finished.` 和 `Formal E2E node exit code: 0`
+遗留问题：
+- 本轮仍未执行真实输入注入；当前 `inputMode=log` 只验证了安全输入 ack。进入 `inject` 前必须由用户另行明确确认，并确保两端屏幕可见。
+- 当前结果证明真实控制链路的媒体、剪贴板和安全输入日志路径可用；后续还要继续做长时间稳定性、真实操作手感、最小化提醒产品化和 Mac 反控 Windows 真连。
+下一步建议：
+- 白天继续时先看 Agent Link Board 和本条交接，再决定是否进入真实 `inject` 验收，或优先做长稳/画质/延迟/音频听感专项。
+- 若要复跑 formal E2E，仍按“无密预检 -> 用户本机隐藏输入密码 -> 正式验收”的流程，密码不要发通讯板。
+是否改了协议：否。
+是否需要另一端配合：本轮正式验收已完成；后续若做真实 `inject` 或长稳专项，需要用户和 Mac Codex 明确配合。
+
 ## 2026-06-16 Mac Codex
 
 日期：2026-06-16 08:31

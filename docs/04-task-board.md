@@ -79,6 +79,7 @@ Windows 端：
 - [x] Windows 恢复开工总览支持 `--userAuthRequest` / PowerShell `-UserAuthRequest`，预检 ready 后直接输出可发 Agent Link Board 的 `NEED_USER_AUTH` 文本和固定目标 PowerShell 正式验收命令。
 - [x] Windows 恢复开工总览支持显式 `--sendUserAuthRequest` / PowerShell `-SendUserAuthRequest`，只在 formal preflight ready 时把无密授权提示发到 Agent Link Board，未 ready 时拒绝发送。
 - [x] Windows formal E2E runner 支持 `--sendUserAuthRequest` / PowerShell `-SendUserAuthRequest`，在 `--preflightOnly` ready 后直接向 Agent Link Board 发送无密 `NEED_USER_AUTH`，未 ready 不发送。
+- [x] Windows formal Mac E2E 已在真实 Mac host `192.168.31.122:43770` / runtime build `c5e5009` 通过：H.264/WebCodecs、音频、文本/文件剪贴板、input-log、黑边防护和客户端诊断均 OK，node exit code 0；密码未上通讯板，未执行 `inject`。
 
 共享：
 
@@ -132,7 +133,7 @@ Windows 端：
 - macOS 被控端 H.264 流式启动有 5 秒 watchdog；启动阶段未建立 `videoStream` 时会回退 `background-jpeg` 并带 `streamFallbackReason`，迟到启动成功的旧流会被 generation token 停止。
 - macOS 被控端已接入 CGEvent 输入注入；当前默认 `LAN_DUAL_INPUT_MODE=log` 做安全联调，只有显式设为 `inject` 时才真实注入。
 - Windows 控制端当前已可区分真实 JPEG、H.264 视频帧和模拟视频帧，并记录图片或 WebCodecs 解码失败；`scripts/windows/test-mac-host.ps1 -Discover` 可用于真机连通自检并自动发现 Mac host，显式加 `-ClipboardText -ClipboardFile` 可验证 macOS 文本和文件剪贴板写入。
-- Windows 端新增 `scripts/windows/check-mac-formal-e2e.mjs` 正式 Mac E2E 聚合脚本：`--preflightOnly --boardSummary` 可只读生成可发 Agent Link Board 的无密摘要，`--preflightOnly --json` 可给自动化读取并带 `runPlan`，普通预检也会列出正式验收步骤、预计耗时、密码经环境变量传递和 `inject=false` 安全边界；`--preflightOnly --userAuthRequest` 可输出无密 `NEED_USER_AUTH`，`--preflightOnly --sendUserAuthRequest` / PowerShell `-SendUserAuthRequest` 会在预检 ready 后直接发送到 Agent Link Board，未 ready 不发送；真正验收时使用 `--promptPassword` 由用户本机隐藏输入正式密码，默认串联发现/认证/H.264 长测/音频/剪贴板/input-log/页面 H.264，密码只经环境变量传给子探针，不执行 `inject`。当前真实 `192.168.31.122:43770` 已重启到 runtime build `b28c42c`，权限/能力全绿，Mac 本机 formal local smoke、Windows 无密 formal preflight 和 client diagnostics 均通过；下一步等待用户在 Windows 本机隐藏输入 Mac host 正式密码启动完整 formal E2E。
+- Windows 端新增 `scripts/windows/check-mac-formal-e2e.mjs` 正式 Mac E2E 聚合脚本：`--preflightOnly --boardSummary` 可只读生成可发 Agent Link Board 的无密摘要，`--preflightOnly --json` 可给自动化读取并带 `runPlan`，普通预检也会列出正式验收步骤、预计耗时、密码经环境变量传递和 `inject=false` 安全边界；`--preflightOnly --userAuthRequest` 可输出无密 `NEED_USER_AUTH`，`--preflightOnly --sendUserAuthRequest` / PowerShell `-SendUserAuthRequest` 会在预检 ready 后直接发送到 Agent Link Board，未 ready 不发送；真正验收时使用 `--promptPassword` 由用户本机隐藏输入正式密码，默认串联发现/认证/H.264 长测/音频/剪贴板/input-log/页面 H.264，密码只经环境变量传给子探针，不执行 `inject`。2026-06-16 真实 `192.168.31.122:43770` 已在 runtime build `c5e5009` 完成完整 formal E2E 并通过：H.264/WebCodecs、音频、剪贴板、input-log、页面诊断和黑边防护 OK，node exit code 0；后续复跑仍按先预检、再本机隐藏输入密码的流程，`inject` 继续单独确认。
 - 真 Mac 已通过强校验探针验证真实 JPEG 首帧、H.264 Annex B 首帧和 PCM 音频帧：`-RequireRealVideo` 会拒绝 mock/fallback 视频帧，`-RequireH264` 会确认 SPS/PPS/IDR，`-RequireAudio` 会确认 `pcm-f32le-base64` payload，`-ExpectInputMode log` 可确认安全输入模式。
 - Mac 端新增 `scripts/mac/observe-mac-video.mjs`，可持续观察 `video_frame` FPS、最大接收间隔、payload、codec、encoding、capturePipeline、source、显示器来源、帧 `timestamp` 接收年龄和 H.264 `timestampUs` / `durationUs` 媒体时间线；真机 H.264 30 秒 877 帧约 29.2fps，最大间隔 45ms；时间线短测 H.264 3 秒 89 帧约 29.2fps、媒体间隔平均/最大 `34281/41668us`、`durationUs=33333`；Mac host 最新代码会输出带小数秒的 ISO `timestamp`，临时 43771 build 已验证 discovery/runtime 为毫秒格式且 mock `video_frame` 接收年龄 max 0ms；空闲/低变化桌面 5 分钟 H.264 约 10.6fps、60 秒复测约 10.9fps，JPEG 60 秒对照约 16.4fps，后续高 FPS 强校验需要使用动态画面或真实控制场景。
 - Mac 端新增 `scripts/mac/stress-mac-host.mjs`，可循环复用 canonical 探针做 H.264 + PCM 连续连接稳定性检查；真机 50 次循环已通过，监听进程 RSS `79376->80656 KB`，FD 保持 `30->30`。脚本现可统计并阈值化完整 probe、首帧、H.264 确认和首个音频帧耗时，便于把连续建连体验退化纳入回归。
@@ -292,7 +293,7 @@ Mac 端：
 
 ## 里程碑 M5：文件剪贴板和增强体验
 
-- [x] 局域网自动发现骨架：控制端刷新设备并探测 `/discovery`，假 Mac 和 Windows 被控端已返回设备信息；Windows 桌面版已可通过 `scripts/windows/discover-lan-hosts.mjs` 扫描当前 IPv4 网段并合并到设备列表。命令行发现脚本已支持 `--boardSummary`、`--requireMacHost` 和 `--noLocalSubnets`，可输出 Mac formal E2E 预检、授权提醒和正式验收命令；刷新后若发现真实在线 WebSocket 设备，会自动选中最佳目标并显示 runtime。当前真实 Mac `192.168.31.122:43770` / runtime build `b28c42c` 已由只读 discovery 和 Windows client diagnostics 验证，formal E2E 当前等待用户本机输入正式密码。
+- [x] 局域网自动发现骨架：控制端刷新设备并探测 `/discovery`，假 Mac 和 Windows 被控端已返回设备信息；Windows 桌面版已可通过 `scripts/windows/discover-lan-hosts.mjs` 扫描当前 IPv4 网段并合并到设备列表。命令行发现脚本已支持 `--boardSummary`、`--requireMacHost` 和 `--noLocalSubnets`，可输出 Mac formal E2E 预检、授权提醒和正式验收命令；刷新后若发现真实在线 WebSocket 设备，会自动选中最佳目标并显示 runtime。当前真实 Mac `192.168.31.122:43770` / runtime build `c5e5009` 已由只读 discovery、Windows client diagnostics 和完整 formal E2E 验证通过。
 - [ ] 跨设备 UDP/mDNS 自动发现。
 - [x] macOS 被控端 Bonjour/mDNS 广播：发布 `_lan-dual-control._tcp`，TXT 记录指向 `/discovery` 和控制端口。
 - [ ] Windows/Tauri 原生层浏览 `_lan-dual-control._tcp` 并回填设备列表。

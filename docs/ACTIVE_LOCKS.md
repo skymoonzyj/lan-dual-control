@@ -1,6 +1,6 @@
 # 当前文件占用
 
-最后更新：2026-06-15
+最后更新：2026-06-16
 
 用途：避免 Windows Codex 和 Mac Codex 同时重写同一片代码。占用不是永久所有权，只表示“我正在处理，另一端先别碰”。
 
@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-16 09:05 | 记录真实 Windows formal Mac E2E 已通过：`192.168.31.122:43770` / runtime build `c5e5009`，H.264/WebCodecs、音频、文本/文件剪贴板、input-log、黑边防护和客户端诊断 OK，node exit code 0；未发送密码，未执行 `inject`。 |
 | Mac Codex | `scripts/mac/start-mac-host.mjs`, `scripts/mac/test-mac-host-start-helper.mjs`, `apps/mac-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-16 08:31 | Mac host 启动助手新增安全 `--stop` / `--stop --json`：只停止本机 `/discovery` 对应的 macOS host PID，离线视为已停止，非本机/非 Mac/缺 runtime PID 均拒绝；测试覆盖后台 host 可由 stop 安全收尾。 |
 | Windows Codex | `scripts/windows/start-mac-alert-watcher.ps1`, `scripts/windows/test-mac-alert-watcher.mjs`, `docs/LAN_CODEX_LINK.md`, `docs/TEST_COORDINATION.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-16 08:35 | Windows Mac alert watcher 启动器新增 `-Status`/`-Stop`/`-Restart` 和 PID/命令行双重查找，防重复启动；测试脚本默认保留无弹窗提醒规则回归，生命周期测试改为可选。 |
 | Windows Codex | `scripts/windows/watch-codex-link-mac-alerts.ps1`, `scripts/windows/start-mac-alert-watcher.ps1`, `scripts/windows/test-mac-alert-watcher.mjs`, `docs/LAN_CODEX_LINK.md`, `docs/TEST_COORDINATION.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-15 23:00 | Windows Mac alert watcher 恢复 502/blocked/授权/权限/stale 提醒，新增 `-Once`/`-NoPopup`/`-AlertExistingEvents` 和无弹窗回归；后台启动器优先 PowerShell 7 `pwsh`。 |
