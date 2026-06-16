@@ -209,6 +209,29 @@ function checkProbeMediaOfflineJson(args) {
   print("OK", "Mac host readiness probeMedia exposes offline aggregate details safely");
 }
 
+function checkProbeMediaResourceSampleImpliesProbeMedia(args) {
+  const result = run([
+    "--json",
+    "--probeMediaResourceSample",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "9",
+    "--timeoutMs",
+    "5000",
+    "--skipCurrentBuildCheck",
+  ], args);
+  assert(result.status !== 0, "--probeMediaResourceSample against an offline host should run media aggregate and fail readiness");
+  const payload = parseJson(result.stdout, "resource-sample implied media readiness JSON");
+  assert(payload.args?.probeMedia === true, "--probeMediaResourceSample should imply probeMedia=true");
+  assert(payload.args?.probeMediaResourceSample === true, "readiness JSON should preserve probeMediaResourceSample=true");
+  const step = payload.results?.find((item) => item.label === "Mac host media aggregate");
+  assert(step, "implied probeMedia should include Mac host media aggregate step");
+  assert(step.details?.resource?.available === false, "implied resource sampling should preserve unavailable resource details");
+  assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "resource-sample implied media readiness JSON");
+  print("OK", "Mac host readiness probeMediaResourceSample implies probeMedia");
+}
+
 async function checkActiveBoardCall(args) {
   const call = {
     status: "CALLING",
@@ -323,6 +346,7 @@ async function main() {
   checkHelp(args);
   checkDefaultDoesNotReadBoard(args);
   checkProbeMediaOfflineJson(args);
+  checkProbeMediaResourceSampleImpliesProbeMedia(args);
   await checkActiveBoardCall(args);
   await checkDoneBoardCall(args);
   await checkBoardSummary(args);
