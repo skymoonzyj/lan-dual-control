@@ -19,6 +19,34 @@
 
 ## 2026-06-16 Mac Codex
 
+日期：2026-06-16 10:35
+开发端：Mac Codex
+本轮目标：让 Mac 侧发现 Windows host 后直接给出 ready 后的通讯板 call 命令，减少跨端真连前手工拼接。
+完成内容：
+- `scripts/mac/discover-windows-hosts.mjs` 在发现 Windows host 后新增 `sendCallCommand` 字段，对应 `check-mac-client-formal-status --host <Windows IP> --port <port> --sendCall`。
+- `--boardSummary` 现在同时给出 formal checklist 命令和 ready 后的 `--sendCall` 协调命令；仍然只读扫描 `/discovery`，不认证、不要求密码、不发送输入、不执行 `inject`。
+- `scripts/mac/test-discover-windows-hosts.mjs` 增加 JSON 和 board summary 断言，确保 `sendCallCommand` 出现且摘要不泄密。
+修改文件：
+- `scripts/mac/discover-windows-hosts.mjs`
+- `scripts/mac/test-discover-windows-hosts.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/discover-windows-hosts.mjs`
+- `node --check scripts/mac/test-discover-windows-hosts.mjs`
+- `node scripts/mac/test-discover-windows-hosts.mjs --timeoutMs 30000`
+遗留问题：
+- 本轮未扫描真实局域网、未启动 Windows host、未跑真实 Mac 控制 Windows 验收；后续需要 Windows host 在线并由用户在 Mac 本机隐藏输入正式密码后执行真连 smoke。
+下一步建议：
+- Windows host 启动后，Mac 侧运行 `node scripts/mac/discover-windows-hosts.mjs --boardSummary`；若 formal checklist ready 且需要 Windows 协调，再运行摘要里的 `--sendCall` 命令。
+是否改了协议：否。
+是否需要另一端配合：当前不需要；后续真实 Mac 控制 Windows 验收需要 Windows host 在线。
+
+## 2026-06-16 Mac Codex
+
 日期：2026-06-16 10:22
 开发端：Mac Codex
 本轮目标：补齐 Mac 控制 Windows formal checklist 的无密通讯板呼叫入口，减少真连验收前手工协调失误。

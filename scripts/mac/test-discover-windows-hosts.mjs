@@ -160,6 +160,8 @@ function checkFoundJson(tmp, args) {
   assert(payload.ignored.length === 1, "found payload should keep ignored Mac host diagnostics");
   assert(payload.best.host === "192.168.31.68", "best host should be Windows");
   assertIncludes(payload.nextCommand, "--host 192.168.31.68", "next command");
+  assertIncludes(payload.sendCallCommand, "--host 192.168.31.68", "send call command");
+  assertIncludes(payload.sendCallCommand, "--sendCall", "send call command");
   assertIncludes(payload.boardSummary, "No password was requested or sent", "board summary");
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "found output");
   console.log("[OK] JSON discovery filters Windows hosts and returns next formal command");
@@ -173,6 +175,7 @@ function checkBoardSummaryFound(tmp, args) {
   assert(result.status === 0, `found board summary should exit 0.\n${result.stdout}\n${result.stderr}`);
   assertIncludes(result.stdout, "Windows host discovery: found 1", "found board summary");
   assertIncludes(result.stdout, "check-mac-client-formal-status.mjs --host 192.168.31.68", "found board summary");
+  assertIncludes(result.stdout, "--sendCall", "found board summary");
   assertIncludes(result.stdout, "no WebSocket/input/inject", "found board summary");
   console.log("[OK] Board summary gives a secret-free next step when Windows host is found");
 }

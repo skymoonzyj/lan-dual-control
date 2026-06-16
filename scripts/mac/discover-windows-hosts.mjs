@@ -201,6 +201,10 @@ function readinessCommand(item) {
   return `node scripts/mac/check-mac-client-formal-status.mjs --host ${item.host} --port ${item.port} --boardSummary`;
 }
 
+function sendCallCommand(item) {
+  return `node scripts/mac/check-mac-client-formal-status.mjs --host ${item.host} --port ${item.port} --sendCall`;
+}
+
 function buildReport(scan, args) {
   const found = Array.isArray(scan.found) ? scan.found : [];
   const windowsHosts = found.filter(isWindowsHost);
@@ -215,6 +219,7 @@ function buildReport(scan, args) {
     ports: scan.ports || args.ports,
     subnets: scan.subnets || [],
     nextCommand: best ? readinessCommand(best) : "",
+    sendCallCommand: best ? sendCallCommand(best) : "",
     boardSummary: "",
   };
   report.boardSummary = makeBoardSummary(report);
@@ -223,7 +228,7 @@ function buildReport(scan, args) {
 
 function makeBoardSummary(report) {
   if (report.best) {
-    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}. Next Mac formal check: ${report.nextCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}. Next Mac formal check: ${report.nextCommand}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
   }
   const ignored = report.ignored.length > 0
     ? ` Saw ${report.ignored.length} non-Windows host(s), likely Mac/self.`
@@ -238,6 +243,7 @@ function printText(report, args) {
       console.log(`[OK] ${summarizeHost(item)}`);
     }
     console.log(`[INFO] Next: ${report.nextCommand}`);
+    console.log(`[INFO] Ready call: ${report.sendCallCommand}`);
   } else {
     console.log("[WARN] No Windows LAN dual-control host was found.");
     if (report.ignored.length > 0) {
