@@ -339,6 +339,8 @@ function checkHelp(args) {
     assert(/--sendCall/.test(result.stdout), `${script} ${flag} should document --sendCall`);
     assert(/--forceCall/.test(result.stdout), `${script} ${flag} should document --forceCall`);
     assert(/--clearStaleCall/.test(result.stdout), `${script} ${flag} should document --clearStaleCall`);
+    assert(/commands\.mediaReadinessBoardSummary/.test(result.stdout), `${script} ${flag} should document media readiness command output`);
+    assert(/--promptPassword/.test(result.stdout), `${script} ${flag} should document local password prompt for media readiness command`);
     assert(!/Mac host probe password/.test(result.stdout), `${script} ${flag} should not prompt for password`);
   }
   print("OK", "Formal E2E status help exits quickly");

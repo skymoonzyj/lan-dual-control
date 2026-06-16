@@ -54,6 +54,12 @@ Options:
   --json                    Print one machine-readable JSON object.
   --help, -h                Show this help without probing anything.
 
+JSON output:
+  commands.mediaReadinessBoardSummary
+                            Safe local command for refreshing the Mac H.264/PCM
+                            media baseline before long formal E2E runs.
+                            It uses --promptPassword and never embeds --password.
+
 Examples:
   node scripts/mac/check-mac-formal-e2e-status.mjs
   node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary
