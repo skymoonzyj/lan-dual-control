@@ -39,6 +39,9 @@ function printHelp() {
 Prints a safe Windows-side resume-status report before continuing LAN dual
 control work. It is read-only: it does not authenticate a WebSocket, does not
 ask for or print passwords, does not send input, and does not execute inject.
+JSON, human output, and board summaries include a Windows host media-baseline
+command for checking local controlled-side video/audio before Mac reverse
+control.
 
 Options:
   --host <host>                 Explicit Mac host target. Default: ${defaults.host}
@@ -69,6 +72,7 @@ Examples:
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --userAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --sendUserAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
+  node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
 `);
 }
 
@@ -533,6 +537,12 @@ function makeCommands(args, preflight) {
       "-Port", String(port),
       "-PromptPassword",
     ].join(" "),
+    windowsHostMediaReadinessBoardSummary: [
+      "node scripts/windows/check-windows-host-readiness.mjs",
+      "--checkBoard",
+      "--probeMedia",
+      "--boardSummary",
+    ].join(" "),
   };
 }
 
@@ -572,6 +582,7 @@ function makeBoardSummary(report) {
   return [
     `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}${boardCall}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
     `Next=${mac.ok ? report.commands.userAuthRequest : report.commands.preflightBoardSummary}.`,
+    `WindowsHostMedia=${report.commands.windowsHostMediaReadinessBoardSummary}.`,
     "No password was requested or sent; no WebSocket auth/input/inject was performed.",
   ].join(" ");
 }
@@ -744,6 +755,7 @@ function printHuman(report) {
   console.log(`  ${report.commands.preflightBoardSummary}`);
   console.log(`  ${report.commands.userAuthRequest}`);
   console.log(`  ${report.commands.formalRun}`);
+  console.log(`  ${report.commands.windowsHostMediaReadinessBoardSummary}`);
   console.log("- Board summary:");
   console.log(`  ${report.boardSummary}`);
   console.log("- User auth request:");

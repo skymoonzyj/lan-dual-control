@@ -19,6 +19,44 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 20:18
+开发端：Windows Codex
+本轮目标：让 Windows 恢复开工总览直接提示本机 Windows host 媒体基线命令。
+完成内容：
+- `scripts/windows/check-windows-resume-status.mjs` 的 JSON、普通输出和 `--boardSummary` 新增 `windowsHostMediaReadinessBoardSummary` / `WindowsHostMedia=`，指向 `check-windows-host-readiness --checkBoard --probeMedia --boardSummary`。
+- PowerShell 包装帮助同步说明恢复总览会带 Windows host media baseline 命令。
+- Node 与 PowerShell 回归锁定 JSON 字段、通讯板摘要和帮助文案，确认不泄露 mock 密码。
+- 当前状态、下一步和任务板已同步，说明 Mac 反控 Windows 前可以从恢复总览直接拿到媒体基线命令。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- PowerShell 7 AST 语法解析 `scripts/windows/check-windows-resume-status.ps1`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --script test-windows-resume-status.mjs --script test-windows-resume-status-powershell.mjs --timeoutMs 10000`
+- `node scripts/windows/check-windows-resume-status.mjs --noDiscover --host 127.0.0.1 --port 9 --boardSummary --timeoutMs 12000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps docs scripts shared`
+遗留问题：
+- 本轮只补命令提示，不启动正式 Windows host，不做真实媒体长测。
+下一步建议：
+- Mac 控制 Windows 前，先按恢复总览里的 `WindowsHostMedia=` 命令刷新 Windows host 视频/音频基线；如果显示 partial/failed，再查看 readiness JSON 里的具体媒体聚合详情。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 20:03
 开发端：Windows Codex
 本轮目标：把 Windows readiness `--probeMedia` 接入 Windows 桌面“本机被控”体检面板。

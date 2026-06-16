@@ -197,6 +197,8 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "current Agent Link", "PowerShell wrapper help");
   assertIncludes(output, "does not ask for or print", "PowerShell wrapper help");
   assertIncludes(output, "passwords", "PowerShell wrapper help");
+  assertIncludes(output, "Windows host media baseline", "PowerShell wrapper help");
+  assertIncludes(output, "--probeMedia --boardSummary", "PowerShell wrapper help");
   console.log("[OK] PowerShell resume-status wrapper help is safe");
 }
 
@@ -223,6 +225,8 @@ async function checkMockJson(args) {
     assertIncludes(payload.boardSummary, "Windows resume:", "mock JSON board summary");
     assertIncludes(payload.userAuthRequest, "NEED_USER_AUTH", "mock JSON userAuthRequest");
     assertIncludes(payload.userAuthRequest, "powershell.exe", "mock JSON userAuthRequest");
+    assertIncludes(payload.commands?.windowsHostMediaReadinessBoardSummary, "check-windows-host-readiness.mjs", "mock JSON media command");
+    assertIncludes(payload.commands?.windowsHostMediaReadinessBoardSummary, "--probeMedia", "mock JSON media command");
     assertNotIncludes(output, "test-password", "PowerShell mock JSON");
     console.log("[OK] PowerShell resume-status wrapper supports mock JSON discovery");
   });
@@ -246,6 +250,8 @@ async function checkBoardSummary(args) {
     const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean);
     assert(lines.length === 1, `board summary should be one line, got ${lines.length}`);
     assertIncludes(output, "mac=ready", "PowerShell board summary");
+    assertIncludes(output, "WindowsHostMedia=", "PowerShell board summary");
+    assertIncludes(output, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "PowerShell board summary");
     assertIncludes(output, "No password was requested or sent", "PowerShell board summary");
     assertNotIncludes(output, "test-password", "PowerShell board summary");
     console.log("[OK] PowerShell resume-status wrapper prints one-line board summary");

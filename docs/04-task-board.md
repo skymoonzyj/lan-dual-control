@@ -81,6 +81,7 @@ Windows 端：
 - [x] Windows 端新增恢复开工总览 `scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`：只读汇总 git、通讯板、Mac formal preflight、自动发现目标和下一步命令；不认证、不要求密码、不发送输入、不执行 `inject`。
 - [x] Windows 恢复开工总览新增 PowerShell 包装入口 `scripts/windows/check-windows-resume-status.ps1 -CheckBoard -BoardSummary`，并可加 `-CheckClientDiagnostics` 做无密 Windows 控制端页面诊断。
 - [x] Windows 恢复开工总览优先结构化读取 Agent Link Board `/api/state` 的 `currentCall`，失败时才退回旧命令输出解析：`--checkBoard --json`、普通输出和 `--boardSummary` 会显示 active Mac -> Windows 呼叫方向/目标，DONE call 不会误当作待办，方便 Windows 接手时直接响应 Mac 端正式测试请求。
+- [x] Windows 恢复开工总览会输出 Windows host 媒体基线命令：JSON、普通输出和 `--boardSummary` 都会给出 `check-windows-host-readiness --checkBoard --probeMedia --boardSummary`，方便 Mac 反控 Windows 前一键刷新视频/音频基线。
 - [x] Windows host 启动/状态助手也支持 `--status --checkBoard` / PowerShell `-Status -CheckBoard`：只读读取 Agent Link Board `/api/state.currentCall`，JSON、普通输出和 `--boardSummary` 会提示 active Mac -> Windows call，DONE call 不进入待办摘要，不启动 host、不认证、不发送密码、不执行 `inject`。
 - [x] Mac host 启动/状态助手也支持 `--status --checkBoard`：只读读取 Agent Link Board `/api/state.currentCall`，JSON、普通输出和 `--boardSummary` 会提示 active call，DONE call 标为 inactive，摘要不回显 command；`--boardSummary --checkBoard` 会自动走 status，不会误启动 host。
 - [x] Windows 桌面版“本机被控”面板的体检和状态刷新也会启用 `--checkBoard`：UI 会提示 active Mac -> Windows call 为“Mac 正在请求 Windows 配合”，DONE call 不当作待办，且不回显 call command。

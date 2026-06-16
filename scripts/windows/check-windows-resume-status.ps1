@@ -47,6 +47,8 @@ passwords, does not send input, and does not execute inject.
 
 When -CheckBoard is set, the report also summarizes the current Agent Link
 call so Windows can see active Mac -> Windows test requests during resume.
+The report also includes a Windows host media baseline command:
+node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
 "@
 }
 
