@@ -17,6 +17,36 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-16 Mac Codex
+
+日期：2026-06-16 11:32
+开发端：Mac Codex
+本轮目标：让 Mac 控制 Windows formal status 在本地 Mac client 页面离线时直接指向 `--ensureClient` 恢复路径。
+完成内容：
+- `scripts/mac/check-mac-client-formal-status.mjs` 的本地 Mac client 页面 blocker/warning 现在会同时提示 `start-mac-client --allowExisting` 和 `run-mac-client-formal-smoke --ensureClient`，避免 formal checklist 与 smoke 新入口脱节。
+- `runPlan.commands` 新增/细化 `ensureMacClient`、`checkMacClient`、`safePreflightWithEnsureClient`、`sendCallWithEnsureClient`，并让正式 `browserSmoke` 默认带 `--ensureClient`；自定义 Windows host、client host/port 和 Agent Link Board server 会贯穿到命令。
+- `scripts/mac/test-mac-client-formal-status.mjs` 增加离线提示、ready runPlan target-specific `--ensureClient` 命令和通讯板 call expected 文案断言。
+- 本轮不启动服务、不认证 WebSocket、不要求或发送密码、不执行 `inject`，只收口本地页面启动提示和交接文档。
+修改文件：
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-client-formal-status.mjs`
+- `node --check scripts/mac/test-mac-client-formal-status.mjs`
+- `node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 30000`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮只验证 formal status 的本机/假服务路径；真实 Mac 控制 Windows 浏览器 smoke 仍需要 Windows host 在线，并由用户在 Mac 本机隐藏输入正式 Windows host 密码后执行。
+下一步建议：
+- Windows host 在线后，Mac 侧优先运行 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --sendCall`；ready 后再由用户在 Mac 本机隐藏输入正式密码运行 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword`。
+是否改了协议：否。
+是否需要另一端配合：当前不需要；后续真实 Mac 控制 Windows 验收需要 Windows host 在线。
+
 ## 2026-06-16 Windows Codex
 
 日期：2026-06-16 11:20

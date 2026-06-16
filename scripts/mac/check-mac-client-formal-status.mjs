@@ -255,9 +255,9 @@ function buildChecklist(readiness, args) {
   if (clientServer.online && clientServer.titleFound) {
     checklist.push(okItem("client-server", `Mac client page online at ${clientServer.url}`));
   } else if (args.allowClientServerOffline) {
-    checklist.push(warnItem("client-server", `Mac client page offline/unverified at ${clientServer.url || `${args.clientHost}:${args.clientPort}`}`, clientServer.error?.message || "", "Start with node scripts/mac/start-mac-client.mjs, then rerun this checklist."));
+    checklist.push(warnItem("client-server", `Mac client page offline/unverified at ${clientServer.url || `${args.clientHost}:${args.clientPort}`}`, clientServer.error?.message || "", `Start or reuse it with ${makeStartClientCommand(args)}, or let the smoke wrapper do it with ${makeEnsureClientSmokeCommand(args)}.`));
   } else {
-    checklist.push(blockItem("client-server", `Mac client page offline/unverified at ${clientServer.url || `${args.clientHost}:${args.clientPort}`}`, clientServer.error?.message || "", "Start with node scripts/mac/start-mac-client.mjs, then rerun this checklist."));
+    checklist.push(blockItem("client-server", `Mac client page offline/unverified at ${clientServer.url || `${args.clientHost}:${args.clientPort}`}`, clientServer.error?.message || "", `Start or reuse it with ${makeStartClientCommand(args)}, or let the smoke wrapper do it with ${makeEnsureClientSmokeCommand(args)}.`));
   }
 
   if (args.skipBoard) {
@@ -340,6 +340,27 @@ function makeChecklistCommand(args) {
   return parts.join(" ");
 }
 
+function makeStartClientCommand(args) {
+  const parts = [
+    "node scripts/mac/start-mac-client.mjs",
+    "--allowExisting",
+  ];
+  if (args.clientHost !== defaults.clientHost) parts.push("--host", args.clientHost);
+  if (args.clientPort !== defaults.clientPort) parts.push("--port", String(args.clientPort));
+  return parts.join(" ");
+}
+
+function makeClientStatusCommand(args) {
+  const parts = [
+    "node scripts/mac/start-mac-client.mjs",
+    "--status",
+    "--boardSummary",
+  ];
+  if (args.clientHost !== defaults.clientHost) parts.push("--host", args.clientHost);
+  if (args.clientPort !== defaults.clientPort) parts.push("--port", String(args.clientPort));
+  return parts.join(" ");
+}
+
 function makeBrowserTestCommand(report, args) {
   const host = report.readiness.windowsHost || {};
   const targetHost = host.probe?.host || args.windowsHost || "<Windows IP>";
@@ -350,8 +371,25 @@ function makeBrowserTestCommand(report, args) {
     targetHost,
     "--port",
     String(targetPort),
+    "--ensureClient",
     "--promptPassword",
   ].join(" ");
+}
+
+function makeEnsureClientSmokeCommand(args, extra = []) {
+  const parts = [
+    "node scripts/mac/run-mac-client-formal-smoke.mjs",
+  ];
+  if (args.windowsHost) {
+    parts.push("--host", args.windowsHost, "--port", String(args.windowsPort || defaults.windowsPort));
+  } else {
+    parts.push("--discover");
+  }
+  parts.push("--ensureClient", ...extra);
+  if (args.clientHost !== defaults.clientHost) parts.push("--clientHost", args.clientHost);
+  if (args.clientPort !== defaults.clientPort) parts.push("--clientPort", String(args.clientPort));
+  if (args.server !== defaults.server) parts.push("--server", args.server);
+  return parts.join(" ");
 }
 
 function makeCallPayload(report, args) {
@@ -416,7 +454,10 @@ function makeRunPlan(report, args) {
     },
     commands: {
       discoverWindowsHost: "node scripts/mac/discover-windows-hosts.mjs --boardSummary",
-      ensureMacClient: "node scripts/mac/start-mac-client.mjs --status --boardSummary",
+      ensureMacClient: makeStartClientCommand(args),
+      checkMacClient: makeClientStatusCommand(args),
+      safePreflightWithEnsureClient: makeEnsureClientSmokeCommand(args, ["--preflightOnly", "--boardSummary"]),
+      sendCallWithEnsureClient: makeEnsureClientSmokeCommand(args, ["--preflightOnly", "--sendCall"]),
       rerunFormalChecklist: makeChecklistCommand(args),
       browserSmoke: browserTestCommand,
     },
@@ -424,7 +465,7 @@ function makeRunPlan(report, args) {
       {
         id: "local-client",
         title: "Confirm the Mac client page is online",
-        command: "node scripts/mac/start-mac-client.mjs --status --boardSummary",
+        command: makeClientStatusCommand(args),
         success: "Mac client page is reachable and serving apps/mac-client.",
       },
       {

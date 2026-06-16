@@ -146,11 +146,16 @@ function checkOfflineJson(args) {
   assert(payload.checklist.some((entry) => entry.id === "client-server" && entry.status === "blocker"), "offline payload should block on local client server");
   assert(payload.checklist.some((entry) => entry.id === "windows-host" && entry.status === "blocker"), "offline payload should block on Windows host");
   assert(payload.checklist.some((entry) => entry.id === "inject" && entry.status === "skip"), "offline payload should explicitly skip inject");
+  assert(payload.checklist.some((entry) => entry.id === "client-server" && String(entry.next || "").includes("start-mac-client.mjs --allowExisting")), "offline client server next step should suggest start helper");
+  assert(payload.checklist.some((entry) => entry.id === "client-server" && String(entry.next || "").includes("run-mac-client-formal-smoke.mjs --discover --ensureClient")), "offline client server next step should suggest ensureClient smoke wrapper");
   assert(payload.checklist.some((entry) => entry.id === "windows-host" && String(entry.next || "").includes("discover-windows-hosts.mjs")), "offline Windows host next step should suggest discovery helper");
   assert(payload.runPlan?.safety?.passwordRequestedByThisScript === false, "offline runPlan should not request passwords");
   assert(payload.runPlan?.safety?.passwordInCommandArguments === false, "offline runPlan should keep passwords out of argv");
   assert(payload.runPlan?.safety?.inject === false, "offline runPlan should not run inject");
   assert(payload.runPlan?.commands?.discoverWindowsHost?.includes("discover-windows-hosts.mjs"), "offline runPlan should include discovery command");
+  assert(payload.runPlan?.commands?.ensureMacClient?.includes("start-mac-client.mjs --allowExisting"), "offline runPlan should include start/reuse client command");
+  assert(payload.runPlan?.commands?.safePreflightWithEnsureClient?.includes("--discover --ensureClient --preflightOnly --boardSummary"), "offline runPlan should include ensureClient preflight command");
+  assert(payload.runPlan?.commands?.sendCallWithEnsureClient?.includes("--discover --ensureClient --preflightOnly --sendCall"), "offline runPlan should include ensureClient sendCall command");
   assert(payload.runPlan?.steps?.some((step) => step.id === "browser-smoke"), "offline runPlan should include browser smoke step");
   assertIncludes(payload.boardSummary || "", "Do not send passwords", "offline board summary");
   assertIncludes(payload.boardSummary || "", "RunPlan:", "offline board summary");
@@ -469,7 +474,10 @@ async function checkReadyShape(args) {
       assert(payload.runPlan?.commands?.browserSmoke?.includes("run-mac-client-formal-smoke.mjs"), "ready runPlan should include Mac browser smoke wrapper");
       assert(payload.runPlan?.commands?.browserSmoke?.includes("--host 127.0.0.1"), "ready runPlan should include target host");
       assert(payload.runPlan?.commands?.browserSmoke?.includes(`--port ${windowsPort}`), "ready runPlan should include target port");
+      assert(payload.runPlan?.commands?.browserSmoke?.includes("--ensureClient"), "ready runPlan should ensure local Mac client for browser smoke");
       assert(payload.runPlan?.commands?.browserSmoke?.includes("--promptPassword"), "ready runPlan should use visible password prompt");
+      assert(payload.runPlan?.commands?.safePreflightWithEnsureClient?.includes(`--host 127.0.0.1 --port ${windowsPort} --ensureClient --preflightOnly --boardSummary`), "ready runPlan should include target-specific ensureClient preflight");
+      assert(payload.runPlan?.commands?.sendCallWithEnsureClient?.includes(`--host 127.0.0.1 --port ${windowsPort} --ensureClient --preflightOnly --sendCall`), "ready runPlan should include target-specific ensureClient sendCall");
       assert(payload.runPlan?.safety?.authenticatesWebSocket === false, "formal checklist runPlan itself should not authenticate");
       assert(payload.runPlan?.safety?.requiresExplicitUserConfirmationForInject === true, "runPlan should require explicit inject confirmation");
       assertIncludes(payload.boardSummary || "", "windowsHost=online 127.0.0.1", "ready board summary");
@@ -534,6 +542,7 @@ async function checkReadySendCall(args) {
         assert(call.command === "node scripts/windows/start-windows-host.mjs --status --json", "call command should be executable on Windows side");
         assertIncludes(call.expected, "run-mac-client-formal-smoke.mjs", "ready call expected");
         assertIncludes(call.expected, `--port ${windowsPort}`, "ready call expected");
+        assertIncludes(call.expected, "--ensureClient", "ready call expected");
         assertIncludes(call.expected, "不要执行 inject", "ready call expected");
         assertIncludes(call.ask, "密码不要发在联络板", "ready call ask");
         assertIncludes(call.ask, "明确确认", "ready call ask");
