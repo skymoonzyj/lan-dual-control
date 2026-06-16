@@ -50,6 +50,12 @@ Options:
   --json                     Print one machine-readable JSON object.
   --help, -h                 Show this help without probing anything.
 
+Machine-readable JSON fields:
+  commands.mediaReadinessBoardSummary
+                             Secret-free Mac media baseline command for
+                             formal-run prep; it prompts for a password and
+                             never embeds one in argv.
+
 Examples:
   node scripts/mac/check-mac-resume-status.mjs
   node scripts/mac/check-mac-resume-status.mjs --checkBoard --json
@@ -469,6 +475,10 @@ function buildRecommendations({ git, host, board, args }) {
   }
   recommendations.push({
     level: "next",
+    text: `Before a long formal run, refresh the Mac H.264/PCM media baseline: ${makeMediaReadinessBoardSummaryCommand(args)}.`,
+  });
+  recommendations.push({
+    level: "next",
     text: "Next formal path: board sync -> formal password Mac host -> Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input log.",
   });
   recommendations.push({
@@ -522,6 +532,21 @@ function formatBoardHostAddress(host) {
     : null;
   if (lan?.address && lan?.port) return `${lan.address}:${lan.port}`;
   return `${host.probe.host}:${host.probe.port}`;
+}
+
+function makeMediaReadinessBoardSummaryCommand(args) {
+  return [
+    "node scripts/mac/check-mac-host-readiness.mjs",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--checkBoard",
+    "--probeMedia",
+    "--probeMediaResourceSample",
+    "--promptPassword",
+    "--boardSummary",
+  ].join(" ");
 }
 
 function formatBoardBuildDiff(buildDiff) {
@@ -596,6 +621,7 @@ function formatBoardSummary(report) {
     return [
       `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${attention}.`,
       "Next: start formal host with start-mac-host --promptPassword --requirePassword before Windows E2E.",
+      `After host is online, refresh media baseline with ${report.commands.mediaReadinessBoardSummary}.`,
       "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
     ].join(" ");
   }
@@ -611,6 +637,7 @@ function formatBoardSummary(report) {
   return [
     `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}.`,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}.`,
+    `Media baseline command: ${report.commands.mediaReadinessBoardSummary}.`,
     "Next formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
@@ -690,6 +717,9 @@ async function main() {
     git,
     board,
     host,
+    commands: {
+      mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
+    },
     recommendations,
   };
   report.boardSummary = formatBoardSummary(report);

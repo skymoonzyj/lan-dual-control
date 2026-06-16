@@ -109,9 +109,22 @@ function assertNoPasswordLeak(result, label) {
 function assertBoardSummaryShape(text, label) {
   assert(/Mac resume:/.test(text), `${label} should start with Mac resume summary`);
   assert(/repo=/.test(text), `${label} should include repo state`);
+  assert(/media baseline/i.test(text), `${label} should include media baseline guidance`);
+  assert(/check-mac-host-readiness\.mjs/.test(text), `${label} should include the media readiness command`);
   assert(/Do not send passwords/.test(text), `${label} should include password safety note`);
   assert(/--confirmUserWatching/.test(text), `${label} should include inject confirmation flag guidance`);
   assert(!/super-secret-resume-password/.test(text), `${label} should not leak secret-like text`);
+}
+
+function assertMediaReadinessCommand(command, label) {
+  assert(/check-mac-host-readiness\.mjs/.test(command), `${label} should use check-mac-host-readiness`);
+  assert(command.includes("--checkBoard"), `${label} should read Agent Link Board`);
+  assert(command.includes("--probeMedia"), `${label} should probe media`);
+  assert(command.includes("--probeMediaResourceSample"), `${label} should request resource sampling`);
+  assert(command.includes("--promptPassword"), `${label} should use a visible password prompt`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
 }
 
 function checkHelp(args) {
@@ -119,6 +132,7 @@ function checkHelp(args) {
     const result = run(args, [flag]);
     assert(result.status === 0, `${script} ${flag} should exit 0`);
     assert(/\bUsage\b/.test(result.stdout), `${script} ${flag} should print Usage`);
+    assert(/commands\.mediaReadinessBoardSummary/.test(result.stdout), `${script} ${flag} should document media command JSON field`);
   }
   print("OK", "Resume status help exits quickly");
 }
@@ -138,6 +152,7 @@ function checkOfflineJson(args) {
   assert(payload.host?.probe?.port === 9, "offline payload should keep probe port");
   assert(payload.host?.error?.message, "offline payload should include error.message");
   assert(Array.isArray(payload.recommendations), "offline payload should include recommendations");
+  assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary || "", "offline JSON media readiness command");
   assertBoardSummaryShape(payload.boardSummary || "", "offline JSON boardSummary");
   assert(payload.recommendations.some((item) => /start-mac-host/.test(item.text)), "offline recommendations should include startup guidance");
   print("OK", "Offline resume status JSON includes probe, error, and next-step guidance");
@@ -205,7 +220,9 @@ function checkOnlineJson(args) {
   assert(Array.isArray(payload.host.displays), "online payload should include displays");
   assert(Array.isArray(payload.host.lanAddresses), "online payload should include lanAddresses");
   assert(payload.host.buildDiff && typeof payload.host.buildDiff === "object", "online payload should include buildDiff");
+  assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary || "", "online JSON media readiness command");
   assert(Array.isArray(payload.recommendations), "online payload should include recommendations");
+  assert(payload.recommendations.some((item) => /media baseline/.test(item.text) && /--probeMedia/.test(item.text)), "online recommendations should include media baseline command");
   assertBoardSummaryShape(payload.boardSummary || "", "online JSON boardSummary");
   print("OK", "Online resume status JSON includes runtime, permissions, capabilities, displays, LAN addresses, and buildDiff");
 }
