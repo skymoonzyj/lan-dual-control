@@ -51,6 +51,41 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 13:46
+开发端：Windows Codex
+本轮目标：补齐 Mac media 聚合的机器可读状态和 partial 摘要语义。
+完成内容：
+- `scripts/mac/observe-mac-media.mjs` 的 JSON `summary` 新增 `status` 字段，取值为 `ok`、`partial` 或 `failed`。
+- `--boardSummary` 成功时保留 `Mac media baseline passed`，单路成功单路失败时改为 `Mac media baseline partial`，全部执行链路失败时仍显示 `failed <数量>`。
+- 合并时保留 Mac 端已新增的 `--resourceSample` / `resource=off|sampled|unavailable` 能力；资源采样不可用仍不影响视频/音频结果。
+- `scripts/mac/test-mac-media-json-output.mjs` fake-host 回归新增成功、partial failure、全失败三种 `summary.status` 断言，并保留不泄密和不执行 input/inject 的检查；帮助检查失败信息补 status/signal/error，方便 Windows 审查机定位 `spawnSync node.exe EPERM`。
+- Mac host README、当前状态、下一步和任务板同步说明 `summary.status` / partial 摘要。
+修改文件：
+- `scripts/mac/observe-mac-media.mjs`
+- `scripts/mac/test-mac-media-json-output.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/observe-mac-media.mjs`
+- `node --check scripts/mac/test-mac-media-json-output.mjs`
+- `node scripts/mac/test-mac-media-json-output.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-script-help.mjs --script observe-mac-media.mjs --script test-mac-media-json-output.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-script-help.mjs --script observe-windows-host-media.mjs --script test-windows-host-media-board-summary.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps docs scripts shared`
+遗留问题：
+- 本轮只跑 fake Mac host 聚合自测；真实 Mac host 媒体基线仍需在 Mac 本机用正式密码或 `LAN_DUAL_PASSWORD` 运行。
+下一步建议：
+- 双端媒体聚合现在都有 `summary.status=ok|partial|failed`；后续 Agent Link Board 或桌面面板自动化可统一消费该字段。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 13:35
 开发端：Windows Codex
 本轮目标：给 Windows host 媒体聚合 JSON 增加机器可读状态字段。

@@ -124,7 +124,7 @@ function runMediaAsync(extraArgs, args, env = {}) {
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = runMediaSync([flag], args);
-    assert(result.status === 0, `${script} ${flag} should exit 0`);
+    assert(result.status === 0, `${script} ${flag} should exit 0; status=${result.status} signal=${result.signal || "none"} error=${result.error?.message || "none"} output=${outputOf(result).slice(0, 500)}`);
     assert(/\bUsage\b/.test(result.stdout), `${script} ${flag} should print Usage`);
     assert(!/password/i.test(result.stderr || ""), `${script} ${flag} should not prompt for password`);
   }
@@ -479,6 +479,7 @@ async function checkFakeHostJsonSuccess(args) {
     assert(result.status === 0, `fake host media should pass.\n${outputOf(result)}`);
     const payload = parseJson(result.stdout, "fake host media JSON");
     assert(payload.ok === true, "fake host payload should report ok=true");
+    assert(payload.summary?.status === "ok", `fake host summary.status should be ok.\n${result.stdout}`);
     assert(payload.summary?.passed === 2 && payload.summary?.failed === 0, "fake host should pass video and audio");
     assert(payload.video?.ok === true && payload.video?.observation?.frameCount >= 4, "video result should pass with frames");
     assert(payload.audio?.ok === true && payload.audio?.observation?.frameCount >= 8, "audio result should pass with frames");
@@ -537,13 +538,38 @@ async function checkPartialFailureKeepsOtherProbe(args) {
     assert(payload.ok === false, "partial failure should report ok=false");
     assert(payload.video?.ok === false, "video should fail threshold");
     assert(payload.audio?.ok === true, "audio should still run and pass after video failure");
+    assert(payload.summary?.status === "partial", `partial failure summary.status should be partial.\n${result.stdout}`);
     assert(payload.summary?.passed === 1 && payload.summary?.failed === 1, "summary should count one pass and one failure");
     assert(Array.isArray(payload.summary?.failures), "summary should include structured failures");
     assert(payload.summary.failures.some((failure) => failure.id === "video" && /Expected at least/i.test(failure.message || "")), "failures should include video threshold reason");
+    assert(/Mac media baseline partial/.test(payload.boardSummary || ""), "boardSummary should mark partial failure");
     assert(/video=FAIL\(reason=/.test(payload.boardSummary || ""), "boardSummary should include failed video reason");
     assertNoSecretLikeText(outputOf(result), "partial failure output");
   });
   print("OK", "Media aggregate keeps audio result after video failure");
+}
+
+async function checkAllFailureJsonStatus(args) {
+  await withFakeMacHost(async ({ port }) => {
+    const result = await runMediaAsync([
+      "--json",
+      ...baseProbeArgs(port),
+      "--videoMinFrames",
+      "999",
+      "--audioMinFrames",
+      "999",
+    ], args, { LAN_DUAL_PASSWORD: "super-secret-mac-media" });
+
+    assert(result.status !== 0, `all-failure JSON should exit non-zero.\n${outputOf(result)}`);
+    const payload = parseJson(result.stdout, "all-failure JSON");
+    assert(payload.ok === false, "all-failure payload should report ok=false");
+    assert(payload.summary?.status === "failed", `all-failure summary.status should be failed.\n${result.stdout}`);
+    assert(payload.summary?.passed === 0 && payload.summary?.failed === 2, "summary should count two failures");
+    assert(Array.isArray(payload.summary?.failures) && payload.summary.failures.length === 2, "summary should include two structured failures");
+    assert(/Mac media baseline failed 2/.test(payload.boardSummary || ""), "boardSummary should mark full failure count");
+    assertNoSecretLikeText(outputOf(result), "all-failure output");
+  });
+  print("OK", "All-failure media JSON exposes failed status");
 }
 
 async function checkFailureBoardSummary(args) {
@@ -558,7 +584,7 @@ async function checkFailureBoardSummary(args) {
     assert(result.status !== 0, `failure boardSummary should exit non-zero.\n${outputOf(result)}`);
     const lines = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean);
     assert(lines.length === 1, `failure boardSummary should print exactly one line, got ${lines.length}\n${result.stdout}`);
-    assert(lines[0].includes("Mac media baseline failed 1"), "failure boardSummary should identify failed count");
+    assert(lines[0].includes("Mac media baseline partial"), "failure boardSummary should identify partial failure");
     assert(lines[0].includes("request=1280x720@30Hz/12000kbps/h264/450ms,audio=450ms"), "failure boardSummary should include media request context");
     assert(lines[0].includes("video=FAIL(reason="), "failure boardSummary should include video failure reason");
     assert(lines[0].includes("audio=") && !lines[0].includes("audio=FAIL"), "failure boardSummary should keep passing audio result");
@@ -636,6 +662,7 @@ async function main() {
   await checkFakeHostJsonSuccess(args);
   await checkResourceSampling(args);
   await checkPartialFailureKeepsOtherProbe(args);
+  await checkAllFailureJsonStatus(args);
   await checkFailureBoardSummary(args);
   await checkBoardSummary(args);
   await checkSkipBoardSummaryRequest(args);

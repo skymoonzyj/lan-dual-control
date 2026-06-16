@@ -712,13 +712,24 @@ function formatBoardReason(value, maxLength = 140) {
   return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}...` : normalized;
 }
 
+function mediaStatusFromCounts(ok, passed, failed) {
+  if (ok) return "ok";
+  return Number(passed) > 0 && Number(failed) > 0 ? "partial" : "failed";
+}
+
+function boardStatus(report) {
+  const status = report.summary?.status || mediaStatusFromCounts(report.ok, report.summary?.passed, report.summary?.failed);
+  if (status === "ok") return "passed";
+  if (status === "partial") return "partial";
+  const failed = Number(report.summary?.failed) || report.probes.filter((probe) => !probe.ok).length;
+  return `failed ${failed}`;
+}
+
 function makeBoardSummary(report) {
-  const failed = report.probes.filter((probe) => !probe.ok);
-  const status = failed.length === 0 ? "passed" : `failed ${failed.length}`;
   const video = report.probes.find((probe) => probe.id === "video");
   const audio = report.probes.find((probe) => probe.id === "audio");
   const parts = [
-    `Mac media baseline ${status}: host=${report.target.host}:${report.target.port}`,
+    `Mac media baseline ${boardStatus(report)}: host=${report.target.host}:${report.target.port}`,
     `request=${formatRequestSummary(report.args)}`,
     `video=${formatProbeSummary(video)}`,
     `audio=${formatProbeSummary(audio)}`,
@@ -791,8 +802,10 @@ function summarizeArgs(args) {
 }
 
 function makeReport(args, probes, resource, startedAt, elapsedMs) {
+  const passed = probes.filter((probe) => probe.ok).length;
+  const failed = probes.filter((probe) => !probe.ok).length;
   const report = {
-    ok: probes.every((probe) => probe.ok),
+    ok: failed === 0,
     startedAt,
     finishedAt: new Date().toISOString(),
     elapsedMs,
@@ -803,8 +816,9 @@ function makeReport(args, probes, resource, startedAt, elapsedMs) {
     video: probes.find((probe) => probe.id === "video") || null,
     audio: probes.find((probe) => probe.id === "audio") || null,
     summary: {
-      passed: probes.filter((probe) => probe.ok).length,
-      failed: probes.filter((probe) => !probe.ok).length,
+      status: mediaStatusFromCounts(failed === 0, passed, failed),
+      passed,
+      failed,
       failures: probes
         .filter((probe) => !probe.ok)
         .map((probe) => ({
