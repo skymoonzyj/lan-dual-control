@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
-const benchmarkScript = resolve(scriptDir, "benchmark-windows-wgc-settings.mjs");
+const benchmarkScript = process.env.LAN_DUAL_WINDOWS_WGC_BENCHMARK_SCRIPT
+  ? resolve(process.env.LAN_DUAL_WINDOWS_WGC_BENCHMARK_SCRIPT)
+  : resolve(scriptDir, "benchmark-windows-wgc-settings.mjs");
 const helperExe = resolve(repoRoot, "apps/windows-wgc-helper/target/debug/lan-dual-wgc-helper.exe");
 
 const defaultProfiles = ["60:20000:balanced"];
@@ -40,6 +42,7 @@ const defaults = {
   motionStimulusHeight: 540,
   motionStimulusWarmupMs: 1200,
   motionStimulusBrowser: "",
+  progressIntervalMs: 10000,
   skipBuild: false,
   json: false,
   boardSummary: false,
@@ -83,6 +86,7 @@ Options:
   --motionStimulusHeight <px>           Animated window height. Default: ${defaults.motionStimulusHeight}
   --motionStimulusWarmupMs <ms>         Wait after opening the animation. Default: ${defaults.motionStimulusWarmupMs}
   --motionStimulusBrowser <path>        Browser exe for browser motion stimulus
+  --progressIntervalMs <ms>             Print per-source wait progress every N ms; 0 disables. Default: ${defaults.progressIntervalMs}
   --boardSummary                        Print one Agent Link Board-safe summary line
   --json                                Print JSON result
   --verbose                             Print child command output on failure
@@ -157,6 +161,10 @@ function parseArgs(argv) {
   args.motionStimulusHeight = Math.max(240, Number(args.motionStimulusHeight) || defaults.motionStimulusHeight);
   args.motionStimulusWarmupMs = Math.max(300, Number(args.motionStimulusWarmupMs) || defaults.motionStimulusWarmupMs);
   args.motionStimulusBrowser = String(args.motionStimulusBrowser || "").trim();
+  const progressIntervalMs = Number(args.progressIntervalMs);
+  args.progressIntervalMs = Number.isFinite(progressIntervalMs)
+    ? Math.max(0, progressIntervalMs)
+    : defaults.progressIntervalMs;
   args.skipBuild = booleanArg(args.skipBuild);
   args.json = booleanArg(args.json);
   args.boardSummary = booleanArg(args.boardSummary);
@@ -226,7 +234,27 @@ function normalizeRatioArg(value, fallback = 1) {
   return Math.max(0, Math.min(1, number));
 }
 
-function runCommand(command, commandArgs, { cwd = repoRoot, env = process.env, timeoutMs, verbose = false } = {}) {
+function formatSeconds(ms) {
+  const seconds = Math.max(0, Number(ms) || 0) / 1000;
+  if (seconds >= 10) {
+    return `${seconds.toFixed(0)}s`;
+  }
+  return `${seconds.toFixed(1)}s`;
+}
+
+function progressEveryText(args) {
+  return args.progressIntervalMs > 0 ? formatSeconds(args.progressIntervalMs) : "off";
+}
+
+function runCommand(command, commandArgs, {
+  cwd = repoRoot,
+  env = process.env,
+  timeoutMs,
+  verbose = false,
+  progressIntervalMs = 0,
+  progressLabel = "",
+  expectedMs = 0,
+} = {}) {
   return new Promise((resolveRun) => {
     const child = spawn(command, commandArgs, {
       cwd,
@@ -237,7 +265,21 @@ function runCommand(command, commandArgs, { cwd = repoRoot, env = process.env, t
     let stdout = "";
     let stderr = "";
     const startedAt = performance.now();
+    const progressMs = Math.max(0, Number(progressIntervalMs) || 0);
+    const expectedText = Number(expectedMs) > 0 ? ` / expected ${formatSeconds(expectedMs)}` : "";
+    const progressTimer = progressMs > 0 && progressLabel
+      ? setInterval(() => {
+        const elapsedMs = performance.now() - startedAt;
+        const timeoutLeftMs = Number(timeoutMs) > 0 ? Math.max(0, timeoutMs - elapsedMs) : 0;
+        const timeoutText = Number(timeoutMs) > 0 ? ` / timeout left ${formatSeconds(timeoutLeftMs)}` : "";
+        console.log(`[INFO] ${progressLabel} progress: elapsed ${formatSeconds(elapsedMs)}${expectedText}${timeoutText}`);
+      }, progressMs)
+      : null;
+    progressTimer?.unref?.();
     const timer = setTimeout(() => {
+      if (progressTimer) {
+        clearInterval(progressTimer);
+      }
       child.kill();
       resolveRun({
         ok: false,
@@ -257,6 +299,9 @@ function runCommand(command, commandArgs, { cwd = repoRoot, env = process.env, t
     });
     child.on("error", (error) => {
       clearTimeout(timer);
+      if (progressTimer) {
+        clearInterval(progressTimer);
+      }
       resolveRun({
         ok: false,
         timedOut: false,
@@ -268,6 +313,9 @@ function runCommand(command, commandArgs, { cwd = repoRoot, env = process.env, t
     });
     child.on("close", (exitCode) => {
       clearTimeout(timer);
+      if (progressTimer) {
+        clearInterval(progressTimer);
+      }
       if (verbose && exitCode !== 0) {
         console.error(stderr.trim());
         console.error(stdout.trim());
@@ -329,6 +377,8 @@ async function runSourceBenchmark(args, source, sourceIndex) {
     String(args.resourceSampleTimeoutMs),
     "--repeatLastFrameMode",
     args.repeatLastFrameMode,
+    "--progressIntervalMs",
+    String(args.progressIntervalMs),
     "--h264Bridge",
     "--h264Source",
     source,
@@ -363,10 +413,14 @@ async function runSourceBenchmark(args, source, sourceIndex) {
     argv.push("--skipBuild");
   }
 
+  const childTimeoutMs = args.timeoutMs + args.durationMs * Math.max(1, args.profiles.length) + 15000;
   const result = await runCommand(process.execPath, argv, {
     cwd: repoRoot,
-    timeoutMs: args.timeoutMs + args.durationMs * Math.max(1, args.profiles.length) + 15000,
+    timeoutMs: childTimeoutMs,
     verbose: args.verbose,
+    progressIntervalMs: args.json || args.boardSummary ? 0 : args.progressIntervalMs,
+    progressLabel: `source ${source} (${sourceIndex + 1}/${args.sources.length})`,
+    expectedMs: args.durationMs * Math.max(1, args.profiles.length),
   });
   const parsed = parseMaybeJson(result.stdout);
   if (!result.ok && parsed) {
@@ -583,7 +637,10 @@ async function main() {
   for (let index = 0; index < args.sources.length; index += 1) {
     const source = args.sources[index];
     if (!args.json && !args.boardSummary) {
-      console.log(`[RUN] WGC H.264 source ${source}`);
+      console.log(
+        `[RUN] WGC H.264 source ${source} (${index + 1}/${args.sources.length}) ` +
+        `profiles=${args.profiles.length} duration=${formatSeconds(args.durationMs)} progressEvery=${progressEveryText(args)}`,
+      );
     }
     const run = await runSourceBenchmark(args, source, index);
     runs.push(run);
@@ -611,6 +668,7 @@ async function main() {
       motionStimulus: args.motionStimulus,
       resourceSample: args.resourceSample,
       resourceSampleTree: args.resourceSampleTree,
+      progressIntervalMs: args.progressIntervalMs,
     },
     comparisons,
     runs,

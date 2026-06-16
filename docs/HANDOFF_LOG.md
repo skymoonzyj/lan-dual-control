@@ -19,6 +19,39 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 22:25
+开发端：Windows Codex
+本轮目标：让 Windows WGC benchmark/compare 在长时间子进程等待时有进度反馈，避免现场误判卡住。
+完成内容：
+- `benchmark-windows-wgc-settings.mjs` 新增 `--progressIntervalMs`，普通输出会在 helper 构建和每个 profile 子观察期间打印 elapsed、expected 和 timeout left；默认 10 秒一次，`0` 可关闭。
+- `compare-windows-wgc-h264-sources.mjs` 新增同名参数，普通输出会在每个 raw-bgra/NV12 source 子 benchmark 期间打印等待进度，并把该参数透传给子 benchmark。
+- `--json` 和 `--boardSummary` 保持干净，不混入进度行。
+- 新增 `test-windows-wgc-progress-output.mjs`，用临时 fake observer/benchmark 覆盖普通进度输出、JSON/boardSummary 干净和不泄密。
+- Windows host README、当前状态、下一步和任务板已同步。
+修改文件：
+- `scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `scripts/windows/compare-windows-wgc-h264-sources.mjs`
+- `scripts/windows/test-windows-wgc-progress-output.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `node --check scripts/windows/compare-windows-wgc-h264-sources.mjs`
+- `node --check scripts/windows/test-windows-wgc-progress-output.mjs`
+- `node scripts/windows/test-windows-wgc-progress-output.mjs`（普通沙盒首次 `spawn EPERM`，按允许子进程方式重跑通过）
+遗留问题：
+- 本轮只验证进度输出和机器输出纯净性，未启动真实 WGC helper、未连接 Mac、未认证正式服务、未发送输入或执行 `inject`。
+下一步建议：
+- 后续真实 WGC 性能长测可保留默认 10 秒心跳；现场需要更密集反馈时加 `--progressIntervalMs 5000`，通讯板摘要继续使用 `--boardSummary`。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 22:05
 开发端：Windows Codex
 本轮目标：让 Windows host 视频、音频和媒体聚合观察在长时间基线时有进度反馈。

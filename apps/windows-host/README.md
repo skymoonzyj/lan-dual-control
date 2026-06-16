@@ -458,6 +458,8 @@ WGC 参数基准脚本位于 `scripts/windows/benchmark-windows-wgc-settings.mjs
 
 需要快速比较 WGC H.264 raw-bgra 与 NV12 两条内部源格式时，使用 `scripts/windows/compare-windows-wgc-h264-sources.mjs`。它只是包装现有 benchmark，默认顺序跑 raw-bgra 和 NV12，并输出普通摘要、`--json` 或可发 Agent Link Board 的 `--boardSummary`；不会连接 Mac、不会认证正式密码、不会发送输入或执行 `inject`。日常收口也可以用 `check-windows-host-readiness --probeWgcH264Sources` 跑一组更短的 30Hz/10Mbps readiness 探针。
 
+普通输出模式下，WGC benchmark 会在 helper 构建和每个 profile 子观察期间默认每 10 秒打印一次进度，WGC H.264 source compare 会在每个 source 子 benchmark 期间默认每 10 秒打印一次进度；可用 `--progressIntervalMs 5000` 改成 5 秒一次，传 `0` 可关闭。`--json` 和 `--boardSummary` 仍保持纯机器输出/单行摘要，不混入进度心跳，方便继续直接贴 Agent Link Board 或交给自动化解析。
+
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-mode.mjs
 node E:\codex\lan-dual-control\scripts\windows\test-windows-wgc-mode.mjs --mockHelper --durationMs 1200 --minFrames 5

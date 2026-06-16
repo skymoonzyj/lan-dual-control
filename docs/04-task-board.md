@@ -344,6 +344,7 @@ Mac 端：
 - [x] Windows WGC 动态画面 benchmark 刺激源。（`benchmark-windows-wgc-settings --motionStimulus` 可短暂打开 WinForms 或 browser 动画窗口；本机动态短测仍未显著提高 unique helper source FPS，指向 helper 读回/事件节奏而非单纯静态桌面。）
 - [x] Windows WGC helper 内部阶段耗时诊断。（helper frame header 新增 `helperTimingMs`，Windows host 透传到 JPEG/H.264 `video_frame`，observer/benchmark 汇总 wait/try/copy/map/convert 等阶段；真实 NV12/H.264 短测显示瓶颈集中在 CPU BGRA→NV12 转换/缩放。）
 - [x] Windows WGC H.264 raw-bgra vs NV12 源格式对照脚本。（`compare-windows-wgc-h264-sources.mjs` 包装现有 benchmark，输出 FPS、重复帧、helperTiming、资源 delta、`--json` 和无密 `--boardSummary`；`check-windows-host-readiness --probeWgcH264Sources` 可跑一组更短的 readiness 对照。）
+- [x] Windows WGC benchmark/compare 长等待进度心跳。（`benchmark-windows-wgc-settings.mjs` 和 `compare-windows-wgc-h264-sources.mjs` 普通输出默认每 10 秒报告子进程等待进度，`--progressIntervalMs` 可调或关闭，`--json` / `--boardSummary` 保持干净。）
 - [x] Mac client 接收 Windows WGC 轻量重复帧。（`--expectRepeatSignalVideo` 会启动 WGC mock helper，验证 `repeatPreviousFrame` 无 `dataUrl` 时保持上一帧可见并显示“重复”计数。）
 - [x] Windows host 可选 `binary-jpeg` WebSocket 二进制视频帧。（Mac client 声明 `preferredVideoTransport=binary-jpeg` 后，JPEG 元数据保留 JSON 头、图片改走原始 JPEG 字节；`--expectBinaryVideo` 页面级自检通过。）
 - [x] Windows host `ffmpeg-h264` 模式的 MJPEG/JPEG fallback。（Mac client/WebCodecs 拒绝当前 H.264 `codecString` 后发送 `preferredVideoCodec=mjpeg` / `preferredVideoEncoding=data-url`，同一个 host 会切到 `windows-ffmpeg-gdigrab-mjpeg` 并恢复 JPEG 画面；`--expectH264Fallback` 页面级自检通过。）

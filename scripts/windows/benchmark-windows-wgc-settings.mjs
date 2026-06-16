@@ -9,7 +9,9 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
 const helperDir = resolve(repoRoot, "apps/windows-wgc-helper");
 const helperExe = resolve(helperDir, "target/debug/lan-dual-wgc-helper.exe");
-const observeScript = resolve(scriptDir, "observe-windows-host-video.mjs");
+const observeScript = process.env.LAN_DUAL_WINDOWS_WGC_OBSERVE_SCRIPT
+  ? resolve(process.env.LAN_DUAL_WINDOWS_WGC_OBSERVE_SCRIPT)
+  : resolve(scriptDir, "observe-windows-host-video.mjs");
 
 const defaultProfiles = [
   "30:10000:balanced",
@@ -49,6 +51,7 @@ const defaults = {
   motionStimulusHeight: 540,
   motionStimulusWarmupMs: 1200,
   motionStimulusBrowser: "",
+  progressIntervalMs: 10000,
   skipBuild: false,
   json: false,
   verbose: false,
@@ -92,6 +95,7 @@ Options:
   --motionStimulusHeight <px>           Animated window height. Default: ${defaults.motionStimulusHeight}
   --motionStimulusWarmupMs <ms>         Wait after opening the animation. Default: ${defaults.motionStimulusWarmupMs}
   --motionStimulusBrowser <path>        Browser exe for the animation window. Default: auto-detect Edge
+  --progressIntervalMs <ms>             Print per-profile wait progress every N ms; 0 disables. Default: ${defaults.progressIntervalMs}
   --json                                Print JSON result
   --verbose                             Print child command stderr/stdout on failure
   --help, -h                            Show this help without starting a host
@@ -160,6 +164,10 @@ function parseArgs(argv) {
   args.motionStimulusHeight = Math.max(240, Number(args.motionStimulusHeight) || defaults.motionStimulusHeight);
   args.motionStimulusWarmupMs = Math.max(300, Number(args.motionStimulusWarmupMs) || defaults.motionStimulusWarmupMs);
   args.motionStimulusBrowser = String(args.motionStimulusBrowser || process.env.LAN_DUAL_MOTION_STIMULUS_BROWSER || "").trim();
+  const progressIntervalMs = Number(args.progressIntervalMs);
+  args.progressIntervalMs = Number.isFinite(progressIntervalMs)
+    ? Math.max(0, progressIntervalMs)
+    : defaults.progressIntervalMs;
   args.skipBuild = booleanArg(args.skipBuild);
   args.json = booleanArg(args.json);
   args.verbose = booleanArg(args.verbose);
@@ -253,11 +261,31 @@ function delay(ms) {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }
 
+function formatSeconds(ms) {
+  const seconds = Math.max(0, Number(ms) || 0) / 1000;
+  if (seconds >= 10) {
+    return `${seconds.toFixed(0)}s`;
+  }
+  return `${seconds.toFixed(1)}s`;
+}
+
+function progressEveryText(args) {
+  return args.progressIntervalMs > 0 ? formatSeconds(args.progressIntervalMs) : "off";
+}
+
 function addArg(argv, name, value) {
   argv.push(name, String(value));
 }
 
-function runCommand(command, commandArgs, { cwd = repoRoot, env = process.env, timeoutMs, verbose = false } = {}) {
+function runCommand(command, commandArgs, {
+  cwd = repoRoot,
+  env = process.env,
+  timeoutMs,
+  verbose = false,
+  progressIntervalMs = 0,
+  progressLabel = "",
+  expectedMs = 0,
+} = {}) {
   return new Promise((resolveRun) => {
     const child = spawn(command, commandArgs, {
       cwd,
@@ -268,7 +296,21 @@ function runCommand(command, commandArgs, { cwd = repoRoot, env = process.env, t
     let stdout = "";
     let stderr = "";
     const startedAt = performance.now();
+    const progressMs = Math.max(0, Number(progressIntervalMs) || 0);
+    const expectedText = Number(expectedMs) > 0 ? ` / expected ${formatSeconds(expectedMs)}` : "";
+    const progressTimer = progressMs > 0 && progressLabel
+      ? setInterval(() => {
+        const elapsedMs = performance.now() - startedAt;
+        const timeoutLeftMs = Number(timeoutMs) > 0 ? Math.max(0, timeoutMs - elapsedMs) : 0;
+        const timeoutText = Number(timeoutMs) > 0 ? ` / timeout left ${formatSeconds(timeoutLeftMs)}` : "";
+        console.log(`[INFO] ${progressLabel} progress: elapsed ${formatSeconds(elapsedMs)}${expectedText}${timeoutText}`);
+      }, progressMs)
+      : null;
+    progressTimer?.unref?.();
     const timer = setTimeout(() => {
+      if (progressTimer) {
+        clearInterval(progressTimer);
+      }
       child.kill();
       resolveRun({
         ok: false,
@@ -288,6 +330,9 @@ function runCommand(command, commandArgs, { cwd = repoRoot, env = process.env, t
     });
     child.on("error", (error) => {
       clearTimeout(timer);
+      if (progressTimer) {
+        clearInterval(progressTimer);
+      }
       resolveRun({
         ok: false,
         exitCode: null,
@@ -299,6 +344,9 @@ function runCommand(command, commandArgs, { cwd = repoRoot, env = process.env, t
     });
     child.on("close", (exitCode) => {
       clearTimeout(timer);
+      if (progressTimer) {
+        clearInterval(progressTimer);
+      }
       const result = {
         ok: exitCode === 0,
         exitCode,
@@ -579,6 +627,9 @@ async function buildHelper(args) {
     cwd: helperDir,
     timeoutMs: args.timeoutMs,
     verbose: args.verbose,
+    progressIntervalMs: args.json ? 0 : args.progressIntervalMs,
+    progressLabel: "WGC helper cargo build",
+    expectedMs: args.timeoutMs,
   });
   if (!result.ok) {
     throw new Error(`cargo build failed${result.stderr.trim() ? `: ${result.stderr.trim()}` : ""}`);
@@ -652,6 +703,8 @@ async function runProfile(args, profile, index) {
     String(args.repeatLastFrame),
     "--wgcRepeatLastFrameMode",
     args.repeatLastFrameMode,
+    "--progressIntervalMs",
+    String(args.progressIntervalMs),
     "--json",
   ];
   if (args.h264Bridge) {
@@ -668,11 +721,15 @@ async function runProfile(args, profile, index) {
     }
   }
 
+  const childTimeoutMs = args.timeoutMs + args.durationMs + 5000;
   const result = await runCommand(process.execPath, argv, {
     cwd: repoRoot,
     env,
-    timeoutMs: args.timeoutMs + args.durationMs + 5000,
+    timeoutMs: childTimeoutMs,
     verbose: args.verbose,
+    progressIntervalMs: args.json ? 0 : args.progressIntervalMs,
+    progressLabel: `profile ${index + 1}/${args.profiles.length} ${profile.name}`,
+    expectedMs: args.durationMs,
   });
   if (!result.ok) {
     return {
@@ -798,7 +855,10 @@ async function main() {
     for (let index = 0; index < args.profiles.length; index += 1) {
       const profile = args.profiles[index];
       if (!args.json) {
-        console.log(`[RUN] ${profile.name}`);
+        console.log(
+          `[RUN] ${profile.name} (${index + 1}/${args.profiles.length}) ` +
+          `duration=${formatSeconds(args.durationMs)} progressEvery=${progressEveryText(args)}`,
+        );
       }
       const result = await runProfile(args, profile, index);
       results.push(result);
@@ -833,6 +893,7 @@ async function main() {
       motionStimulusWidth: args.motionStimulusWidth,
       motionStimulusHeight: args.motionStimulusHeight,
       motionStimulusWarmupMs: args.motionStimulusWarmupMs,
+      progressIntervalMs: args.progressIntervalMs,
     },
     motionStimulus: {
       enabled: motionStimulus.enabled,
