@@ -32,6 +32,7 @@ const defaults = {
   minAudioFrames: 0,
   minAudioFps: 0,
   maxAudioGapMs: 0,
+  progressIntervalMs: 10000,
   clipboardText: false,
   clipboardHostToClient: false,
   clipboardFile: false,
@@ -81,6 +82,7 @@ Options:
   --minAudioFrames <count>            Require at least this many audio frames during observation.
   --minAudioFps <fps>                 Require observed audio FPS during observation.
   --maxAudioGapMs <ms>                Fail if audio frame arrival gap exceeds this value.
+  --progressIntervalMs <ms>           Print video/audio observation progress every N ms; 0 disables. Default: ${defaults.progressIntervalMs}
   --preferredVideoCodec <codec>       Requested codec: mjpeg or h264. Default: ${defaults.preferredVideoCodec}
   --requireRealVideo                  Reject mock/svg video frames.
   --requireH264                       Require H.264 Annex B video; implies preferred codec h264.
@@ -149,6 +151,10 @@ function parseArgs(argv) {
   args.minAudioFrames = Math.max(0, Number(args.minAudioFrames) || 0);
   args.minAudioFps = Math.max(0, Number(args.minAudioFps) || 0);
   args.maxAudioGapMs = Math.max(0, Number(args.maxAudioGapMs) || 0);
+  const progressIntervalMs = Number(args.progressIntervalMs);
+  args.progressIntervalMs = Number.isFinite(progressIntervalMs)
+    ? Math.max(0, progressIntervalMs)
+    : defaults.progressIntervalMs;
   const clipboardRoundTrip = booleanArg(args.clipboardRoundTrip);
   const clipboardFileRoundTrip = booleanArg(args.clipboardFileRoundTrip);
   args.clipboardText = booleanArg(args.clipboardText) || booleanArg(args.clipboard) || clipboardRoundTrip;
@@ -953,6 +959,40 @@ function finishMediaStats(stats) {
   };
 }
 
+function formatSeconds(ms) {
+  return `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
+}
+
+function printObservationStart(label, durationMs, args, maxGapMs) {
+  const intervalText = args.progressIntervalMs > 0 ? formatSeconds(args.progressIntervalMs) : "off";
+  const gapText = maxGapMs > 0 ? `${maxGapMs}ms` : "off";
+  print(
+    "INFO",
+    `${label} observation started: target=${formatSeconds(durationMs)}, progressEvery=${intervalText}, maxGap=${gapText}.`,
+  );
+}
+
+function printMediaProgress(label, stats, deadline, now = performance.now()) {
+  const elapsedMs = Math.max(1, now - stats.startedAt);
+  const totalMs = Math.max(1, deadline - stats.startedAt);
+  const remainingMs = Math.max(0, deadline - now);
+  const percent = Math.min(100, Math.max(0, (elapsedMs / totalMs) * 100));
+  const fps = (stats.frames * 1000) / elapsedMs;
+  print(
+    "INFO",
+    `${label} progress: ${stats.frames} frames / ${formatSeconds(elapsedMs)} elapsed / ${formatSeconds(remainingMs)} left / ${percent.toFixed(0)}% / ${fps.toFixed(2)} FPS / max gap ${Math.round(stats.maxGapMs)} ms.`,
+  );
+}
+
+function maybePrintMediaProgress(label, stats, deadline, nextProgressAt, intervalMs) {
+  if (nextProgressAt <= 0) return nextProgressAt;
+  const now = performance.now();
+  if (now < nextProgressAt || now >= deadline) return nextProgressAt;
+  printMediaProgress(label, stats, deadline, now);
+  const next = nextProgressAt + Math.max(1, intervalMs);
+  return next <= now ? now + Math.max(1, intervalMs) : next;
+}
+
 function assertMediaStats(summary, { minFrames, minFps, label }) {
   const problems = [];
   if (minFrames > 0 && summary.frames < minFrames) {
@@ -970,6 +1010,7 @@ async function observeVideoFrames(client, args, answer, firstFrame) {
   if (!args.observeVideoMs) return;
 
   const stats = createMediaStats("video", args.maxVideoGapMs);
+  printObservationStart("Video", args.observeVideoMs, args, args.maxVideoGapMs);
   if (args.requireH264) {
     assertH264VideoFrame(firstFrame, answer, { silent: true });
   } else if (args.requireRealVideo) {
@@ -978,6 +1019,7 @@ async function observeVideoFrames(client, args, answer, firstFrame) {
   recordMediaFrame(stats, firstFrame, answer);
 
   const deadline = performance.now() + args.observeVideoMs;
+  let nextProgressAt = args.progressIntervalMs > 0 ? stats.startedAt + args.progressIntervalMs : 0;
   while (performance.now() < deadline) {
     const remainingMs = deadline - performance.now();
     const waitMs = Math.max(1, Math.min(remainingMs, args.maxVideoGapMs || args.timeoutMs));
@@ -989,6 +1031,7 @@ async function observeVideoFrames(client, args, answer, firstFrame) {
         assertRealVideoFrame(frame, answer, { silent: true });
       }
       recordMediaFrame(stats, frame, answer);
+      nextProgressAt = maybePrintMediaProgress("Video", stats, deadline, nextProgressAt, args.progressIntervalMs);
     } catch (error) {
       if (performance.now() >= deadline) {
         break;
@@ -1015,6 +1058,7 @@ async function observeAudioFrames(client, args, answer, firstAudioFrame = null) 
   if (!args.observeAudioMs) return firstAudioFrame;
 
   const stats = createMediaStats("audio", args.maxAudioGapMs);
+  printObservationStart("Audio", args.observeAudioMs, args, args.maxAudioGapMs);
   let audioFrame = firstAudioFrame;
   if (!audioFrame) {
     audioFrame = await client.waitFor("audio_frame", Math.max(args.timeoutMs, args.maxAudioGapMs || 0, 10000));
@@ -1023,6 +1067,7 @@ async function observeAudioFrames(client, args, answer, firstAudioFrame = null) 
   recordMediaFrame(stats, audioFrame, answer);
 
   const deadline = performance.now() + args.observeAudioMs;
+  let nextProgressAt = args.progressIntervalMs > 0 ? stats.startedAt + args.progressIntervalMs : 0;
   while (performance.now() < deadline) {
     const remainingMs = deadline - performance.now();
     const waitMs = Math.max(1, Math.min(remainingMs, args.maxAudioGapMs || args.timeoutMs));
@@ -1030,6 +1075,7 @@ async function observeAudioFrames(client, args, answer, firstAudioFrame = null) 
       const frame = await client.waitFor("audio_frame", waitMs);
       assertAudioFrame(frame, answer, { silent: true });
       recordMediaFrame(stats, frame, answer);
+      nextProgressAt = maybePrintMediaProgress("Audio", stats, deadline, nextProgressAt, args.progressIntervalMs);
     } catch (error) {
       if (performance.now() >= deadline) {
         break;

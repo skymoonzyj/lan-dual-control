@@ -72,6 +72,8 @@ node E:\codex\lan-dual-control\scripts\windows\test-coordinate-mapping.mjs --hel
 脚本会先回归画面内悬浮控制中心，确认悬浮层、摘要、画质、缩放、声音、音量、全屏和窗口按钮能同步到原工具栏与页面布局；随后会模拟适应窗口黑边输入，确认黑边移动、点击、滚轮不会发远控事件，画面内按下后移到黑边松开也能正常释放。连接成功后还会等待刷新率卡片显示数值型“实收 FPS”和“协商 Hz”，避免把请求刷新率误当成真实帧率。
 只需要快速检查诊断条、悬浮控制中心和黑边输入防护时，可加 `--diagnosticsOnly`，不会连接被控端；该路径也会模拟 Mac host `runtime`，确认诊断条能显示 PID、运行时长和 build，并覆盖顶部输入状态的安全日志/真实控制/被拒绝提示、视频帧新鲜度显示、时钟偏差提示、H.264 Annex B/AVC 关键帧识别 helper，以及自动重连倒计时和“立即重连”按钮。Mac host 重启后，可再加 `--discover --expectDiscoveryRuntimeBuildId <build-id>`，脚本会先用 `discover-lan-hosts` 自动选中最佳 Mac host，再通过真实 `/discovery` 无密码验收设备列表、刷新后自动选中 WebSocket 设备、以及诊断条显示的 runtime。已知 IP 且不想扫整段局域网时，可组合 `--discover --discoverNoLocalSubnets --host <Mac IP> --port 43770`。
 
+正式 Mac E2E 长测仍走 `check-mac-formal-e2e.mjs --promptPassword`，密码只经环境变量传给子探针；其中 5 分钟视频观察和音频观察会先打印观察目标，并默认每 10 秒输出一次进度心跳，包含已收帧数、剩余时间、当前 FPS 和最大帧间隔，避免现场误判为卡住。需要调试心跳频率时可加 `--progressIntervalMs <ms>`，传 `0` 可关闭。
+
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\discover-lan-hosts.mjs
 node E:\codex\lan-dual-control\scripts\windows\discover-lan-hosts.mjs --boardSummary --requireMacHost
@@ -85,6 +87,7 @@ node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs -
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password --requireH264
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password --injectPcmAudio
+node E:\codex\lan-dual-control\scripts\windows\check-mac-formal-e2e.mjs --discover --promptPassword
 ```
 
 该脚本会保留浏览器 GPU/视频合成能力，避免自检环境把 WebCodecs H.264 误判为不支持；真实 Mac 127.0.0.1:43770 / build `db48055` 已验证 `avc1.420029:annexb` 解码到 1920×1080 canvas，`H264Errors=0`。

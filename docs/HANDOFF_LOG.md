@@ -19,6 +19,38 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 21:25
+开发端：Windows Codex
+本轮目标：解决正式 Mac E2E 长测中间无输出、现场看起来像卡住的问题。
+完成内容：
+- `probe-mac-host.mjs` 的视频/音频观察会先打印目标时长，随后按 `--progressIntervalMs` 周期输出帧数、剩余时间、当前 FPS 和最大帧间隔。
+- `check-mac-formal-e2e.mjs` 新增同名 `--progressIntervalMs` 参数并传给底层探针，默认 10 秒；传 `0` 可关闭。
+- formal E2E mock fast path 回归把心跳间隔降到 200ms，断言 `Video observation started` 和 `Video progress:` 出现，同时继续确认不泄露密码。
+- Windows client README、当前状态、下一步和任务板已同步说明长测心跳。
+修改文件：
+- `scripts/windows/probe-mac-host.mjs`
+- `scripts/windows/check-mac-formal-e2e.mjs`
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/probe-mac-host.mjs`
+- `node --check scripts/windows/check-mac-formal-e2e.mjs`
+- `node --check scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 45000`
+遗留问题：
+- 本轮不连接真实 Mac、不输入正式密码、不执行 `inject`；真实 5 分钟长测可在用户准备好密码后复跑确认现场观感。
+下一步建议：
+- 下次正式跑 `check-mac-formal-e2e --discover --promptPassword` 时，观察 5 分钟 H.264 阶段是否每 10 秒输出心跳；如果需要更密集现场反馈可临时加 `--progressIntervalMs 5000`。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 21:05
 开发端：Windows Codex
 本轮目标：让 Windows 控制端导出日志能记录重连等待诊断。

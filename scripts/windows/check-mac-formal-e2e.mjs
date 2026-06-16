@@ -24,6 +24,7 @@ const defaults = {
   minAudioFrames: 900,
   minAudioFps: 40,
   maxAudioGapMs: 1000,
+  progressIntervalMs: 10000,
   width: 1920,
   height: 1080,
   fps: 60,
@@ -77,6 +78,7 @@ Options:
   --minAudioFrames <count>       Required observed audio frames. Default: ${defaults.minAudioFrames}
   --minAudioFps <fps>            Required observed audio FPS. Default: ${defaults.minAudioFps}
   --maxAudioGapMs <ms>           Max audio arrival gap. Default: ${defaults.maxAudioGapMs}
+  --progressIntervalMs <ms>      Print media observation progress every N ms; 0 disables. Default: ${defaults.progressIntervalMs}
   --width <px>                   Requested width. Default: ${defaults.width}
   --height <px>                  Requested height. Default: ${defaults.height}
   --fps <fps>                    Requested refresh rate. Default: ${defaults.fps}
@@ -169,6 +171,7 @@ function parseArgs(argv) {
     "minAudioFrames",
     "minAudioFps",
     "maxAudioGapMs",
+    "progressIntervalMs",
     "width",
     "height",
     "fps",
@@ -272,6 +275,7 @@ function makeFormalRunPlan(args) {
       minFrames: args.minVideoFrames,
       minFps: args.minVideoFps,
       maxGapMs: args.maxVideoGapMs,
+      progressIntervalMs: args.progressIntervalMs,
       allowMockVideo: args.allowMockVideo,
     },
     audio: {
@@ -280,6 +284,7 @@ function makeFormalRunPlan(args) {
       minFrames: args.skipAudio ? 0 : args.minAudioFrames,
       minFps: args.skipAudio ? 0 : args.minAudioFps,
       maxGapMs: args.skipAudio ? null : args.maxAudioGapMs,
+      progressIntervalMs: args.progressIntervalMs,
     },
     clipboard: {
       text: !args.skipClipboard,
@@ -963,6 +968,7 @@ function makeProbeArgs(args) {
     "--minVideoFrames", String(args.minVideoFrames),
     "--minVideoFps", String(args.minVideoFps),
     "--maxVideoGapMs", String(args.maxVideoGapMs),
+    "--progressIntervalMs", String(args.progressIntervalMs),
   ];
   if (args.requirePassword) {
     probeArgs.push("--requirePassword");

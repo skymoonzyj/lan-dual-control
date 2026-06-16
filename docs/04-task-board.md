@@ -94,6 +94,7 @@ Windows 端：
 - [x] Windows formal E2E runner 支持 `--sendUserAuthRequest` / PowerShell `-SendUserAuthRequest`，在 `--preflightOnly` ready 后直接向 Agent Link Board 发送无密 `NEED_USER_AUTH`，未 ready 不发送。
 - [x] Windows LAN 发现 Mac host 摘要新增 ready 后自动发送授权提醒命令：`discover-lan-hosts --boardSummary --requireMacHost` 会同时给出预检、`--userAuthRequest`、`--sendUserAuthRequest` 和正式 `--promptPassword` 命令；发现本身只读，不认证、不发密码、不执行 `inject`。
 - [x] Windows formal Mac E2E 已在真实 Mac host `192.168.31.122:43770` / runtime build `c5e5009` 通过：H.264/WebCodecs、音频、文本/文件剪贴板、input-log、黑边防护和客户端诊断均 OK，node exit code 0；密码未上通讯板，未执行 `inject`。
+- [x] Windows formal Mac E2E / `probe-mac-host` 长时间媒体观察新增进度心跳：视频和音频长测开始时打印目标时长，默认每 10 秒输出帧数、剩余时间、当前 FPS 和最大间隔；`--progressIntervalMs` 可调整或关闭，避免现场 5 分钟长测被误判为卡住。
 
 共享：
 

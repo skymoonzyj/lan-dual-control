@@ -449,6 +449,7 @@ async function testMockFastPath(args) {
       "--allowMockVideo",
       "--videoDurationMs", "800",
       "--minVideoFrames", "2",
+      "--progressIntervalMs", "200",
       "--skipInputLog",
       "--skipAudio",
       "--skipBrowser",
@@ -458,6 +459,8 @@ async function testMockFastPath(args) {
       env: { LAN_DUAL_PASSWORD: "test-password" },
     });
     assert(result.exitCode === 0, `mock fast path failed\n${result.stdout}\n${result.stderr}`);
+    assertIncludes(result.stdout, "Video observation started", "mock fast path progress start");
+    assertIncludes(result.stdout, "Video progress:", "mock fast path progress heartbeat");
     assertIncludes(result.stdout, "Formal Mac E2E checks finished", "mock fast path");
     assertIncludes(result.stdout, "Windows formal Mac E2E finished: completed", "mock fast path");
     assertIncludes(result.stdout, "Clipboard file accepted", "mock fast path");
