@@ -1852,6 +1852,131 @@ async function verifyWindowsToMacKeyboardMapping(session) {
   return result;
 }
 
+async function verifyReconnectControls(session) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      if (
+        typeof scheduleReconnect !== "function" ||
+        typeof reconnectNow !== "function" ||
+        typeof clearReconnectTimers !== "function" ||
+        typeof connect !== "function" ||
+        typeof state !== "object"
+      ) {
+        return { ok: false, reason: "missing reconnect functions" };
+      }
+
+      const reconnectButton = document.querySelector("#reconnectNowButton");
+      const actions = document.querySelector("#connectionActions");
+      const status = document.querySelector("#statusText");
+      const remote = document.querySelector("#remoteStatusText");
+      const disconnectButton = document.querySelector("#disconnectButton");
+      if (!reconnectButton || !actions || !status || !remote || !disconnectButton) {
+        return { ok: false, reason: "missing reconnect elements" };
+      }
+
+      const originalConnect = connect;
+      const originalAttempts = state.reconnectAttempts;
+      const originalTimer = state.reconnectTimer;
+      const originalCountdownTimer = state.reconnectCountdownTimer;
+      const originalStableTimer = state.reconnectStableTimer;
+      const originalDueAt = state.reconnectDueAt;
+      const originalReason = state.reconnectReason;
+      const originalHost = state.activeHost;
+      const originalPort = state.activePort;
+      const originalConnected = state.connected;
+      const originalConnecting = state.connecting;
+      const originalConnectionState = state.connectionState;
+      const originalManualDisconnect = state.manualDisconnect;
+      const originalActionsClass = actions.className;
+      const originalReconnectHidden = reconnectButton.hidden;
+      const originalReconnectDisabled = reconnectButton.disabled;
+      const originalDisconnectDisabled = disconnectButton.disabled;
+      const originalStatus = status.textContent;
+      const originalRemote = remote.textContent;
+      const originalBadge = document.querySelector("#connectionBadge")?.className || "";
+      const originalBadgeText = document.querySelector("#connectionBadge")?.textContent || "";
+      const calls = [];
+
+      try {
+        connect = async (options = {}) => {
+          calls.push({ reconnect: Boolean(options.reconnect) });
+        };
+        state.reconnectAttempts = 0;
+        state.activeHost = "192.168.31.122";
+        state.activePort = "43770";
+        state.connected = false;
+        state.connecting = false;
+        state.manualDisconnect = false;
+
+        scheduleReconnect("测试断线");
+        const scheduled =
+          state.reconnectTimer &&
+          state.reconnectCountdownTimer &&
+          !reconnectButton.hidden &&
+          !reconnectButton.disabled &&
+          actions.classList.contains("has-reconnect") &&
+          !disconnectButton.disabled &&
+          status.textContent.includes("秒后自动重连") &&
+          status.textContent.includes("1/3") &&
+          remote.textContent.includes("秒后自动重连");
+
+        reconnectButton.click();
+        const immediate =
+          calls.length === 1 &&
+          calls[0].reconnect === true &&
+          state.reconnectTimer === null &&
+          state.reconnectCountdownTimer === null &&
+          reconnectButton.hidden &&
+          !actions.classList.contains("has-reconnect");
+
+        return {
+          ok: scheduled && immediate,
+          scheduled,
+          immediate,
+          status: status.textContent,
+          remote: remote.textContent,
+          calls,
+        };
+      } finally {
+        if (state.reconnectTimer) window.clearTimeout(state.reconnectTimer);
+        if (state.reconnectCountdownTimer) window.clearInterval(state.reconnectCountdownTimer);
+        if (state.reconnectStableTimer && state.reconnectStableTimer !== originalStableTimer) {
+          window.clearTimeout(state.reconnectStableTimer);
+        }
+        connect = originalConnect;
+        state.reconnectAttempts = originalAttempts;
+        state.reconnectTimer = originalTimer;
+        state.reconnectCountdownTimer = originalCountdownTimer;
+        state.reconnectStableTimer = originalStableTimer;
+        state.reconnectDueAt = originalDueAt;
+        state.reconnectReason = originalReason;
+        state.activeHost = originalHost;
+        state.activePort = originalPort;
+        state.connected = originalConnected;
+        state.connecting = originalConnecting;
+        state.connectionState = originalConnectionState;
+        state.manualDisconnect = originalManualDisconnect;
+        actions.className = originalActionsClass;
+        reconnectButton.hidden = originalReconnectHidden;
+        reconnectButton.disabled = originalReconnectDisabled;
+        disconnectButton.disabled = originalDisconnectDisabled;
+        status.textContent = originalStatus;
+        remote.textContent = originalRemote;
+        const badge = document.querySelector("#connectionBadge");
+        if (badge) {
+          badge.className = originalBadge;
+          badge.textContent = originalBadgeText;
+        }
+      }
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`reconnect controls check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function run() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -1948,6 +2073,11 @@ async function run() {
     print(
       "OK",
       `Keyboard mapping: Ctrl+C -> ${keyboardMappingCheck.copy.modifiers.join("+")} / ${keyboardMappingCheck.copy.shortcutAction}; custom=${keyboardMappingCheck.custom.modifiers.join("+")}`,
+    );
+    const reconnectControlsCheck = await verifyReconnectControls(session);
+    print(
+      "OK",
+      `Reconnect controls: scheduled=${reconnectControlsCheck.scheduled}, immediate=${reconnectControlsCheck.immediate}`,
     );
     if (args.expectDiscoveryRuntimeBuildId) {
       const discoveryRuntimeCheck = await verifyDiscoveryRuntimeDiagnostics(session, {

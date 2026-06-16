@@ -55,6 +55,10 @@ button:disabled {
   white-space: nowrap;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 320px minmax(660px, 1fr);
@@ -185,6 +189,15 @@ button:disabled {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+.connection-actions.has-reconnect {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.connection-actions.has-reconnect .primary-action,
+.connection-actions.has-reconnect .secondary-action {
+  padding: 0 8px;
 }
 
 .local-host-panel .field {

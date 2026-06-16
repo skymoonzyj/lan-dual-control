@@ -19,6 +19,43 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 20:56
+开发端：Windows Codex
+本轮目标：改善 Windows 控制端断线后的重连体验。
+完成内容：
+- `apps/windows-client` 连接面板新增“立即重连”按钮；只有进入自动重连等待态时显示，点击后会跳过等待并立刻执行当前重连尝试。
+- 自动重连等待态现在按秒刷新状态栏和远程画面状态，显示第几次重连与剩余时间；手动“断开”仍会停止自动重连。
+- 修复按钮通用 `display: inline-flex` 覆盖 HTML `hidden` 的布局问题，确保隐藏按钮不占位。
+- `test-windows-client-browser.mjs --diagnosticsOnly` 新增页面级重连控件回归，覆盖倒计时、按钮显示、立即重连和计时器清理。
+- Windows client README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/app.js`
+- `apps/windows-client/styles.css`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- 内置浏览器访问 `http://127.0.0.1:5178/`，确认默认隐藏的“立即重连”不占位，连接/断开按钮同排显示
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-client-browser.mjs --timeoutMs 10000`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮只做页面重连体验，不连接真实 Mac，不做真实断网/host 重启恢复耗时测试。
+下一步建议：
+- 真实 Mac host 或假 Mac 服务下复测断线/重启场景，结合 `--maxReconnectRestoreMs` 记录画面恢复耗时和用户提示是否足够直观。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 20:37
 开发端：Windows Codex
 本轮目标：让 Windows host 状态助手也提示本机媒体基线命令。

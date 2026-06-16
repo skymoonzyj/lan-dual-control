@@ -16,7 +16,9 @@ const elements = {
   portInput: document.querySelector("#portInput"),
   passwordInput: document.querySelector("#passwordInput"),
   mockScenarioSelect: document.querySelector("#mockScenarioSelect"),
+  connectionActions: document.querySelector("#connectionActions"),
   connectButton: document.querySelector("#connectButton"),
+  reconnectNowButton: document.querySelector("#reconnectNowButton"),
   disconnectButton: document.querySelector("#disconnectButton"),
   refreshDevicesButton: document.querySelector("#refreshDevicesButton"),
   deviceList: document.querySelector("#deviceList"),
@@ -324,7 +326,10 @@ const state = {
   manualDisconnect: false,
   reconnectAttempts: 0,
   reconnectTimer: null,
+  reconnectCountdownTimer: null,
   reconnectStableTimer: null,
+  reconnectDueAt: 0,
+  reconnectReason: "",
   clipboardSequence: 0,
   fileTransferSequence: 0,
   fileTransferActive: false,
@@ -1694,10 +1699,51 @@ function clearReconnectTimers() {
     window.clearTimeout(state.reconnectTimer);
     state.reconnectTimer = null;
   }
+  if (state.reconnectCountdownTimer) {
+    window.clearInterval(state.reconnectCountdownTimer);
+    state.reconnectCountdownTimer = null;
+  }
   if (state.reconnectStableTimer) {
     window.clearTimeout(state.reconnectStableTimer);
     state.reconnectStableTimer = null;
   }
+  state.reconnectDueAt = 0;
+  state.reconnectReason = "";
+  updateReconnectControls(false);
+}
+
+function updateReconnectControls(visible = Boolean(state.reconnectTimer)) {
+  const isVisible = Boolean(visible);
+  if (elements.reconnectNowButton) {
+    elements.reconnectNowButton.hidden = !isVisible;
+    elements.reconnectNowButton.disabled = !isVisible || state.connecting;
+  }
+  if (elements.connectionActions) {
+    elements.connectionActions.classList.toggle("has-reconnect", isVisible);
+  }
+}
+
+function formatReconnectCountdown(remainingMs) {
+  const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
+  const attemptText = `${state.reconnectAttempts}/${maxReconnectAttempts}`;
+  if (seconds <= 0) {
+    return `正在自动重连 ${state.activeHost}:${state.activePort}（${attemptText}）`;
+  }
+  return `连接中断，${seconds} 秒后自动重连（${attemptText}）`;
+}
+
+function refreshReconnectCountdown() {
+  if (!state.reconnectTimer || !state.reconnectDueAt) {
+    updateReconnectControls(false);
+    return;
+  }
+  const text = formatReconnectCountdown(state.reconnectDueAt - Date.now());
+  state.connectionState = "reconnecting";
+  setBadge(connectionStates.reconnecting.badge, connectionStates.reconnecting.label);
+  elements.statusText.textContent = text;
+  elements.remoteStatusText.textContent = text;
+  updateReconnectControls(true);
+  syncFloatingControlCenter();
 }
 
 function setUiDisconnected(statusText = "未连接", logDetail = "会话已关闭") {
@@ -1771,10 +1817,9 @@ function scheduleReconnect(reason) {
 
   state.reconnectAttempts += 1;
   const delayMs = reconnectBaseDelayMs * state.reconnectAttempts;
-  setConnectionState(
-    "reconnecting",
-    `连接中断，${Math.round(delayMs / 1000)} 秒后自动重连（${state.reconnectAttempts}/${maxReconnectAttempts}）`,
-  );
+  state.reconnectReason = reason;
+  state.reconnectDueAt = Date.now() + delayMs;
+  setConnectionState("reconnecting", formatReconnectCountdown(delayMs));
   resetHostDiagnostics(`诊断：等待第 ${state.reconnectAttempts}/${maxReconnectAttempts} 次自动重连。`);
   elements.connectButton.disabled = true;
   elements.disconnectButton.disabled = false;
@@ -1782,11 +1827,36 @@ function scheduleReconnect(reason) {
   updateFileClipboardButton();
   addLog("自动重连", `${reason} · 第 ${state.reconnectAttempts}/${maxReconnectAttempts} 次`);
   updateReverseControlUi();
+  updateReconnectControls(true);
+  state.reconnectCountdownTimer = window.setInterval(refreshReconnectCountdown, 1000);
 
   state.reconnectTimer = window.setTimeout(() => {
+    if (state.reconnectCountdownTimer) {
+      window.clearInterval(state.reconnectCountdownTimer);
+      state.reconnectCountdownTimer = null;
+    }
     state.reconnectTimer = null;
+    state.reconnectDueAt = 0;
+    updateReconnectControls(false);
     connect({ reconnect: true });
   }, delayMs);
+}
+
+function reconnectNow() {
+  if (!state.reconnectTimer) return;
+  window.clearTimeout(state.reconnectTimer);
+  state.reconnectTimer = null;
+  if (state.reconnectCountdownTimer) {
+    window.clearInterval(state.reconnectCountdownTimer);
+    state.reconnectCountdownTimer = null;
+  }
+  state.reconnectDueAt = 0;
+  const attemptText = `${state.reconnectAttempts}/${maxReconnectAttempts}`;
+  const reason = state.reconnectReason || "用户手动立即重连";
+  state.reconnectReason = "";
+  updateReconnectControls(false);
+  addLog("立即重连", `${reason} · 第 ${attemptText} 次`);
+  connect({ reconnect: true });
 }
 
 function currentDisplaySettings() {
@@ -1883,7 +1953,7 @@ function syncFloatingControlCenter() {
     }
   }
   if (elements.floatingDisconnectButton) {
-    elements.floatingDisconnectButton.disabled = !state.connected && !state.connecting;
+    elements.floatingDisconnectButton.disabled = !state.connected && !state.connecting && !state.reconnectTimer;
   }
   if (elements.floatingFullscreenButton) {
     elements.floatingFullscreenButton.disabled = state.fullscreen;
@@ -4715,6 +4785,10 @@ elements.mockScenarioSelect.addEventListener("change", () => {
 elements.connectButton.addEventListener("click", () => {
   primeAudioPlayback();
   void connect();
+});
+elements.reconnectNowButton.addEventListener("click", () => {
+  primeAudioPlayback();
+  reconnectNow();
 });
 elements.disconnectButton.addEventListener("click", disconnect);
 elements.refreshDevicesButton.addEventListener("click", refreshDevices);

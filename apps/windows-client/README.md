@@ -30,7 +30,7 @@
 - 支持连接状态机和中文错误提示；认证失败会显示剩余尝试次数。
 - 支持假 Mac 联调错误模拟：密码错误、权限不足、输入被拒绝、视频中断、连接后断开。
 - 支持认证门禁联调：未认证连接不能进入会话、输入、剪贴板或反控流程。
-- 支持非手动断线后自动重连，最多重试 3 次；遇到密码错误会停止重连，等待用户确认密码。
+- 支持非手动断线后自动重连，最多重试 3 次；重连等待时会显示倒计时并提供“立即重连”按钮，遇到密码错误会停止重连，等待用户确认密码。
 - 支持声音接收：处理 `audio_settings_ack`、模拟 `audio_frame` 和真实 `pcm-f32le-base64` PCM 帧，状态栏显示音频帧、音量、音频延迟和播放计数。
 - 支持真实 Mac 视频帧诊断：连接后可区分 `jpeg` 真实视频帧和 `mock-svg` 模拟帧，并记录图片解码失败。
 - 支持实收 FPS 统计：刷新率卡片会区分“实收 FPS、协商 Hz、请求 Hz”，避免把控制端请求值误认为真实帧率。
@@ -70,7 +70,7 @@ node E:\codex\lan-dual-control\scripts\windows\test-coordinate-mapping.mjs --hel
 
 真实 Mac 页面级自检可自动启动本地控制端页面、打开 Edge、连接 Mac，并确认诊断条和视频画面；加 `--requireH264` 可强制要求真实 H.264/WebCodecs 画布解码成功且本次连接 H.264 解码错误计数为 0，加 `--injectPcmAudio` 可额外注入一帧 planar PCM，验证控制端音频播放入口：
 脚本会先回归画面内悬浮控制中心，确认悬浮层、摘要、画质、缩放、声音、音量、全屏和窗口按钮能同步到原工具栏与页面布局；随后会模拟适应窗口黑边输入，确认黑边移动、点击、滚轮不会发远控事件，画面内按下后移到黑边松开也能正常释放。连接成功后还会等待刷新率卡片显示数值型“实收 FPS”和“协商 Hz”，避免把请求刷新率误当成真实帧率。
-只需要快速检查诊断条、悬浮控制中心和黑边输入防护时，可加 `--diagnosticsOnly`，不会连接被控端；该路径也会模拟 Mac host `runtime`，确认诊断条能显示 PID、运行时长和 build，并覆盖顶部输入状态的安全日志/真实控制/被拒绝提示、视频帧新鲜度显示、时钟偏差提示和 H.264 Annex B/AVC 关键帧识别 helper。Mac host 重启后，可再加 `--discover --expectDiscoveryRuntimeBuildId <build-id>`，脚本会先用 `discover-lan-hosts` 自动选中最佳 Mac host，再通过真实 `/discovery` 无密码验收设备列表、刷新后自动选中 WebSocket 设备、以及诊断条显示的 runtime。已知 IP 且不想扫整段局域网时，可组合 `--discover --discoverNoLocalSubnets --host <Mac IP> --port 43770`。
+只需要快速检查诊断条、悬浮控制中心和黑边输入防护时，可加 `--diagnosticsOnly`，不会连接被控端；该路径也会模拟 Mac host `runtime`，确认诊断条能显示 PID、运行时长和 build，并覆盖顶部输入状态的安全日志/真实控制/被拒绝提示、视频帧新鲜度显示、时钟偏差提示、H.264 Annex B/AVC 关键帧识别 helper，以及自动重连倒计时和“立即重连”按钮。Mac host 重启后，可再加 `--discover --expectDiscoveryRuntimeBuildId <build-id>`，脚本会先用 `discover-lan-hosts` 自动选中最佳 Mac host，再通过真实 `/discovery` 无密码验收设备列表、刷新后自动选中 WebSocket 设备、以及诊断条显示的 runtime。已知 IP 且不想扫整段局域网时，可组合 `--discover --discoverNoLocalSubnets --host <Mac IP> --port 43770`。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\discover-lan-hosts.mjs
@@ -120,7 +120,7 @@ node E:\codex\lan-dual-control\apps\mock-mac-host\server.mjs 43770
 
 连接成功后，分辨率、刷新率、码率、声音、剪贴板、鼠标键盘输入和一键反控按钮都会通过协议层发送消息。
 假 Mac 服务还会持续发送模拟 `video_frame`，用于提前验证 Windows 端画面渲染流程。
-如果假 Mac 断开连接，Windows 控制端会进入“重连中”状态并自动尝试恢复；点击“断开”会停止自动重连。
+如果假 Mac 断开连接，Windows 控制端会进入“重连中”状态并自动尝试恢复；等待期间可以点击“立即重连”马上尝试本次重连，点击“断开”会停止自动重连。
 模拟场景中的“输入被拒绝”可用于回归 `input_ack` 失败提示；“反控已同意 / 反控超时 / 对方向我发起反控”可用于提前联调反控状态机。
 点击左侧“刷新设备”后，如果假 Mac 服务或真实 Mac host 正在运行，会显示为在线设备；刷新结果里有真实在线设备时会自动填入地址、端口和 WebSocket 连接方式，也可以手动点击列表切换目标。
 

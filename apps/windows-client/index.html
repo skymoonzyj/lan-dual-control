@@ -62,10 +62,14 @@
             </select>
           </label>
 
-          <div class="button-row">
+          <div id="connectionActions" class="button-row connection-actions">
             <button id="connectButton" class="primary-action" type="button">
               <span aria-hidden="true">▶</span>
               连接
+            </button>
+            <button id="reconnectNowButton" class="secondary-action" type="button" hidden disabled>
+              <span aria-hidden="true">↻</span>
+              立即重连
             </button>
             <button id="disconnectButton" class="secondary-action" type="button" disabled>
               <span aria-hidden="true">■</span>
