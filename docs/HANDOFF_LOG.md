@@ -19,6 +19,43 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 09:15
+开发端：Windows Codex
+本轮目标：在用户确认人在现场后，完成真实 Mac input inject 小范围验收，并补上 Windows 探针的真注入强校验，避免把日志模式误判为真注入。
+完成内容：
+- 开工检查 Agent Link Board 和真实 `/discovery`：Mac host `192.168.31.122:43770` 先在线于 `inputMode=log`，随后 Mac Codex 在用户确认看着 Mac 屏幕后停止 log host，并用隐藏密码启动 `--inputMode inject --background`。
+- Windows 端只读发现确认新 Mac host ready：runtime build `d398d64`，`inputMode=inject`，权限全开，host runtime source diff=0。
+- 真实 safe inject 小验收已通过：Windows 本机隐藏输入密码后运行 `node scripts/windows/probe-mac-host.mjs --host 192.168.31.122 --port 43770 --promptPassword --requirePassword --inputEvents --inputEventSet safe --expectInputMode inject --expectInputInjected true`，probe exit code 0；safe set 仅鼠标移动 + F13，2 个事件均收到 `input_ack injected=true`。
+- 已向 Agent Link Board 同步通过摘要；密码未上通讯板，未执行点击、Delete、Ctrl+A 或 full event set。
+- `scripts/windows/probe-mac-host.mjs` 新增 `--expectInputInjected true|false`，在 `--inputEvents` 时强制检查每个 `input_ack.injected`，防止 log-only ack 被误当成真实注入。
+- `probe-mac-host` 新增 `--inputEventSet safe|full`，默认 `safe` 只发送鼠标移动和 F13 两个低副作用事件；旧的点击、滚轮、Ctrl+A、Delete、Insert 等事件保留在显式 `--inputEventSet full`。
+- `scripts/windows/test-mac-host.ps1` 同步支持 `-ExpectInputInjected` 和 `-InputEventSet`，便于现场用 PowerShell 跑同一套真注入小验收。
+- `scripts/windows/test-probe-mac-host-discover.mjs` 增加 mock 回归：log-only mock host 在 `--expectInputInjected false` 下通过，在 `--expectInputInjected true` 下必须失败。
+修改文件：
+- `scripts/windows/probe-mac-host.mjs`
+- `scripts/windows/test-mac-host.ps1`
+- `scripts/windows/test-probe-mac-host-discover.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/probe-mac-host.mjs`
+- `node --check scripts/windows/test-probe-mac-host-discover.mjs`
+- PowerShell AST parse `scripts/windows/test-mac-host.ps1`
+- `node scripts/windows/test-probe-mac-host-discover.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script probe-mac-host.mjs --script test-probe-mac-host-discover.mjs --timeoutMs 10000`
+- 真实 inject transcript：`.dev-lab/mac-inject-safe-20260616-091526.transcript.txt`，结尾包含 `Input events acknowledged: 2 events / injected=true` 和 `probe exit code: 0`
+遗留问题：
+- 本轮只覆盖低副作用 safe set（鼠标移动 + F13）；点击、滚轮、Delete、Ctrl+A、Insert 等 full event set 仍需用户另行明确同意后再做。
+下一步建议：
+- 先不要默认扩大到 `--inputEventSet full`；下一步更值得做的是把真实点击/键盘映射和可撤销测试场景设计好，再在空白安全页面里验收。
+是否改了协议：否。
+是否需要另一端配合：本轮已配合完成；后续若扩大 full event set，需要 Mac Codex 保持 host 在线并需要用户继续在现场观察屏幕。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 08:58
 开发端：Windows Codex
 本轮目标：响应 Mac 端正式 E2E 呼叫，在用户在场时完成真实 Windows 控制 Mac formal E2E，并把结果同步到联络板和文档。

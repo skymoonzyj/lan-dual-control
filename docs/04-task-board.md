@@ -74,6 +74,8 @@ Windows 端：
 - [x] Windows 控制端页面自检支持自动发现最佳 Mac host 后再跑无密 UI runtime 验收。
 - [x] 底层 Mac host 探针支持自动发现最佳 Mac host 后再做认证、媒体、剪贴板和 input-log 验收。
 - [x] PowerShell Mac host 验收入口支持 `-Discover` 自动发现；发现失败先退出，不弹密码框，方便 Windows 端无手填 IP 做 H.264、音频、剪贴板和 input-log 探针。
+- [x] Windows Mac host 底层探针支持真实输入注入强校验：`--expectInputInjected true|false` 校验 `input_ack.injected`，`--inputEventSet safe` 默认只发鼠标移动和 F13，避免真机 inject 验收时误点或把 log-only ack 误判为通过。
+- [x] 真实 Windows 控制 Mac safe inject 小验收通过：2026-06-16 连接 `192.168.31.122:43770` / runtime build `d398d64` / `inputMode=inject`，Windows 本机隐藏输入密码后 safe set 2 个事件均 `input_ack injected=true`，未执行点击、Delete、Ctrl+A 或 full event set。
 - [x] Windows 端新增恢复开工总览 `scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`：只读汇总 git、通讯板、Mac formal preflight、自动发现目标和下一步命令；不认证、不要求密码、不发送输入、不执行 `inject`。
 - [x] Windows 恢复开工总览新增 PowerShell 包装入口 `scripts/windows/check-windows-resume-status.ps1 -CheckBoard -BoardSummary`，并可加 `-CheckClientDiagnostics` 做无密 Windows 控制端页面诊断。
 - [x] Windows 恢复开工总览支持 `--userAuthRequest` / PowerShell `-UserAuthRequest`，预检 ready 后直接输出可发 Agent Link Board 的 `NEED_USER_AUTH` 文本和固定目标 PowerShell 正式验收命令。

@@ -27,10 +27,12 @@ param(
   [switch] $ClipboardFile,
   [int] $ClipboardFileBytes = 96,
   [switch] $InputEvents,
+  [string] $InputEventSet = "",
   [switch] $RequireRealVideo,
   [switch] $RequireH264,
   [switch] $RequireAudio,
-  [string] $ExpectInputMode = ""
+  [string] $ExpectInputMode = "",
+  [string] $ExpectInputInjected = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -119,6 +121,9 @@ try {
   if ($InputEvents) {
     $nodeArgs += "--inputEvents"
   }
+  if ($InputEventSet) {
+    $nodeArgs += @("--inputEventSet", $InputEventSet)
+  }
   if ($RequireRealVideo) {
     $nodeArgs += "--requireRealVideo"
   }
@@ -130,6 +135,9 @@ try {
   }
   if ($ExpectInputMode) {
     $nodeArgs += @("--expectInputMode", $ExpectInputMode)
+  }
+  if ($ExpectInputInjected) {
+    $nodeArgs += @("--expectInputInjected", $ExpectInputInjected)
   }
 
   & node @nodeArgs

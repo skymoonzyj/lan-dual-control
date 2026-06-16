@@ -161,6 +161,67 @@ async function checkDiscoverMockProbe(args) {
   });
 }
 
+async function checkInputInjectedExpectation(args) {
+  await withMockHost(async (port) => {
+    const passResult = await run([
+      "--discover",
+      "--discoverNoLocalSubnets",
+      "--host", "127.0.0.1",
+      "--port", String(port),
+      "--password", "demo-password",
+      "--timeoutMs", "8000",
+      "--width", "640",
+      "--height", "360",
+      "--fps", "30",
+      "--inputEvents",
+      "--expectInputInjected", "false",
+    ], args);
+    const passOutput = `${passResult.stdout}\n${passResult.stderr}`;
+    assert(passResult.exitCode === 0, `log-mode injected=false expectation should pass\n${passOutput}`);
+    assertIncludes(passOutput, "Input events acknowledged: 2 events", "input injected=false expectation");
+    assertIncludes(passOutput, "injected=false", "input injected=false expectation");
+
+    const failResult = await run([
+      "--discover",
+      "--discoverNoLocalSubnets",
+      "--host", "127.0.0.1",
+      "--port", String(port),
+      "--password", "demo-password",
+      "--timeoutMs", "8000",
+      "--width", "640",
+      "--height", "360",
+      "--fps", "30",
+      "--inputEvents",
+      "--expectInputInjected", "true",
+    ], args);
+    const failOutput = `${failResult.stdout}\n${failResult.stderr}`;
+    assert(failResult.exitCode !== 0, "log-mode injected=true expectation should fail");
+    assertIncludes(failOutput, "input_event injected mismatch", "input injected=true mismatch");
+    console.log("[OK] probe-mac-host validates input_ack injected flag");
+  });
+}
+
+async function checkInputOptionValidation(args) {
+  const injectedResult = await run([
+    "--host", "127.0.0.1",
+    "--port", "9",
+    "--expectInputInjected", "maybe",
+  ], args);
+  const injectedOutput = `${injectedResult.stdout}\n${injectedResult.stderr}`;
+  assert(injectedResult.exitCode !== 0, "invalid --expectInputInjected should fail");
+  assertIncludes(injectedOutput, "--expectInputInjected must be true or false", "invalid expectInputInjected");
+
+  const setResult = await run([
+    "--host", "127.0.0.1",
+    "--port", "9",
+    "--inputEventSet", "unsafe",
+  ], args);
+  const setOutput = `${setResult.stdout}\n${setResult.stderr}`;
+  assert(setResult.exitCode !== 0, "invalid --inputEventSet should fail");
+  assertIncludes(setOutput, "--inputEventSet must be one of: safe, full", "invalid inputEventSet");
+  console.log("[OK] probe-mac-host rejects invalid input safety options");
+}
+
 async function checkDiscoverFailsBeforePassword(args) {
   const result = await run([
     "--discover",
@@ -186,6 +247,8 @@ async function main() {
   }
   const args = parseArgs(process.argv);
   await checkDiscoverMockProbe(args);
+  await checkInputInjectedExpectation(args);
+  await checkInputOptionValidation(args);
   await checkDiscoverFailsBeforePassword(args);
   console.log("[OK] probe-mac-host discovery regression passed");
 }

@@ -38,11 +38,13 @@ const defaults = {
   clipboardFileHostToClient: false,
   clipboardFileBytes: 96,
   inputEvents: false,
+  inputEventSet: "safe",
   requireRealVideo: false,
   requireH264: false,
   requireAudio: false,
   preferredVideoCodec: "mjpeg",
   expectInputMode: "",
+  expectInputInjected: "",
 };
 
 function helpRequested(argv) {
@@ -84,7 +86,9 @@ Options:
   --requireH264                       Require H.264 Annex B video; implies preferred codec h264.
   --requireAudio                      Require one pcm-f32le audio_frame.
   --expectInputMode <mode>            Require input mode from discovery/hello/session.
+  --expectInputInjected <true|false>  Require input_ack injected flag when --inputEvents is enabled.
   --inputEvents                       Send safe input events; requires host input mode expectations separately.
+  --inputEventSet <safe|full>         Input event set for --inputEvents. Default: ${defaults.inputEventSet}
   --clipboardText                     Send a text clipboard message to the host.
   --clipboardHostToClient             Read Mac pasteboard changes sent by the host. macOS only.
   --clipboardFile                     Send a small file clipboard transfer to the host.
@@ -153,6 +157,7 @@ function parseArgs(argv) {
   args.clipboardFileHostToClient = booleanArg(args.clipboardFileHostToClient) || clipboardFileRoundTrip;
   args.clipboardFileBytes = Number(args.clipboardFileBytes) || defaults.clipboardFileBytes;
   args.inputEvents = booleanArg(args.inputEvents) || booleanArg(args.input);
+  args.inputEventSet = normalizeChoice(args.inputEventSet, ["safe", "full"], defaults.inputEventSet, "--inputEventSet");
   args.requireRealVideo = booleanArg(args.requireRealVideo) || booleanArg(args.realVideo);
   args.requireH264 = booleanArg(args.requireH264) || booleanArg(args.h264);
   args.requireAudio = booleanArg(args.requireAudio) || booleanArg(args.audio);
@@ -161,11 +166,25 @@ function parseArgs(argv) {
     args.preferredVideoCodec = "h264";
   }
   args.expectInputMode = String(args.expectInputMode || "").trim().toLowerCase();
+  args.expectInputInjected = parseOptionalBoolean(args.expectInputInjected, "--expectInputInjected");
   return args;
 }
 
 function booleanArg(value) {
   return value === true || value === "true" || value === "1" || value === "yes";
+}
+
+function parseOptionalBoolean(value, optionName) {
+  if (value === undefined || value === null || value === "") return "";
+  if (value === true || value === "true" || value === "1" || value === "yes" || value === "on") return true;
+  if (value === false || value === "false" || value === "0" || value === "no" || value === "off") return false;
+  throw new Error(`${optionName} must be true or false`);
+}
+
+function normalizeChoice(value, choices, fallback, optionName) {
+  const normalized = String(value || fallback || "").trim().toLowerCase();
+  if (choices.includes(normalized)) return normalized;
+  throw new Error(`${optionName} must be one of: ${choices.join(", ")}`);
 }
 
 function print(status, text) {
@@ -1264,7 +1283,7 @@ async function probeClipboardFileHostToClient(client, args) {
 }
 
 async function probeInputEvents(client, args) {
-  const events = [
+  const safeEvents = [
     {
       type: "input_event",
       event: "mouse_move",
@@ -1274,6 +1293,16 @@ async function probeInputEvents(client, args) {
       remoteX: 960,
       remoteY: 540,
     },
+    {
+      type: "input_event",
+      event: "key",
+      action: "key",
+      key: "F13",
+      code: "F13",
+    },
+  ];
+  const fullEvents = [
+    ...safeEvents,
     {
       type: "input_event",
       event: "mouse_button",
@@ -1331,17 +1360,11 @@ async function probeInputEvents(client, args) {
       type: "input_event",
       event: "key",
       action: "key",
-      key: "F13",
-      code: "F13",
-    },
-    {
-      type: "input_event",
-      event: "key",
-      action: "key",
       key: "Insert",
       code: "Insert",
     },
   ];
+  const events = args.inputEventSet === "full" ? fullEvents : safeEvents;
 
   for (const event of events) {
     const envelope = client.send(event);
@@ -1352,10 +1375,18 @@ async function probeInputEvents(client, args) {
     if (!ack.accepted) {
       throw new Error(`input_event rejected: ${ack.reason || ack.mode || "unknown"}`);
     }
+    if (typeof args.expectInputInjected === "boolean" && ack.injected !== args.expectInputInjected) {
+      throw new Error(
+        `input_event injected mismatch: expected ${args.expectInputInjected}, got ${ack.injected} (${ack.reason || ack.mode || "unknown"})`,
+      );
+    }
   }
 
   await delay(50);
-  print("OK", `Input events acknowledged: ${events.length} events`);
+  const injectText = typeof args.expectInputInjected === "boolean"
+    ? ` / injected=${args.expectInputInjected}`
+    : "";
+  print("OK", `Input events acknowledged: ${events.length} events${injectText}`);
 }
 
 async function main() {
@@ -1364,7 +1395,13 @@ async function main() {
     return;
   }
 
-  const args = parseArgs(process.argv.slice(2));
+  let args;
+  try {
+    args = parseArgs(process.argv.slice(2));
+  } catch (error) {
+    fail(error.message);
+    return;
+  }
   try {
     const discoverySelection = await resolveDiscoveryTarget(args);
     if (discoverySelection) {
