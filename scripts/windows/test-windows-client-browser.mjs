@@ -21,6 +21,7 @@ const defaults = {
   clientPort: 5197,
   debugPort: 9337,
   timeoutMs: 30000,
+  progressIntervalMs: 10000,
   requireVideoSurface: true,
   requireH264: false,
   injectPcmAudio: false,
@@ -53,6 +54,7 @@ Options:
   --clientPort <port>                   Local Windows client web port. Default: ${defaults.clientPort}
   --debugPort <port>                    Browser remote debugging port. Default: ${defaults.debugPort}
   --timeoutMs <ms>                      Per-step timeout. Default: ${defaults.timeoutMs}
+  --progressIntervalMs <ms>             Print connection/video/audio wait progress every N ms; 0 disables. Default: ${defaults.progressIntervalMs}
   --headed                              Run browser headed instead of headless.
   --diagnosticsOnly                     Only run local UI diagnostics; do not connect to a Mac host.
   --noRequireVideoSurface               Do not require a visible decoded video surface.
@@ -130,6 +132,10 @@ function parseArgs(argv) {
   args.clientPort = Number(args.clientPort);
   args.debugPort = Number(args.debugPort);
   args.timeoutMs = Number(args.timeoutMs);
+  const progressIntervalMs = Number(args.progressIntervalMs);
+  args.progressIntervalMs = Number.isFinite(progressIntervalMs)
+    ? Math.max(0, progressIntervalMs)
+    : defaults.progressIntervalMs;
   args.discoverTimeoutMs = Math.max(250, Number(args.discoverTimeoutMs) || defaults.discoverTimeoutMs);
   return args;
 }
@@ -227,8 +233,35 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitFor(fn, timeoutMs, label) {
-  const deadline = Date.now() + timeoutMs;
+function formatSeconds(ms) {
+  return `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
+}
+
+function progressEveryText(args) {
+  return args.progressIntervalMs > 0 ? formatSeconds(args.progressIntervalMs) : "off";
+}
+
+function compactProgressText(value, maxLength = 100) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
+}
+
+function printTimedProgress(label, startedAt, deadline, details = "") {
+  const now = Date.now();
+  const elapsedMs = Math.max(0, now - startedAt);
+  const remainingMs = Math.max(0, deadline - now);
+  const totalMs = Math.max(1, deadline - startedAt);
+  const percent = Math.min(100, Math.max(0, (elapsedMs / totalMs) * 100));
+  const suffix = details ? ` · ${details}` : "";
+  print("INFO", `${label}: ${formatSeconds(elapsedMs)} elapsed / ${formatSeconds(remainingMs)} left / ${percent.toFixed(0)}%${suffix}`);
+}
+
+async function waitFor(fn, timeoutMs, label, options = {}) {
+  const startedAt = Date.now();
+  const deadline = startedAt + timeoutMs;
+  const progressIntervalMs = Math.max(0, Number(options.progressIntervalMs) || 0);
+  let nextProgressAt = progressIntervalMs > 0 ? startedAt + progressIntervalMs : 0;
   let lastError;
   while (Date.now() < deadline) {
     try {
@@ -237,9 +270,100 @@ async function waitFor(fn, timeoutMs, label) {
     } catch (error) {
       lastError = error;
     }
+    if (nextProgressAt > 0 && Date.now() >= nextProgressAt && Date.now() < deadline) {
+      try {
+        options.onProgress?.({ startedAt, deadline, lastError });
+      } catch {}
+      do {
+        nextProgressAt += progressIntervalMs;
+      } while (nextProgressAt <= Date.now());
+    }
     await delay(250);
   }
   throw new Error(`${label} timed out${lastError ? `: ${lastError.message}` : ""}`);
+}
+
+function windowsClientSnapshotExpression() {
+  return `(() => {
+    const text = (selector) => document.querySelector(selector)?.textContent || "";
+    const canvas = document.querySelector("#remoteVideoCanvas");
+    const image = document.querySelector("#remoteFrameImage");
+    const diagnostics = text("#hostDiagnosticsText");
+    const status = text("#statusText");
+    const remote = text("#remoteStatusText");
+    const audio = text("#audioText");
+    const logs = [...document.querySelectorAll("#eventLog li")]
+      .slice(0, 10)
+      .map((item) => item.innerText.replace(/\\s+/g, " "));
+    return {
+      status,
+      remote,
+      diagnostics,
+      audio,
+      metricFps: text("#metricFps"),
+      webCodecs: typeof VideoDecoder,
+      encodedVideoChunk: typeof EncodedVideoChunk,
+      h264DecoderErrors: window.state?.h264DecoderErrorCount ?? 0,
+      videoFrames: window.state?.videoFrames ?? 0,
+      audioFrames: window.state?.audioFrames ?? 0,
+      canvasVisible: canvas?.classList.contains("is-visible") || false,
+      canvasWidth: canvas?.width || 0,
+      canvasHeight: canvas?.height || 0,
+      imageVisible: image?.classList.contains("is-visible") || false,
+      imageHasSource: Boolean(image?.getAttribute("src")),
+      logs,
+    };
+  })()`;
+}
+
+function snapshotProgressDetails(snapshot, extra = "") {
+  if (!snapshot) return extra || "snapshot=pending";
+  const parts = [];
+  const add = (label, value) => {
+    const text = compactProgressText(value);
+    if (text) parts.push(`${label}=${text}`);
+  };
+  add("status", snapshot.status);
+  add("remote", snapshot.remote);
+  add("diagnostics", snapshot.diagnostics);
+  add("fps", snapshot.metricFps);
+  if (snapshot.audio || Number(snapshot.audioFrames) > 0) {
+    add("audio", snapshot.audio);
+  }
+  if (Number(snapshot.videoFrames) > 0) {
+    add("videoFrames", snapshot.videoFrames);
+  }
+  if (Number(snapshot.audioFrames) > 0) {
+    add("audioFrames", snapshot.audioFrames);
+  }
+  if (Number(snapshot.h264DecoderErrors) > 0) {
+    add("h264Errors", snapshot.h264DecoderErrors);
+  }
+  if (extra) parts.push(compactProgressText(extra));
+  return parts.join(" · ") || "snapshot=pending";
+}
+
+async function waitForWindowsClientSnapshot({ args, session, label, timeoutMs, check, onSnapshot }) {
+  const effectiveTimeoutMs = timeoutMs ?? args.timeoutMs;
+  let latestSnapshot = null;
+  print("INFO", `${label} waiting: timeout=${formatSeconds(effectiveTimeoutMs)}, progressEvery=${progressEveryText(args)}.`);
+  return waitFor(
+    async () => {
+      const value = await evaluate(session, windowsClientSnapshotExpression());
+      latestSnapshot = value;
+      onSnapshot?.(value);
+      return check(value);
+    },
+    effectiveTimeoutMs,
+    label,
+    {
+      progressIntervalMs: args.progressIntervalMs,
+      onProgress: ({ startedAt, deadline, lastError }) => {
+        const errorText = lastError ? `lastError=${lastError.message}` : "";
+        printTimedProgress(`${label} progress`, startedAt, deadline, snapshotProgressDetails(latestSnapshot, errorText));
+      },
+    },
+  );
 }
 
 function findBrowserPath() {
@@ -1870,8 +1994,9 @@ async function verifyReconnectControls(session) {
       const actions = document.querySelector("#connectionActions");
       const status = document.querySelector("#statusText");
       const remote = document.querySelector("#remoteStatusText");
+      const connectButton = document.querySelector("#connectButton");
       const disconnectButton = document.querySelector("#disconnectButton");
-      if (!reconnectButton || !actions || !status || !remote || !disconnectButton) {
+      if (!reconnectButton || !actions || !status || !remote || !connectButton || !disconnectButton) {
         return { ok: false, reason: "missing reconnect elements" };
       }
 
@@ -1891,6 +2016,7 @@ async function verifyReconnectControls(session) {
       const originalActionsClass = actions.className;
       const originalReconnectHidden = reconnectButton.hidden;
       const originalReconnectDisabled = reconnectButton.disabled;
+      const originalConnectDisabled = connectButton.disabled;
       const originalDisconnectDisabled = disconnectButton.disabled;
       const originalStatus = status.textContent;
       const originalRemote = remote.textContent;
@@ -1967,6 +2093,7 @@ async function verifyReconnectControls(session) {
         actions.className = originalActionsClass;
         reconnectButton.hidden = originalReconnectHidden;
         reconnectButton.disabled = originalReconnectDisabled;
+        connectButton.disabled = originalConnectDisabled;
         disconnectButton.disabled = originalDisconnectDisabled;
         status.textContent = originalStatus;
         remote.textContent = originalRemote;
@@ -2122,42 +2249,17 @@ async function run() {
     );
 
     let lastSnapshot = null;
-    const snapshot = await waitFor(
-      async () => {
-        const value = await evaluate(
-          session,
-          `(() => {
-            const text = (selector) => document.querySelector(selector)?.textContent || "";
-            const canvas = document.querySelector("#remoteVideoCanvas");
-            const image = document.querySelector("#remoteFrameImage");
-            const diagnostics = text("#hostDiagnosticsText");
-            const status = text("#statusText");
-            const remote = text("#remoteStatusText");
-            const logs = [...document.querySelectorAll("#eventLog li")]
-              .slice(0, 10)
-              .map((item) => item.innerText.replace(/\\s+/g, " "));
-            return {
-              status,
-              remote,
-              diagnostics,
-              metricFps: text("#metricFps"),
-              webCodecs: typeof VideoDecoder,
-              encodedVideoChunk: typeof EncodedVideoChunk,
-              h264DecoderErrors: window.state?.h264DecoderErrorCount ?? 0,
-              canvasVisible: canvas?.classList.contains("is-visible") || false,
-              canvasWidth: canvas?.width || 0,
-              canvasHeight: canvas?.height || 0,
-              imageVisible: image?.classList.contains("is-visible") || false,
-              imageHasSource: Boolean(image?.getAttribute("src")),
-              logs,
-            };
-          })()`,
-        );
-
+    const snapshot = await waitForWindowsClientSnapshot({
+      args,
+      session,
+      label: "Windows client browser connection",
+      onSnapshot: (value) => {
+        lastSnapshot = value;
+      },
+      check: async (value) => {
         if (value.status.includes("连接失败")) {
           throw new Error(`${value.status}: ${value.remote || value.diagnostics}`);
         }
-        lastSnapshot = value;
         const hasVideoSurface =
           (value.canvasVisible && value.canvasWidth > 0 && value.canvasHeight > 0) ||
           (value.imageVisible && value.imageHasSource);
@@ -2184,14 +2286,13 @@ async function run() {
         }
         return null;
       },
-      args.timeoutMs,
-      "Windows client browser connection",
-    ).catch((error) => {
+    }).catch((error) => {
       if (lastSnapshot) {
         print("INFO", `Last status: ${lastSnapshot.status}`);
         print("INFO", `Last remote: ${lastSnapshot.remote}`);
         print("INFO", `Last diagnostics: ${lastSnapshot.diagnostics}`);
         print("INFO", `Last FPS: ${lastSnapshot.metricFps}`);
+        print("INFO", `Last audio: ${lastSnapshot.audio}`);
         print("INFO", `Last surface: canvas=${lastSnapshot.canvasVisible} ${lastSnapshot.canvasWidth}x${lastSnapshot.canvasHeight}, image=${lastSnapshot.imageVisible}`);
         if (lastSnapshot.logs?.length) {
           print("INFO", `Last logs: ${lastSnapshot.logs.join(" | ")}`);
@@ -2216,7 +2317,7 @@ async function run() {
       print("INFO", `Recent logs: ${snapshot.logs.join(" | ")}`);
     }
     if (args.injectPcmAudio) {
-      const audioSnapshot = await evaluate(
+      await evaluate(
         session,
         `(() => {
           const sampleRate = 48000;
@@ -2245,20 +2346,16 @@ async function run() {
             level: 0.05,
             payload: btoa(binary),
           });
-          return new Promise((resolve) => setTimeout(() => {
-            resolve({
-              audioText: document.querySelector("#audioText")?.textContent || "",
-              logs: [...document.querySelectorAll("#eventLog li")]
-                .slice(0, 6)
-                .map((item) => item.innerText.replace(/\\s+/g, " ")),
-            });
-          }, 300));
+          return true;
         })()`,
       );
-      if (!audioSnapshot.audioText.includes("播放")) {
-        throw new Error(`PCM audio injection did not reach playback state: ${audioSnapshot.audioText}`);
-      }
-      print("OK", `Audio: ${audioSnapshot.audioText}`);
+      const audioSnapshot = await waitForWindowsClientSnapshot({
+        args,
+        session,
+        label: "Windows client PCM audio playback",
+        check: async (value) => value.audio.includes("播放") ? value : null,
+      });
+      print("OK", `Audio: ${audioSnapshot.audio}`);
     }
   } finally {
     await closeBrowserBestEffort(session);

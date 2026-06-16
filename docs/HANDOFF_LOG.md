@@ -19,6 +19,37 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 22:00
+开发端：Windows Codex
+本轮目标：让 Windows 控制 Mac 页面自检的连接、视频和音频等待都有现场进度反馈。
+完成内容：
+- `scripts/windows/test-windows-client-browser.mjs` 新增通用页面快照等待包装，连接、视频 surface、H.264/WebCodecs 和 PCM 音频播放等待默认每 10 秒输出状态、远端、诊断、FPS、音频和帧计数。
+- 新增 `--progressIntervalMs <ms>`，可调节心跳频率，传 `0` 可关闭。
+- 修复 `verifyReconnectControls` 只恢复重连/断开按钮、漏恢复连接按钮禁用状态的问题，避免 diagnostics-only 测完后后续连接点击无效。
+- Windows client README、当前状态、下一步和任务板已同步。
+修改文件：
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-client-browser.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --progressIntervalMs 1000`
+- 本机假 Mac：`test-windows-client-browser.mjs --host 127.0.0.1 --port 43773 --password demo-password --timeoutMs 45000 --progressIntervalMs 1000 --clientPort 5205 --debugPort 9349`
+- 本机假 Mac + PCM：`test-windows-client-browser.mjs --host 127.0.0.1 --port 43774 --password demo-password --timeoutMs 45000 --progressIntervalMs 1000 --clientPort 5206 --debugPort 9350 --injectPcmAudio`
+遗留问题：
+- 本轮只连接本机假 Mac 服务和本机浏览器自检，未认证真实 Mac host、未发送密码、未执行 `inject`。
+下一步建议：
+- 下次现场真连 Mac 时保留默认 10 秒心跳；如果用户在旁边等结果，可临时加 `--progressIntervalMs 5000` 更快看到卡点。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 21:55
 开发端：Windows Codex
 本轮目标：让 Mac client 页面自检的连接、认证、视频和音频等待都有进度反馈。
