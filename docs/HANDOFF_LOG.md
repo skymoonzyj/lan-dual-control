@@ -19,6 +19,40 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 13:20
+开发端：Windows Codex
+本轮目标：让 Windows host 媒体观察聚合脚本在单路失败时继续收集另一条链路结果。
+完成内容：
+- `scripts/windows/observe-windows-host-media.mjs` 不再因为视频或音频其中一路失败就立刻结束；视频失败后会继续跑音频，音频失败时会保留已成功的视频结果。
+- JSON 报告新增 `summary.passed`、`summary.failed`、`summary.failures`、`summary.skipped`、`summary.noInput` 和 `summary.noInject`，方便自动化判断 partial failure。
+- `--boardSummary` 失败摘要会明确写 `video=failed reason=...` 或 `audio=failed reason=...`，不会再把失败链路误显示为 skipped。
+- `scripts/windows/test-windows-host-media-board-summary.mjs` 新增 partial failure 回归：模拟视频阈值失败但音频 mock 成功，断言 JSON 保留音频帧、失败列表标记 video、不泄露测试密码。
+修改文件：
+- `scripts/windows/observe-windows-host-media.mjs`
+- `scripts/windows/test-windows-host-media-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/observe-windows-host-media.mjs`
+- `node --check scripts/windows/test-windows-host-media-board-summary.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script observe-windows-host-media.mjs --script test-windows-host-media-board-summary.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-host-media-board-summary.mjs --timeoutMs 60000`
+- `node scripts/windows/test-windows-script-help.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps docs scripts shared`
+遗留问题：
+- 本轮仍使用 mock host 回归 partial failure；真实 FFmpeg/WASAPI 长观察需要在下一次 Windows host 媒体基线或 Mac 反控 Windows 联调时跑。
+下一步建议：
+- 若真实 `gdigrab` 再次 `error 5`，直接跑 `node scripts/windows/observe-windows-host-media.mjs --resourceSampleTree true --boardSummary`，确认摘要是否仍能给出 WASAPI 音频结果。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 13:09
 开发端：Windows Codex
 本轮目标：让 Windows host 媒体观察聚合脚本在失败时也能输出可发 Agent Link Board 的安全摘要。

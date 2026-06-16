@@ -537,6 +537,35 @@ function errorSummary(error, args) {
   return compactText((firstLine || "unknown error").replace(/:$/, ""), 180);
 }
 
+function makeFailure(id, label, error, args) {
+  return {
+    id,
+    label,
+    summary: errorSummary(error, args),
+    message: redactSecrets(error?.message || String(error || ""), args).slice(0, 2400),
+  };
+}
+
+function failureSummaryText(failures) {
+  if (!Array.isArray(failures) || failures.length === 0) return "unknown error";
+  if (failures.length === 1) return failures[0].summary || "unknown error";
+  return failures
+    .map((failure) => `${failure.id || failure.label}: ${failure.summary || "unknown error"}`)
+    .join("; ");
+}
+
+function probeFailure(report, id) {
+  return report.summary?.failures?.find((failure) => failure.id === id) || null;
+}
+
+function probeBoardFragment(report, id, fragment) {
+  const failure = probeFailure(report, id);
+  if (failure) {
+    return `${id}=failed reason=${compactText(failure.summary || "unknown error", 120)}`;
+  }
+  return fragment;
+}
+
 function makeBoardSummary(report) {
   const requested = report.requested || {};
   const requestedVideo = requested.video
@@ -552,11 +581,11 @@ function makeBoardSummary(report) {
     `request=${requestedVideo};${requestedAudio}`,
   ];
   if (!report.ok) {
-    parts.push(`error=${compactText(report.error?.summary || report.error?.message || "unknown error", 180)}`);
+    parts.push(`error=${compactText(failureSummaryText(report.summary?.failures) || report.error?.summary || report.error?.message || "unknown error", 180)}`);
   }
   parts.push(
-    videoBoardFragment(report.video),
-    audioBoardFragment(report.audio),
+    probeBoardFragment(report, "video", videoBoardFragment(report.video)),
+    probeBoardFragment(report, "audio", audioBoardFragment(report.audio)),
     resourceBoardFragment(report),
     "No passwords in summary; no input/inject.",
   );
@@ -575,9 +604,10 @@ function resourceSummary(resource) {
   return `CPU avg/max ${cpu}, working set peak ${memory}, samples ${resource.sampleCount}`;
 }
 
-function makeReport(args, videoRun, audioRun, startedAtIso, finishedAtIso, elapsedMs) {
+function makeReport(args, videoRun, audioRun, failures, startedAtIso, finishedAtIso, elapsedMs) {
+  const failed = Array.isArray(failures) ? failures : [];
   const report = {
-    ok: true,
+    ok: failed.length === 0,
     startedAt: startedAtIso,
     finishedAt: finishedAtIso,
     elapsedMs,
@@ -586,28 +616,28 @@ function makeReport(args, videoRun, audioRun, startedAtIso, finishedAtIso, elaps
     requested: makeRequested(args),
     video: observationFragment(videoRun),
     audio: observationFragment(audioRun),
-  };
-  report.boardSummary = makeBoardSummary(report);
-  return report;
-}
-
-function makeFailureReport(args, error, videoRun, audioRun, startedAtIso, finishedAtIso, elapsedMs) {
-  const details = redactSecrets(error?.message || String(error || ""), args).slice(0, 2400);
-  const report = {
-    ok: false,
-    startedAt: startedAtIso,
-    finishedAt: finishedAtIso,
-    elapsedMs,
-    target: `${args.host}:${args.port}`,
-    useExisting: args.useExisting,
-    requested: makeRequested(args),
-    error: {
-      summary: errorSummary(error, args),
-      message: details,
+    summary: {
+      passed: [videoRun, audioRun].filter(Boolean).length,
+      failed: failed.length,
+      failures: failed.map((failure) => ({
+        id: failure.id,
+        label: failure.label,
+        summary: failure.summary,
+      })),
+      skipped: [
+        args.skipVideo ? "video" : "",
+        args.skipAudio ? "audio" : "",
+      ].filter(Boolean),
+      noInput: true,
+      noInject: true,
     },
-    video: observationFragment(videoRun),
-    audio: observationFragment(audioRun),
   };
+  if (!report.ok) {
+    report.error = {
+      summary: failureSummaryText(failed),
+      message: failed.map((failure) => `${failure.label}: ${failure.message}`).join("\n"),
+    };
+  }
   report.boardSummary = makeBoardSummary(report);
   return report;
 }
@@ -623,14 +653,15 @@ async function main() {
   const startedAtIso = new Date().toISOString();
   let videoRun = null;
   let audioRun = null;
+  const failures = [];
 
-  try {
-    if (!args.skipVideo) {
-      print("RUN", `Video baseline ${args.width}x${args.height}/${args.fps}Hz for ${args.videoDurationMs} ms`, args);
-      const videoArgs = makeVideoArgs(args);
-      if (args.debugCommands) {
-        print("DEBUG", formatCommand(videoScript, videoArgs), args);
-      }
+  if (!args.skipVideo) {
+    print("RUN", `Video baseline ${args.width}x${args.height}/${args.fps}Hz for ${args.videoDurationMs} ms`, args);
+    const videoArgs = makeVideoArgs(args);
+    if (args.debugCommands) {
+      print("DEBUG", formatCommand(videoScript, videoArgs), args);
+    }
+    try {
       videoRun = await runJsonScriptWithRetries(
         "video",
         videoScript,
@@ -647,14 +678,20 @@ async function main() {
         args,
       );
       print("INFO", `Video resource: ${resourceSummary(videoRun.result.resource)}`, args);
+    } catch (error) {
+      const failure = makeFailure("video", "Video", error, args);
+      failures.push(failure);
+      print("FAIL", `Video: ${failure.summary}`, args);
     }
+  }
 
-    if (!args.skipAudio) {
-      print("RUN", `Audio baseline ${args.audioMode} for ${args.audioDurationMs} ms`, args);
-      const audioArgs = makeAudioArgs(args);
-      if (args.debugCommands) {
-        print("DEBUG", formatCommand(audioScript, audioArgs), args);
-      }
+  if (!args.skipAudio) {
+    print("RUN", `Audio baseline ${args.audioMode} for ${args.audioDurationMs} ms`, args);
+    const audioArgs = makeAudioArgs(args);
+    if (args.debugCommands) {
+      print("DEBUG", formatCommand(audioScript, audioArgs), args);
+    }
+    try {
       audioRun = await runJsonScript("audio", audioScript, audioArgs, args.commandTimeoutMs);
       const observation = audioRun.result.observation;
       print(
@@ -663,29 +700,27 @@ async function main() {
         args,
       );
       print("INFO", `Audio resource: ${resourceSummary(audioRun.result.resource)}`, args);
+    } catch (error) {
+      const failure = makeFailure("audio", "Audio", error, args);
+      failures.push(failure);
+      print("FAIL", `Audio: ${failure.summary}`, args);
     }
-  } catch (error) {
-    const finishedAtIso = new Date().toISOString();
-    const report = makeFailureReport(args, error, videoRun, audioRun, startedAtIso, finishedAtIso, Math.round(performance.now() - startedAt));
-    if (args.json) {
-      console.log(JSON.stringify(report, null, 2));
-    } else if (args.boardSummary) {
-      console.log(report.boardSummary);
-    } else {
-      console.error(`[ERROR] ${report.error.message}`);
-    }
-    process.exit(1);
   }
 
   const finishedAtIso = new Date().toISOString();
-  const report = makeReport(args, videoRun, audioRun, startedAtIso, finishedAtIso, Math.round(performance.now() - startedAt));
+  const report = makeReport(args, videoRun, audioRun, failures, startedAtIso, finishedAtIso, Math.round(performance.now() - startedAt));
 
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
   } else if (args.boardSummary) {
     console.log(report.boardSummary);
+  } else if (!report.ok) {
+    console.error(`[ERROR] ${report.error.message}`);
   } else {
     print("OK", `Windows host media baseline passed in ${report.elapsedMs} ms`, args);
+  }
+  if (!report.ok) {
+    process.exit(1);
   }
 }
 

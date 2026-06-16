@@ -582,7 +582,7 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-media.mjs --
 node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-media.mjs --resourceSampleTree true --boardSummary
 ```
 
-`--boardSummary` 会输出一行可直接发到 Agent Link Board 的无密摘要，包含请求分辨率/Hz/Mbps、视频 FPS/最大间隔/帧年龄、音频稳态 FPS/最大间隔/帧年龄和资源采样摘要；失败时也会输出 `Windows media: failed` 的脱敏单行摘要，`--json` 失败路径同样返回可解析报告和 `boardSummary`，方便把 FFmpeg/GDI/WASAPI 波动同步给另一端排障；不会输出密码、系统账号、输入事件或 `inject` 命令。如果只想看其中一条链路，可以加 `--skipVideo` 或 `--skipAudio`。本轮 `2026-06-13 13:02` 音频顺序路径通过：3.5 秒收到 133 帧，稳态 49.94 FPS，最大间隔 43 ms，首帧约 877 ms，payload 7680 bytes，帧年龄最大 13 ms。当前同机 FFmpeg gdigrab 视频短验收偶发回退到 `windows-ffmpeg-gdigrab-fallback-mock`，直接 FFmpeg `gdigrab` 也出现过 `Failed to capture image (error 5)`；因此真实视频基线应在桌面捕获恢复稳定后复测，或继续推进 WGC 采集替换。
+`--boardSummary` 会输出一行可直接发到 Agent Link Board 的无密摘要，包含请求分辨率/Hz/Mbps、视频 FPS/最大间隔/帧年龄、音频稳态 FPS/最大间隔/帧年龄和资源采样摘要；失败时也会输出 `Windows media: failed` 的脱敏单行摘要，`--json` 失败路径同样返回可解析报告和 `boardSummary`。视频或音频其中一路失败时，脚本会继续尝试未跳过的另一条链路，并在报告里保留已成功的结果，方便把 FFmpeg/GDI/WASAPI 波动同步给另一端排障；不会输出密码、系统账号、输入事件或 `inject` 命令。如果只想看其中一条链路，可以加 `--skipVideo` 或 `--skipAudio`。本轮 `2026-06-13 13:02` 音频顺序路径通过：3.5 秒收到 133 帧，稳态 49.94 FPS，最大间隔 43 ms，首帧约 877 ms，payload 7680 bytes，帧年龄最大 13 ms。当前同机 FFmpeg gdigrab 视频短验收偶发回退到 `windows-ffmpeg-gdigrab-fallback-mock`，直接 FFmpeg `gdigrab` 也出现过 `Failed to capture image (error 5)`；因此真实视频基线应在桌面捕获恢复稳定后复测，或继续推进 WGC 采集替换。
 
 认证重试策略回归脚本会同时验证 Windows host 和假 Mac 服务：错误密码剩余 `2/1/0`、第三次断开、新连接正确密码通过。
 

@@ -156,6 +156,24 @@ function failingMockVideoArgs(port) {
   ];
 }
 
+function failingVideoPassingAudioArgs(port) {
+  return [
+    ...baseFastArgs(port),
+    "--videoScreenMode", "mock",
+    "--requireRealVideo", "false",
+    "--videoDurationMs", "800",
+    "--videoMinFrames", "9999",
+    "--videoMinFps", "999",
+    "--videoRetries", "0",
+    "--audioMode", "mock",
+    "--audioScreenMode", "mock",
+    "--requirePcm", "false",
+    "--audioDurationMs", "800",
+    "--audioMinFrames", "2",
+    "--audioMinFps", "1",
+  ];
+}
+
 async function verifyHelp(args) {
   const result = await runMedia(["--help"], args);
   assert(result.exitCode === 0, `help should exit 0, got ${result.exitCode}`);
@@ -206,6 +224,7 @@ async function verifyFailureBoardSummary(args) {
   assert(lines.length === 1, `failure boardSummary should print one line, got ${lines.length}: ${result.stdout}`);
   assertIncludes(lines[0], "Windows media: failed", "failure boardSummary");
   assertIncludes(lines[0], "error=video observation failed", "failure boardSummary");
+  assertIncludes(lines[0], "video=failed", "failure boardSummary");
   assertIncludes(lines[0], "audio=skipped", "failure boardSummary");
   assertIncludes(lines[0], "No passwords in summary", "failure boardSummary");
   assertIncludes(lines[0], "no input/inject", "failure boardSummary");
@@ -231,6 +250,26 @@ async function verifyFailureJsonSummary(args) {
   assertNoSecretLeak(payload.boardSummary, "failure JSON boardSummary");
 }
 
+async function verifyPartialFailureContinues(args) {
+  const port = await getFreePort();
+  const result = await runMedia([...failingVideoPassingAudioArgs(port), "--json"], args);
+  assert(!result.timedOut, "partial failure JSON run timed out");
+  assert(result.exitCode !== 0, "partial failure JSON should exit non-zero");
+  assertNoSecretLeak(result.stdout, "partial failure JSON stdout");
+  assertNoSecretLeak(result.stderr, "partial failure JSON stderr");
+  const payload = parseJson(result.stdout, "partial failure media JSON");
+  assert(payload.ok === false, "partial failure JSON ok should be false");
+  assert(payload.summary?.passed === 1, `partial failure should keep one passed probe: ${result.stdout}`);
+  assert(payload.summary?.failed === 1, `partial failure should record one failed probe: ${result.stdout}`);
+  assert(payload.summary?.failures?.[0]?.id === "video", "partial failure should identify video failure");
+  assert(payload.video === null, "partial failure should not include failed video payload");
+  assert(payload.audio?.observation?.frameCount >= 2, "partial failure should continue and keep audio frames");
+  assertIncludes(payload.boardSummary, "Windows media: failed", "partial failure boardSummary");
+  assertIncludes(payload.boardSummary, "video=failed", "partial failure boardSummary");
+  assertIncludes(payload.boardSummary, "audio=", "partial failure boardSummary");
+  assertNoSecretLeak(payload.boardSummary, "partial failure boardSummary");
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -243,6 +282,7 @@ async function main() {
   await verifyOneLineBoardSummary(args);
   await verifyFailureBoardSummary(args);
   await verifyFailureJsonSummary(args);
+  await verifyPartialFailureContinues(args);
   console.log("[OK] Windows host media board summary checks passed");
 }
 
