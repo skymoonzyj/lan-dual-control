@@ -44,7 +44,7 @@
 - 桌面版新增“本机被控”面板：可选择低风险/部署/深度三档体检 Windows host 环境，也可勾选“媒体基线”把 `check-windows-host-readiness --probeMedia` 纳入体检并显示 `media=ok|partial|failed`；面板还能预览防火墙放行命令、用隐藏密码启动/停止 Windows 被控端，并查看启动日志、`/discovery` 状态、runtime build、视频/音频/输入/剪贴板能力、Agent Link Board 当前呼叫和体检帧新鲜度阈值；面板会消费 `start-windows-host --status --json --checkBoard` 的只读状态，active Mac -> Windows call 会显示为“Mac 正在请求 Windows 配合”，DONE call 不当作待办，浏览器预览版会保持该面板禁用。
 - 支持一键反控请求编号、方向状态显示、超时回滚和对端确认。
 - 支持收到对端 `reverse_control_request` 时弹出确认。
-- 本地事件日志，可一键导出当前连接状态、画质参数、重连状态、最近收到的远端文件和事件记录。
+- 本地事件日志，可一键导出当前连接状态、画质参数、重连状态、重连等待原因、下次重连倒计时、最近收到的远端文件和事件记录。
 
 ## 运行方式
 

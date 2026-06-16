@@ -1910,6 +1910,7 @@ async function verifyReconnectControls(session) {
         state.manualDisconnect = false;
 
         scheduleReconnect("测试断线");
+        const exportText = typeof buildLogExportText === "function" ? buildLogExportText() : "";
         const scheduled =
           state.reconnectTimer &&
           state.reconnectCountdownTimer &&
@@ -1919,7 +1920,11 @@ async function verifyReconnectControls(session) {
           !disconnectButton.disabled &&
           status.textContent.includes("秒后自动重连") &&
           status.textContent.includes("1/3") &&
-          remote.textContent.includes("秒后自动重连");
+          remote.textContent.includes("秒后自动重连") &&
+          exportText.includes("- 重连状态：等待自动重连（1/3") &&
+          exportText.includes("- 重连原因：测试断线") &&
+          exportText.includes("- 下次重连：") &&
+          exportText.includes("秒后）");
 
         reconnectButton.click();
         const immediate =
@@ -1936,6 +1941,8 @@ async function verifyReconnectControls(session) {
           immediate,
           status: status.textContent,
           remote: remote.textContent,
+          exportHasReconnectStatus: exportText.includes("- 重连状态："),
+          exportHasReconnectReason: exportText.includes("- 重连原因：测试断线"),
           calls,
         };
       } finally {

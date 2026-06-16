@@ -19,6 +19,39 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 21:05
+开发端：Windows Codex
+本轮目标：让 Windows 控制端导出日志能记录重连等待诊断。
+完成内容：
+- `buildLogExportText()` 在连接状态里新增重连状态、重连原因和下次重连倒计时，便于现场断线后直接导出日志复盘。
+- `reconnectNow()` 保留原断线原因直到连接成功或失败，不会在立即重连时提前清空原因。
+- `test-windows-client-browser.mjs --diagnosticsOnly` 的重连控件回归新增导出文本断言，确认等待自动重连时导出日志带 `重连状态`、`重连原因` 和 `下次重连`。
+- Windows client README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-client-browser.mjs --timeoutMs 10000`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮只增强导出日志，不做真实断网/host 重启恢复耗时测试。
+下一步建议：
+- 下次真实 Mac 断线/重启复测时，直接导出 Windows 控制端日志，检查重连状态、原因、倒计时和事件记录是否足够定位问题。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 20:56
 开发端：Windows Codex
 本轮目标：改善 Windows 控制端断线后的重连体验。

@@ -1853,7 +1853,6 @@ function reconnectNow() {
   state.reconnectDueAt = 0;
   const attemptText = `${state.reconnectAttempts}/${maxReconnectAttempts}`;
   const reason = state.reconnectReason || "用户手动立即重连";
-  state.reconnectReason = "";
   updateReconnectControls(false);
   addLog("立即重连", `${reason} · 第 ${attemptText} 次`);
   connect({ reconnect: true });
@@ -2256,11 +2255,44 @@ function makeLogFileName() {
   return `lan-dual-control-log-${stamp}.txt`;
 }
 
+function getReconnectExportStatus(now = Date.now()) {
+  const attemptText = `${state.reconnectAttempts}/${maxReconnectAttempts}`;
+  const reason = state.reconnectReason || "-";
+  if (state.reconnectTimer && state.reconnectDueAt) {
+    const remainingSeconds = Math.max(0, Math.ceil((state.reconnectDueAt - now) / 1000));
+    return {
+      status: `等待自动重连（${attemptText}，${remainingSeconds} 秒后）`,
+      reason,
+      next: `${new Date(state.reconnectDueAt).toISOString()}（约 ${remainingSeconds} 秒后）`,
+    };
+  }
+  if (state.connectionState === "reconnecting" && state.connecting) {
+    return {
+      status: `正在自动重连（${attemptText}）`,
+      reason,
+      next: "-",
+    };
+  }
+  if (state.reconnectAttempts > 0) {
+    return {
+      status: `未等待（已尝试 ${attemptText}）`,
+      reason,
+      next: "-",
+    };
+  }
+  return {
+    status: "未等待",
+    reason: "-",
+    next: "-",
+  };
+}
+
 function buildLogExportText() {
   const settings = currentDisplaySettings();
   const keyboardMapping = getKeyboardMapping();
   const connectionLabel =
     elements.transportSelect.value === "websocket" ? "WebSocket 局域网" : "本地模拟";
+  const reconnectExport = getReconnectExportStatus();
   const eventLines = state.logEntries
     .slice()
     .reverse()
@@ -2284,6 +2316,9 @@ function buildLogExportText() {
     `- 反控状态：${state.reverseStateDetail}`,
     `- 连接方式：${connectionLabel}`,
     `- 目标地址：${elements.hostInput.value.trim() || "-"}:${elements.portInput.value.trim() || "-"}`,
+    `- 重连状态：${reconnectExport.status}`,
+    `- 重连原因：${reconnectExport.reason}`,
+    `- 下次重连：${reconnectExport.next}`,
     `- 协议版本：${protocolVersion}`,
     `- 主机诊断：${elements.hostDiagnosticsText.textContent.replace(/^诊断：/, "") || "-"}`,
     "",
