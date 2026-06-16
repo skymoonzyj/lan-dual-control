@@ -484,6 +484,7 @@ async function checkFakeHostJsonSuccess(args) {
     assert(payload.audio?.ok === true && payload.audio?.observation?.frameCount >= 8, "audio result should pass with frames");
     assert(payload.summary?.noInput === true && payload.summary?.noInject === true, "summary should preserve no input/inject");
     assert(/No input or inject was executed/.test(payload.boardSummary || ""), "boardSummary should include input/inject safety note");
+    assert(/request=1280x720@30Hz\/12000kbps\/h264\/450ms,audio=450ms/.test(payload.boardSummary || ""), "boardSummary should include media request context");
     assert(payload.args?.playTone === false, "playTone should default to false");
     assertNoSecretLikeText(outputOf(result), "fake host media JSON output");
   });
@@ -526,6 +527,7 @@ async function checkFailureBoardSummary(args) {
     const lines = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean);
     assert(lines.length === 1, `failure boardSummary should print exactly one line, got ${lines.length}\n${result.stdout}`);
     assert(lines[0].includes("Mac media baseline failed 1"), "failure boardSummary should identify failed count");
+    assert(lines[0].includes("request=1280x720@30Hz/12000kbps/h264/450ms,audio=450ms"), "failure boardSummary should include media request context");
     assert(lines[0].includes("video=FAIL(reason="), "failure boardSummary should include video failure reason");
     assert(lines[0].includes("audio=") && !lines[0].includes("audio=FAIL"), "failure boardSummary should keep passing audio result");
     assert(lines[0].includes("No input or inject was executed"), "failure boardSummary should keep safety note");
@@ -545,12 +547,30 @@ async function checkBoardSummary(args) {
     const lines = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean);
     assert(lines.length === 1, `boardSummary should print exactly one line, got ${lines.length}\n${result.stdout}`);
     assert(lines[0].includes("Mac media baseline passed"), "boardSummary should identify Mac media baseline");
+    assert(lines[0].includes("request=1280x720@30Hz/12000kbps/h264/450ms,audio=450ms"), "boardSummary should include media request context");
     assert(lines[0].includes("video=") && lines[0].includes("audio="), "boardSummary should include video and audio");
     assert(lines[0].includes("password was not printed"), "boardSummary should include password safety note");
     assert(lines[0].includes("playTone=false"), "boardSummary should show no test tone by default");
     assertNoSecretLikeText(outputOf(result), "boardSummary output");
   });
   print("OK", "Board summary is one line and secret-free");
+}
+
+async function checkSkipBoardSummaryRequest(args) {
+  await withFakeMacHost(async ({ port }) => {
+    const result = await runMediaAsync([
+      "--boardSummary",
+      ...baseProbeArgs(port),
+      "--skipAudio",
+    ], args, { LAN_DUAL_PASSWORD: "super-secret-mac-media" });
+
+    assert(result.status === 0, `skip audio boardSummary run should pass.\n${outputOf(result)}`);
+    const line = String(result.stdout || "").trim();
+    assert(line.includes("request=1280x720@30Hz/12000kbps/h264/450ms,audio=skipped"), "skip audio boardSummary should include skipped audio request context");
+    assert(line.includes("audio=skipped"), "skip audio boardSummary should mark audio skipped");
+    assertNoSecretLikeText(outputOf(result), "skip boardSummary output");
+  });
+  print("OK", "Board summary request context handles skipped probes");
 }
 
 function checkSkipModes(args) {
@@ -583,6 +603,7 @@ async function main() {
   await checkPartialFailureKeepsOtherProbe(args);
   await checkFailureBoardSummary(args);
   await checkBoardSummary(args);
+  await checkSkipBoardSummaryRequest(args);
   print("OK", "Mac media aggregate self-test passed");
 }
 

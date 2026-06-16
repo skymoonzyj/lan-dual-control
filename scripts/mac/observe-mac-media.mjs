@@ -446,10 +446,21 @@ function makeBoardSummary(report) {
   const audio = report.probes.find((probe) => probe.id === "audio");
   const parts = [
     `Mac media baseline ${status}: host=${report.target.host}:${report.target.port}`,
+    `request=${formatRequestSummary(report.args)}`,
     `video=${formatProbeSummary(video)}`,
     `audio=${formatProbeSummary(audio)}`,
   ];
   return `${parts.join("; ")}. No input or inject was executed; password was not printed; playTone=${report.args.playTone}.`;
+}
+
+function formatRequestSummary(args) {
+  const video = args.skipVideo
+    ? "video=skipped"
+    : `${args.width}x${args.height}@${args.fps}Hz/${args.bandwidthKbps}kbps/${args.preferredVideoCodec}/${args.videoDurationMs}ms`;
+  const audio = args.skipAudio
+    ? "audio=skipped"
+    : `audio=${args.audioDurationMs}ms`;
+  return `${video},${audio}`;
 }
 
 function summarizeArgs(args) {
