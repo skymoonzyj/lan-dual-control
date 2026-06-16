@@ -58,6 +58,18 @@ Options:
   --json                          Print one machine-readable JSON object, including runPlan.
   --help, -h                      Show this help without probing anything.
 
+JSON output:
+  runPlan.commands.safePreflightWithEnsureClient
+                                  Safe run-mac-client-formal-smoke --ensureClient
+                                  command that starts/reuses the local Mac
+                                  client page, then prints a board-ready
+                                  preflight summary without authenticating.
+  runPlan.commands.sendCallWithEnsureClient
+                                  Safe run-mac-client-formal-smoke --ensureClient
+                                  command that starts/reuses the local Mac
+                                  client page, then sends a Windows formal
+                                  test call only when the checklist is ready.
+
 Examples:
   node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.50 --port 43770 --boardSummary
   node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.50 --port 43770 --sendCall

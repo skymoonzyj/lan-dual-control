@@ -125,6 +125,9 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "Usage:", `${script} ${flag}`);
     assertIncludes(result.stdout, "--sendCall", `${script} ${flag}`);
     assertIncludes(result.stdout, "--forceCall", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.commands.safePreflightWithEnsureClient", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.commands.sendCallWithEnsureClient", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--ensureClient", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
   print("OK", "Mac client formal status help exits quickly");
