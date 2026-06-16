@@ -12,6 +12,8 @@ const defaults = {
   password: process.env.LAN_DUAL_PASSWORD || "demo-password",
   promptPassword: false,
   timeoutMs: 20000,
+  server: "http://192.168.31.68:17888",
+  checkBoard: false,
   expectBuildId: "",
   currentBuildId: "",
   requireOpen: false,
@@ -29,6 +31,7 @@ const defaults = {
   probeStartHelper: false,
   strict: false,
   json: false,
+  boardSummary: false,
 };
 
 const profileDescriptions = {
@@ -60,6 +63,7 @@ function parseArgs(argv) {
       key === "requireCurrentBuildId" ||
       key === "skipCurrentBuildCheck" ||
       key === "promptPassword" ||
+      key === "checkBoard" ||
       key === "probeHost" ||
       key === "probeVideo" ||
       key === "probeAudio" ||
@@ -67,7 +71,8 @@ function parseArgs(argv) {
       key === "probeClipboardSecurity" ||
       key === "probeStartHelper" ||
       key === "strict" ||
-      key === "json"
+      key === "json" ||
+      key === "boardSummary"
     ) {
       args[key] = true;
       continue;
@@ -87,6 +92,8 @@ function parseArgs(argv) {
   args.password = String(args.password || defaults.password);
   args.promptPassword = booleanArg(args.promptPassword);
   args.timeoutMs = clampInteger(args.timeoutMs, 3000, 120000, defaults.timeoutMs);
+  args.server = normalizedText(args.server || defaults.server);
+  args.checkBoard = booleanArg(args.checkBoard);
   args.expectBuildId = normalizedText(args.expectBuildId);
   args.currentBuildId = getGitBuildId();
   args.maxVideoFrameAgeMs = clampInteger(args.maxVideoFrameAgeMs, 0, 600000, defaults.maxVideoFrameAgeMs);
@@ -104,6 +111,7 @@ function parseArgs(argv) {
   args.probeStartHelper = booleanArg(args.probeStartHelper);
   args.strict = booleanArg(args.strict);
   args.json = booleanArg(args.json);
+  args.boardSummary = booleanArg(args.boardSummary);
   applyProfile(args);
   args.probeHost = args.probeHost || Boolean(args.expectBuildId);
   args.probeVideo = args.probeVideo || args.maxVideoFrameAgeMs > 0;
@@ -157,6 +165,10 @@ Options:
                             macOS hidden password dialog. Useful for formal-password
                             deep probes; the value is not printed.
   --timeoutMs <ms>          Per-step timeout. Default: 20000
+  --server <url>            Agent Link Board URL for --checkBoard.
+                            Default: ${defaults.server}
+  --checkBoard              Read Agent Link Board /api/state currentCall and
+                            include it in JSON / board summary.
   --expectBuildId <id>      Require running host runtime.buildId. Implies --probeHost.
   --requireCurrentBuildId   Require running host runtime.buildId to match current git short hash.
   --skipCurrentBuildCheck   Do not warn when running host build differs from current git.
@@ -178,6 +190,7 @@ Options:
   --probeStartHelper        Run start helper self-test on a temporary local port.
   --strict                  Treat warnings as failure.
   --json                    Print machine-readable JSON summary.
+  --boardSummary            Print a short secret-free Agent Link Board summary.
   --help, -h                Show this help without running checks.
 `);
 }
@@ -223,7 +236,7 @@ function getGitBuildId() {
 }
 
 function print(kind, text, args) {
-  if (args.json) return;
+  if (args.json || args.boardSummary) return;
   console.log(`[${kind}] ${text}`);
 }
 
@@ -460,6 +473,115 @@ function parseJsonOutput(text, label) {
   }
 }
 
+function isActiveBoardCall(call) {
+  if (!call) return false;
+  const status = normalizedText(call.status).toLowerCase();
+  if (!status) return true;
+  return !["done", "completed", "complete", "cancelled", "canceled", "resolved", "closed"].includes(status);
+}
+
+function normalizeBoardCall(call) {
+  if (!call || typeof call !== "object") return null;
+  const normalized = {};
+  for (const key of ["status", "goal", "from", "need", "environment", "connection", "command", "expected", "actual", "ask", "blockedBy", "owner", "timeout", "updatedAt"]) {
+    const value = normalizedText(call[key]);
+    if (value) normalized[key] = value;
+  }
+  if (Object.keys(normalized).length === 0) return null;
+  normalized.active = isActiveBoardCall(normalized);
+  return normalized;
+}
+
+function formatBoardCallOneLine(call) {
+  if (!call) return "none";
+  const parts = [
+    `${call.status || "CALL"}: ${call.goal || "untitled"}`,
+    call.from ? `from=${call.from}` : "",
+    call.need ? `need=${call.need}` : "",
+    call.connection ? `connection=${call.connection}` : "",
+  ].filter(Boolean);
+  return parts.join("; ");
+}
+
+function formatBoardCallSummary(board) {
+  if (!board?.checked) return "call=not-checked";
+  if (!board.ok) return "call=unknown";
+  if (!board.currentCall) return "call=none";
+  return `call=${board.activeCall ? "active" : "done"}(${formatBoardCallOneLine(board.currentCall)})`;
+}
+
+function formatReadinessBoardSummary(summary) {
+  const failed = Number(summary.failed || 0);
+  const warnings = Number(summary.warnings || 0);
+  const attention = failed > 0
+    ? `attention=${failed} failed`
+    : warnings > 0
+      ? `attention=${warnings} warning(s)`
+      : "attention=none";
+  const probe = `${summary.args?.host || "127.0.0.1"}:${summary.args?.port || 43770}`;
+  return [
+    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${formatBoardCallSummary(summary.board)}.`,
+    "Next: fix failed checks before formal E2E; keep inputMode=log for unattended checks.",
+    "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
+  ].join(" ");
+}
+
+async function getBoardStatus(args) {
+  const base = {
+    checked: false,
+    ok: null,
+    summary: "not checked",
+    currentCall: null,
+    activeCall: false,
+    error: "",
+  };
+  if (!args.checkBoard) return base;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1000, args.timeoutMs));
+  try {
+    const response = await fetch(new URL("/api/state", args.server), {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        ...(process.env.CODEX_LINK_TOKEN ? { "X-Codex-Link-Token": process.env.CODEX_LINK_TOKEN } : {}),
+      },
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      return {
+        ...base,
+        checked: true,
+        ok: false,
+        summary: `Agent Link Board /api/state returned ${response.status}`,
+        error: `${response.status}: ${text.slice(0, 200)}`,
+      };
+    }
+    const state = text ? JSON.parse(text) : {};
+    const currentCall = normalizeBoardCall(state.currentCall);
+    return {
+      checked: true,
+      ok: true,
+      summary: currentCall
+        ? `${currentCall.active ? "active" : "inactive"} currentCall: ${formatBoardCallOneLine(currentCall)}`
+        : "no currentCall",
+      currentCall,
+      activeCall: Boolean(currentCall?.active),
+      updatedAt: normalizedText(state.updatedAt),
+    };
+  } catch (error) {
+    return {
+      ...base,
+      checked: true,
+      ok: false,
+      summary: "Agent Link Board /api/state was not readable",
+      error: error.name || "request failed",
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function buildMismatchMessage(buildDiff) {
   if (!buildDiff || buildDiff.differs !== true) return "";
   const from = buildDiff.fromBuildId || "missing";
@@ -526,6 +648,36 @@ function statusDetails(statusPayload, args) {
     details.suggestions = Array.isArray(statusPayload.suggestions) ? statusPayload.suggestions : [];
   }
   return details;
+}
+
+async function checkBoard(args) {
+  const board = await getBoardStatus(args);
+  if (!board.checked) {
+    return {
+      ok: true,
+      summary: "not checked; add --checkBoard when coordinating with Windows Codex",
+      details: board,
+    };
+  }
+  if (!board.ok) {
+    return {
+      ok: false,
+      summary: board.summary,
+      warnings: [board.summary],
+      errors: [board.error || board.summary],
+      details: board,
+    };
+  }
+  const warnings = [];
+  if (board.activeCall) {
+    warnings.push(`Agent Link Board has an active call: ${formatBoardCallOneLine(board.currentCall)}. Coordinate before starting another formal test.`);
+  }
+  return {
+    ok: true,
+    summary: board.summary,
+    warnings,
+    details: board,
+  };
 }
 
 async function checkDiscovery(args) {
@@ -653,6 +805,7 @@ async function main() {
   await runStep(results, args, "Mac input keymap coverage", node, ["scripts/mac/check-input-keymap.mjs"], {
     timeoutMs: 10000,
   });
+  await runCustomStep(results, args, "Agent Link Board currentCall", () => checkBoard(args));
   await runCustomStep(results, args, "Mac host discovery", () => checkDiscovery(args));
 
   if (args.probeHost) {
@@ -790,6 +943,8 @@ async function main() {
       profile: args.profile,
       host: args.host,
       port: args.port,
+      server: args.checkBoard ? args.server : "",
+      checkBoard: args.checkBoard,
       promptPassword: args.promptPassword,
       expectBuildId: args.expectBuildId,
       currentBuildId: args.currentBuildId,
@@ -806,6 +961,7 @@ async function main() {
       probeInputLog: args.probeInputLog,
       probeClipboardSecurity: args.probeClipboardSecurity,
       probeStartHelper: args.probeStartHelper,
+      boardSummary: args.boardSummary,
     },
     passed: results.filter((result) => result.ok).length,
     failed: failed.length,
@@ -821,9 +977,19 @@ async function main() {
       details: result.details,
     })),
   };
+  summary.board = results.find((result) => result.label === "Agent Link Board currentCall")?.details || {
+    checked: false,
+    ok: null,
+    summary: "not checked",
+    currentCall: null,
+    activeCall: false,
+  };
+  summary.boardSummary = formatReadinessBoardSummary(summary);
 
   if (args.json) {
     console.log(JSON.stringify(summary, null, 2));
+  } else if (args.boardSummary) {
+    console.log(summary.boardSummary);
   } else {
     print(
       ok ? "OK" : "ERROR",

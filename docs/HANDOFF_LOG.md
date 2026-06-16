@@ -17,6 +17,38 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-16 Mac Codex
+
+日期：2026-06-16 12:23
+开发端：Mac Codex
+本轮目标：让 Mac host readiness 也能只读提示 Agent Link Board 当前测试呼叫。
+完成内容：
+- `scripts/mac/check-mac-host-readiness.mjs` 新增 `--checkBoard`、`--server <url>` 和 `--boardSummary`，显式启用时直接读取 Agent Link Board `/api/state.currentCall`。
+- JSON 输出新增顶层 `board`；普通输出新增 `Agent Link Board currentCall` step；`--boardSummary` 会输出一行秘密安全摘要。
+- active call 会作为 readiness warning 提示先协调，DONE/COMPLETED/CANCELLED/RESOLVED/CLOSED 等完成态 call 标为 inactive，不当作待办；摘要不回显 call command，JSON 保留结构化 command 给自动化。
+- 新增 `scripts/mac/test-mac-host-readiness-board.mjs`，用假 Agent Link Board 覆盖默认不读板、active call、DONE call、单行 boardSummary 和不泄密。
+修改文件：
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `scripts/mac/test-mac-host-readiness-board.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-host-readiness.mjs`
+- `node --check scripts/mac/test-mac-host-readiness-board.mjs`
+- `node scripts/mac/test-mac-host-readiness-board.mjs --timeoutMs 60000`
+- `node scripts/mac/check-mac-host-readiness.mjs --json --checkBoard --timeoutMs 5000 --skipCurrentBuildCheck`
+- `node scripts/mac/check-mac-host-readiness.mjs --boardSummary --checkBoard --timeoutMs 5000 --skipCurrentBuildCheck`
+遗留问题：
+- 本轮不自动响应/清理通讯板 call，也不启动/重启 Mac host；只让 readiness 在 Windows 已发 call 时更容易被 Mac 侧看见。
+下一步建议：
+- Mac host 改动、重启或正式验收前可跑 `node scripts/mac/check-mac-host-readiness.mjs --checkBoard --boardSummary`，先确认本机 readiness 和通讯板是否有 active call。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
 ## 2026-06-16 Windows Codex
 
 日期：2026-06-16 12:18
