@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -81,6 +81,32 @@ function assertNoSecretLikeText(text, label) {
   const value = String(text || "");
   assert(!value.includes("super-secret-readiness-board"), `${label} leaked secret-like server text`);
   assert(!value.includes("super-secret-command-token"), `${label} leaked secret-like command text`);
+}
+
+function functionBlock(source, name) {
+  const start = source.indexOf(`function ${name}`);
+  assert(start >= 0, `missing function ${name}`);
+  let index = source.indexOf("{", start);
+  assert(index >= 0, `missing body for function ${name}`);
+  let depth = 0;
+  for (; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "{") depth += 1;
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, index + 1);
+    }
+  }
+  throw new Error(`unterminated function ${name}`);
+}
+
+function formatMediaBoardSummaryFixture(summary) {
+  const source = readFileSync(new URL("./check-mac-host-readiness.mjs", import.meta.url), "utf8");
+  const formatter = [
+    functionBlock(source, "formatMediaBoardSummary"),
+    functionBlock(source, "normalizeMediaStatus"),
+  ].join("\n");
+  return Function("summary", `${formatter}\nreturn formatMediaBoardSummary(summary);`)(summary);
 }
 
 function waitForPort(child, getStdout, getStderr) {
@@ -164,7 +190,7 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run([flag], args);
-    assert(result.status === 0, `${script} ${flag} should exit 0`);
+    assert(result.status === 0, `${script} ${flag} should exit 0; status=${result.status} signal=${result.signal || "none"} error=${result.error?.message || "none"} output=${`${result.stdout || ""}\n${result.stderr || ""}`.slice(0, 500)}`);
     assert(String(result.stdout).includes("Usage:"), `${script} ${flag} should print Usage`);
     assert(String(result.stdout).includes("--checkBoard"), `${script} ${flag} should document --checkBoard`);
     assert(String(result.stdout).includes("--boardSummary"), `${script} ${flag} should document --boardSummary`);
@@ -180,6 +206,74 @@ function checkDefaultDoesNotReadBoard(args) {
   assert(String(payload.boardSummary || "").includes("call=not-checked"), "default boardSummary should mark call not checked");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "default readiness JSON");
   print("OK", "Mac host readiness does not read Agent Link Board by default");
+}
+
+function checkMediaBoardSummaryStatusFormatting() {
+  const base = {
+    args: { probeMedia: true },
+    results: [
+      {
+        label: "Mac host media aggregate",
+        ok: false,
+        details: {
+          summary: {
+            status: "partial",
+            passed: 1,
+            failed: 1,
+          },
+        },
+      },
+    ],
+  };
+  assert(
+    formatMediaBoardSummaryFixture(base) === "media=partial(passed=1,failed=1)",
+    "media board summary should surface partial status",
+  );
+  assert(
+    formatMediaBoardSummaryFixture({
+      ...base,
+      results: [{
+        label: "Mac host media aggregate",
+        ok: true,
+        details: { summary: { status: "ok", passed: 2, failed: 0 } },
+      }],
+    }) === "media=ok",
+    "media board summary should surface ok status",
+  );
+  assert(
+    formatMediaBoardSummaryFixture({
+      ...base,
+      results: [{
+        label: "Mac host media aggregate",
+        ok: false,
+        details: { summary: { status: "failed", passed: 0, failed: 2 } },
+      }],
+    }) === "media=failed(passed=0,failed=2)",
+    "media board summary should surface failed status with counts",
+  );
+  assert(
+    formatMediaBoardSummaryFixture({
+      ...base,
+      results: [{
+        label: "Mac host media aggregate",
+        ok: false,
+        details: { summary: { passed: 1, failed: 1 } },
+      }],
+    }) === "media=partial(passed=1,failed=1)",
+    "media board summary should infer partial for older media summaries",
+  );
+  assert(
+    formatMediaBoardSummaryFixture({
+      ...base,
+      results: [{
+        label: "Mac host media aggregate",
+        ok: false,
+        details: {},
+      }],
+    }) === "media=failed",
+    "media board summary should keep a media=failed fallback",
+  );
+  print("OK", "Mac host readiness media boardSummary formats ok/partial/failed");
 }
 
 function checkProbeMediaOfflineJson(args) {
@@ -203,6 +297,7 @@ function checkProbeMediaOfflineJson(args) {
   assert(step, "readiness JSON should include Mac host media aggregate step");
   assert(step.ok === false, "offline Mac host media aggregate should fail");
   assert(String(step.summary || "").includes("Mac media baseline failed"), "media aggregate summary should include board-safe baseline failure text");
+  assert(step.details?.summary?.status === "failed", "media aggregate details should preserve failed status");
   assert(step.details?.summary?.failed >= 1, "media aggregate details should preserve failed count");
   assert(step.details?.resource?.available === false, "offline media aggregate should mark resource unavailable");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "offline probeMedia readiness JSON");
@@ -248,6 +343,7 @@ function checkProbeMediaBoardSummary(args) {
   const lines = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean);
   assert(lines.length === 1, `offline --probeMedia boardSummary should print one line, got ${lines.length}`);
   assert(lines[0].includes("media=failed("), "offline --probeMedia boardSummary should include failed media status");
+  assert(!lines[0].includes("media=passed"), "offline --probeMedia boardSummary should not use legacy passed wording");
   assert(lines[0].includes("Do not send passwords"), "offline --probeMedia boardSummary should keep password safety note");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "offline probeMedia boardSummary");
   print("OK", "Mac host readiness boardSummary includes probeMedia status safely");
@@ -366,6 +462,7 @@ async function main() {
   const args = parseArgs(process.argv);
   checkHelp(args);
   checkDefaultDoesNotReadBoard(args);
+  checkMediaBoardSummaryStatusFormatting();
   checkProbeMediaOfflineJson(args);
   checkProbeMediaResourceSampleImpliesProbeMedia(args);
   checkProbeMediaBoardSummary(args);

@@ -208,7 +208,7 @@ node scripts/mac/check-mac-host-readiness.mjs --requireControlPermissions
 node scripts/mac/check-mac-host-readiness.mjs --profile deep
 ```
 
-其中 `--probeVideo` 会做短 H.264 时间线观察，`--probeAudio` 会做短 PCM 音频观察且不播放声音，`--probeInputLog` 会先确认 host 是 `log` 输入模式再发送安全冒烟事件，`--probeStartHelper` 会用临时端口启动/关闭一次启动助手自测，`--probeClipboardSecurity` 会运行本地文件剪贴板接收完整性回归。主机已重启到小数秒 timestamp build 后，可加 `--maxVideoFrameAgeMs 250` 强制要求 `video_frame.timestamp` 接收年龄足够新鲜；也可加 `--maxAudioFrameAgeMs 250` 强制要求 `audio_frame.timestamp` 新鲜且单调。两个参数会分别自动启用对应 probe。如果只想单跑文件剪贴板安全回归，可用 `node scripts/mac/check-mac-host-readiness.mjs --probeClipboardSecurity`；该路径不会启动 host、写系统剪贴板、要求密码或执行输入。如果临时需要验收旧 build，可用 `--skipCurrentBuildCheck` 暂时关闭“运行中 build 与当前 git 不一致”的 warning。需要机器可读结果时可加 `--json`。
+其中 `--probeVideo` 会做短 H.264 时间线观察，`--probeAudio` 会做短 PCM 音频观察且不播放声音，`--probeMedia` 会复用媒体聚合入口输出 H.264 + PCM 一体摘要，并在 `--boardSummary` 中显示 `media=ok|partial|failed`，`--probeInputLog` 会先确认 host 是 `log` 输入模式再发送安全冒烟事件，`--probeStartHelper` 会用临时端口启动/关闭一次启动助手自测，`--probeClipboardSecurity` 会运行本地文件剪贴板接收完整性回归。主机已重启到小数秒 timestamp build 后，可加 `--maxVideoFrameAgeMs 250` 强制要求 `video_frame.timestamp` 接收年龄足够新鲜；也可加 `--maxAudioFrameAgeMs 250` 强制要求 `audio_frame.timestamp` 新鲜且单调。两个参数会分别自动启用对应 probe。如果只想单跑文件剪贴板安全回归，可用 `node scripts/mac/check-mac-host-readiness.mjs --probeClipboardSecurity`；该路径不会启动 host、写系统剪贴板、要求密码或执行输入。如果临时需要验收旧 build，可用 `--skipCurrentBuildCheck` 暂时关闭“运行中 build 与当前 git 不一致”的 warning。需要机器可读结果时可加 `--json`。
 
 进入目录：
 

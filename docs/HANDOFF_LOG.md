@@ -17,6 +17,39 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-16 Windows Codex
+
+日期：2026-06-16 19:08
+开发端：Windows Codex
+本轮目标：把 Mac media `summary.status` 接入 Mac readiness 的一行媒体摘要。
+完成内容：
+- `scripts/mac/check-mac-host-readiness.mjs` 的 `--probeMedia --boardSummary` 现在优先消费媒体聚合 `summary.status=ok|partial|failed`。
+- readiness 摘要从旧的 `media=passed` / 泛化 failed 改为 `media=ok`、`media=partial(passed=X,failed=Y)` 或 `media=failed(passed=X,failed=Y)`；旧 payload 没有 `status` 时仍按 passed/failed 计数推断。
+- `scripts/mac/test-mac-host-readiness-board.mjs` 新增 formatter 源码级回归，覆盖 ok、partial、failed 和旧 payload fallback，并增强 offline `--probeMedia` JSON/boardSummary 断言。
+- Mac host README、当前状态、下一步和任务板同步说明 readiness 可直接输出 `media=ok|partial|failed`。
+修改文件：
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `scripts/mac/test-mac-host-readiness-board.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-host-readiness.mjs`
+- `node --check scripts/mac/test-mac-host-readiness-board.mjs`
+- `node scripts/mac/test-mac-host-readiness-board.mjs --timeoutMs 45000`
+- `node scripts/mac/test-mac-script-help.mjs --script check-mac-host-readiness.mjs --script test-mac-host-readiness-board.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps docs scripts shared`
+遗留问题：
+- 本轮仍只跑离线/fake board/readiness formatter 回归，没有启动真实 Mac host；真实媒体状态由 Mac 本机后续 `--probeMedia` 或 `observe-mac-media` 验证。
+下一步建议：
+- Agent Link Board 或桌面面板读取 readiness 一行摘要时，可直接根据 `media=partial` 判断媒体链路是局部失败，而不是整体失败。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
 ## 2026-06-16 Mac Codex
 
 日期：2026-06-16 13:30

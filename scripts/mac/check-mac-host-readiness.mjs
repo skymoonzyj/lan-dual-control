@@ -631,13 +631,29 @@ function formatMediaBoardSummary(summary) {
     : null;
   if (!result) return "media=missing";
   const details = result.details || {};
-  if (result.ok) return "media=passed";
   const failed = Number(details.summary?.failed);
   const passed = Number(details.summary?.passed);
-  if (Number.isFinite(failed) || Number.isFinite(passed)) {
+  const status = normalizeMediaStatus(details.summary?.status, result.ok, passed, failed);
+  if (status === "ok") return "media=ok";
+  if (status === "partial") {
+    return `media=partial(passed=${Number.isFinite(passed) ? passed : 0},failed=${Number.isFinite(failed) ? failed : 0})`;
+  }
+  if (status === "failed" && (Number.isFinite(failed) || Number.isFinite(passed))) {
     return `media=failed(passed=${Number.isFinite(passed) ? passed : 0},failed=${Number.isFinite(failed) ? failed : 0})`;
   }
+  if (result.ok) return "media=ok";
   return "media=failed";
+}
+
+function normalizeMediaStatus(value, ok, passed, failed) {
+  if (value === "ok" || value === "partial" || value === "failed") return value;
+  if (ok) return "ok";
+  if (Number.isFinite(failed) || Number.isFinite(passed)) {
+    const safeFailed = Number.isFinite(failed) ? failed : 0;
+    const safePassed = Number.isFinite(passed) ? passed : 0;
+    return safeFailed === 0 ? "ok" : safePassed > 0 ? "partial" : "failed";
+  }
+  return "failed";
 }
 
 async function getBoardStatus(args) {
