@@ -242,7 +242,7 @@ function makeDiscoveryPayload(port) {
     protocolVersion: 1,
     role: "host",
     runtime: {
-      processId: 12345,
+      processId: process.pid,
       buildId: "mac-media-json-test",
       startedAt: "2026-06-16T00:00:00.000Z",
       uptimeSeconds: 10,
@@ -483,12 +483,44 @@ async function checkFakeHostJsonSuccess(args) {
     assert(payload.video?.ok === true && payload.video?.observation?.frameCount >= 4, "video result should pass with frames");
     assert(payload.audio?.ok === true && payload.audio?.observation?.frameCount >= 8, "audio result should pass with frames");
     assert(payload.summary?.noInput === true && payload.summary?.noInject === true, "summary should preserve no input/inject");
+    assert(payload.resource?.enabled === false, "resource sampling should default to disabled");
     assert(/No input or inject was executed/.test(payload.boardSummary || ""), "boardSummary should include input/inject safety note");
     assert(/request=1280x720@30Hz\/12000kbps\/h264\/450ms,audio=450ms/.test(payload.boardSummary || ""), "boardSummary should include media request context");
+    assert(/resource=off/.test(payload.boardSummary || ""), "boardSummary should mark resource sampling off by default");
     assert(payload.args?.playTone === false, "playTone should default to false");
     assertNoSecretLikeText(outputOf(result), "fake host media JSON output");
   });
   print("OK", "Temporary fake Mac host passes media aggregate JSON");
+}
+
+async function checkResourceSampling(args) {
+  await withFakeMacHost(async ({ port }) => {
+    const result = await runMediaAsync([
+      "--json",
+      "--resourceSample",
+      "--resourceSampleIntervalMs",
+      "100",
+      ...baseProbeArgs(port),
+    ], args, { LAN_DUAL_PASSWORD: "super-secret-mac-media" });
+
+    assert(result.status === 0, `resource sampling run should pass.\n${outputOf(result)}`);
+    const payload = parseJson(result.stdout, "resource sampling JSON");
+    assert(payload.ok === true, "resource sampling should not fail media success");
+    assert(payload.resource?.enabled === true, "resource sampling should be enabled");
+    assert(payload.resource?.rootPid === process.pid, "resource sampling should use fake discovery runtime process id");
+    if (process.platform === "win32") {
+      assert(payload.resource?.available === false, "resource sampling should be unavailable on Windows");
+      assert(/resource=unavailable/.test(payload.boardSummary || ""), "Windows boardSummary should mark resource sampling unavailable");
+    } else {
+      assert(payload.resource?.available === true, `resource sampling should be available: ${JSON.stringify(payload.resource)}`);
+      assert(payload.resource?.sampleCount >= 1, "resource sampling should collect at least one sample");
+      assert(Number.isFinite(Number(payload.resource?.peakRssMiB)), "resource sampling should include peak RSS");
+      assert(/resource=sampled/.test(payload.boardSummary || ""), "boardSummary should mention sampled resources");
+      assert(/rssPeak=/.test(payload.boardSummary || ""), "boardSummary should include RSS peak");
+    }
+    assertNoSecretLikeText(outputOf(result), "resource sampling output");
+  });
+  print("OK", "Resource sampling is optional, local, and secret-free");
 }
 
 async function checkPartialFailureKeepsOtherProbe(args) {
@@ -530,6 +562,7 @@ async function checkFailureBoardSummary(args) {
     assert(lines[0].includes("request=1280x720@30Hz/12000kbps/h264/450ms,audio=450ms"), "failure boardSummary should include media request context");
     assert(lines[0].includes("video=FAIL(reason="), "failure boardSummary should include video failure reason");
     assert(lines[0].includes("audio=") && !lines[0].includes("audio=FAIL"), "failure boardSummary should keep passing audio result");
+    assert(lines[0].includes("resource=off"), "failure boardSummary should mark resource sampling off by default");
     assert(lines[0].includes("No input or inject was executed"), "failure boardSummary should keep safety note");
     assertNoSecretLikeText(outputOf(result), "failure boardSummary output");
   });
@@ -549,6 +582,7 @@ async function checkBoardSummary(args) {
     assert(lines[0].includes("Mac media baseline passed"), "boardSummary should identify Mac media baseline");
     assert(lines[0].includes("request=1280x720@30Hz/12000kbps/h264/450ms,audio=450ms"), "boardSummary should include media request context");
     assert(lines[0].includes("video=") && lines[0].includes("audio="), "boardSummary should include video and audio");
+    assert(lines[0].includes("resource=off"), "boardSummary should mark resource sampling off by default");
     assert(lines[0].includes("password was not printed"), "boardSummary should include password safety note");
     assert(lines[0].includes("playTone=false"), "boardSummary should show no test tone by default");
     assertNoSecretLikeText(outputOf(result), "boardSummary output");
@@ -600,6 +634,7 @@ async function main() {
   checkSourceDoesNotPassPasswordArg();
   checkSkipModes(args);
   await checkFakeHostJsonSuccess(args);
+  await checkResourceSampling(args);
   await checkPartialFailureKeepsOtherProbe(args);
   await checkFailureBoardSummary(args);
   await checkBoardSummary(args);

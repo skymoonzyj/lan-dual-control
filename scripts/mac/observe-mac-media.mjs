@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { dirname, resolve } from "node:path";
+import { networkInterfaces } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -43,6 +44,9 @@ const defaults = {
   toneVolume: 0.22,
   skipVideo: false,
   skipAudio: false,
+  resourceSample: false,
+  resourceSampleIntervalMs: 1000,
+  resourceSampleTimeoutMs: 3000,
   json: false,
   boardSummary: false,
   debugCommands: false,
@@ -90,6 +94,9 @@ Options:
   --toneVolume <0..1>                  Test tone volume. Default: ${defaults.toneVolume}
   --skipVideo                          Only run audio observation.
   --skipAudio                          Only run video observation.
+  --resourceSample                     Sample local Mac host CPU/RSS during probes. Default: off
+  --resourceSampleIntervalMs <ms>      Resource sample interval. Default: ${defaults.resourceSampleIntervalMs}
+  --resourceSampleTimeoutMs <ms>       Per-sample timeout. Default: ${defaults.resourceSampleTimeoutMs}
   --json                               Print one machine-readable JSON object.
   --boardSummary                       Print one Agent Link Board-safe summary line.
   --debugCommands                      Print child observer commands with password redacted.
@@ -167,6 +174,9 @@ function parseArgs(argv) {
   args.toneVolume = Math.min(1, nonNegativeNumber(args.toneVolume, defaults.toneVolume));
   args.skipVideo = booleanArg(args.skipVideo, defaults.skipVideo);
   args.skipAudio = booleanArg(args.skipAudio, defaults.skipAudio);
+  args.resourceSample = booleanArg(args.resourceSample, defaults.resourceSample);
+  args.resourceSampleIntervalMs = clampInteger(args.resourceSampleIntervalMs, 100, 60000, defaults.resourceSampleIntervalMs);
+  args.resourceSampleTimeoutMs = clampInteger(args.resourceSampleTimeoutMs, 500, 60000, defaults.resourceSampleTimeoutMs);
   args.json = booleanArg(args.json, defaults.json);
   args.boardSummary = booleanArg(args.boardSummary, defaults.boardSummary);
   args.debugCommands = booleanArg(args.debugCommands, defaults.debugCommands);
@@ -404,6 +414,269 @@ function print(args, kind, text) {
   console.log(`[${kind}] ${text}`);
 }
 
+async function fetchDiscovery(args) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.min(args.timeoutMs, args.resourceSampleTimeoutMs));
+  try {
+    const response = await fetch(`http://${args.host}:${args.port}/discovery`, {
+      signal: controller.signal,
+      headers: { accept: "application/json" },
+    });
+    if (!response.ok) {
+      throw new Error(`/discovery HTTP ${response.status}`);
+    }
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function isLikelyLocalHost(host) {
+  const normalized = String(host || "").trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (["", "localhost", "0.0.0.0", "127.0.0.1", "::1"].includes(normalized)) return true;
+  if (/^127\./.test(normalized)) return true;
+  return localAddressSet().has(normalized);
+}
+
+function localAddressSet() {
+  const addresses = new Set();
+  for (const infos of Object.values(networkInterfaces())) {
+    for (const info of infos || []) {
+      if (info?.address) addresses.add(String(info.address).toLowerCase());
+    }
+  }
+  return addresses;
+}
+
+async function prepareResourceSampling(args) {
+  const disabled = {
+    enabled: false,
+    available: false,
+    rootPid: 0,
+    sampleCount: 0,
+    errors: ["resource sampling disabled"],
+  };
+  if (!args.resourceSample) return { sampler: null, resource: disabled };
+
+  let discovery = null;
+  try {
+    discovery = await fetchDiscovery(args);
+  } catch (error) {
+    return {
+      sampler: null,
+      resource: makeUnavailableResource({
+        rootPid: 0,
+        errors: [`/discovery unavailable for resource sampling: ${error.message}`],
+      }),
+    };
+  }
+
+  const rootPid = Number(discovery?.runtime?.processId) || 0;
+  if (process.platform === "win32") {
+    return {
+      sampler: null,
+      resource: makeUnavailableResource({
+        rootPid,
+        errors: ["Mac host resource sampling is not available on Windows"],
+      }),
+    };
+  }
+
+  if (!rootPid) {
+    return {
+      sampler: null,
+      resource: makeUnavailableResource({
+        rootPid: 0,
+        errors: ["/discovery.runtime.processId missing"],
+      }),
+    };
+  }
+  if (!isLikelyLocalHost(args.host)) {
+    return {
+      sampler: null,
+      resource: makeUnavailableResource({
+        rootPid,
+        errors: [`host ${args.host} is not a local interface`],
+      }),
+    };
+  }
+  return {
+    sampler: startProcessResourceSampling({
+      pid: rootPid,
+      intervalMs: args.resourceSampleIntervalMs,
+      timeoutMs: args.resourceSampleTimeoutMs,
+    }),
+    resource: null,
+  };
+}
+
+function makeUnavailableResource({ rootPid, errors }) {
+  return {
+    enabled: true,
+    available: false,
+    rootPid: Number(rootPid) || 0,
+    intervalMs: 0,
+    sampleCount: 0,
+    errors: [...new Set((errors || []).map((item) => redactSensitiveText(item)))].slice(0, 5),
+  };
+}
+
+function startProcessResourceSampling({ pid, intervalMs, timeoutMs }) {
+  const rootPid = Number(pid) || 0;
+  const safeIntervalMs = Math.max(100, Number(intervalMs) || defaults.resourceSampleIntervalMs);
+  const safeTimeoutMs = Math.max(500, Number(timeoutMs) || defaults.resourceSampleTimeoutMs);
+  const samples = [];
+  const errors = [];
+  let stopped = false;
+  let timer = null;
+  let currentSample = null;
+
+  async function collect() {
+    if (stopped || currentSample) return;
+    currentSample = sampleProcess(rootPid, safeTimeoutMs)
+      .then((sample) => {
+        if (sample) {
+          samples.push({
+            at: new Date().toISOString(),
+            ...sample,
+          });
+        }
+      })
+      .catch((error) => {
+        errors.push(redactSensitiveText(error.message || String(error)));
+      })
+      .finally(() => {
+        currentSample = null;
+        if (!stopped) {
+          timer = setTimeout(collect, safeIntervalMs);
+          timer.unref?.();
+        }
+      });
+    await currentSample;
+  }
+
+  collect();
+
+  return {
+    async stop() {
+      stopped = true;
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      if (currentSample) {
+        await currentSample.catch(() => {});
+      }
+      return summarizeResourceSamples(samples, {
+        rootPid,
+        intervalMs: safeIntervalMs,
+        errors,
+      });
+    },
+  };
+}
+
+async function sampleProcess(pid, timeoutMs) {
+  const stdout = await runCommand("ps", [
+    "-p",
+    String(pid),
+    "-o",
+    "pid=",
+    "-o",
+    "pcpu=",
+    "-o",
+    "rss=",
+    "-o",
+    "vsz=",
+    "-o",
+    "comm=",
+  ], timeoutMs);
+  const line = String(stdout || "").trim().split(/\r?\n/).map((item) => item.trim()).find(Boolean);
+  if (!line) {
+    throw new Error(`process ${pid} not found`);
+  }
+  const match = line.match(/^(\d+)\s+([0-9.]+)\s+(\d+)\s+(\d+)\s+(.+)$/);
+  if (!match) {
+    throw new Error(`could not parse ps output for pid ${pid}`);
+  }
+  return {
+    pid: Number(match[1]),
+    cpuPercent: round1(Number(match[2])),
+    rssMiB: kibToMiB(Number(match[3])),
+    virtualMiB: kibToMiB(Number(match[4])),
+    command: match[5],
+  };
+}
+
+function runCommand(command, argv, timeoutMs) {
+  return new Promise((resolveRun, rejectRun) => {
+    const child = spawn(command, argv, {
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      rejectRun(new Error(`${command} timed out after ${timeoutMs} ms`));
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      rejectRun(error);
+    });
+    child.once("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) {
+        resolveRun(stdout);
+        return;
+      }
+      rejectRun(new Error(`${command} exited ${code}${stderr.trim() ? `: ${stderr.trim()}` : ""}`));
+    });
+  });
+}
+
+function summarizeResourceSamples(samples, { rootPid, intervalMs, errors }) {
+  const cpuValues = samples.map((sample) => Number(sample.cpuPercent)).filter((value) => Number.isFinite(value));
+  const rssValues = samples.map((sample) => Number(sample.rssMiB)).filter((value) => Number.isFinite(value));
+  const virtualValues = samples.map((sample) => Number(sample.virtualMiB)).filter((value) => Number.isFinite(value));
+  const processNames = [...new Set(samples.map((sample) => sample.command).filter(Boolean))];
+  return {
+    enabled: true,
+    available: samples.length > 0,
+    rootPid,
+    intervalMs,
+    sampleCount: samples.length,
+    processNames,
+    errors: [...new Set(errors)].slice(0, 5),
+    avgCpuPercent: cpuValues.length ? round1(average(cpuValues)) : null,
+    maxCpuPercent: cpuValues.length ? round1(Math.max(...cpuValues)) : null,
+    avgRssMiB: rssValues.length ? round1(average(rssValues)) : null,
+    peakRssMiB: rssValues.length ? round1(Math.max(...rssValues)) : null,
+    avgVirtualMiB: virtualValues.length ? round1(average(virtualValues)) : null,
+    peakVirtualMiB: virtualValues.length ? round1(Math.max(...virtualValues)) : null,
+  };
+}
+
+function average(values) {
+  return values.length
+    ? values.reduce((total, value) => total + value, 0) / values.length
+    : 0;
+}
+
+function kibToMiB(value) {
+  return round1((Number(value) || 0) / 1024);
+}
+
+function round1(value) {
+  return Math.round((Number(value) || 0) * 10) / 10;
+}
+
 function formatProbeSummary(probe) {
   if (!probe) return "skipped";
   if (!probe.ok) return `FAIL(reason=${formatBoardReason(probe.error?.message || "unknown")})`;
@@ -449,8 +722,19 @@ function makeBoardSummary(report) {
     `request=${formatRequestSummary(report.args)}`,
     `video=${formatProbeSummary(video)}`,
     `audio=${formatProbeSummary(audio)}`,
+    `resource=${formatResourceSummary(report.resource)}`,
   ];
   return `${parts.join("; ")}. No input or inject was executed; password was not printed; playTone=${report.args.playTone}.`;
+}
+
+function formatResourceSummary(resource) {
+  if (!resource?.enabled) return "off";
+  if (!resource.available) return `unavailable(reason=${formatBoardReason((resource.errors || [])[0] || "unknown")})`;
+  const parts = [`sampled(samples=${resource.sampleCount}`];
+  if (Number.isFinite(Number(resource.avgCpuPercent))) parts.push(`cpuAvg=${resource.avgCpuPercent}%`);
+  if (Number.isFinite(Number(resource.maxCpuPercent))) parts.push(`cpuMax=${resource.maxCpuPercent}%`);
+  if (Number.isFinite(Number(resource.peakRssMiB))) parts.push(`rssPeak=${resource.peakRssMiB}MiB`);
+  return `${parts.join(",")})`;
 }
 
 function formatRequestSummary(args) {
@@ -498,12 +782,15 @@ function summarizeArgs(args) {
     toneVolume: args.toneVolume,
     skipVideo: args.skipVideo,
     skipAudio: args.skipAudio,
+    resourceSample: args.resourceSample,
+    resourceSampleIntervalMs: args.resourceSampleIntervalMs,
+    resourceSampleTimeoutMs: args.resourceSampleTimeoutMs,
     json: args.json,
     boardSummary: args.boardSummary,
   };
 }
 
-function makeReport(args, probes, startedAt, elapsedMs) {
+function makeReport(args, probes, resource, startedAt, elapsedMs) {
   const report = {
     ok: probes.every((probe) => probe.ok),
     startedAt,
@@ -511,6 +798,7 @@ function makeReport(args, probes, startedAt, elapsedMs) {
     elapsedMs,
     target: { host: args.host, port: args.port },
     args: summarizeArgs(args),
+    resource,
     probes,
     video: probes.find((probe) => probe.id === "video") || null,
     audio: probes.find((probe) => probe.id === "audio") || null,
@@ -585,10 +873,21 @@ async function main() {
   const startedAt = new Date().toISOString();
   const started = performance.now();
   const probes = [];
-  for (const probe of buildProbes(args)) {
-    probes.push(await runProbe(args, probe));
+  const resourceRun = await prepareResourceSampling(args);
+  let resource = resourceRun.resource;
+  try {
+    if (resourceRun.sampler) {
+      print(args, "RUN", `Resource sampling for local Mac host pid`);
+    }
+    for (const probe of buildProbes(args)) {
+      probes.push(await runProbe(args, probe));
+    }
+  } finally {
+    if (resourceRun.sampler) {
+      resource = await resourceRun.sampler.stop();
+    }
   }
-  const report = makeReport(args, probes, startedAt, Math.round(performance.now() - started));
+  const report = makeReport(args, probes, resource, startedAt, Math.round(performance.now() - started));
 
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));

@@ -17,6 +17,38 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-16 Mac Codex
+
+日期：2026-06-16 13:30
+开发端：Mac Codex
+本轮目标：给 Mac 媒体聚合基线补可选本机资源采样，便于和 Windows 媒体摘要对照。
+完成内容：
+- `scripts/mac/observe-mac-media.mjs` 新增 `--resourceSample`、`--resourceSampleIntervalMs` 和 `--resourceSampleTimeoutMs`，默认关闭；开启后只读 `/discovery.runtime.processId`，仅对本机 Mac host 进程用 `ps` 采样 CPU、RSS 和虚拟内存。
+- JSON 报告新增 `resource` 与对应 `args.resourceSample*` 字段；`--boardSummary` 新增 `resource=off|sampled|unavailable` 片段，保持一行、无密、无输入、无 inject。
+- 采样不可用、目标不是本机、缺少 runtime PID 或在 Windows 审查机运行时，只记录 unavailable，不影响视频/音频 probe 成败。
+- `scripts/mac/test-mac-media-json-output.mjs` 增加资源采样 fake-host 回归，并保持默认关闭、partial failure、失败摘要和不泄密检查。
+修改文件：
+- `scripts/mac/observe-mac-media.mjs`
+- `scripts/mac/test-mac-media-json-output.mjs`
+- `README.md`
+- `apps/mac-host/README.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- `node --check scripts/mac/observe-mac-media.mjs`
+- `node --check scripts/mac/test-mac-media-json-output.mjs`
+- `node scripts/mac/test-mac-media-json-output.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-script-help.mjs --script observe-mac-media.mjs --script test-mac-media-json-output.mjs --timeoutMs 8000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 8000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" README.md apps/mac-host/README.md docs/04-task-board.md docs/HANDOFF_LOG.md scripts/mac/observe-mac-media.mjs scripts/mac/test-mac-media-json-output.mjs`
+遗留问题：
+- 本轮没有启动真实 Mac host，也没有跑真实资源采样长窗口；下一次真实媒体基线可用 `node scripts/mac/observe-mac-media.mjs --resourceSample --boardSummary` 直接把 CPU/RSS 一并发到 Agent Link Board。
+下一步建议：
+- 双端都可用各自 media aggregate 的一行摘要做 H.264/PCM/FPS/资源对照；如果 Mac 真实采样显示 RSS 或 CPU 异常，再进入 Swift host 侧采集/编码性能定位。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
 ## 2026-06-16 Windows Codex
 
 日期：2026-06-16 13:35

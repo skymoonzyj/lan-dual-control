@@ -120,9 +120,10 @@ node scripts/mac/check-mac-formal-local-smoke.mjs --promptPassword
 ```bash
 LAN_DUAL_PASSWORD=... node scripts/mac/observe-mac-media.mjs --json
 node scripts/mac/observe-mac-media.mjs --videoDurationMs 30000 --audioDurationMs 30000 --maxFrameAgeMs 250 --boardSummary
+node scripts/mac/observe-mac-media.mjs --resourceSample --boardSummary
 ```
 
-它会顺序运行 H.264 视频观察和系统 PCM 音频观察，避免同时压两个媒体 probe；不会启动 host、不会认证之外做任何控制动作、不会发送输入事件，也不会执行 `inject`。密码只通过 `LAN_DUAL_PASSWORD` 传给子观察脚本，不放进子进程 argv；`--boardSummary` 只输出一行联络板安全摘要，默认 `playTone=false`，需要有声电平强校验时才显式加 `--playTone --requireLevel`。
+它会顺序运行 H.264 视频观察和系统 PCM 音频观察，避免同时压两个媒体 probe；不会启动 host、不会认证之外做任何控制动作、不会发送输入事件，也不会执行 `inject`。密码只通过 `LAN_DUAL_PASSWORD` 传给子观察脚本，不放进子进程 argv；`--resourceSample` 可只读采样本机 Mac host 进程 CPU/RSS，并写入 JSON 与一行摘要，采样不可用时只标记 unavailable；`--boardSummary` 只输出一行联络板安全摘要，默认 `playTone=false`，需要有声电平强校验时才显式加 `--playTone --requireLevel`。
 
 启动助手会：
 
