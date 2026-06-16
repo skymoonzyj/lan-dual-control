@@ -28,6 +28,7 @@ const defaults = {
   h264Encoder: "",
   wgcHelper: "",
   includeWgcNv12: false,
+  boardSummary: false,
 };
 
 const cases = [
@@ -139,6 +140,7 @@ Options:
   --h264Encoder <name>             Optional encoder for H.264 cases, for example h264_nvenc
   --includeWgcNv12                 Include the real WGC NV12 + H.264 case in the default matrix
   --wgcHelper <path>               WGC helper exe for the WGC NV12 H.264 case
+  --boardSummary          Print one Agent Link Board-safe summary line
   --json                  Print machine-readable summary only
   --verbose               Print each child self-test output
   --help, -h              Show this help without starting browsers or hosts
@@ -199,6 +201,10 @@ function parseArgs(argv) {
     }
     if (token === "--json") {
       args.json = true;
+      continue;
+    }
+    if (token === "--boardSummary") {
+      args.boardSummary = true;
       continue;
     }
     if (token === "--verbose") {
@@ -320,6 +326,49 @@ function summarizeAttempt(result) {
   };
 }
 
+function compactText(value, maxLength = 160) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) {
+    return text;
+  }
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trim()}...`;
+}
+
+function makeBoardSummary(summary) {
+  const requested = summary.casesRequested.length;
+  const passed = summary.casesPassed;
+  const retried = summary.results
+    .filter((result) => Array.isArray(result.attempts) && result.attempts.length > 1)
+    .map((result) => `${result.id}:${result.attempts.length}`);
+  const failed = summary.results.filter((result) => !result.ok);
+  const wgcText = summary.includeWgcNv12 ? "wgcNv12=included" : "wgcNv12=skipped";
+  const encoderText = summary.h264Encoder ? `encoder=${summary.h264Encoder}` : "encoder=default";
+  if (summary.ok) {
+    return (
+      `Mac client video transports passed: ${passed}/${requested}; ` +
+      `cases=${summary.casesRequested.join(",")}; ${encoderText}; ${wgcText}; ` +
+      `retries=${retried.length ? retried.join(",") : "none"}. ` +
+      "No formal password, no Agent Link Board secrets, no input/inject."
+    );
+  }
+
+  const failedText = failed
+    .map((result) => {
+      const attemptCount = Array.isArray(result.attempts) ? result.attempts.length : result.attempt || 1;
+      const reason = compactText(result.tail || result.attempts?.at(-1)?.tail || "failed", 120);
+      return `${result.id}(attempts=${attemptCount},reason=${reason})`;
+    })
+    .join("; ");
+  const stoppedText = summary.casesCompleted < requested
+    ? `; stoppedAfter=${summary.casesCompleted}/${requested}`
+    : "";
+  return (
+    `Mac client video transports failed: passed=${passed}/${requested}${stoppedText}; ` +
+    `failed=${failedText || "unknown"}; ${encoderText}; ${wgcText}; ` +
+    "No formal password, no Agent Link Board secrets, no input/inject."
+  );
+}
+
 function runCase(testCase, args, index, attempt) {
   return new Promise((resolveRun) => {
     const portOffset = index * (args.retries + 1) + (attempt - 1);
@@ -384,7 +433,7 @@ function runCase(testCase, args, index, attempt) {
       });
     }, killAfterMs);
     const progressMs = Math.max(0, Number(args.progressIntervalMs) || 0);
-    const progressTimer = !args.json && progressMs > 0
+    const progressTimer = !args.json && !args.boardSummary && progressMs > 0
       ? setInterval(() => {
         const elapsedMs = performance.now() - startedAt;
         const timeoutLeftMs = Math.max(0, killAfterMs - elapsedMs);
@@ -400,14 +449,14 @@ function runCase(testCase, args, index, attempt) {
     child.stdout.on("data", (chunk) => {
       const text = String(chunk);
       stdout += text;
-      if (args.verbose && !args.json) {
+      if (args.verbose && !args.json && !args.boardSummary) {
         process.stdout.write(text);
       }
     });
     child.stderr.on("data", (chunk) => {
       const text = String(chunk);
       stderr += text;
-      if (args.verbose && !args.json) {
+      if (args.verbose && !args.json && !args.boardSummary) {
         process.stderr.write(text);
       }
     });
@@ -460,7 +509,7 @@ async function runCaseWithRetries(testCase, args, index) {
     }
 
     if (attempt < maxAttempts) {
-      if (!args.json) {
+      if (!args.json && !args.boardSummary) {
         console.log(`[WARN] ${testCase.id}: attempt ${attempt}/${maxAttempts} failed; retrying in ${args.retryDelayMs}ms`);
       }
       await delay(args.retryDelayMs);
@@ -486,7 +535,7 @@ async function main() {
   }
 
   const results = [];
-  if (!args.json) {
+  if (!args.json && !args.boardSummary) {
     console.log(
       `[INFO] Running ${selectedCases.length} Mac client video transport case(s) sequentially; ` +
       `progressEvery=${progressEveryText(args)}`,
@@ -495,7 +544,7 @@ async function main() {
 
   for (let index = 0; index < selectedCases.length; index += 1) {
     const testCase = selectedCases[index];
-    if (!args.json) {
+    if (!args.json && !args.boardSummary) {
       console.log(
         `[RUN] ${testCase.id} (${index + 1}/${selectedCases.length}): ${testCase.label}; ` +
         `attempts=${args.retries + 1}`,
@@ -503,7 +552,7 @@ async function main() {
     }
     const result = await runCaseWithRetries(testCase, args, index);
     results.push(result);
-    if (!args.json) {
+    if (!args.json && !args.boardSummary) {
       const status = result.ok ? "OK" : "FAIL";
       const attemptText = result.attempts.length > 1 ? ` after ${result.attempts.length} attempts` : "";
       console.log(`[${status}] ${testCase.id}: ${result.durationMs}ms${attemptText}`);
@@ -549,9 +598,12 @@ async function main() {
       tail: result.ok ? "" : tail(`${result.stdout}\n${result.stderr}`),
     })),
   };
+  summary.boardSummary = makeBoardSummary(summary);
 
   if (args.json) {
     console.log(JSON.stringify(summary, null, 2));
+  } else if (args.boardSummary) {
+    console.log(summary.boardSummary);
   } else {
     console.log(summary.ok
       ? `[OK] Mac client video transport matrix passed: ${summary.casesPassed}/${summary.casesRequested.length}`

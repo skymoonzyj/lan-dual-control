@@ -61,7 +61,7 @@
 - Windows 侧 `scripts/windows/test-mac-client-browser.mjs` 现在也有页面等待进度心跳：连接首帧、认证失败等待、H.264/二进制视频等待、音频首帧/播放等待、`--observeVideoMs` 持续视频观察和 `--expectReconnect` 恢复等待都会默认每 10 秒输出当前页面状态；长视频观察会额外输出已收帧数、剩余时间和当前 FPS，重连恢复会输出连接状态、session 数和画面状态。`--progressIntervalMs <ms>` 可调整频率，`0` 可关闭。
 
 - Windows WGC benchmark/compare 长等待也已补进度心跳：`scripts/windows/benchmark-windows-wgc-settings.mjs` 普通输出会在 helper 构建和每个 profile 子观察期间默认每 10 秒打印 elapsed/expected/timeout left；`scripts/windows/compare-windows-wgc-h264-sources.mjs` 普通输出会在每个 raw-bgra/NV12 source 子 benchmark 期间打印同类进度。两者均支持 `--progressIntervalMs <ms>`，传 `0` 可关闭；`--json` 和 `--boardSummary` 保持干净，不混入进度行。新增 `scripts/windows/test-windows-wgc-progress-output.mjs` 用临时 fake 子脚本覆盖普通输出进度、JSON/boardSummary 干净和不泄密。
-- Windows Mac client 视频传输矩阵也已补外层进度心跳：`scripts/windows/test-mac-client-video-transports.mjs` 普通输出会在每个 case/attempt 子页面自检期间默认每 10 秒打印 elapsed、临时 host/client/debug 端口和子进程超时剩余，同时把 `--progressIntervalMs` 透传给 `test-mac-client-browser.mjs`，让内层页面等待也继续输出快照；`--json` 保持纯 JSON。新增 `scripts/windows/test-mac-client-video-transports-progress.mjs` 用 fake 子自检覆盖外层进度、参数透传和 JSON 纯净。
+- Windows Mac client 视频传输矩阵也已补外层进度心跳和上板摘要：`scripts/windows/test-mac-client-video-transports.mjs` 普通输出会在每个 case/attempt 子页面自检期间默认每 10 秒打印 elapsed、临时 host/client/debug 端口和子进程超时剩余，同时把 `--progressIntervalMs` 透传给 `test-mac-client-browser.mjs`，让内层页面等待也继续输出快照；`--json` 保持纯 JSON 并带 `boardSummary` 字段，`--boardSummary` 输出一行无密摘要，包含通过数、失败 case、重试次数和 no input/inject 安全说明。新增 `scripts/windows/test-mac-client-video-transports-progress.mjs` 用 fake 子自检覆盖外层进度、参数透传、成功/失败 boardSummary 和 JSON 纯净。
 
 ## Mac 端状态
 

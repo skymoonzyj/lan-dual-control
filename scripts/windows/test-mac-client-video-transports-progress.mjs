@@ -111,6 +111,10 @@ function argValue(name, fallback = "") {
 await new Promise((resolveDelay) => setTimeout(resolveDelay, Number(process.env.FAKE_BROWSER_DELAY_MS) || 350));
 
 const progress = argValue("--progressIntervalMs", "missing");
+if (process.env.FAKE_BROWSER_FAIL === "1") {
+  console.error("[FAIL] fake child failure progress=" + progress);
+  process.exit(7);
+}
 console.log("[OK] Binary H.264 video: fake frame visible progress=" + progress);
 console.log("[OK] Mac client browser self-test passed progress=" + progress);
 `;
@@ -120,6 +124,7 @@ async function verifyHelp() {
   const matrixHelp = await runNode([matrixScript, "--help"]);
   assert(matrixHelp.ok, `matrix --help failed\n${matrixHelp.stderr}`);
   assertIncludes(matrixHelp.stdout, "--progressIntervalMs", "matrix help");
+  assertIncludes(matrixHelp.stdout, "--boardSummary", "matrix help");
 
   const selfHelp = await runNode([fileURLToPath(import.meta.url), "--help"]);
   assert(selfHelp.ok, `self --help failed\n${selfHelp.stderr}`);
@@ -153,6 +158,72 @@ async function verifyOrdinaryProgress(fakeBrowserPath) {
   console.log("[OK] Matrix ordinary output prints outer progress and passes progress to the child");
 }
 
+function nonEmptyLines(text) {
+  return String(text || "").split(/\r?\n/).filter((line) => line.trim());
+}
+
+async function verifyBoardSummaryClean(fakeBrowserPath) {
+  const result = await runNode([
+    matrixScript,
+    "--case",
+    "binary-h264",
+    "--timeoutMs",
+    "10000",
+    "--progressIntervalMs",
+    "100",
+    "--retries",
+    "0",
+    "--boardSummary",
+  ], {
+    env: {
+      ...process.env,
+      LAN_DUAL_MAC_CLIENT_BROWSER_TEST_SCRIPT: fakeBrowserPath,
+      FAKE_BROWSER_DELAY_MS: "350",
+    },
+  });
+  assert(result.ok, `matrix boardSummary run failed\n${result.stdout}\n${result.stderr}`);
+  const lines = nonEmptyLines(result.stdout);
+  assert(lines.length === 1, `boardSummary should print one line, got ${lines.length}\n${result.stdout}`);
+  assertIncludes(lines[0], "Mac client video transports passed", "boardSummary");
+  assertIncludes(lines[0], "cases=binary-h264", "boardSummary");
+  assertIncludes(lines[0], "No formal password", "boardSummary");
+  assertIncludes(lines[0], "no input/inject", "boardSummary");
+  assertNotIncludes(lines[0], "[INFO]", "boardSummary");
+  assertNotIncludes(lines[0], "progress:", "boardSummary");
+  console.log("[OK] Matrix --boardSummary remains one clean success line");
+}
+
+async function verifyFailureBoardSummary(fakeBrowserPath) {
+  const result = await runNode([
+    matrixScript,
+    "--case",
+    "binary-h264",
+    "--timeoutMs",
+    "10000",
+    "--progressIntervalMs",
+    "100",
+    "--retries",
+    "0",
+    "--boardSummary",
+  ], {
+    env: {
+      ...process.env,
+      LAN_DUAL_MAC_CLIENT_BROWSER_TEST_SCRIPT: fakeBrowserPath,
+      FAKE_BROWSER_DELAY_MS: "350",
+      FAKE_BROWSER_FAIL: "1",
+    },
+  });
+  assert(!result.ok, "failure boardSummary should exit non-zero");
+  const lines = nonEmptyLines(result.stdout);
+  assert(lines.length === 1, `failure boardSummary should print one line, got ${lines.length}\n${result.stdout}`);
+  assertIncludes(lines[0], "Mac client video transports failed", "failure boardSummary");
+  assertIncludes(lines[0], "failed=binary-h264", "failure boardSummary");
+  assertIncludes(lines[0], "No formal password", "failure boardSummary");
+  assertNotIncludes(lines[0], "[INFO]", "failure boardSummary");
+  assertNotIncludes(lines[0], "progress:", "failure boardSummary");
+  console.log("[OK] Matrix failure --boardSummary remains one clean line");
+}
+
 async function verifyJsonClean(fakeBrowserPath) {
   const result = await runNode([
     matrixScript,
@@ -177,6 +248,7 @@ async function verifyJsonClean(fakeBrowserPath) {
   assertNotIncludes(result.stdout, "progress:", "JSON output");
   const summary = parseJsonOutput(result.stdout, "matrix JSON output");
   assert(summary.progressIntervalMs === 100, "JSON summary should include progressIntervalMs");
+  assertIncludes(summary.boardSummary, "Mac client video transports passed", "JSON boardSummary");
   assert(summary.results?.[0]?.highlights?.some((line) => line.includes("progress=100")), "JSON highlights should retain child progress argument evidence");
   console.log("[OK] Matrix --json remains clean");
 }
@@ -188,6 +260,8 @@ async function main() {
   try {
     await writeFile(fakeBrowserPath, fakeBrowserSelfTestSource(), "utf8");
     await verifyOrdinaryProgress(fakeBrowserPath);
+    await verifyBoardSummaryClean(fakeBrowserPath);
+    await verifyFailureBoardSummary(fakeBrowserPath);
     await verifyJsonClean(fakeBrowserPath);
   } finally {
     await rm(tempDir, { recursive: true, force: true }).catch(() => {});

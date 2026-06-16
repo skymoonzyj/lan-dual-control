@@ -19,6 +19,39 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 22:41
+开发端：Windows Codex
+本轮目标：让 Mac client 视频传输矩阵可以直接输出适合 Agent Link Board 的一行摘要。
+完成内容：
+- `test-mac-client-video-transports.mjs` 新增 `--boardSummary`，成功和失败路径都会输出一行无密摘要。
+- `--json` 输出新增 `boardSummary` 字段，自动化可直接读取。
+- 摘要包含通过数、失败 case、重试次数、H.264 encoder / WGC NV12 是否包含，以及 no formal password / no Agent Link Board secrets / no input/inject 安全说明。
+- `--boardSummary` 模式不打印外层进度、重试 warning 或 verbose 子输出，保持一行可贴通讯板。
+- `test-mac-client-video-transports-progress.mjs` 扩展 fake 子自检回归，覆盖成功摘要、失败摘要、JSON 摘要和不混入进度行。
+- Windows host README、当前状态、下一步和任务板已同步。
+修改文件：
+- `scripts/windows/test-mac-client-video-transports.mjs`
+- `scripts/windows/test-mac-client-video-transports-progress.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-client-video-transports.mjs`
+- `node --check scripts/windows/test-mac-client-video-transports-progress.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script test-mac-client-video-transports.mjs --script test-mac-client-video-transports-progress.mjs --timeoutMs 10000`
+- `node scripts/windows/test-mac-client-video-transports-progress.mjs`（普通沙盒需允许临时 Node 子进程，已按允许子进程方式通过）
+遗留问题：
+- 本轮只验证矩阵调度层和 fake 子自检输出，未启动真实 Windows host/browser/WGC helper，未连接 Mac、未认证正式服务、未发送输入或执行 `inject`。
+下一步建议：
+- 后续 H.264 / fallback / binary frame 改动后，可用 `test-mac-client-video-transports --boardSummary` 一行同步矩阵结果到通讯板；若失败，再用普通输出或 `--json` 查看详情。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 22:33
 开发端：Windows Codex
 本轮目标：让 Mac client 视频传输矩阵在多 case 浏览器自检等待时有外层进度反馈。
