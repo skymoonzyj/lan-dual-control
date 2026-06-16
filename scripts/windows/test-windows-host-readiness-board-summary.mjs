@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import http from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -141,6 +142,44 @@ function parseJson(text, label) {
   }
 }
 
+async function withMockLinkBoard(callback, stateOverrides = {}) {
+  const state = {
+    currentCall: null,
+    statuses: {},
+    events: [],
+    ...stateOverrides,
+  };
+  const server = http.createServer((request, response) => {
+    if (request.method === "GET" && request.url === "/api/state") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify(state));
+      return;
+    }
+    response.writeHead(404, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ ok: false, error: "not found" }));
+  });
+  await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  const address = server.address();
+  try {
+    await callback(`http://127.0.0.1:${address.port}`);
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose));
+  }
+}
+
+function macCallForWindows() {
+  return {
+    status: "CALLING",
+    from: "Mac Codex",
+    need: "Windows Codex",
+    goal: "正式 Windows host 验收",
+    connection: "Windows host /discovery",
+    command: "node scripts/windows/start-windows-host.mjs --status --json",
+    expected: "Windows confirms host readiness before Mac runs formal smoke.",
+    ask: "请 Windows 先只读确认 status。",
+  };
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -155,14 +194,43 @@ async function main() {
   assert(!help.timedOut, "readiness --help timed out");
   assert(help.exitCode === 0, `readiness --help exited ${help.exitCode}`);
   assert(help.stdout.includes("--boardSummary"), "readiness --help does not mention --boardSummary");
+  assert(help.stdout.includes("--checkBoard"), "readiness --help does not mention --checkBoard");
+  assert(help.stdout.includes("--server"), "readiness --help does not mention --server");
   assert(help.stdout.includes("--probeClipboardSecurity"), "readiness --help does not mention --probeClipboardSecurity");
   assert(help.stdout.includes("--probeWgcH264Sources"), "readiness --help does not mention --probeWgcH264Sources");
 
-  const jsonRun = await runNode(
-    "readiness JSON board summary",
-    [readinessScript, "--json", "--timeoutMs", String(args.readinessTimeoutMs)],
-    args.timeoutMs,
-  );
+  let jsonRun = null;
+  let boardRun = null;
+  await withMockLinkBoard(async (serverUrl) => {
+    jsonRun = await runNode(
+      "readiness JSON board summary",
+      [
+        readinessScript,
+        "--json",
+        "--checkBoard",
+        "--server",
+        serverUrl,
+        "--timeoutMs",
+        String(args.readinessTimeoutMs),
+      ],
+      args.timeoutMs,
+    );
+    boardRun = await runNode(
+      "readiness board summary",
+      [
+        readinessScript,
+        "--boardSummary",
+        "--checkBoard",
+        "--server",
+        serverUrl,
+        "--timeoutMs",
+        String(args.readinessTimeoutMs),
+      ],
+      args.timeoutMs,
+    );
+  }, {
+    currentCall: macCallForWindows(),
+  });
   results.push(jsonRun);
   assert(!jsonRun.timedOut, "readiness --json timed out");
   const jsonSummary = parseJson(jsonRun.stdout, "readiness --json");
@@ -172,6 +240,12 @@ async function main() {
   assert(Array.isArray(jsonSummary.macClientReadinessCommands), "JSON macClientReadinessCommands must be an array");
   assert(Array.isArray(jsonSummary.results), "JSON results must be an array");
   assert(jsonSummary.args?.probeWgcH264Sources === false, "default JSON should keep WGC H.264 source probe disabled");
+  assert(jsonSummary.args?.checkBoard === true, "JSON args should record checkBoard");
+  assert(jsonSummary.board?.ok === true, "JSON board snapshot should be ok");
+  assert(jsonSummary.board?.currentCall?.active === true, "JSON board currentCall should be active");
+  assert(jsonSummary.board?.currentCall?.needsWindows === true, "JSON board currentCall should need Windows");
+  assert(jsonSummary.boardSummary.includes("call=CALLING Mac Codex->Windows Codex"), "JSON boardSummary should include active currentCall");
+  assert(!jsonSummary.boardSummary.includes("--status --json"), "JSON boardSummary should not echo call command");
   assert(jsonSummary.results.some((result) => result.label === "Windows host runtime"), "JSON results missing runtime check");
   assertNoSecretLeak(jsonRun.stdout, "readiness --json stdout");
   assertNoSecretLeak(jsonRun.stderr, "readiness --json stderr");
@@ -198,16 +272,13 @@ async function main() {
   assertNoSecretLeak(clipboardRun.stdout, "readiness --probeClipboardSecurity stdout");
   assertNoSecretLeak(clipboardRun.stderr, "readiness --probeClipboardSecurity stderr");
 
-  const boardRun = await runNode(
-    "readiness board summary",
-    [readinessScript, "--boardSummary", "--timeoutMs", String(args.readinessTimeoutMs)],
-    args.timeoutMs,
-  );
   results.push(boardRun);
   assert(!boardRun.timedOut, "readiness --boardSummary timed out");
   const lines = boardRun.stdout.trim().split(/\r?\n/).filter(Boolean);
   assert(lines.length === 1, `readiness --boardSummary should print one line, got ${lines.length}`);
   assert(lines[0].includes("Windows readiness"), "board summary has unexpected text");
+  assert(lines[0].includes("call=CALLING Mac Codex->Windows Codex"), "board summary is missing active currentCall");
+  assert(!lines[0].includes("--status --json"), "board summary should not echo call command");
   assert(lines[0].includes("Do not send passwords"), "board summary is missing board safety reminder");
   assert(!/\[(INFO|OK|WARN|ERROR|FAIL)\]/.test(lines[0]), "board summary should be plain one-line text");
   assertNoSecretLeak(boardRun.stdout, "readiness --boardSummary stdout");

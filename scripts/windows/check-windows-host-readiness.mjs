@@ -25,6 +25,8 @@ const defaults = {
   skipCurrentBuildCheck: false,
   requireOpen: false,
   strict: false,
+  server: "http://192.168.31.68:17888",
+  checkBoard: false,
   boardSummary: false,
   json: false,
 };
@@ -59,6 +61,7 @@ function parseArgs(argv) {
       key === "skipCurrentBuildCheck" ||
       key === "requireOpen" ||
       key === "strict" ||
+      key === "checkBoard" ||
       key === "boardSummary" ||
       key === "json"
     ) {
@@ -91,6 +94,8 @@ function parseArgs(argv) {
   args.skipCurrentBuildCheck = booleanArg(args.skipCurrentBuildCheck);
   args.requireOpen = booleanArg(args.requireOpen);
   args.strict = booleanArg(args.strict);
+  args.server = String(args.server || defaults.server).trim();
+  args.checkBoard = booleanArg(args.checkBoard);
   args.boardSummary = booleanArg(args.boardSummary);
   args.json = booleanArg(args.json);
   return args;
@@ -149,6 +154,9 @@ Options:
   --skipCurrentBuildCheck   Do not warn when running host build differs from current git.
   --requireOpen       Require LAN/firewall port probe to be open.
   --strict            Treat warnings as failure.
+  --server <url>      Agent Link Board URL. Default: ${defaults.server}
+  --checkBoard        Read one Agent Link Board /api/state snapshot and surface
+                      active Mac -> Windows currentCall.
   --boardSummary      Print a short secret-free Agent Link Board summary.
   --json              Print machine-readable JSON summary.
   --help, -h          Show this help without running checks.
@@ -200,6 +208,127 @@ function splitLines(text) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function normalizedText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function isActiveCallStatus(status) {
+  const normalized = normalizedText(status).toLowerCase();
+  if (!normalized) return true;
+  return !["done", "complete", "completed", "clear", "cleared", "cancelled", "canceled", "idle", "resolved", "closed"].includes(normalized);
+}
+
+function isWindowsText(text) {
+  return /windows|Windows Codex|Windows 端|Windows host|windows-host|start-windows-host/i.test(String(text || ""));
+}
+
+function isMacText(text) {
+  return /mac|macOS|Mac Codex|Mac 端/i.test(String(text || ""));
+}
+
+function normalizeBoardCurrentCall(call) {
+  if (!call || typeof call !== "object") {
+    return {
+      present: false,
+      active: false,
+      summary: "none",
+    };
+  }
+  const parsed = {
+    present: true,
+    status: normalizedText(call.status),
+    from: normalizedText(call.from),
+    need: normalizedText(call.need),
+    goal: normalizedText(call.goal),
+    environment: normalizedText(call.environment),
+    connection: normalizedText(call.connection),
+    command: normalizedText(call.command),
+    expected: normalizedText(call.expected),
+    actual: normalizedText(call.actual),
+    ask: normalizedText(call.ask),
+    blockedBy: normalizedText(call.blockedBy),
+    startedAt: normalizedText(call.startedAt),
+    updatedAt: normalizedText(call.updatedAt),
+    active: false,
+    needsWindows: false,
+    fromMacSide: false,
+    summary: "",
+  };
+  const text = [
+    parsed.goal,
+    parsed.environment,
+    parsed.connection,
+    parsed.command,
+    parsed.expected,
+    parsed.actual,
+    parsed.ask,
+    parsed.blockedBy,
+  ].join("\n");
+  parsed.active = isActiveCallStatus(parsed.status);
+  parsed.needsWindows = isWindowsText(parsed.need) || isWindowsText(text);
+  parsed.fromMacSide = isMacText(parsed.from) || isMacText(text);
+  const direction = [parsed.from || "unknown", parsed.need || "unknown"].join("->");
+  parsed.summary = `${parsed.status || "CALL"} ${direction}${parsed.goal ? ` ${parsed.goal}` : ""}`;
+  return parsed;
+}
+
+async function getBoardSnapshot(args) {
+  if (!args.checkBoard) {
+    return {
+      requested: false,
+      ok: null,
+      status: null,
+      currentCall: {
+        present: false,
+        active: false,
+        summary: "not checked",
+      },
+      error: "",
+    };
+  }
+
+  const controller = new AbortController();
+  const timeoutMs = Math.min(Math.max(args.timeoutMs, 5000), 30000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(new URL("/api/state", args.server), {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        ...(process.env.CODEX_LINK_TOKEN ? { "X-Codex-Link-Token": process.env.CODEX_LINK_TOKEN } : {}),
+      },
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      return {
+        requested: true,
+        ok: false,
+        status: response.status,
+        currentCall: normalizeBoardCurrentCall(null),
+        error: `${response.status}: ${text}`,
+      };
+    }
+    const state = text ? JSON.parse(text) : {};
+    return {
+      requested: true,
+      ok: true,
+      status: response.status,
+      currentCall: normalizeBoardCurrentCall(state.currentCall),
+      error: "",
+    };
+  } catch (error) {
+    return {
+      requested: true,
+      ok: false,
+      status: null,
+      currentCall: normalizeBoardCurrentCall(null),
+      error: error.message,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function runCommand(label, command, commandArgs, options = {}) {
@@ -536,6 +665,9 @@ function makeReadinessBoardSummary(summary) {
   const wgcSourceResult = summary.results.find((result) => result.label === "Windows WGC H.264 source comparison") || null;
   const state = summary.ok ? "passed" : "failed";
   const mode = summary.strict ? "strict" : summary.args.profile;
+  const activeCall = summary.board?.currentCall?.active && summary.board.currentCall.needsWindows && summary.board.currentCall.fromMacSide
+    ? ` call=${compactText(summary.board.currentCall.summary, 180)}.`
+    : "";
   const hasRuntimeBoardSummary = Boolean(runtimeResult?.boardSummary);
   const runtimeText = hasRuntimeBoardSummary
     ? compactText(runtimeResult.boardSummary)
@@ -560,7 +692,7 @@ function makeReadinessBoardSummary(summary) {
   const probeText = probeSentences
     .map((sentence) => (sentence.endsWith(".") ? sentence : `${sentence}.`))
     .join(" ");
-  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${runtimeSentence}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
+  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port};${activeCall} ${runtimeSentence}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
 }
 
 function filterExpectedWarnings(label, warnings) {
@@ -686,6 +818,19 @@ async function main() {
   }
 
   const results = [];
+  const board = await getBoardSnapshot(args);
+  if (args.checkBoard) {
+    if (board.ok) {
+      if (board.currentCall?.present) {
+        const state = board.currentCall.active ? "active" : "inactive";
+        print("INFO", `Agent Link Board currentCall=${state} ${board.currentCall.summary}`, args);
+      } else {
+        print("OK", "Agent Link Board currentCall=none", args);
+      }
+    } else {
+      print("WARN", `Agent Link Board unavailable: ${board.error || "unknown error"}`, args);
+    }
+  }
   const node = process.execPath;
   const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
   const powershell = process.platform === "win32" ? "powershell.exe" : "pwsh";
@@ -822,7 +967,8 @@ async function main() {
   }
 
   const failed = results.filter((result) => !result.ok);
-  const warnings = results.flatMap((result) => result.warnings);
+  const boardWarnings = args.checkBoard && !board.ok ? [`Agent Link Board unavailable: ${board.error || "unknown error"}`] : [];
+  const warnings = results.flatMap((result) => result.warnings).concat(boardWarnings);
   const ok = failed.length === 0 && (!args.strict || warnings.length === 0);
   const macClientReadinessCommands = results.flatMap((result) =>
     Array.isArray(result.macClientReadinessCommands) ? result.macClientReadinessCommands : [],
@@ -849,8 +995,11 @@ async function main() {
       requireCurrentBuildId: args.requireCurrentBuildId,
       skipCurrentBuildCheck: args.skipCurrentBuildCheck,
       requireOpen: args.requireOpen,
+      server: args.server,
+      checkBoard: args.checkBoard,
       boardSummary: args.boardSummary,
     },
+    board,
     passed: results.filter((result) => result.ok).length,
     failed: failed.length,
     warnings: warnings.length,

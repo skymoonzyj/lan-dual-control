@@ -19,6 +19,38 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 12:18
+开发端：Windows Codex
+本轮目标：让 Windows host readiness 在准备 Mac 反控 Windows 时也能看到 Agent Link Board 当前测试呼叫。
+完成内容：
+- `scripts/windows/check-windows-host-readiness.mjs` 新增 `--checkBoard` 和 `--server <url>`，只读读取 Agent Link Board `/api/state.currentCall`。
+- JSON 输出新增 `board`；普通输出会提示当前 call active/inactive；`--boardSummary` 只在 active Mac -> Windows call 时追加 `call=...`，DONE call 不当作待办。
+- 通讯板读取失败只作为 warning，不会认证 WebSocket、不要求或发送密码、不发送输入、不执行 `inject`。
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs` 增加 fake Agent Link Board active Mac -> Windows call，覆盖 JSON 和一行 boardSummary 均能提示 call，且不回显 call command。
+修改文件：
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-host-readiness.mjs`
+- `node --check scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 120000 --readinessTimeoutMs 8000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-host-readiness.mjs --script test-windows-host-readiness-board-summary.mjs --timeoutMs 10000`
+- `node scripts/windows/check-windows-host-readiness.mjs --checkBoard --boardSummary --timeoutMs 8000`
+遗留问题：
+- 本轮不自动响应/清理通讯板 call，也不启动 Windows host；只让 readiness 在 Mac 已发 call 时更容易被 Windows 侧看见。
+下一步建议：
+- Mac 发起 `run-mac-client-formal-smoke --discover --ensureClient --preflightOnly --sendCall` 后，Windows 可跑 `node scripts/windows/check-windows-host-readiness.mjs --checkBoard --boardSummary`，确认本机 readiness 和 active call 后再启动 Windows host。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 12:05
 开发端：Windows Codex
 本轮目标：让 Windows 恢复开工总览与 Mac 侧一样优先结构化读取 Agent Link Board 当前测试呼叫。
