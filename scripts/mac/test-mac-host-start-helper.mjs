@@ -211,6 +211,36 @@ async function assertDryRunWithEnvPassword(timeoutMs) {
   print("OK", "Environment password allows dry run with safe log input mode");
 }
 
+async function assertInjectStartRequiresUserConfirmation(timeoutMs) {
+  const result = await runNode(["--requirePassword", "--inputMode", "inject", "--skipRuntimeCheck"], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "test-password" },
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (result.exitCode === 0 || result.timedOut) {
+    throw new Error(`Inject start should require explicit user-watching confirmation.\n${output}`);
+  }
+  assertIncludes(output, "Refusing to start real input injection without --confirmUserWatching", "inject confirmation failure");
+  assertNotIncludes(output, "Starting Mac host", "inject confirmation failure");
+  assertNotIncludes(output, "Mac host password", "inject confirmation failure");
+  print("OK", "Inject mode refuses to start without explicit user-watching confirmation");
+}
+
+async function assertInjectDryRunStillShowsPlan(timeoutMs) {
+  const result = await runNode(["--requirePassword", "--inputMode", "inject", "--dryRun"], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "test-password" },
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (result.exitCode !== 0 || result.timedOut) {
+    throw new Error(`Inject dry-run should still be allowed for planning.\n${output}`);
+  }
+  assertIncludes(output, "Input mode: inject (real injection)", "inject dry-run plan");
+  assertIncludes(output, "Dry run finished", "inject dry-run plan");
+  assertNotIncludes(output, "Starting Mac host", "inject dry-run plan");
+  print("OK", "Inject dry-run remains available without starting the host");
+}
+
 async function assertEphemeralPasswordDryRun(timeoutMs) {
   const result = await runNode(["--ephemeralPassword", "--requirePassword", "--dryRun"], {
     timeoutMs,
@@ -757,6 +787,8 @@ async function main() {
   await assertPromptPasswordFailsWithoutTty(args.timeoutMs);
   await assertPromptPasswordIgnoresEnvAndStillRequiresDialog(args.timeoutMs);
   await assertDryRunWithEnvPassword(args.timeoutMs);
+  await assertInjectStartRequiresUserConfirmation(args.timeoutMs);
+  await assertInjectDryRunStillShowsPlan(args.timeoutMs);
   await assertEphemeralPasswordDryRun(args.timeoutMs);
   await assertEphemeralPasswordRefusesEnvOverride(args.timeoutMs);
   await assertStatusOffline(args.timeoutMs);

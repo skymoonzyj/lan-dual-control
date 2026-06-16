@@ -117,7 +117,7 @@ node scripts/mac/check-mac-formal-local-smoke.mjs --promptPassword
 - `--stop` 只停止本机 `/discovery` 对应的 macOS host 进程；它要求目标看起来是 Mac host 且提供 `runtime.processId`，不会因为端口上有 Windows host 或未知服务就误杀进程。
 - 等待 `/discovery` 就绪后，默认运行 `check-mac-displays --requireRuntime --expectBuildId <build>` 做只读 runtime/display round-trip 校验；如果需要密码，会通过子进程环境变量传递，不会放进 `--password` 命令参数。
 - `--background` 会在 `/discovery` 和 runtime/display 校验通过后退出启动助手，并让 Mac host 在后台继续运行；默认日志路径在 `.dev-lab/mac-host/`，该目录不会提交到仓库。
-- 如需真实输入注入，必须有人在屏幕前确认安全后，再显式传 `--inputMode inject` 或 `--injectInput`。
+- 如需真实输入注入，必须有人在屏幕前确认安全后，再显式传 `--inputMode inject --confirmUserWatching` 或 `--injectInput --confirmUserWatching`；缺少确认标记时启动助手会拒绝切入真实注入模式。
 
 启动助手自检：
 
@@ -224,7 +224,7 @@ swift run lan-dual-mac-host
 `LAN_DUAL_INPUT_MODE` 可选值：
 
 - `log`：默认值。只打印输入事件，不真正移动鼠标或按键，适合联调协议时避免误操作。
-- `inject`：收到 Windows 控制端的 `input_event` 后调用 macOS `CGEvent` 执行输入；只在有人看屏幕并确认安全后显式启用。
+- `inject`：收到 Windows 控制端的 `input_event` 后调用 macOS `CGEvent` 执行输入；只在有人看屏幕并确认安全后显式启用。通过 `scripts/mac/start-mac-host.mjs` 启动时必须额外加 `--confirmUserWatching`，避免无人值守误切真实输入。
 
 验证 Mac 键盘注入映射覆盖：
 

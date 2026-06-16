@@ -39,6 +39,7 @@ const defaults = {
   logFile: "",
   status: false,
   stop: false,
+  confirmUserWatching: false,
   json: false,
   dryRun: false,
   help: false,
@@ -70,6 +71,7 @@ function parseArgs(argv) {
       key === "background" ||
       key === "status" ||
       key === "stop" ||
+      key === "confirmUserWatching" ||
       key === "json" ||
       key === "dryRun"
     ) {
@@ -155,6 +157,8 @@ Options:
                              then exit without starting.
   --stop                     Stop the local Mac host that answers /discovery on this port.
                              Requires macOS /discovery and runtime.processId; no password is read.
+  --confirmUserWatching      Required with --inputMode inject / --injectInput. Confirms a human
+                             is watching the Mac screen and can take over.
   --json                     With --status, print machine-readable JSON only.
                              With --stop, print machine-readable JSON only.
   --dryRun                   Print the resolved launch plan and exit.
@@ -698,6 +702,15 @@ async function preparePassword(args) {
   }
 }
 
+function assertInjectUserConfirmation(args) {
+  if (args.status || args.stop || args.dryRun) return;
+  if (args.inputMode !== "inject") return;
+  if (args.confirmUserWatching) return;
+  throw new Error(
+    "Refusing to start real input injection without --confirmUserWatching. Only use inject mode when a human is watching the Mac screen and can take over.",
+  );
+}
+
 function makeEphemeralPassword() {
   return `ephemeral-${crypto.randomBytes(24).toString("base64url")}`;
 }
@@ -878,6 +891,7 @@ async function main() {
     return;
   }
 
+  assertInjectUserConfirmation(args);
   await preparePassword(args);
   const env = makeLaunchEnv(args);
   printLaunchPlan(args);
