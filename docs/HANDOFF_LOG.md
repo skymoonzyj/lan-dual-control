@@ -17,6 +17,36 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-16 Mac Codex
+
+日期：2026-06-16 09:25
+开发端：Mac Codex
+本轮目标：收口真实 Mac input inject 复跑文档，确保后续两端不会复制旧命令绕过 `--confirmUserWatching` 护栏。
+完成内容：
+- 开工检查 Agent Link Board、远端 git 和 Mac resume summary；当前 repo 干净，Mac host 在线于 `192.168.31.122:43770`，runtime build `d398d64`，`inputMode=log`，权限/H.264/audio 可用；运行中 host 到当前 repo 仅 build metadata stale，host runtime source diff=0。
+- 文档同步 `scripts/mac/start-mac-host.mjs` 最新安全行为：真实 `--inputMode inject` / `--injectInput` 启动必须额外带 `--confirmUserWatching`，dry-run/status/stop/log 模式不受影响。
+- 更新可复制复跑命令：真实 safe inject 复跑时 Mac 端应先确认用户正在看 Mac 屏幕，再运行 `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --inputMode inject --confirmUserWatching --background`；Windows 端仍只跑 `--inputEventSet safe --expectInputMode inject --expectInputInjected true`。
+- 明确裸 `LAN_DUAL_INPUT_MODE=inject` 只保留给人工监督下的底层调试，不作为日常交接命令。
+- 本轮未启动/停止 host，未要求密码，未发送密码，未执行 `inject`，未改协议或代码。
+修改文件：
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/08-next-work-plan.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary`
+- `git diff --check`
+- 冲突标记扫描
+- `rg` 检查文档中 `inject` / `--inputMode inject` 复跑口径
+遗留问题：
+- 当前 Mac host runtime build 仍是 `d398d64`，repo 是更新后的文档提交；host runtime source diff=0，不影响当前 log-mode 服务。下一次需要部署强验收时再重启 host 到最新 build metadata。
+下一步建议：
+- 继续做无需用户授权的稳定性任务：优先在 log 模式下复跑 Mac host 长稳/恢复状态检查，或推进 Mac client 控制 Windows 真连前的只读清单和 UI 体验。
+是否改了协议：否。
+是否需要另一端配合：否；仅请 Windows 端后续复跑真实 inject 时按新文档加 `--confirmUserWatching`。
+
 ## 2026-06-16 Windows Codex
 
 日期：2026-06-16 09:30

@@ -76,7 +76,7 @@ Windows 端：
 - [x] 底层 Mac host 探针支持自动发现最佳 Mac host 后再做认证、媒体、剪贴板和 input-log 验收。
 - [x] PowerShell Mac host 验收入口支持 `-Discover` 自动发现；发现失败先退出，不弹密码框，方便 Windows 端无手填 IP 做 H.264、音频、剪贴板和 input-log 探针。
 - [x] Windows Mac host 底层探针支持真实输入注入强校验：`--expectInputInjected true|false` 校验 `input_ack.injected`，`--inputEventSet safe` 默认只发鼠标移动和 F13，避免真机 inject 验收时误点或把 log-only ack 误判为通过。
-- [x] 真实 Windows 控制 Mac safe inject 小验收通过：2026-06-16 连接 `192.168.31.122:43770` / runtime build `d398d64` / `inputMode=inject`，Windows 本机隐藏输入密码后 safe set 2 个事件均 `input_ack injected=true`，未执行点击、Delete、Ctrl+A 或 full event set。
+- [x] 真实 Windows 控制 Mac safe inject 小验收通过：2026-06-16 连接 `192.168.31.122:43770` / runtime build `d398d64` / `inputMode=inject`，Windows 本机隐藏输入密码后 safe set 2 个事件均 `input_ack injected=true`，未执行点击、Delete、Ctrl+A 或 full event set；后续复跑 Mac 端启动 inject host 必须带 `--confirmUserWatching`。
 - [x] Windows 端新增恢复开工总览 `scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`：只读汇总 git、通讯板、Mac formal preflight、自动发现目标和下一步命令；不认证、不要求密码、不发送输入、不执行 `inject`。
 - [x] Windows 恢复开工总览新增 PowerShell 包装入口 `scripts/windows/check-windows-resume-status.ps1 -CheckBoard -BoardSummary`，并可加 `-CheckClientDiagnostics` 做无密 Windows 控制端页面诊断。
 - [x] Windows 恢复开工总览支持 `--userAuthRequest` / PowerShell `-UserAuthRequest`，预检 ready 后直接输出可发 Agent Link Board 的 `NEED_USER_AUTH` 文本和固定目标 PowerShell 正式验收命令。
@@ -134,7 +134,7 @@ Windows 端：
 - macOS 被控端已补齐 FPS 诊断字段：`session_answer`、`display_settings_ack` 和 `video_frame` 会返回 `requestedFps`、实际 `fps`、`maxScreenFps`、`frameIntervalMs`、`videoCodec` 和 `capturePipeline`。
 - macOS 被控端 JPEG 调试链路默认真实采集上限改为 30 FPS；Windows 控制端会显示实收 FPS、协商帧率和请求帧率，避免把请求值误认为真实帧率。
 - macOS 被控端 H.264 流式启动有 5 秒 watchdog；启动阶段未建立 `videoStream` 时会回退 `background-jpeg` 并带 `streamFallbackReason`，迟到启动成功的旧流会被 generation token 停止。
-- macOS 被控端已接入 CGEvent 输入注入；当前默认 `LAN_DUAL_INPUT_MODE=log` 做安全联调，只有显式设为 `inject` 时才真实注入。
+- macOS 被控端已接入 CGEvent 输入注入；当前默认 `LAN_DUAL_INPUT_MODE=log` 做安全联调，日常启动助手只有在显式 `--inputMode inject --confirmUserWatching` 或 `--injectInput --confirmUserWatching` 时才允许真实注入。
 - Windows 控制端当前已可区分真实 JPEG、H.264 视频帧和模拟视频帧，并记录图片或 WebCodecs 解码失败；`scripts/windows/test-mac-host.ps1 -Discover` 可用于真机连通自检并自动发现 Mac host，显式加 `-ClipboardText -ClipboardFile` 可验证 macOS 文本和文件剪贴板写入。
 - Windows 端新增 `scripts/windows/check-mac-formal-e2e.mjs` 正式 Mac E2E 聚合脚本：`--preflightOnly --boardSummary` 可只读生成可发 Agent Link Board 的无密摘要，`--preflightOnly --json` 可给自动化读取并带 `runPlan`，普通预检也会列出正式验收步骤、预计耗时、密码经环境变量传递和 `inject=false` 安全边界；`--preflightOnly --userAuthRequest` 可输出无密 `NEED_USER_AUTH`，`--preflightOnly --sendUserAuthRequest` / PowerShell `-SendUserAuthRequest` 会在预检 ready 后直接发送到 Agent Link Board，未 ready 不发送；真正验收时使用 `--promptPassword` 由用户本机隐藏输入正式密码，默认串联发现/认证/H.264 长测/音频/剪贴板/input-log/页面 H.264，密码只经环境变量传给子探针，不执行 `inject`。2026-06-16 真实 `192.168.31.122:43770` 已在 runtime build `c5e5009` 完成完整 formal E2E 并通过：H.264/WebCodecs、音频、剪贴板、input-log、页面诊断和黑边防护 OK，node exit code 0；后续复跑仍按先预检、再本机隐藏输入密码的流程，`inject` 继续单独确认。
 - 真 Mac 已通过强校验探针验证真实 JPEG 首帧、H.264 Annex B 首帧和 PCM 音频帧：`-RequireRealVideo` 会拒绝 mock/fallback 视频帧，`-RequireH264` 会确认 SPS/PPS/IDR，`-RequireAudio` 会确认 `pcm-f32le-base64` payload，`-ExpectInputMode log` 可确认安全输入模式。

@@ -92,7 +92,7 @@
 2. 用 `scripts/windows/probe-mac-host.mjs --requireRealVideo --expectInputMode log --inputEvents` 或 Windows 侧 `scripts/windows/test-mac-host.ps1 -RequireRealVideo -ExpectInputMode log -InputEvents` 验证 `/discovery`、WebSocket、认证、会话、真实首帧和 `input_ack`。
 3. 验证屏幕录制、辅助功能、输入监控权限。
 4. 验证 Windows 控制端能收到 `codec: "jpeg"` 的真实 Mac 屏幕帧。
-5. 在确认安全后切换 `LAN_DUAL_INPUT_MODE=inject`，验证 Windows 控制端能移动 Mac 鼠标、点击、滚轮和发送常用快捷键。
+5. 在用户明确确认正在看 Mac 屏幕后，通过启动助手显式加 `--inputMode inject --confirmUserWatching` 切换真实注入；先复跑 safe 事件集（鼠标移动 + F13），只有再次确认能承受副作用时再验证点击、滚轮和常用快捷键。
 6. 验证 Windows 和 Mac 能互相同步系统文本剪贴板。
 7. 验证 Windows 发送文件剪贴板后，Mac Finder 能粘贴收到的文件。
 8. 验证 Mac 复制普通文件后，Windows 控制端能按块接收并在内存中重组完整文件。
