@@ -302,6 +302,46 @@ function updateRemoteRuntime(runtime) {
   renderSessionDiagnostics();
 }
 
+function compactDiagnosticsText(value, maxLength = 80) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1))}...`;
+}
+
+function normalizeReverseControlGrantStatus(capabilities = {}, reverse = {}) {
+  const rawGrant = reverse.grant && typeof reverse.grant === "object"
+    ? reverse.grant
+    : capabilities.reverseControlGrant && typeof capabilities.reverseControlGrant === "object"
+      ? capabilities.reverseControlGrant
+      : null;
+  if (!rawGrant) return null;
+
+  const lastRequestRaw = rawGrant.lastRequest && typeof rawGrant.lastRequest === "object"
+    ? rawGrant.lastRequest
+    : null;
+  const lastRequest = lastRequestRaw
+    ? {
+      active: Boolean(lastRequestRaw.active),
+      status: compactDiagnosticsText(lastRequestRaw.status, 60),
+      requestId: compactDiagnosticsText(lastRequestRaw.requestId, 60),
+      requester: compactDiagnosticsText(lastRequestRaw.requester, 60),
+      reason: compactDiagnosticsText(lastRequestRaw.reason, 80),
+      requestedAt: compactDiagnosticsText(lastRequestRaw.requestedAt, 40),
+      updatedAt: compactDiagnosticsText(lastRequestRaw.updatedAt, 40),
+      ageMs: Number.isFinite(Number(lastRequestRaw.ageMs)) ? Math.max(0, Number(lastRequestRaw.ageMs)) : null,
+    }
+    : null;
+
+  return {
+    active: Boolean(rawGrant.active),
+    oneTime: Boolean(rawGrant.oneTime),
+    remainingMs: Number.isFinite(Number(rawGrant.remainingMs)) ? Math.max(0, Number(rawGrant.remainingMs)) : 0,
+    grantedAt: compactDiagnosticsText(rawGrant.grantedAt, 40),
+    expiresAt: compactDiagnosticsText(rawGrant.expiresAt, 40),
+    lastRequest,
+  };
+}
+
 function normalizeRemoteCapabilities(capabilities) {
   if (!capabilities || typeof capabilities !== "object") {
     return null;
@@ -352,7 +392,29 @@ function normalizeRemoteCapabilities(capabilities) {
       autoAccept,
       supported,
     },
+    reverseControlGrant: normalizeReverseControlGrantStatus(capabilities, reverse),
   };
+}
+
+function formatReverseControlRequestAge(request = {}) {
+  const ageMs = Number(request.ageMs);
+  if (!Number.isFinite(ageMs) || ageMs < 1000) return "刚刚";
+  const seconds = Math.max(1, Math.floor(ageMs / 1000));
+  if (seconds < 60) return `${seconds} 秒前`;
+  return `${Math.floor(seconds / 60)} 分钟前`;
+}
+
+function formatReverseGrantDiagnostics(grant) {
+  if (!grant || typeof grant !== "object") return "";
+  if (grant.active) {
+    const seconds = Math.max(1, Math.ceil((Number(grant.remainingMs) || 0) / 1000));
+    return `Windows 已临时允许一次 · ${seconds} 秒内重试`;
+  }
+  if (grant.lastRequest?.active) {
+    const requestAge = formatReverseControlRequestAge(grant.lastRequest);
+    return `Windows 已收到请求 · ${requestAge} · 临时允许后重试`;
+  }
+  return "";
 }
 
 function formatReversePolicyDiagnostics(capabilities) {
@@ -376,7 +438,8 @@ function formatReversePolicyDiagnostics(capabilities) {
         : normalized.reverseControlPolicy.autoAccept
           ? "会自动同意"
           : "等待对端策略";
-  return `${modeText} · ${detail}`;
+  const grantText = formatReverseGrantDiagnostics(normalized.reverseControlGrant);
+  return [modeText, detail, grantText].filter(Boolean).join(" · ");
 }
 
 function updateRemoteCapabilities(capabilities) {

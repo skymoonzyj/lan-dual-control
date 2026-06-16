@@ -306,6 +306,7 @@ Mac 端：
 - [x] Windows host 反控请求安全回执：未认证 `LAN002`，默认 `deny` 下认证后 `LAN008` 安全拒绝，显式实验 `accept` 才自动同意，`disabled` 会在发现能力里声明不可用。
 - [x] Windows host 启动/状态/readiness 摘要显示反控策略：启动助手支持 `--reverseControlMode` / PowerShell `-ReverseControlMode`，`--status --json` 暴露 `capabilities.reverseControl`，`--boardSummary` 输出 `reverse=deny-confirm|accept-lab|disabled`。
 - [x] Mac client 会话诊断显示 Windows host 反控策略：从 `/discovery` / `hello_ack` / `session_answer` 读取 `reverseControlMode` / `reverseControlPolicy` / `capabilities.reverseControl`，显示默认拒绝、实验自动同意或未启用；断线、认证失败、重连等待和手动断开会清空旧策略，导出日志包含该字段。
+- [x] Mac client 会话诊断显示 Windows host 一次性临时反控授权和最近请求状态：读取 `reverseControlGrant.active` 与 `reverseControlGrant.lastRequest.active`，提示“Windows 已临时允许一次”或“Windows 已收到请求”，页面自测覆盖扁平/对象/禁用/临时授权/最近请求格式。
 
 验收：
 

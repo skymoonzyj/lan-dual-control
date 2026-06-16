@@ -1311,6 +1311,34 @@ async function assertReversePolicyFormatterVariants(session) {
           reverseControlMode: "disabled",
           reverseControlPolicy: { supported: false },
         }),
+        temporaryGrant: formatReversePolicyDiagnostics({
+          reverseControl: true,
+          reverseControlMode: "deny",
+          reverseControlPolicy: { requiresConfirmation: true, autoAccept: false, supported: true },
+          reverseControlGrant: {
+            active: true,
+            oneTime: true,
+            remainingMs: 30000,
+          },
+        }),
+        pendingRequest: formatReversePolicyDiagnostics({
+          reverseControl: true,
+          reverseControlMode: "deny",
+          reverseControlPolicy: { requiresConfirmation: true, autoAccept: false, supported: true },
+          reverseControlGrant: {
+            active: false,
+            oneTime: true,
+            remainingMs: 0,
+            lastRequest: {
+              active: true,
+              status: "rejected_needs_grant",
+              requestId: "reverse-request-test",
+              requester: "Mac client",
+              reason: "confirmation required",
+              ageMs: 23000,
+            },
+          },
+        }),
         missing: formatReversePolicyDiagnostics({ screen: { capturePipeline: "mock" } }),
       };
     })()`,
@@ -1325,13 +1353,19 @@ async function assertReversePolicyFormatterVariants(session) {
   if (!result.disabled?.includes("未启用") || !result.disabled?.includes("不可请求反控")) {
     mismatches.push(["disabled", result.disabled]);
   }
+  if (!result.temporaryGrant?.includes("Windows 已临时允许一次") || !result.temporaryGrant?.includes("30 秒内重试")) {
+    mismatches.push(["temporaryGrant", result.temporaryGrant]);
+  }
+  if (!result.pendingRequest?.includes("Windows 已收到请求") || !result.pendingRequest?.includes("23 秒前") || !result.pendingRequest?.includes("临时允许后重试")) {
+    mismatches.push(["pendingRequest", result.pendingRequest]);
+  }
   if (result.missing !== "未提供") {
     mismatches.push(["missing", result.missing]);
   }
   if (mismatches.length > 0) {
     throw new Error(`Mac client reverse policy formatter variants mismatch: ${JSON.stringify(mismatches)}`);
   }
-  print("OK", `Reverse policy formatter variants: ${result.flatDeny} / ${result.objectAccept} / ${result.disabled}`);
+  print("OK", `Reverse policy formatter variants: ${result.flatDeny} / ${result.objectAccept} / ${result.disabled} / ${result.temporaryGrant} / ${result.pendingRequest}`);
 }
 
 function installWebSocketSendRecorderExpression() {

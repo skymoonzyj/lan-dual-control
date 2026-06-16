@@ -17,6 +17,41 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 00:10
+开发端：Windows Codex
+本轮目标：让 Mac 控制 Windows 页面显示 Windows host 的一次性临时反控授权和最近请求状态，补齐昨晚 Windows `reverseControlGrant` 的可见闭环。
+完成内容：
+- Mac client 的 `normalizeRemoteCapabilities` 现在会读取 `capabilities.reverseControlGrant` 或对象化 `reverseControl.grant`。
+- “反控策略”诊断行在 Windows 已打开一次性授权时显示“Windows 已临时允许一次 / N 秒内重试”。
+- Windows 已记录最近被默认拒绝的反控请求时，Mac client 会显示“Windows 已收到请求 / 临时允许后重试”。
+- 页面 formatter 回归覆盖默认拒绝、实验自动同意、未启用、临时授权和最近请求五种格式。
+- Mac client README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/mac-client/app.js`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --progressIntervalMs 0`
+- `node --check apps/mac-client/server.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script test-mac-client-browser.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" <本轮文件>`（无冲突标记）
+遗留问题：
+- 这仍是“状态提示”闭环，Mac client 还没有真正的“请求反控/重试反控”按钮和 `reverse_control_response` 产品化状态。
+下一步建议：
+- 下一轮可在 Mac client 增加受保护的“请求反控”按钮：默认先提示 Windows 端需要临时允许，收到 `LAN008` 后保留待重试状态；发现 `reverseControlGrant.active` 后引导用户立即重试。
+是否改了协议：否。只消费 Windows host 已暴露的可选 discovery 能力字段，旧 host 没有该字段时保持原显示。
+是否需要另一端配合：暂不强制需要；真实反控联调时需要 Windows 端打开一次性临时授权窗口。
+
 ## 2026-06-16 Mac Codex
 
 日期：2026-06-16 23:55
