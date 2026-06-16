@@ -1,6 +1,6 @@
 # 当前文件占用
 
-最后更新：2026-06-16
+最后更新：2026-06-17
 
 用途：避免 Windows Codex 和 Mac Codex 同时重写同一片代码。占用不是永久所有权，只表示“我正在处理，另一端先别碰”。
 
@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/check-windows-host-readiness.mjs`, `scripts/windows/test-windows-host-readiness-board-summary.mjs`, `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 00:18 | Windows readiness runtime/boardSummary 保留 `reverse=temporary-grant` 和 `reverse=pending-request`，专项回归用本机临时 host 覆盖默认拒绝后的最近请求和本机一次性授权窗口。 |
 | Windows Codex | `apps/mac-client/app.js`, `apps/mac-client/README.md`, `scripts/windows/test-mac-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 00:10 | Mac client “反控策略”诊断新增 Windows 一次性临时授权和最近请求状态显示：`reverseControlGrant.active` 显示“Windows 已临时允许一次”，`lastRequest.active` 显示“Windows 已收到请求”，页面自测覆盖。 |
 | Windows Codex | `apps/windows-host/src/windows-host-service.mjs`, `scripts/windows/start-windows-host.mjs`, `scripts/windows/test-windows-host-reverse-control.mjs`, `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-host/README.md`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-16 23:59 | Windows host 记录最近一次被默认安全拒绝的反控请求并通过 discovery 暴露；Windows 桌面“本机被控”面板显示“反控：刚收到请求”，提示临时允许后让 Mac 重试。 |
 | Mac Codex | `apps/mac-client/index.html`, `apps/mac-client/app.js`, `apps/mac-client/README.md`, `scripts/windows/test-mac-client-browser.mjs`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-16 23:55 | Mac client 会话诊断新增 Windows host 反控策略显示：读取 `/discovery`、`hello_ack` 和 `session_answer` 的反控能力，展示默认拒绝/实验自动同意/未启用；断线、认证失败、重连等待和手动断开会清空旧策略，日志导出和页面自测已覆盖。 |

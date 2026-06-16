@@ -19,6 +19,35 @@
 
 ## 2026-06-17 Windows Codex
 
+日期：2026-06-17 00:18
+开发端：Windows Codex
+本轮目标：让 Windows readiness 的 runtime/boardSummary 保留一次性反控授权和最近请求状态，避免只读体检把 `temporary-grant` / `pending-request` 降级成普通 `deny`。
+完成内容：
+- `check-windows-host-readiness` 的 runtime 能力摘要新增反控状态优先级：临时授权优先显示 `reverse=temporary-grant`，最近被拒绝请求优先显示 `reverse=pending-request`，否则再显示 `deny-confirm` / `accept-lab` / `disabled`。
+- `test-windows-host-readiness-board-summary` 新增本机临时 Windows host 回归：先认证发送默认拒绝的 `reverse_control_request`，确认 readiness runtime 和 boardSummary 均显示 `pending-request`；再通过本机 `/reverse-control/grant` 打开一次性授权，确认显示 `temporary-grant`。
+- Windows host README、当前状态、下一步和任务板已同步；ACTIVE_LOCKS 将释放本轮文件。
+修改文件：
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-host-readiness.mjs`
+- `node --check scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 120000 --readinessTimeoutMs 10000`
+遗留问题：
+- Mac client 仍需要后续真正的“请求反控/收到 LAN008 后引导 Windows 临时允许/临时授权后重试”产品化按钮和回执状态。
+下一步建议：
+- 继续做 Mac client 的受保护请求反控按钮，或做 Windows 端 readiness/桌面面板在真实 Windows host 常驻时的端到端人工验收。
+是否改了协议：否。只消费已存在的 `capabilities.reverseControl.grant` / `lastRequest` 状态。
+是否需要另一端配合：暂不强制；真实反控闭环验收时需要 Mac 端发起请求、Windows 端点击临时允许后重试。
+
+## 2026-06-17 Windows Codex
+
 日期：2026-06-17 00:10
 开发端：Windows Codex
 本轮目标：让 Mac 控制 Windows 页面显示 Windows host 的一次性临时反控授权和最近请求状态，补齐昨晚 Windows `reverseControlGrant` 的可见闭环。

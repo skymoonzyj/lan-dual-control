@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import http from "node:http";
+import net from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,7 +9,7 @@ const repoRoot = resolve(scriptDir, "../..");
 const readinessScript = resolve(scriptDir, "check-windows-host-readiness.mjs");
 
 const defaults = {
-  timeoutMs: 90000,
+  timeoutMs: 120000,
   readinessTimeoutMs: 8000,
   json: false,
   help: false,
@@ -126,6 +127,7 @@ function assertNoSecretLeak(text, label) {
   const value = String(text || "");
   const forbidden = [
     /demo-password/i,
+    /readiness-reverse-password/i,
     /LAN_DUAL_PASSWORD\s*=/i,
     /--password\s+\S+/i,
     /"password"\s*:/i,
@@ -140,6 +142,210 @@ function parseJson(text, label) {
   } catch (error) {
     throw new Error(`${label} did not print valid JSON: ${error.message}`);
   }
+}
+
+function withTimeout(promise, timeoutMs, label) {
+  return new Promise((resolveTimeout, rejectTimeout) => {
+    const timer = setTimeout(() => rejectTimeout(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolveTimeout(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        rejectTimeout(error);
+      },
+    );
+  });
+}
+
+async function getFreePort(host) {
+  return new Promise((resolvePort, rejectPort) => {
+    const server = net.createServer();
+    server.once("error", rejectPort);
+    server.listen(0, host, () => {
+      const address = server.address();
+      const port = address && typeof address === "object" ? address.port : 0;
+      server.close(() => resolvePort(port));
+    });
+  });
+}
+
+async function waitForDiscovery(host, port, timeoutMs) {
+  const url = `http://${host}:${port}/discovery`;
+  const deadline = Date.now() + timeoutMs;
+  let lastError = null;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      if (response.ok) {
+        return response.json();
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+  }
+  throw new Error(`temporary Windows host discovery did not become ready${lastError ? `: ${lastError.message}` : ""}`);
+}
+
+async function grantReverseControl(host, port, timeoutMs) {
+  const response = await withTimeout(fetch(`http://${host}:${port}/reverse-control/grant`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ durationMs: 30000 }),
+  }), timeoutMs, "grant reverse control");
+  assert(response.status === 200, `grant reverse control failed with HTTP ${response.status}`);
+  const payload = await response.json();
+  assert(payload.ok === true, "grant reverse control response was not ok");
+  assert(payload.reverseControlGrant?.active === true, "grant reverse control did not become active");
+  return payload;
+}
+
+function makeQueue(socket) {
+  const queue = [];
+  const waiters = [];
+  socket.addEventListener("message", (event) => {
+    const raw = typeof event.data === "string" ? event.data : String(event.data || "");
+    const message = JSON.parse(raw);
+    if (waiters.length > 0) {
+      waiters.shift()(message);
+      return;
+    }
+    queue.push(message);
+  });
+  return {
+    next(timeoutMs, label) {
+      if (queue.length > 0) {
+        return Promise.resolve(queue.shift());
+      }
+      return withTimeout(new Promise((resolveMessage) => waiters.push(resolveMessage)), timeoutMs, label);
+    },
+  };
+}
+
+async function openSocket(host, port, timeoutMs) {
+  const socket = new WebSocket(`ws://${host}:${port}`);
+  await withTimeout(new Promise((resolveOpen, rejectOpen) => {
+    socket.addEventListener("open", resolveOpen, { once: true });
+    socket.addEventListener("error", () => rejectOpen(new Error("WebSocket open failed")), { once: true });
+  }), timeoutMs, "temporary Windows host WebSocket open");
+  return { socket, messages: makeQueue(socket) };
+}
+
+async function authenticate(socket, messages, password, timeoutMs) {
+  socket.send(JSON.stringify({ type: "hello" }));
+  const hello = await messages.next(timeoutMs, "temporary host hello_ack");
+  assert(hello.type === "hello_ack", `expected hello_ack, got ${JSON.stringify(hello)}`);
+  socket.send(JSON.stringify({ type: "auth_request", password }));
+  const auth = await messages.next(timeoutMs, "temporary host auth_result");
+  assert(auth.type === "auth_result", `expected auth_result, got ${JSON.stringify(auth)}`);
+  assert(auth.ok === true, `temporary host auth failed: ${JSON.stringify(auth)}`);
+  return hello;
+}
+
+async function requestReverseControl(host, port, password, timeoutMs) {
+  const { socket, messages } = await openSocket(host, port, timeoutMs);
+  try {
+    await authenticate(socket, messages, password, timeoutMs);
+    socket.send(JSON.stringify({
+      type: "reverse_control_request",
+      requestId: "readiness-pending-request",
+      from: "Mac client",
+      message: "readiness regression request",
+    }));
+    const response = await messages.next(timeoutMs, "temporary host reverse_control_response");
+    assert(response.type === "reverse_control_response", `expected reverse_control_response, got ${JSON.stringify(response)}`);
+    assert(response.accepted === false, "default reverse control request should be rejected");
+    assert(response.code === "LAN008", `default reverse control request should return LAN008, got ${response.code}`);
+  } finally {
+    socket.close();
+  }
+  const discovery = await waitForDiscovery(host, port, timeoutMs);
+  assert(discovery.capabilities?.reverseControlGrant?.lastRequest?.active === true, "temporary host did not expose active lastRequest");
+  return discovery;
+}
+
+async function withTemporaryWindowsHost(args, callback) {
+  const { createWindowsHostServer } = await import("../../apps/windows-host/src/windows-host-service.mjs");
+  const host = "127.0.0.1";
+  const port = await getFreePort(host);
+  const password = "readiness-reverse-password";
+  const service = createWindowsHostServer({
+    host,
+    port,
+    password,
+    reverseControlMode: "deny",
+    buildId: "readiness-reverse-state",
+    logger: { info() {}, warn() {}, error() {} },
+  });
+  await withTimeout(service.listen(), args.timeoutMs, "temporary Windows host listen");
+  try {
+    await waitForDiscovery(host, port, args.timeoutMs);
+    await callback({ host, port, password });
+  } finally {
+    await service.close();
+  }
+}
+
+async function runReadinessJsonForHost(label, host, port, args) {
+  const run = await runNode(
+    label,
+    [
+      readinessScript,
+      "--json",
+      "--host",
+      host,
+      "--port",
+      String(port),
+      "--timeoutMs",
+      String(args.readinessTimeoutMs),
+      "--skipCurrentBuildCheck",
+    ],
+    args.timeoutMs,
+  );
+  assert(!run.timedOut, `${label} timed out`);
+  assertNoSecretLeak(run.stdout, `${label} stdout`);
+  assertNoSecretLeak(run.stderr, `${label} stderr`);
+  return { run, payload: parseJson(run.stdout, label) };
+}
+
+function runtimeResultFrom(payload, label) {
+  assert(Array.isArray(payload.results), `${label} JSON results must be an array`);
+  const result = payload.results.find((entry) => entry.label === "Windows host runtime");
+  assert(result, `${label} JSON results missing Windows host runtime`);
+  return result;
+}
+
+async function verifyReverseControlReadinessTokens(args, results) {
+  await withTemporaryWindowsHost(args, async ({ host, port, password }) => {
+    await requestReverseControl(host, port, password, args.readinessTimeoutMs);
+    const pending = await runReadinessJsonForHost("readiness reverse pending request", host, port, args);
+    results.push(pending.run);
+    const pendingRuntime = runtimeResultFrom(pending.payload, pending.run.label);
+    assert(
+      pendingRuntime.summary?.includes("reverse=pending-request"),
+      `runtime summary should preserve pending-request: ${pendingRuntime.summary}`,
+    );
+    assert(
+      pending.payload.boardSummary?.includes("reverse=pending-request"),
+      `boardSummary should preserve pending-request: ${pending.payload.boardSummary}`,
+    );
+
+    await grantReverseControl(host, port, args.readinessTimeoutMs);
+    const grant = await runReadinessJsonForHost("readiness reverse temporary grant", host, port, args);
+    results.push(grant.run);
+    const grantRuntime = runtimeResultFrom(grant.payload, grant.run.label);
+    assert(
+      grantRuntime.summary?.includes("reverse=temporary-grant"),
+      `runtime summary should preserve temporary-grant: ${grantRuntime.summary}`,
+    );
+    assert(
+      grant.payload.boardSummary?.includes("reverse=temporary-grant"),
+      `boardSummary should preserve temporary-grant: ${grant.payload.boardSummary}`,
+    );
+  });
 }
 
 async function withMockLinkBoard(callback, stateOverrides = {}) {
@@ -254,6 +460,8 @@ async function main() {
   }
   assertNoSecretLeak(jsonRun.stdout, "readiness --json stdout");
   assertNoSecretLeak(jsonRun.stderr, "readiness --json stderr");
+
+  await verifyReverseControlReadinessTokens(args, results);
 
   const clipboardRun = await runNode(
     "readiness clipboard security probe",
