@@ -19,6 +19,36 @@
 
 ## 2026-06-16 Mac Codex
 
+日期：2026-06-16 11:48
+开发端：Mac Codex
+本轮目标：让 Mac 恢复开工总览也能看到 Agent Link Board 当前测试呼叫。
+完成内容：
+- `scripts/mac/check-mac-resume-status.mjs` 在 `--checkBoard` 时直接读取 Agent Link Board `/api/state` JSON，并把 `currentCall` 结构化写入 `board.currentCall`。
+- JSON 报告新增 `board.currentCall` 与 `board.activeCall`；普通输出会显示当前 call 摘要；`--boardSummary` 会追加 `call=active/done/none`，便于 Mac 端恢复开工时不漏看 Windows/Mac 待处理呼叫。
+- 摘要只显示 call 状态、标题、来源、需要方和连接，不回显 call command；结构化 JSON 仍保留 command 给自动化读取。
+- `scripts/mac/test-mac-resume-status.mjs` 用独立假 Agent Link Board 子进程覆盖 active call、DONE call、JSON/boardSummary 和秘密安全断言。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 30000`
+- `node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary --timeoutMs 5000`
+遗留问题：
+- 本轮不改变通讯板协议，也不自动发送/清理 call；只做恢复总览提示。真实测试协调仍按现有 `--sendCall` / `--forceCall` 规则执行。
+下一步建议：
+- 每次 Mac 端恢复工作仍先跑 `node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary`；如果显示 `call=active(...)`，先响应或协调该 call，再启动新的正式验收。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Mac Codex
+
 日期：2026-06-16 11:32
 开发端：Mac Codex
 本轮目标：让 Mac 控制 Windows formal status 在本地 Mac client 页面离线时直接指向 `--ensureClient` 恢复路径。

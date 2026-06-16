@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -100,6 +103,7 @@ function print(kind, text) {
 function assertNoPasswordLeak(result, label) {
   const combined = `${result.stdout}\n${result.stderr}`;
   assert(!combined.includes("super-secret-resume-password"), `${label} leaked password text`);
+  assert(!combined.includes("fake-board-token"), `${label} leaked fake board token`);
 }
 
 function assertBoardSummaryShape(text, label) {
@@ -249,7 +253,185 @@ function checkPasswordRedaction(args) {
   print("OK", "Resume status output does not echo unrelated secret-like server text in normal offline mode");
 }
 
-function main() {
+async function withFakeBoard(call, callback) {
+  const dir = mkdtempSync(path.join(tmpdir(), "lan-dual-mac-resume-board-"));
+  const scriptPath = path.join(dir, "fake-board.mjs");
+  const state = {
+    currentCall: call,
+    statuses: {},
+    events: [
+      {
+        id: "event-1",
+        at: new Date().toISOString(),
+        type: "message",
+        from: "Windows Codex",
+        text: "fake board status without secrets",
+      },
+    ],
+    updatedAt: new Date().toISOString(),
+  };
+  writeFileSync(scriptPath, `
+import http from "node:http";
+const state = ${JSON.stringify(state)};
+const server = http.createServer((request, response) => {
+  if (request.method === "GET" && request.url === "/api/state") {
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end(JSON.stringify(state));
+    return;
+  }
+  response.writeHead(404, { "Content-Type": "application/json" });
+  response.end(JSON.stringify({ ok: false, error: "not found" }));
+});
+server.listen(0, "127.0.0.1", () => {
+  const address = server.address();
+  console.log(address.port);
+});
+process.on("SIGTERM", () => server.close(() => process.exit(0)));
+`, "utf8");
+  const child = spawn(process.execPath, [scriptPath], {
+    cwd: repoRoot,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk;
+  });
+
+  try {
+    const port = await waitForPort(child, () => stdout, () => stderr);
+    await callback(`http://127.0.0.1:${port}`);
+  } finally {
+    child.kill("SIGTERM");
+    await new Promise((resolve) => {
+      child.once("exit", resolve);
+      setTimeout(resolve, 1000);
+    });
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function waitForPort(child, getStdout, getStderr) {
+  return new Promise((resolve, reject) => {
+    const started = Date.now();
+    const timer = setInterval(() => {
+      const match = getStdout().match(/(\d+)/);
+      if (match) {
+        clearInterval(timer);
+        resolve(Number(match[1]));
+        return;
+      }
+      if (child.exitCode !== null) {
+        clearInterval(timer);
+        reject(new Error(`fake board exited early\n${getStdout()}\n${getStderr()}`));
+        return;
+      }
+      if (Date.now() - started > 5000) {
+        clearInterval(timer);
+        reject(new Error(`fake board did not start\n${getStdout()}\n${getStderr()}`));
+      }
+    }, 25);
+  });
+}
+
+async function checkBoardCurrentCall(args) {
+  const call = {
+    status: "CALLING",
+    goal: "正式 Windows host 验收",
+    from: "Windows Codex",
+    need: "Mac Codex",
+    connection: "192.168.31.55:43770",
+    command: "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --sendCall",
+    ask: "请先看板再继续，不要发送密码。",
+  };
+  await withFakeBoard(call, async (server) => {
+    const jsonResult = run(args, [
+      "--json",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--timeoutMs",
+      "1200",
+    ]);
+    const payload = parseJson(jsonResult.stdout, "board currentCall resume status");
+    assert(jsonResult.status === 0, `board currentCall JSON should stay non-failing\n${jsonResult.stdout}\n${jsonResult.stderr}`);
+    assert(payload.board?.checked === true, "board currentCall JSON should mark board checked");
+    assert(payload.board?.ok === true, "board currentCall JSON should mark board ok");
+    assert(payload.board?.activeCall === true, "board currentCall JSON should detect active call");
+    assert(payload.board?.currentCall?.goal === call.goal, "board currentCall JSON should include call goal");
+    assert(payload.board?.currentCall?.need === call.need, "board currentCall JSON should include call need");
+    assert(payload.board?.currentCall?.command === call.command, "board currentCall JSON should keep structured command for automation");
+    assert(String(payload.boardSummary || "").includes("call=active"), "board summary should mention active call");
+    assert(String(payload.boardSummary || "").includes(call.goal), "board summary should include call goal");
+    assert(!String(payload.boardSummary || "").includes(call.command), "board summary should not echo call command");
+    assert(payload.recommendations.some((item) => /active call/.test(item.text)), "recommendations should mention active call");
+    assertNoPasswordLeak(jsonResult, "board currentCall JSON");
+
+    const summaryResult = run(args, [
+      "--boardSummary",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--timeoutMs",
+      "1200",
+    ]);
+    assert(summaryResult.status === 0, `board currentCall summary should stay non-failing\n${summaryResult.stdout}\n${summaryResult.stderr}`);
+    const lines = String(summaryResult.stdout || "").trim().split(/\r?\n/).filter(Boolean);
+    assert(lines.length === 1, `board currentCall summary should be one line, got ${lines.length}`);
+    assert(lines[0].includes("call=active"), "board currentCall summary should mention active call");
+    assert(lines[0].includes(call.goal), "board currentCall summary should include call goal");
+    assert(!lines[0].includes(call.command), "board currentCall summary should not echo call command");
+    assertNoPasswordLeak(summaryResult, "board currentCall summary");
+  });
+  print("OK", "Agent Link Board currentCall is surfaced in JSON and board summary");
+}
+
+async function checkBoardDoneCall(args) {
+  const call = {
+    status: "DONE",
+    goal: "历史安全注入验收",
+    from: "Windows Codex",
+    need: "Mac Codex",
+    connection: "192.168.31.122:43770",
+    command: "completed safe probe",
+  };
+  await withFakeBoard(call, async (server) => {
+    const result = run(args, [
+      "--json",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--timeoutMs",
+      "1200",
+    ]);
+    assert(result.status === 0, `done currentCall JSON should stay non-failing\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "done currentCall resume status");
+    assert(payload.board?.activeCall === false, "DONE currentCall should not be active");
+    assert(String(payload.boardSummary || "").includes("call=done"), "board summary should mark DONE call as done");
+    assert(!payload.recommendations.some((item) => /active call/.test(item.text)), "DONE call should not create active-call recommendation");
+    assertNoPasswordLeak(result, "done currentCall JSON");
+  });
+  print("OK", "DONE Agent Link Board currentCall is not treated as active work");
+}
+
+async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
     return;
@@ -262,12 +444,12 @@ function main() {
   checkOnlineJson(args);
   checkOnlineBoardSummary(args);
   checkPasswordRedaction(args);
+  await checkBoardCurrentCall(args);
+  await checkBoardDoneCall(args);
   print("OK", "Mac resume status self-test passed");
 }
 
-try {
-  main();
-} catch (error) {
+main().catch((error) => {
   console.error(`[FAIL] ${error.message}`);
   process.exitCode = 1;
-}
+});

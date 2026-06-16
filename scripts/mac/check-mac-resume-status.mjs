@@ -39,7 +39,8 @@ Options:
   --port <port>              Mac host discovery port. Default: 43770
   --timeoutMs <ms>           Per probe timeout. Default: 5000
   --server <url>             Agent Link Board URL. Default: ${defaults.server}
-  --checkBoard               Read one Agent Link Board snapshot with the CLI.
+  --checkBoard               Read one Agent Link Board snapshot, including
+                             currentCall status.
   --requireClean             Fail if the git worktree has uncommitted changes.
   --requireOnline            Fail if Mac host /discovery is offline.
   --requireNoRuntimeChanges  Fail if current git has Mac host runtime source
@@ -338,16 +339,18 @@ async function getMacHostStatus(args, currentBuildId) {
   }
 }
 
-function getBoardStatus(args) {
+async function getBoardStatus(args) {
   if (!args.checkBoard) {
     return {
       checked: false,
       ok: null,
       summary: "not checked",
       recentLines: [],
+      currentCall: null,
+      activeCall: false,
     };
   }
-  const result = command(process.execPath, [
+  const watchResult = command(process.execPath, [
     "scripts/codex-link-client.mjs",
     "--server",
     args.server,
@@ -357,14 +360,45 @@ function getBoardStatus(args) {
     timeoutMs: Math.max(5000, args.timeoutMs),
     maxBuffer: 8 * 1024 * 1024,
   });
-  const output = `${result.stdout}\n${result.stderr}`;
+  const stateResult = await getBoardState(args);
+  const output = `${watchResult.stdout}\n${watchResult.stderr}`;
   const lines = splitLines(output);
+  const currentCall = normalizeBoardCall(stateResult.state?.currentCall);
   return {
     checked: true,
-    ok: result.ok,
-    summary: result.ok ? `read ${lines.length} non-empty line(s)` : `failed: ${result.error || result.stderr || `exit ${result.status}`}`,
+    ok: watchResult.ok && stateResult.ok,
+    summary: watchResult.ok && stateResult.ok ? `read ${lines.length} non-empty line(s)` : `failed: ${watchResult.error || watchResult.stderr || stateResult.error || `exit ${watchResult.status ?? "state"}`}`,
     recentLines: lines.slice(-12),
+    currentCall,
+    activeCall: isActiveCall(currentCall),
   };
+}
+
+async function getBoardState(args) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1000, args.timeoutMs));
+  try {
+    const response = await fetch(new URL("/api/state", args.server), {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        ...(process.env.CODEX_LINK_TOKEN ? { "X-Codex-Link-Token": process.env.CODEX_LINK_TOKEN } : {}),
+      },
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      return { ok: false, status: response.status, error: `${response.status}: ${text}` };
+    }
+    try {
+      return { ok: true, status: response.status, state: text ? JSON.parse(text) : {} };
+    } catch (error) {
+      return { ok: false, status: response.status, error: `invalid JSON: ${error.message}` };
+    }
+  } catch (error) {
+    return { ok: false, status: null, error: error.message };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function buildRecommendations({ git, host, board, args }) {
@@ -373,6 +407,12 @@ function buildRecommendations({ git, host, board, args }) {
     recommendations.push({
       level: "warning",
       text: "Agent Link Board was not readable; refresh it before coordinating dual-end tests.",
+    });
+  }
+  if (board.checked && board.activeCall) {
+    recommendations.push({
+      level: "next",
+      text: `Agent Link Board has an active call: ${formatCallOneLine(board.currentCall)}. Coordinate before starting another formal test.`,
     });
   }
   if (!git.clean) {
@@ -498,8 +538,50 @@ function formatBoardBuildDiff(buildDiff) {
   return "build comparison unavailable";
 }
 
+function normalizeBoardCall(call) {
+  if (!call || typeof call !== "object") return null;
+  const normalized = {};
+  for (const key of ["status", "goal", "from", "need", "environment", "connection", "command", "expected", "actual", "ask", "blockedBy", "owner", "timeout", "updatedAt"]) {
+    const value = normalizedText(call[key]);
+    if (value) normalized[key] = value;
+  }
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
+function isActiveCall(call) {
+  if (!call) return false;
+  const status = normalizedText(call.status).toLowerCase();
+  if (!status) return true;
+  return !["done", "completed", "complete", "cancelled", "canceled", "resolved", "closed"].includes(status);
+}
+
+function formatCallOneLine(call, options = {}) {
+  if (!call) return "none";
+  const status = normalizedText(call.status) || "CALL";
+  const goal = normalizedText(call.goal) || "untitled";
+  const from = normalizedText(call.from);
+  const need = normalizedText(call.need);
+  const connection = normalizedText(call.connection);
+  const command = normalizedText(call.command);
+  return [
+    `${status}: ${goal}`,
+    from ? `from=${from}` : "",
+    need ? `need=${need}` : "",
+    connection ? `connection=${connection}` : "",
+    options.includeCommand && command ? `command=${command}` : "",
+  ].filter(Boolean).join("; ");
+}
+
+function formatBoardCallSummary(board) {
+  if (!board?.checked) return "call=not-checked";
+  if (!board.ok) return "call=unknown";
+  if (!board.currentCall) return "call=none";
+  const state = board.activeCall ? "active" : "done";
+  return `call=${state}(${formatCallOneLine(board.currentCall)})`;
+}
+
 function formatBoardSummary(report) {
-  const { git, host, currentBuildId, recommendations } = report;
+  const { git, host, board, currentBuildId, recommendations } = report;
   const repoState = `${currentBuildId || "unknown"} ${git.clean ? "clean" : `dirty:${git.changes.length}`}`;
   const blockers = recommendations.filter((item) => item.level === "blocker").length;
   const warnings = recommendations.filter((item) => item.level === "warning").length;
@@ -508,10 +590,11 @@ function formatBoardSummary(report) {
     : warnings > 0
       ? `attention=${warnings} warning(s)`
       : "attention=none";
+  const callSummary = formatBoardCallSummary(board);
 
   if (!host.online) {
     return [
-      `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${attention}.`,
+      `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${attention}.`,
       "Next: start formal host with start-mac-host --promptPassword --requirePassword before Windows E2E.",
       "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
     ].join(" ");
@@ -526,7 +609,7 @@ function formatBoardSummary(report) {
   const buildDiff = formatBoardBuildDiff(host.buildDiff);
 
   return [
-    `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}.`,
+    `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}.`,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}.`,
     "Next formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
@@ -544,6 +627,12 @@ function printReport(report) {
   }
   if (board.checked) {
     console.log(`[${board.ok ? "OK" : "WARN"}] Agent Link Board: ${board.summary}`);
+    if (board.currentCall) {
+      const prefix = board.activeCall ? "NEXT" : "INFO";
+      console.log(`[${prefix}] Agent Link Board currentCall: ${formatCallOneLine(board.currentCall)}`);
+    } else if (board.ok) {
+      console.log("[OK] Agent Link Board currentCall: none");
+    }
   } else {
     console.log("[INFO] Agent Link Board: not checked; add --checkBoard when coordinating with Windows Codex.");
   }
@@ -582,7 +671,7 @@ async function main() {
   const currentBuildId = getCurrentBuildId();
   const git = getGitStatus();
   const host = await getMacHostStatus(args, currentBuildId);
-  const board = getBoardStatus(args);
+  const board = await getBoardStatus(args);
   const recommendations = buildRecommendations({ git, host, board, args });
   const report = {
     ok: computeOk({ git, host, board, recommendations, args }),
