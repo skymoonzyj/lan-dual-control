@@ -56,6 +56,7 @@ const defaults = {
   skipVideo: false,
   skipAudio: false,
   json: false,
+  boardSummary: false,
   verbose: false,
 };
 
@@ -98,11 +99,13 @@ Options:
   --skipAudio                           Only run video observation
   --debugCommands                       Print child observer commands before running
   --json                                Print JSON result only
+  --boardSummary                        Print one secret-free Agent Link Board summary line
   --help, -h                            Show this help without starting a host
 
 Examples:
   node scripts/windows/observe-windows-host-media.mjs
   node scripts/windows/observe-windows-host-media.mjs --resourceSampleTree true --json
+  node scripts/windows/observe-windows-host-media.mjs --resourceSampleTree true --boardSummary
   node scripts/windows/observe-windows-host-media.mjs --useExisting --host 127.0.0.1 --port 43770
 `);
 }
@@ -180,6 +183,7 @@ function parseArgs(argv) {
   args.skipAudio = booleanArg(args.skipAudio);
   args.debugCommands = booleanArg(args.debugCommands);
   args.json = booleanArg(args.json);
+  args.boardSummary = booleanArg(args.boardSummary);
   args.verbose = booleanArg(args.verbose);
 
   if (args.expectSessionFps === 0 && args.useDefaultMaxScreenFps) {
@@ -376,8 +380,103 @@ function formatCommand(scriptPath, argv) {
 }
 
 function print(kind, text, args) {
-  if (args.json) return;
+  if (args.json || args.boardSummary) return;
   console.log(`[${kind}] ${text}`);
+}
+
+function formatNumber(value, digits = 2) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "n/a";
+  const rounded = Number(value).toFixed(digits);
+  return rounded.replace(/\.?0+$/, "");
+}
+
+function formatBitrate(kbps) {
+  const value = Number(kbps);
+  if (!Number.isFinite(value) || value <= 0) return "n/a";
+  if (value >= 1000) return `${formatNumber(value / 1000, 1)}Mbps`;
+  return `${formatNumber(value, 0)}Kbps`;
+}
+
+function videoBoardFragment(video) {
+  if (!video) return "video=skipped";
+  const observation = video.observation || {};
+  const session = video.session || {};
+  const size = observation.width && observation.height
+    ? `${observation.width}x${observation.height}`
+    : session.width && session.height
+      ? `${session.width}x${session.height}`
+      : "unknown-size";
+  const pipeline = session.capturePipeline || firstValue(observation.pipelines) || "unknown-pipeline";
+  const codec = session.videoCodec || firstValue(observation.codecs) || "unknown-codec";
+  const fps = formatNumber(observation.fps);
+  const freshFps = Number(observation.freshFps) > 0 ? ` fresh=${formatNumber(observation.freshFps)}fps` : "";
+  const repeated = Number(observation.repeatedFramePercent) > 0
+    ? ` repeat=${formatNumber(observation.repeatedFramePercent, 1)}%`
+    : "";
+  return [
+    `video=${observation.frameCount ?? "n/a"}f/${fps}fps${freshFps}${repeated}`,
+    size,
+    `${pipeline}/${codec}`,
+    `gapMax=${formatNumber(observation.maxGapMs, 0)}ms`,
+    `ageMax=${formatNumber(observation.maxFrameAgeMs, 0)}ms`,
+  ].join(" ");
+}
+
+function audioBoardFragment(audio) {
+  if (!audio) return "audio=skipped";
+  const observation = audio.observation || {};
+  const steady = observation.steady || {};
+  const session = audio.session || {};
+  const mode = session.audioMode || firstValue(observation.audioModes) || "unknown-mode";
+  const codec = session.audioCodec || firstValue(observation.codecs) || "unknown-codec";
+  const encoding = session.audioEncoding || firstValue(observation.encodings) || "unknown-encoding";
+  return [
+    `audio=${observation.frameCount ?? "n/a"}f steady=${formatNumber(steady.fps ?? observation.fps)}fps`,
+    `${mode}/${codec}/${encoding}`,
+    `gapMax=${formatNumber(steady.maxGapMs ?? observation.maxGapMs, 0)}ms`,
+    `ageMax=${formatNumber(steady.maxFrameAgeMs ?? observation.maxFrameAgeMs, 0)}ms`,
+    Number(observation.maxLevel) > 0 ? `levelMax=${formatNumber(observation.maxLevel, 3)}` : "",
+  ].filter(Boolean).join(" ");
+}
+
+function resourceBoardFragment(report) {
+  const resources = [report.video?.resource, report.audio?.resource].filter(Boolean);
+  const available = resources.filter((resource) => resource?.available);
+  if (!resources.length) return "resource=none";
+  if (!available.length) return "resource=off";
+  const cpuMax = Math.max(...available
+    .map((resource) => Number(resource.maxCpuPercent))
+    .filter((value) => Number.isFinite(value)));
+  const memoryMax = Math.max(...available
+    .map((resource) => Number(resource.peakWorkingSetMiB))
+    .filter((value) => Number.isFinite(value)));
+  const parts = ["resource=sampled"];
+  if (Number.isFinite(cpuMax)) parts.push(`cpuMax=${formatNumber(cpuMax, 1)}%`);
+  if (Number.isFinite(memoryMax)) parts.push(`rssMax=${formatNumber(memoryMax, 1)}MiB`);
+  return parts.join(" ");
+}
+
+function firstValue(values) {
+  return Array.isArray(values) && values.length ? values[0] : "";
+}
+
+function makeBoardSummary(report) {
+  const requestedVideo = report.requested.video
+    ? `${report.requested.video.width}x${report.requested.video.height}@${report.requested.video.fps}Hz/${formatBitrate(report.requested.video.bandwidthKbps)}/${report.requested.video.qualityPreset}`
+    : "video=skipped";
+  const requestedAudio = report.requested.audio
+    ? `${report.requested.audio.audioMode}/${report.requested.audio.durationMs}ms`
+    : "audio=skipped";
+  return [
+    `Windows media: ${report.ok ? "ok" : "failed"}`,
+    `target=${report.target}`,
+    `elapsed=${report.elapsedMs}ms`,
+    `request=${requestedVideo};${requestedAudio}`,
+    videoBoardFragment(report.video),
+    audioBoardFragment(report.audio),
+    resourceBoardFragment(report),
+    "No passwords in summary; no input/inject.",
+  ].join(" | ");
 }
 
 function resourceSummary(resource) {
@@ -395,7 +494,7 @@ function resourceSummary(resource) {
 function makeReport(args, videoRun, audioRun, startedAtIso, finishedAtIso, elapsedMs) {
   const video = videoRun?.result || null;
   const audio = audioRun?.result || null;
-  return {
+  const report = {
     ok: true,
     startedAt: startedAtIso,
     finishedAt: finishedAtIso,
@@ -443,6 +542,8 @@ function makeReport(args, videoRun, audioRun, startedAtIso, finishedAtIso, elaps
       resource: audio.resource,
     } : null,
   };
+  report.boardSummary = makeBoardSummary(report);
+  return report;
 }
 
 async function main() {
@@ -502,6 +603,8 @@ async function main() {
 
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
+  } else if (args.boardSummary) {
+    console.log(report.boardSummary);
   } else {
     print("OK", `Windows host media baseline passed in ${report.elapsedMs} ms`, args);
   }

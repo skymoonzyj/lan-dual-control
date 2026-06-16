@@ -19,6 +19,39 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 12:52
+开发端：Windows Codex
+本轮目标：让 Windows host 媒体观察聚合脚本输出可发 Agent Link Board 的无密摘要。
+完成内容：
+- `scripts/windows/observe-windows-host-media.mjs` 新增 `--boardSummary`：顺序跑视频/音频观察后只输出一行可贴通讯板的媒体基线摘要。
+- JSON 报告新增 `boardSummary` 字段，摘要包含请求分辨率/Hz/Mbps、视频 FPS/最大间隔/帧年龄、音频稳态 FPS/最大间隔/帧年龄和资源采样状态。
+- `--boardSummary` 模式会压掉运行过程日志，避免通讯板消息里混入子命令输出；摘要不包含密码、系统账号、输入事件或 `inject` 命令。
+- 新增 `scripts/windows/test-windows-host-media-board-summary.mjs`，用本机短时 mock 视频/音频 host 覆盖 JSON boardSummary、一行 boardSummary、help 和不泄密。
+修改文件：
+- `scripts/windows/observe-windows-host-media.mjs`
+- `scripts/windows/test-windows-host-media-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/observe-windows-host-media.mjs`
+- `node --check scripts/windows/test-windows-host-media-board-summary.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script observe-windows-host-media.mjs --script test-windows-host-media-board-summary.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-host-media-board-summary.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --timeoutMs 10000`
+- `node scripts/windows/observe-windows-host-media.mjs --skipAudio --videoScreenMode mock --requireRealVideo false --videoDurationMs 800 --videoMinFrames 2 --videoMinFps 1 --resourceSample false --password media-test-secret-should-not-render --boardSummary`
+遗留问题：
+- 本轮只做摘要输出和 mock 回归；真实 FFmpeg gdigrab 视频基线仍需在桌面捕获稳定后复测，或继续推进 WGC/原生硬编路线。
+下一步建议：
+- 后续做 Windows host 画质/延迟/资源对照时，可直接跑 `node scripts/windows/observe-windows-host-media.mjs --resourceSampleTree true --boardSummary`，把一行结果发到 Agent Link Board 给 Mac 端对齐。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 12:45
 开发端：Windows Codex
 本轮目标：让 Windows 桌面版“本机被控”面板也能显示 Agent Link Board 当前测试呼叫。
