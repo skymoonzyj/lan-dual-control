@@ -44,6 +44,9 @@ Common examples:
 This wrapper calls node scripts/windows/check-windows-resume-status.mjs. It is
 read-only: it does not authenticate a WebSocket, does not ask for or print
 passwords, does not send input, and does not execute inject.
+
+When -CheckBoard is set, the report also summarizes the current Agent Link
+call so Windows can see active Mac -> Windows test requests during resume.
 "@
 }
 

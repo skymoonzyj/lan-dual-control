@@ -49,6 +49,40 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 11:40
+开发端：Windows Codex
+本轮目标：让 Windows 恢复开工总览能看到 Agent Link Board 当前测试呼叫。
+完成内容：
+- `scripts/windows/check-windows-resume-status.mjs` 在 `--checkBoard` 时解析联络板 `currentCall`，提取 status/from/need/goal/command 等摘要，并判断是否 active、是否来自 Mac 侧、是否需要 Windows 处理。
+- JSON 报告新增 `board.currentCall`；普通输出会在 Agent Link Board 行下显示 `currentCall=active/inactive` 和可执行 command；`--boardSummary` 会在有 active call 时追加 `call=...`，方便直接贴回通讯板。
+- `scripts/windows/check-windows-resume-status.ps1` 帮助文案同步说明 `-CheckBoard` 会汇总当前 Agent Link call。
+- Node 和 PowerShell 两套回归都新增 fake Agent Link Board active Mac -> Windows call 覆盖，确认摘要包含方向/目标且不泄露测试密码。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- PowerShell 7 AST 语法解析 `check-windows-resume-status.ps1`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- 本轮只用假 Mac host 和假 Agent Link Board 自测；没有启动真实 Windows host、没有连接真实 Mac、没有认证 WebSocket、没有发送密码、没有执行 `inject`。
+下一步建议：
+- Mac 端发 `run-mac-client-formal-smoke --discover --ensureClient --preflightOnly --sendCall` 后，Windows 侧可同时用 watcher 弹窗和 `check-windows-resume-status --checkBoard --boardSummary` 看见该 active call，再启动/确认 Windows host。
+是否改了协议：否。
+是否需要另一端配合：当前不需要；后续真实 Mac 控制 Windows 验收时由 Mac 端发 call。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 11:20
 开发端：Windows Codex
 本轮目标：让 Windows 本地 Agent Link watcher 能识别 Mac 发给 Windows 的正式测试呼叫。

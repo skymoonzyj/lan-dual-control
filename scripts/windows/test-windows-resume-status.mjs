@@ -117,8 +117,14 @@ async function withMockHost(callback) {
   }
 }
 
-async function withMockLinkBoard(callback) {
+async function withMockLinkBoard(callback, stateOverrides = {}) {
   const messages = [];
+  const state = {
+    currentCall: null,
+    statuses: {},
+    events: [],
+    ...stateOverrides,
+  };
   const server = http.createServer((request, response) => {
     let body = "";
     request.setEncoding("utf8");
@@ -138,7 +144,7 @@ async function withMockLinkBoard(callback) {
       }
       if (request.method === "GET" && request.url === "/api/state") {
         response.writeHead(200, { "Content-Type": "application/json" });
-        response.end(JSON.stringify({ currentCall: null, statuses: {}, events: [] }));
+        response.end(JSON.stringify(state));
         return;
       }
       response.writeHead(404, { "Content-Type": "application/json" });
@@ -155,6 +161,21 @@ async function withMockLinkBoard(callback) {
   } finally {
     await new Promise((resolveClose) => server.close(resolveClose));
   }
+}
+
+function macCallForWindows() {
+  return {
+    status: "CALLING",
+    from: "Mac Codex",
+    need: "Windows Codex",
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    goal: "正式 Windows host 验收",
+    connection: "Windows host /discovery",
+    command: "node scripts/windows/start-windows-host.mjs --status --json",
+    expected: "Windows confirms host readiness before Mac runs formal smoke.",
+    ask: "请 Windows 先只读确认 status。",
+  };
 }
 
 async function checkHelp(args) {
@@ -220,6 +241,69 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "mac=ready", "board summary");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "board summary");
     console.log("[OK] Windows resume status board summary is one-line and secret-free");
+  });
+}
+
+async function checkBoardCurrentCallJson(args) {
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock currentCall JSON failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.currentCall?.present === true, "currentCall should be present");
+      assert(payload.board?.currentCall?.active === true, "currentCall should be active");
+      assert(payload.board?.currentCall?.from === "Mac Codex", "currentCall from mismatch");
+      assert(payload.board?.currentCall?.need === "Windows Codex", "currentCall need mismatch");
+      assert(payload.board?.currentCall?.needsWindows === true, "currentCall should need Windows");
+      assert(payload.board?.currentCall?.fromMacSide === true, "currentCall should be Mac-side");
+      assertIncludes(payload.boardSummary, "call=CALLING Mac Codex->Windows Codex", "currentCall board summary");
+      assertIncludes(payload.boardSummary, "正式 Windows host 验收", "currentCall board summary");
+      assertNotIncludes(result.stdout + result.stderr, "test-password", "currentCall JSON");
+      console.log("[OK] Windows resume status JSON includes active Agent Link currentCall");
+    }, {
+      currentCall: macCallForWindows(),
+    });
+  });
+}
+
+async function checkBoardCurrentCallSummary(args) {
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--boardSummary",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock currentCall board summary failed\n${result.stdout}\n${result.stderr}`);
+      const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean);
+      assert(lines.length === 1, `currentCall board summary should be one line, got ${lines.length}`);
+      assertIncludes(result.stdout, "call=CALLING Mac Codex->Windows Codex", "currentCall board summary");
+      assertIncludes(result.stdout, "正式 Windows host 验收", "currentCall board summary");
+      assertNotIncludes(result.stdout + result.stderr, "test-password", "currentCall board summary");
+      console.log("[OK] Windows resume status board summary includes active Agent Link currentCall");
+    }, {
+      currentCall: macCallForWindows(),
+    });
   });
 }
 
@@ -343,6 +427,8 @@ async function main() {
   await checkHelp(args);
   await checkMockJson(args);
   await checkBoardSummary(args);
+  await checkBoardCurrentCallJson(args);
+  await checkBoardCurrentCallSummary(args);
   await checkUserAuthRequest(args);
   await checkSendUserAuthRequest(args);
   await checkSendUserAuthRequestOffline(args);

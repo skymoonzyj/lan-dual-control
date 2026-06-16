@@ -126,8 +126,14 @@ async function withMockHost(callback) {
   }
 }
 
-async function withMockLinkBoard(callback) {
+async function withMockLinkBoard(callback, stateOverrides = {}) {
   const messages = [];
+  const state = {
+    currentCall: null,
+    statuses: {},
+    events: [],
+    ...stateOverrides,
+  };
   const server = http.createServer((request, response) => {
     let body = "";
     request.setEncoding("utf8");
@@ -143,6 +149,11 @@ async function withMockLinkBoard(callback) {
         }
         response.writeHead(200, { "Content-Type": "application/json" });
         response.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      if (request.method === "GET" && request.url === "/api/state") {
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify(state));
         return;
       }
       response.writeHead(404, { "Content-Type": "application/json" });
@@ -161,6 +172,21 @@ async function withMockLinkBoard(callback) {
   }
 }
 
+function macCallForWindows() {
+  return {
+    status: "CALLING",
+    from: "Mac Codex",
+    need: "Windows Codex",
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    goal: "正式 Windows host 验收",
+    connection: "Windows host /discovery",
+    command: "node scripts/windows/start-windows-host.mjs --status --json",
+    expected: "Windows confirms host readiness before Mac runs formal smoke.",
+    ask: "请 Windows 先只读确认 status。",
+  };
+}
+
 async function checkWrapperHelp(args) {
   const result = await runPowerShell(["-Help"], args);
   const output = `${result.stdout}\n${result.stderr}`;
@@ -168,6 +194,7 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "Usage:", "PowerShell wrapper help");
   assertIncludes(output, "-CheckBoard -BoardSummary", "PowerShell wrapper help");
   assertIncludes(output, "-UserAuthRequest", "PowerShell wrapper help");
+  assertIncludes(output, "current Agent Link", "PowerShell wrapper help");
   assertIncludes(output, "does not ask for or print", "PowerShell wrapper help");
   assertIncludes(output, "passwords", "PowerShell wrapper help");
   console.log("[OK] PowerShell resume-status wrapper help is safe");
@@ -222,6 +249,34 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "No password was requested or sent", "PowerShell board summary");
     assertNotIncludes(output, "test-password", "PowerShell board summary");
     console.log("[OK] PowerShell resume-status wrapper prints one-line board summary");
+  });
+}
+
+async function checkBoardCurrentCallSummary(args) {
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-CheckBoard",
+        "-BoardSummary",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell currentCall board summary failed\n${output}`);
+      assertIncludes(output, "call=CALLING Mac Codex->Windows Codex", "PowerShell currentCall board summary");
+      assertIncludes(output, "正式 Windows host 验收", "PowerShell currentCall board summary");
+      assertNotIncludes(output, "test-password", "PowerShell currentCall board summary");
+      console.log("[OK] PowerShell resume-status wrapper includes active Agent Link currentCall");
+    }, {
+      currentCall: macCallForWindows(),
+    });
   });
 }
 
@@ -326,6 +381,7 @@ async function main() {
   await checkWrapperHelp(args);
   await checkMockJson(args);
   await checkBoardSummary(args);
+  await checkBoardCurrentCallSummary(args);
   await checkUserAuthRequest(args);
   await checkSendUserAuthRequest(args);
   await checkOfflineDefaults(args);

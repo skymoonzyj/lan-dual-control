@@ -49,7 +49,7 @@ Options:
   --discoverTimeoutMs <ms>      Per-host discovery timeout. Default: ${defaults.discoverTimeoutMs}
   --timeoutMs <ms>              Per child command timeout. Default: ${defaults.timeoutMs}
   --server <url>                Agent Link Board URL. Default: ${defaults.server}
-  --checkBoard                  Read one Agent Link Board snapshot.
+  --checkBoard                  Read one Agent Link Board snapshot, including currentCall.
   --checkClientDiagnostics      Also run Windows client diagnostics in formal preflight.
   --allowMockVideo              Permit mock video in formal preflight; tests only.
   --skipAudio                   Skip audio capability in formal preflight.
@@ -183,6 +183,100 @@ function tailLines(text, limit = 12) {
   return lines.slice(-limit);
 }
 
+function isActiveCallStatus(status) {
+  const normalized = normalizedText(status).toLowerCase();
+  if (!normalized) return true;
+  return !["done", "complete", "completed", "clear", "cleared", "cancelled", "canceled", "idle"].includes(normalized);
+}
+
+function isWindowsText(text) {
+  return /windows|Windows Codex|Windows 端|Windows host|windows-host|start-windows-host/i.test(String(text || ""));
+}
+
+function isMacText(text) {
+  return /mac|macOS|Mac Codex|Mac 端/i.test(String(text || ""));
+}
+
+function parseBoardCurrentCall(output) {
+  const lines = splitLines(output);
+  const callIndex = lines.findIndex((line) => line.startsWith("[call]"));
+  if (callIndex < 0) {
+    return {
+      present: false,
+      active: false,
+      summary: "none",
+    };
+  }
+  const callLine = lines[callIndex];
+  if (/^\[call\]\s+none\b/i.test(callLine)) {
+    return {
+      present: false,
+      active: false,
+      summary: "none",
+    };
+  }
+
+  const parsed = {
+    present: true,
+    status: "",
+    from: "",
+    need: "",
+    goal: "",
+    environment: "",
+    connection: "",
+    command: "",
+    expected: "",
+    actual: "",
+    ask: "",
+    blockedBy: "",
+    active: false,
+    needsWindows: false,
+    fromMacSide: false,
+    summary: "",
+  };
+  const header = callLine.match(/^\[call\]\s*([^:]*):\s*(.*)$/);
+  if (header) {
+    parsed.status = normalizedText(header[1]);
+    parsed.goal = normalizedText(header[2]);
+  }
+
+  const fields = new Map([
+    ["from", "from"],
+    ["need", "need"],
+    ["environment", "environment"],
+    ["connection", "connection"],
+    ["command", "command"],
+    ["expected", "expected"],
+    ["actual", "actual"],
+    ["ask", "ask"],
+    ["blockedBy", "blockedBy"],
+  ]);
+  for (const line of lines.slice(callIndex + 1)) {
+    if (line.startsWith("[")) break;
+    const field = line.match(/^([A-Za-z]+):\s*(.*)$/);
+    if (!field) continue;
+    const key = fields.get(field[1]);
+    if (key) parsed[key] = normalizedText(field[2]);
+  }
+
+  const text = [
+    parsed.goal,
+    parsed.environment,
+    parsed.connection,
+    parsed.command,
+    parsed.expected,
+    parsed.actual,
+    parsed.ask,
+    parsed.blockedBy,
+  ].join("\n");
+  parsed.active = isActiveCallStatus(parsed.status);
+  parsed.needsWindows = isWindowsText(parsed.need) || isWindowsText(text);
+  parsed.fromMacSide = isMacText(parsed.from) || isMacText(text);
+  const direction = [parsed.from || "unknown", parsed.need || "unknown"].join("->");
+  parsed.summary = `${parsed.status || "CALL"} ${direction}${parsed.goal ? ` ${parsed.goal}` : ""}`;
+  return parsed;
+}
+
 function getGitStatus() {
   const branch = command("git", ["status", "--short", "--branch"], { timeoutMs: 5000 });
   const head = command("git", ["log", "--oneline", "--decorate", "-1"], { timeoutMs: 5000 });
@@ -211,6 +305,11 @@ function getBoardSnapshot(args) {
       status: null,
       lineCount: 0,
       tail: [],
+      currentCall: {
+        present: false,
+        active: false,
+        summary: "not checked",
+      },
       error: "",
     };
   }
@@ -220,12 +319,14 @@ function getBoardSnapshot(args) {
     "watch",
     "--once",
   ], { timeoutMs: Math.min(Math.max(args.timeoutMs, 5000), 30000) });
+  const output = `${result.stdout}\n${result.stderr}`;
   return {
     requested: true,
     ok: result.ok,
     status: result.status,
-    lineCount: splitLines(`${result.stdout}\n${result.stderr}`).length,
-    tail: tailLines(`${result.stdout}\n${result.stderr}`, 8),
+    lineCount: splitLines(output).length,
+    tail: tailLines(output, 8),
+    currentCall: parseBoardCurrentCall(output),
     error: normalizedText(result.error || result.stderr),
   };
 }
@@ -348,6 +449,9 @@ function makeBoardSummary(report) {
       ? "ok"
       : "failed"
     : "skipped";
+  const boardCall = report.board.currentCall?.active
+    ? `; call=${report.board.currentCall.summary}`
+    : "";
   const git = report.git.ok
     ? report.git.clean
       ? "clean"
@@ -361,7 +465,7 @@ function makeBoardSummary(report) {
       : "failed"
     : "skipped";
   return [
-    `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
+    `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}${boardCall}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
     `Next=${mac.ok ? report.commands.userAuthRequest : report.commands.preflightBoardSummary}.`,
     "No password was requested or sent; no WebSocket auth/input/inject was performed.",
   ].join(" ");
@@ -507,6 +611,15 @@ function printHuman(report) {
   }
   if (report.board.requested) {
     console.log(`- Agent Link Board: ${report.board.ok ? "ok" : "failed"} (${report.board.lineCount} line(s))`);
+    if (report.board.currentCall?.present) {
+      const callState = report.board.currentCall.active ? "active" : "inactive";
+      console.log(`  currentCall=${callState} ${report.board.currentCall.summary}`);
+      if (report.board.currentCall.active && report.board.currentCall.command) {
+        console.log(`  callCommand=${report.board.currentCall.command}`);
+      }
+    } else {
+      console.log("  currentCall=none");
+    }
   } else {
     console.log("- Agent Link Board: skipped (use --checkBoard)");
   }
