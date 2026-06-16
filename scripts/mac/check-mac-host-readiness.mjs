@@ -26,6 +26,8 @@ const defaults = {
   maxVideoFrameAgeMs: 0,
   probeAudio: false,
   maxAudioFrameAgeMs: 0,
+  probeMedia: false,
+  probeMediaResourceSample: false,
   probeInputLog: false,
   probeClipboardSecurity: false,
   probeStartHelper: false,
@@ -67,6 +69,8 @@ function parseArgs(argv) {
       key === "probeHost" ||
       key === "probeVideo" ||
       key === "probeAudio" ||
+      key === "probeMedia" ||
+      key === "probeMediaResourceSample" ||
       key === "probeInputLog" ||
       key === "probeClipboardSecurity" ||
       key === "probeStartHelper" ||
@@ -106,6 +110,8 @@ function parseArgs(argv) {
   args.probeHost = booleanArg(args.probeHost);
   args.probeVideo = booleanArg(args.probeVideo);
   args.probeAudio = booleanArg(args.probeAudio);
+  args.probeMedia = booleanArg(args.probeMedia);
+  args.probeMediaResourceSample = booleanArg(args.probeMediaResourceSample);
   args.probeInputLog = booleanArg(args.probeInputLog);
   args.probeClipboardSecurity = booleanArg(args.probeClipboardSecurity);
   args.probeStartHelper = booleanArg(args.probeStartHelper);
@@ -116,6 +122,7 @@ function parseArgs(argv) {
   args.probeHost = args.probeHost || Boolean(args.expectBuildId);
   args.probeVideo = args.probeVideo || args.maxVideoFrameAgeMs > 0;
   args.probeAudio = args.probeAudio || args.maxAudioFrameAgeMs > 0;
+  args.probeMedia = args.probeMedia || args.probeMediaResourceSample;
   return args;
 }
 
@@ -183,6 +190,12 @@ Options:
   --probeAudio              Run short PCM audio observation. Does not play a tone.
   --maxAudioFrameAgeMs <ms> Require fresh audio_frame.timestamp during --probeAudio.
                             Implies --probeAudio. Default: off.
+  --probeMedia              Run observe-mac-media aggregate for one combined
+                            H.264 + PCM report. This does not start the host,
+                            play a tone, send input, or execute inject.
+  --probeMediaResourceSample
+                            With --probeMedia, sample local Mac host CPU/RSS
+                            when /discovery.runtime.processId is local.
   --probeInputLog           Run safe input log smoke test; refuses non-log hosts.
   --probeClipboardSecurity  Run Mac host file clipboard receive integrity guards.
                             This is local-only: it does not start the host, write
@@ -387,6 +400,90 @@ async function runStep(results, args, label, command, commandArgs, options = {})
 function probeEnv(args) {
   return {
     LAN_DUAL_PASSWORD: args.password,
+  };
+}
+
+function mediaCommandArgs(args) {
+  const mediaArgs = [
+    "scripts/mac/observe-mac-media.mjs",
+    "--json",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--timeoutMs",
+    String(args.timeoutMs),
+    "--commandTimeoutMs",
+    String(Math.max(args.timeoutMs, 20000)),
+    "--videoDurationMs",
+    "2500",
+    "--videoMinFrames",
+    "10",
+    "--videoMaxGapMs",
+    "1500",
+    "--audioDurationMs",
+    "2500",
+    "--audioMinFrames",
+    "80",
+    "--audioMaxGapMs",
+    "1000",
+    "--requireFrameTimestamp",
+  ];
+  const maxFrameAgeMs = Math.max(args.maxVideoFrameAgeMs, args.maxAudioFrameAgeMs);
+  if (maxFrameAgeMs > 0) {
+    mediaArgs.push("--maxFrameAgeMs", String(maxFrameAgeMs));
+  }
+  if (args.probeMediaResourceSample) {
+    mediaArgs.push("--resourceSample");
+  }
+  return mediaArgs;
+}
+
+async function checkMediaAggregate(args) {
+  const result = await runCommand(
+    "Mac host media aggregate",
+    process.execPath,
+    mediaCommandArgs(args),
+    { timeoutMs: Math.max(args.timeoutMs, 35000), env: probeEnv(args) },
+  );
+  let payload = null;
+  try {
+    payload = parseJsonOutput(result.stdout, "Mac media aggregate");
+  } catch (error) {
+    return {
+      ok: false,
+      summary: result.summary || error.message,
+      errors: result.errors.length ? result.errors : [error.message],
+      warnings: result.warnings,
+      details: {
+        parseError: error.message,
+        exitCode: result.exitCode,
+      },
+    };
+  }
+  const failures = Array.isArray(payload.summary?.failures)
+    ? payload.summary.failures
+    : [];
+  return {
+    ok: result.ok && payload.ok === true,
+    summary: payload.boardSummary || result.summary || (payload.ok ? "media aggregate passed" : "media aggregate failed"),
+    warnings: result.warnings,
+    errors: result.ok && payload.ok === true
+      ? []
+      : failures.map((failure) => `${failure.id || "probe"}: ${failure.message || "failed"}`),
+    details: {
+      ok: payload.ok === true,
+      target: payload.target || null,
+      boardSummary: payload.boardSummary || "",
+      summary: payload.summary || null,
+      resource: payload.resource || null,
+      video: payload.video
+        ? { ok: payload.video.ok, observation: payload.video.observation || null, error: payload.video.error || null }
+        : null,
+      audio: payload.audio
+        ? { ok: payload.audio.ok, observation: payload.audio.observation || null, error: payload.audio.error || null }
+        : null,
+    },
   };
 }
 
@@ -911,6 +1008,10 @@ async function main() {
     );
   }
 
+  if (args.probeMedia) {
+    await runCustomStep(results, args, "Mac host media aggregate", () => checkMediaAggregate(args));
+  }
+
   if (args.probeInputLog) {
     await runStep(
       results,
@@ -958,6 +1059,8 @@ async function main() {
       maxVideoFrameAgeMs: args.maxVideoFrameAgeMs,
       probeAudio: args.probeAudio,
       maxAudioFrameAgeMs: args.maxAudioFrameAgeMs,
+      probeMedia: args.probeMedia,
+      probeMediaResourceSample: args.probeMediaResourceSample,
       probeInputLog: args.probeInputLog,
       probeClipboardSecurity: args.probeClipboardSecurity,
       probeStartHelper: args.probeStartHelper,

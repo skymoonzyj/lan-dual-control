@@ -168,6 +168,7 @@ function checkHelp(args) {
     assert(String(result.stdout).includes("Usage:"), `${script} ${flag} should print Usage`);
     assert(String(result.stdout).includes("--checkBoard"), `${script} ${flag} should document --checkBoard`);
     assert(String(result.stdout).includes("--boardSummary"), `${script} ${flag} should document --boardSummary`);
+    assert(String(result.stdout).includes("--probeMedia"), `${script} ${flag} should document --probeMedia`);
   }
   print("OK", "Mac host readiness board help exits quickly");
 }
@@ -179,6 +180,33 @@ function checkDefaultDoesNotReadBoard(args) {
   assert(String(payload.boardSummary || "").includes("call=not-checked"), "default boardSummary should mark call not checked");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "default readiness JSON");
   print("OK", "Mac host readiness does not read Agent Link Board by default");
+}
+
+function checkProbeMediaOfflineJson(args) {
+  const result = run([
+    "--json",
+    "--probeMedia",
+    "--probeMediaResourceSample",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "9",
+    "--timeoutMs",
+    "5000",
+    "--skipCurrentBuildCheck",
+  ], args);
+  assert(result.status !== 0, "--probeMedia against an offline host should fail readiness");
+  const payload = parseJson(result.stdout, "offline media readiness JSON");
+  assert(payload.args?.probeMedia === true, "readiness JSON should preserve probeMedia flag");
+  assert(payload.args?.probeMediaResourceSample === true, "readiness JSON should preserve probeMediaResourceSample flag");
+  const step = payload.results?.find((item) => item.label === "Mac host media aggregate");
+  assert(step, "readiness JSON should include Mac host media aggregate step");
+  assert(step.ok === false, "offline Mac host media aggregate should fail");
+  assert(String(step.summary || "").includes("Mac media baseline failed"), "media aggregate summary should include board-safe baseline failure text");
+  assert(step.details?.summary?.failed >= 1, "media aggregate details should preserve failed count");
+  assert(step.details?.resource?.available === false, "offline media aggregate should mark resource unavailable");
+  assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "offline probeMedia readiness JSON");
+  print("OK", "Mac host readiness probeMedia exposes offline aggregate details safely");
 }
 
 async function checkActiveBoardCall(args) {
@@ -294,6 +322,7 @@ async function main() {
   const args = parseArgs(process.argv);
   checkHelp(args);
   checkDefaultDoesNotReadBoard(args);
+  checkProbeMediaOfflineJson(args);
   await checkActiveBoardCall(args);
   await checkDoneBoardCall(args);
   await checkBoardSummary(args);
