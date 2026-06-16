@@ -106,6 +106,7 @@ function assertBoardSummaryShape(text, label) {
   assert(/Mac resume:/.test(text), `${label} should start with Mac resume summary`);
   assert(/repo=/.test(text), `${label} should include repo state`);
   assert(/Do not send passwords/.test(text), `${label} should include password safety note`);
+  assert(/--confirmUserWatching/.test(text), `${label} should include inject confirmation flag guidance`);
   assert(!/super-secret-resume-password/.test(text), `${label} should not leak secret-like text`);
 }
 

@@ -433,7 +433,7 @@ function buildRecommendations({ git, host, board, args }) {
   });
   recommendations.push({
     level: "safety",
-    text: "Do not run inject mode until the user explicitly confirms they are watching the screen.",
+    text: "Do not run inject mode until the user explicitly confirms they are watching the screen; start-mac-host inject startups must include --confirmUserWatching.",
   });
   return recommendations;
 }
@@ -513,7 +513,7 @@ function formatBoardSummary(report) {
     return [
       `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${attention}.`,
       "Next: start formal host with start-mac-host --promptPassword --requirePassword before Windows E2E.",
-      "Do not send passwords on Agent Link Board; inject still requires explicit user confirmation.",
+      "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
     ].join(" ");
   }
 
@@ -529,7 +529,7 @@ function formatBoardSummary(report) {
     `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}.`,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}.`,
     "Next formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log.",
-    "Do not send passwords on Agent Link Board; inject still requires explicit user confirmation.",
+    "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
 }
 

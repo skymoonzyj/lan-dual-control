@@ -19,6 +19,36 @@
 
 ## 2026-06-16 Mac Codex
 
+日期：2026-06-16 09:52
+开发端：Mac Codex
+本轮目标：让 Mac 恢复开工摘要直接携带真实 inject 启动硬护栏，减少联络板转述时的歧义。
+完成内容：
+- `scripts/mac/check-mac-resume-status.mjs` 的普通 safety recommendation 和 `--boardSummary` 现在明确写出：inject 启动需要用户看着 Mac 屏幕，并且必须带 `--confirmUserWatching`。
+- `scripts/mac/test-mac-resume-status.mjs` 增加断言，要求离线/在线 JSON 与 board summary 都包含 `--confirmUserWatching`，避免以后退回含糊文案。
+- 实际运行 `node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary` 确认摘要仍不泄密，且当前 Mac host 在线于 `192.168.31.122:43770`、`inputMode=log`、runtime build `d398d64`，host runtime source diff=0。
+- 本轮未启动/停止 host，未要求密码，未发送密码，未执行 `inject`，未改协议。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 60000`
+- `node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary`
+- `git diff --check`
+遗留问题：
+- 当前 Mac host 仍是 runtime build `d398d64`，repo build metadata 已到 `54163bb+`；`apps/mac-host` runtime 源码无变化，日常 log 模式可继续。部署强验收时再重启 host。
+下一步建议：
+- 继续推进不需要授权的 Mac 侧稳定性：可扩展 resume/formal checklist 的安全摘要覆盖，或做 Mac client 控制 Windows 真连前的只读状态增强。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-16 Mac Codex
+
 日期：2026-06-16 09:25
 开发端：Mac Codex
 本轮目标：收口真实 Mac input inject 复跑文档，确保后续两端不会复制旧命令绕过 `--confirmUserWatching` 护栏。
