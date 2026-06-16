@@ -237,6 +237,60 @@ async function checkNonMacEventIgnored(args) {
   console.log("[OK] Non-Mac urgent events are ignored by default");
 }
 
+async function checkMacCallForWindowsAlerts(args) {
+  const output = await runWatcherAgainst(baseState({
+    currentCall: {
+      status: "CALLING",
+      from: "Mac Codex",
+      need: "Windows Codex",
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      goal: "正式 Windows host 验收",
+      connection: "Windows host /discovery",
+      command: "node scripts/windows/start-windows-host.mjs --status --json",
+      expected: "Windows confirms host readiness, then Mac runs formal smoke.",
+      ask: "请 Windows 先只读确认 status。",
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "Mac call for Windows");
+  assertIncludes(output, "Agent Link call needs Windows attention", "Mac call for Windows");
+  assertIncludes(output, "start-windows-host.mjs --status --json", "Mac call for Windows");
+  console.log("[OK] Mac -> Windows current calls alert");
+}
+
+async function checkDoneMacCallIgnored(args) {
+  const output = await runWatcherAgainst(baseState({
+    currentCall: {
+      status: "DONE",
+      from: "Mac Codex",
+      need: "Windows Codex",
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      goal: "completed Windows host validation",
+      command: "node scripts/windows/start-windows-host.mjs --status --json",
+    },
+  }), [], args);
+  assertNotIncludes(output, "ALERT:", "done Mac call");
+  console.log("[OK] Done Mac -> Windows calls are ignored");
+}
+
+async function checkWindowsCallForMacIgnored(args) {
+  const output = await runWatcherAgainst(baseState({
+    currentCall: {
+      status: "CALLING",
+      from: "Windows Codex",
+      need: "Mac Codex",
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      goal: "启动 Mac host",
+      command: "node scripts/mac/start-mac-host.mjs --status",
+      ask: "请 Mac 端确认 host。",
+    },
+  }), [], args);
+  assertNotIncludes(output, "ALERT:", "Windows call for Mac");
+  console.log("[OK] Windows -> Mac current calls are ignored by the Windows watcher");
+}
+
 async function checkBlockedStatusAlerts(args) {
   const output = await runWatcherAgainst(baseState({
     statuses: {
@@ -355,6 +409,9 @@ async function main() {
   await checkChinesePermissionEventAlerts(args);
   await checkGatewayEventAlerts(args);
   await checkNonMacEventIgnored(args);
+  await checkMacCallForWindowsAlerts(args);
+  await checkDoneMacCallIgnored(args);
+  await checkWindowsCallForMacIgnored(args);
   await checkBlockedStatusAlerts(args);
   await checkStaleStatusAlerts(args);
   if (args.includeLifecycle) {

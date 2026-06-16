@@ -1,6 +1,6 @@
 # 双端测试联络规则
 
-最后更新：2026-06-15
+最后更新：2026-06-16
 
 用途：当一方正在测试，需要另一方及时配合时，用这个文件记录“正在呼叫谁、需要什么、当前卡在哪里”。真正的即时提醒优先使用局域网联络板的授权/卡住提醒，必要时再用微信、飞书、钉钉、Telegram 或 GitHub Issue 兜底；这个文件负责保留项目内的事实记录。
 
@@ -12,8 +12,8 @@
    - 适合实时发消息、更新在线状态和发起测试呼叫。
    - Codex 可以用 `scripts/codex-link-client.mjs watch` 监控消息，用 `send/status/call` 给联络板发送信息。
    - 浏览器里点击“开启声音/桌面提醒”后，`NEED_USER_AUTH`、`USER_ACTION_REQUIRED`、`BLOCKED_BY_PERMISSION`、502/Bad Gateway 和长时间未更新状态会触发提醒。
-   - Windows 侧可以运行 `scripts\windows\start-mac-alert-watcher.ps1 -Server http://联络板主机:17888`，在 Mac 端需要授权、卡住或 502 时弹出本机提醒；启动器优先使用 PowerShell 7 `pwsh`，会用 `.dev-lab/mac-alert-watcher.pid` 防重复启动，并把日志写到 `.dev-lab/mac-alert-watcher.*.log`。需要查看、停止或重启时加 `-Status`、`-Stop` 或 `-Restart`。
-   - 不想弹窗、只想回归提醒规则时运行 `node scripts\windows\test-mac-alert-watcher.mjs --timeoutMs 20000`，它会用本机假联络板和 `-Once -NoPopup` 验证授权、中文权限提示、502、blocked 和长时间未更新状态。
+   - Windows 侧可以运行 `scripts\windows\start-mac-alert-watcher.ps1 -Server http://联络板主机:17888`，在 Mac 端需要授权、卡住、502，或 Mac Codex 发起需要 Windows Codex/Windows host 配合的当前呼叫时弹出本机提醒；启动器优先使用 PowerShell 7 `pwsh`，会用 `.dev-lab/mac-alert-watcher.pid` 防重复启动，并把日志写到 `.dev-lab/mac-alert-watcher.*.log`。需要查看、停止或重启时加 `-Status`、`-Stop` 或 `-Restart`。
+   - 不想弹窗、只想回归提醒规则时运行 `node scripts\windows\test-mac-alert-watcher.mjs --timeoutMs 20000`，它会用本机假联络板和 `-Once -NoPopup` 验证授权、中文权限提示、502、blocked、长时间未更新状态、Mac -> Windows active call 提醒，以及完成呼叫/反向呼叫忽略规则。
 
 2. 人类即时消息负责兜底提醒。
    - 例如：在微信或飞书发一句“Mac Codex 需要 Windows 端配合，看联络板和 `docs/TEST_COORDINATION.md` 最新呼叫”。

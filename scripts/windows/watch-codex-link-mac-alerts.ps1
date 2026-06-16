@@ -113,6 +113,66 @@ function Test-MacRelated {
     return (($From -match $WatchPattern) -or ($Text -match $WatchPattern) -or ($Role -match $WatchPattern))
 }
 
+function Test-WindowsRelated {
+    param([string]$Text = "")
+    return ($Text -match "(?i)windows|Windows Codex|Windows 端|Windows host|windows-host|start-windows-host")
+}
+
+function Test-ActiveCall {
+    param($Call)
+    if (-not $Call) {
+        return $false
+    }
+    $status = ([string]$Call.status).Trim().ToLowerInvariant()
+    if ([string]::IsNullOrWhiteSpace($status)) {
+        return $true
+    }
+    return -not (@("done", "complete", "completed", "clear", "cleared", "cancelled", "canceled", "idle") -contains $status)
+}
+
+function Format-CallMessage {
+    param($Call)
+    $lines = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($entry in @(
+        @("Status", [string]$Call.status),
+        @("From", [string]$Call.from),
+        @("Need", [string]$Call.need),
+        @("Goal", [string]$Call.goal),
+        @("Connection", [string]$Call.connection),
+        @("Command", [string]$Call.command),
+        @("Expected", [string]$Call.expected),
+        @("Ask", [string]$Call.ask),
+        @("Updated at", [string]$Call.updatedAt)
+    )) {
+        if (-not [string]::IsNullOrWhiteSpace($entry[1])) {
+            $lines.Add(("{0}: {1}" -f $entry[0], $entry[1])) | Out-Null
+        }
+    }
+    return ($lines -join "`n")
+}
+
+function Test-CallNeedsWindowsAttention {
+    param($Call)
+    if (-not (Test-ActiveCall -Call $Call)) {
+        return $false
+    }
+    $from = [string]$Call.from
+    $need = [string]$Call.need
+    $text = @(
+        [string]$Call.goal,
+        [string]$Call.environment,
+        [string]$Call.connection,
+        [string]$Call.command,
+        [string]$Call.expected,
+        [string]$Call.actual,
+        [string]$Call.blockedBy,
+        [string]$Call.ask
+    ) -join "`n"
+    $needsWindows = (Test-WindowsRelated -Text $need) -or (Test-WindowsRelated -Text $text)
+    $fromMacSide = Test-MacRelated -From $from -Text $text
+    return ($needsWindows -and $fromMacSide)
+}
+
 function Get-AgeMinutes {
     param([string]$Timestamp)
     try {
@@ -192,6 +252,20 @@ while ($true) {
         }
         if (-not $initialized) {
             $initialized = $true
+        }
+
+        if (Test-CallNeedsWindowsAttention -Call $state.currentCall) {
+            $callId = [string]$state.currentCall.updatedAt
+            if ([string]::IsNullOrWhiteSpace($callId)) {
+                $callId = [string]$state.currentCall.startedAt
+            }
+            if ([string]::IsNullOrWhiteSpace($callId)) {
+                $callId = [string]$state.currentCall.goal
+            }
+            Add-AlertOnce `
+                -Id ("call-windows:" + $callId) `
+                -Title ("Agent Link call needs Windows attention - " + [string]$state.currentCall.from) `
+                -Message (Format-CallMessage -Call $state.currentCall)
         }
 
         foreach ($event in @($state.events)) {

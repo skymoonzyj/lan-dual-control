@@ -17,6 +17,38 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-16 Windows Codex
+
+日期：2026-06-16 11:20
+开发端：Windows Codex
+本轮目标：让 Windows 本地 Agent Link watcher 能识别 Mac 发给 Windows 的正式测试呼叫。
+完成内容：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1` 新增 `currentCall` 读取逻辑：当 Agent Link Board 上有来自 Mac 侧、需要 Windows Codex/Windows host 配合、且状态仍未完成的呼叫时，会在 Windows 本机触发提醒。
+- 已完成的 `DONE`/`COMPLETED`/`CANCELLED` 等呼叫不会提醒；Windows 自己呼叫 Mac 的测试请求也不会被这个 watcher 误弹。
+- 提醒内容包含 status/from/need/goal/connection/command/expected/ask/updatedAt，便于 Windows 端从弹窗或日志直接知道下一步该跑什么；规则仍只读联络板，不认证、不发送密码、不执行输入。
+- `scripts/windows/test-mac-alert-watcher.mjs` 用本机假 Agent Link Board 增加 Mac -> Windows active call、done call 忽略、Windows -> Mac call 忽略三条回归。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `docs/LAN_CODEX_LINK.md`
+- `docs/TEST_COORDINATION.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- PowerShell 7 AST 语法解析 `watch-codex-link-mac-alerts.ps1`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 20000`
+- `node scripts/windows/test-windows-script-help.mjs --script test-mac-alert-watcher.mjs --timeoutMs 10000`
+遗留问题：
+- 本轮只用假联络板验证，没有触发真实系统弹窗；真实使用时可通过 `scripts/windows/start-mac-alert-watcher.ps1 -Server http://192.168.31.68:17888 -Restart` 后等待 Mac 端发正式 `--sendCall` 验证。
+下一步建议：
+- Mac 端准备正式 Mac 控制 Windows smoke 时，可继续使用 `run-mac-client-formal-smoke --discover --preflightOnly --sendCall`；Windows watcher 后台运行时会看到该 currentCall 并提醒 Windows 端先确认 host 状态。
+是否改了协议：否。
+是否需要另一端配合：当前不需要；后续真实 Mac 控制 Windows 验收时由 Mac 端发 call 即可。
+
 ## 2026-06-16 Mac Codex
 
 日期：2026-06-16 11:21
