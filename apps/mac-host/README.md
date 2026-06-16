@@ -115,6 +115,15 @@ node scripts/mac/check-mac-formal-local-smoke.mjs --promptPassword
 
 该脚本会复用 `observe-mac-video`、`observe-mac-audio` 和 `smoke-mac-input-log`，默认要求正式密码来源为 `LAN_DUAL_PASSWORD` 或 `--promptPassword`，并拒绝空密码和 `demo-password`。`--promptPassword` 会先播放两声提示音并打印不含密码的弹窗提示，再优先打开 macOS 系统隐藏密码弹窗，系统弹窗失败时才尝试原生 AppKit 前台高层级隐藏密码框；密码只通过子进程环境变量传递，不放进命令参数；脚本不会启动 Mac host、不会切 `inject`，也不会打印密码。自动化需要机器可读结果时可加 `--json`，需要本地假服务回归时才显式加 `--allowDemoPassword`。
 
+如果只想观察已运行 Mac host 的媒体基线，不需要 input-log 或正式 smoke，可用媒体聚合入口：
+
+```bash
+LAN_DUAL_PASSWORD=... node scripts/mac/observe-mac-media.mjs --json
+node scripts/mac/observe-mac-media.mjs --videoDurationMs 30000 --audioDurationMs 30000 --maxFrameAgeMs 250 --boardSummary
+```
+
+它会顺序运行 H.264 视频观察和系统 PCM 音频观察，避免同时压两个媒体 probe；不会启动 host、不会认证之外做任何控制动作、不会发送输入事件，也不会执行 `inject`。密码只通过 `LAN_DUAL_PASSWORD` 传给子观察脚本，不放进子进程 argv；`--boardSummary` 只输出一行联络板安全摘要，默认 `playTone=false`，需要有声电平强校验时才显式加 `--playTone --requireLevel`。
+
 启动助手会：
 
 - 默认绑定 `0.0.0.0:43770`，打印 Windows 端可填写的局域网地址。

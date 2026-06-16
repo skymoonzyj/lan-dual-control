@@ -144,3 +144,12 @@ node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFra
 ```
 
 该脚本只读连接已运行的 Mac host，统计 `video_frame` FPS、最大帧间隔、payload 大小、codec、encoding 和 `capturePipeline`；也可用 `--preferredVideoCodec mjpeg --requireRealVideo` 观察 JPEG 兜底链路。
+
+需要同时汇总 H.264 视频和系统 PCM 音频基线时，可用 Mac 侧媒体聚合入口：
+
+```bash
+LAN_DUAL_PASSWORD=... node scripts/mac/observe-mac-media.mjs --json
+node scripts/mac/observe-mac-media.mjs --videoDurationMs 30000 --audioDurationMs 30000 --maxFrameAgeMs 250 --boardSummary
+```
+
+聚合脚本只连接已运行的 Mac host，顺序运行视频和音频观察，不启动 host、不发送输入、不执行 `inject`；密码只通过 `LAN_DUAL_PASSWORD` 传给子探针。`--boardSummary` 会输出一行可发到 Agent Link Board 的无密摘要，默认不播放测试音，只有显式 `--playTone` 才会播放本机提示音。
