@@ -123,6 +123,17 @@ function assertNoSecretLikeText(text, label) {
   assertNotIncludes(text, "super-secret-command-token", label);
 }
 
+function assertMediaReadinessCommand(command, label) {
+  assertIncludes(command, "check-mac-host-readiness.mjs", label);
+  assertIncludes(command, "--checkBoard", label);
+  assertIncludes(command, "--probeMedia", label);
+  assertIncludes(command, "--probeMediaResourceSample", label);
+  assertIncludes(command, "--promptPassword", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--server", label);
+}
+
 function parseJsonOutput(text, label) {
   try {
     return JSON.parse(String(text).trim());
@@ -305,6 +316,8 @@ async function assertStatusOfflineJson(timeoutMs) {
   if (json.online !== false || json.ok !== false || json.probe?.port !== port) {
     throw new Error(`Offline JSON status had unexpected shape.\n${result.stdout}`);
   }
+  assertMediaReadinessCommand(json.commands?.mediaReadinessBoardSummary || "", "offline JSON status media command");
+  assertIncludes(json.boardSummary || "", "MacHostMedia=", "offline JSON status boardSummary");
   assertNotIncludes(output, "[INFO]", "offline JSON status");
   assertNotIncludes(output, "Starting Mac host", "offline JSON status");
   print("OK", "Status reports offline hosts as machine-readable JSON");
@@ -468,6 +481,8 @@ async function assertStatusDoesNotReadBoardByDefault(timeoutMs) {
   if (json.board?.checked !== false || !String(json.boardSummary || "").includes("call=not-checked")) {
     throw new Error(`Default JSON status should mark Agent Link Board not checked.\n${result.stdout}`);
   }
+  assertMediaReadinessCommand(json.commands?.mediaReadinessBoardSummary || "", "default JSON status media command");
+  assertIncludes(json.boardSummary || "", "MacHostMedia=", "default JSON status boardSummary");
   assertNoSecretLikeText(output, "default JSON status");
   print("OK", "Status does not read Agent Link Board unless --checkBoard is set");
 }
@@ -511,6 +526,8 @@ async function assertStatusBoardCurrentCall(timeoutMs) {
     if (!String(json.boardSummary || "").includes("call=active") || !String(json.boardSummary || "").includes(call.goal)) {
       throw new Error(`Status boardSummary should include active call goal.\n${result.stdout}`);
     }
+    assertMediaReadinessCommand(json.commands?.mediaReadinessBoardSummary || "", "status board currentCall media command");
+    assertIncludes(json.boardSummary || "", "MacHostMedia=", "status boardSummary");
     assertNotIncludes(json.boardSummary || "", "super-secret-command-token", "status boardSummary");
 
     const summaryResult = await runNode([
@@ -537,6 +554,7 @@ async function assertStatusBoardCurrentCall(timeoutMs) {
     assertIncludes(lines[0], "Mac host status:", "status boardSummary");
     assertIncludes(lines[0], "call=active", "status boardSummary");
     assertIncludes(lines[0], call.goal, "status boardSummary");
+    assertIncludes(lines[0], "MacHostMedia=", "status boardSummary");
     assertNoSecretLikeText(summaryOutput, "status boardSummary");
   });
   print("OK", "Status surfaces active Agent Link Board currentCall safely");
@@ -681,6 +699,8 @@ async function assertStatusOnline(timeoutMs) {
     if (json.displayCount !== json.displays.length) {
       throw new Error(`Online JSON status should keep displayCount aligned with displays length.\n${jsonStatus.stdout}`);
     }
+    assertMediaReadinessCommand(json.commands?.mediaReadinessBoardSummary || "", "online JSON status media command");
+    assertIncludes(json.boardSummary || "", "MacHostMedia=", "online JSON status boardSummary");
     assertNotIncludes(jsonOutput, "[INFO]", "online JSON status");
     print("OK", `Status reports running Mac host on temporary port ${port}`);
   } finally {

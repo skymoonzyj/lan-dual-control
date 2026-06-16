@@ -173,6 +173,12 @@ Options:
                              With --stop, print machine-readable JSON only.
   --dryRun                   Print the resolved launch plan and exit.
   --help, -h                 Show this help without starting Mac host.
+
+Machine-readable JSON fields:
+  commands.mediaReadinessBoardSummary
+                             Secret-free Mac media baseline command for status
+                             consumers; it prompts for a password and never
+                             embeds one in argv.
 `);
 }
 
@@ -332,6 +338,21 @@ function statusProbeHost(args) {
   return args.host === "0.0.0.0" || args.host === "::" ? "127.0.0.1" : args.host;
 }
 
+function makeMediaReadinessBoardSummaryCommand(args) {
+  return [
+    "node scripts/mac/check-mac-host-readiness.mjs",
+    "--host",
+    statusProbeHost(args),
+    "--port",
+    String(args.port),
+    "--checkBoard",
+    "--probeMedia",
+    "--probeMediaResourceSample",
+    "--promptPassword",
+    "--boardSummary",
+  ].join(" ");
+}
+
 function isLocalProbeHost(host) {
   const value = normalizedText(host).toLowerCase();
   if (!value) return false;
@@ -456,6 +477,7 @@ function formatStatusBoardSummary(payload) {
     return [
       `Mac host status: offline at ${payload.probe.host}:${payload.probe.port}; ${callSummary}.`,
       "Next: start safely with node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword.",
+      `After host is online, MacHostMedia=${payload.commands?.mediaReadinessBoardSummary || "not-available"}.`,
       "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
     ].join(" ");
   }
@@ -478,6 +500,7 @@ function formatStatusBoardSummary(payload) {
   return [
     `Mac host status: online ${target}; runtimeBuild=${runtimeBuild} inputMode=${payload.inputMode || "unknown"}; ${callSummary}.`,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${formatStatusBuildDiff(payload.buildDiff)}.`,
+    `MacHostMedia=${payload.commands?.mediaReadinessBoardSummary || "not-available"}.`,
     "Next: coordinate on Agent Link Board before formal E2E.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
@@ -761,6 +784,9 @@ async function printStatus(args) {
       currentBuildId: args.buildId,
       buildDiff,
       board,
+      commands: {
+        mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
+      },
       discovery,
     };
     payload.boardSummary = formatStatusBoardSummary(payload);
@@ -798,6 +824,7 @@ async function printStatus(args) {
     if (runtime.buildId && args.buildId && runtime.buildId !== args.buildId) {
       printBuildMismatchStatus(buildDiff);
     }
+    console.log(`[INFO] Mac host media baseline: ${payload.commands.mediaReadinessBoardSummary}`);
     return payload;
   } catch (error) {
     const payload = {
@@ -811,6 +838,9 @@ async function printStatus(args) {
       displays: [],
       displayCount: 0,
       board,
+      commands: {
+        mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
+      },
       suggestions: [
         "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword",
         "node scripts/mac/start-mac-host.mjs --ephemeralPassword --requirePassword",
@@ -839,6 +869,7 @@ async function printStatus(args) {
     }
     console.log("[INFO] Start safely with: node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword");
     console.log("[INFO] For temporary discovery/runtime diagnostics without sharing a password: node scripts/mac/start-mac-host.mjs --ephemeralPassword --requirePassword");
+    console.log(`[INFO] After host is online, refresh media baseline with: ${payload.commands.mediaReadinessBoardSummary}`);
     return payload;
   }
 }
