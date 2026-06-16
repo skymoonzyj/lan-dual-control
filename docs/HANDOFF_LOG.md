@@ -17,6 +17,43 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-16 Mac Codex
+
+日期：2026-06-16 23:55
+开发端：Mac Codex
+本轮目标：让 Mac 控制 Windows 页面直接显示 Windows host 当前反控策略，避免真连前看不出默认拒绝、实验同意或禁用状态。
+完成内容：
+- Mac client 会话诊断新增“反控策略”行，初始显示“未提供”。
+- 从 `/discovery`、`hello_ack` 和 `session_answer` 读取 Windows host 的 `reverseControlMode`、`reverseControlPolicy`，并兼容对象化 `capabilities.reverseControl` 状态。
+- UI 显示默认拒绝、实验自动同意、未启用和未知策略的中文说明；默认拒绝会明确“需要 Windows 用户确认”，实验同意会标注“仅可信局域网实验”。
+- 目标变更、发现失败、连接开始、连接关闭、认证失败、手动断开和重连等待都会清空旧反控策略，避免 stale 状态误导用户。
+- Mac client 日志导出新增“反控策略”字段，页面自测覆盖正常连接、认证失败、重连等待/恢复、手动断开清空、导出文本和扁平/对象/disabled 三类能力格式。
+修改文件：
+- `apps/mac-client/index.html`
+- `apps/mac-client/app.js`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check apps/mac-client/server.mjs`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --clientPort 5198 --debugPort 9342 --mockVideo --allowClipboardFallback --skipFileClipboard --progressIntervalMs 0 --timeoutMs 45000`
+- `node scripts/windows/test-mac-client-browser.mjs --clientPort 5198 --debugPort 9342 --mockVideo --allowClipboardFallback --skipFileClipboard --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3 --clientPassword wrong-password --progressIntervalMs 0 --timeoutMs 45000`
+- `node scripts/windows/test-mac-client-browser.mjs --clientPort 5198 --debugPort 9342 --mockVideo --allowClipboardFallback --skipFileClipboard --expectReconnect --testReconnectNow --progressIntervalMs 0 --timeoutMs 60000`
+- `node scripts/windows/test-windows-script-help.mjs --script test-mac-client-browser.mjs --timeoutMs 10000`
+- `git diff --check`
+- 冲突标记扫描：`apps/mac-client/README.md`、`apps/mac-client/app.js`、`apps/mac-client/index.html`、`scripts/windows/test-mac-client-browser.mjs`
+- 内置浏览器打开 `http://127.0.0.1:5188/`，确认存在 `#reversePolicyMetric` 且初始值为“未提供”。
+遗留问题：
+- Mac client 目前只展示策略，还没有发送 `reverse_control_request` 或消费 Windows 一次性临时授权窗口做“立即请求反控”的完整体验。
+下一步建议：
+- Windows host 已推一次性临时反控授权后，Mac 端下一轮可读取 `reverseControlGrant.active`，在页面上提示“Windows 已临时允许下一次反控”，并增加安全的请求反控按钮/回执显示。
+是否改了协议：否。只消费 Windows host 已暴露的可选能力字段，兼容扁平和对象化状态。
+是否需要另一端配合：暂不需要；后续请求反控按钮和真实联调需要 Windows 端开一次性授权窗口配合。
+
 ## 2026-06-16 Windows Codex
 
 日期：2026-06-16 23:45

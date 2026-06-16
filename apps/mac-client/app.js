@@ -28,6 +28,7 @@ const elements = {
   audioFlowMetric: document.querySelector("#audioFlowMetric"),
   reconnectMetric: document.querySelector("#reconnectMetric"),
   remoteRuntimeMetric: document.querySelector("#remoteRuntimeMetric"),
+  reversePolicyMetric: document.querySelector("#reversePolicyMetric"),
   inputStatus: document.querySelector("#inputStatus"),
   remoteViewport: document.querySelector("#remoteViewport"),
   remoteImage: document.querySelector("#remoteImage"),
@@ -109,6 +110,7 @@ const state = {
   reconnectReason: "",
   reconnectStableTimer: null,
   remoteRuntime: null,
+  remoteCapabilities: null,
   clipboardWatchTimer: null,
   clipboardReadInFlight: false,
   lastLocalClipboardText: "",
@@ -300,6 +302,93 @@ function updateRemoteRuntime(runtime) {
   renderSessionDiagnostics();
 }
 
+function normalizeRemoteCapabilities(capabilities) {
+  if (!capabilities || typeof capabilities !== "object") {
+    return null;
+  }
+  const reverse = capabilities.reverseControl && typeof capabilities.reverseControl === "object"
+    ? capabilities.reverseControl
+    : {};
+  const policy = reverse.policy && typeof reverse.policy === "object"
+    ? reverse.policy
+    : capabilities.reverseControlPolicy && typeof capabilities.reverseControlPolicy === "object"
+    ? capabilities.reverseControlPolicy
+    : {};
+  const rawMode =
+    capabilities.reverseControlMode ||
+    reverse.mode ||
+    reverse.reverseControlMode ||
+    policy.mode ||
+    (capabilities.reverseControl === false || reverse.supported === false ? "disabled" : "");
+  const mode = String(rawMode).trim().toLowerCase();
+  const hasReverseSignal =
+    rawMode ||
+    capabilities.reverseControl !== undefined ||
+    Object.keys(reverse).length > 0 ||
+    Object.keys(policy).length > 0;
+  if (!hasReverseSignal) {
+    return null;
+  }
+  const supported = capabilities.reverseControl !== undefined && typeof capabilities.reverseControl !== "object"
+    ? Boolean(capabilities.reverseControl)
+    : reverse.supported !== undefined
+      ? Boolean(reverse.supported)
+      : policy.supported !== undefined
+        ? Boolean(policy.supported)
+        : mode !== "disabled";
+  const autoAccept = reverse.autoAccept !== undefined
+    ? Boolean(reverse.autoAccept)
+    : Boolean(policy.autoAccept);
+  const requiresConfirmation = reverse.requiresConfirmation !== undefined
+    ? Boolean(reverse.requiresConfirmation)
+    : policy.requiresConfirmation !== undefined
+      ? Boolean(policy.requiresConfirmation)
+      : mode !== "accept" && mode !== "disabled";
+  return {
+    reverseControl: supported,
+    reverseControlMode: mode || (supported ? "unknown" : "disabled"),
+    reverseControlPolicy: {
+      requiresConfirmation,
+      autoAccept,
+      supported,
+    },
+  };
+}
+
+function formatReversePolicyDiagnostics(capabilities) {
+  const normalized = normalizeRemoteCapabilities(capabilities);
+  if (!normalized) {
+    return "未提供";
+  }
+  const modeLabels = {
+    deny: "默认拒绝",
+    accept: "实验自动同意",
+    disabled: "未启用",
+    unknown: "未知策略",
+  };
+  const modeText = modeLabels[normalized.reverseControlMode] || normalized.reverseControlMode;
+  const detail = normalized.reverseControlMode === "accept"
+    ? "仅可信局域网实验"
+    : normalized.reverseControlMode === "disabled" || normalized.reverseControl === false || normalized.reverseControlPolicy.supported === false
+      ? "不可请求反控"
+      : normalized.reverseControlPolicy.requiresConfirmation
+        ? "需要 Windows 用户确认"
+        : normalized.reverseControlPolicy.autoAccept
+          ? "会自动同意"
+          : "等待对端策略";
+  return `${modeText} · ${detail}`;
+}
+
+function updateRemoteCapabilities(capabilities) {
+  state.remoteCapabilities = normalizeRemoteCapabilities(capabilities);
+  renderSessionDiagnostics();
+}
+
+function clearRemoteEndpointDetails() {
+  updateRemoteRuntime(null);
+  updateRemoteCapabilities(null);
+}
+
 function resetSessionDiagnostics({ resetReconnects = false } = {}) {
   state.connectionStartedAt = performance.now();
   state.firstVideoFrameMs = 0;
@@ -350,6 +439,7 @@ function renderSessionDiagnostics() {
     ? `已尝试 ${state.reconnectTotal} 次 · 当前 ${state.reconnectAttempts}/${maxReconnectAttempts}${formatReconnectCountdownSuffix()}`
     : "0 次";
   elements.remoteRuntimeMetric.textContent = formatRemoteRuntimeDiagnostics(state.remoteRuntime);
+  elements.reversePolicyMetric.textContent = formatReversePolicyDiagnostics(state.remoteCapabilities);
 }
 
 function reconnectDelayForAttempt(attempt) {
@@ -463,7 +553,7 @@ function resetEndpointDiscoveryState() {
   state.authenticated = false;
   resetAudioPlayback();
   cancelActiveFileTransfer("连接目标已变更，文件发送已取消");
-  updateRemoteRuntime(null);
+  clearRemoteEndpointDetails();
   resetSessionDiagnostics({ resetReconnects: true });
   resetVideoSurface();
   resetRemoteStatus();
@@ -768,6 +858,7 @@ async function discover({ signal, lockButton = true } = {}) {
     const payload = await response.json();
     if (requestId === state.discoveryRequestId) {
       updateRemoteRuntime(payload.runtime);
+      updateRemoteCapabilities(payload.capabilities);
       elements.remoteStatus.textContent = `${payload.deviceName || payload.hostName || "Windows"} · ${payload.platform || "unknown"}`;
       logEvent("发现成功", `${payload.host || elements.hostInput.value}:${payload.port || elements.portInput.value}`);
     }
@@ -777,7 +868,7 @@ async function discover({ signal, lockButton = true } = {}) {
       throw error;
     }
     if (requestId === state.discoveryRequestId) {
-      updateRemoteRuntime(null);
+      clearRemoteEndpointDetails();
       elements.remoteStatus.textContent = "发现失败";
       logEvent("发现失败", error.message);
     }
@@ -797,7 +888,7 @@ async function connect({ reconnect = false } = {}) {
     clearReconnectTimers();
     closeSocketSilently();
     state.authenticated = false;
-    updateRemoteRuntime(null);
+    clearRemoteEndpointDetails();
     resetSessionDiagnostics({ resetReconnects: true });
     stopClipboardWatch("正在重新连接，监听已停止");
     resetAudioPlayback();
@@ -850,7 +941,7 @@ async function connect({ reconnect = false } = {}) {
     state.socket = null;
     state.authenticated = false;
     setConnected(false);
-    updateRemoteRuntime(null);
+    clearRemoteEndpointDetails();
     state.closeStatusOverride = "";
     stopClipboardWatch("连接关闭，监听已停止");
     resetAudioPlayback();
@@ -981,6 +1072,7 @@ function buildLogExportText() {
     `- 远端摘要：${elements.remoteStatus.textContent || "-"}`,
     `- 目标地址：${currentEndpoint().host}:${currentEndpoint().port}`,
     `- 远端运行：${elements.remoteRuntimeMetric.textContent || "-"}`,
+    `- 反控策略：${elements.reversePolicyMetric.textContent || "-"}`,
     `- 重连状态：${reconnectExport.status}`,
     `- 重连原因：${reconnectExport.reason}`,
     `- 下次重连：${reconnectExport.next}`,
@@ -1048,7 +1140,7 @@ function disconnect() {
   stopClipboardWatch("已断开，监听已停止");
   resetAudioPlayback();
   cancelActiveFileTransfer("已断开，文件发送已取消");
-  updateRemoteRuntime(null);
+  clearRemoteEndpointDetails();
   resetSessionDiagnostics({ resetReconnects: true });
   resetVideoSurface();
   resetRemoteStatus();
@@ -1195,6 +1287,7 @@ function handleHelloAck(message) {
   if (message.runtime) {
     updateRemoteRuntime(message.runtime);
   }
+  updateRemoteCapabilities(message.capabilities);
   elements.remoteStatus.textContent = `${message.hostName || message.deviceName || "Windows"} · ${message.hostPlatform || "windows"}`;
   logEvent("握手成功", message.hostName || message.deviceName || "Windows 被控端");
   send({
@@ -1222,7 +1315,7 @@ function closeAfterAuthFailure(status) {
   state.closeStatusOverride = status;
   state.authenticated = false;
   setConnected(false);
-  updateRemoteRuntime(null);
+  clearRemoteEndpointDetails();
   resetSessionDiagnostics({ resetReconnects: true });
   stopClipboardWatch("认证失败，监听已停止");
   resetAudioPlayback();
@@ -1274,6 +1367,9 @@ function handleSessionAnswer(message) {
   state.remoteHeight = Number(message.height || message.screenHeight || state.remoteHeight);
   if (message.runtime) {
     updateRemoteRuntime(message.runtime);
+  }
+  if (message.capabilities) {
+    updateRemoteCapabilities(message.capabilities);
   }
   elements.remoteStatus.textContent = `${state.remoteWidth}x${state.remoteHeight} · ${message.hostMode || "windows-host"}`;
   if (message.audioEnabled) {

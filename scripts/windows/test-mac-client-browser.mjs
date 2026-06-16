@@ -892,9 +892,10 @@ async function verifyMacClientReconnect({ args, repoRoot, session, windowsHost }
       const surfaceCleared = value.video === "连接中断" && !value.surfaceVisible && !value.surfaceHasFrame;
       const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
       const runtimeCleared = value.remoteRuntime === "未提供";
+      const reversePolicyCleared = value.reversePolicy === "未提供";
       const remoteCleared = value.remote === "连接中断";
       const audioCleared = value.audioToggleChecked ? value.audio === "未接收" : value.audio === "未开启";
-      return (reconnecting || logVisible) && countdownVisible && reconnectButtonVisible && surfaceCleared && clipboardButtonsDisabled && runtimeCleared && remoteCleared && audioCleared ? value : null;
+      return (reconnecting || logVisible) && countdownVisible && reconnectButtonVisible && surfaceCleared && clipboardButtonsDisabled && runtimeCleared && reversePolicyCleared && remoteCleared && audioCleared ? value : null;
     },
     args.timeoutMs,
     "Mac client reconnect scheduling",
@@ -1013,6 +1014,7 @@ async function verifyMacClientLogExport({ args, session }) {
           "- 重连原因：测试断线",
           "- 下次重连：",
           "- 远端运行：",
+          "- 反控策略：",
           "- 视频状态：",
           "- 文本剪贴板：",
           "事件记录",
@@ -1153,6 +1155,7 @@ function buildSnapshotExpression() {
       audioFlowMetric: text("#audioFlowMetric"),
       reconnectMetric: text("#reconnectMetric"),
       remoteRuntime: text("#remoteRuntimeMetric"),
+      reversePolicy: text("#reversePolicyMetric"),
       lastVideoFrame: (() => {
         const frame = [...(window.__lanDualReceivedMessages || [])].reverse().find((message) => message.type === "video_frame");
         if (!frame) return null;
@@ -1266,6 +1269,69 @@ function assertTemporaryRuntimeDiagnostics(snapshot, args, label) {
       remote: snapshot.remote,
     })}`);
   }
+}
+
+function assertTemporaryReversePolicyDiagnostics(snapshot, args, label) {
+  if (args.useExistingHost) {
+    return;
+  }
+  const text = snapshot.reversePolicy || "";
+  if (!text.includes("默认拒绝") || !text.includes("需要 Windows 用户确认")) {
+    throw new Error(`${label} reverse policy diagnostics missing: ${JSON.stringify({
+      reversePolicy: snapshot.reversePolicy,
+      remote: snapshot.remote,
+    })}`);
+  }
+}
+
+async function assertReversePolicyFormatterVariants(session) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      if (typeof formatReversePolicyDiagnostics !== "function") {
+        throw new Error("Mac client reverse policy formatter is not available");
+      }
+      return {
+        flatDeny: formatReversePolicyDiagnostics({
+          reverseControl: true,
+          reverseControlMode: "deny",
+          reverseControlPolicy: { requiresConfirmation: true, autoAccept: false, supported: true },
+        }),
+        objectAccept: formatReversePolicyDiagnostics({
+          reverseControl: {
+            supported: true,
+            mode: "accept",
+            autoAccept: true,
+            requiresConfirmation: false,
+            policy: { mode: "accept", autoAccept: true, supported: true },
+          },
+        }),
+        disabled: formatReversePolicyDiagnostics({
+          reverseControl: false,
+          reverseControlMode: "disabled",
+          reverseControlPolicy: { supported: false },
+        }),
+        missing: formatReversePolicyDiagnostics({ screen: { capturePipeline: "mock" } }),
+      };
+    })()`,
+  );
+  const mismatches = [];
+  if (!result.flatDeny?.includes("默认拒绝") || !result.flatDeny?.includes("需要 Windows 用户确认")) {
+    mismatches.push(["flatDeny", result.flatDeny]);
+  }
+  if (!result.objectAccept?.includes("实验自动同意") || !result.objectAccept?.includes("仅可信局域网实验")) {
+    mismatches.push(["objectAccept", result.objectAccept]);
+  }
+  if (!result.disabled?.includes("未启用") || !result.disabled?.includes("不可请求反控")) {
+    mismatches.push(["disabled", result.disabled]);
+  }
+  if (result.missing !== "未提供") {
+    mismatches.push(["missing", result.missing]);
+  }
+  if (mismatches.length > 0) {
+    throw new Error(`Mac client reverse policy formatter variants mismatch: ${JSON.stringify(mismatches)}`);
+  }
+  print("OK", `Reverse policy formatter variants: ${result.flatDeny} / ${result.objectAccept} / ${result.disabled}`);
 }
 
 function installWebSocketSendRecorderExpression() {
@@ -1918,9 +1984,10 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
           const surfaceCleared = value.video === "无画面" && !value.surfaceVisible && !value.surfaceHasFrame;
           const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
           const runtimeCleared = value.remoteRuntime === "未提供";
+          const reversePolicyCleared = value.reversePolicy === "未提供";
           const remoteReset = value.remote === "等待发现";
           const audioCleared = value.audioToggleChecked ? value.audio === "未接收" : value.audio === "未开启";
-          return matchesExpectedAuthFailure(value, args) && buttonsReset && surfaceCleared && clipboardButtonsDisabled && runtimeCleared && remoteReset && audioCleared
+          return matchesExpectedAuthFailure(value, args) && buttonsReset && surfaceCleared && clipboardButtonsDisabled && runtimeCleared && reversePolicyCleared && remoteReset && audioCleared
             ? value
             : null;
         },
@@ -1941,6 +2008,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       print("OK", `Auth failure remote: ${authFailureSnapshot.remote}`);
       print("OK", `Auth failure surface: ${authFailureSnapshot.video}`);
       print("OK", `Auth failure runtime: ${authFailureSnapshot.remoteRuntime}`);
+      print("OK", `Auth failure reverse policy: ${authFailureSnapshot.reversePolicy}`);
       if (authFailureSnapshot.logs.length > 0) {
         print("INFO", `Recent logs: ${authFailureSnapshot.logs.join(" | ")}`);
       }
@@ -1982,7 +2050,10 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     print("OK", `Remote: ${videoSnapshot.remote}`);
     print("OK", `Video: ${videoSnapshot.video}`);
     assertTemporaryRuntimeDiagnostics(videoSnapshot, args, "Mac client session");
+    assertTemporaryReversePolicyDiagnostics(videoSnapshot, args, "Mac client session");
+    await assertReversePolicyFormatterVariants(session);
     print("OK", `Remote runtime: ${videoSnapshot.remoteRuntime}`);
+    print("OK", `Reverse policy: ${videoSnapshot.reversePolicy}`);
     print("OK", `Initial video ready: ${initialVideoMs}ms`);
     if (!videoSnapshot.sendClipboardFilesButtonDisabled) {
       throw new Error("Mac client file send button should stay disabled until files are selected");
@@ -2842,10 +2913,11 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
           : value.audio === "未开启";
         const reconnectOk = value.reconnectMetric === "0 次";
         const runtimeOk = value.remoteRuntime === "未提供";
+        const reversePolicyOk = value.reversePolicy === "未提供";
         const remoteOk = value.remote === "等待发现";
         const surfaceCleared = !value.surfaceVisible && !value.surfaceHasFrame;
         const clipboardButtonsDisabled = value.sendClipboardButtonDisabled && value.sendClipboardFilesButtonDisabled;
-        return connectionOk && videoStatusOk && firstVideoOk && videoFlowOk && audioFlowOk && audioStatusOk && reconnectOk && runtimeOk && remoteOk && surfaceCleared && clipboardButtonsDisabled
+        return connectionOk && videoStatusOk && firstVideoOk && videoFlowOk && audioFlowOk && audioStatusOk && reconnectOk && runtimeOk && reversePolicyOk && remoteOk && surfaceCleared && clipboardButtonsDisabled
           ? value
           : null;
       },
@@ -2854,7 +2926,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     );
     print(
       "OK",
-      `Disconnect reset: ${disconnectSnapshot.remote} / ${disconnectSnapshot.video} / ${disconnectSnapshot.firstVideoMetric} / ${disconnectSnapshot.videoFlowMetric} / ${disconnectSnapshot.audio} / ${disconnectSnapshot.audioFlowMetric} / ${disconnectSnapshot.reconnectMetric} / ${disconnectSnapshot.remoteRuntime}`,
+      `Disconnect reset: ${disconnectSnapshot.remote} / ${disconnectSnapshot.video} / ${disconnectSnapshot.firstVideoMetric} / ${disconnectSnapshot.videoFlowMetric} / ${disconnectSnapshot.audio} / ${disconnectSnapshot.audioFlowMetric} / ${disconnectSnapshot.reconnectMetric} / ${disconnectSnapshot.remoteRuntime} / ${disconnectSnapshot.reversePolicy}`,
     );
     print("OK", "Mac client browser self-test passed");
   } finally {
