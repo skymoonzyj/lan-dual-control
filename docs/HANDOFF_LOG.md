@@ -50,6 +50,43 @@
 
 ## 2026-06-16 Mac Codex
 
+日期：2026-06-16 08:57
+开发端：Mac Codex
+本轮目标：白天恢复后重新启动真实 Mac host，协同 Windows 完成正式 Windows 控制 Mac E2E，并记录通过证据。
+完成内容：
+- 开工前读取 Agent Link Board、同步 Windows 最新 `5e8bb4b` watcher lifecycle 提交，并确认本地 repo clean。
+- 用户在场后，按安全流程运行 `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --background`：脚本先响铃并弹 Mac 本机隐藏密码框，密码未发送到通讯板或命令参数。
+- Mac host 后台启动成功：`192.168.31.122:43770`，pid=`84997`，runtimeBuild=`c5e5009`，`inputMode=log`，screen/accessibility/inputMonitoring 权限全开，H.264、系统 PCM、文本/文件剪贴板可用。
+- 向 Agent Link Board 发送 ready 状态并刷新 formal E2E call，Windows 侧随后完成无密 preflight/client diagnostics。
+- Supervisor 确认正式 Windows 控制 Mac E2E 已完成且退出码 0；Windows transcript `.dev-lab/formal-e2e-windows-20260616-084744.transcript.txt` 显示 Control center、文件剪贴板恢复、黑边防护、H.264/WebCodecs、音频帧和诊断均 OK，最终 `[OK] Formal Mac E2E checks finished`。Windows Codex 补发摘要：H.264/WebCodecs 解码 OK，canvas=`1920x1080`，实收约 `52.4 FPS`（请求 60Hz、协商 30Hz），audio `pcm-f32le` 有播放，剪贴板/文件剪贴板恢复/input-log/客户端诊断均 OK。
+- 拉取 Windows `5e8bb4b` 后，运行中 Mac host 只剩 build metadata stale；`changedHostRuntimeFileCount=0`，Mac host 行为源码未变，所以未为 watcher 文档/Windows 脚本提交重启 host。
+- CURRENT_STATUS、NEXT_ACTIONS 和任务板同步：正式 E2E 已通过；密码未上通讯板；`inject` 仍未执行。
+修改文件：
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --background`
+- `node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary`
+- `node scripts/mac/check-mac-resume-status.mjs --checkBoard --json`
+- `node scripts/mac/start-mac-host.mjs --status --json`
+- Agent Link Board Supervisor `DONE: 正式端到端验收 Mac host`，actual 为 Windows runner 退出码 0
+- `git diff --check`
+- 行首冲突标记扫描
+遗留问题：
+- `inject` 真实输入注入未执行；需要用户在屏幕前明确确认后再切 `LAN_DUAL_INPUT_MODE=inject` 验收。
+- 当前 Mac host 仍在后台运行；如收工或无人值守，使用 `node scripts/mac/start-mac-host.mjs --stop` 安全停止。
+- Windows formal 结果摘要已由 Supervisor 和 Windows Codex 双方确认；后续若需要复审，可先看 `.dev-lab/formal-e2e-windows-20260616-084744.transcript.txt`。
+下一步建议：
+- 短期优先做真实输入注入安全验收设计/执行，或继续做 H.264/音频长时间稳定性和低延迟体验收口。
+- 若继续正式测试，先在通讯板同步，再用 Mac/Windows resume status 做无密检查；不要重复要求用户输入密码，除非要重新认证或重启 host。
+是否改了协议：否。
+是否需要另一端配合：正式 E2E 已通过；后续 inject 或长稳测试需要 Windows 端和用户在场配合。
+
+## 2026-06-16 Mac Codex
+
 日期：2026-06-16 08:31
 开发端：Mac Codex
 本轮目标：给 Mac host 后台常驻启动补安全停止入口，让 `--background` 有对称的日常收尾命令。
