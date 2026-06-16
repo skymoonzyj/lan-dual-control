@@ -19,6 +19,39 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 13:30
+开发端：Windows Codex
+本轮目标：让 Windows host 媒体观察摘要区分 partial failure 和全失败。
+完成内容：
+- `scripts/windows/observe-windows-host-media.mjs` 新增媒体聚合状态判断：全部通过显示 `Windows media: ok`，单路成功单路失败显示 `Windows media: partial`，全部执行链路失败才显示 `Windows media: failed`。
+- `scripts/windows/test-windows-host-media-board-summary.mjs` 的 partial failure 回归改为断言 `Windows media: partial`，继续覆盖视频失败但音频成功、失败链路标记、成功链路保留和不泄密。
+- Windows host README、当前状态、下一步和任务板同步说明 `partial` / `failed` 的区别，避免把 FFmpeg/GDI 临时抓屏失败误读成音频也坏。
+修改文件：
+- `scripts/windows/observe-windows-host-media.mjs`
+- `scripts/windows/test-windows-host-media-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/observe-windows-host-media.mjs`
+- `node --check scripts/windows/test-windows-host-media-board-summary.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script observe-windows-host-media.mjs --script test-windows-host-media-board-summary.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-host-media-board-summary.mjs --timeoutMs 60000`
+- `node scripts/windows/test-windows-script-help.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps docs scripts shared`
+遗留问题：
+- 本轮仍是 mock partial failure 回归；真实 Windows host 媒体基线需要在 Windows 桌面捕获稳定后复测。
+下一步建议：
+- 下一轮可继续把 Mac/Windows media 聚合摘要格式对齐，或跑真实 Windows host WGC/H.264 媒体基线，确认 60Hz/码率设置下的稳定 FPS。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 13:20
 开发端：Windows Codex
 本轮目标：让 Windows host 媒体观察聚合脚本在单路失败时继续收集另一条链路结果。

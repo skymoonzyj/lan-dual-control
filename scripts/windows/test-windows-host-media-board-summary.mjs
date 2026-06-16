@@ -264,7 +264,7 @@ async function verifyPartialFailureContinues(args) {
   assert(payload.summary?.failures?.[0]?.id === "video", "partial failure should identify video failure");
   assert(payload.video === null, "partial failure should not include failed video payload");
   assert(payload.audio?.observation?.frameCount >= 2, "partial failure should continue and keep audio frames");
-  assertIncludes(payload.boardSummary, "Windows media: failed", "partial failure boardSummary");
+  assertIncludes(payload.boardSummary, "Windows media: partial", "partial failure boardSummary");
   assertIncludes(payload.boardSummary, "video=failed", "partial failure boardSummary");
   assertIncludes(payload.boardSummary, "audio=", "partial failure boardSummary");
   assertNoSecretLeak(payload.boardSummary, "partial failure boardSummary");

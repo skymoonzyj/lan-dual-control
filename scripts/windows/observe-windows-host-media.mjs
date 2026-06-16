@@ -566,6 +566,13 @@ function probeBoardFragment(report, id, fragment) {
   return fragment;
 }
 
+function mediaStatus(report) {
+  if (report.ok) return "ok";
+  const passed = Number(report.summary?.passed) || 0;
+  const failed = Number(report.summary?.failed) || 0;
+  return passed > 0 && failed > 0 ? "partial" : "failed";
+}
+
 function makeBoardSummary(report) {
   const requested = report.requested || {};
   const requestedVideo = requested.video
@@ -575,7 +582,7 @@ function makeBoardSummary(report) {
     ? `${report.requested.audio.audioMode}/${report.requested.audio.durationMs}ms`
     : "audio=skipped";
   const parts = [
-    `Windows media: ${report.ok ? "ok" : "failed"}`,
+    `Windows media: ${mediaStatus(report)}`,
     `target=${report.target}`,
     `elapsed=${report.elapsedMs}ms`,
     `request=${requestedVideo};${requestedAudio}`,
