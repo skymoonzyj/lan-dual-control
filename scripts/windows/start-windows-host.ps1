@@ -27,6 +27,8 @@ param(
   [switch] $SkipFirewallCheck,
   [switch] $NoRequireOpen,
   [switch] $Status,
+  [switch] $CheckBoard,
+  [string] $Server = "",
   [switch] $BoardSummary,
   [switch] $Json,
   [switch] $DryRun
@@ -62,6 +64,8 @@ if ($DryRunFirewallRule) { $nodeArgs += "--dryRunFirewallRule" }
 if ($SkipFirewallCheck) { $nodeArgs += "--skipFirewallCheck" }
 if ($NoRequireOpen) { $nodeArgs += "--noRequireOpen" }
 if ($Status) { $nodeArgs += "--status" }
+if ($CheckBoard) { $nodeArgs += "--checkBoard" }
+if ($Server) { $nodeArgs += @("--server", $Server) }
 if ($BoardSummary) { $nodeArgs += "--boardSummary" }
 if ($Json) { $nodeArgs += "--json" }
 if ($DryRun) { $nodeArgs += "--dryRun" }

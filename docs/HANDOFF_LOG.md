@@ -51,6 +51,43 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 12:23
+开发端：Windows Codex
+本轮目标：让 Windows host 启动/状态助手也能看到 Agent Link Board 当前测试呼叫。
+完成内容：
+- `scripts/windows/start-windows-host.mjs` 新增 `--checkBoard` 和 `--server <url>`，在 `--status` 路径只读读取 Agent Link Board `/api/state.currentCall`。
+- `--status --json`、普通输出和 `--status --boardSummary` 会提示 active Mac -> Windows call；DONE/完成态 call 不进入待办摘要。
+- PowerShell 包装 `scripts/windows/start-windows-host.ps1` 同步新增 `-CheckBoard` 和 `-Server`。
+- 启动助手自测新增本机 fake Agent Link Board，覆盖 active Mac -> Windows call 和 DONE call；摘要不回显 call command。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- PowerShell 7 AST 语法解析 `start-windows-host.ps1`
+- `node scripts/windows/test-windows-script-help.mjs --script start-windows-host.mjs --script test-windows-host-start-helper.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 60000`
+- `node scripts/windows/start-windows-host.mjs --status --checkBoard --boardSummary --host 127.0.0.1 --port 9 --timeoutMs 8000`（离线非 0 符合预期）
+- `node scripts/windows/start-windows-host.mjs --status --checkBoard --host 127.0.0.1 --port 9 --timeoutMs 8000`（真实联络板只读，当前 DONE call 显示 inactive）
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮只做状态提示，不自动响应、清理或覆盖通讯板 call；不启动 Windows host、不认证、不发送密码、不执行 `inject`。
+下一步建议：
+- Mac 发起 Windows host 验收 call 后，Windows 可先跑 `node scripts/windows/start-windows-host.mjs --status --checkBoard --boardSummary` 判断当前 host 是否在线、是否有待处理 call，再决定是否启动 host 或跑 readiness。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 12:18
 开发端：Windows Codex
 本轮目标：让 Windows host readiness 在准备 Mac 反控 Windows 时也能看到 Agent Link Board 当前测试呼叫。

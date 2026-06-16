@@ -1,4 +1,5 @@
 import net from "node:net";
+import http from "node:http";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -133,6 +134,34 @@ async function getFreePort() {
   });
 }
 
+async function startFakeBoard(state) {
+  let requestCount = 0;
+  const server = http.createServer((request, response) => {
+    const url = new URL(request.url || "/", `http://${request.headers.host || "127.0.0.1"}`);
+    if (request.method === "GET" && url.pathname === "/api/state") {
+      requestCount += 1;
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(state));
+      return;
+    }
+    response.writeHead(404, { "content-type": "text/plain" });
+    response.end("not found");
+  });
+  await new Promise((resolveListen, rejectListen) => {
+    server.once("error", rejectListen);
+    server.listen(0, "127.0.0.1", resolveListen);
+  });
+  const address = server.address();
+  const port = address && typeof address === "object" ? address.port : 0;
+  return {
+    url: `http://127.0.0.1:${port}`,
+    get requestCount() {
+      return requestCount;
+    },
+    close: () => new Promise((resolveClose) => server.close(resolveClose)),
+  };
+}
+
 async function assertMissingPasswordFails(timeoutMs) {
   const result = await runNode(["--requirePassword", "--dryRun"], {
     timeoutMs,
@@ -262,6 +291,117 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   assertIncludes(boardResult.stdout, "Do not send passwords", "offline board summary");
   assertNotIncludes(boardOutput, "LAN_DUAL_PASSWORD is required", "offline board summary");
   print("OK", "Status mode reports offline host without requiring a password");
+}
+
+async function assertStatusCheckBoardCurrentCall(timeoutMs) {
+  const port = await getFreePort();
+  const activeBoard = await startFakeBoard({
+    currentCall: {
+      status: "CALLING",
+      from: "Mac Codex",
+      need: "Windows Codex",
+      goal: "Mac formal Windows host 验收",
+      command: "node scripts/mac/check-mac-client-formal-status.mjs --sendCall --debugToken should-not-leak",
+      expected: "Windows host ready for Mac client formal smoke",
+      ask: "请 Windows 端准备 host status",
+    },
+  });
+
+  try {
+    const jsonResult = await runNode([
+      "--status",
+      "--json",
+      "--checkBoard",
+      "--server",
+      activeBoard.url,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(port),
+      "--requirePassword",
+    ], {
+      timeoutMs,
+      env: { LAN_DUAL_PASSWORD: "" },
+    });
+    const jsonOutput = `${jsonResult.stdout}\n${jsonResult.stderr}`;
+    if (jsonResult.exitCode === 0 || jsonResult.timedOut) {
+      throw new Error(`Offline checkBoard JSON status should fail quickly without starting host.\n${jsonOutput}`);
+    }
+    const parsed = parseJsonOutput(jsonResult.stdout, "offline checkBoard JSON status");
+    if (!parsed.board?.requested || !parsed.board?.ok || activeBoard.requestCount < 1) {
+      throw new Error(`Offline checkBoard JSON status did not read the fake board.\n${jsonResult.stdout}`);
+    }
+    if (!parsed.board.currentCall?.active || !parsed.board.currentCall?.needsWindows || !parsed.board.currentCall?.fromMacSide) {
+      throw new Error(`Offline checkBoard JSON status did not classify active Mac -> Windows call.\n${jsonResult.stdout}`);
+    }
+    assertIncludes(parsed.boardSummary, "call=CALLING Mac Codex->Windows Codex", "offline checkBoard JSON board summary");
+    assertIncludes(parsed.boardSummary, "Mac formal Windows host 验收", "offline checkBoard JSON board summary");
+    assertNotIncludes(parsed.boardSummary, "--sendCall", "offline checkBoard JSON board summary");
+    assertNotIncludes(parsed.boardSummary, "should-not-leak", "offline checkBoard JSON board summary");
+
+    const boardResult = await runNode([
+      "--status",
+      "--boardSummary",
+      "--checkBoard",
+      "--server",
+      activeBoard.url,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(port),
+      "--requirePassword",
+    ], {
+      timeoutMs,
+      env: { LAN_DUAL_PASSWORD: "" },
+    });
+    const boardOutput = `${boardResult.stdout}\n${boardResult.stderr}`;
+    if (boardResult.exitCode === 0 || boardResult.timedOut) {
+      throw new Error(`Offline checkBoard board summary should fail quickly without starting host.\n${boardOutput}`);
+    }
+    assertIncludes(boardResult.stdout, "call=CALLING Mac Codex->Windows Codex", "offline checkBoard board summary");
+    assertNotIncludes(boardResult.stdout, "--sendCall", "offline checkBoard board summary");
+    assertNotIncludes(boardOutput, "LAN_DUAL_PASSWORD is required", "offline checkBoard board summary");
+  } finally {
+    await activeBoard.close();
+  }
+
+  const doneBoard = await startFakeBoard({
+    currentCall: {
+      status: "DONE",
+      from: "Mac Codex",
+      need: "Windows Codex",
+      goal: "finished Windows host test",
+      command: "completed command should stay out of board summary",
+    },
+  });
+  try {
+    const boardResult = await runNode([
+      "--status",
+      "--boardSummary",
+      "--checkBoard",
+      "--server",
+      doneBoard.url,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(port),
+      "--requirePassword",
+    ], {
+      timeoutMs,
+      env: { LAN_DUAL_PASSWORD: "" },
+    });
+    const boardOutput = `${boardResult.stdout}\n${boardResult.stderr}`;
+    if (boardResult.exitCode === 0 || boardResult.timedOut) {
+      throw new Error(`DONE checkBoard board summary should fail quickly without starting host.\n${boardOutput}`);
+    }
+    assertIncludes(boardResult.stdout, "Windows host readiness: offline", "DONE checkBoard board summary");
+    assertNotIncludes(boardResult.stdout, "call=DONE", "DONE checkBoard board summary");
+    assertNotIncludes(boardResult.stdout, "finished Windows host test", "DONE checkBoard board summary");
+  } finally {
+    await doneBoard.close();
+  }
+
+  print("OK", "Status mode surfaces active Mac -> Windows currentCall and ignores DONE calls");
 }
 
 async function assertStatusOnlineWithTempHost(timeoutMs) {
@@ -504,6 +644,7 @@ async function main() {
   await assertDryRunWithEnvPassword(args.timeoutMs);
   await assertDryRunWgcH264BridgeOptions(args.timeoutMs);
   await assertStatusOfflineNeedsNoPassword(args.timeoutMs);
+  await assertStatusCheckBoardCurrentCall(args.timeoutMs);
   await assertStatusOnlineWithTempHost(args.timeoutMs);
   await assertLaunchWithEnvPassword(args.timeoutMs);
   print("OK", "Windows host start helper self-test passed");

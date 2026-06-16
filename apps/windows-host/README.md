@@ -67,18 +67,22 @@ node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --dryRun
 node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --status
 ```
 
-需要给脚本或联络板消费时，加 `--json` 输出纯机器可读 JSON；PowerShell 包装也可以用 `-Status -Json` 走同一条只读检查：
+需要给脚本或联络板消费时，加 `--json` 输出纯机器可读 JSON；如果还要同时看 Agent Link Board 当前是否有 Mac -> Windows 呼叫，加 `--checkBoard` / `-CheckBoard` 只读读取 `/api/state.currentCall`。PowerShell 包装也可以用 `-Status -Json` 走同一条只读检查：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --status --json
+node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --status --json --checkBoard
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -Status -Json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -Status -Json -CheckBoard
 ```
 
-需要把当前 Windows host 在线状态同步到 Agent Link Board，或让 Mac 端直接跑真连前 readiness / formal checklist，可以用无密摘要输出。它会给出 `check-mac-client-readiness`、`check-mac-client-formal-status` 和 ready 后可用的 `check-mac-client-formal-status --sendCall` 下一步命令，不会启动服务、不会认证、不会打印密码：
+需要把当前 Windows host 在线状态同步到 Agent Link Board，或让 Mac 端直接跑真连前 readiness / formal checklist，可以用无密摘要输出。它会给出 `check-mac-client-readiness`、`check-mac-client-formal-status` 和 ready 后可用的 `check-mac-client-formal-status --sendCall` 下一步命令；加 `--checkBoard` / `-CheckBoard` 时，摘要还会提示 active Mac -> Windows `currentCall`，DONE call 不会当作待办。状态入口不会启动服务、不会认证、不会打印密码：
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --status --boardSummary
+node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --status --checkBoard --boardSummary
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -Status -BoardSummary
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -Status -CheckBoard -BoardSummary
 ```
 
 Node 入口同样支持：

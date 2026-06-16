@@ -31,6 +31,7 @@ const defaults = {
   ffmpeg: process.env.LAN_DUAL_FFMPEG || "",
   buildId: process.env.LAN_DUAL_BUILD_ID || "",
   timeoutMs: 8000,
+  server: process.env.CODEX_LINK_SERVER || "http://192.168.31.68:17888",
   skipFirewallCheck: false,
   noRequireOpen: false,
   addFirewallRule: false,
@@ -38,6 +39,7 @@ const defaults = {
   promptPassword: false,
   requirePassword: false,
   status: false,
+  checkBoard: false,
   boardSummary: false,
   json: false,
   dryRun: false,
@@ -70,6 +72,7 @@ function parseArgs(argv) {
       key === "wgcH264Bridge" ||
       key === "wgcRepeatLastFrame" ||
       key === "status" ||
+      key === "checkBoard" ||
       key === "boardSummary" ||
       key === "json" ||
       key === "dryRun"
@@ -121,8 +124,10 @@ function parseArgs(argv) {
   args.inputMode = normalizeMode(args.inputMode, ["auto", "log", "system"], "");
   args.ffmpeg = resolveFfmpegCommand(String(args.ffmpeg || "").trim());
   args.buildId = String(args.buildId || "").trim() || getGitBuildId() || "dev";
+  args.server = String(args.server || defaults.server).trim() || defaults.server;
   args.promptPassword = Boolean(args.promptPassword);
   args.requirePassword = Boolean(args.requirePassword);
+  args.checkBoard = Boolean(args.checkBoard);
   return args;
 }
 
@@ -159,6 +164,9 @@ Options:
   --noRequireOpen         Run firewall check but do not require the port probe to pass.
   --status                Print current /discovery runtime status and stale-build source diff,
                           then exit without starting.
+  --checkBoard            With --status, read one Agent Link Board /api/state snapshot
+                          and surface active Mac -> Windows currentCall.
+  --server <url>          Agent Link Board URL. Default: ${defaults.server}
   --boardSummary          With --status, print a short secret-free Agent Link Board summary.
   --json                  With --status, print pure machine-readable JSON.
   --dryRun                Print the resolved launch plan and exit.
@@ -302,6 +310,147 @@ function compactText(value, maxLength = 140) {
   return `${text.slice(0, maxLength - 3)}...`;
 }
 
+function normalizedText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function isActiveCallStatus(status) {
+  const normalized = normalizedText(status).toLowerCase();
+  if (!normalized) return true;
+  return !["done", "complete", "completed", "clear", "cleared", "cancelled", "canceled", "idle", "resolved", "closed"].includes(normalized);
+}
+
+function isWindowsText(text) {
+  return /windows|Windows Codex|Windows 端|Windows host|windows-host|start-windows-host/i.test(String(text || ""));
+}
+
+function isMacText(text) {
+  return /mac|macOS|Mac Codex|Mac 端/i.test(String(text || ""));
+}
+
+function normalizeBoardCurrentCall(call) {
+  if (!call || typeof call !== "object") {
+    return {
+      present: false,
+      active: false,
+      needsWindows: false,
+      fromMacSide: false,
+      summary: "none",
+    };
+  }
+  const parsed = {
+    present: true,
+    status: normalizedText(call.status),
+    from: normalizedText(call.from),
+    need: normalizedText(call.need),
+    goal: normalizedText(call.goal),
+    environment: normalizedText(call.environment),
+    connection: normalizedText(call.connection),
+    command: normalizedText(call.command),
+    expected: normalizedText(call.expected),
+    actual: normalizedText(call.actual),
+    ask: normalizedText(call.ask),
+    blockedBy: normalizedText(call.blockedBy),
+    startedAt: normalizedText(call.startedAt),
+    updatedAt: normalizedText(call.updatedAt),
+    active: false,
+    needsWindows: false,
+    fromMacSide: false,
+    summary: "",
+  };
+  const text = [
+    parsed.goal,
+    parsed.environment,
+    parsed.connection,
+    parsed.command,
+    parsed.expected,
+    parsed.actual,
+    parsed.ask,
+    parsed.blockedBy,
+  ].join("\n");
+  parsed.active = isActiveCallStatus(parsed.status);
+  parsed.needsWindows = isWindowsText(parsed.need) || isWindowsText(text);
+  parsed.fromMacSide = isMacText(parsed.from) || isMacText(text);
+  const direction = [parsed.from || "unknown", parsed.need || "unknown"].join("->");
+  parsed.summary = `${parsed.status || "CALL"} ${direction}${parsed.goal ? ` ${parsed.goal}` : ""}`;
+  return parsed;
+}
+
+function skippedBoardSnapshot() {
+  return {
+    requested: false,
+    ok: null,
+    status: null,
+    currentCall: {
+      present: false,
+      active: false,
+      needsWindows: false,
+      fromMacSide: false,
+      summary: "not checked",
+    },
+    error: "",
+  };
+}
+
+async function getBoardSnapshot(args) {
+  if (!args.checkBoard) return skippedBoardSnapshot();
+
+  const controller = new AbortController();
+  const timeoutMs = Math.min(Math.max(args.timeoutMs, 5000), 30000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(new URL("/api/state", args.server), {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        ...(process.env.CODEX_LINK_TOKEN ? { "X-Codex-Link-Token": process.env.CODEX_LINK_TOKEN } : {}),
+      },
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      return {
+        requested: true,
+        ok: false,
+        status: response.status,
+        currentCall: normalizeBoardCurrentCall(null),
+        error: `${response.status}: ${text}`,
+      };
+    }
+    const state = text ? JSON.parse(text) : {};
+    return {
+      requested: true,
+      ok: true,
+      status: response.status,
+      currentCall: normalizeBoardCurrentCall(state.currentCall),
+      error: "",
+    };
+  } catch (error) {
+    return {
+      requested: true,
+      ok: false,
+      status: null,
+      currentCall: normalizeBoardCurrentCall(null),
+      error: error.message,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function activeMacToWindowsCall(status) {
+  const call = status.board?.currentCall || null;
+  return call?.active && call.needsWindows && call.fromMacSide ? call : null;
+}
+
+function boardSummaryFragment(status) {
+  const call = activeMacToWindowsCall(status);
+  if (call) return ` call=${compactText(call.summary, 180)}.`;
+  if (status.board?.requested && !status.board.ok) {
+    return ` board=unavailable:${compactText(status.board.error || "unknown error", 90)}.`;
+  }
+  return "";
+}
+
 function statusProbeHost(args) {
   return args.host === "0.0.0.0" || args.host === "::" ? "127.0.0.1" : args.host;
 }
@@ -417,8 +566,9 @@ function macReadinessTargets(status) {
 }
 
 function makeBoardSummary(status) {
+  const board = boardSummaryFragment(status);
   if (!status.ok) {
-    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port}; start safely with ${status.suggestions[0] || "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword"}. Do not send passwords on Agent Link Board.`;
+    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${status.suggestions[0] || "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword"}. Do not send passwords on Agent Link Board.`;
   }
   const targets = macReadinessTargets(status);
   const targetText = targets.length > 0
@@ -431,7 +581,7 @@ function makeBoardSummary(status) {
   const next = targets[0]?.formalCommand || targets[0]?.command || "Mac should rerun readiness after a LAN IPv4 address is available.";
   const readiness = targets[0]?.command ? ` Readiness: ${targets[0].command}.` : "";
   const sendCall = targets[0]?.sendCallCommand ? ` SendCall when ready: ${targets[0].sendCallCommand}.` : "";
-  return `Windows host readiness: online targets=${targetText}; runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness}${sendCall} Do not send passwords on Agent Link Board.`;
+  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness}${sendCall} Do not send passwords on Agent Link Board.`;
 }
 
 function applyDiscoveryStatus(status, discovery, args) {
@@ -493,6 +643,7 @@ function makeStatusShell(args, probeHost = statusProbeHost(args)) {
     lanAddresses: getLanAddresses(),
     buildDiff: null,
     macClientReadinessCommands: [],
+    board: skippedBoardSnapshot(),
     boardSummary: "",
     warnings: [],
     suggestions: [],
@@ -503,6 +654,10 @@ function makeStatusShell(args, probeHost = statusProbeHost(args)) {
 async function getStatus(args) {
   const probeHost = statusProbeHost(args);
   const status = makeStatusShell(args, probeHost);
+  status.board = await getBoardSnapshot(args);
+  if (status.board.requested && !status.board.ok) {
+    status.warnings.push(`Agent Link Board unavailable: ${compactText(status.board.error || "unknown error")}`);
+  }
 
   try {
     const discovery = await requestJson(status.probe.url, Math.min(args.timeoutMs, 3000));
@@ -521,6 +676,24 @@ async function getStatus(args) {
   }
 }
 
+function printBoardSnapshot(status) {
+  if (!status.board?.requested) return;
+  if (!status.board.ok) {
+    console.log(`[WARN] Agent Link Board unavailable: ${status.board.error || "unknown error"}`);
+    return;
+  }
+  const call = status.board.currentCall || {};
+  if (!call.present) {
+    console.log("[OK] Agent Link Board currentCall=none");
+    return;
+  }
+  const state = call.active ? "active" : "inactive";
+  console.log(`[INFO] Agent Link Board currentCall=${state} ${call.summary}`);
+  if (call.active && call.needsWindows && call.fromMacSide) {
+    console.log("[INFO] Agent Link Board has an active Mac -> Windows call; coordinate before changing test state.");
+  }
+}
+
 async function printStatus(args) {
   const status = await getStatus(args);
   if (args.json) {
@@ -534,6 +707,7 @@ async function printStatus(args) {
   }
 
   console.log(`[INFO] Windows host status probe: ${status.probe.host}:${status.probe.port}`);
+  printBoardSnapshot(status);
   if (status.ok) {
     console.log(`[OK] /discovery online: ${status.device?.deviceName || "Windows host"} · ${discoveryRuntimeSummary(status.runtime || {})}`);
     const discoveryLike = { capabilities: {
