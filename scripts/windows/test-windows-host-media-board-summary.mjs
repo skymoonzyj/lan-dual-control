@@ -21,7 +21,8 @@ Options:
 
 Description:
   Verifies observe-windows-host-media exposes a secret-free boardSummary in
-  JSON and one-line Agent Link Board modes using local mock video/audio hosts.
+  JSON, failure JSON, and one-line Agent Link Board modes using local mock
+  video/audio hosts.
 `);
 }
 
@@ -146,6 +147,15 @@ function mockAudioArgs(port) {
   ];
 }
 
+function failingMockVideoArgs(port) {
+  return [
+    ...mockVideoArgs(port),
+    "--videoMinFrames", "9999",
+    "--videoMinFps", "999",
+    "--videoRetries", "0",
+  ];
+}
+
 async function verifyHelp(args) {
   const result = await runMedia(["--help"], args);
   assert(result.exitCode === 0, `help should exit 0, got ${result.exitCode}`);
@@ -187,6 +197,40 @@ async function verifyOneLineBoardSummary(args) {
   assertNoSecretLeak(result.stderr, "boardSummary stderr");
 }
 
+async function verifyFailureBoardSummary(args) {
+  const port = await getFreePort();
+  const result = await runMedia([...failingMockVideoArgs(port), "--boardSummary"], args);
+  assert(!result.timedOut, "failure boardSummary video run timed out");
+  assert(result.exitCode !== 0, "failure boardSummary should exit non-zero");
+  const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean);
+  assert(lines.length === 1, `failure boardSummary should print one line, got ${lines.length}: ${result.stdout}`);
+  assertIncludes(lines[0], "Windows media: failed", "failure boardSummary");
+  assertIncludes(lines[0], "error=video observation failed", "failure boardSummary");
+  assertIncludes(lines[0], "audio=skipped", "failure boardSummary");
+  assertIncludes(lines[0], "No passwords in summary", "failure boardSummary");
+  assertIncludes(lines[0], "no input/inject", "failure boardSummary");
+  assertNoSecretLeak(lines[0], "failure boardSummary line");
+  assertNoSecretLeak(result.stderr, "failure boardSummary stderr");
+}
+
+async function verifyFailureJsonSummary(args) {
+  const port = await getFreePort();
+  const result = await runMedia([...failingMockVideoArgs(port), "--json"], args);
+  assert(!result.timedOut, "failure JSON video run timed out");
+  assert(result.exitCode !== 0, "failure JSON should exit non-zero");
+  assertNoSecretLeak(result.stdout, "failure JSON stdout");
+  assertNoSecretLeak(result.stderr, "failure JSON stderr");
+  const payload = parseJson(result.stdout, "failure media JSON");
+  assert(payload.ok === false, "failure JSON ok should be false");
+  assert(payload.error?.summary === "video observation failed", "failure JSON summary mismatch");
+  assert(typeof payload.error?.message === "string" && payload.error.message.length > 0, "failure JSON should include sanitized error message");
+  assert(typeof payload.boardSummary === "string" && payload.boardSummary.length > 0, "failure JSON boardSummary missing");
+  assertIncludes(payload.boardSummary, "Windows media: failed", "failure JSON boardSummary");
+  assertIncludes(payload.boardSummary, "error=video observation failed", "failure JSON boardSummary");
+  assertIncludes(payload.boardSummary, "No passwords in summary", "failure JSON boardSummary");
+  assertNoSecretLeak(payload.boardSummary, "failure JSON boardSummary");
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -197,6 +241,8 @@ async function main() {
   await verifyHelp(args);
   await verifyJsonSummary(args);
   await verifyOneLineBoardSummary(args);
+  await verifyFailureBoardSummary(args);
+  await verifyFailureJsonSummary(args);
   console.log("[OK] Windows host media board summary checks passed");
 }
 

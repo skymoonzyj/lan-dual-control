@@ -19,6 +19,40 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 13:09
+开发端：Windows Codex
+本轮目标：让 Windows host 媒体观察聚合脚本在失败时也能输出可发 Agent Link Board 的安全摘要。
+完成内容：
+- `scripts/windows/observe-windows-host-media.mjs` 的失败路径现在会生成脱敏 `ok=false` JSON 报告，并保留同格式 `boardSummary`。
+- `--boardSummary` 失败时只输出一行 `Windows media: failed` 摘要，包含 target、elapsed、请求分辨率/Hz/Mbps/音频参数、简短错误原因和“不含密码/不执行 inject”边界。
+- 成功路径的摘要格式保持兼容；若视频已成功而音频失败，失败报告会保留已完成的视频片段，方便定位是哪一段坏了。
+- `scripts/windows/test-windows-host-media-board-summary.mjs` 新增失败 boardSummary 和失败 JSON 回归，断言输出不泄露测试密码片段。
+修改文件：
+- `scripts/windows/observe-windows-host-media.mjs`
+- `scripts/windows/test-windows-host-media-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/observe-windows-host-media.mjs`
+- `node --check scripts/windows/test-windows-host-media-board-summary.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script observe-windows-host-media.mjs --script test-windows-host-media-board-summary.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-host-media-board-summary.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps docs scripts shared`
+遗留问题：
+- 本轮只增强失败摘要和测试覆盖；真实 Windows FFmpeg gdigrab / WASAPI 仍需要在后续真机媒体基线里继续观察。
+下一步建议：
+- 做 Windows host 媒体基线或 Mac 反控 Windows 体验前，可直接跑 `node scripts/windows/observe-windows-host-media.mjs --resourceSampleTree true --boardSummary`；成功或失败都能把一行脱敏结果发给 Mac 端对照。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 12:52
 开发端：Windows Codex
 本轮目标：让 Windows host 媒体观察聚合脚本输出可发 Agent Link Board 的无密摘要。

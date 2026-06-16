@@ -460,23 +460,107 @@ function firstValue(values) {
   return Array.isArray(values) && values.length ? values[0] : "";
 }
 
+function makeRequested(args) {
+  return {
+    video: args.skipVideo ? null : {
+      width: args.width,
+      height: args.height,
+      fps: args.fps,
+      bandwidthKbps: args.bandwidthKbps,
+      qualityPreset: args.qualityPreset,
+      durationMs: args.videoDurationMs,
+      minFrames: args.videoMinFrames,
+      minFps: args.videoMinFps,
+      resourceSampleTree: args.videoResourceSampleTree,
+    },
+    audio: args.skipAudio ? null : {
+      audioMode: args.audioMode,
+      durationMs: args.audioDurationMs,
+      minFrames: args.audioMinFrames,
+      minFps: args.audioMinFps,
+      resourceSampleTree: args.audioResourceSampleTree,
+      playTone: args.playTone,
+      requireLevel: args.requireLevel,
+    },
+    maxGapMs: args.maxGapMs,
+    maxFrameAgeMs: args.maxFrameAgeMs,
+    requireMonotonicTimestamp: args.requireMonotonicTimestamp,
+    resourceSample: args.resourceSample,
+  };
+}
+
+function observationFragment(run) {
+  const result = run?.result;
+  if (!result) return null;
+  return {
+    durationMs: run.durationMs,
+    target: result.target,
+    session: result.session,
+    observation: result.observation,
+    resource: result.resource,
+  };
+}
+
+function escapeRegExp(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function redactSecrets(text, args) {
+  let sanitized = String(text || "");
+  const secrets = new Set([
+    args?.password,
+    process.env.LAN_DUAL_PASSWORD,
+    defaults.password,
+  ].filter((value) => value && String(value).length >= 3));
+
+  for (const secret of secrets) {
+    sanitized = sanitized.replace(new RegExp(escapeRegExp(secret), "g"), "[redacted]");
+  }
+
+  sanitized = sanitized.replace(/(--password\s+)(?:"[^"]*"|\S+)/gi, "$1[redacted]");
+  sanitized = sanitized.replace(/(LAN_DUAL_PASSWORD\s*=\s*)(?:"[^"]*"|'[^']*'|\S+)/gi, "$1[redacted]");
+  return sanitized;
+}
+
+function compactText(text, maxLength = 240) {
+  const compacted = String(text || "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (compacted.length <= maxLength) return compacted;
+  return `${compacted.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function errorSummary(error, args) {
+  const sanitized = redactSecrets(error?.message || String(error || ""), args);
+  const firstLine = sanitized.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+  return compactText((firstLine || "unknown error").replace(/:$/, ""), 180);
+}
+
 function makeBoardSummary(report) {
-  const requestedVideo = report.requested.video
+  const requested = report.requested || {};
+  const requestedVideo = requested.video
     ? `${report.requested.video.width}x${report.requested.video.height}@${report.requested.video.fps}Hz/${formatBitrate(report.requested.video.bandwidthKbps)}/${report.requested.video.qualityPreset}`
     : "video=skipped";
-  const requestedAudio = report.requested.audio
+  const requestedAudio = requested.audio
     ? `${report.requested.audio.audioMode}/${report.requested.audio.durationMs}ms`
     : "audio=skipped";
-  return [
+  const parts = [
     `Windows media: ${report.ok ? "ok" : "failed"}`,
     `target=${report.target}`,
     `elapsed=${report.elapsedMs}ms`,
     `request=${requestedVideo};${requestedAudio}`,
+  ];
+  if (!report.ok) {
+    parts.push(`error=${compactText(report.error?.summary || report.error?.message || "unknown error", 180)}`);
+  }
+  parts.push(
     videoBoardFragment(report.video),
     audioBoardFragment(report.audio),
     resourceBoardFragment(report),
     "No passwords in summary; no input/inject.",
-  ].join(" | ");
+  );
+  return parts.join(" | ");
 }
 
 function resourceSummary(resource) {
@@ -492,8 +576,6 @@ function resourceSummary(resource) {
 }
 
 function makeReport(args, videoRun, audioRun, startedAtIso, finishedAtIso, elapsedMs) {
-  const video = videoRun?.result || null;
-  const audio = audioRun?.result || null;
   const report = {
     ok: true,
     startedAt: startedAtIso,
@@ -501,46 +583,30 @@ function makeReport(args, videoRun, audioRun, startedAtIso, finishedAtIso, elaps
     elapsedMs,
     target: `${args.host}:${args.port}`,
     useExisting: args.useExisting,
-    requested: {
-      video: args.skipVideo ? null : {
-        width: args.width,
-        height: args.height,
-        fps: args.fps,
-        bandwidthKbps: args.bandwidthKbps,
-        qualityPreset: args.qualityPreset,
-        durationMs: args.videoDurationMs,
-        minFrames: args.videoMinFrames,
-        minFps: args.videoMinFps,
-        resourceSampleTree: args.videoResourceSampleTree,
-      },
-      audio: args.skipAudio ? null : {
-        audioMode: args.audioMode,
-        durationMs: args.audioDurationMs,
-        minFrames: args.audioMinFrames,
-        minFps: args.audioMinFps,
-        resourceSampleTree: args.audioResourceSampleTree,
-        playTone: args.playTone,
-        requireLevel: args.requireLevel,
-      },
-      maxGapMs: args.maxGapMs,
-      maxFrameAgeMs: args.maxFrameAgeMs,
-      requireMonotonicTimestamp: args.requireMonotonicTimestamp,
-      resourceSample: args.resourceSample,
+    requested: makeRequested(args),
+    video: observationFragment(videoRun),
+    audio: observationFragment(audioRun),
+  };
+  report.boardSummary = makeBoardSummary(report);
+  return report;
+}
+
+function makeFailureReport(args, error, videoRun, audioRun, startedAtIso, finishedAtIso, elapsedMs) {
+  const details = redactSecrets(error?.message || String(error || ""), args).slice(0, 2400);
+  const report = {
+    ok: false,
+    startedAt: startedAtIso,
+    finishedAt: finishedAtIso,
+    elapsedMs,
+    target: `${args.host}:${args.port}`,
+    useExisting: args.useExisting,
+    requested: makeRequested(args),
+    error: {
+      summary: errorSummary(error, args),
+      message: details,
     },
-    video: video ? {
-      durationMs: videoRun.durationMs,
-      target: video.target,
-      session: video.session,
-      observation: video.observation,
-      resource: video.resource,
-    } : null,
-    audio: audio ? {
-      durationMs: audioRun.durationMs,
-      target: audio.target,
-      session: audio.session,
-      observation: audio.observation,
-      resource: audio.resource,
-    } : null,
+    video: observationFragment(videoRun),
+    audio: observationFragment(audioRun),
   };
   report.boardSummary = makeBoardSummary(report);
   return report;
@@ -558,44 +624,57 @@ async function main() {
   let videoRun = null;
   let audioRun = null;
 
-  if (!args.skipVideo) {
-    print("RUN", `Video baseline ${args.width}x${args.height}/${args.fps}Hz for ${args.videoDurationMs} ms`, args);
-    const videoArgs = makeVideoArgs(args);
-    if (args.debugCommands) {
-      print("DEBUG", formatCommand(videoScript, videoArgs), args);
+  try {
+    if (!args.skipVideo) {
+      print("RUN", `Video baseline ${args.width}x${args.height}/${args.fps}Hz for ${args.videoDurationMs} ms`, args);
+      const videoArgs = makeVideoArgs(args);
+      if (args.debugCommands) {
+        print("DEBUG", formatCommand(videoScript, videoArgs), args);
+      }
+      videoRun = await runJsonScriptWithRetries(
+        "video",
+        videoScript,
+        videoArgs,
+        args.commandTimeoutMs,
+        args.videoRetries,
+        args.retryDelayMs,
+        args,
+      );
+      const observation = videoRun.result.observation;
+      print(
+        "OK",
+        `Video: ${observation.frameCount} frames, ${observation.fps} FPS, max gap ${observation.maxGapMs} ms, frame age max ${observation.maxFrameAgeMs} ms`,
+        args,
+      );
+      print("INFO", `Video resource: ${resourceSummary(videoRun.result.resource)}`, args);
     }
-    videoRun = await runJsonScriptWithRetries(
-      "video",
-      videoScript,
-      videoArgs,
-      args.commandTimeoutMs,
-      args.videoRetries,
-      args.retryDelayMs,
-      args,
-    );
-    const observation = videoRun.result.observation;
-    print(
-      "OK",
-      `Video: ${observation.frameCount} frames, ${observation.fps} FPS, max gap ${observation.maxGapMs} ms, frame age max ${observation.maxFrameAgeMs} ms`,
-      args,
-    );
-    print("INFO", `Video resource: ${resourceSummary(videoRun.result.resource)}`, args);
-  }
 
-  if (!args.skipAudio) {
-    print("RUN", `Audio baseline ${args.audioMode} for ${args.audioDurationMs} ms`, args);
-    const audioArgs = makeAudioArgs(args);
-    if (args.debugCommands) {
-      print("DEBUG", formatCommand(audioScript, audioArgs), args);
+    if (!args.skipAudio) {
+      print("RUN", `Audio baseline ${args.audioMode} for ${args.audioDurationMs} ms`, args);
+      const audioArgs = makeAudioArgs(args);
+      if (args.debugCommands) {
+        print("DEBUG", formatCommand(audioScript, audioArgs), args);
+      }
+      audioRun = await runJsonScript("audio", audioScript, audioArgs, args.commandTimeoutMs);
+      const observation = audioRun.result.observation;
+      print(
+        "OK",
+        `Audio: ${observation.frameCount} frames, steady ${observation.steady.fps} FPS, max gap ${observation.steady.maxGapMs} ms, frame age max ${observation.steady.maxFrameAgeMs} ms`,
+        args,
+      );
+      print("INFO", `Audio resource: ${resourceSummary(audioRun.result.resource)}`, args);
     }
-    audioRun = await runJsonScript("audio", audioScript, audioArgs, args.commandTimeoutMs);
-    const observation = audioRun.result.observation;
-    print(
-      "OK",
-      `Audio: ${observation.frameCount} frames, steady ${observation.steady.fps} FPS, max gap ${observation.steady.maxGapMs} ms, frame age max ${observation.steady.maxFrameAgeMs} ms`,
-      args,
-    );
-    print("INFO", `Audio resource: ${resourceSummary(audioRun.result.resource)}`, args);
+  } catch (error) {
+    const finishedAtIso = new Date().toISOString();
+    const report = makeFailureReport(args, error, videoRun, audioRun, startedAtIso, finishedAtIso, Math.round(performance.now() - startedAt));
+    if (args.json) {
+      console.log(JSON.stringify(report, null, 2));
+    } else if (args.boardSummary) {
+      console.log(report.boardSummary);
+    } else {
+      console.error(`[ERROR] ${report.error.message}`);
+    }
+    process.exit(1);
   }
 
   const finishedAtIso = new Date().toISOString();
