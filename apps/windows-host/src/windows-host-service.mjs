@@ -12,6 +12,27 @@ const defaultPassword = "demo-password";
 const maxAuthAttempts = 3;
 const binaryVideoMagic = Buffer.from("LDCV1\n", "ascii");
 
+function normalizeReverseControlMode(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["accept", "auto-accept", "auto_accept", "lab-accept", "test-accept"].includes(normalized)) {
+    return "accept";
+  }
+  if (["disabled", "disable", "off", "false", "0"].includes(normalized)) {
+    return "disabled";
+  }
+  return "deny";
+}
+
+function makeReverseControlCapabilities(mode) {
+  const normalized = normalizeReverseControlMode(mode);
+  return {
+    supported: normalized !== "disabled",
+    mode: normalized,
+    requiresConfirmation: normalized !== "accept",
+    autoAccept: normalized === "accept",
+  };
+}
+
 function makeRuntimeInfo(startedAtMs, buildId) {
   return {
     processId: process.pid,
@@ -122,6 +143,88 @@ function makeEnvelope(message) {
   };
 }
 
+function makeReverseControlResponse({ message, mode, state }) {
+  const reverseMode = normalizeReverseControlMode(mode);
+  const requestId = String(message.requestId ?? "").trim();
+  const requester = String(message.from || "对方").trim() || "对方";
+  const now = new Date().toISOString();
+
+  if (!requestId) {
+    Object.assign(state, {
+      status: "rejected",
+      requestId: "",
+      updatedAt: now,
+      reason: "缺少 requestId",
+    });
+    return {
+      type: "reverse_control_response",
+      requestId: "",
+      accepted: false,
+      code: "LAN008",
+      reason: "缺少 requestId，已拒绝一键反控请求。",
+      reverseControlMode: reverseMode,
+      reverseControlState: state.status,
+    };
+  }
+
+  Object.assign(state, {
+    status: "requested",
+    requestId,
+    requester,
+    requestedAt: now,
+    updatedAt: now,
+    reason: "",
+  });
+
+  if (reverseMode === "disabled") {
+    Object.assign(state, {
+      status: "rejected",
+      updatedAt: new Date().toISOString(),
+      reason: "disabled",
+    });
+    return {
+      type: "reverse_control_response",
+      requestId,
+      accepted: false,
+      code: "LAN008",
+      reason: "Windows host 当前未启用一键反控接收，控制方向保持不变。",
+      reverseControlMode: reverseMode,
+      reverseControlState: state.status,
+    };
+  }
+
+  if (reverseMode === "accept") {
+    Object.assign(state, {
+      status: "accepted",
+      updatedAt: new Date().toISOString(),
+      reason: "explicit lab auto-accept",
+    });
+    return {
+      type: "reverse_control_response",
+      requestId,
+      accepted: true,
+      reason: "Windows host 已在显式实验策略下同意一键反控请求。",
+      reverseControlMode: reverseMode,
+      reverseControlState: state.status,
+    };
+  }
+
+  Object.assign(state, {
+    status: "rejected",
+    updatedAt: new Date().toISOString(),
+    reason: "confirmation required",
+  });
+  return {
+    type: "reverse_control_response",
+    requestId,
+    accepted: false,
+    code: "LAN008",
+    reason: `${requester} 请求一键反控；Windows host 当前需要用户确认，默认安全拒绝，控制方向保持不变。`,
+    reverseControlMode: reverseMode,
+    reverseControlState: state.status,
+  };
+}
+
 function parseDataUrlPayload(dataUrl) {
   const match = /^data:([^;,]+)?;base64,(.*)$/s.exec(String(dataUrl || ""));
   if (!match) {
@@ -206,6 +309,15 @@ function createClient(socket, context) {
   let audioTimer = null;
   let authenticated = false;
   let failedAuthAttempts = 0;
+  const reverseControlMode = normalizeReverseControlMode(context.reverseControlMode);
+  const reverseControlPolicy = makeReverseControlCapabilities(reverseControlMode);
+  const reverseControlState = {
+    status: "idle",
+    requestId: "",
+    requester: "",
+    reason: "",
+    updatedAt: new Date().toISOString(),
+  };
 
   function send(message) {
     socket.write(encodeTextFrame(JSON.stringify(makeEnvelope(message))));
@@ -331,6 +443,9 @@ function createClient(socket, context) {
           clipboardFile: true,
           clipboardFileMode: clipboardCapabilities.fileMode,
           clipboard: clipboardCapabilities,
+          reverseControl: reverseControlPolicy.supported,
+          reverseControlMode,
+          reverseControlPolicy,
         },
       });
       return;
@@ -473,12 +588,26 @@ function createClient(socket, context) {
     }
 
     if (message.type === "reverse_control_request") {
-      send({
-        type: "reverse_control_response",
-        requestId: message.requestId,
-        accepted: false,
-        reason: "Windows 被控端骨架已收到请求，反控切换状态机尚未实装。",
+      const response = makeReverseControlResponse({
+        message,
+        mode: reverseControlMode,
+        state: reverseControlState,
       });
+      context.logger.info(response.accepted
+        ? `一键反控请求已同意：requestId=${response.requestId}`
+        : `一键反控请求已拒绝：requestId=${response.requestId || "missing"} reason=${response.reason}`);
+      send(response);
+      return;
+    }
+
+    if (message.type === "reverse_control_response") {
+      Object.assign(reverseControlState, {
+        status: message.accepted ? "peer_accepted" : "peer_rejected",
+        requestId: String(message.requestId ?? ""),
+        reason: String(message.reason ?? ""),
+        updatedAt: new Date().toISOString(),
+      });
+      context.logger.info(`收到一键反控确认：accepted=${Boolean(message.accepted)} requestId=${reverseControlState.requestId || "missing"}`);
       return;
     }
 
@@ -567,6 +696,7 @@ export function createWindowsHostServer({
   port = 43770,
   password = defaultPassword,
   buildId = process.env.LAN_DUAL_BUILD_ID || "dev",
+  reverseControlMode = process.env.LAN_DUAL_WINDOWS_REVERSE_CONTROL_MODE || "deny",
   logger = new WindowsHostLogger(),
 } = {}) {
   const startedAtMs = Date.now();
@@ -575,6 +705,8 @@ export function createWindowsHostServer({
   const audio = new WindowsAudioCaptureCoordinator({ logger });
   const input = new WindowsInputInjector({ logger });
   const clipboard = new WindowsClipboardBridge({ logger });
+  const normalizedReverseControlMode = normalizeReverseControlMode(reverseControlMode);
+  const reverseControlPolicy = makeReverseControlCapabilities(normalizedReverseControlMode);
 
   const server = createServer((request, response) => {
     const corsHeaders = {
@@ -619,7 +751,9 @@ export function createWindowsHostServer({
           clipboardFileMode: clipboardCapabilities.fileMode,
           clipboard: clipboardCapabilities,
           videoTransports: ["json", "binary-jpeg", "binary-h264"],
-          reverseControl: true,
+          reverseControl: reverseControlPolicy.supported,
+          reverseControlMode: normalizedReverseControlMode,
+          reverseControlPolicy,
           mock: screenCapabilities.mode === "mock",
         },
         lastSeenAt: new Date().toISOString(),
@@ -650,7 +784,16 @@ export function createWindowsHostServer({
     ].join("\r\n"));
 
     logger.info(`收到控制端连接：${request.socket.remoteAddress ?? "unknown"}`);
-    createClient(socket, { password, logger, screen, audio, input, clipboard, runtime });
+    createClient(socket, {
+      password,
+      logger,
+      screen,
+      audio,
+      input,
+      clipboard,
+      runtime,
+      reverseControlMode: normalizedReverseControlMode,
+    });
   });
 
   return {
@@ -670,6 +813,13 @@ export function createWindowsHostServer({
             screenCapabilities.mode === "system-jpeg"
               ? `当前使用 Windows 系统截图 JPEG 视频帧，${audioSummary}；可注入输入并写入系统文本/文件剪贴板。`
               : `当前视频管线为 ${screenCapabilities.capturePipeline ?? screenCapabilities.mode}，${audioSummary}；Windows 上可注入输入并写入系统文本/文件剪贴板。`,
+          );
+          logger.info(
+            normalizedReverseControlMode === "accept"
+              ? "一键反控策略：显式实验同意。仅用于可信局域网联调。"
+              : normalizedReverseControlMode === "disabled"
+                ? "一键反控策略：已禁用。"
+                : "一键反控策略：默认安全拒绝，需要后续桌面确认入口显式同意。",
           );
           resolve();
         });

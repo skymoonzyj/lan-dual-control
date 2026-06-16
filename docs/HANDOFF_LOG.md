@@ -19,6 +19,45 @@
 
 ## 2026-06-16 Windows Codex
 
+日期：2026-06-16 22:55
+开发端：Windows Codex
+本轮目标：让 Windows host 的 `reverse_control_request` 不再停留在“尚未实装”的模糊拒绝，而是有明确安全策略和可回归状态回执。
+完成内容：
+- Windows host 新增 `LAN_DUAL_WINDOWS_REVERSE_CONTROL_MODE` 策略：默认 `deny`，可选 `accept` 或 `disabled`。
+- `/discovery.capabilities` 和 `hello_ack.capabilities` 新增 `reverseControlMode` / `reverseControlPolicy`，Mac 端预检可以看到当前策略。
+- 未认证 `reverse_control_request` 继续按 `LAN002` 拒绝。
+- 认证后默认 `deny` 按 `LAN008` 拒绝，理由明确写出需要用户确认并保持当前控制方向；缺少 `requestId` 也按 `LAN008` 拒绝。
+- 显式 `accept` 仅作为可信局域网实验短测入口，返回 accepted=true 和 `reverseControlState=accepted`；`disabled` 会声明能力不可用并拒绝。
+- 新增 `test-windows-host-reverse-control.mjs`，用临时 in-process Windows host 覆盖未认证、默认拒绝、缺 requestId、显式 accept 和 disabled 五条路径。
+- Windows host README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-host/server.mjs`
+- `apps/windows-host/src/windows-host-service.mjs`
+- `scripts/windows/test-windows-host-reverse-control.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-host/src/windows-host-service.mjs`
+- `node --check apps/windows-host/server.mjs`
+- `node --check scripts/windows/test-windows-host-reverse-control.mjs`
+- `node scripts/windows/test-windows-host-reverse-control.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-host-reverse-control.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-script-help.mjs --timeoutMs 10000`（全量 90 条 help 命令通过）
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps/windows-host scripts/windows docs`（无冲突标记）
+遗留问题：
+- 本轮不实现“同意后自动打开另一端控制窗口/接管连接”的完整产品流程；默认仍安全拒绝，真正同意还需要后续接桌面确认入口。
+下一步建议：
+- 后续可以把 Windows 桌面壳确认弹窗接到该策略，确认后再临时切 `accept` 或通过更细的本地确认通道回执。
+是否改了协议：否。只增加向后兼容的能力/回执诊断字段。
+是否需要另一端配合：当前不需要；后续产品化一键反控需要 Mac 端配合真实接管流程。
+
+## 2026-06-16 Windows Codex
+
 日期：2026-06-16 22:41
 开发端：Windows Codex
 本轮目标：让 Mac client 视频传输矩阵可以直接输出适合 Agent Link Board 的一行摘要。

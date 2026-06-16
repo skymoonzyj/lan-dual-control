@@ -5,7 +5,7 @@
 ## 当前内容
 
 - Node.js WebSocket 被控服务，默认端口 `43770`。
-- `hello`、`auth_request`、`session_offer`、`display_settings`、`input_event`、`input_ack`、`clipboard_text` 和 `reverse_control_request` 消息处理；未认证连接会被拒绝，同一连接内密码错误 3 次后会关闭连接。
+- `hello`、`auth_request`、`session_offer`、`display_settings`、`input_event`、`input_ack`、`clipboard_text` 和 `reverse_control_request` 消息处理；未认证连接会被拒绝，同一连接内密码错误 3 次后会关闭连接。反控请求默认按 `LAN008` 安全拒绝并说明需要用户确认；只有显式设置实验策略 `LAN_DUAL_WINDOWS_REVERSE_CONTROL_MODE=accept` 时才会自动同意，适合可信局域网短测。
 - Windows 屏幕 `video_frame` 输出：默认在 Windows 桌面会话中用 FFmpeg gdigrab 持续采集 MJPEG/JPEG；也可显式使用 `ffmpeg-h264` 让 FFmpeg 输出 H.264 Annex B 帧，默认编码器为 `libx264`，也可用 `LAN_DUAL_WINDOWS_H264_ENCODER` 或启动/测试脚本的 `--h264Encoder` 选择 `h264_nvenc` 等 FFmpeg H.264 编码器。H.264 输出会按分辨率和刷新率自动选择 `h264Level`，避免 2K/4K 或高刷新率会话被固定 Level 4.2 限制。`ffmpeg-h264` 模式下，如果控制端明确请求 `preferredVideoCodec=mjpeg` 或 `preferredVideoEncoding=data-url`，当前会话会切回 FFmpeg MJPEG/JPEG，保证浏览器 H.264 解码不可用时仍有画面；无 FFmpeg 或采集失败时回退 PowerShell/System.Drawing 系统截图，失败时再回退模拟帧。控制端下发的 `qualityPreset` 和 `maxBandwidthKbps` 会换算为实际 `jpegQuality`，让 5/10/20/40/50 Mbps 对应不同压缩质量。若控制端声明 `preferredVideoTransport=binary-jpeg`，JPEG 帧会优先走 WebSocket 二进制帧；若 H.264 会话声明 `binary-h264`，Annex B payload 会走 WebSocket 二进制帧，减少 data URL/base64 文本重发成本；不支持时仍回退旧 JSON 文本帧。
 - 音频 `audio_frame` 输出：默认发送模拟帧；显式设置 `LAN_DUAL_WINDOWS_AUDIO_MODE=wasapi` 后可用 Windows WASAPI loopback 采集默认播放设备的系统声音并发送 `pcm-f32le-base64` PCM 帧；也可设置 `LAN_DUAL_WINDOWS_AUDIO_DEVICE` 试用 FFmpeg DirectShow 指定设备。
 - 屏幕采集当前是 FFmpeg gdigrab + PowerShell/System.Drawing 兜底的过渡实现；`ffmpeg-h264` 是可选流式编码模式，主要用于和 Mac client H.264 接收链路联调，不替代后续 Windows Graphics Capture。已新增 Windows Graphics Capture 支持预检和 Rust helper 项目；helper 目前可完成 WGC/D3D 初始化、读取真实 `Direct3D11CaptureFrame.Surface`、CPU readback、请求分辨率缩放，并可输出 JPEG、raw BGRA 或 NV12 给 Node host。下一步是 helper 原生硬编、资源对照和 Mac client 真连观感验收。
@@ -15,6 +15,7 @@
 - 文本剪贴板模块：在 Windows 上通过 PowerShell `Set-Clipboard` 写入系统剪贴板，在非 Windows 开发环境回退为内存保存。
 - 文件剪贴板接收模块：接收 `clipboard_file_*` 文件清单、分块、完成消息并返回进度；接收端现在必须先收到并接受 `clipboard_file_offer`，会校验文件数量、512MB 总量上限、64KB 分块上限、`fileIndex`、`offset`、分块不越界且不重叠，并按每个文件真实覆盖区间判断完整性；在 Windows 上通过 PowerShell `Set-Clipboard -Path` 写入系统文件剪贴板，在非 Windows 开发环境保存到临时目录。
 - `/discovery` 设备发现接口，供 Windows 控制端或未来 Mac 控制端扫描局域网设备列表；`/discovery` 和 `hello_ack` 会带可选 `runtime` 诊断，显示当前进程 PID、启动时间、运行时长和 build id，方便确认没有连到旧进程。
+- `/discovery.capabilities.reverseControlMode` 和 `hello_ack.capabilities.reverseControlMode` 会声明当前反控策略：默认 `deny`，可选 `accept` 或 `disabled`；`reverseControlPolicy` 会说明是否需要确认、是否为实验自动同意。
 - `/discovery.capabilities.videoTransports` 会声明当前 Windows host 支持 `json`、`binary-jpeg` 和 `binary-h264`；`session_answer` / `display_settings_ack` 会回传实际 `videoTransport`，方便 Mac client 和自检脚本确认是否启用了二进制视频路径。
 
 ## 运行
@@ -129,6 +130,7 @@ $env:LAN_DUAL_HOST="0.0.0.0"
 $env:LAN_DUAL_PORT="43770"
 $env:LAN_DUAL_PASSWORD="demo-password"
 $env:LAN_DUAL_BUILD_ID="my-build-id" # 可选；不设置时启动助手会用当前 git short hash
+$env:LAN_DUAL_WINDOWS_REVERSE_CONTROL_MODE="deny" # 默认安全拒绝；accept 仅用于可信局域网实验短测
 node .\server.mjs
 ```
 
@@ -299,6 +301,12 @@ node E:\codex\lan-dual-control\scripts\windows\test-windows-host-clipboard-secur
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --probeClipboardSecurity
+```
+
+一键反控请求的安全策略可单独跑专项回归。它会启动临时 Windows host，覆盖未认证 `LAN002`、默认 `deny` 下的 `LAN008`、缺少 `requestId`、显式 `accept` 实验策略和 `disabled` 发现能力；不使用正式密码、不发送输入、不执行 `inject`：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\test-windows-host-reverse-control.mjs
 ```
 
 Mac 从另一台机器连接 Windows 前，可以先做一次局域网和防火墙只读检查。它会列出本机局域网 IP、端口监听地址、TCP 探测结果、当前网络配置和匹配的入站放行规则；默认不会修改系统防火墙。

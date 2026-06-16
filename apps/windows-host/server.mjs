@@ -12,6 +12,7 @@ function readConfig() {
       ? portArg
       : Number.parseInt(process.env.LAN_DUAL_PORT || "43770", 10),
     password: process.env.LAN_DUAL_PASSWORD || "demo-password",
+    reverseControlMode: process.env.LAN_DUAL_WINDOWS_REVERSE_CONTROL_MODE || "deny",
   };
 }
 
