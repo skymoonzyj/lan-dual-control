@@ -292,6 +292,8 @@ function runObserver(port, extraArgs, timeoutMs) {
         "--timeoutMs",
         String(timeoutMs),
         "--json",
+        "--progressIntervalMs",
+        "100",
         "--requireH264",
         "--requireFrameTimestamp",
         "--requireMonotonicTimestampUs",
@@ -366,6 +368,9 @@ async function assertJsonSuccess(timeoutMs) {
     if (String(result.stdout).includes("[OK]")) {
       throw new Error(`JSON stdout should not include text logs.\n${result.stdout}`);
     }
+    if (!String(result.stderr).includes("Video progress:")) {
+      throw new Error(`JSON stderr should include progress heartbeat.\n${result.stderr}`);
+    }
     print("OK", "observe-mac-video JSON success output is parseable");
   });
 }
@@ -388,6 +393,9 @@ async function assertJsonFailure(timeoutMs) {
     }
     if (!payload.observation || payload.observation.frameCount <= 0) {
       throw new Error(`JSON failure should retain partial observation.\n${result.stdout}`);
+    }
+    if (!String(result.stderr).includes("Video progress:")) {
+      throw new Error(`JSON failure stderr should include progress heartbeat.\n${result.stderr}`);
     }
     print("OK", "observe-mac-video JSON failure keeps partial observation");
   });

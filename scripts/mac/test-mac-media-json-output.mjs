@@ -146,6 +146,7 @@ function checkSourceDoesNotPassPasswordArg() {
     "media observer should not pass --password argv to child observers",
   );
   assert(source.includes("env.LAN_DUAL_PASSWORD"), "media observer should pass password through LAN_DUAL_PASSWORD");
+  assert(source.includes('"--progressIntervalMs"'), "media observer should forward --progressIntervalMs to child observers");
   print("OK", "Child media observers receive the password through environment, not argv");
 }
 
@@ -463,6 +464,8 @@ function baseProbeArgs(port) {
     "450",
     "--audioMinFrames",
     "8",
+    "--progressIntervalMs",
+    "100",
     "--maxFrameAgeMs",
     "1000",
   ];
@@ -485,10 +488,14 @@ async function checkFakeHostJsonSuccess(args) {
     assert(payload.audio?.ok === true && payload.audio?.observation?.frameCount >= 8, "audio result should pass with frames");
     assert(payload.summary?.noInput === true && payload.summary?.noInject === true, "summary should preserve no input/inject");
     assert(payload.resource?.enabled === false, "resource sampling should default to disabled");
+    assert(payload.args?.progressIntervalMs === 100, "JSON should report progress interval");
     assert(/No input or inject was executed/.test(payload.boardSummary || ""), "boardSummary should include input/inject safety note");
     assert(/request=1280x720@30Hz\/12000kbps\/h264\/450ms,audio=450ms/.test(payload.boardSummary || ""), "boardSummary should include media request context");
     assert(/resource=off/.test(payload.boardSummary || ""), "boardSummary should mark resource sampling off by default");
     assert(payload.args?.playTone === false, "playTone should default to false");
+    assert(!/\[(video|audio)\]\s+\[INFO\].*progress/i.test(result.stdout), "JSON stdout should not include forwarded progress logs");
+    assert(/Video progress:/.test(result.stderr), "JSON stderr should include video progress heartbeat");
+    assert(/Audio progress:/.test(result.stderr), "JSON stderr should include audio progress heartbeat");
     assertNoSecretLikeText(outputOf(result), "fake host media JSON output");
   });
   print("OK", "Temporary fake Mac host passes media aggregate JSON");
@@ -611,6 +618,9 @@ async function checkBoardSummary(args) {
     assert(lines[0].includes("resource=off"), "boardSummary should mark resource sampling off by default");
     assert(lines[0].includes("password was not printed"), "boardSummary should include password safety note");
     assert(lines[0].includes("playTone=false"), "boardSummary should show no test tone by default");
+    assert(!/\[(video|audio)\]\s+\[INFO\].*progress/i.test(result.stdout), "boardSummary stdout should not include forwarded progress logs");
+    assert(/Video progress:/.test(result.stderr), "boardSummary stderr should include video progress heartbeat");
+    assert(/Audio progress:/.test(result.stderr), "boardSummary stderr should include audio progress heartbeat");
     assertNoSecretLikeText(outputOf(result), "boardSummary output");
   });
   print("OK", "Board summary is one line and secret-free");

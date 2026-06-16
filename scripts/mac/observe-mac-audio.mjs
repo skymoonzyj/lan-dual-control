@@ -28,6 +28,7 @@ const defaults = {
   toneDelayMs: 750,
   toneVolume: 0.22,
   json: false,
+  progressIntervalMs: 10000,
 };
 
 const runState = {
@@ -77,6 +78,7 @@ function parseArgs(argv) {
   args.toneDelayMs = nonNegativeInteger(args.toneDelayMs, defaults.toneDelayMs);
   args.toneVolume = clamp(nonNegativeNumber(args.toneVolume, defaults.toneVolume), 0, 1);
   args.json = booleanArg(args.json, defaults.json);
+  args.progressIntervalMs = nonNegativeInteger(args.progressIntervalMs, defaults.progressIntervalMs);
   if (args.maxFrameAgeMs > 0) {
     args.requireFrameTimestamp = true;
   }
@@ -133,6 +135,14 @@ function delay(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function formatSeconds(ms) {
+  return `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
+}
+
+function progressEveryText(args) {
+  return args.progressIntervalMs > 0 ? formatSeconds(args.progressIntervalMs) : "off";
 }
 
 function withTimeout(promise, timeoutMs, label) {
@@ -470,6 +480,38 @@ function actualFps(stats, args) {
   return stats.frames > 1 ? ((stats.frames - 1) * 1000) / elapsedMs : 0;
 }
 
+function progressDetails(stats, args) {
+  const maxGap = stats.gaps.length > 0 ? Math.max(...stats.gaps) : 0;
+  const ageText = stats.timestampFrames > 0
+    ? `, ageMax=${Math.round(stats.frameAgeMaxMs)}ms`
+    : "";
+  return `frames=${stats.frames}, fps=${actualFps(stats, args).toFixed(1)}, maxGap=${Math.round(maxGap)}ms, levelMax=${finiteLevel(stats.maxLevel).toFixed(3)}${ageText}, lastFrame=${stats.lastFrameId ?? "?"}`;
+}
+
+async function observeWindowWithProgress(stats, args) {
+  const startedAt = Date.now();
+  const deadline = startedAt + args.durationMs;
+  let nextProgressAt = args.progressIntervalMs > 0 ? startedAt + args.progressIntervalMs : 0;
+  print("INFO", `Audio observation started: target=${formatSeconds(args.durationMs)}, progressEvery=${progressEveryText(args)}`);
+
+  while (Date.now() < deadline) {
+    const now = Date.now();
+    const nextWake = nextProgressAt > 0
+      ? Math.min(deadline, Math.max(now + 1, nextProgressAt))
+      : deadline;
+    await delay(Math.max(1, Math.min(250, nextWake - now)));
+    if (nextProgressAt > 0 && Date.now() >= nextProgressAt && Date.now() < deadline) {
+      print(
+        "INFO",
+        `Audio progress: ${formatSeconds(Date.now() - startedAt)} elapsed / ${formatSeconds(deadline - Date.now())} left / ${progressDetails(stats, args)}`,
+      );
+      do {
+        nextProgressAt += args.progressIntervalMs;
+      } while (nextProgressAt <= Date.now());
+    }
+  }
+}
+
 function makeObservation(stats, args) {
   const elapsedMs = stats.firstReceivedAt && stats.lastReceivedAt
     ? Math.max(1, stats.lastReceivedAt - stats.firstReceivedAt)
@@ -597,6 +639,7 @@ function summarizeArgs(args) {
     toneDurationMs: args.toneDurationMs,
     toneDelayMs: args.toneDelayMs,
     toneVolume: args.toneVolume,
+    progressIntervalMs: args.progressIntervalMs,
     json: args.json,
   };
 }
@@ -744,6 +787,7 @@ Options:
   --toneDurationMs <ms>         Test tone duration. Default: 1500
   --toneDelayMs <ms>            Delay after first audio frame before tone starts. Default: 750
   --toneVolume <0..1>           Test tone volume. Default: 0.22
+  --progressIntervalMs <ms>     Print observation progress every N ms; 0 disables. Default: 10000
   --json                        Print one machine-readable JSON object to stdout.
 
 Example:
@@ -765,6 +809,7 @@ async function main() {
     "INFO",
     `Observe audio for ${args.durationMs} ms, minFrames=${args.minFrames}, maxGapMs=${args.maxGapMs}, requireLevel=${args.requireLevel ? args.minLevel : "off"}`,
   );
+  print("INFO", `Audio progress heartbeat: every ${progressEveryText(args)}`);
   await fetchDiscovery(args);
 
   const audio = createAudioStats(args);
@@ -817,7 +862,7 @@ async function main() {
 
   const tonePlayback = await startTonePlayback(args);
   try {
-    await delay(args.durationMs);
+    await observeWindowWithProgress(audio.stats, args);
   } finally {
     socket.close();
     await tonePlayback.stop();

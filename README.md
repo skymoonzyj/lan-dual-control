@@ -143,7 +143,7 @@ Mac 本机可持续观察视频帧节奏：
 node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFrames 100 --minFps 20
 ```
 
-该脚本只读连接已运行的 Mac host，统计 `video_frame` FPS、最大帧间隔、payload 大小、codec、encoding 和 `capturePipeline`；也可用 `--preferredVideoCodec mjpeg --requireRealVideo` 观察 JPEG 兜底链路。
+该脚本只读连接已运行的 Mac host，统计 `video_frame` FPS、最大帧间隔、payload 大小、codec、encoding 和 `capturePipeline`；长观察普通输出默认每 10 秒打印一次进度，可用 `--progressIntervalMs 5000` 调密或传 `0` 关闭。也可用 `--preferredVideoCodec mjpeg --requireRealVideo` 观察 JPEG 兜底链路。
 
 需要同时汇总 H.264 视频和系统 PCM 音频基线时，可用 Mac 侧媒体聚合入口：
 
@@ -153,4 +153,4 @@ node scripts/mac/observe-mac-media.mjs --videoDurationMs 30000 --audioDurationMs
 node scripts/mac/observe-mac-media.mjs --resourceSample --boardSummary
 ```
 
-聚合脚本只连接已运行的 Mac host，顺序运行视频和音频观察，不启动 host、不发送输入、不执行 `inject`；密码只通过 `LAN_DUAL_PASSWORD` 传给子探针。`--resourceSample` 会只读读取本机 Mac host 的 `/discovery.runtime.processId`，并在观察窗口内采样 CPU 和 RSS；拿不到本机 PID 时只在摘要里标记 unavailable，不影响媒体结果。`--boardSummary` 会输出一行可发到 Agent Link Board 的无密摘要，默认不播放测试音，只有显式 `--playTone` 才会播放本机提示音。
+聚合脚本只连接已运行的 Mac host，顺序运行视频和音频观察，不启动 host、不发送输入、不执行 `inject`；密码只通过 `LAN_DUAL_PASSWORD` 传给子探针。`--progressIntervalMs` 会传给视频和音频子观察器，普通输出默认每 10 秒显示观察进度，`--json` / `--boardSummary` 的 stdout 仍保持机器可读或单行摘要，进度改走 stderr。`--resourceSample` 会只读读取本机 Mac host 的 `/discovery.runtime.processId`，并在观察窗口内采样 CPU 和 RSS；拿不到本机 PID 时只在摘要里标记 unavailable，不影响媒体结果。`--boardSummary` 会输出一行可发到 Agent Link Board 的无密摘要，默认不播放测试音，只有显式 `--playTone` 才会播放本机提示音。

@@ -42,6 +42,7 @@ const defaults = {
   toneDurationMs: 1500,
   toneDelayMs: 750,
   toneVolume: 0.22,
+  progressIntervalMs: 10000,
   skipVideo: false,
   skipAudio: false,
   resourceSample: false,
@@ -92,6 +93,7 @@ Options:
   --toneDurationMs <ms>                Test tone duration. Default: ${defaults.toneDurationMs}
   --toneDelayMs <ms>                   Delay after first audio frame before tone. Default: ${defaults.toneDelayMs}
   --toneVolume <0..1>                  Test tone volume. Default: ${defaults.toneVolume}
+  --progressIntervalMs <ms>            Child observer progress heartbeat; 0 disables. Default: ${defaults.progressIntervalMs}
   --skipVideo                          Only run audio observation.
   --skipAudio                          Only run video observation.
   --resourceSample                     Sample local Mac host CPU/RSS during probes. Default: off
@@ -172,6 +174,7 @@ function parseArgs(argv) {
   args.toneDurationMs = clampInteger(args.toneDurationMs, 50, 60000, defaults.toneDurationMs);
   args.toneDelayMs = clampInteger(args.toneDelayMs, 0, 60000, defaults.toneDelayMs);
   args.toneVolume = Math.min(1, nonNegativeNumber(args.toneVolume, defaults.toneVolume));
+  args.progressIntervalMs = clampInteger(args.progressIntervalMs, 0, 600000, defaults.progressIntervalMs);
   args.skipVideo = booleanArg(args.skipVideo, defaults.skipVideo);
   args.skipAudio = booleanArg(args.skipAudio, defaults.skipAudio);
   args.resourceSample = booleanArg(args.resourceSample, defaults.resourceSample);
@@ -243,6 +246,7 @@ function makeVideoArgs(args) {
   if (args.expectActiveDisplayId) addArg(argv, "--expectActiveDisplayId", args.expectActiveDisplayId);
   if (args.maxFrameAgeMs > 0) addArg(argv, "--maxFrameAgeMs", args.maxFrameAgeMs);
   if (args.maxTimestampGapUs > 0) addArg(argv, "--maxTimestampGapUs", args.maxTimestampGapUs);
+  addArg(argv, "--progressIntervalMs", args.progressIntervalMs);
   addFlag(argv, "--requireH264", args.requireH264);
   addFlag(argv, "--requireRealVideo", args.requireRealVideo);
   addFlag(argv, "--requireFrameTimestamp", args.requireFrameTimestamp);
@@ -270,6 +274,7 @@ function makeAudioArgs(args) {
   addArg(argv, "--toneDurationMs", args.toneDurationMs);
   addArg(argv, "--toneDelayMs", args.toneDelayMs);
   addArg(argv, "--toneVolume", args.toneVolume);
+  addArg(argv, "--progressIntervalMs", args.progressIntervalMs);
   addFlag(argv, "--json", true);
   return argv;
 }
@@ -304,7 +309,19 @@ function runJsonScript(probe, scriptPath, argv, args) {
       stdout += String(chunk);
     });
     child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
+      const text = String(chunk);
+      stderr += text;
+      for (const line of text.split(/\r?\n/).filter(Boolean)) {
+        const message = line.replace(/^\[[^\]]+\]\s*/, "");
+        if (/^(Video|Audio) (observation started|progress):/.test(message)) {
+          const progressLine = `[${probe.id}] [INFO] ${message}`;
+          if (args.json || args.boardSummary) {
+            console.error(progressLine);
+          } else {
+            console.log(progressLine);
+          }
+        }
+      }
     });
     child.on("error", (error) => {
       clearTimeout(timer);
@@ -791,6 +808,7 @@ function summarizeArgs(args) {
     toneDurationMs: args.toneDurationMs,
     toneDelayMs: args.toneDelayMs,
     toneVolume: args.toneVolume,
+    progressIntervalMs: args.progressIntervalMs,
     skipVideo: args.skipVideo,
     skipAudio: args.skipAudio,
     resourceSample: args.resourceSample,

@@ -123,7 +123,7 @@ node scripts/mac/observe-mac-media.mjs --videoDurationMs 30000 --audioDurationMs
 node scripts/mac/observe-mac-media.mjs --resourceSample --boardSummary
 ```
 
-它会顺序运行 H.264 视频观察和系统 PCM 音频观察，避免同时压两个媒体 probe；不会启动 host、不会认证之外做任何控制动作、不会发送输入事件，也不会执行 `inject`。密码只通过 `LAN_DUAL_PASSWORD` 传给子观察脚本，不放进子进程 argv；`--resourceSample` 可只读采样本机 Mac host 进程 CPU/RSS，并写入 JSON 与一行摘要，采样不可用时只标记 unavailable；`--boardSummary` 只输出一行联络板安全摘要，单路成功单路失败会标为 `Mac media baseline partial`，全部执行链路失败才保留 `failed <数量>`，`--json` 同时提供 `summary.status=ok|partial|failed` 给自动化读取；默认 `playTone=false`，需要有声电平强校验时才显式加 `--playTone --requireLevel`。
+它会顺序运行 H.264 视频观察和系统 PCM 音频观察，避免同时压两个媒体 probe；不会启动 host、不会认证之外做任何控制动作、不会发送输入事件，也不会执行 `inject`。密码只通过 `LAN_DUAL_PASSWORD` 传给子观察脚本，不放进子进程 argv；`--progressIntervalMs` 会传给视频和音频子观察器，普通输出默认每 10 秒显示观察进度，传 `0` 可关闭，`--json` / `--boardSummary` 的 stdout 仍保持机器可读或单行摘要，进度改走 stderr；`--resourceSample` 可只读采样本机 Mac host 进程 CPU/RSS，并写入 JSON 与一行摘要，采样不可用时只标记 unavailable；`--boardSummary` 只输出一行联络板安全摘要，单路成功单路失败会标为 `Mac media baseline partial`，全部执行链路失败才保留 `failed <数量>`，`--json` 同时提供 `summary.status=ok|partial|failed` 给自动化读取；默认 `playTone=false`，需要有声电平强校验时才显式加 `--playTone --requireLevel`。
 
 启动助手会：
 
@@ -332,7 +332,7 @@ scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireH264 -ExpectInpu
 node scripts/mac/observe-mac-video.mjs --durationMs 10000 --requireH264 --minFrames 100 --minFps 20 --maxGapMs 1000 --expectActiveDisplayId main --requireMonotonicTimestampUs
 ```
 
-该脚本会只读统计 `video_frame` 帧数、接收 FPS、最大帧间隔、payload 大小、codec、encoding、`capturePipeline`、source、`activeDisplayId`、`displayName`、帧 `timestamp` 接收年龄，以及 H.264 `timestampUs` / `durationUs` 媒体时间线，用于排查 H.264/JPEG 帧率不稳、回退到 mock、采集管线漂移、显示器来源漂移或编码时间线跳变。需要长时间强校验显示器来源时可加 `--requireFrameDisplayDiagnostic` 或 `--expectActiveDisplayId main`；需要校验 H.264 时间线时可加 `--requireTimestampUs --requireMonotonicTimestampUs --maxTimestampGapUs <us>`；JPEG 兜底链路可用 `--preferredVideoCodec mjpeg --requireRealVideo --expectActiveDisplayId main --requireFrameTimestamp` 观察。重启到带小数秒 timestamp 的 Mac host 后，可用 `--maxFrameAgeMs 250` 级别检查本机接收年龄；如果仍在调试旧 host，建议临时放宽到 `1500` 以上，避免把旧秒级时间戳取整误判为旧帧。
+该脚本会只读统计 `video_frame` 帧数、接收 FPS、最大帧间隔、payload 大小、codec、encoding、`capturePipeline`、source、`activeDisplayId`、`displayName`、帧 `timestamp` 接收年龄，以及 H.264 `timestampUs` / `durationUs` 媒体时间线，用于排查 H.264/JPEG 帧率不稳、回退到 mock、采集管线漂移、显示器来源漂移或编码时间线跳变。长时间观察普通输出默认每 10 秒打印帧数、剩余时间、当前 FPS、最大间隔和帧年龄，现场需要更密集反馈时加 `--progressIntervalMs 5000`，不需要时传 `0`。需要长时间强校验显示器来源时可加 `--requireFrameDisplayDiagnostic` 或 `--expectActiveDisplayId main`；需要校验 H.264 时间线时可加 `--requireTimestampUs --requireMonotonicTimestampUs --maxTimestampGapUs <us>`；JPEG 兜底链路可用 `--preferredVideoCodec mjpeg --requireRealVideo --expectActiveDisplayId main --requireFrameTimestamp` 观察。重启到带小数秒 timestamp 的 Mac host 后，可用 `--maxFrameAgeMs 250` 级别检查本机接收年龄；如果仍在调试旧 host，建议临时放宽到 `1500` 以上，避免把旧秒级时间戳取整误判为旧帧。
 
 当前真机基线：H.264 30 秒观察 877 帧、约 29.2fps、最大间隔 45ms，全部为 `h264` / `annexb-base64` / `screencapturekit-h264`；时间线增强后短测 H.264 3 秒 89 帧、约 29.2fps、最大接收间隔 39ms，`timestampUs` 单调，媒体间隔平均/最大 `34281/41668us`，`durationUs=33333`；主 `43770` 旧进程上 JPEG 2 秒 31 帧、约 15.4fps、最大接收间隔 74ms，帧 `timestamp` 均可解析。小数秒 timestamp 临时 `43771` build 已验证：`/discovery.lastSeenAt` 和 `runtime.startedAt` 为 `2026-06-12T10:05:33.915Z` 这类毫秒格式，mock 视频帧 `frameAge max=0ms`；临时第二 host 的真实采集可能因资源竞争回退 mock，主 43770 不受影响。空闲/低变化桌面下，H.264 5 分钟观察收到 3168 帧、约 10.6fps，60 秒低门槛复测收到 654 帧、约 10.9fps、最大间隔 883ms；JPEG 60 秒对照收到 983 帧、约 16.4fps。后续做长时间视频强校验时，需要区分静态桌面和动态画面，静态桌面不要直接把 `--minFps 25` 当硬门槛。
 
@@ -362,7 +362,7 @@ scripts\windows\test-mac-host.ps1 -HostName 192.168.1.x -RequireH264 -RequireAud
 node scripts/mac/observe-mac-audio.mjs --durationMs 10000 --minFrames 80 --maxGapMs 1000
 ```
 
-该脚本会只读统计 `audio_frame` 帧数、接收间隔、payload 大小、电平范围和 `timestamp` 接收年龄，用于排查无声、间断、格式漂移或旧音频帧；默认不会播放声音、修改系统音量、输入或剪贴板。需要把音频帧新鲜度变成强校验时，可加 `--maxFrameAgeMs 250 --requireMonotonicTimestamp`。需要确认非静音系统声音时，可以在有人确认不打扰的场景下显式播放短测试音并要求电平：
+该脚本会只读统计 `audio_frame` 帧数、接收间隔、payload 大小、电平范围和 `timestamp` 接收年龄，用于排查无声、间断、格式漂移或旧音频帧；长时间观察普通输出默认每 10 秒打印帧数、剩余时间、当前 FPS、最大间隔、最高电平和帧年龄，可用 `--progressIntervalMs` 调整或关闭。默认不会播放声音、修改系统音量、输入或剪贴板。需要把音频帧新鲜度变成强校验时，可加 `--maxFrameAgeMs 250 --requireMonotonicTimestamp`。需要确认非静音系统声音时，可以在有人确认不打扰的场景下显式播放短测试音并要求电平：
 
 ```bash
 node scripts/mac/observe-mac-audio.mjs --durationMs 4500 --minFrames 160 --maxGapMs 1000 --playTone --requireLevel --minLevel 0.01

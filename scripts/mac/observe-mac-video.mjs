@@ -24,6 +24,7 @@ const defaults = {
   requireMonotonicTimestampUs: false,
   maxTimestampGapUs: 0,
   json: false,
+  progressIntervalMs: 10000,
   width: 1280,
   height: 720,
   fps: 30,
@@ -79,6 +80,7 @@ function parseArgs(argv) {
   args.requireMonotonicTimestampUs = booleanArg(args.requireMonotonicTimestampUs, defaults.requireMonotonicTimestampUs);
   args.maxTimestampGapUs = nonNegativeInteger(args.maxTimestampGapUs, defaults.maxTimestampGapUs);
   args.json = booleanArg(args.json, defaults.json);
+  args.progressIntervalMs = nonNegativeInteger(args.progressIntervalMs, defaults.progressIntervalMs);
   args.width = positiveInteger(args.width, defaults.width);
   args.height = positiveInteger(args.height, defaults.height);
   args.fps = positiveInteger(args.fps, defaults.fps);
@@ -146,6 +148,14 @@ function delay(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function formatSeconds(ms) {
+  return `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
+}
+
+function progressEveryText(args) {
+  return args.progressIntervalMs > 0 ? formatSeconds(args.progressIntervalMs) : "off";
 }
 
 function withTimeout(promise, timeoutMs, label) {
@@ -735,6 +745,38 @@ function actualFps(stats, args) {
   return stats.frames > 1 ? ((stats.frames - 1) * 1000) / elapsedMs : 0;
 }
 
+function progressDetails(stats, args) {
+  const maxGap = stats.gaps.length > 0 ? Math.max(...stats.gaps) : 0;
+  const ageText = stats.timestampFrames > 0
+    ? `, ageMax=${Math.round(stats.frameAgeMaxMs)}ms`
+    : "";
+  return `frames=${stats.frames}, fps=${actualFps(stats, args).toFixed(1)}, maxGap=${Math.round(maxGap)}ms${ageText}, lastFrame=${stats.lastFrameId ?? "?"}`;
+}
+
+async function observeWindowWithProgress(stats, args) {
+  const startedAt = Date.now();
+  const deadline = startedAt + args.durationMs;
+  let nextProgressAt = args.progressIntervalMs > 0 ? startedAt + args.progressIntervalMs : 0;
+  print("INFO", `Video observation started: target=${formatSeconds(args.durationMs)}, progressEvery=${progressEveryText(args)}`);
+
+  while (Date.now() < deadline) {
+    const now = Date.now();
+    const nextWake = nextProgressAt > 0
+      ? Math.min(deadline, Math.max(now + 1, nextProgressAt))
+      : deadline;
+    await delay(Math.max(1, Math.min(250, nextWake - now)));
+    if (nextProgressAt > 0 && Date.now() >= nextProgressAt && Date.now() < deadline) {
+      print(
+        "INFO",
+        `Video progress: ${formatSeconds(Date.now() - startedAt)} elapsed / ${formatSeconds(deadline - Date.now())} left / ${progressDetails(stats, args)}`,
+      );
+      do {
+        nextProgressAt += args.progressIntervalMs;
+      } while (nextProgressAt <= Date.now());
+    }
+  }
+}
+
 function assertStats(stats, args) {
   const problems = [];
   if (stats.frames < args.minFrames) {
@@ -783,6 +825,7 @@ Options:
   --requireTimestampUs             Require every video_frame to include numeric timestampUs.
   --requireMonotonicTimestampUs    Require timestampUs to never move backwards.
   --maxTimestampGapUs <us>         Maximum allowed timestampUs delta between frames. Default: off
+  --progressIntervalMs <ms>        Print observation progress every N ms; 0 disables. Default: 10000
   --json                           Print one machine-readable JSON object to stdout.
 
 Examples:
@@ -804,6 +847,7 @@ async function main() {
     "INFO",
     `Observe video for ${args.durationMs} ms, preferred=${args.preferredVideoCodec}, minFrames=${args.minFrames}, minFps=${args.minFps}, maxGapMs=${args.maxGapMs}`,
   );
+  print("INFO", `Video progress heartbeat: every ${progressEveryText(args)}`);
   await fetchDiscovery(args);
 
   const video = createVideoStats(args);
@@ -857,7 +901,7 @@ async function main() {
     "First video_frame",
   );
 
-  await delay(args.durationMs);
+  await observeWindowWithProgress(video.stats, args);
   socket.close();
 
   runState.observation = makeObservation(video.stats, args);
