@@ -19,6 +19,37 @@
 
 ## 2026-06-16 Mac Codex
 
+日期：2026-06-16 10:47
+开发端：Mac Codex
+本轮目标：收口 Mac 控制 Windows formal smoke 的通讯板衔接，让预检/干跑也直接暴露 ready 后的 `--sendCall` 命令。
+完成内容：
+- `scripts/mac/run-mac-client-formal-smoke.mjs` 在已有 Windows host 时新增 `commands.sendCall`，对应 `check-mac-client-formal-status --host <Windows IP> --port <port> --sendCall`。
+- `--preflightOnly --boardSummary` 在 formal checklist ready 时会提示可先用该 `--sendCall` 命令协调 Windows；没有 host 时仍不输出空 host 的 auth/sendCall 命令。
+- `run-mac-client-formal-smoke --server <url>` 现在会传给内部 `check-mac-client-formal-status`，并同步写进输出的 preflight/sendCall 命令，方便假通讯板或备用通讯板测试。
+- `scripts/mac/test-mac-client-formal-smoke.mjs` 的假 Agent Link Board 改为独立子进程，避免同步子进程读板时把同进程 HTTP server 事件循环堵住；新增断言覆盖 ready sendCall 提示、自定义 board server 贯穿和发现失败无 sendCall。
+- 本轮未启动真实 Windows host、未认证 WebSocket、未要求或发送密码、未发送通讯板 call、未执行 `inject`。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/run-mac-client-formal-smoke.mjs`
+- `node --check scripts/mac/test-mac-client-formal-smoke.mjs`
+- `node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 60000`
+遗留问题：
+- 本轮只补无密流程衔接；真实 Mac 控制 Windows 浏览器 smoke 仍需要 Windows host 在线，并由用户在 Mac 本机隐藏输入正式 Windows host 密码后执行。
+下一步建议：
+- Windows host 启动后，Mac 侧先跑 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --preflightOnly --boardSummary`；若 ready 且需要 Windows 端看屏/保活，再运行摘要或 JSON 里的 `--sendCall` 命令，最后由用户在 Mac 本机隐藏输入正式密码跑 `--discover --promptPassword`。
+是否改了协议：否。
+是否需要另一端配合：当前不需要；后续真实 Mac 控制 Windows 验收需要 Windows host 在线。
+
+## 2026-06-16 Mac Codex
+
 日期：2026-06-16 10:35
 开发端：Mac Codex
 本轮目标：让 Mac 侧发现 Windows host 后直接给出 ready 后的通讯板 call 命令，减少跨端真连前手工拼接。

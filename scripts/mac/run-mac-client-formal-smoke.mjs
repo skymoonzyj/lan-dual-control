@@ -229,6 +229,8 @@ function runPreflight(args) {
     String(args.clientPort),
     "--timeoutMs",
     String(Math.min(args.timeoutMs, 60000)),
+    "--server",
+    args.server,
   ];
   if (args.host) preflightArgs.push("--host", args.host, "--port", String(args.port));
   if (args.skipBoard) preflightArgs.push("--skipBoard");
@@ -381,11 +383,27 @@ function makeBrowserSmokeCommand(args) {
 }
 
 function makePreflightCommand(args) {
-  return [
+  const parts = [
     "node scripts/mac/check-mac-client-formal-status.mjs",
     ...(args.host ? ["--host", args.host, "--port", String(args.port)] : []),
     "--boardSummary",
-  ].join(" ");
+  ];
+  if (args.server !== defaults.server) parts.push("--server", args.server);
+  return parts.join(" ");
+}
+
+function makeSendCallCommand(args) {
+  if (!hasWindowsHost(args)) return "";
+  const parts = [
+    "node scripts/mac/check-mac-client-formal-status.mjs",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--sendCall",
+  ];
+  if (args.server !== defaults.server) parts.push("--server", args.server);
+  return parts.join(" ");
 }
 
 function makeDiscoveryRetryCommand(args) {
@@ -496,8 +514,11 @@ function makeBoardSummary(report) {
     ].join(" ");
   }
   if (report.preflightOnly || report.dryRun) {
+    const sendCallText = report.commands?.sendCall && report.preflight?.readyToCall
+      ? ` Coordinate first if Windows needs a board call: ${report.commands.sendCall}.`
+      : "";
     const nextText = report.commands?.browserSmoke
-      ? `Next: run with --promptPassword when ready to authenticate; command=${report.commands.browserSmoke}.`
+      ? `Next: run with --promptPassword when ready to authenticate; command=${report.commands.browserSmoke}.${sendCallText}`
       : `Next: start or discover a Windows host, then rerun safe preflight; command=${report.commands?.discoverPreflight || ""}.`;
     return [
       `Mac client browser smoke preflight for ${target}: ok=${report.preflight?.ok ? "yes" : "no"} ready=${report.preflight?.readyToCall ? "yes" : "no"}.${discoveryText}`,
@@ -560,6 +581,7 @@ function makeReport(args, preflight) {
     },
     commands: {
       preflight: makePreflightCommand(args),
+      sendCall: makeSendCallCommand(args),
       discoverPreflight: makeDiscoveryRetryCommand(args),
       browserSmoke: makeBrowserSmokeCommand(args),
     },

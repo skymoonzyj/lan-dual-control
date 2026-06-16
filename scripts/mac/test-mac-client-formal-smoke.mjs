@@ -211,6 +211,46 @@ server.listen(port, "127.0.0.1");
   }
 }
 
+async function withBoardServer(callback) {
+  const port = await getFreePort();
+  const child = spawn(process.execPath, [
+    "--input-type=module",
+    "-e",
+    `
+import { createServer } from "node:http";
+const port = Number(process.argv[1]);
+const state = {
+  updatedAt: new Date().toISOString(),
+  currentCall: null,
+  statuses: {},
+  events: [],
+};
+const server = createServer((request, response) => {
+  const pathname = new URL(request.url || "/", \`http://\${request.headers.host || "127.0.0.1"}\`).pathname;
+  if (pathname === "/api/state") {
+    response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    response.end(JSON.stringify(state));
+    return;
+  }
+  response.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+  response.end(JSON.stringify({ ok: false, error: "not found" }));
+});
+server.listen(port, "127.0.0.1");
+`,
+    String(port),
+  ], {
+    cwd: repoRoot,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  try {
+    await waitForHttpPath(port, "/api/state", 5000);
+    await callback(`http://127.0.0.1:${port}`);
+  } finally {
+    child.kill("SIGTERM");
+    await waitForClose(child);
+  }
+}
+
 async function waitForClose(child) {
   await new Promise((resolve) => {
     const timer = setTimeout(resolve, 1000);
@@ -246,26 +286,33 @@ async function checkPreflightAndDryRun(args) {
   const secret = "super-secret-smoke-password";
   await withMacClientServer(args, async (clientPort) => {
     await withWindowsDiscoveryServer(async (windowsPort) => {
-      const preflight = run([
-        "--json",
-        "--skipBoard",
-        "--preflightOnly",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        String(windowsPort),
-        "--clientPort",
-        String(clientPort),
-        "--timeoutMs",
-        "10000",
-      ], args, { LAN_DUAL_PASSWORD: secret });
-      const preflightPayload = parseJson(preflight.stdout, "preflight JSON");
-      assert(preflight.status === 0, `preflight should pass.\n${preflight.stdout}\n${preflight.stderr}`);
-      assert(preflightPayload.ok === true, "preflight should be ok=true");
-      assert(preflightPayload.preflightOnly === true, "preflightOnly should be recorded");
-      assert(preflightPayload.preflight?.ok === true, "nested formal preflight should be ok=true");
-      assert(preflightPayload.preflight?.readyToCall === false, "skipBoard should prevent readyToCall");
-      assertNotIncludes(`${preflight.stdout}\n${preflight.stderr}`, secret, "preflight output");
+      await withBoardServer(async (boardServer) => {
+        const preflight = run([
+          "--json",
+          "--preflightOnly",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          String(windowsPort),
+          "--clientPort",
+          String(clientPort),
+          "--server",
+          boardServer,
+          "--timeoutMs",
+          "10000",
+        ], args, { LAN_DUAL_PASSWORD: secret });
+        const preflightPayload = parseJson(preflight.stdout, "preflight JSON");
+        assert(preflight.status === 0, `preflight should pass.\n${preflight.stdout}\n${preflight.stderr}`);
+        assert(preflightPayload.ok === true, "preflight should be ok=true");
+        assert(preflightPayload.preflightOnly === true, "preflightOnly should be recorded");
+        assert(preflightPayload.preflight?.ok === true, "nested formal preflight should be ok=true");
+        assert(preflightPayload.preflight?.readyToCall === true, "custom board server should allow readyToCall");
+        assert(preflightPayload.commands?.sendCall?.includes("--sendCall"), "preflight should expose sendCall command");
+        assert(preflightPayload.commands?.sendCall?.includes(`--server ${boardServer}`), "sendCall command should preserve custom board server");
+        assertIncludes(preflightPayload.boardSummary || "", "Coordinate first", "preflight board summary");
+        assertIncludes(preflightPayload.boardSummary || "", "--sendCall", "preflight board summary");
+        assertNotIncludes(`${preflight.stdout}\n${preflight.stderr}`, secret, "preflight output");
+      });
 
       const dryRun = run([
         "--json",
@@ -283,6 +330,7 @@ async function checkPreflightAndDryRun(args) {
       const dryRunPayload = parseJson(dryRun.stdout, "dryRun JSON");
       assert(dryRun.status === 0, `dryRun should pass.\n${dryRun.stdout}\n${dryRun.stderr}`);
       assert(dryRunPayload.ok === true, "dryRun should be ok=true");
+      assert(dryRunPayload.commands?.sendCall?.includes("--sendCall"), "dryRun should expose sendCall command");
       assert(dryRunPayload.commands?.browserSmoke?.includes("--useEnvPassword"), "dryRun should use environment password flag");
       assert(dryRunPayload.commands?.browserSmoke?.includes("--requirePassword"), "dryRun should require password in child command");
       assertNotIncludes(dryRunPayload.commands?.browserSmoke || "", secret, "dryRun command");
@@ -356,6 +404,7 @@ async function checkDiscoverFailureNoPasswordPrompt(args) {
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, "Password cannot be empty", "discover failure should not prompt for password");
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--host  --port", "discover failure should not print an empty host auth command");
   assert(!payload.commands?.browserSmoke, "discover failure should not provide a browser auth command without a host");
+  assert(!payload.commands?.sendCall, "discover failure should not provide a sendCall command without a host");
   assertIncludes(payload.commands?.discoverPreflight || "", "--discover", "discover failure should provide a safe discovery preflight retry command");
   print("OK", "Discovery failure exits before password prompt");
 }
