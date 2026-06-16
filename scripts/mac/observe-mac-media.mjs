@@ -406,7 +406,7 @@ function print(args, kind, text) {
 
 function formatProbeSummary(probe) {
   if (!probe) return "skipped";
-  if (!probe.ok) return "FAIL";
+  if (!probe.ok) return `FAIL(reason=${formatBoardReason(probe.error?.message || "unknown")})`;
   const obs = probe.observation || {};
   if (probe.id === "video") {
     const codec = firstObjectKey(obs.codecs) || probe.session?.videoCodec || "unknown";
@@ -427,6 +427,16 @@ function formatProbeSummary(probe) {
 function firstObjectKey(value) {
   if (!value || typeof value !== "object") return "";
   return Object.keys(value)[0] || "";
+}
+
+function formatBoardReason(value, maxLength = 140) {
+  const normalized = redactSensitiveText(value)
+    .replace(/\b(token|password|secret|authorization)=\S+/gi, "$1=[redacted]")
+    .replace(/\s+/g, " ")
+    .replace(/[;\r\n]+/g, " ")
+    .trim();
+  if (!normalized) return "unknown";
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}...` : normalized;
 }
 
 function makeBoardSummary(report) {
@@ -496,6 +506,13 @@ function makeReport(args, probes, startedAt, elapsedMs) {
     summary: {
       passed: probes.filter((probe) => probe.ok).length,
       failed: probes.filter((probe) => !probe.ok).length,
+      failures: probes
+        .filter((probe) => !probe.ok)
+        .map((probe) => ({
+          id: probe.id,
+          label: probe.label,
+          message: formatBoardReason(probe.error?.message || "unknown", 240),
+        })),
       skipped: [
         args.skipVideo ? "video" : "",
         args.skipAudio ? "audio" : "",

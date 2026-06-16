@@ -505,10 +505,33 @@ async function checkPartialFailureKeepsOtherProbe(args) {
     assert(payload.video?.ok === false, "video should fail threshold");
     assert(payload.audio?.ok === true, "audio should still run and pass after video failure");
     assert(payload.summary?.passed === 1 && payload.summary?.failed === 1, "summary should count one pass and one failure");
-    assert(/video=FAIL/.test(payload.boardSummary || ""), "boardSummary should include failed video");
+    assert(Array.isArray(payload.summary?.failures), "summary should include structured failures");
+    assert(payload.summary.failures.some((failure) => failure.id === "video" && /Expected at least/i.test(failure.message || "")), "failures should include video threshold reason");
+    assert(/video=FAIL\(reason=/.test(payload.boardSummary || ""), "boardSummary should include failed video reason");
     assertNoSecretLikeText(outputOf(result), "partial failure output");
   });
   print("OK", "Media aggregate keeps audio result after video failure");
+}
+
+async function checkFailureBoardSummary(args) {
+  await withFakeMacHost(async ({ port }) => {
+    const result = await runMediaAsync([
+      "--boardSummary",
+      ...baseProbeArgs(port),
+      "--videoMinFrames",
+      "999",
+    ], args, { LAN_DUAL_PASSWORD: "super-secret-mac-media" });
+
+    assert(result.status !== 0, `failure boardSummary should exit non-zero.\n${outputOf(result)}`);
+    const lines = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean);
+    assert(lines.length === 1, `failure boardSummary should print exactly one line, got ${lines.length}\n${result.stdout}`);
+    assert(lines[0].includes("Mac media baseline failed 1"), "failure boardSummary should identify failed count");
+    assert(lines[0].includes("video=FAIL(reason="), "failure boardSummary should include video failure reason");
+    assert(lines[0].includes("audio=") && !lines[0].includes("audio=FAIL"), "failure boardSummary should keep passing audio result");
+    assert(lines[0].includes("No input or inject was executed"), "failure boardSummary should keep safety note");
+    assertNoSecretLikeText(outputOf(result), "failure boardSummary output");
+  });
+  print("OK", "Failure board summary is one line, useful, and secret-free");
 }
 
 async function checkBoardSummary(args) {
@@ -558,6 +581,7 @@ async function main() {
   checkSkipModes(args);
   await checkFakeHostJsonSuccess(args);
   await checkPartialFailureKeepsOtherProbe(args);
+  await checkFailureBoardSummary(args);
   await checkBoardSummary(args);
   print("OK", "Mac media aggregate self-test passed");
 }
