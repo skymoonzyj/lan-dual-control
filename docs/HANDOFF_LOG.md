@@ -19,6 +19,39 @@
 
 ## 2026-06-16 Mac Codex
 
+日期：2026-06-16 12:35
+开发端：Mac Codex
+本轮目标：让 Mac host 启动/状态助手也能只读提示 Agent Link Board 当前测试呼叫。
+完成内容：
+- `scripts/mac/start-mac-host.mjs` 新增 `--checkBoard`、`--server <url>` 和 `--boardSummary`，在 `--status` 路径只读读取 Agent Link Board `/api/state.currentCall`。
+- JSON 输出新增 `board` 和 `boardSummary`；普通输出会显示 `Agent Link Board currentCall`；`--boardSummary` 输出一行秘密安全摘要。
+- active call 会提示先协调，DONE/COMPLETED/CANCELLED/RESOLVED/CLOSED 等完成态 call 标为 inactive；摘要不回显 call command，JSON 保留结构化 command 给自动化。
+- `--boardSummary --checkBoard` 即使忘记 `--status` 也会自动走只读 status，避免误启动 Mac host。
+- `scripts/mac/test-mac-host-start-helper.mjs` 用假 Agent Link Board 覆盖默认不读板、active call、DONE call、单行 boardSummary 和不泄密。
+修改文件：
+- `scripts/mac/start-mac-host.mjs`
+- `scripts/mac/test-mac-host-start-helper.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/start-mac-host.mjs`
+- `node --check scripts/mac/test-mac-host-start-helper.mjs`
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 60000`
+- `node scripts/mac/start-mac-host.mjs --status --json --checkBoard --timeoutMs 5000`
+- `node scripts/mac/start-mac-host.mjs --boardSummary --checkBoard --timeoutMs 5000`
+遗留问题：
+- 本轮不自动响应/清理通讯板 call，也不启动或重启正式 Mac host；只让状态助手在日常查看 host 时更容易看见待处理 call。
+下一步建议：
+- 日常查看 Mac host 状态或准备重启前，可跑 `node scripts/mac/start-mac-host.mjs --status --checkBoard --boardSummary`，确认 host、buildDiff 和通讯板 call 后再行动。
+是否改了协议：否。
+是否需要另一端配合：当前不需要。
+
+## 2026-06-16 Mac Codex
+
 日期：2026-06-16 12:23
 开发端：Mac Codex
 本轮目标：让 Mac host readiness 也能只读提示 Agent Link Board 当前测试呼叫。

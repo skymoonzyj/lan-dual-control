@@ -29,6 +29,9 @@ const defaults = {
   bonjour: parseBoolean(process.env.LAN_DUAL_BONJOUR, true),
   buildId: process.env.LAN_DUAL_BUILD_ID || "",
   timeoutMs: 12000,
+  server: "http://192.168.31.68:17888",
+  checkBoard: false,
+  boardSummary: false,
   promptPassword: false,
   requirePassword: false,
   ephemeralPassword: false,
@@ -71,6 +74,8 @@ function parseArgs(argv) {
       key === "background" ||
       key === "status" ||
       key === "stop" ||
+      key === "checkBoard" ||
+      key === "boardSummary" ||
       key === "confirmUserWatching" ||
       key === "json" ||
       key === "dryRun"
@@ -119,6 +124,7 @@ function parseArgs(argv) {
   args.bonjour = parseBoolean(args.bonjour, defaults.bonjour);
   args.buildId = normalizedText(args.buildId) || getGitBuildId();
   args.timeoutMs = clampInteger(args.timeoutMs, 1000, 120000, defaults.timeoutMs);
+  args.server = normalizedText(args.server || defaults.server);
   args.password = String(args.password || "").trim();
   return args;
 }
@@ -146,6 +152,10 @@ Options:
   --maxScreenFps <fps>       LAN_DUAL_MAX_SCREEN_FPS. Default: 30
   --jpegQuality <value>      LAN_DUAL_JPEG_QUALITY, 0.1 to 0.95
   --buildId <id>             LAN_DUAL_BUILD_ID. Default: current git short hash.
+  --server <url>             Agent Link Board URL for --status --checkBoard.
+                             Default: ${defaults.server}
+  --checkBoard               With --status, read Agent Link Board /api/state currentCall.
+  --boardSummary             With --status, print a short secret-free Agent Link Board summary.
   --noBonjour                Disable Bonjour/mDNS advertisement.
   --skipRuntimeCheck         Skip check-mac-displays after /discovery is ready.
   --requireRuntimeCheck      Stop startup if the runtime/display check fails.
@@ -393,6 +403,142 @@ function discoveryPermissionSummary(discovery) {
   ].join(" ");
 }
 
+function isActiveBoardCall(call) {
+  if (!call) return false;
+  const status = normalizedText(call.status).toLowerCase();
+  if (!status) return true;
+  return !["done", "completed", "complete", "cancelled", "canceled", "resolved", "closed"].includes(status);
+}
+
+function normalizeBoardCall(call) {
+  if (!call || typeof call !== "object") return null;
+  const normalized = {};
+  for (const key of ["status", "goal", "from", "need", "environment", "connection", "command", "expected", "actual", "ask", "blockedBy", "owner", "timeout", "updatedAt"]) {
+    const value = normalizedText(call[key]);
+    if (value) normalized[key] = value;
+  }
+  if (Object.keys(normalized).length === 0) return null;
+  normalized.active = isActiveBoardCall(normalized);
+  return normalized;
+}
+
+function formatBoardCallOneLine(call) {
+  if (!call) return "none";
+  return [
+    `${call.status || "CALL"}: ${call.goal || "untitled"}`,
+    call.from ? `from=${call.from}` : "",
+    call.need ? `need=${call.need}` : "",
+    call.connection ? `connection=${call.connection}` : "",
+  ].filter(Boolean).join("; ");
+}
+
+function formatBoardCallSummary(board) {
+  if (!board?.checked) return "call=not-checked";
+  if (!board.ok) return "call=unknown";
+  if (!board.currentCall) return "call=none";
+  return `call=${board.activeCall ? "active" : "done"}(${formatBoardCallOneLine(board.currentCall)})`;
+}
+
+function formatStatusBuildDiff(buildDiff) {
+  if (!buildDiff || buildDiff.differs === false) return "build=current";
+  if (buildDiff.comparable && buildDiff.changedHostRuntimeFileCount === 0) {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} stale metadata only, hostRuntimeChanges=0`;
+  }
+  if (buildDiff.comparable) {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} restart recommended, hostRuntimeChanges=${buildDiff.changedHostRuntimeFileCount ?? "unknown"}`;
+  }
+  return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} differs from repo=${buildDiff.toBuildId || "unknown"}`;
+}
+
+function formatStatusBoardSummary(payload) {
+  const callSummary = formatBoardCallSummary(payload.board);
+  if (!payload.online) {
+    return [
+      `Mac host status: offline at ${payload.probe.host}:${payload.probe.port}; ${callSummary}.`,
+      "Next: start safely with node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword.",
+      "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
+    ].join(" ");
+  }
+
+  const lan = Array.isArray(payload.lanAddresses) && payload.lanAddresses.length > 0
+    ? payload.lanAddresses[0]
+    : null;
+  const target = lan?.address ? `${lan.address}:${lan.port}` : `${payload.probe.host}:${payload.probe.port}`;
+  const runtimeBuild = payload.runtime?.buildId || "unknown";
+  const permissions = [
+    `screen=${statusValue(payload.permissions?.screenRecording)}`,
+    `accessibility=${statusValue(payload.permissions?.accessibility)}`,
+    `inputMonitoring=${statusValue(payload.permissions?.inputMonitoring)}`,
+  ].join(" ");
+  const capabilities = payload.capabilities || {};
+  const h264 = statusValue(capabilities.h264Stream);
+  const audio = capabilities.audioMode || statusValue(capabilities.audio);
+  const pipeline = capabilities.capturePipeline || "unknown";
+  const displays = formatDisplays(payload.displays);
+  return [
+    `Mac host status: online ${target}; runtimeBuild=${runtimeBuild} inputMode=${payload.inputMode || "unknown"}; ${callSummary}.`,
+    `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${formatStatusBuildDiff(payload.buildDiff)}.`,
+    "Next: coordinate on Agent Link Board before formal E2E.",
+    "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
+  ].join(" ");
+}
+
+async function getBoardStatus(args) {
+  const base = {
+    checked: false,
+    ok: null,
+    summary: "not checked",
+    currentCall: null,
+    activeCall: false,
+    error: "",
+  };
+  if (!args.checkBoard) return base;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1000, args.timeoutMs));
+  try {
+    const response = await fetch(new URL("/api/state", args.server), {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        ...(process.env.CODEX_LINK_TOKEN ? { "X-Codex-Link-Token": process.env.CODEX_LINK_TOKEN } : {}),
+      },
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      return {
+        ...base,
+        checked: true,
+        ok: false,
+        summary: `Agent Link Board /api/state returned ${response.status}`,
+        error: `${response.status}: ${text.slice(0, 200)}`,
+      };
+    }
+    const state = text ? JSON.parse(text) : {};
+    const currentCall = normalizeBoardCall(state.currentCall);
+    return {
+      checked: true,
+      ok: true,
+      summary: currentCall
+        ? `${currentCall.active ? "active" : "inactive"} currentCall: ${formatBoardCallOneLine(currentCall)}`
+        : "no currentCall",
+      currentCall,
+      activeCall: Boolean(currentCall?.active),
+      updatedAt: normalizedText(state.updatedAt),
+    };
+  } catch (error) {
+    return {
+      ...base,
+      checked: true,
+      ok: false,
+      summary: "Agent Link Board /api/state was not readable",
+      error: error.name || error.message || "request failed",
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function isMacHostDiscovery(discovery) {
   const platform = normalizedText(discovery?.platform).toLowerCase();
   if (platform === "macos" || platform === "darwin") return true;
@@ -578,6 +724,7 @@ async function stopHost(args) {
 
 async function printStatus(args) {
   const probeHost = statusProbeHost(args);
+  const board = await getBoardStatus(args);
   try {
     const discovery = await requestJson(`http://${probeHost}:${args.port}/discovery`, Math.min(args.timeoutMs, 3000));
     const runtime = discovery.runtime || {};
@@ -613,14 +760,30 @@ async function printStatus(args) {
       lanAddresses: lanAddresses.map((entry) => ({ ...entry, port: args.port })),
       currentBuildId: args.buildId,
       buildDiff,
+      board,
       discovery,
     };
+    payload.boardSummary = formatStatusBoardSummary(payload);
     if (args.json) {
       console.log(JSON.stringify(payload, null, 2));
       return payload;
     }
+    if (args.boardSummary) {
+      console.log(payload.boardSummary);
+      return payload;
+    }
     console.log(`[INFO] Mac host status probe: ${probeHost}:${args.port}`);
     console.log(`[OK] /discovery online: ${payload.deviceName} · input=${input} · ${discoveryRuntimeSummary(runtime)}`);
+    if (board.checked) {
+      console.log(`[${board.ok ? "OK" : "WARN"}] Agent Link Board: ${board.summary}`);
+      if (board.currentCall) {
+        console.log(`[${board.activeCall ? "WARN" : "INFO"}] Agent Link Board currentCall: ${formatBoardCallOneLine(board.currentCall)}`);
+      } else if (board.ok) {
+        console.log("[OK] Agent Link Board currentCall: none");
+      }
+    } else {
+      console.log("[INFO] Agent Link Board: not checked; add --checkBoard when coordinating with Windows Codex.");
+    }
     console.log(`[INFO] Permissions: ${discoveryPermissionSummary(discovery)}`);
     console.log(`[INFO] Capabilities: ${discoveryCapabilitySummary(discovery)}`);
     console.log(`[INFO] Displays: ${formatDisplays(displays)}`);
@@ -647,17 +810,33 @@ async function printStatus(args) {
       },
       displays: [],
       displayCount: 0,
+      board,
       suggestions: [
         "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword",
         "node scripts/mac/start-mac-host.mjs --ephemeralPassword --requirePassword",
       ],
     };
+    payload.boardSummary = formatStatusBoardSummary(payload);
     if (args.json) {
       console.log(JSON.stringify(payload, null, 2));
       return payload;
     }
+    if (args.boardSummary) {
+      console.log(payload.boardSummary);
+      return payload;
+    }
     console.log(`[INFO] Mac host status probe: ${probeHost}:${args.port}`);
     console.log(`[WARN] /discovery offline on ${probeHost}:${args.port}: ${error.message}`);
+    if (board.checked) {
+      console.log(`[${board.ok ? "OK" : "WARN"}] Agent Link Board: ${board.summary}`);
+      if (board.currentCall) {
+        console.log(`[${board.activeCall ? "WARN" : "INFO"}] Agent Link Board currentCall: ${formatBoardCallOneLine(board.currentCall)}`);
+      } else if (board.ok) {
+        console.log("[OK] Agent Link Board currentCall: none");
+      }
+    } else {
+      console.log("[INFO] Agent Link Board: not checked; add --checkBoard when coordinating with Windows Codex.");
+    }
     console.log("[INFO] Start safely with: node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword");
     console.log("[INFO] For temporary discovery/runtime diagnostics without sharing a password: node scripts/mac/start-mac-host.mjs --ephemeralPassword --requirePassword");
     return payload;
@@ -878,6 +1057,9 @@ async function main() {
     return;
   }
   const args = parseArgs(process.argv);
+  if ((args.checkBoard || args.boardSummary) && !args.status && !args.stop) {
+    args.status = true;
+  }
 
   if (args.stop) {
     const result = await stopHost(args);

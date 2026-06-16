@@ -118,6 +118,11 @@ function assertNotIncludes(text, expected, label) {
   }
 }
 
+function assertNoSecretLikeText(text, label) {
+  assertNotIncludes(text, "super-secret-start-status", label);
+  assertNotIncludes(text, "super-secret-command-token", label);
+}
+
 function parseJsonOutput(text, label) {
   try {
     return JSON.parse(String(text).trim());
@@ -379,6 +384,52 @@ async function withMockDiscoveryServer(payload, fn) {
   }
 }
 
+async function withMockBoardServer(currentCall, fn) {
+  const state = {
+    currentCall,
+    statuses: {},
+    events: [],
+    updatedAt: new Date().toISOString(),
+  };
+  const server = net.createServer((socket) => {
+    socket.once("data", (chunk) => {
+      const request = String(chunk || "");
+      if (!request.startsWith("GET /api/state ")) {
+        const body = JSON.stringify({ ok: false, error: "not found" });
+        socket.end([
+          "HTTP/1.1 404 Not Found",
+          "Content-Type: application/json",
+          `Content-Length: ${Buffer.byteLength(body)}`,
+          "Connection: close",
+          "",
+          body,
+        ].join("\r\n"));
+        return;
+      }
+      const body = JSON.stringify(state);
+      socket.end([
+        "HTTP/1.1 200 OK",
+        "Content-Type: application/json",
+        `Content-Length: ${Buffer.byteLength(body)}`,
+        "Connection: close",
+        "",
+        body,
+      ].join("\r\n"));
+    });
+  });
+  await new Promise((resolveListen, rejectListen) => {
+    server.once("error", rejectListen);
+    server.listen(0, "127.0.0.1", resolveListen);
+  });
+  const address = server.address();
+  const port = address && typeof address === "object" ? address.port : 0;
+  try {
+    return await fn(`http://127.0.0.1:${port}`);
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose));
+  }
+}
+
 async function assertStopRefusesNonMacDiscovery(timeoutMs) {
   await withMockDiscoveryServer({
     type: "lan_dual_discovery",
@@ -401,6 +452,134 @@ async function assertStopRefusesNonMacDiscovery(timeoutMs) {
     assertNotIncludes(output, "LAN_DUAL_PASSWORD is required", "non-Mac stop");
   });
   print("OK", "Stop refuses non-macOS discovery targets");
+}
+
+async function assertStatusDoesNotReadBoardByDefault(timeoutMs) {
+  const port = await getFreePort();
+  const result = await runNode(["--status", "--json", "--host", "127.0.0.1", "--port", String(port)], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "" },
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (result.exitCode !== 1 || result.timedOut) {
+    throw new Error(`Default JSON status should report offline without reading board.\n${output}`);
+  }
+  const json = parseJsonOutput(result.stdout, "default JSON status");
+  if (json.board?.checked !== false || !String(json.boardSummary || "").includes("call=not-checked")) {
+    throw new Error(`Default JSON status should mark Agent Link Board not checked.\n${result.stdout}`);
+  }
+  assertNoSecretLikeText(output, "default JSON status");
+  print("OK", "Status does not read Agent Link Board unless --checkBoard is set");
+}
+
+async function assertStatusBoardCurrentCall(timeoutMs) {
+  const port = await getFreePort();
+  const call = {
+    status: "CALLING",
+    goal: "Mac host status fake board summary",
+    from: "Windows Codex",
+    need: "Mac Codex",
+    connection: "192.168.31.122:43770",
+    command: "node secret --token super-secret-command-token",
+  };
+  await withMockBoardServer(call, async (server) => {
+    const result = await runNode([
+      "--status",
+      "--json",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(port),
+    ], {
+      timeoutMs,
+      env: { LAN_DUAL_PASSWORD: "" },
+    });
+    const output = `${result.stdout}\n${result.stderr}`;
+    if (result.exitCode !== 1 || result.timedOut) {
+      throw new Error(`Offline JSON status with board should stay normally offline.\n${output}`);
+    }
+    const json = parseJsonOutput(result.stdout, "status board currentCall JSON");
+    if (json.board?.checked !== true || json.board?.activeCall !== true || json.board?.currentCall?.goal !== call.goal) {
+      throw new Error(`Status JSON should include active currentCall.\n${result.stdout}`);
+    }
+    if (json.board?.currentCall?.command !== call.command) {
+      throw new Error(`Status JSON should preserve structured command for automation.\n${result.stdout}`);
+    }
+    if (!String(json.boardSummary || "").includes("call=active") || !String(json.boardSummary || "").includes(call.goal)) {
+      throw new Error(`Status boardSummary should include active call goal.\n${result.stdout}`);
+    }
+    assertNotIncludes(json.boardSummary || "", "super-secret-command-token", "status boardSummary");
+
+    const summaryResult = await runNode([
+      "--boardSummary",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(port),
+    ], {
+      timeoutMs,
+      env: { LAN_DUAL_PASSWORD: "" },
+    });
+    const summaryOutput = `${summaryResult.stdout}\n${summaryResult.stderr}`;
+    if (summaryResult.exitCode !== 1 || summaryResult.timedOut) {
+      throw new Error(`Offline boardSummary status should stay normally offline.\n${summaryOutput}`);
+    }
+    const lines = String(summaryResult.stdout || "").trim().split(/\r?\n/).filter(Boolean);
+    if (lines.length !== 1) {
+      throw new Error(`Status boardSummary should print one line, got ${lines.length}.\n${summaryOutput}`);
+    }
+    assertIncludes(lines[0], "Mac host status:", "status boardSummary");
+    assertIncludes(lines[0], "call=active", "status boardSummary");
+    assertIncludes(lines[0], call.goal, "status boardSummary");
+    assertNoSecretLikeText(summaryOutput, "status boardSummary");
+  });
+  print("OK", "Status surfaces active Agent Link Board currentCall safely");
+}
+
+async function assertStatusBoardDoneCall(timeoutMs) {
+  const port = await getFreePort();
+  const call = {
+    status: "DONE",
+    goal: "Mac host status completed board call",
+    from: "Windows Codex",
+    need: "Mac Codex",
+    command: "completed super-secret-command-token",
+  };
+  await withMockBoardServer(call, async (server) => {
+    const result = await runNode([
+      "--status",
+      "--json",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(port),
+    ], {
+      timeoutMs,
+      env: { LAN_DUAL_PASSWORD: "" },
+    });
+    const output = `${result.stdout}\n${result.stderr}`;
+    if (result.exitCode !== 1 || result.timedOut) {
+      throw new Error(`DONE currentCall JSON status should stay normally offline.\n${output}`);
+    }
+    const json = parseJsonOutput(result.stdout, "done currentCall status JSON");
+    if (json.board?.activeCall !== false) {
+      throw new Error(`DONE currentCall should not be active.\n${result.stdout}`);
+    }
+    if (!String(json.boardSummary || "").includes("call=done")) {
+      throw new Error(`DONE currentCall boardSummary should mark done.\n${result.stdout}`);
+    }
+    assertNotIncludes(json.boardSummary || "", "super-secret-command-token", "done status boardSummary");
+  });
+  print("OK", "Status treats DONE Agent Link Board currentCall as inactive");
 }
 
 async function assertStatusOnline(timeoutMs) {
@@ -796,6 +975,9 @@ async function main() {
   await assertStopOffline(args.timeoutMs);
   await assertStopRefusesNonLocalHost(args.timeoutMs);
   await assertStopRefusesNonMacDiscovery(args.timeoutMs);
+  await assertStatusDoesNotReadBoardByDefault(args.timeoutMs);
+  await assertStatusBoardCurrentCall(args.timeoutMs);
+  await assertStatusBoardDoneCall(args.timeoutMs);
   await assertStatusOnline(args.timeoutMs);
   await assertLaunchWithEnvPassword(args.timeoutMs);
   await assertLaunchWithEphemeralPassword(args.timeoutMs);
