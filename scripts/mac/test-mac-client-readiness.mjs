@@ -91,6 +91,28 @@ function assertMacClientPageStatusCommand(command, label) {
   assertNotIncludes(command, "--server", label);
 }
 
+function assertMacClientDiscoverWindowsCommand(command, label) {
+  assertIncludes(command, "discover-windows-hosts.mjs", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+}
+
+function assertMacClientReverseRehearsalAction(text, label) {
+  assertIncludes(text, "MacClientDiscoverWindows", label);
+  assertIncludes(text, "ReverseRehearsal=", label);
+  assertIncludes(text, "LAN008", label);
+  assertIncludes(text, "local loopback", label);
+  assertIncludes(text, "临时授权已使用", label);
+  assertNotIncludes(text, "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(text, "--password", label);
+  assertNotIncludes(text, "--sendCall", label);
+  assertNotIncludes(text, "inject", label);
+}
+
 function assertMacClientFormalSmokeCommand(command, label) {
   assertIncludes(command, "run-mac-client-formal-smoke.mjs", label);
   assertIncludes(command, "--discover", label);
@@ -126,6 +148,8 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "Usage:", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientPageStatusCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientCopyDiagnosticsAction", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macClientDiscoverWindowsCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macClientReverseRehearsalAction", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientFormalSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientBrowserSelfTestCommand", `${script} ${flag}`);
   }
@@ -142,11 +166,15 @@ function checkOfflineJson(args) {
   assert(payload.windowsHost?.checked === false, "Windows host should not be checked by default");
   assert(Array.isArray(payload.checklist), "payload should include checklist");
   assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "offline JSON Mac client page status command");
+  assertMacClientDiscoverWindowsCommand(payload.commands?.macClientDiscoverWindowsCommand || "", "offline JSON Mac client Windows discovery command");
+  assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "offline JSON Mac client reverse rehearsal action");
   assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "offline JSON Mac client formal smoke command");
   assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "offline JSON Mac client browser self-test command");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "payload should include copy diagnostics action");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("连接密码"), "copy diagnostics action should mention password safety");
   assert(/Mac client readiness:/.test(payload.boardSummary || ""), "payload should include boardSummary");
+  assert(/MacClientDiscoverWindows=/.test(payload.boardSummary || ""), "boardSummary should include Windows discovery command");
+  assert(/MacClientReverseRehearsal=/.test(payload.boardSummary || ""), "boardSummary should include reverse rehearsal action");
   assert(/MacClientFormalSmoke=/.test(payload.boardSummary || ""), "boardSummary should include formal smoke command");
   assert(/MacClientBrowserSelfTest=/.test(payload.boardSummary || ""), "boardSummary should include browser self-test command");
   assert(/CopyDiagnostics=Mac client 事件日志点击/.test(payload.boardSummary || ""), "boardSummary should include copy diagnostics action");
@@ -199,6 +227,11 @@ function checkBoardSummary(args) {
   assertIncludes(text, "Mac client readiness:", "board summary");
   assertIncludes(text, "MacClientPage=", "board summary");
   assertIncludes(text, "start-mac-client.mjs", "board summary");
+  assertIncludes(text, "MacClientDiscoverWindows=", "board summary");
+  assertIncludes(text, "discover-windows-hosts.mjs", "board summary");
+  assertIncludes(text, "MacClientReverseRehearsal=", "board summary");
+  assertIncludes(text, "ReverseRehearsal=", "board summary");
+  assertIncludes(text, "LAN008", "board summary");
   assertIncludes(text, "MacClientFormalSmoke=", "board summary");
   assertIncludes(text, "run-mac-client-formal-smoke.mjs", "board summary");
   assertIncludes(text, "--preflightOnly", "board summary");
@@ -216,6 +249,10 @@ function checkPlainReport(args) {
   assert(result.status === 0, "plain report should exit 0 without blockers");
   assertIncludes(result.stdout, "Mac client page status:", "plain report");
   assertIncludes(result.stdout, "start-mac-client.mjs", "plain report");
+  assertIncludes(result.stdout, "Mac client discover Windows host:", "plain report");
+  assertIncludes(result.stdout, "discover-windows-hosts.mjs", "plain report");
+  assertIncludes(result.stdout, "Mac client reverse rehearsal:", "plain report");
+  assertIncludes(result.stdout, "ReverseRehearsal=", "plain report");
   assertIncludes(result.stdout, "Mac client formal smoke preflight:", "plain report");
   assertIncludes(result.stdout, "run-mac-client-formal-smoke.mjs", "plain report");
   assertIncludes(result.stdout, "Mac client browser self-test:", "plain report");
@@ -294,6 +331,8 @@ async function checkClientServerProbe(args) {
     assert(payload.clientServer?.online === true, "client server should be online");
     assert(payload.clientServer?.titleFound === true, "client server should look like Mac client page");
     assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "client server probe command");
+    assertMacClientDiscoverWindowsCommand(payload.commands?.macClientDiscoverWindowsCommand || "", "client server probe Windows discovery command");
+    assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "client server probe reverse rehearsal action");
     assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "client server probe formal smoke command");
     assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "client server probe browser self-test command");
     assert(payload.checklist.some((item) => item.id === "client-server" && item.status === "ok"), "client-server ok item should be present");
@@ -389,6 +428,8 @@ async function checkWindowsDiscoveryProbe(args) {
     assert(payload.windowsHost?.capabilities?.clipboard?.file === true, "file clipboard should be captured");
     assert(payload.checklist.some((item) => item.id === "windows-host" && item.status === "ok"), "windows-host ok item should be present");
     assert(/online 127\.0\.0\.1/.test(payload.boardSummary || ""), "board summary should include online Windows host");
+    assertMacClientDiscoverWindowsCommand(payload.commands?.macClientDiscoverWindowsCommand || "", "Windows discovery probe Windows discovery command");
+    assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "Windows discovery probe reverse rehearsal action");
     assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "Windows discovery probe formal smoke command");
     assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "Windows discovery probe browser self-test command");
   });

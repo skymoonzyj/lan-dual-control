@@ -72,6 +72,14 @@ Machine-readable JSON fields:
                              Safe in-page action for copying the Mac client
                              diagnostic report. It does not contain or request
                              a password.
+  commands.macClientDiscoverWindowsCommand
+                             Secret-free Windows host discovery command from
+                             the Mac side. Its board summary includes the
+                             formal checklist and ReverseRehearsal= guidance
+                             when a Windows host is found.
+  commands.macClientReverseRehearsalAction
+                             Human action for the guarded reverse-control
+                             request rehearsal after Windows discovery.
   commands.macClientFormalSmokeCommand
                              Secret-free formal smoke preflight command. It
                              may safely start/reuse the local Mac client page,
@@ -502,6 +510,14 @@ function makeMacClientPageStatusCommand() {
   return "node scripts/mac/start-mac-client.mjs --status --boardSummary";
 }
 
+function makeMacClientDiscoverWindowsCommand() {
+  return "node scripts/mac/discover-windows-hosts.mjs --boardSummary";
+}
+
+function makeMacClientReverseRehearsalAction() {
+  return "Run MacClientDiscoverWindows first, then use its ReverseRehearsal= line: Mac requests reverse control and expects LAN008, Windows runs the local loopback one-time grant, Mac retries and expects accepted/临时授权已使用";
+}
+
 function makeMacClientFormalSmokeCommand() {
   return "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
 }
@@ -525,7 +541,7 @@ function makeBoardSummary(report) {
       : `offline ${report.windowsHost.probe.host}:${report.windowsHost.probe.port}`;
   const counts = `blockers=${report.counts.blocker} warnings=${report.counts.warning}`;
   const next = report.recommendations[0]?.text || "No next step available.";
-  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows}; ${counts}. Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
+  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows}; ${counts}. Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
 }
 
 function printHuman(report) {
@@ -536,6 +552,8 @@ function printHuman(report) {
   console.log(`- Windows host: ${report.windowsHost.checked ? (report.windowsHost.online ? `online ${report.windowsHost.probe.host}:${report.windowsHost.probe.port}` : `offline ${report.windowsHost.probe.host}:${report.windowsHost.probe.port}`) : "not checked"}`);
   console.log(`- Agent Link Board: ${report.board.checked ? (report.board.ok ? "readable" : "not readable") : "not checked"}`);
   console.log(`- Mac client page status: ${report.commands.macClientPageStatusCommand}`);
+  console.log(`- Mac client discover Windows host: ${report.commands.macClientDiscoverWindowsCommand}`);
+  console.log(`- Mac client reverse rehearsal: ${report.commands.macClientReverseRehearsalAction}`);
   console.log(`- Mac client formal smoke preflight: ${report.commands.macClientFormalSmokeCommand}`);
   console.log(`- Mac client browser self-test: ${report.commands.macClientBrowserSelfTestCommand}`);
   console.log(`- Copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
@@ -590,6 +608,8 @@ async function buildReport(args) {
     counts,
     commands: {
       macClientPageStatusCommand: makeMacClientPageStatusCommand(),
+      macClientDiscoverWindowsCommand: makeMacClientDiscoverWindowsCommand(),
+      macClientReverseRehearsalAction: makeMacClientReverseRehearsalAction(),
       macClientFormalSmokeCommand: makeMacClientFormalSmokeCommand(),
       macClientBrowserSelfTestCommand: makeMacClientBrowserSelfTestCommand(),
       macClientCopyDiagnosticsAction: makeMacClientCopyDiagnosticsAction(),
