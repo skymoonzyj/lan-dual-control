@@ -10,6 +10,7 @@ param(
     [switch]$Status,
     [switch]$Stop,
     [switch]$Restart,
+    [switch]$Json,
     [string]$PidFile = "",
     [string]$OutLog = "",
     [string]$ErrLog = ""
@@ -73,6 +74,14 @@ function Get-WatcherProcesses {
 
 function Show-WatcherStatus {
     $existing = @(Get-WatcherProcesses)
+    if ($Json) {
+        $message = "Mac alert watcher is not running."
+        if ($existing.Count -gt 0) {
+            $message = "Mac alert watcher is running."
+        }
+        Write-WatcherJson -Action "status" -Processes $existing -Message $message
+        return
+    }
     if ($existing.Count -gt 0) {
         Write-Host "Mac alert watcher is running."
         foreach ($item in $existing) {
@@ -88,17 +97,92 @@ function Show-WatcherStatus {
     Write-Host ("Error log: {0}" -f $ErrLog)
 }
 
+function New-WatcherJsonPayload {
+    param(
+        [string]$Action,
+        [array]$Processes = @(),
+        [bool]$Ok = $true,
+        [bool]$Started = $false,
+        [bool]$Reused = $false,
+        [array]$StoppedProcessIds = @(),
+        [string]$Message = ""
+    )
+
+    $processIds = @()
+    $startedAt = @()
+    foreach ($item in @($Processes)) {
+        if ($null -ne $item.ProcessId) {
+            $processIds += [int]$item.ProcessId
+        }
+        if ($item.CreationDate) {
+            $startedAt += [string]$item.CreationDate
+        }
+    }
+
+    return [ordered]@{
+        ok = $Ok
+        action = $Action
+        running = ($processIds.Count -gt 0)
+        started = $Started
+        reused = $Reused
+        stoppedProcessIds = @($StoppedProcessIds)
+        processIds = @($processIds)
+        processStartedAt = @($startedAt)
+        server = [string]$Server
+        pidFile = [string]$PidFile
+        outLog = [string]$OutLog
+        errLog = [string]$ErrLog
+        powerShell = [string]$powerShellExe
+        message = [string]$Message
+    }
+}
+
+function Write-WatcherJson {
+    param(
+        [string]$Action,
+        [array]$Processes = @(),
+        [bool]$Ok = $true,
+        [bool]$Started = $false,
+        [bool]$Reused = $false,
+        [array]$StoppedProcessIds = @(),
+        [string]$Message = ""
+    )
+    New-WatcherJsonPayload `
+        -Action $Action `
+        -Processes $Processes `
+        -Ok $Ok `
+        -Started $Started `
+        -Reused $Reused `
+        -StoppedProcessIds $StoppedProcessIds `
+        -Message $Message |
+        ConvertTo-Json -Depth 6
+}
+
 function Stop-WatcherProcess {
+    param(
+        [switch]$SuppressJson
+    )
     $existing = @(Get-WatcherProcesses)
+    $stoppedProcessIds = @()
     if ($existing.Count -eq 0) {
+        if ($Json -and (-not $SuppressJson)) {
+            Write-WatcherJson -Action "stop" -Processes @() -StoppedProcessIds @() -Message "Mac alert watcher is not running."
+            return
+        }
         Write-Host "Mac alert watcher is not running."
         return
     }
     foreach ($item in $existing) {
+        $stoppedProcessIds += [int]$item.ProcessId
         Stop-Process -Id $item.ProcessId -Force -ErrorAction SilentlyContinue
-        Write-Host ("Mac alert watcher stopped. Process ID: {0}" -f $item.ProcessId)
+        if (-not $Json) {
+            Write-Host ("Mac alert watcher stopped. Process ID: {0}" -f $item.ProcessId)
+        }
     }
     Remove-Item -Path $PidFile -Force -ErrorAction SilentlyContinue
+    if ($Json -and (-not $SuppressJson)) {
+        Write-WatcherJson -Action "stop" -Processes @() -StoppedProcessIds $stoppedProcessIds -Message "Mac alert watcher stopped."
+    }
 }
 
 if ($Status) {
@@ -112,10 +196,14 @@ if ($Stop -and (-not $Restart)) {
 }
 
 if ($Restart) {
-    Stop-WatcherProcess
+    Stop-WatcherProcess -SuppressJson
 } else {
     $existing = @(Get-WatcherProcesses)
     if ($existing.Count -gt 0) {
+        if ($Json) {
+            Write-WatcherJson -Action "start" -Processes $existing -Reused $true -Message "Mac alert watcher is already running."
+            return
+        }
         Write-Host "Mac alert watcher is already running."
         foreach ($item in $existing) {
             Write-Host ("Process ID: {0}" -f $item.ProcessId)
@@ -158,6 +246,7 @@ $process = Start-Process `
     -PassThru
 
 Set-Content -Path $PidFile -Value ([string]$process.Id) -Encoding UTF8
+$actualProcesses = @()
 for ($attempt = 0; $attempt -lt 10; $attempt++) {
     $actualProcesses = @(Get-WatcherProcesses)
     if ($actualProcesses.Count -gt 0) {
@@ -167,6 +256,12 @@ for ($attempt = 0; $attempt -lt 10; $attempt++) {
 }
 if ($actualProcesses.Count -gt 0) {
     Set-Content -Path $PidFile -Value ([string]$actualProcesses[0].ProcessId) -Encoding UTF8
+}
+
+if ($Json) {
+    $jsonAction = if ($Restart) { "restart" } else { "start" }
+    Write-WatcherJson -Action $jsonAction -Processes $actualProcesses -Started $true -Message "Mac alert watcher started."
+    return
 }
 
 Write-Host "Mac alert watcher started."

@@ -361,6 +361,66 @@ async function checkReverseGrantStatusAlerts(args) {
   console.log("[OK] Mac reverse-control grant status alerts");
 }
 
+async function checkStartWrapperJsonStatus(args) {
+  const basePath = resolve(repoRoot, ".dev-lab", `mac-alert-watcher-json-status-${process.pid}-${Date.now()}`);
+  const pidFile = `${basePath}.pid`;
+  const outLog = `${basePath}.out.log`;
+  const errLog = `${basePath}.err.log`;
+  const result = await runPowerShell(args.powerShellExe, [
+    "-NoProfile",
+    "-ExecutionPolicy", "Bypass",
+    "-File", startWrapperScript,
+    "-Server", "http://127.0.0.1:1",
+    "-Token", "secret-token-for-test",
+    "-PidFile", pidFile,
+    "-OutLog", outLog,
+    "-ErrLog", errLog,
+    "-Status",
+    "-Json",
+  ], args);
+  const output = `${result.stdout}\n${result.stderr}`;
+  try {
+    assert(result.exitCode === 0, `JSON status should exit 0\n${output}`);
+    assertNotIncludes(output, "secret-token-for-test", "JSON status");
+    const payload = JSON.parse(result.stdout);
+    assert(payload.ok === true, "JSON status should be ok");
+    assert(payload.action === "status", "JSON status action should be status");
+    assert(payload.running === false, "JSON status should not find a watcher for a unique fake server");
+    assert(Array.isArray(payload.processIds), "JSON status should include processIds array");
+    assert(payload.processIds.length === 0, "JSON status should not include process ids for an offline watcher");
+    assert(payload.server === "http://127.0.0.1:1", "JSON status should include server");
+    assert(String(payload.pidFile || "").endsWith(".pid"), "JSON status should include pid file");
+    assert(typeof payload.message === "string" && payload.message.includes("not running"), "JSON status should include status message");
+    const stop = await runPowerShell(args.powerShellExe, [
+      "-NoProfile",
+      "-ExecutionPolicy", "Bypass",
+      "-File", startWrapperScript,
+      "-Server", "http://127.0.0.1:1",
+      "-Token", "secret-token-for-test",
+      "-PidFile", pidFile,
+      "-OutLog", outLog,
+      "-ErrLog", errLog,
+      "-Stop",
+      "-Json",
+    ], args);
+    const stopOutput = `${stop.stdout}\n${stop.stderr}`;
+    assert(stop.exitCode === 0, `JSON stop should exit 0 when watcher is not running\n${stopOutput}`);
+    assertNotIncludes(stopOutput, "secret-token-for-test", "JSON stop");
+    const stopPayload = JSON.parse(stop.stdout);
+    assert(stopPayload.ok === true, "JSON stop should be ok");
+    assert(stopPayload.action === "stop", "JSON stop action should be stop");
+    assert(stopPayload.running === false, "JSON stop should report not running for a unique fake server");
+    assert(Array.isArray(stopPayload.stoppedProcessIds), "JSON stop should include stoppedProcessIds array");
+    console.log("[OK] Start wrapper JSON status is parseable and secret-free");
+  } finally {
+    await Promise.all([
+      rm(pidFile, { force: true }),
+      rm(outLog, { force: true }),
+      rm(errLog, { force: true }),
+    ]);
+  }
+}
+
 async function checkStartWrapperLifecycle(args) {
   const basePath = resolve(repoRoot, ".dev-lab", `mac-alert-watcher-test-${process.pid}-${Date.now()}`);
   const pidFile = `${basePath}.pid`;
@@ -453,6 +513,7 @@ async function main() {
   await checkBlockedStatusAlerts(args);
   await checkStaleStatusAlerts(args);
   await checkReverseGrantStatusAlerts(args);
+  await checkStartWrapperJsonStatus(args);
   if (args.includeLifecycle) {
     await checkStartWrapperLifecycle(args);
   }

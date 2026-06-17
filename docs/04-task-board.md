@@ -11,7 +11,7 @@
 - [x] 建立双端交接中心：当前状态、下一步、文件占用和交接日志。
 - [x] 建立双端测试联络规则。
 - [x] 建立局域网 Codex 联络板，支持网页实时收发和命令行收发。
-- [x] Windows 侧联络板 Mac 提醒 watcher 可后台运行：优先 PowerShell 7，Mac 授权/权限/502/blocked/长时间无更新、Mac 发给 Windows 的 active currentCall，以及 Mac 反控请求 `LAN008` 后等待 Windows `ReverseGrant` 临时授权都会弹本机提醒；支持状态/停止/重启和防重复启动，并有无弹窗自动回归。
+- [x] Windows 侧联络板 Mac 提醒 watcher 可后台运行：优先 PowerShell 7，Mac 授权/权限/502/blocked/长时间无更新、Mac 发给 Windows 的 active currentCall，以及 Mac 反控请求 `LAN008` 后等待 Windows `ReverseGrant` 临时授权都会弹本机提醒；支持状态/停止/重启、防重复启动和 `-Json` 机器可读输出，并有无弹窗自动回归。
 - [x] 上传到 GitHub 仓库。
 - [x] Mac mini 到位后克隆仓库。
 

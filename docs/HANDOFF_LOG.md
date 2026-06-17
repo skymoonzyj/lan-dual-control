@@ -19,6 +19,42 @@
 
 ## 2026-06-17 Windows Codex
 
+日期：2026-06-17 12:02
+开发端：Windows Codex
+本轮目标：给 Windows Mac alert watcher 启动器增加机器可读 JSON 输出。
+完成内容：
+- `scripts/windows/start-mac-alert-watcher.ps1` 新增 `-Json`：`-Status`、`-Stop`、启动、重复启动和 `-Restart` 路径都会输出单个 JSON 对象，包含 `action`、`running`、`processIds`、日志路径、`powerShell` 和 `message`。
+- `-Json` 输出不会回显 `-Token`，适合恢复总览、桌面壳或后续自动化稳定消费。
+- 修正 `-Restart -Json` 只输出最终一个 JSON 对象，不会先输出 stop JSON 再输出 restart JSON。
+- `test-mac-alert-watcher` 新增 `-Status -Json` 和未运行 `-Stop -Json` 断言，确认输出可解析且不泄露测试 token。
+- 当前状态、下一步、任务板和联络板说明已同步。
+修改文件：
+- `scripts/windows/start-mac-alert-watcher.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/LAN_CODEX_LINK.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- PowerShell 7 AST 语法解析 `scripts/windows/start-mac-alert-watcher.ps1`
+- `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server http://127.0.0.1:1 -Status -Json`
+- `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server http://127.0.0.1:1 -Stop -Json`
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script test-mac-alert-watcher.mjs --timeoutMs 10000`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 30000`
+- `git diff --check`
+- 行首冲突标记扫描
+遗留问题：
+- 这轮默认回归只测不启动正式 watcher 的 JSON status/stop；完整后台 lifecycle 仍保留在 `--includeLifecycle` 手动深跑入口，避免常规回归在少数 PowerShell alias 环境悬挂。
+下一步建议：
+- 后续接 Windows 桌面壳时优先消费 `start-mac-alert-watcher.ps1 -Status -Json`，不要再解析人类文本。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Windows Codex
+
 日期：2026-06-17 11:49
 开发端：Windows Codex
 本轮目标：让 Windows 恢复开工总览只读显示本机 Mac 提醒 watcher 是否运行。

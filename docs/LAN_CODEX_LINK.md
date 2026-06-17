@@ -83,6 +83,8 @@ scripts\windows\start-mac-alert-watcher.ps1 -Server http://192.168.1.x:17888 -St
 scripts\windows\start-mac-alert-watcher.ps1 -Server http://192.168.1.x:17888 -Restart
 ```
 
+脚本或桌面壳需要机器读取时，在上述命令后加 `-Json`。`-Status -Json`、`-Stop -Json` 和启动/重复启动路径都会输出单个 JSON 对象，包含 `action`、`running`、`processIds`、日志路径和 `message`；不会回显 token。
+
 需要前台调试时直接运行：
 
 ```powershell
