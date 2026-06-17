@@ -244,6 +244,10 @@ async function assertPowerShellWrapperHelp(timeoutMs) {
     assertIncludes(output, "benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "WindowsWgcBenchmarkPs=", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "benchmark-windows-wgc-settings.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "WindowsWgcCompare=", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "compare-windows-wgc-h264-sources.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "WindowsWgcComparePs=", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "compare-windows-wgc-h264-sources.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "ReverseGrant=", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "ReverseGrantPs=", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "allow-windows-reverse-control.ps1 -HostName 127.0.0.1", `PowerShell wrapper ${helpArg}`);
@@ -372,6 +376,12 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   if (!String(parsed.windowsWgcBenchmarkPowerShellCommand || "").includes("benchmark-windows-wgc-settings.ps1") || !String(parsed.windowsWgcBenchmarkPowerShellCommand || "").includes("-BoardSummary")) {
     throw new Error(`Offline JSON status did not include Windows WGC benchmark PowerShell command.\n${jsonResult.stdout}`);
   }
+  if (!String(parsed.windowsWgcCompareCommand || "").includes("compare-windows-wgc-h264-sources.mjs") || !String(parsed.windowsWgcCompareCommand || "").includes("--boardSummary")) {
+    throw new Error(`Offline JSON status did not include Windows WGC compare command.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.windowsWgcComparePowerShellCommand || "").includes("compare-windows-wgc-h264-sources.ps1") || !String(parsed.windowsWgcComparePowerShellCommand || "").includes("-BoardSummary")) {
+    throw new Error(`Offline JSON status did not include Windows WGC compare PowerShell command.\n${jsonResult.stdout}`);
+  }
   if (!String(parsed.windowsReverseControlGrantCommand || "").includes("allow-windows-reverse-control.mjs") || !String(parsed.windowsReverseControlGrantCommand || "").includes("--boardSummary")) {
     throw new Error(`Offline JSON status did not include Windows reverse grant command.\n${jsonResult.stdout}`);
   }
@@ -395,6 +405,12 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   }
   if (!String(parsed.boardSummary || "").includes("WindowsWgcBenchmarkPs=") || !String(parsed.boardSummary || "").includes("benchmark-windows-wgc-settings.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary")) {
     throw new Error(`Offline JSON board summary did not include WindowsWgcBenchmarkPs command.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.boardSummary || "").includes("WindowsWgcCompare=") || !String(parsed.boardSummary || "").includes("compare-windows-wgc-h264-sources.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary")) {
+    throw new Error(`Offline JSON board summary did not include WindowsWgcCompare command.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.boardSummary || "").includes("WindowsWgcComparePs=") || !String(parsed.boardSummary || "").includes("compare-windows-wgc-h264-sources.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary")) {
+    throw new Error(`Offline JSON board summary did not include WindowsWgcComparePs command.\n${jsonResult.stdout}`);
   }
   assertNotIncludes(jsonOutput, "[INFO]", "offline JSON status");
   assertNotIncludes(jsonOutput, "LAN_DUAL_PASSWORD is required", "offline JSON status");
@@ -421,6 +437,10 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   assertIncludes(boardResult.stdout, "benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", "offline board summary");
   assertIncludes(boardResult.stdout, "WindowsWgcBenchmarkPs=", "offline board summary");
   assertIncludes(boardResult.stdout, "benchmark-windows-wgc-settings.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary", "offline board summary");
+  assertIncludes(boardResult.stdout, "WindowsWgcCompare=", "offline board summary");
+  assertIncludes(boardResult.stdout, "compare-windows-wgc-h264-sources.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", "offline board summary");
+  assertIncludes(boardResult.stdout, "WindowsWgcComparePs=", "offline board summary");
+  assertIncludes(boardResult.stdout, "compare-windows-wgc-h264-sources.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary", "offline board summary");
   assertIncludes(boardResult.stdout, "Do not send passwords", "offline board summary");
   assertNotIncludes(boardOutput, "LAN_DUAL_PASSWORD is required", "offline board summary");
   print("OK", "Status mode reports offline host without requiring a password");
@@ -681,6 +701,12 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         if (!String(parsed.windowsWgcBenchmarkPowerShellCommand || "").includes("benchmark-windows-wgc-settings.ps1") || !String(parsed.windowsWgcBenchmarkPowerShellCommand || "").includes("-BoardSummary")) {
           throw new Error(`Online JSON status did not include Windows WGC benchmark PowerShell command.\n${jsonResult.stdout}`);
         }
+        if (!String(parsed.windowsWgcCompareCommand || "").includes("compare-windows-wgc-h264-sources.mjs") || !String(parsed.windowsWgcCompareCommand || "").includes("--boardSummary")) {
+          throw new Error(`Online JSON status did not include Windows WGC compare command.\n${jsonResult.stdout}`);
+        }
+        if (!String(parsed.windowsWgcComparePowerShellCommand || "").includes("compare-windows-wgc-h264-sources.ps1") || !String(parsed.windowsWgcComparePowerShellCommand || "").includes("-BoardSummary")) {
+          throw new Error(`Online JSON status did not include Windows WGC compare PowerShell command.\n${jsonResult.stdout}`);
+        }
         if (!String(parsed.windowsReverseControlGrantCommand || "").includes("allow-windows-reverse-control.mjs") || !String(parsed.windowsReverseControlGrantCommand || "").includes("--host 127.0.0.1")) {
           throw new Error(`Online JSON status did not include Windows reverse grant command.\n${jsonResult.stdout}`);
         }
@@ -704,6 +730,12 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         }
         if (!String(parsed.boardSummary || "").includes("WindowsWgcBenchmarkPs=") || !String(parsed.boardSummary || "").includes("benchmark-windows-wgc-settings.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary")) {
           throw new Error(`Online JSON board summary did not include WindowsWgcBenchmarkPs command.\n${jsonResult.stdout}`);
+        }
+        if (!String(parsed.boardSummary || "").includes("WindowsWgcCompare=") || !String(parsed.boardSummary || "").includes("compare-windows-wgc-h264-sources.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary")) {
+          throw new Error(`Online JSON board summary did not include WindowsWgcCompare command.\n${jsonResult.stdout}`);
+        }
+        if (!String(parsed.boardSummary || "").includes("WindowsWgcComparePs=") || !String(parsed.boardSummary || "").includes("compare-windows-wgc-h264-sources.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary")) {
+          throw new Error(`Online JSON board summary did not include WindowsWgcComparePs command.\n${jsonResult.stdout}`);
         }
         if (!String(parsed.boardSummary || "").includes("ReverseGrant=") || !String(parsed.boardSummary || "").includes("allow-windows-reverse-control.mjs")) {
           throw new Error(`Online JSON board summary did not include Windows reverse grant command.\n${jsonResult.stdout}`);
@@ -742,6 +774,10 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         assertIncludes(boardResult.stdout, "benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", "online board summary");
         assertIncludes(boardResult.stdout, "WindowsWgcBenchmarkPs=", "online board summary");
         assertIncludes(boardResult.stdout, "benchmark-windows-wgc-settings.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary", "online board summary");
+        assertIncludes(boardResult.stdout, "WindowsWgcCompare=", "online board summary");
+        assertIncludes(boardResult.stdout, "compare-windows-wgc-h264-sources.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", "online board summary");
+        assertIncludes(boardResult.stdout, "WindowsWgcComparePs=", "online board summary");
+        assertIncludes(boardResult.stdout, "compare-windows-wgc-h264-sources.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary", "online board summary");
         assertIncludes(boardResult.stdout, "ReverseGrant=", "online board summary");
         assertIncludes(boardResult.stdout, "allow-windows-reverse-control.mjs --host 127.0.0.1", "online board summary");
         assertIncludes(boardResult.stdout, "ReverseGrantPs=", "online board summary");
