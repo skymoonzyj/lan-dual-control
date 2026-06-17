@@ -2218,6 +2218,11 @@ function formatFloatingClipboardStatus() {
   return "剪贴板：待机";
 }
 
+function getClipboardExportStatus() {
+  const clipboardStatus = formatFloatingClipboardStatus().replace(/^剪贴板：/, "").trim();
+  return clipboardStatus || "-";
+}
+
 function syncFloatingControlStatus() {
   if (elements.floatingFullscreenHint) {
     elements.floatingFullscreenHint.textContent = state.immersiveFullscreen
@@ -2914,6 +2919,7 @@ function buildDiagnosticsQuickSummary({
   macAlertWatcherExport,
   localHostExport,
   remoteFileExport,
+  clipboardExport,
   videoExport,
   audioExport,
   floatingControlExport,
@@ -2930,6 +2936,7 @@ function buildDiagnosticsQuickSummary({
     `- 远端连接：${currentStateLabel} · ${connectionLabel} · ${targetLabel}`,
     `- 重连：${reconnectParts.join(" · ")}`,
     `- 远端文件：${remoteFileExport.summary}`,
+    `- 剪贴板：${clipboardExport}`,
     `- 视频：${videoExport}`,
     `- 声音：${audioExport.summary}`,
     `- 输入：${inputExport}`,
@@ -2952,6 +2959,7 @@ function buildLogExportText() {
   const macAlertWatcherExport = getMacAlertWatcherExportStatus();
   const localHostExport = getLocalHostExportStatus();
   const remoteFileExport = getRemoteFileTransferExportStatus();
+  const clipboardExport = getClipboardExportStatus();
   const videoExport = getVideoExportStatus();
   const audioExport = getAudioExportStatus();
   const floatingControlExport = getFloatingControlExportStatus();
@@ -2983,6 +2991,7 @@ function buildLogExportText() {
       macAlertWatcherExport,
       localHostExport,
       remoteFileExport,
+      clipboardExport,
       videoExport,
       audioExport,
       floatingControlExport,
@@ -3034,6 +3043,7 @@ function buildLogExportText() {
     `- 声音电平：${audioExport.level}`,
     `- 声音错误：${audioExport.error}`,
     `- 剪贴板：${settings.clipboard ? "开启" : "关闭"}`,
+    `- 剪贴板状态：${clipboardExport}`,
     `- 全屏浮层模式：${floatingControlExport.mode}`,
     `- 全屏浮层摘要：${floatingControlExport.summary}`,
     `- 全屏浮层提示：${floatingControlExport.hint}`,

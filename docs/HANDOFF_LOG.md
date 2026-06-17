@@ -19,6 +19,39 @@
 
 ## 2026-06-18 Windows Codex
 
+日期：2026-06-18 续跑
+开发端：Windows Codex
+本轮目标：让 Windows 控 Mac 复制诊断快速摘要直接写出独立剪贴板状态，方便定位文字、文件或压缩包复制问题。
+完成内容：
+- 复制/导出的诊断报告快速摘要新增“剪贴板”一行，复用全屏浮层同一套剪贴板状态口径。
+- “显示与能力”分段新增“剪贴板状态”，记录关闭/待机、文字文件能力、远端文件接收进度、系统剪贴板写入结果或最近收到文件。
+- 页面 diagnostics-only 自检模拟远端压缩包接收中状态，断言导出文本和复制文本都包含独立剪贴板摘要/状态。
+- Windows 控制端 README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps\windows-client scripts\windows docs`
+遗留问题：
+- 真实大文件/压缩包复制仍需后续用 Mac 真机做人工体验验收。
+下一步建议：
+- 白天继续真实 Mac 连接下复制文本、文件和压缩包，核对复制诊断里的“剪贴板”与“远端文件”是否和实际体验一致。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真机体验验收时需要 Mac host 在线。
+
+## 2026-06-18 Windows Codex
+
 日期：2026-06-18 夜间
 开发端：Windows Codex
 本轮目标：让 Windows 控 Mac 复制诊断快速摘要直接写出独立视频状态，方便定位卡顿、不是 60Hz 或 H.264/JPEG 回退。

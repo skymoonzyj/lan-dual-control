@@ -2809,6 +2809,7 @@ async function verifyReconnectControls(session) {
       const localHostInputSelect = document.querySelector("#localHostInputModeSelect");
       const localHostReverseSelect = document.querySelector("#localHostReverseControlModeSelect");
       const localHostReadinessSelect = document.querySelector("#localHostReadinessProfileSelect");
+      const clipboardToggleElement = document.querySelector("#clipboardToggle");
       const audioToggleElement = document.querySelector("#audioToggle");
       const audioVolumeElement = document.querySelector("#audioVolumeRange");
       const originalLocalHostBadgeText = localHostBadge?.textContent || "";
@@ -2823,6 +2824,7 @@ async function verifyReconnectControls(session) {
       const originalReceivedTempPath = state.receivedClipboardTempPath;
       const originalReceivedWriteStatus = state.receivedClipboardWriteStatus;
       const originalRemoteFileTransfers = state.remoteFileTransfers;
+      const originalClipboardChecked = Boolean(clipboardToggleElement?.checked);
       const originalAudioChecked = Boolean(audioToggleElement?.checked);
       const originalAudioVolume = audioVolumeElement?.value || "";
       const originalAudioFrames = state.audioFrames;
@@ -2908,6 +2910,7 @@ async function verifyReconnectControls(session) {
             },
           ],
         ]);
+        if (clipboardToggleElement) clipboardToggleElement.checked = true;
         if (audioToggleElement) audioToggleElement.checked = true;
         if (audioVolumeElement) audioVolumeElement.value = "33";
         state.audioFrames = 24;
@@ -2935,6 +2938,9 @@ async function verifyReconnectControls(session) {
             exportText.includes("- 重连：等待自动重连") && exportText.includes("原因 测试断线"),
           quickSummaryRemoteFiles:
             exportText.includes("- 远端文件：warning") && exportText.includes("远端文件接收超时"),
+          quickSummaryClipboard:
+            exportText.includes("- 剪贴板：接收 1 个文件") &&
+            exportText.includes("2 B/4 B"),
           quickSummaryAudio:
             exportText.includes("- 声音：已接收，等待播放") &&
             exportText.includes("音量 33%") &&
@@ -2989,6 +2995,9 @@ async function verifyReconnectControls(session) {
             exportText.includes("丢 2"),
           audioLevel: exportText.includes("- 声音电平：37%"),
           audioError: exportText.includes("- 声音错误：-"),
+          clipboardStatus:
+            exportText.includes("- 剪贴板状态：接收 1 个文件") &&
+            exportText.includes("2 B/4 B"),
           runtimeInput: exportText.includes("- 输入事件：7（安全日志，不会真正控制 / 已记录）"),
           remoteFileStatus:
             exportText.includes("- 远端文件状态：warning") && exportText.includes("远端文件接收超时"),
@@ -3009,6 +3018,8 @@ async function verifyReconnectControls(session) {
           copiedText.includes("- Mac 提醒：提醒中") &&
           copiedText.includes("- 全屏浮层连接：连接：") &&
           copiedText.includes("- 全屏浮层视频：视频：") &&
+          copiedText.includes("- 剪贴板：接收 1 个文件") &&
+          copiedText.includes("- 剪贴板状态：接收 1 个文件") &&
           copiedText.includes("- 输入：7（安全日志，不会真正控制 / 已记录）") &&
           copiedText.includes("- 输入事件：7（安全日志，不会真正控制 / 已记录）") &&
           copiedText.includes("- 声音状态：已接收，等待播放") &&
@@ -3091,6 +3102,7 @@ async function verifyReconnectControls(session) {
         state.receivedClipboardTempPath = originalReceivedTempPath;
         state.receivedClipboardWriteStatus = originalReceivedWriteStatus;
         state.remoteFileTransfers = originalRemoteFileTransfers;
+        if (clipboardToggleElement) clipboardToggleElement.checked = originalClipboardChecked;
         if (audioToggleElement) audioToggleElement.checked = originalAudioChecked;
         if (audioVolumeElement) audioVolumeElement.value = originalAudioVolume;
         state.audioFrames = originalAudioFrames;
