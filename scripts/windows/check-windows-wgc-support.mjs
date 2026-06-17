@@ -4,8 +4,11 @@ const defaults = {
   timeoutMs: 10000,
   requireSupported: false,
   json: false,
+  boardSummary: false,
   verbose: false,
 };
+
+let activeArgs = null;
 
 function printHelp() {
   console.log(`Usage:
@@ -15,13 +18,20 @@ Options:
   --timeoutMs <ms>        PowerShell probe timeout. Default: ${defaults.timeoutMs}
   --requireSupported     Exit non-zero when Windows Graphics Capture is unavailable
   --json                 Print machine-readable JSON summary
+  --boardSummary         Print a one-line secret-free Agent Link Board summary
   --verbose              Print raw probe details
   --help, -h             Show this help without probing
 
 Description:
   Runs a read-only preflight for the future Windows Graphics Capture backend.
   It does not start capture, does not replace the current FFmpeg gdigrab path,
-  and does not change system settings.
+  and does not change system settings. It does not start Windows host,
+  authenticate, ask for or print passwords, capture screen/audio, or send
+  input/inject events.
+
+Examples:
+  node scripts/windows/check-windows-wgc-support.mjs --boardSummary
+  node scripts/windows/check-windows-wgc-support.mjs --requireSupported --json
 `);
 }
 
@@ -42,6 +52,10 @@ function parseArgs(argv) {
       args.json = true;
       continue;
     }
+    if (token === "--boardSummary") {
+      args.boardSummary = true;
+      continue;
+    }
     if (token === "--verbose") {
       args.verbose = true;
       continue;
@@ -57,8 +71,58 @@ function parseArgs(argv) {
 }
 
 function print(kind, text, args) {
-  if (args.json) return;
+  if (args.json || args.boardSummary) return;
   console.log(`[${kind}] ${text}`);
+}
+
+function safeField(value) {
+  return String(value ?? "")
+    .replace(/[\r\n]+/g, " ")
+    .replace(/[;]/g, ",")
+    .trim();
+}
+
+function yesNo(value) {
+  if (value === true) return "yes";
+  if (value === false) return "no";
+  return "unknown";
+}
+
+function summarizeBlockers(blockers) {
+  if (!Array.isArray(blockers) || blockers.length === 0) return "none";
+  const clipped = blockers
+    .slice(0, 3)
+    .map((blocker) => safeField(blocker))
+    .filter(Boolean)
+    .join(" | ");
+  return clipped || "unknown";
+}
+
+function makeBoardSummary(result) {
+  const summary = result.summary || {};
+  const state = result.ok
+    ? summary.supported
+      ? "ready"
+      : "informational"
+    : "failed";
+  const osBuild = summary.osBuild || "unknown";
+  const winrt = summary.requiredTypesAvailable
+    ? "ok"
+    : `missing:${Array.isArray(summary.missingTypes) ? summary.missingTypes.length : "unknown"}`;
+  const gpu = `${summary.hardwareGpuCount ?? "unknown"} hardware/${summary.virtualGpuCount ?? "unknown"} virtual`;
+  return [
+    `Windows WGC support: ${state}; supported=${yesNo(summary.supported)}; required=${yesNo(summary.required)}; osBuild=${osBuild}; sessionSupported=${yesNo(summary.sessionSupported)}; winrt=${winrt}; gpu=${gpu}; blockers=${summarizeBlockers(summary.blockers)}.`,
+    "read-only; no-host; no-password/auth; no-screen/audio-capture; no-input/inject.",
+  ].join(" ");
+}
+
+function makeFailureBoardSummary(error, args) {
+  const required = args?.requireSupported ? "yes" : "no";
+  const detail = safeField(error?.message || "unknown error") || "unknown error";
+  return [
+    `Windows WGC support: failed; required=${required}; error=${detail}.`,
+    "read-only; no-host; no-password/auth; no-screen/audio-capture; no-input/inject.",
+  ].join(" ");
 }
 
 function makeProbeScript() {
@@ -295,6 +359,7 @@ function summarizeProbe(probe) {
 
 async function main() {
   const args = parseArgs(process.argv);
+  activeArgs = args;
   if (args.help) {
     printHelp();
     return;
@@ -305,9 +370,12 @@ async function main() {
   summary.required = args.requireSupported;
   const ok = summary.supported || !args.requireSupported;
   const result = { ok, summary, probe: args.verbose ? probe : undefined };
+  result.boardSummary = makeBoardSummary(result);
 
   if (args.json) {
     console.log(JSON.stringify(result, null, 2));
+  } else if (args.boardSummary) {
+    console.log(result.boardSummary);
   } else {
     print("INFO", `OS: ${summary.osCaption || "unknown"} build ${summary.osBuild || "unknown"}`, args);
     print("INFO", `GPU: ${summary.hardwareGpuCount} hardware adapter(s), ${summary.virtualGpuCount} virtual adapter(s)`, args);
@@ -330,6 +398,10 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(`[FAIL] ${error.message}`);
+  if (activeArgs?.boardSummary) {
+    console.log(makeFailureBoardSummary(error, activeArgs));
+  } else {
+    console.error(`[FAIL] ${error.message}`);
+  }
   process.exitCode = 1;
 });

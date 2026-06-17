@@ -72,6 +72,10 @@ It also includes a read-only Windows video encoder/WGC/WebCodecs support command
 node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
 PowerShell equivalent:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-video-encoder-support.ps1 -BoardSummary
+It also includes a dedicated read-only Windows Graphics Capture preflight command:
+node scripts/windows/check-windows-wgc-support.mjs --boardSummary
+PowerShell equivalent:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-wgc-support.ps1 -BoardSummary
 It also includes a browser-only WebCodecs H.264 support command:
 node scripts/windows/check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A --boardSummary
 PowerShell equivalent:

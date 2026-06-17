@@ -17,6 +17,47 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
+本轮目标：把 Windows WGC/WinRT/GPU 专项预检做成可上板的一行摘要，并接入恢复总览。
+完成内容：
+- `scripts/windows/check-windows-wgc-support.mjs` 新增 `--boardSummary`，JSON 同步带 `boardSummary` 字段；摘要包含 supported、required、osBuild、`GraphicsCaptureSession.IsSupported()`、WinRT 类型、硬件/虚拟 GPU 数和 no host/no password/no capture/no input/inject 安全边界。
+- 新增 PowerShell 包装 `scripts/windows/check-windows-wgc-support.ps1`，支持 `-BoardSummary`、`-Json`、`-RequireSupported`、`-VerboseOutput` 和纯 `-Help/-h`。
+- 新增 `scripts/windows/test-windows-wgc-support-board-summary.mjs`，覆盖 Node/PowerShell 单行摘要、JSON `boardSummary`、PowerShell help 和不泄密。
+- `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `WindowsWgcSupport=` / `WindowsWgcSupportPs=`，恢复开工时可把 WGC 前置条件和综合视频/WebCodecs 检查分开上板。
+- Windows PowerShell 统一 help 覆盖更新为 18 个 `.ps1` 入口、36 条帮助命令，新增 `check-windows-wgc-support.ps1`。
+修改文件：
+- `scripts/windows/check-windows-wgc-support.mjs`
+- `scripts/windows/check-windows-wgc-support.ps1`
+- `scripts/windows/test-windows-wgc-support-board-summary.mjs`
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-wgc-support.mjs`
+- `node --check scripts/windows/test-windows-wgc-support-board-summary.mjs`
+- PowerShell AST parse `check-windows-wgc-support.ps1`
+- `node scripts/windows/check-windows-wgc-support.mjs --boardSummary`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-wgc-support.ps1 -BoardSummary`
+- `node scripts/windows/test-windows-wgc-support-board-summary.mjs --timeoutMs 20000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-wgc-support.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-powershell-help.mjs --script check-windows-wgc-support.ps1 --timeoutMs 10000 --boardSummary`
+遗留问题：
+- 本轮只做只读 WGC/WinRT/GPU 前置条件检查和恢复总览提示；没有启动 Windows host、没有认证 WebSocket、没有采集屏幕/声音、没有发送密码/input/inject。
+下一步建议：
+- 白天排查高刷或 H.264 体验时，先跑 `check-windows-resume-status --checkBoard --boardSummary`，看 `WindowsWgcSupport=`、`WindowsVideoSupport=` 和 `WindowsWebCodecs=` 三条分别是否 ready，再决定继续看 WGC helper 原生硬编、采集节奏或浏览器解码。
+是否改了协议：否。
+是否需要另一端配合：否；真实观感联调时再通过 Agent Link Board 呼叫 Mac。
+
 ## 2026-06-17 Mac Codex
 
 日期：2026-06-17 续跑

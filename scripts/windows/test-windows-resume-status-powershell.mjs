@@ -216,6 +216,9 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "Windows video encoder/WGC/WebCodecs support command", "PowerShell wrapper help");
   assertIncludes(output, "check-windows-video-encoder-support.mjs --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "check-windows-video-encoder-support.ps1 -BoardSummary", "PowerShell wrapper help");
+  assertIncludes(output, "dedicated read-only Windows Graphics Capture", "PowerShell wrapper help");
+  assertIncludes(output, "check-windows-wgc-support.mjs --boardSummary", "PowerShell wrapper help");
+  assertIncludes(output, "check-windows-wgc-support.ps1 -BoardSummary", "PowerShell wrapper help");
   assertIncludes(output, "browser-only WebCodecs H.264 support command", "PowerShell wrapper help");
   assertIncludes(output, "check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "check-webcodecs-h264-support.ps1 -RequireCodec avc1.42C02A -BoardSummary", "PowerShell wrapper help");
@@ -281,6 +284,10 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.windowsVideoEncoderSupportBoardSummary, "--boardSummary", "mock JSON video support command");
     assertIncludes(payload.commands?.windowsVideoEncoderSupportPowerShellBoardSummary, "check-windows-video-encoder-support.ps1", "mock JSON video support PowerShell command");
     assertIncludes(payload.commands?.windowsVideoEncoderSupportPowerShellBoardSummary, "-BoardSummary", "mock JSON video support PowerShell command");
+    assertIncludes(payload.commands?.windowsWgcSupportBoardSummary, "check-windows-wgc-support.mjs", "mock JSON WGC command");
+    assertIncludes(payload.commands?.windowsWgcSupportBoardSummary, "--boardSummary", "mock JSON WGC command");
+    assertIncludes(payload.commands?.windowsWgcSupportPowerShellBoardSummary, "check-windows-wgc-support.ps1", "mock JSON WGC PowerShell command");
+    assertIncludes(payload.commands?.windowsWgcSupportPowerShellBoardSummary, "-BoardSummary", "mock JSON WGC PowerShell command");
     assertIncludes(payload.commands?.windowsWebCodecsH264BoardSummary, "check-webcodecs-h264-support.mjs", "mock JSON WebCodecs command");
     assertIncludes(payload.commands?.windowsWebCodecsH264BoardSummary, "--requireCodec avc1.42C02A", "mock JSON WebCodecs command");
     assertIncludes(payload.commands?.windowsWebCodecsH264BoardSummary, "--boardSummary", "mock JSON WebCodecs command");
@@ -376,6 +383,10 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "check-windows-video-encoder-support.mjs --boardSummary", "PowerShell board summary");
     assertIncludes(output, "WindowsVideoSupportPs=", "PowerShell board summary");
     assertIncludes(output, "check-windows-video-encoder-support.ps1 -BoardSummary", "PowerShell board summary");
+    assertIncludes(output, "WindowsWgcSupport=", "PowerShell board summary");
+    assertIncludes(output, "check-windows-wgc-support.mjs --boardSummary", "PowerShell board summary");
+    assertIncludes(output, "WindowsWgcSupportPs=", "PowerShell board summary");
+    assertIncludes(output, "check-windows-wgc-support.ps1 -BoardSummary", "PowerShell board summary");
     assertIncludes(output, "WindowsWebCodecs=", "PowerShell board summary");
     assertIncludes(output, "check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A --boardSummary", "PowerShell board summary");
     assertIncludes(output, "WindowsWebCodecsPs=", "PowerShell board summary");
