@@ -21,6 +21,38 @@
 
 日期：2026-06-17 续跑
 开发端：Mac Codex
+本轮目标：让 Mac 恢复总览直接提示 Mac 控制 Windows formal 人工清单入口。
+完成内容：
+- `scripts/mac/check-mac-resume-status.mjs` 新增 `commands.macClientFormalChecklistCommand`，值为 `node scripts/mac/check-mac-client-formal-status.mjs --boardSummary`。
+- 普通输出新增 `Mac client formal checklist:`；`--boardSummary` 新增 `MacClientFormalChecklist=...`，方便恢复现场时直接拿到 Mac -> Windows formal 人工真连清单。
+- 该入口保持只读：不启动 host/client、不认证、不要求或打印密码、不发送 Agent Link Board call/input/inject、不回显自定义 server URL。
+- `scripts/mac/test-mac-resume-status.mjs` 覆盖 help、离线/在线 JSON、普通输出和 boardSummary 中的新命令，并确认不携带密码/发起 call。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 45000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮只补恢复总览和自测，没有启动真实 Windows host、没有认证、没有发送密码/input/inject。
+下一步建议：
+- 恢复开工先跑 `check-mac-resume-status --checkBoard --boardSummary`；看到 `MacClientFormalChecklist=` 后可直接发/运行 formal manual checklist。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Mac Codex
+
+日期：2026-06-17 续跑
+开发端：Mac Codex
 本轮目标：给 Mac 控制 Windows formal checklist 补人工真连验收清单。
 完成内容：
 - `scripts/mac/check-mac-client-formal-status.mjs` 的 `runPlan` 新增 `manualChecklist`，把人工真连要确认的连接、视频、音频、剪贴板、input_ack 和复制诊断/日志证据整理成固定 JSON 字段。

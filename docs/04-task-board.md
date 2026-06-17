@@ -129,6 +129,7 @@ Windows 端：
 - [x] Mac 恢复开工总览也可解析 Agent Link Board `currentCall`：`--checkBoard --json`、普通输出和 `--boardSummary` 会显示 `call=active/done/none`，DONE 呼叫不会误当作待办，摘要不回显 call command。
 - [x] Mac 恢复开工总览会输出本地 Mac client 页面状态命令：JSON `commands.macClientPageStatusCommand`、普通输出和 `--boardSummary` 都带 `MacClientPage=start-mac-client --status --boardSummary`，只读检查页面是否在线，不启动服务、不连接 Windows。
 - [x] Mac 恢复开工总览会输出 Mac client 无密诊断和复制诊断提示：JSON、普通输出和 `--boardSummary` 都带 `MacClientDiagnostics=check-mac-client-readiness --probeClientServer --checkBoard --boardSummary` 与 `CopyDiagnostics=Mac client 事件日志点击“复制诊断”`，方便现场先发一行 readiness，再粘贴完整页面诊断。
+- [x] Mac 恢复开工总览会输出 Mac client formal 人工真连清单命令：JSON `commands.macClientFormalChecklistCommand`、普通输出和 `--boardSummary` 都带 `MacClientFormalChecklist=check-mac-client-formal-status --boardSummary`，方便恢复后直接拿到 `ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics`；不认证、不发送 call/input/inject。
 - [x] Mac 恢复开工总览会输出 Mac 脚本 help 安全自检命令：JSON `commands.macScriptHelpCommand`、普通输出和 `--boardSummary` 都带 `MacScriptHelp=test-mac-script-help --timeoutMs 10000 --boardSummary`，提醒修改 `scripts/mac/*.mjs` 后跑统一 `--help/-h` 副作用防线并得到一行上板摘要。
 - [x] Windows 恢复开工总览支持 `--userAuthRequest` / PowerShell `-UserAuthRequest`，预检 ready 后直接输出可发 Agent Link Board 的 `NEED_USER_AUTH` 文本和固定目标 PowerShell 正式验收命令。
 - [x] Windows 恢复开工总览支持显式 `--sendUserAuthRequest` / PowerShell `-SendUserAuthRequest`，只在 formal preflight ready 时把无密授权提示发到 Agent Link Board，未 ready 时拒绝发送。
