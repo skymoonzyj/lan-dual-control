@@ -267,6 +267,9 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "dedicated Windows Graphics Capture", `help ${flag}`);
     assertIncludes(result.stdout, "check-windows-wgc-support.mjs --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "check-windows-wgc-support.ps1 -BoardSummary", `help ${flag}`);
+    assertIncludes(result.stdout, "WGC H.264 raw-bgra vs NV12", `help ${flag}`);
+    assertIncludes(result.stdout, "compare-windows-wgc-h264-sources.mjs --profile 60:20000:balanced", `help ${flag}`);
+    assertIncludes(result.stdout, "compare-windows-wgc-h264-sources.ps1 -Profile 60:20000:balanced", `help ${flag}`);
     assertIncludes(result.stdout, "browser-only WebCodecs H.264", `help ${flag}`);
     assertIncludes(result.stdout, "check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "check-webcodecs-h264-support.ps1 -RequireCodec avc1.42C02A -BoardSummary", `help ${flag}`);
@@ -345,6 +348,12 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsWgcSupportBoardSummary || "").includes("--boardSummary"), "mock JSON WGC command should be board-safe");
     assert(String(payload.commands?.windowsWgcSupportPowerShellBoardSummary || "").includes("check-windows-wgc-support.ps1"), "mock JSON should include Windows WGC PowerShell command");
     assert(String(payload.commands?.windowsWgcSupportPowerShellBoardSummary || "").includes("-BoardSummary"), "mock JSON WGC PowerShell command should be board-safe");
+    assert(String(payload.commands?.windowsWgcH264SourceCompareBoardSummary || "").includes("compare-windows-wgc-h264-sources.mjs"), "mock JSON should include Windows WGC compare command");
+    assert(String(payload.commands?.windowsWgcH264SourceCompareBoardSummary || "").includes("--profile 60:20000:balanced"), "mock JSON WGC compare command should use the default profile");
+    assert(String(payload.commands?.windowsWgcH264SourceCompareBoardSummary || "").includes("--boardSummary"), "mock JSON WGC compare command should be board-safe");
+    assert(String(payload.commands?.windowsWgcH264SourceComparePowerShellBoardSummary || "").includes("compare-windows-wgc-h264-sources.ps1"), "mock JSON should include Windows WGC compare PowerShell command");
+    assert(String(payload.commands?.windowsWgcH264SourceComparePowerShellBoardSummary || "").includes("-Profile 60:20000:balanced"), "mock JSON WGC compare PowerShell command should use the default profile");
+    assert(String(payload.commands?.windowsWgcH264SourceComparePowerShellBoardSummary || "").includes("-BoardSummary"), "mock JSON WGC compare PowerShell command should be board-safe");
     assert(String(payload.commands?.windowsWebCodecsH264BoardSummary || "").includes("check-webcodecs-h264-support.mjs"), "mock JSON should include Windows WebCodecs H.264 command");
     assert(String(payload.commands?.windowsWebCodecsH264BoardSummary || "").includes("--requireCodec avc1.42C02A"), "mock JSON WebCodecs command should require the baseline codec");
     assert(String(payload.commands?.windowsWebCodecsH264BoardSummary || "").includes("--boardSummary"), "mock JSON WebCodecs command should be board-safe");
@@ -487,6 +496,10 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "check-windows-wgc-support.mjs --boardSummary", "board summary");
     assertIncludes(result.stdout, "WindowsWgcSupportPs=", "board summary");
     assertIncludes(result.stdout, "check-windows-wgc-support.ps1 -BoardSummary", "board summary");
+    assertIncludes(result.stdout, "WindowsWgcCompare=", "board summary");
+    assertIncludes(result.stdout, "compare-windows-wgc-h264-sources.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", "board summary");
+    assertIncludes(result.stdout, "WindowsWgcComparePs=", "board summary");
+    assertIncludes(result.stdout, "compare-windows-wgc-h264-sources.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary", "board summary");
     assertIncludes(result.stdout, "WindowsWebCodecs=", "board summary");
     assertIncludes(result.stdout, "check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A --boardSummary", "board summary");
     assertIncludes(result.stdout, "WindowsWebCodecsPs=", "board summary");

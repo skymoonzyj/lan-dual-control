@@ -8,6 +8,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
 const benchmarkScript = resolve(scriptDir, "benchmark-windows-wgc-settings.mjs");
 const compareScript = resolve(scriptDir, "compare-windows-wgc-h264-sources.mjs");
+const comparePowerShellScript = "scripts/windows/compare-windows-wgc-h264-sources.ps1";
 
 function printHelp() {
   console.log(`Usage:
@@ -44,6 +45,63 @@ function assertNotIncludes(text, needle, context) {
 function runNode(args, { env = process.env, timeoutMs = 15000 } = {}) {
   return new Promise((resolveRun) => {
     const child = spawn(process.execPath, args, {
+      cwd: repoRoot,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      resolveRun({
+        ok: false,
+        timedOut: true,
+        exitCode: null,
+        stdout,
+        stderr,
+      });
+    }, timeoutMs);
+
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolveRun({
+        ok: false,
+        timedOut: false,
+        exitCode: null,
+        stdout,
+        stderr: `${stderr}\n${error.message}`.trim(),
+      });
+    });
+    child.on("close", (exitCode) => {
+      clearTimeout(timer);
+      resolveRun({
+        ok: exitCode === 0,
+        timedOut: false,
+        exitCode,
+        stdout,
+        stderr,
+      });
+    });
+  });
+}
+
+function runPowerShell(args, { env = process.env, timeoutMs = 15000 } = {}) {
+  return new Promise((resolveRun) => {
+    const child = spawn("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      comparePowerShellScript,
+      ...args,
+    ], {
       cwd: repoRoot,
       env,
       stdio: ["ignore", "pipe", "pipe"],
@@ -242,6 +300,12 @@ async function verifyHelp() {
   const compareHelp = await runNode([compareScript, "--help"]);
   assert(compareHelp.ok, `compare --help failed\n${compareHelp.stderr}`);
   assertIncludes(compareHelp.stdout, "--progressIntervalMs", "compare help");
+
+  const comparePowerShellHelp = await runPowerShell(["-Help"]);
+  assert(comparePowerShellHelp.ok, `compare PowerShell -Help failed\n${comparePowerShellHelp.stderr}`);
+  assertIncludes(comparePowerShellHelp.stdout, "-BoardSummary", "compare PowerShell help");
+  assertIncludes(comparePowerShellHelp.stdout, "-ProgressIntervalMs", "compare PowerShell help");
+  assertIncludes(comparePowerShellHelp.stdout, "does not connect to Mac", "compare PowerShell help");
   console.log("[OK] Help includes --progressIntervalMs");
 }
 
@@ -376,6 +440,71 @@ async function verifyCompareBoardSummaryClean(fakeBenchmarkPath) {
   console.log("[OK] Compare --boardSummary remains one clean line");
 }
 
+async function verifyComparePowerShellBoardSummaryClean(fakeBenchmarkPath) {
+  const result = await runPowerShell([
+    "-Source",
+    "raw-bgra",
+    "nv12",
+    "-Profile",
+    "60:20000:balanced",
+    "-DurationMs",
+    "800",
+    "-TimeoutMs",
+    "10000",
+    "-ProgressIntervalMs",
+    "100",
+    "-SkipBuild",
+    "-Helper",
+    process.execPath,
+    "-BoardSummary",
+  ], {
+    env: {
+      ...process.env,
+      LAN_DUAL_WINDOWS_WGC_BENCHMARK_SCRIPT: fakeBenchmarkPath,
+      FAKE_BENCHMARK_DELAY_MS: "350",
+    },
+  });
+  assert(result.ok, `compare PowerShell boardSummary run failed\n${result.stdout}\n${result.stderr}`);
+  assertIncludes(result.stdout, "Windows WGC H.264 source compare passed", "compare PowerShell boardSummary output");
+  assertNotIncludes(result.stdout, "[INFO]", "compare PowerShell boardSummary output");
+  assertNotIncludes(result.stdout, "progress:", "compare PowerShell boardSummary output");
+  assert(String(result.stderr || "").trim() === "", `compare PowerShell boardSummary stderr should be empty\n${result.stderr}`);
+  console.log("[OK] Compare PowerShell -BoardSummary remains one clean line");
+}
+
+async function verifyComparePowerShellJsonClean(fakeBenchmarkPath) {
+  const result = await runPowerShell([
+    "-Source",
+    "raw-bgra",
+    "nv12",
+    "-Profile",
+    "60:20000:balanced",
+    "-DurationMs",
+    "800",
+    "-TimeoutMs",
+    "10000",
+    "-ProgressIntervalMs",
+    "100",
+    "-SkipBuild",
+    "-Helper",
+    process.execPath,
+    "-Json",
+  ], {
+    env: {
+      ...process.env,
+      LAN_DUAL_WINDOWS_WGC_BENCHMARK_SCRIPT: fakeBenchmarkPath,
+      FAKE_BENCHMARK_DELAY_MS: "350",
+    },
+  });
+  assert(result.ok, `compare PowerShell JSON run failed\n${result.stdout}\n${result.stderr}`);
+  assertNotIncludes(result.stdout, "[INFO]", "compare PowerShell JSON output");
+  const summary = parseJsonOutput(result.stdout, "compare PowerShell JSON output");
+  assert(summary.boardSummary.includes("Windows WGC H.264 source compare passed"), "PowerShell JSON should include boardSummary");
+  assert(summary.requested?.progressIntervalMs === 100, "PowerShell JSON should include requested.progressIntervalMs");
+  assert(String(result.stderr || "").trim() === "", `compare PowerShell JSON stderr should be empty\n${result.stderr}`);
+  console.log("[OK] Compare PowerShell -Json remains clean");
+}
+
 async function main() {
   await verifyHelp();
   const tempDir = await mkdtemp(join(tmpdir(), "lan-dual-wgc-progress-"));
@@ -388,6 +517,8 @@ async function main() {
     await verifyBenchmarkJsonClean(fakeObservePath);
     await verifyCompareProgress(fakeBenchmarkPath);
     await verifyCompareBoardSummaryClean(fakeBenchmarkPath);
+    await verifyComparePowerShellBoardSummaryClean(fakeBenchmarkPath);
+    await verifyComparePowerShellJsonClean(fakeBenchmarkPath);
   } finally {
     await rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }

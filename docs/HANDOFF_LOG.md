@@ -21,6 +21,48 @@
 
 日期：2026-06-17 续跑
 开发端：Windows Codex
+本轮目标：给 Windows WGC H.264 raw-bgra vs NV12 源格式对照补 PowerShell 入口，并接入 Windows 恢复总览。
+完成内容：
+- 新增 `scripts/windows/compare-windows-wgc-h264-sources.ps1`，包装同名 Node compare 工具，支持 `-Profile`、`-DurationMs`、`-BoardSummary`、`-Json`、`-ProgressIntervalMs`、`-SkipBuild`、`-Helper` 和常用阈值参数；帮助说明该工具只跑本机临时 Windows host/WGC helper benchmark，不连接 Mac、不认证、不请求或打印密码、不发送 input/inject。
+- `scripts/windows/test-windows-wgc-progress-output.mjs` 新增 PowerShell fake-benchmark 回归，覆盖 `-BoardSummary` 单行干净输出、`-Json` 纯 JSON 和不泄密。
+- `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `WindowsWgcCompare=` / `WindowsWgcComparePs=`，方便恢复开工时从总览直接复制较重的 raw-bgra vs NV12 对照命令。
+- Windows PowerShell 统一 help 覆盖更新为 19 个 `.ps1` 入口、38 条帮助命令，新增 `compare-windows-wgc-h264-sources.ps1`。
+- Windows host README、当前状态、下一步和任务板已同步 Node/PowerShell 两条 WGC 对照入口。
+修改文件：
+- `scripts/windows/compare-windows-wgc-h264-sources.ps1`
+- `scripts/windows/test-windows-wgc-progress-output.mjs`
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-windows-wgc-progress-output.mjs`
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-windows-wgc-progress-output.mjs`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-powershell-help.mjs --script compare-windows-wgc-h264-sources.ps1 --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`
+遗留问题：
+- 本轮没有跑真实 WGC raw-bgra/NV12 benchmark；新增 PowerShell wrapper 的行为用 fake benchmark 锁定。真实性能数据仍按现场需要手动运行 `WindowsWgcCompare=` / `WindowsWgcComparePs=`。
+下一步建议：
+- 白天恢复后先跑 `node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`，看 `WindowsWgcSupport=`、`WindowsWgcCompare=`、`WindowsWebCodecs=` 和 Mac 端 currentCall，再决定是否做真实 WGC 对照或 Mac client 真连。
+是否改了协议：否。
+是否需要另一端配合：否；仅在白天要跑真实 WGC/Mac client 观感对照时再通过 Agent Link Board 呼叫 Mac 端。
+
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
 本轮目标：把 Windows WGC/WinRT/GPU 专项预检做成可上板的一行摘要，并接入恢复总览。
 完成内容：
 - `scripts/windows/check-windows-wgc-support.mjs` 新增 `--boardSummary`，JSON 同步带 `boardSummary` 字段；摘要包含 supported、required、osBuild、`GraphicsCaptureSession.IsSupported()`、WinRT 类型、硬件/虚拟 GPU 数和 no host/no password/no capture/no input/inject 安全边界。

@@ -76,6 +76,10 @@ It also includes a dedicated read-only Windows Graphics Capture preflight comman
 node scripts/windows/check-windows-wgc-support.mjs --boardSummary
 PowerShell equivalent:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-wgc-support.ps1 -BoardSummary
+It also includes a heavier WGC H.264 raw-bgra vs NV12 source comparison command:
+node scripts/windows/compare-windows-wgc-h264-sources.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary
+PowerShell equivalent:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/compare-windows-wgc-h264-sources.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary
 It also includes a browser-only WebCodecs H.264 support command:
 node scripts/windows/check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A --boardSummary
 PowerShell equivalent:
