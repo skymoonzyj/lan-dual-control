@@ -507,11 +507,12 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 node E:\codex\lan-dual-control\scripts\windows\check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A
 ```
 
-继续往 WGC + H.264/硬编推进前，建议先跑一遍 Windows 视频编码能力体检。它只读汇总 FFmpeg H.264 软件/硬件编码器、WGC 预检和浏览器 WebCodecs 解码能力，不启动 Windows host、不抓屏、不改系统设置；需要给自动化消费时可加 `--json`。本机 `2026-06-15 00:05` 强校验已通过：FFmpeg `8.1.1` 检测到 `libx264`、`h264_nvenc`、`h264_qsv`、`h264_amf`、`h264_mf`、`h264_d3d12va` 等 H.264 编码入口，WGC 预检通过，Edge WebCodecs H.264 支持通过；当前 WGC JPEG 桥接 H.264/NVENC 正确性原型已通过，下一步应改 raw BGRA/NV12 或原生硬编。
+继续往 WGC + H.264/硬编推进前，建议先跑一遍 Windows 视频编码能力体检。它只读汇总 FFmpeg H.264 软件/硬件编码器、WGC 预检和浏览器 WebCodecs 解码能力，不启动 Windows host、不抓屏、不改系统设置；需要给自动化消费时可加 `--json`，需要把当前能力发 Agent Link Board 时可加 `--boardSummary` 输出一行无密摘要。本机 `2026-06-15 00:05` 强校验已通过：FFmpeg `8.1.1` 检测到 `libx264`、`h264_nvenc`、`h264_qsv`、`h264_amf`、`h264_mf`、`h264_d3d12va` 等 H.264 编码入口，WGC 预检通过，Edge WebCodecs H.264 支持通过；当前 WGC JPEG 桥接 H.264/NVENC 正确性原型已通过，下一步应改 raw BGRA/NV12 或原生硬编。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-support.mjs
 node E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-support.mjs --requireAnyH264 --requireHardwareH264 --requireWgc --requireWebCodecsH264
+node E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-support.mjs --boardSummary
 node E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-support.mjs --json
 ```
 

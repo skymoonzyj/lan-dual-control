@@ -18,6 +18,7 @@ const defaults = {
   requireHardwareH264: false,
   requireWgc: false,
   requireWebCodecsH264: false,
+  boardSummary: false,
 };
 
 const hardwareEncoderNames = new Set([
@@ -54,6 +55,7 @@ Options:
   --requireWgc               Exit non-zero if Windows Graphics Capture preflight fails.
   --requireWebCodecsH264     Exit non-zero if browser WebCodecs H.264 support is unavailable.
   --json                     Print a single machine-readable JSON object.
+  --boardSummary             Print a one-line secret-free Agent Link Board summary.
   --verbose                  Include child stderr tails in JSON and text output.
   --help, -h                 Show this help without probing.
 
@@ -67,6 +69,7 @@ Description:
 Examples:
   node scripts/windows/check-windows-video-encoder-support.mjs
   node scripts/windows/check-windows-video-encoder-support.mjs --json
+  node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
   node scripts/windows/check-windows-video-encoder-support.mjs --requireAnyH264 --requireWgc
 `);
 }
@@ -82,6 +85,10 @@ function parseArgs(argv) {
     }
     if (token === "--json") {
       args.json = true;
+      continue;
+    }
+    if (token === "--boardSummary") {
+      args.boardSummary = true;
       continue;
     }
     if (token === "--verbose") {
@@ -132,7 +139,7 @@ function parseArgs(argv) {
 }
 
 function print(kind, text, args) {
-  if (!args.json) {
+  if (!args.json && !args.boardSummary) {
     console.log(`[${kind}] ${text}`);
   }
 }
@@ -499,6 +506,59 @@ function summarizeForText(result, args) {
   }
 }
 
+function compactToken(value) {
+  return String(value || "")
+    .replace(/[\r\n;]+/g, ",")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatFfmpegBoardSummary(ffmpeg) {
+  if (ffmpeg?.skipped) return "ffmpeg=skipped";
+  if (!ffmpeg?.available) return `ffmpeg=unavailable${ffmpeg?.error ? `(${compactToken(ffmpeg.error)})` : ""}`;
+  const h264 = ffmpeg.h264 || {};
+  const hardware = h264.preferredHardware?.name || "none";
+  const software = h264.preferredSoftware?.name || "none";
+  return `ffmpegH264=${h264.available ? "ok" : "missing"}; hardware=${hardware}; software=${software}`;
+}
+
+function formatWgcBoardSummary(wgc) {
+  if (wgc?.skipped) return "wgc=skipped";
+  if (wgc?.supported) return "wgc=ok";
+  const blocker = compactToken((wgc?.summary?.blockers || [])[0] || wgc?.error || "not-ready");
+  return `wgc=blocked(${blocker})`;
+}
+
+function formatWebCodecsBoardSummary(webCodecs) {
+  if (webCodecs?.skipped) return "webcodecs=skipped";
+  if (webCodecs?.anySupported) {
+    const preferred = webCodecs.preferred || {};
+    const codec = preferred.codec || webCodecs.supportedCodecs?.[0] || "h264";
+    const format = preferred.format || "unknown";
+    return `webcodecs=ok(${codec}/${format})`;
+  }
+  const failure = compactToken((webCodecs?.failures || [])[0] || webCodecs?.error || "not-confirmed");
+  return `webcodecs=unconfirmed(${failure})`;
+}
+
+function makeBoardSummary(result) {
+  const parts = [
+    `Windows video encoder support: ${result.ok ? "ok" : "failed"}`,
+    formatFfmpegBoardSummary(result.ffmpeg),
+    formatWgcBoardSummary(result.wgc),
+    formatWebCodecsBoardSummary(result.webCodecs),
+    `recommendation=${compactToken(result.recommendation?.preferredPath || "unknown")}`,
+  ];
+  if (result.warnings?.length) {
+    parts.push(`warnings=${result.warnings.length}`);
+  }
+  if (result.failures?.length) {
+    parts.push(`failures=${result.failures.length}`);
+  }
+  parts.push("read-only", "no-password", "no-host", "no-input/inject");
+  return parts.filter(Boolean).join("; ");
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -537,9 +597,12 @@ async function main() {
     warnings,
     failures,
   };
+  result.boardSummary = makeBoardSummary(result);
 
   if (args.json) {
     console.log(JSON.stringify(result, null, 2));
+  } else if (args.boardSummary) {
+    console.log(result.boardSummary);
   } else {
     summarizeForText(result, args);
   }
