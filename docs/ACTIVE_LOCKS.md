@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/mac/check-mac-resume-status.mjs`, `scripts/mac/test-mac-resume-status.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 16:35 | Mac resume status 新增 `MacScriptHelp=` / `commands.macScriptHelpCommand`，恢复总览会提示统一 Mac `.mjs` help 安全自检；专项回归和 86 条 help 覆盖通过。 |
 | Mac Codex | `scripts/mac/test-mac-script-help.mjs`, `docs/CURRENT_STATUS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 14:40 | Mac `.mjs` help 统一自检新增运行时副作用输出防线；86 条 `--help/-h` 覆盖通过，锁定不误启动服务、不弹密码提示、不连接真实 host、不读取 Agent Link Board。 |
 | Windows Codex | `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 续跑 | 同步 Windows PowerShell `-Help/-h` 纯帮助覆盖文档；记录 `test-windows-powershell-help` 自动覆盖 12 个 `.ps1` 入口/24 条命令，以及后续改 `.ps1` 必跑 Windows PowerShell + PowerShell 7 双路径。 |
 | Windows Codex | `scripts/windows/check-windows-host-readiness.ps1`, `scripts/windows/test-windows-host-readiness-board-summary.mjs`, `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 续跑 | Windows host readiness 新增 PowerShell 包装入口；支持 `-CheckBoard/-BoardSummary/-Json/-Profile/-ProbeMedia` 等常用参数，专项回归覆盖 Node/PowerShell help、JSON、boardSummary 和不泄密。 |

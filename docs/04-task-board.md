@@ -122,6 +122,7 @@ Windows 端：
 - [x] Mac `.mjs` 工具脚本建立统一 `--help/-h` 纯帮助覆盖自检：`test-mac-script-help.mjs` 当前覆盖 43 个脚本、86 条帮助命令，并拒绝帮助路径误启动服务、弹密码提示、输出真实环境密码、启动 DevTools/Swift build、连接真实 host 或读取 Agent Link Board 状态。
 - [x] Mac 恢复开工总览也可解析 Agent Link Board `currentCall`：`--checkBoard --json`、普通输出和 `--boardSummary` 会显示 `call=active/done/none`，DONE 呼叫不会误当作待办，摘要不回显 call command。
 - [x] Mac 恢复开工总览会输出 Mac client 无密诊断和复制诊断提示：JSON、普通输出和 `--boardSummary` 都带 `MacClientDiagnostics=check-mac-client-readiness --probeClientServer --checkBoard --boardSummary` 与 `CopyDiagnostics=Mac client 事件日志点击“复制诊断”`，方便现场先发一行 readiness，再粘贴完整页面诊断。
+- [x] Mac 恢复开工总览会输出 Mac 脚本 help 安全自检命令：JSON `commands.macScriptHelpCommand`、普通输出和 `--boardSummary` 都带 `MacScriptHelp=test-mac-script-help --timeoutMs 10000`，提醒修改 `scripts/mac/*.mjs` 后跑统一 `--help/-h` 副作用防线。
 - [x] Windows 恢复开工总览支持 `--userAuthRequest` / PowerShell `-UserAuthRequest`，预检 ready 后直接输出可发 Agent Link Board 的 `NEED_USER_AUTH` 文本和固定目标 PowerShell 正式验收命令。
 - [x] Windows 恢复开工总览支持显式 `--sendUserAuthRequest` / PowerShell `-SendUserAuthRequest`，只在 formal preflight ready 时把无密授权提示发到 Agent Link Board，未 ready 时拒绝发送。
 - [x] Windows formal E2E runner 支持 `--sendUserAuthRequest` / PowerShell `-SendUserAuthRequest`，在 `--preflightOnly` ready 后直接向 Agent Link Board 发送无密 `NEED_USER_AUTH`，未 ready 不发送。

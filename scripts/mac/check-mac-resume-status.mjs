@@ -59,6 +59,9 @@ Machine-readable JSON fields:
                              Secret-free Mac client readiness command for
                              checking local page files/server state without
                              authenticating a Windows host.
+  commands.macScriptHelpCommand
+                             Pure help coverage command for scripts/mac/*.mjs;
+                             it rejects runtime side-effect output.
 
 Examples:
   node scripts/mac/check-mac-resume-status.mjs
@@ -562,6 +565,10 @@ function makeMacClientDiagnosticsCommand() {
   ].join(" ");
 }
 
+function makeMacScriptHelpCommand() {
+  return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000";
+}
+
 function formatBoardBuildDiff(buildDiff) {
   if (!buildDiff || buildDiff.severity === "ok") return "build=current";
   if (buildDiff.severity === "stale-metadata") {
@@ -636,6 +643,7 @@ function formatBoardSummary(report) {
       "Next: start formal host with start-mac-host --promptPassword --requirePassword before Windows E2E.",
       `After host is online, refresh media baseline with ${report.commands.mediaReadinessBoardSummary}.`,
       `MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
+      `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
       "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
     ].join(" ");
   }
@@ -653,6 +661,7 @@ function formatBoardSummary(report) {
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}.`,
     `Media baseline command: ${report.commands.mediaReadinessBoardSummary}.`,
     `MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
+    `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
     "Next formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
@@ -703,6 +712,7 @@ function printReport(report) {
   }
   console.log(`[NEXT] Mac client diagnostics: ${report.commands.macClientDiagnosticsCommand}`);
   console.log(`[NEXT] Mac client copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
+  console.log(`[NEXT] Mac script help safety check: ${report.commands.macScriptHelpCommand}`);
   console.log(report.ok ? "[OK] Resume status passed" : "[FAIL] Resume status needs attention");
 }
 
@@ -738,6 +748,7 @@ async function main() {
       mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
       macClientDiagnosticsCommand: makeMacClientDiagnosticsCommand(),
       macClientCopyDiagnosticsAction: "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码",
+      macScriptHelpCommand: makeMacScriptHelpCommand(),
     },
     recommendations,
   };

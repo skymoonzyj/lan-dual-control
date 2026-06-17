@@ -19,6 +19,37 @@
 
 ## 2026-06-17 Mac Codex
 
+日期：2026-06-17 16:35
+开发端：Mac Codex
+本轮目标：让 Mac 恢复开工总览直接提示统一 Mac script help 安全自检命令。
+完成内容：
+- `check-mac-resume-status` 新增 `commands.macScriptHelpCommand`，固定为 `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000`。
+- JSON、普通输出和 `--boardSummary` 都会输出 `MacScriptHelp=`，方便每次修改 `scripts/mac/*.mjs` 后直接按恢复总览跑统一 `--help/-h` 副作用防线。
+- 自测补齐 help 字段、离线/在线 JSON、普通输出和 boardSummary 断言，并确认该命令不带密码、不回显自定义 board server、不读取 Agent Link Board。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 45000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/mac docs`
+遗留问题：
+- 本轮只补恢复总览提示和回归，不启动真实服务、不认证、不发送密码/input/inject；真实 Mac 控制 Windows 仍需 Windows host 在线和 Agent Link Board 呼叫配合。
+下一步建议：
+- 后续 Mac 端改任意 `scripts/mac/*.mjs`，先跑恢复总览，再按 `MacScriptHelp=` 运行统一 help 安全自检，最后再发通讯板/推送。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Mac Codex
+
 日期：2026-06-17 14:40
 开发端：Mac Codex
 本轮目标：加固 Mac `.mjs` 工具的 `--help/-h` 统一自检，防止现场查参数时误触发运行时副作用。
