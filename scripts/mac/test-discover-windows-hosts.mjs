@@ -75,9 +75,32 @@ function assertFormalSmokeCommand(command, label) {
   assertNotIncludes(command, "--json", label);
 }
 
+function assertMacClientBrowserSelfTestCommand(command, label) {
+  assertIncludes(command, "test-mac-client-browser.mjs", label);
+  assertIncludes(command, "--mockVideo", label);
+  assertIncludes(command, "--allowClipboardFallback", label);
+  assertIncludes(command, "--skipFileClipboard", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertIncludes(command, "--progressIntervalMs 0", label);
+  assertNotIncludes(command, "--useExistingHost", label);
+  assertNotIncludes(command, "--useEnvPassword", label);
+  assertNotIncludes(command, "--requirePassword", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+}
+
 function extractFormalSmokeCommand(text, label) {
   const match = String(text || "").match(/FormalSmoke=(.+?)(?:\. ManualChecklist=|\n|$)/);
   assert(match, `${label} should include FormalSmoke= command.\n${text}`);
+  return match[1].trim();
+}
+
+function extractMacClientBrowserSelfTestCommand(text, label) {
+  const match = String(text || "").match(/MacClientBrowserSelfTest=(.+?)(?:\. If that checklist|\.\s*No password|\n|$)/);
+  assert(match, `${label} should include MacClientBrowserSelfTest= command.\n${text}`);
   return match[1].trim();
 }
 
@@ -166,6 +189,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "--scanTimeoutMs", `${script} ${flag}`);
     assertIncludes(result.stdout, "formalChecklistCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "formalSmokeCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macClientBrowserSelfTestCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "manualChecklistSummary", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
@@ -187,6 +211,10 @@ function checkFoundJson(tmp, args) {
   assertIncludes(payload.formalChecklistCommand, "--host 192.168.31.68", "formal checklist command");
   assertIncludes(payload.formalChecklistCommand, "--boardSummary", "formal checklist command");
   assertFormalSmokeCommand(payload.formalSmokeCommand || "", "formal smoke command");
+  assertMacClientBrowserSelfTestCommand(
+    payload.macClientBrowserSelfTestCommand || "",
+    "Mac client browser self-test command",
+  );
   assert(payload.manualChecklistSummary === "connection/video/audio/clipboard/input_ack/diagnostics", "found payload should include manual checklist summary");
   assertIncludes(payload.sendCallCommand, "--host 192.168.31.68", "send call command");
   assertIncludes(payload.sendCallCommand, "--sendCall", "send call command");
@@ -194,6 +222,11 @@ function checkFoundJson(tmp, args) {
   assertIncludes(payload.boardSummary, "FormalSmoke=", "board summary");
   assertFormalSmokeCommand(extractFormalSmokeCommand(payload.boardSummary, "board summary"), "board summary formal smoke command");
   assertIncludes(payload.boardSummary, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "board summary");
+  assertIncludes(payload.boardSummary, "MacClientBrowserSelfTest=", "board summary");
+  assertMacClientBrowserSelfTestCommand(
+    extractMacClientBrowserSelfTestCommand(payload.boardSummary, "board summary"),
+    "board summary Mac client browser self-test command",
+  );
   assertIncludes(payload.boardSummary, "No password was requested or sent", "board summary");
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "found output");
   console.log("[OK] JSON discovery filters Windows hosts and returns next formal command");
@@ -210,6 +243,11 @@ function checkBoardSummaryFound(tmp, args) {
   assertIncludes(result.stdout, "FormalSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.68", "found board summary");
   assertFormalSmokeCommand(extractFormalSmokeCommand(result.stdout, "found board summary"), "found board summary formal smoke command");
   assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "found board summary");
+  assertIncludes(result.stdout, "MacClientBrowserSelfTest=", "found board summary");
+  assertMacClientBrowserSelfTestCommand(
+    extractMacClientBrowserSelfTestCommand(result.stdout, "found board summary"),
+    "found board summary Mac client browser self-test command",
+  );
   assertIncludes(result.stdout, "--sendCall", "found board summary");
   assertIncludes(result.stdout, "no WebSocket/input/inject", "found board summary");
   console.log("[OK] Board summary gives a secret-free next step when Windows host is found");
@@ -222,9 +260,13 @@ function checkPlainFound(tmp, args) {
   });
   assert(result.status === 0, `found plain output should exit 0.\n${result.stdout}\n${result.stderr}`);
   assertIncludes(result.stdout, "Formal smoke preflight:", "found plain output");
+  assertIncludes(result.stdout, "Mac client browser self-test:", "found plain output");
   const match = String(result.stdout || "").match(/Formal smoke preflight: ([^\n]+)/);
   assert(match, `found plain output should include formal smoke command line.\n${result.stdout}`);
   assertFormalSmokeCommand(match[1], "found plain output formal smoke command");
+  const selfTestMatch = String(result.stdout || "").match(/Mac client browser self-test: ([^\n]+)/);
+  assert(selfTestMatch, `found plain output should include self-test command line.\n${result.stdout}`);
+  assertMacClientBrowserSelfTestCommand(selfTestMatch[1], "found plain output Mac client browser self-test command");
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "found plain output");
   console.log("[OK] Plain discovery output includes the formal smoke preflight command");
 }
@@ -241,6 +283,15 @@ function checkNoneRequireFound(tmp, args) {
   assert(payload.ignored.length === 1, "none payload should include ignored Mac host");
   assertIncludes(payload.boardSummary, "no Windows host found", "none board summary");
   assertIncludes(payload.boardSummary, "Ask Windows Codex to start Windows host", "none board summary");
+  assertIncludes(payload.boardSummary, "MacClientBrowserSelfTest=", "none board summary");
+  assertMacClientBrowserSelfTestCommand(
+    payload.macClientBrowserSelfTestCommand || "",
+    "none JSON Mac client browser self-test command",
+  );
+  assertMacClientBrowserSelfTestCommand(
+    extractMacClientBrowserSelfTestCommand(payload.boardSummary, "none board summary"),
+    "none board summary Mac client browser self-test command",
+  );
   console.log("[OK] Missing Windows host fails only when required and explains next step");
 }
 

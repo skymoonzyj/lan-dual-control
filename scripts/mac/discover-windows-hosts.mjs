@@ -57,6 +57,10 @@ Machine-readable JSON fields:
                            command. It can start/reuse the local Mac client
                            page, but does not authenticate, prompt for a
                            password, send a call, or send input.
+  macClientBrowserSelfTestCommand
+                           Secret-free local Mac client browser self-test. It
+                           uses a temporary mock Windows host and does not use
+                           a real host, password, call, or inject.
   manualChecklistSummary   Human true-test checklist order:
                            ${manualChecklistSummary}.
 `);
@@ -217,6 +221,10 @@ function formalSmokeCommand(item) {
   return `node scripts/mac/run-mac-client-formal-smoke.mjs --host ${item.host} --port ${item.port} --ensureClient --preflightOnly --boardSummary`;
 }
 
+function macClientBrowserSelfTestCommand() {
+  return "node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard --boardSummary --progressIntervalMs 0";
+}
+
 function sendCallCommand(item) {
   return `node scripts/mac/check-mac-client-formal-status.mjs --host ${item.host} --port ${item.port} --sendCall`;
 }
@@ -237,6 +245,7 @@ function buildReport(scan, args) {
     nextCommand: best ? readinessCommand(best) : "",
     formalChecklistCommand: best ? readinessCommand(best) : "",
     formalSmokeCommand: best ? formalSmokeCommand(best) : "",
+    macClientBrowserSelfTestCommand: macClientBrowserSelfTestCommand(),
     manualChecklistSummary,
     sendCallCommand: best ? sendCallCommand(best) : "",
     boardSummary: "",
@@ -247,12 +256,12 @@ function buildReport(scan, args) {
 
 function makeBoardSummary(report) {
   if (report.best) {
-    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}. FormalChecklist=${report.formalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}. FormalChecklist=${report.formalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
   }
   const ignored = report.ignored.length > 0
     ? ` Saw ${report.ignored.length} non-Windows host(s), likely Mac/self.`
     : "";
-  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
 }
 
 function printText(report, args) {
@@ -265,6 +274,7 @@ function printText(report, args) {
     console.log(`[INFO] Formal checklist: ${report.formalChecklistCommand}`);
     console.log(`[INFO] Formal smoke preflight: ${report.formalSmokeCommand}`);
     console.log(`[INFO] Manual checklist: ${report.manualChecklistSummary}`);
+    console.log(`[INFO] Mac client browser self-test: ${report.macClientBrowserSelfTestCommand}`);
     console.log(`[INFO] Ready call: ${report.sendCallCommand}`);
   } else {
     console.log("[WARN] No Windows LAN dual-control host was found.");
@@ -274,6 +284,7 @@ function printText(report, args) {
       }
     }
     console.log("[INFO] Ask Windows Codex to start Windows host, then rerun this discovery or check-mac-client-formal-status with the Windows IP.");
+    console.log(`[INFO] Mac client browser self-test: ${report.macClientBrowserSelfTestCommand}`);
   }
   if (args.verbose && Array.isArray(report.subnets)) {
     for (const subnet of report.subnets) {
