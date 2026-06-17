@@ -223,6 +223,27 @@ async function checkGatewayEventAlerts(args) {
   console.log("[OK] 502/Bad Gateway events alert");
 }
 
+async function checkReverseGrantEventAlerts(args) {
+  const output = await runWatcherAgainst(baseState({
+    events: [{
+      id: "reverse-grant",
+      at: new Date().toISOString(),
+      type: "message",
+      from: "Mac Codex",
+      text: [
+        "Mac 反控请求收到 LAN008；请 Windows 本机运行",
+        "ReverseGrant=node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary",
+        "后让 Mac 重试反控。",
+      ].join(" "),
+    }],
+  }), ["-AlertExistingEvents"], args);
+  assertIncludes(output, "ALERT:", "reverse grant event");
+  assertIncludes(output, "LAN008", "reverse grant event");
+  assertIncludes(output, "ReverseGrant=", "reverse grant event");
+  assertIncludes(output, "allow-windows-reverse-control.mjs", "reverse grant event");
+  console.log("[OK] Mac reverse-control grant events alert");
+}
+
 async function checkNonMacEventIgnored(args) {
   const output = await runWatcherAgainst(baseState({
     events: [{
@@ -324,6 +345,22 @@ async function checkStaleStatusAlerts(args) {
   console.log("[OK] Stale Mac status alerts");
 }
 
+async function checkReverseGrantStatusAlerts(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "waiting",
+        note: "等待 Windows 临时允许反控后重试。",
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "reverse grant status");
+  assertIncludes(output, "临时允许反控", "reverse grant status");
+  console.log("[OK] Mac reverse-control grant status alerts");
+}
+
 async function checkStartWrapperLifecycle(args) {
   const basePath = resolve(repoRoot, ".dev-lab", `mac-alert-watcher-test-${process.pid}-${Date.now()}`);
   const pidFile = `${basePath}.pid`;
@@ -408,12 +445,14 @@ async function main() {
   await checkUrgentEventAlerts(args);
   await checkChinesePermissionEventAlerts(args);
   await checkGatewayEventAlerts(args);
+  await checkReverseGrantEventAlerts(args);
   await checkNonMacEventIgnored(args);
   await checkMacCallForWindowsAlerts(args);
   await checkDoneMacCallIgnored(args);
   await checkWindowsCallForMacIgnored(args);
   await checkBlockedStatusAlerts(args);
   await checkStaleStatusAlerts(args);
+  await checkReverseGrantStatusAlerts(args);
   if (args.includeLifecycle) {
     await checkStartWrapperLifecycle(args);
   }

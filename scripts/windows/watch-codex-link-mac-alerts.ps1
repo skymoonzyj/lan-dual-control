@@ -39,6 +39,11 @@ $cnNetwork = ConvertFrom-CodePoints @(0x7f51, 0x7edc)
 $cnRequest = ConvertFrom-CodePoints @(0x8bf7, 0x6c42)
 $cnInterface = ConvertFrom-CodePoints @(0x63a5, 0x53e3)
 $cnTimeout = ConvertFrom-CodePoints @(0x8d85, 0x65f6)
+$cnReverseControl = ConvertFrom-CodePoints @(0x53cd, 0x63a7)
+$cnTemporary = ConvertFrom-CodePoints @(0x4e34, 0x65f6)
+$cnAllow = ConvertFrom-CodePoints @(0x5141, 0x8bb8)
+$cnRetry = ConvertFrom-CodePoints @(0x91cd, 0x8bd5)
+$cnOneTime = ConvertFrom-CodePoints @(0x4e00, 0x6b21, 0x6027)
 
 $urgentPatterns = @(
     "NEED_USER_AUTH",
@@ -49,6 +54,14 @@ $urgentPatterns = @(
     "\b(HTTP\s*)?502\b",
     "Bad Gateway",
     "Gateway Timeout",
+    "\bLAN008\b",
+    "ReverseGrant",
+    "allow-windows-reverse-control",
+    "reverse_control_request",
+    "reverse_control_response",
+    "reverse grant",
+    "one-time reverse",
+    "temporary reverse",
     "permission",
     "authorization",
     "authorize"
@@ -89,7 +102,12 @@ function Test-UrgentText {
         (Test-ContainsPair -Text $Text -Left $cnPermission -Right $cnFailed) -or
         (Test-ContainsPair -Text $Text -Left $cnNetwork -Right $cnFailed) -or
         (Test-ContainsPair -Text $Text -Left $cnRequest -Right $cnTimeout) -or
-        (Test-ContainsPair -Text $Text -Left $cnInterface -Right $cnTimeout)) {
+        (Test-ContainsPair -Text $Text -Left $cnInterface -Right $cnTimeout) -or
+        (Test-ContainsPair -Text $Text -Left $cnReverseControl -Right $cnTemporary) -or
+        (Test-ContainsPair -Text $Text -Left $cnReverseControl -Right $cnAllow) -or
+        (Test-ContainsPair -Text $Text -Left $cnReverseControl -Right $cnRequest) -or
+        (Test-ContainsPair -Text $Text -Left $cnReverseControl -Right $cnRetry) -or
+        (Test-ContainsPair -Text $Text -Left $cnReverseControl -Right $cnOneTime)) {
         return $true
     }
     return $false

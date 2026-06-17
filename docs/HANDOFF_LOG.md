@@ -19,6 +19,37 @@
 
 ## 2026-06-17 Windows Codex
 
+日期：2026-06-17 11:37
+开发端：Windows Codex
+本轮目标：补强 Windows 本机 Agent Link watcher，让 Mac 端等待反控临时授权时也能弹 Windows 本机提醒。
+完成内容：
+- `watch-codex-link-mac-alerts.ps1` 的 urgent 规则新增 `LAN008`、`ReverseGrant`、`allow-windows-reverse-control`、`reverse_control_request/response` 和中英文反控授权等待关键词。
+- watcher 现在会在 Mac 消息或 Mac 状态里看到“临时允许反控 / 重试反控”等文字时提醒 Windows，适合 Mac client 请求反控被默认 `LAN008` 安全拒绝后提示 Windows 打开一次性授权。
+- `test-mac-alert-watcher` 新增 fake Agent Link Board 回归，覆盖 Mac 反控授权消息和 Mac waiting 状态提醒，并继续确认非 Mac 事件不误报。
+- 当前状态、下一步、任务板和联络板说明已同步。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/LAN_CODEX_LINK.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- PowerShell 7 AST 语法解析 `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `node scripts/windows/test-windows-script-help.mjs --script test-mac-alert-watcher.mjs --timeoutMs 10000`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 30000`
+遗留问题：
+- 这轮只增强联络板提醒器，不启动真实 Windows host、不认证、不发送密码、不发送输入、不执行 inject。
+下一步建议：
+- 后续 Mac 端发起反控演练时，如果 Mac 状态或消息写出 `LAN008` / `ReverseGrant`，Windows watcher 后台运行即可弹本机提醒；Windows 端再按摘要里的 `allow-windows-reverse-control` 或桌面按钮打开一次性授权，让 Mac 重试。
+是否改了协议：否。
+是否需要另一端配合：真实闭环仍需要 Mac 端发起反控请求；本轮自测不需要另一端配合。
+
+## 2026-06-17 Windows Codex
+
 日期：2026-06-17 11:27
 开发端：Windows Codex
 本轮目标：让 Windows 恢复开工总览也直接提示本机一次性反控授权命令，方便明天接着做 Mac 反控 Windows 联调。
