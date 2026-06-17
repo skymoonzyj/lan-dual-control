@@ -536,6 +536,14 @@ function formatInputStatusDetail(diagnostics = state.hostDiagnostics) {
   return parts.join(" / ");
 }
 
+function getInputExportStatus() {
+  if (state.connected && state.controlDirection === "mac_to_windows") {
+    return "暂停（当前由 Mac 控制）";
+  }
+  const detail = formatInputStatusDetail();
+  return `${state.inputEvents}${detail ? `（${detail}）` : ""}`;
+}
+
 function updateInputStatus() {
   if (state.connected && state.controlDirection === "mac_to_windows") {
     elements.inputText.textContent = "输入事件：暂停（当前由 Mac 控制）";
@@ -2903,6 +2911,7 @@ function buildDiagnosticsQuickSummary({
   remoteFileExport,
   audioExport,
   floatingControlExport,
+  inputExport,
 }) {
   const reconnectParts = [reconnectExport.status];
   if (reconnectExport.reason && reconnectExport.reason !== "-") {
@@ -2916,6 +2925,7 @@ function buildDiagnosticsQuickSummary({
     `- 重连：${reconnectParts.join(" · ")}`,
     `- 远端文件：${remoteFileExport.summary}`,
     `- 声音：${audioExport.summary}`,
+    `- 输入：${inputExport}`,
     `- 全屏浮层：${floatingControlExport.mode} · ${floatingControlExport.connection} · ${floatingControlExport.video}`,
     `- 本机协作：Mac 提醒 ${macAlertWatcherExport.status} · 本机被控 ${localHostExport.status} · 反控 ${localHostExport.reverseControlMode}`,
     `- 画质请求：${getResolutionExportLabel(settings)} · ${settings.fps} Hz · ${Math.round(settings.maxBandwidthKbps / 1000)} Mbps · 声音${settings.audio ? "开" : "关"}`,
@@ -2937,6 +2947,7 @@ function buildLogExportText() {
   const remoteFileExport = getRemoteFileTransferExportStatus();
   const audioExport = getAudioExportStatus();
   const floatingControlExport = getFloatingControlExportStatus();
+  const inputExport = getInputExportStatus();
   const resolutionLabel = getResolutionExportLabel(settings);
   const eventLines = state.logEntries
     .slice()
@@ -2966,6 +2977,7 @@ function buildLogExportText() {
       remoteFileExport,
       audioExport,
       floatingControlExport,
+      inputExport,
     }),
     "",
     "连接状态",
@@ -3029,7 +3041,7 @@ function buildLogExportText() {
     `- Windows 快捷键兼容：${elements.shortcutCompatToggle.checked ? "开启" : "关闭"}`,
     "",
     "运行统计",
-    `- 输入事件：${elements.inputText.textContent.replace(/^输入事件：/, "") || state.inputEvents}`,
+    `- 输入事件：${inputExport}`,
     `- 视频帧：${state.videoFrames}`,
     `- 音频帧：${state.audioFrames}`,
     `- 重连次数：${state.reconnectAttempts}/${maxReconnectAttempts}`,

@@ -21,6 +21,39 @@
 
 日期：2026-06-18 夜间
 开发端：Windows Codex
+本轮目标：让 Windows 控 Mac 复制诊断快速摘要直接写出输入模式/注入状态，方便定位“已连接但不能点击”。
+完成内容：
+- 复制/导出的诊断报告快速摘要新增“输入”一行，记录输入事件数量以及安全日志/真实控制/模拟/等待认证等输入模式。
+- 运行统计里的“输入事件”改为同一份状态来源，会带 `input_ack` 的已记录、已注入或被拒绝错误码。
+- 页面 diagnostics-only 自检在重连导出场景里模拟 `inputMode=log` + `inputAckStatus=logged`，确认导出和复制文本包含“安全日志，不会真正控制 / 已记录”。
+- Windows 控制端 README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps\windows-client scripts\windows docs`
+遗留问题：
+- 夜间只做无授权页面自检，不连接真实 Mac、不认证、不发送密码/input/inject；真实点击控制仍需用户在场时按正式流程验收。
+下一步建议：
+- 现场看到“连上但不能点”时，先复制诊断；若快速摘要显示“输入：...（安全日志，不会真正控制 / 已记录）”，说明链路收到了输入但 Mac host 仍在安全日志模式，需要按用户确认流程切换真实注入。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 夜间
+开发端：Windows Codex
 本轮目标：让 Windows 控 Mac 复制诊断报告直接写出普通声音接收/播放状态，方便定位听不到声音。
 完成内容：
 - 复制/导出的诊断报告快速摘要新增“声音”一行，记录关闭/等待音频/已接收等待播放/正在播放/播放失败、音量、接收帧、播放帧和丢帧。

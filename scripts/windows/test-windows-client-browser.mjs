@@ -2819,6 +2819,9 @@ async function verifyReconnectControls(session) {
       const originalAudioPlayedFrames = state.audioPlayedFrames;
       const originalAudioDroppedFrames = state.audioDroppedFrames;
       const originalAudioLastError = state.audioLastError;
+      const originalInputEvents = state.inputEvents;
+      const originalHostDiagnostics = { ...(state.hostDiagnostics || {}) };
+      const originalControlDirection = state.controlDirection;
       const calls = [];
       let copiedText = "";
 
@@ -2901,8 +2904,17 @@ async function verifyReconnectControls(session) {
         state.audioPlayedFrames = 0;
         state.audioDroppedFrames = 2;
         state.audioLastError = "";
-
         scheduleReconnect("测试断线");
+        state.inputEvents = 7;
+        state.controlDirection = "windows_to_mac";
+        state.hostDiagnostics = {
+          ...(state.hostDiagnostics || {}),
+          inputMode: "log",
+          inputAckStatus: "logged",
+          inputAckCode: "",
+          inputAckReason: "",
+        };
+        if (typeof updateInputStatus === "function") updateInputStatus();
         const exportText = typeof buildLogExportText === "function" ? buildLogExportText() : "";
         const exportChecks = {
           quickSummarySection: exportText.includes("\\n快速摘要\\n"),
@@ -2918,6 +2930,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("接收 24 帧") &&
             exportText.includes("播放 0") &&
             exportText.includes("丢 2"),
+          quickSummaryInput: exportText.includes("- 输入：7（安全日志，不会真正控制 / 已记录）"),
           quickSummaryFloating:
             exportText.includes("- 全屏浮层：窗口") &&
             exportText.includes("连接：") &&
@@ -2965,6 +2978,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("丢 2"),
           audioLevel: exportText.includes("- 声音电平：37%"),
           audioError: exportText.includes("- 声音错误：-"),
+          runtimeInput: exportText.includes("- 输入事件：7（安全日志，不会真正控制 / 已记录）"),
           remoteFileStatus:
             exportText.includes("- 远端文件状态：warning") && exportText.includes("远端文件接收超时"),
           remoteFileActive:
@@ -2984,6 +2998,8 @@ async function verifyReconnectControls(session) {
           copiedText.includes("- Mac 提醒：提醒中") &&
           copiedText.includes("- 全屏浮层连接：连接：") &&
           copiedText.includes("- 全屏浮层视频：视频：") &&
+          copiedText.includes("- 输入：7（安全日志，不会真正控制 / 已记录）") &&
+          copiedText.includes("- 输入事件：7（安全日志，不会真正控制 / 已记录）") &&
           copiedText.includes("- 声音状态：已接收，等待播放") &&
           copiedText.includes("- 声音电平：37%") &&
           copiedText.includes("- 远端文件状态：warning") &&
@@ -3071,6 +3087,10 @@ async function verifyReconnectControls(session) {
         state.audioPlayedFrames = originalAudioPlayedFrames;
         state.audioDroppedFrames = originalAudioDroppedFrames;
         state.audioLastError = originalAudioLastError;
+        state.inputEvents = originalInputEvents;
+        state.hostDiagnostics = originalHostDiagnostics;
+        state.controlDirection = originalControlDirection;
+        if (typeof updateInputStatus === "function") updateInputStatus();
         state.logEntries = originalLogEntries;
         if (eventLog) eventLog.innerHTML = originalEventLogHtml;
         window.__TAURI__ = originalTauri;
