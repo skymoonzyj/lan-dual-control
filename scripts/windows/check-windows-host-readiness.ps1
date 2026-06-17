@@ -81,6 +81,7 @@ Options:
 
 Status summaries include:
   WindowsHostMedia=node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
+  WindowsHostMediaPs=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary
   WindowsVideoSupport=node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
   WindowsVideoSupportPs=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-video-encoder-support.ps1 -BoardSummary
   WindowsWgcBenchmark=node scripts/windows/benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary

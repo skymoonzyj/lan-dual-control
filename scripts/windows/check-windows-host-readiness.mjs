@@ -511,6 +511,10 @@ function windowsReverseControlGrantPowerShellCommand(port = defaults.port) {
   return `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port ${safePort} -DurationMs 30000 -BoardSummary`;
 }
 
+function windowsHostMediaReadinessPowerShellCommand() {
+  return "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary";
+}
+
 function windowsVideoEncoderSupportCommand() {
   return "node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary";
 }
@@ -627,6 +631,7 @@ async function checkRunningHostRuntime(args) {
         summary: args.requireOpen ? message : "Windows host is not running; runtime check skipped",
         boardSummary: statusPayload.boardSummary || "",
         macClientReadinessCommands: statusPayload.macClientReadinessCommands || [],
+        windowsHostMediaReadinessPowerShellCommand: statusPayload.windowsHostMediaReadinessPowerShellCommand || windowsHostMediaReadinessPowerShellCommand(),
         windowsReverseControlGrantCommand: statusPayload.windowsReverseControlGrantCommand || windowsReverseControlGrantCommand(args.port),
         windowsReverseControlGrantPowerShellCommand: statusPayload.windowsReverseControlGrantPowerShellCommand || windowsReverseControlGrantPowerShellCommand(args.port),
         windowsVideoEncoderSupportCommand: statusPayload.windowsVideoEncoderSupportCommand || windowsVideoEncoderSupportCommand(),
@@ -686,6 +691,7 @@ async function checkRunningHostRuntime(args) {
       summary,
       boardSummary: statusPayload.boardSummary || "",
       macClientReadinessCommands: statusPayload.macClientReadinessCommands || [],
+      windowsHostMediaReadinessPowerShellCommand: statusPayload.windowsHostMediaReadinessPowerShellCommand || windowsHostMediaReadinessPowerShellCommand(),
       windowsReverseControlGrantCommand: statusPayload.windowsReverseControlGrantCommand || windowsReverseControlGrantCommand(args.port),
       windowsReverseControlGrantPowerShellCommand: statusPayload.windowsReverseControlGrantPowerShellCommand || windowsReverseControlGrantPowerShellCommand(args.port),
       windowsVideoEncoderSupportCommand: statusPayload.windowsVideoEncoderSupportCommand || windowsVideoEncoderSupportCommand(),
@@ -708,6 +714,7 @@ async function checkRunningHostRuntime(args) {
       summary: args.requireOpen ? message : "Windows host is not running; runtime check skipped",
       boardSummary: "",
       macClientReadinessCommands: [],
+      windowsHostMediaReadinessPowerShellCommand: windowsHostMediaReadinessPowerShellCommand(),
       windowsReverseControlGrantCommand: windowsReverseControlGrantCommand(args.port),
       windowsReverseControlGrantPowerShellCommand: windowsReverseControlGrantPowerShellCommand(args.port),
       windowsVideoEncoderSupportCommand: windowsVideoEncoderSupportCommand(),
@@ -749,6 +756,10 @@ function makeReadinessBoardSummary(summary) {
   const reverseGrantPowerShell = summary.windowsReverseControlGrantPowerShellCommand && !runtimeText.includes("ReverseGrantPs=")
     ? ` ReverseGrantPs=${summary.windowsReverseControlGrantPowerShellCommand}.`
     : "";
+  const hostMediaPowerShell = summary.windowsHostMediaReadinessPowerShellCommand
+    && (!runtimeText.includes("WindowsHostMediaPs=") || !runtimeText.includes(summary.windowsHostMediaReadinessPowerShellCommand))
+    ? ` WindowsHostMediaPs=${summary.windowsHostMediaReadinessPowerShellCommand}.`
+    : "";
   const videoSupport = summary.windowsVideoEncoderSupportCommand && !runtimeText.includes("WindowsVideoSupport=")
     ? ` WindowsVideoSupport=${summary.windowsVideoEncoderSupportCommand}.`
     : "";
@@ -771,7 +782,7 @@ function makeReadinessBoardSummary(summary) {
   const probeText = probeSentences
     .map((sentence) => (sentence.endsWith(".") ? sentence : `${sentence}.`))
     .join(" ");
-  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrant}${reverseGrantPowerShell}${videoSupport}${videoSupportPowerShell}${wgcBenchmark}${wgcBenchmarkPowerShell}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
+  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrant}${reverseGrantPowerShell}${hostMediaPowerShell}${videoSupport}${videoSupportPowerShell}${wgcBenchmark}${wgcBenchmarkPowerShell}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
 }
 
 function formatMediaBoardSummary(summary) {
@@ -1205,6 +1216,9 @@ async function main() {
   const macClientReadinessCommands = results.flatMap((result) =>
     Array.isArray(result.macClientReadinessCommands) ? result.macClientReadinessCommands : [],
   );
+  const windowsHostMediaReadinessPowerShellCommandValue = results.find((result) =>
+    typeof result.windowsHostMediaReadinessPowerShellCommand === "string" && result.windowsHostMediaReadinessPowerShellCommand,
+  )?.windowsHostMediaReadinessPowerShellCommand || windowsHostMediaReadinessPowerShellCommand();
   const windowsReverseControlGrantCommandValue = results.find((result) =>
     typeof result.windowsReverseControlGrantCommand === "string" && result.windowsReverseControlGrantCommand,
   )?.windowsReverseControlGrantCommand || windowsReverseControlGrantCommand(args.port);
@@ -1255,6 +1269,7 @@ async function main() {
     failed: failed.length,
     warnings: warnings.length,
     macClientReadinessCommands,
+    windowsHostMediaReadinessPowerShellCommand: windowsHostMediaReadinessPowerShellCommandValue,
     windowsReverseControlGrantCommand: windowsReverseControlGrantCommandValue,
     windowsReverseControlGrantPowerShellCommand: windowsReverseControlGrantPowerShellCommandValue,
     windowsVideoEncoderSupportCommand: windowsVideoEncoderSupportCommandValue,
@@ -1272,6 +1287,7 @@ async function main() {
       macClientReadinessCommands: Array.isArray(result.macClientReadinessCommands)
         ? result.macClientReadinessCommands
         : [],
+      windowsHostMediaReadinessPowerShellCommand: result.windowsHostMediaReadinessPowerShellCommand || "",
       windowsReverseControlGrantCommand: result.windowsReverseControlGrantCommand || "",
       windowsReverseControlGrantPowerShellCommand: result.windowsReverseControlGrantPowerShellCommand || "",
       windowsVideoEncoderSupportCommand: result.windowsVideoEncoderSupportCommand || "",

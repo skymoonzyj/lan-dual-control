@@ -234,6 +234,8 @@ async function assertPowerShellWrapperHelp(timeoutMs) {
     assertIncludes(output, "-Status -CheckBoard -BoardSummary", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "WindowsHostMedia=", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "WindowsHostMediaPs=", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "WindowsVideoSupport=", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "check-windows-video-encoder-support.mjs --boardSummary", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "WindowsVideoSupportPs=", `PowerShell wrapper ${helpArg}`);
@@ -355,6 +357,9 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   if (!String(parsed.windowsHostMediaReadinessCommand || "").includes("check-windows-host-readiness.mjs") || !String(parsed.windowsHostMediaReadinessCommand || "").includes("--probeMedia")) {
     throw new Error(`Offline JSON status did not include Windows host media readiness command.\n${jsonResult.stdout}`);
   }
+  if (!String(parsed.windowsHostMediaReadinessPowerShellCommand || "").includes("check-windows-host-readiness.ps1") || !String(parsed.windowsHostMediaReadinessPowerShellCommand || "").includes("-ProbeMedia") || !String(parsed.windowsHostMediaReadinessPowerShellCommand || "").includes("-BoardSummary")) {
+    throw new Error(`Offline JSON status did not include Windows host media readiness PowerShell command.\n${jsonResult.stdout}`);
+  }
   if (!String(parsed.windowsVideoEncoderSupportCommand || "").includes("check-windows-video-encoder-support.mjs") || !String(parsed.windowsVideoEncoderSupportCommand || "").includes("--boardSummary")) {
     throw new Error(`Offline JSON status did not include Windows video support command.\n${jsonResult.stdout}`);
   }
@@ -375,6 +380,9 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   }
   if (!String(parsed.boardSummary || "").includes("WindowsHostMedia=")) {
     throw new Error(`Offline JSON board summary did not include WindowsHostMedia command.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.boardSummary || "").includes("WindowsHostMediaPs=") || !String(parsed.boardSummary || "").includes("check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary")) {
+    throw new Error(`Offline JSON board summary did not include WindowsHostMediaPs command.\n${jsonResult.stdout}`);
   }
   if (!String(parsed.boardSummary || "").includes("WindowsVideoSupport=") || !String(parsed.boardSummary || "").includes("check-windows-video-encoder-support.mjs --boardSummary")) {
     throw new Error(`Offline JSON board summary did not include WindowsVideoSupport command.\n${jsonResult.stdout}`);
@@ -403,6 +411,8 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   assertIncludes(boardResult.stdout, "start safely", "offline board summary");
   assertIncludes(boardResult.stdout, "WindowsHostMedia=", "offline board summary");
   assertIncludes(boardResult.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "offline board summary");
+  assertIncludes(boardResult.stdout, "WindowsHostMediaPs=", "offline board summary");
+  assertIncludes(boardResult.stdout, "check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary", "offline board summary");
   assertIncludes(boardResult.stdout, "WindowsVideoSupport=", "offline board summary");
   assertIncludes(boardResult.stdout, "check-windows-video-encoder-support.mjs --boardSummary", "offline board summary");
   assertIncludes(boardResult.stdout, "WindowsVideoSupportPs=", "offline board summary");
@@ -656,6 +666,9 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         if (!String(parsed.windowsHostMediaReadinessCommand || "").includes("check-windows-host-readiness.mjs") || !String(parsed.windowsHostMediaReadinessCommand || "").includes("--probeMedia")) {
           throw new Error(`Online JSON status did not include Windows host media readiness command.\n${jsonResult.stdout}`);
         }
+        if (!String(parsed.windowsHostMediaReadinessPowerShellCommand || "").includes("check-windows-host-readiness.ps1") || !String(parsed.windowsHostMediaReadinessPowerShellCommand || "").includes("-ProbeMedia") || !String(parsed.windowsHostMediaReadinessPowerShellCommand || "").includes("-BoardSummary")) {
+          throw new Error(`Online JSON status did not include Windows host media readiness PowerShell command.\n${jsonResult.stdout}`);
+        }
         if (!String(parsed.windowsVideoEncoderSupportCommand || "").includes("check-windows-video-encoder-support.mjs") || !String(parsed.windowsVideoEncoderSupportCommand || "").includes("--boardSummary")) {
           throw new Error(`Online JSON status did not include Windows video support command.\n${jsonResult.stdout}`);
         }
@@ -676,6 +689,9 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         }
         if (!String(parsed.boardSummary || "").includes("WindowsHostMedia=")) {
           throw new Error(`Online JSON board summary did not include WindowsHostMedia command.\n${jsonResult.stdout}`);
+        }
+        if (!String(parsed.boardSummary || "").includes("WindowsHostMediaPs=") || !String(parsed.boardSummary || "").includes("check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary")) {
+          throw new Error(`Online JSON board summary did not include WindowsHostMediaPs command.\n${jsonResult.stdout}`);
         }
         if (!String(parsed.boardSummary || "").includes("WindowsVideoSupport=") || !String(parsed.boardSummary || "").includes("check-windows-video-encoder-support.mjs --boardSummary")) {
           throw new Error(`Online JSON board summary did not include WindowsVideoSupport command.\n${jsonResult.stdout}`);
@@ -716,6 +732,8 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         assertIncludes(boardResult.stdout, "--sendCall", "online board summary");
         assertIncludes(boardResult.stdout, "WindowsHostMedia=", "online board summary");
         assertIncludes(boardResult.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "online board summary");
+        assertIncludes(boardResult.stdout, "WindowsHostMediaPs=", "online board summary");
+        assertIncludes(boardResult.stdout, "check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary", "online board summary");
         assertIncludes(boardResult.stdout, "WindowsVideoSupport=", "online board summary");
         assertIncludes(boardResult.stdout, "check-windows-video-encoder-support.mjs --boardSummary", "online board summary");
         assertIncludes(boardResult.stdout, "WindowsVideoSupportPs=", "online board summary");

@@ -502,6 +502,8 @@ async function main() {
     assert(powerShellHelp.stdout.includes("-CheckBoard -BoardSummary"), `PowerShell readiness ${helpArg} does not mention board summary`);
     assert(powerShellHelp.stdout.includes("-Profile deploy"), `PowerShell readiness ${helpArg} does not mention deploy profile`);
     assert(powerShellHelp.stdout.includes("-ProbeMedia"), `PowerShell readiness ${helpArg} does not mention media probe`);
+    assert(powerShellHelp.stdout.includes("WindowsHostMediaPs="), `PowerShell readiness ${helpArg} does not mention WindowsHostMediaPs`);
+    assert(powerShellHelp.stdout.includes("check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary"), `PowerShell readiness ${helpArg} does not mention media PowerShell command`);
     assert(powerShellHelp.stdout.includes("WindowsWgcBenchmark="), `PowerShell readiness ${helpArg} does not mention WindowsWgcBenchmark`);
     assert(powerShellHelp.stdout.includes("benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary"), `PowerShell readiness ${helpArg} does not mention benchmark command`);
     assert(powerShellHelp.stdout.includes("WindowsVideoSupportPs="), `PowerShell readiness ${helpArg} does not mention WindowsVideoSupportPs`);
@@ -591,6 +593,13 @@ async function main() {
     "JSON windowsReverseControlGrantPowerShellCommand is missing",
   );
   assert(
+    typeof jsonSummary.windowsHostMediaReadinessPowerShellCommand === "string"
+      && jsonSummary.windowsHostMediaReadinessPowerShellCommand.includes("check-windows-host-readiness.ps1")
+      && jsonSummary.windowsHostMediaReadinessPowerShellCommand.includes("-ProbeMedia")
+      && jsonSummary.windowsHostMediaReadinessPowerShellCommand.includes("-BoardSummary"),
+    "JSON windowsHostMediaReadinessPowerShellCommand is missing",
+  );
+  assert(
     typeof jsonSummary.windowsVideoEncoderSupportCommand === "string"
       && jsonSummary.windowsVideoEncoderSupportCommand.includes("check-windows-video-encoder-support.mjs")
       && jsonSummary.windowsVideoEncoderSupportCommand.includes("--boardSummary"),
@@ -625,6 +634,11 @@ async function main() {
   assert(jsonSummary.board?.currentCall?.active === true, "JSON board currentCall should be active");
   assert(jsonSummary.board?.currentCall?.needsWindows === true, "JSON board currentCall should need Windows");
   assert(jsonSummary.boardSummary.includes("call=CALLING Mac Codex->Windows Codex"), "JSON boardSummary should include active currentCall");
+  assert(jsonSummary.boardSummary.includes("WindowsHostMediaPs="), "JSON boardSummary should include Windows host media PowerShell command");
+  assert(
+    jsonSummary.boardSummary.includes("check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary"),
+    "JSON boardSummary should include the runnable Windows host media PowerShell command",
+  );
   assert(jsonSummary.boardSummary.includes("WindowsVideoSupport="), "JSON boardSummary should include Windows video support command");
   assert(
     jsonSummary.boardSummary.includes("check-windows-video-encoder-support.mjs --boardSummary"),
@@ -653,6 +667,11 @@ async function main() {
   assert(!jsonSummary.boardSummary.includes("--status --json"), "JSON boardSummary should not echo call command");
   assert(jsonSummary.results.some((result) => result.label === "Windows host runtime"), "JSON results missing runtime check");
   const runtimeResult = jsonSummary.results.find((result) => result.label === "Windows host runtime");
+  assert(
+    typeof runtimeResult?.windowsHostMediaReadinessPowerShellCommand === "string"
+      && runtimeResult.windowsHostMediaReadinessPowerShellCommand.includes("check-windows-host-readiness.ps1"),
+    "runtime result should carry Windows host media PowerShell command",
+  );
   assert(
     typeof runtimeResult?.windowsVideoEncoderSupportCommand === "string"
       && runtimeResult.windowsVideoEncoderSupportCommand.includes("check-windows-video-encoder-support.mjs"),
@@ -690,6 +709,12 @@ async function main() {
   assert(powerShellJsonSummary.args?.checkBoard === true, "PowerShell JSON args should record checkBoard");
   assert(typeof powerShellJsonSummary.boardSummary === "string" && powerShellJsonSummary.boardSummary.includes("Windows readiness"), "PowerShell JSON boardSummary is missing");
   assert(powerShellJsonSummary.boardSummary.includes("call=CALLING Mac Codex->Windows Codex"), "PowerShell JSON boardSummary should include active currentCall");
+  assert(powerShellJsonSummary.boardSummary.includes("WindowsHostMediaPs="), "PowerShell JSON boardSummary should include WindowsHostMediaPs");
+  assert(
+    typeof powerShellJsonSummary.windowsHostMediaReadinessPowerShellCommand === "string"
+      && powerShellJsonSummary.windowsHostMediaReadinessPowerShellCommand.includes("check-windows-host-readiness.ps1"),
+    "PowerShell JSON should include Windows host media PowerShell command",
+  );
   assert(powerShellJsonSummary.boardSummary.includes("WindowsVideoSupport="), "PowerShell JSON boardSummary should include WindowsVideoSupport");
   assert(powerShellJsonSummary.boardSummary.includes("WindowsVideoSupportPs="), "PowerShell JSON boardSummary should include WindowsVideoSupportPs");
   assert(
@@ -775,6 +800,11 @@ async function main() {
   assert(lines[0].includes("call=CALLING Mac Codex->Windows Codex"), "board summary is missing active currentCall");
   assert(!lines[0].includes("--status --json"), "board summary should not echo call command");
   assert(lines[0].includes("media=not-checked"), "board summary should show media=not-checked by default");
+  assert(lines[0].includes("WindowsHostMediaPs="), "board summary should include Windows host media PowerShell command");
+  assert(
+    lines[0].includes("check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary"),
+    "board summary should include the runnable Windows host media PowerShell command",
+  );
   assert(lines[0].includes("WindowsVideoSupport="), "board summary should include Windows video support command");
   assert(
     lines[0].includes("check-windows-video-encoder-support.mjs --boardSummary"),
@@ -806,6 +836,7 @@ async function main() {
   assert(powerShellBoardLines.length === 1, `PowerShell readiness -BoardSummary should print one line, got ${powerShellBoardLines.length}`);
   assert(powerShellBoardLines[0].includes("Windows readiness"), "PowerShell board summary has unexpected text");
   assert(powerShellBoardLines[0].includes("call=CALLING Mac Codex->Windows Codex"), "PowerShell board summary is missing active currentCall");
+  assert(powerShellBoardLines[0].includes("WindowsHostMediaPs="), "PowerShell board summary should include WindowsHostMediaPs");
   assert(powerShellBoardLines[0].includes("WindowsVideoSupport="), "PowerShell board summary should include WindowsVideoSupport");
   assert(powerShellBoardLines[0].includes("WindowsVideoSupportPs="), "PowerShell board summary should include WindowsVideoSupportPs");
   assert(powerShellBoardLines[0].includes("WindowsWgcBenchmark="), "PowerShell board summary should include WindowsWgcBenchmark");

@@ -21,6 +21,47 @@
 
 日期：2026-06-17 续跑
 开发端：Windows Codex
+本轮目标：把 Windows host 媒体基线的 PowerShell 命令补进 Windows host status/readiness 摘要。
+完成内容：
+- `start-windows-host --status` 的 JSON、普通输出、离线/在线 `--boardSummary` 和启动后 ready 输出新增 `windowsHostMediaReadinessPowerShellCommand` / `WindowsHostMediaPs=`，指向 `check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary`。
+- `check-windows-host-readiness` 的 JSON、PowerShell JSON 和 `--boardSummary` 新增同一条 `WindowsHostMediaPs=`，即使 runtime 摘要被压缩也会独立保留该入口。
+- `start-windows-host.ps1` 与 `check-windows-host-readiness.ps1` 的 `-Help/-h` 同步说明 `WindowsHostMediaPs=`，帮助路径仍不启动 host、不认证、不读取密码、不发送 input/inject。
+- Windows host README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `scripts/windows/check-windows-host-readiness.ps1`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/check-windows-host-readiness.mjs`
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- `node --check scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 120000 --readinessTimeoutMs 8000`
+- `node scripts/windows/test-windows-script-help.mjs --script start-windows-host.mjs --script check-windows-host-readiness.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-powershell-help.mjs --script start-windows-host.ps1 --script check-windows-host-readiness.ps1 --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/start-windows-host.mjs --status --checkBoard --boardSummary`（本机 43770 离线，按设计非 0，但输出确认包含 `WindowsHostMediaPs=` 且不启动 host）
+- `node scripts/windows/check-windows-host-readiness.mjs --checkBoard --boardSummary --timeoutMs 8000`
+遗留问题：
+- 本轮只暴露已有 PowerShell 媒体基线命令，没有实际启动 Windows host 或跑强校验 `-ProbeMedia`；真实视频/音频基线仍按现场需要执行 `WindowsHostMedia=` 或 `WindowsHostMediaPs=`。
+下一步建议：
+- Mac 控 Windows 前若只想确认本机 Windows host 状态，先发 `start-windows-host --status --checkBoard --boardSummary`；若要用现场 PowerShell 刷新本机视频/音频基线，复制其中 `WindowsHostMediaPs=`。
+是否改了协议：否。
+是否需要另一端配合：否；真实观感/资源对照时再通过 Agent Link Board 呼叫 Mac 端。
+
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
 本轮目标：把 Windows 视频能力体检的 PowerShell 命令补进 Windows host status/readiness 摘要。
 完成内容：
 - `start-windows-host --status` 的 JSON、普通输出、离线/在线 `--boardSummary` 和启动后 ready 输出新增 `windowsVideoEncoderSupportPowerShellCommand` / `WindowsVideoSupportPs=`，指向 `check-windows-video-encoder-support.ps1 -BoardSummary`。
