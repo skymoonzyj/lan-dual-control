@@ -91,6 +91,7 @@ Examples:
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --sendUserAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
   node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host 192.168.31.122 --port 43770 --requireMacHost --boardSummary
+  node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/discover-lan-hosts.ps1 -NoLocalSubnets -HostName 192.168.31.122 -Port 43770 -RequireMacHost -BoardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
   node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
@@ -550,6 +551,12 @@ function makeCommands(args, preflight) {
   const windowsHostPort = 43770;
   const macHostDiscoveryBoardSummary = makeMacHostDiscoveryCommand(args, preflight, host, port);
   const macHostDiscoveryPowerShellBoardSummary = makeMacHostDiscoveryPowerShellCommand(args, preflight, host, port);
+  const macUnattendedStatusCommand = [
+    "node scripts/mac/check-mac-unattended-status.mjs",
+    "--host", host,
+    "--port", String(port),
+    "--boardSummary",
+  ].join(" ");
   const formalChecklistBoardSummary = [
     "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
     "-Discover",
@@ -590,6 +597,7 @@ function makeCommands(args, preflight) {
     resumeBoardSummary: "node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary",
     macHostDiscoveryBoardSummary,
     macHostDiscoveryPowerShellBoardSummary,
+    macUnattendedStatusCommand,
     formalChecklistBoardSummary,
     preflightBoardSummary: [
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
@@ -856,6 +864,7 @@ function makeBoardSummary(report) {
     `Next=${mac.ok ? report.commands.userAuthRequest : report.commands.preflightBoardSummary}.`,
     `MacDiscovery=${report.commands.macHostDiscoveryBoardSummary}.`,
     `MacDiscoveryPs=${report.commands.macHostDiscoveryPowerShellBoardSummary}.`,
+    `MacUnattended=${report.commands.macUnattendedStatusCommand}.`,
     `FormalChecklist=${report.commands.formalChecklistBoardSummary}; ManualChecklist=${report.formalManualChecklist.summary}.`,
     `WinClientDiagnostics=${report.commands.windowsClientDiagnosticsCommand}; WinClientDiagnosticsPs=${report.commands.windowsClientDiagnosticsPowerShellCommand}; CopyDiagnostics=${report.commands.windowsClientCopyDiagnosticsAction}`,
     `WindowsHostMedia=${report.commands.windowsHostMediaReadinessBoardSummary}.`,
@@ -1057,6 +1066,7 @@ function printHuman(report) {
   console.log("- Next safe commands:");
   console.log(`  ${report.commands.macHostDiscoveryBoardSummary}`);
   console.log(`  ${report.commands.macHostDiscoveryPowerShellBoardSummary}`);
+  console.log(`  ${report.commands.macUnattendedStatusCommand}`);
   console.log(`  ${report.commands.formalChecklistBoardSummary}`);
   console.log(`  ${report.commands.preflightBoardSummary}`);
   console.log(`  ${report.commands.userAuthRequest}`);

@@ -21,6 +21,39 @@
 
 日期：2026-06-18 夜间
 开发端：Windows Codex
+本轮目标：把 Mac 值守检查入口接进 Windows 恢复总览，方便 Windows 开工第一屏同步 Mac LaunchAgent、自启动、电源和锁屏/睡眠限制摘要。
+完成内容：
+- `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `MacUnattended=node scripts/mac/check-mac-unattended-status.mjs --host <Mac host> --port <port> --boardSummary`。
+- PowerShell 包装 `check-windows-resume-status.ps1 -Help` 同步说明该 Mac-side unattended/startup status command。
+- Node 与 PowerShell resume 回归新增 JSON 字段、单行 boardSummary 和帮助文本断言，确认命令只作为无密只读摘要入口，不认证、不发密码、不发送 input/inject。
+- CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已同步。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 60000`
+遗留问题：
+- 本轮只接入命令入口，不在 Windows 侧直接执行 Mac LaunchAgent/pmset 检查；真实自启动、睡眠和锁屏可达性仍以 Mac 端 `check-mac-unattended-status` 结果为准。
+下一步建议：
+- Mac 端继续把 LaunchAgent 启停和 status 字段产品化；Windows 控制端后续可消费这些字段，把“等待 Mac 上报”升级为明确的在线/权限缺失/可能睡眠/需要授权提示。
+是否改了协议：否。
+是否需要另一端配合：后续需要 Mac 端继续推进值守状态字段；当前不阻塞。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 夜间
+开发端：Windows Codex
 本轮目标：让 Windows 控 Mac 复制诊断快速摘要写出 Mac 值守/可远程推断，配合后续 Mac 自启、锁屏和休息场景产品化。
 完成内容：
 - 复制/导出的诊断报告快速摘要新增“Mac 值守”一行，基于 Windows 侧当前连接、设备发现、重连等待和 Mac 提醒 watcher 推断“当前可远程/恢复中/已发现/未发现”。
