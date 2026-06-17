@@ -1169,6 +1169,9 @@ function buildSnapshotExpression() {
       remoteRuntime: text("#remoteRuntimeMetric"),
       reversePolicy: text("#reversePolicyMetric"),
       reverseControlStatus: text("#reverseControlStatus"),
+      reverseControlHint: text("#reverseControlHint"),
+      reverseControlGrantCommand: text("#reverseControlGrantCommand"),
+      reverseControlGrantCommandHidden: document.querySelector("#reverseControlGrantCommand")?.hidden ?? true,
       reverseControlButtonText: text("#reverseControlButton"),
       reverseControlButtonDisabled: document.querySelector("#reverseControlButton")?.disabled || false,
       reverseControlRequests: (window.__lanDualSentMessages || [])
@@ -1449,6 +1452,12 @@ async function verifyMacClientReverseControlRequest({ args, session }) {
         latestResponse.code === "LAN008" &&
         value.reverseControlStatus.includes("Windows 已安全拒绝") &&
         value.reverseControlStatus.includes("临时允许后重试") &&
+        value.reverseControlHint.includes("Windows 已安全拒绝") &&
+        value.reverseControlGrantCommand.includes("allow-windows-reverse-control.mjs") &&
+        value.reverseControlGrantCommand.includes("--host 127.0.0.1") &&
+        value.reverseControlGrantCommand.includes(`--port ${args.port}`) &&
+        value.reverseControlGrantCommand.includes("--grant --durationMs 30000 --boardSummary") &&
+        value.reverseControlGrantCommandHidden === false &&
         value.reverseControlButtonText === "重试反控" &&
         value.reverseControlButtonDisabled === false;
       const noInputEvents = Number(value.inputEvents) === initialInputEvents;
@@ -1466,6 +1475,9 @@ async function verifyMacClientReverseControlRequest({ args, session }) {
     check: async (value) => (
       value.reversePolicy.includes("Windows 已临时允许一次") &&
       value.reverseControlStatus.includes("Windows 已临时允许一次") &&
+      value.reverseControlHint.includes("Windows 已打开一次性授权窗口") &&
+      value.reverseControlGrantCommand.includes(`--port ${args.port}`) &&
+      value.reverseControlGrantCommandHidden === false &&
       value.reverseControlButtonText === "重试反控" &&
       value.reverseControlButtonDisabled === false
         ? value
@@ -1490,6 +1502,9 @@ async function verifyMacClientReverseControlRequest({ args, session }) {
         latestResponse.reverseControlGrant === "consumed" &&
         value.reverseControlStatus.includes("Windows 已同意") &&
         value.reverseControlStatus.includes("临时授权已使用") &&
+        value.reverseControlHint.includes("Windows 已同意") &&
+        value.reverseControlHint.includes("无需再次运行授权命令") &&
+        value.reverseControlGrantCommandHidden === true &&
         value.reverseControlButtonDisabled === false;
       const noInputEvents = Number(value.inputEvents) === initialInputEvents;
       return requestOk && responseOk && noInputEvents ? value : null;

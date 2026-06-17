@@ -457,6 +457,27 @@ button:disabled {
   color: #7a351f;
 }
 
+.reverse-control-help {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  color: #7a351f;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.reverse-control-help code {
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+  border: 1px solid rgba(122, 53, 31, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--ink);
+  font-family: "SFMono-Regular", "Menlo", "Consolas", monospace;
+  font-size: 0.75rem;
+  user-select: all;
+}
+
 .toggle-row {
   display: flex;
   align-items: center;

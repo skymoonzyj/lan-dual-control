@@ -31,6 +31,8 @@ const elements = {
   reversePolicyMetric: document.querySelector("#reversePolicyMetric"),
   reverseControlStatus: document.querySelector("#reverseControlStatus"),
   reverseControlButton: document.querySelector("#reverseControlButton"),
+  reverseControlHint: document.querySelector("#reverseControlHint"),
+  reverseControlGrantCommand: document.querySelector("#reverseControlGrantCommand"),
   inputStatus: document.querySelector("#inputStatus"),
   remoteViewport: document.querySelector("#remoteViewport"),
   remoteImage: document.querySelector("#remoteImage"),
@@ -531,6 +533,80 @@ function currentReverseControlStatusText() {
   return "可请求 Windows 切换为被控端";
 }
 
+function currentWindowsReverseGrantCommand() {
+  const rawPort = String(elements.portInput.value || "").trim();
+  const port = /^\d{1,5}$/.test(rawPort) ? rawPort : "43770";
+  return [
+    "node scripts/windows/allow-windows-reverse-control.mjs",
+    "--host 127.0.0.1",
+    `--port ${port}`,
+    "--grant --durationMs 30000 --boardSummary",
+  ].join(" ");
+}
+
+function currentReverseControlHelp() {
+  if (!state.connected) {
+    return {
+      hint: "连接 Windows host 后，如需临时允许反控，这里会显示 Windows 本机命令。",
+      command: "",
+    };
+  }
+  if (!state.authenticated) {
+    return {
+      hint: "认证成功后才能请求反控；不要把密码发到联络板。",
+      command: "",
+    };
+  }
+  if (!state.remoteCapabilities) {
+    return {
+      hint: "等待 Windows host 声明反控策略。",
+      command: "",
+    };
+  }
+  if (!reverseControlSupported()) {
+    return {
+      hint: "Windows host 当前未启用反控接收，无需运行临时授权命令。",
+      command: "",
+    };
+  }
+  const command = currentWindowsReverseGrantCommand();
+  const grant = state.remoteCapabilities.reverseControlGrant;
+  if (grant?.active) {
+    return {
+      hint: "Windows 已打开一次性授权窗口，Mac 端请立即点“重试反控”。",
+      command,
+    };
+  }
+  if (state.reverseControlRequest.status === "accepted") {
+    return {
+      hint: "Windows 已同意，临时授权已使用；无需再次运行授权命令。",
+      command: "",
+    };
+  }
+  if (state.reverseControlRequest.status === "rejected" && state.reverseControlRequest.code === "LAN008") {
+    return {
+      hint: "Windows 已安全拒绝。请让 Windows 端在本机运行下面命令，或点击桌面面板“临时允许反控”，然后 Mac 端重试。",
+      command,
+    };
+  }
+  if (grant?.lastRequest?.active) {
+    return {
+      hint: "Windows 已记录最近一次请求。请 Windows 端本机临时允许后，Mac 端再点“重试反控”。",
+      command,
+    };
+  }
+  if (state.reverseControlRequest.status === "pending") {
+    return {
+      hint: "请求已发出；若返回 LAN008，再让 Windows 端本机临时允许。",
+      command: "",
+    };
+  }
+  return {
+    hint: "首次请求通常会被默认安全拒绝；被拒绝后这里会给出 Windows 本机临时授权命令。",
+    command: "",
+  };
+}
+
 function renderReverseControlRequest() {
   const canRequest = state.connected &&
     state.authenticated &&
@@ -539,6 +615,10 @@ function renderReverseControlRequest() {
   elements.reverseControlButton.disabled = !canRequest;
   elements.reverseControlButton.textContent = currentReverseControlButtonText();
   elements.reverseControlStatus.textContent = currentReverseControlStatusText();
+  const help = currentReverseControlHelp();
+  elements.reverseControlHint.textContent = help.hint;
+  elements.reverseControlGrantCommand.textContent = help.command;
+  elements.reverseControlGrantCommand.hidden = !help.command;
 }
 
 function sendReverseControlRequest() {
@@ -1328,6 +1408,8 @@ function buildLogExportText() {
     `- 远端运行：${elements.remoteRuntimeMetric.textContent || "-"}`,
     `- 反控策略：${elements.reversePolicyMetric.textContent || "-"}`,
     `- 反控请求：${elements.reverseControlStatus.textContent || "-"}`,
+    `- 反控授权提示：${elements.reverseControlHint.textContent || "-"}`,
+    `- Windows 本机授权命令：${elements.reverseControlGrantCommand.textContent || "-"}`,
     `- 重连状态：${reconnectExport.status}`,
     `- 重连原因：${reconnectExport.reason}`,
     `- 下次重连：${reconnectExport.next}`,

@@ -231,6 +231,40 @@
 
 ## 2026-06-17 Mac Codex
 
+日期：2026-06-17 11:54
+开发端：Mac Codex
+本轮目标：让 Mac client 反控请求 UI 在现场联调时直接给出 Windows 本机一次性授权命令，减少 `LAN008` 后通讯板来回确认。
+完成内容：
+- “一键反控”区域新增授权提示和可选中命令块；未连接/未认证/未声明策略时显示轻提示，不打扰主流程。
+- 当 Mac 请求反控被 `LAN008` 默认安全拒绝、或 Windows discovery 暴露最近请求时，页面显示 Windows 本机回环命令：`node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port <Windows host port> --grant --durationMs 30000 --boardSummary`。
+- 当 Windows 已打开一次性授权窗口时，页面提示 Mac 立即点“重试反控”，并继续显示同一条 Windows 本机命令；accepted/临时授权已使用后会隐藏命令，避免误导 Windows 重复授权。
+- 日志导出新增“反控授权提示”和“Windows 本机授权命令”，方便真实联调现场复盘；命令不包含密码、token 或系统账号信息。
+- 页面自测扩展断言：`LAN008` 后命令出现且为 `--host 127.0.0.1 --port <当前 Windows host port>`，临时授权时仍显示，accepted 后隐藏；仍确认不泄露密码、不发送额外 `input_event`。
+修改文件：
+- `apps/mac-client/index.html`
+- `apps/mac-client/styles.css`
+- `apps/mac-client/app.js`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check apps/mac-client/server.mjs`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --clientPort 5198 --debugPort 9342 --mockVideo --allowClipboardFallback --skipFileClipboard --progressIntervalMs 0 --timeoutMs 45000`
+遗留问题：
+- 本轮仍不连接真实 Windows host、不认证、不触发真实反控、不执行 inject；真实验收需要 Windows 端本机运行 helper 或点击桌面面板按钮配合。
+下一步建议：
+- 真连时 Mac 先点“请求反控”看到 `LAN008`，页面会直接显示 Windows 本机授权命令；Windows 端运行命令或点“临时允许反控”后，Mac 点“重试反控”确认 accepted/临时授权已使用。
+是否改了协议：否。只增加 Mac client UI/日志提示，继续使用已有 `reverse_control_request` / `reverse_control_response` 和 Windows 本机授权 helper。
+是否需要另一端配合：真实联调需要 Windows 端本机执行一次性授权命令或点击桌面面板；本轮自测不需要真实 Windows 配合。
+
+## 2026-06-17 Mac Codex
+
 日期：2026-06-17 09:28
 开发端：Mac Codex
 本轮目标：把 Mac 控制 Windows formal checklist/smoke 的执行计划补齐到“请求反控 -> Windows 本机一次性授权 -> Mac 重试 accepted”的安全演练闭环，方便后续真机联调照通讯板执行。
