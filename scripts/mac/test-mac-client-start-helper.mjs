@@ -102,12 +102,9 @@ function assertFormalSmokeCommand(command, label) {
 }
 
 function assertMacClientBrowserSelfTestCommand(command, label) {
-  assertIncludes(command, "test-mac-client-browser.mjs", label);
-  assertIncludes(command, "--mockVideo", label);
-  assertIncludes(command, "--allowClipboardFallback", label);
-  assertIncludes(command, "--skipFileClipboard", label);
+  assertIncludes(command, "scripts/mac/test-mac-client-browser-self-test.mjs", label);
   assertIncludes(command, "--boardSummary", label);
-  assertIncludes(command, "--progressIntervalMs 0", label);
+  assertNotIncludes(command, "scripts/windows/test-mac-client-browser.mjs", label);
   assertNotIncludes(command, "--useExistingHost", label);
   assertNotIncludes(command, "--useEnvPassword", label);
   assertNotIncludes(command, "--requirePassword", label);

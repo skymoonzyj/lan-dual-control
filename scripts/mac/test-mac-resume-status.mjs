@@ -127,7 +127,7 @@ function assertBoardSummaryShape(text, label) {
   assert(/MacClientFormalSmoke=/.test(text), `${label} should include Mac client formal smoke preflight guidance`);
   assert(/run-mac-client-formal-smoke\.mjs/.test(text), `${label} should include the Mac client formal smoke preflight command`);
   assert(/MacClientBrowserSelfTest=/.test(text), `${label} should include Mac client browser self-test guidance`);
-  assert(/test-mac-client-browser\.mjs/.test(text), `${label} should include the Mac client browser self-test command`);
+  assert(/scripts\/mac\/test-mac-client-browser-self-test\.mjs/.test(text), `${label} should include the Mac client browser self-test command`);
   assert(/MacScriptHelp=/.test(text), `${label} should include Mac script help safety guidance`);
   assert(/test-mac-script-help\.mjs/.test(text), `${label} should include the Mac script help command`);
   assert(/Do not send passwords/.test(text), `${label} should include password safety note`);
@@ -219,12 +219,9 @@ function assertMacClientFormalSmokeCommand(command, label) {
 }
 
 function assertMacClientBrowserSelfTestCommand(command, label) {
-  assert(/test-mac-client-browser\.mjs/.test(command), `${label} should use test-mac-client-browser`);
-  assert(command.includes("--mockVideo"), `${label} should use a temporary mock Windows host`);
-  assert(command.includes("--allowClipboardFallback"), `${label} should allow local non-Windows clipboard fallback`);
-  assert(command.includes("--skipFileClipboard"), `${label} should avoid system file clipboard coupling`);
+  assert(/scripts\/mac\/test-mac-client-browser-self-test\.mjs/.test(command), `${label} should use the Mac browser self-test wrapper`);
   assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
-  assert(command.includes("--progressIntervalMs 0"), `${label} should keep board-summary stdout clean`);
+  assert(!command.includes("scripts/windows/test-mac-client-browser.mjs"), `${label} should not expose the Windows test script path`);
   assert(!command.includes("--useExistingHost"), `${label} should not target a real Windows host`);
   assert(!command.includes("--useEnvPassword"), `${label} should not read a real password from env`);
   assert(!command.includes("--requirePassword"), `${label} should not require a real password`);
@@ -353,7 +350,7 @@ function checkOfflinePlainReport(args) {
   assert(String(result.stdout || "").includes("discover-windows-hosts.mjs"), "plain report should include Mac client Windows discovery command");
   assert(String(result.stdout || "").includes("check-mac-client-formal-status.mjs"), "plain report should include Mac client formal checklist command");
   assert(String(result.stdout || "").includes("run-mac-client-formal-smoke.mjs"), "plain report should include Mac client formal smoke preflight command");
-  assert(String(result.stdout || "").includes("test-mac-client-browser.mjs"), "plain report should include Mac client browser self-test command");
+  assert(String(result.stdout || "").includes("scripts/mac/test-mac-client-browser-self-test.mjs"), "plain report should include Mac client browser self-test command");
   assert(String(result.stdout || "").includes("check-mac-formal-local-smoke.mjs"), "plain report should include Mac formal local smoke command");
   assert(String(result.stdout || "").includes("check-mac-formal-e2e-status.mjs"), "plain report should include Mac formal E2E status command");
   assert(String(result.stdout || "").includes("Mac client copy diagnostics:"), "plain report should include copy diagnostics label");

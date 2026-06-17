@@ -222,7 +222,7 @@ function formalSmokeCommand(item) {
 }
 
 function macClientBrowserSelfTestCommand() {
-  return "node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard --boardSummary --progressIntervalMs 0";
+  return "node scripts/mac/test-mac-client-browser-self-test.mjs --boardSummary";
 }
 
 function sendCallCommand(item) {

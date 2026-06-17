@@ -20,7 +20,7 @@ const defaults = {
 
 const copyDiagnosticsAction = "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码";
 const formalSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
-const browserSelfTestCommand = "node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard --boardSummary --progressIntervalMs 0";
+const browserSelfTestCommand = "node scripts/mac/test-mac-client-browser-self-test.mjs --boardSummary";
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");

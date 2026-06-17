@@ -106,12 +106,9 @@ function assertMacClientFormalSmokeCommand(command, label) {
 }
 
 function assertMacClientBrowserSelfTestCommand(command, label) {
-  assertIncludes(command, "test-mac-client-browser.mjs", label);
-  assertIncludes(command, "--mockVideo", label);
-  assertIncludes(command, "--allowClipboardFallback", label);
-  assertIncludes(command, "--skipFileClipboard", label);
+  assertIncludes(command, "scripts/mac/test-mac-client-browser-self-test.mjs", label);
   assertIncludes(command, "--boardSummary", label);
-  assertIncludes(command, "--progressIntervalMs 0", label);
+  assertNotIncludes(command, "scripts/windows/test-mac-client-browser.mjs", label);
   assertNotIncludes(command, "--useExistingHost", label);
   assertNotIncludes(command, "--useEnvPassword", label);
   assertNotIncludes(command, "--requirePassword", label);
@@ -206,9 +203,7 @@ function checkBoardSummary(args) {
   assertIncludes(text, "run-mac-client-formal-smoke.mjs", "board summary");
   assertIncludes(text, "--preflightOnly", "board summary");
   assertIncludes(text, "MacClientBrowserSelfTest=", "board summary");
-  assertIncludes(text, "test-mac-client-browser.mjs", "board summary");
-  assertIncludes(text, "--mockVideo", "board summary");
-  assertIncludes(text, "--skipFileClipboard", "board summary");
+  assertIncludes(text, "scripts/mac/test-mac-client-browser-self-test.mjs", "board summary");
   assertIncludes(text, "CopyDiagnostics=Mac client 事件日志点击", "board summary");
   assertIncludes(text, "连接密码", "board summary");
   assertIncludes(text, "Do not send passwords", "board summary");
@@ -224,7 +219,7 @@ function checkPlainReport(args) {
   assertIncludes(result.stdout, "Mac client formal smoke preflight:", "plain report");
   assertIncludes(result.stdout, "run-mac-client-formal-smoke.mjs", "plain report");
   assertIncludes(result.stdout, "Mac client browser self-test:", "plain report");
-  assertIncludes(result.stdout, "test-mac-client-browser.mjs", "plain report");
+  assertIncludes(result.stdout, "scripts/mac/test-mac-client-browser-self-test.mjs", "plain report");
   assertIncludes(result.stdout, "Copy diagnostics:", "plain report");
   assertIncludes(result.stdout, "复制诊断", "plain report");
   assertIncludes(result.stdout, "连接密码", "plain report");
