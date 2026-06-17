@@ -4008,11 +4008,31 @@ function fileClipboardLocalDetail(result = {}, fallback = "文件仍保留在远
   return recovery && !reason.includes(recovery) ? `${reason}；${recovery}` : reason;
 }
 
+function renderReceivedFilesStatus() {
+  const writeStatus = state.receivedClipboardWriteStatus || {};
+  elements.receivedFilesStatus.hidden = !writeStatus.text;
+  elements.receivedFilesStatus.textContent = writeStatus.text || "";
+  elements.receivedFilesStatus.className = `received-files-status${writeStatus.kind ? ` is-${writeStatus.kind}` : ""}`;
+}
+
 function setReceivedFilesWriteStatus(kind = "", text = "") {
   state.receivedClipboardWriteStatus = {
     kind,
     text,
   };
+  renderReceivedFilesStatus();
+}
+
+function describeIncomingFileTransferStatus(transfer = {}) {
+  const fileCount = Number(transfer.fileCount) || (Array.isArray(transfer.files) ? transfer.files.length : 0);
+  const receivedBytes = Math.max(0, Number(transfer.receivedBytes) || 0);
+  const totalBytes = Math.max(0, Number(transfer.totalBytes) || 0);
+  const countText = fileCount > 0 ? `${fileCount} 个文件` : "远端文件";
+  if (totalBytes > 0) {
+    const percent = Math.min(100, Math.round((receivedBytes / totalBytes) * 100));
+    return `正在接收 ${countText}：${formatBytes(receivedBytes)}/${formatBytes(totalBytes)}，${percent}%。完成后会写入系统文件剪贴板或留在托盘。`;
+  }
+  return `正在接收 ${countText}：${formatBytes(receivedBytes)}。完成后会写入系统文件剪贴板或留在托盘。`;
 }
 
 function updateReceivedFilesWriteStatusFromResult(result = {}, fileCount = state.receivedClipboardFiles.length) {
@@ -4197,9 +4217,7 @@ function renderReceivedFiles() {
   elements.clearReceivedFilesButton.title = state.receivedClipboardTempPath
     ? "清空托盘（不删除系统剪贴板临时目录）"
     : "清空远端文件";
-  elements.receivedFilesStatus.hidden = files.length === 0 || !writeStatus.text;
-  elements.receivedFilesStatus.textContent = writeStatus.text || "";
-  elements.receivedFilesStatus.className = `received-files-status${writeStatus.kind ? ` is-${writeStatus.kind}` : ""}`;
+  renderReceivedFilesStatus();
 
   if (files.length === 0) {
     const empty = document.createElement("p");
@@ -4333,6 +4351,8 @@ function handleClipboardFileOffer(message) {
 
   if (!elements.clipboardToggle.checked) {
     addLog("文件剪贴板", "已拒绝远端文件：剪贴板同步已关闭");
+    setReceivedFilesWriteStatus("warning", "已拒绝远端文件：剪贴板同步已关闭。");
+    renderReceivedFiles();
     state.client?.sendClipboardFileResponse({
       transferId,
       accepted: false,
@@ -4344,6 +4364,8 @@ function handleClipboardFileOffer(message) {
 
   if (files.length === 0 && totalBytes > 0) {
     addLog("文件剪贴板", "已拒绝远端文件：缺少文件清单");
+    setReceivedFilesWriteStatus("warning", "已拒绝远端文件：缺少文件清单，请让 Mac 重新复制。");
+    renderReceivedFiles();
     state.client?.sendClipboardFileResponse({
       transferId,
       accepted: false,
@@ -4356,6 +4378,8 @@ function handleClipboardFileOffer(message) {
   if (totalBytes > maxClipboardFileBytes) {
     const reason = `远端文件总大小 ${formatBytes(totalBytes)}，超过当前上限 ${formatBytes(maxClipboardFileBytes)}`;
     addLog("文件剪贴板", reason);
+    setReceivedFilesWriteStatus("warning", `${reason}，已拒绝接收。`);
+    renderReceivedFiles();
     state.client?.sendClipboardFileResponse({
       transferId,
       accepted: false,
@@ -4373,6 +4397,8 @@ function handleClipboardFileOffer(message) {
     files,
   });
 
+  setReceivedFilesWriteStatus("busy", describeIncomingFileTransferStatus(state.remoteFileTransfers.get(transferId)));
+  renderReceivedFiles();
   elements.clipboardText.textContent = `剪贴板：准备接收远端 ${fileCount || files.length} 个文件`;
   addLog("文件剪贴板", `收到远端文件清单 ${fileCount || files.length} 个，共 ${formatBytes(totalBytes)}，暂存到浏览器内存`);
   state.client?.sendClipboardFileResponse({
@@ -4417,6 +4443,7 @@ function handleClipboardFileChunk(message) {
     const totalBytes = transfer.totalBytes || Number(message.totalBytes) || transfer.receivedBytes;
     const percent = totalBytes === 0 ? 100 : Math.min(100, Math.round((transfer.receivedBytes / totalBytes) * 100));
     elements.clipboardText.textContent = `剪贴板：接收远端文件 ${percent}%`;
+    setReceivedFilesWriteStatus("busy", describeIncomingFileTransferStatus(transfer));
     state.client?.sendClipboardFileProgress({
       transferId,
       receivedBytes: transfer.receivedBytes,
@@ -4427,6 +4454,8 @@ function handleClipboardFileChunk(message) {
     state.remoteFileTransfers.delete(transferId);
     elements.clipboardText.textContent = "剪贴板：远端文件接收失败";
     addLog("文件剪贴板失败", reason);
+    setReceivedFilesWriteStatus("warning", `远端文件接收失败：${reason}。请让 Mac 重新复制。`);
+    renderReceivedFiles();
     state.client?.sendClipboardFileResult({
       transferId,
       accepted: false,
@@ -4479,6 +4508,8 @@ async function handleClipboardFileComplete(message) {
     state.remoteFileTransfers.delete(transferId);
     elements.clipboardText.textContent = "剪贴板：远端文件接收不完整";
     addLog("文件剪贴板失败", reason);
+    setReceivedFilesWriteStatus("warning", `${reason}。已停止接收，请让 Mac 重新复制。`);
+    renderReceivedFiles();
     state.client?.sendClipboardFileResult({
       transferId,
       accepted: false,

@@ -1334,6 +1334,7 @@ async function verifyFileClipboardRecoveryText(session) {
       if (
         typeof fileClipboardRecoveryText !== "function" ||
         typeof fileClipboardLocalDetail !== "function" ||
+        typeof describeIncomingFileTransferStatus !== "function" ||
         typeof renderReceivedFiles !== "function" ||
         typeof openReceivedFilesTempPath !== "function" ||
         typeof updateReceivedFilesWriteStatusFromResult !== "function"
@@ -1368,8 +1369,68 @@ async function verifyFileClipboardRecoveryText(session) {
       const originalFiles = state.receivedClipboardFiles;
       const originalTempPath = state.receivedClipboardTempPath;
       const originalWriteStatus = state.receivedClipboardWriteStatus;
+      const originalTransfers = state.remoteFileTransfers;
+      const originalClient = state.client;
+      const originalClipboardToggle = elements.clipboardToggle.checked;
       const calls = [];
+      const clipboardResponses = [];
+      const clipboardProgress = [];
+      const clipboardResults = [];
       try {
+        state.remoteFileTransfers = new Map();
+        state.client = {
+          sendClipboardFileResponse: (payload) => clipboardResponses.push(payload),
+          sendClipboardFileProgress: (payload) => clipboardProgress.push(payload),
+          sendClipboardFileResult: (payload) => clipboardResults.push(payload),
+        };
+        elements.clipboardToggle.checked = true;
+        handleClipboardFileOffer({
+          type: "clipboard_file_offer",
+          transferId: "live-transfer",
+          fileCount: 1,
+          totalBytes: 4,
+          files: [
+            {
+              index: 0,
+              name: "demo.txt",
+              size: 4,
+              mimeType: "text/plain",
+            },
+          ],
+        });
+        const statusVisibleAfterOffer = status && !status.hidden;
+        const statusTextAfterOffer = status?.textContent || "";
+        const statusClassAfterOffer = status?.className || "";
+        const emptyTextAfterOffer = document.querySelector(".received-files-empty")?.textContent || "";
+        handleClipboardFileChunk({
+          type: "clipboard_file_chunk",
+          transferId: "live-transfer",
+          fileIndex: 0,
+          fileName: "demo.txt",
+          offset: 0,
+          dataBase64: btoa("te"),
+        });
+        const statusVisibleAfterChunk = status && !status.hidden;
+        const statusTextAfterChunk = status?.textContent || "";
+        const statusClassAfterChunk = status?.className || "";
+        state.remoteFileTransfers.clear();
+        handleClipboardFileOffer({
+          type: "clipboard_file_offer",
+          transferId: "too-large",
+          fileCount: 1,
+          totalBytes: maxClipboardFileBytes + 1,
+          files: [
+            {
+              index: 0,
+              name: "huge.zip",
+              size: maxClipboardFileBytes + 1,
+              mimeType: "application/zip",
+            },
+          ],
+        });
+        const statusTextAfterOversize = status?.textContent || "";
+        const statusClassAfterOversize = status?.className || "";
+
         state.receivedClipboardFiles = [
           {
             name: "demo.zip",
@@ -1433,6 +1494,21 @@ async function verifyFileClipboardRecoveryText(session) {
             detail.includes("系统文件剪贴板写入失败") &&
             detail.includes("临时目录：C:/Temp/lan-dual-control/clip-1") &&
             memoryDetail === "浏览器预览版只能保留内存托盘" &&
+            statusVisibleAfterOffer &&
+            statusTextAfterOffer.includes("正在接收 1 个文件") &&
+            statusTextAfterOffer.includes("0 B/4 B") &&
+            statusClassAfterOffer.includes("is-busy") &&
+            emptyTextAfterOffer.includes("Mac 复制文件") &&
+            statusVisibleAfterChunk &&
+            statusTextAfterChunk.includes("2 B/4 B") &&
+            statusTextAfterChunk.includes("50%") &&
+            statusClassAfterChunk.includes("is-busy") &&
+            statusTextAfterOversize.includes("超过当前上限") &&
+            statusTextAfterOversize.includes("已拒绝接收") &&
+            statusClassAfterOversize.includes("is-warning") &&
+            clipboardResponses.some((payload) => payload.transferId === "live-transfer" && payload.accepted === true) &&
+            clipboardResponses.some((payload) => payload.transferId === "too-large" && payload.accepted === false) &&
+            clipboardProgress.some((payload) => payload.transferId === "live-transfer" && payload.receivedBytes === 2) &&
             enabledAfterTempPath &&
             disabledWithoutTempPath &&
             retryTitleAfterFailure === "重试写入系统文件剪贴板" &&
@@ -1454,6 +1530,15 @@ async function verifyFileClipboardRecoveryText(session) {
           recovery,
           detail,
           memoryDetail,
+          statusTextAfterOffer,
+          statusClassAfterOffer,
+          statusTextAfterChunk,
+          statusClassAfterChunk,
+          statusTextAfterOversize,
+          statusClassAfterOversize,
+          clipboardResponses,
+          clipboardProgress,
+          clipboardResults,
           enabledAfterTempPath,
           disabledWithoutTempPath,
           retryTitleAfterFailure,
@@ -1479,6 +1564,9 @@ async function verifyFileClipboardRecoveryText(session) {
         state.receivedClipboardFiles = originalFiles;
         state.receivedClipboardTempPath = originalTempPath;
         state.receivedClipboardWriteStatus = originalWriteStatus;
+        state.remoteFileTransfers = originalTransfers;
+        state.client = originalClient;
+        elements.clipboardToggle.checked = originalClipboardToggle;
         renderReceivedFiles();
       }
     })()`,

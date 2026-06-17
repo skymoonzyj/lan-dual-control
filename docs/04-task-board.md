@@ -97,6 +97,7 @@ Windows 端：
 - [x] Windows 控制端导出/复制诊断报告已整理为“连接状态”和“本机协作”分段，现场粘贴后可更快区分远端 Mac 连接问题和 Windows 本机 host / 提醒 watcher 准备状态。
 - [x] Windows 控制端导出/复制诊断报告顶部新增“快速摘要”，一屏内先汇总远端连接、重连、本机协作和画质请求；页面 diagnostics 回归覆盖摘要和复制内容。
 - [x] Windows 控制端页面自检新增 `--boardSummary`：diagnostics-only 或真实连接成功后 stdout 输出一行无密 `Windows client diagnostics` 摘要，详细进度转 stderr，便于直接发 Agent Link Board。
+- [x] Windows 控制端远端文件托盘补齐接收中/失败状态条：文件 offer、分块进度、超限拒绝、解析失败和不完整完成都会直接显示在“远端文件”面板；页面 diagnostics 回归覆盖文件尚未完成时的状态可见性和超限拒绝提示。
 - [x] Windows host 启动/状态助手也支持 `--status --checkBoard` / PowerShell `-Status -CheckBoard`：只读读取 Agent Link Board `/api/state.currentCall`，JSON、普通输出和 `--boardSummary` 会提示 active Mac -> Windows call，DONE call 不进入待办摘要，不启动 host、不认证、不发送密码、不执行 `inject`。
 - [x] Windows host 启动/状态助手 `--status` 也会输出本机媒体基线命令：JSON 带 `windowsHostMediaReadinessCommand`，普通输出和 `--boardSummary` 带 `WindowsHostMedia=check-windows-host-readiness --checkBoard --probeMedia --boardSummary`，方便 Mac 反控前刷新视频/音频基线。
 - [x] Windows host 启动/状态助手和 readiness 摘要也会输出视频能力体检命令：JSON 带 `windowsVideoEncoderSupportCommand`，普通输出和 `--boardSummary` 带 `WindowsVideoSupport=check-windows-video-encoder-support --boardSummary`，方便 H.264/WGC/WebCodecs 调试前先发无密能力摘要。

@@ -17,6 +17,39 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
+本轮目标：补强 Windows 控制端远端文件托盘在接收中和失败场景下的可见状态。
+完成内容：
+- `apps/windows-client/app.js` 新增远端文件托盘状态渲染 helper，状态条不再要求已有文件行；只要有接收、拒绝或失败状态，就会在“远端文件”面板显示。
+- 文件 `clipboard_file_offer` 接收后会显示正在接收的文件数、已收/总字节和百分比；分块到达时持续更新进度。
+- 剪贴板关闭、缺少文件清单、总量超限、分块解析失败和不完整完成都会写入托盘 warning 状态，并提示让 Mac 重新复制或说明已拒绝接收。
+- `scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly` 的 file-clipboard-recovery 检查新增接收中状态可见性、50% 分块进度、超限拒绝提示和协议响应断言。
+- Windows client README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮只补 Windows 控制端托盘状态和页面自测，没有跑真实 Mac 文件复制；后续仍需用真实文件/压缩包验收 Windows 粘贴可用性和失败恢复。
+下一步建议：
+- 真机文件剪贴板联调时，除了看事件日志，也直接看“远端文件”面板状态条是否显示接收进度、拒绝原因、临时目录或可重试动作。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-17 Mac Codex
 
 日期：2026-06-17 17:15
