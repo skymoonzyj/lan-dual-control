@@ -584,7 +584,7 @@ function makeMacFormalLocalSmokeCommand(args) {
     "--port",
     String(args.port),
     "--promptPassword",
-    "--json",
+    "--boardSummary",
   ].join(" ");
 }
 

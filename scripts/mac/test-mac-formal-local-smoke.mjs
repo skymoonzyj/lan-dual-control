@@ -102,6 +102,7 @@ function checkHelp(args) {
     const result = runSmoke([flag], args);
     assert(result.status === 0, `${script} ${flag} should exit 0`);
     assert(/\bUsage\b/.test(result.stdout), `${script} ${flag} should print Usage`);
+    assert(/--boardSummary/.test(result.stdout), `${script} ${flag} should document --boardSummary`);
     assert(!/Mac host formal smoke password:/.test(result.stdout), `${script} ${flag} should not prompt`);
   }
   print("OK", "Formal local smoke help exits quickly");
@@ -137,6 +138,15 @@ function checkPasswordSafety(args) {
   assert(promptWithPassword.status !== 0, "--promptPassword with --password should fail");
   assert(/cannot be combined/.test(promptPasswordPayload.error?.message || ""), "prompt with password should explain conflict");
   assertNoSecretLikeText(outputOf(promptWithPassword), "prompt with password failure");
+
+  const boardSummary = runSmoke(["--boardSummary"], args);
+  const boardLines = String(boardSummary.stdout || "").trim().split(/\r?\n/).filter(Boolean);
+  assert(boardSummary.status !== 0, "missing password boardSummary should fail");
+  assert(boardLines.length === 1, `missing password boardSummary should print one stdout line, got ${boardLines.length}`);
+  assert(/Mac formal local smoke failed/.test(boardLines[0]), "missing password boardSummary should explain failure");
+  assert(/No inject was executed/.test(boardLines[0]), "missing password boardSummary should keep inject safety note");
+  assert(!String(boardSummary.stdout || "").includes("Mac host formal smoke password:"), "boardSummary failure should not prompt on stdout");
+  assertNoSecretLikeText(outputOf(boardSummary), "missing password boardSummary failure");
 
   print("OK", "Password safety failures are JSON, fast, and secret-free");
 }
@@ -523,6 +533,43 @@ async function checkFakeHostSuccess(args) {
   print("OK", "Temporary fake Mac host passes video/audio/input-log aggregate smoke");
 }
 
+async function checkFakeHostBoardSummary(args) {
+  await withFakeMacHost(async ({ port }) => {
+    const secret = "super-secret-formal-local-smoke";
+    const result = await runSmokeAsync([
+      "--boardSummary",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(port),
+      "--timeoutMs",
+      "5000",
+      "--videoDurationMs",
+      "1200",
+      "--videoMinFrames",
+      "8",
+      "--videoMinFps",
+      "4",
+      "--audioDurationMs",
+      "1200",
+      "--audioMinFrames",
+      "20",
+      "--inputTimeoutMs",
+      "5000",
+    ], args, { LAN_DUAL_PASSWORD: secret });
+
+    assert(result.status === 0, `fake host boardSummary smoke should pass.\n${outputOf(result)}`);
+    const lines = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean);
+    assert(lines.length === 1, `fake host boardSummary should print one stdout line, got ${lines.length}`);
+    assert(/Mac formal local smoke passed/.test(lines[0]), "boardSummary should report passed");
+    assert(/video=/.test(lines[0]) && /audio=/.test(lines[0]) && /inputLog=/.test(lines[0]), "boardSummary should include all probes");
+    assert(/No inject was executed/.test(lines[0]), "boardSummary should include inject safety note");
+    assert(/\[INFO\] Running H\.264 video/.test(result.stderr), "boardSummary progress should go to stderr");
+    assertNoSecretLikeText(outputOf(result), "fake host boardSummary output");
+  });
+  print("OK", "Temporary fake Mac host boardSummary is one line and secret-free");
+}
+
 async function checkFakeHostSkippedDemoPassword(args) {
   await withFakeMacHost(async ({ port }) => {
     const result = await runSmokeAsync([
@@ -582,6 +629,7 @@ async function main() {
   checkJsonFailureParseable(args);
   await checkFakeHostSkippedDemoPassword(args);
   await checkFakeHostSuccess(args);
+  await checkFakeHostBoardSummary(args);
   print("OK", "Mac formal local smoke self-test passed");
 }
 

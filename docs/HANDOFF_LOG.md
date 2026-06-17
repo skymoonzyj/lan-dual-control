@@ -21,6 +21,44 @@
 
 日期：2026-06-17 续跑
 开发端：Mac Codex
+本轮目标：让 Mac formal local smoke 可直接输出一行联络板摘要。
+完成内容：
+- `scripts/mac/check-mac-formal-local-smoke.mjs` 新增 `--boardSummary`：完成 H.264、PCM 和 input-log 聚合后，stdout 只输出一行无密摘要，进度输出走 stderr。
+- 失败路径也支持 `--boardSummary`，会输出一行可读失败摘要并保留“未执行 inject、未打印密码”的安全边界。
+- `scripts/mac/check-mac-resume-status.mjs` 的 `MacFormalLocalSmoke=` 推荐命令从 `--json` 改为 `--boardSummary`，让恢复总览默认给出可直接上板的短验收命令。
+- `scripts/mac/test-mac-formal-local-smoke.mjs` 覆盖 help、缺密码 boardSummary 失败、fake host 成功 boardSummary 单行输出和不泄密；`scripts/mac/test-mac-resume-status.mjs` 锁定新的命令形状。
+修改文件：
+- `scripts/mac/check-mac-formal-local-smoke.mjs`
+- `scripts/mac/test-mac-formal-local-smoke.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-formal-local-smoke.mjs`
+- `node --check scripts/mac/test-mac-formal-local-smoke.mjs`
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- `node scripts/mac/test-mac-formal-local-smoke.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 10000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮只跑假 Mac host 自测；没有运行真实 `--promptPassword --boardSummary`，没有触发密码弹窗、没有认证真实 host、没有发送 call/input/inject。
+下一步建议：
+- 用户在场、正式呼叫 Windows 前，先运行 `check-mac-resume-status --checkBoard --boardSummary`，再按摘要里的 `MacFormalLocalSmoke=` 执行本机短验收并把一行结果同步到联络板。
+是否改了协议：否。
+是否需要另一端配合：否；真实端到端验收时再通过 Agent Link Board 呼叫 Windows。
+
+## 2026-06-17 Mac Codex
+
+日期：2026-06-17 续跑
+开发端：Mac Codex
 本轮目标：让 Mac 恢复总览直接给出本机 formal local smoke 短验收入口。
 完成内容：
 - `scripts/mac/check-mac-resume-status.mjs` 的 JSON `commands` 新增 `macFormalLocalSmokeCommand`，命令形状为 `check-mac-formal-local-smoke --host <host> --port <port> --promptPassword --json`。

@@ -27,6 +27,7 @@ const defaults = {
   skipAudio: false,
   skipInputLog: false,
   json: false,
+  boardSummary: false,
 };
 
 function helpRequested(argv) {
@@ -68,12 +69,14 @@ Options:
   --skipVideo                Skip H.264 probe.
   --skipAudio                Skip PCM probe.
   --skipInputLog             Skip input-log probe.
+  --boardSummary             Print one secret-free Agent Link Board summary line.
   --json                     Print one machine-readable JSON object.
   --help, -h                 Show this help without probing anything.
 
 Examples:
   LAN_DUAL_PASSWORD=... node scripts/mac/check-mac-formal-local-smoke.mjs
   node scripts/mac/check-mac-formal-local-smoke.mjs --promptPassword --json
+  node scripts/mac/check-mac-formal-local-smoke.mjs --promptPassword --boardSummary
 `);
 }
 
@@ -94,6 +97,7 @@ function parseArgs(argv) {
       token === "--skipVideo" ||
       token === "--skipAudio" ||
       token === "--skipInputLog" ||
+      token === "--boardSummary" ||
       token === "--json"
     ) {
       args[token.slice(2)] = true;
@@ -158,6 +162,7 @@ function parseArgs(argv) {
   args.skipAudio = booleanArg(args.skipAudio);
   args.skipInputLog = booleanArg(args.skipInputLog);
   args.json = booleanArg(args.json);
+  args.boardSummary = booleanArg(args.boardSummary);
   return args;
 }
 
@@ -178,7 +183,7 @@ function booleanArg(value) {
 
 function print(args, kind, text) {
   const line = `[${kind}] ${text}`;
-  if (args.json) {
+  if (args.json || args.boardSummary) {
     console.error(line);
   } else {
     console.log(line);
@@ -195,7 +200,7 @@ async function preparePassword(args) {
       message: "Enter the formal Mac host smoke password. It is only used for this local smoke check and is not printed.",
       prompt: "Formal smoke password:",
       terminalLabel: "Mac host formal smoke password: ",
-      output: args.json ? process.stderr : process.stdout,
+      output: args.json || args.boardSummary ? process.stderr : process.stdout,
     });
   }
   if (!args.requirePassword) return;
@@ -458,6 +463,7 @@ function summarizeArgs(args) {
     skipAudio: args.skipAudio,
     skipInputLog: args.skipInputLog,
     json: args.json,
+    boardSummary: args.boardSummary,
   };
 }
 
@@ -484,6 +490,8 @@ async function main() {
   const report = makeReport(args, probes);
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
+  } else if (args.boardSummary) {
+    console.log(report.boardSummary);
   } else {
     printReport(args, report);
   }
@@ -497,6 +505,8 @@ main().catch((error) => {
       checkedAt: new Date().toISOString(),
       error: { message: redactSensitiveText(error.message), name: error.name },
     }, null, 2));
+  } else if (process.argv.includes("--boardSummary")) {
+    console.log(`Mac formal local smoke failed: ${redactSensitiveText(error.message)}. No inject was executed; password was not printed.`);
   } else {
     console.error(`[FAIL] ${redactSensitiveText(error.message)}`);
   }

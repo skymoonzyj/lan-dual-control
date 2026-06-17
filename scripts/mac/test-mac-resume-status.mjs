@@ -143,7 +143,8 @@ function assertMediaReadinessCommand(command, label) {
 function assertMacFormalLocalSmokeCommand(command, label) {
   assert(/check-mac-formal-local-smoke\.mjs/.test(command), `${label} should use check-mac-formal-local-smoke`);
   assert(command.includes("--promptPassword"), `${label} should use a visible password prompt`);
-  assert(command.includes("--json"), `${label} should expose machine-readable evidence`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!command.includes("--json"), `${label} should default to one-line boardSummary output`);
   assert(!command.includes("--password"), `${label} should not embed a password argument`);
   assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
   assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
