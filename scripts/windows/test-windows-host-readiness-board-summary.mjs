@@ -462,6 +462,12 @@ async function main() {
       && jsonSummary.windowsReverseControlGrantCommand.includes("allow-windows-reverse-control.mjs"),
     "JSON windowsReverseControlGrantCommand is missing",
   );
+  assert(
+    typeof jsonSummary.windowsVideoEncoderSupportCommand === "string"
+      && jsonSummary.windowsVideoEncoderSupportCommand.includes("check-windows-video-encoder-support.mjs")
+      && jsonSummary.windowsVideoEncoderSupportCommand.includes("--boardSummary"),
+    "JSON windowsVideoEncoderSupportCommand is missing",
+  );
   assert(Array.isArray(jsonSummary.results), "JSON results must be an array");
   assert(jsonSummary.args?.probeWgcH264Sources === false, "default JSON should keep WGC H.264 source probe disabled");
   assert(jsonSummary.args?.checkBoard === true, "JSON args should record checkBoard");
@@ -469,9 +475,19 @@ async function main() {
   assert(jsonSummary.board?.currentCall?.active === true, "JSON board currentCall should be active");
   assert(jsonSummary.board?.currentCall?.needsWindows === true, "JSON board currentCall should need Windows");
   assert(jsonSummary.boardSummary.includes("call=CALLING Mac Codex->Windows Codex"), "JSON boardSummary should include active currentCall");
+  assert(jsonSummary.boardSummary.includes("WindowsVideoSupport="), "JSON boardSummary should include Windows video support command");
+  assert(
+    jsonSummary.boardSummary.includes("check-windows-video-encoder-support.mjs --boardSummary"),
+    "JSON boardSummary should include the runnable Windows video support command",
+  );
   assert(!jsonSummary.boardSummary.includes("--status --json"), "JSON boardSummary should not echo call command");
   assert(jsonSummary.results.some((result) => result.label === "Windows host runtime"), "JSON results missing runtime check");
   const runtimeResult = jsonSummary.results.find((result) => result.label === "Windows host runtime");
+  assert(
+    typeof runtimeResult?.windowsVideoEncoderSupportCommand === "string"
+      && runtimeResult.windowsVideoEncoderSupportCommand.includes("check-windows-video-encoder-support.mjs"),
+    "runtime result should carry Windows video support command",
+  );
   if (runtimeResult?.summary?.includes("screen=")) {
     assert(runtimeResult.summary.includes("reverse="), `runtime summary missing reverse-control policy: ${runtimeResult.summary}`);
   }
@@ -535,6 +551,11 @@ async function main() {
   assert(lines[0].includes("call=CALLING Mac Codex->Windows Codex"), "board summary is missing active currentCall");
   assert(!lines[0].includes("--status --json"), "board summary should not echo call command");
   assert(lines[0].includes("media=not-checked"), "board summary should show media=not-checked by default");
+  assert(lines[0].includes("WindowsVideoSupport="), "board summary should include Windows video support command");
+  assert(
+    lines[0].includes("check-windows-video-encoder-support.mjs --boardSummary"),
+    "board summary should include the runnable Windows video support command",
+  );
   assert(lines[0].includes("Do not send passwords"), "board summary is missing board safety reminder");
   assert(!/\[(INFO|OK|WARN|ERROR|FAIL)\]/.test(lines[0]), "board summary should be plain one-line text");
   assertNoSecretLeak(boardRun.stdout, "readiness --boardSummary stdout");

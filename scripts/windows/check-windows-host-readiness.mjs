@@ -506,6 +506,10 @@ function windowsReverseControlGrantCommand(port = defaults.port) {
   return `node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port ${safePort} --durationMs 30000 --boardSummary`;
 }
 
+function windowsVideoEncoderSupportCommand() {
+  return "node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary";
+}
+
 function formatCapabilities(capabilities = {}) {
   const screen = capabilities.screen || {};
   const audio = capabilities.audio || {};
@@ -607,6 +611,7 @@ async function checkRunningHostRuntime(args) {
         boardSummary: statusPayload.boardSummary || "",
         macClientReadinessCommands: statusPayload.macClientReadinessCommands || [],
         windowsReverseControlGrantCommand: statusPayload.windowsReverseControlGrantCommand || windowsReverseControlGrantCommand(args.port),
+        windowsVideoEncoderSupportCommand: statusPayload.windowsVideoEncoderSupportCommand || windowsVideoEncoderSupportCommand(),
         warnings,
         errors,
       };
@@ -661,6 +666,7 @@ async function checkRunningHostRuntime(args) {
       boardSummary: statusPayload.boardSummary || "",
       macClientReadinessCommands: statusPayload.macClientReadinessCommands || [],
       windowsReverseControlGrantCommand: statusPayload.windowsReverseControlGrantCommand || windowsReverseControlGrantCommand(args.port),
+      windowsVideoEncoderSupportCommand: statusPayload.windowsVideoEncoderSupportCommand || windowsVideoEncoderSupportCommand(),
       warnings,
       errors,
     };
@@ -678,6 +684,7 @@ async function checkRunningHostRuntime(args) {
       boardSummary: "",
       macClientReadinessCommands: [],
       windowsReverseControlGrantCommand: windowsReverseControlGrantCommand(args.port),
+      windowsVideoEncoderSupportCommand: windowsVideoEncoderSupportCommand(),
       warnings,
       errors,
     };
@@ -710,6 +717,9 @@ function makeReadinessBoardSummary(summary) {
   const reverseGrant = summary.windowsReverseControlGrantCommand && !runtimeText.includes("ReverseGrant=")
     ? ` ReverseGrant=${summary.windowsReverseControlGrantCommand}.`
     : "";
+  const videoSupport = summary.windowsVideoEncoderSupportCommand && !runtimeText.includes("WindowsVideoSupport=")
+    ? ` WindowsVideoSupport=${summary.windowsVideoEncoderSupportCommand}.`
+    : "";
   const probeSentences = [];
   if (wgcSourceResult) {
     const probeState = wgcSourceResult.ok ? "passed" : "failed";
@@ -720,7 +730,7 @@ function makeReadinessBoardSummary(summary) {
   const probeText = probeSentences
     .map((sentence) => (sentence.endsWith(".") ? sentence : `${sentence}.`))
     .join(" ");
-  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrant}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
+  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrant}${videoSupport}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
 }
 
 function formatMediaBoardSummary(summary) {
@@ -1157,6 +1167,9 @@ async function main() {
   const windowsReverseControlGrantCommandValue = results.find((result) =>
     typeof result.windowsReverseControlGrantCommand === "string" && result.windowsReverseControlGrantCommand,
   )?.windowsReverseControlGrantCommand || windowsReverseControlGrantCommand(args.port);
+  const windowsVideoEncoderSupportCommandValue = results.find((result) =>
+    typeof result.windowsVideoEncoderSupportCommand === "string" && result.windowsVideoEncoderSupportCommand,
+  )?.windowsVideoEncoderSupportCommand || windowsVideoEncoderSupportCommand();
 
   const summary = {
     ok,
@@ -1190,6 +1203,7 @@ async function main() {
     warnings: warnings.length,
     macClientReadinessCommands,
     windowsReverseControlGrantCommand: windowsReverseControlGrantCommandValue,
+    windowsVideoEncoderSupportCommand: windowsVideoEncoderSupportCommandValue,
     results: results.map((result) => ({
       label: result.label,
       ok: result.ok,
@@ -1202,6 +1216,7 @@ async function main() {
         ? result.macClientReadinessCommands
         : [],
       windowsReverseControlGrantCommand: result.windowsReverseControlGrantCommand || "",
+      windowsVideoEncoderSupportCommand: result.windowsVideoEncoderSupportCommand || "",
       warnings: result.warnings,
       errors: result.errors,
     })),

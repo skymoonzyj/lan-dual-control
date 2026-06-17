@@ -173,7 +173,8 @@ Options:
   --server <url>          Agent Link Board URL. Default: ${defaults.server}
   --boardSummary          With --status, print a short secret-free Agent Link Board summary.
                           The summary includes a WindowsHostMedia command for local
-                          video/audio baseline checks before Mac reverse control.
+                          video/audio baseline checks and a WindowsVideoSupport
+                          command for H.264/WGC/WebCodecs capability checks.
   --json                  With --status, print pure machine-readable JSON.
   --dryRun                Print the resolved launch plan and exit.
   --help, -h              Show this help without starting Windows host.
@@ -626,6 +627,10 @@ function windowsHostMediaReadinessCommand() {
   return "node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary";
 }
 
+function windowsVideoEncoderSupportCommand() {
+  return "node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary";
+}
+
 function windowsReverseControlGrantCommand(port = defaults.port) {
   const safePort = Math.max(1, Math.min(65535, Number(port) || defaults.port));
   return `node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port ${safePort} --durationMs 30000 --boardSummary`;
@@ -655,7 +660,7 @@ function macReadinessTargets(status) {
 function makeBoardSummary(status) {
   const board = boardSummaryFragment(status);
   if (!status.ok) {
-    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${status.suggestions[0] || "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword"}. WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. Do not send passwords on Agent Link Board.`;
+    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${status.suggestions[0] || "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword"}. WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. Do not send passwords on Agent Link Board.`;
   }
   const targets = macReadinessTargets(status);
   const targetText = targets.length > 0
@@ -672,7 +677,7 @@ function makeBoardSummary(status) {
   const reverseGrant = shouldShowReverseControlGrantCommand(reverse)
     ? ` ReverseGrant=${status.windowsReverseControlGrantCommand}.`
     : "";
-  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness}${sendCall} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}.${reverseGrant} Do not send passwords on Agent Link Board.`;
+  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness}${sendCall} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}.${reverseGrant} Do not send passwords on Agent Link Board.`;
 }
 
 function applyDiscoveryStatus(status, discovery, args) {
@@ -735,6 +740,7 @@ function makeStatusShell(args, probeHost = statusProbeHost(args)) {
     buildDiff: null,
     macClientReadinessCommands: [],
     windowsHostMediaReadinessCommand: windowsHostMediaReadinessCommand(),
+    windowsVideoEncoderSupportCommand: windowsVideoEncoderSupportCommand(),
     windowsReverseControlGrantCommand: windowsReverseControlGrantCommand(args.port),
     board: skippedBoardSnapshot(),
     boardSummary: "",
@@ -837,6 +843,7 @@ async function printStatus(args) {
         console.log(`[INFO] Mac formal send-call command: ${status.macClientReadinessCommands[0].sendCallCommand}`);
       }
       console.log(`[INFO] Windows host media baseline command: ${status.windowsHostMediaReadinessCommand}`);
+      console.log(`[INFO] Windows video support command: ${status.windowsVideoEncoderSupportCommand}`);
       if (shouldShowReverseControlGrantCommand(status.capabilities?.reverseControl)) {
         console.log(`[INFO] Windows reverse grant command: ${status.windowsReverseControlGrantCommand}`);
       }
@@ -852,6 +859,7 @@ async function printStatus(args) {
   console.log(`[INFO] Start safely with: ${status.suggestions[0]}`);
   console.log(`[INFO] ${status.suggestions[1]}`);
   console.log(`[INFO] Windows host media baseline command: ${status.windowsHostMediaReadinessCommand}`);
+  console.log(`[INFO] Windows video support command: ${status.windowsVideoEncoderSupportCommand}`);
   console.log(`[INFO] Windows reverse grant command after host is online: ${status.windowsReverseControlGrantCommand}`);
   return false;
 }
@@ -1045,6 +1053,9 @@ function printMacNextSteps(status) {
   }
   if (status.windowsHostMediaReadinessCommand) {
     console.log(`[INFO] Windows host media baseline command: ${status.windowsHostMediaReadinessCommand}`);
+  }
+  if (status.windowsVideoEncoderSupportCommand) {
+    console.log(`[INFO] Windows video support command: ${status.windowsVideoEncoderSupportCommand}`);
   }
   if (status.windowsReverseControlGrantCommand) {
     console.log(`[INFO] Windows reverse grant command: ${status.windowsReverseControlGrantCommand}`);
