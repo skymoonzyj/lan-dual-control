@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/index.html`, `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 休息续跑 | Windows 控制端事件面板新增“复制诊断”入口，复用脱敏导出日志文本写入剪贴板；页面 diagnostics 回归覆盖复制内容和 fake 密码脱敏。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 休息续跑 | Windows 控制端导出日志/状态快照新增本机被控 Windows host 状态、端口、画面/声音/输入/反控策略、体检档位、媒体基线开关和最近状态输出脱敏摘要；页面 diagnostics 回归覆盖脱敏。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 休息续跑 | Windows 控制端导出日志/状态快照新增本机 Mac 提醒 watcher 状态、详情、最近检查时间、自动轮询间隔和联络板地址；页面 diagnostics 回归覆盖导出字段。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 12:25 | Windows 桌面壳 Mac 提醒 watcher 状态查询加 15 秒节流；自动本机状态轮询不再每 2.5 秒启动 PowerShell，手动刷新/开启/停止仍即时执行。 |

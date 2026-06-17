@@ -2116,12 +2116,14 @@ async function verifyWindowsToMacKeyboardMapping(session) {
 async function verifyReconnectControls(session) {
   const result = await evaluate(
     session,
-    `(() => {
+    `(async () => {
       if (
         typeof scheduleReconnect !== "function" ||
         typeof reconnectNow !== "function" ||
         typeof clearReconnectTimers !== "function" ||
         typeof connect !== "function" ||
+        typeof buildLogExportText !== "function" ||
+        typeof copyLogsToClipboard !== "function" ||
         typeof state !== "object"
       ) {
         return { ok: false, reason: "missing reconnect functions" };
@@ -2133,7 +2135,9 @@ async function verifyReconnectControls(session) {
       const remote = document.querySelector("#remoteStatusText");
       const connectButton = document.querySelector("#connectButton");
       const disconnectButton = document.querySelector("#disconnectButton");
-      if (!reconnectButton || !actions || !status || !remote || !connectButton || !disconnectButton) {
+      const copyButton = document.querySelector("#copyLogButton");
+      const eventLog = document.querySelector("#eventLog");
+      if (!reconnectButton || !actions || !status || !remote || !connectButton || !disconnectButton || !copyButton) {
         return { ok: false, reason: "missing reconnect elements" };
       }
 
@@ -2160,6 +2164,9 @@ async function verifyReconnectControls(session) {
       const originalBadge = document.querySelector("#connectionBadge")?.className || "";
       const originalBadgeText = document.querySelector("#connectionBadge")?.textContent || "";
       const originalTauri = window.__TAURI__;
+      const originalClipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+      const originalLogEntries = Array.isArray(state.logEntries) ? state.logEntries.slice() : [];
+      const originalEventLogHtml = eventLog?.innerHTML || "";
       const originalWatcherRunning = state.localMacAlertWatcherRunning;
       const originalWatcherBusy = state.localMacAlertWatcherBusy;
       const originalWatcherCheckedAt = state.localMacAlertWatcherStatusCheckedAt;
@@ -2183,11 +2190,20 @@ async function verifyReconnectControls(session) {
       const originalLocalHostReverseValue = localHostReverseSelect?.value || "";
       const originalLocalHostReadinessValue = localHostReadinessSelect?.value || "";
       const calls = [];
+      let copiedText = "";
 
       try {
         connect = async (options = {}) => {
           calls.push({ reconnect: Boolean(options.reconnect) });
         };
+        Object.defineProperty(navigator, "clipboard", {
+          configurable: true,
+          value: {
+            writeText: async (text) => {
+              copiedText = String(text);
+            },
+          },
+        });
         window.__TAURI__ = { core: { invoke: async () => ({}) } };
         state.localMacAlertWatcherRunning = true;
         state.localMacAlertWatcherBusy = false;
@@ -2239,6 +2255,13 @@ async function verifyReconnectControls(session) {
           localHostPasswordHidden: exportText.includes("- 本机被控密码：不导出"),
           noLocalHostSecret: !exportText.includes("should-not-export"),
         };
+        await copyLogsToClipboard();
+        const copied =
+          copiedText.includes("- 本机被控：桌面壳托管运行中") &&
+          copiedText.includes("- Mac 提醒：提醒中") &&
+          copiedText.includes("password=<hidden>") &&
+          !copiedText.includes("should-not-export") &&
+          state.logEntries[0]?.title === "诊断复制";
         const scheduled =
           state.reconnectTimer &&
           state.reconnectCountdownTimer &&
@@ -2261,9 +2284,10 @@ async function verifyReconnectControls(session) {
           !actions.classList.contains("has-reconnect");
 
         return {
-          ok: scheduled && immediate,
+          ok: scheduled && immediate && copied,
           scheduled,
           immediate,
+          copied,
           status: status.textContent,
           remote: remote.textContent,
           exportHasReconnectStatus: exportText.includes("- 重连状态："),
@@ -2273,6 +2297,8 @@ async function verifyReconnectControls(session) {
           exportHasLocalHostStatus: exportText.includes("- 本机被控：桌面壳托管运行中"),
           exportMasksLocalHostOutput: !exportText.includes("should-not-export"),
           exportChecks,
+          copiedTextHasLocalHostStatus: copiedText.includes("- 本机被控：桌面壳托管运行中"),
+          copiedTextMasksLocalHostOutput: !copiedText.includes("should-not-export"),
           calls,
         };
       } finally {
@@ -2300,7 +2326,18 @@ async function verifyReconnectControls(session) {
         state.localHostRunning = originalLocalHostRunning;
         state.localHostOnline = originalLocalHostOnline;
         state.localHostBusy = originalLocalHostBusy;
+        state.logEntries = originalLogEntries;
+        if (eventLog) eventLog.innerHTML = originalEventLogHtml;
         window.__TAURI__ = originalTauri;
+        if (originalClipboardDescriptor) {
+          Object.defineProperty(navigator, "clipboard", originalClipboardDescriptor);
+        } else {
+          try {
+            delete navigator.clipboard;
+          } catch (error) {
+            // Ignore cleanup failures in browsers that expose clipboard on the prototype.
+          }
+        }
         const watcherStatus = document.querySelector("#localMacAlertWatcherStatusText");
         if (watcherStatus) watcherStatus.textContent = originalWatcherStatus;
         if (localHostBadge) {

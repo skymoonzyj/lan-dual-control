@@ -21,6 +21,37 @@
 
 日期：2026-06-17 休息续跑
 开发端：Windows Codex
+本轮目标：给 Windows 控制端增加“复制诊断”入口，方便现场直接粘贴当前状态报告。
+完成内容：
+- 事件面板新增 `copyLogButton`，显示“复制诊断”按钮。
+- 新增 `copyLogsToClipboard()` 和 `writeTextToClipboard()`：优先用 `navigator.clipboard.writeText`，失败时退回隐藏文本框复制；复制内容复用 `buildLogExportText()`，与导出日志保持同一份脱敏文本。
+- 页面 diagnostics 回归 mock 剪贴板，确认复制文本包含 Mac 提醒、本机被控状态和脱敏输出，且不包含 fake 密码原文；复制成功会写入“诊断复制”事件。
+- README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 本轮没有在真实桌面壳里人工点按钮，只用浏览器页面级自测 mock 剪贴板验证逻辑；桌面实机可在下次联调时顺手点一次确认系统剪贴板。
+下一步建议：
+- 后续可把复制诊断也做进 Mac client，形成双端一致的现场反馈入口。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 休息续跑
+开发端：Windows Codex
 本轮目标：让 Windows 控制端导出日志记录本机被控 Windows host 状态，方便 Mac 反控 Windows 排查。
 完成内容：
 - `buildLogExportText()` 新增本机被控诊断字段：状态、徽标、详情、端口、画面/声音/输入/反控策略、体检档位、媒体基线开关、最近状态输出摘要和“密码不导出”说明。

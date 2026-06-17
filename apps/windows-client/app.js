@@ -22,6 +22,7 @@ const elements = {
   disconnectButton: document.querySelector("#disconnectButton"),
   refreshDevicesButton: document.querySelector("#refreshDevicesButton"),
   deviceList: document.querySelector("#deviceList"),
+  copyLogButton: document.querySelector("#copyLogButton"),
   exportLogButton: document.querySelector("#exportLogButton"),
   clearLogButton: document.querySelector("#clearLogButton"),
   localHostBadge: document.querySelector("#localHostBadge"),
@@ -2482,6 +2483,43 @@ function exportLogs() {
     addLog("日志导出", link.download);
   } catch (error) {
     addLog("日志导出失败", error?.message || "当前环境不允许导出文件");
+  }
+}
+
+async function writeTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch (error) {
+      // Fall through to the textarea copy path for local file/browser preview contexts.
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.append(textarea);
+  textarea.focus();
+  textarea.select();
+  try {
+    const copied = document.execCommand?.("copy");
+    if (!copied) throw new Error("copy command was rejected");
+  } finally {
+    textarea.remove();
+  }
+}
+
+async function copyLogsToClipboard() {
+  try {
+    const text = buildLogExportText();
+    await writeTextToClipboard(text);
+    addLog("诊断复制", "已复制当前诊断报告");
+  } catch (error) {
+    addLog("诊断复制失败", error?.message || "当前环境不允许写入剪贴板");
   }
 }
 
@@ -5187,6 +5225,9 @@ elements.reconnectNowButton.addEventListener("click", () => {
 });
 elements.disconnectButton.addEventListener("click", disconnect);
 elements.refreshDevicesButton.addEventListener("click", refreshDevices);
+elements.copyLogButton.addEventListener("click", () => {
+  void copyLogsToClipboard();
+});
 elements.exportLogButton.addEventListener("click", exportLogs);
 elements.clearLogButton.addEventListener("click", () => {
   state.logEntries = [];
