@@ -118,6 +118,14 @@ node scripts/mac/test-mac-client-readiness.mjs
 node scripts/mac/test-mac-client-formal-status.mjs
 ```
 
+日常检查 Mac client 页面本身时，优先跑 Mac 侧本机 mock 自测包装器：
+
+```bash
+node scripts/mac/test-mac-client-browser-self-test.mjs --boardSummary
+```
+
+该入口会临时启动本机 mock Windows host 和 Mac client 页面，默认启用 `mockVideo`、允许本机剪贴板回退、跳过真实文件剪贴板写入，并只输出一行可贴到 Agent Link Board 的无密摘要。它会拒绝真实 host、密码、call 和进度覆盖参数，避免本机页面自测误进入正式联调；只有真实 Windows host、WASAPI 音频、文件注入、视频传输矩阵等高级场景，才直接使用底层 `scripts/windows/test-mac-client-browser.mjs`。
+
 本机联调已验证：连接 `127.0.0.1:43772` Windows host 回退服务后，发送文本剪贴板会收到 `clipboard_ack`，非 Windows 环境显示 `memory-only` 回退模式。
 
 Mac 本机文本剪贴板已纳入页面级自检：脚本会断言未连接/空文本时“发送文字”禁用，连接后填入临时文本再确认按钮启用并发送；还会授权浏览器剪贴板、写入临时文本、点击“读取 Mac 剪贴板”并确认按钮可用，再发送并等待 `clipboard_ack`。自检会继续开启监听，写入新文本后确认自动发送收到 `clipboard_ack`。断开连接时监听会自动停止，文字/文件发送按钮都会回到禁用态。页面级自检也会先确认“发现”按钮在 `/discovery` 请求中锁定并恢复，再在连接发起后确认“连接”按钮立刻禁用、“断开”按钮可用，并验证连接中点击断开不会继续建立 WebSocket，防止重复连接或误连接。
@@ -126,7 +134,7 @@ Mac 本机文本剪贴板已纳入页面级自检：脚本会断言未连接/空
 
 视频参数已纳入页面级自检：脚本会确认默认 `session_offer` 请求 1080P / 60 Hz / 20 Mbps，并根据浏览器能力断言支持 WebCodecs 时请求 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb` / `preferredVideoTransport=binary-h264`，禁用 WebCodecs 时请求 `mjpeg` / `data-url` / `binary-jpeg` 兜底；同时断言 `supportedVideoTransports` 会随 `session_offer`、`display_settings` 一起发送并包含 `json`、`binary-jpeg`、`binary-h264`。页面 URL 带 `?binaryVideo=0` 或自检加 `--disableBinaryVideo` 时，只声明 `json` 并回归 H.264 JSON/base64 兼容路径；切换到高清预设后，脚本会断言页面发送 2K / 60 Hz / 40 Mbps 的 `display_settings` 且保留对应视频编码和传输偏好，并收到 `display_settings_ack`；如果启用了持续视频观察，还会继续要求切换后收到新的视频帧，且最后一帧尺寸、编码和传输方式与新设置一致。
 
-持续视频体验也可量化：脚本加 `--observeVideoMs <毫秒>` 会在连接后统计短窗口内收到的 `video_frame` 数和实收 FPS；加 `--minObservedVideoFrames <帧数>` 或 `--minObservedVideoFps <FPS>` 可把持续来帧能力变成强校验。连接首帧、认证失败、H.264/二进制视频、音频首帧/播放、重连恢复和长窗口观察都会输出等待进度心跳；默认每 10 秒输出一次，长观察会包含已收帧数、剩余时间和当前 FPS；可用 `--progressIntervalMs <毫秒>` 调整，传 `0` 可关闭。需要把页面自检结果直接同步到 Agent Link Board 时，可加 `--boardSummary`，stdout 只输出一行无密摘要，详细进度转到 stderr。
+底层页面自检也支持量化持续视频体验：直接使用 `scripts/windows/test-mac-client-browser.mjs` 时，加 `--observeVideoMs <毫秒>` 会在连接后统计短窗口内收到的 `video_frame` 数和实收 FPS；加 `--minObservedVideoFrames <帧数>` 或 `--minObservedVideoFps <FPS>` 可把持续来帧能力变成强校验。连接首帧、认证失败、H.264/二进制视频、音频首帧/播放、重连恢复和长窗口观察都会输出等待进度心跳；默认每 10 秒输出一次，长观察会包含已收帧数、剩余时间和当前 FPS；可用 `--progressIntervalMs <毫秒>` 调整，传 `0` 可关闭。需要把页面自检结果直接同步到 Agent Link Board 时，日常优先使用上面的 Mac 包装器 `--boardSummary`；高级场景可直接给底层脚本加 `--boardSummary`，stdout 只输出一行无密摘要，详细进度转到 stderr。
 
 会话诊断面板已纳入页面级自检：连接成功并出现首帧后，脚本会断言“首帧”和“视频流”指标已从等待状态更新，并在对端提供 `video_frame.timestamp` 时断言视频状态和诊断行显示“到达 <ms>”或“时钟偏差”；视频表面可以是 JPEG `<img>` 或 H.264 `<canvas>`，自检会统一识别；加 `--requireH264Video` 时，脚本会启动 `ffmpeg-h264` host 并要求页面显示 H.264 canvas，不允许回退 JPEG；加 `--expectBinaryH264Video` 时，脚本会要求页面收到 `binary-h264` 帧并保持 H.264 canvas 可见；加 `--expectBinaryVideo` 时，脚本会启动 WGC JPEG helper 并要求页面收到 `binary-jpeg` 视频帧、保持画面可见且诊断显示“二进制”；加 `--disableBinaryVideo` 时，脚本会用 `?binaryVideo=0` 关闭二进制视频并要求旧 JSON/base64 路径仍可显示；加 `--expectRepeatSignalVideo` 时，脚本会启动 WGC mock helper 并要求 `repeatPreviousFrame` 轻量重复帧保持画面可见且诊断显示“重复”；加 `--expectH264Fallback` 时，脚本会显式模拟 H.264 配置不支持，要求页面发送 MJPEG/JPEG fallback 请求并最终显示 `jpeg` 画面；临时 Windows host 也会断言 runtime 里显示 PID 和测试 build id，音频验收时也会断言音频诊断显示已接收帧；自检末尾会点击“断开”，确认连接状态、视频表面、音频状态和诊断指标回到干净初始态。
 
