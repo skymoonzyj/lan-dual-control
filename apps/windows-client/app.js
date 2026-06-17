@@ -38,6 +38,10 @@ const elements = {
   localHostFirewallButton: document.querySelector("#localHostFirewallButton"),
   localHostStopButton: document.querySelector("#localHostStopButton"),
   localHostReverseGrantButton: document.querySelector("#localHostReverseGrantButton"),
+  localMacAlertWatcherBadge: document.querySelector("#localMacAlertWatcherBadge"),
+  localMacAlertWatcherStatusText: document.querySelector("#localMacAlertWatcherStatusText"),
+  localMacAlertWatcherToggleButton: document.querySelector("#localMacAlertWatcherToggleButton"),
+  localMacAlertWatcherRefreshButton: document.querySelector("#localMacAlertWatcherRefreshButton"),
   localHostStatusText: document.querySelector("#localHostStatusText"),
   localHostOutput: document.querySelector("#localHostOutput"),
   historyList: document.querySelector("#historyList"),
@@ -116,6 +120,7 @@ const fileChunkSizeBytes = 64 * 1024;
 const maxClipboardFileBytes = 512 * 1024 * 1024;
 const nativeClipboardChunkSizeBytes = 1024 * 1024;
 const maxNativeClipboardFileBytes = maxClipboardFileBytes;
+const defaultAgentLinkServer = "http://192.168.31.68:17888";
 const defaultHostDiagnosticsText = "诊断：等待连接。";
 const displayOptionDefaults = {
   resolution: "1920x1080",
@@ -323,6 +328,8 @@ const state = {
   localHostOnline: false,
   localHostBusy: false,
   localHostPollTimer: null,
+  localMacAlertWatcherRunning: false,
+  localMacAlertWatcherBusy: false,
   connectionState: "idle",
   remoteDisplays: fallbackDisplays,
   activeDisplayId: "main",
@@ -3036,6 +3043,13 @@ function buildLocalHostStatusRequest(extra = {}) {
   };
 }
 
+function buildMacAlertWatcherRequest(extra = {}) {
+  return {
+    server: defaultAgentLinkServer,
+    ...extra,
+  };
+}
+
 function buildLocalHostLaunchRequest() {
   return {
     host: "0.0.0.0",
@@ -3055,6 +3069,86 @@ function setLocalHostBadge(mode, text) {
 
 function setLocalHostStatus(text) {
   elements.localHostStatusText.textContent = text;
+}
+
+function setLocalMacAlertWatcherBadge(mode, text) {
+  elements.localMacAlertWatcherBadge.className = `status-badge ${mode}`;
+  elements.localMacAlertWatcherBadge.textContent = text;
+}
+
+function normalizeMacAlertWatcherPayload(result) {
+  if (result?.json && typeof result.json === "object") return result.json;
+  if (result && typeof result === "object" && Object.prototype.hasOwnProperty.call(result, "running")) {
+    return result;
+  }
+  return null;
+}
+
+function macAlertWatcherUiState(payload, { available = canUseDesktopHostControl(), busy = false } = {}) {
+  if (!available) {
+    return {
+      running: false,
+      badgeMode: "offline",
+      badgeText: "需桌面版",
+      statusText: "桌面版可开启 Windows 浮窗提醒，接住 Mac 端授权、权限和反控等待消息。",
+      toggleText: "开启提醒",
+      toggleIcon: "◌",
+    };
+  }
+  if (busy) {
+    return {
+      running: state.localMacAlertWatcherRunning,
+      badgeMode: "connecting",
+      badgeText: "处理中",
+      statusText: "正在处理 Mac 提醒 watcher...",
+      toggleText: state.localMacAlertWatcherRunning ? "停止提醒" : "开启提醒",
+      toggleIcon: state.localMacAlertWatcherRunning ? "■" : "◌",
+    };
+  }
+  if (!payload || payload.ok === false) {
+    return {
+      running: false,
+      badgeMode: "offline",
+      badgeText: "未知",
+      statusText: payload?.message || "暂时无法读取 Windows 浮窗提醒状态。",
+      toggleText: "开启提醒",
+      toggleIcon: "◌",
+    };
+  }
+  const running = payload.running === true;
+  const processIds = Array.isArray(payload.processIds) ? payload.processIds.filter(Boolean) : [];
+  const processText = running && processIds.length > 0 ? `，PID ${processIds.join(", ")}` : "";
+  const serverText = payload.server ? `，监听 ${payload.server}` : "";
+  return {
+    running,
+    badgeMode: running ? "online" : "offline",
+    badgeText: running ? "提醒中" : "未开启",
+    statusText: running
+      ? `Windows 浮窗提醒已开启${processText}${serverText}。`
+      : "Windows 浮窗提醒未开启；可一键启动后接收 Mac 授权、权限和反控等待消息。",
+    toggleText: running ? "停止提醒" : "开启提醒",
+    toggleIcon: running ? "■" : "◌",
+  };
+}
+
+function applyMacAlertWatcherResult(result) {
+  const payload = normalizeMacAlertWatcherPayload(result);
+  const view = macAlertWatcherUiState(payload);
+  state.localMacAlertWatcherRunning = view.running;
+  setLocalMacAlertWatcherBadge(view.badgeMode, view.badgeText);
+  elements.localMacAlertWatcherStatusText.textContent = view.statusText;
+  elements.localMacAlertWatcherToggleButton.lastChild.textContent = ` ${view.toggleText}`;
+  elements.localMacAlertWatcherToggleButton.querySelector("span").textContent = view.toggleIcon;
+  updateLocalMacAlertWatcherControls();
+}
+
+function applyMacAlertWatcherError(error) {
+  state.localMacAlertWatcherRunning = false;
+  setLocalMacAlertWatcherBadge("offline", "不可用");
+  elements.localMacAlertWatcherStatusText.textContent = error?.message || "读取 Windows 浮窗提醒状态失败。";
+  elements.localMacAlertWatcherToggleButton.lastChild.textContent = " 开启提醒";
+  elements.localMacAlertWatcherToggleButton.querySelector("span").textContent = "◌";
+  updateLocalMacAlertWatcherControls();
 }
 
 function renderLocalHostOutput(lines = []) {
@@ -3390,6 +3484,20 @@ function localHostHelperStatusLines(result) {
   return lines;
 }
 
+function updateLocalMacAlertWatcherControls() {
+  const available = canUseDesktopHostControl();
+  const busy = state.localMacAlertWatcherBusy;
+  elements.localMacAlertWatcherToggleButton.disabled = !available || busy;
+  elements.localMacAlertWatcherRefreshButton.disabled = !available || busy;
+  if (!available || busy) {
+    const view = macAlertWatcherUiState(null, { available, busy });
+    setLocalMacAlertWatcherBadge(view.badgeMode, view.badgeText);
+    elements.localMacAlertWatcherStatusText.textContent = view.statusText;
+    elements.localMacAlertWatcherToggleButton.lastChild.textContent = ` ${view.toggleText}`;
+    elements.localMacAlertWatcherToggleButton.querySelector("span").textContent = view.toggleIcon;
+  }
+}
+
 function updateLocalHostControls() {
   const available = canUseDesktopHostControl();
   const busy = state.localHostBusy;
@@ -3464,13 +3572,17 @@ async function refreshLocalHostProcessStatus() {
   const invoke = getTauriInvoke();
   if (!invoke) {
     updateLocalHostControls();
+    updateLocalMacAlertWatcherControls();
     return;
   }
   try {
-    const [snapshotResult, helperResult] = await Promise.allSettled([
+    const [snapshotResult, helperResult, watcherResult] = await Promise.allSettled([
       invoke("get_windows_host_status"),
       invoke("get_windows_host_helper_status", {
         request: buildLocalHostStatusRequest(),
+      }),
+      invoke("get_mac_alert_watcher_status", {
+        request: buildMacAlertWatcherRequest(),
       }),
     ]);
     if (snapshotResult.status === "rejected" && helperResult.status === "rejected") {
@@ -3489,9 +3601,15 @@ async function refreshLocalHostProcessStatus() {
       snapshot.helperStatusError = helperResult.reason?.message || String(helperResult.reason || "");
     }
     applyLocalHostSnapshot(snapshot);
+    if (watcherResult.status === "fulfilled") {
+      applyMacAlertWatcherResult(watcherResult.value);
+    } else {
+      applyMacAlertWatcherError(watcherResult.reason);
+    }
   } catch (error) {
     setLocalHostStatus(error?.message || "读取本机被控状态失败。");
     updateLocalHostControls();
+    updateLocalMacAlertWatcherControls();
   }
 }
 
@@ -3603,6 +3721,53 @@ async function grantLocalHostReverseControl() {
     renderLocalHostOutput([error?.message || String(error)]);
   } finally {
     setLocalHostBusy(false);
+  }
+}
+
+function setMacAlertWatcherBusy(busy, text = "") {
+  state.localMacAlertWatcherBusy = busy;
+  if (text) elements.localMacAlertWatcherStatusText.textContent = text;
+  updateLocalMacAlertWatcherControls();
+}
+
+async function refreshMacAlertWatcherStatus({ quiet = false } = {}) {
+  const invoke = getTauriInvoke();
+  if (!invoke) {
+    updateLocalMacAlertWatcherControls();
+    return;
+  }
+  if (!quiet) setMacAlertWatcherBusy(true, "正在刷新 Windows 浮窗提醒状态...");
+  try {
+    const result = await invoke("get_mac_alert_watcher_status", {
+      request: buildMacAlertWatcherRequest(),
+    });
+    state.localMacAlertWatcherBusy = false;
+    applyMacAlertWatcherResult(result);
+    if (!quiet) addLog("Mac 提醒", normalizeMacAlertWatcherPayload(result)?.running ? "Windows 浮窗提醒已开启" : "Windows 浮窗提醒未开启");
+  } catch (error) {
+    state.localMacAlertWatcherBusy = false;
+    applyMacAlertWatcherError(error);
+  }
+}
+
+async function toggleMacAlertWatcher() {
+  const invoke = getTauriInvoke();
+  if (!invoke) return;
+  const shouldStop = state.localMacAlertWatcherRunning;
+  setMacAlertWatcherBusy(true, shouldStop ? "正在停止 Windows 浮窗提醒..." : "正在开启 Windows 浮窗提醒...");
+  try {
+    const result = await invoke(shouldStop ? "stop_mac_alert_watcher" : "start_mac_alert_watcher", {
+      request: buildMacAlertWatcherRequest(),
+    });
+    state.localMacAlertWatcherBusy = false;
+    applyMacAlertWatcherResult(result);
+    const payload = normalizeMacAlertWatcherPayload(result);
+    addLog("Mac 提醒", payload?.message || (payload?.running ? "Windows 浮窗提醒已开启" : "Windows 浮窗提醒已停止"));
+    renderLocalHostOutput(localHostCommandLines(result));
+  } catch (error) {
+    state.localMacAlertWatcherBusy = false;
+    applyMacAlertWatcherError(error);
+    renderLocalHostOutput([error?.message || String(error)]);
   }
 }
 
@@ -4933,6 +5098,12 @@ elements.localHostStopButton.addEventListener("click", () => {
 elements.localHostReverseGrantButton.addEventListener("click", () => {
   void grantLocalHostReverseControl();
 });
+elements.localMacAlertWatcherToggleButton.addEventListener("click", () => {
+  void toggleMacAlertWatcher();
+});
+elements.localMacAlertWatcherRefreshButton.addEventListener("click", () => {
+  void refreshMacAlertWatcherStatus();
+});
 
 elements.fullscreenButton.addEventListener("click", () => setFullscreen(true));
 elements.windowModeButton.addEventListener("click", () => setFullscreen(false));
@@ -5222,6 +5393,7 @@ renderReceivedFiles();
 resetHostDiagnostics();
 updateReverseControlUi();
 updateLocalHostControls();
+updateLocalMacAlertWatcherControls();
 startLocalHostPolling();
 void refreshLocalHostProcessStatus();
 addLog("控制端启动", "本地模拟模式，可切换 WebSocket");

@@ -824,12 +824,16 @@ async function verifyDesktopOnlyHostPanel(session) {
     `(() => {
       const badge = document.querySelector("#localHostBadge");
       const status = document.querySelector("#localHostStatusText");
+      const watcherBadge = document.querySelector("#localMacAlertWatcherBadge");
+      const watcherStatus = document.querySelector("#localMacAlertWatcherStatusText");
       const buttons = [
         "#localHostReadinessButton",
         "#localHostStartButton",
         "#localHostFirewallButton",
         "#localHostStopButton",
         "#localHostReverseGrantButton",
+        "#localMacAlertWatcherToggleButton",
+        "#localMacAlertWatcherRefreshButton",
       ].map((selector) => document.querySelector(selector));
       const inputs = [
         "#localHostPortInput",
@@ -867,6 +871,32 @@ async function verifyDesktopOnlyHostPanel(session) {
       const statusRequest =
         typeof buildLocalHostStatusRequest === "function"
           ? buildLocalHostStatusRequest()
+          : {};
+      const watcherRequest =
+        typeof buildMacAlertWatcherRequest === "function"
+          ? buildMacAlertWatcherRequest()
+          : {};
+      const watcherRunningView =
+        typeof macAlertWatcherUiState === "function"
+          ? macAlertWatcherUiState({
+              ok: true,
+              action: "status",
+              running: true,
+              processIds: [1357],
+              server: "http://192.168.31.68:17888",
+              message: "Mac alert watcher is running.",
+            }, { available: true, busy: false })
+          : {};
+      const watcherStoppedView =
+        typeof macAlertWatcherUiState === "function"
+          ? macAlertWatcherUiState({
+              ok: true,
+              action: "status",
+              running: false,
+              processIds: [],
+              server: "http://192.168.31.68:17888",
+              message: "Mac alert watcher is not running.",
+            }, { available: true, busy: false })
           : {};
       const readinessHeaderLines =
         typeof readinessLines === "function"
@@ -1111,6 +1141,10 @@ async function verifyDesktopOnlyHostPanel(session) {
           typeof canUseDesktopHostControl === "function" &&
           typeof buildLocalHostReadinessRequest === "function" &&
           typeof buildLocalHostStatusRequest === "function" &&
+          typeof buildMacAlertWatcherRequest === "function" &&
+          typeof macAlertWatcherUiState === "function" &&
+          typeof refreshMacAlertWatcherStatus === "function" &&
+          typeof toggleMacAlertWatcher === "function" &&
           typeof normalizeLocalHostHelperStatus === "function" &&
           typeof localHostHelperStatusSummary === "function" &&
           typeof localHostHelperStatusLines === "function" &&
@@ -1122,6 +1156,8 @@ async function verifyDesktopOnlyHostPanel(session) {
           canUseDesktopHostControl() === false &&
           badge?.textContent === "需桌面版" &&
           status?.textContent.includes("浏览器预览版") &&
+          watcherBadge?.textContent === "需桌面版" &&
+          watcherStatus?.textContent.includes("Windows 浮窗提醒") &&
           buttons.every((button) => button?.disabled) &&
           inputs.every((input) => input?.disabled) &&
           profileSelect?.value === "default" &&
@@ -1136,6 +1172,16 @@ async function verifyDesktopOnlyHostPanel(session) {
           statusRequest.host === "127.0.0.1" &&
           statusRequest.port === readinessRequest.port &&
           statusRequest.checkBoard === true &&
+          watcherRequest.server === "http://192.168.31.68:17888" &&
+          watcherRunningView.running === true &&
+          watcherRunningView.badgeText === "提醒中" &&
+          watcherRunningView.toggleText === "停止提醒" &&
+          watcherRunningView.statusText.includes("PID 1357") &&
+          watcherRunningView.statusText.includes("192.168.31.68") &&
+          watcherStoppedView.running === false &&
+          watcherStoppedView.badgeText === "未开启" &&
+          watcherStoppedView.toggleText === "开启提醒" &&
+          watcherStoppedView.statusText.includes("未开启") &&
           readinessHeaderText.includes("client-test") &&
           readinessHeaderText.includes("1000 ms") &&
           readinessHeaderText.includes("750 ms") &&
@@ -1171,6 +1217,8 @@ async function verifyDesktopOnlyHostPanel(session) {
           nativeClipboardChunkSizeBytes === 1024 * 1024,
         badge: badge?.textContent || "",
         status: status?.textContent || "",
+        watcherBadge: watcherBadge?.textContent || "",
+        watcherStatus: watcherStatus?.textContent || "",
         profile: profileSelect?.value || "",
         requestProfile: readinessRequest.profile || "",
         requestProbeMedia: readinessRequest.probeMedia,
@@ -1178,6 +1226,9 @@ async function verifyDesktopOnlyHostPanel(session) {
         defaultLaunchRequest,
         acceptLaunchRequest,
         statusRequest,
+        watcherRequest,
+        watcherRunningView,
+        watcherStoppedView,
         readinessHeader: readinessHeaderLines.slice(0, 4),
         readinessSummaryText,
         helperSummary,

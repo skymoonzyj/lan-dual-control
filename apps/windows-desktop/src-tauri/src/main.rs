@@ -28,6 +28,7 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 const MAX_HOST_LOG_LINES: usize = 240;
 const MAX_NATIVE_CLIPBOARD_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
 const STALE_CLIPBOARD_ROOT_MAX_AGE_SECS: u64 = 7 * 24 * 60 * 60;
+const DEFAULT_AGENT_LINK_SERVER: &str = "http://192.168.31.68:17888";
 static CLIPBOARD_TRANSFER_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Default)]
@@ -160,6 +161,12 @@ struct WindowsHostLaunchRequest {
 struct WindowsHostReverseGrantRequest {
     port: Option<u16>,
     duration_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MacAlertWatcherRequest {
+    server: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -582,6 +589,15 @@ fn normalize_port(value: Option<u16>) -> u16 {
     value.filter(|port| *port > 0).unwrap_or(43770)
 }
 
+fn normalize_agent_link_server(value: Option<&String>) -> String {
+    let server = value.map(|text| text.trim()).unwrap_or("");
+    if server.is_empty() {
+        DEFAULT_AGENT_LINK_SERVER.to_string()
+    } else {
+        server.trim_end_matches('/').to_string()
+    }
+}
+
 fn normalize_mode(value: Option<&String>, allowed: &[&str], fallback: &str) -> String {
     let mode = value
         .map(|text| text.trim().to_ascii_lowercase())
@@ -647,6 +663,37 @@ fn run_node_script(
     let output = command
         .output()
         .map_err(|error| format!("运行 Node 脚本失败：{error}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let json = serde_json::from_str::<Value>(stdout.trim()).ok();
+
+    Ok(DesktopCommandResult {
+        ok: output.status.success(),
+        exit_code: output.status.code(),
+        stdout,
+        stderr,
+        json,
+    })
+}
+
+fn run_powershell_script(
+    repo_root: &Path,
+    script_path: &Path,
+    args: &[String],
+) -> Result<DesktopCommandResult, String> {
+    let mut command = Command::new("powershell.exe");
+    command
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
+        .arg(script_path)
+        .args(args)
+        .current_dir(repo_root)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    add_hidden_flag(&mut command);
+
+    let output = command
+        .output()
+        .map_err(|error| format!("运行 PowerShell 脚本失败：{error}"))?;
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     let json = serde_json::from_str::<Value>(stdout.trim()).ok();
@@ -1329,6 +1376,46 @@ fn get_windows_host_helper_status(
     run_node_script(&repo, &script, &args, &[])
 }
 
+fn run_mac_alert_watcher_command(
+    request: MacAlertWatcherRequest,
+    action: &str,
+) -> Result<DesktopCommandResult, String> {
+    let repo = repo_root()?;
+    let script = repo
+        .join("scripts")
+        .join("windows")
+        .join("start-mac-alert-watcher.ps1");
+    let server = normalize_agent_link_server(request.server.as_ref());
+    let mut args = vec!["-Server".to_string(), server, "-Json".to_string()];
+    match action {
+        "status" => args.push("-Status".to_string()),
+        "stop" => args.push("-Stop".to_string()),
+        "start" => {}
+        _ => return Err("未知的 Mac 提醒 watcher 操作。".to_string()),
+    }
+
+    run_powershell_script(&repo, &script, &args)
+}
+
+#[tauri::command]
+fn get_mac_alert_watcher_status(
+    request: MacAlertWatcherRequest,
+) -> Result<DesktopCommandResult, String> {
+    run_mac_alert_watcher_command(request, "status")
+}
+
+#[tauri::command]
+fn start_mac_alert_watcher(
+    request: MacAlertWatcherRequest,
+) -> Result<DesktopCommandResult, String> {
+    run_mac_alert_watcher_command(request, "start")
+}
+
+#[tauri::command]
+fn stop_mac_alert_watcher(request: MacAlertWatcherRequest) -> Result<DesktopCommandResult, String> {
+    run_mac_alert_watcher_command(request, "stop")
+}
+
 #[tauri::command]
 fn start_windows_host(
     request: WindowsHostLaunchRequest,
@@ -1510,8 +1597,8 @@ fn grant_windows_host_reverse_control(
         &body,
         "reverse-control grant",
     )?;
-    let stdout = serde_json::to_string_pretty(&json)
-        .unwrap_or_else(|_| "{\"ok\":true}".to_string());
+    let stdout =
+        serde_json::to_string_pretty(&json).unwrap_or_else(|_| "{\"ok\":true}".to_string());
     Ok(DesktopCommandResult {
         ok: json.get("ok").and_then(Value::as_bool).unwrap_or(true),
         exit_code: Some(0),
@@ -1719,6 +1806,9 @@ fn main() {
             preview_windows_firewall_rule,
             discover_lan_hosts,
             get_windows_host_helper_status,
+            get_mac_alert_watcher_status,
+            start_mac_alert_watcher,
+            stop_mac_alert_watcher,
             start_windows_host,
             stop_windows_host,
             get_windows_host_status,

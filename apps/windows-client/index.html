@@ -176,6 +176,26 @@
             </button>
           </div>
 
+          <div class="local-alert-watcher">
+            <div class="local-alert-watcher-heading">
+              <span>Mac 提醒</span>
+              <span id="localMacAlertWatcherBadge" class="status-badge offline">未开启</span>
+            </div>
+            <p id="localMacAlertWatcherStatusText" class="local-alert-watcher-text">
+              桌面版可开启 Windows 浮窗提醒，接住 Mac 端授权、权限和反控等待消息。
+            </p>
+            <div class="button-row local-alert-watcher-row">
+              <button id="localMacAlertWatcherToggleButton" class="secondary-action" type="button" disabled>
+                <span aria-hidden="true">◌</span>
+                开启提醒
+              </button>
+              <button id="localMacAlertWatcherRefreshButton" class="secondary-action" type="button" disabled>
+                <span aria-hidden="true">↻</span>
+                刷新提醒
+              </button>
+            </div>
+          </div>
+
           <p id="localHostStatusText" class="local-host-status">桌面版可一键启动 Windows 被控端。</p>
           <pre id="localHostOutput" class="local-host-output" aria-live="polite"></pre>
         </section>

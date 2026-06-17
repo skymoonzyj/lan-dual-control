@@ -19,6 +19,43 @@
 
 ## 2026-06-17 Windows Codex
 
+日期：2026-06-17 12:13
+开发端：Windows Codex
+本轮目标：把 Windows 本机 Mac 提醒 watcher 接入桌面壳。
+完成内容：
+- Tauri 后端新增 `get_mac_alert_watcher_status`、`start_mac_alert_watcher`、`stop_mac_alert_watcher`，统一调用 `scripts/windows/start-mac-alert-watcher.ps1 -Json`，默认联络板为 `http://192.168.31.68:17888`。
+- Windows 控制端“本机被控”面板新增“Mac 提醒”区：显示 `需桌面版/未开启/提醒中/不可用`，可一键开启或停止 Windows 本机浮窗 watcher，并可刷新状态。
+- 页面轮询会同时读取 watcher 状态；浏览器预览版保持禁用，不会启动后台 watcher。
+- `test-windows-client-browser --diagnosticsOnly` 的桌面专属面板回归新增默认联络板地址、按钮禁用、运行/未运行文案和纯格式化函数断言。
+- README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-desktop/src-tauri/src/main.rs`
+- `apps/windows-client/index.html`
+- `apps/windows-client/app.js`
+- `apps/windows-client/styles.css`
+- `apps/windows-client/README.md`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `cargo check --manifest-path apps/windows-desktop/src-tauri/Cargo.toml`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server http://192.168.31.68:17888 -Status -Json`
+- `cargo test --manifest-path apps/windows-desktop/src-tauri/Cargo.toml`
+遗留问题：
+- 本轮未真实点击桌面壳按钮启动 watcher，只验证 Tauri 编译、PowerShell JSON status 和页面逻辑；如需完整后台 lifecycle，仍可跑 `test-mac-alert-watcher --includeLifecycle` 或人工点桌面按钮。
+下一步建议：
+- 明天 Windows 侧等待 Mac 授权/权限/反控重试时，优先打开桌面壳“本机被控 -> Mac 提醒”并点“开启提醒”；命令行入口作为备用。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Windows Codex
+
 日期：2026-06-17 12:06
 开发端：Windows Codex
 本轮目标：让 Windows 恢复开工总览优先消费 Mac alert watcher 的机器可读状态。
