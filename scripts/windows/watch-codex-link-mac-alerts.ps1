@@ -7,10 +7,45 @@ param(
     [int]$PopupTimeoutSeconds = 0,
     [switch]$AlertExistingEvents,
     [switch]$NoPopup,
-    [switch]$Once
+    [switch]$Once,
+    [Alias("h")]
+    [switch]$Help
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($Help) {
+    Write-Output @"
+Usage:
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\watch-codex-link-mac-alerts.ps1 [options]
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\watch-codex-link-mac-alerts.ps1 [options]
+
+Common examples:
+  # Watch the LAN Agent Link Board and show Windows-side alerts for Mac requests.
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\watch-codex-link-mac-alerts.ps1 -Server http://YOUR_BOARD_IP:17888
+
+  # Run one no-popup poll for diagnostics.
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\watch-codex-link-mac-alerts.ps1 -Server http://YOUR_BOARD_IP:17888 -Once -NoPopup
+
+Options:
+  -Server <url>              Agent Link Board URL. Default: http://127.0.0.1:17888.
+  -Token <token>             Optional Agent Link Board token. Never printed.
+  -WatchPattern <regex>      Text used to detect Mac-side events. Default: (?i)mac|macOS.
+  -IntervalSeconds <sec>     Poll interval. Default: 15.
+  -StaleMinutes <min>        Alert when Mac status is stale for this many minutes. Default: 5.
+  -PopupTimeoutSeconds <sec> Windows popup timeout. Default: 0.
+  -AlertExistingEvents       Alert on already-present matching board events.
+  -NoPopup                   Print alerts without Windows popup/beep output.
+  -Once                      Run one poll and exit.
+  -Help, -h                  Show this help without watching the board.
+
+Safety:
+  -Help never contacts the Agent Link Board, never starts the watch loop, never
+  shows popups or beeps, never prints tokens, and never sends passwords,
+  authentication, input, or inject events.
+"@
+    exit 0
+}
 
 try {
     $utf8NoBom = New-Object System.Text.UTF8Encoding $false

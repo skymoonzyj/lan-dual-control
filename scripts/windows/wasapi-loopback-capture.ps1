@@ -3,10 +3,42 @@ param(
   [int]$Channels = 2,
   [int]$FrameMs = 20,
   [int]$DurationMs = 0,
-  [switch]$InfoOnly
+  [switch]$InfoOnly,
+  [Alias("h")]
+  [switch]$Help
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($Help) {
+  Write-Output @"
+Usage:
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\wasapi-loopback-capture.ps1 [options]
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\wasapi-loopback-capture.ps1 [options]
+
+Common examples:
+  # Print the default render device mix format as JSON without capturing audio.
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\wasapi-loopback-capture.ps1 -InfoOnly
+
+  # Capture 2 seconds of system loopback audio as raw float32 PCM on stdout.
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\wasapi-loopback-capture.ps1 -DurationMs 2000 > audio-f32le.raw
+
+Options:
+  -SampleRate <hz>   Requested sample rate metadata. Default: 48000.
+  -Channels <count>  Output channel count, clamped to 1-8. Default: 2.
+  -FrameMs <ms>      Target frame size, clamped to 10-60 ms. Default: 20.
+  -DurationMs <ms>   Capture duration. Default: 0, capture until stopped.
+  -InfoOnly          Print device/audio format JSON and exit without capturing.
+  -Help, -h          Show this help without initializing WASAPI or capturing audio.
+
+Safety:
+  -Help never initializes WASAPI, never captures or writes audio frames, never
+  starts remote hosts, never authenticates, never prints passwords, and never
+  sends input/inject events. Without -InfoOnly or -DurationMs, this script runs
+  until stopped and writes binary audio to stdout.
+"@
+  exit 0
+}
 
 $source = @'
 using System;

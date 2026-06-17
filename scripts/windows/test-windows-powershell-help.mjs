@@ -197,6 +197,8 @@ function analyze(result) {
     /Configuring machine Rust environment/i,
     /Installing Visual Studio C\+\+ Build Tools/i,
     /Build Tools installer failed/i,
+    /LAN_DUAL_WASAPI_INFO/i,
+    /LAN_DUAL_WASAPI_ERROR/i,
     /\bAuth passed\b/i,
     /\binput_ack\b/i,
   ];
