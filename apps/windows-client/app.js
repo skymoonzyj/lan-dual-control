@@ -387,6 +387,7 @@ const state = {
   reconnectStableTimer: null,
   reconnectDueAt: 0,
   reconnectReason: "",
+  copyDiagnosticsFeedbackTimer: null,
   clipboardSequence: 0,
   fileTransferSequence: 0,
   fileTransferActive: false,
@@ -3002,9 +3003,24 @@ async function copyLogsToClipboard() {
     const text = buildLogExportText();
     await writeTextToClipboard(text);
     addLog("诊断复制", "已复制当前诊断报告");
+    setFloatingCopyDiagnosticsFeedback("已复制");
   } catch (error) {
     addLog("诊断复制失败", error?.message || "当前环境不允许写入剪贴板");
+    setFloatingCopyDiagnosticsFeedback("复制失败");
   }
+}
+
+function setFloatingCopyDiagnosticsFeedback(label) {
+  if (!elements.floatingCopyDiagnosticsButton) return;
+  if (state.copyDiagnosticsFeedbackTimer) {
+    window.clearTimeout(state.copyDiagnosticsFeedbackTimer);
+    state.copyDiagnosticsFeedbackTimer = null;
+  }
+  elements.floatingCopyDiagnosticsButton.textContent = label;
+  state.copyDiagnosticsFeedbackTimer = window.setTimeout(() => {
+    elements.floatingCopyDiagnosticsButton.textContent = "复制诊断";
+    state.copyDiagnosticsFeedbackTimer = null;
+  }, 1600);
 }
 
 function buildSessionOffer() {

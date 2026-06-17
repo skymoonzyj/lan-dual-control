@@ -1061,6 +1061,8 @@ async function verifyFloatingControlCenter(session) {
         const originalClipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
         const originalLogEntries = Array.isArray(state.logEntries) ? state.logEntries.slice() : [];
         const originalEventLogHtml = eventLog?.innerHTML || "";
+        const originalButtonText = button?.textContent || "";
+        const originalFeedbackTimer = state.copyDiagnosticsFeedbackTimer;
         if (!button || typeof copyLogsToClipboard !== "function") return false;
         try {
           Object.defineProperty(navigator, "clipboard", {
@@ -1081,9 +1083,15 @@ async function verifyFloatingControlCenter(session) {
             diagnosticsCopyText.includes("- 当前状态：") &&
             diagnosticsCopyText.includes("- 本机被控密码：不导出") &&
             !diagnosticsCopyText.includes("demo-password") &&
+            button.textContent.includes("已复制") &&
             state.logEntries[0]?.title === "诊断复制"
           );
         } finally {
+          if (state.copyDiagnosticsFeedbackTimer && state.copyDiagnosticsFeedbackTimer !== originalFeedbackTimer) {
+            window.clearTimeout(state.copyDiagnosticsFeedbackTimer);
+          }
+          state.copyDiagnosticsFeedbackTimer = originalFeedbackTimer;
+          button.textContent = originalButtonText;
           if (originalClipboardDescriptor) {
             Object.defineProperty(navigator, "clipboard", originalClipboardDescriptor);
           } else {
