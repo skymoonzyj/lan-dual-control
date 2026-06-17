@@ -264,6 +264,9 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "Windows video encoder/WGC/WebCodecs support", `help ${flag}`);
     assertIncludes(result.stdout, "check-windows-video-encoder-support.mjs --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "check-windows-video-encoder-support.ps1 -BoardSummary", `help ${flag}`);
+    assertIncludes(result.stdout, "browser-only WebCodecs H.264", `help ${flag}`);
+    assertIncludes(result.stdout, "check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A --boardSummary", `help ${flag}`);
+    assertIncludes(result.stdout, "check-webcodecs-h264-support.ps1 -RequireCodec avc1.42C02A -BoardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "local alert-watcher start/status commands", `help ${flag}`);
     assertIncludes(result.stdout, "MacDiscovery Node and PowerShell commands", `help ${flag}`);
@@ -335,6 +338,12 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsVideoEncoderSupportBoardSummary || "").includes("--boardSummary"), "mock JSON video encoder command should be board-safe");
     assert(String(payload.commands?.windowsVideoEncoderSupportPowerShellBoardSummary || "").includes("check-windows-video-encoder-support.ps1"), "mock JSON should include Windows video encoder PowerShell command");
     assert(String(payload.commands?.windowsVideoEncoderSupportPowerShellBoardSummary || "").includes("-BoardSummary"), "mock JSON video encoder PowerShell command should be board-safe");
+    assert(String(payload.commands?.windowsWebCodecsH264BoardSummary || "").includes("check-webcodecs-h264-support.mjs"), "mock JSON should include Windows WebCodecs H.264 command");
+    assert(String(payload.commands?.windowsWebCodecsH264BoardSummary || "").includes("--requireCodec avc1.42C02A"), "mock JSON WebCodecs command should require the baseline codec");
+    assert(String(payload.commands?.windowsWebCodecsH264BoardSummary || "").includes("--boardSummary"), "mock JSON WebCodecs command should be board-safe");
+    assert(String(payload.commands?.windowsWebCodecsH264PowerShellBoardSummary || "").includes("check-webcodecs-h264-support.ps1"), "mock JSON should include Windows WebCodecs H.264 PowerShell command");
+    assert(String(payload.commands?.windowsWebCodecsH264PowerShellBoardSummary || "").includes("-RequireCodec avc1.42C02A"), "mock JSON WebCodecs PowerShell command should require the baseline codec");
+    assert(String(payload.commands?.windowsWebCodecsH264PowerShellBoardSummary || "").includes("-BoardSummary"), "mock JSON WebCodecs PowerShell command should be board-safe");
     assert(String(payload.commands?.windowsPowerShellHelpBoardSummary || "").includes("test-windows-powershell-help.mjs"), "mock JSON should include Windows PowerShell help command");
     assert(String(payload.commands?.windowsPowerShellHelpBoardSummary || "").includes("--timeoutMs 10000"), "mock JSON PowerShell help command should set a stable timeout");
     assert(String(payload.commands?.windowsPowerShellHelpBoardSummary || "").includes("--boardSummary"), "mock JSON PowerShell help command should be board-safe");
@@ -467,6 +476,10 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "check-windows-video-encoder-support.mjs --boardSummary", "board summary");
     assertIncludes(result.stdout, "WindowsVideoSupportPs=", "board summary");
     assertIncludes(result.stdout, "check-windows-video-encoder-support.ps1 -BoardSummary", "board summary");
+    assertIncludes(result.stdout, "WindowsWebCodecs=", "board summary");
+    assertIncludes(result.stdout, "check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A --boardSummary", "board summary");
+    assertIncludes(result.stdout, "WindowsWebCodecsPs=", "board summary");
+    assertIncludes(result.stdout, "check-webcodecs-h264-support.ps1 -RequireCodec avc1.42C02A -BoardSummary", "board summary");
     assertIncludes(result.stdout, "PowerShellHelp=", "board summary");
     assertIncludes(result.stdout, "test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary", "board summary");
     assertIncludes(result.stdout, "PowerShellHelpPwsh=", "board summary");

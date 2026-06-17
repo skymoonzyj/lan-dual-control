@@ -17,6 +17,49 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
+本轮目标：把 Windows 浏览器 WebCodecs H.264 能力检查做成可上板的一行摘要，并接入恢复总览。
+完成内容：
+- `scripts/windows/check-webcodecs-h264-support.mjs` 新增 `--boardSummary`，JSON 同步带 `boardSummary` 字段；摘要包含 H.264 支持状态、首选 codec/format、浏览器信息和 no host/no password/no capture/no input/inject 安全边界。
+- 新增 PowerShell 包装 `scripts/windows/check-webcodecs-h264-support.ps1`，支持 `-RequireCodec avc1.42C02A -BoardSummary`、`-Json`、`-RequireAny`、`-Headed` 和纯 `-Help/-h`。
+- 修复 WebCodecs 探针的浏览器等待与清理：DevTools 发现、WebSocket、CDP 调用都有硬超时；Edge 兼容层重启后会按临时 `userDataDir` 清理残留进程，避免现场命令卡住。
+- `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `WindowsWebCodecs=` / `WindowsWebCodecsPs=`，恢复开工一行摘要能直接给出浏览器 H.264 解码能力检查命令。
+- 新增 `scripts/windows/test-webcodecs-h264-support-board-summary.mjs`，覆盖 Node/PowerShell 单行摘要、JSON `boardSummary`、PowerShell help 和不泄密。
+修改文件：
+- `scripts/windows/check-webcodecs-h264-support.mjs`
+- `scripts/windows/check-webcodecs-h264-support.ps1`
+- `scripts/windows/test-webcodecs-h264-support-board-summary.mjs`
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-webcodecs-h264-support.mjs`
+- `node --check scripts/windows/test-webcodecs-h264-support-board-summary.mjs`
+- PowerShell AST parse `check-webcodecs-h264-support.ps1`
+- `node scripts/windows/check-webcodecs-h264-support.mjs --debugPort 19452 --timeoutMs 8000 --codecs avc1.42C02A --boardSummary`
+- `node scripts/windows/test-webcodecs-h264-support-board-summary.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-webcodecs-h264-support.mjs --script test-webcodecs-h264-support-board-summary.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`
+遗留问题：
+- 本轮只做本机浏览器只读能力检查，没有连接 Mac、没有启动 Windows host、没有认证、没有发送密码/input/inject。
+下一步建议：
+- 白天 H.264 或无画面排查时，先跑恢复总览看 `WindowsWebCodecs=` / `WindowsWebCodecsPs=`；如果浏览器能力 OK，再继续看 host 编码、WebSocket 二进制帧和页面解码链路。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-17 Mac Codex
 
 日期：2026-06-17 续跑

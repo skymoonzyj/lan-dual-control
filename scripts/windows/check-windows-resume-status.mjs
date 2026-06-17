@@ -43,8 +43,9 @@ JSON, human output, and board summaries include a Windows host media-baseline
 command for checking local controlled-side video/audio before Mac reverse
 control, including a PowerShell equivalent, plus a local one-time reverse-control grant command for retrying a
 Mac reverse-control request without switching Windows host to accept-lab mode.
-They also include a no-password Windows client diagnostics command, a read-only
-Windows video encoder/WGC/WebCodecs support command, and a reminder to copy the
+They also include a no-password Windows client diagnostics command, read-only
+Windows video encoder/WGC/WebCodecs support and browser-only WebCodecs H.264
+commands, and a reminder to copy the
 in-page diagnostics report first when UI symptoms need to be shared. They also
 include Windows PowerShell and PowerShell 7 help coverage commands so .ps1
 entry points can be checked before posting a handoff.
@@ -97,6 +98,8 @@ Examples:
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary
   node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-video-encoder-support.ps1 -BoardSummary
+  node scripts/windows/check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A --boardSummary
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-webcodecs-h264-support.ps1 -RequireCodec avc1.42C02A -BoardSummary
   node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary
   node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary
   node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary
@@ -630,6 +633,16 @@ function makeCommands(args, preflight) {
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-video-encoder-support.ps1",
       "-BoardSummary",
     ].join(" "),
+    windowsWebCodecsH264BoardSummary: [
+      "node scripts/windows/check-webcodecs-h264-support.mjs",
+      "--requireCodec", "avc1.42C02A",
+      "--boardSummary",
+    ].join(" "),
+    windowsWebCodecsH264PowerShellBoardSummary: [
+      "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-webcodecs-h264-support.ps1",
+      "-RequireCodec", "avc1.42C02A",
+      "-BoardSummary",
+    ].join(" "),
     windowsPowerShellHelpBoardSummary: [
       "node scripts/windows/test-windows-powershell-help.mjs",
       "--timeoutMs", "10000",
@@ -812,6 +825,8 @@ function makeBoardSummary(report) {
     `WindowsHostMediaPs=${report.commands.windowsHostMediaReadinessPowerShellBoardSummary}.`,
     `WindowsVideoSupport=${report.commands.windowsVideoEncoderSupportBoardSummary}.`,
     `WindowsVideoSupportPs=${report.commands.windowsVideoEncoderSupportPowerShellBoardSummary}.`,
+    `WindowsWebCodecs=${report.commands.windowsWebCodecsH264BoardSummary}.`,
+    `WindowsWebCodecsPs=${report.commands.windowsWebCodecsH264PowerShellBoardSummary}.`,
     `PowerShellHelp=${report.commands.windowsPowerShellHelpBoardSummary}.`,
     `PowerShellHelpPwsh=${report.commands.windowsPowerShell7HelpBoardSummary}.`,
     `ReverseGrant=${report.commands.windowsReverseControlGrantBoardSummary}.`,
@@ -1010,6 +1025,8 @@ function printHuman(report) {
   console.log(`  ${report.commands.windowsHostMediaReadinessPowerShellBoardSummary}`);
   console.log(`  ${report.commands.windowsVideoEncoderSupportBoardSummary}`);
   console.log(`  ${report.commands.windowsVideoEncoderSupportPowerShellBoardSummary}`);
+  console.log(`  ${report.commands.windowsWebCodecsH264BoardSummary}`);
+  console.log(`  ${report.commands.windowsWebCodecsH264PowerShellBoardSummary}`);
   console.log(`  ${report.commands.windowsPowerShellHelpBoardSummary}`);
   console.log(`  ${report.commands.windowsPowerShell7HelpBoardSummary}`);
   console.log(`  ${report.commands.windowsReverseControlGrantBoardSummary}`);

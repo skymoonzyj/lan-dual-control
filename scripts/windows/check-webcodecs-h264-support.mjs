@@ -23,6 +23,7 @@ const defaults = {
   json: false,
   requireAny: false,
   requireCodec: "",
+  boardSummary: false,
 };
 
 function helpRequested(argv) {
@@ -45,11 +46,13 @@ Options:
   --requireAny             Exit non-zero if no tested H.264 config is supported.
   --requireCodec <codec>   Exit non-zero if the given codec has no supported config.
   --json                   Print a single machine-readable JSON object.
+  --boardSummary           Print a one-line secret-free Agent Link Board summary.
   --headed                 Run browser headed instead of headless.
 
 Examples:
   node scripts/windows/check-webcodecs-h264-support.mjs
   node scripts/windows/check-webcodecs-h264-support.mjs --requireCodec avc1.420029
+  node scripts/windows/check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A --boardSummary
   node scripts/windows/check-webcodecs-h264-support.mjs --json
 `);
 }
@@ -68,6 +71,10 @@ function parseArgs(argv) {
     }
     if (key === "json") {
       args.json = true;
+      continue;
+    }
+    if (key === "boardSummary") {
+      args.boardSummary = true;
       continue;
     }
     if (key === "requireAny") {
@@ -111,7 +118,7 @@ function normalizeCodec(value) {
 }
 
 function print(kind, text, args) {
-  if (!args.json) {
+  if (!args.json && !args.boardSummary) {
     console.log(`[${kind}] ${text}`);
   }
 }
@@ -120,12 +127,25 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function withTimeout(promise, timeoutMs, label) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs} ms`)), timeoutMs);
+    }),
+  ]).finally(() => {
+    clearTimeout(timer);
+  });
+}
+
 async function waitFor(fn, timeoutMs, label) {
   const deadline = Date.now() + timeoutMs;
   let lastError;
   while (Date.now() < deadline) {
     try {
-      const value = await fn();
+      const perAttemptTimeoutMs = Math.min(1500, Math.max(250, deadline - Date.now()));
+      const value = await withTimeout(fn(), perAttemptTimeoutMs, label);
       if (value) return value;
     } catch (error) {
       lastError = error;
@@ -155,13 +175,20 @@ function findBrowserPath() {
 
 function startProcess(command, commandArgs) {
   return spawn(command, commandArgs, {
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: "ignore",
     windowsHide: true,
   });
 }
 
-async function getJson(url) {
-  const response = await fetch(url);
+async function getJson(url, timeoutMs = 1500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let response;
+  try {
+    response = await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!response.ok) {
     throw new Error(`${url} -> ${response.status}`);
   }
@@ -239,26 +266,30 @@ class CdpSession {
 async function connectCdp(debugPort, timeoutMs) {
   const target = await waitFor(
     async () => {
-      const list = await getJson(`http://127.0.0.1:${debugPort}/json/list`);
+      const list = await getJson(`http://127.0.0.1:${debugPort}/json/list`, Math.min(1500, Math.max(500, timeoutMs)));
       return list.find((item) => item.type === "page" && item.webSocketDebuggerUrl);
     },
     timeoutMs,
     "browser DevTools target",
   );
   const socket = new WebSocket(target.webSocketDebuggerUrl);
-  await new Promise((resolve, reject) => {
+  await withTimeout(new Promise((resolve, reject) => {
     socket.addEventListener("open", resolve, { once: true });
     socket.addEventListener("error", reject, { once: true });
-  });
+  }), Math.min(3000, Math.max(1000, timeoutMs)), "browser DevTools WebSocket");
   return new CdpSession(socket);
 }
 
-async function evaluate(session, expression) {
-  const result = await session.send("Runtime.evaluate", {
+async function cdpSend(session, method, params, timeoutMs) {
+  return withTimeout(session.send(method, params), timeoutMs, `CDP ${method}`);
+}
+
+async function evaluate(session, expression, timeoutMs) {
+  const result = await cdpSend(session, "Runtime.evaluate", {
     expression,
     awaitPromise: true,
     returnByValue: true,
-  });
+  }, timeoutMs);
   if (result.exceptionDetails) {
     throw new Error(result.exceptionDetails.text || "Runtime.evaluate failed");
   }
@@ -323,8 +354,27 @@ function buildProbeExpression(args) {
 }
 
 async function stopProcess(child) {
-  if (!child || child.exitCode !== null) return;
-  child.kill();
+  if (!child) return;
+  if (child.exitCode !== null) return;
+  if (process.platform === "win32" && child.pid) {
+    await new Promise((resolve) => {
+      const taskkill = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      const timer = setTimeout(resolve, 2000);
+      taskkill.once("exit", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      taskkill.once("error", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+  } else {
+    child.kill();
+  }
   await Promise.race([
     new Promise((resolve) => child.once("exit", resolve)),
     delay(2000),
@@ -332,6 +382,44 @@ async function stopProcess(child) {
   if (child.exitCode === null) {
     child.kill("SIGKILL");
   }
+}
+
+async function runCleanup(command, commandArgs, timeoutMs) {
+  await new Promise((resolve) => {
+    const child = spawn(command, commandArgs, {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    const timer = setTimeout(() => {
+      child.kill();
+      resolve();
+    }, timeoutMs);
+    child.once("exit", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    child.once("error", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+async function stopBrowserProcessesForUserDataDir(userDataDir) {
+  if (process.platform !== "win32" || !userDataDir) return;
+  const needle = String(userDataDir).replace(/'/g, "''");
+  const commandText = [
+    `$needle = '${needle}'`,
+    "$names = @('msedge.exe','chrome.exe','chromium.exe')",
+    "Get-CimInstance Win32_Process | Where-Object { $names -contains $_.Name -and $_.CommandLine -like \"*$needle*\" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }",
+  ].join("; ");
+  await runCleanup("powershell.exe", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    commandText,
+  ], 5000);
 }
 
 function summarize(result, args) {
@@ -356,6 +444,53 @@ function summarize(result, args) {
   return { preferred, failures };
 }
 
+function summarizeBrowserName(userAgent, browserPath) {
+  const text = String(userAgent || browserPath || "");
+  const edge = text.match(/Edg\/([0-9.]+)/);
+  if (edge) return `Edge/${edge[1]}`;
+  const chrome = text.match(/Chrome\/([0-9.]+)/);
+  if (chrome) return `Chrome/${chrome[1]}`;
+  const firefox = text.match(/Firefox\/([0-9.]+)/);
+  if (firefox) return `Firefox/${firefox[1]}`;
+  return browserPath ? browserPath.split(/[\\/]/).pop() || "browser" : "browser";
+}
+
+function compactList(items, maxItems = 4) {
+  const values = [...new Set((items || []).filter(Boolean))];
+  if (values.length <= maxItems) return values.join(",");
+  return `${values.slice(0, maxItems).join(",")}+${values.length - maxItems}`;
+}
+
+function makeBoardSummary(output) {
+  const status = output.ok ? "ok" : "failed";
+  const any = output.anySupported ? "yes" : "no";
+  const preferred = output.preferred
+    ? `${output.preferred.codec}/${output.preferred.format}`
+    : "none";
+  const supported = compactList(output.supportedCodecs || []);
+  const requirements = [
+    output.requirements?.any ? "any" : "",
+    output.requirements?.codec ? `codec:${output.requirements.codec}` : "",
+  ].filter(Boolean).join(",") || "none";
+  const failureText = output.failures?.length
+    ? `; failures=${output.failures.slice(0, 3).join(";").replace(/\s+/g, " ")}`
+    : "";
+  return [
+    `Windows WebCodecs H.264: ${status}; any=${any}; preferred=${preferred}; supported=${supported || "none"}; require=${requirements}; size=${output.args?.width || "?"}x${output.args?.height || "?"}; browser=${summarizeBrowserName(output.userAgent, output.browserPath)}${failureText}.`,
+    "Read-only browser capability probe; no host startup, no password/auth, no screen/audio capture, no input/inject.",
+  ].join(" ");
+}
+
+function makeErrorBoardSummary(error) {
+  const message = String(error?.message || error || "unknown error").replace(/\s+/g, " ").slice(0, 240);
+  return [
+    `Windows WebCodecs H.264: failed; error=${message}.`,
+    "Read-only browser capability probe; no host startup, no password/auth, no screen/audio capture, no input/inject.",
+  ].join(" ");
+}
+
+let activeArgs = null;
+
 async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -363,6 +498,7 @@ async function main() {
   }
 
   const args = parseArgs(process.argv);
+  activeArgs = args;
   const browserPath = findBrowserPath();
   const userDataDir = await mkdtemp(join(tmpdir(), "lan-dual-webcodecs-h264-"));
   const probe = await startProbeServer();
@@ -382,15 +518,15 @@ async function main() {
   let session;
   try {
     session = await connectCdp(args.debugPort, args.timeoutMs);
-    await session.send("Runtime.enable");
-    await session.send("Page.enable");
-    await session.send("Page.navigate", { url: probe.url });
+    await cdpSend(session, "Runtime.enable", {}, Math.min(5000, args.timeoutMs));
+    await cdpSend(session, "Page.enable", {}, Math.min(5000, args.timeoutMs));
+    await cdpSend(session, "Page.navigate", { url: probe.url }, Math.min(5000, args.timeoutMs));
     await waitFor(
-      () => evaluate(session, `location.origin === ${JSON.stringify(new URL(probe.url).origin)} && document.readyState !== "loading"`),
+      () => evaluate(session, `location.origin === ${JSON.stringify(new URL(probe.url).origin)} && document.readyState !== "loading"`, Math.min(2000, args.timeoutMs)),
       args.timeoutMs,
       "probe page load",
     );
-    const result = await evaluate(session, buildProbeExpression(args));
+    const result = await evaluate(session, buildProbeExpression(args), args.timeoutMs);
     const { preferred, failures } = summarize(result, args);
     const output = {
       ok: failures.length === 0,
@@ -404,10 +540,17 @@ async function main() {
       ...result,
       preferred,
       failures,
+      requirements: {
+        any: args.requireAny,
+        codec: args.requireCodec,
+      },
     };
+    output.boardSummary = makeBoardSummary(output);
 
     if (args.json) {
       console.log(JSON.stringify(output, null, 2));
+    } else if (args.boardSummary) {
+      console.log(output.boardSummary);
     } else {
       print("OK", `Browser: ${result.userAgent || browserPath}`, args);
       if (!result.available || !result.hasIsConfigSupported) {
@@ -434,12 +577,17 @@ async function main() {
   } finally {
     session?.close();
     await stopProcess(browser);
+    await stopBrowserProcessesForUserDataDir(userDataDir);
     await stopProbeServer(probe?.server);
     await rm(userDataDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
   }
 }
 
 main().catch((error) => {
-  console.error(`[ERROR] ${error.message}`);
+  if (activeArgs?.boardSummary) {
+    console.log(makeErrorBoardSummary(error));
+  } else {
+    console.error(`[ERROR] ${error.message}`);
+  }
   process.exitCode = 1;
 });
