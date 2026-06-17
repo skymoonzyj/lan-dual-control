@@ -5,7 +5,9 @@ param(
   [int] $ClientPort = 5178,
   [int] $MockMacPort = 43770,
   [int] $WindowsHostPort = 43772,
-  [string] $Password = "demo-password"
+  [string] $Password = "demo-password",
+  [Alias("h")]
+  [switch] $Help
 )
 
 $ErrorActionPreference = "Continue"
@@ -13,6 +15,43 @@ $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Resolve-Path (Join-Path $scriptRoot "..\..")
 $sessionRoot = Join-Path $repoRoot ".dev-lab"
 $script:HadFailure = $false
+
+if ($Help) {
+  Write-Output @"
+Usage:
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dev-lab.ps1 [options]
+
+Common examples:
+  # Show this help without running checks or starting services.
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dev-lab.ps1 -Help
+
+  # Run local syntax/protocol/dev environment checks only.
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dev-lab.ps1
+
+  # Start the local Windows client, mock Mac host, and Windows host lab services.
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dev-lab.ps1 -Start
+
+  # Stop services previously started by this dev lab helper.
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\dev-lab.ps1 -Stop
+
+Options:
+  -Start                    Start local lab services after base checks.
+  -Stop                     Stop lab services recorded under .dev-lab and exit.
+  -Build                    Build the Windows desktop exe during the check.
+  -ClientPort <port>        Local Windows client page port. Default: 5178.
+  -MockMacPort <port>       Local mock Mac WebSocket port. Default: 43770.
+  -WindowsHostPort <port>   Local Windows host port. Default: 43772.
+  -Password <text>          Demo password used only for local lab services.
+  -Help, -h                 Show this help.
+
+Safety:
+  -Help/-h exits before checking tools, running npm/node checks, creating
+  .dev-lab files, starting/stopping services, building the desktop app, opening
+  ports, authenticating, or sending input/inject events.
+  -Start is intended for local development only and uses a demo password.
+"@
+  exit 0
+}
 
 function Write-Section {
   param([string] $Text)

@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/test-windows-host.ps1`, `scripts/windows/dev-lab.ps1`, `apps/windows-host/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 休息续跑 | `test-windows-host.ps1` 和 `dev-lab.ps1` 新增 `-Help/-h` 纯帮助；统一 PowerShell help 覆盖扩展到 14 个 `.ps1` 入口/28 条命令，Windows PowerShell 与 PowerShell 7 均通过。 |
 | Mac Codex | `scripts/mac/test-mac-script-help-summary.mjs`, `docs/CURRENT_STATUS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 17:05 | Mac script help boardSummary/JSON boardSummary 新增专项自测；统一 help 覆盖更新为 44 个脚本、88 条命令。 |
 | Mac Codex | `scripts/mac/test-mac-script-help.mjs`, `scripts/mac/check-mac-resume-status.mjs`, `scripts/mac/test-mac-resume-status.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 16:50 | Mac script help 自检新增 `--boardSummary` 一行无密摘要，resume status 的 `MacScriptHelp=` 同步推荐 boardSummary 形态；resume/status 和 86 条 help 覆盖通过。 |
 | Mac Codex | `scripts/mac/check-mac-resume-status.mjs`, `scripts/mac/test-mac-resume-status.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 16:35 | Mac resume status 新增 `MacScriptHelp=` / `commands.macScriptHelpCommand`，恢复总览会提示统一 Mac `.mjs` help 安全自检；专项回归和 86 条 help 覆盖通过。 |

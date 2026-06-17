@@ -24,7 +24,9 @@ param(
   [switch] $SkipClipboardText,
   [switch] $SkipClipboardFile,
   [switch] $RequireAudio,
-  [switch] $InputEvents
+  [switch] $InputEvents,
+  [Alias("h")]
+  [switch] $Help
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,6 +35,61 @@ $repoRoot = Resolve-Path (Join-Path $scriptRoot "..\..")
 $probeScript = Join-Path $scriptRoot "probe-mac-host.mjs"
 $serverScript = Join-Path $repoRoot "apps\windows-host\server.mjs"
 $startedProcess = $null
+
+if ($Help) {
+  Write-Output @"
+Usage:
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-windows-host.ps1 [options]
+
+Common examples:
+  # Show this help without launching Windows host or probes.
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-windows-host.ps1 -Help
+
+  # Low-risk self-test with mock video and no clipboard checks.
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-windows-host.ps1 -MockVideo -SkipClipboardText -SkipClipboardFile
+
+  # Validate real FFmpeg screen capture at a requested frame rate.
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-windows-host.ps1 -ScreenMode ffmpeg -Fps 30
+
+  # Validate WASAPI loopback audio frames.
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-windows-host.ps1 -AudioMode wasapi -RequireAudio
+
+  # Safe input acknowledgement check; log mode does not inject real input.
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\test-windows-host.ps1 -InputEvents -InputMode log
+
+Options:
+  -HostName <host>          Windows host bind/probe host. Default: 127.0.0.1.
+  -Port <port>              Windows host port. Default: 43772.
+  -Password <text>          Local test password for the temporary host. Default: demo-password.
+  -TimeoutMs <ms>           Probe timeout. Default: 15000.
+  -Width <px>               Requested session width. Default: 640.
+  -Height <px>              Requested session height. Default: 360.
+  -Fps <hz>                 Requested session refresh rate. Default: 2.
+  -BandwidthKbps <kbps>     Requested video bandwidth. Default: 5000.
+  -ScreenMode <mode>        auto, ffmpeg, system, or mock.
+  -ClipboardMode <mode>     auto, system, or memory.
+  -InputMode <mode>         auto, system, or log. Default: log.
+  -AudioMode <mode>         auto, mock, dshow, or wasapi.
+  -AudioDevice <name>       Optional DirectShow audio device name.
+  -Ffmpeg <path>            FFmpeg path; defaults to LAN_DUAL_FFMPEG or C:\DevTools.
+  -UseExisting              Probe an already running host on the target port.
+  -KeepRunning              Keep the temporary host running after the probe.
+  -MockVideo                Force mock video instead of real screen capture.
+  -SkipClipboardText        Skip text clipboard verification.
+  -SkipClipboardFile        Skip file clipboard verification.
+  -ClipboardFileBytes <n>   Test file size for file clipboard verification.
+  -RequireAudio             Require at least one audio frame.
+  -InputEvents              Send input events and require the expected input mode.
+  -Help, -h                 Show this help.
+
+Safety:
+  -Help/-h exits before checking ports, launching Windows host, running probes,
+  authenticating, touching clipboard, capturing screen/audio, or sending input.
+  Without -Help this script may start a temporary local Windows host; keep
+  -InputMode log unless a user is watching the screen for real input tests.
+"@
+  exit 0
+}
 
 if (-not $Ffmpeg) {
   $defaultFfmpeg = "C:\DevTools\ffmpeg\bin\ffmpeg.exe"

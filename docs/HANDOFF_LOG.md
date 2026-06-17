@@ -17,6 +17,40 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 休息续跑
+开发端：Windows Codex
+本轮目标：给容易误启动本机服务的 Windows PowerShell 入口补 `-Help/-h` 纯帮助，并纳入统一覆盖自检。
+完成内容：
+- `scripts/windows/test-windows-host.ps1` 新增 `-Help/-h`：说明本机 Windows host 自检、视频/音频/剪贴板/input-log 参数和安全边界；帮助路径早退出，不检查端口、不启动临时 host、不认证、不触碰剪贴板、不采集屏幕/声音、不发送输入。
+- `scripts/windows/dev-lab.ps1` 新增 `-Help/-h`：说明 dev lab 检查、启动、停止、构建和端口参数；帮助路径早退出，不跑 Node/npm 检查、不创建 `.dev-lab` 文件、不启动/停止服务、不构建桌面 app。
+- `scripts/windows/test-windows-powershell-help.mjs` 自动发现新增两个入口后，覆盖从 12 个 PowerShell 脚本、24 条命令扩展到 14 个脚本、28 条命令，并在 Windows PowerShell 与 PowerShell 7 下通过。
+- Windows host README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `scripts/windows/test-windows-host.ps1`
+- `scripts/windows/dev-lab.ps1`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- PowerShell 7 语法解析 `scripts/windows/test-windows-host.ps1`
+- PowerShell 7 语法解析 `scripts/windows/dev-lab.ps1`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/dev-lab.ps1 -Help`
+- `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-host.ps1 -h`
+- `node --check scripts/windows/test-windows-powershell-help.mjs`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000`
+遗留问题：
+- 本轮只补帮助和文档，不运行真实 Windows host 自检、不做 Mac 反控 Windows 真连。
+下一步建议：
+- 后续若继续补剩余 PowerShell 入口，避免碰 `scripts/windows/test-mac-host.ps1` 这类高冲突探针，除非先在 Agent Link Board 明确协调。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-17 Mac Codex
 
 日期：2026-06-17 17:05
