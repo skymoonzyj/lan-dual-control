@@ -19,6 +19,40 @@
 
 ## 2026-06-17 Mac Codex
 
+日期：2026-06-17 09:28
+开发端：Mac Codex
+本轮目标：把 Mac 控制 Windows formal checklist/smoke 的执行计划补齐到“请求反控 -> Windows 本机一次性授权 -> Mac 重试 accepted”的安全演练闭环，方便后续真机联调照通讯板执行。
+完成内容：
+- `check-mac-client-formal-status` 的 `runPlan.commands` 新增 Windows 本机回环授权状态命令、一次性授权命令和 `reverseControlRehearsal` 文本；`runPlan.steps` 新增 `reverse-control-request` 步骤，明确先点“请求反控”预期 `LAN008`，Windows 本机运行 `allow-windows-reverse-control --grant --durationMs 30000 --boardSummary`，Mac 再点“重试反控”预期 accepted/临时授权已使用。
+- formal `--sendCall` 的 Agent Link Board call 文本同步带上反控演练说明和 Windows 本机授权命令；仍只发送无密协调信息，不认证、不发密码、不发送输入、不执行 inject。
+- `run-mac-client-formal-smoke` 的 `--preflightOnly` / `--dryRun` JSON 和 `--boardSummary` 也会输出同一套反控演练命令，发现/ensureClient/sendCall 路径均保留秘密安全边界。
+- 自测补齐新增字段、boardSummary、call payload 和 no secret/no input/no inject 断言；修复本轮新增 boardSummary 里误用外层 `args` 的作用域问题。
+修改文件：
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-client-formal-status.mjs`
+- `node --check scripts/mac/run-mac-client-formal-smoke.mjs`
+- `node --check scripts/mac/test-mac-client-formal-status.mjs`
+- `node --check scripts/mac/test-mac-client-formal-smoke.mjs`
+- `node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 30000`
+遗留问题：
+- 这轮只补齐 formal 计划、通讯板摘要和自动测试，不连接真实 Windows host、不认证、不触发真实反控、不执行 inject。
+下一步建议：
+- 真连时先跑 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --sendCall` 协调 Windows；用户在场后 Mac 端用 `--promptPassword` 跑真实页面 smoke。要验收反控闭环时，Mac 先点“请求反控”看到 `LAN008`，Windows 本机运行 `node scripts/windows/allow-windows-reverse-control.mjs --grant --durationMs 30000 --boardSummary` 或点桌面面板“临时允许反控”，Mac 再点“重试反控”。
+是否改了协议：否。只消费已有 `reverse_control_request` / `reverse_control_response` 和 Windows 本机授权助手。
+是否需要另一端配合：后续真实联调需要 Windows 端在本机运行一次性授权命令或点击桌面面板按钮；本轮自测不需要真实 Windows 配合。
+
+## 2026-06-17 Mac Codex
+
 日期：2026-06-17 09:05
 开发端：Mac Codex
 本轮目标：补齐 Mac client 的受保护“请求反控/重试反控”入口，让 Windows 默认拒绝、临时允许、重试成功形成页面闭环。

@@ -69,6 +69,16 @@ JSON output:
                                   command that starts/reuses the local Mac
                                   client page, then sends a Windows formal
                                   test call only when the checklist is ready.
+  runPlan.commands.windowsReverseGrantStatus
+                                  Windows-side loopback command that inspects
+                                  the one-time reverse-control grant state.
+  runPlan.commands.windowsOpenOneTimeReverseGrant
+                                  Windows-side loopback command that opens a
+                                  short one-time reverse-control grant window.
+  runPlan.commands.reverseControlRehearsal
+                                  Human-safe LAN008 -> one-time grant -> retry
+                                  accepted rehearsal; no password, no input,
+                                  and no inject are sent by this checklist.
 
 Examples:
   node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.50 --port 43770 --boardSummary
@@ -388,6 +398,37 @@ function makeBrowserTestCommand(report, args) {
   ].join(" ");
 }
 
+function makeWindowsReverseGrantCommand(report, args, action = "grant") {
+  const host = report.readiness.windowsHost || {};
+  const targetPort = host.probe?.port || args.windowsPort || defaults.windowsPort;
+  const parts = [
+    "node scripts/windows/allow-windows-reverse-control.mjs",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(targetPort),
+  ];
+  if (action === "status") {
+    parts.push("--status");
+  } else if (action === "revoke") {
+    parts.push("--revoke");
+  } else {
+    parts.push("--grant", "--durationMs", "30000");
+  }
+  parts.push("--boardSummary");
+  return parts.join(" ");
+}
+
+function makeReverseControlRehearsalText(report, args) {
+  const grantCommand = makeWindowsReverseGrantCommand(report, args, "grant");
+  return [
+    "Mac authenticates in the Mac client page, clicks 请求反控, and expects LAN008/default deny first.",
+    `Windows Codex runs on the Windows host machine: ${grantCommand}.`,
+    "Mac clicks 重试反控 and expects accepted plus 临时授权已使用.",
+    "No password goes on Agent Link Board, no input_event is sent by this request, and inject stays off.",
+  ].join(" ");
+}
+
 function makeEnsureClientSmokeCommand(args, extra = []) {
   const parts = [
     "node scripts/mac/run-mac-client-formal-smoke.mjs",
@@ -411,6 +452,7 @@ function makeCallPayload(report, args) {
   const address = `${targetHost}:${targetPort}`;
   const browserSmoke = makeBrowserTestCommand(report, args);
   const windowsStatusCommand = "node scripts/windows/start-windows-host.mjs --status --json";
+  const reverseRehearsal = makeReverseControlRehearsalText(report, args);
   return {
     status: "CALLING",
     from: formalWindowsCallIdentity.from,
@@ -419,8 +461,8 @@ function makeCallPayload(report, args) {
     environment: `Windows host ${address}; runtimeBuild=${host.runtime?.buildId || "unknown"}; inputMode=${host.capabilities?.input?.mode || "unknown"}`,
     connection: address,
     command: windowsStatusCommand,
-    expected: `Windows 端确认 Windows host 在线且保持 ${address} 可连；Mac 端随后运行 ${browserSmoke}，在本机隐藏输入正式密码后验证首帧/H.264 或 JPEG fallback、帧延迟、系统音频播放、文本/文件剪贴板和 input-log ack；不要执行 inject。`,
-    ask: `请确认 Windows host 保持在线并观察 Windows 屏幕/日志；Mac 端下一步 smoke 命令：${browserSmoke}。密码不要发在联络板，inject 只有用户另行明确确认后才可执行。`,
+    expected: `Windows 端确认 Windows host 在线且保持 ${address} 可连；Mac 端随后运行 ${browserSmoke}，在本机隐藏输入正式密码后验证首帧/H.264 或 JPEG fallback、帧延迟、系统音频播放、文本/文件剪贴板和 input-log ack；反控请求安全演练按 ${reverseRehearsal}；不要执行 inject。`,
+    ask: `请确认 Windows host 保持在线并观察 Windows 屏幕/日志；Mac 端下一步 smoke 命令：${browserSmoke}。如需验收反控请求闭环，请按 Windows 本机回环授权命令配合：${makeWindowsReverseGrantCommand(report, args, "grant")}。密码不要发在联络板，inject 只有用户另行明确确认后才可执行。`,
     owner: "Mac Codex",
     timeout: "用户在场时执行",
   };
@@ -462,6 +504,8 @@ function makeRunPlan(report, args) {
       passwordInCommandArguments: false,
       passwordOnAgentLinkBoard: false,
       inject: false,
+      reverseControlRequestSendsInput: false,
+      windowsReverseGrantLoopbackOnly: true,
       requiresExplicitUserConfirmationForInject: true,
     },
     commands: {
@@ -472,6 +516,9 @@ function makeRunPlan(report, args) {
       sendCallWithEnsureClient: makeEnsureClientSmokeCommand(args, ["--preflightOnly", "--sendCall"]),
       rerunFormalChecklist: makeChecklistCommand(args),
       browserSmoke: browserTestCommand,
+      windowsReverseGrantStatus: makeWindowsReverseGrantCommand(report, args, "status"),
+      windowsOpenOneTimeReverseGrant: makeWindowsReverseGrantCommand(report, args, "grant"),
+      reverseControlRehearsal: makeReverseControlRehearsalText(report, args),
     },
     steps: [
       {
@@ -499,6 +546,12 @@ function makeRunPlan(report, args) {
         success: "First frame, H.264/JPEG fallback, frame age, audio payload/playback, clipboard and input-log ack are checked.",
       },
       {
+        id: "reverse-control-request",
+        title: "Exercise the guarded reverse-control request loop",
+        command: makeWindowsReverseGrantCommand(report, args, "grant"),
+        success: "Mac first sees LAN008/default deny, Windows opens a one-time local grant, Mac retries, and the page shows accepted plus 临时授权已使用.",
+      },
+      {
         id: "observe-and-compare",
         title: "Compare user-visible quality and resource impact",
         command: "",
@@ -508,6 +561,7 @@ function makeRunPlan(report, args) {
     notes: [
       "Do not send passwords, tokens, or system account details on Agent Link Board.",
       "Only enter the Windows host password in the Mac client UI or run-mac-client-formal-smoke --promptPassword when intentionally running auth.",
+      "The Windows reverse grant helper must run on the Windows host machine against loopback; Mac should not call the grant endpoint directly.",
       "Do not run real input injection unless the user explicitly confirms they are watching.",
     ],
   };
@@ -528,7 +582,8 @@ function makeBoardSummary(report) {
     report.readyToCall
       ? `Next: run Mac client true test against ${host.probe?.host}:${host.probe?.port}; compare first frame, FPS, frame age, audio playback, clipboard, input-log, bandwidth/CPU.`
       : "Next: clear blockers, run node scripts/mac/start-mac-client.mjs, discover/start Windows host, then rerun with --host <Windows IP> --port 43770 --boardSummary.",
-    "RunPlan: local client -> Windows discovery -> formal checklist -> browser smoke -> observe quality/resources.",
+    `Reverse rehearsal: click 请求反控 -> expect LAN008; Windows local grant: ${makeWindowsReverseGrantCommand(report, { windowsPort: host.probe?.port || report.args?.windowsPort || defaults.windowsPort }, "grant")}; Mac retry -> accepted/临时授权已使用.`,
+    "RunPlan: local client -> Windows discovery -> formal checklist -> browser smoke -> reverse request rehearsal -> observe quality/resources.",
     "Do not send passwords on Agent Link Board; do not run inject unless the user explicitly confirms they are watching.",
   ].join(" ");
 }

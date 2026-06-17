@@ -127,6 +127,9 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "--forceCall", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.safePreflightWithEnsureClient", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.sendCallWithEnsureClient", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.commands.windowsReverseGrantStatus", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.commands.windowsOpenOneTimeReverseGrant", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.commands.reverseControlRehearsal", `${script} ${flag}`);
     assertIncludes(result.stdout, "--ensureClient", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
@@ -159,8 +162,17 @@ function checkOfflineJson(args) {
   assert(payload.runPlan?.commands?.ensureMacClient?.includes("start-mac-client.mjs --allowExisting"), "offline runPlan should include start/reuse client command");
   assert(payload.runPlan?.commands?.safePreflightWithEnsureClient?.includes("--discover --ensureClient --preflightOnly --boardSummary"), "offline runPlan should include ensureClient preflight command");
   assert(payload.runPlan?.commands?.sendCallWithEnsureClient?.includes("--discover --ensureClient --preflightOnly --sendCall"), "offline runPlan should include ensureClient sendCall command");
+  assert(payload.runPlan?.commands?.windowsReverseGrantStatus?.includes("allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --status --boardSummary"), "offline runPlan should include Windows reverse grant status command");
+  assert(payload.runPlan?.commands?.windowsOpenOneTimeReverseGrant?.includes("allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --grant --durationMs 30000 --boardSummary"), "offline runPlan should include Windows one-time grant command");
+  assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "LAN008", "offline reverse rehearsal command");
+  assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "临时授权已使用", "offline reverse rehearsal command");
   assert(payload.runPlan?.steps?.some((step) => step.id === "browser-smoke"), "offline runPlan should include browser smoke step");
+  assert(payload.runPlan?.steps?.some((step) => step.id === "reverse-control-request"), "offline runPlan should include reverse control request step");
+  assert(payload.runPlan?.safety?.reverseControlRequestSendsInput === false, "offline runPlan should say reverse request sends no input");
+  assert(payload.runPlan?.safety?.windowsReverseGrantLoopbackOnly === true, "offline runPlan should keep Windows grant loopback-only");
   assertIncludes(payload.boardSummary || "", "Do not send passwords", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "Reverse rehearsal:", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "allow-windows-reverse-control.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "RunPlan:", "offline board summary");
   assertIncludes(payload.callText || "", "not ready", "offline call text");
   assertNotIncludes(payload.boardSummary || "", "--checkBoard", "offline board summary");
@@ -205,6 +217,7 @@ function checkBoardSummarySecretFree(args) {
   assert(result.status === 0, "board summary with allow flags should exit 0");
   assertIncludes(result.stdout, "Mac client formal Windows test:", "board summary");
   assertIncludes(result.stdout, "RunPlan:", "board summary");
+  assertIncludes(result.stdout, "Reverse rehearsal:", "board summary");
   assertIncludes(result.stdout, "Do not send passwords", "board summary");
   assertNotIncludes(output, secret, "board summary");
   print("OK", "Board summary is short and does not echo secret-like server text");
@@ -226,6 +239,7 @@ function checkHumanRunPlan(args) {
   assertIncludes(result.stdout, "Formal run plan", "human runPlan");
   assertIncludes(result.stdout, "local-client", "human runPlan");
   assertIncludes(result.stdout, "browser-smoke", "human runPlan");
+  assertIncludes(result.stdout, "reverse-control-request", "human runPlan");
   assertIncludes(result.stdout, "passwordInCommandArguments=false", "human runPlan safety");
   assertIncludes(result.stdout, "inject=false", "human runPlan safety");
   assertNotIncludes(output, "LAN_DUAL_PASSWORD", "human runPlan output");
@@ -479,11 +493,19 @@ async function checkReadyShape(args) {
       assert(payload.runPlan?.commands?.browserSmoke?.includes(`--port ${windowsPort}`), "ready runPlan should include target port");
       assert(payload.runPlan?.commands?.browserSmoke?.includes("--ensureClient"), "ready runPlan should ensure local Mac client for browser smoke");
       assert(payload.runPlan?.commands?.browserSmoke?.includes("--promptPassword"), "ready runPlan should use visible password prompt");
+      assert(payload.runPlan?.commands?.windowsReverseGrantStatus?.includes(`--port ${windowsPort} --status --boardSummary`), "ready runPlan should include target Windows reverse grant status command");
+      assert(payload.runPlan?.commands?.windowsOpenOneTimeReverseGrant?.includes(`--port ${windowsPort} --grant --durationMs 30000 --boardSummary`), "ready runPlan should include target Windows one-time reverse grant command");
+      assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "Windows Codex runs on the Windows host machine", "ready reverse rehearsal");
+      assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "input_event", "ready reverse rehearsal");
       assert(payload.runPlan?.commands?.safePreflightWithEnsureClient?.includes(`--host 127.0.0.1 --port ${windowsPort} --ensureClient --preflightOnly --boardSummary`), "ready runPlan should include target-specific ensureClient preflight");
       assert(payload.runPlan?.commands?.sendCallWithEnsureClient?.includes(`--host 127.0.0.1 --port ${windowsPort} --ensureClient --preflightOnly --sendCall`), "ready runPlan should include target-specific ensureClient sendCall");
       assert(payload.runPlan?.safety?.authenticatesWebSocket === false, "formal checklist runPlan itself should not authenticate");
+      assert(payload.runPlan?.safety?.reverseControlRequestSendsInput === false, "ready runPlan should say reverse request sends no input");
+      assert(payload.runPlan?.safety?.windowsReverseGrantLoopbackOnly === true, "ready runPlan should keep Windows grant loopback-only");
       assert(payload.runPlan?.safety?.requiresExplicitUserConfirmationForInject === true, "runPlan should require explicit inject confirmation");
+      assert(payload.runPlan?.steps?.some((step) => step.id === "reverse-control-request" && String(step.command || "").includes("allow-windows-reverse-control.mjs")), "ready runPlan should include reverse control request step");
       assertIncludes(payload.boardSummary || "", "windowsHost=online 127.0.0.1", "ready board summary");
+      assertIncludes(payload.boardSummary || "", "Reverse rehearsal:", "ready board summary");
       assertIncludes(payload.callText || "", "Suggested browser test:", "ready call text");
       assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "ready output");
     });
@@ -546,7 +568,11 @@ async function checkReadySendCall(args) {
         assertIncludes(call.expected, "run-mac-client-formal-smoke.mjs", "ready call expected");
         assertIncludes(call.expected, `--port ${windowsPort}`, "ready call expected");
         assertIncludes(call.expected, "--ensureClient", "ready call expected");
+        assertIncludes(call.expected, "反控请求安全演练", "ready call expected");
+        assertIncludes(call.expected, "LAN008", "ready call expected");
         assertIncludes(call.expected, "不要执行 inject", "ready call expected");
+        assertIncludes(call.ask, "allow-windows-reverse-control.mjs", "ready call ask");
+        assertIncludes(call.ask, `--port ${windowsPort}`, "ready call ask");
         assertIncludes(call.ask, "密码不要发在联络板", "ready call ask");
         assertIncludes(call.ask, "明确确认", "ready call ask");
         assertNoSecretLikeText(JSON.stringify(call), "ready sendCall board call");

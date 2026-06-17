@@ -290,6 +290,9 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.preflight", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.sendCall", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.browserSmoke", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.windowsReverseGrantStatus", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.windowsOpenOneTimeReverseGrant", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.reverseControlRehearsal", `${script} ${flag}`);
     assertIncludes(result.stdout, "ensuredClient", `${script} ${flag}`);
     assertIncludes(result.stdout, "sentCall", `${script} ${flag}`);
     assertIncludes(result.stdout, "--discover --ensureClient --preflightOnly --sendCall", `${script} ${flag}`);
@@ -346,8 +349,14 @@ async function checkPreflightAndDryRun(args) {
         assert(preflightPayload.commands?.sendCall?.includes(`--server ${boardServer}`), "sendCall command should preserve custom board server");
         assert(preflightPayload.commands?.discoverPreflight?.includes("--discover"), "preflight should expose safe discovery retry command");
         assert(preflightPayload.commands?.browserSmoke?.includes("--useEnvPassword"), "preflight should expose env-password browser command shape");
+        assert(preflightPayload.commands?.windowsReverseGrantStatus?.includes(`--port ${windowsPort} --status --boardSummary`), "preflight should expose Windows reverse grant status command");
+        assert(preflightPayload.commands?.windowsOpenOneTimeReverseGrant?.includes(`--port ${windowsPort} --grant --durationMs 30000 --boardSummary`), "preflight should expose Windows one-time grant command");
+        assertIncludes(preflightPayload.commands?.reverseControlRehearsal || "", "LAN008", "preflight reverse rehearsal");
+        assertIncludes(preflightPayload.commands?.reverseControlRehearsal || "", "临时授权已使用", "preflight reverse rehearsal");
         assertIncludes(preflightPayload.boardSummary || "", "Coordinate first", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "--sendCall", "preflight board summary");
+        assertIncludes(preflightPayload.boardSummary || "", "Reverse rehearsal after auth", "preflight board summary");
+        assertIncludes(preflightPayload.boardSummary || "", "allow-windows-reverse-control.mjs", "preflight board summary");
         assertNotIncludes(`${preflight.stdout}\n${preflight.stderr}`, secret, "preflight output");
 
         const sendCall = run([
@@ -374,6 +383,7 @@ async function checkPreflightAndDryRun(args) {
         assert("boardCallBeforeSend" in sendCallPayload.sentCall, "sendCall should expose prior board call state");
         assert(sendCallPayload.sentCall?.payload?.goal === "正式端到端验收 Windows host", "sendCall payload should keep formal goal");
         assertIncludes(sendCallPayload.boardSummary || "", "Agent Link Board call was sent", "sendCall board summary");
+        assertIncludes(sendCallPayload.boardSummary || "", "Reverse rehearsal after auth", "sendCall board summary");
         assertNotIncludes(`${sendCall.stdout}\n${sendCall.stderr}`, secret, "sendCall output");
       });
 
@@ -399,6 +409,9 @@ async function checkPreflightAndDryRun(args) {
       assert(dryRunPayload.commands?.discoverPreflight?.includes("--discover"), "dryRun should expose safe discovery command");
       assert(dryRunPayload.commands?.browserSmoke?.includes("--useEnvPassword"), "dryRun should use environment password flag");
       assert(dryRunPayload.commands?.browserSmoke?.includes("--requirePassword"), "dryRun should require password in child command");
+      assert(dryRunPayload.commands?.windowsReverseGrantStatus?.includes(`--port ${windowsPort} --status --boardSummary`), "dryRun should expose Windows reverse grant status command");
+      assert(dryRunPayload.commands?.windowsOpenOneTimeReverseGrant?.includes(`--port ${windowsPort} --grant --durationMs 30000 --boardSummary`), "dryRun should expose Windows one-time grant command");
+      assertIncludes(dryRunPayload.commands?.reverseControlRehearsal || "", "Windows Codex runs on the Windows host machine", "dryRun reverse rehearsal");
       assertNotIncludes(dryRunPayload.commands?.browserSmoke || "", secret, "dryRun command");
       assertNotIncludes(`${dryRun.stdout}\n${dryRun.stderr}`, secret, "dryRun output");
     });
@@ -440,6 +453,8 @@ async function checkDiscoverPreflight(args) {
       assert(payload.commands?.sendCall?.includes("--sendCall"), "discover preflight should expose selected-host sendCall command");
       assert(payload.commands?.sendCall?.includes(`--port ${windowsPort}`), "discover preflight sendCall should use selected port");
       assert(payload.commands?.browserSmoke?.includes("--host 127.0.0.1"), "browser command should use discovered host");
+      assert(payload.commands?.windowsOpenOneTimeReverseGrant?.includes(`--port ${windowsPort} --grant --durationMs 30000 --boardSummary`), "discover preflight should use selected port for Windows grant helper");
+      assertIncludes(payload.boardSummary || "", "Reverse rehearsal after auth", "discover preflight board summary");
       assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "discover preflight output");
     });
   });
@@ -521,6 +536,7 @@ async function checkDiscoverSendCall(args) {
         assert(payload.sentCall?.ok === true, "discover sendCall should report sentCall ok");
         assert(payload.sentCall?.payload?.connection === `127.0.0.1:${windowsPort}`, "discover sendCall should call selected Windows host");
         assertIncludes(payload.boardSummary || "", "Agent Link Board call was sent", "discover sendCall board summary");
+        assertIncludes(payload.boardSummary || "", "Reverse rehearsal after auth", "discover sendCall board summary");
         assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "discover sendCall output");
       });
     });

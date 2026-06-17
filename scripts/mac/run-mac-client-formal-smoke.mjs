@@ -102,6 +102,15 @@ Machine-readable JSON fields:
   commands.sendCall              Secret-free --preflightOnly call sender; only set after a Windows host is known.
   commands.discoverPreflight     Safe discovery + preflight retry command when no host is known.
   commands.browserSmoke          Browser smoke command shape; uses --useEnvPassword, never embeds passwords.
+  commands.windowsReverseGrantStatus
+                                  Windows-side loopback command to inspect the
+                                  one-time reverse-control grant state.
+  commands.windowsOpenOneTimeReverseGrant
+                                  Windows-side loopback command to open a short
+                                  one-time reverse-control grant window.
+  commands.reverseControlRehearsal
+                                  Safe LAN008 -> Windows local one-time grant
+                                  -> Mac retry accepted rehearsal.
   ensuredClient                  Result from --ensureClient start/reuse of the local Mac client page.
   discovery                      Selected Windows host details when --discover is used.
   sentCall                       Present only with --preflightOnly --sendCall; secret-free Agent Link Board result.
@@ -517,6 +526,34 @@ function makeDiscoveryRetryCommand(args) {
   return command.join(" ");
 }
 
+function makeWindowsReverseGrantCommand(args, action = "grant") {
+  const parts = [
+    "node scripts/windows/allow-windows-reverse-control.mjs",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(args.port || defaults.port),
+  ];
+  if (action === "status") {
+    parts.push("--status");
+  } else if (action === "revoke") {
+    parts.push("--revoke");
+  } else {
+    parts.push("--grant", "--durationMs", "30000");
+  }
+  parts.push("--boardSummary");
+  return parts.join(" ");
+}
+
+function makeReverseControlRehearsalText(args) {
+  return [
+    "Mac authenticates in the Mac client page, clicks 请求反控, and expects LAN008/default deny first.",
+    `Windows Codex runs on the Windows host machine: ${makeWindowsReverseGrantCommand(args, "grant")}.`,
+    "Mac clicks 重试反控 and expects accepted plus 临时授权已使用.",
+    "No password goes on Agent Link Board, no input_event is sent by this request, and inject stays off.",
+  ].join(" ");
+}
+
 async function preparePassword(args) {
   if (args.preflightOnly || args.dryRun) return "";
   if (args.promptPassword) {
@@ -647,6 +684,7 @@ function makeBoardSummary(report) {
     return [
       `Mac client browser smoke passed against ${target}; duration=${report.browserSmoke.durationMs}ms.${discoveryText}`,
       `Preflight ready=${report.preflight?.readyToCall ? "yes" : "no"}; command used environment password, not argv.`,
+      `Reverse rehearsal next if needed: ${report.commands?.reverseControlRehearsal || makeReverseControlRehearsalText(report.args)}.`,
       "No password was sent to Agent Link Board; inject was not executed.",
     ].join(" ");
   }
@@ -664,6 +702,7 @@ function makeBoardSummary(report) {
     return [
       `Mac client browser smoke preflight for ${target}: ok=${report.preflight?.ok ? "yes" : "no"} ready=${report.preflight?.readyToCall ? "yes" : "no"}.${discoveryText}`,
       nextText,
+      `Reverse rehearsal after auth: ${report.commands?.reverseControlRehearsal || makeReverseControlRehearsalText(report.args)}.`,
       "No password was requested or sent; inject was not executed.",
     ].join(" ");
   }
@@ -728,6 +767,9 @@ function makeReport(args, preflight) {
       sendCall: makeSendCallCommand(args),
       discoverPreflight: makeDiscoveryRetryCommand(args),
       browserSmoke: makeBrowserSmokeCommand(args),
+      windowsReverseGrantStatus: makeWindowsReverseGrantCommand(args, "status"),
+      windowsOpenOneTimeReverseGrant: makeWindowsReverseGrantCommand(args, "grant"),
+      reverseControlRehearsal: makeReverseControlRehearsalText(args),
     },
     preflight: preflight.payload,
     preflightRaw: {
