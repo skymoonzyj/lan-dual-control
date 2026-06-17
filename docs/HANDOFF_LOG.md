@@ -21,6 +21,43 @@
 
 日期：2026-06-17 续跑
 开发端：Windows Codex
+本轮目标：给 Windows WGC 刷新率/码率 benchmark 增加可上板摘要和 PowerShell 入口。
+完成内容：
+- `scripts/windows/benchmark-windows-wgc-settings.mjs` 新增 `--boardSummary`，JSON 同步带 `boardSummary` 字段；摘要包含分辨率、H.264/重复帧模式、各 profile 帧数/FPS/fresh/source/repeat/pipeline，并声明 no formal password/no Mac auth/no input/inject。
+- 新增 PowerShell 包装 `scripts/windows/benchmark-windows-wgc-settings.ps1`，支持 `-Profile`、`-DurationMs`、`-BoardSummary`、`-Json`、`-RepeatLastFrame`、`-H264Bridge`、`-H264Source`、`-H264Encoder`、`-MotionStimulus` 和纯 `-Help/-h`。
+- `scripts/windows/test-windows-wgc-progress-output.mjs` 扩展 fake observe 回归，覆盖 benchmark Node `--boardSummary`、PowerShell `-BoardSummary`、PowerShell `-Json`、普通进度输出和不泄密。
+- Windows PowerShell 统一 help 覆盖更新为 20 个 `.ps1` 入口、40 条帮助命令，新增 `benchmark-windows-wgc-settings.ps1`。
+- Windows host README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `scripts/windows/benchmark-windows-wgc-settings.ps1`
+- `scripts/windows/test-windows-wgc-progress-output.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/benchmark-windows-wgc-settings.mjs`
+- `node --check scripts/windows/test-windows-wgc-progress-output.mjs`
+- PowerShell AST parse `benchmark-windows-wgc-settings.ps1`
+- `node scripts/windows/test-windows-wgc-progress-output.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script benchmark-windows-wgc-settings.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-powershell-help.mjs --script benchmark-windows-wgc-settings.ps1 --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`
+遗留问题：
+- 本轮没有跑真实 WGC benchmark；新增输出路径使用 fake observe 锁定。真实性能数据仍按现场需要手动运行 benchmark 命令。
+下一步建议：
+- 需要看刷新率/码率基础表现时，先跑 `benchmark-windows-wgc-settings.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary`；需要 raw-bgra/NV12 对照时，再跑 `compare-windows-wgc-h264-sources.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary`。
+是否改了协议：否。
+是否需要另一端配合：否；真实观感/资源对照时再通过 Agent Link Board 呼叫 Mac 端。
+
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
 本轮目标：给 Windows WGC H.264 raw-bgra vs NV12 源格式对照补 PowerShell 入口，并接入 Windows 恢复总览。
 完成内容：
 - 新增 `scripts/windows/compare-windows-wgc-h264-sources.ps1`，包装同名 Node compare 工具，支持 `-Profile`、`-DurationMs`、`-BoardSummary`、`-Json`、`-ProgressIntervalMs`、`-SkipBuild`、`-Helper` 和常用阈值参数；帮助说明该工具只跑本机临时 Windows host/WGC helper benchmark，不连接 Mac、不认证、不请求或打印密码、不发送 input/inject。

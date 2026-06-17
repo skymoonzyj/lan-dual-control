@@ -54,6 +54,7 @@ const defaults = {
   progressIntervalMs: 10000,
   skipBuild: false,
   json: false,
+  boardSummary: false,
   verbose: false,
 };
 
@@ -96,12 +97,14 @@ Options:
   --motionStimulusWarmupMs <ms>         Wait after opening the animation. Default: ${defaults.motionStimulusWarmupMs}
   --motionStimulusBrowser <path>        Browser exe for the animation window. Default: auto-detect Edge
   --progressIntervalMs <ms>             Print per-profile wait progress every N ms; 0 disables. Default: ${defaults.progressIntervalMs}
+  --boardSummary                        Print one Agent Link Board-safe summary line
   --json                                Print JSON result
   --verbose                             Print child command stderr/stdout on failure
   --help, -h                            Show this help without starting a host
 
 Examples:
   node scripts/windows/benchmark-windows-wgc-settings.mjs
+  node scripts/windows/benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1500 --boardSummary
   node scripts/windows/benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1500 --json
 `);
 }
@@ -170,6 +173,7 @@ function parseArgs(argv) {
     : defaults.progressIntervalMs;
   args.skipBuild = booleanArg(args.skipBuild);
   args.json = booleanArg(args.json);
+  args.boardSummary = booleanArg(args.boardSummary);
   args.verbose = booleanArg(args.verbose);
   args.host = String(args.host || defaults.host).trim();
   args.password = String(args.password || defaults.password);
@@ -627,7 +631,7 @@ async function buildHelper(args) {
     cwd: helperDir,
     timeoutMs: args.timeoutMs,
     verbose: args.verbose,
-    progressIntervalMs: args.json ? 0 : args.progressIntervalMs,
+    progressIntervalMs: args.json || args.boardSummary ? 0 : args.progressIntervalMs,
     progressLabel: "WGC helper cargo build",
     expectedMs: args.timeoutMs,
   });
@@ -727,7 +731,7 @@ async function runProfile(args, profile, index) {
     env,
     timeoutMs: childTimeoutMs,
     verbose: args.verbose,
-    progressIntervalMs: args.json ? 0 : args.progressIntervalMs,
+    progressIntervalMs: args.json || args.boardSummary ? 0 : args.progressIntervalMs,
     progressLabel: `profile ${index + 1}/${args.profiles.length} ${profile.name}`,
     expectedMs: args.durationMs,
   });
@@ -827,6 +831,35 @@ function printProfile(result) {
   }
 }
 
+function makeBoardSummary(summary) {
+  if (!summary.ok) {
+    const failed = summary.profiles
+      .filter((profile) => !profile.ok)
+      .map((profile) => `${profile.profile?.name || "unknown"}: ${profile.error || "failed"}`)
+      .join("; ");
+    return `Windows WGC benchmark failed: ${failed || "unknown failure"}. No formal password, no WebSocket auth to Mac, no input/inject.`;
+  }
+  const profiles = summary.profiles.map((profile) => {
+    const pipeline = profile.capturePipeline || "unknown-pipeline";
+    const encoder = profile.h264Encoder ? `/${profile.h264Encoder}` : "";
+    const repeated = profile.repeatedFramePercent !== null ? `${profile.repeatedFramePercent}%` : "?%";
+    return (
+      `${profile.profile.name}=${profile.frames}f/${profile.fps}fps ` +
+      `fresh=${profile.freshFps} source=${profile.uniqueHelperFps} ` +
+      `repeat=${repeated} ${pipeline}${encoder}`
+    );
+  }).join("; ");
+  const mode = summary.requested.h264Bridge
+    ? `h264:${summary.requested.h264Source || "jpeg"}${summary.requested.h264Encoder ? `/${summary.requested.h264Encoder}` : ""}`
+    : "jpeg";
+  return (
+    `Windows WGC benchmark passed: ${summary.requested.width}x${summary.requested.height} ` +
+    `mode=${mode} repeat=${summary.requested.repeatLastFrame ? summary.requested.repeatLastFrameMode : "off"} ` +
+    `profiles=[${profiles || "none"}]. ` +
+    "No formal password, no WebSocket auth to Mac, no input/inject."
+  );
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -842,19 +875,19 @@ async function main() {
   const results = [];
 
   const build = await buildHelper(args);
-  if (!args.json) {
+  if (!args.json && !args.boardSummary) {
     console.log(`[OK] WGC helper ready: ${args.helper}${build.skipped ? " (build skipped)" : ""}`);
   }
 
   try {
     motionStimulus = await startMotionStimulus(args);
-    if (motionStimulus.enabled && !args.json) {
+    if (motionStimulus.enabled && !args.json && !args.boardSummary) {
       console.log(`[OK] Motion stimulus ready: PID ${motionStimulus.pid}, ${Math.round(motionStimulus.width)}x${Math.round(motionStimulus.height)}`);
     }
 
     for (let index = 0; index < args.profiles.length; index += 1) {
       const profile = args.profiles[index];
-      if (!args.json) {
+      if (!args.json && !args.boardSummary) {
         console.log(
           `[RUN] ${profile.name} (${index + 1}/${args.profiles.length}) ` +
           `duration=${formatSeconds(args.durationMs)} progressEvery=${progressEveryText(args)}`,
@@ -862,7 +895,7 @@ async function main() {
       }
       const result = await runProfile(args, profile, index);
       results.push(result);
-      if (!args.json) {
+      if (!args.json && !args.boardSummary) {
         printProfile(result);
       }
     }
@@ -907,9 +940,12 @@ async function main() {
     profiles: results.map(compactResult),
     results,
   };
+  summary.boardSummary = makeBoardSummary(summary);
 
   if (args.json) {
     console.log(JSON.stringify(summary, null, 2));
+  } else if (args.boardSummary) {
+    console.log(summary.boardSummary);
   }
   process.exitCode = summary.ok ? 0 : 1;
 }

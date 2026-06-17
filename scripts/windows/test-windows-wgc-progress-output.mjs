@@ -8,6 +8,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
 const benchmarkScript = resolve(scriptDir, "benchmark-windows-wgc-settings.mjs");
 const compareScript = resolve(scriptDir, "compare-windows-wgc-h264-sources.mjs");
+const benchmarkPowerShellScript = "scripts/windows/benchmark-windows-wgc-settings.ps1";
 const comparePowerShellScript = "scripts/windows/compare-windows-wgc-h264-sources.ps1";
 
 function printHelp() {
@@ -92,14 +93,14 @@ function runNode(args, { env = process.env, timeoutMs = 15000 } = {}) {
   });
 }
 
-function runPowerShell(args, { env = process.env, timeoutMs = 15000 } = {}) {
+function runPowerShellScript(script, args, { env = process.env, timeoutMs = 15000 } = {}) {
   return new Promise((resolveRun) => {
     const child = spawn("powershell.exe", [
       "-NoProfile",
       "-ExecutionPolicy",
       "Bypass",
       "-File",
-      comparePowerShellScript,
+      script,
       ...args,
     ], {
       cwd: repoRoot,
@@ -147,6 +148,14 @@ function runPowerShell(args, { env = process.env, timeoutMs = 15000 } = {}) {
       });
     });
   });
+}
+
+function runComparePowerShell(args, options = {}) {
+  return runPowerShellScript(comparePowerShellScript, args, options);
+}
+
+function runBenchmarkPowerShell(args, options = {}) {
+  return runPowerShellScript(benchmarkPowerShellScript, args, options);
 }
 
 function parseJsonOutput(output, context) {
@@ -296,12 +305,19 @@ async function verifyHelp() {
   const benchmarkHelp = await runNode([benchmarkScript, "--help"]);
   assert(benchmarkHelp.ok, `benchmark --help failed\n${benchmarkHelp.stderr}`);
   assertIncludes(benchmarkHelp.stdout, "--progressIntervalMs", "benchmark help");
+  assertIncludes(benchmarkHelp.stdout, "--boardSummary", "benchmark help");
+
+  const benchmarkPowerShellHelp = await runBenchmarkPowerShell(["-Help"]);
+  assert(benchmarkPowerShellHelp.ok, `benchmark PowerShell -Help failed\n${benchmarkPowerShellHelp.stderr}`);
+  assertIncludes(benchmarkPowerShellHelp.stdout, "-BoardSummary", "benchmark PowerShell help");
+  assertIncludes(benchmarkPowerShellHelp.stdout, "-ProgressIntervalMs", "benchmark PowerShell help");
+  assertIncludes(benchmarkPowerShellHelp.stdout, "does not connect to Mac", "benchmark PowerShell help");
 
   const compareHelp = await runNode([compareScript, "--help"]);
   assert(compareHelp.ok, `compare --help failed\n${compareHelp.stderr}`);
   assertIncludes(compareHelp.stdout, "--progressIntervalMs", "compare help");
 
-  const comparePowerShellHelp = await runPowerShell(["-Help"]);
+  const comparePowerShellHelp = await runComparePowerShell(["-Help"]);
   assert(comparePowerShellHelp.ok, `compare PowerShell -Help failed\n${comparePowerShellHelp.stderr}`);
   assertIncludes(comparePowerShellHelp.stdout, "-BoardSummary", "compare PowerShell help");
   assertIncludes(comparePowerShellHelp.stdout, "-ProgressIntervalMs", "compare PowerShell help");
@@ -367,7 +383,98 @@ async function verifyBenchmarkJsonClean(fakeObservePath) {
   assertNotIncludes(result.stdout, "[INFO]", "benchmark JSON output");
   const summary = parseJsonOutput(result.stdout, "benchmark JSON output");
   assert(summary.requested?.progressIntervalMs === 100, "benchmark JSON should include requested.progressIntervalMs");
+  assert(summary.boardSummary.includes("Windows WGC benchmark passed"), "benchmark JSON should include boardSummary");
   console.log("[OK] Benchmark --json remains clean");
+}
+
+async function verifyBenchmarkBoardSummaryClean(fakeObservePath) {
+  const result = await runNode([
+    benchmarkScript,
+    "--skipBuild",
+    "--helper",
+    process.execPath,
+    "--profile",
+    "60:20000:balanced",
+    "--durationMs",
+    "800",
+    "--timeoutMs",
+    "10000",
+    "--progressIntervalMs",
+    "100",
+    "--boardSummary",
+  ], {
+    env: {
+      ...process.env,
+      LAN_DUAL_WINDOWS_WGC_OBSERVE_SCRIPT: fakeObservePath,
+      FAKE_OBSERVE_DELAY_MS: "350",
+    },
+  });
+  assert(result.ok, `benchmark boardSummary run failed\n${result.stdout}\n${result.stderr}`);
+  assertIncludes(result.stdout, "Windows WGC benchmark passed", "benchmark boardSummary output");
+  assertIncludes(result.stdout, "60Hz-20M-balanced", "benchmark boardSummary output");
+  assertNotIncludes(result.stdout, "[INFO]", "benchmark boardSummary output");
+  assertNotIncludes(result.stdout, "progress:", "benchmark boardSummary output");
+  console.log("[OK] Benchmark --boardSummary remains one clean line");
+}
+
+async function verifyBenchmarkPowerShellBoardSummaryClean(fakeObservePath) {
+  const result = await runBenchmarkPowerShell([
+    "-Profile",
+    "60:20000:balanced",
+    "-DurationMs",
+    "800",
+    "-TimeoutMs",
+    "10000",
+    "-ProgressIntervalMs",
+    "100",
+    "-SkipBuild",
+    "-Helper",
+    process.execPath,
+    "-BoardSummary",
+  ], {
+    env: {
+      ...process.env,
+      LAN_DUAL_WINDOWS_WGC_OBSERVE_SCRIPT: fakeObservePath,
+      FAKE_OBSERVE_DELAY_MS: "350",
+    },
+  });
+  assert(result.ok, `benchmark PowerShell boardSummary run failed\n${result.stdout}\n${result.stderr}`);
+  assertIncludes(result.stdout, "Windows WGC benchmark passed", "benchmark PowerShell boardSummary output");
+  assertIncludes(result.stdout, "60Hz-20M-balanced", "benchmark PowerShell boardSummary output");
+  assertNotIncludes(result.stdout, "[INFO]", "benchmark PowerShell boardSummary output");
+  assertNotIncludes(result.stdout, "progress:", "benchmark PowerShell boardSummary output");
+  assert(String(result.stderr || "").trim() === "", `benchmark PowerShell boardSummary stderr should be empty\n${result.stderr}`);
+  console.log("[OK] Benchmark PowerShell -BoardSummary remains one clean line");
+}
+
+async function verifyBenchmarkPowerShellJsonClean(fakeObservePath) {
+  const result = await runBenchmarkPowerShell([
+    "-Profile",
+    "60:20000:balanced",
+    "-DurationMs",
+    "800",
+    "-TimeoutMs",
+    "10000",
+    "-ProgressIntervalMs",
+    "100",
+    "-SkipBuild",
+    "-Helper",
+    process.execPath,
+    "-Json",
+  ], {
+    env: {
+      ...process.env,
+      LAN_DUAL_WINDOWS_WGC_OBSERVE_SCRIPT: fakeObservePath,
+      FAKE_OBSERVE_DELAY_MS: "350",
+    },
+  });
+  assert(result.ok, `benchmark PowerShell JSON run failed\n${result.stdout}\n${result.stderr}`);
+  assertNotIncludes(result.stdout, "[INFO]", "benchmark PowerShell JSON output");
+  const summary = parseJsonOutput(result.stdout, "benchmark PowerShell JSON output");
+  assert(summary.boardSummary.includes("Windows WGC benchmark passed"), "benchmark PowerShell JSON should include boardSummary");
+  assert(summary.requested?.progressIntervalMs === 100, "benchmark PowerShell JSON should include requested.progressIntervalMs");
+  assert(String(result.stderr || "").trim() === "", `benchmark PowerShell JSON stderr should be empty\n${result.stderr}`);
+  console.log("[OK] Benchmark PowerShell -Json remains clean");
 }
 
 async function verifyCompareProgress(fakeBenchmarkPath) {
@@ -441,7 +548,7 @@ async function verifyCompareBoardSummaryClean(fakeBenchmarkPath) {
 }
 
 async function verifyComparePowerShellBoardSummaryClean(fakeBenchmarkPath) {
-  const result = await runPowerShell([
+  const result = await runComparePowerShell([
     "-Source",
     "raw-bgra",
     "nv12",
@@ -473,7 +580,7 @@ async function verifyComparePowerShellBoardSummaryClean(fakeBenchmarkPath) {
 }
 
 async function verifyComparePowerShellJsonClean(fakeBenchmarkPath) {
-  const result = await runPowerShell([
+  const result = await runComparePowerShell([
     "-Source",
     "raw-bgra",
     "nv12",
@@ -515,6 +622,9 @@ async function main() {
     await writeFile(fakeBenchmarkPath, fakeBenchmarkSource(), "utf8");
     await verifyBenchmarkProgress(fakeObservePath);
     await verifyBenchmarkJsonClean(fakeObservePath);
+    await verifyBenchmarkBoardSummaryClean(fakeObservePath);
+    await verifyBenchmarkPowerShellBoardSummaryClean(fakeObservePath);
+    await verifyBenchmarkPowerShellJsonClean(fakeObservePath);
     await verifyCompareProgress(fakeBenchmarkPath);
     await verifyCompareBoardSummaryClean(fakeBenchmarkPath);
     await verifyComparePowerShellBoardSummaryClean(fakeBenchmarkPath);
