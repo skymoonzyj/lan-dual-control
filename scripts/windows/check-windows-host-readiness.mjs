@@ -515,6 +515,10 @@ function windowsVideoEncoderSupportCommand() {
   return "node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary";
 }
 
+function windowsWgcBenchmarkCommand() {
+  return "node scripts/windows/benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary";
+}
+
 function formatCapabilities(capabilities = {}) {
   const screen = capabilities.screen || {};
   const audio = capabilities.audio || {};
@@ -618,6 +622,7 @@ async function checkRunningHostRuntime(args) {
         windowsReverseControlGrantCommand: statusPayload.windowsReverseControlGrantCommand || windowsReverseControlGrantCommand(args.port),
         windowsReverseControlGrantPowerShellCommand: statusPayload.windowsReverseControlGrantPowerShellCommand || windowsReverseControlGrantPowerShellCommand(args.port),
         windowsVideoEncoderSupportCommand: statusPayload.windowsVideoEncoderSupportCommand || windowsVideoEncoderSupportCommand(),
+        windowsWgcBenchmarkCommand: statusPayload.windowsWgcBenchmarkCommand || windowsWgcBenchmarkCommand(),
         warnings,
         errors,
       };
@@ -674,6 +679,7 @@ async function checkRunningHostRuntime(args) {
       windowsReverseControlGrantCommand: statusPayload.windowsReverseControlGrantCommand || windowsReverseControlGrantCommand(args.port),
       windowsReverseControlGrantPowerShellCommand: statusPayload.windowsReverseControlGrantPowerShellCommand || windowsReverseControlGrantPowerShellCommand(args.port),
       windowsVideoEncoderSupportCommand: statusPayload.windowsVideoEncoderSupportCommand || windowsVideoEncoderSupportCommand(),
+      windowsWgcBenchmarkCommand: statusPayload.windowsWgcBenchmarkCommand || windowsWgcBenchmarkCommand(),
       warnings,
       errors,
     };
@@ -693,6 +699,7 @@ async function checkRunningHostRuntime(args) {
       windowsReverseControlGrantCommand: windowsReverseControlGrantCommand(args.port),
       windowsReverseControlGrantPowerShellCommand: windowsReverseControlGrantPowerShellCommand(args.port),
       windowsVideoEncoderSupportCommand: windowsVideoEncoderSupportCommand(),
+      windowsWgcBenchmarkCommand: windowsWgcBenchmarkCommand(),
       warnings,
       errors,
     };
@@ -731,6 +738,9 @@ function makeReadinessBoardSummary(summary) {
   const videoSupport = summary.windowsVideoEncoderSupportCommand && !runtimeText.includes("WindowsVideoSupport=")
     ? ` WindowsVideoSupport=${summary.windowsVideoEncoderSupportCommand}.`
     : "";
+  const wgcBenchmark = summary.windowsWgcBenchmarkCommand && !runtimeText.includes("WindowsWgcBenchmark=")
+    ? ` WindowsWgcBenchmark=${summary.windowsWgcBenchmarkCommand}.`
+    : "";
   const probeSentences = [];
   if (wgcSourceResult) {
     const probeState = wgcSourceResult.ok ? "passed" : "failed";
@@ -741,7 +751,7 @@ function makeReadinessBoardSummary(summary) {
   const probeText = probeSentences
     .map((sentence) => (sentence.endsWith(".") ? sentence : `${sentence}.`))
     .join(" ");
-  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrant}${reverseGrantPowerShell}${videoSupport}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
+  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrant}${reverseGrantPowerShell}${videoSupport}${wgcBenchmark}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
 }
 
 function formatMediaBoardSummary(summary) {
@@ -1184,6 +1194,9 @@ async function main() {
   const windowsVideoEncoderSupportCommandValue = results.find((result) =>
     typeof result.windowsVideoEncoderSupportCommand === "string" && result.windowsVideoEncoderSupportCommand,
   )?.windowsVideoEncoderSupportCommand || windowsVideoEncoderSupportCommand();
+  const windowsWgcBenchmarkCommandValue = results.find((result) =>
+    typeof result.windowsWgcBenchmarkCommand === "string" && result.windowsWgcBenchmarkCommand,
+  )?.windowsWgcBenchmarkCommand || windowsWgcBenchmarkCommand();
 
   const summary = {
     ok,
@@ -1219,6 +1232,7 @@ async function main() {
     windowsReverseControlGrantCommand: windowsReverseControlGrantCommandValue,
     windowsReverseControlGrantPowerShellCommand: windowsReverseControlGrantPowerShellCommandValue,
     windowsVideoEncoderSupportCommand: windowsVideoEncoderSupportCommandValue,
+    windowsWgcBenchmarkCommand: windowsWgcBenchmarkCommandValue,
     results: results.map((result) => ({
       label: result.label,
       ok: result.ok,
@@ -1233,6 +1247,7 @@ async function main() {
       windowsReverseControlGrantCommand: result.windowsReverseControlGrantCommand || "",
       windowsReverseControlGrantPowerShellCommand: result.windowsReverseControlGrantPowerShellCommand || "",
       windowsVideoEncoderSupportCommand: result.windowsVideoEncoderSupportCommand || "",
+      windowsWgcBenchmarkCommand: result.windowsWgcBenchmarkCommand || "",
       warnings: result.warnings,
       errors: result.errors,
     })),
