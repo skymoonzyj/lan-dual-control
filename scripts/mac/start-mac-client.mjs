@@ -20,6 +20,7 @@ const defaults = {
 
 const copyDiagnosticsAction = "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码";
 const formalSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
+const browserSelfTestCommand = "node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard --boardSummary --progressIntervalMs 0";
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -42,6 +43,22 @@ Options:
   --open                 Open the local page in the default browser after start.
   --allowExisting        Treat an already-running page on the port as success.
   --help, -h             Show this help without starting anything.
+
+Machine-readable JSON fields:
+  commands.macClientStartOrReuseCommand
+                         Secret-free command to start or reuse this local page.
+  commands.macClientFormalStatusCommand
+                         Secret-free checklist command before true Windows control.
+  commands.macClientFormalSmokeCommand
+                         Secret-free preflight command. It does not authenticate,
+                         prompt for a password, send a call, or send input.
+  commands.macClientBrowserSelfTestCommand
+                         Secret-free local browser self-test command. It uses a
+                         temporary mock Windows host and does not use a real host,
+                         password, call, or inject.
+  commands.macClientCopyDiagnosticsAction
+                         Safe in-page action for copying diagnostics after
+                         confirming no connection password is included.
 
 Examples:
   node scripts/mac/start-mac-client.mjs
@@ -198,6 +215,7 @@ function makeBoardSummary(report) {
       `Mac client page online at ${report.url}; pid=${report.processId || "existing"}; title=${report.titleFound ? "ok" : "unexpected"}.`,
       "Next: run check-mac-client-formal-status --host <Windows IP> --port 43770 --boardSummary before true Windows control.",
       `MacClientFormalSmoke=${formalSmokeCommand}.`,
+      `MacClientBrowserSelfTest=${browserSelfTestCommand}.`,
       `CopyDiagnostics=${copyDiagnosticsAction}.`,
       "No password was requested or sent; no Windows connection/input was attempted.",
     ].join(" ");
@@ -206,6 +224,7 @@ function makeBoardSummary(report) {
     `Mac client page offline at ${report.url}: ${report.error?.message || "unknown"}.`,
     "Next: start with node scripts/mac/start-mac-client.mjs, then rerun formal checklist.",
     `MacClientFormalSmoke=${formalSmokeCommand}.`,
+    `MacClientBrowserSelfTest=${browserSelfTestCommand}.`,
     `CopyDiagnostics=页面在线后在 ${copyDiagnosticsAction}.`,
     "No password was requested or sent; no Windows connection/input was attempted.",
   ].join(" ");
@@ -217,6 +236,7 @@ function makeCommands(args) {
     macClientFormalStatusCommand:
       "node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary",
     macClientFormalSmokeCommand: formalSmokeCommand,
+    macClientBrowserSelfTestCommand: browserSelfTestCommand,
     macClientCopyDiagnosticsAction: copyDiagnosticsAction,
   };
 }
