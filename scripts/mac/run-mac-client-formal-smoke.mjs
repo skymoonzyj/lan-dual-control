@@ -122,6 +122,10 @@ Machine-readable JSON fields:
   commands.reverseControlRehearsal
                                   Safe LAN008 -> Windows local one-time grant
                                   -> Mac retry accepted rehearsal.
+  commands.reverseGrantCopyAction
+                                  Mac client UI evidence to verify after LAN008:
+                                  both PowerShell and Node fallback grant
+                                  commands can be copied without passwords.
   ensuredClient                  Result from --ensureClient start/reuse of the local Mac client page.
   discovery                      Selected Windows host details when --discover is used.
   discovery.formalChecklistCommand
@@ -598,9 +602,14 @@ function makeReverseControlRehearsalText(args) {
     "Mac authenticates in the Mac client page, clicks 请求反控, and expects LAN008/default deny first.",
     `Windows Codex runs the recommended PowerShell command on the Windows host machine: ${grantCommand}.`,
     `Node fallback if PowerShell is unavailable: ${nodeFallbackCommand}.`,
+    makeReverseGrantCopyAction(),
     "Mac clicks 重试反控 and expects accepted plus 临时授权已使用.",
     "No password goes on Agent Link Board, no input_event is sent by this request, and inject stays off.",
   ].join(" ");
+}
+
+function makeReverseGrantCopyAction() {
+  return "After LAN008, Mac client page shows Copy PowerShell and Copy Node for the Windows loopback grant commands; copied text must contain no password and copying must not send input_event.";
 }
 
 async function preparePassword(args) {
@@ -753,6 +762,7 @@ function makeBoardSummary(report) {
       `Mac client browser smoke preflight for ${target}: ok=${report.preflight?.ok ? "yes" : "no"} ready=${report.preflight?.readyToCall ? "yes" : "no"}.${discoveryText}${discoveryChecklistText}`,
       nextText,
       `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
+      `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
       `Reverse rehearsal after auth: ${report.commands?.reverseControlRehearsal || makeReverseControlRehearsalText(report.args)}.`,
       "No password was requested or sent; inject was not executed.",
     ].join(" ");
@@ -834,6 +844,7 @@ function makeReport(args, preflight) {
       windowsReverseGrantStatusNodeFallback: makeWindowsReverseGrantNodeFallbackCommand(args, "status"),
       windowsOpenOneTimeReverseGrantNodeFallback: makeWindowsReverseGrantNodeFallbackCommand(args, "grant"),
       reverseControlRehearsal: makeReverseControlRehearsalText(args),
+      reverseGrantCopyAction: makeReverseGrantCopyAction(),
     },
     preflight: preflight.payload,
     preflightRaw: {

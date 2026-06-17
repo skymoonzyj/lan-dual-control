@@ -126,7 +126,10 @@ function assertManualChecklist(checklist, label) {
   }
   const combined = JSON.stringify(checklist);
   assertIncludes(combined, "Copy Diagnostics", `${label} diagnostics`);
+  assertIncludes(combined, "Copy PowerShell", `${label} reverse grant PowerShell copy`);
+  assertIncludes(combined, "Copy Node", `${label} reverse grant Node copy`);
   assertIncludes(combined, "password", `${label} password safety`);
+  assertIncludes(combined, "input_event", `${label} reverse grant copy input safety`);
   assertNotIncludes(combined, "LAN_DUAL_PASSWORD", `${label}`);
 }
 
@@ -160,6 +163,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "runPlan.commands.windowsReverseGrantStatusNodeFallback", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsOpenOneTimeReverseGrantNodeFallback", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.reverseControlRehearsal", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.commands.reverseGrantCopyAction", `${script} ${flag}`);
     assertIncludes(result.stdout, "--ensureClient", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
@@ -203,6 +207,8 @@ function checkOfflineJson(args) {
   assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "PowerShell", "offline reverse rehearsal command");
   assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "LAN008", "offline reverse rehearsal command");
   assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "临时授权已使用", "offline reverse rehearsal command");
+  assertIncludes(payload.runPlan?.commands?.reverseGrantCopyAction || "", "Copy PowerShell", "offline reverse grant copy action");
+  assertIncludes(payload.runPlan?.commands?.reverseGrantCopyAction || "", "Copy Node", "offline reverse grant copy action");
   assert(payload.runPlan?.steps?.some((step) => step.id === "browser-smoke"), "offline runPlan should include browser smoke step");
   assert(payload.runPlan?.steps?.some((step) => step.id === "local-browser-self-test" && String(step.command || "").includes("scripts/mac/test-mac-client-browser-self-test.mjs")), "offline runPlan should include local browser self-test step");
   assert(payload.runPlan?.steps?.some((step) => step.id === "reverse-control-request"), "offline runPlan should include reverse control request step");
@@ -258,6 +264,8 @@ function checkBoardSummarySecretFree(args) {
   assertIncludes(result.stdout, "Mac client formal Windows test:", "board summary");
   assertIncludes(result.stdout, "RunPlan:", "board summary");
   assertIncludes(result.stdout, "Reverse rehearsal:", "board summary");
+  assertIncludes(result.stdout, "ReverseGrantCopy=", "board summary");
+  assertIncludes(result.stdout, "Copy Node", "board summary");
   assertIncludes(result.stdout, "Do not send passwords", "board summary");
   assertNotIncludes(output, secret, "board summary");
   print("OK", "Board summary is short and does not echo secret-like server text");
@@ -547,6 +555,8 @@ async function checkReadyShape(args) {
       assert(payload.runPlan?.commands?.windowsOpenOneTimeReverseGrantNodeFallback?.includes(`--port ${windowsPort} --grant --durationMs 30000 --boardSummary`), "ready runPlan should include target Windows one-time reverse grant Node fallback command");
       assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "recommended PowerShell command", "ready reverse rehearsal");
       assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "input_event", "ready reverse rehearsal");
+      assertIncludes(payload.runPlan?.commands?.reverseGrantCopyAction || "", "Copy PowerShell", "ready reverse grant copy action");
+      assertIncludes(payload.runPlan?.commands?.reverseGrantCopyAction || "", "Copy Node", "ready reverse grant copy action");
       assert(payload.runPlan?.commands?.safePreflightWithEnsureClient?.includes(`--host 127.0.0.1 --port ${windowsPort} --ensureClient --preflightOnly --boardSummary`), "ready runPlan should include target-specific ensureClient preflight");
       assert(payload.runPlan?.commands?.sendCallWithEnsureClient?.includes(`--host 127.0.0.1 --port ${windowsPort} --ensureClient --preflightOnly --sendCall`), "ready runPlan should include target-specific ensureClient sendCall");
       assert(payload.runPlan?.safety?.authenticatesWebSocket === false, "formal checklist runPlan itself should not authenticate");
@@ -560,6 +570,7 @@ async function checkReadyShape(args) {
       assertIncludes(payload.boardSummary || "", "windowsHost=online 127.0.0.1", "ready board summary");
       assertIncludes(payload.boardSummary || "", "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "ready board summary");
       assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "ready board summary");
+      assertIncludes(payload.boardSummary || "", "ReverseGrantCopy=", "ready board summary");
       assertIncludes(payload.boardSummary || "", "Reverse rehearsal:", "ready board summary");
       assertIncludes(payload.callText || "", "Suggested browser test:", "ready call text");
       assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "ready output");

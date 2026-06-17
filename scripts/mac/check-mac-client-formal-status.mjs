@@ -94,6 +94,10 @@ JSON output:
                                   Human-safe LAN008 -> one-time grant -> retry
                                   accepted rehearsal; no password, no input,
                                   and no inject are sent by this checklist.
+  runPlan.commands.reverseGrantCopyAction
+                                  Mac client UI evidence to verify after LAN008:
+                                  both PowerShell and Node fallback grant
+                                  commands can be copied without passwords.
 
 Examples:
   node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.50 --port 43770 --boardSummary
@@ -472,9 +476,14 @@ function makeReverseControlRehearsalText(report, args) {
     "Mac authenticates in the Mac client page, clicks 请求反控, and expects LAN008/default deny first.",
     `Windows Codex runs the recommended PowerShell command on the Windows host machine: ${grantCommand}.`,
     `Node fallback if PowerShell is unavailable: ${nodeFallbackCommand}.`,
+    makeReverseGrantCopyAction(),
     "Mac clicks 重试反控 and expects accepted plus 临时授权已使用.",
     "No password goes on Agent Link Board, no input_event is sent by this request, and inject stays off.",
   ].join(" ");
+}
+
+function makeReverseGrantCopyAction() {
+  return "After LAN008, Mac client page shows Copy PowerShell and Copy Node for the Windows loopback grant commands; copied text must contain no password and copying must not send input_event.";
 }
 
 function makeManualChecklist(report, args) {
@@ -518,7 +527,7 @@ function makeManualChecklist(report, args) {
       id: "diagnostics",
       title: "Copy diagnostics and summarize issues",
       evidence: "Mac client event log Copy Diagnostics output is pasted after checking it does not include the connection password.",
-      pass: "Diagnostics include connection, media, clipboard, input acknowledgment, reverse-control state, and recent errors.",
+      pass: `Diagnostics include connection, media, clipboard, input acknowledgment, reverse-control state, recent errors, and grant-copy evidence. ${makeReverseGrantCopyAction()}`,
     },
   ];
 }
@@ -618,6 +627,7 @@ function makeRunPlan(report, args) {
       windowsReverseGrantStatusNodeFallback: makeWindowsReverseGrantNodeFallbackCommand(report, args, "status"),
       windowsOpenOneTimeReverseGrantNodeFallback: makeWindowsReverseGrantNodeFallbackCommand(report, args, "grant"),
       reverseControlRehearsal: makeReverseControlRehearsalText(report, args),
+      reverseGrantCopyAction: makeReverseGrantCopyAction(),
     },
     steps: [
       {
@@ -691,6 +701,7 @@ function makeBoardSummary(report) {
       : "Next: clear blockers, run node scripts/mac/start-mac-client.mjs, discover/start Windows host, then rerun with --host <Windows IP> --port 43770 --boardSummary.",
     "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
     `MacClientBrowserSelfTest=${report.runPlan?.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
+    `ReverseGrantCopy=${report.runPlan?.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
     `Reverse rehearsal: click 请求反控 -> expect LAN008; Windows local grant PowerShell: ${makeWindowsReverseGrantCommand(report, { windowsPort: host.probe?.port || report.args?.windowsPort || defaults.windowsPort }, "grant")}; Node fallback: ${makeWindowsReverseGrantNodeFallbackCommand(report, { windowsPort: host.probe?.port || report.args?.windowsPort || defaults.windowsPort }, "grant")}; Mac retry -> accepted/临时授权已使用.`,
     "RunPlan: local client -> Windows discovery -> formal checklist -> local browser self-test -> browser smoke -> reverse request rehearsal -> observe quality/resources.",
     "Do not send passwords on Agent Link Board; do not run inject unless the user explicitly confirms they are watching.",

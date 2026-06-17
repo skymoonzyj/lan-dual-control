@@ -93,7 +93,7 @@ node scripts/mac/check-mac-client-readiness.mjs --host <Windows IP> --port 43770
 node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary
 ```
 
-该清单会复用 readiness，并把 repo 干净、本地 Mac client 页面在线、Windows host `/discovery` 在线、通讯板可读、H.264/音频/输入/剪贴板能力可见整理成 `readyToCall`、`callText`、`runPlan` 和 `boardSummary`。`runPlan` 会列出本地页面、Windows discovery、formal checklist、浏览器 smoke、质量/资源观察步骤，以及 `manualChecklist` 人工真连核对项：连接、视频、音频、剪贴板、input_ack 和复制诊断。它也明确 `passwordInCommandArguments=false`、`passwordOnAgentLinkBoard=false`、`inject=false`。它仍然只读：不会认证 WebSocket、不会要求或打印密码、不会发送输入，也不会执行 `inject`。
+该清单会复用 readiness，并把 repo 干净、本地 Mac client 页面在线、Windows host `/discovery` 在线、通讯板可读、H.264/音频/输入/剪贴板能力可见整理成 `readyToCall`、`callText`、`runPlan` 和 `boardSummary`。`runPlan` 会列出本地页面、Windows discovery、formal checklist、浏览器 smoke、质量/资源观察步骤，以及 `manualChecklist` 人工真连核对项：连接、视频、音频、剪贴板、input_ack 和复制诊断；同时通过 `reverseGrantCopyAction` / `ReverseGrantCopy=` 提醒 LAN008 后确认页面可复制 PowerShell 推荐命令和 Node 备用命令，复制文本不含密码且不会发送 `input_event`。它也明确 `passwordInCommandArguments=false`、`passwordOnAgentLinkBoard=false`、`inject=false`。它仍然只读：不会认证 WebSocket、不会要求或打印密码、不会发送输入，也不会执行 `inject`。
 
 ## 当前限制
 
