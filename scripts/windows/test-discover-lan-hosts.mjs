@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const script = "scripts/windows/discover-lan-hosts.mjs";
+const psScript = "scripts/windows/discover-lan-hosts.ps1";
 
 const defaults = {
   timeoutMs: 12000,
@@ -168,6 +169,60 @@ function run(extraArgs, args) {
   });
 }
 
+function runPowerShell(extraArgs, args) {
+  return new Promise((resolveRun) => {
+    const child = spawn("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy", "Bypass",
+      "-File", psScript,
+      ...extraArgs,
+    ], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        LAN_DUAL_PASSWORD: "",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      resolveRun({
+        status: null,
+        signal: "timeout",
+        stdout,
+        stderr,
+      });
+    }, args.timeoutMs);
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolveRun({
+        status: null,
+        signal: "error",
+        stdout,
+        stderr: `${stderr}\n${error.message}`.trim(),
+      });
+    });
+    child.on("close", (status, signal) => {
+      clearTimeout(timer);
+      resolveRun({
+        status,
+        signal,
+        stdout,
+        stderr,
+      });
+    });
+  });
+}
+
 function parseJson(stdout, label) {
   try {
     return JSON.parse(String(stdout || "").trim());
@@ -198,6 +253,21 @@ async function checkHelp(args) {
   console.log("[OK] LAN discovery help covers new Mac formal E2E options");
 }
 
+async function checkPowerShellHelp(args) {
+  for (const flag of ["-Help", "-h"]) {
+    const result = await runPowerShell([flag], args);
+    assert(result.status === 0, `${psScript} ${flag} should exit 0.\n${result.stdout}\n${result.stderr}`);
+    assertIncludes(result.stdout, "Usage:", `${psScript} ${flag}`);
+    assertIncludes(result.stdout, "-BoardSummary", `${psScript} ${flag}`);
+    assertIncludes(result.stdout, "-RequireMacHost", `${psScript} ${flag}`);
+    assertIncludes(result.stdout, "-NoLocalSubnets", `${psScript} ${flag}`);
+    assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", `${psScript} ${flag}`);
+    assertNotIncludes(result.stdout, "Mac host password:", `${psScript} ${flag}`);
+    assertNotIncludes(result.stdout, "Starting Windows host", `${psScript} ${flag}`);
+  }
+  console.log("[OK] PowerShell LAN discovery help is pure and covers Mac formal checklist options");
+}
+
 async function checkFoundJson(macPort, windowsPort, args) {
   const result = await run(["--json", ...baseProbeArgs(macPort, windowsPort)], args);
   assert(result.status === 0, `found JSON should exit 0.\n${result.stdout}\n${result.stderr}`);
@@ -225,6 +295,25 @@ async function checkFoundJson(macPort, windowsPort, args) {
   console.log("[OK] JSON discovery keeps all hosts and adds Mac formal E2E next commands");
 }
 
+async function checkPowerShellJson(macPort, args) {
+  const result = await runPowerShell([
+    "-Json",
+    "-NoLocalSubnets",
+    "-HostName", "127.0.0.1",
+    "-TimeoutMs", "250",
+    "-Port", String(macPort),
+    "-RequireMacHost",
+  ], args);
+  assert(result.status === 0, `PowerShell JSON should exit 0.\n${result.stdout}\n${result.stderr}`);
+  const payload = parseJson(result.stdout, "PowerShell JSON");
+  assert(payload.ok === true, "PowerShell JSON payload should be ok=true");
+  assert(payload.macHosts.length === 1, "PowerShell JSON payload should include one Mac host");
+  assertIncludes(payload.macFormalE2e.formalChecklistCommand, "--preflightOnly --checkClientDiagnostics --boardSummary", "PowerShell formal checklist command");
+  assert(payload.macFormalE2e.manualChecklistSummary === "connection/video/audio/clipboard/input_ack/diagnostics", "PowerShell manual checklist summary mismatch");
+  assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "PowerShell JSON output");
+  console.log("[OK] PowerShell JSON discovery relays Mac formal checklist commands");
+}
+
 async function checkBoardSummary(macPort, windowsPort, args) {
   const result = await run(["--boardSummary", ...baseProbeArgs(macPort, windowsPort)], args);
   assert(result.status === 0, `board summary should exit 0.\n${result.stdout}\n${result.stderr}`);
@@ -239,6 +328,25 @@ async function checkBoardSummary(macPort, windowsPort, args) {
   assertIncludes(result.stdout, "--promptPassword", "board summary");
   assertNotIncludes(result.stdout, "demo-password", "board summary");
   console.log("[OK] Board summary prints secret-free preflight/auth/formal commands");
+}
+
+async function checkPowerShellBoardSummary(macPort, args) {
+  const result = await runPowerShell([
+    "-BoardSummary",
+    "-NoLocalSubnets",
+    "-HostName", "127.0.0.1",
+    "-TimeoutMs", "250",
+    "-Port", String(macPort),
+    "-RequireMacHost",
+  ], args);
+  assert(result.status === 0, `PowerShell board summary should exit 0.\n${result.stdout}\n${result.stderr}`);
+  assertIncludes(result.stdout, "Windows-side Mac host discovery: found 1 Mac host", "PowerShell board summary");
+  assertIncludes(result.stdout, "check-mac-formal-e2e.mjs --host 127.0.0.1", "PowerShell board summary");
+  assertIncludes(result.stdout, "FormalChecklist=", "PowerShell board summary");
+  assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "PowerShell board summary");
+  assertIncludes(result.stdout, "No password was requested or sent", "PowerShell board summary");
+  assertNotIncludes(result.stdout, "LAN_DUAL_PASSWORD", "PowerShell board summary");
+  console.log("[OK] PowerShell board summary prints secret-free Mac formal checklist commands");
 }
 
 async function checkRequireMacHostFailsOnOnlyWindows(windowsPort, args) {
@@ -296,8 +404,11 @@ async function main() {
 
   try {
     await checkHelp(args);
+    await checkPowerShellHelp(args);
     await checkFoundJson(mac.port, windows.port, args);
+    await checkPowerShellJson(mac.port, args);
     await checkBoardSummary(mac.port, windows.port, args);
+    await checkPowerShellBoardSummary(mac.port, args);
     await checkRequireMacHostFailsOnOnlyWindows(windows.port, args);
     console.log("[OK] Windows LAN discovery self-test passed");
   } finally {
