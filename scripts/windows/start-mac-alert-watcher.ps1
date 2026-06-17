@@ -11,12 +11,56 @@ param(
     [switch]$Stop,
     [switch]$Restart,
     [switch]$Json,
+    [Alias("h")]
+    [switch]$Help,
     [string]$PidFile = "",
     [string]$OutLog = "",
     [string]$ErrLog = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($Help) {
+    Write-Output @"
+Usage:
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\start-mac-alert-watcher.ps1 [options]
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\start-mac-alert-watcher.ps1 [options]
+
+Common examples:
+  # Start the local Windows popup watcher for Mac-side Agent Link alerts.
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\start-mac-alert-watcher.ps1 -Server http://YOUR_BOARD_IP:17888
+
+  # Inspect watcher state as one machine-readable JSON object.
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\start-mac-alert-watcher.ps1 -Status -Json
+
+  # Stop the watcher.
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\start-mac-alert-watcher.ps1 -Stop
+
+Options:
+  -Server <url>              Agent Link Board URL. Default: http://127.0.0.1:17888.
+  -Token <token>             Optional Agent Link Board token. Not printed in JSON/status output.
+  -WatchPattern <regex>      Text used to detect Mac-side events. Default: (?i)mac|macOS.
+  -IntervalSeconds <sec>     Poll interval for the background watcher. Default: 15.
+  -StaleMinutes <min>        Alert when Mac status is stale for this many minutes. Default: 5.
+  -PopupTimeoutSeconds <sec> Windows popup timeout. Default: 0.
+  -AlertExistingEvents       Alert on matching existing board events instead of only new ones.
+  -NoPopup                   Print alerts without Windows popup/beep output.
+  -Status                    Inspect whether the watcher is already running.
+  -Stop                      Stop the watcher.
+  -Restart                   Stop and start the watcher.
+  -Json                      Print one machine-readable JSON object for start/status/stop/restart.
+  -PidFile <path>            Override PID file path.
+  -OutLog <path>             Override watcher stdout log path.
+  -ErrLog <path>             Override watcher stderr log path.
+  -Help, -h                  Show this help without starting or stopping the watcher.
+
+Safety:
+  -Help never starts or stops the watcher, never contacts the Agent Link Board,
+  never prints tokens, and never sends passwords, authentication, input, or
+  inject events.
+"@
+    exit 0
+}
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $watcher = Join-Path $PSScriptRoot "watch-codex-link-mac-alerts.ps1"

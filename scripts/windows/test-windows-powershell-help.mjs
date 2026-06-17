@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,6 +30,8 @@ Options:
 
 Description:
   Verifies Windows PowerShell wrapper scripts expose pure -Help and -h output.
+  By default this checks the pinned core wrappers plus every scripts/windows/*.ps1
+  file that declares a Help switch.
   A passing check means the command exits 0, prints Usage/Options-style help,
   returns quickly, and does not start hosts, ask for passwords, authenticate,
   launch probes, or send input/inject events.
@@ -84,12 +86,22 @@ function parseArgs(argv) {
 
 function listScripts(selectedScripts) {
   const selected = new Set(selectedScripts.map((name) => basename(name)));
+  const allScripts = readdirSync(scriptDir)
+    .filter((name) => name.endsWith(".ps1"))
+    .sort((a, b) => a.localeCompare(b));
+  const helpScripts = allScripts.filter((name) => scriptDeclaresHelp(name));
+  const defaultCoverage = [...new Set([...defaultScripts, ...helpScripts])]
+    .sort((a, b) => a.localeCompare(b));
   const scripts = selected.size === 0
-    ? defaultScripts
-    : defaultScripts.filter((name) => selected.has(name));
-  const missing = [...selected].filter((name) => !defaultScripts.includes(name));
+    ? defaultCoverage
+    : allScripts.filter((name) => selected.has(name));
+  const missing = [...selected].filter((name) => !allScripts.includes(name));
   if (missing.length > 0) {
-    throw new Error(`Unknown PowerShell help script(s): ${missing.join(", ")}`);
+    throw new Error(`Unknown PowerShell script(s): ${missing.join(", ")}`);
+  }
+  const nonHelpSelected = scripts.filter((name) => !scriptDeclaresHelp(name) && !defaultScripts.includes(name));
+  if (nonHelpSelected.length > 0) {
+    throw new Error(`PowerShell script(s) do not declare a Help switch: ${nonHelpSelected.join(", ")}`);
   }
   for (const scriptName of scripts) {
     const scriptPath = resolve(scriptDir, scriptName);
@@ -98,6 +110,15 @@ function listScripts(selectedScripts) {
     }
   }
   return scripts;
+}
+
+function scriptDeclaresHelp(scriptName) {
+  const scriptPath = resolve(scriptDir, scriptName);
+  if (!existsSync(scriptPath)) {
+    return false;
+  }
+  const text = readFileSync(scriptPath, "utf8");
+  return /(?:\[[^\]]+\]\s*)*\[switch\]\s*\$Help\b/i.test(text);
 }
 
 function runHelp(shell, scriptName, flag, timeoutMs) {
@@ -170,6 +191,9 @@ function analyze(result) {
     /LAN_DUAL_PASSWORD\s*=/i,
     /Starting Windows host/i,
     /Starting Mac alert watcher/i,
+    /Mac alert watcher started/i,
+    /Watching Mac-side Agent Link alerts/i,
+    /Codex LAN Link started/i,
     /\bAuth passed\b/i,
     /\binput_ack\b/i,
   ];
