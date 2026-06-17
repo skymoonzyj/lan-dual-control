@@ -519,13 +519,24 @@ function formatMacBuildDiff(buildDiff) {
 function makeMacFormalCommands(item) {
   if (!item) return null;
   const base = `node scripts/windows/check-mac-formal-e2e.mjs --host ${item.host} --port ${item.port}`;
+  const psBase = [
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
+    "-Discover",
+    "-DiscoverNoLocalSubnets",
+    "-HostName", item.host,
+    "-Port", String(item.port),
+  ].join(" ");
   return {
     preflightCommand: `${base} --preflightOnly --checkClientDiagnostics --boardSummary`,
     formalChecklistCommand: `${base} --preflightOnly --checkClientDiagnostics --boardSummary`,
+    formalChecklistPowerShellCommand: `${psBase} -PreflightOnly -CheckClientDiagnostics -BoardSummary`,
     manualChecklistSummary: "connection/video/audio/clipboard/input_ack/diagnostics",
     userAuthRequestCommand: `${base} --preflightOnly --checkClientDiagnostics --userAuthRequest`,
+    userAuthRequestPowerShellCommand: `${psBase} -PreflightOnly -CheckClientDiagnostics -UserAuthRequest`,
     sendUserAuthRequestCommand: `${base} --preflightOnly --checkClientDiagnostics --sendUserAuthRequest`,
+    sendUserAuthRequestPowerShellCommand: `${psBase} -PreflightOnly -CheckClientDiagnostics -SendUserAuthRequest`,
     formalCommand: `${base} --promptPassword`,
+    formalPowerShellCommand: `${psBase} -PromptPassword`,
   };
 }
 
@@ -536,6 +547,7 @@ function makeMacBoardSummary(report) {
       `Build diff: ${formatMacBuildDiff(report.bestMacHost.buildDiff)}.`,
       `Next preflight: ${report.macFormalE2e.preflightCommand}.`,
       `FormalChecklist=${report.macFormalE2e.formalChecklistCommand}; ManualChecklist=${report.macFormalE2e.manualChecklistSummary}.`,
+      `FormalChecklistPs=${report.macFormalE2e.formalChecklistPowerShellCommand}.`,
       `User auth request when ready: ${report.macFormalE2e.userAuthRequestCommand}.`,
       `Send auth request when ready: ${report.macFormalE2e.sendUserAuthRequestCommand}.`,
       `Formal command: ${report.macFormalE2e.formalCommand}.`,

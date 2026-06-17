@@ -282,11 +282,19 @@ async function checkFoundJson(macPort, windowsPort, args) {
   assert(payload.bestMacHost.buildDiff?.severity === "warning", "fake mac-build should be non-comparable and warn");
   assertIncludes(payload.macFormalE2e.preflightCommand, "--preflightOnly --checkClientDiagnostics --boardSummary", "preflight command");
   assertIncludes(payload.macFormalE2e.formalChecklistCommand, "--preflightOnly --checkClientDiagnostics --boardSummary", "formal checklist command");
+  assertIncludes(payload.macFormalE2e.formalChecklistPowerShellCommand, "check-mac-formal-e2e.ps1", "formal checklist PowerShell command");
+  assertIncludes(payload.macFormalE2e.formalChecklistPowerShellCommand, "-Discover -DiscoverNoLocalSubnets", "formal checklist PowerShell command");
+  assertIncludes(payload.macFormalE2e.formalChecklistPowerShellCommand, `-Port ${macPort}`, "formal checklist PowerShell command");
+  assertIncludes(payload.macFormalE2e.formalChecklistPowerShellCommand, "-PreflightOnly -CheckClientDiagnostics -BoardSummary", "formal checklist PowerShell command");
   assert(payload.macFormalE2e.manualChecklistSummary === "connection/video/audio/clipboard/input_ack/diagnostics", "manual checklist summary mismatch");
   assertIncludes(payload.macFormalE2e.userAuthRequestCommand, "--userAuthRequest", "user auth command");
+  assertIncludes(payload.macFormalE2e.userAuthRequestPowerShellCommand, "-UserAuthRequest", "user auth PowerShell command");
   assertIncludes(payload.macFormalE2e.sendUserAuthRequestCommand, "--sendUserAuthRequest", "send user auth command");
+  assertIncludes(payload.macFormalE2e.sendUserAuthRequestPowerShellCommand, "-SendUserAuthRequest", "send user auth PowerShell command");
   assertIncludes(payload.macFormalE2e.formalCommand, "--promptPassword", "formal command");
+  assertIncludes(payload.macFormalE2e.formalPowerShellCommand, "-PromptPassword", "formal PowerShell command");
   assertIncludes(payload.boardSummary, "FormalChecklist=", "board summary");
+  assertIncludes(payload.boardSummary, "FormalChecklistPs=", "board summary");
   assertIncludes(payload.boardSummary, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "board summary");
   assertIncludes(payload.boardSummary, "No password was requested or sent", "board summary");
   assertIncludes(payload.boardSummary, "no WebSocket/input/inject", "board summary");
@@ -309,6 +317,7 @@ async function checkPowerShellJson(macPort, args) {
   assert(payload.ok === true, "PowerShell JSON payload should be ok=true");
   assert(payload.macHosts.length === 1, "PowerShell JSON payload should include one Mac host");
   assertIncludes(payload.macFormalE2e.formalChecklistCommand, "--preflightOnly --checkClientDiagnostics --boardSummary", "PowerShell formal checklist command");
+  assertIncludes(payload.macFormalE2e.formalChecklistPowerShellCommand, "-PreflightOnly -CheckClientDiagnostics -BoardSummary", "PowerShell formal checklist PowerShell command");
   assert(payload.macFormalE2e.manualChecklistSummary === "connection/video/audio/clipboard/input_ack/diagnostics", "PowerShell manual checklist summary mismatch");
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "PowerShell JSON output");
   console.log("[OK] PowerShell JSON discovery relays Mac formal checklist commands");
@@ -322,6 +331,8 @@ async function checkBoardSummary(macPort, windowsPort, args) {
   assertIncludes(result.stdout, "differs from repo", "board summary");
   assertIncludes(result.stdout, "check-mac-formal-e2e.mjs --host 127.0.0.1", "board summary");
   assertIncludes(result.stdout, "FormalChecklist=", "board summary");
+  assertIncludes(result.stdout, "FormalChecklistPs=", "board summary");
+  assertIncludes(result.stdout, "check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 127.0.0.1", "board summary");
   assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "board summary");
   assertIncludes(result.stdout, "--userAuthRequest", "board summary");
   assertIncludes(result.stdout, "--sendUserAuthRequest", "board summary");
@@ -343,6 +354,8 @@ async function checkPowerShellBoardSummary(macPort, args) {
   assertIncludes(result.stdout, "Windows-side Mac host discovery: found 1 Mac host", "PowerShell board summary");
   assertIncludes(result.stdout, "check-mac-formal-e2e.mjs --host 127.0.0.1", "PowerShell board summary");
   assertIncludes(result.stdout, "FormalChecklist=", "PowerShell board summary");
+  assertIncludes(result.stdout, "FormalChecklistPs=", "PowerShell board summary");
+  assertIncludes(result.stdout, "check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 127.0.0.1", "PowerShell board summary");
   assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "PowerShell board summary");
   assertIncludes(result.stdout, "No password was requested or sent", "PowerShell board summary");
   assertNotIncludes(result.stdout, "LAN_DUAL_PASSWORD", "PowerShell board summary");
