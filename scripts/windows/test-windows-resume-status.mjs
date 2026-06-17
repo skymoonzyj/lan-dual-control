@@ -263,6 +263,8 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "Windows video encoder/WGC/WebCodecs support", `help ${flag}`);
     assertIncludes(result.stdout, "check-windows-video-encoder-support.mjs --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "local alert-watcher start/status commands", `help ${flag}`);
+    assertIncludes(result.stdout, "formal manual checklist command", `help ${flag}`);
+    assertIncludes(result.stdout, "input_ack", `help ${flag}`);
     assertIncludes(result.stdout, "checks", `help ${flag}`);
     assertIncludes(result.stdout, "alert-watcher status read-only", `help ${flag}`);
     assertIncludes(result.stdout, "start-mac-alert-watcher.ps1", `help ${flag}`);
@@ -296,6 +298,15 @@ async function checkMockJson(args) {
     assert(String(payload.userAuthRequest || "").includes("powershell.exe"), "mock JSON user auth request should prefer PowerShell");
     assert(String(payload.userAuthRequest || "").includes("-PromptPassword"), "mock JSON user auth request should prompt for password");
     assert(String(payload.commands?.formalRun || "").includes("-PromptPassword"), "mock JSON should include formal command");
+    assert(String(payload.commands?.formalChecklistBoardSummary || "").includes("check-mac-formal-e2e.ps1"), "mock JSON should include formal checklist command");
+    assert(String(payload.commands?.formalChecklistBoardSummary || "").includes("-DiscoverNoLocalSubnets"), "mock JSON formal checklist should use fixed target discovery");
+    assert(String(payload.commands?.formalChecklistBoardSummary || "").includes("-PreflightOnly"), "mock JSON formal checklist should be preflight-only");
+    assert(String(payload.commands?.formalChecklistBoardSummary || "").includes("-CheckClientDiagnostics"), "mock JSON formal checklist should include client diagnostics");
+    assert(String(payload.commands?.formalChecklistBoardSummary || "").includes("-BoardSummary"), "mock JSON formal checklist should be board-safe");
+    assert(String(payload.commands?.formalChecklistBoardSummary || "").includes(`-Port ${port}`), "mock JSON formal checklist should use discovered mock port");
+    assert(payload.formalManualChecklist?.summary === "connection/video/audio/clipboard/input_ack/diagnostics", "mock JSON should include manual checklist summary");
+    assert(payload.formalManualChecklist?.fromPreflight === true, "mock JSON manual checklist should come from formal preflight");
+    assert(Array.isArray(payload.formalManualChecklist?.ids) && payload.formalManualChecklist.ids.includes("input_ack"), "mock JSON manual checklist should include input_ack");
     assert(String(payload.commands?.windowsHostMediaReadinessBoardSummary || "").includes("check-windows-host-readiness.mjs"), "mock JSON should include Windows host media readiness command");
     assert(String(payload.commands?.windowsHostMediaReadinessBoardSummary || "").includes("--probeMedia"), "mock JSON media readiness command should enable --probeMedia");
     assert(String(payload.commands?.windowsHostMediaReadinessBoardSummary || "").includes("--boardSummary"), "mock JSON media readiness command should be board-safe");
@@ -393,6 +404,9 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "Windows resume:", "board summary");
     assertIncludes(result.stdout, "No password was requested or sent", "board summary");
     assertIncludes(result.stdout, "mac=ready", "board summary");
+    assertIncludes(result.stdout, "FormalChecklist=", "board summary");
+    assertIncludes(result.stdout, "check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "board summary");
+    assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "board summary");
     assertIncludes(result.stdout, "WindowsHostMedia=", "board summary");
     assertIncludes(result.stdout, "WinClientDiagnostics=", "board summary");
     assertIncludes(result.stdout, "test-windows-client-browser.mjs --discover --discoverNoLocalSubnets", "board summary");

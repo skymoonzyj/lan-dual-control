@@ -52,6 +52,9 @@ JSON and human output also include local alert-watcher start/status commands
 so Windows can surface Mac-side auth, permission, blocked, and reverse-grant
 requests while a remote-control window is minimized. The report also checks
 the local alert-watcher status read-only, without starting it.
+The report also surfaces the formal manual checklist command and the checklist
+ids so a resume handoff can immediately verify connection, video, audio,
+clipboard, input_ack, and diagnostics in that order.
 
 Options:
   --host <host>                 Explicit Mac host target. Default: ${defaults.host}
@@ -82,6 +85,7 @@ Examples:
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --userAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --sendUserAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
   node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
   node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
   node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
@@ -528,6 +532,16 @@ function makeCommands(args, preflight) {
   const port = Number(target.port || args.port);
   const runtimeBuildId = String(preflight.payload?.runtime?.buildId || "").trim();
   const windowsHostPort = 43770;
+  const formalChecklistBoardSummary = [
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
+    "-Discover",
+    "-DiscoverNoLocalSubnets",
+    "-HostName", host,
+    "-Port", String(port),
+    "-PreflightOnly",
+    "-CheckClientDiagnostics",
+    "-BoardSummary",
+  ].join(" ");
   const windowsClientDiagnosticsCommand = [
     "node scripts/windows/test-windows-client-browser.mjs",
     "--discover",
@@ -543,6 +557,7 @@ function makeCommands(args, preflight) {
   }
   return {
     resumeBoardSummary: "node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary",
+    formalChecklistBoardSummary,
     preflightBoardSummary: [
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
       "-Discover",
@@ -616,6 +631,23 @@ function makeCommands(args, preflight) {
       "-Server", args.server,
       "-Status",
     ].join(" "),
+  };
+}
+
+function makeFormalManualChecklist(mac, commands) {
+  const items = Array.isArray(mac?.runPlan?.manualChecklist)
+    ? mac.runPlan.manualChecklist
+    : [];
+  const ids = items
+    .map((item) => normalizedText(item?.id))
+    .filter(Boolean);
+  const fallbackIds = ["connection", "video", "audio", "clipboard", "input_ack", "diagnostics"];
+  const effectiveIds = ids.length > 0 ? ids : fallbackIds;
+  return {
+    fromPreflight: ids.length > 0,
+    ids: effectiveIds,
+    summary: effectiveIds.join("/"),
+    command: commands.formalChecklistBoardSummary,
   };
 }
 
@@ -708,6 +740,7 @@ function makeBoardSummary(report) {
   return [
     `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}${boardCall}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
     `Next=${mac.ok ? report.commands.userAuthRequest : report.commands.preflightBoardSummary}.`,
+    `FormalChecklist=${report.commands.formalChecklistBoardSummary}; ManualChecklist=${report.formalManualChecklist.summary}.`,
     `WinClientDiagnostics=${report.commands.windowsClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.windowsClientCopyDiagnosticsAction}`,
     `WindowsHostMedia=${report.commands.windowsHostMediaReadinessBoardSummary}.`,
     `WindowsVideoSupport=${report.commands.windowsVideoEncoderSupportBoardSummary}.`,
@@ -789,6 +822,7 @@ async function makeReport(args) {
   const board = await getBoardSnapshot(args);
   const macPreflight = runFormalPreflight(args);
   const commands = makeCommands(args, macPreflight);
+  const formalManualChecklist = makeFormalManualChecklist(macPreflight.payload, commands);
   const windowsMacAlertWatcher = getWindowsMacAlertWatcherStatus(args, commands);
   const checks = [
     { name: "gitStatus", ok: git.ok, detail: git.clean ? "clean" : `${git.changeCount} change(s)` },
@@ -830,6 +864,7 @@ async function makeReport(args) {
     macPreflight,
     windowsMacAlertWatcher,
     commands,
+    formalManualChecklist,
     checks,
     failedChecks: [],
   };
@@ -894,6 +929,7 @@ function printHuman(report) {
     console.log(`- Mac formal preflight: offline (${detail})`);
   }
   console.log("- Next safe commands:");
+  console.log(`  ${report.commands.formalChecklistBoardSummary}`);
   console.log(`  ${report.commands.preflightBoardSummary}`);
   console.log(`  ${report.commands.userAuthRequest}`);
   console.log(`  ${report.commands.formalRun}`);

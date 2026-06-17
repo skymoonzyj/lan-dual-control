@@ -50,6 +50,10 @@ When -CheckBoard is set, the report also summarizes the current Agent Link
 call so Windows can see active Mac -> Windows test requests during resume.
 The report also includes a Windows host media baseline command:
 node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
+It also includes the Windows -> Mac formal manual checklist command:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName <Mac IP> -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
+The board summary labels it as:
+ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics
 It also includes a Windows local one-time reverse-control grant command:
 node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary
 PowerShell 7 equivalent:

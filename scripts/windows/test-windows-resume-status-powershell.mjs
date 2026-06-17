@@ -199,6 +199,9 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "passwords", "PowerShell wrapper help");
   assertIncludes(output, "Windows host media baseline", "PowerShell wrapper help");
   assertIncludes(output, "--probeMedia --boardSummary", "PowerShell wrapper help");
+  assertIncludes(output, "Windows -> Mac formal manual checklist command", "PowerShell wrapper help");
+  assertIncludes(output, "check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "PowerShell wrapper help");
+  assertIncludes(output, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "PowerShell wrapper help");
   assertIncludes(output, "Windows local one-time reverse-control grant", "PowerShell wrapper help");
   assertIncludes(output, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770", "PowerShell wrapper help");
   assertIncludes(output, "allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770", "PowerShell wrapper help");
@@ -239,6 +242,14 @@ async function checkMockJson(args) {
     assertIncludes(payload.boardSummary, "Windows resume:", "mock JSON board summary");
     assertIncludes(payload.userAuthRequest, "NEED_USER_AUTH", "mock JSON userAuthRequest");
     assertIncludes(payload.userAuthRequest, "powershell.exe", "mock JSON userAuthRequest");
+    assertIncludes(payload.commands?.formalChecklistBoardSummary, "check-mac-formal-e2e.ps1", "mock JSON formal checklist command");
+    assertIncludes(payload.commands?.formalChecklistBoardSummary, "-DiscoverNoLocalSubnets", "mock JSON formal checklist command");
+    assertIncludes(payload.commands?.formalChecklistBoardSummary, "-PreflightOnly", "mock JSON formal checklist command");
+    assertIncludes(payload.commands?.formalChecklistBoardSummary, "-CheckClientDiagnostics", "mock JSON formal checklist command");
+    assertIncludes(payload.commands?.formalChecklistBoardSummary, "-BoardSummary", "mock JSON formal checklist command");
+    assertIncludes(payload.commands?.formalChecklistBoardSummary, `-Port ${port}`, "mock JSON formal checklist command");
+    assert(payload.formalManualChecklist?.summary === "connection/video/audio/clipboard/input_ack/diagnostics", "PowerShell mock JSON should include manual checklist summary");
+    assert(Array.isArray(payload.formalManualChecklist?.ids) && payload.formalManualChecklist.ids.includes("input_ack"), "PowerShell mock JSON manual checklist should include input_ack");
     assertIncludes(payload.commands?.windowsHostMediaReadinessBoardSummary, "check-windows-host-readiness.mjs", "mock JSON media command");
     assertIncludes(payload.commands?.windowsHostMediaReadinessBoardSummary, "--probeMedia", "mock JSON media command");
     assertIncludes(payload.commands?.windowsVideoEncoderSupportBoardSummary, "check-windows-video-encoder-support.mjs", "mock JSON video support command");
@@ -302,6 +313,9 @@ async function checkBoardSummary(args) {
     const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean);
     assert(lines.length === 1, `board summary should be one line, got ${lines.length}`);
     assertIncludes(output, "mac=ready", "PowerShell board summary");
+    assertIncludes(output, "FormalChecklist=", "PowerShell board summary");
+    assertIncludes(output, "check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "PowerShell board summary");
+    assertIncludes(output, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "PowerShell board summary");
     assertIncludes(output, "WinClientDiagnostics=", "PowerShell board summary");
     assertIncludes(output, "test-windows-client-browser.mjs --discover --discoverNoLocalSubnets", "PowerShell board summary");
     assertIncludes(output, "--diagnosticsOnly --boardSummary --timeoutMs 45000", "PowerShell board summary");
