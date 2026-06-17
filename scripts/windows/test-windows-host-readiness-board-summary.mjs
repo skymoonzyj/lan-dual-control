@@ -332,6 +332,14 @@ async function verifyReverseControlReadinessTokens(args, results) {
       pending.payload.boardSummary?.includes("reverse=pending-request"),
       `boardSummary should preserve pending-request: ${pending.payload.boardSummary}`,
     );
+    assert(
+      pending.payload.boardSummary?.includes("ReverseGrant=") && pending.payload.boardSummary?.includes("allow-windows-reverse-control.mjs"),
+      `boardSummary should include reverse grant command: ${pending.payload.boardSummary}`,
+    );
+    assert(
+      pending.payload.windowsReverseControlGrantCommand?.includes("allow-windows-reverse-control.mjs"),
+      `JSON should include reverse grant command: ${pending.payload.windowsReverseControlGrantCommand}`,
+    );
 
     await grantReverseControl(host, port, args.readinessTimeoutMs);
     const grant = await runReadinessJsonForHost("readiness reverse temporary grant", host, port, args);
@@ -344,6 +352,10 @@ async function verifyReverseControlReadinessTokens(args, results) {
     assert(
       grant.payload.boardSummary?.includes("reverse=temporary-grant"),
       `boardSummary should preserve temporary-grant: ${grant.payload.boardSummary}`,
+    );
+    assert(
+      grant.payload.boardSummary?.includes("ReverseGrant=") && grant.payload.boardSummary?.includes("allow-windows-reverse-control.mjs"),
+      `boardSummary should include reverse grant command while grant is active: ${grant.payload.boardSummary}`,
     );
   });
 }
@@ -445,6 +457,11 @@ async function main() {
   assert(jsonSummary.boardSummary.includes("Windows readiness"), "JSON boardSummary has unexpected text");
   assert(jsonSummary.boardSummary.includes("Do not send passwords"), "JSON boardSummary is missing board safety reminder");
   assert(Array.isArray(jsonSummary.macClientReadinessCommands), "JSON macClientReadinessCommands must be an array");
+  assert(
+    typeof jsonSummary.windowsReverseControlGrantCommand === "string"
+      && jsonSummary.windowsReverseControlGrantCommand.includes("allow-windows-reverse-control.mjs"),
+    "JSON windowsReverseControlGrantCommand is missing",
+  );
   assert(Array.isArray(jsonSummary.results), "JSON results must be an array");
   assert(jsonSummary.args?.probeWgcH264Sources === false, "default JSON should keep WGC H.264 source probe disabled");
   assert(jsonSummary.args?.checkBoard === true, "JSON args should record checkBoard");

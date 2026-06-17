@@ -87,6 +87,41 @@
 
 ## 2026-06-17 Windows Codex
 
+日期：2026-06-17 11:15
+开发端：Windows Codex
+本轮目标：让 Windows host 状态和 readiness 摘要直接带出临时反控授权命令，方便 Mac client 请求反控入口完成后现场联调。
+完成内容：
+- `start-windows-host --status` JSON 新增 `windowsReverseControlGrantCommand`，普通输出、启动后 ready 输出和在线 `--boardSummary` 在默认需确认策略下显示 `Windows reverse grant command` / `ReverseGrant=`。
+- `check-windows-host-readiness` JSON 新增 `windowsReverseControlGrantCommand`，`--boardSummary` 即使压缩运行时摘要也会独立保留 `ReverseGrant=...allow-windows-reverse-control...`，避免命令被长 Mac next 文本截掉。
+- `test-windows-host-start-helper` 和 `test-windows-host-readiness-board-summary` 已覆盖离线、在线、启动 ready 输出、JSON、boardSummary、pending-request 和 temporary-grant 两种反控状态里的命令可见性。
+- Windows host README、当前状态、下一步和任务板已同步；本轮仍未碰 `apps/mac-client`，避免和 Mac 端请求反控入口工作冲突。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/check-windows-host-readiness.mjs`
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- `node --check scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 60000`
+- `node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 120000 --readinessTimeoutMs 10000`
+遗留问题：
+- 还需要 Mac 端请求反控按钮推送后做真实闭环：Mac 请求一次看到 `LAN008`，Windows 用摘要里的 `ReverseGrant=` 打开一次性授权，再让 Mac 重试确认 accepted。
+下一步建议：
+- Mac 端推送后，Windows 端 pull/rebase，优先跑 `test-mac-client-browser` 的反控请求回归；若真实 Windows host 在线，可直接把 `start-windows-host --status --checkBoard --boardSummary` 摘要发通讯板，按其中 `ReverseGrant=` 配合 Mac 重试。
+是否改了协议：未改协议；只给状态 JSON 和无密摘要增加现有本机授权助手命令提示。
+是否需要另一端配合：需要 Mac 端完成并推送 Mac client 请求反控入口后，一起跑 `LAN008 -> ReverseGrant -> accepted` 闭环。
+
+## 2026-06-17 Windows Codex
+
 日期：2026-06-17 08:58
 开发端：Windows Codex
 本轮目标：避开 Mac 端正在处理的 Mac client 请求反控入口，补齐 Windows 本机一次性反控授权的命令行备用流程。

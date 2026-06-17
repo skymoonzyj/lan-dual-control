@@ -501,6 +501,11 @@ function reverseControlReadinessToken(reverse = {}) {
   return reverse.mode || "unknown";
 }
 
+function windowsReverseControlGrantCommand(port = defaults.port) {
+  const safePort = Math.max(1, Math.min(65535, Number(port) || defaults.port));
+  return `node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port ${safePort} --durationMs 30000 --boardSummary`;
+}
+
 function formatCapabilities(capabilities = {}) {
   const screen = capabilities.screen || {};
   const audio = capabilities.audio || {};
@@ -601,6 +606,7 @@ async function checkRunningHostRuntime(args) {
         summary: args.requireOpen ? message : "Windows host is not running; runtime check skipped",
         boardSummary: statusPayload.boardSummary || "",
         macClientReadinessCommands: statusPayload.macClientReadinessCommands || [],
+        windowsReverseControlGrantCommand: statusPayload.windowsReverseControlGrantCommand || windowsReverseControlGrantCommand(args.port),
         warnings,
         errors,
       };
@@ -654,6 +660,7 @@ async function checkRunningHostRuntime(args) {
       summary,
       boardSummary: statusPayload.boardSummary || "",
       macClientReadinessCommands: statusPayload.macClientReadinessCommands || [],
+      windowsReverseControlGrantCommand: statusPayload.windowsReverseControlGrantCommand || windowsReverseControlGrantCommand(args.port),
       warnings,
       errors,
     };
@@ -670,6 +677,7 @@ async function checkRunningHostRuntime(args) {
       summary: args.requireOpen ? message : "Windows host is not running; runtime check skipped",
       boardSummary: "",
       macClientReadinessCommands: [],
+      windowsReverseControlGrantCommand: windowsReverseControlGrantCommand(args.port),
       warnings,
       errors,
     };
@@ -699,6 +707,9 @@ function makeReadinessBoardSummary(summary) {
     ? ""
     : " Do not send passwords on Agent Link Board.";
   const runtimeSentence = runtimeText.endsWith(".") ? runtimeText : `${runtimeText}.`;
+  const reverseGrant = summary.windowsReverseControlGrantCommand && !runtimeText.includes("ReverseGrant=")
+    ? ` ReverseGrant=${summary.windowsReverseControlGrantCommand}.`
+    : "";
   const probeSentences = [];
   if (wgcSourceResult) {
     const probeState = wgcSourceResult.ok ? "passed" : "failed";
@@ -709,7 +720,7 @@ function makeReadinessBoardSummary(summary) {
   const probeText = probeSentences
     .map((sentence) => (sentence.endsWith(".") ? sentence : `${sentence}.`))
     .join(" ");
-  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
+  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrant}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
 }
 
 function formatMediaBoardSummary(summary) {
@@ -1143,6 +1154,9 @@ async function main() {
   const macClientReadinessCommands = results.flatMap((result) =>
     Array.isArray(result.macClientReadinessCommands) ? result.macClientReadinessCommands : [],
   );
+  const windowsReverseControlGrantCommandValue = results.find((result) =>
+    typeof result.windowsReverseControlGrantCommand === "string" && result.windowsReverseControlGrantCommand,
+  )?.windowsReverseControlGrantCommand || windowsReverseControlGrantCommand(args.port);
 
   const summary = {
     ok,
@@ -1175,6 +1189,7 @@ async function main() {
     failed: failed.length,
     warnings: warnings.length,
     macClientReadinessCommands,
+    windowsReverseControlGrantCommand: windowsReverseControlGrantCommandValue,
     results: results.map((result) => ({
       label: result.label,
       ok: result.ok,
@@ -1186,6 +1201,7 @@ async function main() {
       macClientReadinessCommands: Array.isArray(result.macClientReadinessCommands)
         ? result.macClientReadinessCommands
         : [],
+      windowsReverseControlGrantCommand: result.windowsReverseControlGrantCommand || "",
       warnings: result.warnings,
       errors: result.errors,
     })),
