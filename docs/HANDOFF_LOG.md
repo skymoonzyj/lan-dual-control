@@ -17,6 +17,42 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
+本轮目标：给 Windows 本机一次性反控授权助手增加 PowerShell 包装入口，方便现场用 PowerShell 7 直接授权/撤销/上板摘要。
+完成内容：
+- 新增 `scripts/windows/allow-windows-reverse-control.ps1`。
+- PowerShell wrapper 支持 `-BoardSummary`、`-Json`、`-Status`、`-Grant`、`-Revoke`、`-Action`、`-DurationMs`、`-TimeoutMs` 和 `-HostName`；`-Help/-h` 只打印说明，不联系 host。
+- 包装入口仍只调用 Windows host 本机回环管理端点，不使用或打印密码，不认证远端，不发送输入事件，不执行 `inject`。
+- `test-windows-reverse-control-grant-helper` 扩展到同时覆盖 Node 和 PowerShell 的在线授权、状态读取、撤销、离线 boardSummary 和帮助输出。
+- Windows host README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `scripts/windows/allow-windows-reverse-control.ps1`
+- `scripts/windows/test-windows-reverse-control-grant-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/allow-windows-reverse-control.mjs`
+- `node --check scripts/windows/test-windows-reverse-control-grant-helper.mjs`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -Help`
+- PowerShell 7 `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -Help`
+- `node scripts/windows/test-windows-reverse-control-grant-helper.mjs --timeoutMs 20000`
+- `node scripts/windows/test-windows-script-help.mjs --script allow-windows-reverse-control.mjs --script test-windows-reverse-control-grant-helper.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows apps/windows-host docs`
+遗留问题：
+- 本轮只补 PowerShell 包装和本机临时授权流程；真实 Mac 反控 Windows 闭环仍需 Windows host 在线、Mac client 发起请求后现场配合。
+下一步建议：
+- 真连时优先在 Windows 端运行 `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -BoardSummary` 或点桌面面板“临时允许反控”，再让 Mac client 点“重试反控”确认 accepted。
+是否改了协议：否。
+是否需要另一端配合：否；后续真实反控演练需要 Mac 端发起 `reverse_control_request`。
+
 ## 2026-06-17 Mac Codex
 
 日期：2026-06-17 13:18

@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
 const helperPath = resolve(scriptDir, "allow-windows-reverse-control.mjs");
+const powerShellHelperPath = resolve(scriptDir, "allow-windows-reverse-control.ps1");
 
 const defaults = {
   host: "127.0.0.1",
@@ -122,6 +123,41 @@ function runHelper(args, timeoutMs) {
   });
 }
 
+function runPowerShell(args, timeoutMs) {
+  return new Promise((resolveRun) => {
+    const child = spawn("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy", "Bypass",
+      "-File", powerShellHelperPath,
+      ...args,
+    ], {
+      cwd: repoRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      resolveRun({ exitCode: null, timedOut: true, stdout, stderr });
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolveRun({ exitCode: null, timedOut: false, stdout, stderr: `${stderr}\n${error.message}`.trim() });
+    });
+    child.on("close", (exitCode) => {
+      clearTimeout(timer);
+      resolveRun({ exitCode, timedOut: false, stdout, stderr });
+    });
+  });
+}
+
 function parseJsonOutput(result, label) {
   assert.equal(result.timedOut, false, `${label} timed out`);
   assert.equal(result.exitCode, 0, `${label} failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
@@ -206,10 +242,50 @@ async function verifyGrantStatusAndRevoke(args) {
     assert.equal(revoked.reverseControlGrant.active, false);
     assert.match(revoked.boardSummary, /revoked/);
     assert.match(revoked.boardSummary, /grant=inactive/);
+
+    const psGranted = await runPowerShell([
+      "-HostName", host.host,
+      "-Port", String(host.port),
+      "-DurationMs", "12000",
+      "-BoardSummary",
+      "-TimeoutMs", "3000",
+    ], args.timeoutMs);
+    assert.equal(psGranted.timedOut, false, "PowerShell grant boardSummary timed out");
+    assert.equal(psGranted.exitCode, 0, `PowerShell grant boardSummary failed\n${psGranted.stderr}`);
+    assert.match(psGranted.stdout, /Windows reverse grant:/);
+    assert.match(psGranted.stdout, /granted/);
+    assert.match(psGranted.stdout, /grant=temporary-grant/);
+    assert.match(psGranted.stdout, /no-password/);
+    assert.doesNotMatch(psGranted.stdout + psGranted.stderr, new RegExp(args.password));
+
+    const psStatus = parseJsonOutput(await runPowerShell([
+      "-HostName", host.host,
+      "-Port", String(host.port),
+      "-Status",
+      "-Json",
+      "-TimeoutMs", "3000",
+    ], args.timeoutMs), "PowerShell status JSON");
+    assert.equal(psStatus.ok, true);
+    assert.equal(psStatus.action, "status");
+    assert.equal(psStatus.reverseControlGrant.active, true);
+    assert.match(psStatus.boardSummary, /grant=temporary-grant/);
+    assert.doesNotMatch(JSON.stringify(psStatus), new RegExp(args.password));
+
+    const psRevoked = parseJsonOutput(await runPowerShell([
+      "-HostName", host.host,
+      "-Port", String(host.port),
+      "-Revoke",
+      "-Json",
+      "-TimeoutMs", "3000",
+    ], args.timeoutMs), "PowerShell revoke JSON");
+    assert.equal(psRevoked.ok, true);
+    assert.equal(psRevoked.action, "revoke");
+    assert.equal(psRevoked.reverseControlGrant.active, false);
+    assert.match(psRevoked.boardSummary, /revoked/);
   } finally {
     await host.service.close();
   }
-  print("OK", "Grant helper reads status, opens one-time grant, prints board summary, and revokes");
+  print("OK", "Grant helper reads status, opens one-time grant, prints board summary, and revokes through Node and PowerShell");
 }
 
 async function verifyOfflineBoardSummary(args) {
@@ -229,7 +305,41 @@ async function verifyOfflineBoardSummary(args) {
   assert.match(result.stdout, /no-input/);
   assert.match(result.stdout, /no-inject/);
   assert.doesNotMatch(result.stdout + result.stderr, /Error:|at /);
+
+  const psResult = await runPowerShell([
+    "-HostName", args.host,
+    "-Port", String(port),
+    "-Status",
+    "-BoardSummary",
+    "-TimeoutMs", "1000",
+  ], args.timeoutMs);
+  assert.equal(psResult.timedOut, false, "PowerShell offline boardSummary timed out");
+  assert.notEqual(psResult.exitCode, 0, "PowerShell offline boardSummary should exit non-zero");
+  assert.match(psResult.stdout, /Windows reverse grant:/);
+  assert.match(psResult.stdout, /failed action=status/);
+  assert.match(psResult.stdout, /no-password/);
+  assert.match(psResult.stdout, /no-input/);
+  assert.match(psResult.stdout, /no-inject/);
+  assert.doesNotMatch(psResult.stdout + psResult.stderr, /Error:|at /);
   print("OK", "Offline helper failure stays single-line and safe for the board");
+}
+
+async function verifyPowerShellHelp(args) {
+  for (const flag of ["-Help", "-h"]) {
+    const result = await runPowerShell([flag], args.timeoutMs);
+    assert.equal(result.timedOut, false, `PowerShell ${flag} timed out`);
+    assert.equal(result.exitCode, 0, `PowerShell ${flag} failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+    assert.match(result.stdout, /Usage:/);
+    assert.match(result.stdout, /-BoardSummary/);
+    assert.match(result.stdout, /-Status/);
+    assert.match(result.stdout, /-Grant/);
+    assert.match(result.stdout, /-Revoke/);
+    assert.match(result.stdout, /Safety:/);
+    assert.match(result.stdout, /not use or print passwords/);
+    assert.doesNotMatch(result.stdout, /Windows reverse grant:/);
+    assert.doesNotMatch(result.stdout + result.stderr, new RegExp(args.password));
+  }
+  print("OK", "PowerShell wrapper help is pure documentation and secret-free");
 }
 
 async function main() {
@@ -241,6 +351,7 @@ async function main() {
 
   await verifyGrantStatusAndRevoke(args);
   await verifyOfflineBoardSummary(args);
+  await verifyPowerShellHelp(args);
   print("OK", "Windows reverse-control grant helper tests passed");
 }
 
