@@ -78,6 +78,12 @@ Machine-readable JSON fields:
                              discovers Windows hosts, and prints a summary
                              without authenticating, prompting for a password,
                              sending a call, or sending input.
+  commands.macClientBrowserSelfTestCommand
+                             Secret-free local browser self-test command. It
+                             starts a temporary mock Windows host and prints a
+                             one-line board summary without using a real host,
+                             requesting a password, sending a call, or running
+                             inject.
 
 Examples:
   node scripts/mac/check-mac-client-readiness.mjs --json
@@ -500,6 +506,10 @@ function makeMacClientFormalSmokeCommand() {
   return "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
 }
 
+function makeMacClientBrowserSelfTestCommand() {
+  return "node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard --boardSummary --progressIntervalMs 0";
+}
+
 function makeBoardSummary(report) {
   const repo = report.git.clean ? "clean" : `dirty(${report.git.changes.length})`;
   const client = report.client.ok ? "ok" : "blocked";
@@ -515,7 +525,7 @@ function makeBoardSummary(report) {
       : `offline ${report.windowsHost.probe.host}:${report.windowsHost.probe.port}`;
   const counts = `blockers=${report.counts.blocker} warnings=${report.counts.warning}`;
   const next = report.recommendations[0]?.text || "No next step available.";
-  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows}; ${counts}. Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
+  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows}; ${counts}. Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
 }
 
 function printHuman(report) {
@@ -527,6 +537,7 @@ function printHuman(report) {
   console.log(`- Agent Link Board: ${report.board.checked ? (report.board.ok ? "readable" : "not readable") : "not checked"}`);
   console.log(`- Mac client page status: ${report.commands.macClientPageStatusCommand}`);
   console.log(`- Mac client formal smoke preflight: ${report.commands.macClientFormalSmokeCommand}`);
+  console.log(`- Mac client browser self-test: ${report.commands.macClientBrowserSelfTestCommand}`);
   console.log(`- Copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
   console.log(`- result: ${report.ok ? "ready with warnings allowed" : "blocked"} (${report.counts.blocker} blockers, ${report.counts.warning} warnings)`);
   console.log("");
@@ -580,6 +591,7 @@ async function buildReport(args) {
     commands: {
       macClientPageStatusCommand: makeMacClientPageStatusCommand(),
       macClientFormalSmokeCommand: makeMacClientFormalSmokeCommand(),
+      macClientBrowserSelfTestCommand: makeMacClientBrowserSelfTestCommand(),
       macClientCopyDiagnosticsAction: makeMacClientCopyDiagnosticsAction(),
     },
     recommendations: makeRecommendations(checklist, windowsHost),
