@@ -2243,6 +2243,7 @@ async function verifyReconnectControls(session) {
           macAlertSecondsAgo: exportText.includes("秒前）"),
           macAlertPoll: exportText.includes("- Mac 提醒自动轮询：约 15 秒"),
           macAlertServer: exportText.includes("- Mac 提醒联络板：http://192.168.31.68:17888"),
+          localCollaborationSection: exportText.includes("\\n本机协作\\n"),
           localHostStatus: exportText.includes("- 本机被控：桌面壳托管运行中"),
           localHostBadge: exportText.includes("- 本机被控徽标：运行中"),
           localHostDetail: exportText.includes("- 本机被控详情：本机被控正在运行"),
@@ -2257,6 +2258,7 @@ async function verifyReconnectControls(session) {
         };
         await copyLogsToClipboard();
         const copied =
+          copiedText.includes("\\n本机协作\\n") &&
           copiedText.includes("- 本机被控：桌面壳托管运行中") &&
           copiedText.includes("- Mac 提醒：提醒中") &&
           copiedText.includes("password=<hidden>") &&

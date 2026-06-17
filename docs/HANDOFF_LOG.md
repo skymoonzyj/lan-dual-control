@@ -56,6 +56,36 @@
 
 日期：2026-06-17 休息续跑
 开发端：Windows Codex
+本轮目标：整理 Windows 控制端诊断报告结构，让远端连接和本机协作状态更容易阅读。
+完成内容：
+- `buildLogExportText()` 把 Mac 提醒 watcher 和本机被控 Windows host 字段从“连接状态”挪到新增“本机协作”小节。
+- 保留原字段名不变，导出日志和复制诊断仍复用同一份脱敏文本。
+- 页面 diagnostics 回归新增 `本机协作` 分段断言，复制诊断也确认包含该分段。
+- README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 本轮只整理诊断文本结构，没有改真实连接、host 启动或系统剪贴板路径。
+下一步建议：
+- 若继续做诊断体验，可考虑在报告顶部增加一行短摘要，用于通讯板快速浏览。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 休息续跑
+开发端：Windows Codex
 本轮目标：给 Windows 控制端增加“复制诊断”入口，方便现场直接粘贴当前状态报告。
 完成内容：
 - 事件面板新增 `copyLogButton`，显示“复制诊断”按钮。
