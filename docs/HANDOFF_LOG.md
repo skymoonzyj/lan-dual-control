@@ -53,6 +53,38 @@
 
 ## 2026-06-17 Mac Codex
 
+日期：2026-06-17 16:55
+开发端：Mac Codex
+本轮目标：让 Mac client 本地页面启动/状态助手的一行摘要也带页面复制诊断提示。
+完成内容：
+- `scripts/mac/start-mac-client.mjs` 的 `--boardSummary` 在线摘要新增 `CopyDiagnostics=Mac client 事件日志点击“复制诊断”`，并提醒粘贴前确认不包含连接密码。
+- 离线摘要保留启动下一步，同时提示页面在线后再复制诊断，避免离线时误以为已经能取页面日志。
+- `scripts/mac/test-mac-client-start-helper.mjs` 增加在线/离线 JSON 摘要断言，锁住 `CopyDiagnostics=`、`复制诊断` 和连接密码安全提示。
+- 当前状态、下一步和任务板已同步该启动助手摘要能力。
+修改文件：
+- `scripts/mac/start-mac-client.mjs`
+- `scripts/mac/test-mac-client-start-helper.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/start-mac-client.mjs`
+- `node --check scripts/mac/test-mac-client-start-helper.mjs`
+- `node scripts/mac/test-mac-client-start-helper.mjs --timeoutMs 45000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/mac docs`
+遗留问题：
+- 本轮只补 Mac client 本地页面启动/状态摘要和自测，不连接 Windows host、不认证、不发送密码/input/inject。
+下一步建议：
+- 现场只想确认本地 Mac client 页面状态时，可先跑 `node scripts/mac/start-mac-client.mjs --status --boardSummary`；若页面在线，再点事件日志“复制诊断”粘贴完整报告。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Mac Codex
+
 日期：2026-06-17 17:05
 开发端：Mac Codex
 本轮目标：给 Mac script help 的 `--boardSummary` / JSON `boardSummary` 增加专项自测，防止上板摘要后续退化。

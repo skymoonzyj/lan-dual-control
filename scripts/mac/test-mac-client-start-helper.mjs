@@ -139,6 +139,9 @@ async function checkOfflineStatus(args) {
   assert(payload.ok === false, "offline payload should be ok=false");
   assert(payload.online === false, "offline payload should be online=false");
   assertIncludes(payload.boardSummary || "", "Mac client page offline", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "CopyDiagnostics=", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "复制诊断", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "连接密码", "offline board summary");
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "offline status");
   print("OK", "Offline status reports machine-readable JSON without secrets");
 }
@@ -154,6 +157,9 @@ async function checkStartAndExisting(args) {
   assert(started.online === true, "started payload should be online=true");
   assert(started.processId, "started payload should include processId");
   assertIncludes(started.boardSummary || "", "Mac client page online", "start board summary");
+  assertIncludes(started.boardSummary || "", "CopyDiagnostics=", "start board summary");
+  assertIncludes(started.boardSummary || "", "复制诊断", "start board summary");
+  assertIncludes(started.boardSummary || "", "连接密码", "start board summary");
   assertNotIncludes(`${start.stdout}\n${start.stderr}`, "demo-password", "start output");
 
   try {
@@ -166,6 +172,8 @@ async function checkStartAndExisting(args) {
     assert(status.status === 0, "online status should pass");
     assert(statusPayload.ok === true, "online status should be ok=true");
     assert(statusPayload.online === true, "online status should be online=true");
+    assertIncludes(statusPayload.boardSummary || "", "CopyDiagnostics=", "online status board summary");
+    assertIncludes(statusPayload.boardSummary || "", "复制诊断", "online status board summary");
 
     const duplicate = run(["--json", "--port", String(port), "--timeoutMs", "1200"], {
       timeoutMs: args.timeoutMs,

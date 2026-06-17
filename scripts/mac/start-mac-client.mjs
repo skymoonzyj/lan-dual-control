@@ -18,6 +18,8 @@ const defaults = {
   help: false,
 };
 
+const copyDiagnosticsAction = "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码";
+
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
 }
@@ -194,12 +196,14 @@ function makeBoardSummary(report) {
     return [
       `Mac client page online at ${report.url}; pid=${report.processId || "existing"}; title=${report.titleFound ? "ok" : "unexpected"}.`,
       "Next: run check-mac-client-formal-status --host <Windows IP> --port 43770 --boardSummary before true Windows control.",
+      `CopyDiagnostics=${copyDiagnosticsAction}.`,
       "No password was requested or sent; no Windows connection/input was attempted.",
     ].join(" ");
   }
   return [
     `Mac client page offline at ${report.url}: ${report.error?.message || "unknown"}.`,
     "Next: start with node scripts/mac/start-mac-client.mjs, then rerun formal checklist.",
+    `CopyDiagnostics=页面在线后在 ${copyDiagnosticsAction}.`,
     "No password was requested or sent; no Windows connection/input was attempted.",
   ].join(" ");
 }
