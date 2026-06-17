@@ -115,7 +115,7 @@ node scripts/mac/install-mac-host-launch-agent.mjs --boardSummary
 node scripts/mac/check-mac-formal-e2e-status.mjs
 ```
 
-该脚本复用恢复状态总览，但会把正式验收需要的 repo、联络板、Mac host、LAN 地址、`inputMode=log`、权限、H.264、系统音频、剪贴板、显示器和 build 差异整理成 checklist。默认会读取 Agent Link Board；如果有 blocker，就不建议发起 Windows call。JSON、普通说明和 `--boardSummary` 也会给出 `MacFormalLocalSmoke=`，提醒长时间正式验收前先做本机 H.264/PCM/input-log 短验收。需要发联络板时可用：
+该脚本复用恢复状态总览，但会把正式验收需要的 repo、联络板、Mac host、LAN 地址、`inputMode=log`、权限、H.264、系统音频、剪贴板、显示器和 build 差异整理成 checklist。默认会读取 Agent Link Board；如果有 blocker，就不建议发起 Windows call。JSON、普通说明和 `--boardSummary` 也会给出 `MacLaunchAgentPlan=` 和 `MacFormalLocalSmoke=`，前者只是默认 dry-run 自启动模板计划，不写系统、不执行 `launchctl`、不启动 host、不要求密码；后者提醒长时间正式验收前先做本机 H.264/PCM/input-log 短验收。需要发联络板时可用：
 
 ```bash
 node scripts/mac/check-mac-formal-e2e-status.mjs --boardSummary

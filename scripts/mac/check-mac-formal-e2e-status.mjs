@@ -63,6 +63,11 @@ JSON output:
                             Safe local command for refreshing the Mac H.264/PCM
                             media baseline before long formal E2E runs.
                             It uses --promptPassword and never embeds --password.
+  commands.macLaunchAgentPlanCommand
+                            Secret-free LaunchAgent dry-run planner command.
+                            It prints a plist plan and manual load commands
+                            without writing files, loading launchctl, starting
+                            Mac host, or requesting a password.
 
 Examples:
   node scripts/mac/check-mac-formal-e2e-status.mjs
@@ -405,6 +410,7 @@ function makeCallText(report) {
     return [
       "Mac formal E2E is not ready: Mac host is offline.",
       "Start with start-mac-host --promptPassword --requirePassword, then rerun the checklist.",
+      `Plan safe reboot persistence first with: ${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
       `When the host is online, run local smoke first with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
       `When the host is online, refresh the media baseline with: ${report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
     ].join(" ");
@@ -414,6 +420,7 @@ function makeCallText(report) {
     `Mac formal E2E ${report.readyToCall ? "ready" : "needs attention"}: host=${address}, repo=${report.resume.currentBuildId || "unknown"}, runtimeBuild=${host.runtime?.buildId || "unknown"}, inputMode=${host.inputMode || "unknown"}.`,
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)} audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}.`,
     `Checklist blockers=${report.counts.blockers}, warnings=${report.counts.warnings}.`,
+    `If this Mac should stay ready after reboot, review the dry-run LaunchAgent plan with: ${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
     `Before long formal runs, run local H.264/PCM/input-log smoke with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
     `Before long formal runs, refresh the Mac media baseline with: ${report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
     "If ready, Windows should run discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log. Do not run inject unless the user explicitly confirms they are watching.",
@@ -430,6 +437,7 @@ function makeBoardSummary(report) {
       `Mac formal E2E: ${state}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}.`,
       `Mac host offline at ${host.probe?.host || report.args.host}:${host.probe?.port || report.args.port}.`,
       "Next: start with start-mac-host --promptPassword --requirePassword, then rerun checklist.",
+      `MacLaunchAgentPlan=${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
       `MacFormalLocalSmoke=${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
       "Media precheck after host is online: check-mac-host-readiness --probeMedia --boardSummary.",
       "Do not send passwords on Agent Link Board; inject requires explicit user confirmation.",
@@ -438,6 +446,7 @@ function makeBoardSummary(report) {
   return [
     `Mac formal E2E: ${state}; host=${formatHostAddress(host)}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}; runtimeBuild=${host.runtime?.buildId || "unknown"}; inputMode=${host.inputMode || "unknown"}.`,
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)}; audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}; ${formatBuildDiff(host.buildDiff)}.`,
+    `MacLaunchAgentPlan=${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
     `MacFormalLocalSmoke=${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
     "Media precheck: check-mac-host-readiness --probeMedia --boardSummary before long formal runs.",
     "Formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log; no inject without explicit user confirmation.",
@@ -450,6 +459,13 @@ function makeCommands(report) {
   const probeHost = normalizedText(host.probe?.host || report.args.host) || defaults.host;
   const probePort = host.probe?.port || report.args.port || defaults.port;
   return {
+    macLaunchAgentPlanCommand: [
+      "node",
+      "scripts/mac/install-mac-host-launch-agent.mjs",
+      "--port",
+      String(probePort),
+      "--boardSummary",
+    ].join(" "),
     macFormalLocalSmokeCommand: [
       "node",
       "scripts/mac/check-mac-formal-local-smoke.mjs",
