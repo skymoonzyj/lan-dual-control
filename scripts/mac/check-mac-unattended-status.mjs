@@ -396,13 +396,19 @@ function shellQuote(value) {
 }
 
 function makeBoardSummary(report) {
-  const blockers = report.findings.filter((item) => item.level === "blocker").length;
-  const warnings = report.findings.filter((item) => item.level === "warning").length;
+  const blockersList = report.findings.filter((item) => item.level === "blocker");
+  const warningsList = report.findings.filter((item) => item.level === "warning");
+  const blockers = blockersList.length;
+  const warnings = warningsList.length;
   const attention = blockers > 0
     ? `attention=${blockers} blocker(s)`
     : warnings > 0
       ? `attention=${warnings} warning(s)`
       : "attention=none";
+  const findingSummary = [
+    blockers > 0 ? `blockers=${summarizeFindingIds(blockersList)}` : "",
+    warnings > 0 ? `warnings=${summarizeFindingIds(warningsList)}` : "",
+  ].filter(Boolean).join(" ");
   const host = report.host.online
     ? `online inputMode=${report.host.inputMode || "unknown"} build=${report.host.runtime?.buildId || "unknown"}`
     : `offline ${report.args.host}:${report.args.port}`;
@@ -411,11 +417,18 @@ function makeBoardSummary(report) {
     : "permissions=unknown";
   const agent = `launchAgent=${report.launchAgent.exists ? "file-present" : "missing"} loaded=${report.launchAgent.loaded === null ? "unknown" : boolText(report.launchAgent.loaded)}`;
   return [
-    `Mac unattended status: host=${host}; ${perms}; ${agent}; power=${report.power.summary}; ${attention}.`,
+    `Mac unattended status: host=${host}; ${perms}; ${agent}; power=${report.power.summary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
     `MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --boardSummary; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; HostReadiness=${report.commands.hostReadiness}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
+}
+
+function summarizeFindingIds(findings) {
+  const ids = [...new Set(findings.map((item) => item.id).filter(Boolean))];
+  if (ids.length === 0) return "unknown";
+  if (ids.length <= 4) return ids.join(",");
+  return `${ids.slice(0, 4).join(",")}+${ids.length - 4}more`;
 }
 
 function boolText(value) {

@@ -218,6 +218,7 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.boardSummary, "MacUnattendedStatus=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacLaunchAgentPlan=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "HostReadiness=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "warnings=host-offline,launch-agent-missing", "missing LaunchAgent board summary");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "missing LaunchAgent JSON");
   print("OK", "Missing LaunchAgent is reported as a warning in default JSON mode");
 }
@@ -233,6 +234,8 @@ function checkRequireLaunchAgentFails(args) {
   assert(result.status !== 0, "requireLaunchAgent should fail when plist is missing");
   assert(payload.ok === false, "requireLaunchAgent payload should report ok=false");
   assert(payload.findings.some((item) => item.id === "launch-agent-missing" && item.level === "blocker"), "requireLaunchAgent should emit a blocker");
+  assertIncludes(payload.boardSummary, "blockers=launch-agent-missing", "require LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "warnings=host-offline", "require LaunchAgent board summary");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "require LaunchAgent JSON");
   print("OK", "requireLaunchAgent turns missing plist into a blocker");
 }
@@ -263,6 +266,7 @@ function checkStrictWarningsFail(args) {
   assert(result.status !== 0, "strict mode should fail on warnings");
   assert(payload.ok === false, "strict mode payload should report ok=false");
   assert(payload.findings.some((item) => item.level === "warning"), "strict mode should preserve warning findings");
+  assertIncludes(payload.boardSummary, "warnings=host-offline,launch-agent-missing", "strict unattended board summary");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "strict unattended JSON");
   print("OK", "strict mode turns unattended warnings into a failing report");
 }
@@ -315,6 +319,7 @@ function checkBoardSummary(args) {
   assertIncludes(text, "MacUnattendedStatus=", "board summary");
   assertIncludes(text, "MacLaunchAgentPlan=", "board summary");
   assertIncludes(text, "HostReadiness=", "board summary");
+  assertIncludes(text, "warnings=host-offline,launch-agent-missing", "board summary");
   assertIncludes(text, "No password", "board summary");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "board summary");
   print("OK", "Board summary is one line, actionable, and secret-free");
