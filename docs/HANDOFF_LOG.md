@@ -21,6 +21,39 @@
 
 日期：2026-06-17 续跑
 开发端：Windows Codex
+本轮目标：补齐 Windows host PowerShell 启动/状态入口帮助，让 PowerShell 7/Windows PowerShell 用户也能直接看到无密上板命令。
+完成内容：
+- `start-windows-host.ps1` 新增 `-Help` / `-h` 纯帮助入口。
+- 帮助明确 `-Status -CheckBoard -BoardSummary` 不启动 host、不认证、不要求或打印密码、不发送 input/inject。
+- 帮助列出 `WindowsHostMedia=`、`WindowsVideoSupport=` 和 `ReverseGrant=` 三条可发 Agent Link Board 的安全命令。
+- `test-windows-host-start-helper` 增加 PowerShell wrapper help 回归，覆盖 `-Help` 和 `-h`，并断言不会误启动 host。
+- 当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-windows-host.ps1 -Help`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-windows-host.ps1 -h`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 60000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows docs`
+遗留问题：
+- 本轮只补 PowerShell 帮助和文档，不启动真实 Windows host、不认证、不发送密码、不执行 input/inject。
+下一步建议：
+- 白天若从 PowerShell 入口启动或查状态，忘记参数时先跑 `scripts/windows/start-windows-host.ps1 -Help`；现场给通讯板发 Windows host 状态时继续优先用 `-Status -CheckBoard -BoardSummary`。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
 本轮目标：让 Windows 恢复总览里的 Windows 控制端诊断命令直接输出通讯板一行摘要。
 完成内容：
 - `check-windows-resume-status` 的 `windowsClientDiagnosticsCommand` / `WinClientDiagnostics=` 追加 `--boardSummary`。

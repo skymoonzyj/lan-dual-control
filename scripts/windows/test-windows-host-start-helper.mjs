@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const helperScript = "scripts/windows/start-windows-host.mjs";
+const powershellWrapperScript = "scripts/windows/start-windows-host.ps1";
 
 const defaults = {
   timeoutMs: 12000,
@@ -49,6 +50,17 @@ function print(kind, text) {
 
 function runNode(args, options = {}) {
   return run(process.execPath, [helperScript, ...args], options);
+}
+
+function runPowerShell(args, options = {}) {
+  return run("powershell.exe", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    powershellWrapperScript,
+    ...args,
+  ], options);
 }
 
 function run(command, commandArgs, options = {}) {
@@ -206,6 +218,31 @@ async function assertDryRunWithEnvPassword(timeoutMs) {
   assertIncludes(output, "Reverse control mode: deny", "dry run with env password");
   assertNotIncludes(output, "demo password", "dry run with env password");
   print("OK", "Environment password allows dry run without demo warning");
+}
+
+async function assertPowerShellWrapperHelp(timeoutMs) {
+  for (const helpArg of ["-Help", "-h"]) {
+    const result = await runPowerShell([helpArg], {
+      timeoutMs,
+      env: { LAN_DUAL_PASSWORD: "" },
+    });
+    const output = `${result.stdout}\n${result.stderr}`;
+    if (result.exitCode !== 0 || result.timedOut) {
+      throw new Error(`PowerShell wrapper ${helpArg} should print help without starting host.\n${output}`);
+    }
+    assertIncludes(output, "Usage:", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "-Status -CheckBoard -BoardSummary", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "WindowsHostMedia=", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "WindowsVideoSupport=", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "check-windows-video-encoder-support.mjs --boardSummary", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "ReverseGrant=", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "never starts Windows host", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "never asks for or prints passwords", `PowerShell wrapper ${helpArg}`);
+    assertNotIncludes(output, "Starting Windows host", `PowerShell wrapper ${helpArg}`);
+    assertNotIncludes(output, "LAN_DUAL_PASSWORD is required", `PowerShell wrapper ${helpArg}`);
+  }
+  print("OK", "PowerShell start helper help is safe and documents board summary commands");
 }
 
 async function assertDryRunReverseControlMode(timeoutMs) {
@@ -736,6 +773,7 @@ async function main() {
   await assertMissingPasswordFails(args.timeoutMs);
   await assertPromptPasswordFailsWithoutTty(args.timeoutMs);
   await assertDryRunWithEnvPassword(args.timeoutMs);
+  await assertPowerShellWrapperHelp(args.timeoutMs);
   await assertDryRunReverseControlMode(args.timeoutMs);
   await assertDryRunWgcH264BridgeOptions(args.timeoutMs);
   await assertStatusOfflineNeedsNoPassword(args.timeoutMs);

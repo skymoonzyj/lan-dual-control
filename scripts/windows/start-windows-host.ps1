@@ -33,12 +33,54 @@ param(
   [string] $Server = "",
   [switch] $BoardSummary,
   [switch] $Json,
-  [switch] $DryRun
+  [switch] $DryRun,
+  [Alias("h")]
+  [switch] $Help
 )
 
 $ErrorActionPreference = "Stop"
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Resolve-Path (Join-Path $scriptRoot "..\..")
+
+if ($Help) {
+  Write-Output @"
+Usage:
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\start-windows-host.ps1 [options]
+
+Common examples:
+  # Read-only status, safe for Agent Link Board summaries.
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\start-windows-host.ps1 -Status -CheckBoard -BoardSummary
+
+  # Machine-readable status for desktop shells or scripts.
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\start-windows-host.ps1 -Status -Json -CheckBoard
+
+  # Start Windows host with a hidden local password prompt.
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\start-windows-host.ps1 -PromptPassword -RequirePassword
+
+Options:
+  -Status             Read current /discovery status only; does not start the host.
+  -CheckBoard         Read Agent Link Board currentCall in status mode.
+  -BoardSummary       Print one secret-free Agent Link Board summary line.
+  -Json               Print machine-readable JSON when supported by the Node helper.
+  -PromptPassword     Ask for a local hidden password prompt before starting.
+  -RequirePassword    Reject startup if no password is available.
+  -ScreenMode <mode>  auto, ffmpeg, ffmpeg-h264, system, mock, or wgc.
+  -AudioMode <mode>   mock, wasapi, or dshow.
+  -InputMode <mode>   auto, log, or system.
+  -ReverseControlMode deny, accept, or disabled. Default: deny.
+  -DryRun             Print the resolved startup plan without starting.
+  -Help, -h           Show this help.
+
+Status summaries include:
+  WindowsHostMedia=node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
+  WindowsVideoSupport=node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
+  ReverseGrant=node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port <port> --durationMs 30000 --boardSummary
+
+Safety:
+  -Status/-BoardSummary never starts Windows host, never authenticates, never asks for or prints passwords, and never sends input/inject events.
+"@
+  exit 0
+}
 
 $nodeArgs = @(
   "scripts\windows\start-windows-host.mjs",
