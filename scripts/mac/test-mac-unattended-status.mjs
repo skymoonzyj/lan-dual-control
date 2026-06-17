@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -60,6 +60,77 @@ function run(args, extraArgs = []) {
     timeout: args.timeoutMs,
     maxBuffer: 8 * 1024 * 1024,
   });
+}
+
+function waitForPort(child, getStdout, getStderr) {
+  return new Promise((resolve, reject) => {
+    const started = Date.now();
+    const timer = setInterval(() => {
+      const match = getStdout().match(/(\d+)/);
+      if (match) {
+        clearInterval(timer);
+        resolve(Number(match[1]));
+        return;
+      }
+      if (child.exitCode !== null) {
+        clearInterval(timer);
+        reject(new Error(`fake host exited early\n${getStdout()}\n${getStderr()}`));
+        return;
+      }
+      if (Date.now() - started > 5000) {
+        clearInterval(timer);
+        reject(new Error(`fake host did not start\n${getStdout()}\n${getStderr()}`));
+      }
+    }, 25);
+  });
+}
+
+async function withFakeHost(discovery, callback) {
+  const dir = mkdtempSync(path.join(tmpdir(), "lan-dual-unattended-host-"));
+  const scriptPath = path.join(dir, "fake-host.mjs");
+  writeFileSync(scriptPath, `
+import http from "node:http";
+const discovery = ${JSON.stringify(discovery)};
+const server = http.createServer((request, response) => {
+  if (request.method === "GET" && request.url === "/discovery") {
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end(JSON.stringify(discovery));
+    return;
+  }
+  response.writeHead(404, { "Content-Type": "text/plain" });
+  response.end("not found");
+});
+server.listen(0, "127.0.0.1", () => {
+  const address = server.address();
+  console.log(address.port);
+});
+process.on("SIGTERM", () => server.close(() => process.exit(0)));
+`, "utf8");
+  const child = spawn(process.execPath, [scriptPath], {
+    cwd: repoRoot,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk;
+  });
+  try {
+    const port = await waitForPort(child, () => stdout, () => stderr);
+    await callback(port);
+  } finally {
+    child.kill("SIGTERM");
+    await new Promise((resolve) => {
+      child.once("exit", resolve);
+      setTimeout(resolve, 1000);
+    });
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 function parseJson(stdout, label) {
@@ -249,7 +320,48 @@ function checkBoardSummary(args) {
   print("OK", "Board summary is one line, actionable, and secret-free");
 }
 
-function main() {
+async function checkCapabilitiesInputMode(args) {
+  await withFakeHost({
+    deviceName: "Fake unattended Mac",
+    permissions: {
+      screenRecording: true,
+      accessibility: true,
+      inputMonitoring: true,
+    },
+    runtime: {
+      buildId: "fake-unattended-build",
+      processId: 12345,
+    },
+    capabilities: {
+      inputMode: "log",
+      h264Stream: true,
+      capturePipeline: "screencapturekit-h264",
+      audioMode: "system-pcm",
+    },
+  }, async (port) => {
+    const result = run(args, [
+      "--json",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(port),
+      "--timeoutMs",
+      "1200",
+      "--skipLaunchctl",
+      "--skipPmset",
+    ]);
+    const payload = parseJson(result.stdout, "capabilities inputMode JSON");
+    assert(result.status === 0, `capabilities inputMode path should stay non-failing\n${result.stdout}\n${result.stderr}`);
+    assert(payload.host?.online === true, "capabilities inputMode fake host should be online");
+    assert(payload.host?.inputMode === "log", "capabilities.inputMode should be used when top-level inputMode is absent");
+    assert(!payload.findings.some((item) => item.id === "input-mode"), "capabilities inputMode=log should not create input-mode finding");
+    assertIncludes(payload.boardSummary, "inputMode=log", "capabilities inputMode board summary");
+    assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "capabilities inputMode JSON");
+  });
+  print("OK", "Capabilities inputMode is surfaced in unattended JSON and board summary");
+}
+
+async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
     return;
@@ -262,7 +374,11 @@ function main() {
   checkStrictWarningsFail(args);
   checkFakePlist(args);
   checkBoardSummary(args);
+  await checkCapabilitiesInputMode(args);
   print("OK", "Mac unattended status self-test passed");
 }
 
-main();
+main().catch((error) => {
+  console.error(`[FAIL] ${error.message}`);
+  process.exitCode = 1;
+});

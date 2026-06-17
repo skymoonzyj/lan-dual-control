@@ -172,7 +172,7 @@ async function checkHost(args) {
     status: result.status || 0,
     error: result.ok ? "" : result.error || "unknown",
     deviceName: String(payload.deviceName || payload.name || ""),
-    inputMode: String(payload.inputMode || payload.capabilities?.input?.mode || ""),
+    inputMode: String(payload.inputMode || payload.capabilities?.inputMode || payload.capabilities?.input?.mode || ""),
     permissions: payload.permissions || {},
     runtime: payload.runtime || {},
     capabilities: payload.capabilities || {},
