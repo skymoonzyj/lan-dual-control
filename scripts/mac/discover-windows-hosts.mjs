@@ -61,6 +61,10 @@ Machine-readable JSON fields:
                            Secret-free local Mac client browser self-test. It
                            uses a temporary mock Windows host and does not use
                            a real host, password, call, or inject.
+  reverseControlRehearsal  Secret-free human rehearsal for the guarded
+                           reverse-control request loop after authentication:
+                           Mac expects LAN008 first, Windows opens a local
+                           one-time grant, then Mac retries.
   manualChecklistSummary   Human true-test checklist order:
                            ${manualChecklistSummary}.
 `);
@@ -229,6 +233,51 @@ function sendCallCommand(item) {
   return `node scripts/mac/check-mac-client-formal-status.mjs --host ${item.host} --port ${item.port} --sendCall`;
 }
 
+function windowsReverseGrantPowerShellCommand(item, action = "grant") {
+  const parts = [
+    "pwsh -NoProfile -ExecutionPolicy Bypass",
+    "-File",
+    "scripts/windows/allow-windows-reverse-control.ps1",
+    "-HostName",
+    "127.0.0.1",
+    "-Port",
+    String(item.port),
+  ];
+  if (action === "status") {
+    parts.push("-Status");
+  } else {
+    parts.push("-Grant", "-DurationMs", "30000");
+  }
+  parts.push("-BoardSummary");
+  return parts.join(" ");
+}
+
+function windowsReverseGrantNodeFallbackCommand(item, action = "grant") {
+  const parts = [
+    "node scripts/windows/allow-windows-reverse-control.mjs",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(item.port),
+  ];
+  if (action === "status") {
+    parts.push("--status");
+  } else {
+    parts.push("--grant", "--durationMs", "30000");
+  }
+  parts.push("--boardSummary");
+  return parts.join(" ");
+}
+
+function reverseControlRehearsal(item) {
+  return [
+    "Mac clicks 请求反控 after auth and expects LAN008/default deny.",
+    `Windows runs local loopback grant: ${windowsReverseGrantPowerShellCommand(item, "grant")}.`,
+    `Node fallback: ${windowsReverseGrantNodeFallbackCommand(item, "grant")}.`,
+    "Mac clicks 重试反控 and expects accepted/临时授权已使用; no password, input_event, or inject is sent by discovery.",
+  ].join(" ");
+}
+
 function buildReport(scan, args) {
   const found = Array.isArray(scan.found) ? scan.found : [];
   const windowsHosts = found.filter(isWindowsHost);
@@ -248,6 +297,7 @@ function buildReport(scan, args) {
     macClientBrowserSelfTestCommand: macClientBrowserSelfTestCommand(),
     manualChecklistSummary,
     sendCallCommand: best ? sendCallCommand(best) : "",
+    reverseControlRehearsal: best ? reverseControlRehearsal(best) : "",
     boardSummary: "",
   };
   report.boardSummary = makeBoardSummary(report);
@@ -256,7 +306,7 @@ function buildReport(scan, args) {
 
 function makeBoardSummary(report) {
   if (report.best) {
-    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}. FormalChecklist=${report.formalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}. FormalChecklist=${report.formalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
   }
   const ignored = report.ignored.length > 0
     ? ` Saw ${report.ignored.length} non-Windows host(s), likely Mac/self.`
@@ -275,6 +325,7 @@ function printText(report, args) {
     console.log(`[INFO] Formal smoke preflight: ${report.formalSmokeCommand}`);
     console.log(`[INFO] Manual checklist: ${report.manualChecklistSummary}`);
     console.log(`[INFO] Mac client browser self-test: ${report.macClientBrowserSelfTestCommand}`);
+    console.log(`[INFO] Reverse rehearsal: ${report.reverseControlRehearsal}`);
     console.log(`[INFO] Ready call: ${report.sendCallCommand}`);
   } else {
     console.log("[WARN] No Windows LAN dual-control host was found.");

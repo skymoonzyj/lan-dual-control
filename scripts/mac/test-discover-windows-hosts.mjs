@@ -89,6 +89,18 @@ function assertMacClientBrowserSelfTestCommand(command, label) {
   assertNotIncludes(command, "--server", label);
 }
 
+function assertReverseControlRehearsal(text, label) {
+  assertIncludes(text, "LAN008", label);
+  assertIncludes(text, "allow-windows-reverse-control.ps1", label);
+  assertIncludes(text, "allow-windows-reverse-control.mjs", label);
+  assertIncludes(text, "127.0.0.1", label);
+  assertIncludes(text, "--port 43770", label);
+  assertIncludes(text, "临时授权已使用", label);
+  assertNotIncludes(text, "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(text, "--password", label);
+  assertNotIncludes(text, "--sendCall", label);
+}
+
 function extractFormalSmokeCommand(text, label) {
   const match = String(text || "").match(/FormalSmoke=(.+?)(?:\. ManualChecklist=|\n|$)/);
   assert(match, `${label} should include FormalSmoke= command.\n${text}`);
@@ -96,8 +108,14 @@ function extractFormalSmokeCommand(text, label) {
 }
 
 function extractMacClientBrowserSelfTestCommand(text, label) {
-  const match = String(text || "").match(/MacClientBrowserSelfTest=(.+?)(?:\. If that checklist|\.\s*No password|\n|$)/);
+  const match = String(text || "").match(/MacClientBrowserSelfTest=(.+?)(?:\. ReverseRehearsal=|\. If that checklist|\.\s*No password|\n|$)/);
   assert(match, `${label} should include MacClientBrowserSelfTest= command.\n${text}`);
+  return match[1].trim();
+}
+
+function extractReverseRehearsal(text, label) {
+  const match = String(text || "").match(/ReverseRehearsal=(.+?)(?:\. If that checklist|\.\s*No password|\n|$)/);
+  assert(match, `${label} should include ReverseRehearsal= text.\n${text}`);
   return match[1].trim();
 }
 
@@ -187,6 +205,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "formalChecklistCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "formalSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macClientBrowserSelfTestCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "reverseControlRehearsal", `${script} ${flag}`);
     assertIncludes(result.stdout, "manualChecklistSummary", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
@@ -215,6 +234,7 @@ function checkFoundJson(tmp, args) {
   assert(payload.manualChecklistSummary === "connection/video/audio/clipboard/input_ack/diagnostics", "found payload should include manual checklist summary");
   assertIncludes(payload.sendCallCommand, "--host 192.168.31.68", "send call command");
   assertIncludes(payload.sendCallCommand, "--sendCall", "send call command");
+  assertReverseControlRehearsal(payload.reverseControlRehearsal || "", "found JSON reverse rehearsal");
   assertIncludes(payload.boardSummary, "FormalChecklist=", "board summary");
   assertIncludes(payload.boardSummary, "FormalSmoke=", "board summary");
   assertFormalSmokeCommand(extractFormalSmokeCommand(payload.boardSummary, "board summary"), "board summary formal smoke command");
@@ -224,6 +244,8 @@ function checkFoundJson(tmp, args) {
     extractMacClientBrowserSelfTestCommand(payload.boardSummary, "board summary"),
     "board summary Mac client browser self-test command",
   );
+  assertIncludes(payload.boardSummary, "ReverseRehearsal=", "board summary");
+  assertReverseControlRehearsal(extractReverseRehearsal(payload.boardSummary, "board summary"), "board summary reverse rehearsal");
   assertIncludes(payload.boardSummary, "No password was requested or sent", "board summary");
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "found output");
   console.log("[OK] JSON discovery filters Windows hosts and returns next formal command");
@@ -245,6 +267,8 @@ function checkBoardSummaryFound(tmp, args) {
     extractMacClientBrowserSelfTestCommand(result.stdout, "found board summary"),
     "found board summary Mac client browser self-test command",
   );
+  assertIncludes(result.stdout, "ReverseRehearsal=", "found board summary");
+  assertReverseControlRehearsal(extractReverseRehearsal(result.stdout, "found board summary"), "found board summary reverse rehearsal");
   assertIncludes(result.stdout, "--sendCall", "found board summary");
   assertIncludes(result.stdout, "no WebSocket/input/inject", "found board summary");
   console.log("[OK] Board summary gives a secret-free next step when Windows host is found");
@@ -258,12 +282,16 @@ function checkPlainFound(tmp, args) {
   assert(result.status === 0, `found plain output should exit 0.\n${result.stdout}\n${result.stderr}`);
   assertIncludes(result.stdout, "Formal smoke preflight:", "found plain output");
   assertIncludes(result.stdout, "Mac client browser self-test:", "found plain output");
+  assertIncludes(result.stdout, "Reverse rehearsal:", "found plain output");
   const match = String(result.stdout || "").match(/Formal smoke preflight: ([^\n]+)/);
   assert(match, `found plain output should include formal smoke command line.\n${result.stdout}`);
   assertFormalSmokeCommand(match[1], "found plain output formal smoke command");
   const selfTestMatch = String(result.stdout || "").match(/Mac client browser self-test: ([^\n]+)/);
   assert(selfTestMatch, `found plain output should include self-test command line.\n${result.stdout}`);
   assertMacClientBrowserSelfTestCommand(selfTestMatch[1], "found plain output Mac client browser self-test command");
+  const reverseMatch = String(result.stdout || "").match(/Reverse rehearsal: ([^\n]+)/);
+  assert(reverseMatch, `found plain output should include reverse rehearsal line.\n${result.stdout}`);
+  assertReverseControlRehearsal(reverseMatch[1], "found plain output reverse rehearsal");
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "found plain output");
   console.log("[OK] Plain discovery output includes the formal smoke preflight command");
 }
@@ -281,6 +309,7 @@ function checkNoneRequireFound(tmp, args) {
   assertIncludes(payload.boardSummary, "no Windows host found", "none board summary");
   assertIncludes(payload.boardSummary, "Ask Windows Codex to start Windows host", "none board summary");
   assertIncludes(payload.boardSummary, "MacClientBrowserSelfTest=", "none board summary");
+  assert(!payload.reverseControlRehearsal, "none payload should not invent a reverse rehearsal without a Windows host");
   assertMacClientBrowserSelfTestCommand(
     payload.macClientBrowserSelfTestCommand || "",
     "none JSON Mac client browser self-test command",
