@@ -825,6 +825,47 @@ async function verifyFloatingControlCenter(session) {
         valueOf("#audioVolumeRange") === "33" &&
         document.querySelector("#floatingAudioVolumeText")?.textContent === "33%";
 
+      let audioStatusText = "";
+      const audioStatusVisible = (() => {
+        const audioToggleElement = document.querySelector("#audioToggle");
+        const originalAudioState = {
+          connected: state.connected,
+          audioChecked: Boolean(audioToggleElement?.checked),
+          audioFrames: state.audioFrames,
+          audioLevel: state.audioLevel,
+          audioPlayedFrames: state.audioPlayedFrames,
+          audioDroppedFrames: state.audioDroppedFrames,
+          audioLastError: state.audioLastError,
+        };
+        try {
+          state.connected = true;
+          if (audioToggleElement) audioToggleElement.checked = true;
+          state.audioFrames = 24;
+          state.audioLevel = 0.37;
+          state.audioPlayedFrames = 20;
+          state.audioDroppedFrames = 2;
+          state.audioLastError = "";
+          if (typeof syncFloatingControlCenter === "function") syncFloatingControlCenter();
+          audioStatusText = document.querySelector("#floatingAudioStatus")?.textContent || "";
+          return (
+            audioStatusText.includes("接收 24 帧") &&
+            audioStatusText.includes("电平 37%") &&
+            audioStatusText.includes("33%") &&
+            audioStatusText.includes("播放 20") &&
+            audioStatusText.includes("丢 2")
+          );
+        } finally {
+          state.connected = originalAudioState.connected;
+          if (audioToggleElement) audioToggleElement.checked = originalAudioState.audioChecked;
+          state.audioFrames = originalAudioState.audioFrames;
+          state.audioLevel = originalAudioState.audioLevel;
+          state.audioPlayedFrames = originalAudioState.audioPlayedFrames;
+          state.audioDroppedFrames = originalAudioState.audioDroppedFrames;
+          state.audioLastError = originalAudioState.audioLastError;
+          if (typeof syncFloatingControlCenter === "function") syncFloatingControlCenter();
+        }
+      })();
+
       let videoStatusText = "";
       const videoStatusVisible = (() => {
         const originalVideoState = {
@@ -868,6 +909,7 @@ async function verifyFloatingControlCenter(session) {
       const statusVisible =
         document.querySelector("#floatingFullscreenHint")?.textContent.includes("Esc") &&
         document.querySelector("#floatingVideoStatus")?.textContent.includes("视频") &&
+        document.querySelector("#floatingAudioStatus")?.textContent.includes("声音") &&
         document.querySelector("#floatingInputModeStatus")?.textContent.includes("输入") &&
         document.querySelector("#floatingSecurityStatus")?.textContent.includes("安全");
 
@@ -987,6 +1029,7 @@ async function verifyFloatingControlCenter(session) {
           audioSynced &&
           volumeSynced &&
           statusVisible &&
+          audioStatusVisible &&
           videoStatusVisible &&
           shortcutSent &&
           fullscreenEntered &&
@@ -1005,6 +1048,8 @@ async function verifyFloatingControlCenter(session) {
         audioSynced,
         volumeSynced,
         statusVisible,
+        audioStatusVisible,
+        audioStatusText,
         videoStatusVisible,
         videoStatusText,
         shortcutSent,
@@ -2857,7 +2902,7 @@ async function run() {
     summary.checks.push("control-center");
     print(
       "OK",
-      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, original=${controlCenterCheck.originalPresetSynced}, detailed=${controlCenterCheck.detailedSettingsSynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, status=${controlCenterCheck.statusVisible}, video=${controlCenterCheck.videoStatusVisible}, shortcut=${controlCenterCheck.shortcutSent}, fullscreen=${controlCenterCheck.fullscreenEntered}, hint=${controlCenterCheck.fullscreenHintVisible}, esc=${controlCenterCheck.fullscreenEscExited}, immersive=${controlCenterCheck.immersiveFullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
+      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, original=${controlCenterCheck.originalPresetSynced}, detailed=${controlCenterCheck.detailedSettingsSynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, status=${controlCenterCheck.statusVisible}, video=${controlCenterCheck.videoStatusVisible}, audioStatus=${controlCenterCheck.audioStatusVisible}, shortcut=${controlCenterCheck.shortcutSent}, fullscreen=${controlCenterCheck.fullscreenEntered}, hint=${controlCenterCheck.fullscreenHintVisible}, esc=${controlCenterCheck.fullscreenEscExited}, immersive=${controlCenterCheck.immersiveFullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
     );
     const desktopOnlyPanelCheck = await verifyDesktopOnlyHostPanel(session);
     summary.checks.push("desktop-panel");

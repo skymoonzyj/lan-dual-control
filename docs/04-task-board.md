@@ -60,6 +60,7 @@ Windows 端：
 - [x] Windows 控 Mac 全屏进入轻提示：进入全屏会短暂显示 `Esc` 退出、当前画质、刷新率、码率和输入状态，`Esc` 在全屏里优先退出全屏；页面 diagnostics-only 覆盖提示可见和 Esc 退出。
 - [x] Windows 控 Mac 真全屏入口：悬浮控制中心新增“真全屏”按钮，支持浏览器/桌面壳 Fullscreen API；不支持时回退普通全屏并中文提示；页面 diagnostics-only 覆盖真全屏模拟路径。
 - [x] Windows 控 Mac 全屏浮层补视频链路状态：悬浮控制中心展开后显示 H.264/JPEG、实收 FPS、协商/请求刷新率、帧延迟或时钟偏差和回退原因，方便现场判断卡顿、非 60Hz 或 H.264 回退；页面 diagnostics-only 覆盖该状态。
+- [x] Windows 控 Mac 全屏浮层补声音状态：悬浮控制中心展开后显示声音开关、接收帧数、电平、播放计数、音量和丢帧，方便现场判断没收到音频、收到但未播放或播放失败；页面 diagnostics-only 覆盖该状态。
 
 ## Mac 反控 Windows 真连准备
 

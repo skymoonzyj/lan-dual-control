@@ -95,6 +95,7 @@ const elements = {
   floatingAudioSelect: document.querySelector("#floatingAudioSelect"),
   floatingFullscreenHint: document.querySelector("#floatingFullscreenHint"),
   floatingVideoStatus: document.querySelector("#floatingVideoStatus"),
+  floatingAudioStatus: document.querySelector("#floatingAudioStatus"),
   floatingInputModeStatus: document.querySelector("#floatingInputModeStatus"),
   floatingSecurityStatus: document.querySelector("#floatingSecurityStatus"),
   floatingShortcutSelect: document.querySelector("#floatingShortcutSelect"),
@@ -2056,6 +2057,36 @@ function formatFloatingVideoStatus() {
   return `视频：${parts.join(" · ")}`;
 }
 
+function formatFloatingAudioStatus() {
+  const volume = Number(elements.audioVolumeRange.value) || 0;
+  if (!elements.audioToggle.checked) {
+    return "声音：关闭";
+  }
+  if (state.audioLastError) {
+    const detail = String(state.audioLastError).replace(/\s+/g, " ").slice(0, 24);
+    return `声音：播放失败 · ${detail}`;
+  }
+  const parts = [];
+  if (state.audioFrames > 0) {
+    parts.push(`接收 ${state.audioFrames} 帧`);
+    parts.push(`电平 ${Math.round(state.audioLevel * 100)}%`);
+  } else if (state.connected) {
+    parts.push("等待音频");
+  } else {
+    parts.push("已开启");
+  }
+  parts.push(`${volume}%`);
+  if (state.audioPlayedFrames > 0) {
+    parts.push(`播放 ${state.audioPlayedFrames}`);
+  } else if (state.audioFrames > 0) {
+    parts.push("等待播放");
+  }
+  if (state.audioDroppedFrames > 0) {
+    parts.push(`丢 ${state.audioDroppedFrames}`);
+  }
+  return `声音：${parts.join(" · ")}`;
+}
+
 function syncFloatingControlStatus() {
   if (elements.floatingFullscreenHint) {
     elements.floatingFullscreenHint.textContent = state.immersiveFullscreen
@@ -2066,6 +2097,9 @@ function syncFloatingControlStatus() {
   }
   if (elements.floatingVideoStatus) {
     elements.floatingVideoStatus.textContent = formatFloatingVideoStatus();
+  }
+  if (elements.floatingAudioStatus) {
+    elements.floatingAudioStatus.textContent = formatFloatingAudioStatus();
   }
   if (elements.floatingInputModeStatus) {
     elements.floatingInputModeStatus.textContent = formatFloatingInputModeStatus();
@@ -2350,6 +2384,7 @@ function resetAudioPlayback() {
   state.audioPlayedFrames = 0;
   state.audioDroppedFrames = 0;
   state.audioLastError = "";
+  syncFloatingControlStatus();
 }
 
 function primeAudioPlayback() {
@@ -2361,11 +2396,13 @@ function primeAudioPlayback() {
     .then(() => {
       if (state.audioContext?.state === "running") {
         elements.audioText.textContent = `声音：播放已准备 · ${elements.audioVolumeRange.value}%`;
+        syncFloatingControlStatus();
       }
     })
     .catch((error) => {
       state.audioLastError = error?.message || String(error);
       addLog("声音播放准备失败", state.audioLastError);
+      syncFloatingControlStatus();
     });
 }
 
@@ -2487,6 +2524,7 @@ function renderAudioStatusFromFrame(frame) {
       : "";
   const droppedText = state.audioDroppedFrames > 0 ? ` · 丢 ${state.audioDroppedFrames}` : "";
   elements.audioText.textContent = `声音：接收中 · ${levelText} · ${volume}%${latencyText}${playbackText}${droppedText}`;
+  syncFloatingControlStatus();
 
   if (state.audioFrames === 1 || state.audioFrames % 20 === 0) {
     addLog(
@@ -2517,6 +2555,7 @@ function handleAudioFrame(frame) {
     .catch((error) => {
       state.audioLastError = error?.message || String(error);
       elements.audioText.textContent = `声音：播放失败 · ${state.audioLastError}`;
+      syncFloatingControlStatus();
       addLog("声音播放失败", state.audioLastError);
     });
 }
@@ -5186,6 +5225,7 @@ function handleProtocolMessage(message) {
     elements.audioText.textContent = message.enabled
       ? `声音：设置已接收 · ${message.volume ?? elements.audioVolumeRange.value}%`
       : "声音：已关闭";
+    syncFloatingControlStatus();
     return;
   }
 
@@ -5193,6 +5233,7 @@ function handleProtocolMessage(message) {
     elements.audioText.textContent = message.enabled
       ? `声音：${message.message || "已开启"}`
       : `声音：${message.message || "已关闭"}`;
+    syncFloatingControlStatus();
     return;
   }
 
@@ -5863,6 +5904,7 @@ elements.audioToggle.addEventListener("change", () => {
   } else {
     resetAudioPlayback();
   }
+  syncFloatingControlCenter();
   sendDisplaySettings();
 });
 elements.audioVolumeRange.addEventListener("input", () => {
