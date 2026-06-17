@@ -100,6 +100,8 @@ Options:
   --server <url>                 Agent Link Board URL for --sendUserAuthRequest. Default: ${defaults.server}
   --json                         With --preflightOnly, print a single JSON object including runPlan.
   --boardSummary                 Print a short secret-free Agent Link Board summary.
+  runPlan.manualChecklist        Human true-test checklist for connection,
+                                 video, audio, clipboard, input_ack, and diagnostics.
   --help, -h                     Show this help.
 
 Examples:
@@ -216,6 +218,48 @@ function makeDisplayCommand(script, args) {
   return ["node", script, ...args].map(quoteCommandArg).join(" ");
 }
 
+function makeManualChecklist(args) {
+  const target = `${args.host}:${Number(args.port)}`;
+  return [
+    {
+      id: "connection",
+      label: "Connection",
+      evidence: `Windows client status shows connected to Mac host ${target}; discovery/runtime build matches /discovery.`,
+    },
+    {
+      id: "video",
+      label: "Video",
+      evidence: "Windows client shows Mac desktop frames, fresh frame age or clock-skew warning, and expected FPS/codec diagnostics.",
+    },
+    {
+      id: "audio",
+      label: "Audio",
+      evidence: args.skipAudio
+        ? "Audio probe is skipped in this run plan; rerun without --skipAudio before judging daily-use sound."
+        : "Windows client receives and plays Mac system PCM audio without duplicate local/remote confusion.",
+    },
+    {
+      id: "clipboard",
+      label: "Clipboard",
+      evidence: args.skipClipboard
+        ? "Clipboard probe is skipped in this run plan; rerun without --skipClipboard before judging text/file copy."
+        : "Text clipboard and file/zip clipboard transfer work in both the probe result and Windows client diagnostics.",
+    },
+    {
+      id: "input_ack",
+      label: "Input ack",
+      evidence: args.skipInputLog
+        ? "Input-log probe is skipped in this run plan; rerun without --skipInputLog before judging control acknowledgments."
+        : "Mac host returns input_ack in log mode; no real system input injection is requested by this formal run.",
+    },
+    {
+      id: "diagnostics",
+      label: "Diagnostics",
+      evidence: "Windows client event panel '复制诊断' or exported log includes connection, runtime build, FPS/frame-age, audio, clipboard, and input status.",
+    },
+  ];
+}
+
 function makeFormalRunPlan(args) {
   const probeExpectedMs = Math.max(
     Number(args.videoDurationMs) || 0,
@@ -290,6 +334,7 @@ function makeFormalRunPlan(args) {
       text: !args.skipClipboard,
       file: !args.skipClipboard && !args.skipFileClipboard,
     },
+    manualChecklist: makeManualChecklist(args),
     steps,
     estimatedDurationMs: steps.reduce((total, step) => total + (Number(step.expectedDurationMs) || 0), 0),
   };
@@ -318,6 +363,7 @@ function makeBoardSummary(report, outcome = "preflight") {
       `${prefix}: offline; target=${report.target.host}:${report.target.port}; error=${report.error?.message || "unknown"}.`,
       "Password was not requested and is not included.",
       `Next safe command after Mac host is online: ${report.command}.`,
+      "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
       "Inject was not used and still needs explicit user confirmation.",
     ].join(" ");
   }
@@ -340,6 +386,7 @@ function makeBoardSummary(report, outcome = "preflight") {
     `${prefix}: ${state}; target=${report.target.host}:${report.target.port}; runtimeBuild=${report.runtime?.buildId || "unknown"}; runtimePid=${report.runtime?.processId || "unknown"}.`,
     `Capabilities h264=${statusFlag(report.capabilities?.h264Stream)} audio=${report.capabilities?.audioMode || statusFlag(report.capabilities?.audio)} clipboardText=${statusFlag(report.capabilities?.clipboardText)} clipboardFile=${statusFlag(report.capabilities?.clipboardFile)} inputMode=${report.capabilities?.inputMode || "missing"} mock=${statusFlag(report.capabilities?.mock)} maxScreenFps=${report.capabilities?.maxScreenFps || "unknown"}.`,
     `Permissions screen=${statusFlag(permissions.screenRecording)} accessibility=${statusFlag(permissions.accessibility)} inputMonitoring=${statusFlag(permissions.inputMonitoring)}; displays=${summarizeDisplays(report)}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
+    "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
     `Safe formal command: ${report.command}. Password is not included; inject was not used and still needs explicit user confirmation.`,
   ].join(" ");
 }
@@ -651,6 +698,13 @@ function printRunPlan(runPlan) {
   print("INFO", `Password handling: ${runPlan.passwordTransport}; passwordInCommandArguments=${runPlan.passwordInCommandArguments}.`);
   for (const [index, step] of steps.entries()) {
     print("INFO", `Plan ${index + 1}: ${step.label}; timeout=${step.timeoutMs}ms; command=${step.command}`);
+  }
+  const manualChecklist = Array.isArray(runPlan.manualChecklist) ? runPlan.manualChecklist : [];
+  if (manualChecklist.length > 0) {
+    print("INFO", "Manual true-test checklist:");
+    for (const item of manualChecklist) {
+      print("INFO", `- ${item.id}: ${item.evidence}`);
+    }
   }
 }
 

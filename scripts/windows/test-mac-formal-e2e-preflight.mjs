@@ -87,9 +87,24 @@ function assertRunPlanSafe(payload, label, expectations = {}) {
   if (Object.prototype.hasOwnProperty.call(expectations, "inputMode")) {
     assert(plan.inputMode === expectations.inputMode, `${label} input mode mismatch`);
   }
+  assertManualChecklist(plan.manualChecklist, label);
   const serialized = JSON.stringify(plan);
   assertNotIncludes(serialized, "test-password", label);
   assertNotIncludes(serialized, "demo-password", label);
+}
+
+function assertManualChecklist(checklist, label) {
+  assert(Array.isArray(checklist), `${label} manual checklist should be an array`);
+  const ids = checklist.map((entry) => entry.id);
+  for (const id of ["connection", "video", "audio", "clipboard", "input_ack", "diagnostics"]) {
+    assert(ids.includes(id), `${label} manual checklist missing ${id}`);
+  }
+  const combined = JSON.stringify(checklist);
+  assertIncludes(combined, "Windows client", `${label} manual checklist`);
+  assertIncludes(combined, "Mac host", `${label} manual checklist`);
+  assertIncludes(combined, "复制诊断", `${label} manual checklist`);
+  assertNotIncludes(combined, "test-password", `${label} manual checklist`);
+  assertNotIncludes(combined, "demo-password", `${label} manual checklist`);
 }
 
 function runRunner(args, { env = {}, timeoutMs = defaults.timeoutMs } = {}) {
@@ -179,6 +194,9 @@ async function testOfflinePreflight(args) {
   const result = await runRunner(["--host", "127.0.0.1", "--port", "9", "--preflightOnly"], args);
   assert(result.exitCode !== 0, "offline preflight should fail");
   assertIncludes(result.stdout, "Mac host discovery offline", "offline text preflight");
+  assertIncludes(result.stdout, "Manual true-test checklist", "offline text preflight");
+  assertIncludes(result.stdout, "- connection:", "offline text preflight");
+  assertIncludes(result.stdout, "- diagnostics:", "offline text preflight");
   assertNotIncludes(result.stdout + result.stderr, "Mac host password", "offline text preflight");
   print("OK", "Offline text preflight fails before password");
 }
@@ -200,6 +218,7 @@ async function testOfflineBoardSummary(args) {
   assertIncludes(result.stdout, "Windows formal Mac E2E preflight: offline", "offline board summary");
   assertIncludes(result.stdout, "Password was not requested", "offline board summary");
   assertIncludes(result.stdout, "--promptPassword", "offline board summary");
+  assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "offline board summary");
   assertNotIncludes(result.stdout + result.stderr, "Mac host password", "offline board summary");
   print("OK", "Offline board summary is secret-free");
 }
@@ -324,6 +343,7 @@ async function testMockPreflightBoardSummary(args) {
     assert(result.exitCode === 0, `mock preflight board summary failed\n${result.stdout}\n${result.stderr}`);
     assertIncludes(result.stdout, "Windows formal Mac E2E preflight: ready", "mock board summary");
     assertIncludes(result.stdout, "failedChecks=none", "mock board summary");
+    assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "mock board summary");
     assertIncludes(result.stdout, "Password is not included", "mock board summary");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "mock board summary");
     print("OK", "Mock board summary passes without leaking password");
