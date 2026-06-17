@@ -194,6 +194,9 @@ function analyze(result) {
     /Mac alert watcher started/i,
     /Watching Mac-side Agent Link alerts/i,
     /Codex LAN Link started/i,
+    /Configuring machine Rust environment/i,
+    /Installing Visual Studio C\+\+ Build Tools/i,
+    /Build Tools installer failed/i,
     /\bAuth passed\b/i,
     /\binput_ack\b/i,
   ];

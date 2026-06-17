@@ -1,4 +1,30 @@
+param(
+  [Alias("h")]
+  [switch] $Help
+)
+
 $ErrorActionPreference = "Continue"
+
+if ($Help) {
+  Write-Output @"
+Usage:
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\verify-dev-env.ps1 [options]
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\verify-dev-env.ps1 [options]
+
+Common examples:
+  # Check whether the Windows development tools are available.
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\verify-dev-env.ps1
+
+Options:
+  -Help, -h  Show this help without probing local tools.
+
+Safety:
+  This checker is read-only. It does not install tools, change system
+  environment variables, start remote hosts, authenticate, print passwords, or
+  send input/inject events. -Help exits before running any probes.
+"@
+  exit 0
+}
 
 function Test-Command {
   param(

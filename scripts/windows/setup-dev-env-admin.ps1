@@ -1,7 +1,39 @@
 # Run this file from an elevated PowerShell window.
 # It configures machine-level Rust paths and installs Visual Studio C++ Build Tools.
 
+param(
+  [Alias("h")]
+  [switch] $Help
+)
+
 $ErrorActionPreference = "Stop"
+
+if ($Help) {
+  Write-Output @"
+Usage:
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\setup-dev-env-admin.ps1 [options]
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\setup-dev-env-admin.ps1 [options]
+
+Common examples:
+  # Show this help first; it is safe from a non-admin terminal.
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\setup-dev-env-admin.ps1 -Help
+
+  # From an elevated terminal, configure machine-level dev paths and run the
+  # Visual Studio Build Tools installer.
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\setup-dev-env-admin.ps1
+
+Options:
+  -Help, -h  Show this help without creating directories, changing machine
+             environment variables, or starting the Build Tools installer.
+
+Safety:
+  Running without -Help requires an elevated terminal and may modify machine
+  RUSTUP_HOME, CARGO_HOME, and Path, then start the Visual Studio Build Tools
+  installer from C:\DevTools\installers\vs_BuildTools.exe. -Help exits before
+  any system-level operation.
+"@
+  exit 0
+}
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $toolsRoot = "C:\DevTools"
