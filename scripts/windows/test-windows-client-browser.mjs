@@ -2763,6 +2763,7 @@ async function verifyReconnectControls(session) {
       const disconnectButton = document.querySelector("#disconnectButton");
       const copyButton = document.querySelector("#copyLogButton");
       const eventLog = document.querySelector("#eventLog");
+      const hostDiagnosticsElement = document.querySelector("#hostDiagnosticsText");
       if (!reconnectButton || !floatingReconnectButton || !actions || !status || !remote || !connectButton || !disconnectButton || !copyButton) {
         return { ok: false, reason: "missing reconnect elements" };
       }
@@ -2834,6 +2835,8 @@ async function verifyReconnectControls(session) {
       const originalAudioLastError = state.audioLastError;
       const originalInputEvents = state.inputEvents;
       const originalHostDiagnostics = { ...(state.hostDiagnostics || {}) };
+      const originalHostDiagnosticsText = hostDiagnosticsElement?.textContent || "";
+      const originalHostDiagnosticsClass = hostDiagnosticsElement?.className || "";
       const originalControlDirection = state.controlDirection;
       const calls = [];
       let copiedText = "";
@@ -2921,19 +2924,44 @@ async function verifyReconnectControls(session) {
         scheduleReconnect("测试断线");
         state.inputEvents = 7;
         state.controlDirection = "windows_to_mac";
-        state.hostDiagnostics = {
-          ...(state.hostDiagnostics || {}),
+        if (typeof updateHostDiagnostics === "function") updateHostDiagnostics({
+          hostMode: "mac-host-background-jpeg",
+          capturePipeline: "background-jpeg",
+          permissions: {
+            screenRecording: true,
+            accessibility: false,
+            inputMonitoring: true,
+          },
+          runtime: {
+            processId: 24680,
+            uptimeSeconds: 3661,
+            buildId: "host-build-test",
+          },
+          videoCodec: "jpeg",
+          videoEncoding: "data-url",
+          streamFallbackReason: "H.264 启动超时，已回退 JPEG",
+          clipboardText: true,
+          clipboardTextMode: "system",
+          clipboardFile: true,
+          clipboardFileMode: "system",
           inputMode: "log",
           inputAckStatus: "logged",
           inputAckCode: "",
           inputAckReason: "",
-        };
+        });
         if (typeof updateInputStatus === "function") updateInputStatus();
         const exportText = typeof buildLogExportText === "function" ? buildLogExportText() : "";
         const exportChecks = {
           quickSummarySection: exportText.includes("\\n快速摘要\\n"),
           quickSummaryRemote:
             exportText.includes("- 远端连接：") && exportText.includes("192.168.31.122:43770"),
+          quickSummaryHost:
+            exportText.includes("- Mac 主机：") &&
+            exportText.includes("PID 24680") &&
+            exportText.includes("host-build-test") &&
+            exportText.includes("权限") &&
+            exportText.includes("辅助功能未开") &&
+            exportText.includes("视频回退"),
           quickSummaryReconnect:
             exportText.includes("- 重连：等待自动重连") && exportText.includes("原因 测试断线"),
           quickSummaryRemoteFiles:
@@ -2960,6 +2988,11 @@ async function verifyReconnectControls(session) {
           reconnectReason: exportText.includes("- 重连原因：测试断线"),
           reconnectNext: exportText.includes("- 下次重连："),
           reconnectSeconds: exportText.includes("秒后）"),
+          hostDiagnosticsDetail:
+            exportText.includes("- 主机诊断：") &&
+            exportText.includes("PID 24680") &&
+            exportText.includes("host-build-test") &&
+            exportText.includes("辅助功能未开"),
           macAlertStatus: exportText.includes("- Mac 提醒：提醒中"),
           macAlertDetail: exportText.includes("- Mac 提醒详情：Windows 浮窗提醒已开启"),
           macAlertCheckedAt: exportText.includes("- Mac 提醒最近检查："),
@@ -3014,6 +3047,9 @@ async function verifyReconnectControls(session) {
           copiedText.includes("\\n快速摘要\\n") &&
           copiedText.includes("\\n本机协作\\n") &&
           copiedText.includes("- 远端连接：") &&
+          copiedText.includes("- Mac 主机：") &&
+          copiedText.includes("host-build-test") &&
+          copiedText.includes("辅助功能未开") &&
           copiedText.includes("- 本机被控：桌面壳托管运行中") &&
           copiedText.includes("- Mac 提醒：提醒中") &&
           copiedText.includes("- 全屏浮层连接：连接：") &&
@@ -3112,6 +3148,10 @@ async function verifyReconnectControls(session) {
         state.audioLastError = originalAudioLastError;
         state.inputEvents = originalInputEvents;
         state.hostDiagnostics = originalHostDiagnostics;
+        if (hostDiagnosticsElement) {
+          hostDiagnosticsElement.textContent = originalHostDiagnosticsText;
+          hostDiagnosticsElement.className = originalHostDiagnosticsClass;
+        }
         state.controlDirection = originalControlDirection;
         if (typeof updateInputStatus === "function") updateInputStatus();
         state.logEntries = originalLogEntries;

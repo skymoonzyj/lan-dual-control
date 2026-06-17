@@ -21,6 +21,39 @@
 
 日期：2026-06-18 续跑
 开发端：Windows Codex
+本轮目标：让 Windows 控 Mac 复制诊断快速摘要直接写出 Mac 主机诊断/权限/runtime，方便第一屏定位看不到画面、权限缺失、旧 build 或 H.264 回退。
+完成内容：
+- 复制/导出的诊断报告快速摘要新增“Mac 主机”一行，复用页面已有主机诊断文字并压缩到一行。
+- “连接状态”分段的“主机诊断”也改用同一份脱敏/压缩状态，避免过长诊断撑坏报告。
+- 页面 diagnostics-only 自检模拟 Mac host runtime、辅助功能权限未开、H.264 回退和剪贴板能力，断言导出文本和复制文本都包含 Mac 主机摘要/主机诊断。
+- Windows 控制端 README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps\windows-client scripts\windows docs`
+遗留问题：
+- 夜间只做无授权页面自检，不连接真实 Mac、不认证、不发送密码/input/inject；真实权限缺失和旧 runtime 仍需现场真机状态确认。
+下一步建议：
+- 现场看不到画面或怀疑 Mac host 没重启时，先复制诊断，看快速摘要里的“Mac 主机”行是否显示权限未开、H.264 回退或旧 build。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 续跑
+开发端：Windows Codex
 本轮目标：让 Windows 控 Mac 复制诊断快速摘要直接写出独立剪贴板状态，方便定位文字、文件或压缩包复制问题。
 完成内容：
 - 复制/导出的诊断报告快速摘要新增“剪贴板”一行，复用全屏浮层同一套剪贴板状态口径。

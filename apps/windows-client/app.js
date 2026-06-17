@@ -2139,6 +2139,17 @@ function getVideoExportStatus() {
   return videoStatus || "-";
 }
 
+function compactExportStatusText(text, maxLength = 180) {
+  const normalized = String(text || "").replace(/\s+/g, " ").trim();
+  if (!normalized) return "-";
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}...` : normalized;
+}
+
+function getHostDiagnosticsExportStatus() {
+  const diagnosticsText = elements.hostDiagnosticsText.textContent.replace(/^诊断：/, "").trim();
+  return compactExportStatusText(diagnosticsText);
+}
+
 function formatFloatingAudioStatus() {
   const volume = Number(elements.audioVolumeRange.value) || 0;
   if (!elements.audioToggle.checked) {
@@ -2915,6 +2926,7 @@ function buildDiagnosticsQuickSummary({
   currentStateLabel,
   connectionLabel,
   targetLabel,
+  hostDiagnosticsExport,
   reconnectExport,
   macAlertWatcherExport,
   localHostExport,
@@ -2934,6 +2946,7 @@ function buildDiagnosticsQuickSummary({
   }
   return [
     `- 远端连接：${currentStateLabel} · ${connectionLabel} · ${targetLabel}`,
+    `- Mac 主机：${hostDiagnosticsExport}`,
     `- 重连：${reconnectParts.join(" · ")}`,
     `- 远端文件：${remoteFileExport.summary}`,
     `- 剪贴板：${clipboardExport}`,
@@ -2955,6 +2968,7 @@ function buildLogExportText() {
   const hostForExport = state.activeHost || elements.hostInput.value.trim() || "-";
   const portForExport = state.activePort || elements.portInput.value.trim() || "-";
   const targetLabel = `${hostForExport}:${portForExport}`;
+  const hostDiagnosticsExport = getHostDiagnosticsExportStatus();
   const reconnectExport = getReconnectExportStatus();
   const macAlertWatcherExport = getMacAlertWatcherExportStatus();
   const localHostExport = getLocalHostExportStatus();
@@ -2987,6 +3001,7 @@ function buildLogExportText() {
       currentStateLabel,
       connectionLabel,
       targetLabel,
+      hostDiagnosticsExport,
       reconnectExport,
       macAlertWatcherExport,
       localHostExport,
@@ -3009,7 +3024,7 @@ function buildLogExportText() {
     `- 重连原因：${reconnectExport.reason}`,
     `- 下次重连：${reconnectExport.next}`,
     `- 协议版本：${protocolVersion}`,
-    `- 主机诊断：${elements.hostDiagnosticsText.textContent.replace(/^诊断：/, "") || "-"}`,
+    `- 主机诊断：${hostDiagnosticsExport}`,
     "",
     "本机协作",
     `- Mac 提醒：${macAlertWatcherExport.status}`,
