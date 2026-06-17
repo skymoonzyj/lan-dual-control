@@ -88,8 +88,16 @@ const elements = {
   floatingControlSummary: document.querySelector("#floatingControlSummary"),
   floatingDisplaySelect: document.querySelector("#floatingDisplaySelect"),
   floatingQualitySelect: document.querySelector("#floatingQualitySelect"),
+  floatingResolutionSelect: document.querySelector("#floatingResolutionSelect"),
+  floatingFpsSelect: document.querySelector("#floatingFpsSelect"),
+  floatingBandwidthSelect: document.querySelector("#floatingBandwidthSelect"),
   floatingScaleSelect: document.querySelector("#floatingScaleSelect"),
   floatingAudioSelect: document.querySelector("#floatingAudioSelect"),
+  floatingFullscreenHint: document.querySelector("#floatingFullscreenHint"),
+  floatingInputModeStatus: document.querySelector("#floatingInputModeStatus"),
+  floatingSecurityStatus: document.querySelector("#floatingSecurityStatus"),
+  floatingShortcutSelect: document.querySelector("#floatingShortcutSelect"),
+  floatingShortcutButton: document.querySelector("#floatingShortcutButton"),
   floatingAudioVolumeRange: document.querySelector("#floatingAudioVolumeRange"),
   floatingAudioVolumeText: document.querySelector("#floatingAudioVolumeText"),
   floatingFullscreenButton: document.querySelector("#floatingFullscreenButton"),
@@ -144,7 +152,7 @@ const qualityPresets = {
     bandwidth: "10",
   },
   balanced: {
-    label: "均衡",
+    label: "自动",
     resolution: "2560x1440",
     fps: "60",
     bandwidth: "20",
@@ -155,6 +163,25 @@ const qualityPresets = {
     fps: "120",
     bandwidth: "50",
   },
+  original: {
+    label: "原画",
+    resolution: "3840x2160",
+    fps: "60",
+    bandwidth: "50",
+    scaleMode: "original",
+  },
+};
+const floatingShortcutActions = {
+  copy: { label: "复制", key: "c", code: "KeyC", modifiers: ["meta"] },
+  paste: { label: "粘贴", key: "v", code: "KeyV", modifiers: ["meta"], syncClipboard: true },
+  cut: { label: "剪切", key: "x", code: "KeyX", modifiers: ["meta"] },
+  select_all: { label: "全选", key: "a", code: "KeyA", modifiers: ["meta"] },
+  undo: { label: "撤销", key: "z", code: "KeyZ", modifiers: ["meta"] },
+  redo: { label: "重做", key: "z", code: "KeyZ", modifiers: ["meta", "shift"] },
+  find: { label: "查找", key: "f", code: "KeyF", modifiers: ["meta"] },
+  save: { label: "保存", key: "s", code: "KeyS", modifiers: ["meta"] },
+  app_switch: { label: "切换应用", key: "Tab", code: "Tab", modifiers: ["meta"] },
+  lock_screen: { label: "锁屏", key: "q", code: "KeyQ", modifiers: ["ctrl", "meta"] },
 };
 const hostModeLabels = {
   "mac-host-background-jpeg": "Mac 后台 JPEG",
@@ -499,11 +526,13 @@ function formatInputStatusDetail(diagnostics = state.hostDiagnostics) {
 function updateInputStatus() {
   if (state.connected && state.controlDirection === "mac_to_windows") {
     elements.inputText.textContent = "输入事件：暂停（当前由 Mac 控制）";
+    syncFloatingControlStatus();
     return;
   }
 
   const detail = formatInputStatusDetail();
   elements.inputText.textContent = `输入事件：${state.inputEvents}${detail ? `（${detail}）` : ""}`;
+  syncFloatingControlStatus();
 }
 
 function updateReverseControlUi() {
@@ -1188,6 +1217,10 @@ function applyQualityPreset(presetKey, { send = true } = {}) {
   elements.resolutionSelect.value = preset.resolution;
   elements.fpsSelect.value = preset.fps;
   elements.bandwidthSelect.value = preset.bandwidth;
+  if (preset.scaleMode) {
+    elements.scaleModeSelect.value = preset.scaleMode;
+    applyScaleMode();
+  }
   state.applyingQualityPreset = false;
   updateMetrics();
   savePreferences();
@@ -1942,8 +1975,50 @@ function cloneSelectOptions(sourceSelect, targetSelect) {
   targetSelect.value = sourceSelect.value;
 }
 
+function formatFloatingInputModeStatus() {
+  if (!state.connected) return "输入：未连接";
+  if (state.controlDirection === "mac_to_windows") return "输入：当前由 Mac 控制";
+  const modeText = getInputModeStatusText(state.hostDiagnostics.inputMode) || "等待对端确认";
+  return `输入：${modeText}`;
+}
+
+function formatFloatingSecurityStatus() {
+  if (!state.connected) return "安全：待机";
+  if (state.hostDiagnostics.inputAckStatus === "rejected") {
+    return "安全：输入被拒绝";
+  }
+  if (state.hostDiagnostics.inputMode === "inject") {
+    return "安全：真实控制";
+  }
+  if (state.hostDiagnostics.inputMode === "log") {
+    return "安全：仅记录";
+  }
+  const level = getHostDiagnosticsLevel();
+  if (level === "warning") return "安全：需注意";
+  if (level === "ok") return "安全：正常";
+  return "安全：连接中";
+}
+
+function syncFloatingControlStatus() {
+  if (elements.floatingFullscreenHint) {
+    elements.floatingFullscreenHint.textContent = state.fullscreen ? "Esc 退出全屏" : "全屏后 Esc 退出";
+  }
+  if (elements.floatingInputModeStatus) {
+    elements.floatingInputModeStatus.textContent = formatFloatingInputModeStatus();
+  }
+  if (elements.floatingSecurityStatus) {
+    elements.floatingSecurityStatus.textContent = formatFloatingSecurityStatus();
+  }
+  if (elements.floatingShortcutButton) {
+    elements.floatingShortcutButton.disabled = !canSendControlInput();
+  }
+}
+
 function syncFloatingControlCenter() {
   cloneSelectOptions(elements.displaySelect, elements.floatingDisplaySelect);
+  cloneSelectOptions(elements.resolutionSelect, elements.floatingResolutionSelect);
+  cloneSelectOptions(elements.fpsSelect, elements.floatingFpsSelect);
+  cloneSelectOptions(elements.bandwidthSelect, elements.floatingBandwidthSelect);
   if (elements.floatingQualitySelect) {
     elements.floatingQualitySelect.value = elements.qualityPresetSelect.value;
   }
@@ -1984,6 +2059,7 @@ function syncFloatingControlCenter() {
   if (elements.floatingWindowButton) {
     elements.floatingWindowButton.disabled = !state.fullscreen;
   }
+  syncFloatingControlStatus();
 }
 
 function setControlCenterOpen(open) {
@@ -2905,7 +2981,52 @@ function setFullscreen(enabled) {
   document.querySelector(".app-shell").classList.toggle("is-fullscreen", enabled);
   elements.fullscreenButton.classList.toggle("active", enabled);
   elements.windowModeButton.classList.toggle("active", !enabled);
+  syncFloatingControlCenter();
   sendDisplaySettings();
+}
+
+function modifierFlags(modifiers = []) {
+  return {
+    ctrlKey: modifiers.includes("ctrl"),
+    altKey: modifiers.includes("alt"),
+    shiftKey: modifiers.includes("shift"),
+    metaKey: modifiers.includes("meta"),
+  };
+}
+
+async function sendFloatingShortcut() {
+  const shortcutKey = elements.floatingShortcutSelect?.value || "copy";
+  const shortcut = floatingShortcutActions[shortcutKey] || floatingShortcutActions.copy;
+  if (!canSendControlInput()) {
+    elements.remoteStatusText.textContent = "连接后可发送远程快捷键";
+    addLog("快捷键", "当前未连接或控制方向已切换，未发送");
+    syncFloatingControlStatus();
+    return;
+  }
+  if (shortcut.syncClipboard) {
+    await syncClipboardBeforePaste();
+  }
+
+  const flags = modifierFlags(shortcut.modifiers);
+  registerInputEvent("快捷键", `${shortcut.label} · ${shortcut.modifiers.join("+")}+${shortcut.key}`, {
+    event: "key",
+    action: "key",
+    key: shortcut.key,
+    code: shortcut.code,
+    repeat: false,
+    ...flags,
+    modifiers: shortcut.modifiers,
+    remoteModifiers: shortcut.modifiers,
+    keyboardMapping: getKeyboardMapping(),
+    shortcutProfile: "toolbar",
+    shortcutAction: shortcutKey,
+    localKey: shortcut.key,
+    localCode: shortcut.code,
+    localCtrlKey: false,
+    localAltKey: false,
+    localShiftKey: false,
+    localMetaKey: false,
+  });
 }
 
 function registerInputEvent(kind, detail, eventPayload = {}) {
@@ -5472,6 +5593,21 @@ elements.floatingDisplaySelect.addEventListener("change", () => {
   dispatchControlEvent(elements.displaySelect);
   syncFloatingControlCenter();
 });
+elements.floatingResolutionSelect.addEventListener("change", () => {
+  elements.resolutionSelect.value = elements.floatingResolutionSelect.value;
+  dispatchControlEvent(elements.resolutionSelect);
+  syncFloatingControlCenter();
+});
+elements.floatingFpsSelect.addEventListener("change", () => {
+  elements.fpsSelect.value = elements.floatingFpsSelect.value;
+  dispatchControlEvent(elements.fpsSelect);
+  syncFloatingControlCenter();
+});
+elements.floatingBandwidthSelect.addEventListener("change", () => {
+  elements.bandwidthSelect.value = elements.floatingBandwidthSelect.value;
+  dispatchControlEvent(elements.bandwidthSelect);
+  syncFloatingControlCenter();
+});
 elements.floatingScaleSelect.addEventListener("change", () => {
   elements.scaleModeSelect.value = elements.floatingScaleSelect.value;
   dispatchControlEvent(elements.scaleModeSelect);
@@ -5486,6 +5622,9 @@ elements.floatingAudioVolumeRange.addEventListener("input", () => {
   elements.audioVolumeRange.value = elements.floatingAudioVolumeRange.value;
   dispatchControlEvent(elements.audioVolumeRange, "input");
   syncFloatingControlCenter();
+});
+elements.floatingShortcutButton.addEventListener("click", () => {
+  void sendFloatingShortcut();
 });
 
 elements.qualityPresetSelect.addEventListener("change", () => {

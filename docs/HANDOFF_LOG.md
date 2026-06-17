@@ -21,6 +21,39 @@
 
 日期：2026-06-17 续跑
 开发端：Windows Codex
+本轮目标：第一阶段远控 UI 收口，把 Windows 控 Mac 悬浮控制中心补成可日常操作的远控工具栏。
+完成内容：
+- Windows 控 Mac 顶部画质预设改为“流畅 / 自动 / 高清 / 原画 / 自定义”，新增“原画”预设：请求 4K、50 Mbps，并切到原始比例。
+- 远程画面右上角悬浮控制中心新增分辨率、刷新率、码率、常用 macOS 快捷键发送、`Esc` 退出全屏提示、输入模式和安全状态；全屏后仍保留这些入口。
+- 常用快捷键按钮复用现有 `input_event` 键盘消息，不新增协议；当前包括复制、粘贴、剪切、全选、撤销、重做、查找、保存、应用切换和锁屏。
+- 页面自检扩展覆盖原画预设、详细显示参数同步、快捷键发送、安全状态显示、全屏/窗口切换和黑边输入防护。
+- Windows 控制端 README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/app.js`
+- `apps/windows-client/styles.css`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 本轮只做 Windows 控 Mac 页面的 UI/入口收口，没有改变视频编码、协议字段或 Mac 端页面。真实 Mac 连接下还需要人工观察原画模式、全屏退出、声音和快捷键手感。
+下一步建议：
+- 下一轮优先在真实 Mac host 连接时用新控制中心验收：原画/高清/流畅切换、全屏退出、声音开关、快捷键发送和 `inputMode=log/inject/rejected` 状态是否足够清楚。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真实 Mac 联调时再通过 Agent Link Board 发 call。
+
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
 本轮目标：把 Windows WebCodecs H.264 解码预检命令补进 Windows host status/readiness 摘要。
 完成内容：
 - `start-windows-host --status` 的 JSON、普通输出、离线/在线 `--boardSummary` 和启动后 ready 输出新增 `windowsWebCodecsH264Command` / `windowsWebCodecsH264PowerShellCommand`，指向 `check-webcodecs-h264-support` 的 Node 与 PowerShell 一行摘要命令。

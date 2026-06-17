@@ -919,6 +919,37 @@ button:disabled {
   padding: 8px;
 }
 
+.control-center-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.control-center-status span {
+  min-height: 28px;
+  border: 1px solid #dbe3ec;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.25;
+  padding: 6px 8px;
+}
+
+.control-center-shortcut {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.control-center-shortcut .control-center-item {
+  min-width: 0;
+  padding: 8px;
+}
+
 .control-center-volume input {
   width: 100%;
   accent-color: var(--accent);
@@ -1160,6 +1191,10 @@ button:disabled {
 
   .control-center-panel {
     width: min(390px, calc(100vw - 40px));
+  }
+
+  .control-center-shortcut {
+    grid-template-columns: 1fr;
   }
 }
 

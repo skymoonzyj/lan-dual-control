@@ -795,6 +795,23 @@ async function verifyFloatingControlCenter(session) {
         valueOf("#bandwidthSelect") === "50";
       const summarySynced = summary.textContent.includes("120 Hz") && summary.textContent.includes("50 Mbps");
 
+      setValue("#floatingQualitySelect", "original");
+      const originalPresetSynced =
+        valueOf("#qualityPresetSelect") === "original" &&
+        valueOf("#resolutionSelect") === "3840x2160" &&
+        valueOf("#fpsSelect") === "60" &&
+        valueOf("#bandwidthSelect") === "50" &&
+        valueOf("#scaleModeSelect") === "original";
+
+      setValue("#floatingResolutionSelect", "1920x1080");
+      setValue("#floatingFpsSelect", "144");
+      setValue("#floatingBandwidthSelect", "40");
+      const detailedSettingsSynced =
+        valueOf("#qualityPresetSelect") === "custom" &&
+        valueOf("#resolutionSelect") === "1920x1080" &&
+        valueOf("#fpsSelect") === "144" &&
+        valueOf("#bandwidthSelect") === "40";
+
       setValue("#floatingScaleSelect", "stretch");
       const scaleSynced =
         valueOf("#scaleModeSelect") === "stretch" &&
@@ -807,6 +824,49 @@ async function verifyFloatingControlCenter(session) {
       const volumeSynced =
         valueOf("#audioVolumeRange") === "33" &&
         document.querySelector("#floatingAudioVolumeText")?.textContent === "33%";
+
+      const statusVisible =
+        document.querySelector("#floatingFullscreenHint")?.textContent.includes("Esc") &&
+        document.querySelector("#floatingInputModeStatus")?.textContent.includes("输入") &&
+        document.querySelector("#floatingSecurityStatus")?.textContent.includes("安全");
+
+      const shortcutSent = (() => {
+        const sent = [];
+        const originalConnected = state.connected;
+        const originalControlDirection = state.controlDirection;
+        const originalClient = state.client;
+        const originalInputEvents = state.inputEvents;
+        const originalInputMode = state.hostDiagnostics.inputMode;
+        try {
+          state.connected = true;
+          state.controlDirection = "windows_to_mac";
+          state.hostDiagnostics.inputMode = "inject";
+          state.client = {
+            sendInputEvent(payload) {
+              sent.push(payload);
+            },
+          };
+          if (typeof syncFloatingControlCenter === "function") syncFloatingControlCenter();
+          setValue("#floatingShortcutSelect", "copy");
+          document.querySelector("#floatingShortcutButton")?.click();
+          return (
+            sent.length === 1 &&
+            sent[0].shortcutProfile === "toolbar" &&
+            sent[0].shortcutAction === "copy" &&
+            sent[0].key === "c" &&
+            sent[0].metaKey === true &&
+            sent[0].remoteModifiers?.includes("meta")
+          );
+        } finally {
+          state.connected = originalConnected;
+          state.controlDirection = originalControlDirection;
+          state.client = originalClient;
+          state.inputEvents = originalInputEvents;
+          state.hostDiagnostics.inputMode = originalInputMode;
+          if (typeof updateInputStatus === "function") updateInputStatus();
+          if (typeof syncFloatingControlCenter === "function") syncFloatingControlCenter();
+        }
+      })();
 
       document.querySelector("#floatingFullscreenButton")?.click();
       const shell = document.querySelector(".app-shell");
@@ -843,9 +903,13 @@ async function verifyFloatingControlCenter(session) {
           floatingLayer &&
           summarySynced &&
           qualitySynced &&
+          originalPresetSynced &&
+          detailedSettingsSynced &&
           scaleSynced &&
           audioSynced &&
           volumeSynced &&
+          statusVisible &&
+          shortcutSent &&
           fullscreenEntered &&
           fullscreenExited,
         opened,
@@ -853,9 +917,13 @@ async function verifyFloatingControlCenter(session) {
         summarySynced,
         summary: summary.textContent,
         qualitySynced,
+        originalPresetSynced,
+        detailedSettingsSynced,
         scaleSynced,
         audioSynced,
         volumeSynced,
+        statusVisible,
+        shortcutSent,
         fullscreenEntered,
         fullscreenExited,
         closed: panel.hidden,
@@ -2702,7 +2770,7 @@ async function run() {
     summary.checks.push("control-center");
     print(
       "OK",
-      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, fullscreen=${controlCenterCheck.fullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
+      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, original=${controlCenterCheck.originalPresetSynced}, detailed=${controlCenterCheck.detailedSettingsSynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, status=${controlCenterCheck.statusVisible}, shortcut=${controlCenterCheck.shortcutSent}, fullscreen=${controlCenterCheck.fullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
     );
     const desktopOnlyPanelCheck = await verifyDesktopOnlyHostPanel(session);
     summary.checks.push("desktop-panel");

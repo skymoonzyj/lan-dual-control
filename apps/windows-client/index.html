@@ -341,8 +341,9 @@
             <span>画质</span>
             <select id="qualityPresetSelect">
               <option value="smooth">流畅</option>
-              <option value="balanced" selected>均衡</option>
+              <option value="balanced" selected>自动</option>
               <option value="sharp">高清</option>
+              <option value="original">原画</option>
               <option value="custom">自定义</option>
             </select>
           </label>
@@ -493,10 +494,23 @@
                       <span>画质</span>
                       <select id="floatingQualitySelect">
                         <option value="smooth">流畅</option>
-                        <option value="balanced">均衡</option>
+                        <option value="balanced">自动</option>
                         <option value="sharp">高清</option>
+                        <option value="original">原画</option>
                         <option value="custom">自定义</option>
                       </select>
+                    </label>
+                    <label class="control-center-item">
+                      <span>分辨率</span>
+                      <select id="floatingResolutionSelect"></select>
+                    </label>
+                    <label class="control-center-item">
+                      <span>刷新率</span>
+                      <select id="floatingFpsSelect"></select>
+                    </label>
+                    <label class="control-center-item">
+                      <span>码率</span>
+                      <select id="floatingBandwidthSelect"></select>
                     </label>
                     <label class="control-center-item">
                       <span>窗口</span>
@@ -513,6 +527,31 @@
                         <option value="off">关闭</option>
                       </select>
                     </label>
+                  </div>
+                  <div class="control-center-status" aria-live="polite">
+                    <span id="floatingFullscreenHint">Esc 退出全屏</span>
+                    <span id="floatingInputModeStatus">输入：未连接</span>
+                    <span id="floatingSecurityStatus">安全：待机</span>
+                  </div>
+                  <div class="control-center-shortcut">
+                    <label class="control-center-item">
+                      <span>快捷键</span>
+                      <select id="floatingShortcutSelect">
+                        <option value="copy">复制 ⌘C</option>
+                        <option value="paste">粘贴 ⌘V</option>
+                        <option value="cut">剪切 ⌘X</option>
+                        <option value="select_all">全选 ⌘A</option>
+                        <option value="undo">撤销 ⌘Z</option>
+                        <option value="redo">重做 ⇧⌘Z</option>
+                        <option value="find">查找 ⌘F</option>
+                        <option value="save">保存 ⌘S</option>
+                        <option value="app_switch">切换应用 ⌘Tab</option>
+                        <option value="lock_screen">锁屏 ⌃⌘Q</option>
+                      </select>
+                    </label>
+                    <button id="floatingShortcutButton" class="control-center-action" type="button">
+                      发送
+                    </button>
                   </div>
                   <label class="control-center-volume">
                     <span>音量</span>
