@@ -2820,6 +2820,20 @@ function getResolutionExportLabel(settings) {
   return settings.resolutionMode === "native" ? "原生" : `${settings.width} × ${settings.height}`;
 }
 
+function getFloatingControlExportStatus() {
+  return {
+    mode: state.immersiveFullscreen ? "真全屏" : state.fullscreen ? "普通全屏" : "窗口",
+    summary: elements.floatingControlSummary?.textContent?.trim() || "-",
+    hint: elements.floatingFullscreenHint?.textContent?.trim() || "-",
+    connection: formatFloatingConnectionStatus(),
+    video: formatFloatingVideoStatus(),
+    audio: formatFloatingAudioStatus(),
+    clipboard: formatFloatingClipboardStatus(),
+    input: formatFloatingInputModeStatus(),
+    security: formatFloatingSecurityStatus(),
+  };
+}
+
 function buildDiagnosticsQuickSummary({
   settings,
   currentStateLabel,
@@ -2829,6 +2843,7 @@ function buildDiagnosticsQuickSummary({
   macAlertWatcherExport,
   localHostExport,
   remoteFileExport,
+  floatingControlExport,
 }) {
   const reconnectParts = [reconnectExport.status];
   if (reconnectExport.reason && reconnectExport.reason !== "-") {
@@ -2841,6 +2856,7 @@ function buildDiagnosticsQuickSummary({
     `- 远端连接：${currentStateLabel} · ${connectionLabel} · ${targetLabel}`,
     `- 重连：${reconnectParts.join(" · ")}`,
     `- 远端文件：${remoteFileExport.summary}`,
+    `- 全屏浮层：${floatingControlExport.mode} · ${floatingControlExport.connection} · ${floatingControlExport.video}`,
     `- 本机协作：Mac 提醒 ${macAlertWatcherExport.status} · 本机被控 ${localHostExport.status} · 反控 ${localHostExport.reverseControlMode}`,
     `- 画质请求：${getResolutionExportLabel(settings)} · ${settings.fps} Hz · ${Math.round(settings.maxBandwidthKbps / 1000)} Mbps · 声音${settings.audio ? "开" : "关"}`,
   ];
@@ -2859,6 +2875,7 @@ function buildLogExportText() {
   const macAlertWatcherExport = getMacAlertWatcherExportStatus();
   const localHostExport = getLocalHostExportStatus();
   const remoteFileExport = getRemoteFileTransferExportStatus();
+  const floatingControlExport = getFloatingControlExportStatus();
   const resolutionLabel = getResolutionExportLabel(settings);
   const eventLines = state.logEntries
     .slice()
@@ -2886,6 +2903,7 @@ function buildLogExportText() {
       macAlertWatcherExport,
       localHostExport,
       remoteFileExport,
+      floatingControlExport,
     }),
     "",
     "连接状态",
@@ -2929,6 +2947,15 @@ function buildLogExportText() {
     `- 码率：${Math.round(settings.maxBandwidthKbps / 1000)} Mbps`,
     `- 声音：${settings.audio ? `开启 · ${settings.audioVolume}%` : "关闭"}`,
     `- 剪贴板：${settings.clipboard ? "开启" : "关闭"}`,
+    `- 全屏浮层模式：${floatingControlExport.mode}`,
+    `- 全屏浮层摘要：${floatingControlExport.summary}`,
+    `- 全屏浮层提示：${floatingControlExport.hint}`,
+    `- 全屏浮层连接：${floatingControlExport.connection}`,
+    `- 全屏浮层视频：${floatingControlExport.video}`,
+    `- 全屏浮层声音：${floatingControlExport.audio}`,
+    `- 全屏浮层剪贴板：${floatingControlExport.clipboard}`,
+    `- 全屏浮层输入：${floatingControlExport.input}`,
+    `- 全屏浮层安全：${floatingControlExport.security}`,
     `- 远端文件状态：${remoteFileExport.status}`,
     `- 正在接收远端文件：${remoteFileExport.active}`,
     `- 最近收到远端文件：${state.receivedClipboardFiles.length} 个`,

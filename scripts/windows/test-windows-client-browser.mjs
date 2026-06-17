@@ -2819,6 +2819,10 @@ async function verifyReconnectControls(session) {
             exportText.includes("- 重连：等待自动重连") && exportText.includes("原因 测试断线"),
           quickSummaryRemoteFiles:
             exportText.includes("- 远端文件：warning") && exportText.includes("远端文件接收超时"),
+          quickSummaryFloating:
+            exportText.includes("- 全屏浮层：窗口") &&
+            exportText.includes("连接：") &&
+            exportText.includes("秒后重连"),
           quickSummaryLocal: exportText.includes(
             "- 本机协作：Mac 提醒 提醒中 · 本机被控 桌面壳托管运行中 · 反控 需确认",
           ),
@@ -2844,6 +2848,16 @@ async function verifyReconnectControls(session) {
           localHostOutput: exportText.includes("- 本机被控最近输出："),
           localHostOutputMasked: exportText.includes("password=<hidden>"),
           localHostPasswordHidden: exportText.includes("- 本机被控密码：不导出"),
+          floatingMode: exportText.includes("- 全屏浮层模式：窗口"),
+          floatingSummary: exportText.includes("- 全屏浮层摘要："),
+          floatingHint: exportText.includes("- 全屏浮层提示："),
+          floatingConnection:
+            exportText.includes("- 全屏浮层连接：连接：") && exportText.includes("秒后重连"),
+          floatingVideo: exportText.includes("- 全屏浮层视频：视频："),
+          floatingAudio: exportText.includes("- 全屏浮层声音：声音："),
+          floatingClipboard: exportText.includes("- 全屏浮层剪贴板：剪贴板："),
+          floatingInput: exportText.includes("- 全屏浮层输入：输入："),
+          floatingSecurity: exportText.includes("- 全屏浮层安全：安全："),
           remoteFileStatus:
             exportText.includes("- 远端文件状态：warning") && exportText.includes("远端文件接收超时"),
           remoteFileActive:
@@ -2861,6 +2875,8 @@ async function verifyReconnectControls(session) {
           copiedText.includes("- 远端连接：") &&
           copiedText.includes("- 本机被控：桌面壳托管运行中") &&
           copiedText.includes("- Mac 提醒：提醒中") &&
+          copiedText.includes("- 全屏浮层连接：连接：") &&
+          copiedText.includes("- 全屏浮层视频：视频：") &&
           copiedText.includes("- 远端文件状态：warning") &&
           copiedText.includes("远端文件接收超时") &&
           copiedText.includes("- 正在接收远端文件：1 个文件 2 B/4 B") &&

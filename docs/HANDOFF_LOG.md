@@ -21,6 +21,39 @@
 
 日期：2026-06-18 续跑
 开发端：Windows Codex
+本轮目标：让 Windows 控 Mac 的复制诊断报告也记录全屏浮层状态，方便真全屏现场粘贴复盘。
+完成内容：
+- 复制/导出的诊断报告顶部“快速摘要”新增“全屏浮层”一行，记录当前窗口/全屏模式、连接状态和视频状态。
+- “显示与能力”分段新增全屏浮层摘要、提示、连接、视频、声音、剪贴板、输入和安全状态。
+- 页面 diagnostics-only 自检新增导出文本和剪贴板复制文本断言，确认浮层状态会进入报告。
+- Windows 控制端 README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps\windows-client scripts\windows docs`
+遗留问题：
+- 本轮只做页面报告和 diagnostics-only 自检，不连接真实 Mac、不认证、不发送密码/input/inject；真实全屏现场仍需确认粘贴出的浮层状态足够直观。
+下一步建议：
+- 真机联调遇到卡顿、断线、没声音或文件剪贴板问题时，在全屏浮层直接点“复制诊断”，先看快速摘要里的全屏浮层连接/视频/声音/剪贴板状态。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 续跑
+开发端：Windows Codex
 本轮目标：第一阶段远控 UI 补强，让全屏浮层“复制诊断”点击后有即时反馈。
 完成内容：
 - Windows 控 Mac 悬浮控制中心的“复制诊断”按钮在复制成功后短暂显示“已复制”，复制失败时短暂显示“复制失败”，随后恢复“复制诊断”。
