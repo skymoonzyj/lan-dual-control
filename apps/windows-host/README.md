@@ -56,11 +56,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-contro
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -PromptPassword -RequirePassword -Wasapi
 ```
 
-一键反控接收策略默认是安全 `deny`：认证后的反控请求会返回 `LAN008`，提示需要用户确认，控制方向不会自动切换；同时状态里会短时记录最近一次被拒绝的请求。Windows 桌面版“本机被控”面板可点“临时允许反控”，它只从 Windows 本机回环地址调用 `/reverse-control/grant`，打开约 30 秒的一次性授权窗口；下一次 Mac 反控请求通过后授权会自动消耗，超时未用也会失效。如果 Mac 已经先请求过，面板会显示“刚收到请求”，此时点击临时允许后让 Mac 端重试即可。需要可信局域网实验短测长期自动同意时，必须显式传 `--reverseControlMode accept` / `-ReverseControlMode accept`；需要完全关闭反控能力声明时，用 `disabled`。启动计划、`--status --json` 和 `--status --boardSummary` 都会显示当前策略、临时授权和最近请求状态；一键体检的 runtime 摘要也会保留 `reverse=temporary-grant` 或 `reverse=pending-request`，避免只看 readiness 时误以为仍是普通 `deny-confirm`。
+一键反控接收策略默认是安全 `deny`：认证后的反控请求会返回 `LAN008`，提示需要用户确认，控制方向不会自动切换；同时状态里会短时记录最近一次被拒绝的请求。Windows 桌面版“本机被控”面板可点“临时允许反控”，它只从 Windows 本机回环地址调用 `/reverse-control/grant`，打开约 30 秒的一次性授权窗口；下一次 Mac 反控请求通过后授权会自动消耗，超时未用也会失效。如果 Mac 已经先请求过，面板会显示“刚收到请求”，此时点击临时允许后让 Mac 端重试即可。命令行备用入口是 `allow-windows-reverse-control.mjs`，可查看状态、打开一次性授权或撤销授权，并输出适合 Agent Link Board 的无密单行摘要。需要可信局域网实验短测长期自动同意时，必须显式传 `--reverseControlMode accept` / `-ReverseControlMode accept`；需要完全关闭反控能力声明时，用 `disabled`。启动计划、`--status --json` 和 `--status --boardSummary` 都会显示当前策略、临时授权和最近请求状态；一键体检的 runtime 摘要也会保留 `reverse=temporary-grant` 或 `reverse=pending-request`，避免只看 readiness 时误以为仍是普通 `deny-confirm`。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --promptPassword --requirePassword --reverseControlMode deny
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\start-windows-host.ps1 -PromptPassword -RequirePassword -ReverseControlMode accept
+node E:\codex\lan-dual-control\scripts\windows\allow-windows-reverse-control.mjs --durationMs 30000 --boardSummary
+node E:\codex\lan-dual-control\scripts\windows\allow-windows-reverse-control.mjs --status --json
+node E:\codex\lan-dual-control\scripts\windows\allow-windows-reverse-control.mjs --revoke
 ```
 
 需要先确认会用什么地址和参数、但不真正启动服务时：
@@ -314,6 +317,7 @@ node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs 
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\test-windows-host-reverse-control.mjs
+node E:\codex\lan-dual-control\scripts\windows\test-windows-reverse-control-grant-helper.mjs
 ```
 
 Mac 从另一台机器连接 Windows 前，可以先做一次局域网和防火墙只读检查。它会列出本机局域网 IP、端口监听地址、TCP 探测结果、当前网络配置和匹配的入站放行规则；默认不会修改系统防火墙。

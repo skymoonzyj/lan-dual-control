@@ -90,6 +90,7 @@ Windows 端：
 - [x] Windows 桌面版“本机被控”面板的体检和状态刷新也会启用 `--checkBoard`：UI 会提示 active Mac -> Windows call 为“Mac 正在请求 Windows 配合”，DONE call 不当作待办，且不回显 call command。
 - [x] Windows 桌面版“本机被控”面板接入反控策略选择和状态显示：启动前可选“需确认 / 实验同意 / 关闭”，默认“需确认”并透传给 `start-windows-host --reverseControlMode deny`；状态区会显示实际 `capabilities.reverseControl`，避免 Mac 反控 Windows 前误开自动同意。
 - [x] Windows host 和桌面“本机被控”面板支持一次性临时反控授权：Windows 本机点击“临时允许反控”后打开约 30 秒窗口，下一次 Mac `reverse_control_request` 会通过并立即消耗；默认 `deny-confirm`、实验 `accept-lab` 和禁用 `disabled` 语义保持不变，授权管理端点只允许回环访问。
+- [x] Windows 本机临时反控授权新增命令行备用入口：`allow-windows-reverse-control.mjs` 可只读查看、打开一次性授权、撤销授权，并输出无密 JSON 或 Agent Link Board 单行摘要；专项回归覆盖在线授权/撤销和离线安全摘要。
 - [x] Windows host 会记录最近一次被默认安全拒绝的反控请求，并通过 `/discovery.capabilities.reverseControlGrant.lastRequest` 暴露给本机面板；Windows 桌面“本机被控”状态会显示“反控：刚收到请求”和临时授权后重试提示。
 - [x] Windows readiness runtime/boardSummary 保留反控授权窗口和最近请求状态：运行中 host 有一次性授权时显示 `reverse=temporary-grant`，刚安全拒绝过 Mac 请求时显示 `reverse=pending-request`，专项回归用本机临时 host 覆盖两种状态。
 - [x] Mac 恢复开工总览也可解析 Agent Link Board `currentCall`：`--checkBoard --json`、普通输出和 `--boardSummary` 会显示 `call=active/done/none`，DONE 呼叫不会误当作待办，摘要不回显 call command。

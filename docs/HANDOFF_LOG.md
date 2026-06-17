@@ -19,6 +19,36 @@
 
 ## 2026-06-17 Windows Codex
 
+日期：2026-06-17 08:58
+开发端：Windows Codex
+本轮目标：避开 Mac 端正在处理的 Mac client 请求反控入口，补齐 Windows 本机一次性反控授权的命令行备用流程。
+完成内容：
+- 新增 `allow-windows-reverse-control.mjs`：可对本机 Windows host 执行 `--status`、默认 `--grant` 和 `--revoke`，只访问回环管理端点，不要求密码、不发送输入、不执行 `inject`。
+- 支持 `--json` 和 `--boardSummary`：在线时输出当前 `reverseControlMode`、授权窗口、最近请求；离线时仍输出干净失败 JSON / 单行摘要，适合上 Agent Link Board。
+- 新增 `test-windows-reverse-control-grant-helper.mjs`：启动临时 Windows host，覆盖状态读取、一次性授权、boardSummary、撤销授权和离线安全摘要。
+- Windows host README、当前状态、下一步和任务板已同步；本轮不碰 `apps/mac-client`，避免和 Mac Codex 00:22 的请求反控入口工作冲突。
+修改文件：
+- `scripts/windows/allow-windows-reverse-control.mjs`
+- `scripts/windows/test-windows-reverse-control-grant-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/allow-windows-reverse-control.mjs`
+- `node --check scripts/windows/test-windows-reverse-control-grant-helper.mjs`
+- `node scripts/windows/test-windows-reverse-control-grant-helper.mjs --timeoutMs 15000`
+遗留问题：
+- Mac client 请求按钮和 `reverse_control_response` 状态显示由 Mac 端本轮继续处理；Windows 侧已提供命令行临时授权入口，方便后续真连时配合重试。
+下一步建议：
+- Mac 端推送请求反控入口后，Windows 端 pull/rebase，再跑 Mac client 页面自测与真实 Windows host 一次性授权联调：先让 Mac 请求一次看到 `LAN008`，Windows 执行 `allow-windows-reverse-control --boardSummary`，再让 Mac 重试确认 accepted。
+是否改了协议：未改协议；只新增 Windows 本机管理端点的命令行封装和自测。
+是否需要另一端配合：需要 Mac 端后续基于已在做的 Mac client 请求入口联调一次 `LAN008 -> 临时允许 -> 重试 accepted` 流程。
+
+## 2026-06-17 Windows Codex
+
 日期：2026-06-17 00:18
 开发端：Windows Codex
 本轮目标：让 Windows readiness 的 runtime/boardSummary 保留一次性反控授权和最近请求状态，避免只读体检把 `temporary-grant` / `pending-request` 降级成普通 `deny`。
