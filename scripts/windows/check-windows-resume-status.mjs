@@ -55,6 +55,8 @@ the local alert-watcher status read-only, without starting it.
 The report also surfaces the formal manual checklist command and the checklist
 ids so a resume handoff can immediately verify connection, video, audio,
 clipboard, input_ack, and diagnostics in that order.
+It also includes a MacDiscovery command that can be posted before formal
+preflight when the team wants a fresh, secret-free /discovery snapshot.
 
 Options:
   --host <host>                 Explicit Mac host target. Default: ${defaults.host}
@@ -85,6 +87,7 @@ Examples:
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --userAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --sendUserAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
+  node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host 192.168.31.122 --port 43770 --requireMacHost --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
   node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
   node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
@@ -532,6 +535,7 @@ function makeCommands(args, preflight) {
   const port = Number(target.port || args.port);
   const runtimeBuildId = String(preflight.payload?.runtime?.buildId || "").trim();
   const windowsHostPort = 43770;
+  const macHostDiscoveryBoardSummary = makeMacHostDiscoveryCommand(args, preflight, host, port);
   const formalChecklistBoardSummary = [
     "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
     "-Discover",
@@ -557,6 +561,7 @@ function makeCommands(args, preflight) {
   }
   return {
     resumeBoardSummary: "node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary",
+    macHostDiscoveryBoardSummary,
     formalChecklistBoardSummary,
     preflightBoardSummary: [
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
@@ -632,6 +637,20 @@ function makeCommands(args, preflight) {
       "-Status",
     ].join(" "),
   };
+}
+
+function makeMacHostDiscoveryCommand(args, preflight, host, port) {
+  const commandParts = [
+    "node scripts/windows/discover-lan-hosts.mjs",
+    "--requireMacHost",
+    "--boardSummary",
+  ];
+  const hasOnlineTarget = Boolean(preflight.payload?.online && preflight.payload?.target?.host);
+  const hasExplicitTarget = args.hostProvided || args.discoverNoLocalSubnets || !args.discover;
+  if (hasOnlineTarget || hasExplicitTarget) {
+    commandParts.splice(1, 0, "--noLocalSubnets", "--host", host, "--port", String(port));
+  }
+  return commandParts.join(" ");
 }
 
 function makeFormalManualChecklist(mac, commands) {
@@ -740,6 +759,7 @@ function makeBoardSummary(report) {
   return [
     `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}${boardCall}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
     `Next=${mac.ok ? report.commands.userAuthRequest : report.commands.preflightBoardSummary}.`,
+    `MacDiscovery=${report.commands.macHostDiscoveryBoardSummary}.`,
     `FormalChecklist=${report.commands.formalChecklistBoardSummary}; ManualChecklist=${report.formalManualChecklist.summary}.`,
     `WinClientDiagnostics=${report.commands.windowsClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.windowsClientCopyDiagnosticsAction}`,
     `WindowsHostMedia=${report.commands.windowsHostMediaReadinessBoardSummary}.`,
@@ -929,6 +949,7 @@ function printHuman(report) {
     console.log(`- Mac formal preflight: offline (${detail})`);
   }
   console.log("- Next safe commands:");
+  console.log(`  ${report.commands.macHostDiscoveryBoardSummary}`);
   console.log(`  ${report.commands.formalChecklistBoardSummary}`);
   console.log(`  ${report.commands.preflightBoardSummary}`);
   console.log(`  ${report.commands.userAuthRequest}`);
