@@ -119,7 +119,7 @@ Windows 端：
 - [x] Mac client 事件日志新增“复制诊断”按钮：复用同一份不含连接密码的导出日志文本写入 Mac 浏览器剪贴板，方便现场直接粘贴给 Agent Link Board 或另一端；页面自测覆盖复制内容、脱敏和无额外输入事件。
 - [x] Mac client readiness 摘要新增 `CopyDiagnostics=`：JSON、普通输出和 `--boardSummary` 都提示在事件日志点击“复制诊断”，方便现场先发一行 readiness 后再粘贴完整页面诊断。
 - [x] Mac client formal checklist/smoke 的 runPlan 和通讯板摘要补齐反控请求安全演练：Mac 请求预期 `LAN008`，Windows 本机优先用 PowerShell 一次性授权，Node 命令作为 fallback，Mac 重试预期 accepted/临时授权已使用；命令和自测均锁定不发密码、不发送输入事件、不执行 `inject`。
-- [x] Mac `.mjs` 工具脚本建立统一 `--help/-h` 纯帮助覆盖自检：`test-mac-script-help.mjs` 当前覆盖 43 个脚本、86 条帮助命令，并拒绝帮助路径误启动服务、弹密码提示、输出真实环境密码、启动 DevTools/Swift build、连接真实 host 或读取 Agent Link Board 状态；`--boardSummary` 可输出一行无密上板摘要。
+- [x] Mac `.mjs` 工具脚本建立统一 `--help/-h` 纯帮助覆盖自检：`test-mac-script-help.mjs` 当前覆盖 44 个脚本、88 条帮助命令，并拒绝帮助路径误启动服务、弹密码提示、输出真实环境密码、启动 DevTools/Swift build、连接真实 host 或读取 Agent Link Board 状态；`--boardSummary` 可输出一行无密上板摘要，并由 `test-mac-script-help-summary.mjs` 专项锁定。
 - [x] Mac 恢复开工总览也可解析 Agent Link Board `currentCall`：`--checkBoard --json`、普通输出和 `--boardSummary` 会显示 `call=active/done/none`，DONE 呼叫不会误当作待办，摘要不回显 call command。
 - [x] Mac 恢复开工总览会输出 Mac client 无密诊断和复制诊断提示：JSON、普通输出和 `--boardSummary` 都带 `MacClientDiagnostics=check-mac-client-readiness --probeClientServer --checkBoard --boardSummary` 与 `CopyDiagnostics=Mac client 事件日志点击“复制诊断”`，方便现场先发一行 readiness，再粘贴完整页面诊断。
 - [x] Mac 恢复开工总览会输出 Mac 脚本 help 安全自检命令：JSON `commands.macScriptHelpCommand`、普通输出和 `--boardSummary` 都带 `MacScriptHelp=test-mac-script-help --timeoutMs 10000 --boardSummary`，提醒修改 `scripts/mac/*.mjs` 后跑统一 `--help/-h` 副作用防线并得到一行上板摘要。

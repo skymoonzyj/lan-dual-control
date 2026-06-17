@@ -74,7 +74,7 @@
 
 ## Mac 端状态
 
-- Mac `.mjs` 工具脚本已建立统一 `--help/-h` 纯帮助覆盖自检 `scripts/mac/test-mac-script-help.mjs`：当前覆盖 43 个脚本、86 条帮助命令，要求快速 0 退出并打印 Usage/Options 帮助；同时拒绝常见运行时副作用输出形态，包括密码提示、真实 `LAN_DUAL_PASSWORD=` 值泄露、Mac client/server 启动提示、浏览器 DevTools 监听、Swift build 日志、Mac host 运行日志、真实 host 协议收发日志和 Agent Link Board 状态输出。占位符示例如 `LAN_DUAL_PASSWORD=...` 允许保留在帮助文本中；自检不启动服务、不认证、不发送密码/input/inject。需要发 Agent Link Board 时可加 `--boardSummary`，stdout 只输出一行无密摘要；`--json` 也会带同一段 `boardSummary`。
+- Mac `.mjs` 工具脚本已建立统一 `--help/-h` 纯帮助覆盖自检 `scripts/mac/test-mac-script-help.mjs`：当前覆盖 44 个脚本、88 条帮助命令，要求快速 0 退出并打印 Usage/Options 帮助；同时拒绝常见运行时副作用输出形态，包括密码提示、真实 `LAN_DUAL_PASSWORD=` 值泄露、Mac client/server 启动提示、浏览器 DevTools 监听、Swift build 日志、Mac host 运行日志、真实 host 协议收发日志和 Agent Link Board 状态输出。占位符示例如 `LAN_DUAL_PASSWORD=...` 允许保留在帮助文本中；自检不启动服务、不认证、不发送密码/input/inject。需要发 Agent Link Board 时可加 `--boardSummary`，stdout 只输出一行无密摘要；`--json` 也会带同一段 `boardSummary`。专项 `test-mac-script-help-summary.mjs` 会锁定一行摘要和 JSON `boardSummary` 字段。
 - macOS 被控端已有 Swift WebSocket 服务、`/discovery`、认证、会话协商、真实 JPEG 屏幕帧、模拟帧回退、CGEvent 输入注入、文本剪贴板双向同步和文件剪贴板接收。Mac host 文件剪贴板接收已对齐完成完整性加固：必须先有 `clipboard_file_offer`，offer 校验文件数、总大小和清单一致性，chunk 校验 `fileIndex`、`offset`、分块大小、连续 offset 和不越界；完成时要求逐文件 received/expected/disk size 完全一致，重复/重叠/不完整分块不能误完成，并保留空文件兼容。新增 `scripts/mac/test-mac-host-clipboard-file-integrity.mjs` 锁定这些守卫。
 - JPEG 调试链路默认真实采集上限已改为 30 FPS，控制端会显示实收 FPS、协商帧率和请求帧率。
 - 真 Mac 已用于验证真实 JPEG 首帧、文本剪贴板双向同步、文件剪贴板从 Mac 推送到控制端内存托盘。

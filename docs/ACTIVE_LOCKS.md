@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/mac/test-mac-script-help-summary.mjs`, `docs/CURRENT_STATUS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 17:05 | Mac script help boardSummary/JSON boardSummary 新增专项自测；统一 help 覆盖更新为 44 个脚本、88 条命令。 |
 | Mac Codex | `scripts/mac/test-mac-script-help.mjs`, `scripts/mac/check-mac-resume-status.mjs`, `scripts/mac/test-mac-resume-status.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 16:50 | Mac script help 自检新增 `--boardSummary` 一行无密摘要，resume status 的 `MacScriptHelp=` 同步推荐 boardSummary 形态；resume/status 和 86 条 help 覆盖通过。 |
 | Mac Codex | `scripts/mac/check-mac-resume-status.mjs`, `scripts/mac/test-mac-resume-status.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 16:35 | Mac resume status 新增 `MacScriptHelp=` / `commands.macScriptHelpCommand`，恢复总览会提示统一 Mac `.mjs` help 安全自检；专项回归和 86 条 help 覆盖通过。 |
 | Mac Codex | `scripts/mac/test-mac-script-help.mjs`, `docs/CURRENT_STATUS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 14:40 | Mac `.mjs` help 统一自检新增运行时副作用输出防线；86 条 `--help/-h` 覆盖通过，锁定不误启动服务、不弹密码提示、不连接真实 host、不读取 Agent Link Board。 |

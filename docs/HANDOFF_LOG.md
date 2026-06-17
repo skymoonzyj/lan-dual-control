@@ -19,6 +19,34 @@
 
 ## 2026-06-17 Mac Codex
 
+日期：2026-06-17 17:05
+开发端：Mac Codex
+本轮目标：给 Mac script help 的 `--boardSummary` / JSON `boardSummary` 增加专项自测，防止上板摘要后续退化。
+完成内容：
+- 新增 `scripts/mac/test-mac-script-help-summary.mjs`，只选取 `test-mac-script-help.mjs` 自身跑 `--boardSummary` 和 `--json`，断言摘要为单行、包含纯 help 安全边界，并且 JSON 带同一段 `boardSummary`。
+- 专项自测确认摘要不打印 `LAN_DUAL_PASSWORD=`、密码提示、Agent Link Board 状态或协议流量关键词。
+- 新脚本纳入统一 Mac help 覆盖；当前 `test-mac-script-help` 覆盖数更新为 44 个脚本、88 条 `--help/-h` 命令。
+- 当前状态和任务板已同步为 44/88。
+修改文件：
+- `scripts/mac/test-mac-script-help-summary.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/test-mac-script-help-summary.mjs`
+- `node scripts/mac/test-mac-script-help-summary.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000`
+遗留问题：
+- 本轮只新增 Mac 侧自测与文档计数，不启动真实服务、不认证、不发送密码/input/inject；真实 Mac 控制 Windows 仍需 Windows host 在线和 Agent Link Board 呼叫配合。
+下一步建议：
+- 后续修改 `test-mac-script-help` 的摘要或 JSON 输出时，先跑 `test-mac-script-help-summary`，再跑完整 `test-mac-script-help`。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Mac Codex
+
 日期：2026-06-17 16:50
 开发端：Mac Codex
 本轮目标：让 Mac script help 统一自检可直接输出 Agent Link Board 一行摘要，并让恢复总览推荐这一形态。
