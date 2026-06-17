@@ -240,6 +240,7 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("--boardSummary"), "mock JSON reverse grant command should be board-safe");
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("test-windows-client-browser.mjs"), "mock JSON should include Windows client diagnostics command");
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("--diagnosticsOnly"), "mock JSON client diagnostics should be no-auth diagnostics only");
+    assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("--boardSummary"), "mock JSON client diagnostics should be board-safe");
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("--discoverNoLocalSubnets"), "mock JSON client diagnostics should target the known host without scanning the whole LAN");
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes(`--port ${port}`), "mock JSON client diagnostics should use the discovered Mac port");
     assert(String(payload.commands?.windowsClientCopyDiagnosticsAction || "").includes("复制诊断"), "mock JSON should include in-page copy diagnostics action");
@@ -285,6 +286,7 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "WindowsHostMedia=", "board summary");
     assertIncludes(result.stdout, "WinClientDiagnostics=", "board summary");
     assertIncludes(result.stdout, "test-windows-client-browser.mjs --discover --discoverNoLocalSubnets", "board summary");
+    assertIncludes(result.stdout, "--diagnosticsOnly --boardSummary --timeoutMs 45000", "board summary");
     assertIncludes(result.stdout, "CopyDiagnostics=Windows 控制端事件面板点击", "board summary");
     assertIncludes(result.stdout, "快速摘要", "board summary");
     assertIncludes(result.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "board summary");

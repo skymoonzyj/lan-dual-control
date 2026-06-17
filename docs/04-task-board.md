@@ -88,7 +88,7 @@ Windows 端：
 - [x] Windows 恢复开工总览的 JSON/普通输出会输出本机 Mac 提醒 watcher 启动和状态命令：`start-mac-alert-watcher.ps1 -Server <Agent Link Board>` / `-Status`，方便窗口最小化或等待 Mac 授权/反控重试时直接开启 Windows 浮窗提醒；`--boardSummary` 仍保持短摘要。
 - [x] Windows 恢复开工总览会只读显示本机 Mac 提醒 watcher 运行状态：JSON 带 `windowsMacAlertWatcher.state/running`，普通输出显示 `Windows Mac alert watcher: running/not-running/unknown/unavailable`，不会自动启动 watcher。
 - [x] Windows 恢复开工总览现在优先调用 `start-mac-alert-watcher.ps1 -Status -Json` 读取 watcher 状态；JSON 会保留 `source=json`、原始 `payload` 和 `parseError`，只有机器可读输出不可用时才退回旧文本解析。
-- [x] Windows 恢复开工总览会输出 Windows 控制端无密页面诊断命令和页面内“复制诊断 / 快速摘要”提示：JSON、普通输出和 `--boardSummary` 都会给出 `WinClientDiagnostics=` 与 `CopyDiagnostics=`，方便真连现场先复制 Windows 控制端诊断报告再定位 UI 卡点。
+- [x] Windows 恢复开工总览会输出 Windows 控制端无密页面诊断命令和页面内“复制诊断 / 快速摘要”提示：JSON、普通输出和 `--boardSummary` 都会给出带 `--boardSummary` 的 `WinClientDiagnostics=` 与 `CopyDiagnostics=`，方便真连现场先发一行页面诊断，再复制 Windows 控制端诊断报告定位 UI 卡点。
 - [x] Windows 桌面版“本机被控”面板新增“Mac 提醒”区：可只读刷新本机 alert watcher 状态，也可一键开启或停止 Windows 浮窗提醒；浏览器预览版保持禁用，页面自测覆盖按钮、默认联络板地址和运行/未运行文案。
 - [x] Windows 桌面版“Mac 提醒”自动状态轮询已节流：本机状态轮询仍为 2.5 秒，但 watcher PowerShell 状态查询约 15 秒一次；手动刷新和开启/停止按钮仍即时执行，页面自测锁定节流阈值。
 - [x] Windows 控制端导出日志/状态快照会写入本机 Mac 提醒 watcher 状态、详情、最近检查时间、自动轮询间隔和联络板地址，方便远控窗口最小化后复盘 Windows 侧是否开了浮窗提醒。

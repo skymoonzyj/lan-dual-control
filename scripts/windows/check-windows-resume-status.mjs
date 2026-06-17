@@ -80,7 +80,7 @@ Examples:
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --userAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --sendUserAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
-  node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --timeoutMs 45000
+  node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
   node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
   node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server ${defaults.server}
@@ -570,6 +570,7 @@ function makeCommands(args, preflight) {
       "--host", host,
       "--port", String(port),
       "--diagnosticsOnly",
+      "--boardSummary",
       "--timeoutMs", "45000",
     ].join(" "),
     windowsClientCopyDiagnosticsAction: "Windows 控制端事件面板点击“复制诊断”，先看“快速摘要”。",

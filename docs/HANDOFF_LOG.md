@@ -17,6 +17,42 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
+本轮目标：让 Windows 恢复总览里的 Windows 控制端诊断命令直接输出通讯板一行摘要。
+完成内容：
+- `check-windows-resume-status` 的 `windowsClientDiagnosticsCommand` / `WinClientDiagnostics=` 追加 `--boardSummary`。
+- 帮助示例同步为 `test-windows-client-browser --discover --diagnosticsOnly --boardSummary --timeoutMs 45000`。
+- Node/PowerShell 回归同时断言 JSON 命令和一行 `boardSummary` 都包含该参数，避免以后退回多行输出。
+- 当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- `node scripts/windows/check-windows-resume-status.mjs --noDiscover --host 127.0.0.1 --port 9 --boardSummary --timeoutMs 12000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows docs`
+遗留问题：
+- 本轮只改恢复总览推荐命令，不打开浏览器、不连接真实 Mac、不认证、不发送密码、不执行 input/inject。
+下一步建议：
+- 恢复现场先跑 `node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`；按摘要里的 `WinClientDiagnostics=` 发一行页面诊断，再按需粘贴页面“复制诊断”的完整快速摘要。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-17 Mac Codex
 
 日期：2026-06-17 13:03
