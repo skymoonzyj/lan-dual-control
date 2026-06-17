@@ -58,6 +58,9 @@ It also includes a one-line no-password Windows client diagnostics command:
 node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
 It also includes a read-only Windows video encoder/WGC/WebCodecs support command:
 node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
+It also includes Windows PowerShell help coverage commands:
+node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary
+node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary
 Use that first for Agent Link Board, then use the page Event Log "复制诊断"
 action when the full "快速摘要" report is needed.
 JSON and human output also include Windows local Mac alert watcher commands:

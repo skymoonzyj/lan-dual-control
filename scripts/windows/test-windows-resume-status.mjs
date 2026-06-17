@@ -237,6 +237,12 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsHostMediaReadinessBoardSummary || "").includes("--boardSummary"), "mock JSON media readiness command should be board-safe");
     assert(String(payload.commands?.windowsVideoEncoderSupportBoardSummary || "").includes("check-windows-video-encoder-support.mjs"), "mock JSON should include Windows video encoder support command");
     assert(String(payload.commands?.windowsVideoEncoderSupportBoardSummary || "").includes("--boardSummary"), "mock JSON video encoder command should be board-safe");
+    assert(String(payload.commands?.windowsPowerShellHelpBoardSummary || "").includes("test-windows-powershell-help.mjs"), "mock JSON should include Windows PowerShell help command");
+    assert(String(payload.commands?.windowsPowerShellHelpBoardSummary || "").includes("--timeoutMs 10000"), "mock JSON PowerShell help command should set a stable timeout");
+    assert(String(payload.commands?.windowsPowerShellHelpBoardSummary || "").includes("--boardSummary"), "mock JSON PowerShell help command should be board-safe");
+    assert(String(payload.commands?.windowsPowerShell7HelpBoardSummary || "").includes("test-windows-powershell-help.mjs"), "mock JSON should include Windows PowerShell 7 help command");
+    assert(String(payload.commands?.windowsPowerShell7HelpBoardSummary || "").includes("--shell pwsh"), "mock JSON PowerShell 7 help command should select pwsh");
+    assert(String(payload.commands?.windowsPowerShell7HelpBoardSummary || "").includes("--boardSummary"), "mock JSON PowerShell 7 help command should be board-safe");
     assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("allow-windows-reverse-control.mjs"), "mock JSON should include Windows reverse grant command");
     assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("--host 127.0.0.1"), "mock JSON reverse grant command should be local-only");
     assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("--port 43770"), "mock JSON reverse grant command should target the default Windows host port");
@@ -301,6 +307,10 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "board summary");
     assertIncludes(result.stdout, "WindowsVideoSupport=", "board summary");
     assertIncludes(result.stdout, "check-windows-video-encoder-support.mjs --boardSummary", "board summary");
+    assertIncludes(result.stdout, "PowerShellHelp=", "board summary");
+    assertIncludes(result.stdout, "test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary", "board summary");
+    assertIncludes(result.stdout, "PowerShellHelpPwsh=", "board summary");
+    assertIncludes(result.stdout, "test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary", "board summary");
     assertIncludes(result.stdout, "ReverseGrant=", "board summary");
     assertIncludes(result.stdout, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary", "board summary");
     assertIncludes(result.stdout, "ReverseGrantPs=", "board summary");

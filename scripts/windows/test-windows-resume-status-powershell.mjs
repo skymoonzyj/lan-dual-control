@@ -206,6 +206,9 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000", "PowerShell wrapper help");
   assertIncludes(output, "Windows video encoder/WGC/WebCodecs support command", "PowerShell wrapper help");
   assertIncludes(output, "check-windows-video-encoder-support.mjs --boardSummary", "PowerShell wrapper help");
+  assertIncludes(output, "Windows PowerShell help coverage commands", "PowerShell wrapper help");
+  assertIncludes(output, "test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary", "PowerShell wrapper help");
+  assertIncludes(output, "test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "Use that first for Agent Link Board", "PowerShell wrapper help");
   assertIncludes(output, "Windows local Mac alert watcher commands", "PowerShell wrapper help");
   assertIncludes(output, "start-mac-alert-watcher.ps1 -Server", "PowerShell wrapper help");
@@ -240,6 +243,12 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.windowsHostMediaReadinessBoardSummary, "--probeMedia", "mock JSON media command");
     assertIncludes(payload.commands?.windowsVideoEncoderSupportBoardSummary, "check-windows-video-encoder-support.mjs", "mock JSON video support command");
     assertIncludes(payload.commands?.windowsVideoEncoderSupportBoardSummary, "--boardSummary", "mock JSON video support command");
+    assertIncludes(payload.commands?.windowsPowerShellHelpBoardSummary, "test-windows-powershell-help.mjs", "mock JSON PowerShell help command");
+    assertIncludes(payload.commands?.windowsPowerShellHelpBoardSummary, "--timeoutMs 10000", "mock JSON PowerShell help command");
+    assertIncludes(payload.commands?.windowsPowerShellHelpBoardSummary, "--boardSummary", "mock JSON PowerShell help command");
+    assertIncludes(payload.commands?.windowsPowerShell7HelpBoardSummary, "test-windows-powershell-help.mjs", "mock JSON PowerShell 7 help command");
+    assertIncludes(payload.commands?.windowsPowerShell7HelpBoardSummary, "--shell pwsh", "mock JSON PowerShell 7 help command");
+    assertIncludes(payload.commands?.windowsPowerShell7HelpBoardSummary, "--boardSummary", "mock JSON PowerShell 7 help command");
     assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "allow-windows-reverse-control.mjs", "mock JSON reverse grant command");
     assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "--host 127.0.0.1", "mock JSON reverse grant command");
     assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "--port 43770", "mock JSON reverse grant command");
@@ -302,6 +311,10 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "PowerShell board summary");
     assertIncludes(output, "WindowsVideoSupport=", "PowerShell board summary");
     assertIncludes(output, "check-windows-video-encoder-support.mjs --boardSummary", "PowerShell board summary");
+    assertIncludes(output, "PowerShellHelp=", "PowerShell board summary");
+    assertIncludes(output, "test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary", "PowerShell board summary");
+    assertIncludes(output, "PowerShellHelpPwsh=", "PowerShell board summary");
+    assertIncludes(output, "test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary", "PowerShell board summary");
     assertIncludes(output, "ReverseGrant=", "PowerShell board summary");
     assertIncludes(output, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary", "PowerShell board summary");
     assertIncludes(output, "ReverseGrantPs=", "PowerShell board summary");

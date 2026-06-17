@@ -45,7 +45,9 @@ control, plus a local one-time reverse-control grant command for retrying a
 Mac reverse-control request without switching Windows host to accept-lab mode.
 They also include a no-password Windows client diagnostics command, a read-only
 Windows video encoder/WGC/WebCodecs support command, and a reminder to copy the
-in-page diagnostics report first when UI symptoms need to be shared.
+in-page diagnostics report first when UI symptoms need to be shared. They also
+include Windows PowerShell and PowerShell 7 help coverage commands so .ps1
+entry points can be checked before posting a handoff.
 JSON and human output also include local alert-watcher start/status commands
 so Windows can surface Mac-side auth, permission, blocked, and reverse-grant
 requests while a remote-control window is minimized. The report also checks
@@ -83,6 +85,8 @@ Examples:
   node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
   node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
   node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
+  node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary
+  node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary
   node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary
   pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -DurationMs 30000 -BoardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server ${defaults.server}
@@ -562,6 +566,17 @@ function makeCommands(args, preflight) {
       "node scripts/windows/check-windows-video-encoder-support.mjs",
       "--boardSummary",
     ].join(" "),
+    windowsPowerShellHelpBoardSummary: [
+      "node scripts/windows/test-windows-powershell-help.mjs",
+      "--timeoutMs", "10000",
+      "--boardSummary",
+    ].join(" "),
+    windowsPowerShell7HelpBoardSummary: [
+      "node scripts/windows/test-windows-powershell-help.mjs",
+      "--shell", "pwsh",
+      "--timeoutMs", "10000",
+      "--boardSummary",
+    ].join(" "),
     windowsReverseControlGrantBoardSummary: [
       "node scripts/windows/allow-windows-reverse-control.mjs",
       "--host", "127.0.0.1",
@@ -691,6 +706,8 @@ function makeBoardSummary(report) {
     `WinClientDiagnostics=${report.commands.windowsClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.windowsClientCopyDiagnosticsAction}`,
     `WindowsHostMedia=${report.commands.windowsHostMediaReadinessBoardSummary}.`,
     `WindowsVideoSupport=${report.commands.windowsVideoEncoderSupportBoardSummary}.`,
+    `PowerShellHelp=${report.commands.windowsPowerShellHelpBoardSummary}.`,
+    `PowerShellHelpPwsh=${report.commands.windowsPowerShell7HelpBoardSummary}.`,
     `ReverseGrant=${report.commands.windowsReverseControlGrantBoardSummary}.`,
     `ReverseGrantPs=${report.commands.windowsReverseControlGrantPowerShellBoardSummary}.`,
     "No password was requested or sent; no WebSocket auth/input/inject was performed.",
@@ -879,6 +896,8 @@ function printHuman(report) {
   console.log(`  ${report.commands.windowsClientCopyDiagnosticsAction}`);
   console.log(`  ${report.commands.windowsHostMediaReadinessBoardSummary}`);
   console.log(`  ${report.commands.windowsVideoEncoderSupportBoardSummary}`);
+  console.log(`  ${report.commands.windowsPowerShellHelpBoardSummary}`);
+  console.log(`  ${report.commands.windowsPowerShell7HelpBoardSummary}`);
   console.log(`  ${report.commands.windowsReverseControlGrantBoardSummary}`);
   console.log(`  ${report.commands.windowsReverseControlGrantPowerShellBoardSummary}`);
   console.log(`  ${report.commands.windowsMacAlertWatcherStart}`);

@@ -47,6 +47,50 @@
 
 日期：2026-06-17 休息续跑
 开发端：Windows Codex
+本轮目标：让 Windows PowerShell help 覆盖结果可一行发到 Agent Link Board，并把该命令接入 Windows 恢复总览。
+完成内容：
+- `scripts/windows/test-windows-powershell-help.mjs` 新增 `--boardSummary`：成功时一行输出 14 个 `.ps1` / 28 条 `-Help/-h` 覆盖结果；`--json` 同步带 `boardSummary`。
+- 新增 `scripts/windows/test-windows-powershell-help-summary.mjs`，专项锁定 boardSummary 单行、JSON 字段，以及不泄露 `LAN_DUAL_PASSWORD`、Token、Agent Link 状态或协议流量。
+- `scripts/windows/check-windows-resume-status.mjs` 的 JSON、普通输出和 boardSummary 新增 `PowerShellHelp=` / `PowerShellHelpPwsh=`，分别给 Windows PowerShell 与 PowerShell 7 的无密 help 覆盖摘要命令。
+- PowerShell wrapper help、Node/PowerShell resume status 回归、Windows host README、当前状态、下一步和任务板已同步。
+修改文件：
+- `scripts/windows/test-windows-powershell-help.mjs`
+- `scripts/windows/test-windows-powershell-help-summary.mjs`
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-windows-powershell-help.mjs`
+- `node --check scripts/windows/test-windows-powershell-help-summary.mjs`
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-windows-powershell-help-summary.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-powershell-help-summary.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 60000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 60000`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮只补诊断/交接工具，不运行真实 Mac/Windows 远控、不认证、不发送密码/input/inject。
+下一步建议：
+- 后续 Windows `.ps1` 改动后，优先把 `PowerShellHelp=` 和 `PowerShellHelpPwsh=` 两条摘要发到通讯板，再按需贴详细失败输出。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 休息续跑
+开发端：Windows Codex
 本轮目标：给容易误启动本机服务的 Windows PowerShell 入口补 `-Help/-h` 纯帮助，并纳入统一覆盖自检。
 完成内容：
 - `scripts/windows/test-windows-host.ps1` 新增 `-Help/-h`：说明本机 Windows host 自检、视频/音频/剪贴板/input-log 参数和安全边界；帮助路径早退出，不检查端口、不启动临时 host、不认证、不触碰剪贴板、不采集屏幕/声音、不发送输入。
