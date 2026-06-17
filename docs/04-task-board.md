@@ -89,6 +89,7 @@ Windows 端：
 - [x] Windows 恢复开工总览会只读显示本机 Mac 提醒 watcher 运行状态：JSON 带 `windowsMacAlertWatcher.state/running`，普通输出显示 `Windows Mac alert watcher: running/not-running/unknown/unavailable`，不会自动启动 watcher。
 - [x] Windows 恢复开工总览现在优先调用 `start-mac-alert-watcher.ps1 -Status -Json` 读取 watcher 状态；JSON 会保留 `source=json`、原始 `payload` 和 `parseError`，只有机器可读输出不可用时才退回旧文本解析。
 - [x] Windows 桌面版“本机被控”面板新增“Mac 提醒”区：可只读刷新本机 alert watcher 状态，也可一键开启或停止 Windows 浮窗提醒；浏览器预览版保持禁用，页面自测覆盖按钮、默认联络板地址和运行/未运行文案。
+- [x] Windows 桌面版“Mac 提醒”自动状态轮询已节流：本机状态轮询仍为 2.5 秒，但 watcher PowerShell 状态查询约 15 秒一次；手动刷新和开启/停止按钮仍即时执行，页面自测锁定节流阈值。
 - [x] Windows host 启动/状态助手也支持 `--status --checkBoard` / PowerShell `-Status -CheckBoard`：只读读取 Agent Link Board `/api/state.currentCall`，JSON、普通输出和 `--boardSummary` 会提示 active Mac -> Windows call，DONE call 不进入待办摘要，不启动 host、不认证、不发送密码、不执行 `inject`。
 - [x] Windows host 启动/状态助手 `--status` 也会输出本机媒体基线命令：JSON 带 `windowsHostMediaReadinessCommand`，普通输出和 `--boardSummary` 带 `WindowsHostMedia=check-windows-host-readiness --checkBoard --probeMedia --boardSummary`，方便 Mac 反控前刷新视频/音频基线。
 - [x] Mac host 启动/状态助手也支持 `--status --checkBoard`：只读读取 Agent Link Board `/api/state.currentCall`，JSON、普通输出和 `--boardSummary` 会提示 active call，DONE call 标为 inactive，摘要不回显 command；`--boardSummary --checkBoard` 会自动走 status，不会误启动 host。

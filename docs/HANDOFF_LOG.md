@@ -19,6 +19,36 @@
 
 ## 2026-06-17 Windows Codex
 
+日期：2026-06-17 12:21
+开发端：Windows Codex
+本轮目标：给桌面壳 Mac 提醒 watcher 状态查询加节流，避免频繁启动 PowerShell。
+完成内容：
+- `apps/windows-client/app.js` 新增 `localMacAlertWatcherStatusPollMs=15000` 和 `shouldRefreshMacAlertWatcherStatus`；自动本机状态轮询仍 2.5 秒，但 watcher 状态查询约 15 秒才触发一次。
+- 手动“刷新提醒”、开启和停止 watcher 仍会立即调用 Tauri 命令，不受自动节流影响。
+- 页面自测新增 watcher 节流阈值断言，锁定无缓存立即查、15 秒前不查、到 15 秒后再查。
+- README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 本轮只改前端轮询节流，没有重新跑桌面壳真实按钮 lifecycle；完整 watcher 后台 lifecycle 仍可用 `test-mac-alert-watcher --includeLifecycle` 或人工点按钮验收。
+下一步建议：
+- 后续如果桌面壳继续增加后台工具状态，优先采用类似节流/缓存策略，避免每轮 UI 状态刷新都启动外部进程。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Windows Codex
+
 日期：2026-06-17 12:13
 开发端：Windows Codex
 本轮目标：把 Windows 本机 Mac 提醒 watcher 接入桌面壳。

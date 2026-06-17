@@ -121,6 +121,7 @@ const maxClipboardFileBytes = 512 * 1024 * 1024;
 const nativeClipboardChunkSizeBytes = 1024 * 1024;
 const maxNativeClipboardFileBytes = maxClipboardFileBytes;
 const defaultAgentLinkServer = "http://192.168.31.68:17888";
+const localMacAlertWatcherStatusPollMs = 15000;
 const defaultHostDiagnosticsText = "诊断：等待连接。";
 const displayOptionDefaults = {
   resolution: "1920x1080",
@@ -330,6 +331,7 @@ const state = {
   localHostPollTimer: null,
   localMacAlertWatcherRunning: false,
   localMacAlertWatcherBusy: false,
+  localMacAlertWatcherStatusCheckedAt: 0,
   connectionState: "idle",
   remoteDisplays: fallbackDisplays,
   activeDisplayId: "main",
@@ -3084,6 +3086,13 @@ function normalizeMacAlertWatcherPayload(result) {
   return null;
 }
 
+function shouldRefreshMacAlertWatcherStatus(now = Date.now()) {
+  return (
+    !state.localMacAlertWatcherStatusCheckedAt ||
+    now - state.localMacAlertWatcherStatusCheckedAt >= localMacAlertWatcherStatusPollMs
+  );
+}
+
 function macAlertWatcherUiState(payload, { available = canUseDesktopHostControl(), busy = false } = {}) {
   if (!available) {
     return {
@@ -3134,6 +3143,7 @@ function macAlertWatcherUiState(payload, { available = canUseDesktopHostControl(
 function applyMacAlertWatcherResult(result) {
   const payload = normalizeMacAlertWatcherPayload(result);
   const view = macAlertWatcherUiState(payload);
+  state.localMacAlertWatcherStatusCheckedAt = Date.now();
   state.localMacAlertWatcherRunning = view.running;
   setLocalMacAlertWatcherBadge(view.badgeMode, view.badgeText);
   elements.localMacAlertWatcherStatusText.textContent = view.statusText;
@@ -3143,6 +3153,7 @@ function applyMacAlertWatcherResult(result) {
 }
 
 function applyMacAlertWatcherError(error) {
+  state.localMacAlertWatcherStatusCheckedAt = Date.now();
   state.localMacAlertWatcherRunning = false;
   setLocalMacAlertWatcherBadge("offline", "不可用");
   elements.localMacAlertWatcherStatusText.textContent = error?.message || "读取 Windows 浮窗提醒状态失败。";
@@ -3576,14 +3587,17 @@ async function refreshLocalHostProcessStatus() {
     return;
   }
   try {
+    const shouldRefreshWatcher = shouldRefreshMacAlertWatcherStatus();
     const [snapshotResult, helperResult, watcherResult] = await Promise.allSettled([
       invoke("get_windows_host_status"),
       invoke("get_windows_host_helper_status", {
         request: buildLocalHostStatusRequest(),
       }),
-      invoke("get_mac_alert_watcher_status", {
-        request: buildMacAlertWatcherRequest(),
-      }),
+      shouldRefreshWatcher
+        ? invoke("get_mac_alert_watcher_status", {
+            request: buildMacAlertWatcherRequest(),
+          })
+        : Promise.resolve(null),
     ]);
     if (snapshotResult.status === "rejected" && helperResult.status === "rejected") {
       throw snapshotResult.reason;
@@ -3601,7 +3615,9 @@ async function refreshLocalHostProcessStatus() {
       snapshot.helperStatusError = helperResult.reason?.message || String(helperResult.reason || "");
     }
     applyLocalHostSnapshot(snapshot);
-    if (watcherResult.status === "fulfilled") {
+    if (!shouldRefreshWatcher) {
+      updateLocalMacAlertWatcherControls();
+    } else if (watcherResult.status === "fulfilled") {
       applyMacAlertWatcherResult(watcherResult.value);
     } else {
       applyMacAlertWatcherError(watcherResult.reason);

@@ -898,6 +898,22 @@ async function verifyDesktopOnlyHostPanel(session) {
               message: "Mac alert watcher is not running.",
             }, { available: true, busy: false })
           : {};
+      const previousWatcherCheckedAt = typeof state === "object" ? state.localMacAlertWatcherStatusCheckedAt || 0 : 0;
+      if (typeof state === "object") state.localMacAlertWatcherStatusCheckedAt = 1000;
+      const watcherThrottleBefore =
+        typeof shouldRefreshMacAlertWatcherStatus === "function"
+          ? shouldRefreshMacAlertWatcherStatus(15999)
+          : null;
+      const watcherThrottleAtLimit =
+        typeof shouldRefreshMacAlertWatcherStatus === "function"
+          ? shouldRefreshMacAlertWatcherStatus(16000)
+          : null;
+      const watcherThrottleNoCache = (() => {
+        if (typeof shouldRefreshMacAlertWatcherStatus !== "function" || typeof state !== "object") return null;
+        state.localMacAlertWatcherStatusCheckedAt = 0;
+        return shouldRefreshMacAlertWatcherStatus(2000);
+      })();
+      if (typeof state === "object") state.localMacAlertWatcherStatusCheckedAt = previousWatcherCheckedAt;
       const readinessHeaderLines =
         typeof readinessLines === "function"
           ? readinessLines({
@@ -1143,6 +1159,7 @@ async function verifyDesktopOnlyHostPanel(session) {
           typeof buildLocalHostStatusRequest === "function" &&
           typeof buildMacAlertWatcherRequest === "function" &&
           typeof macAlertWatcherUiState === "function" &&
+          typeof shouldRefreshMacAlertWatcherStatus === "function" &&
           typeof refreshMacAlertWatcherStatus === "function" &&
           typeof toggleMacAlertWatcher === "function" &&
           typeof normalizeLocalHostHelperStatus === "function" &&
@@ -1182,6 +1199,9 @@ async function verifyDesktopOnlyHostPanel(session) {
           watcherStoppedView.badgeText === "未开启" &&
           watcherStoppedView.toggleText === "开启提醒" &&
           watcherStoppedView.statusText.includes("未开启") &&
+          watcherThrottleBefore === false &&
+          watcherThrottleAtLimit === true &&
+          watcherThrottleNoCache === true &&
           readinessHeaderText.includes("client-test") &&
           readinessHeaderText.includes("1000 ms") &&
           readinessHeaderText.includes("750 ms") &&
@@ -1229,6 +1249,9 @@ async function verifyDesktopOnlyHostPanel(session) {
         watcherRequest,
         watcherRunningView,
         watcherStoppedView,
+        watcherThrottleBefore,
+        watcherThrottleAtLimit,
+        watcherThrottleNoCache,
         readinessHeader: readinessHeaderLines.slice(0, 4),
         readinessSummaryText,
         helperSummary,
