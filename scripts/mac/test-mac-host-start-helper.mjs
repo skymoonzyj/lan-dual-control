@@ -134,6 +134,24 @@ function assertMediaReadinessCommand(command, label) {
   assertNotIncludes(command, "--server", label);
 }
 
+function assertMacLaunchAgentPlanCommand(command, label, expectedPort = null) {
+  assertIncludes(command, "install-mac-host-launch-agent.mjs", label);
+  assertIncludes(command, "--port", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--write", label);
+  assertNotIncludes(command, "--force", label);
+  assertNotIncludes(command, "launchctl", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+  if (expectedPort !== null) {
+    assertIncludes(command, `--port ${expectedPort}`, label);
+  }
+}
+
 function parseJsonOutput(text, label) {
   try {
     return JSON.parse(String(text).trim());
@@ -297,6 +315,8 @@ async function assertStatusOffline(timeoutMs) {
   }
   assertIncludes(output, "/discovery offline", "offline status");
   assertIncludes(output, "start-mac-host.mjs --promptPassword --requirePassword", "offline status");
+  assertIncludes(output, "Mac host LaunchAgent dry-run plan:", "offline status");
+  assertIncludes(output, "install-mac-host-launch-agent.mjs", "offline status");
   assertNotIncludes(output, "Starting Mac host", "offline status");
   assertNotIncludes(output, "LAN_DUAL_PASSWORD is required", "offline status");
   print("OK", "Status reports offline hosts without starting or requiring a password");
@@ -316,7 +336,9 @@ async function assertStatusOfflineJson(timeoutMs) {
   if (json.online !== false || json.ok !== false || json.probe?.port !== port) {
     throw new Error(`Offline JSON status had unexpected shape.\n${result.stdout}`);
   }
+  assertMacLaunchAgentPlanCommand(json.commands?.macLaunchAgentPlanCommand || "", "offline JSON status LaunchAgent command", port);
   assertMediaReadinessCommand(json.commands?.mediaReadinessBoardSummary || "", "offline JSON status media command");
+  assertIncludes(json.boardSummary || "", "MacLaunchAgentPlan=", "offline JSON status boardSummary");
   assertIncludes(json.boardSummary || "", "MacHostMedia=", "offline JSON status boardSummary");
   assertNotIncludes(output, "[INFO]", "offline JSON status");
   assertNotIncludes(output, "Starting Mac host", "offline JSON status");
@@ -481,7 +503,9 @@ async function assertStatusDoesNotReadBoardByDefault(timeoutMs) {
   if (json.board?.checked !== false || !String(json.boardSummary || "").includes("call=not-checked")) {
     throw new Error(`Default JSON status should mark Agent Link Board not checked.\n${result.stdout}`);
   }
+  assertMacLaunchAgentPlanCommand(json.commands?.macLaunchAgentPlanCommand || "", "default JSON status LaunchAgent command", port);
   assertMediaReadinessCommand(json.commands?.mediaReadinessBoardSummary || "", "default JSON status media command");
+  assertIncludes(json.boardSummary || "", "MacLaunchAgentPlan=", "default JSON status boardSummary");
   assertIncludes(json.boardSummary || "", "MacHostMedia=", "default JSON status boardSummary");
   assertNoSecretLikeText(output, "default JSON status");
   print("OK", "Status does not read Agent Link Board unless --checkBoard is set");
@@ -526,7 +550,9 @@ async function assertStatusBoardCurrentCall(timeoutMs) {
     if (!String(json.boardSummary || "").includes("call=active") || !String(json.boardSummary || "").includes(call.goal)) {
       throw new Error(`Status boardSummary should include active call goal.\n${result.stdout}`);
     }
+    assertMacLaunchAgentPlanCommand(json.commands?.macLaunchAgentPlanCommand || "", "status board currentCall LaunchAgent command", port);
     assertMediaReadinessCommand(json.commands?.mediaReadinessBoardSummary || "", "status board currentCall media command");
+    assertIncludes(json.boardSummary || "", "MacLaunchAgentPlan=", "status boardSummary");
     assertIncludes(json.boardSummary || "", "MacHostMedia=", "status boardSummary");
     assertNotIncludes(json.boardSummary || "", "super-secret-command-token", "status boardSummary");
 
@@ -554,6 +580,7 @@ async function assertStatusBoardCurrentCall(timeoutMs) {
     assertIncludes(lines[0], "Mac host status:", "status boardSummary");
     assertIncludes(lines[0], "call=active", "status boardSummary");
     assertIncludes(lines[0], call.goal, "status boardSummary");
+    assertIncludes(lines[0], "MacLaunchAgentPlan=", "status boardSummary");
     assertIncludes(lines[0], "MacHostMedia=", "status boardSummary");
     assertNoSecretLikeText(summaryOutput, "status boardSummary");
   });
@@ -699,7 +726,9 @@ async function assertStatusOnline(timeoutMs) {
     if (json.displayCount !== json.displays.length) {
       throw new Error(`Online JSON status should keep displayCount aligned with displays length.\n${jsonStatus.stdout}`);
     }
+    assertMacLaunchAgentPlanCommand(json.commands?.macLaunchAgentPlanCommand || "", "online JSON status LaunchAgent command", port);
     assertMediaReadinessCommand(json.commands?.mediaReadinessBoardSummary || "", "online JSON status media command");
+    assertIncludes(json.boardSummary || "", "MacLaunchAgentPlan=", "online JSON status boardSummary");
     assertIncludes(json.boardSummary || "", "MacHostMedia=", "online JSON status boardSummary");
     assertNotIncludes(jsonOutput, "[INFO]", "online JSON status");
     print("OK", `Status reports running Mac host on temporary port ${port}`);

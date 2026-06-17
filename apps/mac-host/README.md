@@ -75,7 +75,7 @@ JSON 模式只输出机器可读对象，包含 `online`、`runtime`、`permissi
 node scripts/mac/start-mac-host.mjs --status --checkBoard --boardSummary
 ```
 
-`--checkBoard` 只读 Agent Link Board `/api/state.currentCall`；active call 会提示先协调，DONE/COMPLETED/CANCELLED/RESOLVED/CLOSED 等完成态 call 会标为 inactive。`--boardSummary` 只输出一行秘密安全摘要，不回显 call command；如果只写 `--boardSummary --checkBoard` 而忘了 `--status`，启动助手也会自动走只读 status，不会误启动 Mac host。
+`--checkBoard` 只读 Agent Link Board `/api/state.currentCall`；active call 会提示先协调，DONE/COMPLETED/CANCELLED/RESOLVED/CLOSED 等完成态 call 会标为 inactive。`--boardSummary` 只输出一行秘密安全摘要，不回显 call command；如果只写 `--boardSummary --checkBoard` 而忘了 `--status`，启动助手也会自动走只读 status，不会误启动 Mac host。status 摘要和 JSON 也会给出 `MacLaunchAgentPlan=`，它只是默认 dry-run 自启动模板计划，不写系统、不执行 `launchctl`、不启动 host、不要求密码。
 
 双端恢复开工时，如果想一次看仓库、联络板、Mac host 在线状态、权限和旧 build 是否需要重启，可以先跑轻量总览：
 
@@ -147,7 +147,7 @@ node scripts/mac/observe-mac-media.mjs --resourceSample --boardSummary
 - 默认设置 `LAN_DUAL_INPUT_MODE=log`，避免无人值守时真实注入输入。
 - `--requirePassword` 会拒绝空密码和 `demo-password`，真机局域网联调建议始终打开。
 - `--ephemeralPassword` 会为本次进程生成一次性随机 `LAN_DUAL_PASSWORD` 且不打印密码；适合先恢复 `/discovery`、runtime/build 和权限诊断通道，但不能用于另一端认证联调，因为密码不会被共享。
-- `--status` 只读取 `/discovery` 并退出，不会启动 Swift host，不会读取或打印密码；运行中 build 与当前 git 不一致时，会列出旧 build 后变动过的 Mac host 运行源码文件，若没有运行源码变化则说明服务行为大概率仍是当前的，只是 build 元数据落后；加 `--json` 可让脚本稳定读取同一份状态对象。加 `--checkBoard` 会只读 Agent Link Board currentCall，`--boardSummary` 会输出一行无密摘要且不回显 call command；`--boardSummary`/`--checkBoard` 默认转入 status 路径，避免误启动服务。
+- `--status` 只读取 `/discovery` 并退出，不会启动 Swift host，不会读取或打印密码；运行中 build 与当前 git 不一致时，会列出旧 build 后变动过的 Mac host 运行源码文件，若没有运行源码变化则说明服务行为大概率仍是当前的，只是 build 元数据落后；加 `--json` 可让脚本稳定读取同一份状态对象。加 `--checkBoard` 会只读 Agent Link Board currentCall，`--boardSummary` 会输出一行无密摘要且不回显 call command；`--boardSummary`/`--checkBoard` 默认转入 status 路径，避免误启动服务。status 摘要会给出 `MacLaunchAgentPlan=`，方便启动前先复制 dry-run 自启动模板计划。
 - `--stop` 只停止本机 `/discovery` 对应的 macOS host 进程；它要求目标看起来是 Mac host 且提供 `runtime.processId`，不会因为端口上有 Windows host 或未知服务就误杀进程。
 - 等待 `/discovery` 就绪后，默认运行 `check-mac-displays --requireRuntime --expectBuildId <build>` 做只读 runtime/display round-trip 校验；如果需要密码，会通过子进程环境变量传递，不会放进 `--password` 命令参数。
 - `--background` 会在 `/discovery` 和 runtime/display 校验通过后退出启动助手，并让 Mac host 在后台继续运行；默认日志路径在 `.dev-lab/mac-host/`，该目录不会提交到仓库。
