@@ -22,7 +22,9 @@ Description:
   Verifies every scripts/mac/*.mjs utility supports pure --help and -h output.
   A passing check means the command exits 0, prints Usage/Options-style help, and
   returns quickly without building Swift, starting Mac host, probing devices, or
-  connecting to a real host.
+  connecting to a real host. It also rejects common runtime side-effect output
+  such as password prompts, browser DevTools startup, Swift build logs, or host
+  connection/probe logs.
 
 Examples:
   node scripts/mac/test-mac-script-help.mjs
@@ -142,9 +144,48 @@ function runHelp(scriptName, flag, timeoutMs) {
   });
 }
 
+const forbiddenRuntimeOutputPatterns = [
+  {
+    label: "password prompt",
+    pattern: /(?:^|\n)\s*[^\n]*(?:Mac host|Windows host|LAN Dual Control)[^\n]*password\s*:\s*$/i,
+  },
+  {
+    label: "environment password leak",
+    pattern: /(?:^|\n)\s*LAN_DUAL_PASSWORD\s*=\s*(?!\.{3}(?:\s|$)|<)\S+/i,
+  },
+  {
+    label: "Mac client server startup",
+    pattern: /(?:^|\n)\s*Mac client prototype:\s*https?:\/\//i,
+  },
+  {
+    label: "browser DevTools startup",
+    pattern: /(?:^|\n)\s*DevTools listening on\s+wss?:\/\//i,
+  },
+  {
+    label: "Swift build output",
+    pattern: /(?:^|\n)\s*(?:Building|Compiling|Linking|Compile Swift Module)\b/i,
+  },
+  {
+    label: "Mac host runtime startup",
+    pattern: /(?:^|\n)\s*(?:\[[^\n\]]+\]\s*)?[^\n]*\blan-dual-mac-host\b[^\n]*\b(?:listening|started|ready)\b[^\n]*(?:https?:\/\/|port|\d{2,5})/i,
+  },
+  {
+    label: "real host connection/auth",
+    pattern:
+      /(?:^|\n)\s*(?:\{[^\n]*"type"\s*:\s*"(?:hello_ack|session_answer|input_ack|video_frame|audio_frame)"|(?:\[[^\n\]]+\]\s*)?[^\n]*\b(?:received|sent|accepted|authenticated|connected|frame|ack)\b[^\n]*\b(?:hello_ack|session_answer|input_ack|video_frame|audio_frame)\b)/i,
+  },
+  {
+    label: "Agent Link Board output",
+    pattern: /(?:^|\n)\s*(?:updatedAt:|currentCall:|statuses:|recentEvents:)\s*$/m,
+  },
+];
+
 function analyze(result) {
   const combined = `${result.stdout}\n${result.stderr}`;
   const hasHelpShape = /\bUsage\b/i.test(combined) || /\bOptions\b/i.test(combined) || combined.includes("用法");
+  const forbiddenMatches = forbiddenRuntimeOutputPatterns
+    .filter(({ pattern }) => pattern.test(combined))
+    .map(({ label }) => label);
   const problems = [];
   if (result.timedOut) {
     problems.push(`timed out after ${result.durationMs}ms`);
@@ -155,10 +196,14 @@ function analyze(result) {
   if (!hasHelpShape) {
     problems.push("missing Usage/Options help text");
   }
+  if (forbiddenMatches.length > 0) {
+    problems.push(`forbidden runtime output: ${forbiddenMatches.join(", ")}`);
+  }
   return {
     ...result,
     ok: problems.length === 0,
     problems,
+    forbiddenMatches,
     outputBytes: Buffer.byteLength(combined, "utf8"),
   };
 }

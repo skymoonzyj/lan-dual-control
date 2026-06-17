@@ -17,6 +17,32 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Mac Codex
+
+日期：2026-06-17 14:40
+开发端：Mac Codex
+本轮目标：加固 Mac `.mjs` 工具的 `--help/-h` 统一自检，防止现场查参数时误触发运行时副作用。
+完成内容：
+- `scripts/mac/test-mac-script-help.mjs` 在原有 43 个脚本、86 条帮助命令覆盖基础上，新增 forbidden runtime output 检查。
+- 自检现在会拒绝密码提示、真实 `LAN_DUAL_PASSWORD=` 值输出、Mac client/server 启动提示、浏览器 DevTools 监听、Swift build 日志、Mac host 启动日志、真实 host 协议收发日志和 Agent Link Board 状态输出。
+- 规则按运行时日志/提示形态匹配，允许帮助文本保留安全占位符示例，如 `LAN_DUAL_PASSWORD=...`，避免误伤正常文档。
+- 当前状态和任务板已同步；本轮不改 Windows 脚本、不改协议、不启动真实服务。
+修改文件：
+- `scripts/mac/test-mac-script-help.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/test-mac-script-help.mjs`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000`
+遗留问题：
+- 本轮只加固 Mac 脚本 help 覆盖，不做真实 Mac 控制 Windows 联调；后续真连仍需通过 Agent Link Board 呼叫 Windows 端配合授权。
+下一步建议：
+- 后续新增或修改 `scripts/mac/*.mjs` 时，先确认 `--help` 和 `-h` 都是早退出路径，再跑 `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000`，避免查参数时误启动 host/client 或触发密码/联络板动作。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-17 Windows Codex
 
 日期：2026-06-17 续跑
