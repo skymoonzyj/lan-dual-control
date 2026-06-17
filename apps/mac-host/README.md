@@ -101,6 +101,14 @@ node scripts/mac/check-mac-unattended-status.mjs --boardSummary
 
 该脚本只检查当前 `/discovery`、LaunchAgent plist/`launchctl`、`pmset` 睡眠配置，以及锁屏、显示器睡眠、系统睡眠、重启登录和真实输入注入限制；不会创建或加载 LaunchAgent、不会启动 Mac host、不会认证 WebSocket、不会要求或打印密码，也不会发送输入事件。自动化需要完整字段时可加 `--json`；需要把缺 LaunchAgent、host 离线或权限缺失变成失败，可加 `--requireLaunchAgent` / `--requireHostOnline` / `--requireControlPermissions` / `--strict`。双端恢复总览的 `--boardSummary` 也会给出 `MacUnattendedStatus=`，方便推送或呼叫前先同步这一项。
 
+如果要生成 Mac host 登录后自启动的 LaunchAgent 模板，先跑默认 dry-run 计划：
+
+```bash
+node scripts/mac/install-mac-host-launch-agent.mjs --boardSummary
+```
+
+该入口默认不写文件、不执行 `launchctl`、不启动 Mac host、不会认证 WebSocket、不会要求或打印密码，也不会发送输入事件；只输出 plist 预览、手动写入/加载/状态检查命令和安全边界。显式加 `--write` 才会写入 plist 和日志目录，但仍不会自动 load；加载仍需人工运行摘要里的 `ManualLoad=`。默认 `--passwordMode ephemeral` 只适合自动恢复 `/discovery` 和状态诊断，随机密码不会共享给另一台设备；如果要登录后弹出前台隐藏密码框，可显式用 `--passwordMode prompt --write`，启动助手会先响铃再弹窗。不要把正式连接密码写进 plist；真正无人值守认证后续应走 Keychain/用户明确授权方案。
+
 准备正式呼叫 Windows 端做端到端验收前，可再跑正式清单：
 
 ```bash
@@ -188,6 +196,7 @@ node scripts/mac/test-mac-script-help.mjs
 ```bash
 node scripts/mac/test-mac-resume-status.mjs
 node scripts/mac/test-mac-unattended-status.mjs
+node scripts/mac/test-mac-host-launch-agent.mjs
 node scripts/mac/test-mac-host-readiness-board.mjs
 ```
 

@@ -57,6 +57,7 @@ Machine-readable JSON fields:
   launchAgent                    LaunchAgent plist existence and launchctl loaded status.
   power                          pmset sleep/display/network-wake snapshot and risk notes.
   limitations                    Lock screen, display sleep, system sleep, reboot/login limits.
+  commands.launchAgentPlan       Secret-free LaunchAgent dry-run planner command.
   commands.hostReadiness         Follow-up Mac host readiness command.
 
 Examples:
@@ -378,6 +379,7 @@ function buildFindings({ args, host, launchAgent, power }) {
 
 function makeCommands(args) {
   return {
+    launchAgentPlan: `node scripts/mac/install-mac-host-launch-agent.mjs --launchAgentPath ${shellQuote(args.launchAgentPath)} --boardSummary`,
     hostStatus: `node scripts/mac/start-mac-host.mjs --status --host ${args.host} --port ${args.port} --boardSummary`,
     hostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     startHost: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port}`,
@@ -385,6 +387,12 @@ function makeCommands(args) {
     launchAgentPath: args.launchAgentPath,
     launchAgentLabel: args.label,
   };
+}
+
+function shellQuote(value) {
+  const text = String(value ?? "");
+  if (/^[A-Za-z0-9_./:=@%+-]+$/.test(text)) return text;
+  return `'${text.replace(/'/g, "'\\''")}'`;
 }
 
 function makeBoardSummary(report) {
@@ -404,7 +412,7 @@ function makeBoardSummary(report) {
   const agent = `launchAgent=${report.launchAgent.exists ? "file-present" : "missing"} loaded=${report.launchAgent.loaded === null ? "unknown" : boolText(report.launchAgent.loaded)}`;
   return [
     `Mac unattended status: host=${host}; ${perms}; ${agent}; power=${report.power.summary}; ${attention}.`,
-    `MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --boardSummary; HostReadiness=${report.commands.hostReadiness}.`,
+    `MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --boardSummary; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; HostReadiness=${report.commands.hostReadiness}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
@@ -463,6 +471,7 @@ function printHuman(report) {
   }
   console.log("- limitations:");
   for (const item of report.limitations) console.log(`  - ${item}`);
+  console.log(`- LaunchAgent plan: ${report.commands.launchAgentPlan}`);
   console.log(`- host readiness: ${report.commands.hostReadiness}`);
   console.log(report.boardSummary);
 }

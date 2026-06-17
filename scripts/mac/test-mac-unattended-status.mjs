@@ -121,6 +121,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "host", `${script} ${flag}`);
     assertIncludes(result.stdout, "launchAgent", `${script} ${flag}`);
     assertIncludes(result.stdout, "power", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.launchAgentPlan", `${script} ${flag}`);
     assertNoSecretOrInputGuidance(result.stdout, `${script} ${flag}`);
   }
   print("OK", "Unattended status help exits quickly and stays side-effect-free");
@@ -141,7 +142,10 @@ function checkMissingLaunchAgentJson(args) {
   assert(payload.power?.checked === false, "missing LaunchAgent payload should skip pmset");
   assert(Array.isArray(payload.findings), "missing LaunchAgent payload should include findings");
   assert(payload.findings.some((item) => item.id === "launch-agent-missing" && item.level === "warning"), "missing LaunchAgent should be a warning by default");
+  assertIncludes(payload.commands?.launchAgentPlan || "", "install-mac-host-launch-agent.mjs", "missing LaunchAgent commands.launchAgentPlan");
+  assertIncludes(payload.commands?.launchAgentPlan || "", "--boardSummary", "missing LaunchAgent commands.launchAgentPlan");
   assertIncludes(payload.boardSummary, "MacUnattendedStatus=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacLaunchAgentPlan=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "HostReadiness=", "missing LaunchAgent board summary");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "missing LaunchAgent JSON");
   print("OK", "Missing LaunchAgent is reported as a warning in default JSON mode");
@@ -215,6 +219,7 @@ function checkFakePlist(args) {
     assert(payload.launchAgent?.readable === true, "fake plist should be readable");
     assert(payload.launchAgent?.installed === true, "fake plist should be considered installed");
     assert(payload.launchAgent?.labelMatches === true, "fake plist label should match");
+    assertIncludes(payload.commands?.launchAgentPlan || "", "install-mac-host-launch-agent.mjs", "fake plist commands.launchAgentPlan");
     assertIncludes(payload.commands?.hostReadiness || "", "check-mac-host-readiness.mjs", "fake plist commands.hostReadiness");
     assert(payload.limitations.some((item) => /System sleep/.test(item)), "fake plist payload should document sleep limit");
     assert(payload.limitations.some((item) => /Reboot/.test(item)), "fake plist payload should document reboot/login limit");
@@ -237,6 +242,7 @@ function checkBoardSummary(args) {
   assert(lines.length === 1, `board summary should be one line, got ${lines.length}`);
   assertIncludes(text, "Mac unattended status:", "board summary");
   assertIncludes(text, "MacUnattendedStatus=", "board summary");
+  assertIncludes(text, "MacLaunchAgentPlan=", "board summary");
   assertIncludes(text, "HostReadiness=", "board summary");
   assertIncludes(text, "No password", "board summary");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "board summary");
