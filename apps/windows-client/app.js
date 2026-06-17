@@ -2387,6 +2387,33 @@ function getLocalHostExportStatus() {
   };
 }
 
+function getRemoteFileTransferExportStatus(now = Date.now()) {
+  const writeStatus = state.receivedClipboardWriteStatus || {};
+  const activeTransfers = Array.from(state.remoteFileTransfers.values()).map((transfer) => {
+    const idleMs = now - (Number(transfer.lastActivityAt) || Number(transfer.startedAt) || now);
+    const idleSeconds = Math.max(0, Math.round(idleMs / 1000));
+    const fileCount = Number(transfer.fileCount) || (Array.isArray(transfer.files) ? transfer.files.length : 0);
+    const countText = fileCount > 0 ? `${fileCount} 个文件` : "远端文件";
+    return `${countText} ${remoteFileTransferProgressText(transfer)}，约 ${idleSeconds} 秒无新分块`;
+  });
+  const statusText = String(writeStatus.text || "").trim();
+  const kindText = writeStatus.kind ? `${writeStatus.kind} · ` : "";
+  const receivedCount = state.receivedClipboardFiles.length;
+  return {
+    summary: statusText
+      ? `${kindText}${statusText}`
+      : activeTransfers.length > 0
+        ? `正在接收 ${activeTransfers.length} 个传输`
+        : receivedCount > 0
+          ? `已暂存 ${receivedCount} 个文件`
+          : "无远端文件状态",
+    status: statusText ? `${kindText}${statusText}` : "无状态提示",
+    active: activeTransfers.length ? activeTransfers.join("；") : "无",
+    receivedCount,
+    tempPath: state.receivedClipboardTempPath || "-",
+  };
+}
+
 function getResolutionExportLabel(settings) {
   return settings.resolutionMode === "native" ? "原生" : `${settings.width} × ${settings.height}`;
 }
@@ -2399,6 +2426,7 @@ function buildDiagnosticsQuickSummary({
   reconnectExport,
   macAlertWatcherExport,
   localHostExport,
+  remoteFileExport,
 }) {
   const reconnectParts = [reconnectExport.status];
   if (reconnectExport.reason && reconnectExport.reason !== "-") {
@@ -2410,6 +2438,7 @@ function buildDiagnosticsQuickSummary({
   return [
     `- 远端连接：${currentStateLabel} · ${connectionLabel} · ${targetLabel}`,
     `- 重连：${reconnectParts.join(" · ")}`,
+    `- 远端文件：${remoteFileExport.summary}`,
     `- 本机协作：Mac 提醒 ${macAlertWatcherExport.status} · 本机被控 ${localHostExport.status} · 反控 ${localHostExport.reverseControlMode}`,
     `- 画质请求：${getResolutionExportLabel(settings)} · ${settings.fps} Hz · ${Math.round(settings.maxBandwidthKbps / 1000)} Mbps · 声音${settings.audio ? "开" : "关"}`,
   ];
@@ -2427,6 +2456,7 @@ function buildLogExportText() {
   const reconnectExport = getReconnectExportStatus();
   const macAlertWatcherExport = getMacAlertWatcherExportStatus();
   const localHostExport = getLocalHostExportStatus();
+  const remoteFileExport = getRemoteFileTransferExportStatus();
   const resolutionLabel = getResolutionExportLabel(settings);
   const eventLines = state.logEntries
     .slice()
@@ -2453,6 +2483,7 @@ function buildLogExportText() {
       reconnectExport,
       macAlertWatcherExport,
       localHostExport,
+      remoteFileExport,
     }),
     "",
     "连接状态",
@@ -2496,7 +2527,10 @@ function buildLogExportText() {
     `- 码率：${Math.round(settings.maxBandwidthKbps / 1000)} Mbps`,
     `- 声音：${settings.audio ? `开启 · ${settings.audioVolume}%` : "关闭"}`,
     `- 剪贴板：${settings.clipboard ? "开启" : "关闭"}`,
+    `- 远端文件状态：${remoteFileExport.status}`,
+    `- 正在接收远端文件：${remoteFileExport.active}`,
     `- 最近收到远端文件：${state.receivedClipboardFiles.length} 个`,
+    `- 远端文件临时目录：${remoteFileExport.tempPath}`,
     `- 按键映射：Win→${remoteModifierLabels[keyboardMapping.win]}，Alt→${remoteModifierLabels[keyboardMapping.alt]}，Ctrl→${remoteModifierLabels[keyboardMapping.ctrl]}`,
     `- Windows 快捷键兼容：${elements.shortcutCompatToggle.checked ? "开启" : "关闭"}`,
     "",

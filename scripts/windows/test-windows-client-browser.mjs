@@ -2356,6 +2356,10 @@ async function verifyReconnectControls(session) {
       const originalLocalHostInputValue = localHostInputSelect?.value || "";
       const originalLocalHostReverseValue = localHostReverseSelect?.value || "";
       const originalLocalHostReadinessValue = localHostReadinessSelect?.value || "";
+      const originalReceivedFiles = state.receivedClipboardFiles;
+      const originalReceivedTempPath = state.receivedClipboardTempPath;
+      const originalReceivedWriteStatus = state.receivedClipboardWriteStatus;
+      const originalRemoteFileTransfers = state.remoteFileTransfers;
       const calls = [];
       let copiedText = "";
 
@@ -2396,6 +2400,41 @@ async function verifyReconnectControls(session) {
         state.connected = false;
         state.connecting = false;
         state.manualDisconnect = false;
+        state.receivedClipboardFiles = [
+          {
+            name: "demo.zip",
+            size: 3,
+            mimeType: "application/zip",
+            blob: new Blob(["zip"]),
+            objectUrl: "",
+          },
+        ];
+        state.receivedClipboardTempPath = "C:/Temp/lan-dual-control/clip-1";
+        state.receivedClipboardWriteStatus = {
+          kind: "warning",
+          text: "远端文件接收超时：2 B/4 B，45 秒没有收到新分块或完成消息。已停止接收，请让 Mac 重新复制。",
+        };
+        state.remoteFileTransfers = new Map([
+          [
+            "diagnostic-transfer",
+            {
+              transferId: "diagnostic-transfer",
+              totalBytes: 4,
+              receivedBytes: 2,
+              fileCount: 1,
+              files: [
+                {
+                  index: 0,
+                  name: "demo.txt",
+                  size: 4,
+                  mimeType: "text/plain",
+                },
+              ],
+              startedAt: Date.now() - 50000,
+              lastActivityAt: Date.now() - 45000,
+            },
+          ],
+        ]);
 
         scheduleReconnect("测试断线");
         const exportText = typeof buildLogExportText === "function" ? buildLogExportText() : "";
@@ -2405,6 +2444,8 @@ async function verifyReconnectControls(session) {
             exportText.includes("- 远端连接：") && exportText.includes("192.168.31.122:43770"),
           quickSummaryReconnect:
             exportText.includes("- 重连：等待自动重连") && exportText.includes("原因 测试断线"),
+          quickSummaryRemoteFiles:
+            exportText.includes("- 远端文件：warning") && exportText.includes("远端文件接收超时"),
           quickSummaryLocal: exportText.includes(
             "- 本机协作：Mac 提醒 提醒中 · 本机被控 桌面壳托管运行中 · 反控 需确认",
           ),
@@ -2430,6 +2471,14 @@ async function verifyReconnectControls(session) {
           localHostOutput: exportText.includes("- 本机被控最近输出："),
           localHostOutputMasked: exportText.includes("password=<hidden>"),
           localHostPasswordHidden: exportText.includes("- 本机被控密码：不导出"),
+          remoteFileStatus:
+            exportText.includes("- 远端文件状态：warning") && exportText.includes("远端文件接收超时"),
+          remoteFileActive:
+            exportText.includes("- 正在接收远端文件：1 个文件 2 B/4 B") &&
+            exportText.includes("秒无新分块"),
+          remoteFileReceivedCount: exportText.includes("- 最近收到远端文件：1 个"),
+          remoteFileTempPath: exportText.includes("- 远端文件临时目录：C:/Temp/lan-dual-control/clip-1"),
+          remoteFileList: exportText.includes("1. demo.zip · 3 B · application/zip"),
           noLocalHostSecret: !exportText.includes("should-not-export"),
         };
         await copyLogsToClipboard();
@@ -2439,6 +2488,10 @@ async function verifyReconnectControls(session) {
           copiedText.includes("- 远端连接：") &&
           copiedText.includes("- 本机被控：桌面壳托管运行中") &&
           copiedText.includes("- Mac 提醒：提醒中") &&
+          copiedText.includes("- 远端文件状态：warning") &&
+          copiedText.includes("远端文件接收超时") &&
+          copiedText.includes("- 正在接收远端文件：1 个文件 2 B/4 B") &&
+          copiedText.includes("- 远端文件临时目录：C:/Temp/lan-dual-control/clip-1") &&
           copiedText.includes("password=<hidden>") &&
           !copiedText.includes("should-not-export") &&
           state.logEntries[0]?.title === "诊断复制";
@@ -2506,6 +2559,10 @@ async function verifyReconnectControls(session) {
         state.localHostRunning = originalLocalHostRunning;
         state.localHostOnline = originalLocalHostOnline;
         state.localHostBusy = originalLocalHostBusy;
+        state.receivedClipboardFiles = originalReceivedFiles;
+        state.receivedClipboardTempPath = originalReceivedTempPath;
+        state.receivedClipboardWriteStatus = originalReceivedWriteStatus;
+        state.remoteFileTransfers = originalRemoteFileTransfers;
         state.logEntries = originalLogEntries;
         if (eventLog) eventLog.innerHTML = originalEventLogHtml;
         window.__TAURI__ = originalTauri;
