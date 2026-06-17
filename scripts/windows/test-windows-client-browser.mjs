@@ -750,7 +750,7 @@ async function evaluate(session, expression) {
 async function verifyFloatingControlCenter(session) {
   const result = await evaluate(
     session,
-    `(() => {
+    `(async () => {
       const valueOf = (selector) => document.querySelector(selector)?.value ?? "";
       const setValue = (selector, value, eventName = "change") => {
         const element = document.querySelector(selector);
@@ -889,6 +889,28 @@ async function verifyFloatingControlCenter(session) {
         !shell?.classList.contains("is-fullscreen") &&
         getComputedStyle(topbar).display !== "none";
 
+      const originalRequestFullscreen = shell?.requestFullscreen;
+      let immersiveRequestCalled = false;
+      if (shell) {
+        shell.requestFullscreen = () => {
+          immersiveRequestCalled = true;
+          return Promise.resolve();
+        };
+      }
+      if (typeof enterImmersiveFullscreen === "function") {
+        await enterImmersiveFullscreen();
+      }
+      await Promise.resolve();
+      const immersiveFullscreenEntered =
+        immersiveRequestCalled &&
+        Boolean(state.immersiveFullscreen) &&
+        shell?.classList.contains("is-fullscreen") &&
+        document.querySelector("#fullscreenHintText")?.textContent.includes("真全屏");
+      setFullscreen(false);
+      if (shell && originalRequestFullscreen) {
+        shell.requestFullscreen = originalRequestFullscreen;
+      }
+
       if (panel.hidden) toggle.click();
       document.querySelector("#floatingFullscreenButton")?.click();
 
@@ -928,6 +950,7 @@ async function verifyFloatingControlCenter(session) {
           fullscreenEntered &&
           fullscreenHintVisible &&
           fullscreenEscExited &&
+          immersiveFullscreenEntered &&
           fullscreenExited,
         opened,
         floatingLayer,
@@ -944,6 +967,7 @@ async function verifyFloatingControlCenter(session) {
         fullscreenEntered,
         fullscreenHintVisible,
         fullscreenEscExited,
+        immersiveFullscreenEntered,
         fullscreenExited,
         closed: panel.hidden,
         restored: {
@@ -2789,7 +2813,7 @@ async function run() {
     summary.checks.push("control-center");
     print(
       "OK",
-      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, original=${controlCenterCheck.originalPresetSynced}, detailed=${controlCenterCheck.detailedSettingsSynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, status=${controlCenterCheck.statusVisible}, shortcut=${controlCenterCheck.shortcutSent}, fullscreen=${controlCenterCheck.fullscreenEntered}, hint=${controlCenterCheck.fullscreenHintVisible}, esc=${controlCenterCheck.fullscreenEscExited}, window=${controlCenterCheck.fullscreenExited}`,
+      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, original=${controlCenterCheck.originalPresetSynced}, detailed=${controlCenterCheck.detailedSettingsSynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, status=${controlCenterCheck.statusVisible}, shortcut=${controlCenterCheck.shortcutSent}, fullscreen=${controlCenterCheck.fullscreenEntered}, hint=${controlCenterCheck.fullscreenHintVisible}, esc=${controlCenterCheck.fullscreenEscExited}, immersive=${controlCenterCheck.immersiveFullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
     );
     const desktopOnlyPanelCheck = await verifyDesktopOnlyHostPanel(session);
     summary.checks.push("desktop-panel");

@@ -101,6 +101,7 @@ const elements = {
   floatingAudioVolumeRange: document.querySelector("#floatingAudioVolumeRange"),
   floatingAudioVolumeText: document.querySelector("#floatingAudioVolumeText"),
   floatingFullscreenButton: document.querySelector("#floatingFullscreenButton"),
+  floatingImmersiveFullscreenButton: document.querySelector("#floatingImmersiveFullscreenButton"),
   floatingWindowButton: document.querySelector("#floatingWindowButton"),
   floatingDisconnectButton: document.querySelector("#floatingDisconnectButton"),
   fullscreenHint: document.querySelector("#fullscreenHint"),
@@ -324,6 +325,7 @@ const state = {
   connecting: false,
   inputEvents: 0,
   fullscreen: false,
+  immersiveFullscreen: false,
   client: null,
   activeHost: "",
   activePort: "",
@@ -2005,7 +2007,11 @@ function formatFloatingSecurityStatus() {
 
 function syncFloatingControlStatus() {
   if (elements.floatingFullscreenHint) {
-    elements.floatingFullscreenHint.textContent = state.fullscreen ? "Esc 退出全屏" : "全屏后 Esc 退出";
+    elements.floatingFullscreenHint.textContent = state.immersiveFullscreen
+      ? "Esc 退出真全屏"
+      : state.fullscreen
+        ? "Esc 退出全屏"
+        : "全屏后 Esc 退出";
   }
   if (elements.floatingInputModeStatus) {
     elements.floatingInputModeStatus.textContent = formatFloatingInputModeStatus();
@@ -2032,7 +2038,8 @@ function formatFullscreenHintText() {
   const settings = currentDisplaySettings();
   const quality = elements.qualityPresetSelect.selectedOptions[0]?.textContent || "自定义";
   const input = formatFloatingInputModeStatus();
-  return `Esc 退出 · ${quality} · ${settings.fps} Hz / ${elements.bandwidthSelect.value} Mbps · ${input}`;
+  const mode = state.immersiveFullscreen ? "真全屏" : "全屏";
+  return `Esc 退出${mode} · ${quality} · ${settings.fps} Hz / ${elements.bandwidthSelect.value} Mbps · ${input}`;
 }
 
 function updateFullscreenHintText() {
@@ -2060,6 +2067,75 @@ function showFullscreenHint({ autoHide = true } = {}) {
   elements.fullscreenHint.classList.add("is-visible");
   if (autoHide) {
     state.fullscreenHintTimer = window.setTimeout(hideFullscreenHint, 3800);
+  }
+}
+
+function fullscreenApiElement() {
+  return (
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.msFullscreenElement ||
+    null
+  );
+}
+
+function fullscreenApiTarget() {
+  return document.querySelector(".app-shell") || document.documentElement;
+}
+
+function requestElementFullscreen(element) {
+  const request =
+    element?.requestFullscreen ||
+    element?.webkitRequestFullscreen ||
+    element?.msRequestFullscreen;
+  if (!request) {
+    return Promise.reject(new Error("当前窗口环境不支持系统真全屏"));
+  }
+  return Promise.resolve(request.call(element));
+}
+
+function exitDocumentFullscreen() {
+  const exit =
+    document.exitFullscreen ||
+    document.webkitExitFullscreen ||
+    document.msExitFullscreen;
+  if (!exit || !fullscreenApiElement()) {
+    return Promise.resolve();
+  }
+  return Promise.resolve(exit.call(document));
+}
+
+async function enterImmersiveFullscreen() {
+  setFullscreen(true);
+  try {
+    await requestElementFullscreen(fullscreenApiTarget());
+    state.immersiveFullscreen = true;
+    syncFloatingControlCenter();
+    showFullscreenHint();
+    addLog("真全屏", "已进入沉浸式全屏，按 Esc 退出");
+  } catch (error) {
+    state.immersiveFullscreen = false;
+    elements.remoteStatusText.textContent = "当前窗口环境不支持真全屏，已进入普通全屏";
+    addLog("真全屏不可用", error?.message || "已使用普通全屏");
+    syncFloatingControlCenter();
+    showFullscreenHint();
+  }
+}
+
+function handleNativeFullscreenChange() {
+  const active = Boolean(fullscreenApiElement());
+  if (active) {
+    state.immersiveFullscreen = true;
+    if (!state.fullscreen) {
+      setFullscreen(true);
+    }
+  } else if (state.immersiveFullscreen) {
+    state.immersiveFullscreen = false;
+    if (state.fullscreen) {
+      setFullscreen(false);
+    } else {
+      syncFloatingControlCenter();
+    }
   }
 }
 
@@ -2105,8 +2181,11 @@ function syncFloatingControlCenter() {
   if (elements.floatingFullscreenButton) {
     elements.floatingFullscreenButton.disabled = state.fullscreen;
   }
+  if (elements.floatingImmersiveFullscreenButton) {
+    elements.floatingImmersiveFullscreenButton.disabled = state.immersiveFullscreen;
+  }
   if (elements.floatingWindowButton) {
-    elements.floatingWindowButton.disabled = !state.fullscreen;
+    elements.floatingWindowButton.disabled = !state.fullscreen && !state.immersiveFullscreen;
   }
   syncFloatingControlStatus();
 }
@@ -3026,6 +3105,10 @@ function sendDisplaySettings() {
 }
 
 function setFullscreen(enabled) {
+  if (!enabled && state.immersiveFullscreen) {
+    void exitDocumentFullscreen();
+    state.immersiveFullscreen = false;
+  }
   state.fullscreen = enabled;
   document.querySelector(".app-shell").classList.toggle("is-fullscreen", enabled);
   elements.fullscreenButton.classList.toggle("active", enabled);
@@ -5629,6 +5712,10 @@ elements.floatingFullscreenButton.addEventListener("click", () => {
   setFullscreen(true);
   setControlCenterOpen(false);
 });
+elements.floatingImmersiveFullscreenButton.addEventListener("click", () => {
+  void enterImmersiveFullscreen();
+  setControlCenterOpen(false);
+});
 elements.floatingWindowButton.addEventListener("click", () => {
   setFullscreen(false);
   setControlCenterOpen(false);
@@ -5917,6 +6004,9 @@ document.addEventListener("pointerdown", (event) => {
     setControlCenterOpen(false);
   }
 });
+document.addEventListener("fullscreenchange", handleNativeFullscreenChange);
+document.addEventListener("webkitfullscreenchange", handleNativeFullscreenChange);
+document.addEventListener("MSFullscreenChange", handleNativeFullscreenChange);
 
 tickClock();
 setInterval(tickClock, 1000);
