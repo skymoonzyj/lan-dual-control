@@ -102,6 +102,7 @@ Windows 端：
 - [x] Windows host 启动/状态助手和 readiness 摘要也会输出视频能力体检命令：JSON 带 `windowsVideoEncoderSupportCommand`，普通输出和 `--boardSummary` 带 `WindowsVideoSupport=check-windows-video-encoder-support --boardSummary`，方便 H.264/WGC/WebCodecs 调试前先发无密能力摘要。
 - [x] Windows host PowerShell 包装入口支持 `-Help` / `-h` 纯帮助：说明 `-Status -CheckBoard -BoardSummary`、`WindowsHostMedia=`、`WindowsVideoSupport=` 和 `ReverseGrant=`，不会启动 host、不会认证、不会要求或打印密码。
 - [x] Windows 视频能力体检支持 PowerShell 包装入口：`check-windows-video-encoder-support.ps1 -BoardSummary/-Json/-RequireAnyH264/-RequireHardwareH264/-RequireWgc/-RequireWebCodecsH264`，专项回归覆盖 Node 和 PowerShell 输出一致性。
+- [x] Windows host readiness 支持 PowerShell 包装入口：`check-windows-host-readiness.ps1 -CheckBoard -BoardSummary/-Json/-Profile deploy/-ProbeMedia` 可直接走同一套 Node 体检逻辑；`-Help/-h` 纯帮助不会启动 host、不会认证、不会要求或打印密码，专项回归覆盖 Node/PowerShell 的 help、JSON、boardSummary 和不泄密。
 - [x] Mac host 启动/状态助手也支持 `--status --checkBoard`：只读读取 Agent Link Board `/api/state.currentCall`，JSON、普通输出和 `--boardSummary` 会提示 active call，DONE call 标为 inactive，摘要不回显 command；`--boardSummary --checkBoard` 会自动走 status，不会误启动 host。
 - [x] Windows 桌面版“本机被控”面板的体检和状态刷新也会启用 `--checkBoard`：UI 会提示 active Mac -> Windows call 为“Mac 正在请求 Windows 配合”，DONE call 不当作待办，且不回显 call command。
 - [x] Windows 桌面版“本机被控”面板接入反控策略选择和状态显示：启动前可选“需确认 / 实验同意 / 关闭”，默认“需确认”并透传给 `start-windows-host --reverseControlMode deny`；状态区会显示实际 `capabilities.reverseControl`，避免 Mac 反控 Windows 前误开自动同意。

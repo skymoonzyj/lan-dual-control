@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
 const readinessScript = resolve(scriptDir, "check-windows-host-readiness.mjs");
+const readinessPowerShellScript = resolve(scriptDir, "check-windows-host-readiness.ps1");
 
 const defaults = {
   timeoutMs: 120000,
@@ -63,6 +64,68 @@ function parseArgs(argv) {
 function runNode(label, args, timeoutMs) {
   return new Promise((resolveRun) => {
     const child = spawn(process.execPath, args, {
+      cwd: repoRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    const startedAt = Date.now();
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      resolveRun({
+        label,
+        durationMs: Date.now() - startedAt,
+        ...result,
+      });
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish({
+        exitCode: null,
+        timedOut: true,
+        stdout,
+        stderr,
+      });
+    }, timeoutMs);
+
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      finish({
+        exitCode: null,
+        timedOut: false,
+        stdout,
+        stderr: `${stderr}\n${error.message}`.trim(),
+      });
+    });
+    child.on("close", (exitCode) => {
+      clearTimeout(timer);
+      finish({
+        exitCode,
+        timedOut: false,
+        stdout,
+        stderr,
+      });
+    });
+  });
+}
+
+function runPowerShell(label, args, timeoutMs) {
+  return new Promise((resolveRun) => {
+    const child = spawn("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy", "Bypass",
+      "-File", readinessPowerShellScript,
+      ...args,
+    ], {
       cwd: repoRoot,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -430,8 +493,26 @@ async function main() {
   assert(help.stdout.includes("--probeClipboardSecurity"), "readiness --help does not mention --probeClipboardSecurity");
   assert(help.stdout.includes("--probeWgcH264Sources"), "readiness --help does not mention --probeWgcH264Sources");
 
+  for (const helpArg of ["-Help", "-h"]) {
+    const powerShellHelp = await runPowerShell(`readiness PowerShell ${helpArg}`, [helpArg], args.timeoutMs);
+    results.push(powerShellHelp);
+    assert(!powerShellHelp.timedOut, `PowerShell readiness ${helpArg} timed out`);
+    assert(powerShellHelp.exitCode === 0, `PowerShell readiness ${helpArg} exited ${powerShellHelp.exitCode}`);
+    assert(powerShellHelp.stdout.includes("Usage:"), `PowerShell readiness ${helpArg} does not print usage`);
+    assert(powerShellHelp.stdout.includes("-CheckBoard -BoardSummary"), `PowerShell readiness ${helpArg} does not mention board summary`);
+    assert(powerShellHelp.stdout.includes("-Profile deploy"), `PowerShell readiness ${helpArg} does not mention deploy profile`);
+    assert(powerShellHelp.stdout.includes("-ProbeMedia"), `PowerShell readiness ${helpArg} does not mention media probe`);
+    assert(powerShellHelp.stdout.includes("ReverseGrantPs="), `PowerShell readiness ${helpArg} does not mention ReverseGrantPs`);
+    assert(/do(?:es)? not ask for or print\s+passwords/i.test(powerShellHelp.stdout), `PowerShell readiness ${helpArg} does not document password safety`);
+    assert(!powerShellHelp.stdout.includes("[INFO]"), `PowerShell readiness ${helpArg} should not run checks`);
+    assertNoSecretLeak(powerShellHelp.stdout, `PowerShell readiness ${helpArg} stdout`);
+    assertNoSecretLeak(powerShellHelp.stderr, `PowerShell readiness ${helpArg} stderr`);
+  }
+
   let jsonRun = null;
   let boardRun = null;
+  let powerShellJsonRun = null;
+  let powerShellBoardRun = null;
   await withMockLinkBoard(async (serverUrl) => {
     jsonRun = await runNode(
       "readiness JSON board summary",
@@ -455,6 +536,30 @@ async function main() {
         "--server",
         serverUrl,
         "--timeoutMs",
+        String(args.readinessTimeoutMs),
+      ],
+      args.timeoutMs,
+    );
+    powerShellJsonRun = await runPowerShell(
+      "readiness PowerShell JSON board summary",
+      [
+        "-Json",
+        "-CheckBoard",
+        "-Server",
+        serverUrl,
+        "-TimeoutMs",
+        String(args.readinessTimeoutMs),
+      ],
+      args.timeoutMs,
+    );
+    powerShellBoardRun = await runPowerShell(
+      "readiness PowerShell board summary",
+      [
+        "-BoardSummary",
+        "-CheckBoard",
+        "-Server",
+        serverUrl,
+        "-TimeoutMs",
         String(args.readinessTimeoutMs),
       ],
       args.timeoutMs,
@@ -520,6 +625,22 @@ async function main() {
   }
   assertNoSecretLeak(jsonRun.stdout, "readiness --json stdout");
   assertNoSecretLeak(jsonRun.stderr, "readiness --json stderr");
+
+  results.push(powerShellJsonRun);
+  assert(!powerShellJsonRun.timedOut, "PowerShell readiness -Json timed out");
+  const powerShellJsonSummary = parseJson(powerShellJsonRun.stdout, "PowerShell readiness -Json");
+  assert(powerShellJsonSummary.args?.checkBoard === true, "PowerShell JSON args should record checkBoard");
+  assert(typeof powerShellJsonSummary.boardSummary === "string" && powerShellJsonSummary.boardSummary.includes("Windows readiness"), "PowerShell JSON boardSummary is missing");
+  assert(powerShellJsonSummary.boardSummary.includes("call=CALLING Mac Codex->Windows Codex"), "PowerShell JSON boardSummary should include active currentCall");
+  assert(powerShellJsonSummary.boardSummary.includes("WindowsVideoSupport="), "PowerShell JSON boardSummary should include WindowsVideoSupport");
+  assert(powerShellJsonSummary.boardSummary.includes("ReverseGrantPs="), "PowerShell JSON boardSummary should include ReverseGrantPs");
+  assert(
+    typeof powerShellJsonSummary.windowsReverseControlGrantPowerShellCommand === "string"
+      && powerShellJsonSummary.windowsReverseControlGrantPowerShellCommand.includes("allow-windows-reverse-control.ps1"),
+    "PowerShell JSON should include reverse grant PowerShell command",
+  );
+  assertNoSecretLeak(powerShellJsonRun.stdout, "PowerShell readiness -Json stdout");
+  assertNoSecretLeak(powerShellJsonRun.stderr, "PowerShell readiness -Json stderr");
 
   await verifyReverseControlReadinessTokens(args, results);
 
@@ -588,12 +709,27 @@ async function main() {
   assertNoSecretLeak(boardRun.stdout, "readiness --boardSummary stdout");
   assertNoSecretLeak(boardRun.stderr, "readiness --boardSummary stderr");
 
+  results.push(powerShellBoardRun);
+  assert(!powerShellBoardRun.timedOut, "PowerShell readiness -BoardSummary timed out");
+  const powerShellBoardLines = powerShellBoardRun.stdout.trim().split(/\r?\n/).filter(Boolean);
+  assert(powerShellBoardLines.length === 1, `PowerShell readiness -BoardSummary should print one line, got ${powerShellBoardLines.length}`);
+  assert(powerShellBoardLines[0].includes("Windows readiness"), "PowerShell board summary has unexpected text");
+  assert(powerShellBoardLines[0].includes("call=CALLING Mac Codex->Windows Codex"), "PowerShell board summary is missing active currentCall");
+  assert(powerShellBoardLines[0].includes("WindowsVideoSupport="), "PowerShell board summary should include WindowsVideoSupport");
+  assert(powerShellBoardLines[0].includes("ReverseGrantPs="), "PowerShell board summary should include ReverseGrantPs");
+  assert(powerShellBoardLines[0].includes("Do not send passwords"), "PowerShell board summary is missing board safety reminder");
+  assert(!/\[(INFO|OK|WARN|ERROR|FAIL)\]/.test(powerShellBoardLines[0]), "PowerShell board summary should be plain one-line text");
+  assertNoSecretLeak(powerShellBoardRun.stdout, "PowerShell readiness -BoardSummary stdout");
+  assertNoSecretLeak(powerShellBoardRun.stderr, "PowerShell readiness -BoardSummary stderr");
+
   const summary = {
     ok: true,
     readinessJsonExitCode: jsonRun.exitCode,
+    readinessPowerShellJsonExitCode: powerShellJsonRun.exitCode,
     readinessClipboardProbeExitCode: clipboardRun.exitCode,
     readinessMediaProbeExitCode: mediaRun.exitCode,
     readinessBoardSummaryExitCode: boardRun.exitCode,
+    readinessPowerShellBoardSummaryExitCode: powerShellBoardRun.exitCode,
     boardSummary: lines[0],
     results: results.map((result) => ({
       label: result.label,

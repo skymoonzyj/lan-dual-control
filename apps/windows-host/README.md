@@ -238,7 +238,11 @@ node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs
 node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --boardSummary
 node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --checkBoard --boardSummary
 node E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.mjs --json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.ps1 -CheckBoard -BoardSummary
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\check-windows-host-readiness.ps1 -CheckBoard -Json
 ```
+
+PowerShell 包装入口只把参数转给同一个 Node readiness 脚本，适合现场用 PowerShell 7/Windows PowerShell 直接跑 `-BoardSummary`、`-Json`、`-Profile deploy`、`-ProbeMedia` 等；`-Help` / `-h` 只打印说明，不启动 host、不认证、不要求或打印密码，也不发送输入事件。
 
 需要确认所有 Windows `.mjs` 工具脚本的 `--help` / `-h` 都只打印帮助、不误启动服务或探测时，可以运行统一覆盖自检：
 

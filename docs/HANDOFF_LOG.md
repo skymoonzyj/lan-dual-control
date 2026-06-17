@@ -21,6 +21,40 @@
 
 日期：2026-06-17 续跑
 开发端：Windows Codex
+本轮目标：给 Windows host readiness 增加 PowerShell 包装入口，方便现场用 PowerShell 7/Windows PowerShell 跑一键体检和 Agent Link Board 摘要。
+完成内容：
+- 新增 `scripts/windows/check-windows-host-readiness.ps1`，把 `-CheckBoard`、`-BoardSummary`、`-Json`、`-Profile default|deploy|deep`、`-ProbeMedia`、`-ProbeVideo`、`-ProbeAudio`、`-ProbeClipboardSecurity`、`-ProbeWgcH264Sources`、`-Require*` 等常用参数转给同一个 Node readiness 脚本。
+- `-Help/-h` 只打印说明，不启动 host、不认证、不要求或打印密码、不发送 input/inject；帮助里同步列出 `WindowsHostMedia=`、`WindowsVideoSupport=`、`ReverseGrant=` 和 `ReverseGrantPs=`。
+- `test-windows-host-readiness-board-summary` 扩展到覆盖 PowerShell wrapper help、`-Json -CheckBoard` 和 `-BoardSummary -CheckBoard`，确认一行摘要、active currentCall、`WindowsVideoSupport=`、`ReverseGrantPs=` 和不泄密。
+- Windows host README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `scripts/windows/check-windows-host-readiness.ps1`
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- PowerShell AST 解析 `scripts/windows/check-windows-host-readiness.ps1`
+- Windows PowerShell `-Help` 和 PowerShell 7 `-Help`
+- `node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 45000`
+- 定点 help coverage
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows apps/windows-host docs`
+遗留问题：
+- 本轮只补 PowerShell 包装和只读/低风险体检入口；真实 Mac 反控 Windows 仍需 Windows host 在线、用户在 Windows 本机确认授权后再联调。
+下一步建议：
+- 现场 Mac 控制 Windows 前优先跑 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-host-readiness.ps1 -CheckBoard -BoardSummary` 发一行无密 readiness，再按需要用 `-Profile deploy` 或 `-ProbeMedia` 做更严格验收。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
 本轮目标：把 PowerShell 7 版一次性反控授权命令接入 Windows 恢复总览、host status 和 readiness 摘要。
 完成内容：
 - `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `ReverseGrantPs=` / `windowsReverseControlGrantPowerShellBoardSummary`，同时保留 Node `ReverseGrant=` 备用命令。
