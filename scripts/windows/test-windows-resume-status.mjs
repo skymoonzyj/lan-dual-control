@@ -263,8 +263,9 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "Windows video encoder/WGC/WebCodecs support", `help ${flag}`);
     assertIncludes(result.stdout, "check-windows-video-encoder-support.mjs --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "local alert-watcher start/status commands", `help ${flag}`);
-    assertIncludes(result.stdout, "MacDiscovery command", `help ${flag}`);
+    assertIncludes(result.stdout, "MacDiscovery Node and PowerShell commands", `help ${flag}`);
     assertIncludes(result.stdout, "discover-lan-hosts.mjs --noLocalSubnets", `help ${flag}`);
+    assertIncludes(result.stdout, "discover-lan-hosts.ps1 -NoLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "formal manual checklist command", `help ${flag}`);
     assertIncludes(result.stdout, "input_ack", `help ${flag}`);
     assertIncludes(result.stdout, "checks", `help ${flag}`);
@@ -306,6 +307,12 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.macHostDiscoveryBoardSummary || "").includes(`--port ${port}`), "mock JSON Mac discovery should use discovered mock port");
     assert(String(payload.commands?.macHostDiscoveryBoardSummary || "").includes("--requireMacHost"), "mock JSON Mac discovery should require a Mac host");
     assert(String(payload.commands?.macHostDiscoveryBoardSummary || "").includes("--boardSummary"), "mock JSON Mac discovery should be board-safe");
+    assert(String(payload.commands?.macHostDiscoveryPowerShellBoardSummary || "").includes("discover-lan-hosts.ps1"), "mock JSON should include Mac discovery PowerShell command");
+    assert(String(payload.commands?.macHostDiscoveryPowerShellBoardSummary || "").includes("-NoLocalSubnets"), "mock JSON Mac discovery PowerShell should use fixed target discovery");
+    assert(String(payload.commands?.macHostDiscoveryPowerShellBoardSummary || "").includes("-HostName 127.0.0.1"), "mock JSON Mac discovery PowerShell should target discovered host");
+    assert(String(payload.commands?.macHostDiscoveryPowerShellBoardSummary || "").includes(`-Port ${port}`), "mock JSON Mac discovery PowerShell should use discovered mock port");
+    assert(String(payload.commands?.macHostDiscoveryPowerShellBoardSummary || "").includes("-RequireMacHost"), "mock JSON Mac discovery PowerShell should require a Mac host");
+    assert(String(payload.commands?.macHostDiscoveryPowerShellBoardSummary || "").includes("-BoardSummary"), "mock JSON Mac discovery PowerShell should be board-safe");
     assert(String(payload.commands?.formalChecklistBoardSummary || "").includes("check-mac-formal-e2e.ps1"), "mock JSON should include formal checklist command");
     assert(String(payload.commands?.formalChecklistBoardSummary || "").includes("-DiscoverNoLocalSubnets"), "mock JSON formal checklist should use fixed target discovery");
     assert(String(payload.commands?.formalChecklistBoardSummary || "").includes("-PreflightOnly"), "mock JSON formal checklist should be preflight-only");
@@ -415,6 +422,9 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "MacDiscovery=", "board summary");
     assertIncludes(result.stdout, "discover-lan-hosts.mjs --noLocalSubnets --host 127.0.0.1", "board summary");
     assertIncludes(result.stdout, "--requireMacHost --boardSummary", "board summary");
+    assertIncludes(result.stdout, "MacDiscoveryPs=", "board summary");
+    assertIncludes(result.stdout, "discover-lan-hosts.ps1 -NoLocalSubnets -HostName 127.0.0.1", "board summary");
+    assertIncludes(result.stdout, "-RequireMacHost -BoardSummary", "board summary");
     assertIncludes(result.stdout, "FormalChecklist=", "board summary");
     assertIncludes(result.stdout, "check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "board summary");
     assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "board summary");

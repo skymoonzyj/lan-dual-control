@@ -52,6 +52,8 @@ The report also includes a Windows host media baseline command:
 node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
 It also includes a secret-free Mac host discovery command:
 node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host <Mac IP> --port 43770 --requireMacHost --boardSummary
+PowerShell equivalent:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/discover-lan-hosts.ps1 -NoLocalSubnets -HostName <Mac IP> -Port 43770 -RequireMacHost -BoardSummary
 It also includes the Windows -> Mac formal manual checklist command:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName <Mac IP> -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
 The board summary labels it as:

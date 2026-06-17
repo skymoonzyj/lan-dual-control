@@ -201,6 +201,7 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "--probeMedia --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "Mac host discovery command", "PowerShell wrapper help");
   assertIncludes(output, "discover-lan-hosts.mjs --noLocalSubnets", "PowerShell wrapper help");
+  assertIncludes(output, "discover-lan-hosts.ps1 -NoLocalSubnets", "PowerShell wrapper help");
   assertIncludes(output, "--requireMacHost --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "Windows -> Mac formal manual checklist command", "PowerShell wrapper help");
   assertIncludes(output, "check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "PowerShell wrapper help");
@@ -251,6 +252,12 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.macHostDiscoveryBoardSummary, `--port ${port}`, "mock JSON Mac discovery command");
     assertIncludes(payload.commands?.macHostDiscoveryBoardSummary, "--requireMacHost", "mock JSON Mac discovery command");
     assertIncludes(payload.commands?.macHostDiscoveryBoardSummary, "--boardSummary", "mock JSON Mac discovery command");
+    assertIncludes(payload.commands?.macHostDiscoveryPowerShellBoardSummary, "discover-lan-hosts.ps1", "mock JSON Mac discovery PowerShell command");
+    assertIncludes(payload.commands?.macHostDiscoveryPowerShellBoardSummary, "-NoLocalSubnets", "mock JSON Mac discovery PowerShell command");
+    assertIncludes(payload.commands?.macHostDiscoveryPowerShellBoardSummary, "-HostName 127.0.0.1", "mock JSON Mac discovery PowerShell command");
+    assertIncludes(payload.commands?.macHostDiscoveryPowerShellBoardSummary, `-Port ${port}`, "mock JSON Mac discovery PowerShell command");
+    assertIncludes(payload.commands?.macHostDiscoveryPowerShellBoardSummary, "-RequireMacHost", "mock JSON Mac discovery PowerShell command");
+    assertIncludes(payload.commands?.macHostDiscoveryPowerShellBoardSummary, "-BoardSummary", "mock JSON Mac discovery PowerShell command");
     assertIncludes(payload.commands?.formalChecklistBoardSummary, "check-mac-formal-e2e.ps1", "mock JSON formal checklist command");
     assertIncludes(payload.commands?.formalChecklistBoardSummary, "-DiscoverNoLocalSubnets", "mock JSON formal checklist command");
     assertIncludes(payload.commands?.formalChecklistBoardSummary, "-PreflightOnly", "mock JSON formal checklist command");
@@ -325,6 +332,9 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "MacDiscovery=", "PowerShell board summary");
     assertIncludes(output, "discover-lan-hosts.mjs --noLocalSubnets --host 127.0.0.1", "PowerShell board summary");
     assertIncludes(output, "--requireMacHost --boardSummary", "PowerShell board summary");
+    assertIncludes(output, "MacDiscoveryPs=", "PowerShell board summary");
+    assertIncludes(output, "discover-lan-hosts.ps1 -NoLocalSubnets -HostName 127.0.0.1", "PowerShell board summary");
+    assertIncludes(output, "-RequireMacHost -BoardSummary", "PowerShell board summary");
     assertIncludes(output, "FormalChecklist=", "PowerShell board summary");
     assertIncludes(output, "check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "PowerShell board summary");
     assertIncludes(output, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "PowerShell board summary");
