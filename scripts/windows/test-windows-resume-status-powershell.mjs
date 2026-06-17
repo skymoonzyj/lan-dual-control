@@ -291,6 +291,14 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.windowsWgcSupportBoardSummary, "--boardSummary", "mock JSON WGC command");
     assertIncludes(payload.commands?.windowsWgcSupportPowerShellBoardSummary, "check-windows-wgc-support.ps1", "mock JSON WGC PowerShell command");
     assertIncludes(payload.commands?.windowsWgcSupportPowerShellBoardSummary, "-BoardSummary", "mock JSON WGC PowerShell command");
+    assertIncludes(payload.commands?.windowsWgcBenchmarkBoardSummary, "benchmark-windows-wgc-settings.mjs", "mock JSON WGC benchmark command");
+    assertIncludes(payload.commands?.windowsWgcBenchmarkBoardSummary, "--profile 60:20000:balanced", "mock JSON WGC benchmark command");
+    assertIncludes(payload.commands?.windowsWgcBenchmarkBoardSummary, "--durationMs 1800", "mock JSON WGC benchmark command");
+    assertIncludes(payload.commands?.windowsWgcBenchmarkBoardSummary, "--boardSummary", "mock JSON WGC benchmark command");
+    assertIncludes(payload.commands?.windowsWgcBenchmarkPowerShellBoardSummary, "benchmark-windows-wgc-settings.ps1", "mock JSON WGC benchmark PowerShell command");
+    assertIncludes(payload.commands?.windowsWgcBenchmarkPowerShellBoardSummary, "-Profile 60:20000:balanced", "mock JSON WGC benchmark PowerShell command");
+    assertIncludes(payload.commands?.windowsWgcBenchmarkPowerShellBoardSummary, "-DurationMs 1800", "mock JSON WGC benchmark PowerShell command");
+    assertIncludes(payload.commands?.windowsWgcBenchmarkPowerShellBoardSummary, "-BoardSummary", "mock JSON WGC benchmark PowerShell command");
     assertIncludes(payload.commands?.windowsWgcH264SourceCompareBoardSummary, "compare-windows-wgc-h264-sources.mjs", "mock JSON WGC compare command");
     assertIncludes(payload.commands?.windowsWgcH264SourceCompareBoardSummary, "--profile 60:20000:balanced", "mock JSON WGC compare command");
     assertIncludes(payload.commands?.windowsWgcH264SourceCompareBoardSummary, "--boardSummary", "mock JSON WGC compare command");
@@ -396,6 +404,10 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "check-windows-wgc-support.mjs --boardSummary", "PowerShell board summary");
     assertIncludes(output, "WindowsWgcSupportPs=", "PowerShell board summary");
     assertIncludes(output, "check-windows-wgc-support.ps1 -BoardSummary", "PowerShell board summary");
+    assertIncludes(output, "WindowsWgcBenchmark=", "PowerShell board summary");
+    assertIncludes(output, "benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", "PowerShell board summary");
+    assertIncludes(output, "WindowsWgcBenchmarkPs=", "PowerShell board summary");
+    assertIncludes(output, "benchmark-windows-wgc-settings.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary", "PowerShell board summary");
     assertIncludes(output, "WindowsWgcCompare=", "PowerShell board summary");
     assertIncludes(output, "compare-windows-wgc-h264-sources.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", "PowerShell board summary");
     assertIncludes(output, "WindowsWgcComparePs=", "PowerShell board summary");

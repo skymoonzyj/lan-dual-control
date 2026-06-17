@@ -646,6 +646,18 @@ function makeCommands(args, preflight) {
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-wgc-support.ps1",
       "-BoardSummary",
     ].join(" "),
+    windowsWgcBenchmarkBoardSummary: [
+      "node scripts/windows/benchmark-windows-wgc-settings.mjs",
+      "--profile", "60:20000:balanced",
+      "--durationMs", "1800",
+      "--boardSummary",
+    ].join(" "),
+    windowsWgcBenchmarkPowerShellBoardSummary: [
+      "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/benchmark-windows-wgc-settings.ps1",
+      "-Profile", "60:20000:balanced",
+      "-DurationMs", "1800",
+      "-BoardSummary",
+    ].join(" "),
     windowsWgcH264SourceCompareBoardSummary: [
       "node scripts/windows/compare-windows-wgc-h264-sources.mjs",
       "--profile", "60:20000:balanced",
@@ -852,6 +864,8 @@ function makeBoardSummary(report) {
     `WindowsVideoSupportPs=${report.commands.windowsVideoEncoderSupportPowerShellBoardSummary}.`,
     `WindowsWgcSupport=${report.commands.windowsWgcSupportBoardSummary}.`,
     `WindowsWgcSupportPs=${report.commands.windowsWgcSupportPowerShellBoardSummary}.`,
+    `WindowsWgcBenchmark=${report.commands.windowsWgcBenchmarkBoardSummary}.`,
+    `WindowsWgcBenchmarkPs=${report.commands.windowsWgcBenchmarkPowerShellBoardSummary}.`,
     `WindowsWgcCompare=${report.commands.windowsWgcH264SourceCompareBoardSummary}.`,
     `WindowsWgcComparePs=${report.commands.windowsWgcH264SourceComparePowerShellBoardSummary}.`,
     `WindowsWebCodecs=${report.commands.windowsWebCodecsH264BoardSummary}.`,
@@ -1056,6 +1070,8 @@ function printHuman(report) {
   console.log(`  ${report.commands.windowsVideoEncoderSupportPowerShellBoardSummary}`);
   console.log(`  ${report.commands.windowsWgcSupportBoardSummary}`);
   console.log(`  ${report.commands.windowsWgcSupportPowerShellBoardSummary}`);
+  console.log(`  ${report.commands.windowsWgcBenchmarkBoardSummary}`);
+  console.log(`  ${report.commands.windowsWgcBenchmarkPowerShellBoardSummary}`);
   console.log(`  ${report.commands.windowsWgcH264SourceCompareBoardSummary}`);
   console.log(`  ${report.commands.windowsWgcH264SourceComparePowerShellBoardSummary}`);
   console.log(`  ${report.commands.windowsWebCodecsH264BoardSummary}`);

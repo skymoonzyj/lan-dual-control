@@ -348,6 +348,14 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsWgcSupportBoardSummary || "").includes("--boardSummary"), "mock JSON WGC command should be board-safe");
     assert(String(payload.commands?.windowsWgcSupportPowerShellBoardSummary || "").includes("check-windows-wgc-support.ps1"), "mock JSON should include Windows WGC PowerShell command");
     assert(String(payload.commands?.windowsWgcSupportPowerShellBoardSummary || "").includes("-BoardSummary"), "mock JSON WGC PowerShell command should be board-safe");
+    assert(String(payload.commands?.windowsWgcBenchmarkBoardSummary || "").includes("benchmark-windows-wgc-settings.mjs"), "mock JSON should include Windows WGC benchmark command");
+    assert(String(payload.commands?.windowsWgcBenchmarkBoardSummary || "").includes("--profile 60:20000:balanced"), "mock JSON WGC benchmark command should use the default profile");
+    assert(String(payload.commands?.windowsWgcBenchmarkBoardSummary || "").includes("--durationMs 1800"), "mock JSON WGC benchmark command should use the short board duration");
+    assert(String(payload.commands?.windowsWgcBenchmarkBoardSummary || "").includes("--boardSummary"), "mock JSON WGC benchmark command should be board-safe");
+    assert(String(payload.commands?.windowsWgcBenchmarkPowerShellBoardSummary || "").includes("benchmark-windows-wgc-settings.ps1"), "mock JSON should include Windows WGC benchmark PowerShell command");
+    assert(String(payload.commands?.windowsWgcBenchmarkPowerShellBoardSummary || "").includes("-Profile 60:20000:balanced"), "mock JSON WGC benchmark PowerShell command should use the default profile");
+    assert(String(payload.commands?.windowsWgcBenchmarkPowerShellBoardSummary || "").includes("-DurationMs 1800"), "mock JSON WGC benchmark PowerShell command should use the short board duration");
+    assert(String(payload.commands?.windowsWgcBenchmarkPowerShellBoardSummary || "").includes("-BoardSummary"), "mock JSON WGC benchmark PowerShell command should be board-safe");
     assert(String(payload.commands?.windowsWgcH264SourceCompareBoardSummary || "").includes("compare-windows-wgc-h264-sources.mjs"), "mock JSON should include Windows WGC compare command");
     assert(String(payload.commands?.windowsWgcH264SourceCompareBoardSummary || "").includes("--profile 60:20000:balanced"), "mock JSON WGC compare command should use the default profile");
     assert(String(payload.commands?.windowsWgcH264SourceCompareBoardSummary || "").includes("--boardSummary"), "mock JSON WGC compare command should be board-safe");
@@ -496,6 +504,10 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "check-windows-wgc-support.mjs --boardSummary", "board summary");
     assertIncludes(result.stdout, "WindowsWgcSupportPs=", "board summary");
     assertIncludes(result.stdout, "check-windows-wgc-support.ps1 -BoardSummary", "board summary");
+    assertIncludes(result.stdout, "WindowsWgcBenchmark=", "board summary");
+    assertIncludes(result.stdout, "benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", "board summary");
+    assertIncludes(result.stdout, "WindowsWgcBenchmarkPs=", "board summary");
+    assertIncludes(result.stdout, "benchmark-windows-wgc-settings.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary", "board summary");
     assertIncludes(result.stdout, "WindowsWgcCompare=", "board summary");
     assertIncludes(result.stdout, "compare-windows-wgc-h264-sources.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", "board summary");
     assertIncludes(result.stdout, "WindowsWgcComparePs=", "board summary");

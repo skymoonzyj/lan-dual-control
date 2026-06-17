@@ -21,6 +21,43 @@
 
 日期：2026-06-17 续跑
 开发端：Windows Codex
+本轮目标：把 Windows WGC 刷新率/码率 benchmark 接入 Windows 恢复总览。
+完成内容：
+- `scripts/windows/check-windows-resume-status.mjs` 的 JSON、普通输出和 `--boardSummary` 新增 `WindowsWgcBenchmark=` / `WindowsWgcBenchmarkPs=`，指向 `benchmark-windows-wgc-settings` 的 Node 与 PowerShell 一行摘要命令。
+- `scripts/windows/test-windows-resume-status.mjs` 和 `scripts/windows/test-windows-resume-status-powershell.mjs` 增加 mock JSON 与 boardSummary 断言，锁定 benchmark 命令使用 `60:20000:balanced`、`1800ms` 和无密摘要模式。
+- 当前状态、下一步、任务板和锁表已同步；恢复后可直接从 `check-windows-resume-status --checkBoard --boardSummary` 复制基础 benchmark 或 raw-bgra/NV12 compare 两级 WGC 排查命令。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-windows-resume-status.mjs`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-powershell-help.mjs --script check-windows-resume-status.ps1 --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`
+- `git diff --check`
+- conflict marker scan
+遗留问题：
+- 本轮只把现有 benchmark 入口接到恢复总览，没有实际跑真实 WGC benchmark；真实性能数据仍按现场需要手动运行 `WindowsWgcBenchmark=` 或 `WindowsWgcBenchmarkPs=`。
+下一步建议：
+- 白天恢复后先跑 `check-windows-resume-status --checkBoard --boardSummary`，若要看基础刷新率/码率表现先用 `WindowsWgcBenchmark=`，需要 raw-bgra/NV12 源格式对照再用 `WindowsWgcCompare=`。
+是否改了协议：否。
+是否需要另一端配合：否；真实观感/资源对照时再通过 Agent Link Board 呼叫 Mac 端。
+
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
 本轮目标：给 Windows WGC 刷新率/码率 benchmark 增加可上板摘要和 PowerShell 入口。
 完成内容：
 - `scripts/windows/benchmark-windows-wgc-settings.mjs` 新增 `--boardSummary`，JSON 同步带 `boardSummary` 字段；摘要包含分辨率、H.264/重复帧模式、各 profile 帧数/FPS/fresh/source/repeat/pipeline，并声明 no formal password/no Mac auth/no input/inject。
