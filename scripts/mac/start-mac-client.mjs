@@ -19,6 +19,7 @@ const defaults = {
 };
 
 const copyDiagnosticsAction = "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码";
+const formalSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -196,6 +197,7 @@ function makeBoardSummary(report) {
     return [
       `Mac client page online at ${report.url}; pid=${report.processId || "existing"}; title=${report.titleFound ? "ok" : "unexpected"}.`,
       "Next: run check-mac-client-formal-status --host <Windows IP> --port 43770 --boardSummary before true Windows control.",
+      `MacClientFormalSmoke=${formalSmokeCommand}.`,
       `CopyDiagnostics=${copyDiagnosticsAction}.`,
       "No password was requested or sent; no Windows connection/input was attempted.",
     ].join(" ");
@@ -203,6 +205,7 @@ function makeBoardSummary(report) {
   return [
     `Mac client page offline at ${report.url}: ${report.error?.message || "unknown"}.`,
     "Next: start with node scripts/mac/start-mac-client.mjs, then rerun formal checklist.",
+    `MacClientFormalSmoke=${formalSmokeCommand}.`,
     `CopyDiagnostics=页面在线后在 ${copyDiagnosticsAction}.`,
     "No password was requested or sent; no Windows connection/input was attempted.",
   ].join(" ");
@@ -213,6 +216,7 @@ function makeCommands(args) {
     macClientStartOrReuseCommand: `node scripts/mac/start-mac-client.mjs --host ${args.host} --port ${args.port} --allowExisting`,
     macClientFormalStatusCommand:
       "node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary",
+    macClientFormalSmokeCommand: formalSmokeCommand,
     macClientCopyDiagnosticsAction: copyDiagnosticsAction,
   };
 }

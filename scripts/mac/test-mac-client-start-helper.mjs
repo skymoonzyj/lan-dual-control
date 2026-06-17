@@ -87,6 +87,20 @@ function print(kind, text) {
   console.log(`[${kind}] ${text}`);
 }
 
+function assertFormalSmokeCommand(command, label) {
+  assertIncludes(command, "run-mac-client-formal-smoke.mjs", label);
+  assertIncludes(command, "--discover", label);
+  assertIncludes(command, "--ensureClient", label);
+  assertIncludes(command, "--preflightOnly", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "--json", label);
+}
+
 async function getFreePort() {
   return new Promise((resolvePort, rejectPort) => {
     const server = createServer();
@@ -146,6 +160,7 @@ async function checkOfflineStatus(args) {
   assert(payload.ok === false, "offline payload should be ok=false");
   assert(payload.online === false, "offline payload should be online=false");
   assertIncludes(payload.boardSummary || "", "Mac client page offline", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "CopyDiagnostics=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "复制诊断", "offline board summary");
   assertIncludes(payload.boardSummary || "", "连接密码", "offline board summary");
@@ -153,6 +168,7 @@ async function checkOfflineStatus(args) {
   assertIncludes(payload.commands?.macClientStartOrReuseCommand || "", "--allowExisting", "offline commands");
   assertIncludes(payload.commands?.macClientFormalStatusCommand || "", "check-mac-client-formal-status", "offline commands");
   assertIncludes(payload.commands?.macClientFormalStatusCommand || "", "<Windows IP>", "offline commands");
+  assertFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "offline formal smoke commands");
   assertIncludes(payload.commands?.macClientCopyDiagnosticsAction || "", "复制诊断", "offline commands");
   assertIncludes(payload.commands?.macClientCopyDiagnosticsAction || "", "连接密码", "offline commands");
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "offline status");
@@ -163,6 +179,7 @@ async function checkOfflineStatus(args) {
   const summaryLine = assertSingleLine(summary.stdout, "offline board summary stdout");
   assert(summary.status !== 0, "offline board summary should fail");
   assertIncludes(summaryLine, "Mac client page offline", "offline board summary stdout");
+  assertIncludes(summaryLine, "MacClientFormalSmoke=", "offline board summary stdout");
   assertIncludes(summaryLine, "CopyDiagnostics=", "offline board summary stdout");
   assertIncludes(summaryLine, "复制诊断", "offline board summary stdout");
   assertIncludes(summaryLine, "连接密码", "offline board summary stdout");
@@ -181,11 +198,13 @@ async function checkStartAndExisting(args) {
   assert(started.online === true, "started payload should be online=true");
   assert(started.processId, "started payload should include processId");
   assertIncludes(started.boardSummary || "", "Mac client page online", "start board summary");
+  assertIncludes(started.boardSummary || "", "MacClientFormalSmoke=", "start board summary");
   assertIncludes(started.boardSummary || "", "CopyDiagnostics=", "start board summary");
   assertIncludes(started.boardSummary || "", "复制诊断", "start board summary");
   assertIncludes(started.boardSummary || "", "连接密码", "start board summary");
   assertIncludes(started.commands?.macClientStartOrReuseCommand || "", `--port ${port}`, "start commands");
   assertIncludes(started.commands?.macClientFormalStatusCommand || "", "check-mac-client-formal-status", "start commands");
+  assertFormalSmokeCommand(started.commands?.macClientFormalSmokeCommand || "", "start formal smoke commands");
   assertIncludes(started.commands?.macClientCopyDiagnosticsAction || "", "复制诊断", "start commands");
   assertNotIncludes(`${start.stdout}\n${start.stderr}`, "demo-password", "start output");
 
@@ -200,6 +219,7 @@ async function checkStartAndExisting(args) {
     assert(statusPayload.ok === true, "online status should be ok=true");
     assert(statusPayload.online === true, "online status should be online=true");
     assertIncludes(statusPayload.boardSummary || "", "CopyDiagnostics=", "online status board summary");
+    assertIncludes(statusPayload.boardSummary || "", "MacClientFormalSmoke=", "online status board summary");
     assertIncludes(statusPayload.boardSummary || "", "复制诊断", "online status board summary");
     assertIncludes(statusPayload.commands?.macClientStartOrReuseCommand || "", `--port ${port}`, "online status commands");
     assertIncludes(
@@ -207,6 +227,7 @@ async function checkStartAndExisting(args) {
       "check-mac-client-formal-status",
       "online status commands",
     );
+    assertFormalSmokeCommand(statusPayload.commands?.macClientFormalSmokeCommand || "", "online status formal smoke commands");
     assertIncludes(statusPayload.commands?.macClientCopyDiagnosticsAction || "", "连接密码", "online status commands");
 
     const summary = run(["--status", "--boardSummary", "--port", String(port), "--timeoutMs", "1200"], {
@@ -215,6 +236,7 @@ async function checkStartAndExisting(args) {
     const summaryLine = assertSingleLine(summary.stdout, "online board summary stdout");
     assert(summary.status === 0, "online board summary should pass");
     assertIncludes(summaryLine, "Mac client page online", "online board summary stdout");
+    assertIncludes(summaryLine, "MacClientFormalSmoke=", "online board summary stdout");
     assertIncludes(summaryLine, "CopyDiagnostics=", "online board summary stdout");
     assertIncludes(summaryLine, "复制诊断", "online board summary stdout");
     assertIncludes(summaryLine, "连接密码", "online board summary stdout");
@@ -235,6 +257,7 @@ async function checkStartAndExisting(args) {
     assert(allowedPayload.ok === true, "allow existing payload should be ok=true");
     assert(allowedPayload.processId === null, "allow existing should not claim a new process id");
     assertIncludes(allowedPayload.commands?.macClientStartOrReuseCommand || "", `--port ${port}`, "allow existing commands");
+    assertFormalSmokeCommand(allowedPayload.commands?.macClientFormalSmokeCommand || "", "allow existing formal smoke commands");
     assertIncludes(
       allowedPayload.commands?.macClientCopyDiagnosticsAction || "",
       "复制诊断",
