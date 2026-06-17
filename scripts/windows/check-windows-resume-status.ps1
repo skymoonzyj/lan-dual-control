@@ -20,6 +20,7 @@ param(
   [switch] $BoardSummary,
   [switch] $UserAuthRequest,
   [switch] $SendUserAuthRequest,
+  [Alias("h")]
   [switch] $Help
 )
 

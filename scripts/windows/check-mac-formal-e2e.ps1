@@ -38,6 +38,7 @@ param(
   [string] $Server = "http://192.168.31.68:17888",
   [switch] $Json,
   [switch] $BoardSummary,
+  [Alias("h")]
   [switch] $Help
 )
 
