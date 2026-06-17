@@ -201,6 +201,9 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "--probeMedia --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "Windows local one-time reverse-control grant", "PowerShell wrapper help");
   assertIncludes(output, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770", "PowerShell wrapper help");
+  assertIncludes(output, "one-line no-password Windows client diagnostics command", "PowerShell wrapper help");
+  assertIncludes(output, "test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000", "PowerShell wrapper help");
+  assertIncludes(output, "Use that first for Agent Link Board", "PowerShell wrapper help");
   assertIncludes(output, "Windows local Mac alert watcher commands", "PowerShell wrapper help");
   assertIncludes(output, "start-mac-alert-watcher.ps1 -Server", "PowerShell wrapper help");
   assertIncludes(output, "checks the watcher status read-only", "PowerShell wrapper help");
