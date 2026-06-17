@@ -117,6 +117,70 @@ async function withMockHost(callback) {
   }
 }
 
+async function withRuntimeDiscoveryHost(callback) {
+  const buildId = "resume-runtime-build";
+  const server = http.createServer((request, response) => {
+    const headers = {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    };
+    if (request.method === "OPTIONS") {
+      response.writeHead(204, headers);
+      response.end();
+      return;
+    }
+    if ((request.url ?? "").split("?")[0] !== "/discovery") {
+      response.writeHead(404, headers);
+      response.end(JSON.stringify({ ok: false, error: "not found" }));
+      return;
+    }
+    const port = server.address().port;
+    response.writeHead(200, headers);
+    response.end(JSON.stringify({
+      type: "lan_dual_discovery",
+      protocolVersion: 1,
+      deviceId: "resume-runtime-mac",
+      deviceName: "Resume Runtime Mac",
+      platform: "macos",
+      role: "host",
+      host: "127.0.0.1",
+      port,
+      controlPort: port,
+      runtime: {
+        buildId,
+        processId: 24680,
+        uptimeSeconds: 12,
+      },
+      capabilities: {
+        video: true,
+        h264Stream: true,
+        audio: true,
+        audioMode: "system-pcm",
+        clipboardText: true,
+        clipboardFile: true,
+        inputMode: "log",
+        mock: true,
+        maxScreenFps: 30,
+      },
+      permissions: {
+        screenRecording: true,
+        accessibility: true,
+        inputMonitoring: true,
+      },
+      lastSeenAt: new Date().toISOString(),
+    }));
+  });
+  await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  const address = server.address();
+  try {
+    await callback(Number(address.port), buildId);
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose));
+  }
+}
+
 async function withMockLinkBoard(callback, stateOverrides = {}) {
   const messages = [];
   const state = {
@@ -276,6 +340,37 @@ async function checkMockJson(args) {
     assert(Array.isArray(payload.windowsMacAlertWatcher?.stdoutTail), "watcher status should include stdout tail");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "mock JSON");
     console.log("[OK] Windows resume status JSON summarizes mock Mac preflight");
+  });
+}
+
+async function checkRuntimeBuildClientDiagnosticsCommand(args) {
+  await withRuntimeDiscoveryHost(async (port, buildId) => {
+    const result = await run([
+      "--discover",
+      "--discoverNoLocalSubnets",
+      "--host", "127.0.0.1",
+      "--port", String(port),
+      "--json",
+      "--allowMockVideo",
+      "--skipAudio",
+      "--skipClipboard",
+      "--skipInputLog",
+    ], args);
+    assert(result.exitCode === 0, `runtime discovery JSON resume failed\n${result.stdout}\n${result.stderr}`);
+    const payload = JSON.parse(result.stdout);
+    assert(payload.macPreflight?.payload?.runtime?.buildId === buildId, "preflight should expose runtime build id");
+    assertIncludes(
+      payload.commands?.windowsClientDiagnosticsCommand,
+      `--expectDiscoveryRuntimeBuildId ${buildId}`,
+      "runtime JSON client diagnostics command",
+    );
+    assertIncludes(
+      payload.boardSummary,
+      `--expectDiscoveryRuntimeBuildId ${buildId}`,
+      "runtime board summary client diagnostics command",
+    );
+    assertNotIncludes(result.stdout + result.stderr, "test-password", "runtime JSON");
+    console.log("[OK] Windows resume status client diagnostics command pins discovery runtime build");
   });
 }
 
@@ -535,6 +630,7 @@ async function main() {
   const args = parseArgs(process.argv);
   await checkHelp(args);
   await checkMockJson(args);
+  await checkRuntimeBuildClientDiagnosticsCommand(args);
   await checkBoardSummary(args);
   await checkBoardCurrentCallJson(args);
   await checkBoardDoneCallJson(args);

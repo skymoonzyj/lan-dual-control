@@ -526,7 +526,21 @@ function makeCommands(args, preflight) {
   const target = preflight.payload?.target || { host: args.host, port: args.port };
   const host = String(target.host || args.host);
   const port = Number(target.port || args.port);
+  const runtimeBuildId = String(preflight.payload?.runtime?.buildId || "").trim();
   const windowsHostPort = 43770;
+  const windowsClientDiagnosticsCommand = [
+    "node scripts/windows/test-windows-client-browser.mjs",
+    "--discover",
+    "--discoverNoLocalSubnets",
+    "--host", host,
+    "--port", String(port),
+    "--diagnosticsOnly",
+    "--boardSummary",
+    "--timeoutMs", "45000",
+  ];
+  if (runtimeBuildId && !/\s/.test(runtimeBuildId)) {
+    windowsClientDiagnosticsCommand.push("--expectDiscoveryRuntimeBuildId", runtimeBuildId);
+  }
   return {
     resumeBoardSummary: "node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary",
     preflightBoardSummary: [
@@ -591,16 +605,7 @@ function makeCommands(args, preflight) {
       "-DurationMs", "30000",
       "-BoardSummary",
     ].join(" "),
-    windowsClientDiagnosticsCommand: [
-      "node scripts/windows/test-windows-client-browser.mjs",
-      "--discover",
-      "--discoverNoLocalSubnets",
-      "--host", host,
-      "--port", String(port),
-      "--diagnosticsOnly",
-      "--boardSummary",
-      "--timeoutMs", "45000",
-    ].join(" "),
+    windowsClientDiagnosticsCommand: windowsClientDiagnosticsCommand.join(" "),
     windowsClientCopyDiagnosticsAction: "Windows 控制端事件面板点击“复制诊断”，先看“快速摘要”。",
     windowsMacAlertWatcherStart: [
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1",
