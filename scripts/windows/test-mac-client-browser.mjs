@@ -1042,6 +1042,8 @@ async function verifyMacClientLogExport({ args, session }) {
           missing,
           forbidden,
           hasDownloadButton: Boolean(elements.exportLogButton),
+          hasCopyButton: Boolean(elements.copyLogButton),
+          copyLogButtonDisabled: elements.copyLogButton?.disabled || false,
           exportLogButtonDisabled: elements.exportLogButton?.disabled || false,
           preview: text.split("\\n").slice(0, 16).join("\\n"),
         };
@@ -1075,6 +1077,12 @@ async function verifyMacClientLogExport({ args, session }) {
   if (!result?.hasDownloadButton) {
     throw new Error("Mac client log export button is missing");
   }
+  if (!result?.hasCopyButton) {
+    throw new Error("Mac client copy diagnostics button is missing");
+  }
+  if (result.copyLogButtonDisabled) {
+    throw new Error("Mac client copy diagnostics button is disabled");
+  }
   if (result.exportLogButtonDisabled) {
     throw new Error("Mac client log export button is disabled");
   }
@@ -1082,6 +1090,46 @@ async function verifyMacClientLogExport({ args, session }) {
     throw new Error(`Mac client log export mismatch: ${JSON.stringify(result)}`);
   }
   print("OK", `Log export snapshot: ${compactProgressText(result.preview, 140)}`);
+
+  const initialInputEvents = Number(await evaluate(
+    session,
+    `(() => (window.__lanDualSentMessages || []).filter((message) => message.type === "input_event").length)()`,
+  )) || 0;
+  await clickElement(session, "#copyLogButton");
+  const copiedSnapshot = await waitForPageSnapshot({
+    args,
+    session,
+    label: "Mac client copy diagnostics",
+    check: async (value) => (
+      value.logCopyStatus.includes("诊断已复制") &&
+      value.copyLogButtonDisabled === false &&
+      Number(value.inputEvents) === initialInputEvents
+        ? value
+        : null
+    ),
+  });
+  const copiedText = await evaluate(session, "navigator.clipboard.readText()");
+  const requiredCopied = [
+    "LAN Dual Control Mac 控制端日志",
+    "连接状态",
+    "显示与媒体",
+    "输入与剪贴板",
+    "事件记录",
+  ];
+  const missingCopied = requiredCopied.filter((item) => !copiedText.includes(item));
+  const forbiddenCopied = [
+    args.clientPassword || "",
+    "password",
+    "密码：",
+  ].filter((item) => item && copiedText.toLowerCase().includes(String(item).toLowerCase()));
+  if (missingCopied.length || forbiddenCopied.length) {
+    throw new Error(`Mac client copied diagnostics mismatch: ${JSON.stringify({
+      missingCopied,
+      forbiddenCopied,
+      preview: copiedText.slice(0, 240),
+    })}`);
+  }
+  print("OK", `Copy diagnostics: ${copiedSnapshot.logCopyStatus}`);
 }
 
 async function observeMacClientVideo({ args, session, label = "Video observe" }) {
@@ -1279,6 +1327,8 @@ function buildSnapshotExpression() {
       connectButtonDisabled: document.querySelector("#connectButton")?.disabled || false,
       reconnectNowHidden: document.querySelector("#reconnectNowButton")?.hidden !== false,
       reconnectNowDisabled: document.querySelector("#reconnectNowButton")?.disabled !== false,
+      copyLogButtonDisabled: document.querySelector("#copyLogButton")?.disabled || false,
+      logCopyStatus: text("#logCopyStatus"),
       exportLogButtonDisabled: document.querySelector("#exportLogButton")?.disabled || false,
       disconnectButtonDisabled: document.querySelector("#disconnectButton")?.disabled || false,
       sendClipboardButtonDisabled: document.querySelector("#sendClipboardButton")?.disabled || false,

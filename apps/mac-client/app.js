@@ -52,7 +52,9 @@ const elements = {
   sendClipboardFilesButton: document.querySelector("#sendClipboardFilesButton"),
   fileClipboardStatus: document.querySelector("#fileClipboardStatus"),
   eventLog: document.querySelector("#eventLog"),
+  copyLogButton: document.querySelector("#copyLogButton"),
   exportLogButton: document.querySelector("#exportLogButton"),
+  logCopyStatus: document.querySelector("#logCopyStatus"),
   clearLogButton: document.querySelector("#clearLogButton"),
 };
 
@@ -1503,6 +1505,28 @@ function buildLogExportText() {
   ].join("\n");
 }
 
+function setLogCopyStatus(text, isError = false) {
+  elements.logCopyStatus.textContent = text;
+  elements.logCopyStatus.hidden = !text;
+  elements.logCopyStatus.dataset.kind = isError ? "error" : "ok";
+}
+
+async function copyDiagnosticsReport() {
+  try {
+    const text = buildLogExportText();
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      fallbackCopyText(text);
+    }
+    setLogCopyStatus("诊断已复制，可粘贴到通讯板或发给对端 Codex", false);
+    logEvent("诊断已复制", "未包含连接密码");
+  } catch (error) {
+    setLogCopyStatus("复制失败，请改用导出日志", true);
+    logEvent("诊断复制失败", error?.message || String(error));
+  }
+}
+
 function exportLogs() {
   try {
     const text = buildLogExportText();
@@ -2927,10 +2951,12 @@ elements.bandwidthSelect.addEventListener("change", markCustomVideoSettings);
 elements.reverseControlButton.addEventListener("click", sendReverseControlRequest);
 elements.copyReverseControlGrantCommandButton.addEventListener("click", copyReverseControlGrantCommand);
 elements.focusButton.addEventListener("click", () => elements.remoteViewport.focus());
+elements.copyLogButton.addEventListener("click", copyDiagnosticsReport);
 elements.exportLogButton.addEventListener("click", exportLogs);
 elements.clearLogButton.addEventListener("click", () => {
   elements.eventLog.textContent = "";
   state.logEntries = [];
+  setLogCopyStatus("");
 });
 elements.audioToggle.addEventListener("change", () => {
   resetAudioStatus();

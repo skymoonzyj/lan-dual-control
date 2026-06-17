@@ -576,6 +576,17 @@ button:disabled {
   border-radius: 13px;
 }
 
+.log-copy-status {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.log-copy-status[data-kind="error"] {
+  color: #9b2c1f;
+}
+
 .event-log {
   display: flex;
   flex-direction: column-reverse;

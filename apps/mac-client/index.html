@@ -226,10 +226,12 @@
             <div class="log-heading">
               <h2>事件日志</h2>
               <div class="log-actions">
+                <button id="copyLogButton" type="button" title="复制诊断">复制诊断</button>
                 <button id="exportLogButton" type="button" title="导出日志">导出</button>
                 <button id="clearLogButton" type="button">清空</button>
               </div>
             </div>
+            <p id="logCopyStatus" class="log-copy-status" hidden></p>
             <ol id="eventLog" class="event-log"></ol>
           </section>
         </aside>

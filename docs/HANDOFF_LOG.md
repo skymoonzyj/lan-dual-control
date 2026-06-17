@@ -17,6 +17,41 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Mac Codex
+
+日期：2026-06-17 13:03
+开发端：Mac Codex
+本轮目标：给 Mac client 事件日志补“复制诊断”入口，便于现场直接粘贴状态。
+完成内容：
+- 事件日志面板新增“复制诊断”按钮，复用 `buildLogExportText()` 输出写入 Mac 浏览器剪贴板。
+- 成功/失败状态显示在日志面板下方；清空日志时同步清除复制状态。
+- 复制不会连接 Windows、不认证、不发送 `input_event`，复制文本沿用导出日志的不含密码约束。
+- 页面自测新增按钮、剪贴板内容、无密码字符串和无额外输入事件断言。
+修改文件：
+- `apps/mac-client/index.html`
+- `apps/mac-client/app.js`
+- `apps/mac-client/styles.css`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check apps/mac-client/server.mjs`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --clientPort 5198 --debugPort 9342 --mockVideo --allowClipboardFallback --skipFileClipboard --progressIntervalMs 0 --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" .`
+遗留问题：
+- 本轮未连接真实 Windows host，只用本机 mock 页面链路验证复制诊断、剪贴板内容和安全边界。
+下一步建议：
+- 现场需要给另一端或通讯板发 Mac client 状态时，优先点事件日志“复制诊断”，不必下载日志文件；不要把密码或系统账号发上板。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-17 Windows Codex
 
 日期：2026-06-17 续跑
