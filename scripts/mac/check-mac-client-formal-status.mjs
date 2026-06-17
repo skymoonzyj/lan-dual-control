@@ -73,6 +73,11 @@ JSON output:
                                   command that starts/reuses the local Mac
                                   client page, then sends a Windows formal
                                   test call only when the checklist is ready.
+  runPlan.commands.macClientBrowserSelfTest
+                                  Secret-free local browser self-test command.
+                                  It uses a temporary mock Windows host and
+                                  does not use a real host, password, call, or
+                                  inject.
   runPlan.commands.windowsReverseGrantStatus
                                   Recommended Windows-side PowerShell loopback
                                   command that inspects the one-time reverse-
@@ -408,6 +413,10 @@ function makeBrowserTestCommand(report, args) {
   ].join(" ");
 }
 
+function makeMacClientBrowserSelfTestCommand() {
+  return "node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard --boardSummary --progressIntervalMs 0";
+}
+
 function makeWindowsReverseGrantPowerShellCommand(report, args, action = "grant") {
   const host = report.readiness.windowsHost || {};
   const targetPort = host.probe?.port || args.windowsPort || defaults.windowsPort;
@@ -600,6 +609,7 @@ function makeRunPlan(report, args) {
       safePreflightWithEnsureClient: makeEnsureClientSmokeCommand(args, ["--preflightOnly", "--boardSummary"]),
       sendCallWithEnsureClient: makeEnsureClientSmokeCommand(args, ["--preflightOnly", "--sendCall"]),
       rerunFormalChecklist: makeChecklistCommand(args),
+      macClientBrowserSelfTest: makeMacClientBrowserSelfTestCommand(),
       browserSmoke: browserTestCommand,
       windowsReverseGrantStatus: makeWindowsReverseGrantCommand(report, args, "status"),
       windowsOpenOneTimeReverseGrant: makeWindowsReverseGrantCommand(report, args, "grant"),
@@ -627,6 +637,12 @@ function makeRunPlan(report, args) {
         title: "Run the read-only formal checklist",
         command: makeChecklistCommand(args),
         success: "Repo, board, local page, Windows discovery, H.264/audio/input-log/clipboard readiness are visible.",
+      },
+      {
+        id: "local-browser-self-test",
+        title: "Run the local mock browser self-test before true host auth",
+        command: makeMacClientBrowserSelfTestCommand(),
+        success: "Temporary mock Windows host validates Mac client page flow, reverse-control LAN008 -> grant -> accepted, clipboard, and input-log without a real host.",
       },
       {
         id: "browser-smoke",
@@ -674,8 +690,9 @@ function makeBoardSummary(report) {
       ? `Next: run Mac client true test against ${host.probe?.host}:${host.probe?.port}; compare first frame, FPS, frame age, audio playback, clipboard, input-log, bandwidth/CPU.`
       : "Next: clear blockers, run node scripts/mac/start-mac-client.mjs, discover/start Windows host, then rerun with --host <Windows IP> --port 43770 --boardSummary.",
     "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
+    `MacClientBrowserSelfTest=${report.runPlan?.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
     `Reverse rehearsal: click 请求反控 -> expect LAN008; Windows local grant PowerShell: ${makeWindowsReverseGrantCommand(report, { windowsPort: host.probe?.port || report.args?.windowsPort || defaults.windowsPort }, "grant")}; Node fallback: ${makeWindowsReverseGrantNodeFallbackCommand(report, { windowsPort: host.probe?.port || report.args?.windowsPort || defaults.windowsPort }, "grant")}; Mac retry -> accepted/临时授权已使用.`,
-    "RunPlan: local client -> Windows discovery -> formal checklist -> browser smoke -> reverse request rehearsal -> observe quality/resources.",
+    "RunPlan: local client -> Windows discovery -> formal checklist -> local browser self-test -> browser smoke -> reverse request rehearsal -> observe quality/resources.",
     "Do not send passwords on Agent Link Board; do not run inject unless the user explicitly confirms they are watching.",
   ].join(" ");
 }
