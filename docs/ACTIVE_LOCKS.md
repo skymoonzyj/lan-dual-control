@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 夜间 | Windows 控 Mac 复制诊断快速摘要新增独立视频状态，导出和复制文本会记录 H.264/JPEG、实收 FPS、协商/请求刷新率、低于请求、帧延迟或回退原因；页面 diagnostics-only 已覆盖低 FPS 导出场景。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 夜间 | Windows 控 Mac 复制诊断快速摘要新增输入模式/注入状态，导出和复制文本会记录安全日志/真实控制/已记录/已注入/被拒绝 ack；页面 diagnostics-only 已覆盖“已连接但不能点击”排查场景。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 夜间 | Windows 控 Mac 复制诊断报告新增普通声音接收/播放摘要，快速摘要和显示能力分段会记录状态、音量、电平、接收帧、播放帧、丢帧和错误；页面 diagnostics-only 已覆盖收到但未播放场景。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 夜间 | Windows 控 Mac 普通窗口诊断条新增低于请求刷新率提示并标为 warning，和全屏浮层共用判断；页面 diagnostics-only 已覆盖低 FPS 与接近请求 FPS 两种场景。 |

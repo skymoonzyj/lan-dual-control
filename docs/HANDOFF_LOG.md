@@ -21,6 +21,39 @@
 
 日期：2026-06-18 夜间
 开发端：Windows Codex
+本轮目标：让 Windows 控 Mac 复制诊断快速摘要直接写出独立视频状态，方便定位卡顿、不是 60Hz 或 H.264/JPEG 回退。
+完成内容：
+- 复制/导出的诊断报告快速摘要新增“视频”一行，复用全屏浮层同一套视频状态口径。
+- “显示与能力”分段新增“视频状态”，记录 H.264/JPEG、实收 FPS、协商/请求刷新率、低于请求、帧延迟或回退原因。
+- 页面 diagnostics-only 的低 FPS 自检同时断言导出文本包含独立视频摘要和视频状态。
+- Windows 控制端 README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps\windows-client scripts\windows docs`
+遗留问题：
+- 夜间只做无授权页面自检，不连接真实 Mac、不认证、不发送密码/input/inject；真实卡顿和主观流畅度仍需用户在场时验收。
+下一步建议：
+- 现场觉得“远控太卡/没有 60Hz”时先复制诊断，看快速摘要里的“视频”行；若显示“低于请求 60 Hz”或回退原因，再分别查 Mac host 采集/H.264 pipeline/WebCodecs/网络。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 夜间
+开发端：Windows Codex
 本轮目标：让 Windows 控 Mac 复制诊断快速摘要直接写出输入模式/注入状态，方便定位“已连接但不能点击”。
 完成内容：
 - 复制/导出的诊断报告快速摘要新增“输入”一行，记录输入事件数量以及安全日志/真实控制/模拟/等待认证等输入模式。

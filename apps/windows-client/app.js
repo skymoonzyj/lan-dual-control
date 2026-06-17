@@ -2134,6 +2134,11 @@ function formatFloatingVideoStatus() {
   return `视频：${parts.join(" · ")}`;
 }
 
+function getVideoExportStatus() {
+  const videoStatus = formatFloatingVideoStatus().replace(/^视频：/, "").trim();
+  return videoStatus || "-";
+}
+
 function formatFloatingAudioStatus() {
   const volume = Number(elements.audioVolumeRange.value) || 0;
   if (!elements.audioToggle.checked) {
@@ -2909,6 +2914,7 @@ function buildDiagnosticsQuickSummary({
   macAlertWatcherExport,
   localHostExport,
   remoteFileExport,
+  videoExport,
   audioExport,
   floatingControlExport,
   inputExport,
@@ -2924,6 +2930,7 @@ function buildDiagnosticsQuickSummary({
     `- 远端连接：${currentStateLabel} · ${connectionLabel} · ${targetLabel}`,
     `- 重连：${reconnectParts.join(" · ")}`,
     `- 远端文件：${remoteFileExport.summary}`,
+    `- 视频：${videoExport}`,
     `- 声音：${audioExport.summary}`,
     `- 输入：${inputExport}`,
     `- 全屏浮层：${floatingControlExport.mode} · ${floatingControlExport.connection} · ${floatingControlExport.video}`,
@@ -2945,6 +2952,7 @@ function buildLogExportText() {
   const macAlertWatcherExport = getMacAlertWatcherExportStatus();
   const localHostExport = getLocalHostExportStatus();
   const remoteFileExport = getRemoteFileTransferExportStatus();
+  const videoExport = getVideoExportStatus();
   const audioExport = getAudioExportStatus();
   const floatingControlExport = getFloatingControlExportStatus();
   const inputExport = getInputExportStatus();
@@ -2975,6 +2983,7 @@ function buildLogExportText() {
       macAlertWatcherExport,
       localHostExport,
       remoteFileExport,
+      videoExport,
       audioExport,
       floatingControlExport,
       inputExport,
@@ -3019,6 +3028,7 @@ function buildLogExportText() {
     `- 缩放：${elements.scaleModeSelect.selectedOptions[0]?.textContent ?? settings.scaleMode}`,
     `- 刷新率：${settings.fps} Hz`,
     `- 码率：${Math.round(settings.maxBandwidthKbps / 1000)} Mbps`,
+    `- 视频状态：${videoExport}`,
     `- 声音：${settings.audio ? `开启 · ${settings.audioVolume}%` : "关闭"}`,
     `- 声音状态：${audioExport.summary}`,
     `- 声音电平：${audioExport.level}`,

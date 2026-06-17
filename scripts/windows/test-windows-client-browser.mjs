@@ -2381,6 +2381,7 @@ async function verifyLowFpsDiagnostics(session) {
       if (
         typeof updateHostDiagnostics !== "function" ||
         typeof resetHostDiagnostics !== "function" ||
+        typeof buildLogExportText !== "function" ||
         typeof state !== "object"
       ) {
         return { ok: false, reason: "missing low FPS diagnostics functions" };
@@ -2415,6 +2416,14 @@ async function verifyLowFpsDiagnostics(session) {
         });
         const lowText = diagnosticsElement.textContent;
         const lowWarning = diagnosticsElement.classList.contains("is-warning");
+        const exportText = buildLogExportText();
+        const exportVideo =
+          exportText.includes("- 视频：JPEG") &&
+          exportText.includes("实收 22.9 FPS") &&
+          exportText.includes("协商 30 Hz") &&
+          exportText.includes("请求 60 Hz") &&
+          exportText.includes("低于请求 60 Hz") &&
+          exportText.includes("- 视频状态：JPEG");
 
         state.actualVideoFps = 58;
         updateHostDiagnostics({});
@@ -2425,10 +2434,12 @@ async function verifyLowFpsDiagnostics(session) {
           ok:
             lowText.includes("低于请求 60 Hz") &&
             lowWarning &&
+            exportVideo &&
             !nearText.includes("低于请求") &&
             !nearWarning,
           lowText,
           lowWarning,
+          exportVideo,
           nearText,
           nearWarning,
         };
