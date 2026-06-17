@@ -246,6 +246,9 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsMacAlertWatcherStatus || "").includes("-Status"), "mock JSON watcher status command should be status-only");
     assert(payload.windowsMacAlertWatcher?.requested === true, "mock JSON should check Windows Mac alert watcher status");
     assert(payload.windowsMacAlertWatcher?.command === payload.commands?.windowsMacAlertWatcherStatus, "watcher status should report the same status command");
+    assert(payload.windowsMacAlertWatcher?.source === "json", "watcher status should consume start-mac-alert-watcher -Json output");
+    assert(payload.windowsMacAlertWatcher?.payload?.action === "status", "watcher status should expose the parsed JSON payload");
+    assert(payload.windowsMacAlertWatcher?.parseError === "", "watcher status JSON parse should not fail");
     assert(["running", "not-running", "unknown", "unavailable"].includes(payload.windowsMacAlertWatcher?.state), "watcher status should have a stable state");
     assert(payload.windowsMacAlertWatcher?.running === true || payload.windowsMacAlertWatcher?.running === false || payload.windowsMacAlertWatcher?.running === null, "watcher running should be boolean or null");
     assert(Array.isArray(payload.windowsMacAlertWatcher?.stdoutTail), "watcher status should include stdout tail");

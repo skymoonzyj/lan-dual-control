@@ -580,14 +580,25 @@ function getWindowsMacAlertWatcherStatus(args, commands) {
     "scripts/windows/start-mac-alert-watcher.ps1",
     "-Server", args.server,
     "-Status",
+    "-Json",
   ], { timeoutMs: Math.min(Math.max(args.timeoutMs, 5000), 15000) });
   const combined = `${result.stdout}\n${result.stderr}`;
   const lines = splitLines(combined);
-  let running = null;
-  if (lines.some((line) => /Mac alert watcher is running\./i.test(line))) {
-    running = true;
-  } else if (lines.some((line) => /Mac alert watcher is not running\./i.test(line))) {
-    running = false;
+  let payload = null;
+  let parseError = "";
+  try {
+    payload = JSON.parse(String(result.stdout || "").trim());
+  } catch (error) {
+    parseError = error.message;
+  }
+  let source = payload && typeof payload === "object" ? "json" : "text";
+  let running = typeof payload?.running === "boolean" ? payload.running : null;
+  if (running === null) {
+    if (lines.some((line) => /Mac alert watcher is running\./i.test(line))) {
+      running = true;
+    } else if (lines.some((line) => /Mac alert watcher is not running\./i.test(line))) {
+      running = false;
+    }
   }
   const state = running === true
     ? "running"
@@ -601,6 +612,9 @@ function getWindowsMacAlertWatcherStatus(args, commands) {
     ok: result.ok,
     running,
     state,
+    source,
+    payload,
+    parseError,
     command: commands.windowsMacAlertWatcherStatus,
     status: result.status,
     signal: result.signal,

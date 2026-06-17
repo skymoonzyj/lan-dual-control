@@ -245,6 +245,9 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.windowsMacAlertWatcherStatus, "-Status", "mock JSON alert watcher status command");
     assert(payload.windowsMacAlertWatcher?.requested === true, "PowerShell mock JSON should check Windows Mac alert watcher status");
     assert(payload.windowsMacAlertWatcher?.command === payload.commands?.windowsMacAlertWatcherStatus, "PowerShell watcher status should report the same status command");
+    assert(payload.windowsMacAlertWatcher?.source === "json", "PowerShell watcher status should consume start-mac-alert-watcher -Json output");
+    assert(payload.windowsMacAlertWatcher?.payload?.action === "status", "PowerShell watcher status should expose parsed JSON payload");
+    assert(payload.windowsMacAlertWatcher?.parseError === "", "PowerShell watcher status JSON parse should not fail");
     assert(["running", "not-running", "unknown", "unavailable"].includes(payload.windowsMacAlertWatcher?.state), "PowerShell watcher status should have a stable state");
     assert(payload.windowsMacAlertWatcher?.running === true || payload.windowsMacAlertWatcher?.running === false || payload.windowsMacAlertWatcher?.running === null, "PowerShell watcher running should be boolean or null");
     assertNotIncludes(output, "test-password", "PowerShell mock JSON");

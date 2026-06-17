@@ -19,6 +19,43 @@
 
 ## 2026-06-17 Windows Codex
 
+日期：2026-06-17 12:06
+开发端：Windows Codex
+本轮目标：让 Windows 恢复开工总览优先消费 Mac alert watcher 的机器可读状态。
+完成内容：
+- `check-windows-resume-status` 调用 `start-mac-alert-watcher.ps1 -Status -Json` 判断本机 Mac 提醒 watcher 是否运行，不再优先解析人类文本。
+- JSON 报告新增 `windowsMacAlertWatcher.source`、`payload` 和 `parseError`；`source=json` 时可直接读取原始状态对象，旧环境或 JSON 不可用时仍退回文本兜底。
+- Node/PowerShell 恢复总览回归都锁定 `source=json`、`payload.action=status` 和空 `parseError`。
+- 当前状态、下一步和任务板已同步，ACTIVE_LOCKS 已释放。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- PowerShell 7 AST 语法解析 `scripts/windows/check-windows-resume-status.ps1`
+- `node scripts/windows/check-windows-resume-status.mjs --noDiscover --host 127.0.0.1 --port 9 --json --timeoutMs 12000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --script test-windows-resume-status.mjs --script test-windows-resume-status-powershell.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 60000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 60000`
+- `git diff --check`
+- 行首冲突标记扫描
+遗留问题：
+- 这轮不启动正式 watcher，只做状态读取路径；完整 watcher 后台 lifecycle 仍按 `test-mac-alert-watcher --includeLifecycle` 手动深跑。
+下一步建议：
+- 后续桌面壳或自动化读取 watcher 状态时直接消费 `windowsMacAlertWatcher.payload/running/source`，不要再解析输出文本。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Windows Codex
+
 日期：2026-06-17 12:02
 开发端：Windows Codex
 本轮目标：给 Windows Mac alert watcher 启动器增加机器可读 JSON 输出。
