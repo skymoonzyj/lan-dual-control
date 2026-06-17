@@ -21,6 +21,40 @@
 
 日期：2026-06-17 续跑
 开发端：Windows Codex
+本轮目标：补强 Windows 控制端远端文件接收卡住/超时后的恢复提示。
+完成内容：
+- `apps/windows-client/app.js` 新增远端文件传输活动时间戳和超时扫描，45 秒没有收到新分块或完成消息时，会停止该 transfer。
+- 超时、中断、重新连接都会把“远端文件”托盘状态条切到 warning，显示已收/总量和“请让 Mac 重新复制”的恢复提示，不再让界面长期停留在“正在接收”。
+- 超时路径会沿用既有 `clipboard_file_result accepted:false` 回给对端，保持协议兼容；本轮没有新增协议字段。
+- `scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly` 的 file-clipboard-recovery 检查新增超时模拟，覆盖状态条文字、warning class、Map 清理、失败 result 和不泄密。
+- Windows client README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-client-browser.mjs --timeoutMs 10000`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮是页面级模拟和本地 diagnostics，没有跑真实 Mac 文件复制中断；后续真机联调仍需验证大文件/压缩包在断网、Mac host 重启或复制取消时的提示。
+下一步建议：
+- 真机文件剪贴板联调时，刻意中断一次传输，确认 Windows 控制端“远端文件”状态条在约 45 秒后提示接收超时，并且再次复制可以恢复。
+是否改了协议：否。
+是否需要另一端配合：后续真机中断场景需要 Mac 端配合复测。
+
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
 本轮目标：补强 Windows 控制端远端文件托盘在接收中和失败场景下的可见状态。
 完成内容：
 - `apps/windows-client/app.js` 新增远端文件托盘状态渲染 helper，状态条不再要求已有文件行；只要有接收、拒绝或失败状态，就会在“远端文件”面板显示。

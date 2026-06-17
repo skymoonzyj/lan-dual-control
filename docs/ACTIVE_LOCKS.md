@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 续跑 | Windows 控制端远端文件接收新增 45 秒超时/连接中断恢复提示；页面 diagnostics 覆盖超时状态、Map 清理和失败 result。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 续跑 | Windows 控制端远端文件托盘新增接收中/拒绝/失败状态条；页面 diagnostics 覆盖 offer、分块进度和超限拒绝提示。 |
 | Mac Codex | `scripts/mac/check-mac-resume-status.mjs`, `scripts/mac/test-mac-resume-status.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 17:20 | Mac resume status 新增 `MacClientPage=` / `commands.macClientPageStatusCommand`，指向 `start-mac-client --status --boardSummary`；专项回归通过。 |
 | Mac Codex | `scripts/mac/start-mac-client.mjs`, `scripts/mac/test-mac-client-start-helper.mjs`, `docs/CURRENT_STATUS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-17 17:15 | Mac client 启动/状态助手 JSON 新增 `commands.macClientStartOrReuseCommand`、`macClientFormalStatusCommand` 和 `macClientCopyDiagnosticsAction`；离线/在线/allowExisting 自测通过。 |

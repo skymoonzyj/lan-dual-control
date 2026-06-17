@@ -1335,6 +1335,7 @@ async function verifyFileClipboardRecoveryText(session) {
         typeof fileClipboardRecoveryText !== "function" ||
         typeof fileClipboardLocalDetail !== "function" ||
         typeof describeIncomingFileTransferStatus !== "function" ||
+        typeof expireStaleRemoteFileTransfers !== "function" ||
         typeof renderReceivedFiles !== "function" ||
         typeof openReceivedFilesTempPath !== "function" ||
         typeof updateReceivedFilesWriteStatusFromResult !== "function"
@@ -1413,6 +1414,13 @@ async function verifyFileClipboardRecoveryText(session) {
         const statusVisibleAfterChunk = status && !status.hidden;
         const statusTextAfterChunk = status?.textContent || "";
         const statusClassAfterChunk = status?.className || "";
+        const liveTransfer = state.remoteFileTransfers.get("live-transfer");
+        liveTransfer.lastActivityAt = Date.now() - remoteFileTransferStallTimeoutMs - 1000;
+        const expiredCount = expireStaleRemoteFileTransfers(Date.now());
+        const statusTextAfterTimeout = status?.textContent || "";
+        const statusClassAfterTimeout = status?.className || "";
+        const clipboardTextAfterTimeout = elements.clipboardText.textContent || "";
+        const transferCountAfterTimeout = state.remoteFileTransfers.size;
         state.remoteFileTransfers.clear();
         handleClipboardFileOffer({
           type: "clipboard_file_offer",
@@ -1503,12 +1511,25 @@ async function verifyFileClipboardRecoveryText(session) {
             statusTextAfterChunk.includes("2 B/4 B") &&
             statusTextAfterChunk.includes("50%") &&
             statusClassAfterChunk.includes("is-busy") &&
+            expiredCount === 1 &&
+            statusTextAfterTimeout.includes("远端文件接收超时") &&
+            statusTextAfterTimeout.includes("2 B/4 B") &&
+            statusClassAfterTimeout.includes("is-warning") &&
+            clipboardTextAfterTimeout.includes("远端文件接收中断") &&
+            transferCountAfterTimeout === 0 &&
             statusTextAfterOversize.includes("超过当前上限") &&
             statusTextAfterOversize.includes("已拒绝接收") &&
             statusClassAfterOversize.includes("is-warning") &&
             clipboardResponses.some((payload) => payload.transferId === "live-transfer" && payload.accepted === true) &&
             clipboardResponses.some((payload) => payload.transferId === "too-large" && payload.accepted === false) &&
             clipboardProgress.some((payload) => payload.transferId === "live-transfer" && payload.receivedBytes === 2) &&
+            clipboardResults.some(
+              (payload) =>
+                payload.transferId === "live-transfer" &&
+                payload.accepted === false &&
+                String(payload.reason || "").includes("接收超时") &&
+                payload.receivedBytes === 2,
+            ) &&
             enabledAfterTempPath &&
             disabledWithoutTempPath &&
             retryTitleAfterFailure === "重试写入系统文件剪贴板" &&
@@ -1534,6 +1555,11 @@ async function verifyFileClipboardRecoveryText(session) {
           statusClassAfterOffer,
           statusTextAfterChunk,
           statusClassAfterChunk,
+          expiredCount,
+          statusTextAfterTimeout,
+          statusClassAfterTimeout,
+          clipboardTextAfterTimeout,
+          transferCountAfterTimeout,
           statusTextAfterOversize,
           statusClassAfterOversize,
           clipboardResponses,

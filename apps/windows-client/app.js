@@ -119,6 +119,8 @@ const browserDiscoveryProbeConcurrency = 8;
 const defaultControlPort = "43770";
 const fileChunkSizeBytes = 64 * 1024;
 const maxClipboardFileBytes = 512 * 1024 * 1024;
+const remoteFileTransferStallTimeoutMs = 45 * 1000;
+const remoteFileTransferSweepIntervalMs = 1000;
 const nativeClipboardChunkSizeBytes = 1024 * 1024;
 const maxNativeClipboardFileBytes = maxClipboardFileBytes;
 const defaultAgentLinkServer = "http://192.168.31.68:17888";
@@ -1636,7 +1638,7 @@ function setUiConnecting(host, port) {
   resetVideoDecoder({ resetFallback: true });
   resetAudioPlayback();
   state.lastFrameDecodeErrorId = "";
-  state.remoteFileTransfers.clear();
+  rejectAllRemoteFileTransfers("正在建立新连接，远端文件接收已中断", { notifyPeer: false });
   elements.remoteCanvas.classList.remove("has-video-frame");
   resetReverseControlState();
   setConnectionState("connecting", `正在连接 ${host}:${port}`);
@@ -1787,7 +1789,7 @@ function setUiDisconnected(statusText = "未连接", logDetail = "会话已关�
   elements.disconnectButton.disabled = true;
   elements.reverseButton.disabled = true;
   state.fileTransferActive = false;
-  state.remoteFileTransfers.clear();
+  rejectAllRemoteFileTransfers("连接已断开，远端文件接收已中断", { notifyPeer: false });
   updateFileClipboardButton();
   syncFloatingControlCenter();
   addLog("断开连接", logDetail);
@@ -1814,6 +1816,7 @@ function handleUnexpectedClose(reason = "被控端关闭了连接") {
   state.audioLevel = 0;
   resetAudioPlayback();
   elements.audioText.textContent = "声音：待机";
+  rejectAllRemoteFileTransfers("连接中断，远端文件接收已中断", { notifyPeer: false });
 
   if (state.manualDisconnect) {
     setUiDisconnected("连接已断开", reason);
@@ -4035,6 +4038,75 @@ function describeIncomingFileTransferStatus(transfer = {}) {
   return `正在接收 ${countText}：${formatBytes(receivedBytes)}。完成后会写入系统文件剪贴板或留在托盘。`;
 }
 
+function touchRemoteFileTransfer(transfer, now = Date.now()) {
+  if (!transfer) return;
+  transfer.startedAt = Number(transfer.startedAt) || now;
+  transfer.lastActivityAt = now;
+}
+
+function remoteFileTransferProgressText(transfer = {}) {
+  const receivedBytes = Math.max(0, Number(transfer.receivedBytes) || 0);
+  const totalBytes = Math.max(0, Number(transfer.totalBytes) || 0);
+  if (totalBytes > 0) {
+    return `${formatBytes(receivedBytes)}/${formatBytes(totalBytes)}`;
+  }
+  return formatBytes(receivedBytes);
+}
+
+function rejectRemoteFileTransfer(transferId, reason, { notifyPeer = true, clipboardText = "剪贴板：远端文件接收中断" } = {}) {
+  const transfer = state.remoteFileTransfers.get(transferId);
+  if (!transfer) {
+    return false;
+  }
+
+  state.remoteFileTransfers.delete(transferId);
+  elements.clipboardText.textContent = clipboardText;
+  addLog("文件剪贴板失败", reason);
+  setReceivedFilesWriteStatus("warning", `${reason}。已停止接收，请让 Mac 重新复制。`);
+  renderReceivedFiles();
+
+  if (notifyPeer) {
+    state.client?.sendClipboardFileResult({
+      transferId,
+      accepted: false,
+      code: "LAN011",
+      reason,
+      receivedBytes: Math.max(0, Number(transfer.receivedBytes) || 0),
+      totalBytes: Math.max(0, Number(transfer.totalBytes) || 0),
+      fileCount: Number(transfer.fileCount) || (Array.isArray(transfer.files) ? transfer.files.length : 0),
+    });
+  }
+  return true;
+}
+
+function rejectAllRemoteFileTransfers(reason, options = {}) {
+  let rejected = 0;
+  for (const transferId of Array.from(state.remoteFileTransfers.keys())) {
+    if (rejectRemoteFileTransfer(transferId, reason, options)) {
+      rejected += 1;
+    }
+  }
+  return rejected;
+}
+
+function expireStaleRemoteFileTransfers(now = Date.now()) {
+  let expired = 0;
+  for (const [transferId, transfer] of Array.from(state.remoteFileTransfers.entries())) {
+    const lastActivityAt = Number(transfer.lastActivityAt) || Number(transfer.startedAt) || now;
+    const idleMs = now - lastActivityAt;
+    if (idleMs < remoteFileTransferStallTimeoutMs) {
+      continue;
+    }
+
+    const idleSeconds = Math.max(1, Math.round(idleMs / 1000));
+    const reason = `远端文件接收超时：${remoteFileTransferProgressText(transfer)}，${idleSeconds} 秒没有收到新分块或完成消息`;
+    if (rejectRemoteFileTransfer(transferId, reason)) {
+      expired += 1;
+    }
+  }
+  return expired;
+}
+
 function updateReceivedFilesWriteStatusFromResult(result = {}, fileCount = state.receivedClipboardFiles.length) {
   if (result.clipboardWritten) {
     setReceivedFilesWriteStatus(
@@ -4389,12 +4461,15 @@ function handleClipboardFileOffer(message) {
     return;
   }
 
+  const now = Date.now();
   state.remoteFileTransfers.set(transferId, {
     transferId,
     totalBytes,
     receivedBytes: 0,
     fileCount: Number(message.fileCount) || files.length,
     files,
+    startedAt: now,
+    lastActivityAt: now,
   });
 
   setReceivedFilesWriteStatus("busy", describeIncomingFileTransferStatus(state.remoteFileTransfers.get(transferId)));
@@ -4417,6 +4492,7 @@ function handleClipboardFileChunk(message) {
     addLog("文件剪贴板", `收到未知文件块，已忽略 · ${transferId || "missing"}`);
     return;
   }
+  touchRemoteFileTransfer(transfer);
 
   try {
     const fileIndex = Math.max(0, Number(message.fileIndex) || 0);
@@ -4472,6 +4548,7 @@ async function handleClipboardFileComplete(message) {
     addLog("文件剪贴板", `收到未知文件完成消息，已忽略 · ${transferId || "missing"}`);
     return;
   }
+  touchRemoteFileTransfer(transfer);
 
   const totalBytes = transfer.totalBytes || Number(message.totalBytes) || transfer.receivedBytes;
   const files = transfer.files
@@ -5612,6 +5689,7 @@ document.addEventListener("pointerdown", (event) => {
 
 tickClock();
 setInterval(tickClock, 1000);
+setInterval(expireStaleRemoteFileTransfers, remoteFileTransferSweepIntervalMs);
 applyPreferences();
 state.discoveredDevices = buildDeviceList();
 renderDiscoveredDevices();
