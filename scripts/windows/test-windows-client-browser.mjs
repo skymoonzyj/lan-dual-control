@@ -2374,6 +2374,82 @@ async function verifyVideoFrameAgeDiagnostics(session) {
   return result;
 }
 
+async function verifyLowFpsDiagnostics(session) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      if (
+        typeof updateHostDiagnostics !== "function" ||
+        typeof resetHostDiagnostics !== "function" ||
+        typeof state !== "object"
+      ) {
+        return { ok: false, reason: "missing low FPS diagnostics functions" };
+      }
+
+      const diagnosticsElement = document.querySelector("#hostDiagnosticsText");
+      if (!diagnosticsElement) {
+        return { ok: false, reason: "missing diagnostics element" };
+      }
+
+      const originalDiagnostics = { ...state.hostDiagnostics };
+      const originalConnected = state.connected;
+      const originalActualFps = state.actualVideoFps;
+      const originalRequestedFps = state.requestedFps;
+      const originalNegotiatedFps = state.negotiatedFps;
+      const originalText = diagnosticsElement.textContent;
+      const originalOk = diagnosticsElement.classList.contains("is-ok");
+      const originalWarning = diagnosticsElement.classList.contains("is-warning");
+
+      try {
+        resetHostDiagnostics();
+        state.connected = true;
+        state.actualVideoFps = 22.9;
+        state.negotiatedFps = 30;
+        state.requestedFps = 60;
+        updateHostDiagnostics({
+          videoCodec: "jpeg",
+          videoEncoding: "data-url",
+          videoSource: "screen",
+          capturePipeline: "background-jpeg",
+          droppedFrames: 0,
+        });
+        const lowText = diagnosticsElement.textContent;
+        const lowWarning = diagnosticsElement.classList.contains("is-warning");
+
+        state.actualVideoFps = 58;
+        updateHostDiagnostics({});
+        const nearText = diagnosticsElement.textContent;
+        const nearWarning = diagnosticsElement.classList.contains("is-warning");
+
+        return {
+          ok:
+            lowText.includes("低于请求 60 Hz") &&
+            lowWarning &&
+            !nearText.includes("低于请求") &&
+            !nearWarning,
+          lowText,
+          lowWarning,
+          nearText,
+          nearWarning,
+        };
+      } finally {
+        state.hostDiagnostics = originalDiagnostics;
+        state.connected = originalConnected;
+        state.actualVideoFps = originalActualFps;
+        state.requestedFps = originalRequestedFps;
+        state.negotiatedFps = originalNegotiatedFps;
+        diagnosticsElement.textContent = originalText;
+        diagnosticsElement.classList.toggle("is-ok", originalOk);
+        diagnosticsElement.classList.toggle("is-warning", originalWarning);
+      }
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`low FPS diagnostics check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function verifyDiscoveryRuntimeDiagnostics(session, { host, port, buildId, timeoutMs }) {
   const result = await evaluate(
     session,
@@ -3116,6 +3192,9 @@ async function run() {
     const frameAgeCheck = await verifyVideoFrameAgeDiagnostics(session);
     summary.checks.push("frame-age");
     print("OK", `Video frame age diagnostics: ${frameAgeCheck.latency} / ${frameAgeCheck.skewLatency}`);
+    const lowFpsCheck = await verifyLowFpsDiagnostics(session);
+    summary.checks.push("low-fps-diagnostics");
+    print("OK", `Low FPS diagnostics: ${lowFpsCheck.lowText}`);
     const keyFrameCheck = await verifyH264KeyFrameDetection(session);
     summary.checks.push("h264-keyframe");
     print(

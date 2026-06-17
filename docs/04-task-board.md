@@ -61,6 +61,7 @@ Windows 端：
 - [x] Windows 控 Mac 真全屏入口：悬浮控制中心新增“真全屏”按钮，支持浏览器/桌面壳 Fullscreen API；不支持时回退普通全屏并中文提示；页面 diagnostics-only 覆盖真全屏模拟路径。
 - [x] Windows 控 Mac 全屏浮层补视频链路状态：悬浮控制中心展开后显示 H.264/JPEG、实收 FPS、协商/请求刷新率、帧延迟或时钟偏差和回退原因，方便现场判断卡顿、非 60Hz 或 H.264 回退；页面 diagnostics-only 覆盖该状态。
 - [x] Windows 控 Mac 全屏浮层补低于请求刷新率提示：实收 FPS 明显低于请求 Hz 时直接显示“低于请求”，减少现场把请求刷新率误当真实刷新率；页面 diagnostics-only 覆盖 22.9 FPS / 请求 60 Hz 场景。
+- [x] Windows 控 Mac 普通窗口诊断条补低于请求刷新率提示：窗口化控制时也能看到“低于请求 60 Hz”并标为 warning；页面 diagnostics-only 覆盖低 FPS 与接近请求 FPS 两种场景。
 - [x] Windows 控 Mac 全屏浮层补声音状态：悬浮控制中心展开后显示声音开关、接收帧数、电平、播放计数、音量和丢帧，方便现场判断没收到音频、收到但未播放或播放失败；页面 diagnostics-only 覆盖该状态。
 - [x] Windows 控 Mac 全屏浮层补剪贴板/远端文件状态：悬浮控制中心展开后显示文字/文件剪贴板能力、远端文件接收进度、系统文件剪贴板写入状态和最近收到文件数量；页面 diagnostics-only 覆盖进行中文件接收状态。
 - [x] Windows 控 Mac 全屏浮层补连接/重连状态：悬浮控制中心展开后显示连接状态、自动重连倒计时和重连次数，并提供全屏内“立即重连”按钮；页面 diagnostics-only 覆盖倒计时状态和按钮可用性。

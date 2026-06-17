@@ -19,6 +19,39 @@
 
 ## 2026-06-18 Windows Codex
 
+日期：2026-06-18 夜间
+开发端：Windows Codex
+本轮目标：让 Windows 控 Mac 普通窗口诊断条也提示低于请求刷新率，和全屏浮层保持一致。
+完成内容：
+- 普通窗口诊断条的视频分段会在实收 FPS 明显低于请求 Hz 时显示“低于请求 N Hz”。
+- 同一状态会把诊断条标为 warning，窗口化控制时不必进入全屏也能看出不是请求刷新率。
+- 全屏浮层继续复用同一套帧率差距判断，避免两处口径不一致。
+- 页面 diagnostics-only 自检新增 `low-fps-diagnostics`，覆盖 `22.9 FPS / 请求 60 Hz` 会提示、`58 FPS / 请求 60 Hz` 不误报。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps\windows-client scripts\windows docs`
+遗留问题：
+- 夜间只做无授权页面自检，不连接真实 Mac、不认证、不发送密码/input/inject；真实动态画面和主观流畅度仍需用户在场时验收。
+下一步建议：
+- 窗口化使用时如果觉得卡，先看顶部诊断条里的“低于请求 N Hz”和帧延迟；全屏时看浮层同一信息，必要时复制诊断给另一端。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-18 Windows Codex
+
 日期：2026-06-18 续跑
 开发端：Windows Codex
 本轮目标：让 Windows 控 Mac 全屏浮层在实收 FPS 明显低于请求刷新率时直接提示，辅助判断“不是 60Hz”。

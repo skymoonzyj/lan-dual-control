@@ -943,6 +943,9 @@ function getHostDiagnosticsLevel(diagnostics = state.hostDiagnostics) {
   if (diagnostics.videoFrameClockSkewed || Number(diagnostics.videoFrameAgeMs) > 1000) {
     return "warning";
   }
+  if (getVideoRateWarning()) {
+    return "warning";
+  }
   if (warnings.length > 0 || hasCaptureFallback) {
     return "warning";
   }
@@ -1004,8 +1007,12 @@ function renderHostDiagnosticsText() {
   }
   if (videoParts.length > 0) {
     const frameParts = [...videoParts];
+    const rateWarning = getVideoRateWarning();
     if (Number.isFinite(droppedFrames)) {
       frameParts.push(`丢帧 ${droppedFrames}`);
+    }
+    if (rateWarning) {
+      frameParts.push(rateWarning);
     }
     if (frameAgeText) {
       frameParts.push(diagnostics.videoFrameClockSkewed ? frameAgeText : `到达 ${frameAgeText}`);
