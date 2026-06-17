@@ -50,6 +50,8 @@ When -CheckBoard is set, the report also summarizes the current Agent Link
 call so Windows can see active Mac -> Windows test requests during resume.
 The report also includes a Windows host media baseline command:
 node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
+PowerShell equivalent:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary
 It also includes a secret-free Mac host discovery command:
 node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host <Mac IP> --port 43770 --requireMacHost --boardSummary
 PowerShell equivalent:

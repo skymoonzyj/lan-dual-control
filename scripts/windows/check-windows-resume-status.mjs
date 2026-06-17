@@ -41,7 +41,7 @@ control work. It is read-only: it does not authenticate a WebSocket, does not
 ask for or print passwords, does not send input, and does not execute inject.
 JSON, human output, and board summaries include a Windows host media-baseline
 command for checking local controlled-side video/audio before Mac reverse
-control, plus a local one-time reverse-control grant command for retrying a
+control, including a PowerShell equivalent, plus a local one-time reverse-control grant command for retrying a
 Mac reverse-control request without switching Windows host to accept-lab mode.
 They also include a no-password Windows client diagnostics command, a read-only
 Windows video encoder/WGC/WebCodecs support command, and a reminder to copy the
@@ -93,6 +93,7 @@ Examples:
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
   node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
   node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary
   node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
   node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary
   node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary
@@ -600,6 +601,12 @@ function makeCommands(args, preflight) {
       "--probeMedia",
       "--boardSummary",
     ].join(" "),
+    windowsHostMediaReadinessPowerShellBoardSummary: [
+      "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-host-readiness.ps1",
+      "-CheckBoard",
+      "-ProbeMedia",
+      "-BoardSummary",
+    ].join(" "),
     windowsVideoEncoderSupportBoardSummary: [
       "node scripts/windows/check-windows-video-encoder-support.mjs",
       "--boardSummary",
@@ -782,6 +789,7 @@ function makeBoardSummary(report) {
     `FormalChecklist=${report.commands.formalChecklistBoardSummary}; ManualChecklist=${report.formalManualChecklist.summary}.`,
     `WinClientDiagnostics=${report.commands.windowsClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.windowsClientCopyDiagnosticsAction}`,
     `WindowsHostMedia=${report.commands.windowsHostMediaReadinessBoardSummary}.`,
+    `WindowsHostMediaPs=${report.commands.windowsHostMediaReadinessPowerShellBoardSummary}.`,
     `WindowsVideoSupport=${report.commands.windowsVideoEncoderSupportBoardSummary}.`,
     `PowerShellHelp=${report.commands.windowsPowerShellHelpBoardSummary}.`,
     `PowerShellHelpPwsh=${report.commands.windowsPowerShell7HelpBoardSummary}.`,
@@ -977,6 +985,7 @@ function printHuman(report) {
   console.log(`  ${report.commands.windowsClientDiagnosticsCommand}`);
   console.log(`  ${report.commands.windowsClientCopyDiagnosticsAction}`);
   console.log(`  ${report.commands.windowsHostMediaReadinessBoardSummary}`);
+  console.log(`  ${report.commands.windowsHostMediaReadinessPowerShellBoardSummary}`);
   console.log(`  ${report.commands.windowsVideoEncoderSupportBoardSummary}`);
   console.log(`  ${report.commands.windowsPowerShellHelpBoardSummary}`);
   console.log(`  ${report.commands.windowsPowerShell7HelpBoardSummary}`);

@@ -259,6 +259,7 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "--boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "--checkBoard", `help ${flag}`);
     assertIncludes(result.stdout, "Windows host media-baseline", `help ${flag}`);
+    assertIncludes(result.stdout, "check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "one-time reverse-control grant", `help ${flag}`);
     assertIncludes(result.stdout, "Windows video encoder/WGC/WebCodecs support", `help ${flag}`);
     assertIncludes(result.stdout, "check-windows-video-encoder-support.mjs --boardSummary", `help ${flag}`);
@@ -325,6 +326,9 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsHostMediaReadinessBoardSummary || "").includes("check-windows-host-readiness.mjs"), "mock JSON should include Windows host media readiness command");
     assert(String(payload.commands?.windowsHostMediaReadinessBoardSummary || "").includes("--probeMedia"), "mock JSON media readiness command should enable --probeMedia");
     assert(String(payload.commands?.windowsHostMediaReadinessBoardSummary || "").includes("--boardSummary"), "mock JSON media readiness command should be board-safe");
+    assert(String(payload.commands?.windowsHostMediaReadinessPowerShellBoardSummary || "").includes("check-windows-host-readiness.ps1"), "mock JSON should include Windows host media PowerShell command");
+    assert(String(payload.commands?.windowsHostMediaReadinessPowerShellBoardSummary || "").includes("-ProbeMedia"), "mock JSON media PowerShell command should enable -ProbeMedia");
+    assert(String(payload.commands?.windowsHostMediaReadinessPowerShellBoardSummary || "").includes("-BoardSummary"), "mock JSON media PowerShell command should be board-safe");
     assert(String(payload.commands?.windowsVideoEncoderSupportBoardSummary || "").includes("check-windows-video-encoder-support.mjs"), "mock JSON should include Windows video encoder support command");
     assert(String(payload.commands?.windowsVideoEncoderSupportBoardSummary || "").includes("--boardSummary"), "mock JSON video encoder command should be board-safe");
     assert(String(payload.commands?.windowsPowerShellHelpBoardSummary || "").includes("test-windows-powershell-help.mjs"), "mock JSON should include Windows PowerShell help command");
@@ -435,6 +439,8 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "CopyDiagnostics=Windows 控制端事件面板点击", "board summary");
     assertIncludes(result.stdout, "快速摘要", "board summary");
     assertIncludes(result.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "board summary");
+    assertIncludes(result.stdout, "WindowsHostMediaPs=", "board summary");
+    assertIncludes(result.stdout, "check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary", "board summary");
     assertIncludes(result.stdout, "WindowsVideoSupport=", "board summary");
     assertIncludes(result.stdout, "check-windows-video-encoder-support.mjs --boardSummary", "board summary");
     assertIncludes(result.stdout, "PowerShellHelp=", "board summary");
