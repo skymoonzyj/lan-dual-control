@@ -383,6 +383,7 @@ function checkOfflineJson(args) {
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "offline JSON should include copy diagnostics action");
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "offline JSON Mac script help command");
   assertBoardSummaryShape(payload.boardSummary || "", "offline JSON boardSummary");
+  assert(/warnings=[^.]*host-offline/.test(String(payload.boardSummary || "")), "offline JSON boardSummary should include warning IDs");
   assert(payload.recommendations.some((item) => /start-mac-host/.test(item.text)), "offline recommendations should include startup guidance");
   print("OK", "Offline resume status JSON includes probe, error, and next-step guidance");
 }
@@ -402,6 +403,7 @@ function checkRequireOnlineFails(args) {
   assert(result.status !== 0, "requireOnline offline path should fail");
   assert(payload.ok === false, "requireOnline offline payload should report ok=false");
   assert(payload.recommendations.some((item) => item.level === "blocker"), "requireOnline offline payload should include a blocker");
+  assert(String(payload.boardSummary || "").includes("blockers=host-offline"), "requireOnline boardSummary should include blocker IDs");
   print("OK", "requireOnline turns offline Mac host into a failing JSON report");
 }
 
@@ -419,6 +421,7 @@ function checkOfflineBoardSummary(args) {
   const text = String(result.stdout || "").trim();
   assertBoardSummaryShape(text, "offline board summary");
   assert(/Mac host offline/.test(text), "offline board summary should mention host offline");
+  assert(/warnings=[^.]*host-offline/.test(text), "offline board summary should include warning IDs");
   assert(/start formal host/.test(text), "offline board summary should include formal host start guidance");
   print("OK", "Offline board summary is short, secret-free, and actionable");
 }
@@ -613,8 +616,9 @@ async function checkH264FallbackPipelineWarning(args) {
     assert(result.status === 0, `fallback pipeline warning should not fail resume status\n${result.stdout}\n${result.stderr}`);
     assert(payload.host?.online === true, "fallback pipeline payload should report host online");
     assert(payload.host?.capabilities?.capturePipeline === "background-jpeg", "fallback pipeline payload should preserve capturePipeline");
-    assert(payload.recommendations.some((item) => item.level === "warning" && /current capture pipeline is background-jpeg/.test(item.text)), "fallback pipeline should create a warning recommendation");
+    assert(payload.recommendations.some((item) => item.id === "h264-fallback" && item.level === "warning" && /current capture pipeline is background-jpeg/.test(item.text)), "fallback pipeline should create a warning recommendation");
     assert(String(payload.boardSummary || "").includes("attention="), "fallback pipeline boardSummary should include attention");
+    assert(/warnings=[^.]*h264-fallback/.test(String(payload.boardSummary || "")), "fallback pipeline boardSummary should include warning IDs");
     assert(!String(payload.boardSummary || "").includes("attention=none"), "fallback pipeline boardSummary should not say attention=none");
     assertNoPasswordLeak(result, "fallback pipeline resume status");
   });

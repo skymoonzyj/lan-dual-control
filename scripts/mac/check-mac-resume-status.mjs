@@ -471,6 +471,7 @@ function buildRecommendations({ git, host, board, args }) {
   if (board.checked && !board.ok) {
     recommendations.push({
       level: "warning",
+      id: "board-unreadable",
       text: "Agent Link Board was not readable; refresh it before coordinating dual-end tests.",
     });
   }
@@ -483,12 +484,14 @@ function buildRecommendations({ git, host, board, args }) {
   if (!git.clean) {
     recommendations.push({
       level: args.requireClean ? "blocker" : "warning",
+      id: "worktree-dirty",
       text: "Worktree has uncommitted changes; commit/stash or document them before pulling or pushing.",
     });
   }
   if (!host.online) {
     recommendations.push({
       level: args.requireOnline ? "blocker" : "warning",
+      id: "host-offline",
       text: "Mac host discovery is offline; start it safely with start-mac-host before Windows validation.",
     });
     recommendations.push({
@@ -508,36 +511,42 @@ function buildRecommendations({ git, host, board, args }) {
   if (host.inputMode !== "log") {
     recommendations.push({
       level: "blocker",
+      id: "input-mode",
       text: `Mac host inputMode is ${host.inputMode || "unknown"}; unattended validation should stay in log mode.`,
     });
   }
   if (host.permissions.screenRecording !== true) {
     recommendations.push({
       level: "blocker",
+      id: "screen-recording",
       text: "Screen Recording permission is off; real video validation will fail or fall back.",
     });
   }
   if (host.permissions.accessibility !== true) {
     recommendations.push({
       level: "warning",
+      id: "accessibility",
       text: "Accessibility permission is off; log-mode tests can continue, but inject cannot work.",
     });
   }
   if (host.permissions.inputMonitoring !== true) {
     recommendations.push({
       level: "warning",
+      id: "input-monitoring",
       text: "Input Monitoring is not confirmed; keyboard edge cases may need manual permission review.",
     });
   }
   if (host.capabilities?.h264Stream === true && !isH264CapturePipelineActive(host.capabilities)) {
     recommendations.push({
       level: "warning",
+      id: "h264-fallback",
       text: `Mac host advertises H.264, but current capture pipeline is ${host.capabilities?.capturePipeline || "unknown"}; refresh the media baseline before formal H.264 E2E.`,
     });
   }
   if (host.buildDiff.severity === "restart-recommended") {
     recommendations.push({
       level: args.requireNoRuntimeChanges ? "blocker" : "warning",
+      id: "runtime-changes",
       text: `${host.buildDiff.message} Changed runtime files: ${host.buildDiff.changedHostRuntimeFiles.slice(0, 6).join(", ")}`,
     });
   } else if (host.buildDiff.differs) {
@@ -773,18 +782,21 @@ function formatBoardCallSummary(board) {
 function formatBoardSummary(report) {
   const { git, host, board, currentBuildId, recommendations } = report;
   const repoState = `${currentBuildId || "unknown"} ${git.clean ? "clean" : `dirty:${git.changes.length}`}`;
-  const blockers = recommendations.filter((item) => item.level === "blocker").length;
-  const warnings = recommendations.filter((item) => item.level === "warning").length;
+  const blockerItems = recommendations.filter((item) => item.level === "blocker");
+  const warningItems = recommendations.filter((item) => item.level === "warning");
+  const blockers = blockerItems.length;
+  const warnings = warningItems.length;
   const attention = blockers > 0
     ? `attention=${blockers} blocker(s)`
     : warnings > 0
       ? `attention=${warnings} warning(s)`
       : "attention=none";
+  const findingSummary = formatRecommendationSummary(blockerItems, warningItems);
   const callSummary = formatBoardCallSummary(board);
 
   if (!host.online) {
     return [
-      `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${attention}.`,
+      `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
       "Next: start formal host with start-mac-host --promptPassword --requirePassword before Windows E2E.",
       `After host is online, refresh media baseline with ${report.commands.mediaReadinessBoardSummary}.`,
       `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
@@ -812,7 +824,7 @@ function formatBoardSummary(report) {
 
   return [
     `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}.`,
-    `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}.`,
+    `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
     `Media baseline command: ${report.commands.mediaReadinessBoardSummary}.`,
     `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
     `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
@@ -828,6 +840,20 @@ function formatBoardSummary(report) {
     "Next formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
+}
+
+function formatRecommendationSummary(blockerItems, warningItems) {
+  return [
+    blockerItems.length > 0 ? `blockers=${summarizeRecommendationIds(blockerItems)}` : "",
+    warningItems.length > 0 ? `warnings=${summarizeRecommendationIds(warningItems)}` : "",
+  ].filter(Boolean).join(" ");
+}
+
+function summarizeRecommendationIds(items) {
+  const ids = [...new Set(items.map((item) => item.id).filter(Boolean))];
+  if (ids.length === 0) return "unknown";
+  if (ids.length <= 4) return ids.join(",");
+  return `${ids.slice(0, 4).join(",")}+${ids.length - 4}more`;
 }
 
 function printReport(report) {
