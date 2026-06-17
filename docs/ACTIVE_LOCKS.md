@@ -1,6 +1,6 @@
 # 当前文件占用
 
-最后更新：2026-06-17
+最后更新：2026-06-18
 
 用途：避免 Windows Codex 和 Mac Codex 同时重写同一片代码。占用不是永久所有权，只表示“我正在处理，另一端先别碰”。
 
@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/index.html`, `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 续跑 | Windows 控 Mac 全屏悬浮控制中心新增连接/重连状态，显示自动重连倒计时和次数，并提供浮层“立即重连”按钮；页面 diagnostics-only 已覆盖 `connection=true` 和浮层按钮点击。 |
 | Windows Codex | `apps/windows-client/index.html`, `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 续跑 | Windows 控 Mac 全屏悬浮控制中心新增剪贴板/远端文件状态，显示文字/文件能力、进行中接收进度、系统剪贴板写入状态和最近收到文件数量；页面 diagnostics-only 已覆盖 `clipboard=true`。 |
 | Windows Codex | `apps/windows-client/index.html`, `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 续跑 | Windows 控 Mac 全屏悬浮控制中心新增声音接收/播放状态，显示接收帧数、电平、音量、播放计数和丢帧；页面 diagnostics-only 已覆盖 `audioStatus=true`。 |
 | Windows Codex | `apps/windows-client/index.html`, `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 续跑 | Windows 控 Mac 全屏悬浮控制中心新增视频链路/实收 FPS/协商与请求刷新率/帧延迟/回退原因状态；页面 diagnostics-only 已覆盖 `video=true`。 |

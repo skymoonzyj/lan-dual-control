@@ -94,6 +94,7 @@ const elements = {
   floatingScaleSelect: document.querySelector("#floatingScaleSelect"),
   floatingAudioSelect: document.querySelector("#floatingAudioSelect"),
   floatingFullscreenHint: document.querySelector("#floatingFullscreenHint"),
+  floatingConnectionStatus: document.querySelector("#floatingConnectionStatus"),
   floatingVideoStatus: document.querySelector("#floatingVideoStatus"),
   floatingAudioStatus: document.querySelector("#floatingAudioStatus"),
   floatingClipboardStatus: document.querySelector("#floatingClipboardStatus"),
@@ -106,6 +107,7 @@ const elements = {
   floatingFullscreenButton: document.querySelector("#floatingFullscreenButton"),
   floatingImmersiveFullscreenButton: document.querySelector("#floatingImmersiveFullscreenButton"),
   floatingWindowButton: document.querySelector("#floatingWindowButton"),
+  floatingReconnectButton: document.querySelector("#floatingReconnectButton"),
   floatingDisconnectButton: document.querySelector("#floatingDisconnectButton"),
   fullscreenHint: document.querySelector("#fullscreenHint"),
   fullscreenHintText: document.querySelector("#fullscreenHintText"),
@@ -1784,9 +1786,14 @@ function updateReconnectControls(visible = Boolean(state.reconnectTimer)) {
     elements.reconnectNowButton.hidden = !isVisible;
     elements.reconnectNowButton.disabled = !isVisible || state.connecting;
   }
+  if (elements.floatingReconnectButton) {
+    elements.floatingReconnectButton.hidden = !isVisible;
+    elements.floatingReconnectButton.disabled = !isVisible || state.connecting;
+  }
   if (elements.connectionActions) {
     elements.connectionActions.classList.toggle("has-reconnect", isVisible);
   }
+  syncFloatingControlStatus();
 }
 
 function formatReconnectCountdown(remainingMs) {
@@ -1985,6 +1992,40 @@ function cloneSelectOptions(sourceSelect, targetSelect) {
   targetSelect.value = sourceSelect.value;
 }
 
+function formatFloatingConnectionStatus() {
+  const target = [state.activeHost, state.activePort].filter(Boolean).join(":");
+  const stateConfig = connectionStates[state.connectionState] ?? connectionStates.idle;
+
+  if (state.reconnectTimer || state.connectionState === "reconnecting") {
+    const attemptText = `${state.reconnectAttempts}/${maxReconnectAttempts}`;
+    if (state.connecting) {
+      return `连接：正在重连${target ? ` ${target}` : ""}（${attemptText}）`;
+    }
+    const remainingSeconds = state.reconnectDueAt
+      ? Math.max(0, Math.ceil((state.reconnectDueAt - Date.now()) / 1000))
+      : 0;
+    const reason = String(state.reconnectReason || "").replace(/\s+/g, " ").trim();
+    const reasonText = reason ? ` · ${reason.length > 18 ? `${reason.slice(0, 17)}...` : reason}` : "";
+    return remainingSeconds > 0
+      ? `连接：${remainingSeconds} 秒后重连（${attemptText}）${reasonText}`
+      : `连接：准备重连（${attemptText}）${reasonText}`;
+  }
+
+  if (state.connecting) {
+    return `连接：${stateConfig.label}${target ? ` ${target}` : ""}`;
+  }
+
+  if (state.connected) {
+    return `连接：已连接${target ? ` ${target}` : ""}`;
+  }
+
+  if (state.connectionState === "failed" || state.connectionState === "disconnected") {
+    return `连接：${stateConfig.label}`;
+  }
+
+  return "连接：未连接";
+}
+
 function formatFloatingInputModeStatus() {
   if (!state.connected) return "输入：未连接";
   if (state.controlDirection === "mac_to_windows") return "输入：当前由 Mac 控制";
@@ -2144,6 +2185,9 @@ function syncFloatingControlStatus() {
       : state.fullscreen
         ? "Esc 退出全屏"
         : "全屏后 Esc 退出";
+  }
+  if (elements.floatingConnectionStatus) {
+    elements.floatingConnectionStatus.textContent = formatFloatingConnectionStatus();
   }
   if (elements.floatingVideoStatus) {
     elements.floatingVideoStatus.textContent = formatFloatingVideoStatus();
@@ -2327,6 +2371,11 @@ function syncFloatingControlCenter() {
   }
   if (elements.floatingWindowButton) {
     elements.floatingWindowButton.disabled = !state.fullscreen && !state.immersiveFullscreen;
+  }
+  if (elements.floatingReconnectButton) {
+    const reconnectVisible = Boolean(state.reconnectTimer);
+    elements.floatingReconnectButton.hidden = !reconnectVisible;
+    elements.floatingReconnectButton.disabled = !reconnectVisible || state.connecting;
   }
   syncFloatingControlStatus();
 }
@@ -5889,6 +5938,10 @@ elements.floatingImmersiveFullscreenButton.addEventListener("click", () => {
 elements.floatingWindowButton.addEventListener("click", () => {
   setFullscreen(false);
   setControlCenterOpen(false);
+});
+elements.floatingReconnectButton.addEventListener("click", () => {
+  primeAudioPlayback();
+  reconnectNow();
 });
 elements.floatingDisconnectButton.addEventListener("click", () => {
   disconnect();

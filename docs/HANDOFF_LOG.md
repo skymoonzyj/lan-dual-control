@@ -21,6 +21,40 @@
 
 日期：2026-06-18 续跑
 开发端：Windows Codex
+本轮目标：第一阶段远控 UI 补强，让 Windows 控 Mac 全屏时能直接看到连接和重连状态，并可在浮层内立即重连。
+完成内容：
+- Windows 控 Mac 悬浮控制中心新增“连接”状态胶囊，展开后显示未连接、连接中、已连接、断线自动重连倒计时、重连次数和简短断线原因。
+- 悬浮控制中心动作区新增“立即重连”按钮；只有自动重连等待中才显示，点击后复用现有 `reconnectNow()` 流程，不改变重连策略。
+- 页面自检新增浮层连接/重连状态断言，模拟第 2/3 次自动重连倒计时，并确认浮层“立即重连”按钮可用；重连控件回归也改为点击浮层按钮确认动作。
+- Windows 控制端 README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps\windows-client scripts\windows docs`
+遗留问题：
+- 本轮只做页面 UI 和 diagnostics-only 自检，不连接真实 Mac、不认证、不发送密码/input/inject；真实断网或 Mac host 重启时仍需现场观察全屏浮层倒计时、立即重连和恢复画面的体验。
+下一步建议：
+- 真机 Mac 联调时在普通全屏/真全屏下重启 host 或断开网络，观察浮层“连接”状态和“立即重连”按钮是否足够直观，并复制诊断确认重连原因和下次重连时间一致。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真实断线恢复联调时再通过 Agent Link Board 发 call。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 续跑
+开发端：Windows Codex
 本轮目标：第一阶段远控 UI 补强，让 Windows 控 Mac 全屏时能直接看到剪贴板和远端文件接收状态。
 完成内容：
 - Windows 控 Mac 悬浮控制中心新增“剪贴板”状态胶囊，展开后显示文字/文件剪贴板能力、远端文件接收进度、系统文件剪贴板写入状态、最近收到远端文件数量或关闭/待机状态。

@@ -825,6 +825,53 @@ async function verifyFloatingControlCenter(session) {
         valueOf("#audioVolumeRange") === "33" &&
         document.querySelector("#floatingAudioVolumeText")?.textContent === "33%";
 
+      let connectionStatusText = "";
+      const connectionStatusVisible = (() => {
+        const floatingReconnectButton = document.querySelector("#floatingReconnectButton");
+        const originalConnectionState = {
+          connected: state.connected,
+          connecting: state.connecting,
+          connectionState: state.connectionState,
+          activeHost: state.activeHost,
+          activePort: state.activePort,
+          reconnectAttempts: state.reconnectAttempts,
+          reconnectTimer: state.reconnectTimer,
+          reconnectDueAt: state.reconnectDueAt,
+          reconnectReason: state.reconnectReason,
+        };
+        try {
+          state.connected = false;
+          state.connecting = false;
+          state.connectionState = "reconnecting";
+          state.activeHost = "192.168.31.122";
+          state.activePort = "43770";
+          state.reconnectAttempts = 2;
+          state.reconnectTimer = 1;
+          state.reconnectDueAt = Date.now() + 2400;
+          state.reconnectReason = "测试断线";
+          if (typeof syncFloatingControlCenter === "function") syncFloatingControlCenter();
+          connectionStatusText = document.querySelector("#floatingConnectionStatus")?.textContent || "";
+          return (
+            connectionStatusText.includes("连接：") &&
+            connectionStatusText.includes("秒后重连") &&
+            connectionStatusText.includes("2/3") &&
+            !floatingReconnectButton?.hidden &&
+            !floatingReconnectButton?.disabled
+          );
+        } finally {
+          state.connected = originalConnectionState.connected;
+          state.connecting = originalConnectionState.connecting;
+          state.connectionState = originalConnectionState.connectionState;
+          state.activeHost = originalConnectionState.activeHost;
+          state.activePort = originalConnectionState.activePort;
+          state.reconnectAttempts = originalConnectionState.reconnectAttempts;
+          state.reconnectTimer = originalConnectionState.reconnectTimer;
+          state.reconnectDueAt = originalConnectionState.reconnectDueAt;
+          state.reconnectReason = originalConnectionState.reconnectReason;
+          if (typeof syncFloatingControlCenter === "function") syncFloatingControlCenter();
+        }
+      })();
+
       let audioStatusText = "";
       const audioStatusVisible = (() => {
         const audioToggleElement = document.querySelector("#audioToggle");
@@ -962,6 +1009,7 @@ async function verifyFloatingControlCenter(session) {
       })();
       const statusVisible =
         document.querySelector("#floatingFullscreenHint")?.textContent.includes("Esc") &&
+        document.querySelector("#floatingConnectionStatus")?.textContent.includes("连接") &&
         document.querySelector("#floatingVideoStatus")?.textContent.includes("视频") &&
         document.querySelector("#floatingAudioStatus")?.textContent.includes("声音") &&
         document.querySelector("#floatingClipboardStatus")?.textContent.includes("剪贴板") &&
@@ -1084,6 +1132,7 @@ async function verifyFloatingControlCenter(session) {
           audioSynced &&
           volumeSynced &&
           statusVisible &&
+          connectionStatusVisible &&
           audioStatusVisible &&
           clipboardStatusVisible &&
           videoStatusVisible &&
@@ -1104,6 +1153,8 @@ async function verifyFloatingControlCenter(session) {
         audioSynced,
         volumeSynced,
         statusVisible,
+        connectionStatusVisible,
+        connectionStatusText,
         audioStatusVisible,
         audioStatusText,
         clipboardStatusVisible,
@@ -2561,6 +2612,7 @@ async function verifyReconnectControls(session) {
       }
 
       const reconnectButton = document.querySelector("#reconnectNowButton");
+      const floatingReconnectButton = document.querySelector("#floatingReconnectButton");
       const actions = document.querySelector("#connectionActions");
       const status = document.querySelector("#statusText");
       const remote = document.querySelector("#remoteStatusText");
@@ -2568,7 +2620,7 @@ async function verifyReconnectControls(session) {
       const disconnectButton = document.querySelector("#disconnectButton");
       const copyButton = document.querySelector("#copyLogButton");
       const eventLog = document.querySelector("#eventLog");
-      if (!reconnectButton || !actions || !status || !remote || !connectButton || !disconnectButton || !copyButton) {
+      if (!reconnectButton || !floatingReconnectButton || !actions || !status || !remote || !connectButton || !disconnectButton || !copyButton) {
         return { ok: false, reason: "missing reconnect elements" };
       }
 
@@ -2588,6 +2640,8 @@ async function verifyReconnectControls(session) {
       const originalActionsClass = actions.className;
       const originalReconnectHidden = reconnectButton.hidden;
       const originalReconnectDisabled = reconnectButton.disabled;
+      const originalFloatingReconnectHidden = floatingReconnectButton.hidden;
+      const originalFloatingReconnectDisabled = floatingReconnectButton.disabled;
       const originalConnectDisabled = connectButton.disabled;
       const originalDisconnectDisabled = disconnectButton.disabled;
       const originalStatus = status.textContent;
@@ -2764,6 +2818,8 @@ async function verifyReconnectControls(session) {
           state.reconnectCountdownTimer &&
           !reconnectButton.hidden &&
           !reconnectButton.disabled &&
+          !floatingReconnectButton.hidden &&
+          !floatingReconnectButton.disabled &&
           actions.classList.contains("has-reconnect") &&
           !disconnectButton.disabled &&
           status.textContent.includes("秒后自动重连") &&
@@ -2771,13 +2827,14 @@ async function verifyReconnectControls(session) {
           remote.textContent.includes("秒后自动重连") &&
           Object.values(exportChecks).every(Boolean);
 
-        reconnectButton.click();
+        floatingReconnectButton.click();
         const immediate =
           calls.length === 1 &&
           calls[0].reconnect === true &&
           state.reconnectTimer === null &&
           state.reconnectCountdownTimer === null &&
           reconnectButton.hidden &&
+          floatingReconnectButton.hidden &&
           !actions.classList.contains("has-reconnect");
 
         return {
@@ -2854,6 +2911,8 @@ async function verifyReconnectControls(session) {
         actions.className = originalActionsClass;
         reconnectButton.hidden = originalReconnectHidden;
         reconnectButton.disabled = originalReconnectDisabled;
+        floatingReconnectButton.hidden = originalFloatingReconnectHidden;
+        floatingReconnectButton.disabled = originalFloatingReconnectDisabled;
         connectButton.disabled = originalConnectDisabled;
         disconnectButton.disabled = originalDisconnectDisabled;
         status.textContent = originalStatus;
@@ -2960,7 +3019,7 @@ async function run() {
     summary.checks.push("control-center");
     print(
       "OK",
-      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, original=${controlCenterCheck.originalPresetSynced}, detailed=${controlCenterCheck.detailedSettingsSynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, status=${controlCenterCheck.statusVisible}, video=${controlCenterCheck.videoStatusVisible}, audioStatus=${controlCenterCheck.audioStatusVisible}, clipboard=${controlCenterCheck.clipboardStatusVisible}, shortcut=${controlCenterCheck.shortcutSent}, fullscreen=${controlCenterCheck.fullscreenEntered}, hint=${controlCenterCheck.fullscreenHintVisible}, esc=${controlCenterCheck.fullscreenEscExited}, immersive=${controlCenterCheck.immersiveFullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
+      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, original=${controlCenterCheck.originalPresetSynced}, detailed=${controlCenterCheck.detailedSettingsSynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, status=${controlCenterCheck.statusVisible}, connection=${controlCenterCheck.connectionStatusVisible}, video=${controlCenterCheck.videoStatusVisible}, audioStatus=${controlCenterCheck.audioStatusVisible}, clipboard=${controlCenterCheck.clipboardStatusVisible}, shortcut=${controlCenterCheck.shortcutSent}, fullscreen=${controlCenterCheck.fullscreenEntered}, hint=${controlCenterCheck.fullscreenHintVisible}, esc=${controlCenterCheck.fullscreenEscExited}, immersive=${controlCenterCheck.immersiveFullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
     );
     const desktopOnlyPanelCheck = await verifyDesktopOnlyHostPanel(session);
     summary.checks.push("desktop-panel");

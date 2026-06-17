@@ -12,7 +12,7 @@
    - 验证通过后，真实输入注入只能在用户明确确认正在看 Mac 屏幕后执行；Mac 端通过启动助手切换时必须带 `--confirmUserWatching`，不要把裸 `LAN_DUAL_INPUT_MODE=inject` 当作日常复跑路径。
 
 2. Windows 端继续完善控制体验。
-   - 第一阶段 UI 主线已经开始落到 Windows 控 Mac 页面：悬浮控制中心现在有显示器、画质、分辨率、刷新率、码率、缩放、声音、音量、常用 macOS 快捷键、普通全屏、真全屏、窗口、退出远控、`Esc` 退出提示、视频链路/实收 FPS/帧延迟状态、声音接收/播放状态、剪贴板/远端文件状态、输入模式和安全状态；进入全屏时也会短暂显示 `Esc` 退出、当前画质、刷新率、码率和输入状态。后续真实 Mac 连接时重点验收原画模式是否清楚、真全屏是否能进入/退出、全屏后是否能顺手退出、视频状态是否能帮助判断“不是 60Hz/卡顿/回退 JPEG”、声音状态是否能区分没收到音频帧/收到但未播放/音量为 0、剪贴板状态是否能显示远端文件/压缩包接收进度和系统剪贴板写入结果、快捷键入口是否可用，以及 `inputMode=log` 时是否明确显示“只记录、不真正控制”。
+   - 第一阶段 UI 主线已经开始落到 Windows 控 Mac 页面：悬浮控制中心现在有显示器、画质、分辨率、刷新率、码率、缩放、声音、音量、常用 macOS 快捷键、普通全屏、真全屏、窗口、立即重连、退出远控、`Esc` 退出提示、连接/重连状态、视频链路/实收 FPS/帧延迟状态、声音接收/播放状态、剪贴板/远端文件状态、输入模式和安全状态；进入全屏时也会短暂显示 `Esc` 退出、当前画质、刷新率、码率和输入状态。后续真实 Mac 连接时重点验收原画模式是否清楚、真全屏是否能进入/退出、全屏后是否能顺手退出、断线后浮层是否显示倒计时且可立即重连、视频状态是否能帮助判断“不是 60Hz/卡顿/回退 JPEG”、声音状态是否能区分没收到音频帧/收到但未播放/音量为 0、剪贴板状态是否能显示远端文件/压缩包接收进度和系统剪贴板写入结果、快捷键入口是否可用，以及 `inputMode=log` 时是否明确显示“只记录、不真正控制”。
    - Windows 侧需要给 Mac 端或通讯板同步一次性反控授权入口时，优先使用 PowerShell 7 摘要命令：`pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -DurationMs 30000 -BoardSummary`。恢复总览、Windows host `--status` 和 readiness 摘要现在都会同时给出 `ReverseGrantPs=` 推荐命令与 `ReverseGrant=` Node 备用命令；它们只提示/打开 Windows 本机回环临时授权窗口，不发送密码、不认证远端、不发送输入、不执行 `inject`。
    - 需要先确认本机 WGC/WinRT/GPU 和浏览器 H.264 解码条件时，不必从 resume 总览里翻命令：`start-windows-host --status --boardSummary` 和 `check-windows-host-readiness --boardSummary` 也会直接给出 `WindowsWgcSupport=` / `WindowsWgcSupportPs=` 以及 `WindowsWebCodecs=` / `WindowsWebCodecsPs=`，先跑专项预检，再按需继续 `WindowsWgcBenchmark=` / `WindowsWgcCompare=`。
    - 修改任意 Windows PowerShell `.ps1` 入口后，先跑 `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary` 和 `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`。这条统一自检会自动发现带 `Help` switch 的 PowerShell 脚本，并确认 `-Help/-h` 只打印说明，不误启动 host/watcher/Agent Link、不改机器环境、不初始化 WASAPI/采集系统声音、不认证、不发送密码/Token/input/inject；当前覆盖 20 个入口、40 条命令，也包括 `test-windows-host.ps1`、`dev-lab.ps1`、`test-windows-client-browser.ps1`、`check-webcodecs-h264-support.ps1`、`check-windows-wgc-support.ps1`、`benchmark-windows-wgc-settings.ps1` 和 `compare-windows-wgc-h264-sources.ps1` 这类容易误启动本机服务或浏览器/系统探针的入口；`--boardSummary` 可直接输出一行无密结果给 Agent Link Board。
@@ -24,7 +24,7 @@
    - 继续验证 Mac 真实 `pcm-f32le-base64` 音频帧播放稳定性，重点看静音、音量变化、长时间运行和延迟；全屏悬浮控制中心展开后也会显示声音接收帧数、电平、播放计数、音量和丢帧，现场听不到声音时先看它是“等待音频”“等待播放”还是“播放失败”。
    - Windows 控制端远端文件托盘已补接收中、分块进度、超限拒绝、解析失败、不完整完成、连接中断和 45 秒无新分块/完成消息的超时状态条；后续真实文件/压缩包复制时，除了看事件日志，也要直接看“远端文件”面板状态和全屏悬浮控制中心的“剪贴板”状态是否同步给出接收进度、写入系统剪贴板结果和可执行恢复动作。
    - 黑边输入防护已固化到 Windows 控制端页面级自检；后续改缩放、画布或输入层时保持该回归。
-   - 处理真实 Mac 连接中的中文错误提示和重连体验；当前控制端已补自动重连倒计时、“立即重连”按钮，并在导出日志中记录重连原因和下次重连倒计时，报告顶部“快速摘要”会先汇总远端连接和重连状态；下一步重点看真实断网/host 重启后的画面恢复时间和错误提示是否足够直观。
+   - 处理真实 Mac 连接中的中文错误提示和重连体验；当前控制端已补自动重连倒计时、“立即重连”按钮，并在全屏悬浮控制中心显示连接/重连倒计时和浮层“立即重连”入口，导出日志也会记录重连原因和下次重连倒计时，报告顶部“快速摘要”会先汇总远端连接和重连状态；下一步重点看真实断网/host 重启后的画面恢复时间和错误提示是否足够直观。
    - 现场跑 `check-mac-formal-e2e --promptPassword` 或底层 `probe-mac-host --durationMs ...` 长测时，视频/音频观察会先打印目标时长，并默认每 10 秒输出一次进度心跳；如果长测中没有看到心跳，优先检查脚本是否已更新到包含 `--progressIntervalMs` 的版本。单独跑 Windows 控制 Mac 页面自检时，`test-windows-client-browser.mjs` 的连接、视频、H.264 和 PCM 音频播放等待也会输出页面快照；现场需要更密集反馈时加 `--progressIntervalMs 5000`，不需要时传 `0`。
 
 3. 继续 H.264 流式视频链路验收。
