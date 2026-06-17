@@ -17,6 +17,34 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
+本轮目标：同步最近 Windows PowerShell 纯帮助覆盖与安全边界，确保后续现场脚本查参数不会误触发服务、系统改动或采集动作。
+完成内容：
+- `scripts/windows/test-windows-powershell-help.mjs` 已作为统一 PowerShell help 覆盖自检：自动发现 `scripts/windows/*.ps1` 中声明 `Help` switch 的入口，并验证 `-Help/-h` 快速 0 退出、输出 Usage/Options 帮助且不误触发运行时动作。
+- 当前已覆盖 12 个 PowerShell 脚本、24 条帮助命令：反控授权、formal E2E、Windows readiness/resume/video support、dev-env 检查/系统级 setup、Agent Link 启动、Mac alert watcher 启动与直接 watcher、Windows host 启动、WASAPI loopback capture。
+- 最近补齐的 `start-codex-link.ps1`、`verify-dev-env.ps1`、`setup-dev-env-admin.ps1`、`watch-codex-link-mac-alerts.ps1` 和 `wasapi-loopback-capture.ps1` 的 `-Help/-h` 都是早退出路径：不创建日志、不启动服务/监听、不改机器环境、不启动 Build Tools 安装器、不初始化 WASAPI、不采集系统声音、不打印 Token、不认证、不发送密码/input/inject。
+- `CURRENT_STATUS`、`NEXT_ACTIONS` 和任务板已同步：以后改任意 Windows `.ps1` 入口后，必须跑统一 help 自检的 Windows PowerShell 与 PowerShell 7 两条路径。
+修改文件：
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 文档 diff 审阅
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" docs`
+- 代码侧上一轮已在 `849aa1f` 验证：`node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000` 与 `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000` 均 24/24 通过，`test-mac-alert-watcher` 通过。
+遗留问题：
+- 本轮只同步文档，不新增代码能力；真实反控和媒体链路仍按现有 NEXT_ACTIONS 继续验收。
+下一步建议：
+- 后续新增或修改 Windows PowerShell 脚本时，先实现 `-Help/-h` 早退出，再跑 `test-windows-powershell-help` 的 Windows PowerShell 与 PowerShell 7 双路径，避免现场查参数误启动服务或触发系统操作。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-17 Mac Codex
 
 日期：2026-06-17 14:15
