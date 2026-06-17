@@ -504,6 +504,8 @@ async function main() {
     assert(powerShellHelp.stdout.includes("-ProbeMedia"), `PowerShell readiness ${helpArg} does not mention media probe`);
     assert(powerShellHelp.stdout.includes("WindowsWgcBenchmark="), `PowerShell readiness ${helpArg} does not mention WindowsWgcBenchmark`);
     assert(powerShellHelp.stdout.includes("benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary"), `PowerShell readiness ${helpArg} does not mention benchmark command`);
+    assert(powerShellHelp.stdout.includes("WindowsVideoSupportPs="), `PowerShell readiness ${helpArg} does not mention WindowsVideoSupportPs`);
+    assert(powerShellHelp.stdout.includes("check-windows-video-encoder-support.ps1 -BoardSummary"), `PowerShell readiness ${helpArg} does not mention video support PowerShell command`);
     assert(powerShellHelp.stdout.includes("WindowsWgcBenchmarkPs="), `PowerShell readiness ${helpArg} does not mention WindowsWgcBenchmarkPs`);
     assert(powerShellHelp.stdout.includes("benchmark-windows-wgc-settings.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary"), `PowerShell readiness ${helpArg} does not mention benchmark PowerShell command`);
     assert(powerShellHelp.stdout.includes("ReverseGrantPs="), `PowerShell readiness ${helpArg} does not mention ReverseGrantPs`);
@@ -595,6 +597,12 @@ async function main() {
     "JSON windowsVideoEncoderSupportCommand is missing",
   );
   assert(
+    typeof jsonSummary.windowsVideoEncoderSupportPowerShellCommand === "string"
+      && jsonSummary.windowsVideoEncoderSupportPowerShellCommand.includes("check-windows-video-encoder-support.ps1")
+      && jsonSummary.windowsVideoEncoderSupportPowerShellCommand.includes("-BoardSummary"),
+    "JSON windowsVideoEncoderSupportPowerShellCommand is missing",
+  );
+  assert(
     typeof jsonSummary.windowsWgcBenchmarkCommand === "string"
       && jsonSummary.windowsWgcBenchmarkCommand.includes("benchmark-windows-wgc-settings.mjs")
       && jsonSummary.windowsWgcBenchmarkCommand.includes("--profile 60:20000:balanced")
@@ -622,6 +630,11 @@ async function main() {
     jsonSummary.boardSummary.includes("check-windows-video-encoder-support.mjs --boardSummary"),
     "JSON boardSummary should include the runnable Windows video support command",
   );
+  assert(jsonSummary.boardSummary.includes("WindowsVideoSupportPs="), "JSON boardSummary should include Windows video support PowerShell command");
+  assert(
+    jsonSummary.boardSummary.includes("check-windows-video-encoder-support.ps1 -BoardSummary"),
+    "JSON boardSummary should include the runnable Windows video support PowerShell command",
+  );
   assert(jsonSummary.boardSummary.includes("WindowsWgcBenchmark="), "JSON boardSummary should include Windows WGC benchmark command");
   assert(
     jsonSummary.boardSummary.includes("benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary"),
@@ -644,6 +657,11 @@ async function main() {
     typeof runtimeResult?.windowsVideoEncoderSupportCommand === "string"
       && runtimeResult.windowsVideoEncoderSupportCommand.includes("check-windows-video-encoder-support.mjs"),
     "runtime result should carry Windows video support command",
+  );
+  assert(
+    typeof runtimeResult?.windowsVideoEncoderSupportPowerShellCommand === "string"
+      && runtimeResult.windowsVideoEncoderSupportPowerShellCommand.includes("check-windows-video-encoder-support.ps1"),
+    "runtime result should carry Windows video support PowerShell command",
   );
   assert(
     typeof runtimeResult?.windowsWgcBenchmarkCommand === "string"
@@ -673,6 +691,12 @@ async function main() {
   assert(typeof powerShellJsonSummary.boardSummary === "string" && powerShellJsonSummary.boardSummary.includes("Windows readiness"), "PowerShell JSON boardSummary is missing");
   assert(powerShellJsonSummary.boardSummary.includes("call=CALLING Mac Codex->Windows Codex"), "PowerShell JSON boardSummary should include active currentCall");
   assert(powerShellJsonSummary.boardSummary.includes("WindowsVideoSupport="), "PowerShell JSON boardSummary should include WindowsVideoSupport");
+  assert(powerShellJsonSummary.boardSummary.includes("WindowsVideoSupportPs="), "PowerShell JSON boardSummary should include WindowsVideoSupportPs");
+  assert(
+    typeof powerShellJsonSummary.windowsVideoEncoderSupportPowerShellCommand === "string"
+      && powerShellJsonSummary.windowsVideoEncoderSupportPowerShellCommand.includes("check-windows-video-encoder-support.ps1"),
+    "PowerShell JSON should include Windows video support PowerShell command",
+  );
   assert(powerShellJsonSummary.boardSummary.includes("WindowsWgcBenchmark="), "PowerShell JSON boardSummary should include WindowsWgcBenchmark");
   assert(powerShellJsonSummary.boardSummary.includes("WindowsWgcBenchmarkPs="), "PowerShell JSON boardSummary should include WindowsWgcBenchmarkPs");
   assert(
@@ -756,6 +780,11 @@ async function main() {
     lines[0].includes("check-windows-video-encoder-support.mjs --boardSummary"),
     "board summary should include the runnable Windows video support command",
   );
+  assert(lines[0].includes("WindowsVideoSupportPs="), "board summary should include Windows video support PowerShell command");
+  assert(
+    lines[0].includes("check-windows-video-encoder-support.ps1 -BoardSummary"),
+    "board summary should include the runnable Windows video support PowerShell command",
+  );
   assert(lines[0].includes("WindowsWgcBenchmark="), "board summary should include Windows WGC benchmark command");
   assert(
     lines[0].includes("benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary"),
@@ -778,6 +807,7 @@ async function main() {
   assert(powerShellBoardLines[0].includes("Windows readiness"), "PowerShell board summary has unexpected text");
   assert(powerShellBoardLines[0].includes("call=CALLING Mac Codex->Windows Codex"), "PowerShell board summary is missing active currentCall");
   assert(powerShellBoardLines[0].includes("WindowsVideoSupport="), "PowerShell board summary should include WindowsVideoSupport");
+  assert(powerShellBoardLines[0].includes("WindowsVideoSupportPs="), "PowerShell board summary should include WindowsVideoSupportPs");
   assert(powerShellBoardLines[0].includes("WindowsWgcBenchmark="), "PowerShell board summary should include WindowsWgcBenchmark");
   assert(powerShellBoardLines[0].includes("WindowsWgcBenchmarkPs="), "PowerShell board summary should include WindowsWgcBenchmarkPs");
   assert(powerShellBoardLines[0].includes("ReverseGrantPs="), "PowerShell board summary should include ReverseGrantPs");

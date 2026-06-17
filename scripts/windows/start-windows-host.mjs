@@ -631,6 +631,10 @@ function windowsVideoEncoderSupportCommand() {
   return "node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary";
 }
 
+function windowsVideoEncoderSupportPowerShellCommand() {
+  return "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-video-encoder-support.ps1 -BoardSummary";
+}
+
 function windowsWgcBenchmarkCommand() {
   return "node scripts/windows/benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary";
 }
@@ -673,7 +677,7 @@ function macReadinessTargets(status) {
 function makeBoardSummary(status) {
   const board = boardSummaryFragment(status);
   if (!status.ok) {
-    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${status.suggestions[0] || "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword"}. WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. Do not send passwords on Agent Link Board.`;
+    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${status.suggestions[0] || "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword"}. WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. Do not send passwords on Agent Link Board.`;
   }
   const targets = macReadinessTargets(status);
   const targetText = targets.length > 0
@@ -693,7 +697,7 @@ function makeBoardSummary(status) {
   const reverseGrantPowerShell = shouldShowReverseControlGrantCommand(reverse)
     ? ` ReverseGrantPs=${status.windowsReverseControlGrantPowerShellCommand}.`
     : "";
-  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness}${sendCall} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}.${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
+  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness}${sendCall} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}.${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
 }
 
 function applyDiscoveryStatus(status, discovery, args) {
@@ -757,6 +761,7 @@ function makeStatusShell(args, probeHost = statusProbeHost(args)) {
     macClientReadinessCommands: [],
     windowsHostMediaReadinessCommand: windowsHostMediaReadinessCommand(),
     windowsVideoEncoderSupportCommand: windowsVideoEncoderSupportCommand(),
+    windowsVideoEncoderSupportPowerShellCommand: windowsVideoEncoderSupportPowerShellCommand(),
     windowsWgcBenchmarkCommand: windowsWgcBenchmarkCommand(),
     windowsWgcBenchmarkPowerShellCommand: windowsWgcBenchmarkPowerShellCommand(),
     windowsReverseControlGrantCommand: windowsReverseControlGrantCommand(args.port),
@@ -863,6 +868,7 @@ async function printStatus(args) {
       }
       console.log(`[INFO] Windows host media baseline command: ${status.windowsHostMediaReadinessCommand}`);
       console.log(`[INFO] Windows video support command: ${status.windowsVideoEncoderSupportCommand}`);
+      console.log(`[INFO] Windows video support PowerShell command: ${status.windowsVideoEncoderSupportPowerShellCommand}`);
       console.log(`[INFO] Windows WGC benchmark command: ${status.windowsWgcBenchmarkCommand}`);
       console.log(`[INFO] Windows WGC benchmark PowerShell command: ${status.windowsWgcBenchmarkPowerShellCommand}`);
       if (shouldShowReverseControlGrantCommand(status.capabilities?.reverseControl)) {
@@ -882,6 +888,7 @@ async function printStatus(args) {
   console.log(`[INFO] ${status.suggestions[1]}`);
   console.log(`[INFO] Windows host media baseline command: ${status.windowsHostMediaReadinessCommand}`);
   console.log(`[INFO] Windows video support command: ${status.windowsVideoEncoderSupportCommand}`);
+  console.log(`[INFO] Windows video support PowerShell command after host is online: ${status.windowsVideoEncoderSupportPowerShellCommand}`);
   console.log(`[INFO] Windows WGC benchmark command after host is online: ${status.windowsWgcBenchmarkCommand}`);
   console.log(`[INFO] Windows WGC benchmark PowerShell command after host is online: ${status.windowsWgcBenchmarkPowerShellCommand}`);
   console.log(`[INFO] Windows reverse grant PowerShell command after host is online: ${status.windowsReverseControlGrantPowerShellCommand}`);
@@ -1081,6 +1088,9 @@ function printMacNextSteps(status) {
   }
   if (status.windowsVideoEncoderSupportCommand) {
     console.log(`[INFO] Windows video support command: ${status.windowsVideoEncoderSupportCommand}`);
+  }
+  if (status.windowsVideoEncoderSupportPowerShellCommand) {
+    console.log(`[INFO] Windows video support PowerShell command: ${status.windowsVideoEncoderSupportPowerShellCommand}`);
   }
   if (status.windowsWgcBenchmarkCommand) {
     console.log(`[INFO] Windows WGC benchmark command: ${status.windowsWgcBenchmarkCommand}`);

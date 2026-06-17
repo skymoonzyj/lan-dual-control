@@ -236,6 +236,8 @@ async function assertPowerShellWrapperHelp(timeoutMs) {
     assertIncludes(output, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "WindowsVideoSupport=", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "check-windows-video-encoder-support.mjs --boardSummary", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "WindowsVideoSupportPs=", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "check-windows-video-encoder-support.ps1 -BoardSummary", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "WindowsWgcBenchmark=", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "WindowsWgcBenchmarkPs=", `PowerShell wrapper ${helpArg}`);
@@ -321,6 +323,8 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   assertIncludes(output, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "offline status");
   assertIncludes(output, "Windows video support command:", "offline status");
   assertIncludes(output, "check-windows-video-encoder-support.mjs --boardSummary", "offline status");
+  assertIncludes(output, "Windows video support PowerShell command after host is online:", "offline status");
+  assertIncludes(output, "check-windows-video-encoder-support.ps1 -BoardSummary", "offline status");
   assertIncludes(output, "Windows WGC benchmark command after host is online:", "offline status");
   assertIncludes(output, "benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", "offline status");
   assertIncludes(output, "Windows WGC benchmark PowerShell command after host is online:", "offline status");
@@ -354,6 +358,9 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   if (!String(parsed.windowsVideoEncoderSupportCommand || "").includes("check-windows-video-encoder-support.mjs") || !String(parsed.windowsVideoEncoderSupportCommand || "").includes("--boardSummary")) {
     throw new Error(`Offline JSON status did not include Windows video support command.\n${jsonResult.stdout}`);
   }
+  if (!String(parsed.windowsVideoEncoderSupportPowerShellCommand || "").includes("check-windows-video-encoder-support.ps1") || !String(parsed.windowsVideoEncoderSupportPowerShellCommand || "").includes("-BoardSummary")) {
+    throw new Error(`Offline JSON status did not include Windows video support PowerShell command.\n${jsonResult.stdout}`);
+  }
   if (!String(parsed.windowsWgcBenchmarkCommand || "").includes("benchmark-windows-wgc-settings.mjs") || !String(parsed.windowsWgcBenchmarkCommand || "").includes("--boardSummary")) {
     throw new Error(`Offline JSON status did not include Windows WGC benchmark command.\n${jsonResult.stdout}`);
   }
@@ -371,6 +378,9 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   }
   if (!String(parsed.boardSummary || "").includes("WindowsVideoSupport=") || !String(parsed.boardSummary || "").includes("check-windows-video-encoder-support.mjs --boardSummary")) {
     throw new Error(`Offline JSON board summary did not include WindowsVideoSupport command.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.boardSummary || "").includes("WindowsVideoSupportPs=") || !String(parsed.boardSummary || "").includes("check-windows-video-encoder-support.ps1 -BoardSummary")) {
+    throw new Error(`Offline JSON board summary did not include WindowsVideoSupportPs command.\n${jsonResult.stdout}`);
   }
   if (!String(parsed.boardSummary || "").includes("WindowsWgcBenchmark=") || !String(parsed.boardSummary || "").includes("benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary")) {
     throw new Error(`Offline JSON board summary did not include WindowsWgcBenchmark command.\n${jsonResult.stdout}`);
@@ -395,6 +405,8 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   assertIncludes(boardResult.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "offline board summary");
   assertIncludes(boardResult.stdout, "WindowsVideoSupport=", "offline board summary");
   assertIncludes(boardResult.stdout, "check-windows-video-encoder-support.mjs --boardSummary", "offline board summary");
+  assertIncludes(boardResult.stdout, "WindowsVideoSupportPs=", "offline board summary");
+  assertIncludes(boardResult.stdout, "check-windows-video-encoder-support.ps1 -BoardSummary", "offline board summary");
   assertIncludes(boardResult.stdout, "WindowsWgcBenchmark=", "offline board summary");
   assertIncludes(boardResult.stdout, "benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", "offline board summary");
   assertIncludes(boardResult.stdout, "WindowsWgcBenchmarkPs=", "offline board summary");
@@ -591,6 +603,8 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         assertIncludes(statusOutput, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "online status");
         assertIncludes(statusOutput, "Windows video support command:", "online status");
         assertIncludes(statusOutput, "check-windows-video-encoder-support.mjs --boardSummary", "online status");
+        assertIncludes(statusOutput, "Windows video support PowerShell command:", "online status");
+        assertIncludes(statusOutput, "check-windows-video-encoder-support.ps1 -BoardSummary", "online status");
         assertIncludes(statusOutput, "Windows WGC benchmark command:", "online status");
         assertIncludes(statusOutput, "benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", "online status");
         assertIncludes(statusOutput, "Windows WGC benchmark PowerShell command:", "online status");
@@ -645,6 +659,9 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         if (!String(parsed.windowsVideoEncoderSupportCommand || "").includes("check-windows-video-encoder-support.mjs") || !String(parsed.windowsVideoEncoderSupportCommand || "").includes("--boardSummary")) {
           throw new Error(`Online JSON status did not include Windows video support command.\n${jsonResult.stdout}`);
         }
+        if (!String(parsed.windowsVideoEncoderSupportPowerShellCommand || "").includes("check-windows-video-encoder-support.ps1") || !String(parsed.windowsVideoEncoderSupportPowerShellCommand || "").includes("-BoardSummary")) {
+          throw new Error(`Online JSON status did not include Windows video support PowerShell command.\n${jsonResult.stdout}`);
+        }
         if (!String(parsed.windowsWgcBenchmarkCommand || "").includes("benchmark-windows-wgc-settings.mjs") || !String(parsed.windowsWgcBenchmarkCommand || "").includes("--boardSummary")) {
           throw new Error(`Online JSON status did not include Windows WGC benchmark command.\n${jsonResult.stdout}`);
         }
@@ -662,6 +679,9 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         }
         if (!String(parsed.boardSummary || "").includes("WindowsVideoSupport=") || !String(parsed.boardSummary || "").includes("check-windows-video-encoder-support.mjs --boardSummary")) {
           throw new Error(`Online JSON board summary did not include WindowsVideoSupport command.\n${jsonResult.stdout}`);
+        }
+        if (!String(parsed.boardSummary || "").includes("WindowsVideoSupportPs=") || !String(parsed.boardSummary || "").includes("check-windows-video-encoder-support.ps1 -BoardSummary")) {
+          throw new Error(`Online JSON board summary did not include WindowsVideoSupportPs command.\n${jsonResult.stdout}`);
         }
         if (!String(parsed.boardSummary || "").includes("WindowsWgcBenchmark=") || !String(parsed.boardSummary || "").includes("benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary")) {
           throw new Error(`Online JSON board summary did not include WindowsWgcBenchmark command.\n${jsonResult.stdout}`);
@@ -698,6 +718,8 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         assertIncludes(boardResult.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "online board summary");
         assertIncludes(boardResult.stdout, "WindowsVideoSupport=", "online board summary");
         assertIncludes(boardResult.stdout, "check-windows-video-encoder-support.mjs --boardSummary", "online board summary");
+        assertIncludes(boardResult.stdout, "WindowsVideoSupportPs=", "online board summary");
+        assertIncludes(boardResult.stdout, "check-windows-video-encoder-support.ps1 -BoardSummary", "online board summary");
         assertIncludes(boardResult.stdout, "WindowsWgcBenchmark=", "online board summary");
         assertIncludes(boardResult.stdout, "benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", "online board summary");
         assertIncludes(boardResult.stdout, "WindowsWgcBenchmarkPs=", "online board summary");
