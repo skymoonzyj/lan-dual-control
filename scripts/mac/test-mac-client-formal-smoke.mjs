@@ -86,6 +86,23 @@ function print(kind, text) {
   console.log(`[${kind}] ${text}`);
 }
 
+function assertMacClientBrowserSelfTestCommand(command, label) {
+  assertIncludes(command, "test-mac-client-browser.mjs", label);
+  assertIncludes(command, "--mockVideo", label);
+  assertIncludes(command, "--allowClipboardFallback", label);
+  assertIncludes(command, "--skipFileClipboard", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertIncludes(command, "--progressIntervalMs 0", label);
+  assertNotIncludes(command, "--useExistingHost", label);
+  assertNotIncludes(command, "--useEnvPassword", label);
+  assertNotIncludes(command, "--requirePassword", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+}
+
 async function getFreePort() {
   return new Promise((resolvePort, rejectPort) => {
     const server = createServer();
@@ -290,6 +307,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.preflight", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.sendCall", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.browserSmoke", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macClientBrowserSelfTest", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.windowsReverseGrantStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.windowsOpenOneTimeReverseGrant", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.windowsReverseGrantStatusNodeFallback", `${script} ${flag}`);
@@ -353,6 +371,10 @@ async function checkPreflightAndDryRun(args) {
         assert(preflightPayload.commands?.sendCall?.includes(`--server ${boardServer}`), "sendCall command should preserve custom board server");
         assert(preflightPayload.commands?.discoverPreflight?.includes("--discover"), "preflight should expose safe discovery retry command");
         assert(preflightPayload.commands?.browserSmoke?.includes("--useEnvPassword"), "preflight should expose env-password browser command shape");
+        assertMacClientBrowserSelfTestCommand(
+          preflightPayload.commands?.macClientBrowserSelfTest || "",
+          "preflight Mac client browser self-test command",
+        );
         assert(preflightPayload.commands?.windowsReverseGrantStatus?.includes(`-Port ${windowsPort} -Status -BoardSummary`), "preflight should expose recommended Windows PowerShell reverse grant status command");
         assert(preflightPayload.commands?.windowsOpenOneTimeReverseGrant?.includes(`-Port ${windowsPort} -Grant -DurationMs 30000 -BoardSummary`), "preflight should expose recommended Windows PowerShell one-time grant command");
         assert(preflightPayload.commands?.windowsReverseGrantStatusNodeFallback?.includes(`--port ${windowsPort} --status --boardSummary`), "preflight should expose Windows reverse grant Node fallback command");
@@ -362,6 +384,7 @@ async function checkPreflightAndDryRun(args) {
         assertIncludes(preflightPayload.commands?.reverseControlRehearsal || "", "临时授权已使用", "preflight reverse rehearsal");
         assertIncludes(preflightPayload.boardSummary || "", "Coordinate first", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "--sendCall", "preflight board summary");
+        assertIncludes(preflightPayload.boardSummary || "", "MacClientBrowserSelfTest=", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "Reverse rehearsal after auth", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "allow-windows-reverse-control.ps1", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "allow-windows-reverse-control.mjs", "preflight board summary");
@@ -417,6 +440,10 @@ async function checkPreflightAndDryRun(args) {
       assert(dryRunPayload.commands?.discoverPreflight?.includes("--discover"), "dryRun should expose safe discovery command");
       assert(dryRunPayload.commands?.browserSmoke?.includes("--useEnvPassword"), "dryRun should use environment password flag");
       assert(dryRunPayload.commands?.browserSmoke?.includes("--requirePassword"), "dryRun should require password in child command");
+      assertMacClientBrowserSelfTestCommand(
+        dryRunPayload.commands?.macClientBrowserSelfTest || "",
+        "dryRun Mac client browser self-test command",
+      );
       assert(dryRunPayload.commands?.windowsReverseGrantStatus?.includes(`-Port ${windowsPort} -Status -BoardSummary`), "dryRun should expose recommended Windows PowerShell reverse grant status command");
       assert(dryRunPayload.commands?.windowsOpenOneTimeReverseGrant?.includes(`-Port ${windowsPort} -Grant -DurationMs 30000 -BoardSummary`), "dryRun should expose recommended Windows PowerShell one-time grant command");
       assert(dryRunPayload.commands?.windowsReverseGrantStatusNodeFallback?.includes(`--port ${windowsPort} --status --boardSummary`), "dryRun should expose Windows reverse grant Node fallback command");
@@ -465,10 +492,15 @@ async function checkDiscoverPreflight(args) {
       assert(payload.commands?.sendCall?.includes("--sendCall"), "discover preflight should expose selected-host sendCall command");
       assert(payload.commands?.sendCall?.includes(`--port ${windowsPort}`), "discover preflight sendCall should use selected port");
       assert(payload.commands?.browserSmoke?.includes("--host 127.0.0.1"), "browser command should use discovered host");
+      assertMacClientBrowserSelfTestCommand(
+        payload.commands?.macClientBrowserSelfTest || "",
+        "discover preflight Mac client browser self-test command",
+      );
       assert(payload.commands?.windowsOpenOneTimeReverseGrant?.includes(`-Port ${windowsPort} -Grant -DurationMs 30000 -BoardSummary`), "discover preflight should use selected port for recommended Windows PowerShell grant helper");
       assert(payload.commands?.windowsOpenOneTimeReverseGrantNodeFallback?.includes(`--port ${windowsPort} --grant --durationMs 30000 --boardSummary`), "discover preflight should use selected port for Windows grant helper fallback");
       assertIncludes(payload.boardSummary || "", "FormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "discover preflight board summary");
       assertIncludes(payload.boardSummary || "", "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "discover preflight board summary");
+      assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "discover preflight board summary");
       assertIncludes(payload.boardSummary || "", "Reverse rehearsal after auth", "discover preflight board summary");
       assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "discover preflight output");
     });

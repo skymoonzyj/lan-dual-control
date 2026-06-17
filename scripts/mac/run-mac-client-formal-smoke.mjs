@@ -102,6 +102,11 @@ Machine-readable JSON fields:
   commands.sendCall              Secret-free --preflightOnly call sender; only set after a Windows host is known.
   commands.discoverPreflight     Safe discovery + preflight retry command when no host is known.
   commands.browserSmoke          Browser smoke command shape; uses --useEnvPassword, never embeds passwords.
+  commands.macClientBrowserSelfTest
+                                  Secret-free local browser self-test command.
+                                  It uses a temporary mock Windows host and
+                                  does not use a real host, password, call, or
+                                  inject.
   commands.windowsReverseGrantStatus
                                   Recommended Windows-side PowerShell loopback
                                   command to inspect the one-time reverse-
@@ -472,6 +477,10 @@ function makeBrowserSmokeCommand(args) {
   return makeBrowserArgs(args).join(" ");
 }
 
+function makeMacClientBrowserSelfTestCommand() {
+  return "node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard --boardSummary --progressIntervalMs 0";
+}
+
 function makePreflightCommand(args) {
   const parts = [
     "node scripts/mac/check-mac-client-formal-status.mjs",
@@ -743,6 +752,7 @@ function makeBoardSummary(report) {
     return [
       `Mac client browser smoke preflight for ${target}: ok=${report.preflight?.ok ? "yes" : "no"} ready=${report.preflight?.readyToCall ? "yes" : "no"}.${discoveryText}${discoveryChecklistText}`,
       nextText,
+      `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
       `Reverse rehearsal after auth: ${report.commands?.reverseControlRehearsal || makeReverseControlRehearsalText(report.args)}.`,
       "No password was requested or sent; inject was not executed.",
     ].join(" ");
@@ -816,6 +826,7 @@ function makeReport(args, preflight) {
       sendCall: makeSendCallCommand(args),
       discoverPreflight: makeDiscoveryRetryCommand(args),
       browserSmoke: makeBrowserSmokeCommand(args),
+      macClientBrowserSelfTest: makeMacClientBrowserSelfTestCommand(),
       windowsReverseGrantStatus: makeWindowsReverseGrantCommand(args, "status"),
       windowsOpenOneTimeReverseGrant: makeWindowsReverseGrantCommand(args, "grant"),
       windowsReverseGrantStatusPowerShell: makeWindowsReverseGrantPowerShellCommand(args, "status"),
