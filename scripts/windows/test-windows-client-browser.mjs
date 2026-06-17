@@ -848,6 +848,8 @@ async function verifyDesktopOnlyHostPanel(session) {
       const profileSelect = document.querySelector("#localHostReadinessProfileSelect");
       const probeMediaToggle = document.querySelector("#localHostProbeMediaToggle");
       const reverseSelect = document.querySelector("#localHostReverseControlModeSelect");
+      const originalReverseValue = reverseSelect?.value || "";
+      const originalProbeMediaChecked = Boolean(probeMediaToggle?.checked);
       const profileOptions = Array.from(profileSelect?.options || []).map((option) => option.value);
       const defaultLaunchRequest =
         typeof buildLocalHostLaunchRequest === "function"
@@ -858,6 +860,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         typeof buildLocalHostLaunchRequest === "function"
           ? buildLocalHostLaunchRequest()
           : {};
+      if (reverseSelect) reverseSelect.value = originalReverseValue;
       const readinessRequest =
         typeof buildLocalHostReadinessRequest === "function"
           ? buildLocalHostReadinessRequest()
@@ -867,7 +870,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         typeof buildLocalHostReadinessRequest === "function"
           ? buildLocalHostReadinessRequest()
           : {};
-      if (probeMediaToggle) probeMediaToggle.checked = false;
+      if (probeMediaToggle) probeMediaToggle.checked = originalProbeMediaChecked;
       const statusRequest =
         typeof buildLocalHostStatusRequest === "function"
           ? buildLocalHostStatusRequest()
@@ -2161,6 +2164,24 @@ async function verifyReconnectControls(session) {
       const originalWatcherBusy = state.localMacAlertWatcherBusy;
       const originalWatcherCheckedAt = state.localMacAlertWatcherStatusCheckedAt;
       const originalWatcherStatus = document.querySelector("#localMacAlertWatcherStatusText")?.textContent || "";
+      const originalLocalHostRunning = state.localHostRunning;
+      const originalLocalHostOnline = state.localHostOnline;
+      const originalLocalHostBusy = state.localHostBusy;
+      const localHostBadge = document.querySelector("#localHostBadge");
+      const localHostStatus = document.querySelector("#localHostStatusText");
+      const localHostOutput = document.querySelector("#localHostOutput");
+      const localHostProbeMediaToggle = document.querySelector("#localHostProbeMediaToggle");
+      const localHostInputSelect = document.querySelector("#localHostInputModeSelect");
+      const localHostReverseSelect = document.querySelector("#localHostReverseControlModeSelect");
+      const localHostReadinessSelect = document.querySelector("#localHostReadinessProfileSelect");
+      const originalLocalHostBadgeText = localHostBadge?.textContent || "";
+      const originalLocalHostBadgeClass = localHostBadge?.className || "";
+      const originalLocalHostStatus = localHostStatus?.textContent || "";
+      const originalLocalHostOutput = localHostOutput?.textContent || "";
+      const originalProbeMedia = Boolean(localHostProbeMediaToggle?.checked);
+      const originalLocalHostInputValue = localHostInputSelect?.value || "";
+      const originalLocalHostReverseValue = localHostReverseSelect?.value || "";
+      const originalLocalHostReadinessValue = localHostReadinessSelect?.value || "";
       const calls = [];
 
       try {
@@ -2173,6 +2194,19 @@ async function verifyReconnectControls(session) {
         state.localMacAlertWatcherStatusCheckedAt = Date.now();
         const watcherStatus = document.querySelector("#localMacAlertWatcherStatusText");
         if (watcherStatus) watcherStatus.textContent = "Windows 浮窗提醒已开启，监听测试联络板。";
+        state.localHostRunning = true;
+        state.localHostOnline = true;
+        state.localHostBusy = false;
+        if (localHostBadge) {
+          localHostBadge.textContent = "运行中";
+          localHostBadge.className = "status-badge online";
+        }
+        if (localHostStatus) localHostStatus.textContent = "本机被控正在运行：PID 2468 · 反控 需确认";
+        if (localHostOutput) localHostOutput.textContent = "[INFO] Windows host ready\\npassword=should-not-export";
+        if (localHostProbeMediaToggle) localHostProbeMediaToggle.checked = true;
+        if (localHostInputSelect) localHostInputSelect.value = "log";
+        if (localHostReverseSelect) localHostReverseSelect.value = "deny";
+        if (localHostReadinessSelect) localHostReadinessSelect.value = "default";
         state.reconnectAttempts = 0;
         state.activeHost = "192.168.31.122";
         state.activePort = "43770";
@@ -2182,6 +2216,29 @@ async function verifyReconnectControls(session) {
 
         scheduleReconnect("测试断线");
         const exportText = typeof buildLogExportText === "function" ? buildLogExportText() : "";
+        const exportChecks = {
+          reconnectStatus: exportText.includes("- 重连状态：等待自动重连（1/3"),
+          reconnectReason: exportText.includes("- 重连原因：测试断线"),
+          reconnectNext: exportText.includes("- 下次重连："),
+          reconnectSeconds: exportText.includes("秒后）"),
+          macAlertStatus: exportText.includes("- Mac 提醒：提醒中"),
+          macAlertDetail: exportText.includes("- Mac 提醒详情：Windows 浮窗提醒已开启"),
+          macAlertCheckedAt: exportText.includes("- Mac 提醒最近检查："),
+          macAlertSecondsAgo: exportText.includes("秒前）"),
+          macAlertPoll: exportText.includes("- Mac 提醒自动轮询：约 15 秒"),
+          macAlertServer: exportText.includes("- Mac 提醒联络板：http://192.168.31.68:17888"),
+          localHostStatus: exportText.includes("- 本机被控：桌面壳托管运行中"),
+          localHostBadge: exportText.includes("- 本机被控徽标：运行中"),
+          localHostDetail: exportText.includes("- 本机被控详情：本机被控正在运行"),
+          localHostPort: exportText.includes("- 本机被控端口：43770"),
+          localHostInput: exportText.includes("- 本机被控输入：安全日志"),
+          localHostReverse: exportText.includes("- 本机被控反控策略：需确认"),
+          localHostReadiness: exportText.includes("- 本机被控体检：低风险；媒体基线 开启"),
+          localHostOutput: exportText.includes("- 本机被控最近输出："),
+          localHostOutputMasked: exportText.includes("password=<hidden>"),
+          localHostPasswordHidden: exportText.includes("- 本机被控密码：不导出"),
+          noLocalHostSecret: !exportText.includes("should-not-export"),
+        };
         const scheduled =
           state.reconnectTimer &&
           state.reconnectCountdownTimer &&
@@ -2192,16 +2249,7 @@ async function verifyReconnectControls(session) {
           status.textContent.includes("秒后自动重连") &&
           status.textContent.includes("1/3") &&
           remote.textContent.includes("秒后自动重连") &&
-          exportText.includes("- 重连状态：等待自动重连（1/3") &&
-          exportText.includes("- 重连原因：测试断线") &&
-          exportText.includes("- 下次重连：") &&
-          exportText.includes("秒后）") &&
-          exportText.includes("- Mac 提醒：提醒中") &&
-          exportText.includes("- Mac 提醒详情：Windows 浮窗提醒已开启") &&
-          exportText.includes("- Mac 提醒最近检查：") &&
-          exportText.includes("秒前）") &&
-          exportText.includes("- Mac 提醒自动轮询：约 15 秒") &&
-          exportText.includes("- Mac 提醒联络板：http://192.168.31.68:17888");
+          Object.values(exportChecks).every(Boolean);
 
         reconnectButton.click();
         const immediate =
@@ -2222,6 +2270,9 @@ async function verifyReconnectControls(session) {
           exportHasReconnectReason: exportText.includes("- 重连原因：测试断线"),
           exportHasMacAlertWatcherStatus: exportText.includes("- Mac 提醒：提醒中"),
           exportHasMacAlertWatcherCheckedAt: exportText.includes("- Mac 提醒最近检查："),
+          exportHasLocalHostStatus: exportText.includes("- 本机被控：桌面壳托管运行中"),
+          exportMasksLocalHostOutput: !exportText.includes("should-not-export"),
+          exportChecks,
           calls,
         };
       } finally {
@@ -2246,9 +2297,22 @@ async function verifyReconnectControls(session) {
         state.localMacAlertWatcherRunning = originalWatcherRunning;
         state.localMacAlertWatcherBusy = originalWatcherBusy;
         state.localMacAlertWatcherStatusCheckedAt = originalWatcherCheckedAt;
+        state.localHostRunning = originalLocalHostRunning;
+        state.localHostOnline = originalLocalHostOnline;
+        state.localHostBusy = originalLocalHostBusy;
         window.__TAURI__ = originalTauri;
         const watcherStatus = document.querySelector("#localMacAlertWatcherStatusText");
         if (watcherStatus) watcherStatus.textContent = originalWatcherStatus;
+        if (localHostBadge) {
+          localHostBadge.textContent = originalLocalHostBadgeText;
+          localHostBadge.className = originalLocalHostBadgeClass;
+        }
+        if (localHostStatus) localHostStatus.textContent = originalLocalHostStatus;
+        if (localHostOutput) localHostOutput.textContent = originalLocalHostOutput;
+        if (localHostProbeMediaToggle) localHostProbeMediaToggle.checked = originalProbeMedia;
+        if (localHostInputSelect) localHostInputSelect.value = originalLocalHostInputValue;
+        if (localHostReverseSelect) localHostReverseSelect.value = originalLocalHostReverseValue;
+        if (localHostReadinessSelect) localHostReadinessSelect.value = originalLocalHostReadinessValue;
         actions.className = originalActionsClass;
         reconnectButton.hidden = originalReconnectHidden;
         reconnectButton.disabled = originalReconnectDisabled;

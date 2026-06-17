@@ -21,6 +21,37 @@
 
 日期：2026-06-17 休息续跑
 开发端：Windows Codex
+本轮目标：让 Windows 控制端导出日志记录本机被控 Windows host 状态，方便 Mac 反控 Windows 排查。
+完成内容：
+- `buildLogExportText()` 新增本机被控诊断字段：状态、徽标、详情、端口、画面/声音/输入/反控策略、体检档位、媒体基线开关、最近状态输出摘要和“密码不导出”说明。
+- 新增 `getLocalHostExportStatus()`、`getLocalHostOutputSummary()` 和脱敏函数；导出只读取页面已有状态，不启动 host、不探测端口、不读取被控密码输入框。
+- 页面 diagnostics 回归模拟 Windows host 正在运行，并在最近输出里放入 fake `password=...`，确认导出文本会脱敏为 `password=<hidden>` 且不包含原始值。
+- 顺手修复桌面专属面板自测对反控策略/媒体基线选项的状态污染，临时改值后会恢复原值。
+- README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 本轮不启动真实 Windows host，不验证真实 Mac 反控 Windows；只是把页面已有本机状态纳入导出日志。
+下一步建议：
+- 后续可把导出文本重排成“远端连接 / 本机协作 / 事件记录”三段，提高现场阅读效率。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 休息续跑
+开发端：Windows Codex
 本轮目标：让 Windows 控制端导出日志记录本机 Mac 提醒 watcher 状态，方便窗口最小化提醒链路排查。
 完成内容：
 - `buildLogExportText()` 新增“Mac 提醒”诊断字段：状态、详情、最近检查时间、自动轮询间隔和联络板地址。

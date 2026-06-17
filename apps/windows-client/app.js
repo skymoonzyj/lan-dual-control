@@ -2333,6 +2333,56 @@ function getMacAlertWatcherExportStatus(now = Date.now()) {
   };
 }
 
+function getSelectExportLabel(selectElement) {
+  return selectElement?.selectedOptions?.[0]?.textContent?.trim() || selectElement?.value || "-";
+}
+
+function sanitizeExportStatusLine(line) {
+  return String(line || "")
+    .replace(/\b(LAN_DUAL_PASSWORD)\s*=\s*\S+/gi, "$1=<hidden>")
+    .replace(/\b(password|passwd|pwd|token|secret)\s*[:=]\s*\S+/gi, "$1=<hidden>")
+    .replace(/(--(?:password|token|secret))\s+\S+/gi, "$1 <hidden>")
+    .slice(0, 220);
+}
+
+function getLocalHostOutputSummary() {
+  const lines = elements.localHostOutput.textContent
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!lines.length) return "无";
+  return `${lines.length} 行，最近：${sanitizeExportStatusLine(lines[lines.length - 1])}`;
+}
+
+function getLocalHostExportStatus() {
+  const available = canUseDesktopHostControl();
+  let status = "未检查";
+  if (!available) {
+    status = "需桌面版";
+  } else if (state.localHostBusy) {
+    status = state.localHostRunning || state.localHostOnline ? "处理中（此前在线）" : "处理中";
+  } else if (state.localHostRunning) {
+    status = "桌面壳托管运行中";
+  } else if (state.localHostOnline) {
+    status = "端口已在线";
+  } else {
+    status = "未在线";
+  }
+  return {
+    status,
+    badge: elements.localHostBadge.textContent.trim() || "-",
+    detail: elements.localHostStatusText.textContent.trim() || "-",
+    port: String(getLocalHostPort()),
+    screenMode: getSelectExportLabel(elements.localHostScreenModeSelect),
+    audioMode: getSelectExportLabel(elements.localHostAudioModeSelect),
+    inputMode: getSelectExportLabel(elements.localHostInputModeSelect),
+    reverseControlMode: getSelectExportLabel(elements.localHostReverseControlModeSelect),
+    readinessProfile: getSelectExportLabel(elements.localHostReadinessProfileSelect),
+    probeMedia: elements.localHostProbeMediaToggle?.checked ? "开启" : "关闭",
+    outputSummary: getLocalHostOutputSummary(),
+  };
+}
+
 function buildLogExportText() {
   const settings = currentDisplaySettings();
   const keyboardMapping = getKeyboardMapping();
@@ -2340,6 +2390,7 @@ function buildLogExportText() {
     elements.transportSelect.value === "websocket" ? "WebSocket 局域网" : "本地模拟";
   const reconnectExport = getReconnectExportStatus();
   const macAlertWatcherExport = getMacAlertWatcherExportStatus();
+  const localHostExport = getLocalHostExportStatus();
   const eventLines = state.logEntries
     .slice()
     .reverse()
@@ -2371,6 +2422,17 @@ function buildLogExportText() {
     `- Mac 提醒最近检查：${macAlertWatcherExport.checkedAt}`,
     `- Mac 提醒自动轮询：约 ${macAlertWatcherExport.pollInterval}`,
     `- Mac 提醒联络板：${macAlertWatcherExport.server}`,
+    `- 本机被控：${localHostExport.status}`,
+    `- 本机被控徽标：${localHostExport.badge}`,
+    `- 本机被控详情：${localHostExport.detail}`,
+    `- 本机被控端口：${localHostExport.port}`,
+    `- 本机被控画面：${localHostExport.screenMode}`,
+    `- 本机被控声音：${localHostExport.audioMode}`,
+    `- 本机被控输入：${localHostExport.inputMode}`,
+    `- 本机被控反控策略：${localHostExport.reverseControlMode}`,
+    `- 本机被控体检：${localHostExport.readinessProfile}；媒体基线 ${localHostExport.probeMedia}`,
+    `- 本机被控最近输出：${localHostExport.outputSummary}`,
+    `- 本机被控密码：不导出`,
     `- 协议版本：${protocolVersion}`,
     `- 主机诊断：${elements.hostDiagnosticsText.textContent.replace(/^诊断：/, "") || "-"}`,
     "",
