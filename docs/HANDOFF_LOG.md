@@ -19,6 +19,43 @@
 
 ## 2026-06-17 Windows Codex
 
+日期：2026-06-17 续跑
+开发端：Windows Codex
+本轮目标：让 Windows 恢复开工总览直接提示 Windows 控制端无密页面诊断和“复制诊断”入口。
+完成内容：
+- `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `windowsClientDiagnosticsCommand` / `WinClientDiagnostics=`，指向 `test-windows-client-browser --discover --diagnosticsOnly`。
+- 同一总览新增 `windowsClientCopyDiagnosticsAction` / `CopyDiagnostics=`，提醒在 Windows 控制端事件面板点“复制诊断”，先看“快速摘要”。
+- PowerShell 包装帮助同步说明该无密诊断入口；Node/PowerShell 回归新增命令形状、端口、摘要和不泄密断言。
+- 当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `pwsh -NoProfile -Command '$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile("scripts/windows/check-windows-resume-status.ps1",[ref]$tokens,[ref]$errors) | Out-Null; if ($errors.Count) { exit 1 }; "OK"'`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows docs`
+遗留问题：
+- 本轮只补恢复总览提示，不实际打开浏览器、不连接真实 Mac、不启动 Windows host。
+下一步建议：
+- 明天恢复联调时先看 `check-windows-resume-status --checkBoard --boardSummary`，若出现 UI 卡点，按 `WinClientDiagnostics=` 跑无密页面诊断，再用页面“复制诊断”贴出快速摘要。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Windows Codex
+
 日期：2026-06-17 休息续跑
 开发端：Windows Codex
 本轮目标：给 Windows 控制端复制/导出诊断报告增加顶部快速摘要，方便现场粘贴后先判断卡点。

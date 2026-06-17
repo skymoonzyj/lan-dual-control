@@ -43,6 +43,9 @@ JSON, human output, and board summaries include a Windows host media-baseline
 command for checking local controlled-side video/audio before Mac reverse
 control, plus a local one-time reverse-control grant command for retrying a
 Mac reverse-control request without switching Windows host to accept-lab mode.
+They also include a no-password Windows client diagnostics command and a
+reminder to copy the in-page diagnostics report first when UI symptoms need to
+be shared.
 JSON and human output also include local alert-watcher start/status commands
 so Windows can surface Mac-side auth, permission, blocked, and reverse-grant
 requests while a remote-control window is minimized. The report also checks
@@ -77,6 +80,7 @@ Examples:
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --userAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --sendUserAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
+  node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --timeoutMs 45000
   node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
   node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server ${defaults.server}
@@ -559,6 +563,16 @@ function makeCommands(args, preflight) {
       "--durationMs", "30000",
       "--boardSummary",
     ].join(" "),
+    windowsClientDiagnosticsCommand: [
+      "node scripts/windows/test-windows-client-browser.mjs",
+      "--discover",
+      "--discoverNoLocalSubnets",
+      "--host", host,
+      "--port", String(port),
+      "--diagnosticsOnly",
+      "--timeoutMs", "45000",
+    ].join(" "),
+    windowsClientCopyDiagnosticsAction: "Windows 控制端事件面板点击“复制诊断”，先看“快速摘要”。",
     windowsMacAlertWatcherStart: [
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1",
       "-Server", args.server,
@@ -660,6 +674,7 @@ function makeBoardSummary(report) {
   return [
     `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}${boardCall}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
     `Next=${mac.ok ? report.commands.userAuthRequest : report.commands.preflightBoardSummary}.`,
+    `WinClientDiagnostics=${report.commands.windowsClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.windowsClientCopyDiagnosticsAction}`,
     `WindowsHostMedia=${report.commands.windowsHostMediaReadinessBoardSummary}.`,
     `ReverseGrant=${report.commands.windowsReverseControlGrantBoardSummary}.`,
     "No password was requested or sent; no WebSocket auth/input/inject was performed.",
@@ -844,6 +859,8 @@ function printHuman(report) {
   console.log(`  ${report.commands.preflightBoardSummary}`);
   console.log(`  ${report.commands.userAuthRequest}`);
   console.log(`  ${report.commands.formalRun}`);
+  console.log(`  ${report.commands.windowsClientDiagnosticsCommand}`);
+  console.log(`  ${report.commands.windowsClientCopyDiagnosticsAction}`);
   console.log(`  ${report.commands.windowsHostMediaReadinessBoardSummary}`);
   console.log(`  ${report.commands.windowsReverseControlGrantBoardSummary}`);
   console.log(`  ${report.commands.windowsMacAlertWatcherStart}`);

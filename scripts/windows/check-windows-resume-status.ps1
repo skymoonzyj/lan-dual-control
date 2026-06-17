@@ -51,6 +51,8 @@ The report also includes a Windows host media baseline command:
 node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
 It also includes a Windows local one-time reverse-control grant command:
 node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary
+It also includes a no-password Windows client diagnostics command and reminds
+you to use the page Event Log "复制诊断" action, starting with the "快速摘要".
 JSON and human output also include Windows local Mac alert watcher commands:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server $Server
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server $Server -Status

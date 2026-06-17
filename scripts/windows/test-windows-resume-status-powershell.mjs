@@ -237,6 +237,12 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "--port 43770", "mock JSON reverse grant command");
     assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "--durationMs 30000", "mock JSON reverse grant command");
     assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "--boardSummary", "mock JSON reverse grant command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, "test-windows-client-browser.mjs", "mock JSON client diagnostics command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, "--diagnosticsOnly", "mock JSON client diagnostics command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, "--discoverNoLocalSubnets", "mock JSON client diagnostics command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, `--port ${port}`, "mock JSON client diagnostics command");
+    assertIncludes(payload.commands?.windowsClientCopyDiagnosticsAction, "复制诊断", "mock JSON copy diagnostics action");
+    assertIncludes(payload.commands?.windowsClientCopyDiagnosticsAction, "快速摘要", "mock JSON copy diagnostics action");
     assertIncludes(payload.commands?.windowsMacAlertWatcherStart, "start-mac-alert-watcher.ps1", "mock JSON alert watcher start command");
     assertIncludes(payload.commands?.windowsMacAlertWatcherStart, "-Server http://192.168.31.68:17888", "mock JSON alert watcher start command");
     assert(!String(payload.commands?.windowsMacAlertWatcherStart || "").includes("-Status"), "mock JSON alert watcher start command should not be status-only");
@@ -273,6 +279,10 @@ async function checkBoardSummary(args) {
     const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean);
     assert(lines.length === 1, `board summary should be one line, got ${lines.length}`);
     assertIncludes(output, "mac=ready", "PowerShell board summary");
+    assertIncludes(output, "WinClientDiagnostics=", "PowerShell board summary");
+    assertIncludes(output, "test-windows-client-browser.mjs --discover --discoverNoLocalSubnets", "PowerShell board summary");
+    assertIncludes(output, "CopyDiagnostics=Windows 控制端事件面板点击", "PowerShell board summary");
+    assertIncludes(output, "快速摘要", "PowerShell board summary");
     assertIncludes(output, "WindowsHostMedia=", "PowerShell board summary");
     assertIncludes(output, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "PowerShell board summary");
     assertIncludes(output, "ReverseGrant=", "PowerShell board summary");
