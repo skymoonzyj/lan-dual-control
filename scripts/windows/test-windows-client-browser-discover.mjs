@@ -23,9 +23,11 @@ Options:
 
 Description:
   Verifies the Windows control client browser self-test can use --discover to
-  select a Mac host before diagnosticsOnly UI checks. It uses a local fake
-  /discovery server, does not authenticate, does not request a password, does
-  not open WebSocket, and does not send input or inject events.
+  select a Mac host before diagnosticsOnly UI checks, and that its boardSummary
+  keeps real discovery diagnostics separate from local UI fixture diagnostics.
+  It uses a local fake /discovery server, does not authenticate, does not
+  request a password, does not open WebSocket, and does not send input or inject
+  events.
 `);
 }
 
@@ -58,6 +60,12 @@ function assertIncludes(text, expected, label) {
 
 function assertNotIncludes(text, expected, label) {
   assert(!String(text).includes(expected), `${label} unexpectedly included ${JSON.stringify(expected)}.\n${text}`);
+}
+
+function assertSingleLine(text, label) {
+  const lines = String(text).trim().split(/\r?\n/).filter(Boolean);
+  assert(lines.length === 1, `${label} should be exactly one non-empty line.\n${text}`);
+  return lines[0];
 }
 
 function corsHeaders() {
@@ -198,12 +206,22 @@ async function checkBrowserDiscover(args) {
       "--host", "127.0.0.1",
       "--port", String(host.port),
       "--diagnosticsOnly",
+      "--boardSummary",
       "--expectDiscoveryRuntimeBuildId", "browser-discover-build",
       "--clientPort", String(clientPort),
       "--debugPort", String(debugPort),
       "--timeoutMs", "15000",
     ], args);
     assert(result.exitCode === 0, `${script} discover diagnostics failed\n${result.stdout}\n${result.stderr}`);
+    const summaryLine = assertSingleLine(result.stdout, "browser discover boardSummary stdout");
+    assertIncludes(summaryLine, "Windows client diagnostics: passed", "browser discover boardSummary");
+    assertIncludes(summaryLine, `discovery=127.0.0.1:${host.port}/build=browser-discover-build`, "browser discover boardSummary");
+    assertIncludes(summaryLine, "discoveryDiag=", "browser discover boardSummary");
+    assertIncludes(summaryLine, "build browser-discover-build", "browser discover boardSummary");
+    assertIncludes(summaryLine, "uiDiag=", "browser discover boardSummary");
+    assertIncludes(summaryLine, "build runtime-test", "browser discover boardSummary");
+    assertNotIncludes(summaryLine, "; diag=", "browser discover boardSummary");
+    assertNotIncludes(summaryLine, " password=", "browser discover boardSummary");
     const output = `${result.stdout}\n${result.stderr}`;
     assertIncludes(output, `Discovery target: 127.0.0.1:${host.port}`, "browser discover output");
     assertIncludes(output, "Discovery runtime:", "browser discover output");
