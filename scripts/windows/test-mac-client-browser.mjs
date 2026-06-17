@@ -1287,6 +1287,8 @@ function buildSnapshotExpression() {
       reverseControlGrantFallbackCommandHidden: document.querySelector("#reverseControlGrantFallbackCommand")?.hidden ?? true,
       reverseControlGrantCopyButtonHidden: document.querySelector("#copyReverseControlGrantCommandButton")?.hidden ?? true,
       reverseControlGrantCopyButtonDisabled: document.querySelector("#copyReverseControlGrantCommandButton")?.disabled ?? true,
+      reverseControlGrantFallbackCopyButtonHidden: document.querySelector("#copyReverseControlGrantFallbackCommandButton")?.hidden ?? true,
+      reverseControlGrantFallbackCopyButtonDisabled: document.querySelector("#copyReverseControlGrantFallbackCommandButton")?.disabled ?? true,
       reverseControlGrantCopyStatus: text("#reverseControlGrantCopyStatus"),
       reverseControlButtonText: text("#reverseControlButton"),
       reverseControlButtonDisabled: document.querySelector("#reverseControlButton")?.disabled || false,
@@ -1584,6 +1586,8 @@ async function verifyMacClientReverseControlRequest({ args, session }) {
         value.reverseControlGrantFallbackCommandHidden === false &&
         value.reverseControlGrantCopyButtonHidden === false &&
         value.reverseControlGrantCopyButtonDisabled === false &&
+        value.reverseControlGrantFallbackCopyButtonHidden === false &&
+        value.reverseControlGrantFallbackCopyButtonDisabled === false &&
         value.reverseControlButtonText === "重试反控" &&
         value.reverseControlButtonDisabled === false;
       const noInputEvents = Number(value.inputEvents) === initialInputEvents;
@@ -1615,6 +1619,29 @@ async function verifyMacClientReverseControlRequest({ args, session }) {
   }
   print("OK", `Reverse grant command copy: ${copiedSnapshot.reverseControlGrantCopyStatus}`);
 
+  await clickElement(session, "#copyReverseControlGrantFallbackCommandButton");
+  const copiedFallbackSnapshot = await waitForPageSnapshot({
+    args,
+    session,
+    label: "Mac client reverse grant fallback command copy",
+    check: async (value) => (
+      value.reverseControlGrantCopyStatus.includes("已复制 Node 备用命令") &&
+      value.reverseControlRequests === 1 &&
+      Number(value.inputEvents) === initialInputEvents
+        ? value
+        : null
+    ),
+  });
+  const copiedFallbackCommand = await evaluate(session, "navigator.clipboard.readText()");
+  if (!copiedFallbackCommand.includes("allow-windows-reverse-control.mjs") ||
+      !copiedFallbackCommand.includes("--host 127.0.0.1") ||
+      !copiedFallbackCommand.includes(`--port ${args.port}`) ||
+      !copiedFallbackCommand.includes("--grant --durationMs 30000 --boardSummary") ||
+      copiedFallbackCommand.includes("allow-windows-reverse-control.ps1")) {
+    throw new Error(`Mac client copied unexpected reverse grant fallback command: ${copiedFallbackCommand}`);
+  }
+  print("OK", `Reverse grant fallback command copy: ${copiedFallbackSnapshot.reverseControlGrantCopyStatus}`);
+
   await postJson(`http://${args.host}:${args.port}/reverse-control/grant`, { durationMs: 30000 });
   await clickElement(session, "#discoverButton");
   const grantSnapshot = await waitForPageSnapshot({
@@ -1631,6 +1658,8 @@ async function verifyMacClientReverseControlRequest({ args, session }) {
       value.reverseControlGrantFallbackCommandHidden === false &&
       value.reverseControlGrantCopyButtonHidden === false &&
       value.reverseControlGrantCopyButtonDisabled === false &&
+      value.reverseControlGrantFallbackCopyButtonHidden === false &&
+      value.reverseControlGrantFallbackCopyButtonDisabled === false &&
       value.reverseControlButtonText === "重试反控" &&
       value.reverseControlButtonDisabled === false
         ? value
@@ -1660,6 +1689,7 @@ async function verifyMacClientReverseControlRequest({ args, session }) {
         value.reverseControlGrantCommandHidden === true &&
         value.reverseControlGrantFallbackCommandHidden === true &&
         value.reverseControlGrantCopyButtonHidden === true &&
+        value.reverseControlGrantFallbackCopyButtonHidden === true &&
         value.reverseControlButtonDisabled === false;
       const noInputEvents = Number(value.inputEvents) === initialInputEvents;
       return requestOk && responseOk && noInputEvents ? value : null;

@@ -37,6 +37,7 @@ const elements = {
   reverseControlGrantFallbackRow: document.querySelector("#reverseControlGrantFallbackRow"),
   reverseControlGrantFallbackCommand: document.querySelector("#reverseControlGrantFallbackCommand"),
   copyReverseControlGrantCommandButton: document.querySelector("#copyReverseControlGrantCommandButton"),
+  copyReverseControlGrantFallbackCommandButton: document.querySelector("#copyReverseControlGrantFallbackCommandButton"),
   reverseControlGrantCopyStatus: document.querySelector("#reverseControlGrantCopyStatus"),
   inputStatus: document.querySelector("#inputStatus"),
   remoteViewport: document.querySelector("#remoteViewport"),
@@ -663,10 +664,10 @@ function fallbackCopyText(text) {
   }
 }
 
-async function copyReverseControlGrantCommand() {
-  const command = elements.reverseControlGrantCommand.textContent.trim();
-  if (!command || elements.reverseControlGrantCommand.hidden) {
-    setReverseControlCopyStatus("暂无可复制命令", true);
+async function copyReverseControlGrantText(commandElement, unavailableText, successText, eventTitle) {
+  const command = commandElement.textContent.trim();
+  if (!command || commandElement.hidden) {
+    setReverseControlCopyStatus(unavailableText, true);
     return;
   }
   try {
@@ -675,12 +676,30 @@ async function copyReverseControlGrantCommand() {
     } else {
       fallbackCopyText(command);
     }
-    setReverseControlCopyStatus("已复制 PowerShell，请在 Windows host 本机终端执行", false);
-    logEvent("反控授权 PowerShell 命令已复制", "仅复制推荐命令，不包含密码");
+    setReverseControlCopyStatus(successText, false);
+    logEvent(eventTitle, "仅复制 Windows 本机回环授权命令，不包含密码");
   } catch (error) {
     setReverseControlCopyStatus("复制失败，请手动选中命令复制", true);
     logEvent("反控授权命令复制失败", error?.message || String(error));
   }
+}
+
+async function copyReverseControlGrantCommand() {
+  await copyReverseControlGrantText(
+    elements.reverseControlGrantCommand,
+    "暂无可复制命令",
+    "已复制 PowerShell，请在 Windows host 本机终端执行",
+    "反控授权 PowerShell 命令已复制",
+  );
+}
+
+async function copyReverseControlGrantFallbackCommand() {
+  await copyReverseControlGrantText(
+    elements.reverseControlGrantFallbackCommand,
+    "暂无可复制 Node 备用命令",
+    "已复制 Node 备用命令，请在 Windows host 本机终端执行",
+    "反控授权 Node 备用命令已复制",
+  );
 }
 
 function renderReverseControlRequest() {
@@ -707,6 +726,8 @@ function renderReverseControlRequest() {
   elements.reverseControlGrantCommandRow.hidden = !hasCommand;
   elements.copyReverseControlGrantCommandButton.hidden = !hasCommand;
   elements.copyReverseControlGrantCommandButton.disabled = !hasCommand;
+  elements.copyReverseControlGrantFallbackCommandButton.hidden = !hasFallbackCommand;
+  elements.copyReverseControlGrantFallbackCommandButton.disabled = !hasFallbackCommand;
   if (!hasCommand || commandChanged || fallbackChanged) {
     setReverseControlCopyStatus("");
   }
@@ -2985,6 +3006,7 @@ elements.fpsSelect.addEventListener("change", markCustomVideoSettings);
 elements.bandwidthSelect.addEventListener("change", markCustomVideoSettings);
 elements.reverseControlButton.addEventListener("click", sendReverseControlRequest);
 elements.copyReverseControlGrantCommandButton.addEventListener("click", copyReverseControlGrantCommand);
+elements.copyReverseControlGrantFallbackCommandButton.addEventListener("click", copyReverseControlGrantFallbackCommand);
 elements.focusButton.addEventListener("click", () => elements.remoteViewport.focus());
 elements.copyLogButton.addEventListener("click", copyDiagnosticsReport);
 elements.exportLogButton.addEventListener("click", exportLogs);

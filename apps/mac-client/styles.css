@@ -500,9 +500,11 @@ button:disabled {
   grid-column: 1 / -1;
   display: grid;
   gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .reverse-control-fallback-row span {
+  grid-column: 1 / -1;
   color: #7a351f;
   font-size: 0.72rem;
   font-weight: 900;
