@@ -107,6 +107,7 @@ const elements = {
   floatingFullscreenButton: document.querySelector("#floatingFullscreenButton"),
   floatingImmersiveFullscreenButton: document.querySelector("#floatingImmersiveFullscreenButton"),
   floatingWindowButton: document.querySelector("#floatingWindowButton"),
+  floatingCopyDiagnosticsButton: document.querySelector("#floatingCopyDiagnosticsButton"),
   floatingReconnectButton: document.querySelector("#floatingReconnectButton"),
   floatingDisconnectButton: document.querySelector("#floatingDisconnectButton"),
   fullscreenHint: document.querySelector("#fullscreenHint"),
@@ -5938,6 +5939,9 @@ elements.floatingImmersiveFullscreenButton.addEventListener("click", () => {
 elements.floatingWindowButton.addEventListener("click", () => {
   setFullscreen(false);
   setControlCenterOpen(false);
+});
+elements.floatingCopyDiagnosticsButton.addEventListener("click", () => {
+  void copyLogsToClipboard();
 });
 elements.floatingReconnectButton.addEventListener("click", () => {
   primeAudioPlayback();

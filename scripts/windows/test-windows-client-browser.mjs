@@ -1054,6 +1054,50 @@ async function verifyFloatingControlCenter(session) {
         }
       })();
 
+      let diagnosticsCopyText = "";
+      const diagnosticsCopyVisible = await (async () => {
+        const button = document.querySelector("#floatingCopyDiagnosticsButton");
+        const eventLog = document.querySelector("#eventLog");
+        const originalClipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+        const originalLogEntries = Array.isArray(state.logEntries) ? state.logEntries.slice() : [];
+        const originalEventLogHtml = eventLog?.innerHTML || "";
+        if (!button || typeof copyLogsToClipboard !== "function") return false;
+        try {
+          Object.defineProperty(navigator, "clipboard", {
+            configurable: true,
+            value: {
+              writeText: async (text) => {
+                diagnosticsCopyText = String(text);
+              },
+            },
+          });
+          button.click();
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          return (
+            !button.disabled &&
+            diagnosticsCopyText.includes("\\n快速摘要\\n") &&
+            diagnosticsCopyText.includes("\\n连接状态\\n") &&
+            diagnosticsCopyText.includes("\\n本机协作\\n") &&
+            diagnosticsCopyText.includes("- 当前状态：") &&
+            diagnosticsCopyText.includes("- 本机被控密码：不导出") &&
+            !diagnosticsCopyText.includes("demo-password") &&
+            state.logEntries[0]?.title === "诊断复制"
+          );
+        } finally {
+          if (originalClipboardDescriptor) {
+            Object.defineProperty(navigator, "clipboard", originalClipboardDescriptor);
+          } else {
+            try {
+              delete navigator.clipboard;
+            } catch {
+              // Ignore cleanup failures in older browser contexts.
+            }
+          }
+          state.logEntries = originalLogEntries;
+          if (eventLog) eventLog.innerHTML = originalEventLogHtml;
+        }
+      })();
+
       document.querySelector("#floatingFullscreenButton")?.click();
       const shell = document.querySelector(".app-shell");
       const topbar = document.querySelector(".topbar");
@@ -1137,6 +1181,7 @@ async function verifyFloatingControlCenter(session) {
           clipboardStatusVisible &&
           videoStatusVisible &&
           shortcutSent &&
+          diagnosticsCopyVisible &&
           fullscreenEntered &&
           fullscreenHintVisible &&
           fullscreenEscExited &&
@@ -1162,6 +1207,8 @@ async function verifyFloatingControlCenter(session) {
         videoStatusVisible,
         videoStatusText,
         shortcutSent,
+        diagnosticsCopyVisible,
+        diagnosticsCopyTextLength: diagnosticsCopyText.length,
         fullscreenEntered,
         fullscreenHintVisible,
         fullscreenEscExited,
@@ -3019,7 +3066,7 @@ async function run() {
     summary.checks.push("control-center");
     print(
       "OK",
-      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, original=${controlCenterCheck.originalPresetSynced}, detailed=${controlCenterCheck.detailedSettingsSynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, status=${controlCenterCheck.statusVisible}, connection=${controlCenterCheck.connectionStatusVisible}, video=${controlCenterCheck.videoStatusVisible}, audioStatus=${controlCenterCheck.audioStatusVisible}, clipboard=${controlCenterCheck.clipboardStatusVisible}, shortcut=${controlCenterCheck.shortcutSent}, fullscreen=${controlCenterCheck.fullscreenEntered}, hint=${controlCenterCheck.fullscreenHintVisible}, esc=${controlCenterCheck.fullscreenEscExited}, immersive=${controlCenterCheck.immersiveFullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
+      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, original=${controlCenterCheck.originalPresetSynced}, detailed=${controlCenterCheck.detailedSettingsSynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, status=${controlCenterCheck.statusVisible}, connection=${controlCenterCheck.connectionStatusVisible}, video=${controlCenterCheck.videoStatusVisible}, audioStatus=${controlCenterCheck.audioStatusVisible}, clipboard=${controlCenterCheck.clipboardStatusVisible}, shortcut=${controlCenterCheck.shortcutSent}, diagnosticsCopy=${controlCenterCheck.diagnosticsCopyVisible}, fullscreen=${controlCenterCheck.fullscreenEntered}, hint=${controlCenterCheck.fullscreenHintVisible}, esc=${controlCenterCheck.fullscreenEscExited}, immersive=${controlCenterCheck.immersiveFullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
     );
     const desktopOnlyPanelCheck = await verifyDesktopOnlyHostPanel(session);
     summary.checks.push("desktop-panel");

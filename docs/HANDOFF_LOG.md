@@ -21,6 +21,40 @@
 
 日期：2026-06-18 续跑
 开发端：Windows Codex
+本轮目标：第一阶段远控 UI 补强，让 Windows 控 Mac 全屏时可以直接复制脱敏诊断报告。
+完成内容：
+- Windows 控 Mac 悬浮控制中心动作区新增“复制诊断”按钮，展开浮层后可直接复制与事件面板同源的脱敏诊断报告。
+- 复制内容复用现有 `buildLogExportText()` / `copyLogsToClipboard()`，包含快速摘要、连接状态、本机协作和显示能力等排障信息；仍保留“本机被控密码：不导出”。
+- 页面自检新增浮层复制诊断断言，模拟点击按钮后确认剪贴板文本包含“快速摘要 / 连接状态 / 本机协作”，并确认没有 `demo-password`。
+- Windows 控制端 README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps\windows-client scripts\windows docs`
+遗留问题：
+- 本轮只做页面 UI 和 diagnostics-only 自检，不连接真实 Mac、不认证、不发送密码/input/inject；真实全屏现场还需要人工确认复制后的文本能顺手粘贴到 Agent Link Board 或 Codex。
+下一步建议：
+- 真机联调时在普通全屏/真全屏下遇到卡顿、没声音或断线，优先点浮层“复制诊断”，看快速摘要里的连接、重连、视频、声音和本机协作信息是否足够定位。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真实全屏排障时再通过 Agent Link Board 发 call。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 续跑
+开发端：Windows Codex
 本轮目标：第一阶段远控 UI 补强，让 Windows 控 Mac 全屏时能直接看到连接和重连状态，并可在浮层内立即重连。
 完成内容：
 - Windows 控 Mac 悬浮控制中心新增“连接”状态胶囊，展开后显示未连接、连接中、已连接、断线自动重连倒计时、重连次数和简短断线原因。
