@@ -57,8 +57,12 @@ const defaults = {
   disableGpu: false,
   disableBinaryVideo: false,
   disableWebCodecs: false,
+  boardSummary: false,
 };
 const temporaryWindowsHostBuildId = "mac-client-test";
+let boardSummaryMode = false;
+let lastBoardSummaryArgs = null;
+let lastBoardSummaryReport = null;
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -124,11 +128,13 @@ Options:
   --disableBinaryVideo             Open Mac client with ?binaryVideo=0 and require JSON/base64 video transport.
   --disableGpu                     Launch headless browser with --disable-gpu for old fallback reproduction.
   --disableWebCodecs               Hide VideoDecoder/EncodedVideoChunk and expect MJPEG request fallback.
+  --boardSummary                   Print one secret-free Agent Link Board summary on stdout; detailed progress goes to stderr.
 
 Examples:
   node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard
   node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --enableAudio --expectAudioFrame --observeVideoMs 1200 --minObservedVideoFrames 5
   node scripts/windows/test-mac-client-browser.mjs --useExistingHost --host 192.168.1.50 --port 43770 --enableAudio --expectAudioPayload --expectAudioPlayback
+  node scripts/windows/test-mac-client-browser.mjs --mockVideo --allowClipboardFallback --skipFileClipboard --boardSummary
 `);
 }
 
@@ -154,6 +160,10 @@ function parseArgs(argv) {
     }
     if (key === "disableWebCodecs") {
       args.disableWebCodecs = true;
+      continue;
+    }
+    if (key === "boardSummary") {
+      args.boardSummary = true;
       continue;
     }
     if (key === "disableGpu") {
@@ -337,7 +347,60 @@ function normalizeWgcH264Source(value) {
 }
 
 function print(kind, text) {
-  console.log(`[${kind}] ${text}`);
+  const line = `[${kind}] ${text}`;
+  if (boardSummaryMode) {
+    console.error(line);
+  } else {
+    console.log(line);
+  }
+}
+
+function compactBoardText(value, maxLength = 110) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
+}
+
+function redactBoardSummaryText(value, args = lastBoardSummaryArgs) {
+  let text = String(value ?? "");
+  const secrets = [
+    args?.password,
+    args?.hostPassword,
+    args?.clientPassword,
+    process.env.LAN_DUAL_PASSWORD,
+  ].filter(Boolean);
+  for (const secret of secrets) {
+    text = text.split(String(secret)).join("[redacted]");
+  }
+  return text;
+}
+
+function makeBoardSummary(report = lastBoardSummaryReport || {}, args = lastBoardSummaryArgs || defaults) {
+  const status = report.ok === false ? "failed" : "passed";
+  const target = `${args.host || defaults.host}:${args.port || defaults.port}`;
+  const hostMode = args.useExistingHost ? "existing-host" : args.mockVideo ? "temporary-mock-host" : "temporary-host";
+  const parts = [
+    `Mac client browser self-test: ${status}`,
+    `target=${target}`,
+    `mode=${hostMode}`,
+  ];
+  if (report.authFailure) {
+    parts.push(`authFailure=${compactBoardText(report.authFailure, 80)}`);
+  } else {
+    if (report.connection) parts.push(`connection=${compactBoardText(report.connection, 80)}`);
+    if (report.video) parts.push(`video=${compactBoardText(report.video, 100)}`);
+    if (report.videoDiagnostics) parts.push(`diagnostics=${compactBoardText(report.videoDiagnostics, 100)}`);
+    if (report.videoObserve) parts.push(`observe=${compactBoardText(report.videoObserve, 80)}`);
+    parts.push(`audio=${compactBoardText(report.audio || (args.enableAudio ? "requested" : "not-requested"), 90)}`);
+    if (report.reverseControl) parts.push(`reverse=${compactBoardText(report.reverseControl, 100)}`);
+    if (report.input) parts.push(`input=${compactBoardText(report.input, 90)}`);
+    if (report.clipboardText) parts.push(`clipboardText=${compactBoardText(report.clipboardText, 90)}`);
+    parts.push(`fileClipboard=${compactBoardText(report.clipboardFile || (args.testFileClipboard ? "not-run" : "skipped"), 90)}`);
+  }
+  if (report.error) parts.push(`error=${compactBoardText(report.error, 120)}`);
+  parts.push("no password printed or sent to Agent Link Board");
+  parts.push("no inject");
+  return redactBoardSummaryText(parts.join("; "), args);
 }
 
 function delay(ms) {
@@ -2068,12 +2131,29 @@ async function verifyMacClientFileClipboardDisconnectCancel({ args, session, upl
 }
 
 async function run() {
+  boardSummaryMode = process.argv.includes("--boardSummary");
   if (helpRequested(process.argv)) {
     printHelp();
     return;
   }
 
   const args = parseArgs(process.argv);
+  boardSummaryMode = Boolean(args.boardSummary);
+  lastBoardSummaryArgs = args;
+  lastBoardSummaryReport = {
+    ok: false,
+    connection: "",
+    video: "",
+    videoDiagnostics: "",
+    videoObserve: "",
+    audio: args.enableAudio ? "requested" : "not-requested",
+    reverseControl: args.useExistingHost ? "skipped existing host" : "",
+    input: "",
+    clipboardText: "",
+    clipboardFile: args.testFileClipboard ? "not-run" : "skipped",
+    authFailure: "",
+    error: "",
+  };
   const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
   const clientOrigin = `http://127.0.0.1:${args.clientPort}`;
   const clientParams = new URLSearchParams();
@@ -2284,6 +2364,17 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
         print("INFO", `Recent logs: ${authFailureSnapshot.logs.join(" | ")}`);
       }
       print("OK", "Mac client auth failure self-test passed");
+      lastBoardSummaryReport = {
+        ...lastBoardSummaryReport,
+        ok: true,
+        authFailure: authFailureSnapshot.connection,
+        connection: authFailureSnapshot.connection,
+        video: authFailureSnapshot.video,
+        reverseControl: "not applicable after expected auth failure",
+      };
+      if (args.boardSummary) {
+        console.log(makeBoardSummary(lastBoardSummaryReport, args));
+      }
       return;
     }
 
@@ -2320,6 +2411,12 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     print("OK", `Connection: ${videoSnapshot.connection}`);
     print("OK", `Remote: ${videoSnapshot.remote}`);
     print("OK", `Video: ${videoSnapshot.video}`);
+    lastBoardSummaryReport = {
+      ...lastBoardSummaryReport,
+      connection: videoSnapshot.connection,
+      video: videoSnapshot.video,
+      reverseControl: args.useExistingHost ? "skipped existing host" : "pending guarded request rehearsal",
+    };
     assertTemporaryRuntimeDiagnostics(videoSnapshot, args, "Mac client session");
     assertTemporaryReversePolicyDiagnostics(videoSnapshot, args, "Mac client session");
     await assertReversePolicyFormatterVariants(session);
@@ -2327,6 +2424,9 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     print("OK", `Reverse policy: ${videoSnapshot.reversePolicy}`);
     print("OK", `Initial video ready: ${initialVideoMs}ms`);
     await verifyMacClientReverseControlRequest({ args, session });
+    lastBoardSummaryReport.reverseControl = args.useExistingHost
+      ? "skipped existing host"
+      : "LAN008 -> PowerShell copy -> temporary grant -> accepted; no input_event";
     if (!videoSnapshot.sendClipboardFilesButtonDisabled) {
       throw new Error("Mac client file send button should stay disabled until files are selected");
     }
@@ -2362,6 +2462,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       });
     }
     print("OK", `Diagnostics: ${diagnosticsSnapshot.firstVideoMetric} / ${diagnosticsSnapshot.videoFlowMetric}`);
+    lastBoardSummaryReport.videoDiagnostics = `${diagnosticsSnapshot.firstVideoMetric} / ${diagnosticsSnapshot.videoFlowMetric}`;
     if (args.requireH264Video) {
       const h264Snapshot = await waitForPageSnapshot({
         args,
@@ -2559,7 +2660,10 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     }
     print("OK", `Video settings: ${videoSnapshot.displaySettings}`);
 
-    await observeMacClientVideo({ args, session });
+    const observedVideo = await observeMacClientVideo({ args, session });
+    if (observedVideo) {
+      lastBoardSummaryReport.videoObserve = `${observedVideo.frames} frames / ${observedVideo.elapsedMs}ms / ${observedVideo.fps.toFixed(1)} fps`;
+    }
 
     if (args.expectReconnect) {
       windowsHost = await verifyMacClientReconnect({ args, repoRoot, session, windowsHost });
@@ -2790,6 +2894,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       const ageText = hasAudioFrameAge ? ` · frameAge=${audioSnapshot.lastAudioFrameAgeMs}ms` : "";
       print("OK", `Audio: ${audioSnapshot.audio} / ${audioSnapshot.audioPlayback}${payloadText}${timingText}`);
       print("OK", `Audio diagnostics: ${audioSnapshot.audioFlowMetric}${ageText}`);
+      lastBoardSummaryReport.audio = `${audioSnapshot.audio} / ${audioSnapshot.audioPlayback}${payloadText}${timingText}`;
 
       await clickElement(session, "#audioToggle");
       const audioDisabledSnapshot = await waitFor(
@@ -2943,6 +3048,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     );
 
     print("OK", `Input: ${inputSnapshot.input}`);
+    lastBoardSummaryReport.input = inputSnapshot.input;
     if (inputSnapshot.logs.length > 0) {
       print("INFO", `Recent logs: ${inputSnapshot.logs.join(" | ")}`);
     }
@@ -3041,6 +3147,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     );
 
     print("OK", `Clipboard: ${clipboardSnapshot.clipboard}`);
+    lastBoardSummaryReport.clipboardText = clipboardSnapshot.clipboard;
 
     const localClipboardText = `Mac client local clipboard ${Date.now()}`;
     await evaluate(session, `navigator.clipboard.writeText(${JSON.stringify(localClipboardText)})`);
@@ -3081,6 +3188,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       "Mac client local clipboard send",
     );
     print("OK", `Local clipboard send: ${localClipboardSendSnapshot.clipboard}`);
+    lastBoardSummaryReport.clipboardText = localClipboardSendSnapshot.clipboard;
 
     const watchedClipboardText = `Mac client watched clipboard ${Date.now()}`;
     await evaluate(
@@ -3159,6 +3267,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       );
 
       print("OK", `File clipboard: ${fileClipboardSnapshot.fileClipboard}`);
+      lastBoardSummaryReport.clipboardFile = fileClipboardSnapshot.fileClipboard;
       await verifyMacClientFileClipboardDisconnectCancel({ args, session, uploadDir });
     }
 
@@ -3201,6 +3310,13 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       `Disconnect reset: ${disconnectSnapshot.remote} / ${disconnectSnapshot.video} / ${disconnectSnapshot.firstVideoMetric} / ${disconnectSnapshot.videoFlowMetric} / ${disconnectSnapshot.audio} / ${disconnectSnapshot.audioFlowMetric} / ${disconnectSnapshot.reconnectMetric} / ${disconnectSnapshot.remoteRuntime} / ${disconnectSnapshot.reversePolicy}`,
     );
     print("OK", "Mac client browser self-test passed");
+    lastBoardSummaryReport = {
+      ...lastBoardSummaryReport,
+      ok: true,
+    };
+    if (args.boardSummary) {
+      console.log(makeBoardSummary(lastBoardSummaryReport, args));
+    }
   } finally {
     session?.close();
     browser?.kill();
@@ -3216,6 +3332,14 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
 }
 
 run().catch((error) => {
+  if (boardSummaryMode) {
+    const report = {
+      ...(lastBoardSummaryReport || {}),
+      ok: false,
+      error: error.message || String(error),
+    };
+    console.log(makeBoardSummary(report, lastBoardSummaryArgs || defaults));
+  }
   console.error(`[FAIL] ${error.message}`);
   process.exitCode = 1;
 });
