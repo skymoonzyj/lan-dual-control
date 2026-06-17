@@ -69,6 +69,11 @@ Machine-readable JSON fields:
                              command; it checks host, LaunchAgent, power, and
                              lock/sleep/reboot limits without changing system
                              state or requesting a password.
+  commands.macLaunchAgentPlanCommand
+                             Secret-free Mac host LaunchAgent dry-run planner;
+                             it prints a plist plan and manual load commands
+                             without writing files, loading launchctl, starting
+                             Mac host, or requesting a password.
   commands.macClientDiagnosticsCommand
                              Secret-free Mac client readiness command for
                              checking local page files/server state without
@@ -489,6 +494,10 @@ function buildRecommendations({ git, host, board, args }) {
       level: "next",
       text: `For unattended readiness, review LaunchAgent, power, and lock/sleep/reboot limits: ${makeMacUnattendedStatusCommand(args)}.`,
     });
+    recommendations.push({
+      level: "next",
+      text: `For login startup planning, dry-run the LaunchAgent template first: ${makeMacLaunchAgentPlanCommand(args)}.`,
+    });
     return recommendations;
   }
   if (host.inputMode !== "log") {
@@ -537,6 +546,10 @@ function buildRecommendations({ git, host, board, args }) {
   recommendations.push({
     level: "next",
     text: `Before promising unattended control, review LaunchAgent, power, and lock/sleep/reboot limits: ${makeMacUnattendedStatusCommand(args)}.`,
+  });
+  recommendations.push({
+    level: "next",
+    text: `Before writing any login startup plist, dry-run the LaunchAgent template first: ${makeMacLaunchAgentPlanCommand(args)}.`,
   });
   recommendations.push({
     level: "next",
@@ -638,6 +651,15 @@ function makeMacUnattendedStatusCommand(args) {
     "node scripts/mac/check-mac-unattended-status.mjs",
     "--host",
     args.host,
+    "--port",
+    String(args.port),
+    "--boardSummary",
+  ].join(" ");
+}
+
+function makeMacLaunchAgentPlanCommand(args) {
+  return [
+    "node scripts/mac/install-mac-host-launch-agent.mjs",
     "--port",
     String(args.port),
     "--boardSummary",
@@ -757,6 +779,7 @@ function formatBoardSummary(report) {
       `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
       `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
       `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
+      `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
       `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
       `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
       `MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}.`,
@@ -783,6 +806,7 @@ function formatBoardSummary(report) {
     `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
     `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
     `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
+    `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
     `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
     `MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}.`,
@@ -841,6 +865,7 @@ function printReport(report) {
   console.log(`[NEXT] Mac formal local smoke: ${report.commands.macFormalLocalSmokeCommand}`);
   console.log(`[NEXT] Mac formal E2E preflight: ${report.commands.macFormalE2eStatusCommand}`);
   console.log(`[NEXT] Mac unattended/startup status: ${report.commands.macUnattendedStatusCommand}`);
+  console.log(`[NEXT] Mac LaunchAgent dry-run plan: ${report.commands.macLaunchAgentPlanCommand}`);
   console.log(`[NEXT] Mac client page status: ${report.commands.macClientPageStatusCommand}`);
   console.log(`[NEXT] Mac client diagnostics: ${report.commands.macClientDiagnosticsCommand}`);
   console.log(`[NEXT] Mac client discover Windows host: ${report.commands.macClientDiscoverWindowsCommand}`);
@@ -886,6 +911,7 @@ async function main() {
       macFormalLocalSmokeCommand: makeMacFormalLocalSmokeCommand(args),
       macFormalE2eStatusCommand: makeMacFormalE2eStatusCommand(args),
       macUnattendedStatusCommand: makeMacUnattendedStatusCommand(args),
+      macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
       macClientPageStatusCommand: makeMacClientPageStatusCommand(),
       macClientDiagnosticsCommand: makeMacClientDiagnosticsCommand(),
       macClientDiscoverWindowsCommand: makeMacClientDiscoverWindowsCommand(),
