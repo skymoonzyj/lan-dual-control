@@ -44,7 +44,7 @@ http://127.0.0.1:5188/
 node scripts/mac/start-mac-client.mjs --status --boardSummary
 ```
 
-该助手只启动/检查本地 Mac 控制端页面，不会连接 Windows host、不会认证、不会要求或打印密码，也不会发送输入事件。需要机器可读结果时可加 `--json`；如果端口上已有页面并希望直接复用，可加 `--allowExisting`；想自动打开浏览器可加 `--open`。
+该助手只启动/检查本地 Mac 控制端页面，不会连接 Windows host、不会认证、不会要求或打印密码，也不会发送输入事件。需要机器可读结果时可加 `--json`；如果端口上已有页面并希望直接复用，可加 `--allowExisting`；想自动打开浏览器可加 `--open`。它的 JSON 和 `--boardSummary` 也会给出 `MacClientDiscoverWindows=` 与 `MacClientReverseRehearsal=`：前者用于只读发现 Windows host，后者提醒先看发现结果里的 `ReverseRehearsal=`，再按 LAN008 -> Windows 本机回环一次性授权 -> Mac 重试的安全闭环走。
 
 本机联调时，如果不想占用真实 Mac host 的 `43770`，可以在另一个终端启动 Windows host 的 mock/回退服务：
 
@@ -71,7 +71,7 @@ LAN_DUAL_PORT=43772 LAN_DUAL_HOST=127.0.0.1 LAN_DUAL_WINDOWS_INPUT_MODE=log node
 node scripts/mac/discover-windows-hosts.mjs --boardSummary
 ```
 
-该发现脚本复用现有 LAN 扫描，只保留 `platform=windows` 的目标，并输出下一步可直接运行的 `check-mac-client-formal-status` 命令。它不会认证 WebSocket、不会要求或打印密码、不会发送输入事件，也不会执行 `inject`。没发现 Windows host 时，先让 Windows Codex 启动 Windows host 并同步 IP/端口。
+该发现脚本复用现有 LAN 扫描，只保留 `platform=windows` 的目标，并输出下一步可直接运行的 `check-mac-client-formal-status` 命令。发现到 Windows host 时，JSON、普通输出和 `--boardSummary` 还会包含 `ReverseRehearsal=`：Mac 认证后先点“请求反控”并预期 `LAN008` 默认安全拒绝，Windows 端在本机回环运行一次性授权命令，随后 Mac 点“重试反控”并预期 accepted / `临时授权已使用`。它不会认证 WebSocket、不会要求或打印密码、不会发送输入事件，也不会执行 `inject`。没发现 Windows host 时，先让 Windows Codex 启动 Windows host 并同步 IP/端口。
 
 Mac 控制真实 Windows host 前，先做只读预检：
 
@@ -85,7 +85,7 @@ node scripts/mac/check-mac-client-readiness.mjs --checkBoard --boardSummary
 node scripts/mac/check-mac-client-readiness.mjs --host <Windows IP> --port 43770 --checkBoard --boardSummary
 ```
 
-该脚本不会启动 Mac client、不会启动或认证 Windows host、不会要求或打印密码、不会发送输入事件。它只检查 repo、Mac client 静态文件和语法、可选本地 Mac client HTTP 页面、可选 Windows host `/discovery` 及 Agent Link Board，并输出可直接发到通讯板的无密摘要。需要机器可读结果时加 `--json`；本地页面已启动时可加 `--probeClientServer`；正式要求目标 Windows host 在线时可加 `--requireWindowsHost`。
+该脚本不会启动 Mac client、不会启动或认证 Windows host、不会要求或打印密码、不会发送输入事件。它只检查 repo、Mac client 静态文件和语法、可选本地 Mac client HTTP 页面、可选 Windows host `/discovery` 及 Agent Link Board，并输出可直接发到通讯板的无密摘要。摘要会同时带 `MacClientPage=`、`MacClientDiscoverWindows=`、`MacClientReverseRehearsal=`、`MacClientFormalSmoke=`、`MacClientBrowserSelfTest=` 和 `CopyDiagnostics=`，方便从页面状态、Windows 发现、反控安全演练、本机 mock 自测到正式 smoke 串成一条无密路径。需要机器可读结果时加 `--json`；本地页面已启动时可加 `--probeClientServer`；正式要求目标 Windows host 在线时可加 `--requireWindowsHost`。
 
 正式做 Mac 控制 Windows 真连观感验收前，可跑更严格的清单：
 
