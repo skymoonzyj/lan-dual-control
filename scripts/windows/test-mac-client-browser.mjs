@@ -1220,6 +1220,8 @@ function buildSnapshotExpression() {
       reverseControlHint: text("#reverseControlHint"),
       reverseControlGrantCommand: text("#reverseControlGrantCommand"),
       reverseControlGrantCommandHidden: document.querySelector("#reverseControlGrantCommand")?.hidden ?? true,
+      reverseControlGrantFallbackCommand: text("#reverseControlGrantFallbackCommand"),
+      reverseControlGrantFallbackCommandHidden: document.querySelector("#reverseControlGrantFallbackCommand")?.hidden ?? true,
       reverseControlGrantCopyButtonHidden: document.querySelector("#copyReverseControlGrantCommandButton")?.hidden ?? true,
       reverseControlGrantCopyButtonDisabled: document.querySelector("#copyReverseControlGrantCommandButton")?.disabled ?? true,
       reverseControlGrantCopyStatus: text("#reverseControlGrantCopyStatus"),
@@ -1506,11 +1508,17 @@ async function verifyMacClientReverseControlRequest({ args, session }) {
         value.reverseControlStatus.includes("Windows 已安全拒绝") &&
         value.reverseControlStatus.includes("临时允许后重试") &&
         value.reverseControlHint.includes("Windows 已安全拒绝") &&
-        value.reverseControlGrantCommand.includes("allow-windows-reverse-control.mjs") &&
-        value.reverseControlGrantCommand.includes("--host 127.0.0.1") &&
-        value.reverseControlGrantCommand.includes(`--port ${args.port}`) &&
-        value.reverseControlGrantCommand.includes("--grant --durationMs 30000 --boardSummary") &&
+        value.reverseControlGrantCommand.includes("pwsh -NoProfile -ExecutionPolicy Bypass") &&
+        value.reverseControlGrantCommand.includes("allow-windows-reverse-control.ps1") &&
+        value.reverseControlGrantCommand.includes("-HostName 127.0.0.1") &&
+        value.reverseControlGrantCommand.includes(`-Port ${args.port}`) &&
+        value.reverseControlGrantCommand.includes("-Grant -DurationMs 30000 -BoardSummary") &&
+        value.reverseControlGrantFallbackCommand.includes("allow-windows-reverse-control.mjs") &&
+        value.reverseControlGrantFallbackCommand.includes("--host 127.0.0.1") &&
+        value.reverseControlGrantFallbackCommand.includes(`--port ${args.port}`) &&
+        value.reverseControlGrantFallbackCommand.includes("--grant --durationMs 30000 --boardSummary") &&
         value.reverseControlGrantCommandHidden === false &&
+        value.reverseControlGrantFallbackCommandHidden === false &&
         value.reverseControlGrantCopyButtonHidden === false &&
         value.reverseControlGrantCopyButtonDisabled === false &&
         value.reverseControlButtonText === "重试反控" &&
@@ -1535,10 +1543,11 @@ async function verifyMacClientReverseControlRequest({ args, session }) {
     ),
   });
   const copiedCommand = await evaluate(session, "navigator.clipboard.readText()");
-  if (!copiedCommand.includes("allow-windows-reverse-control.mjs") ||
-      !copiedCommand.includes("--host 127.0.0.1") ||
-      !copiedCommand.includes(`--port ${args.port}`) ||
-      !copiedCommand.includes("--grant --durationMs 30000 --boardSummary")) {
+  if (!copiedCommand.includes("allow-windows-reverse-control.ps1") ||
+      !copiedCommand.includes("-HostName 127.0.0.1") ||
+      !copiedCommand.includes(`-Port ${args.port}`) ||
+      !copiedCommand.includes("-Grant -DurationMs 30000 -BoardSummary") ||
+      copiedCommand.includes("allow-windows-reverse-control.mjs")) {
     throw new Error(`Mac client copied unexpected reverse grant command: ${copiedCommand}`);
   }
   print("OK", `Reverse grant command copy: ${copiedSnapshot.reverseControlGrantCopyStatus}`);
@@ -1553,8 +1562,10 @@ async function verifyMacClientReverseControlRequest({ args, session }) {
       value.reversePolicy.includes("Windows 已临时允许一次") &&
       value.reverseControlStatus.includes("Windows 已临时允许一次") &&
       value.reverseControlHint.includes("Windows 已打开一次性授权窗口") &&
-      value.reverseControlGrantCommand.includes(`--port ${args.port}`) &&
+      value.reverseControlGrantCommand.includes(`-Port ${args.port}`) &&
+      value.reverseControlGrantFallbackCommand.includes(`--port ${args.port}`) &&
       value.reverseControlGrantCommandHidden === false &&
+      value.reverseControlGrantFallbackCommandHidden === false &&
       value.reverseControlGrantCopyButtonHidden === false &&
       value.reverseControlGrantCopyButtonDisabled === false &&
       value.reverseControlButtonText === "重试反控" &&
@@ -1584,6 +1595,7 @@ async function verifyMacClientReverseControlRequest({ args, session }) {
         value.reverseControlHint.includes("Windows 已同意") &&
         value.reverseControlHint.includes("无需再次运行授权命令") &&
         value.reverseControlGrantCommandHidden === true &&
+        value.reverseControlGrantFallbackCommandHidden === true &&
         value.reverseControlGrantCopyButtonHidden === true &&
         value.reverseControlButtonDisabled === false;
       const noInputEvents = Number(value.inputEvents) === initialInputEvents;

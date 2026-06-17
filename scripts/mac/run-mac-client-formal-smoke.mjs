@@ -103,11 +103,17 @@ Machine-readable JSON fields:
   commands.discoverPreflight     Safe discovery + preflight retry command when no host is known.
   commands.browserSmoke          Browser smoke command shape; uses --useEnvPassword, never embeds passwords.
   commands.windowsReverseGrantStatus
-                                  Windows-side loopback command to inspect the
-                                  one-time reverse-control grant state.
+                                  Recommended Windows-side PowerShell loopback
+                                  command to inspect the one-time reverse-
+                                  control grant state.
   commands.windowsOpenOneTimeReverseGrant
-                                  Windows-side loopback command to open a short
-                                  one-time reverse-control grant window.
+                                  Recommended Windows-side PowerShell loopback
+                                  command to open a short one-time reverse-
+                                  control grant window.
+  commands.windowsReverseGrantStatusNodeFallback
+                                  Node fallback for inspecting the grant state.
+  commands.windowsOpenOneTimeReverseGrantNodeFallback
+                                  Node fallback for opening the grant window.
   commands.reverseControlRehearsal
                                   Safe LAN008 -> Windows local one-time grant
                                   -> Mac retry accepted rehearsal.
@@ -526,7 +532,28 @@ function makeDiscoveryRetryCommand(args) {
   return command.join(" ");
 }
 
-function makeWindowsReverseGrantCommand(args, action = "grant") {
+function makeWindowsReverseGrantPowerShellCommand(args, action = "grant") {
+  const parts = [
+    "pwsh -NoProfile -ExecutionPolicy Bypass",
+    "-File",
+    "scripts/windows/allow-windows-reverse-control.ps1",
+    "-HostName",
+    "127.0.0.1",
+    "-Port",
+    String(args.port || defaults.port),
+  ];
+  if (action === "status") {
+    parts.push("-Status");
+  } else if (action === "revoke") {
+    parts.push("-Revoke");
+  } else {
+    parts.push("-Grant", "-DurationMs", "30000");
+  }
+  parts.push("-BoardSummary");
+  return parts.join(" ");
+}
+
+function makeWindowsReverseGrantNodeFallbackCommand(args, action = "grant") {
   const parts = [
     "node scripts/windows/allow-windows-reverse-control.mjs",
     "--host",
@@ -545,10 +572,17 @@ function makeWindowsReverseGrantCommand(args, action = "grant") {
   return parts.join(" ");
 }
 
+function makeWindowsReverseGrantCommand(args, action = "grant") {
+  return makeWindowsReverseGrantPowerShellCommand(args, action);
+}
+
 function makeReverseControlRehearsalText(args) {
+  const grantCommand = makeWindowsReverseGrantCommand(args, "grant");
+  const nodeFallbackCommand = makeWindowsReverseGrantNodeFallbackCommand(args, "grant");
   return [
     "Mac authenticates in the Mac client page, clicks 请求反控, and expects LAN008/default deny first.",
-    `Windows Codex runs on the Windows host machine: ${makeWindowsReverseGrantCommand(args, "grant")}.`,
+    `Windows Codex runs the recommended PowerShell command on the Windows host machine: ${grantCommand}.`,
+    `Node fallback if PowerShell is unavailable: ${nodeFallbackCommand}.`,
     "Mac clicks 重试反控 and expects accepted plus 临时授权已使用.",
     "No password goes on Agent Link Board, no input_event is sent by this request, and inject stays off.",
   ].join(" ");
@@ -769,6 +803,10 @@ function makeReport(args, preflight) {
       browserSmoke: makeBrowserSmokeCommand(args),
       windowsReverseGrantStatus: makeWindowsReverseGrantCommand(args, "status"),
       windowsOpenOneTimeReverseGrant: makeWindowsReverseGrantCommand(args, "grant"),
+      windowsReverseGrantStatusPowerShell: makeWindowsReverseGrantPowerShellCommand(args, "status"),
+      windowsOpenOneTimeReverseGrantPowerShell: makeWindowsReverseGrantPowerShellCommand(args, "grant"),
+      windowsReverseGrantStatusNodeFallback: makeWindowsReverseGrantNodeFallbackCommand(args, "status"),
+      windowsOpenOneTimeReverseGrantNodeFallback: makeWindowsReverseGrantNodeFallbackCommand(args, "grant"),
       reverseControlRehearsal: makeReverseControlRehearsalText(args),
     },
     preflight: preflight.payload,

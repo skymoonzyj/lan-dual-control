@@ -496,6 +496,23 @@ button:disabled {
   white-space: nowrap;
 }
 
+.reverse-control-fallback-row {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 4px;
+}
+
+.reverse-control-fallback-row span {
+  color: #7a351f;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.reverse-control-fallback-row code {
+  background: rgba(255, 255, 255, 0.44);
+}
+
 .reverse-control-copy-status {
   color: #5b4636;
   font-weight: 700;

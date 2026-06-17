@@ -17,6 +17,49 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Mac Codex
+
+日期：2026-06-17 14:15
+开发端：Mac Codex
+本轮目标：把 Mac 侧反控授权提示对齐到 Windows PowerShell 推荐入口，同时保留 Node 备用命令。
+完成内容：
+- Mac client 在 `LAN008`、最近请求或临时授权窗口状态下展示 PowerShell 推荐授权命令，并保留 Node 备用命令；复制按钮只复制 PowerShell 命令，不混入备用命令。
+- Mac client 导出/复制诊断文本新增 PowerShell 推荐命令和 Node 备用命令两项。
+- `check-mac-client-formal-status` 和 `run-mac-client-formal-smoke` 的 `windowsReverseGrantStatus` / `windowsOpenOneTimeReverseGrant` 改为 PowerShell 推荐命令，并新增 `windowsReverseGrantStatusNodeFallback` / `windowsOpenOneTimeReverseGrantNodeFallback`。
+- formal runPlan、boardSummary 和 sendCall 文案都明确 PowerShell 优先、Node fallback；仍强调授权 helper 只能在 Windows host 本机回环运行。
+- 当前状态、下一步、任务板和 Mac client README 已同步。
+修改文件：
+- `apps/mac-client/index.html`
+- `apps/mac-client/styles.css`
+- `apps/mac-client/app.js`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node --check scripts/mac/check-mac-client-formal-status.mjs`
+- `node --check scripts/mac/run-mac-client-formal-smoke.mjs`
+- `node --check scripts/mac/test-mac-client-formal-status.mjs`
+- `node --check scripts/mac/test-mac-client-formal-smoke.mjs`
+- `node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 45000`
+- `node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 45000`
+- `node scripts/windows/test-mac-client-browser.mjs --clientPort 5198 --debugPort 9342 --mockVideo --allowClipboardFallback --skipFileClipboard --progressIntervalMs 0 --timeoutMs 45000`
+遗留问题：
+- 本轮只补 Mac 侧提示和回归，不启动真实 Windows host、不认证、不发送密码、不发送 input、不执行 inject。
+下一步建议：
+- 真连演练时，让 Windows 端优先运行 Mac 页面或 formal 摘要里的 PowerShell 授权命令，再让 Mac client 点“重试反控”；PowerShell 不可用时再用 Node fallback。
+是否改了协议：否。
+是否需要另一端配合：否；后续真实反控演练才需要 Windows 端现场配合。
+
 ## 2026-06-17 Windows Codex
 
 日期：2026-06-17 续跑

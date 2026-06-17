@@ -34,6 +34,8 @@ const elements = {
   reverseControlHint: document.querySelector("#reverseControlHint"),
   reverseControlGrantCommandRow: document.querySelector("#reverseControlGrantCommandRow"),
   reverseControlGrantCommand: document.querySelector("#reverseControlGrantCommand"),
+  reverseControlGrantFallbackRow: document.querySelector("#reverseControlGrantFallbackRow"),
+  reverseControlGrantFallbackCommand: document.querySelector("#reverseControlGrantFallbackCommand"),
   copyReverseControlGrantCommandButton: document.querySelector("#copyReverseControlGrantCommandButton"),
   reverseControlGrantCopyStatus: document.querySelector("#reverseControlGrantCopyStatus"),
   inputStatus: document.querySelector("#inputStatus"),
@@ -538,9 +540,24 @@ function currentReverseControlStatusText() {
   return "可请求 Windows 切换为被控端";
 }
 
-function currentWindowsReverseGrantCommand() {
+function currentWindowsReverseGrantPort() {
   const rawPort = String(elements.portInput.value || "").trim();
-  const port = /^\d{1,5}$/.test(rawPort) ? rawPort : "43770";
+  return /^\d{1,5}$/.test(rawPort) ? rawPort : "43770";
+}
+
+function currentWindowsReverseGrantPowerShellCommand() {
+  const port = currentWindowsReverseGrantPort();
+  return [
+    "pwsh -NoProfile -ExecutionPolicy Bypass",
+    "-File scripts/windows/allow-windows-reverse-control.ps1",
+    "-HostName 127.0.0.1",
+    `-Port ${port}`,
+    "-Grant -DurationMs 30000 -BoardSummary",
+  ].join(" ");
+}
+
+function currentWindowsReverseGrantNodeFallbackCommand() {
+  const port = currentWindowsReverseGrantPort();
   return [
     "node scripts/windows/allow-windows-reverse-control.mjs",
     "--host 127.0.0.1",
@@ -554,61 +571,72 @@ function currentReverseControlHelp() {
     return {
       hint: "连接 Windows host 后，如需临时允许反控，这里会显示 Windows 本机命令。",
       command: "",
+      fallbackCommand: "",
     };
   }
   if (!state.authenticated) {
     return {
       hint: "认证成功后才能请求反控；不要把密码发到联络板。",
       command: "",
+      fallbackCommand: "",
     };
   }
   if (!state.remoteCapabilities) {
     return {
       hint: "等待 Windows host 声明反控策略。",
       command: "",
+      fallbackCommand: "",
     };
   }
   if (!reverseControlSupported()) {
     return {
       hint: "Windows host 当前未启用反控接收，无需运行临时授权命令。",
       command: "",
+      fallbackCommand: "",
     };
   }
-  const command = currentWindowsReverseGrantCommand();
+  const command = currentWindowsReverseGrantPowerShellCommand();
+  const fallbackCommand = currentWindowsReverseGrantNodeFallbackCommand();
   const grant = state.remoteCapabilities.reverseControlGrant;
   if (grant?.active) {
     return {
-      hint: "Windows 已打开一次性授权窗口，Mac 端请立即点“重试反控”。",
+      hint: "Windows 已打开一次性授权窗口，Mac 端请立即点“重试反控”；下方 PowerShell 为推荐入口，Node 为备用。",
       command,
+      fallbackCommand,
     };
   }
   if (state.reverseControlRequest.status === "accepted") {
     return {
       hint: "Windows 已同意，临时授权已使用；无需再次运行授权命令。",
       command: "",
+      fallbackCommand: "",
     };
   }
   if (state.reverseControlRequest.status === "rejected" && state.reverseControlRequest.code === "LAN008") {
     return {
-      hint: "Windows 已安全拒绝。请让 Windows 端在本机运行下面命令，或点击桌面面板“临时允许反控”，然后 Mac 端重试。",
+      hint: "Windows 已安全拒绝。请让 Windows 端在本机运行推荐 PowerShell 命令，或点击桌面面板“临时允许反控”，然后 Mac 端重试；Node 命令仅作备用。",
       command,
+      fallbackCommand,
     };
   }
   if (grant?.lastRequest?.active) {
     return {
-      hint: "Windows 已记录最近一次请求。请 Windows 端本机临时允许后，Mac 端再点“重试反控”。",
+      hint: "Windows 已记录最近一次请求。请 Windows 端本机临时允许后，Mac 端再点“重试反控”；优先用 PowerShell 命令。",
       command,
+      fallbackCommand,
     };
   }
   if (state.reverseControlRequest.status === "pending") {
     return {
       hint: "请求已发出；若返回 LAN008，再让 Windows 端本机临时允许。",
       command: "",
+      fallbackCommand: "",
     };
   }
   return {
-    hint: "首次请求通常会被默认安全拒绝；被拒绝后这里会给出 Windows 本机临时授权命令。",
+    hint: "首次请求通常会被默认安全拒绝；被拒绝后这里会给出 Windows 本机 PowerShell 推荐授权命令。",
     command: "",
+    fallbackCommand: "",
   };
 }
 
@@ -647,8 +675,8 @@ async function copyReverseControlGrantCommand() {
     } else {
       fallbackCopyText(command);
     }
-    setReverseControlCopyStatus("已复制，请在 Windows host 本机终端执行", false);
-    logEvent("反控授权命令已复制", "仅复制命令，不包含密码");
+    setReverseControlCopyStatus("已复制 PowerShell，请在 Windows host 本机终端执行", false);
+    logEvent("反控授权 PowerShell 命令已复制", "仅复制推荐命令，不包含密码");
   } catch (error) {
     setReverseControlCopyStatus("复制失败，请手动选中命令复制", true);
     logEvent("反控授权命令复制失败", error?.message || String(error));
@@ -665,15 +693,21 @@ function renderReverseControlRequest() {
   elements.reverseControlStatus.textContent = currentReverseControlStatusText();
   const help = currentReverseControlHelp();
   const previousCommand = elements.reverseControlGrantCommand.textContent || "";
+  const previousFallbackCommand = elements.reverseControlGrantFallbackCommand.textContent || "";
   const commandChanged = previousCommand !== help.command;
+  const fallbackChanged = previousFallbackCommand !== help.fallbackCommand;
   const hasCommand = Boolean(help.command);
+  const hasFallbackCommand = Boolean(help.fallbackCommand);
   elements.reverseControlHint.textContent = help.hint;
   elements.reverseControlGrantCommand.textContent = help.command;
   elements.reverseControlGrantCommand.hidden = !hasCommand;
+  elements.reverseControlGrantFallbackCommand.textContent = help.fallbackCommand;
+  elements.reverseControlGrantFallbackCommand.hidden = !hasFallbackCommand;
+  elements.reverseControlGrantFallbackRow.hidden = !hasFallbackCommand;
   elements.reverseControlGrantCommandRow.hidden = !hasCommand;
   elements.copyReverseControlGrantCommandButton.hidden = !hasCommand;
   elements.copyReverseControlGrantCommandButton.disabled = !hasCommand;
-  if (!hasCommand || commandChanged) {
+  if (!hasCommand || commandChanged || fallbackChanged) {
     setReverseControlCopyStatus("");
   }
 }
@@ -1466,7 +1500,8 @@ function buildLogExportText() {
     `- 反控策略：${elements.reversePolicyMetric.textContent || "-"}`,
     `- 反控请求：${elements.reverseControlStatus.textContent || "-"}`,
     `- 反控授权提示：${elements.reverseControlHint.textContent || "-"}`,
-    `- Windows 本机授权命令：${elements.reverseControlGrantCommand.textContent || "-"}`,
+    `- Windows 本机授权命令（PowerShell 推荐）：${elements.reverseControlGrantCommand.textContent || "-"}`,
+    `- Windows 本机授权命令（Node 备用）：${elements.reverseControlGrantFallbackCommand.textContent || "-"}`,
     `- 反控授权复制：${elements.reverseControlGrantCopyStatus.textContent || "-"}`,
     `- 重连状态：${reconnectExport.status}`,
     `- 重连原因：${reconnectExport.reason}`,

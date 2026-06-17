@@ -129,6 +129,8 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "runPlan.commands.sendCallWithEnsureClient", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsReverseGrantStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsOpenOneTimeReverseGrant", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.commands.windowsReverseGrantStatusNodeFallback", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.commands.windowsOpenOneTimeReverseGrantNodeFallback", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.reverseControlRehearsal", `${script} ${flag}`);
     assertIncludes(result.stdout, "--ensureClient", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
@@ -162,8 +164,11 @@ function checkOfflineJson(args) {
   assert(payload.runPlan?.commands?.ensureMacClient?.includes("start-mac-client.mjs --allowExisting"), "offline runPlan should include start/reuse client command");
   assert(payload.runPlan?.commands?.safePreflightWithEnsureClient?.includes("--discover --ensureClient --preflightOnly --boardSummary"), "offline runPlan should include ensureClient preflight command");
   assert(payload.runPlan?.commands?.sendCallWithEnsureClient?.includes("--discover --ensureClient --preflightOnly --sendCall"), "offline runPlan should include ensureClient sendCall command");
-  assert(payload.runPlan?.commands?.windowsReverseGrantStatus?.includes("allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --status --boardSummary"), "offline runPlan should include Windows reverse grant status command");
-  assert(payload.runPlan?.commands?.windowsOpenOneTimeReverseGrant?.includes("allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --grant --durationMs 30000 --boardSummary"), "offline runPlan should include Windows one-time grant command");
+  assert(payload.runPlan?.commands?.windowsReverseGrantStatus?.includes("allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary"), "offline runPlan should include recommended Windows PowerShell reverse grant status command");
+  assert(payload.runPlan?.commands?.windowsOpenOneTimeReverseGrant?.includes("allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary"), "offline runPlan should include recommended Windows PowerShell one-time grant command");
+  assert(payload.runPlan?.commands?.windowsReverseGrantStatusNodeFallback?.includes("allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --status --boardSummary"), "offline runPlan should include Windows reverse grant Node fallback command");
+  assert(payload.runPlan?.commands?.windowsOpenOneTimeReverseGrantNodeFallback?.includes("allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --grant --durationMs 30000 --boardSummary"), "offline runPlan should include Windows one-time grant Node fallback command");
+  assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "PowerShell", "offline reverse rehearsal command");
   assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "LAN008", "offline reverse rehearsal command");
   assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "临时授权已使用", "offline reverse rehearsal command");
   assert(payload.runPlan?.steps?.some((step) => step.id === "browser-smoke"), "offline runPlan should include browser smoke step");
@@ -493,9 +498,11 @@ async function checkReadyShape(args) {
       assert(payload.runPlan?.commands?.browserSmoke?.includes(`--port ${windowsPort}`), "ready runPlan should include target port");
       assert(payload.runPlan?.commands?.browserSmoke?.includes("--ensureClient"), "ready runPlan should ensure local Mac client for browser smoke");
       assert(payload.runPlan?.commands?.browserSmoke?.includes("--promptPassword"), "ready runPlan should use visible password prompt");
-      assert(payload.runPlan?.commands?.windowsReverseGrantStatus?.includes(`--port ${windowsPort} --status --boardSummary`), "ready runPlan should include target Windows reverse grant status command");
-      assert(payload.runPlan?.commands?.windowsOpenOneTimeReverseGrant?.includes(`--port ${windowsPort} --grant --durationMs 30000 --boardSummary`), "ready runPlan should include target Windows one-time reverse grant command");
-      assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "Windows Codex runs on the Windows host machine", "ready reverse rehearsal");
+      assert(payload.runPlan?.commands?.windowsReverseGrantStatus?.includes(`-Port ${windowsPort} -Status -BoardSummary`), "ready runPlan should include target Windows PowerShell reverse grant status command");
+      assert(payload.runPlan?.commands?.windowsOpenOneTimeReverseGrant?.includes(`-Port ${windowsPort} -Grant -DurationMs 30000 -BoardSummary`), "ready runPlan should include target Windows PowerShell one-time reverse grant command");
+      assert(payload.runPlan?.commands?.windowsReverseGrantStatusNodeFallback?.includes(`--port ${windowsPort} --status --boardSummary`), "ready runPlan should include target Windows reverse grant Node fallback command");
+      assert(payload.runPlan?.commands?.windowsOpenOneTimeReverseGrantNodeFallback?.includes(`--port ${windowsPort} --grant --durationMs 30000 --boardSummary`), "ready runPlan should include target Windows one-time reverse grant Node fallback command");
+      assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "recommended PowerShell command", "ready reverse rehearsal");
       assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "input_event", "ready reverse rehearsal");
       assert(payload.runPlan?.commands?.safePreflightWithEnsureClient?.includes(`--host 127.0.0.1 --port ${windowsPort} --ensureClient --preflightOnly --boardSummary`), "ready runPlan should include target-specific ensureClient preflight");
       assert(payload.runPlan?.commands?.sendCallWithEnsureClient?.includes(`--host 127.0.0.1 --port ${windowsPort} --ensureClient --preflightOnly --sendCall`), "ready runPlan should include target-specific ensureClient sendCall");
@@ -503,7 +510,7 @@ async function checkReadyShape(args) {
       assert(payload.runPlan?.safety?.reverseControlRequestSendsInput === false, "ready runPlan should say reverse request sends no input");
       assert(payload.runPlan?.safety?.windowsReverseGrantLoopbackOnly === true, "ready runPlan should keep Windows grant loopback-only");
       assert(payload.runPlan?.safety?.requiresExplicitUserConfirmationForInject === true, "runPlan should require explicit inject confirmation");
-      assert(payload.runPlan?.steps?.some((step) => step.id === "reverse-control-request" && String(step.command || "").includes("allow-windows-reverse-control.mjs")), "ready runPlan should include reverse control request step");
+      assert(payload.runPlan?.steps?.some((step) => step.id === "reverse-control-request" && String(step.command || "").includes("allow-windows-reverse-control.ps1")), "ready runPlan should include reverse control request step");
       assertIncludes(payload.boardSummary || "", "windowsHost=online 127.0.0.1", "ready board summary");
       assertIncludes(payload.boardSummary || "", "Reverse rehearsal:", "ready board summary");
       assertIncludes(payload.callText || "", "Suggested browser test:", "ready call text");
@@ -571,6 +578,8 @@ async function checkReadySendCall(args) {
         assertIncludes(call.expected, "反控请求安全演练", "ready call expected");
         assertIncludes(call.expected, "LAN008", "ready call expected");
         assertIncludes(call.expected, "不要执行 inject", "ready call expected");
+        assertIncludes(call.ask, "allow-windows-reverse-control.ps1", "ready call ask");
+        assertIncludes(call.ask, `-Port ${windowsPort}`, "ready call ask");
         assertIncludes(call.ask, "allow-windows-reverse-control.mjs", "ready call ask");
         assertIncludes(call.ask, `--port ${windowsPort}`, "ready call ask");
         assertIncludes(call.ask, "密码不要发在联络板", "ready call ask");
