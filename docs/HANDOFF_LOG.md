@@ -17,6 +17,32 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Mac Codex
+
+日期：2026-06-17 17:05
+开发端：Mac Codex
+本轮目标：把 `start-mac-client --status --boardSummary` 的真实 stdout 摘要路径纳入自测。
+完成内容：
+- `scripts/mac/test-mac-client-start-helper.mjs` 新增 `assertSingleLine`，直接断言 `--status --boardSummary` stdout 非空且只有一行。
+- 离线状态会单独运行 `--status --boardSummary`，确认非零退出时仍输出可发板的 `Mac client page offline`、`CopyDiagnostics=`、`复制诊断` 和连接密码安全提示。
+- 在线临时 Mac client 页面状态同样运行 `--status --boardSummary`，确认零退出时输出 `Mac client page online`、`CopyDiagnostics=`、`复制诊断` 和连接密码安全提示。
+- 当前状态和任务板已同步：启动助手自测现在覆盖 JSON 内摘要和真实 stdout 单行摘要。
+修改文件：
+- `scripts/mac/test-mac-client-start-helper.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/test-mac-client-start-helper.mjs`
+- `node scripts/mac/test-mac-client-start-helper.mjs --timeoutMs 45000`
+遗留问题：
+- 本轮只补自测和文档，不启动真实 Windows host、不认证、不发送密码/input/inject。
+下一步建议：
+- 后续修改 `start-mac-client` 摘要时，直接跑 `test-mac-client-start-helper`，它会同时覆盖 JSON 和真实 `--boardSummary` 输出。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-17 Windows Codex
 
 日期：2026-06-17 休息续跑

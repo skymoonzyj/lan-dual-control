@@ -54,6 +54,13 @@ function assertNotIncludes(text, expected, label) {
   assert(!String(text).includes(expected), `${label} unexpectedly included ${JSON.stringify(expected)}.\n${text}`);
 }
 
+function assertSingleLine(text, label) {
+  const trimmed = String(text || "").trim();
+  assert(trimmed.length > 0, `${label} should not be empty`);
+  assert(!trimmed.includes("\n"), `${label} should be a single line.\n${text}`);
+  return trimmed;
+}
+
 function run(args, options = {}) {
   return spawnSync(process.execPath, [script, ...args], {
     cwd: repoRoot,
@@ -143,6 +150,17 @@ async function checkOfflineStatus(args) {
   assertIncludes(payload.boardSummary || "", "复制诊断", "offline board summary");
   assertIncludes(payload.boardSummary || "", "连接密码", "offline board summary");
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "offline status");
+
+  const summary = run(["--status", "--boardSummary", "--port", String(port), "--timeoutMs", "1200"], {
+    timeoutMs: args.timeoutMs,
+  });
+  const summaryLine = assertSingleLine(summary.stdout, "offline board summary stdout");
+  assert(summary.status !== 0, "offline board summary should fail");
+  assertIncludes(summaryLine, "Mac client page offline", "offline board summary stdout");
+  assertIncludes(summaryLine, "CopyDiagnostics=", "offline board summary stdout");
+  assertIncludes(summaryLine, "复制诊断", "offline board summary stdout");
+  assertIncludes(summaryLine, "连接密码", "offline board summary stdout");
+  assertNotIncludes(`${summary.stdout}\n${summary.stderr}`, "LAN_DUAL_PASSWORD", "offline board summary stdout");
   print("OK", "Offline status reports machine-readable JSON without secrets");
 }
 
@@ -174,6 +192,17 @@ async function checkStartAndExisting(args) {
     assert(statusPayload.online === true, "online status should be online=true");
     assertIncludes(statusPayload.boardSummary || "", "CopyDiagnostics=", "online status board summary");
     assertIncludes(statusPayload.boardSummary || "", "复制诊断", "online status board summary");
+
+    const summary = run(["--status", "--boardSummary", "--port", String(port), "--timeoutMs", "1200"], {
+      timeoutMs: args.timeoutMs,
+    });
+    const summaryLine = assertSingleLine(summary.stdout, "online board summary stdout");
+    assert(summary.status === 0, "online board summary should pass");
+    assertIncludes(summaryLine, "Mac client page online", "online board summary stdout");
+    assertIncludes(summaryLine, "CopyDiagnostics=", "online board summary stdout");
+    assertIncludes(summaryLine, "复制诊断", "online board summary stdout");
+    assertIncludes(summaryLine, "连接密码", "online board summary stdout");
+    assertNotIncludes(`${summary.stdout}\n${summary.stderr}`, "LAN_DUAL_PASSWORD", "online board summary stdout");
 
     const duplicate = run(["--json", "--port", String(port), "--timeoutMs", "1200"], {
       timeoutMs: args.timeoutMs,
