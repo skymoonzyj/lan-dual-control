@@ -15,6 +15,7 @@ Options:
   --timeoutMs <ms>       Per help command timeout. Default: ${defaultTimeoutMs}
   --script <name>        Limit to one script file name; can be repeated
   --json                 Print JSON summary
+  --boardSummary         Print one secret-free Agent Link Board summary line
   --verbose              Print each help command output
   --help, -h             Show this help without running checks
 
@@ -37,6 +38,7 @@ function parseArgs(argv) {
     timeoutMs: defaultTimeoutMs,
     scripts: [],
     json: false,
+    boardSummary: false,
     verbose: false,
     help: false,
   };
@@ -50,6 +52,10 @@ function parseArgs(argv) {
     }
     if (token === "--json") {
       args.json = true;
+      continue;
+    }
+    if (token === "--boardSummary") {
+      args.boardSummary = true;
       continue;
     }
     if (token === "--verbose") {
@@ -208,6 +214,27 @@ function analyze(result) {
   };
 }
 
+function makeBoardSummary(summary) {
+  const scope = summary.scriptsChecked === 1 ? "1 script" : `${summary.scriptsChecked} scripts`;
+  const commandCount = `${summary.commandsChecked} command${summary.commandsChecked === 1 ? "" : "s"}`;
+  if (summary.ok) {
+    return [
+      `Mac script help: ok ${summary.commandsChecked}/${summary.commandsChecked} commands across ${scope}; timeout=${summary.timeoutMs}ms.`,
+      "Pure --help/-h only; no service startup, password prompt, Agent Link read, host auth, input, or inject output detected.",
+    ].join(" ");
+  }
+  const failedNames = summary.failed
+    .slice(0, 5)
+    .map((failure) => `${failure.scriptName} ${failure.flag}: ${failure.problems.join("+")}`)
+    .join("; ");
+  const more = summary.failed.length > 5 ? `; +${summary.failed.length - 5} more` : "";
+  return [
+    `Mac script help: failed ${summary.failed.length}/${commandCount} across ${scope}; timeout=${summary.timeoutMs}ms.`,
+    `Failed=${failedNames || "unknown"}${more}.`,
+    "No password/input/inject was intentionally sent; inspect local command output before posting details.",
+  ].join(" ");
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -221,7 +248,7 @@ async function main() {
     for (const flag of ["--help", "-h"]) {
       const result = analyze(await runHelp(scriptName, flag, args.timeoutMs));
       results.push(result);
-      if (!args.json) {
+      if (!args.json && !args.boardSummary) {
         const status = result.ok ? "OK" : "FAIL";
         console.log(`[${status}] ${scriptName} ${flag} (${result.durationMs}ms)`);
         if (!result.ok) {
@@ -245,9 +272,12 @@ async function main() {
       problems: result.problems,
     })),
   };
+  summary.boardSummary = makeBoardSummary(summary);
 
   if (args.json) {
     console.log(JSON.stringify({ ...summary, results }, null, 2));
+  } else if (args.boardSummary) {
+    console.log(summary.boardSummary);
   } else {
     console.log(summary.ok
       ? `[OK] Mac script help coverage passed: ${summary.commandsChecked} commands`

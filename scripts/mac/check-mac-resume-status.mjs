@@ -61,7 +61,8 @@ Machine-readable JSON fields:
                              authenticating a Windows host.
   commands.macScriptHelpCommand
                              Pure help coverage command for scripts/mac/*.mjs;
-                             it rejects runtime side-effect output.
+                             it rejects runtime side-effect output and prints
+                             one Agent Link Board summary line.
 
 Examples:
   node scripts/mac/check-mac-resume-status.mjs
@@ -566,7 +567,7 @@ function makeMacClientDiagnosticsCommand() {
 }
 
 function makeMacScriptHelpCommand() {
-  return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000";
+  return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
 
 function formatBoardBuildDiff(buildDiff) {

@@ -19,11 +19,44 @@
 
 ## 2026-06-17 Mac Codex
 
+日期：2026-06-17 16:50
+开发端：Mac Codex
+本轮目标：让 Mac script help 统一自检可直接输出 Agent Link Board 一行摘要，并让恢复总览推荐这一形态。
+完成内容：
+- `scripts/mac/test-mac-script-help.mjs` 新增 `--boardSummary`：完整跑 43 个 Mac `.mjs` 脚本、86 条 `--help/-h` 命令后，stdout 只输出一行无密摘要。
+- `--json` 结果新增同一段 `boardSummary` 字段，方便自动化消费后再转发通讯板。
+- `check-mac-resume-status` 的 `commands.macScriptHelpCommand` / `MacScriptHelp=` 改为 `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`，现场按恢复总览即可得到可发板摘要。
+- 文档同步说明该命令不读取 Agent Link Board、不认证、不要求密码、不启动 host/client、不发送 input/inject。
+修改文件：
+- `scripts/mac/test-mac-script-help.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/test-mac-script-help.mjs`
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --json`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 45000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000`
+遗留问题：
+- 本轮只改 Mac 侧 help/恢复总览提示和文档，不启动真实服务、不认证、不发送密码/input/inject；真实 Mac 控制 Windows 仍需 Windows host 在线和 Agent Link Board 呼叫配合。
+下一步建议：
+- 后续 Mac 端改任意 `.mjs`，先跑恢复总览，再执行 `MacScriptHelp=` 一行摘要；如果失败，先本地看详细普通输出，不要把大量 stderr 或敏感上下文直接贴板。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Mac Codex
+
 日期：2026-06-17 16:35
 开发端：Mac Codex
 本轮目标：让 Mac 恢复开工总览直接提示统一 Mac script help 安全自检命令。
 完成内容：
-- `check-mac-resume-status` 新增 `commands.macScriptHelpCommand`，固定为 `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000`。
+- `check-mac-resume-status` 新增 `commands.macScriptHelpCommand`，固定为 `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`。
 - JSON、普通输出和 `--boardSummary` 都会输出 `MacScriptHelp=`，方便每次修改 `scripts/mac/*.mjs` 后直接按恢复总览跑统一 `--help/-h` 副作用防线。
 - 自测补齐 help 字段、离线/在线 JSON、普通输出和 boardSummary 断言，并确认该命令不带密码、不回显自定义 board server、不读取 Agent Link Board。
 修改文件：

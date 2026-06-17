@@ -144,6 +144,7 @@ function assertMacClientDiagnosticsCommand(command, label) {
 function assertMacScriptHelpCommand(command, label) {
   assert(/test-mac-script-help\.mjs/.test(command), `${label} should use test-mac-script-help`);
   assert(command.includes("--timeoutMs 10000"), `${label} should use the standard timeout`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
   assert(!command.includes("--password"), `${label} should not embed a password argument`);
   assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
   assert(!command.includes("--checkBoard"), `${label} should not read Agent Link Board`);
