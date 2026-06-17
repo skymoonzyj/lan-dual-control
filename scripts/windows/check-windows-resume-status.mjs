@@ -92,6 +92,7 @@ Examples:
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/discover-lan-hosts.ps1 -NoLocalSubnets -HostName 192.168.31.122 -Port 43770 -RequireMacHost -BoardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
   node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -DiagnosticsOnly -BoardSummary -TimeoutMs 45000
   node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary
   node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
@@ -564,6 +565,19 @@ function makeCommands(args, preflight) {
   if (runtimeBuildId && !/\s/.test(runtimeBuildId)) {
     windowsClientDiagnosticsCommand.push("--expectDiscoveryRuntimeBuildId", runtimeBuildId);
   }
+  const windowsClientDiagnosticsPowerShellCommand = [
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-client-browser.ps1",
+    "-Discover",
+    "-DiscoverNoLocalSubnets",
+    "-HostName", host,
+    "-Port", String(port),
+    "-DiagnosticsOnly",
+    "-BoardSummary",
+    "-TimeoutMs", "45000",
+  ];
+  if (runtimeBuildId && !/\s/.test(runtimeBuildId)) {
+    windowsClientDiagnosticsPowerShellCommand.push("-ExpectDiscoveryRuntimeBuildId", runtimeBuildId);
+  }
   return {
     resumeBoardSummary: "node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary",
     macHostDiscoveryBoardSummary,
@@ -642,6 +656,7 @@ function makeCommands(args, preflight) {
       "-BoardSummary",
     ].join(" "),
     windowsClientDiagnosticsCommand: windowsClientDiagnosticsCommand.join(" "),
+    windowsClientDiagnosticsPowerShellCommand: windowsClientDiagnosticsPowerShellCommand.join(" "),
     windowsClientCopyDiagnosticsAction: "Windows 控制端事件面板点击“复制诊断”，先看“快速摘要”。",
     windowsMacAlertWatcherStart: [
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1",
@@ -792,7 +807,7 @@ function makeBoardSummary(report) {
     `MacDiscovery=${report.commands.macHostDiscoveryBoardSummary}.`,
     `MacDiscoveryPs=${report.commands.macHostDiscoveryPowerShellBoardSummary}.`,
     `FormalChecklist=${report.commands.formalChecklistBoardSummary}; ManualChecklist=${report.formalManualChecklist.summary}.`,
-    `WinClientDiagnostics=${report.commands.windowsClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.windowsClientCopyDiagnosticsAction}`,
+    `WinClientDiagnostics=${report.commands.windowsClientDiagnosticsCommand}; WinClientDiagnosticsPs=${report.commands.windowsClientDiagnosticsPowerShellCommand}; CopyDiagnostics=${report.commands.windowsClientCopyDiagnosticsAction}`,
     `WindowsHostMedia=${report.commands.windowsHostMediaReadinessBoardSummary}.`,
     `WindowsHostMediaPs=${report.commands.windowsHostMediaReadinessPowerShellBoardSummary}.`,
     `WindowsVideoSupport=${report.commands.windowsVideoEncoderSupportBoardSummary}.`,
@@ -989,6 +1004,7 @@ function printHuman(report) {
   console.log(`  ${report.commands.userAuthRequest}`);
   console.log(`  ${report.commands.formalRun}`);
   console.log(`  ${report.commands.windowsClientDiagnosticsCommand}`);
+  console.log(`  ${report.commands.windowsClientDiagnosticsPowerShellCommand}`);
   console.log(`  ${report.commands.windowsClientCopyDiagnosticsAction}`);
   console.log(`  ${report.commands.windowsHostMediaReadinessBoardSummary}`);
   console.log(`  ${report.commands.windowsHostMediaReadinessPowerShellBoardSummary}`);

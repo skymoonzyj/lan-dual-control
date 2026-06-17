@@ -66,6 +66,8 @@ PowerShell 7 equivalent:
 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -DurationMs 30000 -BoardSummary
 It also includes a one-line no-password Windows client diagnostics command:
 node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
+PowerShell equivalent:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets -HostName <Mac IP> -Port 43770 -DiagnosticsOnly -BoardSummary -TimeoutMs 45000
 It also includes a read-only Windows video encoder/WGC/WebCodecs support command:
 node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
 PowerShell equivalent:

@@ -212,6 +212,7 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770", "PowerShell wrapper help");
   assertIncludes(output, "one-line no-password Windows client diagnostics command", "PowerShell wrapper help");
   assertIncludes(output, "test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000", "PowerShell wrapper help");
+  assertIncludes(output, "test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets", "PowerShell wrapper help");
   assertIncludes(output, "Windows video encoder/WGC/WebCodecs support command", "PowerShell wrapper help");
   assertIncludes(output, "check-windows-video-encoder-support.mjs --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "check-windows-video-encoder-support.ps1 -BoardSummary", "PowerShell wrapper help");
@@ -298,6 +299,11 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, "--boardSummary", "mock JSON client diagnostics command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, "--discoverNoLocalSubnets", "mock JSON client diagnostics command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, `--port ${port}`, "mock JSON client diagnostics command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, "test-windows-client-browser.ps1", "mock JSON client diagnostics PowerShell command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, "-DiagnosticsOnly", "mock JSON client diagnostics PowerShell command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, "-BoardSummary", "mock JSON client diagnostics PowerShell command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, "-DiscoverNoLocalSubnets", "mock JSON client diagnostics PowerShell command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, `-Port ${port}`, "mock JSON client diagnostics PowerShell command");
     assertIncludes(payload.commands?.windowsClientCopyDiagnosticsAction, "复制诊断", "mock JSON copy diagnostics action");
     assertIncludes(payload.commands?.windowsClientCopyDiagnosticsAction, "快速摘要", "mock JSON copy diagnostics action");
     assertIncludes(payload.commands?.windowsMacAlertWatcherStart, "start-mac-alert-watcher.ps1", "mock JSON alert watcher start command");
@@ -348,6 +354,9 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "WinClientDiagnostics=", "PowerShell board summary");
     assertIncludes(output, "test-windows-client-browser.mjs --discover --discoverNoLocalSubnets", "PowerShell board summary");
     assertIncludes(output, "--diagnosticsOnly --boardSummary --timeoutMs 45000", "PowerShell board summary");
+    assertIncludes(output, "WinClientDiagnosticsPs=", "PowerShell board summary");
+    assertIncludes(output, "test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets", "PowerShell board summary");
+    assertIncludes(output, "-DiagnosticsOnly -BoardSummary -TimeoutMs 45000", "PowerShell board summary");
     assertIncludes(output, "CopyDiagnostics=Windows 控制端事件面板点击", "PowerShell board summary");
     assertIncludes(output, "快速摘要", "PowerShell board summary");
     assertIncludes(output, "WindowsHostMedia=", "PowerShell board summary");

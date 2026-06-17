@@ -264,6 +264,7 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "Windows video encoder/WGC/WebCodecs support", `help ${flag}`);
     assertIncludes(result.stdout, "check-windows-video-encoder-support.mjs --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "check-windows-video-encoder-support.ps1 -BoardSummary", `help ${flag}`);
+    assertIncludes(result.stdout, "test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "local alert-watcher start/status commands", `help ${flag}`);
     assertIncludes(result.stdout, "MacDiscovery Node and PowerShell commands", `help ${flag}`);
     assertIncludes(result.stdout, "discover-lan-hosts.mjs --noLocalSubnets", `help ${flag}`);
@@ -355,6 +356,11 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("--boardSummary"), "mock JSON client diagnostics should be board-safe");
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("--discoverNoLocalSubnets"), "mock JSON client diagnostics should target the known host without scanning the whole LAN");
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes(`--port ${port}`), "mock JSON client diagnostics should use the discovered Mac port");
+    assert(String(payload.commands?.windowsClientDiagnosticsPowerShellCommand || "").includes("test-windows-client-browser.ps1"), "mock JSON should include Windows client diagnostics PowerShell command");
+    assert(String(payload.commands?.windowsClientDiagnosticsPowerShellCommand || "").includes("-DiscoverNoLocalSubnets"), "mock JSON client diagnostics PowerShell should target the known host without scanning the whole LAN");
+    assert(String(payload.commands?.windowsClientDiagnosticsPowerShellCommand || "").includes(`-Port ${port}`), "mock JSON client diagnostics PowerShell should use the discovered Mac port");
+    assert(String(payload.commands?.windowsClientDiagnosticsPowerShellCommand || "").includes("-DiagnosticsOnly"), "mock JSON client diagnostics PowerShell should be no-auth diagnostics only");
+    assert(String(payload.commands?.windowsClientDiagnosticsPowerShellCommand || "").includes("-BoardSummary"), "mock JSON client diagnostics PowerShell should be board-safe");
     assert(String(payload.commands?.windowsClientCopyDiagnosticsAction || "").includes("复制诊断"), "mock JSON should include in-page copy diagnostics action");
     assert(String(payload.commands?.windowsClientCopyDiagnosticsAction || "").includes("快速摘要"), "mock JSON copy diagnostics action should mention the quick summary");
     assert(String(payload.commands?.windowsMacAlertWatcherStart || "").includes("start-mac-alert-watcher.ps1"), "mock JSON should include Windows Mac alert watcher start command");
@@ -398,9 +404,19 @@ async function checkRuntimeBuildClientDiagnosticsCommand(args) {
       "runtime JSON client diagnostics command",
     );
     assertIncludes(
+      payload.commands?.windowsClientDiagnosticsPowerShellCommand,
+      `-ExpectDiscoveryRuntimeBuildId ${buildId}`,
+      "runtime JSON client diagnostics PowerShell command",
+    );
+    assertIncludes(
       payload.boardSummary,
       `--expectDiscoveryRuntimeBuildId ${buildId}`,
       "runtime board summary client diagnostics command",
+    );
+    assertIncludes(
+      payload.boardSummary,
+      `-ExpectDiscoveryRuntimeBuildId ${buildId}`,
+      "runtime board summary client diagnostics PowerShell command",
     );
     assertNotIncludes(result.stdout + result.stderr, "test-password", "runtime JSON");
     console.log("[OK] Windows resume status client diagnostics command pins discovery runtime build");
@@ -439,6 +455,9 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "WinClientDiagnostics=", "board summary");
     assertIncludes(result.stdout, "test-windows-client-browser.mjs --discover --discoverNoLocalSubnets", "board summary");
     assertIncludes(result.stdout, "--diagnosticsOnly --boardSummary --timeoutMs 45000", "board summary");
+    assertIncludes(result.stdout, "WinClientDiagnosticsPs=", "board summary");
+    assertIncludes(result.stdout, "test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets", "board summary");
+    assertIncludes(result.stdout, "-DiagnosticsOnly -BoardSummary -TimeoutMs 45000", "board summary");
     assertIncludes(result.stdout, "CopyDiagnostics=Windows 控制端事件面板点击", "board summary");
     assertIncludes(result.stdout, "快速摘要", "board summary");
     assertIncludes(result.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "board summary");
