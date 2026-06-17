@@ -60,6 +60,27 @@ function assertNotIncludes(text, expected, label) {
   assert(!String(text).includes(expected), `${label} unexpectedly included ${JSON.stringify(expected)}.\n${text}`);
 }
 
+function assertFormalSmokeCommand(command, label) {
+  assertIncludes(command, "run-mac-client-formal-smoke.mjs", label);
+  assertIncludes(command, "--host 192.168.31.68", label);
+  assertIncludes(command, "--port 43770", label);
+  assertIncludes(command, "--ensureClient", label);
+  assertIncludes(command, "--preflightOnly", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "--json", label);
+}
+
+function extractFormalSmokeCommand(text, label) {
+  const match = String(text || "").match(/FormalSmoke=(.+?)(?:\. ManualChecklist=|\n|$)/);
+  assert(match, `${label} should include FormalSmoke= command.\n${text}`);
+  return match[1].trim();
+}
+
 function makeFakeScanner(tmp) {
   const fakePath = join(tmp, "scripts/windows/discover-lan-hosts.mjs");
   mkdirSync(dirname(fakePath), { recursive: true });
@@ -144,6 +165,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "read-only", `${script} ${flag}`);
     assertIncludes(result.stdout, "--scanTimeoutMs", `${script} ${flag}`);
     assertIncludes(result.stdout, "formalChecklistCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "formalSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "manualChecklistSummary", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
@@ -164,10 +186,13 @@ function checkFoundJson(tmp, args) {
   assertIncludes(payload.nextCommand, "--host 192.168.31.68", "next command");
   assertIncludes(payload.formalChecklistCommand, "--host 192.168.31.68", "formal checklist command");
   assertIncludes(payload.formalChecklistCommand, "--boardSummary", "formal checklist command");
+  assertFormalSmokeCommand(payload.formalSmokeCommand || "", "formal smoke command");
   assert(payload.manualChecklistSummary === "connection/video/audio/clipboard/input_ack/diagnostics", "found payload should include manual checklist summary");
   assertIncludes(payload.sendCallCommand, "--host 192.168.31.68", "send call command");
   assertIncludes(payload.sendCallCommand, "--sendCall", "send call command");
   assertIncludes(payload.boardSummary, "FormalChecklist=", "board summary");
+  assertIncludes(payload.boardSummary, "FormalSmoke=", "board summary");
+  assertFormalSmokeCommand(extractFormalSmokeCommand(payload.boardSummary, "board summary"), "board summary formal smoke command");
   assertIncludes(payload.boardSummary, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "board summary");
   assertIncludes(payload.boardSummary, "No password was requested or sent", "board summary");
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "found output");
@@ -182,10 +207,26 @@ function checkBoardSummaryFound(tmp, args) {
   assert(result.status === 0, `found board summary should exit 0.\n${result.stdout}\n${result.stderr}`);
   assertIncludes(result.stdout, "Windows host discovery: found 1", "found board summary");
   assertIncludes(result.stdout, "FormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.68", "found board summary");
+  assertIncludes(result.stdout, "FormalSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.68", "found board summary");
+  assertFormalSmokeCommand(extractFormalSmokeCommand(result.stdout, "found board summary"), "found board summary formal smoke command");
   assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "found board summary");
   assertIncludes(result.stdout, "--sendCall", "found board summary");
   assertIncludes(result.stdout, "no WebSocket/input/inject", "found board summary");
   console.log("[OK] Board summary gives a secret-free next step when Windows host is found");
+}
+
+function checkPlainFound(tmp, args) {
+  const result = run(["--host", "192.168.31.68"], args, {
+    FAKE_SCANNER_ROOT: tmp,
+    FAKE_WINDOWS_DISCOVERY_MODE: "found",
+  });
+  assert(result.status === 0, `found plain output should exit 0.\n${result.stdout}\n${result.stderr}`);
+  assertIncludes(result.stdout, "Formal smoke preflight:", "found plain output");
+  const match = String(result.stdout || "").match(/Formal smoke preflight: ([^\n]+)/);
+  assert(match, `found plain output should include formal smoke command line.\n${result.stdout}`);
+  assertFormalSmokeCommand(match[1], "found plain output formal smoke command");
+  assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "found plain output");
+  console.log("[OK] Plain discovery output includes the formal smoke preflight command");
 }
 
 function checkNoneRequireFound(tmp, args) {
@@ -215,6 +256,7 @@ function main() {
     checkHelp(args);
     checkFoundJson(tmp, args);
     checkBoardSummaryFound(tmp, args);
+    checkPlainFound(tmp, args);
     checkNoneRequireFound(tmp, args);
     console.log("[OK] Mac Windows host discovery self-test passed");
   } finally {
