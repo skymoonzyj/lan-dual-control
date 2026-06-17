@@ -52,6 +52,36 @@
 
 ## 2026-06-17 Mac Codex
 
+日期：2026-06-17 17:20
+开发端：Mac Codex
+本轮目标：把本地 Mac client 页面状态命令接入 Mac 恢复总览。
+完成内容：
+- `scripts/mac/check-mac-resume-status.mjs` 新增 `commands.macClientPageStatusCommand`，值为 `node scripts/mac/start-mac-client.mjs --status --boardSummary`，只读检查本地 Mac client 页面是否在线。
+- 普通输出新增 `[NEXT] Mac client page status: ...`；`--boardSummary` 新增 `MacClientPage=...`，可直接发 Agent Link Board。
+- JSON、普通输出和 boardSummary 均继续不启动服务、不认证、不发送密码/input/inject。
+- `scripts/mac/test-mac-resume-status.mjs` 覆盖 help、离线/在线 JSON、普通输出和 boardSummary 中的新命令。
+- 当前状态、下一步和任务板已同步该恢复总览入口。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 45000`
+遗留问题：
+- 本轮只补 Mac 恢复总览和自测，不启动真实 Windows host、不认证、不发送密码/input/inject。
+下一步建议：
+- 恢复现场要同步 Mac 控制端页面状态时，优先按 resume status 摘要里的 `MacClientPage=` 发一行页面在线状态，再按 `MacClientDiagnostics=` 发 readiness 摘要。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Mac Codex
+
 日期：2026-06-17 17:15
 开发端：Mac Codex
 本轮目标：让 `start-mac-client --json` 也提供机器可读的下一步命令和复制诊断动作。

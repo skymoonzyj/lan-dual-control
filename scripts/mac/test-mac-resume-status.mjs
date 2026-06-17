@@ -111,6 +111,8 @@ function assertBoardSummaryShape(text, label) {
   assert(/repo=/.test(text), `${label} should include repo state`);
   assert(/media baseline/i.test(text), `${label} should include media baseline guidance`);
   assert(/check-mac-host-readiness\.mjs/.test(text), `${label} should include the media readiness command`);
+  assert(/MacClientPage=/.test(text), `${label} should include Mac client page status guidance`);
+  assert(/start-mac-client\.mjs/.test(text), `${label} should include the Mac client page status command`);
   assert(/MacClientDiagnostics=/.test(text), `${label} should include Mac client diagnostics guidance`);
   assert(/check-mac-client-readiness\.mjs/.test(text), `${label} should include the Mac client readiness command`);
   assert(/CopyDiagnostics=Mac client 事件日志点击/.test(text), `${label} should include Mac client copy diagnostics action`);
@@ -141,6 +143,15 @@ function assertMacClientDiagnosticsCommand(command, label) {
   assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
 }
 
+function assertMacClientPageStatusCommand(command, label) {
+  assert(/start-mac-client\.mjs/.test(command), `${label} should use start-mac-client`);
+  assert(command.includes("--status"), `${label} should only check page status`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!command.includes("--allowExisting"), `${label} should not start or accept a page process`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+}
+
 function assertMacScriptHelpCommand(command, label) {
   assert(/test-mac-script-help\.mjs/.test(command), `${label} should use test-mac-script-help`);
   assert(command.includes("--timeoutMs 10000"), `${label} should use the standard timeout`);
@@ -157,6 +168,7 @@ function checkHelp(args) {
     assert(/\bUsage\b/.test(result.stdout), `${script} ${flag} should print Usage`);
     assert(/commands\.mediaReadinessBoardSummary/.test(result.stdout), `${script} ${flag} should document media command JSON field`);
     assert(/commands\.macClientDiagnosticsCommand/.test(result.stdout), `${script} ${flag} should document Mac client diagnostics JSON field`);
+    assert(/commands\.macClientPageStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac client page status JSON field`);
     assert(/commands\.macScriptHelpCommand/.test(result.stdout), `${script} ${flag} should document Mac script help JSON field`);
   }
   print("OK", "Resume status help exits quickly");
@@ -178,6 +190,7 @@ function checkOfflineJson(args) {
   assert(payload.host?.error?.message, "offline payload should include error.message");
   assert(Array.isArray(payload.recommendations), "offline payload should include recommendations");
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary || "", "offline JSON media readiness command");
+  assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "offline JSON Mac client page status command");
   assertMacClientDiagnosticsCommand(payload.commands?.macClientDiagnosticsCommand || "", "offline JSON Mac client diagnostics command");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "offline JSON should include copy diagnostics action");
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "offline JSON Mac script help command");
@@ -233,6 +246,8 @@ function checkOfflinePlainReport(args) {
   ]);
   assert(result.status === 0, "offline plain report should stay non-failing without requireOnline");
   assert(String(result.stdout || "").includes("Mac client diagnostics:"), "plain report should include Mac client diagnostics label");
+  assert(String(result.stdout || "").includes("Mac client page status:"), "plain report should include Mac client page status label");
+  assert(String(result.stdout || "").includes("start-mac-client.mjs"), "plain report should include Mac client page status command");
   assert(String(result.stdout || "").includes("check-mac-client-readiness.mjs"), "plain report should include Mac client readiness command");
   assert(String(result.stdout || "").includes("Mac client copy diagnostics:"), "plain report should include copy diagnostics label");
   assert(String(result.stdout || "").includes("复制诊断"), "plain report should mention the copy diagnostics action");
@@ -269,6 +284,7 @@ function checkOnlineJson(args) {
   assert(Array.isArray(payload.host.lanAddresses), "online payload should include lanAddresses");
   assert(payload.host.buildDiff && typeof payload.host.buildDiff === "object", "online payload should include buildDiff");
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary || "", "online JSON media readiness command");
+  assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "online JSON Mac client page status command");
   assertMacClientDiagnosticsCommand(payload.commands?.macClientDiagnosticsCommand || "", "online JSON Mac client diagnostics command");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("连接密码"), "online JSON copy diagnostics action should mention password safety");
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "online JSON Mac script help command");

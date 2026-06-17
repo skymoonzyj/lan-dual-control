@@ -59,6 +59,9 @@ Machine-readable JSON fields:
                              Secret-free Mac client readiness command for
                              checking local page files/server state without
                              authenticating a Windows host.
+  commands.macClientPageStatusCommand
+                             Secret-free local Mac client page status command;
+                             it does not start the page or connect to Windows.
   commands.macScriptHelpCommand
                              Pure help coverage command for scripts/mac/*.mjs;
                              it rejects runtime side-effect output and prints
@@ -566,6 +569,10 @@ function makeMacClientDiagnosticsCommand() {
   ].join(" ");
 }
 
+function makeMacClientPageStatusCommand() {
+  return "node scripts/mac/start-mac-client.mjs --status --boardSummary";
+}
+
 function makeMacScriptHelpCommand() {
   return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
@@ -643,7 +650,7 @@ function formatBoardSummary(report) {
       `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${attention}.`,
       "Next: start formal host with start-mac-host --promptPassword --requirePassword before Windows E2E.",
       `After host is online, refresh media baseline with ${report.commands.mediaReadinessBoardSummary}.`,
-      `MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
+      `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
       `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
       "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
     ].join(" ");
@@ -661,7 +668,7 @@ function formatBoardSummary(report) {
     `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}.`,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}.`,
     `Media baseline command: ${report.commands.mediaReadinessBoardSummary}.`,
-    `MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
+    `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
     `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
     "Next formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
@@ -711,6 +718,7 @@ function printReport(report) {
     const prefix = item.level === "blocker" ? "ERROR" : item.level === "warning" ? "WARN" : item.level === "next" ? "NEXT" : "INFO";
     console.log(`[${prefix}] ${item.text}`);
   }
+  console.log(`[NEXT] Mac client page status: ${report.commands.macClientPageStatusCommand}`);
   console.log(`[NEXT] Mac client diagnostics: ${report.commands.macClientDiagnosticsCommand}`);
   console.log(`[NEXT] Mac client copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
   console.log(`[NEXT] Mac script help safety check: ${report.commands.macScriptHelpCommand}`);
@@ -747,6 +755,7 @@ async function main() {
     host,
     commands: {
       mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
+      macClientPageStatusCommand: makeMacClientPageStatusCommand(),
       macClientDiagnosticsCommand: makeMacClientDiagnosticsCommand(),
       macClientCopyDiagnosticsAction: "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码",
       macScriptHelpCommand: makeMacScriptHelpCommand(),
