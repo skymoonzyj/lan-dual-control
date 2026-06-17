@@ -195,6 +195,7 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "--boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "--checkBoard", `help ${flag}`);
     assertIncludes(result.stdout, "Windows host media-baseline", `help ${flag}`);
+    assertIncludes(result.stdout, "one-time reverse-control grant", `help ${flag}`);
   }
   console.log("[OK] Windows resume status help is pure");
 }
@@ -228,6 +229,11 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsHostMediaReadinessBoardSummary || "").includes("check-windows-host-readiness.mjs"), "mock JSON should include Windows host media readiness command");
     assert(String(payload.commands?.windowsHostMediaReadinessBoardSummary || "").includes("--probeMedia"), "mock JSON media readiness command should enable --probeMedia");
     assert(String(payload.commands?.windowsHostMediaReadinessBoardSummary || "").includes("--boardSummary"), "mock JSON media readiness command should be board-safe");
+    assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("allow-windows-reverse-control.mjs"), "mock JSON should include Windows reverse grant command");
+    assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("--host 127.0.0.1"), "mock JSON reverse grant command should be local-only");
+    assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("--port 43770"), "mock JSON reverse grant command should target the default Windows host port");
+    assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("--durationMs 30000"), "mock JSON reverse grant command should be time-limited");
+    assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("--boardSummary"), "mock JSON reverse grant command should be board-safe");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "mock JSON");
     console.log("[OK] Windows resume status JSON summarizes mock Mac preflight");
   });
@@ -254,6 +260,8 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "mac=ready", "board summary");
     assertIncludes(result.stdout, "WindowsHostMedia=", "board summary");
     assertIncludes(result.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "board summary");
+    assertIncludes(result.stdout, "ReverseGrant=", "board summary");
+    assertIncludes(result.stdout, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary", "board summary");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "board summary");
     console.log("[OK] Windows resume status board summary is one-line and secret-free");
   });

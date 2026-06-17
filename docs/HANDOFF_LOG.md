@@ -17,6 +17,41 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 11:27
+开发端：Windows Codex
+本轮目标：让 Windows 恢复开工总览也直接提示本机一次性反控授权命令，方便明天接着做 Mac 反控 Windows 联调。
+完成内容：
+- `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `windowsReverseControlGrantBoardSummary` / `ReverseGrant=`，指向 Windows 本机回环授权命令 `allow-windows-reverse-control --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary`。
+- PowerShell 包装帮助同步说明恢复总览同时给出媒体基线命令和本机一次性反控授权命令。
+- Node/PowerShell 回归覆盖帮助、JSON、boardSummary 中的 `ReverseGrant=`，并继续确认不泄露测试密码。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- PowerShell 7 AST 语法解析 `scripts/windows/check-windows-resume-status.ps1`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --script test-windows-resume-status.mjs --script test-windows-resume-status-powershell.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 60000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 60000`
+- `node scripts/windows/check-windows-resume-status.mjs --noDiscover --host 127.0.0.1 --port 9 --boardSummary --timeoutMs 12000`
+遗留问题：
+- 这轮只补恢复总览提示，不启动真实 Windows host、不认证、不发送密码、不发送输入、不执行 inject。
+下一步建议：
+- 明天恢复时先跑 `node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`；如 Mac 端要演练反控，按摘要里的 `ReverseGrant=` 在 Windows 本机打开一次性授权，再让 Mac 点“重试反控”。
+是否改了协议：否。
+是否需要另一端配合：真实闭环仍需要 Mac 端发起 `reverse_control_request` 后双方现场确认；本轮代码回归不需要另一端配合。
+
 ## 2026-06-17 Mac Codex
 
 日期：2026-06-17 09:28

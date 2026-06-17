@@ -199,6 +199,8 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "passwords", "PowerShell wrapper help");
   assertIncludes(output, "Windows host media baseline", "PowerShell wrapper help");
   assertIncludes(output, "--probeMedia --boardSummary", "PowerShell wrapper help");
+  assertIncludes(output, "Windows local one-time reverse-control grant", "PowerShell wrapper help");
+  assertIncludes(output, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770", "PowerShell wrapper help");
   console.log("[OK] PowerShell resume-status wrapper help is safe");
 }
 
@@ -227,6 +229,11 @@ async function checkMockJson(args) {
     assertIncludes(payload.userAuthRequest, "powershell.exe", "mock JSON userAuthRequest");
     assertIncludes(payload.commands?.windowsHostMediaReadinessBoardSummary, "check-windows-host-readiness.mjs", "mock JSON media command");
     assertIncludes(payload.commands?.windowsHostMediaReadinessBoardSummary, "--probeMedia", "mock JSON media command");
+    assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "allow-windows-reverse-control.mjs", "mock JSON reverse grant command");
+    assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "--host 127.0.0.1", "mock JSON reverse grant command");
+    assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "--port 43770", "mock JSON reverse grant command");
+    assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "--durationMs 30000", "mock JSON reverse grant command");
+    assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "--boardSummary", "mock JSON reverse grant command");
     assertNotIncludes(output, "test-password", "PowerShell mock JSON");
     console.log("[OK] PowerShell resume-status wrapper supports mock JSON discovery");
   });
@@ -252,6 +259,8 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "mac=ready", "PowerShell board summary");
     assertIncludes(output, "WindowsHostMedia=", "PowerShell board summary");
     assertIncludes(output, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "PowerShell board summary");
+    assertIncludes(output, "ReverseGrant=", "PowerShell board summary");
+    assertIncludes(output, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary", "PowerShell board summary");
     assertIncludes(output, "No password was requested or sent", "PowerShell board summary");
     assertNotIncludes(output, "test-password", "PowerShell board summary");
     console.log("[OK] PowerShell resume-status wrapper prints one-line board summary");

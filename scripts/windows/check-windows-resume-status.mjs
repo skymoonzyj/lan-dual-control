@@ -41,7 +41,8 @@ control work. It is read-only: it does not authenticate a WebSocket, does not
 ask for or print passwords, does not send input, and does not execute inject.
 JSON, human output, and board summaries include a Windows host media-baseline
 command for checking local controlled-side video/audio before Mac reverse
-control.
+control, plus a local one-time reverse-control grant command for retrying a
+Mac reverse-control request without switching Windows host to accept-lab mode.
 
 Options:
   --host <host>                 Explicit Mac host target. Default: ${defaults.host}
@@ -73,6 +74,7 @@ Examples:
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --sendUserAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
   node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
+  node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary
 `);
 }
 
@@ -508,6 +510,7 @@ function makeCommands(args, preflight) {
   const target = preflight.payload?.target || { host: args.host, port: args.port };
   const host = String(target.host || args.host);
   const port = Number(target.port || args.port);
+  const windowsHostPort = 43770;
   return {
     resumeBoardSummary: "node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary",
     preflightBoardSummary: [
@@ -541,6 +544,13 @@ function makeCommands(args, preflight) {
       "node scripts/windows/check-windows-host-readiness.mjs",
       "--checkBoard",
       "--probeMedia",
+      "--boardSummary",
+    ].join(" "),
+    windowsReverseControlGrantBoardSummary: [
+      "node scripts/windows/allow-windows-reverse-control.mjs",
+      "--host", "127.0.0.1",
+      "--port", String(windowsHostPort),
+      "--durationMs", "30000",
       "--boardSummary",
     ].join(" "),
   };
@@ -583,6 +593,7 @@ function makeBoardSummary(report) {
     `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}${boardCall}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
     `Next=${mac.ok ? report.commands.userAuthRequest : report.commands.preflightBoardSummary}.`,
     `WindowsHostMedia=${report.commands.windowsHostMediaReadinessBoardSummary}.`,
+    `ReverseGrant=${report.commands.windowsReverseControlGrantBoardSummary}.`,
     "No password was requested or sent; no WebSocket auth/input/inject was performed.",
   ].join(" ");
 }
@@ -756,6 +767,7 @@ function printHuman(report) {
   console.log(`  ${report.commands.userAuthRequest}`);
   console.log(`  ${report.commands.formalRun}`);
   console.log(`  ${report.commands.windowsHostMediaReadinessBoardSummary}`);
+  console.log(`  ${report.commands.windowsReverseControlGrantBoardSummary}`);
   console.log("- Board summary:");
   console.log(`  ${report.boardSummary}`);
   console.log("- User auth request:");
