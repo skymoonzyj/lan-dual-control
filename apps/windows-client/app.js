@@ -2384,14 +2384,47 @@ function getLocalHostExportStatus() {
   };
 }
 
+function getResolutionExportLabel(settings) {
+  return settings.resolutionMode === "native" ? "原生" : `${settings.width} × ${settings.height}`;
+}
+
+function buildDiagnosticsQuickSummary({
+  settings,
+  currentStateLabel,
+  connectionLabel,
+  targetLabel,
+  reconnectExport,
+  macAlertWatcherExport,
+  localHostExport,
+}) {
+  const reconnectParts = [reconnectExport.status];
+  if (reconnectExport.reason && reconnectExport.reason !== "-") {
+    reconnectParts.push(`原因 ${reconnectExport.reason}`);
+  }
+  if (reconnectExport.next && reconnectExport.next !== "-") {
+    reconnectParts.push(`下次 ${reconnectExport.next}`);
+  }
+  return [
+    `- 远端连接：${currentStateLabel} · ${connectionLabel} · ${targetLabel}`,
+    `- 重连：${reconnectParts.join(" · ")}`,
+    `- 本机协作：Mac 提醒 ${macAlertWatcherExport.status} · 本机被控 ${localHostExport.status} · 反控 ${localHostExport.reverseControlMode}`,
+    `- 画质请求：${getResolutionExportLabel(settings)} · ${settings.fps} Hz · ${Math.round(settings.maxBandwidthKbps / 1000)} Mbps · 声音${settings.audio ? "开" : "关"}`,
+  ];
+}
+
 function buildLogExportText() {
   const settings = currentDisplaySettings();
   const keyboardMapping = getKeyboardMapping();
+  const currentStateLabel = connectionStates[state.connectionState]?.label ?? state.connectionState;
   const connectionLabel =
     elements.transportSelect.value === "websocket" ? "WebSocket 局域网" : "本地模拟";
+  const hostForExport = state.activeHost || elements.hostInput.value.trim() || "-";
+  const portForExport = state.activePort || elements.portInput.value.trim() || "-";
+  const targetLabel = `${hostForExport}:${portForExport}`;
   const reconnectExport = getReconnectExportStatus();
   const macAlertWatcherExport = getMacAlertWatcherExportStatus();
   const localHostExport = getLocalHostExportStatus();
+  const resolutionLabel = getResolutionExportLabel(settings);
   const eventLines = state.logEntries
     .slice()
     .reverse()
@@ -2408,13 +2441,24 @@ function buildLogExportText() {
     "LAN Dual Control Windows 控制端日志",
     `导出时间：${new Date().toISOString()}`,
     "",
+    "快速摘要",
+    ...buildDiagnosticsQuickSummary({
+      settings,
+      currentStateLabel,
+      connectionLabel,
+      targetLabel,
+      reconnectExport,
+      macAlertWatcherExport,
+      localHostExport,
+    }),
+    "",
     "连接状态",
-    `- 当前状态：${connectionStates[state.connectionState]?.label ?? state.connectionState}`,
+    `- 当前状态：${currentStateLabel}`,
     `- 状态详情：${elements.statusText.textContent}`,
     `- 当前方向：${getControlDirectionLabel(state.controlDirection)}`,
     `- 反控状态：${state.reverseStateDetail}`,
     `- 连接方式：${connectionLabel}`,
-    `- 目标地址：${elements.hostInput.value.trim() || "-"}:${elements.portInput.value.trim() || "-"}`,
+    `- 目标地址：${targetLabel}`,
     `- 重连状态：${reconnectExport.status}`,
     `- 重连原因：${reconnectExport.reason}`,
     `- 下次重连：${reconnectExport.next}`,
@@ -2443,7 +2487,7 @@ function buildLogExportText() {
     `- 画质预设：${elements.qualityPresetSelect.selectedOptions[0]?.textContent ?? settings.qualityPreset}`,
     `- 显示模式：${settings.displayMode === "fullscreen" ? "全屏" : "窗口"}`,
     `- 显示器：${elements.displaySelect.selectedOptions[0]?.textContent ?? settings.displayId}`,
-    `- 分辨率：${settings.resolutionMode === "native" ? "原生" : `${settings.width} × ${settings.height}`}`,
+    `- 分辨率：${resolutionLabel}`,
     `- 缩放：${elements.scaleModeSelect.selectedOptions[0]?.textContent ?? settings.scaleMode}`,
     `- 刷新率：${settings.fps} Hz`,
     `- 码率：${Math.round(settings.maxBandwidthKbps / 1000)} Mbps`,

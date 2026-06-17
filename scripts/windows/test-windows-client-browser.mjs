@@ -2233,6 +2233,15 @@ async function verifyReconnectControls(session) {
         scheduleReconnect("测试断线");
         const exportText = typeof buildLogExportText === "function" ? buildLogExportText() : "";
         const exportChecks = {
+          quickSummarySection: exportText.includes("\\n快速摘要\\n"),
+          quickSummaryRemote:
+            exportText.includes("- 远端连接：") && exportText.includes("192.168.31.122:43770"),
+          quickSummaryReconnect:
+            exportText.includes("- 重连：等待自动重连") && exportText.includes("原因 测试断线"),
+          quickSummaryLocal: exportText.includes(
+            "- 本机协作：Mac 提醒 提醒中 · 本机被控 桌面壳托管运行中 · 反控 需确认",
+          ),
+          quickSummaryQuality: /- 画质请求：.+ Hz · .+ Mbps/.test(exportText),
           reconnectStatus: exportText.includes("- 重连状态：等待自动重连（1/3"),
           reconnectReason: exportText.includes("- 重连原因：测试断线"),
           reconnectNext: exportText.includes("- 下次重连："),
@@ -2258,7 +2267,9 @@ async function verifyReconnectControls(session) {
         };
         await copyLogsToClipboard();
         const copied =
+          copiedText.includes("\\n快速摘要\\n") &&
           copiedText.includes("\\n本机协作\\n") &&
+          copiedText.includes("- 远端连接：") &&
           copiedText.includes("- 本机被控：桌面壳托管运行中") &&
           copiedText.includes("- Mac 提醒：提醒中") &&
           copiedText.includes("password=<hidden>") &&

@@ -17,6 +17,39 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 休息续跑
+开发端：Windows Codex
+本轮目标：给 Windows 控制端复制/导出诊断报告增加顶部快速摘要，方便现场粘贴后先判断卡点。
+完成内容：
+- `buildLogExportText()` 在详细分段前新增“快速摘要”小节，汇总远端连接、重连、本机协作和画质请求。
+- 摘要复用现有页面状态和脱敏诊断数据，不读取或导出密码，也不触发额外 host / watcher 探测。
+- 页面 diagnostics 回归新增摘要小节、远端目标、重连原因、本机协作和画质请求断言；复制诊断也确认带摘要。
+- README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-client-browser.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps/windows-client scripts/windows docs`
+遗留问题：
+- 本轮只优化诊断文本可读性，不连接真实 Mac、不启动真实 Windows host。
+下一步建议：
+- 后续真实联调时，现场优先点 Windows 控制端事件面板“复制诊断”，先看“快速摘要”，再展开看“连接状态 / 本机协作”。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-17 Mac Codex
 
 日期：2026-06-17 12:35
