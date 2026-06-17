@@ -62,6 +62,10 @@ Machine-readable JSON fields:
   commands.macClientPageStatusCommand
                              Secret-free local Mac client page status command;
                              it does not start the page or connect to Windows.
+  commands.macClientDiscoverWindowsCommand
+                             Secret-free Windows host discovery command from
+                             the Mac side; it does not authenticate or send
+                             input.
   commands.macClientFormalChecklistCommand
                              Secret-free Mac controls Windows formal checklist
                              command; it prints the manual true-test checklist
@@ -577,6 +581,10 @@ function makeMacClientPageStatusCommand() {
   return "node scripts/mac/start-mac-client.mjs --status --boardSummary";
 }
 
+function makeMacClientDiscoverWindowsCommand() {
+  return "node scripts/mac/discover-windows-hosts.mjs --boardSummary";
+}
+
 function makeMacClientFormalChecklistCommand() {
   return "node scripts/mac/check-mac-client-formal-status.mjs --boardSummary";
 }
@@ -659,6 +667,7 @@ function formatBoardSummary(report) {
       "Next: start formal host with start-mac-host --promptPassword --requirePassword before Windows E2E.",
       `After host is online, refresh media baseline with ${report.commands.mediaReadinessBoardSummary}.`,
       `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
+      `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
       `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
       `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
       "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
@@ -678,6 +687,7 @@ function formatBoardSummary(report) {
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}.`,
     `Media baseline command: ${report.commands.mediaReadinessBoardSummary}.`,
     `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
+    `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
     `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
     `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
     "Next formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log.",
@@ -730,6 +740,7 @@ function printReport(report) {
   }
   console.log(`[NEXT] Mac client page status: ${report.commands.macClientPageStatusCommand}`);
   console.log(`[NEXT] Mac client diagnostics: ${report.commands.macClientDiagnosticsCommand}`);
+  console.log(`[NEXT] Mac client discover Windows host: ${report.commands.macClientDiscoverWindowsCommand}`);
   console.log(`[NEXT] Mac client formal checklist: ${report.commands.macClientFormalChecklistCommand}`);
   console.log(`[NEXT] Mac client copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
   console.log(`[NEXT] Mac script help safety check: ${report.commands.macScriptHelpCommand}`);
@@ -768,6 +779,7 @@ async function main() {
       mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
       macClientPageStatusCommand: makeMacClientPageStatusCommand(),
       macClientDiagnosticsCommand: makeMacClientDiagnosticsCommand(),
+      macClientDiscoverWindowsCommand: makeMacClientDiscoverWindowsCommand(),
       macClientFormalChecklistCommand: makeMacClientFormalChecklistCommand(),
       macClientCopyDiagnosticsAction: "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码",
       macScriptHelpCommand: makeMacScriptHelpCommand(),
