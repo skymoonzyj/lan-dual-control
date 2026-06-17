@@ -521,6 +521,8 @@ function makeMacFormalCommands(item) {
   const base = `node scripts/windows/check-mac-formal-e2e.mjs --host ${item.host} --port ${item.port}`;
   return {
     preflightCommand: `${base} --preflightOnly --checkClientDiagnostics --boardSummary`,
+    formalChecklistCommand: `${base} --preflightOnly --checkClientDiagnostics --boardSummary`,
+    manualChecklistSummary: "connection/video/audio/clipboard/input_ack/diagnostics",
     userAuthRequestCommand: `${base} --preflightOnly --checkClientDiagnostics --userAuthRequest`,
     sendUserAuthRequestCommand: `${base} --preflightOnly --checkClientDiagnostics --sendUserAuthRequest`,
     formalCommand: `${base} --promptPassword`,
@@ -533,6 +535,7 @@ function makeMacBoardSummary(report) {
       `Windows-side Mac host discovery: found ${report.macHosts.length} Mac host(s); best=${summarizeMacHost(report.bestMacHost)}.`,
       `Build diff: ${formatMacBuildDiff(report.bestMacHost.buildDiff)}.`,
       `Next preflight: ${report.macFormalE2e.preflightCommand}.`,
+      `FormalChecklist=${report.macFormalE2e.formalChecklistCommand}; ManualChecklist=${report.macFormalE2e.manualChecklistSummary}.`,
       `User auth request when ready: ${report.macFormalE2e.userAuthRequestCommand}.`,
       `Send auth request when ready: ${report.macFormalE2e.sendUserAuthRequestCommand}.`,
       `Formal command: ${report.macFormalE2e.formalCommand}.`,
@@ -626,6 +629,8 @@ async function main() {
     if (macDiscovery.bestMacHost) {
       print("INFO", `Mac host build diff: ${macDiscovery.bestMacHost.buildDiff.message}`, args);
       print("INFO", `Mac formal preflight command: ${macDiscovery.macFormalE2e.preflightCommand}`, args);
+      print("INFO", `Mac formal checklist command: ${macDiscovery.macFormalE2e.formalChecklistCommand}`, args);
+      print("INFO", `Mac manual checklist: ${macDiscovery.macFormalE2e.manualChecklistSummary}`, args);
       print("INFO", `Mac user auth request command: ${macDiscovery.macFormalE2e.userAuthRequestCommand}`, args);
       print("INFO", `Mac send user auth request command: ${macDiscovery.macFormalE2e.sendUserAuthRequestCommand}`, args);
       print("INFO", `Mac formal E2E command: ${macDiscovery.macFormalE2e.formalCommand}`, args);

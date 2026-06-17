@@ -211,9 +211,13 @@ async function checkFoundJson(macPort, windowsPort, args) {
   assert(payload.bestMacHost.buildDiff?.differs === true, "bestMacHost should include buildDiff for stale/non-comparable runtime builds");
   assert(payload.bestMacHost.buildDiff?.severity === "warning", "fake mac-build should be non-comparable and warn");
   assertIncludes(payload.macFormalE2e.preflightCommand, "--preflightOnly --checkClientDiagnostics --boardSummary", "preflight command");
+  assertIncludes(payload.macFormalE2e.formalChecklistCommand, "--preflightOnly --checkClientDiagnostics --boardSummary", "formal checklist command");
+  assert(payload.macFormalE2e.manualChecklistSummary === "connection/video/audio/clipboard/input_ack/diagnostics", "manual checklist summary mismatch");
   assertIncludes(payload.macFormalE2e.userAuthRequestCommand, "--userAuthRequest", "user auth command");
   assertIncludes(payload.macFormalE2e.sendUserAuthRequestCommand, "--sendUserAuthRequest", "send user auth command");
   assertIncludes(payload.macFormalE2e.formalCommand, "--promptPassword", "formal command");
+  assertIncludes(payload.boardSummary, "FormalChecklist=", "board summary");
+  assertIncludes(payload.boardSummary, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "board summary");
   assertIncludes(payload.boardSummary, "No password was requested or sent", "board summary");
   assertIncludes(payload.boardSummary, "no WebSocket/input/inject", "board summary");
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, "test-password", "found output");
@@ -228,6 +232,8 @@ async function checkBoardSummary(macPort, windowsPort, args) {
   assertIncludes(result.stdout, "Build diff:", "board summary");
   assertIncludes(result.stdout, "differs from repo", "board summary");
   assertIncludes(result.stdout, "check-mac-formal-e2e.mjs --host 127.0.0.1", "board summary");
+  assertIncludes(result.stdout, "FormalChecklist=", "board summary");
+  assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "board summary");
   assertIncludes(result.stdout, "--userAuthRequest", "board summary");
   assertIncludes(result.stdout, "--sendUserAuthRequest", "board summary");
   assertIncludes(result.stdout, "--promptPassword", "board summary");
