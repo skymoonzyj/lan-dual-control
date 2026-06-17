@@ -526,6 +526,18 @@ async function getJson(url) {
   return response.json();
 }
 
+async function postJson(url, body = {}) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`${url} -> ${response.status}`);
+  }
+  return response.json();
+}
+
 async function waitForHttpOk(url, timeoutMs, label) {
   return waitFor(async () => {
     const response = await fetch(url, { cache: "no-store" });
@@ -1156,6 +1168,41 @@ function buildSnapshotExpression() {
       reconnectMetric: text("#reconnectMetric"),
       remoteRuntime: text("#remoteRuntimeMetric"),
       reversePolicy: text("#reversePolicyMetric"),
+      reverseControlStatus: text("#reverseControlStatus"),
+      reverseControlButtonText: text("#reverseControlButton"),
+      reverseControlButtonDisabled: document.querySelector("#reverseControlButton")?.disabled || false,
+      reverseControlRequests: (window.__lanDualSentMessages || [])
+        .filter((message) => message.type === "reverse_control_request").length,
+      inputEvents: (window.__lanDualSentMessages || [])
+        .filter((message) => message.type === "input_event").length,
+      latestReverseControlRequest: (() => {
+        const request = [...(window.__lanDualSentMessages || [])]
+          .reverse()
+          .find((message) => message.type === "reverse_control_request");
+        if (!request) return null;
+        return {
+          requestId: request.requestId || "",
+          from: request.from || "",
+          clientPlatform: request.clientPlatform || "",
+          hasPassword: Object.prototype.hasOwnProperty.call(request, "password"),
+          keys: Object.keys(request).sort(),
+        };
+      })(),
+      latestReverseControlResponse: (() => {
+        const response = [...(window.__lanDualReceivedMessages || [])]
+          .reverse()
+          .find((message) => message.type === "reverse_control_response");
+        if (!response) return null;
+        return {
+          requestId: response.requestId || "",
+          accepted: response.accepted === true,
+          code: response.code || "",
+          reason: response.reason || "",
+          reverseControlMode: response.reverseControlMode || "",
+          reverseControlState: response.reverseControlState || "",
+          reverseControlGrant: response.reverseControlGrant || "",
+        };
+      })(),
       lastVideoFrame: (() => {
         const frame = [...(window.__lanDualReceivedMessages || [])].reverse().find((message) => message.type === "video_frame");
         if (!frame) return null;
@@ -1366,6 +1413,89 @@ async function assertReversePolicyFormatterVariants(session) {
     throw new Error(`Mac client reverse policy formatter variants mismatch: ${JSON.stringify(mismatches)}`);
   }
   print("OK", `Reverse policy formatter variants: ${result.flatDeny} / ${result.objectAccept} / ${result.disabled} / ${result.temporaryGrant} / ${result.pendingRequest}`);
+}
+
+async function verifyMacClientReverseControlRequest({ args, session }) {
+  if (args.useExistingHost) {
+    print("INFO", "Reverse control request click test skipped for existing host.");
+    return;
+  }
+
+  const beforeSnapshot = await evaluate(session, buildSnapshotExpression());
+  if (beforeSnapshot.reverseControlButtonDisabled || !beforeSnapshot.reverseControlStatus.includes("默认安全拒绝")) {
+    throw new Error(`Mac client reverse request button is not ready: ${JSON.stringify({
+      status: beforeSnapshot.reverseControlStatus,
+      button: beforeSnapshot.reverseControlButtonText,
+      disabled: beforeSnapshot.reverseControlButtonDisabled,
+      reversePolicy: beforeSnapshot.reversePolicy,
+    })}`);
+  }
+
+  const initialInputEvents = Number(beforeSnapshot.inputEvents) || 0;
+  await clickElement(session, "#reverseControlButton");
+  const rejectedSnapshot = await waitForPageSnapshot({
+    args,
+    session,
+    label: "Mac client reverse control denied response",
+    check: async (value) => {
+      const latestRequest = value.latestReverseControlRequest || {};
+      const latestResponse = value.latestReverseControlResponse || {};
+      const requestOk = value.reverseControlRequests === 1 &&
+        latestRequest.requestId &&
+        latestRequest.from === "Mac client" &&
+        latestRequest.clientPlatform === "macos" &&
+        latestRequest.hasPassword === false;
+      const responseOk = latestResponse.accepted === false &&
+        latestResponse.code === "LAN008" &&
+        value.reverseControlStatus.includes("Windows 已安全拒绝") &&
+        value.reverseControlStatus.includes("临时允许后重试") &&
+        value.reverseControlButtonText === "重试反控" &&
+        value.reverseControlButtonDisabled === false;
+      const noInputEvents = Number(value.inputEvents) === initialInputEvents;
+      return requestOk && responseOk && noInputEvents ? value : null;
+    },
+  });
+  print("OK", `Reverse request denied: ${rejectedSnapshot.reverseControlStatus}`);
+
+  await postJson(`http://${args.host}:${args.port}/reverse-control/grant`, { durationMs: 30000 });
+  await clickElement(session, "#discoverButton");
+  const grantSnapshot = await waitForPageSnapshot({
+    args,
+    session,
+    label: "Mac client reverse control temporary grant visible",
+    check: async (value) => (
+      value.reversePolicy.includes("Windows 已临时允许一次") &&
+      value.reverseControlStatus.includes("Windows 已临时允许一次") &&
+      value.reverseControlButtonText === "重试反控" &&
+      value.reverseControlButtonDisabled === false
+        ? value
+        : null
+    ),
+  });
+  print("OK", `Reverse temporary grant: ${grantSnapshot.reversePolicy}`);
+
+  await clickElement(session, "#reverseControlButton");
+  const acceptedSnapshot = await waitForPageSnapshot({
+    args,
+    session,
+    label: "Mac client reverse control accepted response",
+    check: async (value) => {
+      const latestRequest = value.latestReverseControlRequest || {};
+      const latestResponse = value.latestReverseControlResponse || {};
+      const requestOk = value.reverseControlRequests === 2 &&
+        latestRequest.requestId &&
+        latestRequest.from === "Mac client" &&
+        latestRequest.hasPassword === false;
+      const responseOk = latestResponse.accepted === true &&
+        latestResponse.reverseControlGrant === "consumed" &&
+        value.reverseControlStatus.includes("Windows 已同意") &&
+        value.reverseControlStatus.includes("临时授权已使用") &&
+        value.reverseControlButtonDisabled === false;
+      const noInputEvents = Number(value.inputEvents) === initialInputEvents;
+      return requestOk && responseOk && noInputEvents ? value : null;
+    },
+  });
+  print("OK", `Reverse request accepted: ${acceptedSnapshot.reverseControlStatus}`);
 }
 
 function installWebSocketSendRecorderExpression() {
@@ -2089,6 +2219,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     print("OK", `Remote runtime: ${videoSnapshot.remoteRuntime}`);
     print("OK", `Reverse policy: ${videoSnapshot.reversePolicy}`);
     print("OK", `Initial video ready: ${initialVideoMs}ms`);
+    await verifyMacClientReverseControlRequest({ args, session });
     if (!videoSnapshot.sendClipboardFilesButtonDisabled) {
       throw new Error("Mac client file send button should stay disabled until files are selected");
     }

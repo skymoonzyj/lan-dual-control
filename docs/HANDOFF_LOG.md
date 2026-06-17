@@ -17,6 +17,40 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Mac Codex
+
+日期：2026-06-17 09:05
+开发端：Mac Codex
+本轮目标：补齐 Mac client 的受保护“请求反控/重试反控”入口，让 Windows 默认拒绝、临时允许、重试成功形成页面闭环。
+完成内容：
+- Mac client 会话诊断下方新增“一键反控”操作区和状态行，按钮只在已连接、已认证且 Windows host 声明支持反控接收时启用。
+- 点击按钮只通过当前 WebSocket 发送 `reverse_control_request`，携带 `requestId`、来源和平台信息，不发送密码、不发送输入事件、不执行 inject。
+- 页面新增 `reverse_control_response` 处理：默认 `LAN008` 会提示“Windows 已安全拒绝，请在 Windows 端临时允许后重试”；发现临时授权后按钮显示“重试反控”；accepted 且授权被消耗时显示“Windows 已同意 / 临时授权已使用”。
+- 日志导出新增“反控请求”状态，断线、认证失败、目标变更和手动断开会清理旧反控请求状态。
+- 页面自测新增反控请求闭环：默认拒绝、回环临时授权、重试成功、不泄露密码和不发送额外 input_event。
+修改文件：
+- `apps/mac-client/index.html`
+- `apps/mac-client/styles.css`
+- `apps/mac-client/app.js`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check apps/mac-client/server.mjs`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --clientPort 5198 --debugPort 9342 --mockVideo --allowClipboardFallback --skipFileClipboard --progressIntervalMs 0 --timeoutMs 45000`
+遗留问题：
+- 这轮只完成页面请求和回执产品闭环；真实 Mac 控制 Windows 的完整方向切换/接管体验仍需双方在现场用 Agent Link Board call 协调后联调，不能自动执行 inject。
+下一步建议：
+- 真实 Windows host 在线时，让 Mac client 先点“请求反控”触发 `LAN008`，Windows 本机点“临时允许反控”，Mac 再点“重试反控”；确认 accepted 后再讨论真实切换控制方向的后续实现。
+是否改了协议：否。使用 Windows host 已存在的 `reverse_control_request` / `reverse_control_response` 消息和 `reverseControlGrant` 能力字段。
+是否需要另一端配合：真实联调需要 Windows 端打开一次性临时授权并观察 Windows host/桌面面板状态；本轮本机临时 host 自测不需要真实 Windows 配合。
+
 ## 2026-06-17 Windows Codex
 
 日期：2026-06-17 08:58

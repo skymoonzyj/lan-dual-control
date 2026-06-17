@@ -29,6 +29,8 @@ const elements = {
   reconnectMetric: document.querySelector("#reconnectMetric"),
   remoteRuntimeMetric: document.querySelector("#remoteRuntimeMetric"),
   reversePolicyMetric: document.querySelector("#reversePolicyMetric"),
+  reverseControlStatus: document.querySelector("#reverseControlStatus"),
+  reverseControlButton: document.querySelector("#reverseControlButton"),
   inputStatus: document.querySelector("#inputStatus"),
   remoteViewport: document.querySelector("#remoteViewport"),
   remoteImage: document.querySelector("#remoteImage"),
@@ -111,6 +113,17 @@ const state = {
   reconnectStableTimer: null,
   remoteRuntime: null,
   remoteCapabilities: null,
+  reverseControlRequest: {
+    requestId: "",
+    status: "idle",
+    sentAt: 0,
+    responseAt: 0,
+    accepted: false,
+    code: "",
+    reason: "",
+    mode: "",
+    grant: "",
+  },
   clipboardWatchTimer: null,
   clipboardReadInFlight: false,
   lastLocalClipboardText: "",
@@ -442,6 +455,182 @@ function formatReversePolicyDiagnostics(capabilities) {
   return [modeText, detail, grantText].filter(Boolean).join(" · ");
 }
 
+function reverseControlSupported() {
+  const capabilities = state.remoteCapabilities;
+  if (!capabilities) return false;
+  return capabilities.reverseControl !== false &&
+    capabilities.reverseControlMode !== "disabled" &&
+    capabilities.reverseControlPolicy?.supported !== false;
+}
+
+function resetReverseControlRequest(status = "idle") {
+  state.reverseControlRequest = {
+    requestId: "",
+    status,
+    sentAt: 0,
+    responseAt: 0,
+    accepted: false,
+    code: "",
+    reason: "",
+    mode: "",
+    grant: "",
+  };
+  renderReverseControlRequest();
+}
+
+function makeReverseControlRequestId() {
+  const suffix = Math.random().toString(16).slice(2, 8);
+  return `mac-reverse-${Date.now().toString(36)}-${suffix}`;
+}
+
+function formatReverseControlResponseText(message = {}) {
+  const accepted = message.accepted === true;
+  const reason = compactDiagnosticsText(message.reason || message.message || message.code || "", 100);
+  const code = compactDiagnosticsText(message.code || "", 40);
+  const grant = compactDiagnosticsText(message.reverseControlGrant || message.grant || "", 40);
+  if (accepted) {
+    return grant === "consumed"
+      ? "Windows 已同意 · 临时授权已使用"
+      : "Windows 已同意 · 可以切换反控流程";
+  }
+  if (code === "LAN008") {
+    return "Windows 已安全拒绝 · 请在 Windows 端临时允许后重试";
+  }
+  return reason ? `Windows 已拒绝 · ${reason}` : "Windows 已拒绝";
+}
+
+function currentReverseControlButtonText() {
+  const request = state.reverseControlRequest;
+  if (request.status === "pending") return "等待回执";
+  if (request.status === "rejected") return "重试反控";
+  const grant = state.remoteCapabilities?.reverseControlGrant;
+  if (grant?.active) return "重试反控";
+  if (grant?.lastRequest?.active) return "重试反控";
+  return "请求反控";
+}
+
+function currentReverseControlStatusText() {
+  const request = state.reverseControlRequest;
+  if (!state.connected) return "未连接 Windows host";
+  if (!state.authenticated) return "连接后等待认证";
+  if (!state.remoteCapabilities) return "等待 Windows host 声明反控策略";
+  if (!reverseControlSupported()) return "Windows host 未启用反控接收";
+  if (request.status === "pending") return "请求已发送，等待 Windows 回执";
+  if (request.status === "accepted") return formatReverseControlResponseText(request);
+  const grant = state.remoteCapabilities.reverseControlGrant;
+  if (grant?.active) return "Windows 已临时允许一次，请立即重试";
+  if (request.status === "rejected") return formatReverseControlResponseText(request);
+  if (request.status === "failed") return request.reason || "请求未发送";
+  if (grant?.lastRequest?.active) return "Windows 已收到请求，临时允许后可重试";
+  if (state.remoteCapabilities.reverseControlPolicy?.requiresConfirmation) {
+    return "默认安全拒绝，首次请求会提醒 Windows 用户";
+  }
+  if (state.remoteCapabilities.reverseControlPolicy?.autoAccept) {
+    return "实验自动同意，仅可信局域网使用";
+  }
+  return "可请求 Windows 切换为被控端";
+}
+
+function renderReverseControlRequest() {
+  const canRequest = state.connected &&
+    state.authenticated &&
+    reverseControlSupported() &&
+    state.reverseControlRequest.status !== "pending";
+  elements.reverseControlButton.disabled = !canRequest;
+  elements.reverseControlButton.textContent = currentReverseControlButtonText();
+  elements.reverseControlStatus.textContent = currentReverseControlStatusText();
+}
+
+function sendReverseControlRequest() {
+  if (!state.connected || !state.authenticated) {
+    state.reverseControlRequest = {
+      ...state.reverseControlRequest,
+      status: "failed",
+      reason: "请先连接并认证 Windows host",
+    };
+    renderReverseControlRequest();
+    logEvent("反控请求未发送", state.reverseControlRequest.reason);
+    return;
+  }
+  if (!reverseControlSupported()) {
+    state.reverseControlRequest = {
+      ...state.reverseControlRequest,
+      status: "failed",
+      reason: "Windows host 未启用反控接收",
+    };
+    renderReverseControlRequest();
+    logEvent("反控请求未发送", state.reverseControlRequest.reason);
+    return;
+  }
+  const requestId = makeReverseControlRequestId();
+  const sentAt = Date.now();
+  const envelope = send({
+    type: "reverse_control_request",
+    requestId,
+    from: "Mac client",
+    clientName: "Mac 控制端 Web 原型",
+    clientPlatform: "macos",
+    requestedAt: new Date(sentAt).toISOString(),
+  });
+  if (!envelope) {
+    state.reverseControlRequest = {
+      ...state.reverseControlRequest,
+      status: "failed",
+      reason: "WebSocket 未连接，请重新连接后再试",
+    };
+    renderReverseControlRequest();
+    logEvent("反控请求未发送", state.reverseControlRequest.reason);
+    return;
+  }
+  state.reverseControlRequest = {
+    requestId,
+    status: "pending",
+    sentAt,
+    responseAt: 0,
+    accepted: false,
+    code: "",
+    reason: "",
+    mode: state.remoteCapabilities?.reverseControlMode || "",
+    grant: "",
+  };
+  renderReverseControlRequest();
+  logEvent("反控请求已发送", `${requestId} · 等待 Windows 回执`);
+}
+
+function handleReverseControlResponse(message) {
+  const requestId = String(message.requestId ?? "").trim();
+  if (state.reverseControlRequest.requestId && requestId && requestId !== state.reverseControlRequest.requestId) {
+    logEvent("忽略过期反控回执", requestId);
+    return;
+  }
+  if (message.accepted === true && message.reverseControlGrant === "consumed" && state.remoteCapabilities?.reverseControlGrant) {
+    state.remoteCapabilities = {
+      ...state.remoteCapabilities,
+      reverseControlGrant: {
+        ...state.remoteCapabilities.reverseControlGrant,
+        active: false,
+        remainingMs: 0,
+      },
+    };
+  }
+  state.reverseControlRequest = {
+    requestId: requestId || state.reverseControlRequest.requestId,
+    status: message.accepted ? "accepted" : "rejected",
+    sentAt: state.reverseControlRequest.sentAt || 0,
+    responseAt: Date.now(),
+    accepted: message.accepted === true,
+    code: compactDiagnosticsText(message.code, 40),
+    reason: compactDiagnosticsText(message.reason || message.message || message.code || "", 120),
+    mode: compactDiagnosticsText(message.reverseControlMode || state.remoteCapabilities?.reverseControlMode || "", 40),
+    grant: compactDiagnosticsText(message.reverseControlGrant, 40),
+  };
+  renderReverseControlRequest();
+  logEvent(
+    message.accepted ? "反控请求已同意" : "反控请求被拒绝",
+    formatReverseControlResponseText(message),
+  );
+}
+
 function updateRemoteCapabilities(capabilities) {
   state.remoteCapabilities = normalizeRemoteCapabilities(capabilities);
   renderSessionDiagnostics();
@@ -450,6 +639,7 @@ function updateRemoteCapabilities(capabilities) {
 function clearRemoteEndpointDetails() {
   updateRemoteRuntime(null);
   updateRemoteCapabilities(null);
+  resetReverseControlRequest();
 }
 
 function resetSessionDiagnostics({ resetReconnects = false } = {}) {
@@ -503,6 +693,7 @@ function renderSessionDiagnostics() {
     : "0 次";
   elements.remoteRuntimeMetric.textContent = formatRemoteRuntimeDiagnostics(state.remoteRuntime);
   elements.reversePolicyMetric.textContent = formatReversePolicyDiagnostics(state.remoteCapabilities);
+  renderReverseControlRequest();
 }
 
 function reconnectDelayForAttempt(attempt) {
@@ -1136,6 +1327,7 @@ function buildLogExportText() {
     `- 目标地址：${currentEndpoint().host}:${currentEndpoint().port}`,
     `- 远端运行：${elements.remoteRuntimeMetric.textContent || "-"}`,
     `- 反控策略：${elements.reversePolicyMetric.textContent || "-"}`,
+    `- 反控请求：${elements.reverseControlStatus.textContent || "-"}`,
     `- 重连状态：${reconnectExport.status}`,
     `- 重连原因：${reconnectExport.reason}`,
     `- 下次重连：${reconnectExport.next}`,
@@ -1336,6 +1528,9 @@ async function handleMessage(rawData) {
       break;
     case "clipboard_file_result":
       handleClipboardFileResult(message);
+      break;
+    case "reverse_control_response":
+      handleReverseControlResponse(message);
       break;
     case "error":
       logEvent("远端错误", message.message || message.reason || message.code || "unknown");
@@ -2591,6 +2786,7 @@ elements.qualityPresetSelect.addEventListener("change", applyQualityPreset);
 elements.resolutionSelect.addEventListener("change", markCustomVideoSettings);
 elements.fpsSelect.addEventListener("change", markCustomVideoSettings);
 elements.bandwidthSelect.addEventListener("change", markCustomVideoSettings);
+elements.reverseControlButton.addEventListener("click", sendReverseControlRequest);
 elements.focusButton.addEventListener("click", () => elements.remoteViewport.focus());
 elements.exportLogButton.addEventListener("click", exportLogs);
 elements.clearLogButton.addEventListener("click", () => {
@@ -2679,5 +2875,6 @@ updateDisplaySettingsStatus();
 initializeRecentConnections();
 updateTextClipboardButton();
 updateFileClipboardButton();
+renderReverseControlRequest();
 renderSessionDiagnostics();
 logEvent("Mac 控制端已就绪", "默认连接 127.0.0.1:43772，可改为 Windows 局域网 IP:43770");
