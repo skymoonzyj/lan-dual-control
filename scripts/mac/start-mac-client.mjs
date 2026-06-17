@@ -19,6 +19,8 @@ const defaults = {
 };
 
 const copyDiagnosticsAction = "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码";
+const discoverWindowsCommand = "node scripts/mac/discover-windows-hosts.mjs --boardSummary";
+const reverseRehearsalAction = "Run MacClientDiscoverWindows first, then use its ReverseRehearsal= line: Mac requests reverse control and expects LAN008, Windows runs the local loopback one-time grant, Mac retries and expects accepted/临时授权已使用";
 const formalSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
 const browserSelfTestCommand = "node scripts/mac/test-mac-client-browser-self-test.mjs --boardSummary";
 
@@ -49,6 +51,13 @@ Machine-readable JSON fields:
                          Secret-free command to start or reuse this local page.
   commands.macClientFormalStatusCommand
                          Secret-free checklist command before true Windows control.
+  commands.macClientDiscoverWindowsCommand
+                         Secret-free Windows host discovery command from the
+                         Mac side. Its board summary includes FormalChecklist=
+                         and ReverseRehearsal= when a Windows host is found.
+  commands.macClientReverseRehearsalAction
+                         Human action for the guarded reverse-control request
+                         rehearsal after Windows discovery.
   commands.macClientFormalSmokeCommand
                          Secret-free preflight command. It does not authenticate,
                          prompt for a password, send a call, or send input.
@@ -215,6 +224,8 @@ function makeBoardSummary(report) {
       `Mac client page online at ${report.url}; pid=${report.processId || "existing"}; title=${report.titleFound ? "ok" : "unexpected"}.`,
       "Next: run check-mac-client-formal-status --host <Windows IP> --port 43770 --boardSummary before true Windows control.",
       `MacClientFormalSmoke=${formalSmokeCommand}.`,
+      `MacClientDiscoverWindows=${discoverWindowsCommand}.`,
+      `MacClientReverseRehearsal=${reverseRehearsalAction}.`,
       `MacClientBrowserSelfTest=${browserSelfTestCommand}.`,
       `CopyDiagnostics=${copyDiagnosticsAction}.`,
       "No password was requested or sent; no Windows connection/input was attempted.",
@@ -224,6 +235,8 @@ function makeBoardSummary(report) {
     `Mac client page offline at ${report.url}: ${report.error?.message || "unknown"}.`,
     "Next: start with node scripts/mac/start-mac-client.mjs, then rerun formal checklist.",
     `MacClientFormalSmoke=${formalSmokeCommand}.`,
+    `MacClientDiscoverWindows=${discoverWindowsCommand}.`,
+    `MacClientReverseRehearsal=${reverseRehearsalAction}.`,
     `MacClientBrowserSelfTest=${browserSelfTestCommand}.`,
     `CopyDiagnostics=页面在线后在 ${copyDiagnosticsAction}.`,
     "No password was requested or sent; no Windows connection/input was attempted.",
@@ -235,6 +248,8 @@ function makeCommands(args) {
     macClientStartOrReuseCommand: `node scripts/mac/start-mac-client.mjs --host ${args.host} --port ${args.port} --allowExisting`,
     macClientFormalStatusCommand:
       "node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary",
+    macClientDiscoverWindowsCommand: discoverWindowsCommand,
+    macClientReverseRehearsalAction: reverseRehearsalAction,
     macClientFormalSmokeCommand: formalSmokeCommand,
     macClientBrowserSelfTestCommand: browserSelfTestCommand,
     macClientCopyDiagnosticsAction: copyDiagnosticsAction,
