@@ -56,6 +56,39 @@
 
 日期：2026-06-17 续跑
 开发端：Windows Codex
+本轮目标：给 Windows 控制端页面自检新增一行上板摘要，方便真机现场快速回报 UI 诊断结果。
+完成内容：
+- `scripts/windows/test-windows-client-browser.mjs` 新增 `--boardSummary` 参数。
+- 显式启用时，详细 `[OK]` / 进度日志转到 stderr，stdout 只输出一行无密 `Windows client diagnostics: ...` 摘要。
+- 摘要包含模式、目标、发现结果、已通过检查项、远端/诊断/FPS/音频/画面摘要，并明确未把密码发到 Agent Link Board、未执行 input/inject。
+- README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `--boardSummary` 实测 stdout 1 行，stderr 14 行详细进度。
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-client-browser.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows apps/windows-client docs`
+遗留问题：
+- 本轮只验证 diagnostics-only 摘要；真实 Mac 认证连接摘要等下次现场有密码时再跑。
+下一步建议：
+- 恢复总览给出 `WinClientDiagnostics=` 后，现场可追加 `--boardSummary` 先发一行结果，再按需粘贴页面“复制诊断”的完整快速摘要。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
 本轮目标：让 Windows 恢复开工总览直接提示 Windows 控制端无密页面诊断和“复制诊断”入口。
 完成内容：
 - `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `windowsClientDiagnosticsCommand` / `WinClientDiagnostics=`，指向 `test-windows-client-browser --discover --diagnosticsOnly`。

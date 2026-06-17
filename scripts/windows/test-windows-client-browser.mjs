@@ -28,7 +28,12 @@ const defaults = {
   diagnosticsOnly: false,
   expectDiscoveryRuntimeBuildId: "",
   headless: true,
+  boardSummary: false,
 };
+
+let activeOutputArgs = null;
+let lastBoardSummary = "";
+let activeSummary = null;
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -57,6 +62,7 @@ Options:
   --progressIntervalMs <ms>             Print connection/video/audio wait progress every N ms; 0 disables. Default: ${defaults.progressIntervalMs}
   --headed                              Run browser headed instead of headless.
   --diagnosticsOnly                     Only run local UI diagnostics; do not connect to a Mac host.
+  --boardSummary                        Print one secret-free Agent Link Board summary line on stdout; progress goes to stderr.
   --noRequireVideoSurface               Do not require a visible decoded video surface.
   --requireH264                         Require H.264/WebCodecs decoded video.
   --injectPcmAudio                      Inject a synthetic PCM frame into the page and require playback state.
@@ -107,6 +113,10 @@ function parseArgs(argv) {
     if (key === "diagnosticsOnly") {
       args.diagnosticsOnly = true;
       args.requireVideoSurface = false;
+      continue;
+    }
+    if (key === "boardSummary") {
+      args.boardSummary = true;
       continue;
     }
     if (key === "promptPassword") {
@@ -226,7 +236,12 @@ function promptHidden(label) {
 }
 
 function print(kind, text) {
-  console.log(`[${kind}] ${text}`);
+  const line = `[${kind}] ${text}`;
+  if (activeOutputArgs?.boardSummary) {
+    console.error(line);
+  } else {
+    console.log(line);
+  }
 }
 
 function delay(ms) {
@@ -245,6 +260,42 @@ function compactProgressText(value, maxLength = 100) {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   if (!text) return "";
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
+}
+
+function compactBoardSummaryText(value, maxLength = 180) {
+  return compactProgressText(value, maxLength)
+    .replace(/[;|]/g, ",")
+    .replace(/\b(LAN_DUAL_PASSWORD|password|passwd|pwd|token|secret)\s*[:=]\s*\S+/gi, "$1=<hidden>")
+    .replace(/(--(?:password|token|secret))\s+\S+/gi, "$1 <hidden>");
+}
+
+function makeBoardSummary(summary) {
+  const checks = Array.from(summary.checks || []);
+  const checkText = checks.length ? checks.join(",") : "none";
+  const discovery = summary.discoveryTarget
+    ? `${summary.discoveryTarget}${summary.discoveryRuntimeBuild ? `/build=${summary.discoveryRuntimeBuild}` : ""}`
+    : "skipped";
+  const details = [];
+  if (summary.remote) details.push(`remote=${compactBoardSummaryText(summary.remote, 120)}`);
+  if (summary.diagnostics) details.push(`diag=${compactBoardSummaryText(summary.diagnostics, 140)}`);
+  if (summary.fps) details.push(`fps=${compactBoardSummaryText(summary.fps, 80)}`);
+  if (summary.audio) details.push(`audio=${compactBoardSummaryText(summary.audio, 80)}`);
+  if (summary.surface) details.push(`surface=${summary.surface}`);
+  if (summary.h264Errors !== "") details.push(`h264Errors=${summary.h264Errors}`);
+  if (summary.error) details.push(`error=${compactBoardSummaryText(summary.error, 140)}`);
+  const detailText = details.length ? ` ${details.join("; ")}.` : "";
+  return [
+    `Windows client diagnostics: ${summary.status}; mode=${summary.mode}; target=${summary.target}; discovery=${discovery}; checks=${checkText}.`,
+    detailText.trim(),
+    "No password was printed or sent to Agent Link Board; no input/inject was performed.",
+  ].filter(Boolean).join(" ");
+}
+
+function emitBoardSummary(summary) {
+  lastBoardSummary = makeBoardSummary(summary);
+  if (activeOutputArgs?.boardSummary) {
+    console.log(lastBoardSummary);
+  }
 }
 
 function printTimedProgress(label, startedAt, deadline, details = "") {
@@ -2391,9 +2442,30 @@ async function run() {
   }
 
   const args = parseArgs(process.argv);
+  activeOutputArgs = args;
+  const summary = {
+    status: "running",
+    mode: args.diagnosticsOnly ? "diagnostics" : "connect",
+    target: `${args.host}:${args.port}`,
+    discoveryTarget: "",
+    discoveryRuntimeBuild: "",
+    checks: [],
+    remote: "",
+    diagnostics: "",
+    fps: "",
+    audio: "",
+    surface: "",
+    h264Errors: "",
+    error: "",
+  };
+  activeSummary = summary;
   const discoverySelection = await resolveDiscoveryTarget(args);
   if (discoverySelection) {
     const runtimeText = discoverySelection.runtimeBuild ? ` runtimeBuild=${discoverySelection.runtimeBuild}` : "";
+    summary.discoveryTarget = discoverySelection.target;
+    summary.discoveryRuntimeBuild = discoverySelection.runtimeBuild || "";
+    summary.target = discoverySelection.target;
+    summary.checks.push("discovery");
     print(
       "OK",
       `Discovery target: ${discoverySelection.target}; macHosts=${discoverySelection.foundMacHosts}${runtimeText}`,
@@ -2446,42 +2518,53 @@ async function run() {
     );
 
     const controlCenterCheck = await verifyFloatingControlCenter(session);
+    summary.checks.push("control-center");
     print(
       "OK",
       `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, fullscreen=${controlCenterCheck.fullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
     );
     const desktopOnlyPanelCheck = await verifyDesktopOnlyHostPanel(session);
+    summary.checks.push("desktop-panel");
     print(
       "OK",
       `Desktop-only host panel: badge=${desktopOnlyPanelCheck.badge}, nativeLimit=${desktopOnlyPanelCheck.maxNativeClipboardFileBytes}, chunk=${desktopOnlyPanelCheck.nativeClipboardChunkSizeBytes}`,
     );
     const fileClipboardRecoveryCheck = await verifyFileClipboardRecoveryText(session);
+    summary.checks.push("file-clipboard-recovery");
     print("OK", `File clipboard recovery: ${fileClipboardRecoveryCheck.recovery}`);
     const blackBarCheck = await verifyBlackBarInputGuard(session);
+    summary.checks.push("blackbar");
     print(
       "OK",
       `Black bar guard: move=${blackBarCheck.moveIgnored}, down=${blackBarCheck.blackBarDownIgnored}, release=${blackBarCheck.releaseSentAtLastPoint}, wheel=${blackBarCheck.blackBarWheelIgnored}`,
     );
     const streamFallbackCheck = await verifyStreamFallbackDiagnostics(session);
+    summary.checks.push("fallback-diagnostics");
+    summary.diagnostics = streamFallbackCheck.fallbackText;
     print("OK", `Stream fallback diagnostics: ${streamFallbackCheck.fallbackText}`);
     const frameAgeCheck = await verifyVideoFrameAgeDiagnostics(session);
+    summary.checks.push("frame-age");
     print("OK", `Video frame age diagnostics: ${frameAgeCheck.latency} / ${frameAgeCheck.skewLatency}`);
     const keyFrameCheck = await verifyH264KeyFrameDetection(session);
+    summary.checks.push("h264-keyframe");
     print(
       "OK",
       `H.264 key frame detection: annexbKey=${keyFrameCheck.annexbKey}, annexbDelta=${keyFrameCheck.annexbDelta}, avcKey=${keyFrameCheck.avcKey}`,
     );
     const inputStatusCheck = await verifyInputModeStatusText(session);
+    summary.checks.push("input-status");
     print(
       "OK",
       `Input status text: ${inputStatusCheck.logMode} / ${inputStatusCheck.injected} / ${inputStatusCheck.rejected}`,
     );
     const keyboardMappingCheck = await verifyWindowsToMacKeyboardMapping(session);
+    summary.checks.push("keyboard-mapping");
     print(
       "OK",
       `Keyboard mapping: Ctrl+C -> ${keyboardMappingCheck.copy.modifiers.join("+")} / ${keyboardMappingCheck.copy.shortcutAction}; custom=${keyboardMappingCheck.custom.modifiers.join("+")}`,
     );
     const reconnectControlsCheck = await verifyReconnectControls(session);
+    summary.checks.push("reconnect");
     print(
       "OK",
       `Reconnect controls: scheduled=${reconnectControlsCheck.scheduled}, immediate=${reconnectControlsCheck.immediate}`,
@@ -2497,9 +2580,13 @@ async function run() {
         "OK",
         `Discovery runtime: ${discoveryRuntimeCheck.detail} / ${discoveryRuntimeCheck.diagnostics}`,
       );
+      summary.checks.push("discovery-runtime");
+      summary.diagnostics = discoveryRuntimeCheck.diagnostics;
     }
     if (args.diagnosticsOnly) {
       print("OK", "Diagnostics-only browser checks passed");
+      summary.status = "passed";
+      emitBoardSummary(summary);
       return;
     }
 
@@ -2575,6 +2662,13 @@ async function run() {
     });
 
     print("OK", `Status: ${snapshot.status}`);
+    summary.status = "passed";
+    summary.remote = snapshot.remote;
+    summary.diagnostics = snapshot.diagnostics;
+    summary.fps = snapshot.metricFps;
+    summary.surface = `canvas=${snapshot.canvasVisible ? `${snapshot.canvasWidth}x${snapshot.canvasHeight}` : "off"},image=${snapshot.imageVisible ? "on" : "off"}`;
+    summary.h264Errors = String(snapshot.h264DecoderErrors ?? "");
+    summary.checks.push("connection");
     print("OK", `Remote: ${snapshot.remote}`);
     print("OK", `Diagnostics: ${snapshot.diagnostics}`);
     print("OK", `FPS: ${snapshot.metricFps}`);
@@ -2628,8 +2722,11 @@ async function run() {
         label: "Windows client PCM audio playback",
         check: async (value) => value.audio.includes("播放") ? value : null,
       });
+      summary.audio = audioSnapshot.audio;
+      summary.checks.push("audio");
       print("OK", `Audio: ${audioSnapshot.audio}`);
     }
+    emitBoardSummary(summary);
   } finally {
     await closeBrowserBestEffort(session);
     try {
@@ -2647,6 +2744,17 @@ async function run() {
 }
 
 run().catch((error) => {
+  if (activeOutputArgs?.boardSummary && !lastBoardSummary) {
+    const summary = activeSummary || {
+      status: "failed",
+      mode: "unknown",
+      target: `${defaults.host}:${defaults.port}`,
+      checks: [],
+    };
+    summary.status = "failed";
+    summary.error = error?.message || "unknown error";
+    emitBoardSummary(summary);
+  }
   console.error(`[FAIL] ${error.message}`);
   process.exitCode = 1;
 });
