@@ -196,6 +196,8 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "--checkBoard", `help ${flag}`);
     assertIncludes(result.stdout, "Windows host media-baseline", `help ${flag}`);
     assertIncludes(result.stdout, "one-time reverse-control grant", `help ${flag}`);
+    assertIncludes(result.stdout, "Windows video encoder/WGC/WebCodecs support", `help ${flag}`);
+    assertIncludes(result.stdout, "check-windows-video-encoder-support.mjs --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "local alert-watcher start/status commands", `help ${flag}`);
     assertIncludes(result.stdout, "checks", `help ${flag}`);
     assertIncludes(result.stdout, "alert-watcher status read-only", `help ${flag}`);
@@ -233,6 +235,8 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsHostMediaReadinessBoardSummary || "").includes("check-windows-host-readiness.mjs"), "mock JSON should include Windows host media readiness command");
     assert(String(payload.commands?.windowsHostMediaReadinessBoardSummary || "").includes("--probeMedia"), "mock JSON media readiness command should enable --probeMedia");
     assert(String(payload.commands?.windowsHostMediaReadinessBoardSummary || "").includes("--boardSummary"), "mock JSON media readiness command should be board-safe");
+    assert(String(payload.commands?.windowsVideoEncoderSupportBoardSummary || "").includes("check-windows-video-encoder-support.mjs"), "mock JSON should include Windows video encoder support command");
+    assert(String(payload.commands?.windowsVideoEncoderSupportBoardSummary || "").includes("--boardSummary"), "mock JSON video encoder command should be board-safe");
     assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("allow-windows-reverse-control.mjs"), "mock JSON should include Windows reverse grant command");
     assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("--host 127.0.0.1"), "mock JSON reverse grant command should be local-only");
     assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("--port 43770"), "mock JSON reverse grant command should target the default Windows host port");
@@ -290,6 +294,8 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "CopyDiagnostics=Windows 控制端事件面板点击", "board summary");
     assertIncludes(result.stdout, "快速摘要", "board summary");
     assertIncludes(result.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "board summary");
+    assertIncludes(result.stdout, "WindowsVideoSupport=", "board summary");
+    assertIncludes(result.stdout, "check-windows-video-encoder-support.mjs --boardSummary", "board summary");
     assertIncludes(result.stdout, "ReverseGrant=", "board summary");
     assertIncludes(result.stdout, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary", "board summary");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "board summary");

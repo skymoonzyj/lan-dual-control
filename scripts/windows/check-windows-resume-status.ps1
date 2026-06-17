@@ -53,6 +53,8 @@ It also includes a Windows local one-time reverse-control grant command:
 node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary
 It also includes a one-line no-password Windows client diagnostics command:
 node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
+It also includes a read-only Windows video encoder/WGC/WebCodecs support command:
+node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
 Use that first for Agent Link Board, then use the page Event Log "复制诊断"
 action when the full "快速摘要" report is needed.
 JSON and human output also include Windows local Mac alert watcher commands:

@@ -43,9 +43,9 @@ JSON, human output, and board summaries include a Windows host media-baseline
 command for checking local controlled-side video/audio before Mac reverse
 control, plus a local one-time reverse-control grant command for retrying a
 Mac reverse-control request without switching Windows host to accept-lab mode.
-They also include a no-password Windows client diagnostics command and a
-reminder to copy the in-page diagnostics report first when UI symptoms need to
-be shared.
+They also include a no-password Windows client diagnostics command, a read-only
+Windows video encoder/WGC/WebCodecs support command, and a reminder to copy the
+in-page diagnostics report first when UI symptoms need to be shared.
 JSON and human output also include local alert-watcher start/status commands
 so Windows can surface Mac-side auth, permission, blocked, and reverse-grant
 requests while a remote-control window is minimized. The report also checks
@@ -82,6 +82,7 @@ Examples:
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
   node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
   node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
+  node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
   node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server ${defaults.server}
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server ${defaults.server} -Status
@@ -556,6 +557,10 @@ function makeCommands(args, preflight) {
       "--probeMedia",
       "--boardSummary",
     ].join(" "),
+    windowsVideoEncoderSupportBoardSummary: [
+      "node scripts/windows/check-windows-video-encoder-support.mjs",
+      "--boardSummary",
+    ].join(" "),
     windowsReverseControlGrantBoardSummary: [
       "node scripts/windows/allow-windows-reverse-control.mjs",
       "--host", "127.0.0.1",
@@ -677,6 +682,7 @@ function makeBoardSummary(report) {
     `Next=${mac.ok ? report.commands.userAuthRequest : report.commands.preflightBoardSummary}.`,
     `WinClientDiagnostics=${report.commands.windowsClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.windowsClientCopyDiagnosticsAction}`,
     `WindowsHostMedia=${report.commands.windowsHostMediaReadinessBoardSummary}.`,
+    `WindowsVideoSupport=${report.commands.windowsVideoEncoderSupportBoardSummary}.`,
     `ReverseGrant=${report.commands.windowsReverseControlGrantBoardSummary}.`,
     "No password was requested or sent; no WebSocket auth/input/inject was performed.",
   ].join(" ");
@@ -863,6 +869,7 @@ function printHuman(report) {
   console.log(`  ${report.commands.windowsClientDiagnosticsCommand}`);
   console.log(`  ${report.commands.windowsClientCopyDiagnosticsAction}`);
   console.log(`  ${report.commands.windowsHostMediaReadinessBoardSummary}`);
+  console.log(`  ${report.commands.windowsVideoEncoderSupportBoardSummary}`);
   console.log(`  ${report.commands.windowsReverseControlGrantBoardSummary}`);
   console.log(`  ${report.commands.windowsMacAlertWatcherStart}`);
   console.log(`  ${report.commands.windowsMacAlertWatcherStatus}`);
