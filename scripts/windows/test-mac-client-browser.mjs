@@ -1172,6 +1172,9 @@ function buildSnapshotExpression() {
       reverseControlHint: text("#reverseControlHint"),
       reverseControlGrantCommand: text("#reverseControlGrantCommand"),
       reverseControlGrantCommandHidden: document.querySelector("#reverseControlGrantCommand")?.hidden ?? true,
+      reverseControlGrantCopyButtonHidden: document.querySelector("#copyReverseControlGrantCommandButton")?.hidden ?? true,
+      reverseControlGrantCopyButtonDisabled: document.querySelector("#copyReverseControlGrantCommandButton")?.disabled ?? true,
+      reverseControlGrantCopyStatus: text("#reverseControlGrantCopyStatus"),
       reverseControlButtonText: text("#reverseControlButton"),
       reverseControlButtonDisabled: document.querySelector("#reverseControlButton")?.disabled || false,
       reverseControlRequests: (window.__lanDualSentMessages || [])
@@ -1458,6 +1461,8 @@ async function verifyMacClientReverseControlRequest({ args, session }) {
         value.reverseControlGrantCommand.includes(`--port ${args.port}`) &&
         value.reverseControlGrantCommand.includes("--grant --durationMs 30000 --boardSummary") &&
         value.reverseControlGrantCommandHidden === false &&
+        value.reverseControlGrantCopyButtonHidden === false &&
+        value.reverseControlGrantCopyButtonDisabled === false &&
         value.reverseControlButtonText === "重试反控" &&
         value.reverseControlButtonDisabled === false;
       const noInputEvents = Number(value.inputEvents) === initialInputEvents;
@@ -1465,6 +1470,28 @@ async function verifyMacClientReverseControlRequest({ args, session }) {
     },
   });
   print("OK", `Reverse request denied: ${rejectedSnapshot.reverseControlStatus}`);
+
+  await clickElement(session, "#copyReverseControlGrantCommandButton");
+  const copiedSnapshot = await waitForPageSnapshot({
+    args,
+    session,
+    label: "Mac client reverse grant command copy",
+    check: async (value) => (
+      value.reverseControlGrantCopyStatus.includes("已复制") &&
+      value.reverseControlRequests === 1 &&
+      Number(value.inputEvents) === initialInputEvents
+        ? value
+        : null
+    ),
+  });
+  const copiedCommand = await evaluate(session, "navigator.clipboard.readText()");
+  if (!copiedCommand.includes("allow-windows-reverse-control.mjs") ||
+      !copiedCommand.includes("--host 127.0.0.1") ||
+      !copiedCommand.includes(`--port ${args.port}`) ||
+      !copiedCommand.includes("--grant --durationMs 30000 --boardSummary")) {
+    throw new Error(`Mac client copied unexpected reverse grant command: ${copiedCommand}`);
+  }
+  print("OK", `Reverse grant command copy: ${copiedSnapshot.reverseControlGrantCopyStatus}`);
 
   await postJson(`http://${args.host}:${args.port}/reverse-control/grant`, { durationMs: 30000 });
   await clickElement(session, "#discoverButton");
@@ -1478,6 +1505,8 @@ async function verifyMacClientReverseControlRequest({ args, session }) {
       value.reverseControlHint.includes("Windows 已打开一次性授权窗口") &&
       value.reverseControlGrantCommand.includes(`--port ${args.port}`) &&
       value.reverseControlGrantCommandHidden === false &&
+      value.reverseControlGrantCopyButtonHidden === false &&
+      value.reverseControlGrantCopyButtonDisabled === false &&
       value.reverseControlButtonText === "重试反控" &&
       value.reverseControlButtonDisabled === false
         ? value
@@ -1505,6 +1534,7 @@ async function verifyMacClientReverseControlRequest({ args, session }) {
         value.reverseControlHint.includes("Windows 已同意") &&
         value.reverseControlHint.includes("无需再次运行授权命令") &&
         value.reverseControlGrantCommandHidden === true &&
+        value.reverseControlGrantCopyButtonHidden === true &&
         value.reverseControlButtonDisabled === false;
       const noInputEvents = Number(value.inputEvents) === initialInputEvents;
       return requestOk && responseOk && noInputEvents ? value : null;

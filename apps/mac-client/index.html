@@ -185,7 +185,11 @@
               <button id="reverseControlButton" type="button" disabled>请求反控</button>
               <div id="reverseControlHelp" class="reverse-control-help">
                 <span id="reverseControlHint">需要 Windows 临时允许时，这里会显示本机授权命令。</span>
-                <code id="reverseControlGrantCommand" hidden></code>
+                <div id="reverseControlGrantCommandRow" class="reverse-control-command-row" hidden>
+                  <code id="reverseControlGrantCommand" hidden></code>
+                  <button id="copyReverseControlGrantCommandButton" type="button" hidden disabled>复制命令</button>
+                </div>
+                <span id="reverseControlGrantCopyStatus" class="reverse-control-copy-status" hidden></span>
               </div>
             </div>
           </section>

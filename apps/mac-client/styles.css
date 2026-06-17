@@ -466,7 +466,21 @@ button:disabled {
   line-height: 1.45;
 }
 
-.reverse-control-help code {
+.reverse-control-help span {
+  overflow: visible;
+  margin-top: 0;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.reverse-control-command-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+
+.reverse-control-command-row code {
   overflow-wrap: anywhere;
   padding: 8px 10px;
   border: 1px solid rgba(122, 53, 31, 0.18);
@@ -476,6 +490,19 @@ button:disabled {
   font-family: "SFMono-Regular", "Menlo", "Consolas", monospace;
   font-size: 0.75rem;
   user-select: all;
+}
+
+.reverse-control-command-row button {
+  white-space: nowrap;
+}
+
+.reverse-control-copy-status {
+  color: #5b4636;
+  font-weight: 700;
+}
+
+.reverse-control-copy-status[data-kind="error"] {
+  color: #9b2c1f;
 }
 
 .toggle-row {

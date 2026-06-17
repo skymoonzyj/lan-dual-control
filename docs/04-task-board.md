@@ -104,7 +104,7 @@ Windows 端：
 - [x] Windows host 会记录最近一次被默认安全拒绝的反控请求，并通过 `/discovery.capabilities.reverseControlGrant.lastRequest` 暴露给本机面板；Windows 桌面“本机被控”状态会显示“反控：刚收到请求”和临时授权后重试提示。
 - [x] Windows readiness runtime/boardSummary 保留反控授权窗口和最近请求状态：运行中 host 有一次性授权时显示 `reverse=temporary-grant`，刚安全拒绝过 Mac 请求时显示 `reverse=pending-request`，专项回归用本机临时 host 覆盖两种状态。
 - [x] Mac client 增加受保护的“请求反控/重试反控”入口：只在已连接、已认证且 Windows host 声明支持反控接收时可点；点击只发送 `reverse_control_request`，显示 `reverse_control_response` 的 `LAN008` 安全拒绝、Windows 临时授权重试提示和 accepted/临时授权已使用状态，页面自测覆盖默认拒绝、回环临时授权、重试成功、不泄露密码和不发送额外输入事件。
-- [x] Mac client 在 `LAN008`、最近请求或临时授权状态下直接显示 Windows 本机一次性授权命令：`allow-windows-reverse-control --host 127.0.0.1 --port <Windows host port> --grant --durationMs 30000 --boardSummary`；accepted 后隐藏命令，页面自测覆盖。
+- [x] Mac client 在 `LAN008`、最近请求或临时授权状态下直接显示并可一键复制 Windows 本机一次性授权命令：`allow-windows-reverse-control --host 127.0.0.1 --port <Windows host port> --grant --durationMs 30000 --boardSummary`；accepted 后隐藏命令，页面自测覆盖命令复制和无额外输入事件。
 - [x] Mac client formal checklist/smoke 的 runPlan 和通讯板摘要补齐反控请求安全演练：Mac 请求预期 `LAN008`，Windows 本机一次性授权，Mac 重试预期 accepted/临时授权已使用；命令和自测均锁定不发密码、不发送输入事件、不执行 `inject`。
 - [x] Mac 恢复开工总览也可解析 Agent Link Board `currentCall`：`--checkBoard --json`、普通输出和 `--boardSummary` 会显示 `call=active/done/none`，DONE 呼叫不会误当作待办，摘要不回显 call command。
 - [x] Windows 恢复开工总览支持 `--userAuthRequest` / PowerShell `-UserAuthRequest`，预检 ready 后直接输出可发 Agent Link Board 的 `NEED_USER_AUTH` 文本和固定目标 PowerShell 正式验收命令。

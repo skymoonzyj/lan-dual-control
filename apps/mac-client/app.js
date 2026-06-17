@@ -32,7 +32,10 @@ const elements = {
   reverseControlStatus: document.querySelector("#reverseControlStatus"),
   reverseControlButton: document.querySelector("#reverseControlButton"),
   reverseControlHint: document.querySelector("#reverseControlHint"),
+  reverseControlGrantCommandRow: document.querySelector("#reverseControlGrantCommandRow"),
   reverseControlGrantCommand: document.querySelector("#reverseControlGrantCommand"),
+  copyReverseControlGrantCommandButton: document.querySelector("#copyReverseControlGrantCommandButton"),
+  reverseControlGrantCopyStatus: document.querySelector("#reverseControlGrantCopyStatus"),
   inputStatus: document.querySelector("#inputStatus"),
   remoteViewport: document.querySelector("#remoteViewport"),
   remoteImage: document.querySelector("#remoteImage"),
@@ -607,6 +610,49 @@ function currentReverseControlHelp() {
   };
 }
 
+function setReverseControlCopyStatus(text, isError = false) {
+  elements.reverseControlGrantCopyStatus.textContent = text;
+  elements.reverseControlGrantCopyStatus.hidden = !text;
+  elements.reverseControlGrantCopyStatus.dataset.kind = isError ? "error" : "ok";
+}
+
+function fallbackCopyText(text) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  if (!copied) {
+    throw new Error("copy command returned false");
+  }
+}
+
+async function copyReverseControlGrantCommand() {
+  const command = elements.reverseControlGrantCommand.textContent.trim();
+  if (!command || elements.reverseControlGrantCommand.hidden) {
+    setReverseControlCopyStatus("暂无可复制命令", true);
+    return;
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(command);
+    } else {
+      fallbackCopyText(command);
+    }
+    setReverseControlCopyStatus("已复制，请在 Windows host 本机终端执行", false);
+    logEvent("反控授权命令已复制", "仅复制命令，不包含密码");
+  } catch (error) {
+    setReverseControlCopyStatus("复制失败，请手动选中命令复制", true);
+    logEvent("反控授权命令复制失败", error?.message || String(error));
+  }
+}
+
 function renderReverseControlRequest() {
   const canRequest = state.connected &&
     state.authenticated &&
@@ -616,9 +662,18 @@ function renderReverseControlRequest() {
   elements.reverseControlButton.textContent = currentReverseControlButtonText();
   elements.reverseControlStatus.textContent = currentReverseControlStatusText();
   const help = currentReverseControlHelp();
+  const previousCommand = elements.reverseControlGrantCommand.textContent || "";
+  const commandChanged = previousCommand !== help.command;
+  const hasCommand = Boolean(help.command);
   elements.reverseControlHint.textContent = help.hint;
   elements.reverseControlGrantCommand.textContent = help.command;
-  elements.reverseControlGrantCommand.hidden = !help.command;
+  elements.reverseControlGrantCommand.hidden = !hasCommand;
+  elements.reverseControlGrantCommandRow.hidden = !hasCommand;
+  elements.copyReverseControlGrantCommandButton.hidden = !hasCommand;
+  elements.copyReverseControlGrantCommandButton.disabled = !hasCommand;
+  if (!hasCommand || commandChanged) {
+    setReverseControlCopyStatus("");
+  }
 }
 
 function sendReverseControlRequest() {
@@ -1410,6 +1465,7 @@ function buildLogExportText() {
     `- 反控请求：${elements.reverseControlStatus.textContent || "-"}`,
     `- 反控授权提示：${elements.reverseControlHint.textContent || "-"}`,
     `- Windows 本机授权命令：${elements.reverseControlGrantCommand.textContent || "-"}`,
+    `- 反控授权复制：${elements.reverseControlGrantCopyStatus.textContent || "-"}`,
     `- 重连状态：${reconnectExport.status}`,
     `- 重连原因：${reconnectExport.reason}`,
     `- 下次重连：${reconnectExport.next}`,
@@ -2869,6 +2925,7 @@ elements.resolutionSelect.addEventListener("change", markCustomVideoSettings);
 elements.fpsSelect.addEventListener("change", markCustomVideoSettings);
 elements.bandwidthSelect.addEventListener("change", markCustomVideoSettings);
 elements.reverseControlButton.addEventListener("click", sendReverseControlRequest);
+elements.copyReverseControlGrantCommandButton.addEventListener("click", copyReverseControlGrantCommand);
 elements.focusButton.addEventListener("click", () => elements.remoteViewport.focus());
 elements.exportLogButton.addEventListener("click", exportLogs);
 elements.clearLogButton.addEventListener("click", () => {

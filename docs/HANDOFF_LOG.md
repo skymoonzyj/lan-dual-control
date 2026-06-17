@@ -17,6 +17,41 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Mac Codex
+
+日期：2026-06-17 12:35
+开发端：Mac Codex
+本轮目标：补齐 Mac client 反控授权命令一键复制，降低现场手动复制长命令出错概率。
+完成内容：
+- Mac client “一键反控”帮助区在 `LAN008`、最近请求或临时授权窗口状态下继续显示 Windows 本机回环授权命令，并新增“复制命令”按钮。
+- 复制只写入 Mac 端浏览器剪贴板，不访问 Windows host 授权端点，不发送 `input_event`，成功/失败会显示状态并写入本地事件日志。
+- accepted/临时授权已使用后命令和复制按钮会一起隐藏；日志导出新增“反控授权复制”状态，便于现场复盘。
+- 页面自测新增复制按钮、剪贴板内容、无密码、无额外输入事件断言。
+修改文件：
+- `apps/mac-client/index.html`
+- `apps/mac-client/app.js`
+- `apps/mac-client/styles.css`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/mac-client/app.js`
+- `node --check apps/mac-client/server.mjs`
+- `node --check scripts/windows/test-mac-client-browser.mjs`
+- `node scripts/windows/test-mac-client-browser.mjs --clientPort 5198 --debugPort 9342 --mockVideo --allowClipboardFallback --skipFileClipboard --progressIntervalMs 0 --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<{7}|={7}|>{7})" .`
+遗留问题：
+- 本轮未连接真实 Windows host；只用本机 mock Windows host 验证页面复制、`LAN008 -> 临时授权 -> accepted` 和安全边界。
+下一步建议：
+- 真实 Mac 控制 Windows smoke 时，若 Mac 页面显示授权命令，可直接点“复制命令”，再通过通讯板让 Windows 端在 Windows 本机终端执行；不要把密码或系统账号发上板。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-17 Windows Codex
 
 日期：2026-06-17 休息续跑
