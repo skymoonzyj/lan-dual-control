@@ -208,6 +208,9 @@ async function checkDiscoverMockPreflightJson(args) {
     assert(payload.target.host === "127.0.0.1", "preflight should target localhost");
     assert(payload.target.port === port, "preflight should target discovered mock port");
     assert(payload.command.includes(`--port ${port}`), "safe command should use discovered port");
+    assert(String(payload.formalPowerShellCommand || "").includes(`-Port ${port}`), "safe PowerShell command should use discovered port");
+    assert(String(payload.boardSummary || "").includes("Safe formal PowerShell command"), "PowerShell preflight board summary should include PowerShell command");
+    assert(String(payload.userAuthRequest || "").includes("PowerShell 等价"), "PowerShell preflight user auth request should include PowerShell command");
     assertRunPlanSafe(payload, "PowerShell discover preflight");
     assertNotIncludes(output, "test-password", "PowerShell discover preflight");
     console.log("[OK] PowerShell formal E2E wrapper supports discovery JSON preflight");
@@ -256,6 +259,7 @@ async function checkMockFastFormalPath(args) {
     assert(result.exitCode === 0, `PowerShell mock fast formal path failed\n${output}`);
     assertIncludes(output, "Formal Mac E2E checks finished", "PowerShell mock fast path");
     assertIncludes(output, "Windows formal Mac E2E finished: completed", "PowerShell mock fast path");
+    assertIncludes(output, "Safe formal PowerShell command", "PowerShell mock fast path");
     assertIncludes(output, "Clipboard file accepted", "PowerShell mock fast path");
     assertNotIncludes(output, "test-password", "PowerShell mock fast path");
     console.log("[OK] PowerShell formal E2E wrapper drives the mock fast formal path");
@@ -283,6 +287,8 @@ async function checkMockSendUserAuthRequest(args) {
       assert(requests[0].method === "POST", "PowerShell send should POST");
       assert(requests[0].path === "/api/message", `PowerShell send path mismatch: ${requests[0].path}`);
       assert(String(requests[0].body.text || "").includes("NEED_USER_AUTH:"), "PowerShell send body missing auth request");
+      assert(String(requests[0].body.text || "").includes("PowerShell 等价"), "PowerShell send body missing PowerShell formal command");
+      assert(String(requests[0].body.text || "").includes("-PromptPassword"), "PowerShell send body missing prompt command");
       assertNotIncludes(JSON.stringify(requests[0].body), "test-password", "PowerShell send user auth request body");
       assertNotIncludes(output, "test-password", "PowerShell send user auth request");
       console.log("[OK] PowerShell formal E2E wrapper sends secret-free user auth request");

@@ -207,6 +207,8 @@ async function testOfflineJson(args) {
   const payload = JSON.parse(result.stdout);
   assert(payload.ok === false && payload.online === false, "offline JSON preflight shape mismatch");
   assert(payload.command.includes("--promptPassword"), "offline JSON should include safe command");
+  assert(String(payload.formalPowerShellCommand || "").includes("-PromptPassword"), "offline JSON should include safe PowerShell command");
+  assert(String(payload.formalPowerShellCommand || "").includes("-HostName 127.0.0.1"), "offline JSON PowerShell command should target host");
   assert(String(payload.boardSummary || "").includes("offline"), "offline JSON should include board summary");
   assertRunPlanSafe(payload, "offline JSON run plan", { audioSkipped: false, clipboardText: true, inputMode: "log" });
   print("OK", "Offline JSON preflight is parseable");
@@ -218,6 +220,8 @@ async function testOfflineBoardSummary(args) {
   assertIncludes(result.stdout, "Windows formal Mac E2E preflight: offline", "offline board summary");
   assertIncludes(result.stdout, "Password was not requested", "offline board summary");
   assertIncludes(result.stdout, "--promptPassword", "offline board summary");
+  assertIncludes(result.stdout, "Next safe PowerShell command", "offline board summary");
+  assertIncludes(result.stdout, "-PromptPassword", "offline board summary");
   assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "offline board summary");
   assertNotIncludes(result.stdout + result.stderr, "Mac host password", "offline board summary");
   print("OK", "Offline board summary is secret-free");
@@ -271,8 +275,12 @@ async function testMockPreflightJson(args) {
     assert(payload.ok === true && payload.online === true, "mock preflight JSON shape mismatch");
     assert(payload.capabilities.mock === true, "mock preflight should identify mock host");
     assert(payload.command.includes("--promptPassword"), "mock preflight should include safe command");
+    assert(String(payload.formalPowerShellCommand || "").includes("-PromptPassword"), "mock preflight should include safe PowerShell command");
+    assert(String(payload.formalPowerShellCommand || "").includes(`-Port ${port}`), "mock preflight PowerShell command should use mock port");
     assert(String(payload.boardSummary || "").includes("failedChecks=none"), "mock preflight JSON should include board summary");
+    assert(String(payload.boardSummary || "").includes("Safe formal PowerShell command"), "mock preflight JSON board summary should include PowerShell command");
     assert(String(payload.userAuthRequest || "").includes("NEED_USER_AUTH:"), "mock preflight JSON should include user auth request");
+    assert(String(payload.userAuthRequest || "").includes("PowerShell 等价"), "mock preflight JSON should include PowerShell auth command");
     assertRunPlanSafe(payload, "mock JSON run plan", { audioSkipped: true, clipboardText: false, inputMode: "skipped" });
     assert(payload.runPlan.video?.allowMockVideo === true, "mock JSON run plan should mark mock video allowed");
     print("OK", "Mock JSON preflight passes");
@@ -303,6 +311,7 @@ async function testDiscoverMockPreflightJson(args) {
     assert(payload.discoverySelection?.source === "discover-lan-hosts", "discover selection source mismatch");
     assert(payload.discoverySelection?.foundMacHosts >= 1, "discover selection should report Mac hosts");
     assert(payload.command.includes(`--port ${port}`), "safe command should use discovered port");
+    assert(String(payload.formalPowerShellCommand || "").includes(`-Port ${port}`), "safe PowerShell command should use discovered port");
     assertRunPlanSafe(payload, "discover mock JSON run plan", { audioSkipped: true, clipboardText: false, inputMode: "skipped" });
     assertNotIncludes(result.stdout + result.stderr, "test-password", "discover mock JSON");
     print("OK", "Discovery-backed mock JSON preflight selects the Mac host");
@@ -344,6 +353,8 @@ async function testMockPreflightBoardSummary(args) {
     assertIncludes(result.stdout, "Windows formal Mac E2E preflight: ready", "mock board summary");
     assertIncludes(result.stdout, "failedChecks=none", "mock board summary");
     assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "mock board summary");
+    assertIncludes(result.stdout, "Safe formal PowerShell command", "mock board summary");
+    assertIncludes(result.stdout, "check-mac-formal-e2e.ps1", "mock board summary");
     assertIncludes(result.stdout, "Password is not included", "mock board summary");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "mock board summary");
     print("OK", "Mock board summary passes without leaking password");
@@ -365,6 +376,8 @@ async function testMockPreflightUserAuthRequest(args) {
     assert(result.exitCode === 0, `mock preflight user auth request failed\n${result.stdout}\n${result.stderr}`);
     assertIncludes(result.stdout, "NEED_USER_AUTH:", "mock user auth request");
     assertIncludes(result.stdout, "--promptPassword", "mock user auth request");
+    assertIncludes(result.stdout, "PowerShell 等价", "mock user auth request");
+    assertIncludes(result.stdout, "-PromptPassword", "mock user auth request");
     assertIncludes(result.stdout, "不要把密码发到联络板", "mock user auth request");
     assertIncludes(result.stdout, "inject", "mock user auth request");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "mock user auth request");
@@ -412,6 +425,8 @@ async function testMockPreflightSendUserAuthRequest(args) {
       assert(requests[0].body.from === "Windows Codex", "mock send from mismatch");
       assert(String(requests[0].body.text || "").includes("NEED_USER_AUTH:"), "mock send text missing auth request");
       assert(String(requests[0].body.text || "").includes("--promptPassword"), "mock send text missing safe formal command");
+      assert(String(requests[0].body.text || "").includes("PowerShell 等价"), "mock send text missing PowerShell formal command");
+      assert(String(requests[0].body.text || "").includes("-PromptPassword"), "mock send text missing PowerShell prompt command");
       assertNotIncludes(JSON.stringify(requests[0].body), "test-password", "mock send user auth request body");
       assertNotIncludes(result.stdout + result.stderr, "test-password", "mock send user auth request output");
       print("OK", "Mock send user auth request posts a secret-free Agent Link Board message");

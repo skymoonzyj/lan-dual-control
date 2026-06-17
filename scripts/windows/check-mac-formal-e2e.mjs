@@ -209,6 +209,15 @@ function makeFormalCommand(args) {
   ].join(" ");
 }
 
+function makeFormalPowerShellCommand(args) {
+  return [
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
+    "-HostName", args.host,
+    "-Port", String(args.port),
+    "-PromptPassword",
+  ].join(" ");
+}
+
 function quoteCommandArg(value) {
   const text = String(value);
   return /^[A-Za-z0-9_./:=@-]+$/.test(text) ? text : JSON.stringify(text);
@@ -363,6 +372,7 @@ function makeBoardSummary(report, outcome = "preflight") {
       `${prefix}: offline; target=${report.target.host}:${report.target.port}; error=${report.error?.message || "unknown"}.`,
       "Password was not requested and is not included.",
       `Next safe command after Mac host is online: ${report.command}.`,
+      `Next safe PowerShell command after Mac host is online: ${report.formalPowerShellCommand}.`,
       "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
       "Inject was not used and still needs explicit user confirmation.",
     ].join(" ");
@@ -388,6 +398,7 @@ function makeBoardSummary(report, outcome = "preflight") {
     `Permissions screen=${statusFlag(permissions.screenRecording)} accessibility=${statusFlag(permissions.accessibility)} inputMonitoring=${statusFlag(permissions.inputMonitoring)}; displays=${summarizeDisplays(report)}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
     "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
     `Safe formal command: ${report.command}. Password is not included; inject was not used and still needs explicit user confirmation.`,
+    `Safe formal PowerShell command: ${report.formalPowerShellCommand}. Password is not included; inject was not used and still needs explicit user confirmation.`,
   ].join(" ");
 }
 
@@ -407,6 +418,7 @@ function makeUserAuthRequest(report) {
   return [
     `NEED_USER_AUTH: 正式 Mac 端到端验收需要你在 Windows 本机隐藏输入 Mac host 正式密码，target=${target}。`,
     `位置/步骤：在 E:\\codex\\lan-dual-control 运行 ${report.command}。`,
+    `PowerShell 等价：${report.formalPowerShellCommand}。`,
     "不要把密码发到联络板；本命令默认不执行 inject，inject 仍需你另行明确确认。",
     "处理后请回复 已输入密码并开始验收。",
   ].join(" ");
@@ -649,6 +661,7 @@ function makePreflightReport(args, discoveryResult) {
       detail: "not requested",
     },
     command: makeFormalCommand(args),
+    formalPowerShellCommand: makeFormalPowerShellCommand(args),
     runPlan: makeFormalRunPlan(args),
   });
 }
@@ -682,6 +695,7 @@ function makeOfflinePreflightReport(args, error) {
       detail: "not requested",
     },
     command: makeFormalCommand(args),
+    formalPowerShellCommand: makeFormalPowerShellCommand(args),
     runPlan: makeFormalRunPlan(args),
   });
 }
