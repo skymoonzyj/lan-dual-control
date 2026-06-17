@@ -1,10 +1,42 @@
 param(
     [string]$HostName = "0.0.0.0",
     [int]$Port = 17888,
-    [string]$Token = ""
+    [string]$Token = "",
+    [Alias("h")]
+    [switch]$Help
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($Help) {
+    Write-Output @"
+Usage:
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\start-codex-link.ps1 [options]
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\windows\start-codex-link.ps1 [options]
+
+Common examples:
+  # Start the Agent Link Board on the LAN default port.
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\start-codex-link.ps1
+
+  # Start on localhost for single-machine checks.
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\start-codex-link.ps1 -HostName 127.0.0.1 -Port 17888
+
+  # Start with a token on a trusted LAN.
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\windows\start-codex-link.ps1 -Token YOUR_TOKEN
+
+Options:
+  -HostName <host>  Bind address. Default: 0.0.0.0.
+  -Port <port>      Agent Link Board port. Default: 17888.
+  -Token <token>    Optional board token. The script reports token mode but never prints the token value.
+  -Help, -h         Show this help without starting the Agent Link Board.
+
+Safety:
+  -Help never starts the Agent Link Board, never creates logs, never prints
+  tokens, and never sends passwords, authentication, input, or inject events.
+"@
+    exit 0
+}
+
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $server = Join-Path $repoRoot "scripts\codex-link-server.mjs"
 $logDir = Join-Path $repoRoot ".dev-lab"
