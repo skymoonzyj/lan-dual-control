@@ -196,6 +196,8 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "--checkBoard", `help ${flag}`);
     assertIncludes(result.stdout, "Windows host media-baseline", `help ${flag}`);
     assertIncludes(result.stdout, "one-time reverse-control grant", `help ${flag}`);
+    assertIncludes(result.stdout, "local alert-watcher start/status commands", `help ${flag}`);
+    assertIncludes(result.stdout, "start-mac-alert-watcher.ps1", `help ${flag}`);
   }
   console.log("[OK] Windows resume status help is pure");
 }
@@ -234,6 +236,12 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("--port 43770"), "mock JSON reverse grant command should target the default Windows host port");
     assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("--durationMs 30000"), "mock JSON reverse grant command should be time-limited");
     assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("--boardSummary"), "mock JSON reverse grant command should be board-safe");
+    assert(String(payload.commands?.windowsMacAlertWatcherStart || "").includes("start-mac-alert-watcher.ps1"), "mock JSON should include Windows Mac alert watcher start command");
+    assert(String(payload.commands?.windowsMacAlertWatcherStart || "").includes("-Server http://192.168.31.68:17888"), "mock JSON watcher start command should include the board server");
+    assert(!String(payload.commands?.windowsMacAlertWatcherStart || "").includes("-Status"), "mock JSON watcher start command should not be the status check");
+    assert(String(payload.commands?.windowsMacAlertWatcherStatus || "").includes("start-mac-alert-watcher.ps1"), "mock JSON should include Windows Mac alert watcher status command");
+    assert(String(payload.commands?.windowsMacAlertWatcherStatus || "").includes("-Server http://192.168.31.68:17888"), "mock JSON watcher status command should include the board server");
+    assert(String(payload.commands?.windowsMacAlertWatcherStatus || "").includes("-Status"), "mock JSON watcher status command should be status-only");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "mock JSON");
     console.log("[OK] Windows resume status JSON summarizes mock Mac preflight");
   });

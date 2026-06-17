@@ -201,6 +201,8 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "--probeMedia --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "Windows local one-time reverse-control grant", "PowerShell wrapper help");
   assertIncludes(output, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770", "PowerShell wrapper help");
+  assertIncludes(output, "Windows local Mac alert watcher commands", "PowerShell wrapper help");
+  assertIncludes(output, "start-mac-alert-watcher.ps1 -Server", "PowerShell wrapper help");
   console.log("[OK] PowerShell resume-status wrapper help is safe");
 }
 
@@ -234,6 +236,12 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "--port 43770", "mock JSON reverse grant command");
     assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "--durationMs 30000", "mock JSON reverse grant command");
     assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "--boardSummary", "mock JSON reverse grant command");
+    assertIncludes(payload.commands?.windowsMacAlertWatcherStart, "start-mac-alert-watcher.ps1", "mock JSON alert watcher start command");
+    assertIncludes(payload.commands?.windowsMacAlertWatcherStart, "-Server http://192.168.31.68:17888", "mock JSON alert watcher start command");
+    assert(!String(payload.commands?.windowsMacAlertWatcherStart || "").includes("-Status"), "mock JSON alert watcher start command should not be status-only");
+    assertIncludes(payload.commands?.windowsMacAlertWatcherStatus, "start-mac-alert-watcher.ps1", "mock JSON alert watcher status command");
+    assertIncludes(payload.commands?.windowsMacAlertWatcherStatus, "-Server http://192.168.31.68:17888", "mock JSON alert watcher status command");
+    assertIncludes(payload.commands?.windowsMacAlertWatcherStatus, "-Status", "mock JSON alert watcher status command");
     assertNotIncludes(output, "test-password", "PowerShell mock JSON");
     console.log("[OK] PowerShell resume-status wrapper supports mock JSON discovery");
   });

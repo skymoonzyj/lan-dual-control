@@ -19,6 +19,42 @@
 
 ## 2026-06-17 Windows Codex
 
+日期：2026-06-17 11:47
+开发端：Windows Codex
+本轮目标：把 Windows 本机 Mac 提醒 watcher 的启动/状态命令纳入恢复开工总览。
+完成内容：
+- `check-windows-resume-status` 的 JSON/普通输出新增 `windowsMacAlertWatcherStart` 和 `windowsMacAlertWatcherStatus`，直接给出 `start-mac-alert-watcher.ps1 -Server <Agent Link Board>` 与 `-Status`。
+- PowerShell 包装帮助同步说明本机 Mac 提醒 watcher 命令；`--boardSummary` 仍保持短摘要，只保留 Mac preflight、WindowsHostMedia、ReverseGrant 和 no password/no input/inject 安全说明。
+- Node/PowerShell 回归新增 watcher 命令断言，确认命令包含当前 Agent Link Board server、不误标 start 为 status，并继续确认不泄露测试密码。
+- 当前状态、下一步和任务板已同步。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- PowerShell 7 AST 语法解析 `scripts/windows/check-windows-resume-status.ps1`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --script test-windows-resume-status.mjs --script test-windows-resume-status-powershell.mjs --timeoutMs 10000`
+- `node scripts/windows/check-windows-resume-status.mjs --noDiscover --host 127.0.0.1 --port 9 --json --timeoutMs 12000`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 60000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 60000`
+遗留问题：
+- 这轮只把 watcher 管理命令放进恢复总览，不自动启动后台 watcher，不认证、不要求密码、不发送输入、不执行 inject。
+下一步建议：
+- 后续 Windows 开工先跑恢复总览；需要等待 Mac 端授权、权限或反控重试时，复制普通输出里的 watcher start/status 命令打开本机浮窗提醒。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Windows Codex
+
 日期：2026-06-17 11:37
 开发端：Windows Codex
 本轮目标：补强 Windows 本机 Agent Link watcher，让 Mac 端等待反控临时授权时也能弹 Windows 本机提醒。

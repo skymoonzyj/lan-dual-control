@@ -43,6 +43,9 @@ JSON, human output, and board summaries include a Windows host media-baseline
 command for checking local controlled-side video/audio before Mac reverse
 control, plus a local one-time reverse-control grant command for retrying a
 Mac reverse-control request without switching Windows host to accept-lab mode.
+JSON and human output also include local alert-watcher start/status commands
+so Windows can surface Mac-side auth, permission, blocked, and reverse-grant
+requests while a remote-control window is minimized.
 
 Options:
   --host <host>                 Explicit Mac host target. Default: ${defaults.host}
@@ -75,6 +78,8 @@ Examples:
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
   node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
   node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server ${defaults.server}
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server ${defaults.server} -Status
 `);
 }
 
@@ -553,6 +558,15 @@ function makeCommands(args, preflight) {
       "--durationMs", "30000",
       "--boardSummary",
     ].join(" "),
+    windowsMacAlertWatcherStart: [
+      "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1",
+      "-Server", args.server,
+    ].join(" "),
+    windowsMacAlertWatcherStatus: [
+      "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1",
+      "-Server", args.server,
+      "-Status",
+    ].join(" "),
   };
 }
 
@@ -768,6 +782,8 @@ function printHuman(report) {
   console.log(`  ${report.commands.formalRun}`);
   console.log(`  ${report.commands.windowsHostMediaReadinessBoardSummary}`);
   console.log(`  ${report.commands.windowsReverseControlGrantBoardSummary}`);
+  console.log(`  ${report.commands.windowsMacAlertWatcherStart}`);
+  console.log(`  ${report.commands.windowsMacAlertWatcherStatus}`);
   console.log("- Board summary:");
   console.log(`  ${report.boardSummary}`);
   console.log("- User auth request:");
