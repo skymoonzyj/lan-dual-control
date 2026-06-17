@@ -44,7 +44,7 @@ http://127.0.0.1:5188/
 node scripts/mac/start-mac-client.mjs --status --boardSummary
 ```
 
-该助手只启动/检查本地 Mac 控制端页面，不会连接 Windows host、不会认证、不会要求或打印密码，也不会发送输入事件。需要机器可读结果时可加 `--json`；如果端口上已有页面并希望直接复用，可加 `--allowExisting`；想自动打开浏览器可加 `--open`。它的 JSON 和 `--boardSummary` 也会给出 `MacClientDiscoverWindows=` 与 `MacClientReverseRehearsal=`：前者用于只读发现 Windows host，后者提醒先看发现结果里的 `ReverseRehearsal=`，再按 LAN008 -> Windows 本机回环一次性授权 -> Mac 重试的安全闭环走。
+该助手只启动/检查本地 Mac 控制端页面，不会连接 Windows host、不会认证、不会要求或打印密码，也不会发送输入事件。需要机器可读结果时可加 `--json`；如果端口上已有页面并希望直接复用，可加 `--allowExisting`；想自动打开浏览器可加 `--open`。它的 JSON 和 `--boardSummary` 也会给出 `MacClientDiscoverWindows=`、`MacClientReverseRehearsal=` 与 `MacClientReverseGrantCopy=`：前者用于只读发现 Windows host，后两者提醒先看发现结果里的 `ReverseRehearsal=`，再按 LAN008 -> Windows 本机回环一次性授权 -> Mac 重试的安全闭环走，并在 LAN008 后确认页面可复制 PowerShell 推荐命令和 Node 备用命令，复制文本不含连接密码且不会发送 `input_event`。
 
 本机联调时，如果不想占用真实 Mac host 的 `43770`，可以在另一个终端启动 Windows host 的 mock/回退服务：
 
@@ -85,7 +85,7 @@ node scripts/mac/check-mac-client-readiness.mjs --checkBoard --boardSummary
 node scripts/mac/check-mac-client-readiness.mjs --host <Windows IP> --port 43770 --checkBoard --boardSummary
 ```
 
-该脚本不会启动 Mac client、不会启动或认证 Windows host、不会要求或打印密码、不会发送输入事件。它只检查 repo、Mac client 静态文件和语法、可选本地 Mac client HTTP 页面、可选 Windows host `/discovery` 及 Agent Link Board，并输出可直接发到通讯板的无密摘要。摘要会同时带 `MacClientPage=`、`MacClientDiscoverWindows=`、`MacClientReverseRehearsal=`、`MacClientFormalSmoke=`、`MacClientBrowserSelfTest=` 和 `CopyDiagnostics=`，方便从页面状态、Windows 发现、反控安全演练、本机 mock 自测到正式 smoke 串成一条无密路径。需要机器可读结果时加 `--json`；本地页面已启动时可加 `--probeClientServer`；正式要求目标 Windows host 在线时可加 `--requireWindowsHost`。
+该脚本不会启动 Mac client、不会启动或认证 Windows host、不会要求或打印密码、不会发送输入事件。它只检查 repo、Mac client 静态文件和语法、可选本地 Mac client HTTP 页面、可选 Windows host `/discovery` 及 Agent Link Board，并输出可直接发到通讯板的无密摘要。摘要会同时带 `MacClientPage=`、`MacClientDiscoverWindows=`、`MacClientReverseRehearsal=`、`MacClientReverseGrantCopy=`、`MacClientFormalSmoke=`、`MacClientBrowserSelfTest=` 和 `CopyDiagnostics=`，方便从页面状态、Windows 发现、反控安全演练、授权命令复制检查、本机 mock 自测到正式 smoke 串成一条无密路径。需要机器可读结果时加 `--json`；本地页面已启动时可加 `--probeClientServer`；正式要求目标 Windows host 在线时可加 `--requireWindowsHost`。
 
 正式做 Mac 控制 Windows 真连观感验收前，可跑更严格的清单：
 

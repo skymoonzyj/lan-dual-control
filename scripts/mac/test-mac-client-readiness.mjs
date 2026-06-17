@@ -113,6 +113,17 @@ function assertMacClientReverseRehearsalAction(text, label) {
   assertNotIncludes(text, "inject", label);
 }
 
+function assertMacClientReverseGrantCopyAction(text, label) {
+  assertIncludes(text, "复制 PowerShell", label);
+  assertIncludes(text, "复制 Node", label);
+  assertIncludes(text, "连接密码", label);
+  assertIncludes(text, "input_event", label);
+  assertNotIncludes(text, "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(text, "--password", label);
+  assertNotIncludes(text, "--sendCall", label);
+  assertNotIncludes(text, "inject", label);
+}
+
 function assertMacClientFormalSmokeCommand(command, label) {
   assertIncludes(command, "run-mac-client-formal-smoke.mjs", label);
   assertIncludes(command, "--discover", label);
@@ -150,6 +161,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macClientCopyDiagnosticsAction", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientDiscoverWindowsCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientReverseRehearsalAction", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macClientReverseGrantCopyAction", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientFormalSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientBrowserSelfTestCommand", `${script} ${flag}`);
   }
@@ -168,6 +180,7 @@ function checkOfflineJson(args) {
   assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "offline JSON Mac client page status command");
   assertMacClientDiscoverWindowsCommand(payload.commands?.macClientDiscoverWindowsCommand || "", "offline JSON Mac client Windows discovery command");
   assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "offline JSON Mac client reverse rehearsal action");
+  assertMacClientReverseGrantCopyAction(payload.commands?.macClientReverseGrantCopyAction || "", "offline JSON Mac client reverse grant copy action");
   assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "offline JSON Mac client formal smoke command");
   assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "offline JSON Mac client browser self-test command");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "payload should include copy diagnostics action");
@@ -175,6 +188,7 @@ function checkOfflineJson(args) {
   assert(/Mac client readiness:/.test(payload.boardSummary || ""), "payload should include boardSummary");
   assert(/MacClientDiscoverWindows=/.test(payload.boardSummary || ""), "boardSummary should include Windows discovery command");
   assert(/MacClientReverseRehearsal=/.test(payload.boardSummary || ""), "boardSummary should include reverse rehearsal action");
+  assert(/MacClientReverseGrantCopy=/.test(payload.boardSummary || ""), "boardSummary should include reverse grant copy action");
   assert(/MacClientFormalSmoke=/.test(payload.boardSummary || ""), "boardSummary should include formal smoke command");
   assert(/MacClientBrowserSelfTest=/.test(payload.boardSummary || ""), "boardSummary should include browser self-test command");
   assert(/CopyDiagnostics=Mac client 事件日志点击/.test(payload.boardSummary || ""), "boardSummary should include copy diagnostics action");
@@ -230,6 +244,7 @@ function checkBoardSummary(args) {
   assertIncludes(text, "MacClientDiscoverWindows=", "board summary");
   assertIncludes(text, "discover-windows-hosts.mjs", "board summary");
   assertIncludes(text, "MacClientReverseRehearsal=", "board summary");
+  assertIncludes(text, "MacClientReverseGrantCopy=", "board summary");
   assertIncludes(text, "ReverseRehearsal=", "board summary");
   assertIncludes(text, "LAN008", "board summary");
   assertIncludes(text, "MacClientFormalSmoke=", "board summary");
@@ -253,6 +268,8 @@ function checkPlainReport(args) {
   assertIncludes(result.stdout, "discover-windows-hosts.mjs", "plain report");
   assertIncludes(result.stdout, "Mac client reverse rehearsal:", "plain report");
   assertIncludes(result.stdout, "ReverseRehearsal=", "plain report");
+  assertIncludes(result.stdout, "Mac client reverse grant copy:", "plain report");
+  assertIncludes(result.stdout, "复制 Node", "plain report");
   assertIncludes(result.stdout, "Mac client formal smoke preflight:", "plain report");
   assertIncludes(result.stdout, "run-mac-client-formal-smoke.mjs", "plain report");
   assertIncludes(result.stdout, "Mac client browser self-test:", "plain report");
@@ -333,6 +350,7 @@ async function checkClientServerProbe(args) {
     assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "client server probe command");
     assertMacClientDiscoverWindowsCommand(payload.commands?.macClientDiscoverWindowsCommand || "", "client server probe Windows discovery command");
     assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "client server probe reverse rehearsal action");
+    assertMacClientReverseGrantCopyAction(payload.commands?.macClientReverseGrantCopyAction || "", "client server probe reverse grant copy action");
     assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "client server probe formal smoke command");
     assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "client server probe browser self-test command");
     assert(payload.checklist.some((item) => item.id === "client-server" && item.status === "ok"), "client-server ok item should be present");
@@ -430,6 +448,7 @@ async function checkWindowsDiscoveryProbe(args) {
     assert(/online 127\.0\.0\.1/.test(payload.boardSummary || ""), "board summary should include online Windows host");
     assertMacClientDiscoverWindowsCommand(payload.commands?.macClientDiscoverWindowsCommand || "", "Windows discovery probe Windows discovery command");
     assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "Windows discovery probe reverse rehearsal action");
+    assertMacClientReverseGrantCopyAction(payload.commands?.macClientReverseGrantCopyAction || "", "Windows discovery probe reverse grant copy action");
     assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "Windows discovery probe formal smoke command");
     assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "Windows discovery probe browser self-test command");
   });

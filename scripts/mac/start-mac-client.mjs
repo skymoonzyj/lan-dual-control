@@ -21,6 +21,7 @@ const defaults = {
 const copyDiagnosticsAction = "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码";
 const discoverWindowsCommand = "node scripts/mac/discover-windows-hosts.mjs --boardSummary";
 const reverseRehearsalAction = "Run MacClientDiscoverWindows first, then use its ReverseRehearsal= line: Mac requests reverse control and expects LAN008, Windows runs the local loopback one-time grant, Mac retries and expects accepted/临时授权已使用";
+const reverseGrantCopyAction = "LAN008 后在 Mac client 页面点击“复制 PowerShell”和“复制 Node”，确认复制文本不含连接密码且不会发送 input_event";
 const formalSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
 const browserSelfTestCommand = "node scripts/mac/test-mac-client-browser-self-test.mjs --boardSummary";
 
@@ -58,6 +59,9 @@ Machine-readable JSON fields:
   commands.macClientReverseRehearsalAction
                          Human action for the guarded reverse-control request
                          rehearsal after Windows discovery.
+  commands.macClientReverseGrantCopyAction
+                         Human action for confirming both reverse-grant copy
+                         buttons after LAN008 without passwords or input.
   commands.macClientFormalSmokeCommand
                          Secret-free preflight command. It does not authenticate,
                          prompt for a password, send a call, or send input.
@@ -226,6 +230,7 @@ function makeBoardSummary(report) {
       `MacClientFormalSmoke=${formalSmokeCommand}.`,
       `MacClientDiscoverWindows=${discoverWindowsCommand}.`,
       `MacClientReverseRehearsal=${reverseRehearsalAction}.`,
+      `MacClientReverseGrantCopy=${reverseGrantCopyAction}.`,
       `MacClientBrowserSelfTest=${browserSelfTestCommand}.`,
       `CopyDiagnostics=${copyDiagnosticsAction}.`,
       "No password was requested or sent; no Windows connection/input was attempted.",
@@ -237,6 +242,7 @@ function makeBoardSummary(report) {
     `MacClientFormalSmoke=${formalSmokeCommand}.`,
     `MacClientDiscoverWindows=${discoverWindowsCommand}.`,
     `MacClientReverseRehearsal=${reverseRehearsalAction}.`,
+    `MacClientReverseGrantCopy=${reverseGrantCopyAction}.`,
     `MacClientBrowserSelfTest=${browserSelfTestCommand}.`,
     `CopyDiagnostics=页面在线后在 ${copyDiagnosticsAction}.`,
     "No password was requested or sent; no Windows connection/input was attempted.",
@@ -250,6 +256,7 @@ function makeCommands(args) {
       "node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary",
     macClientDiscoverWindowsCommand: discoverWindowsCommand,
     macClientReverseRehearsalAction: reverseRehearsalAction,
+    macClientReverseGrantCopyAction: reverseGrantCopyAction,
     macClientFormalSmokeCommand: formalSmokeCommand,
     macClientBrowserSelfTestCommand: browserSelfTestCommand,
     macClientCopyDiagnosticsAction: copyDiagnosticsAction,
