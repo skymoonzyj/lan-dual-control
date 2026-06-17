@@ -79,6 +79,11 @@ Machine-readable JSON fields:
                              Secret-free Mac controls Windows formal checklist
                              command; it prints the manual true-test checklist
                              without authenticating or sending input.
+  commands.macClientFormalSmokeCommand
+                             Secret-free Mac controls Windows browser-smoke
+                             preflight command; it discovers Windows hosts and
+                             prints a summary without authenticating, prompting
+                             for a password, sending a call, or sending input.
   commands.macScriptHelpCommand
                              Pure help coverage command for scripts/mac/*.mjs;
                              it rejects runtime side-effect output and prints
@@ -625,6 +630,10 @@ function makeMacClientFormalChecklistCommand() {
   return "node scripts/mac/check-mac-client-formal-status.mjs --boardSummary";
 }
 
+function makeMacClientFormalSmokeCommand() {
+  return "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --preflightOnly --boardSummary";
+}
+
 function makeMacScriptHelpCommand() {
   return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
@@ -707,6 +716,7 @@ function formatBoardSummary(report) {
       `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
       `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
       `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
+      `MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}.`,
       `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
       "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
     ].join(" ");
@@ -729,6 +739,7 @@ function formatBoardSummary(report) {
     `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
     `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
+    `MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}.`,
     `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
     "Next formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
@@ -784,6 +795,7 @@ function printReport(report) {
   console.log(`[NEXT] Mac client diagnostics: ${report.commands.macClientDiagnosticsCommand}`);
   console.log(`[NEXT] Mac client discover Windows host: ${report.commands.macClientDiscoverWindowsCommand}`);
   console.log(`[NEXT] Mac client formal checklist: ${report.commands.macClientFormalChecklistCommand}`);
+  console.log(`[NEXT] Mac client formal smoke preflight: ${report.commands.macClientFormalSmokeCommand}`);
   console.log(`[NEXT] Mac client copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
   console.log(`[NEXT] Mac script help safety check: ${report.commands.macScriptHelpCommand}`);
   console.log(report.ok ? "[OK] Resume status passed" : "[FAIL] Resume status needs attention");
@@ -825,6 +837,7 @@ async function main() {
       macClientDiagnosticsCommand: makeMacClientDiagnosticsCommand(),
       macClientDiscoverWindowsCommand: makeMacClientDiscoverWindowsCommand(),
       macClientFormalChecklistCommand: makeMacClientFormalChecklistCommand(),
+      macClientFormalSmokeCommand: makeMacClientFormalSmokeCommand(),
       macClientCopyDiagnosticsAction: "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码",
       macScriptHelpCommand: makeMacScriptHelpCommand(),
     },
