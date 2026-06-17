@@ -55,6 +55,37 @@
 
 ## 2026-06-17 Mac Codex
 
+日期：2026-06-17 13:51
+开发端：Mac Codex
+本轮目标：让 Mac client readiness 自身也提示页面复制诊断入口。
+完成内容：
+- `check-mac-client-readiness` 新增 `commands.macClientCopyDiagnosticsAction`，JSON 可直接读取该提示。
+- `--boardSummary` 增加 `CopyDiagnostics=Mac client 事件日志点击“复制诊断”`，和 Mac 恢复总览里的 `MacClientDiagnostics=` 形成闭环。
+- 普通输出新增 `Copy diagnostics:` 行，现场不看 JSON 时也能知道下一步怎么粘贴完整页面诊断。
+- 自测新增 help、JSON、普通输出、boardSummary 和不泄密断言。
+修改文件：
+- `scripts/mac/check-mac-client-readiness.mjs`
+- `scripts/mac/test-mac-client-readiness.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-client-readiness.mjs`
+- `node --check scripts/mac/test-mac-client-readiness.mjs`
+- `node scripts/mac/test-mac-client-readiness.mjs --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/mac docs`
+遗留问题：
+- 本轮只补 Mac client readiness 提示，不打开真实 Windows host、不认证、不发送密码、不发送 input、不执行 inject。
+下一步建议：
+- 现场先跑 `node scripts/mac/check-mac-client-readiness.mjs --probeClientServer --checkBoard --boardSummary` 发一行 readiness；如需更多细节，再在 Mac client 页面事件日志点“复制诊断”粘贴完整报告。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Mac Codex
+
 日期：2026-06-17 13:18
 开发端：Mac Codex
 本轮目标：让 Mac 恢复总览直接提示 Mac client 无密诊断和复制诊断入口。

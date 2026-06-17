@@ -87,6 +87,7 @@ function checkHelp(args) {
     const result = run([flag], args);
     assert(result.status === 0, `${script} ${flag} should exit 0`);
     assertIncludes(result.stdout, "Usage:", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macClientCopyDiagnosticsAction", `${script} ${flag}`);
   }
   print("OK", "Mac client readiness help exits quickly");
 }
@@ -100,7 +101,10 @@ function checkOfflineJson(args) {
   assert(payload.clientServer?.checked === false, "client server should not be checked by default");
   assert(payload.windowsHost?.checked === false, "Windows host should not be checked by default");
   assert(Array.isArray(payload.checklist), "payload should include checklist");
+  assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "payload should include copy diagnostics action");
+  assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("连接密码"), "copy diagnostics action should mention password safety");
   assert(/Mac client readiness:/.test(payload.boardSummary || ""), "payload should include boardSummary");
+  assert(/CopyDiagnostics=Mac client 事件日志点击/.test(payload.boardSummary || ""), "boardSummary should include copy diagnostics action");
   print("OK", "Offline JSON is parseable and secret-free");
 }
 
@@ -148,9 +152,20 @@ function checkBoardSummary(args) {
   const text = String(result.stdout || "").trim();
   assert(result.status === 0, "board summary should exit 0 without blockers");
   assertIncludes(text, "Mac client readiness:", "board summary");
+  assertIncludes(text, "CopyDiagnostics=Mac client 事件日志点击", "board summary");
+  assertIncludes(text, "连接密码", "board summary");
   assertIncludes(text, "Do not send passwords", "board summary");
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "board summary output");
   print("OK", "Board summary is short and does not echo secret-like server text");
+}
+
+function checkPlainReport(args) {
+  const result = run(["--timeoutMs", "1200"], args);
+  assert(result.status === 0, "plain report should exit 0 without blockers");
+  assertIncludes(result.stdout, "Copy diagnostics:", "plain report");
+  assertIncludes(result.stdout, "复制诊断", "plain report");
+  assertIncludes(result.stdout, "连接密码", "plain report");
+  print("OK", "Plain report includes copy diagnostics guidance");
 }
 
 async function getFreePort() {
@@ -327,6 +342,7 @@ async function main() {
   checkOfflineJson(args);
   checkRequireFailures(args);
   checkBoardSummary(args);
+  checkPlainReport(args);
   await checkClientServerProbe(args);
   await checkWindowsDiscoveryProbe(args);
   print("OK", "Mac client readiness self-test passed");

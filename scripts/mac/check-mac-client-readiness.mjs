@@ -64,6 +64,12 @@ Options:
   --json                     Print one machine-readable JSON object.
   --help, -h                 Show this help without probing anything.
 
+Machine-readable JSON fields:
+  commands.macClientCopyDiagnosticsAction
+                             Safe in-page action for copying the Mac client
+                             diagnostic report. It does not contain or request
+                             a password.
+
 Examples:
   node scripts/mac/check-mac-client-readiness.mjs --json
   node scripts/mac/check-mac-client-readiness.mjs --probeClientServer --boardSummary
@@ -473,6 +479,10 @@ function makeRecommendations(checklist, windowsHost) {
   return recommendations;
 }
 
+function makeMacClientCopyDiagnosticsAction() {
+  return "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码";
+}
+
 function makeBoardSummary(report) {
   const repo = report.git.clean ? "clean" : `dirty(${report.git.changes.length})`;
   const client = report.client.ok ? "ok" : "blocked";
@@ -488,7 +498,7 @@ function makeBoardSummary(report) {
       : `offline ${report.windowsHost.probe.host}:${report.windowsHost.probe.port}`;
   const counts = `blockers=${report.counts.blocker} warnings=${report.counts.warning}`;
   const next = report.recommendations[0]?.text || "No next step available.";
-  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows}; ${counts}. Next: ${next} Do not send passwords on Agent Link Board.`;
+  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows}; ${counts}. Next: ${next} CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
 }
 
 function printHuman(report) {
@@ -498,6 +508,7 @@ function printHuman(report) {
   console.log(`- local server: ${report.clientServer.checked ? (report.clientServer.online ? `online ${report.clientServer.url}` : `offline ${report.clientServer.url}`) : "not checked"}`);
   console.log(`- Windows host: ${report.windowsHost.checked ? (report.windowsHost.online ? `online ${report.windowsHost.probe.host}:${report.windowsHost.probe.port}` : `offline ${report.windowsHost.probe.host}:${report.windowsHost.probe.port}`) : "not checked"}`);
   console.log(`- Agent Link Board: ${report.board.checked ? (report.board.ok ? "readable" : "not readable") : "not checked"}`);
+  console.log(`- Copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
   console.log(`- result: ${report.ok ? "ready with warnings allowed" : "blocked"} (${report.counts.blocker} blockers, ${report.counts.warning} warnings)`);
   console.log("");
   for (const item of report.checklist) {
@@ -547,6 +558,9 @@ async function buildReport(args) {
     board,
     checklist,
     counts,
+    commands: {
+      macClientCopyDiagnosticsAction: makeMacClientCopyDiagnosticsAction(),
+    },
     recommendations: makeRecommendations(checklist, windowsHost),
     boardSummary: "",
   };
