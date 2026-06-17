@@ -118,6 +118,18 @@ function print(kind, text) {
   console.log(`[${kind}] ${text}`);
 }
 
+function assertManualChecklist(checklist, label) {
+  assert(Array.isArray(checklist), `${label} should be an array`);
+  const ids = checklist.map((entry) => entry.id);
+  for (const id of ["connection", "video", "audio", "clipboard", "input-ack", "diagnostics"]) {
+    assert(ids.includes(id), `${label} should include ${id}`);
+  }
+  const combined = JSON.stringify(checklist);
+  assertIncludes(combined, "Copy Diagnostics", `${label} diagnostics`);
+  assertIncludes(combined, "password", `${label} password safety`);
+  assertNotIncludes(combined, "LAN_DUAL_PASSWORD", `${label}`);
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run([flag], args);
@@ -125,6 +137,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "Usage:", `${script} ${flag}`);
     assertIncludes(result.stdout, "--sendCall", `${script} ${flag}`);
     assertIncludes(result.stdout, "--forceCall", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.manualChecklist", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.safePreflightWithEnsureClient", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.sendCallWithEnsureClient", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsReverseGrantStatus", `${script} ${flag}`);
@@ -173,6 +186,7 @@ function checkOfflineJson(args) {
   assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "临时授权已使用", "offline reverse rehearsal command");
   assert(payload.runPlan?.steps?.some((step) => step.id === "browser-smoke"), "offline runPlan should include browser smoke step");
   assert(payload.runPlan?.steps?.some((step) => step.id === "reverse-control-request"), "offline runPlan should include reverse control request step");
+  assertManualChecklist(payload.runPlan?.manualChecklist, "offline manual checklist");
   assert(payload.runPlan?.safety?.reverseControlRequestSendsInput === false, "offline runPlan should say reverse request sends no input");
   assert(payload.runPlan?.safety?.windowsReverseGrantLoopbackOnly === true, "offline runPlan should keep Windows grant loopback-only");
   assertIncludes(payload.boardSummary || "", "Do not send passwords", "offline board summary");
@@ -245,6 +259,9 @@ function checkHumanRunPlan(args) {
   assertIncludes(result.stdout, "local-client", "human runPlan");
   assertIncludes(result.stdout, "browser-smoke", "human runPlan");
   assertIncludes(result.stdout, "reverse-control-request", "human runPlan");
+  assertIncludes(result.stdout, "Manual true-test checklist", "human manual checklist");
+  assertIncludes(result.stdout, "connection:", "human manual checklist");
+  assertIncludes(result.stdout, "diagnostics:", "human manual checklist");
   assertIncludes(result.stdout, "passwordInCommandArguments=false", "human runPlan safety");
   assertIncludes(result.stdout, "inject=false", "human runPlan safety");
   assertNotIncludes(output, "LAN_DUAL_PASSWORD", "human runPlan output");
@@ -511,7 +528,10 @@ async function checkReadyShape(args) {
       assert(payload.runPlan?.safety?.windowsReverseGrantLoopbackOnly === true, "ready runPlan should keep Windows grant loopback-only");
       assert(payload.runPlan?.safety?.requiresExplicitUserConfirmationForInject === true, "runPlan should require explicit inject confirmation");
       assert(payload.runPlan?.steps?.some((step) => step.id === "reverse-control-request" && String(step.command || "").includes("allow-windows-reverse-control.ps1")), "ready runPlan should include reverse control request step");
+      assertManualChecklist(payload.runPlan?.manualChecklist, "ready manual checklist");
+      assert(JSON.stringify(payload.runPlan?.manualChecklist || []).includes(`127.0.0.1:${windowsPort}`), "ready manual checklist should include target address");
       assertIncludes(payload.boardSummary || "", "windowsHost=online 127.0.0.1", "ready board summary");
+      assertIncludes(payload.boardSummary || "", "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "ready board summary");
       assertIncludes(payload.boardSummary || "", "Reverse rehearsal:", "ready board summary");
       assertIncludes(payload.callText || "", "Suggested browser test:", "ready call text");
       assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "ready output");

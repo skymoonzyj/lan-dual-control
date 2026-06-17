@@ -21,6 +21,39 @@
 
 日期：2026-06-17 续跑
 开发端：Mac Codex
+本轮目标：给 Mac 控制 Windows formal checklist 补人工真连验收清单。
+完成内容：
+- `scripts/mac/check-mac-client-formal-status.mjs` 的 `runPlan` 新增 `manualChecklist`，把人工真连要确认的连接、视频、音频、剪贴板、input_ack 和复制诊断/日志证据整理成固定 JSON 字段。
+- 普通输出新增 `Manual true-test checklist`，`--boardSummary` 新增 `ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics`，方便发通讯板后双方按项执行。
+- 清单保持只读语义：不启动 Windows host、不认证、不要求或打印密码、不发送输入事件、不执行 inject；反控授权仍只提示 Windows 本机回环命令。
+- `scripts/mac/test-mac-client-formal-status.mjs` 覆盖 help、离线 JSON、普通输出、ready JSON 和 boardSummary 中的新清单，并确认不泄露 `LAN_DUAL_PASSWORD`。
+修改文件：
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-client-formal-status.mjs`
+- `node --check scripts/mac/test-mac-client-formal-status.mjs`
+- `node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 45000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮只补人工验收计划和自测，没有启动真实 Windows host、没有认证、没有发送密码/input/inject。
+下一步建议：
+- 后续 Mac -> Windows 轻量联调时，先用 `check-mac-client-formal-status --boardSummary` 发 readiness 和 `ManualChecklist=`，再按连接、视频、音频、剪贴板、input_ack、复制诊断逐项打勾。
+是否改了协议：否。
+是否需要另一端配合：后续真实联调时需要 Windows 端启动/保持 Windows host 在线。
+
+## 2026-06-17 Mac Codex
+
+日期：2026-06-17 续跑
+开发端：Mac Codex
 本轮目标：让 Mac client readiness 自身也输出本地页面状态命令。
 完成内容：
 - `scripts/mac/check-mac-client-readiness.mjs` 新增 `commands.macClientPageStatusCommand`，值为 `node scripts/mac/start-mac-client.mjs --status --boardSummary`，只读检查本地 Mac client 页面在线状态。

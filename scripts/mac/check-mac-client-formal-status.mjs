@@ -59,6 +59,10 @@ Options:
   --help, -h                      Show this help without probing anything.
 
 JSON output:
+  runPlan.manualChecklist
+                                  Human true-test checklist for connection,
+                                  video/audio, clipboard, input acknowledgments,
+                                  and diagnostics export evidence.
   runPlan.commands.safePreflightWithEnsureClient
                                   Safe run-mac-client-formal-smoke --ensureClient
                                   command that starts/reuses the local Mac
@@ -464,6 +468,52 @@ function makeReverseControlRehearsalText(report, args) {
   ].join(" ");
 }
 
+function makeManualChecklist(report, args) {
+  const host = report.readiness.windowsHost || {};
+  const clientServer = report.readiness.clientServer || {};
+  const targetHost = host.probe?.host || args.windowsHost || "<Windows IP>";
+  const targetPort = host.probe?.port || args.windowsPort || defaults.windowsPort;
+  const clientUrl = clientServer.url || `http://${args.clientHost}:${args.clientPort}/`;
+  return [
+    {
+      id: "connection",
+      title: "Connect and authenticate from Mac client to Windows host",
+      evidence: `Mac client page ${clientUrl} shows connected/authenticated to ${targetHost}:${targetPort}; Windows host runtime/build is visible.`,
+      pass: "Connected state is stable and no password is copied to Agent Link Board.",
+    },
+    {
+      id: "video",
+      title: "Verify visible Windows desktop video and frame freshness",
+      evidence: "Mac client shows Windows desktop, first frame time, observed FPS, video frame age or clock-skew warning, and H.264/JPEG fallback state.",
+      pass: "Video is visible, keeps updating, and any fallback or repeated-frame warning is understandable.",
+    },
+    {
+      id: "audio",
+      title: "Verify Windows system audio payload and playback",
+      evidence: "Mac client audio status shows payload/playback counters plus audio frame age or clock-skew warning.",
+      pass: "Audio frame count and playback count increase during the test, or silence is explained clearly.",
+    },
+    {
+      id: "clipboard",
+      title: "Verify text and file clipboard paths",
+      evidence: "Text clipboard ack is visible; file transfer/send status is visible; Windows side can retry or explain failure.",
+      pass: "Text copy works, file path gives a clear success/failure/retry state, and no secret text is included.",
+    },
+    {
+      id: "input-ack",
+      title: "Verify safe input acknowledgments only",
+      evidence: "Mac client event log shows input acknowledgments in Windows host log mode; no real system injection is requested by this checklist.",
+      pass: "Mouse/key events receive acknowledgments, and the UI still indicates log/safe mode unless user explicitly chose real control.",
+    },
+    {
+      id: "diagnostics",
+      title: "Copy diagnostics and summarize issues",
+      evidence: "Mac client event log Copy Diagnostics output is pasted after checking it does not include the connection password.",
+      pass: "Diagnostics include connection, media, clipboard, input acknowledgment, reverse-control state, and recent errors.",
+    },
+  ];
+}
+
 function makeEnsureClientSmokeCommand(args, extra = []) {
   const parts = [
     "node scripts/mac/run-mac-client-formal-smoke.mjs",
@@ -597,6 +647,7 @@ function makeRunPlan(report, args) {
         success: "Record first frame time, observed FPS, frame age, audio delay, bandwidth/CPU/memory, and any reconnect issues.",
       },
     ],
+    manualChecklist: makeManualChecklist(report, args),
     notes: [
       "Do not send passwords, tokens, or system account details on Agent Link Board.",
       "Only enter the Windows host password in the Mac client UI or run-mac-client-formal-smoke --promptPassword when intentionally running auth.",
@@ -622,6 +673,7 @@ function makeBoardSummary(report) {
     report.readyToCall
       ? `Next: run Mac client true test against ${host.probe?.host}:${host.probe?.port}; compare first frame, FPS, frame age, audio playback, clipboard, input-log, bandwidth/CPU.`
       : "Next: clear blockers, run node scripts/mac/start-mac-client.mjs, discover/start Windows host, then rerun with --host <Windows IP> --port 43770 --boardSummary.",
+    "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
     `Reverse rehearsal: click 请求反控 -> expect LAN008; Windows local grant PowerShell: ${makeWindowsReverseGrantCommand(report, { windowsPort: host.probe?.port || report.args?.windowsPort || defaults.windowsPort }, "grant")}; Node fallback: ${makeWindowsReverseGrantNodeFallbackCommand(report, { windowsPort: host.probe?.port || report.args?.windowsPort || defaults.windowsPort }, "grant")}; Mac retry -> accepted/临时授权已使用.`,
     "RunPlan: local client -> Windows discovery -> formal checklist -> browser smoke -> reverse request rehearsal -> observe quality/resources.",
     "Do not send passwords on Agent Link Board; do not run inject unless the user explicitly confirms they are watching.",
@@ -781,6 +833,13 @@ function printRunPlan(runPlan) {
     console.log(`  Success: ${step.success}`);
   }
   console.log(`- safety: passwordInCommandArguments=${runPlan.safety.passwordInCommandArguments}; inject=${runPlan.safety.inject}; passwordOnAgentLinkBoard=${runPlan.safety.passwordOnAgentLinkBoard}`);
+  console.log("");
+  console.log("Manual true-test checklist");
+  for (const item of runPlan.manualChecklist || []) {
+    console.log(`- ${item.id}: ${item.title}`);
+    console.log(`  Evidence: ${item.evidence}`);
+    console.log(`  Pass: ${item.pass}`);
+  }
   console.log("");
 }
 
