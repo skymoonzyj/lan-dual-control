@@ -81,8 +81,8 @@ node E:\codex\lan-dual-control\scripts\windows\discover-lan-hosts.mjs --noLocalS
 node E:\codex\lan-dual-control\scripts\windows\discover-lan-hosts.mjs --subnet 192.168.31.0/24 --requireFound
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --diagnosticsOnly
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --diagnosticsOnly --boardSummary
-node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --discover --diagnosticsOnly --expectDiscoveryRuntimeBuildId d807536
-node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --discover --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --diagnosticsOnly --expectDiscoveryRuntimeBuildId d807536
+node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --expectDiscoveryRuntimeBuildId d807536
+node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --discover --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --diagnosticsOnly --boardSummary --expectDiscoveryRuntimeBuildId d807536
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --diagnosticsOnly --host 192.168.31.122 --port 43770 --expectDiscoveryRuntimeBuildId edcde5e
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --discover --promptPassword --requirePassword --requireH264
 node E:\codex\lan-dual-control\scripts\windows\test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --password demo-password

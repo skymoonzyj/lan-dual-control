@@ -70,7 +70,9 @@ Options:
 
 Examples:
   node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly
+  node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary
   node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --expectDiscoveryRuntimeBuildId <build-id>
+  node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --expectDiscoveryRuntimeBuildId <build-id>
   node scripts/windows/test-windows-client-browser.mjs --host 192.168.1.20 --port 43770 --promptPassword --requirePassword --requireH264
   node scripts/windows/test-windows-client-browser.mjs --discover --promptPassword --requirePassword --requireH264
   node scripts/windows/test-windows-client-browser.mjs --host 127.0.0.1 --port 43770 --injectPcmAudio
