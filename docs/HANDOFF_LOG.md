@@ -21,6 +21,38 @@
 
 日期：2026-06-17 续跑
 开发端：Windows Codex
+本轮目标：第一阶段远控 UI 补强，确保 Windows 控 Mac 进入全屏后不会找不到退出方式。
+完成内容：
+- Windows 控 Mac 远程画面新增全屏轻提示：进入全屏时短暂显示 `Esc` 退出、当前画质、刷新率、码率和输入状态。
+- `Esc` 键在全屏里会优先退出全屏；如果控制中心正展开，会同时收起控制中心，避免只关面板不退出全屏。
+- 页面自检扩展覆盖全屏提示可见、提示文案包含当前 `Hz/Mbps`、`Esc` 退出全屏、全屏/窗口按钮和原有黑边输入防护。
+- Windows 控制端 README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/app.js`
+- `apps/windows-client/styles.css`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 本轮只做页面 UI 行为和自检，不改变协议、不连接真实 Mac、不认证、不发送密码/input/inject。真实 Mac 连接时仍需观察全屏提示是否不遮挡操作、原画模式下文案是否足够清楚。
+下一步建议：
+- Windows 控 Mac UI 继续补“真全屏/沉浸式全屏”入口规划，或转入真实 Mac 连接下的原画/声音/快捷键手感验收。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真实 Mac 连接验收时再通过 Agent Link Board 发 call。
+
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
 本轮目标：第一阶段远控 UI 收口，把 Windows 控 Mac 悬浮控制中心补成可日常操作的远控工具栏。
 完成内容：
 - Windows 控 Mac 顶部画质预设改为“流畅 / 自动 / 高清 / 原画 / 自定义”，新增“原画”预设：请求 4K、50 Mbps，并切到原始比例。

@@ -872,10 +872,25 @@ async function verifyFloatingControlCenter(session) {
       const shell = document.querySelector(".app-shell");
       const topbar = document.querySelector(".topbar");
       const remoteSurface = document.querySelector(".remote-surface");
+      const fullscreenHint = document.querySelector("#fullscreenHint");
+      const fullscreenHintText = document.querySelector("#fullscreenHintText")?.textContent || "";
       const fullscreenEntered =
         shell?.classList.contains("is-fullscreen") &&
         getComputedStyle(topbar).display === "none" &&
         getComputedStyle(remoteSurface).paddingTop === "0px";
+      const fullscreenHintVisible =
+        fullscreenHint?.classList.contains("is-visible") &&
+        fullscreenHintText.includes("Esc") &&
+        fullscreenHintText.includes("144 Hz") &&
+        fullscreenHintText.includes("40 Mbps");
+
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      const fullscreenEscExited =
+        !shell?.classList.contains("is-fullscreen") &&
+        getComputedStyle(topbar).display !== "none";
+
+      if (panel.hidden) toggle.click();
+      document.querySelector("#floatingFullscreenButton")?.click();
 
       if (panel.hidden) toggle.click();
       document.querySelector("#floatingWindowButton")?.click();
@@ -911,6 +926,8 @@ async function verifyFloatingControlCenter(session) {
           statusVisible &&
           shortcutSent &&
           fullscreenEntered &&
+          fullscreenHintVisible &&
+          fullscreenEscExited &&
           fullscreenExited,
         opened,
         floatingLayer,
@@ -925,6 +942,8 @@ async function verifyFloatingControlCenter(session) {
         statusVisible,
         shortcutSent,
         fullscreenEntered,
+        fullscreenHintVisible,
+        fullscreenEscExited,
         fullscreenExited,
         closed: panel.hidden,
         restored: {
@@ -2770,7 +2789,7 @@ async function run() {
     summary.checks.push("control-center");
     print(
       "OK",
-      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, original=${controlCenterCheck.originalPresetSynced}, detailed=${controlCenterCheck.detailedSettingsSynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, status=${controlCenterCheck.statusVisible}, shortcut=${controlCenterCheck.shortcutSent}, fullscreen=${controlCenterCheck.fullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
+      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, original=${controlCenterCheck.originalPresetSynced}, detailed=${controlCenterCheck.detailedSettingsSynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, status=${controlCenterCheck.statusVisible}, shortcut=${controlCenterCheck.shortcutSent}, fullscreen=${controlCenterCheck.fullscreenEntered}, hint=${controlCenterCheck.fullscreenHintVisible}, esc=${controlCenterCheck.fullscreenEscExited}, window=${controlCenterCheck.fullscreenExited}`,
     );
     const desktopOnlyPanelCheck = await verifyDesktopOnlyHostPanel(session);
     summary.checks.push("desktop-panel");

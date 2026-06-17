@@ -103,6 +103,9 @@ const elements = {
   floatingFullscreenButton: document.querySelector("#floatingFullscreenButton"),
   floatingWindowButton: document.querySelector("#floatingWindowButton"),
   floatingDisconnectButton: document.querySelector("#floatingDisconnectButton"),
+  fullscreenHint: document.querySelector("#fullscreenHint"),
+  fullscreenHintText: document.querySelector("#fullscreenHintText"),
+  fullscreenHintClose: document.querySelector("#fullscreenHintClose"),
   cursorDot: document.querySelector("#cursorDot"),
   remoteFrameImage: document.querySelector("#remoteFrameImage"),
   remoteVideoCanvas: document.querySelector("#remoteVideoCanvas"),
@@ -389,6 +392,7 @@ const state = {
   lastRemotePointer: null,
   remotePointerButtonsDown: new Set(),
   pointerOutsideFrameNoticeAt: 0,
+  fullscreenHintTimer: null,
   controlDirection: "windows_to_mac",
   pendingControlDirection: "",
   reverseRequestId: "",
@@ -2012,6 +2016,51 @@ function syncFloatingControlStatus() {
   if (elements.floatingShortcutButton) {
     elements.floatingShortcutButton.disabled = !canSendControlInput();
   }
+  if (state.fullscreen && elements.fullscreenHint?.classList.contains("is-visible")) {
+    updateFullscreenHintText();
+  }
+}
+
+function clearFullscreenHintTimer() {
+  if (state.fullscreenHintTimer) {
+    window.clearTimeout(state.fullscreenHintTimer);
+    state.fullscreenHintTimer = null;
+  }
+}
+
+function formatFullscreenHintText() {
+  const settings = currentDisplaySettings();
+  const quality = elements.qualityPresetSelect.selectedOptions[0]?.textContent || "自定义";
+  const input = formatFloatingInputModeStatus();
+  return `Esc 退出 · ${quality} · ${settings.fps} Hz / ${elements.bandwidthSelect.value} Mbps · ${input}`;
+}
+
+function updateFullscreenHintText() {
+  if (elements.fullscreenHintText) {
+    elements.fullscreenHintText.textContent = formatFullscreenHintText();
+  }
+}
+
+function hideFullscreenHint() {
+  clearFullscreenHintTimer();
+  if (!elements.fullscreenHint) return;
+  elements.fullscreenHint.classList.remove("is-visible");
+  window.setTimeout(() => {
+    if (!elements.fullscreenHint.classList.contains("is-visible")) {
+      elements.fullscreenHint.hidden = true;
+    }
+  }, 180);
+}
+
+function showFullscreenHint({ autoHide = true } = {}) {
+  if (!elements.fullscreenHint) return;
+  clearFullscreenHintTimer();
+  updateFullscreenHintText();
+  elements.fullscreenHint.hidden = false;
+  elements.fullscreenHint.classList.add("is-visible");
+  if (autoHide) {
+    state.fullscreenHintTimer = window.setTimeout(hideFullscreenHint, 3800);
+  }
 }
 
 function syncFloatingControlCenter() {
@@ -2982,6 +3031,11 @@ function setFullscreen(enabled) {
   elements.fullscreenButton.classList.toggle("active", enabled);
   elements.windowModeButton.classList.toggle("active", !enabled);
   syncFloatingControlCenter();
+  if (enabled) {
+    showFullscreenHint();
+  } else {
+    hideFullscreenHint();
+  }
   sendDisplaySettings();
 }
 
@@ -5626,6 +5680,7 @@ elements.floatingAudioVolumeRange.addEventListener("input", () => {
 elements.floatingShortcutButton.addEventListener("click", () => {
   void sendFloatingShortcut();
 });
+elements.fullscreenHintClose.addEventListener("click", hideFullscreenHint);
 
 elements.qualityPresetSelect.addEventListener("change", () => {
   if (elements.qualityPresetSelect.value === "custom") {
@@ -5843,12 +5898,15 @@ elements.remoteCanvas.addEventListener("keydown", async (event) => {
 });
 
 window.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !elements.controlCenterPanel.hidden) {
-    setControlCenterOpen(false);
+  if (event.key === "Escape" && state.fullscreen) {
+    if (!elements.controlCenterPanel.hidden) {
+      setControlCenterOpen(false);
+    }
+    setFullscreen(false);
     return;
   }
-  if (event.key === "Escape" && state.fullscreen) {
-    setFullscreen(false);
+  if (event.key === "Escape" && !elements.controlCenterPanel.hidden) {
+    setControlCenterOpen(false);
   }
 });
 document.addEventListener("pointerdown", (event) => {

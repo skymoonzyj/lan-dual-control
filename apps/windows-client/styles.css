@@ -989,6 +989,63 @@ button:disabled {
   color: var(--danger);
 }
 
+.fullscreen-hint {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  bottom: 18px;
+  display: inline-flex;
+  max-width: min(680px, calc(100% - 32px));
+  min-height: 38px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.62);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.9);
+  color: #f8fafc;
+  box-shadow: 0 16px 38px rgba(8, 15, 24, 0.24);
+  font-size: 13px;
+  line-height: 1.3;
+  padding: 8px 8px 8px 12px;
+  transform: translateX(-50%) translateY(10px);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.fullscreen-hint.is-visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.fullscreen-hint span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fullscreen-hint button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(226, 232, 240, 0.42);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.fullscreen-hint button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
 .mac-menubar {
   position: relative;
   z-index: 1;
@@ -1203,6 +1260,12 @@ button:disabled {
     right: 8px;
     top: 8px;
     max-width: calc(100% - 16px);
+  }
+
+  .fullscreen-hint {
+    bottom: 10px;
+    max-width: calc(100% - 20px);
+    font-size: 12px;
   }
 
   .control-center-copy small {
