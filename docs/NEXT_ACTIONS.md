@@ -19,9 +19,9 @@
    - 真机联调前优先用 Windows 桌面版“刷新设备”自动扫描同网段 `/discovery`；命令行可用 `node scripts/windows/discover-lan-hosts.mjs --boardSummary --requireMacHost` 快速确认当前 Mac IP，并直接得到 formal E2E 预检、授权提醒、ready 后自动发送授权提醒和正式验收命令。已知 IP 时用 `--noLocalSubnets --host 192.168.31.122 --port 43770` 可避免扫整段局域网。发现摘要现在会附带 Mac host runtime `buildDiff`：若只是 `stale metadata only, hostRuntimeChanges=0` 可继续无密预检；若显示 `restart recommended`，正式长测前先请 Mac 端重启 host。2026-06-16 真实 Mac host `192.168.31.122:43770` / runtime build `c5e5009` 已通过完整 Windows formal Mac E2E：H.264/WebCodecs、音频、文本/文件剪贴板、input-log 和 Windows 控制端诊断均 OK；formal E2E 未执行 `inject`。之后真实 safe inject 小验收已单独通过，后续复跑仍必须先由用户明确确认正在看 Mac 屏幕，并由 Mac 端用 `--confirmUserWatching` 启动 inject host。
    - 保持诊断状态条准确显示真实视频、模拟回退、Mac host runtime、权限、输入注入和剪贴板状态。
    - 保持顶部“输入事件”状态能直说当前输入模式：`inputMode=log` 必须提示“安全日志，不会真正控制”，真实注入要显示“真实控制 / 已注入”，拒绝要显示错误码；后续改输入 UI 或诊断条时先跑 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`。
-   - 恢复开工或现场要快速同步 Windows 控制端页面状态时，优先跑 `node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`；摘要里的 `WinClientDiagnostics=` 已直接带 `--boardSummary`，可先发一行无密页面诊断，再按需点页面或全屏浮层“复制诊断”粘贴完整快速摘要，报告里会保留当前全屏浮层的连接、视频、声音、剪贴板、输入和安全状态。
+   - 恢复开工或现场要快速同步 Windows 控制端页面状态时，优先跑 `node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`；摘要里的 `WinClientDiagnostics=` 已直接带 `--boardSummary`，可先发一行无密页面诊断，再按需点页面或全屏浮层“复制诊断”粘贴完整快速摘要，报告里会保留普通声音接收/播放摘要，以及当前全屏浮层的连接、视频、声音、剪贴板、输入和安全状态。
    - 真实连接时同时观察“实收 FPS”和“帧延迟”：帧延迟来自 `video_frame.timestamp` 接收年龄，可帮助区分采集/编码/网络/解码卡顿；普通诊断条和全屏悬浮控制中心展开后都会显示当前视频链路、低于请求刷新率提示、帧延迟或回退原因，浮层还会显示实收/协商/请求刷新率；现场觉得“没有 60Hz”时先截图或复制诊断看这一行；若显示“时钟偏差”，先校准两端系统时间再判断延迟。
-   - 继续验证 Mac 真实 `pcm-f32le-base64` 音频帧播放稳定性，重点看静音、音量变化、长时间运行和延迟；全屏悬浮控制中心展开后也会显示声音接收帧数、电平、播放计数、音量和丢帧，现场听不到声音时先看它是“等待音频”“等待播放”还是“播放失败”。
+   - 继续验证 Mac 真实 `pcm-f32le-base64` 音频帧播放稳定性，重点看静音、音量变化、长时间运行和延迟；全屏悬浮控制中心展开后会显示声音接收帧数、电平、播放计数、音量和丢帧，复制诊断报告也会写入普通声音接收/播放/音量/电平/丢帧/错误摘要。现场听不到声音时先看它是“等待音频”“已接收，等待播放”“正在播放”还是“播放失败”。
    - Windows 控制端远端文件托盘已补接收中、分块进度、超限拒绝、解析失败、不完整完成、连接中断和 45 秒无新分块/完成消息的超时状态条；后续真实文件/压缩包复制时，除了看事件日志，也要直接看“远端文件”面板状态和全屏悬浮控制中心的“剪贴板”状态是否同步给出接收进度、写入系统剪贴板结果和可执行恢复动作。
    - 黑边输入防护已固化到 Windows 控制端页面级自检；后续改缩放、画布或输入层时保持该回归。
    - 处理真实 Mac 连接中的中文错误提示和重连体验；当前控制端已补自动重连倒计时、“立即重连”按钮，并在全屏悬浮控制中心显示连接/重连倒计时和浮层“立即重连”入口，导出日志也会记录重连原因和下次重连倒计时，报告顶部“快速摘要”会先汇总远端连接和重连状态；下一步重点看真实断网/host 重启后的画面恢复时间和错误提示是否足够直观。

@@ -2845,6 +2845,39 @@ function getResolutionExportLabel(settings) {
   return settings.resolutionMode === "native" ? "原生" : `${settings.width} × ${settings.height}`;
 }
 
+function getAudioExportStatus() {
+  const enabled = elements.audioToggle.checked;
+  const volume = Number(elements.audioVolumeRange.value) || 0;
+  const frameCount = Number(state.audioFrames) || 0;
+  const playedCount = Number(state.audioPlayedFrames) || 0;
+  const droppedCount = Number(state.audioDroppedFrames) || 0;
+  const level = Math.round((Number(state.audioLevel) || 0) * 100);
+  const error = state.audioLastError ? String(state.audioLastError).replace(/\s+/g, " ").slice(0, 120) : "";
+  let status = "待机";
+  if (!enabled) {
+    status = "关闭";
+  } else if (error) {
+    status = "播放失败";
+  } else if (frameCount > 0 && playedCount > 0) {
+    status = "正在播放";
+  } else if (frameCount > 0) {
+    status = "已接收，等待播放";
+  } else if (state.connected) {
+    status = "等待音频";
+  }
+  const volumeText = `${volume}%${enabled && volume <= 0 ? "（静音）" : ""}`;
+  return {
+    status,
+    volume: volumeText,
+    frames: frameCount,
+    played: playedCount,
+    dropped: droppedCount,
+    level: `${level}%`,
+    error: error || "-",
+    summary: `${status} · 音量 ${volumeText} · 接收 ${frameCount} 帧 · 播放 ${playedCount} · 丢 ${droppedCount}`,
+  };
+}
+
 function getFloatingControlExportStatus() {
   return {
     mode: state.immersiveFullscreen ? "真全屏" : state.fullscreen ? "普通全屏" : "窗口",
@@ -2868,6 +2901,7 @@ function buildDiagnosticsQuickSummary({
   macAlertWatcherExport,
   localHostExport,
   remoteFileExport,
+  audioExport,
   floatingControlExport,
 }) {
   const reconnectParts = [reconnectExport.status];
@@ -2881,6 +2915,7 @@ function buildDiagnosticsQuickSummary({
     `- 远端连接：${currentStateLabel} · ${connectionLabel} · ${targetLabel}`,
     `- 重连：${reconnectParts.join(" · ")}`,
     `- 远端文件：${remoteFileExport.summary}`,
+    `- 声音：${audioExport.summary}`,
     `- 全屏浮层：${floatingControlExport.mode} · ${floatingControlExport.connection} · ${floatingControlExport.video}`,
     `- 本机协作：Mac 提醒 ${macAlertWatcherExport.status} · 本机被控 ${localHostExport.status} · 反控 ${localHostExport.reverseControlMode}`,
     `- 画质请求：${getResolutionExportLabel(settings)} · ${settings.fps} Hz · ${Math.round(settings.maxBandwidthKbps / 1000)} Mbps · 声音${settings.audio ? "开" : "关"}`,
@@ -2900,6 +2935,7 @@ function buildLogExportText() {
   const macAlertWatcherExport = getMacAlertWatcherExportStatus();
   const localHostExport = getLocalHostExportStatus();
   const remoteFileExport = getRemoteFileTransferExportStatus();
+  const audioExport = getAudioExportStatus();
   const floatingControlExport = getFloatingControlExportStatus();
   const resolutionLabel = getResolutionExportLabel(settings);
   const eventLines = state.logEntries
@@ -2928,6 +2964,7 @@ function buildLogExportText() {
       macAlertWatcherExport,
       localHostExport,
       remoteFileExport,
+      audioExport,
       floatingControlExport,
     }),
     "",
@@ -2971,6 +3008,9 @@ function buildLogExportText() {
     `- 刷新率：${settings.fps} Hz`,
     `- 码率：${Math.round(settings.maxBandwidthKbps / 1000)} Mbps`,
     `- 声音：${settings.audio ? `开启 · ${settings.audioVolume}%` : "关闭"}`,
+    `- 声音状态：${audioExport.summary}`,
+    `- 声音电平：${audioExport.level}`,
+    `- 声音错误：${audioExport.error}`,
     `- 剪贴板：${settings.clipboard ? "开启" : "关闭"}`,
     `- 全屏浮层模式：${floatingControlExport.mode}`,
     `- 全屏浮层摘要：${floatingControlExport.summary}`,

@@ -2798,6 +2798,8 @@ async function verifyReconnectControls(session) {
       const localHostInputSelect = document.querySelector("#localHostInputModeSelect");
       const localHostReverseSelect = document.querySelector("#localHostReverseControlModeSelect");
       const localHostReadinessSelect = document.querySelector("#localHostReadinessProfileSelect");
+      const audioToggleElement = document.querySelector("#audioToggle");
+      const audioVolumeElement = document.querySelector("#audioVolumeRange");
       const originalLocalHostBadgeText = localHostBadge?.textContent || "";
       const originalLocalHostBadgeClass = localHostBadge?.className || "";
       const originalLocalHostStatus = localHostStatus?.textContent || "";
@@ -2810,6 +2812,13 @@ async function verifyReconnectControls(session) {
       const originalReceivedTempPath = state.receivedClipboardTempPath;
       const originalReceivedWriteStatus = state.receivedClipboardWriteStatus;
       const originalRemoteFileTransfers = state.remoteFileTransfers;
+      const originalAudioChecked = Boolean(audioToggleElement?.checked);
+      const originalAudioVolume = audioVolumeElement?.value || "";
+      const originalAudioFrames = state.audioFrames;
+      const originalAudioLevel = state.audioLevel;
+      const originalAudioPlayedFrames = state.audioPlayedFrames;
+      const originalAudioDroppedFrames = state.audioDroppedFrames;
+      const originalAudioLastError = state.audioLastError;
       const calls = [];
       let copiedText = "";
 
@@ -2885,6 +2894,13 @@ async function verifyReconnectControls(session) {
             },
           ],
         ]);
+        if (audioToggleElement) audioToggleElement.checked = true;
+        if (audioVolumeElement) audioVolumeElement.value = "33";
+        state.audioFrames = 24;
+        state.audioLevel = 0.37;
+        state.audioPlayedFrames = 0;
+        state.audioDroppedFrames = 2;
+        state.audioLastError = "";
 
         scheduleReconnect("测试断线");
         const exportText = typeof buildLogExportText === "function" ? buildLogExportText() : "";
@@ -2896,6 +2912,12 @@ async function verifyReconnectControls(session) {
             exportText.includes("- 重连：等待自动重连") && exportText.includes("原因 测试断线"),
           quickSummaryRemoteFiles:
             exportText.includes("- 远端文件：warning") && exportText.includes("远端文件接收超时"),
+          quickSummaryAudio:
+            exportText.includes("- 声音：已接收，等待播放") &&
+            exportText.includes("音量 33%") &&
+            exportText.includes("接收 24 帧") &&
+            exportText.includes("播放 0") &&
+            exportText.includes("丢 2"),
           quickSummaryFloating:
             exportText.includes("- 全屏浮层：窗口") &&
             exportText.includes("连接：") &&
@@ -2935,6 +2957,14 @@ async function verifyReconnectControls(session) {
           floatingClipboard: exportText.includes("- 全屏浮层剪贴板：剪贴板："),
           floatingInput: exportText.includes("- 全屏浮层输入：输入："),
           floatingSecurity: exportText.includes("- 全屏浮层安全：安全："),
+          audioStatus:
+            exportText.includes("- 声音状态：已接收，等待播放") &&
+            exportText.includes("音量 33%") &&
+            exportText.includes("接收 24 帧") &&
+            exportText.includes("播放 0") &&
+            exportText.includes("丢 2"),
+          audioLevel: exportText.includes("- 声音电平：37%"),
+          audioError: exportText.includes("- 声音错误：-"),
           remoteFileStatus:
             exportText.includes("- 远端文件状态：warning") && exportText.includes("远端文件接收超时"),
           remoteFileActive:
@@ -2954,6 +2984,8 @@ async function verifyReconnectControls(session) {
           copiedText.includes("- Mac 提醒：提醒中") &&
           copiedText.includes("- 全屏浮层连接：连接：") &&
           copiedText.includes("- 全屏浮层视频：视频：") &&
+          copiedText.includes("- 声音状态：已接收，等待播放") &&
+          copiedText.includes("- 声音电平：37%") &&
           copiedText.includes("- 远端文件状态：warning") &&
           copiedText.includes("远端文件接收超时") &&
           copiedText.includes("- 正在接收远端文件：1 个文件 2 B/4 B") &&
@@ -3032,6 +3064,13 @@ async function verifyReconnectControls(session) {
         state.receivedClipboardTempPath = originalReceivedTempPath;
         state.receivedClipboardWriteStatus = originalReceivedWriteStatus;
         state.remoteFileTransfers = originalRemoteFileTransfers;
+        if (audioToggleElement) audioToggleElement.checked = originalAudioChecked;
+        if (audioVolumeElement) audioVolumeElement.value = originalAudioVolume;
+        state.audioFrames = originalAudioFrames;
+        state.audioLevel = originalAudioLevel;
+        state.audioPlayedFrames = originalAudioPlayedFrames;
+        state.audioDroppedFrames = originalAudioDroppedFrames;
+        state.audioLastError = originalAudioLastError;
         state.logEntries = originalLogEntries;
         if (eventLog) eventLog.innerHTML = originalEventLogHtml;
         window.__TAURI__ = originalTauri;
