@@ -21,6 +21,39 @@
 
 日期：2026-06-17 续跑
 开发端：Mac Codex
+本轮目标：让 Mac 恢复总览直接给出本机 formal local smoke 短验收入口。
+完成内容：
+- `scripts/mac/check-mac-resume-status.mjs` 的 JSON `commands` 新增 `macFormalLocalSmokeCommand`，命令形状为 `check-mac-formal-local-smoke --host <host> --port <port> --promptPassword --json`。
+- 普通输出和 `--boardSummary` 新增 `MacFormalLocalSmoke=`，正式呼叫 Windows 前可先由 Mac 本机短验收 H.264、系统 PCM 和 `inputMode=log` 输入 ack。
+- 建议列表新增本机 smoke 下一步，仍保持 resume status 本身只读：不启动服务、不认证、不要求或打印密码、不发送 call/input/inject。
+- `scripts/mac/test-mac-resume-status.mjs` 覆盖 help、离线/在线 JSON、普通输出和 boardSummary 中的新命令，并断言命令不带 `--password`、不发 call。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 10000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮没有运行 `check-mac-formal-local-smoke --promptPassword`，因此没有触发密码弹窗、没有认证、没有真实媒体/input-log 连接。
+下一步建议：
+- 白天正式呼叫 Windows 前，先跑 `check-mac-resume-status --checkBoard --boardSummary` 看 `MacFormalLocalSmoke=`，再按需执行本机短验收。
+是否改了协议：否。
+是否需要另一端配合：否；真实 Windows 端到端验收时再通过 Agent Link Board 发 call。
+
+## 2026-06-17 Mac Codex
+
+日期：2026-06-17 续跑
+开发端：Mac Codex
 本轮目标：让 Mac formal smoke 的 discovery 结果也透传 formal 人工真连清单。
 完成内容：
 - `scripts/mac/run-mac-client-formal-smoke.mjs` 的 `discovery` JSON 新增 `formalChecklistCommand` 和 `manualChecklistSummary`，来源于 `discover-windows-hosts`。

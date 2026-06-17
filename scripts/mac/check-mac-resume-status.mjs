@@ -55,6 +55,10 @@ Machine-readable JSON fields:
                              Secret-free Mac media baseline command for
                              formal-run prep; it prompts for a password and
                              never embeds one in argv.
+  commands.macFormalLocalSmokeCommand
+                             Secret-free local formal smoke command for
+                             H.264/PCM/input-log prep; it prompts visibly and
+                             never embeds a password in argv.
   commands.macClientDiagnosticsCommand
                              Secret-free Mac client readiness command for
                              checking local page files/server state without
@@ -498,6 +502,10 @@ function buildRecommendations({ git, host, board, args }) {
   });
   recommendations.push({
     level: "next",
+    text: `Before asking Windows for formal E2E, run the local H.264/PCM/input-log smoke: ${makeMacFormalLocalSmokeCommand(args)}.`,
+  });
+  recommendations.push({
+    level: "next",
     text: "Next formal path: board sync -> formal password Mac host -> Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input log.",
   });
   recommendations.push({
@@ -565,6 +573,18 @@ function makeMediaReadinessBoardSummaryCommand(args) {
     "--probeMediaResourceSample",
     "--promptPassword",
     "--boardSummary",
+  ].join(" ");
+}
+
+function makeMacFormalLocalSmokeCommand(args) {
+  return [
+    "node scripts/mac/check-mac-formal-local-smoke.mjs",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--promptPassword",
+    "--json",
   ].join(" ");
 }
 
@@ -666,6 +686,7 @@ function formatBoardSummary(report) {
       `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${attention}.`,
       "Next: start formal host with start-mac-host --promptPassword --requirePassword before Windows E2E.",
       `After host is online, refresh media baseline with ${report.commands.mediaReadinessBoardSummary}.`,
+      `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
       `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
       `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
       `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
@@ -686,6 +707,7 @@ function formatBoardSummary(report) {
     `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}.`,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}.`,
     `Media baseline command: ${report.commands.mediaReadinessBoardSummary}.`,
+    `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
     `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
     `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
@@ -738,6 +760,7 @@ function printReport(report) {
     const prefix = item.level === "blocker" ? "ERROR" : item.level === "warning" ? "WARN" : item.level === "next" ? "NEXT" : "INFO";
     console.log(`[${prefix}] ${item.text}`);
   }
+  console.log(`[NEXT] Mac formal local smoke: ${report.commands.macFormalLocalSmokeCommand}`);
   console.log(`[NEXT] Mac client page status: ${report.commands.macClientPageStatusCommand}`);
   console.log(`[NEXT] Mac client diagnostics: ${report.commands.macClientDiagnosticsCommand}`);
   console.log(`[NEXT] Mac client discover Windows host: ${report.commands.macClientDiscoverWindowsCommand}`);
@@ -777,6 +800,7 @@ async function main() {
     host,
     commands: {
       mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
+      macFormalLocalSmokeCommand: makeMacFormalLocalSmokeCommand(args),
       macClientPageStatusCommand: makeMacClientPageStatusCommand(),
       macClientDiagnosticsCommand: makeMacClientDiagnosticsCommand(),
       macClientDiscoverWindowsCommand: makeMacClientDiscoverWindowsCommand(),
