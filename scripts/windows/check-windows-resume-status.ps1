@@ -54,6 +54,7 @@ node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 4
 JSON and human output also include Windows local Mac alert watcher commands:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server $Server
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server $Server -Status
+The Node report also checks the watcher status read-only and does not start it.
 "@
 }
 

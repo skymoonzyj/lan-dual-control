@@ -45,7 +45,8 @@ control, plus a local one-time reverse-control grant command for retrying a
 Mac reverse-control request without switching Windows host to accept-lab mode.
 JSON and human output also include local alert-watcher start/status commands
 so Windows can surface Mac-side auth, permission, blocked, and reverse-grant
-requests while a remote-control window is minimized.
+requests while a remote-control window is minimized. The report also checks
+the local alert-watcher status read-only, without starting it.
 
 Options:
   --host <host>                 Explicit Mac host target. Default: ${defaults.host}
@@ -570,6 +571,45 @@ function makeCommands(args, preflight) {
   };
 }
 
+function getWindowsMacAlertWatcherStatus(args, commands) {
+  const result = command("powershell.exe", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    "scripts/windows/start-mac-alert-watcher.ps1",
+    "-Server", args.server,
+    "-Status",
+  ], { timeoutMs: Math.min(Math.max(args.timeoutMs, 5000), 15000) });
+  const combined = `${result.stdout}\n${result.stderr}`;
+  const lines = splitLines(combined);
+  let running = null;
+  if (lines.some((line) => /Mac alert watcher is running\./i.test(line))) {
+    running = true;
+  } else if (lines.some((line) => /Mac alert watcher is not running\./i.test(line))) {
+    running = false;
+  }
+  const state = running === true
+    ? "running"
+    : running === false
+      ? "not-running"
+      : result.ok
+        ? "unknown"
+        : "unavailable";
+  return {
+    requested: true,
+    ok: result.ok,
+    running,
+    state,
+    command: commands.windowsMacAlertWatcherStatus,
+    status: result.status,
+    signal: result.signal,
+    stdoutTail: tailLines(result.stdout, 8),
+    stderrTail: tailLines(result.stderr, 4),
+    error: normalizedText(result.error || result.stderr),
+  };
+}
+
 function makeBoardSummary(report) {
   const mac = report.macPreflight?.payload || {};
   const failedChecks = Array.isArray(mac.failedChecks) && mac.failedChecks.length > 0
@@ -682,6 +722,7 @@ async function makeReport(args) {
   const board = await getBoardSnapshot(args);
   const macPreflight = runFormalPreflight(args);
   const commands = makeCommands(args, macPreflight);
+  const windowsMacAlertWatcher = getWindowsMacAlertWatcherStatus(args, commands);
   const checks = [
     { name: "gitStatus", ok: git.ok, detail: git.clean ? "clean" : `${git.changeCount} change(s)` },
     { name: "board", ok: !board.requested || board.ok, detail: board.requested ? `lines=${board.lineCount}` : "skipped" },
@@ -720,6 +761,7 @@ async function makeReport(args) {
     git,
     board,
     macPreflight,
+    windowsMacAlertWatcher,
     commands,
     checks,
     failedChecks: [],
@@ -763,6 +805,14 @@ function printHuman(report) {
     }
   } else {
     console.log("- Agent Link Board: skipped (use --checkBoard)");
+  }
+  const watcher = report.windowsMacAlertWatcher;
+  if (watcher?.requested) {
+    const watcherState = watcher.ok ? watcher.state : "unavailable";
+    console.log(`- Windows Mac alert watcher: ${watcherState}`);
+    if (!watcher.ok && watcher.error) {
+      console.log(`  statusError=${watcher.error}`);
+    }
   }
   const mac = report.macPreflight.payload || null;
   if (mac?.online) {

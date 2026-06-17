@@ -203,6 +203,7 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770", "PowerShell wrapper help");
   assertIncludes(output, "Windows local Mac alert watcher commands", "PowerShell wrapper help");
   assertIncludes(output, "start-mac-alert-watcher.ps1 -Server", "PowerShell wrapper help");
+  assertIncludes(output, "checks the watcher status read-only", "PowerShell wrapper help");
   console.log("[OK] PowerShell resume-status wrapper help is safe");
 }
 
@@ -242,6 +243,10 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.windowsMacAlertWatcherStatus, "start-mac-alert-watcher.ps1", "mock JSON alert watcher status command");
     assertIncludes(payload.commands?.windowsMacAlertWatcherStatus, "-Server http://192.168.31.68:17888", "mock JSON alert watcher status command");
     assertIncludes(payload.commands?.windowsMacAlertWatcherStatus, "-Status", "mock JSON alert watcher status command");
+    assert(payload.windowsMacAlertWatcher?.requested === true, "PowerShell mock JSON should check Windows Mac alert watcher status");
+    assert(payload.windowsMacAlertWatcher?.command === payload.commands?.windowsMacAlertWatcherStatus, "PowerShell watcher status should report the same status command");
+    assert(["running", "not-running", "unknown", "unavailable"].includes(payload.windowsMacAlertWatcher?.state), "PowerShell watcher status should have a stable state");
+    assert(payload.windowsMacAlertWatcher?.running === true || payload.windowsMacAlertWatcher?.running === false || payload.windowsMacAlertWatcher?.running === null, "PowerShell watcher running should be boolean or null");
     assertNotIncludes(output, "test-password", "PowerShell mock JSON");
     console.log("[OK] PowerShell resume-status wrapper supports mock JSON discovery");
   });

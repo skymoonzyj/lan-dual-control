@@ -197,6 +197,8 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "Windows host media-baseline", `help ${flag}`);
     assertIncludes(result.stdout, "one-time reverse-control grant", `help ${flag}`);
     assertIncludes(result.stdout, "local alert-watcher start/status commands", `help ${flag}`);
+    assertIncludes(result.stdout, "checks", `help ${flag}`);
+    assertIncludes(result.stdout, "alert-watcher status read-only", `help ${flag}`);
     assertIncludes(result.stdout, "start-mac-alert-watcher.ps1", `help ${flag}`);
   }
   console.log("[OK] Windows resume status help is pure");
@@ -242,6 +244,11 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsMacAlertWatcherStatus || "").includes("start-mac-alert-watcher.ps1"), "mock JSON should include Windows Mac alert watcher status command");
     assert(String(payload.commands?.windowsMacAlertWatcherStatus || "").includes("-Server http://192.168.31.68:17888"), "mock JSON watcher status command should include the board server");
     assert(String(payload.commands?.windowsMacAlertWatcherStatus || "").includes("-Status"), "mock JSON watcher status command should be status-only");
+    assert(payload.windowsMacAlertWatcher?.requested === true, "mock JSON should check Windows Mac alert watcher status");
+    assert(payload.windowsMacAlertWatcher?.command === payload.commands?.windowsMacAlertWatcherStatus, "watcher status should report the same status command");
+    assert(["running", "not-running", "unknown", "unavailable"].includes(payload.windowsMacAlertWatcher?.state), "watcher status should have a stable state");
+    assert(payload.windowsMacAlertWatcher?.running === true || payload.windowsMacAlertWatcher?.running === false || payload.windowsMacAlertWatcher?.running === null, "watcher running should be boolean or null");
+    assert(Array.isArray(payload.windowsMacAlertWatcher?.stdoutTail), "watcher status should include stdout tail");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "mock JSON");
     console.log("[OK] Windows resume status JSON summarizes mock Mac preflight");
   });

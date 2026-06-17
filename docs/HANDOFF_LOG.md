@@ -19,6 +19,43 @@
 
 ## 2026-06-17 Windows Codex
 
+日期：2026-06-17 11:49
+开发端：Windows Codex
+本轮目标：让 Windows 恢复开工总览只读显示本机 Mac 提醒 watcher 是否运行。
+完成内容：
+- `check-windows-resume-status` 新增 `windowsMacAlertWatcher` JSON 字段，运行现有 `start-mac-alert-watcher.ps1 -Status` 只读检查 watcher 状态，不自动启动后台进程。
+- 普通输出新增 `Windows Mac alert watcher: running/not-running/unknown/unavailable`，开工时能直接判断是否需要启动本机浮窗提醒。
+- PowerShell 包装帮助同步说明 watcher status 只读检查；Node/PowerShell 回归新增状态字段断言。
+- 当前状态、下一步和任务板已同步。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/check-windows-resume-status.mjs --noDiscover --host 127.0.0.1 --port 9 --json --timeoutMs 12000`
+- PowerShell 7 AST 语法解析 `scripts/windows/check-windows-resume-status.ps1`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --script test-windows-resume-status.mjs --script test-windows-resume-status-powershell.mjs --timeoutMs 10000`
+- `node scripts/windows/check-windows-resume-status.mjs --noDiscover --host 127.0.0.1 --port 9 --timeoutMs 12000`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 60000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 60000`
+遗留问题：
+- 这轮只读查询 watcher 状态，不自动启动 watcher；如果显示 `not-running`，仍需按恢复总览里的 start 命令手动启动。
+下一步建议：
+- 后续可考虑把 watcher 状态接入 Windows 桌面壳“本机被控/协作”区域，但这轮先保持 CLI 总览低风险。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Windows Codex
+
 日期：2026-06-17 11:47
 开发端：Windows Codex
 本轮目标：把 Windows 本机 Mac 提醒 watcher 的启动/状态命令纳入恢复开工总览。
