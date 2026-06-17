@@ -21,6 +21,40 @@
 
 日期：2026-06-18 续跑
 开发端：Windows Codex
+本轮目标：第一阶段远控 UI 补强，让 Windows 控 Mac 全屏时能直接看到剪贴板和远端文件接收状态。
+完成内容：
+- Windows 控 Mac 悬浮控制中心新增“剪贴板”状态胶囊，展开后显示文字/文件剪贴板能力、远端文件接收进度、系统文件剪贴板写入状态、最近收到远端文件数量或关闭/待机状态。
+- 剪贴板状态会跟随本机文字/文件发送、远端文件 offer/chunk/complete、系统文件剪贴板写入结果、远端文件托盘清空和剪贴板开关刷新。
+- 页面自检新增浮层剪贴板状态断言，模拟正在接收 2 个远端文件，进度 `1.0 MB/2.0 MB`。
+- Windows 控制端 README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps\windows-client scripts\windows docs`
+遗留问题：
+- 本轮只做页面 UI 和 diagnostics-only 自检，不连接真实 Mac、不认证、不发送密码/input/inject；真实 Mac 连接时仍需用普通文件和压缩包复制验证浮层状态、远端文件托盘和 Windows 系统剪贴板写入是否一致。
+下一步建议：
+- 真实 Mac 联调时优先在普通全屏/真全屏下复制一个小文件和一个压缩包，观察“剪贴板”状态是否能从接收进度走到系统剪贴板写入结果。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真实 Mac 文件剪贴板联调时再通过 Agent Link Board 发 call。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 续跑
+开发端：Windows Codex
 本轮目标：第一阶段远控 UI 补强，让 Windows 控 Mac 全屏时能直接看到声音接收和播放状态。
 完成内容：
 - Windows 控 Mac 悬浮控制中心新增“声音”状态胶囊，展开后显示声音关闭/等待音频/接收帧数/电平/音量/播放计数/丢帧。

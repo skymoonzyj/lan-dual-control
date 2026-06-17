@@ -866,6 +866,60 @@ async function verifyFloatingControlCenter(session) {
         }
       })();
 
+      let clipboardStatusText = "";
+      const clipboardStatusVisible = (() => {
+        const clipboardToggleElement = document.querySelector("#clipboardToggle");
+        const originalClipboardState = {
+          connected: state.connected,
+          checked: Boolean(clipboardToggleElement?.checked),
+          fileTransferActive: state.fileTransferActive,
+          remoteFileTransfers: new Map(state.remoteFileTransfers),
+          receivedClipboardWriteStatus: { ...state.receivedClipboardWriteStatus },
+          receivedClipboardFiles: [...state.receivedClipboardFiles],
+          hostDiagnostics: { ...state.hostDiagnostics },
+        };
+        try {
+          state.connected = true;
+          if (clipboardToggleElement) clipboardToggleElement.checked = true;
+          state.fileTransferActive = false;
+          state.remoteFileTransfers = new Map([
+            [
+              "transfer-test",
+              {
+                fileCount: 2,
+                receivedBytes: 1048576,
+                totalBytes: 2097152,
+                files: [],
+              },
+            ],
+          ]);
+          state.receivedClipboardWriteStatus = { kind: "", text: "" };
+          state.receivedClipboardFiles = [];
+          state.hostDiagnostics = {
+            ...state.hostDiagnostics,
+            clipboardText: true,
+            clipboardTextMode: "system",
+            clipboardFile: true,
+            clipboardFileMode: "system",
+          };
+          if (typeof syncFloatingControlCenter === "function") syncFloatingControlCenter();
+          clipboardStatusText = document.querySelector("#floatingClipboardStatus")?.textContent || "";
+          return (
+            clipboardStatusText.includes("接收 2 个文件") &&
+            clipboardStatusText.includes("1.0 MB/2.0 MB")
+          );
+        } finally {
+          state.connected = originalClipboardState.connected;
+          if (clipboardToggleElement) clipboardToggleElement.checked = originalClipboardState.checked;
+          state.fileTransferActive = originalClipboardState.fileTransferActive;
+          state.remoteFileTransfers = originalClipboardState.remoteFileTransfers;
+          state.receivedClipboardWriteStatus = originalClipboardState.receivedClipboardWriteStatus;
+          state.receivedClipboardFiles = originalClipboardState.receivedClipboardFiles;
+          state.hostDiagnostics = originalClipboardState.hostDiagnostics;
+          if (typeof syncFloatingControlCenter === "function") syncFloatingControlCenter();
+        }
+      })();
+
       let videoStatusText = "";
       const videoStatusVisible = (() => {
         const originalVideoState = {
@@ -910,6 +964,7 @@ async function verifyFloatingControlCenter(session) {
         document.querySelector("#floatingFullscreenHint")?.textContent.includes("Esc") &&
         document.querySelector("#floatingVideoStatus")?.textContent.includes("视频") &&
         document.querySelector("#floatingAudioStatus")?.textContent.includes("声音") &&
+        document.querySelector("#floatingClipboardStatus")?.textContent.includes("剪贴板") &&
         document.querySelector("#floatingInputModeStatus")?.textContent.includes("输入") &&
         document.querySelector("#floatingSecurityStatus")?.textContent.includes("安全");
 
@@ -1030,6 +1085,7 @@ async function verifyFloatingControlCenter(session) {
           volumeSynced &&
           statusVisible &&
           audioStatusVisible &&
+          clipboardStatusVisible &&
           videoStatusVisible &&
           shortcutSent &&
           fullscreenEntered &&
@@ -1050,6 +1106,8 @@ async function verifyFloatingControlCenter(session) {
         statusVisible,
         audioStatusVisible,
         audioStatusText,
+        clipboardStatusVisible,
+        clipboardStatusText,
         videoStatusVisible,
         videoStatusText,
         shortcutSent,
@@ -2902,7 +2960,7 @@ async function run() {
     summary.checks.push("control-center");
     print(
       "OK",
-      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, original=${controlCenterCheck.originalPresetSynced}, detailed=${controlCenterCheck.detailedSettingsSynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, status=${controlCenterCheck.statusVisible}, video=${controlCenterCheck.videoStatusVisible}, audioStatus=${controlCenterCheck.audioStatusVisible}, shortcut=${controlCenterCheck.shortcutSent}, fullscreen=${controlCenterCheck.fullscreenEntered}, hint=${controlCenterCheck.fullscreenHintVisible}, esc=${controlCenterCheck.fullscreenEscExited}, immersive=${controlCenterCheck.immersiveFullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
+      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, original=${controlCenterCheck.originalPresetSynced}, detailed=${controlCenterCheck.detailedSettingsSynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, status=${controlCenterCheck.statusVisible}, video=${controlCenterCheck.videoStatusVisible}, audioStatus=${controlCenterCheck.audioStatusVisible}, clipboard=${controlCenterCheck.clipboardStatusVisible}, shortcut=${controlCenterCheck.shortcutSent}, fullscreen=${controlCenterCheck.fullscreenEntered}, hint=${controlCenterCheck.fullscreenHintVisible}, esc=${controlCenterCheck.fullscreenEscExited}, immersive=${controlCenterCheck.immersiveFullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
     );
     const desktopOnlyPanelCheck = await verifyDesktopOnlyHostPanel(session);
     summary.checks.push("desktop-panel");

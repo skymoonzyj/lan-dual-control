@@ -96,6 +96,7 @@ const elements = {
   floatingFullscreenHint: document.querySelector("#floatingFullscreenHint"),
   floatingVideoStatus: document.querySelector("#floatingVideoStatus"),
   floatingAudioStatus: document.querySelector("#floatingAudioStatus"),
+  floatingClipboardStatus: document.querySelector("#floatingClipboardStatus"),
   floatingInputModeStatus: document.querySelector("#floatingInputModeStatus"),
   floatingSecurityStatus: document.querySelector("#floatingSecurityStatus"),
   floatingShortcutSelect: document.querySelector("#floatingShortcutSelect"),
@@ -2087,6 +2088,55 @@ function formatFloatingAudioStatus() {
   return `声音：${parts.join(" · ")}`;
 }
 
+function compactFloatingStatusText(text, maxLength = 42) {
+  const normalized = String(text || "").replace(/\s+/g, " ").replace(/^剪贴板：/, "").trim();
+  if (!normalized) return "";
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}...` : normalized;
+}
+
+function formatFloatingClipboardStatus() {
+  if (!elements.clipboardToggle.checked) {
+    return "剪贴板：关闭";
+  }
+
+  const activeTransfer = state.remoteFileTransfers.values().next().value;
+  if (activeTransfer) {
+    const fileCount = Number(activeTransfer.fileCount) || (Array.isArray(activeTransfer.files) ? activeTransfer.files.length : 0);
+    const countText = fileCount > 0 ? `${fileCount} 个文件` : "远端文件";
+    return `剪贴板：接收 ${countText} · ${remoteFileTransferProgressText(activeTransfer)}`;
+  }
+
+  if (state.fileTransferActive) {
+    return "剪贴板：正在发送文件";
+  }
+
+  const writeStatus = state.receivedClipboardWriteStatus || {};
+  if (writeStatus.text) {
+    return `剪贴板：${compactFloatingStatusText(writeStatus.text)}`;
+  }
+
+  if (state.receivedClipboardFiles.length > 0) {
+    return `剪贴板：已收 ${state.receivedClipboardFiles.length} 个远端文件`;
+  }
+
+  if (state.connected) {
+    const textCapability = formatClipboardCapability(
+      state.hostDiagnostics.clipboardText,
+      state.hostDiagnostics.clipboardTextMode,
+    );
+    const fileCapability = formatClipboardCapability(
+      state.hostDiagnostics.clipboardFile,
+      state.hostDiagnostics.clipboardFileMode,
+    );
+    if (textCapability || fileCapability) {
+      return `剪贴板：文字 ${textCapability || "未知"} / 文件 ${fileCapability || "未知"}`;
+    }
+    return "剪贴板：已开启";
+  }
+
+  return "剪贴板：待机";
+}
+
 function syncFloatingControlStatus() {
   if (elements.floatingFullscreenHint) {
     elements.floatingFullscreenHint.textContent = state.immersiveFullscreen
@@ -2100,6 +2150,9 @@ function syncFloatingControlStatus() {
   }
   if (elements.floatingAudioStatus) {
     elements.floatingAudioStatus.textContent = formatFloatingAudioStatus();
+  }
+  if (elements.floatingClipboardStatus) {
+    elements.floatingClipboardStatus.textContent = formatFloatingClipboardStatus();
   }
   if (elements.floatingInputModeStatus) {
     elements.floatingInputModeStatus.textContent = formatFloatingInputModeStatus();
@@ -3432,6 +3485,7 @@ async function syncClipboardText({ quietNoText = false } = {}) {
     if (!text) {
       if (!quietNoText) {
         elements.clipboardText.textContent = "剪贴板：没有可同步的文字";
+        syncFloatingControlStatus();
         addLog("剪贴板", "本机剪贴板没有文字内容");
       }
       return false;
@@ -3439,6 +3493,7 @@ async function syncClipboardText({ quietNoText = false } = {}) {
 
     const clipboardId = makeClipboardId();
     elements.clipboardText.textContent = `剪贴板：已发送 ${text.length} 字`;
+    syncFloatingControlStatus();
     if (state.client) {
       state.client.sendClipboardText(text, {
         clipboardId,
@@ -3450,6 +3505,7 @@ async function syncClipboardText({ quietNoText = false } = {}) {
   } catch (error) {
     const message = error?.message || "剪贴板读取失败";
     elements.clipboardText.textContent = "剪贴板：同步失败";
+    syncFloatingControlStatus();
     addLog("剪贴板失败", message);
     return false;
   }
@@ -3475,12 +3531,14 @@ async function syncClipboardBeforePaste() {
 async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clearFileInput = false } = {}) {
   if (!state.connected || !state.client) {
     elements.clipboardText.textContent = "剪贴板：请先连接被控端";
+    syncFloatingControlStatus();
     addLog(sourceLabel, "未连接，无法发送文件");
     return;
   }
 
   if (!elements.clipboardToggle.checked) {
     elements.clipboardText.textContent = "剪贴板：已关闭";
+    syncFloatingControlStatus();
     addLog(sourceLabel, "剪贴板同步已关闭");
     return;
   }
@@ -3493,6 +3551,7 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
   if (totalBytes > maxClipboardFileBytes) {
     const message = `文件总大小 ${formatBytes(totalBytes)}，超过当前上限 ${formatBytes(maxClipboardFileBytes)}`;
     elements.clipboardText.textContent = "剪贴板：文件过大";
+    syncFloatingControlStatus();
     addLog(sourceLabel, message);
     if (clearFileInput) elements.fileClipboardInput.value = "";
     return;
@@ -3511,6 +3570,7 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
   state.fileTransferActive = true;
   updateFileClipboardButton();
   elements.clipboardText.textContent = `剪贴板：准备发送 ${files.length} 个文件`;
+  syncFloatingControlStatus();
 
   try {
     state.client.sendClipboardFileOffer({
@@ -3545,6 +3605,7 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
         chunkIndex += 1;
         const percent = totalBytes === 0 ? 100 : Math.round((sentBytes / totalBytes) * 100);
         elements.clipboardText.textContent = `剪贴板：文件发送 ${percent}%`;
+        syncFloatingControlStatus();
         if (chunkIndex % 8 === 0) {
           await yieldToUi();
         }
@@ -3557,15 +3618,18 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
       fileCount: files.length,
     });
     elements.clipboardText.textContent = `剪贴板：文件已发送 ${formatBytes(sentBytes)}`;
+    syncFloatingControlStatus();
     addLog(sourceLabel, `文件块发送完成，等待对端确认 · ${transferId}`);
   } catch (error) {
     const message = error?.message || "文件发送失败";
     elements.clipboardText.textContent = "剪贴板：文件发送失败";
+    syncFloatingControlStatus();
     addLog(`${sourceLabel}失败`, message);
   } finally {
     state.fileTransferActive = false;
     if (clearFileInput) elements.fileClipboardInput.value = "";
     updateFileClipboardButton();
+    syncFloatingControlStatus();
   }
 }
 
@@ -4410,6 +4474,7 @@ function setReceivedFilesWriteStatus(kind = "", text = "") {
     text,
   };
   renderReceivedFilesStatus();
+  syncFloatingControlStatus();
 }
 
 function describeIncomingFileTransferStatus(transfer = {}) {
@@ -4746,6 +4811,7 @@ function clearReceivedFiles() {
   setReceivedFilesWriteStatus("", "");
   renderReceivedFiles();
   elements.clipboardText.textContent = elements.clipboardToggle.checked ? "剪贴板：已开启" : "剪贴板：已关闭";
+  syncFloatingControlStatus();
   addLog(
     "远端文件",
     keptTempPath
@@ -4861,6 +4927,7 @@ function handleClipboardFileOffer(message) {
   setReceivedFilesWriteStatus("busy", describeIncomingFileTransferStatus(state.remoteFileTransfers.get(transferId)));
   renderReceivedFiles();
   elements.clipboardText.textContent = `剪贴板：准备接收远端 ${fileCount || files.length} 个文件`;
+  syncFloatingControlStatus();
   addLog("文件剪贴板", `收到远端文件清单 ${fileCount || files.length} 个，共 ${formatBytes(totalBytes)}，暂存到浏览器内存`);
   state.client?.sendClipboardFileResponse({
     transferId,
@@ -4906,6 +4973,7 @@ function handleClipboardFileChunk(message) {
     const percent = totalBytes === 0 ? 100 : Math.min(100, Math.round((transfer.receivedBytes / totalBytes) * 100));
     elements.clipboardText.textContent = `剪贴板：接收远端文件 ${percent}%`;
     setReceivedFilesWriteStatus("busy", describeIncomingFileTransferStatus(transfer));
+    syncFloatingControlStatus();
     state.client?.sendClipboardFileProgress({
       transferId,
       receivedBytes: transfer.receivedBytes,
@@ -5020,6 +5088,7 @@ async function handleClipboardFileComplete(message) {
     : savedToTemp
       ? `剪贴板：已接收远端 ${files.length} 个文件（已保存到临时目录）`
       : `剪贴板：已接收远端 ${files.length} 个文件（内存暂存）`;
+  syncFloatingControlStatus();
   addLog(
     "文件剪贴板",
     systemClipboardResult.clipboardWritten
@@ -5042,6 +5111,7 @@ function handleClipboardFileResponse(message) {
     ? "剪贴板：对端已准备接收文件"
     : `剪贴板：对端拒绝文件${message.reason ? `，${message.reason}` : ""}`;
   elements.clipboardText.textContent = text;
+  syncFloatingControlStatus();
   addLog("文件剪贴板", message.accepted ? "对端已接受文件清单" : message.reason || "对端拒绝文件清单");
 }
 
@@ -5051,12 +5121,14 @@ function handleClipboardFileProgress(message) {
   }
   const percent = Math.round((Number(message.receivedBytes || 0) / Number(message.totalBytes)) * 100);
   elements.clipboardText.textContent = `剪贴板：对端接收 ${percent}%`;
+  syncFloatingControlStatus();
 }
 
 function handleClipboardFileResult(message) {
   elements.clipboardText.textContent = message.accepted
     ? "剪贴板：对端已完成文件接收"
     : "剪贴板：对端文件接收失败";
+  syncFloatingControlStatus();
   addLog("文件剪贴板", message.reason || (message.accepted ? "对端已完成文件接收" : "对端文件接收失败"));
 }
 
@@ -5073,6 +5145,7 @@ async function receiveClipboardText(message) {
   try {
     await writeLocalClipboardText(message.text ?? "");
     elements.clipboardText.textContent = `剪贴板：已接收 ${message.textLength ?? message.text?.length ?? 0} 字`;
+    syncFloatingControlStatus();
     addLog("剪贴板", "已写入远端文字到本机剪贴板");
     state.client?.sendClipboardAck({
       accepted: true,
@@ -5081,6 +5154,7 @@ async function receiveClipboardText(message) {
   } catch (error) {
     const reason = error?.message || "写入系统剪贴板失败";
     elements.clipboardText.textContent = "剪贴板：接收失败";
+    syncFloatingControlStatus();
     addLog("剪贴板失败", reason);
     state.client?.sendClipboardAck({
       accepted: false,
