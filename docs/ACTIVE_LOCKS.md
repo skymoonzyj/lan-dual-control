@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 续跑 | Windows 控 Mac 全屏浮层视频状态新增低于请求刷新率提示；页面 diagnostics-only 已覆盖 `22.9 FPS / 请求 60 Hz` 场景。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 续跑 | Windows 控 Mac 复制/导出诊断报告新增全屏浮层状态，快速摘要和显示能力分段会记录连接、视频、声音、剪贴板、输入和安全状态；页面 diagnostics-only 已覆盖导出/复制内容。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 续跑 | Windows 控 Mac 全屏浮层“复制诊断”按钮新增已复制/复制失败即时反馈；页面 diagnostics-only 已覆盖成功反馈。 |
 | Windows Codex | `apps/windows-client/index.html`, `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 续跑 | Windows 控 Mac 全屏悬浮控制中心新增“复制诊断”按钮，复用同一份脱敏诊断报告；页面 diagnostics-only 已覆盖 `diagnosticsCopy=true` 和不泄密。 |

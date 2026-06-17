@@ -995,6 +995,7 @@ async function verifyFloatingControlCenter(session) {
             videoStatusText.includes("实收 22.9 FPS") &&
             videoStatusText.includes("协商 30 Hz") &&
             videoStatusText.includes("请求 60 Hz") &&
+            videoStatusText.includes("低于请求 60 Hz") &&
             videoStatusText.includes("到达 123ms") &&
             videoStatusText.includes("回退")
           );

@@ -2081,9 +2081,27 @@ function formatFloatingVideoRate() {
   return parts.join(" / ");
 }
 
+function getVideoRateWarning() {
+  const actual = Number(state.actualVideoFps) || 0;
+  const requested = state.requestedFps || Number(elements.fpsSelect.value) || 0;
+  if (!state.connected || !actual || !requested) return "";
+  if (actual < requested * 0.85 && requested - actual >= 5) {
+    return `低于请求 ${requested} Hz`;
+  }
+  const negotiated = state.negotiatedFps || requested;
+  if (negotiated && actual < negotiated * 0.85 && negotiated - actual >= 5) {
+    return `低于协商 ${negotiated} Hz`;
+  }
+  return "";
+}
+
 function formatFloatingVideoStatus() {
   const diagnostics = state.hostDiagnostics;
   const parts = [formatFloatingVideoCodec(diagnostics), formatFloatingVideoRate()].filter(Boolean);
+  const rateWarning = getVideoRateWarning();
+  if (rateWarning) {
+    parts.push(rateWarning);
+  }
   const ageText = formatVideoFrameAge(diagnostics.videoFrameAgeMs, {
     clockSkewed: diagnostics.videoFrameClockSkewed,
   });

@@ -21,6 +21,39 @@
 
 日期：2026-06-18 续跑
 开发端：Windows Codex
+本轮目标：让 Windows 控 Mac 全屏浮层在实收 FPS 明显低于请求刷新率时直接提示，辅助判断“不是 60Hz”。
+完成内容：
+- 全屏浮层视频状态新增帧率差距提示：已连接且实收 FPS 明显低于请求 Hz 时显示“低于请求 N Hz”。
+- 该提示复用现有实收 FPS、协商 Hz 和请求 Hz 状态，不新增协议字段。
+- 页面 diagnostics-only 自检固定 `22.9 FPS / 协商 30 Hz / 请求 60 Hz` 场景，确认浮层显示“低于请求 60 Hz”。
+- Windows 控制端 README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps\windows-client scripts\windows docs`
+遗留问题：
+- 本轮只做页面状态提示和 diagnostics-only 自检，不连接真实 Mac、不认证、不发送密码/input/inject；真实主观流畅度仍要看 Mac host 当前 H.264/JPEG 管线、动态画面和实收 FPS。
+下一步建议：
+- 真机联调觉得卡或不像 60Hz 时，优先展开全屏浮层或复制诊断，看“实收 FPS / 协商 Hz / 请求 Hz / 低于请求”组合，而不是只看请求档位。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 续跑
+开发端：Windows Codex
 本轮目标：让 Windows 控 Mac 的复制诊断报告也记录全屏浮层状态，方便真全屏现场粘贴复盘。
 完成内容：
 - 复制/导出的诊断报告顶部“快速摘要”新增“全屏浮层”一行，记录当前窗口/全屏模式、连接状态和视频状态。
