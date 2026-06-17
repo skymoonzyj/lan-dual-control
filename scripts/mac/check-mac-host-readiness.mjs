@@ -541,16 +541,28 @@ function formatRuntime(runtime) {
 
 function formatPermissions(permissions) {
   if (!permissions || typeof permissions !== "object") return "permissions=missing";
-  const status = (value) => {
-    if (value === true) return "on";
-    if (value === false) return "off";
-    return "unknown";
-  };
   return [
     `screen=${status(permissions.screenRecording)}`,
     `accessibility=${status(permissions.accessibility)}`,
     `inputMonitoring=${status(permissions.inputMonitoring)}`,
   ].join(" ");
+}
+
+function status(value) {
+  if (value === true) return "on";
+  if (value === false) return "off";
+  return "unknown";
+}
+
+function isH264CapturePipelineActive(capabilities) {
+  const pipeline = normalizedText((capabilities || {}).capturePipeline).toLowerCase();
+  return pipeline.includes("h264");
+}
+
+function h264FallbackPipelineWarning(capabilities) {
+  const safeCapabilities = capabilities || {};
+  if (safeCapabilities.h264Stream !== true || isH264CapturePipelineActive(safeCapabilities)) return "";
+  return `H.264 is advertised but current capture pipeline is ${safeCapabilities.capturePipeline || "unknown"}; refresh the media baseline before formal H.264 validation`;
 }
 
 function discoveryInputMode(discovery) {
@@ -624,12 +636,23 @@ function formatReadinessBoardSummary(summary) {
       : "attention=none";
   const probe = `${summary.args?.host || "127.0.0.1"}:${summary.args?.port || 43770}`;
   const media = formatMediaBoardSummary(summary);
+  const hostMedia = formatHostMediaBoardSummary(summary);
   return [
-    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${media}; ${formatBoardCallSummary(summary.board)}.`,
+    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${media}${hostMedia ? `; ${hostMedia}` : ""}; ${formatBoardCallSummary(summary.board)}.`,
     `MacLaunchAgentPlan=${summary.commands?.macLaunchAgentPlanCommand || makeMacLaunchAgentPlanCommand(summary.args || {})}.`,
     "Next: fix failed checks before formal E2E; keep inputMode=log for unattended checks.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
+}
+
+function formatHostMediaBoardSummary(summary) {
+  const discovery = Array.isArray(summary.results)
+    ? summary.results.find((item) => item.label === "Mac host discovery")
+    : null;
+  const details = discovery?.details || {};
+  if (details.online !== true) return "";
+  const capabilities = details.capabilities || {};
+  return `h264=${status(capabilities.h264Stream)} pipeline=${capabilities.capturePipeline || "unknown"}`;
 }
 
 function makeMacLaunchAgentPlanCommand(args = {}) {
@@ -850,6 +873,7 @@ async function checkDiscovery(args) {
     const input = statusPayload.inputMode || discoveryInputMode(discovery);
     const runtime = statusPayload.runtime || discovery.runtime || {};
     const permissions = statusPayload.permissions || discovery.permissions || {};
+    const capabilities = statusPayload.capabilities || discovery.capabilities || {};
     const buildDiff = statusPayload.buildDiff || {};
     const warnings = [];
     const errors = [];
@@ -887,6 +911,10 @@ async function checkDiscovery(args) {
     }
     if (permissions.inputMonitoring === false) {
       warnings.push("input monitoring permission is off or not yet confirmed; keyboard edge cases may need manual permission review");
+    }
+    const h264PipelineWarning = h264FallbackPipelineWarning(capabilities);
+    if (h264PipelineWarning) {
+      warnings.push(h264PipelineWarning);
     }
     if (args.requireInputMonitoring && permissions.inputMonitoring !== true) {
       errors.push("input monitoring permission is required");

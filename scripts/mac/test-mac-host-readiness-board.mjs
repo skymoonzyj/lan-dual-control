@@ -125,6 +125,25 @@ function formatMediaBoardSummaryFixture(summary) {
   return Function("summary", `${formatter}\nreturn formatMediaBoardSummary(summary);`)(summary);
 }
 
+function h264FallbackPipelineWarningFixture(capabilities) {
+  const source = readFileSync(new URL("./check-mac-host-readiness.mjs", import.meta.url), "utf8");
+  const helpers = [
+    functionBlock(source, "normalizedText"),
+    functionBlock(source, "isH264CapturePipelineActive"),
+    functionBlock(source, "h264FallbackPipelineWarning"),
+  ].join("\n");
+  return Function("capabilities", `${helpers}\nreturn h264FallbackPipelineWarning(capabilities);`)(capabilities);
+}
+
+function formatHostMediaBoardSummaryFixture(summary) {
+  const source = readFileSync(new URL("./check-mac-host-readiness.mjs", import.meta.url), "utf8");
+  const helpers = [
+    functionBlock(source, "status"),
+    functionBlock(source, "formatHostMediaBoardSummary"),
+  ].join("\n");
+  return Function("summary", `${helpers}\nreturn formatHostMediaBoardSummary(summary);`)(summary);
+}
+
 function waitForPort(child, getStdout, getStderr) {
   return new Promise((resolve, reject) => {
     const started = Date.now();
@@ -293,6 +312,54 @@ function checkMediaBoardSummaryStatusFormatting() {
     "media board summary should keep a media=failed fallback",
   );
   print("OK", "Mac host readiness media boardSummary formats ok/partial/failed");
+}
+
+function checkH264FallbackPipelineFormatting() {
+  const fallbackWarning = h264FallbackPipelineWarningFixture({
+    h264Stream: true,
+    capturePipeline: "background-jpeg",
+  });
+  assert(/current capture pipeline is background-jpeg/.test(fallbackWarning), "fallback pipeline warning should name the current pipeline");
+  assert(/media baseline/.test(fallbackWarning), "fallback pipeline warning should recommend refreshing the media baseline");
+  assert(
+    h264FallbackPipelineWarningFixture({ h264Stream: true, capturePipeline: "screencapturekit-h264" }) === "",
+    "active H.264 pipeline should not create a fallback warning",
+  );
+  assert(
+    h264FallbackPipelineWarningFixture({ h264Stream: false, capturePipeline: "background-jpeg" }) === "",
+    "non-H.264 capability should keep the existing blocker/probe paths instead of this warning",
+  );
+  assert(
+    formatHostMediaBoardSummaryFixture({
+      results: [{
+        label: "Mac host discovery",
+        details: {
+          online: true,
+          capabilities: {
+            h264Stream: true,
+            capturePipeline: "background-jpeg",
+          },
+        },
+      }],
+    }) === "h264=on pipeline=background-jpeg",
+    "host media board summary should include current H.264 and pipeline state",
+  );
+  assert(
+    formatHostMediaBoardSummaryFixture({
+      results: [{
+        label: "Mac host discovery",
+        details: {
+          online: false,
+          capabilities: {
+            h264Stream: true,
+            capturePipeline: "background-jpeg",
+          },
+        },
+      }],
+    }) === "",
+    "offline host media board summary should stay compact",
+  );
+  print("OK", "Mac host readiness highlights H.264 fallback pipeline state");
 }
 
 function checkProbeMediaOfflineJson(args) {
@@ -502,6 +569,7 @@ async function main() {
   checkHelp(args);
   checkDefaultDoesNotReadBoard(args);
   checkMediaBoardSummaryStatusFormatting();
+  checkH264FallbackPipelineFormatting();
   checkProbeMediaOfflineJson(args);
   checkProbeMediaResourceSampleImpliesProbeMedia(args);
   checkProbeMediaBoardSummary(args);
