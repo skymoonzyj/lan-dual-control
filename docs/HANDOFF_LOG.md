@@ -21,6 +21,39 @@
 
 日期：2026-06-17 续跑
 开发端：Mac Codex
+本轮目标：让 Mac 侧 Windows host 发现摘要直接带 formal 人工真连清单。
+完成内容：
+- `scripts/mac/discover-windows-hosts.mjs` 的 JSON 新增 `formalChecklistCommand` 和 `manualChecklistSummary`，发现 Windows host 后直接给 `check-mac-client-formal-status --host <Windows IP> --port <port> --boardSummary`。
+- `--boardSummary` 新增 `FormalChecklist=` 与 `ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics`，普通输出同步打印 `Formal checklist` 和 `Manual checklist`。
+- 该发现入口仍保持只读：只扫描 `/discovery`，不认证 WebSocket、不要求或打印密码、不发送 Agent Link Board call/input/inject。
+- `scripts/mac/test-discover-windows-hosts.mjs` 覆盖 help、JSON 和 boardSummary 中的新字段，并确认无 Windows host 时仍给出下一步提示。
+修改文件：
+- `scripts/mac/discover-windows-hosts.mjs`
+- `scripts/mac/test-discover-windows-hosts.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/discover-windows-hosts.mjs`
+- `node --check scripts/mac/test-discover-windows-hosts.mjs`
+- `node scripts/mac/test-discover-windows-hosts.mjs --timeoutMs 30000`
+- `node scripts/mac/discover-windows-hosts.mjs --noLocalSubnets --host 127.0.0.1 --timeoutMs 200 --scanTimeoutMs 3000 --boardSummary`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮没有启动真实 Windows host、没有认证、没有发送密码/call/input/inject；真实 Mac -> Windows 联调仍需 Windows host 在线后复测。
+下一步建议：
+- 恢复现场可先运行 `discover-windows-hosts --boardSummary`；发现到 Windows host 后，直接把摘要里的 `FormalChecklist=` 和 `ManualChecklist=` 发到通讯板或继续跑 formal checklist。
+是否改了协议：否。
+是否需要另一端配合：真实联调时需要 Windows 端启动 Windows host。
+
+## 2026-06-17 Mac Codex
+
+日期：2026-06-17 续跑
+开发端：Mac Codex
 本轮目标：让 Mac 恢复总览直接提示 Windows host 发现入口。
 完成内容：
 - `scripts/mac/check-mac-resume-status.mjs` 新增 `commands.macClientDiscoverWindowsCommand`，值为 `node scripts/mac/discover-windows-hosts.mjs --boardSummary`。

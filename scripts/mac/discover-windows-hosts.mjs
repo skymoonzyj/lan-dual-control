@@ -17,6 +17,8 @@ const defaults = {
   scanTimeoutMs: 0,
 };
 
+const manualChecklistSummary = "connection/video/audio/clipboard/input_ack/diagnostics";
+
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
 }
@@ -47,6 +49,12 @@ Examples:
   node scripts/mac/discover-windows-hosts.mjs --boardSummary
   node scripts/mac/discover-windows-hosts.mjs --subnet 192.168.31.0/24 --requireFound
   node scripts/mac/discover-windows-hosts.mjs --host 192.168.31.68 --json
+
+Machine-readable JSON fields:
+  formalChecklistCommand   Secret-free board summary command for the Mac
+                           controls Windows formal checklist.
+  manualChecklistSummary   Human true-test checklist order:
+                           ${manualChecklistSummary}.
 `);
 }
 
@@ -219,6 +227,8 @@ function buildReport(scan, args) {
     ports: scan.ports || args.ports,
     subnets: scan.subnets || [],
     nextCommand: best ? readinessCommand(best) : "",
+    formalChecklistCommand: best ? readinessCommand(best) : "",
+    manualChecklistSummary,
     sendCallCommand: best ? sendCallCommand(best) : "",
     boardSummary: "",
   };
@@ -228,7 +238,7 @@ function buildReport(scan, args) {
 
 function makeBoardSummary(report) {
   if (report.best) {
-    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}. Next Mac formal check: ${report.nextCommand}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}. FormalChecklist=${report.formalChecklistCommand}. ManualChecklist=${report.manualChecklistSummary}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
   }
   const ignored = report.ignored.length > 0
     ? ` Saw ${report.ignored.length} non-Windows host(s), likely Mac/self.`
@@ -243,6 +253,8 @@ function printText(report, args) {
       console.log(`[OK] ${summarizeHost(item)}`);
     }
     console.log(`[INFO] Next: ${report.nextCommand}`);
+    console.log(`[INFO] Formal checklist: ${report.formalChecklistCommand}`);
+    console.log(`[INFO] Manual checklist: ${report.manualChecklistSummary}`);
     console.log(`[INFO] Ready call: ${report.sendCallCommand}`);
   } else {
     console.log("[WARN] No Windows LAN dual-control host was found.");
