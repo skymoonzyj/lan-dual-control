@@ -531,6 +531,14 @@ function windowsWgcSupportPowerShellCommand() {
   return "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-wgc-support.ps1 -BoardSummary";
 }
 
+function windowsWebCodecsH264Command() {
+  return "node scripts/windows/check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A --boardSummary";
+}
+
+function windowsWebCodecsH264PowerShellCommand() {
+  return "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-webcodecs-h264-support.ps1 -RequireCodec avc1.42C02A -BoardSummary";
+}
+
 function windowsWgcBenchmarkCommand() {
   return "node scripts/windows/benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary";
 }
@@ -654,6 +662,8 @@ async function checkRunningHostRuntime(args) {
         windowsVideoEncoderSupportPowerShellCommand: statusPayload.windowsVideoEncoderSupportPowerShellCommand || windowsVideoEncoderSupportPowerShellCommand(),
         windowsWgcSupportCommand: statusPayload.windowsWgcSupportCommand || windowsWgcSupportCommand(),
         windowsWgcSupportPowerShellCommand: statusPayload.windowsWgcSupportPowerShellCommand || windowsWgcSupportPowerShellCommand(),
+        windowsWebCodecsH264Command: statusPayload.windowsWebCodecsH264Command || windowsWebCodecsH264Command(),
+        windowsWebCodecsH264PowerShellCommand: statusPayload.windowsWebCodecsH264PowerShellCommand || windowsWebCodecsH264PowerShellCommand(),
         windowsWgcBenchmarkCommand: statusPayload.windowsWgcBenchmarkCommand || windowsWgcBenchmarkCommand(),
         windowsWgcBenchmarkPowerShellCommand: statusPayload.windowsWgcBenchmarkPowerShellCommand || windowsWgcBenchmarkPowerShellCommand(),
         windowsWgcCompareCommand: statusPayload.windowsWgcCompareCommand || windowsWgcCompareCommand(),
@@ -718,6 +728,8 @@ async function checkRunningHostRuntime(args) {
       windowsVideoEncoderSupportPowerShellCommand: statusPayload.windowsVideoEncoderSupportPowerShellCommand || windowsVideoEncoderSupportPowerShellCommand(),
       windowsWgcSupportCommand: statusPayload.windowsWgcSupportCommand || windowsWgcSupportCommand(),
       windowsWgcSupportPowerShellCommand: statusPayload.windowsWgcSupportPowerShellCommand || windowsWgcSupportPowerShellCommand(),
+      windowsWebCodecsH264Command: statusPayload.windowsWebCodecsH264Command || windowsWebCodecsH264Command(),
+      windowsWebCodecsH264PowerShellCommand: statusPayload.windowsWebCodecsH264PowerShellCommand || windowsWebCodecsH264PowerShellCommand(),
       windowsWgcBenchmarkCommand: statusPayload.windowsWgcBenchmarkCommand || windowsWgcBenchmarkCommand(),
       windowsWgcBenchmarkPowerShellCommand: statusPayload.windowsWgcBenchmarkPowerShellCommand || windowsWgcBenchmarkPowerShellCommand(),
       windowsWgcCompareCommand: statusPayload.windowsWgcCompareCommand || windowsWgcCompareCommand(),
@@ -745,6 +757,8 @@ async function checkRunningHostRuntime(args) {
       windowsVideoEncoderSupportPowerShellCommand: windowsVideoEncoderSupportPowerShellCommand(),
       windowsWgcSupportCommand: windowsWgcSupportCommand(),
       windowsWgcSupportPowerShellCommand: windowsWgcSupportPowerShellCommand(),
+      windowsWebCodecsH264Command: windowsWebCodecsH264Command(),
+      windowsWebCodecsH264PowerShellCommand: windowsWebCodecsH264PowerShellCommand(),
       windowsWgcBenchmarkCommand: windowsWgcBenchmarkCommand(),
       windowsWgcBenchmarkPowerShellCommand: windowsWgcBenchmarkPowerShellCommand(),
       windowsWgcCompareCommand: windowsWgcCompareCommand(),
@@ -802,6 +816,14 @@ function makeReadinessBoardSummary(summary) {
     && (!runtimeText.includes("WindowsWgcSupportPs=") || !runtimeText.includes(summary.windowsWgcSupportPowerShellCommand))
     ? ` WindowsWgcSupportPs=${summary.windowsWgcSupportPowerShellCommand}.`
     : "";
+  const webCodecs = summary.windowsWebCodecsH264Command
+    && (!runtimeText.includes("WindowsWebCodecs=") || !runtimeText.includes(summary.windowsWebCodecsH264Command))
+    ? ` WindowsWebCodecs=${summary.windowsWebCodecsH264Command}.`
+    : "";
+  const webCodecsPowerShell = summary.windowsWebCodecsH264PowerShellCommand
+    && (!runtimeText.includes("WindowsWebCodecsPs=") || !runtimeText.includes(summary.windowsWebCodecsH264PowerShellCommand))
+    ? ` WindowsWebCodecsPs=${summary.windowsWebCodecsH264PowerShellCommand}.`
+    : "";
   const wgcBenchmark = summary.windowsWgcBenchmarkCommand && !runtimeText.includes("WindowsWgcBenchmark=")
     ? ` WindowsWgcBenchmark=${summary.windowsWgcBenchmarkCommand}.`
     : "";
@@ -826,7 +848,7 @@ function makeReadinessBoardSummary(summary) {
   const probeText = probeSentences
     .map((sentence) => (sentence.endsWith(".") ? sentence : `${sentence}.`))
     .join(" ");
-  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrant}${reverseGrantPowerShell}${hostMediaPowerShell}${videoSupport}${videoSupportPowerShell}${wgcSupport}${wgcSupportPowerShell}${wgcBenchmark}${wgcBenchmarkPowerShell}${wgcCompare}${wgcComparePowerShell}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
+  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrant}${reverseGrantPowerShell}${hostMediaPowerShell}${videoSupport}${videoSupportPowerShell}${wgcSupport}${wgcSupportPowerShell}${webCodecs}${webCodecsPowerShell}${wgcBenchmark}${wgcBenchmarkPowerShell}${wgcCompare}${wgcComparePowerShell}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
 }
 
 function formatMediaBoardSummary(summary) {
@@ -1281,6 +1303,12 @@ async function main() {
   const windowsWgcSupportPowerShellCommandValue = results.find((result) =>
     typeof result.windowsWgcSupportPowerShellCommand === "string" && result.windowsWgcSupportPowerShellCommand,
   )?.windowsWgcSupportPowerShellCommand || windowsWgcSupportPowerShellCommand();
+  const windowsWebCodecsH264CommandValue = results.find((result) =>
+    typeof result.windowsWebCodecsH264Command === "string" && result.windowsWebCodecsH264Command,
+  )?.windowsWebCodecsH264Command || windowsWebCodecsH264Command();
+  const windowsWebCodecsH264PowerShellCommandValue = results.find((result) =>
+    typeof result.windowsWebCodecsH264PowerShellCommand === "string" && result.windowsWebCodecsH264PowerShellCommand,
+  )?.windowsWebCodecsH264PowerShellCommand || windowsWebCodecsH264PowerShellCommand();
   const windowsWgcBenchmarkCommandValue = results.find((result) =>
     typeof result.windowsWgcBenchmarkCommand === "string" && result.windowsWgcBenchmarkCommand,
   )?.windowsWgcBenchmarkCommand || windowsWgcBenchmarkCommand();
@@ -1332,6 +1360,8 @@ async function main() {
     windowsVideoEncoderSupportPowerShellCommand: windowsVideoEncoderSupportPowerShellCommandValue,
     windowsWgcSupportCommand: windowsWgcSupportCommandValue,
     windowsWgcSupportPowerShellCommand: windowsWgcSupportPowerShellCommandValue,
+    windowsWebCodecsH264Command: windowsWebCodecsH264CommandValue,
+    windowsWebCodecsH264PowerShellCommand: windowsWebCodecsH264PowerShellCommandValue,
     windowsWgcBenchmarkCommand: windowsWgcBenchmarkCommandValue,
     windowsWgcBenchmarkPowerShellCommand: windowsWgcBenchmarkPowerShellCommandValue,
     windowsWgcCompareCommand: windowsWgcCompareCommandValue,
@@ -1354,6 +1384,8 @@ async function main() {
       windowsVideoEncoderSupportPowerShellCommand: result.windowsVideoEncoderSupportPowerShellCommand || "",
       windowsWgcSupportCommand: result.windowsWgcSupportCommand || "",
       windowsWgcSupportPowerShellCommand: result.windowsWgcSupportPowerShellCommand || "",
+      windowsWebCodecsH264Command: result.windowsWebCodecsH264Command || "",
+      windowsWebCodecsH264PowerShellCommand: result.windowsWebCodecsH264PowerShellCommand || "",
       windowsWgcBenchmarkCommand: result.windowsWgcBenchmarkCommand || "",
       windowsWgcBenchmarkPowerShellCommand: result.windowsWgcBenchmarkPowerShellCommand || "",
       windowsWgcCompareCommand: result.windowsWgcCompareCommand || "",

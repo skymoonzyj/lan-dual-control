@@ -175,7 +175,8 @@ Options:
                           The summary includes a WindowsHostMedia command for local
                           video/audio baseline checks and a WindowsVideoSupport
                           command for H.264/WGC/WebCodecs capability checks, plus
-                          WindowsWgcSupport for WGC/WinRT/GPU preflight checks.
+                          WindowsWgcSupport for WGC/WinRT/GPU preflight checks and
+                          WindowsWebCodecs for browser H.264 decode checks.
   --json                  With --status, print pure machine-readable JSON.
   --dryRun                Print the resolved launch plan and exit.
   --help, -h              Show this help without starting Windows host.
@@ -648,6 +649,14 @@ function windowsWgcSupportPowerShellCommand() {
   return "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-wgc-support.ps1 -BoardSummary";
 }
 
+function windowsWebCodecsH264Command() {
+  return "node scripts/windows/check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A --boardSummary";
+}
+
+function windowsWebCodecsH264PowerShellCommand() {
+  return "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-webcodecs-h264-support.ps1 -RequireCodec avc1.42C02A -BoardSummary";
+}
+
 function windowsWgcBenchmarkCommand() {
   return "node scripts/windows/benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary";
 }
@@ -698,7 +707,7 @@ function macReadinessTargets(status) {
 function makeBoardSummary(status) {
   const board = boardSummaryFragment(status);
   if (!status.ok) {
-    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${status.suggestions[0] || "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword"}. WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}. Do not send passwords on Agent Link Board.`;
+    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${status.suggestions[0] || "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword"}. WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}. Do not send passwords on Agent Link Board.`;
   }
   const targets = macReadinessTargets(status);
   const targetText = targets.length > 0
@@ -718,7 +727,7 @@ function makeBoardSummary(status) {
   const reverseGrantPowerShell = shouldShowReverseControlGrantCommand(reverse)
     ? ` ReverseGrantPs=${status.windowsReverseControlGrantPowerShellCommand}.`
     : "";
-  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness}${sendCall} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
+  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness}${sendCall} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
 }
 
 function applyDiscoveryStatus(status, discovery, args) {
@@ -786,6 +795,8 @@ function makeStatusShell(args, probeHost = statusProbeHost(args)) {
     windowsVideoEncoderSupportPowerShellCommand: windowsVideoEncoderSupportPowerShellCommand(),
     windowsWgcSupportCommand: windowsWgcSupportCommand(),
     windowsWgcSupportPowerShellCommand: windowsWgcSupportPowerShellCommand(),
+    windowsWebCodecsH264Command: windowsWebCodecsH264Command(),
+    windowsWebCodecsH264PowerShellCommand: windowsWebCodecsH264PowerShellCommand(),
     windowsWgcBenchmarkCommand: windowsWgcBenchmarkCommand(),
     windowsWgcBenchmarkPowerShellCommand: windowsWgcBenchmarkPowerShellCommand(),
     windowsWgcCompareCommand: windowsWgcCompareCommand(),
@@ -898,6 +909,8 @@ async function printStatus(args) {
       console.log(`[INFO] Windows video support PowerShell command: ${status.windowsVideoEncoderSupportPowerShellCommand}`);
       console.log(`[INFO] Windows WGC support command: ${status.windowsWgcSupportCommand}`);
       console.log(`[INFO] Windows WGC support PowerShell command: ${status.windowsWgcSupportPowerShellCommand}`);
+      console.log(`[INFO] Windows WebCodecs H.264 command: ${status.windowsWebCodecsH264Command}`);
+      console.log(`[INFO] Windows WebCodecs H.264 PowerShell command: ${status.windowsWebCodecsH264PowerShellCommand}`);
       console.log(`[INFO] Windows WGC benchmark command: ${status.windowsWgcBenchmarkCommand}`);
       console.log(`[INFO] Windows WGC benchmark PowerShell command: ${status.windowsWgcBenchmarkPowerShellCommand}`);
       console.log(`[INFO] Windows WGC source compare command: ${status.windowsWgcCompareCommand}`);
@@ -923,6 +936,8 @@ async function printStatus(args) {
   console.log(`[INFO] Windows video support PowerShell command after host is online: ${status.windowsVideoEncoderSupportPowerShellCommand}`);
   console.log(`[INFO] Windows WGC support command: ${status.windowsWgcSupportCommand}`);
   console.log(`[INFO] Windows WGC support PowerShell command after host is online: ${status.windowsWgcSupportPowerShellCommand}`);
+  console.log(`[INFO] Windows WebCodecs H.264 command: ${status.windowsWebCodecsH264Command}`);
+  console.log(`[INFO] Windows WebCodecs H.264 PowerShell command after host is online: ${status.windowsWebCodecsH264PowerShellCommand}`);
   console.log(`[INFO] Windows WGC benchmark command after host is online: ${status.windowsWgcBenchmarkCommand}`);
   console.log(`[INFO] Windows WGC benchmark PowerShell command after host is online: ${status.windowsWgcBenchmarkPowerShellCommand}`);
   console.log(`[INFO] Windows WGC source compare command after host is online: ${status.windowsWgcCompareCommand}`);
@@ -1136,6 +1151,12 @@ function printMacNextSteps(status) {
   }
   if (status.windowsWgcSupportPowerShellCommand) {
     console.log(`[INFO] Windows WGC support PowerShell command: ${status.windowsWgcSupportPowerShellCommand}`);
+  }
+  if (status.windowsWebCodecsH264Command) {
+    console.log(`[INFO] Windows WebCodecs H.264 command: ${status.windowsWebCodecsH264Command}`);
+  }
+  if (status.windowsWebCodecsH264PowerShellCommand) {
+    console.log(`[INFO] Windows WebCodecs H.264 PowerShell command: ${status.windowsWebCodecsH264PowerShellCommand}`);
   }
   if (status.windowsWgcBenchmarkCommand) {
     console.log(`[INFO] Windows WGC benchmark command: ${status.windowsWgcBenchmarkCommand}`);

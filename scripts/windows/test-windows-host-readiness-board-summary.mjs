@@ -512,6 +512,10 @@ async function main() {
     assert(powerShellHelp.stdout.includes("check-windows-wgc-support.mjs --boardSummary"), `PowerShell readiness ${helpArg} does not mention WGC support command`);
     assert(powerShellHelp.stdout.includes("WindowsWgcSupportPs="), `PowerShell readiness ${helpArg} does not mention WindowsWgcSupportPs`);
     assert(powerShellHelp.stdout.includes("check-windows-wgc-support.ps1 -BoardSummary"), `PowerShell readiness ${helpArg} does not mention WGC support PowerShell command`);
+    assert(powerShellHelp.stdout.includes("WindowsWebCodecs="), `PowerShell readiness ${helpArg} does not mention WindowsWebCodecs`);
+    assert(powerShellHelp.stdout.includes("check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A --boardSummary"), `PowerShell readiness ${helpArg} does not mention WebCodecs command`);
+    assert(powerShellHelp.stdout.includes("WindowsWebCodecsPs="), `PowerShell readiness ${helpArg} does not mention WindowsWebCodecsPs`);
+    assert(powerShellHelp.stdout.includes("check-webcodecs-h264-support.ps1 -RequireCodec avc1.42C02A -BoardSummary"), `PowerShell readiness ${helpArg} does not mention WebCodecs PowerShell command`);
     assert(powerShellHelp.stdout.includes("WindowsWgcBenchmarkPs="), `PowerShell readiness ${helpArg} does not mention WindowsWgcBenchmarkPs`);
     assert(powerShellHelp.stdout.includes("benchmark-windows-wgc-settings.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary"), `PowerShell readiness ${helpArg} does not mention benchmark PowerShell command`);
     assert(powerShellHelp.stdout.includes("WindowsWgcCompare="), `PowerShell readiness ${helpArg} does not mention WindowsWgcCompare`);
@@ -632,6 +636,20 @@ async function main() {
     "JSON windowsWgcSupportPowerShellCommand is missing",
   );
   assert(
+    typeof jsonSummary.windowsWebCodecsH264Command === "string"
+      && jsonSummary.windowsWebCodecsH264Command.includes("check-webcodecs-h264-support.mjs")
+      && jsonSummary.windowsWebCodecsH264Command.includes("--requireCodec avc1.42C02A")
+      && jsonSummary.windowsWebCodecsH264Command.includes("--boardSummary"),
+    "JSON windowsWebCodecsH264Command is missing",
+  );
+  assert(
+    typeof jsonSummary.windowsWebCodecsH264PowerShellCommand === "string"
+      && jsonSummary.windowsWebCodecsH264PowerShellCommand.includes("check-webcodecs-h264-support.ps1")
+      && jsonSummary.windowsWebCodecsH264PowerShellCommand.includes("-RequireCodec avc1.42C02A")
+      && jsonSummary.windowsWebCodecsH264PowerShellCommand.includes("-BoardSummary"),
+    "JSON windowsWebCodecsH264PowerShellCommand is missing",
+  );
+  assert(
     typeof jsonSummary.windowsWgcBenchmarkCommand === "string"
       && jsonSummary.windowsWgcBenchmarkCommand.includes("benchmark-windows-wgc-settings.mjs")
       && jsonSummary.windowsWgcBenchmarkCommand.includes("--profile 60:20000:balanced")
@@ -695,6 +713,16 @@ async function main() {
     jsonSummary.boardSummary.includes("check-windows-wgc-support.ps1 -BoardSummary"),
     "JSON boardSummary should include the runnable Windows WGC support PowerShell command",
   );
+  assert(jsonSummary.boardSummary.includes("WindowsWebCodecs="), "JSON boardSummary should include Windows WebCodecs command");
+  assert(
+    jsonSummary.boardSummary.includes("check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A --boardSummary"),
+    "JSON boardSummary should include the runnable Windows WebCodecs command",
+  );
+  assert(jsonSummary.boardSummary.includes("WindowsWebCodecsPs="), "JSON boardSummary should include Windows WebCodecs PowerShell command");
+  assert(
+    jsonSummary.boardSummary.includes("check-webcodecs-h264-support.ps1 -RequireCodec avc1.42C02A -BoardSummary"),
+    "JSON boardSummary should include the runnable Windows WebCodecs PowerShell command",
+  );
   assert(jsonSummary.boardSummary.includes("WindowsWgcBenchmark="), "JSON boardSummary should include Windows WGC benchmark command");
   assert(
     jsonSummary.boardSummary.includes("benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary"),
@@ -747,6 +775,16 @@ async function main() {
     typeof runtimeResult?.windowsWgcSupportPowerShellCommand === "string"
       && runtimeResult.windowsWgcSupportPowerShellCommand.includes("check-windows-wgc-support.ps1"),
     "runtime result should carry Windows WGC support PowerShell command",
+  );
+  assert(
+    typeof runtimeResult?.windowsWebCodecsH264Command === "string"
+      && runtimeResult.windowsWebCodecsH264Command.includes("check-webcodecs-h264-support.mjs"),
+    "runtime result should carry Windows WebCodecs H.264 command",
+  );
+  assert(
+    typeof runtimeResult?.windowsWebCodecsH264PowerShellCommand === "string"
+      && runtimeResult.windowsWebCodecsH264PowerShellCommand.includes("check-webcodecs-h264-support.ps1"),
+    "runtime result should carry Windows WebCodecs H.264 PowerShell command",
   );
   assert(
     typeof runtimeResult?.windowsWgcBenchmarkCommand === "string"
@@ -809,6 +847,18 @@ async function main() {
     typeof powerShellJsonSummary.windowsWgcSupportPowerShellCommand === "string"
       && powerShellJsonSummary.windowsWgcSupportPowerShellCommand.includes("check-windows-wgc-support.ps1"),
     "PowerShell JSON should include Windows WGC support PowerShell command",
+  );
+  assert(powerShellJsonSummary.boardSummary.includes("WindowsWebCodecs="), "PowerShell JSON boardSummary should include WindowsWebCodecs");
+  assert(powerShellJsonSummary.boardSummary.includes("WindowsWebCodecsPs="), "PowerShell JSON boardSummary should include WindowsWebCodecsPs");
+  assert(
+    typeof powerShellJsonSummary.windowsWebCodecsH264Command === "string"
+      && powerShellJsonSummary.windowsWebCodecsH264Command.includes("check-webcodecs-h264-support.mjs"),
+    "PowerShell JSON should include Windows WebCodecs command",
+  );
+  assert(
+    typeof powerShellJsonSummary.windowsWebCodecsH264PowerShellCommand === "string"
+      && powerShellJsonSummary.windowsWebCodecsH264PowerShellCommand.includes("check-webcodecs-h264-support.ps1"),
+    "PowerShell JSON should include Windows WebCodecs PowerShell command",
   );
   assert(powerShellJsonSummary.boardSummary.includes("WindowsWgcBenchmark="), "PowerShell JSON boardSummary should include WindowsWgcBenchmark");
   assert(powerShellJsonSummary.boardSummary.includes("WindowsWgcBenchmarkPs="), "PowerShell JSON boardSummary should include WindowsWgcBenchmarkPs");
@@ -925,6 +975,16 @@ async function main() {
     lines[0].includes("check-windows-wgc-support.ps1 -BoardSummary"),
     "board summary should include the runnable Windows WGC support PowerShell command",
   );
+  assert(lines[0].includes("WindowsWebCodecs="), "board summary should include Windows WebCodecs command");
+  assert(
+    lines[0].includes("check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A --boardSummary"),
+    "board summary should include the runnable Windows WebCodecs command",
+  );
+  assert(lines[0].includes("WindowsWebCodecsPs="), "board summary should include Windows WebCodecs PowerShell command");
+  assert(
+    lines[0].includes("check-webcodecs-h264-support.ps1 -RequireCodec avc1.42C02A -BoardSummary"),
+    "board summary should include the runnable Windows WebCodecs PowerShell command",
+  );
   assert(lines[0].includes("WindowsWgcBenchmark="), "board summary should include Windows WGC benchmark command");
   assert(
     lines[0].includes("benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary"),
@@ -961,6 +1021,8 @@ async function main() {
   assert(powerShellBoardLines[0].includes("WindowsVideoSupportPs="), "PowerShell board summary should include WindowsVideoSupportPs");
   assert(powerShellBoardLines[0].includes("WindowsWgcSupport="), "PowerShell board summary should include WindowsWgcSupport");
   assert(powerShellBoardLines[0].includes("WindowsWgcSupportPs="), "PowerShell board summary should include WindowsWgcSupportPs");
+  assert(powerShellBoardLines[0].includes("WindowsWebCodecs="), "PowerShell board summary should include WindowsWebCodecs");
+  assert(powerShellBoardLines[0].includes("WindowsWebCodecsPs="), "PowerShell board summary should include WindowsWebCodecsPs");
   assert(powerShellBoardLines[0].includes("WindowsWgcBenchmark="), "PowerShell board summary should include WindowsWgcBenchmark");
   assert(powerShellBoardLines[0].includes("WindowsWgcBenchmarkPs="), "PowerShell board summary should include WindowsWgcBenchmarkPs");
   assert(powerShellBoardLines[0].includes("WindowsWgcCompare="), "PowerShell board summary should include WindowsWgcCompare");

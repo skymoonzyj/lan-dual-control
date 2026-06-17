@@ -64,6 +64,7 @@ Windows 端：
 - [x] 新增 Mac 侧 Windows host 发现入口：`scripts/mac/discover-windows-hosts.mjs --boardSummary` 只读扫描 `/discovery`，过滤 `platform=windows`，输出下一步 formal checklist 命令和 ready 后 `--sendCall` 协调命令；不认证、不要求密码、不发送输入、不执行 `inject`。
 - [x] Mac 侧 Windows host 发现摘要新增 formal 人工真连清单入口：JSON 带 `formalChecklistCommand` / `manualChecklistSummary`，`--boardSummary` 带 `FormalChecklist=` 与 `ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics`，发现到 Windows host 后可直接进入清单验收。
 - [x] Windows host `--status` 和 `check-windows-host-readiness --boardSummary` 摘要新增 `WindowsWgcSupport=` / `WindowsWgcSupportPs=`，可从本机被控入口直接复制 WGC/WinRT/GPU 专项预检命令，再继续 WGC benchmark 或 raw-bgra/NV12 对照。
+- [x] Windows host `--status` 和 `check-windows-host-readiness --boardSummary` 摘要新增 `WindowsWebCodecs=` / `WindowsWebCodecsPs=`，可从本机被控入口直接复制 Edge/Chrome WebCodecs H.264 解码预检命令。
 - [x] 增加中文错误提示。
 - [x] 增加假 Mac 错误模拟。
 - [x] 增加意外断线自动重连。
