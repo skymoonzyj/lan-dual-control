@@ -214,6 +214,7 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000", "PowerShell wrapper help");
   assertIncludes(output, "Windows video encoder/WGC/WebCodecs support command", "PowerShell wrapper help");
   assertIncludes(output, "check-windows-video-encoder-support.mjs --boardSummary", "PowerShell wrapper help");
+  assertIncludes(output, "check-windows-video-encoder-support.ps1 -BoardSummary", "PowerShell wrapper help");
   assertIncludes(output, "Windows PowerShell help coverage commands", "PowerShell wrapper help");
   assertIncludes(output, "test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary", "PowerShell wrapper help");
@@ -274,6 +275,8 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.windowsHostMediaReadinessPowerShellBoardSummary, "-BoardSummary", "mock JSON media PowerShell command");
     assertIncludes(payload.commands?.windowsVideoEncoderSupportBoardSummary, "check-windows-video-encoder-support.mjs", "mock JSON video support command");
     assertIncludes(payload.commands?.windowsVideoEncoderSupportBoardSummary, "--boardSummary", "mock JSON video support command");
+    assertIncludes(payload.commands?.windowsVideoEncoderSupportPowerShellBoardSummary, "check-windows-video-encoder-support.ps1", "mock JSON video support PowerShell command");
+    assertIncludes(payload.commands?.windowsVideoEncoderSupportPowerShellBoardSummary, "-BoardSummary", "mock JSON video support PowerShell command");
     assertIncludes(payload.commands?.windowsPowerShellHelpBoardSummary, "test-windows-powershell-help.mjs", "mock JSON PowerShell help command");
     assertIncludes(payload.commands?.windowsPowerShellHelpBoardSummary, "--timeoutMs 10000", "mock JSON PowerShell help command");
     assertIncludes(payload.commands?.windowsPowerShellHelpBoardSummary, "--boardSummary", "mock JSON PowerShell help command");
@@ -353,6 +356,8 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary", "PowerShell board summary");
     assertIncludes(output, "WindowsVideoSupport=", "PowerShell board summary");
     assertIncludes(output, "check-windows-video-encoder-support.mjs --boardSummary", "PowerShell board summary");
+    assertIncludes(output, "WindowsVideoSupportPs=", "PowerShell board summary");
+    assertIncludes(output, "check-windows-video-encoder-support.ps1 -BoardSummary", "PowerShell board summary");
     assertIncludes(output, "PowerShellHelp=", "PowerShell board summary");
     assertIncludes(output, "test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary", "PowerShell board summary");
     assertIncludes(output, "PowerShellHelpPwsh=", "PowerShell board summary");

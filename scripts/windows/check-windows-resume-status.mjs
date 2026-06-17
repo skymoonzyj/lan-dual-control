@@ -95,6 +95,7 @@ Examples:
   node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary
   node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-video-encoder-support.ps1 -BoardSummary
   node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary
   node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary
   node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary
@@ -611,6 +612,10 @@ function makeCommands(args, preflight) {
       "node scripts/windows/check-windows-video-encoder-support.mjs",
       "--boardSummary",
     ].join(" "),
+    windowsVideoEncoderSupportPowerShellBoardSummary: [
+      "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-video-encoder-support.ps1",
+      "-BoardSummary",
+    ].join(" "),
     windowsPowerShellHelpBoardSummary: [
       "node scripts/windows/test-windows-powershell-help.mjs",
       "--timeoutMs", "10000",
@@ -791,6 +796,7 @@ function makeBoardSummary(report) {
     `WindowsHostMedia=${report.commands.windowsHostMediaReadinessBoardSummary}.`,
     `WindowsHostMediaPs=${report.commands.windowsHostMediaReadinessPowerShellBoardSummary}.`,
     `WindowsVideoSupport=${report.commands.windowsVideoEncoderSupportBoardSummary}.`,
+    `WindowsVideoSupportPs=${report.commands.windowsVideoEncoderSupportPowerShellBoardSummary}.`,
     `PowerShellHelp=${report.commands.windowsPowerShellHelpBoardSummary}.`,
     `PowerShellHelpPwsh=${report.commands.windowsPowerShell7HelpBoardSummary}.`,
     `ReverseGrant=${report.commands.windowsReverseControlGrantBoardSummary}.`,
@@ -987,6 +993,7 @@ function printHuman(report) {
   console.log(`  ${report.commands.windowsHostMediaReadinessBoardSummary}`);
   console.log(`  ${report.commands.windowsHostMediaReadinessPowerShellBoardSummary}`);
   console.log(`  ${report.commands.windowsVideoEncoderSupportBoardSummary}`);
+  console.log(`  ${report.commands.windowsVideoEncoderSupportPowerShellBoardSummary}`);
   console.log(`  ${report.commands.windowsPowerShellHelpBoardSummary}`);
   console.log(`  ${report.commands.windowsPowerShell7HelpBoardSummary}`);
   console.log(`  ${report.commands.windowsReverseControlGrantBoardSummary}`);
