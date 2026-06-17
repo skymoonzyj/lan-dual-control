@@ -279,7 +279,13 @@ function makeBoardSummary(summary) {
     : "skipped";
   const details = [];
   if (summary.remote) details.push(`remote=${compactBoardSummaryText(summary.remote, 120)}`);
-  if (summary.diagnostics) details.push(`diag=${compactBoardSummaryText(summary.diagnostics, 140)}`);
+  if (summary.discoveryDiagnostics) {
+    details.push(`discoveryDiag=${compactBoardSummaryText(summary.discoveryDiagnostics, 120)}`);
+  }
+  if (summary.uiDiagnostics) details.push(`uiDiag=${compactBoardSummaryText(summary.uiDiagnostics, 140)}`);
+  if (!summary.discoveryDiagnostics && !summary.uiDiagnostics && summary.diagnostics) {
+    details.push(`diag=${compactBoardSummaryText(summary.diagnostics, 140)}`);
+  }
   if (summary.fps) details.push(`fps=${compactBoardSummaryText(summary.fps, 80)}`);
   if (summary.audio) details.push(`audio=${compactBoardSummaryText(summary.audio, 80)}`);
   if (summary.surface) details.push(`surface=${summary.surface}`);
@@ -2625,6 +2631,8 @@ async function run() {
     checks: [],
     remote: "",
     diagnostics: "",
+    discoveryDiagnostics: "",
+    uiDiagnostics: "",
     fps: "",
     audio: "",
     surface: "",
@@ -2714,6 +2722,7 @@ async function run() {
     const streamFallbackCheck = await verifyStreamFallbackDiagnostics(session);
     summary.checks.push("fallback-diagnostics");
     summary.diagnostics = streamFallbackCheck.fallbackText;
+    summary.uiDiagnostics = streamFallbackCheck.fallbackText;
     print("OK", `Stream fallback diagnostics: ${streamFallbackCheck.fallbackText}`);
     const frameAgeCheck = await verifyVideoFrameAgeDiagnostics(session);
     summary.checks.push("frame-age");
@@ -2755,6 +2764,7 @@ async function run() {
       );
       summary.checks.push("discovery-runtime");
       summary.diagnostics = discoveryRuntimeCheck.diagnostics;
+      summary.discoveryDiagnostics = discoveryRuntimeCheck.diagnostics;
     }
     if (args.diagnosticsOnly) {
       print("OK", "Diagnostics-only browser checks passed");
@@ -2838,6 +2848,7 @@ async function run() {
     summary.status = "passed";
     summary.remote = snapshot.remote;
     summary.diagnostics = snapshot.diagnostics;
+    summary.uiDiagnostics = snapshot.diagnostics;
     summary.fps = snapshot.metricFps;
     summary.surface = `canvas=${snapshot.canvasVisible ? `${snapshot.canvasWidth}x${snapshot.canvasHeight}` : "off"},image=${snapshot.imageVisible ? "on" : "off"}`;
     summary.h264Errors = String(snapshot.h264DecoderErrors ?? "");
