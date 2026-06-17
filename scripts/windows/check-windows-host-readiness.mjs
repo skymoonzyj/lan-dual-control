@@ -519,6 +519,10 @@ function windowsWgcBenchmarkCommand() {
   return "node scripts/windows/benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary";
 }
 
+function windowsWgcBenchmarkPowerShellCommand() {
+  return "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/benchmark-windows-wgc-settings.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary";
+}
+
 function formatCapabilities(capabilities = {}) {
   const screen = capabilities.screen || {};
   const audio = capabilities.audio || {};
@@ -623,6 +627,7 @@ async function checkRunningHostRuntime(args) {
         windowsReverseControlGrantPowerShellCommand: statusPayload.windowsReverseControlGrantPowerShellCommand || windowsReverseControlGrantPowerShellCommand(args.port),
         windowsVideoEncoderSupportCommand: statusPayload.windowsVideoEncoderSupportCommand || windowsVideoEncoderSupportCommand(),
         windowsWgcBenchmarkCommand: statusPayload.windowsWgcBenchmarkCommand || windowsWgcBenchmarkCommand(),
+        windowsWgcBenchmarkPowerShellCommand: statusPayload.windowsWgcBenchmarkPowerShellCommand || windowsWgcBenchmarkPowerShellCommand(),
         warnings,
         errors,
       };
@@ -680,6 +685,7 @@ async function checkRunningHostRuntime(args) {
       windowsReverseControlGrantPowerShellCommand: statusPayload.windowsReverseControlGrantPowerShellCommand || windowsReverseControlGrantPowerShellCommand(args.port),
       windowsVideoEncoderSupportCommand: statusPayload.windowsVideoEncoderSupportCommand || windowsVideoEncoderSupportCommand(),
       windowsWgcBenchmarkCommand: statusPayload.windowsWgcBenchmarkCommand || windowsWgcBenchmarkCommand(),
+      windowsWgcBenchmarkPowerShellCommand: statusPayload.windowsWgcBenchmarkPowerShellCommand || windowsWgcBenchmarkPowerShellCommand(),
       warnings,
       errors,
     };
@@ -700,6 +706,7 @@ async function checkRunningHostRuntime(args) {
       windowsReverseControlGrantPowerShellCommand: windowsReverseControlGrantPowerShellCommand(args.port),
       windowsVideoEncoderSupportCommand: windowsVideoEncoderSupportCommand(),
       windowsWgcBenchmarkCommand: windowsWgcBenchmarkCommand(),
+      windowsWgcBenchmarkPowerShellCommand: windowsWgcBenchmarkPowerShellCommand(),
       warnings,
       errors,
     };
@@ -741,6 +748,9 @@ function makeReadinessBoardSummary(summary) {
   const wgcBenchmark = summary.windowsWgcBenchmarkCommand && !runtimeText.includes("WindowsWgcBenchmark=")
     ? ` WindowsWgcBenchmark=${summary.windowsWgcBenchmarkCommand}.`
     : "";
+  const wgcBenchmarkPowerShell = summary.windowsWgcBenchmarkPowerShellCommand && !runtimeText.includes("WindowsWgcBenchmarkPs=")
+    ? ` WindowsWgcBenchmarkPs=${summary.windowsWgcBenchmarkPowerShellCommand}.`
+    : "";
   const probeSentences = [];
   if (wgcSourceResult) {
     const probeState = wgcSourceResult.ok ? "passed" : "failed";
@@ -751,7 +761,7 @@ function makeReadinessBoardSummary(summary) {
   const probeText = probeSentences
     .map((sentence) => (sentence.endsWith(".") ? sentence : `${sentence}.`))
     .join(" ");
-  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrant}${reverseGrantPowerShell}${videoSupport}${wgcBenchmark}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
+  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrant}${reverseGrantPowerShell}${videoSupport}${wgcBenchmark}${wgcBenchmarkPowerShell}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
 }
 
 function formatMediaBoardSummary(summary) {
@@ -1197,6 +1207,9 @@ async function main() {
   const windowsWgcBenchmarkCommandValue = results.find((result) =>
     typeof result.windowsWgcBenchmarkCommand === "string" && result.windowsWgcBenchmarkCommand,
   )?.windowsWgcBenchmarkCommand || windowsWgcBenchmarkCommand();
+  const windowsWgcBenchmarkPowerShellCommandValue = results.find((result) =>
+    typeof result.windowsWgcBenchmarkPowerShellCommand === "string" && result.windowsWgcBenchmarkPowerShellCommand,
+  )?.windowsWgcBenchmarkPowerShellCommand || windowsWgcBenchmarkPowerShellCommand();
 
   const summary = {
     ok,
@@ -1233,6 +1246,7 @@ async function main() {
     windowsReverseControlGrantPowerShellCommand: windowsReverseControlGrantPowerShellCommandValue,
     windowsVideoEncoderSupportCommand: windowsVideoEncoderSupportCommandValue,
     windowsWgcBenchmarkCommand: windowsWgcBenchmarkCommandValue,
+    windowsWgcBenchmarkPowerShellCommand: windowsWgcBenchmarkPowerShellCommandValue,
     results: results.map((result) => ({
       label: result.label,
       ok: result.ok,
@@ -1248,6 +1262,7 @@ async function main() {
       windowsReverseControlGrantPowerShellCommand: result.windowsReverseControlGrantPowerShellCommand || "",
       windowsVideoEncoderSupportCommand: result.windowsVideoEncoderSupportCommand || "",
       windowsWgcBenchmarkCommand: result.windowsWgcBenchmarkCommand || "",
+      windowsWgcBenchmarkPowerShellCommand: result.windowsWgcBenchmarkPowerShellCommand || "",
       warnings: result.warnings,
       errors: result.errors,
     })),

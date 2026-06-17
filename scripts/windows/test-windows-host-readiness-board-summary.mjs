@@ -504,6 +504,8 @@ async function main() {
     assert(powerShellHelp.stdout.includes("-ProbeMedia"), `PowerShell readiness ${helpArg} does not mention media probe`);
     assert(powerShellHelp.stdout.includes("WindowsWgcBenchmark="), `PowerShell readiness ${helpArg} does not mention WindowsWgcBenchmark`);
     assert(powerShellHelp.stdout.includes("benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary"), `PowerShell readiness ${helpArg} does not mention benchmark command`);
+    assert(powerShellHelp.stdout.includes("WindowsWgcBenchmarkPs="), `PowerShell readiness ${helpArg} does not mention WindowsWgcBenchmarkPs`);
+    assert(powerShellHelp.stdout.includes("benchmark-windows-wgc-settings.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary"), `PowerShell readiness ${helpArg} does not mention benchmark PowerShell command`);
     assert(powerShellHelp.stdout.includes("ReverseGrantPs="), `PowerShell readiness ${helpArg} does not mention ReverseGrantPs`);
     assert(/do(?:es)? not ask for or print\s+passwords/i.test(powerShellHelp.stdout), `PowerShell readiness ${helpArg} does not document password safety`);
     assert(!powerShellHelp.stdout.includes("[INFO]"), `PowerShell readiness ${helpArg} should not run checks`);
@@ -600,6 +602,14 @@ async function main() {
       && jsonSummary.windowsWgcBenchmarkCommand.includes("--boardSummary"),
     "JSON windowsWgcBenchmarkCommand is missing",
   );
+  assert(
+    typeof jsonSummary.windowsWgcBenchmarkPowerShellCommand === "string"
+      && jsonSummary.windowsWgcBenchmarkPowerShellCommand.includes("benchmark-windows-wgc-settings.ps1")
+      && jsonSummary.windowsWgcBenchmarkPowerShellCommand.includes("-Profile 60:20000:balanced")
+      && jsonSummary.windowsWgcBenchmarkPowerShellCommand.includes("-DurationMs 1800")
+      && jsonSummary.windowsWgcBenchmarkPowerShellCommand.includes("-BoardSummary"),
+    "JSON windowsWgcBenchmarkPowerShellCommand is missing",
+  );
   assert(Array.isArray(jsonSummary.results), "JSON results must be an array");
   assert(jsonSummary.args?.probeWgcH264Sources === false, "default JSON should keep WGC H.264 source probe disabled");
   assert(jsonSummary.args?.checkBoard === true, "JSON args should record checkBoard");
@@ -616,6 +626,11 @@ async function main() {
   assert(
     jsonSummary.boardSummary.includes("benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary"),
     "JSON boardSummary should include the runnable Windows WGC benchmark command",
+  );
+  assert(jsonSummary.boardSummary.includes("WindowsWgcBenchmarkPs="), "JSON boardSummary should include Windows WGC benchmark PowerShell command");
+  assert(
+    jsonSummary.boardSummary.includes("benchmark-windows-wgc-settings.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary"),
+    "JSON boardSummary should include the runnable Windows WGC benchmark PowerShell command",
   );
   assert(jsonSummary.boardSummary.includes("ReverseGrantPs="), "JSON boardSummary should include Windows reverse grant PowerShell command");
   assert(
@@ -636,6 +651,11 @@ async function main() {
     "runtime result should carry Windows WGC benchmark command",
   );
   assert(
+    typeof runtimeResult?.windowsWgcBenchmarkPowerShellCommand === "string"
+      && runtimeResult.windowsWgcBenchmarkPowerShellCommand.includes("benchmark-windows-wgc-settings.ps1"),
+    "runtime result should carry Windows WGC benchmark PowerShell command",
+  );
+  assert(
     typeof runtimeResult?.windowsReverseControlGrantPowerShellCommand === "string"
       && runtimeResult.windowsReverseControlGrantPowerShellCommand.includes("allow-windows-reverse-control.ps1"),
     "runtime result should carry Windows reverse grant PowerShell command",
@@ -654,10 +674,16 @@ async function main() {
   assert(powerShellJsonSummary.boardSummary.includes("call=CALLING Mac Codex->Windows Codex"), "PowerShell JSON boardSummary should include active currentCall");
   assert(powerShellJsonSummary.boardSummary.includes("WindowsVideoSupport="), "PowerShell JSON boardSummary should include WindowsVideoSupport");
   assert(powerShellJsonSummary.boardSummary.includes("WindowsWgcBenchmark="), "PowerShell JSON boardSummary should include WindowsWgcBenchmark");
+  assert(powerShellJsonSummary.boardSummary.includes("WindowsWgcBenchmarkPs="), "PowerShell JSON boardSummary should include WindowsWgcBenchmarkPs");
   assert(
     typeof powerShellJsonSummary.windowsWgcBenchmarkCommand === "string"
       && powerShellJsonSummary.windowsWgcBenchmarkCommand.includes("benchmark-windows-wgc-settings.mjs"),
     "PowerShell JSON should include Windows WGC benchmark command",
+  );
+  assert(
+    typeof powerShellJsonSummary.windowsWgcBenchmarkPowerShellCommand === "string"
+      && powerShellJsonSummary.windowsWgcBenchmarkPowerShellCommand.includes("benchmark-windows-wgc-settings.ps1"),
+    "PowerShell JSON should include Windows WGC benchmark PowerShell command",
   );
   assert(powerShellJsonSummary.boardSummary.includes("ReverseGrantPs="), "PowerShell JSON boardSummary should include ReverseGrantPs");
   assert(
@@ -735,6 +761,11 @@ async function main() {
     lines[0].includes("benchmark-windows-wgc-settings.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary"),
     "board summary should include the runnable Windows WGC benchmark command",
   );
+  assert(lines[0].includes("WindowsWgcBenchmarkPs="), "board summary should include Windows WGC benchmark PowerShell command");
+  assert(
+    lines[0].includes("benchmark-windows-wgc-settings.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary"),
+    "board summary should include the runnable Windows WGC benchmark PowerShell command",
+  );
   assert(lines[0].includes("Do not send passwords"), "board summary is missing board safety reminder");
   assert(!/\[(INFO|OK|WARN|ERROR|FAIL)\]/.test(lines[0]), "board summary should be plain one-line text");
   assertNoSecretLeak(boardRun.stdout, "readiness --boardSummary stdout");
@@ -748,6 +779,7 @@ async function main() {
   assert(powerShellBoardLines[0].includes("call=CALLING Mac Codex->Windows Codex"), "PowerShell board summary is missing active currentCall");
   assert(powerShellBoardLines[0].includes("WindowsVideoSupport="), "PowerShell board summary should include WindowsVideoSupport");
   assert(powerShellBoardLines[0].includes("WindowsWgcBenchmark="), "PowerShell board summary should include WindowsWgcBenchmark");
+  assert(powerShellBoardLines[0].includes("WindowsWgcBenchmarkPs="), "PowerShell board summary should include WindowsWgcBenchmarkPs");
   assert(powerShellBoardLines[0].includes("ReverseGrantPs="), "PowerShell board summary should include ReverseGrantPs");
   assert(powerShellBoardLines[0].includes("Do not send passwords"), "PowerShell board summary is missing board safety reminder");
   assert(!/\[(INFO|OK|WARN|ERROR|FAIL)\]/.test(powerShellBoardLines[0]), "PowerShell board summary should be plain one-line text");
