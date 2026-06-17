@@ -507,13 +507,16 @@ node E:\codex\lan-dual-control\scripts\windows\observe-windows-host-video.mjs --
 node E:\codex\lan-dual-control\scripts\windows\check-webcodecs-h264-support.mjs --requireCodec avc1.42C02A
 ```
 
-继续往 WGC + H.264/硬编推进前，建议先跑一遍 Windows 视频编码能力体检。它只读汇总 FFmpeg H.264 软件/硬件编码器、WGC 预检和浏览器 WebCodecs 解码能力，不启动 Windows host、不抓屏、不改系统设置；需要给自动化消费时可加 `--json`，需要把当前能力发 Agent Link Board 时可加 `--boardSummary` 输出一行无密摘要。本机 `2026-06-15 00:05` 强校验已通过：FFmpeg `8.1.1` 检测到 `libx264`、`h264_nvenc`、`h264_qsv`、`h264_amf`、`h264_mf`、`h264_d3d12va` 等 H.264 编码入口，WGC 预检通过，Edge WebCodecs H.264 支持通过；当前 WGC JPEG 桥接 H.264/NVENC 正确性原型已通过，下一步应改 raw BGRA/NV12 或原生硬编。
+继续往 WGC + H.264/硬编推进前，建议先跑一遍 Windows 视频编码能力体检。它只读汇总 FFmpeg H.264 软件/硬件编码器、WGC 预检和浏览器 WebCodecs 解码能力，不启动 Windows host、不抓屏、不改系统设置；需要给自动化消费时可加 `--json` / PowerShell `-Json`，需要把当前能力发 Agent Link Board 时可加 `--boardSummary` / `-BoardSummary` 输出一行无密摘要。本机 `2026-06-15 00:05` 强校验已通过：FFmpeg `8.1.1` 检测到 `libx264`、`h264_nvenc`、`h264_qsv`、`h264_amf`、`h264_mf`、`h264_d3d12va` 等 H.264 编码入口，WGC 预检通过，Edge WebCodecs H.264 支持通过；当前 WGC JPEG 桥接 H.264/NVENC 正确性原型已通过，下一步应改 raw BGRA/NV12 或原生硬编。
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-support.mjs
 node E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-support.mjs --requireAnyH264 --requireHardwareH264 --requireWgc --requireWebCodecsH264
 node E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-support.mjs --boardSummary
 node E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-support.mjs --json
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-support.ps1 -BoardSummary
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:\codex\lan-dual-control\scripts\windows\check-windows-video-encoder-support.ps1 -RequireAnyH264 -RequireHardwareH264 -RequireWgc -RequireWebCodecsH264
 ```
 
 当前 H.264 短基线：`2026-06-13 14:18` 在真实桌面权限下运行 `test-windows-h264-mode`，本机临时 host 720p/30Hz 观察 2.5 秒收到 73 帧，平均 28.83 FPS，最大帧间隔 53 ms，timestamp 单调，管线为 `windows-ffmpeg-gdigrab-h264`，codec 为 `h264`。普通沙盒上下文仍可能遇到 FFmpeg `gdigrab error 5` / mock fallback；这属于桌面抓屏权限/会话限制，不应误判为 H.264 管线不可用。当前实现默认使用 `libx264` 软件编码，也支持显式 `h264_nvenc` 等 FFmpeg encoder，并会在 discovery/session/frame/观察脚本中带出实际 `h264Encoder`；可按客户端能力在 JSON/base64 和 `binary-h264` 二进制传输之间切换。WGC helper JPEG -> FFmpeg H.264 桥接已能验证 WGC 源接硬编的正确性，但后续仍需 raw BGRA/NV12 或原生硬编来减少 gdigrab 与 JPEG 桥接限制。

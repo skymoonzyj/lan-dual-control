@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
 const supportScript = resolve(scriptDir, "check-windows-video-encoder-support.mjs");
+const powershellWrapperScript = "scripts/windows/check-windows-video-encoder-support.ps1";
 
 const defaults = {
   timeoutMs: 10000,
@@ -76,6 +77,47 @@ function runSupport(args, timeoutMs) {
   });
 }
 
+function runPowerShell(args, timeoutMs) {
+  return new Promise((resolveRun) => {
+    const child = spawn("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      powershellWrapperScript,
+      ...args,
+    ], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        LAN_DUAL_PASSWORD: "",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      resolveRun({ exitCode: null, timedOut: true, stdout, stderr });
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolveRun({ exitCode: null, timedOut: false, stdout, stderr: `${stderr}\n${error.message}`.trim() });
+    });
+    child.on("close", (exitCode) => {
+      clearTimeout(timer);
+      resolveRun({ exitCode, timedOut: false, stdout, stderr });
+    });
+  });
+}
+
 function assertNoSecretLeak(text, label) {
   const value = String(text || "");
   const forbidden = [
@@ -118,6 +160,21 @@ async function verifyBoardSummary(args) {
   return line;
 }
 
+async function verifyPowerShellBoardSummary(args, expectedLine) {
+  const result = await runPowerShell([
+    "-SkipFfmpeg",
+    "-SkipWgc",
+    "-SkipWebCodecs",
+    "-BoardSummary",
+  ], args.timeoutMs);
+  assert.equal(result.timedOut, false, "PowerShell -BoardSummary timed out");
+  assert.equal(result.exitCode, 0, `PowerShell -BoardSummary failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  assert.equal(result.stderr.trim(), "", "PowerShell -BoardSummary should not print stderr on success");
+  const line = singleLine(result.stdout);
+  assert.equal(line, expectedLine);
+  assertNoSecretLeak(line, "PowerShell boardSummary stdout");
+}
+
 async function verifyJsonSummary(args, expectedLine) {
   const result = await runSupport([
     "--skipFfmpeg",
@@ -130,6 +187,20 @@ async function verifyJsonSummary(args, expectedLine) {
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.boardSummary, expectedLine);
   assertNoSecretLeak(JSON.stringify(payload), "JSON payload");
+}
+
+async function verifyPowerShellJsonSummary(args, expectedLine) {
+  const result = await runPowerShell([
+    "-SkipFfmpeg",
+    "-SkipWgc",
+    "-SkipWebCodecs",
+    "-Json",
+  ], args.timeoutMs);
+  assert.equal(result.timedOut, false, "PowerShell -Json timed out");
+  assert.equal(result.exitCode, 0, `PowerShell -Json failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.boardSummary, expectedLine);
+  assertNoSecretLeak(JSON.stringify(payload), "PowerShell JSON payload");
 }
 
 async function verifyFailureSummary(args) {
@@ -149,6 +220,41 @@ async function verifyFailureSummary(args) {
   assertNoSecretLeak(line, "failure boardSummary stdout");
 }
 
+async function verifyPowerShellFailureSummary(args) {
+  const result = await runPowerShell([
+    "-SkipFfmpeg",
+    "-SkipWgc",
+    "-SkipWebCodecs",
+    "-RequireAnyH264",
+    "-BoardSummary",
+  ], args.timeoutMs);
+  assert.equal(result.timedOut, false, "PowerShell failure -BoardSummary timed out");
+  assert.notEqual(result.exitCode, 0, "PowerShell failure -BoardSummary should exit non-zero");
+  const line = singleLine(result.stdout);
+  assert.match(line, /^Windows video encoder support: failed; /);
+  assert.match(line, /failures=1/);
+  assert.match(line, /no-password/);
+  assertNoSecretLeak(line, "PowerShell failure boardSummary stdout");
+}
+
+async function verifyPowerShellHelp(args) {
+  for (const helpArg of ["-Help", "-h"]) {
+    const result = await runPowerShell([helpArg], args.timeoutMs);
+    assert.equal(result.timedOut, false, `PowerShell ${helpArg} timed out`);
+    assert.equal(result.exitCode, 0, `PowerShell ${helpArg} failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+    const output = `${result.stdout}\n${result.stderr}`;
+    assert.match(output, /Usage:/);
+    assert.match(output, /-BoardSummary/);
+    assert.match(output, /-RequireHardwareH264/);
+    assert.match(output, /-RequireWebCodecsH264/);
+    assert.match(output, /read-only/);
+    assert.match(output, /does not start Windows host/);
+    assert.match(output, /does not ask for or print passwords/);
+    assert.doesNotMatch(output, /Windows video encoder support:/);
+    assertNoSecretLeak(output, `PowerShell ${helpArg}`);
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -156,8 +262,12 @@ async function main() {
     return;
   }
   const summary = await verifyBoardSummary(args);
+  await verifyPowerShellBoardSummary(args, summary);
   await verifyJsonSummary(args, summary);
+  await verifyPowerShellJsonSummary(args, summary);
   await verifyFailureSummary(args);
+  await verifyPowerShellFailureSummary(args);
+  await verifyPowerShellHelp(args);
   console.log("[OK] Windows video encoder support boardSummary is safe and parseable");
 }
 

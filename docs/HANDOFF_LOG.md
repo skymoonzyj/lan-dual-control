@@ -52,6 +52,43 @@
 
 日期：2026-06-17 续跑
 开发端：Windows Codex
+本轮目标：给 WindowsVideoSupport 视频能力体检增加 PowerShell 包装入口，方便 PowerShell 7 现场直接运行。
+完成内容：
+- 新增 `scripts/windows/check-windows-video-encoder-support.ps1`。
+- PowerShell wrapper 支持 `-BoardSummary`、`-Json`、`-SkipFfmpeg`、`-SkipWgc`、`-SkipWebCodecs`、`-RequireAnyH264`、`-RequireHardwareH264`、`-RequireWgc`、`-RequireWebCodecsH264`、`-Ffmpeg` 和 `-TimeoutMs`。
+- `-Help` / `-h` 输出纯帮助，明确该工具只读、不启动 host、不抓屏、不认证、不要求或打印密码、不发送 input/inject。
+- `test-windows-video-encoder-support-board-summary` 扩展到同时覆盖 Node 和 PowerShell 的一行摘要、JSON `boardSummary`、失败摘要和帮助输出。
+- Windows host README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `scripts/windows/check-windows-video-encoder-support.ps1`
+- `scripts/windows/test-windows-video-encoder-support-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-video-encoder-support.mjs`
+- `node --check scripts/windows/test-windows-video-encoder-support-board-summary.mjs`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-video-encoder-support.ps1 -Help`
+- `node scripts/windows/test-windows-video-encoder-support-board-summary.mjs --timeoutMs 15000`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-video-encoder-support.ps1 -BoardSummary`
+- PowerShell 7 `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-video-encoder-support.ps1 -BoardSummary`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-video-encoder-support.mjs --script test-windows-video-encoder-support-board-summary.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows apps/windows-host docs`
+遗留问题：
+- 本轮不切换既有 `WindowsVideoSupport=` 摘要里的 Node 命令；PowerShell wrapper 作为现场等价入口并已在文档中说明。
+下一步建议：
+- H.264/WGC 现场调试前可跑 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-video-encoder-support.ps1 -BoardSummary`，先把一行能力摘要发到 Agent Link Board。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
 本轮目标：补齐 Windows host PowerShell 启动/状态入口帮助，让 PowerShell 7/Windows PowerShell 用户也能直接看到无密上板命令。
 完成内容：
 - `start-windows-host.ps1` 新增 `-Help` / `-h` 纯帮助入口。
