@@ -90,6 +90,11 @@ Machine-readable JSON fields:
                              and prints one board summary line without using a
                              real host, requesting a password, sending a call,
                              or running inject.
+  commands.macClientReverseRehearsalAction
+                             Human action for the guarded Mac-controls-Windows
+                             reverse-control request rehearsal. Run discovery,
+                             use its ReverseRehearsal= line, and keep the
+                             Windows grant on Windows loopback.
   commands.macScriptHelpCommand
                              Pure help coverage command for scripts/mac/*.mjs;
                              it rejects runtime side-effect output and prints
@@ -644,6 +649,10 @@ function makeMacClientBrowserSelfTestCommand() {
   return "node scripts/mac/test-mac-client-browser-self-test.mjs --boardSummary";
 }
 
+function makeMacClientReverseRehearsalAction() {
+  return "Run MacClientDiscoverWindows first, then use its ReverseRehearsal= line: Mac requests reverse control and expects LAN008, Windows runs the local loopback one-time grant, Mac retries and expects accepted/临时授权已使用";
+}
+
 function makeMacScriptHelpCommand() {
   return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
@@ -725,6 +734,7 @@ function formatBoardSummary(report) {
       `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
       `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
       `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
+      `MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}.`,
       `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
       `MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}.`,
       `MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}.`,
@@ -749,6 +759,7 @@ function formatBoardSummary(report) {
     `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
     `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
+    `MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}.`,
     `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
     `MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}.`,
     `MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}.`,
@@ -806,6 +817,7 @@ function printReport(report) {
   console.log(`[NEXT] Mac client page status: ${report.commands.macClientPageStatusCommand}`);
   console.log(`[NEXT] Mac client diagnostics: ${report.commands.macClientDiagnosticsCommand}`);
   console.log(`[NEXT] Mac client discover Windows host: ${report.commands.macClientDiscoverWindowsCommand}`);
+  console.log(`[NEXT] Mac client reverse rehearsal: ${report.commands.macClientReverseRehearsalAction}`);
   console.log(`[NEXT] Mac client formal checklist: ${report.commands.macClientFormalChecklistCommand}`);
   console.log(`[NEXT] Mac client formal smoke preflight: ${report.commands.macClientFormalSmokeCommand}`);
   console.log(`[NEXT] Mac client browser self-test: ${report.commands.macClientBrowserSelfTestCommand}`);
@@ -849,6 +861,7 @@ async function main() {
       macClientPageStatusCommand: makeMacClientPageStatusCommand(),
       macClientDiagnosticsCommand: makeMacClientDiagnosticsCommand(),
       macClientDiscoverWindowsCommand: makeMacClientDiscoverWindowsCommand(),
+      macClientReverseRehearsalAction: makeMacClientReverseRehearsalAction(),
       macClientFormalChecklistCommand: makeMacClientFormalChecklistCommand(),
       macClientFormalSmokeCommand: makeMacClientFormalSmokeCommand(),
       macClientBrowserSelfTestCommand: makeMacClientBrowserSelfTestCommand(),
