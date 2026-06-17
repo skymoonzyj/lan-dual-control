@@ -55,6 +55,10 @@ Machine-readable JSON fields:
                              Secret-free Mac media baseline command for
                              formal-run prep; it prompts for a password and
                              never embeds one in argv.
+  commands.macClientDiagnosticsCommand
+                             Secret-free Mac client readiness command for
+                             checking local page files/server state without
+                             authenticating a Windows host.
 
 Examples:
   node scripts/mac/check-mac-resume-status.mjs
@@ -549,6 +553,15 @@ function makeMediaReadinessBoardSummaryCommand(args) {
   ].join(" ");
 }
 
+function makeMacClientDiagnosticsCommand() {
+  return [
+    "node scripts/mac/check-mac-client-readiness.mjs",
+    "--probeClientServer",
+    "--checkBoard",
+    "--boardSummary",
+  ].join(" ");
+}
+
 function formatBoardBuildDiff(buildDiff) {
   if (!buildDiff || buildDiff.severity === "ok") return "build=current";
   if (buildDiff.severity === "stale-metadata") {
@@ -622,6 +635,7 @@ function formatBoardSummary(report) {
       `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${attention}.`,
       "Next: start formal host with start-mac-host --promptPassword --requirePassword before Windows E2E.",
       `After host is online, refresh media baseline with ${report.commands.mediaReadinessBoardSummary}.`,
+      `MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
       "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
     ].join(" ");
   }
@@ -638,6 +652,7 @@ function formatBoardSummary(report) {
     `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}.`,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}.`,
     `Media baseline command: ${report.commands.mediaReadinessBoardSummary}.`,
+    `MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
     "Next formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
@@ -686,6 +701,8 @@ function printReport(report) {
     const prefix = item.level === "blocker" ? "ERROR" : item.level === "warning" ? "WARN" : item.level === "next" ? "NEXT" : "INFO";
     console.log(`[${prefix}] ${item.text}`);
   }
+  console.log(`[NEXT] Mac client diagnostics: ${report.commands.macClientDiagnosticsCommand}`);
+  console.log(`[NEXT] Mac client copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
   console.log(report.ok ? "[OK] Resume status passed" : "[FAIL] Resume status needs attention");
 }
 
@@ -719,6 +736,8 @@ async function main() {
     host,
     commands: {
       mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
+      macClientDiagnosticsCommand: makeMacClientDiagnosticsCommand(),
+      macClientCopyDiagnosticsAction: "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码",
     },
     recommendations,
   };

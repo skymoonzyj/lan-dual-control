@@ -17,6 +17,37 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Mac Codex
+
+日期：2026-06-17 13:18
+开发端：Mac Codex
+本轮目标：让 Mac 恢复总览直接提示 Mac client 无密诊断和复制诊断入口。
+完成内容：
+- `check-mac-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `macClientDiagnosticsCommand` / `MacClientDiagnostics=`。
+- 诊断命令指向 `node scripts/mac/check-mac-client-readiness.mjs --probeClientServer --checkBoard --boardSummary`，只读检查 Mac client 文件/本地页面状态。
+- 同一总览新增 `macClientCopyDiagnosticsAction` / `CopyDiagnostics=`，提示在 Mac client 事件日志点击“复制诊断”，粘贴前确认不含连接密码。
+- 自测新增 help、JSON、普通输出、boardSummary、在线/离线和不泄密断言。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/mac docs`
+遗留问题：
+- 本轮只补 Mac 恢复总览提示，不打开浏览器、不连接 Windows host、不认证、不发送密码、不执行 input/inject。
+下一步建议：
+- 恢复现场先跑 `node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary`；按摘要里的 `MacClientDiagnostics=` 发一行 Mac client readiness，再按需粘贴页面“复制诊断”的完整报告。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-17 Windows Codex
 
 日期：2026-06-17 续跑

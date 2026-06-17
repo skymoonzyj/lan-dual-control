@@ -114,6 +114,7 @@ Windows 端：
 - [x] Mac client 事件日志新增“复制诊断”按钮：复用同一份不含连接密码的导出日志文本写入 Mac 浏览器剪贴板，方便现场直接粘贴给 Agent Link Board 或另一端；页面自测覆盖复制内容、脱敏和无额外输入事件。
 - [x] Mac client formal checklist/smoke 的 runPlan 和通讯板摘要补齐反控请求安全演练：Mac 请求预期 `LAN008`，Windows 本机一次性授权，Mac 重试预期 accepted/临时授权已使用；命令和自测均锁定不发密码、不发送输入事件、不执行 `inject`。
 - [x] Mac 恢复开工总览也可解析 Agent Link Board `currentCall`：`--checkBoard --json`、普通输出和 `--boardSummary` 会显示 `call=active/done/none`，DONE 呼叫不会误当作待办，摘要不回显 call command。
+- [x] Mac 恢复开工总览会输出 Mac client 无密诊断和复制诊断提示：JSON、普通输出和 `--boardSummary` 都带 `MacClientDiagnostics=check-mac-client-readiness --probeClientServer --checkBoard --boardSummary` 与 `CopyDiagnostics=Mac client 事件日志点击“复制诊断”`，方便现场先发一行 readiness，再粘贴完整页面诊断。
 - [x] Windows 恢复开工总览支持 `--userAuthRequest` / PowerShell `-UserAuthRequest`，预检 ready 后直接输出可发 Agent Link Board 的 `NEED_USER_AUTH` 文本和固定目标 PowerShell 正式验收命令。
 - [x] Windows 恢复开工总览支持显式 `--sendUserAuthRequest` / PowerShell `-SendUserAuthRequest`，只在 formal preflight ready 时把无密授权提示发到 Agent Link Board，未 ready 时拒绝发送。
 - [x] Windows formal E2E runner 支持 `--sendUserAuthRequest` / PowerShell `-SendUserAuthRequest`，在 `--preflightOnly` ready 后直接向 Agent Link Board 发送无密 `NEED_USER_AUTH`，未 ready 不发送。
