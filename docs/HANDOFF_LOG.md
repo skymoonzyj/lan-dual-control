@@ -19,6 +19,36 @@
 
 ## 2026-06-17 Windows Codex
 
+日期：2026-06-17 休息续跑
+开发端：Windows Codex
+本轮目标：让 Windows 控制端导出日志记录本机 Mac 提醒 watcher 状态，方便窗口最小化提醒链路排查。
+完成内容：
+- `buildLogExportText()` 新增“Mac 提醒”诊断字段：状态、详情、最近检查时间、自动轮询间隔和联络板地址。
+- 新增 `getMacAlertWatcherExportStatus()` / `formatMacAlertWatcherCheckedAt()`，只读取前端已有状态，不自动启动 watcher，也不触发额外 PowerShell 查询。
+- `test-windows-client-browser --diagnosticsOnly` 的重连/导出日志回归新增 watcher 字段断言，确认导出文本带 `提醒中`、最近检查、15 秒轮询和默认联络板地址。
+- README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 本轮不启动真实 watcher，不测试系统浮窗 lifecycle；完整后台 lifecycle 仍用 `test-mac-alert-watcher --includeLifecycle` 或桌面按钮人工验收。
+下一步建议：
+- 若后续继续增强现场排查，可以把导出日志里的本机被控状态、体检摘要和 watcher 状态整理成更明显的“本机协作状态”小节。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Windows Codex
+
 日期：2026-06-17 12:21
 开发端：Windows Codex
 本轮目标：给桌面壳 Mac 提醒 watcher 状态查询加节流，避免频繁启动 PowerShell。

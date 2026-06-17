@@ -2307,12 +2307,39 @@ function getReconnectExportStatus(now = Date.now()) {
   };
 }
 
+function formatMacAlertWatcherCheckedAt(checkedAt, now = Date.now()) {
+  if (!checkedAt) return "未检查";
+  const elapsedSeconds = Math.max(0, Math.round((now - checkedAt) / 1000));
+  return `${new Date(checkedAt).toISOString()}（约 ${elapsedSeconds} 秒前）`;
+}
+
+function getMacAlertWatcherExportStatus(now = Date.now()) {
+  const available = canUseDesktopHostControl();
+  const statusDetail = elements.localMacAlertWatcherStatusText.textContent.trim() || "-";
+  let status = "未检查";
+  if (!available) {
+    status = "需桌面版";
+  } else if (state.localMacAlertWatcherBusy) {
+    status = state.localMacAlertWatcherRunning ? "处理中（此前提醒中）" : "处理中";
+  } else if (state.localMacAlertWatcherStatusCheckedAt) {
+    status = state.localMacAlertWatcherRunning ? "提醒中" : "未开启";
+  }
+  return {
+    status,
+    detail: statusDetail,
+    checkedAt: formatMacAlertWatcherCheckedAt(state.localMacAlertWatcherStatusCheckedAt, now),
+    pollInterval: `${Math.round(localMacAlertWatcherStatusPollMs / 1000)} 秒`,
+    server: buildMacAlertWatcherRequest().server,
+  };
+}
+
 function buildLogExportText() {
   const settings = currentDisplaySettings();
   const keyboardMapping = getKeyboardMapping();
   const connectionLabel =
     elements.transportSelect.value === "websocket" ? "WebSocket 局域网" : "本地模拟";
   const reconnectExport = getReconnectExportStatus();
+  const macAlertWatcherExport = getMacAlertWatcherExportStatus();
   const eventLines = state.logEntries
     .slice()
     .reverse()
@@ -2339,6 +2366,11 @@ function buildLogExportText() {
     `- 重连状态：${reconnectExport.status}`,
     `- 重连原因：${reconnectExport.reason}`,
     `- 下次重连：${reconnectExport.next}`,
+    `- Mac 提醒：${macAlertWatcherExport.status}`,
+    `- Mac 提醒详情：${macAlertWatcherExport.detail}`,
+    `- Mac 提醒最近检查：${macAlertWatcherExport.checkedAt}`,
+    `- Mac 提醒自动轮询：约 ${macAlertWatcherExport.pollInterval}`,
+    `- Mac 提醒联络板：${macAlertWatcherExport.server}`,
     `- 协议版本：${protocolVersion}`,
     `- 主机诊断：${elements.hostDiagnosticsText.textContent.replace(/^诊断：/, "") || "-"}`,
     "",

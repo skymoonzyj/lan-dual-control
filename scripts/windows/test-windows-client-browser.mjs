@@ -2156,12 +2156,23 @@ async function verifyReconnectControls(session) {
       const originalRemote = remote.textContent;
       const originalBadge = document.querySelector("#connectionBadge")?.className || "";
       const originalBadgeText = document.querySelector("#connectionBadge")?.textContent || "";
+      const originalTauri = window.__TAURI__;
+      const originalWatcherRunning = state.localMacAlertWatcherRunning;
+      const originalWatcherBusy = state.localMacAlertWatcherBusy;
+      const originalWatcherCheckedAt = state.localMacAlertWatcherStatusCheckedAt;
+      const originalWatcherStatus = document.querySelector("#localMacAlertWatcherStatusText")?.textContent || "";
       const calls = [];
 
       try {
         connect = async (options = {}) => {
           calls.push({ reconnect: Boolean(options.reconnect) });
         };
+        window.__TAURI__ = { core: { invoke: async () => ({}) } };
+        state.localMacAlertWatcherRunning = true;
+        state.localMacAlertWatcherBusy = false;
+        state.localMacAlertWatcherStatusCheckedAt = Date.now();
+        const watcherStatus = document.querySelector("#localMacAlertWatcherStatusText");
+        if (watcherStatus) watcherStatus.textContent = "Windows 浮窗提醒已开启，监听测试联络板。";
         state.reconnectAttempts = 0;
         state.activeHost = "192.168.31.122";
         state.activePort = "43770";
@@ -2184,7 +2195,13 @@ async function verifyReconnectControls(session) {
           exportText.includes("- 重连状态：等待自动重连（1/3") &&
           exportText.includes("- 重连原因：测试断线") &&
           exportText.includes("- 下次重连：") &&
-          exportText.includes("秒后）");
+          exportText.includes("秒后）") &&
+          exportText.includes("- Mac 提醒：提醒中") &&
+          exportText.includes("- Mac 提醒详情：Windows 浮窗提醒已开启") &&
+          exportText.includes("- Mac 提醒最近检查：") &&
+          exportText.includes("秒前）") &&
+          exportText.includes("- Mac 提醒自动轮询：约 15 秒") &&
+          exportText.includes("- Mac 提醒联络板：http://192.168.31.68:17888");
 
         reconnectButton.click();
         const immediate =
@@ -2203,6 +2220,8 @@ async function verifyReconnectControls(session) {
           remote: remote.textContent,
           exportHasReconnectStatus: exportText.includes("- 重连状态："),
           exportHasReconnectReason: exportText.includes("- 重连原因：测试断线"),
+          exportHasMacAlertWatcherStatus: exportText.includes("- Mac 提醒：提醒中"),
+          exportHasMacAlertWatcherCheckedAt: exportText.includes("- Mac 提醒最近检查："),
           calls,
         };
       } finally {
@@ -2224,6 +2243,12 @@ async function verifyReconnectControls(session) {
         state.connecting = originalConnecting;
         state.connectionState = originalConnectionState;
         state.manualDisconnect = originalManualDisconnect;
+        state.localMacAlertWatcherRunning = originalWatcherRunning;
+        state.localMacAlertWatcherBusy = originalWatcherBusy;
+        state.localMacAlertWatcherStatusCheckedAt = originalWatcherCheckedAt;
+        window.__TAURI__ = originalTauri;
+        const watcherStatus = document.querySelector("#localMacAlertWatcherStatusText");
+        if (watcherStatus) watcherStatus.textContent = originalWatcherStatus;
         actions.className = originalActionsClass;
         reconnectButton.hidden = originalReconnectHidden;
         reconnectButton.disabled = originalReconnectDisabled;
