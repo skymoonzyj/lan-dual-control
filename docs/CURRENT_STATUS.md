@@ -14,6 +14,7 @@
 - 下一步入口：`docs/NEXT_ACTIONS.md`
 
 ## Windows 端状态
+- Windows resume/status/readiness 的反控授权提示已接入 PowerShell 7 推荐命令：`check-windows-resume-status`、`start-windows-host --status` 和 `check-windows-host-readiness` 的 JSON/普通输出/`--boardSummary` 都会在默认需确认策略下保留 Node 备用 `ReverseGrant=`，并新增 `ReverseGrantPs=` / `windowsReverseControlGrantPowerShellCommand` / `windowsReverseControlGrantPowerShellBoardSummary`，指向 Windows 本机回环 `allow-windows-reverse-control.ps1 -BoardSummary`；这些提示不启动 host、不认证、不要求或打印密码、不发送输入、不执行 `inject`。
 - Windows 常用检查/回归脚本已继续补齐 `--help/-h` 纯帮助入口：`check-windows-audio-devices`、`check-windows-firewall`、`test-auth-retry-policy`、`test-coordinate-mapping` 和 `test-windows-input-helper` 查参数时不会列设备、探测端口、启动临时服务、创建 input helper 或运行断言。
 - Windows `.mjs` 工具脚本新增统一帮助入口覆盖自检 `scripts/windows/test-windows-script-help.mjs`，会逐个验证 `scripts/windows/*.mjs` 的 `--help` 和 `-h` 都快速 0 退出并打印 Usage/Options 帮助；当前 45 个脚本、90 条帮助命令全部通过，也修正了 `check-windows-host-readiness`、`start-windows-host` 和 `test-windows-host-start-helper` 的 `-h` 短写误忽略问题。
 - Windows 音频观察脚本已可用 `--help/-h` 纯查看参数，不会启动临时 host；也可统计 `audio_frame.timestamp` 接收年龄，并用 `--maxFrameAgeMs` / `--requireMonotonicTimestamp` 做音频帧新鲜度强校验；本机 WASAPI 短观察通过，倒退 timestamp 的临时假 host 会按预期失败。

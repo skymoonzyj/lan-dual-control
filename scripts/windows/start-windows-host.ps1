@@ -75,6 +75,7 @@ Status summaries include:
   WindowsHostMedia=node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
   WindowsVideoSupport=node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
   ReverseGrant=node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port <port> --durationMs 30000 --boardSummary
+  ReverseGrantPs=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port <port> -DurationMs 30000 -BoardSummary
 
 Safety:
   -Status/-BoardSummary never starts Windows host, never authenticates, never asks for or prints passwords, and never sends input/inject events.

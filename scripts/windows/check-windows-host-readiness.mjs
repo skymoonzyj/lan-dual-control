@@ -506,6 +506,11 @@ function windowsReverseControlGrantCommand(port = defaults.port) {
   return `node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port ${safePort} --durationMs 30000 --boardSummary`;
 }
 
+function windowsReverseControlGrantPowerShellCommand(port = defaults.port) {
+  const safePort = Math.max(1, Math.min(65535, Number(port) || defaults.port));
+  return `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port ${safePort} -DurationMs 30000 -BoardSummary`;
+}
+
 function windowsVideoEncoderSupportCommand() {
   return "node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary";
 }
@@ -611,6 +616,7 @@ async function checkRunningHostRuntime(args) {
         boardSummary: statusPayload.boardSummary || "",
         macClientReadinessCommands: statusPayload.macClientReadinessCommands || [],
         windowsReverseControlGrantCommand: statusPayload.windowsReverseControlGrantCommand || windowsReverseControlGrantCommand(args.port),
+        windowsReverseControlGrantPowerShellCommand: statusPayload.windowsReverseControlGrantPowerShellCommand || windowsReverseControlGrantPowerShellCommand(args.port),
         windowsVideoEncoderSupportCommand: statusPayload.windowsVideoEncoderSupportCommand || windowsVideoEncoderSupportCommand(),
         warnings,
         errors,
@@ -666,6 +672,7 @@ async function checkRunningHostRuntime(args) {
       boardSummary: statusPayload.boardSummary || "",
       macClientReadinessCommands: statusPayload.macClientReadinessCommands || [],
       windowsReverseControlGrantCommand: statusPayload.windowsReverseControlGrantCommand || windowsReverseControlGrantCommand(args.port),
+      windowsReverseControlGrantPowerShellCommand: statusPayload.windowsReverseControlGrantPowerShellCommand || windowsReverseControlGrantPowerShellCommand(args.port),
       windowsVideoEncoderSupportCommand: statusPayload.windowsVideoEncoderSupportCommand || windowsVideoEncoderSupportCommand(),
       warnings,
       errors,
@@ -684,6 +691,7 @@ async function checkRunningHostRuntime(args) {
       boardSummary: "",
       macClientReadinessCommands: [],
       windowsReverseControlGrantCommand: windowsReverseControlGrantCommand(args.port),
+      windowsReverseControlGrantPowerShellCommand: windowsReverseControlGrantPowerShellCommand(args.port),
       windowsVideoEncoderSupportCommand: windowsVideoEncoderSupportCommand(),
       warnings,
       errors,
@@ -717,6 +725,9 @@ function makeReadinessBoardSummary(summary) {
   const reverseGrant = summary.windowsReverseControlGrantCommand && !runtimeText.includes("ReverseGrant=")
     ? ` ReverseGrant=${summary.windowsReverseControlGrantCommand}.`
     : "";
+  const reverseGrantPowerShell = summary.windowsReverseControlGrantPowerShellCommand && !runtimeText.includes("ReverseGrantPs=")
+    ? ` ReverseGrantPs=${summary.windowsReverseControlGrantPowerShellCommand}.`
+    : "";
   const videoSupport = summary.windowsVideoEncoderSupportCommand && !runtimeText.includes("WindowsVideoSupport=")
     ? ` WindowsVideoSupport=${summary.windowsVideoEncoderSupportCommand}.`
     : "";
@@ -730,7 +741,7 @@ function makeReadinessBoardSummary(summary) {
   const probeText = probeSentences
     .map((sentence) => (sentence.endsWith(".") ? sentence : `${sentence}.`))
     .join(" ");
-  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrant}${videoSupport}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
+  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrant}${reverseGrantPowerShell}${videoSupport}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
 }
 
 function formatMediaBoardSummary(summary) {
@@ -1167,6 +1178,9 @@ async function main() {
   const windowsReverseControlGrantCommandValue = results.find((result) =>
     typeof result.windowsReverseControlGrantCommand === "string" && result.windowsReverseControlGrantCommand,
   )?.windowsReverseControlGrantCommand || windowsReverseControlGrantCommand(args.port);
+  const windowsReverseControlGrantPowerShellCommandValue = results.find((result) =>
+    typeof result.windowsReverseControlGrantPowerShellCommand === "string" && result.windowsReverseControlGrantPowerShellCommand,
+  )?.windowsReverseControlGrantPowerShellCommand || windowsReverseControlGrantPowerShellCommand(args.port);
   const windowsVideoEncoderSupportCommandValue = results.find((result) =>
     typeof result.windowsVideoEncoderSupportCommand === "string" && result.windowsVideoEncoderSupportCommand,
   )?.windowsVideoEncoderSupportCommand || windowsVideoEncoderSupportCommand();
@@ -1203,6 +1217,7 @@ async function main() {
     warnings: warnings.length,
     macClientReadinessCommands,
     windowsReverseControlGrantCommand: windowsReverseControlGrantCommandValue,
+    windowsReverseControlGrantPowerShellCommand: windowsReverseControlGrantPowerShellCommandValue,
     windowsVideoEncoderSupportCommand: windowsVideoEncoderSupportCommandValue,
     results: results.map((result) => ({
       label: result.label,
@@ -1216,6 +1231,7 @@ async function main() {
         ? result.macClientReadinessCommands
         : [],
       windowsReverseControlGrantCommand: result.windowsReverseControlGrantCommand || "",
+      windowsReverseControlGrantPowerShellCommand: result.windowsReverseControlGrantPowerShellCommand || "",
       windowsVideoEncoderSupportCommand: result.windowsVideoEncoderSupportCommand || "",
       warnings: result.warnings,
       errors: result.errors,

@@ -201,6 +201,7 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "--probeMedia --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "Windows local one-time reverse-control grant", "PowerShell wrapper help");
   assertIncludes(output, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770", "PowerShell wrapper help");
+  assertIncludes(output, "allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770", "PowerShell wrapper help");
   assertIncludes(output, "one-line no-password Windows client diagnostics command", "PowerShell wrapper help");
   assertIncludes(output, "test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000", "PowerShell wrapper help");
   assertIncludes(output, "Windows video encoder/WGC/WebCodecs support command", "PowerShell wrapper help");
@@ -244,6 +245,11 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "--port 43770", "mock JSON reverse grant command");
     assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "--durationMs 30000", "mock JSON reverse grant command");
     assertIncludes(payload.commands?.windowsReverseControlGrantBoardSummary, "--boardSummary", "mock JSON reverse grant command");
+    assertIncludes(payload.commands?.windowsReverseControlGrantPowerShellBoardSummary, "allow-windows-reverse-control.ps1", "mock JSON reverse grant PowerShell command");
+    assertIncludes(payload.commands?.windowsReverseControlGrantPowerShellBoardSummary, "-HostName 127.0.0.1", "mock JSON reverse grant PowerShell command");
+    assertIncludes(payload.commands?.windowsReverseControlGrantPowerShellBoardSummary, "-Port 43770", "mock JSON reverse grant PowerShell command");
+    assertIncludes(payload.commands?.windowsReverseControlGrantPowerShellBoardSummary, "-DurationMs 30000", "mock JSON reverse grant PowerShell command");
+    assertIncludes(payload.commands?.windowsReverseControlGrantPowerShellBoardSummary, "-BoardSummary", "mock JSON reverse grant PowerShell command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, "test-windows-client-browser.mjs", "mock JSON client diagnostics command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, "--diagnosticsOnly", "mock JSON client diagnostics command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, "--boardSummary", "mock JSON client diagnostics command");
@@ -298,6 +304,8 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "check-windows-video-encoder-support.mjs --boardSummary", "PowerShell board summary");
     assertIncludes(output, "ReverseGrant=", "PowerShell board summary");
     assertIncludes(output, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary", "PowerShell board summary");
+    assertIncludes(output, "ReverseGrantPs=", "PowerShell board summary");
+    assertIncludes(output, "allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -DurationMs 30000 -BoardSummary", "PowerShell board summary");
     assertIncludes(output, "No password was requested or sent", "PowerShell board summary");
     assertNotIncludes(output, "test-password", "PowerShell board summary");
     console.log("[OK] PowerShell resume-status wrapper prints one-line board summary");

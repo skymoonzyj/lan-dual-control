@@ -84,6 +84,7 @@ Examples:
   node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
   node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
   node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -DurationMs 30000 -BoardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server ${defaults.server}
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server ${defaults.server} -Status
 `);
@@ -568,6 +569,13 @@ function makeCommands(args, preflight) {
       "--durationMs", "30000",
       "--boardSummary",
     ].join(" "),
+    windowsReverseControlGrantPowerShellBoardSummary: [
+      "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1",
+      "-HostName", "127.0.0.1",
+      "-Port", String(windowsHostPort),
+      "-DurationMs", "30000",
+      "-BoardSummary",
+    ].join(" "),
     windowsClientDiagnosticsCommand: [
       "node scripts/windows/test-windows-client-browser.mjs",
       "--discover",
@@ -684,6 +692,7 @@ function makeBoardSummary(report) {
     `WindowsHostMedia=${report.commands.windowsHostMediaReadinessBoardSummary}.`,
     `WindowsVideoSupport=${report.commands.windowsVideoEncoderSupportBoardSummary}.`,
     `ReverseGrant=${report.commands.windowsReverseControlGrantBoardSummary}.`,
+    `ReverseGrantPs=${report.commands.windowsReverseControlGrantPowerShellBoardSummary}.`,
     "No password was requested or sent; no WebSocket auth/input/inject was performed.",
   ].join(" ");
 }
@@ -871,6 +880,7 @@ function printHuman(report) {
   console.log(`  ${report.commands.windowsHostMediaReadinessBoardSummary}`);
   console.log(`  ${report.commands.windowsVideoEncoderSupportBoardSummary}`);
   console.log(`  ${report.commands.windowsReverseControlGrantBoardSummary}`);
+  console.log(`  ${report.commands.windowsReverseControlGrantPowerShellBoardSummary}`);
   console.log(`  ${report.commands.windowsMacAlertWatcherStart}`);
   console.log(`  ${report.commands.windowsMacAlertWatcherStatus}`);
   console.log("- Board summary:");

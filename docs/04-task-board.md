@@ -108,6 +108,7 @@ Windows 端：
 - [x] Windows host 和桌面“本机被控”面板支持一次性临时反控授权：Windows 本机点击“临时允许反控”后打开约 30 秒窗口，下一次 Mac `reverse_control_request` 会通过并立即消耗；默认 `deny-confirm`、实验 `accept-lab` 和禁用 `disabled` 语义保持不变，授权管理端点只允许回环访问。
 - [x] Windows 本机临时反控授权新增命令行备用入口：`allow-windows-reverse-control.mjs` 可只读查看、打开一次性授权、撤销授权，并输出无密 JSON 或 Agent Link Board 单行摘要；专项回归覆盖在线授权/撤销和离线安全摘要。
 - [x] Windows 本机临时反控授权支持 PowerShell 包装入口：`allow-windows-reverse-control.ps1 -BoardSummary/-Status/-Revoke/-Json` 可在 PowerShell 7 或 Windows PowerShell 中直接查看、授权、撤销；专项回归覆盖 Node/PowerShell 在线、离线和帮助输出。
+- [x] Windows resume/status/readiness 摘要接入 PowerShell 7 版一次性反控授权命令：`check-windows-resume-status`、`start-windows-host --status` 和 `check-windows-host-readiness` 都会在 JSON/普通输出/`--boardSummary` 中新增 `ReverseGrantPs=` 或 `windowsReverseControlGrantPowerShellCommand`，同时保留旧的 Node `ReverseGrant=` 备用命令；专项回归覆盖在线、离线、PowerShell wrapper help 和 boardSummary。
 - [x] Windows host `--status` 和 Windows readiness 摘要会直接给出 `ReverseGrant=allow-windows-reverse-control --boardSummary`：默认需确认策略下，无论是普通状态、JSON、启动后 ready 输出还是 Agent Link Board 一行摘要，都能看到本机临时授权命令；readiness 压缩 runtime 摘要时也会独立保留该命令。
 - [x] Windows host 会记录最近一次被默认安全拒绝的反控请求，并通过 `/discovery.capabilities.reverseControlGrant.lastRequest` 暴露给本机面板；Windows 桌面“本机被控”状态会显示“反控：刚收到请求”和临时授权后重试提示。
 - [x] Windows readiness runtime/boardSummary 保留反控授权窗口和最近请求状态：运行中 host 有一次性授权时显示 `reverse=temporary-grant`，刚安全拒绝过 Mac 请求时显示 `reverse=pending-request`，专项回归用本机临时 host 覆盖两种状态。

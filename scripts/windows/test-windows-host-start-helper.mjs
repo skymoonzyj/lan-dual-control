@@ -237,6 +237,8 @@ async function assertPowerShellWrapperHelp(timeoutMs) {
     assertIncludes(output, "WindowsVideoSupport=", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "check-windows-video-encoder-support.mjs --boardSummary", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "ReverseGrant=", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "ReverseGrantPs=", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "allow-windows-reverse-control.ps1 -HostName 127.0.0.1", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "never starts Windows host", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "never asks for or prints passwords", `PowerShell wrapper ${helpArg}`);
     assertNotIncludes(output, "Starting Windows host", `PowerShell wrapper ${helpArg}`);
@@ -315,8 +317,10 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   assertIncludes(output, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "offline status");
   assertIncludes(output, "Windows video support command:", "offline status");
   assertIncludes(output, "check-windows-video-encoder-support.mjs --boardSummary", "offline status");
-  assertIncludes(output, "Windows reverse grant command after host is online:", "offline status");
+  assertIncludes(output, "Windows reverse grant PowerShell command after host is online:", "offline status");
+  assertIncludes(output, "Windows reverse grant Node fallback after host is online:", "offline status");
   assertIncludes(output, "allow-windows-reverse-control.mjs --host 127.0.0.1", "offline status");
+  assertIncludes(output, "allow-windows-reverse-control.ps1 -HostName 127.0.0.1", "offline status");
   assertNotIncludes(output, "LAN_DUAL_PASSWORD is required", "offline status");
   assertNotIncludes(output, "Starting Windows host", "offline status");
   assertNotIncludes(output, "at printStatus", "offline status");
@@ -344,6 +348,9 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   }
   if (!String(parsed.windowsReverseControlGrantCommand || "").includes("allow-windows-reverse-control.mjs") || !String(parsed.windowsReverseControlGrantCommand || "").includes("--boardSummary")) {
     throw new Error(`Offline JSON status did not include Windows reverse grant command.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.windowsReverseControlGrantPowerShellCommand || "").includes("allow-windows-reverse-control.ps1") || !String(parsed.windowsReverseControlGrantPowerShellCommand || "").includes("-BoardSummary")) {
+    throw new Error(`Offline JSON status did not include Windows reverse grant PowerShell command.\n${jsonResult.stdout}`);
   }
   if (!String(parsed.boardSummary || "").includes("WindowsHostMedia=")) {
     throw new Error(`Offline JSON board summary did not include WindowsHostMedia command.\n${jsonResult.stdout}`);
@@ -560,8 +567,10 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         assertIncludes(statusOutput, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "online status");
         assertIncludes(statusOutput, "Windows video support command:", "online status");
         assertIncludes(statusOutput, "check-windows-video-encoder-support.mjs --boardSummary", "online status");
-        assertIncludes(statusOutput, "Windows reverse grant command:", "online status");
+        assertIncludes(statusOutput, "Windows reverse grant PowerShell command:", "online status");
+        assertIncludes(statusOutput, "Windows reverse grant Node fallback:", "online status");
         assertIncludes(statusOutput, "allow-windows-reverse-control.mjs --host 127.0.0.1", "online status");
+        assertIncludes(statusOutput, "allow-windows-reverse-control.ps1 -HostName 127.0.0.1", "online status");
         assertIncludes(statusOutput, "differs from current git", "online status");
         assertIncludes(statusOutput, "Could not inspect Windows host runtime changes", "online status");
         assertNotIncludes(statusOutput, "test-password", "online status");
@@ -611,6 +620,9 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         if (!String(parsed.windowsReverseControlGrantCommand || "").includes("allow-windows-reverse-control.mjs") || !String(parsed.windowsReverseControlGrantCommand || "").includes("--host 127.0.0.1")) {
           throw new Error(`Online JSON status did not include Windows reverse grant command.\n${jsonResult.stdout}`);
         }
+        if (!String(parsed.windowsReverseControlGrantPowerShellCommand || "").includes("allow-windows-reverse-control.ps1") || !String(parsed.windowsReverseControlGrantPowerShellCommand || "").includes("-HostName 127.0.0.1")) {
+          throw new Error(`Online JSON status did not include Windows reverse grant PowerShell command.\n${jsonResult.stdout}`);
+        }
         if (!String(parsed.boardSummary || "").includes("WindowsHostMedia=")) {
           throw new Error(`Online JSON board summary did not include WindowsHostMedia command.\n${jsonResult.stdout}`);
         }
@@ -619,6 +631,9 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         }
         if (!String(parsed.boardSummary || "").includes("ReverseGrant=") || !String(parsed.boardSummary || "").includes("allow-windows-reverse-control.mjs")) {
           throw new Error(`Online JSON board summary did not include Windows reverse grant command.\n${jsonResult.stdout}`);
+        }
+        if (!String(parsed.boardSummary || "").includes("ReverseGrantPs=") || !String(parsed.boardSummary || "").includes("allow-windows-reverse-control.ps1")) {
+          throw new Error(`Online JSON board summary did not include Windows reverse grant PowerShell command.\n${jsonResult.stdout}`);
         }
         if (parsed.buildDiff?.checked !== false || !String(parsed.buildDiff?.message || "").includes("Could not inspect")) {
           throw new Error(`Online JSON status did not include expected uninspectable build diff.\n${jsonResult.stdout}`);
@@ -645,6 +660,8 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         assertIncludes(boardResult.stdout, "check-windows-video-encoder-support.mjs --boardSummary", "online board summary");
         assertIncludes(boardResult.stdout, "ReverseGrant=", "online board summary");
         assertIncludes(boardResult.stdout, "allow-windows-reverse-control.mjs --host 127.0.0.1", "online board summary");
+        assertIncludes(boardResult.stdout, "ReverseGrantPs=", "online board summary");
+        assertIncludes(boardResult.stdout, "allow-windows-reverse-control.ps1 -HostName 127.0.0.1", "online board summary");
         assertIncludes(boardResult.stdout, "Do not send passwords", "online board summary");
         assertNotIncludes(boardOutput, "test-password", "online board summary");
         finish();
@@ -749,7 +766,11 @@ async function assertLaunchWithEnvPassword(timeoutMs) {
         rejectLaunch(new Error(`Start helper did not print Windows video support command.\n${output}`));
         return;
       }
-      if (!output.includes("Windows reverse grant command:") || !output.includes("allow-windows-reverse-control.mjs --host 127.0.0.1")) {
+      if (!output.includes("Windows reverse grant PowerShell command:") || !output.includes("allow-windows-reverse-control.ps1 -HostName 127.0.0.1")) {
+        rejectLaunch(new Error(`Start helper did not print Windows reverse grant PowerShell command.\n${output}`));
+        return;
+      }
+      if (!output.includes("Windows reverse grant Node fallback:") || !output.includes("allow-windows-reverse-control.mjs --host 127.0.0.1")) {
         rejectLaunch(new Error(`Start helper did not print Windows reverse grant command.\n${output}`));
         return;
       }

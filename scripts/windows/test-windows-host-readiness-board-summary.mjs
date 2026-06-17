@@ -337,8 +337,16 @@ async function verifyReverseControlReadinessTokens(args, results) {
       `boardSummary should include reverse grant command: ${pending.payload.boardSummary}`,
     );
     assert(
+      pending.payload.boardSummary?.includes("ReverseGrantPs=") && pending.payload.boardSummary?.includes("allow-windows-reverse-control.ps1"),
+      `boardSummary should include reverse grant PowerShell command: ${pending.payload.boardSummary}`,
+    );
+    assert(
       pending.payload.windowsReverseControlGrantCommand?.includes("allow-windows-reverse-control.mjs"),
       `JSON should include reverse grant command: ${pending.payload.windowsReverseControlGrantCommand}`,
+    );
+    assert(
+      pending.payload.windowsReverseControlGrantPowerShellCommand?.includes("allow-windows-reverse-control.ps1"),
+      `JSON should include reverse grant PowerShell command: ${pending.payload.windowsReverseControlGrantPowerShellCommand}`,
     );
 
     await grantReverseControl(host, port, args.readinessTimeoutMs);
@@ -356,6 +364,10 @@ async function verifyReverseControlReadinessTokens(args, results) {
     assert(
       grant.payload.boardSummary?.includes("ReverseGrant=") && grant.payload.boardSummary?.includes("allow-windows-reverse-control.mjs"),
       `boardSummary should include reverse grant command while grant is active: ${grant.payload.boardSummary}`,
+    );
+    assert(
+      grant.payload.boardSummary?.includes("ReverseGrantPs=") && grant.payload.boardSummary?.includes("allow-windows-reverse-control.ps1"),
+      `boardSummary should include reverse grant PowerShell command while grant is active: ${grant.payload.boardSummary}`,
     );
   });
 }
@@ -463,6 +475,11 @@ async function main() {
     "JSON windowsReverseControlGrantCommand is missing",
   );
   assert(
+    typeof jsonSummary.windowsReverseControlGrantPowerShellCommand === "string"
+      && jsonSummary.windowsReverseControlGrantPowerShellCommand.includes("allow-windows-reverse-control.ps1"),
+    "JSON windowsReverseControlGrantPowerShellCommand is missing",
+  );
+  assert(
     typeof jsonSummary.windowsVideoEncoderSupportCommand === "string"
       && jsonSummary.windowsVideoEncoderSupportCommand.includes("check-windows-video-encoder-support.mjs")
       && jsonSummary.windowsVideoEncoderSupportCommand.includes("--boardSummary"),
@@ -480,6 +497,11 @@ async function main() {
     jsonSummary.boardSummary.includes("check-windows-video-encoder-support.mjs --boardSummary"),
     "JSON boardSummary should include the runnable Windows video support command",
   );
+  assert(jsonSummary.boardSummary.includes("ReverseGrantPs="), "JSON boardSummary should include Windows reverse grant PowerShell command");
+  assert(
+    jsonSummary.boardSummary.includes("allow-windows-reverse-control.ps1"),
+    "JSON boardSummary should include the runnable Windows reverse grant PowerShell command",
+  );
   assert(!jsonSummary.boardSummary.includes("--status --json"), "JSON boardSummary should not echo call command");
   assert(jsonSummary.results.some((result) => result.label === "Windows host runtime"), "JSON results missing runtime check");
   const runtimeResult = jsonSummary.results.find((result) => result.label === "Windows host runtime");
@@ -487,6 +509,11 @@ async function main() {
     typeof runtimeResult?.windowsVideoEncoderSupportCommand === "string"
       && runtimeResult.windowsVideoEncoderSupportCommand.includes("check-windows-video-encoder-support.mjs"),
     "runtime result should carry Windows video support command",
+  );
+  assert(
+    typeof runtimeResult?.windowsReverseControlGrantPowerShellCommand === "string"
+      && runtimeResult.windowsReverseControlGrantPowerShellCommand.includes("allow-windows-reverse-control.ps1"),
+    "runtime result should carry Windows reverse grant PowerShell command",
   );
   if (runtimeResult?.summary?.includes("screen=")) {
     assert(runtimeResult.summary.includes("reverse="), `runtime summary missing reverse-control policy: ${runtimeResult.summary}`);

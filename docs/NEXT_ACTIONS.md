@@ -12,6 +12,7 @@
    - 验证通过后，真实输入注入只能在用户明确确认正在看 Mac 屏幕后执行；Mac 端通过启动助手切换时必须带 `--confirmUserWatching`，不要把裸 `LAN_DUAL_INPUT_MODE=inject` 当作日常复跑路径。
 
 2. Windows 端继续完善控制体验。
+   - Windows 侧需要给 Mac 端或通讯板同步一次性反控授权入口时，优先使用 PowerShell 7 摘要命令：`pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -DurationMs 30000 -BoardSummary`。恢复总览、Windows host `--status` 和 readiness 摘要现在都会同时给出 `ReverseGrantPs=` 推荐命令与 `ReverseGrant=` Node 备用命令；它们只提示/打开 Windows 本机回环临时授权窗口，不发送密码、不认证远端、不发送输入、不执行 `inject`。
    - 真机联调前优先用 Windows 桌面版“刷新设备”自动扫描同网段 `/discovery`；命令行可用 `node scripts/windows/discover-lan-hosts.mjs --boardSummary --requireMacHost` 快速确认当前 Mac IP，并直接得到 formal E2E 预检、授权提醒、ready 后自动发送授权提醒和正式验收命令。已知 IP 时用 `--noLocalSubnets --host 192.168.31.122 --port 43770` 可避免扫整段局域网。发现摘要现在会附带 Mac host runtime `buildDiff`：若只是 `stale metadata only, hostRuntimeChanges=0` 可继续无密预检；若显示 `restart recommended`，正式长测前先请 Mac 端重启 host。2026-06-16 真实 Mac host `192.168.31.122:43770` / runtime build `c5e5009` 已通过完整 Windows formal Mac E2E：H.264/WebCodecs、音频、文本/文件剪贴板、input-log 和 Windows 控制端诊断均 OK；formal E2E 未执行 `inject`。之后真实 safe inject 小验收已单独通过，后续复跑仍必须先由用户明确确认正在看 Mac 屏幕，并由 Mac 端用 `--confirmUserWatching` 启动 inject host。
    - 保持诊断状态条准确显示真实视频、模拟回退、Mac host runtime、权限、输入注入和剪贴板状态。
    - 保持顶部“输入事件”状态能直说当前输入模式：`inputMode=log` 必须提示“安全日志，不会真正控制”，真实注入要显示“真实控制 / 已注入”，拒绝要显示错误码；后续改输入 UI 或诊断条时先跑 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`。

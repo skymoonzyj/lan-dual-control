@@ -242,6 +242,11 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("--port 43770"), "mock JSON reverse grant command should target the default Windows host port");
     assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("--durationMs 30000"), "mock JSON reverse grant command should be time-limited");
     assert(String(payload.commands?.windowsReverseControlGrantBoardSummary || "").includes("--boardSummary"), "mock JSON reverse grant command should be board-safe");
+    assert(String(payload.commands?.windowsReverseControlGrantPowerShellBoardSummary || "").includes("allow-windows-reverse-control.ps1"), "mock JSON should include Windows reverse grant PowerShell command");
+    assert(String(payload.commands?.windowsReverseControlGrantPowerShellBoardSummary || "").includes("-HostName 127.0.0.1"), "mock JSON reverse grant PowerShell command should be local-only");
+    assert(String(payload.commands?.windowsReverseControlGrantPowerShellBoardSummary || "").includes("-Port 43770"), "mock JSON reverse grant PowerShell command should target the default Windows host port");
+    assert(String(payload.commands?.windowsReverseControlGrantPowerShellBoardSummary || "").includes("-DurationMs 30000"), "mock JSON reverse grant PowerShell command should be time-limited");
+    assert(String(payload.commands?.windowsReverseControlGrantPowerShellBoardSummary || "").includes("-BoardSummary"), "mock JSON reverse grant PowerShell command should be board-safe");
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("test-windows-client-browser.mjs"), "mock JSON should include Windows client diagnostics command");
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("--diagnosticsOnly"), "mock JSON client diagnostics should be no-auth diagnostics only");
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("--boardSummary"), "mock JSON client diagnostics should be board-safe");
@@ -298,6 +303,8 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "check-windows-video-encoder-support.mjs --boardSummary", "board summary");
     assertIncludes(result.stdout, "ReverseGrant=", "board summary");
     assertIncludes(result.stdout, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary", "board summary");
+    assertIncludes(result.stdout, "ReverseGrantPs=", "board summary");
+    assertIncludes(result.stdout, "allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -DurationMs 30000 -BoardSummary", "board summary");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "board summary");
     console.log("[OK] Windows resume status board summary is one-line and secret-free");
   });

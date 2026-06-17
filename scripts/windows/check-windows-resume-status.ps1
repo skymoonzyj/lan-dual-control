@@ -51,6 +51,8 @@ The report also includes a Windows host media baseline command:
 node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
 It also includes a Windows local one-time reverse-control grant command:
 node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary
+PowerShell 7 equivalent:
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -DurationMs 30000 -BoardSummary
 It also includes a one-line no-password Windows client diagnostics command:
 node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
 It also includes a read-only Windows video encoder/WGC/WebCodecs support command:

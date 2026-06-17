@@ -636,6 +636,11 @@ function windowsReverseControlGrantCommand(port = defaults.port) {
   return `node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port ${safePort} --durationMs 30000 --boardSummary`;
 }
 
+function windowsReverseControlGrantPowerShellCommand(port = defaults.port) {
+  const safePort = Math.max(1, Math.min(65535, Number(port) || defaults.port));
+  return `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port ${safePort} -DurationMs 30000 -BoardSummary`;
+}
+
 function shouldShowReverseControlGrantCommand(reverse = normalizeReverseControlStatus()) {
   return Boolean(reverse.supported) && reverse.mode !== "disabled" && reverse.mode !== "accept" && !reverse.autoAccept;
 }
@@ -677,7 +682,10 @@ function makeBoardSummary(status) {
   const reverseGrant = shouldShowReverseControlGrantCommand(reverse)
     ? ` ReverseGrant=${status.windowsReverseControlGrantCommand}.`
     : "";
-  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness}${sendCall} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}.${reverseGrant} Do not send passwords on Agent Link Board.`;
+  const reverseGrantPowerShell = shouldShowReverseControlGrantCommand(reverse)
+    ? ` ReverseGrantPs=${status.windowsReverseControlGrantPowerShellCommand}.`
+    : "";
+  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${readiness}${sendCall} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}.${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
 }
 
 function applyDiscoveryStatus(status, discovery, args) {
@@ -742,6 +750,7 @@ function makeStatusShell(args, probeHost = statusProbeHost(args)) {
     windowsHostMediaReadinessCommand: windowsHostMediaReadinessCommand(),
     windowsVideoEncoderSupportCommand: windowsVideoEncoderSupportCommand(),
     windowsReverseControlGrantCommand: windowsReverseControlGrantCommand(args.port),
+    windowsReverseControlGrantPowerShellCommand: windowsReverseControlGrantPowerShellCommand(args.port),
     board: skippedBoardSnapshot(),
     boardSummary: "",
     warnings: [],
@@ -845,7 +854,8 @@ async function printStatus(args) {
       console.log(`[INFO] Windows host media baseline command: ${status.windowsHostMediaReadinessCommand}`);
       console.log(`[INFO] Windows video support command: ${status.windowsVideoEncoderSupportCommand}`);
       if (shouldShowReverseControlGrantCommand(status.capabilities?.reverseControl)) {
-        console.log(`[INFO] Windows reverse grant command: ${status.windowsReverseControlGrantCommand}`);
+        console.log(`[INFO] Windows reverse grant PowerShell command: ${status.windowsReverseControlGrantPowerShellCommand}`);
+        console.log(`[INFO] Windows reverse grant Node fallback: ${status.windowsReverseControlGrantCommand}`);
       }
       console.log("[INFO] Board summary: node scripts/windows/start-windows-host.mjs --status --boardSummary");
     }
@@ -860,7 +870,8 @@ async function printStatus(args) {
   console.log(`[INFO] ${status.suggestions[1]}`);
   console.log(`[INFO] Windows host media baseline command: ${status.windowsHostMediaReadinessCommand}`);
   console.log(`[INFO] Windows video support command: ${status.windowsVideoEncoderSupportCommand}`);
-  console.log(`[INFO] Windows reverse grant command after host is online: ${status.windowsReverseControlGrantCommand}`);
+  console.log(`[INFO] Windows reverse grant PowerShell command after host is online: ${status.windowsReverseControlGrantPowerShellCommand}`);
+  console.log(`[INFO] Windows reverse grant Node fallback after host is online: ${status.windowsReverseControlGrantCommand}`);
   return false;
 }
 
@@ -1058,7 +1069,8 @@ function printMacNextSteps(status) {
     console.log(`[INFO] Windows video support command: ${status.windowsVideoEncoderSupportCommand}`);
   }
   if (status.windowsReverseControlGrantCommand) {
-    console.log(`[INFO] Windows reverse grant command: ${status.windowsReverseControlGrantCommand}`);
+    console.log(`[INFO] Windows reverse grant PowerShell command: ${status.windowsReverseControlGrantPowerShellCommand}`);
+    console.log(`[INFO] Windows reverse grant Node fallback: ${status.windowsReverseControlGrantCommand}`);
   }
   if (status.boardSummary) {
     console.log(`[INFO] Agent Link Board summary: ${status.boardSummary}`);

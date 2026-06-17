@@ -21,6 +21,50 @@
 
 日期：2026-06-17 续跑
 开发端：Windows Codex
+本轮目标：把 PowerShell 7 版一次性反控授权命令接入 Windows 恢复总览、host status 和 readiness 摘要。
+完成内容：
+- `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `ReverseGrantPs=` / `windowsReverseControlGrantPowerShellBoardSummary`，同时保留 Node `ReverseGrant=` 备用命令。
+- `start-windows-host --status`、启动后 ready 输出和 `--boardSummary` 新增 `windowsReverseControlGrantPowerShellCommand` / `ReverseGrantPs=`，并把 Node 命令明确标为 fallback。
+- `check-windows-host-readiness` 的 runtime JSON、顶层 JSON 和 `boardSummary` 新增 PowerShell 授权命令；即使 runtime 摘要被压缩，也会独立保留 `ReverseGrantPs=`。
+- PowerShell 包装帮助、Windows host README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check` 覆盖本轮 7 个 Windows 脚本/测试。
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 45000`
+- PowerShell AST 解析 `check-windows-resume-status.ps1` 和 `start-windows-host.ps1`。
+- `node scripts/windows/test-windows-script-help.mjs` 定点覆盖本轮相关命令。
+- 离线 `check-windows-resume-status --boardSummary` 和 `start-windows-host --status --json` 样例确认 `ReverseGrantPs=` / `windowsReverseControlGrantPowerShellCommand`。
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows apps/windows-host docs`
+遗留问题：
+- 本轮只补状态/摘要提示，不自动打开授权，也不执行真实反控；正式 Mac 反控 Windows 仍需 Windows host 在线后由 Windows 本机授权，再让 Mac 重试。
+下一步建议：
+- 真连时优先把 `ReverseGrantPs=` 发到 Agent Link Board 或在 Windows 本机执行，成功后让 Mac client 点“重试反控”确认 accepted。
+是否改了协议：否。
+是否需要另一端配合：否；后续真实反控演练需要 Mac 端发起请求。
+
+## 2026-06-17 Windows Codex
+
+日期：2026-06-17 续跑
+开发端：Windows Codex
 本轮目标：给 Windows 本机一次性反控授权助手增加 PowerShell 包装入口，方便现场用 PowerShell 7 直接授权/撤销/上板摘要。
 完成内容：
 - 新增 `scripts/windows/allow-windows-reverse-control.ps1`。
