@@ -17,6 +17,39 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Mac Codex
+
+日期：2026-06-17 续跑
+开发端：Mac Codex
+本轮目标：让 Mac client readiness 自身也输出本地页面状态命令。
+完成内容：
+- `scripts/mac/check-mac-client-readiness.mjs` 新增 `commands.macClientPageStatusCommand`，值为 `node scripts/mac/start-mac-client.mjs --status --boardSummary`，只读检查本地 Mac client 页面在线状态。
+- 普通输出新增 `Mac client page status:`；`--boardSummary` 新增 `MacClientPage=...`，方便不经过 resume status 时也能先发本地页面状态。
+- help、JSON、普通输出和 boardSummary 都继续不启动 Mac client、不连接 Windows host、不认证、不要求或打印密码、不发送 input、不执行 inject。
+- `scripts/mac/test-mac-client-readiness.mjs` 覆盖 help、离线 JSON、plain report、boardSummary 和本地 Mac client server probe 中的新命令，并确认命令不带密码/server/allowExisting 参数。
+- 已先合并 Windows 最新 `b5bdeb1`，保留对方 Windows 控制端远端文件接收超时/中断恢复交接记录。
+修改文件：
+- `scripts/mac/check-mac-client-readiness.mjs`
+- `scripts/mac/test-mac-client-readiness.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-client-readiness.mjs`
+- `node --check scripts/mac/test-mac-client-readiness.mjs`
+- `node scripts/mac/test-mac-client-readiness.mjs --timeoutMs 45000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮只补 Mac readiness 的无密下一步命令，不启动真实 Windows host、不认证、不发送密码/input/inject。
+下一步建议：
+- 现场直接跑 Mac client readiness 时，优先用 `MacClientPage=` 先确认本地页面在线，再按 `CopyDiagnostics=` 粘贴页面完整诊断；如需更完整恢复总览仍先跑 `check-mac-resume-status --checkBoard --boardSummary`。
+是否改了协议：否。
+是否需要另一端配合：否。
+
 ## 2026-06-17 Windows Codex
 
 日期：2026-06-17 续跑

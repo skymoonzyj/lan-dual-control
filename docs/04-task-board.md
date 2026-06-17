@@ -121,6 +121,7 @@ Windows 端：
 - [x] Mac client 在 `LAN008`、最近请求或临时授权状态下直接显示并可一键复制 Windows 本机 PowerShell 推荐一次性授权命令：`allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port <Windows host port> -Grant -DurationMs 30000 -BoardSummary`，并展示 Node 备用命令；accepted 后隐藏命令，页面自测覆盖 PowerShell 复制、Node 备用显示和无额外输入事件。
 - [x] Mac client 事件日志新增“复制诊断”按钮：复用同一份不含连接密码的导出日志文本写入 Mac 浏览器剪贴板，方便现场直接粘贴给 Agent Link Board 或另一端；页面自测覆盖复制内容、脱敏和无额外输入事件。
 - [x] Mac client readiness 摘要新增 `CopyDiagnostics=`：JSON、普通输出和 `--boardSummary` 都提示在事件日志点击“复制诊断”，方便现场先发一行 readiness 后再粘贴完整页面诊断。
+- [x] Mac client readiness 摘要新增 `MacClientPage=` / JSON `commands.macClientPageStatusCommand`：直接指向 `start-mac-client --status --boardSummary`，方便单独跑 readiness 时先确认本地页面在线；该命令只读、不启动页面、不连接 Windows、不认证、不发送 input/inject。
 - [x] Mac client 本地页面启动/状态助手摘要新增 `CopyDiagnostics=`：`start-mac-client --status --boardSummary` 页面在线时提示在事件日志点击“复制诊断”，页面离线时提示先启动页面、在线后再复制诊断；专项自测覆盖 JSON 内摘要、真实 stdout 单行摘要、在线/离线摘要和不泄密。
 - [x] Mac client 本地页面启动/状态助手 JSON 新增 `commands`：`macClientStartOrReuseCommand`、`macClientFormalStatusCommand` 和 `macClientCopyDiagnosticsAction` 可供恢复总览或自动化直接消费；自测覆盖离线、启动、在线 status 和 allowExisting 路径，确认命令不带密码。
 - [x] Mac client formal checklist/smoke 的 runPlan 和通讯板摘要补齐反控请求安全演练：Mac 请求预期 `LAN008`，Windows 本机优先用 PowerShell 一次性授权，Node 命令作为 fallback，Mac 重试预期 accepted/临时授权已使用；命令和自测均锁定不发密码、不发送输入事件、不执行 `inject`。

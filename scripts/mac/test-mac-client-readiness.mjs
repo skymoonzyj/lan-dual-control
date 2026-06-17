@@ -82,11 +82,21 @@ function print(kind, text) {
   console.log(`[${kind}] ${text}`);
 }
 
+function assertMacClientPageStatusCommand(command, label) {
+  assertIncludes(command, "start-mac-client.mjs", label);
+  assertIncludes(command, "--status", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--allowExisting", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--server", label);
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run([flag], args);
     assert(result.status === 0, `${script} ${flag} should exit 0`);
     assertIncludes(result.stdout, "Usage:", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macClientPageStatusCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientCopyDiagnosticsAction", `${script} ${flag}`);
   }
   print("OK", "Mac client readiness help exits quickly");
@@ -101,6 +111,7 @@ function checkOfflineJson(args) {
   assert(payload.clientServer?.checked === false, "client server should not be checked by default");
   assert(payload.windowsHost?.checked === false, "Windows host should not be checked by default");
   assert(Array.isArray(payload.checklist), "payload should include checklist");
+  assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "offline JSON Mac client page status command");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "payload should include copy diagnostics action");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("连接密码"), "copy diagnostics action should mention password safety");
   assert(/Mac client readiness:/.test(payload.boardSummary || ""), "payload should include boardSummary");
@@ -152,6 +163,8 @@ function checkBoardSummary(args) {
   const text = String(result.stdout || "").trim();
   assert(result.status === 0, "board summary should exit 0 without blockers");
   assertIncludes(text, "Mac client readiness:", "board summary");
+  assertIncludes(text, "MacClientPage=", "board summary");
+  assertIncludes(text, "start-mac-client.mjs", "board summary");
   assertIncludes(text, "CopyDiagnostics=Mac client 事件日志点击", "board summary");
   assertIncludes(text, "连接密码", "board summary");
   assertIncludes(text, "Do not send passwords", "board summary");
@@ -162,6 +175,8 @@ function checkBoardSummary(args) {
 function checkPlainReport(args) {
   const result = run(["--timeoutMs", "1200"], args);
   assert(result.status === 0, "plain report should exit 0 without blockers");
+  assertIncludes(result.stdout, "Mac client page status:", "plain report");
+  assertIncludes(result.stdout, "start-mac-client.mjs", "plain report");
   assertIncludes(result.stdout, "Copy diagnostics:", "plain report");
   assertIncludes(result.stdout, "复制诊断", "plain report");
   assertIncludes(result.stdout, "连接密码", "plain report");
@@ -235,6 +250,7 @@ async function checkClientServerProbe(args) {
     assert(result.status === 0, `client server probe should pass.\n${result.stdout}\n${result.stderr}`);
     assert(payload.clientServer?.online === true, "client server should be online");
     assert(payload.clientServer?.titleFound === true, "client server should look like Mac client page");
+    assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "client server probe command");
     assert(payload.checklist.some((item) => item.id === "client-server" && item.status === "ok"), "client-server ok item should be present");
   });
   print("OK", "Running Mac client HTTP server probe passes");
