@@ -17,6 +17,40 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 续跑
+开发端：Windows Codex
+本轮目标：第一阶段远控 UI 补强，让 Windows 控 Mac 全屏时能直接看到视频链路和卡顿指标。
+完成内容：
+- Windows 控 Mac 悬浮控制中心新增“视频”状态胶囊，展开后显示当前 H.264/JPEG/模拟链路、实收 FPS、协商/请求刷新率、帧延迟或时钟偏差。
+- 视频状态会同步 H.264/JPEG 回退原因、等待关键帧和解码异常提示，便于现场判断“没有 60Hz”、卡顿或回退 JPEG 的原因。
+- 页面自检新增浮层视频状态断言，模拟 H.264、实收 22.9 FPS、协商 30 Hz、请求 60 Hz、123ms 到达延迟和回退原因。
+- Windows 控制端 README、当前状态、下一步、任务板和锁表已同步。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps\windows-client scripts\windows docs`
+遗留问题：
+- 本轮只做页面 UI 和 diagnostics-only 自检，不连接真实 Mac、不认证、不发送密码/input/inject；真实 Mac 连接时仍需观察全屏状态行是否足够帮助现场判断帧率和延迟。
+下一步建议：
+- 真实 Mac 联调时优先在真全屏/普通全屏下截图或复制诊断，确认浮层视频状态、顶部 FPS 卡片和诊断条三处信息一致。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真实 Mac 联调时再通过 Agent Link Board 发 call。
+
 ## 2026-06-17 Windows Codex
 
 日期：2026-06-17 续跑

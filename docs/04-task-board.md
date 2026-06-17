@@ -59,6 +59,7 @@ Windows 端：
 - [x] Windows 控 Mac 悬浮控制中心补齐第一阶段远控工具栏：全屏后保留画面内入口，可切显示器、画质、分辨率、刷新率、码率、缩放、声音、音量和常用 macOS 快捷键，显示 `Esc` 退出全屏、输入模式和安全状态；页面 diagnostics-only 覆盖原画预设、详细参数同步、快捷键发送、全屏/窗口和黑边输入防护。
 - [x] Windows 控 Mac 全屏进入轻提示：进入全屏会短暂显示 `Esc` 退出、当前画质、刷新率、码率和输入状态，`Esc` 在全屏里优先退出全屏；页面 diagnostics-only 覆盖提示可见和 Esc 退出。
 - [x] Windows 控 Mac 真全屏入口：悬浮控制中心新增“真全屏”按钮，支持浏览器/桌面壳 Fullscreen API；不支持时回退普通全屏并中文提示；页面 diagnostics-only 覆盖真全屏模拟路径。
+- [x] Windows 控 Mac 全屏浮层补视频链路状态：悬浮控制中心展开后显示 H.264/JPEG、实收 FPS、协商/请求刷新率、帧延迟或时钟偏差和回退原因，方便现场判断卡顿、非 60Hz 或 H.264 回退；页面 diagnostics-only 覆盖该状态。
 
 ## Mac 反控 Windows 真连准备
 

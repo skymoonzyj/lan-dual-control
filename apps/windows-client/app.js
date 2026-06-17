@@ -94,6 +94,7 @@ const elements = {
   floatingScaleSelect: document.querySelector("#floatingScaleSelect"),
   floatingAudioSelect: document.querySelector("#floatingAudioSelect"),
   floatingFullscreenHint: document.querySelector("#floatingFullscreenHint"),
+  floatingVideoStatus: document.querySelector("#floatingVideoStatus"),
   floatingInputModeStatus: document.querySelector("#floatingInputModeStatus"),
   floatingSecurityStatus: document.querySelector("#floatingSecurityStatus"),
   floatingShortcutSelect: document.querySelector("#floatingShortcutSelect"),
@@ -1035,6 +1036,7 @@ function updateHostDiagnostics(nextDiagnostics = {}) {
   elements.hostDiagnosticsText.textContent = renderHostDiagnosticsText();
   setHostDiagnosticsLevel(getHostDiagnosticsLevel());
   updateInputStatus();
+  syncFloatingControlStatus();
 }
 
 function resetHostDiagnostics(text = defaultHostDiagnosticsText) {
@@ -2005,6 +2007,55 @@ function formatFloatingSecurityStatus() {
   return "安全：连接中";
 }
 
+function formatFloatingVideoCodec(diagnostics = state.hostDiagnostics) {
+  const codec = String(diagnostics.videoCodec || "").toLowerCase();
+  if (codec === "h264") return "H.264";
+  if (codec === "jpeg" || codec === "mjpeg") return codec.toUpperCase();
+  if (codec === "mock-svg") return "模拟";
+  if (codec) return codec.toUpperCase();
+  return diagnostics.capturePipeline ? labelFromMap(diagnostics.capturePipeline, capturePipelineLabels) : "等待视频";
+}
+
+function formatFloatingVideoRate() {
+  const requested = state.requestedFps || Number(elements.fpsSelect.value) || 0;
+  const negotiated = state.negotiatedFps || requested;
+  const parts = [];
+  if (state.actualVideoFps > 0) {
+    parts.push(`实收 ${state.actualVideoFps.toFixed(1)} FPS`);
+  } else if (state.connected) {
+    parts.push("实收 -- FPS");
+  }
+  if (negotiated) {
+    parts.push(`协商 ${negotiated} Hz`);
+  }
+  if (requested && negotiated && requested !== negotiated) {
+    parts.push(`请求 ${requested} Hz`);
+  } else if (!state.connected && requested) {
+    parts.push(`请求 ${requested} Hz`);
+  }
+  return parts.join(" / ");
+}
+
+function formatFloatingVideoStatus() {
+  const diagnostics = state.hostDiagnostics;
+  const parts = [formatFloatingVideoCodec(diagnostics), formatFloatingVideoRate()].filter(Boolean);
+  const ageText = formatVideoFrameAge(diagnostics.videoFrameAgeMs, {
+    clockSkewed: diagnostics.videoFrameClockSkewed,
+  });
+  if (ageText) {
+    parts.push(diagnostics.videoFrameClockSkewed ? ageText : `到达 ${ageText}`);
+  }
+  const fallbackReason = diagnostics.streamFallbackReason || diagnostics.h264FallbackReason || "";
+  if (fallbackReason) {
+    parts.push(`回退 ${fallbackReason}`);
+  } else if (diagnostics.videoDecoderStatus === "waiting-keyframe") {
+    parts.push("等待关键帧");
+  } else if (diagnostics.videoDecoderStatus === "error") {
+    parts.push("解码异常");
+  }
+  return `视频：${parts.join(" · ")}`;
+}
+
 function syncFloatingControlStatus() {
   if (elements.floatingFullscreenHint) {
     elements.floatingFullscreenHint.textContent = state.immersiveFullscreen
@@ -2012,6 +2063,9 @@ function syncFloatingControlStatus() {
       : state.fullscreen
         ? "Esc 退出全屏"
         : "全屏后 Esc 退出";
+  }
+  if (elements.floatingVideoStatus) {
+    elements.floatingVideoStatus.textContent = formatFloatingVideoStatus();
   }
   if (elements.floatingInputModeStatus) {
     elements.floatingInputModeStatus.textContent = formatFloatingInputModeStatus();
@@ -2271,6 +2325,7 @@ function updateFpsMetric() {
     parts.push(`请求 ${requested} Hz`);
   }
   elements.metricFps.textContent = parts.join(" · ");
+  syncFloatingControlStatus();
 }
 
 function buildAudioSettingsMessage() {
