@@ -21,6 +21,40 @@
 
 日期：2026-06-17 续跑
 开发端：Mac Codex
+本轮目标：让 Mac 恢复总览直接给出 formal E2E 只读预检入口。
+完成内容：
+- `scripts/mac/check-mac-resume-status.mjs` 的 JSON `commands` 新增 `macFormalE2eStatusCommand`，命令形状为 `check-mac-formal-e2e-status --host <host> --port <port> --boardSummary`。
+- 普通输出和 `--boardSummary` 新增 `MacFormalE2E=`，正式呼叫 Windows 前可先一行确认 repo、联络板、Mac host、权限、媒体、剪贴板、display 和 buildDiff readiness。
+- 该命令保持只读：不弹密码、不认证 WebSocket、不发送 Agent Link Board call/input/inject；真正发正式呼叫仍需人工确认后另行显式 `--sendCall`。
+- `scripts/mac/test-mac-resume-status.mjs` 覆盖 help、离线/在线 JSON、普通输出和 boardSummary 中的新命令，并断言命令不带 `--password`、不带 `--sendCall`、不带自定义 board server。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 10000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/mac/check-mac-formal-e2e-status.mjs --host 127.0.0.1 --port 43770 --boardSummary --allowDirty`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮只做只读 resume/status 收口；没有运行真实 formal E2E、没有触发密码弹窗、没有认证真实 host、没有发送 call/input/inject。
+下一步建议：
+- 白天正式呼叫 Windows 前，先跑 `check-mac-resume-status --checkBoard --boardSummary`，按摘要里的 `MacFormalLocalSmoke=` 做本机短验收，再按 `MacFormalE2E=` 确认 readiness，ready 后再决定是否显式 `--sendCall`。
+是否改了协议：否。
+是否需要另一端配合：否；真实端到端验收时再通过 Agent Link Board 呼叫 Windows。
+
+## 2026-06-17 Mac Codex
+
+日期：2026-06-17 续跑
+开发端：Mac Codex
 本轮目标：让 Mac formal local smoke 可直接输出一行联络板摘要。
 完成内容：
 - `scripts/mac/check-mac-formal-local-smoke.mjs` 新增 `--boardSummary`：完成 H.264、PCM 和 input-log 聚合后，stdout 只输出一行无密摘要，进度输出走 stderr。

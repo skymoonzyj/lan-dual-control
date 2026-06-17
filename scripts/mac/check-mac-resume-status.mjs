@@ -59,6 +59,11 @@ Machine-readable JSON fields:
                              Secret-free local formal smoke command for
                              H.264/PCM/input-log prep; it prompts visibly and
                              never embeds a password in argv.
+  commands.macFormalE2eStatusCommand
+                             Secret-free formal Mac E2E readiness command; it
+                             reads readiness/board state, prints a one-line
+                             summary, and does not send a call unless rerun
+                             explicitly with --sendCall.
   commands.macClientDiagnosticsCommand
                              Secret-free Mac client readiness command for
                              checking local page files/server state without
@@ -588,6 +593,17 @@ function makeMacFormalLocalSmokeCommand(args) {
   ].join(" ");
 }
 
+function makeMacFormalE2eStatusCommand(args) {
+  return [
+    "node scripts/mac/check-mac-formal-e2e-status.mjs",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--boardSummary",
+  ].join(" ");
+}
+
 function makeMacClientDiagnosticsCommand() {
   return [
     "node scripts/mac/check-mac-client-readiness.mjs",
@@ -687,6 +703,7 @@ function formatBoardSummary(report) {
       "Next: start formal host with start-mac-host --promptPassword --requirePassword before Windows E2E.",
       `After host is online, refresh media baseline with ${report.commands.mediaReadinessBoardSummary}.`,
       `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
+      `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
       `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
       `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
       `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
@@ -708,6 +725,7 @@ function formatBoardSummary(report) {
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}.`,
     `Media baseline command: ${report.commands.mediaReadinessBoardSummary}.`,
     `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
+    `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
     `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
     `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
@@ -761,6 +779,7 @@ function printReport(report) {
     console.log(`[${prefix}] ${item.text}`);
   }
   console.log(`[NEXT] Mac formal local smoke: ${report.commands.macFormalLocalSmokeCommand}`);
+  console.log(`[NEXT] Mac formal E2E preflight: ${report.commands.macFormalE2eStatusCommand}`);
   console.log(`[NEXT] Mac client page status: ${report.commands.macClientPageStatusCommand}`);
   console.log(`[NEXT] Mac client diagnostics: ${report.commands.macClientDiagnosticsCommand}`);
   console.log(`[NEXT] Mac client discover Windows host: ${report.commands.macClientDiscoverWindowsCommand}`);
@@ -801,6 +820,7 @@ async function main() {
     commands: {
       mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
       macFormalLocalSmokeCommand: makeMacFormalLocalSmokeCommand(args),
+      macFormalE2eStatusCommand: makeMacFormalE2eStatusCommand(args),
       macClientPageStatusCommand: makeMacClientPageStatusCommand(),
       macClientDiagnosticsCommand: makeMacClientDiagnosticsCommand(),
       macClientDiscoverWindowsCommand: makeMacClientDiscoverWindowsCommand(),

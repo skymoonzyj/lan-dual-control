@@ -91,7 +91,7 @@ node scripts/mac/check-mac-resume-status.mjs --checkBoard
 node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary
 ```
 
-`--boardSummary` 只输出一段适合直接发送到联络板的秘密安全摘要，包含 repo 状态、Mac host 地址、权限、H.264/音频、显示器、build 差异和正式验收下一步；不会输出密码、系统账号或联络板 token。摘要也会给出 `MacFormalLocalSmoke=`，方便正式呼叫 Windows 前先本机短验收 H.264、系统 PCM 和安全 input-log。
+`--boardSummary` 只输出一段适合直接发送到联络板的秘密安全摘要，包含 repo 状态、Mac host 地址、权限、H.264/音频、显示器、build 差异和正式验收下一步；不会输出密码、系统账号或联络板 token。摘要也会给出 `MacFormalLocalSmoke=` 和 `MacFormalE2E=`，方便正式呼叫 Windows 前先本机短验收 H.264、系统 PCM 和安全 input-log，再跑只读 formal E2E readiness 摘要确认是否可发 call。
 
 准备正式呼叫 Windows 端做端到端验收前，可再跑正式清单：
 
