@@ -19,6 +19,35 @@
 
 ## 2026-06-17 Mac Codex
 
+日期：2026-06-17 17:15
+开发端：Mac Codex
+本轮目标：让 `start-mac-client --json` 也提供机器可读的下一步命令和复制诊断动作。
+完成内容：
+- `scripts/mac/start-mac-client.mjs` 的 JSON 报告新增 `commands.macClientStartOrReuseCommand`，指向当前 host/port 的安全启动或复用命令。
+- JSON 报告新增 `commands.macClientFormalStatusCommand`，给出 Mac 控制 Windows 前的 formal status 一行摘要命令模板。
+- JSON 报告新增 `commands.macClientCopyDiagnosticsAction`，与 `CopyDiagnostics=` 摘要使用同一段“事件日志点击复制诊断、粘贴前确认不含连接密码”提示。
+- `scripts/mac/test-mac-client-start-helper.mjs` 覆盖离线 status、启动成功、在线 status 和 allowExisting 四条 JSON 路径的 commands 字段。
+- 当前状态和任务板已同步该 JSON commands 能力；已先合并 Windows 最新 `ffb05db`，保留对方 PowerShell help boardSummary 交接记录。
+修改文件：
+- `scripts/mac/start-mac-client.mjs`
+- `scripts/mac/test-mac-client-start-helper.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/start-mac-client.mjs`
+- `node --check scripts/mac/test-mac-client-start-helper.mjs`
+- `node scripts/mac/test-mac-client-start-helper.mjs --timeoutMs 45000`
+遗留问题：
+- 本轮只补本地 Mac client 启动助手 JSON 和自测，不连接 Windows host、不认证、不发送密码/input/inject。
+下一步建议：
+- 后续恢复总览或自动化需要本地 Mac client 页面下一步命令时，可优先读取 `start-mac-client --json` 的 `commands` 字段，避免手工拼命令。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-17 Mac Codex
+
 日期：2026-06-17 17:05
 开发端：Mac Codex
 本轮目标：把 `start-mac-client --status --boardSummary` 的真实 stdout 摘要路径纳入自测。

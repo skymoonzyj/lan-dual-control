@@ -208,6 +208,15 @@ function makeBoardSummary(report) {
   ].join(" ");
 }
 
+function makeCommands(args) {
+  return {
+    macClientStartOrReuseCommand: `node scripts/mac/start-mac-client.mjs --host ${args.host} --port ${args.port} --allowExisting`,
+    macClientFormalStatusCommand:
+      "node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary",
+    macClientCopyDiagnosticsAction: copyDiagnosticsAction,
+  };
+}
+
 function printHuman(report) {
   console.log(`Mac client page: ${report.online ? "online" : "offline"} at ${report.url}`);
   if (report.processId) console.log(`Process: ${report.processId}`);
@@ -230,6 +239,7 @@ async function buildStatusReport(args) {
     error: probe.error,
   };
   report.boardSummary = makeBoardSummary(report);
+  report.commands = makeCommands(args);
   return report;
 }
 
@@ -248,6 +258,7 @@ async function startAndReport(args) {
         error: { message: "Mac client page is already running; pass --allowExisting to accept it." },
       };
       report.boardSummary = makeBoardSummary(report);
+      report.commands = makeCommands(args);
       return report;
     }
     const report = {
@@ -261,6 +272,7 @@ async function startAndReport(args) {
       error: null,
     };
     report.boardSummary = makeBoardSummary(report);
+    report.commands = makeCommands(args);
     if (args.open) openBrowser(report.url);
     return report;
   }
@@ -278,6 +290,7 @@ async function startAndReport(args) {
     error: ready.error,
   };
   report.boardSummary = makeBoardSummary(report);
+  report.commands = makeCommands(args);
 
   if (report.ok) {
     child.unref();
