@@ -126,6 +126,7 @@ Windows 端：
 - [x] Mac client 本地页面启动/状态助手摘要新增 `CopyDiagnostics=`：`start-mac-client --status --boardSummary` 页面在线时提示在事件日志点击“复制诊断”，页面离线时提示先启动页面、在线后再复制诊断；专项自测覆盖 JSON 内摘要、真实 stdout 单行摘要、在线/离线摘要和不泄密。
 - [x] Mac client 本地页面启动/状态助手 JSON 新增 `commands`：`macClientStartOrReuseCommand`、`macClientFormalStatusCommand` 和 `macClientCopyDiagnosticsAction` 可供恢复总览或自动化直接消费；自测覆盖离线、启动、在线 status 和 allowExisting 路径，确认命令不带密码。
 - [x] Mac client formal checklist/smoke 的 runPlan 和通讯板摘要补齐反控请求安全演练：Mac 请求预期 `LAN008`，Windows 本机优先用 PowerShell 一次性授权，Node 命令作为 fallback，Mac 重试预期 accepted/临时授权已使用；命令和自测均锁定不发密码、不发送输入事件、不执行 `inject`。
+- [x] Mac formal smoke 的 discovery 结果透传人工真连清单：`run-mac-client-formal-smoke --discover --preflightOnly --boardSummary` 会在摘要里显示 `FormalChecklist=` 与 `ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics`，JSON `discovery` 也带对应字段。
 - [x] Mac `.mjs` 工具脚本建立统一 `--help/-h` 纯帮助覆盖自检：`test-mac-script-help.mjs` 当前覆盖 44 个脚本、88 条帮助命令，并拒绝帮助路径误启动服务、弹密码提示、输出真实环境密码、启动 DevTools/Swift build、连接真实 host 或读取 Agent Link Board 状态；`--boardSummary` 可输出一行无密上板摘要，并由 `test-mac-script-help-summary.mjs` 专项锁定。
 - [x] Mac 恢复开工总览也可解析 Agent Link Board `currentCall`：`--checkBoard --json`、普通输出和 `--boardSummary` 会显示 `call=active/done/none`，DONE 呼叫不会误当作待办，摘要不回显 call command。
 - [x] Mac 恢复开工总览会输出本地 Mac client 页面状态命令：JSON `commands.macClientPageStatusCommand`、普通输出和 `--boardSummary` 都带 `MacClientPage=start-mac-client --status --boardSummary`，只读检查页面是否在线，不启动服务、不连接 Windows。

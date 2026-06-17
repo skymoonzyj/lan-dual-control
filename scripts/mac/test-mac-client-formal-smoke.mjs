@@ -296,6 +296,8 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.windowsOpenOneTimeReverseGrantNodeFallback", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.reverseControlRehearsal", `${script} ${flag}`);
     assertIncludes(result.stdout, "ensuredClient", `${script} ${flag}`);
+    assertIncludes(result.stdout, "discovery.formalChecklistCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "discovery.manualChecklistSummary", `${script} ${flag}`);
     assertIncludes(result.stdout, "sentCall", `${script} ${flag}`);
     assertIncludes(result.stdout, "--discover --ensureClient --preflightOnly --sendCall", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "LAN_DUAL_PASSWORD=", `${script} ${flag}`);
@@ -458,11 +460,15 @@ async function checkDiscoverPreflight(args) {
       assert(payload.args?.port === windowsPort, "discover preflight should select mock Windows port");
       assert(payload.discovery?.ok === true, "discover preflight should report discovery ok");
       assert(payload.discovery?.selected?.host === "127.0.0.1", "discover preflight selected host mismatch");
+      assert(payload.discovery?.formalChecklistCommand?.includes(`--port ${windowsPort}`), "discover preflight should expose discovery formal checklist command");
+      assert(payload.discovery?.manualChecklistSummary === "connection/video/audio/clipboard/input_ack/diagnostics", "discover preflight should expose manual checklist summary");
       assert(payload.commands?.sendCall?.includes("--sendCall"), "discover preflight should expose selected-host sendCall command");
       assert(payload.commands?.sendCall?.includes(`--port ${windowsPort}`), "discover preflight sendCall should use selected port");
       assert(payload.commands?.browserSmoke?.includes("--host 127.0.0.1"), "browser command should use discovered host");
       assert(payload.commands?.windowsOpenOneTimeReverseGrant?.includes(`-Port ${windowsPort} -Grant -DurationMs 30000 -BoardSummary`), "discover preflight should use selected port for recommended Windows PowerShell grant helper");
       assert(payload.commands?.windowsOpenOneTimeReverseGrantNodeFallback?.includes(`--port ${windowsPort} --grant --durationMs 30000 --boardSummary`), "discover preflight should use selected port for Windows grant helper fallback");
+      assertIncludes(payload.boardSummary || "", "FormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "discover preflight board summary");
+      assertIncludes(payload.boardSummary || "", "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "discover preflight board summary");
       assertIncludes(payload.boardSummary || "", "Reverse rehearsal after auth", "discover preflight board summary");
       assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "discover preflight output");
     });
@@ -542,9 +548,13 @@ async function checkDiscoverSendCall(args) {
         assert(payload.ok === true, "discover sendCall should be ok=true");
         assert(payload.args?.discover === true, "discover sendCall should record discover=true");
         assert(payload.discovery?.selected?.host === "127.0.0.1", "discover sendCall should select mock host");
+        assertIncludes(payload.discovery?.formalChecklistCommand || "", `--port ${windowsPort}`, "discover sendCall discovery formal checklist");
+        assert(payload.discovery?.manualChecklistSummary === "connection/video/audio/clipboard/input_ack/diagnostics", "discover sendCall manual checklist summary");
         assert(payload.sentCall?.ok === true, "discover sendCall should report sentCall ok");
         assert(payload.sentCall?.payload?.connection === `127.0.0.1:${windowsPort}`, "discover sendCall should call selected Windows host");
         assertIncludes(payload.boardSummary || "", "Agent Link Board call was sent", "discover sendCall board summary");
+        assertIncludes(payload.boardSummary || "", "FormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "discover sendCall board summary");
+        assertIncludes(payload.boardSummary || "", "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "discover sendCall board summary");
         assertIncludes(payload.boardSummary || "", "Reverse rehearsal after auth", "discover sendCall board summary");
         assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "discover sendCall output");
       });

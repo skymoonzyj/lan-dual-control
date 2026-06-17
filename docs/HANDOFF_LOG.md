@@ -21,6 +21,39 @@
 
 日期：2026-06-17 续跑
 开发端：Mac Codex
+本轮目标：让 Mac formal smoke 的 discovery 结果也透传 formal 人工真连清单。
+完成内容：
+- `scripts/mac/run-mac-client-formal-smoke.mjs` 的 `discovery` JSON 新增 `formalChecklistCommand` 和 `manualChecklistSummary`，来源于 `discover-windows-hosts`。
+- `--discover --preflightOnly --boardSummary` 和 discover sendCall 摘要现在会带 `FormalChecklist=` 与 `ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics`，发现、预检、人工清单路径更连贯。
+- 该透传保持只读语义：发现和预检不认证、不要求或打印密码、不发送 input/inject；只有显式 `--preflightOnly --sendCall` 且 ready 时才发送既有无密 call。
+- `scripts/mac/test-mac-client-formal-smoke.mjs` 覆盖 help、discover preflight 和 discover sendCall 中的新字段/摘要。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/run-mac-client-formal-smoke.mjs`
+- `node --check scripts/mac/test-mac-client-formal-smoke.mjs`
+- `node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 45000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮没有启动真实 Windows host、没有认证、没有发送密码/input/inject；真实 Mac -> Windows smoke 仍需 Windows host 在线和用户密码授权。
+下一步建议：
+- 真机联调前优先跑 `run-mac-client-formal-smoke --discover --ensureClient --preflightOnly --boardSummary`，先看 `FormalChecklist=` / `ManualChecklist=`，ready 后再决定是否 `--sendCall` 或 `--promptPassword`。
+是否改了协议：否。
+是否需要另一端配合：真实联调时需要 Windows 端启动 Windows host。
+
+## 2026-06-17 Mac Codex
+
+日期：2026-06-17 续跑
+开发端：Mac Codex
 本轮目标：让 Mac 侧 Windows host 发现摘要直接带 formal 人工真连清单。
 完成内容：
 - `scripts/mac/discover-windows-hosts.mjs` 的 JSON 新增 `formalChecklistCommand` 和 `manualChecklistSummary`，发现 Windows host 后直接给 `check-mac-client-formal-status --host <Windows IP> --port <port> --boardSummary`。

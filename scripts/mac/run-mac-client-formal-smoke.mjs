@@ -119,6 +119,12 @@ Machine-readable JSON fields:
                                   -> Mac retry accepted rehearsal.
   ensuredClient                  Result from --ensureClient start/reuse of the local Mac client page.
   discovery                      Selected Windows host details when --discover is used.
+  discovery.formalChecklistCommand
+                                  Secret-free formal checklist board summary
+                                  command from Windows host discovery.
+  discovery.manualChecklistSummary
+                                  Human true-test checklist order from Windows
+                                  host discovery.
   sentCall                       Present only with --preflightOnly --sendCall; secret-free Agent Link Board result.
 
 Examples:
@@ -714,9 +720,10 @@ function makeBoardSummary(report) {
   const discoveryText = report.discovery?.requested
     ? ` Discovery=${report.discovery.selected ? `${report.discovery.selected.host}:${report.discovery.selected.port}` : "requested"}.`
     : "";
+  const discoveryChecklistText = makeDiscoveryChecklistText(report);
   if (report.ok && report.browserSmoke?.ran) {
     return [
-      `Mac client browser smoke passed against ${target}; duration=${report.browserSmoke.durationMs}ms.${discoveryText}`,
+      `Mac client browser smoke passed against ${target}; duration=${report.browserSmoke.durationMs}ms.${discoveryText}${discoveryChecklistText}`,
       `Preflight ready=${report.preflight?.readyToCall ? "yes" : "no"}; command used environment password, not argv.`,
       `Reverse rehearsal next if needed: ${report.commands?.reverseControlRehearsal || makeReverseControlRehearsalText(report.args)}.`,
       "No password was sent to Agent Link Board; inject was not executed.",
@@ -734,7 +741,7 @@ function makeBoardSummary(report) {
       ? `Next: run with --promptPassword when ready to authenticate; command=${report.commands.browserSmoke}.${sendCallText}`
       : `Next: start or discover a Windows host, then rerun safe preflight; command=${report.commands?.discoverPreflight || ""}.`;
     return [
-      `Mac client browser smoke preflight for ${target}: ok=${report.preflight?.ok ? "yes" : "no"} ready=${report.preflight?.readyToCall ? "yes" : "no"}.${discoveryText}`,
+      `Mac client browser smoke preflight for ${target}: ok=${report.preflight?.ok ? "yes" : "no"} ready=${report.preflight?.readyToCall ? "yes" : "no"}.${discoveryText}${discoveryChecklistText}`,
       nextText,
       `Reverse rehearsal after auth: ${report.commands?.reverseControlRehearsal || makeReverseControlRehearsalText(report.args)}.`,
       "No password was requested or sent; inject was not executed.",
@@ -745,6 +752,14 @@ function makeBoardSummary(report) {
     "Keep passwords off Agent Link Board; rerun preflight before retrying.",
     "Inject was not executed.",
   ].join(" ");
+}
+
+function makeDiscoveryChecklistText(report) {
+  if (!report.discovery?.requested || !report.discovery?.formalChecklistCommand) return "";
+  const manual = report.discovery.manualChecklistSummary
+    ? ` ManualChecklist=${report.discovery.manualChecklistSummary}.`
+    : "";
+  return ` FormalChecklist=${report.discovery.formalChecklistCommand}.${manual}`;
 }
 
 function printHuman(report) {
@@ -959,6 +974,8 @@ function summarizeDiscovery(discovery) {
           inputMode: best.capabilities?.input?.mode || best.capabilities?.inputMode || "",
         }
       : null,
+    formalChecklistCommand: discovery.payload?.formalChecklistCommand || "",
+    manualChecklistSummary: discovery.payload?.manualChecklistSummary || "",
     boardSummary: discovery.payload?.boardSummary || "",
     parseError: discovery.parseError || "",
   };
