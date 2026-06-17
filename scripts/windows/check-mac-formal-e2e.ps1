@@ -59,6 +59,23 @@ Common examples:
   scripts\windows\check-mac-formal-e2e.ps1 -Discover -PromptPassword
   scripts\windows\check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -BoardSummary
 
+Key options:
+  -Discover                         Auto-select the best LAN Mac host before running.
+  -DiscoverNoLocalSubnets           Only probe localhost and explicit -HostName targets.
+  -PreflightOnly                    Read /discovery and print readiness plus runPlan.
+  -CheckClientDiagnostics           Include Windows client no-password diagnostics in preflight.
+  -UserAuthRequest                  Print a secret-free NEED_USER_AUTH reminder when ready.
+  -SendUserAuthRequest              Send that reminder to Agent Link Board when ready.
+  -PromptPassword                   Ask for the Mac host password without echoing it.
+  -BoardSummary                     Print one secret-free Agent Link Board summary line.
+  -Json                             Print machine-readable preflight JSON.
+
+runPlan.manualChecklist:
+  Human true-test checklist for connection, video, audio, clipboard,
+  input_ack, and diagnostics. It is printed in preflight output and summarized
+  as ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics
+  for board-safe coordination.
+
 This wrapper calls node scripts/windows/check-mac-formal-e2e.mjs. It does not
 print passwords and does not enable inject.
 "@

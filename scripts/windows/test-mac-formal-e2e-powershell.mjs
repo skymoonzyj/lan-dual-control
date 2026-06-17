@@ -179,6 +179,10 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "Usage:", "PowerShell wrapper help");
   assertIncludes(output, "-Discover -PreflightOnly -BoardSummary", "PowerShell wrapper help");
   assertIncludes(output, "-SendUserAuthRequest", "PowerShell wrapper help");
+  assertIncludes(output, "runPlan.manualChecklist", "PowerShell wrapper help");
+  assertIncludes(output, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "PowerShell wrapper help");
+  assertIncludes(output, "-CheckClientDiagnostics", "PowerShell wrapper help");
+  assertIncludes(output, "-PromptPassword", "PowerShell wrapper help");
   console.log("[OK] PowerShell formal E2E wrapper help is safe");
 }
 

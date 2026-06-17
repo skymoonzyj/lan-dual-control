@@ -206,7 +206,7 @@ function analyze(result) {
     /LAN_DUAL_WASAPI_INFO/i,
     /LAN_DUAL_WASAPI_ERROR/i,
     /\bAuth passed\b/i,
-    /\binput_ack\b/i,
+    /\[(?:OK|INFO|RUN|WARN|ERROR)\].*\binput_ack\b/i,
   ];
   const matchedForbidden = forbidden.filter((pattern) => pattern.test(combined)).map((pattern) => String(pattern));
   const problems = [];
