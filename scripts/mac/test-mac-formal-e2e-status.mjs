@@ -147,9 +147,25 @@ function assertNoSecretLikeText(text, label) {
 
 function assertBoardSummaryShape(text, label) {
   assert(/Mac formal E2E:/.test(text), `${label} should start with formal E2E summary`);
+  assert(/MacFormalLocalSmoke=/.test(text), `${label} should include local formal smoke guidance`);
+  assert(/check-mac-formal-local-smoke\.mjs/.test(text), `${label} should include local formal smoke command`);
   assert(/Do not send passwords/.test(text), `${label} should include password safety note`);
   assert(/inject/.test(text), `${label} should include inject safety note`);
   assertNoSecretLikeText(text, label);
+}
+
+function assertMacFormalLocalSmokeCommand(command, label, expectedPort = null) {
+  const text = String(command || "");
+  assert(/node scripts\/mac\/check-mac-formal-local-smoke\.mjs/.test(text), `${label} should use check-mac-formal-local-smoke`);
+  assert(/--promptPassword/.test(text), `${label} should prompt locally instead of embedding a password`);
+  assert(/--boardSummary/.test(text), `${label} should produce boardSummary`);
+  assert(!/(^|\s)--password(\s|=|$)/.test(text), `${label} should not embed --password`);
+  assert(!/--sendCall/.test(text), `${label} should not send Agent Link Board calls`);
+  assert(!/--server/.test(text), `${label} should not echo custom board server URLs`);
+  assert(!/super-secret-formal-password/.test(text), `${label} should not echo server-like secret text`);
+  if (expectedPort !== null) {
+    assert(text.includes(`--port ${expectedPort}`), `${label} should target expected port ${expectedPort}`);
+  }
 }
 
 function assertMediaReadinessCommand(command, label, expectedPort = null) {
@@ -339,6 +355,7 @@ function checkHelp(args) {
     assert(/--sendCall/.test(result.stdout), `${script} ${flag} should document --sendCall`);
     assert(/--forceCall/.test(result.stdout), `${script} ${flag} should document --forceCall`);
     assert(/--clearStaleCall/.test(result.stdout), `${script} ${flag} should document --clearStaleCall`);
+    assert(/commands\.macFormalLocalSmokeCommand/.test(result.stdout), `${script} ${flag} should document local smoke command output`);
     assert(/commands\.mediaReadinessBoardSummary/.test(result.stdout), `${script} ${flag} should document media readiness command output`);
     assert(/--promptPassword/.test(result.stdout), `${script} ${flag} should document local password prompt for media readiness command`);
     assert(!/Mac host probe password/.test(result.stdout), `${script} ${flag} should not prompt for password`);
@@ -366,7 +383,9 @@ function checkOfflineJson(args) {
   assert(payload.checklist.some((entry) => entry.id === "inject" && entry.status === "skip"), "offline checklist should explicitly skip inject");
   assertBoardSummaryShape(payload.boardSummary || "", "offline JSON boardSummary");
   assert(/start-mac-host --promptPassword --requirePassword/.test(payload.callText || ""), "offline callText should include safe start command");
+  assert(/check-mac-formal-local-smoke\.mjs/.test(payload.callText || ""), "offline callText should include local smoke command");
   assert(/check-mac-host-readiness --probeMedia --boardSummary/.test(payload.boardSummary || ""), "offline boardSummary should mention media precheck");
+  assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "offline local smoke command", 9);
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "offline media readiness command", 9);
   print("OK", "Offline formal E2E JSON blocks the call and keeps safety guidance");
 }
@@ -594,6 +613,7 @@ async function checkReadySendCall(args) {
         assert(call[field] === payload.sentCall.payload[field], `sentCall payload should match fake board call field ${field}`);
       }
       assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "ready sendCall media readiness command", macHost.port);
+      assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "ready sendCall local smoke command", macHost.port);
       print("OK", "Ready --sendCall posts one secret-free formal E2E call to a fake board");
     });
   });
@@ -734,6 +754,8 @@ function checkOnlineJson(args) {
   assert(payload.checklist.some((entry) => entry.id === "inject" && entry.status === "skip"), "online checklist should explicitly skip inject");
   assertBoardSummaryShape(payload.boardSummary || "", "online JSON boardSummary");
   assert(/discovery -> auth -> H\.264 5-10 min/.test(payload.callText || ""), "online callText should include formal path");
+  assert(/check-mac-formal-local-smoke\.mjs/.test(payload.callText || ""), "online callText should include local smoke command");
+  assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "online local smoke command", args.port);
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "online media readiness command", args.port);
   print("OK", "Online formal E2E JSON includes video/audio/clipboard/input-log/inject safety checklist");
 }
@@ -781,6 +803,7 @@ function checkSecretRedaction(args) {
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "formal E2E JSON");
   const payload = parseJson(result.stdout, "secret-redaction formal E2E JSON");
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "secret-redaction media readiness command", 9);
+  assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "secret-redaction local smoke command", 9);
   print("OK", "Formal E2E status output does not echo unrelated secret-like server text");
 }
 

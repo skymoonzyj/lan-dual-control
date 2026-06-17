@@ -17,6 +17,40 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-17 Mac Codex
+
+日期：2026-06-17 续跑
+开发端：Mac Codex
+本轮目标：让 Mac formal E2E 预检直接提示本机 formal local smoke。
+完成内容：
+- `scripts/mac/check-mac-formal-e2e-status.mjs` 的 JSON `commands` 新增 `macFormalLocalSmokeCommand`，命令形状为 `check-mac-formal-local-smoke --host <host> --port <port> --promptPassword --boardSummary`。
+- `callText` 和 `--boardSummary` 新增 `MacFormalLocalSmoke=`，提醒长时间正式 E2E 前先由 Mac 本机短验 H.264、系统 PCM 和 `inputMode=log` 输入 ack。
+- 该提示只生成命令，不自动运行 smoke、不弹密码、不认证 WebSocket、不发送 Agent Link Board call/input/inject。
+- `scripts/mac/test-mac-formal-e2e-status.mjs` 覆盖 help、离线/在线 JSON、ready sendCall JSON、secret redaction 和 boardSummary 中的新命令，并断言命令不带 `--password`、不带 `--sendCall`、不回显 board server。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `apps/mac-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-formal-e2e-status.mjs`
+- `node --check scripts/mac/test-mac-formal-e2e-status.mjs`
+- `node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 45000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/mac/check-mac-formal-e2e-status.mjs --host 127.0.0.1 --port 43770 --boardSummary --allowDirty`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮只做只读提示链路收口；没有运行真实 formal local smoke、没有触发密码弹窗、没有认证真实 host、没有发送 call/input/inject。
+下一步建议：
+- 白天正式呼叫 Windows 前，按 `check-mac-resume-status --checkBoard --boardSummary` 给出的顺序走：先 `MacFormalLocalSmoke=` 本机短验，再 `MacFormalE2E=` 只读确认 readiness，ready 后再显式 `--sendCall`。
+是否改了协议：否。
+是否需要另一端配合：否；真实端到端验收时再通过 Agent Link Board 呼叫 Windows。
+
 ## 2026-06-17 Windows Codex
 
 日期：2026-06-17 续跑
