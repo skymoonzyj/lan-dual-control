@@ -115,6 +115,8 @@ function assertBoardSummaryShape(text, label) {
   assert(/check-mac-formal-local-smoke\.mjs/.test(text), `${label} should include the Mac formal local smoke command`);
   assert(/MacFormalE2E=/.test(text), `${label} should include Mac formal E2E preflight guidance`);
   assert(/check-mac-formal-e2e-status\.mjs/.test(text), `${label} should include the Mac formal E2E preflight command`);
+  assert(/MacUnattendedStatus=/.test(text), `${label} should include Mac unattended/startup guidance`);
+  assert(/check-mac-unattended-status\.mjs/.test(text), `${label} should include the Mac unattended/startup command`);
   assert(/MacClientPage=/.test(text), `${label} should include Mac client page status guidance`);
   assert(/start-mac-client\.mjs/.test(text), `${label} should include the Mac client page status command`);
   assert(/MacClientDiagnostics=/.test(text), `${label} should include Mac client diagnostics guidance`);
@@ -170,6 +172,19 @@ function assertMacFormalE2eStatusCommand(command, label) {
   assert(!command.includes("--clearStaleCall"), `${label} should not clear Agent Link Board calls`);
   assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
   assert(!command.includes("--json"), `${label} should default to one-line boardSummary output`);
+}
+
+function assertMacUnattendedStatusCommand(command, label) {
+  assert(/check-mac-unattended-status\.mjs/.test(command), `${label} should use check-mac-unattended-status`);
+  assert(command.includes("--host"), `${label} should keep the target host explicit`);
+  assert(command.includes("--port"), `${label} should keep the target port explicit`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+  assert(!command.includes("--json"), `${label} should default to one-line boardSummary output`);
+  assert(!command.includes("inject"), `${label} should not instruct injection`);
 }
 
 function assertMacClientDiagnosticsCommand(command, label) {
@@ -265,6 +280,7 @@ function checkHelp(args) {
     assert(/commands\.mediaReadinessBoardSummary/.test(result.stdout), `${script} ${flag} should document media command JSON field`);
     assert(/commands\.macFormalLocalSmokeCommand/.test(result.stdout), `${script} ${flag} should document Mac formal local smoke JSON field`);
     assert(/commands\.macFormalE2eStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac formal E2E status JSON field`);
+    assert(/commands\.macUnattendedStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac unattended/startup JSON field`);
     assert(/commands\.macClientDiagnosticsCommand/.test(result.stdout), `${script} ${flag} should document Mac client diagnostics JSON field`);
     assert(/commands\.macClientPageStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac client page status JSON field`);
     assert(/commands\.macClientDiscoverWindowsCommand/.test(result.stdout), `${script} ${flag} should document Mac client Windows discovery JSON field`);
@@ -294,6 +310,7 @@ function checkOfflineJson(args) {
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary || "", "offline JSON media readiness command");
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand || "", "offline JSON Mac formal local smoke command");
   assertMacFormalE2eStatusCommand(payload.commands?.macFormalE2eStatusCommand || "", "offline JSON Mac formal E2E status command");
+  assertMacUnattendedStatusCommand(payload.commands?.macUnattendedStatusCommand || "", "offline JSON Mac unattended/startup command");
   assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "offline JSON Mac client page status command");
   assertMacClientDiagnosticsCommand(payload.commands?.macClientDiagnosticsCommand || "", "offline JSON Mac client diagnostics command");
   assertMacClientDiscoverWindowsCommand(payload.commands?.macClientDiscoverWindowsCommand || "", "offline JSON Mac client Windows discovery command");
@@ -357,6 +374,7 @@ function checkOfflinePlainReport(args) {
   assert(String(result.stdout || "").includes("Mac client diagnostics:"), "plain report should include Mac client diagnostics label");
   assert(String(result.stdout || "").includes("Mac formal local smoke:"), "plain report should include Mac formal local smoke label");
   assert(String(result.stdout || "").includes("Mac formal E2E preflight:"), "plain report should include Mac formal E2E preflight label");
+  assert(String(result.stdout || "").includes("Mac unattended/startup status:"), "plain report should include Mac unattended/startup label");
   assert(String(result.stdout || "").includes("Mac client page status:"), "plain report should include Mac client page status label");
   assert(String(result.stdout || "").includes("Mac client discover Windows host:"), "plain report should include Mac client Windows discovery label");
   assert(String(result.stdout || "").includes("Mac client reverse rehearsal:"), "plain report should include Mac client reverse rehearsal label");
@@ -372,6 +390,7 @@ function checkOfflinePlainReport(args) {
   assert(String(result.stdout || "").includes("scripts/mac/test-mac-client-browser-self-test.mjs"), "plain report should include Mac client browser self-test command");
   assert(String(result.stdout || "").includes("check-mac-formal-local-smoke.mjs"), "plain report should include Mac formal local smoke command");
   assert(String(result.stdout || "").includes("check-mac-formal-e2e-status.mjs"), "plain report should include Mac formal E2E status command");
+  assert(String(result.stdout || "").includes("check-mac-unattended-status.mjs"), "plain report should include Mac unattended/startup command");
   assert(String(result.stdout || "").includes("Mac client copy diagnostics:"), "plain report should include copy diagnostics label");
   assert(String(result.stdout || "").includes("复制诊断"), "plain report should mention the copy diagnostics action");
   assert(String(result.stdout || "").includes("Mac script help safety check:"), "plain report should include Mac script help label");
@@ -409,6 +428,7 @@ function checkOnlineJson(args) {
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary || "", "online JSON media readiness command");
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand || "", "online JSON Mac formal local smoke command");
   assertMacFormalE2eStatusCommand(payload.commands?.macFormalE2eStatusCommand || "", "online JSON Mac formal E2E status command");
+  assertMacUnattendedStatusCommand(payload.commands?.macUnattendedStatusCommand || "", "online JSON Mac unattended/startup command");
   assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "online JSON Mac client page status command");
   assertMacClientDiagnosticsCommand(payload.commands?.macClientDiagnosticsCommand || "", "online JSON Mac client diagnostics command");
   assertMacClientDiscoverWindowsCommand(payload.commands?.macClientDiscoverWindowsCommand || "", "online JSON Mac client Windows discovery command");

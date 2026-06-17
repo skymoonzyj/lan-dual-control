@@ -64,6 +64,11 @@ Machine-readable JSON fields:
                              reads readiness/board state, prints a one-line
                              summary, and does not send a call unless rerun
                              explicitly with --sendCall.
+  commands.macUnattendedStatusCommand
+                             Secret-free Mac controlled-end unattended status
+                             command; it checks host, LaunchAgent, power, and
+                             lock/sleep/reboot limits without changing system
+                             state or requesting a password.
   commands.macClientDiagnosticsCommand
                              Secret-free Mac client readiness command for
                              checking local page files/server state without
@@ -480,6 +485,10 @@ function buildRecommendations({ git, host, board, args }) {
       level: "next",
       text: "For formal E2E, use start-mac-host --promptPassword --requirePassword and do not share secrets on the board.",
     });
+    recommendations.push({
+      level: "next",
+      text: `For unattended readiness, review LaunchAgent, power, and lock/sleep/reboot limits: ${makeMacUnattendedStatusCommand(args)}.`,
+    });
     return recommendations;
   }
   if (host.inputMode !== "log") {
@@ -524,6 +533,10 @@ function buildRecommendations({ git, host, board, args }) {
   recommendations.push({
     level: "next",
     text: `Before asking Windows for formal E2E, run the local H.264/PCM/input-log smoke: ${makeMacFormalLocalSmokeCommand(args)}.`,
+  });
+  recommendations.push({
+    level: "next",
+    text: `Before promising unattended control, review LaunchAgent, power, and lock/sleep/reboot limits: ${makeMacUnattendedStatusCommand(args)}.`,
   });
   recommendations.push({
     level: "next",
@@ -612,6 +625,17 @@ function makeMacFormalLocalSmokeCommand(args) {
 function makeMacFormalE2eStatusCommand(args) {
   return [
     "node scripts/mac/check-mac-formal-e2e-status.mjs",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--boardSummary",
+  ].join(" ");
+}
+
+function makeMacUnattendedStatusCommand(args) {
+  return [
+    "node scripts/mac/check-mac-unattended-status.mjs",
     "--host",
     args.host,
     "--port",
@@ -732,6 +756,7 @@ function formatBoardSummary(report) {
       `After host is online, refresh media baseline with ${report.commands.mediaReadinessBoardSummary}.`,
       `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
       `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
+      `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
       `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
       `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
       `MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}.`,
@@ -757,6 +782,7 @@ function formatBoardSummary(report) {
     `Media baseline command: ${report.commands.mediaReadinessBoardSummary}.`,
     `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
     `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
+    `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
     `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
     `MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}.`,
@@ -814,6 +840,7 @@ function printReport(report) {
   }
   console.log(`[NEXT] Mac formal local smoke: ${report.commands.macFormalLocalSmokeCommand}`);
   console.log(`[NEXT] Mac formal E2E preflight: ${report.commands.macFormalE2eStatusCommand}`);
+  console.log(`[NEXT] Mac unattended/startup status: ${report.commands.macUnattendedStatusCommand}`);
   console.log(`[NEXT] Mac client page status: ${report.commands.macClientPageStatusCommand}`);
   console.log(`[NEXT] Mac client diagnostics: ${report.commands.macClientDiagnosticsCommand}`);
   console.log(`[NEXT] Mac client discover Windows host: ${report.commands.macClientDiscoverWindowsCommand}`);
@@ -858,6 +885,7 @@ async function main() {
       mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
       macFormalLocalSmokeCommand: makeMacFormalLocalSmokeCommand(args),
       macFormalE2eStatusCommand: makeMacFormalE2eStatusCommand(args),
+      macUnattendedStatusCommand: makeMacUnattendedStatusCommand(args),
       macClientPageStatusCommand: makeMacClientPageStatusCommand(),
       macClientDiagnosticsCommand: makeMacClientDiagnosticsCommand(),
       macClientDiscoverWindowsCommand: makeMacClientDiscoverWindowsCommand(),

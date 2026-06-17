@@ -93,6 +93,14 @@ node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary
 
 `--boardSummary` 只输出一段适合直接发送到联络板的秘密安全摘要，包含 repo 状态、Mac host 地址、权限、H.264/音频、显示器、build 差异和正式验收下一步；不会输出密码、系统账号或联络板 token。摘要也会给出 `MacFormalLocalSmoke=` 和 `MacFormalE2E=`，方便正式呼叫 Windows 前先本机短验收 H.264、系统 PCM 和安全 input-log，再跑只读 formal E2E readiness 摘要确认是否可发 call。
 
+如果要确认 Mac 被控端是否适合做无人值守/自启动阶段承诺，可跑只读状态入口：
+
+```bash
+node scripts/mac/check-mac-unattended-status.mjs --boardSummary
+```
+
+该脚本只检查当前 `/discovery`、LaunchAgent plist/`launchctl`、`pmset` 睡眠配置，以及锁屏、显示器睡眠、系统睡眠、重启登录和真实输入注入限制；不会创建或加载 LaunchAgent、不会启动 Mac host、不会认证 WebSocket、不会要求或打印密码，也不会发送输入事件。自动化需要完整字段时可加 `--json`；需要把缺 LaunchAgent、host 离线或权限缺失变成失败，可加 `--requireLaunchAgent` / `--requireHostOnline` / `--requireControlPermissions` / `--strict`。双端恢复总览的 `--boardSummary` 也会给出 `MacUnattendedStatus=`，方便推送或呼叫前先同步这一项。
+
 准备正式呼叫 Windows 端做端到端验收前，可再跑正式清单：
 
 ```bash
@@ -179,6 +187,7 @@ node scripts/mac/test-mac-script-help.mjs
 
 ```bash
 node scripts/mac/test-mac-resume-status.mjs
+node scripts/mac/test-mac-unattended-status.mjs
 node scripts/mac/test-mac-host-readiness-board.mjs
 ```
 
