@@ -113,6 +113,7 @@ function discoveryStep(summary, label) {
 }
 
 function assertOfflineDetails(summary, expectedPort) {
+  assertLaunchAgentPlanner(summary, "offline readiness");
   const step = discoveryStep(summary, "offline readiness");
   if (step.ok !== true) {
     throw new Error(`offline readiness discovery should be a warning, not a failure: ${step.summary}`);
@@ -132,6 +133,7 @@ function assertOfflineDetails(summary, expectedPort) {
 }
 
 function assertOnlineDetails(summary, expectedPort) {
+  assertLaunchAgentPlanner(summary, "online readiness");
   const step = discoveryStep(summary, "online readiness");
   if (step.ok !== true) {
     throw new Error(`online readiness discovery should pass: ${step.summary}`);
@@ -163,6 +165,21 @@ function assertOnlineDetails(summary, expectedPort) {
   }
   if (!details.buildDiff || typeof details.buildDiff !== "object") {
     throw new Error("online readiness details should include buildDiff object");
+  }
+}
+
+function assertLaunchAgentPlanner(summary, label) {
+  const command = String(summary.commands?.macLaunchAgentPlanCommand || "");
+  if (!command.includes("install-mac-host-launch-agent.mjs")) {
+    throw new Error(`${label}: missing LaunchAgent planner command`);
+  }
+  if (!command.includes("--boardSummary") || !command.includes("--port")) {
+    throw new Error(`${label}: LaunchAgent planner command should be boardSummary dry-run with an explicit port`);
+  }
+  for (const forbidden of ["--write", "--force", "launchctl", "--promptPassword", "--password", "--sendCall", "inject"]) {
+    if (command.includes(forbidden)) {
+      throw new Error(`${label}: LaunchAgent planner command should not include ${forbidden}`);
+    }
   }
 }
 

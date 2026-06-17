@@ -205,6 +205,13 @@ Options:
   --json                    Print machine-readable JSON summary.
   --boardSummary            Print a short secret-free Agent Link Board summary.
   --help, -h                Show this help without running checks.
+
+Machine-readable JSON fields:
+  commands.macLaunchAgentPlanCommand
+                            Secret-free LaunchAgent dry-run planner command.
+                            It prints a plist plan and manual load commands
+                            without writing files, loading launchctl, starting
+                            Mac host, or requesting a password.
 `);
 }
 
@@ -619,8 +626,18 @@ function formatReadinessBoardSummary(summary) {
   const media = formatMediaBoardSummary(summary);
   return [
     `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${media}; ${formatBoardCallSummary(summary.board)}.`,
+    `MacLaunchAgentPlan=${summary.commands?.macLaunchAgentPlanCommand || makeMacLaunchAgentPlanCommand(summary.args || {})}.`,
     "Next: fix failed checks before formal E2E; keep inputMode=log for unattended checks.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
+  ].join(" ");
+}
+
+function makeMacLaunchAgentPlanCommand(args = {}) {
+  return [
+    "node scripts/mac/install-mac-host-launch-agent.mjs",
+    "--port",
+    String(args.port || 43770),
+    "--boardSummary",
   ].join(" ");
 }
 
@@ -1102,6 +1119,9 @@ async function main() {
     passed: results.filter((result) => result.ok).length,
     failed: failed.length,
     warnings: warnings.length,
+    commands: {
+      macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
+    },
     results: results.map((result) => ({
       label: result.label,
       ok: result.ok,
@@ -1137,6 +1157,7 @@ async function main() {
     if (!ok && !args.probeHost) {
       print("INFO", "For deeper validation, rerun with --probeHost, --probeVideo, --probeAudio, or --probeInputLog as needed.", args);
     }
+    print("NEXT", `Mac LaunchAgent dry-run plan: ${summary.commands.macLaunchAgentPlanCommand}`, args);
   }
 
   if (!ok) {

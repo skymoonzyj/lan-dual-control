@@ -83,6 +83,22 @@ function assertNoSecretLikeText(text, label) {
   assert(!value.includes("super-secret-command-token"), `${label} leaked secret-like command text`);
 }
 
+function assertMacLaunchAgentPlanCommand(command, label) {
+  const value = String(command || "");
+  assert(value.includes("install-mac-host-launch-agent.mjs"), `${label} should use install-mac-host-launch-agent`);
+  assert(value.includes("--port"), `${label} should keep the target port explicit`);
+  assert(value.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!value.includes("--write"), `${label} should stay dry-run by default`);
+  assert(!value.includes("--force"), `${label} should not overwrite files`);
+  assert(!value.includes("launchctl"), `${label} should not run launchctl`);
+  assert(!value.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!value.includes("--password"), `${label} should not embed a password argument`);
+  assert(!value.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!value.includes("--server"), `${label} should not echo board server URLs`);
+  assert(!value.includes("--json"), `${label} should default to one-line boardSummary output`);
+  assert(!value.includes("inject"), `${label} should not instruct injection`);
+}
+
 function functionBlock(source, name) {
   const start = source.indexOf(`function ${name}`);
   assert(start >= 0, `missing function ${name}`);
@@ -195,6 +211,7 @@ function checkHelp(args) {
     assert(String(result.stdout).includes("--checkBoard"), `${script} ${flag} should document --checkBoard`);
     assert(String(result.stdout).includes("--boardSummary"), `${script} ${flag} should document --boardSummary`);
     assert(String(result.stdout).includes("--probeMedia"), `${script} ${flag} should document --probeMedia`);
+    assert(String(result.stdout).includes("commands.macLaunchAgentPlanCommand"), `${script} ${flag} should document LaunchAgent planner command`);
   }
   print("OK", "Mac host readiness board help exits quickly");
 }
@@ -203,7 +220,9 @@ function checkDefaultDoesNotReadBoard(args) {
   const result = run(["--json", "--timeoutMs", "5000", "--skipCurrentBuildCheck"], args);
   const payload = parseJson(result.stdout, "default readiness JSON");
   assert(payload.board?.checked === false, "default readiness should not read Agent Link Board");
+  assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand || "", "default readiness JSON LaunchAgent planner command");
   assert(String(payload.boardSummary || "").includes("call=not-checked"), "default boardSummary should mark call not checked");
+  assert(String(payload.boardSummary || "").includes("MacLaunchAgentPlan="), "default boardSummary should include LaunchAgent planner guidance");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "default readiness JSON");
   print("OK", "Mac host readiness does not read Agent Link Board by default");
 }
@@ -343,6 +362,7 @@ function checkProbeMediaBoardSummary(args) {
   const lines = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean);
   assert(lines.length === 1, `offline --probeMedia boardSummary should print one line, got ${lines.length}`);
   assert(lines[0].includes("media=failed("), "offline --probeMedia boardSummary should include failed media status");
+  assert(lines[0].includes("MacLaunchAgentPlan="), "offline --probeMedia boardSummary should include LaunchAgent planner guidance");
   assert(!lines[0].includes("media=passed"), "offline --probeMedia boardSummary should not use legacy passed wording");
   assert(lines[0].includes("Do not send passwords"), "offline --probeMedia boardSummary should keep password safety note");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "offline probeMedia boardSummary");
@@ -379,6 +399,7 @@ async function checkActiveBoardCall(args) {
     assert(payload.board?.currentCall?.goal === call.goal, "active board JSON should keep call goal");
     assert(payload.board?.currentCall?.command === call.command, "active board JSON should keep command for automation");
     assert(String(payload.boardSummary || "").includes("call=active"), "boardSummary should mention active call");
+    assert(String(payload.boardSummary || "").includes("MacLaunchAgentPlan="), "boardSummary should include LaunchAgent planner guidance");
     assert(String(payload.boardSummary || "").includes(call.goal), "boardSummary should include call goal");
     assert(!String(payload.boardSummary || "").includes("super-secret-command-token"), "boardSummary should not echo command");
     assert(payload.results.some((item) => item.label === "Agent Link Board currentCall" && item.warnings.some((warning) => warning.includes("active call"))), "active call should create readiness warning");
@@ -447,11 +468,29 @@ async function checkBoardSummary(args) {
     assert(lines.length === 1, `boardSummary should print one line, got ${lines.length}`);
     assert(lines[0].includes("Mac host readiness:"), "boardSummary should identify readiness");
     assert(lines[0].includes("call=active"), "boardSummary should mention active call");
+    assert(lines[0].includes("MacLaunchAgentPlan="), "boardSummary should include LaunchAgent planner guidance");
     assert(lines[0].includes(call.goal), "boardSummary should include call goal");
     assert(lines[0].includes("Do not send passwords"), "boardSummary should include password safety note");
     assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "readiness boardSummary");
   });
   print("OK", "Mac host readiness boardSummary is one-line and secret-free");
+}
+
+function checkPlainOutputIncludesLaunchAgentPlan(args) {
+  const result = run([
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "9",
+    "--timeoutMs",
+    "5000",
+    "--skipCurrentBuildCheck",
+  ], args);
+  assert(result.status === 0 || result.status === 1, "plain readiness output should exit normally");
+  assert(String(result.stdout || "").includes("Mac LaunchAgent dry-run plan:"), "plain output should include LaunchAgent planner label");
+  assert(String(result.stdout || "").includes("install-mac-host-launch-agent.mjs"), "plain output should include LaunchAgent planner command");
+  assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "plain readiness output");
+  print("OK", "Mac host readiness plain output includes LaunchAgent planner guidance");
 }
 
 async function main() {
@@ -466,6 +505,7 @@ async function main() {
   checkProbeMediaOfflineJson(args);
   checkProbeMediaResourceSampleImpliesProbeMedia(args);
   checkProbeMediaBoardSummary(args);
+  checkPlainOutputIncludesLaunchAgentPlan(args);
   await checkActiveBoardCall(args);
   await checkDoneBoardCall(args);
   await checkBoardSummary(args);

@@ -184,6 +184,7 @@ node scripts/mac/check-mac-host-readiness.mjs --checkBoard --boardSummary
 ```
 
 `--checkBoard` 只读 Agent Link Board `/api/state.currentCall`；active call 会提示先协调，DONE/COMPLETED/CANCELLED/RESOLVED/CLOSED 等完成态 call 会标为 inactive。`--boardSummary` 只输出一行秘密安全摘要，不回显 call command；需要自动化读取完整结构时用 `--json`。
+摘要和 JSON 也会给出 `MacLaunchAgentPlan=`，可直接复制默认 dry-run 的 LaunchAgent 模板计划入口；它不会写系统、不会执行 `launchctl`、不会启动 host，也不会要求或打印密码。
 
 查看 Mac 侧工具参数或新增脚本后，可用统一覆盖自检确认 `scripts/mac/*.mjs` 的 `--help/-h` 都只打印帮助、快速退出，不会误触发 Swift build、启动 host 或连接真实服务：
 
