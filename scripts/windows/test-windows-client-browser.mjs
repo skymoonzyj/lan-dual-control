@@ -2962,6 +2962,10 @@ async function verifyReconnectControls(session) {
             exportText.includes("权限") &&
             exportText.includes("辅助功能未开") &&
             exportText.includes("视频回退"),
+          quickSummaryMacReachability:
+            exportText.includes("- Mac 值守：恢复中") &&
+            exportText.includes("自启/睡眠状态等待 Mac 上报") &&
+            exportText.includes("提醒 提醒中"),
           quickSummaryReconnect:
             exportText.includes("- 重连：等待自动重连") && exportText.includes("原因 测试断线"),
           quickSummaryRemoteFiles:
@@ -2985,6 +2989,9 @@ async function verifyReconnectControls(session) {
           ),
           quickSummaryQuality: /- 画质请求：.+ Hz · .+ Mbps/.test(exportText),
           reconnectStatus: exportText.includes("- 重连状态：等待自动重连（1/3"),
+          macReachabilityDetail:
+            exportText.includes("- Mac 值守：恢复中") &&
+            exportText.includes("- Mac 值守说明：当前仅由 Windows 侧连接、发现、重连和提醒 watcher 推断"),
           reconnectReason: exportText.includes("- 重连原因：测试断线"),
           reconnectNext: exportText.includes("- 下次重连："),
           reconnectSeconds: exportText.includes("秒后）"),
@@ -3048,6 +3055,8 @@ async function verifyReconnectControls(session) {
           copiedText.includes("\\n本机协作\\n") &&
           copiedText.includes("- 远端连接：") &&
           copiedText.includes("- Mac 主机：") &&
+          copiedText.includes("- Mac 值守：恢复中") &&
+          copiedText.includes("自启/睡眠状态等待 Mac 上报") &&
           copiedText.includes("host-build-test") &&
           copiedText.includes("辅助功能未开") &&
           copiedText.includes("- 本机被控：桌面壳托管运行中") &&

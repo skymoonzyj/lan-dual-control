@@ -19,6 +19,39 @@
 
 ## 2026-06-18 Windows Codex
 
+日期：2026-06-18 夜间
+开发端：Windows Codex
+本轮目标：让 Windows 控 Mac 复制诊断快速摘要写出 Mac 值守/可远程推断，配合后续 Mac 自启、锁屏和休息场景产品化。
+完成内容：
+- 复制/导出的诊断报告快速摘要新增“Mac 值守”一行，基于 Windows 侧当前连接、设备发现、重连等待和 Mac 提醒 watcher 推断“当前可远程/恢复中/已发现/未发现”。
+- “连接状态”分段新增 Mac 值守详情和说明，明确 LaunchAgent、自启动、锁屏/睡眠可达性仍等待 Mac status/readiness 上报，避免 Windows 侧提前承诺系统能力。
+- 页面 diagnostics-only 自检在模拟断线等待态下断言导出文本和复制文本都包含 Mac 值守、提醒 watcher 和“自启/睡眠状态等待 Mac 上报”。
+- Windows 控制端 README、当前状态、下一步和任务板已同步。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps\windows-client scripts\windows docs`
+遗留问题：
+- 夜间只做无授权页面自检，不连接真实 Mac、不认证、不发送密码/input/inject；Mac 自启动、睡眠、锁屏可达性还需要 Mac 端 status/readiness 输出真实字段后再接 UI。
+下一步建议：
+- Mac 端值守 status/readiness 一旦输出 LaunchAgent、睡眠风险和锁屏可达性字段，Windows 控制端可把当前“等待 Mac 上报”升级为明确的在线/权限缺失/可能睡眠/需要授权提示。
+是否改了协议：否。
+是否需要另一端配合：后续需要 Mac 端提供值守状态字段；当前不阻塞。
+
+## 2026-06-18 Windows Codex
+
 日期：2026-06-18 续跑
 开发端：Windows Codex
 本轮目标：让 Windows 控 Mac 复制诊断快速摘要直接写出 Mac 主机诊断/权限/runtime，方便第一屏定位看不到画面、权限缺失、旧 build 或 H.264 回退。

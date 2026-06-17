@@ -2793,6 +2793,64 @@ function getMacAlertWatcherExportStatus(now = Date.now()) {
   };
 }
 
+function isMacHostDevice(device) {
+  const platform = String(device?.platform ?? "").toLowerCase();
+  const role = String(device?.role ?? "").toLowerCase();
+  const name = String(device?.deviceName ?? "").toLowerCase();
+  return platform === "macos" || role.includes("mac") || name.includes("mac");
+}
+
+function formatMacReachabilityDevice(device) {
+  if (!device) return "";
+  const target = [device.host, device.port].filter(Boolean).join(":");
+  return [device.deviceName, target].filter(Boolean).join(" ");
+}
+
+function getMacReachabilityExportStatus({ targetLabel, reconnectExport, macAlertWatcherExport }) {
+  const onlineMacDevices = state.discoveredDevices.filter(
+    (device) =>
+      device &&
+      device.status === "online" &&
+      (device.transport ?? "websocket") === "websocket" &&
+      isMacHostDevice(device),
+  );
+  const activeHost = String(state.activeHost || elements.hostInput.value || "").trim();
+  const activePort = String(state.activePort || elements.portInput.value || "").trim();
+  const activeOnlineDevice =
+    onlineMacDevices.find(
+      (device) => String(device.host ?? "").trim() === activeHost && String(device.port ?? "").trim() === activePort,
+    ) || onlineMacDevices[0];
+  const targetText = targetLabel && targetLabel !== "-:-" ? targetLabel : [activeHost, activePort].filter(Boolean).join(":");
+  const parts = [];
+
+  if (state.connected) {
+    parts.push(`当前可远程${targetText ? `（${targetText}）` : ""}`);
+  } else if (state.connecting) {
+    parts.push(`正在连接${targetText ? `（${targetText}）` : ""}`);
+  } else if (state.reconnectTimer || state.connectionState === "reconnecting") {
+    parts.push(`恢复中（${reconnectExport.status}）`);
+  } else if (activeOnlineDevice) {
+    parts.push(`已发现在线 Mac（${formatMacReachabilityDevice(activeOnlineDevice)}）`);
+  } else {
+    parts.push("未发现在线 Mac");
+  }
+
+  if (onlineMacDevices.length > 1) {
+    parts.push(`在线 ${onlineMacDevices.length} 台`);
+  }
+  if (macAlertWatcherExport.status && macAlertWatcherExport.status !== "未检查") {
+    parts.push(`提醒 ${macAlertWatcherExport.status}`);
+  } else {
+    parts.push("提醒未检查");
+  }
+  parts.push("自启/睡眠状态等待 Mac 上报");
+
+  return {
+    status: compactExportStatusText(parts.join(" · "), 220),
+    note: "当前仅由 Windows 侧连接、发现、重连和提醒 watcher 推断；LaunchAgent、自启动、锁屏/睡眠可达性需等 Mac status/readiness 上报。",
+  };
+}
+
 function getSelectExportLabel(selectElement) {
   return selectElement?.selectedOptions?.[0]?.textContent?.trim() || selectElement?.value || "-";
 }
@@ -2927,6 +2985,7 @@ function buildDiagnosticsQuickSummary({
   connectionLabel,
   targetLabel,
   hostDiagnosticsExport,
+  macReachabilityExport,
   reconnectExport,
   macAlertWatcherExport,
   localHostExport,
@@ -2947,6 +3006,7 @@ function buildDiagnosticsQuickSummary({
   return [
     `- 远端连接：${currentStateLabel} · ${connectionLabel} · ${targetLabel}`,
     `- Mac 主机：${hostDiagnosticsExport}`,
+    `- Mac 值守：${macReachabilityExport.status}`,
     `- 重连：${reconnectParts.join(" · ")}`,
     `- 远端文件：${remoteFileExport.summary}`,
     `- 剪贴板：${clipboardExport}`,
@@ -2971,6 +3031,11 @@ function buildLogExportText() {
   const hostDiagnosticsExport = getHostDiagnosticsExportStatus();
   const reconnectExport = getReconnectExportStatus();
   const macAlertWatcherExport = getMacAlertWatcherExportStatus();
+  const macReachabilityExport = getMacReachabilityExportStatus({
+    targetLabel,
+    reconnectExport,
+    macAlertWatcherExport,
+  });
   const localHostExport = getLocalHostExportStatus();
   const remoteFileExport = getRemoteFileTransferExportStatus();
   const clipboardExport = getClipboardExportStatus();
@@ -3002,6 +3067,7 @@ function buildLogExportText() {
       connectionLabel,
       targetLabel,
       hostDiagnosticsExport,
+      macReachabilityExport,
       reconnectExport,
       macAlertWatcherExport,
       localHostExport,
@@ -3020,6 +3086,8 @@ function buildLogExportText() {
     `- 反控状态：${state.reverseStateDetail}`,
     `- 连接方式：${connectionLabel}`,
     `- 目标地址：${targetLabel}`,
+    `- Mac 值守：${macReachabilityExport.status}`,
+    `- Mac 值守说明：${macReachabilityExport.note}`,
     `- 重连状态：${reconnectExport.status}`,
     `- 重连原因：${reconnectExport.reason}`,
     `- 下次重连：${reconnectExport.next}`,
