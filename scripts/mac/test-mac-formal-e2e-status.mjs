@@ -283,7 +283,7 @@ async function withFakeMacHost(callback, options = {}) {
       audioMode: "system-pcm",
       clipboardText: true,
       clipboardFile: true,
-      capturePipeline: "screencapturekit-h264",
+      capturePipeline: options.capturePipeline || "screencapturekit-h264",
       displays: [
         {
           id: "main",
@@ -752,6 +752,37 @@ async function checkForceSendCall(args) {
   });
 }
 
+async function checkFallbackPipelineVideoWarning(args) {
+  await withFakeMacHost(async (macHost) => {
+    const localTimeoutMs = String(Math.min(args.timeoutMs, 5000));
+    const result = await runAsync(args, [
+      "--json",
+      "--allowDirty",
+      "--skipBoard",
+      "--host",
+      macHost.host,
+      "--port",
+      String(macHost.port),
+      "--timeoutMs",
+      localTimeoutMs,
+    ]);
+    const payload = parseJson(result.stdout, "fallback pipeline formal E2E status");
+    assert(result.status === 0, `fallback pipeline warning should not fail formal status:\n${result.stdout}\n${result.stderr}`);
+    assert(payload.ok === true, "fallback pipeline payload should remain ok because video fallback is a warning");
+    assert(payload.readyToCall === false, "fallback pipeline payload should not be readyToCall when board is skipped");
+    assert(payload.counts?.blockers === 0, "fallback pipeline payload should not add blockers");
+    assert(payload.counts?.warnings >= 2, "fallback pipeline payload should include board-skip and video warnings");
+    const video = payload.checklist?.find((entry) => entry.id === "video");
+    assert(video?.status === "warning", "fallback pipeline video checklist item should be a warning");
+    assert(/currentPipeline=background-jpeg/.test(video.summary || ""), "fallback pipeline warning should name the current pipeline");
+    assert(/media baseline/.test(video.next || ""), "fallback pipeline warning should recommend refreshing the media baseline");
+    assert(/needs attention/.test(payload.boardSummary || ""), "fallback pipeline board summary should show attention is needed");
+    assert(/pipeline=background-jpeg/.test(payload.boardSummary || ""), "fallback pipeline board summary should name the current pipeline");
+    assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "fallback pipeline formal E2E status");
+    print("OK", "Formal E2E status warns when H.264 is advertised but the current pipeline is JPEG fallback");
+  }, { capturePipeline: "background-jpeg" });
+}
+
 function checkOnlineJson(args) {
   const result = run(args, [
     "--json",
@@ -854,6 +885,7 @@ async function main() {
   await checkExistingBoardCallProtection(args);
   await checkDoneBoardCallDoesNotBlock(args);
   await checkForceSendCall(args);
+  await checkFallbackPipelineVideoWarning(args);
   checkOnlineJson(args);
   checkOnlineBoardSummary(args);
   checkSecretRedaction(args);

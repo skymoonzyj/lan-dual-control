@@ -254,6 +254,11 @@ function isSystemPcmAudio(capabilities) {
   return capabilities?.audio === true || audioMode === "system-pcm" || audioMode.includes("pcm");
 }
 
+function isH264CapturePipelineActive(capabilities = {}) {
+  const pipeline = normalizedText(capabilities.capturePipeline).toLowerCase();
+  return pipeline.includes("h264");
+}
+
 function buildChecklist(resume, args) {
   const checklist = [];
   const git = resume.git || {};
@@ -322,8 +327,10 @@ function buildChecklist(resume, args) {
     checklist.push(warnItem("input-monitoring", "Input Monitoring", `permission ${statusValue(permissions.inputMonitoring)}`, "", "Keyboard edge cases may need manual permission review."));
   }
 
-  if (capabilities.h264Stream === true) {
+  if (capabilities.h264Stream === true && isH264CapturePipelineActive(capabilities)) {
     checklist.push(okItem("video", "H.264 Video", `advertised; currentPipeline=${capabilities.capturePipeline || "unknown"}`));
+  } else if (capabilities.h264Stream === true) {
+    checklist.push(warnItem("video", "H.264 Video", `advertised but currentPipeline=${capabilities.capturePipeline || "unknown"}`, "", "Refresh the Mac media baseline before 5-10 minute formal H.264 validation."));
   } else {
     checklist.push(blockItem("video", "H.264 Video", `h264=${statusValue(capabilities.h264Stream)} pipeline=${capabilities.capturePipeline || "unknown"}`, "", "Fix ScreenCaptureKit/H.264 readiness before 5-10 minute formal video validation."));
   }
@@ -418,7 +425,7 @@ function makeCallText(report) {
   const address = formatHostAddress(host);
   return [
     `Mac formal E2E ${report.readyToCall ? "ready" : "needs attention"}: host=${address}, repo=${report.resume.currentBuildId || "unknown"}, runtimeBuild=${host.runtime?.buildId || "unknown"}, inputMode=${host.inputMode || "unknown"}.`,
-    `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)} audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}.`,
+    `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)} pipeline=${host.capabilities?.capturePipeline || "unknown"} audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}.`,
     `Checklist blockers=${report.counts.blockers}, warnings=${report.counts.warnings}.`,
     `If this Mac should stay ready after reboot, review the dry-run LaunchAgent plan with: ${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
     `Before long formal runs, run local H.264/PCM/input-log smoke with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
@@ -445,7 +452,7 @@ function makeBoardSummary(report) {
   }
   return [
     `Mac formal E2E: ${state}; host=${formatHostAddress(host)}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}; runtimeBuild=${host.runtime?.buildId || "unknown"}; inputMode=${host.inputMode || "unknown"}.`,
-    `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)}; audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}; ${formatBuildDiff(host.buildDiff)}.`,
+    `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)}; pipeline=${host.capabilities?.capturePipeline || "unknown"}; audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}; ${formatBuildDiff(host.buildDiff)}.`,
     `MacLaunchAgentPlan=${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
     `MacFormalLocalSmoke=${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
     "Media precheck: check-mac-host-readiness --probeMedia --boardSummary before long formal runs.",

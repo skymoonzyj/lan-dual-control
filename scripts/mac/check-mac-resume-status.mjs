@@ -301,6 +301,11 @@ function statusValue(value) {
   return "unknown";
 }
 
+function isH264CapturePipelineActive(capabilities = {}) {
+  const pipeline = normalizedText(capabilities.capturePipeline).toLowerCase();
+  return pipeline.includes("h264");
+}
+
 function getLanAddresses(port) {
   const addresses = [];
   for (const [name, entries] of Object.entries(os.networkInterfaces())) {
@@ -522,6 +527,12 @@ function buildRecommendations({ git, host, board, args }) {
     recommendations.push({
       level: "warning",
       text: "Input Monitoring is not confirmed; keyboard edge cases may need manual permission review.",
+    });
+  }
+  if (host.capabilities?.h264Stream === true && !isH264CapturePipelineActive(host.capabilities)) {
+    recommendations.push({
+      level: "warning",
+      text: `Mac host advertises H.264, but current capture pipeline is ${host.capabilities?.capturePipeline || "unknown"}; refresh the media baseline before formal H.264 E2E.`,
     });
   }
   if (host.buildDiff.severity === "restart-recommended") {

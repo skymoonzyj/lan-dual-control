@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import http from "node:http";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -81,6 +82,48 @@ function run(args, extraArgs = []) {
     encoding: "utf8",
     timeout: args.timeoutMs,
     maxBuffer: 8 * 1024 * 1024,
+  });
+}
+
+function runAsync(args, extraArgs = []) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [script, ...extraArgs], {
+      cwd: repoRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+    }, args.timeoutMs);
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("close", (status, signal) => {
+      clearTimeout(timer);
+      resolve({
+        status,
+        signal,
+        stdout,
+        stderr,
+        error: signal === "SIGTERM" ? { message: `timeout after ${args.timeoutMs}ms` } : null,
+      });
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolve({
+        status: null,
+        signal: null,
+        stdout,
+        stderr,
+        error,
+      });
+    });
   });
 }
 
@@ -492,6 +535,92 @@ function checkOnlineBoardSummary(args) {
   print("OK", "Online board summary includes host, permissions, build, and formal-path status");
 }
 
+async function withFakeMacHost(callback, options = {}) {
+  const discovery = {
+    platform: "macos",
+    deviceName: "Fake Resume Mac",
+    inputMode: "log",
+    runtime: {
+      buildId: options.runtimeBuildId || "fake-resume-build",
+      processId: 12345,
+      startedAt: new Date().toISOString(),
+    },
+    permissions: {
+      screenRecording: true,
+      accessibility: true,
+      inputMonitoring: true,
+    },
+    capabilities: {
+      inputMode: "log",
+      h264Stream: true,
+      audio: true,
+      audioMode: "system-pcm",
+      clipboardText: true,
+      clipboardFile: true,
+      capturePipeline: options.capturePipeline || "background-jpeg",
+      displays: [
+        {
+          id: "main",
+          name: "Main Display",
+          width: 1920,
+          height: 1080,
+          primary: true,
+        },
+      ],
+    },
+  };
+  const server = http.createServer((request, response) => {
+    if (request.method === "GET" && request.url === "/discovery") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify(discovery));
+      return;
+    }
+    response.writeHead(404, { "Content-Type": "text/plain" });
+    response.end("not found");
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+  try {
+    const address = server.address();
+    return await callback({ host: address.address, port: address.port, discovery });
+  } finally {
+    await new Promise((resolve, reject) => {
+      server.close((error) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
+  }
+}
+
+async function checkH264FallbackPipelineWarning(args) {
+  await withFakeMacHost(async (macHost) => {
+    const result = await runAsync(args, [
+      "--json",
+      "--host",
+      macHost.host,
+      "--port",
+      String(macHost.port),
+      "--timeoutMs",
+      "1200",
+    ]);
+    const payload = parseJson(result.stdout, "fallback pipeline resume status");
+    assert(result.status === 0, `fallback pipeline warning should not fail resume status\n${result.stdout}\n${result.stderr}`);
+    assert(payload.host?.online === true, "fallback pipeline payload should report host online");
+    assert(payload.host?.capabilities?.capturePipeline === "background-jpeg", "fallback pipeline payload should preserve capturePipeline");
+    assert(payload.recommendations.some((item) => item.level === "warning" && /current capture pipeline is background-jpeg/.test(item.text)), "fallback pipeline should create a warning recommendation");
+    assert(String(payload.boardSummary || "").includes("attention="), "fallback pipeline boardSummary should include attention");
+    assert(!String(payload.boardSummary || "").includes("attention=none"), "fallback pipeline boardSummary should not say attention=none");
+    assertNoPasswordLeak(result, "fallback pipeline resume status");
+  });
+  print("OK", "Resume status warns when H.264 is advertised but current pipeline is JPEG fallback");
+}
+
 function checkPasswordRedaction(args) {
   const result = run(args, [
     "--json",
@@ -700,6 +829,7 @@ async function main() {
   checkOfflinePlainReport(args);
   checkOnlineJson(args);
   checkOnlineBoardSummary(args);
+  await checkH264FallbackPipelineWarning(args);
   checkPasswordRedaction(args);
   await checkBoardCurrentCall(args);
   await checkBoardDoneCall(args);
