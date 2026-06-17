@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -73,6 +74,31 @@ function assertSingleLine(text, label) {
   return trimmed;
 }
 
+function occupyPortIfAvailable(port, host = "127.0.0.1") {
+  return new Promise((resolve) => {
+    const server = createServer();
+    server.once("error", () => {
+      resolve(null);
+    });
+    server.listen(port, host, () => {
+      resolve(server);
+    });
+  });
+}
+
+function closeServer(server) {
+  return new Promise((resolve, reject) => {
+    if (!server) {
+      resolve();
+      return;
+    }
+    server.close((error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run([flag], args);
@@ -94,19 +120,25 @@ function checkRiskyArgsRefuse(args) {
   console.log("[OK] Risky real-host/password/call args are rejected");
 }
 
-function checkBoardSummary(args) {
-  const result = run(["--timeoutMs", String(args.timeoutMs)], args);
-  const summary = assertSingleLine(result.stdout, "wrapper board summary stdout");
-  assert(result.status === 0, `wrapper self-test should pass.\n${result.stdout}\n${result.stderr}`);
-  assertIncludes(summary, "Mac client browser self-test: passed", "wrapper board summary");
-  assertIncludes(summary, "temporary-mock-host", "wrapper board summary");
-  assertIncludes(summary, "no password", "wrapper board summary");
-  assertIncludes(summary, "no inject", "wrapper board summary");
-  assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "wrapper output");
-  console.log("[OK] Wrapper runs the local mock browser self-test with one-line stdout");
+async function checkBoardSummary(args) {
+  const occupiedServer = await occupyPortIfAvailable(5188);
+  try {
+    const result = run(["--timeoutMs", String(args.timeoutMs)], args);
+    const summary = assertSingleLine(result.stdout, "wrapper board summary stdout");
+    assert(result.status === 0, `wrapper self-test should pass.\n${result.stdout}\n${result.stderr}`);
+    assertIncludes(summary, "Mac client browser self-test: passed", "wrapper board summary");
+    assertIncludes(summary, "temporary-mock-host", "wrapper board summary");
+    assertIncludes(summary, "no password", "wrapper board summary");
+    assertIncludes(summary, "no inject", "wrapper board summary");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "wrapper output");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}`, "EADDRINUSE", "wrapper output");
+  } finally {
+    await closeServer(occupiedServer);
+  }
+  console.log("[OK] Wrapper runs the local mock browser self-test with one-line stdout and no client-port collision noise");
 }
 
-function main() {
+async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
     return;
@@ -114,12 +146,12 @@ function main() {
   const args = parseArgs(process.argv);
   checkHelp(args);
   checkRiskyArgsRefuse(args);
-  checkBoardSummary(args);
+  await checkBoardSummary(args);
   console.log("[OK] Mac client browser self-test wrapper self-test passed");
 }
 
 try {
-  main();
+  await main();
 } catch (error) {
   console.error(`[FAIL] ${error.message}`);
   process.exitCode = 1;

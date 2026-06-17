@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
+const defaultClientPort = 5188;
 const deniedFlags = new Set([
   "--host",
   "--windowsHost",
@@ -51,14 +53,52 @@ function assertSafeArgs(args) {
   }
 }
 
-function main() {
+function hasFlag(args, flag) {
+  return args.some((token) => token === flag || token.startsWith(`${flag}=`));
+}
+
+function tcpPortAvailable(port, host = "127.0.0.1") {
+  return new Promise((resolve) => {
+    const server = createServer();
+    server.once("error", () => {
+      resolve(false);
+    });
+    server.listen(port, host, () => {
+      server.close(() => resolve(true));
+    });
+  });
+}
+
+function findEphemeralPort(host = "127.0.0.1") {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, host, () => {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+async function maybeAddClientPort(forwardedArgs) {
+  if (hasFlag(forwardedArgs, "--clientPort")) return forwardedArgs;
+  if (await tcpPortAvailable(defaultClientPort)) return forwardedArgs;
+  const clientPort = await findEphemeralPort();
+  if (!clientPort) return forwardedArgs;
+  console.error(`[INFO] Mac client port ${defaultClientPort} is already in use; using temporary self-test port ${clientPort}.`);
+  return [...forwardedArgs, "--clientPort", String(clientPort)];
+}
+
+async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
     return;
   }
 
-  const forwardedArgs = process.argv.slice(2);
+  let forwardedArgs = process.argv.slice(2);
   assertSafeArgs(forwardedArgs);
+  forwardedArgs = await maybeAddClientPort(forwardedArgs);
   const childArgs = [
     "scripts/windows/test-mac-client-browser.mjs",
     "--mockVideo",
@@ -85,7 +125,7 @@ function main() {
 }
 
 try {
-  main();
+  await main();
 } catch (error) {
   console.error(`[FAIL] ${error.message}`);
   process.exitCode = 1;
