@@ -52,6 +52,7 @@ Description:
 
 When a Mac host is found, the board summary includes:
   FormalChecklist=node scripts/windows/check-mac-formal-e2e.mjs --preflightOnly --checkClientDiagnostics --boardSummary
+  MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --requireLaunchAgentMaxFps --boardSummary
   ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics
 "@
 }

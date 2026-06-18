@@ -519,6 +519,7 @@ function formatMacBuildDiff(buildDiff) {
 function makeMacFormalCommands(item) {
   if (!item) return null;
   const base = `node scripts/windows/check-mac-formal-e2e.mjs --host ${item.host} --port ${item.port}`;
+  const macSideBase = `node scripts/mac/check-mac-unattended-status.mjs --host ${item.host} --port ${item.port}`;
   const psBase = [
     "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
     "-Discover",
@@ -531,6 +532,7 @@ function makeMacFormalCommands(item) {
     formalChecklistCommand: `${base} --preflightOnly --checkClientDiagnostics --boardSummary`,
     formalChecklistPowerShellCommand: `${psBase} -PreflightOnly -CheckClientDiagnostics -BoardSummary`,
     manualChecklistSummary: "connection/video/audio/clipboard/input_ack/diagnostics",
+    macUnattendedFormalCommand: `${macSideBase} --requireLaunchAgentMaxFps --boardSummary`,
     userAuthRequestCommand: `${base} --preflightOnly --checkClientDiagnostics --userAuthRequest`,
     userAuthRequestPowerShellCommand: `${psBase} -PreflightOnly -CheckClientDiagnostics -UserAuthRequest`,
     sendUserAuthRequestCommand: `${base} --preflightOnly --checkClientDiagnostics --sendUserAuthRequest`,
@@ -548,6 +550,7 @@ function makeMacBoardSummary(report) {
       `Next preflight: ${report.macFormalE2e.preflightCommand}.`,
       `FormalChecklist=${report.macFormalE2e.formalChecklistCommand}; ManualChecklist=${report.macFormalE2e.manualChecklistSummary}.`,
       `FormalChecklistPs=${report.macFormalE2e.formalChecklistPowerShellCommand}.`,
+      `MacUnattendedFormal=${report.macFormalE2e.macUnattendedFormalCommand}.`,
       `User auth request when ready: ${report.macFormalE2e.userAuthRequestCommand}.`,
       `Send auth request when ready: ${report.macFormalE2e.sendUserAuthRequestCommand}.`,
       `Formal command: ${report.macFormalE2e.formalCommand}.`,
@@ -643,6 +646,7 @@ async function main() {
       print("INFO", `Mac formal preflight command: ${macDiscovery.macFormalE2e.preflightCommand}`, args);
       print("INFO", `Mac formal checklist command: ${macDiscovery.macFormalE2e.formalChecklistCommand}`, args);
       print("INFO", `Mac manual checklist: ${macDiscovery.macFormalE2e.manualChecklistSummary}`, args);
+      print("INFO", `Mac unattended formal gate: ${macDiscovery.macFormalE2e.macUnattendedFormalCommand}`, args);
       print("INFO", `Mac user auth request command: ${macDiscovery.macFormalE2e.userAuthRequestCommand}`, args);
       print("INFO", `Mac send user auth request command: ${macDiscovery.macFormalE2e.sendUserAuthRequestCommand}`, args);
       print("INFO", `Mac formal E2E command: ${macDiscovery.macFormalE2e.formalCommand}`, args);
