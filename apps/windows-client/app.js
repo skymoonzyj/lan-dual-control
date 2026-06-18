@@ -6187,7 +6187,7 @@ function describeOutgoingFileResultStatus(result = {}) {
 function expirePendingOutgoingFileResult(now = Date.now()) {
   const transfer = state.lastOutgoingFileTransfer || {};
   if (transfer.status !== "sent") return 0;
-  const lastActivityAt = Number(transfer.completedAt) || Number(transfer.lastActivityAt) || Number(transfer.startedAt) || now;
+  const lastActivityAt = Number(transfer.lastActivityAt) || Number(transfer.completedAt) || Number(transfer.startedAt) || now;
   const idleMs = now - lastActivityAt;
   if (idleMs < remoteFileTransferStallTimeoutMs) return 0;
 
@@ -6949,6 +6949,13 @@ function handleClipboardFileProgress(message) {
   if (transferId && currentTransferId && transferId !== currentTransferId) {
     addLog("文件剪贴板", `忽略旧的对端文件进度 · ${transferId}`);
     return;
+  }
+  const now = Date.now();
+  if (transferId && state.outgoingFileTransfer?.transferId === transferId) {
+    state.outgoingFileTransfer.lastActivityAt = now;
+  }
+  if (transferId && state.lastOutgoingFileTransfer?.transferId === transferId) {
+    state.lastOutgoingFileTransfer.lastActivityAt = now;
   }
   const percent = Math.round((Number(message.receivedBytes || 0) / Number(message.totalBytes)) * 100);
   elements.clipboardText.textContent = `剪贴板：对端接收 ${percent}%`;

@@ -2726,6 +2726,7 @@ async function verifyOutgoingFileResultStatus(session) {
       if (
         typeof handleClipboardFileResult !== "function" ||
         typeof handleClipboardFileResponse !== "function" ||
+        typeof handleClipboardFileProgress !== "function" ||
         typeof formatFloatingClipboardStatus !== "function" ||
         typeof syncFloatingControlStatus !== "function" ||
         typeof sendFilesToRemote !== "function" ||
@@ -2749,6 +2750,7 @@ async function verifyOutgoingFileResultStatus(session) {
       const firstRemoteRejectSends = [];
       const remoteRejectRetrySends = [];
       const activeFailureSends = [];
+      const progressKeepaliveSends = [];
       const pendingTimeoutSends = [];
       const pendingTimeoutRetrySends = [];
       try {
@@ -2959,6 +2961,39 @@ async function verifyOutgoingFileResultStatus(session) {
         const activeFailureCanRetry = canRetryLastOutgoingFileTransfer();
         const activeFailureButtonLabel = elements.fileClipboardButton.querySelector("span:not([aria-hidden])")?.textContent || "";
 
+        const progressKeepaliveBytes = new Uint8Array(fileChunkSizeBytes + 640);
+        progressKeepaliveBytes.fill(70);
+        const progressKeepaliveFile = new File([progressKeepaliveBytes], "progress-keepalive.zip", { type: "application/zip" });
+        const progressKeepaliveDataTransfer = new DataTransfer();
+        progressKeepaliveDataTransfer.items.add(progressKeepaliveFile);
+        elements.fileClipboardInput.files = progressKeepaliveDataTransfer.files;
+        state.client = {
+          sendClipboardFileOffer: (payload) => progressKeepaliveSends.push({ type: "offer", payload }),
+          sendClipboardFileChunk: (payload) => progressKeepaliveSends.push({ type: "chunk", payload }),
+          sendClipboardFileComplete: (payload) => progressKeepaliveSends.push({ type: "complete", payload }),
+        };
+        await sendFilesToRemote([progressKeepaliveFile], { sourceLabel: "对端进度保活测试", clearFileInput: true });
+        const progressKeepaliveTransfer = state.lastOutgoingFileTransfer || {};
+        const progressKeepaliveAt = Number(progressKeepaliveTransfer.completedAt || Date.now()) + Math.floor(remoteFileTransferStallTimeoutMs / 2);
+        const originalDateNow = Date.now;
+        Date.now = () => progressKeepaliveAt;
+        try {
+          handleClipboardFileProgress({
+            type: "clipboard_file_progress",
+            transferId: progressKeepaliveTransfer.transferId,
+            receivedBytes: Math.floor(progressKeepaliveFile.size / 2),
+            totalBytes: progressKeepaliveFile.size,
+          });
+        } finally {
+          Date.now = originalDateNow;
+        }
+        const progressKeepaliveNoTimeoutCount = expirePendingOutgoingFileResult(progressKeepaliveAt + remoteFileTransferStallTimeoutMs - 1000);
+        const progressKeepaliveText = elements.clipboardText.textContent || "";
+        const progressKeepaliveState = state.lastOutgoingFileTransfer || {};
+        const progressKeepaliveOfferCount = progressKeepaliveSends.filter((item) => item.type === "offer").length;
+        const progressKeepaliveChunkCount = progressKeepaliveSends.filter((item) => item.type === "chunk").length;
+        const progressKeepaliveCompleteCount = progressKeepaliveSends.filter((item) => item.type === "complete").length;
+
         const pendingBytes = new Uint8Array(fileChunkSizeBytes + 256);
         pendingBytes.fill(67);
         const pendingFile = new File([pendingBytes], "pending-timeout.zip", { type: "application/zip" });
@@ -3103,6 +3138,15 @@ async function verifyOutgoingFileResultStatus(session) {
             activeFailureFileInputLength === 1 &&
             activeFailureCanRetry === true &&
             activeFailureButtonLabel === "重新发送" &&
+            progressKeepaliveOfferCount === 1 &&
+            progressKeepaliveChunkCount === 2 &&
+            progressKeepaliveCompleteCount === 1 &&
+            progressKeepaliveNoTimeoutCount === 0 &&
+            progressKeepaliveText.includes("对端接收") &&
+            !progressKeepaliveText.includes("对端确认超时") &&
+            progressKeepaliveState.transferId === progressKeepaliveTransfer.transferId &&
+            progressKeepaliveState.status === "sent" &&
+            progressKeepaliveState.lastActivityAt === progressKeepaliveAt &&
             expiredPendingCount === 1 &&
             pendingTimeoutText.includes("对端确认超时") &&
             pendingTimeoutText.includes("可重新发送") &&
@@ -3167,6 +3211,13 @@ async function verifyOutgoingFileResultStatus(session) {
           activeFailureFileInputLength,
           activeFailureCanRetry,
           activeFailureButtonLabel,
+          progressKeepaliveOfferCount,
+          progressKeepaliveChunkCount,
+          progressKeepaliveCompleteCount,
+          progressKeepaliveNoTimeoutCount,
+          progressKeepaliveText,
+          progressKeepaliveState,
+          progressKeepaliveAt,
           expiredPendingCount,
           pendingTimeoutText,
           pendingTimeoutFloating,

@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端本机文件等待对端确认期间，当前 transfer 的对端进度能刷新保活时间。
+完成内容：
+- `clipboard_file_progress` 如果属于当前 `transferId`，会刷新 `lastActivityAt`，确认超时计算也优先使用最新活动时间。
+- 大文件场景里，只要对端仍在持续上报接收进度，Windows 端不会按本机分块发送完成时间误判“对端确认超时”。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增页面断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`（失败点：对端 progress 到达后仍按旧完成时间触发“对端确认超时”）。
+- 实现后复跑同一 diagnostics-only 通过。
+遗留问题：
+- 这只是等待确认阶段的保活，不是断点续传；连接中断后仍需从头重新发送。
+下一步建议：
+- 真机大文件测试时观察对端进度、最终 result、确认超时和重新发送按钮是否与 Mac 侧大文件接收时间一致。
+是否改了协议：否；只消费既有 `clipboard_file_progress` 和 `transferId`。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端本机文件发送中途收到当前 transfer 失败结果时保留文件并可重发。
 完成内容：
 - `clipboard_file_result.accepted=false` 如果在当前 transfer 分块发送中途到达，会复用 active 发送信息保留文件名、大小和可重发状态。
