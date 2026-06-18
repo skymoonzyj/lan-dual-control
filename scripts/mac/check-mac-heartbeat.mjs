@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 import http from "node:http";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
+const launchAgentLabel = "com.lan-dual-control.mac-host";
+const launchAgentPath = join(homedir(), "Library", "LaunchAgents", `${launchAgentLabel}.plist`);
 const hostRuntimePaths = [
   "apps/mac-host/Package.swift",
   "apps/mac-host/Sources",
@@ -85,7 +88,7 @@ Machine-readable JSON fields:
   board                       Agent Link Board readability and currentCall.
   commands                    Secret-free next-step commands for user action,
                               including the local Mac client mock browser
-                              self-test.
+                              self-test and LaunchAgent load/print checks.
 
 Examples:
   node scripts/mac/check-mac-heartbeat.mjs --checkBoard --boardSummary
@@ -190,6 +193,12 @@ function clampInteger(value, min, max, fallback) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(min, Math.min(max, Math.trunc(parsed)));
+}
+
+function shellQuote(value) {
+  const text = String(value ?? "");
+  if (/^[A-Za-z0-9_./:=@%+-]+$/.test(text)) return text;
+  return `'${text.replace(/'/g, "'\\''")}'`;
 }
 
 function command(commandName, commandArgs, options = {}) {
@@ -597,6 +606,8 @@ function buildCommands(args) {
     macHostReadinessCommand: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     macUnattendedStatusCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --boardSummary`,
     macUnattendedFormalCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`,
+    macLaunchAgentLoadCommand: `launchctl bootstrap gui/$(id -u) ${shellQuote(launchAgentPath)}`,
+    macLaunchAgentPrintCommand: `launchctl print gui/$(id -u)/${shellQuote(launchAgentLabel)}`,
     macClientPageStatusCommand: "node scripts/mac/start-mac-client.mjs --status --boardSummary",
     macClientDiagnosticsCommand: "node scripts/mac/check-mac-client-readiness.mjs --probeClientServer --checkBoard --boardSummary",
     macFormalLocalSmokeCommand: `node scripts/mac/check-mac-formal-local-smoke.mjs --host ${args.host} --port ${args.port} --promptPassword --boardSummary`,
@@ -687,6 +698,8 @@ function makeBoardSummary(report) {
     `MacHostReadiness=${report.commands.macHostReadinessCommand}.`,
     `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
+    `MacLaunchAgentLoad=${report.commands.macLaunchAgentLoadCommand}.`,
+    `MacLaunchAgentPrint=${report.commands.macLaunchAgentPrintCommand}.`,
     `MacClientPage=${report.commands.macClientPageStatusCommand}.`,
     `MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}.`,
     `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
