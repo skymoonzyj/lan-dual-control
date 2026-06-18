@@ -161,6 +161,7 @@ async function preparePassword(args) {
     throw new Error("--promptPassword refuses to override an existing LAN_DUAL_PASSWORD. Unset it or omit --promptPassword.");
   }
   if (args.promptPassword) {
+    print("INFO", "等待隐藏密码输入：输入时不会显示字符；这是正常等待，不是卡住。");
     args.password = await promptHidden("Mac host password: ");
     if (!args.password) {
       throw new Error("Password cannot be empty when --promptPassword is used.");

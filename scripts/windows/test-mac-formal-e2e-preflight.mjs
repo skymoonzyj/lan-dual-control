@@ -7,6 +7,7 @@ import { createMockMacHostServer } from "../../apps/mock-mac-host/server.mjs";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
 const runnerScript = resolve(scriptDir, "check-mac-formal-e2e.mjs");
+const browserRunnerScript = resolve(scriptDir, "test-windows-client-browser.mjs");
 
 const defaults = {
   timeoutMs: 30000,
@@ -122,6 +123,41 @@ function assertManualChecklist(checklist, label) {
 function runRunner(args, { env = {}, timeoutMs = defaults.timeoutMs } = {}) {
   return new Promise((resolveRun) => {
     const child = spawn(process.execPath, [runnerScript, ...args], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        LAN_DUAL_PASSWORD: "",
+        ...env,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      resolveRun({ exitCode: null, timedOut: true, stdout, stderr });
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolveRun({ exitCode: null, timedOut: false, stdout, stderr: `${stderr}\n${error.message}`.trim() });
+    });
+    child.on("close", (exitCode) => {
+      clearTimeout(timer);
+      resolveRun({ exitCode, timedOut: false, stdout, stderr });
+    });
+  });
+}
+
+function runBrowserRunner(args, { env = {}, timeoutMs = defaults.timeoutMs } = {}) {
+  return new Promise((resolveRun) => {
+    const child = spawn(process.execPath, [browserRunnerScript, ...args], {
       cwd: repoRoot,
       env: {
         ...process.env,
@@ -624,6 +660,42 @@ async function testMockRequiresPasswordAfterPreflight(args) {
   });
 }
 
+async function testFormalPromptExplainsPasswordWait(args) {
+  await withMockHost(async (port) => {
+    const result = await runRunner([
+      "--host", "127.0.0.1",
+      "--port", String(port),
+      "--promptPassword",
+      "--allowMockVideo",
+      "--skipInputLog",
+      "--skipAudio",
+      "--skipClipboard",
+      "--skipProbe",
+      "--skipBrowser",
+    ], args);
+    assert(result.exitCode !== 0, "formal prompt should fail in a non-interactive test terminal");
+    assertIncludes(result.stdout, "等待隐藏密码输入", "formal password prompt hint");
+    assertIncludes(result.stdout, "不是卡住", "formal password prompt hint");
+    assertIncludes(result.stderr, "--promptPassword requires an interactive terminal", "formal password prompt hint");
+    assertNotIncludes(result.stdout + result.stderr, "test-password", "formal password prompt hint");
+    print("OK", "Formal runner explains password wait before interactive prompt");
+  });
+}
+
+async function testBrowserPromptExplainsPasswordWait(args) {
+  const result = await runBrowserRunner([
+    "--host", "127.0.0.1",
+    "--port", "9",
+    "--promptPassword",
+    "--requirePassword",
+  ], args);
+  assert(result.exitCode !== 0, "browser prompt should fail in a non-interactive test terminal");
+  assertIncludes(result.stdout, "等待隐藏密码输入", "browser password prompt hint");
+  assertIncludes(result.stdout, "不是卡住", "browser password prompt hint");
+  assertIncludes(result.stderr, "--promptPassword requires an interactive terminal", "browser password prompt hint");
+  print("OK", "Browser runner explains password wait before interactive prompt");
+}
+
 async function testMockFastPath(args) {
   await withMockHost(async (port) => {
     const result = await runRunner([
@@ -679,6 +751,8 @@ async function main() {
   await testDiscoverMockPreflightJson(args);
   await testDiscoverOfflineJson(args);
   await testMockRequiresPasswordAfterPreflight(args);
+  await testFormalPromptExplainsPasswordWait(args);
+  await testBrowserPromptExplainsPasswordWait(args);
   await testMockFastPath(args);
   print("OK", "Windows formal E2E preflight regression passed");
 }

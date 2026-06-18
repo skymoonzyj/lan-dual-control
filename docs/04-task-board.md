@@ -221,6 +221,7 @@ Windows 端：
 - [x] Windows 控制 Mac 页面级自检的连接、视频 surface、H.264/WebCodecs 和 PCM 音频播放等待也接入 `--progressIntervalMs` 页面快照心跳；同轮修复 diagnostics 后连接按钮禁用状态恢复漏项，避免自检后真实连接点击无效。
 - [x] Windows formal Mac E2E 的第二步浏览器 H.264 检查也透传 `--progressIntervalMs`，预检查客户端诊断和正式第二步都能按同一频率打印页面快照，避免现场误判为卡住。
 - [x] Windows formal Mac E2E 正式运行会明确打印 Plan 1/2 和 Plan 2/2：Plan 1 会说明 H.264 首帧确认后仍要继续长视频观察，再做音频观察，Plan 2 才是 Windows client 浏览器 H.264 canvas 检查，避免把长观察误判为第二步卡住。
+- [x] Windows formal Mac E2E 和第二步浏览器自检的 `--promptPassword` 路径会在隐藏密码提示前打印“等待隐藏密码输入：输入时不会显示字符；这是正常等待，不是卡住。”；专项回归覆盖非交互终端下正式 runner 和浏览器 runner 均先输出提示再拒绝，避免现场把等待密码误判为第二步卡住。
 - [x] Windows `probe-mac-host` 视频/音频观察尾段正常收口：已收到足够帧时不会因为目标窗口最后几十毫秒等不到下一帧误失败，真正长时间无帧仍按最大间隔失败。
 
 共享：

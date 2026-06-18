@@ -21,6 +21,36 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：复查 Windows formal Mac E2E 第二步卡住体验，并给密码等待加明确提示。
+完成内容：
+- 无密复查真实 Mac host `192.168.31.122:43770`：`check-mac-formal-e2e --preflightOnly --checkClientDiagnostics --boardSummary` 返回 ready，`clientDiagnostics=passed`，runtime build `d398d64`。
+- 结论：第二步诊断页本身可跑通；当前“没有 60Hz”的主要现场证据是 Mac host 自报 `maxScreenFps=30`，需要 Mac 侧按 `MacMaxFpsPlan` / LaunchAgent max FPS 方案处理后再长测。
+- `check-mac-formal-e2e --promptPassword` 和 `test-windows-client-browser --promptPassword` 现在会在隐藏密码提示前说明“等待隐藏密码输入：输入时不会显示字符；这是正常等待，不是卡住。”。
+- 专项回归新增非交互终端断言，确保两个入口都先输出提示，再因非交互终端拒绝，不泄露密码。
+修改文件：
+- `scripts/windows/check-mac-formal-e2e.mjs`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --boardSummary --timeoutMs 45000 --progressIntervalMs 10000`
+- `node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 70000`
+遗留问题：
+- 真正正式 browser/auth 长测仍需要用户在 Windows 本机输入 Mac host 密码；密码不得发 Agent Link Board。
+- 60Hz 体验还需要 Mac host 上限从 30 提升并经 Mac 侧 readiness/status 强校验。
+下一步建议：
+- Mac 侧先处理 `maxScreenFps=30`，Windows 侧随后复跑正式 E2E 或页面级 `--requireH264` 长测。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 侧后续确认 60Hz/LaunchAgent max FPS 配置；当前不阻塞无密诊断。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：给 Windows 音频设备检查增加可发 Agent Link Board 的一行摘要，并校准反向声音任务状态。
 完成内容：
 - `check-windows-audio-devices.mjs` 新增 `--boardSummary`，输出 `AudioDevices=Windows audio devices: wasapi=...; dshowAudio=...; probe=...; no password/auth/input/inject.`。

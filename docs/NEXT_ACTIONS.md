@@ -35,7 +35,7 @@
    - Windows 控制端远端文件托盘已补接收中、分块进度、超限拒绝、解析失败、不完整完成、连接中断和 45 秒无新分块/完成消息的超时状态条；后续真实文件/压缩包复制时，除了看事件日志，也要直接看“远端文件”面板状态和全屏悬浮控制中心的“剪贴板”状态是否同步给出接收进度、写入系统剪贴板结果和可执行恢复动作。
    - 黑边输入防护已固化到 Windows 控制端页面级自检；后续改缩放、画布或输入层时保持该回归。
    - 处理真实 Mac 连接中的中文错误提示和重连体验；当前控制端已补自动重连倒计时、“立即重连”按钮，并在全屏悬浮控制中心显示连接/重连倒计时和浮层“立即重连”入口，导出日志也会记录重连原因和下次重连倒计时，报告顶部“快速摘要”会先汇总远端连接和重连状态；下一步重点看真实断网/host 重启后的画面恢复时间和错误提示是否足够直观。
-   - 现场跑 `check-mac-formal-e2e --promptPassword` 或底层 `probe-mac-host --durationMs ...` 长测时，先看 runner 打印的 `Starting plan 1/2` / `Starting plan 2/2`：Plan 1 的 H.264 首帧确认后还会继续做长视频观察，再做音频观察，Plan 2 才是 Windows client 浏览器 H.264 canvas 检查。视频/音频观察会先打印目标时长，并默认每 10 秒输出一次进度心跳；如果长测中没有看到心跳，优先检查脚本是否已更新到包含 `--progressIntervalMs` 的版本。正式 E2E 的第二步 `test-windows-client-browser` 现在也会收到同一个心跳参数，等待连接、H.264 canvas 或 FPS 诊断时会输出页面快照；现场需要更密集反馈时加 `--progressIntervalMs 5000`，不需要时传 `0`。
+   - 现场跑 `check-mac-formal-e2e --promptPassword` 或底层 `probe-mac-host --durationMs ...` 长测时，先看 runner 打印的 `Starting plan 1/2` / `Starting plan 2/2`：Plan 1 的 H.264 首帧确认后还会继续做长视频观察，再做音频观察，Plan 2 才是 Windows client 浏览器 H.264 canvas 检查。视频/音频观察会先打印目标时长，并默认每 10 秒输出一次进度心跳；如果长测中没有看到心跳，优先检查脚本是否已更新到包含 `--progressIntervalMs` 的版本。正式 E2E 的第二步 `test-windows-client-browser` 现在也会收到同一个心跳参数，等待连接、H.264 canvas 或 FPS 诊断时会输出页面快照；现场需要更密集反馈时加 `--progressIntervalMs 5000`，不需要时传 `0`。如果终端停在隐藏密码输入，脚本现在会先打印“等待隐藏密码输入：输入时不会显示字符；这是正常等待，不是卡住。”；这时直接输入密码并回车即可，密码不会显示在终端或命令参数里。
 
 3. 继续 H.264 流式视频链路验收。
    - Mac 真机已通过 `--requireH264` 首帧强校验，Windows 控制端页面级 `--requireH264` 也已验证真实 WebCodecs 解码；下一步继续观察延迟、长时间稳定性和 JPEG 回退体验。

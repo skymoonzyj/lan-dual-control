@@ -14,6 +14,7 @@
 - 下一步入口：`docs/NEXT_ACTIONS.md`
 
 ## Windows 端状态
+- Windows formal Mac E2E / Windows client browser 第二步现场复查：`check-mac-formal-e2e --preflightOnly --checkClientDiagnostics --boardSummary --host 192.168.31.122 --port 43770` 已无密跑通，返回 `clientDiagnostics=passed`、`runtimeBuild=d398d64`，失败点不在 Windows client 诊断页；当前 Mac host 自报 `maxScreenFps=30`，所以请求 60Hz 时会被远端上限压住。正式 `--promptPassword` 路径现在会在隐藏密码提示前打印“等待隐藏密码输入：输入时不会显示字符；这是正常等待，不是卡住。”，`test-windows-client-browser --promptPassword` 也有同样提示。
 - Windows host `start-windows-host --status` 在线状态现在也会在普通输出、JSON `macClientReadinessCommands[]` 和 `--boardSummary` 里输出统一 `MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs ... --boardSummary` 标签；原 `formalCommand` / `sendCallCommand` 保持不变，方便 Mac 反控 Windows 前从 Windows host 状态摘要直接复制正式清单入口，也方便 Windows watcher/人工统一识别。
 - Windows host `start-windows-host --status` 离线状态现在会在 JSON、普通输出和 `--boardSummary` 里给出 `safeStartCommand` 与 `ephemeralStartCommand`，并显式保留当前 `--host <host>` / `--port <port>`；复制摘要里的启动建议不会再把自定义端口退回默认 `43770`，状态模式仍不启动服务、不认证、不要求或打印密码、不发送 input/inject。
 - Windows resume/status/readiness 的反控授权提示已接入 PowerShell 7 推荐命令：`check-windows-resume-status`、`start-windows-host --status` 和 `check-windows-host-readiness` 的 JSON/普通输出/`--boardSummary` 都会在默认需确认策略下保留 Node 备用 `ReverseGrant=`，并新增 `ReverseGrantPs=` / `windowsReverseControlGrantPowerShellCommand` / `windowsReverseControlGrantPowerShellBoardSummary`，指向 Windows 本机回环 `allow-windows-reverse-control.ps1 -BoardSummary`；这些提示不启动 host、不认证、不要求或打印密码、不发送输入、不执行 `inject`。
