@@ -73,6 +73,13 @@ Machine-readable JSON fields:
                                   command for the formal 60Hz target; prompts
                                   locally, never embeds a password, and does
                                   not send input.
+  commands.macHostStop           Secret-free local stop command for the
+                                  current Mac host /discovery process; does
+                                  not authenticate or request a password.
+  commands.macLaunchAgentLoad    Manual launchctl bootstrap command for the
+                                  checked LaunchAgent plist.
+  commands.macLaunchAgentPrint   Manual launchctl print command for verifying
+                                  the checked LaunchAgent label.
   commands.macHostReadiness      Follow-up Mac host readiness command with the
                                   standard MacHostReadiness label.
   commands.hostReadiness         Follow-up Mac host readiness command.
@@ -431,9 +438,9 @@ function buildFindings({ args, host, launchAgent, power }) {
   if (args.requireLaunchAgentLoaded && !launchAgent.launchctl.checked) {
     addFinding(findings, "blocker", "launch-agent-loaded-unchecked", `LaunchAgent ${args.label} loaded status was not checked.`);
   } else if (args.requireLaunchAgentLoaded && launchAgent.launchctl.checked && launchAgent.loaded !== true) {
-    addFinding(findings, "blocker", "launch-agent-not-loaded", `LaunchAgent ${args.label} is not loaded.`);
+    addFinding(findings, "blocker", "launch-agent-not-loaded", `LaunchAgent ${args.label} is not loaded. To transition without guessing: stop the current host with ${makeMacHostStopCommand(args)}, manually load the LaunchAgent with ${makeMacLaunchAgentLoadCommand(args)}, then verify with ${makeMacUnattendedFormalCommand(args)}.`);
   } else if (launchAgent.launchctl.checked && launchAgent.loaded !== true) {
-    addFinding(findings, "warning", "launch-agent-not-loaded", `LaunchAgent ${args.label} is not loaded.`);
+    addFinding(findings, "warning", "launch-agent-not-loaded", `LaunchAgent ${args.label} is not loaded. If the plist is ready, stop the current host with ${makeMacHostStopCommand(args)}, manually load with ${makeMacLaunchAgentLoadCommand(args)}, then verify with ${makeMacUnattendedFormalCommand(args)}.`);
   }
 
   for (const warning of power.warnings || []) {
@@ -450,15 +457,37 @@ function makeCommands(args) {
     macMaxFpsPlan: makeLaunchAgentPlanCommand(args, { maxScreenFps: formalTargetMaxScreenFps }),
     macHostSafeStart: makeMacHostSafeStartCommand(args),
     macMaxFpsSafeStart: makeMacMaxFpsSafeStartCommand(args),
+    macHostStop: makeMacHostStopCommand(args),
+    macLaunchAgentLoad: makeMacLaunchAgentLoadCommand(args),
+    macLaunchAgentPrint: makeMacLaunchAgentPrintCommand(args),
     hostStatus: `node scripts/mac/start-mac-host.mjs --status --host ${args.host} --port ${args.port} --boardSummary`,
     macHostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     hostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     macFormalLocalSmoke: makeMacFormalLocalSmokeCommand(args),
     startHost: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port}`,
-    stopHost: `node scripts/mac/start-mac-host.mjs --stop --host ${args.host} --port ${args.port}`,
+    stopHost: makeMacHostStopCommand(args),
     launchAgentPath: args.launchAgentPath,
     launchAgentLabel: args.label,
   };
+}
+
+function makeMacHostStopCommand(args) {
+  return [
+    "node scripts/mac/start-mac-host.mjs",
+    "--stop",
+    "--host",
+    shellQuote(args.host),
+    "--port",
+    String(args.port),
+  ].join(" ");
+}
+
+function makeMacLaunchAgentLoadCommand(args) {
+  return `launchctl bootstrap gui/$(id -u) ${shellQuote(args.launchAgentPath)}`;
+}
+
+function makeMacLaunchAgentPrintCommand(args) {
+  return `launchctl print gui/$(id -u)/${shellQuote(args.label)}`;
 }
 
 function makeLaunchAgentPlanCommand(args, { maxScreenFps = null } = {}) {
@@ -580,7 +609,7 @@ function makeBoardSummary(report) {
   const agentMaxFps = report.launchAgent.maxScreenFps === null ? "unknown" : String(report.launchAgent.maxScreenFps);
   return [
     `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
-    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}.`,
+    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
@@ -651,6 +680,9 @@ function printHuman(report) {
   console.log(`- Mac max FPS plan: ${report.commands.macMaxFpsPlan}`);
   console.log(`- Mac host safe start: ${report.commands.macHostSafeStart}`);
   console.log(`- Mac 60Hz safe foreground start: ${report.commands.macMaxFpsSafeStart}`);
+  console.log(`- Mac host stop: ${report.commands.macHostStop}`);
+  console.log(`- Mac LaunchAgent load: ${report.commands.macLaunchAgentLoad}`);
+  console.log(`- Mac LaunchAgent print: ${report.commands.macLaunchAgentPrint}`);
   console.log(`- Mac host readiness: ${report.commands.macHostReadiness}`);
   console.log(`- Mac formal local smoke: ${report.commands.macFormalLocalSmoke}`);
   console.log(report.boardSummary);

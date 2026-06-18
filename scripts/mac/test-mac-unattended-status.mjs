@@ -232,6 +232,9 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macUnattendedFormal", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macHostSafeStart", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macMaxFpsSafeStart", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macHostStop", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macLaunchAgentLoad", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macLaunchAgentPrint", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macFormalLocalSmoke", `${script} ${flag}`);
     assertNoSecretOrInputGuidance(result.stdout, `${script} ${flag}`);
   }
@@ -288,6 +291,17 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.commands?.macMaxFpsSafeStart || "", "--host 0.0.0.0", "missing LaunchAgent commands.macMaxFpsSafeStart");
   assertIncludes(payload.commands?.macMaxFpsSafeStart || "", "--port 9", "missing LaunchAgent commands.macMaxFpsSafeStart");
   assertIncludes(payload.commands?.macMaxFpsSafeStart || "", "--maxScreenFps 60", "missing LaunchAgent commands.macMaxFpsSafeStart");
+  assertIncludes(payload.commands?.macHostStop || "", "start-mac-host.mjs", "missing LaunchAgent commands.macHostStop");
+  assertIncludes(payload.commands?.macHostStop || "", "--stop", "missing LaunchAgent commands.macHostStop");
+  assertIncludes(payload.commands?.macHostStop || "", "--host 127.0.0.1", "missing LaunchAgent commands.macHostStop");
+  assertIncludes(payload.commands?.macHostStop || "", "--port 9", "missing LaunchAgent commands.macHostStop");
+  assertNotIncludes(payload.commands?.macHostStop || "", "--promptPassword", "missing LaunchAgent commands.macHostStop");
+  assertNotIncludes(payload.commands?.macHostStop || "", "--password", "missing LaunchAgent commands.macHostStop");
+  assertNotIncludes(payload.commands?.macHostStop || "", "inject", "missing LaunchAgent commands.macHostStop");
+  assertIncludes(payload.commands?.macLaunchAgentLoad || "", "launchctl bootstrap", "missing LaunchAgent commands.macLaunchAgentLoad");
+  assertIncludes(payload.commands?.macLaunchAgentLoad || "", missingPath, "missing LaunchAgent commands.macLaunchAgentLoad");
+  assertIncludes(payload.commands?.macLaunchAgentPrint || "", "launchctl print", "missing LaunchAgent commands.macLaunchAgentPrint");
+  assertIncludes(payload.commands?.macLaunchAgentPrint || "", "com.lan-dual-control.mac-host", "missing LaunchAgent commands.macLaunchAgentPrint");
   assertIncludes(payload.commands?.macHostReadiness || "", "check-mac-host-readiness.mjs", "missing LaunchAgent commands.macHostReadiness");
   assertIncludes(payload.commands?.macHostReadiness || "", "--host 127.0.0.1", "missing LaunchAgent commands.macHostReadiness");
   assertIncludes(payload.commands?.macHostReadiness || "", "--port 9", "missing LaunchAgent commands.macHostReadiness");
@@ -313,6 +327,13 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.boardSummary, "--maxScreenFps 60", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "--promptPassword", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "--requirePassword", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacHostStop=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacHostStop=node scripts/mac/start-mac-host.mjs", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "--stop --host 127.0.0.1 --port 9", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacLaunchAgentLoad=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "launchctl bootstrap", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacLaunchAgentPrint=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "launchctl print", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "--launchAgentPath", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, missingPath, "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "--skipLaunchctl", "missing LaunchAgent board summary");
@@ -370,6 +391,9 @@ function checkLaunchAgentPlannerPreservesOptions(args) {
   assertIncludes(payload.commands?.macHostSafeStart || "", "--port 9", "custom LaunchAgent commands.macHostSafeStart");
   assertIncludes(payload.commands?.macMaxFpsSafeStart || "", "--port 9", "custom LaunchAgent commands.macMaxFpsSafeStart");
   assertIncludes(payload.commands?.macMaxFpsSafeStart || "", "--maxScreenFps 60", "custom LaunchAgent commands.macMaxFpsSafeStart");
+  assertIncludes(payload.commands?.macHostStop || "", "--port 9", "custom LaunchAgent commands.macHostStop");
+  assertIncludes(payload.commands?.macLaunchAgentLoad || "", missingPath, "custom LaunchAgent commands.macLaunchAgentLoad");
+  assertIncludes(payload.commands?.macLaunchAgentPrint || "", label, "custom LaunchAgent commands.macLaunchAgentPrint");
   assertIncludes(payload.commands?.macUnattendedFormal || "", `--label ${label}`, "custom LaunchAgent commands.macUnattendedFormal");
   assertIncludes(payload.commands?.macUnattendedFormal || "", "--requireLaunchAgentLoaded", "custom LaunchAgent commands.macUnattendedFormal");
   assertIncludes(payload.commands?.macFormalLocalSmoke || "", "--port 9", "custom LaunchAgent commands.macFormalLocalSmoke");
@@ -377,6 +401,9 @@ function checkLaunchAgentPlannerPreservesOptions(args) {
   assertIncludes(payload.boardSummary || "", `--label ${label}`, "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacHostSafeStart=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacMaxFpsSafeStart=", "custom LaunchAgent board summary");
+  assertIncludes(payload.boardSummary || "", "MacHostStop=", "custom LaunchAgent board summary");
+  assertIncludes(payload.boardSummary || "", "MacLaunchAgentLoad=", "custom LaunchAgent board summary");
+  assertIncludes(payload.boardSummary || "", "MacLaunchAgentPrint=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacFormalLocalSmoke=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "--port 9", "custom LaunchAgent board summary");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "custom LaunchAgent planner JSON");
@@ -497,6 +524,10 @@ function checkFakePlist(args) {
     assertIncludes(payload.commands?.macMaxFpsPlan || "", "--maxScreenFps 60", "fake plist commands.macMaxFpsPlan");
     assertIncludes(payload.commands?.macHostSafeStart || "", "--promptPassword", "fake plist commands.macHostSafeStart");
     assertIncludes(payload.commands?.macHostSafeStart || "", "--port 9", "fake plist commands.macHostSafeStart");
+    assertIncludes(payload.commands?.macHostStop || "", "--stop", "fake plist commands.macHostStop");
+    assertIncludes(payload.commands?.macHostStop || "", "--port 9", "fake plist commands.macHostStop");
+    assertIncludes(payload.commands?.macLaunchAgentLoad || "", plist, "fake plist commands.macLaunchAgentLoad");
+    assertIncludes(payload.commands?.macLaunchAgentPrint || "", "com.lan-dual-control.mac-host", "fake plist commands.macLaunchAgentPrint");
     assertIncludes(payload.commands?.macUnattendedFormal || "", "--requireLaunchAgentLoaded", "fake plist commands.macUnattendedFormal");
     assertIncludes(payload.commands?.macHostReadiness || "", "check-mac-host-readiness.mjs", "fake plist commands.macHostReadiness");
     assertIncludes(payload.commands?.hostReadiness || "", "check-mac-host-readiness.mjs", "fake plist commands.hostReadiness");
@@ -553,6 +584,13 @@ function checkBoardSummary(args) {
   assertIncludes(text, "MacHostSafeStart=node scripts/mac/start-mac-host.mjs", "board summary");
   assertIncludes(text, "MacMaxFpsSafeStart=", "board summary");
   assertIncludes(text, "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs", "board summary");
+  assertIncludes(text, "MacHostStop=", "board summary");
+  assertIncludes(text, "MacHostStop=node scripts/mac/start-mac-host.mjs", "board summary");
+  assertIncludes(text, "--stop --host 127.0.0.1 --port 9", "board summary");
+  assertIncludes(text, "MacLaunchAgentLoad=", "board summary");
+  assertIncludes(text, "launchctl bootstrap", "board summary");
+  assertIncludes(text, "MacLaunchAgentPrint=", "board summary");
+  assertIncludes(text, "launchctl print", "board summary");
   assertIncludes(text, "--promptPassword", "board summary");
   assertIncludes(text, "--requirePassword", "board summary");
   assertIncludes(text, "--maxScreenFps 60", "board summary");

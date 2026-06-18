@@ -64,6 +64,16 @@ Machine-readable JSON fields:
                              Secret-free foreground Mac host start command for
                              the formal 60Hz target; it prompts locally, never
                              embeds a password in argv, and does not send input.
+  commands.macHostStopCommand
+                             Secret-free local stop command for the current Mac
+                             host before loading the LaunchAgent; it does not
+                             authenticate or request a password.
+  commands.macLaunchAgentLoadCommand
+                             Manual launchctl bootstrap command for loading the
+                             standard Mac host LaunchAgent.
+  commands.macLaunchAgentPrintCommand
+                             Manual launchctl print command for verifying the
+                             standard Mac host LaunchAgent status.
   commands.macHostReadinessCommand
                              Secret-free low-risk Mac host readiness command;
                              it reads host and Agent Link Board state, prints
@@ -780,6 +790,35 @@ function makeMacMaxFpsSafeStartCommand(args) {
   ].join(" ");
 }
 
+function makeMacHostStopCommand(args) {
+  return [
+    "node scripts/mac/start-mac-host.mjs",
+    "--stop",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+  ].join(" ");
+}
+
+function defaultLaunchAgentPath() {
+  return `${os.homedir()}/Library/LaunchAgents/com.lan-dual-control.mac-host.plist`;
+}
+
+function shellQuote(value) {
+  const text = String(value ?? "");
+  if (/^[A-Za-z0-9_./:=@%+-]+$/.test(text)) return text;
+  return `'${text.replace(/'/g, "'\\''")}'`;
+}
+
+function makeMacLaunchAgentLoadCommand() {
+  return `launchctl bootstrap gui/$(id -u) ${shellQuote(defaultLaunchAgentPath())}`;
+}
+
+function makeMacLaunchAgentPrintCommand() {
+  return "launchctl print gui/$(id -u)/com.lan-dual-control.mac-host";
+}
+
 function makeMacUnattendedStatusCommand(args) {
   return [
     "node scripts/mac/check-mac-unattended-status.mjs",
@@ -1021,6 +1060,9 @@ function formatBoardSummary(report) {
       `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${heartbeatWatcherSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
       `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
       `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
+      `MacHostStop=${report.commands.macHostStopCommand}.`,
+      `MacLaunchAgentLoad=${report.commands.macLaunchAgentLoadCommand}.`,
+      `MacLaunchAgentPrint=${report.commands.macLaunchAgentPrintCommand}.`,
       `MacHostReadiness=${report.commands.macHostReadinessCommand}.`,
       "Next: start the formal host with MacHostSafeStart, or MacMaxFpsSafeStart for foreground 60Hz validation, before Windows E2E.",
       `After host is online, refresh media baseline with ${report.commands.mediaReadinessBoardSummary}.`,
@@ -1059,6 +1101,9 @@ function formatBoardSummary(report) {
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
     `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
+    `MacHostStop=${report.commands.macHostStopCommand}.`,
+    `MacLaunchAgentLoad=${report.commands.macLaunchAgentLoadCommand}.`,
+    `MacLaunchAgentPrint=${report.commands.macLaunchAgentPrintCommand}.`,
     `MacHostReadiness=${report.commands.macHostReadinessCommand}.`,
     `Media baseline command: ${report.commands.mediaReadinessBoardSummary}.`,
     `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
@@ -1152,6 +1197,9 @@ function printReport(report) {
   console.log(`[NEXT] Mac formal E2E preflight: ${report.commands.macFormalE2eStatusCommand}`);
   console.log(`[NEXT] Mac host safe start: ${report.commands.macHostSafeStartCommand}`);
   console.log(`[NEXT] Mac 60Hz safe foreground start: ${report.commands.macMaxFpsSafeStartCommand}`);
+  console.log(`[NEXT] Mac host stop before LaunchAgent load: ${report.commands.macHostStopCommand}`);
+  console.log(`[NEXT] Mac LaunchAgent load: ${report.commands.macLaunchAgentLoadCommand}`);
+  console.log(`[NEXT] Mac LaunchAgent print: ${report.commands.macLaunchAgentPrintCommand}`);
   console.log(`[NEXT] Mac host readiness: ${report.commands.macHostReadinessCommand}`);
   console.log(`[NEXT] Mac unattended/startup status: ${report.commands.macUnattendedStatusCommand}`);
   console.log(`[NEXT] Mac unattended formal 60Hz gate: ${report.commands.macUnattendedFormalCommand}`);
@@ -1208,6 +1256,9 @@ async function main() {
       mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
       macHostSafeStartCommand: makeMacHostSafeStartCommand(args),
       macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
+      macHostStopCommand: makeMacHostStopCommand(args),
+      macLaunchAgentLoadCommand: makeMacLaunchAgentLoadCommand(),
+      macLaunchAgentPrintCommand: makeMacLaunchAgentPrintCommand(),
       macHostReadinessCommand: makeMacHostReadinessCommand(args),
       macFormalLocalSmokeCommand: makeMacFormalLocalSmokeCommand(args),
       macFormalE2eStatusCommand: makeMacFormalE2eStatusCommand(args),

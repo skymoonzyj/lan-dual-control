@@ -167,6 +167,13 @@ function assertBoardSummaryShape(text, label) {
   assert(/MacMaxFpsSafeStart=/.test(text), `${label} should include Mac foreground 60Hz safe start guidance`);
   assert(/MacMaxFpsSafeStart=.*start-mac-host\.mjs/.test(text), `${label} should use start-mac-host for foreground 60Hz safe start`);
   assert(/MacMaxFpsSafeStart=.*--maxScreenFps 60/.test(text), `${label} should include the formal 60Hz safe start command`);
+  assert(/MacHostStop=/.test(text), `${label} should include current Mac host stop guidance before LaunchAgent load`);
+  assert(/MacHostStop=.*start-mac-host\.mjs/.test(text), `${label} should use start-mac-host for host stop guidance`);
+  assert(/MacHostStop=.*--stop/.test(text), `${label} should make the stop action explicit`);
+  assert(/MacLaunchAgentLoad=/.test(text), `${label} should include manual LaunchAgent load guidance`);
+  assert(/MacLaunchAgentLoad=.*launchctl bootstrap/.test(text), `${label} should use launchctl bootstrap for manual load guidance`);
+  assert(/MacLaunchAgentPrint=/.test(text), `${label} should include manual LaunchAgent verification guidance`);
+  assert(/MacLaunchAgentPrint=.*launchctl print/.test(text), `${label} should use launchctl print for manual verification guidance`);
   assert(/MacHostReadiness=/.test(text), `${label} should include low-risk Mac host readiness guidance`);
   assert(/MacHostReadiness=.*check-mac-host-readiness\.mjs/.test(text), `${label} should include the low-risk Mac host readiness command`);
   assert(/MacUnattendedStatus=/.test(text), `${label} should include Mac unattended/startup guidance`);
@@ -237,6 +244,38 @@ function assertMacHostSafeStartCommand(command, label) {
 function assertMacMaxFpsSafeStartCommand(command, label) {
   assertMacHostSafeStartCommand(command, label);
   assert(command.includes("--maxScreenFps 60"), `${label} should target the formal 60Hz foreground start`);
+}
+
+function assertMacHostStopCommand(command, label) {
+  assert(/start-mac-host\.mjs/.test(command), `${label} should use start-mac-host`);
+  assert(command.includes("--stop"), `${label} should stop the current local Mac host`);
+  assert(command.includes("--host"), `${label} should keep the target host explicit`);
+  assert(command.includes("--port"), `${label} should keep the target port explicit`);
+  assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+  assert(!command.includes("inject"), `${label} should not instruct injection`);
+}
+
+function assertMacLaunchAgentLoadCommand(command, label) {
+  assert(command.includes("launchctl bootstrap"), `${label} should use launchctl bootstrap`);
+  assert(command.includes("$(id -u)"), `${label} should target the current GUI user`);
+  assert(command.includes("com.lan-dual-control.mac-host.plist"), `${label} should name the checked LaunchAgent plist`);
+  assert(!command.includes("LAN_DUAL_PASSWORD"), `${label} should not embed password environment`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("input_event"), `${label} should not send input`);
+  assert(!command.includes("inject"), `${label} should not instruct injection`);
+}
+
+function assertMacLaunchAgentPrintCommand(command, label) {
+  assert(command.includes("launchctl print"), `${label} should use launchctl print`);
+  assert(command.includes("$(id -u)"), `${label} should target the current GUI user`);
+  assert(command.includes("com.lan-dual-control.mac-host"), `${label} should name the checked LaunchAgent label`);
+  assert(!command.includes("LAN_DUAL_PASSWORD"), `${label} should not embed password environment`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("input_event"), `${label} should not send input`);
+  assert(!command.includes("inject"), `${label} should not instruct injection`);
 }
 
 function assertMacHostReadinessCommand(command, label) {
@@ -521,6 +560,10 @@ function checkOfflineJson(args) {
   assert((payload.commands?.macHostSafeStartCommand || "").includes("--port 9"), "offline JSON Mac host safe start command should keep port");
   assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand || "", "offline JSON Mac foreground 60Hz safe start command");
   assert((payload.commands?.macMaxFpsSafeStartCommand || "").includes("--port 9"), "offline JSON Mac foreground 60Hz safe start command should keep port");
+  assertMacHostStopCommand(payload.commands?.macHostStopCommand || "", "offline JSON Mac host stop command");
+  assert((payload.commands?.macHostStopCommand || "").includes("--port 9"), "offline JSON Mac host stop command should keep port");
+  assertMacLaunchAgentLoadCommand(payload.commands?.macLaunchAgentLoadCommand || "", "offline JSON Mac LaunchAgent load command");
+  assertMacLaunchAgentPrintCommand(payload.commands?.macLaunchAgentPrintCommand || "", "offline JSON Mac LaunchAgent print command");
   assertMacHostReadinessCommand(payload.commands?.macHostReadinessCommand || "", "offline JSON Mac host readiness command");
   assert((payload.commands?.macHostReadinessCommand || "").includes("--port 9"), "offline JSON Mac host readiness command should keep port");
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand || "", "offline JSON Mac formal local smoke command");
@@ -681,6 +724,9 @@ function checkOnlineJson(args) {
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand || "", "online JSON Mac formal local smoke command");
   assertMacHostSafeStartCommand(payload.commands?.macHostSafeStartCommand || "", "online JSON Mac host safe start command");
   assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand || "", "online JSON Mac foreground 60Hz safe start command");
+  assertMacHostStopCommand(payload.commands?.macHostStopCommand || "", "online JSON Mac host stop command");
+  assertMacLaunchAgentLoadCommand(payload.commands?.macLaunchAgentLoadCommand || "", "online JSON Mac LaunchAgent load command");
+  assertMacLaunchAgentPrintCommand(payload.commands?.macLaunchAgentPrintCommand || "", "online JSON Mac LaunchAgent print command");
   assertMacHostReadinessCommand(payload.commands?.macHostReadinessCommand || "", "online JSON Mac host readiness command");
   assertMacFormalE2eStatusCommand(payload.commands?.macFormalE2eStatusCommand || "", "online JSON Mac formal E2E status command");
   assertMacUnattendedStatusCommand(payload.commands?.macUnattendedStatusCommand || "", "online JSON Mac unattended/startup command");
@@ -815,10 +861,16 @@ async function checkMaxFpsPlanWarning(args) {
     assert(result.status === 0, `max-FPS warning should not fail resume status\n${result.stdout}\n${result.stderr}`);
     assert(payload.host?.capabilities?.maxScreenFps === 30, "max-FPS payload should preserve remote maxScreenFps");
     assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand || "", "max-FPS JSON foreground safe start command");
+    assertMacHostStopCommand(payload.commands?.macHostStopCommand || "", "max-FPS JSON host stop command");
+    assertMacLaunchAgentLoadCommand(payload.commands?.macLaunchAgentLoadCommand || "", "max-FPS JSON LaunchAgent load command");
+    assertMacLaunchAgentPrintCommand(payload.commands?.macLaunchAgentPrintCommand || "", "max-FPS JSON LaunchAgent print command");
     assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand || "", "max-FPS JSON planner command");
     assert(payload.recommendations.some((item) => item.id === "fps-limit" && item.level === "warning" && /maxScreenFps=30/.test(item.text)), "max-FPS limit should create a warning recommendation");
     assert(/warnings=[^.]*fps-limit/.test(String(payload.boardSummary || "")), "max-FPS boardSummary should include fps-limit warning ID");
     assert(String(payload.boardSummary || "").includes("MacMaxFpsSafeStart="), "max-FPS boardSummary should include MacMaxFpsSafeStart");
+    assert(String(payload.boardSummary || "").includes("MacHostStop="), "max-FPS boardSummary should include MacHostStop");
+    assert(String(payload.boardSummary || "").includes("MacLaunchAgentLoad="), "max-FPS boardSummary should include MacLaunchAgentLoad");
+    assert(String(payload.boardSummary || "").includes("MacLaunchAgentPrint="), "max-FPS boardSummary should include MacLaunchAgentPrint");
     assert(String(payload.boardSummary || "").includes("MacMaxFpsPlan="), "max-FPS boardSummary should include MacMaxFpsPlan");
     assert(String(payload.boardSummary || "").includes("--maxScreenFps 60"), "max-FPS boardSummary should include 60Hz planner command");
     assertNoPasswordLeak(result, "max-FPS plan resume status");

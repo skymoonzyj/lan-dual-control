@@ -21,6 +21,35 @@
 
 日期：2026-06-18 继续推进
 开发端：Mac Codex
+本轮目标：把当前 Mac host 仍为 `maxScreenFps=30`、LaunchAgent plist 已是 60 但未加载的现场缺口，收口成恢复第一屏可直接执行的安全命令链。
+完成内容：
+- `check-mac-unattended-status` 的 help、JSON、普通输出和 `--boardSummary` 新增 `MacHostStop=`、`MacLaunchAgentLoad=`、`MacLaunchAgentPrint=`，明确 60Hz/LaunchAgent 切换顺序：先只停本机当前 `/discovery` 对应 Mac host，再人工 `launchctl bootstrap` 加载 LaunchAgent，最后用 `MacUnattendedFormal=` 复查 loaded + max FPS。
+- `check-mac-resume-status` 同步在 JSON commands、普通输出和 `--boardSummary` 输出同一组三段命令，让开工第一屏不用再跳到 planner 里翻 `ManualLoad=`。
+- 新增命令都只是可复制指引；脚本本身仍不停止 host、不运行 `launchctl`、不启动服务、不认证、不请求或发送密码、不发送 input/inject。
+修改文件：
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 45000`
+遗留问题：
+- 当前真实 Mac host 仍在运行 `maxScreenFps=30`；本轮没有自动停 host、没有加载 LaunchAgent，也没有弹密码框。现场切到 60Hz 仍需用户/人工按摘要执行 `MacHostStop=`、`MacLaunchAgentLoad=`、`MacLaunchAgentPrint=` / `MacUnattendedFormal=` 后再复跑正式 E2E。
+下一步建议：
+- Mac 端先发 `node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary` 到联络板；若仍见 `warnings=fps-limit` 或 `launch-agent-not-loaded`，由用户确认后执行摘要里的停止/加载/复查链，再让 Windows 侧复跑 formal preflight。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端后续读取新的 `MacHostStop=` / `MacLaunchAgentLoad=` / `MacLaunchAgentPrint=` 摘要并在用户确认后复跑 60Hz formal preflight；不要在通讯板发送密码/token/系统账号。
+
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
 本轮目标：把 Windows 随机运行期密码导致的真实 browser smoke 阻塞沉淀为 Mac formal 工具的稳定安全认证路径提示。
 完成内容：
 - `check-mac-client-formal-status` 的 JSON runPlan、普通输出和 `--boardSummary` 新增 `SecureAuthPath=`、`WindowsSecureAuthStart=`、`WindowsSecureAuthStartNodeFallback=`，明确随机密码不可取回时的安全流程：Windows 本机停止旧 host，前台隐藏输入临时密码重启 host，用户在 Mac `--promptPassword` 弹窗里输入同一个临时密码。
