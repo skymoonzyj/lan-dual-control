@@ -340,6 +340,12 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.macHostReadinessCommand || "").includes(`--port ${port}`), "mock JSON Mac host readiness command should use discovered mock port");
     assert(String(payload.commands?.macHostReadinessCommand || "").includes("--checkBoard"), "mock JSON Mac host readiness command should read Agent Link Board");
     assert(String(payload.commands?.macHostReadinessCommand || "").includes("--boardSummary"), "mock JSON Mac host readiness command should be board-safe");
+    assert(String(payload.commands?.macFormalLocalSmokeCommand || "").includes("check-mac-formal-local-smoke.mjs"), "mock JSON should include Mac formal local smoke command");
+    assert(String(payload.commands?.macFormalLocalSmokeCommand || "").includes("--host 127.0.0.1"), "mock JSON Mac formal local smoke command should target discovered host");
+    assert(String(payload.commands?.macFormalLocalSmokeCommand || "").includes(`--port ${port}`), "mock JSON Mac formal local smoke command should use discovered mock port");
+    assert(String(payload.commands?.macFormalLocalSmokeCommand || "").includes("--promptPassword"), "mock JSON Mac formal local smoke command should prompt locally");
+    assert(String(payload.commands?.macFormalLocalSmokeCommand || "").includes("--boardSummary"), "mock JSON Mac formal local smoke command should be board-safe");
+    assert(!String(payload.commands?.macFormalLocalSmokeCommand || "").includes("--password"), "mock JSON Mac formal local smoke command should not include password argv");
     assert(String(payload.commands?.macUnattendedStatusCommand || "").includes("check-mac-unattended-status.mjs"), "mock JSON should include Mac unattended status command");
     assert(String(payload.commands?.macUnattendedStatusCommand || "").includes("--host 127.0.0.1"), "mock JSON Mac unattended command should target discovered host");
     assert(String(payload.commands?.macUnattendedStatusCommand || "").includes(`--port ${port}`), "mock JSON Mac unattended command should use discovered mock port");
@@ -574,6 +580,9 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "MacHostReadiness=", "board summary");
     assertIncludes(result.stdout, "check-mac-host-readiness.mjs --host 127.0.0.1", "board summary");
     assertIncludes(result.stdout, `--port ${port} --checkBoard --boardSummary`, "board summary");
+    assertIncludes(result.stdout, "MacFormalLocalSmoke=", "board summary");
+    assertIncludes(result.stdout, `check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port ${port} --promptPassword --boardSummary`, "board summary");
+    assertNotIncludes(result.stdout, "--password", "board summary Mac formal local smoke should not include password argv");
     assertIncludes(result.stdout, "MacUnattended=", "board summary");
     assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 127.0.0.1", "board summary");
     assertIncludes(result.stdout, `--port ${port} --boardSummary`, "board summary");
@@ -732,13 +741,14 @@ async function checkBoardCurrentCallSummary(args) {
 async function checkBoardMacHostSafeStartExtraction(args) {
   const safeCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888";
   const maxFpsCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888 --maxScreenFps 60";
+  const localSmokeCommand = "node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43888 --promptPassword --boardSummary";
   await withMockHost(async (port) => {
     const boardState = {
       statuses: {
         "Mac Codex": {
           role: "Mac 端",
           status: "idle",
-          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand}`,
+          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand}`,
         },
       },
       events: [
@@ -761,6 +771,16 @@ async function checkBoardMacHostSafeStartExtraction(args) {
           type: "status",
           from: "Mac Codex",
           text: "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port <当前端口> --maxScreenFps 60",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43888 --password secret-value --boardSummary",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port <当前端口> --promptPassword --boardSummary",
         },
       ],
     };
@@ -789,8 +809,13 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board.macMaxFpsSafeStart.command === maxFpsCommand, "MacMaxFpsSafeStart command mismatch");
       assert(payload.board.macMaxFpsSafeStart.source === "api-state", "MacMaxFpsSafeStart should come from /api/state");
       assert(payload.board.macMaxFpsSafeStart.rejectedCount >= 2, "placeholder or missing max FPS MacMaxFpsSafeStart should be rejected");
+      assert(payload.board?.macFormalLocalSmoke?.found === true, "MacFormalLocalSmoke should be found in board state");
+      assert(payload.board.macFormalLocalSmoke.command === localSmokeCommand, "MacFormalLocalSmoke command mismatch");
+      assert(payload.board.macFormalLocalSmoke.source === "api-state", "MacFormalLocalSmoke should come from /api/state");
+      assert(payload.board.macFormalLocalSmoke.rejectedCount >= 2, "unsafe or placeholder MacFormalLocalSmoke should be rejected");
       assertIncludes(payload.boardSummary, `MacHostSafeStart=${safeCommand}.`, "MacHostSafeStart JSON board summary");
       assertIncludes(payload.boardSummary, `MacMaxFpsSafeStart=${maxFpsCommand}.`, "MacMaxFpsSafeStart JSON board summary");
+      assertIncludes(payload.boardSummary, `MacFormalLocalSmoke=${localSmokeCommand}.`, "MacFormalLocalSmoke JSON board summary");
       assertNotIncludes(result.stdout + result.stderr, "secret-value", "MacHostSafeStart JSON should not leak rejected command");
     }, boardState);
 
@@ -813,6 +838,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(lines.length === 1, `MacHostSafeStart board summary should be one line, got ${lines.length}`);
       assertIncludes(result.stdout, `MacHostSafeStart=${safeCommand}.`, "MacHostSafeStart board summary");
       assertIncludes(result.stdout, `MacMaxFpsSafeStart=${maxFpsCommand}.`, "MacMaxFpsSafeStart board summary");
+      assertIncludes(result.stdout, `MacFormalLocalSmoke=${localSmokeCommand}.`, "MacFormalLocalSmoke board summary");
       assertNotIncludes(result.stdout + result.stderr, "secret-value", "MacHostSafeStart board summary should not leak rejected command");
     }, boardState);
 
@@ -832,6 +858,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(result.exitCode === 0, `mock MacHostSafeStart human output failed\n${result.stdout}\n${result.stderr}`);
       assertIncludes(result.stdout, `MacHostSafeStart=${safeCommand}`, "MacHostSafeStart human output");
       assertIncludes(result.stdout, `MacMaxFpsSafeStart=${maxFpsCommand}`, "MacMaxFpsSafeStart human output");
+      assertIncludes(result.stdout, `MacFormalLocalSmoke=${localSmokeCommand}`, "MacFormalLocalSmoke human output");
       assertNotIncludes(result.stdout + result.stderr, "secret-value", "MacHostSafeStart human output should not leak rejected command");
       console.log("[OK] Windows resume status extracts Mac safe-start commands from Agent Link Board safely");
     }, boardState);

@@ -53,9 +53,9 @@ passwords, does not send input, and does not execute inject.
 
 When -CheckBoard is set, the report also summarizes the current Agent Link
 call so Windows can see active Mac -> Windows test requests during resume.
-It also surfaces recent MacHostSafeStart= and MacMaxFpsSafeStart= commands from
+It also surfaces recent MacHostSafeStart=, MacMaxFpsSafeStart= and MacFormalLocalSmoke= commands from
 Agent Link Board status/messages so Mac host safe foreground-start guidance,
-including 60Hz foreground-start guidance, is visible in JSON, human output, and
+including 60Hz foreground-start guidance and local smoke next steps, is visible in JSON, human output, and
 one-line board summaries.
 The report also includes a Windows host media baseline command:
 node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
@@ -67,6 +67,8 @@ PowerShell equivalent:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/discover-lan-hosts.ps1 -NoLocalSubnets -HostName <Mac IP> -Port 43770 -RequireMacHost -BoardSummary
 It also includes a Mac host readiness command for detailed Mac-side host status:
 node scripts/mac/check-mac-host-readiness.mjs --host <Mac IP> --port 43770 --checkBoard --boardSummary
+It also includes a Mac formal local smoke command for local H.264/PCM/input-log checks:
+node scripts/mac/check-mac-formal-local-smoke.mjs --host <Mac IP> --port 43770 --promptPassword --boardSummary
 It also includes a Mac-side unattended/startup status command:
 node scripts/mac/check-mac-unattended-status.mjs --host <Mac IP> --port 43770 --boardSummary
 It also includes a formal 60Hz Mac-side unattended gate:

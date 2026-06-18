@@ -198,6 +198,7 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "current Agent Link", "PowerShell wrapper help");
   assertIncludes(output, "MacHostSafeStart=", "PowerShell wrapper help");
   assertIncludes(output, "MacMaxFpsSafeStart=", "PowerShell wrapper help");
+  assertIncludes(output, "MacFormalLocalSmoke=", "PowerShell wrapper help");
   assertIncludes(output, "does not ask for or print", "PowerShell wrapper help");
   assertIncludes(output, "passwords", "PowerShell wrapper help");
   assertIncludes(output, "Windows host media baseline", "PowerShell wrapper help");
@@ -209,6 +210,8 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "--requireMacHost --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "Mac host readiness command", "PowerShell wrapper help");
   assertIncludes(output, "check-mac-host-readiness.mjs --host <Mac IP> --port 43770 --checkBoard --boardSummary", "PowerShell wrapper help");
+  assertIncludes(output, "Mac formal local smoke command", "PowerShell wrapper help");
+  assertIncludes(output, "check-mac-formal-local-smoke.mjs --host <Mac IP> --port 43770 --promptPassword --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "Mac-side unattended/startup status command", "PowerShell wrapper help");
   assertIncludes(output, "check-mac-unattended-status.mjs --host <Mac IP> --port 43770 --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "formal 60Hz Mac-side unattended gate", "PowerShell wrapper help");
@@ -290,6 +293,12 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.macHostReadinessCommand, `--port ${port}`, "mock JSON Mac host readiness command");
     assertIncludes(payload.commands?.macHostReadinessCommand, "--checkBoard", "mock JSON Mac host readiness command");
     assertIncludes(payload.commands?.macHostReadinessCommand, "--boardSummary", "mock JSON Mac host readiness command");
+    assertIncludes(payload.commands?.macFormalLocalSmokeCommand, "check-mac-formal-local-smoke.mjs", "mock JSON Mac formal local smoke command");
+    assertIncludes(payload.commands?.macFormalLocalSmokeCommand, "--host 127.0.0.1", "mock JSON Mac formal local smoke command");
+    assertIncludes(payload.commands?.macFormalLocalSmokeCommand, `--port ${port}`, "mock JSON Mac formal local smoke command");
+    assertIncludes(payload.commands?.macFormalLocalSmokeCommand, "--promptPassword", "mock JSON Mac formal local smoke command");
+    assertIncludes(payload.commands?.macFormalLocalSmokeCommand, "--boardSummary", "mock JSON Mac formal local smoke command");
+    assertNotIncludes(payload.commands?.macFormalLocalSmokeCommand, "--password", "mock JSON Mac formal local smoke command should not include password argv");
     assertIncludes(payload.commands?.macUnattendedStatusCommand, "check-mac-unattended-status.mjs", "mock JSON Mac unattended command");
     assertIncludes(payload.commands?.macUnattendedStatusCommand, "--host 127.0.0.1", "mock JSON Mac unattended command");
     assertIncludes(payload.commands?.macUnattendedStatusCommand, `--port ${port}`, "mock JSON Mac unattended command");
@@ -484,6 +493,9 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "MacHostReadiness=", "PowerShell board summary");
     assertIncludes(output, "check-mac-host-readiness.mjs --host 127.0.0.1", "PowerShell board summary");
     assertIncludes(output, `--port ${port} --checkBoard --boardSummary`, "PowerShell board summary");
+    assertIncludes(output, "MacFormalLocalSmoke=", "PowerShell board summary");
+    assertIncludes(output, `check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port ${port} --promptPassword --boardSummary`, "PowerShell board summary");
+    assertNotIncludes(output, "--password", "PowerShell board summary Mac formal local smoke should not include password argv");
     assertIncludes(output, "MacUnattended=", "PowerShell board summary");
     assertIncludes(output, "check-mac-unattended-status.mjs --host 127.0.0.1", "PowerShell board summary");
     assertIncludes(output, `--port ${port} --boardSummary`, "PowerShell board summary");
@@ -607,13 +619,14 @@ async function checkBoardCurrentCallJson(args) {
 async function checkBoardMacHostSafeStartExtraction(args) {
   const safeCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888";
   const maxFpsCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888 --maxScreenFps 60";
+  const localSmokeCommand = "node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43888 --promptPassword --boardSummary";
   await withMockHost(async (port) => {
     const boardState = {
       statuses: {
         "Mac Codex": {
           role: "Mac 端",
           status: "idle",
-          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand}`,
+          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand}`,
         },
       },
       events: [
@@ -636,6 +649,16 @@ async function checkBoardMacHostSafeStartExtraction(args) {
           type: "status",
           from: "Mac Codex",
           text: "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port <当前端口> --maxScreenFps 60",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43888 --password secret-value --boardSummary",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port <当前端口> --promptPassword --boardSummary",
         },
       ],
     };
@@ -663,8 +686,12 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board?.macMaxFpsSafeStart?.found === true, "PowerShell MacMaxFpsSafeStart should be found");
       assert(payload.board.macMaxFpsSafeStart.command === maxFpsCommand, "PowerShell MacMaxFpsSafeStart command mismatch");
       assert(payload.board.macMaxFpsSafeStart.rejectedCount >= 2, "PowerShell placeholder or missing max FPS MacMaxFpsSafeStart should be rejected");
+      assert(payload.board?.macFormalLocalSmoke?.found === true, "PowerShell MacFormalLocalSmoke should be found");
+      assert(payload.board.macFormalLocalSmoke.command === localSmokeCommand, "PowerShell MacFormalLocalSmoke command mismatch");
+      assert(payload.board.macFormalLocalSmoke.rejectedCount >= 2, "PowerShell unsafe or placeholder MacFormalLocalSmoke should be rejected");
       assertIncludes(payload.boardSummary, `MacHostSafeStart=${safeCommand}.`, "PowerShell MacHostSafeStart JSON board summary");
       assertIncludes(payload.boardSummary, `MacMaxFpsSafeStart=${maxFpsCommand}.`, "PowerShell MacMaxFpsSafeStart JSON board summary");
+      assertIncludes(payload.boardSummary, `MacFormalLocalSmoke=${localSmokeCommand}.`, "PowerShell MacFormalLocalSmoke JSON board summary");
       assertNotIncludes(output, "secret-value", "PowerShell MacHostSafeStart JSON should not leak rejected command");
     }, boardState);
 
@@ -686,6 +713,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(result.exitCode === 0, `PowerShell MacHostSafeStart board summary failed\n${output}`);
       assertIncludes(output, `MacHostSafeStart=${safeCommand}.`, "PowerShell MacHostSafeStart board summary");
       assertIncludes(output, `MacMaxFpsSafeStart=${maxFpsCommand}.`, "PowerShell MacMaxFpsSafeStart board summary");
+      assertIncludes(output, `MacFormalLocalSmoke=${localSmokeCommand}.`, "PowerShell MacFormalLocalSmoke board summary");
       assertNotIncludes(output, "secret-value", "PowerShell MacHostSafeStart board summary should not leak rejected command");
       console.log("[OK] PowerShell resume-status wrapper surfaces Mac safe-start commands safely");
     }, boardState);

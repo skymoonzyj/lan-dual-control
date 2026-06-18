@@ -21,6 +21,39 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 恢复总览直接提供并安全提取 `MacFormalLocalSmoke=` 本机短验收入口。
+完成内容：
+- `check-windows-resume-status` 的 JSON `commands.macFormalLocalSmokeCommand`、普通输出和 `--boardSummary` 新增 `MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host <Mac IP> --port <port> --promptPassword --boardSummary`。
+- `--checkBoard` 会从 Agent Link Board `/api/state` 或 watch 文本中提取最近 `MacFormalLocalSmoke=` / `RerunFormalLocalSmoke=` 命令；只接受 `node scripts/mac/check-mac-formal-local-smoke.mjs`，拒绝 `--password`、token/secret、占位端口和不带 `--boardSummary` 的候选。
+- PowerShell 包装帮助同步说明该入口；Node/PowerShell 回归都覆盖 JSON、boardSummary、帮助和联络板安全提取。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- PowerShell 7 AST parse `scripts/windows/check-windows-resume-status.ps1`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- 未执行真实密码认证、真实 Mac 本机短验收或 input/inject；本轮只做 Windows 恢复总览入口和安全提取。
+下一步建议：
+- Windows 开工第一屏继续优先跑 `check-windows-resume-status --checkBoard --boardSummary`；如果摘要里有 `MacFormalLocalSmoke=`，先让 Mac 端按该命令做本机短验收，再进入正式长测。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真正短验收需要 Mac 端/用户现场输入密码。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows watcher 和控制端诊断消费 Mac 侧 `MacFormalLocalSmoke=` / `RerunFormalLocalSmoke=`。
 完成内容：
 - `watch-codex-link-mac-alerts.ps1` 新增 Mac 本机正式短验收显式匹配：`MacFormalLocalSmoke=`、`RerunFormalLocalSmoke=` 或 `check-mac-formal-local-smoke` 搭配 failed/blocked/ready=false、认证/密码或非空 warning/blocker 时会触发 Windows 本机提醒。
