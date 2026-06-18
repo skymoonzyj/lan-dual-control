@@ -97,6 +97,9 @@ JSON output:
                                   It uses a temporary mock Windows host and
                                   does not use a real host, password, call, or
                                   inject.
+  runPlan.commands.macScriptHelp
+                                  Unified side-effect-free Mac script help
+                                  self-check command.
   runPlan.commands.windowsHostStatus
                                   Recommended Windows-side loopback status
                                   command. It reports whether the Windows host
@@ -763,6 +766,10 @@ function makeMacClientBrowserSelfTestCommand() {
   return "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
 }
 
+function makeMacScriptHelpCommand() {
+  return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
+}
+
 function makeWindowsHostStatusCommand(reportOrHost = {}, args = {}) {
   const host = reportOrHost.readiness?.windowsHost || reportOrHost || {};
   const targetPort = host.probe?.port || args.windowsPort || defaults.windowsPort;
@@ -1051,6 +1058,7 @@ function makeRunPlan(report, args) {
       macClientFormalChecklist: makeChecklistCommand(args),
       rerunFormalChecklist: makeChecklistCommand(args),
       macClientBrowserSelfTest: makeMacClientBrowserSelfTestCommand(),
+      macScriptHelp: makeMacScriptHelpCommand(),
       browserSmoke: browserTestCommand,
       windowsReverseGrantStatus: makeWindowsReverseGrantCommand(report, args, "status"),
       windowsOpenOneTimeReverseGrant: makeWindowsReverseGrantCommand(report, args, "grant"),
@@ -1147,6 +1155,7 @@ function makeBoardSummary(report) {
     `MacClientFormalChecklist=${report.runPlan?.commands?.macClientFormalChecklist || makeChecklistCommand(report.args || {})}.`,
     "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
     `MacClientBrowserSelfTest=${report.runPlan?.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
+    `MacScriptHelp=${report.runPlan?.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
     `ReverseGrantCopy=${report.runPlan?.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
     ...reverseGrantParts,
     ...secureAuthParts,
@@ -1329,6 +1338,9 @@ function printRunPlan(runPlan) {
   }
   if (runPlan.commands?.macClientFormalChecklist) {
     console.log(`- Mac client formal checklist: ${runPlan.commands.macClientFormalChecklist}`);
+  }
+  if (runPlan.commands?.macScriptHelp) {
+    console.log(`- Mac script help safety check: ${runPlan.commands.macScriptHelp}`);
   }
   if (runPlan.commands?.secureAuthPath) {
     console.log(`- Secure auth path: ${runPlan.commands.secureAuthPath}`);
