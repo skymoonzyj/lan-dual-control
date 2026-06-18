@@ -79,6 +79,40 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：把 `WindowsSecureAuthPath=` / `SecureAuthPath=` 消费进 Windows 恢复总览和控制端诊断，承接 Mac true browser smoke 的安全认证阻塞。
+完成内容：
+- `check-windows-resume-status` 默认输出 JSON `commands.windowsSecureAuthPath`、普通输出和 `--boardSummary` 的 `WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword`。
+- `--checkBoard` 会从 Agent Link Board 最近状态/消息/事件安全提取 `WindowsSecureAuthPath=` 或 `SecureAuthPath=`，并拒绝带 `--password`、token/secret、非 `0.0.0.0` 绑定、缺 `--promptPassword` / `--requirePassword` 或 `<当前端口>` 占位的候选。
+- PowerShell 包装器帮助、JSON 和 `-BoardSummary` 已同步。
+- Windows 控制端 Mac 提醒区、快速摘要和复制/导出诊断会在认证/密码/失败/阻塞上下文里显示“Windows 安全认证路径已提供”；干净命令清单不误弹，不自动运行命令。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 这轮不实际重启 Windows host，也不认证 WebSocket；真正 browser smoke 仍需要用户现场在 Windows 和 Mac 两端隐藏输入同一个临时密码。
+下一步建议：
+- Mac 端看到 `WindowsSecureAuthPath=` 后，按现场流程重启 Windows host 并复跑 true browser smoke；不要在通讯板发送密码/token，也不要执行 input/inject。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端后续消费该摘要并复跑认证 smoke；不需要共享密码。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：响应 Mac secure-auth call，把随机运行期密码阻塞时的安全认证路径写入 Windows host/status/readiness 摘要。
 完成内容：
 - `start-windows-host --status` 普通输出、JSON 和 `--boardSummary` 新增 `windowsSecureAuthPath` / `WindowsSecureAuthPath=`。

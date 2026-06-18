@@ -65,7 +65,10 @@ MacHeartbeatOnce=, MacHeartbeatWatch=, WindowsReverseGrantStatus=, and
 WindowsOpenOneTimeReverseGrant= commands from
 Agent Link Board status/messages so Mac host safe foreground-start guidance
 and Windows local reverse-control grant guidance are visible in Windows resume
-JSON, human output, and one-line board summaries.
+JSON, human output, and one-line board summaries. It also publishes and safely
+extracts WindowsSecureAuthPath= / SecureAuthPath= so Mac true browser smoke can
+recover from random runtime passwords by asking the user to type the same
+temporary password locally on both machines.
 It also includes a secret-free MacHostReadiness command so Windows can ask the
 Mac side to run the detailed host readiness/status check before formal testing.
 It also includes a secret-free MacHeartbeat command so Windows can ask the Mac
@@ -157,6 +160,7 @@ Examples:
   pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -DurationMs 30000 -BoardSummary
   pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary
   pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary
+  node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server ${defaults.server}
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server ${defaults.server} -Status
 `);
@@ -1048,6 +1052,56 @@ function parseWindowsReverseGrantCommand(fragment, expectedAction) {
   return commandText;
 }
 
+function parseWindowsSecureAuthPathCommand(fragment) {
+  const rawTokens = String(fragment || "").split(/\s+/).map(stripCommandToken).filter(Boolean);
+  const nodeIndex = rawTokens.findIndex((token, index) =>
+    token === "node" &&
+    rawTokens[index + 1]?.replace(/\\/g, "/") === "scripts/windows/start-windows-host.mjs",
+  );
+  if (nodeIndex < 0) return null;
+
+  const tokens = [rawTokens[nodeIndex], rawTokens[nodeIndex + 1]];
+  let host = "";
+  let port = null;
+  let hasPromptPassword = false;
+  let hasRequirePassword = false;
+  for (let index = nodeIndex + 2; index < rawTokens.length; index += 1) {
+    const token = rawTokens[index];
+    if (!token || /^[A-Za-z][A-Za-z0-9_-]*=/.test(token)) break;
+    if (!token.startsWith("--")) break;
+    if (/^--(?:password|token|secret|passwd|pwd)$/i.test(token)) return null;
+    if (token === "--promptPassword" || token === "--requirePassword") {
+      if (token === "--promptPassword") hasPromptPassword = true;
+      if (token === "--requirePassword") hasRequirePassword = true;
+      tokens.push(token);
+      continue;
+    }
+    if (token === "--host" || token === "--port") {
+      const value = stripCommandToken(rawTokens[index + 1] || "");
+      if (!value || value.startsWith("--") || /^[A-Za-z][A-Za-z0-9_-]*=/.test(value) || /[<>]/.test(value)) return null;
+      if (token === "--host") {
+        host = value;
+        if (value !== "0.0.0.0") return null;
+      }
+      if (token === "--port") {
+        port = Number(value);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+      }
+      const pair = `${token} ${value}`;
+      if (hasSecretLikeCommandValue(pair)) return null;
+      tokens.push(token, value);
+      index += 1;
+      continue;
+    }
+    return null;
+  }
+
+  if (host !== "0.0.0.0" || !port || !hasPromptPassword || !hasRequirePassword) return null;
+  const commandText = tokens.join(" ");
+  if (hasSecretLikeCommandValue(commandText)) return null;
+  return commandText;
+}
+
 function commandHasFlag(commandText, flagName) {
   return String(commandText || "").split(/\s+/).includes(flagName);
 }
@@ -1302,6 +1356,54 @@ function extractWindowsReverseGrantFromBoardState(state, label, expectedAction) 
   };
 }
 
+function extractWindowsSecureAuthPathFromText(text, source = "text") {
+  const value = String(text || "");
+  const regex = /\b(?:WindowsSecureAuthPath|SecureAuthPath)\s*=\s*/gi;
+  const commands = [];
+  let rejectedCount = 0;
+  let match;
+  while ((match = regex.exec(value)) !== null) {
+    const fragment = value.slice(match.index + match[0].length);
+    const commandText = parseWindowsSecureAuthPathCommand(fragment);
+    if (!commandText) {
+      rejectedCount += 1;
+    } else if (!commands.includes(commandText)) {
+      commands.push(commandText);
+    }
+  }
+  if (commands.length === 0) return emptyMacSafeStart(source, value ? 1 : 0, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source,
+    textCount: value ? 1 : 0,
+    rejectedCount,
+  };
+}
+
+function extractWindowsSecureAuthPathFromBoardState(state) {
+  const texts = collectStringValues(state);
+  const commands = [];
+  let rejectedCount = 0;
+  for (const text of texts) {
+    const extracted = extractWindowsSecureAuthPathFromText(text, "api-state");
+    for (const commandText of extracted.commands) {
+      if (!commands.includes(commandText)) commands.push(commandText);
+    }
+    rejectedCount += extracted.rejectedCount;
+  }
+  if (commands.length === 0) return emptyMacSafeStart("api-state", texts.length, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source: "api-state",
+    textCount: texts.length,
+    rejectedCount,
+  };
+}
+
 async function getBoardState(args) {
   const controller = new AbortController();
   const timeoutMs = Math.min(Math.max(args.timeoutMs, 5000), 30000);
@@ -1377,6 +1479,7 @@ async function getBoardSnapshot(args) {
       windowsOpenOneTimeReverseGrant: emptyMacSafeStart("skipped"),
       windowsReverseGrantStatusNodeFallback: emptyMacSafeStart("skipped"),
       windowsOpenOneTimeReverseGrantNodeFallback: emptyMacSafeStart("skipped"),
+      windowsSecureAuthPath: emptyMacSafeStart("skipped"),
       error: "",
     };
   }
@@ -1404,6 +1507,7 @@ async function getBoardSnapshot(args) {
       windowsOpenOneTimeReverseGrant: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsOpenOneTimeReverseGrant", "grant"),
       windowsReverseGrantStatusNodeFallback: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsReverseGrantStatusNodeFallback", "status"),
       windowsOpenOneTimeReverseGrantNodeFallback: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsOpenOneTimeReverseGrantNodeFallback", "grant"),
+      windowsSecureAuthPath: extractWindowsSecureAuthPathFromBoardState(stateResult.state),
       error: "",
     };
   }
@@ -1436,6 +1540,7 @@ async function getBoardSnapshot(args) {
     windowsOpenOneTimeReverseGrant: extractWindowsReverseGrantFromText(output, "WindowsOpenOneTimeReverseGrant", "grant", result.ok ? "codex-link-client" : "unavailable"),
     windowsReverseGrantStatusNodeFallback: extractWindowsReverseGrantFromText(output, "WindowsReverseGrantStatusNodeFallback", "status", result.ok ? "codex-link-client" : "unavailable"),
     windowsOpenOneTimeReverseGrantNodeFallback: extractWindowsReverseGrantFromText(output, "WindowsOpenOneTimeReverseGrantNodeFallback", "grant", result.ok ? "codex-link-client" : "unavailable"),
+    windowsSecureAuthPath: extractWindowsSecureAuthPathFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     apiStateError: normalizedText(stateResult.error),
     error: result.ok ? "" : normalizedText(stateResult.error || result.error || result.stderr),
   };
@@ -1708,12 +1813,18 @@ function inspectWindowsClientDiagnosticsPorts(args) {
   };
 }
 
+function makeWindowsSecureAuthPathCommand(port = 43770) {
+  const safePort = clampInteger(port, 1, 65535, 43770);
+  return `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${safePort} --promptPassword --requirePassword`;
+}
+
 function makeCommands(args, preflight) {
   const target = preflight.payload?.target || { host: args.host, port: args.port };
   const host = String(target.host || args.host);
   const port = Number(target.port || args.port);
   const runtimeBuildId = String(preflight.payload?.runtime?.buildId || "").trim();
   const windowsHostPort = 43770;
+  const windowsSecureAuthPath = makeWindowsSecureAuthPathCommand(windowsHostPort);
   const macHostDiscoveryBoardSummary = makeMacHostDiscoveryCommand(args, preflight, host, port);
   const macHostDiscoveryPowerShellBoardSummary = makeMacHostDiscoveryPowerShellCommand(args, preflight, host, port);
   const macHostReadinessCommand = [
@@ -1917,6 +2028,7 @@ function makeCommands(args, preflight) {
       "--probeMedia",
       "--boardSummary",
     ].join(" "),
+    windowsSecureAuthPath,
     windowsHostMediaReadinessPowerShellBoardSummary: [
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-host-readiness.ps1",
       "-CheckBoard",
@@ -2190,6 +2302,7 @@ function makeBoardSummary(report) {
   const windowsOpenOneTimeReverseGrantCommand = report.board.windowsOpenOneTimeReverseGrant?.command || report.commands.windowsOpenOneTimeReverseGrantPowerShellBoardSummary;
   const windowsReverseGrantStatusNodeCommand = report.board.windowsReverseGrantStatusNodeFallback?.command || report.commands.windowsReverseGrantStatusBoardSummary;
   const windowsOpenOneTimeReverseGrantNodeCommand = report.board.windowsOpenOneTimeReverseGrantNodeFallback?.command || report.commands.windowsOpenOneTimeReverseGrantBoardSummary;
+  const windowsSecureAuthPathCommand = report.board.windowsSecureAuthPath?.command || report.commands.windowsSecureAuthPath;
   return [
     `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}${boardCall}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
     `WinClientPorts=${clientPorts}; WinClientPortsNext=${clientPortsNext}.`,
@@ -2232,6 +2345,7 @@ function makeBoardSummary(report) {
     `WindowsOpenOneTimeReverseGrant=${windowsOpenOneTimeReverseGrantCommand}.`,
     `WindowsReverseGrantStatusNodeFallback=${windowsReverseGrantStatusNodeCommand}.`,
     `WindowsOpenOneTimeReverseGrantNodeFallback=${windowsOpenOneTimeReverseGrantNodeCommand}.`,
+    `WindowsSecureAuthPath=${windowsSecureAuthPathCommand}.`,
     `ReverseGrant=${report.commands.windowsReverseControlGrantBoardSummary}.`,
     `ReverseGrantPs=${report.commands.windowsReverseControlGrantPowerShellBoardSummary}.`,
     "No password was requested or sent; no WebSocket auth/input/inject was performed.",
@@ -2421,6 +2535,9 @@ function printHuman(report) {
     if (report.board.windowsOpenOneTimeReverseGrantNodeFallback?.command) {
       console.log(`  WindowsOpenOneTimeReverseGrantNodeFallback=${report.board.windowsOpenOneTimeReverseGrantNodeFallback.command}`);
     }
+    if (report.board.windowsSecureAuthPath?.command) {
+      console.log(`  WindowsSecureAuthPath=${report.board.windowsSecureAuthPath.command}`);
+    }
   } else {
     console.log("- Agent Link Board: skipped (use --checkBoard)");
   }
@@ -2502,6 +2619,7 @@ function printHuman(report) {
   console.log(`  WindowsOpenOneTimeReverseGrant=${report.board.windowsOpenOneTimeReverseGrant?.command || report.commands.windowsOpenOneTimeReverseGrantPowerShellBoardSummary}`);
   console.log(`  WindowsReverseGrantStatusNodeFallback=${report.board.windowsReverseGrantStatusNodeFallback?.command || report.commands.windowsReverseGrantStatusBoardSummary}`);
   console.log(`  WindowsOpenOneTimeReverseGrantNodeFallback=${report.board.windowsOpenOneTimeReverseGrantNodeFallback?.command || report.commands.windowsOpenOneTimeReverseGrantBoardSummary}`);
+  console.log(`  WindowsSecureAuthPath=${report.board.windowsSecureAuthPath?.command || report.commands.windowsSecureAuthPath}`);
   console.log(`  ${report.commands.windowsReverseControlGrantBoardSummary}`);
   console.log(`  ${report.commands.windowsReverseControlGrantPowerShellBoardSummary}`);
   console.log(`  ${report.commands.windowsMacAlertWatcherStart}`);

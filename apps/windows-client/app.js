@@ -287,6 +287,7 @@ const macUnattendedRiskLabels = {
   "mac-formal-local-smoke-rerun": "Mac 本机短验收重跑命令已提供",
   "windows-reverse-grant-status": "Windows 反控授权状态命令已提供",
   "windows-open-one-time-reverse-grant": "Windows 一次性反控授权命令已提供",
+  "windows-secure-auth-path": "Windows 安全认证路径已提供",
   "mac-host-media-aggregate": "Mac 媒体基线需检查",
   "mac-host-runtime-display-round-trip": "Mac runtime/display 回环需检查",
   "mac-host-build": "Mac host 构建需检查",
@@ -3136,6 +3137,7 @@ function parseMacUnattendedAttention(text) {
   const hasRerunFormalLocalSmoke = /\bRerunFormalLocalSmoke\s*=/i.test(source);
   const hasWindowsReverseGrantStatus = /\bWindowsReverseGrantStatus(NodeFallback)?\s*=/i.test(source);
   const hasWindowsOpenOneTimeReverseGrant = /\bWindowsOpenOneTimeReverseGrant(NodeFallback)?\s*=/i.test(source);
+  const hasWindowsSecureAuthPath = /\b(?:WindowsSecureAuthPath|SecureAuthPath)\s*=/i.test(source);
   const hasMacMaxFpsFinding = risks.some((risk) =>
     risk === "fps-limit" ||
     risk === "mac-host-max-fps" ||
@@ -3152,6 +3154,9 @@ function parseMacUnattendedAttention(text) {
   const hasWindowsReverseGrantContext =
     risks.some((risk) => risk === "windows-host" || risk === "auth" || risk === "board") ||
     /\bLAN008\b|reverse_control_|ready\s*=\s*false|blocked|failed|pending-request|临时允许|重试|请求反控|等待\s*Windows/i.test(source);
+  const hasWindowsSecureAuthContext =
+    risks.some((risk) => risk === "windows-host" || risk === "auth" || risk === "password" || risk === "board") ||
+    /\b(auth|password|promptPassword|LAN_DUAL_PASSWORD|true\s*browser|browser\s*smoke|formal\s*smoke|smoke|exit\s*=\s*1|ready\s*=\s*false|blocked|failed)\b|认证|密码|现场|等待\s*Windows|随机运行期密码/i.test(source);
   if (lower.includes("ready=false") && risks.length === 0) {
     risks.push("not-ready");
   }
@@ -3269,6 +3274,9 @@ function parseMacUnattendedAttention(text) {
   }
   if (hasWindowsOpenOneTimeReverseGrant && hasWindowsReverseGrantContext) {
     risks.unshift("windows-open-one-time-reverse-grant");
+  }
+  if (hasWindowsSecureAuthPath && hasWindowsSecureAuthContext) {
+    risks.unshift("windows-secure-auth-path");
   }
   const labels = [...new Set(risks.map(labelMacUnattendedRisk).filter(Boolean))];
   return {

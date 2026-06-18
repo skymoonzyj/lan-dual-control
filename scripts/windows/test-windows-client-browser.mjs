@@ -1497,6 +1497,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
         "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
         "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary",
+        "WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword",
         "run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
         "MacHeartbeat=status=ok; checkedAt=2020-01-01T00:00:00.000Z; device=Mac; codex=ok status=coding updatedAt=2020-01-01T00:00:00.000Z ageMs=999999; macHost=online 127.0.0.1:43770; macClient=online http://127.0.0.1:5188/; board=ok boardUpdatedAt=2020-01-01T00:00:00.000Z; blockers=none warnings=none reason=ok",
         "MacHeartbeat=stale heartbeat missing; Mac host /discovery unreachable ECONNREFUSED; HTTP 502 Bad Gateway",
@@ -1908,6 +1909,7 @@ async function verifyDesktopOnlyHostPanel(session) {
           watcherRunningView.statusText.includes("Mac 后台心跳启动命令已提供") &&
           watcherRunningView.statusText.includes("Mac 后台心跳状态命令已提供") &&
           watcherRunningView.statusText.includes("Mac 后台心跳停止命令已提供") &&
+          watcherRunningView.statusText.includes("Windows 安全认证路径已提供") &&
           watcherRunningView.statusText.includes("Mac host 不可达") &&
           watcherRunningView.statusText.includes("Mac/API 网络错误") &&
           watcherRunningView.statusText.includes("Mac Codex 可能卡在重新连接 5/5") &&
@@ -3165,6 +3167,7 @@ async function verifyReconnectControls(session) {
         "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
         "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
         "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary",
+        "WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword",
         "run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
         "MacHeartbeat=status=ok; checkedAt=2020-01-01T00:00:00.000Z; device=Mac; codex=ok status=coding updatedAt=2020-01-01T00:00:00.000Z ageMs=999999; macHost=online 127.0.0.1:43770; macClient=online http://127.0.0.1:5188/; board=ok boardUpdatedAt=2020-01-01T00:00:00.000Z; blockers=none warnings=none reason=ok",
         "MacHeartbeat=stale heartbeat missing; Mac host /discovery unreachable ECONNREFUSED; HTTP 502 Bad Gateway",
@@ -3345,6 +3348,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("Mac 本机短验收重跑命令已提供") &&
             exportText.includes("Windows 反控授权状态命令已提供") &&
             exportText.includes("Windows 一次性反控授权命令已提供") &&
+            exportText.includes("Windows 安全认证路径已提供") &&
             exportText.includes("Mac 心跳摘要过旧") &&
             exportText.includes("Mac 心跳过期，可能卡住") &&
             exportText.includes("Mac 后台心跳启动命令已提供") &&
@@ -3377,6 +3381,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs") &&
             exportText.includes("WindowsReverseGrantStatus=pwsh") &&
             exportText.includes("WindowsOpenOneTimeReverseGrant=pwsh") &&
+            exportText.includes("WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs") &&
             exportText.includes("checkedAt=2020-01-01T00:00:00.000Z") &&
             exportText.includes("MacHeartbeat=stale") &&
             exportText.includes("HTTP 502 Bad Gateway") &&
@@ -3460,6 +3465,7 @@ async function verifyReconnectControls(session) {
           copiedText.includes("Mac 本机短验收重跑命令已提供") &&
           copiedText.includes("Windows 反控授权状态命令已提供") &&
           copiedText.includes("Windows 一次性反控授权命令已提供") &&
+          copiedText.includes("Windows 安全认证路径已提供") &&
           copiedText.includes("Mac 心跳过期，可能卡住") &&
           copiedText.includes("Mac host 不可达") &&
           copiedText.includes("Mac/API 网络错误") &&
@@ -3477,6 +3483,7 @@ async function verifyReconnectControls(session) {
           copiedText.includes("RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs") &&
           copiedText.includes("WindowsReverseGrantStatus=pwsh") &&
           copiedText.includes("WindowsOpenOneTimeReverseGrant=pwsh") &&
+          copiedText.includes("WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs") &&
           copiedText.includes("host-build-test") &&
           copiedText.includes("辅助功能未开") &&
           copiedText.includes("- 本机被控：桌面壳托管运行中") &&

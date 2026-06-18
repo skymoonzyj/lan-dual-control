@@ -283,6 +283,7 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "MacMaxFpsSafeStart=", `help ${flag}`);
     assertIncludes(result.stdout, "WindowsReverseGrantStatus=", `help ${flag}`);
     assertIncludes(result.stdout, "WindowsOpenOneTimeReverseGrant=", `help ${flag}`);
+    assertIncludes(result.stdout, "WindowsSecureAuthPath=", `help ${flag}`);
     assertIncludes(result.stdout, "discover-lan-hosts.mjs --noLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "discover-lan-hosts.ps1 -NoLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-host-readiness.mjs --host 192.168.31.122 --port 43770 --checkBoard --boardSummary", `help ${flag}`);
@@ -417,6 +418,12 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsHostMediaReadinessBoardSummary || "").includes("check-windows-host-readiness.mjs"), "mock JSON should include Windows host media readiness command");
     assert(String(payload.commands?.windowsHostMediaReadinessBoardSummary || "").includes("--probeMedia"), "mock JSON media readiness command should enable --probeMedia");
     assert(String(payload.commands?.windowsHostMediaReadinessBoardSummary || "").includes("--boardSummary"), "mock JSON media readiness command should be board-safe");
+    assert(String(payload.commands?.windowsSecureAuthPath || "").includes("start-windows-host.mjs"), "mock JSON should include Windows secure auth path");
+    assert(String(payload.commands?.windowsSecureAuthPath || "").includes("--host 0.0.0.0"), "mock JSON Windows secure auth path should expose LAN host binding");
+    assert(String(payload.commands?.windowsSecureAuthPath || "").includes("--port 43770"), "mock JSON Windows secure auth path should use Windows host port");
+    assert(String(payload.commands?.windowsSecureAuthPath || "").includes("--promptPassword"), "mock JSON Windows secure auth path should prompt locally");
+    assert(String(payload.commands?.windowsSecureAuthPath || "").includes("--requirePassword"), "mock JSON Windows secure auth path should require a non-empty password");
+    assert(!String(payload.commands?.windowsSecureAuthPath || "").includes("--password"), "mock JSON Windows secure auth path should not include password argv");
     assert(String(payload.commands?.windowsHostMediaReadinessPowerShellBoardSummary || "").includes("check-windows-host-readiness.ps1"), "mock JSON should include Windows host media PowerShell command");
     assert(String(payload.commands?.windowsHostMediaReadinessPowerShellBoardSummary || "").includes("-ProbeMedia"), "mock JSON media PowerShell command should enable -ProbeMedia");
     assert(String(payload.commands?.windowsHostMediaReadinessPowerShellBoardSummary || "").includes("-BoardSummary"), "mock JSON media PowerShell command should be board-safe");
@@ -721,6 +728,8 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --status --boardSummary", "board summary");
     assertIncludes(result.stdout, "WindowsOpenOneTimeReverseGrantNodeFallback=", "board summary");
     assertIncludes(result.stdout, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --grant --durationMs 30000 --boardSummary", "board summary");
+    assertIncludes(result.stdout, "WindowsSecureAuthPath=", "board summary");
+    assertIncludes(result.stdout, "start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword", "board summary");
     assertIncludes(result.stdout, "ReverseGrant=", "board summary");
     assertIncludes(result.stdout, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary", "board summary");
     assertIncludes(result.stdout, "ReverseGrantPs=", "board summary");
@@ -788,7 +797,7 @@ async function checkBoardDoneCallJson(args) {
       assert(payload.board?.currentCall?.active === false, "DONE currentCall should not be active");
       assertIncludes(payload.board.currentCall.summary, "DONE Mac Codex->Windows Codex", "DONE currentCall summary");
       assertNotIncludes(payload.boardSummary, "call=DONE", "DONE currentCall board summary");
-      assertNotIncludes(payload.boardSummary, "start-windows-host", "DONE currentCall board summary");
+      assertNotIncludes(payload.boardSummary, "start-windows-host.mjs --status --json", "DONE currentCall board summary");
       assertNotIncludes(result.stdout + result.stderr, "test-password", "DONE currentCall JSON");
       console.log("[OK] Windows resume status keeps DONE Agent Link currentCall out of board summary");
     }, {
@@ -1189,6 +1198,110 @@ async function checkBoardWindowsReverseGrantExtraction(args) {
   });
 }
 
+async function checkBoardWindowsSecureAuthPathExtraction(args) {
+  const secureAuthCommand = "node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 45678 --promptPassword --requirePassword";
+  const aliasSecureAuthCommand = "node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 45679 --promptPassword --requirePassword";
+  await withMockHost(async (port) => {
+    const boardState = {
+      statuses: {
+        "Windows Codex": {
+          role: "Windows 端",
+          status: "idle",
+          note: [
+            "Windows host 当前使用随机运行期密码，Mac true browser smoke 需现场认证。",
+            `WindowsSecureAuthPath=${secureAuthCommand}`,
+            `SecureAuthPath=${aliasSecureAuthCommand}`,
+          ].join(" "),
+        },
+      },
+      events: [
+        {
+          type: "message",
+          from: "Windows Codex",
+          text: "WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 43770 --password secret-value --requirePassword",
+        },
+        {
+          type: "message",
+          from: "Windows Codex",
+          text: "SecureAuthPath=node scripts/windows/start-windows-host.mjs --host 127.0.0.1 --port 43770 --promptPassword --requirePassword",
+        },
+        {
+          type: "status",
+          from: "Windows Codex",
+          text: "WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port <当前端口> --promptPassword --requirePassword",
+        },
+        {
+          type: "status",
+          from: "Windows Codex",
+          text: "WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword",
+        },
+      ],
+    };
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock WindowsSecureAuthPath JSON failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.windowsSecureAuthPath?.found === true, "WindowsSecureAuthPath should be found");
+      assert(payload.board.windowsSecureAuthPath.command === aliasSecureAuthCommand, "WindowsSecureAuthPath should use the newest safe command including SecureAuthPath alias");
+      assert(payload.board.windowsSecureAuthPath.rejectedCount >= 4, "unsafe WindowsSecureAuthPath candidates should be rejected");
+      assertIncludes(payload.boardSummary, `WindowsSecureAuthPath=${aliasSecureAuthCommand}.`, "WindowsSecureAuthPath JSON board summary");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "WindowsSecureAuthPath JSON should not leak rejected command");
+      assertNotIncludes(result.stdout + result.stderr, "--host 127.0.0.1 --port 43770 --promptPassword", "WindowsSecureAuthPath JSON should not leak non-LAN binding candidate");
+    }, boardState);
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--boardSummary",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock WindowsSecureAuthPath board summary failed\n${result.stdout}\n${result.stderr}`);
+      assertIncludes(result.stdout, `WindowsSecureAuthPath=${aliasSecureAuthCommand}.`, "WindowsSecureAuthPath board summary");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "WindowsSecureAuthPath board summary should not leak rejected command");
+    }, boardState);
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock WindowsSecureAuthPath human output failed\n${result.stdout}\n${result.stderr}`);
+      assertIncludes(result.stdout, `WindowsSecureAuthPath=${aliasSecureAuthCommand}`, "WindowsSecureAuthPath human output");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "WindowsSecureAuthPath human output should not leak rejected command");
+      console.log("[OK] Windows resume status extracts Windows secure-auth paths from Agent Link Board safely");
+    }, boardState);
+  });
+}
+
 async function checkUserAuthRequest(args) {
   await withMockHost(async (port) => {
     const result = await run([
@@ -1316,6 +1429,7 @@ async function main() {
   await checkBoardCurrentCallSummary(args);
   await checkBoardMacHostSafeStartExtraction(args);
   await checkBoardWindowsReverseGrantExtraction(args);
+  await checkBoardWindowsSecureAuthPathExtraction(args);
   await checkUserAuthRequest(args);
   await checkSendUserAuthRequest(args);
   await checkSendUserAuthRequestOffline(args);
