@@ -151,6 +151,19 @@ function assertMacClientBrowserSelfTestCommand(command, label) {
   assertNotIncludes(command, "--server", label);
 }
 
+function assertWindowsHostStatusCommand(command, label, expectedPort = "43770") {
+  assertIncludes(command, "scripts/windows/start-windows-host.mjs", label);
+  assertIncludes(command, "--status", label);
+  assertIncludes(command, "--host 127.0.0.1", label);
+  assertIncludes(command, `--port ${expectedPort}`, label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run([flag], args);
@@ -162,6 +175,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "runPlan.commands.safePreflightWithEnsureClient", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.sendCallWithEnsureClient", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.macClientBrowserSelfTest", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.commands.windowsHostStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsReverseGrantStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsOpenOneTimeReverseGrant", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsReverseGrantStatusNodeFallback", `${script} ${flag}`);
@@ -200,6 +214,7 @@ function checkOfflineJson(args) {
   assert(payload.runPlan?.commands?.ensureMacClient?.includes("start-mac-client.mjs --allowExisting"), "offline runPlan should include start/reuse client command");
   assert(payload.runPlan?.commands?.safePreflightWithEnsureClient?.includes("--discover --ensureClient --preflightOnly --boardSummary"), "offline runPlan should include ensureClient preflight command");
   assert(payload.runPlan?.commands?.sendCallWithEnsureClient?.includes("--discover --ensureClient --preflightOnly --sendCall"), "offline runPlan should include ensureClient sendCall command");
+  assertWindowsHostStatusCommand(payload.runPlan?.commands?.windowsHostStatus || "", "offline runPlan Windows host status command");
   assertMacClientBrowserSelfTestCommand(
     payload.runPlan?.commands?.macClientBrowserSelfTest || "",
     "offline runPlan Mac client browser self-test command",
@@ -224,6 +239,7 @@ function checkOfflineJson(args) {
   assertMatches(payload.boardSummary || "", /blockers=[^.]*windows-host/, "offline board summary blockers");
   assertMatches(payload.boardSummary || "", /warnings=[^.]*board/, "offline board summary warnings");
   assertIncludes(payload.boardSummary || "", "Reverse rehearsal:", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "WindowsHostStatus=node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "allow-windows-reverse-control.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "RunPlan:", "offline board summary");
@@ -280,6 +296,8 @@ function checkBoardSummarySecretFree(args) {
   assertMatches(result.stdout, /warnings=[^.]*board/, "board summary warnings");
   assertMatches(result.stdout, /warnings=[^.]*windows-host/, "board summary warnings");
   assertIncludes(result.stdout, "RunPlan:", "board summary");
+  assertIncludes(result.stdout, "WindowsHostStatus=", "board summary");
+  assertIncludes(result.stdout, "start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary", "board summary");
   assertIncludes(result.stdout, "Reverse rehearsal:", "board summary");
   assertIncludes(result.stdout, "ReverseGrantCopy=", "board summary");
   assertIncludes(result.stdout, "Copy Node", "board summary");
@@ -306,6 +324,8 @@ function checkHumanRunPlan(args) {
   assertIncludes(result.stdout, "browser-smoke", "human runPlan");
   assertIncludes(result.stdout, "local-browser-self-test", "human runPlan");
   assertIncludes(result.stdout, "reverse-control-request", "human runPlan");
+  assertIncludes(result.stdout, "Windows host status for Windows side:", "human runPlan");
+  assertIncludes(result.stdout, "start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary", "human runPlan");
   assertIncludes(result.stdout, "Manual true-test checklist", "human manual checklist");
   assertIncludes(result.stdout, "connection:", "human manual checklist");
   assertIncludes(result.stdout, "diagnostics:", "human manual checklist");
@@ -566,6 +586,11 @@ async function checkReadyShape(args) {
         payload.runPlan?.commands?.macClientBrowserSelfTest || "",
         "ready runPlan Mac client browser self-test command",
       );
+      assertWindowsHostStatusCommand(
+        payload.runPlan?.commands?.windowsHostStatus || "",
+        "ready runPlan Windows host status command",
+        String(windowsPort),
+      );
       assert(payload.runPlan?.commands?.windowsReverseGrantStatus?.includes(`-Port ${windowsPort} -Status -BoardSummary`), "ready runPlan should include target Windows PowerShell reverse grant status command");
       assert(payload.runPlan?.commands?.windowsOpenOneTimeReverseGrant?.includes(`-Port ${windowsPort} -Grant -DurationMs 30000 -BoardSummary`), "ready runPlan should include target Windows PowerShell one-time reverse grant command");
       assert(payload.runPlan?.commands?.windowsReverseGrantStatusNodeFallback?.includes(`--port ${windowsPort} --status --boardSummary`), "ready runPlan should include target Windows reverse grant Node fallback command");
@@ -588,6 +613,7 @@ async function checkReadyShape(args) {
       assertIncludes(payload.boardSummary || "", "blockers=none", "ready board summary");
       assertMatches(payload.boardSummary || "", /warnings=[^.]*board/, "ready board summary warnings");
       assertIncludes(payload.boardSummary || "", "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "ready board summary");
+      assertIncludes(payload.boardSummary || "", `WindowsHostStatus=node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port ${windowsPort} --boardSummary`, "ready board summary");
       assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "ready board summary");
       assertIncludes(payload.boardSummary || "", "ReverseGrantCopy=", "ready board summary");
       assertIncludes(payload.boardSummary || "", "Reverse rehearsal:", "ready board summary");
