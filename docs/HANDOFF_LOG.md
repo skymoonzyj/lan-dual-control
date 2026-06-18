@@ -21,6 +21,40 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：落地 Windows 控 Mac 页面内“Mac 监看”小窗第一版。
+完成内容：
+- Windows 控制端顶部工具栏新增“监看小窗”入口，悬浮控制中心也新增“监看”按钮。
+- 进入小窗后远控画面缩到页面右下角，默认只监看、不发送键鼠或快捷键；小窗显示连接、视频、输入安全状态和 Mac 提醒摘要。
+- 小窗支持拖动、浏览器内缩放、恢复主窗口、复制诊断和断开；复制/导出诊断会标记“监看小窗”和“只监看，不发送输入”。
+- 页面自检新增小窗回归：进入、禁输入、拖动、恢复和复制诊断均纳入 `test-windows-client-browser --diagnosticsOnly`。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/styles.css`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps scripts docs shared` 无匹配。
+遗留问题：
+- 这版还是页面内小窗，不是桌面壳 always-on-top 独立窗口；真实 Mac 连接后还要看小窗尺寸、拖动/缩放手感和 Mac 卡住提醒可读性。
+下一步建议：
+- 真连 Mac 时打开小窗观察 Codex/编译/测试场景；确认体验稳定后，再把同一状态抽到 Tauri 桌面置顶小窗。
+是否改了协议：否。
+是否需要另一端配合：不阻塞；后续真实 Mac 连接体验验收时可请 Mac 端保持 host 在线并上报 heartbeat/watchdog 状态。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows 侧消费精确 `codex-reconnect-stuck` 卡住信号。
 完成内容：
 - `watch-codex-link-mac-alerts.ps1` 新增精确匹配：`reason=codex-reconnect-stuck`、`正在重新连接 5/5`、`stream disconnected before completion`，以及 `error sending request` + `/backend-api/codex/responses`。

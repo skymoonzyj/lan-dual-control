@@ -335,6 +335,9 @@
             <button id="fullscreenButton" class="tool-button" type="button" title="全屏">
               ⛶
             </button>
+            <button id="monitorModeButton" class="tool-button" type="button" title="监看小窗">
+              ◲
+            </button>
           </div>
 
           <label class="select-control">
@@ -566,10 +569,22 @@
                     <button id="floatingFullscreenButton" class="control-center-action" type="button">全屏</button>
                     <button id="floatingImmersiveFullscreenButton" class="control-center-action" type="button">真全屏</button>
                     <button id="floatingWindowButton" class="control-center-action" type="button">窗口</button>
+                    <button id="floatingMonitorModeButton" class="control-center-action" type="button">监看</button>
                     <button id="floatingCopyDiagnosticsButton" class="control-center-action" type="button">复制诊断</button>
                     <button id="floatingReconnectButton" class="control-center-action" type="button" hidden disabled>立即重连</button>
                     <button id="floatingDisconnectButton" class="control-center-action danger" type="button">退出远控</button>
                   </div>
+                </div>
+              </div>
+              <div id="monitorModeBar" class="monitor-mode-bar" hidden>
+                <div id="monitorModeDragHandle" class="monitor-mode-drag" title="拖动小窗">
+                  <strong>Mac 监看</strong>
+                  <small id="monitorModeStatus">只监看 · 等待连接</small>
+                </div>
+                <div class="monitor-mode-actions">
+                  <button id="monitorModeRestoreButton" type="button">恢复</button>
+                  <button id="monitorModeCopyButton" type="button">复制诊断</button>
+                  <button id="monitorModeDisconnectButton" type="button">断开</button>
                 </div>
               </div>
               <div id="fullscreenHint" class="fullscreen-hint" hidden>

@@ -705,6 +705,63 @@ button:disabled {
   padding: 18px;
 }
 
+.app-shell.is-monitor-mode {
+  display: block;
+  min-height: 100vh;
+}
+
+.app-shell.is-monitor-mode .sidebar,
+.app-shell.is-monitor-mode .topbar,
+.app-shell.is-monitor-mode .statusbar {
+  display: none;
+}
+
+.app-shell.is-monitor-mode .workspace {
+  display: block;
+  min-height: 100vh;
+  pointer-events: none;
+}
+
+.app-shell.is-monitor-mode .remote-surface {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 30;
+  width: min(430px, calc(100vw - 36px));
+  height: min(280px, calc(100vh - 36px));
+  min-width: 300px;
+  min-height: 190px;
+  overflow: auto;
+  resize: both;
+  padding: 0;
+  pointer-events: auto;
+}
+
+.app-shell.is-monitor-mode .remote-canvas {
+  height: 100%;
+  min-height: 0;
+  border-color: rgba(20, 122, 108, 0.72);
+  box-shadow: 0 16px 46px rgba(8, 15, 24, 0.32);
+}
+
+.app-shell.is-monitor-mode .remote-canvas::after {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  border: 1px solid rgba(94, 234, 212, 0.34);
+  border-radius: inherit;
+  content: "";
+  pointer-events: none;
+}
+
+.app-shell.is-monitor-mode .remote-control-center {
+  display: none;
+}
+
+.app-shell.is-monitor-mode .fullscreen-hint {
+  display: none;
+}
+
 .remote-canvas {
   position: relative;
   width: 100%;
@@ -987,6 +1044,65 @@ button:disabled {
 .control-center-action.danger {
   border-color: rgba(194, 65, 12, 0.38);
   color: var(--danger);
+}
+
+.monitor-mode-bar {
+  position: absolute;
+  z-index: 6;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.58);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #f8fafc;
+  box-shadow: 0 12px 30px rgba(8, 15, 24, 0.3);
+  padding: 7px;
+  backdrop-filter: blur(14px);
+}
+
+.monitor-mode-drag {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  cursor: move;
+}
+
+.monitor-mode-drag strong {
+  font-size: 13px;
+  line-height: 1.1;
+}
+
+.monitor-mode-drag small {
+  overflow: hidden;
+  color: rgba(226, 232, 240, 0.78);
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monitor-mode-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.monitor-mode-actions button {
+  min-height: 30px;
+  border: 1px solid rgba(226, 232, 240, 0.44);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+.monitor-mode-actions button:hover {
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .fullscreen-hint {

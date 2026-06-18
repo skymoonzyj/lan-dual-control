@@ -82,6 +82,7 @@ const elements = {
   windowModeButton: document.querySelector("#windowModeButton"),
   reverseButton: document.querySelector("#reverseButton"),
   reverseButtonText: document.querySelector("#reverseButtonText"),
+  monitorModeButton: document.querySelector("#monitorModeButton"),
   remoteControlCenter: document.querySelector("#remoteControlCenter"),
   controlCenterToggle: document.querySelector("#controlCenterToggle"),
   controlCenterPanel: document.querySelector("#controlCenterPanel"),
@@ -107,9 +108,16 @@ const elements = {
   floatingFullscreenButton: document.querySelector("#floatingFullscreenButton"),
   floatingImmersiveFullscreenButton: document.querySelector("#floatingImmersiveFullscreenButton"),
   floatingWindowButton: document.querySelector("#floatingWindowButton"),
+  floatingMonitorModeButton: document.querySelector("#floatingMonitorModeButton"),
   floatingCopyDiagnosticsButton: document.querySelector("#floatingCopyDiagnosticsButton"),
   floatingReconnectButton: document.querySelector("#floatingReconnectButton"),
   floatingDisconnectButton: document.querySelector("#floatingDisconnectButton"),
+  monitorModeBar: document.querySelector("#monitorModeBar"),
+  monitorModeStatus: document.querySelector("#monitorModeStatus"),
+  monitorModeDragHandle: document.querySelector("#monitorModeDragHandle"),
+  monitorModeRestoreButton: document.querySelector("#monitorModeRestoreButton"),
+  monitorModeCopyButton: document.querySelector("#monitorModeCopyButton"),
+  monitorModeDisconnectButton: document.querySelector("#monitorModeDisconnectButton"),
   fullscreenHint: document.querySelector("#fullscreenHint"),
   fullscreenHintText: document.querySelector("#fullscreenHintText"),
   fullscreenHintClose: document.querySelector("#fullscreenHintClose"),
@@ -404,6 +412,8 @@ const state = {
   inputEvents: 0,
   fullscreen: false,
   immersiveFullscreen: false,
+  monitorMode: false,
+  monitorModeDrag: null,
   client: null,
   activeHost: "",
   activePort: "",
@@ -614,6 +624,9 @@ function getInputExportStatus() {
   if (state.connected && state.controlDirection === "mac_to_windows") {
     return "暂停（当前由 Mac 控制）";
   }
+  if (state.monitorMode) {
+    return `${state.inputEvents}（只监看，不发送输入）`;
+  }
   const detail = formatInputStatusDetail();
   return `${state.inputEvents}${detail ? `（${detail}）` : ""}`;
 }
@@ -621,6 +634,12 @@ function getInputExportStatus() {
 function updateInputStatus() {
   if (state.connected && state.controlDirection === "mac_to_windows") {
     elements.inputText.textContent = "输入事件：暂停（当前由 Mac 控制）";
+    syncFloatingControlStatus();
+    return;
+  }
+
+  if (state.monitorMode) {
+    elements.inputText.textContent = `输入事件：${state.inputEvents}（只监看，不发送输入）`;
     syncFloatingControlStatus();
     return;
   }
@@ -655,7 +674,7 @@ function resetReverseControlState() {
 }
 
 function canSendControlInput() {
-  return state.connected && state.controlDirection === "windows_to_mac";
+  return state.connected && state.controlDirection === "windows_to_mac" && !state.monitorMode;
 }
 
 function getAuthErrorMessage(error) {
@@ -2172,6 +2191,7 @@ function formatFloatingConnectionStatus() {
 
 function formatFloatingInputModeStatus() {
   if (!state.connected) return "输入：未连接";
+  if (state.monitorMode) return "输入：只监看，不发送输入";
   if (state.controlDirection === "mac_to_windows") return "输入：当前由 Mac 控制";
   const modeText = getInputModeStatusText(state.hostDiagnostics.inputMode) || "等待对端确认";
   return `输入：${modeText}`;
@@ -2394,8 +2414,14 @@ function syncFloatingControlStatus() {
   if (elements.floatingShortcutButton) {
     elements.floatingShortcutButton.disabled = !canSendControlInput();
   }
+  if (elements.floatingMonitorModeButton) {
+    elements.floatingMonitorModeButton.disabled = state.monitorMode;
+  }
   if (state.fullscreen && elements.fullscreenHint?.classList.contains("is-visible")) {
     updateFullscreenHintText();
+  }
+  if (state.monitorMode) {
+    updateMonitorModeStatus();
   }
 }
 
@@ -3273,7 +3299,7 @@ function getAudioExportStatus() {
 
 function getFloatingControlExportStatus() {
   return {
-    mode: state.immersiveFullscreen ? "真全屏" : state.fullscreen ? "普通全屏" : "窗口",
+    mode: state.monitorMode ? "监看小窗" : state.immersiveFullscreen ? "真全屏" : state.fullscreen ? "普通全屏" : "窗口",
     summary: elements.floatingControlSummary?.textContent?.trim() || "-",
     hint: elements.floatingFullscreenHint?.textContent?.trim() || "-",
     connection: formatFloatingConnectionStatus(),
@@ -3838,6 +3864,9 @@ function setFullscreen(enabled) {
     void exitDocumentFullscreen();
     state.immersiveFullscreen = false;
   }
+  if (enabled && state.monitorMode) {
+    setMonitorMode(false);
+  }
   state.fullscreen = enabled;
   document.querySelector(".app-shell").classList.toggle("is-fullscreen", enabled);
   elements.fullscreenButton.classList.toggle("active", enabled);
@@ -3849,6 +3878,97 @@ function setFullscreen(enabled) {
     hideFullscreenHint();
   }
   sendDisplaySettings();
+}
+
+function clearMonitorModePosition() {
+  const surface = document.querySelector(".remote-surface");
+  if (!surface) return;
+  for (const property of ["left", "top", "right", "bottom", "width", "height"]) {
+    surface.style.removeProperty(property);
+  }
+}
+
+function formatMonitorModeStatus() {
+  const source = [state.localMacAlertWatcherFindingText, elements.localMacAlertWatcherStatusText?.textContent || ""].join(" ");
+  const attention = parseMacUnattendedAttention(source);
+  const parts = [
+    "只监看",
+    formatFloatingConnectionStatus().replace(/^连接：/, ""),
+    formatFloatingVideoStatus().replace(/^视频：/, ""),
+    formatFloatingInputModeStatus().replace(/^输入：/, ""),
+  ].filter(Boolean);
+  if (attention.summary) {
+    parts.push(`提醒：${attention.summary}`);
+  }
+  return compactExportStatusText(parts.join(" · "), 260);
+}
+
+function updateMonitorModeStatus() {
+  if (elements.monitorModeStatus) {
+    elements.monitorModeStatus.textContent = formatMonitorModeStatus();
+  }
+}
+
+function setMonitorMode(enabled) {
+  if (enabled && (state.fullscreen || state.immersiveFullscreen)) {
+    setFullscreen(false);
+  }
+  state.monitorMode = Boolean(enabled);
+  document.querySelector(".app-shell")?.classList.toggle("is-monitor-mode", state.monitorMode);
+  elements.monitorModeButton?.classList.toggle("active", state.monitorMode);
+  if (elements.monitorModeBar) {
+    elements.monitorModeBar.hidden = !state.monitorMode;
+  }
+  if (state.monitorMode) {
+    setControlCenterOpen(false);
+    hideFullscreenHint();
+    elements.remoteCanvas?.blur();
+    addLog("监看小窗", "已进入只监看模式");
+  } else {
+    clearMonitorModePosition();
+    state.monitorModeDrag = null;
+    addLog("监看小窗", "已恢复主窗口");
+  }
+  updateInputStatus();
+  syncFloatingControlCenter();
+  updateMonitorModeStatus();
+}
+
+function startMonitorModeDrag(event) {
+  if (!state.monitorMode || event.button !== 0) return;
+  const surface = document.querySelector(".remote-surface");
+  if (!surface) return;
+  const rect = surface.getBoundingClientRect();
+  state.monitorModeDrag = {
+    startX: event.clientX,
+    startY: event.clientY,
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
+  };
+  surface.style.left = `${rect.left}px`;
+  surface.style.top = `${rect.top}px`;
+  surface.style.right = "auto";
+  surface.style.bottom = "auto";
+  surface.style.width = `${rect.width}px`;
+  surface.style.height = `${rect.height}px`;
+  event.preventDefault();
+}
+
+function moveMonitorModeWindow(event) {
+  if (!state.monitorModeDrag) return;
+  const surface = document.querySelector(".remote-surface");
+  if (!surface) return;
+  const drag = state.monitorModeDrag;
+  const nextLeft = Math.max(8, Math.min(window.innerWidth - drag.width - 8, drag.left + event.clientX - drag.startX));
+  const nextTop = Math.max(8, Math.min(window.innerHeight - drag.height - 8, drag.top + event.clientY - drag.startY));
+  surface.style.left = `${nextLeft}px`;
+  surface.style.top = `${nextTop}px`;
+}
+
+function stopMonitorModeDrag() {
+  state.monitorModeDrag = null;
 }
 
 function modifierFlags(modifiers = []) {
@@ -6492,6 +6612,7 @@ elements.localMacAlertWatcherRefreshButton.addEventListener("click", () => {
 
 elements.fullscreenButton.addEventListener("click", () => setFullscreen(true));
 elements.windowModeButton.addEventListener("click", () => setFullscreen(false));
+elements.monitorModeButton.addEventListener("click", () => setMonitorMode(!state.monitorMode));
 elements.reverseButton.addEventListener("click", requestReverseControl);
 elements.controlCenterToggle.addEventListener("click", () => {
   setControlCenterOpen(elements.controlCenterPanel.hidden);
@@ -6508,6 +6629,10 @@ elements.floatingWindowButton.addEventListener("click", () => {
   setFullscreen(false);
   setControlCenterOpen(false);
 });
+elements.floatingMonitorModeButton.addEventListener("click", () => {
+  setMonitorMode(true);
+  setControlCenterOpen(false);
+});
 elements.floatingCopyDiagnosticsButton.addEventListener("click", () => {
   void copyLogsToClipboard();
 });
@@ -6519,6 +6644,17 @@ elements.floatingDisconnectButton.addEventListener("click", () => {
   disconnect();
   setControlCenterOpen(false);
 });
+elements.monitorModeRestoreButton.addEventListener("click", () => {
+  setMonitorMode(false);
+});
+elements.monitorModeCopyButton.addEventListener("click", () => {
+  void copyLogsToClipboard();
+});
+elements.monitorModeDisconnectButton.addEventListener("click", () => {
+  disconnect();
+  setMonitorMode(false);
+});
+elements.monitorModeDragHandle.addEventListener("pointerdown", startMonitorModeDrag);
 elements.floatingQualitySelect.addEventListener("change", () => {
   elements.qualityPresetSelect.value = elements.floatingQualitySelect.value;
   dispatchControlEvent(elements.qualityPresetSelect);
@@ -6802,6 +6938,8 @@ document.addEventListener("pointerdown", (event) => {
 });
 document.addEventListener("fullscreenchange", handleNativeFullscreenChange);
 document.addEventListener("webkitfullscreenchange", handleNativeFullscreenChange);
+window.addEventListener("pointermove", moveMonitorModeWindow);
+window.addEventListener("pointerup", stopMonitorModeDrag);
 document.addEventListener("MSFullscreenChange", handleNativeFullscreenChange);
 
 tickClock();

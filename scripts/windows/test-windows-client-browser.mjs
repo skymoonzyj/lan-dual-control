@@ -1162,6 +1162,183 @@ async function verifyFloatingControlCenter(session) {
         getComputedStyle(topbar).display !== "none";
       if (panel.hidden) toggle.click();
 
+      const monitorModeCheck = await (async () => {
+        const monitorButton = document.querySelector("#monitorModeButton");
+        const floatingMonitorButton = document.querySelector("#floatingMonitorModeButton");
+        const monitorBar = document.querySelector("#monitorModeBar");
+        const monitorStatus = document.querySelector("#monitorModeStatus");
+        const restoreButton = document.querySelector("#monitorModeRestoreButton");
+        const copyButton = document.querySelector("#monitorModeCopyButton");
+        if (
+          !monitorButton ||
+          !floatingMonitorButton ||
+          !monitorBar ||
+          !monitorStatus ||
+          !restoreButton ||
+          !copyButton ||
+          typeof setMonitorMode !== "function" ||
+          typeof startMonitorModeDrag !== "function" ||
+          typeof moveMonitorModeWindow !== "function" ||
+          typeof stopMonitorModeDrag !== "function"
+        ) {
+          return { ok: false, reason: "missing monitor mode elements" };
+        }
+
+        const originalMonitorMode = state.monitorMode;
+        const originalConnected = state.connected;
+        const originalControlDirection = state.controlDirection;
+        const originalClient = state.client;
+        const originalInputEvents = state.inputEvents;
+        const originalHostDiagnostics = { ...state.hostDiagnostics };
+        const originalClipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+        const originalLogEntries = Array.isArray(state.logEntries) ? state.logEntries.slice() : [];
+        const eventLog = document.querySelector("#eventLog");
+        const originalEventLogHtml = eventLog?.innerHTML || "";
+        const originalFeedbackTimer = state.copyDiagnosticsFeedbackTimer;
+        const originalFloatingCopyText = document.querySelector("#floatingCopyDiagnosticsButton")?.textContent || "";
+        const originalRemoteSurfaceStyle = remoteSurface?.getAttribute("style") || "";
+        const sent = [];
+        let copiedText = "";
+
+        try {
+          Object.defineProperty(navigator, "clipboard", {
+            configurable: true,
+            value: {
+              writeText: async (text) => {
+                copiedText = String(text);
+              },
+            },
+          });
+          state.connected = true;
+          state.controlDirection = "windows_to_mac";
+          state.inputEvents = 10;
+          state.hostDiagnostics = {
+            ...state.hostDiagnostics,
+            inputMode: "inject",
+            inputAckStatus: "injected",
+          };
+          state.client = {
+            sendInputEvent(payload) {
+              sent.push(payload);
+            },
+          };
+          if (typeof updateInputStatus === "function") updateInputStatus();
+          if (typeof syncFloatingControlCenter === "function") syncFloatingControlCenter();
+
+          monitorButton.click();
+          await Promise.resolve();
+          const monitorSurfaceStyle = getComputedStyle(remoteSurface);
+          const enteredByTopbar =
+            state.monitorMode &&
+            shell?.classList.contains("is-monitor-mode") &&
+            !monitorBar.hidden &&
+            getComputedStyle(topbar).display === "none" &&
+            monitorSurfaceStyle.position === "fixed" &&
+            monitorSurfaceStyle.pointerEvents === "auto" &&
+            monitorStatus.textContent.includes("只监看") &&
+            document.querySelector("#inputText")?.textContent.includes("只监看") &&
+            document.querySelector("#floatingInputModeStatus")?.textContent.includes("只监看");
+
+          const inputBefore = state.inputEvents;
+          setValue("#floatingShortcutSelect", "copy");
+          const shortcutButton = document.querySelector("#floatingShortcutButton");
+          shortcutButton?.click();
+          const inputBlocked =
+            sent.length === 0 &&
+            state.inputEvents === inputBefore &&
+            Boolean(shortcutButton?.disabled);
+
+          copyButton.click();
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          const copiedMonitorDiagnostics =
+            copiedText.includes("- 全屏浮层模式：监看小窗") &&
+            copiedText.includes("只监看，不发送输入") &&
+            !copiedText.includes("demo-password");
+
+          const rect = remoteSurface.getBoundingClientRect();
+          startMonitorModeDrag({
+            button: 0,
+            clientX: rect.left + 12,
+            clientY: rect.top + 12,
+            preventDefault() {},
+          });
+          moveMonitorModeWindow({
+            clientX: rect.left + 48,
+            clientY: rect.top + 34,
+          });
+          stopMonitorModeDrag();
+          const dragHandled =
+            remoteSurface.style.left.endsWith("px") &&
+            remoteSurface.style.top.endsWith("px") &&
+            remoteSurface.style.right === "auto" &&
+            remoteSurface.style.bottom === "auto";
+
+          restoreButton.click();
+          const restoredByButton =
+            !state.monitorMode &&
+            !shell?.classList.contains("is-monitor-mode") &&
+            monitorBar.hidden;
+
+          if (panel.hidden) toggle.click();
+          floatingMonitorButton.click();
+          const enteredByFloating =
+            state.monitorMode &&
+            shell?.classList.contains("is-monitor-mode") &&
+            !monitorBar.hidden &&
+            panel.hidden;
+
+          return {
+            ok:
+              enteredByTopbar &&
+              inputBlocked &&
+              copiedMonitorDiagnostics &&
+              dragHandled &&
+              restoredByButton &&
+              enteredByFloating,
+            enteredByTopbar,
+            inputBlocked,
+            copiedMonitorDiagnostics,
+            dragHandled,
+            restoredByButton,
+            enteredByFloating,
+            status: monitorStatus.textContent,
+          };
+        } finally {
+          setMonitorMode(Boolean(originalMonitorMode));
+          state.connected = originalConnected;
+          state.controlDirection = originalControlDirection;
+          state.client = originalClient;
+          state.inputEvents = originalInputEvents;
+          state.hostDiagnostics = originalHostDiagnostics;
+          if (state.copyDiagnosticsFeedbackTimer && state.copyDiagnosticsFeedbackTimer !== originalFeedbackTimer) {
+            window.clearTimeout(state.copyDiagnosticsFeedbackTimer);
+          }
+          state.copyDiagnosticsFeedbackTimer = originalFeedbackTimer;
+          const floatingCopyButton = document.querySelector("#floatingCopyDiagnosticsButton");
+          if (floatingCopyButton) floatingCopyButton.textContent = originalFloatingCopyText;
+          state.logEntries = originalLogEntries;
+          if (eventLog) eventLog.innerHTML = originalEventLogHtml;
+          if (remoteSurface) {
+            if (originalRemoteSurfaceStyle) {
+              remoteSurface.setAttribute("style", originalRemoteSurfaceStyle);
+            } else {
+              remoteSurface.removeAttribute("style");
+            }
+          }
+          if (originalClipboardDescriptor) {
+            Object.defineProperty(navigator, "clipboard", originalClipboardDescriptor);
+          } else {
+            try {
+              delete navigator.clipboard;
+            } catch {
+              // Ignore cleanup failures in older browser contexts.
+            }
+          }
+          if (typeof updateInputStatus === "function") updateInputStatus();
+          if (typeof syncFloatingControlCenter === "function") syncFloatingControlCenter();
+        }
+      })();
+
       document.querySelector("#qualityPresetSelect").value = original.quality;
       document.querySelector("#resolutionSelect").value = original.resolution;
       document.querySelector("#fpsSelect").value = original.fps;
@@ -1197,7 +1374,8 @@ async function verifyFloatingControlCenter(session) {
           fullscreenHintVisible &&
           fullscreenEscExited &&
           immersiveFullscreenEntered &&
-          fullscreenExited,
+          fullscreenExited &&
+          monitorModeCheck.ok,
         opened,
         floatingLayer,
         summarySynced,
@@ -1225,6 +1403,7 @@ async function verifyFloatingControlCenter(session) {
         fullscreenEscExited,
         immersiveFullscreenEntered,
         fullscreenExited,
+        monitorModeCheck,
         closed: panel.hidden,
         restored: {
           quality: valueOf("#qualityPresetSelect"),
@@ -3442,7 +3621,7 @@ async function run() {
     summary.checks.push("control-center");
     print(
       "OK",
-      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, original=${controlCenterCheck.originalPresetSynced}, detailed=${controlCenterCheck.detailedSettingsSynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, status=${controlCenterCheck.statusVisible}, connection=${controlCenterCheck.connectionStatusVisible}, video=${controlCenterCheck.videoStatusVisible}, audioStatus=${controlCenterCheck.audioStatusVisible}, clipboard=${controlCenterCheck.clipboardStatusVisible}, shortcut=${controlCenterCheck.shortcutSent}, diagnosticsCopy=${controlCenterCheck.diagnosticsCopyVisible}, fullscreen=${controlCenterCheck.fullscreenEntered}, hint=${controlCenterCheck.fullscreenHintVisible}, esc=${controlCenterCheck.fullscreenEscExited}, immersive=${controlCenterCheck.immersiveFullscreenEntered}, window=${controlCenterCheck.fullscreenExited}`,
+      `Control center: open=${controlCenterCheck.opened}, floating=${controlCenterCheck.floatingLayer}, summary=${controlCenterCheck.summarySynced}, quality=${controlCenterCheck.qualitySynced}, original=${controlCenterCheck.originalPresetSynced}, detailed=${controlCenterCheck.detailedSettingsSynced}, scale=${controlCenterCheck.scaleSynced}, audio=${controlCenterCheck.audioSynced}, volume=${controlCenterCheck.volumeSynced}, status=${controlCenterCheck.statusVisible}, connection=${controlCenterCheck.connectionStatusVisible}, video=${controlCenterCheck.videoStatusVisible}, audioStatus=${controlCenterCheck.audioStatusVisible}, clipboard=${controlCenterCheck.clipboardStatusVisible}, shortcut=${controlCenterCheck.shortcutSent}, diagnosticsCopy=${controlCenterCheck.diagnosticsCopyVisible}, fullscreen=${controlCenterCheck.fullscreenEntered}, hint=${controlCenterCheck.fullscreenHintVisible}, esc=${controlCenterCheck.fullscreenEscExited}, immersive=${controlCenterCheck.immersiveFullscreenEntered}, window=${controlCenterCheck.fullscreenExited}, monitor=${controlCenterCheck.monitorModeCheck?.ok}`,
     );
     const desktopOnlyPanelCheck = await verifyDesktopOnlyHostPanel(session);
     summary.checks.push("desktop-panel");
