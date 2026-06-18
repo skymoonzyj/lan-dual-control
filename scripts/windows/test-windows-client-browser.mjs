@@ -2416,7 +2416,8 @@ async function verifyOutgoingFileResultStatus(session) {
         typeof syncFloatingControlStatus !== "function" ||
         typeof sendFilesToRemote !== "function" ||
         typeof canRetryLastOutgoingFileTransfer !== "function" ||
-        typeof updateFileClipboardButton !== "function"
+        typeof updateFileClipboardButton !== "function" ||
+        typeof expirePendingOutgoingFileResult !== "function"
       ) {
         return { ok: false, reason: "missing outgoing file result helpers" };
       }
@@ -2432,6 +2433,8 @@ async function verifyOutgoingFileResultStatus(session) {
       const originalOutgoingTransfer = state.outgoingFileTransfer;
       const firstRemoteRejectSends = [];
       const remoteRejectRetrySends = [];
+      const pendingTimeoutSends = [];
+      const pendingTimeoutRetrySends = [];
       try {
         state.connected = true;
         elements.clipboardToggle.checked = true;
@@ -2459,6 +2462,14 @@ async function verifyOutgoingFileResultStatus(session) {
         const clipboardText = elements.clipboardText.textContent || "";
         const floatingClipboardText = formatFloatingClipboardStatus();
 
+        state.lastOutgoingFileTransfer = {
+          transferId: "result-temp",
+          status: "sent",
+          fileCount: 1,
+          sentBytes: 2048,
+          totalBytes: 2048,
+          files: [{ index: 0, name: "temp.zip", size: 2048 }],
+        };
         handleClipboardFileResult({
           type: "clipboard_file_result",
           transferId: "result-temp",
@@ -2471,6 +2482,14 @@ async function verifyOutgoingFileResultStatus(session) {
         });
         const tempText = elements.clipboardText.textContent || "";
 
+        state.lastOutgoingFileTransfer = {
+          transferId: "result-memory",
+          status: "sent",
+          fileCount: 1,
+          sentBytes: 128,
+          totalBytes: 128,
+          files: [{ index: 0, name: "memory.txt", size: 128 }],
+        };
         handleClipboardFileResult({
           type: "clipboard_file_result",
           transferId: "result-memory",
@@ -2483,6 +2502,14 @@ async function verifyOutgoingFileResultStatus(session) {
         });
         const memoryText = elements.clipboardText.textContent || "";
 
+        state.lastOutgoingFileTransfer = {
+          transferId: "result-failed",
+          status: "sent",
+          fileCount: 1,
+          sentBytes: 4096,
+          totalBytes: 4096,
+          files: [{ index: 0, name: "failed.zip", size: 4096 }],
+        };
         handleClipboardFileResult({
           type: "clipboard_file_result",
           transferId: "result-failed",
@@ -2550,6 +2577,52 @@ async function verifyOutgoingFileResultStatus(session) {
         updateFileClipboardButton();
         const fileInputLengthAfterRemoteAccept = elements.fileClipboardInput.files?.length || 0;
 
+        const pendingBytes = new Uint8Array(fileChunkSizeBytes + 256);
+        pendingBytes.fill(67);
+        const pendingFile = new File([pendingBytes], "pending-timeout.zip", { type: "application/zip" });
+        const pendingDataTransfer = new DataTransfer();
+        pendingDataTransfer.items.add(pendingFile);
+        elements.fileClipboardInput.files = pendingDataTransfer.files;
+        state.client = {
+          sendClipboardFileOffer: (payload) => pendingTimeoutSends.push({ type: "offer", payload }),
+          sendClipboardFileChunk: (payload) => pendingTimeoutSends.push({ type: "chunk", payload }),
+          sendClipboardFileComplete: (payload) => pendingTimeoutSends.push({ type: "complete", payload }),
+        };
+        await sendFilesToRemote([pendingFile], { sourceLabel: "对端确认超时测试", clearFileInput: true });
+        const pendingBeforeTimeout = state.lastOutgoingFileTransfer || {};
+        const expiredPendingCount = expirePendingOutgoingFileResult(
+          Number(pendingBeforeTimeout.completedAt || Date.now()) + remoteFileTransferStallTimeoutMs + 1000,
+        );
+        updateFileClipboardButton();
+        const pendingTimeoutText = elements.clipboardText.textContent || "";
+        const pendingTimeoutFloating = formatFloatingClipboardStatus();
+        const pendingTimeoutState = state.lastOutgoingFileTransfer || {};
+        const canRetryAfterPendingTimeout = canRetryLastOutgoingFileTransfer();
+        const fileInputLengthAfterPendingTimeout = elements.fileClipboardInput.files?.length || 0;
+        const buttonLabelAfterPendingTimeout = elements.fileClipboardButton.querySelector("span:not([aria-hidden])")?.textContent || "";
+
+        state.client = {
+          sendClipboardFileOffer: (payload) => pendingTimeoutRetrySends.push({ type: "offer", payload }),
+          sendClipboardFileChunk: (payload) => pendingTimeoutRetrySends.push({ type: "chunk", payload }),
+          sendClipboardFileComplete: (payload) => pendingTimeoutRetrySends.push({ type: "complete", payload }),
+        };
+        elements.fileClipboardButton.click();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        const pendingTimeoutRetryOfferCount = pendingTimeoutRetrySends.filter((item) => item.type === "offer").length;
+        const pendingTimeoutRetryChunkCount = pendingTimeoutRetrySends.filter((item) => item.type === "chunk").length;
+        const pendingTimeoutRetryCompleteCount = pendingTimeoutRetrySends.filter((item) => item.type === "complete").length;
+        const pendingTimeoutRetryTransferId = pendingTimeoutRetrySends.find((item) => item.type === "complete")?.payload?.transferId;
+        const staleLateResultReturn = handleClipboardFileResult({
+          transferId: pendingBeforeTimeout.transferId,
+          accepted: true,
+          saveMode: "clipboard",
+          fileCount: 1,
+          totalBytes: pendingFile.size,
+          reason: "old transfer accepted late",
+        });
+        const staleLateResultState = state.lastOutgoingFileTransfer || {};
+        const staleLateResultText = elements.clipboardText.textContent || "";
+
         return {
           ok:
             clipboardText.includes("对端已接收并写入系统文件剪贴板") &&
@@ -2577,7 +2650,24 @@ async function verifyOutgoingFileResultStatus(session) {
             remoteRejectRetryOfferCount === 1 &&
             remoteRejectRetryChunkCount === 2 &&
             remoteRejectRetryCompleteCount === 1 &&
-            fileInputLengthAfterRemoteAccept === 0,
+            fileInputLengthAfterRemoteAccept === 0 &&
+            expiredPendingCount === 1 &&
+            pendingTimeoutText.includes("对端确认超时") &&
+            pendingTimeoutText.includes("可重新发送") &&
+            pendingTimeoutFloating.includes("对端确认超时") &&
+            pendingTimeoutState.status === "remote-result" &&
+            pendingTimeoutState.accepted === false &&
+            pendingTimeoutState.canRetry === true &&
+            canRetryAfterPendingTimeout === true &&
+            fileInputLengthAfterPendingTimeout === 1 &&
+            buttonLabelAfterPendingTimeout === "重新发送" &&
+            pendingTimeoutRetryOfferCount === 1 &&
+            pendingTimeoutRetryChunkCount === 2 &&
+            pendingTimeoutRetryCompleteCount === 1 &&
+            staleLateResultReturn === false &&
+            staleLateResultState.transferId === pendingTimeoutRetryTransferId &&
+            staleLateResultState.status === "sent" &&
+            !staleLateResultText.includes("old transfer accepted late"),
           clipboardText,
           floatingClipboardText,
           tempText,
@@ -2595,6 +2685,20 @@ async function verifyOutgoingFileResultStatus(session) {
           remoteRejectRetryChunkCount,
           remoteRejectRetryCompleteCount,
           fileInputLengthAfterRemoteAccept,
+          expiredPendingCount,
+          pendingTimeoutText,
+          pendingTimeoutFloating,
+          pendingTimeoutState,
+          canRetryAfterPendingTimeout,
+          fileInputLengthAfterPendingTimeout,
+          buttonLabelAfterPendingTimeout,
+          pendingTimeoutRetryOfferCount,
+          pendingTimeoutRetryChunkCount,
+          pendingTimeoutRetryCompleteCount,
+          pendingTimeoutRetryTransferId,
+          staleLateResultReturn,
+          staleLateResultState,
+          staleLateResultText,
         };
       } finally {
         state.lastOutgoingFileTransfer = originalLastOutgoingTransfer;

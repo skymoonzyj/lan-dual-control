@@ -5874,6 +5874,35 @@ function describeOutgoingFileResultStatus(result = {}) {
   return `对端已完成文件接收（${countText}${sizeText}）${reasonText}`;
 }
 
+function expirePendingOutgoingFileResult(now = Date.now()) {
+  const transfer = state.lastOutgoingFileTransfer || {};
+  if (transfer.status !== "sent") return 0;
+  const lastActivityAt = Number(transfer.completedAt) || Number(transfer.lastActivityAt) || Number(transfer.startedAt) || now;
+  const idleMs = now - lastActivityAt;
+  if (idleMs < remoteFileTransferStallTimeoutMs) return 0;
+
+  const idleSeconds = Math.max(1, Math.round(idleMs / 1000));
+  const reason = `对端确认超时：${outgoingFileTransferProgressText(transfer)}，${idleSeconds} 秒没有收到结果`;
+  state.lastOutgoingFileTransfer = {
+    ...transfer,
+    status: "remote-result",
+    accepted: false,
+    reason,
+    receivedBytes: Math.max(0, Number(transfer.sentBytes) || 0),
+    totalBytes: Math.max(0, Number(transfer.totalBytes) || 0),
+    fileCount: Number(transfer.fileCount) || (Array.isArray(transfer.files) ? transfer.files.length : 0),
+    failedAt: now,
+    lastActivityAt: now,
+    canRetry: Boolean(transfer.canRetry && (elements.fileClipboardInput.files?.length || 0) > 0),
+  };
+  const detail = describeOutgoingFileResultStatus(state.lastOutgoingFileTransfer);
+  elements.clipboardText.textContent = `剪贴板：${detail}`;
+  updateFileClipboardButton();
+  syncFloatingControlStatus();
+  addLog("文件剪贴板", detail);
+  return 1;
+}
+
 function remoteFileTransferRateText(transfer = {}, now = Date.now()) {
   const receivedBytes = Math.max(0, Number(transfer.receivedBytes) || 0);
   if (receivedBytes <= 0) return "";
@@ -6563,6 +6592,11 @@ function handleClipboardFileProgress(message) {
 }
 
 function handleClipboardFileResult(message) {
+  const currentTransferId = state.lastOutgoingFileTransfer?.transferId || "";
+  if (currentTransferId && message.transferId && currentTransferId !== message.transferId) {
+    addLog("文件剪贴板", `忽略旧的对端文件结果 · ${message.transferId}`);
+    return false;
+  }
   const previousTransferMatches = state.lastOutgoingFileTransfer?.transferId === message.transferId;
   const previousTransfer = previousTransferMatches
     ? state.lastOutgoingFileTransfer
@@ -6588,6 +6622,7 @@ function handleClipboardFileResult(message) {
   updateFileClipboardButton();
   syncFloatingControlStatus();
   addLog("文件剪贴板", detail);
+  return true;
 }
 
 async function receiveClipboardText(message) {
@@ -7672,6 +7707,7 @@ document.addEventListener("MSFullscreenChange", handleNativeFullscreenChange);
 tickClock();
 setInterval(tickClock, 1000);
 setInterval(expireStaleRemoteFileTransfers, remoteFileTransferSweepIntervalMs);
+setInterval(expirePendingOutgoingFileResult, remoteFileTransferSweepIntervalMs);
 applyPreferences();
 state.discoveredDevices = buildDeviceList();
 renderDiscoveredDevices();

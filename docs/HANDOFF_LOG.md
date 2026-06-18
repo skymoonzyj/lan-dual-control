@@ -21,6 +21,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端手动发送文件等待对端确认超时时可直接重发。
+完成内容：
+- 本机文件分块发送完成后，如果 45 秒没有收到对端 `clipboard_file_result`，顶部剪贴板状态和全屏/监看浮层会提示“对端确认超时”。
+- 确认超时后保留当前文件选择，按钮切换为“重新发送”，用户可直接从头重发保留文件。
+- 如果超时后已经重新发送，旧 `transferId` 的迟到对端结果只写事件日志，不再覆盖当前重发等待状态。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`（失败点：旧 `transferId` 的迟到结果覆盖当前重发状态）。
+- 实现后复跑备用端口：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`
+遗留问题：
+- 这仍是从头重新发送，不是断点续传。
+- 默认 `5197/9337` 端口复跑时曾只打印页面地址后退出，备用端口通过；现场若看到 `WinClientPorts=occupied(...;stale-diagnostics)`，继续按已有备用端口提示处理。
+下一步建议：
+- 真机大文件/压缩包长测时重点观察对端确认是否能稳定返回、超时提示是否足够明显，以及重发后系统文件剪贴板粘贴是否稳定。
+是否改了协议：否；复用既有 `clipboard_file_result` 和 `transferId`。
+是否需要另一端配合：暂不需要；真机长测时再请 Mac 端配合复制文件或模拟长时间不返回结果。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端手动发送文件在对端拒收后也能直接重发。
 完成内容：
 - 手动选文件发送时，本机分块发完后不再立刻清空文件选择，而是等待对端 `clipboard_file_result accepted=true` 后再清空。
