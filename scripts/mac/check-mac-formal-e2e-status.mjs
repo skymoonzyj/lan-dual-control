@@ -76,6 +76,11 @@ JSON output:
                             for the formal 60Hz target. It does not write
                             files, load launchctl, start Mac host, request a
                             password, or send input.
+  commands.macUnattendedFormalCommand
+                            Secret-free read-only formal unattended gate. It
+                            turns missing or low LaunchAgent maxScreenFps into
+                            a blocker without writing files, loading launchctl,
+                            requesting a password, sending a call, or sending input.
 
 Examples:
   node scripts/mac/check-mac-formal-e2e-status.mjs
@@ -468,6 +473,7 @@ function makeCallText(report) {
       "Start with start-mac-host --promptPassword --requirePassword, then rerun the checklist.",
       `Plan safe reboot persistence first with: ${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
       `If targeting formal 60Hz, dry-run max-FPS planning first with: ${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
+      `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
       `When the host is online, run local smoke first with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
       `When the host is online, refresh the media baseline with: ${report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
     ].join(" ");
@@ -479,6 +485,7 @@ function makeCallText(report) {
     `Checklist ${findings}.`,
     `If this Mac should stay ready after reboot, review the dry-run LaunchAgent plan with: ${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
     `If targeting formal 60Hz, review the max-FPS dry-run plan with: ${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
+    `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
     `Before long formal runs, run local H.264/PCM/input-log smoke with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
     `Before long formal runs, refresh the Mac media baseline with: ${report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
     "If ready, Windows should run discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log. Do not run inject unless the user explicitly confirms they are watching.",
@@ -498,6 +505,7 @@ function makeBoardSummary(report) {
       "Next: start with start-mac-host --promptPassword --requirePassword, then rerun checklist.",
       `MacLaunchAgentPlan=${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
       `MacMaxFpsPlan=${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
+      `MacUnattendedFormal=${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
       `MacFormalLocalSmoke=${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
       "Media precheck after host is online: check-mac-host-readiness --probeMedia --boardSummary.",
       "Do not send passwords on Agent Link Board; inject requires explicit user confirmation.",
@@ -508,6 +516,7 @@ function makeBoardSummary(report) {
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)}; pipeline=${host.capabilities?.capturePipeline || "unknown"}; audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}; ${formatBuildDiff(host.buildDiff)}.`,
     `MacLaunchAgentPlan=${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
     `MacMaxFpsPlan=${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
+    `MacUnattendedFormal=${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
     `MacFormalLocalSmoke=${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
     "Media precheck: check-mac-host-readiness --probeMedia --boardSummary before long formal runs.",
     "Formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log; no inject without explicit user confirmation.",
@@ -528,6 +537,7 @@ function makeCommands(report) {
       "--boardSummary",
     ].join(" "),
     macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(probePort),
+    macUnattendedFormalCommand: makeMacUnattendedFormalCommand(probeHost, probePort),
     macFormalLocalSmokeCommand: [
       "node",
       "scripts/mac/check-mac-formal-local-smoke.mjs",
@@ -562,6 +572,19 @@ function makeMacMaxFpsPlanCommand(port) {
     String(port || defaults.port),
     "--maxScreenFps",
     String(formalTargetMaxScreenFps),
+    "--boardSummary",
+  ].join(" ");
+}
+
+function makeMacUnattendedFormalCommand(host, port) {
+  return [
+    "node",
+    "scripts/mac/check-mac-unattended-status.mjs",
+    "--host",
+    shellArg(host || defaults.host),
+    "--port",
+    String(port || defaults.port),
+    "--requireLaunchAgentMaxFps",
     "--boardSummary",
   ].join(" ");
 }
