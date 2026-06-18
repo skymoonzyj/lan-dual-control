@@ -137,6 +137,10 @@ function assertCommandSet(commands, label) {
   assertIncludes(commands?.macHostSafeStartCommand || "", "start-mac-host.mjs", label);
   assertIncludes(commands?.macHostSafeStartCommand || "", "--promptPassword", label);
   assertIncludes(commands?.macHostSafeStartCommand || "", "--requirePassword", label);
+  assertIncludes(commands?.macMaxFpsSafeStartCommand || "", "start-mac-host.mjs", label);
+  assertIncludes(commands?.macMaxFpsSafeStartCommand || "", "--promptPassword", label);
+  assertIncludes(commands?.macMaxFpsSafeStartCommand || "", "--requirePassword", label);
+  assertIncludes(commands?.macMaxFpsSafeStartCommand || "", "--maxScreenFps 60", label);
   assertIncludes(commands?.macHostReadinessCommand || "", "check-mac-host-readiness.mjs", label);
   assertIncludes(commands?.macHostReadinessCommand || "", "--checkBoard", label);
   assertIncludes(commands?.macHostReadinessCommand || "", "--boardSummary", label);
@@ -186,6 +190,8 @@ function assertCommandSet(commands, label) {
   assertNotIncludes(commands?.macClientBrowserSelfTestCommand || "", "--server", label);
   assertNotIncludes(commands?.macClientBrowserSelfTestCommand || "", "input_event", label);
   assertNotIncludes(commands?.macClientBrowserSelfTestCommand || "", "inject", label);
+  assertNotIncludes(commands?.macMaxFpsSafeStartCommand || "", "--password", label);
+  assertNotIncludes(commands?.macMaxFpsSafeStartCommand || "", "inject", label);
   assertNoSecrets(JSON.stringify(commands), label);
 }
 
@@ -270,6 +276,7 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "macHost=offline", "offline board summary");
   assertIncludes(payload.boardSummary || "", "macClient=offline", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacHostReadiness=", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacMaxFpsSafeStart=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacUnattendedStatus=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentLoad=", "offline board summary");
@@ -350,6 +357,7 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "checkedAt=", "online board summary");
       assertIncludes(payload.boardSummary || "", "inputMode=log", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacHostReadiness=", "online board summary");
+      assertIncludes(payload.boardSummary || "", "MacMaxFpsSafeStart=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacUnattendedStatus=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacLaunchAgentLoad=", "online board summary");
@@ -417,11 +425,15 @@ async function checkOnlineStaleHostBuildWarning(args) {
       assertIncludes(payload.boardSummary || "", "restart recommended", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "hostRuntimeChanges=", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "MacHostStop=node scripts/mac/start-mac-host.mjs --stop", "stale build board summary");
+      assertIncludes(payload.boardSummary || "", "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs", "stale build board summary");
+      assertIncludes(payload.boardSummary || "", "--maxScreenFps 60", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "MacLaunchAgentLoad=launchctl bootstrap", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "MacLaunchAgentPrint=launchctl print", "stale build board summary");
       assertIncludes(payload.commands?.macHostStopCommand || "", "start-mac-host.mjs --stop", "stale build commands");
+      assertIncludes(payload.commands?.macMaxFpsSafeStartCommand || "", "start-mac-host.mjs", "stale build commands");
+      assertIncludes(payload.commands?.macMaxFpsSafeStartCommand || "", "--maxScreenFps 60", "stale build commands");
       assertIncludes(payload.commands?.macHostReadinessCommand || "", "check-mac-host-readiness.mjs", "stale build commands");
       assertIncludes(payload.commands?.macUnattendedFormalCommand || "", "check-mac-unattended-status.mjs", "stale build commands");
       assertIncludes(payload.commands?.macLaunchAgentLoadCommand || "", "launchctl bootstrap", "stale build commands");

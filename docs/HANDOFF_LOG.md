@@ -17,6 +17,35 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
+本轮目标：让 Mac heartbeat 直接给出前台 60Hz 安全启动命令，补齐旧 host / 远端 30Hz 上限时的无密下一步。
+完成内容：
+- `check-mac-heartbeat --boardSummary` 新增 `MacMaxFpsSafeStart=`，命令为 `start-mac-host --promptPassword --requirePassword --host 0.0.0.0 --port <port> --maxScreenFps 60`。
+- JSON `commands.macMaxFpsSafeStartCommand` 同步输出，Windows watcher/控制端已有的 `MacMaxFpsSafeStart=` 消费逻辑可以直接复用。
+- 该命令只是人工可复制指引，不自动启动 host、不读取或打印密码、不认证、不发送 input/inject。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增 heartbeat 自测断言并确认失败：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 30000`，失败点是 `MacMaxFpsSafeStart=` 缺失。
+- 实现后复跑同一 heartbeat 自测通过。
+- 真实心跳：`node scripts/mac/check-mac-heartbeat.mjs --host 127.0.0.1 --port 43770 --clientHost 127.0.0.1 --clientPort 5188 --checkBoard --boardSummary` 已输出 `MacMaxFpsSafeStart=... --maxScreenFps 60`。
+- 语法、Mac script help、diff check 和冲突扫描通过。
+遗留问题：
+- 真正停止旧 Mac host、前台 60Hz 启动或加载 LaunchAgent 仍需要用户授权；本轮没有请求密码，也没有启动/停止服务。
+下一步建议：
+- 白天用户在场时，先按 `MacHostStop=` 停旧 host，再按 `MacMaxFpsSafeStart=` 做前台 60Hz 验证，或按 `MacLaunchAgentLoad=` 切到 LaunchAgent 后跑 `MacUnattendedFormal=`。
+是否改了协议：否；只增加 heartbeat 摘要/JSON 里的安全命令标签。
+是否需要另一端配合：后续真实 Windows 控 Mac 60Hz 验收需要 Windows 端复跑页面/正式 E2E，但本轮不需要。
+
 ## 2026-06-19 Windows Codex
 
 日期：2026-06-19 继续推进

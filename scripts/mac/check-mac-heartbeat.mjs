@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const launchAgentLabel = "com.lan-dual-control.mac-host";
 const launchAgentPath = join(homedir(), "Library", "LaunchAgents", `${launchAgentLabel}.plist`);
+const formalTargetMaxScreenFps = 60;
 const hostRuntimePaths = [
   "apps/mac-host/Package.swift",
   "apps/mac-host/Sources",
@@ -88,7 +89,8 @@ Machine-readable JSON fields:
   board                       Agent Link Board readability and currentCall.
   commands                    Secret-free next-step commands for user action,
                               including the local Mac client mock browser
-                              self-test and LaunchAgent load/print checks.
+                              self-test, 60Hz safe start, and LaunchAgent
+                              load/print checks.
 
 Examples:
   node scripts/mac/check-mac-heartbeat.mjs --checkBoard --boardSummary
@@ -603,6 +605,7 @@ function buildCommands(args) {
     macHeartbeatCommand: `node scripts/mac/check-mac-heartbeat.mjs --host ${args.host} --port ${args.port} --clientHost ${args.clientHost} --clientPort ${args.clientPort} --checkBoard --boardSummary`,
     macHostStopCommand: `node scripts/mac/start-mac-host.mjs --stop --host ${args.host} --port ${args.port}`,
     macHostSafeStartCommand: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port}`,
+    macMaxFpsSafeStartCommand: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port} --maxScreenFps ${formalTargetMaxScreenFps}`,
     macHostReadinessCommand: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     macUnattendedStatusCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --boardSummary`,
     macUnattendedFormalCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`,
@@ -695,6 +698,7 @@ function makeBoardSummary(report) {
     `MacHeartbeatRerun=${report.commands.macHeartbeatCommand}.`,
     `MacHostStop=${report.commands.macHostStopCommand}.`,
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
+    `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
     `MacHostReadiness=${report.commands.macHostReadinessCommand}.`,
     `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
