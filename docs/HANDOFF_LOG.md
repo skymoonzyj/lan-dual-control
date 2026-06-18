@@ -21,6 +21,37 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows resume 对安全认证 active call 给出可复制的无密确认命令，帮助收束联络板上已响应的 call。
+完成内容：
+- `check-windows-resume-status` 在 secure-auth currentCall 且已有安全 `WindowsSecureAuthPath` 时，现在会生成 `board.currentCall.agentCallAckCommand`。
+- `--boardSummary` 同步输出 `AgentCallAck=node scripts/codex-link-client.mjs ... send --from "Windows Codex" --text "...WindowsSecureAuthPath..."`，用于回复 Mac 端“Windows 已提供安全路径，请本机确认后再清理 currentCall”。
+- `AgentCallAck` 只发送说明，不自动 `clear-call`，也不会认证 WebSocket、不会发送密码、不会发送 input/inject。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 实现后复跑：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- `node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`（真实通讯板摘要已显示 `AgentCallAck=`）
+遗留问题：
+- 旧 active call 是否清理仍需 Mac/人工确认；本轮没有自动调用 `clear-call`，避免误清其他端仍在看的呼叫。
+下一步建议：
+- 如果通讯板仍显示 “Coordinate secure auth...” active call，Windows 侧可复制 `AgentCallAck=` 发一条确认消息；Mac 端确认路径后再由负责方显式清理 call。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac/人工确认安全路径并决定何时清理 active call；不要在通讯板发送密码/token/系统账号。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：补强正式 E2E 第二步现场提示，避免 Windows client browser H.264 canvas/FPS 等待被误判为卡住。
 完成内容：
 - `check-mac-formal-e2e` 的 runPlan 现在给 `windows-client-browser-h264` 步骤输出 `troubleshootingHints[]`，机器可读地列出第二步排障顺序。

@@ -469,10 +469,12 @@ function annotateBoardCurrentCall(board, commands) {
     currentCall.secureAuthPathReady = true;
     currentCall.next = "mac-confirm-secure-auth-path";
     currentCall.nextDetail = "WindowsSecureAuthPath is available; Mac can confirm the local safe auth path before the call is cleared.";
+    currentCall.agentCallAckCommand = makeAgentCallAckCommand(commands?.server || defaults.server, windowsSecureAuthPathCommand);
   } else {
     currentCall.secureAuthPathReady = false;
     currentCall.next = "";
     currentCall.nextDetail = "";
+    currentCall.agentCallAckCommand = "";
   }
 }
 
@@ -1965,6 +1967,30 @@ function makeWindowsSecureAuthPathCommand(port = 43770) {
   return `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${safePort} --promptPassword --requirePassword`;
 }
 
+function quoteCommandArg(value) {
+  const text = String(value);
+  return /^[A-Za-z0-9_./:=@-]+$/.test(text) ? text : JSON.stringify(text);
+}
+
+function makeAgentCallAckCommand(server, windowsSecureAuthPathCommand) {
+  const text = [
+    `WindowsSecureAuthPath 已提供：${windowsSecureAuthPathCommand}。`,
+    "请 Mac 端/人工确认这条本机隐藏输入同一临时密码的安全认证路径；确认后再按需要清理 currentCall。",
+    "不要在 Agent Link Board 发送密码/token/系统账号；不认证、不发送 input/inject。",
+  ].join("");
+  return [
+    "node",
+    "scripts/codex-link-client.mjs",
+    "--server",
+    server || defaults.server,
+    "send",
+    "--from",
+    "Windows Codex",
+    "--text",
+    text,
+  ].map(quoteCommandArg).join(" ");
+}
+
 function makeCommands(args, preflight) {
   const target = preflight.payload?.target || { host: args.host, port: args.port };
   const host = String(target.host || args.host);
@@ -2120,6 +2146,7 @@ function makeCommands(args, preflight) {
     windowsClientDiagnosticsAlternatePowerShellCommand.push("-ExpectDiscoveryRuntimeBuildId", runtimeBuildId);
   }
   return {
+    server: args.server,
     resumeBoardSummary: "node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary",
     macHostDiscoveryBoardSummary,
     macHostDiscoveryPowerShellBoardSummary,
@@ -2426,6 +2453,9 @@ function makeBoardSummary(report) {
   const boardCallNext = report.board.currentCall?.active && report.board.currentCall.next
     ? `; AgentCallNext=${report.board.currentCall.next}`
     : "";
+  const boardCallAck = report.board.currentCall?.active && report.board.currentCall.agentCallAckCommand
+    ? `; AgentCallAck=${report.board.currentCall.agentCallAckCommand}`
+    : "";
   const git = report.git.ok
     ? report.git.clean
       ? "clean"
@@ -2454,7 +2484,7 @@ function makeBoardSummary(report) {
   const windowsOpenOneTimeReverseGrantNodeCommand = report.board.windowsOpenOneTimeReverseGrantNodeFallback?.command || report.commands.windowsOpenOneTimeReverseGrantBoardSummary;
   const windowsSecureAuthPathCommand = report.board.windowsSecureAuthPath?.command || report.commands.windowsSecureAuthPath;
   return [
-    `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}${boardCall}${boardCallNext}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
+    `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}${boardCall}${boardCallNext}${boardCallAck}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
     `WinClientPorts=${clientPorts}; WinClientPortsNext=${clientPortsNext}.`,
     ...(report.board.windowsLanRisk?.found
       ? [`WindowsLanRisk=${report.board.windowsLanRisk.summary}.`]

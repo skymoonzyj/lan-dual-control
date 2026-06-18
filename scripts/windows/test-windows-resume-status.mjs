@@ -870,9 +870,15 @@ async function checkSecureAuthCallNextSummary(args) {
       assert(payload.board?.currentCall?.active === true, "secure-auth currentCall should be active");
       assert(payload.board?.currentCall?.secureAuthPathReady === true, "secure-auth currentCall should be marked ready after WindowsSecureAuthPath is available");
       assert(payload.board?.currentCall?.next === "mac-confirm-secure-auth-path", "secure-auth currentCall should tell Mac to confirm the safe path");
+      assertIncludes(payload.board?.currentCall?.agentCallAckCommand || "", "node scripts/codex-link-client.mjs", "secure-auth currentCall ack command");
+      assertIncludes(payload.board?.currentCall?.agentCallAckCommand || "", `--server ${board.url}`, "secure-auth currentCall ack command");
+      assertIncludes(payload.board?.currentCall?.agentCallAckCommand || "", "send --from", "secure-auth currentCall ack command");
+      assertIncludes(payload.board?.currentCall?.agentCallAckCommand || "", "WindowsSecureAuthPath", "secure-auth currentCall ack command");
       assertIncludes(payload.boardSummary, "AgentCallNext=mac-confirm-secure-auth-path", "secure-auth currentCall board summary");
+      assertIncludes(payload.boardSummary, "AgentCallAck=node scripts/codex-link-client.mjs", "secure-auth currentCall board summary");
       assertIncludes(payload.boardSummary, "WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword", "secure-auth currentCall board summary");
       assertNotIncludes(result.stdout + result.stderr, "secret-value", "secure-auth currentCall JSON should not leak secrets");
+      assertNotIncludes(result.stdout + result.stderr, "--password", "secure-auth currentCall JSON should not include password args");
       console.log("[OK] Windows resume status marks secure-auth currentCall ready when WindowsSecureAuthPath is available");
     }, {
       currentCall: secureAuthMacCallForWindows(),
