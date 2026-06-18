@@ -1318,6 +1318,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
         "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary",
         "run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
+        "MacHeartbeat=stale heartbeat missing; Mac host /discovery unreachable ECONNREFUSED; HTTP 502 Bad Gateway",
       ].join("; ");
       const macAlertFindingSummary = "Mac side status alert - Mac Codex | " + macAlertFindingText;
       const watcherRunningView =
@@ -1662,6 +1663,9 @@ async function verifyDesktopOnlyHostPanel(session) {
           watcherRunningView.statusText.includes("Windows 被控端未指定或未就绪") &&
           watcherRunningView.statusText.includes("仓库状态需检查") &&
           watcherRunningView.statusText.includes("LaunchAgent 刷新率上限需调整") &&
+          watcherRunningView.statusText.includes("Mac 心跳过期") &&
+          watcherRunningView.statusText.includes("Mac host 不可达") &&
+          watcherRunningView.statusText.includes("Mac/API 网络错误") &&
           watcherStoppedView.running === false &&
           watcherStoppedView.badgeText === "未开启" &&
           watcherStoppedView.toggleText === "开启提醒" &&
@@ -2910,6 +2914,7 @@ async function verifyReconnectControls(session) {
         "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
         "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary",
         "run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
+        "MacHeartbeat=stale heartbeat missing; Mac host /discovery unreachable ECONNREFUSED; HTTP 502 Bad Gateway",
       ].join("; ");
 
       try {
@@ -3078,6 +3083,9 @@ async function verifyReconnectControls(session) {
             exportText.includes("Mac 本机短验收重跑命令已提供") &&
             exportText.includes("Windows 反控授权状态命令已提供") &&
             exportText.includes("Windows 一次性反控授权命令已提供") &&
+            exportText.includes("Mac 心跳过期，可能卡住") &&
+            exportText.includes("Mac host 不可达") &&
+            exportText.includes("Mac/API 网络错误") &&
             exportText.includes("- Mac 值守说明：Windows 已从 Mac 提醒 watcher 状态里识别到值守 warnings/blockers"),
           reconnectReason: exportText.includes("- 重连原因：测试断线"),
           reconnectNext: exportText.includes("- 下次重连："),
@@ -3100,6 +3108,8 @@ async function verifyReconnectControls(session) {
             exportText.includes("RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs") &&
             exportText.includes("WindowsReverseGrantStatus=pwsh") &&
             exportText.includes("WindowsOpenOneTimeReverseGrant=pwsh") &&
+            exportText.includes("MacHeartbeat=stale") &&
+            exportText.includes("HTTP 502 Bad Gateway") &&
             exportText.includes("warnings=board"),
           macAlertCheckedAt: exportText.includes("- Mac 提醒最近检查："),
           macAlertSecondsAgo: exportText.includes("秒前）"),
@@ -3168,6 +3178,9 @@ async function verifyReconnectControls(session) {
           copiedText.includes("Mac 本机短验收重跑命令已提供") &&
           copiedText.includes("Windows 反控授权状态命令已提供") &&
           copiedText.includes("Windows 一次性反控授权命令已提供") &&
+          copiedText.includes("Mac 心跳过期，可能卡住") &&
+          copiedText.includes("Mac host 不可达") &&
+          copiedText.includes("Mac/API 网络错误") &&
           copiedText.includes("launch-agent-max-fps") &&
           copiedText.includes("mac-host-max-fps") &&
           copiedText.includes("MacHostSafeStart=node scripts/mac/start-mac-host.mjs") &&

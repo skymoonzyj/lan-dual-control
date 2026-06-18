@@ -80,6 +80,7 @@ $cnAllow = ConvertFrom-CodePoints @(0x5141, 0x8bb8)
 $cnRetry = ConvertFrom-CodePoints @(0x91cd, 0x8bd5)
 $cnOneTime = ConvertFrom-CodePoints @(0x4e00, 0x6b21, 0x6027)
 
+$activeMacWorkStatuses = @("coding", "checking", "testing", "waiting", "running", "thinking", "working", "syncing", "planning")
 $nonEmptyFindingValuePattern = "(?!none\b|ok\b|0\b|false\b|-\b|$)[^\s;]+"
 $findingFieldPattern = "\b(warnings|blockers)\s*[:=]\s*$nonEmptyFindingValuePattern"
 $fpsFindingPattern = "fps-limit|mac-host-max-fps|launch-agent-max-fps"
@@ -94,6 +95,10 @@ $urgentPatterns = @(
     "\b(HTTP\s*)?502\b",
     "Bad Gateway",
     "Gateway Timeout",
+    "\b(ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|network timeout|request timeout|API error)\b",
+    "(MacHeartbeat|MacWatchdog|Mac watchdog|heartbeat).*(stale|missing|expired|timeout|timed out|lost|unreachable|ready=false|blocked|failed)",
+    "(Mac host|MacHost|mac-host|/discovery).*(unreachable|offline|ECONNREFUSED|ETIMEDOUT|timeout|timed out|failed|502|Bad Gateway)",
+    "(unreachable|offline|ECONNREFUSED|ETIMEDOUT|timeout|timed out|failed|502|Bad Gateway).*(Mac host|MacHost|mac-host|/discovery)",
     "\bLAN008\b",
     "(LAN008|pending-request|ready=false|blocked|failed|$cnTemporary|$cnAllow|$cnAuth|$cnRetry|$cnRequest|$cnNeed).*(WindowsReverseGrant|WindowsOpenOneTimeReverseGrant|ReverseGrant|allow-windows-reverse-control)",
     "(WindowsReverseGrant|WindowsOpenOneTimeReverseGrant|ReverseGrant|allow-windows-reverse-control).*(LAN008|pending-request|ready=false|blocked|failed|$cnTemporary|$cnAllow|$cnAuth|$cnRetry|$cnRequest|$cnNeed)",
@@ -343,6 +348,18 @@ while ($true) {
                 -Id ("call-windows:" + $callId) `
                 -Title ("Agent Link call needs Windows attention - " + [string]$state.currentCall.from) `
                 -Message (Format-CallMessage -Call $state.currentCall)
+
+            $callAgeTimestamp = [string]$state.currentCall.updatedAt
+            if ([string]::IsNullOrWhiteSpace($callAgeTimestamp)) {
+                $callAgeTimestamp = [string]$state.currentCall.startedAt
+            }
+            $callAgeMinutes = Get-AgeMinutes -Timestamp $callAgeTimestamp
+            if (($null -ne $callAgeMinutes) -and ($callAgeMinutes -gt $StaleMinutes)) {
+                Add-AlertOnce `
+                    -Id ("call-stale:" + $callId + ":" + $StaleMinutes) `
+                    -Title ("Agent Link call may be stale - " + [string]$state.currentCall.from) `
+                    -Message ((Format-CallMessage -Call $state.currentCall) + "`n`nThis Mac -> Windows call has not updated for more than {0} minute(s). Please check whether Mac Codex is stuck, waiting for authorization, or unable to report back." -f $StaleMinutes)
+            }
         }
 
         foreach ($event in @($state.events)) {
@@ -383,7 +400,7 @@ while ($true) {
                     -Message ($statusText + "`n`nUpdated at: " + [string]$item.updatedAt)
             }
 
-            if (@("coding", "testing", "waiting", "ready") -contains $status) {
+            if ($activeMacWorkStatuses -contains $status) {
                 $ageMinutes = Get-AgeMinutes -Timestamp ([string]$item.updatedAt)
                 if (($null -ne $ageMinutes) -and ($ageMinutes -gt $StaleMinutes)) {
                     Add-AlertOnce `

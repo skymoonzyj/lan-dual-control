@@ -21,6 +21,42 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows 侧先落地 Mac 卡住/心跳/502 独立提醒底座，并回复小窗模式排期。
+完成内容：
+- 已在 Agent Link Board 回复：Windows 侧 Mac 监看小窗第一版建议先做页面内“浮层缩小模式”，复用现有视频画布、悬浮控制中心和诊断状态，默认只监看、不捕获键鼠；稳定后再抽到桌面壳 always-on-top 独立小窗。
+- `watch-codex-link-mac-alerts.ps1` 扩展 stale 判断：`checking`、`thinking`、`running`、`syncing`、`planning` 等 Mac Codex 进行中状态长时间无更新会提醒；Mac -> Windows `currentCall` 超过阈值未更新会单独提醒。
+- watcher 新增 Mac 心跳/host/网络文案识别：`MacHeartbeat=stale`、Mac watchdog 心跳过期、Mac host `/discovery` 不可达、`ECONNREFUSED`、502/Bad Gateway/API 网络错误都会触发 Windows 本机提醒。
+- Windows 控制端 Mac 提醒区、快速摘要和复制/导出诊断新增中文风险：“Mac 心跳过期，可能卡住”“Mac host 不可达”“Mac/API 网络错误”，并放宽 Mac 值守导出摘要长度，避免关键卡住信号被截断。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- PowerShell 7 AST parse `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 30000`
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 本轮只做 Windows 侧独立提醒底座；真正独立 Mac watchdog/heartbeat 进程或 Mac health endpoint 仍需 Mac 端后续设计。
+- 小窗模式本轮只确定排期和消费底座，未开始 UI 实装。
+下一步建议：
+- 继续做 Windows 控 Mac 的页面内“监看小窗/浮层缩小模式”：默认只监看，显示远端画面、连接/FPS/延迟、输入/安全状态、最近 Mac 提醒，并提供恢复、复制诊断和断开。
+是否改了协议：否。
+是否需要另一端配合：Mac 端后续可补独立 watchdog/heartbeat 字段；Windows 当前规则已能消费文本和 watcher 摘要。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows host 状态和 readiness 对齐 `WindowsReverseGrant*` 稳定标签。
 完成内容：
 - `start-windows-host --status` 的 JSON、普通输出和 `--boardSummary` 在默认需确认反控策略下新增 `WindowsReverseGrantStatus=`、`WindowsOpenOneTimeReverseGrant=`、`WindowsReverseGrantStatusNodeFallback=`、`WindowsOpenOneTimeReverseGrantNodeFallback=`；同时保留旧 `ReverseGrant=` / `ReverseGrantPs=`。

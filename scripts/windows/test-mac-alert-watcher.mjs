@@ -342,6 +342,28 @@ async function checkMacCallForWindowsAlerts(args) {
   console.log("[OK] Mac -> Windows current calls alert");
 }
 
+async function checkStaleMacCallForWindowsAlerts(args) {
+  const staleAt = new Date(Date.now() - 12 * 60 * 1000).toISOString();
+  const output = await runWatcherAgainst(baseState({
+    currentCall: {
+      status: "CALLING",
+      from: "Mac Codex",
+      need: "Windows Codex",
+      startedAt: staleAt,
+      updatedAt: staleAt,
+      goal: "Mac client formal smoke waiting for Windows grant",
+      connection: "Windows host reverse control",
+      command: "node scripts/mac/run-mac-client-formal-smoke.mjs --boardSummary",
+      expected: "Windows opens one-time reverse grant, then Mac retries.",
+      ask: "请 Windows 检查是否卡住或需要授权。",
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "stale Mac call for Windows");
+  assertIncludes(output, "Agent Link call may be stale", "stale Mac call for Windows");
+  assertIncludes(output, "has not updated for more than 5 minute", "stale Mac call for Windows");
+  console.log("[OK] Stale Mac -> Windows current calls alert");
+}
+
 async function checkDoneMacCallIgnored(args) {
   const output = await runWatcherAgainst(baseState({
     currentCall: {
@@ -406,6 +428,53 @@ async function checkStaleStatusAlerts(args) {
   assertIncludes(output, "ALERT:", "stale status");
   assertIncludes(output, "Mac side may be stuck", "stale status");
   console.log("[OK] Stale Mac status alerts");
+}
+
+async function checkCodexWorkStatusStaleAlerts(args) {
+  const staleAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Checking": {
+        role: "Mac 端",
+        status: "checking",
+        note: "checking formal E2E step 2",
+        updatedAt: staleAt,
+      },
+      "Mac Thinking": {
+        role: "Mac 端",
+        status: "thinking",
+        note: "thinking through build failure",
+        updatedAt: staleAt,
+      },
+      "Mac Running": {
+        role: "Mac 端",
+        status: "running",
+        note: "running local smoke",
+        updatedAt: staleAt,
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "Mac side may be stuck - Mac Checking", "checking stale status");
+  assertIncludes(output, "Mac side may be stuck - Mac Thinking", "thinking stale status");
+  assertIncludes(output, "Mac side may be stuck - Mac Running", "running stale status");
+  console.log("[OK] Checking/thinking/running Mac statuses alert when stale");
+}
+
+async function checkMacHeartbeatAndHostUnreachableAlerts(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Watchdog": {
+        role: "Mac 端",
+        status: "idle",
+        note: "MacHeartbeat=stale heartbeat missing; Mac host /discovery unreachable ECONNREFUSED",
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "Mac heartbeat and host unreachable status");
+  assertIncludes(output, "MacHeartbeat=stale", "Mac heartbeat status");
+  assertIncludes(output, "Mac host /discovery unreachable", "Mac host unreachable status");
+  console.log("[OK] Mac heartbeat stale and host unreachable wording alerts");
 }
 
 async function checkReverseGrantStatusAlerts(args) {
@@ -881,10 +950,13 @@ async function main() {
   await checkMacUnattendedEventAlerts(args);
   await checkNonMacEventIgnored(args);
   await checkMacCallForWindowsAlerts(args);
+  await checkStaleMacCallForWindowsAlerts(args);
   await checkDoneMacCallIgnored(args);
   await checkWindowsCallForMacIgnored(args);
   await checkBlockedStatusAlerts(args);
   await checkStaleStatusAlerts(args);
+  await checkCodexWorkStatusStaleAlerts(args);
+  await checkMacHeartbeatAndHostUnreachableAlerts(args);
   await checkReverseGrantStatusAlerts(args);
   await checkMacUnattendedStatusAlerts(args);
   await checkMacUnattendedOkStatusIgnored(args);

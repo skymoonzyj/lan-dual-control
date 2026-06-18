@@ -252,6 +252,10 @@ const macUnattendedRiskLabels = {
   "sleep-unreachable": "睡眠后不可达",
   "host-offline": "Mac host 离线",
   "host-unreachable": "Mac host 不可达",
+  "mac-heartbeat-stale": "Mac 心跳过期，可能卡住",
+  "mac-watchdog-stale": "Mac watchdog 心跳过期",
+  "mac-api-error": "Mac/API 网络错误",
+  "mac-codex-stuck": "Mac Codex 可能卡住",
   "mac-host": "Mac host 需检查",
   "mac-host-discovery": "Mac host 发现需检查",
   "mac-host-safe-start": "Mac host 安全启动命令已提供",
@@ -2974,6 +2978,24 @@ function parseMacUnattendedAttention(text) {
   if (lower.includes("ready=false") && risks.length === 0) {
     risks.push("not-ready");
   }
+  if (/\b(MacHeartbeat|heartbeat)\b.*\b(stale|missing|expired|timeout|timed out|lost|failed|unreachable)\b/i.test(source)) {
+    risks.unshift("mac-heartbeat-stale");
+  }
+  if (/\b(MacWatchdog|watchdog)\b.*\b(stale|missing|expired|timeout|timed out|lost|failed|unreachable)\b/i.test(source)) {
+    risks.unshift("mac-watchdog-stale");
+  }
+  if (
+    /\b(Mac host|MacHost|mac-host|\/discovery)\b.*\b(unreachable|offline|econnrefused|etimedout|timeout|timed out|failed|bad gateway)\b/i.test(source) ||
+    /\b(unreachable|offline|econnrefused|etimedout|timeout|timed out|failed|bad gateway)\b.*\b(Mac host|MacHost|mac-host|\/discovery)\b/i.test(source)
+  ) {
+    risks.unshift(lower.includes("offline") || lower.includes("离线") ? "host-offline" : "host-unreachable");
+  }
+  if (/\b(HTTP\s*)?502\b|Bad Gateway|Gateway Timeout|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|network timeout|request timeout|API error/i.test(source)) {
+    risks.unshift("mac-api-error");
+  }
+  if (/\b(stuck|blocked|hung)\b|卡住|阻塞/.test(source) && !/\bblockers\s*[:=]\s*none\b/i.test(source)) {
+    risks.unshift("mac-codex-stuck");
+  }
   if (/attention\s*=\s*(warning|blocker|failed)/i.test(source) && risks.length === 0) {
     risks.push("attention");
   }
@@ -3018,7 +3040,7 @@ function parseMacUnattendedAttention(text) {
     warnings,
     blockers,
     labels,
-    summary: labels.length ? compactExportStatusText(labels.join(" / "), 520) : "",
+    summary: labels.length ? compactExportStatusText(labels.join(" / "), 760) : "",
   };
 }
 
@@ -3105,7 +3127,7 @@ function getMacReachabilityExportStatus({ targetLabel, reconnectExport, macAlert
   }
 
   return {
-    status: compactExportStatusText(parts.join(" · "), 420),
+    status: compactExportStatusText(parts.join(" · "), 900),
     note: macAlertWatcherExport.unattended?.summary
       ? "Windows 已从 Mac 提醒 watcher 状态里识别到值守 warnings/blockers；详细 LaunchAgent、自启动、电源、锁屏/睡眠可达性仍以 Mac status/readiness 为准。"
       : "当前仅由 Windows 侧连接、发现、重连和提醒 watcher 推断；LaunchAgent、自启动、锁屏/睡眠可达性需等 Mac status/readiness 上报。",
