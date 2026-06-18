@@ -62,6 +62,7 @@ requests while a remote-control window is minimized. The report also checks
 the local alert-watcher status read-only, without starting it.
 When --checkBoard is enabled, the report also surfaces recent
 MacHostSafeStart=, MacMaxFpsSafeStart=, MacFormalLocalSmoke=,
+MacClientFormalSmoke=,
 MacHeartbeatOnce=, MacHeartbeatWatch=, WindowsReverseGrantStatus=, and
 WindowsOpenOneTimeReverseGrant= commands from
 Agent Link Board status/messages so Mac host safe foreground-start guidance
@@ -98,6 +99,8 @@ clipboard, input_ack, and diagnostics in that order.
   FPS gaps and unloaded LaunchAgents as blockers before asking for a password.
   It also includes MacFormalLocalSmoke for the local Mac H.264/PCM/input-log
   smoke check before long formal E2E runs.
+  It also includes MacClientFormalSmoke for the Mac client no-password formal
+  preflight that first starts or reuses the Mac client page.
 
 Options:
   --host <host>                 Explicit Mac host target. Default: ${defaults.host}
@@ -143,6 +146,7 @@ Examples:
   node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary
   node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --boardSummary
   node scripts/mac/check-mac-formal-local-smoke.mjs --host 192.168.31.122 --port 43770 --promptPassword --boardSummary
+  node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/discover-lan-hosts.ps1 -NoLocalSubnets -HostName 192.168.31.122 -Port 43770 -RequireMacHost -BoardSummary
@@ -802,6 +806,94 @@ function parseMacFormalLocalSmokeCommand(fragment) {
   return commandText;
 }
 
+function parseMacClientFormalSmokeCommand(fragment) {
+  const rawTokens = String(fragment || "").split(/\s+/).map(stripCommandToken).filter(Boolean);
+  if (rawTokens.length < 2) return null;
+  if (rawTokens[0] !== "node") return null;
+  if (rawTokens[1].replace(/\\/g, "/") !== "scripts/mac/run-mac-client-formal-smoke.mjs") return null;
+
+  const noValueFlags = new Set([
+    "--discover",
+    "--ensureClient",
+    "--preflightOnly",
+    "--boardSummary",
+  ]);
+  const valueFlags = new Set([
+    "--host",
+    "--port",
+    "--clientHost",
+    "--clientPort",
+    "--debugPort",
+    "--server",
+    "--timeoutMs",
+    "--discoverTimeoutMs",
+    "--clientTimeoutMs",
+  ]);
+  const integerValueFlags = new Set([
+    "--port",
+    "--clientPort",
+    "--debugPort",
+    "--timeoutMs",
+    "--discoverTimeoutMs",
+    "--clientTimeoutMs",
+  ]);
+  const tokens = [rawTokens[0], rawTokens[1]];
+  let hasDiscover = false;
+  let hasEnsureClient = false;
+  let hasPreflightOnly = false;
+  let hasBoardSummary = false;
+  for (let index = 2; index < rawTokens.length; index += 1) {
+    const token = rawTokens[index];
+    if (!token || /^[A-Za-z][A-Za-z0-9_-]*=/.test(token)) break;
+    if (!token.startsWith("--")) break;
+    if (/^--(?:password|token|secret|passwd|pwd)$/i.test(token)) return null;
+    if (noValueFlags.has(token)) {
+      if (token === "--discover") hasDiscover = true;
+      if (token === "--ensureClient") hasEnsureClient = true;
+      if (token === "--preflightOnly") hasPreflightOnly = true;
+      if (token === "--boardSummary") hasBoardSummary = true;
+      tokens.push(token);
+      continue;
+    }
+    if (valueFlags.has(token)) {
+      const value = stripCommandToken(rawTokens[index + 1] || "");
+      if (!value || value.startsWith("--") || /^[A-Za-z][A-Za-z0-9_-]*=/.test(value)) return null;
+      if (/[<>]/.test(value)) return null;
+      if (integerValueFlags.has(token)) {
+        const integerValue = Number(value);
+        if (!Number.isInteger(integerValue) || integerValue < 0) return null;
+        if ((token === "--port" || token === "--clientPort" || token === "--debugPort") && (integerValue < 1 || integerValue > 65535)) return null;
+      } else if (token === "--server") {
+        try {
+          const url = new URL(value);
+          if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return null;
+        } catch {
+          return null;
+        }
+      }
+      const pair = `${token} ${value}`;
+      if (hasSecretLikeCommandValue(pair)) return null;
+      tokens.push(token, value);
+      index += 1;
+      continue;
+    }
+    return null;
+  }
+
+  const commandText = tokens.join(" ");
+  if (
+    tokens.length < 6 ||
+    hasSecretLikeCommandValue(commandText) ||
+    !hasDiscover ||
+    !hasEnsureClient ||
+    !hasPreflightOnly ||
+    !hasBoardSummary
+  ) {
+    return null;
+  }
+  return commandText;
+}
+
 function parseMacHeartbeatWatcherCommand(fragment, expectedMode) {
   const rawTokens = String(fragment || "").split(/\s+/).map(stripCommandToken).filter(Boolean);
   if (rawTokens.length < 2) return null;
@@ -1252,6 +1344,58 @@ function extractMacFormalLocalSmokeFromBoardState(state) {
   };
 }
 
+function extractMacClientFormalSmokeFromText(text, source = "text") {
+  const value = String(text || "");
+  const labels = ["MacClientFormalSmoke", "RerunMacClientFormalSmoke"];
+  const commands = [];
+  let rejectedCount = 0;
+  for (const label of labels) {
+    const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`\\b${escapedLabel}\\s*=\\s*`, "gi");
+    let match;
+    while ((match = regex.exec(value)) !== null) {
+      const fragment = value.slice(match.index + match[0].length);
+      const commandText = parseMacClientFormalSmokeCommand(fragment);
+      if (!commandText) {
+        rejectedCount += 1;
+      } else if (!commands.includes(commandText)) {
+        commands.push(commandText);
+      }
+    }
+  }
+  if (commands.length === 0) return emptyMacSafeStart(source, value ? 1 : 0, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source,
+    textCount: value ? 1 : 0,
+    rejectedCount,
+  };
+}
+
+function extractMacClientFormalSmokeFromBoardState(state) {
+  const texts = collectStringValues(state);
+  const commands = [];
+  let rejectedCount = 0;
+  for (const text of texts) {
+    const extracted = extractMacClientFormalSmokeFromText(text, "api-state");
+    for (const commandText of extracted.commands) {
+      if (!commands.includes(commandText)) commands.push(commandText);
+    }
+    rejectedCount += extracted.rejectedCount;
+  }
+  if (commands.length === 0) return emptyMacSafeStart("api-state", texts.length, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source: "api-state",
+    textCount: texts.length,
+    rejectedCount,
+  };
+}
+
 function extractMacHeartbeatWatcherFromText(text, label, expectedMode, source = "text") {
   const value = String(text || "");
   const escapedLabel = String(label).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1619,6 +1763,7 @@ async function getBoardSnapshot(args) {
       macHostSafeStart: emptyMacSafeStart("skipped"),
       macMaxFpsSafeStart: emptyMacSafeStart("skipped"),
       macFormalLocalSmoke: emptyMacSafeStart("skipped"),
+      macClientFormalSmoke: emptyMacSafeStart("skipped"),
       macHeartbeatOnce: emptyMacSafeStart("skipped"),
       macHeartbeatWatch: emptyMacSafeStart("skipped"),
       macHeartbeatStart: emptyMacSafeStart("skipped"),
@@ -1648,6 +1793,7 @@ async function getBoardSnapshot(args) {
       macHostSafeStart: extractMacSafeStartFromBoardState(stateResult.state, "MacHostSafeStart"),
       macMaxFpsSafeStart: extractMacSafeStartFromBoardState(stateResult.state, "MacMaxFpsSafeStart", { requireMaxScreenFps: true }),
       macFormalLocalSmoke: extractMacFormalLocalSmokeFromBoardState(stateResult.state),
+      macClientFormalSmoke: extractMacClientFormalSmokeFromBoardState(stateResult.state),
       macHeartbeatOnce: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatOnce", "once"),
       macHeartbeatWatch: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatWatch", "watch"),
       macHeartbeatStart: extractMacHeartbeatStartHelperFromBoardState(stateResult.state, "MacHeartbeatStart", "start"),
@@ -1682,6 +1828,7 @@ async function getBoardSnapshot(args) {
     macHostSafeStart: extractMacSafeStartFromText(output, "MacHostSafeStart", result.ok ? "codex-link-client" : "unavailable"),
     macMaxFpsSafeStart: extractMacSafeStartFromText(output, "MacMaxFpsSafeStart", result.ok ? "codex-link-client" : "unavailable", { requireMaxScreenFps: true }),
     macFormalLocalSmoke: extractMacFormalLocalSmokeFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    macClientFormalSmoke: extractMacClientFormalSmokeFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatOnce: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatOnce", "once", result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatWatch: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatWatch", "watch", result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatStart: extractMacHeartbeatStartHelperFromText(output, "MacHeartbeatStart", "start", result.ok ? "codex-link-client" : "unavailable"),
@@ -2071,6 +2218,13 @@ function makeCommands(args, preflight) {
     "--promptPassword",
     "--boardSummary",
   ].join(" ");
+  const macClientFormalSmokeCommand = [
+    "node scripts/mac/run-mac-client-formal-smoke.mjs",
+    "--discover",
+    "--ensureClient",
+    "--preflightOnly",
+    "--boardSummary",
+  ].join(" ");
   const macUnattendedStatusCommand = [
     "node scripts/mac/check-mac-unattended-status.mjs",
     "--host", host,
@@ -2166,6 +2320,7 @@ function makeCommands(args, preflight) {
     macHeartbeatStatusCommand,
     macHeartbeatStopCommand,
     macFormalLocalSmokeCommand,
+    macClientFormalSmokeCommand,
     macUnattendedStatusCommand,
     macUnattendedFormalStatusCommand,
     formalChecklistBoardSummary,
@@ -2481,6 +2636,7 @@ function makeBoardSummary(report) {
     ? "default-ok"
     : `use --clientPort ${report.windowsClientDiagnosticsPorts?.alternateClientPort || defaults.alternateClientPort} --debugPort ${report.windowsClientDiagnosticsPorts?.alternateDebugPort || defaults.alternateDebugPort}`;
   const macFormalLocalSmokeCommand = report.board.macFormalLocalSmoke?.command || report.commands.macFormalLocalSmokeCommand;
+  const macClientFormalSmokeCommand = report.board.macClientFormalSmoke?.command || report.commands.macClientFormalSmokeCommand;
   const macHeartbeatOnceCommand = report.board.macHeartbeatOnce?.command || report.commands.macHeartbeatOnceCommand;
   const macHeartbeatWatchCommand = report.board.macHeartbeatWatch?.command || report.commands.macHeartbeatWatchCommand;
   const macHeartbeatStartCommand = report.board.macHeartbeatStart?.command || report.commands.macHeartbeatStartCommand;
@@ -2511,6 +2667,7 @@ function makeBoardSummary(report) {
     `MacHeartbeatStatus=${macHeartbeatStatusCommand}.`,
     `MacHeartbeatStop=${macHeartbeatStopCommand}.`,
     `MacFormalLocalSmoke=${macFormalLocalSmokeCommand}.`,
+    `MacClientFormalSmoke=${macClientFormalSmokeCommand}.`,
     `MacUnattended=${report.commands.macUnattendedStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalStatusCommand}.`,
     ...(report.board.macHostSafeStart?.command ? [`MacHostSafeStart=${report.board.macHostSafeStart.command}.`] : []),
@@ -2763,6 +2920,9 @@ function printHuman(report) {
     if (report.board.macFormalLocalSmoke?.command) {
       console.log(`  MacFormalLocalSmoke=${report.board.macFormalLocalSmoke.command}`);
     }
+    if (report.board.macClientFormalSmoke?.command) {
+      console.log(`  MacClientFormalSmoke=${report.board.macClientFormalSmoke.command}`);
+    }
     if (report.board.macHeartbeatFreshness?.present) {
       console.log(`  MacHeartbeatFreshness=${report.board.macHeartbeatFreshness.summary}`);
     }
@@ -2825,6 +2985,7 @@ function printHuman(report) {
   console.log(`  MacHeartbeatStatus=${report.board.macHeartbeatStatus?.command || report.commands.macHeartbeatStatusCommand}`);
   console.log(`  MacHeartbeatStop=${report.board.macHeartbeatStop?.command || report.commands.macHeartbeatStopCommand}`);
   console.log(`  MacFormalLocalSmoke=${report.board.macFormalLocalSmoke?.command || report.commands.macFormalLocalSmokeCommand}`);
+  console.log(`  MacClientFormalSmoke=${report.board.macClientFormalSmoke?.command || report.commands.macClientFormalSmokeCommand}`);
   console.log(`  ${report.commands.macUnattendedStatusCommand}`);
   console.log(`  ${report.commands.macUnattendedFormalStatusCommand}`);
   if (report.board.macHostSafeStart?.command) {
@@ -2835,6 +2996,9 @@ function printHuman(report) {
   }
   if (report.board.macFormalLocalSmoke?.command) {
     console.log(`  MacFormalLocalSmoke=${report.board.macFormalLocalSmoke.command}`);
+  }
+  if (report.board.macClientFormalSmoke?.command) {
+    console.log(`  MacClientFormalSmoke=${report.board.macClientFormalSmoke.command}`);
   }
   console.log(`  ${report.commands.formalChecklistBoardSummary}`);
   console.log(`  ${report.commands.preflightBoardSummary}`);

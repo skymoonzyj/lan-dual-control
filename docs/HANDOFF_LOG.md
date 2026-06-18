@@ -17,6 +17,44 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 恢复总览消费 Mac 端上板的 `MacClientFormalSmoke=` 安全预检入口。
+完成内容：
+- `check-windows-resume-status` 默认新增 `commands.macClientFormalSmokeCommand`，普通输出和 `--boardSummary` 会给出 `MacClientFormalSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary`。
+- `--checkBoard` 会从 Agent Link Board `/api/state` 或 fallback 文本安全提取 `MacClientFormalSmoke=` / `RerunMacClientFormalSmoke=`；只接受 `run-mac-client-formal-smoke.mjs`、`--discover`、`--ensureClient`、`--preflightOnly`、`--boardSummary`，拒绝密码/token/secret、缺关键参数或不完整候选。
+- PowerShell 包装帮助和 Node/PowerShell 回归都已覆盖该入口；不认证、不弹密码、不发 call/input/inject。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 先新增 PowerShell 断言并确认失败：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- 实现后复跑：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 实现后复跑：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`（真实摘要已显示 `MacClientFormalSmoke=... --discover --ensureClient --preflightOnly --boardSummary`）
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --script test-windows-resume-status.mjs --script test-windows-resume-status-powershell.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`
+遗留问题：
+- 本轮只做 Windows resume 的只读消费/展示；未运行真实 Mac browser smoke，未认证 Windows host，未发送 Agent Link call。
+下一步建议：
+- Mac 控 Windows 真连前，Windows 侧先跑 `check-windows-resume-status --checkBoard --boardSummary`，看到 `MacClientFormalSmoke=` 后让 Mac 端先做无密 discovery/formal preflight，再决定是否需要用户输入密码或发 call。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Mac 端已能上板同名入口。
+
 ## 2026-06-18 Mac Codex
 
 日期：2026-06-18 继续推进

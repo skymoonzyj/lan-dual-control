@@ -56,6 +56,7 @@ passwords, does not send input, and does not execute inject.
 When -CheckBoard is set, the report also summarizes the current Agent Link
 call so Windows can see active Mac -> Windows test requests during resume.
 It also surfaces recent MacHostSafeStart=, MacMaxFpsSafeStart=, MacFormalLocalSmoke=,
+MacClientFormalSmoke=,
 WindowsReverseGrantStatus=, WindowsOpenOneTimeReverseGrant= and WindowsSecureAuthPath= commands from Agent Link Board status/messages so Mac host safe foreground-start guidance,
 including 60Hz foreground-start guidance, local smoke next steps, Windows local reverse-control grant guidance, and onsite Windows host secure-auth restart guidance, is visible in JSON, human output, and
 one-line board summaries.
@@ -74,6 +75,8 @@ node scripts/mac/check-mac-heartbeat.mjs --host <Mac IP> --port 43770 --checkBoa
 It also surfaces MacHeartbeatOnce=, MacHeartbeatWatch=, and MacHeartbeatStart/Status/Stop= watcher commands so the Mac side can post one heartbeat now or manage a background heartbeat watcher; when Agent Link Board already has Mac resume output, those commands are safely extracted and preferred.
 It also includes a Mac formal local smoke command for local H.264/PCM/input-log checks:
 node scripts/mac/check-mac-formal-local-smoke.mjs --host <Mac IP> --port 43770 --promptPassword --boardSummary
+It also includes a Mac client formal smoke preflight command:
+node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary
 It also includes a Mac-side unattended/startup status command:
 node scripts/mac/check-mac-unattended-status.mjs --host <Mac IP> --port 43770 --boardSummary
 It also includes a formal 60Hz Mac-side unattended gate:

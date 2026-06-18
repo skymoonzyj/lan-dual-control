@@ -308,6 +308,8 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "start-mac-heartbeat-watcher.mjs --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "start-mac-heartbeat-watcher.mjs --status --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "start-mac-heartbeat-watcher.mjs --stop --boardSummary", `help ${flag}`);
+    assertIncludes(result.stdout, "MacClientFormalSmoke=", `help ${flag}`);
+    assertIncludes(result.stdout, "run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "formal manual checklist command", `help ${flag}`);
@@ -411,6 +413,12 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.macFormalLocalSmokeCommand || "").includes("--promptPassword"), "mock JSON Mac formal local smoke command should prompt locally");
     assert(String(payload.commands?.macFormalLocalSmokeCommand || "").includes("--boardSummary"), "mock JSON Mac formal local smoke command should be board-safe");
     assert(!String(payload.commands?.macFormalLocalSmokeCommand || "").includes("--password"), "mock JSON Mac formal local smoke command should not include password argv");
+    assert(String(payload.commands?.macClientFormalSmokeCommand || "").includes("run-mac-client-formal-smoke.mjs"), "mock JSON should include Mac client formal smoke command");
+    assert(String(payload.commands?.macClientFormalSmokeCommand || "").includes("--discover"), "mock JSON Mac client formal smoke command should discover Windows host");
+    assert(String(payload.commands?.macClientFormalSmokeCommand || "").includes("--ensureClient"), "mock JSON Mac client formal smoke command should ensure Mac client page");
+    assert(String(payload.commands?.macClientFormalSmokeCommand || "").includes("--preflightOnly"), "mock JSON Mac client formal smoke command should be preflight-only");
+    assert(String(payload.commands?.macClientFormalSmokeCommand || "").includes("--boardSummary"), "mock JSON Mac client formal smoke command should be board-safe");
+    assert(!String(payload.commands?.macClientFormalSmokeCommand || "").includes("--password"), "mock JSON Mac client formal smoke command should not include password argv");
     assert(String(payload.commands?.macUnattendedStatusCommand || "").includes("check-mac-unattended-status.mjs"), "mock JSON should include Mac unattended status command");
     assert(String(payload.commands?.macUnattendedStatusCommand || "").includes("--host 127.0.0.1"), "mock JSON Mac unattended command should target discovered host");
     assert(String(payload.commands?.macUnattendedStatusCommand || "").includes(`--port ${port}`), "mock JSON Mac unattended command should use discovered mock port");
@@ -685,6 +693,8 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "MacFormalLocalSmoke=", "board summary");
     assertIncludes(result.stdout, `check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port ${port} --promptPassword --boardSummary`, "board summary");
     assertNotIncludes(result.stdout, "--password", "board summary Mac formal local smoke should not include password argv");
+    assertIncludes(result.stdout, "MacClientFormalSmoke=", "board summary");
+    assertIncludes(result.stdout, "run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary", "board summary");
     assertIncludes(result.stdout, "MacUnattended=", "board summary");
     assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 127.0.0.1", "board summary");
     assertIncludes(result.stdout, `--port ${port} --boardSummary`, "board summary");
@@ -896,6 +906,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const heartbeatStartCommand = "node scripts/mac/start-mac-heartbeat-watcher.mjs --boardSummary";
   const heartbeatStatusCommand = "node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary";
   const heartbeatStopCommand = "node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --boardSummary";
+  const macClientFormalSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
   const heartbeatNow = Date.now();
   const freshCheckedAt = new Date(heartbeatNow - 60_000).toISOString();
   const freshCodexUpdatedAt = new Date(heartbeatNow - 65_000).toISOString();
@@ -908,7 +919,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
         "Mac Codex": {
           role: "Mac 端",
           status: "idle",
-          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand} MacHeartbeatStart=${heartbeatStartCommand} MacHeartbeatStatus=${heartbeatStatusCommand} MacHeartbeatStop=${heartbeatStopCommand}`,
+          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacClientFormalSmoke=${macClientFormalSmokeCommand} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand} MacHeartbeatStart=${heartbeatStartCommand} MacHeartbeatStatus=${heartbeatStatusCommand} MacHeartbeatStop=${heartbeatStopCommand}`,
         },
         "Mac Heartbeat": {
           role: "Mac heartbeat watcher",
@@ -952,6 +963,21 @@ async function checkBoardMacHostSafeStartExtraction(args) {
           type: "status",
           from: "Mac Codex",
           text: "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port <当前端口> --promptPassword --boardSummary",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacClientFormalSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --password secret-value --preflightOnly --boardSummary",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacClientFormalSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --discover --preflightOnly --boardSummary",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacClientFormalSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly",
         },
         {
           type: "message",
@@ -1024,6 +1050,10 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board.macFormalLocalSmoke.command === localSmokeCommand, "MacFormalLocalSmoke command mismatch");
       assert(payload.board.macFormalLocalSmoke.source === "api-state", "MacFormalLocalSmoke should come from /api/state");
       assert(payload.board.macFormalLocalSmoke.rejectedCount >= 2, "unsafe or placeholder MacFormalLocalSmoke should be rejected");
+      assert(payload.board?.macClientFormalSmoke?.found === true, "MacClientFormalSmoke should be found in board state");
+      assert(payload.board.macClientFormalSmoke.command === macClientFormalSmokeCommand, "MacClientFormalSmoke command mismatch");
+      assert(payload.board.macClientFormalSmoke.source === "api-state", "MacClientFormalSmoke should come from /api/state");
+      assert(payload.board.macClientFormalSmoke.rejectedCount >= 3, "unsafe or incomplete MacClientFormalSmoke should be rejected");
       assert(payload.board?.macHeartbeatOnce?.found === true, "MacHeartbeatOnce should be found in board state");
       assert(payload.board.macHeartbeatOnce.command === heartbeatOnceCommand, "MacHeartbeatOnce command mismatch");
       assert(payload.board.macHeartbeatOnce.source === "api-state", "MacHeartbeatOnce should come from /api/state");
@@ -1054,6 +1084,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(payload.boardSummary, `MacHostSafeStart=${safeCommand}.`, "MacHostSafeStart JSON board summary");
       assertIncludes(payload.boardSummary, `MacMaxFpsSafeStart=${maxFpsCommand}.`, "MacMaxFpsSafeStart JSON board summary");
       assertIncludes(payload.boardSummary, `MacFormalLocalSmoke=${localSmokeCommand}.`, "MacFormalLocalSmoke JSON board summary");
+      assertIncludes(payload.boardSummary, `MacClientFormalSmoke=${macClientFormalSmokeCommand}.`, "MacClientFormalSmoke JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "MacHeartbeatOnce JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "MacHeartbeatWatch JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatStart=${heartbeatStartCommand}.`, "MacHeartbeatStart JSON board summary");
@@ -1084,6 +1115,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacHostSafeStart=${safeCommand}.`, "MacHostSafeStart board summary");
       assertIncludes(result.stdout, `MacMaxFpsSafeStart=${maxFpsCommand}.`, "MacMaxFpsSafeStart board summary");
       assertIncludes(result.stdout, `MacFormalLocalSmoke=${localSmokeCommand}.`, "MacFormalLocalSmoke board summary");
+      assertIncludes(result.stdout, `MacClientFormalSmoke=${macClientFormalSmokeCommand}.`, "MacClientFormalSmoke board summary");
       assertIncludes(result.stdout, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "MacHeartbeatOnce board summary");
       assertIncludes(result.stdout, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "MacHeartbeatWatch board summary");
       assertIncludes(result.stdout, `MacHeartbeatStart=${heartbeatStartCommand}.`, "MacHeartbeatStart board summary");
@@ -1111,6 +1143,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacHostSafeStart=${safeCommand}`, "MacHostSafeStart human output");
       assertIncludes(result.stdout, `MacMaxFpsSafeStart=${maxFpsCommand}`, "MacMaxFpsSafeStart human output");
       assertIncludes(result.stdout, `MacFormalLocalSmoke=${localSmokeCommand}`, "MacFormalLocalSmoke human output");
+      assertIncludes(result.stdout, `MacClientFormalSmoke=${macClientFormalSmokeCommand}`, "MacClientFormalSmoke human output");
       assertIncludes(result.stdout, `MacHeartbeatOnce=${heartbeatOnceCommand}`, "MacHeartbeatOnce human output");
       assertIncludes(result.stdout, `MacHeartbeatWatch=${heartbeatWatchCommand}`, "MacHeartbeatWatch human output");
       assertIncludes(result.stdout, `MacHeartbeatStart=${heartbeatStartCommand}`, "MacHeartbeatStart human output");
