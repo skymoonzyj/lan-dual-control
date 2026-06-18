@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端在对端文件剪贴板不可用时会本地拦截手动文件/压缩包发送，不发 `clipboard_file_offer`、分块或完成消息，并提示检查被控端文件剪贴板能力或使用远端文件托盘/临时目录；不改协议。 |
 | Mac Codex | `apps/mac-client/app.js`, `apps/mac-client/README.md`, `scripts/windows/test-mac-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Mac client 复制/导出诊断新增“文件发送建议”行：发送中/等待确认提示保持连接和等待回执，失败/确认超时/可重发提示点击“重新发送”并让 Windows 检查连接、文件剪贴板能力、权限或磁盘空间；不改协议。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端复制/导出诊断新增独立“剪贴板能力建议”行：剪贴板关闭、远端文字不可用或远端文件不可用时给出下一步，文件/压缩包不能直接复制粘贴时提示检查被控端文件剪贴板能力或使用远端文件托盘/临时目录；不改协议。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端复制/导出诊断新增独立“远端文件建议”行，接收超时/中断/坏分块/拒收时提示让 Mac 重新复制并检查连接，系统文件剪贴板写入失败时提示重试写入或打开临时目录；不改协议。 |

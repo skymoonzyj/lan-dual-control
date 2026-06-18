@@ -50,6 +50,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端在对端文件剪贴板不可用时，本地拦截手动发送文件。
+完成内容：
+- Windows 控制端发送文件前会读取被控端剪贴板能力诊断。
+- 当被控端明确报告文件剪贴板不可用时，页面会提示“对端文件剪贴板不可用”，不再发送 `clipboard_file_offer`、分块或完成消息。
+- 未知能力不阻断发送，避免旧 host 缺少诊断字段时误拦截。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`（失败点：仍发送 offer/chunk/complete）。
+- 实现后复跑同一 diagnostics-only 命令通过。
+遗留问题：
+- 这只是发送前的本地防误操作；对端文件剪贴板能力本体修复仍要看 Mac/Windows host 端实现。
+下一步建议：
+- 真机文件/压缩包复制长测时，如果看到“对端文件剪贴板不可用”，优先让被控端修复文件剪贴板能力，临时路径继续用远端文件托盘/临时目录。
+是否改了协议：否；只消费既有 `/discovery`/host diagnostics 能力并做 Windows 控制端本地拦截。
+是否需要另一端配合：暂不需要；真机长测时再请被控端配合验证文件剪贴板能力。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端复制/导出诊断给出剪贴板能力下一步建议。
 完成内容：
 - 复制/导出诊断新增“剪贴板能力建议”，独立于“剪贴板状态”“远端文件建议”和“本机发送建议”。

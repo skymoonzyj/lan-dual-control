@@ -4714,6 +4714,15 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
     return;
   }
 
+  const diagnostics = state.hostDiagnostics || {};
+  if (isClipboardCapabilityUnavailable(diagnostics.clipboardFile, diagnostics.clipboardFileMode)) {
+    const message = "对端文件剪贴板不可用；文件/压缩包不能直接复制粘贴，请检查被控端文件剪贴板能力，或暂时使用远端文件托盘/临时目录。";
+    elements.clipboardText.textContent = `剪贴板：${message}`;
+    syncFloatingControlStatus();
+    addLog(`${sourceLabel}未发送`, message);
+    return;
+  }
+
   const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
   if (totalBytes > maxClipboardFileBytes) {
     const message = `文件总大小 ${formatBytes(totalBytes)}，超过当前上限 ${formatBytes(maxClipboardFileBytes)}`;

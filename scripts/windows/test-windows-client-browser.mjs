@@ -2063,10 +2063,12 @@ async function verifyFileClipboardRecoveryText(session) {
       const originalConnected = state.connected;
       const originalClient = state.client;
       const originalClipboardToggle = elements.clipboardToggle.checked;
+      const originalHostDiagnostics = { ...(state.hostDiagnostics || {}) };
       const calls = [];
       const clipboardResponses = [];
       const clipboardProgress = [];
       const clipboardResults = [];
+      const unsupportedSends = [];
       const failingSends = [];
       const retrySends = [];
       try {
@@ -2086,6 +2088,36 @@ async function verifyFileClipboardRecoveryText(session) {
         const outgoingFloatingStatus = document.querySelector("#floatingClipboardStatus")?.textContent || "";
         state.fileTransferActive = false;
         state.outgoingFileTransfer = null;
+
+        const unsupportedFile = new File([new Uint8Array([1, 2, 3, 4])], "unsupported.zip", { type: "application/zip" });
+        state.connected = true;
+        elements.clipboardToggle.checked = true;
+        if (typeof updateHostDiagnostics === "function") {
+          updateHostDiagnostics({
+            clipboardText: true,
+            clipboardTextMode: "system",
+            clipboardFile: false,
+            clipboardFileMode: "unsupported",
+          });
+        } else {
+          state.hostDiagnostics = {
+            ...(state.hostDiagnostics || {}),
+            clipboardText: true,
+            clipboardTextMode: "system",
+            clipboardFile: false,
+            clipboardFileMode: "unsupported",
+          };
+        }
+        state.client = {
+          sendClipboardFileOffer: (payload) => unsupportedSends.push({ type: "offer", payload }),
+          sendClipboardFileChunk: (payload) => unsupportedSends.push({ type: "chunk", payload }),
+          sendClipboardFileComplete: (payload) => unsupportedSends.push({ type: "complete", payload }),
+        };
+        await sendFilesToRemote([unsupportedFile], { sourceLabel: "能力拦截测试" });
+        const unsupportedClipboardText = elements.clipboardText.textContent || "";
+        const unsupportedSendCount = unsupportedSends.length;
+        state.hostDiagnostics = { ...originalHostDiagnostics };
+
         const retryFileBytes = new Uint8Array(fileChunkSizeBytes + 2048);
         retryFileBytes.fill(65);
         const retryFile = new File([retryFileBytes], "retry-demo.zip", { type: "application/zip" });
@@ -2260,6 +2292,9 @@ async function verifyFileClipboardRecoveryText(session) {
             outgoingFloatingStatus.includes("发送 1 个文件") &&
             outgoingFloatingStatus.includes("2.0 KB/4.0 KB") &&
             outgoingFloatingStatus.includes("速度 2.0 KB/s") &&
+            unsupportedSendCount === 0 &&
+            unsupportedClipboardText.includes("对端文件剪贴板不可用") &&
+            unsupportedClipboardText.includes("文件/压缩包不能直接复制粘贴") &&
             failedClipboardText.includes("文件发送失败") &&
             failedClipboardText.includes("可重新发送") &&
             lastOutgoingFailure.status === "failed" &&
@@ -2332,6 +2367,9 @@ async function verifyFileClipboardRecoveryText(session) {
           recovery,
           detail,
           memoryDetail,
+          unsupportedClipboardText,
+          unsupportedSendCount,
+          unsupportedSends,
           failedClipboardText,
           lastOutgoingFailure,
           lastOutgoingFailureStatus,
@@ -2395,6 +2433,7 @@ async function verifyFileClipboardRecoveryText(session) {
         state.connected = originalConnected;
         state.client = originalClient;
         elements.clipboardToggle.checked = originalClipboardToggle;
+        state.hostDiagnostics = originalHostDiagnostics;
         elements.fileClipboardInput.value = "";
         renderReceivedFiles();
       }
