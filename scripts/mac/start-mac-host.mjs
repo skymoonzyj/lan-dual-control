@@ -47,6 +47,7 @@ const defaults = {
   dryRun: false,
   help: false,
 };
+const formalTargetMaxScreenFps = 60;
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -184,6 +185,11 @@ Machine-readable JSON fields:
                              It prints a plist plan and manual load commands
                              without writing files, loading launchctl, starting
                              Mac host, or requesting a password.
+  commands.macMaxFpsPlanCommand
+                             Secret-free LaunchAgent dry-run planner command for
+                             the formal 60Hz target; it only prints a plan and
+                             does not write files, load launchctl, start Mac
+                             host, request a password, or send input.
 `);
 }
 
@@ -367,6 +373,17 @@ function makeMacLaunchAgentPlanCommand(args) {
   ].join(" ");
 }
 
+function makeMacMaxFpsPlanCommand(args) {
+  return [
+    "node scripts/mac/install-mac-host-launch-agent.mjs",
+    "--port",
+    String(args.port),
+    "--maxScreenFps",
+    String(formalTargetMaxScreenFps),
+    "--boardSummary",
+  ].join(" ");
+}
+
 function isLocalProbeHost(host) {
   const value = normalizedText(host).toLowerCase();
   if (!value) return false;
@@ -492,6 +509,7 @@ function formatStatusBoardSummary(payload) {
       `Mac host status: offline at ${payload.probe.host}:${payload.probe.port}; ${callSummary}.`,
       "Next: start safely with node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword.",
       `MacLaunchAgentPlan=${payload.commands?.macLaunchAgentPlanCommand || "not-available"}.`,
+      `MacMaxFpsPlan=${payload.commands?.macMaxFpsPlanCommand || "not-available"}.`,
       `After host is online, MacHostMedia=${payload.commands?.mediaReadinessBoardSummary || "not-available"}.`,
       "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
     ].join(" ");
@@ -516,6 +534,7 @@ function formatStatusBoardSummary(payload) {
     `Mac host status: online ${target}; runtimeBuild=${runtimeBuild} inputMode=${payload.inputMode || "unknown"}; ${callSummary}.`,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${formatStatusBuildDiff(payload.buildDiff)}.`,
     `MacLaunchAgentPlan=${payload.commands?.macLaunchAgentPlanCommand || "not-available"}.`,
+    `MacMaxFpsPlan=${payload.commands?.macMaxFpsPlanCommand || "not-available"}.`,
     `MacHostMedia=${payload.commands?.mediaReadinessBoardSummary || "not-available"}.`,
     "Next: coordinate on Agent Link Board before formal E2E.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
@@ -802,6 +821,7 @@ async function printStatus(args) {
       board,
       commands: {
         macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
+        macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
         mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
       },
       discovery,
@@ -843,6 +863,7 @@ async function printStatus(args) {
     }
     console.log(`[INFO] Mac host media baseline: ${payload.commands.mediaReadinessBoardSummary}`);
     console.log(`[INFO] Mac host LaunchAgent dry-run plan: ${payload.commands.macLaunchAgentPlanCommand}`);
+    console.log(`[INFO] Mac host max FPS dry-run plan: ${payload.commands.macMaxFpsPlanCommand}`);
     return payload;
   } catch (error) {
     const payload = {
@@ -858,6 +879,7 @@ async function printStatus(args) {
       board,
       commands: {
         macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
+        macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
         mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
       },
       suggestions: [
@@ -889,6 +911,7 @@ async function printStatus(args) {
     console.log("[INFO] Start safely with: node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword");
     console.log("[INFO] For temporary discovery/runtime diagnostics without sharing a password: node scripts/mac/start-mac-host.mjs --ephemeralPassword --requirePassword");
     console.log(`[INFO] Mac host LaunchAgent dry-run plan: ${payload.commands.macLaunchAgentPlanCommand}`);
+    console.log(`[INFO] Mac host max FPS dry-run plan: ${payload.commands.macMaxFpsPlanCommand}`);
     console.log(`[INFO] After host is online, refresh media baseline with: ${payload.commands.mediaReadinessBoardSummary}`);
     return payload;
   }

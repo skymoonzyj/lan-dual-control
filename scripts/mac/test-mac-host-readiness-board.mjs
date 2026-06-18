@@ -99,6 +99,11 @@ function assertMacLaunchAgentPlanCommand(command, label) {
   assert(!value.includes("inject"), `${label} should not instruct injection`);
 }
 
+function assertMacMaxFpsPlanCommand(command, label) {
+  assertMacLaunchAgentPlanCommand(command, label);
+  assert(String(command || "").includes("--maxScreenFps 60"), `${label} should target the formal 60Hz max-FPS plan`);
+}
+
 function functionBlock(source, name) {
   const start = source.indexOf(`function ${name}`);
   assert(start >= 0, `missing function ${name}`);
@@ -135,10 +140,21 @@ function h264FallbackPipelineWarningFixture(capabilities) {
   return Function("capabilities", `${helpers}\nreturn h264FallbackPipelineWarning(capabilities);`)(capabilities);
 }
 
+function maxScreenFpsWarningFixture(capabilities) {
+  const source = readFileSync(new URL("./check-mac-host-readiness.mjs", import.meta.url), "utf8");
+  const helpers = [
+    "const formalTargetMaxScreenFps = 60;",
+    functionBlock(source, "getMaxScreenFps"),
+    functionBlock(source, "maxScreenFpsWarning"),
+  ].join("\n");
+  return Function("capabilities", `${helpers}\nreturn maxScreenFpsWarning(capabilities);`)(capabilities);
+}
+
 function formatHostMediaBoardSummaryFixture(summary) {
   const source = readFileSync(new URL("./check-mac-host-readiness.mjs", import.meta.url), "utf8");
   const helpers = [
     functionBlock(source, "status"),
+    functionBlock(source, "getMaxScreenFps"),
     functionBlock(source, "formatHostMediaBoardSummary"),
   ].join("\n");
   return Function("summary", `${helpers}\nreturn formatHostMediaBoardSummary(summary);`)(summary);
@@ -242,6 +258,7 @@ function checkHelp(args) {
     assert(String(result.stdout).includes("--boardSummary"), `${script} ${flag} should document --boardSummary`);
     assert(String(result.stdout).includes("--probeMedia"), `${script} ${flag} should document --probeMedia`);
     assert(String(result.stdout).includes("commands.macLaunchAgentPlanCommand"), `${script} ${flag} should document LaunchAgent planner command`);
+    assert(String(result.stdout).includes("commands.macMaxFpsPlanCommand"), `${script} ${flag} should document max-FPS planner command`);
   }
   print("OK", "Mac host readiness board help exits quickly");
 }
@@ -251,10 +268,15 @@ function checkDefaultDoesNotReadBoard(args) {
   const payload = parseJson(result.stdout, "default readiness JSON");
   assert(payload.board?.checked === false, "default readiness should not read Agent Link Board");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand || "", "default readiness JSON LaunchAgent planner command");
+  assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand || "", "default readiness JSON max-FPS planner command");
+  const maxFpsStep = payload.results?.find((item) => item.label === "Mac host max FPS");
+  assert(maxFpsStep, "default readiness JSON should include an independent Mac host max FPS step");
+  assert(maxFpsStep.ok === true, "Mac host max FPS step should be advisory and non-blocking");
   assert(String(payload.boardSummary || "").includes("call=not-checked"), "default boardSummary should mark call not checked");
   assert(String(payload.boardSummary || "").includes("blockers="), "default boardSummary should include blocker ids");
   assert(String(payload.boardSummary || "").includes("warnings="), "default boardSummary should include warning ids");
   assert(String(payload.boardSummary || "").includes("MacLaunchAgentPlan="), "default boardSummary should include LaunchAgent planner guidance");
+  assert(String(payload.boardSummary || "").includes("MacMaxFpsPlan="), "default boardSummary should include max-FPS planner guidance");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "default readiness JSON");
   print("OK", "Mac host readiness does not read Agent Link Board by default");
 }
@@ -368,11 +390,12 @@ function checkH264FallbackPipelineFormatting() {
           capabilities: {
             h264Stream: true,
             capturePipeline: "background-jpeg",
+            maxScreenFps: 30,
           },
         },
       }],
-    }) === "h264=on pipeline=background-jpeg",
-    "host media board summary should include current H.264 and pipeline state",
+    }) === "h264=on pipeline=background-jpeg maxFps=30",
+    "host media board summary should include current H.264, pipeline, and max FPS state",
   );
   assert(
     formatHostMediaBoardSummaryFixture({
@@ -390,6 +413,23 @@ function checkH264FallbackPipelineFormatting() {
     "offline host media board summary should stay compact",
   );
   print("OK", "Mac host readiness highlights H.264 fallback pipeline state");
+}
+
+function checkMaxScreenFpsWarningFormatting() {
+  const warning = maxScreenFpsWarningFixture({ maxScreenFps: 30 });
+  assert(/maxScreenFps=30/.test(warning), "max-FPS warning should name the current remote max");
+  assert(/formal 60Hz/.test(warning), "max-FPS warning should name the formal 60Hz target");
+  assert(/max-FPS LaunchAgent plan/.test(warning), "max-FPS warning should recommend the dry-run planner");
+  assert(maxScreenFpsWarningFixture({ maxScreenFps: 60 }) === "", "60Hz max should not create a warning");
+  assert(maxScreenFpsWarningFixture({ maxScreenFps: 120 }) === "", "above-target max should not create a warning");
+  assert(maxScreenFpsWarningFixture({}) === "", "missing max should not create a warning");
+  assert(
+    formatReadinessFindingsFixture([
+      { label: "Mac host max FPS", ok: true, warnings: [warning] },
+    ]) === "blockers=none warnings=mac-host-max-fps",
+    "max-FPS warning should use a stable readiness id",
+  );
+  print("OK", "Mac host readiness formats maxScreenFps warnings safely");
 }
 
 function checkProbeMediaOfflineJson(args) {
@@ -462,6 +502,8 @@ function checkProbeMediaBoardSummary(args) {
   assert(lines[0].includes("warnings=mac-host-discovery"), "offline --probeMedia boardSummary should name discovery warning");
   assert(lines[0].includes("media=failed("), "offline --probeMedia boardSummary should include failed media status");
   assert(lines[0].includes("MacLaunchAgentPlan="), "offline --probeMedia boardSummary should include LaunchAgent planner guidance");
+  assert(lines[0].includes("MacMaxFpsPlan="), "offline --probeMedia boardSummary should include max-FPS planner guidance");
+  assert(lines[0].includes("--maxScreenFps 60"), "offline --probeMedia boardSummary should include 60Hz planner command");
   assert(!lines[0].includes("media=passed"), "offline --probeMedia boardSummary should not use legacy passed wording");
   assert(lines[0].includes("Do not send passwords"), "offline --probeMedia boardSummary should keep password safety note");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "offline probeMedia boardSummary");
@@ -501,6 +543,7 @@ async function checkActiveBoardCall(args) {
     assert(String(payload.boardSummary || "").includes("warnings="), "active boardSummary should include warning ids");
     assert(String(payload.boardSummary || "").includes("agent-link-board-currentcall"), "active boardSummary should name board currentCall warning");
     assert(String(payload.boardSummary || "").includes("MacLaunchAgentPlan="), "boardSummary should include LaunchAgent planner guidance");
+    assert(String(payload.boardSummary || "").includes("MacMaxFpsPlan="), "boardSummary should include max-FPS planner guidance");
     assert(String(payload.boardSummary || "").includes(call.goal), "boardSummary should include call goal");
     assert(!String(payload.boardSummary || "").includes("super-secret-command-token"), "boardSummary should not echo command");
     assert(payload.results.some((item) => item.label === "Agent Link Board currentCall" && item.warnings.some((warning) => warning.includes("active call"))), "active call should create readiness warning");
@@ -572,6 +615,7 @@ async function checkBoardSummary(args) {
     assert(lines[0].includes("warnings="), "boardSummary should include warning ids");
     assert(lines[0].includes("call=active"), "boardSummary should mention active call");
     assert(lines[0].includes("MacLaunchAgentPlan="), "boardSummary should include LaunchAgent planner guidance");
+    assert(lines[0].includes("MacMaxFpsPlan="), "boardSummary should include max-FPS planner guidance");
     assert(lines[0].includes(call.goal), "boardSummary should include call goal");
     assert(lines[0].includes("Do not send passwords"), "boardSummary should include password safety note");
     assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "readiness boardSummary");
@@ -591,7 +635,9 @@ function checkPlainOutputIncludesLaunchAgentPlan(args) {
   ], args);
   assert(result.status === 0 || result.status === 1, "plain readiness output should exit normally");
   assert(String(result.stdout || "").includes("Mac LaunchAgent dry-run plan:"), "plain output should include LaunchAgent planner label");
+  assert(String(result.stdout || "").includes("Mac max FPS dry-run plan:"), "plain output should include max-FPS planner label");
   assert(String(result.stdout || "").includes("install-mac-host-launch-agent.mjs"), "plain output should include LaunchAgent planner command");
+  assert(String(result.stdout || "").includes("--maxScreenFps 60"), "plain output should include max-FPS planner command");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "plain readiness output");
   print("OK", "Mac host readiness plain output includes LaunchAgent planner guidance");
 }
@@ -607,6 +653,7 @@ async function main() {
   checkMediaBoardSummaryStatusFormatting();
   checkReadinessFindingsFormatting();
   checkH264FallbackPipelineFormatting();
+  checkMaxScreenFpsWarningFormatting();
   checkProbeMediaOfflineJson(args);
   checkProbeMediaResourceSampleImpliesProbeMedia(args);
   checkProbeMediaBoardSummary(args);

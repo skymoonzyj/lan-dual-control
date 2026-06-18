@@ -35,6 +35,7 @@ const defaults = {
   json: false,
   boardSummary: false,
 };
+const formalTargetMaxScreenFps = 60;
 
 const profileDescriptions = {
   default: "default low-risk checks only",
@@ -212,6 +213,11 @@ Machine-readable JSON fields:
                             It prints a plist plan and manual load commands
                             without writing files, loading launchctl, starting
                             Mac host, or requesting a password.
+  commands.macMaxFpsPlanCommand
+                            Secret-free LaunchAgent dry-run planner command for
+                            the formal 60Hz target. It only prints a plan and
+                            does not write files, load launchctl, start Mac
+                            host, request a password, or send input.
 `);
 }
 
@@ -565,6 +571,44 @@ function h264FallbackPipelineWarning(capabilities) {
   return `H.264 is advertised but current capture pipeline is ${safeCapabilities.capturePipeline || "unknown"}; refresh the media baseline before formal H.264 validation`;
 }
 
+function getMaxScreenFps(capabilities) {
+  const value = Number((capabilities || {}).maxScreenFps);
+  return Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
+}
+
+function maxScreenFpsWarning(capabilities) {
+  const maxScreenFps = getMaxScreenFps(capabilities);
+  if (maxScreenFps === null || maxScreenFps >= formalTargetMaxScreenFps) return "";
+  return `maxScreenFps=${maxScreenFps}; formal ${formalTargetMaxScreenFps}Hz validation will run at the remote limit until the max-FPS LaunchAgent plan is reviewed`;
+}
+
+function checkMaxScreenFps(discoveryDetails, args) {
+  if (!discoveryDetails?.online) {
+    return {
+      ok: true,
+      summary: "not checked; Mac host discovery is offline",
+      warnings: [],
+      details: { checked: false, reason: "host-offline" },
+    };
+  }
+  const maxScreenFps = getMaxScreenFps(discoveryDetails.capabilities);
+  const warning = maxScreenFpsWarning(discoveryDetails.capabilities);
+  return {
+    ok: true,
+    summary: maxScreenFps
+      ? `maxScreenFps=${maxScreenFps}; formalTarget=${formalTargetMaxScreenFps}`
+      : "maxScreenFps not reported by discovery",
+    warnings: warning ? [warning] : [],
+    details: {
+      checked: true,
+      maxScreenFps,
+      formalTargetMaxScreenFps,
+      limited: Boolean(warning),
+      macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
+    },
+  };
+}
+
 function discoveryInputMode(discovery) {
   return discovery?.capabilities?.inputMode || discovery?.capabilities?.input?.mode || discovery?.inputMode || "unknown";
 }
@@ -641,6 +685,7 @@ function formatReadinessBoardSummary(summary) {
   return [
     `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${hostMedia ? `; ${hostMedia}` : ""}; ${formatBoardCallSummary(summary.board)}.`,
     `MacLaunchAgentPlan=${summary.commands?.macLaunchAgentPlanCommand || makeMacLaunchAgentPlanCommand(summary.args || {})}.`,
+    `MacMaxFpsPlan=${summary.commands?.macMaxFpsPlanCommand || makeMacMaxFpsPlanCommand(summary.args || {})}.`,
     "Next: fix failed checks before formal E2E; keep inputMode=log for unattended checks.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
@@ -677,7 +722,12 @@ function formatHostMediaBoardSummary(summary) {
   const details = discovery?.details || {};
   if (details.online !== true) return "";
   const capabilities = details.capabilities || {};
-  return `h264=${status(capabilities.h264Stream)} pipeline=${capabilities.capturePipeline || "unknown"}`;
+  const maxScreenFps = getMaxScreenFps(capabilities);
+  return [
+    `h264=${status(capabilities.h264Stream)}`,
+    `pipeline=${capabilities.capturePipeline || "unknown"}`,
+    maxScreenFps ? `maxFps=${maxScreenFps}` : "",
+  ].filter(Boolean).join(" ");
 }
 
 function makeMacLaunchAgentPlanCommand(args = {}) {
@@ -685,6 +735,17 @@ function makeMacLaunchAgentPlanCommand(args = {}) {
     "node scripts/mac/install-mac-host-launch-agent.mjs",
     "--port",
     String(args.port || 43770),
+    "--boardSummary",
+  ].join(" ");
+}
+
+function makeMacMaxFpsPlanCommand(args = {}) {
+  return [
+    "node scripts/mac/install-mac-host-launch-agent.mjs",
+    "--port",
+    String(args.port || 43770),
+    "--maxScreenFps",
+    String(formalTargetMaxScreenFps),
     "--boardSummary",
   ].join(" ");
 }
@@ -1006,7 +1067,8 @@ async function main() {
     timeoutMs: 10000,
   });
   await runCustomStep(results, args, "Agent Link Board currentCall", () => checkBoard(args));
-  await runCustomStep(results, args, "Mac host discovery", () => checkDiscovery(args));
+  const discoveryResult = await runCustomStep(results, args, "Mac host discovery", () => checkDiscovery(args));
+  await runCustomStep(results, args, "Mac host max FPS", () => checkMaxScreenFps(discoveryResult.details, args));
 
   if (args.probeHost) {
     await runStep(
@@ -1174,6 +1236,7 @@ async function main() {
     warnings: warnings.length,
     commands: {
       macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
+      macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
     },
     results: results.map((result) => ({
       label: result.label,
@@ -1211,6 +1274,7 @@ async function main() {
       print("INFO", "For deeper validation, rerun with --probeHost, --probeVideo, --probeAudio, or --probeInputLog as needed.", args);
     }
     print("NEXT", `Mac LaunchAgent dry-run plan: ${summary.commands.macLaunchAgentPlanCommand}`, args);
+    print("NEXT", `Mac max FPS dry-run plan: ${summary.commands.macMaxFpsPlanCommand}`, args);
   }
 
   if (!ok) {
