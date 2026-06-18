@@ -113,6 +113,21 @@ function assertMacHostSafeStartCommand(command, label) {
   assert(!value.includes("inject"), `${label} should not instruct injection`);
 }
 
+function assertMacHostStopCommand(command, label) {
+  const value = String(command || "");
+  assert(value.includes("start-mac-host.mjs"), `${label} should use start-mac-host`);
+  assert(value.includes("--stop"), `${label} should make the stop action explicit`);
+  assert(value.includes("--host"), `${label} should keep the target host explicit`);
+  assert(value.includes("--port"), `${label} should keep the target port explicit`);
+  assert(!value.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!value.includes("--requirePassword"), `${label} should not require authentication`);
+  assert(!value.includes("--password"), `${label} should not embed a password argument`);
+  assert(!value.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!value.includes("--server"), `${label} should not echo board server URLs`);
+  assert(!value.includes("--json"), `${label} should default to user-visible shutdown`);
+  assert(!value.includes("inject"), `${label} should not instruct injection`);
+}
+
 function assertMacMaxFpsSafeStartCommand(command, label) {
   assertMacHostSafeStartCommand(command, label);
   assert(String(command || "").includes("--maxScreenFps 60"), `${label} should target the formal 60Hz foreground start`);
@@ -307,6 +322,7 @@ function checkHelp(args) {
     assert(String(result.stdout).includes("--boardSummary"), `${script} ${flag} should document --boardSummary`);
     assert(String(result.stdout).includes("--probeMedia"), `${script} ${flag} should document --probeMedia`);
     assert(String(result.stdout).includes("commands.macHostSafeStartCommand"), `${script} ${flag} should document safe start command`);
+    assert(String(result.stdout).includes("commands.macHostStopCommand"), `${script} ${flag} should document stop command`);
     assert(String(result.stdout).includes("commands.macMaxFpsSafeStartCommand"), `${script} ${flag} should document foreground 60Hz safe start command`);
     assert(String(result.stdout).includes("commands.macLaunchAgentPlanCommand"), `${script} ${flag} should document LaunchAgent planner command`);
     assert(String(result.stdout).includes("commands.macMaxFpsPlanCommand"), `${script} ${flag} should document max-FPS planner command`);
@@ -321,6 +337,7 @@ function checkDefaultDoesNotReadBoard(args) {
   const payload = parseJson(result.stdout, "default readiness JSON");
   assert(payload.board?.checked === false, "default readiness should not read Agent Link Board");
   assertMacHostSafeStartCommand(payload.commands?.macHostSafeStartCommand || "", "default readiness JSON safe start command");
+  assertMacHostStopCommand(payload.commands?.macHostStopCommand || "", "default readiness JSON stop command");
   assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand || "", "default readiness JSON foreground 60Hz safe start command");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand || "", "default readiness JSON LaunchAgent planner command");
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand || "", "default readiness JSON max-FPS planner command");
@@ -334,6 +351,8 @@ function checkDefaultDoesNotReadBoard(args) {
   assert(String(payload.boardSummary || "").includes("warnings="), "default boardSummary should include warning ids");
   assert(String(payload.boardSummary || "").includes("MacHostSafeStart="), "default boardSummary should include safe start guidance");
   assert(String(payload.boardSummary || "").includes("--host 0.0.0.0"), "default boardSummary should keep safe start bind host");
+  assert(String(payload.boardSummary || "").includes("MacHostStop="), "default boardSummary should include stop guidance");
+  assert(String(payload.boardSummary || "").includes("--stop"), "default boardSummary should make stop action explicit");
   assert(String(payload.boardSummary || "").includes("MacMaxFpsSafeStart="), "default boardSummary should include foreground 60Hz safe start guidance");
   assert(String(payload.boardSummary || "").includes("--maxScreenFps 60"), "default boardSummary should include foreground 60Hz safe start target");
   assert(String(payload.boardSummary || "").includes("MacLaunchAgentPlan="), "default boardSummary should include LaunchAgent planner guidance");
@@ -566,6 +585,8 @@ function checkProbeMediaBoardSummary(args) {
   assert(lines[0].includes("media=failed("), "offline --probeMedia boardSummary should include failed media status");
   assert(lines[0].includes("MacHostSafeStart="), "offline --probeMedia boardSummary should include safe start guidance");
   assert(lines[0].includes("--host 0.0.0.0"), "offline --probeMedia boardSummary should keep safe start bind host");
+  assert(lines[0].includes("MacHostStop="), "offline --probeMedia boardSummary should include stop guidance");
+  assert(lines[0].includes("--stop"), "offline --probeMedia boardSummary should make stop action explicit");
   assert(lines[0].includes("MacMaxFpsSafeStart="), "offline --probeMedia boardSummary should include foreground 60Hz safe start guidance");
   assert(lines[0].includes("--maxScreenFps 60"), "offline --probeMedia boardSummary should include foreground 60Hz safe start target");
   assert(lines[0].includes("MacLaunchAgentPlan="), "offline --probeMedia boardSummary should include LaunchAgent planner guidance");
@@ -613,6 +634,7 @@ async function checkActiveBoardCall(args) {
     assert(String(payload.boardSummary || "").includes("warnings="), "active boardSummary should include warning ids");
     assert(String(payload.boardSummary || "").includes("agent-link-board-currentcall"), "active boardSummary should name board currentCall warning");
     assert(String(payload.boardSummary || "").includes("MacHostSafeStart="), "boardSummary should include safe start guidance");
+    assert(String(payload.boardSummary || "").includes("MacHostStop="), "boardSummary should include stop guidance");
     assert(String(payload.boardSummary || "").includes("MacMaxFpsSafeStart="), "boardSummary should include foreground 60Hz safe start guidance");
     assert(String(payload.boardSummary || "").includes("MacLaunchAgentPlan="), "boardSummary should include LaunchAgent planner guidance");
     assert(String(payload.boardSummary || "").includes("MacMaxFpsPlan="), "boardSummary should include max-FPS planner guidance");
@@ -689,6 +711,7 @@ async function checkBoardSummary(args) {
     assert(lines[0].includes("warnings="), "boardSummary should include warning ids");
     assert(lines[0].includes("call=active"), "boardSummary should mention active call");
     assert(lines[0].includes("MacHostSafeStart="), "boardSummary should include safe start guidance");
+    assert(lines[0].includes("MacHostStop="), "boardSummary should include stop guidance");
     assert(lines[0].includes("MacMaxFpsSafeStart="), "boardSummary should include foreground 60Hz safe start guidance");
     assert(lines[0].includes("MacLaunchAgentPlan="), "boardSummary should include LaunchAgent planner guidance");
     assert(lines[0].includes("MacMaxFpsPlan="), "boardSummary should include max-FPS planner guidance");
@@ -712,6 +735,7 @@ function checkPlainOutputIncludesLaunchAgentPlan(args) {
     "--skipCurrentBuildCheck",
   ], args);
   assert(result.status === 0 || result.status === 1, "plain readiness output should exit normally");
+  assert(String(result.stdout || "").includes("Mac host stop:"), "plain output should include stop label");
   assert(String(result.stdout || "").includes("Mac LaunchAgent dry-run plan:"), "plain output should include LaunchAgent planner label");
   assert(String(result.stdout || "").includes("Mac max FPS dry-run plan:"), "plain output should include max-FPS planner label");
   assert(String(result.stdout || "").includes("Mac 60Hz safe foreground start:"), "plain output should include foreground 60Hz safe start label");

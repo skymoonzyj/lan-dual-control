@@ -212,6 +212,10 @@ Machine-readable JSON fields:
                             Secret-free foreground start command preserving the
                             checked port; it prompts locally and never embeds
                             a password in argv.
+  commands.macHostStopCommand
+                            Secret-free local stop command for the currently
+                            checked Mac host port; it does not prompt for a
+                            password, send input, or embed board URLs.
   commands.macMaxFpsSafeStartCommand
                             Secret-free foreground start command for the formal
                             60Hz target; it prompts locally, never embeds a
@@ -703,6 +707,7 @@ function formatReadinessBoardSummary(summary) {
   return [
     `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${hostMedia ? `; ${hostMedia}` : ""}; ${formatBoardCallSummary(summary.board)}.`,
     `MacHostSafeStart=${summary.commands?.macHostSafeStartCommand || makeMacHostSafeStartCommand(summary.args || {})}.`,
+    `MacHostStop=${summary.commands?.macHostStopCommand || makeMacHostStopCommand(summary.args || {})}.`,
     `MacMaxFpsSafeStart=${summary.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(summary.args || {})}.`,
     `MacLaunchAgentPlan=${summary.commands?.macLaunchAgentPlanCommand || makeMacLaunchAgentPlanCommand(summary.args || {})}.`,
     `MacMaxFpsPlan=${summary.commands?.macMaxFpsPlanCommand || makeMacMaxFpsPlanCommand(summary.args || {})}.`,
@@ -768,6 +773,22 @@ function makeMacHostSafeStartCommand(args = {}) {
     "--requirePassword",
     "--host",
     "0.0.0.0",
+    "--port",
+    String(args.port || 43770),
+  ].join(" ");
+}
+
+function statusProbeHost(args = {}) {
+  const host = args.host || "127.0.0.1";
+  return host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host;
+}
+
+function makeMacHostStopCommand(args = {}) {
+  return [
+    "node scripts/mac/start-mac-host.mjs",
+    "--stop",
+    "--host",
+    statusProbeHost(args),
     "--port",
     String(args.port || 43770),
   ].join(" ");
@@ -1309,6 +1330,7 @@ async function main() {
     warnings: warnings.length,
     commands: {
       macHostSafeStartCommand: makeMacHostSafeStartCommand(args),
+      macHostStopCommand: makeMacHostStopCommand(args),
       macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
       macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
       macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
@@ -1351,6 +1373,7 @@ async function main() {
       print("INFO", "For deeper validation, rerun with --probeHost, --probeVideo, --probeAudio, or --probeInputLog as needed.", args);
     }
     print("NEXT", `Mac host safe start: ${summary.commands.macHostSafeStartCommand}`, args);
+    print("NEXT", `Mac host stop: ${summary.commands.macHostStopCommand}`, args);
     print("NEXT", `Mac 60Hz safe foreground start: ${summary.commands.macMaxFpsSafeStartCommand}`, args);
     print("NEXT", `Mac LaunchAgent dry-run plan: ${summary.commands.macLaunchAgentPlanCommand}`, args);
     print("NEXT", `Mac max FPS dry-run plan: ${summary.commands.macMaxFpsPlanCommand}`, args);
