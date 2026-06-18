@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac formal E2E readiness 摘要也暴露 Mac 脚本 help 安全自检入口。
+完成内容：
+- `check-mac-formal-e2e-status --json/--boardSummary` 现在输出 `commands.macScriptHelpCommand` / `MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`。
+- 只拿到 `MacFormalE2E=` 或 formal E2E readiness 摘要时，也能直接要求 Mac 端跑统一 `--help/-h` 副作用防线，不必回翻 resume、heartbeat、host readiness 或 unattended 摘要。
+- `callText` 也会提示同一条 help 安全自检命令，方便普通输出复制给另一端。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 12000` 失败在 help 缺 `commands.macScriptHelpCommand`。
+- 绿灯：实现后复跑同一自测通过。
+遗留问题：
+- 本轮只补 formal E2E readiness 摘要的安全自检入口，没有进行真实 Windows formal E2E、密码认证或输入注入验收。
+下一步建议：
+- Windows 或人工只看到 `MacFormalE2E=` 摘要时，可直接复制 `MacScriptHelp=` 让 Mac 端确认所有 Mac `.mjs` 脚本 help 路径无副作用；正式 E2E 仍需用户在场时按安全认证流程走，`inject` 仍需另行明确确认。
+是否改了协议：否；只补 Mac formal E2E readiness 的安全命令标签。
+是否需要另一端配合：本轮不需要；Windows 端可后续按需消费该标签。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac client formal smoke 的安全重跑命令保留 Windows 发现范围。
 完成内容：
 - `run-mac-client-formal-smoke --json/--boardSummary` 输出的 `commands.macClientFormalSmoke` / `MacClientFormalSmoke=` 现在会保留 `--discoverHost`、`--discoverSubnet`、`--discoverNoLocalSubnets`、`--discoverTimeoutMs` 和 `--discoverScanTimeoutMs`。

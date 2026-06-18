@@ -105,6 +105,11 @@ JSON output:
                             turns missing or low LaunchAgent maxScreenFps into
                             a blocker without writing files, loading launchctl,
                             requesting a password, sending a call, or sending input.
+  commands.macScriptHelpCommand
+                            Secret-free Mac script help safety check. It runs
+                            --help/-h coverage only and does not start services,
+                            request passwords, read Agent Link Board, authenticate,
+                            send calls, or send input.
 
 Examples:
   node scripts/mac/check-mac-formal-e2e-status.mjs
@@ -505,6 +510,7 @@ function makeCallText(report) {
       `When the host is online, run low-risk host readiness with: ${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
       `When the host is online, run local smoke first with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
       `When the host is online, refresh the media baseline with: ${report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
+      `If only this summary is available, verify Mac script help safety with: ${report.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
     ].join(" ");
   }
   const address = formatHostAddress(host);
@@ -522,6 +528,7 @@ function makeCallText(report) {
     `Before long formal runs, run low-risk host readiness with: ${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
     `Before long formal runs, run local H.264/PCM/input-log smoke with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
     `Before long formal runs, refresh the Mac media baseline with: ${report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
+    `If only this summary is available, verify Mac script help safety with: ${report.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
     "If ready, Windows should run discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log. Do not run inject unless the user explicitly confirms they are watching.",
   ].join(" ");
 }
@@ -548,6 +555,7 @@ function makeBoardSummary(report) {
       `MacHostReadiness=${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
       `MacFormalLocalSmoke=${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
       "Media precheck after host is online: check-mac-host-readiness --probeMedia --boardSummary.",
+      `MacScriptHelp=${report.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
       "Do not send passwords on Agent Link Board; inject requires explicit user confirmation.",
     ].join(" ");
   }
@@ -565,6 +573,7 @@ function makeBoardSummary(report) {
     `MacHostReadiness=${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
     `MacFormalLocalSmoke=${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
     "Media precheck: check-mac-host-readiness --probeMedia --boardSummary before long formal runs.",
+    `MacScriptHelp=${report.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
     "Formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log; no inject without explicit user confirmation.",
     "Do not send passwords on Agent Link Board.",
   ].join(" ");
@@ -613,7 +622,12 @@ function makeCommands(report) {
       "--promptPassword",
       "--boardSummary",
     ].join(" "),
+    macScriptHelpCommand: makeMacScriptHelpCommand(),
   };
+}
+
+function makeMacScriptHelpCommand() {
+  return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
 
 function makeMacHostReadinessCommand(host, port) {

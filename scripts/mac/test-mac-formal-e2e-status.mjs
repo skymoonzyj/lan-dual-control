@@ -173,6 +173,8 @@ function assertBoardSummaryShape(text, label) {
   assert(/MacHostReadiness=.*check-mac-host-readiness\.mjs/.test(text), `${label} should use check-mac-host-readiness for low-risk host readiness`);
   assert(/MacFormalLocalSmoke=/.test(text), `${label} should include local formal smoke guidance`);
   assert(/check-mac-formal-local-smoke\.mjs/.test(text), `${label} should include local formal smoke command`);
+  assert(/MacScriptHelp=/.test(text), `${label} should include Mac script help safety check guidance`);
+  assert(/MacScriptHelp=.*test-mac-script-help\.mjs/.test(text), `${label} should include Mac script help command`);
   assert(/Do not send passwords/.test(text), `${label} should include password safety note`);
   assert(/inject/.test(text), `${label} should include inject safety note`);
   assertNoSecretLikeText(text, label);
@@ -317,6 +319,20 @@ function assertMacFormalLocalSmokeCommand(command, label, expectedPort = null) {
   if (expectedPort !== null) {
     assert(text.includes(`--port ${expectedPort}`), `${label} should target expected port ${expectedPort}`);
   }
+}
+
+function assertMacScriptHelpCommand(command, label) {
+  const text = String(command || "");
+  assert(/node scripts\/mac\/test-mac-script-help\.mjs/.test(text), `${label} should use test-mac-script-help`);
+  assert(/--timeoutMs 10000/.test(text), `${label} should keep the bounded help timeout`);
+  assert(/--boardSummary/.test(text), `${label} should produce boardSummary`);
+  assert(!/--promptPassword/.test(text), `${label} should not prompt for passwords`);
+  assert(!/(^|\s)--password(\s|=|$)/.test(text), `${label} should not embed --password`);
+  assert(!/--sendCall/.test(text), `${label} should not send Agent Link Board calls`);
+  assert(!/--server/.test(text), `${label} should not echo custom board server URLs`);
+  assert(!/input_event/.test(text), `${label} should not mention input events`);
+  assert(!/inject/.test(text), `${label} should not instruct injection`);
+  assert(!/super-secret-formal-password/.test(text), `${label} should not echo server-like secret text`);
 }
 
 function assertMediaReadinessCommand(command, label, expectedPort = null) {
@@ -518,6 +534,7 @@ function checkHelp(args) {
     assert(/commands\.macLaunchAgentPlanCommand/.test(result.stdout), `${script} ${flag} should document LaunchAgent planner command output`);
     assert(/commands\.macMaxFpsPlanCommand/.test(result.stdout), `${script} ${flag} should document Mac max-FPS planner command output`);
     assert(/commands\.macUnattendedFormalCommand/.test(result.stdout), `${script} ${flag} should document Mac unattended formal gate command output`);
+    assert(/commands\.macScriptHelpCommand/.test(result.stdout), `${script} ${flag} should document Mac script help safety command output`);
     assert(/--promptPassword/.test(result.stdout), `${script} ${flag} should document local password prompt for media readiness command`);
     assert(!/Mac host probe password/.test(result.stdout), `${script} ${flag} should not prompt for password`);
   }
@@ -577,6 +594,7 @@ function checkOfflineJson(args) {
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand, "offline unattended formal command", 9);
   assertMacHostReadinessCommand(payload.commands?.macHostReadinessCommand, "offline host readiness command", 9);
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "offline local smoke command", 9);
+  assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand, "offline Mac script help command");
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "offline media readiness command", 9);
   print("OK", "Offline formal E2E JSON blocks the call and keeps safety guidance");
 }
@@ -847,6 +865,7 @@ async function checkReadySendCall(args) {
       assertMacHostReadinessCommand(payload.commands?.macHostReadinessCommand, "ready sendCall host readiness command", macHost.port);
       assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "ready sendCall media readiness command", macHost.port);
       assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "ready sendCall local smoke command", macHost.port);
+      assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand, "ready sendCall Mac script help command");
       assert(/ready with warnings for Windows formal E2E/.test(payload.boardSummary || ""), "ready sendCall boardSummary should make warning state explicit");
       assert(/Mac formal E2E ready with warnings/.test(payload.callText || ""), "ready sendCall callText should make warning state explicit");
       assert(/blockers=none/.test(payload.boardSummary || ""), "ready sendCall boardSummary should report no blockers");
@@ -1029,6 +1048,7 @@ async function checkMaxFpsLimitWarning(args) {
     assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "max-FPS formal E2E planner command", macHost.port);
     assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand, "max-FPS formal E2E unattended formal command", macHost.port);
     assertMacHostReadinessCommand(payload.commands?.macHostReadinessCommand, "max-FPS formal E2E host readiness command", macHost.port);
+    assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand, "max-FPS formal E2E Mac script help command");
     assert(/warnings=[^.]*fps-limit/.test(payload.boardSummary || ""), "max-FPS board summary should name fps-limit warning");
     assert(/MacMaxFpsSafeStart=/.test(payload.boardSummary || ""), "max-FPS board summary should include MacMaxFpsSafeStart");
     assert(/MacHostStop=/.test(payload.boardSummary || ""), "max-FPS board summary should include MacHostStop");
@@ -1093,6 +1113,7 @@ function checkOnlineJson(args) {
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand, "online unattended formal command", args.port);
   assertMacHostReadinessCommand(payload.commands?.macHostReadinessCommand, "online host readiness command", args.port);
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "online local smoke command", args.port);
+  assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand, "online Mac script help command");
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "online media readiness command", args.port);
   print("OK", "Online formal E2E JSON includes video/audio/clipboard/input-log/inject safety checklist");
 }
@@ -1147,6 +1168,7 @@ function checkSecretRedaction(args) {
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "secret-redaction max-FPS planner command", 9);
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "secret-redaction media readiness command", 9);
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "secret-redaction local smoke command", 9);
+  assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand, "secret-redaction Mac script help command");
   print("OK", "Formal E2E status output does not echo unrelated secret-like server text");
 }
 
