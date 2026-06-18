@@ -59,7 +59,7 @@ It also surfaces recent MacHostSafeStart=, MacMaxFpsSafeStart=, MacFormalLocalSm
 MacClientDiscoverWindows=,
 MacClientFormalChecklist=,
 MacClientFormalSmoke=,
-WindowsReverseGrantStatus=, WindowsOpenOneTimeReverseGrant= and WindowsSecureAuthPath= commands from Agent Link Board status/messages so Mac host safe foreground-start guidance,
+WindowsReverseGrantStatus=, WindowsOpenOneTimeReverseGrant=, WindowsSecureAuthPath=, WindowsFirewallStatus= and WindowsFirewallPreview= commands from Agent Link Board status/messages so Mac host safe foreground-start guidance,
 including 60Hz foreground-start guidance, local smoke next steps, Windows local reverse-control grant guidance, and onsite Windows host secure-auth restart guidance, is visible in JSON, human output, and
 one-line board summaries.
 The report also includes a Windows host media baseline command:
@@ -101,6 +101,8 @@ WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scr
 WindowsReverseGrantStatusNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --status --boardSummary
 WindowsOpenOneTimeReverseGrantNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --grant --durationMs 30000 --boardSummary
 WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword
+WindowsFirewallStatus=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --json
+WindowsFirewallPreview=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --dryRunRule --ruleProfile Private
 If a secure-auth currentCall is active and the summary shows AgentCallAck=,
 use -SendAgentCallAck to send that same secret-free acknowledgement. It does
 not clear the call, authenticate a WebSocket, send a password, or send input/inject.

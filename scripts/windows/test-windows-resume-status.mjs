@@ -460,6 +460,9 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsSecureAuthPath || "").includes("--promptPassword"), "mock JSON Windows secure auth path should prompt locally");
     assert(String(payload.commands?.windowsSecureAuthPath || "").includes("--requirePassword"), "mock JSON Windows secure auth path should require a non-empty password");
     assert(!String(payload.commands?.windowsSecureAuthPath || "").includes("--password"), "mock JSON Windows secure auth path should not include password argv");
+    assert(String(payload.commands?.windowsFirewallStatusBoardSummary || "").includes("check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --json"), "mock JSON should include Windows firewall status command");
+    assert(String(payload.commands?.windowsFirewallPreviewBoardSummary || "").includes("check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --dryRunRule --ruleProfile Private"), "mock JSON should include dry-run-only Windows firewall preview command");
+    assert(!String(payload.commands?.windowsFirewallPreviewBoardSummary || "").includes("--addRule"), "mock JSON Windows firewall preview command should not change firewall");
     assert(String(payload.commands?.windowsHostMediaReadinessPowerShellBoardSummary || "").includes("check-windows-host-readiness.ps1"), "mock JSON should include Windows host media PowerShell command");
     assert(String(payload.commands?.windowsHostMediaReadinessPowerShellBoardSummary || "").includes("-ProbeMedia"), "mock JSON media PowerShell command should enable -ProbeMedia");
     assert(String(payload.commands?.windowsHostMediaReadinessPowerShellBoardSummary || "").includes("-BoardSummary"), "mock JSON media PowerShell command should be board-safe");
@@ -772,6 +775,11 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --grant --durationMs 30000 --boardSummary", "board summary");
     assertIncludes(result.stdout, "WindowsSecureAuthPath=", "board summary");
     assertIncludes(result.stdout, "start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword", "board summary");
+    assertIncludes(result.stdout, "WindowsFirewallStatus=", "board summary");
+    assertIncludes(result.stdout, "check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --json", "board summary");
+    assertIncludes(result.stdout, "WindowsFirewallPreview=", "board summary");
+    assertIncludes(result.stdout, "check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --dryRunRule --ruleProfile Private", "board summary");
+    assertNotIncludes(result.stdout, "--addRule", "board summary");
     assertIncludes(result.stdout, "ReverseGrant=", "board summary");
     assertIncludes(result.stdout, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary", "board summary");
     assertIncludes(result.stdout, "ReverseGrantPs=", "board summary");

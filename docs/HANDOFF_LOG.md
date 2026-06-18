@@ -52,6 +52,52 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：补 WindowsLanRisk 后的安全下一步入口，让 Windows 发现/防火墙问题能从 status/readiness/resume 一行摘要直接进入只读检查和 dry-run 预览。
+完成内容：
+- `start-windows-host --status` 的 JSON、普通输出、离线/在线 `--boardSummary` 新增 `windowsFirewallStatusCommand` / `WindowsFirewallStatus=` 与 `windowsFirewallPreviewCommand` / `WindowsFirewallPreview=`。
+- `check-windows-host-readiness` 的 JSON、PowerShell JSON 和 `--boardSummary` 新增同一组防火墙只读/dry-run 命令，和 `WindowsLanRisk=` 放在一起便于现场排查。
+- `check-windows-resume-status` 的 JSON `commands`、普通输出和 `--boardSummary` 新增 `WindowsFirewallStatus=` / `WindowsFirewallPreview=`；PowerShell wrapper help 已同步说明。
+- `WindowsFirewallStatus=` 指向 `check-windows-firewall --host 0.0.0.0 --port <port> --json`；`WindowsFirewallPreview=` 指向 `check-windows-firewall --dryRunRule --ruleProfile Private`，不含 `--addRule`，不会自动改系统防火墙。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `scripts/windows/check-windows-host-readiness.ps1`
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check`：`check-windows-host-readiness.mjs`、`start-windows-host.mjs`、`check-windows-resume-status.mjs` 和本轮改到的 4 个测试脚本均通过。
+- `node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 120000 --readinessTimeoutMs 8000`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 120000`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 120000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 120000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-host-readiness.mjs --script start-windows-host.mjs --script check-windows-resume-status.mjs --script test-windows-host-readiness-board-summary.mjs --script test-windows-host-start-helper.mjs --script test-windows-resume-status.mjs --script test-windows-resume-status-powershell.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`
+- 真实摘要：`check-windows-host-readiness --checkBoard --boardSummary`、`start-windows-host --status --checkBoard --boardSummary`、`check-windows-resume-status --checkBoard --boardSummary` 均确认输出 `WindowsFirewallStatus=` 与 `WindowsFirewallPreview=`。
+- 非沙盒只读确认：`check-windows-firewall --json` 能读取当前 listener/profile；`--dryRunRule --ruleProfile Private` 只打印 `New-NetFirewallRule` 建议，不新增规则。
+- `git diff --check` 与冲突标记扫描通过。
+遗留问题：
+- 当前 Windows 网络 Profile 仍是 Public，且未发现 enabled inbound allow rule；本轮只把只读检查和 dry-run 预览入口显式暴露，不自动改系统设置。
+- 当前 Windows host runtime build 仍是旧进程 `f27f0a6`，正式验收前如需最新代码，应按安全流程重启 host。
+下一步建议：
+- Mac 端发现不到 Windows host 或看到 `WindowsLanRisk=no-firewall-allow,public-profile` 时，先复制 `WindowsFirewallStatus=` 做只读确认；需要用户处理系统防火墙前再看 `WindowsFirewallPreview=`，不要在通讯板发送真正 `--addRule` 自动修改命令。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Mac 端只需在后续摘要里继续消费这些只读标签，不发送密码/token/系统账号。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 本机提醒和 Windows 控制端诊断消费 Mac 侧 `MacClientDiscoverWindows=` 与 `WindowsLanRisk=`，避免 Mac 发现不到 Windows host 时丢失防火墙/Public 网络线索。
 完成内容：
 - `watch-codex-link-mac-alerts.ps1` 新增 `MacClientDiscoverWindows` / `discover-windows-hosts` 与 `WindowsLanRisk`、`no-firewall-allow`、`public-profile`、`lan-probe-blocked`、`tcp-unreachable` 等组合提醒规则。

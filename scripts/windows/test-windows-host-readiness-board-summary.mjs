@@ -235,6 +235,39 @@ function expectedLanRisksFrom(payload) {
   return risks;
 }
 
+function assertLanAccessCommands(payload, label) {
+  const summary = String(payload?.boardSummary || "");
+  const firewallStatus = String(payload?.windowsFirewallStatusCommand || "");
+  const firewallPreview = String(payload?.windowsFirewallPreviewCommand || "");
+  assert(
+    firewallStatus.includes("check-windows-firewall.mjs")
+      && firewallStatus.includes("--host 0.0.0.0")
+      && firewallStatus.includes("--port")
+      && firewallStatus.includes("--json"),
+    `${label} JSON should include Windows firewall status command: ${firewallStatus}`,
+  );
+  assert(
+    firewallPreview.includes("check-windows-firewall.mjs")
+      && firewallPreview.includes("--dryRunRule")
+      && firewallPreview.includes("--ruleProfile Private")
+      && !firewallPreview.includes("--addRule"),
+    `${label} JSON should include dry-run-only Windows firewall preview command: ${firewallPreview}`,
+  );
+  assert(
+    summary.includes("WindowsFirewallStatus=")
+      && summary.includes("check-windows-firewall.mjs --host 0.0.0.0")
+      && summary.includes("--json"),
+    `${label} boardSummary should include WindowsFirewallStatus: ${summary}`,
+  );
+  assert(
+    summary.includes("WindowsFirewallPreview=")
+      && summary.includes("--dryRunRule")
+      && summary.includes("--ruleProfile Private")
+      && !summary.includes("--addRule"),
+    `${label} boardSummary should include dry-run-only WindowsFirewallPreview: ${summary}`,
+  );
+}
+
 function withTimeout(promise, timeoutMs, label) {
   return new Promise((resolveTimeout, rejectTimeout) => {
     const timer = setTimeout(() => rejectTimeout(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
@@ -646,6 +679,7 @@ async function main() {
   assert(jsonSummary.boardSummary.includes("Windows readiness"), "JSON boardSummary has unexpected text");
   assert(jsonSummary.boardSummary.includes("Do not send passwords"), "JSON boardSummary is missing board safety reminder");
   assert(jsonSummary.boardSummary.includes("WindowsSecureAuthPath="), "JSON boardSummary is missing WindowsSecureAuthPath");
+  assertLanAccessCommands(jsonSummary, "readiness --json");
   const expectedLanRisks = expectedLanRisksFrom(jsonSummary);
   const expectedLanRiskText = expectedLanRisks.length > 0 ? expectedLanRisks.join(",") : "none";
   assert(Array.isArray(jsonSummary.windowsLanRisks), "JSON windowsLanRisks must be an array");
@@ -906,6 +940,7 @@ async function main() {
   assert(typeof powerShellJsonSummary.boardSummary === "string" && powerShellJsonSummary.boardSummary.includes("Windows readiness"), "PowerShell JSON boardSummary is missing");
   assert(powerShellJsonSummary.boardSummary.includes("call=CALLING Mac Codex->Windows Codex"), "PowerShell JSON boardSummary should include active currentCall");
   assert(powerShellJsonSummary.boardSummary.includes("WindowsSecureAuthPath="), "PowerShell JSON boardSummary should include WindowsSecureAuthPath");
+  assertLanAccessCommands(powerShellJsonSummary, "PowerShell readiness -Json");
   assert(
     typeof powerShellJsonSummary.windowsSecureAuthPath === "string"
       && powerShellJsonSummary.windowsSecureAuthPath.includes("--promptPassword --requirePassword"),

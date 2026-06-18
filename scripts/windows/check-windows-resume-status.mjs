@@ -2399,6 +2399,16 @@ function makeWindowsSecureAuthPathCommand(port = 43770) {
   return `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${safePort} --promptPassword --requirePassword`;
 }
 
+function makeWindowsFirewallStatusCommand(port = 43770) {
+  const safePort = clampInteger(port, 1, 65535, 43770);
+  return `node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port ${safePort} --json`;
+}
+
+function makeWindowsFirewallPreviewCommand(port = 43770) {
+  const safePort = clampInteger(port, 1, 65535, 43770);
+  return `node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port ${safePort} --dryRunRule --ruleProfile Private`;
+}
+
 function quoteCommandArg(value) {
   const text = String(value);
   return /^[A-Za-z0-9_./:=@-]+$/.test(text) ? text : JSON.stringify(text);
@@ -2434,6 +2444,8 @@ function makeCommands(args, preflight) {
   const runtimeBuildId = String(preflight.payload?.runtime?.buildId || "").trim();
   const windowsHostPort = 43770;
   const windowsSecureAuthPath = makeWindowsSecureAuthPathCommand(windowsHostPort);
+  const windowsFirewallStatusBoardSummary = makeWindowsFirewallStatusCommand(windowsHostPort);
+  const windowsFirewallPreviewBoardSummary = makeWindowsFirewallPreviewCommand(windowsHostPort);
   const macHostDiscoveryBoardSummary = makeMacHostDiscoveryCommand(args, preflight, host, port);
   const macHostDiscoveryPowerShellBoardSummary = makeMacHostDiscoveryPowerShellCommand(args, preflight, host, port);
   const macHostReadinessCommand = [
@@ -2660,6 +2672,8 @@ function makeCommands(args, preflight) {
       "--boardSummary",
     ].join(" "),
     windowsSecureAuthPath,
+    windowsFirewallStatusBoardSummary,
+    windowsFirewallPreviewBoardSummary,
     windowsHostMediaReadinessPowerShellBoardSummary: [
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-host-readiness.ps1",
       "-CheckBoard",
@@ -2992,6 +3006,8 @@ function makeBoardSummary(report) {
     `WindowsReverseGrantStatusNodeFallback=${windowsReverseGrantStatusNodeCommand}.`,
     `WindowsOpenOneTimeReverseGrantNodeFallback=${windowsOpenOneTimeReverseGrantNodeCommand}.`,
     `WindowsSecureAuthPath=${windowsSecureAuthPathCommand}.`,
+    `WindowsFirewallStatus=${report.commands.windowsFirewallStatusBoardSummary}.`,
+    `WindowsFirewallPreview=${report.commands.windowsFirewallPreviewBoardSummary}.`,
     `ReverseGrant=${report.commands.windowsReverseControlGrantBoardSummary}.`,
     `ReverseGrantPs=${report.commands.windowsReverseControlGrantPowerShellBoardSummary}.`,
     "No password was requested or sent; no WebSocket auth/input/inject was performed.",
@@ -3245,6 +3261,8 @@ function printHuman(report) {
     if (report.board.windowsSecureAuthPath?.command) {
       console.log(`  WindowsSecureAuthPath=${report.board.windowsSecureAuthPath.command}`);
     }
+    console.log(`  WindowsFirewallStatus=${report.commands.windowsFirewallStatusBoardSummary}`);
+    console.log(`  WindowsFirewallPreview=${report.commands.windowsFirewallPreviewBoardSummary}`);
     if (report.board.windowsLanRisk?.found) {
       console.log(`  WindowsLanRisk=${report.board.windowsLanRisk.summary}`);
     }
@@ -3342,6 +3360,8 @@ function printHuman(report) {
   console.log(`  WindowsReverseGrantStatusNodeFallback=${report.board.windowsReverseGrantStatusNodeFallback?.command || report.commands.windowsReverseGrantStatusBoardSummary}`);
   console.log(`  WindowsOpenOneTimeReverseGrantNodeFallback=${report.board.windowsOpenOneTimeReverseGrantNodeFallback?.command || report.commands.windowsOpenOneTimeReverseGrantBoardSummary}`);
   console.log(`  WindowsSecureAuthPath=${report.board.windowsSecureAuthPath?.command || report.commands.windowsSecureAuthPath}`);
+  console.log(`  WindowsFirewallStatus=${report.commands.windowsFirewallStatusBoardSummary}`);
+  console.log(`  WindowsFirewallPreview=${report.commands.windowsFirewallPreviewBoardSummary}`);
   console.log(`  ${report.commands.windowsReverseControlGrantBoardSummary}`);
   console.log(`  ${report.commands.windowsReverseControlGrantPowerShellBoardSummary}`);
   console.log(`  ${report.commands.windowsMacAlertWatcherStart}`);

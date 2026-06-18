@@ -126,6 +126,36 @@ function assertNotIncludes(text, expected, label) {
   }
 }
 
+function assertWindowsFirewallCommands(payload, label, port) {
+  const statusCommand = String(payload?.windowsFirewallStatusCommand || "");
+  const previewCommand = String(payload?.windowsFirewallPreviewCommand || "");
+  const boardSummary = String(payload?.boardSummary || "");
+  const expectedStatus = `check-windows-firewall.mjs --host 0.0.0.0 --port ${port} --json`;
+  const expectedPreview = `check-windows-firewall.mjs --host 0.0.0.0 --port ${port} --dryRunRule --ruleProfile Private`;
+  if (!statusCommand.includes(expectedStatus)) {
+    throw new Error(`${label} did not include Windows firewall status command.\n${JSON.stringify(payload, null, 2)}`);
+  }
+  if (!previewCommand.includes(expectedPreview) || previewCommand.includes("--addRule")) {
+    throw new Error(`${label} did not include dry-run-only Windows firewall preview command.\n${JSON.stringify(payload, null, 2)}`);
+  }
+  if (!boardSummary.includes("WindowsFirewallStatus=") || !boardSummary.includes(expectedStatus)) {
+    throw new Error(`${label} board summary did not include WindowsFirewallStatus.\n${boardSummary}`);
+  }
+  if (!boardSummary.includes("WindowsFirewallPreview=") || !boardSummary.includes(expectedPreview) || boardSummary.includes("--addRule")) {
+    throw new Error(`${label} board summary did not include dry-run-only WindowsFirewallPreview.\n${boardSummary}`);
+  }
+}
+
+function assertWindowsFirewallBoardSummary(output, label, port) {
+  const expectedStatus = `check-windows-firewall.mjs --host 0.0.0.0 --port ${port} --json`;
+  const expectedPreview = `check-windows-firewall.mjs --host 0.0.0.0 --port ${port} --dryRunRule --ruleProfile Private`;
+  assertIncludes(output, "WindowsFirewallStatus=", label);
+  assertIncludes(output, expectedStatus, label);
+  assertIncludes(output, "WindowsFirewallPreview=", label);
+  assertIncludes(output, expectedPreview, label);
+  assertNotIncludes(output, "--addRule", label);
+}
+
 function parseJsonOutput(text, label) {
   try {
     return JSON.parse(String(text || "").trim());
@@ -449,6 +479,7 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   if (!String(parsed.boardSummary || "").includes("WindowsSecureAuthPath=") || !String(parsed.boardSummary || "").includes(expectedSecureAuthStart)) {
     throw new Error(`Offline JSON board summary did not include WindowsSecureAuthPath.\n${jsonResult.stdout}`);
   }
+  assertWindowsFirewallCommands(parsed, "offline JSON status", port);
   if (!String(parsed.boardSummary || "").includes("WindowsHostMediaPs=") || !String(parsed.boardSummary || "").includes("check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary")) {
     throw new Error(`Offline JSON board summary did not include WindowsHostMediaPs command.\n${jsonResult.stdout}`);
   }
@@ -514,6 +545,7 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   assertIncludes(boardResult.stdout, expectedEphemeralStart, "offline board summary ephemeral start command");
   assertIncludes(boardResult.stdout, "WindowsSecureAuthPath=", "offline board summary secure auth path");
   assertIncludes(boardResult.stdout, expectedSecureAuthStart, "offline board summary secure auth command");
+  assertWindowsFirewallBoardSummary(boardResult.stdout, "offline board summary firewall commands", port);
   assertIncludes(boardResult.stdout, "WindowsHostMedia=", "offline board summary");
   assertIncludes(boardResult.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "offline board summary");
   assertIncludes(boardResult.stdout, "WindowsHostMediaPs=", "offline board summary");
@@ -793,6 +825,7 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         if (String(parsed.windowsSecureAuthPath || "").includes("--password ")) {
           throw new Error(`Online JSON secure auth path should not include a password argument.\n${jsonResult.stdout}`);
         }
+        assertWindowsFirewallCommands(parsed, "online JSON status", port);
         if (!String(parsed.boardSummary || "").includes("WindowsSecureAuthPath=")) {
           throw new Error(`Online JSON board summary did not include WindowsSecureAuthPath.\n${jsonResult.stdout}`);
         }
@@ -928,6 +961,7 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         assertIncludes(boardResult.stdout, "reverse=deny-confirm", "online board summary");
         assertIncludes(boardResult.stdout, "WindowsSecureAuthPath=", "online board summary secure auth path");
         assertIncludes(boardResult.stdout, `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${port} --promptPassword --requirePassword`, "online board summary secure auth command");
+        assertWindowsFirewallBoardSummary(boardResult.stdout, "online board summary firewall commands", port);
         assertIncludes(boardResult.stdout, "check-mac-client-readiness.mjs", "online board summary");
         assertIncludes(boardResult.stdout, "check-mac-client-formal-status.mjs", "online board summary");
         assertIncludes(boardResult.stdout, "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "online board summary");

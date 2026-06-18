@@ -544,6 +544,16 @@ function windowsSecureAuthPath(port = defaults.port) {
   return `Restart Windows host locally with ${windowsSecureAuthStartCommand(port)}; user enters the same temporary password in the Windows and Mac --promptPassword prompts; do not send passwords on Agent Link Board, command arguments, or logs`;
 }
 
+function windowsFirewallStatusCommand(port = defaults.port) {
+  const safePort = Math.max(1, Math.min(65535, Number(port) || defaults.port));
+  return `node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port ${safePort} --json`;
+}
+
+function windowsFirewallPreviewCommand(port = defaults.port) {
+  const safePort = Math.max(1, Math.min(65535, Number(port) || defaults.port));
+  return `node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port ${safePort} --dryRunRule --ruleProfile Private`;
+}
+
 function windowsHostMediaReadinessPowerShellCommand() {
   return "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary";
 }
@@ -866,6 +876,12 @@ function makeReadinessBoardSummary(summary) {
   const secureAuthPath = summary.windowsSecureAuthPath && !runtimeText.includes("WindowsSecureAuthPath=")
     ? ` WindowsSecureAuthPath=${summary.windowsSecureAuthPath}.`
     : "";
+  const firewallStatus = summary.windowsFirewallStatusCommand && !runtimeText.includes("WindowsFirewallStatus=")
+    ? ` WindowsFirewallStatus=${summary.windowsFirewallStatusCommand}.`
+    : "";
+  const firewallPreview = summary.windowsFirewallPreviewCommand && !runtimeText.includes("WindowsFirewallPreview=")
+    ? ` WindowsFirewallPreview=${summary.windowsFirewallPreviewCommand}.`
+    : "";
   const videoSupport = summary.windowsVideoEncoderSupportCommand && !runtimeText.includes("WindowsVideoSupport=")
     ? ` WindowsVideoSupport=${summary.windowsVideoEncoderSupportCommand}.`
     : "";
@@ -912,7 +928,7 @@ function makeReadinessBoardSummary(summary) {
   const probeText = probeSentences
     .map((sentence) => (sentence.endsWith(".") ? sentence : `${sentence}.`))
     .join(" ");
-  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media}; WindowsLanRisk=${lanRisk};${activeCall} ${runtimeSentence}${reverseGrantStatus}${openOneTimeReverseGrant}${reverseGrantStatusNode}${openOneTimeReverseGrantNode}${reverseGrant}${reverseGrantPowerShell}${secureAuthPath}${hostMediaPowerShell}${videoSupport}${videoSupportPowerShell}${wgcSupport}${wgcSupportPowerShell}${webCodecs}${webCodecsPowerShell}${wgcBenchmark}${wgcBenchmarkPowerShell}${wgcCompare}${wgcComparePowerShell}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
+  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media}; WindowsLanRisk=${lanRisk};${activeCall} ${runtimeSentence}${reverseGrantStatus}${openOneTimeReverseGrant}${reverseGrantStatusNode}${openOneTimeReverseGrantNode}${reverseGrant}${reverseGrantPowerShell}${secureAuthPath}${firewallStatus}${firewallPreview}${hostMediaPowerShell}${videoSupport}${videoSupportPowerShell}${wgcSupport}${wgcSupportPowerShell}${webCodecs}${webCodecsPowerShell}${wgcBenchmark}${wgcBenchmarkPowerShell}${wgcCompare}${wgcComparePowerShell}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
 }
 
 function formatMediaBoardSummary(summary) {
@@ -1434,6 +1450,8 @@ async function main() {
   const windowsSecureAuthPathValue = results.find((result) =>
     typeof result.windowsSecureAuthPath === "string" && result.windowsSecureAuthPath,
   )?.windowsSecureAuthPath || windowsSecureAuthPath(args.port);
+  const windowsFirewallStatusCommandValue = windowsFirewallStatusCommand(args.port);
+  const windowsFirewallPreviewCommandValue = windowsFirewallPreviewCommand(args.port);
   const windowsLanRisks = deriveWindowsLanRisks(results);
 
   const summary = {
@@ -1485,6 +1503,8 @@ async function main() {
     windowsWgcCompareCommand: windowsWgcCompareCommandValue,
     windowsWgcComparePowerShellCommand: windowsWgcComparePowerShellCommandValue,
     windowsSecureAuthPath: windowsSecureAuthPathValue,
+    windowsFirewallStatusCommand: windowsFirewallStatusCommandValue,
+    windowsFirewallPreviewCommand: windowsFirewallPreviewCommandValue,
     windowsLanRisks,
     results: results.map((result) => ({
       label: result.label,
@@ -1515,6 +1535,8 @@ async function main() {
       windowsWgcCompareCommand: result.windowsWgcCompareCommand || "",
       windowsWgcComparePowerShellCommand: result.windowsWgcComparePowerShellCommand || "",
       windowsSecureAuthPath: result.windowsSecureAuthPath || "",
+      windowsFirewallStatusCommand: result.windowsFirewallStatusCommand || "",
+      windowsFirewallPreviewCommand: result.windowsFirewallPreviewCommand || "",
       warnings: result.warnings,
       errors: result.errors,
     })),

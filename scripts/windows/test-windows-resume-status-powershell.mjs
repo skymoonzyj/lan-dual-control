@@ -405,6 +405,9 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.windowsSecureAuthPath, "--promptPassword", "mock JSON Windows secure auth path");
     assertIncludes(payload.commands?.windowsSecureAuthPath, "--requirePassword", "mock JSON Windows secure auth path");
     assertNotIncludes(payload.commands?.windowsSecureAuthPath, "--password", "mock JSON Windows secure auth path should not include password argv");
+    assertIncludes(payload.commands?.windowsFirewallStatusBoardSummary, "check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --json", "mock JSON Windows firewall status command");
+    assertIncludes(payload.commands?.windowsFirewallPreviewBoardSummary, "check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --dryRunRule --ruleProfile Private", "mock JSON Windows firewall preview command");
+    assertNotIncludes(payload.commands?.windowsFirewallPreviewBoardSummary, "--addRule", "mock JSON Windows firewall preview command should not change firewall");
     assertIncludes(payload.commands?.windowsHostMediaReadinessPowerShellBoardSummary, "check-windows-host-readiness.ps1", "mock JSON media PowerShell command");
     assertIncludes(payload.commands?.windowsHostMediaReadinessPowerShellBoardSummary, "-ProbeMedia", "mock JSON media PowerShell command");
     assertIncludes(payload.commands?.windowsHostMediaReadinessPowerShellBoardSummary, "-BoardSummary", "mock JSON media PowerShell command");
@@ -671,6 +674,11 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --grant --durationMs 30000 --boardSummary", "PowerShell board summary");
     assertIncludes(output, "WindowsSecureAuthPath=", "PowerShell board summary");
     assertIncludes(output, "start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword", "PowerShell board summary");
+    assertIncludes(output, "WindowsFirewallStatus=", "PowerShell board summary");
+    assertIncludes(output, "check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --json", "PowerShell board summary");
+    assertIncludes(output, "WindowsFirewallPreview=", "PowerShell board summary");
+    assertIncludes(output, "check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --dryRunRule --ruleProfile Private", "PowerShell board summary");
+    assertNotIncludes(output, "--addRule", "PowerShell board summary");
     assertIncludes(output, "ReverseGrant=", "PowerShell board summary");
     assertIncludes(output, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary", "PowerShell board summary");
     assertIncludes(output, "ReverseGrantPs=", "PowerShell board summary");
