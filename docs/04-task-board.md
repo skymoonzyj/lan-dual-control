@@ -18,6 +18,7 @@
 - [x] Windows Mac 提醒 watcher 对齐 Mac host readiness 明细：`MacHostReadiness` / `check-mac-host-readiness` 摘要里的 `warnings=mac-host-discovery`、`warnings=agent-link-board-currentcall` 或非空 `blockers=` 会触发提醒，控制端会翻译成“Mac host 发现需检查”“联络板当前呼叫需协调”等中文风险。
 - [x] Windows Mac 提醒 watcher 对齐 Mac formal smoke 明细：`run-mac-client-formal-smoke` / `MacClientFormalSmoke` 摘要里的 `preflight blockers=windows-host warnings=board` 会触发提醒，控制端会翻译成“Windows 被控端未指定或未就绪”“联络板状态需检查”等中文风险。
 - [x] Windows Mac 提醒 watcher 对齐 Mac resume 刷新率上限明细：`MacResumeStatus` / `check-mac-resume-status` 摘要里的 `warnings=h264-fallback,fps-limit` 会触发提醒，控制端会把 `fps-limit` 翻译成“Mac 刷新率上限需调整”，避免远端 30Hz 上限被误判为 Windows 第二步卡住。
+- [x] Windows 控制端对齐 Mac host readiness 刷新率上限明细：`warnings=mac-host-max-fps` 会被翻译成“Mac host 刷新率上限需调整”，并保留原始短标签到复制/导出诊断，方便区分 resume 的 `fps-limit` 和 host readiness 的 `mac-host-max-fps`。
 - [x] 上传到 GitHub 仓库。
 - [x] Mac mini 到位后克隆仓库。
 

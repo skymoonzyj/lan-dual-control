@@ -492,7 +492,7 @@ async function checkMacHostReadinessFindingsAlert(args) {
       "Mac Codex": {
         role: "Mac 端",
         status: "idle",
-        note: "MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall",
+        note: "MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps",
         updatedAt: new Date().toISOString(),
       },
     },
@@ -501,6 +501,7 @@ async function checkMacHostReadinessFindingsAlert(args) {
   assertIncludes(output, "MacHostReadiness=attention", "Mac host readiness findings status");
   assertIncludes(output, "warnings=mac-host-discovery", "Mac host readiness findings status");
   assertIncludes(output, "agent-link-board-currentcall", "Mac host readiness findings status");
+  assertIncludes(output, "mac-host-max-fps", "Mac host readiness findings status");
   console.log("[OK] Mac host readiness finding status alerts");
 }
 

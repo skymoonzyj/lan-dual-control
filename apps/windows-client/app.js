@@ -259,6 +259,8 @@ const macUnattendedRiskLabels = {
   "mac-host-start-helper-syntax": "Mac host 启动助手语法需检查",
   "mac-host-helper-dry-run": "Mac host 启动助手干跑需检查",
   "mac-host-file-clipboard-security": "Mac 文件剪贴板安全回归需检查",
+  "mac-host-max-fps": "Mac host 刷新率上限需调整",
+  "mac-host-max-screen-fps": "Mac host 刷新率上限需检查",
   "agent-link-board-currentcall": "联络板当前呼叫需协调",
   board: "联络板状态需检查",
   "agent-link-board": "联络板状态需检查",
