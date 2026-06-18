@@ -141,6 +141,19 @@ function assertMacClientReverseGrantCopyAction(text, label) {
   assertNotIncludes(text, "inject", label);
 }
 
+function assertMacClientFormalChecklistCommand(command, label, expectedHost = "<Windows IP>", expectedPort = "43770") {
+  assertIncludes(command, "check-mac-client-formal-status.mjs", label);
+  assertIncludes(command, `--host ${expectedHost}`, label);
+  assertIncludes(command, `--port ${expectedPort}`, label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "--json", label);
+}
+
 function assertMacClientFormalSmokeCommand(command, label) {
   assertIncludes(command, "run-mac-client-formal-smoke.mjs", label);
   assertIncludes(command, "--discover", label);
@@ -180,6 +193,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.windowsHostStatusCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientReverseRehearsalAction", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientReverseGrantCopyAction", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macClientFormalChecklistCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientFormalSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientBrowserSelfTestCommand", `${script} ${flag}`);
   }
@@ -200,6 +214,7 @@ function checkOfflineJson(args) {
   assertWindowsHostStatusCommand(payload.commands?.windowsHostStatusCommand || "", "offline JSON Windows host status command");
   assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "offline JSON Mac client reverse rehearsal action");
   assertMacClientReverseGrantCopyAction(payload.commands?.macClientReverseGrantCopyAction || "", "offline JSON Mac client reverse grant copy action");
+  assertMacClientFormalChecklistCommand(payload.commands?.macClientFormalChecklistCommand || "", "offline JSON Mac client formal checklist command");
   assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "offline JSON Mac client formal smoke command");
   assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "offline JSON Mac client browser self-test command");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "payload should include copy diagnostics action");
@@ -213,6 +228,7 @@ function checkOfflineJson(args) {
   assert(/WindowsHostStatus=/.test(payload.boardSummary || ""), "boardSummary should include Windows host status command");
   assert(/MacClientReverseRehearsal=/.test(payload.boardSummary || ""), "boardSummary should include reverse rehearsal action");
   assert(/MacClientReverseGrantCopy=/.test(payload.boardSummary || ""), "boardSummary should include reverse grant copy action");
+  assert(/MacClientFormalChecklist=/.test(payload.boardSummary || ""), "boardSummary should include formal checklist command");
   assert(/MacClientFormalSmoke=/.test(payload.boardSummary || ""), "boardSummary should include formal smoke command");
   assert(/MacClientBrowserSelfTest=/.test(payload.boardSummary || ""), "boardSummary should include browser self-test command");
   assert(/CopyDiagnostics=Mac client 事件日志点击/.test(payload.boardSummary || ""), "boardSummary should include copy diagnostics action");
@@ -279,6 +295,8 @@ function checkBoardSummary(args) {
   assertIncludes(text, "MacClientReverseGrantCopy=", "board summary");
   assertIncludes(text, "ReverseRehearsal=", "board summary");
   assertIncludes(text, "LAN008", "board summary");
+  assertIncludes(text, "MacClientFormalChecklist=", "board summary");
+  assertIncludes(text, "check-mac-client-formal-status.mjs", "board summary");
   assertIncludes(text, "MacClientFormalSmoke=", "board summary");
   assertIncludes(text, "run-mac-client-formal-smoke.mjs", "board summary");
   assertIncludes(text, "--preflightOnly", "board summary");
@@ -304,6 +322,8 @@ function checkPlainReport(args) {
   assertIncludes(result.stdout, "ReverseRehearsal=", "plain report");
   assertIncludes(result.stdout, "Mac client reverse grant copy:", "plain report");
   assertIncludes(result.stdout, "复制 Node", "plain report");
+  assertIncludes(result.stdout, "Mac client formal checklist:", "plain report");
+  assertIncludes(result.stdout, "check-mac-client-formal-status.mjs", "plain report");
   assertIncludes(result.stdout, "Mac client formal smoke preflight:", "plain report");
   assertIncludes(result.stdout, "run-mac-client-formal-smoke.mjs", "plain report");
   assertIncludes(result.stdout, "Mac client browser self-test:", "plain report");
@@ -389,6 +409,7 @@ async function checkClientServerProbe(args) {
     assertWindowsHostStatusCommand(payload.commands?.windowsHostStatusCommand || "", "client server probe Windows host status command");
     assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "client server probe reverse rehearsal action");
     assertMacClientReverseGrantCopyAction(payload.commands?.macClientReverseGrantCopyAction || "", "client server probe reverse grant copy action");
+    assertMacClientFormalChecklistCommand(payload.commands?.macClientFormalChecklistCommand || "", "client server probe formal checklist command");
     assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "client server probe formal smoke command");
     assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "client server probe browser self-test command");
     assert(payload.checklist.some((item) => item.id === "client-server" && item.status === "ok"), "client-server ok item should be present");
@@ -492,6 +513,8 @@ async function checkWindowsDiscoveryProbe(args) {
     assertIncludes(payload.boardSummary || "", `WindowsHostStatus=node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port ${port} --boardSummary`, "Windows discovery boardSummary");
     assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "Windows discovery probe reverse rehearsal action");
     assertMacClientReverseGrantCopyAction(payload.commands?.macClientReverseGrantCopyAction || "", "Windows discovery probe reverse grant copy action");
+    assertMacClientFormalChecklistCommand(payload.commands?.macClientFormalChecklistCommand || "", "Windows discovery probe formal checklist command", "127.0.0.1", String(port));
+    assertIncludes(payload.boardSummary || "", `MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 127.0.0.1 --port ${port} --boardSummary`, "Windows discovery boardSummary");
     assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "Windows discovery probe formal smoke command");
     assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "Windows discovery probe browser self-test command");
   });
