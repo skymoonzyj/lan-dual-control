@@ -17,6 +17,36 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
+本轮目标：Mac 值守检查摘要补齐安全前台启动入口。
+完成内容：
+- `check-mac-unattended-status` 的 JSON `commands` 新增 `macHostSafeStart`，命令为 `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port <当前端口>`。
+- `--boardSummary` 在 `MacUnattendedStatus=` 后新增 `MacHostSafeStart=`，让 LaunchAgent 缺失、host 离线或 60Hz 值守门禁失败时，同一行摘要就能复制安全启动命令。
+- 普通输出也会显示 `Mac host safe start`；该入口只提示本机前台隐藏密码输入，不把密码放到 argv，不发送 input/inject，不改协议。
+修改文件：
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-unattended-status.mjs`
+- `node --check scripts/mac/test-mac-unattended-status.mjs`
+- `node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 30000`
+- `node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43888 --skipLaunchctl --skipPmset --boardSummary`（确认一行摘要包含 `MacHostSafeStart=` 且保留 `--port 43888`）
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/mac/check-mac-unattended-status.mjs scripts/mac/test-mac-unattended-status.mjs docs/HANDOFF_LOG.md docs/ACTIVE_LOCKS.md docs/04-task-board.md`
+遗留问题：
+- 本轮只补状态/摘要里的安全启动入口；没有实际写入或加载 LaunchAgent，也没有重启 Mac host。
+下一步建议：
+- 真正消除 Windows formal 60Hz 预检里的 `maxScreenFps=30` / LaunchAgent loaded blocker，仍需用户现场允许后由 Mac 端运行 LaunchAgent 规划、加载并重启 host，再让 Windows 侧复跑 discovery / resume / formal preflight。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；后续真实 60Hz 值守复验需要 Windows 端按最新摘要复跑只读检查。
+
 ## 2026-06-18 Windows Codex
 
 日期：2026-06-18 继续推进

@@ -67,6 +67,8 @@ Machine-readable JSON fields:
                                   report; preserves host/port/path and require flags.
   commands.macUnattendedFormal   Secret-free formal 60Hz gate command requiring
                                   LaunchAgent maxScreenFps and loaded status.
+  commands.macHostSafeStart      Secret-free foreground Mac host safe-start
+                                  command; prompts for password locally.
   commands.hostReadiness         Follow-up Mac host readiness command.
 
 Examples:
@@ -437,6 +439,7 @@ function makeCommands(args) {
     macUnattendedFormal: makeMacUnattendedFormalCommand(args),
     launchAgentPlan: makeLaunchAgentPlanCommand(args),
     macMaxFpsPlan: makeLaunchAgentPlanCommand(args, { maxScreenFps: formalTargetMaxScreenFps }),
+    macHostSafeStart: makeMacHostSafeStartCommand(args),
     hostStatus: `node scripts/mac/start-mac-host.mjs --status --host ${args.host} --port ${args.port} --boardSummary`,
     hostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     startHost: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port}`,
@@ -458,6 +461,18 @@ function makeLaunchAgentPlanCommand(args, { maxScreenFps = null } = {}) {
   if (maxScreenFps !== null) parts.push("--maxScreenFps", String(maxScreenFps));
   parts.push("--boardSummary");
   return parts.join(" ");
+}
+
+function makeMacHostSafeStartCommand(args) {
+  return [
+    "node scripts/mac/start-mac-host.mjs",
+    "--promptPassword",
+    "--requirePassword",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    String(args.port),
+  ].join(" ");
 }
 
 function makeMacUnattendedFormalCommand(args) {
@@ -527,7 +542,7 @@ function makeBoardSummary(report) {
   const agentMaxFps = report.launchAgent.maxScreenFps === null ? "unknown" : String(report.launchAgent.maxScreenFps);
   return [
     `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
-    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; HostReadiness=${report.commands.hostReadiness}.`,
+    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; HostReadiness=${report.commands.hostReadiness}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
@@ -596,6 +611,7 @@ function printHuman(report) {
   for (const item of report.limitations) console.log(`  - ${item}`);
   console.log(`- LaunchAgent plan: ${report.commands.launchAgentPlan}`);
   console.log(`- Mac max FPS plan: ${report.commands.macMaxFpsPlan}`);
+  console.log(`- Mac host safe start: ${report.commands.macHostSafeStart}`);
   console.log(`- host readiness: ${report.commands.hostReadiness}`);
   console.log(report.boardSummary);
 }
