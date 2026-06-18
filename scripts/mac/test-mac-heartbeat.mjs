@@ -140,7 +140,8 @@ function assertCommandSet(commands, label) {
   assertIncludes(commands?.macClientPageStatusCommand || "", "start-mac-client.mjs --status --boardSummary", label);
   assertIncludes(commands?.macClientDiagnosticsCommand || "", "check-mac-client-readiness.mjs", label);
   assertIncludes(commands?.macFormalLocalSmokeCommand || "", "check-mac-formal-local-smoke.mjs", label);
-  assertIncludes(commands?.macClientDiscoverWindowsCommand || "", "discover-windows-hosts.mjs --boardSummary", label);
+  assertIncludes(commands?.macClientDiscoverWindowsCommand || "", "discover-windows-hosts.mjs", label);
+  assertIncludes(commands?.macClientDiscoverWindowsCommand || "", "--checkBoard", label);
   assertNoSecrets(JSON.stringify(commands), label);
 }
 

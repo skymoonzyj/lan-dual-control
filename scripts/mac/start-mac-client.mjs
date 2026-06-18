@@ -19,7 +19,7 @@ const defaults = {
 };
 
 const copyDiagnosticsAction = "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码";
-const discoverWindowsCommand = "node scripts/mac/discover-windows-hosts.mjs --boardSummary";
+const discoverWindowsCommand = "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary";
 const reverseRehearsalAction = "Run MacClientDiscoverWindows first, then use its ReverseRehearsal= line: Mac requests reverse control and expects LAN008, Windows runs the local loopback one-time grant, Mac retries and expects accepted/临时授权已使用";
 const reverseGrantCopyAction = "LAN008 后在 Mac client 页面点击“复制 PowerShell”和“复制 Node”，确认复制文本不含连接密码且不会发送 input_event";
 const windowsReverseGrantStatusCommand = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary";

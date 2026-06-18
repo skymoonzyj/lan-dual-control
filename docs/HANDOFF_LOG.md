@@ -114,6 +114,45 @@
 
 日期：2026-06-18 继续推进
 开发端：Mac Codex
+本轮目标：把 Mac 侧所有恢复/状态摘要里的 Windows host 发现入口统一升级为 `discover-windows-hosts --checkBoard --boardSummary`，避免刚新增的 `WindowsLanRisk=` 消费能力只在少数入口可见。
+完成内容：
+- `check-mac-heartbeat`、`check-mac-resume-status`、`start-mac-client --status` 和 `check-mac-client-formal-status` 现在都输出 `MacClientDiscoverWindows=node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary`。
+- `check-mac-client-formal-status --boardSummary` 新增稳定标签 `MacClientDiscoverWindows=`，Windows host 未发现/未检查时，一行 formal 摘要也能直接给出读板 discovery 入口。
+- `run-mac-client-formal-smoke` 缺 host 提示和 `discover-windows-hosts --help` 示例同步改为带 `--checkBoard`。
+- 当前状态/下一步/任务板更新为新版命令；历史交接记录保留当时事实不改。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/start-mac-client.mjs`
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/discover-windows-hosts.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `scripts/mac/test-mac-client-start-helper.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增 heartbeat/resume/start/formal status 自测断言并确认失败：旧 discovery 命令缺 `--checkBoard`。
+- `node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 22000`
+- `node scripts/mac/test-mac-client-start-helper.mjs --timeoutMs 12000`
+- `node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 30000`
+遗留问题：
+- 本轮只改 Mac 端输出建议命令；没有认证 WebSocket，没有请求/发送密码，没有发送 input/inject，也没有自动清理旧 secure-auth currentCall。
+下一步建议：
+- 白天恢复或 Windows 发现不到时，优先复制任一 Mac 摘要里的 `MacClientDiscoverWindows=`；它会默认读取 Agent Link Board 上的 `WindowsLanRisk=`，再决定是否需要 Windows/人工处理防火墙/Public 网络。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Windows 改代码；如果真实发现仍失败，需要 Windows/人工按 `WindowsLanRisk=` 处理防火墙/网络。不要在通讯板发送密码/token/系统账号。
+
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac discovery/readiness 消费 Windows 已经上板的 `WindowsLanRisk=`，把“发现不到 Windows host”转成可直接排查的 LAN/firewall 风险提示。
 完成内容：
 - 新增 `scripts/mac/board-windows-lan-risk.mjs`，统一只读读取 Agent Link Board `/api/state` 并安全提取 `WindowsLanRisk=` / `WindowsLanRisks=`；只接受逗号分隔的短 risk token，拒绝 `--password`、`LAN_DUAL_PASSWORD`、token/secret/passwd/pwd 等危险候选，且拒绝候选不回显。

@@ -263,10 +263,12 @@ function checkOfflineJson(args) {
   assert(payload.checklist.some((entry) => entry.id === "client-server" && String(entry.next || "").includes("start-mac-client.mjs --allowExisting")), "offline client server next step should suggest start helper");
   assert(payload.checklist.some((entry) => entry.id === "client-server" && String(entry.next || "").includes("run-mac-client-formal-smoke.mjs --discover --ensureClient")), "offline client server next step should suggest ensureClient smoke wrapper");
   assert(payload.checklist.some((entry) => entry.id === "windows-host" && String(entry.next || "").includes("discover-windows-hosts.mjs")), "offline Windows host next step should suggest discovery helper");
+  assert(payload.checklist.some((entry) => entry.id === "windows-host" && String(entry.next || "").includes("discover-windows-hosts.mjs --checkBoard --boardSummary")), "offline Windows host next step should read Agent Link Board for Windows LAN risk hints");
   assert(payload.runPlan?.safety?.passwordRequestedByThisScript === false, "offline runPlan should not request passwords");
   assert(payload.runPlan?.safety?.passwordInCommandArguments === false, "offline runPlan should keep passwords out of argv");
   assert(payload.runPlan?.safety?.inject === false, "offline runPlan should not run inject");
   assert(payload.runPlan?.commands?.discoverWindowsHost?.includes("discover-windows-hosts.mjs"), "offline runPlan should include discovery command");
+  assert(payload.runPlan?.commands?.discoverWindowsHost?.includes("--checkBoard --boardSummary"), "offline runPlan discovery command should read Agent Link Board for Windows LAN risk hints");
   assert(payload.runPlan?.commands?.ensureMacClient?.includes("start-mac-client.mjs --allowExisting"), "offline runPlan should include start/reuse client command");
   assert(payload.runPlan?.commands?.safePreflightWithEnsureClient?.includes("--discover --ensureClient --preflightOnly --boardSummary"), "offline runPlan should include ensureClient preflight command");
   assert(payload.runPlan?.commands?.sendCallWithEnsureClient?.includes("--discover --ensureClient --preflightOnly --sendCall"), "offline runPlan should include ensureClient sendCall command");
@@ -305,8 +307,8 @@ function checkOfflineJson(args) {
   assertIncludes(payload.boardSummary || "", "allow-windows-reverse-control.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "RunPlan:", "offline board summary");
   assertIncludes(payload.callText || "", "not ready", "offline call text");
-  assertNotIncludes(payload.boardSummary || "", "--checkBoard", "offline board summary");
-  assertNotIncludes(payload.callText || "", "--checkBoard", "offline call text");
+  assertIncludes(payload.boardSummary || "", "discover-windows-hosts.mjs --checkBoard --boardSummary", "offline board summary");
+  assertIncludes(payload.callText || "", "discover-windows-hosts.mjs --checkBoard --boardSummary", "offline call text");
   print("OK", "Offline JSON blocks formal Windows test and remains secret-free");
 }
 

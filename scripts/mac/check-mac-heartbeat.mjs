@@ -497,7 +497,7 @@ function buildCommands(args) {
     macClientPageStatusCommand: "node scripts/mac/start-mac-client.mjs --status --boardSummary",
     macClientDiagnosticsCommand: "node scripts/mac/check-mac-client-readiness.mjs --probeClientServer --checkBoard --boardSummary",
     macFormalLocalSmokeCommand: `node scripts/mac/check-mac-formal-local-smoke.mjs --host ${args.host} --port ${args.port} --promptPassword --boardSummary`,
-    macClientDiscoverWindowsCommand: "node scripts/mac/discover-windows-hosts.mjs --boardSummary",
+    macClientDiscoverWindowsCommand: "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary",
   };
 }
 

@@ -116,6 +116,7 @@ function assertMacClientFormalStatusCommand(command, label) {
 
 function assertMacClientDiscoverWindowsCommand(command, label) {
   assertIncludes(command, "discover-windows-hosts.mjs", label);
+  assertIncludes(command, "--checkBoard", label);
   assertIncludes(command, "--boardSummary", label);
   assertNotIncludes(command, "--promptPassword", label);
   assertNotIncludes(command, "--password", label);

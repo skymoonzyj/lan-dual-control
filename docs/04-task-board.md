@@ -131,7 +131,7 @@ Windows 端：
 
 - [x] 新增 Mac 控制端本地页面启动/状态助手。
 - [x] 新增 Mac 控制 Windows 前的只读 readiness 和 formal checklist。
-- [x] 新增 Mac 侧 Windows host 发现入口：`scripts/mac/discover-windows-hosts.mjs --boardSummary` 只读扫描 `/discovery`，过滤 `platform=windows`，输出下一步 formal checklist 命令和 ready 后 `--sendCall` 协调命令；不认证、不要求密码、不发送输入、不执行 `inject`。
+- [x] 新增 Mac 侧 Windows host 发现入口：`scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary` 只读扫描 `/discovery`，过滤 `platform=windows`，并安全读取 Agent Link Board 上的 `WindowsLanRisk=`；输出下一步 formal checklist 命令和 ready 后 `--sendCall` 协调命令；不认证、不要求密码、不发送输入、不执行 `inject`。
 - [x] Mac 侧 Windows host 发现摘要新增 formal 人工真连清单入口：JSON 带 `formalChecklistCommand` / `manualChecklistSummary`，`--boardSummary` 带 `FormalChecklist=` 与 `ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics`，发现到 Windows host 后可直接进入清单验收。
 - [x] Windows host `--status` 和 `check-windows-host-readiness --boardSummary` 摘要新增 `WindowsWgcSupport=` / `WindowsWgcSupportPs=`，可从本机被控入口直接复制 WGC/WinRT/GPU 专项预检命令，再继续 WGC benchmark 或 raw-bgra/NV12 对照。
 - [x] Windows host `--status` 和 `check-windows-host-readiness --boardSummary` 摘要新增 `WindowsWebCodecs=` / `WindowsWebCodecsPs=`，可从本机被控入口直接复制 Edge/Chrome WebCodecs H.264 解码预检命令。
@@ -216,7 +216,7 @@ Windows 端：
 - [x] Mac 恢复开工总览也可解析 Agent Link Board `currentCall`：`--checkBoard --json`、普通输出和 `--boardSummary` 会显示 `call=active/done/none`，DONE 呼叫不会误当作待办，摘要不回显 call command。
 - [x] Mac 恢复开工总览会输出本地 Mac client 页面状态命令：JSON `commands.macClientPageStatusCommand`、普通输出和 `--boardSummary` 都带 `MacClientPage=start-mac-client --status --boardSummary`，只读检查页面是否在线，不启动服务、不连接 Windows。
 - [x] Mac 恢复开工总览会输出 Mac client 无密诊断和复制诊断提示：JSON、普通输出和 `--boardSummary` 都带 `MacClientDiagnostics=check-mac-client-readiness --probeClientServer --checkBoard --boardSummary` 与 `CopyDiagnostics=Mac client 事件日志点击“复制诊断”`，方便现场先发一行 readiness，再粘贴完整页面诊断。
-- [x] Mac 恢复开工总览会输出 Windows host 发现命令：JSON `commands.macClientDiscoverWindowsCommand`、普通输出和 `--boardSummary` 都带 `MacClientDiscoverWindows=discover-windows-hosts --boardSummary`，方便恢复后先只读发现 Windows host，再跑 formal checklist；不认证、不发送 call/input/inject。
+- [x] Mac 恢复开工总览、heartbeat、Mac client page status 和 formal status 会输出 Windows host 发现命令：JSON `commands.macClientDiscoverWindowsCommand`、普通输出和 `--boardSummary` 都带 `MacClientDiscoverWindows=discover-windows-hosts --checkBoard --boardSummary`，方便恢复后先只读发现 Windows host 并读取 `WindowsLanRisk=`，再跑 formal checklist；不认证、不发送 call/input/inject。
 - [x] Mac 恢复开工总览会输出 Mac client formal 人工真连清单命令：JSON `commands.macClientFormalChecklistCommand`、普通输出和 `--boardSummary` 都带 `MacClientFormalChecklist=check-mac-client-formal-status --boardSummary`，方便恢复后直接拿到 `ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics`；不认证、不发送 call/input/inject。
 - [x] Mac 恢复开工总览会输出本机 formal local smoke 命令：JSON `commands.macFormalLocalSmokeCommand`、普通输出和 `--boardSummary` 都带 `MacFormalLocalSmoke=check-mac-formal-local-smoke --promptPassword --boardSummary`，正式呼叫 Windows 前可先本机短验收 H.264/PCM/input-log 并得到一行上板摘要；命令显式弹密码，不把密码放 argv，不发送 call/input/inject。
 - [x] Mac 恢复开工总览会输出 formal E2E 只读预检命令：JSON `commands.macFormalE2eStatusCommand`、普通输出和 `--boardSummary` 都带 `MacFormalE2E=check-mac-formal-e2e-status --boardSummary`，正式呼叫 Windows 前可先一行确认 repo/联络板/Mac host/权限/媒体/剪贴板/display/build 是否 ready；不弹密码、不发送 call/input/inject。

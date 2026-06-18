@@ -877,7 +877,7 @@ function makeMacClientPageStatusCommand() {
 }
 
 function makeMacClientDiscoverWindowsCommand() {
-  return "node scripts/mac/discover-windows-hosts.mjs --boardSummary";
+  return "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary";
 }
 
 function makeMacClientFormalChecklistCommand() {

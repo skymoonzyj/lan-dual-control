@@ -51,7 +51,7 @@ Options:
   --help, -h              Show this help without scanning.
 
 Examples:
-  node scripts/mac/discover-windows-hosts.mjs --boardSummary
+  node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary
   node scripts/mac/discover-windows-hosts.mjs --subnet 192.168.31.0/24 --requireFound
   node scripts/mac/discover-windows-hosts.mjs --host 192.168.31.68 --json
 

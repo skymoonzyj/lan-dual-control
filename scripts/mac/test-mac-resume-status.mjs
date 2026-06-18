@@ -372,6 +372,7 @@ function assertMacClientPageStatusCommand(command, label) {
 
 function assertMacClientDiscoverWindowsCommand(command, label) {
   assert(/discover-windows-hosts\.mjs/.test(command), `${label} should use discover-windows-hosts`);
+  assert(command.includes("--checkBoard"), `${label} should read Agent Link Board for Windows LAN risk hints`);
   assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
   assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
   assert(!command.includes("--password"), `${label} should not embed a password argument`);

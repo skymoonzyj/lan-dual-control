@@ -1045,7 +1045,7 @@ async function main() {
   report.discovery = summarizeDiscovery(discovery);
   try {
     if (!args.host) {
-      throw new Error("--host <Windows IP> is required. Run scripts/mac/discover-windows-hosts.mjs --boardSummary first if needed.");
+      throw new Error("--host <Windows IP> is required. Run scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary first if needed.");
     }
     if (!preflight.payload) {
       throw new Error(`formal checklist did not produce JSON: ${preflight.parseError || "unknown parse error"}`);
