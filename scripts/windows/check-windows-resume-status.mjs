@@ -439,6 +439,40 @@ function normalizeBoardCurrentCall(call) {
   return parsed;
 }
 
+function isSecureAuthCurrentCall(call) {
+  if (!call?.active || !call.needsWindows || !call.fromMacSide) {
+    return false;
+  }
+  const text = [
+    call.goal,
+    call.environment,
+    call.connection,
+    call.command,
+    call.expected,
+    call.actual,
+    call.ask,
+    call.blockedBy,
+  ].join("\n");
+  return /secure\s*auth|安全认证|认证路径|随机运行期密码|运行期密码|LAN_DUAL_PASSWORD|promptPassword|password|密码|auth/i.test(text);
+}
+
+function annotateBoardCurrentCall(board, commands) {
+  const currentCall = board?.currentCall;
+  if (!currentCall?.present) {
+    return;
+  }
+  const windowsSecureAuthPathCommand = board.windowsSecureAuthPath?.command || commands?.windowsSecureAuthPath || "";
+  if (isSecureAuthCurrentCall(currentCall) && windowsSecureAuthPathCommand) {
+    currentCall.secureAuthPathReady = true;
+    currentCall.next = "mac-confirm-secure-auth-path";
+    currentCall.nextDetail = "WindowsSecureAuthPath is available; Mac can confirm the local safe auth path before the call is cleared.";
+  } else {
+    currentCall.secureAuthPathReady = false;
+    currentCall.next = "";
+    currentCall.nextDetail = "";
+  }
+}
+
 function countBoardStateItems(state) {
   if (!state || typeof state !== "object") return 0;
   const statusCount = state.statuses && typeof state.statuses === "object"
@@ -2276,6 +2310,9 @@ function makeBoardSummary(report) {
   const boardCall = report.board.currentCall?.active
     ? `; call=${report.board.currentCall.summary}`
     : "";
+  const boardCallNext = report.board.currentCall?.active && report.board.currentCall.next
+    ? `; AgentCallNext=${report.board.currentCall.next}`
+    : "";
   const git = report.git.ok
     ? report.git.clean
       ? "clean"
@@ -2304,7 +2341,7 @@ function makeBoardSummary(report) {
   const windowsOpenOneTimeReverseGrantNodeCommand = report.board.windowsOpenOneTimeReverseGrantNodeFallback?.command || report.commands.windowsOpenOneTimeReverseGrantBoardSummary;
   const windowsSecureAuthPathCommand = report.board.windowsSecureAuthPath?.command || report.commands.windowsSecureAuthPath;
   return [
-    `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}${boardCall}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
+    `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}${boardCall}${boardCallNext}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
     `WinClientPorts=${clientPorts}; WinClientPortsNext=${clientPortsNext}.`,
     `Next=${mac.ok ? report.commands.userAuthRequest : report.commands.preflightBoardSummary}.`,
     `MacDiscovery=${report.commands.macHostDiscoveryBoardSummary}.`,
@@ -2422,6 +2459,7 @@ async function makeReport(args) {
   const board = await getBoardSnapshot(args);
   const macPreflight = runFormalPreflight(args);
   const commands = makeCommands(args, macPreflight);
+  annotateBoardCurrentCall(board, commands);
   const formalManualChecklist = makeFormalManualChecklist(macPreflight.payload, commands);
   const windowsMacAlertWatcher = getWindowsMacAlertWatcherStatus(args, commands);
   const windowsClientDiagnosticsPorts = inspectWindowsClientDiagnosticsPorts(args);
@@ -2507,6 +2545,9 @@ function printHuman(report) {
       console.log(`  currentCall=${callState} ${report.board.currentCall.summary}`);
       if (report.board.currentCall.active && report.board.currentCall.command) {
         console.log(`  callCommand=${report.board.currentCall.command}`);
+      }
+      if (report.board.currentCall.active && report.board.currentCall.next) {
+        console.log(`  callNext=${report.board.currentCall.next}`);
       }
     } else {
       console.log("  currentCall=none");

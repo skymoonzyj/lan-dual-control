@@ -252,6 +252,20 @@ function doneMacCallForWindows() {
   };
 }
 
+function secureAuthMacCallForWindows() {
+  return {
+    status: "CALLING",
+    from: "Mac Codex",
+    need: "Windows Codex",
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    goal: "Coordinate secure auth for Mac client true browser smoke",
+    connection: "Windows host 192.168.31.68:43770",
+    expected: "Windows provides a safe local auth path without posting secrets.",
+    ask: "Mac 环境 LAN_DUAL_PASSWORD=unset，Windows host 使用随机运行期密码且未上板。请 Windows 端协助给出安全认证路径，不要在 Agent Link Board 发送密码/token/系统账号。",
+  };
+}
+
 async function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = await run([flag], args);
@@ -831,6 +845,37 @@ async function checkBoardCurrentCallSummary(args) {
       console.log("[OK] Windows resume status board summary includes active Agent Link currentCall");
     }, {
       currentCall: macCallForWindows(),
+    });
+  });
+}
+
+async function checkSecureAuthCallNextSummary(args) {
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock secure-auth currentCall JSON failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.currentCall?.active === true, "secure-auth currentCall should be active");
+      assert(payload.board?.currentCall?.secureAuthPathReady === true, "secure-auth currentCall should be marked ready after WindowsSecureAuthPath is available");
+      assert(payload.board?.currentCall?.next === "mac-confirm-secure-auth-path", "secure-auth currentCall should tell Mac to confirm the safe path");
+      assertIncludes(payload.boardSummary, "AgentCallNext=mac-confirm-secure-auth-path", "secure-auth currentCall board summary");
+      assertIncludes(payload.boardSummary, "WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword", "secure-auth currentCall board summary");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "secure-auth currentCall JSON should not leak secrets");
+      console.log("[OK] Windows resume status marks secure-auth currentCall ready when WindowsSecureAuthPath is available");
+    }, {
+      currentCall: secureAuthMacCallForWindows(),
     });
   });
 }
@@ -1427,6 +1472,7 @@ async function main() {
   await checkBoardCurrentCallJson(args);
   await checkBoardDoneCallJson(args);
   await checkBoardCurrentCallSummary(args);
+  await checkSecureAuthCallNextSummary(args);
   await checkBoardMacHostSafeStartExtraction(args);
   await checkBoardWindowsReverseGrantExtraction(args);
   await checkBoardWindowsSecureAuthPathExtraction(args);

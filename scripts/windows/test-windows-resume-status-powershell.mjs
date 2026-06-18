@@ -188,6 +188,20 @@ function macCallForWindows() {
   };
 }
 
+function secureAuthMacCallForWindows() {
+  return {
+    status: "CALLING",
+    from: "Mac Codex",
+    need: "Windows Codex",
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    goal: "Coordinate secure auth for Mac client true browser smoke",
+    connection: "Windows host 192.168.31.68:43770",
+    expected: "Windows provides a safe local auth path without posting secrets.",
+    ask: "Mac 环境 LAN_DUAL_PASSWORD=unset，Windows host 使用随机运行期密码且未上板。请 Windows 端协助给出安全认证路径，不要在 Agent Link Board 发送密码/token/系统账号。",
+  };
+}
+
 async function checkWrapperHelp(args) {
   const result = await runPowerShell(["-Help"], args);
   const output = `${result.stdout}\n${result.stderr}`;
@@ -699,6 +713,38 @@ async function checkBoardCurrentCallJson(args) {
   });
 }
 
+async function checkSecureAuthCallNextSummary(args) {
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-CheckBoard",
+        "-Json",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell secure-auth currentCall JSON failed\n${output}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.currentCall?.active === true, "PowerShell secure-auth currentCall should be active");
+      assert(payload.board?.currentCall?.secureAuthPathReady === true, "PowerShell secure-auth currentCall should be marked ready after WindowsSecureAuthPath is available");
+      assert(payload.board?.currentCall?.next === "mac-confirm-secure-auth-path", "PowerShell secure-auth currentCall should tell Mac to confirm the safe path");
+      assertIncludes(payload.boardSummary, "AgentCallNext=mac-confirm-secure-auth-path", "PowerShell secure-auth board summary");
+      assertIncludes(payload.boardSummary, "WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword", "PowerShell secure-auth board summary");
+      assertNotIncludes(output, "secret-value", "PowerShell secure-auth currentCall JSON should not leak secrets");
+      console.log("[OK] PowerShell resume-status wrapper marks secure-auth currentCall ready");
+    }, {
+      currentCall: secureAuthMacCallForWindows(),
+    });
+  });
+}
+
 async function checkBoardMacHostSafeStartExtraction(args) {
   const safeCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888";
   const maxFpsCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888 --maxScreenFps 60";
@@ -1089,6 +1135,7 @@ async function main() {
   await checkBoardSummary(args);
   await checkBoardCurrentCallSummary(args);
   await checkBoardCurrentCallJson(args);
+  await checkSecureAuthCallNextSummary(args);
   await checkBoardMacHostSafeStartExtraction(args);
   await checkBoardWindowsSecureAuthPathExtraction(args);
   await checkUserAuthRequest(args);

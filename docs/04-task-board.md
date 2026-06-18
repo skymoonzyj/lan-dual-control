@@ -56,6 +56,7 @@
 - [x] Windows host 状态和 readiness 摘要补安全认证路径：`start-windows-host --status` 与 `check-windows-host-readiness` 的普通输出、JSON 和 `--boardSummary` 现在都会给出 `WindowsSecureAuthPath=`，用于随机运行期密码不可取回时现场重启 Windows host 并由用户在 Windows/Mac 两端本地隐藏输入同一个临时密码；不通过通讯板、命令参数或日志传密码。
 - [x] Mac client formal 工具补安全认证路径摘要：`check-mac-client-formal-status` 和 `run-mac-client-formal-smoke` 的 JSON/普通输出/`--boardSummary` 现在给出 `SecureAuthPath=`、`WindowsSecureAuthStart=`、`WindowsSecureAuthStartNodeFallback=`，用于 Windows host 随机运行期密码无法安全取回时指导两端本机输入同一个临时密码；不启动服务、不认证、不发密码/input/inject。
 - [x] Windows 恢复总览和控制端诊断消费安全认证路径：`check-windows-resume-status` 默认输出 `WindowsSecureAuthPath=`，`--checkBoard` 会安全提取 `WindowsSecureAuthPath=` / `SecureAuthPath=` 并拒绝敏感参数、非 LAN 绑定、缺隐藏密码参数或占位端口；Windows 控制端在认证/密码/失败/阻塞上下文中显示“Windows 安全认证路径已提供”，干净命令清单不误弹。
+- [x] Windows 恢复总览闭环安全认证 currentCall：active Mac -> Windows 安全认证 call 若已有可用 `WindowsSecureAuthPath=`，JSON 会标记 `board.currentCall.secureAuthPathReady=true`，`--boardSummary` 输出 `AgentCallNext=mac-confirm-secure-auth-path`，提示 Windows 已响应，后续由 Mac/人工确认路径并清理 call；不自动清 call、不认证、不发密码/input/inject。
 - [x] 上传到 GitHub 仓库。
 - [x] Mac mini 到位后克隆仓库。
 

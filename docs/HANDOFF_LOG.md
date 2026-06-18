@@ -17,6 +17,34 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows resume 在安全认证 currentCall 已有可用 `WindowsSecureAuthPath=` 时，明确提示下一步由 Mac/人工确认路径，而不是继续表现成 Windows 未响应。
+完成内容：
+- `check-windows-resume-status --checkBoard --json` 现在会识别 active Mac -> Windows 安全认证 call：当 call 文本指向认证/密码/随机运行期密码，且报告已有安全 `WindowsSecureAuthPath` 时，JSON `board.currentCall.secureAuthPathReady=true`、`next=mac-confirm-secure-auth-path`。
+- `--boardSummary` 同步输出 `AgentCallNext=mac-confirm-secure-auth-path`；普通输出里也会显示 `callNext=mac-confirm-secure-auth-path`。
+- 该提示只说明 Windows 已给出本地隐藏输入同一临时密码的安全路径；脚本不会自动清理 currentCall，不认证、不请求或发送密码、不发送 input/inject。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- 当前 Agent Link Board 的安全认证 call 仍由 Mac 发起；Windows 端不擅自清理。Mac/人工确认 `WindowsSecureAuthPath` 后，可按双方约定清理 currentCall 或发新 call。
+下一步建议：
+- Mac 端重新拉取后可跑 Windows resume boardSummary 或自己的 formal smoke/status 摘要，确认看到 `AgentCallNext=mac-confirm-secure-auth-path` 后继续现场安全认证流程。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac/人工确认路径；不要在通讯板发送密码/token/系统账号。
+
 ## 2026-06-18 Mac Codex
 
 日期：2026-06-18 继续推进
