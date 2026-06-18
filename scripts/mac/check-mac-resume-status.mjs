@@ -885,7 +885,7 @@ function makeMacClientFormalChecklistCommand() {
 }
 
 function makeMacClientFormalSmokeCommand() {
-  return "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --preflightOnly --boardSummary";
+  return "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
 }
 
 function makeMacClientBrowserSelfTestCommand() {

@@ -17,6 +17,36 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
+本轮目标：让 Mac 恢复总览里的 Mac client formal smoke 入口默认先确保本地页面在线，减少真连前手工漏启动页面。
+完成内容：
+- `check-mac-resume-status` 的 `MacClientFormalSmoke=` / JSON `commands.macClientFormalSmokeCommand` 现在输出 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary`。
+- 该入口只做本地 Mac client 页面安全启动/复用、Windows discovery 和无密 formal preflight；不弹密码、不认证 Windows host、不发 Agent Link Board call、不发送 input/inject。
+- `test-mac-resume-status` 已把 `--ensureClient` 纳入命令断言，同时继续拒绝 `--promptPassword`、`--password`、`--sendCall` 和 `--forceCall`。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先改断言并确认失败：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 22000`
+- 实现后复跑：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 22000`
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary`（真实摘要已显示 `MacClientFormalSmoke=... --discover --ensureClient --preflightOnly --boardSummary`）
+遗留问题：
+- 这轮只增强恢复总览给出的安全预检入口；未执行真实密码 browser smoke，未发送 call，未执行 input/inject。
+下一步建议：
+- Mac 控制 Windows 真连前优先从 `check-mac-resume-status --checkBoard --boardSummary` 复制 `MacClientFormalSmoke=`，再根据 preflight 结果决定是否需要发 call 或由用户输入密码跑真实 smoke。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Windows 端可继续当前 Windows-only resume/sendAgentCallAck 工作。
+
 ## 2026-06-18 Windows Codex
 
 日期：2026-06-18 继续推进

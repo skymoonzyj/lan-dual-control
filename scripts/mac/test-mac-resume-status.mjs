@@ -404,13 +404,13 @@ function assertMacClientFormalChecklistCommand(command, label) {
 function assertMacClientFormalSmokeCommand(command, label) {
   assert(/run-mac-client-formal-smoke\.mjs/.test(command), `${label} should use run-mac-client-formal-smoke`);
   assert(command.includes("--discover"), `${label} should discover Windows hosts safely`);
+  assert(command.includes("--ensureClient"), `${label} should safely start or reuse the local Mac client page before preflight`);
   assert(command.includes("--preflightOnly"), `${label} should stay in preflight mode`);
   assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
   assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
   assert(!command.includes("--password"), `${label} should not embed a password argument`);
   assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
   assert(!command.includes("--forceCall"), `${label} should not replace an Agent Link Board call`);
-  assert(!command.includes("--ensureClient"), `${label} should not start or reuse the local client page`);
   assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
   assert(!command.includes("--json"), `${label} should default to one-line boardSummary output`);
 }
