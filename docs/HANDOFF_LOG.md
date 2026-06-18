@@ -21,6 +21,36 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：让正式 Mac E2E 预检直接解释远端 FPS 上限截断，并给出 Mac 端安全 dry-run 提升上限建议，避免把请求 60Hz 但远端 30Hz 误判成 Windows 第二步卡住。
+完成内容：
+- `check-mac-formal-e2e` 的预检报告新增 `fpsLimit` 字段，记录 `requestedFps`、`maxScreenFps`、`limited` 和无密 `macMaxFpsPlanCommand`。
+- `--boardSummary` 现在会在真实 `maxScreenFps=30`、正式请求 60Hz 时输出 `FpsLimit requested=60Hz remoteMax=30Hz`，并给出 `MacMaxFpsPlan=node scripts/mac/install-mac-host-launch-agent.mjs --port 43770 --maxScreenFps 60 --boardSummary`。
+- `--userAuthRequest` / `--sendUserAuthRequest` 的 `NEED_USER_AUTH` 文本会先提示“当前 Mac host 上限 30Hz，正式验收请求 60Hz 会按远端上限运行”，再提醒用户输入正式密码；不会把密码、`--write`、`launchctl` 或 `inject` 放进建议。
+- 回归新增只读 fake discovery 场景，专门模拟 Mac 远端 30Hz 上限，锁定 JSON、通讯板摘要和授权提醒的 secret-free/dry-run 行为。
+修改文件：
+- `scripts/windows/check-mac-formal-e2e.mjs`
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-mac-formal-e2e.mjs`
+- `node --check scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 45000`
+- `node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --boardSummary --timeoutMs 45000`
+遗留问题：
+- 本轮只解释和规划上限，不实际修改 Mac host 运行上限；真实 60Hz 仍需要 Mac 端 dry-run/写入 LaunchAgent 或启动参数并重启 host 后再做 H.264/音频/资源长稳。
+下一步建议：
+- Mac 端可按摘要里的 `MacMaxFpsPlan=` 先 dry-run LaunchAgent 参数，确认 `LAN_DUAL_MAX_SCREEN_FPS=60` 的写入/重启路径；Windows 端随后用同一正式预检和页面诊断复查是否不再被 30Hz 截断。
+是否改了协议：否，消费已有 `maxScreenFps` 诊断字段并扩展 Windows 侧报告。
+是否需要另一端配合：需要 Mac 端后续决定是否提高 host 上限并重启；本轮代码本身不需要 Mac 端同步改动。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端明确显示 Mac host 远端 `maxScreenFps` 上限，避免用户请求 60/120Hz 时误判为 Windows 第二步卡住或控制端卡顿。
 完成内容：
 - Windows 控 Mac 页面现在会从 `/discovery.capabilities.maxScreenFps`、`session_answer.maxScreenFps`、`display_settings_ack.maxScreenFps` 和 `video_frame.maxScreenFps` 保存远端最高刷新率。

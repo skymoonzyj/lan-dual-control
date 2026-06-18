@@ -169,6 +169,66 @@ async function withMockHost(fn) {
   }
 }
 
+async function withDiscoveryOnlyHost({ maxScreenFps = 30 } = {}, fn) {
+  const server = createServer((request, response) => {
+    if ((request.url || "").split("?")[0] !== "/discovery") {
+      response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("not found\n");
+      return;
+    }
+    const address = server.address();
+    response.writeHead(200, {
+      "Access-Control-Allow-Origin": "*",
+      "Content-Type": "application/json; charset=utf-8",
+    });
+    response.end(JSON.stringify({
+      type: "lan_dual_discovery",
+      protocolVersion: 1,
+      deviceId: `limited-mac-${address.port}`,
+      deviceName: "限速 Mac",
+      hostName: "限速 Mac",
+      platform: "macos",
+      role: "host",
+      host: "127.0.0.1",
+      port: address.port,
+      capabilities: {
+        video: true,
+        h264Stream: true,
+        audio: true,
+        audioMode: "system-pcm",
+        clipboardText: true,
+        clipboardFile: true,
+        inputMode: "log",
+        mock: false,
+        capturePipeline: "screencapturekit-h264",
+        maxScreenFps,
+        displays: [
+          { id: "main", name: "主显示器", width: 1920, height: 1080, primary: true },
+        ],
+      },
+      permissions: {
+        screenRecording: true,
+        accessibility: true,
+        inputMonitoring: true,
+      },
+      runtime: {
+        processId: 12345,
+        startedAt: "2026-06-18T00:00:00.000Z",
+        uptimeSeconds: 60,
+        buildId: "limited-fps-test",
+      },
+      lastSeenAt: "2026-06-18T00:00:01.000Z",
+    }));
+  });
+  await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  const address = server.address();
+  try {
+    return await fn(Number(address.port));
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose));
+  }
+}
+
 async function withFakeLinkBoard(fn) {
   const requests = [];
   const server = createServer((request, response) => {
@@ -296,6 +356,34 @@ async function testMockPreflightJson(args) {
     assertRunPlanSafe(payload, "mock JSON run plan", { audioSkipped: true, clipboardText: false, inputMode: "skipped" });
     assert(payload.runPlan.video?.allowMockVideo === true, "mock JSON run plan should mark mock video allowed");
     print("OK", "Mock JSON preflight passes");
+  });
+}
+
+async function testFpsLimitPreflightJson(args) {
+  await withDiscoveryOnlyHost({ maxScreenFps: 30 }, async (port) => {
+    const result = await runRunner([
+      "--host", "127.0.0.1",
+      "--port", String(port),
+      "--preflightOnly",
+      "--json",
+    ], args);
+    assert(result.exitCode === 0, `FPS limit preflight JSON failed\n${result.stdout}\n${result.stderr}`);
+    const payload = JSON.parse(result.stdout);
+    assert(payload.fpsLimit?.limited === true, "FPS limit should be marked limited");
+    assert(payload.fpsLimit?.requestedFps === 60, "FPS limit requested FPS mismatch");
+    assert(payload.fpsLimit?.maxScreenFps === 30, "FPS limit remote max mismatch");
+    assertIncludes(payload.fpsLimit?.macMaxFpsPlanCommand || "", "scripts/mac/install-mac-host-launch-agent.mjs", "FPS limit Mac plan command");
+    assertIncludes(payload.fpsLimit?.macMaxFpsPlanCommand || "", `--port ${port}`, "FPS limit Mac plan port");
+    assertIncludes(payload.fpsLimit?.macMaxFpsPlanCommand || "", "--maxScreenFps 60", "FPS limit Mac plan FPS");
+    assertIncludes(payload.fpsLimit?.macMaxFpsPlanCommand || "", "--boardSummary", "FPS limit Mac plan board summary");
+    assertIncludes(String(payload.boardSummary || ""), "FpsLimit requested=60Hz remoteMax=30Hz", "FPS limit board summary");
+    assertIncludes(String(payload.boardSummary || ""), "MacMaxFpsPlan=node scripts/mac/install-mac-host-launch-agent.mjs", "FPS limit board summary plan");
+    assertIncludes(String(payload.userAuthRequest || ""), "当前 Mac host 上限 30Hz", "FPS limit user auth request");
+    assertIncludes(String(payload.userAuthRequest || ""), "dry-run", "FPS limit user auth request dry-run");
+    assertNotIncludes(result.stdout + result.stderr, "test-password", "FPS limit preflight JSON");
+    assertNotIncludes(result.stdout + result.stderr, "--write", "FPS limit preflight JSON should stay dry-run");
+    assertNotIncludes(result.stdout + result.stderr, "launchctl", "FPS limit preflight JSON should not load LaunchAgent");
+    print("OK", "FPS limit preflight explains remote cap without leaking secrets");
   });
 }
 
@@ -534,6 +622,7 @@ async function main() {
   await testUserAuthRequestRequiresPreflight(args);
   await testSendUserAuthRequestRequiresPreflight(args);
   await testMockPreflightJson(args);
+  await testFpsLimitPreflightJson(args);
   await testMockPreflightBoardSummary(args);
   await testMockPreflightUserAuthRequest(args);
   await testOfflineSendUserAuthRequestDoesNotPost(args);

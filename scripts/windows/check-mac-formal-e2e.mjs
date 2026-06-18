@@ -372,6 +372,50 @@ function summarizeDisplays(report) {
     .join(",");
 }
 
+function positiveNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function formatFps(value) {
+  const parsed = positiveNumber(value);
+  if (parsed === null) return "unknown";
+  return Number.isInteger(parsed) ? String(parsed) : parsed.toFixed(1).replace(/\.0$/, "");
+}
+
+function makeMacMaxFpsPlanCommand(report, requestedFps) {
+  const port = Number(report.target?.port) || defaults.port;
+  const planFps = Math.max(1, Math.min(60, Math.trunc(Number(requestedFps) || 0)));
+  if (!planFps) return "";
+  return `node scripts/mac/install-mac-host-launch-agent.mjs --port ${port} --maxScreenFps ${planFps} --boardSummary`;
+}
+
+function makeFpsLimitStatus(report) {
+  const requestedFps = positiveNumber(report.runPlan?.video?.fps);
+  const maxScreenFps = positiveNumber(report.capabilities?.maxScreenFps);
+  const limited = Boolean(requestedFps && maxScreenFps && requestedFps > maxScreenFps);
+  const result = {
+    requestedFps,
+    maxScreenFps,
+    limited,
+    macMaxFpsPlanCommand: "",
+    note: requestedFps
+      ? "remote maxScreenFps is unknown"
+      : "formal run plan FPS is unknown",
+  };
+
+  if (requestedFps && maxScreenFps) {
+    result.note = limited
+      ? `requested ${formatFps(requestedFps)}Hz is capped by remote ${formatFps(maxScreenFps)}Hz`
+      : `requested ${formatFps(requestedFps)}Hz is within remote ${formatFps(maxScreenFps)}Hz`;
+  }
+  if (limited) {
+    result.macMaxFpsPlanCommand = makeMacMaxFpsPlanCommand(report, requestedFps);
+    result.macMaxFpsPlanFps = Math.max(1, Math.min(60, Math.trunc(requestedFps)));
+  }
+  return result;
+}
+
 function makeBoardSummary(report, outcome = "preflight") {
   const prefix = outcome === "formal-success"
     ? "Windows formal Mac E2E finished"
@@ -401,14 +445,19 @@ function makeBoardSummary(report, outcome = "preflight") {
       : "failed"
     : "skipped";
   const permissions = report.permissions || {};
+  const fpsLimit = report.fpsLimit || makeFpsLimitStatus(report);
+  const fpsLimitLine = fpsLimit.limited
+    ? `FpsLimit requested=${formatFps(fpsLimit.requestedFps)}Hz remoteMax=${formatFps(fpsLimit.maxScreenFps)}Hz; MacMaxFpsPlan=${fpsLimit.macMaxFpsPlanCommand}.`
+    : "";
   return [
     `${prefix}: ${state}; target=${report.target.host}:${report.target.port}; runtimeBuild=${report.runtime?.buildId || "unknown"}; runtimePid=${report.runtime?.processId || "unknown"}.`,
     `Capabilities h264=${statusFlag(report.capabilities?.h264Stream)} audio=${report.capabilities?.audioMode || statusFlag(report.capabilities?.audio)} clipboardText=${statusFlag(report.capabilities?.clipboardText)} clipboardFile=${statusFlag(report.capabilities?.clipboardFile)} inputMode=${report.capabilities?.inputMode || "missing"} mock=${statusFlag(report.capabilities?.mock)} maxScreenFps=${report.capabilities?.maxScreenFps || "unknown"}.`,
+    fpsLimitLine,
     `Permissions screen=${statusFlag(permissions.screenRecording)} accessibility=${statusFlag(permissions.accessibility)} inputMonitoring=${statusFlag(permissions.inputMonitoring)}; displays=${summarizeDisplays(report)}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
     "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
     `Safe formal command: ${report.command}. Password is not included; inject was not used and still needs explicit user confirmation.`,
     `Safe formal PowerShell command: ${report.formalPowerShellCommand}. Password is not included; inject was not used and still needs explicit user confirmation.`,
-  ].join(" ");
+  ].filter(Boolean).join(" ");
 }
 
 function makeUserAuthRequest(report) {
@@ -424,16 +473,23 @@ function makeUserAuthRequest(report) {
     ].join(" ");
   }
 
+  const fpsLimit = report.fpsLimit || makeFpsLimitStatus(report);
+  const fpsLimitText = fpsLimit.limited
+    ? `刷新率提示：当前 Mac host 上限 ${formatFps(fpsLimit.maxScreenFps)}Hz，正式验收请求 ${formatFps(fpsLimit.requestedFps)}Hz 会按远端上限运行；若要提高上限，先让 Mac 端 dry-run ${fpsLimit.macMaxFpsPlanCommand} 并重启 host 后再验收。`
+    : "";
+
   return [
     `NEED_USER_AUTH: 正式 Mac 端到端验收需要你在 Windows 本机隐藏输入 Mac host 正式密码，target=${target}。`,
+    fpsLimitText,
     `位置/步骤：在 E:\\codex\\lan-dual-control 运行 ${report.command}。`,
     `PowerShell 等价：${report.formalPowerShellCommand}。`,
     "不要把密码发到联络板；本命令默认不执行 inject，inject 仍需你另行明确确认。",
     "处理后请回复 已输入密码并开始验收。",
-  ].join(" ");
+  ].filter(Boolean).join(" ");
 }
 
 function attachBoardSummary(report, outcome = "preflight") {
+  report.fpsLimit = makeFpsLimitStatus(report);
   report.boardSummary = makeBoardSummary(report, outcome);
   report.userAuthRequest = makeUserAuthRequest(report);
   return report;
