@@ -17,6 +17,45 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
+本轮目标：补齐 Mac heartbeat 后台 watcher 的可管理启动入口，并同步到恢复总览。
+完成内容：
+- 新增 `scripts/mac/start-mac-heartbeat-watcher.mjs`：支持 start/status/stop/restart，管理 `.dev-lab/mac-heartbeat/` 下的 PID、metadata 和 stdout/stderr 日志。
+- 后台 watcher 默认启动 `watch-mac-heartbeat --sendStatus --intervalMs 30000`，以独立设备 `Mac Heartbeat` 上 Agent Link Board，不刷新或伪装 `Mac Codex` 状态。
+- 新增 `scripts/mac/test-mac-heartbeat-watcher-start-helper.mjs`，用 fake watcher 覆盖 help、not-running status、start/status/boardSummary/stop 和 restart 生命周期。
+- `check-mac-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `MacHeartbeatStart=`、`MacHeartbeatStatus=`、`MacHeartbeatStop=`，并保留 `MacHeartbeatOnce=` / `MacHeartbeatWatch=`。
+修改文件：
+- `scripts/mac/start-mac-heartbeat-watcher.mjs`
+- `scripts/mac/test-mac-heartbeat-watcher-start-helper.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/start-mac-heartbeat-watcher.mjs`
+- `node --check scripts/mac/test-mac-heartbeat-watcher-start-helper.mjs`
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- `node scripts/mac/test-mac-heartbeat-watcher-start-helper.mjs --timeoutMs 45000`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 45000`
+- `node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/mac docs` 无匹配。
+遗留问题：
+- 本轮只提供 Mac 端后台 watcher 管理入口，没有真实启动常驻 watcher；如需长时间值守，后续由用户或两端确认后再运行 `MacHeartbeatStart=`。
+- Windows 端已消费 `MacHeartbeatOnce=` / `MacHeartbeatWatch=`；若要在 Windows resume/控制端进一步显示 `MacHeartbeatStart/Status/Stop`，可由 Windows Codex 后续接入。
+下一步建议：
+- 继续真实 Mac 被控端长时间体验验收，或让 Windows 端消费 `MacHeartbeatStart/Status/Stop` 稳定标签。
+是否改了协议：否。
+是否需要另一端配合：暂不阻塞；如 Windows 端想展示后台 watcher 管理命令，可消费 Mac resume 摘要里的 `MacHeartbeatStart=` / `MacHeartbeatStatus=` / `MacHeartbeatStop=`。
+
 ## 2026-06-18 Windows Codex
 
 日期：2026-06-18 继续推进
