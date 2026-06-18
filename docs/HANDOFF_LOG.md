@@ -64,6 +64,44 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 恢复总览消费 Mac 端上板的 `MacClientDiscoverWindows=` 只读 Windows host 发现入口。
+完成内容：
+- `check-windows-resume-status` 默认新增 `commands.macClientDiscoverWindowsCommand`，普通输出和 `--boardSummary` 会给出 `MacClientDiscoverWindows=node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary`。
+- `--checkBoard` 会从 Agent Link Board `/api/state` 或 fallback 文本安全提取 `MacClientDiscoverWindows=` / `RerunMacClientDiscoverWindows=`；只接受 `discover-windows-hosts.mjs`、`--checkBoard`、`--boardSummary` 和白名单只读参数，拒绝密码/token/secret、`--promptPassword`、`--sendCall`、`--forceCall` 或缺联络板读取/摘要参数的候选。
+- PowerShell 包装帮助和 Node/PowerShell 回归都已覆盖该入口；不认证、不弹密码、不发 call/input/inject。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 先新增 PowerShell 断言并确认失败：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- 实现后复跑：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 实现后复跑：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --script test-windows-resume-status.mjs --script test-windows-resume-status-powershell.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`（真实摘要已显示 `MacClientDiscoverWindows=... --checkBoard --boardSummary`）
+遗留问题：
+- 本轮只做 Windows resume 的只读消费/展示；未运行真实 Mac 控 Windows browser smoke，未认证 Windows host，未发送 Agent Link call。
+下一步建议：
+- Mac 控 Windows 真连前，Windows 侧先跑 `check-windows-resume-status --checkBoard --boardSummary`，先看 `MacClientDiscoverWindows=` 做只读 Windows host 发现和 `WindowsLanRisk=` 对齐，再看 `MacClientFormalChecklist=` / `MacClientFormalSmoke=` 继续无密 formal checklist / preflight。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Mac heartbeat/resume/status 已能上板同名入口。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 恢复总览消费 Mac 端上板的 `MacClientFormalChecklist=` 正式清单入口。
 完成内容：
 - `check-windows-resume-status` 默认新增 `commands.macClientFormalChecklistCommand`，普通输出和 `--boardSummary` 会给出 `MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary`。

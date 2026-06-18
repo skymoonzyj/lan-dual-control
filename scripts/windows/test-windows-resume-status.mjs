@@ -308,6 +308,8 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "start-mac-heartbeat-watcher.mjs --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "start-mac-heartbeat-watcher.mjs --status --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "start-mac-heartbeat-watcher.mjs --stop --boardSummary", `help ${flag}`);
+    assertIncludes(result.stdout, "MacClientDiscoverWindows=", `help ${flag}`);
+    assertIncludes(result.stdout, "discover-windows-hosts.mjs --checkBoard --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "MacClientFormalChecklist=", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "MacClientFormalSmoke=", `help ${flag}`);
@@ -415,6 +417,10 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.macFormalLocalSmokeCommand || "").includes("--promptPassword"), "mock JSON Mac formal local smoke command should prompt locally");
     assert(String(payload.commands?.macFormalLocalSmokeCommand || "").includes("--boardSummary"), "mock JSON Mac formal local smoke command should be board-safe");
     assert(!String(payload.commands?.macFormalLocalSmokeCommand || "").includes("--password"), "mock JSON Mac formal local smoke command should not include password argv");
+    assert(String(payload.commands?.macClientDiscoverWindowsCommand || "").includes("discover-windows-hosts.mjs"), "mock JSON should include Mac client discover Windows command");
+    assert(String(payload.commands?.macClientDiscoverWindowsCommand || "").includes("--checkBoard"), "mock JSON Mac client discover Windows command should read Agent Link Board");
+    assert(String(payload.commands?.macClientDiscoverWindowsCommand || "").includes("--boardSummary"), "mock JSON Mac client discover Windows command should be board-safe");
+    assert(!String(payload.commands?.macClientDiscoverWindowsCommand || "").includes("--password"), "mock JSON Mac client discover Windows command should not include password argv");
     assert(String(payload.commands?.macClientFormalChecklistCommand || "").includes("check-mac-client-formal-status.mjs"), "mock JSON should include Mac client formal checklist command");
     assert(String(payload.commands?.macClientFormalChecklistCommand || "").includes("--discover"), "mock JSON Mac client formal checklist command should discover Windows host");
     assert(String(payload.commands?.macClientFormalChecklistCommand || "").includes("--port 43770"), "mock JSON Mac client formal checklist command should target the default Windows host port");
@@ -700,6 +706,8 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "MacFormalLocalSmoke=", "board summary");
     assertIncludes(result.stdout, `check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port ${port} --promptPassword --boardSummary`, "board summary");
     assertNotIncludes(result.stdout, "--password", "board summary Mac formal local smoke should not include password argv");
+    assertIncludes(result.stdout, "MacClientDiscoverWindows=", "board summary");
+    assertIncludes(result.stdout, "discover-windows-hosts.mjs --checkBoard --boardSummary", "board summary");
     assertIncludes(result.stdout, "MacClientFormalChecklist=", "board summary");
     assertIncludes(result.stdout, "check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary", "board summary");
     assertIncludes(result.stdout, "MacClientFormalSmoke=", "board summary");
@@ -915,6 +923,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const heartbeatStartCommand = "node scripts/mac/start-mac-heartbeat-watcher.mjs --boardSummary";
   const heartbeatStatusCommand = "node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary";
   const heartbeatStopCommand = "node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --boardSummary";
+  const macClientDiscoverWindowsCommand = "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary";
   const macClientFormalChecklistCommand = "node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary";
   const macClientFormalSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
   const heartbeatNow = Date.now();
@@ -929,7 +938,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
         "Mac Codex": {
           role: "Mac 端",
           status: "idle",
-          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacClientFormalChecklist=${macClientFormalChecklistCommand} MacClientFormalSmoke=${macClientFormalSmokeCommand} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand} MacHeartbeatStart=${heartbeatStartCommand} MacHeartbeatStatus=${heartbeatStatusCommand} MacHeartbeatStop=${heartbeatStopCommand}`,
+          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacClientDiscoverWindows=${macClientDiscoverWindowsCommand} MacClientFormalChecklist=${macClientFormalChecklistCommand} MacClientFormalSmoke=${macClientFormalSmokeCommand} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand} MacHeartbeatStart=${heartbeatStartCommand} MacHeartbeatStatus=${heartbeatStatusCommand} MacHeartbeatStop=${heartbeatStopCommand}`,
         },
         "Mac Heartbeat": {
           role: "Mac heartbeat watcher",
@@ -978,6 +987,21 @@ async function checkBoardMacHostSafeStartExtraction(args) {
           type: "message",
           from: "Mac Codex",
           text: "MacClientFormalSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --password secret-value --preflightOnly --boardSummary",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacClientDiscoverWindows=node scripts/mac/discover-windows-hosts.mjs --checkBoard --password secret-value --boardSummary",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacClientDiscoverWindows=node scripts/mac/discover-windows-hosts.mjs --boardSummary",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacClientDiscoverWindows=node scripts/mac/discover-windows-hosts.mjs --checkBoard",
         },
         {
           type: "message",
@@ -1075,6 +1099,10 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board.macFormalLocalSmoke.command === localSmokeCommand, "MacFormalLocalSmoke command mismatch");
       assert(payload.board.macFormalLocalSmoke.source === "api-state", "MacFormalLocalSmoke should come from /api/state");
       assert(payload.board.macFormalLocalSmoke.rejectedCount >= 2, "unsafe or placeholder MacFormalLocalSmoke should be rejected");
+      assert(payload.board?.macClientDiscoverWindows?.found === true, "MacClientDiscoverWindows should be found in board state");
+      assert(payload.board.macClientDiscoverWindows.command === macClientDiscoverWindowsCommand, "MacClientDiscoverWindows command mismatch");
+      assert(payload.board.macClientDiscoverWindows.source === "api-state", "MacClientDiscoverWindows should come from /api/state");
+      assert(payload.board.macClientDiscoverWindows.rejectedCount >= 3, "unsafe or incomplete MacClientDiscoverWindows should be rejected");
       assert(payload.board?.macClientFormalChecklist?.found === true, "MacClientFormalChecklist should be found in board state");
       assert(payload.board.macClientFormalChecklist.command === macClientFormalChecklistCommand, "MacClientFormalChecklist command mismatch");
       assert(payload.board.macClientFormalChecklist.source === "api-state", "MacClientFormalChecklist should come from /api/state");
@@ -1113,6 +1141,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(payload.boardSummary, `MacHostSafeStart=${safeCommand}.`, "MacHostSafeStart JSON board summary");
       assertIncludes(payload.boardSummary, `MacMaxFpsSafeStart=${maxFpsCommand}.`, "MacMaxFpsSafeStart JSON board summary");
       assertIncludes(payload.boardSummary, `MacFormalLocalSmoke=${localSmokeCommand}.`, "MacFormalLocalSmoke JSON board summary");
+      assertIncludes(payload.boardSummary, `MacClientDiscoverWindows=${macClientDiscoverWindowsCommand}.`, "MacClientDiscoverWindows JSON board summary");
       assertIncludes(payload.boardSummary, `MacClientFormalChecklist=${macClientFormalChecklistCommand}.`, "MacClientFormalChecklist JSON board summary");
       assertIncludes(payload.boardSummary, `MacClientFormalSmoke=${macClientFormalSmokeCommand}.`, "MacClientFormalSmoke JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "MacHeartbeatOnce JSON board summary");
@@ -1145,6 +1174,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacHostSafeStart=${safeCommand}.`, "MacHostSafeStart board summary");
       assertIncludes(result.stdout, `MacMaxFpsSafeStart=${maxFpsCommand}.`, "MacMaxFpsSafeStart board summary");
       assertIncludes(result.stdout, `MacFormalLocalSmoke=${localSmokeCommand}.`, "MacFormalLocalSmoke board summary");
+      assertIncludes(result.stdout, `MacClientDiscoverWindows=${macClientDiscoverWindowsCommand}.`, "MacClientDiscoverWindows board summary");
       assertIncludes(result.stdout, `MacClientFormalChecklist=${macClientFormalChecklistCommand}.`, "MacClientFormalChecklist board summary");
       assertIncludes(result.stdout, `MacClientFormalSmoke=${macClientFormalSmokeCommand}.`, "MacClientFormalSmoke board summary");
       assertIncludes(result.stdout, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "MacHeartbeatOnce board summary");
@@ -1174,6 +1204,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacHostSafeStart=${safeCommand}`, "MacHostSafeStart human output");
       assertIncludes(result.stdout, `MacMaxFpsSafeStart=${maxFpsCommand}`, "MacMaxFpsSafeStart human output");
       assertIncludes(result.stdout, `MacFormalLocalSmoke=${localSmokeCommand}`, "MacFormalLocalSmoke human output");
+      assertIncludes(result.stdout, `MacClientDiscoverWindows=${macClientDiscoverWindowsCommand}`, "MacClientDiscoverWindows human output");
       assertIncludes(result.stdout, `MacClientFormalChecklist=${macClientFormalChecklistCommand}`, "MacClientFormalChecklist human output");
       assertIncludes(result.stdout, `MacClientFormalSmoke=${macClientFormalSmokeCommand}`, "MacClientFormalSmoke human output");
       assertIncludes(result.stdout, `MacHeartbeatOnce=${heartbeatOnceCommand}`, "MacHeartbeatOnce human output");

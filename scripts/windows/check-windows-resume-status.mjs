@@ -62,6 +62,7 @@ requests while a remote-control window is minimized. The report also checks
 the local alert-watcher status read-only, without starting it.
 When --checkBoard is enabled, the report also surfaces recent
 MacHostSafeStart=, MacMaxFpsSafeStart=, MacFormalLocalSmoke=,
+MacClientDiscoverWindows=,
 MacClientFormalChecklist=,
 MacClientFormalSmoke=,
 MacHeartbeatOnce=, MacHeartbeatWatch=, WindowsReverseGrantStatus=, and
@@ -100,6 +101,8 @@ clipboard, input_ack, and diagnostics in that order.
   FPS gaps and unloaded LaunchAgents as blockers before asking for a password.
   It also includes MacFormalLocalSmoke for the local Mac H.264/PCM/input-log
   smoke check before long formal E2E runs.
+  It also includes MacClientDiscoverWindows for the Mac-side read-only Windows
+  host discovery check that also reads WindowsLanRisk hints.
   It also includes MacClientFormalChecklist for the Mac client no-password
   formal checklist that can discover the Windows host first.
   It also includes MacClientFormalSmoke for the Mac client no-password formal
@@ -149,6 +152,7 @@ Examples:
   node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary
   node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --boardSummary
   node scripts/mac/check-mac-formal-local-smoke.mjs --host 192.168.31.122 --port 43770 --promptPassword --boardSummary
+  node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary
   node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary
   node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary
@@ -979,6 +983,88 @@ function parseMacClientFormalChecklistCommand(fragment) {
   return commandText;
 }
 
+function parseMacClientDiscoverWindowsCommand(fragment) {
+  const rawTokens = String(fragment || "").split(/\s+/).map(stripCommandToken).filter(Boolean);
+  if (rawTokens.length < 2) return null;
+  if (rawTokens[0] !== "node") return null;
+  if (rawTokens[1].replace(/\\/g, "/") !== "scripts/mac/discover-windows-hosts.mjs") return null;
+
+  const noValueFlags = new Set([
+    "--checkBoard",
+    "--boardSummary",
+    "--noLocalSubnets",
+    "--requireFound",
+  ]);
+  const valueFlags = new Set([
+    "--host",
+    "--port",
+    "--subnet",
+    "--server",
+    "--timeoutMs",
+    "--scanTimeoutMs",
+    "--concurrency",
+    "--maxHostsPerSubnet",
+  ]);
+  const integerValueFlags = new Set([
+    "--port",
+    "--timeoutMs",
+    "--scanTimeoutMs",
+    "--concurrency",
+    "--maxHostsPerSubnet",
+  ]);
+  const tokens = [rawTokens[0], rawTokens[1]];
+  let hasCheckBoard = false;
+  let hasBoardSummary = false;
+  for (let index = 2; index < rawTokens.length; index += 1) {
+    const token = rawTokens[index];
+    if (!token || /^[A-Za-z][A-Za-z0-9_-]*=/.test(token)) break;
+    if (!token.startsWith("--")) break;
+    if (/^--(?:password|token|secret|passwd|pwd|promptPassword|sendCall|forceCall)$/i.test(token)) return null;
+    if (noValueFlags.has(token)) {
+      if (token === "--checkBoard") hasCheckBoard = true;
+      if (token === "--boardSummary") hasBoardSummary = true;
+      tokens.push(token);
+      continue;
+    }
+    if (valueFlags.has(token)) {
+      const value = stripCommandToken(rawTokens[index + 1] || "");
+      if (!value || value.startsWith("--") || /^[A-Za-z][A-Za-z0-9_-]*=/.test(value)) return null;
+      if (/[<>]/.test(value)) return null;
+      if (integerValueFlags.has(token)) {
+        const integerValue = Number(value);
+        if (!Number.isInteger(integerValue) || integerValue < 0) return null;
+        if (token === "--port" && (integerValue < 1 || integerValue > 65535)) return null;
+      } else if (token === "--server") {
+        try {
+          const url = new URL(value);
+          if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return null;
+        } catch {
+          return null;
+        }
+      } else if (token === "--subnet") {
+        if (!/^\d{1,3}(?:\.\d{1,3}){3}\/\d{1,2}$/.test(value)) return null;
+      }
+      const pair = `${token} ${value}`;
+      if (hasSecretLikeCommandValue(pair)) return null;
+      tokens.push(token, value);
+      index += 1;
+      continue;
+    }
+    return null;
+  }
+
+  const commandText = tokens.join(" ");
+  if (
+    tokens.length < 4 ||
+    hasSecretLikeCommandValue(commandText) ||
+    !hasCheckBoard ||
+    !hasBoardSummary
+  ) {
+    return null;
+  }
+  return commandText;
+}
+
 function parseMacHeartbeatWatcherCommand(fragment, expectedMode) {
   const rawTokens = String(fragment || "").split(/\s+/).map(stripCommandToken).filter(Boolean);
   if (rawTokens.length < 2) return null;
@@ -1489,6 +1575,58 @@ function extractMacClientFormalChecklistFromText(text, source = "text") {
   };
 }
 
+function extractMacClientDiscoverWindowsFromText(text, source = "text") {
+  const value = String(text || "");
+  const labels = ["MacClientDiscoverWindows", "RerunMacClientDiscoverWindows"];
+  const commands = [];
+  let rejectedCount = 0;
+  for (const label of labels) {
+    const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`\\b${escapedLabel}\\s*=\\s*`, "gi");
+    let match;
+    while ((match = regex.exec(value)) !== null) {
+      const fragment = value.slice(match.index + match[0].length);
+      const commandText = parseMacClientDiscoverWindowsCommand(fragment);
+      if (!commandText) {
+        rejectedCount += 1;
+      } else if (!commands.includes(commandText)) {
+        commands.push(commandText);
+      }
+    }
+  }
+  if (commands.length === 0) return emptyMacSafeStart(source, value ? 1 : 0, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source,
+    textCount: value ? 1 : 0,
+    rejectedCount,
+  };
+}
+
+function extractMacClientDiscoverWindowsFromBoardState(state) {
+  const texts = collectStringValues(state);
+  const commands = [];
+  let rejectedCount = 0;
+  for (const text of texts) {
+    const extracted = extractMacClientDiscoverWindowsFromText(text, "api-state");
+    for (const commandText of extracted.commands) {
+      if (!commands.includes(commandText)) commands.push(commandText);
+    }
+    rejectedCount += extracted.rejectedCount;
+  }
+  if (commands.length === 0) return emptyMacSafeStart("api-state", texts.length, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source: "api-state",
+    textCount: texts.length,
+    rejectedCount,
+  };
+}
+
 function extractMacClientFormalChecklistFromBoardState(state) {
   const texts = collectStringValues(state);
   const commands = [];
@@ -1900,6 +2038,7 @@ async function getBoardSnapshot(args) {
       macHostSafeStart: emptyMacSafeStart("skipped"),
       macMaxFpsSafeStart: emptyMacSafeStart("skipped"),
       macFormalLocalSmoke: emptyMacSafeStart("skipped"),
+      macClientDiscoverWindows: emptyMacSafeStart("skipped"),
       macClientFormalChecklist: emptyMacSafeStart("skipped"),
       macClientFormalSmoke: emptyMacSafeStart("skipped"),
       macHeartbeatOnce: emptyMacSafeStart("skipped"),
@@ -1931,6 +2070,7 @@ async function getBoardSnapshot(args) {
       macHostSafeStart: extractMacSafeStartFromBoardState(stateResult.state, "MacHostSafeStart"),
       macMaxFpsSafeStart: extractMacSafeStartFromBoardState(stateResult.state, "MacMaxFpsSafeStart", { requireMaxScreenFps: true }),
       macFormalLocalSmoke: extractMacFormalLocalSmokeFromBoardState(stateResult.state),
+      macClientDiscoverWindows: extractMacClientDiscoverWindowsFromBoardState(stateResult.state),
       macClientFormalChecklist: extractMacClientFormalChecklistFromBoardState(stateResult.state),
       macClientFormalSmoke: extractMacClientFormalSmokeFromBoardState(stateResult.state),
       macHeartbeatOnce: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatOnce", "once"),
@@ -1967,6 +2107,7 @@ async function getBoardSnapshot(args) {
     macHostSafeStart: extractMacSafeStartFromText(output, "MacHostSafeStart", result.ok ? "codex-link-client" : "unavailable"),
     macMaxFpsSafeStart: extractMacSafeStartFromText(output, "MacMaxFpsSafeStart", result.ok ? "codex-link-client" : "unavailable", { requireMaxScreenFps: true }),
     macFormalLocalSmoke: extractMacFormalLocalSmokeFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    macClientDiscoverWindows: extractMacClientDiscoverWindowsFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macClientFormalChecklist: extractMacClientFormalChecklistFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macClientFormalSmoke: extractMacClientFormalSmokeFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatOnce: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatOnce", "once", result.ok ? "codex-link-client" : "unavailable"),
@@ -2358,6 +2499,11 @@ function makeCommands(args, preflight) {
     "--promptPassword",
     "--boardSummary",
   ].join(" ");
+  const macClientDiscoverWindowsCommand = [
+    "node scripts/mac/discover-windows-hosts.mjs",
+    "--checkBoard",
+    "--boardSummary",
+  ].join(" ");
   const macClientFormalChecklistCommand = [
     "node scripts/mac/check-mac-client-formal-status.mjs",
     "--discover",
@@ -2466,6 +2612,7 @@ function makeCommands(args, preflight) {
     macHeartbeatStatusCommand,
     macHeartbeatStopCommand,
     macFormalLocalSmokeCommand,
+    macClientDiscoverWindowsCommand,
     macClientFormalChecklistCommand,
     macClientFormalSmokeCommand,
     macUnattendedStatusCommand,
@@ -2783,6 +2930,7 @@ function makeBoardSummary(report) {
     ? "default-ok"
     : `use --clientPort ${report.windowsClientDiagnosticsPorts?.alternateClientPort || defaults.alternateClientPort} --debugPort ${report.windowsClientDiagnosticsPorts?.alternateDebugPort || defaults.alternateDebugPort}`;
   const macFormalLocalSmokeCommand = report.board.macFormalLocalSmoke?.command || report.commands.macFormalLocalSmokeCommand;
+  const macClientDiscoverWindowsCommand = report.board.macClientDiscoverWindows?.command || report.commands.macClientDiscoverWindowsCommand;
   const macClientFormalChecklistCommand = report.board.macClientFormalChecklist?.command || report.commands.macClientFormalChecklistCommand;
   const macClientFormalSmokeCommand = report.board.macClientFormalSmoke?.command || report.commands.macClientFormalSmokeCommand;
   const macHeartbeatOnceCommand = report.board.macHeartbeatOnce?.command || report.commands.macHeartbeatOnceCommand;
@@ -2815,6 +2963,7 @@ function makeBoardSummary(report) {
     `MacHeartbeatStatus=${macHeartbeatStatusCommand}.`,
     `MacHeartbeatStop=${macHeartbeatStopCommand}.`,
     `MacFormalLocalSmoke=${macFormalLocalSmokeCommand}.`,
+    `MacClientDiscoverWindows=${macClientDiscoverWindowsCommand}.`,
     `MacClientFormalChecklist=${macClientFormalChecklistCommand}.`,
     `MacClientFormalSmoke=${macClientFormalSmokeCommand}.`,
     `MacUnattended=${report.commands.macUnattendedStatusCommand}.`,
@@ -3069,6 +3218,9 @@ function printHuman(report) {
     if (report.board.macFormalLocalSmoke?.command) {
       console.log(`  MacFormalLocalSmoke=${report.board.macFormalLocalSmoke.command}`);
     }
+    if (report.board.macClientDiscoverWindows?.command) {
+      console.log(`  MacClientDiscoverWindows=${report.board.macClientDiscoverWindows.command}`);
+    }
     if (report.board.macClientFormalChecklist?.command) {
       console.log(`  MacClientFormalChecklist=${report.board.macClientFormalChecklist.command}`);
     }
@@ -3137,6 +3289,7 @@ function printHuman(report) {
   console.log(`  MacHeartbeatStatus=${report.board.macHeartbeatStatus?.command || report.commands.macHeartbeatStatusCommand}`);
   console.log(`  MacHeartbeatStop=${report.board.macHeartbeatStop?.command || report.commands.macHeartbeatStopCommand}`);
   console.log(`  MacFormalLocalSmoke=${report.board.macFormalLocalSmoke?.command || report.commands.macFormalLocalSmokeCommand}`);
+  console.log(`  MacClientDiscoverWindows=${report.board.macClientDiscoverWindows?.command || report.commands.macClientDiscoverWindowsCommand}`);
   console.log(`  MacClientFormalChecklist=${report.board.macClientFormalChecklist?.command || report.commands.macClientFormalChecklistCommand}`);
   console.log(`  MacClientFormalSmoke=${report.board.macClientFormalSmoke?.command || report.commands.macClientFormalSmokeCommand}`);
   console.log(`  ${report.commands.macUnattendedStatusCommand}`);
@@ -3149,6 +3302,9 @@ function printHuman(report) {
   }
   if (report.board.macFormalLocalSmoke?.command) {
     console.log(`  MacFormalLocalSmoke=${report.board.macFormalLocalSmoke.command}`);
+  }
+  if (report.board.macClientDiscoverWindows?.command) {
+    console.log(`  MacClientDiscoverWindows=${report.board.macClientDiscoverWindows.command}`);
   }
   if (report.board.macClientFormalChecklist?.command) {
     console.log(`  MacClientFormalChecklist=${report.board.macClientFormalChecklist.command}`);
