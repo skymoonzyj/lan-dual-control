@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端消费 Mac heartbeat/readiness/unattended 里的 `MacLaunchAgentLoad=` / `MacLaunchAgentPrint=`，在 60Hz LaunchAgent 切换场景给出中文提示。
+完成内容：
+- Windows 控制端 Mac 提醒解析新增 `MacLaunchAgentLoad=` / `MacLaunchAgentPrint=` 识别：同段摘要有 warning/blocker、旧 build、重启建议、`fps-limit`、`launch-agent-max-fps` 或 `loaded=false` 等上下文时，会显示“Mac LaunchAgent 加载命令已提供”“Mac LaunchAgent 打印验证命令已提供”。
+- 复制/导出诊断保留原始 `launchctl bootstrap` / `launchctl print` 命令，便于现场按 `MacHostStop=` -> `MacLaunchAgentLoad=` -> `MacLaunchAgentPrint=` -> `MacUnattendedFormal=` 的顺序让 Mac 侧人工切换和复查。
+- 干净命令清单不误弹；这只是 UI 诊断和文案消费，不自动运行 `launchctl`，不认证、不发密码、不发送 input/inject。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增 diagnostics-only 页面断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5210 --debugPort 9350 --timeoutMs 45000`，失败点是 Mac 提醒诊断没有“Mac LaunchAgent 加载命令已提供”“Mac LaunchAgent 打印验证命令已提供”。
+- 实现后复跑同一 diagnostics-only 通过；提交前还会跑语法、diff check 和冲突扫描。
+遗留问题：
+- 真机 60Hz 切换仍需用户或 Mac 端人工执行 `launchctl` 相关命令，并用 `MacUnattendedFormal=` 复查 loaded/max-fps blocker 是否消失。
+下一步建议：
+- 最新 Mac heartbeat 已经能上板 `MacLaunchAgentLoad=` / `MacLaunchAgentPrint=`；Windows 端看到 LaunchAgent/刷新率 warning 时，可直接复制提示链让 Mac 端完成人工切换。
+是否改了协议：否；只消费已有通讯板/诊断文本里的安全命令标签。
+是否需要另一端配合：后续真实执行 LaunchAgent 加载、打印验证和 formal 60Hz 强校验时需要 Mac 端或用户配合。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端消费 Mac heartbeat/readiness/unattended 里的 `MacUnattendedStatus=` / `MacUnattendedFormal=` 安全命令，在有 warning/blocker、旧 build 或刷新率上限上下文时给出中文提示。
 完成内容：
 - Windows 控制端 Mac 提醒解析新增值守状态/正式检查命令识别：同段摘要出现风险上下文时，会显示“Mac 值守状态命令已提供”“Mac 值守正式检查命令已提供”。

@@ -286,6 +286,8 @@ const macUnattendedRiskLabels = {
   "mac-host-stop-command": "Mac host 停止旧进程命令已提供",
   "mac-host-safe-start": "Mac host 安全启动命令已提供",
   "mac-max-fps-safe-start": "Mac 60Hz 安全启动命令已提供",
+  "mac-launch-agent-load-command": "Mac LaunchAgent 加载命令已提供",
+  "mac-launch-agent-print-command": "Mac LaunchAgent 打印验证命令已提供",
   "mac-client-discover-windows": "Mac client Windows 发现命令已提供",
   "mac-client-formal-checklist": "Mac client 正式清单命令已提供",
   "mac-formal-local-smoke": "Mac 本机短验收需处理",
@@ -3306,6 +3308,8 @@ function parseMacUnattendedAttention(text) {
   const hasMacHostStop = /\bMacHostStop\s*=/i.test(source);
   const hasMacHostSafeStart = /\bMacHostSafeStart\s*=/i.test(source);
   const hasMacMaxFpsSafeStart = /\bMacMaxFpsSafeStart\s*=/i.test(source);
+  const hasMacLaunchAgentLoad = /\bMacLaunchAgentLoad\s*=\s*launchctl\s+bootstrap\b/i.test(source);
+  const hasMacLaunchAgentPrint = /\bMacLaunchAgentPrint\s*=\s*launchctl\s+print\b/i.test(source);
   const hasMacClientDiscoverWindows = /\bMacClientDiscoverWindows\s*=/i.test(source);
   const hasMacClientFormalChecklist = /\bMacClientFormalChecklist\s*=/i.test(source);
   const hasMacHeartbeatOnce = /\bMacHeartbeatOnce\s*=/i.test(source);
@@ -3418,6 +3422,15 @@ function parseMacUnattendedAttention(text) {
   }
   if (hasMacUnattendedFormalCommand && hasMacUnattendedCommandContext) {
     risks.unshift("mac-unattended-formal-command");
+  }
+  const hasMacLaunchAgentCommandContext =
+    risks.length > 0 ||
+    /attention\s*=\s*(warning|blocker|failed)|ready\s*=\s*false|restart recommended|hostRuntimeChanges|runtimeBuild|mac-host-build-stale|launch-agent-(missing|not-loaded|failed|disabled|max-fps|max-screen-fps)|max-fps|fps-limit|loaded\s*=\s*false|not[- ]loaded|未\s*loaded|未加载|stale build|build.*stale|运行.*旧|重启/i.test(source);
+  if (hasMacLaunchAgentLoad && hasMacLaunchAgentCommandContext) {
+    risks.unshift("mac-launch-agent-load-command");
+  }
+  if (hasMacLaunchAgentPrint && hasMacLaunchAgentCommandContext) {
+    risks.unshift("mac-launch-agent-print-command");
   }
   if (
     hasMacHostStop &&

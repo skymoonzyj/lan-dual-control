@@ -33,6 +33,7 @@
 - [x] Windows 控制端消费 Mac host readiness 的安全启动提示：当提醒状态里同时有 `MacHostSafeStart=` 和非空 readiness warning/blocker 时，Mac 提醒区、快速摘要和复制诊断会显示“Mac host 安全启动命令已提供”；`warnings=none blockers=none` 时只保留命令文本，不误弹提醒。
 - [x] Windows 控制端消费 Mac host 停止旧进程提示：当 Mac heartbeat/readiness 摘要里同时出现 stale build / restart recommended 与 `MacHostStop=` 时，Mac 提醒区、快速摘要和复制诊断会显示“Mac host 停止旧进程命令已提供”，提示现场先停旧 host 再安全启动；页面 diagnostics-only 覆盖，不自动执行 stop/start。
 - [x] Windows 控制端消费 Mac 值守状态/正式检查命令提示：`MacUnattendedStatus=` / `MacUnattendedFormal=` 搭配 warning/blocker、旧 build、重启建议或刷新率上限上下文时，Mac 提醒区、快速摘要和复制诊断会显示“Mac 值守状态命令已提供”“Mac 值守正式检查命令已提供”；干净命令清单不误弹，不自动执行 Mac 命令。
+- [x] Windows 控制端消费 Mac LaunchAgent 加载/打印验证命令提示：`MacLaunchAgentLoad=` / `MacLaunchAgentPrint=` 搭配 warning/blocker、旧 build、`fps-limit`、`launch-agent-max-fps` 或 `loaded=false` 上下文时，Mac 提醒区、快速摘要和复制诊断会显示“Mac LaunchAgent 加载命令已提供”“Mac LaunchAgent 打印验证命令已提供”；保留原始 `launchctl` 命令，不自动执行。
 - [x] Windows Mac 提醒 watcher 对齐 Mac formal smoke 明细：`run-mac-client-formal-smoke` / `MacClientFormalSmoke` 摘要里的 `preflight blockers=windows-host warnings=board` 会触发提醒，控制端会翻译成“Windows 被控端未指定或未就绪”“联络板状态需检查”等中文风险。
 - [x] Windows Mac 提醒 watcher 对齐 Mac resume 刷新率上限明细：`MacResumeStatus` / `check-mac-resume-status` 摘要里的 `warnings=h264-fallback,fps-limit` 会触发提醒，控制端会把 `fps-limit` 翻译成“Mac 刷新率上限需调整”，避免远端 30Hz 上限被误判为 Windows 第二步卡住。
 - [x] Windows 控制端对齐 Mac host readiness 刷新率上限明细：`warnings=mac-host-max-fps` 会被翻译成“Mac host 刷新率上限需调整”，并保留原始短标签到复制/导出诊断，方便区分 resume 的 `fps-limit` 和 host readiness 的 `mac-host-max-fps`。
