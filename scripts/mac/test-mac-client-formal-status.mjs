@@ -203,6 +203,18 @@ function assertSecureAuthPath(text, label, expectedPort = "43770", options = {})
   assertNotIncludes(text, "token=", label);
 }
 
+function assertWindowsSecureAuthPathCommand(command, label, expectedPort = "43770") {
+  assertIncludes(command, "node scripts/windows/start-windows-host.mjs", label);
+  assertIncludes(command, "--host 0.0.0.0", label);
+  assertIncludes(command, `--port ${expectedPort}`, label);
+  assertIncludes(command, "--promptPassword", label);
+  assertIncludes(command, "--requirePassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "LAN_DUAL_PASSWORD=", label);
+  assertNotIncludes(command, "token=", label);
+  assertNotIncludes(command, "secret", label);
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run([flag], args);
@@ -223,6 +235,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "runPlan.commands.reverseControlRehearsal", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.reverseGrantCopyAction", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.secureAuthPath", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.commands.windowsSecureAuthPath", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsSecureAuthStart", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsSecureAuthStartNodeFallback", `${script} ${flag}`);
     assertIncludes(result.stdout, "--ensureClient", `${script} ${flag}`);
@@ -535,22 +548,26 @@ function readRequestBody(request) {
 async function withFakeBoard(callback, options = {}) {
   const calls = [];
   let currentCall = options.currentCall || null;
+  const events = Array.isArray(options.events)
+    ? options.events
+    : [
+        {
+          id: "fake-board-client-formal-1",
+          at: new Date().toISOString(),
+          type: "message",
+          from: "Fake Board",
+          text: "ready",
+        },
+      ];
   const server = createServer(async (request, response) => {
     if (request.method === "GET" && request.url === "/api/state") {
       response.writeHead(200, { "Content-Type": "application/json" });
       response.end(JSON.stringify({
         updatedAt: new Date().toISOString(),
         currentCall,
-        statuses: {},
-        events: [
-          {
-            id: "fake-board-client-formal-1",
-            at: new Date().toISOString(),
-            type: "message",
-            from: "Fake Board",
-            text: "ready",
-          },
-        ],
+        statuses: options.statuses || {},
+        events,
+        messages: Array.isArray(options.messages) ? options.messages : [],
       }));
       return;
     }
@@ -690,6 +707,90 @@ async function checkReadyShape(args) {
     });
   });
   print("OK", "Mock ready shape includes client/server/h264/audio/clipboard and skips inject");
+}
+
+async function checkBoardWindowsSecureAuthPathExtraction(args) {
+  await withMacClientServer(args, async (clientPort) => {
+    await withWindowsDiscoveryServer(async (windowsPort) => {
+      const secret = "super-secret-secure-auth";
+      const safeCommand = `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${windowsPort} --promptPassword --requirePassword`;
+      const unsafeCommands = [
+        `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${windowsPort} --password ${secret} --requirePassword`,
+        `node scripts/windows/start-windows-host.mjs --host 127.0.0.1 --port ${windowsPort} --promptPassword --requirePassword`,
+        "node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port <当前端口> --promptPassword --requirePassword",
+        `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${windowsPort} --requirePassword`,
+      ];
+      const events = [
+        {
+          id: "fake-board-client-formal-unsafe-password",
+          at: new Date(Date.now() - 4000).toISOString(),
+          type: "message",
+          from: "Windows Codex",
+          text: `WindowsSecureAuthPath=${unsafeCommands[0]}.`,
+        },
+        {
+          id: "fake-board-client-formal-unsafe-host",
+          at: new Date(Date.now() - 3000).toISOString(),
+          type: "message",
+          from: "Windows Codex",
+          text: `SecureAuthPath=${unsafeCommands[1]}.`,
+        },
+        {
+          id: "fake-board-client-formal-unsafe-placeholder",
+          at: new Date(Date.now() - 2000).toISOString(),
+          type: "message",
+          from: "Windows Codex",
+          text: `WindowsSecureAuthPath=${unsafeCommands[2]}.`,
+        },
+        {
+          id: "fake-board-client-formal-unsafe-missing-prompt",
+          at: new Date(Date.now() - 1000).toISOString(),
+          type: "message",
+          from: "Windows Codex",
+          text: `WindowsSecureAuthPath=${unsafeCommands[3]}.`,
+        },
+        {
+          id: "fake-board-client-formal-safe",
+          at: new Date().toISOString(),
+          type: "message",
+          from: "Windows Codex",
+          text: `WindowsSecureAuthPath=${safeCommand}.`,
+        },
+      ];
+      await withFakeBoard(async (board) => {
+        const result = await runAsync([
+          "--json",
+          "--allowDirty",
+          "--clientPort",
+          String(clientPort),
+          "--host",
+          "127.0.0.1",
+          "--port",
+          String(windowsPort),
+          "--server",
+          board.serverUrl,
+        ], args);
+        const payload = parseJson(result.stdout, "board Windows secure auth path JSON");
+        const output = `${result.stdout}\n${result.stderr}`;
+        assert(result.status === 0, `board Windows secure auth path should exit 0.\n${output}`);
+        assert(payload.boardSecureAuthPath?.found === true, "board Windows secure auth path should be found");
+        assert(payload.boardSecureAuthPath?.command === safeCommand, "board Windows secure auth path should select the safe command");
+        assert(payload.boardSecureAuthPath?.rejectedCount >= unsafeCommands.length, "board Windows secure auth path should count rejected unsafe candidates");
+        assert(payload.runPlan?.commands?.windowsSecureAuthPath === safeCommand, "runPlan should surface WindowsSecureAuthPath from board");
+        assertWindowsSecureAuthPathCommand(
+          payload.runPlan?.commands?.windowsSecureAuthPath || "",
+          "runPlan WindowsSecureAuthPath command",
+          String(windowsPort),
+        );
+        assertIncludes(payload.boardSummary || "", `WindowsSecureAuthPath=${safeCommand}.`, "board summary WindowsSecureAuthPath");
+        assertNotIncludes(output, secret, "secure auth path output");
+        for (const unsafeCommand of unsafeCommands) {
+          assertNotIncludes(output, unsafeCommand, "secure auth path output");
+        }
+      }, { events });
+    });
+  });
+  print("OK", "Agent Link Board WindowsSecureAuthPath extraction accepts only safe prompt-based commands");
 }
 
 async function checkOfflineSendCallRefuses(args) {
@@ -888,6 +989,7 @@ async function main() {
   checkBoardSummarySecretFree(args);
   checkHumanRunPlan(args);
   await checkReadyShape(args);
+  await checkBoardWindowsSecureAuthPathExtraction(args);
   await checkOfflineSendCallRefuses(args);
   await checkReadySendCall(args);
   await checkExistingBoardCallProtection(args);

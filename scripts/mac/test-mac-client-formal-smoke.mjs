@@ -138,6 +138,17 @@ function assertSecureAuthPath(text, label, expectedPort, options = {}) {
   assertNotIncludes(text, "token=", label);
 }
 
+function assertWindowsSecureAuthPathCommand(command, label, expectedPort) {
+  assertIncludes(command, "node scripts/windows/start-windows-host.mjs", label);
+  assertIncludes(command, "--host 0.0.0.0", label);
+  assertIncludes(command, `--port ${expectedPort}`, label);
+  assertIncludes(command, "--promptPassword", label);
+  assertIncludes(command, "--requirePassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "LAN_DUAL_PASSWORD=", label);
+  assertNotIncludes(command, "token=", label);
+}
+
 async function getFreePort() {
   return new Promise((resolvePort, rejectPort) => {
     const server = createServer();
@@ -263,19 +274,27 @@ server.listen(port, "127.0.0.1");
   }
 }
 
-async function withBoardServer(callback) {
+async function withBoardServer(callback, options = {}) {
   const port = await getFreePort();
+  const initialState = {
+    currentCall: options.currentCall || null,
+    statuses: options.statuses || {},
+    events: Array.isArray(options.events) ? options.events : [],
+    messages: Array.isArray(options.messages) ? options.messages : [],
+  };
   const child = spawn(process.execPath, [
     "--input-type=module",
     "-e",
     `
 import { createServer } from "node:http";
 const port = Number(process.argv[1]);
+const initialState = JSON.parse(process.argv[2] || "{}");
 const state = {
   updatedAt: new Date().toISOString(),
-  currentCall: null,
-  statuses: {},
-  events: [],
+  currentCall: initialState.currentCall || null,
+  statuses: initialState.statuses || {},
+  events: Array.isArray(initialState.events) ? initialState.events : [],
+  messages: Array.isArray(initialState.messages) ? initialState.messages : [],
 };
 const server = createServer((request, response) => {
   const pathname = new URL(request.url || "/", \`http://\${request.headers.host || "127.0.0.1"}\`).pathname;
@@ -307,6 +326,7 @@ const server = createServer((request, response) => {
 server.listen(port, "127.0.0.1");
 `,
     String(port),
+    JSON.stringify(initialState),
   ], {
     cwd: repoRoot,
     stdio: ["ignore", "pipe", "pipe"],
@@ -351,6 +371,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.reverseControlRehearsal", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.reverseGrantCopyAction", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.secureAuthPath", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.windowsSecureAuthPath", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.windowsSecureAuthStart", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.windowsSecureAuthStartNodeFallback", `${script} ${flag}`);
     assertIncludes(result.stdout, "ensuredClient", `${script} ${flag}`);
@@ -384,6 +405,16 @@ async function checkPreflightAndDryRun(args) {
   const secret = "super-secret-smoke-password";
   await withMacClientServer(args, async (clientPort) => {
     await withWindowsDiscoveryServer(async (windowsPort) => {
+      const secureAuthCommand = `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${windowsPort} --promptPassword --requirePassword`;
+      const boardEvents = [
+        {
+          id: "fake-smoke-secure-auth-path",
+          at: new Date().toISOString(),
+          type: "message",
+          from: "Windows Codex",
+          text: `WindowsSecureAuthPath=${secureAuthCommand}.`,
+        },
+      ];
       await withBoardServer(async (boardServer) => {
         const preflight = run([
           "--json",
@@ -431,7 +462,14 @@ async function checkPreflightAndDryRun(args) {
         assertIncludes(preflightPayload.commands?.reverseGrantCopyAction || "", "Copy PowerShell", "preflight reverse grant copy action");
         assertIncludes(preflightPayload.commands?.reverseGrantCopyAction || "", "Copy Node", "preflight reverse grant copy action");
         assertSecureAuthPath(preflightPayload.commands?.secureAuthPath || "", "preflight secure auth path", windowsPort);
+        assertWindowsSecureAuthPathCommand(
+          preflightPayload.commands?.windowsSecureAuthPath || "",
+          "preflight WindowsSecureAuthPath command",
+          windowsPort,
+        );
+        assertIncludes(preflightPayload.commands?.secureAuthPath || "", `WindowsSecureAuthPath=${secureAuthCommand}`, "preflight secure auth path");
         assertSecureAuthPath(preflightPayload.boardSummary || "", "preflight board summary secure auth path", windowsPort, { expectBoardLabel: true });
+        assertIncludes(preflightPayload.boardSummary || "", `WindowsSecureAuthPath=${secureAuthCommand}.`, "preflight board summary WindowsSecureAuthPath");
         assertIncludes(preflightPayload.boardSummary || "", "Coordinate first", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "--sendCall", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "blockers=none", "preflight board summary");
@@ -478,7 +516,7 @@ async function checkPreflightAndDryRun(args) {
         assertReverseGrantBoardSummary(sendCallPayload.boardSummary || "", "sendCall board summary", windowsPort);
         assertIncludes(sendCallPayload.boardSummary || "", "Reverse rehearsal after auth", "sendCall board summary");
         assertNotIncludes(`${sendCall.stdout}\n${sendCall.stderr}`, secret, "sendCall output");
-      });
+      }, { events: boardEvents });
 
       const dryRun = run([
         "--json",

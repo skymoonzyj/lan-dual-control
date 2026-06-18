@@ -115,6 +115,11 @@ JSON output:
                                   restart Windows host locally with a hidden
                                   prompt, then type the same temporary password
                                   into the Mac --promptPassword dialog.
+  runPlan.commands.windowsSecureAuthPath
+                                  Safe WindowsSecureAuthPath/SecureAuthPath
+                                  command found on Agent Link Board, only when
+                                  it restarts the Windows host with a local
+                                  hidden prompt and no password argument.
   runPlan.commands.windowsSecureAuthStart
                                   Recommended Windows-side PowerShell command
                                   to restart Windows host with a hidden local
@@ -208,6 +213,192 @@ function splitLines(value) {
     .filter(Boolean);
 }
 
+function collectStringValues(value, results = [], depth = 0) {
+  if (depth > 6 || value === null || value === undefined) return results;
+  if (typeof value === "string") {
+    const text = normalizedText(value);
+    if (text) results.push(text);
+    return results;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectStringValues(item, results, depth + 1);
+    return results;
+  }
+  if (typeof value === "object") {
+    for (const item of Object.values(value)) collectStringValues(item, results, depth + 1);
+  }
+  return results;
+}
+
+function stripCommandToken(token) {
+  let value = normalizedText(token);
+  const sentenceBoundary = value.search(/[;，。；]/);
+  if (sentenceBoundary >= 0) value = value.slice(0, sentenceBoundary);
+  return value.replace(/[.,]+$/g, "");
+}
+
+function hasSecretLikeCommandValue(commandText) {
+  const text = String(commandText || "");
+  return (
+    /\bLAN_DUAL_PASSWORD\s*=/i.test(text) ||
+    /\b(?:token|secret|passwd|pwd)\s*[:=]\s*\S+/i.test(text) ||
+    /(?:^|\s)--(?:password|token|secret|passwd|pwd)\s+\S+/i.test(text)
+  );
+}
+
+function emptyWindowsSecureAuthPath(source = "none", textCount = 0, rejectedCount = 0, error = "") {
+  return {
+    found: false,
+    command: "",
+    commands: [],
+    source,
+    textCount,
+    rejectedCount,
+    error,
+  };
+}
+
+function parseWindowsSecureAuthPathCommand(fragment) {
+  const rawTokens = String(fragment || "").split(/\s+/).map(stripCommandToken).filter(Boolean);
+  if (rawTokens.length < 2) return null;
+  if (rawTokens[0] !== "node") return null;
+  if (rawTokens[1]?.replace(/\\/g, "/") !== "scripts/windows/start-windows-host.mjs") return null;
+
+  const tokens = [rawTokens[0], rawTokens[1]];
+  let host = "";
+  let port = null;
+  let hasPromptPassword = false;
+  let hasRequirePassword = false;
+  for (let index = 2; index < rawTokens.length; index += 1) {
+    const token = rawTokens[index];
+    if (!token || /^[A-Za-z][A-Za-z0-9_-]*=/.test(token)) break;
+    if (!token.startsWith("--")) break;
+    if (/^--(?:password|token|secret|passwd|pwd)$/i.test(token)) return null;
+    if (token === "--promptPassword" || token === "--requirePassword") {
+      if (token === "--promptPassword") hasPromptPassword = true;
+      if (token === "--requirePassword") hasRequirePassword = true;
+      tokens.push(token);
+      continue;
+    }
+    if (token === "--host" || token === "--port") {
+      const value = stripCommandToken(rawTokens[index + 1] || "");
+      if (!value || value.startsWith("--") || /^[A-Za-z][A-Za-z0-9_-]*=/.test(value) || /[<>]/.test(value)) return null;
+      if (token === "--host") {
+        host = value;
+        if (value !== "0.0.0.0") return null;
+      } else {
+        port = Number(value);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+      }
+      const pair = `${token} ${value}`;
+      if (hasSecretLikeCommandValue(pair)) return null;
+      tokens.push(token, value);
+      index += 1;
+      continue;
+    }
+    return null;
+  }
+
+  if (host !== "0.0.0.0" || !port || !hasPromptPassword || !hasRequirePassword) return null;
+  const commandText = tokens.join(" ");
+  if (hasSecretLikeCommandValue(commandText)) return null;
+  return commandText;
+}
+
+function extractWindowsSecureAuthPathFromText(text, source = "text") {
+  const value = String(text || "");
+  const regex = /\b(?:WindowsSecureAuthPath|SecureAuthPath)\s*=\s*/gi;
+  const commands = [];
+  let rejectedCount = 0;
+  let match;
+  while ((match = regex.exec(value)) !== null) {
+    const fragment = value.slice(match.index + match[0].length);
+    const commandText = parseWindowsSecureAuthPathCommand(fragment);
+    if (!commandText) {
+      rejectedCount += 1;
+    } else if (!commands.includes(commandText)) {
+      commands.push(commandText);
+    }
+  }
+  if (commands.length === 0) return emptyWindowsSecureAuthPath(source, value ? 1 : 0, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source,
+    textCount: value ? 1 : 0,
+    rejectedCount,
+    error: "",
+  };
+}
+
+function extractWindowsSecureAuthPathFromBoardState(state) {
+  const texts = collectStringValues(state);
+  const commands = [];
+  let rejectedCount = 0;
+  for (const text of texts) {
+    const extracted = extractWindowsSecureAuthPathFromText(text, "api-state");
+    for (const commandText of extracted.commands) {
+      if (!commands.includes(commandText)) commands.push(commandText);
+    }
+    rejectedCount += extracted.rejectedCount;
+  }
+  if (commands.length === 0) return emptyWindowsSecureAuthPath("api-state", texts.length, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source: "api-state",
+    textCount: texts.length,
+    rejectedCount,
+    error: "",
+  };
+}
+
+function getBoardSecureAuthPath(args) {
+  if (args.skipBoard) {
+    return emptyWindowsSecureAuthPath("skipped", 0, 0);
+  }
+  const stateReader = `
+const server = process.argv[1];
+const timeoutMs = Number(process.argv[2] || 5000);
+const token = process.env.CODEX_LINK_TOKEN || "";
+const controller = new AbortController();
+const timer = setTimeout(() => controller.abort(), timeoutMs);
+try {
+  const response = await fetch(new URL("/api/state", server), {
+    cache: "no-store",
+    signal: controller.signal,
+    headers: token ? { "X-Codex-Link-Token": token } : {},
+  });
+  if (!response.ok) throw new Error(String(response.status));
+  console.log(await response.text() || "{}");
+} finally {
+  clearTimeout(timer);
+}
+`;
+  const result = spawnSync(process.execPath, [
+    "-e",
+    stateReader,
+    args.server,
+    String(Math.max(args.timeoutMs + 3000, 6000)),
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: Math.max(args.timeoutMs + 3000, 6000),
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    return emptyWindowsSecureAuthPath("unavailable", 0, 0, "Agent Link Board state unavailable");
+  }
+  try {
+    const state = JSON.parse(String(result.stdout || "{}"));
+    return extractWindowsSecureAuthPathFromBoardState(state);
+  } catch {
+    return emptyWindowsSecureAuthPath("api-state", 0, 0, "Agent Link Board state was not valid JSON");
+  }
+}
+
 function statusValue(value) {
   if (value === true) return "on";
   if (value === false) return "off";
@@ -244,7 +435,11 @@ function runReadiness(args) {
   });
   const stdout = String(result.stdout || "").trim();
   try {
-    return JSON.parse(stdout);
+    const readiness = JSON.parse(stdout);
+    if (readiness.board?.ok) {
+      readiness.board.error = "";
+    }
+    return readiness;
   } catch (error) {
     throw new Error(`check-mac-client-readiness did not print valid JSON: ${error.message}\n${stdout}\n${result.stderr || ""}`);
   }
@@ -540,11 +735,17 @@ function makeSecureAuthPathSummaryText() {
 }
 
 function makeSecureAuthPathText(report, args) {
-  return [
+  const parts = [
     makeSecureAuthPathSummaryText(),
+  ];
+  if (report.boardSecureAuthPath?.command) {
+    parts.push(`WindowsSecureAuthPath=${report.boardSecureAuthPath.command}`);
+  }
+  parts.push(
     `WindowsSecureAuthStart=${makeWindowsSecureAuthStartPowerShellCommand(report, args)}`,
     `WindowsSecureAuthStartNodeFallback=${makeWindowsSecureAuthStartNodeFallbackCommand(report, args)}`,
-  ].join(" ");
+  );
+  return parts.join(" ");
 }
 
 function makeReverseControlRehearsalText(report, args) {
@@ -580,11 +781,17 @@ function makeReverseGrantBoardSummaryParts(report, args) {
 
 function makeSecureAuthBoardSummaryParts(report, args) {
   const commands = report?.runPlan?.commands || {};
-  return [
+  const parts = [
     `SecureAuthPath=${makeSecureAuthPathSummaryText()}`,
+  ];
+  if (commands.windowsSecureAuthPath) {
+    parts.push(`WindowsSecureAuthPath=${commands.windowsSecureAuthPath}.`);
+  }
+  parts.push(
     `WindowsSecureAuthStart=${commands.windowsSecureAuthStart || makeWindowsSecureAuthStartPowerShellCommand(report, args)}.`,
     `WindowsSecureAuthStartNodeFallback=${commands.windowsSecureAuthStartNodeFallback || makeWindowsSecureAuthStartNodeFallbackCommand(report, args)}.`,
-  ];
+  );
+  return parts;
 }
 
 function makeManualChecklist(report, args) {
@@ -732,6 +939,7 @@ function makeRunPlan(report, args) {
       reverseControlRehearsal: makeReverseControlRehearsalText(report, args),
       reverseGrantCopyAction: makeReverseGrantCopyAction(),
       secureAuthPath: makeSecureAuthPathText(report, args),
+      windowsSecureAuthPath: report.boardSecureAuthPath?.command || "",
       windowsSecureAuthStart: makeWindowsSecureAuthStartPowerShellCommand(report, args),
       windowsSecureAuthStartNodeFallback: makeWindowsSecureAuthStartNodeFallbackCommand(report, args),
     },
@@ -1027,6 +1235,7 @@ function printHuman(report) {
 
 function buildReport(args) {
   const readiness = runReadiness(args);
+  const boardSecureAuthPath = getBoardSecureAuthPath(args);
   const checklist = buildChecklist(readiness, args);
   const counts = {
     ok: countChecklist(checklist, "ok"),
@@ -1054,6 +1263,7 @@ function buildReport(args) {
     counts,
     checklist,
     readiness,
+    boardSecureAuthPath,
   };
   report.runPlan = makeRunPlan(report, args);
   report.callText = makeCallText(report);

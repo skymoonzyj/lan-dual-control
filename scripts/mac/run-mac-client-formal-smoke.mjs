@@ -137,6 +137,10 @@ Machine-readable JSON fields:
                                   restart Windows host locally with a hidden
                                   prompt, then type the same temporary password
                                   into the Mac --promptPassword dialog.
+  commands.windowsSecureAuthPath
+                                  Safe WindowsSecureAuthPath/SecureAuthPath
+                                  command already validated by the nested
+                                  formal checklist from Agent Link Board.
   commands.windowsSecureAuthStart
                                   Recommended Windows-side PowerShell command
                                   to restart Windows host with a hidden local
@@ -647,12 +651,18 @@ function makeSecureAuthPathSummaryText() {
   ].join(" ");
 }
 
-function makeSecureAuthPathText(args) {
-  return [
+function makeSecureAuthPathText(args, windowsSecureAuthPath = "") {
+  const parts = [
     makeSecureAuthPathSummaryText(),
+  ];
+  if (windowsSecureAuthPath) {
+    parts.push(`WindowsSecureAuthPath=${windowsSecureAuthPath}`);
+  }
+  parts.push(
     `WindowsSecureAuthStart=${makeWindowsSecureAuthStartPowerShellCommand(args)}`,
     `WindowsSecureAuthStartNodeFallback=${makeWindowsSecureAuthStartNodeFallbackCommand(args)}`,
-  ].join(" ");
+  );
+  return parts.join(" ");
 }
 
 function makeReverseControlRehearsalText(args) {
@@ -688,11 +698,17 @@ function makeReverseGrantBoardSummaryParts(report, args) {
 
 function makeSecureAuthBoardSummaryParts(report, args) {
   const commands = report?.commands || {};
-  return [
+  const parts = [
     `SecureAuthPath=${makeSecureAuthPathSummaryText()}`,
+  ];
+  if (commands.windowsSecureAuthPath) {
+    parts.push(`WindowsSecureAuthPath=${commands.windowsSecureAuthPath}.`);
+  }
+  parts.push(
     `WindowsSecureAuthStart=${commands.windowsSecureAuthStart || makeWindowsSecureAuthStartPowerShellCommand(args)}.`,
     `WindowsSecureAuthStartNodeFallback=${commands.windowsSecureAuthStartNodeFallback || makeWindowsSecureAuthStartNodeFallbackCommand(args)}.`,
-  ];
+  );
+  return parts;
 }
 
 async function preparePassword(args) {
@@ -914,6 +930,7 @@ function printHuman(report) {
 }
 
 function makeReport(args, preflight) {
+  const windowsSecureAuthPath = preflight.payload?.runPlan?.commands?.windowsSecureAuthPath || "";
   return {
     ok: false,
     preflightOnly: args.preflightOnly,
@@ -956,7 +973,8 @@ function makeReport(args, preflight) {
       windowsOpenOneTimeReverseGrantNodeFallback: makeWindowsReverseGrantNodeFallbackCommand(args, "grant"),
       reverseControlRehearsal: makeReverseControlRehearsalText(args),
       reverseGrantCopyAction: makeReverseGrantCopyAction(),
-      secureAuthPath: makeSecureAuthPathText(args),
+      secureAuthPath: makeSecureAuthPathText(args, windowsSecureAuthPath),
+      windowsSecureAuthPath,
       windowsSecureAuthStart: makeWindowsSecureAuthStartPowerShellCommand(args),
       windowsSecureAuthStartNodeFallback: makeWindowsSecureAuthStartNodeFallbackCommand(args),
     },

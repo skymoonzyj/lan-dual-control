@@ -17,6 +17,42 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
+本轮目标：让 Mac formal status/smoke 消费 Windows 已经上板的安全认证路径，闭环 `mac-confirm-secure-auth-path` 下一步。
+完成内容：
+- `check-mac-client-formal-status` 现在会读取 Agent Link Board `/api/state`，从 `WindowsSecureAuthPath=` / `SecureAuthPath=` 中只提取安全的 Windows 本机隐藏密码重启命令：`node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port <port> --promptPassword --requirePassword`。
+- 提取规则会拒绝带 `--password`、token/secret/passwd/pwd、`LAN_DUAL_PASSWORD=`、非 `0.0.0.0` host、占位端口、缺 `--promptPassword` / `--requirePassword` 或错误脚本/未知参数的候选；拒绝候选不会出现在 formal status 输出里。
+- `run-mac-client-formal-smoke` 会继承 nested formal preflight 已校验的 `commands.windowsSecureAuthPath`，并在 JSON commands、`SecureAuthPath=` 和 `--boardSummary` 中显示，方便 Mac/人工确认 Windows 已给出安全路径。
+- formal status 汇总层在 Agent Link Board 可读时不再把 `watch --once` 原始事件文本塞进 `readiness.board.error`，避免危险示例或敏感文本被 JSON 回显。
+修改文件：
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增 formal status 自测断言并确认失败：`node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 30000`
+- 先新增 formal smoke 自测断言并确认失败：`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 30000`
+- `node --check scripts/mac/check-mac-client-formal-status.mjs`
+- `node --check scripts/mac/run-mac-client-formal-smoke.mjs`
+- `node --check scripts/mac/test-mac-client-formal-status.mjs`
+- `node --check scripts/mac/test-mac-client-formal-smoke.mjs`
+- `node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 30000`
+遗留问题：
+- 本轮只做只读路径确认和摘要闭环；没有输入真实 Windows 密码，没有认证 WebSocket，没有运行真实 browser smoke，没有发送 input/inject，也没有自动清理 currentCall。
+下一步建议：
+- Mac/人工可跑 `node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.68 --port 43770 --boardSummary` 确认能看到 `WindowsSecureAuthPath=` 后，再在用户在场时按同一临时密码流程复跑真实 browser smoke；确认完成后再协调清理旧安全认证 currentCall。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows/人工在现场按 `WindowsSecureAuthPath=` 本机隐藏输入临时密码；不要在通讯板发送密码/token/系统账号。
+
 ## 2026-06-18 Windows Codex
 
 日期：2026-06-18 继续推进
