@@ -80,6 +80,9 @@ $cnAllow = ConvertFrom-CodePoints @(0x5141, 0x8bb8)
 $cnRetry = ConvertFrom-CodePoints @(0x91cd, 0x8bd5)
 $cnOneTime = ConvertFrom-CodePoints @(0x4e00, 0x6b21, 0x6027)
 
+$nonEmptyFindingValuePattern = "(?!none\b|ok\b|0\b|false\b|-\b|$)[^\s;]+"
+$findingFieldPattern = "\b(warnings|blockers)\s*[:=]\s*$nonEmptyFindingValuePattern"
+
 $urgentPatterns = @(
     "NEED_USER_AUTH",
     "USER_ACTION_REQUIRED",
@@ -97,11 +100,12 @@ $urgentPatterns = @(
     "reverse grant",
     "one-time reverse",
     "temporary reverse",
-    "MacUnattendedStatus.*(attention=(warning|blocker|failed)|ready=false|\bwarnings\s*=\s*(?!none\b|ok\b|0\b|false\b|-\b|$)[^\s;]+|\bblockers\s*=\s*(?!none\b|ok\b|0\b|false\b|-\b|$)[^\s;]+)",
-    "Mac unattended status.*(attention=(warning|blocker|failed)|ready=false|\bwarnings\s*=\s*(?!none\b|ok\b|0\b|false\b|-\b|$)[^\s;]+|\bblockers\s*=\s*(?!none\b|ok\b|0\b|false\b|-\b|$)[^\s;]+)",
+    "MacUnattendedStatus.*(attention=(warning|blocker|failed)|ready=false|$findingFieldPattern)",
+    "Mac unattended status.*(attention=(warning|blocker|failed)|ready=false|$findingFieldPattern)",
+    "(MacClient(Readiness|Formal)|Mac client (readiness|formal)|Mac formal E2E status|MacFormalE2EStatus|check-mac-(client-readiness|client-formal-status|formal-e2e-status)).*(ready with warnings|attention=(warning|blocker|failed)|ready=false|$findingFieldPattern)",
     "MacLaunchAgentPlan.*(missing|not-loaded|disabled|failed|enable|install|repair|fix|warning|blocker)",
-    "\bwarnings\s*=\s*(?!none\b|ok\b|0\b|false\b|-\b|$)[^\s;]+",
-    "\bblockers\s*=\s*(?!none\b|ok\b|0\b|false\b|-\b|$)[^\s;]+",
+    "\bwarnings\s*[:=]\s*$nonEmptyFindingValuePattern",
+    "\bblockers\s*[:=]\s*$nonEmptyFindingValuePattern",
     "launch-agent-(missing|not-loaded|disabled|failed)",
     "launch agent (missing|not loaded|disabled|failed)",
     "\bpower-(warning|risk|blocked)\b",

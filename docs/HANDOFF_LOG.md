@@ -19,6 +19,39 @@
 
 ## 2026-06-18 Windows Codex
 
+日期：2026-06-18 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 本机 Mac 提醒 watcher 对齐 Mac 最新 `blockers=` / `warnings=` 明细摘要。
+完成内容：
+- `watch-codex-link-mac-alerts.ps1` 把 warning/blocker 字段匹配升级为同时支持 `warnings=` / `blockers=` 和 `warnings:` / `blockers:`。
+- watcher 新增 Mac client readiness/formal 与 formal E2E status 的显式触发规则；`warnings=windows-host`、`warnings=video,build,auth`、`ready with warnings` 等会进入 Windows 本机提醒链路，`warnings=none blockers=none` 仍不提醒。
+- `test-mac-alert-watcher.mjs` 新增 fake Agent Link Board 回归，覆盖 Mac client/formal findings 提醒和 clean findings 防噪音。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- Windows PowerShell AST 解析 `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- PowerShell 7 AST 解析 `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-powershell-help.mjs --script watch-codex-link-mac-alerts.ps1 --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --script watch-codex-link-mac-alerts.ps1 --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows docs`
+遗留问题：
+- 本轮只增强 Windows watcher 识别和回归；不启动正式后台 watcher，不触发真实系统弹窗。
+下一步建议：
+- Mac 端继续把 readiness/formal/final E2E 的 boardSummary 保持为稳定短标签；Windows 控制端复制诊断可后续把 `video/build/auth/windows-host` 进一步翻译成更细中文风险。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-18 Windows Codex
+
 日期：2026-06-18 继续收口
 开发端：Windows Codex
 本轮目标：让 Windows 恢复总览 PowerShell wrapper 也能直接绕开第二步默认诊断端口残留，对齐 Node 入口的 `WinClientPorts` 能力。
