@@ -656,6 +656,36 @@ function statusFromFindings(findings) {
   return "ok";
 }
 
+function buildSuggestedAction(report) {
+  if (report.blockers.includes("codex-reconnect-stuck") || report.blockers.includes("mac-codex-stale")) {
+    return {
+      id: "check-mac-codex-window",
+      reason: "Mac Codex appears stuck or stale; the user should inspect the Mac Codex window before continuing.",
+      commands: {},
+      boardSummary: "suggestedAction=请用户查看 Mac Codex 窗口，必要时手动重试/刷新/继续",
+    };
+  }
+  if (report.warnings.includes("mac-host-build-stale")) {
+    return {
+      id: "restart-mac-host-safely",
+      reason: "Mac host runtime build is stale; stop the old local host, restart with a visible password prompt, then rerun MacResumeStatus.",
+      commands: {
+        macHostStopCommand: report.commands.macHostStopCommand,
+        macHostSafeStartCommand: report.commands.macHostSafeStartCommand,
+        macMaxFpsSafeStartCommand: report.commands.macMaxFpsSafeStartCommand,
+        macResumeStatusCommand: report.commands.macResumeStatusCommand,
+      },
+      boardSummary: "suggestedAction=restart-mac-host-safely actionCommands=MacHostStop->MacHostSafeStart-or-MacMaxFpsSafeStart->MacResumeStatus",
+    };
+  }
+  return {
+    id: "none",
+    reason: "No immediate user action is suggested by this heartbeat.",
+    commands: {},
+    boardSummary: "suggestedAction=none",
+  };
+}
+
 function summarizeIds(ids) {
   return ids.length > 0 ? ids.join(",") : "none";
 }
@@ -694,9 +724,7 @@ function makeBoardSummary(report) {
     ? `ok status=${report.codex.status || "unknown"} updatedAt=${codexUpdatedAt} ageMs=${codexAge}`
     : `${report.codex.reason} status=${report.codex.status || "unknown"} updatedAt=${codexUpdatedAt} ageMs=${codexAge} evidenceAgeMs=${codexAgeMs ?? "unknown"}`;
   const evidence = report.codex.evidence ? ` evidence=${report.codex.evidence}` : "";
-  const suggestedAction = report.status === "blocked"
-    ? "suggestedAction=请用户查看 Mac Codex 窗口，必要时手动重试/刷新/继续"
-    : "suggestedAction=none";
+  const suggestedAction = report.suggestedAction?.boardSummary || "suggestedAction=none";
   return [
     `MacHeartbeat=status=${report.status}; checkedAt=${checkedAt}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}.${evidence}`,
     suggestedAction,
@@ -763,8 +791,10 @@ async function buildReport(args) {
     commands,
     blockers: findings.blockers,
     warnings: findings.warnings,
+    suggestedAction: null,
     boardSummary: "",
   };
+  report.suggestedAction = buildSuggestedAction(report);
   report.boardSummary = makeBoardSummary(report);
   return report;
 }
