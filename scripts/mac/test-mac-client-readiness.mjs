@@ -141,6 +141,77 @@ function assertMacClientReverseGrantCopyAction(text, label) {
   assertNotIncludes(text, "inject", label);
 }
 
+function assertWindowsReverseGrantPowerShellCommand(command, label, expectedPort = "43770", action = "grant") {
+  assertIncludes(command, "pwsh -NoProfile -ExecutionPolicy Bypass", label);
+  assertIncludes(command, "-File scripts/windows/allow-windows-reverse-control.ps1", label);
+  assertIncludes(command, "-HostName 127.0.0.1", label);
+  assertIncludes(command, `-Port ${expectedPort}`, label);
+  if (action === "status") {
+    assertIncludes(command, "-Status", label);
+    assertNotIncludes(command, "-Grant", label);
+  } else {
+    assertIncludes(command, "-Grant", label);
+    assertIncludes(command, "-DurationMs 30000", label);
+    assertNotIncludes(command, "-Status", label);
+  }
+  assertIncludes(command, "-BoardSummary", label);
+  assertNotIncludes(command, "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
+function assertWindowsReverseGrantNodeFallbackCommand(command, label, expectedPort = "43770", action = "grant") {
+  assertIncludes(command, "node scripts/windows/allow-windows-reverse-control.mjs", label);
+  assertIncludes(command, "--host 127.0.0.1", label);
+  assertIncludes(command, `--port ${expectedPort}`, label);
+  if (action === "status") {
+    assertIncludes(command, "--status", label);
+    assertNotIncludes(command, "--grant", label);
+  } else {
+    assertIncludes(command, "--grant", label);
+    assertIncludes(command, "--durationMs 30000", label);
+    assertNotIncludes(command, "--status", label);
+  }
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
+function assertWindowsReverseGrantCommands(commands, label, expectedPort = "43770") {
+  assertWindowsReverseGrantPowerShellCommand(commands?.windowsReverseGrantStatusCommand || "", `${label} PowerShell status`, expectedPort, "status");
+  assertWindowsReverseGrantPowerShellCommand(commands?.windowsOpenOneTimeReverseGrantCommand || "", `${label} PowerShell grant`, expectedPort, "grant");
+  assertWindowsReverseGrantNodeFallbackCommand(commands?.windowsReverseGrantStatusNodeFallbackCommand || "", `${label} Node status`, expectedPort, "status");
+  assertWindowsReverseGrantNodeFallbackCommand(commands?.windowsOpenOneTimeReverseGrantNodeFallbackCommand || "", `${label} Node grant`, expectedPort, "grant");
+}
+
+function assertWindowsReverseGrantBoardSummary(text, label, expectedPort = "43770") {
+  assertIncludes(text, "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass", label);
+  assertIncludes(text, `-Port ${expectedPort} -Status -BoardSummary`, label);
+  assertIncludes(text, "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass", label);
+  assertIncludes(text, `-Port ${expectedPort} -Grant -DurationMs 30000 -BoardSummary`, label);
+  assertIncludes(text, "WindowsReverseGrantStatusNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs", label);
+  assertIncludes(text, `--host 127.0.0.1 --port ${expectedPort} --status --boardSummary`, label);
+  assertIncludes(text, "WindowsOpenOneTimeReverseGrantNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs", label);
+  assertIncludes(text, `--host 127.0.0.1 --port ${expectedPort} --grant --durationMs 30000 --boardSummary`, label);
+  assertNotIncludes(text, "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(text, "--password", label);
+}
+
+function extractPlainLineValue(text, prefix, label) {
+  const line = String(text || "")
+    .split(/\r?\n/)
+    .find((candidate) => candidate.startsWith(prefix));
+  assert(line, `${label} should include ${prefix} line.\n${text}`);
+  return line.slice(prefix.length).trim();
+}
+
 function assertMacClientFormalChecklistCommand(command, label, expectedHost = "<Windows IP>", expectedPort = "43770") {
   assertIncludes(command, "check-mac-client-formal-status.mjs", label);
   assertIncludes(command, `--host ${expectedHost}`, label);
@@ -193,6 +264,10 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.windowsHostStatusCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientReverseRehearsalAction", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientReverseGrantCopyAction", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.windowsReverseGrantStatusCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.windowsOpenOneTimeReverseGrantCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.windowsReverseGrantStatusNodeFallbackCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientFormalChecklistCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientFormalSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientBrowserSelfTestCommand", `${script} ${flag}`);
@@ -214,6 +289,7 @@ function checkOfflineJson(args) {
   assertWindowsHostStatusCommand(payload.commands?.windowsHostStatusCommand || "", "offline JSON Windows host status command");
   assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "offline JSON Mac client reverse rehearsal action");
   assertMacClientReverseGrantCopyAction(payload.commands?.macClientReverseGrantCopyAction || "", "offline JSON Mac client reverse grant copy action");
+  assertWindowsReverseGrantCommands(payload.commands, "offline JSON Windows reverse grant commands");
   assertMacClientFormalChecklistCommand(payload.commands?.macClientFormalChecklistCommand || "", "offline JSON Mac client formal checklist command");
   assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "offline JSON Mac client formal smoke command");
   assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "offline JSON Mac client browser self-test command");
@@ -228,6 +304,7 @@ function checkOfflineJson(args) {
   assert(/WindowsHostStatus=/.test(payload.boardSummary || ""), "boardSummary should include Windows host status command");
   assert(/MacClientReverseRehearsal=/.test(payload.boardSummary || ""), "boardSummary should include reverse rehearsal action");
   assert(/MacClientReverseGrantCopy=/.test(payload.boardSummary || ""), "boardSummary should include reverse grant copy action");
+  assertWindowsReverseGrantBoardSummary(payload.boardSummary || "", "offline JSON boardSummary");
   assert(/MacClientFormalChecklist=/.test(payload.boardSummary || ""), "boardSummary should include formal checklist command");
   assert(/MacClientFormalSmoke=/.test(payload.boardSummary || ""), "boardSummary should include formal smoke command");
   assert(/MacClientBrowserSelfTest=/.test(payload.boardSummary || ""), "boardSummary should include browser self-test command");
@@ -293,6 +370,7 @@ function checkBoardSummary(args) {
   assertIncludes(text, "start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary", "board summary");
   assertIncludes(text, "MacClientReverseRehearsal=", "board summary");
   assertIncludes(text, "MacClientReverseGrantCopy=", "board summary");
+  assertWindowsReverseGrantBoardSummary(text, "board summary");
   assertIncludes(text, "ReverseRehearsal=", "board summary");
   assertIncludes(text, "LAN008", "board summary");
   assertIncludes(text, "MacClientFormalChecklist=", "board summary");
@@ -322,6 +400,34 @@ function checkPlainReport(args) {
   assertIncludes(result.stdout, "ReverseRehearsal=", "plain report");
   assertIncludes(result.stdout, "Mac client reverse grant copy:", "plain report");
   assertIncludes(result.stdout, "复制 Node", "plain report");
+  assertIncludes(result.stdout, "Windows reverse grant status:", "plain report");
+  assertWindowsReverseGrantPowerShellCommand(
+    extractPlainLineValue(result.stdout, "- Windows reverse grant status: ", "plain report"),
+    "plain report PowerShell status",
+    "43770",
+    "status",
+  );
+  assertIncludes(result.stdout, "Windows one-time reverse grant:", "plain report");
+  assertWindowsReverseGrantPowerShellCommand(
+    extractPlainLineValue(result.stdout, "- Windows one-time reverse grant: ", "plain report"),
+    "plain report PowerShell grant",
+    "43770",
+    "grant",
+  );
+  assertIncludes(result.stdout, "Windows reverse grant status (Node fallback):", "plain report");
+  assertWindowsReverseGrantNodeFallbackCommand(
+    extractPlainLineValue(result.stdout, "- Windows reverse grant status (Node fallback): ", "plain report"),
+    "plain report Node status",
+    "43770",
+    "status",
+  );
+  assertIncludes(result.stdout, "Windows one-time reverse grant (Node fallback):", "plain report");
+  assertWindowsReverseGrantNodeFallbackCommand(
+    extractPlainLineValue(result.stdout, "- Windows one-time reverse grant (Node fallback): ", "plain report"),
+    "plain report Node grant",
+    "43770",
+    "grant",
+  );
   assertIncludes(result.stdout, "Mac client formal checklist:", "plain report");
   assertIncludes(result.stdout, "check-mac-client-formal-status.mjs", "plain report");
   assertIncludes(result.stdout, "Mac client formal smoke preflight:", "plain report");
@@ -409,6 +515,7 @@ async function checkClientServerProbe(args) {
     assertWindowsHostStatusCommand(payload.commands?.windowsHostStatusCommand || "", "client server probe Windows host status command");
     assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "client server probe reverse rehearsal action");
     assertMacClientReverseGrantCopyAction(payload.commands?.macClientReverseGrantCopyAction || "", "client server probe reverse grant copy action");
+    assertWindowsReverseGrantCommands(payload.commands, "client server probe Windows reverse grant commands");
     assertMacClientFormalChecklistCommand(payload.commands?.macClientFormalChecklistCommand || "", "client server probe formal checklist command");
     assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "client server probe formal smoke command");
     assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "client server probe browser self-test command");
@@ -513,6 +620,8 @@ async function checkWindowsDiscoveryProbe(args) {
     assertIncludes(payload.boardSummary || "", `WindowsHostStatus=node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port ${port} --boardSummary`, "Windows discovery boardSummary");
     assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "Windows discovery probe reverse rehearsal action");
     assertMacClientReverseGrantCopyAction(payload.commands?.macClientReverseGrantCopyAction || "", "Windows discovery probe reverse grant copy action");
+    assertWindowsReverseGrantCommands(payload.commands, "Windows discovery probe Windows reverse grant commands", String(port));
+    assertWindowsReverseGrantBoardSummary(payload.boardSummary || "", "Windows discovery boardSummary reverse grant commands", String(port));
     assertMacClientFormalChecklistCommand(payload.commands?.macClientFormalChecklistCommand || "", "Windows discovery probe formal checklist command", "127.0.0.1", String(port));
     assertIncludes(payload.boardSummary || "", `MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 127.0.0.1 --port ${port} --boardSummary`, "Windows discovery boardSummary");
     assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "Windows discovery probe formal smoke command");

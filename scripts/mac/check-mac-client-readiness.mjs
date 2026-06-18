@@ -88,6 +88,18 @@ Machine-readable JSON fields:
                              Human action for confirming both reverse-grant
                              copy buttons after LAN008 without passwords or
                              input.
+  commands.windowsReverseGrantStatusCommand
+                             Windows-side PowerShell status command for the
+                             local one-time reverse-control grant.
+  commands.windowsOpenOneTimeReverseGrantCommand
+                             Windows-side PowerShell command to open a short
+                             local one-time reverse-control grant.
+  commands.windowsReverseGrantStatusNodeFallbackCommand
+                             Node fallback status command for the same local
+                             Windows one-time reverse-control grant.
+  commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand
+                             Node fallback command to open the same local
+                             Windows one-time reverse-control grant.
   commands.macClientFormalChecklistCommand
                              Secret-free formal checklist command. It prints
                              the manual true-test checklist before true
@@ -541,6 +553,44 @@ function makeMacClientReverseGrantCopyAction() {
   return "LAN008 后在 Mac client 页面点击“复制 PowerShell”和“复制 Node”，确认复制文本不含连接密码且不会发送 input_event";
 }
 
+function makeWindowsReverseGrantPowerShellCommand(windowsHost = {}, args = {}, action = "grant") {
+  const targetPort = windowsHost.probe?.port || args.windowsPort || defaults.windowsPort;
+  const parts = [
+    "pwsh -NoProfile -ExecutionPolicy Bypass",
+    "-File",
+    "scripts/windows/allow-windows-reverse-control.ps1",
+    "-HostName",
+    "127.0.0.1",
+    "-Port",
+    String(targetPort),
+  ];
+  if (action === "status") {
+    parts.push("-Status");
+  } else {
+    parts.push("-Grant", "-DurationMs", "30000");
+  }
+  parts.push("-BoardSummary");
+  return parts.join(" ");
+}
+
+function makeWindowsReverseGrantNodeFallbackCommand(windowsHost = {}, args = {}, action = "grant") {
+  const targetPort = windowsHost.probe?.port || args.windowsPort || defaults.windowsPort;
+  const parts = [
+    "node scripts/windows/allow-windows-reverse-control.mjs",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(targetPort),
+  ];
+  if (action === "status") {
+    parts.push("--status");
+  } else {
+    parts.push("--grant", "--durationMs", "30000");
+  }
+  parts.push("--boardSummary");
+  return parts.join(" ");
+}
+
 function makeMacClientFormalChecklistCommand(windowsHost = {}, args = {}) {
   const targetHost = windowsHost.probe?.host || args.windowsHost || "<Windows IP>";
   const targetPort = windowsHost.probe?.port || args.windowsPort || defaults.windowsPort;
@@ -570,7 +620,7 @@ function makeBoardSummary(report) {
       : `offline ${report.windowsHost.probe.host}:${report.windowsHost.probe.port}`;
   const findings = formatChecklistFindings(report.checklist);
   const next = report.recommendations[0]?.text || "No next step available.";
-  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows}; ${findings}. Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; WindowsHostStatus=${report.commands.windowsHostStatusCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
+  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows}; ${findings}. Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; WindowsHostStatus=${report.commands.windowsHostStatusCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; WindowsReverseGrantStatus=${report.commands.windowsReverseGrantStatusCommand}; WindowsOpenOneTimeReverseGrant=${report.commands.windowsOpenOneTimeReverseGrantCommand}; WindowsReverseGrantStatusNodeFallback=${report.commands.windowsReverseGrantStatusNodeFallbackCommand}; WindowsOpenOneTimeReverseGrantNodeFallback=${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}; MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
 }
 
 function formatChecklistFindings(checklist) {
@@ -601,6 +651,10 @@ function printHuman(report) {
   console.log(`- Windows host status for Windows side: ${report.commands.windowsHostStatusCommand}`);
   console.log(`- Mac client reverse rehearsal: ${report.commands.macClientReverseRehearsalAction}`);
   console.log(`- Mac client reverse grant copy: ${report.commands.macClientReverseGrantCopyAction}`);
+  console.log(`- Windows reverse grant status: ${report.commands.windowsReverseGrantStatusCommand}`);
+  console.log(`- Windows one-time reverse grant: ${report.commands.windowsOpenOneTimeReverseGrantCommand}`);
+  console.log(`- Windows reverse grant status (Node fallback): ${report.commands.windowsReverseGrantStatusNodeFallbackCommand}`);
+  console.log(`- Windows one-time reverse grant (Node fallback): ${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}`);
   console.log(`- Mac client formal checklist: ${report.commands.macClientFormalChecklistCommand}`);
   console.log(`- Mac client formal smoke preflight: ${report.commands.macClientFormalSmokeCommand}`);
   console.log(`- Mac client browser self-test: ${report.commands.macClientBrowserSelfTestCommand}`);
@@ -660,6 +714,10 @@ async function buildReport(args) {
       windowsHostStatusCommand: makeWindowsHostStatusCommand(windowsHost, args),
       macClientReverseRehearsalAction: makeMacClientReverseRehearsalAction(),
       macClientReverseGrantCopyAction: makeMacClientReverseGrantCopyAction(),
+      windowsReverseGrantStatusCommand: makeWindowsReverseGrantPowerShellCommand(windowsHost, args, "status"),
+      windowsOpenOneTimeReverseGrantCommand: makeWindowsReverseGrantPowerShellCommand(windowsHost, args, "grant"),
+      windowsReverseGrantStatusNodeFallbackCommand: makeWindowsReverseGrantNodeFallbackCommand(windowsHost, args, "status"),
+      windowsOpenOneTimeReverseGrantNodeFallbackCommand: makeWindowsReverseGrantNodeFallbackCommand(windowsHost, args, "grant"),
       macClientFormalChecklistCommand: makeMacClientFormalChecklistCommand(windowsHost, args),
       macClientFormalSmokeCommand: makeMacClientFormalSmokeCommand(),
       macClientBrowserSelfTestCommand: makeMacClientBrowserSelfTestCommand(),

@@ -85,7 +85,7 @@ node scripts/mac/check-mac-client-readiness.mjs --checkBoard --boardSummary
 node scripts/mac/check-mac-client-readiness.mjs --host <Windows IP> --port 43770 --checkBoard --boardSummary
 ```
 
-该脚本不会启动 Mac client、不会启动或认证 Windows host、不会要求或打印密码、不会发送输入事件。它只检查 repo、Mac client 静态文件和语法、可选本地 Mac client HTTP 页面、可选 Windows host `/discovery` 及 Agent Link Board，并输出可直接发到通讯板的无密摘要。摘要会同时带 `MacClientPage=`、`MacClientDiscoverWindows=`、`MacClientReverseRehearsal=`、`MacClientReverseGrantCopy=`、`MacClientFormalSmoke=`、`MacClientBrowserSelfTest=` 和 `CopyDiagnostics=`，方便从页面状态、Windows 发现、反控安全演练、授权命令复制检查、本机 mock 自测到正式 smoke 串成一条无密路径。需要机器可读结果时加 `--json`；本地页面已启动时可加 `--probeClientServer`；正式要求目标 Windows host 在线时可加 `--requireWindowsHost`。
+该脚本不会启动 Mac client、不会启动或认证 Windows host、不会要求或打印密码、不会发送输入事件。它只检查 repo、Mac client 静态文件和语法、可选本地 Mac client HTTP 页面、可选 Windows host `/discovery` 及 Agent Link Board，并输出可直接发到通讯板的无密摘要。摘要会同时带 `MacClientPage=`、`MacClientDiscoverWindows=`、`MacClientReverseRehearsal=`、`MacClientReverseGrantCopy=`、`WindowsReverseGrantStatus=`、`WindowsOpenOneTimeReverseGrant=`、`WindowsReverseGrantStatusNodeFallback=`、`WindowsOpenOneTimeReverseGrantNodeFallback=`、`MacClientFormalSmoke=`、`MacClientBrowserSelfTest=` 和 `CopyDiagnostics=`，方便从页面状态、Windows 发现、反控安全演练、Windows 本机回环授权命令、授权命令复制检查、本机 mock 自测到正式 smoke 串成一条无密路径。需要机器可读结果时加 `--json`；本地页面已启动时可加 `--probeClientServer`；正式要求目标 Windows host 在线时可加 `--requireWindowsHost`。
 
 正式做 Mac 控制 Windows 真连观感验收前，可跑更严格的清单：
 
