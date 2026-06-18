@@ -68,6 +68,10 @@ Options:
   --json                       Print one machine-readable JSON report.
   --help, -h                   Show this help without probing or writing anything.
 
+Machine-readable JSON fields:
+  commands.macUnattendedFormal Post-write read-only check command; fails if the
+                               LaunchAgent maxScreenFps is missing or below 60.
+
 Examples:
   node scripts/mac/install-mac-host-launch-agent.mjs --boardSummary
   node scripts/mac/install-mac-host-launch-agent.mjs --write
@@ -307,6 +311,7 @@ function makeCommands(args) {
     print: `launchctl print gui/${uid}/${shellQuote(args.label)}`,
     hostStatus: `node scripts/mac/start-mac-host.mjs --status --host 127.0.0.1 --port ${args.port} --boardSummary`,
     unattendedStatus: `node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port ${args.port} --launchAgentPath ${shellQuote(args.launchAgentPath)} --boardSummary`,
+    macUnattendedFormal: `node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port ${args.port} --launchAgentPath ${shellQuote(args.launchAgentPath)} --requireLaunchAgentMaxFps --boardSummary`,
   };
 }
 
@@ -371,7 +376,7 @@ function makeBoardSummary(report) {
     : report.args.passwordMode;
   return [
     `Mac LaunchAgent plan: ${writeState}; label=${report.args.label}; path=${report.paths.launchAgentPath}; port=${report.args.port}; maxFps=${report.args.maxScreenFps}; auth=${auth}; keepAlive=${report.args.keepAlive ? "on" : "off"}.`,
-    `MacLaunchAgentPlan=${report.commands.dryRun}; ManualWrite=${report.commands.writePlist}; ManualLoad=${report.commands.bootstrap}; Status=${report.commands.unattendedStatus}.`,
+    `MacLaunchAgentPlan=${report.commands.dryRun}; ManualWrite=${report.commands.writePlist}; ManualLoad=${report.commands.bootstrap}; Status=${report.commands.unattendedStatus}; MacUnattendedFormal=${report.commands.macUnattendedFormal}.`,
     "No password is written or requested by this planner; no launchctl/start/auth/input/inject action was attempted.",
   ].join(" ");
 }
@@ -443,6 +448,7 @@ function printHuman(report) {
   console.log(`  - write: ${report.commands.writePlist}`);
   console.log(`  - load: ${report.commands.bootstrap}`);
   console.log(`  - status: ${report.commands.unattendedStatus}`);
+  console.log(`  - formal check: ${report.commands.macUnattendedFormal}`);
   console.log("- warnings:");
   for (const warning of report.warnings) {
     console.log(`  - ${warning}`);
