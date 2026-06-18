@@ -275,6 +275,7 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "--checkBoard", `help ${flag}`);
     assertIncludes(result.stdout, "--clientPort", `help ${flag}`);
     assertIncludes(result.stdout, "--debugPort", `help ${flag}`);
+    assertIncludes(result.stdout, "--sendAgentCallAck", `help ${flag}`);
     assertIncludes(result.stdout, "Windows host media-baseline", `help ${flag}`);
     assertIncludes(result.stdout, "check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "one-time reverse-control grant", `help ${flag}`);
@@ -1534,6 +1535,89 @@ async function checkSendUserAuthRequestOffline(args) {
   });
 }
 
+async function checkSendAgentCallAck(args) {
+  const secureAuthCommand = "node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 45679 --promptPassword --requirePassword";
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--sendAgentCallAck",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock sendAgentCallAck failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.sentAgentCallAck?.requested === true, "sendAgentCallAck should be requested");
+      assert(payload.sentAgentCallAck?.ok === true, "sendAgentCallAck should pass");
+      assert(board.messages.length === 1, `expected one board message, got ${board.messages.length}`);
+      assert(board.messages[0].from === "Windows Codex", "AgentCallAck message should use Windows Codex sender");
+      assertIncludes(board.messages[0].text, "WindowsSecureAuthPath 已提供", "sent AgentCallAck");
+      assertIncludes(board.messages[0].text, secureAuthCommand, "sent AgentCallAck");
+      assertIncludes(board.messages[0].text, "不要在 Agent Link Board 发送密码", "sent AgentCallAck");
+      assertIncludes(board.messages[0].text, "不认证、不发送 input/inject", "sent AgentCallAck");
+      assertNotIncludes(JSON.stringify(board.messages), "secret-value", "sent AgentCallAck");
+      assertNotIncludes(JSON.stringify(board.messages), "--password", "sent AgentCallAck");
+      console.log("[OK] Windows resume status can send a secret-free AgentCallAck");
+    }, {
+      currentCall: secureAuthMacCallForWindows(),
+      statuses: {
+        "Windows Codex": {
+          role: "Windows 端",
+          status: "idle",
+          note: `WindowsSecureAuthPath=${secureAuthCommand}`,
+        },
+      },
+    });
+  });
+}
+
+async function checkSendAgentCallAckWithoutReadyCall(args) {
+  const secureAuthCommand = "node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 45679 --promptPassword --requirePassword";
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--sendAgentCallAck",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode !== 0, "sendAgentCallAck should fail when there is no active secure-auth call");
+      const payload = JSON.parse(result.stdout);
+      assert(payload.sentAgentCallAck?.requested === true, "sendAgentCallAck refusal should be requested");
+      assert(payload.sentAgentCallAck?.ok === false, "sendAgentCallAck refusal should fail");
+      assert(payload.failedChecks?.some((check) => check.name === "sendAgentCallAck"), "AgentCallAck refusal should be named");
+      assert(board.messages.length === 0, `refused AgentCallAck should not post a board message, got ${board.messages.length}`);
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "refused AgentCallAck");
+      console.log("[OK] Windows resume status refuses AgentCallAck without an active secure-auth call");
+    }, {
+      currentCall: macCallForWindows(),
+      statuses: {
+        "Windows Codex": {
+          role: "Windows 端",
+          status: "idle",
+          note: `WindowsSecureAuthPath=${secureAuthCommand}`,
+        },
+      },
+    });
+  });
+}
+
 async function checkOfflineJson(args) {
   const result = await run([
     "--noDiscover",
@@ -1589,6 +1673,8 @@ async function main() {
   await checkUserAuthRequest(args);
   await checkSendUserAuthRequest(args);
   await checkSendUserAuthRequestOffline(args);
+  await checkSendAgentCallAck(args);
+  await checkSendAgentCallAckWithoutReadyCall(args);
   await checkOfflineJson(args);
   await checkRequireMacReady(args);
   console.log("[OK] Windows resume status regression passed");

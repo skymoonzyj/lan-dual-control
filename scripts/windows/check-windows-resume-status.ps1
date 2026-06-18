@@ -24,6 +24,7 @@ param(
   [switch] $BoardSummary,
   [switch] $UserAuthRequest,
   [switch] $SendUserAuthRequest,
+  [switch] $SendAgentCallAck,
   [Alias("h")]
   [switch] $Help
 )
@@ -43,6 +44,7 @@ Common examples:
   scripts\windows\check-windows-resume-status.ps1 -CheckBoard -CheckClientDiagnostics -BoardSummary
   scripts\windows\check-windows-resume-status.ps1 -CheckBoard -CheckClientDiagnostics -UserAuthRequest
   scripts\windows\check-windows-resume-status.ps1 -CheckBoard -CheckClientDiagnostics -SendUserAuthRequest
+  scripts\windows\check-windows-resume-status.ps1 -CheckBoard -SendAgentCallAck -Json
   scripts\windows\check-windows-resume-status.ps1 -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -Json
   scripts\windows\check-windows-resume-status.ps1 -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -CheckClientDiagnostics -ClientPort 5200 -DebugPort 9340 -BoardSummary
   scripts\windows\check-windows-resume-status.ps1 -NoDiscover -HostName 127.0.0.1 -Port 9 -Json -RequireMacReady
@@ -90,6 +92,9 @@ WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scr
 WindowsReverseGrantStatusNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --status --boardSummary
 WindowsOpenOneTimeReverseGrantNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --grant --durationMs 30000 --boardSummary
 WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword
+If a secure-auth currentCall is active and the summary shows AgentCallAck=,
+use -SendAgentCallAck to send that same secret-free acknowledgement. It does
+not clear the call, authenticate a WebSocket, send a password, or send input/inject.
 It also includes a one-line no-password Windows client diagnostics command:
 node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
 PowerShell equivalent:
@@ -206,6 +211,9 @@ try {
   }
   if ($SendUserAuthRequest) {
     $nodeArgs += "--sendUserAuthRequest"
+  }
+  if ($SendAgentCallAck) {
+    $nodeArgs += "--sendAgentCallAck"
   }
 
   & node @nodeArgs

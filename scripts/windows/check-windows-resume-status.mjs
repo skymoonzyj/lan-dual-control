@@ -30,6 +30,7 @@ const defaults = {
   boardSummary: false,
   userAuthRequest: false,
   sendUserAuthRequest: false,
+  sendAgentCallAck: false,
 };
 const macHeartbeatFreshnessStaleMs = 2 * 60 * 1000;
 
@@ -123,6 +124,7 @@ Options:
   --boardSummary                Print a one-line secret-free Agent Link Board summary.
   --userAuthRequest             Print a secret-free NEED_USER_AUTH message for Agent Link Board.
   --sendUserAuthRequest         Send NEED_USER_AUTH to Agent Link Board only when preflight is ready.
+  --sendAgentCallAck            Send the secret-free AgentCallAck only when secure-auth currentCall is ready.
   --json                        Print one machine-readable JSON object.
   --help, -h                    Show this help without probing anything.
 
@@ -130,6 +132,7 @@ Examples:
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --userAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --sendUserAuthRequest
+  node scripts/windows/check-windows-resume-status.mjs --checkBoard --sendAgentCallAck --json
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
   node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host 192.168.31.122 --port 43770 --requireMacHost --boardSummary
   node scripts/mac/check-mac-host-readiness.mjs --host 192.168.31.122 --port 43770 --checkBoard --boardSummary
@@ -197,6 +200,7 @@ function parseArgs(argv) {
       token === "--boardSummary" ||
       token === "--userAuthRequest" ||
       token === "--sendUserAuthRequest" ||
+      token === "--sendAgentCallAck" ||
       token === "--json"
     ) {
       args[token.slice(2)] = true;
@@ -1972,12 +1976,16 @@ function quoteCommandArg(value) {
   return /^[A-Za-z0-9_./:=@-]+$/.test(text) ? text : JSON.stringify(text);
 }
 
-function makeAgentCallAckCommand(server, windowsSecureAuthPathCommand) {
-  const text = [
+function makeAgentCallAckText(windowsSecureAuthPathCommand) {
+  return [
     `WindowsSecureAuthPath 已提供：${windowsSecureAuthPathCommand}。`,
     "请 Mac 端/人工确认这条本机隐藏输入同一临时密码的安全认证路径；确认后再按需要清理 currentCall。",
     "不要在 Agent Link Board 发送密码/token/系统账号；不认证、不发送 input/inject。",
   ].join("");
+}
+
+function makeAgentCallAckCommand(server, windowsSecureAuthPathCommand) {
+  const text = makeAgentCallAckText(windowsSecureAuthPathCommand);
   return [
     "node",
     "scripts/codex-link-client.mjs",
@@ -2600,6 +2608,45 @@ function sendUserAuthRequest(args, report) {
   };
 }
 
+function sendAgentCallAck(args, report) {
+  if (!args.sendAgentCallAck) {
+    return {
+      requested: false,
+      ok: null,
+      status: null,
+      error: "",
+      detail: "not requested",
+    };
+  }
+
+  const currentCall = report.board?.currentCall;
+  if (!currentCall?.active || !currentCall.secureAuthPathReady || !currentCall.agentCallAckCommand) {
+    return {
+      requested: true,
+      ok: false,
+      status: null,
+      error: "",
+      detail: "No active secure-auth currentCall with a ready WindowsSecureAuthPath; AgentCallAck was not sent.",
+    };
+  }
+
+  const windowsSecureAuthPathCommand = report.board.windowsSecureAuthPath?.command || report.commands.windowsSecureAuthPath;
+  const result = command(process.execPath, [
+    "scripts/codex-link-client.mjs",
+    "--server", args.server,
+    "send",
+    "--from", "Windows Codex",
+    "--text", makeAgentCallAckText(windowsSecureAuthPathCommand),
+  ], { timeoutMs: Math.min(Math.max(args.timeoutMs, 5000), 30000) });
+  return {
+    requested: true,
+    ok: result.ok,
+    status: result.status,
+    error: normalizedText(result.error || result.stderr),
+    detail: result.ok ? "sent" : normalizedText(result.error || result.stderr || `exit ${result.status}`),
+  };
+}
+
 async function makeReport(args) {
   const git = getGitStatus();
   const board = await getBoardSnapshot(args);
@@ -2647,6 +2694,7 @@ async function makeReport(args) {
       requireClean: args.requireClean,
       requireMacReady: args.requireMacReady,
       sendUserAuthRequest: args.sendUserAuthRequest,
+      sendAgentCallAck: args.sendAgentCallAck,
     },
     git,
     board,
@@ -2661,11 +2709,19 @@ async function makeReport(args) {
   report.boardSummary = makeBoardSummary(report);
   report.userAuthRequest = makeUserAuthRequest(report);
   report.sentUserAuthRequest = sendUserAuthRequest(args, report);
+  report.sentAgentCallAck = sendAgentCallAck(args, report);
   if (args.sendUserAuthRequest) {
     checks.push({
       name: "sendUserAuthRequest",
       ok: report.sentUserAuthRequest.ok,
       detail: report.sentUserAuthRequest.detail,
+    });
+  }
+  if (args.sendAgentCallAck) {
+    checks.push({
+      name: "sendAgentCallAck",
+      ok: report.sentAgentCallAck.ok,
+      detail: report.sentAgentCallAck.detail,
     });
   }
   report.failedChecks = checks.filter((check) => !check.ok);
@@ -2820,6 +2876,9 @@ function printHuman(report) {
   console.log(`  ${report.userAuthRequest}`);
   if (report.sentUserAuthRequest.requested) {
     console.log(`- Sent user auth request: ${report.sentUserAuthRequest.ok ? "ok" : "failed"} (${report.sentUserAuthRequest.detail})`);
+  }
+  if (report.sentAgentCallAck.requested) {
+    console.log(`- Sent AgentCallAck: ${report.sentAgentCallAck.ok ? "ok" : "failed"} (${report.sentAgentCallAck.detail})`);
   }
 }
 

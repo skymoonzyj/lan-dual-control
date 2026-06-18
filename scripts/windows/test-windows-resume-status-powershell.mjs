@@ -209,6 +209,7 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "Usage:", "PowerShell wrapper help");
   assertIncludes(output, "-CheckBoard -BoardSummary", "PowerShell wrapper help");
   assertIncludes(output, "-UserAuthRequest", "PowerShell wrapper help");
+  assertIncludes(output, "-SendAgentCallAck", "PowerShell wrapper help");
   assertIncludes(output, "current Agent Link", "PowerShell wrapper help");
   assertIncludes(output, "MacHostSafeStart=", "PowerShell wrapper help");
   assertIncludes(output, "MacMaxFpsSafeStart=", "PowerShell wrapper help");
@@ -1176,6 +1177,49 @@ async function checkSendUserAuthRequest(args) {
   });
 }
 
+async function checkSendAgentCallAck(args) {
+  const secureAuthCommand = "node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 45679 --promptPassword --requirePassword";
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-CheckBoard",
+        "-SendAgentCallAck",
+        "-Json",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell sendAgentCallAck failed\n${output}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.sentAgentCallAck?.ok === true, "PowerShell AgentCallAck should pass");
+      assert(board.messages.length === 1, `expected one board message, got ${board.messages.length}`);
+      assert(board.messages[0].from === "Windows Codex", "PowerShell AgentCallAck sender mismatch");
+      assertIncludes(board.messages[0].text, "WindowsSecureAuthPath 已提供", "PowerShell sent AgentCallAck");
+      assertIncludes(board.messages[0].text, secureAuthCommand, "PowerShell sent AgentCallAck");
+      assertIncludes(board.messages[0].text, "不要在 Agent Link Board 发送密码", "PowerShell sent AgentCallAck");
+      assertNotIncludes(JSON.stringify(board.messages), "secret-value", "PowerShell sent AgentCallAck");
+      assertNotIncludes(JSON.stringify(board.messages), "--password", "PowerShell sent AgentCallAck");
+      console.log("[OK] PowerShell resume-status wrapper can send a secret-free AgentCallAck");
+    }, {
+      currentCall: secureAuthMacCallForWindows(),
+      statuses: {
+        "Windows Codex": {
+          role: "Windows 端",
+          status: "idle",
+          note: `WindowsSecureAuthPath=${secureAuthCommand}`,
+        },
+      },
+    });
+  });
+}
+
 async function checkOfflineDefaults(args) {
   const result = await runPowerShell([
     "-NoDiscover",
@@ -1228,6 +1272,7 @@ async function main() {
   await checkBoardWindowsLanRiskExtraction(args);
   await checkUserAuthRequest(args);
   await checkSendUserAuthRequest(args);
+  await checkSendAgentCallAck(args);
   await checkOfflineDefaults(args);
   await checkRequireMacReady(args);
   console.log("[OK] PowerShell resume-status wrapper regression passed");

@@ -51,6 +51,38 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：把安全认证 `AgentCallAck=` 从“复制命令”补成显式安全发送入口，减少现场手动复制步骤。
+完成内容：
+- `check-windows-resume-status` 新增 `--sendAgentCallAck`，只在 Agent Link Board 当前 call 是 active secure-auth 且 `WindowsSecureAuthPath` 已就绪时发送无密确认消息。
+- PowerShell 包装入口新增 `-SendAgentCallAck`，转发到同一套 Node 安全门控。
+- 发送结果写入 JSON `sentAgentCallAck`，失败时加入 `failedChecks`，例如当前不是 secure-auth active call ready 时会拒绝发送且不 POST 通讯板。
+- `AgentCallAck=` 摘要命令和真实发送共用同一段文本：只说明安全路径已提供，请 Mac/人工确认后再清理 currentCall；不包含密码，也不自动清 call。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 先新增 PowerShell 断言并确认失败：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- 实现后复跑：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 实现后复跑：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- 旧 secure-auth currentCall 是否清理仍需 Mac/人工确认；本轮仍不自动 `clear-call`。
+下一步建议：
+- 若现场确认安全路径已收到，可由 Mac/人工决定清理 active call；不要在通讯板发送密码/token/系统账号。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac/人工确认安全路径后决定是否清理当前 call；不需要 Mac 改协议。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows resume 对安全认证 active call 给出可复制的无密确认命令，帮助收束联络板上已响应的 call。
 完成内容：
 - `check-windows-resume-status` 在 secure-auth currentCall 且已有安全 `WindowsSecureAuthPath` 时，现在会生成 `board.currentCall.agentCallAckCommand`。
