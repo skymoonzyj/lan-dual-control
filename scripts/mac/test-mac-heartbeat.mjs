@@ -142,6 +142,13 @@ function assertCommandSet(commands, label) {
   assertIncludes(commands?.macFormalLocalSmokeCommand || "", "check-mac-formal-local-smoke.mjs", label);
   assertIncludes(commands?.macClientDiscoverWindowsCommand || "", "discover-windows-hosts.mjs", label);
   assertIncludes(commands?.macClientDiscoverWindowsCommand || "", "--checkBoard", label);
+  assertIncludes(commands?.macClientFormalChecklistCommand || "", "check-mac-client-formal-status.mjs", label);
+  assertIncludes(commands?.macClientFormalChecklistCommand || "", "--boardSummary", label);
+  assertIncludes(commands?.macClientFormalSmokeCommand || "", "run-mac-client-formal-smoke.mjs", label);
+  assertIncludes(commands?.macClientFormalSmokeCommand || "", "--discover", label);
+  assertIncludes(commands?.macClientFormalSmokeCommand || "", "--ensureClient", label);
+  assertIncludes(commands?.macClientFormalSmokeCommand || "", "--preflightOnly", label);
+  assertIncludes(commands?.macClientFormalSmokeCommand || "", "--boardSummary", label);
   assertNoSecrets(JSON.stringify(commands), label);
 }
 
@@ -196,6 +203,8 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "checkedAt=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "macHost=offline", "offline board summary");
   assertIncludes(payload.boardSummary || "", "macClient=offline", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "offline board summary");
   assertCommandSet(payload.commands, "offline commands");
   assertNoSecrets(`${result.stdout}\n${result.stderr}`, "offline output");
   print("OK", "Offline heartbeat reports warnings without secrets");
@@ -266,6 +275,8 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "MacHeartbeat=status=ok", "online board summary");
       assertIncludes(payload.boardSummary || "", "checkedAt=", "online board summary");
       assertIncludes(payload.boardSummary || "", "inputMode=log", "online board summary");
+      assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=", "online board summary");
+      assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "online board summary");
       assertCommandSet(payload.commands, "online commands");
       assertNoSecrets(`${result.stdout}\n${result.stderr}`, "online output");
     });

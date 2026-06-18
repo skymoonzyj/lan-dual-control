@@ -21,6 +21,38 @@
 
 日期：2026-06-18 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac heartbeat 一行摘要也能直接给出 Mac 控 Windows formal checklist/smoke 入口，避免 Windows 端只看心跳时还要翻 resume。
+完成内容：
+- `check-mac-heartbeat` 的 JSON `commands` 新增 `macClientFormalChecklistCommand` 与 `macClientFormalSmokeCommand`。
+- `check-mac-heartbeat --boardSummary` 现在输出 `MacClientFormalChecklist=` 和 `MacClientFormalSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary`。
+- 这些命令只用于只读 formal checklist / 无密 preflight；不弹密码、不认证 Windows host、不发送 Agent Link Board call、不发送 input/inject。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000`
+- 实现后复跑：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000`
+- `node --check scripts/mac/check-mac-heartbeat.mjs`
+- `node --check scripts/mac/test-mac-heartbeat.mjs`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/mac/check-mac-heartbeat.mjs --host 127.0.0.1 --port 43770 --clientHost 127.0.0.1 --clientPort 5188 --checkBoard --boardSummary`（真实摘要已显示 `MacClientFormalChecklist=` 与 `MacClientFormalSmoke=... --ensureClient --preflightOnly --boardSummary`）
+- 合并 Windows 端 `741374b` 后已重新跑上述验证；真实 heartbeat 首次因 Mac Codex 上板时间戳过旧按预期 blocked，刷新 `Mac Codex` 状态后复跑为 `status=ok`。
+遗留问题：
+- 这轮只增强 heartbeat 上板提示；未执行真实 browser smoke，未发送 call，未执行 input/inject。
+下一步建议：
+- Windows 端看到 `MacHeartbeat=` 时可直接复制其中的 `MacClientFormalChecklist=` / `MacClientFormalSmoke=` 继续 Mac 控 Windows 预检；如需真实密码 smoke，仍等用户在 Mac 本机隐藏输入。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Windows 端可继续 Windows-only resume/sendAgentCallAck 工作。
+
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac 恢复总览里的 Mac client formal smoke 入口默认先确保本地页面在线，减少真连前手工漏启动页面。
 完成内容：
 - `check-mac-resume-status` 的 `MacClientFormalSmoke=` / JSON `commands.macClientFormalSmokeCommand` 现在输出 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary`。
