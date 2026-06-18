@@ -111,6 +111,43 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows 侧消费 Mac `MacHostSafeStart=` 安全启动提示。
+完成内容：
+- `watch-codex-link-mac-alerts.ps1` 识别带非空 readiness finding 的 `MacHostSafeStart=` 场景；`warnings=none blockers=none` 时不会误弹。
+- Windows 控制端 Mac 提醒区、快速摘要和复制/导出诊断现在会把 `MacHostSafeStart=` 翻译为“Mac host 安全启动命令已提供”，并保留原始命令文本。
+- 修正 `ready with warnings: blockers: none warnings: ...` 被误解析出 `blockers` 风险词的噪音。
+- Windows 控制端 README、当前状态、下一步和任务板已同步该行为。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- PowerShell AST parse: `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`
+遗留问题：
+- 本轮只让 Windows 侧显示和传播 Mac 安全启动提示；真正启动或重启 Mac host 仍由 Mac 端按 `MacHostSafeStart=` 命令执行。
+下一步建议：
+- Mac 端若 readiness 报 host 离线或 blocker，可直接把带 `MacHostSafeStart=` 的 boardSummary 发上板；Windows 端会在提醒区和复制诊断里显示“Mac host 安全启动命令已提供”，再由 Mac 端执行安全启动。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Mac 端后续实际离线/重启场景可自然验证该提示。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows 侧生成的 `MacUnattendedFormal=` 对齐 Mac 最新双门禁。
 完成内容：
 - `check-mac-formal-e2e` 的 `fpsLimit.macUnattendedFormalCommand` 现在同时带 `--requireLaunchAgentMaxFps` 和 `--requireLaunchAgentLoaded`。

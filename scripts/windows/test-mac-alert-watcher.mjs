@@ -522,6 +522,44 @@ async function checkMacHostReadinessCleanIgnored(args) {
   console.log("[OK] Mac host readiness clean status is ignored");
 }
 
+async function checkMacHostSafeStartGuidanceAlert(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: [
+          "MacHostReadiness=attention blockers=host-offline warnings=none",
+          "MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770",
+        ].join("; "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "Mac host safe-start guidance status");
+  assertIncludes(output, "MacHostSafeStart=", "Mac host safe-start guidance status");
+  assertIncludes(output, "blockers=host-offline", "Mac host safe-start guidance status");
+  console.log("[OK] Mac host safe-start guidance alerts when readiness has blockers");
+}
+
+async function checkMacHostSafeStartCleanIgnored(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: [
+          "MacHostReadiness=ready blockers=none warnings=none",
+          "MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770",
+        ].join("; "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertNotIncludes(output, "ALERT:", "Mac host safe-start clean status");
+  console.log("[OK] Mac host safe-start guidance alone is ignored");
+}
+
 async function checkMacClientFormalSmokeFindingsAlert(args) {
   const output = await runWatcherAgainst(baseState({
     statuses: {
@@ -732,6 +770,8 @@ async function main() {
   await checkMacClientFormalCleanIgnored(args);
   await checkMacHostReadinessFindingsAlert(args);
   await checkMacHostReadinessCleanIgnored(args);
+  await checkMacHostSafeStartGuidanceAlert(args);
+  await checkMacHostSafeStartCleanIgnored(args);
   await checkMacClientFormalSmokeFindingsAlert(args);
   await checkMacClientFormalSmokeCleanIgnored(args);
   await checkStartWrapperJsonStatus(args);

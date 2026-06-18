@@ -254,6 +254,7 @@ const macUnattendedRiskLabels = {
   "host-unreachable": "Mac host 不可达",
   "mac-host": "Mac host 需检查",
   "mac-host-discovery": "Mac host 发现需检查",
+  "mac-host-safe-start": "Mac host 安全启动命令已提供",
   "mac-host-media-aggregate": "Mac 媒体基线需检查",
   "mac-host-runtime-display-round-trip": "Mac runtime/display 回环需检查",
   "mac-host-build": "Mac host 构建需检查",
@@ -2902,7 +2903,9 @@ function normalizeMacUnattendedToken(token) {
 }
 
 function isEmptyMacUnattendedValue(value) {
-  return ["", "none", "ok", "0", "false", "-", "none.", "ok."].includes(normalizeMacUnattendedToken(value));
+  return ["", "none", "ok", "0", "false", "-", "none.", "ok.", "warnings", "blockers"].includes(
+    normalizeMacUnattendedToken(value),
+  );
 }
 
 function extractMacUnattendedValues(text, key) {
@@ -2938,18 +2941,25 @@ function parseMacUnattendedAttention(text) {
   const blockers = extractMacUnattendedValues(source, "blockers");
   const risks = [...new Set([...blockers, ...warnings])];
   const lower = source.toLowerCase();
+  const hasMacHostSafeStart = /\bMacHostSafeStart\s*=/i.test(source);
   if (lower.includes("ready=false") && risks.length === 0) {
     risks.push("not-ready");
   }
   if (/attention\s*=\s*(warning|blocker|failed)/i.test(source) && risks.length === 0) {
     risks.push("attention");
   }
+  if (
+    hasMacHostSafeStart &&
+    (risks.length > 0 || /host-(offline|unreachable)|ready\s*=\s*false|offline|离线/.test(lower))
+  ) {
+    risks.unshift("mac-host-safe-start");
+  }
   const labels = [...new Set(risks.map(labelMacUnattendedRisk).filter(Boolean))];
   return {
     warnings,
     blockers,
     labels,
-    summary: labels.length ? compactExportStatusText(labels.join(" / "), 140) : "",
+    summary: labels.length ? compactExportStatusText(labels.join(" / "), 180) : "",
   };
 }
 

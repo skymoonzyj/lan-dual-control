@@ -107,6 +107,8 @@ $urgentPatterns = @(
     "(MacClientFormalSmoke|Mac client formal smoke|run-mac-client-formal-smoke).*(ready with warnings|blocked|failed|ready=false|$findingFieldPattern)",
     "(MacClient(Readiness|Formal)|Mac client (readiness|formal)|Mac formal E2E status|MacFormalE2EStatus|check-mac-(client-readiness|client-formal-status|formal-e2e-status)).*(ready with warnings|attention=(warning|blocker|failed)|ready=false|$findingFieldPattern)",
     "MacLaunchAgentPlan.*(missing|not-loaded|disabled|failed|enable|install|repair|fix|warning|blocker)",
+    "MacHostSafeStart=.*($findingFieldPattern|host-(offline|unreachable)|ready=false)",
+    "($findingFieldPattern|host-(offline|unreachable)|ready=false).*MacHostSafeStart=",
     "\bwarnings\s*[:=]\s*$nonEmptyFindingValuePattern",
     "\bblockers\s*[:=]\s*$nonEmptyFindingValuePattern",
     "launch-agent-(missing|not-loaded|disabled|failed)",
