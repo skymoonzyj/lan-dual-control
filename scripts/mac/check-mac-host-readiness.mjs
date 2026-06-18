@@ -220,6 +220,11 @@ Machine-readable JSON fields:
                             Secret-free foreground start command for the formal
                             60Hz target; it prompts locally, never embeds a
                             password in argv, and does not send input.
+  commands.macResumeStatusCommand
+                            Secret-free read-only resume summary rerun command
+                            for confirming host build and next steps after a
+                            safe restart. It does not prompt, authenticate, or
+                            send input.
   commands.macLaunchAgentPlanCommand
                             Secret-free LaunchAgent dry-run planner command.
                             It prints a plist plan and manual load commands
@@ -708,11 +713,13 @@ function formatReadinessBoardSummary(summary) {
   const media = formatMediaBoardSummary(summary);
   const hostBuild = formatHostBuildBoardSummary(summary);
   const hostMedia = formatHostMediaBoardSummary(summary);
+  const suggestedAction = summary.suggestedAction?.boardSummary ? `; ${summary.suggestedAction.boardSummary}` : "";
   return [
-    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${hostBuild ? `; ${hostBuild}` : ""}${hostMedia ? `; ${hostMedia}` : ""}; ${formatBoardCallSummary(summary.board)}.`,
+    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${hostBuild ? `; ${hostBuild}` : ""}${hostMedia ? `; ${hostMedia}` : ""}${suggestedAction}; ${formatBoardCallSummary(summary.board)}.`,
     `MacHostSafeStart=${summary.commands?.macHostSafeStartCommand || makeMacHostSafeStartCommand(summary.args || {})}.`,
     `MacHostStop=${summary.commands?.macHostStopCommand || makeMacHostStopCommand(summary.args || {})}.`,
     `MacMaxFpsSafeStart=${summary.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(summary.args || {})}.`,
+    `MacResumeStatus=${summary.commands?.macResumeStatusCommand || makeMacResumeStatusCommand(summary.args || {})}.`,
     `MacLaunchAgentPlan=${summary.commands?.macLaunchAgentPlanCommand || makeMacLaunchAgentPlanCommand(summary.args || {})}.`,
     `MacMaxFpsPlan=${summary.commands?.macMaxFpsPlanCommand || makeMacMaxFpsPlanCommand(summary.args || {})}.`,
     `MacUnattendedFormal=${summary.commands?.macUnattendedFormalCommand || makeMacUnattendedFormalCommand(summary.args || {})}.`,
@@ -862,6 +869,18 @@ function makeMacMaxFpsSafeStartCommand(args = {}) {
     String(args.port || 43770),
     "--maxScreenFps",
     String(formalTargetMaxScreenFps),
+  ].join(" ");
+}
+
+function makeMacResumeStatusCommand(args = {}) {
+  return [
+    "node scripts/mac/check-mac-resume-status.mjs",
+    "--host",
+    statusProbeHost(args),
+    "--port",
+    String(args.port || 43770),
+    "--checkBoard",
+    "--boardSummary",
   ].join(" ");
 }
 
@@ -1028,6 +1047,29 @@ async function getStatusPayload(args) {
   return {
     payload: parseJsonOutput(stdout, "Mac host status helper"),
     result,
+  };
+}
+
+function buildSuggestedAction(summary) {
+  const discovery = Array.isArray(summary.results)
+    ? summary.results.find((item) => item.label === "Mac host discovery")
+    : null;
+  const buildDiff = discovery?.details?.buildDiff || {};
+  const staleRuntime = discovery?.details?.online === true
+    && buildDiff.differs === true
+    && (buildDiff.severity === "restart-recommended"
+      || (buildDiff.comparable === true && Number(buildDiff.changedHostRuntimeFileCount || 0) > 0));
+  if (!staleRuntime) return null;
+  return {
+    id: "restart-mac-host-safely",
+    reason: "Mac host runtime build is stale; stop the old local host, restart with a visible password prompt, then rerun MacResumeStatus.",
+    commands: {
+      macHostStopCommand: summary.commands?.macHostStopCommand,
+      macHostSafeStartCommand: summary.commands?.macHostSafeStartCommand,
+      macMaxFpsSafeStartCommand: summary.commands?.macMaxFpsSafeStartCommand,
+      macResumeStatusCommand: summary.commands?.macResumeStatusCommand,
+    },
+    boardSummary: "suggestedAction=restart-mac-host-safely actionCommands=MacHostStop->MacHostSafeStart-or-MacMaxFpsSafeStart->MacResumeStatus",
   };
 }
 
@@ -1393,6 +1435,7 @@ async function main() {
       macHostSafeStartCommand: makeMacHostSafeStartCommand(args),
       macHostStopCommand: makeMacHostStopCommand(args),
       macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
+      macResumeStatusCommand: makeMacResumeStatusCommand(args),
       macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
       macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
       macUnattendedFormalCommand: makeMacUnattendedFormalCommand(args),
@@ -1410,6 +1453,7 @@ async function main() {
       details: result.details,
     })),
   };
+  summary.suggestedAction = buildSuggestedAction(summary);
   summary.board = results.find((result) => result.label === "Agent Link Board currentCall")?.details || {
     checked: false,
     ok: null,
@@ -1437,11 +1481,15 @@ async function main() {
     print("NEXT", `Mac host safe start: ${summary.commands.macHostSafeStartCommand}`, args);
     print("NEXT", `Mac host stop: ${summary.commands.macHostStopCommand}`, args);
     print("NEXT", `Mac 60Hz safe foreground start: ${summary.commands.macMaxFpsSafeStartCommand}`, args);
+    print("NEXT", `Mac resume status: ${summary.commands.macResumeStatusCommand}`, args);
     print("NEXT", `Mac LaunchAgent dry-run plan: ${summary.commands.macLaunchAgentPlanCommand}`, args);
     print("NEXT", `Mac max FPS dry-run plan: ${summary.commands.macMaxFpsPlanCommand}`, args);
     print("NEXT", `Mac unattended formal 60Hz gate: ${summary.commands.macUnattendedFormalCommand}`, args);
     print("NEXT", `Mac formal local smoke: ${summary.commands.macFormalLocalSmokeCommand}`, args);
     print("NEXT", `Mac script help safety check: ${summary.commands.macScriptHelpCommand}`, args);
+    if (summary.suggestedAction?.id) {
+      print("NEXT", `Suggested action: ${summary.suggestedAction.id} · ${summary.suggestedAction.reason}`, args);
+    }
   }
 
   if (!ok) {

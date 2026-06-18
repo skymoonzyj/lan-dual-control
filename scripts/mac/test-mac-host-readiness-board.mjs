@@ -128,6 +128,24 @@ function assertMacHostStopCommand(command, label) {
   assert(!value.includes("inject"), `${label} should not instruct injection`);
 }
 
+function assertMacResumeStatusCommand(command, label) {
+  const value = String(command || "");
+  assert(value.includes("check-mac-resume-status.mjs"), `${label} should use check-mac-resume-status`);
+  assert(value.includes("--host"), `${label} should keep the target host explicit`);
+  assert(value.includes("--port"), `${label} should keep the target port explicit`);
+  assert(value.includes("--checkBoard"), `${label} should read Agent Link Board`);
+  assert(value.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!value.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!value.includes("--requirePassword"), `${label} should not require authentication`);
+  assert(!value.includes("--password"), `${label} should not embed a password argument`);
+  assert(!value.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!value.includes("--forceCall"), `${label} should not force an Agent Link Board call`);
+  assert(!value.includes("--server"), `${label} should not echo board server URLs`);
+  assert(!value.includes("--json"), `${label} should default to one-line boardSummary output`);
+  assert(!value.includes("input_event"), `${label} should not mention input events`);
+  assert(!value.includes("inject"), `${label} should not instruct injection`);
+}
+
 function assertMacMaxFpsSafeStartCommand(command, label) {
   assertMacHostSafeStartCommand(command, label);
   assert(String(command || "").includes("--maxScreenFps 60"), `${label} should target the formal 60Hz foreground start`);
@@ -261,6 +279,14 @@ function formatReadinessFindingsFixture(results) {
   return Function("results", `${helpers}\nreturn formatReadinessFindings(results);`)(results);
 }
 
+function buildSuggestedActionFixture(summary) {
+  const source = readFileSync(new URL("./check-mac-host-readiness.mjs", import.meta.url), "utf8");
+  const helpers = [
+    functionBlock(source, "buildSuggestedAction"),
+  ].join("\n");
+  return Function("summary", `${helpers}\nreturn buildSuggestedAction(summary);`)(summary);
+}
+
 function waitForPort(child, getStdout, getStderr) {
   return new Promise((resolve, reject) => {
     const started = Date.now();
@@ -350,6 +376,7 @@ function checkHelp(args) {
     assert(String(result.stdout).includes("commands.macHostSafeStartCommand"), `${script} ${flag} should document safe start command`);
     assert(String(result.stdout).includes("commands.macHostStopCommand"), `${script} ${flag} should document stop command`);
     assert(String(result.stdout).includes("commands.macMaxFpsSafeStartCommand"), `${script} ${flag} should document foreground 60Hz safe start command`);
+    assert(String(result.stdout).includes("commands.macResumeStatusCommand"), `${script} ${flag} should document Mac resume status command`);
     assert(String(result.stdout).includes("commands.macLaunchAgentPlanCommand"), `${script} ${flag} should document LaunchAgent planner command`);
     assert(String(result.stdout).includes("commands.macMaxFpsPlanCommand"), `${script} ${flag} should document max-FPS planner command`);
     assert(String(result.stdout).includes("commands.macUnattendedFormalCommand"), `${script} ${flag} should document unattended formal gate command`);
@@ -366,6 +393,7 @@ function checkDefaultDoesNotReadBoard(args) {
   assertMacHostSafeStartCommand(payload.commands?.macHostSafeStartCommand || "", "default readiness JSON safe start command");
   assertMacHostStopCommand(payload.commands?.macHostStopCommand || "", "default readiness JSON stop command");
   assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand || "", "default readiness JSON foreground 60Hz safe start command");
+  assertMacResumeStatusCommand(payload.commands?.macResumeStatusCommand || "", "default readiness JSON Mac resume status command");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand || "", "default readiness JSON LaunchAgent planner command");
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand || "", "default readiness JSON max-FPS planner command");
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand || "", "default readiness JSON unattended formal command");
@@ -383,6 +411,8 @@ function checkDefaultDoesNotReadBoard(args) {
   assert(String(payload.boardSummary || "").includes("--stop"), "default boardSummary should make stop action explicit");
   assert(String(payload.boardSummary || "").includes("MacMaxFpsSafeStart="), "default boardSummary should include foreground 60Hz safe start guidance");
   assert(String(payload.boardSummary || "").includes("--maxScreenFps 60"), "default boardSummary should include foreground 60Hz safe start target");
+  assert(String(payload.boardSummary || "").includes("MacResumeStatus="), "default boardSummary should include Mac resume status guidance");
+  assert(String(payload.boardSummary || "").includes("check-mac-resume-status.mjs"), "default boardSummary should include the Mac resume status command");
   assert(String(payload.boardSummary || "").includes("MacLaunchAgentPlan="), "default boardSummary should include LaunchAgent planner guidance");
   assert(String(payload.boardSummary || "").includes("MacMaxFpsPlan="), "default boardSummary should include max-FPS planner guidance");
   assert(String(payload.boardSummary || "").includes("MacUnattendedFormal="), "default boardSummary should include unattended formal guidance");
@@ -557,6 +587,56 @@ function checkHostBuildBoardSummaryFormatting() {
     "current host build should not add noise to the board summary",
   );
   print("OK", "Mac host readiness boardSummary includes stale build details");
+}
+
+function checkStaleBuildSuggestedActionFormatting() {
+  const summary = {
+    commands: {
+      macHostStopCommand: "node scripts/mac/start-mac-host.mjs --stop --host 127.0.0.1 --port 43770",
+      macHostSafeStartCommand: "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770",
+      macMaxFpsSafeStartCommand: "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60",
+      macResumeStatusCommand: "node scripts/mac/check-mac-resume-status.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary",
+    },
+    results: [{
+      label: "Mac host discovery",
+      ok: true,
+      warnings: ["Mac host runtime source changed since abc1234; restart before deploy-style validation."],
+      details: {
+        online: true,
+        buildDiff: {
+          differs: true,
+          severity: "restart-recommended",
+          fromBuildId: "abc1234",
+          toBuildId: "def5678",
+          changedHostRuntimeFileCount: 2,
+        },
+      },
+    }],
+  };
+  const action = buildSuggestedActionFixture(summary);
+  assert(action?.id === "restart-mac-host-safely", "stale build should expose a structured safe restart action");
+  assert(String(action?.reason || "").includes("Mac host runtime build is stale"), "stale build action should explain stale runtime");
+  assertMacHostStopCommand(action?.commands?.macHostStopCommand || "", "stale build suggested stop command");
+  assertMacHostSafeStartCommand(action?.commands?.macHostSafeStartCommand || "", "stale build suggested safe start command");
+  assertMacMaxFpsSafeStartCommand(action?.commands?.macMaxFpsSafeStartCommand || "", "stale build suggested 60Hz safe start command");
+  assertMacResumeStatusCommand(action?.commands?.macResumeStatusCommand || "", "stale build suggested resume status command");
+  assert(String(action?.boardSummary || "").includes("suggestedAction=restart-mac-host-safely"), "stale build action should include boardSummary label");
+  assert(String(action?.boardSummary || "").includes("actionCommands=MacHostStop->MacHostSafeStart-or-MacMaxFpsSafeStart->MacResumeStatus"), "stale build action should include safe action order");
+
+  const cleanAction = buildSuggestedActionFixture({
+    commands: summary.commands,
+    results: [{
+      label: "Mac host discovery",
+      ok: true,
+      warnings: [],
+      details: {
+        online: true,
+        buildDiff: { differs: false, severity: "ok" },
+      },
+    }],
+  });
+  assert(cleanAction === null, "current host build should not suggest a restart action");
+  print("OK", "Mac host readiness suggests a safe restart action for stale runtime builds only");
 }
 
 function checkH264FallbackPipelineFormatting() {
@@ -877,6 +957,7 @@ async function main() {
   checkMediaBoardSummaryStatusFormatting();
   checkReadinessFindingsFormatting();
   checkHostBuildBoardSummaryFormatting();
+  checkStaleBuildSuggestedActionFormatting();
   checkH264FallbackPipelineFormatting();
   checkMaxScreenFpsWarningFormatting();
   checkProbeMediaOfflineJson(args);
