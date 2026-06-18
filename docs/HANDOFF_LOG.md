@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端手动发送文件超过大小上限时给出稳定可见中文提示。
+完成内容：
+- 手动发送文件/压缩包超过当前大小上限时，顶部剪贴板状态会显示“文件过大”并带当前上限原因。
+- 全屏/监看浮层会同步显示“文件过大”和“超过当前上限”，不会停留在旧的等待对端确认状态。
+- 页面 diagnostics-only 用轻量 fake 文件对象覆盖超限早退，不会创建真实大文件。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增页面断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`（失败点：文件过大时浮层仍显示旧的“等待对端确认”）。
+- 实现后复跑同一 diagnostics-only 通过。
+遗留问题：
+- 这只改善超限早退反馈，不改变 512 MB 上限、分块协议或断点续传策略。
+下一步建议：
+- 真机大文件测试时确认“文件过大”提示、对端确认超时提示和重新发送按钮文案不会互相覆盖。
+是否改了协议：否；只改 Windows 控制端 UI 状态和页面自测。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端手动发送文件在未连接或剪贴板关闭时给出稳定可见中文提示。
 完成内容：
 - 未连接被控端时手动发送文件，顶部剪贴板状态会显示“请先连接被控端”。

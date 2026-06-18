@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端手动发送文件/压缩包超过当前大小上限时，顶部状态和全屏/监看浮层会直接显示“文件过大”和当前上限原因；只改 UI 状态和页面 diagnostics-only，不改协议。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端手动发送文件/压缩包在未连接被控端或剪贴板同步关闭时，顶部状态和全屏/监看浮层会直接显示“请先连接被控端”或“已关闭”；只改 UI 状态和页面 diagnostics-only，不改协议。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端 `Ctrl+V` 在未连接被控端或剪贴板同步关闭时，顶部状态和全屏/监看浮层会直接显示“请先连接被控端”或“已关闭”；只改 UI 状态和页面 diagnostics-only，不改协议。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端 `Ctrl+V` 文件剪贴板读取失败时，顶部状态和全屏/监看浮层会直接显示中文原因；资源管理器剪贴板只有文件夹、原生读取不可用或读取失败均有可见提示，不改协议。 |

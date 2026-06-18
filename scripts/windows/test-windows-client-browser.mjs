@@ -2283,6 +2283,35 @@ async function verifyFileClipboardRecoveryText(session) {
         const unsupportedSendCount = unsupportedSends.length;
         state.hostDiagnostics = { ...originalHostDiagnostics };
 
+        const oversizeOutgoingSends = [];
+        const oversizeOutgoingFile = {
+          name: "too-large-local.zip",
+          size: maxClipboardFileBytes + 1,
+          type: "application/zip",
+          lastModified: 1710000000000,
+        };
+        state.connected = true;
+        elements.clipboardToggle.checked = true;
+        state.hostDiagnostics = {
+          ...(state.hostDiagnostics || {}),
+          clipboardText: true,
+          clipboardTextMode: "system",
+          clipboardFile: true,
+          clipboardFileMode: "system",
+        };
+        state.client = {
+          sendClipboardFileOffer: (payload) => oversizeOutgoingSends.push({ type: "offer", payload }),
+          sendClipboardFileChunk: (payload) => oversizeOutgoingSends.push({ type: "chunk", payload }),
+          sendClipboardFileComplete: (payload) => oversizeOutgoingSends.push({ type: "complete", payload }),
+        };
+        elements.clipboardText.textContent = "剪贴板：已开启";
+        if (typeof syncFloatingControlStatus === "function") syncFloatingControlStatus();
+        await sendFilesToRemote([oversizeOutgoingFile], { sourceLabel: "文件过大测试" });
+        const oversizeOutgoingText = elements.clipboardText.textContent || "";
+        const oversizeOutgoingFloating = document.querySelector("#floatingClipboardStatus")?.textContent || "";
+        const oversizeOutgoingSendCount = oversizeOutgoingSends.length;
+        state.hostDiagnostics = { ...originalHostDiagnostics };
+
         const retryFileBytes = new Uint8Array(fileChunkSizeBytes + 2048);
         retryFileBytes.fill(65);
         const retryFile = new File([retryFileBytes], "retry-demo.zip", { type: "application/zip" });
@@ -2486,6 +2515,10 @@ async function verifyFileClipboardRecoveryText(session) {
             unsupportedSendCount === 0 &&
             unsupportedClipboardText.includes("对端文件剪贴板不可用") &&
             unsupportedClipboardText.includes("文件/压缩包不能直接复制粘贴") &&
+            oversizeOutgoingSendCount === 0 &&
+            oversizeOutgoingText.includes("文件过大") &&
+            oversizeOutgoingFloating.includes("文件过大") &&
+            oversizeOutgoingFloating.includes("超过当前上限") &&
             failedClipboardText.includes("文件发送失败") &&
             failedClipboardText.includes("可重新发送") &&
             lastOutgoingFailure.status === "failed" &&
@@ -2581,6 +2614,9 @@ async function verifyFileClipboardRecoveryText(session) {
           unsupportedClipboardText,
           unsupportedSendCount,
           unsupportedSends,
+          oversizeOutgoingText,
+          oversizeOutgoingFloating,
+          oversizeOutgoingSendCount,
           failedClipboardText,
           lastOutgoingFailure,
           lastOutgoingFailureStatus,

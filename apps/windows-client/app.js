@@ -4867,7 +4867,8 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
   const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
   if (totalBytes > maxClipboardFileBytes) {
     const message = `文件总大小 ${formatBytes(totalBytes)}，超过当前上限 ${formatBytes(maxClipboardFileBytes)}`;
-    elements.clipboardText.textContent = "剪贴板：文件过大";
+    state.localClipboardStatusText = `剪贴板：文件过大；${message}`;
+    elements.clipboardText.textContent = state.localClipboardStatusText;
     syncFloatingControlStatus();
     addLog(sourceLabel, message);
     if (clearFileInput) elements.fileClipboardInput.value = "";
