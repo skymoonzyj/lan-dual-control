@@ -63,6 +63,8 @@ Machine-readable JSON fields:
   commands.launchAgentPlan       Secret-free LaunchAgent dry-run planner command.
   commands.macMaxFpsPlan         Secret-free LaunchAgent dry-run planner command
                                   for the formal 60Hz max-FPS target.
+  commands.macUnattendedStatus   Secret-free exact rerun command for this
+                                  report; preserves host/port/path and require flags.
   commands.hostReadiness         Follow-up Mac host readiness command.
 
 Examples:
@@ -429,6 +431,7 @@ function buildFindings({ args, host, launchAgent, power }) {
 
 function makeCommands(args) {
   return {
+    macUnattendedStatus: makeMacUnattendedStatusCommand(args),
     launchAgentPlan: `node scripts/mac/install-mac-host-launch-agent.mjs --launchAgentPath ${shellQuote(args.launchAgentPath)} --boardSummary`,
     macMaxFpsPlan: `node scripts/mac/install-mac-host-launch-agent.mjs --launchAgentPath ${shellQuote(args.launchAgentPath)} --maxScreenFps ${formalTargetMaxScreenFps} --boardSummary`,
     hostStatus: `node scripts/mac/start-mac-host.mjs --status --host ${args.host} --port ${args.port} --boardSummary`,
@@ -438,6 +441,30 @@ function makeCommands(args) {
     launchAgentPath: args.launchAgentPath,
     launchAgentLabel: args.label,
   };
+}
+
+function makeMacUnattendedStatusCommand(args) {
+  const parts = [
+    "node scripts/mac/check-mac-unattended-status.mjs",
+    "--host",
+    shellQuote(args.host),
+    "--port",
+    String(args.port),
+    "--launchAgentPath",
+    shellQuote(args.launchAgentPath),
+  ];
+  if (args.timeoutMs !== defaults.timeoutMs) parts.push("--timeoutMs", String(args.timeoutMs));
+  if (args.label !== defaults.label) parts.push("--label", shellQuote(args.label));
+  if (args.requireHostOnline) parts.push("--requireHostOnline");
+  if (args.requireLaunchAgent) parts.push("--requireLaunchAgent");
+  if (args.requireLaunchAgentMaxFps) parts.push("--requireLaunchAgentMaxFps");
+  if (args.requireLaunchAgentLoaded) parts.push("--requireLaunchAgentLoaded");
+  if (args.requireControlPermissions) parts.push("--requireControlPermissions");
+  if (args.strict) parts.push("--strict");
+  if (args.skipLaunchctl) parts.push("--skipLaunchctl");
+  if (args.skipPmset) parts.push("--skipPmset");
+  parts.push("--boardSummary");
+  return parts.join(" ");
 }
 
 function shellQuote(value) {
@@ -467,7 +494,7 @@ function makeBoardSummary(report) {
   const agentMaxFps = report.launchAgent.maxScreenFps === null ? "unknown" : String(report.launchAgent.maxScreenFps);
   return [
     `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
-    `MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --boardSummary; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; HostReadiness=${report.commands.hostReadiness}.`,
+    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; HostReadiness=${report.commands.hostReadiness}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
