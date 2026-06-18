@@ -149,6 +149,10 @@ function assertBoardSummaryShape(text, label) {
   assert(/Mac formal E2E:/.test(text), `${label} should start with formal E2E summary`);
   assert(/\bblockers=/.test(text), `${label} should include blocker ids`);
   assert(/\bwarnings=/.test(text), `${label} should include warning ids`);
+  assert(/MacHostSafeStart=/.test(text), `${label} should include Mac host safe start guidance`);
+  assert(/start-mac-host\.mjs/.test(text), `${label} should include the Mac host safe start command`);
+  assert(/--promptPassword/.test(text), `${label} should make safe-start password prompting explicit`);
+  assert(/--requirePassword/.test(text), `${label} should require a password for safe start`);
   assert(/MacLaunchAgentPlan=/.test(text), `${label} should include LaunchAgent dry-run planner guidance`);
   assert(/install-mac-host-launch-agent\.mjs/.test(text), `${label} should include LaunchAgent planner command`);
   assert(/MacMaxFpsPlan=/.test(text), `${label} should include Mac max-FPS dry-run planner guidance`);

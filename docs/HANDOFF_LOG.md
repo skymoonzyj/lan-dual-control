@@ -21,6 +21,36 @@
 
 日期：2026-06-18 继续推进
 开发端：Mac Codex
+本轮目标：Mac formal E2E readiness 摘要显式输出安全前台启动标签。
+完成内容：
+- `check-mac-formal-e2e-status --boardSummary` 离线和在线路径都新增 `MacHostSafeStart=`，复用现有 `commands.macHostSafeStartCommand`。
+- 离线 formal E2E 摘要仍会说明先用 `MacHostSafeStart` 启动 host 再重跑 checklist，并保留当前 `--port <端口>`。
+- 统一测试形状要求 formal E2E 摘要必须包含 `MacHostSafeStart=`、`start-mac-host.mjs`、`--promptPassword` 和 `--requirePassword`，避免回退成自然语言不可解析提示。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-formal-e2e-status.mjs`
+- `node --check scripts/mac/test-mac-formal-e2e-status.mjs`
+- `node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 30000`
+- `node scripts/mac/check-mac-formal-e2e-status.mjs --host 127.0.0.1 --port 43888 --skipBoard --boardSummary`（预期因 host 离线退出非 0；stdout 一行摘要包含 `MacHostSafeStart=` 且保留 `--port 43888`）
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/mac/check-mac-formal-e2e-status.mjs scripts/mac/test-mac-formal-e2e-status.mjs docs/HANDOFF_LOG.md docs/ACTIVE_LOCKS.md docs/04-task-board.md`
+遗留问题：
+- 本轮只补 formal E2E readiness 摘要标签；没有启动 host、没有发 Agent Link Board call、没有认证、没有 input/inject。
+下一步建议：
+- 继续把 Mac 侧其他正式/页面入口的下一步命令标签统一成可复制、可被 Windows watcher 识别的一行摘要；真正 60Hz 复验仍需后续现场授权后处理 LaunchAgent 并让 Windows 侧重跑 formal preflight。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
 本轮目标：Mac 恢复总览摘要显式输出安全前台启动标签。
 完成内容：
 - `check-mac-resume-status --boardSummary` 离线和在线路径都新增 `MacHostSafeStart=`，复用现有 `commands.macHostSafeStartCommand`。
