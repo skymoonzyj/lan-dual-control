@@ -703,9 +703,10 @@ function formatReadinessBoardSummary(summary) {
   const findings = formatReadinessFindings(summary.results);
   const probe = `${summary.args?.host || "127.0.0.1"}:${summary.args?.port || 43770}`;
   const media = formatMediaBoardSummary(summary);
+  const hostBuild = formatHostBuildBoardSummary(summary);
   const hostMedia = formatHostMediaBoardSummary(summary);
   return [
-    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${hostMedia ? `; ${hostMedia}` : ""}; ${formatBoardCallSummary(summary.board)}.`,
+    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${hostBuild ? `; ${hostBuild}` : ""}${hostMedia ? `; ${hostMedia}` : ""}; ${formatBoardCallSummary(summary.board)}.`,
     `MacHostSafeStart=${summary.commands?.macHostSafeStartCommand || makeMacHostSafeStartCommand(summary.args || {})}.`,
     `MacHostStop=${summary.commands?.macHostStopCommand || makeMacHostStopCommand(summary.args || {})}.`,
     `MacMaxFpsSafeStart=${summary.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(summary.args || {})}.`,
@@ -769,6 +770,29 @@ function readinessResultId(label) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return normalized || "unknown";
+}
+
+function formatHostBuildBoardSummary(summary) {
+  const discovery = Array.isArray(summary.results)
+    ? summary.results.find((item) => item.label === "Mac host discovery")
+    : null;
+  const details = discovery?.details || {};
+  if (details.online !== true) return "";
+  const buildDiff = details.buildDiff || {};
+  if (!buildDiff || buildDiff.differs !== true || buildDiff.severity === "ok") return "";
+  if (buildDiff.severity === "stale-metadata") {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} stale metadata only, hostRuntimeChanges=0`;
+  }
+  if (buildDiff.severity === "restart-recommended") {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} restart recommended, hostRuntimeChanges=${buildDiff.changedHostRuntimeFileCount ?? "unknown"}`;
+  }
+  if (buildDiff.comparable && buildDiff.changedHostRuntimeFileCount === 0) {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} stale metadata only, hostRuntimeChanges=0`;
+  }
+  if (buildDiff.comparable) {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} restart recommended, hostRuntimeChanges=${buildDiff.changedHostRuntimeFileCount ?? "unknown"}`;
+  }
+  return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} differs from repo=${buildDiff.toBuildId || "unknown"}`;
 }
 
 function formatHostMediaBoardSummary(summary) {

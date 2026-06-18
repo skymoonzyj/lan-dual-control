@@ -224,6 +224,14 @@ function formatHostMediaBoardSummaryFixture(summary) {
   return Function("summary", `${helpers}\nreturn formatHostMediaBoardSummary(summary);`)(summary);
 }
 
+function formatHostBuildBoardSummaryFixture(summary) {
+  const source = readFileSync(new URL("./check-mac-host-readiness.mjs", import.meta.url), "utf8");
+  const helpers = [
+    functionBlock(source, "formatHostBuildBoardSummary"),
+  ].join("\n");
+  return Function("summary", `${helpers}\nreturn formatHostBuildBoardSummary(summary);`)(summary);
+}
+
 function formatReadinessFindingsFixture(results) {
   const source = readFileSync(new URL("./check-mac-host-readiness.mjs", import.meta.url), "utf8");
   const helpers = [
@@ -461,6 +469,75 @@ function checkReadinessFindingsFormatting() {
     "readiness findings should emit explicit none values",
   );
   print("OK", "Mac host readiness boardSummary findings use stable ids");
+}
+
+function checkHostBuildBoardSummaryFormatting() {
+  assert(
+    formatHostBuildBoardSummaryFixture({
+      results: [{
+        label: "Mac host discovery",
+        details: {
+          online: true,
+          buildDiff: {
+            differs: true,
+            severity: "restart-recommended",
+            fromBuildId: "abc1234",
+            toBuildId: "def5678",
+            changedHostRuntimeFileCount: 3,
+          },
+        },
+      }],
+    }) === "runtimeBuild=abc1234 restart recommended, hostRuntimeChanges=3",
+    "host build board summary should include stale runtime build details",
+  );
+  assert(
+    formatHostBuildBoardSummaryFixture({
+      results: [{
+        label: "Mac host discovery",
+        details: {
+          online: true,
+          buildDiff: {
+            differs: true,
+            comparable: true,
+            fromBuildId: "abc1234",
+            toBuildId: "def5678",
+            changedHostRuntimeFileCount: 1,
+          },
+        },
+      }],
+    }) === "runtimeBuild=abc1234 restart recommended, hostRuntimeChanges=1",
+    "host build board summary should infer restart guidance from comparable runtime file changes",
+  );
+  assert(
+    formatHostBuildBoardSummaryFixture({
+      results: [{
+        label: "Mac host discovery",
+        details: {
+          online: true,
+          buildDiff: {
+            differs: true,
+            severity: "stale-metadata",
+            fromBuildId: "abc1234",
+            changedHostRuntimeFileCount: 0,
+          },
+        },
+      }],
+    }) === "runtimeBuild=abc1234 stale metadata only, hostRuntimeChanges=0",
+    "host build board summary should keep stale metadata distinct from runtime changes",
+  );
+  assert(
+    formatHostBuildBoardSummaryFixture({
+      results: [{
+        label: "Mac host discovery",
+        details: {
+          online: true,
+          buildDiff: { severity: "ok", differs: false },
+        },
+      }],
+    }) === "",
+    "current host build should not add noise to the board summary",
+  );
+  print("OK", "Mac host readiness boardSummary includes stale build details");
 }
 
 function checkH264FallbackPipelineFormatting() {
@@ -774,6 +851,7 @@ async function main() {
   checkDefaultDoesNotReadBoard(args);
   checkMediaBoardSummaryStatusFormatting();
   checkReadinessFindingsFormatting();
+  checkHostBuildBoardSummaryFormatting();
   checkH264FallbackPipelineFormatting();
   checkMaxScreenFpsWarningFormatting();
   checkProbeMediaOfflineJson(args);
