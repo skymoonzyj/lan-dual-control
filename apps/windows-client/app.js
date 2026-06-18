@@ -270,6 +270,8 @@ const macUnattendedRiskLabels = {
   "mac-heartbeat-start-command": "Mac 后台心跳启动命令已提供",
   "mac-heartbeat-status-command": "Mac 后台心跳状态命令已提供",
   "mac-heartbeat-stop-command": "Mac 后台心跳停止命令已提供",
+  "mac-unattended-status-command": "Mac 值守状态命令已提供",
+  "mac-unattended-formal-command": "Mac 值守正式检查命令已提供",
   "mac-watchdog-stale": "Mac watchdog 心跳过期",
   "mac-api-error": "Mac/API 网络错误",
   "mac-codex-stale": "Mac Codex 长时间无新进展",
@@ -3311,6 +3313,10 @@ function parseMacUnattendedAttention(text) {
   const hasMacHeartbeatStart = /\bMacHeartbeatStart\s*=/i.test(source);
   const hasMacHeartbeatStatus = /\bMacHeartbeatStatus\s*=/i.test(source);
   const hasMacHeartbeatStop = /\bMacHeartbeatStop\s*=/i.test(source);
+  const hasMacUnattendedStatusCommand =
+    /\bMacUnattended(?:Status)?\s*=\s*node\s+scripts[\\/]+mac[\\/]+check-mac-unattended-status\.mjs\b/i.test(source);
+  const hasMacUnattendedFormalCommand =
+    /\bMacUnattendedFormal\s*=\s*node\s+scripts[\\/]+mac[\\/]+check-mac-unattended-status\.mjs\b/i.test(source);
   const hasMacFormalLocalSmoke = /\b(MacFormalLocalSmoke|check-mac-formal-local-smoke)\b/i.test(source);
   const hasRerunFormalLocalSmoke = /\bRerunFormalLocalSmoke\s*=/i.test(source);
   const hasWindowsReverseGrantStatus = /\bWindowsReverseGrantStatus(NodeFallback)?\s*=/i.test(source);
@@ -3403,6 +3409,15 @@ function parseMacUnattendedAttention(text) {
   }
   if (/attention\s*=\s*(warning|blocker|failed)/i.test(source) && risks.length === 0) {
     risks.push("attention");
+  }
+  const hasMacUnattendedCommandContext =
+    risks.length > 0 ||
+    /attention\s*=\s*(warning|blocker|failed)|ready\s*=\s*false|restart recommended|hostRuntimeChanges|runtimeBuild|mac-host-build-stale|launch-agent|max-fps|fps-limit|power-risk|sleep-risk|stale build|build.*stale|运行.*旧|重启/i.test(source);
+  if (hasMacUnattendedStatusCommand && hasMacUnattendedCommandContext) {
+    risks.unshift("mac-unattended-status-command");
+  }
+  if (hasMacUnattendedFormalCommand && hasMacUnattendedCommandContext) {
+    risks.unshift("mac-unattended-formal-command");
   }
   if (
     hasMacHostStop &&

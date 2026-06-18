@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端消费 Mac heartbeat/readiness/unattended 里的 `MacUnattendedStatus=` / `MacUnattendedFormal=` 安全命令，在有 warning/blocker、旧 build 或刷新率上限上下文时给出中文提示。
+完成内容：
+- Windows 控制端 Mac 提醒解析新增值守状态/正式检查命令识别：同段摘要出现风险上下文时，会显示“Mac 值守状态命令已提供”“Mac 值守正式检查命令已提供”。
+- 复制/导出诊断保留原始 `MacUnattendedStatus=` / `MacUnattendedFormal=` 命令，便于现场让 Mac 侧复跑普通值守状态或 formal 60Hz 强校验。
+- 干净命令清单不误弹；这只是 UI 诊断和文案消费，不自动运行 Mac 脚本，不认证、不发密码、不发送 input/inject。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增 diagnostics-only 页面断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5210 --debugPort 9350 --timeoutMs 45000`，失败点是 Mac 提醒诊断没有“Mac 值守状态命令已提供”“Mac 值守正式检查命令已提供”。
+- 实现后复跑同一 diagnostics-only 通过；提交前还会跑语法、diff check 和冲突扫描。
+遗留问题：
+- 真机 Mac host 仍是旧 build/restart recommended 场景时，后续仍需用户或 Mac 端按 `MacHostStop=` / `MacHostSafeStart=` 完成真实切换，再验收 60Hz、文件剪贴板和输入链路。
+下一步建议：
+- Mac heartbeat 已能上板 `MacUnattendedStatus=` / `MacUnattendedFormal=`；Windows 端看到值守/刷新率 warning 时，先让 Mac 端复跑这些检查，再决定是否执行 stop/safe-start。
+是否改了协议：否；只消费已有通讯板/诊断文本里的安全命令标签。
+是否需要另一端配合：后续真实切换 Mac host、复跑 formal 60Hz 强校验时需要 Mac 端或用户配合。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端消费 Mac heartbeat/readiness 里的 `MacHostStop=`，在旧 Mac host build 场景给出清楚中文提示。
 完成内容：
 - Windows 控制端 Mac 提醒解析新增 `MacHostStop=` 识别：当同段摘要出现 `mac-host-build-stale`、`restart recommended`、`runtimeBuild=` 或 `hostRuntimeChanges=` 时，会显示“Mac host 停止旧进程命令已提供”。

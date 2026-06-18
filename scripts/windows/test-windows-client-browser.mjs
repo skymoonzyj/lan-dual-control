@@ -1487,6 +1487,8 @@ async function verifyDesktopOnlyHostPanel(session) {
           : {};
       const macAlertFindingText = [
         "MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none",
+        "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --boardSummary",
+        "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary",
         "MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo",
         "MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit",
         "MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps",
@@ -4286,6 +4288,8 @@ async function verifyReconnectControls(session) {
       let copiedText = "";
       const macAlertFindingText = [
         "MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none",
+        "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --boardSummary",
+        "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary",
         "MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo",
         "MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit",
         "MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps",
@@ -4516,6 +4520,8 @@ async function verifyReconnectControls(session) {
             exportText.includes("Windows 被控端未指定或未就绪") &&
             exportText.includes("仓库状态需检查") &&
             exportText.includes("LaunchAgent 刷新率上限需调整") &&
+            exportText.includes("Mac 值守状态命令已提供") &&
+            exportText.includes("Mac 值守正式检查命令已提供") &&
             exportText.includes("Mac 60Hz 安全启动命令已提供") &&
             exportText.includes("Mac host 停止旧进程命令已提供") &&
             exportText.includes("Mac host 安全启动命令已提供") &&
@@ -4556,6 +4562,8 @@ async function verifyReconnectControls(session) {
             exportText.includes("warnings: video,build,auth,windows-host,repo") &&
             exportText.includes("warnings=h264-fallback,fps-limit") &&
             exportText.includes("warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps") &&
+            exportText.includes("MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs") &&
+            exportText.includes("MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs") &&
             exportText.includes("MacHostStop=node scripts/mac/start-mac-host.mjs --stop") &&
             exportText.includes("MacHostSafeStart=node scripts/mac/start-mac-host.mjs") &&
             exportText.includes("MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs") &&
@@ -4662,6 +4670,8 @@ async function verifyReconnectControls(session) {
           copiedText.includes("Windows 被控端未指定或未就绪") &&
           copiedText.includes("仓库状态需检查") &&
           copiedText.includes("LaunchAgent 刷新率上限需调整") &&
+          copiedText.includes("Mac 值守状态命令已提供") &&
+          copiedText.includes("Mac 值守正式检查命令已提供") &&
           copiedText.includes("Mac 60Hz 安全启动命令已提供") &&
           copiedText.includes("Mac host 停止旧进程命令已提供") &&
           copiedText.includes("Mac host 安全启动命令已提供") &&
@@ -4687,6 +4697,8 @@ async function verifyReconnectControls(session) {
           copiedText.includes("检测到 stream disconnected before completion") &&
           copiedText.includes("launch-agent-max-fps") &&
           copiedText.includes("mac-host-max-fps") &&
+          copiedText.includes("MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs") &&
+          copiedText.includes("MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs") &&
           copiedText.includes("MacHostStop=node scripts/mac/start-mac-host.mjs --stop") &&
           copiedText.includes("MacHostSafeStart=node scripts/mac/start-mac-host.mjs") &&
           copiedText.includes("MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs") &&
