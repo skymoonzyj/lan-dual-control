@@ -230,6 +230,9 @@ function formatReadinessFindingsFixture(results) {
     functionBlock(source, "normalizedText"),
     functionBlock(source, "readinessResultId"),
     functionBlock(source, "summarizeReadinessResultIds"),
+    functionBlock(source, "isMacHostBuildStaleWarning"),
+    functionBlock(source, "readinessWarningResultIds"),
+    functionBlock(source, "summarizeReadinessWarningResultIds"),
     functionBlock(source, "formatReadinessFindings"),
   ].join("\n");
   return Function("results", `${helpers}\nreturn formatReadinessFindings(results);`)(results);
@@ -440,6 +443,18 @@ function checkReadinessFindingsFormatting() {
       { label: "Agent Link Board currentCall", ok: true, warnings: ["duplicate warning"] },
     ]) === "blockers=mac-host-media-aggregate warnings=mac-host-discovery,agent-link-board-currentcall",
     "readiness findings should summarize failed and warning labels as stable ids",
+  );
+  assert(
+    formatReadinessFindingsFixture([
+      {
+        label: "Mac host discovery",
+        ok: true,
+        summary: "Mac host is online but running host build abc123 differs from current git def456",
+        warnings: ["running host build abc123 differs from current git def456; restart recommended"],
+        details: { buildDiff: { differs: true, severity: "restart-recommended" } },
+      },
+    ]) === "blockers=none warnings=mac-host-discovery,mac-host-build-stale",
+    "stale Mac host runtime warning should expose a stable mac-host-build-stale id",
   );
   assert(
     formatReadinessFindingsFixture([{ label: "Node.js", ok: true, warnings: [] }]) === "blockers=none warnings=none",

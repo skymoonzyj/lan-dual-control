@@ -721,7 +721,7 @@ function formatReadinessBoardSummary(summary) {
 function formatReadinessFindings(results) {
   const items = Array.isArray(results) ? results : [];
   const blockers = summarizeReadinessResultIds(items.filter((item) => item && item.ok === false));
-  const warnings = summarizeReadinessResultIds(items.filter((item) => Array.isArray(item?.warnings) && item.warnings.length > 0));
+  const warnings = summarizeReadinessWarningResultIds(items.filter((item) => Array.isArray(item?.warnings) && item.warnings.length > 0));
   return `blockers=${blockers} warnings=${warnings}`;
 }
 
@@ -732,6 +732,35 @@ function summarizeReadinessResultIds(items) {
   if (ids.length === 0) return "none";
   if (ids.length <= 4) return ids.join(",");
   return `${ids.slice(0, 4).join(",")}+${ids.length - 4}more`;
+}
+
+function summarizeReadinessWarningResultIds(items) {
+  const ids = [...new Set(items.flatMap((item) => readinessWarningResultIds(item)))];
+  if (ids.length === 0) return "none";
+  if (ids.length <= 4) return ids.join(",");
+  return `${ids.slice(0, 4).join(",")}+${ids.length - 4}more`;
+}
+
+function readinessWarningResultIds(item) {
+  const id = readinessResultId(item?.label || item?.id || "unknown");
+  const ids = [id];
+  if (id === "mac-host-discovery" && isMacHostBuildStaleWarning(item)) {
+    ids.push("mac-host-build-stale");
+  }
+  return ids.filter(Boolean);
+}
+
+function isMacHostBuildStaleWarning(item) {
+  const buildDiff = item?.details?.buildDiff || {};
+  if (buildDiff.differs === true && ["restart-recommended", "warning"].includes(buildDiff.severity)) {
+    return true;
+  }
+  const warningText = [
+    item?.summary,
+    ...(Array.isArray(item?.warnings) ? item.warnings : []),
+  ].join(" ").toLowerCase();
+  return warningText.includes("running host build")
+    && warningText.includes("differs from current git");
 }
 
 function readinessResultId(label) {
