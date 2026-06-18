@@ -17,6 +17,39 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 桌面控制端支持资源管理器复制文件后用 `Ctrl+V` 发送到被控端。
+完成内容：
+- Windows 控制端在浏览器剪贴板 API 没有读到文件时，会尝试调用 Tauri 原生文件剪贴板读取。
+- Windows 桌面壳新增 `begin_clipboard_file_read`、`read_clipboard_file_chunk`、`cancel_clipboard_file_read`，读取系统 `FileDropList` 后按块返回文件内容。
+- 资源管理器复制普通文件/压缩包后，远控窗口 `Ctrl+V` 会沿现有 `clipboard_file_*` 通道发送；文件夹暂不递归发送，避免误传整目录。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-desktop/src-tauri/src/main.rs`
+- `apps/windows-client/README.md`
+- `apps/windows-desktop/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增页面断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`（失败点：未调用原生命令、未发送文件）。
+- 先新增 Rust 单测并确认失败：`cargo test --manifest-path apps/windows-desktop/src-tauri/Cargo.toml native_clipboard_read_transfer_reads_file_chunks_and_cleans_state`（失败点：读取函数不存在）。
+- 实现后复跑页面 diagnostics-only 通过。
+- `cargo test --manifest-path apps/windows-desktop/src-tauri/Cargo.toml` 通过。
+遗留问题：
+- 文件夹剪贴板暂不递归发送；后续如果要支持文件夹，需要先设计打包/目录结构策略。
+- 仍不是断点续传；连接中断后需要从头重发。
+下一步建议：
+- Windows 桌面版真机验收：在资源管理器复制 `.zip` 或普通文件，切回远控窗口按 `Ctrl+V`，观察发送进度、对端 result、复制诊断和重发体验。
+是否改了协议：否；复用既有 `clipboard_file_offer/chunk/complete/result`。
+是否需要另一端配合：暂不需要；真机长测时再请 Mac 端配合接收文件。
+
 ## 2026-06-19 Mac Codex
 
 日期：2026-06-19 继续推进

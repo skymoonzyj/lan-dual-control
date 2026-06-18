@@ -4602,11 +4602,11 @@ function getClipboardBlobFileName(mimeType, index) {
   return `clipboard-${Date.now().toString(16)}-${index + 1}.${extension}`;
 }
 
-async function readLocalClipboardFiles() {
+async function readBrowserClipboardFiles() {
   if (!navigator.clipboard?.read || typeof File === "undefined") {
     return {
       files: [],
-      reason: "文件剪贴板自动同步需要桌面原生模块，当前可先用“发送文件”按钮。",
+      reason: "浏览器剪贴板没有提供可读取的文件。",
     };
   }
 
@@ -4632,6 +4632,111 @@ async function readLocalClipboardFiles() {
       files: [],
       reason: error?.message || "读取文件剪贴板失败，后续接入桌面原生模块。",
     };
+  }
+}
+
+function parseNativeClipboardLastModified(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  const parsed = Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
+function makeNativeClipboardFile(meta, transferId, invoke) {
+  const index = Number(meta.index ?? 0);
+  const size = Math.max(0, Number(meta.size ?? 0));
+  const mimeType = String(meta.mimeType || "application/octet-stream");
+  return {
+    name: String(meta.name || `clipboard-${index + 1}`),
+    size,
+    type: mimeType,
+    lastModified: parseNativeClipboardLastModified(meta.lastModified),
+    slice(start = 0, end = size) {
+      const offset = Math.max(0, Number(start) || 0);
+      const cappedEnd = Math.min(size, Math.max(offset, Number(end) || 0));
+      const length = cappedEnd - offset;
+      return {
+        size: length,
+        type: mimeType,
+        async arrayBuffer() {
+          const result = await invoke("read_clipboard_file_chunk", {
+            payload: {
+              transferId,
+              fileIndex: index,
+              offset,
+              length,
+            },
+          });
+          return base64ToUint8Array(result?.dataBase64 || "").buffer;
+        },
+      };
+    },
+  };
+}
+
+async function readNativeClipboardFiles() {
+  const invoke = getTauriInvoke();
+  if (!invoke) {
+    return {
+      files: [],
+      reason: "文件剪贴板自动同步需要桌面原生模块，当前可先用“发送文件”按钮。",
+    };
+  }
+
+  try {
+    const result = await invoke("begin_clipboard_file_read");
+    const transferId = String(result?.transferId || "");
+    const metas = Array.isArray(result?.files) ? result.files : [];
+    if (!transferId || metas.length === 0) {
+      return {
+        files: [],
+        reason: result?.reason || "系统剪贴板里没有可发送的文件。",
+      };
+    }
+
+    return {
+      files: metas.map((meta, index) => makeNativeClipboardFile({ index, ...meta }, transferId, invoke)),
+      reason: "",
+      async cleanup() {
+        await invoke("cancel_clipboard_file_read", {
+          payload: { transferId },
+        });
+      },
+    };
+  } catch (error) {
+    return {
+      files: [],
+      reason: error?.message || "读取系统文件剪贴板失败。",
+    };
+  }
+}
+
+async function readLocalClipboardFiles() {
+  const browserResult = await readBrowserClipboardFiles();
+  if (browserResult.files.length > 0) {
+    return browserResult;
+  }
+
+  const nativeResult = await readNativeClipboardFiles();
+  if (nativeResult.files.length > 0) {
+    return nativeResult;
+  }
+
+  return {
+    files: [],
+    reason: nativeResult.reason || browserResult.reason,
+  };
+}
+
+async function cleanupLocalClipboardFiles(clipboardFiles) {
+  if (typeof clipboardFiles?.cleanup !== "function") {
+    return;
+  }
+  try {
+    await clipboardFiles.cleanup();
+  } catch (error) {
+    addLog("文件剪贴板", error?.message || "清理本机文件剪贴板读取状态失败");
   }
 }
 
@@ -4685,7 +4790,11 @@ async function syncClipboardBeforePaste() {
 
   const clipboardFiles = await readLocalClipboardFiles();
   if (clipboardFiles.files.length > 0) {
-    await sendFilesToRemote(clipboardFiles.files, { sourceLabel: "文件剪贴板" });
+    try {
+      await sendFilesToRemote(clipboardFiles.files, { sourceLabel: "文件剪贴板" });
+    } finally {
+      await cleanupLocalClipboardFiles(clipboardFiles);
+    }
     return;
   }
 

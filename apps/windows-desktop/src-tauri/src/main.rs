@@ -6,7 +6,7 @@ use serde_json::Value;
 use std::{
     collections::HashMap,
     env, fs,
-    io::{BufRead, BufReader, Read, Write},
+    io::{BufRead, BufReader, Read, Seek, SeekFrom, Write},
     net::{SocketAddr, TcpStream},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
@@ -27,6 +27,7 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 const MAX_HOST_LOG_LINES: usize = 240;
 const MAX_NATIVE_CLIPBOARD_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_NATIVE_CLIPBOARD_READ_CHUNK_BYTES: u64 = 1024 * 1024;
 const STALE_CLIPBOARD_ROOT_MAX_AGE_SECS: u64 = 7 * 24 * 60 * 60;
 const DEFAULT_AGENT_LINK_SERVER: &str = "http://192.168.31.68:17888";
 static CLIPBOARD_TRANSFER_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -42,6 +43,11 @@ struct ClipboardFileTransferState {
     transfers: Mutex<HashMap<String, NativeClipboardTransfer>>,
 }
 
+#[derive(Default)]
+struct ClipboardFileReadState {
+    transfers: Mutex<HashMap<String, NativeClipboardReadTransfer>>,
+}
+
 #[derive(Debug)]
 struct NativeClipboardTransfer {
     root_dir: PathBuf,
@@ -54,6 +60,20 @@ struct NativeClipboardFileEntry {
     path: PathBuf,
     expected_bytes: u64,
     written_bytes: u64,
+}
+
+#[derive(Debug)]
+struct NativeClipboardReadTransfer {
+    files: Vec<NativeClipboardReadEntry>,
+}
+
+#[derive(Debug)]
+struct NativeClipboardReadEntry {
+    name: String,
+    path: PathBuf,
+    size: u64,
+    mime_type: String,
+    last_modified: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -126,6 +146,52 @@ struct FinishClipboardFileWritePayload {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CancelClipboardFileWritePayload {
+    transfer_id: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ClipboardFileReadMeta {
+    index: usize,
+    name: String,
+    size: u64,
+    mime_type: String,
+    last_modified: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BeginClipboardFileReadResult {
+    transfer_id: String,
+    file_count: usize,
+    total_bytes: u64,
+    skipped_directories: usize,
+    files: Vec<ClipboardFileReadMeta>,
+    reason: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReadClipboardFileChunkPayload {
+    transfer_id: String,
+    file_index: usize,
+    offset: u64,
+    length: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ReadClipboardFileChunkResult {
+    transfer_id: String,
+    file_index: usize,
+    offset: u64,
+    bytes: usize,
+    data_base64: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CancelClipboardFileReadPayload {
     transfer_id: String,
 }
 
@@ -271,6 +337,19 @@ fn add_clipboard_total_bytes(current: u64, added: u64) -> Result<u64, String> {
     if total > MAX_NATIVE_CLIPBOARD_TOTAL_BYTES {
         return Err(format!(
             "远端文件总大小 {} 字节，超过桌面版系统文件剪贴板写入上限 {} 字节。",
+            total, MAX_NATIVE_CLIPBOARD_TOTAL_BYTES
+        ));
+    }
+    Ok(total)
+}
+
+fn add_local_clipboard_total_bytes(current: u64, added: u64) -> Result<u64, String> {
+    let total = current
+        .checked_add(added)
+        .ok_or_else(|| "本机剪贴板文件总大小超出可处理范围。".to_string())?;
+    if total > MAX_NATIVE_CLIPBOARD_TOTAL_BYTES {
+        return Err(format!(
+            "本机剪贴板文件总大小 {} 字节，超过桌面版文件发送上限 {} 字节。",
             total, MAX_NATIVE_CLIPBOARD_TOTAL_BYTES
         ));
     }
@@ -459,6 +538,173 @@ fn cancel_native_clipboard_transfer(
     }
 }
 
+fn file_modified_millis(metadata: &fs::Metadata) -> u64 {
+    metadata
+        .modified()
+        .ok()
+        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64)
+        .unwrap_or(0)
+}
+
+fn guess_mime_type_from_path(path: &Path) -> String {
+    match path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        "pdf" => "application/pdf",
+        "zip" => "application/zip",
+        "7z" => "application/x-7z-compressed",
+        "rar" => "application/vnd.rar",
+        "txt" => "text/plain",
+        _ => "application/octet-stream",
+    }
+    .to_string()
+}
+
+fn create_native_clipboard_read_transfer(
+    paths: &[PathBuf],
+    transfers: &mut HashMap<String, NativeClipboardReadTransfer>,
+) -> Result<BeginClipboardFileReadResult, String> {
+    if paths.is_empty() {
+        return Err("系统剪贴板里没有可发送的文件。".to_string());
+    }
+
+    let mut entries = Vec::new();
+    let mut total_bytes = 0_u64;
+    let mut skipped_directories = 0_usize;
+
+    for (index, path) in paths.iter().enumerate() {
+        let canonical = fs::canonicalize(path)
+            .map_err(|error| format!("读取剪贴板文件路径失败：{}：{error}", path.display()))?;
+        let metadata = fs::metadata(&canonical)
+            .map_err(|error| format!("读取剪贴板文件信息失败：{}：{error}", canonical.display()))?;
+        if metadata.is_dir() {
+            skipped_directories += 1;
+            continue;
+        }
+        if !metadata.is_file() {
+            continue;
+        }
+        total_bytes = add_local_clipboard_total_bytes(total_bytes, metadata.len())?;
+        let name = canonical
+            .file_name()
+            .and_then(|value| value.to_str())
+            .map(|value| safe_file_name(value, index))
+            .unwrap_or_else(|| format!("clipboard-{}", index + 1));
+        entries.push(NativeClipboardReadEntry {
+            name,
+            path: canonical.clone(),
+            size: metadata.len(),
+            mime_type: guess_mime_type_from_path(&canonical),
+            last_modified: file_modified_millis(&metadata),
+        });
+    }
+
+    if entries.is_empty() {
+        return Err(if skipped_directories > 0 {
+            "系统剪贴板里只有文件夹；当前先支持文件和压缩包，暂不递归发送文件夹。".to_string()
+        } else {
+            "系统剪贴板里没有可发送的文件。".to_string()
+        });
+    }
+
+    let base_id = make_clipboard_transfer_id()?;
+    let mut transfer_id = base_id.clone();
+    let mut suffix = 1_u32;
+    while transfers.contains_key(&transfer_id) {
+        suffix += 1;
+        transfer_id = format!("{base_id}-{suffix}");
+    }
+
+    let files = entries
+        .iter()
+        .enumerate()
+        .map(|(index, file)| ClipboardFileReadMeta {
+            index,
+            name: file.name.clone(),
+            size: file.size,
+            mime_type: file.mime_type.clone(),
+            last_modified: file.last_modified,
+        })
+        .collect::<Vec<_>>();
+    let file_count = files.len();
+    transfers.insert(
+        transfer_id.clone(),
+        NativeClipboardReadTransfer { files: entries },
+    );
+
+    Ok(BeginClipboardFileReadResult {
+        transfer_id,
+        file_count,
+        total_bytes,
+        skipped_directories,
+        files,
+        reason: if skipped_directories > 0 {
+            format!("已跳过 {skipped_directories} 个文件夹。")
+        } else {
+            String::new()
+        },
+    })
+}
+
+fn read_native_clipboard_file_chunk(
+    transfers: &HashMap<String, NativeClipboardReadTransfer>,
+    payload: ReadClipboardFileChunkPayload,
+) -> Result<ReadClipboardFileChunkResult, String> {
+    let transfer = transfers
+        .get(&payload.transfer_id)
+        .ok_or_else(|| "本机文件剪贴板读取状态不存在或已结束。".to_string())?;
+    let file = transfer
+        .files
+        .get(payload.file_index)
+        .ok_or_else(|| "文件索引无效。".to_string())?;
+    if payload.offset > file.size {
+        return Err(format!(
+            "读取偏移超出文件大小：{} > {}。",
+            payload.offset, file.size
+        ));
+    }
+
+    let remaining = file.size - payload.offset;
+    let length = payload
+        .length
+        .min(remaining)
+        .min(MAX_NATIVE_CLIPBOARD_READ_CHUNK_BYTES);
+    let mut handle =
+        fs::File::open(&file.path).map_err(|error| format!("打开剪贴板文件失败：{error}"))?;
+    handle
+        .seek(SeekFrom::Start(payload.offset))
+        .map_err(|error| format!("定位剪贴板文件失败：{error}"))?;
+    let mut buffer = vec![0_u8; length as usize];
+    let bytes = handle
+        .read(&mut buffer)
+        .map_err(|error| format!("读取剪贴板文件失败：{error}"))?;
+    buffer.truncate(bytes);
+
+    Ok(ReadClipboardFileChunkResult {
+        transfer_id: payload.transfer_id,
+        file_index: payload.file_index,
+        offset: payload.offset,
+        bytes,
+        data_base64: general_purpose::STANDARD.encode(&buffer),
+    })
+}
+
+fn cancel_native_clipboard_read_transfer(
+    transfers: &mut HashMap<String, NativeClipboardReadTransfer>,
+    transfer_id: &str,
+) -> bool {
+    transfers.remove(transfer_id).is_some()
+}
+
 fn validate_clipboard_temp_path(path: &str) -> Result<(PathBuf, bool), String> {
     let raw_path = path.trim();
     if raw_path.is_empty() {
@@ -538,6 +784,73 @@ fn write_paths_to_clipboard(paths: &[PathBuf]) -> Result<(), String> {
 #[cfg(not(windows))]
 fn write_paths_to_clipboard(_paths: &[PathBuf]) -> Result<(), String> {
     Err("当前不是 Windows 环境，不能写入系统文件剪贴板。".to_string())
+}
+
+#[cfg(windows)]
+fn read_paths_from_clipboard() -> Result<Vec<PathBuf>, String> {
+    let script = [
+        "$ErrorActionPreference = 'Stop'",
+        "$items = @(Get-Clipboard -Format FileDropList -ErrorAction Stop)",
+        "$paths = @($items | ForEach-Object { $_.FullName })",
+        "$paths | ConvertTo-Json -Compress",
+    ]
+    .join("; ");
+
+    let mut command = Command::new("powershell.exe");
+    command
+        .args([
+            "-NoProfile",
+            "-STA",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            &script,
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .creation_flags(CREATE_NO_WINDOW);
+
+    let output = command
+        .output()
+        .map_err(|error| format!("启动 PowerShell 读取文件剪贴板失败：{error}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        return Err(if stderr.is_empty() { stdout } else { stderr });
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if stdout.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let value: Value = serde_json::from_str(&stdout)
+        .map_err(|error| format!("解析系统文件剪贴板路径失败：{error}"))?;
+    let mut paths = Vec::new();
+    match value {
+        Value::Array(items) => {
+            for item in items {
+                if let Some(path) = item.as_str().map(str::trim).filter(|path| !path.is_empty()) {
+                    paths.push(PathBuf::from(path));
+                }
+            }
+        }
+        Value::String(path) => {
+            let path = path.trim();
+            if !path.is_empty() {
+                paths.push(PathBuf::from(path));
+            }
+        }
+        Value::Null => {}
+        _ => return Err("系统文件剪贴板路径格式无效。".to_string()),
+    }
+    Ok(paths)
+}
+
+#[cfg(not(windows))]
+fn read_paths_from_clipboard() -> Result<Vec<PathBuf>, String> {
+    Err("当前不是 Windows 环境，不能读取系统文件剪贴板。".to_string())
 }
 
 fn repo_root() -> Result<PathBuf, String> {
@@ -1207,6 +1520,45 @@ fn cancel_clipboard_file_write(
 }
 
 #[tauri::command]
+fn begin_clipboard_file_read(
+    state: tauri::State<'_, ClipboardFileReadState>,
+) -> Result<BeginClipboardFileReadResult, String> {
+    let paths = read_paths_from_clipboard()?;
+    let mut transfers = state
+        .transfers
+        .lock()
+        .map_err(|_| "文件剪贴板读取状态不可用。".to_string())?;
+    create_native_clipboard_read_transfer(&paths, &mut transfers)
+}
+
+#[tauri::command]
+fn read_clipboard_file_chunk(
+    payload: ReadClipboardFileChunkPayload,
+    state: tauri::State<'_, ClipboardFileReadState>,
+) -> Result<ReadClipboardFileChunkResult, String> {
+    let transfers = state
+        .transfers
+        .lock()
+        .map_err(|_| "文件剪贴板读取状态不可用。".to_string())?;
+    read_native_clipboard_file_chunk(&transfers, payload)
+}
+
+#[tauri::command]
+fn cancel_clipboard_file_read(
+    payload: CancelClipboardFileReadPayload,
+    state: tauri::State<'_, ClipboardFileReadState>,
+) -> Result<bool, String> {
+    let mut transfers = state
+        .transfers
+        .lock()
+        .map_err(|_| "文件剪贴板读取状态不可用。".to_string())?;
+    Ok(cancel_native_clipboard_read_transfer(
+        &mut transfers,
+        &payload.transfer_id,
+    ))
+}
+
+#[tauri::command]
 fn open_clipboard_temp_path(path: String) -> Result<bool, String> {
     let (target, is_dir) = validate_clipboard_temp_path(&path)?;
 
@@ -1751,6 +2103,62 @@ mod tests {
     }
 
     #[test]
+    fn native_clipboard_read_transfer_reads_file_chunks_and_cleans_state() {
+        let root_dir = std::env::temp_dir().join(format!(
+            "lan-dual-control-read-test-{}",
+            CLIPBOARD_TRANSFER_COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root_dir).expect("read test temp root");
+        let file_path = root_dir.join("native-demo.zip");
+        fs::write(&file_path, b"hello-native").expect("read test file");
+
+        let mut transfers = HashMap::new();
+        let begin = create_native_clipboard_read_transfer(&[file_path.clone()], &mut transfers)
+            .expect("begin read transfer");
+        assert_eq!(begin.file_count, 1);
+        assert_eq!(begin.total_bytes, 12);
+        assert_eq!(begin.files[0].name, "native-demo.zip");
+        assert_eq!(begin.files[0].size, 12);
+
+        let chunk = read_native_clipboard_file_chunk(
+            &transfers,
+            ReadClipboardFileChunkPayload {
+                transfer_id: begin.transfer_id.clone(),
+                file_index: 0,
+                offset: 6,
+                length: 6,
+            },
+        )
+        .expect("read chunk");
+        assert_eq!(chunk.bytes, 6);
+        assert_eq!(
+            general_purpose::STANDARD
+                .decode(chunk.data_base64.as_bytes())
+                .expect("chunk base64"),
+            b"native"
+        );
+
+        let bad_offset = read_native_clipboard_file_chunk(
+            &transfers,
+            ReadClipboardFileChunkPayload {
+                transfer_id: begin.transfer_id.clone(),
+                file_index: 0,
+                offset: 13,
+                length: 1,
+            },
+        )
+        .expect_err("offset beyond size should fail");
+        assert!(bad_offset.contains("超出文件大小"));
+
+        assert!(cancel_native_clipboard_read_transfer(
+            &mut transfers,
+            &begin.transfer_id
+        ));
+        assert!(!transfers.contains_key(&begin.transfer_id));
+        let _ = fs::remove_dir_all(root_dir);
+    }
+
+    #[test]
     fn validates_clipboard_temp_paths_under_app_temp_root() {
         let transfer_id = make_clipboard_transfer_id().expect("transfer id");
         let root_dir = make_clipboard_root_dir(&transfer_id);
@@ -1795,12 +2203,16 @@ fn main() {
     tauri::Builder::default()
         .manage(WindowsHostProcessState::default())
         .manage(ClipboardFileTransferState::default())
+        .manage(ClipboardFileReadState::default())
         .invoke_handler(tauri::generate_handler![
             write_files_to_clipboard,
             begin_clipboard_file_write,
             append_clipboard_file_chunk,
             finish_clipboard_file_write,
             cancel_clipboard_file_write,
+            begin_clipboard_file_read,
+            read_clipboard_file_chunk,
+            cancel_clipboard_file_read,
             open_clipboard_temp_path,
             run_windows_host_readiness,
             preview_windows_firewall_rule,

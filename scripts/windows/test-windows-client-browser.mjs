@@ -2069,8 +2069,12 @@ async function verifyFileClipboardRecoveryText(session) {
       const clipboardProgress = [];
       const clipboardResults = [];
       const unsupportedSends = [];
+      const nativeClipboardSends = [];
+      const nativeClipboardInvokes = [];
       const failingSends = [];
       const retrySends = [];
+      const originalNavigatorClipboard = navigator.clipboard;
+      let navigatorClipboardOverridden = false;
       try {
         state.fileTransferActive = true;
         state.outgoingFileTransfer = {
@@ -2088,6 +2092,81 @@ async function verifyFileClipboardRecoveryText(session) {
         const outgoingFloatingStatus = document.querySelector("#floatingClipboardStatus")?.textContent || "";
         state.fileTransferActive = false;
         state.outgoingFileTransfer = null;
+
+        const nativeClipboardBytes = new Uint8Array([80, 75, 3, 4, 9]);
+        const nativeClipboardBase64 = window.btoa(
+          Array.from(nativeClipboardBytes, (byte) => String.fromCharCode(byte)).join(""),
+        );
+        Object.defineProperty(navigator, "clipboard", {
+          configurable: true,
+          value: {
+            read: async () => [],
+            readText: async () => "",
+          },
+        });
+        navigatorClipboardOverridden = true;
+        window.__TAURI__ = {
+          core: {
+            invoke: async (command, args = {}) => {
+              nativeClipboardInvokes.push({ command, args });
+              if (command === "begin_clipboard_file_read") {
+                return {
+                  transferId: "native-read-1",
+                  fileCount: 1,
+                  totalBytes: nativeClipboardBytes.length,
+                  files: [
+                    {
+                      index: 0,
+                      name: "native-demo.zip",
+                      size: nativeClipboardBytes.length,
+                      mimeType: "application/zip",
+                      lastModified: 1710000000000,
+                    },
+                  ],
+                };
+              }
+              if (command === "read_clipboard_file_chunk") {
+                const payload = args.payload || {};
+                const offset = Number(payload.offset || 0);
+                const length = Number(payload.length || nativeClipboardBytes.length);
+                const bytes = nativeClipboardBytes.slice(offset, Math.min(nativeClipboardBytes.length, offset + length));
+                const dataBase64 = window.btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""));
+                return {
+                  transferId: payload.transferId,
+                  fileIndex: payload.fileIndex,
+                  offset,
+                  bytes: bytes.length,
+                  dataBase64,
+                };
+              }
+              if (command === "cancel_clipboard_file_read") {
+                return true;
+              }
+              throw new Error("unexpected native clipboard command " + command);
+            },
+          },
+        };
+        state.connected = true;
+        elements.clipboardToggle.checked = true;
+        state.hostDiagnostics = {
+          ...(state.hostDiagnostics || {}),
+          clipboardText: true,
+          clipboardTextMode: "system",
+          clipboardFile: true,
+          clipboardFileMode: "system",
+        };
+        state.client = {
+          sendClipboardFileOffer: (payload) => nativeClipboardSends.push({ type: "offer", payload }),
+          sendClipboardFileChunk: (payload) => nativeClipboardSends.push({ type: "chunk", payload }),
+          sendClipboardFileComplete: (payload) => nativeClipboardSends.push({ type: "complete", payload }),
+        };
+        await syncClipboardBeforePaste();
+        const nativeClipboardOffer = nativeClipboardSends.find((item) => item.type === "offer")?.payload || {};
+        const nativeClipboardChunk = nativeClipboardSends.find((item) => item.type === "chunk")?.payload || {};
+        const nativeClipboardComplete = nativeClipboardSends.find((item) => item.type === "complete")?.payload || {};
+        const nativeClipboardText = elements.clipboardText.textContent || "";
+        const nativeClipboardCommands = nativeClipboardInvokes.map((item) => item.command);
+        state.hostDiagnostics = { ...originalHostDiagnostics };
 
         const unsupportedFile = new File([new Uint8Array([1, 2, 3, 4])], "unsupported.zip", { type: "application/zip" });
         state.connected = true;
@@ -2292,6 +2371,17 @@ async function verifyFileClipboardRecoveryText(session) {
             outgoingFloatingStatus.includes("发送 1 个文件") &&
             outgoingFloatingStatus.includes("2.0 KB/4.0 KB") &&
             outgoingFloatingStatus.includes("速度 2.0 KB/s") &&
+            nativeClipboardSends.filter((item) => item.type === "offer").length === 1 &&
+            nativeClipboardSends.filter((item) => item.type === "chunk").length === 1 &&
+            nativeClipboardSends.filter((item) => item.type === "complete").length === 1 &&
+            nativeClipboardOffer.files?.[0]?.name === "native-demo.zip" &&
+            nativeClipboardOffer.totalBytes === nativeClipboardBytes.length &&
+            nativeClipboardChunk.bytes === nativeClipboardBytes.length &&
+            nativeClipboardComplete.totalBytes === nativeClipboardBytes.length &&
+            nativeClipboardCommands.includes("begin_clipboard_file_read") &&
+            nativeClipboardCommands.includes("read_clipboard_file_chunk") &&
+            nativeClipboardCommands.includes("cancel_clipboard_file_read") &&
+            nativeClipboardText.includes("等待对端确认") &&
             unsupportedSendCount === 0 &&
             unsupportedClipboardText.includes("对端文件剪贴板不可用") &&
             unsupportedClipboardText.includes("文件/压缩包不能直接复制粘贴") &&
@@ -2367,6 +2457,12 @@ async function verifyFileClipboardRecoveryText(session) {
           recovery,
           detail,
           memoryDetail,
+          nativeClipboardText,
+          nativeClipboardCommands,
+          nativeClipboardSends,
+          nativeClipboardOffer,
+          nativeClipboardChunk,
+          nativeClipboardComplete,
           unsupportedClipboardText,
           unsupportedSendCount,
           unsupportedSends,
@@ -2422,6 +2518,12 @@ async function verifyFileClipboardRecoveryText(session) {
           delete window.__TAURI__;
         } else {
           window.__TAURI__ = originalTauri;
+        }
+        if (navigatorClipboardOverridden) {
+          Object.defineProperty(navigator, "clipboard", {
+            configurable: true,
+            value: originalNavigatorClipboard,
+          });
         }
         state.receivedClipboardFiles = originalFiles;
         state.receivedClipboardTempPath = originalTempPath;
