@@ -73,6 +73,12 @@ JSON output:
                                   command that starts/reuses the local Mac
                                   client page, then sends a Windows formal
                                   test call only when the checklist is ready.
+  runPlan.commands.macClientFormalChecklist
+                                  Secret-free rerun command for this formal
+                                  checklist with the standard
+                                  MacClientFormalChecklist= board-summary
+                                  label. It does not authenticate, request a
+                                  password, send a call, or send input.
   runPlan.commands.macClientBrowserSelfTest
                                   Secret-free local browser self-test command.
                                   It uses a temporary mock Windows host and
@@ -630,6 +636,7 @@ function makeRunPlan(report, args) {
       windowsHostStatus: makeWindowsHostStatusCommand(report, args),
       safePreflightWithEnsureClient: makeEnsureClientSmokeCommand(args, ["--preflightOnly", "--boardSummary"]),
       sendCallWithEnsureClient: makeEnsureClientSmokeCommand(args, ["--preflightOnly", "--sendCall"]),
+      macClientFormalChecklist: makeChecklistCommand(args),
       rerunFormalChecklist: makeChecklistCommand(args),
       macClientBrowserSelfTest: makeMacClientBrowserSelfTestCommand(),
       browserSmoke: browserTestCommand,
@@ -714,6 +721,7 @@ function makeBoardSummary(report) {
       ? `Next: run Mac client true test against ${host.probe?.host}:${host.probe?.port}; compare first frame, FPS, frame age, audio playback, clipboard, input-log, bandwidth/CPU.`
       : "Next: clear blockers, run node scripts/mac/start-mac-client.mjs, discover/start Windows host, then rerun with --host <Windows IP> --port 43770 --boardSummary.",
     `WindowsHostStatus=${report.runPlan?.commands?.windowsHostStatus || makeWindowsHostStatusCommand(host, report.args || {})}.`,
+    `MacClientFormalChecklist=${report.runPlan?.commands?.macClientFormalChecklist || makeChecklistCommand(report.args || {})}.`,
     "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
     `MacClientBrowserSelfTest=${report.runPlan?.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
     `ReverseGrantCopy=${report.runPlan?.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
@@ -893,6 +901,9 @@ function printRunPlan(runPlan) {
   }
   if (runPlan.commands?.windowsHostStatus) {
     console.log(`- Windows host status for Windows side: ${runPlan.commands.windowsHostStatus}`);
+  }
+  if (runPlan.commands?.macClientFormalChecklist) {
+    console.log(`- Mac client formal checklist: ${runPlan.commands.macClientFormalChecklist}`);
   }
   console.log(`- safety: passwordInCommandArguments=${runPlan.safety.passwordInCommandArguments}; inject=${runPlan.safety.inject}; passwordOnAgentLinkBoard=${runPlan.safety.passwordOnAgentLinkBoard}`);
   console.log("");
