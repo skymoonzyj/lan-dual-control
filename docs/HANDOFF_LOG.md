@@ -44,7 +44,40 @@
 是否改了协议：否。
 是否需要另一端配合：不阻塞；后续可让 Mac 端发一条新的 `MacHeartbeat=` 摘要验证 Windows 提醒区刷新。
 
-## 2026-06-18 Windows Codex
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
+本轮目标：让 Mac 恢复总览第一屏直接显示后台 heartbeat watcher 是否在值守。
+完成内容：
+- `scripts/mac/check-mac-resume-status.mjs` 现在会只读调用 `start-mac-heartbeat-watcher --status --json`，并把结果写入 JSON `macHeartbeatWatcher`。
+- `--boardSummary` 的首段新增 `heartbeatWatcher=running/not-running`、`lastHeartbeat=...` 与 `lastRun/post`；无后台日志时显示 `lastHeartbeat=not-seen` / `lastRun=not-seen`。
+- 普通输出新增 `Mac heartbeat watcher:` 行，方便恢复开工时不用另跑命令也能判断后台 watcher 是否真的启动。
+- 该检查不启动 watcher、不停止 watcher、不认证 WebSocket、不请求密码、不发送 input/inject；失败只作为状态诊断显示，不阻塞其他恢复摘要。
+- `scripts/mac/test-mac-resume-status.mjs` 覆盖 help、JSON、普通输出和 boardSummary 里的 watcher 状态字段。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 45000`
+- `node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/mac docs` 无匹配。
+遗留问题：
+- 当前真实后台 heartbeat watcher 未启动，所以真实摘要显示 `heartbeatWatcher=not-running lastHeartbeat=not-seen`；是否长期启动仍等用户或两端确认后执行 `MacHeartbeatStart=`。
+下一步建议：
+- 如果要长期值守，运行 `MacHeartbeatStart=` 后再跑 `check-mac-resume-status --checkBoard --boardSummary`，确认第一屏变为 running 且出现最近 `lastHeartbeat`。
+是否改了协议：否。
+是否需要另一端配合：暂不阻塞；Windows 端可直接读取 Mac resume 摘要里的 `heartbeatWatcher=` 文本。
+
+## 2026-06-18 Mac Codex
 
 日期：2026-06-18 继续推进
 开发端：Mac Codex

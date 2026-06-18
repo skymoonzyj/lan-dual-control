@@ -152,6 +152,8 @@ function assertNoPasswordLeak(result, label) {
 function assertBoardSummaryShape(text, label) {
   assert(/Mac resume:/.test(text), `${label} should start with Mac resume summary`);
   assert(/repo=/.test(text), `${label} should include repo state`);
+  assert(/heartbeatWatcher=/.test(text), `${label} should include Mac heartbeat watcher status`);
+  assert(/lastHeartbeat=/.test(text), `${label} should include the last Mac heartbeat watcher observation`);
   assert(/media baseline/i.test(text), `${label} should include media baseline guidance`);
   assert(/check-mac-host-readiness\.mjs/.test(text), `${label} should include the media readiness command`);
   assert(/MacFormalLocalSmoke=/.test(text), `${label} should include Mac formal local smoke guidance`);
@@ -488,6 +490,7 @@ function checkHelp(args) {
     assert(/commands\.macHeartbeatStartCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat background start JSON field`);
     assert(/commands\.macHeartbeatStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat background status JSON field`);
     assert(/commands\.macHeartbeatStopCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat background stop JSON field`);
+    assert(/macHeartbeatWatcher/.test(result.stdout), `${script} ${flag} should document Mac heartbeat watcher status JSON field`);
     assert(/commands\.macScriptHelpCommand/.test(result.stdout), `${script} ${flag} should document Mac script help JSON field`);
   }
   print("OK", "Resume status help exits quickly");
@@ -507,6 +510,8 @@ function checkOfflineJson(args) {
   assert(payload.host?.online !== true, "offline payload should not report host online");
   assert(payload.host?.probe?.port === 9, "offline payload should keep probe port");
   assert(payload.host?.error?.message, "offline payload should include error.message");
+  assert(payload.macHeartbeatWatcher?.checked === true, "offline payload should include Mac heartbeat watcher status");
+  assert(typeof payload.macHeartbeatWatcher.running === "boolean", "offline payload should include Mac heartbeat watcher running flag");
   assert(Array.isArray(payload.recommendations), "offline payload should include recommendations");
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary || "", "offline JSON media readiness command");
   assertMacHostSafeStartCommand(payload.commands?.macHostSafeStartCommand || "", "offline JSON Mac host safe start command");
@@ -619,6 +624,7 @@ function checkOfflinePlainReport(args) {
   assert(String(result.stdout || "").includes("Mac heartbeat background start:"), "plain report should include Mac heartbeat background start label");
   assert(String(result.stdout || "").includes("Mac heartbeat background status:"), "plain report should include Mac heartbeat background status label");
   assert(String(result.stdout || "").includes("Mac heartbeat background stop:"), "plain report should include Mac heartbeat background stop label");
+  assert(String(result.stdout || "").includes("Mac heartbeat watcher:"), "plain report should include Mac heartbeat watcher status");
   assert(String(result.stdout || "").includes("start-mac-client.mjs"), "plain report should include Mac client page status command");
   assert(String(result.stdout || "").includes("check-mac-client-readiness.mjs"), "plain report should include Mac client readiness command");
   assert(String(result.stdout || "").includes("discover-windows-hosts.mjs"), "plain report should include Mac client Windows discovery command");
@@ -666,6 +672,8 @@ function checkOnlineJson(args) {
   assert(Array.isArray(payload.host.displays), "online payload should include displays");
   assert(Array.isArray(payload.host.lanAddresses), "online payload should include lanAddresses");
   assert(payload.host.buildDiff && typeof payload.host.buildDiff === "object", "online payload should include buildDiff");
+  assert(payload.macHeartbeatWatcher?.checked === true, "online payload should include Mac heartbeat watcher status");
+  assert(typeof payload.macHeartbeatWatcher.running === "boolean", "online payload should include Mac heartbeat watcher running flag");
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary || "", "online JSON media readiness command");
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand || "", "online JSON Mac formal local smoke command");
   assertMacHostSafeStartCommand(payload.commands?.macHostSafeStartCommand || "", "online JSON Mac host safe start command");

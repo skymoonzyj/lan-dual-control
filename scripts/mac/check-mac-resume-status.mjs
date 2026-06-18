@@ -140,6 +140,9 @@ Machine-readable JSON fields:
                              Secret-free background watcher status command.
   commands.macHeartbeatStopCommand
                              Secret-free background watcher stop command.
+  macHeartbeatWatcher        Read-only background watcher status snapshot from
+                             start-mac-heartbeat-watcher --status --json,
+                             including lastHeartbeat when log evidence exists.
   commands.macClientReverseRehearsalAction
                              Human action for the guarded Mac-controls-Windows
                              reverse-control request rehearsal. Run discovery,
@@ -863,6 +866,56 @@ function makeMacHeartbeatStopCommand() {
   return "node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --boardSummary";
 }
 
+function getMacHeartbeatWatcherStatus(args) {
+  const result = command(process.execPath, [
+    "scripts/mac/start-mac-heartbeat-watcher.mjs",
+    "--status",
+    "--json",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--server",
+    args.server,
+    "--timeoutMs",
+    String(Math.min(Math.max(args.timeoutMs, 1000), 10000)),
+  ], {
+    timeoutMs: Math.min(Math.max(args.timeoutMs + 2000, 3000), 15000),
+    maxBuffer: 2 * 1024 * 1024,
+  });
+  if (!result.ok) {
+    return {
+      checked: true,
+      ok: false,
+      running: false,
+      status: result.status,
+      error: normalizedText(result.error || result.stderr || `exit ${result.status ?? "unknown"}`),
+    };
+  }
+  try {
+    const payload = JSON.parse(result.stdout);
+    return {
+      checked: true,
+      ok: Boolean(payload.ok),
+      running: Boolean(payload.running),
+      pid: payload.pid ?? null,
+      stalePidFile: Boolean(payload.stalePidFile),
+      lastHeartbeat: payload.lastHeartbeat || null,
+      files: payload.files || {},
+      commands: payload.commands || {},
+      message: normalizedText(payload.message),
+    };
+  } catch (error) {
+    return {
+      checked: true,
+      ok: false,
+      running: false,
+      status: result.status,
+      error: `invalid JSON: ${error.message}`,
+    };
+  }
+}
+
 function makeMacClientReverseRehearsalAction() {
   return "Run MacClientDiscoverWindows first, then use its ReverseRehearsal= line: Mac requests reverse control and expects LAN008, Windows runs the local loopback one-time grant, Mac retries and expects accepted/临时授权已使用";
 }
@@ -927,8 +980,21 @@ function formatBoardCallSummary(board) {
   return `call=${state}(${formatCallOneLine(board.currentCall)})`;
 }
 
+function formatHeartbeatWatcherSummary(watcher) {
+  if (!watcher?.checked) return "heartbeatWatcher=not-checked";
+  if (!watcher.ok) return `heartbeatWatcher=unknown${watcher.error ? ` error=${watcher.error}` : ""}`;
+  const state = watcher.running ? `running pid=${watcher.pid || "unknown"}` : "not-running";
+  const heartbeat = watcher.lastHeartbeat?.heartbeat?.found
+    ? `lastHeartbeat=${watcher.lastHeartbeat.heartbeat.status || "unknown"} checkedAt=${watcher.lastHeartbeat.heartbeat.checkedAt || "unknown"} reason=${watcher.lastHeartbeat.heartbeat.reason || "unknown"} codexAgeMs=${watcher.lastHeartbeat.heartbeat.codexAgeMs || "unknown"}`
+    : "lastHeartbeat=not-seen";
+  const run = watcher.lastHeartbeat?.watcherRun?.found
+    ? `lastRun=${watcher.lastHeartbeat.watcherRun.run || "unknown"} post=${watcher.lastHeartbeat.watcherRun.post || "unknown"}`
+    : "lastRun=not-seen";
+  return `heartbeatWatcher=${state} ${heartbeat} ${run}`;
+}
+
 function formatBoardSummary(report) {
-  const { git, host, board, currentBuildId, recommendations } = report;
+  const { git, host, board, currentBuildId, recommendations, macHeartbeatWatcher } = report;
   const repoState = `${currentBuildId || "unknown"} ${git.clean ? "clean" : `dirty:${git.changes.length}`}`;
   const blockerItems = recommendations.filter((item) => item.level === "blocker");
   const warningItems = recommendations.filter((item) => item.level === "warning");
@@ -941,10 +1007,11 @@ function formatBoardSummary(report) {
       : "attention=none";
   const findingSummary = formatRecommendationSummary(blockerItems, warningItems);
   const callSummary = formatBoardCallSummary(board);
+  const heartbeatWatcherSummary = formatHeartbeatWatcherSummary(macHeartbeatWatcher);
 
   if (!host.online) {
     return [
-      `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
+      `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${heartbeatWatcherSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
       `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
       `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
       `MacHostReadiness=${report.commands.macHostReadinessCommand}.`,
@@ -981,7 +1048,7 @@ function formatBoardSummary(report) {
   const buildDiff = formatBoardBuildDiff(host.buildDiff);
 
   return [
-    `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}.`,
+    `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}; ${heartbeatWatcherSummary}.`,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
     `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
@@ -1025,7 +1092,7 @@ function summarizeRecommendationIds(items) {
 }
 
 function printReport(report) {
-  const { git, host, board, recommendations } = report;
+  const { git, host, board, recommendations, macHeartbeatWatcher } = report;
   console.log(`[INFO] Mac resume status · ${new Date(report.checkedAt).toLocaleString()}`);
   console.log(`[${git.clean ? "OK" : "WARN"}] Git: ${git.branchLine || "branch unknown"} · ${git.head || "HEAD unknown"} · ${git.clean ? "clean" : `${git.changes.length} change(s)`}`);
   if (!git.clean) {
@@ -1043,6 +1110,13 @@ function printReport(report) {
     }
   } else {
     console.log("[INFO] Agent Link Board: not checked; add --checkBoard when coordinating with Windows Codex.");
+  }
+  if (macHeartbeatWatcher?.checked) {
+    const state = macHeartbeatWatcher.running ? `running pid=${macHeartbeatWatcher.pid || "unknown"}` : "not running";
+    const last = macHeartbeatWatcher.lastHeartbeat?.heartbeat?.found
+      ? `last=${macHeartbeatWatcher.lastHeartbeat.heartbeat.status || "unknown"} checkedAt=${macHeartbeatWatcher.lastHeartbeat.heartbeat.checkedAt || "unknown"} reason=${macHeartbeatWatcher.lastHeartbeat.heartbeat.reason || "unknown"}`
+      : "last=not seen";
+    console.log(`[${macHeartbeatWatcher.ok ? "OK" : "WARN"}] Mac heartbeat watcher: ${state}; ${last}`);
   }
   if (!host.online) {
     console.log(`[WARN] Mac host: offline at ${host.probe.host}:${host.probe.port} (${host.error?.message || "unknown error"})`);
@@ -1103,6 +1177,7 @@ async function main() {
   const git = getGitStatus();
   const host = await getMacHostStatus(args, currentBuildId);
   const board = await getBoardStatus(args);
+  const macHeartbeatWatcher = getMacHeartbeatWatcherStatus(args);
   const recommendations = buildRecommendations({ git, host, board, args });
   const report = {
     ok: computeOk({ git, host, board, recommendations, args }),
@@ -1120,6 +1195,7 @@ async function main() {
     currentBuildId,
     git,
     board,
+    macHeartbeatWatcher,
     host,
     commands: {
       mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
