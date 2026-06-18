@@ -58,6 +58,37 @@
 
 日期：2026-06-18 继续推进
 开发端：Mac Codex
+本轮目标：让 `run-mac-client-formal-smoke` 自身也输出稳定的 `MacClientFormalSmoke=` 安全重跑标签，避免只拿到 formal smoke 摘要时还要回翻 heartbeat/resume。
+完成内容：
+- JSON `commands.macClientFormalSmoke` 新增无密预检命令：`node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary`。
+- preflight、dry-run、sendCall、成功/失败/发现失败的 `--boardSummary` 都会输出 `MacClientFormalSmoke=`；自定义端口、Mac client 端口和备用 Agent Link Board URL 会以安全参数保留。
+- 新标签不继承 `--promptPassword`、`--password`、`--useEnvPassword`、`--sendCall` 或 `--forceCall`，只用于安全启动/复用 Mac client 页面并做无密 discovery/formal preflight。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 22000`（失败点：help 不含 `commands.macClientFormalSmoke`）
+- 语法检查：`node --check scripts/mac/run-mac-client-formal-smoke.mjs`、`node --check scripts/mac/test-mac-client-formal-smoke.mjs`
+- 实现后复跑：`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 22000`
+- 统一 Mac help 安全自检：`node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- 真实无密预检：`node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --allowDirty --boardSummary`（发现 `192.168.31.68:43770`，`ok=yes ready=yes blockers=none warnings=repo`，摘要含 `MacClientFormalSmoke=... --discover --ensureClient --preflightOnly --boardSummary`）
+- 最终收尾：`git diff --check`；`rg -n "^(<<<<<<<|=======|>>>>>>>)" docs scripts/mac`
+遗留问题：
+- 本轮只补无密重跑标签和摘要；未执行真实 browser auth，未弹密码，未发送 call，未发送 input/inject。
+下一步建议：
+- Windows 端或人工看到 Mac formal smoke 失败/阻塞摘要时，可直接复制 `MacClientFormalSmoke=` 先重跑安全无密 preflight；ready 后再决定是否发 call 或由用户在 Mac 本机输入密码跑真实 smoke。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Windows 端当前 resume/watchers 已能消费同名标签。
+
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac formal smoke 的 `--discover` 失败路径也能透传 Agent Link Board 上的 `WindowsLanRisk=`，避免发现不到 Windows host 时丢失防火墙/Public 网络线索。
 完成内容：
 - `run-mac-client-formal-smoke --discover` 调用底层 `discover-windows-hosts` 时，在未 `--skipBoard` 的情况下同步传入 `--server <url> --checkBoard`。

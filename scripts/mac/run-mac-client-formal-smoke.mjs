@@ -105,6 +105,11 @@ Machine-readable JSON fields:
                                   true Windows control without authenticating,
                                   prompting for a password, sending a call, or
                                   sending input.
+  commands.macClientFormalSmoke  Secret-free Mac client formal smoke preflight
+                                  command. It discovers Windows, ensures the
+                                  local Mac client page, and stops before any
+                                  password prompt, authentication, call, input,
+                                  or inject.
   commands.preflight             Secret-free read-only formal checklist command.
   commands.sendCall              Secret-free --preflightOnly call sender; only set after a Windows host is known.
   commands.discoverPreflight     Safe discovery + preflight retry command when no host is known.
@@ -577,6 +582,24 @@ function makeDiscoveryRetryCommand(args) {
   return command.join(" ");
 }
 
+function makeMacClientFormalSmokeCommand(args) {
+  const command = [
+    "node scripts/mac/run-mac-client-formal-smoke.mjs",
+    "--discover",
+    "--ensureClient",
+    "--preflightOnly",
+    "--boardSummary",
+  ];
+  if (args.port && args.port !== defaults.port) command.push("--port", String(args.port));
+  if (args.clientHost && args.clientHost !== defaults.clientHost) command.push("--clientHost", args.clientHost);
+  if (args.clientPort && args.clientPort !== defaults.clientPort) command.push("--clientPort", String(args.clientPort));
+  if (args.server !== defaults.server) command.push("--server", args.server);
+  if (args.discoverTimeoutMs && args.discoverTimeoutMs !== defaults.discoverTimeoutMs) {
+    command.push("--discoverTimeoutMs", String(args.discoverTimeoutMs));
+  }
+  return command.join(" ");
+}
+
 function makeWindowsReverseGrantPowerShellCommand(args, action = "grant") {
   const parts = [
     "pwsh -NoProfile -ExecutionPolicy Bypass",
@@ -850,6 +873,7 @@ function makeBoardSummary(report) {
       `Mac client browser smoke passed against ${target}; duration=${report.browserSmoke.durationMs}ms.${discoveryText}${discoveryChecklistText}`,
       `Preflight ready=${report.preflight?.readyToCall ? "yes" : "no"}; ${preflightFindings}; command used environment password, not argv.`,
       `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
+      `MacClientFormalSmoke=${report.commands?.macClientFormalSmoke || makeMacClientFormalSmokeCommand(report.args)}.`,
       ...reverseGrantParts,
       ...secureAuthParts,
       `Reverse rehearsal next if needed: ${makeReverseControlRehearsalBoardText()}`,
@@ -871,6 +895,7 @@ function makeBoardSummary(report) {
       `Mac client browser smoke preflight for ${target}: ok=${report.preflight?.ok ? "yes" : "no"} ready=${report.preflight?.readyToCall ? "yes" : "no"}; ${preflightFindings}.${discoveryText}${discoveryChecklistText}`,
       nextText,
       `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
+      `MacClientFormalSmoke=${report.commands?.macClientFormalSmoke || makeMacClientFormalSmokeCommand(report.args)}.`,
       `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
       `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
       ...reverseGrantParts,
@@ -882,6 +907,7 @@ function makeBoardSummary(report) {
   return [
     `Mac client browser smoke failed/blocked for ${target}: ${report.error?.message || report.browserSmoke?.error || "unknown"}.${discoveryText}${discoveryChecklistText} Preflight ${preflightFindings}.`,
     `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
+    `MacClientFormalSmoke=${report.commands?.macClientFormalSmoke || makeMacClientFormalSmokeCommand(report.args)}.`,
     ...secureAuthParts,
     "Keep passwords off Agent Link Board; rerun preflight before retrying.",
     "Inject was not executed.",
@@ -967,6 +993,7 @@ function makeReport(args, preflight) {
     },
     commands: {
       macClientFormalChecklist: makePreflightCommand(args),
+      macClientFormalSmoke: makeMacClientFormalSmokeCommand(args),
       preflight: makePreflightCommand(args),
       sendCall: makeSendCallCommand(args),
       discoverPreflight: makeDiscoveryRetryCommand(args),
