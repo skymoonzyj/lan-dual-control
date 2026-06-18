@@ -98,6 +98,12 @@ Options:
   --help, -h                     Show this help without probing anything.
 
 Machine-readable JSON fields:
+  commands.macClientFormalChecklist
+                                  Secret-free formal checklist command. It
+                                  prints the manual true-test checklist before
+                                  true Windows control without authenticating,
+                                  prompting for a password, sending a call, or
+                                  sending input.
   commands.preflight             Secret-free read-only formal checklist command.
   commands.sendCall              Secret-free --preflightOnly call sender; only set after a Windows host is known.
   commands.discoverPreflight     Safe discovery + preflight retry command when no host is known.
@@ -744,6 +750,7 @@ function makeBoardSummary(report) {
     return [
       `Mac client browser smoke passed against ${target}; duration=${report.browserSmoke.durationMs}ms.${discoveryText}${discoveryChecklistText}`,
       `Preflight ready=${report.preflight?.readyToCall ? "yes" : "no"}; ${preflightFindings}; command used environment password, not argv.`,
+      `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
       `Reverse rehearsal next if needed: ${report.commands?.reverseControlRehearsal || makeReverseControlRehearsalText(report.args)}.`,
       "No password was sent to Agent Link Board; inject was not executed.",
     ].join(" ");
@@ -762,6 +769,7 @@ function makeBoardSummary(report) {
     return [
       `Mac client browser smoke preflight for ${target}: ok=${report.preflight?.ok ? "yes" : "no"} ready=${report.preflight?.readyToCall ? "yes" : "no"}; ${preflightFindings}.${discoveryText}${discoveryChecklistText}`,
       nextText,
+      `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
       `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
       `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
       `Reverse rehearsal after auth: ${report.commands?.reverseControlRehearsal || makeReverseControlRehearsalText(report.args)}.`,
@@ -770,6 +778,7 @@ function makeBoardSummary(report) {
   }
   return [
     `Mac client browser smoke failed/blocked for ${target}: ${report.error?.message || report.browserSmoke?.error || "unknown"}. Preflight ${preflightFindings}.`,
+    `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
     "Keep passwords off Agent Link Board; rerun preflight before retrying.",
     "Inject was not executed.",
   ].join(" ");
@@ -849,6 +858,7 @@ function makeReport(args, preflight) {
       allowClipboardFallback: args.allowClipboardFallback,
     },
     commands: {
+      macClientFormalChecklist: makePreflightCommand(args),
       preflight: makePreflightCommand(args),
       sendCall: makeSendCallCommand(args),
       discoverPreflight: makeDiscoveryRetryCommand(args),
