@@ -683,6 +683,16 @@ function windowsReverseControlGrantPowerShellCommand(port = defaults.port) {
   return `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port ${safePort} -DurationMs 30000 -BoardSummary`;
 }
 
+function windowsHostSafeStartCommand(args = {}) {
+  const host = String(args.host || defaults.host).trim() || defaults.host;
+  const port = Math.max(1, Math.min(65535, Number(args.port) || defaults.port));
+  return `node scripts/windows/start-windows-host.mjs --host ${host} --port ${port} --promptPassword --requirePassword`;
+}
+
+function windowsHostEphemeralStartCommand(args = {}) {
+  return `${windowsHostSafeStartCommand(args)} --skipFirewallCheck`;
+}
+
 function shouldShowReverseControlGrantCommand(reverse = normalizeReverseControlStatus()) {
   return Boolean(reverse.supported) && reverse.mode !== "disabled" && reverse.mode !== "accept" && !reverse.autoAccept;
 }
@@ -707,7 +717,9 @@ function macReadinessTargets(status) {
 function makeBoardSummary(status) {
   const board = boardSummaryFragment(status);
   if (!status.ok) {
-    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${status.suggestions[0] || "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword"}. WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}. Do not send passwords on Agent Link Board.`;
+    const safeStart = status.safeStartCommand || status.suggestions[0] || "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword";
+    const ephemeralStart = status.ephemeralStartCommand ? ` temporary smoke with ${status.ephemeralStartCommand}.` : "";
+    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${safeStart}.${ephemeralStart} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}. Do not send passwords on Agent Link Board.`;
   }
   const targets = macReadinessTargets(status);
   const targetText = targets.length > 0
@@ -803,6 +815,8 @@ function makeStatusShell(args, probeHost = statusProbeHost(args)) {
     windowsWgcComparePowerShellCommand: windowsWgcComparePowerShellCommand(),
     windowsReverseControlGrantCommand: windowsReverseControlGrantCommand(args.port),
     windowsReverseControlGrantPowerShellCommand: windowsReverseControlGrantPowerShellCommand(args.port),
+    safeStartCommand: windowsHostSafeStartCommand(args),
+    ephemeralStartCommand: windowsHostEphemeralStartCommand(args),
     board: skippedBoardSnapshot(),
     boardSummary: "",
     warnings: [],
@@ -827,7 +841,8 @@ async function getStatus(args) {
       message: error.message,
     };
     status.suggestions = [
-      "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword",
+      status.safeStartCommand,
+      `Temporary local smoke without firewall check: ${status.ephemeralStartCommand}`,
       "Add --wasapi when Mac should receive Windows system sound.",
     ];
     status.macClientReadinessCommands = [];
@@ -928,8 +943,9 @@ async function printStatus(args) {
   }
 
   console.log(`[WARN] /discovery offline on ${status.probe.host}:${status.probe.port}: ${status.error?.message || "unknown error"}`);
-  console.log(`[INFO] Start safely with: ${status.suggestions[0]}`);
-  console.log(`[INFO] ${status.suggestions[1]}`);
+  console.log(`[INFO] Start safely with: ${status.safeStartCommand || status.suggestions[0]}`);
+  console.log(`[INFO] Temporary local smoke without firewall check: ${status.ephemeralStartCommand}`);
+  console.log(`[INFO] Add --wasapi when Mac should receive Windows system sound.`);
   console.log(`[INFO] Windows host media baseline command: ${status.windowsHostMediaReadinessCommand}`);
   console.log(`[INFO] Windows host media baseline PowerShell command after host is online: ${status.windowsHostMediaReadinessPowerShellCommand}`);
   console.log(`[INFO] Windows video support command: ${status.windowsVideoEncoderSupportCommand}`);

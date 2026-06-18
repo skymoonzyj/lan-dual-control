@@ -95,6 +95,7 @@ Windows 端：
 - [x] Mac 侧 Windows host 发现摘要新增 formal 人工真连清单入口：JSON 带 `formalChecklistCommand` / `manualChecklistSummary`，`--boardSummary` 带 `FormalChecklist=` 与 `ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics`，发现到 Windows host 后可直接进入清单验收。
 - [x] Windows host `--status` 和 `check-windows-host-readiness --boardSummary` 摘要新增 `WindowsWgcSupport=` / `WindowsWgcSupportPs=`，可从本机被控入口直接复制 WGC/WinRT/GPU 专项预检命令，再继续 WGC benchmark 或 raw-bgra/NV12 对照。
 - [x] Windows host `--status` 和 `check-windows-host-readiness --boardSummary` 摘要新增 `WindowsWebCodecs=` / `WindowsWebCodecsPs=`，可从本机被控入口直接复制 Edge/Chrome WebCodecs H.264 解码预检命令。
+- [x] Windows host `--status` 离线安全启动建议保留当前 host/port：JSON 新增 `safeStartCommand` / `ephemeralStartCommand`，普通输出和 `--boardSummary` 的 `start safely with ...` 会显式带 `--host <当前>` / `--port <当前>`，避免 Mac 反控 Windows 前复制命令退回默认端口。
 - [x] 增加中文错误提示。
 - [x] 增加假 Mac 错误模拟。
 - [x] 增加意外断线自动重连。

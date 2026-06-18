@@ -322,6 +322,8 @@ async function assertDryRunWgcH264BridgeOptions(timeoutMs) {
 
 async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   const port = await getFreePort();
+  const expectedSafeStart = `node scripts/windows/start-windows-host.mjs --host 127.0.0.1 --port ${port} --promptPassword --requirePassword`;
+  const expectedEphemeralStart = `${expectedSafeStart} --skipFirewallCheck`;
   const result = await runNode(["--status", "--host", "127.0.0.1", "--port", String(port), "--requirePassword"], {
     timeoutMs,
     env: { LAN_DUAL_PASSWORD: "" },
@@ -333,6 +335,8 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   assertIncludes(output, "Windows host status probe", "offline status");
   assertIncludes(output, "/discovery offline", "offline status");
   assertIncludes(output, "Start safely", "offline status");
+  assertIncludes(output, expectedSafeStart, "offline status safe start command");
+  assertIncludes(output, expectedEphemeralStart, "offline status ephemeral start command");
   assertIncludes(output, "Windows host media baseline command:", "offline status");
   assertIncludes(output, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "offline status");
   assertIncludes(output, "Windows video support command:", "offline status");
@@ -373,6 +377,12 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   }
   if (!Array.isArray(parsed.suggestions) || parsed.suggestions.length < 2) {
     throw new Error(`Offline JSON status did not include startup suggestions.\n${jsonResult.stdout}`);
+  }
+  if (parsed.safeStartCommand !== expectedSafeStart || parsed.ephemeralStartCommand !== expectedEphemeralStart) {
+    throw new Error(`Offline JSON status did not preserve host/port in start commands.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.suggestions[0] || "").includes(`--port ${port}`) || !String(parsed.suggestions[1] || "").includes("--skipFirewallCheck")) {
+    throw new Error(`Offline JSON suggestions did not include precise safe/ephemeral start commands.\n${jsonResult.stdout}`);
   }
   if (!String(parsed.windowsHostMediaReadinessCommand || "").includes("check-windows-host-readiness.mjs") || !String(parsed.windowsHostMediaReadinessCommand || "").includes("--probeMedia")) {
     throw new Error(`Offline JSON status did not include Windows host media readiness command.\n${jsonResult.stdout}`);
@@ -465,6 +475,8 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   }
   assertIncludes(boardResult.stdout, "Windows host readiness: offline", "offline board summary");
   assertIncludes(boardResult.stdout, "start safely", "offline board summary");
+  assertIncludes(boardResult.stdout, expectedSafeStart, "offline board summary safe start command");
+  assertIncludes(boardResult.stdout, expectedEphemeralStart, "offline board summary ephemeral start command");
   assertIncludes(boardResult.stdout, "WindowsHostMedia=", "offline board summary");
   assertIncludes(boardResult.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "offline board summary");
   assertIncludes(boardResult.stdout, "WindowsHostMediaPs=", "offline board summary");

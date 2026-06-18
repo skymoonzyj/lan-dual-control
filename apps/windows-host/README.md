@@ -81,6 +81,8 @@ node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --dryRun
 node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs --status
 ```
 
+离线时普通输出、`--json` 和 `--boardSummary` 都会保留当前检查使用的 `--host` / `--port`；JSON 字段 `safeStartCommand` 是正式安全启动命令，`ephemeralStartCommand` 是跳过防火墙检查的临时冒烟启动命令，适合 Mac 反控 Windows 前从通讯板或桌面壳直接复制，不会把自定义端口退回默认 `43770`。
+
 需要给脚本或联络板消费时，加 `--json` 输出纯机器可读 JSON；如果还要同时看 Agent Link Board 当前是否有 Mac -> Windows 呼叫，加 `--checkBoard` / `-CheckBoard` 只读读取 `/api/state.currentCall`。PowerShell 包装也可以用 `-Status -Json` 走同一条只读检查：
 
 ```powershell

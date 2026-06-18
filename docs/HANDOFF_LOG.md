@@ -21,6 +21,40 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows host `--status` 离线安全启动建议保留当前 host/port。
+完成内容：
+- `start-windows-host --status` 的离线 JSON 新增 `safeStartCommand` 与 `ephemeralStartCommand`，两者都会显式带当前 `--host <host>` / `--port <port>`。
+- 普通输出的 `Start safely with:` 和 `--boardSummary` 的 `start safely with ...` 改用同一条安全启动命令，避免自定义端口现场复制后退回默认 `43770`。
+- 离线建议仍不启动 Windows host、不认证、不要求或打印密码、不发送 input/inject；临时冒烟命令仅额外带 `--skipFirewallCheck`。
+- Windows host README、当前状态、下一步和任务板已同步该行为。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script start-windows-host.mjs --timeoutMs 10000`
+- `node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port 43888 --boardSummary`（预期离线失败，但摘要保留 `--port 43888`）
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows docs apps/windows-host`
+遗留问题：
+- 本轮只补 Windows host 状态入口的离线启动建议；真正 Mac 反控 Windows 真连仍需 Windows host 在线后继续跑 readiness/formal smoke。
+下一步建议：
+- Mac 端若发现 Windows host 离线，可直接复制 `start-windows-host --status --boardSummary` 里的 `start safely with ...`；自定义端口场景不需要手工改命令。
+是否改了协议：否。
+是否需要另一端配合：暂无；这是 Windows-only 状态/文档收口。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows formal E2E 预检直接输出 Mac unattended formal 60Hz 强校验入口。
 完成内容：
 - `check-mac-formal-e2e` 的 `fpsLimit` JSON 新增 `macUnattendedFormalCommand`，命令为 `node scripts/mac/check-mac-unattended-status.mjs --host <Mac> --port <port> --requireLaunchAgentMaxFps --boardSummary`。
