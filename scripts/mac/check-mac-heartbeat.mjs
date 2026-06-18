@@ -89,9 +89,9 @@ Machine-readable JSON fields:
   board                       Agent Link Board readability and currentCall.
   commands                    Secret-free next-step commands for user action,
                               including Mac resume status, formal E2E readiness,
-                              the local Mac client mock browser self-test, Mac
-                              script help safety check, 60Hz safe start, and
-                              LaunchAgent load/print checks.
+                              Mac media baseline, the local Mac client mock
+                              browser self-test, Mac script help safety check,
+                              60Hz safe start, and LaunchAgent load/print checks.
 
 Examples:
   node scripts/mac/check-mac-heartbeat.mjs --checkBoard --boardSummary
@@ -609,6 +609,7 @@ function buildCommands(args) {
     macHostSafeStartCommand: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port}`,
     macMaxFpsSafeStartCommand: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port} --maxScreenFps ${formalTargetMaxScreenFps}`,
     macHostReadinessCommand: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
+    macHostMediaCommand: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --probeMedia --probeMediaResourceSample --promptPassword --boardSummary`,
     macUnattendedStatusCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --boardSummary`,
     macUnattendedFormalCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`,
     macLaunchAgentLoadCommand: `launchctl bootstrap gui/$(id -u) ${shellQuote(launchAgentPath)}`,
@@ -705,6 +706,7 @@ function makeBoardSummary(report) {
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
     `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
     `MacHostReadiness=${report.commands.macHostReadinessCommand}.`,
+    `MacHostMedia=${report.commands.macHostMediaCommand}.`,
     `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
     `MacLaunchAgentLoad=${report.commands.macLaunchAgentLoadCommand}.`,
