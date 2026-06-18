@@ -62,6 +62,10 @@ JSON output:
                             Safe local foreground start command preserving the
                             checked port. It uses --promptPassword and never
                             embeds --password.
+  commands.macMaxFpsSafeStartCommand
+                            Safe local foreground start command for the formal
+                            60Hz target. It uses --promptPassword, never embeds
+                            --password, and does not send input.
   commands.macFormalLocalSmokeCommand
                             Safe local command for H.264/PCM/input-log smoke
                             before asking Windows to run the longer formal E2E.
@@ -369,7 +373,7 @@ function buildChecklist(resume, args) {
 
   if (isFormalFpsLimited(capabilities)) {
     const maxFps = getMaxScreenFps(capabilities);
-    checklist.push(warnItem("fps-limit", "Screen FPS Limit", `remoteMax=${maxFps}Hz below formal target ${formalTargetMaxScreenFps}Hz`, "", `Dry-run max-FPS LaunchAgent plan before 60Hz long validation: ${makeMacMaxFpsPlanCommand(host.probe?.port || args.port)}.`));
+    checklist.push(warnItem("fps-limit", "Screen FPS Limit", `remoteMax=${maxFps}Hz below formal target ${formalTargetMaxScreenFps}Hz`, "", `For foreground 60Hz restart use ${makeMacMaxFpsSafeStartCommand({ port: host.probe?.port || args.port })}; for persistent startup, dry-run max-FPS LaunchAgent plan: ${makeMacMaxFpsPlanCommand(host.probe?.port || args.port)}.`));
   }
 
   if (isSystemPcmAudio(capabilities)) {
@@ -475,6 +479,7 @@ function makeCallText(report) {
       "Mac formal E2E is not ready: Mac host is offline.",
       `Checklist ${findings}.`,
       `Start with ${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}, then rerun the checklist.`,
+      `For foreground formal 60Hz, use: ${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
       `Plan safe reboot persistence first with: ${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
       `If targeting formal 60Hz, dry-run max-FPS planning first with: ${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
       `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
@@ -487,6 +492,7 @@ function makeCallText(report) {
     `Mac formal E2E ${readinessText}: host=${address}, repo=${report.resume.currentBuildId || "unknown"}, runtimeBuild=${host.runtime?.buildId || "unknown"}, inputMode=${host.inputMode || "unknown"}.`,
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)} pipeline=${host.capabilities?.capturePipeline || "unknown"} audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}.`,
     `Checklist ${findings}.`,
+    `For foreground formal 60Hz, use: ${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
     `If this Mac should stay ready after reboot, review the dry-run LaunchAgent plan with: ${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
     `If targeting formal 60Hz, review the max-FPS dry-run plan with: ${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
     `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
@@ -507,7 +513,8 @@ function makeBoardSummary(report) {
       `Mac formal E2E: ${state}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}; ${findings}.`,
       `Mac host offline at ${host.probe?.host || report.args.host}:${host.probe?.port || report.args.port}.`,
       `MacHostSafeStart=${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}.`,
-      "Next: start with MacHostSafeStart, then rerun checklist.",
+      `MacMaxFpsSafeStart=${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
+      "Next: start with MacHostSafeStart, or MacMaxFpsSafeStart for foreground 60Hz validation, then rerun checklist.",
       `MacLaunchAgentPlan=${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
       `MacMaxFpsPlan=${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
       `MacUnattendedFormal=${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
@@ -520,6 +527,7 @@ function makeBoardSummary(report) {
     `Mac formal E2E: ${state}; host=${formatHostAddress(host)}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}; runtimeBuild=${host.runtime?.buildId || "unknown"}; inputMode=${host.inputMode || "unknown"}; ${findings}.`,
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)}; pipeline=${host.capabilities?.capturePipeline || "unknown"}; audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}; ${formatBuildDiff(host.buildDiff)}.`,
     `MacHostSafeStart=${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}.`,
+    `MacMaxFpsSafeStart=${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
     `MacLaunchAgentPlan=${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
     `MacMaxFpsPlan=${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
     `MacUnattendedFormal=${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
@@ -536,6 +544,7 @@ function makeCommands(report) {
   const probePort = host.probe?.port || report.args.port || defaults.port;
   return {
     macHostSafeStartCommand: makeSafeStartCommand({ port: probePort }),
+    macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand({ port: probePort }),
     macLaunchAgentPlanCommand: [
       "node",
       "scripts/mac/install-mac-host-launch-agent.mjs",
@@ -581,6 +590,21 @@ function makeSafeStartCommand(args = {}) {
     "0.0.0.0",
     "--port",
     String(args.port || defaults.port),
+  ].join(" ");
+}
+
+function makeMacMaxFpsSafeStartCommand(args = {}) {
+  return [
+    "node",
+    "scripts/mac/start-mac-host.mjs",
+    "--promptPassword",
+    "--requirePassword",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    String(args.port || defaults.port),
+    "--maxScreenFps",
+    String(formalTargetMaxScreenFps),
   ].join(" ");
 }
 

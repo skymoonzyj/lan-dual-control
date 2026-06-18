@@ -153,6 +153,9 @@ function assertBoardSummaryShape(text, label) {
   assert(/start-mac-host\.mjs/.test(text), `${label} should include the Mac host safe start command`);
   assert(/--promptPassword/.test(text), `${label} should make safe-start password prompting explicit`);
   assert(/--requirePassword/.test(text), `${label} should require a password for safe start`);
+  assert(/MacMaxFpsSafeStart=/.test(text), `${label} should include foreground 60Hz safe start guidance`);
+  assert(/MacMaxFpsSafeStart=.*start-mac-host\.mjs/.test(text), `${label} should use start-mac-host for foreground 60Hz safe start`);
+  assert(/MacMaxFpsSafeStart=.*--maxScreenFps 60/.test(text), `${label} should include the formal 60Hz safe start command`);
   assert(/MacLaunchAgentPlan=/.test(text), `${label} should include LaunchAgent dry-run planner guidance`);
   assert(/install-mac-host-launch-agent\.mjs/.test(text), `${label} should include LaunchAgent planner command`);
   assert(/MacMaxFpsPlan=/.test(text), `${label} should include Mac max-FPS dry-run planner guidance`);
@@ -180,6 +183,11 @@ function assertMacHostSafeStartCommand(command, label, expectedPort = null) {
   if (expectedPort !== null) {
     assert(text.includes(`--port ${expectedPort}`), `${label} should target expected port ${expectedPort}`);
   }
+}
+
+function assertMacMaxFpsSafeStartCommand(command, label, expectedPort = null) {
+  assertMacHostSafeStartCommand(command, label, expectedPort);
+  assert(String(command || "").includes("--maxScreenFps 60"), `${label} should target the formal 60Hz foreground start`);
 }
 
 function assertMacLaunchAgentPlanCommand(command, label, expectedPort = null) {
@@ -433,6 +441,7 @@ function checkHelp(args) {
     assert(/commands\.macFormalLocalSmokeCommand/.test(result.stdout), `${script} ${flag} should document local smoke command output`);
     assert(/commands\.mediaReadinessBoardSummary/.test(result.stdout), `${script} ${flag} should document media readiness command output`);
     assert(/commands\.macHostSafeStartCommand/.test(result.stdout), `${script} ${flag} should document Mac host safe start command output`);
+    assert(/commands\.macMaxFpsSafeStartCommand/.test(result.stdout), `${script} ${flag} should document Mac foreground 60Hz safe start command output`);
     assert(/commands\.macLaunchAgentPlanCommand/.test(result.stdout), `${script} ${flag} should document LaunchAgent planner command output`);
     assert(/commands\.macMaxFpsPlanCommand/.test(result.stdout), `${script} ${flag} should document Mac max-FPS planner command output`);
     assert(/commands\.macUnattendedFormalCommand/.test(result.stdout), `${script} ${flag} should document Mac unattended formal gate command output`);
@@ -466,6 +475,8 @@ function checkOfflineJson(args) {
   assert(/start-mac-host\.mjs --promptPassword --requirePassword/.test(payload.callText || ""), "offline callText should include safe start command");
   assert(/--host 0\.0\.0\.0 --port 9/.test(payload.callText || ""), "offline callText should keep safe start target");
   assert(/--host 0\.0\.0\.0 --port 9/.test(payload.boardSummary || ""), "offline boardSummary should keep safe start target");
+  assert(/MacMaxFpsSafeStart=.*--host 0\.0\.0\.0 --port 9 --maxScreenFps 60/.test(payload.boardSummary || ""), "offline boardSummary should include foreground 60Hz safe start target");
+  assert(/foreground formal 60Hz/.test(payload.callText || ""), "offline callText should mention foreground 60Hz safe start");
   assert(/Checklist blockers=[^.]*host/.test(payload.callText || ""), "offline callText should name host blocker");
   assert(/warnings=[^.]*board/.test(payload.callText || ""), "offline callText should name board warning");
   assert(/install-mac-host-launch-agent\.mjs/.test(payload.callText || ""), "offline callText should include LaunchAgent planner command");
@@ -475,6 +486,7 @@ function checkOfflineJson(args) {
   assert(/check-mac-formal-local-smoke\.mjs/.test(payload.callText || ""), "offline callText should include local smoke command");
   assert(/check-mac-host-readiness --probeMedia --boardSummary/.test(payload.boardSummary || ""), "offline boardSummary should mention media precheck");
   assertMacHostSafeStartCommand(payload.commands?.macHostSafeStartCommand, "offline safe start command", 9);
+  assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand, "offline foreground 60Hz safe start command", 9);
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand, "offline LaunchAgent planner command", 9);
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "offline max-FPS planner command", 9);
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand, "offline unattended formal command", 9);
@@ -501,6 +513,7 @@ function checkOfflineBoardSummary(args) {
   assert(/blockers=[^.]*host/.test(text), "offline board summary should name host blocker");
   assert(/warnings=[^.]*board/.test(text), "offline board summary should name board warning");
   assert(/--host 0\.0\.0\.0 --port 9/.test(text), "offline board summary should keep safe start target");
+  assert(/MacMaxFpsSafeStart=.*--host 0\.0\.0\.0 --port 9 --maxScreenFps 60/.test(text), "offline board summary should keep foreground 60Hz safe start target");
   assert(/Media precheck/.test(text), "offline board summary should mention media precheck");
   print("OK", "Offline board summary is short, secret-free, and actionable");
 }
@@ -736,6 +749,7 @@ async function checkReadySendCall(args) {
         assert(call[field] === payload.sentCall.payload[field], `sentCall payload should match fake board call field ${field}`);
       }
       assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand, "ready sendCall LaunchAgent planner command", macHost.port);
+      assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand, "ready sendCall foreground 60Hz safe start command", macHost.port);
       assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "ready sendCall max-FPS planner command", macHost.port);
       assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand, "ready sendCall unattended formal command", macHost.port);
       assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "ready sendCall media readiness command", macHost.port);
@@ -914,10 +928,12 @@ async function checkMaxFpsLimitWarning(args) {
     const fpsLimit = payload.checklist?.find((entry) => entry.id === "fps-limit");
     assert(fpsLimit?.status === "warning", "max-FPS checklist item should be a warning");
     assert(/remoteMax=30Hz/.test(fpsLimit.summary || ""), "max-FPS warning should name the remote max FPS");
-    assert(/--maxScreenFps 60/.test(fpsLimit.next || ""), "max-FPS warning should recommend the 60Hz dry-run planner");
+    assert(/--maxScreenFps 60/.test(fpsLimit.next || ""), "max-FPS warning should recommend the 60Hz foreground start or dry-run planner");
+    assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand, "max-FPS formal E2E foreground safe start command", macHost.port);
     assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "max-FPS formal E2E planner command", macHost.port);
     assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand, "max-FPS formal E2E unattended formal command", macHost.port);
     assert(/warnings=[^.]*fps-limit/.test(payload.boardSummary || ""), "max-FPS board summary should name fps-limit warning");
+    assert(/MacMaxFpsSafeStart=/.test(payload.boardSummary || ""), "max-FPS board summary should include MacMaxFpsSafeStart");
     assert(/MacMaxFpsPlan=/.test(payload.boardSummary || ""), "max-FPS board summary should include MacMaxFpsPlan");
     assert(/MacUnattendedFormal=/.test(payload.boardSummary || ""), "max-FPS board summary should include MacUnattendedFormal");
     assert(/--maxScreenFps 60/.test(payload.boardSummary || ""), "max-FPS board summary should include the 60Hz planner command");
@@ -959,9 +975,11 @@ function checkOnlineJson(args) {
   assert(/warnings=/.test(payload.callText || ""), "online callText should include warning ids");
   assert(/install-mac-host-launch-agent\.mjs/.test(payload.callText || ""), "online callText should include LaunchAgent planner command");
   assert(/--maxScreenFps 60/.test(payload.callText || ""), "online callText should include max-FPS planner command");
+  assert(/foreground formal 60Hz/.test(payload.callText || ""), "online callText should mention foreground 60Hz safe start");
   assert(/check-mac-unattended-status\.mjs/.test(payload.callText || ""), "online callText should include unattended formal gate command");
   assert(/--requireLaunchAgentMaxFps/.test(payload.callText || ""), "online callText should include formal LaunchAgent max-FPS gate");
   assert(/check-mac-formal-local-smoke\.mjs/.test(payload.callText || ""), "online callText should include local smoke command");
+  assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand, "online foreground 60Hz safe start command", args.port);
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand, "online LaunchAgent planner command", args.port);
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "online max-FPS planner command", args.port);
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand, "online unattended formal command", args.port);
@@ -1012,6 +1030,7 @@ function checkSecretRedaction(args) {
   ]);
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "formal E2E JSON");
   const payload = parseJson(result.stdout, "secret-redaction formal E2E JSON");
+  assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand, "secret-redaction foreground 60Hz safe start command", 9);
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand, "secret-redaction LaunchAgent planner command", 9);
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "secret-redaction max-FPS planner command", 9);
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "secret-redaction media readiness command", 9);
