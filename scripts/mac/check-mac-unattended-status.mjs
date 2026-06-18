@@ -18,6 +18,7 @@ const defaults = {
   boardSummary: false,
   requireHostOnline: false,
   requireLaunchAgent: false,
+  requireLaunchAgentMaxFps: false,
   requireLaunchAgentLoaded: false,
   requireControlPermissions: false,
   strict: false,
@@ -44,6 +45,7 @@ Options:
                                  ${defaults.launchAgentPath}
   --requireHostOnline            Fail if Mac host /discovery is offline.
   --requireLaunchAgent           Fail if LaunchAgent plist is missing.
+  --requireLaunchAgentMaxFps     Fail if LaunchAgent maxScreenFps is missing or below ${formalTargetMaxScreenFps}.
   --requireLaunchAgentLoaded     Fail if launchctl does not show the label loaded.
   --requireControlPermissions    Fail if Screen Recording or Accessibility is off.
   --strict                       Treat warnings as failures.
@@ -87,6 +89,7 @@ function parseArgs(argv) {
       token === "--boardSummary" ||
       token === "--requireHostOnline" ||
       token === "--requireLaunchAgent" ||
+      token === "--requireLaunchAgentMaxFps" ||
       token === "--requireLaunchAgentLoaded" ||
       token === "--requireControlPermissions" ||
       token === "--strict" ||
@@ -399,14 +402,16 @@ function buildFindings({ args, host, launchAgent, power }) {
     }
   }
 
+  const launchAgentMissingLevel = args.requireLaunchAgent || args.requireLaunchAgentMaxFps ? "blocker" : "warning";
+  const launchAgentMaxFpsLevel = args.requireLaunchAgentMaxFps ? "blocker" : "warning";
   if (!launchAgent.exists) {
-    addFinding(findings, args.requireLaunchAgent ? "blocker" : "warning", "launch-agent-missing", `LaunchAgent plist is missing at ${launchAgent.path}.`);
+    addFinding(findings, launchAgentMissingLevel, "launch-agent-missing", `LaunchAgent plist is missing at ${launchAgent.path}.`);
   } else if (!launchAgent.labelMatches) {
     addFinding(findings, "warning", "launch-agent-label", `LaunchAgent label is ${launchAgent.label}; expected ${args.label}.`);
   } else if (launchAgent.readable && launchAgent.maxScreenFps === null) {
-    addFinding(findings, "warning", "launch-agent-max-fps", `LaunchAgent maxScreenFps is not explicit; start helper default is 30FPS, below the formal ${formalTargetMaxScreenFps}Hz target.`);
+    addFinding(findings, launchAgentMaxFpsLevel, "launch-agent-max-fps", `LaunchAgent maxScreenFps is not explicit; start helper default is 30FPS, below the formal ${formalTargetMaxScreenFps}Hz target.`);
   } else if (launchAgent.readable && launchAgent.maxScreenFps < formalTargetMaxScreenFps) {
-    addFinding(findings, "warning", "launch-agent-max-fps", `LaunchAgent maxScreenFps=${launchAgent.maxScreenFps}; formal ${formalTargetMaxScreenFps}Hz validation will keep reporting a remote FPS limit until the max-FPS plan is reviewed.`);
+    addFinding(findings, launchAgentMaxFpsLevel, "launch-agent-max-fps", `LaunchAgent maxScreenFps=${launchAgent.maxScreenFps}; formal ${formalTargetMaxScreenFps}Hz validation will keep reporting a remote FPS limit until the max-FPS plan is reviewed.`);
   }
   if (args.requireLaunchAgentLoaded && !launchAgent.launchctl.checked) {
     addFinding(findings, "blocker", "launch-agent-loaded-unchecked", `LaunchAgent ${args.label} loaded status was not checked.`);
@@ -498,6 +503,7 @@ async function buildReport(args) {
       launchAgentPath: args.launchAgentPath,
       requireHostOnline: args.requireHostOnline,
       requireLaunchAgent: args.requireLaunchAgent,
+      requireLaunchAgentMaxFps: args.requireLaunchAgentMaxFps,
       requireLaunchAgentLoaded: args.requireLaunchAgentLoaded,
       requireControlPermissions: args.requireControlPermissions,
       strict: args.strict,

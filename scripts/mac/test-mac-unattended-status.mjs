@@ -196,9 +196,10 @@ function fakeLaunchAgentPlist({ label = "com.lan-dual-control.mac-host", maxScre
     "log",
     "--videoMode",
     "h264",
-    "--maxScreenFps",
-    String(maxScreenFps),
   ];
+  if (maxScreenFps !== null) {
+    programArguments.push("--maxScreenFps", String(maxScreenFps));
+  }
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -220,6 +221,7 @@ function checkHelp(args) {
     assert(result.status === 0, `${script} ${flag} should exit 0`);
     assertIncludes(result.stdout, "Usage", `${script} ${flag}`);
     assertIncludes(result.stdout, "--requireLaunchAgent", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--requireLaunchAgentMaxFps", `${script} ${flag}`);
     assertIncludes(result.stdout, "--skipLaunchctl", `${script} ${flag}`);
     assertIncludes(result.stdout, "host", `${script} ${flag}`);
     assertIncludes(result.stdout, "launchAgent", `${script} ${flag}`);
@@ -273,6 +275,64 @@ function checkRequireLaunchAgentFails(args) {
   assertIncludes(payload.boardSummary, "warnings=host-offline", "require LaunchAgent board summary");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "require LaunchAgent JSON");
   print("OK", "requireLaunchAgent turns missing plist into a blocker");
+}
+
+function checkRequireLaunchAgentMaxFpsFails(args) {
+  const missingPath = path.join(tmpdir(), `missing-lan-dual-agent-max-fps-${Date.now()}.plist`);
+  const missingResult = run(args, [
+    "--json",
+    ...baseOfflineArgs(missingPath),
+    "--requireLaunchAgentMaxFps",
+  ]);
+  const missingPayload = parseJson(missingResult.stdout, "require LaunchAgent max-FPS missing JSON");
+  assert(missingResult.status !== 0, "requireLaunchAgentMaxFps should fail when plist is missing");
+  assert(missingPayload.ok === false, "requireLaunchAgentMaxFps missing payload should report ok=false");
+  assert(missingPayload.args?.requireLaunchAgentMaxFps === true, "requireLaunchAgentMaxFps should be echoed in JSON args");
+  assert(missingPayload.findings.some((item) => item.id === "launch-agent-missing" && item.level === "blocker"), "requireLaunchAgentMaxFps should block a missing LaunchAgent");
+  assertIncludes(missingPayload.boardSummary, "blockers=launch-agent-missing", "require LaunchAgent max-FPS missing board summary");
+  assertIncludes(missingPayload.boardSummary, "warnings=host-offline", "require LaunchAgent max-FPS missing board summary");
+  assertIncludes(missingPayload.commands?.macMaxFpsPlan || "", "--maxScreenFps 60", "require LaunchAgent max-FPS missing command");
+  assertNoSecretOrInputGuidance(`${missingResult.stdout}\n${missingResult.stderr}`, "require LaunchAgent max-FPS missing JSON");
+
+  const dir = mkdtempSync(path.join(tmpdir(), "lan-dual-unattended-agent-require-fps-"));
+  try {
+    const lowFpsPlist = path.join(dir, "com.lan-dual-control.mac-host-low.plist");
+    writeFileSync(lowFpsPlist, fakeLaunchAgentPlist({ maxScreenFps: 30 }), "utf8");
+    const lowFpsResult = run(args, [
+      "--json",
+      ...baseOfflineArgs(lowFpsPlist),
+      "--requireLaunchAgentMaxFps",
+    ]);
+    const lowFpsPayload = parseJson(lowFpsResult.stdout, "require LaunchAgent low max-FPS JSON");
+    assert(lowFpsResult.status !== 0, "requireLaunchAgentMaxFps should fail when LaunchAgent maxScreenFps is below 60");
+    assert(lowFpsPayload.ok === false, "requireLaunchAgentMaxFps low-FPS payload should report ok=false");
+    assert(lowFpsPayload.launchAgent?.maxScreenFps === 30, "requireLaunchAgentMaxFps should preserve low maxScreenFps");
+    assert(lowFpsPayload.findings.some((item) => item.id === "launch-agent-max-fps" && item.level === "blocker" && /maxScreenFps=30/.test(item.text)), "low LaunchAgent max-FPS should become a blocker");
+    assertIncludes(lowFpsPayload.boardSummary, "maxFps=30", "require LaunchAgent low max-FPS board summary");
+    assertIncludes(lowFpsPayload.boardSummary, "blockers=launch-agent-max-fps", "require LaunchAgent low max-FPS board summary");
+    assertIncludes(lowFpsPayload.boardSummary, "warnings=host-offline", "require LaunchAgent low max-FPS board summary");
+    assertIncludes(lowFpsPayload.commands?.macMaxFpsPlan || "", "--maxScreenFps 60", "require LaunchAgent low max-FPS command");
+    assertNoSecretOrInputGuidance(`${lowFpsResult.stdout}\n${lowFpsResult.stderr}`, "require LaunchAgent low max-FPS JSON");
+
+    const missingFpsPlist = path.join(dir, "com.lan-dual-control.mac-host-missing-fps.plist");
+    writeFileSync(missingFpsPlist, fakeLaunchAgentPlist({ maxScreenFps: null }), "utf8");
+    const missingFpsResult = run(args, [
+      "--json",
+      ...baseOfflineArgs(missingFpsPlist),
+      "--requireLaunchAgentMaxFps",
+    ]);
+    const missingFpsPayload = parseJson(missingFpsResult.stdout, "require LaunchAgent missing max-FPS JSON");
+    assert(missingFpsResult.status !== 0, "requireLaunchAgentMaxFps should fail when LaunchAgent maxScreenFps is not explicit");
+    assert(missingFpsPayload.launchAgent?.maxScreenFps === null, "missing max-FPS payload should expose maxScreenFps=null");
+    assert(missingFpsPayload.findings.some((item) => item.id === "launch-agent-max-fps" && item.level === "blocker" && /not explicit/.test(item.text)), "missing LaunchAgent max-FPS should become a blocker");
+    assertIncludes(missingFpsPayload.boardSummary, "maxFps=unknown", "require LaunchAgent missing max-FPS board summary");
+    assertIncludes(missingFpsPayload.boardSummary, "blockers=launch-agent-max-fps", "require LaunchAgent missing max-FPS board summary");
+    assertIncludes(missingFpsPayload.boardSummary, "warnings=host-offline", "require LaunchAgent missing max-FPS board summary");
+    assertNoSecretOrInputGuidance(`${missingFpsResult.stdout}\n${missingFpsResult.stderr}`, "require LaunchAgent missing max-FPS JSON");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  print("OK", "requireLaunchAgentMaxFps turns missing or low LaunchAgent max FPS into blockers");
 }
 
 function checkRequireLaunchAgentLoadedNeedsProbe(args) {
@@ -484,6 +544,7 @@ async function main() {
   checkHelp(args);
   checkMissingLaunchAgentJson(args);
   checkRequireLaunchAgentFails(args);
+  checkRequireLaunchAgentMaxFpsFails(args);
   checkRequireLaunchAgentLoadedNeedsProbe(args);
   checkStrictWarningsFail(args);
   checkFakePlist(args);
