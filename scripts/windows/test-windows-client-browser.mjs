@@ -1490,6 +1490,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         "MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo",
         "MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit",
         "MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps",
+        "MacHeartbeat=status=warning warnings=mac-host-build-stale reason=ok restart recommended hostRuntimeChanges=1 MacHostStop=node scripts/mac/start-mac-host.mjs --stop --host 127.0.0.1 --port 43770",
         "MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770",
         "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60",
         "MacClientDiscoverWindows=node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary",
@@ -4288,6 +4289,7 @@ async function verifyReconnectControls(session) {
         "MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo",
         "MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit",
         "MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps",
+        "MacHeartbeat=status=warning warnings=mac-host-build-stale reason=ok restart recommended hostRuntimeChanges=1 MacHostStop=node scripts/mac/start-mac-host.mjs --stop --host 127.0.0.1 --port 43770",
         "MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770",
         "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60",
         "MacClientDiscoverWindows=node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary",
@@ -4515,6 +4517,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("仓库状态需检查") &&
             exportText.includes("LaunchAgent 刷新率上限需调整") &&
             exportText.includes("Mac 60Hz 安全启动命令已提供") &&
+            exportText.includes("Mac host 停止旧进程命令已提供") &&
             exportText.includes("Mac host 安全启动命令已提供") &&
             exportText.includes("Mac client Windows 发现命令已提供") &&
             exportText.includes("Windows 防火墙入站放行需检查") &&
@@ -4553,6 +4556,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("warnings: video,build,auth,windows-host,repo") &&
             exportText.includes("warnings=h264-fallback,fps-limit") &&
             exportText.includes("warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps") &&
+            exportText.includes("MacHostStop=node scripts/mac/start-mac-host.mjs --stop") &&
             exportText.includes("MacHostSafeStart=node scripts/mac/start-mac-host.mjs") &&
             exportText.includes("MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs") &&
             exportText.includes("MacClientDiscoverWindows=node scripts/mac/discover-windows-hosts.mjs") &&
@@ -4659,6 +4663,7 @@ async function verifyReconnectControls(session) {
           copiedText.includes("仓库状态需检查") &&
           copiedText.includes("LaunchAgent 刷新率上限需调整") &&
           copiedText.includes("Mac 60Hz 安全启动命令已提供") &&
+          copiedText.includes("Mac host 停止旧进程命令已提供") &&
           copiedText.includes("Mac host 安全启动命令已提供") &&
           copiedText.includes("Mac client Windows 发现命令已提供") &&
           copiedText.includes("Windows 防火墙入站放行需检查") &&
@@ -4682,6 +4687,7 @@ async function verifyReconnectControls(session) {
           copiedText.includes("检测到 stream disconnected before completion") &&
           copiedText.includes("launch-agent-max-fps") &&
           copiedText.includes("mac-host-max-fps") &&
+          copiedText.includes("MacHostStop=node scripts/mac/start-mac-host.mjs --stop") &&
           copiedText.includes("MacHostSafeStart=node scripts/mac/start-mac-host.mjs") &&
           copiedText.includes("MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs") &&
           copiedText.includes("MacClientDiscoverWindows=node scripts/mac/discover-windows-hosts.mjs") &&

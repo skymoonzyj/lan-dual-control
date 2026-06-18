@@ -281,6 +281,7 @@ const macUnattendedRiskLabels = {
   "codex-manual-retry": "请查看 Mac 窗口，可能需要手动重试/刷新",
   "mac-host": "Mac host 需检查",
   "mac-host-discovery": "Mac host 发现需检查",
+  "mac-host-stop-command": "Mac host 停止旧进程命令已提供",
   "mac-host-safe-start": "Mac host 安全启动命令已提供",
   "mac-max-fps-safe-start": "Mac 60Hz 安全启动命令已提供",
   "mac-client-discover-windows": "Mac client Windows 发现命令已提供",
@@ -295,6 +296,7 @@ const macUnattendedRiskLabels = {
   "mac-host-media-aggregate": "Mac 媒体基线需检查",
   "mac-host-runtime-display-round-trip": "Mac runtime/display 回环需检查",
   "mac-host-build": "Mac host 构建需检查",
+  "mac-host-build-stale": "Mac host 运行版本偏旧",
   "mac-host-direct-start-defaults": "Mac host 默认启动安全需检查",
   "mac-host-start-helper-syntax": "Mac host 启动助手语法需检查",
   "mac-host-helper-dry-run": "Mac host 启动助手干跑需检查",
@@ -3299,6 +3301,7 @@ function parseMacUnattendedAttention(text) {
   const risks = [...new Set([...blockers, ...warnings, ...windowsLanRisks])];
   const heartbeatFreshness = parseMacHeartbeatFreshness(source);
   const lower = source.toLowerCase();
+  const hasMacHostStop = /\bMacHostStop\s*=/i.test(source);
   const hasMacHostSafeStart = /\bMacHostSafeStart\s*=/i.test(source);
   const hasMacMaxFpsSafeStart = /\bMacMaxFpsSafeStart\s*=/i.test(source);
   const hasMacClientDiscoverWindows = /\bMacClientDiscoverWindows\s*=/i.test(source);
@@ -3400,6 +3403,15 @@ function parseMacUnattendedAttention(text) {
   }
   if (/attention\s*=\s*(warning|blocker|failed)/i.test(source) && risks.length === 0) {
     risks.push("attention");
+  }
+  if (
+    hasMacHostStop &&
+    (
+      risks.some((risk) => risk === "mac-host-build-stale" || risk === "mac-host-build" || risk === "build" || risk === "stale-build") ||
+      /mac-host-build-stale|restart recommended|hostRuntimeChanges|runtimeBuild|stale build|build.*stale|运行.*旧|重启/.test(source)
+    )
+  ) {
+    risks.unshift("mac-host-stop-command");
   }
   if (
     hasMacHostSafeStart &&

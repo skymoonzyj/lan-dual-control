@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端消费 Mac heartbeat/readiness 里的 `MacHostStop=`，在旧 Mac host build 场景给出清楚中文提示。
+完成内容：
+- Windows 控制端 Mac 提醒解析新增 `MacHostStop=` 识别：当同段摘要出现 `mac-host-build-stale`、`restart recommended`、`runtimeBuild=` 或 `hostRuntimeChanges=` 时，会显示“Mac host 停止旧进程命令已提供”。
+- 复制/导出诊断保留原始 `MacHostStop=` 命令，便于现场先停止旧 Mac host，再按 `MacHostSafeStart=` 安全前台启动到新 build。
+- 这只是 UI 诊断和文案消费，不自动运行 stop/start，不认证、不发密码、不发送 input/inject。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增 diagnostics-only 页面断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5210 --debugPort 9350 --timeoutMs 45000`，失败点是 Mac 提醒诊断没有“Mac host 停止旧进程命令已提供”。
+- 实现后复跑同一 diagnostics-only 通过。
+遗留问题：
+- 真机 Mac host 仍需人工在 Mac 侧停止旧进程并用最新/60Hz 安全启动后再验收真实 60Hz、文件剪贴板和输入链路。
+下一步建议：
+- Mac heartbeat 再报 `mac-host-build-stale` 时，先按 `MacHostStop=` / `MacHostSafeStart=` 处理旧 host，再做正式 Windows 控 Mac 验收。
+是否改了协议：否；只消费已有通讯板/诊断文本里的 `MacHostStop=`。
+是否需要另一端配合：需要 Mac 端或用户在现场执行停止旧 host 和安全重启时配合。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端本机文件等待对端确认期间，当前 transfer 的对端进度能刷新保活时间。
 完成内容：
 - `clipboard_file_progress` 如果属于当前 `transferId`，会刷新 `lastActivityAt`，确认超时计算也优先使用最新活动时间。
