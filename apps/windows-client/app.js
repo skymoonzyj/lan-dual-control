@@ -152,6 +152,7 @@ const nativeClipboardChunkSizeBytes = 1024 * 1024;
 const maxNativeClipboardFileBytes = maxClipboardFileBytes;
 const defaultAgentLinkServer = "http://192.168.31.68:17888";
 const localMacAlertWatcherStatusPollMs = 15000;
+const macHeartbeatFreshnessStaleMs = 2 * 60 * 1000;
 const defaultHostDiagnosticsText = "诊断：等待连接。";
 const displayOptionDefaults = {
   resolution: "1920x1080",
@@ -261,6 +262,7 @@ const macUnattendedRiskLabels = {
   "sleep-unreachable": "睡眠后不可达",
   "host-offline": "Mac host 离线",
   "host-unreachable": "Mac host 不可达",
+  "mac-heartbeat-summary-stale": "Mac 心跳摘要过旧",
   "mac-heartbeat-stale": "Mac 心跳过期，可能卡住",
   "mac-heartbeat-once-command": "Mac 单次心跳上板命令已提供",
   "mac-heartbeat-watch-command": "Mac 持续心跳 watcher 命令已提供",
@@ -2987,6 +2989,25 @@ function formatMacAlertWatcherCheckedAt(checkedAt, now = Date.now()) {
   return `${new Date(checkedAt).toISOString()}（约 ${elapsedSeconds} 秒前）`;
 }
 
+function formatRelativeAgeMs(ageMs) {
+  const age = Number(ageMs);
+  if (!Number.isFinite(age) || age < 0) return "";
+  if (age < 1000) return "刚刚";
+  const seconds = Math.round(age / 1000);
+  if (seconds < 60) return `${seconds} 秒前`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  return `${Math.round(hours / 24)} 天前`;
+}
+
+function parseIsoAgeMs(value, now = Date.now()) {
+  const parsed = Date.parse(String(value || ""));
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, now - parsed);
+}
+
 function normalizeMacUnattendedToken(token) {
   return String(token || "")
     .trim()
@@ -3015,6 +3036,75 @@ function extractMacUnattendedValues(text, key) {
   return [...new Set(values)];
 }
 
+function extractMacHeartbeatValue(text, key) {
+  const pattern = new RegExp(`\\b${escapeRegExp(key)}\\s*=\\s*([^\\s;；，。]+)`, "i");
+  const match = pattern.exec(String(text || ""));
+  return match ? match[1] : "";
+}
+
+function extractMacHeartbeatSegments(text) {
+  const source = String(text || "");
+  const matches = [...source.matchAll(/\bMacHeartbeat\s*=/gi)];
+  return matches.map((match, index) => {
+    const next = matches[index + 1];
+    return source.slice(match.index, next ? next.index : source.length);
+  });
+}
+
+function selectLatestMacHeartbeatSegment(text) {
+  const segments = extractMacHeartbeatSegments(text);
+  if (!segments.length) return "";
+
+  let selected = segments[0];
+  let selectedTime = Number.NEGATIVE_INFINITY;
+  for (const segment of segments) {
+    const checkedTime = Date.parse(extractMacHeartbeatValue(segment, "checkedAt"));
+    if (Number.isFinite(checkedTime) && checkedTime >= selectedTime) {
+      selected = segment;
+      selectedTime = checkedTime;
+    }
+  }
+  return selected;
+}
+
+function parseMacHeartbeatFreshness(text, now = Date.now()) {
+  const source = String(text || "");
+  if (!/\bMacHeartbeat\s*=/.test(source)) {
+    return { present: false, summary: "", detail: "", stale: false };
+  }
+  const heartbeatSource = selectLatestMacHeartbeatSegment(source) || source;
+
+  const checkedAt = extractMacHeartbeatValue(heartbeatSource, "checkedAt");
+  const codexUpdatedAt = extractMacHeartbeatValue(heartbeatSource, "updatedAt");
+  const boardUpdatedAt = extractMacHeartbeatValue(heartbeatSource, "boardUpdatedAt");
+  const codexAgeRaw = extractMacHeartbeatValue(heartbeatSource, "ageMs");
+  const checkedAgeMs = parseIsoAgeMs(checkedAt, now);
+  const boardAgeMs = parseIsoAgeMs(boardUpdatedAt, now);
+  const rawCodexAgeMs = Number(codexAgeRaw);
+  const codexAgeMs = Number.isFinite(rawCodexAgeMs)
+    ? Math.max(0, rawCodexAgeMs)
+    : parseIsoAgeMs(codexUpdatedAt, now);
+  const stale = checkedAgeMs !== null && checkedAgeMs >= macHeartbeatFreshnessStaleMs;
+  const parts = [];
+  if (checkedAgeMs !== null) parts.push(`心跳检查 ${formatRelativeAgeMs(checkedAgeMs)}`);
+  if (codexAgeMs !== null) parts.push(`Mac Codex ${formatRelativeAgeMs(codexAgeMs)}`);
+  if (boardAgeMs !== null) parts.push(`联络板 ${formatRelativeAgeMs(boardAgeMs)}`);
+  const detail = parts.filter(Boolean).join(" / ");
+
+  return {
+    present: true,
+    checkedAt,
+    boardUpdatedAt,
+    codexUpdatedAt,
+    checkedAgeMs,
+    boardAgeMs,
+    codexAgeMs,
+    stale,
+    summary: stale ? `Mac 心跳摘要过旧${detail ? `（${detail}）` : ""}` : detail,
+    detail,
+  };
+}
+
 function labelMacUnattendedRisk(value) {
   const token = normalizeMacUnattendedToken(value);
   if (!token) return "";
@@ -3032,6 +3122,7 @@ function parseMacUnattendedAttention(text) {
   const warnings = extractMacUnattendedValues(source, "warnings");
   const blockers = extractMacUnattendedValues(source, "blockers");
   const risks = [...new Set([...blockers, ...warnings])];
+  const heartbeatFreshness = parseMacHeartbeatFreshness(source);
   const lower = source.toLowerCase();
   const hasMacHostSafeStart = /\bMacHostSafeStart\s*=/i.test(source);
   const hasMacMaxFpsSafeStart = /\bMacMaxFpsSafeStart\s*=/i.test(source);
@@ -3063,6 +3154,9 @@ function parseMacUnattendedAttention(text) {
     /\bLAN008\b|reverse_control_|ready\s*=\s*false|blocked|failed|pending-request|临时允许|重试|请求反控|等待\s*Windows/i.test(source);
   if (lower.includes("ready=false") && risks.length === 0) {
     risks.push("not-ready");
+  }
+  if (heartbeatFreshness.stale) {
+    risks.unshift("mac-heartbeat-summary-stale");
   }
   if (/\b(MacHeartbeat|heartbeat)\b.*\b(stale|missing|expired|timeout|timed out|lost|failed|unreachable)\b/i.test(source)) {
     risks.unshift("mac-heartbeat-stale");
@@ -3182,6 +3276,7 @@ function parseMacUnattendedAttention(text) {
     blockers,
     labels,
     summary: labels.length ? compactExportStatusText(labels.join(" / "), 760) : "",
+    heartbeatFreshness,
   };
 }
 
@@ -3205,6 +3300,7 @@ function getMacAlertWatcherExportStatus(now = Date.now()) {
     status,
     detail,
     unattended,
+    heartbeatFreshness: unattended.heartbeatFreshness,
     checkedAt: formatMacAlertWatcherCheckedAt(state.localMacAlertWatcherStatusCheckedAt, now),
     pollInterval: `${Math.round(localMacAlertWatcherStatusPollMs / 1000)} 秒`,
     server: buildMacAlertWatcherRequest().server,
@@ -3265,6 +3361,11 @@ function getMacReachabilityExportStatus({ targetLabel, reconnectExport, macAlert
     parts.push(`值守风险 ${macAlertWatcherExport.unattended.summary}`);
   } else {
     parts.push("自启/睡眠状态等待 Mac 上报");
+  }
+  const heartbeatFreshness =
+    macAlertWatcherExport.heartbeatFreshness || macAlertWatcherExport.unattended?.heartbeatFreshness;
+  if (heartbeatFreshness?.summary || heartbeatFreshness?.detail) {
+    parts.push(`心跳 ${heartbeatFreshness.summary || heartbeatFreshness.detail}`);
   }
 
   return {
@@ -3427,10 +3528,15 @@ function buildDiagnosticsQuickSummary({
   if (reconnectExport.next && reconnectExport.next !== "-") {
     reconnectParts.push(`下次 ${reconnectExport.next}`);
   }
+  const heartbeatFreshness = macAlertWatcherExport.heartbeatFreshness;
+  const heartbeatLine = heartbeatFreshness?.summary || heartbeatFreshness?.detail
+    ? [`- Mac 心跳：${heartbeatFreshness.summary || heartbeatFreshness.detail}`]
+    : [];
   return [
     `- 远端连接：${currentStateLabel} · ${connectionLabel} · ${targetLabel}`,
     `- Mac 主机：${hostDiagnosticsExport}`,
     `- Mac 值守：${macReachabilityExport.status}`,
+    ...heartbeatLine,
     `- 重连：${reconnectParts.join(" · ")}`,
     `- 远端文件：${remoteFileExport.summary}`,
     `- 剪贴板：${clipboardExport}`,
@@ -3522,6 +3628,7 @@ function buildLogExportText() {
     `- Mac 提醒：${macAlertWatcherExport.status}`,
     `- Mac 提醒详情：${macAlertWatcherExport.detail}`,
     `- Mac 提醒最近检查：${macAlertWatcherExport.checkedAt}`,
+    `- Mac 心跳新鲜度：${macAlertWatcherExport.heartbeatFreshness?.detail || "-"}`,
     `- Mac 提醒自动轮询：约 ${macAlertWatcherExport.pollInterval}`,
     `- Mac 提醒联络板：${macAlertWatcherExport.server}`,
     `- 本机被控：${localHostExport.status}`,

@@ -17,7 +17,34 @@
 是否需要另一端配合：
 ```
 
-## 2026-06-18 Mac Codex
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
+本轮目标：消费 Mac heartbeat 新鲜度字段，让 Windows 控制端能识别旧 `Mac Heartbeat` 摘要。
+完成内容：
+- Windows 控制端会解析 `MacHeartbeat=` 文本里的 `checkedAt=`、Mac Codex `updatedAt=` / `ageMs=` 和 `boardUpdatedAt=`。
+- 如果 `checkedAt` 超过约 2 分钟，Mac 提醒区风险摘要会显示“Mac 心跳摘要过旧”。
+- Mac 值守快速摘要和复制/导出诊断会同步显示心跳新鲜度，导出报告新增“Mac 心跳新鲜度：心跳检查 / Mac Codex / 联络板”。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 这轮只做 Windows 控制端消费；Mac heartbeat watcher 是否在线仍以 Mac 端后台 watcher/status 为准。
+下一步建议：
+- 真实联调时如果 Windows 显示“Mac 心跳摘要过旧”，先让 Mac 端跑 `MacHeartbeatOnce=` 或 `MacHeartbeatStatus=`，再继续判断 Mac Codex 是否卡住。
+是否改了协议：否。
+是否需要另一端配合：不阻塞；后续可让 Mac 端发一条新的 `MacHeartbeat=` 摘要验证 Windows 提醒区刷新。
+
+## 2026-06-18 Windows Codex
 
 日期：2026-06-18 继续推进
 开发端：Mac Codex

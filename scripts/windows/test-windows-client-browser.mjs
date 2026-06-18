@@ -1497,6 +1497,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
         "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary",
         "run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
+        "MacHeartbeat=status=ok; checkedAt=2020-01-01T00:00:00.000Z; device=Mac; codex=ok status=coding updatedAt=2020-01-01T00:00:00.000Z ageMs=999999; macHost=online 127.0.0.1:43770; macClient=online http://127.0.0.1:5188/; board=ok boardUpdatedAt=2020-01-01T00:00:00.000Z; blockers=none warnings=none reason=ok",
         "MacHeartbeat=stale heartbeat missing; Mac host /discovery unreachable ECONNREFUSED; HTTP 502 Bad Gateway",
         "MacHeartbeat=status=blocked; codex=mac-codex-stale; blockers=mac-codex-stale warnings=none reason=mac-codex-stale",
         "MacHeartbeat=status=warning; codex=codex-reconnect-signal; blockers=none warnings=codex-reconnect-signal reason=codex-reconnect-signal",
@@ -1546,6 +1547,16 @@ async function verifyDesktopOnlyHostPanel(session) {
           : {};
       const previousWatcherCheckedAt = typeof state === "object" ? state.localMacAlertWatcherStatusCheckedAt || 0 : 0;
       if (typeof state === "object") state.localMacAlertWatcherStatusCheckedAt = 1000;
+      const freshHeartbeatNoStale =
+        typeof parseMacHeartbeatFreshness === "function"
+          ? parseMacHeartbeatFreshness(
+              [
+                "MacHeartbeat=status=ok; checkedAt=2020-01-01T00:00:00.000Z; updatedAt=2020-01-01T00:00:00.000Z; ageMs=999999; boardUpdatedAt=2020-01-01T00:00:00.000Z",
+                "MacHeartbeat=status=ok; checkedAt=2026-06-18T10:00:00.000Z; updatedAt=2026-06-18T09:59:55.000Z; ageMs=65000; boardUpdatedAt=2026-06-18T10:00:02.000Z",
+              ].join("; "),
+              Date.parse("2026-06-18T10:01:00.000Z"),
+            )
+          : null;
       const watcherThrottleBefore =
         typeof shouldRefreshMacAlertWatcherStatus === "function"
           ? shouldRefreshMacAlertWatcherStatus(15999)
@@ -1891,6 +1902,7 @@ async function verifyDesktopOnlyHostPanel(session) {
           watcherRunningView.statusText.includes("Windows 被控端未指定或未就绪") &&
           watcherRunningView.statusText.includes("仓库状态需检查") &&
           watcherRunningView.statusText.includes("LaunchAgent 刷新率上限需调整") &&
+          watcherRunningView.statusText.includes("Mac 心跳摘要过旧") &&
           watcherRunningView.statusText.includes("Mac 心跳过期") &&
           watcherRunningView.statusText.includes("Mac 后台心跳启动命令已提供") &&
           watcherRunningView.statusText.includes("Mac 后台心跳状态命令已提供") &&
@@ -1907,6 +1919,8 @@ async function verifyDesktopOnlyHostPanel(session) {
           watcherThrottleBefore === false &&
           watcherThrottleAtLimit === true &&
           watcherThrottleNoCache === true &&
+          freshHeartbeatNoStale?.stale === false &&
+          freshHeartbeatNoStale?.summary.includes("心跳检查 1 分钟前") &&
           heartbeatCommandCheck.ok &&
           readinessHeaderText.includes("client-test") &&
           readinessHeaderText.includes("1000 ms") &&
@@ -1958,6 +1972,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         watcherThrottleBefore,
         watcherThrottleAtLimit,
         watcherThrottleNoCache,
+        freshHeartbeatNoStale,
         heartbeatCommandCheck,
         readinessHeader: readinessHeaderLines.slice(0, 4),
         readinessSummaryText,
@@ -3150,6 +3165,7 @@ async function verifyReconnectControls(session) {
         "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
         "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary",
         "run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
+        "MacHeartbeat=status=ok; checkedAt=2020-01-01T00:00:00.000Z; device=Mac; codex=ok status=coding updatedAt=2020-01-01T00:00:00.000Z ageMs=999999; macHost=online 127.0.0.1:43770; macClient=online http://127.0.0.1:5188/; board=ok boardUpdatedAt=2020-01-01T00:00:00.000Z; blockers=none warnings=none reason=ok",
         "MacHeartbeat=stale heartbeat missing; Mac host /discovery unreachable ECONNREFUSED; HTTP 502 Bad Gateway",
         "MacHeartbeat=status=blocked; codex=mac-codex-stale; blockers=mac-codex-stale warnings=none reason=mac-codex-stale",
         "MacHeartbeat=status=warning; codex=codex-reconnect-signal; blockers=none warnings=codex-reconnect-signal reason=codex-reconnect-signal",
@@ -3288,7 +3304,8 @@ async function verifyReconnectControls(session) {
           quickSummaryMacReachability:
             exportText.includes("- Mac 值守：恢复中") &&
             exportText.includes("值守风险") &&
-            exportText.includes("提醒 提醒中"),
+            exportText.includes("提醒 提醒中") &&
+            exportText.includes("Mac 心跳摘要过旧"),
           quickSummaryReconnect:
             exportText.includes("- 重连：等待自动重连") && exportText.includes("原因 测试断线"),
           quickSummaryRemoteFiles:
@@ -3327,6 +3344,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("Mac 本机短验收重跑命令已提供") &&
             exportText.includes("Windows 反控授权状态命令已提供") &&
             exportText.includes("Windows 一次性反控授权命令已提供") &&
+            exportText.includes("Mac 心跳摘要过旧") &&
             exportText.includes("Mac 心跳过期，可能卡住") &&
             exportText.includes("Mac 后台心跳启动命令已提供") &&
             exportText.includes("Mac 后台心跳状态命令已提供") &&
@@ -3358,6 +3376,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs") &&
             exportText.includes("WindowsReverseGrantStatus=pwsh") &&
             exportText.includes("WindowsOpenOneTimeReverseGrant=pwsh") &&
+            exportText.includes("checkedAt=2020-01-01T00:00:00.000Z") &&
             exportText.includes("MacHeartbeat=stale") &&
             exportText.includes("HTTP 502 Bad Gateway") &&
             exportText.includes("Mac Codex 长时间无新进展") &&
@@ -3370,6 +3389,10 @@ async function verifyReconnectControls(session) {
             exportText.includes("reason=codex-reconnect-stuck") &&
             exportText.includes("warnings=board"),
           macAlertCheckedAt: exportText.includes("- Mac 提醒最近检查："),
+          macAlertHeartbeatFreshness:
+            exportText.includes("- Mac 心跳新鲜度：") &&
+            exportText.includes("Mac Codex") &&
+            exportText.includes("联络板"),
           macAlertSecondsAgo: exportText.includes("秒前）"),
           macAlertPoll: exportText.includes("- Mac 提醒自动轮询：约 15 秒"),
           macAlertServer: exportText.includes("- Mac 提醒联络板：http://192.168.31.68:17888"),
