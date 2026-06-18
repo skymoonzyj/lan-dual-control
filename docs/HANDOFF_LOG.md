@@ -21,6 +21,39 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac unattended status 也暴露 Mac 脚本 help 安全自检入口。
+完成内容：
+- `check-mac-unattended-status --json/--boardSummary` 现在输出 `commands.macScriptHelp` / `MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`。
+- Windows 端或人工只看 `MacUnattendedStatus=` 摘要时，也能要求 Mac 端跑统一 `--help/-h` 副作用防线，不必回翻 resume 或 heartbeat 摘要。
+- 自测新增回归：缺 LaunchAgent 的 JSON/boardSummary 和一行 board summary 都必须包含 `MacScriptHelp=`，且命令不含密码、call、input 或 inject 路径。
+修改文件：
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 8000` 失败在 help 缺 `commands.macScriptHelp`。
+- 绿灯：实现后复跑同一自测通过。
+- `node --check scripts/mac/check-mac-unattended-status.mjs`
+- `node --check scripts/mac/test-mac-unattended-status.mjs`
+- `node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 8000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- 真实只读 unattended 摘要抽样：`Mac unattended status:` 输出 `MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`，并明确未请求密码、未认证、未发送 input/inject。
+- `git diff --check` 与冲突标记扫描通过。
+遗留问题：
+- 真实 Mac host 仍是旧 build / 30Hz 上限现场状态；本轮只补 unattended 摘要的安全自检入口，没有停止或重启 host。
+下一步建议：
+- Windows 若只拿到 `MacUnattendedStatus=`，也可复制 `MacScriptHelp=` 让 Mac 端快速确认所有 Mac `.mjs` 脚本 help 路径无副作用；后续仍需用户在场时再处理 60Hz host 重启或正式密码验收。
+是否改了协议：否；只补 Mac unattended status 的安全命令标签。
+是否需要另一端配合：本轮不需要；Windows 端可后续按需消费该标签。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac heartbeat 实时摘要也暴露 Mac 脚本 help 安全自检入口。
 完成内容：
 - `check-mac-heartbeat --json/--boardSummary` 现在输出 `commands.macScriptHelpCommand` / `MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`。

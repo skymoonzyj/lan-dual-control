@@ -90,6 +90,8 @@ Machine-readable JSON fields:
   commands.macFormalLocalSmoke   Follow-up formal H.264 + PCM + input-log
                                   short validation command; prompts locally
                                   and never embeds a password in argv.
+  commands.macScriptHelp         Unified side-effect-free Mac script help
+                                  self-check command.
 
 Examples:
   node scripts/mac/check-mac-unattended-status.mjs --boardSummary
@@ -579,6 +581,7 @@ function makeCommands(args) {
     macHostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     hostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     macFormalLocalSmoke: makeMacFormalLocalSmokeCommand(args),
+    macScriptHelp: makeMacScriptHelpCommand(),
     startHost: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port}`,
     stopHost: makeMacHostStopCommand(args),
     launchAgentPath: args.launchAgentPath,
@@ -657,6 +660,10 @@ function makeMacFormalLocalSmokeCommand(args) {
   ].join(" ");
 }
 
+function makeMacScriptHelpCommand() {
+  return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
+}
+
 function makeMacUnattendedFormalCommand(args) {
   const parts = [
     "node scripts/mac/check-mac-unattended-status.mjs",
@@ -725,7 +732,7 @@ function makeBoardSummary(report) {
   const agentMaxFps = report.launchAgent.maxScreenFps === null ? "unknown" : String(report.launchAgent.maxScreenFps);
   return [
     `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
-    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}.`,
+    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacScriptHelp=${report.commands.macScriptHelp}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
@@ -815,6 +822,7 @@ function printHuman(report) {
   console.log(`- Mac LaunchAgent print: ${report.commands.macLaunchAgentPrint}`);
   console.log(`- Mac host readiness: ${report.commands.macHostReadiness}`);
   console.log(`- Mac formal local smoke: ${report.commands.macFormalLocalSmoke}`);
+  console.log(`- Mac script help: ${report.commands.macScriptHelp}`);
   console.log(report.boardSummary);
 }
 

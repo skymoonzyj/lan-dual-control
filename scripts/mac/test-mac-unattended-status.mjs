@@ -261,6 +261,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macLaunchAgentLoad", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macLaunchAgentPrint", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macFormalLocalSmoke", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macScriptHelp", `${script} ${flag}`);
     assertNoSecretOrInputGuidance(result.stdout, `${script} ${flag}`);
   }
   print("OK", "Unattended status help exits quickly and stays side-effect-free");
@@ -344,6 +345,14 @@ function checkMissingLaunchAgentJson(args) {
   assertNotIncludes(payload.commands?.macFormalLocalSmoke || "", "--json", "missing LaunchAgent commands.macFormalLocalSmoke");
   assertNotIncludes(payload.commands?.macFormalLocalSmoke || "", "--sendCall", "missing LaunchAgent commands.macFormalLocalSmoke");
   assertNotIncludes(payload.commands?.macFormalLocalSmoke || "", "--password", "missing LaunchAgent commands.macFormalLocalSmoke");
+  assertIncludes(payload.commands?.macScriptHelp || "", "test-mac-script-help.mjs", "missing LaunchAgent commands.macScriptHelp");
+  assertIncludes(payload.commands?.macScriptHelp || "", "--timeoutMs 10000", "missing LaunchAgent commands.macScriptHelp");
+  assertIncludes(payload.commands?.macScriptHelp || "", "--boardSummary", "missing LaunchAgent commands.macScriptHelp");
+  assertNotIncludes(payload.commands?.macScriptHelp || "", "--promptPassword", "missing LaunchAgent commands.macScriptHelp");
+  assertNotIncludes(payload.commands?.macScriptHelp || "", "--password", "missing LaunchAgent commands.macScriptHelp");
+  assertNotIncludes(payload.commands?.macScriptHelp || "", "--sendCall", "missing LaunchAgent commands.macScriptHelp");
+  assertNotIncludes(payload.commands?.macScriptHelp || "", "input_event", "missing LaunchAgent commands.macScriptHelp");
+  assertNotIncludes(payload.commands?.macScriptHelp || "", "inject", "missing LaunchAgent commands.macScriptHelp");
   assertIncludes(payload.boardSummary, "MacUnattendedStatus=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacHostSafeStart=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacHostSafeStart=node scripts/mac/start-mac-host.mjs", "missing LaunchAgent board summary");
@@ -373,6 +382,8 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.boardSummary, "HostReadiness=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacFormalLocalSmoke=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacScriptHelp=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "blockers=none", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "warnings=host-offline,launch-agent-missing", "missing LaunchAgent board summary");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "missing LaunchAgent JSON");
@@ -632,6 +643,8 @@ function checkBoardSummary(args) {
   assertIncludes(text, "HostReadiness=", "board summary");
   assertIncludes(text, "MacFormalLocalSmoke=", "board summary");
   assertIncludes(text, "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs", "board summary");
+  assertIncludes(text, "MacScriptHelp=", "board summary");
+  assertIncludes(text, "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "board summary");
   assertIncludes(text, "blockers=none", "board summary");
   assertIncludes(text, "warnings=host-offline,launch-agent-missing", "board summary");
   assertIncludes(text, "No password", "board summary");
