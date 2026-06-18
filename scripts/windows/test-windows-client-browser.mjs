@@ -2276,7 +2276,8 @@ async function verifyFileClipboardRecoveryText(session) {
             retryChunkCount === 2 &&
             retryCompleteCount === 1 &&
             retryClipboardText.includes("文件已发送") &&
-            fileInputLengthAfterRetry === 0 &&
+            retryClipboardText.includes("等待对端确认") &&
+            fileInputLengthAfterRetry === 1 &&
             statusVisibleAfterOffer &&
             statusTextAfterOffer.includes("正在接收 1 个文件") &&
             statusTextAfterOffer.includes("0 B/4 B") &&
@@ -2408,11 +2409,14 @@ async function verifyFileClipboardRecoveryText(session) {
 async function verifyOutgoingFileResultStatus(session) {
   const result = await evaluate(
     session,
-    `(() => {
+    `(async () => {
       if (
         typeof handleClipboardFileResult !== "function" ||
         typeof formatFloatingClipboardStatus !== "function" ||
-        typeof syncFloatingControlStatus !== "function"
+        typeof syncFloatingControlStatus !== "function" ||
+        typeof sendFilesToRemote !== "function" ||
+        typeof canRetryLastOutgoingFileTransfer !== "function" ||
+        typeof updateFileClipboardButton !== "function"
       ) {
         return { ok: false, reason: "missing outgoing file result helpers" };
       }
@@ -2423,6 +2427,11 @@ async function verifyOutgoingFileResultStatus(session) {
       const originalLastOutgoingTransfer = state.lastOutgoingFileTransfer;
       const originalConnected = state.connected;
       const originalClipboardToggle = elements.clipboardToggle.checked;
+      const originalClient = state.client;
+      const originalFileTransferActive = state.fileTransferActive;
+      const originalOutgoingTransfer = state.outgoingFileTransfer;
+      const firstRemoteRejectSends = [];
+      const remoteRejectRetrySends = [];
       try {
         state.connected = true;
         elements.clipboardToggle.checked = true;
@@ -2486,6 +2495,61 @@ async function verifyOutgoingFileResultStatus(session) {
         const failedText = elements.clipboardText.textContent || "";
         const resultState = state.lastOutgoingFileTransfer || {};
 
+        const remoteRejectBytes = new Uint8Array(fileChunkSizeBytes + 512);
+        remoteRejectBytes.fill(66);
+        const remoteRejectFile = new File([remoteRejectBytes], "remote-reject.zip", { type: "application/zip" });
+        const remoteRejectDataTransfer = new DataTransfer();
+        remoteRejectDataTransfer.items.add(remoteRejectFile);
+        elements.fileClipboardInput.files = remoteRejectDataTransfer.files;
+        state.client = {
+          sendClipboardFileOffer: (payload) => firstRemoteRejectSends.push({ type: "offer", payload }),
+          sendClipboardFileChunk: (payload) => firstRemoteRejectSends.push({ type: "chunk", payload }),
+          sendClipboardFileComplete: (payload) => firstRemoteRejectSends.push({ type: "complete", payload }),
+        };
+        await sendFilesToRemote([remoteRejectFile], { sourceLabel: "对端失败重试测试", clearFileInput: true });
+        const sentTransferId = firstRemoteRejectSends.find((item) => item.type === "complete")?.payload?.transferId;
+        handleClipboardFileResult({
+          type: "clipboard_file_result",
+          transferId: sentTransferId,
+          accepted: false,
+          fileCount: 1,
+          receivedBytes: fileChunkSizeBytes,
+          totalBytes: remoteRejectFile.size,
+          reason: "对端写入系统剪贴板失败",
+        });
+        updateFileClipboardButton();
+        const remoteFailureText = elements.clipboardText.textContent || "";
+        const remoteFailureFloating = formatFloatingClipboardStatus();
+        const remoteFailureState = state.lastOutgoingFileTransfer || {};
+        const fileInputLengthAfterRemoteFailure = elements.fileClipboardInput.files?.length || 0;
+        const canRetryAfterRemoteFailure = canRetryLastOutgoingFileTransfer();
+        const buttonLabelAfterRemoteFailure = elements.fileClipboardButton.querySelector("span:not([aria-hidden])")?.textContent || "";
+        const buttonTitleAfterRemoteFailure = elements.fileClipboardButton.title || "";
+
+        state.client = {
+          sendClipboardFileOffer: (payload) => remoteRejectRetrySends.push({ type: "offer", payload }),
+          sendClipboardFileChunk: (payload) => remoteRejectRetrySends.push({ type: "chunk", payload }),
+          sendClipboardFileComplete: (payload) => remoteRejectRetrySends.push({ type: "complete", payload }),
+        };
+        elements.fileClipboardButton.click();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        const remoteRejectRetryOfferCount = remoteRejectRetrySends.filter((item) => item.type === "offer").length;
+        const remoteRejectRetryChunkCount = remoteRejectRetrySends.filter((item) => item.type === "chunk").length;
+        const remoteRejectRetryCompleteCount = remoteRejectRetrySends.filter((item) => item.type === "complete").length;
+        const retrySentTransferId = remoteRejectRetrySends.find((item) => item.type === "complete")?.payload?.transferId;
+        handleClipboardFileResult({
+          type: "clipboard_file_result",
+          transferId: retrySentTransferId,
+          accepted: true,
+          saveMode: "clipboard",
+          fileCount: 1,
+          receivedBytes: remoteRejectFile.size,
+          totalBytes: remoteRejectFile.size,
+          reason: "重发后已写入系统文件剪贴板",
+        });
+        updateFileClipboardButton();
+        const fileInputLengthAfterRemoteAccept = elements.fileClipboardInput.files?.length || 0;
+
         return {
           ok:
             clipboardText.includes("对端已接收并写入系统文件剪贴板") &&
@@ -2499,18 +2563,48 @@ async function verifyOutgoingFileResultStatus(session) {
             failedText.includes("2.0 KB/4.0 KB") &&
             failedText.includes("接收超时") &&
             resultState.status === "remote-result" &&
-            resultState.accepted === false,
+            resultState.accepted === false &&
+            remoteFailureText.includes("对端文件接收失败") &&
+            remoteFailureText.includes("可重新发送") &&
+            remoteFailureFloating.includes("可重新发送") &&
+            remoteFailureState.status === "remote-result" &&
+            remoteFailureState.accepted === false &&
+            remoteFailureState.canRetry === true &&
+            fileInputLengthAfterRemoteFailure === 1 &&
+            canRetryAfterRemoteFailure === true &&
+            buttonLabelAfterRemoteFailure === "重新发送" &&
+            buttonTitleAfterRemoteFailure.includes("重新发送") &&
+            remoteRejectRetryOfferCount === 1 &&
+            remoteRejectRetryChunkCount === 2 &&
+            remoteRejectRetryCompleteCount === 1 &&
+            fileInputLengthAfterRemoteAccept === 0,
           clipboardText,
           floatingClipboardText,
           tempText,
           memoryText,
           failedText,
           resultState,
+          remoteFailureText,
+          remoteFailureFloating,
+          remoteFailureState,
+          fileInputLengthAfterRemoteFailure,
+          canRetryAfterRemoteFailure,
+          buttonLabelAfterRemoteFailure,
+          buttonTitleAfterRemoteFailure,
+          remoteRejectRetryOfferCount,
+          remoteRejectRetryChunkCount,
+          remoteRejectRetryCompleteCount,
+          fileInputLengthAfterRemoteAccept,
         };
       } finally {
         state.lastOutgoingFileTransfer = originalLastOutgoingTransfer;
         state.connected = originalConnected;
         elements.clipboardToggle.checked = originalClipboardToggle;
+        state.client = originalClient;
+        state.fileTransferActive = originalFileTransferActive;
+        state.outgoingFileTransfer = originalOutgoingTransfer;
+        elements.fileClipboardInput.value = "";
+        updateFileClipboardButton();
         syncFloatingControlStatus();
       }
     })()`,

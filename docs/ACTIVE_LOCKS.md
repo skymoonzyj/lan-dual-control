@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端手动发送文件会等对端接受成功后再清空选择；对端返回失败时保留文件并可直接“重新发送”；不改协议，不实现断点续传。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端发送文件后会先显示等待对端确认，收到 `clipboard_file_result` 后区分系统文件剪贴板、临时目录、远端托盘和失败原因；不改协议，不实现断点续传。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/03-architecture-and-protocol.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端远端文件接收新增完整性守卫：拒绝未知 `fileIndex`、重复/错位 `offset` 和超过声明大小的分块，停止 transfer 并返回 `LAN011`；不新增协议字段，不实现断点续传。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端手动发送文件失败后，保留文件时按钮会切换为“重新发送”，点击可直接重发保留文件；不改协议，不实现断点续传。 |

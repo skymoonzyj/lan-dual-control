@@ -21,6 +21,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端手动发送文件在对端拒收后也能直接重发。
+完成内容：
+- 手动选文件发送时，本机分块发完后不再立刻清空文件选择，而是等待对端 `clipboard_file_result accepted=true` 后再清空。
+- 如果对端返回 `accepted=false`，顶部状态和全屏/监看浮层会显示“可重新发送”，文件选择继续保留，按钮切换为“重新发送”。
+- 点击“重新发送”会复用保留的 `FileList` 从头重发；重发成功并收到对端接受结果后清空文件选择。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`（失败点：对端失败后文件选择已清空、按钮仍是“发送文件”、重发计数为 0）。
+- 实现后复跑：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 这仍是从头重新发送，不是断点续传。
+- 如果对端长期不返回 `clipboard_file_result`，手动选择会暂时保留以等待结果；后续可补“等待确认超时/手动放弃等待”提示。
+下一步建议：
+- 真实大文件/压缩包长测时同时看对端失败重试、速度/ETA 和系统剪贴板粘贴是否稳定。
+是否改了协议：否；复用既有 `clipboard_file_result accepted=false`。
+是否需要另一端配合：暂不需要；真机重试体验长测时再请 Mac 端配合返回失败或复制大文件。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端发送文件后能看清对端实际处理结果。
 完成内容：
 - 本机分块发送完成后，顶部剪贴板状态会显示“等待对端确认”，避免把网络发送完成误读为对端已写入剪贴板。

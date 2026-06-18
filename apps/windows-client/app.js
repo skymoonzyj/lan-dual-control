@@ -2963,9 +2963,12 @@ function handleAudioFrame(frame) {
 }
 
 function canRetryLastOutgoingFileTransfer() {
+  const transfer = state.lastOutgoingFileTransfer || {};
+  const failedLocally = transfer.status === "failed";
+  const failedRemotely = transfer.status === "remote-result" && transfer.accepted === false;
   return Boolean(
-    state.lastOutgoingFileTransfer?.status === "failed" &&
-      state.lastOutgoingFileTransfer.canRetry &&
+    (failedLocally || failedRemotely) &&
+      transfer.canRetry &&
       state.connected &&
       state.client &&
       elements.clipboardToggle.checked &&
@@ -4674,6 +4677,8 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
       rateSamples: Array.isArray(state.outgoingFileTransfer?.rateSamples)
         ? [...state.outgoingFileTransfer.rateSamples]
         : [],
+      canRetry: clearFileInput && (elements.fileClipboardInput.files?.length || 0) > 0,
+      clearOnRemoteAccept: Boolean(clearFileInput),
     };
     elements.clipboardText.textContent = `剪贴板：文件已发送 ${formatBytes(sentBytes)}，等待对端确认`;
     syncFloatingControlStatus();
@@ -4702,7 +4707,9 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
   } finally {
     state.fileTransferActive = false;
     state.outgoingFileTransfer = null;
-    if (clearFileInput && transferSucceeded) elements.fileClipboardInput.value = "";
+    if (clearFileInput && transferSucceeded && !state.lastOutgoingFileTransfer?.clearOnRemoteAccept) {
+      elements.fileClipboardInput.value = "";
+    }
     updateFileClipboardButton();
     syncFloatingControlStatus();
   }
@@ -5851,7 +5858,8 @@ function describeOutgoingFileResultStatus(result = {}) {
     : "";
 
   if (!result.accepted) {
-    return `对端文件接收失败（${countText}${sizeText}）${reasonText}`;
+    const retryText = result.canRetry ? "，可重新发送" : "";
+    return `对端文件接收失败（${countText}${sizeText}）${retryText}${reasonText}`;
   }
 
   if (result.saveMode === "clipboard") {
@@ -6555,19 +6563,29 @@ function handleClipboardFileProgress(message) {
 }
 
 function handleClipboardFileResult(message) {
-  const previousTransfer = state.lastOutgoingFileTransfer?.transferId === message.transferId
+  const previousTransferMatches = state.lastOutgoingFileTransfer?.transferId === message.transferId;
+  const previousTransfer = previousTransferMatches
     ? state.lastOutgoingFileTransfer
     : {};
+  const accepted = Boolean(message.accepted);
+  const canRetry = !accepted &&
+    Boolean(previousTransfer.canRetry && (elements.fileClipboardInput.files?.length || 0) > 0);
   state.lastOutgoingFileTransfer = {
     ...previousTransfer,
     ...message,
     status: "remote-result",
-    accepted: Boolean(message.accepted),
+    accepted,
+    canRetry,
     completedAt: Date.now(),
     lastActivityAt: Date.now(),
   };
+  if (accepted && previousTransfer.clearOnRemoteAccept) {
+    elements.fileClipboardInput.value = "";
+    state.lastOutgoingFileTransfer.canRetry = false;
+  }
   const detail = describeOutgoingFileResultStatus(state.lastOutgoingFileTransfer);
   elements.clipboardText.textContent = `剪贴板：${detail}`;
+  updateFileClipboardButton();
   syncFloatingControlStatus();
   addLog("文件剪贴板", detail);
 }
