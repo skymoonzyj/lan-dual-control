@@ -61,9 +61,9 @@ Windows 端：
 - [x] Windows 控 Mac 悬浮控制中心补齐第一阶段远控工具栏：全屏后保留画面内入口，可切显示器、画质、分辨率、刷新率、码率、缩放、声音、音量和常用 macOS 快捷键，显示 `Esc` 退出全屏、输入模式和安全状态；页面 diagnostics-only 覆盖原画预设、详细参数同步、快捷键发送、全屏/窗口和黑边输入防护。
 - [x] Windows 控 Mac 全屏进入轻提示：进入全屏会短暂显示 `Esc` 退出、当前画质、刷新率、码率和输入状态，`Esc` 在全屏里优先退出全屏；页面 diagnostics-only 覆盖提示可见和 Esc 退出。
 - [x] Windows 控 Mac 真全屏入口：悬浮控制中心新增“真全屏”按钮，支持浏览器/桌面壳 Fullscreen API；不支持时回退普通全屏并中文提示；页面 diagnostics-only 覆盖真全屏模拟路径。
-- [x] Windows 控 Mac 全屏浮层补视频链路状态：悬浮控制中心展开后显示 H.264/JPEG、实收 FPS、协商/请求刷新率、帧延迟或时钟偏差和回退原因，方便现场判断卡顿、非 60Hz 或 H.264 回退；页面 diagnostics-only 覆盖该状态。
-- [x] Windows 控 Mac 全屏浮层补低于请求刷新率提示：实收 FPS 明显低于请求 Hz 时直接显示“低于请求”，减少现场把请求刷新率误当真实刷新率；页面 diagnostics-only 覆盖 22.9 FPS / 请求 60 Hz 场景。
-- [x] Windows 控 Mac 普通窗口诊断条补低于请求刷新率提示：窗口化控制时也能看到“低于请求 60 Hz”并标为 warning；页面 diagnostics-only 覆盖低 FPS 与接近请求 FPS 两种场景。
+- [x] Windows 控 Mac 全屏浮层补视频链路状态：悬浮控制中心展开后显示 H.264/JPEG、实收 FPS、协商/请求刷新率、远端上限、帧延迟或时钟偏差和回退原因，方便现场判断卡顿、非 60Hz、远端最高 30Hz 或 H.264 回退；页面 diagnostics-only 覆盖该状态。
+- [x] Windows 控 Mac 全屏浮层补低于协商/请求刷新率与远端上限提示：实收 FPS 低于协商值时显示“低于协商”，Mac host 上报 `maxScreenFps` 低于用户选择值时显示“远端上限 30 Hz”，减少现场把请求刷新率误当真实刷新率；页面 diagnostics-only 覆盖 22.9 FPS / 协商 30 Hz / 请求 60 Hz / 远端上限 30 Hz 场景。
+- [x] Windows 控 Mac 普通窗口诊断条补低于协商/请求刷新率和远端上限提示：窗口化控制时也能看到“低于协商 30 Hz / 远端上限 30 Hz”并标为 warning；页面 diagnostics-only 覆盖低 FPS、远端上限和接近请求 FPS 场景。
 - [x] Windows 控 Mac 全屏浮层补声音状态：悬浮控制中心展开后显示声音开关、接收帧数、电平、播放计数、音量和丢帧，方便现场判断没收到音频、收到但未播放或播放失败；页面 diagnostics-only 覆盖该状态。
 - [x] Windows 控 Mac 全屏浮层补剪贴板/远端文件状态：悬浮控制中心展开后显示文字/文件剪贴板能力、远端文件接收进度、系统文件剪贴板写入状态和最近收到文件数量；页面 diagnostics-only 覆盖进行中文件接收状态。
 - [x] Windows 控 Mac 全屏浮层补连接/重连状态：悬浮控制中心展开后显示连接状态、自动重连倒计时和重连次数，并提供全屏内“立即重连”按钮；页面 diagnostics-only 覆盖倒计时状态和按钮可用性。
@@ -74,7 +74,7 @@ Windows 端：
 - [x] Windows 控 Mac 复制诊断快速摘要补 Mac 值守/可远程推断：报告顶部会基于当前连接、设备发现、重连等待和 Mac 提醒 watcher 写出“当前可远程/恢复中/已发现/未发现”，并明确 LaunchAgent、自启动、锁屏/睡眠可达性等待 Mac status/readiness 上报；页面 diagnostics-only 覆盖导出和复制文本。
 - [x] Windows 控 Mac 复制诊断快速摘要补 Mac 值守风险中文化：当本机 Mac 提醒 watcher 状态或诊断文本里出现 `MacUnattendedStatus`、`warnings=`、`blockers=` 时，报告会把 `launch-agent-missing`、`power-risk` 等短标签翻译成“自启动未配置”“电源设置可能导致睡眠断连”等中文风险；页面 diagnostics-only 覆盖导出和复制文本。
 - [x] Windows 控 Mac 复制诊断快速摘要补独立剪贴板状态：报告顶部会直接写出剪贴板关闭、待机、文字/文件能力、远端文件或压缩包接收进度、系统剪贴板写入状态；显示能力分段也会保留同一状态，页面 diagnostics-only 覆盖导出和复制文本。
-- [x] Windows 控 Mac 复制诊断快速摘要补独立视频状态：报告顶部会直接写出 H.264/JPEG、实收 FPS、协商/请求刷新率、低于请求、帧延迟或回退原因，方便定位卡顿、不是 60Hz 或 H.264 回退；页面 diagnostics-only 覆盖导出文本。
+- [x] Windows 控 Mac 复制诊断快速摘要补独立视频状态：报告顶部会直接写出 H.264/JPEG、实收 FPS、协商/请求刷新率、远端上限、低于协商或请求、帧延迟或回退原因，方便定位卡顿、不是 60Hz、远端最高 30Hz 或 H.264 回退；页面 diagnostics-only 覆盖导出文本。
 - [x] Windows 控 Mac 复制诊断报告补普通声音摘要：快速摘要和显示能力分段会记录声音关闭/等待音频/已接收等待播放/正在播放/播放失败、音量、电平、接收帧、播放帧和丢帧；页面 diagnostics-only 覆盖收到但未播放场景。
 - [x] Windows 控 Mac 复制诊断快速摘要补输入模式/注入状态：报告顶部会直接写出输入事件数量、`inputMode=log` 的“安全日志，不会真正控制”、已记录/已注入/被拒绝 ack，方便定位“已连接但不能点击”；页面 diagnostics-only 覆盖导出和复制文本。
 
@@ -228,7 +228,7 @@ Windows 端：
 - macOS 被控端已接入真实屏幕 JPEG `video_frame` 抓取；默认 `LAN_DUAL_VIDEO_MODE=auto`，权限不足或采集失败时自动回退模拟帧。
 - macOS 被控端真实屏幕帧已改为后台采集/编码队列，支持 `LAN_DUAL_MAX_SCREEN_FPS`、`LAN_DUAL_JPEG_QUALITY` 和 `video_frame.droppedFrames` 调试字段。
 - macOS 被控端已补齐 FPS 诊断字段：`session_answer`、`display_settings_ack` 和 `video_frame` 会返回 `requestedFps`、实际 `fps`、`maxScreenFps`、`frameIntervalMs`、`videoCodec` 和 `capturePipeline`。
-- macOS 被控端 JPEG 调试链路默认真实采集上限改为 30 FPS；Windows 控制端会显示实收 FPS、协商帧率和请求帧率，避免把请求值误认为真实帧率。
+- macOS 被控端 JPEG 调试链路默认真实采集上限改为 30 FPS；Windows 控制端会显示实收 FPS、协商帧率、请求帧率和远端 `maxScreenFps` 上限，避免把请求值误认为真实帧率。
 - macOS 被控端 H.264 流式启动有 5 秒 watchdog；启动阶段未建立 `videoStream` 时会回退 `background-jpeg` 并带 `streamFallbackReason`，迟到启动成功的旧流会被 generation token 停止。
 - macOS 被控端已接入 CGEvent 输入注入；当前默认 `LAN_DUAL_INPUT_MODE=log` 做安全联调，日常启动助手只有在显式 `--inputMode inject --confirmUserWatching` 或 `--injectInput --confirmUserWatching` 时才允许真实注入。
 - Windows 控制端当前已可区分真实 JPEG、H.264 视频帧和模拟视频帧，并记录图片或 WebCodecs 解码失败；`scripts/windows/test-mac-host.ps1 -Discover` 可用于真机连通自检并自动发现 Mac host，显式加 `-ClipboardText -ClipboardFile` 可验证 macOS 文本和文件剪贴板写入。

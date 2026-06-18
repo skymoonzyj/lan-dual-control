@@ -986,6 +986,7 @@ async function verifyFloatingControlCenter(session) {
             videoCodec: "h264",
             videoFrameAgeMs: 123,
             videoFrameClockSkewed: false,
+            maxScreenFps: 30,
             streamFallbackReason: "H.264 启动超时，已回退 JPEG",
           };
           if (typeof syncFloatingControlCenter === "function") syncFloatingControlCenter();
@@ -995,7 +996,8 @@ async function verifyFloatingControlCenter(session) {
             videoStatusText.includes("实收 22.9 FPS") &&
             videoStatusText.includes("协商 30 Hz") &&
             videoStatusText.includes("请求 60 Hz") &&
-            videoStatusText.includes("低于请求 60 Hz") &&
+            videoStatusText.includes("低于协商 30 Hz") &&
+            videoStatusText.includes("远端上限 30 Hz") &&
             videoStatusText.includes("到达 123ms") &&
             videoStatusText.includes("回退")
           );
@@ -2429,6 +2431,7 @@ async function verifyLowFpsDiagnostics(session) {
           videoSource: "screen",
           capturePipeline: "background-jpeg",
           droppedFrames: 0,
+          maxScreenFps: 30,
         });
         const lowText = diagnosticsElement.textContent;
         const lowWarning = diagnosticsElement.classList.contains("is-warning");
@@ -2438,24 +2441,39 @@ async function verifyLowFpsDiagnostics(session) {
           exportText.includes("实收 22.9 FPS") &&
           exportText.includes("协商 30 Hz") &&
           exportText.includes("请求 60 Hz") &&
-          exportText.includes("低于请求 60 Hz") &&
+          exportText.includes("低于协商 30 Hz") &&
+          exportText.includes("远端上限 30 Hz") &&
           exportText.includes("- 视频状态：JPEG");
 
+        state.actualVideoFps = 29;
+        updateHostDiagnostics({ maxScreenFps: 30 });
+        const cappedText = diagnosticsElement.textContent;
+        const cappedWarning = diagnosticsElement.classList.contains("is-warning");
+
         state.actualVideoFps = 58;
-        updateHostDiagnostics({});
+        state.negotiatedFps = 60;
+        updateHostDiagnostics({ maxScreenFps: null });
         const nearText = diagnosticsElement.textContent;
         const nearWarning = diagnosticsElement.classList.contains("is-warning");
 
         return {
           ok:
-            lowText.includes("低于请求 60 Hz") &&
+            lowText.includes("低于协商 30 Hz") &&
+            lowText.includes("远端上限 30 Hz") &&
             lowWarning &&
             exportVideo &&
+            cappedText.includes("远端上限 30 Hz") &&
+            !cappedText.includes("低于协商") &&
+            !cappedText.includes("低于请求") &&
+            cappedWarning &&
             !nearText.includes("低于请求") &&
+            !nearText.includes("远端上限") &&
             !nearWarning,
           lowText,
           lowWarning,
           exportVideo,
+          cappedText,
+          cappedWarning,
           nearText,
           nearWarning,
         };

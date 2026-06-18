@@ -461,6 +461,7 @@ const state = {
     h264DecoderLatencyMs: 0,
     h264FallbackReason: "",
     streamFallbackReason: "",
+    maxScreenFps: null,
     runtime: null,
     warnedMockFrame: false,
   },
@@ -664,6 +665,7 @@ function getEmptyHostDiagnostics() {
     h264DecoderLatencyMs: 0,
     h264FallbackReason: "",
     streamFallbackReason: "",
+    maxScreenFps: null,
     runtime: null,
     warnedMockFrame: false,
   };
@@ -843,6 +845,32 @@ function formatVideoFrameAge(ageMs, { clockSkewed = false, compact = false } = {
   return `${Math.max(0, Math.round(age))}ms`;
 }
 
+function normalizeRemoteMaxScreenFps(value) {
+  const fps = Number(value);
+  if (!Number.isFinite(fps) || fps <= 0) {
+    return null;
+  }
+  return Math.round(fps);
+}
+
+function getRemoteMaxScreenFps(diagnostics = state.hostDiagnostics) {
+  return normalizeRemoteMaxScreenFps(diagnostics?.maxScreenFps);
+}
+
+function formatRemoteFpsLimitText({ includeWhenAtOrBelowRequest = false } = {}) {
+  const maxScreenFps = getRemoteMaxScreenFps();
+  if (!maxScreenFps) {
+    return "";
+  }
+  const requested = state.requestedFps || Number(elements.fpsSelect.value) || 0;
+  const negotiated = state.negotiatedFps || 0;
+  const shouldShow =
+    includeWhenAtOrBelowRequest ||
+    (requested && requested > maxScreenFps) ||
+    (negotiated && negotiated > maxScreenFps);
+  return shouldShow ? `远端上限 ${maxScreenFps} Hz` : "";
+}
+
 function parseFrameTimestampMs(value) {
   if (value === null || value === undefined || value === "") {
     return NaN;
@@ -973,7 +1001,7 @@ function getHostDiagnosticsLevel(diagnostics = state.hostDiagnostics) {
   if (diagnostics.videoFrameClockSkewed || Number(diagnostics.videoFrameAgeMs) > 1000) {
     return "warning";
   }
-  if (getVideoRateWarning()) {
+  if (getVideoRateWarning() || formatRemoteFpsLimitText()) {
     return "warning";
   }
   if (warnings.length > 0 || hasCaptureFallback) {
@@ -1028,6 +1056,7 @@ function renderHostDiagnosticsText() {
     diagnostics.clipboardFileMode,
   );
   const permissionText = formatPermissionStatus(diagnostics.permissions);
+  const fpsLimitText = formatRemoteFpsLimitText();
 
   if (hostParts.length > 0) {
     parts.push(`主机：${hostParts.join(" / ")}`);
@@ -1044,6 +1073,9 @@ function renderHostDiagnosticsText() {
     if (rateWarning) {
       frameParts.push(rateWarning);
     }
+    if (fpsLimitText) {
+      frameParts.push(fpsLimitText);
+    }
     if (frameAgeText) {
       frameParts.push(diagnostics.videoFrameClockSkewed ? frameAgeText : `到达 ${frameAgeText}`);
     }
@@ -1051,6 +1083,8 @@ function renderHostDiagnosticsText() {
       frameParts.push(qualityText);
     }
     parts.push(`视频：${frameParts.join(" / ")}`);
+  } else if (fpsLimitText) {
+    parts.push(`视频上限：${fpsLimitText}`);
   }
   if (decoderText) {
     parts.push(`解码：${decoderText}`);
@@ -1072,13 +1106,19 @@ function renderHostDiagnosticsText() {
 }
 
 function updateHostDiagnostics(nextDiagnostics = {}) {
+  const normalizedDiagnostics = Object.fromEntries(
+    Object.entries(nextDiagnostics).filter(([, value]) => value !== undefined),
+  );
   state.hostDiagnostics = {
     ...state.hostDiagnostics,
-    ...nextDiagnostics,
+    ...normalizedDiagnostics,
   };
   elements.hostDiagnosticsText.textContent = renderHostDiagnosticsText();
   setHostDiagnosticsLevel(getHostDiagnosticsLevel());
   updateInputStatus();
+  if (Object.prototype.hasOwnProperty.call(normalizedDiagnostics, "maxScreenFps")) {
+    updateFpsMetric();
+  }
   syncFloatingControlStatus();
 }
 
@@ -1538,7 +1578,10 @@ function autoSelectDiscoveredDevice(devices) {
   elements.hostInput.value = device.host;
   elements.portInput.value = device.port;
   elements.transportSelect.value = device.transport ?? "websocket";
-  updateHostDiagnostics({ runtime: normalizeHostRuntime(device.runtime) });
+  updateHostDiagnostics({
+    runtime: normalizeHostRuntime(device.runtime),
+    maxScreenFps: normalizeRemoteMaxScreenFps(device.capabilities?.maxScreenFps),
+  });
   savePreferences();
 
   if (changed) {
@@ -1558,7 +1601,10 @@ function selectDevice(device, button) {
   elements.transportSelect.value = device.transport ?? "websocket";
   savePreferences();
   if (!state.connected && !state.connecting) {
-    updateHostDiagnostics({ runtime: normalizeHostRuntime(device.runtime) });
+    updateHostDiagnostics({
+      runtime: normalizeHostRuntime(device.runtime),
+      maxScreenFps: normalizeRemoteMaxScreenFps(device.capabilities?.maxScreenFps),
+    });
   }
   addLog("选择设备", `${device.deviceName} · ${device.host}:${device.port}`);
 }
@@ -1591,11 +1637,14 @@ function renderDiscoveredDevices() {
     const detail = document.createElement("small");
     const statusText = device.status === "online" ? "在线" : device.source;
     const runtimeText = formatHostRuntimeDiagnostics(device.runtime);
+    const maxScreenFps = normalizeRemoteMaxScreenFps(device.capabilities?.maxScreenFps);
+    const fpsLimitText = maxScreenFps ? `最高 ${maxScreenFps} Hz` : "";
     detail.textContent = [
       `${device.host}:${device.port}`,
       getPlatformLabel(device.platform),
       getRoleLabel(device.role),
       statusText,
+      fpsLimitText,
       runtimeText,
     ].filter(Boolean).join(" · ");
     textWrap.append(title, detail);
@@ -1751,6 +1800,10 @@ function setUiConnected(answer) {
     elements.transportSelect.value,
   );
   const runtime = normalizeHostRuntime(answer.runtime) ?? selectedDevice?.runtime ?? state.hostDiagnostics.runtime;
+  const maxScreenFps =
+    normalizeRemoteMaxScreenFps(answer.maxScreenFps) ??
+    normalizeRemoteMaxScreenFps(selectedDevice?.capabilities?.maxScreenFps) ??
+    state.hostDiagnostics.maxScreenFps;
   updateHostDiagnostics({
     hostMode: answer.hostMode ?? "",
     capturePipeline: answer.capturePipeline ?? "",
@@ -1765,6 +1818,7 @@ function setUiConnected(answer) {
     qualityPreset: answer.qualityPreset ?? "",
     jpegQuality: answer.jpegQuality ?? null,
     streamFallbackReason: answer.streamFallbackReason ?? "",
+    maxScreenFps,
     runtime: runtime ?? null,
   });
   elements.remoteCanvas.focus();
@@ -2115,6 +2169,10 @@ function formatFloatingVideoRate() {
   } else if (!state.connected && requested) {
     parts.push(`请求 ${requested} Hz`);
   }
+  const fpsLimitText = formatRemoteFpsLimitText();
+  if (fpsLimitText) {
+    parts.push(fpsLimitText);
+  }
   return parts.join(" / ");
 }
 
@@ -2122,12 +2180,12 @@ function getVideoRateWarning() {
   const actual = Number(state.actualVideoFps) || 0;
   const requested = state.requestedFps || Number(elements.fpsSelect.value) || 0;
   if (!state.connected || !actual || !requested) return "";
-  if (actual < requested * 0.85 && requested - actual >= 5) {
-    return `低于请求 ${requested} Hz`;
-  }
   const negotiated = state.negotiatedFps || requested;
   if (negotiated && actual < negotiated * 0.85 && negotiated - actual >= 5) {
     return `低于协商 ${negotiated} Hz`;
+  }
+  if (!formatRemoteFpsLimitText() && actual < requested * 0.85 && requested - actual >= 5) {
+    return `低于请求 ${requested} Hz`;
   }
   return "";
 }
@@ -2433,7 +2491,9 @@ function syncFloatingControlCenter() {
         state.actualVideoFps > 0
           ? `${state.actualVideoFps.toFixed(1)} FPS`
           : `${state.negotiatedFps || elements.fpsSelect.value} Hz`;
-      elements.floatingControlSummary.textContent = `${codecText} · ${fpsText} · ${bandwidthText}`;
+      const fpsLimitText = formatRemoteFpsLimitText();
+      const fpsSummary = fpsLimitText ? `${fpsText} / ${fpsLimitText}` : fpsText;
+      elements.floatingControlSummary.textContent = `${codecText} · ${fpsSummary} · ${bandwidthText}`;
     } else {
       elements.floatingControlSummary.textContent = `请求 ${elements.fpsSelect.value} Hz · ${bandwidthText}`;
     }
@@ -2537,6 +2597,10 @@ function updateFpsMetric() {
   const parts = [`实收 ${actualText}`, `协商 ${negotiated || "--"} Hz`];
   if (requested && negotiated && requested !== negotiated) {
     parts.push(`请求 ${requested} Hz`);
+  }
+  const fpsLimitText = formatRemoteFpsLimitText();
+  if (fpsLimitText) {
+    parts.push(fpsLimitText);
   }
   elements.metricFps.textContent = parts.join(" · ");
   syncFloatingControlStatus();
@@ -3436,8 +3500,11 @@ async function connect({ reconnect = false } = {}) {
   addLog(reconnect ? "执行重连" : "开始连接", `${transportLabel} · ${host}:${port}`);
 
   const discoveredDevice = await probeConnectionDiagnostics(host, port, elements.transportSelect.value);
-  if (discoveredDevice?.runtime) {
-    updateHostDiagnostics({ runtime: discoveredDevice.runtime });
+  if (discoveredDevice?.runtime || discoveredDevice?.capabilities?.maxScreenFps) {
+    updateHostDiagnostics({
+      runtime: discoveredDevice?.runtime,
+      maxScreenFps: normalizeRemoteMaxScreenFps(discoveredDevice?.capabilities?.maxScreenFps),
+    });
   }
 
   const client = new ProtocolClient({
@@ -5661,6 +5728,7 @@ function handleProtocolMessage(message) {
       clipboardFileMode: message.clipboardFileMode ?? state.hostDiagnostics.clipboardFileMode,
       qualityPreset: message.qualityPreset ?? state.hostDiagnostics.qualityPreset,
       jpegQuality: message.jpegQuality ?? state.hostDiagnostics.jpegQuality,
+      maxScreenFps: normalizeRemoteMaxScreenFps(message.maxScreenFps) ?? state.hostDiagnostics.maxScreenFps,
       runtime: normalizeHostRuntime(message.runtime) ?? state.hostDiagnostics.runtime,
     });
     if (message.streamFallbackReason) {
@@ -5808,6 +5876,7 @@ function renderVideoFrame(frame) {
     ...frameAgeDiagnostics,
     qualityPreset: frame.qualityPreset ?? state.hostDiagnostics.qualityPreset,
     jpegQuality: frame.jpegQuality ?? state.hostDiagnostics.jpegQuality,
+    maxScreenFps: normalizeRemoteMaxScreenFps(frame.maxScreenFps) ?? state.hostDiagnostics.maxScreenFps,
     streamFallbackReason: Object.prototype.hasOwnProperty.call(frame, "streamFallbackReason")
       ? (frame.streamFallbackReason ?? "")
       : frameCodec === "h264"
@@ -6005,6 +6074,7 @@ async function renderH264VideoFrame(frame) {
     droppedFrames: frame.droppedFrames ?? state.hostDiagnostics.droppedFrames,
     ...frameAgeDiagnostics,
     qualityPreset: frame.qualityPreset ?? state.hostDiagnostics.qualityPreset,
+    maxScreenFps: normalizeRemoteMaxScreenFps(frame.maxScreenFps) ?? state.hostDiagnostics.maxScreenFps,
   });
 
   if (state.h264FallbackActive) {

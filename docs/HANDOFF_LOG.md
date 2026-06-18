@@ -19,6 +19,41 @@
 
 ## 2026-06-18 Windows Codex
 
+日期：2026-06-18 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 控制端明确显示 Mac host 远端 `maxScreenFps` 上限，避免用户请求 60/120Hz 时误判为 Windows 第二步卡住或控制端卡顿。
+完成内容：
+- Windows 控 Mac 页面现在会从 `/discovery.capabilities.maxScreenFps`、`session_answer.maxScreenFps`、`display_settings_ack.maxScreenFps` 和 `video_frame.maxScreenFps` 保存远端最高刷新率。
+- 设备列表会显示在线 Mac 的“最高 30 Hz”；FPS 卡片、普通诊断条、全屏悬浮控制中心和复制/导出诊断都会显示“远端上限 30 Hz”。
+- 低帧率提示更细：实收低于协商值时显示“低于协商 30 Hz”；远端上限低于用户请求时显示“远端上限 30 Hz”；没有远端上限且实收低于请求时仍显示“低于请求”。
+- 页面 diagnostics-only 回归覆盖全屏浮层、普通诊断条和导出文本里的 `低于协商 30 Hz / 远端上限 30 Hz`。
+- 真实 Mac `192.168.31.122:43770` 无密预检仍 ready，当前上报 `maxScreenFps=30`，验证本轮 UI 解释和现场事实一致。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5205 --debugPort 9345 --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --clientPort 5206 --debugPort 9346 --timeoutMs 45000`
+- `node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --boardSummary --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps/windows-client scripts/windows docs`
+遗留问题：
+- 本轮不改变 Mac host 实际采集上限；如果要让 Mac 真上 60Hz，需要后续在 Mac host 启动参数或 LaunchAgent 中调整 `LAN_DUAL_MAX_SCREEN_FPS` 并重新做性能/稳定性验收。
+下一步建议：
+- 下一轮可继续推进 Mac host LaunchAgent 配置里暴露 `maxScreenFps` dry-run/写入说明，或者做真实 Mac 60Hz 上限调整后的 H.264 长稳验收。
+是否改了协议：否，消费已有可选诊断字段。
+是否需要另一端配合：不需要；真正提高 Mac 端上限时需要 Mac 端重启 host 并配合观察性能。
+
+## 2026-06-18 Windows Codex
+
 日期：2026-06-18 现场复核与收口
 开发端：Windows Codex
 本轮目标：重新检查正式验收第二步现场卡住感，并让 Windows 桌面壳/控制端能看到 Mac 提醒 watcher 最近告警摘要。
