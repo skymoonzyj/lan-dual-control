@@ -414,6 +414,39 @@ async function checkMacUnattendedOkStatusIgnored(args) {
   console.log("[OK] Mac unattended ok status is ignored");
 }
 
+async function checkMacResumeFindingsAlert(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: "MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacMaxFpsPlan=node scripts/mac/install-mac-host-launch-agent.mjs --port 43770 --maxScreenFps 60 --boardSummary",
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "Mac resume findings status");
+  assertIncludes(output, "MacResumeStatus=ready with warnings", "Mac resume findings status");
+  assertIncludes(output, "warnings=h264-fallback,fps-limit", "Mac resume findings status");
+  assertIncludes(output, "MacMaxFpsPlan=", "Mac resume findings status");
+  console.log("[OK] Mac resume finding status alerts");
+}
+
+async function checkMacResumeCleanIgnored(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: "check-mac-resume-status ready blockers=none warnings=none maxScreenFps=60",
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertNotIncludes(output, "ALERT:", "Mac resume clean status");
+  console.log("[OK] Mac resume clean status is ignored");
+}
+
 async function checkMacClientFormalFindingsAlert(args) {
   const output = await runWatcherAgainst(baseState({
     statuses: {
@@ -690,6 +723,8 @@ async function main() {
   await checkReverseGrantStatusAlerts(args);
   await checkMacUnattendedStatusAlerts(args);
   await checkMacUnattendedOkStatusIgnored(args);
+  await checkMacResumeFindingsAlert(args);
+  await checkMacResumeCleanIgnored(args);
   await checkMacClientFormalFindingsAlert(args);
   await checkMacClientFormalCleanIgnored(args);
   await checkMacHostReadinessFindingsAlert(args);
