@@ -2973,6 +2973,22 @@ async function verifyOutgoingFileResultStatus(session) {
         });
         const staleLateProgressState = state.lastOutgoingFileTransfer || {};
         const staleLateProgressText = elements.clipboardText.textContent || "";
+        const textBeforeStaleResponse = elements.clipboardText.textContent || "";
+        handleClipboardFileResponse({
+          type: "clipboard_file_response",
+          transferId: pendingBeforeTimeout.transferId,
+          accepted: true,
+        });
+        const staleLateAcceptResponseState = state.lastOutgoingFileTransfer || {};
+        const staleLateAcceptResponseText = elements.clipboardText.textContent || "";
+        handleClipboardFileResponse({
+          type: "clipboard_file_response",
+          transferId: pendingBeforeTimeout.transferId,
+          accepted: false,
+          reason: "old offer rejected late",
+        });
+        const staleLateRejectResponseState = state.lastOutgoingFileTransfer || {};
+        const staleLateRejectResponseText = elements.clipboardText.textContent || "";
 
         return {
           ok:
@@ -3031,7 +3047,15 @@ async function verifyOutgoingFileResultStatus(session) {
             !staleLateResultText.includes("old transfer accepted late") &&
             staleLateProgressState.transferId === pendingTimeoutRetryTransferId &&
             staleLateProgressState.status === "sent" &&
-            !staleLateProgressText.includes("对端接收 100%"),
+            !staleLateProgressText.includes("对端接收 100%") &&
+            staleLateAcceptResponseState.transferId === pendingTimeoutRetryTransferId &&
+            staleLateAcceptResponseState.status === "sent" &&
+            staleLateAcceptResponseText === textBeforeStaleResponse &&
+            !staleLateAcceptResponseText.includes("对端已准备接收文件") &&
+            staleLateRejectResponseState.transferId === pendingTimeoutRetryTransferId &&
+            staleLateRejectResponseState.status === "sent" &&
+            staleLateRejectResponseText === textBeforeStaleResponse &&
+            !staleLateRejectResponseText.includes("old offer rejected late"),
           clipboardText,
           floatingClipboardText,
           tempText,
@@ -3071,6 +3095,11 @@ async function verifyOutgoingFileResultStatus(session) {
           staleLateResultText,
           staleLateProgressState,
           staleLateProgressText,
+          textBeforeStaleResponse,
+          staleLateAcceptResponseState,
+          staleLateAcceptResponseText,
+          staleLateRejectResponseState,
+          staleLateRejectResponseText,
         };
       } finally {
         state.lastOutgoingFileTransfer = originalLastOutgoingTransfer;

@@ -6886,9 +6886,16 @@ function isOutgoingFileTransferRejected(transferId) {
 }
 
 function handleClipboardFileResponse(message) {
+  const transferId = String(message.transferId || "");
+  const currentTransferId = state.fileTransferActive && state.outgoingFileTransfer?.transferId
+    ? state.outgoingFileTransfer.transferId
+    : state.lastOutgoingFileTransfer?.transferId || "";
+  if (transferId && currentTransferId && transferId !== currentTransferId) {
+    addLog("文件剪贴板", `忽略旧的对端文件清单响应 · ${transferId}`);
+    return false;
+  }
   const accepted = Boolean(message.accepted);
   if (!accepted) {
-    const transferId = String(message.transferId || "");
     const lastTransfer = state.lastOutgoingFileTransfer?.transferId === transferId
       ? state.lastOutgoingFileTransfer
       : null;
