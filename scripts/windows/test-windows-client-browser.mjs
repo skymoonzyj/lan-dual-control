@@ -2312,6 +2312,21 @@ async function verifyFileClipboardRecoveryText(session) {
         const oversizeOutgoingSendCount = oversizeOutgoingSends.length;
         state.hostDiagnostics = { ...originalHostDiagnostics };
 
+        const emptyOutgoingSends = [];
+        state.connected = true;
+        elements.clipboardToggle.checked = true;
+        state.client = {
+          sendClipboardFileOffer: (payload) => emptyOutgoingSends.push({ type: "offer", payload }),
+          sendClipboardFileChunk: (payload) => emptyOutgoingSends.push({ type: "chunk", payload }),
+          sendClipboardFileComplete: (payload) => emptyOutgoingSends.push({ type: "complete", payload }),
+        };
+        elements.clipboardText.textContent = "剪贴板：已开启";
+        if (typeof syncFloatingControlStatus === "function") syncFloatingControlStatus();
+        await sendFilesToRemote([], { sourceLabel: "未选择文件测试" });
+        const emptyOutgoingText = elements.clipboardText.textContent || "";
+        const emptyOutgoingFloating = document.querySelector("#floatingClipboardStatus")?.textContent || "";
+        const emptyOutgoingSendCount = emptyOutgoingSends.length;
+
         const retryFileBytes = new Uint8Array(fileChunkSizeBytes + 2048);
         retryFileBytes.fill(65);
         const retryFile = new File([retryFileBytes], "retry-demo.zip", { type: "application/zip" });
@@ -2519,6 +2534,9 @@ async function verifyFileClipboardRecoveryText(session) {
             oversizeOutgoingText.includes("文件过大") &&
             oversizeOutgoingFloating.includes("文件过大") &&
             oversizeOutgoingFloating.includes("超过当前上限") &&
+            emptyOutgoingSendCount === 0 &&
+            emptyOutgoingText.includes("未选择文件") &&
+            emptyOutgoingFloating.includes("未选择文件") &&
             failedClipboardText.includes("文件发送失败") &&
             failedClipboardText.includes("可重新发送") &&
             lastOutgoingFailure.status === "failed" &&
@@ -2617,6 +2635,9 @@ async function verifyFileClipboardRecoveryText(session) {
           oversizeOutgoingText,
           oversizeOutgoingFloating,
           oversizeOutgoingSendCount,
+          emptyOutgoingText,
+          emptyOutgoingFloating,
+          emptyOutgoingSendCount,
           failedClipboardText,
           lastOutgoingFailure,
           lastOutgoingFailureStatus,

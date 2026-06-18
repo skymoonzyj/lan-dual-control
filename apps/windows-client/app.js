@@ -4850,6 +4850,10 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
   }
 
   if (files.length === 0) {
+    state.localClipboardStatusText = "剪贴板：未选择文件";
+    elements.clipboardText.textContent = state.localClipboardStatusText;
+    syncFloatingControlStatus();
+    addLog(sourceLabel, "未选择文件，未发送");
     return;
   }
 

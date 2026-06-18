@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端手动发送文件未选择文件时给出稳定可见中文提示。
+完成内容：
+- 手动发送文件入口没有文件时，顶部剪贴板状态会显示“未选择文件”。
+- 全屏/监看浮层会同步显示“未选择文件”，不会残留上一条“文件过大”或等待确认状态。
+- 页面 diagnostics-only 覆盖空选择早退，确认不会发送 `clipboard_file_offer` / chunk / complete。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增页面断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`（失败点：顶部仍为“已开启”，浮层残留上一条“文件过大”）。
+- 实现后复跑同一 diagnostics-only 通过。
+遗留问题：
+- 这只改善空选择早退反馈，不改变文件选择器、文件大小上限、分块协议或断点续传策略。
+下一步建议：
+- 真机手动发送文件时顺手确认取消选择、重新选择和失败重发三类按钮状态不会互相覆盖。
+是否改了协议：否；只改 Windows 控制端 UI 状态和页面自测。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端手动发送文件超过大小上限时给出稳定可见中文提示。
 完成内容：
 - 手动发送文件/压缩包超过当前大小上限时，顶部剪贴板状态会显示“文件过大”并带当前上限原因。
