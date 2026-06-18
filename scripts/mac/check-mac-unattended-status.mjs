@@ -87,6 +87,8 @@ Machine-readable JSON fields:
   commands.macHostReadiness      Follow-up Mac host readiness command with the
                                   standard MacHostReadiness label.
   commands.hostReadiness         Follow-up Mac host readiness command.
+  commands.macResumeStatus       Follow-up Mac resume status command with the
+                                  standard MacResumeStatus label.
   commands.macFormalLocalSmoke   Follow-up formal H.264 + PCM + input-log
                                   short validation command; prompts locally
                                   and never embeds a password in argv.
@@ -580,6 +582,7 @@ function makeCommands(args) {
     hostStatus: `node scripts/mac/start-mac-host.mjs --status --host ${args.host} --port ${args.port} --boardSummary`,
     macHostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     hostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
+    macResumeStatus: makeMacResumeStatusCommand(args),
     macFormalLocalSmoke: makeMacFormalLocalSmokeCommand(args),
     macScriptHelp: makeMacScriptHelpCommand(),
     startHost: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port}`,
@@ -597,6 +600,23 @@ function makeMacHostStopCommand(args) {
     shellQuote(args.host),
     "--port",
     String(args.port),
+  ].join(" ");
+}
+
+function statusProbeHost(args = {}) {
+  const host = args.host || defaults.host;
+  return host === "0.0.0.0" || host === "::" ? defaults.host : host;
+}
+
+function makeMacResumeStatusCommand(args = {}) {
+  return [
+    "node scripts/mac/check-mac-resume-status.mjs",
+    "--host",
+    shellQuote(statusProbeHost(args)),
+    "--port",
+    String(args.port || defaults.port),
+    "--checkBoard",
+    "--boardSummary",
   ].join(" ");
 }
 
@@ -730,9 +750,10 @@ function makeBoardSummary(report) {
     : "permissions=unknown";
   const agent = `launchAgent=${report.launchAgent.exists ? "file-present" : "missing"} loaded=${report.launchAgent.loaded === null ? "unknown" : boolText(report.launchAgent.loaded)}`;
   const agentMaxFps = report.launchAgent.maxScreenFps === null ? "unknown" : String(report.launchAgent.maxScreenFps);
+  const suggestedAction = report.suggestedAction?.boardSummary || "";
   return [
-    `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
-    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacScriptHelp=${report.commands.macScriptHelp}.`,
+    `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedAction ? ` ${suggestedAction}` : ""}.`,
+    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacResumeStatus=${report.commands.macResumeStatus}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacScriptHelp=${report.commands.macScriptHelp}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
@@ -747,6 +768,23 @@ function formatBoardBuildDiff(buildDiff) {
     return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} restart recommended, hostRuntimeChanges=${buildDiff.changedHostRuntimeFileCount ?? "unknown"}`;
   }
   return "";
+}
+
+function buildSuggestedAction(report) {
+  if (report.host?.online && report.host?.buildDiff?.severity === "restart-recommended") {
+    return {
+      id: "restart-mac-host-safely",
+      reason: "Mac host runtime build is stale; stop the old local host, restart with a visible password prompt, then rerun MacResumeStatus.",
+      commands: {
+        macHostStop: report.commands.macHostStop,
+        macHostSafeStart: report.commands.macHostSafeStart,
+        macMaxFpsSafeStart: report.commands.macMaxFpsSafeStart,
+        macResumeStatus: report.commands.macResumeStatus,
+      },
+      boardSummary: "suggestedAction=restart-mac-host-safely actionCommands=MacHostStop->MacHostSafeStart-or-MacMaxFpsSafeStart->MacResumeStatus",
+    };
+  }
+  return undefined;
 }
 
 function summarizeFindingIds(findings) {
@@ -795,8 +833,10 @@ async function buildReport(args) {
     limitations: makeLimitations(),
     findings,
     commands: makeCommands(args),
+    suggestedAction: undefined,
     boardSummary: "",
   };
+  report.suggestedAction = buildSuggestedAction(report);
   report.boardSummary = makeBoardSummary(report);
   return report;
 }
@@ -821,6 +861,8 @@ function printHuman(report) {
   console.log(`- Mac LaunchAgent load: ${report.commands.macLaunchAgentLoad}`);
   console.log(`- Mac LaunchAgent print: ${report.commands.macLaunchAgentPrint}`);
   console.log(`- Mac host readiness: ${report.commands.macHostReadiness}`);
+  console.log(`- Mac resume status: ${report.commands.macResumeStatus}`);
+  if (report.suggestedAction) console.log(`- suggested action: ${report.suggestedAction.boardSummary}`);
   console.log(`- Mac formal local smoke: ${report.commands.macFormalLocalSmoke}`);
   console.log(`- Mac script help: ${report.commands.macScriptHelp}`);
   console.log(report.boardSummary);
