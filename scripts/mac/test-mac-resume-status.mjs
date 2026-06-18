@@ -196,6 +196,12 @@ function assertBoardSummaryShape(text, label) {
   assert(/MacHeartbeatOnce=.*watch-mac-heartbeat\.mjs/.test(text), `${label} should include the Mac heartbeat one-shot command`);
   assert(/MacHeartbeatWatch=/.test(text), `${label} should include Mac heartbeat continuous watcher guidance`);
   assert(/MacHeartbeatWatch=.*watch-mac-heartbeat\.mjs/.test(text), `${label} should include the Mac heartbeat continuous watcher command`);
+  assert(/MacHeartbeatStart=/.test(text), `${label} should include Mac heartbeat background start guidance`);
+  assert(/MacHeartbeatStart=.*start-mac-heartbeat-watcher\.mjs/.test(text), `${label} should include the Mac heartbeat background start command`);
+  assert(/MacHeartbeatStatus=/.test(text), `${label} should include Mac heartbeat background status guidance`);
+  assert(/MacHeartbeatStatus=.*start-mac-heartbeat-watcher\.mjs/.test(text), `${label} should include the Mac heartbeat background status command`);
+  assert(/MacHeartbeatStop=/.test(text), `${label} should include Mac heartbeat background stop guidance`);
+  assert(/MacHeartbeatStop=.*start-mac-heartbeat-watcher\.mjs/.test(text), `${label} should include the Mac heartbeat background stop command`);
   assert(/MacScriptHelp=/.test(text), `${label} should include Mac script help safety guidance`);
   assert(/test-mac-script-help\.mjs/.test(text), `${label} should include the Mac script help command`);
   assert(/Do not send passwords/.test(text), `${label} should include password safety note`);
@@ -410,6 +416,43 @@ function assertMacHeartbeatWatchCommand(command, label) {
   assert(!command.includes("inject"), `${label} should not instruct injection`);
 }
 
+function assertMacHeartbeatStartCommand(command, label) {
+  assert(/start-mac-heartbeat-watcher\.mjs/.test(command), `${label} should use start-mac-heartbeat-watcher`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!command.includes("--status"), `${label} should start by default`);
+  assert(!command.includes("--stop"), `${label} should not stop in the start command`);
+  assert(!command.includes("--device Mac Codex"), `${label} should not post as Mac Codex`);
+  assert(!command.includes("--role Mac 端"), `${label} should not mimic the main Mac Codex role`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+  assert(!command.includes("inject"), `${label} should not instruct injection`);
+}
+
+function assertMacHeartbeatStatusCommand(command, label) {
+  assert(/start-mac-heartbeat-watcher\.mjs/.test(command), `${label} should use start-mac-heartbeat-watcher`);
+  assert(command.includes("--status"), `${label} should check status`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!command.includes("--stop"), `${label} should not stop in the status command`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+  assert(!command.includes("inject"), `${label} should not instruct injection`);
+}
+
+function assertMacHeartbeatStopCommand(command, label) {
+  assert(/start-mac-heartbeat-watcher\.mjs/.test(command), `${label} should use start-mac-heartbeat-watcher`);
+  assert(command.includes("--stop"), `${label} should stop the background watcher`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+  assert(!command.includes("inject"), `${label} should not instruct injection`);
+}
+
 function assertMacScriptHelpCommand(command, label) {
   assert(/test-mac-script-help\.mjs/.test(command), `${label} should use test-mac-script-help`);
   assert(command.includes("--timeoutMs 10000"), `${label} should use the standard timeout`);
@@ -442,6 +485,9 @@ function checkHelp(args) {
     assert(/commands\.macClientBrowserSelfTestCommand/.test(result.stdout), `${script} ${flag} should document Mac client browser self-test JSON field`);
     assert(/commands\.macHeartbeatOnceCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat one-shot JSON field`);
     assert(/commands\.macHeartbeatWatchCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat watcher JSON field`);
+    assert(/commands\.macHeartbeatStartCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat background start JSON field`);
+    assert(/commands\.macHeartbeatStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat background status JSON field`);
+    assert(/commands\.macHeartbeatStopCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat background stop JSON field`);
     assert(/commands\.macScriptHelpCommand/.test(result.stdout), `${script} ${flag} should document Mac script help JSON field`);
   }
   print("OK", "Resume status help exits quickly");
@@ -484,6 +530,9 @@ function checkOfflineJson(args) {
   assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "offline JSON Mac client browser self-test command");
   assertMacHeartbeatOnceCommand(payload.commands?.macHeartbeatOnceCommand || "", "offline JSON Mac heartbeat one-shot command");
   assertMacHeartbeatWatchCommand(payload.commands?.macHeartbeatWatchCommand || "", "offline JSON Mac heartbeat watcher command");
+  assertMacHeartbeatStartCommand(payload.commands?.macHeartbeatStartCommand || "", "offline JSON Mac heartbeat background start command");
+  assertMacHeartbeatStatusCommand(payload.commands?.macHeartbeatStatusCommand || "", "offline JSON Mac heartbeat background status command");
+  assertMacHeartbeatStopCommand(payload.commands?.macHeartbeatStopCommand || "", "offline JSON Mac heartbeat background stop command");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "offline JSON should include copy diagnostics action");
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "offline JSON Mac script help command");
   assertBoardSummaryShape(payload.boardSummary || "", "offline JSON boardSummary");
@@ -567,6 +616,9 @@ function checkOfflinePlainReport(args) {
   assert(String(result.stdout || "").includes("Mac client browser self-test:"), "plain report should include Mac client browser self-test label");
   assert(String(result.stdout || "").includes("Mac heartbeat one-shot board update:"), "plain report should include Mac heartbeat one-shot label");
   assert(String(result.stdout || "").includes("Mac heartbeat continuous board watcher:"), "plain report should include Mac heartbeat watcher label");
+  assert(String(result.stdout || "").includes("Mac heartbeat background start:"), "plain report should include Mac heartbeat background start label");
+  assert(String(result.stdout || "").includes("Mac heartbeat background status:"), "plain report should include Mac heartbeat background status label");
+  assert(String(result.stdout || "").includes("Mac heartbeat background stop:"), "plain report should include Mac heartbeat background stop label");
   assert(String(result.stdout || "").includes("start-mac-client.mjs"), "plain report should include Mac client page status command");
   assert(String(result.stdout || "").includes("check-mac-client-readiness.mjs"), "plain report should include Mac client readiness command");
   assert(String(result.stdout || "").includes("discover-windows-hosts.mjs"), "plain report should include Mac client Windows discovery command");
@@ -575,6 +627,7 @@ function checkOfflinePlainReport(args) {
   assert(String(result.stdout || "").includes("run-mac-client-formal-smoke.mjs"), "plain report should include Mac client formal smoke preflight command");
   assert(String(result.stdout || "").includes("scripts/mac/test-mac-client-browser-self-test.mjs"), "plain report should include Mac client browser self-test command");
   assert(String(result.stdout || "").includes("watch-mac-heartbeat.mjs"), "plain report should include Mac heartbeat watcher command");
+  assert(String(result.stdout || "").includes("start-mac-heartbeat-watcher.mjs"), "plain report should include Mac heartbeat background helper command");
   assert(String(result.stdout || "").includes("check-mac-formal-local-smoke.mjs"), "plain report should include Mac formal local smoke command");
   assert(String(result.stdout || "").includes("check-mac-formal-e2e-status.mjs"), "plain report should include Mac formal E2E status command");
   assert(String(result.stdout || "").includes("check-mac-unattended-status.mjs"), "plain report should include Mac unattended/startup command");
@@ -632,6 +685,9 @@ function checkOnlineJson(args) {
   assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "online JSON Mac client browser self-test command");
   assertMacHeartbeatOnceCommand(payload.commands?.macHeartbeatOnceCommand || "", "online JSON Mac heartbeat one-shot command");
   assertMacHeartbeatWatchCommand(payload.commands?.macHeartbeatWatchCommand || "", "online JSON Mac heartbeat watcher command");
+  assertMacHeartbeatStartCommand(payload.commands?.macHeartbeatStartCommand || "", "online JSON Mac heartbeat background start command");
+  assertMacHeartbeatStatusCommand(payload.commands?.macHeartbeatStatusCommand || "", "online JSON Mac heartbeat background status command");
+  assertMacHeartbeatStopCommand(payload.commands?.macHeartbeatStopCommand || "", "online JSON Mac heartbeat background stop command");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("连接密码"), "online JSON copy diagnostics action should mention password safety");
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "online JSON Mac script help command");
   assert(Array.isArray(payload.recommendations), "online payload should include recommendations");

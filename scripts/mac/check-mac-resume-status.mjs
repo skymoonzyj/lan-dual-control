@@ -132,6 +132,14 @@ Machine-readable JSON fields:
                              command; it keeps posting as "Mac Heartbeat" for
                              Windows-side monitoring without authenticating a
                              host or sending input.
+  commands.macHeartbeatStartCommand
+                             Secret-free background Mac heartbeat watcher
+                             start command. It manages PID/log files and posts
+                             as device "Mac Heartbeat", not "Mac Codex".
+  commands.macHeartbeatStatusCommand
+                             Secret-free background watcher status command.
+  commands.macHeartbeatStopCommand
+                             Secret-free background watcher stop command.
   commands.macClientReverseRehearsalAction
                              Human action for the guarded Mac-controls-Windows
                              reverse-control request rehearsal. Run discovery,
@@ -843,6 +851,18 @@ function makeMacHeartbeatWatchCommand() {
   return "node scripts/mac/watch-mac-heartbeat.mjs --sendStatus --intervalMs 30000";
 }
 
+function makeMacHeartbeatStartCommand() {
+  return "node scripts/mac/start-mac-heartbeat-watcher.mjs --boardSummary";
+}
+
+function makeMacHeartbeatStatusCommand() {
+  return "node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary";
+}
+
+function makeMacHeartbeatStopCommand() {
+  return "node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --boardSummary";
+}
+
 function makeMacClientReverseRehearsalAction() {
   return "Run MacClientDiscoverWindows first, then use its ReverseRehearsal= line: Mac requests reverse control and expects LAN008, Windows runs the local loopback one-time grant, Mac retries and expects accepted/临时授权已使用";
 }
@@ -944,6 +964,9 @@ function formatBoardSummary(report) {
       `MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}.`,
       `MacHeartbeatOnce=${report.commands.macHeartbeatOnceCommand}.`,
       `MacHeartbeatWatch=${report.commands.macHeartbeatWatchCommand}.`,
+      `MacHeartbeatStart=${report.commands.macHeartbeatStartCommand}.`,
+      `MacHeartbeatStatus=${report.commands.macHeartbeatStatusCommand}.`,
+      `MacHeartbeatStop=${report.commands.macHeartbeatStopCommand}.`,
       `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
       "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
     ].join(" ");
@@ -978,6 +1001,9 @@ function formatBoardSummary(report) {
     `MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}.`,
     `MacHeartbeatOnce=${report.commands.macHeartbeatOnceCommand}.`,
     `MacHeartbeatWatch=${report.commands.macHeartbeatWatchCommand}.`,
+    `MacHeartbeatStart=${report.commands.macHeartbeatStartCommand}.`,
+    `MacHeartbeatStatus=${report.commands.macHeartbeatStatusCommand}.`,
+    `MacHeartbeatStop=${report.commands.macHeartbeatStopCommand}.`,
     `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
     "Next formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
@@ -1059,6 +1085,9 @@ function printReport(report) {
   console.log(`[NEXT] Mac client browser self-test: ${report.commands.macClientBrowserSelfTestCommand}`);
   console.log(`[NEXT] Mac heartbeat one-shot board update: ${report.commands.macHeartbeatOnceCommand}`);
   console.log(`[NEXT] Mac heartbeat continuous board watcher: ${report.commands.macHeartbeatWatchCommand}`);
+  console.log(`[NEXT] Mac heartbeat background start: ${report.commands.macHeartbeatStartCommand}`);
+  console.log(`[NEXT] Mac heartbeat background status: ${report.commands.macHeartbeatStatusCommand}`);
+  console.log(`[NEXT] Mac heartbeat background stop: ${report.commands.macHeartbeatStopCommand}`);
   console.log(`[NEXT] Mac client copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
   console.log(`[NEXT] Mac script help safety check: ${report.commands.macScriptHelpCommand}`);
   console.log(report.ok ? "[OK] Resume status passed" : "[FAIL] Resume status needs attention");
@@ -1112,6 +1141,9 @@ async function main() {
       macClientBrowserSelfTestCommand: makeMacClientBrowserSelfTestCommand(),
       macHeartbeatOnceCommand: makeMacHeartbeatOnceCommand(),
       macHeartbeatWatchCommand: makeMacHeartbeatWatchCommand(),
+      macHeartbeatStartCommand: makeMacHeartbeatStartCommand(),
+      macHeartbeatStatusCommand: makeMacHeartbeatStatusCommand(),
+      macHeartbeatStopCommand: makeMacHeartbeatStopCommand(),
       macClientCopyDiagnosticsAction: "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码",
       macScriptHelpCommand: makeMacScriptHelpCommand(),
     },
