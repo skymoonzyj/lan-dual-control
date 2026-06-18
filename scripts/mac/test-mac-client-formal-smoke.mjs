@@ -112,6 +112,18 @@ function assertMacClientFormalChecklistCommand(command, label, expectedHost = "1
   assertNotIncludes(command, "--json", label);
 }
 
+function assertReverseGrantBoardSummary(text, label, expectedPort) {
+  assertIncludes(text, "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass", label);
+  assertIncludes(text, `-Port ${expectedPort} -Status -BoardSummary`, label);
+  assertIncludes(text, "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass", label);
+  assertIncludes(text, `-Port ${expectedPort} -Grant -DurationMs 30000 -BoardSummary`, label);
+  assertIncludes(text, "WindowsReverseGrantStatusNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs", label);
+  assertIncludes(text, `--port ${expectedPort} --status --boardSummary`, label);
+  assertIncludes(text, "WindowsOpenOneTimeReverseGrantNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs", label);
+  assertIncludes(text, `--port ${expectedPort} --grant --durationMs 30000 --boardSummary`, label);
+  assertNotIncludes(text, "--password", label);
+}
+
 async function getFreePort() {
   return new Promise((resolvePort, rejectPort) => {
     const server = createServer();
@@ -409,6 +421,7 @@ async function checkPreflightAndDryRun(args) {
         assertIncludes(preflightPayload.boardSummary || "", `--port ${windowsPort}`, "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "MacClientBrowserSelfTest=", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "ReverseGrantCopy=", "preflight board summary");
+        assertReverseGrantBoardSummary(preflightPayload.boardSummary || "", "preflight board summary", windowsPort);
         assertIncludes(preflightPayload.boardSummary || "", "Reverse rehearsal after auth", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "allow-windows-reverse-control.ps1", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "allow-windows-reverse-control.mjs", "preflight board summary");
@@ -443,6 +456,7 @@ async function checkPreflightAndDryRun(args) {
         assertIncludes(sendCallPayload.boardSummary || "", "MacClientFormalChecklist=", "sendCall board summary");
         assertIncludes(sendCallPayload.boardSummary || "", `--port ${windowsPort}`, "sendCall board summary");
         assertIncludes(sendCallPayload.boardSummary || "", "ReverseGrantCopy=", "sendCall board summary");
+        assertReverseGrantBoardSummary(sendCallPayload.boardSummary || "", "sendCall board summary", windowsPort);
         assertIncludes(sendCallPayload.boardSummary || "", "Reverse rehearsal after auth", "sendCall board summary");
         assertNotIncludes(`${sendCall.stdout}\n${sendCall.stderr}`, secret, "sendCall output");
       });
@@ -490,6 +504,7 @@ async function checkPreflightAndDryRun(args) {
       assert(/warnings=[^.]*board/.test(dryRunPayload.boardSummary || ""), "dryRun board summary should name board warning");
       assertIncludes(dryRunPayload.boardSummary || "", "warnings=", "dryRun board summary");
       assertIncludes(dryRunPayload.boardSummary || "", "MacClientFormalChecklist=", "dryRun board summary");
+      assertReverseGrantBoardSummary(dryRunPayload.boardSummary || "", "dryRun board summary", windowsPort);
       assertNotIncludes(dryRunPayload.commands?.browserSmoke || "", secret, "dryRun command");
       assertNotIncludes(`${dryRun.stdout}\n${dryRun.stderr}`, secret, "dryRun output");
     });
@@ -553,6 +568,7 @@ async function checkDiscoverPreflight(args) {
       assertIncludes(payload.boardSummary || "", "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "discover preflight board summary");
       assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "discover preflight board summary");
       assertIncludes(payload.boardSummary || "", "ReverseGrantCopy=", "discover preflight board summary");
+      assertReverseGrantBoardSummary(payload.boardSummary || "", "discover preflight board summary", windowsPort);
       assertIncludes(payload.boardSummary || "", "Reverse rehearsal after auth", "discover preflight board summary");
       assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "discover preflight output");
     });
@@ -590,6 +606,7 @@ async function checkEnsureClientPreflight(args) {
     assert(payload.preflight?.counts?.blocker === 0, "ensure client preflight should have no blockers");
     assertIncludes(payload.boardSummary || "", "blockers=none", "ensure client board summary");
     assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=", "ensure client board summary");
+    assertReverseGrantBoardSummary(payload.boardSummary || "", "ensure client board summary", windowsPort);
     assert(/warnings=[^.]*board/.test(payload.boardSummary || ""), "ensure client board summary should name board warning");
     assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "ensure client output");
     if (payload.ensuredClient?.processId) {
@@ -646,6 +663,7 @@ async function checkDiscoverSendCall(args) {
         assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "discover sendCall board summary");
         assertIncludes(payload.boardSummary || "", "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "discover sendCall board summary");
         assertIncludes(payload.boardSummary || "", "ReverseGrantCopy=", "discover sendCall board summary");
+        assertReverseGrantBoardSummary(payload.boardSummary || "", "discover sendCall board summary", windowsPort);
         assertIncludes(payload.boardSummary || "", "Reverse rehearsal after auth", "discover sendCall board summary");
         assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "discover sendCall output");
       });

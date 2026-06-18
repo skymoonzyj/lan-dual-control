@@ -614,8 +614,22 @@ function makeReverseControlRehearsalText(args) {
   ].join(" ");
 }
 
+function makeReverseControlRehearsalBoardText() {
+  return "Mac clicks 请求反控 -> expects LAN008/default deny; Windows uses WindowsOpenOneTimeReverseGrant above on loopback; Mac clicks 重试反控 -> accepted plus 临时授权已使用; no password, input_event, or inject.";
+}
+
 function makeReverseGrantCopyAction() {
   return "After LAN008, Mac client page shows Copy PowerShell and Copy Node for the Windows loopback grant commands; copied text must contain no password and copying must not send input_event.";
+}
+
+function makeReverseGrantBoardSummaryParts(report, args) {
+  const commands = report?.commands || {};
+  return [
+    `WindowsReverseGrantStatus=${commands.windowsReverseGrantStatus || makeWindowsReverseGrantCommand(args, "status")}.`,
+    `WindowsOpenOneTimeReverseGrant=${commands.windowsOpenOneTimeReverseGrant || makeWindowsReverseGrantCommand(args, "grant")}.`,
+    `WindowsReverseGrantStatusNodeFallback=${commands.windowsReverseGrantStatusNodeFallback || makeWindowsReverseGrantNodeFallbackCommand(args, "status")}.`,
+    `WindowsOpenOneTimeReverseGrantNodeFallback=${commands.windowsOpenOneTimeReverseGrantNodeFallback || makeWindowsReverseGrantNodeFallbackCommand(args, "grant")}.`,
+  ];
 }
 
 async function preparePassword(args) {
@@ -746,12 +760,14 @@ function makeBoardSummary(report) {
     : "";
   const discoveryChecklistText = makeDiscoveryChecklistText(report);
   const preflightFindings = formatPreflightFindings(report.preflight);
+  const reverseGrantParts = makeReverseGrantBoardSummaryParts(report, report.args);
   if (report.ok && report.browserSmoke?.ran) {
     return [
       `Mac client browser smoke passed against ${target}; duration=${report.browserSmoke.durationMs}ms.${discoveryText}${discoveryChecklistText}`,
       `Preflight ready=${report.preflight?.readyToCall ? "yes" : "no"}; ${preflightFindings}; command used environment password, not argv.`,
       `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
-      `Reverse rehearsal next if needed: ${report.commands?.reverseControlRehearsal || makeReverseControlRehearsalText(report.args)}.`,
+      ...reverseGrantParts,
+      `Reverse rehearsal next if needed: ${makeReverseControlRehearsalBoardText()}`,
       "No password was sent to Agent Link Board; inject was not executed.",
     ].join(" ");
   }
@@ -772,7 +788,8 @@ function makeBoardSummary(report) {
       `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
       `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
       `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
-      `Reverse rehearsal after auth: ${report.commands?.reverseControlRehearsal || makeReverseControlRehearsalText(report.args)}.`,
+      ...reverseGrantParts,
+      `Reverse rehearsal after auth: ${makeReverseControlRehearsalBoardText()}`,
       "No password was requested or sent; inject was not executed.",
     ].join(" ");
   }
