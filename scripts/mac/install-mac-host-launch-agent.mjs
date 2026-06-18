@@ -300,12 +300,7 @@ function makeCommands(args) {
   const uid = "$(id -u)";
   return {
     dryRun: makeDryRunCommand(args),
-    writePlist: [
-      "node scripts/mac/install-mac-host-launch-agent.mjs",
-      "--write",
-      "--launchAgentPath",
-      shellQuote(args.launchAgentPath),
-    ].join(" "),
+    writePlist: makeWritePlistCommand(args),
     createDirs: `mkdir -p ${shellQuote(path.dirname(args.launchAgentPath))} ${shellQuote(args.logDir)}`,
     bootstrap: `launchctl bootstrap gui/${uid} ${shellQuote(args.launchAgentPath)}`,
     bootout: `launchctl bootout gui/${uid}/${shellQuote(args.label)}`,
@@ -315,14 +310,35 @@ function makeCommands(args) {
   };
 }
 
+function appendNonDefaultPlanArgs(parts, args, { includeLaunchAgentPath = false, includeLogDir = false } = {}) {
+  if (args.label !== defaults.label) parts.push("--label", shellQuote(args.label));
+  if (includeLaunchAgentPath || args.launchAgentPath !== defaults.launchAgentPath) {
+    parts.push("--launchAgentPath", shellQuote(args.launchAgentPath));
+  }
+  if (includeLogDir || args.logDir !== defaults.logDir) parts.push("--logDir", shellQuote(args.logDir));
+  if (args.repoRoot !== path.resolve(defaults.repoRoot)) parts.push("--repoRoot", shellQuote(args.repoRoot));
+  if (args.nodePath !== defaults.nodePath) parts.push("--nodePath", shellQuote(args.nodePath));
+  if (args.nodeCommand !== defaults.nodeCommand) parts.push("--nodeCommand", shellQuote(args.nodeCommand));
+  if (args.host !== defaults.host) parts.push("--host", shellQuote(args.host));
+  if (args.port !== defaults.port) parts.push("--port", String(args.port));
+  if (args.videoMode !== defaults.videoMode) parts.push("--videoMode", shellQuote(args.videoMode));
+  if (args.maxScreenFps !== defaults.maxScreenFps) parts.push("--maxScreenFps", String(args.maxScreenFps));
+  if (args.jpegQuality) parts.push("--jpegQuality", shellQuote(args.jpegQuality));
+  if (!args.bonjour) parts.push("--noBonjour");
+  if (args.passwordMode !== defaults.passwordMode) parts.push("--passwordMode", shellQuote(args.passwordMode));
+  if (args.keepAlive) parts.push("--keepAlive");
+  if (args.throttleInterval !== defaults.throttleInterval) parts.push("--throttleInterval", String(args.throttleInterval));
+}
+
+function makeWritePlistCommand(args) {
+  const parts = ["node scripts/mac/install-mac-host-launch-agent.mjs", "--write"];
+  appendNonDefaultPlanArgs(parts, args, { includeLaunchAgentPath: true, includeLogDir: true });
+  return parts.join(" ");
+}
+
 function makeDryRunCommand(args) {
   const parts = ["node scripts/mac/install-mac-host-launch-agent.mjs"];
-  if (args.port !== defaults.port) {
-    parts.push("--port", String(args.port));
-  }
-  if (args.maxScreenFps !== defaults.maxScreenFps) {
-    parts.push("--maxScreenFps", String(args.maxScreenFps));
-  }
+  appendNonDefaultPlanArgs(parts, args);
   parts.push("--boardSummary");
   return parts.join(" ");
 }

@@ -207,8 +207,15 @@ function checkMaxFpsDryRunSummary(args) {
     assert(payload.programArguments.includes("--maxScreenFps"), "max-FPS programArguments should include --maxScreenFps");
     assert(payload.programArguments.includes("60"), "max-FPS programArguments should include 60");
     assertIncludes(payload.commands?.dryRun || "", "--maxScreenFps 60", "max-FPS commands.dryRun");
+    assertIncludes(payload.commands?.writePlist || "", "--maxScreenFps 60", "max-FPS commands.writePlist");
+    assertIncludes(payload.commands?.writePlist || "", "--write", "max-FPS commands.writePlist");
+    assertIncludes(payload.commands?.writePlist || "", "--launchAgentPath", "max-FPS commands.writePlist");
+    assertIncludes(payload.commands?.writePlist || "", "--logDir", "max-FPS commands.writePlist");
     assertIncludes(payload.boardSummary || "", "maxFps=60", "max-FPS boardSummary");
-    assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=node scripts/mac/install-mac-host-launch-agent.mjs --maxScreenFps 60 --boardSummary", "max-FPS boardSummary");
+    assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=node scripts/mac/install-mac-host-launch-agent.mjs", "max-FPS boardSummary");
+    assertIncludes(payload.boardSummary || "", "--maxScreenFps 60 --boardSummary", "max-FPS boardSummary");
+    assertIncludes(payload.boardSummary || "", "ManualWrite=", "max-FPS boardSummary");
+    assertIncludes(payload.boardSummary || "", "--maxScreenFps 60", "max-FPS boardSummary ManualWrite");
     assert(!existsSync(paths.plist), "max-FPS dry-run should not create plist");
     assertNoSecretsOrRuntimeActions(`${result.stdout}\n${result.stderr}`, "max-FPS LaunchAgent JSON");
     print("OK", "Max-FPS dry-run keeps the 60Hz planner command secret-free and side-effect-free");
@@ -279,6 +286,7 @@ function checkPasswordModes(args) {
     assert(prompt.status === 0, "prompt mode dry-run should exit 0");
     assert(promptPayload.programArguments.includes("--promptPassword"), "prompt mode should use visible password prompt");
     assert(!promptPayload.programArguments.includes("--ephemeralPassword"), "prompt mode should not include ephemeral password");
+    assertIncludes(promptPayload.commands?.writePlist || "", "--passwordMode prompt", "prompt mode commands.writePlist");
     assert(promptPayload.warnings.some((item) => /visible password dialog/.test(item)), "prompt mode should warn about visible dialog");
     assertNoSecretsOrRuntimeActions(`${prompt.stdout}\n${prompt.stderr}`, "prompt mode JSON");
 
@@ -296,6 +304,8 @@ function checkPasswordModes(args) {
     assert(envPayload.programArguments.includes("--requirePassword"), "env-required mode should require a password source");
     assertIncludes(envPayload.plist, "<key>KeepAlive</key>", "env-required plist");
     assertIncludes(envPayload.plist, "SuccessfulExit", "env-required keepAlive plist");
+    assertIncludes(envPayload.commands?.writePlist || "", "--passwordMode env-required", "env-required commands.writePlist");
+    assertIncludes(envPayload.commands?.writePlist || "", "--keepAlive", "env-required commands.writePlist");
     assert(envPayload.warnings.some((item) => /launchd provides LAN_DUAL_PASSWORD/.test(item)), "env-required mode should warn about launchd env");
     assertNoSecretsOrRuntimeActions(`${env.stdout}\n${env.stderr}`, "env-required mode JSON");
     print("OK", "Prompt and env-required password modes stay secret-free and explicit");
