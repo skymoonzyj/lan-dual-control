@@ -197,6 +197,7 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "-UserAuthRequest", "PowerShell wrapper help");
   assertIncludes(output, "current Agent Link", "PowerShell wrapper help");
   assertIncludes(output, "MacHostSafeStart=", "PowerShell wrapper help");
+  assertIncludes(output, "MacMaxFpsSafeStart=", "PowerShell wrapper help");
   assertIncludes(output, "does not ask for or print", "PowerShell wrapper help");
   assertIncludes(output, "passwords", "PowerShell wrapper help");
   assertIncludes(output, "Windows host media baseline", "PowerShell wrapper help");
@@ -595,13 +596,14 @@ async function checkBoardCurrentCallJson(args) {
 
 async function checkBoardMacHostSafeStartExtraction(args) {
   const safeCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888";
+  const maxFpsCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888 --maxScreenFps 60";
   await withMockHost(async (port) => {
     const boardState = {
       statuses: {
         "Mac Codex": {
           role: "Mac 端",
           status: "idle",
-          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand}`,
+          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand}`,
         },
       },
       events: [
@@ -614,6 +616,16 @@ async function checkBoardMacHostSafeStartExtraction(args) {
           type: "status",
           from: "Mac Codex",
           text: "MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port <当前端口>",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port <当前端口> --maxScreenFps 60",
         },
       ],
     };
@@ -638,7 +650,11 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board?.macHostSafeStart?.found === true, "PowerShell MacHostSafeStart should be found");
       assert(payload.board.macHostSafeStart.command === safeCommand, "PowerShell MacHostSafeStart command mismatch");
       assert(payload.board.macHostSafeStart.rejectedCount >= 2, "PowerShell unsafe or placeholder MacHostSafeStart should be rejected");
+      assert(payload.board?.macMaxFpsSafeStart?.found === true, "PowerShell MacMaxFpsSafeStart should be found");
+      assert(payload.board.macMaxFpsSafeStart.command === maxFpsCommand, "PowerShell MacMaxFpsSafeStart command mismatch");
+      assert(payload.board.macMaxFpsSafeStart.rejectedCount >= 2, "PowerShell placeholder or missing max FPS MacMaxFpsSafeStart should be rejected");
       assertIncludes(payload.boardSummary, `MacHostSafeStart=${safeCommand}.`, "PowerShell MacHostSafeStart JSON board summary");
+      assertIncludes(payload.boardSummary, `MacMaxFpsSafeStart=${maxFpsCommand}.`, "PowerShell MacMaxFpsSafeStart JSON board summary");
       assertNotIncludes(output, "secret-value", "PowerShell MacHostSafeStart JSON should not leak rejected command");
     }, boardState);
 
@@ -659,8 +675,9 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       const output = `${result.stdout}\n${result.stderr}`;
       assert(result.exitCode === 0, `PowerShell MacHostSafeStart board summary failed\n${output}`);
       assertIncludes(output, `MacHostSafeStart=${safeCommand}.`, "PowerShell MacHostSafeStart board summary");
+      assertIncludes(output, `MacMaxFpsSafeStart=${maxFpsCommand}.`, "PowerShell MacMaxFpsSafeStart board summary");
       assertNotIncludes(output, "secret-value", "PowerShell MacHostSafeStart board summary should not leak rejected command");
-      console.log("[OK] PowerShell resume-status wrapper surfaces MacHostSafeStart safely");
+      console.log("[OK] PowerShell resume-status wrapper surfaces Mac safe-start commands safely");
     }, boardState);
   });
 }

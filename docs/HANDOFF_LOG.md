@@ -21,6 +21,46 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows 恢复总览消费 Mac 侧 `MacMaxFpsSafeStart=` 60Hz 前台安全启动标签，并复查 formal E2E 第二步。
+完成内容：
+- `check-windows-resume-status --checkBoard` 现在会从 Agent Link Board `/api/state` 的状态、消息和事件里提取最近的 `MacMaxFpsSafeStart=`。
+- JSON 新增 `board.macMaxFpsSafeStart`，普通输出和 `--boardSummary` 会在找到安全候选时显示 `MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port <端口> --maxScreenFps 60`。
+- 提取器要求候选必须是 `node scripts/mac/start-mac-host.mjs ...`、带真实数字端口、带 `--maxScreenFps 1..240`；带 `--password`、token、secret、passwd、pwd 或 `<当前端口>` 占位的候选会被拒绝且不输出敏感文本。
+- 重新复查 formal E2E 第二步基础链路：真实 Mac `192.168.31.122:43770` 的无密 preflight 和 Windows client diagnostics 通过；完整 Plan 2 仍需要现场输入 Mac 密码。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/windows/check-mac-formal-e2e.mjs --preflightOnly --checkClientDiagnostics --host 192.168.31.122 --port 43770 --clientPort 5200 --debugPort 9340 --timeoutMs 45000`
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`
+- 真实只读 `node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --checkBoard --boardSummary --timeoutMs 45000`：确认 Mac ready，当前联络板未输出可接受的 `MacMaxFpsSafeStart=`，占位或不完整候选不会进入摘要。
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows docs`（预期无匹配）
+遗留问题：
+- 本轮不启动 Mac host、不写 LaunchAgent、不认证密码、不做真实 H.264 长画面验收、不发送 input/inject。
+下一步建议：
+- Mac 端若要让 Windows 恢复总览显示 `MacMaxFpsSafeStart=`，应上板真实数字端口的命令；Windows 端再用 `check-windows-resume-status --checkBoard --boardSummary` 只读确认。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows 恢复总览消费 Mac 侧 `MacHostSafeStart=` 安全启动标签。
 完成内容：
 - `check-windows-resume-status --checkBoard` 现在会从 Agent Link Board `/api/state` 的状态、消息和事件里提取最近的 `MacHostSafeStart=`。

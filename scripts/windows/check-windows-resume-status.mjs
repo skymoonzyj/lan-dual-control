@@ -59,9 +59,9 @@ so Windows can surface Mac-side auth, permission, blocked, and reverse-grant
 requests while a remote-control window is minimized. The report also checks
 the local alert-watcher status read-only, without starting it.
 When --checkBoard is enabled, the report also surfaces recent
-MacHostSafeStart= commands from Agent Link Board status/messages so Mac host
-safe foreground-start guidance is visible in Windows resume JSON, human output,
-and one-line board summaries.
+MacHostSafeStart= and MacMaxFpsSafeStart= commands from Agent Link Board
+status/messages so Mac host safe foreground-start guidance is visible in
+Windows resume JSON, human output, and one-line board summaries.
 The report also surfaces the formal manual checklist command and the checklist
 ids so a resume handoff can immediately verify connection, video, audio,
 clipboard, input_ack, and diagnostics in that order.
@@ -416,7 +416,7 @@ function countBoardStateItems(state) {
   return statusCount + eventCount + messageCount + callCount;
 }
 
-function emptyMacHostSafeStart(source = "none", textCount = 0, rejectedCount = 0) {
+function emptyMacSafeStart(source = "none", textCount = 0, rejectedCount = 0) {
   return {
     found: false,
     command: "",
@@ -503,6 +503,10 @@ function parseMacHostSafeStartCommand(fragment) {
         const port = Number(value);
         if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
       }
+      if (token === "--maxScreenFps") {
+        const fps = Number(value);
+        if (!Number.isInteger(fps) || fps < 1 || fps > 240) return null;
+      }
       const pair = `${token} ${value}`;
       if (hasSecretLikeCommandValue(pair)) return null;
       tokens.push(token, value);
@@ -517,22 +521,29 @@ function parseMacHostSafeStartCommand(fragment) {
   return commandText;
 }
 
-function extractMacHostSafeStartFromText(text, source = "text") {
+function commandHasFlag(commandText, flagName) {
+  return String(commandText || "").split(/\s+/).includes(flagName);
+}
+
+function extractMacSafeStartFromText(text, label, source = "text", options = {}) {
   const value = String(text || "");
-  const regex = /\bMacHostSafeStart\s*=\s*/gi;
+  const escapedLabel = String(label).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`\\b${escapedLabel}\\s*=\\s*`, "gi");
   const commands = [];
   let rejectedCount = 0;
   let match;
   while ((match = regex.exec(value)) !== null) {
     const fragment = value.slice(match.index + match[0].length);
     const commandText = parseMacHostSafeStartCommand(fragment);
-    if (commandText) {
-      if (!commands.includes(commandText)) commands.push(commandText);
-    } else {
+    if (!commandText) {
       rejectedCount += 1;
+    } else if (options.requireMaxScreenFps && !commandHasFlag(commandText, "--maxScreenFps")) {
+      rejectedCount += 1;
+    } else {
+      if (!commands.includes(commandText)) commands.push(commandText);
     }
   }
-  if (commands.length === 0) return emptyMacHostSafeStart(source, value ? 1 : 0, rejectedCount);
+  if (commands.length === 0) return emptyMacSafeStart(source, value ? 1 : 0, rejectedCount);
   return {
     found: true,
     command: commands[commands.length - 1],
@@ -543,18 +554,18 @@ function extractMacHostSafeStartFromText(text, source = "text") {
   };
 }
 
-function extractMacHostSafeStartFromBoardState(state) {
+function extractMacSafeStartFromBoardState(state, label, options = {}) {
   const texts = collectStringValues(state);
   const commands = [];
   let rejectedCount = 0;
   for (const text of texts) {
-    const extracted = extractMacHostSafeStartFromText(text, "api-state");
+    const extracted = extractMacSafeStartFromText(text, label, "api-state", options);
     for (const commandText of extracted.commands) {
       if (!commands.includes(commandText)) commands.push(commandText);
     }
     rejectedCount += extracted.rejectedCount;
   }
-  if (commands.length === 0) return emptyMacHostSafeStart("api-state", texts.length, rejectedCount);
+  if (commands.length === 0) return emptyMacSafeStart("api-state", texts.length, rejectedCount);
   return {
     found: true,
     command: commands[commands.length - 1],
@@ -627,7 +638,8 @@ async function getBoardSnapshot(args) {
         active: false,
         summary: "not checked",
       },
-      macHostSafeStart: emptyMacHostSafeStart("skipped"),
+      macHostSafeStart: emptyMacSafeStart("skipped"),
+      macMaxFpsSafeStart: emptyMacSafeStart("skipped"),
       error: "",
     };
   }
@@ -642,7 +654,8 @@ async function getBoardSnapshot(args) {
       lineCount: countBoardStateItems(stateResult.state),
       tail: [],
       currentCall: normalizeBoardCurrentCall(stateResult.state?.currentCall),
-      macHostSafeStart: extractMacHostSafeStartFromBoardState(stateResult.state),
+      macHostSafeStart: extractMacSafeStartFromBoardState(stateResult.state, "MacHostSafeStart"),
+      macMaxFpsSafeStart: extractMacSafeStartFromBoardState(stateResult.state, "MacMaxFpsSafeStart", { requireMaxScreenFps: true }),
       error: "",
     };
   }
@@ -662,7 +675,8 @@ async function getBoardSnapshot(args) {
     lineCount: splitLines(output).length,
     tail: tailLines(output, 8),
     currentCall: parseBoardCurrentCall(output),
-    macHostSafeStart: extractMacHostSafeStartFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    macHostSafeStart: extractMacSafeStartFromText(output, "MacHostSafeStart", result.ok ? "codex-link-client" : "unavailable"),
+    macMaxFpsSafeStart: extractMacSafeStartFromText(output, "MacMaxFpsSafeStart", result.ok ? "codex-link-client" : "unavailable", { requireMaxScreenFps: true }),
     apiStateError: normalizedText(stateResult.error),
     error: result.ok ? "" : normalizedText(stateResult.error || result.error || result.stderr),
   };
@@ -1315,6 +1329,7 @@ function makeBoardSummary(report) {
     `MacUnattended=${report.commands.macUnattendedStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalStatusCommand}.`,
     ...(report.board.macHostSafeStart?.command ? [`MacHostSafeStart=${report.board.macHostSafeStart.command}.`] : []),
+    ...(report.board.macMaxFpsSafeStart?.command ? [`MacMaxFpsSafeStart=${report.board.macMaxFpsSafeStart.command}.`] : []),
     `FormalChecklist=${report.commands.formalChecklistBoardSummary}; ManualChecklist=${report.formalManualChecklist.summary}.`,
     `WinClientDiagnostics=${report.commands.windowsClientDiagnosticsCommand}; WinClientDiagnosticsPs=${report.commands.windowsClientDiagnosticsPowerShellCommand}; CopyDiagnostics=${report.commands.windowsClientCopyDiagnosticsAction}`,
     `WinClientDiagnosticsAlt=${report.commands.windowsClientDiagnosticsAlternateCommand}; WinClientDiagnosticsAltPs=${report.commands.windowsClientDiagnosticsAlternatePowerShellCommand}.`,
@@ -1500,6 +1515,9 @@ function printHuman(report) {
     if (report.board.macHostSafeStart?.command) {
       console.log(`  MacHostSafeStart=${report.board.macHostSafeStart.command}`);
     }
+    if (report.board.macMaxFpsSafeStart?.command) {
+      console.log(`  MacMaxFpsSafeStart=${report.board.macMaxFpsSafeStart.command}`);
+    }
   } else {
     console.log("- Agent Link Board: skipped (use --checkBoard)");
   }
@@ -1537,6 +1555,9 @@ function printHuman(report) {
   console.log(`  ${report.commands.macUnattendedFormalStatusCommand}`);
   if (report.board.macHostSafeStart?.command) {
     console.log(`  MacHostSafeStart=${report.board.macHostSafeStart.command}`);
+  }
+  if (report.board.macMaxFpsSafeStart?.command) {
+    console.log(`  MacMaxFpsSafeStart=${report.board.macMaxFpsSafeStart.command}`);
   }
   console.log(`  ${report.commands.formalChecklistBoardSummary}`);
   console.log(`  ${report.commands.preflightBoardSummary}`);
