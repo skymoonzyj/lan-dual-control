@@ -189,6 +189,20 @@ function assertReverseGrantBoardSummary(text, label, expectedPort = "43770") {
   assertNotIncludes(text, "--password", label);
 }
 
+function assertSecureAuthPath(text, label, expectedPort = "43770", options = {}) {
+  if (options.expectBoardLabel) {
+    assertIncludes(text, "SecureAuthPath=", label);
+  }
+  assertIncludes(text, "same temporary password", label);
+  assertIncludes(text, "WindowsSecureAuthStart=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-windows-host.ps1", label);
+  assertIncludes(text, `-Port ${expectedPort} -PromptPassword -RequirePassword`, label);
+  assertIncludes(text, "WindowsSecureAuthStartNodeFallback=node scripts/windows/start-windows-host.mjs", label);
+  assertIncludes(text, `--port ${expectedPort} --promptPassword --requirePassword`, label);
+  assertNotIncludes(text, "--password", label);
+  assertNotIncludes(text, "LAN_DUAL_PASSWORD=", label);
+  assertNotIncludes(text, "token=", label);
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run([flag], args);
@@ -208,6 +222,9 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "runPlan.commands.windowsOpenOneTimeReverseGrantNodeFallback", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.reverseControlRehearsal", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.reverseGrantCopyAction", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.commands.secureAuthPath", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.commands.windowsSecureAuthStart", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.commands.windowsSecureAuthStartNodeFallback", `${script} ${flag}`);
     assertIncludes(result.stdout, "--ensureClient", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
@@ -255,6 +272,8 @@ function checkOfflineJson(args) {
   assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "临时授权已使用", "offline reverse rehearsal command");
   assertIncludes(payload.runPlan?.commands?.reverseGrantCopyAction || "", "Copy PowerShell", "offline reverse grant copy action");
   assertIncludes(payload.runPlan?.commands?.reverseGrantCopyAction || "", "Copy Node", "offline reverse grant copy action");
+  assertSecureAuthPath(payload.runPlan?.commands?.secureAuthPath || "", "offline secure auth path");
+  assertSecureAuthPath(payload.boardSummary || "", "offline board summary secure auth path", "43770", { expectBoardLabel: true });
   assert(payload.runPlan?.steps?.some((step) => step.id === "browser-smoke"), "offline runPlan should include browser smoke step");
   assert(payload.runPlan?.steps?.some((step) => step.id === "local-browser-self-test" && String(step.command || "").includes("scripts/mac/test-mac-client-browser-self-test.mjs")), "offline runPlan should include local browser self-test step");
   assert(payload.runPlan?.steps?.some((step) => step.id === "reverse-control-request"), "offline runPlan should include reverse control request step");
@@ -300,6 +319,7 @@ function checkAllowOfflineWarnings(args) {
   assertMatches(payload.boardSummary || "", /warnings=[^.]*board/, "allow offline board summary warnings");
   assertMatches(payload.boardSummary || "", /warnings=[^.]*windows-host/, "allow offline board summary warnings");
   assertReverseGrantBoardSummary(payload.boardSummary || "", "allow offline board summary");
+  assertSecureAuthPath(payload.boardSummary || "", "allow offline board summary secure auth path", "43770", { expectBoardLabel: true });
   print("OK", "Allow flags keep offline state as warnings but not readyToCall");
 }
 
@@ -333,6 +353,7 @@ function checkBoardSummarySecretFree(args) {
   assertIncludes(result.stdout, "Reverse rehearsal:", "board summary");
   assertIncludes(result.stdout, "ReverseGrantCopy=", "board summary");
   assertReverseGrantBoardSummary(result.stdout, "board summary");
+  assertSecureAuthPath(result.stdout, "board summary secure auth path", "43770", { expectBoardLabel: true });
   assertIncludes(result.stdout, "Copy Node", "board summary");
   assertIncludes(result.stdout, "Do not send passwords", "board summary");
   assertNotIncludes(output, secret, "board summary");
@@ -361,6 +382,8 @@ function checkHumanRunPlan(args) {
   assertIncludes(result.stdout, "start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary", "human runPlan");
   assertIncludes(result.stdout, "Mac client formal checklist:", "human runPlan");
   assertIncludes(result.stdout, "check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary", "human runPlan");
+  assertIncludes(result.stdout, "Secure auth path:", "human runPlan");
+  assertSecureAuthPath(result.stdout, "human runPlan secure auth path");
   assertIncludes(result.stdout, "Manual true-test checklist", "human manual checklist");
   assertIncludes(result.stdout, "connection:", "human manual checklist");
   assertIncludes(result.stdout, "diagnostics:", "human manual checklist");
@@ -634,6 +657,7 @@ async function checkReadyShape(args) {
       assertIncludes(payload.runPlan?.commands?.reverseControlRehearsal || "", "input_event", "ready reverse rehearsal");
       assertIncludes(payload.runPlan?.commands?.reverseGrantCopyAction || "", "Copy PowerShell", "ready reverse grant copy action");
       assertIncludes(payload.runPlan?.commands?.reverseGrantCopyAction || "", "Copy Node", "ready reverse grant copy action");
+      assertSecureAuthPath(payload.runPlan?.commands?.secureAuthPath || "", "ready secure auth path", String(windowsPort));
       assert(payload.runPlan?.commands?.safePreflightWithEnsureClient?.includes(`--host 127.0.0.1 --port ${windowsPort} --ensureClient --preflightOnly --boardSummary`), "ready runPlan should include target-specific ensureClient preflight");
       assert(payload.runPlan?.commands?.sendCallWithEnsureClient?.includes(`--host 127.0.0.1 --port ${windowsPort} --ensureClient --preflightOnly --sendCall`), "ready runPlan should include target-specific ensureClient sendCall");
       assertMacClientFormalChecklistCommand(
@@ -659,6 +683,7 @@ async function checkReadyShape(args) {
       assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "ready board summary");
       assertIncludes(payload.boardSummary || "", "ReverseGrantCopy=", "ready board summary");
       assertReverseGrantBoardSummary(payload.boardSummary || "", "ready board summary", String(windowsPort));
+      assertSecureAuthPath(payload.boardSummary || "", "ready board summary secure auth path", String(windowsPort), { expectBoardLabel: true });
       assertIncludes(payload.boardSummary || "", "Reverse rehearsal:", "ready board summary");
       assertIncludes(payload.callText || "", "Suggested browser test:", "ready call text");
       assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "ready output");

@@ -132,6 +132,18 @@ Machine-readable JSON fields:
                                   Mac client UI evidence to verify after LAN008:
                                   both PowerShell and Node fallback grant
                                   commands can be copied without passwords.
+  commands.secureAuthPath        Human-safe path when Windows host was started
+                                  with an unknown random runtime password:
+                                  restart Windows host locally with a hidden
+                                  prompt, then type the same temporary password
+                                  into the Mac --promptPassword dialog.
+  commands.windowsSecureAuthStart
+                                  Recommended Windows-side PowerShell command
+                                  to restart Windows host with a hidden local
+                                  password prompt.
+  commands.windowsSecureAuthStartNodeFallback
+                                  Node fallback for the same Windows-side
+                                  hidden-prompt restart.
   ensuredClient                  Result from --ensureClient start/reuse of the local Mac client page.
   discovery                      Selected Windows host details when --discover is used.
   discovery.formalChecklistCommand
@@ -601,6 +613,48 @@ function makeWindowsReverseGrantCommand(args, action = "grant") {
   return makeWindowsReverseGrantPowerShellCommand(args, action);
 }
 
+function makeWindowsSecureAuthStartPowerShellCommand(args) {
+  return [
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass",
+    "-File",
+    "scripts/windows/start-windows-host.ps1",
+    "-HostName",
+    "0.0.0.0",
+    "-Port",
+    String(args.port || defaults.port),
+    "-PromptPassword",
+    "-RequirePassword",
+  ].join(" ");
+}
+
+function makeWindowsSecureAuthStartNodeFallbackCommand(args) {
+  return [
+    "node scripts/windows/start-windows-host.mjs",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    String(args.port || defaults.port),
+    "--promptPassword",
+    "--requirePassword",
+  ].join(" ");
+}
+
+function makeSecureAuthPathSummaryText() {
+  return [
+    "If Windows host was started with an unknown random runtime password, Windows stops that host and restarts it locally with WindowsSecureAuthStart.",
+    "The user types the same temporary password into the Windows hidden prompt and this Mac --promptPassword dialog.",
+    "Do not send the password on Agent Link Board, command arguments, logs, or chat; no input_event or inject is sent by this auth step.",
+  ].join(" ");
+}
+
+function makeSecureAuthPathText(args) {
+  return [
+    makeSecureAuthPathSummaryText(),
+    `WindowsSecureAuthStart=${makeWindowsSecureAuthStartPowerShellCommand(args)}`,
+    `WindowsSecureAuthStartNodeFallback=${makeWindowsSecureAuthStartNodeFallbackCommand(args)}`,
+  ].join(" ");
+}
+
 function makeReverseControlRehearsalText(args) {
   const grantCommand = makeWindowsReverseGrantCommand(args, "grant");
   const nodeFallbackCommand = makeWindowsReverseGrantNodeFallbackCommand(args, "grant");
@@ -629,6 +683,15 @@ function makeReverseGrantBoardSummaryParts(report, args) {
     `WindowsOpenOneTimeReverseGrant=${commands.windowsOpenOneTimeReverseGrant || makeWindowsReverseGrantCommand(args, "grant")}.`,
     `WindowsReverseGrantStatusNodeFallback=${commands.windowsReverseGrantStatusNodeFallback || makeWindowsReverseGrantNodeFallbackCommand(args, "status")}.`,
     `WindowsOpenOneTimeReverseGrantNodeFallback=${commands.windowsOpenOneTimeReverseGrantNodeFallback || makeWindowsReverseGrantNodeFallbackCommand(args, "grant")}.`,
+  ];
+}
+
+function makeSecureAuthBoardSummaryParts(report, args) {
+  const commands = report?.commands || {};
+  return [
+    `SecureAuthPath=${makeSecureAuthPathSummaryText()}`,
+    `WindowsSecureAuthStart=${commands.windowsSecureAuthStart || makeWindowsSecureAuthStartPowerShellCommand(args)}.`,
+    `WindowsSecureAuthStartNodeFallback=${commands.windowsSecureAuthStartNodeFallback || makeWindowsSecureAuthStartNodeFallbackCommand(args)}.`,
   ];
 }
 
@@ -761,12 +824,14 @@ function makeBoardSummary(report) {
   const discoveryChecklistText = makeDiscoveryChecklistText(report);
   const preflightFindings = formatPreflightFindings(report.preflight);
   const reverseGrantParts = makeReverseGrantBoardSummaryParts(report, report.args);
+  const secureAuthParts = makeSecureAuthBoardSummaryParts(report, report.args);
   if (report.ok && report.browserSmoke?.ran) {
     return [
       `Mac client browser smoke passed against ${target}; duration=${report.browserSmoke.durationMs}ms.${discoveryText}${discoveryChecklistText}`,
       `Preflight ready=${report.preflight?.readyToCall ? "yes" : "no"}; ${preflightFindings}; command used environment password, not argv.`,
       `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
       ...reverseGrantParts,
+      ...secureAuthParts,
       `Reverse rehearsal next if needed: ${makeReverseControlRehearsalBoardText()}`,
       "No password was sent to Agent Link Board; inject was not executed.",
     ].join(" ");
@@ -789,6 +854,7 @@ function makeBoardSummary(report) {
       `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
       `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
       ...reverseGrantParts,
+      ...secureAuthParts,
       `Reverse rehearsal after auth: ${makeReverseControlRehearsalBoardText()}`,
       "No password was requested or sent; inject was not executed.",
     ].join(" ");
@@ -796,6 +862,7 @@ function makeBoardSummary(report) {
   return [
     `Mac client browser smoke failed/blocked for ${target}: ${report.error?.message || report.browserSmoke?.error || "unknown"}. Preflight ${preflightFindings}.`,
     `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
+    ...secureAuthParts,
     "Keep passwords off Agent Link Board; rerun preflight before retrying.",
     "Inject was not executed.",
   ].join(" ");
@@ -889,6 +956,9 @@ function makeReport(args, preflight) {
       windowsOpenOneTimeReverseGrantNodeFallback: makeWindowsReverseGrantNodeFallbackCommand(args, "grant"),
       reverseControlRehearsal: makeReverseControlRehearsalText(args),
       reverseGrantCopyAction: makeReverseGrantCopyAction(),
+      secureAuthPath: makeSecureAuthPathText(args),
+      windowsSecureAuthStart: makeWindowsSecureAuthStartPowerShellCommand(args),
+      windowsSecureAuthStartNodeFallback: makeWindowsSecureAuthStartNodeFallbackCommand(args),
     },
     preflight: preflight.payload,
     preflightRaw: {

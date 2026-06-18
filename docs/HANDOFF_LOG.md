@@ -17,6 +17,35 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
+本轮目标：把 Windows 随机运行期密码导致的真实 browser smoke 阻塞沉淀为 Mac formal 工具的稳定安全认证路径提示。
+完成内容：
+- `check-mac-client-formal-status` 的 JSON runPlan、普通输出和 `--boardSummary` 新增 `SecureAuthPath=`、`WindowsSecureAuthStart=`、`WindowsSecureAuthStartNodeFallback=`，明确随机密码不可取回时的安全流程：Windows 本机停止旧 host，前台隐藏输入临时密码重启 host，用户在 Mac `--promptPassword` 弹窗里输入同一个临时密码。
+- `run-mac-client-formal-smoke` 的 JSON commands 和 preflight/dryRun/失败/成功 `--boardSummary` 同步输出同一组安全路径字段；真实 smoke 因缺少本地密码失败时也会直接给出流程，避免误判为连接坏或脚本卡住。
+- 所有新增命令只生成提示，不启动 Windows host、不认证、不传密码、不发送 input_event、不执行 inject；输出拒绝 `--password`、`LAN_DUAL_PASSWORD=`、token 形态。
+修改文件：
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 30000`
+- `node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 30000`
+遗留问题：
+- 当前真实 Windows host `192.168.31.68:43770` 仍是随机运行期密码启动；真实 browser smoke 需要用户在 Windows 和 Mac 两台机器本机输入同一个临时密码后再跑。
+下一步建议：
+- 等 Windows 侧完成同名 SecureAuthPath/status 摘要后，由用户现场输入临时密码，Mac 再运行 `run-mac-client-formal-smoke --host 192.168.31.68 --port 43770 --ensureClient --promptPassword --boardSummary`。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端按安全流程重启 host 或给出同名摘要；不要在通讯板发送密码/token/系统账号。
+
 ## 2026-06-18 Windows Codex
 
 日期：2026-06-18 继续推进

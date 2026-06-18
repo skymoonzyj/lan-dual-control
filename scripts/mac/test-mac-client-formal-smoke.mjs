@@ -124,6 +124,20 @@ function assertReverseGrantBoardSummary(text, label, expectedPort) {
   assertNotIncludes(text, "--password", label);
 }
 
+function assertSecureAuthPath(text, label, expectedPort, options = {}) {
+  if (options.expectBoardLabel) {
+    assertIncludes(text, "SecureAuthPath=", label);
+  }
+  assertIncludes(text, "same temporary password", label);
+  assertIncludes(text, "WindowsSecureAuthStart=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-windows-host.ps1", label);
+  assertIncludes(text, `-Port ${expectedPort} -PromptPassword -RequirePassword`, label);
+  assertIncludes(text, "WindowsSecureAuthStartNodeFallback=node scripts/windows/start-windows-host.mjs", label);
+  assertIncludes(text, `--port ${expectedPort} --promptPassword --requirePassword`, label);
+  assertNotIncludes(text, "--password", label);
+  assertNotIncludes(text, "LAN_DUAL_PASSWORD=", label);
+  assertNotIncludes(text, "token=", label);
+}
+
 async function getFreePort() {
   return new Promise((resolvePort, rejectPort) => {
     const server = createServer();
@@ -336,6 +350,9 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.windowsOpenOneTimeReverseGrantNodeFallback", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.reverseControlRehearsal", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.reverseGrantCopyAction", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.secureAuthPath", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.windowsSecureAuthStart", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.windowsSecureAuthStartNodeFallback", `${script} ${flag}`);
     assertIncludes(result.stdout, "ensuredClient", `${script} ${flag}`);
     assertIncludes(result.stdout, "discovery.formalChecklistCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "discovery.manualChecklistSummary", `${script} ${flag}`);
@@ -413,6 +430,8 @@ async function checkPreflightAndDryRun(args) {
         assertIncludes(preflightPayload.commands?.reverseControlRehearsal || "", "临时授权已使用", "preflight reverse rehearsal");
         assertIncludes(preflightPayload.commands?.reverseGrantCopyAction || "", "Copy PowerShell", "preflight reverse grant copy action");
         assertIncludes(preflightPayload.commands?.reverseGrantCopyAction || "", "Copy Node", "preflight reverse grant copy action");
+        assertSecureAuthPath(preflightPayload.commands?.secureAuthPath || "", "preflight secure auth path", windowsPort);
+        assertSecureAuthPath(preflightPayload.boardSummary || "", "preflight board summary secure auth path", windowsPort, { expectBoardLabel: true });
         assertIncludes(preflightPayload.boardSummary || "", "Coordinate first", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "--sendCall", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "blockers=none", "preflight board summary");
@@ -500,6 +519,8 @@ async function checkPreflightAndDryRun(args) {
       assertIncludes(dryRunPayload.commands?.reverseControlRehearsal || "", "recommended PowerShell command", "dryRun reverse rehearsal");
       assertIncludes(dryRunPayload.commands?.reverseGrantCopyAction || "", "Copy PowerShell", "dryRun reverse grant copy action");
       assertIncludes(dryRunPayload.commands?.reverseGrantCopyAction || "", "Copy Node", "dryRun reverse grant copy action");
+      assertSecureAuthPath(dryRunPayload.commands?.secureAuthPath || "", "dryRun secure auth path", windowsPort);
+      assertSecureAuthPath(dryRunPayload.boardSummary || "", "dryRun board summary secure auth path", windowsPort, { expectBoardLabel: true });
       assertIncludes(dryRunPayload.boardSummary || "", "blockers=none", "dryRun board summary");
       assert(/warnings=[^.]*board/.test(dryRunPayload.boardSummary || ""), "dryRun board summary should name board warning");
       assertIncludes(dryRunPayload.boardSummary || "", "warnings=", "dryRun board summary");
@@ -560,6 +581,8 @@ async function checkDiscoverPreflight(args) {
       );
       assert(payload.commands?.windowsOpenOneTimeReverseGrant?.includes(`-Port ${windowsPort} -Grant -DurationMs 30000 -BoardSummary`), "discover preflight should use selected port for recommended Windows PowerShell grant helper");
       assert(payload.commands?.windowsOpenOneTimeReverseGrantNodeFallback?.includes(`--port ${windowsPort} --grant --durationMs 30000 --boardSummary`), "discover preflight should use selected port for Windows grant helper fallback");
+      assertSecureAuthPath(payload.commands?.secureAuthPath || "", "discover preflight secure auth path", windowsPort);
+      assertSecureAuthPath(payload.boardSummary || "", "discover preflight board summary secure auth path", windowsPort, { expectBoardLabel: true });
       assertIncludes(payload.boardSummary || "", "FormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "discover preflight board summary");
       assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "discover preflight board summary");
       assertIncludes(payload.boardSummary || "", "blockers=none", "discover preflight board summary");
@@ -607,6 +630,8 @@ async function checkEnsureClientPreflight(args) {
     assertIncludes(payload.boardSummary || "", "blockers=none", "ensure client board summary");
     assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=", "ensure client board summary");
     assertReverseGrantBoardSummary(payload.boardSummary || "", "ensure client board summary", windowsPort);
+    assertSecureAuthPath(payload.commands?.secureAuthPath || "", "ensure client secure auth path", windowsPort);
+    assertSecureAuthPath(payload.boardSummary || "", "ensure client board summary secure auth path", windowsPort, { expectBoardLabel: true });
     assert(/warnings=[^.]*board/.test(payload.boardSummary || ""), "ensure client board summary should name board warning");
     assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "ensure client output");
     if (payload.ensuredClient?.processId) {
@@ -664,6 +689,7 @@ async function checkDiscoverSendCall(args) {
         assertIncludes(payload.boardSummary || "", "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "discover sendCall board summary");
         assertIncludes(payload.boardSummary || "", "ReverseGrantCopy=", "discover sendCall board summary");
         assertReverseGrantBoardSummary(payload.boardSummary || "", "discover sendCall board summary", windowsPort);
+        assertSecureAuthPath(payload.boardSummary || "", "discover sendCall board summary secure auth path", windowsPort, { expectBoardLabel: true });
         assertIncludes(payload.boardSummary || "", "Reverse rehearsal after auth", "discover sendCall board summary");
         assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "discover sendCall output");
       });
@@ -721,6 +747,8 @@ async function checkPasswordSafety(args) {
       const noPasswordPayload = parseJson(noPassword.stdout, "no password JSON");
       assert(noPassword.status !== 0, "no password should fail");
       assertIncludes(noPasswordPayload.error?.message || "", "requires LAN_DUAL_PASSWORD", "no password error");
+      assertSecureAuthPath(noPasswordPayload.commands?.secureAuthPath || "", "no password secure auth path", windowsPort);
+      assertSecureAuthPath(noPasswordPayload.boardSummary || "", "no password board summary secure auth path", windowsPort, { expectBoardLabel: true });
 
       const demoPassword = run([
         "--json",

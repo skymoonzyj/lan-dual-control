@@ -109,6 +109,19 @@ JSON output:
                                   Mac client UI evidence to verify after LAN008:
                                   both PowerShell and Node fallback grant
                                   commands can be copied without passwords.
+  runPlan.commands.secureAuthPath
+                                  Human-safe path when Windows host was started
+                                  with an unknown random runtime password;
+                                  restart Windows host locally with a hidden
+                                  prompt, then type the same temporary password
+                                  into the Mac --promptPassword dialog.
+  runPlan.commands.windowsSecureAuthStart
+                                  Recommended Windows-side PowerShell command
+                                  to restart Windows host with a hidden local
+                                  password prompt.
+  runPlan.commands.windowsSecureAuthStartNodeFallback
+                                  Node fallback for the same Windows-side
+                                  hidden-prompt restart.
 
 Examples:
   node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.50 --port 43770 --boardSummary
@@ -487,6 +500,53 @@ function makeWindowsReverseGrantCommand(report, args, action = "grant") {
   return makeWindowsReverseGrantPowerShellCommand(report, args, action);
 }
 
+function secureAuthTargetPort(report, args) {
+  const host = report.readiness?.windowsHost || {};
+  return host.probe?.port || args.windowsPort || defaults.windowsPort;
+}
+
+function makeWindowsSecureAuthStartPowerShellCommand(report, args) {
+  return [
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass",
+    "-File",
+    "scripts/windows/start-windows-host.ps1",
+    "-HostName",
+    "0.0.0.0",
+    "-Port",
+    String(secureAuthTargetPort(report, args)),
+    "-PromptPassword",
+    "-RequirePassword",
+  ].join(" ");
+}
+
+function makeWindowsSecureAuthStartNodeFallbackCommand(report, args) {
+  return [
+    "node scripts/windows/start-windows-host.mjs",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    String(secureAuthTargetPort(report, args)),
+    "--promptPassword",
+    "--requirePassword",
+  ].join(" ");
+}
+
+function makeSecureAuthPathSummaryText() {
+  return [
+    "If Windows host was started with an unknown random runtime password, Windows stops that host and restarts it locally with WindowsSecureAuthStart.",
+    "The user types the same temporary password into the Windows hidden prompt and this Mac --promptPassword dialog.",
+    "Do not send the password on Agent Link Board, command arguments, logs, or chat; no input_event or inject is sent by this auth step.",
+  ].join(" ");
+}
+
+function makeSecureAuthPathText(report, args) {
+  return [
+    makeSecureAuthPathSummaryText(),
+    `WindowsSecureAuthStart=${makeWindowsSecureAuthStartPowerShellCommand(report, args)}`,
+    `WindowsSecureAuthStartNodeFallback=${makeWindowsSecureAuthStartNodeFallbackCommand(report, args)}`,
+  ].join(" ");
+}
+
 function makeReverseControlRehearsalText(report, args) {
   const grantCommand = makeWindowsReverseGrantCommand(report, args, "grant");
   const nodeFallbackCommand = makeWindowsReverseGrantNodeFallbackCommand(report, args, "grant");
@@ -515,6 +575,15 @@ function makeReverseGrantBoardSummaryParts(report, args) {
     `WindowsOpenOneTimeReverseGrant=${commands.windowsOpenOneTimeReverseGrant || makeWindowsReverseGrantCommand(report, args, "grant")}.`,
     `WindowsReverseGrantStatusNodeFallback=${commands.windowsReverseGrantStatusNodeFallback || makeWindowsReverseGrantNodeFallbackCommand(report, args, "status")}.`,
     `WindowsOpenOneTimeReverseGrantNodeFallback=${commands.windowsOpenOneTimeReverseGrantNodeFallback || makeWindowsReverseGrantNodeFallbackCommand(report, args, "grant")}.`,
+  ];
+}
+
+function makeSecureAuthBoardSummaryParts(report, args) {
+  const commands = report?.runPlan?.commands || {};
+  return [
+    `SecureAuthPath=${makeSecureAuthPathSummaryText()}`,
+    `WindowsSecureAuthStart=${commands.windowsSecureAuthStart || makeWindowsSecureAuthStartPowerShellCommand(report, args)}.`,
+    `WindowsSecureAuthStartNodeFallback=${commands.windowsSecureAuthStartNodeFallback || makeWindowsSecureAuthStartNodeFallbackCommand(report, args)}.`,
   ];
 }
 
@@ -662,6 +731,9 @@ function makeRunPlan(report, args) {
       windowsOpenOneTimeReverseGrantNodeFallback: makeWindowsReverseGrantNodeFallbackCommand(report, args, "grant"),
       reverseControlRehearsal: makeReverseControlRehearsalText(report, args),
       reverseGrantCopyAction: makeReverseGrantCopyAction(),
+      secureAuthPath: makeSecureAuthPathText(report, args),
+      windowsSecureAuthStart: makeWindowsSecureAuthStartPowerShellCommand(report, args),
+      windowsSecureAuthStartNodeFallback: makeWindowsSecureAuthStartNodeFallbackCommand(report, args),
     },
     steps: [
       {
@@ -730,6 +802,7 @@ function makeBoardSummary(report) {
       : "not-checked";
   const findings = formatChecklistFindings(report.checklist);
   const reverseGrantParts = makeReverseGrantBoardSummaryParts(report, report.args || {});
+  const secureAuthParts = makeSecureAuthBoardSummaryParts(report, report.args || {});
   return [
     `Mac client formal Windows test: ${report.readyToCall ? "ready" : `needs attention (${report.counts.blocker} blocker(s), ${report.counts.warning} warning(s))`}; repo=${repo}; client=${client}; localServer=${localServer}; windowsHost=${hostText}; ${findings}.`,
     report.readyToCall
@@ -741,6 +814,7 @@ function makeBoardSummary(report) {
     `MacClientBrowserSelfTest=${report.runPlan?.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
     `ReverseGrantCopy=${report.runPlan?.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
     ...reverseGrantParts,
+    ...secureAuthParts,
     `Reverse rehearsal: ${makeReverseControlRehearsalBoardText()}`,
     "RunPlan: local client -> Windows discovery -> formal checklist -> local browser self-test -> browser smoke -> reverse request rehearsal -> observe quality/resources.",
     "Do not send passwords on Agent Link Board; do not run inject unless the user explicitly confirms they are watching.",
@@ -920,6 +994,9 @@ function printRunPlan(runPlan) {
   }
   if (runPlan.commands?.macClientFormalChecklist) {
     console.log(`- Mac client formal checklist: ${runPlan.commands.macClientFormalChecklist}`);
+  }
+  if (runPlan.commands?.secureAuthPath) {
+    console.log(`- Secure auth path: ${runPlan.commands.secureAuthPath}`);
   }
   console.log(`- safety: passwordInCommandArguments=${runPlan.safety.passwordInCommandArguments}; inject=${runPlan.safety.inject}; passwordOnAgentLinkBoard=${runPlan.safety.passwordOnAgentLinkBoard}`);
   console.log("");
