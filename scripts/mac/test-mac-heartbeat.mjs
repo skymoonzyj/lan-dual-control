@@ -169,6 +169,14 @@ function assertCommandSet(commands, label) {
   assertIncludes(commands?.macClientPageStatusCommand || "", "start-mac-client.mjs --status --boardSummary", label);
   assertIncludes(commands?.macClientDiagnosticsCommand || "", "check-mac-client-readiness.mjs", label);
   assertIncludes(commands?.macFormalLocalSmokeCommand || "", "check-mac-formal-local-smoke.mjs", label);
+  assertIncludes(commands?.macFormalE2eStatusCommand || "", "check-mac-formal-e2e-status.mjs", label);
+  assertIncludes(commands?.macFormalE2eStatusCommand || "", "--boardSummary", label);
+  assertNotIncludes(commands?.macFormalE2eStatusCommand || "", "--promptPassword", label);
+  assertNotIncludes(commands?.macFormalE2eStatusCommand || "", "--password", label);
+  assertNotIncludes(commands?.macFormalE2eStatusCommand || "", "--sendCall", label);
+  assertNotIncludes(commands?.macFormalE2eStatusCommand || "", "--forceCall", label);
+  assertNotIncludes(commands?.macFormalE2eStatusCommand || "", "input_event", label);
+  assertNotIncludes(commands?.macFormalE2eStatusCommand || "", "inject", label);
   assertIncludes(commands?.macClientDiscoverWindowsCommand || "", "discover-windows-hosts.mjs", label);
   assertIncludes(commands?.macClientDiscoverWindowsCommand || "", "--checkBoard", label);
   assertIncludes(commands?.macClientFormalChecklistCommand || "", "check-mac-client-formal-status.mjs", label);
@@ -241,6 +249,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "codex-reconnect-stuck", `${script} ${flag}`);
     assertIncludes(result.stdout, "--codexTextFile", `${script} ${flag}`);
     assertIncludes(result.stdout, "--stateFile", `${script} ${flag}`);
+    assertIncludes(result.stdout, "formal E2E readiness", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
   print("OK", "Mac heartbeat help exits quickly");
@@ -290,6 +299,7 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentLoad=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentPrint=", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacFormalE2E=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "offline board summary");
@@ -372,6 +382,7 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacLaunchAgentLoad=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacLaunchAgentPrint=", "online board summary");
+      assertIncludes(payload.boardSummary || "", "MacFormalE2E=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "online board summary");

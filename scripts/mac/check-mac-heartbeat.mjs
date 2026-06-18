@@ -88,9 +88,10 @@ Machine-readable JSON fields:
   macClient                   Read-only local Mac client page status.
   board                       Agent Link Board readability and currentCall.
   commands                    Secret-free next-step commands for user action,
-                              including the local Mac client mock browser
-                              self-test, Mac script help safety check, 60Hz
-                              safe start, and LaunchAgent load/print checks.
+                              including formal E2E readiness, the local Mac
+                              client mock browser self-test, Mac script help
+                              safety check, 60Hz safe start, and LaunchAgent
+                              load/print checks.
 
 Examples:
   node scripts/mac/check-mac-heartbeat.mjs --checkBoard --boardSummary
@@ -614,6 +615,7 @@ function buildCommands(args) {
     macClientPageStatusCommand: "node scripts/mac/start-mac-client.mjs --status --boardSummary",
     macClientDiagnosticsCommand: "node scripts/mac/check-mac-client-readiness.mjs --probeClientServer --checkBoard --boardSummary",
     macFormalLocalSmokeCommand: `node scripts/mac/check-mac-formal-local-smoke.mjs --host ${args.host} --port ${args.port} --promptPassword --boardSummary`,
+    macFormalE2eStatusCommand: `node scripts/mac/check-mac-formal-e2e-status.mjs --host ${args.host} --port ${args.port} --boardSummary`,
     macClientDiscoverWindowsCommand: "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary",
     macClientFormalChecklistCommand: "node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary",
     macClientFormalSmokeCommand: "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary",
@@ -708,6 +710,7 @@ function makeBoardSummary(report) {
     `MacClientPage=${report.commands.macClientPageStatusCommand}.`,
     `MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}.`,
     `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
+    `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
     `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
     `MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}.`,

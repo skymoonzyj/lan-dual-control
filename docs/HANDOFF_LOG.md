@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac heartbeat 摘要也暴露 formal E2E 只读 readiness 入口。
+完成内容：
+- `check-mac-heartbeat --json/--boardSummary` 现在输出 `commands.macFormalE2eStatusCommand` / `MacFormalE2E=node scripts/mac/check-mac-formal-e2e-status.mjs --host <host> --port <port> --boardSummary`。
+- Windows 端或人工只看最新 `MacHeartbeat=` 时，也能直接要求 Mac 端跑 formal E2E readiness 一行摘要，不必回翻 resume status。
+- help 文本同步说明 heartbeat `commands` 会包含 formal E2E readiness 命令。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` 失败在 board summary 缺 `MacFormalE2E=`。
+- 绿灯：实现后复跑同一自测通过。
+遗留问题：
+- 本轮只补 heartbeat 摘要的只读 readiness 入口，没有请求密码、认证真实 host、发送 Agent Link Board call、发送 input 或执行 `inject`。
+下一步建议：
+- Windows 或人工只看到 `MacHeartbeat=` 时，可直接复制 `MacFormalE2E=` 做正式 E2E readiness 摘要；若需要真正发 formal call，仍由人工确认后另行显式运行 `check-mac-formal-e2e-status --sendCall`。
+是否改了协议：否；只补 Mac heartbeat 的安全命令标签。
+是否需要另一端配合：本轮不需要；Windows 端可后续按需消费该标签。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac 本机 formal local smoke 摘要也暴露 Mac 脚本 help 安全自检入口。
 完成内容：
 - `check-mac-formal-local-smoke --json/--boardSummary` 现在输出 `commands.macScriptHelpCommand` / `MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`。
