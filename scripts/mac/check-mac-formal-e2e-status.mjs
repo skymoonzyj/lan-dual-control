@@ -58,6 +58,10 @@ Options:
   --help, -h                Show this help without probing anything.
 
 JSON output:
+  commands.macHostSafeStartCommand
+                            Safe local foreground start command preserving the
+                            checked port. It uses --promptPassword and never
+                            embeds --password.
   commands.macFormalLocalSmokeCommand
                             Safe local command for H.264/PCM/input-log smoke
                             before asking Windows to run the longer formal E2E.
@@ -313,7 +317,7 @@ function buildChecklist(resume, args) {
   }
 
   if (!host.online) {
-    checklist.push(blockItem("host", "Mac Host", `offline at ${host.probe?.host || args.host}:${host.probe?.port || args.port}`, host.error?.message || "", "Start formal host with start-mac-host --promptPassword --requirePassword."));
+    checklist.push(blockItem("host", "Mac Host", `offline at ${host.probe?.host || args.host}:${host.probe?.port || args.port}`, host.error?.message || "", `Start formal host with ${makeSafeStartCommand(args)}.`));
     checklist.push(skipItem("auth", "Formal Auth", "waiting for host", "", "Do not send passwords on Agent Link Board."));
     checklist.push(skipItem("video", "H.264 Video", "waiting for host"));
     checklist.push(skipItem("audio", "System Audio", "waiting for host"));
@@ -470,7 +474,7 @@ function makeCallText(report) {
     return [
       "Mac formal E2E is not ready: Mac host is offline.",
       `Checklist ${findings}.`,
-      "Start with start-mac-host --promptPassword --requirePassword, then rerun the checklist.",
+      `Start with ${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}, then rerun the checklist.`,
       `Plan safe reboot persistence first with: ${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
       `If targeting formal 60Hz, dry-run max-FPS planning first with: ${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
       `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
@@ -502,7 +506,7 @@ function makeBoardSummary(report) {
     return [
       `Mac formal E2E: ${state}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}; ${findings}.`,
       `Mac host offline at ${host.probe?.host || report.args.host}:${host.probe?.port || report.args.port}.`,
-      "Next: start with start-mac-host --promptPassword --requirePassword, then rerun checklist.",
+      `Next: start with ${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}, then rerun checklist.`,
       `MacLaunchAgentPlan=${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
       `MacMaxFpsPlan=${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
       `MacUnattendedFormal=${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
@@ -529,6 +533,7 @@ function makeCommands(report) {
   const probeHost = normalizedText(host.probe?.host || report.args.host) || defaults.host;
   const probePort = host.probe?.port || report.args.port || defaults.port;
   return {
+    macHostSafeStartCommand: makeSafeStartCommand({ port: probePort }),
     macLaunchAgentPlanCommand: [
       "node",
       "scripts/mac/install-mac-host-launch-agent.mjs",
@@ -562,6 +567,19 @@ function makeCommands(report) {
       "--boardSummary",
     ].join(" "),
   };
+}
+
+function makeSafeStartCommand(args = {}) {
+  return [
+    "node",
+    "scripts/mac/start-mac-host.mjs",
+    "--promptPassword",
+    "--requirePassword",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    String(args.port || defaults.port),
+  ].join(" ");
 }
 
 function makeMacMaxFpsPlanCommand(port) {

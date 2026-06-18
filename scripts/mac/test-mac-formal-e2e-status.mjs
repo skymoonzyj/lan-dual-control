@@ -162,6 +162,22 @@ function assertBoardSummaryShape(text, label) {
   assertNoSecretLikeText(text, label);
 }
 
+function assertMacHostSafeStartCommand(command, label, expectedPort = null) {
+  const text = String(command || "");
+  assert(/node scripts\/mac\/start-mac-host\.mjs/.test(text), `${label} should use start-mac-host`);
+  assert(/--promptPassword/.test(text), `${label} should use a visible password prompt`);
+  assert(/--requirePassword/.test(text), `${label} should require authentication`);
+  assert(/--host 0\.0\.0\.0/.test(text), `${label} should bind for LAN access`);
+  assert(!/(^|\s)--password(\s|=|$)/.test(text), `${label} should not embed --password`);
+  assert(!/--sendCall/.test(text), `${label} should not send Agent Link Board calls`);
+  assert(!/--server/.test(text), `${label} should not echo custom board server URLs`);
+  assert(!/input_event/.test(text), `${label} should not mention input events`);
+  assert(!/--inputMode inject/.test(text), `${label} should not switch into inject mode`);
+  if (expectedPort !== null) {
+    assert(text.includes(`--port ${expectedPort}`), `${label} should target expected port ${expectedPort}`);
+  }
+}
+
 function assertMacLaunchAgentPlanCommand(command, label, expectedPort = null) {
   const text = String(command || "");
   assert(/node scripts\/mac\/install-mac-host-launch-agent\.mjs/.test(text), `${label} should use install-mac-host-launch-agent`);
@@ -411,6 +427,7 @@ function checkHelp(args) {
     assert(/--checkBoard/.test(result.stdout), `${script} ${flag} should document --checkBoard compatibility`);
     assert(/commands\.macFormalLocalSmokeCommand/.test(result.stdout), `${script} ${flag} should document local smoke command output`);
     assert(/commands\.mediaReadinessBoardSummary/.test(result.stdout), `${script} ${flag} should document media readiness command output`);
+    assert(/commands\.macHostSafeStartCommand/.test(result.stdout), `${script} ${flag} should document Mac host safe start command output`);
     assert(/commands\.macLaunchAgentPlanCommand/.test(result.stdout), `${script} ${flag} should document LaunchAgent planner command output`);
     assert(/commands\.macMaxFpsPlanCommand/.test(result.stdout), `${script} ${flag} should document Mac max-FPS planner command output`);
     assert(/commands\.macUnattendedFormalCommand/.test(result.stdout), `${script} ${flag} should document Mac unattended formal gate command output`);
@@ -441,7 +458,9 @@ function checkOfflineJson(args) {
   assertBoardSummaryShape(payload.boardSummary || "", "offline JSON boardSummary");
   assert(/blockers=[^.]*host/.test(payload.boardSummary || ""), "offline boardSummary should name host blocker");
   assert(/warnings=[^.]*board/.test(payload.boardSummary || ""), "offline boardSummary should name board warning");
-  assert(/start-mac-host --promptPassword --requirePassword/.test(payload.callText || ""), "offline callText should include safe start command");
+  assert(/start-mac-host\.mjs --promptPassword --requirePassword/.test(payload.callText || ""), "offline callText should include safe start command");
+  assert(/--host 0\.0\.0\.0 --port 9/.test(payload.callText || ""), "offline callText should keep safe start target");
+  assert(/--host 0\.0\.0\.0 --port 9/.test(payload.boardSummary || ""), "offline boardSummary should keep safe start target");
   assert(/Checklist blockers=[^.]*host/.test(payload.callText || ""), "offline callText should name host blocker");
   assert(/warnings=[^.]*board/.test(payload.callText || ""), "offline callText should name board warning");
   assert(/install-mac-host-launch-agent\.mjs/.test(payload.callText || ""), "offline callText should include LaunchAgent planner command");
@@ -450,6 +469,7 @@ function checkOfflineJson(args) {
   assert(/--requireLaunchAgentMaxFps/.test(payload.callText || ""), "offline callText should include formal LaunchAgent max-FPS gate");
   assert(/check-mac-formal-local-smoke\.mjs/.test(payload.callText || ""), "offline callText should include local smoke command");
   assert(/check-mac-host-readiness --probeMedia --boardSummary/.test(payload.boardSummary || ""), "offline boardSummary should mention media precheck");
+  assertMacHostSafeStartCommand(payload.commands?.macHostSafeStartCommand, "offline safe start command", 9);
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand, "offline LaunchAgent planner command", 9);
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "offline max-FPS planner command", 9);
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand, "offline unattended formal command", 9);
@@ -475,6 +495,7 @@ function checkOfflineBoardSummary(args) {
   assert(/Mac host offline/.test(text), "offline board summary should mention host offline");
   assert(/blockers=[^.]*host/.test(text), "offline board summary should name host blocker");
   assert(/warnings=[^.]*board/.test(text), "offline board summary should name board warning");
+  assert(/--host 0\.0\.0\.0 --port 9/.test(text), "offline board summary should keep safe start target");
   assert(/Media precheck/.test(text), "offline board summary should mention media precheck");
   print("OK", "Offline board summary is short, secret-free, and actionable");
 }

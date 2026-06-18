@@ -56,6 +56,10 @@ Machine-readable JSON fields:
                              Secret-free Mac media baseline command for
                              formal-run prep; it prompts for a password and
                              never embeds one in argv.
+  commands.macHostSafeStartCommand
+                             Secret-free foreground Mac host start command
+                             preserving the checked port; it prompts locally
+                             and never embeds a password in argv.
   commands.macFormalLocalSmokeCommand
                              Secret-free local formal smoke command for
                              H.264/PCM/input-log prep; it prompts visibly and
@@ -506,7 +510,7 @@ function buildRecommendations({ git, host, board, args }) {
     });
     recommendations.push({
       level: "next",
-      text: "For formal E2E, use start-mac-host --promptPassword --requirePassword and do not share secrets on the board.",
+      text: `For formal E2E, use ${makeMacHostSafeStartCommand(args)} and do not share secrets on the board.`,
     });
     recommendations.push({
       level: "next",
@@ -702,6 +706,18 @@ function makeMacFormalE2eStatusCommand(args) {
   ].join(" ");
 }
 
+function makeMacHostSafeStartCommand(args) {
+  return [
+    "node scripts/mac/start-mac-host.mjs",
+    "--promptPassword",
+    "--requirePassword",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    String(args.port),
+  ].join(" ");
+}
+
 function makeMacUnattendedStatusCommand(args) {
   return [
     "node scripts/mac/check-mac-unattended-status.mjs",
@@ -856,7 +872,7 @@ function formatBoardSummary(report) {
   if (!host.online) {
     return [
       `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
-      "Next: start formal host with start-mac-host --promptPassword --requirePassword before Windows E2E.",
+      `Next: start formal host with ${report.commands.macHostSafeStartCommand} before Windows E2E.`,
       `After host is online, refresh media baseline with ${report.commands.mediaReadinessBoardSummary}.`,
       `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
       `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
@@ -1010,6 +1026,7 @@ async function main() {
     host,
     commands: {
       mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
+      macHostSafeStartCommand: makeMacHostSafeStartCommand(args),
       macFormalLocalSmokeCommand: makeMacFormalLocalSmokeCommand(args),
       macFormalE2eStatusCommand: makeMacFormalE2eStatusCommand(args),
       macUnattendedStatusCommand: makeMacUnattendedStatusCommand(args),

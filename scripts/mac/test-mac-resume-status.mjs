@@ -201,6 +201,18 @@ function assertMediaReadinessCommand(command, label) {
   assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
 }
 
+function assertMacHostSafeStartCommand(command, label) {
+  assert(/start-mac-host\.mjs/.test(command), `${label} should use start-mac-host`);
+  assert(command.includes("--promptPassword"), `${label} should prompt visibly`);
+  assert(command.includes("--requirePassword"), `${label} should require auth`);
+  assert(command.includes("--host 0.0.0.0"), `${label} should bind for LAN access`);
+  assert(command.includes("--port"), `${label} should keep the target port explicit`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+  assert(!command.includes("inject"), `${label} should not instruct injection`);
+}
+
 function assertMacFormalLocalSmokeCommand(command, label) {
   assert(/check-mac-formal-local-smoke\.mjs/.test(command), `${label} should use check-mac-formal-local-smoke`);
   assert(command.includes("--promptPassword"), `${label} should use a visible password prompt`);
@@ -353,6 +365,7 @@ function checkHelp(args) {
     assert(result.status === 0, `${script} ${flag} should exit 0`);
     assert(/\bUsage\b/.test(result.stdout), `${script} ${flag} should print Usage`);
     assert(/commands\.mediaReadinessBoardSummary/.test(result.stdout), `${script} ${flag} should document media command JSON field`);
+    assert(/commands\.macHostSafeStartCommand/.test(result.stdout), `${script} ${flag} should document Mac host safe start JSON field`);
     assert(/commands\.macFormalLocalSmokeCommand/.test(result.stdout), `${script} ${flag} should document Mac formal local smoke JSON field`);
     assert(/commands\.macFormalE2eStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac formal E2E status JSON field`);
     assert(/commands\.macUnattendedStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac unattended/startup JSON field`);
@@ -386,6 +399,8 @@ function checkOfflineJson(args) {
   assert(payload.host?.error?.message, "offline payload should include error.message");
   assert(Array.isArray(payload.recommendations), "offline payload should include recommendations");
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary || "", "offline JSON media readiness command");
+  assertMacHostSafeStartCommand(payload.commands?.macHostSafeStartCommand || "", "offline JSON Mac host safe start command");
+  assert((payload.commands?.macHostSafeStartCommand || "").includes("--port 9"), "offline JSON Mac host safe start command should keep port");
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand || "", "offline JSON Mac formal local smoke command");
   assertMacFormalE2eStatusCommand(payload.commands?.macFormalE2eStatusCommand || "", "offline JSON Mac formal E2E status command");
   assertMacUnattendedStatusCommand(payload.commands?.macUnattendedStatusCommand || "", "offline JSON Mac unattended/startup command");
@@ -402,6 +417,7 @@ function checkOfflineJson(args) {
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "offline JSON should include copy diagnostics action");
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "offline JSON Mac script help command");
   assertBoardSummaryShape(payload.boardSummary || "", "offline JSON boardSummary");
+  assert(String(payload.boardSummary || "").includes("--port 9"), "offline JSON boardSummary should include safe start port");
   assert(String(payload.boardSummary || "").includes("blockers=none"), "offline JSON boardSummary should explicitly report no blockers");
   assert(/warnings=[^.]*host-offline/.test(String(payload.boardSummary || "")), "offline JSON boardSummary should include warning IDs");
   assert(payload.recommendations.some((item) => /start-mac-host/.test(item.text)), "offline recommendations should include startup guidance");
@@ -444,6 +460,7 @@ function checkOfflineBoardSummary(args) {
   assert(/blockers=none/.test(text), "offline board summary should explicitly report no blockers");
   assert(/warnings=[^.]*host-offline/.test(text), "offline board summary should include warning IDs");
   assert(/start formal host/.test(text), "offline board summary should include formal host start guidance");
+  assert(/--host 0\.0\.0\.0 --port 9/.test(text), "offline board summary should keep formal host start target");
   print("OK", "Offline board summary is short, secret-free, and actionable");
 }
 
@@ -519,6 +536,7 @@ function checkOnlineJson(args) {
   assert(payload.host.buildDiff && typeof payload.host.buildDiff === "object", "online payload should include buildDiff");
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary || "", "online JSON media readiness command");
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand || "", "online JSON Mac formal local smoke command");
+  assertMacHostSafeStartCommand(payload.commands?.macHostSafeStartCommand || "", "online JSON Mac host safe start command");
   assertMacFormalE2eStatusCommand(payload.commands?.macFormalE2eStatusCommand || "", "online JSON Mac formal E2E status command");
   assertMacUnattendedStatusCommand(payload.commands?.macUnattendedStatusCommand || "", "online JSON Mac unattended/startup command");
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand || "", "online JSON Mac unattended formal command");
