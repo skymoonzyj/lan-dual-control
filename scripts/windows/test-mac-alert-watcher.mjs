@@ -244,6 +244,27 @@ async function checkReverseGrantEventAlerts(args) {
   console.log("[OK] Mac reverse-control grant events alert");
 }
 
+async function checkMacUnattendedEventAlerts(args) {
+  const output = await runWatcherAgainst(baseState({
+    events: [{
+      id: "mac-unattended-warning",
+      at: new Date().toISOString(),
+      type: "message",
+      from: "Mac Codex",
+      text: [
+        "Mac unattended status: ready=false attention=warning",
+        "warnings=launch-agent-missing,launch-agent-not-loaded,power-risk",
+        "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --boardSummary",
+      ].join(" "),
+    }],
+  }), ["-AlertExistingEvents"], args);
+  assertIncludes(output, "ALERT:", "Mac unattended event");
+  assertIncludes(output, "Mac unattended status", "Mac unattended event");
+  assertIncludes(output, "warnings=launch-agent-missing", "Mac unattended event");
+  assertIncludes(output, "MacUnattendedStatus=", "Mac unattended event");
+  console.log("[OK] Mac unattended warning events alert");
+}
+
 async function checkNonMacEventIgnored(args) {
   const output = await runWatcherAgainst(baseState({
     events: [{
@@ -359,6 +380,38 @@ async function checkReverseGrantStatusAlerts(args) {
   assertIncludes(output, "ALERT:", "reverse grant status");
   assertIncludes(output, "临时允许反控", "reverse grant status");
   console.log("[OK] Mac reverse-control grant status alerts");
+}
+
+async function checkMacUnattendedStatusAlerts(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: "MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none",
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "Mac unattended status");
+  assertIncludes(output, "MacUnattendedStatus=", "Mac unattended status");
+  assertIncludes(output, "warnings=launch-agent-missing", "Mac unattended status");
+  console.log("[OK] Mac unattended status alerts");
+}
+
+async function checkMacUnattendedOkStatusIgnored(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: "MacUnattendedStatus=ready warnings=none blockers=none launch-agent=loaded power=ok",
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertNotIncludes(output, "ALERT:", "Mac unattended ok status");
+  console.log("[OK] Mac unattended ok status is ignored");
 }
 
 async function checkStartWrapperJsonStatus(args) {
@@ -506,6 +559,7 @@ async function main() {
   await checkChinesePermissionEventAlerts(args);
   await checkGatewayEventAlerts(args);
   await checkReverseGrantEventAlerts(args);
+  await checkMacUnattendedEventAlerts(args);
   await checkNonMacEventIgnored(args);
   await checkMacCallForWindowsAlerts(args);
   await checkDoneMacCallIgnored(args);
@@ -513,6 +567,8 @@ async function main() {
   await checkBlockedStatusAlerts(args);
   await checkStaleStatusAlerts(args);
   await checkReverseGrantStatusAlerts(args);
+  await checkMacUnattendedStatusAlerts(args);
+  await checkMacUnattendedOkStatusIgnored(args);
   await checkStartWrapperJsonStatus(args);
   if (args.includeLifecycle) {
     await checkStartWrapperLifecycle(args);

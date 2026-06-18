@@ -19,6 +19,33 @@
 
 ## 2026-06-18 Windows Codex
 
+日期：2026-06-18 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 本机 Mac 提醒 watcher 能识别 Mac 值守 warning/blocker，补齐“窗口最小化也能透传 Mac 值守问题”的提醒链路。
+完成内容：
+- `watch-codex-link-mac-alerts.ps1` 的紧急文本规则新增 `MacUnattendedStatus`、`Mac unattended status`、`MacLaunchAgentPlan`、`warnings=`、`blockers=`、LaunchAgent 缺失/未加载/禁用/失败、电源风险、睡眠不可达和 host 离线等 Mac 值守相关触发词。
+- `test-mac-alert-watcher.mjs` 新增 Mac 值守 message 和 Mac status 两条假联络板回归，确认 Mac 端发布 `warnings=launch-agent-missing,...` 或 `MacUnattendedStatus=...` 时会触发 `ALERT:`，非 Mac 事件仍不会误触发；同时新增 `warnings=none blockers=none` 正常状态不提醒的防噪音回归。
+- CURRENT_STATUS、NEXT_ACTIONS、任务板和 ACTIVE_LOCKS 已同步。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 30000`
+遗留问题：
+- 本轮只增强 Windows watcher 识别规则，不安装或修改 Mac LaunchAgent，不认证真实 host，不发送密码/input/inject。
+下一步建议：
+- Mac 端后续把 LaunchAgent/电源/睡眠限制进一步产品化后，继续让 boardSummary 使用稳定短标签；Windows 侧可再把这些短标签接进控制端“Mac 值守”面板的明确状态。
+是否改了协议：否。
+是否需要另一端配合：不需要；后续真机值守验证需要 Mac 端继续上报真实 warnings/blockers。
+
+## 2026-06-18 Windows Codex
+
 日期：2026-06-18 现场复核
 开发端：Windows Codex
 本轮目标：复查用户现场正式 E2E “第二步”看似卡住的问题，并补齐第二步进度心跳透传。
