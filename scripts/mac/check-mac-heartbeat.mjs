@@ -6,6 +6,10 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
+const hostRuntimePaths = [
+  "apps/mac-host/Package.swift",
+  "apps/mac-host/Sources",
+];
 
 const defaults = {
   host: "127.0.0.1",
@@ -260,6 +264,89 @@ function getGitStatus() {
   };
 }
 
+function splitLines(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function getChangedHostRuntimeFiles(fromBuildId, toBuildId) {
+  const from = normalizedText(fromBuildId);
+  const to = normalizedText(toBuildId || "HEAD") || "HEAD";
+  if (!from) return null;
+  const revParse = command("git", ["rev-parse", "--verify", "--quiet", `${from}^{commit}`], { timeoutMs: 3000 });
+  if (!revParse.ok) return null;
+  const diff = command("git", ["diff", "--name-only", `${from}..${to}`, "--", ...hostRuntimePaths], { timeoutMs: 3000 });
+  if (!diff.ok) return null;
+  return splitLines(diff.stdout);
+}
+
+function makeBuildDiff(runtimeBuildId, currentBuildId) {
+  const from = normalizedText(runtimeBuildId);
+  const to = normalizedText(currentBuildId);
+  if (!from || !to) {
+    return {
+      differs: false,
+      fromBuildId: from,
+      toBuildId: to,
+      comparable: false,
+      changedHostRuntimeFiles: null,
+      changedHostRuntimeFileCount: null,
+      severity: "unknown",
+      message: "Build comparison unavailable because runtime.buildId or current git build is missing.",
+    };
+  }
+  if (from === to) {
+    return {
+      differs: false,
+      fromBuildId: from,
+      toBuildId: to,
+      comparable: true,
+      changedHostRuntimeFiles: [],
+      changedHostRuntimeFileCount: 0,
+      severity: "ok",
+      message: "Running host build matches current git.",
+    };
+  }
+
+  const changedFiles = getChangedHostRuntimeFiles(from, to);
+  if (!Array.isArray(changedFiles)) {
+    return {
+      differs: true,
+      fromBuildId: from,
+      toBuildId: to,
+      comparable: false,
+      changedHostRuntimeFiles: null,
+      changedHostRuntimeFileCount: null,
+      severity: "warning",
+      message: `Running host build ${from} differs from current git ${to}; local git history cannot prove whether Mac host runtime changed.`,
+    };
+  }
+  if (changedFiles.length === 0) {
+    return {
+      differs: true,
+      fromBuildId: from,
+      toBuildId: to,
+      comparable: true,
+      changedHostRuntimeFiles: [],
+      changedHostRuntimeFileCount: 0,
+      severity: "stale-metadata",
+      message: `No Mac host runtime source changes since ${from}; behavior is likely current, but build metadata is stale.`,
+    };
+  }
+  return {
+    differs: true,
+    fromBuildId: from,
+    toBuildId: to,
+    comparable: true,
+    changedHostRuntimeFiles: changedFiles,
+    changedHostRuntimeFileCount: changedFiles.length,
+    severity: "restart-recommended",
+    message: `Mac host runtime source changed since ${from}; restart before deploy-style validation.`,
+  };
+}
+
 async function probeMacHost(args) {
   const url = `http://${args.host}:${args.port}/discovery`;
   const result = {
@@ -276,6 +363,16 @@ async function probeMacHost(args) {
     screen: {},
     audio: {},
     pipeline: "",
+    buildDiff: {
+      differs: false,
+      fromBuildId: "",
+      toBuildId: "",
+      comparable: false,
+      changedHostRuntimeFiles: null,
+      changedHostRuntimeFileCount: null,
+      severity: "unknown",
+      message: "",
+    },
     error: "",
   };
   try {
@@ -514,6 +611,8 @@ function buildFindings(args, { macHost, macClient, board, codex }) {
   if (codex.reason === "codex-reconnect-signal") warnings.push("codex-reconnect-signal");
   if (!macHost.online) {
     (args.requireHost ? blockers : warnings).push("mac-host-offline");
+  } else if (["restart-recommended", "warning"].includes(macHost.buildDiff?.severity)) {
+    warnings.push("mac-host-build-stale");
   }
   if (!macClient.online) {
     (args.requireClient ? blockers : warnings).push("mac-client-offline");
@@ -538,10 +637,24 @@ function summarizeIds(ids) {
   return ids.length > 0 ? ids.join(",") : "none";
 }
 
+function formatMacHostBuildDiff(buildDiff) {
+  if (!buildDiff || buildDiff.severity === "ok") return "build=current";
+  if (buildDiff.severity === "stale-metadata") {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} stale metadata only, hostRuntimeChanges=0`;
+  }
+  if (buildDiff.severity === "restart-recommended") {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} restart recommended, hostRuntimeChanges=${buildDiff.changedHostRuntimeFileCount ?? "unknown"}`;
+  }
+  if (buildDiff.differs) {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} differs from repo=${buildDiff.toBuildId || "unknown"}`;
+  }
+  return "build=unknown";
+}
+
 function makeBoardSummary(report) {
   const checkedAt = report.checkedAt || "unknown";
   const host = report.macHost.online
-    ? `online ${report.macHost.host}:${report.macHost.port} build=${report.macHost.runtimeBuild || "unknown"} inputMode=${report.macHost.inputMode || "unknown"}`
+    ? `online ${report.macHost.host}:${report.macHost.port} build=${report.macHost.runtimeBuild || "unknown"} inputMode=${report.macHost.inputMode || "unknown"} ${formatMacHostBuildDiff(report.macHost.buildDiff)}`
     : `offline ${report.macHost.host}:${report.macHost.port}`;
   const client = report.macClient.online ? `online ${report.macClient.url}` : `offline ${report.macClient.url}`;
   const board = !report.board.checked
@@ -597,6 +710,9 @@ async function buildReport(args) {
     readBoard(args),
   ]);
   const git = getGitStatus();
+  if (macHost.online) {
+    macHost.buildDiff = makeBuildDiff(macHost.runtimeBuild, git.head);
+  }
   const codex = analyzeCodex(args, board, nowMs);
   const commands = buildCommands(args);
   const findings = buildFindings(args, { macHost, macClient, board, codex });

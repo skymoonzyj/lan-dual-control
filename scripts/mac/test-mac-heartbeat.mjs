@@ -164,6 +164,35 @@ function assertCommandSet(commands, label) {
   assertNoSecrets(JSON.stringify(commands), label);
 }
 
+function getCurrentBuildId() {
+  const current = spawnSync("git", ["rev-parse", "--short", "HEAD"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 5000,
+  });
+  const currentCommit = String(current.stdout || "").trim();
+  assert(current.status === 0 && currentCommit, "should find current git build id");
+  return currentCommit;
+}
+
+function getRuntimeBuildBeforeLatestMacHostChange() {
+  const latest = spawnSync("git", ["log", "--format=%H", "-1", "--", "apps/mac-host/Sources"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 5000,
+  });
+  const latestCommit = String(latest.stdout || "").trim();
+  assert(latest.status === 0 && latestCommit, "should find latest Mac host source commit");
+  const parent = spawnSync("git", ["rev-parse", "--short", `${latestCommit}^`], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 5000,
+  });
+  const parentCommit = String(parent.stdout || "").trim();
+  assert(parent.status === 0 && parentCommit, "should find parent of latest Mac host source commit");
+  return parentCommit;
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run([flag], args);
@@ -239,6 +268,7 @@ async function withServer(handler, callback) {
 }
 
 async function checkOnlineOk(args) {
+  const currentBuild = getCurrentBuildId();
   await withServer((request, response) => {
     if ((request.url || "").split("?")[0] !== "/discovery") {
       response.writeHead(404).end("not found");
@@ -247,7 +277,7 @@ async function checkOnlineOk(args) {
     response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
     response.end(JSON.stringify({
       platform: "macos",
-      runtime: { processId: 1234, buildId: "mac-heartbeat-build" },
+      runtime: { processId: 1234, buildId: currentBuild },
       permissions: { screenRecording: true, accessibility: true, inputMonitoring: true },
       capabilities: {
         input: { mode: "log" },
@@ -282,7 +312,7 @@ async function checkOnlineOk(args) {
       assert(result.status === 0, `online heartbeat should pass.\n${result.stdout}\n${result.stderr}`);
       assert(payload.status === "ok", "online payload should be ok");
       assert(payload.macHost.online === true, "Mac host should be online");
-      assert(payload.macHost.runtimeBuild === "mac-heartbeat-build", "Mac host runtime build should be captured");
+      assert(payload.macHost.runtimeBuild === currentBuild, "Mac host runtime build should be captured");
       assert(payload.macHost.inputMode === "log", "Mac host inputMode should be captured");
       assert(payload.macClient.online === true, "Mac client should be online");
       assertIsoTimestamp(payload.checkedAt, "online checkedAt");
@@ -298,6 +328,63 @@ async function checkOnlineOk(args) {
     });
   });
   print("OK", "Online heartbeat captures fake Mac host and client state");
+}
+
+async function checkOnlineStaleHostBuildWarning(args) {
+  const staleBuild = getRuntimeBuildBeforeLatestMacHostChange();
+  await withServer((request, response) => {
+    if ((request.url || "").split("?")[0] !== "/discovery") {
+      response.writeHead(404).end("not found");
+      return;
+    }
+    response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    response.end(JSON.stringify({
+      platform: "macos",
+      runtime: { processId: 1234, buildId: staleBuild },
+      permissions: { screenRecording: true, accessibility: true, inputMonitoring: true },
+      capabilities: {
+        input: { mode: "log" },
+        screen: {
+          active: true,
+          h264: true,
+          maxScreenFps: 60,
+          capturePipeline: "screencapturekit-h264",
+        },
+        audio: { active: true, mode: "system-pcm" },
+      },
+    }));
+  }, async (hostPort) => {
+    await withServer((request, response) => {
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end("<!doctype html><title>LAN Dual Mac 控制 Windows</title>");
+    }, async (clientPort) => {
+      const result = await runAsync([
+        "--json",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(hostPort),
+        "--clientHost",
+        "127.0.0.1",
+        "--clientPort",
+        String(clientPort),
+        "--timeoutMs",
+        "1200",
+      ], args);
+      const payload = parseJson(result.stdout, "stale build JSON");
+      assert(result.status === 0, `stale Mac host build should be a warning, not a blocker.\n${result.stdout}\n${result.stderr}`);
+      assert(payload.status === "warning", "stale Mac host build payload should be warning");
+      assert(payload.warnings.includes("mac-host-build-stale"), "stale build warning should be present");
+      assert(payload.macHost.buildDiff?.severity === "restart-recommended", "stale build should recommend restart when runtime files changed");
+      assert(payload.macHost.buildDiff?.changedHostRuntimeFileCount > 0, "stale build should count changed Mac host runtime files");
+      assertIncludes(payload.boardSummary || "", "MacHeartbeat=status=warning", "stale build board summary");
+      assertIncludes(payload.boardSummary || "", "warnings=mac-host-build-stale", "stale build board summary");
+      assertIncludes(payload.boardSummary || "", "restart recommended", "stale build board summary");
+      assertIncludes(payload.boardSummary || "", "hostRuntimeChanges=", "stale build board summary");
+      assertNoSecrets(`${result.stdout}\n${result.stderr}`, "stale build output");
+    });
+  });
+  print("OK", "Online heartbeat warns when Mac host runtime build needs restart");
 }
 
 async function checkBoardTimestamps(args) {
@@ -438,6 +525,7 @@ async function main() {
   const clientPort = await getFreePort();
   checkOfflineWarning(args, hostPort, clientPort);
   await checkOnlineOk(args);
+  await checkOnlineStaleHostBuildWarning(args);
   await checkBoardTimestamps(args);
   checkReconnectStuck(args);
   checkCodexStale(args);
