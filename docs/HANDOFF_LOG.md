@@ -21,6 +21,39 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac heartbeat 实时摘要也暴露 Mac 脚本 help 安全自检入口。
+完成内容：
+- `check-mac-heartbeat --json/--boardSummary` 现在输出 `commands.macScriptHelpCommand` / `MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`。
+- Windows 端或人工只看最新 `MacHeartbeat=` 时，也能要求 Mac 端跑统一 `--help/-h` 副作用防线，不必回翻 Mac resume 摘要。
+- 自测新增回归：离线/在线 heartbeat 摘要必须包含 `MacScriptHelp=`，且命令不含密码、call、input 或 inject 路径。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` 失败在 offline board summary 缺 `MacScriptHelp=`。
+- 绿灯：实现后复跑同一自测通过。
+- `node --check scripts/mac/check-mac-heartbeat.mjs`
+- `node --check scripts/mac/test-mac-heartbeat.mjs`
+- `node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- 真实只读 heartbeat 摘要抽样：`MacHeartbeat=` 输出 `MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`，并明确未请求密码、未认证、未发送 input/inject。
+- `git diff --check` 与冲突标记扫描通过。
+遗留问题：
+- 真实 Mac host 仍是旧 build / 30Hz 上限现场状态；本轮只补心跳摘要的安全自检入口，没有停止或重启 host。
+下一步建议：
+- Windows 若只拿到最新心跳，也可复制 `MacScriptHelp=` 让 Mac 端快速确认所有 Mac `.mjs` 脚本 help 路径无副作用；后续仍需用户在场时再处理 60Hz host 重启或正式密码验收。
+是否改了协议：否；只补 Mac heartbeat 的安全命令标签。
+是否需要另一端配合：本轮不需要；Windows 端可后续按需消费该标签。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac client formal smoke 在认证前失败/阻塞时也保留本地 mock browser 自测入口，便于先排除 Mac client 页面自身问题。
 完成内容：
 - `run-mac-client-formal-smoke --json/--boardSummary` 的失败/阻塞摘要现在会输出 `MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary`。

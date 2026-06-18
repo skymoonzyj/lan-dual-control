@@ -89,8 +89,8 @@ Machine-readable JSON fields:
   board                       Agent Link Board readability and currentCall.
   commands                    Secret-free next-step commands for user action,
                               including the local Mac client mock browser
-                              self-test, 60Hz safe start, and LaunchAgent
-                              load/print checks.
+                              self-test, Mac script help safety check, 60Hz
+                              safe start, and LaunchAgent load/print checks.
 
 Examples:
   node scripts/mac/check-mac-heartbeat.mjs --checkBoard --boardSummary
@@ -618,6 +618,7 @@ function buildCommands(args) {
     macClientFormalChecklistCommand: "node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary",
     macClientFormalSmokeCommand: "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary",
     macClientBrowserSelfTestCommand: "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary",
+    macScriptHelpCommand: "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary",
   };
 }
 
@@ -711,6 +712,7 @@ function makeBoardSummary(report) {
     `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
     `MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}.`,
     `MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}.`,
+    `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
     "No password was requested or sent; no WebSocket auth/input/inject was attempted.",
   ].join(" ");
 }
