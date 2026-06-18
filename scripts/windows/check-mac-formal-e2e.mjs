@@ -772,6 +772,7 @@ async function runClientDiagnostics(args, report) {
     "--clientPort", String(args.clientPort),
     "--debugPort", String(args.debugPort),
     "--timeoutMs", String(Math.max(args.timeoutMs, 45000)),
+    "--progressIntervalMs", String(args.progressIntervalMs),
   ];
   const runtimeBuildId = String(report.runtime?.buildId || "").trim();
   if (runtimeBuildId) {
@@ -1073,6 +1074,7 @@ function makeBrowserArgs(args) {
     "--clientPort", String(args.clientPort),
     "--debugPort", String(args.debugPort),
     "--timeoutMs", String(Math.max(args.timeoutMs, 45000)),
+    "--progressIntervalMs", String(args.progressIntervalMs),
   ];
   if (args.requirePassword) {
     browserArgs.push("--requirePassword");

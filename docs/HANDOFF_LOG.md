@@ -19,6 +19,38 @@
 
 ## 2026-06-18 Windows Codex
 
+日期：2026-06-18 现场复核
+开发端：Windows Codex
+本轮目标：复查用户现场正式 E2E “第二步”看似卡住的问题，并补齐第二步进度心跳透传。
+完成内容：
+- 只读复核真实 Mac host `192.168.31.122:43770`：发现成功，runtime build `d398d64`，H.264/系统 PCM/文字和文件剪贴板/inputMode=log/三项权限均 ready，Windows client diagnostics 通过；当前 Mac discovery 上报 `maxScreenFps=30`，所以正式连接即使请求 60Hz 也会协商到 30Hz。
+- `check-mac-formal-e2e` 现在会把 `--progressIntervalMs` 透传给预检查里的客户端诊断和正式第二步 `test-windows-client-browser`，让第二步连接、H.264 canvas 和 FPS 诊断等待时也按同一频率输出页面快照。
+- 回归新增断言，确保 runPlan 中第二步命令包含 `--progressIntervalMs`，避免后续又退化为静默等待。
+修改文件：
+- `scripts/windows/check-mac-formal-e2e.mjs`
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-mac-formal-e2e.mjs`
+- `node --check scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 45000`
+- `node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --boardSummary`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows docs`
+遗留问题：
+- 本轮没有认证真实 WebSocket、没有请求或输入密码、没有发送 input/inject；真实第二步 H.264 页面检查仍需用户现场输入 Mac host 密码后复跑。
+- Mac host 当前能力摘要仍显示 `maxScreenFps=30`；60Hz/更高刷新率需要 Mac 端继续推进采集/编码上限，不是本轮 Windows 进度心跳修复能解决的。
+下一步建议：
+- 现场复跑完整正式 E2E 时可加 `--progressIntervalMs 5000`，如果看到第二步等待，就按快照判断卡在连接、H.264 canvas、FPS 诊断还是音频播放。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端后续说明/提升 `maxScreenFps=30` 的采集上限；本轮进度透传无需 Mac 配合。
+
+## 2026-06-18 Windows Codex
+
 日期：2026-06-18 夜间
 开发端：Windows Codex
 本轮目标：把 Mac 值守检查入口接进 Windows 恢复总览，方便 Windows 开工第一屏同步 Mac LaunchAgent、自启动、电源和锁屏/睡眠限制摘要。

@@ -172,6 +172,7 @@ Windows 端：
 - [x] Windows formal Mac E2E / `probe-mac-host` 长时间媒体观察新增进度心跳：视频和音频长测开始时打印目标时长，默认每 10 秒输出帧数、剩余时间、当前 FPS 和最大间隔；`--progressIntervalMs` 可调整或关闭，避免现场 5 分钟长测被误判为卡住。
 - [x] Mac client 页面级自检的连接首帧、认证失败、H.264/二进制视频、音频首帧/播放、持续视频观察和重连恢复等待都已接入 `--progressIntervalMs` 进度心跳，真实 Mac 控制 Windows 验收时不再长时间静默等待。
 - [x] Windows 控制 Mac 页面级自检的连接、视频 surface、H.264/WebCodecs 和 PCM 音频播放等待也接入 `--progressIntervalMs` 页面快照心跳；同轮修复 diagnostics 后连接按钮禁用状态恢复漏项，避免自检后真实连接点击无效。
+- [x] Windows formal Mac E2E 的第二步浏览器 H.264 检查也透传 `--progressIntervalMs`，预检查客户端诊断和正式第二步都能按同一频率打印页面快照，避免现场误判为卡住。
 
 共享：
 

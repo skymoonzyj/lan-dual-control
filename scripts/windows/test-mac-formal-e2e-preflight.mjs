@@ -78,6 +78,8 @@ function assertRunPlanSafe(payload, label, expectations = {}) {
   assert(plan.steps.every((step) => typeof step.command === "string" && step.command.startsWith("node ")), `${label} step commands should be displayable node commands`);
   assert(plan.steps.some((step) => step.id === "protocol-media-clipboard-input-log"), `${label} should include the protocol probe`);
   assert(plan.steps.some((step) => step.id === "windows-client-browser-h264"), `${label} should include the browser probe`);
+  const browserStep = plan.steps.find((step) => step.id === "windows-client-browser-h264");
+  assertIncludes(browserStep.command, "--progressIntervalMs", `${label} browser progress command`);
   if (Object.prototype.hasOwnProperty.call(expectations, "audioSkipped")) {
     assert(plan.audio?.skipped === expectations.audioSkipped, `${label} audio skipped mismatch`);
   }
