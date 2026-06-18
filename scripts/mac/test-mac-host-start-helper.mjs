@@ -148,6 +148,20 @@ function assertSafeStartCommand(command, label, expectedPort = null) {
   }
 }
 
+function assertMacHostStopCommand(command, label, expectedPort = null) {
+  assertIncludes(command, "start-mac-host.mjs", label);
+  assertIncludes(command, "--stop", label);
+  assertIncludes(command, "--host 127.0.0.1", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--requirePassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--injectInput", label);
+  assertNotIncludes(command, "--inputMode inject", label);
+  if (expectedPort !== null) {
+    assertIncludes(command, `--port ${expectedPort}`, label);
+  }
+}
+
 function assertMacMaxFpsSafeStartCommand(command, label, expectedPort = null) {
   assertIncludes(command, "start-mac-host.mjs", label);
   assertIncludes(command, "--promptPassword", label);
@@ -901,12 +915,14 @@ async function assertStatusOnline(timeoutMs) {
     assertMacMaxFpsPlanCommand(json.commands?.macMaxFpsPlanCommand || "", "online JSON status max-FPS command", port);
     assertMacUnattendedFormalCommand(json.commands?.macUnattendedFormalCommand || "", "online JSON status unattended formal command", port);
     assertMediaReadinessCommand(json.commands?.mediaReadinessBoardSummary || "", "online JSON status media command");
+    assertMacHostStopCommand(json.commands?.macHostStopCommand || "", "online JSON status stop command", port);
     assertSafeStartCommand(json.commands?.safeStartCommand || "", "online JSON status safe start command", port);
     assertMacMaxFpsSafeStartCommand(json.commands?.macMaxFpsSafeStartCommand || "", "online JSON status max-FPS safe start command", port);
     assertMacHostReadinessCommand(json.commands?.macHostReadinessCommand || "", "online JSON status host readiness command", port);
     assertMacFormalLocalSmokeCommand(json.commands?.macFormalLocalSmokeCommand || "", "online JSON status formal local smoke command", port);
     assertEphemeralStartCommand(json.commands?.ephemeralStartCommand || "", "online JSON status ephemeral start command", port);
     assertIncludes(json.boardSummary || "", `MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port}`, "online JSON status boardSummary");
+    assertIncludes(json.boardSummary || "", `MacHostStop=node scripts/mac/start-mac-host.mjs --stop --host 127.0.0.1 --port ${port}`, "online JSON status boardSummary");
     assertIncludes(json.boardSummary || "", `MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port} --maxScreenFps 60`, "online JSON status boardSummary");
     assertIncludes(json.boardSummary || "", "MacHostReadiness=", "online JSON status boardSummary");
     assertIncludes(json.boardSummary || "", `check-mac-host-readiness.mjs --host 127.0.0.1 --port ${port} --checkBoard --boardSummary`, "online JSON status boardSummary");

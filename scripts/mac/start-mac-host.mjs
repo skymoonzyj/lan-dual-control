@@ -387,6 +387,17 @@ function makeMediaReadinessBoardSummaryCommand(args) {
   ].join(" ");
 }
 
+function makeMacHostStopCommand(args) {
+  return [
+    "node scripts/mac/start-mac-host.mjs",
+    "--stop",
+    "--host",
+    statusProbeHost(args),
+    "--port",
+    String(args.port),
+  ].join(" ");
+}
+
 function makeSafeStartCommand(args) {
   return [
     "node scripts/mac/start-mac-host.mjs",
@@ -605,6 +616,7 @@ function formatStatusBoardSummary(payload) {
   if (!payload.online) {
     return [
       `Mac host status: offline at ${payload.probe.host}:${payload.probe.port}; ${callSummary}.`,
+      `MacHostStop=${payload.commands?.macHostStopCommand || "not-available"}.`,
       `MacHostSafeStart=${payload.commands?.safeStartCommand || "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword"}.`,
       `MacMaxFpsSafeStart=${payload.commands?.macMaxFpsSafeStartCommand || "not-available"}.`,
       `MacHostReadiness=${payload.commands?.macHostReadinessCommand || "not-available"}.`,
@@ -636,6 +648,7 @@ function formatStatusBoardSummary(payload) {
   return [
     `Mac host status: online ${target}; runtimeBuild=${runtimeBuild} inputMode=${payload.inputMode || "unknown"}; ${callSummary}.`,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${formatStatusBuildDiff(payload.buildDiff)}.`,
+    `MacHostStop=${payload.commands?.macHostStopCommand || "not-available"}.`,
     `MacHostSafeStart=${payload.commands?.safeStartCommand || "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword"}.`,
     `MacMaxFpsSafeStart=${payload.commands?.macMaxFpsSafeStartCommand || "not-available"}.`,
     `MacHostReadiness=${payload.commands?.macHostReadinessCommand || "not-available"}.`,
@@ -928,6 +941,7 @@ async function printStatus(args) {
       buildDiff,
       board,
       commands: {
+        macHostStopCommand: makeMacHostStopCommand(args),
         safeStartCommand: makeSafeStartCommand(args),
         macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
         macHostReadinessCommand: makeMacHostReadinessCommand(args),
@@ -997,6 +1011,7 @@ async function printStatus(args) {
       displayCount: 0,
       board,
       commands: {
+        macHostStopCommand: makeMacHostStopCommand(args),
         safeStartCommand: makeSafeStartCommand(args),
         macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
         macHostReadinessCommand: makeMacHostReadinessCommand(args),
