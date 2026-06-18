@@ -2748,6 +2748,7 @@ async function verifyOutgoingFileResultStatus(session) {
       const offerRejectSends = [];
       const firstRemoteRejectSends = [];
       const remoteRejectRetrySends = [];
+      const activeFailureSends = [];
       const pendingTimeoutSends = [];
       const pendingTimeoutRetrySends = [];
       try {
@@ -2920,6 +2921,44 @@ async function verifyOutgoingFileResultStatus(session) {
         updateFileClipboardButton();
         const fileInputLengthAfterRemoteAccept = elements.fileClipboardInput.files?.length || 0;
 
+        const activeFailureBytes = new Uint8Array(fileChunkSizeBytes + 768);
+        activeFailureBytes.fill(69);
+        const activeFailureFile = new File([activeFailureBytes], "active-failure.zip", { type: "application/zip" });
+        const activeFailureDataTransfer = new DataTransfer();
+        activeFailureDataTransfer.items.add(activeFailureFile);
+        elements.fileClipboardInput.files = activeFailureDataTransfer.files;
+        let activeFailureInjected = false;
+        state.client = {
+          sendClipboardFileOffer: (payload) => activeFailureSends.push({ type: "offer", payload }),
+          sendClipboardFileChunk: (payload) => {
+            activeFailureSends.push({ type: "chunk", payload });
+            if (!activeFailureInjected) {
+              activeFailureInjected = true;
+              handleClipboardFileResult({
+                type: "clipboard_file_result",
+                transferId: payload.transferId,
+                accepted: false,
+                fileCount: 1,
+                receivedBytes: payload.sentBytes,
+                totalBytes: activeFailureFile.size,
+                reason: "对端中途拒收",
+              });
+            }
+          },
+          sendClipboardFileComplete: (payload) => activeFailureSends.push({ type: "complete", payload }),
+        };
+        await sendFilesToRemote([activeFailureFile], { sourceLabel: "中途失败重试测试", clearFileInput: true });
+        updateFileClipboardButton();
+        const activeFailureOfferCount = activeFailureSends.filter((item) => item.type === "offer").length;
+        const activeFailureChunkCount = activeFailureSends.filter((item) => item.type === "chunk").length;
+        const activeFailureCompleteCount = activeFailureSends.filter((item) => item.type === "complete").length;
+        const activeFailureText = elements.clipboardText.textContent || "";
+        const activeFailureFloating = formatFloatingClipboardStatus();
+        const activeFailureState = state.lastOutgoingFileTransfer || {};
+        const activeFailureFileInputLength = elements.fileClipboardInput.files?.length || 0;
+        const activeFailureCanRetry = canRetryLastOutgoingFileTransfer();
+        const activeFailureButtonLabel = elements.fileClipboardButton.querySelector("span:not([aria-hidden])")?.textContent || "";
+
         const pendingBytes = new Uint8Array(fileChunkSizeBytes + 256);
         pendingBytes.fill(67);
         const pendingFile = new File([pendingBytes], "pending-timeout.zip", { type: "application/zip" });
@@ -3049,6 +3088,21 @@ async function verifyOutgoingFileResultStatus(session) {
             remoteRejectRetryChunkCount === 2 &&
             remoteRejectRetryCompleteCount === 1 &&
             fileInputLengthAfterRemoteAccept === 0 &&
+            activeFailureOfferCount === 1 &&
+            activeFailureChunkCount === 1 &&
+            activeFailureCompleteCount === 0 &&
+            activeFailureText.includes("对端文件接收失败") &&
+            activeFailureText.includes("可重新发送") &&
+            activeFailureText.includes("对端中途拒收") &&
+            activeFailureFloating.includes("可重新发送") &&
+            activeFailureState.transferId &&
+            activeFailureState.status === "remote-result" &&
+            activeFailureState.accepted === false &&
+            activeFailureState.canRetry === true &&
+            activeFailureState.files?.[0]?.name === "active-failure.zip" &&
+            activeFailureFileInputLength === 1 &&
+            activeFailureCanRetry === true &&
+            activeFailureButtonLabel === "重新发送" &&
             expiredPendingCount === 1 &&
             pendingTimeoutText.includes("对端确认超时") &&
             pendingTimeoutText.includes("可重新发送") &&
@@ -3104,6 +3158,15 @@ async function verifyOutgoingFileResultStatus(session) {
           remoteRejectRetryChunkCount,
           remoteRejectRetryCompleteCount,
           fileInputLengthAfterRemoteAccept,
+          activeFailureOfferCount,
+          activeFailureChunkCount,
+          activeFailureCompleteCount,
+          activeFailureText,
+          activeFailureFloating,
+          activeFailureState,
+          activeFailureFileInputLength,
+          activeFailureCanRetry,
+          activeFailureButtonLabel,
           expiredPendingCount,
           pendingTimeoutText,
           pendingTimeoutFloating,

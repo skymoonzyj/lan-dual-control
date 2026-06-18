@@ -4948,6 +4948,9 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
           encoding: "base64",
           dataBase64,
         });
+        if (isOutgoingFileTransferRejected(transferId)) {
+          return;
+        }
         sentBytes = nextSentBytes;
         if (state.outgoingFileTransfer?.transferId === transferId) {
           recordRemoteFileTransferRateSample(state.outgoingFileTransfer, chunk.size);
@@ -6961,9 +6964,12 @@ function handleClipboardFileResult(message) {
     return false;
   }
   const previousTransferMatches = state.lastOutgoingFileTransfer?.transferId === message.transferId;
+  const activeTransferMatches = state.outgoingFileTransfer?.transferId === message.transferId;
   const previousTransfer = previousTransferMatches
     ? state.lastOutgoingFileTransfer
-    : {};
+    : activeTransferMatches
+      ? state.outgoingFileTransfer
+      : {};
   const accepted = Boolean(message.accepted);
   const canRetry = !accepted &&
     Boolean(previousTransfer.canRetry && (elements.fileClipboardInput.files?.length || 0) > 0);

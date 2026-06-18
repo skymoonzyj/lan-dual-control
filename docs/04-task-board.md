@@ -147,6 +147,7 @@ Windows 端：
 - [x] Windows 控 Mac 本机文件重发忽略旧进度：确认超时后重新发送时，旧 `transferId` 的迟到 `clipboard_file_progress` 只写事件日志，不再覆盖当前“等待对端确认”或失败/重试状态；页面 diagnostics-only 覆盖旧进度回包。
 - [x] Windows 控 Mac 本机文件重发忽略旧清单响应：确认超时后重新发送时，旧 `transferId` 的迟到 `clipboard_file_response` 只写事件日志，不再把当前状态覆盖成“对端已准备接收文件”或旧拒绝原因；页面 diagnostics-only 覆盖旧接受/拒绝 response 回包。
 - [x] Windows 控 Mac 本机文件 active 发送中忽略旧结果：重新发送分块仍在进行时，如果旧 `transferId` 的 `clipboard_file_result` 迟到，只写事件日志，不再瞬间覆盖当前发送中状态；页面 diagnostics-only 覆盖 active retry 中途旧 result 回包。
+- [x] Windows 控 Mac 本机文件 active 发送中失败可重发：分块发送中途如果当前 `transferId` 收到 `clipboard_file_result.accepted=false`，会立即停止继续发送、保留文件选择并切到“重新发送”；页面 diagnostics-only 覆盖中途失败后不发送 complete、保留文件名和可重发状态。
 - [x] Windows 控 Mac 复制诊断快速摘要补独立视频状态：报告顶部会直接写出 H.264/JPEG、实收 FPS、协商/请求刷新率、远端上限、低于协商或请求、帧延迟或回退原因，方便定位卡顿、不是 60Hz、远端最高 30Hz 或 H.264 回退；页面 diagnostics-only 覆盖导出文本。
 - [x] Windows 控 Mac 复制诊断报告补普通声音摘要：快速摘要和显示能力分段会记录声音关闭/等待音频/已接收等待播放/正在播放/播放失败、音量、电平、接收帧、播放帧和丢帧；页面 diagnostics-only 覆盖收到但未播放场景。
 - [x] Windows 控 Mac 复制诊断快速摘要补输入模式/注入状态：报告顶部会直接写出输入事件数量、`inputMode=log` 的“安全日志，不会真正控制”、已记录/已注入/被拒绝 ack，方便定位“已连接但不能点击”；页面 diagnostics-only 覆盖导出和复制文本。

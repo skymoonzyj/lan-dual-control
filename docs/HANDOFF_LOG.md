@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端本机文件发送中途收到当前 transfer 失败结果时保留文件并可重发。
+完成内容：
+- `clipboard_file_result.accepted=false` 如果在当前 transfer 分块发送中途到达，会复用 active 发送信息保留文件名、大小和可重发状态。
+- 发送循环在收到当前失败结果后立即停止，不再继续发送剩余分块或 `clipboard_file_complete`，顶部状态和全屏/监看浮层保持“对端文件接收失败 · 可重新发送”。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增页面断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`（失败点：中途失败后顶部仍显示“正在发送”，`canRetry=false`，按钮仍是“发送文件”）。
+- 实现后复跑同一 diagnostics-only 通过。
+遗留问题：
+- 这仍是从头重新发送，不是断点续传。
+下一步建议：
+- 真机大文件测试时观察中途失败、确认超时、对端拒收和旧消息迟到的按钮/浮层/诊断文案是否一致。
+是否改了协议：否；只消费既有 `clipboard_file_result` 和 `transferId`。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端本机文件重新发送时，active 发送中也忽略旧 transfer 的迟到结果。
 完成内容：
 - `clipboard_file_result` 现在优先用正在发送的 `outgoingFileTransfer.transferId` 判断当前任务；如果旧 transfer 的结果在新一轮分块发送中途才到，只写事件日志，不再覆盖当前顶部剪贴板状态或全屏/监看浮层。
