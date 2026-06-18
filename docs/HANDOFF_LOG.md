@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac LaunchAgent 规划摘要也暴露 Mac 脚本 help 安全自检入口。
+完成内容：
+- `install-mac-host-launch-agent --json/--boardSummary` 现在输出 `commands.macScriptHelp` / `MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`。
+- Windows 端或人工只看到 `MacLaunchAgentPlan=` 摘要时，也能直接让 Mac 端跑统一 `--help/-h` 副作用防线，确认最近 Mac 脚本帮助路径不会误写 plist、加载 `launchctl`、启动 host、弹密码、认证或发送 input/inject。
+- 该命令只作为安全提示输出，不自动运行；本轮没有写 plist、没有加载 LaunchAgent、没有启动 Mac host、没有请求密码、没有认证或发送 call/input/inject。
+修改文件：
+- `scripts/mac/install-mac-host-launch-agent.mjs`
+- `scripts/mac/test-mac-host-launch-agent.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-host-launch-agent.mjs --timeoutMs 10000` 失败在 help 缺 `commands.macScriptHelp`。
+- 绿灯：实现后复跑同一自测通过。
+遗留问题：
+- 本轮只补 LaunchAgent 规划摘要的 help 安全自检入口，没有处理当前 Mac host 旧 build，也没有执行真实 LaunchAgent 切换或 formal E2E。
+下一步建议：
+- 之后如果只拿到 `MacLaunchAgentPlan=` / `ManualWrite=` / `ManualLoad=` 摘要，可先复制其中 `MacScriptHelp=` 让 Mac 端确认 help 路径仍无副作用，再由用户决定是否真正写入/加载 LaunchAgent。
+是否改了协议：否；只补 Mac LaunchAgent planner 的安全命令标签。
+是否需要另一端配合：本轮不需要；Windows 端可后续按需消费该标签。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac heartbeat 摘要也暴露稳定媒体基线入口。
 完成内容：
 - `check-mac-heartbeat --json/--boardSummary` 现在输出 `commands.macHostMediaCommand` / `MacHostMedia=node scripts/mac/check-mac-host-readiness.mjs --host <host> --port <port> --checkBoard --probeMedia --probeMediaResourceSample --promptPassword --boardSummary`。

@@ -77,6 +77,8 @@ Machine-readable JSON fields:
   commands.macFormalLocalSmoke Secret-free local H.264/PCM/input-log smoke
                                command; prompts locally and never embeds a
                                password in argv.
+  commands.macScriptHelp       Secret-free Mac script help safety check; verifies
+                               help paths stay side-effect-free.
 
 Examples:
   node scripts/mac/install-mac-host-launch-agent.mjs --boardSummary
@@ -320,6 +322,7 @@ function makeCommands(args) {
     macFormalLocalSmoke: `node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port ${args.port} --promptPassword --boardSummary`,
     unattendedStatus: `node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port ${args.port} --launchAgentPath ${shellQuote(args.launchAgentPath)} --boardSummary`,
     macUnattendedFormal: `node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port ${args.port} --launchAgentPath ${shellQuote(args.launchAgentPath)} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`,
+    macScriptHelp: "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary",
   };
 }
 
@@ -384,7 +387,7 @@ function makeBoardSummary(report) {
     : report.args.passwordMode;
   return [
     `Mac LaunchAgent plan: ${writeState}; label=${report.args.label}; path=${report.paths.launchAgentPath}; port=${report.args.port}; maxFps=${report.args.maxScreenFps}; auth=${auth}; keepAlive=${report.args.keepAlive ? "on" : "off"}.`,
-    `MacLaunchAgentPlan=${report.commands.dryRun}; ManualWrite=${report.commands.writePlist}; ManualLoad=${report.commands.bootstrap}; Status=${report.commands.unattendedStatus}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}.`,
+    `MacLaunchAgentPlan=${report.commands.dryRun}; ManualWrite=${report.commands.writePlist}; ManualLoad=${report.commands.bootstrap}; Status=${report.commands.unattendedStatus}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacScriptHelp=${report.commands.macScriptHelp}.`,
     "No password is written or requested by this planner; no launchctl/start/auth/input/inject action was attempted.",
   ].join(" ");
 }
@@ -459,6 +462,7 @@ function printHuman(report) {
   console.log(`  - formal check: ${report.commands.macUnattendedFormal}`);
   console.log(`  - host readiness: ${report.commands.macHostReadiness}`);
   console.log(`  - formal local smoke: ${report.commands.macFormalLocalSmoke}`);
+  console.log(`  - script help safety check: ${report.commands.macScriptHelp}`);
   console.log("- warnings:");
   for (const warning of report.warnings) {
     console.log(`  - ${warning}`);
