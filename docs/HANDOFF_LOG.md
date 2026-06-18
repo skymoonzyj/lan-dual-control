@@ -57,6 +57,33 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows host readiness 的一行上板摘要直接暴露 LAN/firewall 风险，不再只显示 `warnings=<数量>`。
+完成内容：
+- `check-windows-host-readiness --json` 新增顶层 `windowsLanRisks[]`，从 `Windows host LAN/firewall` warning 归类 `no-firewall-allow`、`public-profile`、`lan-probe-blocked`、`tcp-unreachable`、`bind-address`、`no-listener`、`no-lan-ip`、`firewall-query-failed`。
+- `--boardSummary` 新增 `WindowsLanRisk=<短标签或 none>`；当前 Windows 现场摘要可直接显示 `WindowsLanRisk=no-firewall-allow,public-profile`，方便 Mac 端/人工判断发现不到 Windows host 时先看防火墙放行和 Public 网络。
+- 该改动只读，不改防火墙、不认证、不请求或发送密码、不发送 input/inject。
+修改文件：
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 120000 --readinessTimeoutMs 8000`
+- 实现后复跑：`node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 120000 --readinessTimeoutMs 8000`
+遗留问题：
+- 当前机器仍提示未发现 TCP 43770 入站放行规则且网络为 Public；本轮只是把风险稳定上报，不自动修改系统防火墙/网络配置。
+下一步建议：
+- Mac 端后续如果发现不到 Windows host，优先读取 `WindowsLanRisk=`；若是 `no-firewall-allow` 或 `public-profile`，由 Windows 用户确认后再手动调整防火墙/网络配置，或用现有 dry-run/管理员流程处理。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Mac 端可选择消费 `WindowsLanRisk=`，不要在通讯板发送密码/token/系统账号。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows resume 在安全认证 currentCall 已有可用 `WindowsSecureAuthPath=` 时，明确提示下一步由 Mac/人工确认路径，而不是继续表现成 Windows 未响应。
 完成内容：
 - `check-windows-resume-status --checkBoard --json` 现在会识别 active Mac -> Windows 安全认证 call：当 call 文本指向认证/密码/随机运行期密码，且报告已有安全 `WindowsSecureAuthPath` 时，JSON `board.currentCall.secureAuthPathReady=true`、`next=mac-confirm-secure-auth-path`。

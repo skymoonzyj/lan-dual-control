@@ -207,6 +207,34 @@ function parseJson(text, label) {
   }
 }
 
+function expectedLanRisksFrom(payload) {
+  const warnings = Array.isArray(payload.results)
+    ? payload.results
+      .filter((result) => result.label === "Windows host LAN/firewall")
+      .flatMap((result) => Array.isArray(result.warnings) ? result.warnings : [])
+    : [];
+  const riskMap = [
+    [/No non-loopback IPv4 LAN address/i, "no-lan-ip"],
+    [/No local TCP listener/i, "no-listener"],
+    [/not on 0\.0\.0\.0/i, "bind-address"],
+    [/No TCP probe reached/i, "tcp-unreachable"],
+    [/LAN address probes did not reach/i, "lan-probe-blocked"],
+    [/Windows firewall query failed/i, "firewall-query-failed"],
+    [/Current network profile is Public/i, "public-profile"],
+    [/No enabled inbound allow rule/i, "no-firewall-allow"],
+  ];
+  const risks = [];
+  for (const warning of warnings) {
+    const text = String(warning || "");
+    for (const [pattern, risk] of riskMap) {
+      if (pattern.test(text) && !risks.includes(risk)) {
+        risks.push(risk);
+      }
+    }
+  }
+  return risks;
+}
+
 function withTimeout(promise, timeoutMs, label) {
   return new Promise((resolveTimeout, rejectTimeout) => {
     const timer = setTimeout(() => rejectTimeout(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
@@ -618,6 +646,17 @@ async function main() {
   assert(jsonSummary.boardSummary.includes("Windows readiness"), "JSON boardSummary has unexpected text");
   assert(jsonSummary.boardSummary.includes("Do not send passwords"), "JSON boardSummary is missing board safety reminder");
   assert(jsonSummary.boardSummary.includes("WindowsSecureAuthPath="), "JSON boardSummary is missing WindowsSecureAuthPath");
+  const expectedLanRisks = expectedLanRisksFrom(jsonSummary);
+  const expectedLanRiskText = expectedLanRisks.length > 0 ? expectedLanRisks.join(",") : "none";
+  assert(Array.isArray(jsonSummary.windowsLanRisks), "JSON windowsLanRisks must be an array");
+  assert(
+    expectedLanRisks.every((risk) => jsonSummary.windowsLanRisks.includes(risk)),
+    `JSON windowsLanRisks missing expected LAN risks: expected ${expectedLanRiskText}, got ${JSON.stringify(jsonSummary.windowsLanRisks)}`,
+  );
+  assert(
+    jsonSummary.boardSummary.includes(`WindowsLanRisk=${expectedLanRiskText}`),
+    `JSON boardSummary missing WindowsLanRisk=${expectedLanRiskText}`,
+  );
   assert(
     typeof jsonSummary.windowsSecureAuthPath === "string"
       && jsonSummary.windowsSecureAuthPath.includes("node scripts/windows/start-windows-host.mjs --host 0.0.0.0")
@@ -1001,6 +1040,10 @@ async function main() {
   assert(lines[0].includes("call=CALLING Mac Codex->Windows Codex"), "board summary is missing active currentCall");
   assert(!lines[0].includes("--status --json"), "board summary should not echo call command");
   assert(lines[0].includes("media=not-checked"), "board summary should show media=not-checked by default");
+  assert(
+    lines[0].includes(`WindowsLanRisk=${expectedLanRiskText}`),
+    `board summary missing WindowsLanRisk=${expectedLanRiskText}`,
+  );
   assert(lines[0].includes("WindowsSecureAuthPath="), "board summary should include WindowsSecureAuthPath");
   assert(lines[0].includes("--promptPassword --requirePassword"), "board summary should include prompt/require password flow");
   assert(lines[0].includes("WindowsHostMediaPs="), "board summary should include Windows host media PowerShell command");
@@ -1069,6 +1112,10 @@ async function main() {
   assert(powerShellBoardLines.length === 1, `PowerShell readiness -BoardSummary should print one line, got ${powerShellBoardLines.length}`);
   assert(powerShellBoardLines[0].includes("Windows readiness"), "PowerShell board summary has unexpected text");
   assert(powerShellBoardLines[0].includes("call=CALLING Mac Codex->Windows Codex"), "PowerShell board summary is missing active currentCall");
+  assert(
+    powerShellBoardLines[0].includes(`WindowsLanRisk=${expectedLanRiskText}`),
+    `PowerShell board summary missing WindowsLanRisk=${expectedLanRiskText}`,
+  );
   assert(powerShellBoardLines[0].includes("WindowsSecureAuthPath="), "PowerShell board summary should include WindowsSecureAuthPath");
   assert(powerShellBoardLines[0].includes("--promptPassword --requirePassword"), "PowerShell board summary should include prompt/require password flow");
   assert(powerShellBoardLines[0].includes("WindowsHostMediaPs="), "PowerShell board summary should include WindowsHostMediaPs");

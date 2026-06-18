@@ -165,8 +165,9 @@ Options:
   --json              Print machine-readable JSON summary.
   --help, -h          Show this help without running checks.
 
-Status summary labels include WindowsSecureAuthPath= for onsite true-browser
-smoke authentication without sending passwords through Agent Link Board.
+Status summary labels include WindowsLanRisk= for LAN/firewall discovery risk
+triage and WindowsSecureAuthPath= for onsite true-browser smoke authentication
+without sending passwords through Agent Link Board.
 
 Profiles:
   default             Low-risk checks only; no running host required.
@@ -820,6 +821,7 @@ function makeReadinessBoardSummary(summary) {
   const runtimeResult = summary.results.find((result) => result.label === "Windows host runtime") || null;
   const wgcSourceResult = summary.results.find((result) => result.label === "Windows WGC H.264 source comparison") || null;
   const media = formatMediaBoardSummary(summary);
+  const lanRisk = formatWindowsLanRisk(summary.windowsLanRisks);
   const state = summary.ok ? "passed" : "failed";
   const mode = summary.strict ? "strict" : summary.args.profile;
   const activeCall = summary.board?.currentCall?.active && summary.board.currentCall.needsWindows && summary.board.currentCall.fromMacSide
@@ -910,7 +912,7 @@ function makeReadinessBoardSummary(summary) {
   const probeText = probeSentences
     .map((sentence) => (sentence.endsWith(".") ? sentence : `${sentence}.`))
     .join(" ");
-  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrantStatus}${openOneTimeReverseGrant}${reverseGrantStatusNode}${openOneTimeReverseGrantNode}${reverseGrant}${reverseGrantPowerShell}${secureAuthPath}${hostMediaPowerShell}${videoSupport}${videoSupportPowerShell}${wgcSupport}${wgcSupportPowerShell}${webCodecs}${webCodecsPowerShell}${wgcBenchmark}${wgcBenchmarkPowerShell}${wgcCompare}${wgcComparePowerShell}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
+  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media}; WindowsLanRisk=${lanRisk};${activeCall} ${runtimeSentence}${reverseGrantStatus}${openOneTimeReverseGrant}${reverseGrantStatusNode}${openOneTimeReverseGrantNode}${reverseGrant}${reverseGrantPowerShell}${secureAuthPath}${hostMediaPowerShell}${videoSupport}${videoSupportPowerShell}${wgcSupport}${wgcSupportPowerShell}${webCodecs}${webCodecsPowerShell}${wgcBenchmark}${wgcBenchmarkPowerShell}${wgcCompare}${wgcComparePowerShell}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
 }
 
 function formatMediaBoardSummary(summary) {
@@ -932,6 +934,40 @@ function formatMediaBoardSummary(summary) {
   }
   if (result.ok) return "media=ok";
   return "media=failed";
+}
+
+function formatWindowsLanRisk(risks) {
+  const values = Array.isArray(risks) ? risks.filter(Boolean) : [];
+  return values.length > 0 ? values.join(",") : "none";
+}
+
+function deriveWindowsLanRisks(results) {
+  const lanResult = Array.isArray(results)
+    ? results.find((result) => result.label === "Windows host LAN/firewall")
+    : null;
+  if (!lanResult) return ["not-checked"];
+
+  const warnings = Array.isArray(lanResult.warnings) ? lanResult.warnings : [];
+  const riskMap = [
+    [/No non-loopback IPv4 LAN address/i, "no-lan-ip"],
+    [/No local TCP listener/i, "no-listener"],
+    [/not on 0\.0\.0\.0/i, "bind-address"],
+    [/No TCP probe reached/i, "tcp-unreachable"],
+    [/LAN address probes did not reach/i, "lan-probe-blocked"],
+    [/Windows firewall query failed/i, "firewall-query-failed"],
+    [/Current network profile is Public/i, "public-profile"],
+    [/No enabled inbound allow rule/i, "no-firewall-allow"],
+  ];
+  const risks = [];
+  for (const warning of warnings) {
+    const text = String(warning || "");
+    for (const [pattern, risk] of riskMap) {
+      if (pattern.test(text) && !risks.includes(risk)) {
+        risks.push(risk);
+      }
+    }
+  }
+  return risks;
 }
 
 function normalizeMediaStatus(value, ok, passed, failed) {
@@ -1398,6 +1434,7 @@ async function main() {
   const windowsSecureAuthPathValue = results.find((result) =>
     typeof result.windowsSecureAuthPath === "string" && result.windowsSecureAuthPath,
   )?.windowsSecureAuthPath || windowsSecureAuthPath(args.port);
+  const windowsLanRisks = deriveWindowsLanRisks(results);
 
   const summary = {
     ok,
@@ -1448,6 +1485,7 @@ async function main() {
     windowsWgcCompareCommand: windowsWgcCompareCommandValue,
     windowsWgcComparePowerShellCommand: windowsWgcComparePowerShellCommandValue,
     windowsSecureAuthPath: windowsSecureAuthPathValue,
+    windowsLanRisks,
     results: results.map((result) => ({
       label: result.label,
       ok: result.ok,
