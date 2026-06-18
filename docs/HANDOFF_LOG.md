@@ -17,6 +17,35 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 控制端接收远端文件时显示实时速度和预计剩余时间，并同步到诊断。
+完成内容：
+- 远端文件接收中的托盘状态现在会显示速度与预计剩余时间。
+- 全屏/监看浮层的剪贴板状态和复制/导出诊断会带同一组接收进度、速度、预计剩余时间和无新分块时长。
+- 浏览器 diagnostics-only 回归覆盖接收进度文本和诊断导出文本；本轮只改接收侧显示，不改 `clipboard_file_*` 协议，不实现断点续传。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`（失败点：远端文件接收 50% 文案还没有 `速度 1 B/s` 和 `剩余约 2 秒`）。
+- 实现后复跑：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- 收尾验证：`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`git diff --check`、行首冲突扫描。
+遗留问题：
+- 断点续传、发送侧测速和滑动平均尚未实现；真实大文件长测时需要观察速度/ETA 是否跳变明显。
+下一步建议：
+- 真实 Mac/Windows 双端文件传输时，用大文件和压缩包测试托盘、全屏/监看浮层、复制诊断三处显示是否一致；如果 ETA 抖动明显，再补滑动平均。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
 ## 2026-06-18 Mac Codex
 
 日期：2026-06-18 继续推进

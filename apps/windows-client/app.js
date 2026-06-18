@@ -5648,9 +5648,13 @@ function describeIncomingFileTransferStatus(transfer = {}) {
   const countText = fileCount > 0 ? `${fileCount} 个文件` : "远端文件";
   if (totalBytes > 0) {
     const percent = Math.min(100, Math.round((receivedBytes / totalBytes) * 100));
-    return `正在接收 ${countText}：${formatBytes(receivedBytes)}/${formatBytes(totalBytes)}，${percent}%。完成后会写入系统文件剪贴板或留在托盘。`;
+    const rateText = remoteFileTransferRateText(transfer);
+    const rateSuffix = rateText ? `，${rateText}` : "";
+    return `正在接收 ${countText}：${formatBytes(receivedBytes)}/${formatBytes(totalBytes)}，${percent}%${rateSuffix}。完成后会写入系统文件剪贴板或留在托盘。`;
   }
-  return `正在接收 ${countText}：${formatBytes(receivedBytes)}。完成后会写入系统文件剪贴板或留在托盘。`;
+  const rateText = remoteFileTransferRateText(transfer);
+  const rateSuffix = rateText ? `，${rateText}` : "";
+  return `正在接收 ${countText}：${formatBytes(receivedBytes)}${rateSuffix}。完成后会写入系统文件剪贴板或留在托盘。`;
 }
 
 function touchRemoteFileTransfer(transfer, now = Date.now()) {
@@ -5662,10 +5666,39 @@ function touchRemoteFileTransfer(transfer, now = Date.now()) {
 function remoteFileTransferProgressText(transfer = {}) {
   const receivedBytes = Math.max(0, Number(transfer.receivedBytes) || 0);
   const totalBytes = Math.max(0, Number(transfer.totalBytes) || 0);
+  const rateText = remoteFileTransferRateText(transfer);
+  const rateSuffix = rateText ? `，${rateText}` : "";
   if (totalBytes > 0) {
-    return `${formatBytes(receivedBytes)}/${formatBytes(totalBytes)}`;
+    return `${formatBytes(receivedBytes)}/${formatBytes(totalBytes)}${rateSuffix}`;
   }
-  return formatBytes(receivedBytes);
+  return `${formatBytes(receivedBytes)}${rateSuffix}`;
+}
+
+function formatRemoteTransferEta(seconds) {
+  const safeSeconds = Math.max(1, Math.ceil(Number(seconds) || 0));
+  if (safeSeconds < 60) return `${safeSeconds} 秒`;
+  const minutes = Math.ceil(safeSeconds / 60);
+  if (minutes < 60) return `${minutes} 分钟`;
+  const hours = Math.ceil(minutes / 60);
+  return `${hours} 小时`;
+}
+
+function remoteFileTransferRateText(transfer = {}, now = Date.now()) {
+  const receivedBytes = Math.max(0, Number(transfer.receivedBytes) || 0);
+  if (receivedBytes <= 0) return "";
+  const startedAt = Number(transfer.startedAt) || 0;
+  if (!startedAt) return "";
+  const lastActivityAt = Number(transfer.lastActivityAt) || now;
+  const elapsedMs = Math.max(1, lastActivityAt - startedAt);
+  const bytesPerSecond = receivedBytes / (elapsedMs / 1000);
+  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return "";
+
+  const totalBytes = Math.max(0, Number(transfer.totalBytes) || 0);
+  const remainingBytes = Math.max(0, totalBytes - receivedBytes);
+  const etaText = totalBytes > 0 && remainingBytes > 0
+    ? `，剩余约 ${formatRemoteTransferEta(remainingBytes / bytesPerSecond)}`
+    : "";
+  return `速度 ${formatBytes(Math.max(1, Math.round(bytesPerSecond)))}/s${etaText}`;
 }
 
 function rejectRemoteFileTransfer(transferId, reason, { notifyPeer = true, clipboardText = "剪贴板：远端文件接收中断" } = {}) {

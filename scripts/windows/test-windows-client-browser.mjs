@@ -2072,6 +2072,10 @@ async function verifyFileClipboardRecoveryText(session) {
             },
           ],
         });
+        const offeredTransfer = state.remoteFileTransfers.get("live-transfer");
+        if (offeredTransfer) {
+          offeredTransfer.startedAt = Date.now() - 2000;
+        }
         const statusVisibleAfterOffer = status && !status.hidden;
         const statusTextAfterOffer = status?.textContent || "";
         const statusClassAfterOffer = status?.className || "";
@@ -2183,6 +2187,8 @@ async function verifyFileClipboardRecoveryText(session) {
             statusVisibleAfterChunk &&
             statusTextAfterChunk.includes("2 B/4 B") &&
             statusTextAfterChunk.includes("50%") &&
+            statusTextAfterChunk.includes("速度 1 B/s") &&
+            statusTextAfterChunk.includes("剩余约 2 秒") &&
             statusClassAfterChunk.includes("is-busy") &&
             expiredCount === 1 &&
             statusTextAfterTimeout.includes("远端文件接收超时") &&
@@ -3248,8 +3254,8 @@ async function verifyReconnectControls(session) {
             "diagnostic-transfer",
             {
               transferId: "diagnostic-transfer",
-              totalBytes: 4,
-              receivedBytes: 2,
+              totalBytes: 4096,
+              receivedBytes: 1024,
               fileCount: 1,
               files: [
                 {
@@ -3259,8 +3265,8 @@ async function verifyReconnectControls(session) {
                   mimeType: "text/plain",
                 },
               ],
-              startedAt: Date.now() - 50000,
-              lastActivityAt: Date.now() - 45000,
+              startedAt: Date.now() - 2000,
+              lastActivityAt: Date.now() - 1000,
             },
           ],
         ]);
@@ -3456,7 +3462,9 @@ async function verifyReconnectControls(session) {
           remoteFileStatus:
             exportText.includes("- 远端文件状态：warning") && exportText.includes("远端文件接收超时"),
           remoteFileActive:
-            exportText.includes("- 正在接收远端文件：1 个文件 2 B/4 B") &&
+            exportText.includes("- 正在接收远端文件：1 个文件 1.0 KB/4.0 KB") &&
+            exportText.includes("速度") &&
+            exportText.includes("剩余约") &&
             exportText.includes("秒无新分块"),
           remoteFileReceivedCount: exportText.includes("- 最近收到远端文件：1 个"),
           remoteFileTempPath: exportText.includes("- 远端文件临时目录：C:/Temp/lan-dual-control/clip-1"),
@@ -3526,7 +3534,9 @@ async function verifyReconnectControls(session) {
           copiedText.includes("- 声音电平：37%") &&
           copiedText.includes("- 远端文件状态：warning") &&
           copiedText.includes("远端文件接收超时") &&
-          copiedText.includes("- 正在接收远端文件：1 个文件 2 B/4 B") &&
+          copiedText.includes("- 正在接收远端文件：1 个文件 1.0 KB/4.0 KB") &&
+          copiedText.includes("速度") &&
+          copiedText.includes("剩余约") &&
           copiedText.includes("- 远端文件临时目录：C:/Temp/lan-dual-control/clip-1") &&
           copiedText.includes("password=<hidden>") &&
           !copiedText.includes("should-not-export") &&
