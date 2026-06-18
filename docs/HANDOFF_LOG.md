@@ -21,6 +21,50 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows discovery 和 formal preflight 也直接给出 `MacFormalLocalSmoke=` 本机短验收入口。
+完成内容：
+- `discover-lan-hosts` 的 JSON `macFormalE2e.macFormalLocalSmokeCommand`、普通输出和 `--boardSummary` 新增 `MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host <Mac IP> --port <port> --promptPassword --boardSummary`。
+- `check-mac-formal-e2e --preflightOnly` 的 JSON、普通输出、`--boardSummary` 和 `NEED_USER_AUTH` 也新增同一条 `MacFormalLocalSmoke=`，提醒正式长测前先由 Mac 本机短验 H.264/PCM/input-log。
+- `discover-lan-hosts.ps1` 帮助说明同步该标签；专项回归覆盖 Node/PowerShell JSON、boardSummary、帮助、不泄密和真实 Mac 只读摘要。
+修改文件：
+- `scripts/windows/discover-lan-hosts.mjs`
+- `scripts/windows/discover-lan-hosts.ps1`
+- `scripts/windows/test-discover-lan-hosts.mjs`
+- `scripts/windows/check-mac-formal-e2e.mjs`
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/discover-lan-hosts.mjs`
+- `node --check scripts/windows/check-mac-formal-e2e.mjs`
+- `node --check scripts/windows/test-discover-lan-hosts.mjs`
+- `node --check scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- PowerShell 7 AST parse `discover-lan-hosts.ps1` 和 `check-mac-formal-e2e.ps1`
+- `node scripts/windows/test-windows-script-help.mjs --script discover-lan-hosts.mjs --script check-mac-formal-e2e.mjs --timeoutMs 10000`
+- `node scripts/windows/test-discover-lan-hosts.mjs --timeoutMs 45000`
+- `node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`
+- 真实只读 `discover-lan-hosts --noLocalSubnets --host 192.168.31.122 --port 43770 --requireMacHost --boardSummary --timeoutMs 1200`
+- 真实只读 `check-mac-formal-e2e --host 192.168.31.122 --port 43770 --preflightOnly --boardSummary --timeoutMs 45000`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 未执行真实密码认证、Mac 本机短验收或 input/inject；本轮只补 Windows 侧可复制入口和无密摘要。
+- 真实 Mac 当前仍上报 `maxScreenFps=30`，formal preflight 会继续提示 `FpsLimit requested=60Hz remoteMax=30Hz`。
+下一步建议：
+- 现场正式长测前，先让 Mac 端复制 discovery/formal preflight 摘要里的 `MacFormalLocalSmoke=` 做本机短验收；若仍显示 30Hz 上限，再按 `MacMaxFpsPlan=` / `MacUnattendedFormal=` 处理 LaunchAgent 上限和 loaded 门禁。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真正本机短验收需要 Mac 端/用户现场输入密码。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 恢复总览直接提供并安全提取 `MacFormalLocalSmoke=` 本机短验收入口。
 完成内容：
 - `check-windows-resume-status` 的 JSON `commands.macFormalLocalSmokeCommand`、普通输出和 `--boardSummary` 新增 `MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host <Mac IP> --port <port> --promptPassword --boardSummary`。

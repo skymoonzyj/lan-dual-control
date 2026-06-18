@@ -261,6 +261,9 @@ async function checkPowerShellHelp(args) {
     assertIncludes(result.stdout, "-BoardSummary", `${psScript} ${flag}`);
     assertIncludes(result.stdout, "-RequireMacHost", `${psScript} ${flag}`);
     assertIncludes(result.stdout, "-NoLocalSubnets", `${psScript} ${flag}`);
+    assertIncludes(result.stdout, "MacFormalLocalSmoke=", `${psScript} ${flag}`);
+    assertIncludes(result.stdout, "check-mac-formal-local-smoke.mjs", `${psScript} ${flag}`);
+    assertIncludes(result.stdout, "--promptPassword --boardSummary", `${psScript} ${flag}`);
     assertIncludes(result.stdout, "MacUnattendedFormal=", `${psScript} ${flag}`);
     assertIncludes(result.stdout, "--requireLaunchAgentMaxFps", `${psScript} ${flag}`);
     assertIncludes(result.stdout, "--requireLaunchAgentLoaded", `${psScript} ${flag}`);
@@ -290,6 +293,11 @@ async function checkFoundJson(macPort, windowsPort, args) {
   assertIncludes(payload.macFormalE2e.formalChecklistPowerShellCommand, `-Port ${macPort}`, "formal checklist PowerShell command");
   assertIncludes(payload.macFormalE2e.formalChecklistPowerShellCommand, "-PreflightOnly -CheckClientDiagnostics -BoardSummary", "formal checklist PowerShell command");
   assert(payload.macFormalE2e.manualChecklistSummary === "connection/video/audio/clipboard/input_ack/diagnostics", "manual checklist summary mismatch");
+  assertIncludes(payload.macFormalE2e.macFormalLocalSmokeCommand, "scripts/mac/check-mac-formal-local-smoke.mjs", "Mac formal local smoke command");
+  assertIncludes(payload.macFormalE2e.macFormalLocalSmokeCommand, "--host 127.0.0.1", "Mac formal local smoke command");
+  assertIncludes(payload.macFormalE2e.macFormalLocalSmokeCommand, `--port ${macPort}`, "Mac formal local smoke command");
+  assertIncludes(payload.macFormalE2e.macFormalLocalSmokeCommand, "--promptPassword", "Mac formal local smoke command");
+  assertIncludes(payload.macFormalE2e.macFormalLocalSmokeCommand, "--boardSummary", "Mac formal local smoke command");
   assertIncludes(payload.macFormalE2e.macUnattendedFormalCommand, "scripts/mac/check-mac-unattended-status.mjs", "Mac unattended formal command");
   assertIncludes(payload.macFormalE2e.macUnattendedFormalCommand, "--host 127.0.0.1", "Mac unattended formal command");
   assertIncludes(payload.macFormalE2e.macUnattendedFormalCommand, `--port ${macPort}`, "Mac unattended formal command");
@@ -304,6 +312,9 @@ async function checkFoundJson(macPort, windowsPort, args) {
   assertIncludes(payload.macFormalE2e.formalPowerShellCommand, "-PromptPassword", "formal PowerShell command");
   assertIncludes(payload.boardSummary, "FormalChecklist=", "board summary");
   assertIncludes(payload.boardSummary, "FormalChecklistPs=", "board summary");
+  assertIncludes(payload.boardSummary, "MacFormalLocalSmoke=", "board summary");
+  assertIncludes(payload.boardSummary, "check-mac-formal-local-smoke.mjs --host 127.0.0.1", "board summary");
+  assertIncludes(payload.boardSummary, "--promptPassword --boardSummary", "board summary");
   assertIncludes(payload.boardSummary, "MacUnattendedFormal=", "board summary");
   assertIncludes(payload.boardSummary, "--requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary", "board summary");
   assertIncludes(payload.boardSummary, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "board summary");
@@ -329,6 +340,9 @@ async function checkPowerShellJson(macPort, args) {
   assert(payload.macHosts.length === 1, "PowerShell JSON payload should include one Mac host");
   assertIncludes(payload.macFormalE2e.formalChecklistCommand, "--preflightOnly --checkClientDiagnostics --boardSummary", "PowerShell formal checklist command");
   assertIncludes(payload.macFormalE2e.formalChecklistPowerShellCommand, "-PreflightOnly -CheckClientDiagnostics -BoardSummary", "PowerShell formal checklist PowerShell command");
+  assertIncludes(payload.macFormalE2e.macFormalLocalSmokeCommand, "check-mac-formal-local-smoke.mjs", "PowerShell Mac formal local smoke command");
+  assertIncludes(payload.macFormalE2e.macFormalLocalSmokeCommand, `--port ${macPort}`, "PowerShell Mac formal local smoke command");
+  assertIncludes(payload.macFormalE2e.macFormalLocalSmokeCommand, "--promptPassword --boardSummary", "PowerShell Mac formal local smoke command");
   assertIncludes(payload.macFormalE2e.macUnattendedFormalCommand, "--requireLaunchAgentMaxFps", "PowerShell Mac unattended formal command");
   assertIncludes(payload.macFormalE2e.macUnattendedFormalCommand, "--requireLaunchAgentLoaded", "PowerShell Mac unattended formal command");
   assert(payload.macFormalE2e.manualChecklistSummary === "connection/video/audio/clipboard/input_ack/diagnostics", "PowerShell manual checklist summary mismatch");
@@ -345,6 +359,9 @@ async function checkBoardSummary(macPort, windowsPort, args) {
   assertIncludes(result.stdout, "check-mac-formal-e2e.mjs --host 127.0.0.1", "board summary");
   assertIncludes(result.stdout, "FormalChecklist=", "board summary");
   assertIncludes(result.stdout, "FormalChecklistPs=", "board summary");
+  assertIncludes(result.stdout, "MacFormalLocalSmoke=", "board summary");
+  assertIncludes(result.stdout, "check-mac-formal-local-smoke.mjs --host 127.0.0.1", "board summary");
+  assertIncludes(result.stdout, "--promptPassword --boardSummary", "board summary");
   assertIncludes(result.stdout, "MacUnattendedFormal=", "board summary");
   assertIncludes(result.stdout, "--requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary", "board summary");
   assertIncludes(result.stdout, "check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 127.0.0.1", "board summary");
@@ -370,6 +387,9 @@ async function checkPowerShellBoardSummary(macPort, args) {
   assertIncludes(result.stdout, "check-mac-formal-e2e.mjs --host 127.0.0.1", "PowerShell board summary");
   assertIncludes(result.stdout, "FormalChecklist=", "PowerShell board summary");
   assertIncludes(result.stdout, "FormalChecklistPs=", "PowerShell board summary");
+  assertIncludes(result.stdout, "MacFormalLocalSmoke=", "PowerShell board summary");
+  assertIncludes(result.stdout, "check-mac-formal-local-smoke.mjs --host 127.0.0.1", "PowerShell board summary");
+  assertIncludes(result.stdout, "--promptPassword --boardSummary", "PowerShell board summary");
   assertIncludes(result.stdout, "MacUnattendedFormal=", "PowerShell board summary");
   assertIncludes(result.stdout, "--requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary", "PowerShell board summary");
   assertIncludes(result.stdout, "check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 127.0.0.1", "PowerShell board summary");

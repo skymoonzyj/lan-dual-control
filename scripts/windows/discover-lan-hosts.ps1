@@ -52,6 +52,7 @@ Description:
 
 When a Mac host is found, the board summary includes:
   FormalChecklist=node scripts/windows/check-mac-formal-e2e.mjs --preflightOnly --checkClientDiagnostics --boardSummary
+  MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --promptPassword --boardSummary
   MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary
   ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics
 "@

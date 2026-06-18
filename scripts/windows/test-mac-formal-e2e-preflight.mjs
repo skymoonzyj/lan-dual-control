@@ -289,7 +289,12 @@ async function testOfflineJson(args) {
   assert(payload.command.includes("--promptPassword"), "offline JSON should include safe command");
   assert(String(payload.formalPowerShellCommand || "").includes("-PromptPassword"), "offline JSON should include safe PowerShell command");
   assert(String(payload.formalPowerShellCommand || "").includes("-HostName 127.0.0.1"), "offline JSON PowerShell command should target host");
+  assertIncludes(String(payload.macFormalLocalSmokeCommand || ""), "scripts/mac/check-mac-formal-local-smoke.mjs", "offline JSON Mac formal local smoke");
+  assertIncludes(String(payload.macFormalLocalSmokeCommand || ""), "--host 127.0.0.1", "offline JSON Mac formal local smoke");
+  assertIncludes(String(payload.macFormalLocalSmokeCommand || ""), "--port 9", "offline JSON Mac formal local smoke");
+  assertIncludes(String(payload.macFormalLocalSmokeCommand || ""), "--promptPassword --boardSummary", "offline JSON Mac formal local smoke");
   assert(String(payload.boardSummary || "").includes("offline"), "offline JSON should include board summary");
+  assertIncludes(String(payload.boardSummary || ""), "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs", "offline JSON board summary");
   assertRunPlanSafe(payload, "offline JSON run plan", { audioSkipped: false, clipboardText: true, inputMode: "log" });
   print("OK", "Offline JSON preflight is parseable");
 }
@@ -302,6 +307,8 @@ async function testOfflineBoardSummary(args) {
   assertIncludes(result.stdout, "--promptPassword", "offline board summary");
   assertIncludes(result.stdout, "Next safe PowerShell command", "offline board summary");
   assertIncludes(result.stdout, "-PromptPassword", "offline board summary");
+  assertIncludes(result.stdout, "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs", "offline board summary");
+  assertIncludes(result.stdout, "--host 127.0.0.1 --port 9 --promptPassword --boardSummary", "offline board summary");
   assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "offline board summary");
   assertNotIncludes(result.stdout + result.stderr, "Mac host password", "offline board summary");
   print("OK", "Offline board summary is secret-free");
@@ -313,6 +320,8 @@ async function testOfflineUserAuthRequest(args) {
   assertIncludes(result.stdout, "NEED_USER_AUTH:", "offline user auth request");
   assertIncludes(result.stdout, "暂时不要输入正式密码", "offline user auth request");
   assertIncludes(result.stdout, "--checkClientDiagnostics --boardSummary", "offline user auth request");
+  assertIncludes(result.stdout, "Mac 本机短验收入口", "offline user auth request");
+  assertIncludes(result.stdout, "check-mac-formal-local-smoke.mjs", "offline user auth request");
   assertNotIncludes(result.stdout + result.stderr, "Mac host password", "offline user auth request");
   print("OK", "Offline user auth request points back to preflight");
 }
@@ -357,7 +366,11 @@ async function testMockPreflightJson(args) {
     assert(payload.command.includes("--promptPassword"), "mock preflight should include safe command");
     assert(String(payload.formalPowerShellCommand || "").includes("-PromptPassword"), "mock preflight should include safe PowerShell command");
     assert(String(payload.formalPowerShellCommand || "").includes(`-Port ${port}`), "mock preflight PowerShell command should use mock port");
+    assertIncludes(String(payload.macFormalLocalSmokeCommand || ""), "scripts/mac/check-mac-formal-local-smoke.mjs", "mock preflight Mac formal local smoke");
+    assertIncludes(String(payload.macFormalLocalSmokeCommand || ""), `--port ${port}`, "mock preflight Mac formal local smoke");
+    assertIncludes(String(payload.macFormalLocalSmokeCommand || ""), "--promptPassword --boardSummary", "mock preflight Mac formal local smoke");
     assert(String(payload.boardSummary || "").includes("failedChecks=none"), "mock preflight JSON should include board summary");
+    assertIncludes(String(payload.boardSummary || ""), "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs", "mock preflight JSON board summary");
     assert(String(payload.boardSummary || "").includes("Safe formal PowerShell command"), "mock preflight JSON board summary should include PowerShell command");
     assert(String(payload.userAuthRequest || "").includes("NEED_USER_AUTH:"), "mock preflight JSON should include user auth request");
     assert(String(payload.userAuthRequest || "").includes("PowerShell 等价"), "mock preflight JSON should include PowerShell auth command");
@@ -390,13 +403,19 @@ async function testFpsLimitPreflightJson(args) {
     assertIncludes(payload.fpsLimit?.macUnattendedFormalCommand || "", "--requireLaunchAgentMaxFps", "FPS limit Mac formal command");
     assertIncludes(payload.fpsLimit?.macUnattendedFormalCommand || "", "--requireLaunchAgentLoaded", "FPS limit Mac formal command");
     assertIncludes(payload.fpsLimit?.macUnattendedFormalCommand || "", "--boardSummary", "FPS limit Mac formal command");
+    assertIncludes(String(payload.macFormalLocalSmokeCommand || ""), "scripts/mac/check-mac-formal-local-smoke.mjs", "FPS limit Mac formal local smoke");
+    assertIncludes(String(payload.macFormalLocalSmokeCommand || ""), `--port ${port}`, "FPS limit Mac formal local smoke");
+    assertIncludes(String(payload.macFormalLocalSmokeCommand || ""), "--promptPassword --boardSummary", "FPS limit Mac formal local smoke");
     assertIncludes(String(payload.boardSummary || ""), "FpsLimit requested=60Hz remoteMax=30Hz", "FPS limit board summary");
     assertIncludes(String(payload.boardSummary || ""), "MacMaxFpsPlan=node scripts/mac/install-mac-host-launch-agent.mjs", "FPS limit board summary plan");
+    assertIncludes(String(payload.boardSummary || ""), "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs", "FPS limit board summary local smoke");
     assertIncludes(String(payload.boardSummary || ""), "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs", "FPS limit board summary formal gate");
     assertIncludes(String(payload.boardSummary || ""), "--requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary", "FPS limit board summary formal gate");
     assertIncludes(String(payload.userAuthRequest || ""), "当前 Mac host 上限 30Hz", "FPS limit user auth request");
     assertIncludes(String(payload.userAuthRequest || ""), "dry-run", "FPS limit user auth request dry-run");
     assertIncludes(String(payload.userAuthRequest || ""), "强校验", "FPS limit user auth request formal gate");
+    assertIncludes(String(payload.userAuthRequest || ""), "本机短验收", "FPS limit user auth request local smoke");
+    assertIncludes(String(payload.userAuthRequest || ""), "check-mac-formal-local-smoke.mjs", "FPS limit user auth request local smoke");
     assertIncludes(String(payload.userAuthRequest || ""), "--requireLaunchAgentMaxFps", "FPS limit user auth request formal gate");
     assertIncludes(String(payload.userAuthRequest || ""), "--requireLaunchAgentLoaded", "FPS limit user auth request formal gate");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "FPS limit preflight JSON");
@@ -431,6 +450,7 @@ async function testDiscoverMockPreflightJson(args) {
     assert(payload.discoverySelection?.foundMacHosts >= 1, "discover selection should report Mac hosts");
     assert(payload.command.includes(`--port ${port}`), "safe command should use discovered port");
     assert(String(payload.formalPowerShellCommand || "").includes(`-Port ${port}`), "safe PowerShell command should use discovered port");
+    assert(String(payload.macFormalLocalSmokeCommand || "").includes(`--port ${port}`), "local smoke command should use discovered port");
     assertRunPlanSafe(payload, "discover mock JSON run plan", { audioSkipped: true, clipboardText: false, inputMode: "skipped" });
     assertNotIncludes(result.stdout + result.stderr, "test-password", "discover mock JSON");
     print("OK", "Discovery-backed mock JSON preflight selects the Mac host");
@@ -472,6 +492,8 @@ async function testMockPreflightBoardSummary(args) {
     assertIncludes(result.stdout, "Windows formal Mac E2E preflight: ready", "mock board summary");
     assertIncludes(result.stdout, "failedChecks=none", "mock board summary");
     assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "mock board summary");
+    assertIncludes(result.stdout, "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs", "mock board summary");
+    assertIncludes(result.stdout, `--port ${port} --promptPassword --boardSummary`, "mock board summary");
     assertIncludes(result.stdout, "Safe formal PowerShell command", "mock board summary");
     assertIncludes(result.stdout, "check-mac-formal-e2e.ps1", "mock board summary");
     assertIncludes(result.stdout, "Password is not included", "mock board summary");
@@ -495,6 +517,8 @@ async function testMockPreflightUserAuthRequest(args) {
     assert(result.exitCode === 0, `mock preflight user auth request failed\n${result.stdout}\n${result.stderr}`);
     assertIncludes(result.stdout, "NEED_USER_AUTH:", "mock user auth request");
     assertIncludes(result.stdout, "--promptPassword", "mock user auth request");
+    assertIncludes(result.stdout, "本机短验收", "mock user auth request");
+    assertIncludes(result.stdout, "check-mac-formal-local-smoke.mjs", "mock user auth request");
     assertIncludes(result.stdout, "PowerShell 等价", "mock user auth request");
     assertIncludes(result.stdout, "-PromptPassword", "mock user auth request");
     assertIncludes(result.stdout, "不要把密码发到联络板", "mock user auth request");
@@ -543,6 +567,7 @@ async function testMockPreflightSendUserAuthRequest(args) {
       assert(requests[0].path === "/api/message", `mock send path mismatch: ${requests[0].path}`);
       assert(requests[0].body.from === "Windows Codex", "mock send from mismatch");
       assert(String(requests[0].body.text || "").includes("NEED_USER_AUTH:"), "mock send text missing auth request");
+      assert(String(requests[0].body.text || "").includes("check-mac-formal-local-smoke.mjs"), "mock send text missing Mac formal local smoke command");
       assert(String(requests[0].body.text || "").includes("--promptPassword"), "mock send text missing safe formal command");
       assert(String(requests[0].body.text || "").includes("PowerShell 等价"), "mock send text missing PowerShell formal command");
       assert(String(requests[0].body.text || "").includes("-PromptPassword"), "mock send text missing PowerShell prompt command");

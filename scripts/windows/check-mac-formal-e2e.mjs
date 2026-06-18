@@ -396,6 +396,12 @@ function makeMacUnattendedFormalCommand(report) {
   return `node scripts/mac/check-mac-unattended-status.mjs --host ${host} --port ${port} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`;
 }
 
+function makeMacFormalLocalSmokeCommand(report) {
+  const host = report.target?.host || defaults.host;
+  const port = Number(report.target?.port) || defaults.port;
+  return `node scripts/mac/check-mac-formal-local-smoke.mjs --host ${host} --port ${port} --promptPassword --boardSummary`;
+}
+
 function makeFpsLimitStatus(report) {
   const requestedFps = positiveNumber(report.runPlan?.video?.fps);
   const maxScreenFps = positiveNumber(report.capabilities?.maxScreenFps);
@@ -433,6 +439,7 @@ function makeBoardSummary(report, outcome = "preflight") {
       "Password was not requested and is not included.",
       `Next safe command after Mac host is online: ${report.command}.`,
       `Next safe PowerShell command after Mac host is online: ${report.formalPowerShellCommand}.`,
+      `MacFormalLocalSmoke=${report.macFormalLocalSmokeCommand}.`,
       "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
       "Inject was not used and still needs explicit user confirmation.",
     ].join(" ");
@@ -461,6 +468,7 @@ function makeBoardSummary(report, outcome = "preflight") {
     `Capabilities h264=${statusFlag(report.capabilities?.h264Stream)} audio=${report.capabilities?.audioMode || statusFlag(report.capabilities?.audio)} clipboardText=${statusFlag(report.capabilities?.clipboardText)} clipboardFile=${statusFlag(report.capabilities?.clipboardFile)} inputMode=${report.capabilities?.inputMode || "missing"} mock=${statusFlag(report.capabilities?.mock)} maxScreenFps=${report.capabilities?.maxScreenFps || "unknown"}.`,
     fpsLimitLine,
     `Permissions screen=${statusFlag(permissions.screenRecording)} accessibility=${statusFlag(permissions.accessibility)} inputMonitoring=${statusFlag(permissions.inputMonitoring)}; displays=${summarizeDisplays(report)}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
+    `MacFormalLocalSmoke=${report.macFormalLocalSmokeCommand}.`,
     "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
     `Safe formal command: ${report.command}. Password is not included; inject was not used and still needs explicit user confirmation.`,
     `Safe formal PowerShell command: ${report.formalPowerShellCommand}. Password is not included; inject was not used and still needs explicit user confirmation.`,
@@ -476,6 +484,7 @@ function makeUserAuthRequest(report) {
     return [
       `NEED_USER_AUTH: 暂时不要输入正式密码，Windows 侧正式 Mac E2E 预检尚未 ready，target=${target}，failedChecks=${failedChecks}。`,
       `位置/步骤：先处理预检问题后重跑 node scripts/windows/check-mac-formal-e2e.mjs --host ${report.target.host} --port ${report.target.port} --preflightOnly --checkClientDiagnostics --boardSummary。`,
+      `Mac 本机短验收入口：${report.macFormalLocalSmokeCommand}。`,
       "处理后请回复 预检已通过。",
     ].join(" ");
   }
@@ -488,6 +497,7 @@ function makeUserAuthRequest(report) {
   return [
     `NEED_USER_AUTH: 正式 Mac 端到端验收需要你在 Windows 本机隐藏输入 Mac host 正式密码，target=${target}。`,
     fpsLimitText,
+    `正式长验收前建议 Mac 端先跑本机短验收：${report.macFormalLocalSmokeCommand}。`,
     `位置/步骤：在 E:\\codex\\lan-dual-control 运行 ${report.command}。`,
     `PowerShell 等价：${report.formalPowerShellCommand}。`,
     "不要把密码发到联络板；本命令默认不执行 inject，inject 仍需你另行明确确认。",
@@ -496,6 +506,7 @@ function makeUserAuthRequest(report) {
 }
 
 function attachBoardSummary(report, outcome = "preflight") {
+  report.macFormalLocalSmokeCommand = makeMacFormalLocalSmokeCommand(report);
   report.fpsLimit = makeFpsLimitStatus(report);
   report.boardSummary = makeBoardSummary(report, outcome);
   report.userAuthRequest = makeUserAuthRequest(report);
@@ -827,6 +838,7 @@ function printPreflightReport(report) {
     print("ERROR", `Mac host discovery offline: ${report.error?.message || "unknown error"}`);
     print("INFO", `Target: ${report.target.host}:${report.target.port}`);
     print("INFO", "Ask Mac side to confirm the host is running before entering the password.");
+    print("INFO", `Mac formal local smoke: ${report.macFormalLocalSmokeCommand}`);
     printRunPlan(report.runPlan);
     return;
   }
@@ -848,6 +860,7 @@ function printPreflightReport(report) {
   for (const check of report.checks) {
     print(check.ok ? "OK" : "WARN", `${check.name}: ${check.detail}`);
   }
+  print("INFO", `Mac formal local smoke: ${report.macFormalLocalSmokeCommand}`);
   print("INFO", `Formal command: ${report.command}`);
   printRunPlan(report.runPlan);
 }
