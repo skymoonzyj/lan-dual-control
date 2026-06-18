@@ -212,6 +212,10 @@ Machine-readable JSON fields:
                             Secret-free foreground start command preserving the
                             checked port; it prompts locally and never embeds
                             a password in argv.
+  commands.macMaxFpsSafeStartCommand
+                            Secret-free foreground start command for the formal
+                            60Hz target; it prompts locally, never embeds a
+                            password in argv, and does not send input.
   commands.macLaunchAgentPlanCommand
                             Secret-free LaunchAgent dry-run planner command.
                             It prints a plist plan and manual load commands
@@ -613,6 +617,7 @@ function checkMaxScreenFps(discoveryDetails, args) {
       maxScreenFps,
       formalTargetMaxScreenFps,
       limited: Boolean(warning),
+      macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
       macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
     },
   };
@@ -694,6 +699,7 @@ function formatReadinessBoardSummary(summary) {
   return [
     `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${hostMedia ? `; ${hostMedia}` : ""}; ${formatBoardCallSummary(summary.board)}.`,
     `MacHostSafeStart=${summary.commands?.macHostSafeStartCommand || makeMacHostSafeStartCommand(summary.args || {})}.`,
+    `MacMaxFpsSafeStart=${summary.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(summary.args || {})}.`,
     `MacLaunchAgentPlan=${summary.commands?.macLaunchAgentPlanCommand || makeMacLaunchAgentPlanCommand(summary.args || {})}.`,
     `MacMaxFpsPlan=${summary.commands?.macMaxFpsPlanCommand || makeMacMaxFpsPlanCommand(summary.args || {})}.`,
     `MacUnattendedFormal=${summary.commands?.macUnattendedFormalCommand || makeMacUnattendedFormalCommand(summary.args || {})}.`,
@@ -759,6 +765,20 @@ function makeMacHostSafeStartCommand(args = {}) {
     "0.0.0.0",
     "--port",
     String(args.port || 43770),
+  ].join(" ");
+}
+
+function makeMacMaxFpsSafeStartCommand(args = {}) {
+  return [
+    "node scripts/mac/start-mac-host.mjs",
+    "--promptPassword",
+    "--requirePassword",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    String(args.port || 43770),
+    "--maxScreenFps",
+    String(formalTargetMaxScreenFps),
   ].join(" ");
 }
 
@@ -1055,7 +1075,7 @@ async function checkDiscovery(args) {
       probe: { host: args.host, port: args.port },
       currentBuildId: args.currentBuildId || "",
       error: { message: error.message },
-      suggestions: [makeMacHostSafeStartCommand(args)],
+      suggestions: [makeMacHostSafeStartCommand(args), makeMacMaxFpsSafeStartCommand(args)],
     };
     if (args.requireOpen) {
       return { ok: false, summary, errors: [summary], details };
@@ -1272,6 +1292,7 @@ async function main() {
     warnings: warnings.length,
     commands: {
       macHostSafeStartCommand: makeMacHostSafeStartCommand(args),
+      macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
       macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
       macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
       macUnattendedFormalCommand: makeMacUnattendedFormalCommand(args),
@@ -1311,6 +1332,8 @@ async function main() {
     if (!ok && !args.probeHost) {
       print("INFO", "For deeper validation, rerun with --probeHost, --probeVideo, --probeAudio, or --probeInputLog as needed.", args);
     }
+    print("NEXT", `Mac host safe start: ${summary.commands.macHostSafeStartCommand}`, args);
+    print("NEXT", `Mac 60Hz safe foreground start: ${summary.commands.macMaxFpsSafeStartCommand}`, args);
     print("NEXT", `Mac LaunchAgent dry-run plan: ${summary.commands.macLaunchAgentPlanCommand}`, args);
     print("NEXT", `Mac max FPS dry-run plan: ${summary.commands.macMaxFpsPlanCommand}`, args);
     print("NEXT", `Mac unattended formal 60Hz gate: ${summary.commands.macUnattendedFormalCommand}`, args);

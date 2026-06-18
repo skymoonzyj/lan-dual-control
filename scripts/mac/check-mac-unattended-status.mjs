@@ -69,6 +69,10 @@ Machine-readable JSON fields:
                                   LaunchAgent maxScreenFps and loaded status.
   commands.macHostSafeStart      Secret-free foreground Mac host safe-start
                                   command; prompts for password locally.
+  commands.macMaxFpsSafeStart    Secret-free foreground Mac host safe-start
+                                  command for the formal 60Hz target; prompts
+                                  locally, never embeds a password, and does
+                                  not send input.
   commands.hostReadiness         Follow-up Mac host readiness command.
 
 Examples:
@@ -415,9 +419,9 @@ function buildFindings({ args, host, launchAgent, power }) {
   } else if (!launchAgent.labelMatches) {
     addFinding(findings, "warning", "launch-agent-label", `LaunchAgent label is ${launchAgent.label}; expected ${args.label}.`);
   } else if (launchAgent.readable && launchAgent.maxScreenFps === null) {
-    addFinding(findings, launchAgentMaxFpsLevel, "launch-agent-max-fps", `LaunchAgent maxScreenFps is not explicit; start helper default is 30FPS, below the formal ${formalTargetMaxScreenFps}Hz target.`);
+    addFinding(findings, launchAgentMaxFpsLevel, "launch-agent-max-fps", `LaunchAgent maxScreenFps is not explicit; start helper default is 30FPS, below the formal ${formalTargetMaxScreenFps}Hz target. For foreground validation use ${makeMacMaxFpsSafeStartCommand(args)}; for persistence review ${makeLaunchAgentPlanCommand(args, { maxScreenFps: formalTargetMaxScreenFps })}.`);
   } else if (launchAgent.readable && launchAgent.maxScreenFps < formalTargetMaxScreenFps) {
-    addFinding(findings, launchAgentMaxFpsLevel, "launch-agent-max-fps", `LaunchAgent maxScreenFps=${launchAgent.maxScreenFps}; formal ${formalTargetMaxScreenFps}Hz validation will keep reporting a remote FPS limit until the max-FPS plan is reviewed.`);
+    addFinding(findings, launchAgentMaxFpsLevel, "launch-agent-max-fps", `LaunchAgent maxScreenFps=${launchAgent.maxScreenFps}; formal ${formalTargetMaxScreenFps}Hz validation will keep reporting a remote FPS limit until the foreground 60Hz safe start or max-FPS LaunchAgent plan is used: ${makeMacMaxFpsSafeStartCommand(args)}; dry-run plan: ${makeLaunchAgentPlanCommand(args, { maxScreenFps: formalTargetMaxScreenFps })}.`);
   }
   if (args.requireLaunchAgentLoaded && !launchAgent.launchctl.checked) {
     addFinding(findings, "blocker", "launch-agent-loaded-unchecked", `LaunchAgent ${args.label} loaded status was not checked.`);
@@ -440,6 +444,7 @@ function makeCommands(args) {
     launchAgentPlan: makeLaunchAgentPlanCommand(args),
     macMaxFpsPlan: makeLaunchAgentPlanCommand(args, { maxScreenFps: formalTargetMaxScreenFps }),
     macHostSafeStart: makeMacHostSafeStartCommand(args),
+    macMaxFpsSafeStart: makeMacMaxFpsSafeStartCommand(args),
     hostStatus: `node scripts/mac/start-mac-host.mjs --status --host ${args.host} --port ${args.port} --boardSummary`,
     hostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     startHost: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port}`,
@@ -472,6 +477,20 @@ function makeMacHostSafeStartCommand(args) {
     "0.0.0.0",
     "--port",
     String(args.port),
+  ].join(" ");
+}
+
+function makeMacMaxFpsSafeStartCommand(args) {
+  return [
+    "node scripts/mac/start-mac-host.mjs",
+    "--promptPassword",
+    "--requirePassword",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    String(args.port),
+    "--maxScreenFps",
+    String(formalTargetMaxScreenFps),
   ].join(" ");
 }
 
@@ -542,7 +561,7 @@ function makeBoardSummary(report) {
   const agentMaxFps = report.launchAgent.maxScreenFps === null ? "unknown" : String(report.launchAgent.maxScreenFps);
   return [
     `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
-    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; HostReadiness=${report.commands.hostReadiness}.`,
+    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; HostReadiness=${report.commands.hostReadiness}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
@@ -612,6 +631,7 @@ function printHuman(report) {
   console.log(`- LaunchAgent plan: ${report.commands.launchAgentPlan}`);
   console.log(`- Mac max FPS plan: ${report.commands.macMaxFpsPlan}`);
   console.log(`- Mac host safe start: ${report.commands.macHostSafeStart}`);
+  console.log(`- Mac 60Hz safe foreground start: ${report.commands.macMaxFpsSafeStart}`);
   console.log(`- host readiness: ${report.commands.hostReadiness}`);
   console.log(report.boardSummary);
 }
