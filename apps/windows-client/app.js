@@ -2495,6 +2495,40 @@ function getOutgoingFileTransferExportStatus() {
   return compactExportStatusText(`${statusText}${fileText}`, 220);
 }
 
+function getOutgoingFileTransferSuggestionExportStatus() {
+  const transfer = state.fileTransferActive && state.outgoingFileTransfer
+    ? state.outgoingFileTransfer
+    : state.lastOutgoingFileTransfer;
+  if (!transfer) return "-";
+  if (transfer.status === "remote-result" && transfer.accepted) return "-";
+
+  const reason = String(transfer.reason || transfer.error || "");
+  const canRetry = Boolean(transfer.canRetry);
+  if (state.fileTransferActive || transfer.status === "sending") {
+    return "保持连接并等待本机分块发送完成，暂时不要重复点击发送。";
+  }
+  if (transfer.status === "sent") {
+    return canRetry
+      ? "继续等待对端确认；如果长时间无结果，可点击“重新发送”或让对端检查文件剪贴板能力。"
+      : "继续等待对端确认；如果长时间无结果，请重新选择文件或让对端检查文件剪贴板能力。";
+  }
+  if (transfer.status === "remote-result" && !transfer.accepted) {
+    if (canRetry) {
+      const timeoutText = /确认超时|没有收到结果|超时/.test(reason)
+        ? "确认超时后"
+        : "对端接收失败后";
+      return `点击“重新发送”；${timeoutText}若再次失败，让对端检查文件剪贴板能力、权限或磁盘空间。`;
+    }
+    return "需要重新选择文件后再发送；同时让对端检查文件剪贴板能力、权限或磁盘空间。";
+  }
+  if (transfer.status === "failed") {
+    return canRetry
+      ? "点击“重新发送”；若继续失败，先检查连接状态，再重新发送。"
+      : "需要重新选择文件后再发送；如果继续失败，先检查连接状态。";
+  }
+  return "-";
+}
+
 function syncFloatingControlStatus() {
   if (elements.floatingFullscreenHint) {
     elements.floatingFullscreenHint.textContent = state.immersiveFullscreen
@@ -3675,6 +3709,7 @@ function buildDiagnosticsQuickSummary({
   remoteFileExport,
   clipboardExport,
   outgoingFileExport,
+  outgoingFileSuggestionExport,
   videoExport,
   audioExport,
   floatingControlExport,
@@ -3700,6 +3735,7 @@ function buildDiagnosticsQuickSummary({
     `- 远端文件：${remoteFileExport.summary}`,
     `- 剪贴板：${clipboardExport}`,
     ...(outgoingFileExport && outgoingFileExport !== "-" ? [`- 本机发送文件：${outgoingFileExport}`] : []),
+    ...(outgoingFileSuggestionExport && outgoingFileSuggestionExport !== "-" ? [`- 本机发送建议：${outgoingFileSuggestionExport}`] : []),
     `- 视频：${videoExport}`,
     `- 声音：${audioExport.summary}`,
     `- 输入：${inputExport}`,
@@ -3730,6 +3766,7 @@ function buildLogExportText() {
   const remoteFileExport = getRemoteFileTransferExportStatus();
   const clipboardExport = getClipboardExportStatus();
   const outgoingFileExport = getOutgoingFileTransferExportStatus();
+  const outgoingFileSuggestionExport = getOutgoingFileTransferSuggestionExportStatus();
   const videoExport = getVideoExportStatus();
   const audioExport = getAudioExportStatus();
   const floatingControlExport = getFloatingControlExportStatus();
@@ -3765,6 +3802,7 @@ function buildLogExportText() {
       remoteFileExport,
       clipboardExport,
       outgoingFileExport,
+      outgoingFileSuggestionExport,
       videoExport,
       audioExport,
       floatingControlExport,
@@ -3821,6 +3859,7 @@ function buildLogExportText() {
     `- 剪贴板：${settings.clipboard ? "开启" : "关闭"}`,
     `- 剪贴板状态：${clipboardExport}`,
     `- 本机发送文件：${outgoingFileExport}`,
+    `- 本机发送建议：${outgoingFileSuggestionExport}`,
     `- 全屏浮层模式：${floatingControlExport.mode}`,
     `- 全屏浮层摘要：${floatingControlExport.summary}`,
     `- 全屏浮层提示：${floatingControlExport.hint}`,

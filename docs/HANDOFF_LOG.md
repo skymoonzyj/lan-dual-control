@@ -50,6 +50,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端复制/导出诊断给出本机发送文件下一步建议。
+完成内容：
+- 复制/导出诊断新增“本机发送建议”行，独立于“本机发送文件”状态。
+- 确认超时、对端拒收或本机发送失败时，报告会提示点击“重新发送”；重复失败时提示让对端检查文件剪贴板能力、权限或磁盘空间。
+- 对端已接收成功时不输出建议，避免正常报告被无关操作提示打扰。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`（失败点：快速摘要和详细报告没有“本机发送建议”）。
+- 实现后复跑同一 diagnostics-only 命令通过。
+遗留问题：
+- 这仍是诊断和现场操作提示增强，不是断点续传。
+下一步建议：
+- 真机大文件/压缩包长测时观察“本机发送文件”和“本机发送建议”是否足够指导重发或对端排查。
+是否改了协议：否；只改 Windows 控制端本地诊断导出。
+是否需要另一端配合：暂不需要；真机长测时再请 Mac 端配合文件复制/接收。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端复制/导出诊断单独显示本机发送文件状态。
 完成内容：
 - 复制/导出诊断新增“本机发送文件”摘要，独立于“剪贴板状态”和“远端文件”。

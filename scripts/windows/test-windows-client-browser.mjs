@@ -3934,6 +3934,10 @@ async function verifyReconnectControls(session) {
             exportText.includes("- 本机发送文件：") &&
             exportText.includes("对端确认超时") &&
             exportText.includes("可重新发送"),
+          quickSummaryOutgoingFileSuggestion:
+            exportText.includes("- 本机发送建议：") &&
+            exportText.includes("点击“重新发送”") &&
+            exportText.includes("检查文件剪贴板能力"),
           quickSummaryAudio:
             exportText.includes("- 声音：已接收，等待播放") &&
             exportText.includes("音量 33%") &&
@@ -4066,6 +4070,9 @@ async function verifyReconnectControls(session) {
             exportText.includes("pending-timeout.zip") &&
             exportText.includes("对端确认超时") &&
             exportText.includes("可重新发送"),
+          outgoingFileSuggestion:
+            exportText.includes("- 本机发送建议：点击“重新发送”") &&
+            exportText.includes("让对端检查文件剪贴板能力"),
           runtimeInput: exportText.includes("- 输入事件：7（安全日志，不会真正控制 / 已记录）"),
           remoteFileStatus:
             exportText.includes("- 远端文件状态：warning") && exportText.includes("远端文件接收超时"),
@@ -4140,6 +4147,9 @@ async function verifyReconnectControls(session) {
           copiedText.includes("pending-timeout.zip") &&
           copiedText.includes("对端确认超时") &&
           copiedText.includes("可重新发送") &&
+          copiedText.includes("- 本机发送建议：") &&
+          copiedText.includes("点击“重新发送”") &&
+          copiedText.includes("让对端检查文件剪贴板能力") &&
           copiedText.includes("- 输入：7（安全日志，不会真正控制 / 已记录）") &&
           copiedText.includes("- 输入事件：7（安全日志，不会真正控制 / 已记录）") &&
           copiedText.includes("- 声音状态：已接收，等待播放") &&
