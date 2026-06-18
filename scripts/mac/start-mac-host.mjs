@@ -188,6 +188,10 @@ Machine-readable JSON fields:
                              Secret-free low-risk Mac host readiness command;
                              it reads host and Agent Link Board state, prints a
                              one-line summary, and does not request a password.
+  commands.macFormalLocalSmokeCommand
+                             Secret-free local H.264/PCM/input-log smoke
+                             command for the checked port. It prompts locally
+                             and never embeds a password in argv.
   commands.ephemeralStartCommand
                              Secret-free temporary discovery/runtime start
                              command preserving the checked port; it generates
@@ -421,6 +425,18 @@ function makeMacHostReadinessCommand(args) {
   ].join(" ");
 }
 
+function makeMacFormalLocalSmokeCommand(args) {
+  return [
+    "node scripts/mac/check-mac-formal-local-smoke.mjs",
+    "--host",
+    statusProbeHost(args),
+    "--port",
+    String(args.port),
+    "--promptPassword",
+    "--boardSummary",
+  ].join(" ");
+}
+
 function makeEphemeralStartCommand(args) {
   return [
     "node scripts/mac/start-mac-host.mjs",
@@ -592,6 +608,7 @@ function formatStatusBoardSummary(payload) {
       `MacHostSafeStart=${payload.commands?.safeStartCommand || "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword"}.`,
       `MacMaxFpsSafeStart=${payload.commands?.macMaxFpsSafeStartCommand || "not-available"}.`,
       `MacHostReadiness=${payload.commands?.macHostReadinessCommand || "not-available"}.`,
+      `MacFormalLocalSmoke=${payload.commands?.macFormalLocalSmokeCommand || "not-available"}.`,
       `Next: start safely with ${payload.commands?.safeStartCommand || "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword"}.`,
       `MacLaunchAgentPlan=${payload.commands?.macLaunchAgentPlanCommand || "not-available"}.`,
       `MacMaxFpsPlan=${payload.commands?.macMaxFpsPlanCommand || "not-available"}.`,
@@ -622,6 +639,7 @@ function formatStatusBoardSummary(payload) {
     `MacHostSafeStart=${payload.commands?.safeStartCommand || "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword"}.`,
     `MacMaxFpsSafeStart=${payload.commands?.macMaxFpsSafeStartCommand || "not-available"}.`,
     `MacHostReadiness=${payload.commands?.macHostReadinessCommand || "not-available"}.`,
+    `MacFormalLocalSmoke=${payload.commands?.macFormalLocalSmokeCommand || "not-available"}.`,
     `MacLaunchAgentPlan=${payload.commands?.macLaunchAgentPlanCommand || "not-available"}.`,
     `MacMaxFpsPlan=${payload.commands?.macMaxFpsPlanCommand || "not-available"}.`,
     `MacUnattendedFormal=${payload.commands?.macUnattendedFormalCommand || "not-available"}.`,
@@ -913,6 +931,7 @@ async function printStatus(args) {
         safeStartCommand: makeSafeStartCommand(args),
         macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
         macHostReadinessCommand: makeMacHostReadinessCommand(args),
+        macFormalLocalSmokeCommand: makeMacFormalLocalSmokeCommand(args),
         ephemeralStartCommand: makeEphemeralStartCommand(args),
         macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
         macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
@@ -960,6 +979,7 @@ async function printStatus(args) {
     console.log(`[INFO] Mac host safe foreground start: ${payload.commands.safeStartCommand}`);
     console.log(`[INFO] Mac host 60Hz safe foreground start: ${payload.commands.macMaxFpsSafeStartCommand}`);
     console.log(`[INFO] Mac host readiness: ${payload.commands.macHostReadinessCommand}`);
+    console.log(`[INFO] Mac formal local smoke: ${payload.commands.macFormalLocalSmokeCommand}`);
     console.log(`[INFO] Mac host LaunchAgent dry-run plan: ${payload.commands.macLaunchAgentPlanCommand}`);
     console.log(`[INFO] Mac host max FPS dry-run plan: ${payload.commands.macMaxFpsPlanCommand}`);
     console.log(`[INFO] Mac host unattended formal gate: ${payload.commands.macUnattendedFormalCommand}`);
@@ -980,6 +1000,7 @@ async function printStatus(args) {
         safeStartCommand: makeSafeStartCommand(args),
         macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
         macHostReadinessCommand: makeMacHostReadinessCommand(args),
+        macFormalLocalSmokeCommand: makeMacFormalLocalSmokeCommand(args),
         ephemeralStartCommand: makeEphemeralStartCommand(args),
         macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
         macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
@@ -1016,6 +1037,7 @@ async function printStatus(args) {
     console.log(`[INFO] Start safely with: ${payload.commands.safeStartCommand}`);
     console.log(`[INFO] For formal 60Hz foreground start: ${payload.commands.macMaxFpsSafeStartCommand}`);
     console.log(`[INFO] Mac host readiness: ${payload.commands.macHostReadinessCommand}`);
+    console.log(`[INFO] After host is online, run local formal smoke: ${payload.commands.macFormalLocalSmokeCommand}`);
     console.log(`[INFO] For temporary discovery/runtime diagnostics without sharing a password: ${payload.commands.ephemeralStartCommand}`);
     console.log(`[INFO] Mac host LaunchAgent dry-run plan: ${payload.commands.macLaunchAgentPlanCommand}`);
     console.log(`[INFO] Mac host max FPS dry-run plan: ${payload.commands.macMaxFpsPlanCommand}`);
