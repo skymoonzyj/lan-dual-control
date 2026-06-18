@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac resume 在旧 host build 时也给出明确安全处理动作。
+完成内容：
+- `check-mac-resume-status --json/--boardSummary` 现在遇到 Mac host runtime 源码已变化、当前运行 host 仍是旧 build 时，输出 `suggestedAction=restart-mac-host-safely`。
+- JSON 新增 `suggestedAction.id/reason/commands`，包含安全顺序：`MacHostStop` -> `MacHostSafeStart` 或 `MacMaxFpsSafeStart` -> `MacResumeStatus`。
+- `MacResumeStatus` 的摘要与上一轮 heartbeat 对齐；这只是只读建议，不会自动停止旧 host、不会启动新 host、不会弹密码、不会认证 WebSocket，也不会发送 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000` 失败在旧 build 缺 `restart-mac-host-safely` 结构化建议。
+- 绿灯：实现后复跑同一自测通过。
+遗留问题：
+- 当前本机 Mac host 仍是旧 build；本轮没有重启它，因为安全启动需要用户在本机可见密码提示里授权。
+下一步建议：
+- 白天正式验收前，看到 Mac resume 或 heartbeat 的 `suggestedAction=restart-mac-host-safely` 时，按摘要顺序先停旧本机 host，再由用户授权安全前台启动，最后跑 `MacResumeStatus` / `MacHostMedia` 确认 build 和媒体基线。
+是否改了协议：否；只补 Mac resume 的只读建议字段和摘要文案。
+是否需要另一端配合：本轮不需要；Windows 端可后续按需消费 `MacResumeStatus` 里的同名 suggestedAction。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac heartbeat 在旧 host build 时给出明确安全处理动作。
 完成内容：
 - `check-mac-heartbeat --json/--boardSummary` 现在遇到 `mac-host-build-stale` / `restart recommended` 时输出 `suggestedAction=restart-mac-host-safely`。

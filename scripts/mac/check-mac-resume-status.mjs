@@ -796,6 +796,18 @@ function makeMacMaxFpsSafeStartCommand(args) {
   ].join(" ");
 }
 
+function makeMacResumeStatusCommand(args) {
+  return [
+    "node scripts/mac/check-mac-resume-status.mjs",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--checkBoard",
+    "--boardSummary",
+  ].join(" ");
+}
+
 function makeMacHostStopCommand(args) {
   return [
     "node scripts/mac/start-mac-host.mjs",
@@ -1045,6 +1057,23 @@ function formatHeartbeatWatcherSummary(watcher) {
   return `heartbeatWatcher=${state} ${heartbeat} ${run}`;
 }
 
+function buildSuggestedAction(report) {
+  if (report.host?.online && report.host?.buildDiff?.severity === "restart-recommended") {
+    return {
+      id: "restart-mac-host-safely",
+      reason: "Mac host runtime build is stale; stop the old local host, restart with a visible password prompt, then rerun MacResumeStatus.",
+      commands: {
+        macHostStopCommand: report.commands.macHostStopCommand,
+        macHostSafeStartCommand: report.commands.macHostSafeStartCommand,
+        macMaxFpsSafeStartCommand: report.commands.macMaxFpsSafeStartCommand,
+        macResumeStatusCommand: report.commands.macResumeStatusCommand,
+      },
+      boardSummary: "suggestedAction=restart-mac-host-safely actionCommands=MacHostStop->MacHostSafeStart-or-MacMaxFpsSafeStart->MacResumeStatus",
+    };
+  }
+  return null;
+}
+
 function formatBoardSummary(report) {
   const { git, host, board, currentBuildId, recommendations, macHeartbeatWatcher } = report;
   const repoState = `${currentBuildId || "unknown"} ${git.clean ? "clean" : `dirty:${git.changes.length}`}`;
@@ -1060,6 +1089,7 @@ function formatBoardSummary(report) {
   const findingSummary = formatRecommendationSummary(blockerItems, warningItems);
   const callSummary = formatBoardCallSummary(board);
   const heartbeatWatcherSummary = formatHeartbeatWatcherSummary(macHeartbeatWatcher);
+  const suggestedActionSummary = report.suggestedAction?.boardSummary ? ` ${report.suggestedAction.boardSummary}` : "";
 
   if (!host.online) {
     return [
@@ -1104,7 +1134,7 @@ function formatBoardSummary(report) {
 
   return [
     `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}; ${heartbeatWatcherSummary}.`,
-    `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
+    `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedActionSummary}.`,
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
     `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
     `MacHostStop=${report.commands.macHostStopCommand}.`,
@@ -1226,6 +1256,9 @@ function printReport(report) {
   console.log(`[NEXT] Mac heartbeat background stop: ${report.commands.macHeartbeatStopCommand}`);
   console.log(`[NEXT] Mac client copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
   console.log(`[NEXT] Mac script help safety check: ${report.commands.macScriptHelpCommand}`);
+  if (report.suggestedAction?.id) {
+    console.log(`[NEXT] Suggested action: ${report.suggestedAction.id} · ${report.suggestedAction.reason}`);
+  }
   console.log(report.ok ? "[OK] Resume status passed" : "[FAIL] Resume status needs attention");
 }
 
@@ -1264,6 +1297,7 @@ async function main() {
       macHostMediaCommand: makeMediaReadinessBoardSummaryCommand(args),
       macHostSafeStartCommand: makeMacHostSafeStartCommand(args),
       macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
+      macResumeStatusCommand: makeMacResumeStatusCommand(args),
       macHostStopCommand: makeMacHostStopCommand(args),
       macLaunchAgentLoadCommand: makeMacLaunchAgentLoadCommand(),
       macLaunchAgentPrintCommand: makeMacLaunchAgentPrintCommand(),
@@ -1291,6 +1325,7 @@ async function main() {
     },
     recommendations,
   };
+  report.suggestedAction = buildSuggestedAction(report);
   report.boardSummary = formatBoardSummary(report);
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));

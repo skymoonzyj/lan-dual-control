@@ -262,6 +262,21 @@ function assertMacHostStopCommand(command, label) {
   assert(!command.includes("inject"), `${label} should not instruct injection`);
 }
 
+function assertMacResumeStatusCommand(command, label) {
+  assert(/check-mac-resume-status\.mjs/.test(command), `${label} should use check-mac-resume-status`);
+  assert(command.includes("--host"), `${label} should keep the target host explicit`);
+  assert(command.includes("--port"), `${label} should keep the target port explicit`);
+  assert(command.includes("--checkBoard"), `${label} should read Agent Link Board`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!command.includes("--forceCall"), `${label} should not replace an Agent Link Board call`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+  assert(!command.includes("input_event"), `${label} should not send input`);
+  assert(!command.includes("inject"), `${label} should not instruct injection`);
+}
+
 function assertMacLaunchAgentLoadCommand(command, label) {
   assert(command.includes("launchctl bootstrap"), `${label} should use launchctl bootstrap`);
   assert(command.includes("$(id -u)"), `${label} should target the current GUI user`);
@@ -511,6 +526,24 @@ function assertMacScriptHelpCommand(command, label) {
   assert(!command.includes("--password"), `${label} should not embed a password argument`);
   assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
   assert(!command.includes("--checkBoard"), `${label} should not read Agent Link Board`);
+}
+
+function getRuntimeBuildBeforeLatestMacHostChange() {
+  const latest = spawnSync("git", ["log", "--format=%H", "-1", "--", "apps/mac-host/Sources"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 5000,
+  });
+  const latestCommit = String(latest.stdout || "").trim();
+  assert(latest.status === 0 && latestCommit, "should find latest Mac host source commit");
+  const parent = spawnSync("git", ["rev-parse", "--short", `${latestCommit}^`], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 5000,
+  });
+  const parentCommit = String(parent.stdout || "").trim();
+  assert(parent.status === 0 && parentCommit, "should find parent of latest Mac host source commit");
+  return parentCommit;
 }
 
 function checkHelp(args) {
@@ -887,7 +920,9 @@ async function checkMaxFpsPlanWarning(args) {
     assertMacLaunchAgentPrintCommand(payload.commands?.macLaunchAgentPrintCommand || "", "max-FPS JSON LaunchAgent print command");
     assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand || "", "max-FPS JSON planner command");
     assert(payload.recommendations.some((item) => item.id === "fps-limit" && item.level === "warning" && /maxScreenFps=30/.test(item.text)), "max-FPS limit should create a warning recommendation");
+    assert(payload.suggestedAction?.id !== "restart-mac-host-safely", "max-FPS-only warning should not suggest a host restart action");
     assert(/warnings=[^.]*fps-limit/.test(String(payload.boardSummary || "")), "max-FPS boardSummary should include fps-limit warning ID");
+    assert(!String(payload.boardSummary || "").includes("suggestedAction=restart-mac-host-safely"), "max-FPS boardSummary should not suggest a stale-build restart");
     assert(String(payload.boardSummary || "").includes("MacMaxFpsSafeStart="), "max-FPS boardSummary should include MacMaxFpsSafeStart");
     assert(String(payload.boardSummary || "").includes("MacHostStop="), "max-FPS boardSummary should include MacHostStop");
     assert(String(payload.boardSummary || "").includes("MacLaunchAgentLoad="), "max-FPS boardSummary should include MacLaunchAgentLoad");
@@ -897,6 +932,38 @@ async function checkMaxFpsPlanWarning(args) {
     assertNoPasswordLeak(result, "max-FPS plan resume status");
   }, { capturePipeline: "screencapturekit-h264", maxScreenFps: 30 });
   print("OK", "Resume status warns when Mac host maxScreenFps is below the formal 60Hz target");
+}
+
+async function checkStaleBuildSuggestedAction(args) {
+  const staleBuild = getRuntimeBuildBeforeLatestMacHostChange();
+  await withFakeMacHost(async (macHost) => {
+    const result = await runAsync(args, [
+      "--json",
+      "--host",
+      macHost.host,
+      "--port",
+      String(macHost.port),
+      "--timeoutMs",
+      "1200",
+    ]);
+    const payload = parseJson(result.stdout, "stale build resume status");
+    assert(result.status === 0, `stale Mac host build should remain a warning by default\n${result.stdout}\n${result.stderr}`);
+    assert(payload.host?.buildDiff?.severity === "restart-recommended", "stale build should recommend a restart when Mac host runtime files changed");
+    assert(payload.host?.buildDiff?.changedHostRuntimeFileCount > 0, "stale build should count changed Mac host runtime files");
+    assert(payload.recommendations.some((item) => item.id === "runtime-changes" && item.level === "warning"), "stale build should create a runtime-changes warning");
+    assert(payload.suggestedAction?.id === "restart-mac-host-safely", "stale build should expose a structured safe restart action");
+    assert(String(payload.suggestedAction?.reason || "").includes("Mac host runtime build is stale"), "stale build action should explain the stale runtime");
+    assertMacHostStopCommand(payload.suggestedAction?.commands?.macHostStopCommand || "", "stale build suggested Mac host stop command");
+    assertMacHostSafeStartCommand(payload.suggestedAction?.commands?.macHostSafeStartCommand || "", "stale build suggested Mac host safe start command");
+    assertMacMaxFpsSafeStartCommand(payload.suggestedAction?.commands?.macMaxFpsSafeStartCommand || "", "stale build suggested Mac 60Hz safe start command");
+    assertMacResumeStatusCommand(payload.suggestedAction?.commands?.macResumeStatusCommand || "", "stale build suggested Mac resume status rerun command");
+    assert(String(payload.boardSummary || "").includes("restart recommended"), "stale build boardSummary should mention restart recommended");
+    assert(/warnings=[^.]*runtime-changes/.test(String(payload.boardSummary || "")), "stale build boardSummary should include runtime-changes warning ID");
+    assert(String(payload.boardSummary || "").includes("suggestedAction=restart-mac-host-safely"), "stale build boardSummary should include the suggested action");
+    assert(String(payload.boardSummary || "").includes("actionCommands=MacHostStop->MacHostSafeStart-or-MacMaxFpsSafeStart->MacResumeStatus"), "stale build boardSummary should include the safe action order");
+    assertNoPasswordLeak(result, "stale build resume status");
+  }, { capturePipeline: "screencapturekit-h264", runtimeBuildId: staleBuild });
+  print("OK", "Resume status suggests a safe restart action when Mac host runtime files changed");
 }
 
 async function checkH264FallbackPipelineWarning(args) {
@@ -1133,6 +1200,7 @@ async function main() {
   checkOnlineJson(args);
   checkOnlineBoardSummary(args);
   await checkMaxFpsPlanWarning(args);
+  await checkStaleBuildSuggestedAction(args);
   await checkH264FallbackPipelineWarning(args);
   checkPasswordRedaction(args);
   await checkBoardCurrentCall(args);
