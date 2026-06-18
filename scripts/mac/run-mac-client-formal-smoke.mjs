@@ -119,6 +119,10 @@ Machine-readable JSON fields:
                                   It uses a temporary mock Windows host and
                                   does not use a real host, password, call, or
                                   inject.
+  commands.macScriptHelp         Secret-free Mac script helper coverage command.
+                                  It checks Mac-side helper commands and
+                                  board summaries without passwords, calls,
+                                  input events, or inject.
   commands.windowsReverseGrantStatus
                                   Recommended Windows-side PowerShell loopback
                                   command to inspect the one-time reverse-
@@ -516,6 +520,10 @@ function makeMacClientBrowserSelfTestCommand() {
   return "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
 }
 
+function makeMacScriptHelpCommand() {
+  return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
+}
+
 function makePreflightCommand(args) {
   const parts = [
     "node scripts/mac/check-mac-client-formal-status.mjs",
@@ -874,6 +882,7 @@ function makeBoardSummary(report) {
       `Preflight ready=${report.preflight?.readyToCall ? "yes" : "no"}; ${preflightFindings}; command used environment password, not argv.`,
       `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
       `MacClientFormalSmoke=${report.commands?.macClientFormalSmoke || makeMacClientFormalSmokeCommand(report.args)}.`,
+      `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
       ...reverseGrantParts,
       ...secureAuthParts,
       `Reverse rehearsal next if needed: ${makeReverseControlRehearsalBoardText()}`,
@@ -897,6 +906,7 @@ function makeBoardSummary(report) {
       `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
       `MacClientFormalSmoke=${report.commands?.macClientFormalSmoke || makeMacClientFormalSmokeCommand(report.args)}.`,
       `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
+      `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
       `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
       ...reverseGrantParts,
       ...secureAuthParts,
@@ -909,6 +919,7 @@ function makeBoardSummary(report) {
     `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
     `MacClientFormalSmoke=${report.commands?.macClientFormalSmoke || makeMacClientFormalSmokeCommand(report.args)}.`,
     `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
+    `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
     `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
     ...reverseGrantParts,
     ...secureAuthParts,
@@ -963,6 +974,7 @@ function printHuman(report) {
     console.log(`- browser smoke: ${report.browserSmoke.ok ? "passed" : "failed"} (${report.browserSmoke.durationMs}ms)`);
   }
   if (report.error?.message) console.log(`- error: ${report.error.message}`);
+  console.log(`- Mac script help: ${report.commands.macScriptHelp}`);
   console.log(report.boardSummary);
 }
 
@@ -1003,6 +1015,7 @@ function makeReport(args, preflight) {
       discoverPreflight: makeDiscoveryRetryCommand(args),
       browserSmoke: makeBrowserSmokeCommand(args),
       macClientBrowserSelfTest: makeMacClientBrowserSelfTestCommand(),
+      macScriptHelp: makeMacScriptHelpCommand(),
       windowsReverseGrantStatus: makeWindowsReverseGrantCommand(args, "status"),
       windowsOpenOneTimeReverseGrant: makeWindowsReverseGrantCommand(args, "grant"),
       windowsReverseGrantStatusPowerShell: makeWindowsReverseGrantPowerShellCommand(args, "status"),

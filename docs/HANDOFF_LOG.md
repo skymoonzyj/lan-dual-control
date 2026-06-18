@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac client formal smoke 自身也暴露 Mac 脚本 help 安全自检入口。
+完成内容：
+- `run-mac-client-formal-smoke --json/--boardSummary` 现在输出 `commands.macScriptHelp` / `MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`。
+- `--help/-h` 的机器可读字段说明补 `commands.macScriptHelp`，普通输出也会显示 `Mac script help:`。
+- Windows 端或人工只看 `MacClientFormalSmoke=` / formal smoke 摘要时，也能要求 Mac 端跑统一 `--help/-h` 副作用防线，不必回翻 heartbeat、resume、readiness、formal checklist 或 discovery 摘要。
+- 自测新增回归：help、preflight JSON/board summary、sendCall 摘要、dryRun、discover preflight、ensureClient preflight、discover sendCall、discover failure 和 no-password failure 都必须包含安全的 `MacScriptHelp=` 命令，且命令不含密码、call、input 或 inject 路径。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 20000` 失败在 help 缺 `commands.macScriptHelp`。
+- 绿灯：实现后复跑同一自测通过。
+遗留问题：
+- 本轮只补 Mac formal smoke 摘要的安全自检入口，没有进行真实 Windows host 密码连接、反控授权或输入注入验收。
+下一步建议：
+- Windows 若只拿到 `MacClientFormalSmoke=` / `run-mac-client-formal-smoke --boardSummary`，也可复制 `MacScriptHelp=` 让 Mac 端快速确认所有 Mac `.mjs` 脚本 help 路径无副作用；正式 Mac 控 Windows 真连仍需用户在场时按安全认证/一次性授权流程走。
+是否改了协议：否；只补 Mac client formal smoke 的安全命令标签。
+是否需要另一端配合：本轮不需要；Windows 端可后续按需消费该标签。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac 侧 Windows host discovery 也暴露 Mac 脚本 help 安全自检入口。
 完成内容：
 - `discover-windows-hosts --json/--boardSummary` 现在输出 `macScriptHelpCommand` / `MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`。
