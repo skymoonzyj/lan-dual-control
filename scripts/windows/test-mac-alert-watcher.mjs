@@ -664,6 +664,27 @@ async function checkMacClientFormalCleanIgnored(args) {
   console.log("[OK] Mac client/formal clean statuses are ignored");
 }
 
+async function checkMacClientDiscoverWindowsLanRiskAlert(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: [
+          "MacClientDiscoverWindows=node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary",
+          "WindowsLanRisk=no-firewall-allow,public-profile",
+          "blockers=none warnings=none",
+        ].join("; "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "MacClientDiscoverWindows WindowsLanRisk status");
+  assertIncludes(output, "MacClientDiscoverWindows=", "MacClientDiscoverWindows WindowsLanRisk status");
+  assertIncludes(output, "WindowsLanRisk=no-firewall-allow,public-profile", "MacClientDiscoverWindows WindowsLanRisk status");
+  console.log("[OK] Mac client Windows discovery LAN risk status alerts");
+}
+
 async function checkMacHostReadinessFindingsAlert(args) {
   const output = await runWatcherAgainst(baseState({
     statuses: {
@@ -1030,6 +1051,7 @@ async function main() {
   await checkMacResumeCleanIgnored(args);
   await checkMacClientFormalFindingsAlert(args);
   await checkMacClientFormalCleanIgnored(args);
+  await checkMacClientDiscoverWindowsLanRiskAlert(args);
   await checkMacHostReadinessFindingsAlert(args);
   await checkMacHostReadinessCleanIgnored(args);
   await checkMacFormalLocalSmokeFindingsAlert(args);

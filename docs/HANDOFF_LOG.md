@@ -17,6 +17,43 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 本机提醒和 Windows 控制端诊断消费 Mac 侧 `MacClientDiscoverWindows=` 与 `WindowsLanRisk=`，避免 Mac 发现不到 Windows host 时丢失防火墙/Public 网络线索。
+完成内容：
+- `watch-codex-link-mac-alerts.ps1` 新增 `MacClientDiscoverWindows` / `discover-windows-hosts` 与 `WindowsLanRisk`、`no-firewall-allow`、`public-profile`、`lan-probe-blocked`、`tcp-unreachable` 等组合提醒规则。
+- Windows 控制端 `parseMacUnattendedAttention` 会解析 `WindowsLanRisk=` / `WindowsLanRisks=`，把 Mac client Windows 发现命令、Windows 局域网风险、防火墙入站放行、Public 网络等短标签中文化。
+- 复制/导出诊断的 Mac 值守摘要对 LAN 风险做优先排序，并适当放宽导出摘要长度，避免关键 Windows 防火墙/Public 网络风险被长心跳/命令提示截断。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先红后绿：`node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 15000`
+- 先红后绿：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-script-help.mjs --script test-mac-alert-watcher.mjs --script test-windows-client-browser.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- `rg`/PowerShell 冲突标记扫描：`scripts/windows`、`apps/windows-client`、`docs` 无 `<<<<<<<` / `=======` / `>>>>>>>`。
+遗留问题：
+- 本轮只补 Windows 侧提醒/诊断消费；未改变 discovery/formal smoke 协议，未运行真实认证，未发送 call，未发送 input/inject。
+下一步建议：
+- 真实 Mac 控 Windows 前，如果 Windows 摘要看到 `WindowsLanRisk=no-firewall-allow,public-profile`，先检查 Windows host 监听地址、网络 Profile 和防火墙入站放行，再让 Mac 端重跑 discover/formal smoke。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
 ## 2026-06-18 Mac Codex
 
 日期：2026-06-18 继续推进

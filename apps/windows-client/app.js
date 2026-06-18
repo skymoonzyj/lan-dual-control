@@ -282,6 +282,7 @@ const macUnattendedRiskLabels = {
   "mac-host-discovery": "Mac host 发现需检查",
   "mac-host-safe-start": "Mac host 安全启动命令已提供",
   "mac-max-fps-safe-start": "Mac 60Hz 安全启动命令已提供",
+  "mac-client-discover-windows": "Mac client Windows 发现命令已提供",
   "mac-client-formal-checklist": "Mac client 正式清单命令已提供",
   "mac-formal-local-smoke": "Mac 本机短验收需处理",
   "mac-formal-local-smoke-rerun": "Mac 本机短验收重跑命令已提供",
@@ -301,6 +302,15 @@ const macUnattendedRiskLabels = {
   board: "联络板状态需检查",
   "agent-link-board": "联络板状态需检查",
   "windows-host": "Windows 被控端未指定或未就绪",
+  "windows-lan-risk": "Windows 局域网风险需检查",
+  "no-firewall-allow": "Windows 防火墙入站放行需检查",
+  "public-profile": "Windows 当前网络是 Public",
+  "lan-probe-blocked": "Windows LAN 探测被阻挡",
+  "tcp-unreachable": "Windows TCP 端口不可达",
+  "bind-address": "Windows 监听地址需检查",
+  "no-listener": "Windows host 未监听",
+  "no-lan-ip": "Windows 未发现局域网地址",
+  "firewall-query-failed": "Windows 防火墙查询失败",
   "node-js": "Node.js 环境需检查",
   swift: "Swift 环境需检查",
   repo: "仓库状态需检查",
@@ -3037,6 +3047,21 @@ function extractMacUnattendedValues(text, key) {
   return [...new Set(values)];
 }
 
+function extractWindowsLanRiskValues(text) {
+  const values = [];
+  const pattern = /\bWindowsLanRisks?\s*=\s*([^\s;；，。]+)/gi;
+  let match;
+  while ((match = pattern.exec(String(text || "")))) {
+    for (const rawValue of String(match[1] || "").split(",")) {
+      const value = normalizeMacUnattendedToken(rawValue);
+      if (!isEmptyMacUnattendedValue(value)) {
+        values.push(value);
+      }
+    }
+  }
+  return [...new Set(values)];
+}
+
 function extractMacHeartbeatValue(text, key) {
   const pattern = new RegExp(`\\b${escapeRegExp(key)}\\s*=\\s*([^\\s;；，。]+)`, "i");
   const match = pattern.exec(String(text || ""));
@@ -3122,11 +3147,13 @@ function parseMacUnattendedAttention(text) {
   const source = String(text || "");
   const warnings = extractMacUnattendedValues(source, "warnings");
   const blockers = extractMacUnattendedValues(source, "blockers");
-  const risks = [...new Set([...blockers, ...warnings])];
+  const windowsLanRisks = extractWindowsLanRiskValues(source);
+  const risks = [...new Set([...blockers, ...warnings, ...windowsLanRisks])];
   const heartbeatFreshness = parseMacHeartbeatFreshness(source);
   const lower = source.toLowerCase();
   const hasMacHostSafeStart = /\bMacHostSafeStart\s*=/i.test(source);
   const hasMacMaxFpsSafeStart = /\bMacMaxFpsSafeStart\s*=/i.test(source);
+  const hasMacClientDiscoverWindows = /\bMacClientDiscoverWindows\s*=/i.test(source);
   const hasMacClientFormalChecklist = /\bMacClientFormalChecklist\s*=/i.test(source);
   const hasMacHeartbeatOnce = /\bMacHeartbeatOnce\s*=/i.test(source);
   const hasMacHeartbeatWatch = /\bMacHeartbeatWatch\s*=/i.test(source);
@@ -3221,6 +3248,19 @@ function parseMacUnattendedAttention(text) {
   ) {
     risks.unshift("mac-max-fps-safe-start");
   }
+  if (windowsLanRisks.length > 0) {
+    risks.unshift("windows-lan-risk");
+  }
+  if (
+    hasMacClientDiscoverWindows &&
+    (
+      windowsLanRisks.length > 0 ||
+      risks.some((risk) => risk === "windows-host" || risk === "board") ||
+      /ready\s*=\s*false|blocked|failed|not-found|not found|windows host.*(missing|offline|unreachable)|发现不到\s*Windows/i.test(lower)
+    )
+  ) {
+    risks.unshift("mac-client-discover-windows");
+  }
   if (
     hasMacClientFormalChecklist &&
     (hasMacClientFormalFinding || /ready\s*=\s*false|blocked|failed/.test(lower))
@@ -3278,12 +3318,30 @@ function parseMacUnattendedAttention(text) {
   if (hasWindowsSecureAuthPath && hasWindowsSecureAuthContext) {
     risks.unshift("windows-secure-auth-path");
   }
-  const labels = [...new Set(risks.map(labelMacUnattendedRisk).filter(Boolean))];
+  const priority = new Map(
+    [
+      "mac-client-discover-windows",
+      "windows-lan-risk",
+      "no-firewall-allow",
+      "public-profile",
+      "lan-probe-blocked",
+      "tcp-unreachable",
+      "bind-address",
+      "no-listener",
+      "no-lan-ip",
+      "firewall-query-failed",
+    ].map((risk, index) => [risk, index]),
+  );
+  const orderedRisks = [...new Set(risks)]
+    .map((risk, index) => ({ risk, index }))
+    .sort((a, b) => (priority.get(a.risk) ?? 1000) - (priority.get(b.risk) ?? 1000) || a.index - b.index)
+    .map(({ risk }) => risk);
+  const labels = [...new Set(orderedRisks.map(labelMacUnattendedRisk).filter(Boolean))];
   return {
     warnings,
     blockers,
     labels,
-    summary: labels.length ? compactExportStatusText(labels.join(" / "), 760) : "",
+    summary: labels.length ? compactExportStatusText(labels.join(" / "), 1200) : "",
     heartbeatFreshness,
   };
 }
@@ -3377,7 +3435,7 @@ function getMacReachabilityExportStatus({ targetLabel, reconnectExport, macAlert
   }
 
   return {
-    status: compactExportStatusText(parts.join(" · "), 900),
+    status: compactExportStatusText(parts.join(" · "), 1600),
     note: macAlertWatcherExport.unattended?.summary
       ? "Windows 已从 Mac 提醒 watcher 状态里识别到值守 warnings/blockers；详细 LaunchAgent、自启动、电源、锁屏/睡眠可达性仍以 Mac status/readiness 为准。"
       : "当前仅由 Windows 侧连接、发现、重连和提醒 watcher 推断；LaunchAgent、自启动、锁屏/睡眠可达性需等 Mac status/readiness 上报。",

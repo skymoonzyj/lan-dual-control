@@ -85,6 +85,7 @@ $nonEmptyFindingValuePattern = "(?!none\b|ok\b|0\b|false\b|-\b|$)[^\s;]+"
 $findingFieldPattern = "\b(warnings|blockers)\s*[:=]\s*$nonEmptyFindingValuePattern"
 $fpsFindingPattern = "fps-limit|mac-host-max-fps|launch-agent-max-fps"
 $macClientFormalFindingPattern = "windows-host|video|build|auth|repo"
+$windowsLanRiskPattern = "no-firewall-allow|public-profile|lan-probe-blocked|tcp-unreachable|bind-address|no-listener|no-lan-ip|firewall-query-failed"
 
 $urgentPatterns = @(
     "NEED_USER_AUTH",
@@ -119,6 +120,8 @@ $urgentPatterns = @(
     "(MacFormalLocalSmoke|Mac formal local smoke|check-mac-formal-local-smoke|RerunFormalLocalSmoke).*(ready with warnings|blocked|failed|ready=false|$findingFieldPattern)",
     "(MacClientFormalSmoke|Mac client formal smoke|run-mac-client-formal-smoke).*(ready with warnings|blocked|failed|ready=false|$findingFieldPattern)",
     "(MacClient(Readiness|Formal)|Mac client (readiness|formal)|Mac formal E2E status|MacFormalE2EStatus|check-mac-(client-readiness|client-formal-status|formal-e2e-status)).*(ready with warnings|attention=(warning|blocker|failed)|ready=false|$findingFieldPattern)",
+    "(MacClientDiscoverWindows|discover-windows-hosts).*(WindowsLanRisks?\s*=\s*($windowsLanRiskPattern)|$windowsLanRiskPattern)",
+    "(WindowsLanRisks?\s*=\s*($windowsLanRiskPattern)|$windowsLanRiskPattern).*(MacClientDiscoverWindows|discover-windows-hosts)",
     "MacLaunchAgentPlan.*(missing|not-loaded|disabled|failed|enable|install|repair|fix|warning|blocker)",
     "MacHostSafeStart=.*($findingFieldPattern|host-(offline|unreachable)|ready=false)",
     "($findingFieldPattern|host-(offline|unreachable)|ready=false).*MacHostSafeStart=",
