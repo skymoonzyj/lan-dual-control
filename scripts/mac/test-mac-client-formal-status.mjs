@@ -138,8 +138,9 @@ function assertManualChecklist(checklist, label) {
 }
 
 function assertMacClientBrowserSelfTestCommand(command, label) {
-  assertIncludes(command, "scripts/mac/test-mac-client-browser-self-test.mjs", label);
+  assertIncludes(command, "scripts/mac/test-mac-client-browser-self-test-wrapper.mjs", label);
   assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "scripts/mac/test-mac-client-browser-self-test.mjs", label);
   assertNotIncludes(command, "scripts/windows/test-mac-client-browser.mjs", label);
   assertNotIncludes(command, "--useExistingHost", label);
   assertNotIncludes(command, "--useEnvPassword", label);
@@ -305,7 +306,7 @@ function checkOfflineJson(args) {
   assertSecureAuthPath(payload.runPlan?.commands?.secureAuthPath || "", "offline secure auth path");
   assertSecureAuthPath(payload.boardSummary || "", "offline board summary secure auth path", "43770", { expectBoardLabel: true });
   assert(payload.runPlan?.steps?.some((step) => step.id === "browser-smoke"), "offline runPlan should include browser smoke step");
-  assert(payload.runPlan?.steps?.some((step) => step.id === "local-browser-self-test" && String(step.command || "").includes("scripts/mac/test-mac-client-browser-self-test.mjs")), "offline runPlan should include local browser self-test step");
+  assert(payload.runPlan?.steps?.some((step) => step.id === "local-browser-self-test" && String(step.command || "").includes("scripts/mac/test-mac-client-browser-self-test-wrapper.mjs")), "offline runPlan should include local browser self-test step");
   assert(payload.runPlan?.steps?.some((step) => step.id === "reverse-control-request"), "offline runPlan should include reverse control request step");
   assertManualChecklist(payload.runPlan?.manualChecklist, "offline manual checklist");
   assert(payload.runPlan?.safety?.reverseControlRequestSendsInput === false, "offline runPlan should say reverse request sends no input");
@@ -709,7 +710,7 @@ async function checkReadyShape(args) {
       assert(payload.runPlan?.safety?.windowsReverseGrantLoopbackOnly === true, "ready runPlan should keep Windows grant loopback-only");
       assert(payload.runPlan?.safety?.requiresExplicitUserConfirmationForInject === true, "runPlan should require explicit inject confirmation");
       assert(payload.runPlan?.steps?.some((step) => step.id === "reverse-control-request" && String(step.command || "").includes("allow-windows-reverse-control.ps1")), "ready runPlan should include reverse control request step");
-      assert(payload.runPlan?.steps?.some((step) => step.id === "local-browser-self-test" && String(step.command || "").includes("scripts/mac/test-mac-client-browser-self-test.mjs")), "ready runPlan should include local browser self-test step");
+      assert(payload.runPlan?.steps?.some((step) => step.id === "local-browser-self-test" && String(step.command || "").includes("scripts/mac/test-mac-client-browser-self-test-wrapper.mjs")), "ready runPlan should include local browser self-test step");
       assertManualChecklist(payload.runPlan?.manualChecklist, "ready manual checklist");
       assert(JSON.stringify(payload.runPlan?.manualChecklist || []).includes(`127.0.0.1:${windowsPort}`), "ready manual checklist should include target address");
       assertIncludes(payload.boardSummary || "", "windowsHost=online 127.0.0.1", "ready board summary");

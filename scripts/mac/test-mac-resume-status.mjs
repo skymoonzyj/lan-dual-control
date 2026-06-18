@@ -202,7 +202,7 @@ function assertBoardSummaryShape(text, label) {
   assert(/MacClientFormalSmoke=/.test(text), `${label} should include Mac client formal smoke preflight guidance`);
   assert(/run-mac-client-formal-smoke\.mjs/.test(text), `${label} should include the Mac client formal smoke preflight command`);
   assert(/MacClientBrowserSelfTest=/.test(text), `${label} should include Mac client browser self-test guidance`);
-  assert(/scripts\/mac\/test-mac-client-browser-self-test\.mjs/.test(text), `${label} should include the Mac client browser self-test command`);
+  assert(/scripts\/mac\/test-mac-client-browser-self-test-wrapper\.mjs/.test(text), `${label} should include the Mac client browser self-test command`);
   assert(/MacHeartbeatOnce=/.test(text), `${label} should include Mac heartbeat one-shot guidance`);
   assert(/MacHeartbeatOnce=.*watch-mac-heartbeat\.mjs/.test(text), `${label} should include the Mac heartbeat one-shot command`);
   assert(/MacHeartbeatWatch=/.test(text), `${label} should include Mac heartbeat continuous watcher guidance`);
@@ -422,8 +422,9 @@ function assertMacClientFormalSmokeCommand(command, label) {
 }
 
 function assertMacClientBrowserSelfTestCommand(command, label) {
-  assert(/scripts\/mac\/test-mac-client-browser-self-test\.mjs/.test(command), `${label} should use the Mac browser self-test wrapper`);
+  assert(/scripts\/mac\/test-mac-client-browser-self-test-wrapper\.mjs/.test(command), `${label} should use the Mac browser self-test wrapper`);
   assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!/scripts\/mac\/test-mac-client-browser-self-test\.mjs/.test(command), `${label} should not point at the noisy raw browser self-test`);
   assert(!command.includes("scripts/windows/test-mac-client-browser.mjs"), `${label} should not expose the Windows test script path`);
   assert(!command.includes("--useExistingHost"), `${label} should not target a real Windows host`);
   assert(!command.includes("--useEnvPassword"), `${label} should not read a real password from env`);
@@ -684,7 +685,7 @@ function checkOfflinePlainReport(args) {
   assert(String(result.stdout || "").includes("ReverseRehearsal="), "plain report should point to discovery ReverseRehearsal output");
   assert(String(result.stdout || "").includes("check-mac-client-formal-status.mjs"), "plain report should include Mac client formal checklist command");
   assert(String(result.stdout || "").includes("run-mac-client-formal-smoke.mjs"), "plain report should include Mac client formal smoke preflight command");
-  assert(String(result.stdout || "").includes("scripts/mac/test-mac-client-browser-self-test.mjs"), "plain report should include Mac client browser self-test command");
+  assert(String(result.stdout || "").includes("scripts/mac/test-mac-client-browser-self-test-wrapper.mjs"), "plain report should include Mac client browser self-test command");
   assert(String(result.stdout || "").includes("watch-mac-heartbeat.mjs"), "plain report should include Mac heartbeat watcher command");
   assert(String(result.stdout || "").includes("start-mac-heartbeat-watcher.mjs"), "plain report should include Mac heartbeat background helper command");
   assert(String(result.stdout || "").includes("check-mac-formal-local-smoke.mjs"), "plain report should include Mac formal local smoke command");

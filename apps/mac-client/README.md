@@ -121,7 +121,7 @@ node scripts/mac/test-mac-client-formal-status.mjs
 日常检查 Mac client 页面本身时，优先跑 Mac 侧本机 mock 自测包装器：
 
 ```bash
-node scripts/mac/test-mac-client-browser-self-test.mjs --boardSummary
+node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary
 ```
 
 该入口会临时启动本机 mock Windows host 和 Mac client 页面，默认启用 `mockVideo`、允许本机剪贴板回退、跳过真实文件剪贴板写入，并只输出一行可贴到 Agent Link Board 的无密摘要。它会拒绝真实 host、密码、call 和进度覆盖参数，避免本机页面自测误进入正式联调；只有真实 Windows host、WASAPI 音频、文件注入、视频传输矩阵等高级场景，才直接使用底层 `scripts/windows/test-mac-client-browser.mjs`。

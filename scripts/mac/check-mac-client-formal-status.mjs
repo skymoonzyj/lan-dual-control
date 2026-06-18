@@ -760,7 +760,7 @@ function makeBrowserTestCommand(report, args) {
 }
 
 function makeMacClientBrowserSelfTestCommand() {
-  return "node scripts/mac/test-mac-client-browser-self-test.mjs --boardSummary";
+  return "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
 }
 
 function makeWindowsHostStatusCommand(reportOrHost = {}, args = {}) {

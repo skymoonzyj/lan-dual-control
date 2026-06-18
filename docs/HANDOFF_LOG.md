@@ -82,6 +82,42 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：统一 `MacClientBrowserSelfTest=` 为一行输出 wrapper，避免把原始 browser/临时 host 噪声日志贴到通讯板。
+完成内容：
+- `scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary` 现在会运行本地 mock browser 自测，并只在 stdout 输出最终一行无密摘要。
+- Mac heartbeat、resume status、Mac client page status、readiness、Windows discovery、formal status 和 formal smoke 的 `MacClientBrowserSelfTest=` 全部改为 wrapper 命令。
+- 对应测试断言现在要求 wrapper 路径，并防止退回原始 `test-mac-client-browser-self-test.mjs --boardSummary` 噪声入口。
+修改文件：
+- `scripts/mac/test-mac-client-browser-self-test-wrapper.mjs`
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/start-mac-client.mjs`
+- `scripts/mac/check-mac-client-readiness.mjs`
+- `scripts/mac/discover-windows-hosts.mjs`
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- matching `scripts/mac/test-*.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先改 heartbeat 断言并确认失败：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000`（失败点：board summary 仍指向原始 browser self-test）。
+- 实现后复跑受影响自测：wrapper、heartbeat、Mac client readiness、start helper、Windows discovery、formal status、formal smoke、resume status。
+- 直接验证 wrapper 一行输出：`node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary --timeoutMs 60000`。
+遗留问题：
+- 真实 Mac 控 Windows 长时间观感、真实 Windows host 音视频延迟和大文件断点续传仍按任务板继续；本轮不认证真实 Windows host、不执行 input/inject。
+下一步建议：
+- 需要贴通讯板时优先复制 `MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary`；它会跑本地 mock 链路并只输出一行。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让最新 `MacHeartbeat=` 摘要直接暴露本地 Mac client browser self-test 入口，方便早上恢复时先跑安全 mock 自测。
 完成内容：
 - `check-mac-heartbeat --boardSummary` 现在输出 `MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test.mjs --boardSummary`。

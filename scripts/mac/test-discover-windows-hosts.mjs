@@ -106,8 +106,9 @@ function assertFormalChecklistCommand(command, label) {
 }
 
 function assertMacClientBrowserSelfTestCommand(command, label) {
-  assertIncludes(command, "scripts/mac/test-mac-client-browser-self-test.mjs", label);
+  assertIncludes(command, "scripts/mac/test-mac-client-browser-self-test-wrapper.mjs", label);
   assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "scripts/mac/test-mac-client-browser-self-test.mjs", label);
   assertNotIncludes(command, "scripts/windows/test-mac-client-browser.mjs", label);
   assertNotIncludes(command, "--useExistingHost", label);
   assertNotIncludes(command, "--useEnvPassword", label);

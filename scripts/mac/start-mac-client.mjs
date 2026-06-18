@@ -28,7 +28,7 @@ const windowsReverseGrantStatusNodeFallbackCommand = "node scripts/windows/allow
 const windowsOpenOneTimeReverseGrantNodeFallbackCommand = "node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --grant --durationMs 30000 --boardSummary";
 const formalChecklistCommand = "node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary";
 const formalSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
-const browserSelfTestCommand = "node scripts/mac/test-mac-client-browser-self-test.mjs --boardSummary";
+const browserSelfTestCommand = "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
