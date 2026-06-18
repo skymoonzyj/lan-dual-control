@@ -197,6 +197,9 @@ Machine-readable JSON fields:
                              the formal 60Hz target; it only prints a plan and
                              does not write files, load launchctl, start Mac
                              host, request a password, or send input.
+  commands.macUnattendedFormalCommand
+                             Secret-free post-write formal gate command requiring
+                             LaunchAgent maxScreenFps >= 60 and loaded status.
 `);
 }
 
@@ -415,6 +418,19 @@ function makeMacMaxFpsPlanCommand(args) {
   ].join(" ");
 }
 
+function makeMacUnattendedFormalCommand(args) {
+  return [
+    "node scripts/mac/check-mac-unattended-status.mjs",
+    "--host",
+    statusProbeHost(args),
+    "--port",
+    String(args.port),
+    "--requireLaunchAgentMaxFps",
+    "--requireLaunchAgentLoaded",
+    "--boardSummary",
+  ].join(" ");
+}
+
 function isLocalProbeHost(host) {
   const value = normalizedText(host).toLowerCase();
   if (!value) return false;
@@ -541,6 +557,7 @@ function formatStatusBoardSummary(payload) {
       `Next: start safely with ${payload.commands?.safeStartCommand || "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword"}.`,
       `MacLaunchAgentPlan=${payload.commands?.macLaunchAgentPlanCommand || "not-available"}.`,
       `MacMaxFpsPlan=${payload.commands?.macMaxFpsPlanCommand || "not-available"}.`,
+      `MacUnattendedFormal=${payload.commands?.macUnattendedFormalCommand || "not-available"}.`,
       `After host is online, MacHostMedia=${payload.commands?.mediaReadinessBoardSummary || "not-available"}.`,
       "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
     ].join(" ");
@@ -566,6 +583,7 @@ function formatStatusBoardSummary(payload) {
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${formatStatusBuildDiff(payload.buildDiff)}.`,
     `MacLaunchAgentPlan=${payload.commands?.macLaunchAgentPlanCommand || "not-available"}.`,
     `MacMaxFpsPlan=${payload.commands?.macMaxFpsPlanCommand || "not-available"}.`,
+    `MacUnattendedFormal=${payload.commands?.macUnattendedFormalCommand || "not-available"}.`,
     `MacHostMedia=${payload.commands?.mediaReadinessBoardSummary || "not-available"}.`,
     "Next: coordinate on Agent Link Board before formal E2E.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
@@ -853,6 +871,7 @@ async function printStatus(args) {
       commands: {
         macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
         macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
+        macUnattendedFormalCommand: makeMacUnattendedFormalCommand(args),
         mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
       },
       discovery,
@@ -895,6 +914,7 @@ async function printStatus(args) {
     console.log(`[INFO] Mac host media baseline: ${payload.commands.mediaReadinessBoardSummary}`);
     console.log(`[INFO] Mac host LaunchAgent dry-run plan: ${payload.commands.macLaunchAgentPlanCommand}`);
     console.log(`[INFO] Mac host max FPS dry-run plan: ${payload.commands.macMaxFpsPlanCommand}`);
+    console.log(`[INFO] Mac host unattended formal gate: ${payload.commands.macUnattendedFormalCommand}`);
     return payload;
   } catch (error) {
     const payload = {
@@ -913,6 +933,7 @@ async function printStatus(args) {
         ephemeralStartCommand: makeEphemeralStartCommand(args),
         macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
         macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
+        macUnattendedFormalCommand: makeMacUnattendedFormalCommand(args),
         mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
       },
       suggestions: [
@@ -945,6 +966,7 @@ async function printStatus(args) {
     console.log(`[INFO] For temporary discovery/runtime diagnostics without sharing a password: ${payload.commands.ephemeralStartCommand}`);
     console.log(`[INFO] Mac host LaunchAgent dry-run plan: ${payload.commands.macLaunchAgentPlanCommand}`);
     console.log(`[INFO] Mac host max FPS dry-run plan: ${payload.commands.macMaxFpsPlanCommand}`);
+    console.log(`[INFO] Mac host unattended formal gate: ${payload.commands.macUnattendedFormalCommand}`);
     console.log(`[INFO] After host is online, refresh media baseline with: ${payload.commands.mediaReadinessBoardSummary}`);
     return payload;
   }
