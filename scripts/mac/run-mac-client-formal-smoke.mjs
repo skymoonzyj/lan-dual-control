@@ -908,7 +908,10 @@ function makeBoardSummary(report) {
     `Mac client browser smoke failed/blocked for ${target}: ${report.error?.message || report.browserSmoke?.error || "unknown"}.${discoveryText}${discoveryChecklistText} Preflight ${preflightFindings}.`,
     `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
     `MacClientFormalSmoke=${report.commands?.macClientFormalSmoke || makeMacClientFormalSmokeCommand(report.args)}.`,
+    `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
+    ...reverseGrantParts,
     ...secureAuthParts,
+    `Reverse rehearsal after auth: ${makeReverseControlRehearsalBoardText()}`,
     "Keep passwords off Agent Link Board; rerun preflight before retrying.",
     "Inject was not executed.",
   ].join(" ");

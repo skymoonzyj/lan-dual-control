@@ -21,6 +21,38 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac client formal smoke 在认证前失败/阻塞时也保留反控授权协同入口，避免真机 smoke 卡住后另一端还要翻旧 preflight。
+完成内容：
+- `run-mac-client-formal-smoke --json/--boardSummary` 的失败/阻塞摘要现在会输出 `ReverseGrantCopy=`、`WindowsReverseGrantStatus=`、`WindowsOpenOneTimeReverseGrant=`、Node fallback 和 `Reverse rehearsal after auth`。
+- 复用已有 Windows 本机回环 PowerShell/Node 一次性授权命令；脚本本身不打开授权、不认证、不请求密码、不发送 `input_event`、不执行 `inject`。
+- 自测新增回归：有 Windows host 但缺少本机密码时，失败摘要必须保留反控授权复制/授权命令且不泄密。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 30000` 失败在 no password board summary 缺 `ReverseGrantCopy=`。
+- 绿灯：实现后复跑同一自测通过。
+- `node --check scripts/mac/run-mac-client-formal-smoke.mjs`
+- `node --check scripts/mac/test-mac-client-formal-smoke.mjs`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- 无密 preflight 摘要抽样：本机未发现 Windows host，命令按预期退出非 0，但摘要包含 `ReverseGrantCopy=` / Windows 一次性授权命令 / `No password was requested or sent`，没有弹密码或认证。
+- `git diff --check` 与冲突标记扫描通过。
+遗留问题：
+- 真实 Mac -> Windows browser smoke 仍需要用户在场输入 Windows host 密码；本轮没有弹密码，也没有发真实 call。
+下一步建议：
+- 真机 smoke 如果认证后遇到 `LAN008`，直接按失败/阻塞摘要里的 `WindowsOpenOneTimeReverseGrant=` 让 Windows 本机开 30 秒一次性授权，再让 Mac 点“重试反控”。
+是否改了协议：否；只补 formal smoke 摘要里的既有安全命令标签。
+是否需要另一端配合：后续真机 `LAN008 -> 一次性授权 -> 重试 accepted` 验收时需要 Windows 端配合；本轮不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac heartbeat 直接给出前台 60Hz 安全启动命令，补齐旧 host / 远端 30Hz 上限时的无密下一步。
 完成内容：
 - `check-mac-heartbeat --boardSummary` 新增 `MacMaxFpsSafeStart=`，命令为 `start-mac-host --promptPassword --requirePassword --host 0.0.0.0 --port <port> --maxScreenFps 60`。

@@ -866,6 +866,9 @@ async function checkPasswordSafety(args) {
       assertIncludes(noPasswordPayload.error?.message || "", "requires LAN_DUAL_PASSWORD", "no password error");
       assertSecureAuthPath(noPasswordPayload.commands?.secureAuthPath || "", "no password secure auth path", windowsPort);
       assertSecureAuthPath(noPasswordPayload.boardSummary || "", "no password board summary secure auth path", windowsPort, { expectBoardLabel: true });
+      assertIncludes(noPasswordPayload.boardSummary || "", "ReverseGrantCopy=", "no password board summary");
+      assertReverseGrantBoardSummary(noPasswordPayload.boardSummary || "", "no password board summary", windowsPort);
+      assertIncludes(noPasswordPayload.boardSummary || "", "Reverse rehearsal", "no password board summary");
 
       const demoPassword = run([
         "--json",
