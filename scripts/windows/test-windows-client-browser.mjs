@@ -2965,6 +2965,14 @@ async function verifyOutgoingFileResultStatus(session) {
         });
         const staleLateResultState = state.lastOutgoingFileTransfer || {};
         const staleLateResultText = elements.clipboardText.textContent || "";
+        handleClipboardFileProgress({
+          type: "clipboard_file_progress",
+          transferId: pendingBeforeTimeout.transferId,
+          receivedBytes: pendingFile.size,
+          totalBytes: pendingFile.size,
+        });
+        const staleLateProgressState = state.lastOutgoingFileTransfer || {};
+        const staleLateProgressText = elements.clipboardText.textContent || "";
 
         return {
           ok:
@@ -3020,7 +3028,10 @@ async function verifyOutgoingFileResultStatus(session) {
             staleLateResultReturn === false &&
             staleLateResultState.transferId === pendingTimeoutRetryTransferId &&
             staleLateResultState.status === "sent" &&
-            !staleLateResultText.includes("old transfer accepted late"),
+            !staleLateResultText.includes("old transfer accepted late") &&
+            staleLateProgressState.transferId === pendingTimeoutRetryTransferId &&
+            staleLateProgressState.status === "sent" &&
+            !staleLateProgressText.includes("对端接收 100%"),
           clipboardText,
           floatingClipboardText,
           tempText,
@@ -3058,6 +3069,8 @@ async function verifyOutgoingFileResultStatus(session) {
           staleLateResultReturn,
           staleLateResultState,
           staleLateResultText,
+          staleLateProgressState,
+          staleLateProgressText,
         };
       } finally {
         state.lastOutgoingFileTransfer = originalLastOutgoingTransfer;

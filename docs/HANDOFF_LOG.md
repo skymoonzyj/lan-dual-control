@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端本机文件发送重试后忽略旧 transfer 的迟到进度。
+完成内容：
+- `clipboard_file_progress` 现在会检查 `transferId`；如果旧 transfer 的进度在重新发送后才到，只写事件日志，不再覆盖当前顶部剪贴板状态或全屏/监看浮层。
+- 页面 diagnostics-only 覆盖“确认超时 -> 重新发送 -> 旧进度 100% 迟到”的场景，确保当前发送仍保持“等待对端确认”状态。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增页面断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`（失败点：旧 `clipboard_file_progress` 把状态覆盖成“对端接收 100%”）。
+- 实现后复跑同一 diagnostics-only 通过。
+遗留问题：
+- 这仍是从头重新发送，不是断点续传。
+下一步建议：
+- 真机大文件测试时继续观察旧 result、旧 progress 和重新发送按钮文案是否保持一致，不互相覆盖。
+是否改了协议：否；只消费既有 `transferId`。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端收到对端文件清单拒绝时立即显示失败并允许重发。
 完成内容：
 - `clipboard_file_response.accepted=false` 现在会更新本机发送状态为对端失败，显示对端拒绝原因和“可重新发送”。

@@ -6932,6 +6932,14 @@ function handleClipboardFileProgress(message) {
   if (!message.totalBytes) {
     return;
   }
+  const transferId = String(message.transferId || "");
+  const currentTransferId = state.fileTransferActive && state.outgoingFileTransfer?.transferId
+    ? state.outgoingFileTransfer.transferId
+    : state.lastOutgoingFileTransfer?.transferId || "";
+  if (transferId && currentTransferId && transferId !== currentTransferId) {
+    addLog("文件剪贴板", `忽略旧的对端文件进度 · ${transferId}`);
+    return;
+  }
   const percent = Math.round((Number(message.receivedBytes || 0) / Number(message.totalBytes)) * 100);
   elements.clipboardText.textContent = `剪贴板：对端接收 ${percent}%`;
   syncFloatingControlStatus();
