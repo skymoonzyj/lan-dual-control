@@ -232,6 +232,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macUnattendedFormal", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macHostSafeStart", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macMaxFpsSafeStart", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macFormalLocalSmoke", `${script} ${flag}`);
     assertNoSecretOrInputGuidance(result.stdout, `${script} ${flag}`);
   }
   print("OK", "Unattended status help exits quickly and stays side-effect-free");
@@ -296,6 +297,14 @@ function checkMissingLaunchAgentJson(args) {
   assertNotIncludes(payload.commands?.macHostReadiness || "", "--password", "missing LaunchAgent commands.macHostReadiness");
   assertNotIncludes(payload.commands?.macHostReadiness || "", "inject", "missing LaunchAgent commands.macHostReadiness");
   assertIncludes(payload.commands?.hostReadiness || "", payload.commands?.macHostReadiness || "missing-command", "missing LaunchAgent commands.hostReadiness alias");
+  assertIncludes(payload.commands?.macFormalLocalSmoke || "", "check-mac-formal-local-smoke.mjs", "missing LaunchAgent commands.macFormalLocalSmoke");
+  assertIncludes(payload.commands?.macFormalLocalSmoke || "", "--host 127.0.0.1", "missing LaunchAgent commands.macFormalLocalSmoke");
+  assertIncludes(payload.commands?.macFormalLocalSmoke || "", "--port 9", "missing LaunchAgent commands.macFormalLocalSmoke");
+  assertIncludes(payload.commands?.macFormalLocalSmoke || "", "--promptPassword", "missing LaunchAgent commands.macFormalLocalSmoke");
+  assertIncludes(payload.commands?.macFormalLocalSmoke || "", "--boardSummary", "missing LaunchAgent commands.macFormalLocalSmoke");
+  assertNotIncludes(payload.commands?.macFormalLocalSmoke || "", "--json", "missing LaunchAgent commands.macFormalLocalSmoke");
+  assertNotIncludes(payload.commands?.macFormalLocalSmoke || "", "--sendCall", "missing LaunchAgent commands.macFormalLocalSmoke");
+  assertNotIncludes(payload.commands?.macFormalLocalSmoke || "", "--password", "missing LaunchAgent commands.macFormalLocalSmoke");
   assertIncludes(payload.boardSummary, "MacUnattendedStatus=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacHostSafeStart=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacHostSafeStart=node scripts/mac/start-mac-host.mjs", "missing LaunchAgent board summary");
@@ -316,6 +325,8 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.boardSummary, "MacHostReadiness=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "HostReadiness=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacFormalLocalSmoke=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "blockers=none", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "warnings=host-offline,launch-agent-missing", "missing LaunchAgent board summary");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "missing LaunchAgent JSON");
@@ -361,9 +372,12 @@ function checkLaunchAgentPlannerPreservesOptions(args) {
   assertIncludes(payload.commands?.macMaxFpsSafeStart || "", "--maxScreenFps 60", "custom LaunchAgent commands.macMaxFpsSafeStart");
   assertIncludes(payload.commands?.macUnattendedFormal || "", `--label ${label}`, "custom LaunchAgent commands.macUnattendedFormal");
   assertIncludes(payload.commands?.macUnattendedFormal || "", "--requireLaunchAgentLoaded", "custom LaunchAgent commands.macUnattendedFormal");
+  assertIncludes(payload.commands?.macFormalLocalSmoke || "", "--port 9", "custom LaunchAgent commands.macFormalLocalSmoke");
+  assertIncludes(payload.commands?.macFormalLocalSmoke || "", "--promptPassword", "custom LaunchAgent commands.macFormalLocalSmoke");
   assertIncludes(payload.boardSummary || "", `--label ${label}`, "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacHostSafeStart=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacMaxFpsSafeStart=", "custom LaunchAgent board summary");
+  assertIncludes(payload.boardSummary || "", "MacFormalLocalSmoke=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "--port 9", "custom LaunchAgent board summary");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "custom LaunchAgent planner JSON");
   print("OK", "LaunchAgent planner commands preserve checked port, label, and plist path");
@@ -553,6 +567,8 @@ function checkBoardSummary(args) {
   assertIncludes(text, "MacHostReadiness=", "board summary");
   assertIncludes(text, "MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs", "board summary");
   assertIncludes(text, "HostReadiness=", "board summary");
+  assertIncludes(text, "MacFormalLocalSmoke=", "board summary");
+  assertIncludes(text, "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs", "board summary");
   assertIncludes(text, "blockers=none", "board summary");
   assertIncludes(text, "warnings=host-offline,launch-agent-missing", "board summary");
   assertIncludes(text, "No password", "board summary");

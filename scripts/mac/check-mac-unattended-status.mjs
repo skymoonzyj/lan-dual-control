@@ -76,6 +76,9 @@ Machine-readable JSON fields:
   commands.macHostReadiness      Follow-up Mac host readiness command with the
                                   standard MacHostReadiness label.
   commands.hostReadiness         Follow-up Mac host readiness command.
+  commands.macFormalLocalSmoke   Follow-up formal H.264 + PCM + input-log
+                                  short validation command; prompts locally
+                                  and never embeds a password in argv.
 
 Examples:
   node scripts/mac/check-mac-unattended-status.mjs --boardSummary
@@ -450,6 +453,7 @@ function makeCommands(args) {
     hostStatus: `node scripts/mac/start-mac-host.mjs --status --host ${args.host} --port ${args.port} --boardSummary`,
     macHostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     hostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
+    macFormalLocalSmoke: makeMacFormalLocalSmokeCommand(args),
     startHost: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port}`,
     stopHost: `node scripts/mac/start-mac-host.mjs --stop --host ${args.host} --port ${args.port}`,
     launchAgentPath: args.launchAgentPath,
@@ -494,6 +498,18 @@ function makeMacMaxFpsSafeStartCommand(args) {
     String(args.port),
     "--maxScreenFps",
     String(formalTargetMaxScreenFps),
+  ].join(" ");
+}
+
+function makeMacFormalLocalSmokeCommand(args) {
+  return [
+    "node scripts/mac/check-mac-formal-local-smoke.mjs",
+    "--host",
+    shellQuote(args.host),
+    "--port",
+    String(args.port),
+    "--promptPassword",
+    "--boardSummary",
   ].join(" ");
 }
 
@@ -564,7 +580,7 @@ function makeBoardSummary(report) {
   const agentMaxFps = report.launchAgent.maxScreenFps === null ? "unknown" : String(report.launchAgent.maxScreenFps);
   return [
     `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
-    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}.`,
+    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
@@ -636,6 +652,7 @@ function printHuman(report) {
   console.log(`- Mac host safe start: ${report.commands.macHostSafeStart}`);
   console.log(`- Mac 60Hz safe foreground start: ${report.commands.macMaxFpsSafeStart}`);
   console.log(`- Mac host readiness: ${report.commands.macHostReadiness}`);
+  console.log(`- Mac formal local smoke: ${report.commands.macFormalLocalSmoke}`);
   console.log(report.boardSummary);
 }
 
