@@ -4834,14 +4834,16 @@ async function syncClipboardBeforePaste() {
 
 async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clearFileInput = false } = {}) {
   if (!state.connected || !state.client) {
-    elements.clipboardText.textContent = "剪贴板：请先连接被控端";
+    state.localClipboardStatusText = "剪贴板：请先连接被控端";
+    elements.clipboardText.textContent = state.localClipboardStatusText;
     syncFloatingControlStatus();
     addLog(sourceLabel, "未连接，无法发送文件");
     return;
   }
 
   if (!elements.clipboardToggle.checked) {
-    elements.clipboardText.textContent = "剪贴板：已关闭";
+    state.localClipboardStatusText = "剪贴板：已关闭";
+    elements.clipboardText.textContent = state.localClipboardStatusText;
     syncFloatingControlStatus();
     addLog(sourceLabel, "剪贴板同步已关闭");
     return;

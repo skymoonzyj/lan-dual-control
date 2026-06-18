@@ -2111,6 +2111,32 @@ async function verifyFileClipboardRecoveryText(session) {
         const pasteDisabledFloating = document.querySelector("#floatingClipboardStatus")?.textContent || "";
         elements.clipboardToggle.checked = true;
 
+        const manualSendBlockedFile = new File([new Uint8Array([80, 75, 3, 4])], "manual-blocked.zip", {
+          type: "application/zip",
+        });
+        state.connected = false;
+        state.client = null;
+        elements.clipboardToggle.checked = true;
+        elements.clipboardText.textContent = "剪贴板：待机";
+        if (typeof syncFloatingControlStatus === "function") syncFloatingControlStatus();
+        await sendFilesToRemote([manualSendBlockedFile], { sourceLabel: "手动发送未连接测试" });
+        const manualDisconnectedText = elements.clipboardText.textContent || "";
+        const manualDisconnectedFloating = document.querySelector("#floatingClipboardStatus")?.textContent || "";
+
+        state.connected = true;
+        state.client = {
+          sendClipboardFileOffer: () => {},
+          sendClipboardFileChunk: () => {},
+          sendClipboardFileComplete: () => {},
+        };
+        elements.clipboardToggle.checked = false;
+        elements.clipboardText.textContent = "剪贴板：已开启";
+        if (typeof syncFloatingControlStatus === "function") syncFloatingControlStatus();
+        await sendFilesToRemote([manualSendBlockedFile], { sourceLabel: "手动发送关闭测试" });
+        const manualDisabledText = elements.clipboardText.textContent || "";
+        const manualDisabledFloating = document.querySelector("#floatingClipboardStatus")?.textContent || "";
+        elements.clipboardToggle.checked = true;
+
         const nativeClipboardBytes = new Uint8Array([80, 75, 3, 4, 9]);
         const nativeClipboardBase64 = window.btoa(
           Array.from(nativeClipboardBytes, (byte) => String.fromCharCode(byte)).join(""),
@@ -2435,6 +2461,10 @@ async function verifyFileClipboardRecoveryText(session) {
             pasteDisconnectedFloating.includes("请先连接被控端") &&
             pasteDisabledText.includes("已关闭") &&
             pasteDisabledFloating.includes("关闭") &&
+            manualDisconnectedText.includes("请先连接被控端") &&
+            manualDisconnectedFloating.includes("请先连接被控端") &&
+            manualDisabledText.includes("已关闭") &&
+            manualDisabledFloating.includes("关闭") &&
             nativeClipboardSends.filter((item) => item.type === "offer").length === 1 &&
             nativeClipboardSends.filter((item) => item.type === "chunk").length === 1 &&
             nativeClipboardSends.filter((item) => item.type === "complete").length === 1 &&
@@ -2532,6 +2562,10 @@ async function verifyFileClipboardRecoveryText(session) {
           pasteDisconnectedFloating,
           pasteDisabledText,
           pasteDisabledFloating,
+          manualDisconnectedText,
+          manualDisconnectedFloating,
+          manualDisabledText,
+          manualDisabledFloating,
           nativeClipboardText,
           nativeClipboardCommands,
           nativeClipboardSends,

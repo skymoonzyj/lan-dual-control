@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端手动发送文件在未连接或剪贴板关闭时给出稳定可见中文提示。
+完成内容：
+- 未连接被控端时手动发送文件，顶部剪贴板状态会显示“请先连接被控端”。
+- 剪贴板同步关闭时手动发送文件，顶部状态会显示“已关闭”。
+- 全屏/监看浮层会同步显示同一状态，不会被旧的本地剪贴板提示覆盖。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增页面断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`（失败点：手动发送文件未连接时浮层仍显示旧状态“已关闭”）。
+- 实现后复跑同一 diagnostics-only 通过。
+遗留问题：
+- 这只改善手动发送文件的早退反馈，不改变文件夹递归发送和断点续传策略。
+下一步建议：
+- 真机体验时顺手确认“发送文件”按钮、资源管理器 `Ctrl+V`、断线、关闭剪贴板开关四条路径的提示是否一致。
+是否改了协议：否；只改 Windows 控制端 UI 状态和页面自测。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端 `Ctrl+V` 在未连接或剪贴板关闭时给出可见中文提示。
 完成内容：
 - 未连接被控端时按 `Ctrl+V`，顶部剪贴板状态会显示“请先连接被控端”。
