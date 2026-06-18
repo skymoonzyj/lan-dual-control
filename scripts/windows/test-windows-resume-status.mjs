@@ -279,6 +279,7 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "local alert-watcher start/status commands", `help ${flag}`);
     assertIncludes(result.stdout, "MacDiscovery Node and PowerShell commands", `help ${flag}`);
+    assertIncludes(result.stdout, "MacHostSafeStart=", `help ${flag}`);
     assertIncludes(result.stdout, "discover-lan-hosts.mjs --noLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "discover-lan-hosts.ps1 -NoLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary", `help ${flag}`);
@@ -718,6 +719,97 @@ async function checkBoardCurrentCallSummary(args) {
   });
 }
 
+async function checkBoardMacHostSafeStartExtraction(args) {
+  const safeCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888";
+  await withMockHost(async (port) => {
+    const boardState = {
+      statuses: {
+        "Mac Codex": {
+          role: "Mac 端",
+          status: "idle",
+          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand}`,
+        },
+      },
+      events: [
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacHostSafeStart=node scripts/mac/start-mac-host.mjs --password secret-value --host 0.0.0.0 --port 9",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port <当前端口>",
+        },
+      ],
+    };
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock MacHostSafeStart JSON failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.macHostSafeStart?.found === true, "MacHostSafeStart should be found in board state");
+      assert(payload.board.macHostSafeStart.command === safeCommand, "MacHostSafeStart command mismatch");
+      assert(payload.board.macHostSafeStart.source === "api-state", "MacHostSafeStart should come from /api/state");
+      assert(payload.board.macHostSafeStart.rejectedCount >= 2, "unsafe or placeholder MacHostSafeStart should be rejected");
+      assertIncludes(payload.boardSummary, `MacHostSafeStart=${safeCommand}.`, "MacHostSafeStart JSON board summary");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "MacHostSafeStart JSON should not leak rejected command");
+    }, boardState);
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--boardSummary",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock MacHostSafeStart board summary failed\n${result.stdout}\n${result.stderr}`);
+      const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean);
+      assert(lines.length === 1, `MacHostSafeStart board summary should be one line, got ${lines.length}`);
+      assertIncludes(result.stdout, `MacHostSafeStart=${safeCommand}.`, "MacHostSafeStart board summary");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "MacHostSafeStart board summary should not leak rejected command");
+    }, boardState);
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock MacHostSafeStart human output failed\n${result.stdout}\n${result.stderr}`);
+      assertIncludes(result.stdout, `MacHostSafeStart=${safeCommand}`, "MacHostSafeStart human output");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "MacHostSafeStart human output should not leak rejected command");
+      console.log("[OK] Windows resume status extracts MacHostSafeStart from Agent Link Board safely");
+    }, boardState);
+  });
+}
+
 async function checkUserAuthRequest(args) {
   await withMockHost(async (port) => {
     const result = await run([
@@ -843,6 +935,7 @@ async function main() {
   await checkBoardCurrentCallJson(args);
   await checkBoardDoneCallJson(args);
   await checkBoardCurrentCallSummary(args);
+  await checkBoardMacHostSafeStartExtraction(args);
   await checkUserAuthRequest(args);
   await checkSendUserAuthRequest(args);
   await checkSendUserAuthRequestOffline(args);

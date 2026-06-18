@@ -196,6 +196,7 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "-CheckBoard -BoardSummary", "PowerShell wrapper help");
   assertIncludes(output, "-UserAuthRequest", "PowerShell wrapper help");
   assertIncludes(output, "current Agent Link", "PowerShell wrapper help");
+  assertIncludes(output, "MacHostSafeStart=", "PowerShell wrapper help");
   assertIncludes(output, "does not ask for or print", "PowerShell wrapper help");
   assertIncludes(output, "passwords", "PowerShell wrapper help");
   assertIncludes(output, "Windows host media baseline", "PowerShell wrapper help");
@@ -592,6 +593,78 @@ async function checkBoardCurrentCallJson(args) {
   });
 }
 
+async function checkBoardMacHostSafeStartExtraction(args) {
+  const safeCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888";
+  await withMockHost(async (port) => {
+    const boardState = {
+      statuses: {
+        "Mac Codex": {
+          role: "Mac 端",
+          status: "idle",
+          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand}`,
+        },
+      },
+      events: [
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacHostSafeStart=node scripts/mac/start-mac-host.mjs --password secret-value --host 0.0.0.0 --port 9",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port <当前端口>",
+        },
+      ],
+    };
+
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-CheckBoard",
+        "-Json",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell MacHostSafeStart JSON failed\n${output}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.macHostSafeStart?.found === true, "PowerShell MacHostSafeStart should be found");
+      assert(payload.board.macHostSafeStart.command === safeCommand, "PowerShell MacHostSafeStart command mismatch");
+      assert(payload.board.macHostSafeStart.rejectedCount >= 2, "PowerShell unsafe or placeholder MacHostSafeStart should be rejected");
+      assertIncludes(payload.boardSummary, `MacHostSafeStart=${safeCommand}.`, "PowerShell MacHostSafeStart JSON board summary");
+      assertNotIncludes(output, "secret-value", "PowerShell MacHostSafeStart JSON should not leak rejected command");
+    }, boardState);
+
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-CheckBoard",
+        "-BoardSummary",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell MacHostSafeStart board summary failed\n${output}`);
+      assertIncludes(output, `MacHostSafeStart=${safeCommand}.`, "PowerShell MacHostSafeStart board summary");
+      assertNotIncludes(output, "secret-value", "PowerShell MacHostSafeStart board summary should not leak rejected command");
+      console.log("[OK] PowerShell resume-status wrapper surfaces MacHostSafeStart safely");
+    }, boardState);
+  });
+}
+
 async function checkUserAuthRequest(args) {
   await withMockHost(async (port) => {
     const result = await runPowerShell([
@@ -696,6 +769,7 @@ async function main() {
   await checkBoardSummary(args);
   await checkBoardCurrentCallSummary(args);
   await checkBoardCurrentCallJson(args);
+  await checkBoardMacHostSafeStartExtraction(args);
   await checkUserAuthRequest(args);
   await checkSendUserAuthRequest(args);
   await checkOfflineDefaults(args);

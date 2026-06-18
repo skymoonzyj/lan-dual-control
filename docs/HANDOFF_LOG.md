@@ -17,6 +17,43 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
+本轮目标：Windows 恢复总览消费 Mac 侧 `MacHostSafeStart=` 安全启动标签。
+完成内容：
+- `check-windows-resume-status --checkBoard` 现在会从 Agent Link Board `/api/state` 的状态、消息和事件里提取最近的 `MacHostSafeStart=`。
+- JSON 新增 `board.macHostSafeStart`，普通输出和 `--boardSummary` 会在找到时显示 `MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port <端口>`。
+- 提取器只接受 `node scripts/mac/start-mac-host.mjs ...` 形式且带真实数字端口的候选，并拒绝带 `--password`、token、secret、passwd、pwd 或 `<当前端口>` 这类占位值的命令；拒绝计数保留在 JSON 中，但不输出敏感文本。
+- PowerShell wrapper 帮助同步说明 `-CheckBoard` 会带出 `MacHostSafeStart=`。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`
+- 真实只读 `node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --checkBoard --boardSummary --timeoutMs 45000`：确认当前 Mac 预检 ready，且占位端口候选不会作为可复制 `MacHostSafeStart=` 输出。
+遗留问题：
+- 本轮只消费通讯板里已有的 Mac 安全启动命令；没有启动 Mac host、没有处理 LaunchAgent、没有做密码认证或真实 H.264 画面验收。
+下一步建议：
+- 后续若 Mac 端希望 Windows 总览显示可复制 `MacHostSafeStart=`，应在通讯板状态/消息里放真实数字端口的命令，不要只放 `<当前端口>` 占位说明。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
 ## 2026-06-18 Mac Codex
 
 日期：2026-06-18 继续推进

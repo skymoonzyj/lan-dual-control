@@ -58,6 +58,10 @@ JSON and human output also include local alert-watcher start/status commands
 so Windows can surface Mac-side auth, permission, blocked, and reverse-grant
 requests while a remote-control window is minimized. The report also checks
 the local alert-watcher status read-only, without starting it.
+When --checkBoard is enabled, the report also surfaces recent
+MacHostSafeStart= commands from Agent Link Board status/messages so Mac host
+safe foreground-start guidance is visible in Windows resume JSON, human output,
+and one-line board summaries.
 The report also surfaces the formal manual checklist command and the checklist
 ids so a resume handoff can immediately verify connection, video, audio,
 clipboard, input_ack, and diagnostics in that order.
@@ -412,6 +416,155 @@ function countBoardStateItems(state) {
   return statusCount + eventCount + messageCount + callCount;
 }
 
+function emptyMacHostSafeStart(source = "none", textCount = 0, rejectedCount = 0) {
+  return {
+    found: false,
+    command: "",
+    commands: [],
+    source,
+    textCount,
+    rejectedCount,
+  };
+}
+
+function collectStringValues(value, results = [], depth = 0) {
+  if (depth > 6 || value === null || value === undefined) return results;
+  if (typeof value === "string") {
+    const text = normalizedText(value);
+    if (text) results.push(text);
+    return results;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectStringValues(item, results, depth + 1);
+    return results;
+  }
+  if (typeof value === "object") {
+    for (const item of Object.values(value)) collectStringValues(item, results, depth + 1);
+  }
+  return results;
+}
+
+function stripCommandToken(token) {
+  let value = normalizedText(token);
+  const sentenceBoundary = value.search(/[;，。；]/);
+  if (sentenceBoundary >= 0) value = value.slice(0, sentenceBoundary);
+  return value.replace(/[.,]+$/g, "");
+}
+
+function hasSecretLikeCommandValue(commandText) {
+  const text = String(commandText || "");
+  return (
+    /\bLAN_DUAL_PASSWORD\s*=/i.test(text) ||
+    /\b(?:token|secret|passwd|pwd)\s*[:=]\s*\S+/i.test(text) ||
+    /(?:^|\s)--(?:password|token|secret|passwd|pwd)\s+\S+/i.test(text)
+  );
+}
+
+function parseMacHostSafeStartCommand(fragment) {
+  const rawTokens = String(fragment || "").split(/\s+/).map(stripCommandToken).filter(Boolean);
+  if (rawTokens.length < 2) return null;
+  if (rawTokens[0] !== "node") return null;
+  if (rawTokens[1].replace(/\\/g, "/") !== "scripts/mac/start-mac-host.mjs") return null;
+
+  const noValueFlags = new Set([
+    "--promptPassword",
+    "--requirePassword",
+    "--background",
+    "--ephemeralPassword",
+    "--confirmUserWatching",
+    "--boardSummary",
+  ]);
+  const valueFlags = new Set([
+    "--host",
+    "--port",
+    "--inputMode",
+    "--maxScreenFps",
+    "--width",
+    "--height",
+    "--fps",
+    "--bandwidthKbps",
+    "--logFile",
+  ]);
+  const tokens = [rawTokens[0], rawTokens[1]];
+  for (let index = 2; index < rawTokens.length; index += 1) {
+    const token = rawTokens[index];
+    if (!token || /^[A-Za-z][A-Za-z0-9_-]*=/.test(token)) break;
+    if (!token.startsWith("--")) break;
+    if (/^--(?:password|token|secret|passwd|pwd)$/i.test(token)) return null;
+    if (noValueFlags.has(token)) {
+      tokens.push(token);
+      continue;
+    }
+    if (valueFlags.has(token)) {
+      const value = stripCommandToken(rawTokens[index + 1] || "");
+      if (!value || value.startsWith("--") || /^[A-Za-z][A-Za-z0-9_-]*=/.test(value)) break;
+      if (/[<>]/.test(value)) return null;
+      if (token === "--port") {
+        const port = Number(value);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+      }
+      const pair = `${token} ${value}`;
+      if (hasSecretLikeCommandValue(pair)) return null;
+      tokens.push(token, value);
+      index += 1;
+      continue;
+    }
+    break;
+  }
+
+  const commandText = tokens.join(" ");
+  if (tokens.length < 4 || hasSecretLikeCommandValue(commandText)) return null;
+  return commandText;
+}
+
+function extractMacHostSafeStartFromText(text, source = "text") {
+  const value = String(text || "");
+  const regex = /\bMacHostSafeStart\s*=\s*/gi;
+  const commands = [];
+  let rejectedCount = 0;
+  let match;
+  while ((match = regex.exec(value)) !== null) {
+    const fragment = value.slice(match.index + match[0].length);
+    const commandText = parseMacHostSafeStartCommand(fragment);
+    if (commandText) {
+      if (!commands.includes(commandText)) commands.push(commandText);
+    } else {
+      rejectedCount += 1;
+    }
+  }
+  if (commands.length === 0) return emptyMacHostSafeStart(source, value ? 1 : 0, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source,
+    textCount: value ? 1 : 0,
+    rejectedCount,
+  };
+}
+
+function extractMacHostSafeStartFromBoardState(state) {
+  const texts = collectStringValues(state);
+  const commands = [];
+  let rejectedCount = 0;
+  for (const text of texts) {
+    const extracted = extractMacHostSafeStartFromText(text, "api-state");
+    for (const commandText of extracted.commands) {
+      if (!commands.includes(commandText)) commands.push(commandText);
+    }
+    rejectedCount += extracted.rejectedCount;
+  }
+  if (commands.length === 0) return emptyMacHostSafeStart("api-state", texts.length, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source: "api-state",
+    textCount: texts.length,
+    rejectedCount,
+  };
+}
+
 async function getBoardState(args) {
   const controller = new AbortController();
   const timeoutMs = Math.min(Math.max(args.timeoutMs, 5000), 30000);
@@ -474,6 +627,7 @@ async function getBoardSnapshot(args) {
         active: false,
         summary: "not checked",
       },
+      macHostSafeStart: emptyMacHostSafeStart("skipped"),
       error: "",
     };
   }
@@ -488,6 +642,7 @@ async function getBoardSnapshot(args) {
       lineCount: countBoardStateItems(stateResult.state),
       tail: [],
       currentCall: normalizeBoardCurrentCall(stateResult.state?.currentCall),
+      macHostSafeStart: extractMacHostSafeStartFromBoardState(stateResult.state),
       error: "",
     };
   }
@@ -507,6 +662,7 @@ async function getBoardSnapshot(args) {
     lineCount: splitLines(output).length,
     tail: tailLines(output, 8),
     currentCall: parseBoardCurrentCall(output),
+    macHostSafeStart: extractMacHostSafeStartFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     apiStateError: normalizedText(stateResult.error),
     error: result.ok ? "" : normalizedText(stateResult.error || result.error || result.stderr),
   };
@@ -1158,6 +1314,7 @@ function makeBoardSummary(report) {
     `MacDiscoveryPs=${report.commands.macHostDiscoveryPowerShellBoardSummary}.`,
     `MacUnattended=${report.commands.macUnattendedStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalStatusCommand}.`,
+    ...(report.board.macHostSafeStart?.command ? [`MacHostSafeStart=${report.board.macHostSafeStart.command}.`] : []),
     `FormalChecklist=${report.commands.formalChecklistBoardSummary}; ManualChecklist=${report.formalManualChecklist.summary}.`,
     `WinClientDiagnostics=${report.commands.windowsClientDiagnosticsCommand}; WinClientDiagnosticsPs=${report.commands.windowsClientDiagnosticsPowerShellCommand}; CopyDiagnostics=${report.commands.windowsClientCopyDiagnosticsAction}`,
     `WinClientDiagnosticsAlt=${report.commands.windowsClientDiagnosticsAlternateCommand}; WinClientDiagnosticsAltPs=${report.commands.windowsClientDiagnosticsAlternatePowerShellCommand}.`,
@@ -1340,6 +1497,9 @@ function printHuman(report) {
     } else {
       console.log("  currentCall=none");
     }
+    if (report.board.macHostSafeStart?.command) {
+      console.log(`  MacHostSafeStart=${report.board.macHostSafeStart.command}`);
+    }
   } else {
     console.log("- Agent Link Board: skipped (use --checkBoard)");
   }
@@ -1375,6 +1535,9 @@ function printHuman(report) {
   console.log(`  ${report.commands.macHostDiscoveryPowerShellBoardSummary}`);
   console.log(`  ${report.commands.macUnattendedStatusCommand}`);
   console.log(`  ${report.commands.macUnattendedFormalStatusCommand}`);
+  if (report.board.macHostSafeStart?.command) {
+    console.log(`  MacHostSafeStart=${report.board.macHostSafeStart.command}`);
+  }
   console.log(`  ${report.commands.formalChecklistBoardSummary}`);
   console.log(`  ${report.commands.preflightBoardSummary}`);
   console.log(`  ${report.commands.userAuthRequest}`);
