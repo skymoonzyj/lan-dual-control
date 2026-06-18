@@ -2242,6 +2242,169 @@ async function verifyMacClientFileClipboardResultFailureRetry({ args, session, u
   print("OK", `File clipboard retry after failed result: ${retryReadySnapshot.fileClipboard} -> ${successSnapshot.fileClipboard}`);
 }
 
+async function verifyMacClientFileClipboardResultTimeoutRetry({ args, session, uploadDir }) {
+  const timeoutPath = join(uploadDir, `mac-client-file-timeout-${Date.now()}.txt`);
+  const timeoutText = [
+    "LAN Dual Control Mac client file clipboard timeout self-test",
+    "This file should remain selected when the host never confirms the transfer result.",
+    `createdAt=${new Date().toISOString()}`,
+    "",
+  ].join("\n");
+  await writeFile(timeoutPath, timeoutText, "utf8");
+
+  await setFileInputFiles(session, "#clipboardFileInput", [timeoutPath]);
+  await evaluate(
+    session,
+    `(() => {
+      window.__lanDualSentMessages = [];
+      window.__lanDualReceivedMessages = [];
+      window.__lanDualLastReceivedByType = {};
+      const socket = window.__lanDualLastSocket;
+      if (!socket) throw new Error("missing recorded WebSocket");
+      window.__lanDualSyntheticFileSend = socket.send;
+      socket.send = (data) => {
+        try {
+          window.__lanDualSentMessages.push(JSON.parse(String(data)));
+        } catch {
+          window.__lanDualSentMessages.push({ raw: String(data) });
+        }
+      };
+      const input = document.querySelector("#clipboardFileInput");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      document.querySelector("#sendClipboardFilesButton").click();
+      return true;
+    })()`,
+  );
+
+  const timedOutTransfer = await waitFor(
+    async () => {
+      const value = await evaluate(
+        session,
+        `(() => {
+          const messages = window.__lanDualSentMessages || [];
+          const complete = messages.find((message) => message.type === "clipboard_file_complete");
+          const offer = messages.find((message) => message.type === "clipboard_file_offer");
+          const snapshot = ${buildSnapshotExpression()};
+          return complete && offer ? { ...snapshot, transferId: complete.transferId, offerTransferId: offer.transferId } : null;
+        })()`,
+      );
+      return value?.transferId && value.transferId === value.offerTransferId ? value : null;
+    },
+    args.timeoutMs,
+    "Mac client file clipboard synthetic timeout send",
+  );
+
+  const timeoutReadySnapshot = await waitFor(
+    async () => {
+      const value = await evaluate(session, buildSnapshotExpression());
+      return value.fileClipboard.includes("确认超时") &&
+        value.fileClipboard.includes("重新发送") &&
+        value.clipboardFileCount === 1 &&
+        !value.sendClipboardFilesButtonDisabled &&
+        value.sendClipboardFilesButtonText.includes("重新发送")
+        ? value
+        : null;
+    },
+    args.timeoutMs,
+    "Mac client file clipboard timeout retry state",
+  );
+
+  await evaluate(
+    session,
+    `(() => {
+      window.__lanDualSentMessages = [];
+      document.querySelector("#sendClipboardFilesButton").click();
+      return true;
+    })()`,
+  );
+
+  const retryTransfer = await waitFor(
+    async () => {
+      const value = await evaluate(
+        session,
+        `(() => {
+          const messages = window.__lanDualSentMessages || [];
+          const complete = messages.find((message) => message.type === "clipboard_file_complete");
+          const offer = messages.find((message) => message.type === "clipboard_file_offer");
+          const snapshot = ${buildSnapshotExpression()};
+          return complete && offer ? { ...snapshot, transferId: complete.transferId, offerTransferId: offer.transferId } : null;
+        })()`,
+      );
+      return value?.transferId &&
+        value.transferId === value.offerTransferId &&
+        value.transferId !== timedOutTransfer.transferId
+        ? value
+        : null;
+    },
+    args.timeoutMs,
+    "Mac client file clipboard timeout retry send",
+  );
+
+  await evaluate(
+    session,
+    `(() => {
+      const socket = window.__lanDualLastSocket;
+      if (!socket) throw new Error("missing recorded WebSocket");
+      socket.dispatchEvent(new MessageEvent("message", {
+        data: JSON.stringify({
+          type: "clipboard_file_result",
+          transferId: ${JSON.stringify(timedOutTransfer.transferId)},
+          accepted: true,
+          saveMode: "temp",
+          receivedBytes: 128,
+          totalBytes: 128,
+        }),
+      }));
+      return true;
+    })()`,
+  );
+  await delay(250);
+  const staleSnapshot = await evaluate(session, buildSnapshotExpression());
+  if (!staleSnapshot.fileClipboard.includes("等待确认")) {
+    throw new Error(`Mac client stale timed-out result overwrote retry state: ${JSON.stringify(staleSnapshot)}`);
+  }
+
+  await evaluate(
+    session,
+    `(() => {
+      const socket = window.__lanDualLastSocket;
+      if (!socket) throw new Error("missing recorded WebSocket");
+      socket.dispatchEvent(new MessageEvent("message", {
+        data: JSON.stringify({
+          type: "clipboard_file_result",
+          transferId: ${JSON.stringify(retryTransfer.transferId)},
+          accepted: true,
+          saveMode: "clipboard",
+          receivedBytes: 128,
+          totalBytes: 128,
+        }),
+      }));
+      if (window.__lanDualSyntheticFileSend) {
+        socket.send = window.__lanDualSyntheticFileSend;
+        delete window.__lanDualSyntheticFileSend;
+      }
+      return true;
+    })()`,
+  );
+
+  const successSnapshot = await waitFor(
+    async () => {
+      const value = await evaluate(session, buildSnapshotExpression());
+      return value.fileClipboard.includes("已写入") &&
+        value.clipboardFileCount === 0 &&
+        value.sendClipboardFilesButtonDisabled &&
+        value.sendClipboardFilesButtonText.includes("发送文件")
+        ? value
+        : null;
+    },
+    args.timeoutMs,
+    "Mac client file clipboard timeout retry success state",
+  );
+
+  print("OK", `File clipboard retry after result timeout: ${timeoutReadySnapshot.fileClipboard} -> ${successSnapshot.fileClipboard}`);
+}
+
 async function verifyMacClientFileClipboardDisconnectCancel({ args, session, uploadDir }) {
   const cancelPath = join(uploadDir, `mac-client-file-cancel-${Date.now()}.txt`);
   const cancelText = [
@@ -2347,6 +2510,7 @@ async function run() {
   const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
   const clientOrigin = `http://127.0.0.1:${args.clientPort}`;
   const clientParams = new URLSearchParams();
+  clientParams.set("clipboardFileResultTimeoutMs", "650");
   if (args.disableBinaryVideo) {
     clientParams.set("binaryVideo", "0");
   }
@@ -3459,6 +3623,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       print("OK", `File clipboard: ${fileClipboardSnapshot.fileClipboard}`);
       lastBoardSummaryReport.clipboardFile = fileClipboardSnapshot.fileClipboard;
       await verifyMacClientFileClipboardResultFailureRetry({ args, session, uploadDir });
+      await verifyMacClientFileClipboardResultTimeoutRetry({ args, session, uploadDir });
       await verifyMacClientFileClipboardDisconnectCancel({ args, session, uploadDir });
     }
 

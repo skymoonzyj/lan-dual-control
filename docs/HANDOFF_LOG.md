@@ -49,6 +49,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac client 发送文件后，如果对端迟迟不返回 `clipboard_file_result`，也能保留文件并一键重发。
+完成内容：
+- Mac client 发送 `clipboard_file_complete` 后会启动默认 45 秒确认计时器。
+- 计时器到期仍未收到当前 transfer 的 `clipboard_file_result` 时，页面显示“确认超时”、保留当前文件选择，并把按钮切换为“重新发送”。
+- 点击“重新发送”会从头发起新的 `transferId`；旧 transfer 的迟到 result 会被忽略，不会覆盖当前重发等待状态。
+修改文件：
+- `apps/mac-client/app.js`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-mac-client-browser.mjs --clientPort 5198 --debugPort 9342 --mockVideo --allowClipboardFallback --progressIntervalMs 0 --timeoutMs 8000`（失败点：`Mac client file clipboard timeout retry state timed out`）。
+- 实现后复跑完整 mock browser 自测：`node scripts/windows/test-mac-client-browser.mjs --clientPort 5198 --debugPort 9342 --mockVideo --allowClipboardFallback --progressIntervalMs 0 --timeoutMs 45000`，新增输出：`File clipboard retry after result timeout: 确认超时 ... 可重新发送 -> 已写入 · clipboard · 128 B`。
+遗留问题：
+- 这仍不是断点续传；超时后的重发会从头发送保留文件。
+- 真机大文件/压缩包长测仍需观察 Windows 端真实 result、超时和重发体验。
+下一步建议：
+- 真机长测时同时看 Mac client 超时重发、Windows 控制端本机发送超时重发和复制/导出诊断是否一致好读。
+是否改了协议：否；只消费既有 `clipboard_file_result`，并在本地 UI 做超时兜底。
+是否需要另一端配合：暂不需要；真实大文件/压缩包长测时再呼叫 Windows 配合。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac client 发送文件到 Windows 后，能消费对端失败结果并保留一键重发。
 完成内容：
 - Mac client 发送 `clipboard_file_complete` 后现在进入“等待确认”状态，按钮保持禁用，不再把“网络已发完”误当成对端已写入。

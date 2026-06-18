@@ -111,6 +111,7 @@ const state = {
   fileTransferRetryAvailable: false,
   fileTransferId: "",
   fileTransferAbortController: null,
+  fileTransferResultTimer: null,
   fileTransfers: new Map(),
   closeStatusOverride: "",
   manualDisconnect: false,
@@ -147,6 +148,10 @@ const recentConnectionsStorageKey = "lanDualMacClientRecentConnections";
 const maxRecentConnections = 8;
 const fileChunkSizeBytes = 64 * 1024;
 const maxClipboardFileBytes = 32 * 1024 * 1024;
+const clipboardFileResultTimeoutMs = (() => {
+  const value = Number(new URLSearchParams(window.location.search).get("clipboardFileResultTimeoutMs") || "45000");
+  return Number.isFinite(value) && value > 0 ? value : 45000;
+})();
 const clipboardWatchIntervalMs = 1200;
 const maxReconnectAttempts = 3;
 const reconnectBaseDelayMs = 1200;
@@ -2801,10 +2806,44 @@ function throwIfFileTransferCanceled(signal) {
   }
 }
 
+function clearFileTransferResultTimer() {
+  if (!state.fileTransferResultTimer) {
+    return;
+  }
+  window.clearTimeout(state.fileTransferResultTimer);
+  state.fileTransferResultTimer = null;
+}
+
+function handleFileTransferResultTimeout(transferId) {
+  if (!state.fileTransferAwaitingResult || state.fileTransferId !== transferId || !state.fileTransfers.has(transferId)) {
+    return;
+  }
+  const transfer = state.fileTransfers.get(transferId) || {};
+  state.fileTransfers.delete(transferId);
+  state.fileTransferResultTimer = null;
+  state.fileTransferId = "";
+  state.fileTransferAbortController = null;
+  state.fileTransferActive = false;
+  state.fileTransferAwaitingResult = false;
+  state.fileTransferRetryAvailable = true;
+  const sentText = transfer.sentBytes || transfer.totalBytes ? ` · ${formatBytes(transfer.sentBytes || transfer.totalBytes)}` : "";
+  elements.fileClipboardStatus.textContent = `确认超时${sentText} · 可重新发送`;
+  logEvent("文件剪贴板确认超时", `${Math.round(clipboardFileResultTimeoutMs / 1000)} 秒未收到对端结果，请重新发送`);
+  updateFileClipboardButton();
+}
+
+function scheduleFileTransferResultTimeout(transferId) {
+  clearFileTransferResultTimer();
+  state.fileTransferResultTimer = window.setTimeout(() => {
+    handleFileTransferResultTimeout(transferId);
+  }, clipboardFileResultTimeoutMs);
+}
+
 function cancelActiveFileTransfer(status = "文件发送已取消") {
   if (!state.fileTransferActive && !state.fileTransferAbortController && !state.fileTransferAwaitingResult) {
     return;
   }
+  clearFileTransferResultTimer();
   state.fileTransferAbortController?.abort();
   state.fileTransferId = "";
   state.fileTransferAbortController = null;
@@ -2852,6 +2891,7 @@ async function sendClipboardFiles() {
 
   let sentBytes = 0;
   const abortController = new AbortController();
+  clearFileTransferResultTimer();
   state.fileTransferActive = true;
   state.fileTransferAwaitingResult = false;
   state.fileTransferRetryAvailable = false;
@@ -2931,6 +2971,7 @@ async function sendClipboardFiles() {
       fileCount: files.length,
     });
     state.fileTransferAwaitingResult = true;
+    scheduleFileTransferResultTimeout(transferId);
     elements.fileClipboardStatus.textContent = `已发送 ${formatBytes(sentBytes)} · 等待确认`;
     logEvent("文件剪贴板", `文件块发送完成，等待确认 · ${transferId}`);
   } catch (error) {
@@ -2944,8 +2985,10 @@ async function sendClipboardFiles() {
   } finally {
     if (state.fileTransferAbortController === abortController) {
       state.fileTransferAbortController = null;
-      state.fileTransferId = "";
       state.fileTransferActive = false;
+      if (!state.fileTransferAwaitingResult) {
+        state.fileTransferId = "";
+      }
     }
     if (!state.fileTransferActive && !state.fileTransferAwaitingResult) {
       elements.clipboardFileInput.value = "";
@@ -2992,6 +3035,7 @@ function handleClipboardFileResult(message) {
   if (!isCurrentFileTransferMessage(message)) {
     return;
   }
+  clearFileTransferResultTimer();
   const totalBytes = Number(message.totalBytes) || 0;
   const receivedBytes = Number(message.receivedBytes) || 0;
   const status = message.accepted
