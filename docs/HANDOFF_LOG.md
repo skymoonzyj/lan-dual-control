@@ -19,6 +19,41 @@
 
 ## 2026-06-18 Windows Codex
 
+日期：2026-06-18 继续收口
+开发端：Windows Codex
+本轮目标：让 Windows 恢复总览 PowerShell wrapper 也能直接绕开第二步默认诊断端口残留，对齐 Node 入口的 `WinClientPorts` 能力。
+完成内容：
+- `check-windows-resume-status.ps1` 新增 `-ClientPort`、`-DebugPort`、`-AlternateClientPort`、`-AlternateDebugPort`，并传给 Node 恢复总览。
+- PowerShell wrapper 帮助新增备用端口示例：`-ClientPort 5200 -DebugPort 9340`，并说明 `WinClientDiagnosticsAlt` 用于默认 `5197/9337` 被旧诊断残留占用时复查。
+- PowerShell 回归新增 custom ports/fake stale diagnostics 场景，确认 `WinClientPorts=occupied(5200,9340;stale-diagnostics)`、`WinClientPortsNext=use --clientPort 5201 --debugPort 9341`、formal preflight 命令和诊断命令都收到端口参数。
+修改文件：
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- Windows PowerShell AST 解析 `scripts/windows/check-windows-resume-status.ps1`
+- PowerShell 7 AST 解析 `scripts/windows/check-windows-resume-status.ps1`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 60000`
+- `node scripts/windows/test-windows-powershell-help.mjs --script check-windows-resume-status.ps1 --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --script check-windows-resume-status.ps1 --timeoutMs 10000 --boardSummary`
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-resume-status.ps1 -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -CheckClientDiagnostics -ClientPort 5200 -DebugPort 9340 -BoardSummary -TimeoutMs 45000`
+- `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-resume-status.ps1 -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -CheckClientDiagnostics -ClientPort 5200 -DebugPort 9340 -BoardSummary -TimeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows docs`
+遗留问题：
+- 本轮仍不自动结束旧诊断进程；只提供 PowerShell/Node 备用端口绕行和明确提示。
+下一步建议：
+- 以后现场如果 `WinClientPorts=occupied(...;stale-diagnostics)`，PowerShell 入口优先跑 `check-windows-resume-status.ps1 -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -CheckClientDiagnostics -ClientPort 5200 -DebugPort 9340 -BoardSummary`。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-18 Windows Codex
+
 日期：2026-06-18 现场复核
 开发端：Windows Codex
 本轮目标：重新检查正式验收第二步卡住现象，并把 Windows 控制端诊断默认端口占用提示固化进恢复总览。

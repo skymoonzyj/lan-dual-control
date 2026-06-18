@@ -63,7 +63,7 @@ function assertNotIncludes(text, expected, label) {
   assert(!String(text).includes(expected), `${label} unexpectedly included ${JSON.stringify(expected)}.\n${text}`);
 }
 
-function runPowerShell(extraArgs, args) {
+function runPowerShell(extraArgs, args, env = {}) {
   return new Promise((resolveRun) => {
     const child = spawn("powershell.exe", [
       "-NoProfile",
@@ -77,6 +77,7 @@ function runPowerShell(extraArgs, args) {
       env: {
         ...process.env,
         LAN_DUAL_PASSWORD: "",
+        ...env,
       },
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -215,6 +216,8 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "one-line no-password Windows client diagnostics command", "PowerShell wrapper help");
   assertIncludes(output, "test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000", "PowerShell wrapper help");
   assertIncludes(output, "test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets", "PowerShell wrapper help");
+  assertIncludes(output, "-ClientPort 5200 -DebugPort 9340", "PowerShell wrapper help");
+  assertIncludes(output, "WinClientDiagnosticsAlt", "PowerShell wrapper help");
   assertIncludes(output, "Windows video encoder/WGC/WebCodecs support command", "PowerShell wrapper help");
   assertIncludes(output, "check-windows-video-encoder-support.mjs --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "check-windows-video-encoder-support.ps1 -BoardSummary", "PowerShell wrapper help");
@@ -257,7 +260,11 @@ async function checkMockJson(args) {
     assert(payload.macPreflight?.payload?.online === true, "mock JSON should include online preflight");
     assert(payload.macPreflight?.payload?.target?.port === port, "mock JSON should use discovered mock port");
     assert(payload.macPreflight?.payload?.discoverySelection?.requested === true, "preflight should record discovery");
+    assertIncludes(payload.macPreflight?.command, "--clientPort 5197", "mock JSON formal preflight command");
+    assertIncludes(payload.macPreflight?.command, "--debugPort 9337", "mock JSON formal preflight command");
     assertIncludes(payload.boardSummary, "Windows resume:", "mock JSON board summary");
+    assert(payload.windowsClientDiagnosticsPorts?.clientPort === 5197, "mock JSON should record default client diagnostics page port");
+    assert(payload.windowsClientDiagnosticsPorts?.debugPort === 9337, "mock JSON should record default client diagnostics debug port");
     assertIncludes(payload.userAuthRequest, "NEED_USER_AUTH", "mock JSON userAuthRequest");
     assertIncludes(payload.userAuthRequest, "powershell.exe", "mock JSON userAuthRequest");
     assertIncludes(payload.commands?.macHostDiscoveryBoardSummary, "discover-lan-hosts.mjs", "mock JSON Mac discovery command");
@@ -338,11 +345,19 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, "--boardSummary", "mock JSON client diagnostics command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, "--discoverNoLocalSubnets", "mock JSON client diagnostics command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, `--port ${port}`, "mock JSON client diagnostics command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, "--clientPort 5197", "mock JSON client diagnostics command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, "--debugPort 9337", "mock JSON client diagnostics command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsAlternateCommand, "--clientPort 5200", "mock JSON alternate client diagnostics command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsAlternateCommand, "--debugPort 9340", "mock JSON alternate client diagnostics command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, "test-windows-client-browser.ps1", "mock JSON client diagnostics PowerShell command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, "-DiagnosticsOnly", "mock JSON client diagnostics PowerShell command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, "-BoardSummary", "mock JSON client diagnostics PowerShell command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, "-DiscoverNoLocalSubnets", "mock JSON client diagnostics PowerShell command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, `-Port ${port}`, "mock JSON client diagnostics PowerShell command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, "-ClientPort 5197", "mock JSON client diagnostics PowerShell command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, "-DebugPort 9337", "mock JSON client diagnostics PowerShell command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsAlternatePowerShellCommand, "-ClientPort 5200", "mock JSON alternate client diagnostics PowerShell command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsAlternatePowerShellCommand, "-DebugPort 9340", "mock JSON alternate client diagnostics PowerShell command");
     assertIncludes(payload.commands?.windowsClientCopyDiagnosticsAction, "复制诊断", "mock JSON copy diagnostics action");
     assertIncludes(payload.commands?.windowsClientCopyDiagnosticsAction, "快速摘要", "mock JSON copy diagnostics action");
     assertIncludes(payload.commands?.windowsMacAlertWatcherStart, "start-mac-alert-watcher.ps1", "mock JSON alert watcher start command");
@@ -360,6 +375,66 @@ async function checkMockJson(args) {
     assert(payload.windowsMacAlertWatcher?.running === true || payload.windowsMacAlertWatcher?.running === false || payload.windowsMacAlertWatcher?.running === null, "PowerShell watcher running should be boolean or null");
     assertNotIncludes(output, "test-password", "PowerShell mock JSON");
     console.log("[OK] PowerShell resume-status wrapper supports mock JSON discovery");
+  });
+}
+
+async function checkCustomClientDiagnosticsPorts(args) {
+  await withMockHost(async (port) => {
+    const fakePorts = JSON.stringify({
+      owners: [
+        {
+          localAddress: "127.0.0.1",
+          localPort: 5200,
+          state: "Listen",
+          owningProcess: 61088,
+          processName: "node.exe",
+          commandLine: "node.exe apps/windows-client/server.mjs 5200",
+        },
+        {
+          localAddress: "::1",
+          localPort: 9340,
+          state: "Listen",
+          owningProcess: 44488,
+          processName: "msedge.exe",
+          commandLine: "msedge.exe --remote-debugging-port=9340 --user-data-dir=C:\\Temp\\lan-dual-edge-pwsh",
+        },
+      ],
+    });
+    const result = await runPowerShell([
+      "-Discover",
+      "-DiscoverNoLocalSubnets",
+      "-HostName", "127.0.0.1",
+      "-Port", String(port),
+      "-ClientPort", "5200",
+      "-DebugPort", "9340",
+      "-AlternateClientPort", "5201",
+      "-AlternateDebugPort", "9341",
+      "-Json",
+      "-AllowMockVideo",
+      "-SkipAudio",
+      "-SkipClipboard",
+      "-SkipInputLog",
+    ], args, {
+      LAN_DUAL_FAKE_WINDOWS_CLIENT_PORTS_JSON: fakePorts,
+    });
+    const output = `${result.stdout}\n${result.stderr}`;
+    assert(result.exitCode === 0, `PowerShell custom client ports JSON failed\n${output}`);
+    const payload = JSON.parse(result.stdout);
+    assert(payload.args?.clientPort === 5200, "PowerShell custom ports should reach Node args clientPort");
+    assert(payload.args?.debugPort === 9340, "PowerShell custom ports should reach Node args debugPort");
+    assert(payload.args?.alternateClientPort === 5201, "PowerShell custom ports should reach Node args alternateClientPort");
+    assert(payload.args?.alternateDebugPort === 9341, "PowerShell custom ports should reach Node args alternateDebugPort");
+    assertIncludes(payload.macPreflight?.command, "--clientPort 5200", "PowerShell custom ports formal preflight command");
+    assertIncludes(payload.macPreflight?.command, "--debugPort 9340", "PowerShell custom ports formal preflight command");
+    assert(payload.windowsClientDiagnosticsPorts?.state === "occupied-stale-diagnostics", "PowerShell custom ports should detect stale diagnostics occupancy");
+    assertIncludes(payload.boardSummary, "WinClientPorts=occupied(5200,9340;stale-diagnostics)", "PowerShell custom ports board summary");
+    assertIncludes(payload.boardSummary, "WinClientPortsNext=use --clientPort 5201 --debugPort 9341", "PowerShell custom ports board summary");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, "--clientPort 5200 --debugPort 9340", "PowerShell custom ports client diagnostics command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsAlternateCommand, "--clientPort 5201 --debugPort 9341", "PowerShell custom ports alternate diagnostics command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, "-ClientPort 5200 -DebugPort 9340", "PowerShell custom ports client diagnostics PowerShell command");
+    assertIncludes(payload.commands?.windowsClientDiagnosticsAlternatePowerShellCommand, "-ClientPort 5201 -DebugPort 9341", "PowerShell custom ports alternate diagnostics PowerShell command");
+    assertNotIncludes(output, "test-password", "PowerShell custom client ports JSON");
+    console.log("[OK] PowerShell resume-status wrapper forwards custom client diagnostics ports");
   });
 }
 
@@ -381,6 +456,8 @@ async function checkBoardSummary(args) {
     const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean);
     assert(lines.length === 1, `board summary should be one line, got ${lines.length}`);
     assertIncludes(output, "mac=ready", "PowerShell board summary");
+    assertIncludes(output, "WinClientPorts=", "PowerShell board summary");
+    assertIncludes(output, "WinClientPortsNext=", "PowerShell board summary");
     assertIncludes(output, "MacDiscovery=", "PowerShell board summary");
     assertIncludes(output, "discover-lan-hosts.mjs --noLocalSubnets --host 127.0.0.1", "PowerShell board summary");
     assertIncludes(output, "--requireMacHost --boardSummary", "PowerShell board summary");
@@ -395,10 +472,16 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "PowerShell board summary");
     assertIncludes(output, "WinClientDiagnostics=", "PowerShell board summary");
     assertIncludes(output, "test-windows-client-browser.mjs --discover --discoverNoLocalSubnets", "PowerShell board summary");
+    assertIncludes(output, "--clientPort 5197 --debugPort 9337", "PowerShell board summary");
     assertIncludes(output, "--diagnosticsOnly --boardSummary --timeoutMs 45000", "PowerShell board summary");
     assertIncludes(output, "WinClientDiagnosticsPs=", "PowerShell board summary");
     assertIncludes(output, "test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets", "PowerShell board summary");
+    assertIncludes(output, "-ClientPort 5197 -DebugPort 9337", "PowerShell board summary");
     assertIncludes(output, "-DiagnosticsOnly -BoardSummary -TimeoutMs 45000", "PowerShell board summary");
+    assertIncludes(output, "WinClientDiagnosticsAlt=", "PowerShell board summary");
+    assertIncludes(output, "--clientPort 5200 --debugPort 9340", "PowerShell board summary");
+    assertIncludes(output, "WinClientDiagnosticsAltPs=", "PowerShell board summary");
+    assertIncludes(output, "-ClientPort 5200 -DebugPort 9340", "PowerShell board summary");
     assertIncludes(output, "CopyDiagnostics=Windows 控制端事件面板点击", "PowerShell board summary");
     assertIncludes(output, "快速摘要", "PowerShell board summary");
     assertIncludes(output, "WindowsHostMedia=", "PowerShell board summary");
@@ -599,6 +682,7 @@ async function main() {
   const args = parseArgs(process.argv);
   await checkWrapperHelp(args);
   await checkMockJson(args);
+  await checkCustomClientDiagnosticsPorts(args);
   await checkBoardSummary(args);
   await checkBoardCurrentCallSummary(args);
   await checkBoardCurrentCallJson(args);

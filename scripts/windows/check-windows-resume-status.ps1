@@ -6,6 +6,10 @@ param(
   [switch] $DiscoverNoLocalSubnets,
   [int] $DiscoverTimeoutMs = 1200,
   [int] $TimeoutMs = 12000,
+  [int] $ClientPort = 5197,
+  [int] $DebugPort = 9337,
+  [int] $AlternateClientPort = 5200,
+  [int] $AlternateDebugPort = 9340,
   [string] $Server = "http://192.168.31.68:17888",
   [switch] $CheckBoard,
   [switch] $CheckClientDiagnostics,
@@ -40,6 +44,7 @@ Common examples:
   scripts\windows\check-windows-resume-status.ps1 -CheckBoard -CheckClientDiagnostics -UserAuthRequest
   scripts\windows\check-windows-resume-status.ps1 -CheckBoard -CheckClientDiagnostics -SendUserAuthRequest
   scripts\windows\check-windows-resume-status.ps1 -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -Json
+  scripts\windows\check-windows-resume-status.ps1 -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -CheckClientDiagnostics -ClientPort 5200 -DebugPort 9340 -BoardSummary
   scripts\windows\check-windows-resume-status.ps1 -NoDiscover -HostName 127.0.0.1 -Port 9 -Json -RequireMacReady
 
 This wrapper calls node scripts/windows/check-windows-resume-status.mjs. It is
@@ -70,6 +75,9 @@ It also includes a one-line no-password Windows client diagnostics command:
 node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
 PowerShell equivalent:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets -HostName <Mac IP> -Port 43770 -DiagnosticsOnly -BoardSummary -TimeoutMs 45000
+The report also checks the local Windows client diagnostics ports read-only. If
+the default page/debug ports 5197/9337 are still occupied by an old diagnostics
+run, use -ClientPort 5200 -DebugPort 9340 on this wrapper or the WinClientDiagnosticsAlt command from the summary.
 It also includes a read-only Windows video encoder/WGC/WebCodecs support command:
 node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary
 PowerShell equivalent:
@@ -121,6 +129,10 @@ try {
     "--port", $Port,
     "--discoverTimeoutMs", $DiscoverTimeoutMs,
     "--timeoutMs", $TimeoutMs,
+    "--clientPort", $ClientPort,
+    "--debugPort", $DebugPort,
+    "--alternateClientPort", $AlternateClientPort,
+    "--alternateDebugPort", $AlternateDebugPort,
     "--server", $Server
   )
 
