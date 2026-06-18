@@ -61,9 +61,12 @@ the local alert-watcher status read-only, without starting it.
 The report also surfaces the formal manual checklist command and the checklist
 ids so a resume handoff can immediately verify connection, video, audio,
 clipboard, input_ack, and diagnostics in that order.
-It also includes MacDiscovery Node and PowerShell commands that can be posted
-before formal preflight when the team wants a fresh, secret-free /discovery
-snapshot.
+  It also includes MacDiscovery Node and PowerShell commands that can be posted
+  before formal preflight when the team wants a fresh, secret-free /discovery
+  snapshot.
+  It also includes MacUnattendedFormal with --requireLaunchAgentMaxFps so formal
+  60Hz readiness can treat LaunchAgent max FPS gaps as blockers before asking
+  for a password.
 
 Options:
   --host <host>                 Explicit Mac host target. Default: ${defaults.host}
@@ -100,6 +103,7 @@ Examples:
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
   node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host 192.168.31.122 --port 43770 --requireMacHost --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary
+  node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/discover-lan-hosts.ps1 -NoLocalSubnets -HostName 192.168.31.122 -Port 43770 -RequireMacHost -BoardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --clientPort 5200 --debugPort 9340 --boardSummary
@@ -789,6 +793,13 @@ function makeCommands(args, preflight) {
     "--port", String(port),
     "--boardSummary",
   ].join(" ");
+  const macUnattendedFormalStatusCommand = [
+    "node scripts/mac/check-mac-unattended-status.mjs",
+    "--host", host,
+    "--port", String(port),
+    "--requireLaunchAgentMaxFps",
+    "--boardSummary",
+  ].join(" ");
   const formalChecklistBoardSummary = [
     "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
     "-Discover",
@@ -862,6 +873,7 @@ function makeCommands(args, preflight) {
     macHostDiscoveryBoardSummary,
     macHostDiscoveryPowerShellBoardSummary,
     macUnattendedStatusCommand,
+    macUnattendedFormalStatusCommand,
     formalChecklistBoardSummary,
     preflightBoardSummary: [
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
@@ -1144,6 +1156,7 @@ function makeBoardSummary(report) {
     `MacDiscovery=${report.commands.macHostDiscoveryBoardSummary}.`,
     `MacDiscoveryPs=${report.commands.macHostDiscoveryPowerShellBoardSummary}.`,
     `MacUnattended=${report.commands.macUnattendedStatusCommand}.`,
+    `MacUnattendedFormal=${report.commands.macUnattendedFormalStatusCommand}.`,
     `FormalChecklist=${report.commands.formalChecklistBoardSummary}; ManualChecklist=${report.formalManualChecklist.summary}.`,
     `WinClientDiagnostics=${report.commands.windowsClientDiagnosticsCommand}; WinClientDiagnosticsPs=${report.commands.windowsClientDiagnosticsPowerShellCommand}; CopyDiagnostics=${report.commands.windowsClientCopyDiagnosticsAction}`,
     `WinClientDiagnosticsAlt=${report.commands.windowsClientDiagnosticsAlternateCommand}; WinClientDiagnosticsAltPs=${report.commands.windowsClientDiagnosticsAlternatePowerShellCommand}.`,
@@ -1360,6 +1373,7 @@ function printHuman(report) {
   console.log(`  ${report.commands.macHostDiscoveryBoardSummary}`);
   console.log(`  ${report.commands.macHostDiscoveryPowerShellBoardSummary}`);
   console.log(`  ${report.commands.macUnattendedStatusCommand}`);
+  console.log(`  ${report.commands.macUnattendedFormalStatusCommand}`);
   console.log(`  ${report.commands.formalChecklistBoardSummary}`);
   console.log(`  ${report.commands.preflightBoardSummary}`);
   console.log(`  ${report.commands.userAuthRequest}`);

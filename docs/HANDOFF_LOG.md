@@ -21,6 +21,45 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows 恢复总览对齐 Mac unattended formal 60Hz 强校验。
+完成内容：
+- `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host <Mac> --port <port> --requireLaunchAgentMaxFps --boardSummary`。
+- PowerShell 包装入口 `check-windows-resume-status.ps1 -Help` 补充 formal 60Hz Mac-side unattended gate 说明。
+- Node 与 PowerShell 恢复总览回归覆盖新字段、boardSummary 标签和 `--requireLaunchAgentMaxFps` 参数，确保命令无密、只读、不认证、不发送 input/inject。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- 合入 Mac 最新 `4b2d9ed` 后复跑：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 合入 Mac 最新 `4b2d9ed` 后复跑：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`（真实只读摘要已包含 `MacUnattendedFormal=`；当前本地未提交所以摘要显示 `repo=dirty(9)`，符合预期）
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows docs`（无匹配）
+遗留问题：
+- 本轮只暴露正式值守强校验命令；真正让 `--requireLaunchAgentMaxFps` 通过仍需要 Mac 端写入/加载 LaunchAgent maxScreenFps 并重启 host。
+下一步建议：
+- Mac 端处理 LaunchAgent 后，Windows 侧优先跑 `check-windows-resume-status --checkBoard --boardSummary`，看 `MacUnattendedFormal=` 对应命令是否不再报 blocker。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；消除 blocker 需要 Mac 端后续实际处理 LaunchAgent。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows 侧消费 Mac unattended 新增 `launch-agent-max-fps` 摘要。
 完成内容：
 - Windows 控制端 Mac 值守风险中文映射新增 `launch-agent-max-fps` / `launch-agent-max-screen-fps`，Mac 提醒区和复制/导出诊断会把 `launch-agent-max-fps` 显示为“LaunchAgent 刷新率上限需调整”。
