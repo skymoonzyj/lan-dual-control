@@ -31,6 +31,7 @@
 - [x] Windows Mac 提醒 watcher 对齐 Mac resume 刷新率上限明细：`MacResumeStatus` / `check-mac-resume-status` 摘要里的 `warnings=h264-fallback,fps-limit` 会触发提醒，控制端会把 `fps-limit` 翻译成“Mac 刷新率上限需调整”，避免远端 30Hz 上限被误判为 Windows 第二步卡住。
 - [x] Windows 控制端对齐 Mac host readiness 刷新率上限明细：`warnings=mac-host-max-fps` 会被翻译成“Mac host 刷新率上限需调整”，并保留原始短标签到复制/导出诊断，方便区分 resume 的 `fps-limit` 和 host readiness 的 `mac-host-max-fps`。
 - [x] Windows 控制端和 watcher 消费 Mac 60Hz 安全启动提示：`MacMaxFpsSafeStart=` 搭配 `fps-limit` / `mac-host-max-fps` / `launch-agent-max-fps` 等 warning 时会提醒并在复制/导出诊断显示“Mac 60Hz 安全启动命令已提供”；`warnings=none blockers=none` 时不误弹。
+- [x] Windows 控制端和 watcher 消费 Mac client 正式清单入口：`MacClientFormalChecklist=` 搭配 Mac client/formal warning 或 blocker 时会提醒并在复制/导出诊断显示“Mac client 正式清单命令已提供”；`warnings=none blockers=none` 时不误弹。
 - [x] 上传到 GitHub 仓库。
 - [x] Mac mini 到位后克隆仓库。
 

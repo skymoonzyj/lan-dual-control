@@ -21,6 +21,42 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows watcher 和控制端诊断消费 Mac 侧 `MacClientFormalChecklist=` 正式清单入口。
+完成内容：
+- `watch-codex-link-mac-alerts.ps1` 新增 `MacClientFormalChecklist=` 显式匹配：当它与 Mac client/formal 的 `windows-host`、`video`、`build`、`auth`、`repo` 等 warning/blocker 或 `ready=false/blocked/failed` 同时出现时提醒。
+- 控制端 Mac 提醒区、快速摘要和复制/导出诊断新增中文提示“Mac client 正式清单命令已提供”，并保留原始 `MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs ...` 命令证据。
+- 清爽状态保护保持不变：`MacClientFormalChecklist=` 单独伴随 `warnings=none blockers=none` 时不误弹。
+- 页面 diagnostics-only 回归把重复的 Mac 提醒假数据整理为变量，并覆盖导出/复制诊断文本里的新中文提示和原始命令。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- PowerShell / PowerShell 7 AST parse `watch-codex-link-mac-alerts.ps1`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5201 --debugPort 9341 --boardSummary --timeoutMs 45000`
+遗留问题：
+- 本轮只做 Windows 侧消费层，不启动 Mac client/host，不认证 WebSocket，不发送密码，不执行 input/inject。
+下一步建议：
+- Mac 端若继续补更多 `MacClientFormalChecklist=` 来源，Windows 侧现有 watcher/控制端诊断应能直接显示；后续可继续做 Mac -> Windows 真机 formal smoke 的无密 readiness/反控授权联动。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows watcher 和控制端诊断消费 Mac 侧 `MacMaxFpsSafeStart=`，并按用户要求重新复查 formal E2E 第二步。
 完成内容：
 - `watch-codex-link-mac-alerts.ps1` 现在会在 `MacMaxFpsSafeStart=` 与 `fps-limit`、`mac-host-max-fps`、`launch-agent-max-fps` 等上限 warning 同时出现时触发 Windows 本机提醒。

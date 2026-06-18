@@ -458,6 +458,7 @@ async function checkMacClientFormalFindingsAlert(args) {
         note: [
           "MacClientReadiness=ready blockers=none warnings=windows-host",
           "Mac formal E2E status ready with warnings: blockers: none warnings: video,build,auth",
+          "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.68 --port 43770 --boardSummary",
         ].join("; "),
         updatedAt: new Date().toISOString(),
       },
@@ -467,6 +468,7 @@ async function checkMacClientFormalFindingsAlert(args) {
   assertIncludes(output, "MacClientReadiness=ready", "Mac client/formal findings status");
   assertIncludes(output, "warnings=windows-host", "Mac client/formal findings status");
   assertIncludes(output, "warnings: video,build,auth", "Mac client/formal findings status");
+  assertIncludes(output, "MacClientFormalChecklist=", "Mac client/formal findings status");
   console.log("[OK] Mac client/formal finding statuses alert");
 }
 
@@ -479,6 +481,7 @@ async function checkMacClientFormalCleanIgnored(args) {
         note: [
           "MacClientReadiness=ready blockers=none warnings=none",
           "Mac formal E2E status ready blockers: none warnings: none",
+          "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.68 --port 43770 --boardSummary",
         ].join("; "),
         updatedAt: new Date().toISOString(),
       },

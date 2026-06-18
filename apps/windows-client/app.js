@@ -256,6 +256,7 @@ const macUnattendedRiskLabels = {
   "mac-host-discovery": "Mac host 发现需检查",
   "mac-host-safe-start": "Mac host 安全启动命令已提供",
   "mac-max-fps-safe-start": "Mac 60Hz 安全启动命令已提供",
+  "mac-client-formal-checklist": "Mac client 正式清单命令已提供",
   "mac-host-media-aggregate": "Mac 媒体基线需检查",
   "mac-host-runtime-display-round-trip": "Mac runtime/display 回环需检查",
   "mac-host-build": "Mac host 构建需检查",
@@ -2944,10 +2945,19 @@ function parseMacUnattendedAttention(text) {
   const lower = source.toLowerCase();
   const hasMacHostSafeStart = /\bMacHostSafeStart\s*=/i.test(source);
   const hasMacMaxFpsSafeStart = /\bMacMaxFpsSafeStart\s*=/i.test(source);
+  const hasMacClientFormalChecklist = /\bMacClientFormalChecklist\s*=/i.test(source);
   const hasMacMaxFpsFinding = risks.some((risk) =>
     risk === "fps-limit" ||
     risk === "mac-host-max-fps" ||
     risk === "launch-agent-max-fps",
+  );
+  const hasMacClientFormalFinding = risks.some((risk) =>
+    risk === "windows-host" ||
+    risk === "video" ||
+    risk === "build" ||
+    risk === "auth" ||
+    risk === "repo" ||
+    risk === "board",
   );
   if (lower.includes("ready=false") && risks.length === 0) {
     risks.push("not-ready");
@@ -2966,6 +2976,12 @@ function parseMacUnattendedAttention(text) {
     (hasMacMaxFpsFinding || /fps-limit|mac-host-max-fps|launch-agent-max-fps/.test(lower))
   ) {
     risks.unshift("mac-max-fps-safe-start");
+  }
+  if (
+    hasMacClientFormalChecklist &&
+    (hasMacClientFormalFinding || /ready\s*=\s*false|blocked|failed/.test(lower))
+  ) {
+    risks.unshift("mac-client-formal-checklist");
   }
   const labels = [...new Set(risks.map(labelMacUnattendedRisk).filter(Boolean))];
   return {
