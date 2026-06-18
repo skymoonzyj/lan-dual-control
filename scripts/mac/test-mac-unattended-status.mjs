@@ -163,6 +163,31 @@ function assertNoSecretOrInputGuidance(text, label) {
   assertNotIncludes(value, "--injectInput", label);
 }
 
+function gitLines(args) {
+  const result = spawnSync("git", args, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 3000,
+  });
+  if (result.status !== 0) return [];
+  return String(result.stdout || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function getComparableStaleMacHostBuildId() {
+  const commits = gitLines([
+    "log",
+    "--format=%h",
+    "--",
+    "apps/mac-host/Package.swift",
+    "apps/mac-host/Sources",
+  ]);
+  assert(commits.length >= 2, "test fixture needs at least two Mac host runtime commits");
+  return commits[1];
+}
+
 function print(kind, text) {
   console.log(`[${kind}] ${text}`);
 }
@@ -655,6 +680,59 @@ async function checkCapabilitiesInputMode(args) {
   print("OK", "Capabilities inputMode is surfaced in unattended JSON and board summary");
 }
 
+async function checkStaleRuntimeBuildWarning(args) {
+  const dir = mkdtempSync(path.join(tmpdir(), "lan-dual-unattended-stale-build-"));
+  try {
+    const plist = path.join(dir, "com.lan-dual-control.mac-host.plist");
+    writeFileSync(plist, fakeLaunchAgentPlist({ maxScreenFps: 60 }), "utf8");
+    const staleRuntimeBuildId = getComparableStaleMacHostBuildId();
+    await withFakeHost({
+      deviceName: "Fake stale unattended Mac",
+      inputMode: "log",
+      permissions: {
+        screenRecording: true,
+        accessibility: true,
+        inputMonitoring: true,
+      },
+      runtime: {
+        buildId: staleRuntimeBuildId,
+        processId: 12345,
+      },
+      capabilities: {
+        h264Stream: true,
+        capturePipeline: "screencapturekit-h264",
+        audioMode: "system-pcm",
+      },
+    }, async (port) => {
+      const result = run(args, [
+        "--json",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(port),
+        "--timeoutMs",
+        "1200",
+        "--launchAgentPath",
+        plist,
+        "--skipLaunchctl",
+        "--skipPmset",
+      ]);
+      const payload = parseJson(result.stdout, "stale runtime unattended JSON");
+      assert(result.status === 0, `stale runtime build should stay warning-only by default\n${result.stdout}\n${result.stderr}`);
+      assert(payload.host?.buildDiff?.severity === "restart-recommended", "stale runtime payload should recommend restart");
+      assert(payload.host?.buildDiff?.changedHostRuntimeFileCount > 0, "stale runtime payload should count changed host runtime files");
+      assert(payload.findings.some((item) => item.id === "mac-host-build-stale" && item.level === "warning"), "stale runtime build should create a stable warning id");
+      assertIncludes(payload.boardSummary, "warnings=mac-host-build-stale", "stale runtime board summary");
+      assertIncludes(payload.boardSummary, `runtimeBuild=${staleRuntimeBuildId} restart recommended`, "stale runtime board summary");
+      assertIncludes(payload.boardSummary, "hostRuntimeChanges=", "stale runtime board summary");
+      assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "stale runtime unattended JSON");
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  print("OK", "Stale Mac host runtime build is surfaced in unattended status");
+}
+
 async function checkNoFindingsSummary(args) {
   const dir = mkdtempSync(path.join(tmpdir(), "lan-dual-unattended-clean-"));
   try {
@@ -726,6 +804,7 @@ async function main() {
   checkLaunchAgentMaxFpsWarning(args);
   checkBoardSummary(args);
   await checkCapabilitiesInputMode(args);
+  await checkStaleRuntimeBuildWarning(args);
   await checkNoFindingsSummary(args);
   print("OK", "Mac unattended status self-test passed");
 }

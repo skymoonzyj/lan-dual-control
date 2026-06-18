@@ -7,6 +7,10 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
+const hostRuntimePaths = [
+  "apps/mac-host/Package.swift",
+  "apps/mac-host/Sources",
+];
 
 const defaults = {
   host: "127.0.0.1",
@@ -157,6 +161,113 @@ function clampInteger(value, min, max, fallback) {
   return Math.max(min, Math.min(max, Math.trunc(parsed)));
 }
 
+function normalizedText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function splitLines(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function command(commandName, commandArgs, options = {}) {
+  const result = spawnSync(commandName, commandArgs, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: options.timeoutMs || 3000,
+    maxBuffer: 1024 * 1024,
+  });
+  return {
+    ok: result.status === 0,
+    stdout: String(result.stdout || ""),
+    stderr: String(result.stderr || ""),
+    error: result.error?.message || "",
+  };
+}
+
+function getGitBuildId() {
+  const result = command("git", ["rev-parse", "--short", "HEAD"], { timeoutMs: 3000 });
+  return result.ok ? normalizedText(result.stdout) : "";
+}
+
+function getChangedHostRuntimeFiles(fromBuildId, toBuildId) {
+  const from = normalizedText(fromBuildId);
+  const to = normalizedText(toBuildId || "HEAD") || "HEAD";
+  if (!from) return null;
+  const revParse = command("git", ["rev-parse", "--verify", "--quiet", `${from}^{commit}`], { timeoutMs: 3000 });
+  if (!revParse.ok) return null;
+  const diff = command("git", ["diff", "--name-only", `${from}..${to}`, "--", ...hostRuntimePaths], { timeoutMs: 3000 });
+  if (!diff.ok) return null;
+  return splitLines(diff.stdout);
+}
+
+function makeBuildDiff(runtimeBuildId, currentBuildId) {
+  const from = normalizedText(runtimeBuildId);
+  const to = normalizedText(currentBuildId);
+  if (!from || !to) {
+    return {
+      differs: false,
+      fromBuildId: from,
+      toBuildId: to,
+      comparable: false,
+      changedHostRuntimeFiles: null,
+      changedHostRuntimeFileCount: null,
+      severity: "unknown",
+      message: "Build comparison unavailable because runtime.buildId or current git build is missing.",
+    };
+  }
+  if (from === to) {
+    return {
+      differs: false,
+      fromBuildId: from,
+      toBuildId: to,
+      comparable: true,
+      changedHostRuntimeFiles: [],
+      changedHostRuntimeFileCount: 0,
+      severity: "ok",
+      message: "Running host build matches current git.",
+    };
+  }
+
+  const changedFiles = getChangedHostRuntimeFiles(from, to);
+  if (!Array.isArray(changedFiles)) {
+    return {
+      differs: true,
+      fromBuildId: from,
+      toBuildId: to,
+      comparable: false,
+      changedHostRuntimeFiles: null,
+      changedHostRuntimeFileCount: null,
+      severity: "warning",
+      message: `Running host build ${from} differs from current git ${to}; local git history cannot prove whether Mac host runtime changed.`,
+    };
+  }
+  if (changedFiles.length === 0) {
+    return {
+      differs: true,
+      fromBuildId: from,
+      toBuildId: to,
+      comparable: true,
+      changedHostRuntimeFiles: [],
+      changedHostRuntimeFileCount: 0,
+      severity: "stale-metadata",
+      message: `No Mac host runtime source changes since ${from}; behavior is likely current, but build metadata is stale.`,
+    };
+  }
+  return {
+    differs: true,
+    fromBuildId: from,
+    toBuildId: to,
+    comparable: true,
+    changedHostRuntimeFiles: changedFiles,
+    changedHostRuntimeFileCount: changedFiles.length,
+    severity: "restart-recommended",
+    message: `Mac host runtime source changed since ${from}; restart before unattended or formal validation.`,
+  };
+}
+
 function requestJson(url, timeoutMs) {
   return new Promise((resolve) => {
     const request = http.get(url, { timeout: timeoutMs }, (response) => {
@@ -204,6 +315,7 @@ async function checkHost(args) {
     permissions: payload.permissions || {},
     runtime: payload.runtime || {},
     capabilities: payload.capabilities || {},
+    buildDiff: {},
   };
 }
 
@@ -409,6 +521,9 @@ function buildFindings({ args, host, launchAgent, power }) {
   if (!host.online) {
     addFinding(findings, args.requireHostOnline ? "blocker" : "warning", "host-offline", `Mac host is offline at ${args.host}:${args.port}.`);
   } else {
+    if (host.buildDiff?.severity === "restart-recommended") {
+      addFinding(findings, "warning", "mac-host-build-stale", `${host.buildDiff.message} Stop the current host with ${makeMacHostStopCommand(args)}, then restart with ${makeMacMaxFpsSafeStartCommand(args)} or load the prepared LaunchAgent.`);
+    }
     if (host.inputMode && host.inputMode !== "log") {
       addFinding(findings, "blocker", "input-mode", `Mac host inputMode=${host.inputMode}; unattended checks should stay in log mode.`);
     }
@@ -599,8 +714,9 @@ function makeBoardSummary(report) {
       ? `attention=${warnings} warning(s)`
       : "attention=none";
   const findingSummary = `blockers=${blockers > 0 ? summarizeFindingIds(blockersList) : "none"} warnings=${warnings > 0 ? summarizeFindingIds(warningsList) : "none"}`;
+  const hostBuildDetail = formatBoardBuildDiff(report.host.buildDiff);
   const host = report.host.online
-    ? `online inputMode=${report.host.inputMode || "unknown"} build=${report.host.runtime?.buildId || "unknown"}`
+    ? `online inputMode=${report.host.inputMode || "unknown"} build=${report.host.runtime?.buildId || "unknown"}${hostBuildDetail ? ` ${hostBuildDetail}` : ""}`
     : `offline ${report.args.host}:${report.args.port}`;
   const perms = report.host.online
     ? `permissions=screen:${boolText(report.host.permissions?.screenRecording)} accessibility:${boolText(report.host.permissions?.accessibility)} inputMonitoring:${boolText(report.host.permissions?.inputMonitoring)}`
@@ -613,6 +729,17 @@ function makeBoardSummary(report) {
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
+}
+
+function formatBoardBuildDiff(buildDiff) {
+  if (!buildDiff || buildDiff.severity === "ok" || buildDiff.severity === "unknown") return "";
+  if (buildDiff.severity === "stale-metadata") {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} stale metadata only, hostRuntimeChanges=0`;
+  }
+  if (buildDiff.severity === "restart-recommended") {
+    return `runtimeBuild=${buildDiff.fromBuildId || "unknown"} restart recommended, hostRuntimeChanges=${buildDiff.changedHostRuntimeFileCount ?? "unknown"}`;
+  }
+  return "";
 }
 
 function summarizeFindingIds(findings) {
@@ -629,7 +756,9 @@ function boolText(value) {
 }
 
 async function buildReport(args) {
+  const currentBuildId = getGitBuildId();
   const host = await checkHost(args);
+  host.buildDiff = makeBuildDiff(host.runtime?.buildId, currentBuildId);
   const launchAgent = checkLaunchAgent(args);
   const power = runPmset(args);
   const findings = buildFindings({ args, host, launchAgent, power });
@@ -638,6 +767,7 @@ async function buildReport(args) {
   const report = {
     ok,
     checkedAt: new Date().toISOString(),
+    currentBuildId,
     args: {
       host: args.host,
       port: args.port,
