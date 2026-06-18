@@ -40,7 +40,7 @@
 - 实现后复跑：`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 22000`
 - `node scripts/mac/test-discover-windows-hosts.mjs --timeoutMs 10000`
 - `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
-- 真实无密预检：`node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary`（发现 `192.168.31.68:43770`，`ready=yes`，仅因本轮未提交显示 `warnings=repo`）
+- 真实无密预检：`node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary`（合入 Windows `52b83f4` 后复跑，发现 `192.168.31.68:43770`，`ready=yes`，`warnings=none`）
 - 真实 heartbeat：`node scripts/mac/check-mac-heartbeat.mjs --host 127.0.0.1 --port 43770 --clientHost 127.0.0.1 --clientPort 5188 --checkBoard --boardSummary`（`status=ok`，`call=none`）
 - 最终收尾：`git diff --check`；`rg -n "^(<<<<<<<|=======|>>>>>>>)" docs scripts/mac`
 遗留问题：
