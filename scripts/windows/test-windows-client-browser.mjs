@@ -2944,9 +2944,30 @@ async function verifyOutgoingFileResultStatus(session) {
         const fileInputLengthAfterPendingTimeout = elements.fileClipboardInput.files?.length || 0;
         const buttonLabelAfterPendingTimeout = elements.fileClipboardButton.querySelector("span:not([aria-hidden])")?.textContent || "";
 
+        let injectedStaleResultDuringActiveRetry = false;
+        let staleResultDuringActiveReturn;
+        let staleResultDuringActiveState = {};
+        let staleResultDuringActiveText = "";
+        let staleResultDuringActiveCurrentId = "";
         state.client = {
           sendClipboardFileOffer: (payload) => pendingTimeoutRetrySends.push({ type: "offer", payload }),
-          sendClipboardFileChunk: (payload) => pendingTimeoutRetrySends.push({ type: "chunk", payload }),
+          sendClipboardFileChunk: (payload) => {
+            pendingTimeoutRetrySends.push({ type: "chunk", payload });
+            if (!injectedStaleResultDuringActiveRetry) {
+              injectedStaleResultDuringActiveRetry = true;
+              staleResultDuringActiveCurrentId = state.outgoingFileTransfer?.transferId || "";
+              staleResultDuringActiveReturn = handleClipboardFileResult({
+                transferId: pendingBeforeTimeout.transferId,
+                accepted: true,
+                saveMode: "clipboard",
+                fileCount: 1,
+                totalBytes: pendingFile.size,
+                reason: "old result during active retry",
+              });
+              staleResultDuringActiveState = state.lastOutgoingFileTransfer || {};
+              staleResultDuringActiveText = elements.clipboardText.textContent || "";
+            }
+          },
           sendClipboardFileComplete: (payload) => pendingTimeoutRetrySends.push({ type: "complete", payload }),
         };
         elements.fileClipboardButton.click();
@@ -3041,6 +3062,10 @@ async function verifyOutgoingFileResultStatus(session) {
             pendingTimeoutRetryOfferCount === 1 &&
             pendingTimeoutRetryChunkCount === 2 &&
             pendingTimeoutRetryCompleteCount === 1 &&
+            staleResultDuringActiveReturn === false &&
+            staleResultDuringActiveCurrentId === pendingTimeoutRetryTransferId &&
+            !staleResultDuringActiveState.transferId &&
+            !staleResultDuringActiveText.includes("old result during active retry") &&
             staleLateResultReturn === false &&
             staleLateResultState.transferId === pendingTimeoutRetryTransferId &&
             staleLateResultState.status === "sent" &&
@@ -3090,6 +3115,10 @@ async function verifyOutgoingFileResultStatus(session) {
           pendingTimeoutRetryChunkCount,
           pendingTimeoutRetryCompleteCount,
           pendingTimeoutRetryTransferId,
+          staleResultDuringActiveReturn,
+          staleResultDuringActiveCurrentId,
+          staleResultDuringActiveState,
+          staleResultDuringActiveText,
           staleLateResultReturn,
           staleLateResultState,
           staleLateResultText,

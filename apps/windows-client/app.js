@@ -6953,7 +6953,9 @@ function handleClipboardFileProgress(message) {
 }
 
 function handleClipboardFileResult(message) {
-  const currentTransferId = state.lastOutgoingFileTransfer?.transferId || "";
+  const currentTransferId = state.fileTransferActive && state.outgoingFileTransfer?.transferId
+    ? state.outgoingFileTransfer.transferId
+    : state.lastOutgoingFileTransfer?.transferId || "";
   if (currentTransferId && message.transferId && currentTransferId !== message.transferId) {
     addLog("文件剪贴板", `忽略旧的对端文件结果 · ${message.transferId}`);
     return false;

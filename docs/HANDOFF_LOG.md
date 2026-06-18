@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端本机文件重新发送时，active 发送中也忽略旧 transfer 的迟到结果。
+完成内容：
+- `clipboard_file_result` 现在优先用正在发送的 `outgoingFileTransfer.transferId` 判断当前任务；如果旧 transfer 的结果在新一轮分块发送中途才到，只写事件日志，不再覆盖当前顶部剪贴板状态或全屏/监看浮层。
+- 页面 diagnostics-only 覆盖“确认超时 -> 重新发送 -> 第一块发送中旧 result 迟到”的场景，确保当前发送中状态不被旧结果打断。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增页面断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`（失败点：旧 result 在 active retry 中把 UI 覆盖成“对端已接收...”）。
+- 实现后复跑同一 diagnostics-only 通过。
+遗留问题：
+- 这仍是从头重新发送，不是断点续传。
+下一步建议：
+- 真机大文件测试时继续观察 active 发送、等待确认、旧 response/result/progress 迟到和重新发送按钮文案是否保持一致。
+是否改了协议：否；只消费既有 `transferId`。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端本机文件发送重试后忽略旧 transfer 的迟到清单响应。
 完成内容：
 - `clipboard_file_response` 现在会检查 `transferId`；如果旧 transfer 的接受/拒绝清单响应在重新发送后才到，只写事件日志，不再覆盖当前顶部剪贴板状态或全屏/监看浮层。
