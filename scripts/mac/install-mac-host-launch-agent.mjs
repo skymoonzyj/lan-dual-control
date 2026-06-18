@@ -72,6 +72,8 @@ Machine-readable JSON fields:
   commands.macUnattendedFormal Post-write read-only formal check command; fails
                                if LaunchAgent maxScreenFps is missing/below 60
                                or if launchctl does not show the agent loaded.
+  commands.macHostReadiness    Secret-free low-risk Mac host readiness command;
+                               reads host and Agent Link Board state only.
 
 Examples:
   node scripts/mac/install-mac-host-launch-agent.mjs --boardSummary
@@ -311,6 +313,7 @@ function makeCommands(args) {
     bootout: `launchctl bootout gui/${uid}/${shellQuote(args.label)}`,
     print: `launchctl print gui/${uid}/${shellQuote(args.label)}`,
     hostStatus: `node scripts/mac/start-mac-host.mjs --status --host 127.0.0.1 --port ${args.port} --boardSummary`,
+    macHostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host 127.0.0.1 --port ${args.port} --checkBoard --boardSummary`,
     unattendedStatus: `node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port ${args.port} --launchAgentPath ${shellQuote(args.launchAgentPath)} --boardSummary`,
     macUnattendedFormal: `node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port ${args.port} --launchAgentPath ${shellQuote(args.launchAgentPath)} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`,
   };
@@ -377,7 +380,7 @@ function makeBoardSummary(report) {
     : report.args.passwordMode;
   return [
     `Mac LaunchAgent plan: ${writeState}; label=${report.args.label}; path=${report.paths.launchAgentPath}; port=${report.args.port}; maxFps=${report.args.maxScreenFps}; auth=${auth}; keepAlive=${report.args.keepAlive ? "on" : "off"}.`,
-    `MacLaunchAgentPlan=${report.commands.dryRun}; ManualWrite=${report.commands.writePlist}; ManualLoad=${report.commands.bootstrap}; Status=${report.commands.unattendedStatus}; MacUnattendedFormal=${report.commands.macUnattendedFormal}.`,
+    `MacLaunchAgentPlan=${report.commands.dryRun}; ManualWrite=${report.commands.writePlist}; ManualLoad=${report.commands.bootstrap}; Status=${report.commands.unattendedStatus}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}.`,
     "No password is written or requested by this planner; no launchctl/start/auth/input/inject action was attempted.",
   ].join(" ");
 }
@@ -450,6 +453,7 @@ function printHuman(report) {
   console.log(`  - load: ${report.commands.bootstrap}`);
   console.log(`  - status: ${report.commands.unattendedStatus}`);
   console.log(`  - formal check: ${report.commands.macUnattendedFormal}`);
+  console.log(`  - host readiness: ${report.commands.macHostReadiness}`);
   console.log("- warnings:");
   for (const warning of report.warnings) {
     console.log(`  - ${warning}`);

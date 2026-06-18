@@ -129,6 +129,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "--write", `${script} ${flag}`);
     assertIncludes(result.stdout, "loading launchctl", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macUnattendedFormal", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macHostReadiness", `${script} ${flag}`);
     assertIncludes(result.stdout, "loaded", `${script} ${flag}`);
     assertNoSecretsOrRuntimeActions(`${result.stdout}\n${result.stderr}`, `${script} ${flag}`);
   }
@@ -162,8 +163,17 @@ function checkDryRunJson(args) {
     assertIncludes(payload.commands?.macUnattendedFormal || "", "--requireLaunchAgentLoaded", "dry-run commands.macUnattendedFormal");
     assertIncludes(payload.commands?.macUnattendedFormal || "", "--launchAgentPath", "dry-run commands.macUnattendedFormal");
     assertIncludes(payload.commands?.macUnattendedFormal || "", "--boardSummary", "dry-run commands.macUnattendedFormal");
+    assertIncludes(payload.commands?.macHostReadiness || "", "check-mac-host-readiness.mjs", "dry-run commands.macHostReadiness");
+    assertIncludes(payload.commands?.macHostReadiness || "", "--host 127.0.0.1", "dry-run commands.macHostReadiness");
+    assertIncludes(payload.commands?.macHostReadiness || "", "--checkBoard", "dry-run commands.macHostReadiness");
+    assertIncludes(payload.commands?.macHostReadiness || "", "--boardSummary", "dry-run commands.macHostReadiness");
+    assertNotIncludes(payload.commands?.macHostReadiness || "", "--probeMedia", "dry-run commands.macHostReadiness");
+    assertNotIncludes(payload.commands?.macHostReadiness || "", "--promptPassword", "dry-run commands.macHostReadiness");
+    assertNotIncludes(payload.commands?.macHostReadiness || "", "--password", "dry-run commands.macHostReadiness");
+    assertNotIncludes(payload.commands?.macHostReadiness || "", "inject", "dry-run commands.macHostReadiness");
     assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=", "dry-run boardSummary");
     assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "dry-run boardSummary");
+    assertIncludes(payload.boardSummary || "", "MacHostReadiness=", "dry-run boardSummary");
     assertIncludes(payload.boardSummary || "", "maxFps=30", "dry-run boardSummary");
     assertIncludes(payload.boardSummary || "", "ManualLoad=", "dry-run boardSummary");
     assert(payload.warnings.some((item) => /random password is not shared/.test(item)), "dry-run warnings should explain ephemeral auth limit");
@@ -192,6 +202,8 @@ function checkBoardSummary(args) {
     assertIncludes(text, "ManualWrite=", "boardSummary");
     assertIncludes(text, "ManualLoad=", "boardSummary");
     assertIncludes(text, "MacUnattendedFormal=", "boardSummary");
+    assertIncludes(text, "MacHostReadiness=", "boardSummary");
+    assertIncludes(text, "MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs", "boardSummary");
     assertIncludes(text, "--requireLaunchAgentMaxFps", "boardSummary");
     assertIncludes(text, "--requireLaunchAgentLoaded", "boardSummary");
     assertIncludes(text, "No password is written", "boardSummary");
@@ -226,11 +238,14 @@ function checkMaxFpsDryRunSummary(args) {
     assertIncludes(payload.commands?.macUnattendedFormal || "", "--requireLaunchAgentLoaded", "max-FPS commands.macUnattendedFormal");
     assertIncludes(payload.commands?.macUnattendedFormal || "", "--launchAgentPath", "max-FPS commands.macUnattendedFormal");
     assertIncludes(payload.commands?.macUnattendedFormal || "", paths.plist, "max-FPS commands.macUnattendedFormal");
+    assertIncludes(payload.commands?.macHostReadiness || "", "--port 43770", "max-FPS commands.macHostReadiness");
+    assertIncludes(payload.commands?.macHostReadiness || "", "--checkBoard", "max-FPS commands.macHostReadiness");
     assertIncludes(payload.boardSummary || "", "maxFps=60", "max-FPS boardSummary");
     assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=node scripts/mac/install-mac-host-launch-agent.mjs", "max-FPS boardSummary");
     assertIncludes(payload.boardSummary || "", "--maxScreenFps 60 --boardSummary", "max-FPS boardSummary");
     assertIncludes(payload.boardSummary || "", "ManualWrite=", "max-FPS boardSummary");
     assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "max-FPS boardSummary");
+    assertIncludes(payload.boardSummary || "", "MacHostReadiness=", "max-FPS boardSummary");
     assertIncludes(payload.boardSummary || "", "--requireLaunchAgentMaxFps", "max-FPS boardSummary");
     assertIncludes(payload.boardSummary || "", "--requireLaunchAgentLoaded", "max-FPS boardSummary");
     assertIncludes(payload.boardSummary || "", "--maxScreenFps 60", "max-FPS boardSummary ManualWrite");
