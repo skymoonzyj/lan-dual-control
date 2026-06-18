@@ -263,6 +263,23 @@ button:disabled {
   grid-template-columns: 1fr 1fr;
 }
 
+.local-alert-command-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.local-alert-command-row .secondary-action {
+  min-height: 34px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.local-alert-command-row .secondary-action:first-child {
+  grid-column: span 2;
+}
+
 .local-host-status {
   margin: 10px 0 0;
   color: var(--muted);

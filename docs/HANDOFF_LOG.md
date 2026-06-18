@@ -20,6 +20,40 @@
 ## 2026-06-18 Mac Codex
 
 日期：2026-06-18 继续推进
+开发端：Windows Codex
+本轮目标：把 Mac heartbeat watcher 管理入口从恢复摘要推进到 Windows 控制端页面，减少手工复制整段摘要。
+完成内容：
+- Windows 控制端“本机被控 -> Mac 提醒”区新增 `心跳一次`、`前台持续`、`后台启动`、`查状态`、`停止心跳` 五个复制按钮。
+- 按钮会优先从 Mac 提醒 watcher 最近文本或输出里安全提取 `MacHeartbeatOnce=` / `MacHeartbeatWatch=` / `MacHeartbeatStart=` / `MacHeartbeatStatus=` / `MacHeartbeatStop=`；若没有提取到，则按当前 Mac 端口和 Agent Link Board 生成默认安全命令。
+- 控制端现在也会把 `MacHeartbeatStart=` / `MacHeartbeatStatus=` / `MacHeartbeatStop=` 翻译成中文提醒，复制/导出诊断能显示后台启动、状态查询和停止命令已提供。
+- 所有按钮只复制需要在 Mac 端执行的命令，不会在 Windows 端启动 Mac 脚本、不认证、不发送密码、不发送 input/inject。
+修改文件：
+- `apps/windows-client/index.html`
+- `apps/windows-client/styles.css`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `git diff --check`
+- 行首冲突扫描无匹配。
+遗留问题：
+- 这轮只做复制入口；实际启动/停止 Mac heartbeat watcher 仍需在 Mac 端执行复制出的命令。
+下一步建议：
+- 等 Mac host 在线后继续真机远控体验验收，重点看监看小窗、Mac 提醒区复制入口、视频/音频和文件剪贴板链路。
+是否改了协议：否。
+是否需要另一端配合：不阻塞；后续可让 Mac 端粘贴执行 `MacHeartbeatStatus=` 或 `MacHeartbeatStart=` 验证 Windows 提醒区刷新。
+
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
 开发端：Mac Codex
 本轮目标：增强 Mac heartbeat 摘要的新鲜度可读性，避免旧 `Mac Heartbeat` 状态被误判为当前状态。
 完成内容：

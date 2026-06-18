@@ -1503,6 +1503,9 @@ async function verifyDesktopOnlyHostPanel(session) {
         "MacHeartbeat=blocked reason=codex-reconnect-stuck evidence=正在重新连接 5/5 / stream disconnected before completion: error sending request for url (https://chatgpt.com/backend-api/codex/responses) suggestedAction=请用户查看 Mac Codex 窗口",
         "MacHeartbeatOnce=node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --boardSummary",
         "MacHeartbeatWatch=node scripts/mac/watch-mac-heartbeat.mjs --sendStatus --intervalMs 30000",
+        "MacHeartbeatStart=node scripts/mac/start-mac-heartbeat-watcher.mjs --host 127.0.0.1 --port 43770 --server http://192.168.31.68:17888 --intervalMs 30000 --boardSummary",
+        "MacHeartbeatStatus=node scripts/mac/start-mac-heartbeat-watcher.mjs --status --host 127.0.0.1 --port 43770 --server http://192.168.31.68:17888 --boardSummary",
+        "MacHeartbeatStop=node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --host 127.0.0.1 --port 43770 --server http://192.168.31.68:17888 --boardSummary",
       ].join("; ");
       const macAlertFindingSummary = "Mac side status alert - Mac Codex | " + macAlertFindingText;
       const watcherRunningView =
@@ -1557,6 +1560,47 @@ async function verifyDesktopOnlyHostPanel(session) {
         return shouldRefreshMacAlertWatcherStatus(2000);
       })();
       if (typeof state === "object") state.localMacAlertWatcherStatusCheckedAt = previousWatcherCheckedAt;
+      const heartbeatCommandCheck = (() => {
+        if (
+          typeof state !== "object" ||
+          typeof getMacHeartbeatCommands !== "function" ||
+          typeof updateMacHeartbeatCommandButtons !== "function"
+        ) {
+          return { ok: false, reason: "missing heartbeat command helpers" };
+        }
+        const originalFindingText = state.localMacAlertWatcherFindingText || "";
+        const originalStatusText = watcherStatus?.textContent || "";
+        try {
+          state.localMacAlertWatcherFindingText = macAlertFindingText;
+          if (watcherStatus) watcherStatus.textContent = "Windows 浮窗提醒已开启。" + macAlertFindingText;
+          const commands = getMacHeartbeatCommands();
+          updateMacHeartbeatCommandButtons();
+          const commandButtons = Array.from(document.querySelectorAll("[data-mac-heartbeat-command]"));
+          const buttonTitles = Object.fromEntries(
+            commandButtons.map((button) => [button.dataset.macHeartbeatCommand, button.title || ""]),
+          );
+          return {
+            ok:
+              commands.once === "node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --boardSummary" &&
+              commands.watch === "node scripts/mac/watch-mac-heartbeat.mjs --sendStatus --intervalMs 30000" &&
+              commands.start?.includes("start-mac-heartbeat-watcher.mjs") &&
+              commands.start?.includes("--intervalMs 30000") &&
+              commands.status?.includes("start-mac-heartbeat-watcher.mjs --status") &&
+              commands.stop?.includes("start-mac-heartbeat-watcher.mjs --stop") &&
+              commandButtons.length === 5 &&
+              commandButtons.every((button) => !button.disabled) &&
+              buttonTitles.once?.includes("watch-mac-heartbeat.mjs --once") &&
+              buttonTitles.start?.includes("start-mac-heartbeat-watcher.mjs"),
+            commands,
+            buttonTitles,
+            disabled: commandButtons.map((button) => Boolean(button.disabled)),
+          };
+        } finally {
+          state.localMacAlertWatcherFindingText = originalFindingText;
+          if (watcherStatus) watcherStatus.textContent = originalStatusText;
+          updateMacHeartbeatCommandButtons();
+        }
+      })();
       const readinessHeaderLines =
         typeof readinessLines === "function"
           ? readinessLines({
@@ -1848,6 +1892,9 @@ async function verifyDesktopOnlyHostPanel(session) {
           watcherRunningView.statusText.includes("仓库状态需检查") &&
           watcherRunningView.statusText.includes("LaunchAgent 刷新率上限需调整") &&
           watcherRunningView.statusText.includes("Mac 心跳过期") &&
+          watcherRunningView.statusText.includes("Mac 后台心跳启动命令已提供") &&
+          watcherRunningView.statusText.includes("Mac 后台心跳状态命令已提供") &&
+          watcherRunningView.statusText.includes("Mac 后台心跳停止命令已提供") &&
           watcherRunningView.statusText.includes("Mac host 不可达") &&
           watcherRunningView.statusText.includes("Mac/API 网络错误") &&
           watcherRunningView.statusText.includes("Mac Codex 可能卡在重新连接 5/5") &&
@@ -1860,6 +1907,7 @@ async function verifyDesktopOnlyHostPanel(session) {
           watcherThrottleBefore === false &&
           watcherThrottleAtLimit === true &&
           watcherThrottleNoCache === true &&
+          heartbeatCommandCheck.ok &&
           readinessHeaderText.includes("client-test") &&
           readinessHeaderText.includes("1000 ms") &&
           readinessHeaderText.includes("750 ms") &&
@@ -1910,6 +1958,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         watcherThrottleBefore,
         watcherThrottleAtLimit,
         watcherThrottleNoCache,
+        heartbeatCommandCheck,
         readinessHeader: readinessHeaderLines.slice(0, 4),
         readinessSummaryText,
         helperSummary,
@@ -3107,6 +3156,9 @@ async function verifyReconnectControls(session) {
         "MacHeartbeat=blocked reason=codex-reconnect-stuck evidence=正在重新连接 5/5 / stream disconnected before completion: error sending request for url (https://chatgpt.com/backend-api/codex/responses) suggestedAction=请用户查看 Mac Codex 窗口",
         "MacHeartbeatOnce=node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --boardSummary",
         "MacHeartbeatWatch=node scripts/mac/watch-mac-heartbeat.mjs --sendStatus --intervalMs 30000",
+        "MacHeartbeatStart=node scripts/mac/start-mac-heartbeat-watcher.mjs --host 127.0.0.1 --port 43770 --server http://192.168.31.68:17888 --intervalMs 30000 --boardSummary",
+        "MacHeartbeatStatus=node scripts/mac/start-mac-heartbeat-watcher.mjs --status --host 127.0.0.1 --port 43770 --server http://192.168.31.68:17888 --boardSummary",
+        "MacHeartbeatStop=node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --host 127.0.0.1 --port 43770 --server http://192.168.31.68:17888 --boardSummary",
       ].join("; ");
 
       try {
@@ -3276,6 +3328,9 @@ async function verifyReconnectControls(session) {
             exportText.includes("Windows 反控授权状态命令已提供") &&
             exportText.includes("Windows 一次性反控授权命令已提供") &&
             exportText.includes("Mac 心跳过期，可能卡住") &&
+            exportText.includes("Mac 后台心跳启动命令已提供") &&
+            exportText.includes("Mac 后台心跳状态命令已提供") &&
+            exportText.includes("Mac 后台心跳停止命令已提供") &&
             exportText.includes("Mac host 不可达") &&
             exportText.includes("Mac/API 网络错误") &&
             exportText.includes("Mac Codex 可能卡在重新连接 5/5") &&
@@ -3309,6 +3364,9 @@ async function verifyReconnectControls(session) {
             exportText.includes("Mac Codex 出现重连异常信号") &&
             exportText.includes("Mac 单次心跳上板命令已提供") &&
             exportText.includes("Mac 持续心跳 watcher 命令已提供") &&
+            exportText.includes("MacHeartbeatStart=node scripts/mac/start-mac-heartbeat-watcher.mjs") &&
+            exportText.includes("MacHeartbeatStatus=node scripts/mac/start-mac-heartbeat-watcher.mjs") &&
+            exportText.includes("MacHeartbeatStop=node scripts/mac/start-mac-heartbeat-watcher.mjs") &&
             exportText.includes("reason=codex-reconnect-stuck") &&
             exportText.includes("warnings=board"),
           macAlertCheckedAt: exportText.includes("- Mac 提醒最近检查："),

@@ -43,6 +43,7 @@ const elements = {
   localMacAlertWatcherStatusText: document.querySelector("#localMacAlertWatcherStatusText"),
   localMacAlertWatcherToggleButton: document.querySelector("#localMacAlertWatcherToggleButton"),
   localMacAlertWatcherRefreshButton: document.querySelector("#localMacAlertWatcherRefreshButton"),
+  localMacHeartbeatCommandButtons: Array.from(document.querySelectorAll("[data-mac-heartbeat-command]")),
   localHostStatusText: document.querySelector("#localHostStatusText"),
   localHostOutput: document.querySelector("#localHostOutput"),
   historyList: document.querySelector("#historyList"),
@@ -263,6 +264,9 @@ const macUnattendedRiskLabels = {
   "mac-heartbeat-stale": "Mac 心跳过期，可能卡住",
   "mac-heartbeat-once-command": "Mac 单次心跳上板命令已提供",
   "mac-heartbeat-watch-command": "Mac 持续心跳 watcher 命令已提供",
+  "mac-heartbeat-start-command": "Mac 后台心跳启动命令已提供",
+  "mac-heartbeat-status-command": "Mac 后台心跳状态命令已提供",
+  "mac-heartbeat-stop-command": "Mac 后台心跳停止命令已提供",
   "mac-watchdog-stale": "Mac watchdog 心跳过期",
   "mac-api-error": "Mac/API 网络错误",
   "mac-codex-stale": "Mac Codex 长时间无新进展",
@@ -317,6 +321,49 @@ const macUnattendedRiskLabels = {
   "input-monitoring-missing": "输入监控权限缺失",
   "not-ready": "值守未就绪",
   attention: "值守需要关注",
+};
+const macHeartbeatCommandSpecs = {
+  once: {
+    label: "MacHeartbeatOnce",
+    text: "心跳一次",
+    script: "watch-mac-heartbeat.mjs",
+    required: ["--once", "--sendStatus", "--boardSummary"],
+    defaultArgs: ["--once", "--sendStatus", "--host", "127.0.0.1", "--port", "{port}", "--server", "{server}", "--boardSummary"],
+    logText: "单次心跳上板",
+  },
+  watch: {
+    label: "MacHeartbeatWatch",
+    text: "前台持续",
+    script: "watch-mac-heartbeat.mjs",
+    required: ["--sendStatus", "--intervalMs"],
+    defaultArgs: ["--sendStatus", "--host", "127.0.0.1", "--port", "{port}", "--server", "{server}", "--intervalMs", "30000"],
+    logText: "前台持续心跳",
+  },
+  start: {
+    label: "MacHeartbeatStart",
+    text: "后台启动",
+    script: "start-mac-heartbeat-watcher.mjs",
+    required: ["--boardSummary"],
+    forbidden: ["--status", "--stop"],
+    defaultArgs: ["--host", "127.0.0.1", "--port", "{port}", "--server", "{server}", "--intervalMs", "30000", "--boardSummary"],
+    logText: "后台心跳启动",
+  },
+  status: {
+    label: "MacHeartbeatStatus",
+    text: "查状态",
+    script: "start-mac-heartbeat-watcher.mjs",
+    required: ["--status", "--boardSummary"],
+    defaultArgs: ["--status", "--host", "127.0.0.1", "--port", "{port}", "--server", "{server}", "--boardSummary"],
+    logText: "后台心跳状态",
+  },
+  stop: {
+    label: "MacHeartbeatStop",
+    text: "停止心跳",
+    script: "start-mac-heartbeat-watcher.mjs",
+    required: ["--stop", "--boardSummary"],
+    defaultArgs: ["--stop", "--host", "127.0.0.1", "--port", "{port}", "--server", "{server}", "--boardSummary"],
+    logText: "后台心跳停止",
+  },
 };
 const videoDecoderStatusLabels = {
   idle: "待机",
@@ -2991,6 +3038,9 @@ function parseMacUnattendedAttention(text) {
   const hasMacClientFormalChecklist = /\bMacClientFormalChecklist\s*=/i.test(source);
   const hasMacHeartbeatOnce = /\bMacHeartbeatOnce\s*=/i.test(source);
   const hasMacHeartbeatWatch = /\bMacHeartbeatWatch\s*=/i.test(source);
+  const hasMacHeartbeatStart = /\bMacHeartbeatStart\s*=/i.test(source);
+  const hasMacHeartbeatStatus = /\bMacHeartbeatStatus\s*=/i.test(source);
+  const hasMacHeartbeatStop = /\bMacHeartbeatStop\s*=/i.test(source);
   const hasMacFormalLocalSmoke = /\b(MacFormalLocalSmoke|check-mac-formal-local-smoke)\b/i.test(source);
   const hasRerunFormalLocalSmoke = /\bRerunFormalLocalSmoke\s*=/i.test(source);
   const hasWindowsReverseGrantStatus = /\bWindowsReverseGrantStatus(NodeFallback)?\s*=/i.test(source);
@@ -3089,6 +3139,24 @@ function parseMacUnattendedAttention(text) {
     (risks.length > 0 || /ready\s*=\s*false|blocked|failed|stale|watchdog|heartbeat|codex-reconnect|mac-codex/.test(lower))
   ) {
     risks.unshift("mac-heartbeat-watch-command");
+  }
+  if (
+    hasMacHeartbeatStart &&
+    (risks.length > 0 || /ready\s*=\s*false|blocked|failed|stale|watchdog|heartbeat|codex-reconnect|mac-codex/.test(lower))
+  ) {
+    risks.unshift("mac-heartbeat-start-command");
+  }
+  if (
+    hasMacHeartbeatStatus &&
+    (risks.length > 0 || /ready\s*=\s*false|blocked|failed|stale|watchdog|heartbeat|codex-reconnect|mac-codex/.test(lower))
+  ) {
+    risks.unshift("mac-heartbeat-status-command");
+  }
+  if (
+    hasMacHeartbeatStop &&
+    (risks.length > 0 || /ready\s*=\s*false|blocked|failed|stale|watchdog|heartbeat|codex-reconnect|mac-codex/.test(lower))
+  ) {
+    risks.unshift("mac-heartbeat-stop-command");
   }
   if (
     hasMacFormalLocalSmoke &&
@@ -4472,6 +4540,142 @@ function macAlertWatcherPayloadFindingText(payload) {
   return parts.filter(Boolean).join(" ");
 }
 
+function escapeRegExp(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeCommandPort(value, fallback = defaultControlPort) {
+  const port = Number(value);
+  return Number.isInteger(port) && port >= 1 && port <= 65535 ? String(port) : fallback;
+}
+
+function macHeartbeatCommandPort() {
+  return normalizeCommandPort(state.activePort || elements.portInput.value || defaultControlPort);
+}
+
+function macHeartbeatCommandServer() {
+  const request = buildMacAlertWatcherRequest();
+  return request.server || defaultAgentLinkServer;
+}
+
+function buildDefaultMacHeartbeatCommand(key) {
+  const spec = macHeartbeatCommandSpecs[key];
+  if (!spec) return "";
+  const port = macHeartbeatCommandPort();
+  const server = macHeartbeatCommandServer();
+  const args = spec.defaultArgs.map((arg) => {
+    if (arg === "{port}") return port;
+    if (arg === "{server}") return server;
+    return arg;
+  });
+  return ["node", `scripts/mac/${spec.script}`, ...args].join(" ");
+}
+
+function extractLabeledCommandValue(text, label) {
+  const source = String(text || "");
+  const match = new RegExp(`\\b${escapeRegExp(label)}\\s*=`, "i").exec(source);
+  if (!match) return "";
+  const start = match.index + match[0].length;
+  const tail = source.slice(start);
+  const boundary = /[;；\r\n]|[.。]\s+(?=(?:MacHeartbeat|Mac[A-Z][A-Za-z]+|Windows[A-Z][A-Za-z]+|RerunFormalLocalSmoke|FormalChecklist|ManualChecklist|WinClient|No password)\b)|\s+No password\b/i.exec(tail);
+  const value = (boundary ? tail.slice(0, boundary.index) : tail)
+    .trim()
+    .replace(/[.。；;，,\s]+$/g, "");
+  return value;
+}
+
+function hasSensitiveCommandPart(command) {
+  return /--password\b|password\s*=|token|secret|passwd|pwd/i.test(String(command || ""));
+}
+
+function commandHasFlag(command, flag) {
+  return new RegExp(`(^|\\s)${escapeRegExp(flag)}(\\s|$)`).test(String(command || ""));
+}
+
+function isSafeMacHeartbeatCommand(key, command) {
+  const spec = macHeartbeatCommandSpecs[key];
+  const text = String(command || "").trim();
+  if (!spec || !text || hasSensitiveCommandPart(text)) return false;
+  const scriptPattern = new RegExp(`^node\\s+scripts[\\\\/]mac[\\\\/]${escapeRegExp(spec.script)}\\b`, "i");
+  if (!scriptPattern.test(text)) return false;
+  for (const flag of spec.required || []) {
+    if (!commandHasFlag(text, flag)) return false;
+  }
+  for (const flag of spec.forbidden || []) {
+    if (commandHasFlag(text, flag)) return false;
+  }
+  return true;
+}
+
+function macHeartbeatCommandSourceText() {
+  return [
+    state.localMacAlertWatcherFindingText,
+    elements.localMacAlertWatcherStatusText.textContent,
+    elements.localHostOutput.textContent,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function getMacHeartbeatCommands() {
+  const source = macHeartbeatCommandSourceText();
+  const commands = {};
+  for (const key of Object.keys(macHeartbeatCommandSpecs)) {
+    const spec = macHeartbeatCommandSpecs[key];
+    const extracted = extractLabeledCommandValue(source, spec.label);
+    commands[key] = isSafeMacHeartbeatCommand(key, extracted)
+      ? extracted
+      : buildDefaultMacHeartbeatCommand(key);
+  }
+  return commands;
+}
+
+function setMacHeartbeatCommandButtonFeedback(button, text) {
+  if (!button) return;
+  const label = button.dataset.label || macHeartbeatCommandSpecs[button.dataset.macHeartbeatCommand]?.text || "";
+  const icon = button.querySelector("span")?.textContent || "";
+  button.textContent = "";
+  const iconElement = document.createElement("span");
+  iconElement.setAttribute("aria-hidden", "true");
+  iconElement.textContent = icon;
+  button.append(iconElement, ` ${text}`);
+  window.setTimeout(() => {
+    button.textContent = "";
+    const resetIcon = document.createElement("span");
+    resetIcon.setAttribute("aria-hidden", "true");
+    resetIcon.textContent = icon;
+    button.append(resetIcon, ` ${label}`);
+  }, 1400);
+}
+
+function updateMacHeartbeatCommandButtons() {
+  const commands = getMacHeartbeatCommands();
+  for (const button of elements.localMacHeartbeatCommandButtons) {
+    const key = button.dataset.macHeartbeatCommand;
+    const command = commands[key] || "";
+    button.disabled = !command;
+    button.title = command ? `复制 Mac 端执行命令：${command}` : "没有可复制的 Mac 心跳命令";
+  }
+}
+
+async function copyMacHeartbeatCommand(key, button) {
+  const spec = macHeartbeatCommandSpecs[key];
+  const command = getMacHeartbeatCommands()[key] || "";
+  if (!spec || !command) return;
+  try {
+    await writeTextToClipboard(command);
+    setMacHeartbeatCommandButtonFeedback(button, "已复制");
+    addLog("Mac 心跳命令", `已复制 ${spec.logText}`);
+    renderLocalHostOutput([
+      `[INFO] 已复制 ${spec.label}: ${command}`,
+      "[INFO] 这条命令需要在 Mac 端执行；Windows 端未认证、未发送输入。",
+    ]);
+  } catch (error) {
+    setMacHeartbeatCommandButtonFeedback(button, "复制失败");
+    addLog("Mac 心跳命令", error?.message || "当前环境不允许写入剪贴板");
+  }
+}
+
 function formatMacAlertWatcherFindingSummary(payload) {
   const attention = parseMacUnattendedAttention(macAlertWatcherPayloadFindingText(payload));
   return attention.summary;
@@ -4897,6 +5101,7 @@ function updateLocalMacAlertWatcherControls() {
     elements.localMacAlertWatcherToggleButton.lastChild.textContent = ` ${view.toggleText}`;
     elements.localMacAlertWatcherToggleButton.querySelector("span").textContent = view.toggleIcon;
   }
+  updateMacHeartbeatCommandButtons();
 }
 
 function updateLocalHostControls() {
@@ -6633,6 +6838,11 @@ elements.localMacAlertWatcherToggleButton.addEventListener("click", () => {
 elements.localMacAlertWatcherRefreshButton.addEventListener("click", () => {
   void refreshMacAlertWatcherStatus();
 });
+for (const button of elements.localMacHeartbeatCommandButtons) {
+  button.addEventListener("click", () => {
+    void copyMacHeartbeatCommand(button.dataset.macHeartbeatCommand, button);
+  });
+}
 
 elements.fullscreenButton.addEventListener("click", () => setFullscreen(true));
 elements.windowModeButton.addEventListener("click", () => setFullscreen(false));
