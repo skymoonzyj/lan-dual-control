@@ -2894,7 +2894,7 @@ async function verifyReconnectControls(session) {
         const watcherStatus = document.querySelector("#localMacAlertWatcherStatusText");
         if (watcherStatus) {
           watcherStatus.textContent =
-            "Windows 浮窗提醒已开启，监听测试联络板。MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none";
+            "Windows 浮窗提醒已开启，监听测试联络板。MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo";
         }
         state.localHostRunning = true;
         state.localHostOnline = true;
@@ -3002,6 +3002,8 @@ async function verifyReconnectControls(session) {
           quickSummaryMacReachability:
             exportText.includes("- Mac 值守：恢复中") &&
             exportText.includes("值守风险 自启动未配置 / 电源设置可能导致睡眠断连") &&
+            exportText.includes("视频链路需检查") &&
+            exportText.includes("认证/密码步骤待确认") &&
             exportText.includes("提醒 提醒中"),
           quickSummaryReconnect:
             exportText.includes("- 重连：等待自动重连") && exportText.includes("原因 测试断线"),
@@ -3028,7 +3030,11 @@ async function verifyReconnectControls(session) {
           reconnectStatus: exportText.includes("- 重连状态：等待自动重连（1/3"),
           macReachabilityDetail:
             exportText.includes("- Mac 值守：恢复中") &&
-            exportText.includes("值守风险 自启动未配置 / 电源设置可能导致睡眠断连") &&
+            exportText.includes("视频链路需检查") &&
+            exportText.includes("运行版本需检查") &&
+            exportText.includes("认证/密码步骤待确认") &&
+            exportText.includes("Windows 被控端未指定或未就绪") &&
+            exportText.includes("仓库状态需检查") &&
             exportText.includes("- Mac 值守说明：Windows 已从 Mac 提醒 watcher 状态里识别到值守 warnings/blockers"),
           reconnectReason: exportText.includes("- 重连原因：测试断线"),
           reconnectNext: exportText.includes("- 下次重连："),
@@ -3041,7 +3047,8 @@ async function verifyReconnectControls(session) {
           macAlertStatus: exportText.includes("- Mac 提醒：提醒中"),
           macAlertDetail:
             exportText.includes("- Mac 提醒详情：Windows 浮窗提醒已开启") &&
-            exportText.includes("warnings=launch-agent-missing,power-risk"),
+            exportText.includes("warnings=launch-agent-missing,power-risk") &&
+            exportText.includes("warnings: video,build,auth,windows-host,repo"),
           macAlertCheckedAt: exportText.includes("- Mac 提醒最近检查："),
           macAlertSecondsAgo: exportText.includes("秒前）"),
           macAlertPoll: exportText.includes("- Mac 提醒自动轮询：约 15 秒"),
@@ -3096,7 +3103,11 @@ async function verifyReconnectControls(session) {
           copiedText.includes("- 远端连接：") &&
           copiedText.includes("- Mac 主机：") &&
           copiedText.includes("- Mac 值守：恢复中") &&
-          copiedText.includes("值守风险 自启动未配置 / 电源设置可能导致睡眠断连") &&
+          copiedText.includes("视频链路需检查") &&
+          copiedText.includes("运行版本需检查") &&
+          copiedText.includes("认证/密码步骤待确认") &&
+          copiedText.includes("Windows 被控端未指定或未就绪") &&
+          copiedText.includes("仓库状态需检查") &&
           copiedText.includes("host-build-test") &&
           copiedText.includes("辅助功能未开") &&
           copiedText.includes("- 本机被控：桌面壳托管运行中") &&

@@ -21,6 +21,39 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控 Mac 复制/导出诊断把 Mac formal findings 短标签翻译成中文风险。
+完成内容：
+- Windows 控制端 Mac 值守风险解析现在同时支持 `warnings=` / `blockers=` 和 `warnings:` / `blockers:`。
+- 风险短标签映射新增 `video`、`build`、`auth`、`windows-host`、`repo`、`h264-fallback`、`stale-build`、`stale-metadata` 等，复制/导出诊断会显示“视频链路需检查”“运行版本需检查”“认证/密码步骤待确认”“Windows 被控端未指定或未就绪”“仓库状态需检查”等中文原因。
+- 页面 diagnostics-only 回归新增 Mac formal findings 场景，确认快速摘要、Mac 值守分段、Mac 提醒详情和复制文本都保留中文风险与原始短标签证据。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --clientPort 5200 --debugPort 9340 --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-client-browser.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps/windows-client scripts/windows docs`
+遗留问题：
+- 本轮只扩展 Windows 控制端复制/导出诊断翻译；不改协议，不启动真实远控，不认证，不发送 input/inject。
+下一步建议：
+- 后续可把这些中文风险也显示到控制端“Mac 提醒”可视区域，而不只是在复制/导出的诊断文本里出现。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 本机 Mac 提醒 watcher 对齐 Mac 最新 `blockers=` / `warnings=` 明细摘要。
 完成内容：
 - `watch-codex-link-mac-alerts.ps1` 把 warning/blocker 字段匹配升级为同时支持 `warnings=` / `blockers=` 和 `warnings:` / `blockers:`。

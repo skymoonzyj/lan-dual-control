@@ -250,6 +250,20 @@ const macUnattendedRiskLabels = {
   "sleep-unreachable": "睡眠后不可达",
   "host-offline": "Mac host 离线",
   "host-unreachable": "Mac host 不可达",
+  "windows-host": "Windows 被控端未指定或未就绪",
+  repo: "仓库状态需检查",
+  "worktree-dirty": "仓库有未提交改动",
+  build: "运行版本需检查",
+  "stale-build": "运行版本偏旧",
+  "stale-metadata": "运行版本元数据偏旧",
+  video: "视频链路需检查",
+  media: "媒体基线需检查",
+  "h264-fallback": "当前不是 H.264 管线",
+  pipeline: "采集管线需检查",
+  auth: "认证/密码步骤待确认",
+  password: "密码步骤待确认",
+  "client-page": "Mac 控制页需检查",
+  "local-server": "本地控制页需检查",
   "screen-recording-missing": "屏幕录制权限缺失",
   "accessibility-missing": "辅助功能权限缺失",
   "input-monitoring-missing": "输入监控权限缺失",
@@ -2872,7 +2886,7 @@ function isEmptyMacUnattendedValue(value) {
 
 function extractMacUnattendedValues(text, key) {
   const values = [];
-  const pattern = new RegExp(`${key}\\s*=\\s*([^\\s;；，。]+)`, "gi");
+  const pattern = new RegExp(`${key}\\s*[:=]\\s*([^\\s;；，。]+)`, "gi");
   let match;
   while ((match = pattern.exec(String(text || "")))) {
     for (const rawValue of String(match[1] || "").split(",")) {

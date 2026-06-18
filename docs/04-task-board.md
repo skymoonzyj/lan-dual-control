@@ -74,6 +74,7 @@ Windows 端：
 - [x] Windows 控 Mac 复制诊断快速摘要补 Mac 主机诊断：报告顶部会直接写出 host 模式、采集管线、runtime PID/build、权限、视频回退、输入和剪贴板能力，方便第一屏定位看不到画面、权限缺失、旧 runtime 或 H.264 回退；页面 diagnostics-only 覆盖导出和复制文本。
 - [x] Windows 控 Mac 复制诊断快速摘要补 Mac 值守/可远程推断：报告顶部会基于当前连接、设备发现、重连等待和 Mac 提醒 watcher 写出“当前可远程/恢复中/已发现/未发现”，并明确 LaunchAgent、自启动、锁屏/睡眠可达性等待 Mac status/readiness 上报；页面 diagnostics-only 覆盖导出和复制文本。
 - [x] Windows 控 Mac 复制诊断快速摘要补 Mac 值守风险中文化：当本机 Mac 提醒 watcher 状态或诊断文本里出现 `MacUnattendedStatus`、`warnings=`、`blockers=` 时，报告会把 `launch-agent-missing`、`power-risk` 等短标签翻译成“自启动未配置”“电源设置可能导致睡眠断连”等中文风险；页面 diagnostics-only 覆盖导出和复制文本。
+- [x] Windows 控 Mac 复制诊断快速摘要补 Mac formal findings 中文化：`warnings:` / `blockers:` 也会被解析，`video`、`build`、`auth`、`windows-host`、`repo` 等短标签会翻译成视频链路、运行版本、认证密码、Windows 被控端和仓库状态风险；页面 diagnostics-only 覆盖导出和复制文本。
 - [x] Windows 控 Mac 复制诊断快速摘要补独立剪贴板状态：报告顶部会直接写出剪贴板关闭、待机、文字/文件能力、远端文件或压缩包接收进度、系统剪贴板写入状态；显示能力分段也会保留同一状态，页面 diagnostics-only 覆盖导出和复制文本。
 - [x] Windows 控 Mac 复制诊断快速摘要补独立视频状态：报告顶部会直接写出 H.264/JPEG、实收 FPS、协商/请求刷新率、远端上限、低于协商或请求、帧延迟或回退原因，方便定位卡顿、不是 60Hz、远端最高 30Hz 或 H.264 回退；页面 diagnostics-only 覆盖导出文本。
 - [x] Windows 控 Mac 复制诊断报告补普通声音摘要：快速摘要和显示能力分段会记录声音关闭/等待音频/已接收等待播放/正在播放/播放失败、音量、电平、接收帧、播放帧和丢帧；页面 diagnostics-only 覆盖收到但未播放场景。
