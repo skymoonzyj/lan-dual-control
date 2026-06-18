@@ -19,6 +19,49 @@
 
 ## 2026-06-18 Windows Codex
 
+日期：2026-06-18 现场复核
+开发端：Windows Codex
+本轮目标：重新检查正式验收“第二步”现场卡住感，并收口 Windows 控制端 Mac 值守风险诊断。
+完成内容：
+- 复核真实 Mac host `192.168.31.122:43770` 的无密预检：发现、H.264、系统 PCM、文本/文件剪贴板和 `inputMode=log` 均 ready；当前会话没有可用密码环境变量，所以未代跑需要认证的正式第二步。
+- `check-mac-formal-e2e` 正式运行现在会在密码输入后明确打印 `Starting plan 1/2` / `Starting plan 2/2`，并说明 Plan 1 在 H.264 首帧确认后还会继续做长视频观察，再做音频观察；Plan 2 才是 Windows client 浏览器 H.264 canvas 检查。
+- 修正 formal runPlan 的 Plan 1 预计耗时为视频观察 + 音频观察的顺序总时长，不再用二者最大值低估现场等待时间。
+- `probe-mac-host` 的视频/音频观察尾段现在会在目标时间窗口末尾正常收口，避免已收到足够帧后因最后几十毫秒等不到下一帧被误判失败；真正长时间无帧仍按 `maxVideoGapMs` / `maxAudioGapMs` 失败。
+- Windows 控 Mac 复制/导出诊断的 Mac 值守摘要现在可解析 `MacUnattendedStatus`、`warnings=`、`blockers=`，并把 `launch-agent-missing`、`power-risk` 等短标签翻译为中文风险，方便窗口最小化提醒链路和复制诊断串起来。
+修改文件：
+- `scripts/windows/probe-mac-host.mjs`
+- `scripts/windows/check-mac-formal-e2e.mjs`
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node --check scripts/windows/probe-mac-host.mjs`
+- `node --check scripts/windows/check-mac-formal-e2e.mjs`
+- `node --check scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 45000`
+- `node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --clientPort 5197 --debugPort 9337 --timeoutMs 45000 --preflightOnly --clientDiagnostics --progressIntervalMs 5000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps/windows-client scripts/windows docs`
+遗留问题：
+- 本轮未认证真实 WebSocket、未请求或输入密码、未发送 input/inject；完整正式第二步仍需用户现场输入 Mac host 密码后复跑。
+- 桌面壳目前只暴露 watcher 状态，不暴露最新 watcher alert/log；控制端只有在状态/诊断文本已带 warnings/blockers 时才能翻译风险，后续可把 watcher 最近告警安全暴露给前端。
+下一步建议：
+- 现场复跑完整正式 E2E 时加 `--progressIntervalMs 5000`，看到 H.264 首帧后继续等 Plan 1 的视频观察进度；出现 `Starting plan 2/2` 后才判断浏览器页面第二步。
+是否改了协议：否。
+是否需要另一端配合：完整正式 E2E 仍需要用户现场输入密码；Mac 端后续可继续把值守 warnings/blockers 稳定放进 readiness/status 摘要。
+
+## 2026-06-18 Windows Codex
+
 日期：2026-06-18 继续推进
 开发端：Windows Codex
 本轮目标：让 Windows 本机 Mac 提醒 watcher 能识别 Mac 值守 warning/blocker，补齐“窗口最小化也能透传 Mac 值守问题”的提醒链路。

@@ -993,6 +993,12 @@ function maybePrintMediaProgress(label, stats, deadline, nextProgressAt, interva
   return next <= now ? now + Math.max(1, intervalMs) : next;
 }
 
+function isObservationTailTimeout(deadline, maxGapMs, timeoutMs) {
+  const remainingMs = deadline - performance.now();
+  const tailWindowMs = Math.min(250, Math.max(1, maxGapMs || timeoutMs || 1));
+  return remainingMs <= tailWindowMs;
+}
+
 function assertMediaStats(summary, { minFrames, minFps, label }) {
   const problems = [];
   if (minFrames > 0 && summary.frames < minFrames) {
@@ -1034,6 +1040,9 @@ async function observeVideoFrames(client, args, answer, firstFrame) {
       nextProgressAt = maybePrintMediaProgress("Video", stats, deadline, nextProgressAt, args.progressIntervalMs);
     } catch (error) {
       if (performance.now() >= deadline) {
+        break;
+      }
+      if (isObservationTailTimeout(deadline, args.maxVideoGapMs, args.timeoutMs)) {
         break;
       }
       if (args.maxVideoGapMs > 0) {
@@ -1078,6 +1087,9 @@ async function observeAudioFrames(client, args, answer, firstAudioFrame = null) 
       nextProgressAt = maybePrintMediaProgress("Audio", stats, deadline, nextProgressAt, args.progressIntervalMs);
     } catch (error) {
       if (performance.now() >= deadline) {
+        break;
+      }
+      if (isObservationTailTimeout(deadline, args.maxAudioGapMs, args.timeoutMs)) {
         break;
       }
       if (args.maxAudioGapMs > 0) {

@@ -234,6 +234,28 @@ const inputAckStatusLabels = {
   logged: "已记录",
   rejected: "被拒绝",
 };
+const macUnattendedRiskLabels = {
+  "launch-agent-missing": "自启动未配置",
+  "launch-agent-not-loaded": "自启动未加载",
+  "launch-agent-disabled": "自启动已停用",
+  "launch-agent-failed": "自启动失败",
+  "launch-agent": "自启动需检查",
+  "power": "电源设置需检查",
+  "power-risk": "电源设置可能导致睡眠断连",
+  "power-warning": "电源设置有提醒",
+  "power-blocked": "电源设置阻塞值守",
+  "sleep": "睡眠策略需检查",
+  "sleep-risk": "睡眠可能断连",
+  "sleep-blocked": "睡眠阻塞值守",
+  "sleep-unreachable": "睡眠后不可达",
+  "host-offline": "Mac host 离线",
+  "host-unreachable": "Mac host 不可达",
+  "screen-recording-missing": "屏幕录制权限缺失",
+  "accessibility-missing": "辅助功能权限缺失",
+  "input-monitoring-missing": "输入监控权限缺失",
+  "not-ready": "值守未就绪",
+  attention: "值守需要关注",
+};
 const videoDecoderStatusLabels = {
   idle: "待机",
   unsupported: "不支持",
@@ -2773,9 +2795,69 @@ function formatMacAlertWatcherCheckedAt(checkedAt, now = Date.now()) {
   return `${new Date(checkedAt).toISOString()}（约 ${elapsedSeconds} 秒前）`;
 }
 
+function normalizeMacUnattendedToken(token) {
+  return String(token || "")
+    .trim()
+    .replace(/^["'`]+|["'`,.;，。；:：]+$/g, "")
+    .toLowerCase();
+}
+
+function isEmptyMacUnattendedValue(value) {
+  return ["", "none", "ok", "0", "false", "-", "none.", "ok."].includes(normalizeMacUnattendedToken(value));
+}
+
+function extractMacUnattendedValues(text, key) {
+  const values = [];
+  const pattern = new RegExp(`${key}\\s*=\\s*([^\\s;；，。]+)`, "gi");
+  let match;
+  while ((match = pattern.exec(String(text || "")))) {
+    for (const rawValue of String(match[1] || "").split(",")) {
+      const value = normalizeMacUnattendedToken(rawValue);
+      if (!isEmptyMacUnattendedValue(value)) {
+        values.push(value);
+      }
+    }
+  }
+  return [...new Set(values)];
+}
+
+function labelMacUnattendedRisk(value) {
+  const token = normalizeMacUnattendedToken(value);
+  if (!token) return "";
+  if (macUnattendedRiskLabels[token]) return macUnattendedRiskLabels[token];
+  if (token.includes("launch-agent")) return "自启动需检查";
+  if (token.includes("power")) return "电源设置需检查";
+  if (token.includes("sleep")) return "睡眠策略需检查";
+  if (token.includes("host")) return "Mac host 需检查";
+  if (token.includes("permission")) return "权限需检查";
+  return token.replace(/[-_]+/g, " ");
+}
+
+function parseMacUnattendedAttention(text) {
+  const source = String(text || "");
+  const warnings = extractMacUnattendedValues(source, "warnings");
+  const blockers = extractMacUnattendedValues(source, "blockers");
+  const risks = [...new Set([...blockers, ...warnings])];
+  const lower = source.toLowerCase();
+  if (lower.includes("ready=false") && risks.length === 0) {
+    risks.push("not-ready");
+  }
+  if (/attention\s*=\s*(warning|blocker|failed)/i.test(source) && risks.length === 0) {
+    risks.push("attention");
+  }
+  const labels = [...new Set(risks.map(labelMacUnattendedRisk).filter(Boolean))];
+  return {
+    warnings,
+    blockers,
+    labels,
+    summary: labels.length ? compactExportStatusText(labels.join(" / "), 140) : "",
+  };
+}
+
 function getMacAlertWatcherExportStatus(now = Date.now()) {
   const available = canUseDesktopHostControl();
   const statusDetail = elements.localMacAlertWatcherStatusText.textContent.trim() || "-";
+  const unattended = parseMacUnattendedAttention(statusDetail);
   let status = "未检查";
   if (!available) {
     status = "需桌面版";
@@ -2787,6 +2869,7 @@ function getMacAlertWatcherExportStatus(now = Date.now()) {
   return {
     status,
     detail: statusDetail,
+    unattended,
     checkedAt: formatMacAlertWatcherCheckedAt(state.localMacAlertWatcherStatusCheckedAt, now),
     pollInterval: `${Math.round(localMacAlertWatcherStatusPollMs / 1000)} 秒`,
     server: buildMacAlertWatcherRequest().server,
@@ -2843,11 +2926,17 @@ function getMacReachabilityExportStatus({ targetLabel, reconnectExport, macAlert
   } else {
     parts.push("提醒未检查");
   }
-  parts.push("自启/睡眠状态等待 Mac 上报");
+  if (macAlertWatcherExport.unattended?.summary) {
+    parts.push(`值守风险 ${macAlertWatcherExport.unattended.summary}`);
+  } else {
+    parts.push("自启/睡眠状态等待 Mac 上报");
+  }
 
   return {
     status: compactExportStatusText(parts.join(" · "), 220),
-    note: "当前仅由 Windows 侧连接、发现、重连和提醒 watcher 推断；LaunchAgent、自启动、锁屏/睡眠可达性需等 Mac status/readiness 上报。",
+    note: macAlertWatcherExport.unattended?.summary
+      ? "Windows 已从 Mac 提醒 watcher 状态里识别到值守 warnings/blockers；详细 LaunchAgent、自启动、电源、锁屏/睡眠可达性仍以 Mac status/readiness 为准。"
+      : "当前仅由 Windows 侧连接、发现、重连和提醒 watcher 推断；LaunchAgent、自启动、锁屏/睡眠可达性需等 Mac status/readiness 上报。",
   };
 }
 

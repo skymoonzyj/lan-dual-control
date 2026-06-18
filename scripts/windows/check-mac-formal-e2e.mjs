@@ -199,6 +199,16 @@ function print(kind, text) {
   console.log(`[${kind}] ${text}`);
 }
 
+function formatDurationMs(ms) {
+  const value = Math.max(0, Number(ms) || 0);
+  if (value <= 0) return "0s";
+  const seconds = value / 1000;
+  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remaining = Math.round(seconds % 60);
+  return remaining > 0 ? `${minutes}m ${remaining}s` : `${minutes}m`;
+}
+
 function makeFormalCommand(args) {
   return [
     "node",
@@ -270,10 +280,9 @@ function makeManualChecklist(args) {
 }
 
 function makeFormalRunPlan(args) {
-  const probeExpectedMs = Math.max(
-    Number(args.videoDurationMs) || 0,
-    args.skipAudio ? 0 : Number(args.audioDurationMs) || 0,
-  );
+  const probeExpectedMs =
+    (Number(args.videoDurationMs) || 0) +
+    (args.skipAudio ? 0 : Number(args.audioDurationMs) || 0);
   const browserTimeoutMs = Math.max(args.timeoutMs, 45000);
   const steps = [];
   if (!args.skipProbe) {
@@ -707,11 +716,14 @@ function printRunPlan(runPlan) {
   const steps = Array.isArray(runPlan.steps) ? runPlan.steps : [];
   print(
     "INFO",
-    `Formal run plan: steps=${steps.length} profile=${runPlan.profile || "formal"} video=${video.width || "?"}x${video.height || "?"}@${video.fps || "?"}Hz/${Math.round((Number(video.bandwidthKbps) || 0) / 1000)}Mbps audio=${audio.skipped ? "skipped" : `${audio.durationMs}ms`} inject=${runPlan.inject}.`,
+    `Formal run plan: steps=${steps.length} profile=${runPlan.profile || "formal"} estimated=${formatDurationMs(runPlan.estimatedDurationMs)} video=${video.width || "?"}x${video.height || "?"}@${video.fps || "?"}Hz/${Math.round((Number(video.bandwidthKbps) || 0) / 1000)}Mbps audio=${audio.skipped ? "skipped" : formatDurationMs(audio.durationMs)} inject=${runPlan.inject}.`,
   );
   print("INFO", `Password handling: ${runPlan.passwordTransport}; passwordInCommandArguments=${runPlan.passwordInCommandArguments}.`);
   for (const [index, step] of steps.entries()) {
-    print("INFO", `Plan ${index + 1}: ${step.label}; timeout=${step.timeoutMs}ms; command=${step.command}`);
+    print(
+      "INFO",
+      `Plan ${index + 1}: ${step.label}; expected=${formatDurationMs(step.expectedDurationMs)}; timeout=${formatDurationMs(step.timeoutMs)}; command=${step.command}`,
+    );
   }
   const manualChecklist = Array.isArray(runPlan.manualChecklist) ? runPlan.manualChecklist : [];
   if (manualChecklist.length > 0) {
@@ -720,6 +732,31 @@ function printRunPlan(runPlan) {
       print("INFO", `- ${item.id}: ${item.evidence}`);
     }
   }
+}
+
+function printFormalStepStart(step, index, totalSteps, runPlan) {
+  print(
+    "INFO",
+    `Starting plan ${index + 1}/${totalSteps}: ${step.label}; expected about ${formatDurationMs(step.expectedDurationMs)}, timeout ${formatDurationMs(step.timeoutMs)}.`,
+  );
+  if (step.id === "protocol-media-clipboard-input-log") {
+    const video = runPlan.video || {};
+    const audio = runPlan.audio || {};
+    print(
+      "INFO",
+      `Plan ${index + 1} is the long media probe: after the first H.264 frame it keeps observing video for ${formatDurationMs(video.durationMs)}${audio.skipped ? "" : `, then audio for ${formatDurationMs(audio.durationMs)}`}. Progress prints every ${formatDurationMs(video.progressIntervalMs)}; this part can look quiet if progress is disabled.`,
+    );
+  }
+  if (step.id === "windows-client-browser-h264") {
+    print(
+      "INFO",
+      `Plan ${index + 1} opens the Windows client page and waits for connected H.264 canvas/FPS diagnostics. It has its own progress snapshots every ${formatDurationMs(runPlan.video?.progressIntervalMs)}.`,
+    );
+  }
+}
+
+function printFormalStepDone(step, index, totalSteps) {
+  print("OK", `Finished plan ${index + 1}/${totalSteps}: ${step.label}`);
 }
 
 function printPreflightReport(report) {
@@ -1123,11 +1160,22 @@ async function main() {
   print("INFO", args.allowMockVideo ? "Video mode: mock/dev allowed." : "Video mode: requiring real H.264 Mac host.");
   print("INFO", args.skipInputLog ? "Input-log probe skipped." : "Input-log probe enabled; inject is not used.");
 
+  const runPlan = preflightReport.runPlan || makeFormalRunPlan(args);
+  const plannedSteps = Array.isArray(runPlan.steps) ? runPlan.steps : [];
+  const probeStep = plannedSteps.find((step) => step.id === "protocol-media-clipboard-input-log");
+  const browserStep = plannedSteps.find((step) => step.id === "windows-client-browser-h264");
+
   if (!args.skipProbe) {
+    const index = probeStep ? plannedSteps.indexOf(probeStep) : 0;
+    printFormalStepStart(probeStep || { label: "Protocol, H.264, audio, clipboard, and input-log probe", timeoutMs: args.timeoutMs }, index, plannedSteps.length || 2, runPlan);
     await runNode("scripts/windows/probe-mac-host.mjs", makeProbeArgs(args), { env: childEnv, cwd: repoRoot });
+    printFormalStepDone(probeStep || { label: "Protocol, H.264, audio, clipboard, and input-log probe" }, index, plannedSteps.length || 2);
   }
   if (!args.skipBrowser) {
+    const index = browserStep ? plannedSteps.indexOf(browserStep) : args.skipProbe ? 0 : 1;
+    printFormalStepStart(browserStep || { label: "Windows client browser discovery and H.264 canvas check", timeoutMs: Math.max(args.timeoutMs, 45000) }, index, plannedSteps.length || 2, runPlan);
     await runNode("scripts/windows/test-windows-client-browser.mjs", makeBrowserArgs(args), { env: childEnv, cwd: repoRoot });
+    printFormalStepDone(browserStep || { label: "Windows client browser discovery and H.264 canvas check" }, index, plannedSteps.length || 2);
   }
 
   print("OK", "Formal Mac E2E checks finished.");

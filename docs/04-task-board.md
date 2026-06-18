@@ -71,6 +71,7 @@ Windows 端：
 - [x] Windows 控 Mac 复制诊断报告补全屏浮层状态：快速摘要和显示能力分段会记录浮层连接、视频、声音、剪贴板、输入和安全状态；页面 diagnostics-only 覆盖导出/复制内容。
 - [x] Windows 控 Mac 复制诊断快速摘要补 Mac 主机诊断：报告顶部会直接写出 host 模式、采集管线、runtime PID/build、权限、视频回退、输入和剪贴板能力，方便第一屏定位看不到画面、权限缺失、旧 runtime 或 H.264 回退；页面 diagnostics-only 覆盖导出和复制文本。
 - [x] Windows 控 Mac 复制诊断快速摘要补 Mac 值守/可远程推断：报告顶部会基于当前连接、设备发现、重连等待和 Mac 提醒 watcher 写出“当前可远程/恢复中/已发现/未发现”，并明确 LaunchAgent、自启动、锁屏/睡眠可达性等待 Mac status/readiness 上报；页面 diagnostics-only 覆盖导出和复制文本。
+- [x] Windows 控 Mac 复制诊断快速摘要补 Mac 值守风险中文化：当本机 Mac 提醒 watcher 状态或诊断文本里出现 `MacUnattendedStatus`、`warnings=`、`blockers=` 时，报告会把 `launch-agent-missing`、`power-risk` 等短标签翻译成“自启动未配置”“电源设置可能导致睡眠断连”等中文风险；页面 diagnostics-only 覆盖导出和复制文本。
 - [x] Windows 控 Mac 复制诊断快速摘要补独立剪贴板状态：报告顶部会直接写出剪贴板关闭、待机、文字/文件能力、远端文件或压缩包接收进度、系统剪贴板写入状态；显示能力分段也会保留同一状态，页面 diagnostics-only 覆盖导出和复制文本。
 - [x] Windows 控 Mac 复制诊断快速摘要补独立视频状态：报告顶部会直接写出 H.264/JPEG、实收 FPS、协商/请求刷新率、低于请求、帧延迟或回退原因，方便定位卡顿、不是 60Hz 或 H.264 回退；页面 diagnostics-only 覆盖导出文本。
 - [x] Windows 控 Mac 复制诊断报告补普通声音摘要：快速摘要和显示能力分段会记录声音关闭/等待音频/已接收等待播放/正在播放/播放失败、音量、电平、接收帧、播放帧和丢帧；页面 diagnostics-only 覆盖收到但未播放场景。
@@ -174,6 +175,8 @@ Windows 端：
 - [x] Mac client 页面级自检的连接首帧、认证失败、H.264/二进制视频、音频首帧/播放、持续视频观察和重连恢复等待都已接入 `--progressIntervalMs` 进度心跳，真实 Mac 控制 Windows 验收时不再长时间静默等待。
 - [x] Windows 控制 Mac 页面级自检的连接、视频 surface、H.264/WebCodecs 和 PCM 音频播放等待也接入 `--progressIntervalMs` 页面快照心跳；同轮修复 diagnostics 后连接按钮禁用状态恢复漏项，避免自检后真实连接点击无效。
 - [x] Windows formal Mac E2E 的第二步浏览器 H.264 检查也透传 `--progressIntervalMs`，预检查客户端诊断和正式第二步都能按同一频率打印页面快照，避免现场误判为卡住。
+- [x] Windows formal Mac E2E 正式运行会明确打印 Plan 1/2 和 Plan 2/2：Plan 1 会说明 H.264 首帧确认后仍要继续长视频观察，再做音频观察，Plan 2 才是 Windows client 浏览器 H.264 canvas 检查，避免把长观察误判为第二步卡住。
+- [x] Windows `probe-mac-host` 视频/音频观察尾段正常收口：已收到足够帧时不会因为目标窗口最后几十毫秒等不到下一帧误失败，真正长时间无帧仍按最大间隔失败。
 
 共享：
 

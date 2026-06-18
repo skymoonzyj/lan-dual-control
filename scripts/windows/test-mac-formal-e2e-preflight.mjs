@@ -80,6 +80,16 @@ function assertRunPlanSafe(payload, label, expectations = {}) {
   assert(plan.steps.some((step) => step.id === "windows-client-browser-h264"), `${label} should include the browser probe`);
   const browserStep = plan.steps.find((step) => step.id === "windows-client-browser-h264");
   assertIncludes(browserStep.command, "--progressIntervalMs", `${label} browser progress command`);
+  const protocolStep = plan.steps.find((step) => step.id === "protocol-media-clipboard-input-log");
+  if (protocolStep) {
+    const expectedProtocolMs =
+      Number(plan.video?.durationMs || 0) +
+      (plan.audio?.skipped ? 0 : Number(plan.audio?.durationMs || 0));
+    assert(
+      Number(protocolStep.expectedDurationMs || 0) === expectedProtocolMs,
+      `${label} should report sequential video/audio probe duration`,
+    );
+  }
   if (Object.prototype.hasOwnProperty.call(expectations, "audioSkipped")) {
     assert(plan.audio?.skipped === expectations.audioSkipped, `${label} audio skipped mismatch`);
   }
@@ -496,8 +506,11 @@ async function testMockFastPath(args) {
       env: { LAN_DUAL_PASSWORD: "test-password" },
     });
     assert(result.exitCode === 0, `mock fast path failed\n${result.stdout}\n${result.stderr}`);
+    assertIncludes(result.stdout, "Starting plan 1/1", "mock fast path step start");
+    assertIncludes(result.stdout, "Plan 1 is the long media probe", "mock fast path long probe note");
     assertIncludes(result.stdout, "Video observation started", "mock fast path progress start");
     assertIncludes(result.stdout, "Video progress:", "mock fast path progress heartbeat");
+    assertIncludes(result.stdout, "Finished plan 1/1", "mock fast path step finish");
     assertIncludes(result.stdout, "Formal Mac E2E checks finished", "mock fast path");
     assertIncludes(result.stdout, "Windows formal Mac E2E finished: completed", "mock fast path");
     assertIncludes(result.stdout, "Clipboard file accepted", "mock fast path");
