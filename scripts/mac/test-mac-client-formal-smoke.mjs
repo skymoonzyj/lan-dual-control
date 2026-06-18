@@ -135,6 +135,10 @@ function assertMacClientFormalSmokeCommand(command, label, options = {}) {
   assertIncludes(command, "--boardSummary", label);
   if (options.expectedPort) assertIncludes(command, `--port ${options.expectedPort}`, label);
   if (options.expectedServer) assertIncludes(command, `--server ${options.expectedServer}`, label);
+  if (options.expectedDiscoverHost) assertIncludes(command, `--discoverHost ${options.expectedDiscoverHost}`, label);
+  if (options.expectedDiscoverNoLocalSubnets) assertIncludes(command, "--discoverNoLocalSubnets", label);
+  if (options.expectedDiscoverTimeoutMs) assertIncludes(command, `--discoverTimeoutMs ${options.expectedDiscoverTimeoutMs}`, label);
+  if (options.expectedDiscoverScanTimeoutMs) assertIncludes(command, `--discoverScanTimeoutMs ${options.expectedDiscoverScanTimeoutMs}`, label);
   assertNotIncludes(command, "--promptPassword", label);
   assertNotIncludes(command, "--password", label);
   assertNotIncludes(command, "--useEnvPassword", label);
@@ -680,7 +684,13 @@ async function checkDiscoverPreflight(args) {
       assertMacClientFormalSmokeCommand(
         payload.commands?.macClientFormalSmoke || "",
         "discover preflight Mac client formal smoke command",
-        { expectedPort: String(windowsPort) },
+        {
+          expectedPort: String(windowsPort),
+          expectedDiscoverHost: "127.0.0.1",
+          expectedDiscoverNoLocalSubnets: true,
+          expectedDiscoverTimeoutMs: "300",
+          expectedDiscoverScanTimeoutMs: "5000",
+        },
       );
       assert(payload.commands?.sendCall?.includes("--sendCall"), "discover preflight should expose selected-host sendCall command");
       assert(payload.commands?.sendCall?.includes(`--port ${windowsPort}`), "discover preflight sendCall should use selected port");
@@ -700,6 +710,17 @@ async function checkDiscoverPreflight(args) {
       assertIncludes(payload.boardSummary || "", "FormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "discover preflight board summary");
       assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "discover preflight board summary");
       assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs", "discover preflight board summary");
+      assertMacClientFormalSmokeCommand(
+        (payload.boardSummary || "").split("MacClientFormalSmoke=")[1]?.split(". ")[0] || "",
+        "discover preflight board summary Mac client formal smoke command",
+        {
+          expectedPort: String(windowsPort),
+          expectedDiscoverHost: "127.0.0.1",
+          expectedDiscoverNoLocalSubnets: true,
+          expectedDiscoverTimeoutMs: "300",
+          expectedDiscoverScanTimeoutMs: "5000",
+        },
+      );
       assertIncludes(payload.boardSummary || "", "blockers=none", "discover preflight board summary");
       assert(/warnings=[^.]*board/.test(payload.boardSummary || ""), "discover preflight board summary should name board warning");
       assertIncludes(payload.boardSummary || "", "warnings=", "discover preflight board summary");

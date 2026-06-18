@@ -601,9 +601,19 @@ function makeMacClientFormalSmokeCommand(args) {
   if (args.port && args.port !== defaults.port) command.push("--port", String(args.port));
   if (args.clientHost && args.clientHost !== defaults.clientHost) command.push("--clientHost", args.clientHost);
   if (args.clientPort && args.clientPort !== defaults.clientPort) command.push("--clientPort", String(args.clientPort));
+  if (args.discoverNoLocalSubnets) command.push("--discoverNoLocalSubnets");
+  for (const host of args.discoverHosts || []) {
+    command.push("--discoverHost", host);
+  }
+  for (const subnet of args.discoverSubnets || []) {
+    command.push("--discoverSubnet", subnet);
+  }
   if (args.server !== defaults.server) command.push("--server", args.server);
   if (args.discoverTimeoutMs && args.discoverTimeoutMs !== defaults.discoverTimeoutMs) {
     command.push("--discoverTimeoutMs", String(args.discoverTimeoutMs));
+  }
+  if (args.discoverScanTimeoutMs && args.discoverScanTimeoutMs !== defaults.discoverScanTimeoutMs) {
+    command.push("--discoverScanTimeoutMs", String(args.discoverScanTimeoutMs));
   }
   return command.join(" ");
 }

@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac client formal smoke 的安全重跑命令保留 Windows 发现范围。
+完成内容：
+- `run-mac-client-formal-smoke --json/--boardSummary` 输出的 `commands.macClientFormalSmoke` / `MacClientFormalSmoke=` 现在会保留 `--discoverHost`、`--discoverSubnet`、`--discoverNoLocalSubnets`、`--discoverTimeoutMs` 和 `--discoverScanTimeoutMs`。
+- 已知 Windows IP 或限制扫描范围的现场，复制 `MacClientFormalSmoke=` 重跑时不会意外扩大到默认局域网扫描。
+- 自测新增回归：discover preflight JSON 和 board summary 里的 `MacClientFormalSmoke=` 必须带回本轮 `--discoverHost 127.0.0.1 --discoverNoLocalSubnets --discoverTimeoutMs 300 --discoverScanTimeoutMs 5000`，且仍不含密码、call、input 或 inject 路径。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 20000` 失败在 `MacClientFormalSmoke=` 缺 `--discoverHost 127.0.0.1`。
+- 绿灯：实现后复跑同一自测通过。
+遗留问题：
+- 本轮只修安全重跑命令形状，没有进行真实 Windows host 密码连接、反控授权或输入注入验收。
+下一步建议：
+- 已知 Windows IP 时优先带 `--discoverNoLocalSubnets --discoverHost <Windows IP>` 跑 formal smoke；复制摘要里的 `MacClientFormalSmoke=` 现在会保留这些参数，适合白天继续真机联调。
+是否改了协议：否；只补 Mac formal smoke 命令生成逻辑。
+是否需要另一端配合：本轮不需要；Windows 端可后续按需消费带发现范围的 `MacClientFormalSmoke=`。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac client formal smoke 自身也暴露 Mac 脚本 help 安全自检入口。
 完成内容：
 - `run-mac-client-formal-smoke --json/--boardSummary` 现在输出 `commands.macScriptHelp` / `MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`。
