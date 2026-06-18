@@ -43,6 +43,8 @@ Options:
   --port <port>             Mac host discovery port. Default: 43770
   --timeoutMs <ms>          Per probe timeout. Default: 8000
   --server <url>            Agent Link Board URL. Default: ${defaults.server}
+  --checkBoard              Explicitly read Agent Link Board. This is the default
+                            and is kept for compatibility with other Mac status tools.
   --skipBoard               Do not read Agent Link Board. Default checks it.
   --allowDirty              Report dirty git state as a warning instead of a blocker.
   --requireCurrentBuildId   Treat stale runtime build metadata as a blocker.
@@ -94,6 +96,7 @@ function parseArgs(argv) {
       continue;
     }
     if (
+      token === "--checkBoard" ||
       token === "--skipBoard" ||
       token === "--allowDirty" ||
       token === "--requireCurrentBuildId" ||
@@ -103,7 +106,11 @@ function parseArgs(argv) {
       token === "--clearStaleCall" ||
       token === "--json"
     ) {
-      args[token.slice(2)] = true;
+      if (token === "--checkBoard") {
+        args.skipBoard = false;
+      } else {
+        args[token.slice(2)] = true;
+      }
       continue;
     }
     if (token === "--host" && next && !next.startsWith("--")) {

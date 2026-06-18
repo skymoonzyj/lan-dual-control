@@ -387,6 +387,7 @@ function checkHelp(args) {
     assert(/--sendCall/.test(result.stdout), `${script} ${flag} should document --sendCall`);
     assert(/--forceCall/.test(result.stdout), `${script} ${flag} should document --forceCall`);
     assert(/--clearStaleCall/.test(result.stdout), `${script} ${flag} should document --clearStaleCall`);
+    assert(/--checkBoard/.test(result.stdout), `${script} ${flag} should document --checkBoard compatibility`);
     assert(/commands\.macFormalLocalSmokeCommand/.test(result.stdout), `${script} ${flag} should document local smoke command output`);
     assert(/commands\.mediaReadinessBoardSummary/.test(result.stdout), `${script} ${flag} should document media readiness command output`);
     assert(/commands\.macLaunchAgentPlanCommand/.test(result.stdout), `${script} ${flag} should document LaunchAgent planner command output`);
@@ -468,6 +469,31 @@ function checkOfflineSendCallRefuses(args) {
   assert(/Refusing to send formal E2E call/.test(result.stderr), "offline sendCall should explain refusal");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "offline sendCall refusal");
   print("OK", "Offline --sendCall refuses before touching the board");
+}
+
+async function checkExplicitCheckBoardAlias(args) {
+  await withFakeBoard(async (board) => {
+    const result = await runAsync(args, [
+      "--json",
+      "--checkBoard",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--server",
+      board.serverUrl,
+      "--timeoutMs",
+      "1200",
+    ]);
+    const payload = parseJson(result.stdout, "explicit checkBoard formal E2E status");
+    assert(result.status !== 0, "explicit checkBoard alias should still fail when Mac host is offline");
+    assert(payload.resume?.board?.checked === true, "explicit checkBoard alias should read Agent Link Board");
+    assert(payload.resume?.board?.ok === true, "explicit checkBoard alias should preserve readable board status");
+    assert(!payload.checklist?.some((entry) => entry.id === "board" && entry.status === "warning"), "explicit checkBoard alias should not produce the skip-board warning");
+    assert(/call=none|Agent Link Board/.test(payload.resume?.boardSummary || payload.boardSummary || ""), "explicit checkBoard alias should keep board evidence available");
+    assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "explicit checkBoard formal E2E status");
+    print("OK", "Explicit --checkBoard alias reads the Agent Link Board safely");
+  });
 }
 
 async function checkClearStaleFormalCall(args) {
@@ -945,6 +971,7 @@ async function main() {
   checkOfflineJson(args);
   checkOfflineBoardSummary(args);
   checkOfflineSendCallRefuses(args);
+  await checkExplicitCheckBoardAlias(args);
   await checkClearStaleFormalCall(args);
   await checkClearStaleCallLeavesOtherCalls(args);
   await checkClearStaleCallKeepsReadyFormalCall(args);
