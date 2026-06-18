@@ -112,12 +112,25 @@ function assertMacUnattendedFormalCommand(command, label, expectedPort) {
   assert(command.includes("--boardSummary"), `${label} should be board-summary ready`);
 }
 
+function assertMacFormalLocalSmokeCommand(command, label, expectedPort) {
+  assertSecretFreeCommand(command, label);
+  assert(command.includes("node scripts/mac/check-mac-formal-local-smoke.mjs"), `${label} should use formal local smoke`);
+  assert(command.includes(`--port ${expectedPort}`), `${label} should preserve the checked port`);
+  assert(command.includes("--promptPassword"), `${label} should prompt locally`);
+  assert(command.includes("--boardSummary"), `${label} should be board-summary ready`);
+}
+
 function assertLocalSmokeCommands(payload, expectedPort, label) {
+  assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand || "", `${label} MacFormalLocalSmoke`, expectedPort);
   assertMacHostSafeStartCommand(payload.commands?.macHostSafeStartCommand || "", `${label} MacHostSafeStart`, expectedPort);
   assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand || "", `${label} MacMaxFpsSafeStart`, expectedPort);
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand || "", `${label} MacUnattendedFormal`, expectedPort);
   assertSecretFreeCommand(payload.commands?.macHostReadinessCommand || "", `${label} MacHostReadiness`);
   assertSecretFreeCommand(payload.commands?.rerunBoardSummaryCommand || "", `${label} rerun command`);
+  assert(
+    payload.commands?.macFormalLocalSmokeCommand === payload.commands?.rerunBoardSummaryCommand,
+    `${label} formal local smoke and rerun commands should stay aligned`,
+  );
 }
 
 function runSmoke(extraArgs, args, env = {}) {
@@ -156,6 +169,7 @@ function checkPasswordSafety(args) {
   assert(noPasswordPayload.summary?.noInject === true, "missing password JSON should preserve noInject=true");
   assertLocalSmokeCommands(noPasswordPayload, 43770, "missing password JSON failure");
   assert(/MacHostSafeStart=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include safe start command");
+  assert(/MacFormalLocalSmoke=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include formal local smoke command");
   assert(/RerunFormalLocalSmoke=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include rerun command");
 
   const demoPassword = runSmoke(["--json"], args, { LAN_DUAL_PASSWORD: "demo-password" });
@@ -205,6 +219,7 @@ function checkPasswordSafety(args) {
   assert(/MacHostSafeStart=/.test(boardLines[0]), "missing password boardSummary should include safe start command");
   assert(/MacMaxFpsSafeStart=/.test(boardLines[0]), "missing password boardSummary should include 60Hz safe start command");
   assert(/MacUnattendedFormal=/.test(boardLines[0]), "missing password boardSummary should include unattended formal command");
+  assert(/MacFormalLocalSmoke=/.test(boardLines[0]), "missing password boardSummary should include formal local smoke command");
   assert(/RerunFormalLocalSmoke=/.test(boardLines[0]), "missing password boardSummary should include rerun command");
   assert(!String(boardSummary.stdout || "").includes("Mac host formal smoke password:"), "boardSummary failure should not prompt on stdout");
   assertNoSecretLikeText(outputOf(boardSummary), "missing password boardSummary failure");
@@ -593,6 +608,7 @@ async function checkFakeHostSuccess(args) {
     assert(payload.boardSummary.includes("MacHostSafeStart="), "boardSummary should include safe start command");
     assert(payload.boardSummary.includes("MacMaxFpsSafeStart="), "boardSummary should include 60Hz safe start command");
     assert(payload.boardSummary.includes("MacUnattendedFormal="), "boardSummary should include formal unattended gate");
+    assert(payload.boardSummary.includes("MacFormalLocalSmoke="), "boardSummary should include formal local smoke command");
     assert(payload.boardSummary.includes("RerunFormalLocalSmoke="), "boardSummary should include rerun command");
     assertNoSecretLikeText(outputOf(result), "fake host success output");
   });
@@ -633,6 +649,7 @@ async function checkFakeHostBoardSummary(args) {
     assert(lines[0].includes(`MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port}`), "boardSummary should include safe start command");
     assert(lines[0].includes(`MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port} --maxScreenFps 60`), "boardSummary should include 60Hz safe start command");
     assert(lines[0].includes(`MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port ${port} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`), "boardSummary should include unattended formal gate");
+    assert(lines[0].includes(`MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port ${port} --promptPassword --boardSummary`), "boardSummary should include formal local smoke command");
     assert(lines[0].includes(`RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port ${port} --promptPassword --boardSummary`), "boardSummary should include rerun command");
     assert(/\[INFO\] Running H\.264 video/.test(result.stderr), "boardSummary progress should go to stderr");
     assertNoSecretLikeText(outputOf(result), "fake host boardSummary output");

@@ -476,8 +476,13 @@ function makeRerunBoardSummaryCommand(args) {
   ].join(" ");
 }
 
+function makeMacFormalLocalSmokeCommand(args) {
+  return makeRerunBoardSummaryCommand(args);
+}
+
 function makeCommands(args) {
   return {
+    macFormalLocalSmokeCommand: makeMacFormalLocalSmokeCommand(args),
     macHostReadinessCommand: makeMacHostReadinessCommand(args),
     macHostSafeStartCommand: makeMacHostSafeStartCommand(args),
     macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
@@ -543,6 +548,7 @@ function makeBoardSummary(args, probes, failed, commands) {
     `MacHostSafeStart=${commands.macHostSafeStartCommand}.`,
     `MacMaxFpsSafeStart=${commands.macMaxFpsSafeStartCommand}.`,
     `MacUnattendedFormal=${commands.macUnattendedFormalCommand}.`,
+    `MacFormalLocalSmoke=${commands.macFormalLocalSmokeCommand}.`,
     `RerunFormalLocalSmoke=${commands.rerunBoardSummaryCommand}.`,
   ].join(" ");
 }
@@ -571,6 +577,7 @@ function makeFailureReport(error, argv) {
       `MacHostSafeStart=${commands.macHostSafeStartCommand}.`,
       `MacMaxFpsSafeStart=${commands.macMaxFpsSafeStartCommand}.`,
       `MacUnattendedFormal=${commands.macUnattendedFormalCommand}.`,
+      `MacFormalLocalSmoke=${commands.macFormalLocalSmokeCommand}.`,
       `RerunFormalLocalSmoke=${commands.rerunBoardSummaryCommand}.`,
     ].join(" "),
   };
