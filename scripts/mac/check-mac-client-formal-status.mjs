@@ -500,8 +500,22 @@ function makeReverseControlRehearsalText(report, args) {
   ].join(" ");
 }
 
+function makeReverseControlRehearsalBoardText() {
+  return "Mac clicks 请求反控 -> expects LAN008/default deny; Windows uses WindowsOpenOneTimeReverseGrant above on loopback; Mac clicks 重试反控 -> accepted plus 临时授权已使用; no password, input_event, or inject.";
+}
+
 function makeReverseGrantCopyAction() {
   return "After LAN008, Mac client page shows Copy PowerShell and Copy Node for the Windows loopback grant commands; copied text must contain no password and copying must not send input_event.";
+}
+
+function makeReverseGrantBoardSummaryParts(report, args) {
+  const commands = report?.runPlan?.commands || {};
+  return [
+    `WindowsReverseGrantStatus=${commands.windowsReverseGrantStatus || makeWindowsReverseGrantCommand(report, args, "status")}.`,
+    `WindowsOpenOneTimeReverseGrant=${commands.windowsOpenOneTimeReverseGrant || makeWindowsReverseGrantCommand(report, args, "grant")}.`,
+    `WindowsReverseGrantStatusNodeFallback=${commands.windowsReverseGrantStatusNodeFallback || makeWindowsReverseGrantNodeFallbackCommand(report, args, "status")}.`,
+    `WindowsOpenOneTimeReverseGrantNodeFallback=${commands.windowsOpenOneTimeReverseGrantNodeFallback || makeWindowsReverseGrantNodeFallbackCommand(report, args, "grant")}.`,
+  ];
 }
 
 function makeManualChecklist(report, args) {
@@ -715,6 +729,7 @@ function makeBoardSummary(report) {
       ? `offline ${host.probe?.host}:${host.probe?.port}`
       : "not-checked";
   const findings = formatChecklistFindings(report.checklist);
+  const reverseGrantParts = makeReverseGrantBoardSummaryParts(report, report.args || {});
   return [
     `Mac client formal Windows test: ${report.readyToCall ? "ready" : `needs attention (${report.counts.blocker} blocker(s), ${report.counts.warning} warning(s))`}; repo=${repo}; client=${client}; localServer=${localServer}; windowsHost=${hostText}; ${findings}.`,
     report.readyToCall
@@ -725,7 +740,8 @@ function makeBoardSummary(report) {
     "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
     `MacClientBrowserSelfTest=${report.runPlan?.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
     `ReverseGrantCopy=${report.runPlan?.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
-    `Reverse rehearsal: click 请求反控 -> expect LAN008; Windows local grant PowerShell: ${makeWindowsReverseGrantCommand(report, { windowsPort: host.probe?.port || report.args?.windowsPort || defaults.windowsPort }, "grant")}; Node fallback: ${makeWindowsReverseGrantNodeFallbackCommand(report, { windowsPort: host.probe?.port || report.args?.windowsPort || defaults.windowsPort }, "grant")}; Mac retry -> accepted/临时授权已使用.`,
+    ...reverseGrantParts,
+    `Reverse rehearsal: ${makeReverseControlRehearsalBoardText()}`,
     "RunPlan: local client -> Windows discovery -> formal checklist -> local browser self-test -> browser smoke -> reverse request rehearsal -> observe quality/resources.",
     "Do not send passwords on Agent Link Board; do not run inject unless the user explicitly confirms they are watching.",
   ].join(" ");

@@ -177,6 +177,18 @@ function assertMacClientFormalChecklistCommand(command, label, expectedHost = "<
   assertNotIncludes(command, "--json", label);
 }
 
+function assertReverseGrantBoardSummary(text, label, expectedPort = "43770") {
+  assertIncludes(text, "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass", label);
+  assertIncludes(text, `-Port ${expectedPort} -Status -BoardSummary`, label);
+  assertIncludes(text, "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass", label);
+  assertIncludes(text, `-Port ${expectedPort} -Grant -DurationMs 30000 -BoardSummary`, label);
+  assertIncludes(text, "WindowsReverseGrantStatusNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs", label);
+  assertIncludes(text, `--port ${expectedPort} --status --boardSummary`, label);
+  assertIncludes(text, "WindowsOpenOneTimeReverseGrantNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs", label);
+  assertIncludes(text, `--port ${expectedPort} --grant --durationMs 30000 --boardSummary`, label);
+  assertNotIncludes(text, "--password", label);
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run([flag], args);
@@ -254,6 +266,7 @@ function checkOfflineJson(args) {
   assertMatches(payload.boardSummary || "", /blockers=[^.]*windows-host/, "offline board summary blockers");
   assertMatches(payload.boardSummary || "", /warnings=[^.]*board/, "offline board summary warnings");
   assertIncludes(payload.boardSummary || "", "Reverse rehearsal:", "offline board summary");
+  assertReverseGrantBoardSummary(payload.boardSummary || "", "offline board summary");
   assertIncludes(payload.boardSummary || "", "WindowsHostStatus=node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "offline board summary");
@@ -286,6 +299,7 @@ function checkAllowOfflineWarnings(args) {
   assertMatches(payload.boardSummary || "", /warnings=[^.]*client-server/, "allow offline board summary warnings");
   assertMatches(payload.boardSummary || "", /warnings=[^.]*board/, "allow offline board summary warnings");
   assertMatches(payload.boardSummary || "", /warnings=[^.]*windows-host/, "allow offline board summary warnings");
+  assertReverseGrantBoardSummary(payload.boardSummary || "", "allow offline board summary");
   print("OK", "Allow flags keep offline state as warnings but not readyToCall");
 }
 
@@ -318,6 +332,7 @@ function checkBoardSummarySecretFree(args) {
   assertIncludes(result.stdout, "check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary", "board summary");
   assertIncludes(result.stdout, "Reverse rehearsal:", "board summary");
   assertIncludes(result.stdout, "ReverseGrantCopy=", "board summary");
+  assertReverseGrantBoardSummary(result.stdout, "board summary");
   assertIncludes(result.stdout, "Copy Node", "board summary");
   assertIncludes(result.stdout, "Do not send passwords", "board summary");
   assertNotIncludes(output, secret, "board summary");
@@ -643,6 +658,7 @@ async function checkReadyShape(args) {
       assertIncludes(payload.boardSummary || "", `MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 127.0.0.1 --port ${windowsPort} --boardSummary`, "ready board summary");
       assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "ready board summary");
       assertIncludes(payload.boardSummary || "", "ReverseGrantCopy=", "ready board summary");
+      assertReverseGrantBoardSummary(payload.boardSummary || "", "ready board summary", String(windowsPort));
       assertIncludes(payload.boardSummary || "", "Reverse rehearsal:", "ready board summary");
       assertIncludes(payload.callText || "", "Suggested browser test:", "ready call text");
       assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "ready output");
