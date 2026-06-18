@@ -699,6 +699,12 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const heartbeatStartCommand = "node scripts/mac/start-mac-heartbeat-watcher.mjs --boardSummary";
   const heartbeatStatusCommand = "node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary";
   const heartbeatStopCommand = "node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --boardSummary";
+  const heartbeatNow = Date.now();
+  const freshCheckedAt = new Date(heartbeatNow - 60_000).toISOString();
+  const freshCodexUpdatedAt = new Date(heartbeatNow - 65_000).toISOString();
+  const freshBoardUpdatedAt = new Date(heartbeatNow - 58_000).toISOString();
+  const staleHeartbeatSummary = "MacHeartbeat=status=ok; checkedAt=2020-01-01T00:00:00.000Z; device=Mac; codex=ok status=idle updatedAt=2020-01-01T00:00:00.000Z ageMs=999999; macHost=online 127.0.0.1:43770; macClient=online http://127.0.0.1:5188/; board=ok boardUpdatedAt=2020-01-01T00:00:00.000Z; blockers=none warnings=none reason=ok";
+  const freshHeartbeatSummary = `MacHeartbeat=status=ok; checkedAt=${freshCheckedAt}; device=Mac; codex=ok status=idle updatedAt=${freshCodexUpdatedAt} ageMs=65000; macHost=online 127.0.0.1:43770; macClient=online http://127.0.0.1:5188/; board=ok boardUpdatedAt=${freshBoardUpdatedAt}; blockers=none warnings=none reason=ok`;
   await withMockHost(async (port) => {
     const boardState = {
       statuses: {
@@ -707,8 +713,19 @@ async function checkBoardMacHostSafeStartExtraction(args) {
           status: "idle",
           note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand} MacHeartbeatStart=${heartbeatStartCommand} MacHeartbeatStatus=${heartbeatStatusCommand} MacHeartbeatStop=${heartbeatStopCommand}`,
         },
+        "Mac Heartbeat": {
+          role: "Mac heartbeat watcher",
+          status: "online",
+          note: freshHeartbeatSummary,
+          updatedAt: freshBoardUpdatedAt,
+        },
       },
       events: [
+        {
+          type: "status",
+          from: "Mac Heartbeat",
+          text: staleHeartbeatSummary,
+        },
         {
           type: "message",
           from: "Mac Codex",
@@ -823,6 +840,10 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board?.macHeartbeatStop?.found === true, "PowerShell MacHeartbeatStop should be found");
       assert(payload.board.macHeartbeatStop.command === heartbeatStopCommand, "PowerShell MacHeartbeatStop command mismatch");
       assert(payload.board.macHeartbeatStop.rejectedCount >= 1, "PowerShell wrong-action MacHeartbeatStop should be rejected");
+      assert(payload.board?.macHeartbeatFreshness?.present === true, "PowerShell MacHeartbeat freshness should be found");
+      assert(payload.board.macHeartbeatFreshness.status === "fresh", "PowerShell MacHeartbeat freshness should use newest summary");
+      assert(payload.board.macHeartbeatFreshness.checkedAt === freshCheckedAt, "PowerShell MacHeartbeat freshness should use newest checkedAt");
+      assert(payload.board.macHeartbeatFreshness.codexAgeMs === 65000, "PowerShell MacHeartbeat freshness should preserve codex age");
       assertIncludes(payload.boardSummary, `MacHostSafeStart=${safeCommand}.`, "PowerShell MacHostSafeStart JSON board summary");
       assertIncludes(payload.boardSummary, `MacMaxFpsSafeStart=${maxFpsCommand}.`, "PowerShell MacMaxFpsSafeStart JSON board summary");
       assertIncludes(payload.boardSummary, `MacFormalLocalSmoke=${localSmokeCommand}.`, "PowerShell MacFormalLocalSmoke JSON board summary");
@@ -831,6 +852,8 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(payload.boardSummary, `MacHeartbeatStart=${heartbeatStartCommand}.`, "PowerShell MacHeartbeatStart JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatStatus=${heartbeatStatusCommand}.`, "PowerShell MacHeartbeatStatus JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatStop=${heartbeatStopCommand}.`, "PowerShell MacHeartbeatStop JSON board summary");
+      assertIncludes(payload.boardSummary, "MacHeartbeatFreshness=fresh", "PowerShell MacHeartbeatFreshness JSON board summary");
+      assertIncludes(payload.boardSummary, `checkedAt=${freshCheckedAt}.`, "PowerShell MacHeartbeatFreshness JSON board summary");
       assertNotIncludes(output, "secret-value", "PowerShell MacHostSafeStart JSON should not leak rejected command");
     }, boardState);
 
@@ -858,6 +881,8 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(output, `MacHeartbeatStart=${heartbeatStartCommand}.`, "PowerShell MacHeartbeatStart board summary");
       assertIncludes(output, `MacHeartbeatStatus=${heartbeatStatusCommand}.`, "PowerShell MacHeartbeatStatus board summary");
       assertIncludes(output, `MacHeartbeatStop=${heartbeatStopCommand}.`, "PowerShell MacHeartbeatStop board summary");
+      assertIncludes(output, "MacHeartbeatFreshness=fresh", "PowerShell MacHeartbeatFreshness board summary");
+      assertIncludes(output, `checkedAt=${freshCheckedAt}.`, "PowerShell MacHeartbeatFreshness board summary");
       assertNotIncludes(output, "secret-value", "PowerShell MacHostSafeStart board summary should not leak rejected command");
       console.log("[OK] PowerShell resume-status wrapper surfaces Mac safe-start commands safely");
     }, boardState);

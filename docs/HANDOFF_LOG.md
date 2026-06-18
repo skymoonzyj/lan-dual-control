@@ -21,6 +21,38 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 恢复开工总览直接消费 Agent Link Board 上的 Mac heartbeat 新鲜度。
+完成内容：
+- `check-windows-resume-status --checkBoard` 现在会从 `/api/state` 的状态/消息/事件里解析所有 `MacHeartbeat=` 摘要。
+- 恢复总览会取最新 `checkedAt` 的那段，避免旧事件覆盖新的 `Mac Heartbeat` 状态。
+- JSON 新增 `board.macHeartbeatFreshness`，普通输出和 `--boardSummary` 新增 `MacHeartbeatFreshness=fresh|stale checked=<秒> codex=<秒> board=<秒> checkedAt=<时间>`。
+- Node 和 PowerShell wrapper 回归都覆盖旧心跳事件 + 新心跳状态并存时取最新状态。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- 这轮只把恢复总览第一屏补上 heartbeat freshness；真实是否需要重启 Mac heartbeat watcher 仍以 `MacHeartbeatStatus=` / Mac 端后台 watcher 状态为准。
+下一步建议：
+- 白天恢复工作时先跑 Windows resume `--checkBoard --boardSummary`。如果看到 `MacHeartbeatFreshness=stale`，先让 Mac 端跑 `MacHeartbeatOnce=` 或 `MacHeartbeatStatus=`，再判断 Mac Codex/host 是否卡住。
+是否改了协议：否。
+是否需要另一端配合：不阻塞；后续 Mac 端只需继续按现有 `MacHeartbeat=` 摘要上板。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：消费 Mac heartbeat 新鲜度字段，让 Windows 控制端能识别旧 `Mac Heartbeat` 摘要。
 完成内容：
 - Windows 控制端会解析 `MacHeartbeat=` 文本里的 `checkedAt=`、Mac Codex `updatedAt=` / `ageMs=` 和 `boardUpdatedAt=`。
