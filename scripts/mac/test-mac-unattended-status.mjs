@@ -182,6 +182,38 @@ function baseOfflineArgs(launchAgentPath) {
   ];
 }
 
+function fakeLaunchAgentPlist({ label = "com.lan-dual-control.mac-host", maxScreenFps = 60 } = {}) {
+  const programArguments = [
+    "/usr/bin/env",
+    "node",
+    "scripts/mac/start-mac-host.mjs",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    "43770",
+    "--requirePassword",
+    "--inputMode",
+    "log",
+    "--videoMode",
+    "h264",
+    "--maxScreenFps",
+    String(maxScreenFps),
+  ];
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${label}</string>
+  <key>ProgramArguments</key>
+  <array>
+${programArguments.map((item) => `    <string>${item}</string>`).join("\n")}
+  </array>
+</dict>
+</plist>
+`;
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run(args, [flag]);
@@ -193,6 +225,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "launchAgent", `${script} ${flag}`);
     assertIncludes(result.stdout, "power", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.launchAgentPlan", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macMaxFpsPlan", `${script} ${flag}`);
     assertNoSecretOrInputGuidance(result.stdout, `${script} ${flag}`);
   }
   print("OK", "Unattended status help exits quickly and stays side-effect-free");
@@ -217,6 +250,7 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.commands?.launchAgentPlan || "", "--boardSummary", "missing LaunchAgent commands.launchAgentPlan");
   assertIncludes(payload.boardSummary, "MacUnattendedStatus=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacLaunchAgentPlan=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacMaxFpsPlan=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "HostReadiness=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "blockers=none", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "warnings=host-offline,launch-agent-missing", "missing LaunchAgent board summary");
@@ -276,15 +310,7 @@ function checkFakePlist(args) {
   const dir = mkdtempSync(path.join(tmpdir(), "lan-dual-unattended-agent-"));
   try {
     const plist = path.join(dir, "com.lan-dual-control.mac-host.plist");
-    writeFileSync(plist, `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>com.lan-dual-control.mac-host</string>
-</dict>
-</plist>
-`, "utf8");
+    writeFileSync(plist, fakeLaunchAgentPlist({ maxScreenFps: 60 }), "utf8");
     const result = run(args, [
       "--json",
       ...baseOfflineArgs(plist),
@@ -295,12 +321,39 @@ function checkFakePlist(args) {
     assert(payload.launchAgent?.readable === true, "fake plist should be readable");
     assert(payload.launchAgent?.installed === true, "fake plist should be considered installed");
     assert(payload.launchAgent?.labelMatches === true, "fake plist label should match");
+    assert(payload.launchAgent?.maxScreenFps === 60, "fake plist should expose maxScreenFps from ProgramArguments");
+    assert(Array.isArray(payload.launchAgent?.programArguments), "fake plist should expose ProgramArguments");
     assertIncludes(payload.commands?.launchAgentPlan || "", "install-mac-host-launch-agent.mjs", "fake plist commands.launchAgentPlan");
+    assertIncludes(payload.commands?.macMaxFpsPlan || "", "--maxScreenFps 60", "fake plist commands.macMaxFpsPlan");
     assertIncludes(payload.commands?.hostReadiness || "", "check-mac-host-readiness.mjs", "fake plist commands.hostReadiness");
     assert(payload.limitations.some((item) => /System sleep/.test(item)), "fake plist payload should document sleep limit");
     assert(payload.limitations.some((item) => /Reboot/.test(item)), "fake plist payload should document reboot/login limit");
     assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "fake plist unattended JSON");
     print("OK", "LaunchAgent plist label parsing and limitations are machine-readable");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function checkLaunchAgentMaxFpsWarning(args) {
+  const dir = mkdtempSync(path.join(tmpdir(), "lan-dual-unattended-agent-fps-"));
+  try {
+    const plist = path.join(dir, "com.lan-dual-control.mac-host.plist");
+    writeFileSync(plist, fakeLaunchAgentPlist({ maxScreenFps: 30 }), "utf8");
+    const result = run(args, [
+      "--json",
+      ...baseOfflineArgs(plist),
+    ]);
+    const payload = parseJson(result.stdout, "max-FPS LaunchAgent JSON");
+    assert(result.status === 0, "low max-FPS LaunchAgent should stay a warning by default");
+    assert(payload.launchAgent?.maxScreenFps === 30, "max-FPS payload should preserve LaunchAgent maxScreenFps");
+    assert(payload.findings.some((item) => item.id === "launch-agent-max-fps" && item.level === "warning" && /maxScreenFps=30/.test(item.text)), "low max-FPS LaunchAgent should create a warning");
+    assertIncludes(payload.commands?.macMaxFpsPlan || "", "--maxScreenFps 60", "max-FPS commands.macMaxFpsPlan");
+    assertIncludes(payload.boardSummary, "maxFps=30", "max-FPS board summary");
+    assertIncludes(payload.boardSummary, "warnings=host-offline,launch-agent-max-fps", "max-FPS board summary");
+    assertIncludes(payload.boardSummary, "MacMaxFpsPlan=", "max-FPS board summary");
+    assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "max-FPS LaunchAgent JSON");
+    print("OK", "LaunchAgent maxScreenFps below 60Hz is reported as a warning");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -319,6 +372,7 @@ function checkBoardSummary(args) {
   assertIncludes(text, "Mac unattended status:", "board summary");
   assertIncludes(text, "MacUnattendedStatus=", "board summary");
   assertIncludes(text, "MacLaunchAgentPlan=", "board summary");
+  assertIncludes(text, "MacMaxFpsPlan=", "board summary");
   assertIncludes(text, "HostReadiness=", "board summary");
   assertIncludes(text, "blockers=none", "board summary");
   assertIncludes(text, "warnings=host-offline,launch-agent-missing", "board summary");
@@ -372,15 +426,7 @@ async function checkNoFindingsSummary(args) {
   const dir = mkdtempSync(path.join(tmpdir(), "lan-dual-unattended-clean-"));
   try {
     const plist = path.join(dir, "com.lan-dual-control.mac-host.plist");
-    writeFileSync(plist, `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>com.lan-dual-control.mac-host</string>
-</dict>
-</plist>
-`, "utf8");
+    writeFileSync(plist, fakeLaunchAgentPlist({ maxScreenFps: 60 }), "utf8");
     await withFakeHost({
       deviceName: "Fake clean unattended Mac",
       inputMode: "log",
@@ -416,7 +462,9 @@ async function checkNoFindingsSummary(args) {
       assert(result.status === 0, `clean unattended path should pass\n${result.stdout}\n${result.stderr}`);
       assert(payload.ok === true, "clean unattended payload should report ok=true");
       assert(payload.findings.length === 0, "clean unattended payload should have no findings");
+      assert(payload.launchAgent?.maxScreenFps === 60, "clean unattended payload should report LaunchAgent maxScreenFps=60");
       assertIncludes(payload.boardSummary, "attention=none", "clean unattended board summary");
+      assertIncludes(payload.boardSummary, "maxFps=60", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "blockers=none", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "warnings=none", "clean unattended board summary");
       assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "clean unattended JSON");
@@ -439,6 +487,7 @@ async function main() {
   checkRequireLaunchAgentLoadedNeedsProbe(args);
   checkStrictWarningsFail(args);
   checkFakePlist(args);
+  checkLaunchAgentMaxFpsWarning(args);
   checkBoardSummary(args);
   await checkCapabilitiesInputMode(args);
   await checkNoFindingsSummary(args);

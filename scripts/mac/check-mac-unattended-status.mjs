@@ -25,6 +25,7 @@ const defaults = {
   skipPmset: false,
   help: false,
 };
+const formalTargetMaxScreenFps = 60;
 
 function printHelp() {
   console.log(`Usage: node scripts/mac/check-mac-unattended-status.mjs [options]
@@ -58,6 +59,8 @@ Machine-readable JSON fields:
   power                          pmset sleep/display/network-wake snapshot and risk notes.
   limitations                    Lock screen, display sleep, system sleep, reboot/login limits.
   commands.launchAgentPlan       Secret-free LaunchAgent dry-run planner command.
+  commands.macMaxFpsPlan         Secret-free LaunchAgent dry-run planner command
+                                  for the formal 60Hz max-FPS target.
   commands.hostReadiness         Follow-up Mac host readiness command.
 
 Examples:
@@ -182,6 +185,7 @@ async function checkHost(args) {
 function readLaunchAgentPlist(args) {
   const exists = existsSync(args.launchAgentPath);
   let label = "";
+  let programArguments = [];
   let readable = false;
   let error = "";
   if (exists) {
@@ -189,23 +193,60 @@ function readLaunchAgentPlist(args) {
       const text = readFileSync(args.launchAgentPath, "utf8");
       readable = true;
       label = extractPlistLabel(text);
+      programArguments = extractPlistProgramArguments(text);
     } catch (readError) {
       error = readError.message;
     }
   }
+  const maxScreenFps = getProgramArgumentNumber(programArguments, "--maxScreenFps");
   return {
     path: args.launchAgentPath,
     exists,
     readable,
     label: label || args.label,
     labelMatches: !label || label === args.label,
+    programArguments,
+    maxScreenFps,
     error,
   };
 }
 
 function extractPlistLabel(text) {
   const match = String(text || "").match(/<key>\s*Label\s*<\/key>\s*<string>\s*([^<]+?)\s*<\/string>/i);
-  return match ? match[1].trim() : "";
+  return match ? xmlUnescape(match[1]).trim() : "";
+}
+
+function extractPlistProgramArguments(text) {
+  const arrayMatch = String(text || "").match(/<key>\s*ProgramArguments\s*<\/key>\s*<array>([\s\S]*?)<\/array>/i);
+  if (!arrayMatch) return [];
+  return [...arrayMatch[1].matchAll(/<string>\s*([\s\S]*?)\s*<\/string>/gi)]
+    .map((match) => xmlUnescape(match[1]).trim())
+    .filter(Boolean);
+}
+
+function xmlUnescape(value) {
+  return String(value || "")
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&gt;/g, ">")
+    .replace(/&lt;/g, "<")
+    .replace(/&amp;/g, "&");
+}
+
+function getProgramArgumentNumber(programArguments, key) {
+  const items = Array.isArray(programArguments) ? programArguments : [];
+  for (let index = 0; index < items.length; index += 1) {
+    const item = String(items[index] || "");
+    if (item === key) {
+      const parsed = Number(items[index + 1]);
+      return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : null;
+    }
+    if (item.startsWith(`${key}=`)) {
+      const parsed = Number(item.slice(key.length + 1));
+      return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : null;
+    }
+  }
+  return null;
 }
 
 function checkLaunchctl(args) {
@@ -362,6 +403,10 @@ function buildFindings({ args, host, launchAgent, power }) {
     addFinding(findings, args.requireLaunchAgent ? "blocker" : "warning", "launch-agent-missing", `LaunchAgent plist is missing at ${launchAgent.path}.`);
   } else if (!launchAgent.labelMatches) {
     addFinding(findings, "warning", "launch-agent-label", `LaunchAgent label is ${launchAgent.label}; expected ${args.label}.`);
+  } else if (launchAgent.readable && launchAgent.maxScreenFps === null) {
+    addFinding(findings, "warning", "launch-agent-max-fps", `LaunchAgent maxScreenFps is not explicit; start helper default is 30FPS, below the formal ${formalTargetMaxScreenFps}Hz target.`);
+  } else if (launchAgent.readable && launchAgent.maxScreenFps < formalTargetMaxScreenFps) {
+    addFinding(findings, "warning", "launch-agent-max-fps", `LaunchAgent maxScreenFps=${launchAgent.maxScreenFps}; formal ${formalTargetMaxScreenFps}Hz validation will keep reporting a remote FPS limit until the max-FPS plan is reviewed.`);
   }
   if (args.requireLaunchAgentLoaded && !launchAgent.launchctl.checked) {
     addFinding(findings, "blocker", "launch-agent-loaded-unchecked", `LaunchAgent ${args.label} loaded status was not checked.`);
@@ -380,6 +425,7 @@ function buildFindings({ args, host, launchAgent, power }) {
 function makeCommands(args) {
   return {
     launchAgentPlan: `node scripts/mac/install-mac-host-launch-agent.mjs --launchAgentPath ${shellQuote(args.launchAgentPath)} --boardSummary`,
+    macMaxFpsPlan: `node scripts/mac/install-mac-host-launch-agent.mjs --launchAgentPath ${shellQuote(args.launchAgentPath)} --maxScreenFps ${formalTargetMaxScreenFps} --boardSummary`,
     hostStatus: `node scripts/mac/start-mac-host.mjs --status --host ${args.host} --port ${args.port} --boardSummary`,
     hostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     startHost: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port}`,
@@ -413,9 +459,10 @@ function makeBoardSummary(report) {
     ? `permissions=screen:${boolText(report.host.permissions?.screenRecording)} accessibility:${boolText(report.host.permissions?.accessibility)} inputMonitoring:${boolText(report.host.permissions?.inputMonitoring)}`
     : "permissions=unknown";
   const agent = `launchAgent=${report.launchAgent.exists ? "file-present" : "missing"} loaded=${report.launchAgent.loaded === null ? "unknown" : boolText(report.launchAgent.loaded)}`;
+  const agentMaxFps = report.launchAgent.maxScreenFps === null ? "unknown" : String(report.launchAgent.maxScreenFps);
   return [
-    `Mac unattended status: host=${host}; ${perms}; ${agent}; power=${report.power.summary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
-    `MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --boardSummary; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; HostReadiness=${report.commands.hostReadiness}.`,
+    `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
+    `MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --boardSummary; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; HostReadiness=${report.commands.hostReadiness}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
@@ -473,7 +520,7 @@ function printHuman(report) {
   console.log(`Mac unattended status: ${report.ok ? "ok" : "needs attention"}`);
   console.log(`- host: ${report.host.online ? `online ${report.args.host}:${report.args.port}` : `offline ${report.args.host}:${report.args.port}`} inputMode=${report.host.inputMode || "unknown"}`);
   console.log(`- permissions: screen=${boolText(report.host.permissions?.screenRecording)} accessibility=${boolText(report.host.permissions?.accessibility)} inputMonitoring=${boolText(report.host.permissions?.inputMonitoring)}`);
-  console.log(`- LaunchAgent: path=${report.launchAgent.path}; file=${report.launchAgent.exists ? "present" : "missing"}; loaded=${report.launchAgent.loaded === null ? "unknown" : boolText(report.launchAgent.loaded)}`);
+  console.log(`- LaunchAgent: path=${report.launchAgent.path}; file=${report.launchAgent.exists ? "present" : "missing"}; loaded=${report.launchAgent.loaded === null ? "unknown" : boolText(report.launchAgent.loaded)}; maxFps=${report.launchAgent.maxScreenFps === null ? "unknown" : report.launchAgent.maxScreenFps}`);
   console.log(`- power: ${report.power.summary}`);
   for (const item of report.findings) {
     const prefix = item.level === "blocker" ? "BLOCK" : item.level === "warning" ? "WARN" : "INFO";
@@ -482,6 +529,7 @@ function printHuman(report) {
   console.log("- limitations:");
   for (const item of report.limitations) console.log(`  - ${item}`);
   console.log(`- LaunchAgent plan: ${report.commands.launchAgentPlan}`);
+  console.log(`- Mac max FPS plan: ${report.commands.macMaxFpsPlan}`);
   console.log(`- host readiness: ${report.commands.hostReadiness}`);
   console.log(report.boardSummary);
 }
