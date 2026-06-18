@@ -21,6 +21,41 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows watcher 和控制端诊断消费 Mac 侧 `MacFormalLocalSmoke=` / `RerunFormalLocalSmoke=`。
+完成内容：
+- `watch-codex-link-mac-alerts.ps1` 新增 Mac 本机正式短验收显式匹配：`MacFormalLocalSmoke=`、`RerunFormalLocalSmoke=` 或 `check-mac-formal-local-smoke` 搭配 failed/blocked/ready=false、认证/密码或非空 warning/blocker 时会触发 Windows 本机提醒。
+- Windows 控制端 Mac 提醒区、快速摘要和复制/导出诊断新增中文风险“Mac 本机短验收需处理”“Mac 本机短验收重跑命令已提供”，并会把 watcher finding 详情纳入导出诊断的脱敏文本。
+- 干净摘要保护保持：`MacFormalLocalSmoke=ready warnings=none blockers=none` 和单独复跑命令不会误弹提醒。
+- 复制/导出诊断的 Mac 值守摘要长度略放宽，避免风险标签较多时把新复跑命令提示截掉。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- PowerShell 7 AST parse `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 未执行真实密码认证或 input/inject；本轮只做 Windows 侧提醒/诊断消费层。
+下一步建议：
+- Mac 端后续跑 `check-mac-formal-local-smoke --boardSummary` 后，Windows 可直接看 Mac 提醒区或复制诊断，确认是否出现本机短验收失败和可复跑命令。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；正式本机短验收仍由 Mac 端/用户现场输入密码触发。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：复查 formal E2E 第二步，并让 Windows host 状态摘要输出统一 `MacClientFormalChecklist=` 标签。
 完成内容：
 - 重新复查 Windows formal E2E 第二步依赖：无密 preflight + Windows client diagnostics-only 均通过；正式连接 Mac 的第二步仍需要用户本机隐藏输入密码，密码未写入命令或通讯板。

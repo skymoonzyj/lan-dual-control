@@ -525,6 +525,46 @@ async function checkMacHostReadinessCleanIgnored(args) {
   console.log("[OK] Mac host readiness clean status is ignored");
 }
 
+async function checkMacFormalLocalSmokeFindingsAlert(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: [
+          "MacFormalLocalSmoke=failed blockers=auth warnings=video",
+          "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
+        ].join("; "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "Mac formal local smoke findings status");
+  assertIncludes(output, "MacFormalLocalSmoke=failed", "Mac formal local smoke findings status");
+  assertIncludes(output, "blockers=auth", "Mac formal local smoke findings status");
+  assertIncludes(output, "warnings=video", "Mac formal local smoke findings status");
+  assertIncludes(output, "RerunFormalLocalSmoke=", "Mac formal local smoke findings status");
+  console.log("[OK] Mac formal local smoke finding status alerts");
+}
+
+async function checkMacFormalLocalSmokeCleanIgnored(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: [
+          "MacFormalLocalSmoke=ready blockers=none warnings=none",
+          "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
+        ].join("; "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertNotIncludes(output, "ALERT:", "Mac formal local smoke clean status");
+  console.log("[OK] Mac formal local smoke clean status is ignored");
+}
+
 async function checkMacHostSafeStartGuidanceAlert(args) {
   const output = await runWatcherAgainst(baseState({
     statuses: {
@@ -811,6 +851,8 @@ async function main() {
   await checkMacClientFormalCleanIgnored(args);
   await checkMacHostReadinessFindingsAlert(args);
   await checkMacHostReadinessCleanIgnored(args);
+  await checkMacFormalLocalSmokeFindingsAlert(args);
+  await checkMacFormalLocalSmokeCleanIgnored(args);
   await checkMacHostSafeStartGuidanceAlert(args);
   await checkMacHostSafeStartCleanIgnored(args);
   await checkMacMaxFpsSafeStartGuidanceAlert(args);

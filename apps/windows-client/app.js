@@ -257,6 +257,8 @@ const macUnattendedRiskLabels = {
   "mac-host-safe-start": "Mac host 安全启动命令已提供",
   "mac-max-fps-safe-start": "Mac 60Hz 安全启动命令已提供",
   "mac-client-formal-checklist": "Mac client 正式清单命令已提供",
+  "mac-formal-local-smoke": "Mac 本机短验收需处理",
+  "mac-formal-local-smoke-rerun": "Mac 本机短验收重跑命令已提供",
   "mac-host-media-aggregate": "Mac 媒体基线需检查",
   "mac-host-runtime-display-round-trip": "Mac runtime/display 回环需检查",
   "mac-host-build": "Mac host 构建需检查",
@@ -433,6 +435,7 @@ const state = {
   localMacAlertWatcherRunning: false,
   localMacAlertWatcherBusy: false,
   localMacAlertWatcherStatusCheckedAt: 0,
+  localMacAlertWatcherFindingText: "",
   connectionState: "idle",
   remoteDisplays: fallbackDisplays,
   activeDisplayId: "main",
@@ -2946,6 +2949,8 @@ function parseMacUnattendedAttention(text) {
   const hasMacHostSafeStart = /\bMacHostSafeStart\s*=/i.test(source);
   const hasMacMaxFpsSafeStart = /\bMacMaxFpsSafeStart\s*=/i.test(source);
   const hasMacClientFormalChecklist = /\bMacClientFormalChecklist\s*=/i.test(source);
+  const hasMacFormalLocalSmoke = /\b(MacFormalLocalSmoke|check-mac-formal-local-smoke)\b/i.test(source);
+  const hasRerunFormalLocalSmoke = /\bRerunFormalLocalSmoke\s*=/i.test(source);
   const hasMacMaxFpsFinding = risks.some((risk) =>
     risk === "fps-limit" ||
     risk === "mac-host-max-fps" ||
@@ -2983,19 +2988,35 @@ function parseMacUnattendedAttention(text) {
   ) {
     risks.unshift("mac-client-formal-checklist");
   }
+  if (
+    hasMacFormalLocalSmoke &&
+    (risks.length > 0 || /ready\s*=\s*false|blocked|failed|cancelled|password|auth/.test(lower))
+  ) {
+    risks.push("mac-formal-local-smoke");
+  }
+  if (
+    hasRerunFormalLocalSmoke &&
+    (risks.length > 0 || /ready\s*=\s*false|blocked|failed|cancelled|password|auth/.test(lower))
+  ) {
+    risks.push("mac-formal-local-smoke-rerun");
+  }
   const labels = [...new Set(risks.map(labelMacUnattendedRisk).filter(Boolean))];
   return {
     warnings,
     blockers,
     labels,
-    summary: labels.length ? compactExportStatusText(labels.join(" / "), 180) : "",
+    summary: labels.length ? compactExportStatusText(labels.join(" / "), 320) : "",
   };
 }
 
 function getMacAlertWatcherExportStatus(now = Date.now()) {
   const available = canUseDesktopHostControl();
   const statusDetail = elements.localMacAlertWatcherStatusText.textContent.trim() || "-";
-  const unattended = parseMacUnattendedAttention(statusDetail);
+  const findingDetail = state.localMacAlertWatcherFindingText
+    ? sanitizeExportStatusLine(state.localMacAlertWatcherFindingText, 1200)
+    : "";
+  const detail = findingDetail ? `${statusDetail} | ${findingDetail}` : statusDetail;
+  const unattended = parseMacUnattendedAttention(`${statusDetail} ${findingDetail}`);
   let status = "未检查";
   if (!available) {
     status = "需桌面版";
@@ -3006,7 +3027,7 @@ function getMacAlertWatcherExportStatus(now = Date.now()) {
   }
   return {
     status,
-    detail: statusDetail,
+    detail,
     unattended,
     checkedAt: formatMacAlertWatcherCheckedAt(state.localMacAlertWatcherStatusCheckedAt, now),
     pollInterval: `${Math.round(localMacAlertWatcherStatusPollMs / 1000)} 秒`,
@@ -3071,7 +3092,7 @@ function getMacReachabilityExportStatus({ targetLabel, reconnectExport, macAlert
   }
 
   return {
-    status: compactExportStatusText(parts.join(" · "), 220),
+    status: compactExportStatusText(parts.join(" · "), 420),
     note: macAlertWatcherExport.unattended?.summary
       ? "Windows 已从 Mac 提醒 watcher 状态里识别到值守 warnings/blockers；详细 LaunchAgent、自启动、电源、锁屏/睡眠可达性仍以 Mac status/readiness 为准。"
       : "当前仅由 Windows 侧连接、发现、重连和提醒 watcher 推断；LaunchAgent、自启动、锁屏/睡眠可达性需等 Mac status/readiness 上报。",
@@ -3082,12 +3103,12 @@ function getSelectExportLabel(selectElement) {
   return selectElement?.selectedOptions?.[0]?.textContent?.trim() || selectElement?.value || "-";
 }
 
-function sanitizeExportStatusLine(line) {
+function sanitizeExportStatusLine(line, maxLength = 220) {
   return String(line || "")
     .replace(/\b(LAN_DUAL_PASSWORD)\s*=\s*\S+/gi, "$1=<hidden>")
     .replace(/\b(password|passwd|pwd|token|secret)\s*[:=]\s*\S+/gi, "$1=<hidden>")
     .replace(/(--(?:password|token|secret))\s+\S+/gi, "$1 <hidden>")
-    .slice(0, 220);
+    .slice(0, maxLength);
 }
 
 function getLocalHostOutputSummary() {
@@ -4310,6 +4331,7 @@ function applyMacAlertWatcherResult(result) {
   const view = macAlertWatcherUiState(payload);
   state.localMacAlertWatcherStatusCheckedAt = Date.now();
   state.localMacAlertWatcherRunning = view.running;
+  state.localMacAlertWatcherFindingText = macAlertWatcherPayloadFindingText(payload);
   setLocalMacAlertWatcherBadge(view.badgeMode, view.badgeText);
   elements.localMacAlertWatcherStatusText.textContent = view.statusText;
   elements.localMacAlertWatcherToggleButton.lastChild.textContent = ` ${view.toggleText}`;
@@ -4320,6 +4342,7 @@ function applyMacAlertWatcherResult(result) {
 function applyMacAlertWatcherError(error) {
   state.localMacAlertWatcherStatusCheckedAt = Date.now();
   state.localMacAlertWatcherRunning = false;
+  state.localMacAlertWatcherFindingText = "";
   setLocalMacAlertWatcherBadge("offline", "不可用");
   elements.localMacAlertWatcherStatusText.textContent = error?.message || "读取 Windows 浮窗提醒状态失败。";
   elements.localMacAlertWatcherToggleButton.lastChild.textContent = " 开启提醒";
