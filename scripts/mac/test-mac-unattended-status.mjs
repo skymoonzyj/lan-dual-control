@@ -287,6 +287,15 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.commands?.macMaxFpsSafeStart || "", "--host 0.0.0.0", "missing LaunchAgent commands.macMaxFpsSafeStart");
   assertIncludes(payload.commands?.macMaxFpsSafeStart || "", "--port 9", "missing LaunchAgent commands.macMaxFpsSafeStart");
   assertIncludes(payload.commands?.macMaxFpsSafeStart || "", "--maxScreenFps 60", "missing LaunchAgent commands.macMaxFpsSafeStart");
+  assertIncludes(payload.commands?.macHostReadiness || "", "check-mac-host-readiness.mjs", "missing LaunchAgent commands.macHostReadiness");
+  assertIncludes(payload.commands?.macHostReadiness || "", "--host 127.0.0.1", "missing LaunchAgent commands.macHostReadiness");
+  assertIncludes(payload.commands?.macHostReadiness || "", "--port 9", "missing LaunchAgent commands.macHostReadiness");
+  assertIncludes(payload.commands?.macHostReadiness || "", "--checkBoard", "missing LaunchAgent commands.macHostReadiness");
+  assertIncludes(payload.commands?.macHostReadiness || "", "--boardSummary", "missing LaunchAgent commands.macHostReadiness");
+  assertNotIncludes(payload.commands?.macHostReadiness || "", "--promptPassword", "missing LaunchAgent commands.macHostReadiness");
+  assertNotIncludes(payload.commands?.macHostReadiness || "", "--password", "missing LaunchAgent commands.macHostReadiness");
+  assertNotIncludes(payload.commands?.macHostReadiness || "", "inject", "missing LaunchAgent commands.macHostReadiness");
+  assertIncludes(payload.commands?.hostReadiness || "", payload.commands?.macHostReadiness || "missing-command", "missing LaunchAgent commands.hostReadiness alias");
   assertIncludes(payload.boardSummary, "MacUnattendedStatus=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacHostSafeStart=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacHostSafeStart=node scripts/mac/start-mac-host.mjs", "missing LaunchAgent board summary");
@@ -304,6 +313,8 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.boardSummary, "MacMaxFpsPlan=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacUnattendedFormal=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "--requireLaunchAgentLoaded", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacHostReadiness=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "HostReadiness=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "blockers=none", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "warnings=host-offline,launch-agent-missing", "missing LaunchAgent board summary");
@@ -473,6 +484,7 @@ function checkFakePlist(args) {
     assertIncludes(payload.commands?.macHostSafeStart || "", "--promptPassword", "fake plist commands.macHostSafeStart");
     assertIncludes(payload.commands?.macHostSafeStart || "", "--port 9", "fake plist commands.macHostSafeStart");
     assertIncludes(payload.commands?.macUnattendedFormal || "", "--requireLaunchAgentLoaded", "fake plist commands.macUnattendedFormal");
+    assertIncludes(payload.commands?.macHostReadiness || "", "check-mac-host-readiness.mjs", "fake plist commands.macHostReadiness");
     assertIncludes(payload.commands?.hostReadiness || "", "check-mac-host-readiness.mjs", "fake plist commands.hostReadiness");
     assert(payload.limitations.some((item) => /System sleep/.test(item)), "fake plist payload should document sleep limit");
     assert(payload.limitations.some((item) => /Reboot/.test(item)), "fake plist payload should document reboot/login limit");
@@ -538,6 +550,8 @@ function checkBoardSummary(args) {
   assertIncludes(text, "MacMaxFpsPlan=", "board summary");
   assertIncludes(text, "MacUnattendedFormal=", "board summary");
   assertIncludes(text, "--requireLaunchAgentLoaded", "board summary");
+  assertIncludes(text, "MacHostReadiness=", "board summary");
+  assertIncludes(text, "MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs", "board summary");
   assertIncludes(text, "HostReadiness=", "board summary");
   assertIncludes(text, "blockers=none", "board summary");
   assertIncludes(text, "warnings=host-offline,launch-agent-missing", "board summary");
