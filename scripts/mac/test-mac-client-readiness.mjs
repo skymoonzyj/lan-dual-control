@@ -53,6 +53,10 @@ function assertIncludes(text, expected, label) {
   assert(String(text).includes(expected), `${label} did not include ${JSON.stringify(expected)}.\n${text}`);
 }
 
+function assertMatches(text, pattern, label) {
+  assert(pattern.test(String(text)), `${label} did not match ${pattern}.\n${text}`);
+}
+
 function assertNotIncludes(text, expected, label) {
   assert(!String(text).includes(expected), `${label} unexpectedly included ${JSON.stringify(expected)}.\n${text}`);
 }
@@ -186,6 +190,10 @@ function checkOfflineJson(args) {
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "payload should include copy diagnostics action");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("连接密码"), "copy diagnostics action should mention password safety");
   assert(/Mac client readiness:/.test(payload.boardSummary || ""), "payload should include boardSummary");
+  assertIncludes(payload.boardSummary || "", "blockers=none", "offline JSON boardSummary");
+  assertMatches(payload.boardSummary || "", /warnings=[^.]*client-server/, "offline JSON boardSummary warnings");
+  assertMatches(payload.boardSummary || "", /warnings=[^.]*board/, "offline JSON boardSummary warnings");
+  assertMatches(payload.boardSummary || "", /warnings=[^.]*windows-host/, "offline JSON boardSummary warnings");
   assert(/MacClientDiscoverWindows=/.test(payload.boardSummary || ""), "boardSummary should include Windows discovery command");
   assert(/MacClientReverseRehearsal=/.test(payload.boardSummary || ""), "boardSummary should include reverse rehearsal action");
   assert(/MacClientReverseGrantCopy=/.test(payload.boardSummary || ""), "boardSummary should include reverse grant copy action");
@@ -209,6 +217,7 @@ function checkRequireFailures(args) {
   assert(client.status !== 0, "requireClientServer should fail offline");
   assert(clientPayload.ok === false, "requireClientServer payload should be ok=false");
   assert(clientPayload.checklist.some((item) => item.id === "client-server" && item.status === "blocker"), "client-server blocker should be present");
+  assertMatches(clientPayload.boardSummary || "", /blockers=[^.]*client-server/, "require client boardSummary blockers");
 
   const windows = run([
     "--json",
@@ -224,6 +233,7 @@ function checkRequireFailures(args) {
   assert(windows.status !== 0, "requireWindowsHost should fail offline");
   assert(windowsPayload.ok === false, "requireWindowsHost payload should be ok=false");
   assert(windowsPayload.checklist.some((item) => item.id === "windows-host" && item.status === "blocker"), "windows-host blocker should be present");
+  assertMatches(windowsPayload.boardSummary || "", /blockers=[^.]*windows-host/, "require Windows boardSummary blockers");
   print("OK", "Require flags turn offline probes into blockers");
 }
 
@@ -239,6 +249,10 @@ function checkBoardSummary(args) {
   const text = String(result.stdout || "").trim();
   assert(result.status === 0, "board summary should exit 0 without blockers");
   assertIncludes(text, "Mac client readiness:", "board summary");
+  assertIncludes(text, "blockers=none", "board summary");
+  assertMatches(text, /warnings=[^.]*client-server/, "board summary warnings");
+  assertMatches(text, /warnings=[^.]*board/, "board summary warnings");
+  assertMatches(text, /warnings=[^.]*windows-host/, "board summary warnings");
   assertIncludes(text, "MacClientPage=", "board summary");
   assertIncludes(text, "start-mac-client.mjs", "board summary");
   assertIncludes(text, "MacClientDiscoverWindows=", "board summary");
@@ -347,6 +361,9 @@ async function checkClientServerProbe(args) {
     assert(result.status === 0, `client server probe should pass.\n${result.stdout}\n${result.stderr}`);
     assert(payload.clientServer?.online === true, "client server should be online");
     assert(payload.clientServer?.titleFound === true, "client server should look like Mac client page");
+    assertIncludes(payload.boardSummary || "", "blockers=none", "client server probe boardSummary");
+    assertMatches(payload.boardSummary || "", /warnings=[^.]*board/, "client server probe boardSummary warnings");
+    assertMatches(payload.boardSummary || "", /warnings=[^.]*windows-host/, "client server probe boardSummary warnings");
     assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "client server probe command");
     assertMacClientDiscoverWindowsCommand(payload.commands?.macClientDiscoverWindowsCommand || "", "client server probe Windows discovery command");
     assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "client server probe reverse rehearsal action");
@@ -446,6 +463,9 @@ async function checkWindowsDiscoveryProbe(args) {
     assert(payload.windowsHost?.capabilities?.clipboard?.file === true, "file clipboard should be captured");
     assert(payload.checklist.some((item) => item.id === "windows-host" && item.status === "ok"), "windows-host ok item should be present");
     assert(/online 127\.0\.0\.1/.test(payload.boardSummary || ""), "board summary should include online Windows host");
+    assertIncludes(payload.boardSummary || "", "blockers=none", "Windows discovery boardSummary");
+    assertMatches(payload.boardSummary || "", /warnings=[^.]*client-server/, "Windows discovery boardSummary warnings");
+    assertMatches(payload.boardSummary || "", /warnings=[^.]*board/, "Windows discovery boardSummary warnings");
     assertMacClientDiscoverWindowsCommand(payload.commands?.macClientDiscoverWindowsCommand || "", "Windows discovery probe Windows discovery command");
     assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "Windows discovery probe reverse rehearsal action");
     assertMacClientReverseGrantCopyAction(payload.commands?.macClientReverseGrantCopyAction || "", "Windows discovery probe reverse grant copy action");

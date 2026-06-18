@@ -54,6 +54,10 @@ function assertIncludes(text, expected, label) {
   assert(String(text).includes(expected), `${label} did not include ${JSON.stringify(expected)}.\n${text}`);
 }
 
+function assertMatches(text, pattern, label) {
+  assert(pattern.test(String(text)), `${label} did not match ${pattern}.\n${text}`);
+}
+
 function assertNotIncludes(text, expected, label) {
   assert(!String(text).includes(expected), `${label} unexpectedly included ${JSON.stringify(expected)}.\n${text}`);
 }
@@ -216,6 +220,9 @@ function checkOfflineJson(args) {
   assert(payload.runPlan?.safety?.reverseControlRequestSendsInput === false, "offline runPlan should say reverse request sends no input");
   assert(payload.runPlan?.safety?.windowsReverseGrantLoopbackOnly === true, "offline runPlan should keep Windows grant loopback-only");
   assertIncludes(payload.boardSummary || "", "Do not send passwords", "offline board summary");
+  assertMatches(payload.boardSummary || "", /blockers=[^.]*client-server/, "offline board summary blockers");
+  assertMatches(payload.boardSummary || "", /blockers=[^.]*windows-host/, "offline board summary blockers");
+  assertMatches(payload.boardSummary || "", /warnings=[^.]*board/, "offline board summary warnings");
   assertIncludes(payload.boardSummary || "", "Reverse rehearsal:", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "allow-windows-reverse-control.mjs", "offline board summary");
@@ -243,6 +250,10 @@ function checkAllowOfflineWarnings(args) {
   assert(payload.ok === true, "allow offline payload should be ok=true");
   assert(payload.readyToCall === false, "allow offline payload should still not be readyToCall");
   assert(payload.counts?.warning >= 2, "allow offline payload should keep warnings");
+  assertIncludes(payload.boardSummary || "", "blockers=none", "allow offline board summary");
+  assertMatches(payload.boardSummary || "", /warnings=[^.]*client-server/, "allow offline board summary warnings");
+  assertMatches(payload.boardSummary || "", /warnings=[^.]*board/, "allow offline board summary warnings");
+  assertMatches(payload.boardSummary || "", /warnings=[^.]*windows-host/, "allow offline board summary warnings");
   print("OK", "Allow flags keep offline state as warnings but not readyToCall");
 }
 
@@ -254,6 +265,8 @@ function checkBoardSummarySecretFree(args) {
     "--allowDirty",
     "--allowClientServerOffline",
     "--allowWindowsHostOffline",
+    "--clientPort",
+    "9",
     "--server",
     `http://${secret}.invalid`,
     "--timeoutMs",
@@ -262,6 +275,10 @@ function checkBoardSummarySecretFree(args) {
   const output = `${result.stdout}\n${result.stderr}`;
   assert(result.status === 0, "board summary with allow flags should exit 0");
   assertIncludes(result.stdout, "Mac client formal Windows test:", "board summary");
+  assertIncludes(result.stdout, "blockers=none", "board summary");
+  assertMatches(result.stdout, /warnings=[^.]*client-server/, "board summary warnings");
+  assertMatches(result.stdout, /warnings=[^.]*board/, "board summary warnings");
+  assertMatches(result.stdout, /warnings=[^.]*windows-host/, "board summary warnings");
   assertIncludes(result.stdout, "RunPlan:", "board summary");
   assertIncludes(result.stdout, "Reverse rehearsal:", "board summary");
   assertIncludes(result.stdout, "ReverseGrantCopy=", "board summary");
@@ -568,6 +585,8 @@ async function checkReadyShape(args) {
       assertManualChecklist(payload.runPlan?.manualChecklist, "ready manual checklist");
       assert(JSON.stringify(payload.runPlan?.manualChecklist || []).includes(`127.0.0.1:${windowsPort}`), "ready manual checklist should include target address");
       assertIncludes(payload.boardSummary || "", "windowsHost=online 127.0.0.1", "ready board summary");
+      assertIncludes(payload.boardSummary || "", "blockers=none", "ready board summary");
+      assertMatches(payload.boardSummary || "", /warnings=[^.]*board/, "ready board summary warnings");
       assertIncludes(payload.boardSummary || "", "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "ready board summary");
       assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "ready board summary");
       assertIncludes(payload.boardSummary || "", "ReverseGrantCopy=", "ready board summary");

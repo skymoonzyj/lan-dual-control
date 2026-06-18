@@ -694,8 +694,9 @@ function makeBoardSummary(report) {
     : host.checked
       ? `offline ${host.probe?.host}:${host.probe?.port}`
       : "not-checked";
+  const findings = formatChecklistFindings(report.checklist);
   return [
-    `Mac client formal Windows test: ${report.readyToCall ? "ready" : `needs attention (${report.counts.blocker} blocker(s), ${report.counts.warning} warning(s))`}; repo=${repo}; client=${client}; localServer=${localServer}; windowsHost=${hostText}.`,
+    `Mac client formal Windows test: ${report.readyToCall ? "ready" : `needs attention (${report.counts.blocker} blocker(s), ${report.counts.warning} warning(s))`}; repo=${repo}; client=${client}; localServer=${localServer}; windowsHost=${hostText}; ${findings}.`,
     report.readyToCall
       ? `Next: run Mac client true test against ${host.probe?.host}:${host.probe?.port}; compare first frame, FPS, frame age, audio playback, clipboard, input-log, bandwidth/CPU.`
       : "Next: clear blockers, run node scripts/mac/start-mac-client.mjs, discover/start Windows host, then rerun with --host <Windows IP> --port 43770 --boardSummary.",
@@ -706,6 +707,22 @@ function makeBoardSummary(report) {
     "RunPlan: local client -> Windows discovery -> formal checklist -> local browser self-test -> browser smoke -> reverse request rehearsal -> observe quality/resources.",
     "Do not send passwords on Agent Link Board; do not run inject unless the user explicitly confirms they are watching.",
   ].join(" ");
+}
+
+function formatChecklistFindings(checklist) {
+  const blockers = summarizeChecklistIds(checklist, "blocker");
+  const warnings = summarizeChecklistIds(checklist, "warning");
+  return `blockers=${blockers} warnings=${warnings}`;
+}
+
+function summarizeChecklistIds(checklist, status) {
+  const ids = [...new Set((checklist || [])
+    .filter((item) => item.status === status)
+    .map((item) => item.id)
+    .filter(Boolean))];
+  if (ids.length === 0) return "none";
+  if (ids.length <= 4) return ids.join(",");
+  return `${ids.slice(0, 4).join(",")}+${ids.length - 4}more`;
 }
 
 function formatGateItem(entry) {

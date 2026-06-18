@@ -547,9 +547,25 @@ function makeBoardSummary(report) {
     : report.windowsHost.online
       ? `online ${report.windowsHost.probe.host}:${report.windowsHost.probe.port} build=${report.windowsHost.runtime?.buildId || "unknown"}`
       : `offline ${report.windowsHost.probe.host}:${report.windowsHost.probe.port}`;
-  const counts = `blockers=${report.counts.blocker} warnings=${report.counts.warning}`;
+  const findings = formatChecklistFindings(report.checklist);
   const next = report.recommendations[0]?.text || "No next step available.";
-  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows}; ${counts}. Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
+  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows}; ${findings}. Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
+}
+
+function formatChecklistFindings(checklist) {
+  const blockers = summarizeChecklistIds(checklist, "blocker");
+  const warnings = summarizeChecklistIds(checklist, "warning");
+  return `blockers=${blockers} warnings=${warnings}`;
+}
+
+function summarizeChecklistIds(checklist, status) {
+  const ids = [...new Set((checklist || [])
+    .filter((item) => item.status === status)
+    .map((item) => item.id)
+    .filter(Boolean))];
+  if (ids.length === 0) return "none";
+  if (ids.length <= 4) return ids.join(",");
+  return `${ids.slice(0, 4).join(",")}+${ids.length - 4}more`;
 }
 
 function printHuman(report) {
