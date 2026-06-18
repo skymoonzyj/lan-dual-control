@@ -1315,6 +1315,8 @@ async function verifyDesktopOnlyHostPanel(session) {
         "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.68 --port 43770 --boardSummary",
         "MacFormalLocalSmoke=failed blockers=auth warnings=video",
         "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
+        "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
+        "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary",
         "run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
       ].join("; ");
       const macAlertFindingSummary = "Mac side status alert - Mac Codex | " + macAlertFindingText;
@@ -2905,6 +2907,8 @@ async function verifyReconnectControls(session) {
         "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.68 --port 43770 --boardSummary",
         "MacFormalLocalSmoke=failed blockers=auth warnings=video",
         "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
+        "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
+        "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary",
         "run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
       ].join("; ");
 
@@ -3072,6 +3076,8 @@ async function verifyReconnectControls(session) {
             exportText.includes("Mac client 正式清单命令已提供") &&
             exportText.includes("Mac 本机短验收需处理") &&
             exportText.includes("Mac 本机短验收重跑命令已提供") &&
+            exportText.includes("Windows 反控授权状态命令已提供") &&
+            exportText.includes("Windows 一次性反控授权命令已提供") &&
             exportText.includes("- Mac 值守说明：Windows 已从 Mac 提醒 watcher 状态里识别到值守 warnings/blockers"),
           reconnectReason: exportText.includes("- 重连原因：测试断线"),
           reconnectNext: exportText.includes("- 下次重连："),
@@ -3092,6 +3098,8 @@ async function verifyReconnectControls(session) {
             exportText.includes("MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs") &&
             exportText.includes("MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs") &&
             exportText.includes("RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs") &&
+            exportText.includes("WindowsReverseGrantStatus=pwsh") &&
+            exportText.includes("WindowsOpenOneTimeReverseGrant=pwsh") &&
             exportText.includes("warnings=board"),
           macAlertCheckedAt: exportText.includes("- Mac 提醒最近检查："),
           macAlertSecondsAgo: exportText.includes("秒前）"),
@@ -3158,12 +3166,16 @@ async function verifyReconnectControls(session) {
           copiedText.includes("Mac client 正式清单命令已提供") &&
           copiedText.includes("Mac 本机短验收需处理") &&
           copiedText.includes("Mac 本机短验收重跑命令已提供") &&
+          copiedText.includes("Windows 反控授权状态命令已提供") &&
+          copiedText.includes("Windows 一次性反控授权命令已提供") &&
           copiedText.includes("launch-agent-max-fps") &&
           copiedText.includes("mac-host-max-fps") &&
           copiedText.includes("MacHostSafeStart=node scripts/mac/start-mac-host.mjs") &&
           copiedText.includes("MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs") &&
           copiedText.includes("MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs") &&
           copiedText.includes("RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs") &&
+          copiedText.includes("WindowsReverseGrantStatus=pwsh") &&
+          copiedText.includes("WindowsOpenOneTimeReverseGrant=pwsh") &&
           copiedText.includes("host-build-test") &&
           copiedText.includes("辅助功能未开") &&
           copiedText.includes("- 本机被控：桌面壳托管运行中") &&

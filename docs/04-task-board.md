@@ -35,6 +35,7 @@
 - [x] Windows 控制端和 watcher 消费 Mac 60Hz 安全启动提示：`MacMaxFpsSafeStart=` 搭配 `fps-limit` / `mac-host-max-fps` / `launch-agent-max-fps` 等 warning 时会提醒并在复制/导出诊断显示“Mac 60Hz 安全启动命令已提供”；`warnings=none blockers=none` 时不误弹。
 - [x] Windows 控制端和 watcher 消费 Mac client 正式清单入口：`MacClientFormalChecklist=` 搭配 Mac client/formal warning 或 blocker 时会提醒并在复制/导出诊断显示“Mac client 正式清单命令已提供”；`warnings=none blockers=none` 时不误弹。
 - [x] Windows 控制端和 watcher 消费 Mac 本机短验收入口：`MacFormalLocalSmoke=` / `RerunFormalLocalSmoke=` 搭配失败、认证、密码或非空 warning/blocker 时会提醒并在复制/导出诊断显示“Mac 本机短验收需处理”和“Mac 本机短验收重跑命令已提供”；干净摘要不误弹，原始复跑命令会保留在诊断详情里。
+- [x] Windows 控制端和 watcher 消费 Mac 反控授权稳定标签：`WindowsReverseGrantStatus=` / `WindowsOpenOneTimeReverseGrant=` 及 Node fallback 只有搭配 `LAN008`、等待/重试、失败/阻塞或非空 warning/blocker 时会提醒；复制/导出诊断显示“Windows 反控授权状态命令已提供”“Windows 一次性反控授权命令已提供”，干净摘要不误弹。
 - [x] Windows host 状态摘要补统一 Mac client 正式清单入口：`start-windows-host --status` 的普通输出、JSON 和 `--boardSummary` 在线路径现在给出 `MacClientFormalChecklist=check-mac-client-formal-status --boardSummary`，同时保留 readiness、formalCommand 和 `--sendCall` 命令，方便 Mac 控 Windows 前从 Windows 端状态一行复制正式清单。
 - [x] 上传到 GitHub 仓库。
 - [x] Mac mini 到位后克隆仓库。

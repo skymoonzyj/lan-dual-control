@@ -244,6 +244,47 @@ async function checkReverseGrantEventAlerts(args) {
   console.log("[OK] Mac reverse-control grant events alert");
 }
 
+async function checkStructuredReverseGrantLabelsAlert(args) {
+  const output = await runWatcherAgainst(baseState({
+    events: [{
+      id: "structured-reverse-grant",
+      at: new Date().toISOString(),
+      type: "message",
+      from: "Mac Codex",
+      text: [
+        "Mac client formal status blocked waiting for Windows reverse control grant after LAN008.",
+        "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
+        "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary",
+        "WindowsReverseGrantStatusNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --status --boardSummary",
+        "WindowsOpenOneTimeReverseGrantNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --grant --durationMs 30000 --boardSummary",
+      ].join(" "),
+    }],
+  }), ["-AlertExistingEvents"], args);
+  assertIncludes(output, "ALERT:", "structured reverse grant labels");
+  assertIncludes(output, "WindowsReverseGrantStatus=", "structured reverse grant labels");
+  assertIncludes(output, "WindowsOpenOneTimeReverseGrant=", "structured reverse grant labels");
+  assertIncludes(output, "allow-windows-reverse-control.ps1", "structured reverse grant labels");
+  console.log("[OK] Structured Windows reverse-grant labels alert when Mac is waiting");
+}
+
+async function checkStructuredReverseGrantCleanIgnored(args) {
+  const output = await runWatcherAgainst(baseState({
+    events: [{
+      id: "structured-reverse-grant-clean",
+      at: new Date().toISOString(),
+      type: "message",
+      from: "Mac Codex",
+      text: [
+        "Mac client formal status ready warnings=none blockers=none.",
+        "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
+        "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary",
+      ].join(" "),
+    }],
+  }), ["-AlertExistingEvents"], args);
+  assertNotIncludes(output, "ALERT:", "clean structured reverse grant labels");
+  console.log("[OK] Clean structured Windows reverse-grant labels do not alert");
+}
+
 async function checkMacUnattendedEventAlerts(args) {
   const output = await runWatcherAgainst(baseState({
     events: [{
@@ -835,6 +876,8 @@ async function main() {
   await checkChinesePermissionEventAlerts(args);
   await checkGatewayEventAlerts(args);
   await checkReverseGrantEventAlerts(args);
+  await checkStructuredReverseGrantLabelsAlert(args);
+  await checkStructuredReverseGrantCleanIgnored(args);
   await checkMacUnattendedEventAlerts(args);
   await checkNonMacEventIgnored(args);
   await checkMacCallForWindowsAlerts(args);

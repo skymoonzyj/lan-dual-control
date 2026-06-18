@@ -21,6 +21,42 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows watcher/控制端消费 Mac 侧 `WindowsReverseGrant*` 稳定标签。
+完成内容：
+- `watch-codex-link-mac-alerts.ps1` 收紧反控授权匹配：`WindowsReverseGrantStatus=` / `WindowsOpenOneTimeReverseGrant=` / `ReverseGrant=` / `allow-windows-reverse-control` 只有搭配 `LAN008`、等待/重试、失败/阻塞或非空风险上下文时才提醒；干净 `warnings=none blockers=none` 命令清单不误弹。
+- Windows 控制端 Mac 提醒区、快速摘要和复制/导出诊断新增“Windows 反控授权状态命令已提供”“Windows 一次性反控授权命令已提供”，并放宽 Mac 值守风险摘要长度，避免多项现场风险被截断。
+- 回归新增结构化反控授权标签告警和干净标签不告警，同时页面 diagnostics-only 覆盖导出/复制文本里的新中文提示和原始命令。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- PowerShell 7 AST parse `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 未执行真实 Mac -> Windows 反控请求或一次性授权；本轮只做 Windows 本机提醒/诊断消费层。
+下一步建议：
+- Mac 端正式 smoke/checklist/discover 摘要带 `WindowsReverseGrant*` 后，Windows 侧可直接看 Mac 提醒区或复制诊断；若出现 `LAN008` 或等待重试，再按 `WindowsOpenOneTimeReverseGrant=` 在 Windows 本机打开一次性授权。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真实反控演练仍需要用户现场确认。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows discovery 和 formal preflight 也直接给出 `MacFormalLocalSmoke=` 本机短验收入口。
 完成内容：
 - `discover-lan-hosts` 的 JSON `macFormalE2e.macFormalLocalSmokeCommand`、普通输出和 `--boardSummary` 新增 `MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host <Mac IP> --port <port> --promptPassword --boardSummary`。
