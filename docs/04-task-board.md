@@ -192,6 +192,7 @@ Windows 端：
 - [x] Windows 控制端页面自检新增 `--boardSummary`：diagnostics-only 或真实连接成功后 stdout 输出一行无密 `Windows client diagnostics` 摘要，详细进度转 stderr，便于直接发 Agent Link Board。
 - [x] Windows 控制端远端文件托盘补齐接收中/失败状态条：文件 offer、分块进度、超限拒绝、解析失败和不完整完成都会直接显示在“远端文件”面板；页面 diagnostics 回归覆盖文件尚未完成时的状态可见性和超限拒绝提示。
 - [x] Windows 控制端远端文件接收新增超时/中断恢复：45 秒无新分块或完成消息、连接中断或重新连接会停止正在接收的 transfer，托盘状态条显示已收/总量和重试提示，并向对端返回失败结果；页面 diagnostics 覆盖超时后状态、Map 清理和不泄密。
+- [x] Windows 控制端远端文件接收新增完整性守卫：接收端拒绝未在 offer 清单中的 `fileIndex`、不连续 `offset`、重复/错位分块和超过声明大小的分块，停止该 transfer 并返回 `LAN011`；页面 diagnostics 覆盖重复 offset、越界分块和未知 fileIndex。
 - [x] Windows host 启动/状态助手也支持 `--status --checkBoard` / PowerShell `-Status -CheckBoard`：只读读取 Agent Link Board `/api/state.currentCall`，JSON、普通输出和 `--boardSummary` 会提示 active Mac -> Windows call，DONE call 不进入待办摘要，不启动 host、不认证、不发送密码、不执行 `inject`。
 - [x] Windows host 启动/状态助手 `--status` 也会输出本机媒体基线命令：JSON 带 `windowsHostMediaReadinessCommand` / `windowsHostMediaReadinessPowerShellCommand`，普通输出和 `--boardSummary` 带 `WindowsHostMedia=check-windows-host-readiness --checkBoard --probeMedia --boardSummary` 与 `WindowsHostMediaPs=check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary`，方便 Mac 反控前刷新视频/音频基线。
 - [x] Windows host 启动/状态助手和 readiness 摘要也会输出视频能力体检命令：JSON 带 `windowsVideoEncoderSupportCommand` / `windowsVideoEncoderSupportPowerShellCommand`，普通输出和 `--boardSummary` 带 `WindowsVideoSupport=check-windows-video-encoder-support --boardSummary` 与 `WindowsVideoSupportPs=check-windows-video-encoder-support.ps1 -BoardSummary`，方便 H.264/WGC/WebCodecs 调试前先发无密能力摘要。

@@ -6286,23 +6286,54 @@ function handleClipboardFileChunk(message) {
   }
 
   try {
-    const fileIndex = Math.max(0, Number(message.fileIndex) || 0);
-    let file = transfer.files.find((item) => item.index === fileIndex);
+    const rawFileIndex = Number(message.fileIndex);
+    if (!Number.isInteger(rawFileIndex) || rawFileIndex < 0) {
+      rejectRemoteFileTransfer(transferId, `远端文件块 fileIndex 无效：${message.fileIndex}`, {
+        clipboardText: "剪贴板：远端文件接收失败",
+      });
+      return;
+    }
+
+    const fileIndex = rawFileIndex;
+    const file = transfer.files.find((item) => item.index === fileIndex);
     if (!file) {
-      file = {
-        index: fileIndex,
-        name: normalizeRemoteFileName(message.fileName, fileIndex),
-        size: 0,
-        mimeType: "application/octet-stream",
-        lastModified: Date.now(),
-        chunks: [],
-        receivedBytes: 0,
-      };
-      transfer.files.push(file);
+      rejectRemoteFileTransfer(transferId, `远端文件块 fileIndex=${fileIndex} 未在清单中`, {
+        clipboardText: "剪贴板：远端文件接收失败",
+      });
+      return;
     }
 
     const bytes = base64ToUint8Array(message.dataBase64);
-    const offset = Math.max(0, Number(message.offset) || file.receivedBytes);
+    const rawOffset = Number(message.offset);
+    const offset = Number.isFinite(rawOffset) ? Math.max(0, Math.floor(rawOffset)) : file.receivedBytes;
+    const expectedOffset = Math.max(0, Number(file.receivedBytes) || 0);
+    if (offset !== expectedOffset) {
+      rejectRemoteFileTransfer(transferId, `远端文件块 offset 不连续：收到 ${offset}，期望 ${expectedOffset}`, {
+        clipboardText: "剪贴板：远端文件接收失败",
+      });
+      return;
+    }
+
+    const declaredFileSize = Math.max(0, Number(file.size) || 0);
+    if (offset + bytes.byteLength > declaredFileSize) {
+      rejectRemoteFileTransfer(
+        transferId,
+        `远端文件块超过声明大小：${formatBytes(offset + bytes.byteLength)}/${formatBytes(declaredFileSize)}`,
+        { clipboardText: "剪贴板：远端文件接收失败" },
+      );
+      return;
+    }
+
+    const declaredTotalBytes = Math.max(0, Number(transfer.totalBytes) || 0);
+    if (declaredTotalBytes > 0 && transfer.receivedBytes + bytes.byteLength > declaredTotalBytes) {
+      rejectRemoteFileTransfer(
+        transferId,
+        `远端文件传输超过声明总大小：${formatBytes(transfer.receivedBytes + bytes.byteLength)}/${formatBytes(declaredTotalBytes)}`,
+        { clipboardText: "剪贴板：远端文件接收失败" },
+      );
+      return;
+    }
+
     file.chunks.push({ offset, bytes });
     file.receivedBytes += bytes.byteLength;
     transfer.receivedBytes += bytes.byteLength;
@@ -6369,9 +6400,11 @@ async function handleClipboardFileComplete(message) {
   const receivedBytes = files.reduce((sum, file) => sum + file.size, 0);
   const expectedFileCount = Number(message.fileCount) || transfer.fileCount || files.length;
   const complete =
-    files.length >= expectedFileCount &&
-    receivedBytes >= totalBytes &&
-    transfer.files.every((file) => !file.size || file.receivedBytes >= file.size);
+    files.length === expectedFileCount &&
+    receivedBytes === totalBytes &&
+    transfer.files.every(
+      (file) => Math.max(0, Number(file.receivedBytes) || 0) === Math.max(0, Number(file.size) || 0),
+    );
 
   if (!complete) {
     const reason = `远端文件接收不完整：${formatBytes(receivedBytes)}/${formatBytes(totalBytes)}`;

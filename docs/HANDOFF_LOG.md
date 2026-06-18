@@ -21,6 +21,38 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：补强 Windows 控制端远端文件接收完整性，避免坏分块被误拼成成功文件。
+完成内容：
+- Windows 控制端接收 `clipboard_file_chunk` 时，现在只接受 offer 清单里的 `fileIndex`。
+- 分块 `offset` 必须连续等于当前已收字节数；重复 offset、错位 offset 会停止该 transfer，提示让 Mac 重新复制，并向对端返回 `LAN011`。
+- 分块不能超过单文件声明大小，也不能超过整批声明总字节数；越界会失败而不是拼接成可下载文件。
+- 完成消息现在要求文件数量、总字节数和逐文件已收字节数精确匹配，不再用“>=”放过重复/多余数据。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/03-architecture-and-protocol.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`（失败点：重复 offset、越界分块、未知 fileIndex 均未被拒绝）。
+- 实现后复跑：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- 收尾验证：`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`git diff --check`、行首冲突扫描。
+遗留问题：
+- 仍不是断点续传；连接中断后仍需要对端重新复制/重新发送。
+- 真机大压缩包复制到 Windows 后的资源管理器粘贴体验还需要人工长测。
+下一步建议：
+- 可继续补发送侧对 `clipboard_file_result` 的更细状态，把“网络已发完”和“对端写入系统剪贴板成功/失败”区分得更直观。
+是否改了协议：否；只补接收端对既有分块字段的校验规则。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：把 Windows 控制端“可重新发送”提示变成真正的一键重发。
 完成内容：
 - 发送文件失败后，若保留了文件选择且当前仍连接，`发送文件` 按钮会切换成 `重新发送`。

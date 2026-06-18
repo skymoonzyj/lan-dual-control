@@ -2405,6 +2405,142 @@ async function verifyFileClipboardRecoveryText(session) {
   return result;
 }
 
+async function verifyFileClipboardIntegrityGuards(session) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      if (
+        typeof handleClipboardFileOffer !== "function" ||
+        typeof handleClipboardFileChunk !== "function" ||
+        typeof renderReceivedFiles !== "function"
+      ) {
+        return { ok: false, reason: "missing file clipboard handlers" };
+      }
+      if (typeof state !== "object" || typeof elements !== "object") {
+        return { ok: false, reason: "missing app state" };
+      }
+
+      const originalTransfers = state.remoteFileTransfers;
+      const originalFiles = state.receivedClipboardFiles;
+      const originalWriteStatus = state.receivedClipboardWriteStatus;
+      const originalClipboardToggle = elements.clipboardToggle.checked;
+      const originalClient = state.client;
+      const clipboardResponses = [];
+      const clipboardResults = [];
+      const status = document.querySelector("#receivedFilesStatus");
+
+      function offer(transferId, files = [{ index: 0, name: "demo.txt", size: 4, mimeType: "text/plain" }]) {
+        handleClipboardFileOffer({
+          type: "clipboard_file_offer",
+          transferId,
+          fileCount: files.length,
+          totalBytes: files.reduce((sum, file) => sum + file.size, 0),
+          files,
+        });
+      }
+
+      function resultFor(transferId) {
+        return clipboardResults.find((payload) => payload.transferId === transferId) || {};
+      }
+
+      try {
+        state.remoteFileTransfers = new Map();
+        state.receivedClipboardFiles = [];
+        elements.clipboardToggle.checked = true;
+        state.client = {
+          sendClipboardFileResponse: (payload) => clipboardResponses.push(payload),
+          sendClipboardFileProgress: () => {},
+          sendClipboardFileResult: (payload) => clipboardResults.push(payload),
+        };
+
+        offer("duplicate-transfer");
+        handleClipboardFileChunk({
+          type: "clipboard_file_chunk",
+          transferId: "duplicate-transfer",
+          fileIndex: 0,
+          offset: 0,
+          dataBase64: btoa("te"),
+        });
+        handleClipboardFileChunk({
+          type: "clipboard_file_chunk",
+          transferId: "duplicate-transfer",
+          fileIndex: 0,
+          offset: 0,
+          dataBase64: btoa("st"),
+        });
+        const duplicateResult = resultFor("duplicate-transfer");
+        const duplicateTransferGone = !state.remoteFileTransfers.has("duplicate-transfer");
+        const duplicateStatusText = status?.textContent || "";
+
+        offer("oversize-transfer");
+        handleClipboardFileChunk({
+          type: "clipboard_file_chunk",
+          transferId: "oversize-transfer",
+          fileIndex: 0,
+          offset: 0,
+          dataBase64: btoa("abcde"),
+        });
+        const oversizeResult = resultFor("oversize-transfer");
+        const oversizeTransferGone = !state.remoteFileTransfers.has("oversize-transfer");
+
+        offer("unknown-index");
+        handleClipboardFileChunk({
+          type: "clipboard_file_chunk",
+          transferId: "unknown-index",
+          fileIndex: 1,
+          offset: 0,
+          dataBase64: btoa("xx"),
+        });
+        const unknownIndexResult = resultFor("unknown-index");
+        const unknownIndexTransferGone = !state.remoteFileTransfers.has("unknown-index");
+
+        const acceptedOffers = clipboardResponses.filter((payload) => payload.accepted).length;
+        const rejectedResults = clipboardResults.filter((payload) => payload.accepted === false);
+        const duplicateReason = String(duplicateResult.reason || "");
+        const oversizeReason = String(oversizeResult.reason || "");
+        const unknownIndexReason = String(unknownIndexResult.reason || "");
+
+        return {
+          ok:
+            acceptedOffers === 3 &&
+            rejectedResults.length === 3 &&
+            duplicateTransferGone &&
+            oversizeTransferGone &&
+            unknownIndexTransferGone &&
+            duplicateResult.code === "LAN011" &&
+            oversizeResult.code === "LAN011" &&
+            unknownIndexResult.code === "LAN011" &&
+            duplicateReason.includes("offset") &&
+            duplicateReason.includes("期望") &&
+            oversizeReason.includes("超过声明大小") &&
+            unknownIndexReason.includes("未在清单中") &&
+            duplicateStatusText.includes("请让 Mac 重新复制"),
+          acceptedOffers,
+          rejectedResults,
+          duplicateResult,
+          oversizeResult,
+          unknownIndexResult,
+          duplicateTransferGone,
+          oversizeTransferGone,
+          unknownIndexTransferGone,
+          duplicateStatusText,
+        };
+      } finally {
+        state.remoteFileTransfers = originalTransfers;
+        state.receivedClipboardFiles = originalFiles;
+        state.receivedClipboardWriteStatus = originalWriteStatus;
+        elements.clipboardToggle.checked = originalClipboardToggle;
+        state.client = originalClient;
+        renderReceivedFiles();
+      }
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`file clipboard integrity guard check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function verifyBlackBarInputGuard(session) {
   const result = await evaluate(
     session,
@@ -3902,6 +4038,9 @@ async function run() {
     const fileClipboardRecoveryCheck = await verifyFileClipboardRecoveryText(session);
     summary.checks.push("file-clipboard-recovery");
     print("OK", `File clipboard recovery: ${fileClipboardRecoveryCheck.recovery}`);
+    const fileClipboardIntegrityCheck = await verifyFileClipboardIntegrityGuards(session);
+    summary.checks.push("file-clipboard-integrity");
+    print("OK", `File clipboard integrity guards: rejected=${fileClipboardIntegrityCheck.rejectedResults.length}`);
     const blackBarCheck = await verifyBlackBarInputGuard(session);
     summary.checks.push("blackbar");
     print(

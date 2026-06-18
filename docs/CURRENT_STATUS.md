@@ -1,6 +1,6 @@
 # 当前开发状态
 
-最后更新：2026-06-18
+最后更新：2026-06-19
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
@@ -19,7 +19,7 @@
 - Windows 恢复总览现在也会消费 Agent Link Board 上的 `WindowsLanRisk=`：`check-windows-resume-status --checkBoard` 会把最近安全短标签写入 JSON `board.windowsLanRisk`、普通输出和 `--boardSummary`，并拒绝未知标签、命令样式文本或疑似敏感参数候选。开工第一屏如果看到 `WindowsLanRisk=no-firewall-allow,public-profile`，优先按 Windows 防火墙放行和网络 Profile 排查；脚本仍只读，不自动改系统设置、不认证、不发密码/input/inject。
 - Windows host `start-windows-host --status`、`check-windows-host-readiness` 和 `check-windows-resume-status` 现在都会在 JSON、普通输出和 `--boardSummary` 中给出 `WindowsFirewallStatus=` 与 `WindowsFirewallPreview=`：前者是只读 `check-windows-firewall --json`，后者是 `--dryRunRule --ruleProfile Private` 预览命令，不包含 `--addRule`，用于现场先确认端口、防火墙和 Public/Private 网络状态，再由用户决定是否以管理员身份处理系统规则。
 - Windows 控制端 Mac 提醒区和复制/导出诊断现在也会消费 `WindowsFirewallStatus=` / `WindowsFirewallPreview=`：当同一段文本里已经有 `WindowsLanRisk=`、`no-firewall-allow`、`public-profile`、`lan-probe-blocked` 等 Windows LAN/firewall 风险时，快速摘要会显示“Windows 防火墙只读检查命令已提供”“Windows 防火墙放行预览命令已提供”。该解析只做本地中文提示和诊断导出，不自动运行命令、不带 `--addRule`、不改系统、不认证、不发密码/input/inject。
-- Windows 控制端远端文件收件托盘现在会在接收进行中显示实时速度和预计剩余时间；速度优先使用最近分块样本的滑动平均，样本不足时回退到总平均。同一信息也进入全屏/监看浮层剪贴板状态，以及复制/导出诊断的“正在接收远端文件”行。当前是接收侧体验补强，不改变 `clipboard_file_*` 协议，不实现断点续传。
+- Windows 控制端远端文件收件托盘现在会在接收进行中显示实时速度和预计剩余时间；速度优先使用最近分块样本的滑动平均，样本不足时回退到总平均。同一信息也进入全屏/监看浮层剪贴板状态，以及复制/导出诊断的“正在接收远端文件”行。接收端也会拒绝未在清单中的 `fileIndex`、不连续 `offset`、重复/错位分块和超过声明大小的分块，拒绝后会停止该 transfer、提示让 Mac 重新复制并返回 `LAN011`。当前是接收侧体验和完整性补强，不改变 `clipboard_file_*` 协议，不实现断点续传。
 - Windows 控制端本机发送文件时也会显示发送进度、速度和预计剩余时间：`sendFilesToRemote` 记录最近分块样本，顶部剪贴板状态和全屏/监看浮层会显示“正在发送 N 个文件：已发/总量，百分比，速度，剩余约 ...”。手动选文件发送失败时，控制端会保留当前文件选择，并在顶部剪贴板状态、全屏/监看浮层和复制/导出诊断里显示最近失败摘要；“发送文件”按钮会切换为“重新发送”，可直接重发保留文件。该能力只改本地 UI，不改变 `clipboard_file_*` 协议，仍不等同于断点续传。
 - Windows 恢复总览和控制端诊断也已消费同一条安全认证路径：`check-windows-resume-status` 的 JSON `commands.windowsSecureAuthPath`、普通输出和 `--boardSummary` 默认输出 `WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword`；`--checkBoard` 会从 Agent Link Board 最近状态/消息安全提取 `WindowsSecureAuthPath=` 或 `SecureAuthPath=`，拒绝带 `--password`、token/secret、非 `0.0.0.0` 绑定、缺 `--promptPassword` / `--requirePassword` 或占位端口的候选。若当前 active call 是 Mac 请求 Windows 协调安全认证，且 Windows resume 已有可用 `WindowsSecureAuthPath`，JSON `board.currentCall.secureAuthPathReady=true` 并在一行摘要给出 `AgentCallNext=mac-confirm-secure-auth-path`，表示 Windows 已给出安全路径，后续由 Mac/人工确认后再清理 call。Windows 控制端 Mac 提醒区、快速摘要和复制/导出诊断在认证/密码/失败/阻塞上下文里会显示“Windows 安全认证路径已提供”，干净命令清单不误弹。
 - Windows 恢复总览现在还会在上述 secure-auth active call ready 时输出 `AgentCallAck=`：这是一条无密 `node scripts/codex-link-client.mjs --server <board> send --from "Windows Codex" --text "...WindowsSecureAuthPath..."` 复制命令，用于让 Windows 侧明确回复“安全路径已提供，请 Mac 本机确认后再清理 currentCall”。需要减少手动复制时，可显式运行 `node scripts/windows/check-windows-resume-status.mjs --checkBoard --sendAgentCallAck --json` 或 PowerShell 包装入口 `-CheckBoard -SendAgentCallAck -Json`；脚本只会在 secure-auth active call ready 时发送，其他 call 会拒绝发送。它只发送说明，不自动 `clear-call`、不认证、不发密码、不发送 input/inject。
