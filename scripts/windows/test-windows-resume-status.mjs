@@ -289,6 +289,9 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "check-mac-heartbeat.mjs --host 192.168.31.122 --port 43770 --checkBoard --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "watch-mac-heartbeat.mjs --once --sendStatus --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "watch-mac-heartbeat.mjs --sendStatus --intervalMs 30000", `help ${flag}`);
+    assertIncludes(result.stdout, "start-mac-heartbeat-watcher.mjs --boardSummary", `help ${flag}`);
+    assertIncludes(result.stdout, "start-mac-heartbeat-watcher.mjs --status --boardSummary", `help ${flag}`);
+    assertIncludes(result.stdout, "start-mac-heartbeat-watcher.mjs --stop --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "formal manual checklist command", `help ${flag}`);
@@ -352,6 +355,40 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.macHeartbeatCommand || "").includes("--server http://192.168.31.68:17888"), "mock JSON Mac heartbeat command should include board server");
     assert(String(payload.commands?.macHeartbeatCommand || "").includes("--checkBoard"), "mock JSON Mac heartbeat command should read Agent Link Board");
     assert(String(payload.commands?.macHeartbeatCommand || "").includes("--boardSummary"), "mock JSON Mac heartbeat command should be board-safe");
+    assert(String(payload.commands?.macHeartbeatOnceCommand || "").includes("watch-mac-heartbeat.mjs"), "mock JSON should include Mac heartbeat one-shot command");
+    assert(String(payload.commands?.macHeartbeatOnceCommand || "").includes("--once"), "mock JSON Mac heartbeat one-shot command should run once");
+    assert(String(payload.commands?.macHeartbeatOnceCommand || "").includes("--sendStatus"), "mock JSON Mac heartbeat one-shot command should post status");
+    assert(String(payload.commands?.macHeartbeatOnceCommand || "").includes("--host 127.0.0.1"), "mock JSON Mac heartbeat one-shot command should target Mac loopback");
+    assert(String(payload.commands?.macHeartbeatOnceCommand || "").includes(`--port ${port}`), "mock JSON Mac heartbeat one-shot command should use discovered Mac port");
+    assert(String(payload.commands?.macHeartbeatOnceCommand || "").includes("--server http://192.168.31.68:17888"), "mock JSON Mac heartbeat one-shot command should include board server");
+    assert(String(payload.commands?.macHeartbeatOnceCommand || "").includes("--boardSummary"), "mock JSON Mac heartbeat one-shot command should be board-safe");
+    assert(String(payload.commands?.macHeartbeatWatchCommand || "").includes("watch-mac-heartbeat.mjs"), "mock JSON should include Mac heartbeat watcher command");
+    assert(!String(payload.commands?.macHeartbeatWatchCommand || "").includes("--once"), "mock JSON Mac heartbeat watcher command should not be one-shot");
+    assert(String(payload.commands?.macHeartbeatWatchCommand || "").includes("--sendStatus"), "mock JSON Mac heartbeat watcher command should post status");
+    assert(String(payload.commands?.macHeartbeatWatchCommand || "").includes("--host 127.0.0.1"), "mock JSON Mac heartbeat watcher command should target Mac loopback");
+    assert(String(payload.commands?.macHeartbeatWatchCommand || "").includes(`--port ${port}`), "mock JSON Mac heartbeat watcher command should use discovered Mac port");
+    assert(String(payload.commands?.macHeartbeatWatchCommand || "").includes("--server http://192.168.31.68:17888"), "mock JSON Mac heartbeat watcher command should include board server");
+    assert(String(payload.commands?.macHeartbeatWatchCommand || "").includes("--intervalMs 30000"), "mock JSON Mac heartbeat watcher command should use the default interval");
+    assert(String(payload.commands?.macHeartbeatStartCommand || "").includes("start-mac-heartbeat-watcher.mjs"), "mock JSON should include Mac heartbeat background start command");
+    assert(!String(payload.commands?.macHeartbeatStartCommand || "").includes("--status"), "mock JSON Mac heartbeat background start command should start by default");
+    assert(!String(payload.commands?.macHeartbeatStartCommand || "").includes("--stop"), "mock JSON Mac heartbeat background start command should start by default");
+    assert(String(payload.commands?.macHeartbeatStartCommand || "").includes("--host 127.0.0.1"), "mock JSON Mac heartbeat background start command should target Mac loopback");
+    assert(String(payload.commands?.macHeartbeatStartCommand || "").includes(`--port ${port}`), "mock JSON Mac heartbeat background start command should use discovered Mac port");
+    assert(String(payload.commands?.macHeartbeatStartCommand || "").includes("--server http://192.168.31.68:17888"), "mock JSON Mac heartbeat background start command should include board server");
+    assert(String(payload.commands?.macHeartbeatStartCommand || "").includes("--intervalMs 30000"), "mock JSON Mac heartbeat background start command should use the default interval");
+    assert(String(payload.commands?.macHeartbeatStartCommand || "").includes("--boardSummary"), "mock JSON Mac heartbeat background start command should be board-safe");
+    assert(String(payload.commands?.macHeartbeatStatusCommand || "").includes("start-mac-heartbeat-watcher.mjs"), "mock JSON should include Mac heartbeat background status command");
+    assert(String(payload.commands?.macHeartbeatStatusCommand || "").includes("--status"), "mock JSON Mac heartbeat background status command should use --status");
+    assert(String(payload.commands?.macHeartbeatStatusCommand || "").includes("--host 127.0.0.1"), "mock JSON Mac heartbeat background status command should target Mac loopback");
+    assert(String(payload.commands?.macHeartbeatStatusCommand || "").includes(`--port ${port}`), "mock JSON Mac heartbeat background status command should use discovered Mac port");
+    assert(String(payload.commands?.macHeartbeatStatusCommand || "").includes("--server http://192.168.31.68:17888"), "mock JSON Mac heartbeat background status command should include board server");
+    assert(String(payload.commands?.macHeartbeatStatusCommand || "").includes("--boardSummary"), "mock JSON Mac heartbeat background status command should be board-safe");
+    assert(String(payload.commands?.macHeartbeatStopCommand || "").includes("start-mac-heartbeat-watcher.mjs"), "mock JSON should include Mac heartbeat background stop command");
+    assert(String(payload.commands?.macHeartbeatStopCommand || "").includes("--stop"), "mock JSON Mac heartbeat background stop command should use --stop");
+    assert(String(payload.commands?.macHeartbeatStopCommand || "").includes("--host 127.0.0.1"), "mock JSON Mac heartbeat background stop command should target Mac loopback");
+    assert(String(payload.commands?.macHeartbeatStopCommand || "").includes(`--port ${port}`), "mock JSON Mac heartbeat background stop command should use discovered Mac port");
+    assert(String(payload.commands?.macHeartbeatStopCommand || "").includes("--server http://192.168.31.68:17888"), "mock JSON Mac heartbeat background stop command should include board server");
+    assert(String(payload.commands?.macHeartbeatStopCommand || "").includes("--boardSummary"), "mock JSON Mac heartbeat background stop command should be board-safe");
     assert(String(payload.commands?.macFormalLocalSmokeCommand || "").includes("check-mac-formal-local-smoke.mjs"), "mock JSON should include Mac formal local smoke command");
     assert(String(payload.commands?.macFormalLocalSmokeCommand || "").includes("--host 127.0.0.1"), "mock JSON Mac formal local smoke command should target discovered host");
     assert(String(payload.commands?.macFormalLocalSmokeCommand || "").includes(`--port ${port}`), "mock JSON Mac formal local smoke command should use discovered mock port");
@@ -609,6 +646,20 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "MacHeartbeat=", "board summary");
     assertIncludes(result.stdout, "check-mac-heartbeat.mjs --host 127.0.0.1", "board summary");
     assertIncludes(result.stdout, `--port ${port} --server http://192.168.31.68:17888 --checkBoard --boardSummary`, "board summary");
+    assertIncludes(result.stdout, "MacHeartbeatOnce=", "board summary");
+    assertIncludes(result.stdout, "watch-mac-heartbeat.mjs --once --sendStatus --host 127.0.0.1", "board summary");
+    assertIncludes(result.stdout, `--port ${port} --server http://192.168.31.68:17888 --boardSummary`, "board summary");
+    assertIncludes(result.stdout, "MacHeartbeatWatch=", "board summary");
+    assertIncludes(result.stdout, "watch-mac-heartbeat.mjs --sendStatus --host 127.0.0.1", "board summary");
+    assertIncludes(result.stdout, `--port ${port} --server http://192.168.31.68:17888 --intervalMs 30000`, "board summary");
+    assertIncludes(result.stdout, "MacHeartbeatStart=", "board summary");
+    assertIncludes(result.stdout, "start-mac-heartbeat-watcher.mjs --host 127.0.0.1", "board summary");
+    assertIncludes(result.stdout, `--port ${port} --server http://192.168.31.68:17888 --intervalMs 30000 --boardSummary`, "board summary");
+    assertIncludes(result.stdout, "MacHeartbeatStatus=", "board summary");
+    assertIncludes(result.stdout, "start-mac-heartbeat-watcher.mjs --status --host 127.0.0.1", "board summary");
+    assertIncludes(result.stdout, `--port ${port} --server http://192.168.31.68:17888 --boardSummary`, "board summary");
+    assertIncludes(result.stdout, "MacHeartbeatStop=", "board summary");
+    assertIncludes(result.stdout, "start-mac-heartbeat-watcher.mjs --stop --host 127.0.0.1", "board summary");
     assertIncludes(result.stdout, "MacFormalLocalSmoke=", "board summary");
     assertIncludes(result.stdout, `check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port ${port} --promptPassword --boardSummary`, "board summary");
     assertNotIncludes(result.stdout, "--password", "board summary Mac formal local smoke should not include password argv");
@@ -781,13 +832,16 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const localSmokeCommand = "node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43888 --promptPassword --boardSummary";
   const heartbeatOnceCommand = "node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --boardSummary";
   const heartbeatWatchCommand = "node scripts/mac/watch-mac-heartbeat.mjs --sendStatus --intervalMs 30000";
+  const heartbeatStartCommand = "node scripts/mac/start-mac-heartbeat-watcher.mjs --boardSummary";
+  const heartbeatStatusCommand = "node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary";
+  const heartbeatStopCommand = "node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --boardSummary";
   await withMockHost(async (port) => {
     const boardState = {
       statuses: {
         "Mac Codex": {
           role: "Mac 端",
           status: "idle",
-          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand}`,
+          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand} MacHeartbeatStart=${heartbeatStartCommand} MacHeartbeatStatus=${heartbeatStatusCommand} MacHeartbeatStop=${heartbeatStopCommand}`,
         },
       },
       events: [
@@ -841,6 +895,26 @@ async function checkBoardMacHostSafeStartExtraction(args) {
           from: "Mac Codex",
           text: "MacHeartbeatWatch=node scripts/mac/check-mac-heartbeat.mjs --sendStatus --intervalMs 30000",
         },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacHeartbeatStart=node scripts/mac/start-mac-heartbeat-watcher.mjs --password secret-value --boardSummary",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacHeartbeatStart=node scripts/mac/watch-mac-heartbeat.mjs --sendStatus --boardSummary",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacHeartbeatStatus=node scripts/mac/start-mac-heartbeat-watcher.mjs --status",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacHeartbeatStop=node scripts/mac/start-mac-heartbeat-watcher.mjs --restart --boardSummary",
+        },
       ],
     };
 
@@ -880,11 +954,26 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board.macHeartbeatWatch.command === heartbeatWatchCommand, "MacHeartbeatWatch command mismatch");
       assert(payload.board.macHeartbeatWatch.source === "api-state", "MacHeartbeatWatch should come from /api/state");
       assert(payload.board.macHeartbeatWatch.rejectedCount >= 2, "unsafe or incomplete MacHeartbeatWatch should be rejected");
+      assert(payload.board?.macHeartbeatStart?.found === true, "MacHeartbeatStart should be found in board state");
+      assert(payload.board.macHeartbeatStart.command === heartbeatStartCommand, "MacHeartbeatStart command mismatch");
+      assert(payload.board.macHeartbeatStart.source === "api-state", "MacHeartbeatStart should come from /api/state");
+      assert(payload.board.macHeartbeatStart.rejectedCount >= 2, "unsafe MacHeartbeatStart should be rejected");
+      assert(payload.board?.macHeartbeatStatus?.found === true, "MacHeartbeatStatus should be found in board state");
+      assert(payload.board.macHeartbeatStatus.command === heartbeatStatusCommand, "MacHeartbeatStatus command mismatch");
+      assert(payload.board.macHeartbeatStatus.source === "api-state", "MacHeartbeatStatus should come from /api/state");
+      assert(payload.board.macHeartbeatStatus.rejectedCount >= 1, "incomplete MacHeartbeatStatus should be rejected");
+      assert(payload.board?.macHeartbeatStop?.found === true, "MacHeartbeatStop should be found in board state");
+      assert(payload.board.macHeartbeatStop.command === heartbeatStopCommand, "MacHeartbeatStop command mismatch");
+      assert(payload.board.macHeartbeatStop.source === "api-state", "MacHeartbeatStop should come from /api/state");
+      assert(payload.board.macHeartbeatStop.rejectedCount >= 1, "wrong-action MacHeartbeatStop should be rejected");
       assertIncludes(payload.boardSummary, `MacHostSafeStart=${safeCommand}.`, "MacHostSafeStart JSON board summary");
       assertIncludes(payload.boardSummary, `MacMaxFpsSafeStart=${maxFpsCommand}.`, "MacMaxFpsSafeStart JSON board summary");
       assertIncludes(payload.boardSummary, `MacFormalLocalSmoke=${localSmokeCommand}.`, "MacFormalLocalSmoke JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "MacHeartbeatOnce JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "MacHeartbeatWatch JSON board summary");
+      assertIncludes(payload.boardSummary, `MacHeartbeatStart=${heartbeatStartCommand}.`, "MacHeartbeatStart JSON board summary");
+      assertIncludes(payload.boardSummary, `MacHeartbeatStatus=${heartbeatStatusCommand}.`, "MacHeartbeatStatus JSON board summary");
+      assertIncludes(payload.boardSummary, `MacHeartbeatStop=${heartbeatStopCommand}.`, "MacHeartbeatStop JSON board summary");
       assertNotIncludes(result.stdout + result.stderr, "secret-value", "MacHostSafeStart JSON should not leak rejected command");
     }, boardState);
 
@@ -910,6 +999,9 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacFormalLocalSmoke=${localSmokeCommand}.`, "MacFormalLocalSmoke board summary");
       assertIncludes(result.stdout, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "MacHeartbeatOnce board summary");
       assertIncludes(result.stdout, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "MacHeartbeatWatch board summary");
+      assertIncludes(result.stdout, `MacHeartbeatStart=${heartbeatStartCommand}.`, "MacHeartbeatStart board summary");
+      assertIncludes(result.stdout, `MacHeartbeatStatus=${heartbeatStatusCommand}.`, "MacHeartbeatStatus board summary");
+      assertIncludes(result.stdout, `MacHeartbeatStop=${heartbeatStopCommand}.`, "MacHeartbeatStop board summary");
       assertNotIncludes(result.stdout + result.stderr, "secret-value", "MacHostSafeStart board summary should not leak rejected command");
     }, boardState);
 
@@ -932,6 +1024,9 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacFormalLocalSmoke=${localSmokeCommand}`, "MacFormalLocalSmoke human output");
       assertIncludes(result.stdout, `MacHeartbeatOnce=${heartbeatOnceCommand}`, "MacHeartbeatOnce human output");
       assertIncludes(result.stdout, `MacHeartbeatWatch=${heartbeatWatchCommand}`, "MacHeartbeatWatch human output");
+      assertIncludes(result.stdout, `MacHeartbeatStart=${heartbeatStartCommand}`, "MacHeartbeatStart human output");
+      assertIncludes(result.stdout, `MacHeartbeatStatus=${heartbeatStatusCommand}`, "MacHeartbeatStatus human output");
+      assertIncludes(result.stdout, `MacHeartbeatStop=${heartbeatStopCommand}`, "MacHeartbeatStop human output");
       assertNotIncludes(result.stdout + result.stderr, "secret-value", "MacHostSafeStart human output should not leak rejected command");
       console.log("[OK] Windows resume status extracts Mac safe-start commands from Agent Link Board safely");
     }, boardState);

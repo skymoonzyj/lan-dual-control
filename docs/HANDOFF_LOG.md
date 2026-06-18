@@ -60,6 +60,45 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows 恢复总览默认输出并消费 Mac heartbeat watcher 管理入口，减少对历史通讯板摘要的依赖。
+完成内容：
+- `check-windows-resume-status` JSON `commands.macHeartbeatOnceCommand` / `commands.macHeartbeatWatchCommand` / `commands.macHeartbeatStartCommand` / `commands.macHeartbeatStatusCommand` / `commands.macHeartbeatStopCommand`、普通输出和 `--boardSummary` 默认给出 Mac 端可复制的 heartbeat watcher 命令。
+- 默认单次命令包含 `watch-mac-heartbeat --once --sendStatus --host 127.0.0.1 --port <Mac port> --server <Agent Link Board> --boardSummary`。
+- 默认持续 watcher 命令包含 `watch-mac-heartbeat --sendStatus --host 127.0.0.1 --port <Mac port> --server <Agent Link Board> --intervalMs 30000`。
+- 默认后台 helper 命令包含 `start-mac-heartbeat-watcher --host 127.0.0.1 --port <Mac port> --server <Agent Link Board> --intervalMs 30000 --boardSummary`、`--status --boardSummary` 和 `--stop --boardSummary`。
+- `--checkBoard` 仍会优先使用 Mac resume 已上板的 `MacHeartbeatOnce=` / `MacHeartbeatWatch=` / `MacHeartbeatStart=` / `MacHeartbeatStatus=` / `MacHeartbeatStop=`，并保留安全校验。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- `node scripts/windows/check-windows-resume-status.mjs --noDiscover --host 192.168.31.122 --port 43770 --boardSummary`
+- `node scripts/windows/check-windows-resume-status.mjs --noDiscover --host 192.168.31.122 --port 43770 --checkBoard --boardSummary`
+- PowerShell AST 解析通过。
+- `git diff --check`
+- 行首冲突扫描无匹配。
+遗留问题：
+- 这轮只把 Mac heartbeat watcher 管理入口放进 Windows 恢复总览；Windows 控制端页面内的一键复制/分按钮入口还没做。
+下一步建议：
+- 下一轮可以把 Windows 桌面版“Mac 提醒”区做成更明确的“复制单次心跳 / 启动后台心跳 / 查看状态 / 停止后台心跳”入口，或继续真实 Mac 视频/音频长测。
+是否改了协议：否。
+是否需要另一端配合：不阻塞；后续真实体验验收时可让 Mac 端运行 `MacHeartbeatStart=` 或 `MacHeartbeatStatus=` 观察 Windows 提醒区刷新。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows 侧消费 Mac resume 暴露的 `MacHeartbeatOnce=` / `MacHeartbeatWatch=`。
 完成内容：
 - `check-windows-resume-status --checkBoard` 新增安全提取 `MacHeartbeatOnce=node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --boardSummary` 和 `MacHeartbeatWatch=node scripts/mac/watch-mac-heartbeat.mjs --sendStatus --intervalMs 30000`。

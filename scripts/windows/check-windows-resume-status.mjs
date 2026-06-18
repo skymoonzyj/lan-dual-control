@@ -70,9 +70,11 @@ Mac side to run the detailed host readiness/status check before formal testing.
 It also includes a secret-free MacHeartbeat command so Windows can ask the Mac
 side to publish the independent heartbeat/watchdog summary for stale Codex,
 reconnect, Mac host, Mac client, and Agent Link Board status.
-When Mac resume has already posted them, MacHeartbeatOnce= and MacHeartbeatWatch=
-are safely extracted so the Mac side can either post one heartbeat now or keep a
-continuous independent heartbeat watcher running.
+The report also includes MacHeartbeatOnce=, MacHeartbeatWatch=, and
+MacHeartbeatStart/Status/Stop= commands so the Mac side can either post one
+heartbeat now or manage a continuous independent heartbeat watcher. When Mac
+resume has already posted its own versions, those commands are safely extracted
+and preferred.
 The report also surfaces the formal manual checklist command and the checklist
 ids so a resume handoff can immediately verify connection, video, audio,
 clipboard, input_ack, and diagnostics in that order.
@@ -123,6 +125,9 @@ Examples:
   node scripts/mac/check-mac-heartbeat.mjs --host 192.168.31.122 --port 43770 --checkBoard --boardSummary
   node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --boardSummary
   node scripts/mac/watch-mac-heartbeat.mjs --sendStatus --intervalMs 30000
+  node scripts/mac/start-mac-heartbeat-watcher.mjs --boardSummary
+  node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary
+  node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --boardSummary
   node scripts/mac/check-mac-formal-local-smoke.mjs --host 192.168.31.122 --port 43770 --promptPassword --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary
@@ -709,6 +714,72 @@ function parseMacHeartbeatWatcherCommand(fragment, expectedMode) {
   return commandText;
 }
 
+function parseMacHeartbeatStartHelperCommand(fragment, expectedAction) {
+  const rawTokens = String(fragment || "").split(/\s+/).map(stripCommandToken).filter(Boolean);
+  if (rawTokens.length < 2) return null;
+  if (rawTokens[0] !== "node") return null;
+  if (rawTokens[1].replace(/\\/g, "/") !== "scripts/mac/start-mac-heartbeat-watcher.mjs") return null;
+
+  const noValueFlags = new Set(["--status", "--stop", "--restart", "--boardSummary"]);
+  const valueFlags = new Set([
+    "--host",
+    "--port",
+    "--clientHost",
+    "--clientPort",
+    "--timeoutMs",
+    "--server",
+    "--intervalMs",
+  ]);
+  const integerValueFlags = new Set(["--port", "--clientPort", "--timeoutMs", "--intervalMs"]);
+  const tokens = [rawTokens[0], rawTokens[1]];
+  let action = "start";
+  let hasBoardSummary = false;
+  for (let index = 2; index < rawTokens.length; index += 1) {
+    const token = rawTokens[index];
+    if (!token || /^[A-Za-z][A-Za-z0-9_-]*=/.test(token)) break;
+    if (!token.startsWith("--")) break;
+    if (/^--(?:password|token|secret|passwd|pwd)$/i.test(token)) return null;
+    if (noValueFlags.has(token)) {
+      if (token === "--status") action = "status";
+      if (token === "--stop") action = "stop";
+      if (token === "--restart") action = "restart";
+      if (token === "--boardSummary") hasBoardSummary = true;
+      tokens.push(token);
+      continue;
+    }
+    if (valueFlags.has(token)) {
+      const value = stripCommandToken(rawTokens[index + 1] || "");
+      if (!value || value.startsWith("--") || /^[A-Za-z][A-Za-z0-9_-]*=/.test(value)) break;
+      if (/[<>]/.test(value)) return null;
+      if (integerValueFlags.has(token)) {
+        const integerValue = Number(value);
+        if (!Number.isInteger(integerValue) || integerValue < 0) return null;
+        if ((token === "--port" || token === "--clientPort") && (integerValue < 1 || integerValue > 65535)) return null;
+        if (token === "--intervalMs" && integerValue < 1000) return null;
+        if (token === "--timeoutMs" && integerValue < 500) return null;
+      } else if (token === "--server") {
+        try {
+          const url = new URL(value);
+          if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return null;
+        } catch {
+          return null;
+        }
+      }
+      const pair = `${token} ${value}`;
+      if (hasSecretLikeCommandValue(pair)) return null;
+      tokens.push(token, value);
+      index += 1;
+      continue;
+    }
+    break;
+  }
+
+  const commandText = tokens.join(" ");
+  if (tokens.length < 3 || hasSecretLikeCommandValue(commandText) || !hasBoardSummary) return null;
+  if (action !== expectedAction) return null;
+  return commandText;
+}
+
 function isLoopbackHost(value) {
   const host = String(value || "").trim().toLowerCase();
   return host === "127.0.0.1" || host === "localhost" || host === "::1" || host === "[::1]";
@@ -1012,6 +1083,55 @@ function extractMacHeartbeatWatcherFromBoardState(state, label, expectedMode) {
   };
 }
 
+function extractMacHeartbeatStartHelperFromText(text, label, expectedAction, source = "text") {
+  const value = String(text || "");
+  const escapedLabel = String(label).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`\\b${escapedLabel}\\s*=\\s*`, "gi");
+  const commands = [];
+  let rejectedCount = 0;
+  let match;
+  while ((match = regex.exec(value)) !== null) {
+    const fragment = value.slice(match.index + match[0].length);
+    const commandText = parseMacHeartbeatStartHelperCommand(fragment, expectedAction);
+    if (!commandText) {
+      rejectedCount += 1;
+    } else if (!commands.includes(commandText)) {
+      commands.push(commandText);
+    }
+  }
+  if (commands.length === 0) return emptyMacSafeStart(source, value ? 1 : 0, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source,
+    textCount: value ? 1 : 0,
+    rejectedCount,
+  };
+}
+
+function extractMacHeartbeatStartHelperFromBoardState(state, label, expectedAction) {
+  const texts = collectStringValues(state);
+  const commands = [];
+  let rejectedCount = 0;
+  for (const text of texts) {
+    const extracted = extractMacHeartbeatStartHelperFromText(text, label, expectedAction, "api-state");
+    for (const commandText of extracted.commands) {
+      if (!commands.includes(commandText)) commands.push(commandText);
+    }
+    rejectedCount += extracted.rejectedCount;
+  }
+  if (commands.length === 0) return emptyMacSafeStart("api-state", texts.length, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source: "api-state",
+    textCount: texts.length,
+    rejectedCount,
+  };
+}
+
 function extractWindowsReverseGrantFromText(text, label, expectedAction, source = "text") {
   const value = String(text || "");
   const escapedLabel = String(label).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1128,6 +1248,9 @@ async function getBoardSnapshot(args) {
       macFormalLocalSmoke: emptyMacSafeStart("skipped"),
       macHeartbeatOnce: emptyMacSafeStart("skipped"),
       macHeartbeatWatch: emptyMacSafeStart("skipped"),
+      macHeartbeatStart: emptyMacSafeStart("skipped"),
+      macHeartbeatStatus: emptyMacSafeStart("skipped"),
+      macHeartbeatStop: emptyMacSafeStart("skipped"),
       windowsReverseGrantStatus: emptyMacSafeStart("skipped"),
       windowsOpenOneTimeReverseGrant: emptyMacSafeStart("skipped"),
       windowsReverseGrantStatusNodeFallback: emptyMacSafeStart("skipped"),
@@ -1151,6 +1274,9 @@ async function getBoardSnapshot(args) {
       macFormalLocalSmoke: extractMacFormalLocalSmokeFromBoardState(stateResult.state),
       macHeartbeatOnce: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatOnce", "once"),
       macHeartbeatWatch: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatWatch", "watch"),
+      macHeartbeatStart: extractMacHeartbeatStartHelperFromBoardState(stateResult.state, "MacHeartbeatStart", "start"),
+      macHeartbeatStatus: extractMacHeartbeatStartHelperFromBoardState(stateResult.state, "MacHeartbeatStatus", "status"),
+      macHeartbeatStop: extractMacHeartbeatStartHelperFromBoardState(stateResult.state, "MacHeartbeatStop", "stop"),
       windowsReverseGrantStatus: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsReverseGrantStatus", "status"),
       windowsOpenOneTimeReverseGrant: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsOpenOneTimeReverseGrant", "grant"),
       windowsReverseGrantStatusNodeFallback: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsReverseGrantStatusNodeFallback", "status"),
@@ -1179,6 +1305,9 @@ async function getBoardSnapshot(args) {
     macFormalLocalSmoke: extractMacFormalLocalSmokeFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatOnce: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatOnce", "once", result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatWatch: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatWatch", "watch", result.ok ? "codex-link-client" : "unavailable"),
+    macHeartbeatStart: extractMacHeartbeatStartHelperFromText(output, "MacHeartbeatStart", "start", result.ok ? "codex-link-client" : "unavailable"),
+    macHeartbeatStatus: extractMacHeartbeatStartHelperFromText(output, "MacHeartbeatStatus", "status", result.ok ? "codex-link-client" : "unavailable"),
+    macHeartbeatStop: extractMacHeartbeatStartHelperFromText(output, "MacHeartbeatStop", "stop", result.ok ? "codex-link-client" : "unavailable"),
     windowsReverseGrantStatus: extractWindowsReverseGrantFromText(output, "WindowsReverseGrantStatus", "status", result.ok ? "codex-link-client" : "unavailable"),
     windowsOpenOneTimeReverseGrant: extractWindowsReverseGrantFromText(output, "WindowsOpenOneTimeReverseGrant", "grant", result.ok ? "codex-link-client" : "unavailable"),
     windowsReverseGrantStatusNodeFallback: extractWindowsReverseGrantFromText(output, "WindowsReverseGrantStatusNodeFallback", "status", result.ok ? "codex-link-client" : "unavailable"),
@@ -1478,6 +1607,47 @@ function makeCommands(args, preflight) {
     "--checkBoard",
     "--boardSummary",
   ].join(" ");
+  const macHeartbeatOnceCommand = [
+    "node scripts/mac/watch-mac-heartbeat.mjs",
+    "--once",
+    "--sendStatus",
+    "--host", "127.0.0.1",
+    "--port", String(port),
+    "--server", args.server,
+    "--boardSummary",
+  ].join(" ");
+  const macHeartbeatWatchCommand = [
+    "node scripts/mac/watch-mac-heartbeat.mjs",
+    "--sendStatus",
+    "--host", "127.0.0.1",
+    "--port", String(port),
+    "--server", args.server,
+    "--intervalMs", "30000",
+  ].join(" ");
+  const macHeartbeatStartCommand = [
+    "node scripts/mac/start-mac-heartbeat-watcher.mjs",
+    "--host", "127.0.0.1",
+    "--port", String(port),
+    "--server", args.server,
+    "--intervalMs", "30000",
+    "--boardSummary",
+  ].join(" ");
+  const macHeartbeatStatusCommand = [
+    "node scripts/mac/start-mac-heartbeat-watcher.mjs",
+    "--status",
+    "--host", "127.0.0.1",
+    "--port", String(port),
+    "--server", args.server,
+    "--boardSummary",
+  ].join(" ");
+  const macHeartbeatStopCommand = [
+    "node scripts/mac/start-mac-heartbeat-watcher.mjs",
+    "--stop",
+    "--host", "127.0.0.1",
+    "--port", String(port),
+    "--server", args.server,
+    "--boardSummary",
+  ].join(" ");
   const macFormalLocalSmokeCommand = [
     "node scripts/mac/check-mac-formal-local-smoke.mjs",
     "--host", host,
@@ -1573,6 +1743,11 @@ function makeCommands(args, preflight) {
     macHostDiscoveryPowerShellBoardSummary,
     macHostReadinessCommand,
     macHeartbeatCommand,
+    macHeartbeatOnceCommand,
+    macHeartbeatWatchCommand,
+    macHeartbeatStartCommand,
+    macHeartbeatStatusCommand,
+    macHeartbeatStopCommand,
     macFormalLocalSmokeCommand,
     macUnattendedStatusCommand,
     macUnattendedFormalStatusCommand,
@@ -1882,6 +2057,11 @@ function makeBoardSummary(report) {
     ? "default-ok"
     : `use --clientPort ${report.windowsClientDiagnosticsPorts?.alternateClientPort || defaults.alternateClientPort} --debugPort ${report.windowsClientDiagnosticsPorts?.alternateDebugPort || defaults.alternateDebugPort}`;
   const macFormalLocalSmokeCommand = report.board.macFormalLocalSmoke?.command || report.commands.macFormalLocalSmokeCommand;
+  const macHeartbeatOnceCommand = report.board.macHeartbeatOnce?.command || report.commands.macHeartbeatOnceCommand;
+  const macHeartbeatWatchCommand = report.board.macHeartbeatWatch?.command || report.commands.macHeartbeatWatchCommand;
+  const macHeartbeatStartCommand = report.board.macHeartbeatStart?.command || report.commands.macHeartbeatStartCommand;
+  const macHeartbeatStatusCommand = report.board.macHeartbeatStatus?.command || report.commands.macHeartbeatStatusCommand;
+  const macHeartbeatStopCommand = report.board.macHeartbeatStop?.command || report.commands.macHeartbeatStopCommand;
   const windowsReverseGrantStatusCommand = report.board.windowsReverseGrantStatus?.command || report.commands.windowsReverseGrantStatusPowerShellBoardSummary;
   const windowsOpenOneTimeReverseGrantCommand = report.board.windowsOpenOneTimeReverseGrant?.command || report.commands.windowsOpenOneTimeReverseGrantPowerShellBoardSummary;
   const windowsReverseGrantStatusNodeCommand = report.board.windowsReverseGrantStatusNodeFallback?.command || report.commands.windowsReverseGrantStatusBoardSummary;
@@ -1894,8 +2074,11 @@ function makeBoardSummary(report) {
     `MacDiscoveryPs=${report.commands.macHostDiscoveryPowerShellBoardSummary}.`,
     `MacHostReadiness=${report.commands.macHostReadinessCommand}.`,
     `MacHeartbeat=${report.commands.macHeartbeatCommand}.`,
-    ...(report.board.macHeartbeatOnce?.command ? [`MacHeartbeatOnce=${report.board.macHeartbeatOnce.command}.`] : []),
-    ...(report.board.macHeartbeatWatch?.command ? [`MacHeartbeatWatch=${report.board.macHeartbeatWatch.command}.`] : []),
+    `MacHeartbeatOnce=${macHeartbeatOnceCommand}.`,
+    `MacHeartbeatWatch=${macHeartbeatWatchCommand}.`,
+    `MacHeartbeatStart=${macHeartbeatStartCommand}.`,
+    `MacHeartbeatStatus=${macHeartbeatStatusCommand}.`,
+    `MacHeartbeatStop=${macHeartbeatStopCommand}.`,
     `MacFormalLocalSmoke=${macFormalLocalSmokeCommand}.`,
     `MacUnattended=${report.commands.macUnattendedStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalStatusCommand}.`,
@@ -2143,12 +2326,11 @@ function printHuman(report) {
   console.log(`  ${report.commands.macHostDiscoveryPowerShellBoardSummary}`);
   console.log(`  ${report.commands.macHostReadinessCommand}`);
   console.log(`  MacHeartbeat=${report.commands.macHeartbeatCommand}`);
-  if (report.board.macHeartbeatOnce?.command) {
-    console.log(`  MacHeartbeatOnce=${report.board.macHeartbeatOnce.command}`);
-  }
-  if (report.board.macHeartbeatWatch?.command) {
-    console.log(`  MacHeartbeatWatch=${report.board.macHeartbeatWatch.command}`);
-  }
+  console.log(`  MacHeartbeatOnce=${report.board.macHeartbeatOnce?.command || report.commands.macHeartbeatOnceCommand}`);
+  console.log(`  MacHeartbeatWatch=${report.board.macHeartbeatWatch?.command || report.commands.macHeartbeatWatchCommand}`);
+  console.log(`  MacHeartbeatStart=${report.board.macHeartbeatStart?.command || report.commands.macHeartbeatStartCommand}`);
+  console.log(`  MacHeartbeatStatus=${report.board.macHeartbeatStatus?.command || report.commands.macHeartbeatStatusCommand}`);
+  console.log(`  MacHeartbeatStop=${report.board.macHeartbeatStop?.command || report.commands.macHeartbeatStopCommand}`);
   console.log(`  MacFormalLocalSmoke=${report.board.macFormalLocalSmoke?.command || report.commands.macFormalLocalSmokeCommand}`);
   console.log(`  ${report.commands.macUnattendedStatusCommand}`);
   console.log(`  ${report.commands.macUnattendedFormalStatusCommand}`);
