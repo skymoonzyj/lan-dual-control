@@ -1960,6 +1960,132 @@ async function verifyMacClientFileClipboardOversizedSelection({ args, session })
   print("OK", `File oversize guard: ${oversizedSnapshot.fileClipboard}`);
 }
 
+async function verifyMacClientFileClipboardRemoteUnavailableGuard({ args, session, uploadDir }) {
+  const unavailablePath = join(uploadDir, `mac-client-file-unsupported-${Date.now()}.txt`);
+  await writeFile(unavailablePath, "Mac client should not send files when the remote file clipboard is unavailable.\n", "utf8");
+
+  await evaluate(
+    session,
+    `(() => {
+      const socket = window.__lanDualLastSocket;
+      if (!socket) throw new Error("missing recorded WebSocket");
+      socket.dispatchEvent(new MessageEvent("message", {
+        data: JSON.stringify({
+          type: "session_answer",
+          ok: true,
+          width: 1920,
+          height: 1080,
+          hostMode: "windows-host-self-test",
+          capabilities: {
+            reverseControl: true,
+            reverseControlMode: "deny",
+            reverseControlPolicy: {
+              supported: true,
+              mode: "deny",
+              requiresConfirmation: true,
+              autoAccept: false,
+            },
+            clipboardText: true,
+            clipboardTextMode: "system",
+            clipboardFile: false,
+            clipboardFileMode: "unsupported",
+            clipboard: {
+              text: true,
+              textMode: "system",
+              file: false,
+              fileMode: "unsupported",
+            },
+          },
+        }),
+      }));
+      window.__lanDualSentMessages = [];
+      window.__lanDualReceivedMessages = [];
+      window.__lanDualLastReceivedByType = {};
+      return true;
+    })()`,
+  );
+
+  await setFileInputFiles(session, "#clipboardFileInput", [unavailablePath]);
+  const unavailableSnapshot = await waitFor(
+    async () => {
+      const value = await evaluate(session, buildSnapshotExpression());
+      return value.sendClipboardFilesButtonDisabled &&
+        value.clipboardFileCount === 1 &&
+        value.fileClipboard.includes("文件剪贴板不可用")
+        ? value
+        : null;
+    },
+    args.timeoutMs,
+    "Mac client remote file clipboard unavailable guard",
+  );
+
+  await evaluate(
+    session,
+    `(() => {
+      document.querySelector("#sendClipboardFilesButton").click();
+      return true;
+    })()`,
+  );
+  await delay(250);
+  const leakedMessages = await evaluate(
+    session,
+    `(() => (window.__lanDualSentMessages || [])
+      .filter((message) => String(message.type || "").startsWith("clipboard_file_")))()`,
+  );
+  if (leakedMessages.length) {
+    throw new Error(`Mac client sent file clipboard messages despite unavailable remote capability: ${JSON.stringify(leakedMessages)}`);
+  }
+  await assertMacClientCopiedFileClipboardAdvice({
+    args,
+    session,
+    expectedSnippets: ["对端文件剪贴板不可用", "检查 Windows 文件剪贴板能力"],
+    label: "Mac client remote file clipboard unavailable copied advice",
+  });
+
+  await evaluate(
+    session,
+    `(() => {
+      const socket = window.__lanDualLastSocket;
+      if (!socket) throw new Error("missing recorded WebSocket");
+      socket.dispatchEvent(new MessageEvent("message", {
+        data: JSON.stringify({
+          type: "session_answer",
+          ok: true,
+          width: 1920,
+          height: 1080,
+          hostMode: "windows-host-self-test",
+          capabilities: {
+            reverseControl: true,
+            reverseControlMode: "deny",
+            reverseControlPolicy: {
+              supported: true,
+              mode: "deny",
+              requiresConfirmation: true,
+              autoAccept: false,
+            },
+            clipboardText: true,
+            clipboardTextMode: "system",
+            clipboardFile: true,
+            clipboardFileMode: "system",
+            clipboard: {
+              text: true,
+              textMode: "system",
+              file: true,
+              fileMode: "system",
+            },
+          },
+        }),
+      }));
+      const input = document.querySelector("#clipboardFileInput");
+      input.value = "";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    })()`,
+  );
+  print("OK", `File remote capability guard: ${unavailableSnapshot.fileClipboard}`);
+}
+
 async function verifyMacClientFileClipboardRejectCancel({ args, session, uploadDir }) {
   const rejectPath = join(uploadDir, `mac-client-file-reject-${Date.now()}.txt`);
   const rejectText = [
@@ -3619,6 +3745,7 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     if (args.testFileClipboard) {
       uploadDir = await mkdtemp(join(tmpdir(), "lan-dual-mac-client-upload-"));
       await verifyMacClientFileClipboardOversizedSelection({ args, session });
+      await verifyMacClientFileClipboardRemoteUnavailableGuard({ args, session, uploadDir });
       await verifyMacClientFileClipboardRejectCancel({ args, session, uploadDir });
 
       const uploadPath = join(uploadDir, `mac-client-file-clipboard-${Date.now()}.txt`);

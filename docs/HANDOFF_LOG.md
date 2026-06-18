@@ -54,6 +54,37 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac client 在 Windows 文件剪贴板不可用时本地拦截手动文件/压缩包发送。
+完成内容：
+- Mac client 现在会消费 Windows host 的 `clipboardFile` / `clipboardFileMode` 和 `capabilities.clipboard.file` / `fileMode`。
+- 当对端明确报告文件剪贴板不可用时，Mac 端选择文件后会禁用发送按钮并提示检查 Windows 文件剪贴板能力。
+- 发送函数增加二次守卫；即使按钮被误触，也不会发出 `clipboard_file_offer`、分块或完成消息。
+- 复制/导出诊断的“文件发送建议”会覆盖对端文件剪贴板不可用场景。
+修改文件：
+- `apps/mac-client/app.js`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增浏览器自测断言并确认失败：`node scripts/windows/test-mac-client-browser.mjs --clientPort 5198 --debugPort 9342 --mockVideo --allowClipboardFallback --progressIntervalMs 0 --timeoutMs 45000`，失败点为 `Mac client remote file clipboard unavailable guard timed out`。
+- 实现后同一命令通过，新增输出：`Mac client remote file clipboard unavailable copied advice: copied diagnostics include file clipboard advice` 和 `File remote capability guard: 对端文件剪贴板不可用...`。
+- 过程中发现并修复断开连接取消提示被能力清空刷新覆盖的问题，复跑同一自测通过。
+遗留问题：
+- 这只是 Mac client 本地 UI/诊断守卫，不修复 Windows host 或系统文件剪贴板能力本体。
+- 旧 host 没有能力字段时仍保持允许发送，避免误拦截；真机仍需通过诊断确认两端能力是否准确。
+下一步建议：
+- 真机文件/压缩包测试时同时粘贴 Mac client 复制诊断和 Windows 控制端复制/导出诊断，确认两端的文件剪贴板能力建议能对上。
+是否改了协议：否；只消费既有能力字段并改 Mac client 本地 UI/自测/文档。
+是否需要另一端配合：暂不需要；真机长测时再呼叫 Windows 配合。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac client 复制/导出诊断在文件发送失败或超时时直接给出下一步建议。
 完成内容：
 - Mac client 导出/复制诊断新增“文件发送建议”行。

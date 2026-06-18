@@ -229,6 +229,7 @@ Windows 端：
 - [x] Mac client 文件剪贴板发送失败结果可重试：发送完成后等待 `clipboard_file_result`，若对端返回 `LAN011` 或其他失败 code/reason，页面保留文件选择、显示失败原因并把按钮切换为“重新发送”；重发成功后再清空文件选择。页面自测覆盖失败结果、重发新 transfer 和成功清理，不改协议、不实现断点续传。
 - [x] Mac client 文件剪贴板等待确认超时可重试：发送完成后若 45 秒没有收到对端 `clipboard_file_result`，页面显示确认超时、保留文件选择并把按钮切换为“重新发送”；重新发送使用新的 `transferId`，旧 transfer 的迟到结果不会覆盖当前等待状态。页面自测覆盖超时、保留文件、重发和旧结果忽略，不改协议、不实现断点续传。
 - [x] Mac client 复制/导出诊断补文件发送建议：文件发送中、等待确认、失败、对端拒绝或确认超时时，诊断文本会输出“文件发送建议”，提示保持连接、点击“重新发送”或让 Windows 端检查连接、文件剪贴板能力、权限和磁盘空间；页面自测覆盖失败结果和确认超时两种复制诊断文本，不改协议。
+- [x] Mac client 文件发送补对端文件剪贴板能力拦截：当 Windows host 明确报告文件剪贴板不可用时，手动选择文件/压缩包后 Mac client 会本地禁用发送并提示检查 Windows 文件剪贴板能力，点击不会发出 `clipboard_file_offer`、分块或完成消息；页面自测覆盖不发送文件消息和复制诊断建议，未知能力不阻断旧 host。
 - [x] Mac client 在 `LAN008`、最近请求或临时授权状态下直接显示并可一键复制 Windows 本机 PowerShell 推荐一次性授权命令：`allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port <Windows host port> -Grant -DurationMs 30000 -BoardSummary`，并展示 Node 备用命令；accepted 后隐藏命令，页面自测覆盖 PowerShell 复制、Node 备用显示和无额外输入事件。
 - [x] Mac client 事件日志新增“复制诊断”按钮：复用同一份不含连接密码的导出日志文本写入 Mac 浏览器剪贴板，方便现场直接粘贴给 Agent Link Board 或另一端；页面自测覆盖复制内容、脱敏和无额外输入事件。
 - [x] Mac client readiness 摘要新增 `CopyDiagnostics=`：JSON、普通输出和 `--boardSummary` 都提示在事件日志点击“复制诊断”，方便现场先发一行 readiness 后再粘贴完整页面诊断。

@@ -126,6 +126,7 @@ const state = {
   reconnectStableTimer: null,
   remoteRuntime: null,
   remoteCapabilities: null,
+  remoteClipboardCapabilities: null,
   reverseControlRequest: {
     requestId: "",
     status: "idle",
@@ -336,6 +337,62 @@ function compactDiagnosticsText(value, maxLength = 80) {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   if (text.length <= maxLength) return text;
   return `${text.slice(0, Math.max(0, maxLength - 1))}...`;
+}
+
+function normalizeOptionalBoolean(value) {
+  if (value === true || value === false) return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "yes", "on", "enabled", "supported", "1"].includes(normalized)) return true;
+    if (["false", "no", "off", "disabled", "unsupported", "unavailable", "0"].includes(normalized)) return false;
+  }
+  return null;
+}
+
+function normalizeRemoteClipboardCapabilities(capabilities) {
+  if (!capabilities || typeof capabilities !== "object") {
+    return null;
+  }
+  const clipboard = capabilities.clipboard && typeof capabilities.clipboard === "object"
+    ? capabilities.clipboard
+    : {};
+  const rawText = capabilities.clipboardText ?? clipboard.text ?? clipboard.clipboardText;
+  const rawFile = capabilities.clipboardFile ?? clipboard.file ?? clipboard.files ?? clipboard.clipboardFile;
+  const textMode = compactDiagnosticsText(capabilities.clipboardTextMode ?? clipboard.textMode ?? clipboard.clipboardTextMode ?? "", 40).toLowerCase();
+  const fileMode = compactDiagnosticsText(capabilities.clipboardFileMode ?? clipboard.fileMode ?? clipboard.filesMode ?? clipboard.clipboardFileMode ?? "", 40).toLowerCase();
+  const hasClipboardSignal =
+    rawText !== undefined ||
+    rawFile !== undefined ||
+    Boolean(textMode) ||
+    Boolean(fileMode) ||
+    Object.keys(clipboard).length > 0;
+  if (!hasClipboardSignal) {
+    return null;
+  }
+  return {
+    text: normalizeOptionalBoolean(rawText),
+    textMode,
+    file: normalizeOptionalBoolean(rawFile),
+    fileMode,
+  };
+}
+
+function isClipboardCapabilityUnavailable(enabled, mode = "") {
+  if (enabled === false) return true;
+  const normalizedMode = String(mode || "").trim().toLowerCase();
+  return ["disabled", "off", "none", "unsupported", "unavailable"].includes(normalizedMode);
+}
+
+function remoteFileClipboardUnavailable() {
+  const capabilities = state.remoteClipboardCapabilities;
+  if (!capabilities) {
+    return false;
+  }
+  return isClipboardCapabilityUnavailable(capabilities.file, capabilities.fileMode);
+}
+
+function remoteFileClipboardUnavailableMessage() {
+  return "对端文件剪贴板不可用；文件/压缩包不能直接发送，请检查 Windows 文件剪贴板能力，或暂时使用其他传输方式。";
 }
 
 function normalizeReverseControlGrantStatus(capabilities = {}, reverse = {}) {
@@ -831,8 +888,23 @@ function handleReverseControlResponse(message) {
 }
 
 function updateRemoteCapabilities(capabilities) {
+  const hadRemoteFileClipboardUnavailable = remoteFileClipboardUnavailable();
+  const hasIncomingCapabilities = capabilities && typeof capabilities === "object";
   state.remoteCapabilities = normalizeRemoteCapabilities(capabilities);
+  state.remoteClipboardCapabilities = normalizeRemoteClipboardCapabilities(capabilities);
   renderSessionDiagnostics();
+  updateFileClipboardButton();
+  const { files } = selectedClipboardFiles();
+  if (
+    hasIncomingCapabilities &&
+    files.length > 0 &&
+    !state.fileTransferActive &&
+    !state.fileTransferAwaitingResult &&
+    !state.fileTransferRetryAvailable &&
+    (hadRemoteFileClipboardUnavailable || remoteFileClipboardUnavailable())
+  ) {
+    renderFileClipboardSelectionStatus();
+  }
 }
 
 function clearRemoteEndpointDetails() {
@@ -1510,6 +1582,9 @@ function getReconnectExportStatus(now = Date.now()) {
 
 function getFileClipboardExportAdvice() {
   const status = String(elements.fileClipboardStatus.textContent || "");
+  if (remoteFileClipboardUnavailable() || status.includes("文件剪贴板不可用")) {
+    return "对端文件剪贴板不可用，请让 Windows 端检查 Windows 文件剪贴板能力，或暂时使用其他传输方式。";
+  }
   if (state.fileTransferActive || status.includes("发送 ")) {
     return "文件正在发送，请保持连接，等待 Windows 返回确认结果。";
   }
@@ -2816,12 +2891,32 @@ function selectedClipboardFiles() {
   return { files, totalBytes, tooLarge: totalBytes > maxClipboardFileBytes };
 }
 
+function renderFileClipboardSelectionStatus({ resetRetry = false } = {}) {
+  if (resetRetry) {
+    state.fileTransferRetryAvailable = false;
+  }
+  const { files, totalBytes, tooLarge } = selectedClipboardFiles();
+  elements.fileClipboardStatus.textContent = files.length
+    ? tooLarge
+      ? `文件过大 · ${formatBytes(totalBytes)} / 上限 ${formatBytes(maxClipboardFileBytes)}`
+      : remoteFileClipboardUnavailable()
+        ? remoteFileClipboardUnavailableMessage()
+        : `${files.length} 个 · ${formatBytes(totalBytes)}`
+    : "未选择";
+  updateFileClipboardButton();
+}
+
 function updateFileClipboardButton() {
   const { files, tooLarge } = selectedClipboardFiles();
   const hasFiles = files.length > 0;
   elements.sendClipboardFilesButton.textContent = state.fileTransferRetryAvailable && hasFiles ? "重新发送" : "发送文件";
   elements.sendClipboardFilesButton.disabled =
-    state.fileTransferActive || state.fileTransferAwaitingResult || !state.authenticated || !hasFiles || tooLarge;
+    state.fileTransferActive ||
+    state.fileTransferAwaitingResult ||
+    !state.authenticated ||
+    !hasFiles ||
+    tooLarge ||
+    remoteFileClipboardUnavailable();
 }
 
 function throwIfFileTransferCanceled(signal) {
@@ -2901,6 +2996,14 @@ async function sendClipboardFiles() {
     const detail = `${formatBytes(totalBytes)} 超过上限 ${formatBytes(maxClipboardFileBytes)}`;
     elements.fileClipboardStatus.textContent = "文件过大";
     logEvent("文件剪贴板过大", detail);
+    return;
+  }
+
+  if (remoteFileClipboardUnavailable()) {
+    const message = remoteFileClipboardUnavailableMessage();
+    elements.fileClipboardStatus.textContent = message;
+    logEvent("文件剪贴板未发送", message);
+    updateFileClipboardButton();
     return;
   }
 
@@ -3137,14 +3240,7 @@ elements.sendClipboardFilesButton.addEventListener("click", () => {
   void sendClipboardFiles();
 });
 elements.clipboardFileInput.addEventListener("change", () => {
-  state.fileTransferRetryAvailable = false;
-  const { files, totalBytes, tooLarge } = selectedClipboardFiles();
-  elements.fileClipboardStatus.textContent = files.length
-    ? tooLarge
-      ? `文件过大 · ${formatBytes(totalBytes)} / 上限 ${formatBytes(maxClipboardFileBytes)}`
-      : `${files.length} 个 · ${formatBytes(totalBytes)}`
-    : "未选择";
-  updateFileClipboardButton();
+  renderFileClipboardSelectionStatus({ resetRetry: true });
 });
 
 elements.remoteViewport.addEventListener("pointerdown", (event) => {

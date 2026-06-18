@@ -119,6 +119,7 @@
 
 ## Mac 端状态
 
+- Mac client 现在也会消费 Windows host 声明的文件剪贴板能力：如果对端明确报告 `clipboardFile=false` 或 `clipboardFileMode=unsupported/unavailable/disabled` 等不可用状态，手动选择文件后发送按钮会保持禁用，点击也不会发出 `clipboard_file_offer`、分块或完成消息，并在页面状态和复制/导出诊断的“文件发送建议”里提示检查 Windows 文件剪贴板能力。未知能力不阻断发送，避免旧 host 缺少诊断字段时误拦截；该行为只改 Mac client 本地 UI，不改协议。
 - Mac client 文件剪贴板发送现在会区分“网络分块已发完”和“对端确认结果”：发送完 `clipboard_file_complete` 后按钮保持禁用并显示等待确认；如果 Windows host 返回失败结果（例如接收端完整性守卫的 `LAN011`），或 45 秒内没有返回 `clipboard_file_result`，页面会显示失败 code/reason 或确认超时、保留当前文件选择并把按钮切换为“重新发送”。重发会使用新的 `transferId`，旧 transfer 的迟到结果不会覆盖当前重发状态；重发成功后才清空选择。复制/导出诊断现在也会输出“文件发送建议”：正在发送或等待确认时提示保持连接/等待回执，失败或确认超时时提示点击“重新发送”，并让 Windows 端检查连接、文件剪贴板能力、权限或磁盘空间。该行为只消费既有 `clipboard_file_result` 字段，不改协议，不实现断点续传。
 - Mac 端 `discover-windows-hosts --checkBoard` 和 `check-mac-client-readiness --checkBoard` 现在会只读消费 Agent Link Board 上的 `WindowsLanRisk=` / `WindowsLanRisks=`：JSON 分别输出 `windowsLanRisk` / `board.windowsLanRisk`，`--boardSummary` 会附带脱敏短标签，例如 `WindowsLanRisk=no-firewall-allow,public-profile`。提取逻辑只接受逗号分隔的安全 risk token，拒绝 `--password`、`LAN_DUAL_PASSWORD`、token/secret/passwd/pwd 等危险候选且不回显；用于 Mac 发现不到 Windows host 时优先提示防火墙放行、Public 网络、LAN 探测不可达、监听地址或端口可达性问题，不修改网络、不认证、不发密码/input/inject。
 - Mac 端 `run-mac-client-formal-smoke --discover` 现在也会把同一条 Agent Link Board `WindowsLanRisk=` 线索透传给底层发现流程；发现失败或被阻塞时，JSON `discovery.windowsLanRisk` 和 `--boardSummary` 会显示脱敏短标签，仍然在任何密码提示、认证、call、input 或 inject 之前退出。
