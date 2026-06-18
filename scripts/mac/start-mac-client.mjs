@@ -26,7 +26,7 @@ const windowsReverseGrantStatusCommand = "pwsh -NoProfile -ExecutionPolicy Bypas
 const windowsOpenOneTimeReverseGrantCommand = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary";
 const windowsReverseGrantStatusNodeFallbackCommand = "node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --status --boardSummary";
 const windowsOpenOneTimeReverseGrantNodeFallbackCommand = "node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --grant --durationMs 30000 --boardSummary";
-const formalChecklistCommand = "node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary";
+const formalChecklistCommand = "node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary";
 const formalSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
 const browserSelfTestCommand = "node scripts/mac/test-mac-client-browser-self-test.mjs --boardSummary";
 
@@ -57,6 +57,8 @@ Machine-readable JSON fields:
                          Secret-free command to start or reuse this local page.
   commands.macClientFormalStatusCommand
                          Secret-free checklist command before true Windows control.
+                         It discovers the Windows host instead of using a
+                         placeholder IP.
   commands.macClientDiscoverWindowsCommand
                          Secret-free Windows host discovery command from the
                          Mac side. Its board summary includes FormalChecklist=

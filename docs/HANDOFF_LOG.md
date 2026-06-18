@@ -21,6 +21,36 @@
 
 日期：2026-06-18 继续推进
 开发端：Mac Codex
+本轮目标：把 `start-mac-client` 本地页面状态入口里的 `MacClientFormalChecklist=` 对齐成无占位自动 discovery 命令，避免恢复现场复制 `<Windows IP>` 模板。
+完成内容：
+- `macClientFormalStatusCommand` / `MacClientFormalChecklist=` 从 `check-mac-client-formal-status --host <Windows IP> --port 43770 --boardSummary` 改为 `check-mac-client-formal-status --discover --port 43770 --boardSummary`。
+- `start-mac-client --help` 的机器可读字段说明补充该命令会先发现 Windows host，不再使用占位 IP。
+- 专项测试先改断言并确认旧实现失败，再更新实现通过。
+修改文件：
+- `scripts/mac/start-mac-client.mjs`
+- `scripts/mac/test-mac-client-start-helper.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/mac/test-mac-client-start-helper.mjs --timeoutMs 12000`（失败点：formal checklist command 不含 `--discover`，仍含 `<Windows IP>`）
+- 语法检查：`node --check scripts/mac/start-mac-client.mjs`、`node --check scripts/mac/test-mac-client-start-helper.mjs`
+- 实现后复跑：`node scripts/mac/test-mac-client-start-helper.mjs --timeoutMs 12000`
+- 统一 Mac help 安全自检：`node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- 真实页面状态摘要：`node scripts/mac/start-mac-client.mjs --status --boardSummary`（确认输出 `MacClientFormalChecklist=... --discover --port 43770 --boardSummary`）
+- 最终收尾：`git diff --check`；`rg -n "^(<<<<<<<|=======|>>>>>>>)" docs scripts/mac`
+遗留问题：
+- 本轮只调整本地 Mac client 页面状态/启动助手的建议命令；不启动 Windows 连接、不认证、不弹密码、不发送 call/input/inject。
+下一步建议：
+- 白天继续时，若只需要确认 Mac client 页面是否在线，可先跑 `node scripts/mac/start-mac-client.mjs --status --boardSummary`，再直接复制其中 `MacClientFormalChecklist=` 或 `MacClientFormalSmoke=` 做无密 preflight。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
 本轮目标：让 `discover-windows-hosts` 也输出标准 `MacClientFormalSmoke=` 安全无密 preflight 标签，衔接 Windows resume/watcher 已消费的同名入口。
 完成内容：
 - JSON 新增 `macClientFormalSmokeCommand`，默认输出 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary`。

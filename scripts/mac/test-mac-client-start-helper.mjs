@@ -103,9 +103,10 @@ function assertFormalSmokeCommand(command, label) {
 
 function assertMacClientFormalStatusCommand(command, label) {
   assertIncludes(command, "check-mac-client-formal-status.mjs", label);
-  assertIncludes(command, "--host <Windows IP>", label);
+  assertIncludes(command, "--discover", label);
   assertIncludes(command, "--port 43770", label);
   assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "<Windows IP>", label);
   assertNotIncludes(command, "--promptPassword", label);
   assertNotIncludes(command, "--password", label);
   assertNotIncludes(command, "--sendCall", label);
