@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac heartbeat 摘要也暴露恢复总览入口。
+完成内容：
+- `check-mac-heartbeat --json/--boardSummary` 现在输出 `commands.macResumeStatusCommand` / `MacResumeStatus=node scripts/mac/check-mac-resume-status.mjs --host <host> --port <port> --checkBoard --boardSummary`。
+- Windows 端或人工只看最新 `MacHeartbeat=` 时，可以直接要求 Mac 端跑完整恢复开工总览，回到 repo/联络板/host/client/watcher/下一步建议的一行摘要。
+- 该命令只读，不启动 host/client，不认证 WebSocket，不请求或打印密码，不发送 Agent Link Board call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` 失败在 board summary 缺 `MacResumeStatus=`。
+- 绿灯：实现后复跑同一自测通过。
+遗留问题：
+- 本轮只补 heartbeat 摘要的恢复总览入口，没有重启 Mac host、请求密码、认证真实 host、发送 call/input 或执行 `inject`。
+下一步建议：
+- Windows 或人工只看到 `MacHeartbeat=` 时，可直接复制 `MacResumeStatus=` 让 Mac 端发布完整恢复总览；若要正式本机/端到端验收，仍按摘要里的专项命令和用户授权流程执行。
+是否改了协议：否；只补 Mac heartbeat 的安全命令标签。
+是否需要另一端配合：本轮不需要；Windows 端可后续按需消费该标签。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac heartbeat 摘要也暴露 formal E2E 只读 readiness 入口。
 完成内容：
 - `check-mac-heartbeat --json/--boardSummary` 现在输出 `commands.macFormalE2eStatusCommand` / `MacFormalE2E=node scripts/mac/check-mac-formal-e2e-status.mjs --host <host> --port <port> --boardSummary`。

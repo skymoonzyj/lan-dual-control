@@ -134,6 +134,15 @@ function assertNoSecrets(text, label) {
 function assertCommandSet(commands, label) {
   assertIncludes(commands?.macHeartbeatCommand || "", "check-mac-heartbeat.mjs", label);
   assertIncludes(commands?.macHeartbeatCommand || "", "--checkBoard", label);
+  assertIncludes(commands?.macResumeStatusCommand || "", "check-mac-resume-status.mjs", label);
+  assertIncludes(commands?.macResumeStatusCommand || "", "--checkBoard", label);
+  assertIncludes(commands?.macResumeStatusCommand || "", "--boardSummary", label);
+  assertNotIncludes(commands?.macResumeStatusCommand || "", "--promptPassword", label);
+  assertNotIncludes(commands?.macResumeStatusCommand || "", "--password", label);
+  assertNotIncludes(commands?.macResumeStatusCommand || "", "--sendCall", label);
+  assertNotIncludes(commands?.macResumeStatusCommand || "", "--forceCall", label);
+  assertNotIncludes(commands?.macResumeStatusCommand || "", "input_event", label);
+  assertNotIncludes(commands?.macResumeStatusCommand || "", "inject", label);
   assertIncludes(commands?.macHostSafeStartCommand || "", "start-mac-host.mjs", label);
   assertIncludes(commands?.macHostSafeStartCommand || "", "--promptPassword", label);
   assertIncludes(commands?.macHostSafeStartCommand || "", "--requirePassword", label);
@@ -293,6 +302,7 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "checkedAt=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "macHost=offline", "offline board summary");
   assertIncludes(payload.boardSummary || "", "macClient=offline", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacResumeStatus=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacHostReadiness=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacMaxFpsSafeStart=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacUnattendedStatus=", "offline board summary");
@@ -376,6 +386,7 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "MacHeartbeat=status=ok", "online board summary");
       assertIncludes(payload.boardSummary || "", "checkedAt=", "online board summary");
       assertIncludes(payload.boardSummary || "", "inputMode=log", "online board summary");
+      assertIncludes(payload.boardSummary || "", "MacResumeStatus=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacHostReadiness=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacMaxFpsSafeStart=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacUnattendedStatus=", "online board summary");
@@ -446,6 +457,7 @@ async function checkOnlineStaleHostBuildWarning(args) {
       assertIncludes(payload.boardSummary || "", "warnings=mac-host-build-stale", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "restart recommended", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "hostRuntimeChanges=", "stale build board summary");
+      assertIncludes(payload.boardSummary || "", "MacResumeStatus=node scripts/mac/check-mac-resume-status.mjs", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "MacHostStop=node scripts/mac/start-mac-host.mjs --stop", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "--maxScreenFps 60", "stale build board summary");

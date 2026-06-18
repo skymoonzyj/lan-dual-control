@@ -88,10 +88,10 @@ Machine-readable JSON fields:
   macClient                   Read-only local Mac client page status.
   board                       Agent Link Board readability and currentCall.
   commands                    Secret-free next-step commands for user action,
-                              including formal E2E readiness, the local Mac
-                              client mock browser self-test, Mac script help
-                              safety check, 60Hz safe start, and LaunchAgent
-                              load/print checks.
+                              including Mac resume status, formal E2E readiness,
+                              the local Mac client mock browser self-test, Mac
+                              script help safety check, 60Hz safe start, and
+                              LaunchAgent load/print checks.
 
 Examples:
   node scripts/mac/check-mac-heartbeat.mjs --checkBoard --boardSummary
@@ -604,6 +604,7 @@ function safeSnippet(text) {
 function buildCommands(args) {
   return {
     macHeartbeatCommand: `node scripts/mac/check-mac-heartbeat.mjs --host ${args.host} --port ${args.port} --clientHost ${args.clientHost} --clientPort ${args.clientPort} --checkBoard --boardSummary`,
+    macResumeStatusCommand: `node scripts/mac/check-mac-resume-status.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     macHostStopCommand: `node scripts/mac/start-mac-host.mjs --stop --host ${args.host} --port ${args.port}`,
     macHostSafeStartCommand: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port}`,
     macMaxFpsSafeStartCommand: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port} --maxScreenFps ${formalTargetMaxScreenFps}`,
@@ -699,6 +700,7 @@ function makeBoardSummary(report) {
     `MacHeartbeat=status=${report.status}; checkedAt=${checkedAt}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}.${evidence}`,
     suggestedAction,
     `MacHeartbeatRerun=${report.commands.macHeartbeatCommand}.`,
+    `MacResumeStatus=${report.commands.macResumeStatusCommand}.`,
     `MacHostStop=${report.commands.macHostStopCommand}.`,
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
     `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
