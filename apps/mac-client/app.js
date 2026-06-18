@@ -107,6 +107,8 @@ const state = {
   h264DecoderLatencyMs: 0,
   reconnectTotal: 0,
   fileTransferActive: false,
+  fileTransferAwaitingResult: false,
+  fileTransferRetryAvailable: false,
   fileTransferId: "",
   fileTransferAbortController: null,
   fileTransfers: new Map(),
@@ -2787,7 +2789,10 @@ function selectedClipboardFiles() {
 
 function updateFileClipboardButton() {
   const { files, tooLarge } = selectedClipboardFiles();
-  elements.sendClipboardFilesButton.disabled = state.fileTransferActive || !state.authenticated || files.length === 0 || tooLarge;
+  const hasFiles = files.length > 0;
+  elements.sendClipboardFilesButton.textContent = state.fileTransferRetryAvailable && hasFiles ? "重新发送" : "发送文件";
+  elements.sendClipboardFilesButton.disabled =
+    state.fileTransferActive || state.fileTransferAwaitingResult || !state.authenticated || !hasFiles || tooLarge;
 }
 
 function throwIfFileTransferCanceled(signal) {
@@ -2797,13 +2802,15 @@ function throwIfFileTransferCanceled(signal) {
 }
 
 function cancelActiveFileTransfer(status = "文件发送已取消") {
-  if (!state.fileTransferActive && !state.fileTransferAbortController) {
+  if (!state.fileTransferActive && !state.fileTransferAbortController && !state.fileTransferAwaitingResult) {
     return;
   }
   state.fileTransferAbortController?.abort();
   state.fileTransferId = "";
   state.fileTransferAbortController = null;
   state.fileTransferActive = false;
+  state.fileTransferAwaitingResult = false;
+  state.fileTransferRetryAvailable = false;
   state.fileTransfers.clear();
   elements.fileClipboardStatus.textContent = status;
   updateFileClipboardButton();
@@ -2846,6 +2853,8 @@ async function sendClipboardFiles() {
   let sentBytes = 0;
   const abortController = new AbortController();
   state.fileTransferActive = true;
+  state.fileTransferAwaitingResult = false;
+  state.fileTransferRetryAvailable = false;
   state.fileTransferId = transferId;
   state.fileTransferAbortController = abortController;
   state.fileTransfers.set(transferId, { fileCount: files.length, totalBytes, sentBytes: 0 });
@@ -2921,7 +2930,8 @@ async function sendClipboardFiles() {
       totalBytes,
       fileCount: files.length,
     });
-    elements.fileClipboardStatus.textContent = `已发送 ${formatBytes(sentBytes)}`;
+    state.fileTransferAwaitingResult = true;
+    elements.fileClipboardStatus.textContent = `已发送 ${formatBytes(sentBytes)} · 等待确认`;
     logEvent("文件剪贴板", `文件块发送完成，等待确认 · ${transferId}`);
   } catch (error) {
     if (error?.name === "AbortError") {
@@ -2937,7 +2947,7 @@ async function sendClipboardFiles() {
       state.fileTransferId = "";
       state.fileTransferActive = false;
     }
-    if (!state.fileTransferActive) {
+    if (!state.fileTransferActive && !state.fileTransferAwaitingResult) {
       elements.clipboardFileInput.value = "";
     }
     updateFileClipboardButton();
@@ -2971,6 +2981,13 @@ function handleClipboardFileProgress(message) {
   elements.fileClipboardStatus.textContent = `对端接收 ${percent}%`;
 }
 
+function formatClipboardFileFailure(message) {
+  const parts = [message.code, message.reason]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  return parts.length ? parts.join(" · ") : "请重新发送";
+}
+
 function handleClipboardFileResult(message) {
   if (!isCurrentFileTransferMessage(message)) {
     return;
@@ -2979,10 +2996,18 @@ function handleClipboardFileResult(message) {
   const receivedBytes = Number(message.receivedBytes) || 0;
   const status = message.accepted
     ? `已写入 · ${message.saveMode || "unknown"} · ${formatBytes(receivedBytes || totalBytes)}`
-    : `失败 · ${message.saveMode || "unknown"}`;
+    : `失败 · ${message.saveMode || "unknown"} · ${formatClipboardFileFailure(message)} · 可重新发送`;
   elements.fileClipboardStatus.textContent = status;
   logEvent(message.accepted ? "文件剪贴板确认" : "文件剪贴板失败", message.reason || status);
   state.fileTransfers.delete(message.transferId);
+  state.fileTransferAwaitingResult = false;
+  state.fileTransferActive = false;
+  state.fileTransferId = "";
+  state.fileTransferRetryAvailable = !message.accepted;
+  if (message.accepted) {
+    elements.clipboardFileInput.value = "";
+  }
+  updateFileClipboardButton();
 }
 
 elements.discoverButton.addEventListener("click", () => {
@@ -3044,6 +3069,7 @@ elements.sendClipboardFilesButton.addEventListener("click", () => {
   void sendClipboardFiles();
 });
 elements.clipboardFileInput.addEventListener("change", () => {
+  state.fileTransferRetryAvailable = false;
   const { files, totalBytes, tooLarge } = selectedClipboardFiles();
   elements.fileClipboardStatus.textContent = files.length
     ? tooLarge

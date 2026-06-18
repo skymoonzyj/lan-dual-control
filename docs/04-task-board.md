@@ -222,6 +222,7 @@ Windows 端：
 - [x] Windows host 会记录最近一次被默认安全拒绝的反控请求，并通过 `/discovery.capabilities.reverseControlGrant.lastRequest` 暴露给本机面板；Windows 桌面“本机被控”状态会显示“反控：刚收到请求”和临时授权后重试提示。
 - [x] Windows readiness runtime/boardSummary 保留反控授权窗口和最近请求状态：运行中 host 有一次性授权时显示 `reverse=temporary-grant`，刚安全拒绝过 Mac 请求时显示 `reverse=pending-request`，专项回归用本机临时 host 覆盖两种状态。
 - [x] Mac client 增加受保护的“请求反控/重试反控”入口：只在已连接、已认证且 Windows host 声明支持反控接收时可点；点击只发送 `reverse_control_request`，显示 `reverse_control_response` 的 `LAN008` 安全拒绝、Windows 临时授权重试提示和 accepted/临时授权已使用状态，页面自测覆盖默认拒绝、回环临时授权、重试成功、不泄露密码和不发送额外输入事件。
+- [x] Mac client 文件剪贴板发送失败结果可重试：发送完成后等待 `clipboard_file_result`，若对端返回 `LAN011` 或其他失败 code/reason，页面保留文件选择、显示失败原因并把按钮切换为“重新发送”；重发成功后再清空文件选择。页面自测覆盖失败结果、重发新 transfer 和成功清理，不改协议、不实现断点续传。
 - [x] Mac client 在 `LAN008`、最近请求或临时授权状态下直接显示并可一键复制 Windows 本机 PowerShell 推荐一次性授权命令：`allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port <Windows host port> -Grant -DurationMs 30000 -BoardSummary`，并展示 Node 备用命令；accepted 后隐藏命令，页面自测覆盖 PowerShell 复制、Node 备用显示和无额外输入事件。
 - [x] Mac client 事件日志新增“复制诊断”按钮：复用同一份不含连接密码的导出日志文本写入 Mac 浏览器剪贴板，方便现场直接粘贴给 Agent Link Board 或另一端；页面自测覆盖复制内容、脱敏和无额外输入事件。
 - [x] Mac client readiness 摘要新增 `CopyDiagnostics=`：JSON、普通输出和 `--boardSummary` 都提示在事件日志点击“复制诊断”，方便现场先发一行 readiness 后再粘贴完整页面诊断。

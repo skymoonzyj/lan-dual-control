@@ -17,6 +17,35 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
+本轮目标：让 Mac client 发送文件到 Windows 后，能消费对端失败结果并保留一键重发。
+完成内容：
+- Mac client 发送 `clipboard_file_complete` 后现在进入“等待确认”状态，按钮保持禁用，不再把“网络已发完”误当成对端已写入。
+- 收到 `clipboard_file_result accepted:false`（例如 Windows 接收端完整性守卫返回 `LAN011`）时，页面会显示失败 code/reason、保留当前文件选择，并把按钮切换为“重新发送”。
+- 点击“重新发送”会复用保留文件重新发起新的 transfer；成功收到 accepted 结果后才清空文件选择并恢复普通“发送文件”按钮。
+修改文件：
+- `apps/mac-client/app.js`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-mac-client-browser.mjs --clientPort 5198 --debugPort 9342 --mockVideo --allowClipboardFallback --progressIntervalMs 0 --timeoutMs 45000`（失败点：`Mac client file clipboard failed result retry state timed out`）。
+- 实现后复跑同一命令通过，新增输出：`File clipboard retry after failed result: 失败 · temp · LAN011 · offset mismatch; please resend · 可重新发送 -> 已写入 · clipboard · 128 B`。
+遗留问题：
+- 这不是断点续传；重发会从头发起新 transfer。
+- 真实 Windows host 的大文件/压缩包失败后资源管理器粘贴体验仍需人工长测。
+下一步建议：
+- Windows 端继续补控制端发送文件后的对端结果提示时，可以用 Mac client 现在的 `LAN011 -> 重新发送` 行为做对照。
+是否改了协议：否；只消费既有 `clipboard_file_result` 字段。
+是否需要另一端配合：暂不需要。
+
 ## 2026-06-19 Windows Codex
 
 日期：2026-06-19 继续推进

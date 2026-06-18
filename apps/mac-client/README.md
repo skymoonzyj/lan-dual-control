@@ -19,7 +19,7 @@
 - 文字发送按钮仅在已连接且文本非空时可用，避免未连接或空内容误点。
 - 可读取 Mac 本机文本剪贴板；用户显式开启后可监听文本变化并自动发送到 Windows host。
 - 手动选择文件并按 `clipboard_file_*` 分块发送到 Windows host。
-- 文件发送按钮仅在已连接且已选文件时可用，发送中和断开后会禁用。
+- 文件发送按钮仅在已连接且已选文件时可用，发送中和等待对端确认时会禁用；如果对端返回失败结果（例如 `LAN011`），页面会保留文件选择、显示失败原因，并把按钮切换为“重新发送”。
 - 可手动开启远端声音，播放 `pcm-f32le-base64` PCM `audio_frame`，mock 音频帧只显示状态；关闭再重新开启音频会立即清理旧状态并等待新音频帧。
 - 显示会话诊断：首帧耗时、视频持续 FPS/最大帧间隔、音频首帧/播放计数、自动重连次数、Windows host 可选 runtime/build 信息，以及对端一键反控策略（默认拒绝/实验自动同意/未启用）；当 Windows host 暴露一次性临时反控授权或最近被拒绝请求时，也会提示“Windows 已临时允许一次”或“Windows 已收到请求”。页面提供受保护的“请求反控/重试反控”按钮：只在已连接、已认证且 Windows 声明支持反控接收时可点；默认 `deny-confirm` 下会收到 `LAN008` 并提示 Windows 用户临时允许后重试，同时显示并可一键复制 Windows 本机回环 PowerShell 推荐授权命令 `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port <Windows host port> -Grant -DurationMs 30000 -BoardSummary`，也可一键复制 Node 备用命令 `node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port <Windows host port> --grant --durationMs 30000 --boardSummary`；临时授权窗口内重试会显示“Windows 已同意 / 临时授权已使用”，并隐藏授权命令。该按钮只发送 `reverse_control_request` 并等待 `reverse_control_response`，不会发送输入事件。
 - 显示 `input_ack`、视频帧和连接日志，并可一键导出或复制当前连接状态、画质、重连倒计时/原因、远端 runtime、音视频/剪贴板摘要和最近事件记录；导出/复制文本不包含连接密码。
@@ -161,7 +161,7 @@ node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --pro
 
 `--preflightOnly --boardSummary` 或 `--dryRun --json` 在已有 Windows host 时会同步给出 ready 后可运行的 `check-mac-client-formal-status --sendCall` 命令；如果想一条命令完成发现、确保本地页面、只读预检并在 ready 后发通讯板呼叫，可用 `--discover --ensureClient --preflightOnly --sendCall`。`--sendCall` 只能和 `--preflightOnly` 同用，未 ready 或没有 Windows host 时会拒绝发送；如果使用备用 Agent Link Board，可加 `--server <url>`，包装器会把该地址传给内部 formal checklist、输出的 `sendCall` 命令和实际发送 call 的子流程。
 
-文件剪贴板入口本机联调已验证：页面显示文件选择和发送入口，未连接/未选择文件/发送中都会禁用发送按钮，超过 32MB 上限时会直接显示“文件过大”并禁用发送；`scripts/windows/test-mac-client-browser.mjs` 会用浏览器调试协议注入临时小文件并等待 `clipboard_file_result`。自检还会模拟超限文件选择、对端拒绝文件清单和文件读取中点击断开，确认页面取消当前文件发送且不会继续发出 `clipboard_file_complete`；取消后迟到的旧 `clipboard_file_*` 消息也不会覆盖当前状态。在 Windows 上默认要求系统文件剪贴板 `saveMode=clipboard`，在 Mac/Linux 开发环境可加 `--allowClipboardFallback --mockVideo` 验证 `saveMode=temp` 回退链路。
+文件剪贴板入口本机联调已验证：页面显示文件选择和发送入口，未连接/未选择文件/发送中/等待确认时都会禁用发送按钮，超过 32MB 上限时会直接显示“文件过大”并禁用发送；`scripts/windows/test-mac-client-browser.mjs` 会用浏览器调试协议注入临时小文件并等待 `clipboard_file_result`。自检还会模拟超限文件选择、对端拒绝文件清单、文件读取中点击断开，以及对端在完成后返回 `LAN011` 等失败结果：失败结果会保留文件选择、显示 code/reason、按钮切换为“重新发送”，重发成功后才清空文件选择；取消后迟到的旧 `clipboard_file_*` 消息也不会覆盖当前状态。在 Windows 上默认要求系统文件剪贴板 `saveMode=clipboard`，在 Mac/Linux 开发环境可加 `--allowClipboardFallback --mockVideo` 验证 `saveMode=temp` 回退链路。
 
 认证失败路径已固化到页面级自检：`scripts/windows/test-mac-client-browser.mjs --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3` 会启动正确密码的临时 Windows host，并让 Mac 控制端填错密码，断言页面最终保留 `认证失败 · 剩余 2/3 次`，连接按钮可重试，远端摘要回到“等待发现”，视频表面回到“无画面”，且远端运行信息回到“未提供”。
 
