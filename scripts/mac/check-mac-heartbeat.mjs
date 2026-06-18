@@ -65,7 +65,8 @@ Options:
                               Default: ${defaults.stuckThresholdMs}
   --staleThresholdMs <ms>     Active Mac Codex status age before stale blocker.
                               Default: ${defaults.staleThresholdMs}
-  --boardSummary              Print one Agent Link Board summary line.
+  --boardSummary              Print one Agent Link Board summary line,
+                              including checkedAt/boardUpdatedAt freshness.
   --json                      Print one machine-readable JSON object.
   --help, -h                  Show this help without probing anything.
 
@@ -533,6 +534,7 @@ function summarizeIds(ids) {
 }
 
 function makeBoardSummary(report) {
+  const checkedAt = report.checkedAt || "unknown";
   const host = report.macHost.online
     ? `online ${report.macHost.host}:${report.macHost.port} build=${report.macHost.runtimeBuild || "unknown"} inputMode=${report.macHost.inputMode || "unknown"}`
     : `offline ${report.macHost.host}:${report.macHost.port}`;
@@ -540,20 +542,22 @@ function makeBoardSummary(report) {
   const board = !report.board.checked
     ? "not-checked"
     : report.board.ok
-      ? `ok call=${report.board.currentCall.status}${report.board.currentCall.active ? ":active" : ""}`
+      ? `ok boardUpdatedAt=${report.board.updatedAt || "unknown"} call=${report.board.currentCall.status}${report.board.currentCall.active ? ":active" : ""}`
       : "failed";
+  const codexUpdatedAt = report.codex.lastEventAt || "unknown";
+  const codexAge = report.codex.lastEventAgeMs ?? "unknown";
   const codexAgeMs = report.codex.reason === "mac-codex-stale"
     ? report.codex.lastEventAgeMs
     : report.codex.reconnectEvidenceAgeMs;
   const codex = report.codex.reason === "ok"
-    ? `ok status=${report.codex.status || "unknown"}`
-    : `${report.codex.reason} status=${report.codex.status || "unknown"} evidenceAgeMs=${codexAgeMs ?? "unknown"}`;
+    ? `ok status=${report.codex.status || "unknown"} updatedAt=${codexUpdatedAt} ageMs=${codexAge}`
+    : `${report.codex.reason} status=${report.codex.status || "unknown"} updatedAt=${codexUpdatedAt} ageMs=${codexAge} evidenceAgeMs=${codexAgeMs ?? "unknown"}`;
   const evidence = report.codex.evidence ? ` evidence=${report.codex.evidence}` : "";
   const suggestedAction = report.status === "blocked"
     ? "suggestedAction=请用户查看 Mac Codex 窗口，必要时手动重试/刷新/继续"
     : "suggestedAction=none";
   return [
-    `MacHeartbeat=status=${report.status}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}.${evidence}`,
+    `MacHeartbeat=status=${report.status}; checkedAt=${checkedAt}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}.${evidence}`,
     suggestedAction,
     `MacHeartbeatRerun=${report.commands.macHeartbeatCommand}.`,
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,

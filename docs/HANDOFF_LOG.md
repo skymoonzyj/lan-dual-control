@@ -21,6 +21,43 @@
 
 日期：2026-06-18 继续推进
 开发端：Mac Codex
+本轮目标：增强 Mac heartbeat 摘要的新鲜度可读性，避免旧 `Mac Heartbeat` 状态被误判为当前状态。
+完成内容：
+- `check-mac-heartbeat --boardSummary` 首段新增 `checkedAt=`，明确这次心跳检查的生成时间。
+- 读取 Agent Link Board 时，摘要里的 `board=` 新增 `boardUpdatedAt=`，明确本次读取到的联络板更新时间。
+- `codex=` 摘要新增 Mac Codex 状态 `updatedAt=` 与 `ageMs=`，正常、重连信号和 stale blocker 路径都会携带对应时间证据。
+- `scripts/mac/test-mac-heartbeat.mjs` 新增假联络板时间戳覆盖，确认 board updatedAt、Mac Codex updatedAt 和摘要文本保持无密。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-heartbeat.mjs`
+- `node --check scripts/mac/test-mac-heartbeat.mjs`
+- `node --check scripts/mac/watch-mac-heartbeat.mjs`
+- `node --check scripts/mac/test-watch-mac-heartbeat.mjs`
+- `node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 45000`
+- `node scripts/mac/test-watch-mac-heartbeat.mjs --timeoutMs 45000`
+- `node scripts/mac/check-mac-heartbeat.mjs --checkBoard --boardSummary`
+- `node scripts/mac/watch-mac-heartbeat.mjs --once --boardSummary`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/mac docs` 无匹配。
+遗留问题：
+- 这轮只增强 Mac heartbeat 摘要自身的新鲜度字段；Windows 端若要把 `checkedAt` / `boardUpdatedAt` / `ageMs` 做成 UI 提醒，可后续消费这些稳定文本。
+下一步建议：
+- 继续真实 Mac 被控端长时间体验验收；如果 Windows 提醒区仍容易误读旧心跳，再让 Windows Codex 把这些时间字段接入中文风险提示。
+是否改了协议：否。
+是否需要另一端配合：暂不阻塞；Windows 端可继续按原 `MacHeartbeat=` 摘要消费，新字段是向后兼容的补充。
+
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
 本轮目标：补齐 Mac heartbeat 后台 watcher 的可管理启动入口，并同步到恢复总览。
 完成内容：
 - 新增 `scripts/mac/start-mac-heartbeat-watcher.mjs`：支持 start/status/stop/restart，管理 `.dev-lab/mac-heartbeat/` 下的 PID、metadata 和 stdout/stderr 日志。

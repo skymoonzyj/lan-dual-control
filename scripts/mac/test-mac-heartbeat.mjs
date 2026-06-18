@@ -61,6 +61,10 @@ function assertNotIncludes(text, expected, label) {
   assert(!String(text).includes(expected), `${label} unexpectedly included ${JSON.stringify(expected)}.\n${text}`);
 }
 
+function assertIsoTimestamp(value, label) {
+  assert(typeof value === "string" && Number.isFinite(Date.parse(value)), `${label} should be an ISO timestamp, got ${JSON.stringify(value)}`);
+}
+
 function run(extraArgs, args) {
   return spawnSync(process.execPath, [script, ...extraArgs], {
     cwd: repoRoot,
@@ -186,7 +190,9 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assert(payload.warnings.includes("mac-host-offline"), "offline payload should warn about Mac host");
   assert(payload.warnings.includes("mac-client-offline"), "offline payload should warn about Mac client");
   assert(payload.codex.reason === "ok", "offline payload should not invent Codex blocker");
+  assertIsoTimestamp(payload.checkedAt, "offline checkedAt");
   assertIncludes(payload.boardSummary || "", "MacHeartbeat=status=warning", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "checkedAt=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "macHost=offline", "offline board summary");
   assertIncludes(payload.boardSummary || "", "macClient=offline", "offline board summary");
   assertCommandSet(payload.commands, "offline commands");
@@ -255,13 +261,70 @@ async function checkOnlineOk(args) {
       assert(payload.macHost.runtimeBuild === "mac-heartbeat-build", "Mac host runtime build should be captured");
       assert(payload.macHost.inputMode === "log", "Mac host inputMode should be captured");
       assert(payload.macClient.online === true, "Mac client should be online");
+      assertIsoTimestamp(payload.checkedAt, "online checkedAt");
       assertIncludes(payload.boardSummary || "", "MacHeartbeat=status=ok", "online board summary");
+      assertIncludes(payload.boardSummary || "", "checkedAt=", "online board summary");
       assertIncludes(payload.boardSummary || "", "inputMode=log", "online board summary");
       assertCommandSet(payload.commands, "online commands");
       assertNoSecrets(`${result.stdout}\n${result.stderr}`, "online output");
     });
   });
   print("OK", "Online heartbeat captures fake Mac host and client state");
+}
+
+async function checkBoardTimestamps(args) {
+  const boardUpdatedAt = new Date(Date.now() - 45000).toISOString();
+  const macCodexUpdatedAt = new Date(Date.now() - 30000).toISOString();
+  const hostPort = await getFreePort();
+  const clientPort = await getFreePort();
+  await withServer((request, response) => {
+    if ((request.url || "").split("?")[0] !== "/api/state") {
+      response.writeHead(404).end("not found");
+      return;
+    }
+    response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    response.end(JSON.stringify({
+      updatedAt: boardUpdatedAt,
+      currentCall: null,
+      statuses: {
+        "Mac Codex": {
+          status: "idle",
+          note: "fake board status",
+          updatedAt: macCodexUpdatedAt,
+        },
+      },
+    }));
+  }, async (boardPort) => {
+    const result = await runAsync([
+      "--json",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(hostPort),
+      "--clientHost",
+      "127.0.0.1",
+      "--clientPort",
+      String(clientPort),
+      "--server",
+      `http://127.0.0.1:${boardPort}`,
+      "--checkBoard",
+      "--timeoutMs",
+      "800",
+    ], args);
+    const payload = parseJson(result.stdout, "board timestamp JSON");
+    assert(result.status === 0, `board timestamp warning should exit 0.\n${result.stdout}\n${result.stderr}`);
+    assert(payload.board.ok === true, "board timestamp payload should read Agent Link Board");
+    assert(payload.board.updatedAt === boardUpdatedAt, "board timestamp payload should preserve board updatedAt");
+    assert(payload.board.macCodexStatus.updatedAt === macCodexUpdatedAt, "board timestamp payload should preserve Mac Codex updatedAt");
+    assert(payload.codex.lastEventAt === macCodexUpdatedAt, "board timestamp payload should use Mac Codex updatedAt as last event");
+    assert(payload.codex.status === "idle", "board timestamp payload should use Mac Codex status");
+    assertIncludes(payload.boardSummary || "", `checkedAt=${payload.checkedAt}`, "board timestamp summary");
+    assertIncludes(payload.boardSummary || "", `boardUpdatedAt=${boardUpdatedAt}`, "board timestamp summary");
+    assertIncludes(payload.boardSummary || "", `codex=ok status=idle updatedAt=${macCodexUpdatedAt}`, "board timestamp summary");
+    assertIncludes(payload.boardSummary || "", "ageMs=", "board timestamp summary");
+    assertNoSecrets(`${result.stdout}\n${result.stderr}`, "board timestamp output");
+  });
+  print("OK", "Heartbeat board summary includes freshness timestamps");
 }
 
 function checkReconnectStuck(args) {
@@ -299,6 +362,8 @@ function checkReconnectStuck(args) {
     assert(payload.codex.signals.includes("stream-disconnected-before-completion"), "should detect stream disconnect");
     assert(payload.codex.signals.includes("codex-backend-api-request-error"), "should detect backend request error");
     assertIncludes(payload.boardSummary || "", "reason=codex-reconnect-stuck", "reconnect board summary");
+    assertIncludes(payload.boardSummary || "", "checkedAt=", "reconnect board summary");
+    assertIncludes(payload.boardSummary || "", `updatedAt=${old}`, "reconnect board summary");
     assertIncludes(payload.boardSummary || "", "suggestedAction=请用户查看 Mac Codex 窗口", "reconnect board summary");
     assertNoSecrets(`${result.stdout}\n${result.stderr}`, "reconnect output");
   } finally {
@@ -329,6 +394,7 @@ function checkCodexStale(args) {
   assertIncludes(payload.boardSummary || "", "reason=mac-codex-stale", "stale board summary");
   assertIncludes(payload.boardSummary || "", "evidenceAgeMs=", "stale board summary");
   assertNotIncludes(payload.boardSummary || "", "evidenceAgeMs=0", "stale board summary");
+  assertIncludes(payload.boardSummary || "", `updatedAt=${old}`, "stale board summary");
   assertNoSecrets(`${result.stdout}\n${result.stderr}`, "stale output");
   print("OK", "Stale active Mac Codex status becomes a blocker");
 }
@@ -344,6 +410,7 @@ async function main() {
   const clientPort = await getFreePort();
   checkOfflineWarning(args, hostPort, clientPort);
   await checkOnlineOk(args);
+  await checkBoardTimestamps(args);
   checkReconnectStuck(args);
   checkCodexStale(args);
   print("OK", "Mac heartbeat self-test passed");
