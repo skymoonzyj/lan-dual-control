@@ -908,6 +908,7 @@ function makeBoardSummary(report) {
     `Mac client browser smoke failed/blocked for ${target}: ${report.error?.message || report.browserSmoke?.error || "unknown"}.${discoveryText}${discoveryChecklistText} Preflight ${preflightFindings}.`,
     `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
     `MacClientFormalSmoke=${report.commands?.macClientFormalSmoke || makeMacClientFormalSmokeCommand(report.args)}.`,
+    `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
     `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
     ...reverseGrantParts,
     ...secureAuthParts,

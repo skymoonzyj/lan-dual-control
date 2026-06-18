@@ -17,6 +17,38 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
+本轮目标：让 Mac client formal smoke 在认证前失败/阻塞时也保留本地 mock browser 自测入口，便于先排除 Mac client 页面自身问题。
+完成内容：
+- `run-mac-client-formal-smoke --json/--boardSummary` 的失败/阻塞摘要现在会输出 `MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary`。
+- 该命令只跑本地 mock Windows host / Mac client 页面自测，不使用真实 Windows host、不请求密码、不发送 call/input/inject。
+- 自测新增回归：有 Windows host 但缺少本机密码时，失败摘要必须保留 `MacClientBrowserSelfTest=`，且命令不含真实 host、密码或授权参数。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 30000` 失败在 no password board summary 缺 `MacClientBrowserSelfTest=`。
+- 绿灯：实现后复跑同一自测通过。
+- `node --check scripts/mac/run-mac-client-formal-smoke.mjs`
+- `node --check scripts/mac/test-mac-client-formal-smoke.mjs`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- 无密 preflight 摘要抽样：本机未发现 Windows host，命令按预期退出非 0，但摘要包含 `MacClientBrowserSelfTest=` / `ReverseGrantCopy=` / `No password was requested or sent`，没有弹密码或认证。
+- `git diff --check` 与冲突标记扫描通过。
+遗留问题：
+- 真实 Mac -> Windows browser smoke 仍需要用户在场输入 Windows host 密码；本轮没有弹密码、没有认证、没有发真实 call。
+下一步建议：
+- 真机 smoke 如果失败摘要里同时有 `MacClientBrowserSelfTest=` 和 Windows 授权/认证路径，先用本地 self-test 快速排除 Mac client 页面问题，再安排用户在场做真实密码 smoke 或 Windows 一次性授权重试。
+是否改了协议：否；只补 formal smoke 摘要里的既有安全命令标签。
+是否需要另一端配合：本轮不需要；后续真实 browser smoke 或反控授权验收才需要 Windows 端/用户配合。
+
 ## 2026-06-19 Windows Codex
 
 日期：2026-06-19 继续推进
