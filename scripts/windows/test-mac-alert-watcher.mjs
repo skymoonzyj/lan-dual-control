@@ -909,6 +909,45 @@ async function checkMacClientFormalSmokeCleanIgnored(args) {
   console.log("[OK] Mac client formal smoke clean status is ignored");
 }
 
+async function checkMacClientBrowserSelfTestFindingsAlert(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: [
+          "MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary",
+          "Mac client browser self-test ready=false blockers=windows-host warnings=board",
+        ].join("; "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "Mac client browser self-test findings status");
+  assertIncludes(output, "MacClientBrowserSelfTest=", "Mac client browser self-test findings status");
+  assertIncludes(output, "blockers=windows-host", "Mac client browser self-test findings status");
+  assertIncludes(output, "warnings=board", "Mac client browser self-test findings status");
+  console.log("[OK] Mac client browser self-test finding status alerts");
+}
+
+async function checkMacClientBrowserSelfTestCleanIgnored(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: [
+          "MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary",
+          "Mac client browser self-test ready blockers=none warnings=none",
+        ].join("; "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertNotIncludes(output, "ALERT:", "Mac client browser self-test clean status");
+  console.log("[OK] Mac client browser self-test clean status is ignored");
+}
+
 async function checkStartWrapperJsonStatus(args) {
   const basePath = resolve(repoRoot, ".dev-lab", `mac-alert-watcher-json-status-${process.pid}-${Date.now()}`);
   const pidFile = `${basePath}.pid`;
@@ -1105,6 +1144,8 @@ async function main() {
   await checkMacLaunchAgentCommandCleanIgnored(args);
   await checkMacClientFormalSmokeFindingsAlert(args);
   await checkMacClientFormalSmokeCleanIgnored(args);
+  await checkMacClientBrowserSelfTestFindingsAlert(args);
+  await checkMacClientBrowserSelfTestCleanIgnored(args);
   await checkStartWrapperJsonStatus(args);
   if (args.includeLifecycle) {
     await checkStartWrapperLifecycle(args);

@@ -51,6 +51,7 @@
 - [x] Windows 控制端对齐 Mac host readiness 刷新率上限明细：`warnings=mac-host-max-fps` 会被翻译成“Mac host 刷新率上限需调整”，并保留原始短标签到复制/导出诊断，方便区分 resume 的 `fps-limit` 和 host readiness 的 `mac-host-max-fps`。
 - [x] Windows 控制端和 watcher 消费 Mac 60Hz 安全启动提示：`MacMaxFpsSafeStart=` 搭配 `fps-limit` / `mac-host-max-fps` / `launch-agent-max-fps` 等 warning 时会提醒并在复制/导出诊断显示“Mac 60Hz 安全启动命令已提供”；`warnings=none blockers=none` 时不误弹。
 - [x] Windows 控制端和 watcher 消费 Mac client 正式清单入口：`MacClientFormalChecklist=` 搭配 Mac client/formal warning 或 blocker 时会提醒并在复制/导出诊断显示“Mac client 正式清单命令已提供”；`warnings=none blockers=none` 时不误弹。
+- [x] Windows 控制端消费 Mac client 本地 browser 自测入口：`MacClientBrowserSelfTest=` 搭配 Mac client formal smoke、browser self-test、失败或非空 warning/blocker 上下文时，会在 Mac 提醒区、快速摘要和复制/导出诊断显示“Mac client 本地 browser 自测命令已提供”；Windows watcher 已覆盖同类非空 findings 提醒，干净命令清单不误弹，不运行 Mac 脚本。
 - [x] Windows 控制端和 watcher 消费 Mac 本机短验收入口：`MacFormalLocalSmoke=` / `RerunFormalLocalSmoke=` 搭配失败、认证、密码或非空 warning/blocker 时会提醒并在复制/导出诊断显示“Mac 本机短验收需处理”和“Mac 本机短验收重跑命令已提供”；干净摘要不误弹，原始复跑命令会保留在诊断详情里。
 - [x] Windows 控制端和 watcher 消费 Mac 反控授权稳定标签：`WindowsReverseGrantStatus=` / `WindowsOpenOneTimeReverseGrant=` 及 Node fallback 只有搭配 `LAN008`、等待/重试、失败/阻塞或非空 warning/blocker 时会提醒；复制/导出诊断显示“Windows 反控授权状态命令已提供”“Windows 一次性反控授权命令已提供”，干净摘要不误弹。
 - [x] Windows Mac 提醒 watcher 第一版独立判断 Mac 可能卡住：`checking` / `thinking` / `running` / `syncing` 等状态长时间无更新、Mac -> Windows currentCall 超时、`MacHeartbeat=stale` / watchdog 心跳过期、Mac host `/discovery` 不可达和 502/Bad Gateway/API 网络错误都会触发提醒；Windows 控制端诊断会中文化这些风险。

@@ -1503,6 +1503,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         "WindowsFirewallStatus=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --json",
         "WindowsFirewallPreview=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --dryRunRule --ruleProfile Private",
         "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.68 --port 43770 --boardSummary",
+        "MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary",
         "MacFormalLocalSmoke=failed blockers=auth warnings=video",
         "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
         "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
@@ -1630,6 +1631,15 @@ async function verifyDesktopOnlyHostPanel(session) {
               [
                 "MacHeartbeat=status=ok warnings=none blockers=none",
                 "MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary",
+              ].join("; "),
+            )
+          : null;
+      const cleanMacClientBrowserSelfTestAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary",
+                "Mac client browser self-test ready blockers=none warnings=none",
               ].join("; "),
             )
           : null;
@@ -1947,6 +1957,9 @@ async function verifyDesktopOnlyHostPanel(session) {
           cleanMacHostReadinessCommandAttention?.summary === "" &&
           Array.isArray(cleanMacHostReadinessCommandAttention?.labels) &&
           cleanMacHostReadinessCommandAttention.labels.length === 0 &&
+          cleanMacClientBrowserSelfTestAttention?.summary === "" &&
+          Array.isArray(cleanMacClientBrowserSelfTestAttention?.labels) &&
+          cleanMacClientBrowserSelfTestAttention.labels.length === 0 &&
           readinessHeaderText.includes("client-test") &&
           readinessHeaderText.includes("1000 ms") &&
           readinessHeaderText.includes("750 ms") &&
@@ -2000,6 +2013,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         freshHeartbeatNoStale,
         heartbeatCommandCheck,
         cleanMacHostReadinessCommandAttention,
+        cleanMacClientBrowserSelfTestAttention,
         readinessHeader: readinessHeaderLines.slice(0, 4),
         readinessSummaryText,
         helperSummary,
@@ -4320,6 +4334,7 @@ async function verifyReconnectControls(session) {
         "WindowsFirewallStatus=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --json",
         "WindowsFirewallPreview=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --dryRunRule --ruleProfile Private",
         "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.68 --port 43770 --boardSummary",
+        "MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary",
         "MacFormalLocalSmoke=failed blockers=auth warnings=video",
         "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
         "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
@@ -4553,6 +4568,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("Windows 防火墙只读检查命令已提供") &&
             exportText.includes("Windows 防火墙放行预览命令已提供") &&
             exportText.includes("Mac client 正式清单命令已提供") &&
+            exportText.includes("Mac client 本地 browser 自测命令已提供") &&
             exportText.includes("Mac 本机短验收需处理") &&
             exportText.includes("Mac 本机短验收重跑命令已提供") &&
             exportText.includes("Windows 反控授权状态命令已提供") &&
@@ -4598,6 +4614,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("WindowsFirewallPreview=node scripts/windows/check-windows-firewall.mjs") &&
             !exportText.includes("WindowsFirewallPreview=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --dryRunRule --ruleProfile Private --addRule") &&
             exportText.includes("MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs") &&
+            exportText.includes("MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs") &&
             exportText.includes("RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs") &&
             exportText.includes("WindowsReverseGrantStatus=pwsh") &&
             exportText.includes("WindowsOpenOneTimeReverseGrant=pwsh") &&
@@ -4709,6 +4726,7 @@ async function verifyReconnectControls(session) {
           copiedText.includes("Windows 防火墙只读检查命令已提供") &&
           copiedText.includes("Windows 防火墙放行预览命令已提供") &&
           copiedText.includes("Mac client 正式清单命令已提供") &&
+          copiedText.includes("Mac client 本地 browser 自测命令已提供") &&
           copiedText.includes("Mac 本机短验收需处理") &&
           copiedText.includes("Mac 本机短验收重跑命令已提供") &&
           copiedText.includes("Windows 反控授权状态命令已提供") &&
@@ -4739,6 +4757,7 @@ async function verifyReconnectControls(session) {
           copiedText.includes("WindowsFirewallPreview=node scripts/windows/check-windows-firewall.mjs") &&
           !copiedText.includes("WindowsFirewallPreview=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --dryRunRule --ruleProfile Private --addRule") &&
           copiedText.includes("MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs") &&
+          copiedText.includes("MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs") &&
           copiedText.includes("RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs") &&
           copiedText.includes("WindowsReverseGrantStatus=pwsh") &&
           copiedText.includes("WindowsOpenOneTimeReverseGrant=pwsh") &&
