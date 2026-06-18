@@ -283,6 +283,7 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "MacMaxFpsSafeStart=", `help ${flag}`);
     assertIncludes(result.stdout, "discover-lan-hosts.mjs --noLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "discover-lan-hosts.ps1 -NoLocalSubnets", `help ${flag}`);
+    assertIncludes(result.stdout, "check-mac-host-readiness.mjs --host 192.168.31.122 --port 43770 --checkBoard --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "formal manual checklist command", `help ${flag}`);
@@ -334,6 +335,11 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.macHostDiscoveryPowerShellBoardSummary || "").includes(`-Port ${port}`), "mock JSON Mac discovery PowerShell should use discovered mock port");
     assert(String(payload.commands?.macHostDiscoveryPowerShellBoardSummary || "").includes("-RequireMacHost"), "mock JSON Mac discovery PowerShell should require a Mac host");
     assert(String(payload.commands?.macHostDiscoveryPowerShellBoardSummary || "").includes("-BoardSummary"), "mock JSON Mac discovery PowerShell should be board-safe");
+    assert(String(payload.commands?.macHostReadinessCommand || "").includes("check-mac-host-readiness.mjs"), "mock JSON should include Mac host readiness command");
+    assert(String(payload.commands?.macHostReadinessCommand || "").includes("--host 127.0.0.1"), "mock JSON Mac host readiness command should target discovered host");
+    assert(String(payload.commands?.macHostReadinessCommand || "").includes(`--port ${port}`), "mock JSON Mac host readiness command should use discovered mock port");
+    assert(String(payload.commands?.macHostReadinessCommand || "").includes("--checkBoard"), "mock JSON Mac host readiness command should read Agent Link Board");
+    assert(String(payload.commands?.macHostReadinessCommand || "").includes("--boardSummary"), "mock JSON Mac host readiness command should be board-safe");
     assert(String(payload.commands?.macUnattendedStatusCommand || "").includes("check-mac-unattended-status.mjs"), "mock JSON should include Mac unattended status command");
     assert(String(payload.commands?.macUnattendedStatusCommand || "").includes("--host 127.0.0.1"), "mock JSON Mac unattended command should target discovered host");
     assert(String(payload.commands?.macUnattendedStatusCommand || "").includes(`--port ${port}`), "mock JSON Mac unattended command should use discovered mock port");
@@ -565,6 +571,9 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "MacDiscoveryPs=", "board summary");
     assertIncludes(result.stdout, "discover-lan-hosts.ps1 -NoLocalSubnets -HostName 127.0.0.1", "board summary");
     assertIncludes(result.stdout, "-RequireMacHost -BoardSummary", "board summary");
+    assertIncludes(result.stdout, "MacHostReadiness=", "board summary");
+    assertIncludes(result.stdout, "check-mac-host-readiness.mjs --host 127.0.0.1", "board summary");
+    assertIncludes(result.stdout, `--port ${port} --checkBoard --boardSummary`, "board summary");
     assertIncludes(result.stdout, "MacUnattended=", "board summary");
     assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 127.0.0.1", "board summary");
     assertIncludes(result.stdout, `--port ${port} --boardSummary`, "board summary");

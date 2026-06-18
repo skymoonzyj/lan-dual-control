@@ -207,6 +207,8 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "discover-lan-hosts.mjs --noLocalSubnets", "PowerShell wrapper help");
   assertIncludes(output, "discover-lan-hosts.ps1 -NoLocalSubnets", "PowerShell wrapper help");
   assertIncludes(output, "--requireMacHost --boardSummary", "PowerShell wrapper help");
+  assertIncludes(output, "Mac host readiness command", "PowerShell wrapper help");
+  assertIncludes(output, "check-mac-host-readiness.mjs --host <Mac IP> --port 43770 --checkBoard --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "Mac-side unattended/startup status command", "PowerShell wrapper help");
   assertIncludes(output, "check-mac-unattended-status.mjs --host <Mac IP> --port 43770 --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "formal 60Hz Mac-side unattended gate", "PowerShell wrapper help");
@@ -283,6 +285,11 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.macHostDiscoveryPowerShellBoardSummary, `-Port ${port}`, "mock JSON Mac discovery PowerShell command");
     assertIncludes(payload.commands?.macHostDiscoveryPowerShellBoardSummary, "-RequireMacHost", "mock JSON Mac discovery PowerShell command");
     assertIncludes(payload.commands?.macHostDiscoveryPowerShellBoardSummary, "-BoardSummary", "mock JSON Mac discovery PowerShell command");
+    assertIncludes(payload.commands?.macHostReadinessCommand, "check-mac-host-readiness.mjs", "mock JSON Mac host readiness command");
+    assertIncludes(payload.commands?.macHostReadinessCommand, "--host 127.0.0.1", "mock JSON Mac host readiness command");
+    assertIncludes(payload.commands?.macHostReadinessCommand, `--port ${port}`, "mock JSON Mac host readiness command");
+    assertIncludes(payload.commands?.macHostReadinessCommand, "--checkBoard", "mock JSON Mac host readiness command");
+    assertIncludes(payload.commands?.macHostReadinessCommand, "--boardSummary", "mock JSON Mac host readiness command");
     assertIncludes(payload.commands?.macUnattendedStatusCommand, "check-mac-unattended-status.mjs", "mock JSON Mac unattended command");
     assertIncludes(payload.commands?.macUnattendedStatusCommand, "--host 127.0.0.1", "mock JSON Mac unattended command");
     assertIncludes(payload.commands?.macUnattendedStatusCommand, `--port ${port}`, "mock JSON Mac unattended command");
@@ -474,6 +481,9 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "MacDiscoveryPs=", "PowerShell board summary");
     assertIncludes(output, "discover-lan-hosts.ps1 -NoLocalSubnets -HostName 127.0.0.1", "PowerShell board summary");
     assertIncludes(output, "-RequireMacHost -BoardSummary", "PowerShell board summary");
+    assertIncludes(output, "MacHostReadiness=", "PowerShell board summary");
+    assertIncludes(output, "check-mac-host-readiness.mjs --host 127.0.0.1", "PowerShell board summary");
+    assertIncludes(output, `--port ${port} --checkBoard --boardSummary`, "PowerShell board summary");
     assertIncludes(output, "MacUnattended=", "PowerShell board summary");
     assertIncludes(output, "check-mac-unattended-status.mjs --host 127.0.0.1", "PowerShell board summary");
     assertIncludes(output, `--port ${port} --boardSummary`, "PowerShell board summary");

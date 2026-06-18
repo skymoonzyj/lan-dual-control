@@ -65,6 +65,8 @@ It also includes a secret-free Mac host discovery command:
 node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host <Mac IP> --port 43770 --requireMacHost --boardSummary
 PowerShell equivalent:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/discover-lan-hosts.ps1 -NoLocalSubnets -HostName <Mac IP> -Port 43770 -RequireMacHost -BoardSummary
+It also includes a Mac host readiness command for detailed Mac-side host status:
+node scripts/mac/check-mac-host-readiness.mjs --host <Mac IP> --port 43770 --checkBoard --boardSummary
 It also includes a Mac-side unattended/startup status command:
 node scripts/mac/check-mac-unattended-status.mjs --host <Mac IP> --port 43770 --boardSummary
 It also includes a formal 60Hz Mac-side unattended gate:

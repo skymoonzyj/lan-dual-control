@@ -21,6 +21,43 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows 恢复总览新增 `MacHostReadiness=` 无密 host readiness 摘要入口。
+完成内容：
+- `check-windows-resume-status` 的 JSON `commands` 新增 `macHostReadinessCommand`。
+- 普通输出“Next safe commands”和 `--boardSummary` 新增 `MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs --host <Mac IP> --port <port> --checkBoard --boardSummary`。
+- 该入口用于让 Mac 端跑无密低风险 host readiness，与需要密码的媒体/正式验收命令分开；不会认证、不要求或打印密码、不发送 input/inject。
+- 已合入 Mac 最新 `7f69426`，两端都使用同名 `MacHostReadiness=` 摘要标签。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --timeoutMs 10000`
+- `node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --checkBoard --boardSummary --timeoutMs 45000`：确认真实摘要包含 `MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs --host 192.168.31.122 --port 43770 --checkBoard --boardSummary`。
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`
+遗留问题：
+- 本轮只新增 Windows 侧恢复总览入口；不启动 Mac host、不跑 Mac readiness 实际命令、不认证、不发送 input/inject。
+下一步建议：
+- 后续恢复开工时先发 Windows `check-windows-resume-status --checkBoard --boardSummary`，若需要 Mac 侧细节，再让 Mac 端复制其中的 `MacHostReadiness=`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows 恢复总览消费 Mac 侧 `MacMaxFpsSafeStart=` 60Hz 前台安全启动标签，并复查 formal E2E 第二步。
 完成内容：
 - `check-windows-resume-status --checkBoard` 现在会从 Agent Link Board `/api/state` 的状态、消息和事件里提取最近的 `MacMaxFpsSafeStart=`。

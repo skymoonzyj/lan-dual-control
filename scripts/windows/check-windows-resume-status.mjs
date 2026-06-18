@@ -62,6 +62,8 @@ When --checkBoard is enabled, the report also surfaces recent
 MacHostSafeStart= and MacMaxFpsSafeStart= commands from Agent Link Board
 status/messages so Mac host safe foreground-start guidance is visible in
 Windows resume JSON, human output, and one-line board summaries.
+It also includes a secret-free MacHostReadiness command so Windows can ask the
+Mac side to run the detailed host readiness/status check before formal testing.
 The report also surfaces the formal manual checklist command and the checklist
 ids so a resume handoff can immediately verify connection, video, audio,
 clipboard, input_ack, and diagnostics in that order.
@@ -106,6 +108,7 @@ Examples:
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --sendUserAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
   node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host 192.168.31.122 --port 43770 --requireMacHost --boardSummary
+  node scripts/mac/check-mac-host-readiness.mjs --host 192.168.31.122 --port 43770 --checkBoard --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/discover-lan-hosts.ps1 -NoLocalSubnets -HostName 192.168.31.122 -Port 43770 -RequireMacHost -BoardSummary
@@ -957,6 +960,13 @@ function makeCommands(args, preflight) {
   const windowsHostPort = 43770;
   const macHostDiscoveryBoardSummary = makeMacHostDiscoveryCommand(args, preflight, host, port);
   const macHostDiscoveryPowerShellBoardSummary = makeMacHostDiscoveryPowerShellCommand(args, preflight, host, port);
+  const macHostReadinessCommand = [
+    "node scripts/mac/check-mac-host-readiness.mjs",
+    "--host", host,
+    "--port", String(port),
+    "--checkBoard",
+    "--boardSummary",
+  ].join(" ");
   const macUnattendedStatusCommand = [
     "node scripts/mac/check-mac-unattended-status.mjs",
     "--host", host,
@@ -1043,6 +1053,7 @@ function makeCommands(args, preflight) {
     resumeBoardSummary: "node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary",
     macHostDiscoveryBoardSummary,
     macHostDiscoveryPowerShellBoardSummary,
+    macHostReadinessCommand,
     macUnattendedStatusCommand,
     macUnattendedFormalStatusCommand,
     formalChecklistBoardSummary,
@@ -1326,6 +1337,7 @@ function makeBoardSummary(report) {
     `Next=${mac.ok ? report.commands.userAuthRequest : report.commands.preflightBoardSummary}.`,
     `MacDiscovery=${report.commands.macHostDiscoveryBoardSummary}.`,
     `MacDiscoveryPs=${report.commands.macHostDiscoveryPowerShellBoardSummary}.`,
+    `MacHostReadiness=${report.commands.macHostReadinessCommand}.`,
     `MacUnattended=${report.commands.macUnattendedStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalStatusCommand}.`,
     ...(report.board.macHostSafeStart?.command ? [`MacHostSafeStart=${report.board.macHostSafeStart.command}.`] : []),
@@ -1551,6 +1563,7 @@ function printHuman(report) {
   console.log("- Next safe commands:");
   console.log(`  ${report.commands.macHostDiscoveryBoardSummary}`);
   console.log(`  ${report.commands.macHostDiscoveryPowerShellBoardSummary}`);
+  console.log(`  ${report.commands.macHostReadinessCommand}`);
   console.log(`  ${report.commands.macUnattendedStatusCommand}`);
   console.log(`  ${report.commands.macUnattendedFormalStatusCommand}`);
   if (report.board.macHostSafeStart?.command) {
