@@ -134,6 +134,33 @@ function assertMediaReadinessCommand(command, label) {
   assertNotIncludes(command, "--server", label);
 }
 
+function assertSafeStartCommand(command, label, expectedPort = null) {
+  assertIncludes(command, "start-mac-host.mjs", label);
+  assertIncludes(command, "--promptPassword", label);
+  assertIncludes(command, "--requirePassword", label);
+  assertIncludes(command, "--host 0.0.0.0", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--injectInput", label);
+  assertNotIncludes(command, "--inputMode inject", label);
+  if (expectedPort !== null) {
+    assertIncludes(command, `--port ${expectedPort}`, label);
+  }
+}
+
+function assertEphemeralStartCommand(command, label, expectedPort = null) {
+  assertIncludes(command, "start-mac-host.mjs", label);
+  assertIncludes(command, "--ephemeralPassword", label);
+  assertIncludes(command, "--requirePassword", label);
+  assertIncludes(command, "--host 0.0.0.0", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--injectInput", label);
+  assertNotIncludes(command, "--inputMode inject", label);
+  if (expectedPort !== null) {
+    assertIncludes(command, `--port ${expectedPort}`, label);
+  }
+}
+
 function assertMacLaunchAgentPlanCommand(command, label, expectedPort = null) {
   assertIncludes(command, "install-mac-host-launch-agent.mjs", label);
   assertIncludes(command, "--port", label);
@@ -320,6 +347,7 @@ async function assertStatusOffline(timeoutMs) {
   }
   assertIncludes(output, "/discovery offline", "offline status");
   assertIncludes(output, "start-mac-host.mjs --promptPassword --requirePassword", "offline status");
+  assertIncludes(output, `--port ${port}`, "offline status");
   assertIncludes(output, "Mac host LaunchAgent dry-run plan:", "offline status");
   assertIncludes(output, "install-mac-host-launch-agent.mjs", "offline status");
   assertNotIncludes(output, "Starting Mac host", "offline status");
@@ -344,6 +372,11 @@ async function assertStatusOfflineJson(timeoutMs) {
   assertMacLaunchAgentPlanCommand(json.commands?.macLaunchAgentPlanCommand || "", "offline JSON status LaunchAgent command", port);
   assertMacMaxFpsPlanCommand(json.commands?.macMaxFpsPlanCommand || "", "offline JSON status max-FPS command", port);
   assertMediaReadinessCommand(json.commands?.mediaReadinessBoardSummary || "", "offline JSON status media command");
+  assertSafeStartCommand(json.commands?.safeStartCommand || "", "offline JSON status safe start command", port);
+  assertEphemeralStartCommand(json.commands?.ephemeralStartCommand || "", "offline JSON status ephemeral start command", port);
+  assertIncludes(json.suggestions?.[0] || "", `--port ${port}`, "offline JSON status suggestions");
+  assertIncludes(json.suggestions?.[1] || "", `--port ${port}`, "offline JSON status suggestions");
+  assertIncludes(json.boardSummary || "", `--port ${port}`, "offline JSON status boardSummary");
   assertIncludes(json.boardSummary || "", "MacLaunchAgentPlan=", "offline JSON status boardSummary");
   assertIncludes(json.boardSummary || "", "MacMaxFpsPlan=", "offline JSON status boardSummary");
   assertIncludes(json.boardSummary || "", "--maxScreenFps 60", "offline JSON status boardSummary");
@@ -592,6 +625,8 @@ async function assertStatusBoardCurrentCall(timeoutMs) {
     assertIncludes(lines[0], "Mac host status:", "status boardSummary");
     assertIncludes(lines[0], "call=active", "status boardSummary");
     assertIncludes(lines[0], call.goal, "status boardSummary");
+    assertIncludes(lines[0], `--port ${port}`, "status boardSummary");
+    assertIncludes(lines[0], "--host 0.0.0.0", "status boardSummary");
     assertIncludes(lines[0], "MacLaunchAgentPlan=", "status boardSummary");
     assertIncludes(lines[0], "MacMaxFpsPlan=", "status boardSummary");
     assertIncludes(lines[0], "MacHostMedia=", "status boardSummary");

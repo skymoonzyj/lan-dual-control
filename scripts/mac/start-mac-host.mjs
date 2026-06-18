@@ -176,6 +176,13 @@ Options:
   --help, -h                 Show this help without starting Mac host.
 
 Machine-readable JSON fields:
+  commands.safeStartCommand  Secret-free foreground start command preserving the
+                             checked port; it prompts locally and never embeds
+                             a password in argv.
+  commands.ephemeralStartCommand
+                             Secret-free temporary discovery/runtime start
+                             command preserving the checked port; it generates
+                             a random password without printing it.
   commands.mediaReadinessBoardSummary
                              Secret-free Mac media baseline command for status
                              consumers; it prompts for a password and never
@@ -364,6 +371,30 @@ function makeMediaReadinessBoardSummaryCommand(args) {
   ].join(" ");
 }
 
+function makeSafeStartCommand(args) {
+  return [
+    "node scripts/mac/start-mac-host.mjs",
+    "--promptPassword",
+    "--requirePassword",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    String(args.port),
+  ].join(" ");
+}
+
+function makeEphemeralStartCommand(args) {
+  return [
+    "node scripts/mac/start-mac-host.mjs",
+    "--ephemeralPassword",
+    "--requirePassword",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    String(args.port),
+  ].join(" ");
+}
+
 function makeMacLaunchAgentPlanCommand(args) {
   return [
     "node scripts/mac/install-mac-host-launch-agent.mjs",
@@ -507,7 +538,7 @@ function formatStatusBoardSummary(payload) {
   if (!payload.online) {
     return [
       `Mac host status: offline at ${payload.probe.host}:${payload.probe.port}; ${callSummary}.`,
-      "Next: start safely with node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword.",
+      `Next: start safely with ${payload.commands?.safeStartCommand || "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword"}.`,
       `MacLaunchAgentPlan=${payload.commands?.macLaunchAgentPlanCommand || "not-available"}.`,
       `MacMaxFpsPlan=${payload.commands?.macMaxFpsPlanCommand || "not-available"}.`,
       `After host is online, MacHostMedia=${payload.commands?.mediaReadinessBoardSummary || "not-available"}.`,
@@ -878,13 +909,15 @@ async function printStatus(args) {
       displayCount: 0,
       board,
       commands: {
+        safeStartCommand: makeSafeStartCommand(args),
+        ephemeralStartCommand: makeEphemeralStartCommand(args),
         macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
         macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
         mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
       },
       suggestions: [
-        "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword",
-        "node scripts/mac/start-mac-host.mjs --ephemeralPassword --requirePassword",
+        makeSafeStartCommand(args),
+        makeEphemeralStartCommand(args),
       ],
     };
     payload.boardSummary = formatStatusBoardSummary(payload);
@@ -908,8 +941,8 @@ async function printStatus(args) {
     } else {
       console.log("[INFO] Agent Link Board: not checked; add --checkBoard when coordinating with Windows Codex.");
     }
-    console.log("[INFO] Start safely with: node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword");
-    console.log("[INFO] For temporary discovery/runtime diagnostics without sharing a password: node scripts/mac/start-mac-host.mjs --ephemeralPassword --requirePassword");
+    console.log(`[INFO] Start safely with: ${payload.commands.safeStartCommand}`);
+    console.log(`[INFO] For temporary discovery/runtime diagnostics without sharing a password: ${payload.commands.ephemeralStartCommand}`);
     console.log(`[INFO] Mac host LaunchAgent dry-run plan: ${payload.commands.macLaunchAgentPlanCommand}`);
     console.log(`[INFO] Mac host max FPS dry-run plan: ${payload.commands.macMaxFpsPlanCommand}`);
     console.log(`[INFO] After host is online, refresh media baseline with: ${payload.commands.mediaReadinessBoardSummary}`);
