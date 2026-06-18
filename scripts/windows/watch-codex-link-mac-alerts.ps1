@@ -123,6 +123,8 @@ $urgentPatterns = @(
     "(MacClientDiscoverWindows|discover-windows-hosts).*(WindowsLanRisks?\s*=\s*($windowsLanRiskPattern)|$windowsLanRiskPattern)",
     "(WindowsLanRisks?\s*=\s*($windowsLanRiskPattern)|$windowsLanRiskPattern).*(MacClientDiscoverWindows|discover-windows-hosts)",
     "MacLaunchAgentPlan.*(missing|not-loaded|disabled|failed|enable|install|repair|fix|warning|blocker)",
+    "MacLaunchAgent(Load|Print)=.*(loaded\s*=\s*false|launchAgentLoaded\s*=\s*false|not[- ]loaded|launch-agent-(missing|not-loaded|failed|disabled|max-fps|max-screen-fps)|$fpsFindingPattern|mac-host-build-stale|restart recommended|hostRuntimeChanges|runtimeBuild)",
+    "(loaded\s*=\s*false|launchAgentLoaded\s*=\s*false|not[- ]loaded|launch-agent-(missing|not-loaded|failed|disabled|max-fps|max-screen-fps)|$fpsFindingPattern|mac-host-build-stale|restart recommended|hostRuntimeChanges|runtimeBuild).*MacLaunchAgent(Load|Print)=",
     "MacHostSafeStart=.*($findingFieldPattern|host-(offline|unreachable)|ready=false)",
     "($findingFieldPattern|host-(offline|unreachable)|ready=false).*MacHostSafeStart=",
     "MacMaxFpsSafeStart=.*($fpsFindingPattern|host-(offline|unreachable)|ready=false)",

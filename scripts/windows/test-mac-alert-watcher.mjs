@@ -835,6 +835,47 @@ async function checkMacMaxFpsSafeStartCleanIgnored(args) {
   console.log("[OK] Mac max-FPS safe-start guidance alone is ignored");
 }
 
+async function checkMacLaunchAgentCommandGuidanceAlert(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Heartbeat": {
+        role: "Mac heartbeat watcher",
+        status: "idle",
+        note: [
+          "MacHeartbeat=status=ok launchAgentLoaded=false maxScreenFps=60",
+          "MacLaunchAgentLoad=launchctl bootstrap gui/$(id -u) /Users/skymoonzyj/Library/LaunchAgents/com.lan-dual-control.mac-host.plist",
+          "MacLaunchAgentPrint=launchctl print gui/$(id -u)/com.lan-dual-control.mac-host",
+        ].join("; "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "Mac LaunchAgent command guidance status");
+  assertIncludes(output, "MacLaunchAgentLoad=", "Mac LaunchAgent command guidance status");
+  assertIncludes(output, "MacLaunchAgentPrint=", "Mac LaunchAgent command guidance status");
+  assertIncludes(output, "launchAgentLoaded=false", "Mac LaunchAgent command guidance status");
+  console.log("[OK] Mac LaunchAgent load/print guidance alerts when findings exist");
+}
+
+async function checkMacLaunchAgentCommandCleanIgnored(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Heartbeat": {
+        role: "Mac heartbeat watcher",
+        status: "idle",
+        note: [
+          "MacHeartbeat=status=ok warnings=none blockers=none",
+          "MacLaunchAgentLoad=launchctl bootstrap gui/$(id -u) /Users/skymoonzyj/Library/LaunchAgents/com.lan-dual-control.mac-host.plist",
+          "MacLaunchAgentPrint=launchctl print gui/$(id -u)/com.lan-dual-control.mac-host",
+        ].join("; "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertNotIncludes(output, "ALERT:", "Mac LaunchAgent clean command status");
+  console.log("[OK] Mac LaunchAgent load/print guidance alone is ignored");
+}
+
 async function checkMacClientFormalSmokeFindingsAlert(args) {
   const output = await runWatcherAgainst(baseState({
     statuses: {
@@ -1060,6 +1101,8 @@ async function main() {
   await checkMacHostSafeStartCleanIgnored(args);
   await checkMacMaxFpsSafeStartGuidanceAlert(args);
   await checkMacMaxFpsSafeStartCleanIgnored(args);
+  await checkMacLaunchAgentCommandGuidanceAlert(args);
+  await checkMacLaunchAgentCommandCleanIgnored(args);
   await checkMacClientFormalSmokeFindingsAlert(args);
   await checkMacClientFormalSmokeCleanIgnored(args);
   await checkStartWrapperJsonStatus(args);

@@ -50,6 +50,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 本机 Mac 提醒 watcher 消费 `MacLaunchAgentLoad=` / `MacLaunchAgentPrint=`，在最小化窗口时也能提示 60Hz LaunchAgent 人工切换链。
+完成内容：
+- `watch-codex-link-mac-alerts.ps1` 新增 `MacLaunchAgentLoad=` / `MacLaunchAgentPrint=` 规则：同段出现 `loaded=false`、`launchAgentLoaded=false`、LaunchAgent 缺失/未加载/失败、`fps-limit`、`launch-agent-max-fps`、旧 build 或重启建议等上下文时会提醒。
+- `test-mac-alert-watcher.mjs` 新增红绿回归：先确认 `loaded=false + MacLaunchAgentLoad/Print` 不提醒，再实现后确认会提醒；同时锁定干净 `warnings=none blockers=none` 命令清单不提醒。
+- 这只是 Windows 本机提醒 watcher 的规则补强，不自动执行 `launchctl`，不认证、不发密码、不发送 input/inject。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 20000` 失败在 `Mac LaunchAgent command guidance status should include "ALERT:"`。
+- 绿灯：实现规则后复跑同一命令通过，并确认 “Mac LaunchAgent load/print guidance alone is ignored”。
+- 提交前还会跑 PowerShell help 覆盖、语法、diff check 和冲突扫描。
+遗留问题：
+- 真机 60Hz 切换仍需用户或 Mac 端人工执行 `launchctl` 相关命令，并用 `MacUnattendedFormal=` 复查 loaded/max-fps blocker 是否消失。
+下一步建议：
+- 若 Mac heartbeat 显示 `loaded=false` 且同时提供 `MacLaunchAgentLoad=` / `MacLaunchAgentPrint=`，Windows 最小化窗口也应弹本机提醒；现场继续按 `MacHostStop=` -> `MacLaunchAgentLoad=` -> `MacLaunchAgentPrint=` -> `MacUnattendedFormal=` 处理。
+是否改了协议：否；只消费已有通讯板/诊断文本里的安全命令标签。
+是否需要另一端配合：后续真实执行 LaunchAgent 加载、打印验证和 formal 60Hz 强校验时需要 Mac 端或用户配合。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端消费 Mac heartbeat/readiness/unattended 里的 `MacLaunchAgentLoad=` / `MacLaunchAgentPrint=`，在 60Hz LaunchAgent 切换场景给出中文提示。
 完成内容：
 - Windows 控制端 Mac 提醒解析新增 `MacLaunchAgentLoad=` / `MacLaunchAgentPrint=` 识别：同段摘要有 warning/blocker、旧 build、重启建议、`fps-limit`、`launch-agent-max-fps` 或 `loaded=false` 等上下文时，会显示“Mac LaunchAgent 加载命令已提供”“Mac LaunchAgent 打印验证命令已提供”。
