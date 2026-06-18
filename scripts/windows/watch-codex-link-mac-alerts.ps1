@@ -102,6 +102,7 @@ $urgentPatterns = @(
     "temporary reverse",
     "MacUnattendedStatus.*(attention=(warning|blocker|failed)|ready=false|$findingFieldPattern)",
     "Mac unattended status.*(attention=(warning|blocker|failed)|ready=false|$findingFieldPattern)",
+    "(MacHostReadiness|Mac host readiness|check-mac-host-readiness).*(ready with warnings|attention=(warning|blocker|failed)|ready=false|$findingFieldPattern)",
     "(MacClient(Readiness|Formal)|Mac client (readiness|formal)|Mac formal E2E status|MacFormalE2EStatus|check-mac-(client-readiness|client-formal-status|formal-e2e-status)).*(ready with warnings|attention=(warning|blocker|failed)|ready=false|$findingFieldPattern)",
     "MacLaunchAgentPlan.*(missing|not-loaded|disabled|failed|enable|install|repair|fix|warning|blocker)",
     "\bwarnings\s*[:=]\s*$nonEmptyFindingValuePattern",

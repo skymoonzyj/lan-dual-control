@@ -453,6 +453,39 @@ async function checkMacClientFormalCleanIgnored(args) {
   console.log("[OK] Mac client/formal clean statuses are ignored");
 }
 
+async function checkMacHostReadinessFindingsAlert(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: "MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall",
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "Mac host readiness findings status");
+  assertIncludes(output, "MacHostReadiness=attention", "Mac host readiness findings status");
+  assertIncludes(output, "warnings=mac-host-discovery", "Mac host readiness findings status");
+  assertIncludes(output, "agent-link-board-currentcall", "Mac host readiness findings status");
+  console.log("[OK] Mac host readiness finding status alerts");
+}
+
+async function checkMacHostReadinessCleanIgnored(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: "check-mac-host-readiness ready blockers=none warnings=none",
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertNotIncludes(output, "ALERT:", "Mac host readiness clean status");
+  console.log("[OK] Mac host readiness clean status is ignored");
+}
+
 async function checkStartWrapperJsonStatus(args) {
   const basePath = resolve(repoRoot, ".dev-lab", `mac-alert-watcher-json-status-${process.pid}-${Date.now()}`);
   const pidFile = `${basePath}.pid`;
@@ -626,6 +659,8 @@ async function main() {
   await checkMacUnattendedOkStatusIgnored(args);
   await checkMacClientFormalFindingsAlert(args);
   await checkMacClientFormalCleanIgnored(args);
+  await checkMacHostReadinessFindingsAlert(args);
+  await checkMacHostReadinessCleanIgnored(args);
   await checkStartWrapperJsonStatus(args);
   if (args.includeLifecycle) {
     await checkStartWrapperLifecycle(args);

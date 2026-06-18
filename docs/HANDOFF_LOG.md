@@ -21,6 +21,44 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows 侧对齐 Mac 最新 host readiness `blockers=` / `warnings=` 明细。
+完成内容：
+- Windows Mac 提醒 watcher 显式识别 `MacHostReadiness`、`Mac host readiness` 和 `check-mac-host-readiness` 摘要里的非空 `warnings=` / `blockers=`，`warnings=none blockers=none` 仍不提醒。
+- Windows 控制端 Mac 值守风险中文映射新增 `mac-host-discovery`、`mac-host-media-aggregate`、`agent-link-board-currentcall`、Mac host build/helper/runtime/display 等短标签，Mac 提醒区和复制/导出诊断会显示“Mac host 发现需检查”“联络板当前呼叫需协调”等中文风险。
+- 页面 diagnostics-only 回归把 Mac host readiness findings 加入 watcher 假状态，确认 Mac 提醒面板、快速摘要、Mac 值守详情和 Mac 提醒详情都保留中文风险与原始短标签证据。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- PowerShell AST 解析 `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- PowerShell 7 AST 解析 `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5207 --debugPort 9347 --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --clientPort 5208 --debugPort 9348 --timeoutMs 45000`
+- `node scripts/windows/test-windows-powershell-help.mjs --script watch-codex-link-mac-alerts.ps1 --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --script watch-codex-link-mac-alerts.ps1 --timeoutMs 10000 --boardSummary`
+遗留问题：
+- 本轮只增强 Windows 侧提醒和中文风险可见性；不认证真实 WebSocket、不请求密码、不发送 input/inject。
+下一步建议：
+- Mac 端继续保持 readiness/formal 摘要使用稳定短标签；Windows 侧后续可继续把新增短标签纳入中文映射。
+是否改了协议：否。
+是否需要另一端配合：否。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：复核正式 E2E 第二步，并把 Mac findings 中文风险直接前置到 Windows 控制端“Mac 提醒”面板。
 完成内容：
 - 重新复核真实 Mac `192.168.31.122:43770`：无密 formal preflight ready，Mac 端权限/H.264/系统 PCM/文本与文件剪贴板/inputMode=log 均通过；干净备用端口 `5202/9342` 的 Windows client diagnostics-only 通过。
