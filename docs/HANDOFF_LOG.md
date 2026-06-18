@@ -21,6 +21,43 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows 侧消费 Mac unattended 新增 `launch-agent-max-fps` 摘要。
+完成内容：
+- Windows 控制端 Mac 值守风险中文映射新增 `launch-agent-max-fps` / `launch-agent-max-screen-fps`，Mac 提醒区和复制/导出诊断会把 `launch-agent-max-fps` 显示为“LaunchAgent 刷新率上限需调整”。
+- `test-mac-alert-watcher` 的 Mac unattended fake 摘要对齐 Mac 最新真实格式：`warnings=launch-agent-missing,launch-agent-not-loaded,launch-agent-max-fps,power-risk`，确认 watcher 保留该短标签证据。
+- 页面 diagnostics-only 回归把 `launch-agent-max-fps` 加入 watcher 假状态，确认 Mac 提醒详情和复制文本保留原始短标签，中文风险里显示 LaunchAgent 刷新率上限提示。
+修改文件：
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5225 --debugPort 9365 --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --clientPort 5226 --debugPort 9366 --timeoutMs 45000`
+- 合入 Mac 最新 `6082a12` 后复跑：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --clientPort 5227 --debugPort 9367 --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script test-mac-alert-watcher.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows apps/windows-client docs`（无匹配）
+遗留问题：
+- 本轮只增强 Windows 侧提醒和中文风险可见性；不认证真实 WebSocket、不请求密码、不发送 input/inject。
+下一步建议：
+- Mac 端实际写入/加载 LaunchAgent maxScreenFps=60 并重启 host 后，Windows 端再复跑值守/status 摘要，确认 `warnings=launch-agent-max-fps` 消失。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真正消除 warning 需要 Mac 端调整 LaunchAgent 并加载/重启 host。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows 侧消费 Mac host readiness 新增 `mac-host-max-fps` 摘要。
 完成内容：
 - Windows 控制端 Mac 值守风险中文映射新增 `mac-host-max-fps` / `mac-host-max-screen-fps`，Mac 提醒区和复制/导出诊断会把 `mac-host-max-fps` 显示为“Mac host 刷新率上限需调整”。

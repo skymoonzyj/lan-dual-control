@@ -1318,18 +1318,18 @@ async function verifyDesktopOnlyHostPanel(session) {
                   at: "2026-06-18 10:31:00",
                   title: "Mac side status alert - Mac Codex",
                   message:
-                    "MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
+                    "MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
                   summary:
-                    "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
+                    "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
                 },
               ],
               lastAlert: {
                 at: "2026-06-18 10:31:00",
                 title: "Mac side status alert - Mac Codex",
                 message:
-                  "MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
+                  "MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
                 summary:
-                  "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
+                  "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
               },
               message: "Mac alert watcher is running.",
             }, { available: true, busy: false })
@@ -1650,7 +1650,7 @@ async function verifyDesktopOnlyHostPanel(session) {
           watcherRunningView.statusText.includes("认证/密码步骤待确认") &&
           watcherRunningView.statusText.includes("Windows 被控端未指定或未就绪") &&
           watcherRunningView.statusText.includes("仓库状态需检查") &&
-          watcherRunningView.statusText.includes("Mac 刷新率上限需调整") &&
+          watcherRunningView.statusText.includes("LaunchAgent 刷新率上限需调整") &&
           watcherStoppedView.running === false &&
           watcherStoppedView.badgeText === "未开启" &&
           watcherStoppedView.toggleText === "开启提醒" &&
@@ -2905,7 +2905,7 @@ async function verifyReconnectControls(session) {
         const watcherStatus = document.querySelector("#localMacAlertWatcherStatusText");
         if (watcherStatus) {
           watcherStatus.textContent =
-            "Windows 浮窗提醒已开启，监听测试联络板。MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board";
+            "Windows 浮窗提醒已开启，监听测试联络板。MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board";
         }
         state.localHostRunning = true;
         state.localHostOnline = true;
@@ -3044,7 +3044,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("认证/密码步骤待确认") &&
             exportText.includes("Windows 被控端未指定或未就绪") &&
             exportText.includes("仓库状态需检查") &&
-            exportText.includes("Mac 刷新率上限需调整") &&
+            exportText.includes("LaunchAgent 刷新率上限需调整") &&
             exportText.includes("- Mac 值守说明：Windows 已从 Mac 提醒 watcher 状态里识别到值守 warnings/blockers"),
           reconnectReason: exportText.includes("- 重连原因：测试断线"),
           reconnectNext: exportText.includes("- 下次重连："),
@@ -3057,7 +3057,7 @@ async function verifyReconnectControls(session) {
           macAlertStatus: exportText.includes("- Mac 提醒：提醒中"),
           macAlertDetail:
             exportText.includes("- Mac 提醒详情：Windows 浮窗提醒已开启") &&
-            exportText.includes("warnings=launch-agent-missing,power-risk") &&
+            exportText.includes("warnings=launch-agent-missing,launch-agent-max-fps,power-risk") &&
             exportText.includes("warnings: video,build,auth,windows-host,repo") &&
             exportText.includes("warnings=h264-fallback,fps-limit") &&
             exportText.includes("warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps") &&
@@ -3121,7 +3121,8 @@ async function verifyReconnectControls(session) {
           copiedText.includes("认证/密码步骤待确认") &&
           copiedText.includes("Windows 被控端未指定或未就绪") &&
           copiedText.includes("仓库状态需检查") &&
-          copiedText.includes("Mac 刷新率上限需调整") &&
+          copiedText.includes("LaunchAgent 刷新率上限需调整") &&
+          copiedText.includes("launch-agent-max-fps") &&
           copiedText.includes("mac-host-max-fps") &&
           copiedText.includes("host-build-test") &&
           copiedText.includes("辅助功能未开") &&

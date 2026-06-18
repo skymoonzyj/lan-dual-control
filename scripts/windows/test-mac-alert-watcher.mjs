@@ -253,7 +253,7 @@ async function checkMacUnattendedEventAlerts(args) {
       from: "Mac Codex",
       text: [
         "Mac unattended status: ready=false attention=warning",
-        "warnings=launch-agent-missing,launch-agent-not-loaded,power-risk",
+        "warnings=launch-agent-missing,launch-agent-not-loaded,launch-agent-max-fps,power-risk",
         "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --boardSummary",
       ].join(" "),
     }],
@@ -261,6 +261,7 @@ async function checkMacUnattendedEventAlerts(args) {
   assertIncludes(output, "ALERT:", "Mac unattended event");
   assertIncludes(output, "Mac unattended status", "Mac unattended event");
   assertIncludes(output, "warnings=launch-agent-missing", "Mac unattended event");
+  assertIncludes(output, "launch-agent-max-fps", "Mac unattended event");
   assertIncludes(output, "MacUnattendedStatus=", "Mac unattended event");
   console.log("[OK] Mac unattended warning events alert");
 }
@@ -388,7 +389,7 @@ async function checkMacUnattendedStatusAlerts(args) {
       "Mac Codex": {
         role: "Mac 端",
         status: "idle",
-        note: "MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none",
+        note: "MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none",
         updatedAt: new Date().toISOString(),
       },
     },
@@ -396,6 +397,7 @@ async function checkMacUnattendedStatusAlerts(args) {
   assertIncludes(output, "ALERT:", "Mac unattended status");
   assertIncludes(output, "MacUnattendedStatus=", "Mac unattended status");
   assertIncludes(output, "warnings=launch-agent-missing", "Mac unattended status");
+  assertIncludes(output, "launch-agent-max-fps", "Mac unattended status");
   console.log("[OK] Mac unattended status alerts");
 }
 

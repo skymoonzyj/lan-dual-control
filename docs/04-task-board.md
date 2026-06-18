@@ -14,6 +14,7 @@
 - [x] Windows 侧联络板 Mac 提醒 watcher 可后台运行：优先 PowerShell 7，Mac 授权/权限/502/blocked/长时间无更新、Mac 发给 Windows 的 active currentCall，以及 Mac 反控请求 `LAN008` 后等待 Windows `ReverseGrant` 临时授权都会弹本机提醒；支持状态/停止/重启、防重复启动和 `-Json` 机器可读输出，并有无弹窗自动回归。
 - [x] Windows Mac 提醒 watcher 状态 JSON 输出最近提醒：`start-mac-alert-watcher.ps1 -Status -Json` 会从 stdout 日志解析 `recentAlerts` / `lastAlert`，不泄露 token，供桌面壳和控制端复制诊断显示最近一条 Mac 授权/权限/值守提醒。
 - [x] Windows Mac 提醒 watcher 识别 Mac 值守风险摘要：`MacUnattendedStatus`、`warnings=`、`blockers=`、LaunchAgent 缺失/未加载、电源或睡眠风险会触发 Windows 本机提醒，方便远控窗口最小化时透传 Mac 值守问题。
+- [x] Windows 控制端对齐 Mac unattended LaunchAgent 刷新率上限明细：`warnings=launch-agent-max-fps` 会被翻译成“LaunchAgent 刷新率上限需调整”，并保留原始短标签到复制/导出诊断。
 - [x] Windows Mac 提醒 watcher 显式识别 Mac client readiness/formal 与 formal E2E status 明细：`warnings=windows-host`、`warnings=video,build,auth` 或人工文本里的 `warnings:` / `blockers:` 会触发提醒，`warnings=none blockers=none` 不提醒。
 - [x] Windows Mac 提醒 watcher 对齐 Mac host readiness 明细：`MacHostReadiness` / `check-mac-host-readiness` 摘要里的 `warnings=mac-host-discovery`、`warnings=agent-link-board-currentcall` 或非空 `blockers=` 会触发提醒，控制端会翻译成“Mac host 发现需检查”“联络板当前呼叫需协调”等中文风险。
 - [x] Windows Mac 提醒 watcher 对齐 Mac formal smoke 明细：`run-mac-client-formal-smoke` / `MacClientFormalSmoke` 摘要里的 `preflight blockers=windows-host warnings=board` 会触发提醒，控制端会翻译成“Windows 被控端未指定或未就绪”“联络板状态需检查”等中文风险。

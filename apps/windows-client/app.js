@@ -239,6 +239,8 @@ const macUnattendedRiskLabels = {
   "launch-agent-not-loaded": "自启动未加载",
   "launch-agent-disabled": "自启动已停用",
   "launch-agent-failed": "自启动失败",
+  "launch-agent-max-fps": "LaunchAgent 刷新率上限需调整",
+  "launch-agent-max-screen-fps": "LaunchAgent 刷新率上限需检查",
   "launch-agent": "自启动需检查",
   "power": "电源设置需检查",
   "power-risk": "电源设置可能导致睡眠断连",
