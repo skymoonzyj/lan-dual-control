@@ -179,6 +179,11 @@ Machine-readable JSON fields:
   commands.safeStartCommand  Secret-free foreground start command preserving the
                              checked port; it prompts locally and never embeds
                              a password in argv.
+  commands.macMaxFpsSafeStartCommand
+                             Secret-free foreground start command for the
+                             formal 60Hz target. It preserves the checked port,
+                             prompts locally, keeps log input mode, and never
+                             embeds a password in argv.
   commands.ephemeralStartCommand
                              Secret-free temporary discovery/runtime start
                              command preserving the checked port; it generates
@@ -386,6 +391,20 @@ function makeSafeStartCommand(args) {
   ].join(" ");
 }
 
+function makeMacMaxFpsSafeStartCommand(args) {
+  return [
+    "node scripts/mac/start-mac-host.mjs",
+    "--promptPassword",
+    "--requirePassword",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    String(args.port),
+    "--maxScreenFps",
+    String(formalTargetMaxScreenFps),
+  ].join(" ");
+}
+
 function makeEphemeralStartCommand(args) {
   return [
     "node scripts/mac/start-mac-host.mjs",
@@ -555,6 +574,7 @@ function formatStatusBoardSummary(payload) {
     return [
       `Mac host status: offline at ${payload.probe.host}:${payload.probe.port}; ${callSummary}.`,
       `MacHostSafeStart=${payload.commands?.safeStartCommand || "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword"}.`,
+      `MacMaxFpsSafeStart=${payload.commands?.macMaxFpsSafeStartCommand || "not-available"}.`,
       `Next: start safely with ${payload.commands?.safeStartCommand || "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword"}.`,
       `MacLaunchAgentPlan=${payload.commands?.macLaunchAgentPlanCommand || "not-available"}.`,
       `MacMaxFpsPlan=${payload.commands?.macMaxFpsPlanCommand || "not-available"}.`,
@@ -583,6 +603,7 @@ function formatStatusBoardSummary(payload) {
     `Mac host status: online ${target}; runtimeBuild=${runtimeBuild} inputMode=${payload.inputMode || "unknown"}; ${callSummary}.`,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${formatStatusBuildDiff(payload.buildDiff)}.`,
     `MacHostSafeStart=${payload.commands?.safeStartCommand || "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword"}.`,
+    `MacMaxFpsSafeStart=${payload.commands?.macMaxFpsSafeStartCommand || "not-available"}.`,
     `MacLaunchAgentPlan=${payload.commands?.macLaunchAgentPlanCommand || "not-available"}.`,
     `MacMaxFpsPlan=${payload.commands?.macMaxFpsPlanCommand || "not-available"}.`,
     `MacUnattendedFormal=${payload.commands?.macUnattendedFormalCommand || "not-available"}.`,
@@ -871,6 +892,9 @@ async function printStatus(args) {
       buildDiff,
       board,
       commands: {
+        safeStartCommand: makeSafeStartCommand(args),
+        macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
+        ephemeralStartCommand: makeEphemeralStartCommand(args),
         macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
         macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
         macUnattendedFormalCommand: makeMacUnattendedFormalCommand(args),
@@ -914,6 +938,8 @@ async function printStatus(args) {
       printBuildMismatchStatus(buildDiff);
     }
     console.log(`[INFO] Mac host media baseline: ${payload.commands.mediaReadinessBoardSummary}`);
+    console.log(`[INFO] Mac host safe foreground start: ${payload.commands.safeStartCommand}`);
+    console.log(`[INFO] Mac host 60Hz safe foreground start: ${payload.commands.macMaxFpsSafeStartCommand}`);
     console.log(`[INFO] Mac host LaunchAgent dry-run plan: ${payload.commands.macLaunchAgentPlanCommand}`);
     console.log(`[INFO] Mac host max FPS dry-run plan: ${payload.commands.macMaxFpsPlanCommand}`);
     console.log(`[INFO] Mac host unattended formal gate: ${payload.commands.macUnattendedFormalCommand}`);
@@ -932,6 +958,7 @@ async function printStatus(args) {
       board,
       commands: {
         safeStartCommand: makeSafeStartCommand(args),
+        macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
         ephemeralStartCommand: makeEphemeralStartCommand(args),
         macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
         macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
@@ -940,6 +967,7 @@ async function printStatus(args) {
       },
       suggestions: [
         makeSafeStartCommand(args),
+        makeMacMaxFpsSafeStartCommand(args),
         makeEphemeralStartCommand(args),
       ],
     };
@@ -965,6 +993,7 @@ async function printStatus(args) {
       console.log("[INFO] Agent Link Board: not checked; add --checkBoard when coordinating with Windows Codex.");
     }
     console.log(`[INFO] Start safely with: ${payload.commands.safeStartCommand}`);
+    console.log(`[INFO] For formal 60Hz foreground start: ${payload.commands.macMaxFpsSafeStartCommand}`);
     console.log(`[INFO] For temporary discovery/runtime diagnostics without sharing a password: ${payload.commands.ephemeralStartCommand}`);
     console.log(`[INFO] Mac host LaunchAgent dry-run plan: ${payload.commands.macLaunchAgentPlanCommand}`);
     console.log(`[INFO] Mac host max FPS dry-run plan: ${payload.commands.macMaxFpsPlanCommand}`);
