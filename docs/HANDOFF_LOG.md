@@ -21,6 +21,36 @@
 
 日期：2026-06-18 继续推进
 开发端：Mac Codex
+本轮目标：Mac 恢复总览摘要显式输出安全前台启动标签。
+完成内容：
+- `check-mac-resume-status --boardSummary` 离线和在线路径都新增 `MacHostSafeStart=`，复用现有 `commands.macHostSafeStartCommand`。
+- 离线摘要保留说明“先用 MacHostSafeStart 启动正式 host，再做 Windows E2E”，同时 `MacHostSafeStart=` 会保留当前 `--port <端口>`。
+- 普通输出新增 `Mac host safe start` 下一步行，便于不用 JSON/boardSummary 时也能直接复制。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 30000`
+- `node scripts/mac/check-mac-resume-status.mjs --host 127.0.0.1 --port 43888 --checkBoard --boardSummary`（确认一行摘要包含 `MacHostSafeStart=` 且保留 `--port 43888`）
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/mac/check-mac-resume-status.mjs scripts/mac/test-mac-resume-status.mjs docs/HANDOFF_LOG.md docs/ACTIVE_LOCKS.md docs/04-task-board.md`
+遗留问题：
+- 本轮只补恢复总览里的结构化安全启动标签；没有实际启动、写入或加载 LaunchAgent。
+下一步建议：
+- 后续若要消除真实 Mac host `maxScreenFps=30`，仍需现场授权后走 LaunchAgent 写入/加载/重启，再让 Windows 侧复跑双门禁 formal preflight。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；后续真实 60Hz 复验需要 Windows 端跑只读检查。
+
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
 本轮目标：Mac 值守检查摘要补齐安全前台启动入口。
 完成内容：
 - `check-mac-unattended-status` 的 JSON `commands` 新增 `macHostSafeStart`，命令为 `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port <当前端口>`。

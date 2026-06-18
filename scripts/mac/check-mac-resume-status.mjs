@@ -873,7 +873,8 @@ function formatBoardSummary(report) {
   if (!host.online) {
     return [
       `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
-      `Next: start formal host with ${report.commands.macHostSafeStartCommand} before Windows E2E.`,
+      `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
+      "Next: start the formal host with MacHostSafeStart before Windows E2E.",
       `After host is online, refresh media baseline with ${report.commands.mediaReadinessBoardSummary}.`,
       `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
       `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
@@ -903,6 +904,7 @@ function formatBoardSummary(report) {
   return [
     `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}.`,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
+    `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
     `Media baseline command: ${report.commands.mediaReadinessBoardSummary}.`,
     `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
     `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
@@ -981,6 +983,7 @@ function printReport(report) {
   }
   console.log(`[NEXT] Mac formal local smoke: ${report.commands.macFormalLocalSmokeCommand}`);
   console.log(`[NEXT] Mac formal E2E preflight: ${report.commands.macFormalE2eStatusCommand}`);
+  console.log(`[NEXT] Mac host safe start: ${report.commands.macHostSafeStartCommand}`);
   console.log(`[NEXT] Mac unattended/startup status: ${report.commands.macUnattendedStatusCommand}`);
   console.log(`[NEXT] Mac unattended formal 60Hz gate: ${report.commands.macUnattendedFormalCommand}`);
   console.log(`[NEXT] Mac LaunchAgent dry-run plan: ${report.commands.macLaunchAgentPlanCommand}`);

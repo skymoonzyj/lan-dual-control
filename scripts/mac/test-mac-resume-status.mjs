@@ -158,6 +158,10 @@ function assertBoardSummaryShape(text, label) {
   assert(/check-mac-formal-local-smoke\.mjs/.test(text), `${label} should include the Mac formal local smoke command`);
   assert(/MacFormalE2E=/.test(text), `${label} should include Mac formal E2E preflight guidance`);
   assert(/check-mac-formal-e2e-status\.mjs/.test(text), `${label} should include the Mac formal E2E preflight command`);
+  assert(/MacHostSafeStart=/.test(text), `${label} should include Mac host safe start guidance`);
+  assert(/start-mac-host\.mjs/.test(text), `${label} should include the Mac host safe start command`);
+  assert(/--promptPassword/.test(text), `${label} should make password prompting explicit for safe start`);
+  assert(/--requirePassword/.test(text), `${label} should require a password for safe start`);
   assert(/MacUnattendedStatus=/.test(text), `${label} should include Mac unattended/startup guidance`);
   assert(/check-mac-unattended-status\.mjs/.test(text), `${label} should include the Mac unattended/startup command`);
   assert(/MacUnattendedFormal=/.test(text), `${label} should include Mac unattended formal max-FPS guidance`);
@@ -460,7 +464,7 @@ function checkOfflineBoardSummary(args) {
   assert(/Mac host offline/.test(text), "offline board summary should mention host offline");
   assert(/blockers=none/.test(text), "offline board summary should explicitly report no blockers");
   assert(/warnings=[^.]*host-offline/.test(text), "offline board summary should include warning IDs");
-  assert(/start formal host/.test(text), "offline board summary should include formal host start guidance");
+  assert(/MacHostSafeStart=/.test(text), "offline board summary should include formal host safe start guidance");
   assert(/--host 0\.0\.0\.0 --port 9/.test(text), "offline board summary should keep formal host start target");
   print("OK", "Offline board summary is short, secret-free, and actionable");
 }
