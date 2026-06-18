@@ -218,6 +218,11 @@ Machine-readable JSON fields:
                             the formal 60Hz target. It only prints a plan and
                             does not write files, load launchctl, start Mac
                             host, request a password, or send input.
+  commands.macUnattendedFormalCommand
+                            Secret-free read-only formal unattended gate. It
+                            turns missing or low LaunchAgent maxScreenFps into
+                            a blocker without writing files, loading launchctl,
+                            requesting a password, or sending input.
 `);
 }
 
@@ -686,6 +691,7 @@ function formatReadinessBoardSummary(summary) {
     `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${hostMedia ? `; ${hostMedia}` : ""}; ${formatBoardCallSummary(summary.board)}.`,
     `MacLaunchAgentPlan=${summary.commands?.macLaunchAgentPlanCommand || makeMacLaunchAgentPlanCommand(summary.args || {})}.`,
     `MacMaxFpsPlan=${summary.commands?.macMaxFpsPlanCommand || makeMacMaxFpsPlanCommand(summary.args || {})}.`,
+    `MacUnattendedFormal=${summary.commands?.macUnattendedFormalCommand || makeMacUnattendedFormalCommand(summary.args || {})}.`,
     "Next: fix failed checks before formal E2E; keep inputMode=log for unattended checks.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
@@ -746,6 +752,18 @@ function makeMacMaxFpsPlanCommand(args = {}) {
     String(args.port || 43770),
     "--maxScreenFps",
     String(formalTargetMaxScreenFps),
+    "--boardSummary",
+  ].join(" ");
+}
+
+function makeMacUnattendedFormalCommand(args = {}) {
+  return [
+    "node scripts/mac/check-mac-unattended-status.mjs",
+    "--host",
+    args.host || "127.0.0.1",
+    "--port",
+    String(args.port || 43770),
+    "--requireLaunchAgentMaxFps",
     "--boardSummary",
   ].join(" ");
 }
@@ -1237,6 +1255,7 @@ async function main() {
     commands: {
       macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
       macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
+      macUnattendedFormalCommand: makeMacUnattendedFormalCommand(args),
     },
     results: results.map((result) => ({
       label: result.label,
@@ -1275,6 +1294,7 @@ async function main() {
     }
     print("NEXT", `Mac LaunchAgent dry-run plan: ${summary.commands.macLaunchAgentPlanCommand}`, args);
     print("NEXT", `Mac max FPS dry-run plan: ${summary.commands.macMaxFpsPlanCommand}`, args);
+    print("NEXT", `Mac unattended formal 60Hz gate: ${summary.commands.macUnattendedFormalCommand}`, args);
   }
 
   if (!ok) {
