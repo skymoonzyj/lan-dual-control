@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac resume 摘要暴露稳定媒体基线标签。
+完成内容：
+- `check-mac-resume-status --json/--boardSummary` 现在输出 `commands.macHostMediaCommand` / `MacHostMedia=node scripts/mac/check-mac-host-readiness.mjs --host <host> --port <port> --checkBoard --probeMedia --probeMediaResourceSample --promptPassword --boardSummary`。
+- 旧字段 `commands.mediaReadinessBoardSummary` 保留，新的 `macHostMediaCommand` 是同一条安全命令的稳定别名，便于 Windows 端或人工只看一行摘要时直接复制媒体基线检查入口。
+- 该命令只作为提示输出，不自动运行；真正执行时会本地可见地提示输入密码，不在 argv、通讯板或日志里放密码，也不认证、不发送 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000` 失败在 help 缺 `commands.macHostMediaCommand`。
+- 绿灯：实现后复跑同一自测通过。
+遗留问题：
+- 本轮只补 Mac resume 摘要标签，没有重启 Mac host、请求密码、认证真实 host、发送 call/input 或执行 `inject`。
+下一步建议：
+- 后续正式长测前，Windows 或人工看到 `MacResumeStatus=` 后可直接复制其中的 `MacHostMedia=`，让 Mac 端刷新 H.264/PCM 媒体基线，再进入 formal E2E。
+是否改了协议：否；只补 Mac resume status 的安全命令标签。
+是否需要另一端配合：本轮不需要；Windows 端可后续按需消费该标签。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac heartbeat 摘要也暴露恢复总览入口。
 完成内容：
 - `check-mac-heartbeat --json/--boardSummary` 现在输出 `commands.macResumeStatusCommand` / `MacResumeStatus=node scripts/mac/check-mac-resume-status.mjs --host <host> --port <port> --checkBoard --boardSummary`。

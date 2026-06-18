@@ -56,6 +56,10 @@ Machine-readable JSON fields:
                              Secret-free Mac media baseline command for
                              formal-run prep; it prompts for a password and
                              never embeds one in argv.
+  commands.macHostMediaCommand
+                             Stable alias for the Mac media baseline command;
+                             board summaries expose it as MacHostMedia= for
+                             easier cross-end copying.
   commands.macHostSafeStartCommand
                              Secret-free foreground Mac host start command
                              preserving the checked port; it prompts locally
@@ -1066,8 +1070,8 @@ function formatBoardSummary(report) {
       `MacLaunchAgentLoad=${report.commands.macLaunchAgentLoadCommand}.`,
       `MacLaunchAgentPrint=${report.commands.macLaunchAgentPrintCommand}.`,
       `MacHostReadiness=${report.commands.macHostReadinessCommand}.`,
-      "Next: start the formal host with MacHostSafeStart, or MacMaxFpsSafeStart for foreground 60Hz validation, before Windows E2E.",
-      `After host is online, refresh media baseline with ${report.commands.mediaReadinessBoardSummary}.`,
+      "Next: start the formal host with MacHostSafeStart, or MacMaxFpsSafeStart for foreground 60Hz validation, before Windows E2E; after host is online run MacHostMedia for the media baseline.",
+      `MacHostMedia=${report.commands.macHostMediaCommand}.`,
       `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
       `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
       `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
@@ -1107,7 +1111,8 @@ function formatBoardSummary(report) {
     `MacLaunchAgentLoad=${report.commands.macLaunchAgentLoadCommand}.`,
     `MacLaunchAgentPrint=${report.commands.macLaunchAgentPrintCommand}.`,
     `MacHostReadiness=${report.commands.macHostReadinessCommand}.`,
-    `Media baseline command: ${report.commands.mediaReadinessBoardSummary}.`,
+    `MacHostMedia=${report.commands.macHostMediaCommand}.`,
+    "Media baseline command: run MacHostMedia before long formal H.264/PCM validation.",
     `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
     `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
     `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
@@ -1256,6 +1261,7 @@ async function main() {
     host,
     commands: {
       mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
+      macHostMediaCommand: makeMediaReadinessBoardSummaryCommand(args),
       macHostSafeStartCommand: makeMacHostSafeStartCommand(args),
       macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
       macHostStopCommand: makeMacHostStopCommand(args),

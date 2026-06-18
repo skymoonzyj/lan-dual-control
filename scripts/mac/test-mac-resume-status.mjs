@@ -156,6 +156,8 @@ function assertBoardSummaryShape(text, label) {
   assert(/lastHeartbeat=/.test(text), `${label} should include the last Mac heartbeat watcher observation`);
   assert(/media baseline/i.test(text), `${label} should include media baseline guidance`);
   assert(/check-mac-host-readiness\.mjs/.test(text), `${label} should include the media readiness command`);
+  assert(/MacHostMedia=/.test(text), `${label} should include stable Mac host media baseline guidance`);
+  assert(/MacHostMedia=.*check-mac-host-readiness\.mjs/.test(text), `${label} should include the stable Mac host media command`);
   assert(/MacFormalLocalSmoke=/.test(text), `${label} should include Mac formal local smoke guidance`);
   assert(/check-mac-formal-local-smoke\.mjs/.test(text), `${label} should include the Mac formal local smoke command`);
   assert(/MacFormalE2E=/.test(text), `${label} should include Mac formal E2E preflight guidance`);
@@ -517,6 +519,7 @@ function checkHelp(args) {
     assert(result.status === 0, `${script} ${flag} should exit 0`);
     assert(/\bUsage\b/.test(result.stdout), `${script} ${flag} should print Usage`);
     assert(/commands\.mediaReadinessBoardSummary/.test(result.stdout), `${script} ${flag} should document media command JSON field`);
+    assert(/commands\.macHostMediaCommand/.test(result.stdout), `${script} ${flag} should document stable Mac host media JSON field`);
     assert(/commands\.macHostSafeStartCommand/.test(result.stdout), `${script} ${flag} should document Mac host safe start JSON field`);
     assert(/commands\.macMaxFpsSafeStartCommand/.test(result.stdout), `${script} ${flag} should document Mac foreground 60Hz safe start JSON field`);
     assert(/commands\.macHostReadinessCommand/.test(result.stdout), `${script} ${flag} should document Mac host readiness JSON field`);
@@ -564,6 +567,11 @@ function checkOfflineJson(args) {
     assert(payload.recommendations.some((item) => item.id === "heartbeat-watcher-not-running"), "offline recommendations should flag a stopped Mac heartbeat watcher");
   }
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary || "", "offline JSON media readiness command");
+  assertMediaReadinessCommand(payload.commands?.macHostMediaCommand || "", "offline JSON Mac host media command");
+  assert(
+    payload.commands?.macHostMediaCommand === payload.commands?.mediaReadinessBoardSummary,
+    "offline JSON Mac host media command should alias the legacy media readiness command",
+  );
   assertMacHostSafeStartCommand(payload.commands?.macHostSafeStartCommand || "", "offline JSON Mac host safe start command");
   assert((payload.commands?.macHostSafeStartCommand || "").includes("--port 9"), "offline JSON Mac host safe start command should keep port");
   assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand || "", "offline JSON Mac foreground 60Hz safe start command");
@@ -729,6 +737,11 @@ function checkOnlineJson(args) {
   assert(payload.macHeartbeatWatcher?.checked === true, "online payload should include Mac heartbeat watcher status");
   assert(typeof payload.macHeartbeatWatcher.running === "boolean", "online payload should include Mac heartbeat watcher running flag");
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary || "", "online JSON media readiness command");
+  assertMediaReadinessCommand(payload.commands?.macHostMediaCommand || "", "online JSON Mac host media command");
+  assert(
+    payload.commands?.macHostMediaCommand === payload.commands?.mediaReadinessBoardSummary,
+    "online JSON Mac host media command should alias the legacy media readiness command",
+  );
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand || "", "online JSON Mac formal local smoke command");
   assertMacHostSafeStartCommand(payload.commands?.macHostSafeStartCommand || "", "online JSON Mac host safe start command");
   assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand || "", "online JSON Mac foreground 60Hz safe start command");
