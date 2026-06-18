@@ -98,6 +98,12 @@ function assertRunPlanSafe(payload, label, expectations = {}) {
       Number(protocolStep.expectedDurationMs || 0) === expectedProtocolMs,
       `${label} should report sequential video/audio probe duration`,
     );
+    assert(Array.isArray(protocolStep.troubleshootingHints), `${label} protocol step should include troubleshooting hints`);
+    const protocolHintText = protocolStep.troubleshootingHints.join("\n");
+    assertIncludes(protocolHintText, "First H.264 frame", `${label} protocol troubleshooting hints`);
+    assertIncludes(protocolHintText, "per-wait timeout", `${label} protocol troubleshooting hints`);
+    assertNotIncludes(protocolHintText, "test-password", `${label} protocol troubleshooting hints`);
+    assertNotIncludes(protocolHintText, "demo-password", `${label} protocol troubleshooting hints`);
   }
   if (Object.prototype.hasOwnProperty.call(expectations, "audioSkipped")) {
     assert(plan.audio?.skipped === expectations.audioSkipped, `${label} audio skipped mismatch`);
@@ -322,6 +328,8 @@ async function testOfflinePreflight(args) {
   assertIncludes(result.stdout, "- connection:", "offline text preflight");
   assertIncludes(result.stdout, "- diagnostics:", "offline text preflight");
   assertIncludes(result.stdout, "Plan 2 hint:", "offline text preflight browser hints");
+  assertIncludes(result.stdout, "Plan 1 hint:", "offline text preflight protocol hints");
+  assertIncludes(result.stdout, "per-wait timeout=30s", "offline text preflight timeout wording");
   assertIncludes(result.stdout, "WinClientPorts", "offline text preflight browser hints");
   assertIncludes(result.stdout, "WindowsLanRisk", "offline text preflight browser hints");
   assertNotIncludes(result.stdout + result.stderr, "Mac host password", "offline text preflight");

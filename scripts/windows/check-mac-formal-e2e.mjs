@@ -279,6 +279,19 @@ function makeManualChecklist(args) {
   ];
 }
 
+function makeProtocolTroubleshootingHints(args) {
+  const videoText = formatDurationMs(args.videoDurationMs);
+  const audioText = args.skipAudio ? "" : `, then audio for ${formatDurationMs(args.audioDurationMs)}`;
+  const progressText = Number(args.progressIntervalMs) > 0
+    ? `progress snapshots every ${formatDurationMs(args.progressIntervalMs)}`
+    : "progress snapshots are disabled by --progressIntervalMs 0";
+  return [
+    `First H.264 frame only confirms capture startup; Plan 1 still observes video for ${videoText}${audioText} before clipboard and input-log checks.`,
+    `The per-wait timeout is ${formatDurationMs(args.timeoutMs)}; it guards one missing frame/message, not the total media observation window.`,
+    `Watch ${progressText}; if they stop changing, check Mac host capture/audio before judging the Windows browser step.`,
+  ];
+}
+
 function makeBrowserTroubleshootingHints(args) {
   const progressText = Number(args.progressIntervalMs) > 0
     ? `progress snapshots every ${formatDurationMs(args.progressIntervalMs)}`
@@ -314,6 +327,7 @@ function makeFormalRunPlan(args) {
         inputLog: !args.skipInputLog,
         inject: false,
       },
+      troubleshootingHints: makeProtocolTroubleshootingHints(args),
     });
   }
   if (!args.skipBrowser) {
@@ -809,7 +823,7 @@ function printRunPlan(runPlan) {
   for (const [index, step] of steps.entries()) {
     print(
       "INFO",
-      `Plan ${index + 1}: ${step.label}; expected=${formatDurationMs(step.expectedDurationMs)}; timeout=${formatDurationMs(step.timeoutMs)}; command=${step.command}`,
+      `Plan ${index + 1}: ${step.label}; expected=${formatDurationMs(step.expectedDurationMs)}; per-wait timeout=${formatDurationMs(step.timeoutMs)}; command=${step.command}`,
     );
     printStepTroubleshootingHints(step, index);
   }
@@ -832,7 +846,7 @@ function printStepTroubleshootingHints(step, index) {
 function printFormalStepStart(step, index, totalSteps, runPlan) {
   print(
     "INFO",
-    `Starting plan ${index + 1}/${totalSteps}: ${step.label}; expected about ${formatDurationMs(step.expectedDurationMs)}, timeout ${formatDurationMs(step.timeoutMs)}.`,
+    `Starting plan ${index + 1}/${totalSteps}: ${step.label}; expected about ${formatDurationMs(step.expectedDurationMs)}, per-wait timeout ${formatDurationMs(step.timeoutMs)}.`,
   );
   if (step.id === "protocol-media-clipboard-input-log") {
     const video = runPlan.video || {};

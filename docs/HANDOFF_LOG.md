@@ -21,6 +21,37 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：复核 Windows formal E2E 第二步现场卡住感，并澄清正式长测输出。
+完成内容：
+- 无密复跑真实 Mac `check-mac-formal-e2e --preflightOnly --checkClientDiagnostics --host 192.168.31.122 --port 43770 --clientPort 5200 --debugPort 9340`，Mac host `/discovery` 在线，H.264、音频、文字/文件剪贴板和 `inputMode=log` 能力均通过，Windows client diagnostics-only 通过，runtimeBuild=`d398d64`。
+- 明确当前“第二步卡住感”的主要误读点：截图里的 H.264 首帧确认后，formal runner 仍会继续第一段真实探针的长视频观察和音频观察；`timeout=45s` 是单次等待帧/消息超时，不是整步总耗时。
+- `check-mac-formal-e2e` runPlan 和普通输出现在把整步预计时长与单次等待超时分开写为 `expected=...; per-wait timeout=...`。
+- `protocol-media-clipboard-input-log` 步骤新增 `troubleshootingHints[]` 和 `Plan 1 hint:`，提示 `First H.264 frame` 后仍要继续视频/音频长观察，并提醒看进度心跳。
+修改文件：
+- `scripts/windows/check-mac-formal-e2e.mjs`
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 45000` 先失败在缺少 `Plan 1 hint:`。
+- 绿灯：同一命令通过，覆盖离线/JSON/board summary/mock/preflight/client diagnostics/密码等待提示/fast path。
+- 真实无密复核：`node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --timeoutMs 45000 --clientPort 5200 --debugPort 9340` 通过并显示 `clientDiagnostics=passed`。
+遗留问题：
+- 正式长测仍需要用户在本机隐藏输入 Mac host 密码后运行；本轮不触碰密码、不认证 WebSocket、不发送 input/inject。
+- 当前 Mac host 仍自报 `maxScreenFps=30`，请求 60Hz 时会被远端上限压住；要判断 60Hz 体验需 Mac 侧按 `MacMaxFpsSafeStart=` / LaunchAgent 60Hz 链路重启后再测。
+下一步建议：
+- 现场复跑正式 E2E 时优先看 `Plan 1 hint:`、`Plan 2 hint:` 和进度心跳；如果停在密码输入，按提示直接输入密码回车。
+- 若只想先确认第二步基础链路，不要输入密码，先跑 `--preflightOnly --checkClientDiagnostics`，必要时改用 `--clientPort 5200 --debugPort 9340` 避开旧诊断端口。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端后续重启到目标刷新率上限后再做正式长测。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端消费 Mac heartbeat/status 里的 `MacHostReadiness=` 安全体检命令，减少现场翻长日志。
 完成内容：
 - Windows 控制端新增 `mac-host-readiness-command` 中文提示：`MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs --host ... --checkBoard --boardSummary` 搭配 warning/blocker、Mac host 离线/不可达、旧 build、重启建议、`mac-host-max-fps` 或 `fps-limit` 等上下文时，会在 Mac 提醒区、快速摘要和复制/导出诊断显示“Mac host 体检命令已提供”。
