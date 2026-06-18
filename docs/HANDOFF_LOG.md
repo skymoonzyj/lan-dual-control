@@ -19,6 +19,49 @@
 
 ## 2026-06-18 Windows Codex
 
+日期：2026-06-18 现场复核与收口
+开发端：Windows Codex
+本轮目标：重新检查正式验收第二步现场卡住感，并让 Windows 桌面壳/控制端能看到 Mac 提醒 watcher 最近告警摘要。
+完成内容：
+- 重新复核真实 Mac host `192.168.31.122:43770`：无密正式预检 ready，H.264、系统 PCM、文本/文件剪贴板、三项权限和 `inputMode=log` 均正常；Windows client diagnostics-only 通过。
+- 确认正式第二步 runPlan 现在包含 `--progressIntervalMs`，等待 H.264 canvas/FPS 时会周期性打印进度；完整认证第二步仍需用户现场输入 Mac host 密码后运行。
+- `start-mac-alert-watcher.ps1 -Status -Json` 新增 `recentAlerts` / `lastAlert`，从 watcher stdout log 解析最近 `ALERT:`，并对 Token 做本地脱敏。
+- Windows 控制端 Mac 提醒区在 watcher 运行时显示“最近提醒：...”，复制/导出诊断也能带出最近 Mac 授权/权限/值守提醒摘要。
+- 回归覆盖 JSON 最近提醒解析、token 不泄露、页面 statusText 最近提醒显示。
+修改文件：
+- `scripts/windows/start-mac-alert-watcher.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- PowerShell AST parse `scripts/windows/start-mac-alert-watcher.ps1`
+- `node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5204 --debugPort 9344 --timeoutMs 45000 --progressIntervalMs 5000`
+- `node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --boardSummary --timeoutMs 45000 --progressIntervalMs 5000`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --clientPort 5203 --debugPort 9343 --timeoutMs 45000`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps/windows-client scripts/windows docs`
+遗留问题：
+- 本轮未认证真实 WebSocket、未请求或输入密码、未发送 input/inject；完整正式第二步仍需用户现场输入 Mac host 密码后复跑。
+- 当前只是读取最近 watcher log 摘要，不改 Windows 浮窗弹出行为；如果 watcher 尚未产生 `ALERT:`，UI 不显示最近提醒。
+下一步建议：
+- 后续可在 Windows 桌面壳里加最近提醒列表/清除入口；Mac 侧继续把值守 warnings/blockers 稳定放入 status/readiness 摘要。
+是否改了协议：否。
+是否需要另一端配合：不需要；完整正式第二步需要用户现场输入密码。
+
+## 2026-06-18 Windows Codex
+
 日期：2026-06-18 现场复核
 开发端：Windows Codex
 本轮目标：重新检查正式验收“第二步”现场卡住感，并收口 Windows 控制端 Mac 值守风险诊断。

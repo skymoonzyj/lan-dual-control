@@ -4086,6 +4086,17 @@ function shouldRefreshMacAlertWatcherStatus(now = Date.now()) {
   );
 }
 
+function formatMacAlertWatcherLastAlert(payload) {
+  const alerts = Array.isArray(payload?.recentAlerts) ? payload.recentAlerts : [];
+  const lastAlert = payload?.lastAlert || (alerts.length ? alerts[alerts.length - 1] : null);
+  if (!lastAlert || typeof lastAlert !== "object") return "";
+  const parts = [
+    lastAlert.title,
+    lastAlert.message || lastAlert.summary,
+  ].filter(Boolean);
+  return compactExportStatusText(parts.join(" · "), 180);
+}
+
 function macAlertWatcherUiState(payload, { available = canUseDesktopHostControl(), busy = false } = {}) {
   if (!available) {
     return {
@@ -4121,12 +4132,14 @@ function macAlertWatcherUiState(payload, { available = canUseDesktopHostControl(
   const processIds = Array.isArray(payload.processIds) ? payload.processIds.filter(Boolean) : [];
   const processText = running && processIds.length > 0 ? `，PID ${processIds.join(", ")}` : "";
   const serverText = payload.server ? `，监听 ${payload.server}` : "";
+  const lastAlertText = formatMacAlertWatcherLastAlert(payload);
+  const lastAlertSuffix = lastAlertText ? ` 最近提醒：${lastAlertText}。` : "";
   return {
     running,
     badgeMode: running ? "online" : "offline",
     badgeText: running ? "提醒中" : "未开启",
     statusText: running
-      ? `Windows 浮窗提醒已开启${processText}${serverText}。`
+      ? `Windows 浮窗提醒已开启${processText}${serverText}。${lastAlertSuffix}`
       : "Windows 浮窗提醒未开启；可一键启动后接收 Mac 授权、权限和反控等待消息。",
     toggleText: running ? "停止提醒" : "开启提醒",
     toggleIcon: running ? "■" : "◌",

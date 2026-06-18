@@ -1311,6 +1311,20 @@ async function verifyDesktopOnlyHostPanel(session) {
               running: true,
               processIds: [1357],
               server: "http://192.168.31.68:17888",
+              recentAlerts: [
+                {
+                  at: "2026-06-18 10:31:00",
+                  title: "Mac side status alert - Mac Codex",
+                  message: "MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none",
+                  summary: "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none",
+                },
+              ],
+              lastAlert: {
+                at: "2026-06-18 10:31:00",
+                title: "Mac side status alert - Mac Codex",
+                message: "MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none",
+                summary: "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none",
+              },
               message: "Mac alert watcher is running.",
             }, { available: true, busy: false })
           : {};
@@ -1622,6 +1636,8 @@ async function verifyDesktopOnlyHostPanel(session) {
           watcherRunningView.toggleText === "停止提醒" &&
           watcherRunningView.statusText.includes("PID 1357") &&
           watcherRunningView.statusText.includes("192.168.31.68") &&
+          watcherRunningView.statusText.includes("最近提醒") &&
+          watcherRunningView.statusText.includes("MacUnattendedStatus=attention") &&
           watcherStoppedView.running === false &&
           watcherStoppedView.badgeText === "未开启" &&
           watcherStoppedView.toggleText === "开启提醒" &&

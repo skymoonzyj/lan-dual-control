@@ -141,6 +141,67 @@ function Show-WatcherStatus {
     Write-Host ("Error log: {0}" -f $ErrLog)
 }
 
+function Protect-WatcherText {
+    param([string]$Text)
+    $value = [string]$Text
+    if ($Token) {
+        $value = $value.Replace($Token, "[redacted-token]")
+    }
+    return $value
+}
+
+function Get-RecentWatcherAlerts {
+    param([int]$Limit = 3)
+
+    if (-not (Test-Path $OutLog)) {
+        return @()
+    }
+
+    $lines = @(Get-Content -Path $OutLog -Tail 240 -ErrorAction SilentlyContinue)
+    $alerts = @()
+    $current = $null
+
+    foreach ($line in $lines) {
+        $text = [string]$line
+        if ($text -match '^\[(?<at>[^\]]+)\]\s+ALERT:\s*(?<title>.*)$') {
+            if ($null -ne $current) {
+                $alerts += $current
+            }
+            $current = [ordered]@{
+                at = Protect-WatcherText $Matches["at"]
+                title = Protect-WatcherText $Matches["title"]
+                lines = @()
+            }
+            continue
+        }
+
+        if ($null -ne $current -and -not [string]::IsNullOrWhiteSpace($text)) {
+            $current.lines += (Protect-WatcherText $text)
+        }
+    }
+
+    if ($null -ne $current) {
+        $alerts += $current
+    }
+
+    $formatted = @()
+    foreach ($alert in @($alerts | Select-Object -Last $Limit)) {
+        $message = (@($alert.lines) | Select-Object -First 3) -join " | "
+        $summaryParts = @([string]$alert.title)
+        if ($message) {
+            $summaryParts += $message
+        }
+        $formatted += [ordered]@{
+            at = [string]$alert.at
+            title = [string]$alert.title
+            message = [string]$message
+            summary = (($summaryParts | Where-Object { $_ }) -join " | ")
+        }
+    }
+
+    return @($formatted)
+}
+
 function New-WatcherJsonPayload {
     param(
         [string]$Action,
@@ -163,6 +224,12 @@ function New-WatcherJsonPayload {
         }
     }
 
+    $recentAlerts = @(Get-RecentWatcherAlerts)
+    $lastAlert = $null
+    if ($recentAlerts.Count -gt 0) {
+        $lastAlert = $recentAlerts[-1]
+    }
+
     return [ordered]@{
         ok = $Ok
         action = $Action
@@ -177,6 +244,8 @@ function New-WatcherJsonPayload {
         outLog = [string]$OutLog
         errLog = [string]$ErrLog
         powerShell = [string]$powerShellExe
+        recentAlerts = @($recentAlerts)
+        lastAlert = $lastAlert
         message = [string]$Message
     }
 }

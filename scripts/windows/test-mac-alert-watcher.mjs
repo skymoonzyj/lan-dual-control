@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
-import { rm } from "node:fs/promises";
+import { rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -419,6 +419,17 @@ async function checkStartWrapperJsonStatus(args) {
   const pidFile = `${basePath}.pid`;
   const outLog = `${basePath}.out.log`;
   const errLog = `${basePath}.err.log`;
+  await writeFile(
+    outLog,
+    [
+      "Watching Mac-side Agent Link alerts from http://127.0.0.1:1",
+      "[2026-06-18 10:31:00] ALERT: Mac side status alert - Mac Codex",
+      "MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none",
+      "Token echo should be redacted: secret-token-for-test",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
   const result = await runPowerShell(args.powerShellExe, [
     "-NoProfile",
     "-ExecutionPolicy", "Bypass",
@@ -444,6 +455,11 @@ async function checkStartWrapperJsonStatus(args) {
     assert(payload.server === "http://127.0.0.1:1", "JSON status should include server");
     assert(String(payload.pidFile || "").endsWith(".pid"), "JSON status should include pid file");
     assert(typeof payload.message === "string" && payload.message.includes("not running"), "JSON status should include status message");
+    assert(Array.isArray(payload.recentAlerts), "JSON status should include recentAlerts array");
+    assert(payload.recentAlerts.length === 1, "JSON status should parse one recent alert");
+    assert(payload.lastAlert?.title === "Mac side status alert - Mac Codex", "JSON status should include last alert title");
+    assert(String(payload.lastAlert?.summary || "").includes("MacUnattendedStatus=attention"), "JSON status should include alert summary");
+    assertNotIncludes(JSON.stringify(payload), "secret-token-for-test", "JSON status recent alerts");
     const stop = await runPowerShell(args.powerShellExe, [
       "-NoProfile",
       "-ExecutionPolicy", "Bypass",
