@@ -260,12 +260,17 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.commands?.macUnattendedStatus || "", "--boardSummary", "missing LaunchAgent commands.macUnattendedStatus");
   assertNotIncludes(payload.commands?.macUnattendedStatus || "", "--json", "missing LaunchAgent commands.macUnattendedStatus");
   assertIncludes(payload.commands?.launchAgentPlan || "", "install-mac-host-launch-agent.mjs", "missing LaunchAgent commands.launchAgentPlan");
+  assertIncludes(payload.commands?.launchAgentPlan || "", "--port 9", "missing LaunchAgent commands.launchAgentPlan");
   assertIncludes(payload.commands?.launchAgentPlan || "", "--boardSummary", "missing LaunchAgent commands.launchAgentPlan");
+  assertIncludes(payload.commands?.macMaxFpsPlan || "", "--port 9", "missing LaunchAgent commands.macMaxFpsPlan");
+  assertIncludes(payload.commands?.macMaxFpsPlan || "", "--maxScreenFps 60", "missing LaunchAgent commands.macMaxFpsPlan");
   assertIncludes(payload.boardSummary, "MacUnattendedStatus=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "--launchAgentPath", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, missingPath, "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "--skipLaunchctl", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacLaunchAgentPlan=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacLaunchAgentPlan=node scripts/mac/install-mac-host-launch-agent.mjs", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "--port 9", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacMaxFpsPlan=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "HostReadiness=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "blockers=none", "missing LaunchAgent board summary");
@@ -289,6 +294,29 @@ function checkRequireLaunchAgentFails(args) {
   assertIncludes(payload.boardSummary, "warnings=host-offline", "require LaunchAgent board summary");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "require LaunchAgent JSON");
   print("OK", "requireLaunchAgent turns missing plist into a blocker");
+}
+
+function checkLaunchAgentPlannerPreservesOptions(args) {
+  const missingPath = path.join(tmpdir(), `missing-lan-dual-agent-custom-${Date.now()}.plist`);
+  const label = "com.lan-dual-control.mac-host.custom";
+  const result = run(args, [
+    "--json",
+    ...baseOfflineArgs(missingPath),
+    "--label",
+    label,
+  ]);
+  const payload = parseJson(result.stdout, "custom LaunchAgent planner JSON");
+  assert(result.status === 0, "custom LaunchAgent planner path should stay non-failing");
+  assertIncludes(payload.commands?.launchAgentPlan || "", "--port 9", "custom LaunchAgent commands.launchAgentPlan");
+  assertIncludes(payload.commands?.launchAgentPlan || "", `--label ${label}`, "custom LaunchAgent commands.launchAgentPlan");
+  assertIncludes(payload.commands?.launchAgentPlan || "", missingPath, "custom LaunchAgent commands.launchAgentPlan");
+  assertIncludes(payload.commands?.macMaxFpsPlan || "", "--port 9", "custom LaunchAgent commands.macMaxFpsPlan");
+  assertIncludes(payload.commands?.macMaxFpsPlan || "", `--label ${label}`, "custom LaunchAgent commands.macMaxFpsPlan");
+  assertIncludes(payload.commands?.macMaxFpsPlan || "", "--maxScreenFps 60", "custom LaunchAgent commands.macMaxFpsPlan");
+  assertIncludes(payload.boardSummary || "", `--label ${label}`, "custom LaunchAgent board summary");
+  assertIncludes(payload.boardSummary || "", "--port 9", "custom LaunchAgent board summary");
+  assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "custom LaunchAgent planner JSON");
+  print("OK", "LaunchAgent planner commands preserve checked port, label, and plist path");
 }
 
 function checkRequireLaunchAgentMaxFpsFails(args) {
@@ -564,6 +592,7 @@ async function main() {
   checkHelp(args);
   checkMissingLaunchAgentJson(args);
   checkRequireLaunchAgentFails(args);
+  checkLaunchAgentPlannerPreservesOptions(args);
   checkRequireLaunchAgentMaxFpsFails(args);
   checkRequireLaunchAgentLoadedNeedsProbe(args);
   checkStrictWarningsFail(args);

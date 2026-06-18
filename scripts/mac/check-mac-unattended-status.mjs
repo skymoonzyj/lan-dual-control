@@ -432,8 +432,8 @@ function buildFindings({ args, host, launchAgent, power }) {
 function makeCommands(args) {
   return {
     macUnattendedStatus: makeMacUnattendedStatusCommand(args),
-    launchAgentPlan: `node scripts/mac/install-mac-host-launch-agent.mjs --launchAgentPath ${shellQuote(args.launchAgentPath)} --boardSummary`,
-    macMaxFpsPlan: `node scripts/mac/install-mac-host-launch-agent.mjs --launchAgentPath ${shellQuote(args.launchAgentPath)} --maxScreenFps ${formalTargetMaxScreenFps} --boardSummary`,
+    launchAgentPlan: makeLaunchAgentPlanCommand(args),
+    macMaxFpsPlan: makeLaunchAgentPlanCommand(args, { maxScreenFps: formalTargetMaxScreenFps }),
     hostStatus: `node scripts/mac/start-mac-host.mjs --status --host ${args.host} --port ${args.port} --boardSummary`,
     hostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     startHost: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port}`,
@@ -441,6 +441,20 @@ function makeCommands(args) {
     launchAgentPath: args.launchAgentPath,
     launchAgentLabel: args.label,
   };
+}
+
+function makeLaunchAgentPlanCommand(args, { maxScreenFps = null } = {}) {
+  const parts = [
+    "node scripts/mac/install-mac-host-launch-agent.mjs",
+    "--launchAgentPath",
+    shellQuote(args.launchAgentPath),
+    "--port",
+    String(args.port),
+  ];
+  if (args.label !== defaults.label) parts.push("--label", shellQuote(args.label));
+  if (maxScreenFps !== null) parts.push("--maxScreenFps", String(maxScreenFps));
+  parts.push("--boardSummary");
+  return parts.join(" ");
 }
 
 function makeMacUnattendedStatusCommand(args) {
