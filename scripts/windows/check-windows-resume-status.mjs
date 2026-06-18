@@ -12,6 +12,10 @@ const defaults = {
   discoverNoLocalSubnets: false,
   discoverTimeoutMs: 1200,
   timeoutMs: 12000,
+  clientPort: 5197,
+  debugPort: 9337,
+  alternateClientPort: 5200,
+  alternateDebugPort: 9340,
   server: "http://192.168.31.68:17888",
   checkBoard: false,
   checkClientDiagnostics: false,
@@ -69,6 +73,10 @@ Options:
   --discoverNoLocalSubnets      Only probe 127.0.0.1 and explicit --host targets.
   --discoverTimeoutMs <ms>      Per-host discovery timeout. Default: ${defaults.discoverTimeoutMs}
   --timeoutMs <ms>              Per child command timeout. Default: ${defaults.timeoutMs}
+  --clientPort <port>           Windows client diagnostics page port. Default: ${defaults.clientPort}
+  --debugPort <port>            Windows client diagnostics browser CDP port. Default: ${defaults.debugPort}
+  --alternateClientPort <port>  Suggested alternate page port if defaults are busy. Default: ${defaults.alternateClientPort}
+  --alternateDebugPort <port>   Suggested alternate CDP port if defaults are busy. Default: ${defaults.alternateDebugPort}
   --server <url>                Agent Link Board URL. Default: ${defaults.server}
   --checkBoard                  Read one Agent Link Board snapshot, including currentCall.
   --checkClientDiagnostics      Also run Windows client diagnostics in formal preflight.
@@ -94,6 +102,7 @@ Examples:
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/discover-lan-hosts.ps1 -NoLocalSubnets -HostName 192.168.31.122 -Port 43770 -RequireMacHost -BoardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
+  node scripts/windows/check-windows-resume-status.mjs --checkBoard --clientPort 5200 --debugPort 9340 --boardSummary
   node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -DiagnosticsOnly -BoardSummary -TimeoutMs 45000
   node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
@@ -166,6 +175,26 @@ function parseArgs(argv) {
     }
     if (token === "--timeoutMs" && next && !next.startsWith("--")) {
       args.timeoutMs = clampInteger(next, 3000, 120000, defaults.timeoutMs);
+      index += 1;
+      continue;
+    }
+    if (token === "--clientPort" && next && !next.startsWith("--")) {
+      args.clientPort = clampInteger(next, 1, 65535, defaults.clientPort);
+      index += 1;
+      continue;
+    }
+    if (token === "--debugPort" && next && !next.startsWith("--")) {
+      args.debugPort = clampInteger(next, 1, 65535, defaults.debugPort);
+      index += 1;
+      continue;
+    }
+    if (token === "--alternateClientPort" && next && !next.startsWith("--")) {
+      args.alternateClientPort = clampInteger(next, 1, 65535, defaults.alternateClientPort);
+      index += 1;
+      continue;
+    }
+    if (token === "--alternateDebugPort" && next && !next.startsWith("--")) {
+      args.alternateDebugPort = clampInteger(next, 1, 65535, defaults.alternateDebugPort);
       index += 1;
       continue;
     }
@@ -487,6 +516,8 @@ function makePreflightArgs(args) {
     "--timeoutMs", String(args.timeoutMs),
     "--discoverTimeoutMs", String(args.discoverTimeoutMs),
     "--port", String(args.port),
+    "--clientPort", String(args.clientPort),
+    "--debugPort", String(args.debugPort),
   ];
   if (args.discover) {
     child.push("--discover");
@@ -543,6 +574,207 @@ function runFormalPreflight(args) {
   };
 }
 
+function safeCommandLineSnippet(value) {
+  let text = String(value || "").replace(/\s+/g, " ").trim();
+  text = text.replace(/(LAN_DUAL_PASSWORD=)[^\s]+/gi, "$1<redacted>");
+  text = text.replace(/(--password\s+)[^\s]+/gi, "$1<redacted>");
+  text = text.replace(/(-Password\s+)[^\s]+/gi, "$1<redacted>");
+  if (text.length > 220) {
+    text = `${text.slice(0, 217)}...`;
+  }
+  return text;
+}
+
+function normalizePortOwner(owner) {
+  const localPort = Number(owner?.localPort ?? owner?.LocalPort);
+  return {
+    localAddress: String(owner?.localAddress ?? owner?.LocalAddress ?? ""),
+    localPort: Number.isFinite(localPort) ? localPort : null,
+    state: String(owner?.state ?? owner?.State ?? ""),
+    owningProcess: Number(owner?.owningProcess ?? owner?.OwningProcess ?? owner?.pid ?? 0) || null,
+    processName: String(owner?.processName ?? owner?.Name ?? ""),
+    commandLineSnippet: safeCommandLineSnippet(owner?.commandLine ?? owner?.CommandLine ?? ""),
+  };
+}
+
+function isLikelyWindowsClientDiagnosticsOwner(owner, args) {
+  const text = `${owner.processName || ""} ${owner.commandLineSnippet || ""}`
+    .toLowerCase()
+    .replace(/\//g, "\\");
+  if (owner.localPort === args.clientPort) {
+    return text.includes("apps\\windows-client\\server.mjs")
+      && text.includes(String(args.clientPort));
+  }
+  if (owner.localPort === args.debugPort) {
+    return text.includes(`--remote-debugging-port=${args.debugPort}`)
+      && text.includes("lan-dual-edge");
+  }
+  return false;
+}
+
+function parseFakeWindowsClientPorts(args) {
+  const raw = process.env.LAN_DUAL_FAKE_WINDOWS_CLIENT_PORTS_JSON;
+  if (!raw) return null;
+  try {
+    const payload = JSON.parse(raw);
+    const owners = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.owners)
+        ? payload.owners
+        : payload?.owners
+          ? [payload.owners]
+          : [];
+    return {
+      source: "fake-env",
+      ok: payload?.ok !== false,
+      error: String(payload?.error || ""),
+      owners: owners.map(normalizePortOwner),
+    };
+  } catch (error) {
+    return {
+      source: "fake-env",
+      ok: false,
+      error: `LAN_DUAL_FAKE_WINDOWS_CLIENT_PORTS_JSON parse failed: ${error.message}`,
+      owners: [],
+    };
+  }
+}
+
+function queryWindowsClientPortOwners(args) {
+  const fake = parseFakeWindowsClientPorts(args);
+  if (fake) return fake;
+  if (process.platform !== "win32") {
+    return {
+      source: "platform",
+      ok: true,
+      unsupported: true,
+      error: "Windows TCP port inspection is only implemented on Windows.",
+      owners: [],
+    };
+  }
+  const ports = [args.clientPort, args.debugPort].map((port) => Number(port)).filter(Boolean).join(",");
+  const ps = [
+    `$ports = @(${ports})`,
+    "$items = @()",
+    "try {",
+    "  $connections = Get-NetTCPConnection -LocalPort $ports -ErrorAction SilentlyContinue | Where-Object { $_.State -eq 'Listen' }",
+    "  foreach ($conn in @($connections)) {",
+    "    $proc = $null",
+    "    try { $proc = Get-CimInstance Win32_Process -Filter \"ProcessId=$($conn.OwningProcess)\" -ErrorAction SilentlyContinue } catch {}",
+    "    $items += [pscustomobject]@{",
+    "      localAddress = [string] $conn.LocalAddress",
+    "      localPort = [int] $conn.LocalPort",
+    "      state = [string] $conn.State",
+    "      owningProcess = [int] $conn.OwningProcess",
+    "      processName = [string] $proc.Name",
+    "      commandLine = [string] $proc.CommandLine",
+    "    }",
+    "  }",
+    "  [pscustomobject]@{ ok = $true; owners = @($items) } | ConvertTo-Json -Compress -Depth 5",
+    "} catch {",
+    "  [pscustomobject]@{ ok = $false; error = $_.Exception.Message; owners = @() } | ConvertTo-Json -Compress -Depth 5",
+    "}",
+  ].join("\n");
+  const result = command("powershell.exe", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    ps,
+  ], { timeoutMs: 7000 });
+  if (!result.ok && !String(result.stdout || "").trim()) {
+    return {
+      source: "powershell",
+      ok: false,
+      error: normalizedText(result.error || result.stderr || `exit ${result.status}`),
+      owners: [],
+    };
+  }
+  try {
+    const payload = JSON.parse(String(result.stdout || "").trim() || "{}");
+    return {
+      source: "powershell",
+      ok: payload?.ok !== false,
+      error: String(payload?.error || ""),
+      owners: (
+        Array.isArray(payload?.owners)
+          ? payload.owners
+          : payload?.owners
+            ? [payload.owners]
+            : []
+      ).map(normalizePortOwner),
+    };
+  } catch (error) {
+    return {
+      source: "powershell",
+      ok: false,
+      error: error.message,
+      owners: [],
+      stdoutTail: tailLines(result.stdout, 4),
+      stderrTail: tailLines(result.stderr, 4),
+    };
+  }
+}
+
+function inspectWindowsClientDiagnosticsPorts(args) {
+  const query = queryWindowsClientPortOwners(args);
+  const owners = query.owners.filter((owner) => owner.localPort === args.clientPort || owner.localPort === args.debugPort);
+  const ports = [
+    {
+      name: "client",
+      port: args.clientPort,
+      occupied: owners.some((owner) => owner.localPort === args.clientPort),
+    },
+    {
+      name: "debug",
+      port: args.debugPort,
+      occupied: owners.some((owner) => owner.localPort === args.debugPort),
+    },
+  ];
+  const occupiedPorts = ports.filter((port) => port.occupied).map((port) => port.port);
+  const staleOwners = owners.filter((owner) => isLikelyWindowsClientDiagnosticsOwner(owner, args));
+  const state = query.unsupported
+    ? "unsupported"
+    : !query.ok
+      ? "unknown"
+      : occupiedPorts.length === 0
+        ? "free"
+        : staleOwners.length > 0
+          ? "occupied-stale-diagnostics"
+          : "occupied";
+  const available = state === "free";
+  const stale = state === "occupied-stale-diagnostics";
+  const summary = state === "free"
+    ? `free(${args.clientPort},${args.debugPort})`
+    : state === "unsupported"
+      ? `unsupported(${args.clientPort},${args.debugPort})`
+      : state === "unknown"
+        ? `unknown(${args.clientPort},${args.debugPort})`
+        : `occupied(${occupiedPorts.join(",")}${stale ? ";stale-diagnostics" : ""})`;
+  const recommendation = available
+    ? "default Windows client diagnostics ports are free"
+    : `use --clientPort ${args.alternateClientPort} --debugPort ${args.alternateDebugPort} for the next browser diagnostics/formal preflight, or close stale diagnostics processes you own`;
+  return {
+    requested: true,
+    ok: true,
+    source: query.source,
+    state,
+    available,
+    staleDiagnostics: stale,
+    clientPort: args.clientPort,
+    debugPort: args.debugPort,
+    alternateClientPort: args.alternateClientPort,
+    alternateDebugPort: args.alternateDebugPort,
+    occupiedPorts,
+    ports,
+    owners,
+    staleOwnerCount: staleOwners.length,
+    summary,
+    recommendation,
+    error: query.error || "",
+  };
+}
+
 function makeCommands(args, preflight) {
   const target = preflight.payload?.target || { host: args.host, port: args.port };
   const host = String(target.host || args.host);
@@ -563,6 +795,8 @@ function makeCommands(args, preflight) {
     "-DiscoverNoLocalSubnets",
     "-HostName", host,
     "-Port", String(port),
+    "-ClientPort", String(args.clientPort),
+    "-DebugPort", String(args.debugPort),
     "-PreflightOnly",
     "-CheckClientDiagnostics",
     "-BoardSummary",
@@ -573,12 +807,27 @@ function makeCommands(args, preflight) {
     "--discoverNoLocalSubnets",
     "--host", host,
     "--port", String(port),
+    "--clientPort", String(args.clientPort),
+    "--debugPort", String(args.debugPort),
+    "--diagnosticsOnly",
+    "--boardSummary",
+    "--timeoutMs", "45000",
+  ];
+  const windowsClientDiagnosticsAlternateCommand = [
+    "node scripts/windows/test-windows-client-browser.mjs",
+    "--discover",
+    "--discoverNoLocalSubnets",
+    "--host", host,
+    "--port", String(port),
+    "--clientPort", String(args.alternateClientPort),
+    "--debugPort", String(args.alternateDebugPort),
     "--diagnosticsOnly",
     "--boardSummary",
     "--timeoutMs", "45000",
   ];
   if (runtimeBuildId && !/\s/.test(runtimeBuildId)) {
     windowsClientDiagnosticsCommand.push("--expectDiscoveryRuntimeBuildId", runtimeBuildId);
+    windowsClientDiagnosticsAlternateCommand.push("--expectDiscoveryRuntimeBuildId", runtimeBuildId);
   }
   const windowsClientDiagnosticsPowerShellCommand = [
     "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-client-browser.ps1",
@@ -586,12 +835,27 @@ function makeCommands(args, preflight) {
     "-DiscoverNoLocalSubnets",
     "-HostName", host,
     "-Port", String(port),
+    "-ClientPort", String(args.clientPort),
+    "-DebugPort", String(args.debugPort),
+    "-DiagnosticsOnly",
+    "-BoardSummary",
+    "-TimeoutMs", "45000",
+  ];
+  const windowsClientDiagnosticsAlternatePowerShellCommand = [
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-client-browser.ps1",
+    "-Discover",
+    "-DiscoverNoLocalSubnets",
+    "-HostName", host,
+    "-Port", String(port),
+    "-ClientPort", String(args.alternateClientPort),
+    "-DebugPort", String(args.alternateDebugPort),
     "-DiagnosticsOnly",
     "-BoardSummary",
     "-TimeoutMs", "45000",
   ];
   if (runtimeBuildId && !/\s/.test(runtimeBuildId)) {
     windowsClientDiagnosticsPowerShellCommand.push("-ExpectDiscoveryRuntimeBuildId", runtimeBuildId);
+    windowsClientDiagnosticsAlternatePowerShellCommand.push("-ExpectDiscoveryRuntimeBuildId", runtimeBuildId);
   }
   return {
     resumeBoardSummary: "node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary",
@@ -602,6 +866,8 @@ function makeCommands(args, preflight) {
     preflightBoardSummary: [
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
       "-Discover",
+      "-ClientPort", String(args.clientPort),
+      "-DebugPort", String(args.debugPort),
       "-PreflightOnly",
       "-CheckClientDiagnostics",
       "-BoardSummary",
@@ -609,6 +875,8 @@ function makeCommands(args, preflight) {
     userAuthRequest: [
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
       "-Discover",
+      "-ClientPort", String(args.clientPort),
+      "-DebugPort", String(args.debugPort),
       "-PreflightOnly",
       "-CheckClientDiagnostics",
       "-UserAuthRequest",
@@ -616,6 +884,8 @@ function makeCommands(args, preflight) {
     formalRun: [
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
       "-Discover",
+      "-ClientPort", String(args.clientPort),
+      "-DebugPort", String(args.debugPort),
       "-PromptPassword",
     ].join(" "),
     formalRunFixedTarget: [
@@ -624,6 +894,8 @@ function makeCommands(args, preflight) {
       "-DiscoverNoLocalSubnets",
       "-HostName", host,
       "-Port", String(port),
+      "-ClientPort", String(args.clientPort),
+      "-DebugPort", String(args.debugPort),
       "-PromptPassword",
     ].join(" "),
     windowsHostMediaReadinessBoardSummary: [
@@ -715,6 +987,8 @@ function makeCommands(args, preflight) {
     ].join(" "),
     windowsClientDiagnosticsCommand: windowsClientDiagnosticsCommand.join(" "),
     windowsClientDiagnosticsPowerShellCommand: windowsClientDiagnosticsPowerShellCommand.join(" "),
+    windowsClientDiagnosticsAlternateCommand: windowsClientDiagnosticsAlternateCommand.join(" "),
+    windowsClientDiagnosticsAlternatePowerShellCommand: windowsClientDiagnosticsAlternatePowerShellCommand.join(" "),
     windowsClientCopyDiagnosticsAction: "Windows 控制端事件面板点击“复制诊断”，先看“快速摘要”。",
     windowsMacAlertWatcherStart: [
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1",
@@ -859,14 +1133,20 @@ function makeBoardSummary(report) {
       ? "passed"
       : "failed"
     : "skipped";
+  const clientPorts = report.windowsClientDiagnosticsPorts?.summary || "unknown";
+  const clientPortsNext = report.windowsClientDiagnosticsPorts?.available
+    ? "default-ok"
+    : `use --clientPort ${report.windowsClientDiagnosticsPorts?.alternateClientPort || defaults.alternateClientPort} --debugPort ${report.windowsClientDiagnosticsPorts?.alternateDebugPort || defaults.alternateDebugPort}`;
   return [
     `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}${boardCall}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
+    `WinClientPorts=${clientPorts}; WinClientPortsNext=${clientPortsNext}.`,
     `Next=${mac.ok ? report.commands.userAuthRequest : report.commands.preflightBoardSummary}.`,
     `MacDiscovery=${report.commands.macHostDiscoveryBoardSummary}.`,
     `MacDiscoveryPs=${report.commands.macHostDiscoveryPowerShellBoardSummary}.`,
     `MacUnattended=${report.commands.macUnattendedStatusCommand}.`,
     `FormalChecklist=${report.commands.formalChecklistBoardSummary}; ManualChecklist=${report.formalManualChecklist.summary}.`,
     `WinClientDiagnostics=${report.commands.windowsClientDiagnosticsCommand}; WinClientDiagnosticsPs=${report.commands.windowsClientDiagnosticsPowerShellCommand}; CopyDiagnostics=${report.commands.windowsClientCopyDiagnosticsAction}`,
+    `WinClientDiagnosticsAlt=${report.commands.windowsClientDiagnosticsAlternateCommand}; WinClientDiagnosticsAltPs=${report.commands.windowsClientDiagnosticsAlternatePowerShellCommand}.`,
     `WindowsHostMedia=${report.commands.windowsHostMediaReadinessBoardSummary}.`,
     `WindowsHostMediaPs=${report.commands.windowsHostMediaReadinessPowerShellBoardSummary}.`,
     `WindowsVideoSupport=${report.commands.windowsVideoEncoderSupportBoardSummary}.`,
@@ -959,6 +1239,7 @@ async function makeReport(args) {
   const commands = makeCommands(args, macPreflight);
   const formalManualChecklist = makeFormalManualChecklist(macPreflight.payload, commands);
   const windowsMacAlertWatcher = getWindowsMacAlertWatcherStatus(args, commands);
+  const windowsClientDiagnosticsPorts = inspectWindowsClientDiagnosticsPorts(args);
   const checks = [
     { name: "gitStatus", ok: git.ok, detail: git.clean ? "clean" : `${git.changeCount} change(s)` },
     { name: "board", ok: !board.requested || board.ok, detail: board.requested ? `lines=${board.lineCount}` : "skipped" },
@@ -988,6 +1269,10 @@ async function makeReport(args) {
       port: args.port,
       discover: args.discover,
       discoverNoLocalSubnets: args.discoverNoLocalSubnets,
+      clientPort: args.clientPort,
+      debugPort: args.debugPort,
+      alternateClientPort: args.alternateClientPort,
+      alternateDebugPort: args.alternateDebugPort,
       checkBoard: args.checkBoard,
       checkClientDiagnostics: args.checkClientDiagnostics,
       requireClean: args.requireClean,
@@ -998,6 +1283,7 @@ async function makeReport(args) {
     board,
     macPreflight,
     windowsMacAlertWatcher,
+    windowsClientDiagnosticsPorts,
     commands,
     formalManualChecklist,
     checks,
@@ -1051,6 +1337,13 @@ function printHuman(report) {
       console.log(`  statusError=${watcher.error}`);
     }
   }
+  const clientPorts = report.windowsClientDiagnosticsPorts;
+  if (clientPorts?.requested) {
+    console.log(`- Windows client diagnostics ports: ${clientPorts.summary}`);
+    if (!clientPorts.available) {
+      console.log(`  recommendation=${clientPorts.recommendation}`);
+    }
+  }
   const mac = report.macPreflight.payload || null;
   if (mac?.online) {
     const state = mac.ok ? "ready" : "blocked";
@@ -1073,6 +1366,10 @@ function printHuman(report) {
   console.log(`  ${report.commands.formalRun}`);
   console.log(`  ${report.commands.windowsClientDiagnosticsCommand}`);
   console.log(`  ${report.commands.windowsClientDiagnosticsPowerShellCommand}`);
+  if (!report.windowsClientDiagnosticsPorts?.available) {
+    console.log(`  ${report.commands.windowsClientDiagnosticsAlternateCommand}`);
+    console.log(`  ${report.commands.windowsClientDiagnosticsAlternatePowerShellCommand}`);
+  }
   console.log(`  ${report.commands.windowsClientCopyDiagnosticsAction}`);
   console.log(`  ${report.commands.windowsHostMediaReadinessBoardSummary}`);
   console.log(`  ${report.commands.windowsHostMediaReadinessPowerShellBoardSummary}`);

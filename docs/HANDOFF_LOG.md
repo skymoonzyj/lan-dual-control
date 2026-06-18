@@ -19,6 +19,41 @@
 
 ## 2026-06-18 Windows Codex
 
+日期：2026-06-18 现场复核
+开发端：Windows Codex
+本轮目标：重新检查正式验收第二步卡住现象，并把 Windows 控制端诊断默认端口占用提示固化进恢复总览。
+完成内容：
+- 现场复核确认 `192.168.31.122:43770` 无密 preflight ready，Windows client diagnostics 用备用端口 `5200/9340` 通过；默认 `5197/9337` 当前被旧 `apps/windows-client/server.mjs` 和 Edge 调试进程占用。
+- `check-windows-resume-status` 新增只读端口占用检查，JSON 输出 `windowsClientDiagnosticsPorts`，普通输出和 `--boardSummary` 输出 `WinClientPorts=` / `WinClientPortsNext=`。
+- `WinClientDiagnostics=` / PowerShell 等价命令现在显式写出默认 `--clientPort 5197 --debugPort 9337`；默认端口被占时，报告会同时给出 `WinClientDiagnosticsAlt=` / `WinClientDiagnosticsAltPs=`，推荐 `5200/9340` 备用端口。
+- 新增 fake 端口占用回归，覆盖 `occupied(...;stale-diagnostics)` 摘要、不泄密和备用命令。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --clientPort 5200 --debugPort 9340 --timeoutMs 45000 --requireH264 --boardSummary`
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 60000`
+- `node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --boardSummary --timeoutMs 45000`
+- `node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --checkClientDiagnostics --clientPort 5200 --debugPort 9340 --boardSummary --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows docs`
+遗留问题：
+- 本轮只提示端口占用，不自动杀旧进程；如要释放默认端口，需要用户确认后手动关闭旧诊断窗口或进程。
+下一步建议：
+- 现场再跑完整正式第二步时，如果默认端口仍占用，先加 `--clientPort 5200 --debugPort 9340` 或 PowerShell `-ClientPort 5200 -DebugPort 9340`。
+是否改了协议：否。
+是否需要另一端配合：否；Mac 端无需同步代码。
+
+## 2026-06-18 Windows Codex
+
 日期：2026-06-18 继续推进
 开发端：Windows Codex
 本轮目标：让正式 Mac E2E 预检直接解释远端 FPS 上限截断，并给出 Mac 端安全 dry-run 提升上限建议，避免把请求 60Hz 但远端 30Hz 误判成 Windows 第二步卡住。

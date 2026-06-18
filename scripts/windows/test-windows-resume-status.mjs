@@ -63,13 +63,14 @@ function assertNotIncludes(text, expected, label) {
   assert(!String(text).includes(expected), `${label} unexpectedly included ${JSON.stringify(expected)}.\n${text}`);
 }
 
-function run(extraArgs, args) {
+function run(extraArgs, args, env = {}) {
   return new Promise((resolveRun) => {
     const child = spawn(process.execPath, [script, ...extraArgs], {
       cwd: repoRoot,
       env: {
         ...process.env,
         LAN_DUAL_PASSWORD: "",
+        ...env,
       },
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -258,6 +259,8 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "Usage:", `help ${flag}`);
     assertIncludes(result.stdout, "--boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "--checkBoard", `help ${flag}`);
+    assertIncludes(result.stdout, "--clientPort", `help ${flag}`);
+    assertIncludes(result.stdout, "--debugPort", `help ${flag}`);
     assertIncludes(result.stdout, "Windows host media-baseline", `help ${flag}`);
     assertIncludes(result.stdout, "check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "one-time reverse-control grant", `help ${flag}`);
@@ -308,6 +311,8 @@ async function checkMockJson(args) {
     assert(payload.macPreflight?.payload?.online === true, "mock JSON should include online preflight");
     assert(payload.macPreflight?.payload?.target?.port === port, "mock JSON should use discovered mock port");
     assert(payload.macPreflight?.payload?.discoverySelection?.requested === true, "preflight should record discovery");
+    assert(String(payload.macPreflight?.command || "").includes("--clientPort 5197"), "mock JSON preflight should pass the default client port to formal preflight");
+    assert(String(payload.macPreflight?.command || "").includes("--debugPort 9337"), "mock JSON preflight should pass the default debug port to formal preflight");
     assert(String(payload.boardSummary || "").includes("Windows resume:"), "mock JSON should include board summary");
     assert(String(payload.userAuthRequest || "").includes("NEED_USER_AUTH"), "mock JSON should include user auth request");
     assert(String(payload.userAuthRequest || "").includes("正式 Mac 端到端验收需要你在 Windows 本机隐藏输入"), "mock JSON should include formal auth wording");
@@ -394,11 +399,23 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("--boardSummary"), "mock JSON client diagnostics should be board-safe");
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("--discoverNoLocalSubnets"), "mock JSON client diagnostics should target the known host without scanning the whole LAN");
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes(`--port ${port}`), "mock JSON client diagnostics should use the discovered Mac port");
+    assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("--clientPort 5197"), "mock JSON client diagnostics should show the default local page port");
+    assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("--debugPort 9337"), "mock JSON client diagnostics should show the default browser debug port");
+    assert(String(payload.commands?.windowsClientDiagnosticsAlternateCommand || "").includes("--clientPort 5200"), "mock JSON client diagnostics should include an alternate page port command");
+    assert(String(payload.commands?.windowsClientDiagnosticsAlternateCommand || "").includes("--debugPort 9340"), "mock JSON client diagnostics should include an alternate browser debug port command");
     assert(String(payload.commands?.windowsClientDiagnosticsPowerShellCommand || "").includes("test-windows-client-browser.ps1"), "mock JSON should include Windows client diagnostics PowerShell command");
     assert(String(payload.commands?.windowsClientDiagnosticsPowerShellCommand || "").includes("-DiscoverNoLocalSubnets"), "mock JSON client diagnostics PowerShell should target the known host without scanning the whole LAN");
     assert(String(payload.commands?.windowsClientDiagnosticsPowerShellCommand || "").includes(`-Port ${port}`), "mock JSON client diagnostics PowerShell should use the discovered Mac port");
+    assert(String(payload.commands?.windowsClientDiagnosticsPowerShellCommand || "").includes("-ClientPort 5197"), "mock JSON client diagnostics PowerShell should show the default local page port");
+    assert(String(payload.commands?.windowsClientDiagnosticsPowerShellCommand || "").includes("-DebugPort 9337"), "mock JSON client diagnostics PowerShell should show the default browser debug port");
     assert(String(payload.commands?.windowsClientDiagnosticsPowerShellCommand || "").includes("-DiagnosticsOnly"), "mock JSON client diagnostics PowerShell should be no-auth diagnostics only");
     assert(String(payload.commands?.windowsClientDiagnosticsPowerShellCommand || "").includes("-BoardSummary"), "mock JSON client diagnostics PowerShell should be board-safe");
+    assert(String(payload.commands?.windowsClientDiagnosticsAlternatePowerShellCommand || "").includes("-ClientPort 5200"), "mock JSON client diagnostics PowerShell should include an alternate page port command");
+    assert(String(payload.commands?.windowsClientDiagnosticsAlternatePowerShellCommand || "").includes("-DebugPort 9340"), "mock JSON client diagnostics PowerShell should include an alternate browser debug port command");
+    assert(payload.windowsClientDiagnosticsPorts?.requested === true, "mock JSON should inspect Windows client diagnostics ports");
+    assert(payload.windowsClientDiagnosticsPorts?.clientPort === 5197, "mock JSON should record the default Windows client diagnostics port");
+    assert(payload.windowsClientDiagnosticsPorts?.debugPort === 9337, "mock JSON should record the default Windows client debug port");
+    assert(typeof payload.windowsClientDiagnosticsPorts?.summary === "string", "mock JSON should include a stable client ports summary");
     assert(String(payload.commands?.windowsClientCopyDiagnosticsAction || "").includes("复制诊断"), "mock JSON should include in-page copy diagnostics action");
     assert(String(payload.commands?.windowsClientCopyDiagnosticsAction || "").includes("快速摘要"), "mock JSON copy diagnostics action should mention the quick summary");
     assert(String(payload.commands?.windowsMacAlertWatcherStart || "").includes("start-mac-alert-watcher.ps1"), "mock JSON should include Windows Mac alert watcher start command");
@@ -461,6 +478,57 @@ async function checkRuntimeBuildClientDiagnosticsCommand(args) {
   });
 }
 
+async function checkWindowsClientDiagnosticsPortOccupancy(args) {
+  await withMockHost(async (port) => {
+    const fakePorts = JSON.stringify({
+      owners: [
+        {
+          localAddress: "127.0.0.1",
+          localPort: 5197,
+          state: "Listen",
+          owningProcess: 61088,
+          processName: "node.exe",
+          commandLine: "node.exe apps/windows-client/server.mjs 5197",
+        },
+        {
+          localAddress: "::1",
+          localPort: 9337,
+          state: "Listen",
+          owningProcess: 44488,
+          processName: "msedge.exe",
+          commandLine: "msedge.exe --remote-debugging-port=9337 --user-data-dir=C:\\Temp\\lan-dual-edge-old",
+        },
+      ],
+    });
+    const result = await run([
+      "--discover",
+      "--discoverNoLocalSubnets",
+      "--host", "127.0.0.1",
+      "--port", String(port),
+      "--json",
+      "--allowMockVideo",
+      "--skipAudio",
+      "--skipClipboard",
+      "--skipInputLog",
+    ], args, {
+      LAN_DUAL_FAKE_WINDOWS_CLIENT_PORTS_JSON: fakePorts,
+    });
+    assert(result.exitCode === 0, `occupied client ports JSON resume failed\n${result.stdout}\n${result.stderr}`);
+    const payload = JSON.parse(result.stdout);
+    const ports = payload.windowsClientDiagnosticsPorts;
+    assert(ports?.available === false, "occupied client ports should not be available");
+    assert(ports?.state === "occupied-stale-diagnostics", `occupied client ports should be stale diagnostics, got ${ports?.state}`);
+    assert(Array.isArray(ports?.occupiedPorts) && ports.occupiedPorts.includes(5197), "occupied client ports should include page port");
+    assert(Array.isArray(ports?.occupiedPorts) && ports.occupiedPorts.includes(9337), "occupied client ports should include debug port");
+    assertIncludes(payload.boardSummary, "WinClientPorts=occupied(5197,9337;stale-diagnostics)", "occupied client ports board summary");
+    assertIncludes(payload.boardSummary, "WinClientPortsNext=use --clientPort 5200 --debugPort 9340", "occupied client ports board summary");
+    assertIncludes(payload.boardSummary, "WinClientDiagnosticsAlt=", "occupied client ports board summary");
+    assertIncludes(payload.boardSummary, "--clientPort 5200 --debugPort 9340", "occupied client ports board summary");
+    assertNotIncludes(result.stdout + result.stderr, "test-password", "occupied client ports JSON");
+    console.log("[OK] Windows resume status warns about occupied client diagnostics ports");
+  });
+}
+
 async function checkBoardSummary(args) {
   await withMockHost(async (port) => {
     const result = await run([
@@ -480,6 +548,8 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "Windows resume:", "board summary");
     assertIncludes(result.stdout, "No password was requested or sent", "board summary");
     assertIncludes(result.stdout, "mac=ready", "board summary");
+    assertIncludes(result.stdout, "WinClientPorts=", "board summary");
+    assertIncludes(result.stdout, "WinClientPortsNext=", "board summary");
     assertIncludes(result.stdout, "MacDiscovery=", "board summary");
     assertIncludes(result.stdout, "discover-lan-hosts.mjs --noLocalSubnets --host 127.0.0.1", "board summary");
     assertIncludes(result.stdout, "--requireMacHost --boardSummary", "board summary");
@@ -495,10 +565,16 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "WindowsHostMedia=", "board summary");
     assertIncludes(result.stdout, "WinClientDiagnostics=", "board summary");
     assertIncludes(result.stdout, "test-windows-client-browser.mjs --discover --discoverNoLocalSubnets", "board summary");
+    assertIncludes(result.stdout, "--clientPort 5197 --debugPort 9337", "board summary");
     assertIncludes(result.stdout, "--diagnosticsOnly --boardSummary --timeoutMs 45000", "board summary");
     assertIncludes(result.stdout, "WinClientDiagnosticsPs=", "board summary");
     assertIncludes(result.stdout, "test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets", "board summary");
+    assertIncludes(result.stdout, "-ClientPort 5197 -DebugPort 9337", "board summary");
     assertIncludes(result.stdout, "-DiagnosticsOnly -BoardSummary -TimeoutMs 45000", "board summary");
+    assertIncludes(result.stdout, "WinClientDiagnosticsAlt=", "board summary");
+    assertIncludes(result.stdout, "--clientPort 5200 --debugPort 9340", "board summary");
+    assertIncludes(result.stdout, "WinClientDiagnosticsAltPs=", "board summary");
+    assertIncludes(result.stdout, "-ClientPort 5200 -DebugPort 9340", "board summary");
     assertIncludes(result.stdout, "CopyDiagnostics=Windows 控制端事件面板点击", "board summary");
     assertIncludes(result.stdout, "快速摘要", "board summary");
     assertIncludes(result.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "board summary");
@@ -753,6 +829,7 @@ async function main() {
   await checkHelp(args);
   await checkMockJson(args);
   await checkRuntimeBuildClientDiagnosticsCommand(args);
+  await checkWindowsClientDiagnosticsPortOccupancy(args);
   await checkBoardSummary(args);
   await checkBoardCurrentCallJson(args);
   await checkBoardDoneCallJson(args);
