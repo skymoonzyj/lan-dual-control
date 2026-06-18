@@ -512,6 +512,7 @@ async function main() {
   assert(help.stdout.includes("--probeMedia"), "readiness --help does not mention --probeMedia");
   assert(help.stdout.includes("--probeClipboardSecurity"), "readiness --help does not mention --probeClipboardSecurity");
   assert(help.stdout.includes("--probeWgcH264Sources"), "readiness --help does not mention --probeWgcH264Sources");
+  assert(help.stdout.includes("WindowsSecureAuthPath="), "readiness --help does not mention WindowsSecureAuthPath");
 
   for (const helpArg of ["-Help", "-h"]) {
     const powerShellHelp = await runPowerShell(`readiness PowerShell ${helpArg}`, [helpArg], args.timeoutMs);
@@ -545,6 +546,7 @@ async function main() {
     assert(powerShellHelp.stdout.includes("ReverseGrantPs="), `PowerShell readiness ${helpArg} does not mention ReverseGrantPs`);
     assert(powerShellHelp.stdout.includes("WindowsReverseGrantStatus="), `PowerShell readiness ${helpArg} does not mention WindowsReverseGrantStatus`);
     assert(powerShellHelp.stdout.includes("WindowsOpenOneTimeReverseGrant="), `PowerShell readiness ${helpArg} does not mention WindowsOpenOneTimeReverseGrant`);
+    assert(powerShellHelp.stdout.includes("WindowsSecureAuthPath="), `PowerShell readiness ${helpArg} does not mention WindowsSecureAuthPath`);
     assert(/do(?:es)? not ask for or print\s+passwords/i.test(powerShellHelp.stdout), `PowerShell readiness ${helpArg} does not document password safety`);
     assert(!powerShellHelp.stdout.includes("[INFO]"), `PowerShell readiness ${helpArg} should not run checks`);
     assertNoSecretLeak(powerShellHelp.stdout, `PowerShell readiness ${helpArg} stdout`);
@@ -615,6 +617,13 @@ async function main() {
   assert(typeof jsonSummary.boardSummary === "string" && jsonSummary.boardSummary.length > 0, "JSON boardSummary is missing");
   assert(jsonSummary.boardSummary.includes("Windows readiness"), "JSON boardSummary has unexpected text");
   assert(jsonSummary.boardSummary.includes("Do not send passwords"), "JSON boardSummary is missing board safety reminder");
+  assert(jsonSummary.boardSummary.includes("WindowsSecureAuthPath="), "JSON boardSummary is missing WindowsSecureAuthPath");
+  assert(
+    typeof jsonSummary.windowsSecureAuthPath === "string"
+      && jsonSummary.windowsSecureAuthPath.includes("node scripts/windows/start-windows-host.mjs --host 0.0.0.0")
+      && jsonSummary.windowsSecureAuthPath.includes("--promptPassword --requirePassword"),
+    "JSON windowsSecureAuthPath is missing",
+  );
   assert(Array.isArray(jsonSummary.macClientReadinessCommands), "JSON macClientReadinessCommands must be an array");
   assert(
     typeof jsonSummary.windowsReverseControlGrantCommand === "string"
@@ -857,6 +866,12 @@ async function main() {
   assert(powerShellJsonSummary.args?.checkBoard === true, "PowerShell JSON args should record checkBoard");
   assert(typeof powerShellJsonSummary.boardSummary === "string" && powerShellJsonSummary.boardSummary.includes("Windows readiness"), "PowerShell JSON boardSummary is missing");
   assert(powerShellJsonSummary.boardSummary.includes("call=CALLING Mac Codex->Windows Codex"), "PowerShell JSON boardSummary should include active currentCall");
+  assert(powerShellJsonSummary.boardSummary.includes("WindowsSecureAuthPath="), "PowerShell JSON boardSummary should include WindowsSecureAuthPath");
+  assert(
+    typeof powerShellJsonSummary.windowsSecureAuthPath === "string"
+      && powerShellJsonSummary.windowsSecureAuthPath.includes("--promptPassword --requirePassword"),
+    "PowerShell JSON should include Windows secure auth path",
+  );
   assert(powerShellJsonSummary.boardSummary.includes("WindowsHostMediaPs="), "PowerShell JSON boardSummary should include WindowsHostMediaPs");
   assert(
     typeof powerShellJsonSummary.windowsHostMediaReadinessPowerShellCommand === "string"
@@ -986,6 +1001,8 @@ async function main() {
   assert(lines[0].includes("call=CALLING Mac Codex->Windows Codex"), "board summary is missing active currentCall");
   assert(!lines[0].includes("--status --json"), "board summary should not echo call command");
   assert(lines[0].includes("media=not-checked"), "board summary should show media=not-checked by default");
+  assert(lines[0].includes("WindowsSecureAuthPath="), "board summary should include WindowsSecureAuthPath");
+  assert(lines[0].includes("--promptPassword --requirePassword"), "board summary should include prompt/require password flow");
   assert(lines[0].includes("WindowsHostMediaPs="), "board summary should include Windows host media PowerShell command");
   assert(
     lines[0].includes("check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary"),
@@ -1052,6 +1069,8 @@ async function main() {
   assert(powerShellBoardLines.length === 1, `PowerShell readiness -BoardSummary should print one line, got ${powerShellBoardLines.length}`);
   assert(powerShellBoardLines[0].includes("Windows readiness"), "PowerShell board summary has unexpected text");
   assert(powerShellBoardLines[0].includes("call=CALLING Mac Codex->Windows Codex"), "PowerShell board summary is missing active currentCall");
+  assert(powerShellBoardLines[0].includes("WindowsSecureAuthPath="), "PowerShell board summary should include WindowsSecureAuthPath");
+  assert(powerShellBoardLines[0].includes("--promptPassword --requirePassword"), "PowerShell board summary should include prompt/require password flow");
   assert(powerShellBoardLines[0].includes("WindowsHostMediaPs="), "PowerShell board summary should include WindowsHostMediaPs");
   assert(powerShellBoardLines[0].includes("WindowsVideoSupport="), "PowerShell board summary should include WindowsVideoSupport");
   assert(powerShellBoardLines[0].includes("WindowsVideoSupportPs="), "PowerShell board summary should include WindowsVideoSupportPs");

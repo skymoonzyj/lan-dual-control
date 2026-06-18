@@ -14,6 +14,7 @@
 - 下一步入口：`docs/NEXT_ACTIONS.md`
 
 ## Windows 端状态
+- Windows host `start-windows-host --status` 与 `check-windows-host-readiness` 现在会在普通输出、JSON 和 `--boardSummary` 里给出 `WindowsSecureAuthPath=`：当当前 host 是随机运行期密码、Mac 真实 browser smoke 无法认证时，不在 Agent Link Board 传密码，也不尝试取回旧密码；现场流程是 Windows 本机前台用 `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port <port> --promptPassword --requirePassword` 重启 host，用户在 Windows 和 Mac 的 `--promptPassword` 提示里输入同一个临时密码，再由 Mac 端复跑 browser smoke。该路径不含 `--password` 参数，不认证 WebSocket、不发送 input/inject，只作为安全操作指引。
 - Windows formal Mac E2E / Windows client browser 第二步现场复查：`check-mac-formal-e2e --preflightOnly --checkClientDiagnostics --boardSummary --host 192.168.31.122 --port 43770` 已无密跑通，返回 `clientDiagnostics=passed`、`runtimeBuild=d398d64`，失败点不在 Windows client 诊断页；当前 Mac host 自报 `maxScreenFps=30`，所以请求 60Hz 时会被远端上限压住。正式 `--promptPassword` 路径现在会在隐藏密码提示前打印“等待隐藏密码输入：输入时不会显示字符；这是正常等待，不是卡住。”，`test-windows-client-browser --promptPassword` 也有同样提示。
 - Windows host `start-windows-host --status` 在线状态现在也会在普通输出、JSON `macClientReadinessCommands[]` 和 `--boardSummary` 里输出统一 `MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs ... --boardSummary` 标签；原 `formalCommand` / `sendCallCommand` 保持不变，方便 Mac 反控 Windows 前从 Windows host 状态摘要直接复制正式清单入口，也方便 Windows watcher/人工统一识别。
 - Windows host `start-windows-host --status` 离线状态现在会在 JSON、普通输出和 `--boardSummary` 里给出 `safeStartCommand` 与 `ephemeralStartCommand`，并显式保留当前 `--host <host>` / `--port <port>`；复制摘要里的启动建议不会再把自定义端口退回默认 `43770`，状态模式仍不启动服务、不认证、不要求或打印密码、不发送 input/inject。

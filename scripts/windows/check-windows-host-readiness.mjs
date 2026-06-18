@@ -165,6 +165,9 @@ Options:
   --json              Print machine-readable JSON summary.
   --help, -h          Show this help without running checks.
 
+Status summary labels include WindowsSecureAuthPath= for onsite true-browser
+smoke authentication without sending passwords through Agent Link Board.
+
 Profiles:
   default             Low-risk checks only; no running host required.
   deploy              Require the configured port/current build, strict mode, plus video/audio probes.
@@ -531,6 +534,15 @@ function windowsOpenOneTimeReverseGrantPowerShellCommand(port = defaults.port) {
   return `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port ${safePort} -Grant -DurationMs 30000 -BoardSummary`;
 }
 
+function windowsSecureAuthStartCommand(port = defaults.port) {
+  const safePort = Math.max(1, Math.min(65535, Number(port) || defaults.port));
+  return `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${safePort} --promptPassword --requirePassword`;
+}
+
+function windowsSecureAuthPath(port = defaults.port) {
+  return `Restart Windows host locally with ${windowsSecureAuthStartCommand(port)}; user enters the same temporary password in the Windows and Mac --promptPassword prompts; do not send passwords on Agent Link Board, command arguments, or logs`;
+}
+
 function windowsHostMediaReadinessPowerShellCommand() {
   return "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary";
 }
@@ -692,6 +704,7 @@ async function checkRunningHostRuntime(args) {
         windowsWgcBenchmarkPowerShellCommand: statusPayload.windowsWgcBenchmarkPowerShellCommand || windowsWgcBenchmarkPowerShellCommand(),
         windowsWgcCompareCommand: statusPayload.windowsWgcCompareCommand || windowsWgcCompareCommand(),
         windowsWgcComparePowerShellCommand: statusPayload.windowsWgcComparePowerShellCommand || windowsWgcComparePowerShellCommand(),
+        windowsSecureAuthPath: statusPayload.windowsSecureAuthPath || windowsSecureAuthPath(args.port),
         warnings,
         errors,
       };
@@ -762,6 +775,7 @@ async function checkRunningHostRuntime(args) {
       windowsWgcBenchmarkPowerShellCommand: statusPayload.windowsWgcBenchmarkPowerShellCommand || windowsWgcBenchmarkPowerShellCommand(),
       windowsWgcCompareCommand: statusPayload.windowsWgcCompareCommand || windowsWgcCompareCommand(),
       windowsWgcComparePowerShellCommand: statusPayload.windowsWgcComparePowerShellCommand || windowsWgcComparePowerShellCommand(),
+      windowsSecureAuthPath: statusPayload.windowsSecureAuthPath || windowsSecureAuthPath(args.port),
       warnings,
       errors,
     };
@@ -795,6 +809,7 @@ async function checkRunningHostRuntime(args) {
       windowsWgcBenchmarkPowerShellCommand: windowsWgcBenchmarkPowerShellCommand(),
       windowsWgcCompareCommand: windowsWgcCompareCommand(),
       windowsWgcComparePowerShellCommand: windowsWgcComparePowerShellCommand(),
+      windowsSecureAuthPath: windowsSecureAuthPath(args.port),
       warnings,
       errors,
     };
@@ -846,6 +861,9 @@ function makeReadinessBoardSummary(summary) {
     && (!runtimeText.includes("WindowsHostMediaPs=") || !runtimeText.includes(summary.windowsHostMediaReadinessPowerShellCommand))
     ? ` WindowsHostMediaPs=${summary.windowsHostMediaReadinessPowerShellCommand}.`
     : "";
+  const secureAuthPath = summary.windowsSecureAuthPath && !runtimeText.includes("WindowsSecureAuthPath=")
+    ? ` WindowsSecureAuthPath=${summary.windowsSecureAuthPath}.`
+    : "";
   const videoSupport = summary.windowsVideoEncoderSupportCommand && !runtimeText.includes("WindowsVideoSupport=")
     ? ` WindowsVideoSupport=${summary.windowsVideoEncoderSupportCommand}.`
     : "";
@@ -892,7 +910,7 @@ function makeReadinessBoardSummary(summary) {
   const probeText = probeSentences
     .map((sentence) => (sentence.endsWith(".") ? sentence : `${sentence}.`))
     .join(" ");
-  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrantStatus}${openOneTimeReverseGrant}${reverseGrantStatusNode}${openOneTimeReverseGrantNode}${reverseGrant}${reverseGrantPowerShell}${hostMediaPowerShell}${videoSupport}${videoSupportPowerShell}${wgcSupport}${wgcSupportPowerShell}${webCodecs}${webCodecsPowerShell}${wgcBenchmark}${wgcBenchmarkPowerShell}${wgcCompare}${wgcComparePowerShell}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
+  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrantStatus}${openOneTimeReverseGrant}${reverseGrantStatusNode}${openOneTimeReverseGrantNode}${reverseGrant}${reverseGrantPowerShell}${secureAuthPath}${hostMediaPowerShell}${videoSupport}${videoSupportPowerShell}${wgcSupport}${wgcSupportPowerShell}${webCodecs}${webCodecsPowerShell}${wgcBenchmark}${wgcBenchmarkPowerShell}${wgcCompare}${wgcComparePowerShell}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
 }
 
 function formatMediaBoardSummary(summary) {
@@ -1377,6 +1395,9 @@ async function main() {
   const windowsWgcComparePowerShellCommandValue = results.find((result) =>
     typeof result.windowsWgcComparePowerShellCommand === "string" && result.windowsWgcComparePowerShellCommand,
   )?.windowsWgcComparePowerShellCommand || windowsWgcComparePowerShellCommand();
+  const windowsSecureAuthPathValue = results.find((result) =>
+    typeof result.windowsSecureAuthPath === "string" && result.windowsSecureAuthPath,
+  )?.windowsSecureAuthPath || windowsSecureAuthPath(args.port);
 
   const summary = {
     ok,
@@ -1426,6 +1447,7 @@ async function main() {
     windowsWgcBenchmarkPowerShellCommand: windowsWgcBenchmarkPowerShellCommandValue,
     windowsWgcCompareCommand: windowsWgcCompareCommandValue,
     windowsWgcComparePowerShellCommand: windowsWgcComparePowerShellCommandValue,
+    windowsSecureAuthPath: windowsSecureAuthPathValue,
     results: results.map((result) => ({
       label: result.label,
       ok: result.ok,
@@ -1454,6 +1476,7 @@ async function main() {
       windowsWgcBenchmarkPowerShellCommand: result.windowsWgcBenchmarkPowerShellCommand || "",
       windowsWgcCompareCommand: result.windowsWgcCompareCommand || "",
       windowsWgcComparePowerShellCommand: result.windowsWgcComparePowerShellCommand || "",
+      windowsSecureAuthPath: result.windowsSecureAuthPath || "",
       warnings: result.warnings,
       errors: result.errors,
     })),

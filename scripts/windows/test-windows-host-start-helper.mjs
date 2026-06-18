@@ -326,6 +326,7 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   const port = await getFreePort();
   const expectedSafeStart = `node scripts/windows/start-windows-host.mjs --host 127.0.0.1 --port ${port} --promptPassword --requirePassword`;
   const expectedEphemeralStart = `${expectedSafeStart} --skipFirewallCheck`;
+  const expectedSecureAuthStart = `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${port} --promptPassword --requirePassword`;
   const result = await runNode(["--status", "--host", "127.0.0.1", "--port", String(port), "--requirePassword"], {
     timeoutMs,
     env: { LAN_DUAL_PASSWORD: "" },
@@ -339,6 +340,8 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   assertIncludes(output, "Start safely", "offline status");
   assertIncludes(output, expectedSafeStart, "offline status safe start command");
   assertIncludes(output, expectedEphemeralStart, "offline status ephemeral start command");
+  assertIncludes(output, "Windows secure auth path:", "offline status secure auth path");
+  assertIncludes(output, expectedSecureAuthStart, "offline status secure auth start command");
   assertIncludes(output, "Windows host media baseline command:", "offline status");
   assertIncludes(output, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "offline status");
   assertIncludes(output, "Windows video support command:", "offline status");
@@ -385,6 +388,12 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   }
   if (!String(parsed.suggestions[0] || "").includes(`--port ${port}`) || !String(parsed.suggestions[1] || "").includes("--skipFirewallCheck")) {
     throw new Error(`Offline JSON suggestions did not include precise safe/ephemeral start commands.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.windowsSecureAuthPath || "").includes(expectedSecureAuthStart) || !String(parsed.windowsSecureAuthPath || "").includes("same temporary password")) {
+    throw new Error(`Offline JSON status did not include the secure auth path.\n${jsonResult.stdout}`);
+  }
+  if (String(parsed.windowsSecureAuthPath || "").includes("--password ")) {
+    throw new Error(`Offline JSON secure auth path should not include a password argument.\n${jsonResult.stdout}`);
   }
   if (!String(parsed.windowsHostMediaReadinessCommand || "").includes("check-windows-host-readiness.mjs") || !String(parsed.windowsHostMediaReadinessCommand || "").includes("--probeMedia")) {
     throw new Error(`Offline JSON status did not include Windows host media readiness command.\n${jsonResult.stdout}`);
@@ -436,6 +445,9 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   }
   if (!String(parsed.boardSummary || "").includes("WindowsHostMedia=")) {
     throw new Error(`Offline JSON board summary did not include WindowsHostMedia command.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.boardSummary || "").includes("WindowsSecureAuthPath=") || !String(parsed.boardSummary || "").includes(expectedSecureAuthStart)) {
+    throw new Error(`Offline JSON board summary did not include WindowsSecureAuthPath.\n${jsonResult.stdout}`);
   }
   if (!String(parsed.boardSummary || "").includes("WindowsHostMediaPs=") || !String(parsed.boardSummary || "").includes("check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary")) {
     throw new Error(`Offline JSON board summary did not include WindowsHostMediaPs command.\n${jsonResult.stdout}`);
@@ -500,6 +512,8 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   assertIncludes(boardResult.stdout, "start safely", "offline board summary");
   assertIncludes(boardResult.stdout, expectedSafeStart, "offline board summary safe start command");
   assertIncludes(boardResult.stdout, expectedEphemeralStart, "offline board summary ephemeral start command");
+  assertIncludes(boardResult.stdout, "WindowsSecureAuthPath=", "offline board summary secure auth path");
+  assertIncludes(boardResult.stdout, expectedSecureAuthStart, "offline board summary secure auth command");
   assertIncludes(boardResult.stdout, "WindowsHostMedia=", "offline board summary");
   assertIncludes(boardResult.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "offline board summary");
   assertIncludes(boardResult.stdout, "WindowsHostMediaPs=", "offline board summary");
@@ -746,6 +760,8 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         assertIncludes(statusOutput, "Windows reverse grant Node fallback:", "online status");
         assertIncludes(statusOutput, "allow-windows-reverse-control.mjs --host 127.0.0.1", "online status");
         assertIncludes(statusOutput, "allow-windows-reverse-control.ps1 -HostName 127.0.0.1", "online status");
+        assertIncludes(statusOutput, "Windows secure auth path:", "online status");
+        assertIncludes(statusOutput, `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${port} --promptPassword --requirePassword`, "online status secure auth path");
         assertIncludes(statusOutput, "differs from current git", "online status");
         assertIncludes(statusOutput, "Could not inspect Windows host runtime changes", "online status");
         assertNotIncludes(statusOutput, "test-password", "online status");
@@ -770,6 +786,15 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         }
         if (!String(parsed.boardSummary || "").includes("Windows host readiness: online") || !String(parsed.boardSummary || "").includes("Do not send passwords")) {
           throw new Error(`Online JSON status did not include expected board summary.\n${jsonResult.stdout}`);
+        }
+        if (!String(parsed.windowsSecureAuthPath || "").includes(`node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${port} --promptPassword --requirePassword`)) {
+          throw new Error(`Online JSON status did not include Windows secure auth path.\n${jsonResult.stdout}`);
+        }
+        if (String(parsed.windowsSecureAuthPath || "").includes("--password ")) {
+          throw new Error(`Online JSON secure auth path should not include a password argument.\n${jsonResult.stdout}`);
+        }
+        if (!String(parsed.boardSummary || "").includes("WindowsSecureAuthPath=")) {
+          throw new Error(`Online JSON board summary did not include WindowsSecureAuthPath.\n${jsonResult.stdout}`);
         }
         if (!String(parsed.boardSummary || "").includes("reverse=deny-confirm")) {
           throw new Error(`Online JSON board summary did not include reverse-control policy.\n${jsonResult.stdout}`);
@@ -901,6 +926,8 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         }
         assertIncludes(boardResult.stdout, "Windows host readiness: online", "online board summary");
         assertIncludes(boardResult.stdout, "reverse=deny-confirm", "online board summary");
+        assertIncludes(boardResult.stdout, "WindowsSecureAuthPath=", "online board summary secure auth path");
+        assertIncludes(boardResult.stdout, `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${port} --promptPassword --requirePassword`, "online board summary secure auth command");
         assertIncludes(boardResult.stdout, "check-mac-client-readiness.mjs", "online board summary");
         assertIncludes(boardResult.stdout, "check-mac-client-formal-status.mjs", "online board summary");
         assertIncludes(boardResult.stdout, "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "online board summary");

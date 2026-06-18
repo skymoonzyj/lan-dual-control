@@ -176,7 +176,8 @@ Options:
                           video/audio baseline checks and a WindowsVideoSupport
                           command for H.264/WGC/WebCodecs capability checks, plus
                           WindowsWgcSupport for WGC/WinRT/GPU preflight checks and
-                          WindowsWebCodecs for browser H.264 decode checks.
+                          WindowsWebCodecs for browser H.264 decode checks, and
+                          WindowsSecureAuthPath for onsite true-browser smoke auth.
   --json                  With --status, print pure machine-readable JSON.
   --dryRun                Print the resolved launch plan and exit.
   --help, -h              Show this help without starting Windows host.
@@ -717,6 +718,15 @@ function windowsHostEphemeralStartCommand(args = {}) {
   return `${windowsHostSafeStartCommand(args)} --skipFirewallCheck`;
 }
 
+function windowsSecureAuthStartCommand(port = defaults.port) {
+  const safePort = Math.max(1, Math.min(65535, Number(port) || defaults.port));
+  return `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${safePort} --promptPassword --requirePassword`;
+}
+
+function windowsSecureAuthPath(port = defaults.port) {
+  return `Restart Windows host locally with ${windowsSecureAuthStartCommand(port)}; user enters the same temporary password in the Windows and Mac --promptPassword prompts; do not send passwords on Agent Link Board, command arguments, or logs`;
+}
+
 function shouldShowReverseControlGrantCommand(reverse = normalizeReverseControlStatus()) {
   return Boolean(reverse.supported) && reverse.mode !== "disabled" && reverse.mode !== "accept" && !reverse.autoAccept;
 }
@@ -758,7 +768,7 @@ function makeBoardSummary(status) {
   if (!status.ok) {
     const safeStart = status.safeStartCommand || status.suggestions[0] || "node scripts/windows/start-windows-host.mjs --promptPassword --requirePassword";
     const ephemeralStart = status.ephemeralStartCommand ? ` temporary smoke with ${status.ephemeralStartCommand}.` : "";
-    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${safeStart}.${ephemeralStart} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrantStable}${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
+    return `Windows host readiness: offline ${status.probe.host}:${status.probe.port};${board} start safely with ${safeStart}.${ephemeralStart} WindowsSecureAuthPath=${status.windowsSecureAuthPath}. WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrantStable}${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
   }
   const targets = macReadinessTargets(status);
   const targetText = targets.length > 0
@@ -772,7 +782,7 @@ function makeBoardSummary(status) {
   const formalChecklist = targets[0]?.formalChecklistLabel ? ` ${targets[0].formalChecklistLabel}.` : "";
   const readiness = targets[0]?.command ? ` Readiness: ${targets[0].command}.` : "";
   const sendCall = targets[0]?.sendCallCommand ? ` SendCall when ready: ${targets[0].sendCallCommand}.` : "";
-  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${formalChecklist}${readiness}${sendCall} WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrantStable}${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
+  return `Windows host readiness: online targets=${targetText};${board} runtimeBuild=${status.runtime?.buildId || "unknown"}; screen=${screen.capturePipeline || screen.mode || "unknown"} codec=${screen.videoCodec || "unknown"} transport=${screen.videoTransport || "unknown"}; audio=${audio.mode || audio.backend || "unknown"}; input=${input.mode || "unknown"}; reverse=${reverseControlBoardToken(reverse)}; clipboard=text:${clipboard.text ? "on" : "off"} file:${clipboard.file ? "on" : "off"}. Mac next: ${next}.${formalChecklist}${readiness}${sendCall} WindowsSecureAuthPath=${status.windowsSecureAuthPath}. WindowsHostMedia=${status.windowsHostMediaReadinessCommand}. WindowsHostMediaPs=${status.windowsHostMediaReadinessPowerShellCommand}. WindowsVideoSupport=${status.windowsVideoEncoderSupportCommand}. WindowsVideoSupportPs=${status.windowsVideoEncoderSupportPowerShellCommand}. WindowsWgcSupport=${status.windowsWgcSupportCommand}. WindowsWgcSupportPs=${status.windowsWgcSupportPowerShellCommand}. WindowsWebCodecs=${status.windowsWebCodecsH264Command}. WindowsWebCodecsPs=${status.windowsWebCodecsH264PowerShellCommand}. WindowsWgcBenchmark=${status.windowsWgcBenchmarkCommand}. WindowsWgcBenchmarkPs=${status.windowsWgcBenchmarkPowerShellCommand}. WindowsWgcCompare=${status.windowsWgcCompareCommand}. WindowsWgcComparePs=${status.windowsWgcComparePowerShellCommand}.${reverseGrantStable}${reverseGrant}${reverseGrantPowerShell} Do not send passwords on Agent Link Board.`;
 }
 
 function applyDiscoveryStatus(status, discovery, args) {
@@ -854,6 +864,7 @@ function makeStatusShell(args, probeHost = statusProbeHost(args)) {
     windowsOpenOneTimeReverseGrantPowerShellCommand: windowsOpenOneTimeReverseGrantPowerShellCommand(args.port),
     safeStartCommand: windowsHostSafeStartCommand(args),
     ephemeralStartCommand: windowsHostEphemeralStartCommand(args),
+    windowsSecureAuthPath: windowsSecureAuthPath(args.port),
     board: skippedBoardSnapshot(),
     boardSummary: "",
     warnings: [],
@@ -970,6 +981,7 @@ async function printStatus(args) {
       console.log(`[INFO] Windows WGC benchmark PowerShell command: ${status.windowsWgcBenchmarkPowerShellCommand}`);
       console.log(`[INFO] Windows WGC source compare command: ${status.windowsWgcCompareCommand}`);
       console.log(`[INFO] Windows WGC source compare PowerShell command: ${status.windowsWgcComparePowerShellCommand}`);
+      console.log(`[INFO] Windows secure auth path: ${status.windowsSecureAuthPath}`);
       if (shouldShowReverseControlGrantCommand(status.capabilities?.reverseControl)) {
         console.log(`[INFO] Windows reverse grant status command: ${status.windowsReverseGrantStatusPowerShellCommand}`);
         console.log(`[INFO] Windows one-time reverse grant command: ${status.windowsOpenOneTimeReverseGrantPowerShellCommand}`);
@@ -1000,6 +1012,7 @@ async function printStatus(args) {
   console.log(`[INFO] Windows WGC benchmark PowerShell command after host is online: ${status.windowsWgcBenchmarkPowerShellCommand}`);
   console.log(`[INFO] Windows WGC source compare command after host is online: ${status.windowsWgcCompareCommand}`);
   console.log(`[INFO] Windows WGC source compare PowerShell command after host is online: ${status.windowsWgcComparePowerShellCommand}`);
+  console.log(`[INFO] Windows secure auth path: ${status.windowsSecureAuthPath}`);
   console.log(`[INFO] Windows reverse grant PowerShell command after host is online: ${status.windowsReverseControlGrantPowerShellCommand}`);
   console.log(`[INFO] Windows reverse grant Node fallback after host is online: ${status.windowsReverseControlGrantCommand}`);
   return false;

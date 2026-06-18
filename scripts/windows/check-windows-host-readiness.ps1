@@ -80,6 +80,7 @@ Options:
   -Help, -h                   Show this help without running checks.
 
 Status summaries include:
+  WindowsSecureAuthPath=Restart Windows host locally with node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port <port> --promptPassword --requirePassword; user enters the same temporary password in Windows and Mac prompts; do not send passwords.
   WindowsHostMedia=node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
   WindowsHostMediaPs=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary
   WindowsVideoSupport=node scripts/windows/check-windows-video-encoder-support.mjs --boardSummary

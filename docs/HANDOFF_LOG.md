@@ -21,6 +21,39 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：响应 Mac secure-auth call，把随机运行期密码阻塞时的安全认证路径写入 Windows host/status/readiness 摘要。
+完成内容：
+- `start-windows-host --status` 普通输出、JSON 和 `--boardSummary` 新增 `windowsSecureAuthPath` / `WindowsSecureAuthPath=`。
+- `check-windows-host-readiness` 普通 `--boardSummary`、JSON、PowerShell JSON 和 PowerShell `-BoardSummary` 会复用或补齐同一条 `WindowsSecureAuthPath=`。
+- 安全路径固定为 Windows 本机前台重启 `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port <port> --promptPassword --requirePassword`，由用户在 Windows 与 Mac 两端隐藏密码提示中输入同一个临时密码；不通过 Agent Link Board、命令参数或日志传密码。
+- PowerShell help 已记录 `WindowsSecureAuthPath=`，便于现场查参数时直接看到无密流程。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `scripts/windows/check-windows-host-readiness.ps1`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 45000 --readinessTimeoutMs 5000`
+遗留问题：
+- 当前后台 Windows host 仍是之前随机运行期密码启动；正式 browser smoke 需要用户现场按 `WindowsSecureAuthPath=` 重启并在两端本地输入同一个临时密码。
+下一步建议：
+- Mac 端看到 `WindowsSecureAuthPath=` 后，不要在通讯板索要密码；等用户现场重启 Windows host 并输入同一临时密码后，再跑 true browser smoke。仍不要执行 input/inject，除非用户另行明确确认。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端按新摘要流程复跑认证 smoke；不需要共享任何密码。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：复查 Windows formal Mac E2E 第二步卡住体验，并给密码等待加明确提示。
 完成内容：
 - 无密复查真实 Mac host `192.168.31.122:43770`：`check-mac-formal-e2e --preflightOnly --checkClientDiagnostics --boardSummary` 返回 ready，`clientDiagnostics=passed`，runtime build `d398d64`。
