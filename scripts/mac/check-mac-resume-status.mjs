@@ -844,9 +844,9 @@ function formatBoardSummary(report) {
 
 function formatRecommendationSummary(blockerItems, warningItems) {
   return [
-    blockerItems.length > 0 ? `blockers=${summarizeRecommendationIds(blockerItems)}` : "",
-    warningItems.length > 0 ? `warnings=${summarizeRecommendationIds(warningItems)}` : "",
-  ].filter(Boolean).join(" ");
+    `blockers=${blockerItems.length > 0 ? summarizeRecommendationIds(blockerItems) : "none"}`,
+    `warnings=${warningItems.length > 0 ? summarizeRecommendationIds(warningItems) : "none"}`,
+  ].join(" ");
 }
 
 function summarizeRecommendationIds(items) {

@@ -218,6 +218,7 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.boardSummary, "MacUnattendedStatus=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacLaunchAgentPlan=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "HostReadiness=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "blockers=none", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "warnings=host-offline,launch-agent-missing", "missing LaunchAgent board summary");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "missing LaunchAgent JSON");
   print("OK", "Missing LaunchAgent is reported as a warning in default JSON mode");
@@ -319,6 +320,7 @@ function checkBoardSummary(args) {
   assertIncludes(text, "MacUnattendedStatus=", "board summary");
   assertIncludes(text, "MacLaunchAgentPlan=", "board summary");
   assertIncludes(text, "HostReadiness=", "board summary");
+  assertIncludes(text, "blockers=none", "board summary");
   assertIncludes(text, "warnings=host-offline,launch-agent-missing", "board summary");
   assertIncludes(text, "No password", "board summary");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "board summary");
@@ -366,6 +368,65 @@ async function checkCapabilitiesInputMode(args) {
   print("OK", "Capabilities inputMode is surfaced in unattended JSON and board summary");
 }
 
+async function checkNoFindingsSummary(args) {
+  const dir = mkdtempSync(path.join(tmpdir(), "lan-dual-unattended-clean-"));
+  try {
+    const plist = path.join(dir, "com.lan-dual-control.mac-host.plist");
+    writeFileSync(plist, `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.lan-dual-control.mac-host</string>
+</dict>
+</plist>
+`, "utf8");
+    await withFakeHost({
+      deviceName: "Fake clean unattended Mac",
+      inputMode: "log",
+      permissions: {
+        screenRecording: true,
+        accessibility: true,
+        inputMonitoring: true,
+      },
+      runtime: {
+        buildId: "fake-clean-unattended-build",
+        processId: 12345,
+      },
+      capabilities: {
+        h264Stream: true,
+        capturePipeline: "screencapturekit-h264",
+        audioMode: "system-pcm",
+      },
+    }, async (port) => {
+      const result = run(args, [
+        "--json",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(port),
+        "--timeoutMs",
+        "1200",
+        "--launchAgentPath",
+        plist,
+        "--skipLaunchctl",
+        "--skipPmset",
+      ]);
+      const payload = parseJson(result.stdout, "clean unattended JSON");
+      assert(result.status === 0, `clean unattended path should pass\n${result.stdout}\n${result.stderr}`);
+      assert(payload.ok === true, "clean unattended payload should report ok=true");
+      assert(payload.findings.length === 0, "clean unattended payload should have no findings");
+      assertIncludes(payload.boardSummary, "attention=none", "clean unattended board summary");
+      assertIncludes(payload.boardSummary, "blockers=none", "clean unattended board summary");
+      assertIncludes(payload.boardSummary, "warnings=none", "clean unattended board summary");
+      assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "clean unattended JSON");
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  print("OK", "Clean unattended status explicitly reports blockers=none and warnings=none");
+}
+
 async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -380,6 +441,7 @@ async function main() {
   checkFakePlist(args);
   checkBoardSummary(args);
   await checkCapabilitiesInputMode(args);
+  await checkNoFindingsSummary(args);
   print("OK", "Mac unattended status self-test passed");
 }
 

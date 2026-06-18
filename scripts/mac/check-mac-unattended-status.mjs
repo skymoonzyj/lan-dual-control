@@ -405,10 +405,7 @@ function makeBoardSummary(report) {
     : warnings > 0
       ? `attention=${warnings} warning(s)`
       : "attention=none";
-  const findingSummary = [
-    blockers > 0 ? `blockers=${summarizeFindingIds(blockersList)}` : "",
-    warnings > 0 ? `warnings=${summarizeFindingIds(warningsList)}` : "",
-  ].filter(Boolean).join(" ");
+  const findingSummary = `blockers=${blockers > 0 ? summarizeFindingIds(blockersList) : "none"} warnings=${warnings > 0 ? summarizeFindingIds(warningsList) : "none"}`;
   const host = report.host.online
     ? `online inputMode=${report.host.inputMode || "unknown"} build=${report.host.runtime?.buildId || "unknown"}`
     : `offline ${report.args.host}:${report.args.port}`;
