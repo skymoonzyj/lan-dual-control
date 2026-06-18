@@ -53,6 +53,10 @@ Examples:
 Machine-readable JSON fields:
   formalChecklistCommand   Secret-free board summary command for the Mac
                            controls Windows formal checklist.
+  macClientFormalChecklistCommand
+                           Alias of formalChecklistCommand with the standard
+                           MacClientFormalChecklist= board-summary label for
+                           watcher and automation consumers.
   formalSmokeCommand       Secret-free run-mac-client-formal-smoke preflight
                            command. It can start/reuse the local Mac client
                            page, but does not authenticate, prompt for a
@@ -293,6 +297,7 @@ function buildReport(scan, args) {
     subnets: scan.subnets || [],
     nextCommand: best ? readinessCommand(best) : "",
     formalChecklistCommand: best ? readinessCommand(best) : "",
+    macClientFormalChecklistCommand: best ? readinessCommand(best) : "",
     formalSmokeCommand: best ? formalSmokeCommand(best) : "",
     macClientBrowserSelfTestCommand: macClientBrowserSelfTestCommand(),
     manualChecklistSummary,
@@ -306,7 +311,7 @@ function buildReport(scan, args) {
 
 function makeBoardSummary(report) {
   if (report.best) {
-    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}. FormalChecklist=${report.formalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}. FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
   }
   const ignored = report.ignored.length > 0
     ? ` Saw ${report.ignored.length} non-Windows host(s), likely Mac/self.`
@@ -322,6 +327,7 @@ function printText(report, args) {
     }
     console.log(`[INFO] Next: ${report.nextCommand}`);
     console.log(`[INFO] Formal checklist: ${report.formalChecklistCommand}`);
+    console.log(`[INFO] Mac client formal checklist: ${report.macClientFormalChecklistCommand}`);
     console.log(`[INFO] Formal smoke preflight: ${report.formalSmokeCommand}`);
     console.log(`[INFO] Manual checklist: ${report.manualChecklistSummary}`);
     console.log(`[INFO] Mac client browser self-test: ${report.macClientBrowserSelfTestCommand}`);

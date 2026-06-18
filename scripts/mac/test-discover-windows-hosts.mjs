@@ -75,6 +75,19 @@ function assertFormalSmokeCommand(command, label) {
   assertNotIncludes(command, "--json", label);
 }
 
+function assertFormalChecklistCommand(command, label) {
+  assertIncludes(command, "check-mac-client-formal-status.mjs", label);
+  assertIncludes(command, "--host 192.168.31.68", label);
+  assertIncludes(command, "--port 43770", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "--json", label);
+}
+
 function assertMacClientBrowserSelfTestCommand(command, label) {
   assertIncludes(command, "scripts/mac/test-mac-client-browser-self-test.mjs", label);
   assertIncludes(command, "--boardSummary", label);
@@ -203,6 +216,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "read-only", `${script} ${flag}`);
     assertIncludes(result.stdout, "--scanTimeoutMs", `${script} ${flag}`);
     assertIncludes(result.stdout, "formalChecklistCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macClientFormalChecklistCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "formalSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macClientBrowserSelfTestCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "reverseControlRehearsal", `${script} ${flag}`);
@@ -224,8 +238,8 @@ function checkFoundJson(tmp, args) {
   assert(payload.ignored.length === 1, "found payload should keep ignored Mac host diagnostics");
   assert(payload.best.host === "192.168.31.68", "best host should be Windows");
   assertIncludes(payload.nextCommand, "--host 192.168.31.68", "next command");
-  assertIncludes(payload.formalChecklistCommand, "--host 192.168.31.68", "formal checklist command");
-  assertIncludes(payload.formalChecklistCommand, "--boardSummary", "formal checklist command");
+  assertFormalChecklistCommand(payload.formalChecklistCommand || "", "formal checklist command");
+  assertFormalChecklistCommand(payload.macClientFormalChecklistCommand || "", "Mac client formal checklist command");
   assertFormalSmokeCommand(payload.formalSmokeCommand || "", "formal smoke command");
   assertMacClientBrowserSelfTestCommand(
     payload.macClientBrowserSelfTestCommand || "",
@@ -236,6 +250,8 @@ function checkFoundJson(tmp, args) {
   assertIncludes(payload.sendCallCommand, "--sendCall", "send call command");
   assertReverseControlRehearsal(payload.reverseControlRehearsal || "", "found JSON reverse rehearsal");
   assertIncludes(payload.boardSummary, "FormalChecklist=", "board summary");
+  assertIncludes(payload.boardSummary, "MacClientFormalChecklist=", "board summary");
+  assertIncludes(payload.boardSummary, "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.68", "board summary");
   assertIncludes(payload.boardSummary, "FormalSmoke=", "board summary");
   assertFormalSmokeCommand(extractFormalSmokeCommand(payload.boardSummary, "board summary"), "board summary formal smoke command");
   assertIncludes(payload.boardSummary, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "board summary");
@@ -259,6 +275,7 @@ function checkBoardSummaryFound(tmp, args) {
   assert(result.status === 0, `found board summary should exit 0.\n${result.stdout}\n${result.stderr}`);
   assertIncludes(result.stdout, "Windows host discovery: found 1", "found board summary");
   assertIncludes(result.stdout, "FormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.68", "found board summary");
+  assertIncludes(result.stdout, "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.68", "found board summary");
   assertIncludes(result.stdout, "FormalSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.68", "found board summary");
   assertFormalSmokeCommand(extractFormalSmokeCommand(result.stdout, "found board summary"), "found board summary formal smoke command");
   assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "found board summary");
@@ -280,6 +297,8 @@ function checkPlainFound(tmp, args) {
     FAKE_WINDOWS_DISCOVERY_MODE: "found",
   });
   assert(result.status === 0, `found plain output should exit 0.\n${result.stdout}\n${result.stderr}`);
+  assertIncludes(result.stdout, "Mac client formal checklist:", "found plain output");
+  assertIncludes(result.stdout, "check-mac-client-formal-status.mjs --host 192.168.31.68", "found plain output");
   assertIncludes(result.stdout, "Formal smoke preflight:", "found plain output");
   assertIncludes(result.stdout, "Mac client browser self-test:", "found plain output");
   assertIncludes(result.stdout, "Reverse rehearsal:", "found plain output");
