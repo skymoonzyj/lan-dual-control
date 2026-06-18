@@ -122,6 +122,16 @@ Machine-readable JSON fields:
                              and prints one board summary line without using a
                              real host, requesting a password, sending a call,
                              or running inject.
+  commands.macHeartbeatOnceCommand
+                             Secret-free one-shot Mac heartbeat watcher command;
+                             it posts a current MacHeartbeat summary to Agent
+                             Link Board as device "Mac Heartbeat" and does not
+                             refresh the Mac Codex status.
+  commands.macHeartbeatWatchCommand
+                             Secret-free continuous Mac heartbeat watcher
+                             command; it keeps posting as "Mac Heartbeat" for
+                             Windows-side monitoring without authenticating a
+                             host or sending input.
   commands.macClientReverseRehearsalAction
                              Human action for the guarded Mac-controls-Windows
                              reverse-control request rehearsal. Run discovery,
@@ -825,6 +835,14 @@ function makeMacClientBrowserSelfTestCommand() {
   return "node scripts/mac/test-mac-client-browser-self-test.mjs --boardSummary";
 }
 
+function makeMacHeartbeatOnceCommand() {
+  return "node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --boardSummary";
+}
+
+function makeMacHeartbeatWatchCommand() {
+  return "node scripts/mac/watch-mac-heartbeat.mjs --sendStatus --intervalMs 30000";
+}
+
 function makeMacClientReverseRehearsalAction() {
   return "Run MacClientDiscoverWindows first, then use its ReverseRehearsal= line: Mac requests reverse control and expects LAN008, Windows runs the local loopback one-time grant, Mac retries and expects accepted/临时授权已使用";
 }
@@ -924,6 +942,8 @@ function formatBoardSummary(report) {
       `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
       `MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}.`,
       `MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}.`,
+      `MacHeartbeatOnce=${report.commands.macHeartbeatOnceCommand}.`,
+      `MacHeartbeatWatch=${report.commands.macHeartbeatWatchCommand}.`,
       `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
       "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
     ].join(" ");
@@ -956,6 +976,8 @@ function formatBoardSummary(report) {
     `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
     `MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}.`,
     `MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}.`,
+    `MacHeartbeatOnce=${report.commands.macHeartbeatOnceCommand}.`,
+    `MacHeartbeatWatch=${report.commands.macHeartbeatWatchCommand}.`,
     `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
     "Next formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
@@ -1035,6 +1057,8 @@ function printReport(report) {
   console.log(`[NEXT] Mac client formal checklist: ${report.commands.macClientFormalChecklistCommand}`);
   console.log(`[NEXT] Mac client formal smoke preflight: ${report.commands.macClientFormalSmokeCommand}`);
   console.log(`[NEXT] Mac client browser self-test: ${report.commands.macClientBrowserSelfTestCommand}`);
+  console.log(`[NEXT] Mac heartbeat one-shot board update: ${report.commands.macHeartbeatOnceCommand}`);
+  console.log(`[NEXT] Mac heartbeat continuous board watcher: ${report.commands.macHeartbeatWatchCommand}`);
   console.log(`[NEXT] Mac client copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
   console.log(`[NEXT] Mac script help safety check: ${report.commands.macScriptHelpCommand}`);
   console.log(report.ok ? "[OK] Resume status passed" : "[FAIL] Resume status needs attention");
@@ -1086,6 +1110,8 @@ async function main() {
       macClientFormalChecklistCommand: makeMacClientFormalChecklistCommand(),
       macClientFormalSmokeCommand: makeMacClientFormalSmokeCommand(),
       macClientBrowserSelfTestCommand: makeMacClientBrowserSelfTestCommand(),
+      macHeartbeatOnceCommand: makeMacHeartbeatOnceCommand(),
+      macHeartbeatWatchCommand: makeMacHeartbeatWatchCommand(),
       macClientCopyDiagnosticsAction: "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码",
       macScriptHelpCommand: makeMacScriptHelpCommand(),
     },
