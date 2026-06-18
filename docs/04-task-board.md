@@ -71,6 +71,7 @@
 - [x] Mac 恢复总览补更稳的 Mac client formal smoke 入口：`MacClientFormalSmoke=` 现在输出 `run-mac-client-formal-smoke --discover --ensureClient --preflightOnly --boardSummary`，先安全启动/复用本地 Mac client 页面，再做无密 Windows discovery/formal preflight；不弹密码、不认证、不发 call/input/inject。
 - [x] Mac formal smoke 自身补同名安全重跑入口：`run-mac-client-formal-smoke --json/--boardSummary` 现在会输出 `commands.macClientFormalSmoke` / `MacClientFormalSmoke=run-mac-client-formal-smoke --discover --ensureClient --preflightOnly --boardSummary`，发现失败、preflight、dry-run 和 sendCall 摘要都可直接重跑安全无密预检；不弹密码、不认证、不发 call/input/inject。
 - [x] Windows 恢复总览消费同一条 Mac client formal smoke 入口：`check-windows-resume-status --checkBoard` 会从 Agent Link Board 安全提取 `MacClientFormalSmoke=run-mac-client-formal-smoke --discover --ensureClient --preflightOnly --boardSummary`，写入 JSON、普通输出和 `--boardSummary`；缺 `--ensureClient` / `--preflightOnly` / `--boardSummary` 或含密码/token/secret 的候选会被拒绝，不认证、不发 call/input/inject。
+- [x] Mac Windows discovery 补同名安全 preflight 入口：`discover-windows-hosts --json/--boardSummary` 和普通输出现在会给出 `macClientFormalSmokeCommand` / `MacClientFormalSmoke=run-mac-client-formal-smoke --discover --ensureClient --preflightOnly --boardSummary`，发现到 Windows host 后也能直接复制标准无密 preflight 标签；不弹密码、不认证、不发 call/input/inject。
 - [x] Windows 恢复总览补安全认证 call 显式发送入口：`check-windows-resume-status --checkBoard --sendAgentCallAck --json` 和 PowerShell `-CheckBoard -SendAgentCallAck -Json` 会在 secure-auth active call ready 时发送同一条无密 Ack；非安全认证 active call 或路径未就绪会拒绝发送，不自动清 call、不认证、不发密码/input/inject。
 - [x] 上传到 GitHub 仓库。
 - [x] Mac mini 到位后克隆仓库。

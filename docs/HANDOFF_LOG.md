@@ -17,6 +17,37 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
+本轮目标：让 `discover-windows-hosts` 也输出标准 `MacClientFormalSmoke=` 安全无密 preflight 标签，衔接 Windows resume/watcher 已消费的同名入口。
+完成内容：
+- JSON 新增 `macClientFormalSmokeCommand`，默认输出 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary`。
+- `--boardSummary` 发现 Windows host 时新增 `MacClientFormalSmoke=`，与既有 target-specific `FormalSmoke=` 并存；前者是标准安全重跑入口，后者仍是已发现 host 的定点 preflight。
+- 普通输出新增 `Mac client formal smoke:` 行；帮助文本说明该命令是给 watcher/自动化消费的安全标签，不继承密码、认证、call 或 input/inject 路径。
+修改文件：
+- `scripts/mac/discover-windows-hosts.mjs`
+- `scripts/mac/test-discover-windows-hosts.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/mac/test-discover-windows-hosts.mjs --timeoutMs 10000`（失败点：help 不含 `macClientFormalSmokeCommand`）
+- 语法检查：`node --check scripts/mac/discover-windows-hosts.mjs`、`node --check scripts/mac/test-discover-windows-hosts.mjs`
+- 实现后复跑：`node scripts/mac/test-discover-windows-hosts.mjs --timeoutMs 10000`
+- 统一 Mac help 安全自检：`node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- 真实只读 discovery：`node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary`
+- 最终收尾：`git diff --check`；`rg -n "^(<<<<<<<|=======|>>>>>>>)" docs scripts/mac`
+遗留问题：
+- 本轮只补 discovery 输出和文档，不运行真实 browser auth，不弹密码，不发送 call，不发送 input/inject。
+下一步建议：
+- 白天继续时先看 Agent Link Board；若只拿到 `discover-windows-hosts` 摘要，可直接复制 `MacClientFormalSmoke=` 做安全无密 preflight，再决定是否由用户授权密码跑真实 smoke 或用 call 请求 Windows 配合。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
 ## 2026-06-18 Windows Codex
 
 日期：2026-06-18 继续推进
