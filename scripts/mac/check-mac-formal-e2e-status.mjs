@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -66,6 +67,16 @@ JSON output:
                             Safe local foreground start command for the formal
                             60Hz target. It uses --promptPassword, never embeds
                             --password, and does not send input.
+  commands.macHostStopCommand
+                            Secret-free local stop command for the currently
+                            checked Mac host before loading the LaunchAgent. It
+                            does not authenticate or request a password.
+  commands.macLaunchAgentLoadCommand
+                            Manual launchctl bootstrap command for loading the
+                            standard Mac host LaunchAgent.
+  commands.macLaunchAgentPrintCommand
+                            Manual launchctl print command for verifying the
+                            standard Mac host LaunchAgent status.
   commands.macHostReadinessCommand
                             Secret-free low-risk Mac host readiness command.
                             It reads host and Agent Link Board state only,
@@ -485,6 +496,9 @@ function makeCallText(report) {
       `Checklist ${findings}.`,
       `Start with ${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}, then rerun the checklist.`,
       `For foreground formal 60Hz, use: ${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
+      `For LaunchAgent transition, stop the current Mac host with: ${report.commands?.macHostStopCommand || makeMacHostStopCommand(report.args?.host, report.args?.port)}.`,
+      `Then manually load the LaunchAgent with: ${report.commands?.macLaunchAgentLoadCommand || makeMacLaunchAgentLoadCommand()}.`,
+      `Verify launchd state with: ${report.commands?.macLaunchAgentPrintCommand || makeMacLaunchAgentPrintCommand()}.`,
       `Plan safe reboot persistence first with: ${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
       `If targeting formal 60Hz, dry-run max-FPS planning first with: ${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
       `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
@@ -499,6 +513,9 @@ function makeCallText(report) {
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)} pipeline=${host.capabilities?.capturePipeline || "unknown"} audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}.`,
     `Checklist ${findings}.`,
     `For foreground formal 60Hz, use: ${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
+    `For LaunchAgent transition, stop the current Mac host with: ${report.commands?.macHostStopCommand || makeMacHostStopCommand(report.args?.host, report.args?.port)}.`,
+    `Then manually load the LaunchAgent with: ${report.commands?.macLaunchAgentLoadCommand || makeMacLaunchAgentLoadCommand()}.`,
+    `Verify launchd state with: ${report.commands?.macLaunchAgentPrintCommand || makeMacLaunchAgentPrintCommand()}.`,
     `If this Mac should stay ready after reboot, review the dry-run LaunchAgent plan with: ${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
     `If targeting formal 60Hz, review the max-FPS dry-run plan with: ${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
     `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
@@ -521,6 +538,9 @@ function makeBoardSummary(report) {
       `Mac host offline at ${host.probe?.host || report.args.host}:${host.probe?.port || report.args.port}.`,
       `MacHostSafeStart=${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}.`,
       `MacMaxFpsSafeStart=${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
+      `MacHostStop=${report.commands?.macHostStopCommand || makeMacHostStopCommand(report.args?.host, report.args?.port)}.`,
+      `MacLaunchAgentLoad=${report.commands?.macLaunchAgentLoadCommand || makeMacLaunchAgentLoadCommand()}.`,
+      `MacLaunchAgentPrint=${report.commands?.macLaunchAgentPrintCommand || makeMacLaunchAgentPrintCommand()}.`,
       "Next: start with MacHostSafeStart, or MacMaxFpsSafeStart for foreground 60Hz validation, then rerun checklist.",
       `MacLaunchAgentPlan=${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
       `MacMaxFpsPlan=${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
@@ -536,6 +556,9 @@ function makeBoardSummary(report) {
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)}; pipeline=${host.capabilities?.capturePipeline || "unknown"}; audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}; ${formatBuildDiff(host.buildDiff)}.`,
     `MacHostSafeStart=${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}.`,
     `MacMaxFpsSafeStart=${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
+    `MacHostStop=${report.commands?.macHostStopCommand || makeMacHostStopCommand(report.args?.host, report.args?.port)}.`,
+    `MacLaunchAgentLoad=${report.commands?.macLaunchAgentLoadCommand || makeMacLaunchAgentLoadCommand()}.`,
+    `MacLaunchAgentPrint=${report.commands?.macLaunchAgentPrintCommand || makeMacLaunchAgentPrintCommand()}.`,
     `MacLaunchAgentPlan=${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
     `MacMaxFpsPlan=${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
     `MacUnattendedFormal=${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
@@ -554,6 +577,9 @@ function makeCommands(report) {
   return {
     macHostSafeStartCommand: makeSafeStartCommand({ port: probePort }),
     macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand({ port: probePort }),
+    macHostStopCommand: makeMacHostStopCommand(probeHost, probePort),
+    macLaunchAgentLoadCommand: makeMacLaunchAgentLoadCommand(),
+    macLaunchAgentPrintCommand: makeMacLaunchAgentPrintCommand(),
     macLaunchAgentPlanCommand: [
       "node",
       "scripts/mac/install-mac-host-launch-agent.mjs",
@@ -629,6 +655,30 @@ function makeMacMaxFpsSafeStartCommand(args = {}) {
     "--maxScreenFps",
     String(formalTargetMaxScreenFps),
   ].join(" ");
+}
+
+function makeMacHostStopCommand(host, port) {
+  return [
+    "node",
+    "scripts/mac/start-mac-host.mjs",
+    "--stop",
+    "--host",
+    shellArg(host || defaults.host),
+    "--port",
+    String(port || defaults.port),
+  ].join(" ");
+}
+
+function defaultLaunchAgentPath() {
+  return `${os.homedir()}/Library/LaunchAgents/com.lan-dual-control.mac-host.plist`;
+}
+
+function makeMacLaunchAgentLoadCommand() {
+  return `launchctl bootstrap gui/$(id -u) ${shellArg(defaultLaunchAgentPath())}`;
+}
+
+function makeMacLaunchAgentPrintCommand() {
+  return "launchctl print gui/$(id -u)/com.lan-dual-control.mac-host";
 }
 
 function makeMacMaxFpsPlanCommand(port) {

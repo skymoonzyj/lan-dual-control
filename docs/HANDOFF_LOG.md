@@ -21,6 +21,39 @@
 
 日期：2026-06-18 继续推进
 开发端：Mac Codex
+本轮目标：把 formal E2E readiness 也补上当前 30fps host -> 60Hz LaunchAgent 的安全人工切换命令链。
+完成内容：
+- `check-mac-formal-e2e-status` 的 help、JSON commands、`callText` 和 `--boardSummary` 新增 `MacHostStop=`、`MacLaunchAgentLoad=`、`MacLaunchAgentPrint=`，和 resume/unattended 摘要使用同一条“停当前 host -> 手动 launchctl bootstrap -> launchctl print 验证 -> MacUnattendedFormal 强校验”链。
+- formal E2E checklist 现在看到 `fps-limit`、当前 host 仍 30fps 或 LaunchAgent 未 loaded 时，不必先跳回 resume/unattended 查命令；正式呼叫 Windows 前的一行 readiness 摘要已经能直接给出下一步。
+- 新增输出只是可复制指引；脚本仍只读，不自动停止 host、不运行 `launchctl`、不启动服务、不弹密码、不认证、不发送 Agent Link Board call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增自测断言并确认失败：`node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 45000`
+- `node --check scripts/mac/check-mac-formal-e2e-status.mjs`
+- `node --check scripts/mac/test-mac-formal-e2e-status.mjs`
+- 实现后复跑：`node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 45000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/mac/check-mac-formal-e2e-status.mjs --host 127.0.0.1 --port 43770 --allowDirty --boardSummary`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/mac docs || true`
+遗留问题：
+- 当前真实 Mac host 仍未自动切换到 LaunchAgent；本轮没有停 host、没有加载 LaunchAgent、没有弹密码框。要真正消除 30fps 上限，仍需用户确认后人工执行摘要里的 `MacHostStop=` / `MacLaunchAgentLoad=` / `MacLaunchAgentPrint=` / `MacUnattendedFormal=`。
+下一步建议：
+- 需要正式长验收前，Mac 端先跑 `node scripts/mac/check-mac-formal-e2e-status.mjs --host 127.0.0.1 --port 43770 --boardSummary`；如果摘要仍见 `warnings=fps-limit`，先按人工切换链处理，再让 Windows 复跑 formal preflight。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Windows 端改代码；Windows 端后续只需读取新的 formal E2E 摘要字段并在用户确认后复跑 formal preflight。不要在通讯板发送密码/token/系统账号。
+
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
 本轮目标：把当前 Mac host 仍为 `maxScreenFps=30`、LaunchAgent plist 已是 60 但未加载的现场缺口，收口成恢复第一屏可直接执行的安全命令链。
 完成内容：
 - `check-mac-unattended-status` 的 help、JSON、普通输出和 `--boardSummary` 新增 `MacHostStop=`、`MacLaunchAgentLoad=`、`MacLaunchAgentPrint=`，明确 60Hz/LaunchAgent 切换顺序：先只停本机当前 `/discovery` 对应 Mac host，再人工 `launchctl bootstrap` 加载 LaunchAgent，最后用 `MacUnattendedFormal=` 复查 loaded + max FPS。
