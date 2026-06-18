@@ -21,6 +21,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端发送本机文件时也显示速度和预计剩余时间。
+完成内容：
+- `sendFilesToRemote` 新增发送侧状态对象，记录本次 transfer 的已发字节、总量、文件数和最近分块样本。
+- 新增发送侧进度文案：正在发送 N 个文件、已发/总量、百分比、速度和预计剩余时间。
+- 顶部剪贴板状态和全屏/监看浮层剪贴板状态共用同一套发送文案；不改 `clipboard_file_*` 协议。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`（失败点：页面缺 `describeOutgoingFileTransferStatus`，浮层发送中只显示“正在发送文件”）。
+- 实现后复跑：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- 收尾验证：`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`git diff --check`、行首冲突扫描。
+遗留问题：
+- 断点续传尚未实现；真实大文件长测后再决定是否调整发送/接收样本窗口。
+下一步建议：
+- 后续可继续做断点续传设计，或先在真实 Mac/Windows 双端用大文件压缩包观察发送和接收两侧状态是否一致。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端远端文件接收速度/预计剩余时间使用最近分块滑动平均，减少大文件显示跳变。
 完成内容：
 - 接收远端文件分块时记录最近 8 个分块的字节数和间隔时间。
@@ -40,7 +69,7 @@
 - 实现后复跑：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
 - 收尾验证：`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`git diff --check`、行首冲突扫描。
 遗留问题：
-- 发送侧测速和断点续传尚未实现；真实大文件长测后再决定是否调整样本窗口或 ETA 显示策略。
+- 发送侧测速已在后续 Windows 轮次补上；断点续传尚未实现。真实大文件长测后再决定是否调整样本窗口或 ETA 显示策略。
 下一步建议：
 - 真实 Mac/Windows 双端文件传输时，用较大压缩包观察速度/ETA 是否平滑；如果连接中断仍需要对端重新复制，这是后续断点续传任务。
 是否改了协议：否。

@@ -2007,6 +2007,7 @@ async function verifyFileClipboardRecoveryText(session) {
       if (
         typeof fileClipboardRecoveryText !== "function" ||
         typeof fileClipboardLocalDetail !== "function" ||
+        typeof describeOutgoingFileTransferStatus !== "function" ||
         typeof describeIncomingFileTransferStatus !== "function" ||
         typeof expireStaleRemoteFileTransfers !== "function" ||
         typeof renderReceivedFiles !== "function" ||
@@ -2034,6 +2035,17 @@ async function verifyFileClipboardRecoveryText(session) {
       const recovery = fileClipboardRecoveryText(tempResult);
       const detail = fileClipboardLocalDetail(tempResult, "fallback");
       const memoryDetail = fileClipboardLocalDetail(memoryResult, "fallback");
+      const outgoingStatus = describeOutgoingFileTransferStatus({
+        fileCount: 1,
+        sentBytes: 2048,
+        totalBytes: 4096,
+        startedAt: Date.now() - 2000,
+        lastActivityAt: Date.now() - 1000,
+        rateSamples: [
+          { bytes: 2048, durationMs: 1000 },
+          { bytes: 2048, durationMs: 1000 },
+        ],
+      });
       const openButton = document.querySelector("#openReceivedFilesTempButton");
       const copyButton = document.querySelector("#copyReceivedFilesButton");
       const clearButton = document.querySelector("#clearReceivedFilesButton");
@@ -2044,6 +2056,8 @@ async function verifyFileClipboardRecoveryText(session) {
       const originalTempPath = state.receivedClipboardTempPath;
       const originalWriteStatus = state.receivedClipboardWriteStatus;
       const originalTransfers = state.remoteFileTransfers;
+      const originalOutgoingTransfer = state.outgoingFileTransfer;
+      const originalFileTransferActive = state.fileTransferActive;
       const originalClient = state.client;
       const originalClipboardToggle = elements.clipboardToggle.checked;
       const calls = [];
@@ -2051,6 +2065,22 @@ async function verifyFileClipboardRecoveryText(session) {
       const clipboardProgress = [];
       const clipboardResults = [];
       try {
+        state.fileTransferActive = true;
+        state.outgoingFileTransfer = {
+          fileCount: 1,
+          sentBytes: 2048,
+          totalBytes: 4096,
+          startedAt: Date.now() - 2000,
+          lastActivityAt: Date.now() - 1000,
+          rateSamples: [
+            { bytes: 2048, durationMs: 1000 },
+            { bytes: 2048, durationMs: 1000 },
+          ],
+        };
+        if (typeof syncFloatingControlCenter === "function") syncFloatingControlCenter();
+        const outgoingFloatingStatus = document.querySelector("#floatingClipboardStatus")?.textContent || "";
+        state.fileTransferActive = false;
+        state.outgoingFileTransfer = null;
         state.remoteFileTransfers = new Map();
         state.client = {
           sendClipboardFileResponse: (payload) => clipboardResponses.push(payload),
@@ -2181,6 +2211,14 @@ async function verifyFileClipboardRecoveryText(session) {
             detail.includes("系统文件剪贴板写入失败") &&
             detail.includes("临时目录：C:/Temp/lan-dual-control/clip-1") &&
             memoryDetail === "浏览器预览版只能保留内存托盘" &&
+            outgoingStatus.includes("正在发送 1 个文件") &&
+            outgoingStatus.includes("2.0 KB/4.0 KB") &&
+            outgoingStatus.includes("50%") &&
+            outgoingStatus.includes("速度 2.0 KB/s") &&
+            outgoingStatus.includes("剩余约 1 秒") &&
+            outgoingFloatingStatus.includes("发送 1 个文件") &&
+            outgoingFloatingStatus.includes("2.0 KB/4.0 KB") &&
+            outgoingFloatingStatus.includes("速度 2.0 KB/s") &&
             statusVisibleAfterOffer &&
             statusTextAfterOffer.includes("正在接收 1 个文件") &&
             statusTextAfterOffer.includes("0 B/4 B") &&
@@ -2275,6 +2313,8 @@ async function verifyFileClipboardRecoveryText(session) {
         state.receivedClipboardTempPath = originalTempPath;
         state.receivedClipboardWriteStatus = originalWriteStatus;
         state.remoteFileTransfers = originalTransfers;
+        state.outgoingFileTransfer = originalOutgoingTransfer;
+        state.fileTransferActive = originalFileTransferActive;
         state.client = originalClient;
         elements.clipboardToggle.checked = originalClipboardToggle;
         renderReceivedFiles();

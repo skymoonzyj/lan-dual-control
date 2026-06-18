@@ -541,6 +541,7 @@ const state = {
   clipboardSequence: 0,
   fileTransferSequence: 0,
   fileTransferActive: false,
+  outgoingFileTransfer: null,
   remoteFileTransfers: new Map(),
   receivedClipboardFiles: [],
   receivedClipboardTempPath: "",
@@ -2069,6 +2070,7 @@ function setUiDisconnected(statusText = "未连接", logDetail = "会话已关�
   elements.disconnectButton.disabled = true;
   elements.reverseButton.disabled = true;
   state.fileTransferActive = false;
+  state.outgoingFileTransfer = null;
   rejectAllRemoteFileTransfers("连接已断开，远端文件接收已中断", { notifyPeer: false });
   updateFileClipboardButton();
   syncFloatingControlCenter();
@@ -2417,7 +2419,10 @@ function formatFloatingClipboardStatus() {
   }
 
   if (state.fileTransferActive) {
-    return "剪贴板：正在发送文件";
+    const outgoingStatus = state.outgoingFileTransfer
+      ? describeOutgoingFileTransferStatus(state.outgoingFileTransfer)
+      : "正在发送文件";
+    return `剪贴板：${compactFloatingStatusText(outgoingStatus, 56) || "正在发送文件"}`;
   }
 
   const writeStatus = state.receivedClipboardWriteStatus || {};
@@ -4562,7 +4567,18 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
   }));
 
   let sentBytes = 0;
+  const startedAt = Date.now();
   state.fileTransferActive = true;
+  state.outgoingFileTransfer = {
+    transferId,
+    totalBytes,
+    sentBytes: 0,
+    fileCount: files.length,
+    files: fileMetas,
+    startedAt,
+    lastActivityAt: startedAt,
+    rateSamples: [],
+  };
   updateFileClipboardButton();
   elements.clipboardText.textContent = `剪贴板：准备发送 ${files.length} 个文件`;
   syncFloatingControlStatus();
@@ -4597,9 +4613,12 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
           dataBase64,
         });
         sentBytes = nextSentBytes;
+        if (state.outgoingFileTransfer?.transferId === transferId) {
+          recordRemoteFileTransferRateSample(state.outgoingFileTransfer, chunk.size);
+          state.outgoingFileTransfer.sentBytes = sentBytes;
+        }
         chunkIndex += 1;
-        const percent = totalBytes === 0 ? 100 : Math.round((sentBytes / totalBytes) * 100);
-        elements.clipboardText.textContent = `剪贴板：文件发送 ${percent}%`;
+        elements.clipboardText.textContent = `剪贴板：${describeOutgoingFileTransferStatus(state.outgoingFileTransfer)}`;
         syncFloatingControlStatus();
         if (chunkIndex % 8 === 0) {
           await yieldToUi();
@@ -4622,6 +4641,7 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
     addLog(`${sourceLabel}失败`, message);
   } finally {
     state.fileTransferActive = false;
+    state.outgoingFileTransfer = null;
     if (clearFileInput) elements.fileClipboardInput.value = "";
     updateFileClipboardButton();
     syncFloatingControlStatus();
@@ -5697,6 +5717,35 @@ function formatRemoteTransferEta(seconds) {
   if (minutes < 60) return `${minutes} 分钟`;
   const hours = Math.ceil(minutes / 60);
   return `${hours} 小时`;
+}
+
+function outgoingFileTransferRateText(transfer = {}, now = Date.now()) {
+  const sentBytes = Math.max(0, Number(transfer.sentBytes) || 0);
+  if (sentBytes <= 0) return "";
+  return remoteFileTransferRateText({ ...transfer, receivedBytes: sentBytes }, now);
+}
+
+function outgoingFileTransferProgressText(transfer = {}) {
+  const sentBytes = Math.max(0, Number(transfer.sentBytes) || 0);
+  const totalBytes = Math.max(0, Number(transfer.totalBytes) || 0);
+  const rateText = outgoingFileTransferRateText(transfer);
+  const rateSuffix = rateText ? `，${rateText}` : "";
+  if (totalBytes > 0) {
+    return `${formatBytes(sentBytes)}/${formatBytes(totalBytes)}${rateSuffix}`;
+  }
+  return `${formatBytes(sentBytes)}${rateSuffix}`;
+}
+
+function describeOutgoingFileTransferStatus(transfer = {}) {
+  const fileCount = Number(transfer?.fileCount) || (Array.isArray(transfer?.files) ? transfer.files.length : 0);
+  const sentBytes = Math.max(0, Number(transfer?.sentBytes) || 0);
+  const totalBytes = Math.max(0, Number(transfer?.totalBytes) || 0);
+  const countText = fileCount > 0 ? `${fileCount} 个文件` : "文件";
+  if (totalBytes > 0) {
+    const percent = Math.min(100, Math.round((sentBytes / totalBytes) * 100));
+    return `正在发送 ${countText}：${outgoingFileTransferProgressText(transfer)}，${percent}%`;
+  }
+  return `正在发送 ${countText}：${outgoingFileTransferProgressText(transfer)}`;
 }
 
 function remoteFileTransferRateText(transfer = {}, now = Date.now()) {
