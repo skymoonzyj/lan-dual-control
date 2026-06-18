@@ -153,37 +153,59 @@ function checkPasswordSafety(args) {
   assert(noPassword.status !== 0, "missing password should fail");
   assert(noPasswordPayload.ok === false, "missing password JSON should report ok=false");
   assert(/requires a password/.test(noPasswordPayload.error?.message || ""), "missing password should explain password requirement");
+  assert(noPasswordPayload.summary?.noInject === true, "missing password JSON should preserve noInject=true");
+  assertLocalSmokeCommands(noPasswordPayload, 43770, "missing password JSON failure");
+  assert(/MacHostSafeStart=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include safe start command");
+  assert(/RerunFormalLocalSmoke=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include rerun command");
 
   const demoPassword = runSmoke(["--json"], args, { LAN_DUAL_PASSWORD: "demo-password" });
   const demoPayload = parseJson(demoPassword.stdout, "demo-password failure");
   assert(demoPassword.status !== 0, "demo-password should fail by default");
   assert(/refuses/.test(demoPayload.error?.message || "") && /formal password/.test(demoPayload.error?.message || ""), "demo-password failure should explain refusal");
+  assertLocalSmokeCommands(demoPayload, 43770, "demo-password JSON failure");
 
   const prompt = runSmoke(["--json", "--promptPassword"], args);
   const promptPayload = parseJson(prompt.stdout, "non-interactive prompt failure");
   assert(prompt.status !== 0, "non-interactive --promptPassword should fail");
   assert(/requires a macOS password dialog/.test(promptPayload.error?.message || ""), "prompt failure should explain unavailable prompt UI");
   assert(!String(prompt.stdout || "").includes("Mac host formal smoke password:"), "JSON prompt failure should not pollute stdout");
+  assertLocalSmokeCommands(promptPayload, 43770, "prompt JSON failure");
 
   const secret = "super-secret-formal-local-smoke";
   const promptWithEnvPassword = runSmoke(["--json", "--promptPassword"], args, { LAN_DUAL_PASSWORD: secret });
   const promptEnvPayload = parseJson(promptWithEnvPassword.stdout, "prompt with environment password failure");
   assert(promptWithEnvPassword.status !== 0, "--promptPassword with LAN_DUAL_PASSWORD should still fail when dialog is disabled");
   assert(/requires a macOS password dialog/.test(promptEnvPayload.error?.message || ""), "prompt with environment password should still require dialog");
+  assertLocalSmokeCommands(promptEnvPayload, 43770, "prompt with environment password JSON failure");
   assertNoSecretLikeText(outputOf(promptWithEnvPassword), "prompt with environment password failure");
 
   const promptWithPassword = runSmoke(["--json", "--promptPassword", "--password", secret], args);
   const promptPasswordPayload = parseJson(promptWithPassword.stdout, "prompt with password failure");
   assert(promptWithPassword.status !== 0, "--promptPassword with --password should fail");
   assert(/cannot be combined/.test(promptPasswordPayload.error?.message || ""), "prompt with password should explain conflict");
+  assertLocalSmokeCommands(promptPasswordPayload, 43770, "prompt with password JSON failure");
   assertNoSecretLikeText(outputOf(promptWithPassword), "prompt with password failure");
+
+  const customTargetFailure = runSmoke(["--json", "--host", "10.0.0.4", "--port", "4567"], args);
+  const customTargetPayload = parseJson(customTargetFailure.stdout, "custom target password failure");
+  assert(customTargetFailure.status !== 0, "custom target missing password should fail");
+  assert(customTargetPayload.target?.host === "10.0.0.4", "custom target failure should preserve host");
+  assert(customTargetPayload.target?.port === 4567, "custom target failure should preserve port");
+  assertLocalSmokeCommands(customTargetPayload, 4567, "custom target password JSON failure");
+  assert((customTargetPayload.commands?.macHostReadinessCommand || "").includes("--host 10.0.0.4"), "custom target readiness command should preserve host");
 
   const boardSummary = runSmoke(["--boardSummary"], args);
   const boardLines = String(boardSummary.stdout || "").trim().split(/\r?\n/).filter(Boolean);
   assert(boardSummary.status !== 0, "missing password boardSummary should fail");
   assert(boardLines.length === 1, `missing password boardSummary should print one stdout line, got ${boardLines.length}`);
   assert(/Mac formal local smoke failed/.test(boardLines[0]), "missing password boardSummary should explain failure");
+  assert(!/reason=[^.]+[.][.]\s/.test(boardLines[0]), "missing password boardSummary should not double-punctuate the reason");
   assert(/No inject was executed/.test(boardLines[0]), "missing password boardSummary should keep inject safety note");
+  assert(/MacHostReadiness=/.test(boardLines[0]), "missing password boardSummary should include readiness command");
+  assert(/MacHostSafeStart=/.test(boardLines[0]), "missing password boardSummary should include safe start command");
+  assert(/MacMaxFpsSafeStart=/.test(boardLines[0]), "missing password boardSummary should include 60Hz safe start command");
+  assert(/MacUnattendedFormal=/.test(boardLines[0]), "missing password boardSummary should include unattended formal command");
+  assert(/RerunFormalLocalSmoke=/.test(boardLines[0]), "missing password boardSummary should include rerun command");
   assert(!String(boardSummary.stdout || "").includes("Mac host formal smoke password:"), "boardSummary failure should not prompt on stdout");
   assertNoSecretLikeText(outputOf(boardSummary), "missing password boardSummary failure");
 

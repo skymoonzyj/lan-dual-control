@@ -486,6 +486,28 @@ function makeCommands(args) {
   };
 }
 
+function argsForFailureReport(argv) {
+  try {
+    return parseArgs(argv);
+  } catch {
+    const args = { ...defaults };
+    for (let index = 2; index < argv.length; index += 1) {
+      const token = argv[index];
+      const next = argv[index + 1];
+      if (token === "--host" && next && !next.startsWith("--")) {
+        args.host = String(next || defaults.host).trim() || defaults.host;
+        index += 1;
+        continue;
+      }
+      if (token === "--port" && next && !next.startsWith("--")) {
+        args.port = clampInteger(next, 1, 65535, defaults.port);
+        index += 1;
+      }
+    }
+    return args;
+  }
+}
+
 function makeReport(args, probes) {
   const failed = probes.filter((probe) => !probe.ok);
   const commands = makeCommands(args);
@@ -523,6 +545,35 @@ function makeBoardSummary(args, probes, failed, commands) {
     `MacUnattendedFormal=${commands.macUnattendedFormalCommand}.`,
     `RerunFormalLocalSmoke=${commands.rerunBoardSummaryCommand}.`,
   ].join(" ");
+}
+
+function makeFailureReport(error, argv) {
+  const args = argsForFailureReport(argv);
+  const commands = makeCommands(args);
+  const message = redactSensitiveText(error.message);
+  const reason = message.replace(/[.。]+$/u, "");
+  return {
+    ok: false,
+    checkedAt: new Date().toISOString(),
+    target: { host: args.host, port: args.port },
+    commands,
+    error: { message, name: error.name },
+    summary: {
+      passed: 0,
+      failed: 1,
+      skipped: [],
+      noInject: true,
+    },
+    boardSummary: [
+      `Mac formal local smoke failed before probes: host=${args.host}:${args.port}; reason=${reason}.`,
+      "No inject was executed; password was not printed.",
+      `MacHostReadiness=${commands.macHostReadinessCommand}.`,
+      `MacHostSafeStart=${commands.macHostSafeStartCommand}.`,
+      `MacMaxFpsSafeStart=${commands.macMaxFpsSafeStartCommand}.`,
+      `MacUnattendedFormal=${commands.macUnattendedFormalCommand}.`,
+      `RerunFormalLocalSmoke=${commands.rerunBoardSummaryCommand}.`,
+    ].join(" "),
+  };
 }
 
 function summarizeArgs(args) {
@@ -586,16 +637,17 @@ async function main() {
 }
 
 main().catch((error) => {
+  const report = makeFailureReport(error, process.argv);
   if (process.argv.includes("--json")) {
-    console.log(JSON.stringify({
-      ok: false,
-      checkedAt: new Date().toISOString(),
-      error: { message: redactSensitiveText(error.message), name: error.name },
-    }, null, 2));
+    console.log(JSON.stringify(report, null, 2));
   } else if (process.argv.includes("--boardSummary")) {
-    console.log(`Mac formal local smoke failed: ${redactSensitiveText(error.message)}. No inject was executed; password was not printed.`);
+    console.log(report.boardSummary);
   } else {
-    console.error(`[FAIL] ${redactSensitiveText(error.message)}`);
+    console.error(`[FAIL] ${report.error.message}`);
+    console.error(`[NEXT] Mac host readiness: ${report.commands.macHostReadinessCommand}`);
+    console.error(`[NEXT] Mac host safe start: ${report.commands.macHostSafeStartCommand}`);
+    console.error(`[NEXT] Mac 60Hz safe foreground start: ${report.commands.macMaxFpsSafeStartCommand}`);
+    console.error(`[NEXT] Mac unattended formal 60Hz gate: ${report.commands.macUnattendedFormalCommand}`);
   }
   process.exitCode = 1;
 });
