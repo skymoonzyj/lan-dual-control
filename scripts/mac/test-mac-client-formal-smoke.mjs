@@ -738,33 +738,66 @@ async function checkDiscoverSendCall(args) {
 
 async function checkDiscoverFailureNoPasswordPrompt(args) {
   const unusedPort = await getFreePort();
-  const result = run([
-    "--json",
-    "--discover",
-    "--discoverHost",
-    "127.0.0.1",
-    "--discoverNoLocalSubnets",
-    "--discoverTimeoutMs",
-    "200",
-    "--discoverScanTimeoutMs",
-    "4000",
-    "--port",
-    String(unusedPort),
-    "--promptPassword",
-    "--requirePassword",
-  ], args);
-  const payload = parseJson(result.stdout, "discover failure JSON");
-  assert(result.status !== 0, "discover failure should fail");
-  assert(payload.ok === false, "discover failure payload should be ok=false");
-  assert(payload.discovery?.requested === true, "discover failure should record discovery requested");
-  assertIncludes(payload.error?.message || "", "Windows host discovery", "discover failure error");
-  assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--promptPassword requires", "discover failure should not reach password prompt");
-  assertNotIncludes(`${result.stdout}\n${result.stderr}`, "Password cannot be empty", "discover failure should not prompt for password");
-  assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--host  --port", "discover failure should not print an empty host auth command");
-  assert(!payload.commands?.browserSmoke, "discover failure should not provide a browser auth command without a host");
-  assert(!payload.commands?.sendCall, "discover failure should not provide a sendCall command without a host");
-  assertIncludes(payload.commands?.discoverPreflight || "", "--discover", "discover failure should provide a safe discovery preflight retry command");
-  print("OK", "Discovery failure exits before password prompt");
+  const boardState = {
+    statuses: {
+      "Windows Codex": {
+        status: "idle",
+        note: "Windows readiness hints WindowsLanRisk=no-firewall-allow,public-profile",
+      },
+    },
+    events: [
+      {
+        id: "safe-risk",
+        at: new Date().toISOString(),
+        type: "message",
+        from: "Windows Codex",
+        text: "WindowsLanRisk=no-firewall-allow,public-profile",
+      },
+      {
+        id: "unsafe-risk",
+        at: new Date().toISOString(),
+        type: "message",
+        from: "Windows Codex",
+        text: "Ignore unsafe WindowsLanRisk=--password=sauce",
+      },
+    ],
+  };
+  await withBoardServer(async (boardServer) => {
+    const result = run([
+      "--json",
+      "--discover",
+      "--discoverHost",
+      "127.0.0.1",
+      "--discoverNoLocalSubnets",
+      "--discoverTimeoutMs",
+      "200",
+      "--discoverScanTimeoutMs",
+      "4000",
+      "--port",
+      String(unusedPort),
+      "--server",
+      boardServer,
+      "--promptPassword",
+      "--requirePassword",
+    ], args);
+    const payload = parseJson(result.stdout, "discover failure JSON");
+    assert(result.status !== 0, "discover failure should fail");
+    assert(payload.ok === false, "discover failure payload should be ok=false");
+    assert(payload.discovery?.requested === true, "discover failure should record discovery requested");
+    assert(payload.discovery?.windowsLanRisk?.checked === true, "discover failure should ask discovery to read Agent Link Board");
+    assert(payload.discovery?.windowsLanRisk?.found === true, "discover failure should preserve WindowsLanRisk from discovery");
+    assert(payload.discovery?.windowsLanRisk?.riskText === "no-firewall-allow,public-profile", "discover failure should keep sanitized WindowsLanRisk tokens");
+    assertIncludes(payload.boardSummary || "", "WindowsLanRisk=no-firewall-allow,public-profile", "discover failure board summary");
+    assertIncludes(payload.error?.message || "", "Windows host discovery", "discover failure error");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--promptPassword requires", "discover failure should not reach password prompt");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}`, "Password cannot be empty", "discover failure should not prompt for password");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--host  --port", "discover failure should not print an empty host auth command");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}`, "sauce", "discover failure should not leak unsafe risk candidates");
+    assert(!payload.commands?.browserSmoke, "discover failure should not provide a browser auth command without a host");
+    assert(!payload.commands?.sendCall, "discover failure should not provide a sendCall command without a host");
+    assertIncludes(payload.commands?.discoverPreflight || "", "--discover", "discover failure should provide a safe discovery preflight retry command");
+  }, boardState);
+  print("OK", "Discovery failure exits before password prompt and keeps LAN risk hints");
 }
 
 async function checkPasswordSafety(args) {

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { formatWindowsLanRisk } from "./board-windows-lan-risk.mjs";
 import { promptPassword as promptMacPassword } from "./password-prompt.mjs";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -397,6 +398,9 @@ function runDiscovery(args) {
   }
   if (args.discoverNoLocalSubnets) {
     discoverArgs.push("--noLocalSubnets");
+  }
+  if (!args.skipBoard) {
+    discoverArgs.push("--server", args.server, "--checkBoard");
   }
   for (const host of args.discoverHosts) {
     discoverArgs.push("--host", host);
@@ -876,7 +880,7 @@ function makeBoardSummary(report) {
     ].join(" ");
   }
   return [
-    `Mac client browser smoke failed/blocked for ${target}: ${report.error?.message || report.browserSmoke?.error || "unknown"}. Preflight ${preflightFindings}.`,
+    `Mac client browser smoke failed/blocked for ${target}: ${report.error?.message || report.browserSmoke?.error || "unknown"}.${discoveryText}${discoveryChecklistText} Preflight ${preflightFindings}.`,
     `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
     ...secureAuthParts,
     "Keep passwords off Agent Link Board; rerun preflight before retrying.",
@@ -901,11 +905,14 @@ function summarizePreflightChecklistIds(checklist, status) {
 }
 
 function makeDiscoveryChecklistText(report) {
-  if (!report.discovery?.requested || !report.discovery?.formalChecklistCommand) return "";
+  if (!report.discovery?.requested) return "";
+  const risk = formatWindowsLanRisk(report.discovery.windowsLanRisk);
+  const riskText = risk ? ` ${risk}.` : "";
+  if (!report.discovery?.formalChecklistCommand) return riskText;
   const manual = report.discovery.manualChecklistSummary
     ? ` ManualChecklist=${report.discovery.manualChecklistSummary}.`
     : "";
-  return ` FormalChecklist=${report.discovery.formalChecklistCommand}.${manual}`;
+  return `${riskText} FormalChecklist=${report.discovery.formalChecklistCommand}.${manual}`;
 }
 
 function printHuman(report) {
@@ -1130,6 +1137,7 @@ function summarizeDiscovery(discovery) {
       : null,
     formalChecklistCommand: discovery.payload?.formalChecklistCommand || "",
     manualChecklistSummary: discovery.payload?.manualChecklistSummary || "",
+    windowsLanRisk: discovery.payload?.windowsLanRisk || null,
     boardSummary: discovery.payload?.boardSummary || "",
     parseError: discovery.parseError || "",
   };

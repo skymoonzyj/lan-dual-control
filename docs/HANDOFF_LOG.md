@@ -21,6 +21,39 @@
 
 日期：2026-06-18 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac formal smoke 的 `--discover` 失败路径也能透传 Agent Link Board 上的 `WindowsLanRisk=`，避免发现不到 Windows host 时丢失防火墙/Public 网络线索。
+完成内容：
+- `run-mac-client-formal-smoke --discover` 调用底层 `discover-windows-hosts` 时，在未 `--skipBoard` 的情况下同步传入 `--server <url> --checkBoard`。
+- JSON `discovery.windowsLanRisk` 会保留底层发现脚本输出的脱敏 risk token；`--boardSummary` 在发现失败/阻塞时也会显示 `WindowsLanRisk=<safe tokens>`。
+- 失败路径仍在任何密码提示、浏览器认证、Agent Link Board call、input 或 inject 之前退出；不回显被拒绝的危险候选。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 22000`（失败点：discover failure 未读取 Agent Link Board）
+- 语法检查：`node --check scripts/mac/run-mac-client-formal-smoke.mjs`、`node --check scripts/mac/test-mac-client-formal-smoke.mjs`、`node --check scripts/mac/discover-windows-hosts.mjs`、`node --check scripts/mac/test-discover-windows-hosts.mjs`
+- 实现后复跑：`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 22000`
+- `node scripts/mac/test-discover-windows-hosts.mjs --timeoutMs 10000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- 真实无密预检：`node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary`（发现 `192.168.31.68:43770`，`ready=yes`，仅因本轮未提交显示 `warnings=repo`）
+- 真实 heartbeat：`node scripts/mac/check-mac-heartbeat.mjs --host 127.0.0.1 --port 43770 --clientHost 127.0.0.1 --clientPort 5188 --checkBoard --boardSummary`（`status=ok`，`call=none`）
+- 最终收尾：`git diff --check`；`rg -n "^(<<<<<<<|=======|>>>>>>>)" docs scripts/mac`
+遗留问题：
+- 本轮只补 `--discover` 失败/阻塞时的 LAN 风险线索；未执行真实 browser auth，未弹密码，未发送 call，未发送 input/inject。
+下一步建议：
+- Windows 端继续消费 `MacClientDiscoverWindows=` / `MacClientFormalSmoke=` 时，如果 Mac formal smoke 摘要出现 `WindowsLanRisk=no-firewall-allow,public-profile`，优先按 Windows 防火墙/网络 Profile 排查，不要误判为 Mac client 页面或 H.264 等待卡住。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Windows 端可继续当前 Windows-only resume 消费展示。
+
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac client formal checklist 在无 host 场景也能只读自动发现 Windows host，减少默认 `127.0.0.1` 误判。
 完成内容：
 - `check-mac-client-formal-status` 新增 `--discover`、`--discoverHost`、`--discoverNoLocalSubnets`、`--discoverTimeoutMs`、`--discoverScanTimeoutMs`；未显式 `--host` 时可先调用 `discover-windows-hosts --json`，发现成功后再跑原 formal checklist。
