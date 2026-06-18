@@ -21,6 +21,38 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端 `Ctrl+V` 在未连接或剪贴板关闭时给出可见中文提示。
+完成内容：
+- 未连接被控端时按 `Ctrl+V`，顶部剪贴板状态会显示“请先连接被控端”。
+- 剪贴板同步关闭时按 `Ctrl+V`，顶部状态会显示“已关闭”。
+- 全屏/监看浮层会同步显示同一状态，避免远控画面里按键后没有反馈。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增页面断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`（失败点：未连接时仍显示“剪贴板：待机”，剪贴板关闭时顶部仍显示“剪贴板：已开启”）。
+- 实现后复跑同一 diagnostics-only 通过。
+- `node --check apps/windows-client/app.js` 通过。
+- `node --check scripts/windows/test-windows-client-browser.mjs` 通过。
+- `git diff --check` 通过。
+- 冲突标记扫描无命中。
+遗留问题：
+- 这只改善 `Ctrl+V` 早退反馈，不改变文件夹递归发送和断点续传策略。
+下一步建议：
+- 真机体验时顺手确认断开连接、关闭剪贴板开关、复制普通文件/压缩包、复制文件夹四种 `Ctrl+V` 状态都能一眼读懂。
+是否改了协议：否；只改 Windows 控制端 UI 状态和页面自测。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端 `Ctrl+V` 文件剪贴板读取失败时给出可见中文原因。
 完成内容：
 - 当资源管理器剪贴板里只有文件夹、桌面原生读取不可用或读取失败时，顶部剪贴板状态会显示具体原因。

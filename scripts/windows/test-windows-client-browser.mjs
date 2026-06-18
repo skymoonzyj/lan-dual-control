@@ -2094,6 +2094,23 @@ async function verifyFileClipboardRecoveryText(session) {
         state.fileTransferActive = false;
         state.outgoingFileTransfer = null;
 
+        state.connected = false;
+        elements.clipboardToggle.checked = true;
+        elements.clipboardText.textContent = "剪贴板：待机";
+        if (typeof syncFloatingControlStatus === "function") syncFloatingControlStatus();
+        await syncClipboardBeforePaste();
+        const pasteDisconnectedText = elements.clipboardText.textContent || "";
+        const pasteDisconnectedFloating = document.querySelector("#floatingClipboardStatus")?.textContent || "";
+
+        state.connected = true;
+        elements.clipboardToggle.checked = false;
+        elements.clipboardText.textContent = "剪贴板：已开启";
+        if (typeof syncFloatingControlStatus === "function") syncFloatingControlStatus();
+        await syncClipboardBeforePaste();
+        const pasteDisabledText = elements.clipboardText.textContent || "";
+        const pasteDisabledFloating = document.querySelector("#floatingClipboardStatus")?.textContent || "";
+        elements.clipboardToggle.checked = true;
+
         const nativeClipboardBytes = new Uint8Array([80, 75, 3, 4, 9]);
         const nativeClipboardBase64 = window.btoa(
           Array.from(nativeClipboardBytes, (byte) => String.fromCharCode(byte)).join(""),
@@ -2414,6 +2431,10 @@ async function verifyFileClipboardRecoveryText(session) {
             outgoingFloatingStatus.includes("发送 1 个文件") &&
             outgoingFloatingStatus.includes("2.0 KB/4.0 KB") &&
             outgoingFloatingStatus.includes("速度 2.0 KB/s") &&
+            pasteDisconnectedText.includes("请先连接被控端") &&
+            pasteDisconnectedFloating.includes("请先连接被控端") &&
+            pasteDisabledText.includes("已关闭") &&
+            pasteDisabledFloating.includes("关闭") &&
             nativeClipboardSends.filter((item) => item.type === "offer").length === 1 &&
             nativeClipboardSends.filter((item) => item.type === "chunk").length === 1 &&
             nativeClipboardSends.filter((item) => item.type === "complete").length === 1 &&
@@ -2507,6 +2528,10 @@ async function verifyFileClipboardRecoveryText(session) {
           recovery,
           detail,
           memoryDetail,
+          pasteDisconnectedText,
+          pasteDisconnectedFloating,
+          pasteDisabledText,
+          pasteDisabledFloating,
           nativeClipboardText,
           nativeClipboardCommands,
           nativeClipboardSends,

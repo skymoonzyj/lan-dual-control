@@ -4797,7 +4797,19 @@ async function syncClipboardText({ quietNoText = false } = {}) {
 }
 
 async function syncClipboardBeforePaste() {
-  if (!state.connected || !elements.clipboardToggle.checked) {
+  if (!state.connected) {
+    state.localClipboardStatusText = "剪贴板：请先连接被控端";
+    elements.clipboardText.textContent = state.localClipboardStatusText;
+    syncFloatingControlStatus();
+    addLog("剪贴板", "未连接，无法同步剪贴板");
+    return;
+  }
+
+  if (!elements.clipboardToggle.checked) {
+    state.localClipboardStatusText = "剪贴板：已关闭";
+    elements.clipboardText.textContent = state.localClipboardStatusText;
+    syncFloatingControlStatus();
+    addLog("剪贴板", "剪贴板同步已关闭");
     return;
   }
 
