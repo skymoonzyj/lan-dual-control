@@ -82,6 +82,7 @@ $cnOneTime = ConvertFrom-CodePoints @(0x4e00, 0x6b21, 0x6027)
 
 $nonEmptyFindingValuePattern = "(?!none\b|ok\b|0\b|false\b|-\b|$)[^\s;]+"
 $findingFieldPattern = "\b(warnings|blockers)\s*[:=]\s*$nonEmptyFindingValuePattern"
+$fpsFindingPattern = "fps-limit|mac-host-max-fps|launch-agent-max-fps"
 
 $urgentPatterns = @(
     "NEED_USER_AUTH",
@@ -109,6 +110,8 @@ $urgentPatterns = @(
     "MacLaunchAgentPlan.*(missing|not-loaded|disabled|failed|enable|install|repair|fix|warning|blocker)",
     "MacHostSafeStart=.*($findingFieldPattern|host-(offline|unreachable)|ready=false)",
     "($findingFieldPattern|host-(offline|unreachable)|ready=false).*MacHostSafeStart=",
+    "MacMaxFpsSafeStart=.*($fpsFindingPattern|host-(offline|unreachable)|ready=false)",
+    "($fpsFindingPattern|host-(offline|unreachable)|ready=false).*MacMaxFpsSafeStart=",
     "\bwarnings\s*[:=]\s*$nonEmptyFindingValuePattern",
     "\bblockers\s*[:=]\s*$nonEmptyFindingValuePattern",
     "launch-agent-(missing|not-loaded|disabled|failed)",

@@ -255,6 +255,7 @@ const macUnattendedRiskLabels = {
   "mac-host": "Mac host 需检查",
   "mac-host-discovery": "Mac host 发现需检查",
   "mac-host-safe-start": "Mac host 安全启动命令已提供",
+  "mac-max-fps-safe-start": "Mac 60Hz 安全启动命令已提供",
   "mac-host-media-aggregate": "Mac 媒体基线需检查",
   "mac-host-runtime-display-round-trip": "Mac runtime/display 回环需检查",
   "mac-host-build": "Mac host 构建需检查",
@@ -2942,6 +2943,12 @@ function parseMacUnattendedAttention(text) {
   const risks = [...new Set([...blockers, ...warnings])];
   const lower = source.toLowerCase();
   const hasMacHostSafeStart = /\bMacHostSafeStart\s*=/i.test(source);
+  const hasMacMaxFpsSafeStart = /\bMacMaxFpsSafeStart\s*=/i.test(source);
+  const hasMacMaxFpsFinding = risks.some((risk) =>
+    risk === "fps-limit" ||
+    risk === "mac-host-max-fps" ||
+    risk === "launch-agent-max-fps",
+  );
   if (lower.includes("ready=false") && risks.length === 0) {
     risks.push("not-ready");
   }
@@ -2953,6 +2960,12 @@ function parseMacUnattendedAttention(text) {
     (risks.length > 0 || /host-(offline|unreachable)|ready\s*=\s*false|offline|离线/.test(lower))
   ) {
     risks.unshift("mac-host-safe-start");
+  }
+  if (
+    hasMacMaxFpsSafeStart &&
+    (hasMacMaxFpsFinding || /fps-limit|mac-host-max-fps|launch-agent-max-fps/.test(lower))
+  ) {
+    risks.unshift("mac-max-fps-safe-start");
   }
   const labels = [...new Set(risks.map(labelMacUnattendedRisk).filter(Boolean))];
   return {

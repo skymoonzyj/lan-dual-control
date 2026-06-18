@@ -21,6 +21,53 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows watcher 和控制端诊断消费 Mac 侧 `MacMaxFpsSafeStart=`，并按用户要求重新复查 formal E2E 第二步。
+完成内容：
+- `watch-codex-link-mac-alerts.ps1` 现在会在 `MacMaxFpsSafeStart=` 与 `fps-limit`、`mac-host-max-fps`、`launch-agent-max-fps` 等上限 warning 同时出现时触发 Windows 本机提醒。
+- Windows 控制端 Mac 提醒区、快速摘要和复制/导出诊断会把该情况翻译成“Mac 60Hz 安全启动命令已提供”，并保留原始 `MacMaxFpsSafeStart=` 命令证据。
+- 新增 watcher 回归覆盖“有上限 warning 时提醒”和“`warnings=none blockers=none` 只带命令时不误弹”两条路径。
+- 页面 diagnostics-only 回归同步覆盖导出/复制诊断文本，确认中文风险和原始安全启动命令都会进入现场报告。
+- 已重新复查 formal E2E 第二步：真实 Mac `192.168.31.122:43770` 无密 preflight 通过，Windows client diagnostics-only 通过；当前 Mac discovery 仍上报 `maxScreenFps=30`，因此 60Hz 体感上限应先让 Mac 端按 `MacMaxFpsSafeStart=` 或 `MacMaxFpsPlan=` 调整后再复验。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/windows/check-mac-formal-e2e.mjs --discover --preflightOnly --boardSummary --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --diagnosticsOnly --boardSummary --timeoutMs 45000 --clientPort 5200 --debugPort 9340`
+- `node scripts/windows/discover-lan-hosts.mjs --host 192.168.31.122 --port 43770 --timeoutMs 45000 --boardSummary`
+- `node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --boardSummary --timeoutMs 45000 --clientPort 5200 --debugPort 9340`
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --boardSummary --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-client-browser.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`
+- PowerShell / PowerShell 7 AST parse `watch-codex-link-mac-alerts.ps1`
+- `git diff --check`
+- 冲突标记扫描
+遗留问题：
+- 本轮不启动正式 Mac host、不写 LaunchAgent、不认证 WebSocket、不发送密码、不执行 input/inject。
+- 真正的 formal Plan 2 H.264 canvas 连接仍需要用户本机隐藏输入 Mac 密码；如果命令停在 `Mac host password:`，属于等待现场输入。
+下一步建议：
+- Mac 侧先把当前 30Hz 上限按 `MacMaxFpsSafeStart=` 前台启动或按 `MacMaxFpsPlan=` 写入 LaunchAgent，再复跑 readiness/status；Windows 侧再做正式 60Hz 第二步。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 侧在方便时处理 60Hz 上限并复报 readiness/status。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows 恢复总览新增 `MacHostReadiness=` 无密 host readiness 摘要入口。
 完成内容：
 - `check-windows-resume-status` 的 JSON `commands` 新增 `macHostReadinessCommand`。

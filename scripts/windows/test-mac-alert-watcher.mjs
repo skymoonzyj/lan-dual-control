@@ -560,6 +560,44 @@ async function checkMacHostSafeStartCleanIgnored(args) {
   console.log("[OK] Mac host safe-start guidance alone is ignored");
 }
 
+async function checkMacMaxFpsSafeStartGuidanceAlert(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: [
+          "MacResumeStatus=ready blockers=none warnings=fps-limit",
+          "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60",
+        ].join("; "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "Mac max-FPS safe-start guidance status");
+  assertIncludes(output, "MacMaxFpsSafeStart=", "Mac max-FPS safe-start guidance status");
+  assertIncludes(output, "warnings=fps-limit", "Mac max-FPS safe-start guidance status");
+  console.log("[OK] Mac max-FPS safe-start guidance alerts when FPS findings exist");
+}
+
+async function checkMacMaxFpsSafeStartCleanIgnored(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: [
+          "MacResumeStatus=ready blockers=none warnings=none",
+          "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60",
+        ].join("; "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertNotIncludes(output, "ALERT:", "Mac max-FPS safe-start clean status");
+  console.log("[OK] Mac max-FPS safe-start guidance alone is ignored");
+}
+
 async function checkMacClientFormalSmokeFindingsAlert(args) {
   const output = await runWatcherAgainst(baseState({
     statuses: {
@@ -772,6 +810,8 @@ async function main() {
   await checkMacHostReadinessCleanIgnored(args);
   await checkMacHostSafeStartGuidanceAlert(args);
   await checkMacHostSafeStartCleanIgnored(args);
+  await checkMacMaxFpsSafeStartGuidanceAlert(args);
+  await checkMacMaxFpsSafeStartCleanIgnored(args);
   await checkMacClientFormalSmokeFindingsAlert(args);
   await checkMacClientFormalSmokeCleanIgnored(args);
   await checkStartWrapperJsonStatus(args);

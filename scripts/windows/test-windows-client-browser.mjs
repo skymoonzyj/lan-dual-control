@@ -1318,18 +1318,18 @@ async function verifyDesktopOnlyHostPanel(session) {
                   at: "2026-06-18 10:31:00",
                   title: "Mac side status alert - Mac Codex",
                   message:
-                    "MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
+                    "MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770; MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
                   summary:
-                    "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
+                    "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770; MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
                 },
               ],
               lastAlert: {
                 at: "2026-06-18 10:31:00",
                 title: "Mac side status alert - Mac Codex",
                 message:
-                  "MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
+                  "MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770; MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
                 summary:
-                  "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
+                  "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770; MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
               },
               message: "Mac alert watcher is running.",
             }, { available: true, busy: false })
@@ -2905,7 +2905,7 @@ async function verifyReconnectControls(session) {
         const watcherStatus = document.querySelector("#localMacAlertWatcherStatusText");
         if (watcherStatus) {
           watcherStatus.textContent =
-            "Windows 浮窗提醒已开启，监听测试联络板。MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board";
+            "Windows 浮窗提醒已开启，监听测试联络板。MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps; MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770; MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board";
         }
         state.localHostRunning = true;
         state.localHostOnline = true;
@@ -3045,6 +3045,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("Windows 被控端未指定或未就绪") &&
             exportText.includes("仓库状态需检查") &&
             exportText.includes("LaunchAgent 刷新率上限需调整") &&
+            exportText.includes("Mac 60Hz 安全启动命令已提供") &&
             exportText.includes("Mac host 安全启动命令已提供") &&
             exportText.includes("- Mac 值守说明：Windows 已从 Mac 提醒 watcher 状态里识别到值守 warnings/blockers"),
           reconnectReason: exportText.includes("- 重连原因：测试断线"),
@@ -3063,6 +3064,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("warnings=h264-fallback,fps-limit") &&
             exportText.includes("warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps") &&
             exportText.includes("MacHostSafeStart=node scripts/mac/start-mac-host.mjs") &&
+            exportText.includes("MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs") &&
             exportText.includes("warnings=board"),
           macAlertCheckedAt: exportText.includes("- Mac 提醒最近检查："),
           macAlertSecondsAgo: exportText.includes("秒前）"),
@@ -3124,10 +3126,12 @@ async function verifyReconnectControls(session) {
           copiedText.includes("Windows 被控端未指定或未就绪") &&
           copiedText.includes("仓库状态需检查") &&
           copiedText.includes("LaunchAgent 刷新率上限需调整") &&
+          copiedText.includes("Mac 60Hz 安全启动命令已提供") &&
           copiedText.includes("Mac host 安全启动命令已提供") &&
           copiedText.includes("launch-agent-max-fps") &&
           copiedText.includes("mac-host-max-fps") &&
           copiedText.includes("MacHostSafeStart=node scripts/mac/start-mac-host.mjs") &&
+          copiedText.includes("MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs") &&
           copiedText.includes("host-build-test") &&
           copiedText.includes("辅助功能未开") &&
           copiedText.includes("- 本机被控：桌面壳托管运行中") &&
