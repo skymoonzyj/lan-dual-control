@@ -74,6 +74,10 @@ Machine-readable JSON fields:
                            Secret-free local Mac client browser self-test. It
                            uses a temporary mock Windows host and does not use
                            a real host, password, call, or inject.
+  macScriptHelpCommand     Secret-free Mac script help safety check. It only
+                           runs --help/-h paths and does not start services,
+                           read Agent Link Board, prompt, auth, input, or
+                           inject.
   windowsReverseGrantStatus
                            Secret-free Windows-side PowerShell status command
                            for the local one-time reverse-control grant.
@@ -279,6 +283,10 @@ function macClientBrowserSelfTestCommand() {
   return "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
 }
 
+function macScriptHelpCommand() {
+  return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
+}
+
 function sendCallCommand(item) {
   return `node scripts/mac/check-mac-client-formal-status.mjs --host ${item.host} --port ${item.port} --sendCall`;
 }
@@ -347,6 +355,7 @@ function buildReport(scan, args, windowsLanRisk = emptyWindowsLanRisk(false)) {
     formalSmokeCommand: best ? formalSmokeCommand(best) : "",
     macClientFormalSmokeCommand: best ? macClientFormalSmokeCommand(args, best) : macClientFormalSmokeCommand(args, null),
     macClientBrowserSelfTestCommand: macClientBrowserSelfTestCommand(),
+    macScriptHelpCommand: macScriptHelpCommand(),
     manualChecklistSummary,
     sendCallCommand: best ? sendCallCommand(best) : "",
     windowsReverseGrantStatus: best ? windowsReverseGrantPowerShellCommand(best, "status") : "",
@@ -365,12 +374,12 @@ function makeBoardSummary(report) {
   const risk = formatWindowsLanRisk(report.windowsLanRisk);
   const riskSummary = risk ? ` ${risk}.` : "";
   if (report.best) {
-    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}.${riskSummary} FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. MacClientFormalSmoke=${report.macClientFormalSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. WindowsReverseGrantStatus=${report.windowsReverseGrantStatus}. WindowsOpenOneTimeReverseGrant=${report.windowsOpenOneTimeReverseGrant}. WindowsReverseGrantStatusNodeFallback=${report.windowsReverseGrantStatusNodeFallback}. WindowsOpenOneTimeReverseGrantNodeFallback=${report.windowsOpenOneTimeReverseGrantNodeFallback}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}.${riskSummary} FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. MacClientFormalSmoke=${report.macClientFormalSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. WindowsReverseGrantStatus=${report.windowsReverseGrantStatus}. WindowsOpenOneTimeReverseGrant=${report.windowsOpenOneTimeReverseGrant}. WindowsReverseGrantStatusNodeFallback=${report.windowsReverseGrantStatusNodeFallback}. WindowsOpenOneTimeReverseGrantNodeFallback=${report.windowsOpenOneTimeReverseGrantNodeFallback}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
   }
   const ignored = report.ignored.length > 0
     ? ` Saw ${report.ignored.length} non-Windows host(s), likely Mac/self.`
     : "";
-  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored}${riskSummary} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored}${riskSummary} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
 }
 
 function printText(report, args) {
@@ -386,6 +395,7 @@ function printText(report, args) {
     console.log(`[INFO] Mac client formal smoke: ${report.macClientFormalSmokeCommand}`);
     console.log(`[INFO] Manual checklist: ${report.manualChecklistSummary}`);
     console.log(`[INFO] Mac client browser self-test: ${report.macClientBrowserSelfTestCommand}`);
+    console.log(`[INFO] Mac script help safety check: ${report.macScriptHelpCommand}`);
     console.log(`[INFO] Windows reverse grant status: ${report.windowsReverseGrantStatus}`);
     console.log(`[INFO] Windows one-time reverse grant: ${report.windowsOpenOneTimeReverseGrant}`);
     console.log(`[INFO] Windows reverse grant status (Node fallback): ${report.windowsReverseGrantStatusNodeFallback}`);
@@ -405,6 +415,7 @@ function printText(report, args) {
     }
     console.log("[INFO] Ask Windows Codex to start Windows host, then rerun this discovery or check-mac-client-formal-status with the Windows IP.");
     console.log(`[INFO] Mac client browser self-test: ${report.macClientBrowserSelfTestCommand}`);
+    console.log(`[INFO] Mac script help safety check: ${report.macScriptHelpCommand}`);
   }
   if (args.verbose && Array.isArray(report.subnets)) {
     for (const subnet of report.subnets) {

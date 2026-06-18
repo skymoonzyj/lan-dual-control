@@ -120,6 +120,19 @@ function assertMacClientBrowserSelfTestCommand(command, label) {
   assertNotIncludes(command, "--server", label);
 }
 
+function assertMacScriptHelpCommand(command, label) {
+  assertIncludes(command, "node scripts/mac/test-mac-script-help.mjs", label);
+  assertIncludes(command, "--timeoutMs 10000", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function assertReverseControlRehearsal(text, label) {
   assertIncludes(text, "LAN008", label);
   assertIncludes(text, "allow-windows-reverse-control.ps1", label);
@@ -185,6 +198,12 @@ function extractFormalSmokeCommand(text, label) {
 function extractMacClientBrowserSelfTestCommand(text, label) {
   const match = String(text || "").match(/MacClientBrowserSelfTest=(.+?)(?:\. WindowsReverseGrantStatus=|\. ReverseRehearsal=|\. If that checklist|\.\s*No password|\n|$)/);
   assert(match, `${label} should include MacClientBrowserSelfTest= command.\n${text}`);
+  return match[1].trim();
+}
+
+function extractMacScriptHelpCommand(text, label) {
+  const match = String(text || "").match(/MacScriptHelp=(.+?)(?:\. WindowsReverseGrantStatus=|\. ReverseRehearsal=|\. If that checklist|\.\s*No password|\n|$)/);
+  assert(match, `${label} should include MacScriptHelp= command.\n${text}`);
   return match[1].trim();
 }
 
@@ -348,6 +367,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "formalSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macClientFormalSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macClientBrowserSelfTestCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macScriptHelpCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "windowsReverseGrantStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "windowsOpenOneTimeReverseGrant", `${script} ${flag}`);
     assertIncludes(result.stdout, "windowsReverseGrantStatusNodeFallback", `${script} ${flag}`);
@@ -381,6 +401,7 @@ function checkFoundJson(tmp, args) {
     payload.macClientBrowserSelfTestCommand || "",
     "Mac client browser self-test command",
   );
+  assertMacScriptHelpCommand(payload.macScriptHelpCommand || "", "Mac script help command");
   assert(payload.manualChecklistSummary === "connection/video/audio/clipboard/input_ack/diagnostics", "found payload should include manual checklist summary");
   assertIncludes(payload.sendCallCommand, "--host 192.168.31.68", "send call command");
   assertIncludes(payload.sendCallCommand, "--sendCall", "send call command");
@@ -401,6 +422,11 @@ function checkFoundJson(tmp, args) {
   assertMacClientBrowserSelfTestCommand(
     extractMacClientBrowserSelfTestCommand(payload.boardSummary, "board summary"),
     "board summary Mac client browser self-test command",
+  );
+  assertIncludes(payload.boardSummary, "MacScriptHelp=", "board summary");
+  assertMacScriptHelpCommand(
+    extractMacScriptHelpCommand(payload.boardSummary, "board summary"),
+    "board summary Mac script help command",
   );
   assertWindowsReverseGrantCommands(payload.boardSummary, "board summary Windows reverse grant commands");
   assertIncludes(payload.boardSummary, "ReverseRehearsal=", "board summary");
@@ -428,6 +454,11 @@ function checkBoardSummaryFound(tmp, args) {
     extractMacClientBrowserSelfTestCommand(result.stdout, "found board summary"),
     "found board summary Mac client browser self-test command",
   );
+  assertIncludes(result.stdout, "MacScriptHelp=", "found board summary");
+  assertMacScriptHelpCommand(
+    extractMacScriptHelpCommand(result.stdout, "found board summary"),
+    "found board summary Mac script help command",
+  );
   assertWindowsReverseGrantCommands(result.stdout, "found board summary Windows reverse grant commands");
   assertIncludes(result.stdout, "ReverseRehearsal=", "found board summary");
   assertReverseControlRehearsal(extractReverseRehearsal(result.stdout, "found board summary"), "found board summary reverse rehearsal");
@@ -447,6 +478,7 @@ function checkPlainFound(tmp, args) {
   assertIncludes(result.stdout, "Formal smoke preflight:", "found plain output");
   assertIncludes(result.stdout, "Mac client formal smoke:", "found plain output");
   assertIncludes(result.stdout, "Mac client browser self-test:", "found plain output");
+  assertIncludes(result.stdout, "Mac script help safety check:", "found plain output");
   assertIncludes(result.stdout, "Windows reverse grant status:", "found plain output");
   assertIncludes(result.stdout, "Windows one-time reverse grant:", "found plain output");
   assertIncludes(result.stdout, "Windows reverse grant status (Node fallback):", "found plain output");
@@ -461,6 +493,9 @@ function checkPlainFound(tmp, args) {
   const selfTestMatch = String(result.stdout || "").match(/Mac client browser self-test: ([^\n]+)/);
   assert(selfTestMatch, `found plain output should include self-test command line.\n${result.stdout}`);
   assertMacClientBrowserSelfTestCommand(selfTestMatch[1], "found plain output Mac client browser self-test command");
+  const scriptHelpMatch = String(result.stdout || "").match(/Mac script help safety check: ([^\n]+)/);
+  assert(scriptHelpMatch, `found plain output should include Mac script help command line.\n${result.stdout}`);
+  assertMacScriptHelpCommand(scriptHelpMatch[1], "found plain output Mac script help command");
   assertIncludes(result.stdout, "-Port 43770 -Status -BoardSummary", "found plain output Windows reverse grant status");
   assertIncludes(result.stdout, "-Port 43770 -Grant -DurationMs 30000 -BoardSummary", "found plain output Windows one-time reverse grant");
   assertIncludes(result.stdout, "--host 127.0.0.1 --port 43770 --status --boardSummary", "found plain output Windows reverse grant status Node fallback");
@@ -485,6 +520,7 @@ function checkNoneRequireFound(tmp, args) {
   assertIncludes(payload.boardSummary, "no Windows host found", "none board summary");
   assertIncludes(payload.boardSummary, "Ask Windows Codex to start Windows host", "none board summary");
   assertIncludes(payload.boardSummary, "MacClientBrowserSelfTest=", "none board summary");
+  assertIncludes(payload.boardSummary, "MacScriptHelp=", "none board summary");
   assert(!payload.reverseControlRehearsal, "none payload should not invent a reverse rehearsal without a Windows host");
   assert(!payload.windowsReverseGrantStatus, "none payload should not invent a Windows reverse grant status command without a Windows host");
   assert(!payload.windowsOpenOneTimeReverseGrant, "none payload should not invent a Windows reverse grant command without a Windows host");
@@ -494,9 +530,14 @@ function checkNoneRequireFound(tmp, args) {
     payload.macClientBrowserSelfTestCommand || "",
     "none JSON Mac client browser self-test command",
   );
+  assertMacScriptHelpCommand(payload.macScriptHelpCommand || "", "none JSON Mac script help command");
   assertMacClientBrowserSelfTestCommand(
     extractMacClientBrowserSelfTestCommand(payload.boardSummary, "none board summary"),
     "none board summary Mac client browser self-test command",
+  );
+  assertMacScriptHelpCommand(
+    extractMacScriptHelpCommand(payload.boardSummary, "none board summary"),
+    "none board summary Mac script help command",
   );
   console.log("[OK] Missing Windows host fails only when required and explains next step");
 }
