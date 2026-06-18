@@ -65,6 +65,18 @@ Machine-readable JSON fields:
                            Secret-free local Mac client browser self-test. It
                            uses a temporary mock Windows host and does not use
                            a real host, password, call, or inject.
+  windowsReverseGrantStatus
+                           Secret-free Windows-side PowerShell status command
+                           for the local one-time reverse-control grant.
+  windowsOpenOneTimeReverseGrant
+                           Secret-free Windows-side PowerShell command to open
+                           a short local one-time reverse-control grant.
+  windowsReverseGrantStatusNodeFallback
+                           Secret-free Node fallback status command for
+                           Windows environments without PowerShell available.
+  windowsOpenOneTimeReverseGrantNodeFallback
+                           Secret-free Node fallback command to open the same
+                           short local one-time reverse-control grant.
   reverseControlRehearsal  Secret-free human rehearsal for the guarded
                            reverse-control request loop after authentication:
                            Mac expects LAN008 first, Windows opens a local
@@ -302,6 +314,10 @@ function buildReport(scan, args) {
     macClientBrowserSelfTestCommand: macClientBrowserSelfTestCommand(),
     manualChecklistSummary,
     sendCallCommand: best ? sendCallCommand(best) : "",
+    windowsReverseGrantStatus: best ? windowsReverseGrantPowerShellCommand(best, "status") : "",
+    windowsOpenOneTimeReverseGrant: best ? windowsReverseGrantPowerShellCommand(best, "grant") : "",
+    windowsReverseGrantStatusNodeFallback: best ? windowsReverseGrantNodeFallbackCommand(best, "status") : "",
+    windowsOpenOneTimeReverseGrantNodeFallback: best ? windowsReverseGrantNodeFallbackCommand(best, "grant") : "",
     reverseControlRehearsal: best ? reverseControlRehearsal(best) : "",
     boardSummary: "",
   };
@@ -311,7 +327,7 @@ function buildReport(scan, args) {
 
 function makeBoardSummary(report) {
   if (report.best) {
-    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}. FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}. FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. WindowsReverseGrantStatus=${report.windowsReverseGrantStatus}. WindowsOpenOneTimeReverseGrant=${report.windowsOpenOneTimeReverseGrant}. WindowsReverseGrantStatusNodeFallback=${report.windowsReverseGrantStatusNodeFallback}. WindowsOpenOneTimeReverseGrantNodeFallback=${report.windowsOpenOneTimeReverseGrantNodeFallback}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
   }
   const ignored = report.ignored.length > 0
     ? ` Saw ${report.ignored.length} non-Windows host(s), likely Mac/self.`
@@ -331,6 +347,10 @@ function printText(report, args) {
     console.log(`[INFO] Formal smoke preflight: ${report.formalSmokeCommand}`);
     console.log(`[INFO] Manual checklist: ${report.manualChecklistSummary}`);
     console.log(`[INFO] Mac client browser self-test: ${report.macClientBrowserSelfTestCommand}`);
+    console.log(`[INFO] Windows reverse grant status: ${report.windowsReverseGrantStatus}`);
+    console.log(`[INFO] Windows one-time reverse grant: ${report.windowsOpenOneTimeReverseGrant}`);
+    console.log(`[INFO] Windows reverse grant status (Node fallback): ${report.windowsReverseGrantStatusNodeFallback}`);
+    console.log(`[INFO] Windows one-time reverse grant (Node fallback): ${report.windowsOpenOneTimeReverseGrantNodeFallback}`);
     console.log(`[INFO] Reverse rehearsal: ${report.reverseControlRehearsal}`);
     console.log(`[INFO] Ready call: ${report.sendCallCommand}`);
   } else {
