@@ -289,6 +289,8 @@ const macUnattendedRiskLabels = {
   "windows-reverse-grant-status": "Windows 反控授权状态命令已提供",
   "windows-open-one-time-reverse-grant": "Windows 一次性反控授权命令已提供",
   "windows-secure-auth-path": "Windows 安全认证路径已提供",
+  "windows-firewall-status": "Windows 防火墙只读检查命令已提供",
+  "windows-firewall-preview": "Windows 防火墙放行预览命令已提供",
   "mac-host-media-aggregate": "Mac 媒体基线需检查",
   "mac-host-runtime-display-round-trip": "Mac runtime/display 回环需检查",
   "mac-host-build": "Mac host 构建需检查",
@@ -3165,6 +3167,8 @@ function parseMacUnattendedAttention(text) {
   const hasWindowsReverseGrantStatus = /\bWindowsReverseGrantStatus(NodeFallback)?\s*=/i.test(source);
   const hasWindowsOpenOneTimeReverseGrant = /\bWindowsOpenOneTimeReverseGrant(NodeFallback)?\s*=/i.test(source);
   const hasWindowsSecureAuthPath = /\b(?:WindowsSecureAuthPath|SecureAuthPath)\s*=/i.test(source);
+  const hasWindowsFirewallStatus = /\bWindowsFirewallStatus\s*=/i.test(source);
+  const hasWindowsFirewallPreview = /\bWindowsFirewallPreview\s*=/i.test(source);
   const hasMacMaxFpsFinding = risks.some((risk) =>
     risk === "fps-limit" ||
     risk === "mac-host-max-fps" ||
@@ -3184,6 +3188,21 @@ function parseMacUnattendedAttention(text) {
   const hasWindowsSecureAuthContext =
     risks.some((risk) => risk === "windows-host" || risk === "auth" || risk === "password" || risk === "board") ||
     /\b(auth|password|promptPassword|LAN_DUAL_PASSWORD|true\s*browser|browser\s*smoke|formal\s*smoke|smoke|exit\s*=\s*1|ready\s*=\s*false|blocked|failed)\b|认证|密码|现场|等待\s*Windows|随机运行期密码/i.test(source);
+  const hasWindowsFirewallContext =
+    windowsLanRisks.length > 0 ||
+    risks.some((risk) =>
+      [
+        "windows-lan-risk",
+        "no-firewall-allow",
+        "public-profile",
+        "lan-probe-blocked",
+        "tcp-unreachable",
+        "bind-address",
+        "firewall-query-failed",
+        "windows-host",
+      ].includes(risk),
+    ) ||
+    /\bWindowsLanRisks?|firewall|public-profile|no-firewall-allow|lan-probe-blocked|tcp-unreachable|防火墙|端口不可达/i.test(source);
   if (lower.includes("ready=false") && risks.length === 0) {
     risks.push("not-ready");
   }
@@ -3318,12 +3337,20 @@ function parseMacUnattendedAttention(text) {
   if (hasWindowsSecureAuthPath && hasWindowsSecureAuthContext) {
     risks.unshift("windows-secure-auth-path");
   }
+  if (hasWindowsFirewallStatus && hasWindowsFirewallContext) {
+    risks.unshift("windows-firewall-status");
+  }
+  if (hasWindowsFirewallPreview && hasWindowsFirewallContext) {
+    risks.unshift("windows-firewall-preview");
+  }
   const priority = new Map(
     [
       "mac-client-discover-windows",
       "windows-lan-risk",
       "no-firewall-allow",
       "public-profile",
+      "windows-firewall-status",
+      "windows-firewall-preview",
       "lan-probe-blocked",
       "tcp-unreachable",
       "bind-address",

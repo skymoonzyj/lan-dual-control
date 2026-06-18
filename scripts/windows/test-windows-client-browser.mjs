@@ -1494,6 +1494,8 @@ async function verifyDesktopOnlyHostPanel(session) {
         "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60",
         "MacClientDiscoverWindows=node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary",
         "WindowsLanRisk=no-firewall-allow,public-profile",
+        "WindowsFirewallStatus=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --json",
+        "WindowsFirewallPreview=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --dryRunRule --ruleProfile Private",
         "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.68 --port 43770 --boardSummary",
         "MacFormalLocalSmoke=failed blockers=auth warnings=video",
         "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
@@ -3166,6 +3168,8 @@ async function verifyReconnectControls(session) {
         "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60",
         "MacClientDiscoverWindows=node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary",
         "WindowsLanRisk=no-firewall-allow,public-profile",
+        "WindowsFirewallStatus=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --json",
+        "WindowsFirewallPreview=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --dryRunRule --ruleProfile Private",
         "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.68 --port 43770 --boardSummary",
         "MacFormalLocalSmoke=failed blockers=auth warnings=video",
         "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
@@ -3350,6 +3354,8 @@ async function verifyReconnectControls(session) {
             exportText.includes("Mac client Windows 发现命令已提供") &&
             exportText.includes("Windows 防火墙入站放行需检查") &&
             exportText.includes("Windows 当前网络是 Public") &&
+            exportText.includes("Windows 防火墙只读检查命令已提供") &&
+            exportText.includes("Windows 防火墙放行预览命令已提供") &&
             exportText.includes("Mac client 正式清单命令已提供") &&
             exportText.includes("Mac 本机短验收需处理") &&
             exportText.includes("Mac 本机短验收重跑命令已提供") &&
@@ -3386,6 +3392,9 @@ async function verifyReconnectControls(session) {
             exportText.includes("MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs") &&
             exportText.includes("MacClientDiscoverWindows=node scripts/mac/discover-windows-hosts.mjs") &&
             exportText.includes("WindowsLanRisk=no-firewall-allow,public-profile") &&
+            exportText.includes("WindowsFirewallStatus=node scripts/windows/check-windows-firewall.mjs") &&
+            exportText.includes("WindowsFirewallPreview=node scripts/windows/check-windows-firewall.mjs") &&
+            !exportText.includes("WindowsFirewallPreview=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --dryRunRule --ruleProfile Private --addRule") &&
             exportText.includes("MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs") &&
             exportText.includes("RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs") &&
             exportText.includes("WindowsReverseGrantStatus=pwsh") &&
@@ -3472,6 +3481,8 @@ async function verifyReconnectControls(session) {
           copiedText.includes("Mac client Windows 发现命令已提供") &&
           copiedText.includes("Windows 防火墙入站放行需检查") &&
           copiedText.includes("Windows 当前网络是 Public") &&
+          copiedText.includes("Windows 防火墙只读检查命令已提供") &&
+          copiedText.includes("Windows 防火墙放行预览命令已提供") &&
           copiedText.includes("Mac client 正式清单命令已提供") &&
           copiedText.includes("Mac 本机短验收需处理") &&
           copiedText.includes("Mac 本机短验收重跑命令已提供") &&
@@ -3493,6 +3504,9 @@ async function verifyReconnectControls(session) {
           copiedText.includes("MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs") &&
           copiedText.includes("MacClientDiscoverWindows=node scripts/mac/discover-windows-hosts.mjs") &&
           copiedText.includes("WindowsLanRisk=no-firewall-allow,public-profile") &&
+          copiedText.includes("WindowsFirewallStatus=node scripts/windows/check-windows-firewall.mjs") &&
+          copiedText.includes("WindowsFirewallPreview=node scripts/windows/check-windows-firewall.mjs") &&
+          !copiedText.includes("WindowsFirewallPreview=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --dryRunRule --ruleProfile Private --addRule") &&
           copiedText.includes("MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs") &&
           copiedText.includes("RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs") &&
           copiedText.includes("WindowsReverseGrantStatus=pwsh") &&

@@ -82,6 +82,31 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端页面/复制诊断消费 `WindowsFirewallStatus=` 与 `WindowsFirewallPreview=`，把上一轮防火墙只读入口从脚本摘要补到现场 UI 诊断。
+完成内容：
+- `apps/windows-client/app.js` 的 Mac 提醒风险翻译器新增 `windows-firewall-status` / `windows-firewall-preview`，当同段文本存在 `WindowsLanRisk=`、`no-firewall-allow`、`public-profile`、`lan-probe-blocked`、`tcp-unreachable` 等 LAN/firewall 风险时，会在 Mac 值守快速摘要和复制/导出诊断里显示“Windows 防火墙只读检查命令已提供”“Windows 防火墙放行预览命令已提供”。
+- `scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly` 新增覆盖：导出和复制诊断必须包含 `WindowsFirewallStatus=` / `WindowsFirewallPreview=` 提示，且 `WindowsFirewallPreview` 仍不得包含 `--addRule`。
+- `apps/windows-client/README.md`、`docs/CURRENT_STATUS.md`、`docs/NEXT_ACTIONS.md`、`docs/04-task-board.md` 已同步说明该入口只读/dry-run，不自动运行、不改系统、不认证、不发密码/input/inject。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 本轮只把 Windows 控制端 UI/诊断和复制报告补齐；实际防火墙状态仍以 `check-windows-firewall --json` 的只读结果为准，真正加规则仍需用户/管理员显式执行，不在 Agent Link Board 自动发送 `--addRule`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Mac 端继续按 `WindowsFirewallStatus=` / `WindowsFirewallPreview=` 标签消费即可。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：补 WindowsLanRisk 后的安全下一步入口，让 Windows 发现/防火墙问题能从 status/readiness/resume 一行摘要直接进入只读检查和 dry-run 预览。
 完成内容：
 - `start-windows-host --status` 的 JSON、普通输出、离线/在线 `--boardSummary` 新增 `windowsFirewallStatusCommand` / `WindowsFirewallStatus=` 与 `windowsFirewallPreviewCommand` / `WindowsFirewallPreview=`。
