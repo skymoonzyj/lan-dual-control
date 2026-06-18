@@ -260,6 +260,8 @@ const macUnattendedRiskLabels = {
   "mac-host-helper-dry-run": "Mac host 启动助手干跑需检查",
   "mac-host-file-clipboard-security": "Mac 文件剪贴板安全回归需检查",
   "agent-link-board-currentcall": "联络板当前呼叫需协调",
+  board: "联络板状态需检查",
+  "agent-link-board": "联络板状态需检查",
   "windows-host": "Windows 被控端未指定或未就绪",
   "node-js": "Node.js 环境需检查",
   swift: "Swift 环境需检查",

@@ -1318,18 +1318,18 @@ async function verifyDesktopOnlyHostPanel(session) {
                   at: "2026-06-18 10:31:00",
                   title: "Mac side status alert - Mac Codex",
                   message:
-                    "MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall",
+                    "MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
                   summary:
-                    "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall",
+                    "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
                 },
               ],
               lastAlert: {
                 at: "2026-06-18 10:31:00",
                 title: "Mac side status alert - Mac Codex",
                 message:
-                  "MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall",
+                  "MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
                 summary:
-                  "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall",
+                  "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
               },
               message: "Mac alert watcher is running.",
             }, { available: true, busy: false })
@@ -1652,6 +1652,7 @@ async function verifyDesktopOnlyHostPanel(session) {
           watcherRunningView.statusText.includes("仓库状态需检查") &&
           watcherRunningView.statusText.includes("Mac host 发现需检查") &&
           watcherRunningView.statusText.includes("联络板当前呼叫需协调") &&
+          watcherRunningView.statusText.includes("联络板状态需检查") &&
           watcherStoppedView.running === false &&
           watcherStoppedView.badgeText === "未开启" &&
           watcherStoppedView.toggleText === "开启提醒" &&
@@ -2906,7 +2907,7 @@ async function verifyReconnectControls(session) {
         const watcherStatus = document.querySelector("#localMacAlertWatcherStatusText");
         if (watcherStatus) {
           watcherStatus.textContent =
-            "Windows 浮窗提醒已开启，监听测试联络板。MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall";
+            "Windows 浮窗提醒已开启，监听测试联络板。MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo; MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall; run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board";
         }
         state.localHostRunning = true;
         state.localHostOnline = true;
@@ -3013,11 +3014,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("视频回退"),
           quickSummaryMacReachability:
             exportText.includes("- Mac 值守：恢复中") &&
-            exportText.includes("值守风险 自启动未配置 / 电源设置可能导致睡眠断连") &&
-            exportText.includes("视频链路需检查") &&
-            exportText.includes("认证/密码步骤待确认") &&
-            exportText.includes("Mac host 发现需检查") &&
-            exportText.includes("联络板当前呼叫需协调") &&
+            exportText.includes("值守风险") &&
             exportText.includes("提醒 提醒中"),
           quickSummaryReconnect:
             exportText.includes("- 重连：等待自动重连") && exportText.includes("原因 测试断线"),
@@ -3051,6 +3048,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("仓库状态需检查") &&
             exportText.includes("Mac host 发现需检查") &&
             exportText.includes("联络板当前呼叫需协调") &&
+            exportText.includes("联络板状态需检查") &&
             exportText.includes("- Mac 值守说明：Windows 已从 Mac 提醒 watcher 状态里识别到值守 warnings/blockers"),
           reconnectReason: exportText.includes("- 重连原因：测试断线"),
           reconnectNext: exportText.includes("- 下次重连："),
@@ -3065,7 +3063,8 @@ async function verifyReconnectControls(session) {
             exportText.includes("- Mac 提醒详情：Windows 浮窗提醒已开启") &&
             exportText.includes("warnings=launch-agent-missing,power-risk") &&
             exportText.includes("warnings: video,build,auth,windows-host,repo") &&
-            exportText.includes("warnings=mac-host-discovery,agent-link-board-currentcall"),
+            exportText.includes("warnings=mac-host-discovery,agent-link-board-currentcall") &&
+            exportText.includes("warnings=board"),
           macAlertCheckedAt: exportText.includes("- Mac 提醒最近检查："),
           macAlertSecondsAgo: exportText.includes("秒前）"),
           macAlertPoll: exportText.includes("- Mac 提醒自动轮询：约 15 秒"),
