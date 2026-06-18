@@ -380,6 +380,22 @@ function summarizeCounts(checklist) {
   };
 }
 
+function formatChecklistFindings(checklist) {
+  const blockers = summarizeChecklistIds(checklist, "blocker");
+  const warnings = summarizeChecklistIds(checklist, "warning");
+  return `blockers=${blockers} warnings=${warnings}`;
+}
+
+function summarizeChecklistIds(checklist, status) {
+  const ids = [...new Set((checklist || [])
+    .filter((entry) => entry.status === status)
+    .map((entry) => entry.id)
+    .filter(Boolean))];
+  if (ids.length === 0) return "none";
+  if (ids.length <= 4) return ids.join(",");
+  return `${ids.slice(0, 4).join(",")}+${ids.length - 4}more`;
+}
+
 function formatGateItem(entry) {
   const summary = normalizedText(entry.summary);
   const detail = normalizedText(entry.detail);
@@ -404,7 +420,7 @@ function formatSendCallRefusal(report) {
     ? ` Changed runtime files: ${buildDiff.changedHostRuntimeFiles.slice(0, 6).join(", ")}.`
     : "";
   return [
-    `Refusing to send formal E2E call because checklist is not ready: blockers=${report.counts.blockers}, warnings=${report.counts.warnings}.`,
+    `Refusing to send formal E2E call because checklist is not ready: ${formatChecklistFindings(report.checklist)} (counts blockers=${report.counts.blockers}, warnings=${report.counts.warnings}).`,
     `Blockers: ${blockerText}.`,
     changedFiles,
     warningText,
@@ -413,9 +429,14 @@ function formatSendCallRefusal(report) {
 
 function makeCallText(report) {
   const host = report.resume.host || {};
+  const findings = formatChecklistFindings(report.checklist);
+  const readinessText = report.readyToCall
+    ? report.counts.warnings > 0 ? "ready with warnings" : "ready"
+    : "needs attention";
   if (!host.online) {
     return [
       "Mac formal E2E is not ready: Mac host is offline.",
+      `Checklist ${findings}.`,
       "Start with start-mac-host --promptPassword --requirePassword, then rerun the checklist.",
       `Plan safe reboot persistence first with: ${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
       `When the host is online, run local smoke first with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
@@ -424,9 +445,9 @@ function makeCallText(report) {
   }
   const address = formatHostAddress(host);
   return [
-    `Mac formal E2E ${report.readyToCall ? "ready" : "needs attention"}: host=${address}, repo=${report.resume.currentBuildId || "unknown"}, runtimeBuild=${host.runtime?.buildId || "unknown"}, inputMode=${host.inputMode || "unknown"}.`,
+    `Mac formal E2E ${readinessText}: host=${address}, repo=${report.resume.currentBuildId || "unknown"}, runtimeBuild=${host.runtime?.buildId || "unknown"}, inputMode=${host.inputMode || "unknown"}.`,
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)} pipeline=${host.capabilities?.capturePipeline || "unknown"} audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}.`,
-    `Checklist blockers=${report.counts.blockers}, warnings=${report.counts.warnings}.`,
+    `Checklist ${findings}.`,
     `If this Mac should stay ready after reboot, review the dry-run LaunchAgent plan with: ${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
     `Before long formal runs, run local H.264/PCM/input-log smoke with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
     `Before long formal runs, refresh the Mac media baseline with: ${report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
@@ -437,11 +458,12 @@ function makeCallText(report) {
 function makeBoardSummary(report) {
   const host = report.resume.host || {};
   const state = report.readyToCall
-    ? "ready for Windows formal E2E"
+    ? report.counts.warnings > 0 ? "ready with warnings for Windows formal E2E" : "ready for Windows formal E2E"
     : `needs attention (${report.counts.blockers} blocker(s), ${report.counts.warnings} warning(s))`;
+  const findings = formatChecklistFindings(report.checklist);
   if (!host.online) {
     return [
-      `Mac formal E2E: ${state}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}.`,
+      `Mac formal E2E: ${state}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}; ${findings}.`,
       `Mac host offline at ${host.probe?.host || report.args.host}:${host.probe?.port || report.args.port}.`,
       "Next: start with start-mac-host --promptPassword --requirePassword, then rerun checklist.",
       `MacLaunchAgentPlan=${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
@@ -451,7 +473,7 @@ function makeBoardSummary(report) {
     ].join(" ");
   }
   return [
-    `Mac formal E2E: ${state}; host=${formatHostAddress(host)}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}; runtimeBuild=${host.runtime?.buildId || "unknown"}; inputMode=${host.inputMode || "unknown"}.`,
+    `Mac formal E2E: ${state}; host=${formatHostAddress(host)}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}; runtimeBuild=${host.runtime?.buildId || "unknown"}; inputMode=${host.inputMode || "unknown"}; ${findings}.`,
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)}; pipeline=${host.capabilities?.capturePipeline || "unknown"}; audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}; ${formatBuildDiff(host.buildDiff)}.`,
     `MacLaunchAgentPlan=${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
     `MacFormalLocalSmoke=${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
@@ -666,7 +688,7 @@ function clearStaleCall(report, args) {
   return {
     ok: true,
     cleared: true,
-    reason: `Cleared stale Mac formal E2E board call because checklist is not ready: blockers=${report.counts.blockers}, warnings=${report.counts.warnings}.`,
+    reason: `Cleared stale Mac formal E2E board call because checklist is not ready: ${formatChecklistFindings(report.checklist)} (counts blockers=${report.counts.blockers}, warnings=${report.counts.warnings}).`,
     previousCall: currentCall,
     result: clearResult || "ok",
   };
@@ -754,7 +776,7 @@ function printClearStaleCallResult(report) {
     console.log(`[INFO] Previous call: ${formatBoardCallLabel(result.previousCall)}`);
   }
   if (!report.readyToCall) {
-    console.log(`[WARN] Formal E2E still not ready: blockers=${report.counts.blockers}, warnings=${report.counts.warnings}`);
+    console.log(`[WARN] Formal E2E still not ready: ${formatChecklistFindings(report.checklist)} (counts blockers=${report.counts.blockers}, warnings=${report.counts.warnings})`);
     console.log(`[INFO] ${report.callText}`);
   }
 }

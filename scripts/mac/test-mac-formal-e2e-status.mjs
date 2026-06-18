@@ -147,6 +147,8 @@ function assertNoSecretLikeText(text, label) {
 
 function assertBoardSummaryShape(text, label) {
   assert(/Mac formal E2E:/.test(text), `${label} should start with formal E2E summary`);
+  assert(/\bblockers=/.test(text), `${label} should include blocker ids`);
+  assert(/\bwarnings=/.test(text), `${label} should include warning ids`);
   assert(/MacLaunchAgentPlan=/.test(text), `${label} should include LaunchAgent dry-run planner guidance`);
   assert(/install-mac-host-launch-agent\.mjs/.test(text), `${label} should include LaunchAgent planner command`);
   assert(/MacFormalLocalSmoke=/.test(text), `${label} should include local formal smoke guidance`);
@@ -405,7 +407,11 @@ function checkOfflineJson(args) {
   assert(payload.checklist.some((entry) => entry.id === "host" && entry.status === "blocker"), "offline checklist should block on host");
   assert(payload.checklist.some((entry) => entry.id === "inject" && entry.status === "skip"), "offline checklist should explicitly skip inject");
   assertBoardSummaryShape(payload.boardSummary || "", "offline JSON boardSummary");
+  assert(/blockers=[^.]*host/.test(payload.boardSummary || ""), "offline boardSummary should name host blocker");
+  assert(/warnings=[^.]*board/.test(payload.boardSummary || ""), "offline boardSummary should name board warning");
   assert(/start-mac-host --promptPassword --requirePassword/.test(payload.callText || ""), "offline callText should include safe start command");
+  assert(/Checklist blockers=[^.]*host/.test(payload.callText || ""), "offline callText should name host blocker");
+  assert(/warnings=[^.]*board/.test(payload.callText || ""), "offline callText should name board warning");
   assert(/install-mac-host-launch-agent\.mjs/.test(payload.callText || ""), "offline callText should include LaunchAgent planner command");
   assert(/check-mac-formal-local-smoke\.mjs/.test(payload.callText || ""), "offline callText should include local smoke command");
   assert(/check-mac-host-readiness --probeMedia --boardSummary/.test(payload.boardSummary || ""), "offline boardSummary should mention media precheck");
@@ -430,6 +436,8 @@ function checkOfflineBoardSummary(args) {
   const text = String(result.stdout || "").trim();
   assertBoardSummaryShape(text, "offline board summary");
   assert(/Mac host offline/.test(text), "offline board summary should mention host offline");
+  assert(/blockers=[^.]*host/.test(text), "offline board summary should name host blocker");
+  assert(/warnings=[^.]*board/.test(text), "offline board summary should name board warning");
   assert(/Media precheck/.test(text), "offline board summary should mention media precheck");
   print("OK", "Offline board summary is short, secret-free, and actionable");
 }
@@ -477,6 +485,7 @@ async function checkClearStaleFormalCall(args) {
     assert(payload.readyToCall === false, "clear stale formal call payload should still report formal E2E not ready");
     assert(payload.clearedStaleCall?.cleared === true, "clear stale formal call should report cleared=true");
     assert(payload.clearedStaleCall?.previousCall?.goal === existingCall.goal, "clear stale formal call should include previous call identity");
+    assert(/blockers=[^.]*host/.test(payload.clearedStaleCall?.reason || ""), "clear stale reason should name host blocker");
     assert(board.clears.length === 1, `fake board should receive exactly one clear-call, got ${board.clears.length}`);
     assert(board.calls.length === 0, "clear stale formal call should not post a replacement call");
     assert(/Mac host\b.*offline/i.test(payload.callText || ""), "clear stale formal call should keep blocker guidance");
@@ -577,6 +586,7 @@ async function checkStaleRuntimeSendCallRefuses(args) {
       assert(payload.ok === false, "stale runtime refusal should report ok=false");
       assert(payload.readyToCall === false, "stale runtime refusal should not be readyToCall");
       assert(/Refusing to send formal E2E call/.test(payload.error?.message || ""), "stale runtime refusal should explain sendCall refusal");
+      assert(/blockers=[^.]*build/.test(payload.error?.message || ""), "stale runtime refusal should include build blocker id");
       assert(/Runtime Build/.test(payload.error?.message || ""), "stale runtime refusal should identify the build blocker");
       assert(/restart recommended/.test(payload.error?.message || ""), "stale runtime refusal should say restart is recommended");
       assert(/Restart Mac host before deploy-style validation/.test(payload.error?.message || ""), "stale runtime refusal should give the restart next step");
@@ -640,6 +650,12 @@ async function checkReadySendCall(args) {
       assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand, "ready sendCall LaunchAgent planner command", macHost.port);
       assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "ready sendCall media readiness command", macHost.port);
       assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "ready sendCall local smoke command", macHost.port);
+      assert(/ready with warnings for Windows formal E2E/.test(payload.boardSummary || ""), "ready sendCall boardSummary should make warning state explicit");
+      assert(/Mac formal E2E ready with warnings/.test(payload.callText || ""), "ready sendCall callText should make warning state explicit");
+      assert(/blockers=none/.test(payload.boardSummary || ""), "ready sendCall boardSummary should report no blockers");
+      assert(/warnings=[^.]*auth/.test(payload.boardSummary || ""), "ready sendCall boardSummary should name auth warning");
+      assert(/Checklist blockers=none/.test(payload.callText || ""), "ready sendCall callText should report no blockers");
+      assert(/warnings=[^.]*auth/.test(payload.callText || ""), "ready sendCall callText should name auth warning");
       print("OK", "Ready --sendCall posts one secret-free formal E2E call to a fake board");
     });
   });
@@ -777,6 +793,9 @@ async function checkFallbackPipelineVideoWarning(args) {
     assert(/currentPipeline=background-jpeg/.test(video.summary || ""), "fallback pipeline warning should name the current pipeline");
     assert(/media baseline/.test(video.next || ""), "fallback pipeline warning should recommend refreshing the media baseline");
     assert(/needs attention/.test(payload.boardSummary || ""), "fallback pipeline board summary should show attention is needed");
+    assert(/blockers=none/.test(payload.boardSummary || ""), "fallback pipeline board summary should report no blockers");
+    assert(/warnings=[^.]*board/.test(payload.boardSummary || ""), "fallback pipeline board summary should name board warning");
+    assert(/warnings=[^.]*video/.test(payload.boardSummary || ""), "fallback pipeline board summary should name video warning");
     assert(/pipeline=background-jpeg/.test(payload.boardSummary || ""), "fallback pipeline board summary should name the current pipeline");
     assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "fallback pipeline formal E2E status");
     print("OK", "Formal E2E status warns when H.264 is advertised but the current pipeline is JPEG fallback");
@@ -811,6 +830,8 @@ function checkOnlineJson(args) {
   assert(payload.checklist.some((entry) => entry.id === "inject" && entry.status === "skip"), "online checklist should explicitly skip inject");
   assertBoardSummaryShape(payload.boardSummary || "", "online JSON boardSummary");
   assert(/discovery -> auth -> H\.264 5-10 min/.test(payload.callText || ""), "online callText should include formal path");
+  assert(/Checklist blockers=/.test(payload.callText || ""), "online callText should include blocker ids");
+  assert(/warnings=/.test(payload.callText || ""), "online callText should include warning ids");
   assert(/install-mac-host-launch-agent\.mjs/.test(payload.callText || ""), "online callText should include LaunchAgent planner command");
   assert(/check-mac-formal-local-smoke\.mjs/.test(payload.callText || ""), "online callText should include local smoke command");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand, "online LaunchAgent planner command", args.port);
