@@ -90,6 +90,10 @@ JSON output:
                             Safe local command for refreshing the Mac H.264/PCM
                             media baseline before long formal E2E runs.
                             It uses --promptPassword and never embeds --password.
+  commands.macHostMediaCommand
+                            Stable alias for the same safe local media baseline
+                            command exposed as MacHostMedia= in board summaries.
+                            It uses --promptPassword and never embeds --password.
   commands.macLaunchAgentPlanCommand
                             Secret-free LaunchAgent dry-run planner command.
                             It prints a plist plan and manual load commands
@@ -509,7 +513,7 @@ function makeCallText(report) {
       `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
       `When the host is online, run low-risk host readiness with: ${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
       `When the host is online, run local smoke first with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
-      `When the host is online, refresh the media baseline with: ${report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
+      `When the host is online, refresh the media baseline with: ${report.commands?.macHostMediaCommand || report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
       `If only this summary is available, verify Mac script help safety with: ${report.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
     ].join(" ");
   }
@@ -527,7 +531,7 @@ function makeCallText(report) {
     `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
     `Before long formal runs, run low-risk host readiness with: ${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
     `Before long formal runs, run local H.264/PCM/input-log smoke with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
-    `Before long formal runs, refresh the Mac media baseline with: ${report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
+    `Before long formal runs, refresh the Mac media baseline with: ${report.commands?.macHostMediaCommand || report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
     `If only this summary is available, verify Mac script help safety with: ${report.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
     "If ready, Windows should run discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log. Do not run inject unless the user explicitly confirms they are watching.",
   ].join(" ");
@@ -554,7 +558,7 @@ function makeBoardSummary(report) {
       `MacUnattendedFormal=${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
       `MacHostReadiness=${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
       `MacFormalLocalSmoke=${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
-      "Media precheck after host is online: check-mac-host-readiness --probeMedia --boardSummary.",
+      `MacHostMedia=${report.commands?.macHostMediaCommand || report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
       `MacScriptHelp=${report.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
       "Do not send passwords on Agent Link Board; inject requires explicit user confirmation.",
     ].join(" ");
@@ -572,7 +576,7 @@ function makeBoardSummary(report) {
     `MacUnattendedFormal=${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
     `MacHostReadiness=${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
     `MacFormalLocalSmoke=${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
-    "Media precheck: check-mac-host-readiness --probeMedia --boardSummary before long formal runs.",
+    `MacHostMedia=${report.commands?.macHostMediaCommand || report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
     `MacScriptHelp=${report.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
     "Formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log; no inject without explicit user confirmation.",
     "Do not send passwords on Agent Link Board.",
@@ -583,6 +587,19 @@ function makeCommands(report) {
   const host = report.resume.host || {};
   const probeHost = normalizedText(host.probe?.host || report.args.host) || defaults.host;
   const probePort = host.probe?.port || report.args.port || defaults.port;
+  const mediaReadinessCommand = [
+    "node",
+    "scripts/mac/check-mac-host-readiness.mjs",
+    "--host",
+    shellArg(probeHost),
+    "--port",
+    String(probePort),
+    "--checkBoard",
+    "--probeMedia",
+    "--probeMediaResourceSample",
+    "--promptPassword",
+    "--boardSummary",
+  ].join(" ");
   return {
     macHostSafeStartCommand: makeSafeStartCommand({ port: probePort }),
     macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand({ port: probePort }),
@@ -609,19 +626,8 @@ function makeCommands(report) {
       "--promptPassword",
       "--boardSummary",
     ].join(" "),
-    mediaReadinessBoardSummary: [
-      "node",
-      "scripts/mac/check-mac-host-readiness.mjs",
-      "--host",
-      shellArg(probeHost),
-      "--port",
-      String(probePort),
-      "--checkBoard",
-      "--probeMedia",
-      "--probeMediaResourceSample",
-      "--promptPassword",
-      "--boardSummary",
-    ].join(" "),
+    mediaReadinessBoardSummary: mediaReadinessCommand,
+    macHostMediaCommand: mediaReadinessCommand,
     macScriptHelpCommand: makeMacScriptHelpCommand(),
   };
 }
