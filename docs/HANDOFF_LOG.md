@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端收到对端文件清单拒绝时立即显示失败并允许重发。
+完成内容：
+- `clipboard_file_response.accepted=false` 现在会更新本机发送状态为对端失败，显示对端拒绝原因和“可重新发送”。
+- 文件选择会保留，发送按钮切到“重新发送”；全屏/监看浮层同步显示可重发状态。
+- 发送循环在让出 UI 后会识别同一 transfer 的拒绝状态，避免继续保持“等待对端确认”的旧表现。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增页面断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`（失败点：拒绝后顶部只显示“对端拒绝文件”，浮层仍是“等待对端确认”，按钮仍是“发送文件”）。
+- 实现后复跑同一 diagnostics-only 通过。
+遗留问题：
+- 这只消费既有 `clipboard_file_response`，不新增协议字段，也不实现断点续传。
+下一步建议：
+- 真机互传大文件时顺手观察 offer 拒绝、完成后 result 失败、确认超时三种失败路径的按钮和浮层文案是否一致。
+是否改了协议：否；只改 Windows 控制端 UI 状态和页面自测。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端手动发送文件未选择文件时给出稳定可见中文提示。
 完成内容：
 - 手动发送文件入口没有文件时，顶部剪贴板状态会显示“未选择文件”。

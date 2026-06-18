@@ -4902,6 +4902,8 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
     startedAt,
     lastActivityAt: startedAt,
     rateSamples: [],
+    canRetry: clearFileInput && (elements.fileClipboardInput.files?.length || 0) > 0,
+    clearOnRemoteAccept: Boolean(clearFileInput),
   };
   updateFileClipboardButton();
   elements.clipboardText.textContent = `剪贴板：准备发送 ${files.length} 个文件`;
@@ -4917,12 +4919,22 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
       files: fileMetas,
     });
     addLog(sourceLabel, `开始发送 ${files.length} 个文件，共 ${formatBytes(totalBytes)}`);
+    await yieldToUi();
+    if (isOutgoingFileTransferRejected(transferId)) {
+      return;
+    }
 
     for (const [fileIndex, file] of files.entries()) {
       let chunkIndex = 0;
       for (let offset = 0; offset < file.size; offset += fileChunkSizeBytes) {
+        if (isOutgoingFileTransferRejected(transferId)) {
+          return;
+        }
         const chunk = file.slice(offset, Math.min(offset + fileChunkSizeBytes, file.size));
         const dataBase64 = arrayBufferToBase64(await chunk.arrayBuffer());
+        if (isOutgoingFileTransferRejected(transferId)) {
+          return;
+        }
         const nextSentBytes = sentBytes + chunk.size;
         state.client.sendClipboardFileChunk({
           transferId,
@@ -4946,6 +4958,9 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
         syncFloatingControlStatus();
         if (chunkIndex % 8 === 0) {
           await yieldToUi();
+          if (isOutgoingFileTransferRejected(transferId)) {
+            return;
+          }
         }
       }
     }
@@ -6865,7 +6880,46 @@ async function handleClipboardFileComplete(message) {
   });
 }
 
+function isOutgoingFileTransferRejected(transferId) {
+  const transfer = state.lastOutgoingFileTransfer || {};
+  return transfer.transferId === transferId && transfer.status === "remote-result" && transfer.accepted === false;
+}
+
 function handleClipboardFileResponse(message) {
+  const accepted = Boolean(message.accepted);
+  if (!accepted) {
+    const transferId = String(message.transferId || "");
+    const lastTransfer = state.lastOutgoingFileTransfer?.transferId === transferId
+      ? state.lastOutgoingFileTransfer
+      : null;
+    const activeTransfer = state.outgoingFileTransfer?.transferId === transferId
+      ? state.outgoingFileTransfer
+      : null;
+    const transfer = lastTransfer || activeTransfer;
+    if (transfer) {
+      const now = Date.now();
+      state.lastOutgoingFileTransfer = {
+        ...transfer,
+        ...message,
+        transferId,
+        status: "remote-result",
+        accepted: false,
+        reason: message.reason || "对端拒绝文件清单",
+        completedAt: now,
+        lastActivityAt: now,
+        canRetry: Boolean(
+          (transfer.canRetry || transfer.clearOnRemoteAccept) && (elements.fileClipboardInput.files?.length || 0) > 0,
+        ),
+      };
+      const detail = describeOutgoingFileResultStatus(state.lastOutgoingFileTransfer);
+      elements.clipboardText.textContent = `剪贴板：${detail}`;
+      updateFileClipboardButton();
+      syncFloatingControlStatus();
+      addLog("文件剪贴板", detail);
+      return;
+    }
+  }
+
   const text = message.accepted
     ? "剪贴板：对端已准备接收文件"
     : `剪贴板：对端拒绝文件${message.reason ? `，${message.reason}` : ""}`;

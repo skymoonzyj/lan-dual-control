@@ -2725,6 +2725,7 @@ async function verifyOutgoingFileResultStatus(session) {
     `(async () => {
       if (
         typeof handleClipboardFileResult !== "function" ||
+        typeof handleClipboardFileResponse !== "function" ||
         typeof formatFloatingClipboardStatus !== "function" ||
         typeof syncFloatingControlStatus !== "function" ||
         typeof sendFilesToRemote !== "function" ||
@@ -2744,6 +2745,7 @@ async function verifyOutgoingFileResultStatus(session) {
       const originalClient = state.client;
       const originalFileTransferActive = state.fileTransferActive;
       const originalOutgoingTransfer = state.outgoingFileTransfer;
+      const offerRejectSends = [];
       const firstRemoteRejectSends = [];
       const remoteRejectRetrySends = [];
       const pendingTimeoutSends = [];
@@ -2834,6 +2836,34 @@ async function verifyOutgoingFileResultStatus(session) {
         });
         const failedText = elements.clipboardText.textContent || "";
         const resultState = state.lastOutgoingFileTransfer || {};
+
+        const offerRejectBytes = new Uint8Array(fileChunkSizeBytes + 384);
+        offerRejectBytes.fill(68);
+        const offerRejectFile = new File([offerRejectBytes], "offer-reject.zip", { type: "application/zip" });
+        const offerRejectDataTransfer = new DataTransfer();
+        offerRejectDataTransfer.items.add(offerRejectFile);
+        elements.fileClipboardInput.files = offerRejectDataTransfer.files;
+        state.client = {
+          sendClipboardFileOffer: (payload) => offerRejectSends.push({ type: "offer", payload }),
+          sendClipboardFileChunk: (payload) => offerRejectSends.push({ type: "chunk", payload }),
+          sendClipboardFileComplete: (payload) => offerRejectSends.push({ type: "complete", payload }),
+        };
+        await sendFilesToRemote([offerRejectFile], { sourceLabel: "文件清单拒绝测试", clearFileInput: true });
+        const offerRejectTransferId = offerRejectSends.find((item) => item.type === "offer")?.payload?.transferId;
+        handleClipboardFileResponse({
+          type: "clipboard_file_response",
+          transferId: offerRejectTransferId,
+          accepted: false,
+          code: "LAN011",
+          reason: "对端文件剪贴板空间不足，拒绝文件清单",
+        });
+        updateFileClipboardButton();
+        const offerRejectText = elements.clipboardText.textContent || "";
+        const offerRejectFloating = formatFloatingClipboardStatus();
+        const offerRejectState = state.lastOutgoingFileTransfer || {};
+        const fileInputLengthAfterOfferReject = elements.fileClipboardInput.files?.length || 0;
+        const canRetryAfterOfferReject = canRetryLastOutgoingFileTransfer();
+        const buttonLabelAfterOfferReject = elements.fileClipboardButton.querySelector("span:not([aria-hidden])")?.textContent || "";
 
         const remoteRejectBytes = new Uint8Array(fileChunkSizeBytes + 512);
         remoteRejectBytes.fill(66);
@@ -2950,6 +2980,16 @@ async function verifyOutgoingFileResultStatus(session) {
             failedText.includes("接收超时") &&
             resultState.status === "remote-result" &&
             resultState.accepted === false &&
+            offerRejectText.includes("对端文件接收失败") &&
+            offerRejectText.includes("可重新发送") &&
+            offerRejectText.includes("文件剪贴板空间不足") &&
+            offerRejectFloating.includes("可重新发送") &&
+            offerRejectState.status === "remote-result" &&
+            offerRejectState.accepted === false &&
+            offerRejectState.canRetry === true &&
+            fileInputLengthAfterOfferReject === 1 &&
+            canRetryAfterOfferReject === true &&
+            buttonLabelAfterOfferReject === "重新发送" &&
             remoteFailureText.includes("对端文件接收失败") &&
             remoteFailureText.includes("可重新发送") &&
             remoteFailureFloating.includes("可重新发送") &&
@@ -2987,6 +3027,12 @@ async function verifyOutgoingFileResultStatus(session) {
           memoryText,
           failedText,
           resultState,
+          offerRejectText,
+          offerRejectFloating,
+          offerRejectState,
+          fileInputLengthAfterOfferReject,
+          canRetryAfterOfferReject,
+          buttonLabelAfterOfferReject,
           remoteFailureText,
           remoteFailureFloating,
           remoteFailureState,
