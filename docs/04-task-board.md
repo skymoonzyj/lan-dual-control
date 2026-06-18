@@ -123,6 +123,7 @@ Windows 端：
 - [x] Windows 桌面版“Mac 提醒”自动状态轮询已节流：本机状态轮询仍为 2.5 秒，但 watcher PowerShell 状态查询约 15 秒一次；手动刷新和开启/停止按钮仍即时执行，页面自测锁定节流阈值。
 - [x] Windows 控制端导出日志/状态快照会写入本机 Mac 提醒 watcher 状态、详情、最近检查时间、自动轮询间隔和联络板地址，方便远控窗口最小化后复盘 Windows 侧是否开了浮窗提醒。
 - [x] Windows 控制端“Mac 提醒”区会显示 watcher 最近提醒短摘要：桌面壳读取 `lastAlert` 后页面状态和复制诊断能看到最近 Mac 授权/权限/值守提醒，页面 diagnostics-only 已覆盖。
+- [x] Windows 控制端“Mac 提醒”区会直接显示 Mac findings 中文风险摘要：watcher 状态里的 `warnings=` / `warnings:`、`blockers=` / `blockers:` 短标签会在面板状态文案中翻译为视频链路、运行版本、认证/密码、Windows 被控端、仓库状态、自启动和电源睡眠风险，用户不用先复制诊断也能看到风险原因。
 - [x] Windows 控制端导出日志/状态快照会写入本机被控 Windows host 状态、徽标、详情、端口、画面/声音/输入/反控策略、体检档位、媒体基线开关和最近状态输出脱敏摘要，方便 Mac 反控 Windows 时复盘 Windows 侧是否已准备好。
 - [x] Windows 控制端事件面板新增“复制诊断”按钮：复用同一份脱敏导出日志文本写入系统剪贴板，方便现场直接粘贴给 Codex 或发到 Agent Link Board；页面 diagnostics 回归覆盖复制内容和脱敏。
 - [x] Windows 控制端导出/复制诊断报告已整理为“连接状态”和“本机协作”分段，现场粘贴后可更快区分远端 Mac 连接问题和 Windows 本机 host / 提醒 watcher 准备状态。

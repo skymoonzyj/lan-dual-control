@@ -4178,6 +4178,22 @@ function formatMacAlertWatcherLastAlert(payload) {
   return compactExportStatusText(parts.join(" · "), 180);
 }
 
+function macAlertWatcherPayloadFindingText(payload) {
+  if (!payload || typeof payload !== "object") return "";
+  const alerts = Array.isArray(payload.recentAlerts) ? payload.recentAlerts : [];
+  const parts = [payload.message];
+  for (const alert of [...alerts, payload.lastAlert]) {
+    if (!alert || typeof alert !== "object") continue;
+    parts.push(alert.title, alert.message, alert.summary);
+  }
+  return parts.filter(Boolean).join(" ");
+}
+
+function formatMacAlertWatcherFindingSummary(payload) {
+  const attention = parseMacUnattendedAttention(macAlertWatcherPayloadFindingText(payload));
+  return attention.summary;
+}
+
 function macAlertWatcherUiState(payload, { available = canUseDesktopHostControl(), busy = false } = {}) {
   if (!available) {
     return {
@@ -4215,13 +4231,15 @@ function macAlertWatcherUiState(payload, { available = canUseDesktopHostControl(
   const serverText = payload.server ? `，监听 ${payload.server}` : "";
   const lastAlertText = formatMacAlertWatcherLastAlert(payload);
   const lastAlertSuffix = lastAlertText ? ` 最近提醒：${lastAlertText}。` : "";
+  const findingSummary = formatMacAlertWatcherFindingSummary(payload);
+  const findingSuffix = findingSummary ? ` 风险：${findingSummary}。` : "";
   return {
     running,
     badgeMode: running ? "online" : "offline",
     badgeText: running ? "提醒中" : "未开启",
     statusText: running
-      ? `Windows 浮窗提醒已开启${processText}${serverText}。${lastAlertSuffix}`
-      : "Windows 浮窗提醒未开启；可一键启动后接收 Mac 授权、权限和反控等待消息。",
+      ? `Windows 浮窗提醒已开启${processText}${serverText}。${lastAlertSuffix}${findingSuffix}`
+      : `Windows 浮窗提醒未开启；可一键启动后接收 Mac 授权、权限和反控等待消息。${lastAlertSuffix}${findingSuffix}`,
     toggleText: running ? "停止提醒" : "开启提醒",
     toggleIcon: running ? "■" : "◌",
   };

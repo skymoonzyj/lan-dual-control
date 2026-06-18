@@ -21,6 +21,44 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：复核正式 E2E 第二步，并把 Mac findings 中文风险直接前置到 Windows 控制端“Mac 提醒”面板。
+完成内容：
+- 重新复核真实 Mac `192.168.31.122:43770`：无密 formal preflight ready，Mac 端权限/H.264/系统 PCM/文本与文件剪贴板/inputMode=log 均通过；干净备用端口 `5202/9342` 的 Windows client diagnostics-only 通过。
+- 确认当前 `5200/9340` 里仍有旧 diagnostics 残留，恢复总览会显示 `WinClientPorts=occupied(...;stale-diagnostics)` 并给出备用端口命令；未自动结束现场进程。
+- Windows 控制端“本机被控 -> Mac 提醒”状态行现在会读取 watcher `recentAlerts` / `lastAlert` / message 里的 `warnings=`、`warnings:`、`blockers=`、`blockers:`，直接显示“风险：视频链路需检查、运行版本需检查、认证/密码步骤待确认、Windows 被控端未指定或未就绪、仓库状态需检查”等中文摘要。
+- 页面 diagnostics-only 回归新增 Mac 提醒面板风险摘要断言；复制/导出诊断的中文风险逻辑保持复用同一套解析。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --clientPort 5200 --debugPort 9340 --timeoutMs 45000 --progressIntervalMs 5000 --boardSummary`
+- `node scripts/windows/test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --clientPort 5202 --debugPort 9342 --diagnosticsOnly --boardSummary --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5203 --debugPort 9343 --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --boardSummary --clientPort 5204 --debugPort 9344 --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script test-windows-client-browser.mjs --timeoutMs 10000`
+- `node scripts/windows/check-windows-resume-status.mjs --host 192.168.31.122 --port 43770 --clientPort 5200 --debugPort 9340 --alternateClientPort 5202 --alternateDebugPort 9342 --boardSummary --timeoutMs 45000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" apps/windows-client scripts/windows docs`
+遗留问题：
+- 完整认证第二步仍需要用户现场输入 Mac host 密码；当前会话没有可用 `LAN_DUAL_PASSWORD`，本轮没有代跑需要密码的正式 WebSocket 验收。
+- Mac 当前 `maxScreenFps=30`，请求 60Hz 时仍会按远端上限运行；要提升体验需 Mac 端调整上限并重启 host 后再测。
+下一步建议：
+- 如果现场再次看到第二步“卡住”，先看 `Starting plan 1/2` / `Starting plan 2/2` 和进度心跳；默认端口残留时优先换 `5202/9342` 或先手动清理旧诊断进程。
+是否改了协议：否。
+是否需要另一端配合：完整正式第二步需要用户现场输入密码；提高 60Hz 上限需要 Mac 端重启 host。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控 Mac 复制/导出诊断把 Mac formal findings 短标签翻译成中文风险。
 完成内容：
 - Windows 控制端 Mac 值守风险解析现在同时支持 `warnings=` / `blockers=` 和 `warnings:` / `blockers:`。

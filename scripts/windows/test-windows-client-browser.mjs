@@ -1317,15 +1317,19 @@ async function verifyDesktopOnlyHostPanel(session) {
                 {
                   at: "2026-06-18 10:31:00",
                   title: "Mac side status alert - Mac Codex",
-                  message: "MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none",
-                  summary: "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none",
+                  message:
+                    "MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo",
+                  summary:
+                    "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo",
                 },
               ],
               lastAlert: {
                 at: "2026-06-18 10:31:00",
                 title: "Mac side status alert - Mac Codex",
-                message: "MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none",
-                summary: "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none",
+                message:
+                  "MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo",
+                summary:
+                  "Mac side status alert - Mac Codex | MacUnattendedStatus=attention warnings=launch-agent-missing,power-risk blockers=none; MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo",
               },
               message: "Mac alert watcher is running.",
             }, { available: true, busy: false })
@@ -1640,6 +1644,12 @@ async function verifyDesktopOnlyHostPanel(session) {
           watcherRunningView.statusText.includes("192.168.31.68") &&
           watcherRunningView.statusText.includes("最近提醒") &&
           watcherRunningView.statusText.includes("MacUnattendedStatus=attention") &&
+          watcherRunningView.statusText.includes("风险：") &&
+          watcherRunningView.statusText.includes("视频链路需检查") &&
+          watcherRunningView.statusText.includes("运行版本需检查") &&
+          watcherRunningView.statusText.includes("认证/密码步骤待确认") &&
+          watcherRunningView.statusText.includes("Windows 被控端未指定或未就绪") &&
+          watcherRunningView.statusText.includes("仓库状态需检查") &&
           watcherStoppedView.running === false &&
           watcherStoppedView.badgeText === "未开启" &&
           watcherStoppedView.toggleText === "开启提醒" &&
