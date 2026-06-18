@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac unattended status 也暴露稳定媒体基线入口。
+完成内容：
+- `check-mac-unattended-status --json/--boardSummary` 现在输出 `commands.macHostMedia` / `MacHostMedia=node scripts/mac/check-mac-host-readiness.mjs --host <host> --port <port> --checkBoard --probeMedia --probeMediaResourceSample --promptPassword --boardSummary`。
+- Windows 端或人工只看 `MacUnattendedStatus=` / `MacUnattendedFormal=` 摘要时，也能直接让 Mac 端刷新 H.264/PCM 媒体基线，不必回翻 heartbeat 或 resume 摘要。
+- 该入口只是只读命令提示；本轮没有运行媒体探针、没有弹密码、没有停/启 host、没有认证 WebSocket，也没有发送 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 45000` 失败在 help 缺 `commands.macHostMedia`。
+- 绿灯：实现后复跑同一自测通过。
+遗留问题：
+- 当前本机 Mac host 仍是旧 build；本轮没有重启它，也没有跑需要密码的媒体基线探针。
+下一步建议：
+- 白天正式验收前，看到 `MacUnattendedStatus=` 后可先按 `suggestedAction` 处理旧 host build，再跑 `MacResumeStatus` 和 `MacHostMedia` 确认 build 与媒体基线。
+是否改了协议：否；只补 Mac unattended status 的安全命令标签。
+是否需要另一端配合：本轮不需要；Windows 端可后续按需消费 `MacHostMedia=`。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac unattended status 也对齐旧 host build 的安全重启建议。
 完成内容：
 - `check-mac-unattended-status --json/--boardSummary` 现在遇到 Mac host runtime 源码已变化、当前运行 host 仍是旧 build 时，输出 `suggestedAction=restart-mac-host-safely`。

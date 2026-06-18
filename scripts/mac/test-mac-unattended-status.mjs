@@ -260,6 +260,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macHostStop", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macLaunchAgentLoad", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macLaunchAgentPrint", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macHostMedia", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macResumeStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macFormalLocalSmoke", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macScriptHelp", `${script} ${flag}`);
@@ -338,6 +339,17 @@ function checkMissingLaunchAgentJson(args) {
   assertNotIncludes(payload.commands?.macHostReadiness || "", "--password", "missing LaunchAgent commands.macHostReadiness");
   assertNotIncludes(payload.commands?.macHostReadiness || "", "inject", "missing LaunchAgent commands.macHostReadiness");
   assertIncludes(payload.commands?.hostReadiness || "", payload.commands?.macHostReadiness || "missing-command", "missing LaunchAgent commands.hostReadiness alias");
+  assertIncludes(payload.commands?.macHostMedia || "", "check-mac-host-readiness.mjs", "missing LaunchAgent commands.macHostMedia");
+  assertIncludes(payload.commands?.macHostMedia || "", "--host 127.0.0.1", "missing LaunchAgent commands.macHostMedia");
+  assertIncludes(payload.commands?.macHostMedia || "", "--port 9", "missing LaunchAgent commands.macHostMedia");
+  assertIncludes(payload.commands?.macHostMedia || "", "--checkBoard", "missing LaunchAgent commands.macHostMedia");
+  assertIncludes(payload.commands?.macHostMedia || "", "--probeMedia", "missing LaunchAgent commands.macHostMedia");
+  assertIncludes(payload.commands?.macHostMedia || "", "--probeMediaResourceSample", "missing LaunchAgent commands.macHostMedia");
+  assertIncludes(payload.commands?.macHostMedia || "", "--promptPassword", "missing LaunchAgent commands.macHostMedia");
+  assertIncludes(payload.commands?.macHostMedia || "", "--boardSummary", "missing LaunchAgent commands.macHostMedia");
+  assertNotIncludes(payload.commands?.macHostMedia || "", "--password", "missing LaunchAgent commands.macHostMedia");
+  assertNotIncludes(payload.commands?.macHostMedia || "", "input_event", "missing LaunchAgent commands.macHostMedia");
+  assertNotIncludes(payload.commands?.macHostMedia || "", "inject", "missing LaunchAgent commands.macHostMedia");
   assertIncludes(payload.commands?.macResumeStatus || "", "check-mac-resume-status.mjs", "missing LaunchAgent commands.macResumeStatus");
   assertIncludes(payload.commands?.macResumeStatus || "", "--host 127.0.0.1", "missing LaunchAgent commands.macResumeStatus");
   assertIncludes(payload.commands?.macResumeStatus || "", "--port 9", "missing LaunchAgent commands.macResumeStatus");
@@ -390,6 +402,9 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.boardSummary, "MacHostReadiness=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "HostReadiness=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacHostMedia=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacHostMedia=node scripts/mac/check-mac-host-readiness.mjs", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "--probeMedia --probeMediaResourceSample --promptPassword", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacResumeStatus=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacResumeStatus=node scripts/mac/check-mac-resume-status.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacFormalLocalSmoke=", "missing LaunchAgent board summary");
@@ -653,6 +668,9 @@ function checkBoardSummary(args) {
   assertIncludes(text, "MacHostReadiness=", "board summary");
   assertIncludes(text, "MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs", "board summary");
   assertIncludes(text, "HostReadiness=", "board summary");
+  assertIncludes(text, "MacHostMedia=", "board summary");
+  assertIncludes(text, "MacHostMedia=node scripts/mac/check-mac-host-readiness.mjs", "board summary");
+  assertIncludes(text, "--probeMedia --probeMediaResourceSample --promptPassword", "board summary");
   assertIncludes(text, "MacResumeStatus=", "board summary");
   assertIncludes(text, "MacResumeStatus=node scripts/mac/check-mac-resume-status.mjs", "board summary");
   assertIncludes(text, "MacFormalLocalSmoke=", "board summary");
@@ -759,6 +777,7 @@ async function checkStaleRuntimeBuildWarning(args) {
       assertNotIncludes(payload.suggestedAction?.commands?.macResumeStatus || "", "--password", "stale runtime suggestedAction macResumeStatus");
       assert(payload.findings.some((item) => item.id === "mac-host-build-stale" && item.level === "warning"), "stale runtime build should create a stable warning id");
       assertIncludes(payload.boardSummary, "suggestedAction=restart-mac-host-safely", "stale runtime board summary");
+      assertIncludes(payload.boardSummary, "MacHostMedia=", "stale runtime board summary");
       assertIncludes(payload.boardSummary, "MacResumeStatus=", "stale runtime board summary");
       assertIncludes(payload.boardSummary, "warnings=mac-host-build-stale", "stale runtime board summary");
       assertIncludes(payload.boardSummary, `runtimeBuild=${staleRuntimeBuildId} restart recommended`, "stale runtime board summary");
@@ -815,6 +834,7 @@ async function checkNoFindingsSummary(args) {
       assertIncludes(payload.boardSummary, "attention=none", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "maxFps=60", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "MacMaxFpsSafeStart=", "clean unattended board summary");
+      assertIncludes(payload.boardSummary, "MacHostMedia=", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "MacResumeStatus=", "clean unattended board summary");
       assert(!payload.suggestedAction, "clean unattended payload should not expose a restart suggestedAction");
       assertNotIncludes(payload.boardSummary, "suggestedAction=restart-mac-host-safely", "clean unattended board summary");

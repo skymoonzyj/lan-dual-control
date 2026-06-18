@@ -87,6 +87,9 @@ Machine-readable JSON fields:
   commands.macHostReadiness      Follow-up Mac host readiness command with the
                                   standard MacHostReadiness label.
   commands.hostReadiness         Follow-up Mac host readiness command.
+  commands.macHostMedia          Follow-up Mac host media baseline command;
+                                  prompts locally and never embeds a password
+                                  in argv.
   commands.macResumeStatus       Follow-up Mac resume status command with the
                                   standard MacResumeStatus label.
   commands.macFormalLocalSmoke   Follow-up formal H.264 + PCM + input-log
@@ -582,6 +585,7 @@ function makeCommands(args) {
     hostStatus: `node scripts/mac/start-mac-host.mjs --status --host ${args.host} --port ${args.port} --boardSummary`,
     macHostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     hostReadiness: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
+    macHostMedia: makeMacHostMediaCommand(args),
     macResumeStatus: makeMacResumeStatusCommand(args),
     macFormalLocalSmoke: makeMacFormalLocalSmokeCommand(args),
     macScriptHelp: makeMacScriptHelpCommand(),
@@ -616,6 +620,21 @@ function makeMacResumeStatusCommand(args = {}) {
     "--port",
     String(args.port || defaults.port),
     "--checkBoard",
+    "--boardSummary",
+  ].join(" ");
+}
+
+function makeMacHostMediaCommand(args = {}) {
+  return [
+    "node scripts/mac/check-mac-host-readiness.mjs",
+    "--host",
+    shellQuote(statusProbeHost(args)),
+    "--port",
+    String(args.port || defaults.port),
+    "--checkBoard",
+    "--probeMedia",
+    "--probeMediaResourceSample",
+    "--promptPassword",
     "--boardSummary",
   ].join(" ");
 }
@@ -753,7 +772,7 @@ function makeBoardSummary(report) {
   const suggestedAction = report.suggestedAction?.boardSummary || "";
   return [
     `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedAction ? ` ${suggestedAction}` : ""}.`,
-    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacResumeStatus=${report.commands.macResumeStatus}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacScriptHelp=${report.commands.macScriptHelp}.`,
+    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacHostMedia=${report.commands.macHostMedia}; MacResumeStatus=${report.commands.macResumeStatus}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacScriptHelp=${report.commands.macScriptHelp}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
@@ -861,6 +880,7 @@ function printHuman(report) {
   console.log(`- Mac LaunchAgent load: ${report.commands.macLaunchAgentLoad}`);
   console.log(`- Mac LaunchAgent print: ${report.commands.macLaunchAgentPrint}`);
   console.log(`- Mac host readiness: ${report.commands.macHostReadiness}`);
+  console.log(`- Mac host media: ${report.commands.macHostMedia}`);
   console.log(`- Mac resume status: ${report.commands.macResumeStatus}`);
   if (report.suggestedAction) console.log(`- suggested action: ${report.suggestedAction.boardSummary}`);
   console.log(`- Mac formal local smoke: ${report.commands.macFormalLocalSmoke}`);
