@@ -251,6 +251,7 @@ function assertMacUnattendedStatusCommand(command, label) {
 function assertMacUnattendedFormalCommand(command, label) {
   assertMacUnattendedStatusCommand(command, label);
   assert(command.includes("--requireLaunchAgentMaxFps"), `${label} should require the formal LaunchAgent max-FPS gate`);
+  assert(command.includes("--requireLaunchAgentLoaded"), `${label} should require the LaunchAgent to be loaded`);
   assert(!command.includes("--strict"), `${label} should not turn every warning into a blocker`);
 }
 

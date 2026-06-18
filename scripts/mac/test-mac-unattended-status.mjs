@@ -229,6 +229,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.launchAgentPlan", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macMaxFpsPlan", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macUnattendedStatus", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macUnattendedFormal", `${script} ${flag}`);
     assertNoSecretOrInputGuidance(result.stdout, `${script} ${flag}`);
   }
   print("OK", "Unattended status help exits quickly and stays side-effect-free");
@@ -259,6 +260,15 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.commands?.macUnattendedStatus || "", "--skipPmset", "missing LaunchAgent commands.macUnattendedStatus");
   assertIncludes(payload.commands?.macUnattendedStatus || "", "--boardSummary", "missing LaunchAgent commands.macUnattendedStatus");
   assertNotIncludes(payload.commands?.macUnattendedStatus || "", "--json", "missing LaunchAgent commands.macUnattendedStatus");
+  assertIncludes(payload.commands?.macUnattendedFormal || "", "check-mac-unattended-status.mjs", "missing LaunchAgent commands.macUnattendedFormal");
+  assertIncludes(payload.commands?.macUnattendedFormal || "", "--host 127.0.0.1", "missing LaunchAgent commands.macUnattendedFormal");
+  assertIncludes(payload.commands?.macUnattendedFormal || "", "--port 9", "missing LaunchAgent commands.macUnattendedFormal");
+  assertIncludes(payload.commands?.macUnattendedFormal || "", "--launchAgentPath", "missing LaunchAgent commands.macUnattendedFormal");
+  assertIncludes(payload.commands?.macUnattendedFormal || "", missingPath, "missing LaunchAgent commands.macUnattendedFormal");
+  assertIncludes(payload.commands?.macUnattendedFormal || "", "--requireLaunchAgentMaxFps", "missing LaunchAgent commands.macUnattendedFormal");
+  assertIncludes(payload.commands?.macUnattendedFormal || "", "--requireLaunchAgentLoaded", "missing LaunchAgent commands.macUnattendedFormal");
+  assertIncludes(payload.commands?.macUnattendedFormal || "", "--boardSummary", "missing LaunchAgent commands.macUnattendedFormal");
+  assertNotIncludes(payload.commands?.macUnattendedFormal || "", "--json", "missing LaunchAgent commands.macUnattendedFormal");
   assertIncludes(payload.commands?.launchAgentPlan || "", "install-mac-host-launch-agent.mjs", "missing LaunchAgent commands.launchAgentPlan");
   assertIncludes(payload.commands?.launchAgentPlan || "", "--port 9", "missing LaunchAgent commands.launchAgentPlan");
   assertIncludes(payload.commands?.launchAgentPlan || "", "--boardSummary", "missing LaunchAgent commands.launchAgentPlan");
@@ -272,6 +282,8 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.boardSummary, "MacLaunchAgentPlan=node scripts/mac/install-mac-host-launch-agent.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "--port 9", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacMaxFpsPlan=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacUnattendedFormal=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "--requireLaunchAgentLoaded", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "HostReadiness=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "blockers=none", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "warnings=host-offline,launch-agent-missing", "missing LaunchAgent board summary");
@@ -313,6 +325,8 @@ function checkLaunchAgentPlannerPreservesOptions(args) {
   assertIncludes(payload.commands?.macMaxFpsPlan || "", "--port 9", "custom LaunchAgent commands.macMaxFpsPlan");
   assertIncludes(payload.commands?.macMaxFpsPlan || "", `--label ${label}`, "custom LaunchAgent commands.macMaxFpsPlan");
   assertIncludes(payload.commands?.macMaxFpsPlan || "", "--maxScreenFps 60", "custom LaunchAgent commands.macMaxFpsPlan");
+  assertIncludes(payload.commands?.macUnattendedFormal || "", `--label ${label}`, "custom LaunchAgent commands.macUnattendedFormal");
+  assertIncludes(payload.commands?.macUnattendedFormal || "", "--requireLaunchAgentLoaded", "custom LaunchAgent commands.macUnattendedFormal");
   assertIncludes(payload.boardSummary || "", `--label ${label}`, "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "--port 9", "custom LaunchAgent board summary");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "custom LaunchAgent planner JSON");
@@ -335,6 +349,8 @@ function checkRequireLaunchAgentMaxFpsFails(args) {
   assertIncludes(missingPayload.boardSummary, "warnings=host-offline", "require LaunchAgent max-FPS missing board summary");
   assertIncludes(missingPayload.commands?.macUnattendedStatus || "", "--requireLaunchAgentMaxFps", "require LaunchAgent max-FPS missing command");
   assertIncludes(missingPayload.boardSummary, "--requireLaunchAgentMaxFps", "require LaunchAgent max-FPS missing board summary");
+  assertIncludes(missingPayload.commands?.macUnattendedFormal || "", "--requireLaunchAgentLoaded", "require LaunchAgent max-FPS missing formal command");
+  assertIncludes(missingPayload.boardSummary, "--requireLaunchAgentLoaded", "require LaunchAgent max-FPS missing board summary");
   assertIncludes(missingPayload.commands?.macMaxFpsPlan || "", "--maxScreenFps 60", "require LaunchAgent max-FPS missing command");
   assertNoSecretOrInputGuidance(`${missingResult.stdout}\n${missingResult.stderr}`, "require LaunchAgent max-FPS missing JSON");
 
@@ -429,6 +445,7 @@ function checkFakePlist(args) {
     assert(Array.isArray(payload.launchAgent?.programArguments), "fake plist should expose ProgramArguments");
     assertIncludes(payload.commands?.launchAgentPlan || "", "install-mac-host-launch-agent.mjs", "fake plist commands.launchAgentPlan");
     assertIncludes(payload.commands?.macMaxFpsPlan || "", "--maxScreenFps 60", "fake plist commands.macMaxFpsPlan");
+    assertIncludes(payload.commands?.macUnattendedFormal || "", "--requireLaunchAgentLoaded", "fake plist commands.macUnattendedFormal");
     assertIncludes(payload.commands?.hostReadiness || "", "check-mac-host-readiness.mjs", "fake plist commands.hostReadiness");
     assert(payload.limitations.some((item) => /System sleep/.test(item)), "fake plist payload should document sleep limit");
     assert(payload.limitations.some((item) => /Reboot/.test(item)), "fake plist payload should document reboot/login limit");
@@ -453,6 +470,7 @@ function checkLaunchAgentMaxFpsWarning(args) {
     assert(payload.launchAgent?.maxScreenFps === 30, "max-FPS payload should preserve LaunchAgent maxScreenFps");
     assert(payload.findings.some((item) => item.id === "launch-agent-max-fps" && item.level === "warning" && /maxScreenFps=30/.test(item.text)), "low max-FPS LaunchAgent should create a warning");
     assertIncludes(payload.commands?.macMaxFpsPlan || "", "--maxScreenFps 60", "max-FPS commands.macMaxFpsPlan");
+    assertIncludes(payload.commands?.macUnattendedFormal || "", "--requireLaunchAgentLoaded", "max-FPS commands.macUnattendedFormal");
     assertIncludes(payload.boardSummary, "maxFps=30", "max-FPS board summary");
     assertIncludes(payload.boardSummary, "warnings=host-offline,launch-agent-max-fps", "max-FPS board summary");
     assertIncludes(payload.boardSummary, "MacMaxFpsPlan=", "max-FPS board summary");
@@ -481,6 +499,8 @@ function checkBoardSummary(args) {
   assertNotIncludes(text, "--json", "board summary");
   assertIncludes(text, "MacLaunchAgentPlan=", "board summary");
   assertIncludes(text, "MacMaxFpsPlan=", "board summary");
+  assertIncludes(text, "MacUnattendedFormal=", "board summary");
+  assertIncludes(text, "--requireLaunchAgentLoaded", "board summary");
   assertIncludes(text, "HostReadiness=", "board summary");
   assertIncludes(text, "blockers=none", "board summary");
   assertIncludes(text, "warnings=host-offline,launch-agent-missing", "board summary");

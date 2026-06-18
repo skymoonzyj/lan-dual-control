@@ -129,6 +129,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "--write", `${script} ${flag}`);
     assertIncludes(result.stdout, "loading launchctl", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macUnattendedFormal", `${script} ${flag}`);
+    assertIncludes(result.stdout, "loaded", `${script} ${flag}`);
     assertNoSecretsOrRuntimeActions(`${result.stdout}\n${result.stderr}`, `${script} ${flag}`);
   }
   print("OK", "LaunchAgent planner help exits quickly and stays side-effect-free");
@@ -158,6 +159,7 @@ function checkDryRunJson(args) {
     assertIncludes(payload.commands?.unattendedStatus || "", "check-mac-unattended-status.mjs", "dry-run commands.unattendedStatus");
     assertIncludes(payload.commands?.macUnattendedFormal || "", "check-mac-unattended-status.mjs", "dry-run commands.macUnattendedFormal");
     assertIncludes(payload.commands?.macUnattendedFormal || "", "--requireLaunchAgentMaxFps", "dry-run commands.macUnattendedFormal");
+    assertIncludes(payload.commands?.macUnattendedFormal || "", "--requireLaunchAgentLoaded", "dry-run commands.macUnattendedFormal");
     assertIncludes(payload.commands?.macUnattendedFormal || "", "--launchAgentPath", "dry-run commands.macUnattendedFormal");
     assertIncludes(payload.commands?.macUnattendedFormal || "", "--boardSummary", "dry-run commands.macUnattendedFormal");
     assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=", "dry-run boardSummary");
@@ -191,6 +193,7 @@ function checkBoardSummary(args) {
     assertIncludes(text, "ManualLoad=", "boardSummary");
     assertIncludes(text, "MacUnattendedFormal=", "boardSummary");
     assertIncludes(text, "--requireLaunchAgentMaxFps", "boardSummary");
+    assertIncludes(text, "--requireLaunchAgentLoaded", "boardSummary");
     assertIncludes(text, "No password is written", "boardSummary");
     assert(!existsSync(paths.plist), "boardSummary dry-run should not create plist");
     assertNoSecretsOrRuntimeActions(`${result.stdout}\n${result.stderr}`, "boardSummary");
@@ -220,6 +223,7 @@ function checkMaxFpsDryRunSummary(args) {
     assertIncludes(payload.commands?.writePlist || "", "--launchAgentPath", "max-FPS commands.writePlist");
     assertIncludes(payload.commands?.writePlist || "", "--logDir", "max-FPS commands.writePlist");
     assertIncludes(payload.commands?.macUnattendedFormal || "", "--requireLaunchAgentMaxFps", "max-FPS commands.macUnattendedFormal");
+    assertIncludes(payload.commands?.macUnattendedFormal || "", "--requireLaunchAgentLoaded", "max-FPS commands.macUnattendedFormal");
     assertIncludes(payload.commands?.macUnattendedFormal || "", "--launchAgentPath", "max-FPS commands.macUnattendedFormal");
     assertIncludes(payload.commands?.macUnattendedFormal || "", paths.plist, "max-FPS commands.macUnattendedFormal");
     assertIncludes(payload.boardSummary || "", "maxFps=60", "max-FPS boardSummary");
@@ -228,6 +232,7 @@ function checkMaxFpsDryRunSummary(args) {
     assertIncludes(payload.boardSummary || "", "ManualWrite=", "max-FPS boardSummary");
     assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "max-FPS boardSummary");
     assertIncludes(payload.boardSummary || "", "--requireLaunchAgentMaxFps", "max-FPS boardSummary");
+    assertIncludes(payload.boardSummary || "", "--requireLaunchAgentLoaded", "max-FPS boardSummary");
     assertIncludes(payload.boardSummary || "", "--maxScreenFps 60", "max-FPS boardSummary ManualWrite");
     assert(!existsSync(paths.plist), "max-FPS dry-run should not create plist");
     assertNoSecretsOrRuntimeActions(`${result.stdout}\n${result.stderr}`, "max-FPS LaunchAgent JSON");

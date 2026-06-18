@@ -764,6 +764,7 @@ function makeMacUnattendedFormalCommand(args = {}) {
     "--port",
     String(args.port || 43770),
     "--requireLaunchAgentMaxFps",
+    "--requireLaunchAgentLoaded",
     "--boardSummary",
   ].join(" ");
 }

@@ -65,6 +65,8 @@ Machine-readable JSON fields:
                                   for the formal 60Hz max-FPS target.
   commands.macUnattendedStatus   Secret-free exact rerun command for this
                                   report; preserves host/port/path and require flags.
+  commands.macUnattendedFormal   Secret-free formal 60Hz gate command requiring
+                                  LaunchAgent maxScreenFps and loaded status.
   commands.hostReadiness         Follow-up Mac host readiness command.
 
 Examples:
@@ -432,6 +434,7 @@ function buildFindings({ args, host, launchAgent, power }) {
 function makeCommands(args) {
   return {
     macUnattendedStatus: makeMacUnattendedStatusCommand(args),
+    macUnattendedFormal: makeMacUnattendedFormalCommand(args),
     launchAgentPlan: makeLaunchAgentPlanCommand(args),
     macMaxFpsPlan: makeLaunchAgentPlanCommand(args, { maxScreenFps: formalTargetMaxScreenFps }),
     hostStatus: `node scripts/mac/start-mac-host.mjs --status --host ${args.host} --port ${args.port} --boardSummary`,
@@ -454,6 +457,22 @@ function makeLaunchAgentPlanCommand(args, { maxScreenFps = null } = {}) {
   if (args.label !== defaults.label) parts.push("--label", shellQuote(args.label));
   if (maxScreenFps !== null) parts.push("--maxScreenFps", String(maxScreenFps));
   parts.push("--boardSummary");
+  return parts.join(" ");
+}
+
+function makeMacUnattendedFormalCommand(args) {
+  const parts = [
+    "node scripts/mac/check-mac-unattended-status.mjs",
+    "--host",
+    shellQuote(args.host),
+    "--port",
+    String(args.port),
+    "--launchAgentPath",
+    shellQuote(args.launchAgentPath),
+  ];
+  if (args.timeoutMs !== defaults.timeoutMs) parts.push("--timeoutMs", String(args.timeoutMs));
+  if (args.label !== defaults.label) parts.push("--label", shellQuote(args.label));
+  parts.push("--requireLaunchAgentMaxFps", "--requireLaunchAgentLoaded", "--boardSummary");
   return parts.join(" ");
 }
 
@@ -508,7 +527,7 @@ function makeBoardSummary(report) {
   const agentMaxFps = report.launchAgent.maxScreenFps === null ? "unknown" : String(report.launchAgent.maxScreenFps);
   return [
     `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
-    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; HostReadiness=${report.commands.hostReadiness}.`,
+    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; HostReadiness=${report.commands.hostReadiness}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");

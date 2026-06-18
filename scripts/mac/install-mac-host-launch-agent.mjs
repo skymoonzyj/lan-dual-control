@@ -69,8 +69,9 @@ Options:
   --help, -h                   Show this help without probing or writing anything.
 
 Machine-readable JSON fields:
-  commands.macUnattendedFormal Post-write read-only check command; fails if the
-                               LaunchAgent maxScreenFps is missing or below 60.
+  commands.macUnattendedFormal Post-write read-only formal check command; fails
+                               if LaunchAgent maxScreenFps is missing/below 60
+                               or if launchctl does not show the agent loaded.
 
 Examples:
   node scripts/mac/install-mac-host-launch-agent.mjs --boardSummary
@@ -311,7 +312,7 @@ function makeCommands(args) {
     print: `launchctl print gui/${uid}/${shellQuote(args.label)}`,
     hostStatus: `node scripts/mac/start-mac-host.mjs --status --host 127.0.0.1 --port ${args.port} --boardSummary`,
     unattendedStatus: `node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port ${args.port} --launchAgentPath ${shellQuote(args.launchAgentPath)} --boardSummary`,
-    macUnattendedFormal: `node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port ${args.port} --launchAgentPath ${shellQuote(args.launchAgentPath)} --requireLaunchAgentMaxFps --boardSummary`,
+    macUnattendedFormal: `node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port ${args.port} --launchAgentPath ${shellQuote(args.launchAgentPath)} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`,
   };
 }
 

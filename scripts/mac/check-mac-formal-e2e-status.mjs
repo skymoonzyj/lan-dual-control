@@ -603,6 +603,7 @@ function makeMacUnattendedFormalCommand(host, port) {
     "--port",
     String(port || defaults.port),
     "--requireLaunchAgentMaxFps",
+    "--requireLaunchAgentLoaded",
     "--boardSummary",
   ].join(" ");
 }

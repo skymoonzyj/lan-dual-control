@@ -209,6 +209,7 @@ function assertMacUnattendedFormalCommand(command, label, expectedPort = null) {
   assert(/--host/.test(text), `${label} should keep the target host explicit`);
   assert(/--port/.test(text), `${label} should keep the target port explicit`);
   assert(/--requireLaunchAgentMaxFps/.test(text), `${label} should require the formal LaunchAgent max-FPS gate`);
+  assert(/--requireLaunchAgentLoaded/.test(text), `${label} should require the LaunchAgent to be loaded`);
   assert(/--boardSummary/.test(text), `${label} should produce boardSummary`);
   assert(!/--promptPassword/.test(text), `${label} should not prompt for passwords`);
   assert(!/(^|\s)--password(\s|=|$)/.test(text), `${label} should not embed --password`);
