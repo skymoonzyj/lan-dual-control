@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端复制/导出诊断新增独立“远端文件建议”行，接收超时/中断/坏分块/拒收时提示让 Mac 重新复制并检查连接，系统文件剪贴板写入失败时提示重试写入或打开临时目录；不改协议。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端复制/导出诊断新增独立“本机发送建议”行，确认超时、对端失败或本机失败时提示点击“重新发送”，并让对端检查文件剪贴板能力、权限或磁盘空间；不改协议。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端复制/导出诊断新增独立“本机发送文件”行，显示正在发送、等待确认、确认超时、对端失败或本机失败，并带文件名和可重发提示；不改协议。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端本机发送文件等待对端确认超过 45 秒会提示超时、保留文件并可重新发送；超时后已重发时旧 `transferId` 迟到结果不会覆盖当前等待状态；不改协议，不实现断点续传。 |

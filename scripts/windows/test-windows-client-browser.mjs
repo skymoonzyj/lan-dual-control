@@ -3927,6 +3927,10 @@ async function verifyReconnectControls(session) {
             exportText.includes("- 重连：等待自动重连") && exportText.includes("原因 测试断线"),
           quickSummaryRemoteFiles:
             exportText.includes("- 远端文件：warning") && exportText.includes("远端文件接收超时"),
+          quickSummaryRemoteFileSuggestion:
+            exportText.includes("- 远端文件建议：") &&
+            exportText.includes("让 Mac 重新复制") &&
+            exportText.includes("检查连接"),
           quickSummaryClipboard:
             exportText.includes("- 剪贴板：接收 1 个文件") &&
             exportText.includes("2 B/4 B"),
@@ -4076,6 +4080,9 @@ async function verifyReconnectControls(session) {
           runtimeInput: exportText.includes("- 输入事件：7（安全日志，不会真正控制 / 已记录）"),
           remoteFileStatus:
             exportText.includes("- 远端文件状态：warning") && exportText.includes("远端文件接收超时"),
+          remoteFileSuggestion:
+            exportText.includes("- 远端文件建议：让 Mac 重新复制") &&
+            exportText.includes("检查连接"),
           remoteFileActive:
             exportText.includes("- 正在接收远端文件：1 个文件 1.0 KB/4.0 KB") &&
             exportText.includes("速度 2.0 KB/s") &&
@@ -4156,6 +4163,9 @@ async function verifyReconnectControls(session) {
           copiedText.includes("- 声音电平：37%") &&
           copiedText.includes("- 远端文件状态：warning") &&
           copiedText.includes("远端文件接收超时") &&
+          copiedText.includes("- 远端文件建议：") &&
+          copiedText.includes("让 Mac 重新复制") &&
+          copiedText.includes("检查连接") &&
           copiedText.includes("- 正在接收远端文件：1 个文件 1.0 KB/4.0 KB") &&
           copiedText.includes("速度 2.0 KB/s") &&
           copiedText.includes("剩余约 2 秒") &&

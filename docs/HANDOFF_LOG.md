@@ -17,6 +17,34 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 控制端复制/导出诊断给出远端文件接收下一步建议。
+完成内容：
+- 复制/导出诊断新增“远端文件建议”行，独立于“远端文件”状态。
+- 接收中会提示保持连接；接收超时、中断、坏分块或拒收时会提示让 Mac 重新复制并检查连接。
+- Windows 系统文件剪贴板写入失败时，会提示重试写入、检查文件剪贴板权限或打开临时目录取文件；成功状态不输出建议。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`（失败点：快速摘要和详细报告没有“远端文件建议”）。
+- 实现后复跑同一 diagnostics-only 命令通过。
+遗留问题：
+- 这仍是诊断和现场操作提示增强，不是断点续传。
+下一步建议：
+- 真机大文件/压缩包长测时观察“远端文件建议”和“本机发送建议”是否能直接指导现场恢复。
+是否改了协议：否；只改 Windows 控制端本地诊断导出。
+是否需要另一端配合：暂不需要；真机长测时再请 Mac 端配合文件复制/接收。
+
 ## 2026-06-19 Mac Codex
 
 日期：2026-06-19 继续推进

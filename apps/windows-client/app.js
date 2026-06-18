@@ -3645,6 +3645,24 @@ function getRemoteFileTransferExportStatus(now = Date.now()) {
   };
 }
 
+function getRemoteFileTransferSuggestionExportStatus() {
+  const writeStatus = state.receivedClipboardWriteStatus || {};
+  const kind = String(writeStatus.kind || "").trim();
+  const statusText = String(writeStatus.text || "").trim();
+  const hasActiveTransfers = state.remoteFileTransfers.size > 0;
+  if (kind === "success") return "-";
+
+  if (kind === "busy" || (!statusText && hasActiveTransfers)) {
+    return "保持连接并等待远端文件接收完成；若长时间无新分块，请检查连接并让 Mac 重新复制。";
+  }
+  if (kind !== "warning" || !statusText) return "-";
+
+  if (/系统|剪贴板写入|未写入|临时目录|重试写入/.test(statusText)) {
+    return "可重试写入 Windows 系统文件剪贴板；若继续失败，检查文件剪贴板权限，或打开临时目录取文件。";
+  }
+  return "让 Mac 重新复制；若再次失败，请检查连接和两端文件剪贴板能力。";
+}
+
 function getResolutionExportLabel(settings) {
   return settings.resolutionMode === "native" ? "原生" : `${settings.width} × ${settings.height}`;
 }
@@ -3707,6 +3725,7 @@ function buildDiagnosticsQuickSummary({
   macAlertWatcherExport,
   localHostExport,
   remoteFileExport,
+  remoteFileSuggestionExport,
   clipboardExport,
   outgoingFileExport,
   outgoingFileSuggestionExport,
@@ -3733,6 +3752,7 @@ function buildDiagnosticsQuickSummary({
     ...heartbeatLine,
     `- 重连：${reconnectParts.join(" · ")}`,
     `- 远端文件：${remoteFileExport.summary}`,
+    ...(remoteFileSuggestionExport && remoteFileSuggestionExport !== "-" ? [`- 远端文件建议：${remoteFileSuggestionExport}`] : []),
     `- 剪贴板：${clipboardExport}`,
     ...(outgoingFileExport && outgoingFileExport !== "-" ? [`- 本机发送文件：${outgoingFileExport}`] : []),
     ...(outgoingFileSuggestionExport && outgoingFileSuggestionExport !== "-" ? [`- 本机发送建议：${outgoingFileSuggestionExport}`] : []),
@@ -3764,6 +3784,7 @@ function buildLogExportText() {
   });
   const localHostExport = getLocalHostExportStatus();
   const remoteFileExport = getRemoteFileTransferExportStatus();
+  const remoteFileSuggestionExport = getRemoteFileTransferSuggestionExportStatus();
   const clipboardExport = getClipboardExportStatus();
   const outgoingFileExport = getOutgoingFileTransferExportStatus();
   const outgoingFileSuggestionExport = getOutgoingFileTransferSuggestionExportStatus();
@@ -3800,6 +3821,7 @@ function buildLogExportText() {
       macAlertWatcherExport,
       localHostExport,
       remoteFileExport,
+      remoteFileSuggestionExport,
       clipboardExport,
       outgoingFileExport,
       outgoingFileSuggestionExport,
@@ -3870,6 +3892,7 @@ function buildLogExportText() {
     `- 全屏浮层输入：${floatingControlExport.input}`,
     `- 全屏浮层安全：${floatingControlExport.security}`,
     `- 远端文件状态：${remoteFileExport.status}`,
+    `- 远端文件建议：${remoteFileSuggestionExport}`,
     `- 正在接收远端文件：${remoteFileExport.active}`,
     `- 最近收到远端文件：${state.receivedClipboardFiles.length} 个`,
     `- 远端文件临时目录：${remoteFileExport.tempPath}`,
