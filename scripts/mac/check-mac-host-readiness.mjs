@@ -208,6 +208,10 @@ Options:
   --help, -h                Show this help without running checks.
 
 Machine-readable JSON fields:
+  commands.macHostSafeStartCommand
+                            Secret-free foreground start command preserving the
+                            checked port; it prompts locally and never embeds
+                            a password in argv.
   commands.macLaunchAgentPlanCommand
                             Secret-free LaunchAgent dry-run planner command.
                             It prints a plist plan and manual load commands
@@ -689,6 +693,7 @@ function formatReadinessBoardSummary(summary) {
   const hostMedia = formatHostMediaBoardSummary(summary);
   return [
     `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${hostMedia ? `; ${hostMedia}` : ""}; ${formatBoardCallSummary(summary.board)}.`,
+    `MacHostSafeStart=${summary.commands?.macHostSafeStartCommand || makeMacHostSafeStartCommand(summary.args || {})}.`,
     `MacLaunchAgentPlan=${summary.commands?.macLaunchAgentPlanCommand || makeMacLaunchAgentPlanCommand(summary.args || {})}.`,
     `MacMaxFpsPlan=${summary.commands?.macMaxFpsPlanCommand || makeMacMaxFpsPlanCommand(summary.args || {})}.`,
     `MacUnattendedFormal=${summary.commands?.macUnattendedFormalCommand || makeMacUnattendedFormalCommand(summary.args || {})}.`,
@@ -742,6 +747,18 @@ function makeMacLaunchAgentPlanCommand(args = {}) {
     "--port",
     String(args.port || 43770),
     "--boardSummary",
+  ].join(" ");
+}
+
+function makeMacHostSafeStartCommand(args = {}) {
+  return [
+    "node scripts/mac/start-mac-host.mjs",
+    "--promptPassword",
+    "--requirePassword",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    String(args.port || 43770),
   ].join(" ");
 }
 
@@ -1038,7 +1055,7 @@ async function checkDiscovery(args) {
       probe: { host: args.host, port: args.port },
       currentBuildId: args.currentBuildId || "",
       error: { message: error.message },
-      suggestions: ["node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword"],
+      suggestions: [makeMacHostSafeStartCommand(args)],
     };
     if (args.requireOpen) {
       return { ok: false, summary, errors: [summary], details };
@@ -1254,6 +1271,7 @@ async function main() {
     failed: failed.length,
     warnings: warnings.length,
     commands: {
+      macHostSafeStartCommand: makeMacHostSafeStartCommand(args),
       macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
       macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
       macUnattendedFormalCommand: makeMacUnattendedFormalCommand(args),
