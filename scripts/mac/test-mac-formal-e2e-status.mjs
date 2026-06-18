@@ -151,6 +151,8 @@ function assertBoardSummaryShape(text, label) {
   assert(/\bwarnings=/.test(text), `${label} should include warning ids`);
   assert(/MacLaunchAgentPlan=/.test(text), `${label} should include LaunchAgent dry-run planner guidance`);
   assert(/install-mac-host-launch-agent\.mjs/.test(text), `${label} should include LaunchAgent planner command`);
+  assert(/MacMaxFpsPlan=/.test(text), `${label} should include Mac max-FPS dry-run planner guidance`);
+  assert(/--maxScreenFps 60/.test(text), `${label} should include the formal 60Hz max-FPS planner command`);
   assert(/MacFormalLocalSmoke=/.test(text), `${label} should include local formal smoke guidance`);
   assert(/check-mac-formal-local-smoke\.mjs/.test(text), `${label} should include local formal smoke command`);
   assert(/Do not send passwords/.test(text), `${label} should include password safety note`);
@@ -176,6 +178,11 @@ function assertMacLaunchAgentPlanCommand(command, label, expectedPort = null) {
   if (expectedPort !== null) {
     assert(text.includes(`--port ${expectedPort}`), `${label} should target expected port ${expectedPort}`);
   }
+}
+
+function assertMacMaxFpsPlanCommand(command, label, expectedPort = null) {
+  assertMacLaunchAgentPlanCommand(command, label, expectedPort);
+  assert(String(command || "").includes("--maxScreenFps 60"), `${label} should target the formal 60Hz max-FPS plan`);
 }
 
 function assertMacFormalLocalSmokeCommand(command, label, expectedPort = null) {
@@ -286,6 +293,7 @@ async function withFakeMacHost(callback, options = {}) {
       clipboardText: true,
       clipboardFile: true,
       capturePipeline: options.capturePipeline || "screencapturekit-h264",
+      maxScreenFps: options.maxScreenFps ?? 60,
       displays: [
         {
           id: "main",
@@ -382,6 +390,7 @@ function checkHelp(args) {
     assert(/commands\.macFormalLocalSmokeCommand/.test(result.stdout), `${script} ${flag} should document local smoke command output`);
     assert(/commands\.mediaReadinessBoardSummary/.test(result.stdout), `${script} ${flag} should document media readiness command output`);
     assert(/commands\.macLaunchAgentPlanCommand/.test(result.stdout), `${script} ${flag} should document LaunchAgent planner command output`);
+    assert(/commands\.macMaxFpsPlanCommand/.test(result.stdout), `${script} ${flag} should document Mac max-FPS planner command output`);
     assert(/--promptPassword/.test(result.stdout), `${script} ${flag} should document local password prompt for media readiness command`);
     assert(!/Mac host probe password/.test(result.stdout), `${script} ${flag} should not prompt for password`);
   }
@@ -413,9 +422,11 @@ function checkOfflineJson(args) {
   assert(/Checklist blockers=[^.]*host/.test(payload.callText || ""), "offline callText should name host blocker");
   assert(/warnings=[^.]*board/.test(payload.callText || ""), "offline callText should name board warning");
   assert(/install-mac-host-launch-agent\.mjs/.test(payload.callText || ""), "offline callText should include LaunchAgent planner command");
+  assert(/--maxScreenFps 60/.test(payload.callText || ""), "offline callText should include max-FPS planner command");
   assert(/check-mac-formal-local-smoke\.mjs/.test(payload.callText || ""), "offline callText should include local smoke command");
   assert(/check-mac-host-readiness --probeMedia --boardSummary/.test(payload.boardSummary || ""), "offline boardSummary should mention media precheck");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand, "offline LaunchAgent planner command", 9);
+  assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "offline max-FPS planner command", 9);
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "offline local smoke command", 9);
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "offline media readiness command", 9);
   print("OK", "Offline formal E2E JSON blocks the call and keeps safety guidance");
@@ -648,6 +659,7 @@ async function checkReadySendCall(args) {
         assert(call[field] === payload.sentCall.payload[field], `sentCall payload should match fake board call field ${field}`);
       }
       assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand, "ready sendCall LaunchAgent planner command", macHost.port);
+      assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "ready sendCall max-FPS planner command", macHost.port);
       assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "ready sendCall media readiness command", macHost.port);
       assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "ready sendCall local smoke command", macHost.port);
       assert(/ready with warnings for Windows formal E2E/.test(payload.boardSummary || ""), "ready sendCall boardSummary should make warning state explicit");
@@ -802,6 +814,38 @@ async function checkFallbackPipelineVideoWarning(args) {
   }, { capturePipeline: "background-jpeg" });
 }
 
+async function checkMaxFpsLimitWarning(args) {
+  await withFakeMacHost(async (macHost) => {
+    const localTimeoutMs = String(Math.min(args.timeoutMs, 5000));
+    const result = await runAsync(args, [
+      "--json",
+      "--allowDirty",
+      "--skipBoard",
+      "--host",
+      macHost.host,
+      "--port",
+      String(macHost.port),
+      "--timeoutMs",
+      localTimeoutMs,
+    ]);
+    const payload = parseJson(result.stdout, "max-FPS formal E2E status");
+    assert(result.status === 0, `max-FPS warning should not fail formal status:\n${result.stdout}\n${result.stderr}`);
+    assert(payload.ok === true, "max-FPS payload should remain ok because FPS limit is a warning");
+    assert(payload.counts?.blockers === 0, "max-FPS payload should not add blockers");
+    assert(payload.counts?.warnings >= 2, "max-FPS payload should include board-skip and fps-limit warnings");
+    const fpsLimit = payload.checklist?.find((entry) => entry.id === "fps-limit");
+    assert(fpsLimit?.status === "warning", "max-FPS checklist item should be a warning");
+    assert(/remoteMax=30Hz/.test(fpsLimit.summary || ""), "max-FPS warning should name the remote max FPS");
+    assert(/--maxScreenFps 60/.test(fpsLimit.next || ""), "max-FPS warning should recommend the 60Hz dry-run planner");
+    assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "max-FPS formal E2E planner command", macHost.port);
+    assert(/warnings=[^.]*fps-limit/.test(payload.boardSummary || ""), "max-FPS board summary should name fps-limit warning");
+    assert(/MacMaxFpsPlan=/.test(payload.boardSummary || ""), "max-FPS board summary should include MacMaxFpsPlan");
+    assert(/--maxScreenFps 60/.test(payload.boardSummary || ""), "max-FPS board summary should include the 60Hz planner command");
+    assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "max-FPS formal E2E status");
+    print("OK", "Formal E2E status warns when Mac host maxScreenFps is below the formal 60Hz target");
+  }, { maxScreenFps: 30 });
+}
+
 function checkOnlineJson(args) {
   const result = run(args, [
     "--json",
@@ -833,8 +877,10 @@ function checkOnlineJson(args) {
   assert(/Checklist blockers=/.test(payload.callText || ""), "online callText should include blocker ids");
   assert(/warnings=/.test(payload.callText || ""), "online callText should include warning ids");
   assert(/install-mac-host-launch-agent\.mjs/.test(payload.callText || ""), "online callText should include LaunchAgent planner command");
+  assert(/--maxScreenFps 60/.test(payload.callText || ""), "online callText should include max-FPS planner command");
   assert(/check-mac-formal-local-smoke\.mjs/.test(payload.callText || ""), "online callText should include local smoke command");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand, "online LaunchAgent planner command", args.port);
+  assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "online max-FPS planner command", args.port);
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "online local smoke command", args.port);
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "online media readiness command", args.port);
   print("OK", "Online formal E2E JSON includes video/audio/clipboard/input-log/inject safety checklist");
@@ -883,6 +929,7 @@ function checkSecretRedaction(args) {
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "formal E2E JSON");
   const payload = parseJson(result.stdout, "secret-redaction formal E2E JSON");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand, "secret-redaction LaunchAgent planner command", 9);
+  assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "secret-redaction max-FPS planner command", 9);
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "secret-redaction media readiness command", 9);
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "secret-redaction local smoke command", 9);
   print("OK", "Formal E2E status output does not echo unrelated secret-like server text");
@@ -907,6 +954,7 @@ async function main() {
   await checkDoneBoardCallDoesNotBlock(args);
   await checkForceSendCall(args);
   await checkFallbackPipelineVideoWarning(args);
+  await checkMaxFpsLimitWarning(args);
   checkOnlineJson(args);
   checkOnlineBoardSummary(args);
   checkSecretRedaction(args);

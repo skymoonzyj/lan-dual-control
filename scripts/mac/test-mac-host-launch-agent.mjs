@@ -156,6 +156,7 @@ function checkDryRunJson(args) {
     assertIncludes(payload.commands?.bootstrap || "", "launchctl bootstrap", "dry-run commands.bootstrap");
     assertIncludes(payload.commands?.unattendedStatus || "", "check-mac-unattended-status.mjs", "dry-run commands.unattendedStatus");
     assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=", "dry-run boardSummary");
+    assertIncludes(payload.boardSummary || "", "maxFps=30", "dry-run boardSummary");
     assertIncludes(payload.boardSummary || "", "ManualLoad=", "dry-run boardSummary");
     assert(payload.warnings.some((item) => /random password is not shared/.test(item)), "dry-run warnings should explain ephemeral auth limit");
     assertNoSecretsOrRuntimeActions(`${result.stdout}\n${result.stderr}`, "dry-run LaunchAgent JSON");
@@ -178,6 +179,7 @@ function checkBoardSummary(args) {
     assert(lines.length === 1, `boardSummary should be one line, got ${lines.length}`);
     assertIncludes(text, "Mac LaunchAgent plan:", "boardSummary");
     assertIncludes(text, "auth=ephemeral-discovery-only", "boardSummary");
+    assertIncludes(text, "maxFps=30", "boardSummary");
     assertIncludes(text, "MacLaunchAgentPlan=", "boardSummary");
     assertIncludes(text, "ManualWrite=", "boardSummary");
     assertIncludes(text, "ManualLoad=", "boardSummary");
@@ -185,6 +187,31 @@ function checkBoardSummary(args) {
     assert(!existsSync(paths.plist), "boardSummary dry-run should not create plist");
     assertNoSecretsOrRuntimeActions(`${result.stdout}\n${result.stderr}`, "boardSummary");
     print("OK", "Board summary is one safe line and still dry-runs");
+  } finally {
+    rmSync(paths.dir, { recursive: true, force: true });
+  }
+}
+
+function checkMaxFpsDryRunSummary(args) {
+  const paths = tempPaths();
+  try {
+    const result = run(args, [
+      "--json",
+      "--maxScreenFps",
+      "60",
+      ...baseArgs(paths),
+    ]);
+    const payload = parseJson(result.stdout, "max-FPS LaunchAgent JSON");
+    assert(result.status === 0, "max-FPS JSON should exit 0");
+    assert(payload.args?.maxScreenFps === 60, "max-FPS JSON should preserve maxScreenFps=60");
+    assert(payload.programArguments.includes("--maxScreenFps"), "max-FPS programArguments should include --maxScreenFps");
+    assert(payload.programArguments.includes("60"), "max-FPS programArguments should include 60");
+    assertIncludes(payload.commands?.dryRun || "", "--maxScreenFps 60", "max-FPS commands.dryRun");
+    assertIncludes(payload.boardSummary || "", "maxFps=60", "max-FPS boardSummary");
+    assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=node scripts/mac/install-mac-host-launch-agent.mjs --maxScreenFps 60 --boardSummary", "max-FPS boardSummary");
+    assert(!existsSync(paths.plist), "max-FPS dry-run should not create plist");
+    assertNoSecretsOrRuntimeActions(`${result.stdout}\n${result.stderr}`, "max-FPS LaunchAgent JSON");
+    print("OK", "Max-FPS dry-run keeps the 60Hz planner command secret-free and side-effect-free");
   } finally {
     rmSync(paths.dir, { recursive: true, force: true });
   }
@@ -287,6 +314,7 @@ function main() {
   checkHelp(args);
   checkDryRunJson(args);
   checkBoardSummary(args);
+  checkMaxFpsDryRunSummary(args);
   checkWrite(args);
   checkPasswordModes(args);
   print("OK", "Mac host LaunchAgent planner self-test passed");

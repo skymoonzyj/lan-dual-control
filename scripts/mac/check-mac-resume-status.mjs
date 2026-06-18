@@ -22,6 +22,7 @@ const defaults = {
   json: false,
   boardSummary: false,
 };
+const formalTargetMaxScreenFps = 60;
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -74,6 +75,11 @@ Machine-readable JSON fields:
                              it prints a plist plan and manual load commands
                              without writing files, loading launchctl, starting
                              Mac host, or requesting a password.
+  commands.macMaxFpsPlanCommand
+                             Secret-free LaunchAgent dry-run planner for the
+                             formal 60Hz target; it only prints a plan and does
+                             not write files, load launchctl, start Mac host,
+                             request a password, or send input.
   commands.macClientDiagnosticsCommand
                              Secret-free Mac client readiness command for
                              checking local page files/server state without
@@ -543,6 +549,14 @@ function buildRecommendations({ git, host, board, args }) {
       text: `Mac host advertises H.264, but current capture pipeline is ${host.capabilities?.capturePipeline || "unknown"}; refresh the media baseline before formal H.264 E2E.`,
     });
   }
+  if (isFormalFpsLimited(host.capabilities)) {
+    const maxFps = getMaxScreenFps(host.capabilities);
+    recommendations.push({
+      level: "warning",
+      id: "fps-limit",
+      text: `Mac host maxScreenFps=${maxFps}; formal 60Hz validation will run at the remote limit until the max-FPS LaunchAgent plan is reviewed: ${makeMacMaxFpsPlanCommand(args)}.`,
+    });
+  }
   if (host.buildDiff.severity === "restart-recommended") {
     recommendations.push({
       level: args.requireNoRuntimeChanges ? "blocker" : "warning",
@@ -607,6 +621,16 @@ function formatCapabilities(capabilities) {
   if (capabilities.capturePipeline) parts.push(`pipeline=${capabilities.capturePipeline}`);
   if (capabilities.maxScreenFps) parts.push(`maxFps=${capabilities.maxScreenFps}`);
   return parts.join(", ");
+}
+
+function getMaxScreenFps(capabilities = {}) {
+  const value = Number(capabilities.maxScreenFps);
+  return Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
+}
+
+function isFormalFpsLimited(capabilities = {}) {
+  const maxScreenFps = getMaxScreenFps(capabilities);
+  return maxScreenFps !== null && maxScreenFps < formalTargetMaxScreenFps;
 }
 
 function formatDisplays(displays) {
@@ -682,6 +706,17 @@ function makeMacLaunchAgentPlanCommand(args) {
     "node scripts/mac/install-mac-host-launch-agent.mjs",
     "--port",
     String(args.port),
+    "--boardSummary",
+  ].join(" ");
+}
+
+function makeMacMaxFpsPlanCommand(args) {
+  return [
+    "node scripts/mac/install-mac-host-launch-agent.mjs",
+    "--port",
+    String(args.port),
+    "--maxScreenFps",
+    String(formalTargetMaxScreenFps),
     "--boardSummary",
   ].join(" ");
 }
@@ -803,6 +838,7 @@ function formatBoardSummary(report) {
       `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
       `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
       `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
+      `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
       `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
       `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
       `MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}.`,
@@ -830,6 +866,7 @@ function formatBoardSummary(report) {
     `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
     `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
     `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
+    `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
     `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
     `MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}.`,
@@ -903,6 +940,7 @@ function printReport(report) {
   console.log(`[NEXT] Mac formal E2E preflight: ${report.commands.macFormalE2eStatusCommand}`);
   console.log(`[NEXT] Mac unattended/startup status: ${report.commands.macUnattendedStatusCommand}`);
   console.log(`[NEXT] Mac LaunchAgent dry-run plan: ${report.commands.macLaunchAgentPlanCommand}`);
+  console.log(`[NEXT] Mac max FPS dry-run plan: ${report.commands.macMaxFpsPlanCommand}`);
   console.log(`[NEXT] Mac client page status: ${report.commands.macClientPageStatusCommand}`);
   console.log(`[NEXT] Mac client diagnostics: ${report.commands.macClientDiagnosticsCommand}`);
   console.log(`[NEXT] Mac client discover Windows host: ${report.commands.macClientDiscoverWindowsCommand}`);
@@ -949,6 +987,7 @@ async function main() {
       macFormalE2eStatusCommand: makeMacFormalE2eStatusCommand(args),
       macUnattendedStatusCommand: makeMacUnattendedStatusCommand(args),
       macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
+      macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
       macClientPageStatusCommand: makeMacClientPageStatusCommand(),
       macClientDiagnosticsCommand: makeMacClientDiagnosticsCommand(),
       macClientDiscoverWindowsCommand: makeMacClientDiscoverWindowsCommand(),

@@ -299,7 +299,7 @@ ${programArguments.map((item) => `    <string>${xmlEscape(item)}</string>`).join
 function makeCommands(args) {
   const uid = "$(id -u)";
   return {
-    dryRun: "node scripts/mac/install-mac-host-launch-agent.mjs --boardSummary",
+    dryRun: makeDryRunCommand(args),
     writePlist: [
       "node scripts/mac/install-mac-host-launch-agent.mjs",
       "--write",
@@ -313,6 +313,18 @@ function makeCommands(args) {
     hostStatus: `node scripts/mac/start-mac-host.mjs --status --host 127.0.0.1 --port ${args.port} --boardSummary`,
     unattendedStatus: `node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port ${args.port} --launchAgentPath ${shellQuote(args.launchAgentPath)} --boardSummary`,
   };
+}
+
+function makeDryRunCommand(args) {
+  const parts = ["node scripts/mac/install-mac-host-launch-agent.mjs"];
+  if (args.port !== defaults.port) {
+    parts.push("--port", String(args.port));
+  }
+  if (args.maxScreenFps !== defaults.maxScreenFps) {
+    parts.push("--maxScreenFps", String(args.maxScreenFps));
+  }
+  parts.push("--boardSummary");
+  return parts.join(" ");
 }
 
 function makeWarnings(args) {
@@ -342,7 +354,7 @@ function makeBoardSummary(report) {
     ? "ephemeral-discovery-only"
     : report.args.passwordMode;
   return [
-    `Mac LaunchAgent plan: ${writeState}; label=${report.args.label}; path=${report.paths.launchAgentPath}; port=${report.args.port}; auth=${auth}; keepAlive=${report.args.keepAlive ? "on" : "off"}.`,
+    `Mac LaunchAgent plan: ${writeState}; label=${report.args.label}; path=${report.paths.launchAgentPath}; port=${report.args.port}; maxFps=${report.args.maxScreenFps}; auth=${auth}; keepAlive=${report.args.keepAlive ? "on" : "off"}.`,
     `MacLaunchAgentPlan=${report.commands.dryRun}; ManualWrite=${report.commands.writePlist}; ManualLoad=${report.commands.bootstrap}; Status=${report.commands.unattendedStatus}.`,
     "No password is written or requested by this planner; no launchctl/start/auth/input/inject action was attempted.",
   ].join(" ");
