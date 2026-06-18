@@ -81,6 +81,14 @@ function assertRunPlanSafe(payload, label, expectations = {}) {
   assert(plan.steps.some((step) => step.id === "windows-client-browser-h264"), `${label} should include the browser probe`);
   const browserStep = plan.steps.find((step) => step.id === "windows-client-browser-h264");
   assertIncludes(browserStep.command, "--progressIntervalMs", `${label} browser progress command`);
+  assert(Array.isArray(browserStep.troubleshootingHints), `${label} browser step should include troubleshooting hints`);
+  const browserHintText = browserStep.troubleshootingHints.join("\n");
+  assertIncludes(browserHintText, "progress snapshots", `${label} browser troubleshooting hints`);
+  assertIncludes(browserHintText, "WinClientPorts", `${label} browser troubleshooting hints`);
+  assertIncludes(browserHintText, "WindowsLanRisk", `${label} browser troubleshooting hints`);
+  assertIncludes(browserHintText, "remoteMaxFps", `${label} browser troubleshooting hints`);
+  assertNotIncludes(browserHintText, "test-password", `${label} browser troubleshooting hints`);
+  assertNotIncludes(browserHintText, "demo-password", `${label} browser troubleshooting hints`);
   const protocolStep = plan.steps.find((step) => step.id === "protocol-media-clipboard-input-log");
   if (protocolStep) {
     const expectedProtocolMs =
@@ -313,6 +321,9 @@ async function testOfflinePreflight(args) {
   assertIncludes(result.stdout, "Manual true-test checklist", "offline text preflight");
   assertIncludes(result.stdout, "- connection:", "offline text preflight");
   assertIncludes(result.stdout, "- diagnostics:", "offline text preflight");
+  assertIncludes(result.stdout, "Plan 2 hint:", "offline text preflight browser hints");
+  assertIncludes(result.stdout, "WinClientPorts", "offline text preflight browser hints");
+  assertIncludes(result.stdout, "WindowsLanRisk", "offline text preflight browser hints");
   assertNotIncludes(result.stdout + result.stderr, "Mac host password", "offline text preflight");
   print("OK", "Offline text preflight fails before password");
 }

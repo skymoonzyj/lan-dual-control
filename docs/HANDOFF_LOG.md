@@ -21,6 +21,38 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：补强正式 E2E 第二步现场提示，避免 Windows client browser H.264 canvas/FPS 等待被误判为卡住。
+完成内容：
+- `check-mac-formal-e2e` 的 runPlan 现在给 `windows-client-browser-h264` 步骤输出 `troubleshootingHints[]`，机器可读地列出第二步排障顺序。
+- 普通输出现在在 Plan 2 后打印 `Plan 2 hint:`，提示等待的是 Windows client 页面、WebSocket、H.264 canvas 与 FPS 诊断。
+- 提示直接覆盖四类现场常见误判：进度心跳是否还在刷、默认端口残留时用 `--clientPort 5200 --debugPort 9340`、`WindowsLanRisk=` 指向防火墙/Public 网络/LAN 风险、`remoteMaxFps` 低于请求 Hz 时先提升 Mac host/LaunchAgent 上限。
+修改文件：
+- `scripts/windows/check-mac-formal-e2e.mjs`
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 45000`
+- `node --check scripts/windows/check-mac-formal-e2e.mjs`
+- `node --check scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- 实现后复跑：`node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 45000`
+- `node scripts/windows/check-mac-formal-e2e.mjs --host 127.0.0.1 --port 9 --preflightOnly --timeoutMs 1200`（预期离线失败，但必须打印 `Plan 2 hint:`）
+- `node scripts/windows/test-windows-script-help.mjs --script check-mac-formal-e2e.mjs --script test-mac-formal-e2e-preflight.mjs --timeoutMs 10000`
+- `git diff --check`
+遗留问题：
+- 这轮只增强诊断提示和 runPlan 字段；未执行真实 WebSocket 认证、未发送密码、未发 input/inject，也未改变媒体/端口流程。
+下一步建议：
+- 现场复跑正式 E2E 第二步时，先看 `Plan 2 hint:`、`WinClientPorts=`、`WindowsLanRisk=` 和 `remoteMaxFps`，再决定是否要换端口、处理 Windows 防火墙/Public 网络或让 Mac 端提升 60Hz 上限。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Mac 端可拉取后读取 `runPlan.steps[].troubleshootingHints[]` 或直接按终端提示排障。不要在通讯板发送密码/token/系统账号。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows resume 第一屏也消费联络板上的 `WindowsLanRisk=`，避免 LAN/firewall 风险只藏在 readiness 摘要里。
 完成内容：
 - `check-windows-resume-status --checkBoard` 现在会从 Agent Link Board `/api/state` 或 fallback `watch --once` 输出里安全提取 `WindowsLanRisk=`，写入 JSON `board.windowsLanRisk`、普通输出和 `--boardSummary`。

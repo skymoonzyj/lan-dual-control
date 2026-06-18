@@ -279,6 +279,18 @@ function makeManualChecklist(args) {
   ];
 }
 
+function makeBrowserTroubleshootingHints(args) {
+  const progressText = Number(args.progressIntervalMs) > 0
+    ? `progress snapshots every ${formatDurationMs(args.progressIntervalMs)}`
+    : "progress snapshots are disabled by --progressIntervalMs 0";
+  return [
+    `Watch ${progressText}; Plan 2 is waiting for the Windows client page, WebSocket, H.264 canvas, and FPS diagnostics before it finishes.`,
+    "If resume shows WinClientPorts=occupied(...;stale-diagnostics), rerun with --clientPort 5200 --debugPort 9340 or free the old diagnostics ports before judging Plan 2.",
+    "If board/resume shows WindowsLanRisk=no-firewall-allow,public-profile,lan-probe-blocked, or tcp-unreachable, fix Windows firewall/network profile/LAN reachability before blaming H.264.",
+    `If discovery/preflight shows remoteMaxFps below requested ${args.fps}Hz, the Mac host is capping refresh rate; raise Mac maxScreenFps and recheck before judging Windows client FPS.`,
+  ];
+}
+
 function makeFormalRunPlan(args) {
   const probeExpectedMs =
     (Number(args.videoDurationMs) || 0) +
@@ -317,6 +329,7 @@ function makeFormalRunPlan(args) {
         h264: !args.allowMockVideo,
         inject: false,
       },
+      troubleshootingHints: makeBrowserTroubleshootingHints(args),
     });
   }
 
@@ -798,6 +811,7 @@ function printRunPlan(runPlan) {
       "INFO",
       `Plan ${index + 1}: ${step.label}; expected=${formatDurationMs(step.expectedDurationMs)}; timeout=${formatDurationMs(step.timeoutMs)}; command=${step.command}`,
     );
+    printStepTroubleshootingHints(step, index);
   }
   const manualChecklist = Array.isArray(runPlan.manualChecklist) ? runPlan.manualChecklist : [];
   if (manualChecklist.length > 0) {
@@ -805,6 +819,13 @@ function printRunPlan(runPlan) {
     for (const item of manualChecklist) {
       print("INFO", `- ${item.id}: ${item.evidence}`);
     }
+  }
+}
+
+function printStepTroubleshootingHints(step, index) {
+  const hints = Array.isArray(step?.troubleshootingHints) ? step.troubleshootingHints : [];
+  for (const hint of hints) {
+    print("INFO", `Plan ${index + 1} hint: ${hint}`);
   }
 }
 
@@ -826,6 +847,7 @@ function printFormalStepStart(step, index, totalSteps, runPlan) {
       "INFO",
       `Plan ${index + 1} opens the Windows client page and waits for connected H.264 canvas/FPS diagnostics. It has its own progress snapshots every ${formatDurationMs(runPlan.video?.progressIntervalMs)}.`,
     );
+    printStepTroubleshootingHints(step, index);
   }
 }
 
