@@ -21,6 +21,39 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac host readiness 也暴露 Mac 脚本 help 安全自检入口。
+完成内容：
+- `check-mac-host-readiness --json/--boardSummary` 现在输出 `commands.macScriptHelpCommand` / `MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`。
+- Windows 端或人工只看 `MacHostReadiness=` 摘要时，也能要求 Mac 端跑统一 `--help/-h` 副作用防线，不必回翻 resume、heartbeat 或 unattended 摘要。
+- 自测新增回归：help、默认 JSON、离线 media board summary、active call JSON 和一行 board summary 都必须包含 `MacScriptHelp=`，且命令不含密码、call、input 或 inject 路径。
+修改文件：
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `scripts/mac/test-mac-host-readiness-board.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-host-readiness-board.mjs --timeoutMs 20000` 失败在 help 缺 `commands.macScriptHelpCommand`。
+- 绿灯：实现后复跑同一自测通过。
+- `node --check scripts/mac/check-mac-host-readiness.mjs`
+- `node --check scripts/mac/test-mac-host-readiness-board.mjs`
+- `node scripts/mac/test-mac-host-readiness-board.mjs --timeoutMs 20000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- 真实只读 host readiness 摘要抽样：`Mac host readiness:` 输出 `MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`，并明确不要在通讯板发送密码、inject 需要用户看屏幕。
+- `git diff --check` 与冲突标记扫描通过。
+遗留问题：
+- 真实 Mac host 仍是旧 build / 30Hz 上限现场状态；本轮只补 host readiness 摘要的安全自检入口，没有停止或重启 host。
+下一步建议：
+- Windows 若只拿到 `MacHostReadiness=`，也可复制 `MacScriptHelp=` 让 Mac 端快速确认所有 Mac `.mjs` 脚本 help 路径无副作用；后续仍需用户在场时再处理 60Hz host 重启或正式密码验收。
+是否改了协议：否；只补 Mac host readiness 的安全命令标签。
+是否需要另一端配合：本轮不需要；Windows 端可后续按需消费该标签。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac unattended status 也暴露 Mac 脚本 help 安全自检入口。
 完成内容：
 - `check-mac-unattended-status --json/--boardSummary` 现在输出 `commands.macScriptHelp` / `MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`。

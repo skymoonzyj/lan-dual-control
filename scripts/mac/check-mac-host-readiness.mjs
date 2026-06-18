@@ -239,6 +239,9 @@ Machine-readable JSON fields:
                             Secret-free formal local smoke command for the next
                             H.264 + PCM + input-log short validation step. It
                             prompts locally and never embeds a password in argv.
+  commands.macScriptHelpCommand
+                            Unified side-effect-free Mac script help
+                            self-check command.
 `);
 }
 
@@ -714,6 +717,7 @@ function formatReadinessBoardSummary(summary) {
     `MacMaxFpsPlan=${summary.commands?.macMaxFpsPlanCommand || makeMacMaxFpsPlanCommand(summary.args || {})}.`,
     `MacUnattendedFormal=${summary.commands?.macUnattendedFormalCommand || makeMacUnattendedFormalCommand(summary.args || {})}.`,
     `MacFormalLocalSmoke=${summary.commands?.macFormalLocalSmokeCommand || makeMacFormalLocalSmokeCommand(summary.args || {})}.`,
+    `MacScriptHelp=${summary.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
     "Next: fix failed checks before formal E2E; keep inputMode=log for unattended checks.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
@@ -895,6 +899,10 @@ function makeMacFormalLocalSmokeCommand(args = {}) {
     "--promptPassword",
     "--boardSummary",
   ].join(" ");
+}
+
+function makeMacScriptHelpCommand() {
+  return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
 
 function formatMediaBoardSummary(summary) {
@@ -1389,6 +1397,7 @@ async function main() {
       macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
       macUnattendedFormalCommand: makeMacUnattendedFormalCommand(args),
       macFormalLocalSmokeCommand: makeMacFormalLocalSmokeCommand(args),
+      macScriptHelpCommand: makeMacScriptHelpCommand(),
     },
     results: results.map((result) => ({
       label: result.label,
@@ -1432,6 +1441,7 @@ async function main() {
     print("NEXT", `Mac max FPS dry-run plan: ${summary.commands.macMaxFpsPlanCommand}`, args);
     print("NEXT", `Mac unattended formal 60Hz gate: ${summary.commands.macUnattendedFormalCommand}`, args);
     print("NEXT", `Mac formal local smoke: ${summary.commands.macFormalLocalSmokeCommand}`, args);
+    print("NEXT", `Mac script help safety check: ${summary.commands.macScriptHelpCommand}`, args);
   }
 
   if (!ok) {
