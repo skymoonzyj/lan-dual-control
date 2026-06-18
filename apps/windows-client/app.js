@@ -261,6 +261,8 @@ const macUnattendedRiskLabels = {
   "host-offline": "Mac host 离线",
   "host-unreachable": "Mac host 不可达",
   "mac-heartbeat-stale": "Mac 心跳过期，可能卡住",
+  "mac-heartbeat-once-command": "Mac 单次心跳上板命令已提供",
+  "mac-heartbeat-watch-command": "Mac 持续心跳 watcher 命令已提供",
   "mac-watchdog-stale": "Mac watchdog 心跳过期",
   "mac-api-error": "Mac/API 网络错误",
   "mac-codex-stale": "Mac Codex 长时间无新进展",
@@ -2987,6 +2989,8 @@ function parseMacUnattendedAttention(text) {
   const hasMacHostSafeStart = /\bMacHostSafeStart\s*=/i.test(source);
   const hasMacMaxFpsSafeStart = /\bMacMaxFpsSafeStart\s*=/i.test(source);
   const hasMacClientFormalChecklist = /\bMacClientFormalChecklist\s*=/i.test(source);
+  const hasMacHeartbeatOnce = /\bMacHeartbeatOnce\s*=/i.test(source);
+  const hasMacHeartbeatWatch = /\bMacHeartbeatWatch\s*=/i.test(source);
   const hasMacFormalLocalSmoke = /\b(MacFormalLocalSmoke|check-mac-formal-local-smoke)\b/i.test(source);
   const hasRerunFormalLocalSmoke = /\bRerunFormalLocalSmoke\s*=/i.test(source);
   const hasWindowsReverseGrantStatus = /\bWindowsReverseGrantStatus(NodeFallback)?\s*=/i.test(source);
@@ -3073,6 +3077,18 @@ function parseMacUnattendedAttention(text) {
     (hasMacClientFormalFinding || /ready\s*=\s*false|blocked|failed/.test(lower))
   ) {
     risks.unshift("mac-client-formal-checklist");
+  }
+  if (
+    hasMacHeartbeatOnce &&
+    (risks.length > 0 || /ready\s*=\s*false|blocked|failed|stale|watchdog|heartbeat|codex-reconnect|mac-codex/.test(lower))
+  ) {
+    risks.unshift("mac-heartbeat-once-command");
+  }
+  if (
+    hasMacHeartbeatWatch &&
+    (risks.length > 0 || /ready\s*=\s*false|blocked|failed|stale|watchdog|heartbeat|codex-reconnect|mac-codex/.test(lower))
+  ) {
+    risks.unshift("mac-heartbeat-watch-command");
   }
   if (
     hasMacFormalLocalSmoke &&

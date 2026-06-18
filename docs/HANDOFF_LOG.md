@@ -21,6 +21,47 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows 侧消费 Mac resume 暴露的 `MacHeartbeatOnce=` / `MacHeartbeatWatch=`。
+完成内容：
+- `check-windows-resume-status --checkBoard` 新增安全提取 `MacHeartbeatOnce=node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --boardSummary` 和 `MacHeartbeatWatch=node scripts/mac/watch-mac-heartbeat.mjs --sendStatus --intervalMs 30000`。
+- 提取结果写入 JSON `board.macHeartbeatOnce` / `board.macHeartbeatWatch`、普通输出和 `--boardSummary`；危险候选会被拒绝，包括敏感参数、缺 `--sendStatus`、单次命令缺 `--once --boardSummary`、持续 watcher 缺 `--intervalMs` 或脚本路径不对。
+- Windows 控制端 Mac 提醒区、快速摘要、复制/导出诊断新增中文风险：“Mac 单次心跳上板命令已提供”“Mac 持续心跳 watcher 命令已提供”，只在 stale/blocked/非空 warning/blocker 或 Codex 重连风险上下文中显示。
+- PowerShell wrapper 帮助和 Node/PowerShell resume 回归同步覆盖这些新字段。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/check-windows-resume-status.mjs --noDiscover --host 192.168.31.122 --port 43770 --checkBoard --boardSummary`
+- PowerShell AST 解析通过。
+遗留问题：
+- 这轮只消费和显示 Mac heartbeat watcher 入口；真正把持续 watcher 纳入桌面壳开关/后台服务管理，后续再做。
+下一步建议：
+- 下一轮可以把 Windows 桌面版“Mac 提醒”区做成更明确的“一键复制/启动 MacHeartbeatOnce/Watch 指令”入口，或者继续推进真实 Mac 画面/音频长测。
+是否改了协议：否。
+是否需要另一端配合：不阻塞；后续可让 Mac 端运行 `MacHeartbeatOnce=` 或 `MacHeartbeatWatch=` 观察 Windows 提醒区是否稳定刷新。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows 侧消费 Mac `check-mac-heartbeat` 新 reason，并把心跳入口放进恢复总览。
 完成内容：
 - `watch-codex-link-mac-alerts.ps1` 新增 `mac-codex-stale` 和 `codex-reconnect-signal` 直接提醒规则。

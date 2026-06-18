@@ -214,6 +214,8 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "check-mac-host-readiness.mjs --host <Mac IP> --port 43770 --checkBoard --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "Mac heartbeat/watchdog command", "PowerShell wrapper help");
   assertIncludes(output, "check-mac-heartbeat.mjs --host <Mac IP> --port 43770 --checkBoard --boardSummary", "PowerShell wrapper help");
+  assertIncludes(output, "MacHeartbeatOnce=", "PowerShell wrapper help");
+  assertIncludes(output, "MacHeartbeatWatch=", "PowerShell wrapper help");
   assertIncludes(output, "Mac formal local smoke command", "PowerShell wrapper help");
   assertIncludes(output, "check-mac-formal-local-smoke.mjs --host <Mac IP> --port 43770 --promptPassword --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "Mac-side unattended/startup status command", "PowerShell wrapper help");
@@ -651,13 +653,15 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const safeCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888";
   const maxFpsCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888 --maxScreenFps 60";
   const localSmokeCommand = "node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43888 --promptPassword --boardSummary";
+  const heartbeatOnceCommand = "node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --boardSummary";
+  const heartbeatWatchCommand = "node scripts/mac/watch-mac-heartbeat.mjs --sendStatus --intervalMs 30000";
   await withMockHost(async (port) => {
     const boardState = {
       statuses: {
         "Mac Codex": {
           role: "Mac 端",
           status: "idle",
-          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand}`,
+          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand}`,
         },
       },
       events: [
@@ -691,6 +695,26 @@ async function checkBoardMacHostSafeStartExtraction(args) {
           from: "Mac Codex",
           text: "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port <当前端口> --promptPassword --boardSummary",
         },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacHeartbeatOnce=node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --password secret-value --boardSummary",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacHeartbeatOnce=node scripts/mac/watch-mac-heartbeat.mjs --once --boardSummary",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacHeartbeatWatch=node scripts/mac/watch-mac-heartbeat.mjs --sendStatus",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacHeartbeatWatch=node scripts/mac/check-mac-heartbeat.mjs --sendStatus --intervalMs 30000",
+        },
       ],
     };
 
@@ -720,9 +744,17 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board?.macFormalLocalSmoke?.found === true, "PowerShell MacFormalLocalSmoke should be found");
       assert(payload.board.macFormalLocalSmoke.command === localSmokeCommand, "PowerShell MacFormalLocalSmoke command mismatch");
       assert(payload.board.macFormalLocalSmoke.rejectedCount >= 2, "PowerShell unsafe or placeholder MacFormalLocalSmoke should be rejected");
+      assert(payload.board?.macHeartbeatOnce?.found === true, "PowerShell MacHeartbeatOnce should be found");
+      assert(payload.board.macHeartbeatOnce.command === heartbeatOnceCommand, "PowerShell MacHeartbeatOnce command mismatch");
+      assert(payload.board.macHeartbeatOnce.rejectedCount >= 2, "PowerShell unsafe or incomplete MacHeartbeatOnce should be rejected");
+      assert(payload.board?.macHeartbeatWatch?.found === true, "PowerShell MacHeartbeatWatch should be found");
+      assert(payload.board.macHeartbeatWatch.command === heartbeatWatchCommand, "PowerShell MacHeartbeatWatch command mismatch");
+      assert(payload.board.macHeartbeatWatch.rejectedCount >= 2, "PowerShell unsafe or incomplete MacHeartbeatWatch should be rejected");
       assertIncludes(payload.boardSummary, `MacHostSafeStart=${safeCommand}.`, "PowerShell MacHostSafeStart JSON board summary");
       assertIncludes(payload.boardSummary, `MacMaxFpsSafeStart=${maxFpsCommand}.`, "PowerShell MacMaxFpsSafeStart JSON board summary");
       assertIncludes(payload.boardSummary, `MacFormalLocalSmoke=${localSmokeCommand}.`, "PowerShell MacFormalLocalSmoke JSON board summary");
+      assertIncludes(payload.boardSummary, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "PowerShell MacHeartbeatOnce JSON board summary");
+      assertIncludes(payload.boardSummary, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "PowerShell MacHeartbeatWatch JSON board summary");
       assertNotIncludes(output, "secret-value", "PowerShell MacHostSafeStart JSON should not leak rejected command");
     }, boardState);
 
@@ -745,6 +777,8 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(output, `MacHostSafeStart=${safeCommand}.`, "PowerShell MacHostSafeStart board summary");
       assertIncludes(output, `MacMaxFpsSafeStart=${maxFpsCommand}.`, "PowerShell MacMaxFpsSafeStart board summary");
       assertIncludes(output, `MacFormalLocalSmoke=${localSmokeCommand}.`, "PowerShell MacFormalLocalSmoke board summary");
+      assertIncludes(output, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "PowerShell MacHeartbeatOnce board summary");
+      assertIncludes(output, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "PowerShell MacHeartbeatWatch board summary");
       assertNotIncludes(output, "secret-value", "PowerShell MacHostSafeStart board summary should not leak rejected command");
       console.log("[OK] PowerShell resume-status wrapper surfaces Mac safe-start commands safely");
     }, boardState);

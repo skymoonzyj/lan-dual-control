@@ -69,6 +69,7 @@ It also includes a Mac host readiness command for detailed Mac-side host status:
 node scripts/mac/check-mac-host-readiness.mjs --host <Mac IP> --port 43770 --checkBoard --boardSummary
 It also includes a Mac heartbeat/watchdog command for independent stale/reconnect monitoring:
 node scripts/mac/check-mac-heartbeat.mjs --host <Mac IP> --port 43770 --checkBoard --boardSummary
+When Agent Link Board already has Mac resume output, it also safely surfaces MacHeartbeatOnce= and MacHeartbeatWatch= watcher commands so the Mac side can post one heartbeat now or keep a background heartbeat running.
 It also includes a Mac formal local smoke command for local H.264/PCM/input-log checks:
 node scripts/mac/check-mac-formal-local-smoke.mjs --host <Mac IP> --port 43770 --promptPassword --boardSummary
 It also includes a Mac-side unattended/startup status command:

@@ -287,6 +287,8 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "discover-lan-hosts.ps1 -NoLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-host-readiness.mjs --host 192.168.31.122 --port 43770 --checkBoard --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-heartbeat.mjs --host 192.168.31.122 --port 43770 --checkBoard --boardSummary", `help ${flag}`);
+    assertIncludes(result.stdout, "watch-mac-heartbeat.mjs --once --sendStatus --boardSummary", `help ${flag}`);
+    assertIncludes(result.stdout, "watch-mac-heartbeat.mjs --sendStatus --intervalMs 30000", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "formal manual checklist command", `help ${flag}`);
@@ -777,13 +779,15 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const safeCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888";
   const maxFpsCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888 --maxScreenFps 60";
   const localSmokeCommand = "node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43888 --promptPassword --boardSummary";
+  const heartbeatOnceCommand = "node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --boardSummary";
+  const heartbeatWatchCommand = "node scripts/mac/watch-mac-heartbeat.mjs --sendStatus --intervalMs 30000";
   await withMockHost(async (port) => {
     const boardState = {
       statuses: {
         "Mac Codex": {
           role: "Mac 端",
           status: "idle",
-          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand}`,
+          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand}`,
         },
       },
       events: [
@@ -817,6 +821,26 @@ async function checkBoardMacHostSafeStartExtraction(args) {
           from: "Mac Codex",
           text: "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port <当前端口> --promptPassword --boardSummary",
         },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacHeartbeatOnce=node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --password secret-value --boardSummary",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacHeartbeatOnce=node scripts/mac/watch-mac-heartbeat.mjs --once --boardSummary",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacHeartbeatWatch=node scripts/mac/watch-mac-heartbeat.mjs --sendStatus",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacHeartbeatWatch=node scripts/mac/check-mac-heartbeat.mjs --sendStatus --intervalMs 30000",
+        },
       ],
     };
 
@@ -848,9 +872,19 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board.macFormalLocalSmoke.command === localSmokeCommand, "MacFormalLocalSmoke command mismatch");
       assert(payload.board.macFormalLocalSmoke.source === "api-state", "MacFormalLocalSmoke should come from /api/state");
       assert(payload.board.macFormalLocalSmoke.rejectedCount >= 2, "unsafe or placeholder MacFormalLocalSmoke should be rejected");
+      assert(payload.board?.macHeartbeatOnce?.found === true, "MacHeartbeatOnce should be found in board state");
+      assert(payload.board.macHeartbeatOnce.command === heartbeatOnceCommand, "MacHeartbeatOnce command mismatch");
+      assert(payload.board.macHeartbeatOnce.source === "api-state", "MacHeartbeatOnce should come from /api/state");
+      assert(payload.board.macHeartbeatOnce.rejectedCount >= 2, "unsafe or incomplete MacHeartbeatOnce should be rejected");
+      assert(payload.board?.macHeartbeatWatch?.found === true, "MacHeartbeatWatch should be found in board state");
+      assert(payload.board.macHeartbeatWatch.command === heartbeatWatchCommand, "MacHeartbeatWatch command mismatch");
+      assert(payload.board.macHeartbeatWatch.source === "api-state", "MacHeartbeatWatch should come from /api/state");
+      assert(payload.board.macHeartbeatWatch.rejectedCount >= 2, "unsafe or incomplete MacHeartbeatWatch should be rejected");
       assertIncludes(payload.boardSummary, `MacHostSafeStart=${safeCommand}.`, "MacHostSafeStart JSON board summary");
       assertIncludes(payload.boardSummary, `MacMaxFpsSafeStart=${maxFpsCommand}.`, "MacMaxFpsSafeStart JSON board summary");
       assertIncludes(payload.boardSummary, `MacFormalLocalSmoke=${localSmokeCommand}.`, "MacFormalLocalSmoke JSON board summary");
+      assertIncludes(payload.boardSummary, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "MacHeartbeatOnce JSON board summary");
+      assertIncludes(payload.boardSummary, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "MacHeartbeatWatch JSON board summary");
       assertNotIncludes(result.stdout + result.stderr, "secret-value", "MacHostSafeStart JSON should not leak rejected command");
     }, boardState);
 
@@ -874,6 +908,8 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacHostSafeStart=${safeCommand}.`, "MacHostSafeStart board summary");
       assertIncludes(result.stdout, `MacMaxFpsSafeStart=${maxFpsCommand}.`, "MacMaxFpsSafeStart board summary");
       assertIncludes(result.stdout, `MacFormalLocalSmoke=${localSmokeCommand}.`, "MacFormalLocalSmoke board summary");
+      assertIncludes(result.stdout, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "MacHeartbeatOnce board summary");
+      assertIncludes(result.stdout, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "MacHeartbeatWatch board summary");
       assertNotIncludes(result.stdout + result.stderr, "secret-value", "MacHostSafeStart board summary should not leak rejected command");
     }, boardState);
 
@@ -894,6 +930,8 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacHostSafeStart=${safeCommand}`, "MacHostSafeStart human output");
       assertIncludes(result.stdout, `MacMaxFpsSafeStart=${maxFpsCommand}`, "MacMaxFpsSafeStart human output");
       assertIncludes(result.stdout, `MacFormalLocalSmoke=${localSmokeCommand}`, "MacFormalLocalSmoke human output");
+      assertIncludes(result.stdout, `MacHeartbeatOnce=${heartbeatOnceCommand}`, "MacHeartbeatOnce human output");
+      assertIncludes(result.stdout, `MacHeartbeatWatch=${heartbeatWatchCommand}`, "MacHeartbeatWatch human output");
       assertNotIncludes(result.stdout + result.stderr, "secret-value", "MacHostSafeStart human output should not leak rejected command");
       console.log("[OK] Windows resume status extracts Mac safe-start commands from Agent Link Board safely");
     }, boardState);
