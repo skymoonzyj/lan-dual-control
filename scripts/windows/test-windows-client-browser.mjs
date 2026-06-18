@@ -3898,8 +3898,8 @@ async function verifyReconnectControls(session) {
           streamFallbackReason: "H.264 启动超时，已回退 JPEG",
           clipboardText: true,
           clipboardTextMode: "system",
-          clipboardFile: true,
-          clipboardFileMode: "system",
+          clipboardFile: false,
+          clipboardFileMode: "unsupported",
           inputMode: "log",
           inputAckStatus: "logged",
           inputAckCode: "",
@@ -3934,6 +3934,10 @@ async function verifyReconnectControls(session) {
           quickSummaryClipboard:
             exportText.includes("- 剪贴板：接收 1 个文件") &&
             exportText.includes("2 B/4 B"),
+          quickSummaryClipboardCapabilitySuggestion:
+            exportText.includes("- 剪贴板能力建议：") &&
+            exportText.includes("文件/压缩包不能直接复制粘贴") &&
+            exportText.includes("检查被控端文件剪贴板能力"),
           quickSummaryOutgoingFile:
             exportText.includes("- 本机发送文件：") &&
             exportText.includes("对端确认超时") &&
@@ -4069,6 +4073,10 @@ async function verifyReconnectControls(session) {
           clipboardStatus:
             exportText.includes("- 剪贴板状态：接收 1 个文件") &&
             exportText.includes("2 B/4 B"),
+          clipboardCapabilitySuggestion:
+            exportText.includes("- 剪贴板能力建议：") &&
+            exportText.includes("文件/压缩包不能直接复制粘贴") &&
+            exportText.includes("检查被控端文件剪贴板能力"),
           outgoingFileStatus:
             exportText.includes("- 本机发送文件：对端文件接收失败") &&
             exportText.includes("pending-timeout.zip") &&
@@ -4150,6 +4158,9 @@ async function verifyReconnectControls(session) {
           copiedText.includes("- 全屏浮层视频：视频：") &&
           copiedText.includes("- 剪贴板：接收 1 个文件") &&
           copiedText.includes("- 剪贴板状态：接收 1 个文件") &&
+          copiedText.includes("- 剪贴板能力建议：") &&
+          copiedText.includes("文件/压缩包不能直接复制粘贴") &&
+          copiedText.includes("检查被控端文件剪贴板能力") &&
           copiedText.includes("- 本机发送文件：") &&
           copiedText.includes("pending-timeout.zip") &&
           copiedText.includes("对端确认超时") &&

@@ -2466,6 +2466,40 @@ function getClipboardExportStatus() {
   return clipboardStatus || "-";
 }
 
+function isClipboardCapabilityUnavailable(enabled, mode = "") {
+  const normalizedEnabled = normalizeOptionalBoolean(enabled);
+  if (normalizedEnabled === false) return true;
+  const normalizedMode = String(mode || "").trim().toLowerCase();
+  return ["disabled", "off", "none", "unsupported", "unavailable"].includes(normalizedMode);
+}
+
+function getClipboardCapabilitySuggestionExportStatus() {
+  if (!elements.clipboardToggle.checked) {
+    return "剪贴板同步已关闭；开启后才能同步文字和文件。";
+  }
+
+  const diagnostics = state.hostDiagnostics || {};
+  const textUnavailable = isClipboardCapabilityUnavailable(
+    diagnostics.clipboardText,
+    diagnostics.clipboardTextMode,
+  );
+  const fileUnavailable = isClipboardCapabilityUnavailable(
+    diagnostics.clipboardFile,
+    diagnostics.clipboardFileMode,
+  );
+
+  if (textUnavailable && fileUnavailable) {
+    return "远端文字和文件剪贴板不可用；请检查被控端剪贴板权限、模式和文件剪贴板能力。";
+  }
+  if (textUnavailable) {
+    return "远端文字剪贴板不可用；请检查被控端剪贴板权限或剪贴板模式。";
+  }
+  if (fileUnavailable) {
+    return "远端文件剪贴板不可用；文件/压缩包不能直接复制粘贴，请检查被控端文件剪贴板能力，或暂时使用远端文件托盘/临时目录。";
+  }
+  return "-";
+}
+
 function getOutgoingFileTransferExportStatus() {
   const transfer = state.fileTransferActive && state.outgoingFileTransfer
     ? state.outgoingFileTransfer
@@ -3727,6 +3761,7 @@ function buildDiagnosticsQuickSummary({
   remoteFileExport,
   remoteFileSuggestionExport,
   clipboardExport,
+  clipboardCapabilitySuggestionExport,
   outgoingFileExport,
   outgoingFileSuggestionExport,
   videoExport,
@@ -3754,6 +3789,9 @@ function buildDiagnosticsQuickSummary({
     `- 远端文件：${remoteFileExport.summary}`,
     ...(remoteFileSuggestionExport && remoteFileSuggestionExport !== "-" ? [`- 远端文件建议：${remoteFileSuggestionExport}`] : []),
     `- 剪贴板：${clipboardExport}`,
+    ...(clipboardCapabilitySuggestionExport && clipboardCapabilitySuggestionExport !== "-"
+      ? [`- 剪贴板能力建议：${clipboardCapabilitySuggestionExport}`]
+      : []),
     ...(outgoingFileExport && outgoingFileExport !== "-" ? [`- 本机发送文件：${outgoingFileExport}`] : []),
     ...(outgoingFileSuggestionExport && outgoingFileSuggestionExport !== "-" ? [`- 本机发送建议：${outgoingFileSuggestionExport}`] : []),
     `- 视频：${videoExport}`,
@@ -3786,6 +3824,7 @@ function buildLogExportText() {
   const remoteFileExport = getRemoteFileTransferExportStatus();
   const remoteFileSuggestionExport = getRemoteFileTransferSuggestionExportStatus();
   const clipboardExport = getClipboardExportStatus();
+  const clipboardCapabilitySuggestionExport = getClipboardCapabilitySuggestionExportStatus();
   const outgoingFileExport = getOutgoingFileTransferExportStatus();
   const outgoingFileSuggestionExport = getOutgoingFileTransferSuggestionExportStatus();
   const videoExport = getVideoExportStatus();
@@ -3823,6 +3862,7 @@ function buildLogExportText() {
       remoteFileExport,
       remoteFileSuggestionExport,
       clipboardExport,
+      clipboardCapabilitySuggestionExport,
       outgoingFileExport,
       outgoingFileSuggestionExport,
       videoExport,
@@ -3880,6 +3920,7 @@ function buildLogExportText() {
     `- 声音错误：${audioExport.error}`,
     `- 剪贴板：${settings.clipboard ? "开启" : "关闭"}`,
     `- 剪贴板状态：${clipboardExport}`,
+    `- 剪贴板能力建议：${clipboardCapabilitySuggestionExport}`,
     `- 本机发送文件：${outgoingFileExport}`,
     `- 本机发送建议：${outgoingFileSuggestionExport}`,
     `- 全屏浮层模式：${floatingControlExport.mode}`,
