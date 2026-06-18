@@ -21,6 +21,38 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端 `Ctrl+V` 文件剪贴板读取失败时给出可见中文原因。
+完成内容：
+- 当资源管理器剪贴板里只有文件夹、桌面原生读取不可用或读取失败时，顶部剪贴板状态会显示具体原因。
+- 全屏/监看浮层剪贴板状态会同步显示同一原因，避免只在事件日志里看到失败。
+- 浮层状态优先级保持传输状态更高，文件发送中/失败/等待确认不会被旧的本地读取失败提示覆盖。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增页面断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`（失败点：浮层仍显示“剪贴板：已开启”，以及旧状态可能盖住后续正常发送的“等待对端确认”）。
+- 实现后复跑同一 diagnostics-only 通过。
+- `node --check apps/windows-client/app.js` 通过。
+- `node --check scripts/windows/test-windows-client-browser.mjs` 通过。
+- `git diff --check` 通过。
+- 冲突标记扫描无命中。
+遗留问题：
+- 文件夹剪贴板仍暂不递归发送；后续若要支持文件夹，需要先设计打包和目录结构策略。
+下一步建议：
+- Windows 桌面版真机验收时，分别复制普通文件、压缩包和文件夹后在远控窗口按 `Ctrl+V`，确认成功路径、失败原因、浮层状态和事件日志都好读。
+是否改了协议：否；只改 Windows 控制端 UI 状态和页面自测。
+是否需要另一端配合：暂不需要；真机长测时再请 Mac 端配合接收文件。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 桌面控制端支持资源管理器复制文件后用 `Ctrl+V` 发送到被控端。
 完成内容：
 - Windows 控制端在浏览器剪贴板 API 没有读到文件时，会尝试调用 Tauri 原生文件剪贴板读取。

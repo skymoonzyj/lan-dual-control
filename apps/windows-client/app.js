@@ -539,6 +539,7 @@ const state = {
   reconnectReason: "",
   copyDiagnosticsFeedbackTimer: null,
   clipboardSequence: 0,
+  localClipboardStatusText: "",
   fileTransferSequence: 0,
   fileTransferActive: false,
   outgoingFileTransfer: null,
@@ -2200,6 +2201,7 @@ function updateMetrics() {
   elements.audioText.textContent = settings.audio
     ? `声音：已开启 · ${settings.audioVolume}%`
     : "声音：已关闭";
+  state.localClipboardStatusText = "";
   elements.clipboardText.textContent = `剪贴板：${settings.clipboard ? "已开启" : "已关闭"}`;
   updateFileClipboardButton();
   syncFloatingControlCenter();
@@ -2441,6 +2443,17 @@ function formatFloatingClipboardStatus() {
 
   if (state.lastOutgoingFileTransfer?.status === "failed") {
     return `剪贴板：${compactFloatingStatusText(describeLastOutgoingFileTransferStatus(state.lastOutgoingFileTransfer), 56)}`;
+  }
+
+  if (state.localClipboardStatusText) {
+    return `剪贴板：${compactFloatingStatusText(state.localClipboardStatusText, 64)}`;
+  }
+
+  if (state.lastOutgoingFileTransfer?.status === "sent") {
+    return `剪贴板：${compactFloatingStatusText(
+      `等待对端确认：${outgoingFileTransferProgressText(state.lastOutgoingFileTransfer)}`,
+      56,
+    )}`;
   }
 
   if (state.connected) {
@@ -4800,6 +4813,9 @@ async function syncClipboardBeforePaste() {
 
   const sentText = await syncClipboardText({ quietNoText: true });
   if (!sentText && clipboardFiles.reason) {
+    state.localClipboardStatusText = `剪贴板：${clipboardFiles.reason}`;
+    elements.clipboardText.textContent = state.localClipboardStatusText;
+    syncFloatingControlStatus();
     addLog("文件剪贴板", clipboardFiles.reason);
   }
 }
@@ -4823,10 +4839,12 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
     return;
   }
 
+  state.localClipboardStatusText = "";
   const diagnostics = state.hostDiagnostics || {};
   if (isClipboardCapabilityUnavailable(diagnostics.clipboardFile, diagnostics.clipboardFileMode)) {
     const message = "对端文件剪贴板不可用；文件/压缩包不能直接复制粘贴，请检查被控端文件剪贴板能力，或暂时使用远端文件托盘/临时目录。";
-    elements.clipboardText.textContent = `剪贴板：${message}`;
+    state.localClipboardStatusText = `剪贴板：${message}`;
+    elements.clipboardText.textContent = state.localClipboardStatusText;
     syncFloatingControlStatus();
     addLog(`${sourceLabel}未发送`, message);
     return;

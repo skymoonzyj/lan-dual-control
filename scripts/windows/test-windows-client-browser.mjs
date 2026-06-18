@@ -2071,6 +2071,7 @@ async function verifyFileClipboardRecoveryText(session) {
       const unsupportedSends = [];
       const nativeClipboardSends = [];
       const nativeClipboardInvokes = [];
+      const nativeClipboardFailureInvokes = [];
       const failingSends = [];
       const retrySends = [];
       const originalNavigatorClipboard = navigator.clipboard;
@@ -2167,6 +2168,48 @@ async function verifyFileClipboardRecoveryText(session) {
         const nativeClipboardText = elements.clipboardText.textContent || "";
         const nativeClipboardCommands = nativeClipboardInvokes.map((item) => item.command);
         state.hostDiagnostics = { ...originalHostDiagnostics };
+
+        window.__TAURI__ = {
+          core: {
+            invoke: async (command, args = {}) => {
+              nativeClipboardFailureInvokes.push({ command, args });
+              if (command === "begin_clipboard_file_read") {
+                throw new Error("系统剪贴板里只有文件夹；当前先支持文件和压缩包，暂不递归发送文件夹。");
+              }
+              throw new Error("unexpected native clipboard failure command " + command);
+            },
+          },
+        };
+        state.connected = true;
+        elements.clipboardToggle.checked = true;
+        elements.clipboardText.textContent = "剪贴板：已开启";
+        if (typeof syncFloatingControlStatus === "function") syncFloatingControlStatus();
+        await syncClipboardBeforePaste();
+        const nativeClipboardFailureText = elements.clipboardText.textContent || "";
+        const nativeClipboardFailureFloating = document.querySelector("#floatingClipboardStatus")?.textContent || "";
+        const nativeClipboardFailureCommands = nativeClipboardFailureInvokes.map((item) => item.command);
+
+        const nativeClipboardAfterFailureSuccessSends = [];
+        state.hostDiagnostics = {
+          ...(state.hostDiagnostics || {}),
+          clipboardText: true,
+          clipboardTextMode: "system",
+          clipboardFile: true,
+          clipboardFileMode: "system",
+        };
+        state.client = {
+          sendClipboardFileOffer: (payload) => nativeClipboardAfterFailureSuccessSends.push({ type: "offer", payload }),
+          sendClipboardFileChunk: (payload) => nativeClipboardAfterFailureSuccessSends.push({ type: "chunk", payload }),
+          sendClipboardFileComplete: (payload) => nativeClipboardAfterFailureSuccessSends.push({ type: "complete", payload }),
+        };
+        await sendFilesToRemote(
+          [new File([new Uint8Array([80, 75, 3, 4])], "after-folder-failure.zip", { type: "application/zip" })],
+          { sourceLabel: "文件剪贴板" },
+        );
+        const nativeClipboardAfterFailureSuccessText = elements.clipboardText.textContent || "";
+        const nativeClipboardAfterFailureSuccessFloating =
+          document.querySelector("#floatingClipboardStatus")?.textContent || "";
+        const nativeClipboardAfterFailureSuccessSendCount = nativeClipboardAfterFailureSuccessSends.length;
 
         const unsupportedFile = new File([new Uint8Array([1, 2, 3, 4])], "unsupported.zip", { type: "application/zip" });
         state.connected = true;
@@ -2382,6 +2425,13 @@ async function verifyFileClipboardRecoveryText(session) {
             nativeClipboardCommands.includes("read_clipboard_file_chunk") &&
             nativeClipboardCommands.includes("cancel_clipboard_file_read") &&
             nativeClipboardText.includes("等待对端确认") &&
+            nativeClipboardFailureCommands.includes("begin_clipboard_file_read") &&
+            nativeClipboardFailureText.includes("系统剪贴板里只有文件夹") &&
+            nativeClipboardFailureText.includes("暂不递归发送文件夹") &&
+            nativeClipboardFailureFloating.includes("系统剪贴板里只有文件夹") &&
+            nativeClipboardAfterFailureSuccessText.includes("等待对端确认") &&
+            nativeClipboardAfterFailureSuccessFloating.includes("等待对端确认") &&
+            nativeClipboardAfterFailureSuccessSendCount >= 3 &&
             unsupportedSendCount === 0 &&
             unsupportedClipboardText.includes("对端文件剪贴板不可用") &&
             unsupportedClipboardText.includes("文件/压缩包不能直接复制粘贴") &&
@@ -2463,6 +2513,12 @@ async function verifyFileClipboardRecoveryText(session) {
           nativeClipboardOffer,
           nativeClipboardChunk,
           nativeClipboardComplete,
+          nativeClipboardFailureText,
+          nativeClipboardFailureFloating,
+          nativeClipboardFailureCommands,
+          nativeClipboardAfterFailureSuccessText,
+          nativeClipboardAfterFailureSuccessFloating,
+          nativeClipboardAfterFailureSuccessSendCount,
           unsupportedClipboardText,
           unsupportedSendCount,
           unsupportedSends,
