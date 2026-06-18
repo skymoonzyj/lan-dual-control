@@ -283,6 +283,7 @@ const macUnattendedRiskLabels = {
   "codex-manual-retry": "请查看 Mac 窗口，可能需要手动重试/刷新",
   "mac-host": "Mac host 需检查",
   "mac-host-discovery": "Mac host 发现需检查",
+  "mac-host-readiness-command": "Mac host 体检命令已提供",
   "mac-host-stop-command": "Mac host 停止旧进程命令已提供",
   "mac-host-safe-start": "Mac host 安全启动命令已提供",
   "mac-max-fps-safe-start": "Mac 60Hz 安全启动命令已提供",
@@ -3306,6 +3307,8 @@ function parseMacUnattendedAttention(text) {
   const heartbeatFreshness = parseMacHeartbeatFreshness(source);
   const lower = source.toLowerCase();
   const hasMacHostStop = /\bMacHostStop\s*=/i.test(source);
+  const hasMacHostReadinessCommand =
+    /\bMacHostReadiness\s*=\s*node\s+scripts[\\/]+mac[\\/]+check-mac-host-readiness\.mjs\b/i.test(source);
   const hasMacHostSafeStart = /\bMacHostSafeStart\s*=/i.test(source);
   const hasMacMaxFpsSafeStart = /\bMacMaxFpsSafeStart\s*=/i.test(source);
   const hasMacLaunchAgentLoad = /\bMacLaunchAgentLoad\s*=\s*launchctl\s+bootstrap\b/i.test(source);
@@ -3441,6 +3444,12 @@ function parseMacUnattendedAttention(text) {
   ) {
     risks.unshift("mac-host-stop-command");
   }
+  const hasMacHostReadinessCommandContext =
+    risks.length > 0 ||
+    /attention\s*=\s*(warning|blocker|failed)|ready\s*=\s*false|host-(offline|unreachable)|offline|unreachable|econnrefused|restart recommended|hostRuntimeChanges|runtimeBuild|mac-host-build-stale|mac-host-(discovery|max-fps|max-screen-fps)|fps-limit|launch-agent|max-fps|stale build|build.*stale|运行.*旧|重启/i.test(source);
+  if (hasMacHostReadinessCommand && hasMacHostReadinessCommandContext) {
+    risks.unshift("mac-host-readiness-command");
+  }
   if (
     hasMacHostSafeStart &&
     (risks.length > 0 || /host-(offline|unreachable)|ready\s*=\s*false|offline|离线/.test(lower))
@@ -3537,6 +3546,7 @@ function parseMacUnattendedAttention(text) {
       "public-profile",
       "windows-firewall-status",
       "windows-firewall-preview",
+      "mac-host-readiness-command",
       "lan-probe-blocked",
       "tcp-unreachable",
       "bind-address",
@@ -3563,7 +3573,7 @@ function getMacAlertWatcherExportStatus(now = Date.now()) {
   const available = canUseDesktopHostControl();
   const statusDetail = elements.localMacAlertWatcherStatusText.textContent.trim() || "-";
   const findingDetail = state.localMacAlertWatcherFindingText
-    ? sanitizeExportStatusLine(state.localMacAlertWatcherFindingText, 1200)
+    ? sanitizeExportStatusLine(state.localMacAlertWatcherFindingText, 1800)
     : "";
   const detail = findingDetail ? `${statusDetail} | ${findingDetail}` : statusDetail;
   const unattended = parseMacUnattendedAttention(`${statusDetail} ${findingDetail}`);

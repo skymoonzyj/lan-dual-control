@@ -17,6 +17,34 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 控制端消费 Mac heartbeat/status 里的 `MacHostReadiness=` 安全体检命令，减少现场翻长日志。
+完成内容：
+- Windows 控制端新增 `mac-host-readiness-command` 中文提示：`MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs --host ... --checkBoard --boardSummary` 搭配 warning/blocker、Mac host 离线/不可达、旧 build、重启建议、`mac-host-max-fps` 或 `fps-limit` 等上下文时，会在 Mac 提醒区、快速摘要和复制/导出诊断显示“Mac host 体检命令已提供”。
+- 干净 `warnings=none blockers=none` 命令清单不提示风险。
+- Mac 提醒详情保留长度从 1200 放宽到 1800，并把 `MacHostReadiness=` 提示放进摘要优先级，避免现场关键命令被长摘要挤掉。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：先在 diagnostics-only 页面回归加入 `MacHostReadiness=` 命令断言，`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 失败在 `macReachabilityDetail=false` / `macAlertDetail=false`。
+- 绿灯：实现解析、优先级和详情长度后，同一命令通过；新增干净路径断言确认 `warnings=none blockers=none` 不误报。
+遗留问题：
+- 真实 Mac 端仍需人工/另一端执行 `check-mac-host-readiness`，Windows 控制端只提示和复制命令。
+下一步建议：
+- Mac heartbeat 或 readiness 摘要出现旧 build、远端上限或 host 不可达时，Windows 页面可先看“Mac host 体检命令已提供”，让 Mac 端跑无密 host readiness，再决定是否停旧 host、60Hz 安全启动或 LaunchAgent 切换。
+是否改了协议：否；只消费现有文本标签。
+是否需要另一端配合：后续真实执行 Mac host readiness 时需要 Mac 端配合，本轮实现本身不需要。
+
 ## 2026-06-19 Mac Codex
 
 日期：2026-06-19 继续推进

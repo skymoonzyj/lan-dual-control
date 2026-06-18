@@ -1494,6 +1494,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         "MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo",
         "MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit",
         "MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps",
+        "MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary",
         "MacHeartbeat=status=warning warnings=mac-host-build-stale reason=ok restart recommended hostRuntimeChanges=1 MacHostStop=node scripts/mac/start-mac-host.mjs --stop --host 127.0.0.1 --port 43770",
         "MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770",
         "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60",
@@ -1623,6 +1624,15 @@ async function verifyDesktopOnlyHostPanel(session) {
           updateMacHeartbeatCommandButtons();
         }
       })();
+      const cleanMacHostReadinessCommandAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "MacHeartbeat=status=ok warnings=none blockers=none",
+                "MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary",
+              ].join("; "),
+            )
+          : null;
       const readinessHeaderLines =
         typeof readinessLines === "function"
           ? readinessLines({
@@ -1934,6 +1944,9 @@ async function verifyDesktopOnlyHostPanel(session) {
           freshHeartbeatNoStale?.stale === false &&
           freshHeartbeatNoStale?.summary.includes("心跳检查 1 分钟前") &&
           heartbeatCommandCheck.ok &&
+          cleanMacHostReadinessCommandAttention?.summary === "" &&
+          Array.isArray(cleanMacHostReadinessCommandAttention?.labels) &&
+          cleanMacHostReadinessCommandAttention.labels.length === 0 &&
           readinessHeaderText.includes("client-test") &&
           readinessHeaderText.includes("1000 ms") &&
           readinessHeaderText.includes("750 ms") &&
@@ -1986,6 +1999,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         watcherThrottleNoCache,
         freshHeartbeatNoStale,
         heartbeatCommandCheck,
+        cleanMacHostReadinessCommandAttention,
         readinessHeader: readinessHeaderLines.slice(0, 4),
         readinessSummaryText,
         helperSummary,
@@ -4297,6 +4311,7 @@ async function verifyReconnectControls(session) {
         "MacFormalStatus=ready with warnings: blockers: none warnings: video,build,auth,windows-host,repo",
         "MacResumeStatus=ready with warnings blockers=none warnings=h264-fallback,fps-limit",
         "MacHostReadiness=attention blockers=none warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps",
+        "MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary",
         "MacHeartbeat=status=warning warnings=mac-host-build-stale reason=ok restart recommended hostRuntimeChanges=1 MacHostStop=node scripts/mac/start-mac-host.mjs --stop --host 127.0.0.1 --port 43770",
         "MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770",
         "MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60",
@@ -4529,6 +4544,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("Mac LaunchAgent 加载命令已提供") &&
             exportText.includes("Mac LaunchAgent 打印验证命令已提供") &&
             exportText.includes("Mac 60Hz 安全启动命令已提供") &&
+            exportText.includes("Mac host 体检命令已提供") &&
             exportText.includes("Mac host 停止旧进程命令已提供") &&
             exportText.includes("Mac host 安全启动命令已提供") &&
             exportText.includes("Mac client Windows 发现命令已提供") &&
@@ -4570,6 +4586,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps") &&
             exportText.includes("MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs") &&
             exportText.includes("MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs") &&
+            exportText.includes("MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs") &&
             exportText.includes("MacLaunchAgentLoad=launchctl bootstrap") &&
             exportText.includes("MacLaunchAgentPrint=launchctl print") &&
             exportText.includes("MacHostStop=node scripts/mac/start-mac-host.mjs --stop") &&
@@ -4683,6 +4700,7 @@ async function verifyReconnectControls(session) {
           copiedText.includes("Mac LaunchAgent 加载命令已提供") &&
           copiedText.includes("Mac LaunchAgent 打印验证命令已提供") &&
           copiedText.includes("Mac 60Hz 安全启动命令已提供") &&
+          copiedText.includes("Mac host 体检命令已提供") &&
           copiedText.includes("Mac host 停止旧进程命令已提供") &&
           copiedText.includes("Mac host 安全启动命令已提供") &&
           copiedText.includes("Mac client Windows 发现命令已提供") &&
@@ -4709,6 +4727,7 @@ async function verifyReconnectControls(session) {
           copiedText.includes("mac-host-max-fps") &&
           copiedText.includes("MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs") &&
           copiedText.includes("MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs") &&
+          copiedText.includes("MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs") &&
           copiedText.includes("MacLaunchAgentLoad=launchctl bootstrap") &&
           copiedText.includes("MacLaunchAgentPrint=launchctl print") &&
           copiedText.includes("MacHostStop=node scripts/mac/start-mac-host.mjs --stop") &&
@@ -4796,6 +4815,8 @@ async function verifyReconnectControls(session) {
           exportHasLocalHostStatus: exportText.includes("- 本机被控：桌面壳托管运行中"),
           exportMasksLocalHostOutput: !exportText.includes("should-not-export"),
           exportChecks,
+          macReachabilityLine: exportText.split("\\n").find((line) => line.startsWith("- Mac 值守：")) || "",
+          macAlertDetailLine: exportText.split("\\n").find((line) => line.startsWith("- Mac 提醒详情：")) || "",
           copiedTextHasLocalHostStatus: copiedText.includes("- 本机被控：桌面壳托管运行中"),
           copiedTextMasksLocalHostOutput: !copiedText.includes("should-not-export"),
           calls,
