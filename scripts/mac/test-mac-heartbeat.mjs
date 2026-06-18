@@ -143,6 +143,8 @@ function assertCommandSet(commands, label) {
   assertIncludes(commands?.macClientDiscoverWindowsCommand || "", "discover-windows-hosts.mjs", label);
   assertIncludes(commands?.macClientDiscoverWindowsCommand || "", "--checkBoard", label);
   assertIncludes(commands?.macClientFormalChecklistCommand || "", "check-mac-client-formal-status.mjs", label);
+  assertIncludes(commands?.macClientFormalChecklistCommand || "", "--discover", label);
+  assertIncludes(commands?.macClientFormalChecklistCommand || "", "--port 43770", label);
   assertIncludes(commands?.macClientFormalChecklistCommand || "", "--boardSummary", label);
   assertIncludes(commands?.macClientFormalSmokeCommand || "", "run-mac-client-formal-smoke.mjs", label);
   assertIncludes(commands?.macClientFormalSmokeCommand || "", "--discover", label);

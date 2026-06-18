@@ -599,6 +599,9 @@ function makeWindowsReverseGrantNodeFallbackCommand(windowsHost = {}, args = {},
 function makeMacClientFormalChecklistCommand(windowsHost = {}, args = {}) {
   const targetHost = windowsHost.probe?.host || args.windowsHost || "<Windows IP>";
   const targetPort = windowsHost.probe?.port || args.windowsPort || defaults.windowsPort;
+  if (!windowsHost.probe?.host && !args.windowsHost) {
+    return `node scripts/mac/check-mac-client-formal-status.mjs --discover --port ${targetPort} --boardSummary`;
+  }
   return `node scripts/mac/check-mac-client-formal-status.mjs --host ${targetHost} --port ${targetPort} --boardSummary`;
 }
 

@@ -17,6 +17,49 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
+本轮目标：让 Mac client formal checklist 在无 host 场景也能只读自动发现 Windows host，减少默认 `127.0.0.1` 误判。
+完成内容：
+- `check-mac-client-formal-status` 新增 `--discover`、`--discoverHost`、`--discoverNoLocalSubnets`、`--discoverTimeoutMs`、`--discoverScanTimeoutMs`；未显式 `--host` 时可先调用 `discover-windows-hosts --json`，发现成功后再跑原 formal checklist。
+- JSON 新增 `discovery` 和 `args.discoveredWindowsHost`；`--boardSummary` 在发现成功时带 `Discovery=<host>:<port>`。
+- 无 host 的 `MacClientFormalChecklist=` 现在默认输出 `node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary`；已知 host 时仍输出目标化 `--host <Windows IP> --port <port>`。
+- 该流程只读，不认证、不弹密码、不发送 Agent Link Board call、不发送 input/inject；发现失败只回到原 blocker/提示路径。
+修改文件：
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `scripts/mac/check-mac-client-readiness.mjs`
+- `scripts/mac/test-mac-client-readiness.mjs`
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 22000`（失败点：help 不含 `--discover`）
+- 先新增 heartbeat 断言并确认失败：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000`（失败点：`MacClientFormalChecklist` 不含 `--discover`）
+- 实现后复跑：`node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 22000`
+- `node scripts/mac/test-mac-client-readiness.mjs --timeoutMs 18000`
+- `node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000`
+- 合入 Windows `cc23c76` 后复跑语法：`node --check scripts/mac/check-mac-client-formal-status.mjs`、`node --check scripts/mac/check-mac-client-readiness.mjs`、`node --check scripts/mac/check-mac-heartbeat.mjs`、`node --check scripts/mac/test-mac-client-formal-status.mjs`、`node --check scripts/mac/test-mac-client-readiness.mjs`、`node --check scripts/mac/test-mac-heartbeat.mjs`
+- 合入 Windows `cc23c76` 后复跑：`node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 22000`
+- `node scripts/mac/test-mac-client-readiness.mjs --timeoutMs 18000`
+- `node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- 真实只读发现清单：`node scripts/mac/check-mac-client-formal-status.mjs --discover --allowDirty --boardSummary`（发现 `192.168.31.68:43770`，输出目标化 `MacClientFormalChecklist=... --host 192.168.31.68 --port 43770 --boardSummary`；仅因本轮未提交显示 `repo=dirty(11)` warning）
+- 真实 heartbeat：`node scripts/mac/check-mac-heartbeat.mjs --host 127.0.0.1 --port 43770 --clientHost 127.0.0.1 --clientPort 5188 --checkBoard --boardSummary`（`status=ok`，通讯板入口含 `MacClientFormalChecklist=... --discover --port 43770 --boardSummary`）
+- 最终收尾：`git diff --check`；`rg -n "^(<<<<<<<|=======|>>>>>>>)" docs scripts/mac`
+遗留问题：
+- 这轮只做只读 discover/checklist 衔接；未执行真实 browser smoke，未发送 call，未认证，未执行 input/inject。
+下一步建议：
+- Windows 端看到 `MacClientFormalChecklist=` 时可直接复制新版 `--discover --port 43770 --boardSummary`；如已知 Windows IP，可继续用目标化 `--host <Windows IP> --port <port>`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Windows 端可继续当前 Windows-only resume 消费展示。
+
 ## 2026-06-18 Windows Codex
 
 日期：2026-06-18 继续推进

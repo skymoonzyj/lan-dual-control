@@ -11,6 +11,11 @@ const defaults = {
   windowsPort: 43770,
   timeoutMs: 5000,
   server: "http://192.168.31.68:17888",
+  discover: false,
+  discoverHosts: [],
+  discoverNoLocalSubnets: false,
+  discoverTimeoutMs: 650,
+  discoverScanTimeoutMs: 0,
   skipBoard: false,
   allowDirty: false,
   allowClientServerOffline: false,
@@ -48,6 +53,14 @@ Options:
   --windowsPort <port>            Same as --port.
   --timeoutMs <ms>                Per probe timeout. Default: ${defaults.timeoutMs}
   --server <url>                  Agent Link Board URL. Default: ${defaults.server}
+  --discover                      Find a Windows host before the checklist
+                                  when --host is not provided. Read-only.
+  --discoverHost <host>           With --discover, probe this host directly.
+                                  Repeatable.
+  --discoverNoLocalSubnets        With --discover, only probe 127.0.0.1 and
+                                  explicit --discoverHost targets.
+  --discoverTimeoutMs <ms>        Per-host discovery timeout. Default: ${defaults.discoverTimeoutMs}
+  --discoverScanTimeoutMs <ms>    Overall discovery timeout. Default: auto.
   --skipBoard                     Do not read Agent Link Board. Default checks it.
   --allowDirty                    Let dirty repo remain a warning.
   --allowClientServerOffline      Let local Mac client page offline remain a warning.
@@ -130,6 +143,7 @@ JSON output:
 
 Examples:
   node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.50 --port 43770 --boardSummary
+  node scripts/mac/check-mac-client-formal-status.mjs --discover --boardSummary
   node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.50 --port 43770 --sendCall
   node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary
   node scripts/mac/check-mac-client-formal-status.mjs --json --skipBoard --allowWindowsHostOffline
@@ -153,6 +167,8 @@ function parseArgs(argv) {
       token === "--boardSummary" ||
       token === "--sendCall" ||
       token === "--forceCall" ||
+      token === "--discover" ||
+      token === "--discoverNoLocalSubnets" ||
       token === "--json"
     ) {
       args[token.slice(2)] = true;
@@ -188,11 +204,27 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if ((token === "--discoverHost" || token === "--discoverWindowsHost") && next && !next.startsWith("--")) {
+      args.discoverHosts.push(next.trim());
+      index += 1;
+      continue;
+    }
+    if (token === "--discoverTimeoutMs" && next && !next.startsWith("--")) {
+      args.discoverTimeoutMs = clampInteger(next, 100, 10000, defaults.discoverTimeoutMs);
+      index += 1;
+      continue;
+    }
+    if (token === "--discoverScanTimeoutMs" && next && !next.startsWith("--")) {
+      args.discoverScanTimeoutMs = clampInteger(next, 0, 120000, defaults.discoverScanTimeoutMs);
+      index += 1;
+      continue;
+    }
     throw new Error(`Unknown argument: ${token}`);
   }
   args.clientHost = String(args.clientHost || defaults.clientHost).trim();
   args.windowsHost = String(args.windowsHost || "").trim();
   args.server = String(args.server || defaults.server).trim();
+  args.discoverHosts = [...new Set((args.discoverHosts || []).map((host) => String(host || "").trim()).filter(Boolean))];
   return args;
 }
 
@@ -445,6 +477,86 @@ function runReadiness(args) {
   }
 }
 
+function emptyDiscovery(reason = "not-requested", error = "") {
+  return {
+    requested: false,
+    ok: false,
+    found: [],
+    best: null,
+    reason,
+    error,
+  };
+}
+
+function runWindowsDiscovery(args) {
+  if (!args.discover || args.windowsHost) {
+    return emptyDiscovery(args.windowsHost ? "explicit-host" : "not-requested");
+  }
+  const discoverArgs = [
+    "scripts/mac/discover-windows-hosts.mjs",
+    "--json",
+    "--port",
+    String(args.windowsPort || defaults.windowsPort),
+    "--timeoutMs",
+    String(args.discoverTimeoutMs || defaults.discoverTimeoutMs),
+  ];
+  for (const host of args.discoverHosts || []) {
+    discoverArgs.push("--host", host);
+  }
+  if (args.discoverNoLocalSubnets) discoverArgs.push("--noLocalSubnets");
+  if (args.discoverScanTimeoutMs > 0) {
+    discoverArgs.push("--scanTimeoutMs", String(args.discoverScanTimeoutMs));
+  }
+  if (!args.skipBoard) {
+    discoverArgs.push("--server", args.server, "--checkBoard");
+  }
+  const discoveryTimeoutBudgetMs = Math.max(
+    args.discoverScanTimeoutMs || 35000,
+    (args.timeoutMs || defaults.timeoutMs) + 5000,
+    10000,
+  );
+  const result = spawnSync(process.execPath, discoverArgs, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: discoveryTimeoutBudgetMs,
+    maxBuffer: 8 * 1024 * 1024,
+    env: {
+      ...process.env,
+      LAN_DUAL_PASSWORD: "",
+    },
+  });
+  const stdout = String(result.stdout || "").trim();
+  try {
+    const discovery = JSON.parse(stdout || "{}");
+    discovery.requested = true;
+    discovery.exitStatus = result.status;
+    if (result.status !== 0 && !discovery.error) {
+      discovery.error = String(result.stderr || "Windows discovery exited non-zero").trim();
+    }
+    return discovery;
+  } catch (error) {
+    return emptyDiscovery("parse-error", `discover-windows-hosts did not print valid JSON: ${error.message}`);
+  }
+}
+
+function applyDiscoveredWindowsHost(args, discovery) {
+  const effectiveArgs = {
+    ...args,
+    discoverHosts: [...(args.discoverHosts || [])],
+  };
+  const best = discovery?.best || null;
+  const host = best?.host || best?.probeHost || "";
+  const port = best?.probePort || best?.port || args.windowsPort || defaults.windowsPort;
+  if (host) {
+    effectiveArgs.windowsHost = String(host);
+    effectiveArgs.windowsPort = clampInteger(port, 1, 65535, args.windowsPort || defaults.windowsPort);
+    effectiveArgs.discoveredWindowsHost = true;
+  } else {
+    effectiveArgs.discoveredWindowsHost = false;
+  }
+  return effectiveArgs;
+}
+
 function item(id, status, summary, detail = "", next = "") {
   return { id, status, summary, detail, next };
 }
@@ -590,6 +702,16 @@ function makeCallText(report) {
 }
 
 function makeChecklistCommand(args) {
+  if (!args.windowsHost) {
+    const parts = [
+      "node scripts/mac/check-mac-client-formal-status.mjs",
+      "--discover",
+      "--port",
+      String(args.windowsPort || defaults.windowsPort),
+      "--boardSummary",
+    ];
+    return parts.join(" ");
+  }
   const parts = [
     "node scripts/mac/check-mac-client-formal-status.mjs",
     "--host",
@@ -1011,8 +1133,12 @@ function makeBoardSummary(report) {
   const findings = formatChecklistFindings(report.checklist);
   const reverseGrantParts = makeReverseGrantBoardSummaryParts(report, report.args || {});
   const secureAuthParts = makeSecureAuthBoardSummaryParts(report, report.args || {});
+  const discoveryPart = report.discovery?.best
+    ? `Discovery=${report.discovery.best.host || report.discovery.best.probeHost}:${report.discovery.best.probePort || report.discovery.best.port || report.args?.windowsPort || defaults.windowsPort}.`
+    : "";
   return [
     `Mac client formal Windows test: ${report.readyToCall ? "ready" : `needs attention (${report.counts.blocker} blocker(s), ${report.counts.warning} warning(s))`}; repo=${repo}; client=${client}; localServer=${localServer}; windowsHost=${hostText}; ${findings}.`,
+    discoveryPart,
     report.readyToCall
       ? `Next: run Mac client true test against ${host.probe?.host}:${host.probe?.port}; compare first frame, FPS, frame age, audio playback, clipboard, input-log, bandwidth/CPU.`
       : "Next: clear blockers, run node scripts/mac/start-mac-client.mjs, discover/start Windows host, then rerun with --host <Windows IP> --port 43770 --boardSummary.",
@@ -1027,7 +1153,7 @@ function makeBoardSummary(report) {
     `Reverse rehearsal: ${makeReverseControlRehearsalBoardText()}`,
     "RunPlan: local client -> Windows discovery -> formal checklist -> local browser self-test -> browser smoke -> reverse request rehearsal -> observe quality/resources.",
     "Do not send passwords on Agent Link Board; do not run inject unless the user explicitly confirms they are watching.",
-  ].join(" ");
+  ].filter(Boolean).join(" ");
 }
 
 function formatChecklistFindings(checklist) {
@@ -1235,9 +1361,11 @@ function printHuman(report) {
 }
 
 function buildReport(args) {
-  const readiness = runReadiness(args);
-  const boardSecureAuthPath = getBoardSecureAuthPath(args);
-  const checklist = buildChecklist(readiness, args);
+  const discovery = runWindowsDiscovery(args);
+  const effectiveArgs = applyDiscoveredWindowsHost(args, discovery);
+  const readiness = runReadiness(effectiveArgs);
+  const boardSecureAuthPath = getBoardSecureAuthPath(effectiveArgs);
+  const checklist = buildChecklist(readiness, effectiveArgs);
   const counts = {
     ok: countChecklist(checklist, "ok"),
     warning: countChecklist(checklist, "warning"),
@@ -1250,26 +1378,31 @@ function buildReport(args) {
     readyToCall,
     checkedAt: new Date().toISOString(),
     args: {
-      clientHost: args.clientHost,
-      clientPort: args.clientPort,
-      windowsHost: args.windowsHost,
-      windowsPort: args.windowsPort,
-      skipBoard: args.skipBoard,
-      allowDirty: args.allowDirty,
-      allowClientServerOffline: args.allowClientServerOffline,
-      allowWindowsHostOffline: args.allowWindowsHostOffline,
-      sendCall: args.sendCall,
-      forceCall: args.forceCall,
+      clientHost: effectiveArgs.clientHost,
+      clientPort: effectiveArgs.clientPort,
+      windowsHost: effectiveArgs.windowsHost,
+      windowsPort: effectiveArgs.windowsPort,
+      discover: args.discover,
+      discoveredWindowsHost: Boolean(effectiveArgs.discoveredWindowsHost),
+      discoverHosts: effectiveArgs.discoverHosts,
+      discoverNoLocalSubnets: effectiveArgs.discoverNoLocalSubnets,
+      skipBoard: effectiveArgs.skipBoard,
+      allowDirty: effectiveArgs.allowDirty,
+      allowClientServerOffline: effectiveArgs.allowClientServerOffline,
+      allowWindowsHostOffline: effectiveArgs.allowWindowsHostOffline,
+      sendCall: effectiveArgs.sendCall,
+      forceCall: effectiveArgs.forceCall,
     },
     counts,
     checklist,
     readiness,
+    discovery,
     boardSecureAuthPath,
   };
-  report.runPlan = makeRunPlan(report, args);
+  report.runPlan = makeRunPlan(report, effectiveArgs);
   report.callText = makeCallText(report);
   report.boardSummary = makeBoardSummary(report);
-  report.callPayload = makeCallPayload(report, args);
+  report.callPayload = makeCallPayload(report, effectiveArgs);
   return report;
 }
 

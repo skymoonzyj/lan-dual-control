@@ -164,9 +164,15 @@ function assertWindowsHostStatusCommand(command, label, expectedPort = "43770") 
   assertNotIncludes(command, "--server", label);
 }
 
-function assertMacClientFormalChecklistCommand(command, label, expectedHost = "<Windows IP>", expectedPort = "43770") {
+function assertMacClientFormalChecklistCommand(command, label, expectedHost = "<Windows IP>", expectedPort = "43770", options = {}) {
   assertIncludes(command, "scripts/mac/check-mac-client-formal-status.mjs", label);
-  assertIncludes(command, `--host ${expectedHost}`, label);
+  if (options.discover) {
+    assertIncludes(command, "--discover", label);
+    assertNotIncludes(command, "--host", label);
+    assertNotIncludes(command, "<Windows IP>", label);
+  } else {
+    assertIncludes(command, `--host ${expectedHost}`, label);
+  }
   assertIncludes(command, `--port ${expectedPort}`, label);
   assertIncludes(command, "--boardSummary", label);
   assertNotIncludes(command, "--promptPassword", label);
@@ -222,6 +228,9 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "Usage:", `${script} ${flag}`);
     assertIncludes(result.stdout, "--sendCall", `${script} ${flag}`);
     assertIncludes(result.stdout, "--forceCall", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--discover", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--discoverHost", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--discoverNoLocalSubnets", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.manualChecklist", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.safePreflightWithEnsureClient", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.sendCallWithEnsureClient", `${script} ${flag}`);
@@ -272,7 +281,13 @@ function checkOfflineJson(args) {
   assert(payload.runPlan?.commands?.ensureMacClient?.includes("start-mac-client.mjs --allowExisting"), "offline runPlan should include start/reuse client command");
   assert(payload.runPlan?.commands?.safePreflightWithEnsureClient?.includes("--discover --ensureClient --preflightOnly --boardSummary"), "offline runPlan should include ensureClient preflight command");
   assert(payload.runPlan?.commands?.sendCallWithEnsureClient?.includes("--discover --ensureClient --preflightOnly --sendCall"), "offline runPlan should include ensureClient sendCall command");
-  assertMacClientFormalChecklistCommand(payload.runPlan?.commands?.macClientFormalChecklist || "", "offline runPlan Mac client formal checklist command");
+  assertMacClientFormalChecklistCommand(
+    payload.runPlan?.commands?.macClientFormalChecklist || "",
+    "offline runPlan Mac client formal checklist command",
+    "<Windows IP>",
+    "43770",
+    { discover: true },
+  );
   assertWindowsHostStatusCommand(payload.runPlan?.commands?.windowsHostStatus || "", "offline runPlan Windows host status command");
   assertMacClientBrowserSelfTestCommand(
     payload.runPlan?.commands?.macClientBrowserSelfTest || "",
@@ -302,7 +317,7 @@ function checkOfflineJson(args) {
   assertIncludes(payload.boardSummary || "", "Reverse rehearsal:", "offline board summary");
   assertReverseGrantBoardSummary(payload.boardSummary || "", "offline board summary");
   assertIncludes(payload.boardSummary || "", "WindowsHostStatus=node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary", "offline board summary");
-  assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "allow-windows-reverse-control.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "RunPlan:", "offline board summary");
@@ -364,7 +379,7 @@ function checkBoardSummarySecretFree(args) {
   assertIncludes(result.stdout, "WindowsHostStatus=", "board summary");
   assertIncludes(result.stdout, "start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary", "board summary");
   assertIncludes(result.stdout, "MacClientFormalChecklist=", "board summary");
-  assertIncludes(result.stdout, "check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary", "board summary");
+  assertIncludes(result.stdout, "check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary", "board summary");
   assertIncludes(result.stdout, "Reverse rehearsal:", "board summary");
   assertIncludes(result.stdout, "ReverseGrantCopy=", "board summary");
   assertReverseGrantBoardSummary(result.stdout, "board summary");
@@ -396,7 +411,7 @@ function checkHumanRunPlan(args) {
   assertIncludes(result.stdout, "Windows host status for Windows side:", "human runPlan");
   assertIncludes(result.stdout, "start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary", "human runPlan");
   assertIncludes(result.stdout, "Mac client formal checklist:", "human runPlan");
-  assertIncludes(result.stdout, "check-mac-client-formal-status.mjs --host <Windows IP> --port 43770 --boardSummary", "human runPlan");
+  assertIncludes(result.stdout, "check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary", "human runPlan");
   assertIncludes(result.stdout, "Secure auth path:", "human runPlan");
   assertSecureAuthPath(result.stdout, "human runPlan secure auth path");
   assertIncludes(result.stdout, "Manual true-test checklist", "human manual checklist");
@@ -478,8 +493,12 @@ const server = createServer((request, response) => {
   }
   response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
   response.end(JSON.stringify({
+    type: "lan_dual_discovery",
+    deviceId: "mock-windows-host-formal",
+    deviceName: "Mock Windows Host Formal",
     name: "Mock Windows Host Formal",
     platform: "windows",
+    role: "host",
     host: "127.0.0.1",
     port,
     controlPort: port,
@@ -709,6 +728,42 @@ async function checkReadyShape(args) {
     });
   });
   print("OK", "Mock ready shape includes client/server/h264/audio/clipboard and skips inject");
+}
+
+async function checkDiscoverSelectsWindowsHost(args) {
+  await withMacClientServer(args, async (clientPort) => {
+    await withWindowsDiscoveryServer(async (windowsPort) => {
+      const result = await runAsync([
+        "--json",
+        "--skipBoard",
+        "--allowDirty",
+        "--clientPort",
+        String(clientPort),
+        "--discover",
+        "--discoverHost",
+        "127.0.0.1",
+        "--discoverNoLocalSubnets",
+        "--port",
+        String(windowsPort),
+        "--timeoutMs",
+        "1600",
+      ], args);
+      const payload = parseJson(result.stdout, "discover formal checklist JSON");
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.status === 0, `discover formal checklist should exit 0.\n${output}`);
+      assert(payload.discovery?.ok === true, "discover payload should include discovery.ok=true");
+      assert(payload.discovery?.best?.host === "127.0.0.1", "discover payload should select mock Windows host");
+      assert(payload.discovery?.best?.probePort === windowsPort, "discover payload should preserve discovered port");
+      assert(payload.args?.windowsHost === "127.0.0.1", "effective args should use discovered Windows host");
+      assert(payload.args?.discoveredWindowsHost === true, "effective args should mark discovered Windows host");
+      assert(payload.runPlan?.target?.host === "127.0.0.1", "runPlan target should use discovered host");
+      assert(payload.runPlan?.commands?.macClientFormalChecklist?.includes(`--host 127.0.0.1 --port ${windowsPort}`), "runPlan checklist should be target-specific after discovery");
+      assertIncludes(payload.boardSummary || "", `Discovery=127.0.0.1:${windowsPort}`, "discover board summary");
+      assertIncludes(payload.boardSummary || "", `MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 127.0.0.1 --port ${windowsPort} --boardSummary`, "discover board summary");
+      assertNoSecretLikeText(output, "discover formal checklist output");
+    });
+  });
+  print("OK", "Discover mode selects a Windows host before building formal checklist");
 }
 
 async function checkBoardWindowsSecureAuthPathExtraction(args) {
@@ -991,6 +1046,7 @@ async function main() {
   checkBoardSummarySecretFree(args);
   checkHumanRunPlan(args);
   await checkReadyShape(args);
+  await checkDiscoverSelectsWindowsHost(args);
   await checkBoardWindowsSecureAuthPathExtraction(args);
   await checkOfflineSendCallRefuses(args);
   await checkReadySendCall(args);
