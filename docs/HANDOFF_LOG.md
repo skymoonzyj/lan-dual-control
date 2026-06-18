@@ -21,6 +21,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端复制/导出诊断单独显示本机发送文件状态。
+完成内容：
+- 复制/导出诊断新增“本机发送文件”摘要，独立于“剪贴板状态”和“远端文件”。
+- 状态可显示正在发送、等待对端确认、对端确认超时、对端失败或本机发送失败，并带短文件名列表。
+- 页面 diagnostics 回归覆盖同时存在远端文件接收和本机发送文件确认超时的场景，确保导出报告不会互相覆盖。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --clientPort 5200 --debugPort 9340 --timeoutMs 45000`（失败点：快速摘要和详细报告没有“本机发送文件”）。
+- 实现后复跑同一 diagnostics-only 命令通过。
+遗留问题：
+- 这仍是诊断展示增强，不是断点续传。
+- 真机大文件/压缩包长测时继续观察导出诊断里的本机发送文件状态是否足够好读。
+下一步建议：
+- 后续可以继续做真实长测前的自动化提示，例如把“确认超时后建议重发/让对端检查文件剪贴板能力”做成更短的现场操作建议。
+是否改了协议：否；只改 Windows 控制端本地诊断导出。
+是否需要另一端配合：暂不需要；真机长测时再请 Mac 端配合文件复制/接收。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端手动发送文件等待对端确认超时时可直接重发。
 完成内容：
 - 本机文件分块发送完成后，如果 45 秒没有收到对端 `clipboard_file_result`，顶部剪贴板状态和全屏/监看浮层会提示“对端确认超时”。

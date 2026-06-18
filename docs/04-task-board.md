@@ -196,6 +196,7 @@ Windows 端：
 - [x] Windows 控制端发送文件后的对端结果提示：本机分块发完后显示等待对端确认，收到 `clipboard_file_result` 后区分系统文件剪贴板、临时目录、远端托盘和失败原因，并同步到全屏/监看浮层；页面 diagnostics 覆盖 clipboard/temp/memory-only/failed 四类结果。
 - [x] Windows 控制端发送文件后的对端失败重试：手动选文件会等对端接受成功后再清空选择，对端返回失败时保留文件并把按钮切到“重新发送”；页面 diagnostics 覆盖远端失败后保留文件、重发和重发成功后清空。
 - [x] Windows 控制端发送文件等待对端确认超时：本机分块发完后若 45 秒没有收到 `clipboard_file_result`，顶部状态和全屏/监看浮层会提示对端确认超时，保留文件选择并切到“重新发送”；超时后已经重新发送时，旧 `transferId` 的迟到结果不会覆盖当前等待状态；页面 diagnostics 覆盖超时、保留文件、重发和旧结果忽略。
+- [x] Windows 控制端复制/导出诊断补本机发送文件状态：报告会独立显示正在发送、等待对端确认、确认超时、对端失败或本机失败，保留文件名和可重发提示；页面 diagnostics 覆盖同时有远端文件接收和本机发送超时两种状态。
 - [x] Windows host 启动/状态助手也支持 `--status --checkBoard` / PowerShell `-Status -CheckBoard`：只读读取 Agent Link Board `/api/state.currentCall`，JSON、普通输出和 `--boardSummary` 会提示 active Mac -> Windows call，DONE call 不进入待办摘要，不启动 host、不认证、不发送密码、不执行 `inject`。
 - [x] Windows host 启动/状态助手 `--status` 也会输出本机媒体基线命令：JSON 带 `windowsHostMediaReadinessCommand` / `windowsHostMediaReadinessPowerShellCommand`，普通输出和 `--boardSummary` 带 `WindowsHostMedia=check-windows-host-readiness --checkBoard --probeMedia --boardSummary` 与 `WindowsHostMediaPs=check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary`，方便 Mac 反控前刷新视频/音频基线。
 - [x] Windows host 启动/状态助手和 readiness 摘要也会输出视频能力体检命令：JSON 带 `windowsVideoEncoderSupportCommand` / `windowsVideoEncoderSupportPowerShellCommand`，普通输出和 `--boardSummary` 带 `WindowsVideoSupport=check-windows-video-encoder-support --boardSummary` 与 `WindowsVideoSupportPs=check-windows-video-encoder-support.ps1 -BoardSummary`，方便 H.264/WGC/WebCodecs 调试前先发无密能力摘要。

@@ -2466,6 +2466,35 @@ function getClipboardExportStatus() {
   return clipboardStatus || "-";
 }
 
+function getOutgoingFileTransferExportStatus() {
+  const transfer = state.fileTransferActive && state.outgoingFileTransfer
+    ? state.outgoingFileTransfer
+    : state.lastOutgoingFileTransfer;
+  if (!transfer) return "-";
+
+  let statusText = "";
+  if (transfer.status === "failed") {
+    statusText = describeLastOutgoingFileTransferStatus(transfer);
+  } else if (transfer.status === "remote-result") {
+    statusText = describeOutgoingFileResultStatus(transfer);
+  } else if (transfer.status === "sent") {
+    statusText = `等待对端确认：${outgoingFileTransferProgressText(transfer)}`;
+  } else if (state.fileTransferActive || transfer.status === "sending") {
+    statusText = describeOutgoingFileTransferStatus(transfer);
+  }
+  if (!statusText) return "-";
+
+  const fileNames = Array.isArray(transfer.files)
+    ? transfer.files
+        .map((file) => String(file?.name || "").trim())
+        .filter(Boolean)
+    : [];
+  const fileText = fileNames.length > 0
+    ? `；文件 ${fileNames.slice(0, 3).join("、")}${fileNames.length > 3 ? ` 等 ${fileNames.length} 个` : ""}`
+    : "";
+  return compactExportStatusText(`${statusText}${fileText}`, 220);
+}
+
 function syncFloatingControlStatus() {
   if (elements.floatingFullscreenHint) {
     elements.floatingFullscreenHint.textContent = state.immersiveFullscreen
@@ -3645,6 +3674,7 @@ function buildDiagnosticsQuickSummary({
   localHostExport,
   remoteFileExport,
   clipboardExport,
+  outgoingFileExport,
   videoExport,
   audioExport,
   floatingControlExport,
@@ -3669,6 +3699,7 @@ function buildDiagnosticsQuickSummary({
     `- 重连：${reconnectParts.join(" · ")}`,
     `- 远端文件：${remoteFileExport.summary}`,
     `- 剪贴板：${clipboardExport}`,
+    ...(outgoingFileExport && outgoingFileExport !== "-" ? [`- 本机发送文件：${outgoingFileExport}`] : []),
     `- 视频：${videoExport}`,
     `- 声音：${audioExport.summary}`,
     `- 输入：${inputExport}`,
@@ -3698,6 +3729,7 @@ function buildLogExportText() {
   const localHostExport = getLocalHostExportStatus();
   const remoteFileExport = getRemoteFileTransferExportStatus();
   const clipboardExport = getClipboardExportStatus();
+  const outgoingFileExport = getOutgoingFileTransferExportStatus();
   const videoExport = getVideoExportStatus();
   const audioExport = getAudioExportStatus();
   const floatingControlExport = getFloatingControlExportStatus();
@@ -3732,6 +3764,7 @@ function buildLogExportText() {
       localHostExport,
       remoteFileExport,
       clipboardExport,
+      outgoingFileExport,
       videoExport,
       audioExport,
       floatingControlExport,
@@ -3787,6 +3820,7 @@ function buildLogExportText() {
     `- 声音错误：${audioExport.error}`,
     `- 剪贴板：${settings.clipboard ? "开启" : "关闭"}`,
     `- 剪贴板状态：${clipboardExport}`,
+    `- 本机发送文件：${outgoingFileExport}`,
     `- 全屏浮层模式：${floatingControlExport.mode}`,
     `- 全屏浮层摘要：${floatingControlExport.summary}`,
     `- 全屏浮层提示：${floatingControlExport.hint}`,

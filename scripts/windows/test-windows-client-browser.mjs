@@ -3723,6 +3723,7 @@ async function verifyReconnectControls(session) {
       const originalReceivedTempPath = state.receivedClipboardTempPath;
       const originalReceivedWriteStatus = state.receivedClipboardWriteStatus;
       const originalRemoteFileTransfers = state.remoteFileTransfers;
+      const originalLastOutgoingFileTransfer = state.lastOutgoingFileTransfer;
       const originalClipboardChecked = Boolean(clipboardToggleElement?.checked);
       const originalAudioChecked = Boolean(audioToggleElement?.checked);
       const originalAudioVolume = audioVolumeElement?.value || "";
@@ -3847,6 +3848,27 @@ async function verifyReconnectControls(session) {
             },
           ],
         ]);
+        state.lastOutgoingFileTransfer = {
+          transferId: "diagnostic-outgoing-timeout",
+          status: "remote-result",
+          accepted: false,
+          fileCount: 1,
+          sentBytes: 65792,
+          receivedBytes: 65792,
+          totalBytes: 65792,
+          files: [
+            {
+              index: 0,
+              name: "pending-timeout.zip",
+              size: 65792,
+              mimeType: "application/zip",
+            },
+          ],
+          reason: "对端确认超时：64.3 KB/64.3 KB，46 秒没有收到结果",
+          canRetry: true,
+          completedAt: Date.now() - 46000,
+          failedAt: Date.now() - 1000,
+        };
         if (clipboardToggleElement) clipboardToggleElement.checked = true;
         if (audioToggleElement) audioToggleElement.checked = true;
         if (audioVolumeElement) audioVolumeElement.value = "33";
@@ -3908,6 +3930,10 @@ async function verifyReconnectControls(session) {
           quickSummaryClipboard:
             exportText.includes("- 剪贴板：接收 1 个文件") &&
             exportText.includes("2 B/4 B"),
+          quickSummaryOutgoingFile:
+            exportText.includes("- 本机发送文件：") &&
+            exportText.includes("对端确认超时") &&
+            exportText.includes("可重新发送"),
           quickSummaryAudio:
             exportText.includes("- 声音：已接收，等待播放") &&
             exportText.includes("音量 33%") &&
@@ -4035,6 +4061,11 @@ async function verifyReconnectControls(session) {
           clipboardStatus:
             exportText.includes("- 剪贴板状态：接收 1 个文件") &&
             exportText.includes("2 B/4 B"),
+          outgoingFileStatus:
+            exportText.includes("- 本机发送文件：对端文件接收失败") &&
+            exportText.includes("pending-timeout.zip") &&
+            exportText.includes("对端确认超时") &&
+            exportText.includes("可重新发送"),
           runtimeInput: exportText.includes("- 输入事件：7（安全日志，不会真正控制 / 已记录）"),
           remoteFileStatus:
             exportText.includes("- 远端文件状态：warning") && exportText.includes("远端文件接收超时"),
@@ -4105,6 +4136,10 @@ async function verifyReconnectControls(session) {
           copiedText.includes("- 全屏浮层视频：视频：") &&
           copiedText.includes("- 剪贴板：接收 1 个文件") &&
           copiedText.includes("- 剪贴板状态：接收 1 个文件") &&
+          copiedText.includes("- 本机发送文件：") &&
+          copiedText.includes("pending-timeout.zip") &&
+          copiedText.includes("对端确认超时") &&
+          copiedText.includes("可重新发送") &&
           copiedText.includes("- 输入：7（安全日志，不会真正控制 / 已记录）") &&
           copiedText.includes("- 输入事件：7（安全日志，不会真正控制 / 已记录）") &&
           copiedText.includes("- 声音状态：已接收，等待播放") &&
@@ -4190,6 +4225,7 @@ async function verifyReconnectControls(session) {
         state.receivedClipboardTempPath = originalReceivedTempPath;
         state.receivedClipboardWriteStatus = originalReceivedWriteStatus;
         state.remoteFileTransfers = originalRemoteFileTransfers;
+        state.lastOutgoingFileTransfer = originalLastOutgoingFileTransfer;
         if (clipboardToggleElement) clipboardToggleElement.checked = originalClipboardChecked;
         if (audioToggleElement) audioToggleElement.checked = originalAudioChecked;
         if (audioVolumeElement) audioVolumeElement.value = originalAudioVolume;

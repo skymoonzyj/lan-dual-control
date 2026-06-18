@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端复制/导出诊断新增独立“本机发送文件”行，显示正在发送、等待确认、确认超时、对端失败或本机失败，并带文件名和可重发提示；不改协议。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端本机发送文件等待对端确认超过 45 秒会提示超时、保留文件并可重新发送；超时后已重发时旧 `transferId` 迟到结果不会覆盖当前等待状态；不改协议，不实现断点续传。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端手动发送文件会等对端接受成功后再清空选择；对端返回失败时保留文件并可直接“重新发送”；不改协议，不实现断点续传。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端发送文件后会先显示等待对端确认，收到 `clipboard_file_result` 后区分系统文件剪贴板、临时目录、远端托盘和失败原因；不改协议，不实现断点续传。 |
