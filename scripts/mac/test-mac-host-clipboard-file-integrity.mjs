@@ -55,6 +55,7 @@ function assertNotIncludes(text, unexpected, label) {
 function assertSourceGuards(source) {
   const offer = section(source, "private func handleClipboardFileOffer", "private func handleClipboardFileChunk");
   const chunk = section(source, "private func handleClipboardFileChunk", "private func handleClipboardFileComplete");
+  const completeHandler = section(source, "private func handleClipboardFileComplete", "private func isFileTransferComplete");
   const complete = section(source, "private func isFileTransferComplete", "private func makeFileTransferDirectory");
   const makeState = section(source, "private func makeFileState", "private func writeFileChunk");
   const helpers = section(source, "private func nonNegativeInt", "private func stringValue");
@@ -81,6 +82,11 @@ function assertSourceGuards(source) {
   assertIncludes(chunk, "chunkData.count <= fileState.expectedBytes - offset", "chunk overflow-safe bounds guard");
   assertIncludes(chunk, "fileState.receivedRanges = mergedRanges", "range tracking");
   assertNotIncludes(chunk, "transfer.files[fileIndex] ?? makeFileState", "chunk handler");
+
+  assertIncludes(completeHandler, "fileTransferIncompleteReason(transfer, urls: urls)", "completion result reason");
+  assertIncludes(source, "private func fileTransferIncompleteReason", "incomplete result reason helper");
+  assertIncludes(source, "已接收 \\(transfer.receivedBytes)/\\(transfer.totalBytes) 字节", "incomplete result reason helper");
+  assertIncludes(source, "文件 \\(urls.count)/\\(transfer.fileCount)", "incomplete result reason helper");
 
   assertIncludes(complete, "urls.count == transfer.fileCount", "completion exact file count guard");
   assertIncludes(complete, "transfer.files.count == transfer.fileCount", "completion declared file count guard");

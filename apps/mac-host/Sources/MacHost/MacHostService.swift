@@ -1277,7 +1277,7 @@ final class MacHostService {
             "totalBytes": transfer.totalBytes,
             "fileCount": urls.count,
             "saveMode": accepted ? "clipboard" : "failed",
-            "reason": accepted ? "macOS 系统文件剪贴板已写入。" : (isComplete ? "macOS 系统文件剪贴板写入失败。" : "文件剪贴板块未接收完整。"),
+            "reason": accepted ? "macOS 系统文件剪贴板已写入。" : (isComplete ? "macOS 系统文件剪贴板写入失败。" : fileTransferIncompleteReason(transfer, urls: urls)),
         ], to: context)
         if !accepted {
             cleanupFileTransfer(transferId, in: context)
@@ -1288,6 +1288,10 @@ final class MacHostService {
             context.lastClipboardChangeCount = clipboardBridge.changeCount()
             context.fileTransfers.removeValue(forKey: transferId)
         }
+    }
+
+    private func fileTransferIncompleteReason(_ transfer: FileTransferState, urls: [URL]) -> String {
+        return "文件剪贴板块未接收完整：已接收 \(transfer.receivedBytes)/\(transfer.totalBytes) 字节，文件 \(urls.count)/\(transfer.fileCount)。"
     }
 
     private func isFileTransferComplete(_ transfer: FileTransferState, urls: [URL]) -> Bool {
