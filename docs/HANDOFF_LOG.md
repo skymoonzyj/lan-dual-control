@@ -17,6 +17,35 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
+本轮目标：把 Windows 控制端“可重新发送”提示变成真正的一键重发。
+完成内容：
+- 发送文件失败后，若保留了文件选择且当前仍连接，`发送文件` 按钮会切换成 `重新发送`。
+- 点击 `重新发送` 会直接复用当前保留的 `FileList` 调用原 `sendFilesToRemote`，不再要求用户重新打开文件选择器。
+- 重发成功后会按原成功路径清空文件选择并恢复普通 `发送文件` 按钮；不改 `clipboard_file_*` 协议，不实现断点续传。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`（失败点：点击按钮后 retry offer/chunk/complete 计数仍为 0）。
+- 实现后复跑：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- 收尾验证：`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`git diff --check`、行首冲突扫描。
+遗留问题：
+- 仍不是断点续传；重发会从头发送保留文件。
+下一步建议：
+- 后续可继续补对端 `clipboard_file_progress/result` 的发送后确认状态，让“已发送到网络”和“对端已写入剪贴板”区分得更清楚。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
 ## 2026-06-19 Mac Codex
 
 日期：2026-06-19 继续推进

@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端手动发送文件失败后，保留文件时按钮会切换为“重新发送”，点击可直接重发保留文件；不改协议，不实现断点续传。 |
 | Mac Codex | `scripts/mac/check-mac-heartbeat.mjs`, `scripts/mac/test-mac-heartbeat.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Mac heartbeat 摘要现在输出 `MacClientBrowserSelfTest=test-mac-client-browser-self-test --boardSummary`，Windows 端只看最新心跳也能让 Mac 先跑本地 mock browser 自测；不认证、不发密码/call/input/inject。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端手动发送文件失败后会保留文件选择，顶部剪贴板状态、全屏/监看浮层和复制/导出诊断显示最近失败摘要与可重新发送提示；不改协议，不实现断点续传。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端本机发送文件时，顶部剪贴板状态和全屏/监看浮层现在显示已发/总量、百分比、速度和预计剩余时间；不改协议，不实现断点续传。 |

@@ -2068,6 +2068,7 @@ async function verifyFileClipboardRecoveryText(session) {
       const clipboardProgress = [];
       const clipboardResults = [];
       const failingSends = [];
+      const retrySends = [];
       try {
         state.fileTransferActive = true;
         state.outgoingFileTransfer = {
@@ -2109,6 +2110,18 @@ async function verifyFileClipboardRecoveryText(session) {
         const fileInputLengthAfterFailure = elements.fileClipboardInput.files?.length || 0;
         const chunkSendCount = failingSends.filter((item) => item.type === "chunk").length;
         const retrySentText = formatBytes(fileChunkSizeBytes);
+        state.client = {
+          sendClipboardFileOffer: (payload) => retrySends.push({ type: "offer", payload }),
+          sendClipboardFileChunk: (payload) => retrySends.push({ type: "chunk", payload }),
+          sendClipboardFileComplete: (payload) => retrySends.push({ type: "complete", payload }),
+        };
+        elements.fileClipboardButton.click();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        const retryOfferCount = retrySends.filter((item) => item.type === "offer").length;
+        const retryChunkCount = retrySends.filter((item) => item.type === "chunk").length;
+        const retryCompleteCount = retrySends.filter((item) => item.type === "complete").length;
+        const retryClipboardText = elements.clipboardText.textContent || "";
+        const fileInputLengthAfterRetry = elements.fileClipboardInput.files?.length || 0;
         state.remoteFileTransfers = new Map();
         state.client = {
           sendClipboardFileResponse: (payload) => clipboardResponses.push(payload),
@@ -2259,6 +2272,11 @@ async function verifyFileClipboardRecoveryText(session) {
             floatingAfterSendFailure.includes("发送失败") &&
             fileInputLengthAfterFailure === 1 &&
             chunkSendCount === 2 &&
+            retryOfferCount === 1 &&
+            retryChunkCount === 2 &&
+            retryCompleteCount === 1 &&
+            retryClipboardText.includes("文件已发送") &&
+            fileInputLengthAfterRetry === 0 &&
             statusVisibleAfterOffer &&
             statusTextAfterOffer.includes("正在接收 1 个文件") &&
             statusTextAfterOffer.includes("0 B/4 B") &&
@@ -2319,6 +2337,11 @@ async function verifyFileClipboardRecoveryText(session) {
           floatingAfterSendFailure,
           fileInputLengthAfterFailure,
           chunkSendCount,
+          retryOfferCount,
+          retryChunkCount,
+          retryCompleteCount,
+          retryClipboardText,
+          fileInputLengthAfterRetry,
           failingSends: failingSends.map((item) => ({
             type: item.type,
             bytes: item.payload?.bytes,

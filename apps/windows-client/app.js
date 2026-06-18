@@ -2958,12 +2958,30 @@ function handleAudioFrame(frame) {
     });
 }
 
+function canRetryLastOutgoingFileTransfer() {
+  return Boolean(
+    state.lastOutgoingFileTransfer?.status === "failed" &&
+      state.lastOutgoingFileTransfer.canRetry &&
+      state.connected &&
+      state.client &&
+      elements.clipboardToggle.checked &&
+      !state.fileTransferActive &&
+      (elements.fileClipboardInput.files?.length || 0) > 0,
+  );
+}
+
 function updateFileClipboardButton() {
+  const canRetry = canRetryLastOutgoingFileTransfer();
   elements.fileClipboardButton.disabled =
     !state.connected ||
     !state.client ||
     !elements.clipboardToggle.checked ||
     state.fileTransferActive;
+  const label = elements.fileClipboardButton.querySelector("span:not([aria-hidden])");
+  if (label) {
+    label.textContent = canRetry ? "重新发送" : "发送文件";
+  }
+  elements.fileClipboardButton.title = canRetry ? "重新发送上次失败的文件" : "选择并发送文件";
 }
 
 function makeLogFileName() {
@@ -4675,6 +4693,15 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
 async function sendClipboardFiles() {
   const files = Array.from(elements.fileClipboardInput.files ?? []);
   await sendFilesToRemote(files, { sourceLabel: "文件剪贴板", clearFileInput: true });
+}
+
+async function handleFileClipboardButtonClick() {
+  if (elements.fileClipboardButton.disabled) return;
+  if (canRetryLastOutgoingFileTransfer()) {
+    await sendClipboardFiles();
+    return;
+  }
+  elements.fileClipboardInput.click();
 }
 
 function getTauriInvoke() {
@@ -7345,8 +7372,7 @@ elements.clipboardToggle.addEventListener("change", () => {
   sendDisplaySettings();
 });
 elements.fileClipboardButton.addEventListener("click", () => {
-  if (elements.fileClipboardButton.disabled) return;
-  elements.fileClipboardInput.click();
+  void handleFileClipboardButtonClick();
 });
 elements.fileClipboardInput.addEventListener("change", sendClipboardFiles);
 elements.copyReceivedFilesButton.addEventListener("click", () => {
