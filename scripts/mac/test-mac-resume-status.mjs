@@ -160,6 +160,8 @@ function assertBoardSummaryShape(text, label) {
   assert(/check-mac-formal-e2e-status\.mjs/.test(text), `${label} should include the Mac formal E2E preflight command`);
   assert(/MacUnattendedStatus=/.test(text), `${label} should include Mac unattended/startup guidance`);
   assert(/check-mac-unattended-status\.mjs/.test(text), `${label} should include the Mac unattended/startup command`);
+  assert(/MacUnattendedFormal=/.test(text), `${label} should include Mac unattended formal max-FPS guidance`);
+  assert(/--requireLaunchAgentMaxFps/.test(text), `${label} should include the formal max-FPS gate`);
   assert(/MacLaunchAgentPlan=/.test(text), `${label} should include Mac LaunchAgent dry-run guidance`);
   assert(/install-mac-host-launch-agent\.mjs/.test(text), `${label} should include the Mac LaunchAgent planner command`);
   assert(/MacMaxFpsPlan=/.test(text), `${label} should include Mac max-FPS dry-run guidance`);
@@ -232,6 +234,12 @@ function assertMacUnattendedStatusCommand(command, label) {
   assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
   assert(!command.includes("--json"), `${label} should default to one-line boardSummary output`);
   assert(!command.includes("inject"), `${label} should not instruct injection`);
+}
+
+function assertMacUnattendedFormalCommand(command, label) {
+  assertMacUnattendedStatusCommand(command, label);
+  assert(command.includes("--requireLaunchAgentMaxFps"), `${label} should require the formal LaunchAgent max-FPS gate`);
+  assert(!command.includes("--strict"), `${label} should not turn every warning into a blocker`);
 }
 
 function assertMacLaunchAgentPlanCommand(command, label) {
@@ -348,6 +356,7 @@ function checkHelp(args) {
     assert(/commands\.macFormalLocalSmokeCommand/.test(result.stdout), `${script} ${flag} should document Mac formal local smoke JSON field`);
     assert(/commands\.macFormalE2eStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac formal E2E status JSON field`);
     assert(/commands\.macUnattendedStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac unattended/startup JSON field`);
+    assert(/commands\.macUnattendedFormalCommand/.test(result.stdout), `${script} ${flag} should document Mac unattended formal JSON field`);
     assert(/commands\.macLaunchAgentPlanCommand/.test(result.stdout), `${script} ${flag} should document Mac LaunchAgent planner JSON field`);
     assert(/commands\.macMaxFpsPlanCommand/.test(result.stdout), `${script} ${flag} should document Mac max-FPS planner JSON field`);
     assert(/commands\.macClientDiagnosticsCommand/.test(result.stdout), `${script} ${flag} should document Mac client diagnostics JSON field`);
@@ -380,6 +389,7 @@ function checkOfflineJson(args) {
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand || "", "offline JSON Mac formal local smoke command");
   assertMacFormalE2eStatusCommand(payload.commands?.macFormalE2eStatusCommand || "", "offline JSON Mac formal E2E status command");
   assertMacUnattendedStatusCommand(payload.commands?.macUnattendedStatusCommand || "", "offline JSON Mac unattended/startup command");
+  assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand || "", "offline JSON Mac unattended formal command");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand || "", "offline JSON Mac LaunchAgent planner command");
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand || "", "offline JSON Mac max-FPS planner command");
   assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "offline JSON Mac client page status command");
@@ -451,6 +461,8 @@ function checkOfflinePlainReport(args) {
   assert(String(result.stdout || "").includes("Mac formal local smoke:"), "plain report should include Mac formal local smoke label");
   assert(String(result.stdout || "").includes("Mac formal E2E preflight:"), "plain report should include Mac formal E2E preflight label");
   assert(String(result.stdout || "").includes("Mac unattended/startup status:"), "plain report should include Mac unattended/startup label");
+  assert(String(result.stdout || "").includes("Mac unattended formal 60Hz gate:"), "plain report should include Mac unattended formal label");
+  assert(String(result.stdout || "").includes("--requireLaunchAgentMaxFps"), "plain report should include Mac unattended formal max-FPS gate");
   assert(String(result.stdout || "").includes("Mac LaunchAgent dry-run plan:"), "plain report should include Mac LaunchAgent planner label");
   assert(String(result.stdout || "").includes("Mac max FPS dry-run plan:"), "plain report should include Mac max-FPS planner label");
   assert(String(result.stdout || "").includes("--maxScreenFps 60"), "plain report should include Mac max-FPS planner command");
@@ -509,6 +521,7 @@ function checkOnlineJson(args) {
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand || "", "online JSON Mac formal local smoke command");
   assertMacFormalE2eStatusCommand(payload.commands?.macFormalE2eStatusCommand || "", "online JSON Mac formal E2E status command");
   assertMacUnattendedStatusCommand(payload.commands?.macUnattendedStatusCommand || "", "online JSON Mac unattended/startup command");
+  assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand || "", "online JSON Mac unattended formal command");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand || "", "online JSON Mac LaunchAgent planner command");
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand || "", "online JSON Mac max-FPS planner command");
   assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "online JSON Mac client page status command");
