@@ -151,6 +151,15 @@ function assertCommandSet(commands, label) {
   assertIncludes(commands?.macClientFormalSmokeCommand || "", "--ensureClient", label);
   assertIncludes(commands?.macClientFormalSmokeCommand || "", "--preflightOnly", label);
   assertIncludes(commands?.macClientFormalSmokeCommand || "", "--boardSummary", label);
+  assertIncludes(commands?.macClientBrowserSelfTestCommand || "", "scripts/mac/test-mac-client-browser-self-test.mjs", label);
+  assertIncludes(commands?.macClientBrowserSelfTestCommand || "", "--boardSummary", label);
+  assertNotIncludes(commands?.macClientBrowserSelfTestCommand || "", "--promptPassword", label);
+  assertNotIncludes(commands?.macClientBrowserSelfTestCommand || "", "--password", label);
+  assertNotIncludes(commands?.macClientBrowserSelfTestCommand || "", "--sendCall", label);
+  assertNotIncludes(commands?.macClientBrowserSelfTestCommand || "", "--forceCall", label);
+  assertNotIncludes(commands?.macClientBrowserSelfTestCommand || "", "--server", label);
+  assertNotIncludes(commands?.macClientBrowserSelfTestCommand || "", "input_event", label);
+  assertNotIncludes(commands?.macClientBrowserSelfTestCommand || "", "inject", label);
   assertNoSecrets(JSON.stringify(commands), label);
 }
 
@@ -207,6 +216,8 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "macClient=offline", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "scripts/mac/test-mac-client-browser-self-test.mjs", "offline board summary");
   assertCommandSet(payload.commands, "offline commands");
   assertNoSecrets(`${result.stdout}\n${result.stderr}`, "offline output");
   print("OK", "Offline heartbeat reports warnings without secrets");
@@ -279,6 +290,8 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "inputMode=log", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "online board summary");
+      assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "online board summary");
+      assertIncludes(payload.boardSummary || "", "scripts/mac/test-mac-client-browser-self-test.mjs", "online board summary");
       assertCommandSet(payload.commands, "online commands");
       assertNoSecrets(`${result.stdout}\n${result.stderr}`, "online output");
     });

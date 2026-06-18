@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/mac/check-mac-heartbeat.mjs`, `scripts/mac/test-mac-heartbeat.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Mac heartbeat 摘要现在输出 `MacClientBrowserSelfTest=test-mac-client-browser-self-test --boardSummary`，Windows 端只看最新心跳也能让 Mac 先跑本地 mock browser 自测；不认证、不发密码/call/input/inject。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端本机发送文件时，顶部剪贴板状态和全屏/监看浮层现在显示已发/总量、百分比、速度和预计剩余时间；不改协议，不实现断点续传。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-19 继续推进 | Windows 控制端远端文件接收速度/ETA 现在优先使用最近分块样本滑动平均；托盘、全屏/监看浮层和复制/导出诊断共用，不改协议，不实现断点续传。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 继续推进 | Windows 控制端远端文件接收托盘、全屏/监看浮层剪贴板状态和复制/导出诊断现在显示接收速度与预计剩余时间；接收侧体验补强，不改协议，不实现断点续传。 |

@@ -17,6 +17,34 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
+本轮目标：让最新 `MacHeartbeat=` 摘要直接暴露本地 Mac client browser self-test 入口，方便早上恢复时先跑安全 mock 自测。
+完成内容：
+- `check-mac-heartbeat --boardSummary` 现在输出 `MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test.mjs --boardSummary`。
+- `commands.macClientBrowserSelfTestCommand` 进入 JSON 命令集合，保持无密码、无认证、无 Agent Link Board call、无 input/inject。
+- 交接文档、下一步清单和任务板同步说明：Windows 端只看最新心跳时，也能让 Mac 端先跑本地 mock browser 自测，再继续正式真连。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000`（失败点：offline board summary 未包含 `MacClientBrowserSelfTest=`）。
+- 实现后复跑：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000`
+- 收尾验证：`node --check scripts/mac/check-mac-heartbeat.mjs`、`node --check scripts/mac/test-mac-heartbeat.mjs`、`node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`、`node scripts/mac/check-mac-heartbeat.mjs --host 127.0.0.1 --port 43770 --clientHost 127.0.0.1 --clientPort 5188 --checkBoard --boardSummary`、`node scripts/mac/test-mac-client-browser-self-test.mjs --boardSummary`、`git diff --check`、行首冲突扫描。
+遗留问题：
+- 这轮只补 Mac heartbeat 的安全自测入口；真实 Mac 控 Windows 长时间观感、真实 Windows host 音视频延迟和大文件传输仍按下一步清单继续。
+下一步建议：
+- 白天恢复时先看 Agent Link Board 最新 `MacHeartbeat=`，需要快速确认 Mac client 页面链路时直接复制 `MacClientBrowserSelfTest=`；需要真连 Windows 时再走 `MacClientFormalChecklist=` / `MacClientFormalSmoke=`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
 ## 2026-06-19 Windows Codex
 
 日期：2026-06-19 继续推进

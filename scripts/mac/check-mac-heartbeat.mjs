@@ -79,7 +79,9 @@ Machine-readable JSON fields:
   macHost                     Read-only /discovery status and key runtime data.
   macClient                   Read-only local Mac client page status.
   board                       Agent Link Board readability and currentCall.
-  commands                    Secret-free next-step commands for user action.
+  commands                    Secret-free next-step commands for user action,
+                              including the local Mac client mock browser
+                              self-test.
 
 Examples:
   node scripts/mac/check-mac-heartbeat.mjs --checkBoard --boardSummary
@@ -500,6 +502,7 @@ function buildCommands(args) {
     macClientDiscoverWindowsCommand: "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary",
     macClientFormalChecklistCommand: "node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary",
     macClientFormalSmokeCommand: "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary",
+    macClientBrowserSelfTestCommand: "node scripts/mac/test-mac-client-browser-self-test.mjs --boardSummary",
   };
 }
 
@@ -569,6 +572,7 @@ function makeBoardSummary(report) {
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
     `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
     `MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}.`,
+    `MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}.`,
     "No password was requested or sent; no WebSocket auth/input/inject was attempted.",
   ].join(" ");
 }
