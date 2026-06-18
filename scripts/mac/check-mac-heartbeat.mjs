@@ -592,6 +592,7 @@ function safeSnippet(text) {
 function buildCommands(args) {
   return {
     macHeartbeatCommand: `node scripts/mac/check-mac-heartbeat.mjs --host ${args.host} --port ${args.port} --clientHost ${args.clientHost} --clientPort ${args.clientPort} --checkBoard --boardSummary`,
+    macHostStopCommand: `node scripts/mac/start-mac-host.mjs --stop --host ${args.host} --port ${args.port}`,
     macHostSafeStartCommand: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port}`,
     macClientPageStatusCommand: "node scripts/mac/start-mac-client.mjs --status --boardSummary",
     macClientDiagnosticsCommand: "node scripts/mac/check-mac-client-readiness.mjs --probeClientServer --checkBoard --boardSummary",
@@ -678,6 +679,7 @@ function makeBoardSummary(report) {
     `MacHeartbeat=status=${report.status}; checkedAt=${checkedAt}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}.${evidence}`,
     suggestedAction,
     `MacHeartbeatRerun=${report.commands.macHeartbeatCommand}.`,
+    `MacHostStop=${report.commands.macHostStopCommand}.`,
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
     `MacClientPage=${report.commands.macClientPageStatusCommand}.`,
     `MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}.`,

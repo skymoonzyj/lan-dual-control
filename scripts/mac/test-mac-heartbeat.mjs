@@ -381,6 +381,10 @@ async function checkOnlineStaleHostBuildWarning(args) {
       assertIncludes(payload.boardSummary || "", "warnings=mac-host-build-stale", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "restart recommended", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "hostRuntimeChanges=", "stale build board summary");
+      assertIncludes(payload.boardSummary || "", "MacHostStop=node scripts/mac/start-mac-host.mjs --stop", "stale build board summary");
+      assertIncludes(payload.commands?.macHostStopCommand || "", "start-mac-host.mjs --stop", "stale build commands");
+      assertIncludes(payload.commands?.macHostStopCommand || "", `--host 127.0.0.1 --port ${hostPort}`, "stale build commands");
+      assertNotIncludes(payload.commands?.macHostStopCommand || "", "--promptPassword", "stale build commands");
       assertNoSecrets(`${result.stdout}\n${result.stderr}`, "stale build output");
     });
   });
