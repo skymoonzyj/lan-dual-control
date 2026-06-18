@@ -50,6 +50,37 @@
 
 日期：2026-06-18 继续推进
 开发端：Mac Codex
+本轮目标：把 Mac 恢复总览里的 `MacClientFormalChecklist=` 对齐成无占位 discovery 命令，避免早上开工第一屏仍复制 bare checklist。
+完成内容：
+- `check-mac-resume-status` 的 `commands.macClientFormalChecklistCommand` / `MacClientFormalChecklist=` 从 `check-mac-client-formal-status --boardSummary` 改为 `check-mac-client-formal-status --discover --port 43770 --boardSummary`。
+- `check-mac-resume-status --help` 的字段说明补充该命令会先按默认 Windows host 端口发现目标，再输出人工真连清单。
+- `test-mac-resume-status` 增加 JSON 和 `--boardSummary` 断言，要求该命令包含 `--discover`、`--port 43770`、`--boardSummary`，且不含密码、`--sendCall`、`--json` 或 `<Windows IP>` 占位。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000`（失败点：offline JSON Mac client formal checklist command 不含 `--discover`）
+- 语法检查：`node --check scripts/mac/check-mac-resume-status.mjs`、`node --check scripts/mac/test-mac-resume-status.mjs`
+- 实现后复跑：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000`
+- 统一 Mac help 安全自检：`node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- 真实只读恢复摘要：`node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary`（确认输出 `MacClientFormalChecklist=... --discover --port 43770 --boardSummary`）
+- 最终收尾：`git diff --check`；`rg -n "^(<<<<<<<|=======|>>>>>>>)" docs scripts/mac`
+遗留问题：
+- 本轮只对齐恢复总览建议命令；不启动 Windows 连接、不认证、不弹密码、不发送 call/input/inject。
+下一步建议：
+- 白天继续时，开工第一屏可跑 `node scripts/mac/check-mac-resume-status.mjs --checkBoard --boardSummary`，直接复制其中 `MacClientFormalChecklist=` 做无密 discovery checklist。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
 本轮目标：把 `start-mac-client` 本地页面状态入口里的 `MacClientFormalChecklist=` 对齐成无占位自动 discovery 命令，避免恢复现场复制 `<Windows IP>` 模板。
 完成内容：
 - `macClientFormalStatusCommand` / `MacClientFormalChecklist=` 从 `check-mac-client-formal-status --host <Windows IP> --port 43770 --boardSummary` 改为 `check-mac-client-formal-status --discover --port 43770 --boardSummary`。

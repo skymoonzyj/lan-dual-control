@@ -119,8 +119,10 @@ Machine-readable JSON fields:
                              input.
   commands.macClientFormalChecklistCommand
                              Secret-free Mac controls Windows formal checklist
-                             command; it prints the manual true-test checklist
-                             without authenticating or sending input.
+                             command; it discovers Windows hosts on the
+                             default port first, then prints the manual
+                             true-test checklist without authenticating or
+                             sending input.
   commands.macClientFormalSmokeCommand
                              Secret-free Mac controls Windows browser-smoke
                              preflight command; it discovers Windows hosts and
@@ -881,7 +883,7 @@ function makeMacClientDiscoverWindowsCommand() {
 }
 
 function makeMacClientFormalChecklistCommand() {
-  return "node scripts/mac/check-mac-client-formal-status.mjs --boardSummary";
+  return "node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary";
 }
 
 function makeMacClientFormalSmokeCommand() {

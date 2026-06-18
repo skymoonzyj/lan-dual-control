@@ -197,6 +197,8 @@ function assertBoardSummaryShape(text, label) {
   assert(/local loopback/.test(text), `${label} should keep reverse grant guidance on loopback`);
   assert(/MacClientFormalChecklist=/.test(text), `${label} should include Mac client formal checklist guidance`);
   assert(/check-mac-client-formal-status\.mjs/.test(text), `${label} should include the Mac client formal checklist command`);
+  assert(/MacClientFormalChecklist=.*--discover/.test(text), `${label} should make Mac client formal checklist discover Windows safely`);
+  assert(/MacClientFormalChecklist=.*--port 43770/.test(text), `${label} should keep the default Windows host port explicit for discovery`);
   assert(/MacClientFormalSmoke=/.test(text), `${label} should include Mac client formal smoke preflight guidance`);
   assert(/run-mac-client-formal-smoke\.mjs/.test(text), `${label} should include the Mac client formal smoke preflight command`);
   assert(/MacClientBrowserSelfTest=/.test(text), `${label} should include Mac client browser self-test guidance`);
@@ -394,11 +396,15 @@ function assertMacClientReverseRehearsalAction(text, label) {
 
 function assertMacClientFormalChecklistCommand(command, label) {
   assert(/check-mac-client-formal-status\.mjs/.test(command), `${label} should use check-mac-client-formal-status`);
+  assert(command.includes("--discover"), `${label} should discover Windows hosts safely`);
+  assert(command.includes("--port 43770"), `${label} should keep the default Windows host port explicit`);
   assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
   assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
   assert(!command.includes("--password"), `${label} should not embed a password argument`);
   assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
   assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+  assert(!command.includes("--json"), `${label} should default to one-line boardSummary output`);
+  assert(!command.includes("<Windows IP>"), `${label} should not require a placeholder Windows IP`);
 }
 
 function assertMacClientFormalSmokeCommand(command, label) {
