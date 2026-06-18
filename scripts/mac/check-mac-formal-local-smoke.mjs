@@ -30,6 +30,8 @@ const defaults = {
   boardSummary: false,
 };
 
+const formalTargetMaxScreenFps = 60;
+
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
 }
@@ -411,13 +413,88 @@ function formatProbeSummary(probe) {
   return "ok";
 }
 
+function makeMacHostSafeStartCommand(args) {
+  return [
+    "node scripts/mac/start-mac-host.mjs",
+    "--promptPassword",
+    "--requirePassword",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    String(args.port),
+  ].join(" ");
+}
+
+function makeMacMaxFpsSafeStartCommand(args) {
+  return [
+    "node scripts/mac/start-mac-host.mjs",
+    "--promptPassword",
+    "--requirePassword",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    String(args.port),
+    "--maxScreenFps",
+    String(formalTargetMaxScreenFps),
+  ].join(" ");
+}
+
+function makeMacHostReadinessCommand(args) {
+  return [
+    "node scripts/mac/check-mac-host-readiness.mjs",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--checkBoard",
+    "--boardSummary",
+  ].join(" ");
+}
+
+function makeMacUnattendedFormalCommand(args) {
+  return [
+    "node scripts/mac/check-mac-unattended-status.mjs",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--requireLaunchAgentMaxFps",
+    "--requireLaunchAgentLoaded",
+    "--boardSummary",
+  ].join(" ");
+}
+
+function makeRerunBoardSummaryCommand(args) {
+  return [
+    "node scripts/mac/check-mac-formal-local-smoke.mjs",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--promptPassword",
+    "--boardSummary",
+  ].join(" ");
+}
+
+function makeCommands(args) {
+  return {
+    macHostReadinessCommand: makeMacHostReadinessCommand(args),
+    macHostSafeStartCommand: makeMacHostSafeStartCommand(args),
+    macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
+    macUnattendedFormalCommand: makeMacUnattendedFormalCommand(args),
+    rerunBoardSummaryCommand: makeRerunBoardSummaryCommand(args),
+  };
+}
+
 function makeReport(args, probes) {
   const failed = probes.filter((probe) => !probe.ok);
+  const commands = makeCommands(args);
   return {
     ok: failed.length === 0,
     checkedAt: new Date().toISOString(),
     target: { host: args.host, port: args.port },
     args: summarizeArgs(args),
+    commands,
     probes,
     summary: {
       passed: probes.filter((probe) => probe.ok).length,
@@ -429,16 +506,22 @@ function makeReport(args, probes) {
       ].filter(Boolean),
       noInject: true,
     },
-    boardSummary: makeBoardSummary(args, probes, failed),
+    boardSummary: makeBoardSummary(args, probes, failed, commands),
   };
 }
 
-function makeBoardSummary(args, probes, failed) {
+function makeBoardSummary(args, probes, failed, commands) {
   const status = failed.length === 0 ? "passed" : `failed ${failed.length}`;
   const parts = probes.map((probe) => `${probe.id}=${probe.ok ? formatProbeSummary(probe) : "FAIL"}`);
+  const probeSummary = parts.length > 0 ? parts.join("; ") : "no probes run";
   return [
-    `Mac formal local smoke ${status}: host=${args.host}:${args.port}; ${parts.join("; ")}.`,
+    `Mac formal local smoke ${status}: host=${args.host}:${args.port}; ${probeSummary}.`,
     "No inject was executed; password was not printed.",
+    `MacHostReadiness=${commands.macHostReadinessCommand}.`,
+    `MacHostSafeStart=${commands.macHostSafeStartCommand}.`,
+    `MacMaxFpsSafeStart=${commands.macMaxFpsSafeStartCommand}.`,
+    `MacUnattendedFormal=${commands.macUnattendedFormalCommand}.`,
+    `RerunFormalLocalSmoke=${commands.rerunBoardSummaryCommand}.`,
   ].join(" ");
 }
 
@@ -472,6 +555,10 @@ function printReport(args, report) {
     print(args, probe.ok ? "OK" : "FAIL", `${probe.label}: ${formatProbeSummary(probe)}`);
   }
   print(args, report.ok ? "OK" : "FAIL", report.boardSummary);
+  print(args, "NEXT", `Mac host readiness: ${report.commands.macHostReadinessCommand}`);
+  print(args, "NEXT", `Mac host safe start: ${report.commands.macHostSafeStartCommand}`);
+  print(args, "NEXT", `Mac 60Hz safe foreground start: ${report.commands.macMaxFpsSafeStartCommand}`);
+  print(args, "NEXT", `Mac unattended formal 60Hz gate: ${report.commands.macUnattendedFormalCommand}`);
 }
 
 async function main() {

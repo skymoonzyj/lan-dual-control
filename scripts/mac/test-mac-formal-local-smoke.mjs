@@ -81,6 +81,45 @@ function assertNoSecretLikeText(text, label) {
   assert(!/token=/i.test(text), `${label} should not print token-like text`);
 }
 
+function assertSecretFreeCommand(command, label) {
+  const text = String(command || "");
+  assert(text.length > 0, `${label} should be present`);
+  assert(!/\s--password\s+/i.test(text), `${label} should not include a password argv`);
+  assert(!/super-secret-formal-local-smoke/.test(text), `${label} should not leak the test password`);
+  assert(!/token|secret|passwd|pwd/i.test(text), `${label} should not include secret-like words`);
+}
+
+function assertMacHostSafeStartCommand(command, label, expectedPort) {
+  assertSecretFreeCommand(command, label);
+  assert(command.includes("node scripts/mac/start-mac-host.mjs"), `${label} should use start-mac-host`);
+  assert(command.includes("--promptPassword"), `${label} should prompt locally`);
+  assert(command.includes("--requirePassword"), `${label} should require a formal password`);
+  assert(command.includes("--host 0.0.0.0"), `${label} should bind to all LAN interfaces`);
+  assert(command.includes(`--port ${expectedPort}`), `${label} should preserve the checked port`);
+}
+
+function assertMacMaxFpsSafeStartCommand(command, label, expectedPort) {
+  assertMacHostSafeStartCommand(command, label, expectedPort);
+  assert(command.includes("--maxScreenFps 60"), `${label} should target formal 60Hz`);
+}
+
+function assertMacUnattendedFormalCommand(command, label, expectedPort) {
+  assertSecretFreeCommand(command, label);
+  assert(command.includes("node scripts/mac/check-mac-unattended-status.mjs"), `${label} should use unattended status`);
+  assert(command.includes(`--port ${expectedPort}`), `${label} should preserve the checked port`);
+  assert(command.includes("--requireLaunchAgentMaxFps"), `${label} should require LaunchAgent max FPS`);
+  assert(command.includes("--requireLaunchAgentLoaded"), `${label} should require loaded LaunchAgent`);
+  assert(command.includes("--boardSummary"), `${label} should be board-summary ready`);
+}
+
+function assertLocalSmokeCommands(payload, expectedPort, label) {
+  assertMacHostSafeStartCommand(payload.commands?.macHostSafeStartCommand || "", `${label} MacHostSafeStart`, expectedPort);
+  assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand || "", `${label} MacMaxFpsSafeStart`, expectedPort);
+  assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand || "", `${label} MacUnattendedFormal`, expectedPort);
+  assertSecretFreeCommand(payload.commands?.macHostReadinessCommand || "", `${label} MacHostReadiness`);
+  assertSecretFreeCommand(payload.commands?.rerunBoardSummaryCommand || "", `${label} rerun command`);
+}
+
 function runSmoke(extraArgs, args, env = {}) {
   return spawnSync(process.execPath, [script, ...extraArgs], {
     cwd: repoRoot,
@@ -524,10 +563,15 @@ async function checkFakeHostSuccess(args) {
     assert(payload.ok === true, "fake host payload should report ok=true");
     assert(payload.summary?.passed === 3, "fake host should pass all three probes");
     assert(payload.summary?.noInject === true, "fake host summary should preserve noInject=true");
+    assertLocalSmokeCommands(payload, port, "fake host success");
     assert(payload.probes?.some((probe) => probe.id === "video" && probe.ok), "video probe should pass");
     assert(payload.probes?.some((probe) => probe.id === "audio" && probe.ok), "audio probe should pass");
     assert(payload.probes?.some((probe) => probe.id === "inputLog" && probe.ok && probe.input?.acknowledged === 16), "input-log probe should acknowledge all events");
     assert(/No inject was executed/.test(payload.boardSummary || ""), "boardSummary should include inject safety note");
+    assert(payload.boardSummary.includes("MacHostSafeStart="), "boardSummary should include safe start command");
+    assert(payload.boardSummary.includes("MacMaxFpsSafeStart="), "boardSummary should include 60Hz safe start command");
+    assert(payload.boardSummary.includes("MacUnattendedFormal="), "boardSummary should include formal unattended gate");
+    assert(payload.boardSummary.includes("RerunFormalLocalSmoke="), "boardSummary should include rerun command");
     assertNoSecretLikeText(outputOf(result), "fake host success output");
   });
   print("OK", "Temporary fake Mac host passes video/audio/input-log aggregate smoke");
@@ -564,6 +608,10 @@ async function checkFakeHostBoardSummary(args) {
     assert(/Mac formal local smoke passed/.test(lines[0]), "boardSummary should report passed");
     assert(/video=/.test(lines[0]) && /audio=/.test(lines[0]) && /inputLog=/.test(lines[0]), "boardSummary should include all probes");
     assert(/No inject was executed/.test(lines[0]), "boardSummary should include inject safety note");
+    assert(lines[0].includes(`MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port}`), "boardSummary should include safe start command");
+    assert(lines[0].includes(`MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port} --maxScreenFps 60`), "boardSummary should include 60Hz safe start command");
+    assert(lines[0].includes(`MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port ${port} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`), "boardSummary should include unattended formal gate");
+    assert(lines[0].includes(`RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port ${port} --promptPassword --boardSummary`), "boardSummary should include rerun command");
     assert(/\[INFO\] Running H\.264 video/.test(result.stderr), "boardSummary progress should go to stderr");
     assertNoSecretLikeText(outputOf(result), "fake host boardSummary output");
   });
@@ -613,6 +661,8 @@ function checkJsonFailureParseable(args) {
   assert(result.status === 0, "all-skipped JSON run should complete even when target is offline");
   assert(payload.ok === true, "all-skipped JSON payload should report ok=true");
   assert(payload.summary?.skipped?.length === 3, "all-skipped JSON should list skipped probes");
+  assert(payload.boardSummary?.includes("no probes run"), "all-skipped JSON boardSummary should explain no probes ran");
+  assertLocalSmokeCommands(payload, 9, "all-skipped JSON");
   assertNoSecretLikeText(outputOf(result), "all-skipped JSON run");
   print("OK", "All-skipped JSON output is parseable and target-independent");
 }
