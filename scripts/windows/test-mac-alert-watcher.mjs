@@ -517,6 +517,29 @@ async function checkCodexReconnectStuckStatusAlerts(args) {
   console.log("[OK] Codex reconnect-stuck status alerts");
 }
 
+async function checkMacHeartbeatReasonAlerts(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Watchdog": {
+        role: "Mac 端",
+        status: "blocked",
+        note: "MacHeartbeat=status=blocked; device=Mac; codex=mac-codex-stale age=700s; macHost=online; macClient=offline; board=ok; blockers=mac-codex-stale warnings=none reason=mac-codex-stale. MacHeartbeatRerun=node scripts/mac/check-mac-heartbeat.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary.",
+        updatedAt: new Date().toISOString(),
+      },
+      "Mac Watchdog Warning": {
+        role: "Mac 端",
+        status: "warning",
+        note: "MacHeartbeat=status=warning; device=Mac; codex=codex-reconnect-signal; blockers=none warnings=codex-reconnect-signal reason=codex-reconnect-signal.",
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "Mac heartbeat reason status");
+  assertIncludes(output, "reason=mac-codex-stale", "Mac heartbeat stale reason");
+  assertIncludes(output, "reason=codex-reconnect-signal", "Mac heartbeat reconnect signal reason");
+  console.log("[OK] Mac heartbeat reason ids alert");
+}
+
 async function checkReverseGrantStatusAlerts(args) {
   const output = await runWatcherAgainst(baseState({
     statuses: {
@@ -999,6 +1022,7 @@ async function main() {
   await checkCodexWorkStatusStaleAlerts(args);
   await checkMacHeartbeatAndHostUnreachableAlerts(args);
   await checkCodexReconnectStuckStatusAlerts(args);
+  await checkMacHeartbeatReasonAlerts(args);
   await checkReverseGrantStatusAlerts(args);
   await checkMacUnattendedStatusAlerts(args);
   await checkMacUnattendedOkStatusIgnored(args);

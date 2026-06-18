@@ -263,7 +263,9 @@ const macUnattendedRiskLabels = {
   "mac-heartbeat-stale": "Mac 心跳过期，可能卡住",
   "mac-watchdog-stale": "Mac watchdog 心跳过期",
   "mac-api-error": "Mac/API 网络错误",
+  "mac-codex-stale": "Mac Codex 长时间无新进展",
   "mac-codex-stuck": "Mac Codex 可能卡住",
+  "codex-reconnect-signal": "Mac Codex 出现重连异常信号",
   "codex-reconnect-stuck": "Mac Codex 可能卡在重新连接 5/5",
   "codex-stream-disconnected": "检测到 stream disconnected before completion",
   "codex-backend-request-error": "Codex 后端请求中断",
@@ -3036,8 +3038,14 @@ function parseMacUnattendedAttention(text) {
   if (hasCodexStreamDisconnected) {
     risks.unshift("codex-stream-disconnected");
   }
+  if (/codex-reconnect-signal/i.test(source)) {
+    risks.unshift("codex-reconnect-signal");
+  }
   if (hasCodexReconnectStuck) {
     risks.unshift("codex-reconnect-stuck");
+  }
+  if (/mac-codex-stale/i.test(source)) {
+    risks.unshift("mac-codex-stale");
   }
   if (hasCodexReconnectStuck || hasCodexStreamDisconnected || hasCodexBackendRequestError) {
     risks.push("codex-manual-retry");

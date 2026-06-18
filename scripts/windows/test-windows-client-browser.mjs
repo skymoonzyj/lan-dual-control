@@ -1498,6 +1498,8 @@ async function verifyDesktopOnlyHostPanel(session) {
         "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary",
         "run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
         "MacHeartbeat=stale heartbeat missing; Mac host /discovery unreachable ECONNREFUSED; HTTP 502 Bad Gateway",
+        "MacHeartbeat=status=blocked; codex=mac-codex-stale; blockers=mac-codex-stale warnings=none reason=mac-codex-stale",
+        "MacHeartbeat=status=warning; codex=codex-reconnect-signal; blockers=none warnings=codex-reconnect-signal reason=codex-reconnect-signal",
         "MacHeartbeat=blocked reason=codex-reconnect-stuck evidence=正在重新连接 5/5 / stream disconnected before completion: error sending request for url (https://chatgpt.com/backend-api/codex/responses) suggestedAction=请用户查看 Mac Codex 窗口",
       ].join("; ");
       const macAlertFindingSummary = "Mac side status alert - Mac Codex | " + macAlertFindingText;
@@ -3098,6 +3100,8 @@ async function verifyReconnectControls(session) {
         "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary",
         "run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
         "MacHeartbeat=stale heartbeat missing; Mac host /discovery unreachable ECONNREFUSED; HTTP 502 Bad Gateway",
+        "MacHeartbeat=status=blocked; codex=mac-codex-stale; blockers=mac-codex-stale warnings=none reason=mac-codex-stale",
+        "MacHeartbeat=status=warning; codex=codex-reconnect-signal; blockers=none warnings=codex-reconnect-signal reason=codex-reconnect-signal",
         "MacHeartbeat=blocked reason=codex-reconnect-stuck evidence=正在重新连接 5/5 / stream disconnected before completion: error sending request for url (https://chatgpt.com/backend-api/codex/responses) suggestedAction=请用户查看 Mac Codex 窗口",
       ].join("; ");
 
@@ -3297,6 +3301,8 @@ async function verifyReconnectControls(session) {
             exportText.includes("WindowsOpenOneTimeReverseGrant=pwsh") &&
             exportText.includes("MacHeartbeat=stale") &&
             exportText.includes("HTTP 502 Bad Gateway") &&
+            exportText.includes("Mac Codex 长时间无新进展") &&
+            exportText.includes("Mac Codex 出现重连异常信号") &&
             exportText.includes("reason=codex-reconnect-stuck") &&
             exportText.includes("warnings=board"),
           macAlertCheckedAt: exportText.includes("- Mac 提醒最近检查："),
@@ -3369,6 +3375,8 @@ async function verifyReconnectControls(session) {
           copiedText.includes("Mac 心跳过期，可能卡住") &&
           copiedText.includes("Mac host 不可达") &&
           copiedText.includes("Mac/API 网络错误") &&
+          copiedText.includes("Mac Codex 长时间无新进展") &&
+          copiedText.includes("Mac Codex 出现重连异常信号") &&
           copiedText.includes("Mac Codex 可能卡在重新连接 5/5") &&
           copiedText.includes("检测到 stream disconnected before completion") &&
           copiedText.includes("launch-agent-max-fps") &&

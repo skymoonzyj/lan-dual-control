@@ -21,6 +21,53 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows 侧消费 Mac `check-mac-heartbeat` 新 reason，并把心跳入口放进恢复总览。
+完成内容：
+- `watch-codex-link-mac-alerts.ps1` 新增 `mac-codex-stale` 和 `codex-reconnect-signal` 直接提醒规则。
+- Windows 控制端 Mac 提醒区、快速摘要、复制/导出诊断新增中文风险：“Mac Codex 长时间无新进展”“Mac Codex 出现重连异常信号”。
+- `check-windows-resume-status` JSON、普通输出和 `--boardSummary` 新增 `MacHeartbeat=node scripts/mac/check-mac-heartbeat.mjs --host <Mac IP> --port <port> --server <Agent Link Board> --checkBoard --boardSummary`。
+- Node/PowerShell resume 回归、watcher 回归和 Windows client diagnostics-only 覆盖这些新字段/文案。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- `node scripts/windows/check-windows-resume-status.mjs --noDiscover --host 192.168.31.122 --port 43770 --boardSummary`
+- PowerShell AST 解析通过。
+- `git diff --check`
+- 行首冲突扫描无匹配。
+遗留问题：
+- 这轮只消费 Mac heartbeat 摘要文本和提供命令入口；真正独立常驻 heartbeat/watchdog 后台化仍由后续 Mac/Windows 桌面壳共同决定。
+下一步建议：
+- 真实联调时让 Mac 端跑 `MacHeartbeat=` 摘要，再观察 Windows watcher、Windows 控制端 Mac 提醒区和监看小窗状态是否及时显示 stale/reconnect 风险。
+是否改了协议：否。
+是否需要另一端配合：不阻塞；后续真实体验验收时需要 Mac 端运行或定时上报 `check-mac-heartbeat` 摘要。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：落地 Windows 控 Mac 页面内“Mac 监看”小窗第一版。
 完成内容：
 - Windows 控制端顶部工具栏新增“监看小窗”入口，悬浮控制中心也新增“监看”按钮。

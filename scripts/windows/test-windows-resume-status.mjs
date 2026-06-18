@@ -286,6 +286,7 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "discover-lan-hosts.mjs --noLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "discover-lan-hosts.ps1 -NoLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-host-readiness.mjs --host 192.168.31.122 --port 43770 --checkBoard --boardSummary", `help ${flag}`);
+    assertIncludes(result.stdout, "check-mac-heartbeat.mjs --host 192.168.31.122 --port 43770 --checkBoard --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "formal manual checklist command", `help ${flag}`);
@@ -343,6 +344,12 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.macHostReadinessCommand || "").includes(`--port ${port}`), "mock JSON Mac host readiness command should use discovered mock port");
     assert(String(payload.commands?.macHostReadinessCommand || "").includes("--checkBoard"), "mock JSON Mac host readiness command should read Agent Link Board");
     assert(String(payload.commands?.macHostReadinessCommand || "").includes("--boardSummary"), "mock JSON Mac host readiness command should be board-safe");
+    assert(String(payload.commands?.macHeartbeatCommand || "").includes("check-mac-heartbeat.mjs"), "mock JSON should include Mac heartbeat command");
+    assert(String(payload.commands?.macHeartbeatCommand || "").includes("--host 127.0.0.1"), "mock JSON Mac heartbeat command should target discovered host");
+    assert(String(payload.commands?.macHeartbeatCommand || "").includes(`--port ${port}`), "mock JSON Mac heartbeat command should use discovered mock port");
+    assert(String(payload.commands?.macHeartbeatCommand || "").includes("--server http://192.168.31.68:17888"), "mock JSON Mac heartbeat command should include board server");
+    assert(String(payload.commands?.macHeartbeatCommand || "").includes("--checkBoard"), "mock JSON Mac heartbeat command should read Agent Link Board");
+    assert(String(payload.commands?.macHeartbeatCommand || "").includes("--boardSummary"), "mock JSON Mac heartbeat command should be board-safe");
     assert(String(payload.commands?.macFormalLocalSmokeCommand || "").includes("check-mac-formal-local-smoke.mjs"), "mock JSON should include Mac formal local smoke command");
     assert(String(payload.commands?.macFormalLocalSmokeCommand || "").includes("--host 127.0.0.1"), "mock JSON Mac formal local smoke command should target discovered host");
     assert(String(payload.commands?.macFormalLocalSmokeCommand || "").includes(`--port ${port}`), "mock JSON Mac formal local smoke command should use discovered mock port");
@@ -597,6 +604,9 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "MacHostReadiness=", "board summary");
     assertIncludes(result.stdout, "check-mac-host-readiness.mjs --host 127.0.0.1", "board summary");
     assertIncludes(result.stdout, `--port ${port} --checkBoard --boardSummary`, "board summary");
+    assertIncludes(result.stdout, "MacHeartbeat=", "board summary");
+    assertIncludes(result.stdout, "check-mac-heartbeat.mjs --host 127.0.0.1", "board summary");
+    assertIncludes(result.stdout, `--port ${port} --server http://192.168.31.68:17888 --checkBoard --boardSummary`, "board summary");
     assertIncludes(result.stdout, "MacFormalLocalSmoke=", "board summary");
     assertIncludes(result.stdout, `check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port ${port} --promptPassword --boardSummary`, "board summary");
     assertNotIncludes(result.stdout, "--password", "board summary Mac formal local smoke should not include password argv");

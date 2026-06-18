@@ -96,6 +96,8 @@ $urgentPatterns = @(
     "Bad Gateway",
     "Gateway Timeout",
     "\b(ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|network timeout|request timeout|API error)\b",
+    "mac-codex-stale",
+    "codex-reconnect-signal",
     "codex-reconnect-stuck",
     "正在重新连接\s*5/5",
     "stream disconnected before completion",

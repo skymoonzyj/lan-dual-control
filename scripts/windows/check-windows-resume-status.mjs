@@ -66,6 +66,9 @@ and Windows local reverse-control grant guidance are visible in Windows resume
 JSON, human output, and one-line board summaries.
 It also includes a secret-free MacHostReadiness command so Windows can ask the
 Mac side to run the detailed host readiness/status check before formal testing.
+It also includes a secret-free MacHeartbeat command so Windows can ask the Mac
+side to publish the independent heartbeat/watchdog summary for stale Codex,
+reconnect, Mac host, Mac client, and Agent Link Board status.
 The report also surfaces the formal manual checklist command and the checklist
 ids so a resume handoff can immediately verify connection, video, audio,
 clipboard, input_ack, and diagnostics in that order.
@@ -113,6 +116,7 @@ Examples:
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
   node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host 192.168.31.122 --port 43770 --requireMacHost --boardSummary
   node scripts/mac/check-mac-host-readiness.mjs --host 192.168.31.122 --port 43770 --checkBoard --boardSummary
+  node scripts/mac/check-mac-heartbeat.mjs --host 192.168.31.122 --port 43770 --checkBoard --boardSummary
   node scripts/mac/check-mac-formal-local-smoke.mjs --host 192.168.31.122 --port 43770 --promptPassword --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary
@@ -1325,6 +1329,14 @@ function makeCommands(args, preflight) {
     "--checkBoard",
     "--boardSummary",
   ].join(" ");
+  const macHeartbeatCommand = [
+    "node scripts/mac/check-mac-heartbeat.mjs",
+    "--host", host,
+    "--port", String(port),
+    "--server", args.server,
+    "--checkBoard",
+    "--boardSummary",
+  ].join(" ");
   const macFormalLocalSmokeCommand = [
     "node scripts/mac/check-mac-formal-local-smoke.mjs",
     "--host", host,
@@ -1419,6 +1431,7 @@ function makeCommands(args, preflight) {
     macHostDiscoveryBoardSummary,
     macHostDiscoveryPowerShellBoardSummary,
     macHostReadinessCommand,
+    macHeartbeatCommand,
     macFormalLocalSmokeCommand,
     macUnattendedStatusCommand,
     macUnattendedFormalStatusCommand,
@@ -1739,6 +1752,7 @@ function makeBoardSummary(report) {
     `MacDiscovery=${report.commands.macHostDiscoveryBoardSummary}.`,
     `MacDiscoveryPs=${report.commands.macHostDiscoveryPowerShellBoardSummary}.`,
     `MacHostReadiness=${report.commands.macHostReadinessCommand}.`,
+    `MacHeartbeat=${report.commands.macHeartbeatCommand}.`,
     `MacFormalLocalSmoke=${macFormalLocalSmokeCommand}.`,
     `MacUnattended=${report.commands.macUnattendedStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalStatusCommand}.`,
@@ -1985,6 +1999,7 @@ function printHuman(report) {
   console.log(`  ${report.commands.macHostDiscoveryBoardSummary}`);
   console.log(`  ${report.commands.macHostDiscoveryPowerShellBoardSummary}`);
   console.log(`  ${report.commands.macHostReadinessCommand}`);
+  console.log(`  MacHeartbeat=${report.commands.macHeartbeatCommand}`);
   console.log(`  MacFormalLocalSmoke=${report.board.macFormalLocalSmoke?.command || report.commands.macFormalLocalSmokeCommand}`);
   console.log(`  ${report.commands.macUnattendedStatusCommand}`);
   console.log(`  ${report.commands.macUnattendedFormalStatusCommand}`);

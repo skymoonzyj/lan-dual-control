@@ -212,6 +212,8 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "--requireMacHost --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "Mac host readiness command", "PowerShell wrapper help");
   assertIncludes(output, "check-mac-host-readiness.mjs --host <Mac IP> --port 43770 --checkBoard --boardSummary", "PowerShell wrapper help");
+  assertIncludes(output, "Mac heartbeat/watchdog command", "PowerShell wrapper help");
+  assertIncludes(output, "check-mac-heartbeat.mjs --host <Mac IP> --port 43770 --checkBoard --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "Mac formal local smoke command", "PowerShell wrapper help");
   assertIncludes(output, "check-mac-formal-local-smoke.mjs --host <Mac IP> --port 43770 --promptPassword --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "Mac-side unattended/startup status command", "PowerShell wrapper help");
@@ -297,6 +299,11 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.macHostReadinessCommand, `--port ${port}`, "mock JSON Mac host readiness command");
     assertIncludes(payload.commands?.macHostReadinessCommand, "--checkBoard", "mock JSON Mac host readiness command");
     assertIncludes(payload.commands?.macHostReadinessCommand, "--boardSummary", "mock JSON Mac host readiness command");
+    assertIncludes(payload.commands?.macHeartbeatCommand, "check-mac-heartbeat.mjs", "mock JSON Mac heartbeat command");
+    assertIncludes(payload.commands?.macHeartbeatCommand, "--host 127.0.0.1", "mock JSON Mac heartbeat command");
+    assertIncludes(payload.commands?.macHeartbeatCommand, `--port ${port}`, "mock JSON Mac heartbeat command");
+    assertIncludes(payload.commands?.macHeartbeatCommand, "--checkBoard", "mock JSON Mac heartbeat command");
+    assertIncludes(payload.commands?.macHeartbeatCommand, "--boardSummary", "mock JSON Mac heartbeat command");
     assertIncludes(payload.commands?.macFormalLocalSmokeCommand, "check-mac-formal-local-smoke.mjs", "mock JSON Mac formal local smoke command");
     assertIncludes(payload.commands?.macFormalLocalSmokeCommand, "--host 127.0.0.1", "mock JSON Mac formal local smoke command");
     assertIncludes(payload.commands?.macFormalLocalSmokeCommand, `--port ${port}`, "mock JSON Mac formal local smoke command");
@@ -507,6 +514,8 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "MacHostReadiness=", "PowerShell board summary");
     assertIncludes(output, "check-mac-host-readiness.mjs --host 127.0.0.1", "PowerShell board summary");
     assertIncludes(output, `--port ${port} --checkBoard --boardSummary`, "PowerShell board summary");
+    assertIncludes(output, "MacHeartbeat=", "PowerShell board summary");
+    assertIncludes(output, `check-mac-heartbeat.mjs --host 127.0.0.1 --port ${port}`, "PowerShell board summary");
     assertIncludes(output, "MacFormalLocalSmoke=", "PowerShell board summary");
     assertIncludes(output, `check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port ${port} --promptPassword --boardSummary`, "PowerShell board summary");
     assertNotIncludes(output, "--password", "PowerShell board summary Mac formal local smoke should not include password argv");
