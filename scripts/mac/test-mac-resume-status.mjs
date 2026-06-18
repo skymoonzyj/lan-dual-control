@@ -513,6 +513,9 @@ function checkOfflineJson(args) {
   assert(payload.macHeartbeatWatcher?.checked === true, "offline payload should include Mac heartbeat watcher status");
   assert(typeof payload.macHeartbeatWatcher.running === "boolean", "offline payload should include Mac heartbeat watcher running flag");
   assert(Array.isArray(payload.recommendations), "offline payload should include recommendations");
+  if (payload.macHeartbeatWatcher.running === false) {
+    assert(payload.recommendations.some((item) => item.id === "heartbeat-watcher-not-running"), "offline recommendations should flag a stopped Mac heartbeat watcher");
+  }
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary || "", "offline JSON media readiness command");
   assertMacHostSafeStartCommand(payload.commands?.macHostSafeStartCommand || "", "offline JSON Mac host safe start command");
   assert((payload.commands?.macHostSafeStartCommand || "").includes("--port 9"), "offline JSON Mac host safe start command should keep port");
@@ -699,6 +702,9 @@ function checkOnlineJson(args) {
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("连接密码"), "online JSON copy diagnostics action should mention password safety");
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "online JSON Mac script help command");
   assert(Array.isArray(payload.recommendations), "online payload should include recommendations");
+  if (payload.macHeartbeatWatcher.running === false) {
+    assert(payload.recommendations.some((item) => item.id === "heartbeat-watcher-not-running"), "online recommendations should flag a stopped Mac heartbeat watcher");
+  }
   assert(payload.recommendations.some((item) => /media baseline/.test(item.text) && /--probeMedia/.test(item.text)), "online recommendations should include media baseline command");
   assertBoardSummaryShape(payload.boardSummary || "", "online JSON boardSummary");
   print("OK", "Online resume status JSON includes runtime, permissions, capabilities, displays, LAN addresses, and buildDiff");

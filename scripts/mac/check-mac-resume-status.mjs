@@ -509,7 +509,7 @@ async function getBoardState(args) {
   }
 }
 
-function buildRecommendations({ git, host, board, args }) {
+function buildRecommendations({ git, host, board, macHeartbeatWatcher, args }) {
   const recommendations = [];
   if (board.checked && !board.ok) {
     recommendations.push({
@@ -529,6 +529,13 @@ function buildRecommendations({ git, host, board, args }) {
       level: args.requireClean ? "blocker" : "warning",
       id: "worktree-dirty",
       text: "Worktree has uncommitted changes; commit/stash or document them before pulling or pushing.",
+    });
+  }
+  if (macHeartbeatWatcher?.checked && macHeartbeatWatcher.ok && !macHeartbeatWatcher.running) {
+    recommendations.push({
+      level: "warning",
+      id: "heartbeat-watcher-not-running",
+      text: `Mac heartbeat background watcher is not running; start it when unattended board freshness matters: ${makeMacHeartbeatStartCommand()}.`,
     });
   }
   if (!host.online) {
@@ -1178,7 +1185,7 @@ async function main() {
   const host = await getMacHostStatus(args, currentBuildId);
   const board = await getBoardStatus(args);
   const macHeartbeatWatcher = getMacHeartbeatWatcherStatus(args);
-  const recommendations = buildRecommendations({ git, host, board, args });
+  const recommendations = buildRecommendations({ git, host, board, macHeartbeatWatcher, args });
   const report = {
     ok: computeOk({ git, host, board, recommendations, args }),
     checkedAt: new Date().toISOString(),
