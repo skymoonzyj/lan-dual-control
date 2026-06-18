@@ -198,6 +198,81 @@ function safeReadJson(path) {
   }
 }
 
+function safeSnippet(text, maxLength = 260) {
+  return String(text || "")
+    .replace(/(password|token|secret|key)\s*[:=]\s*["']?[^"'\s]+/gi, "$1=<redacted>")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function readTextTail(path, maxChars = 128 * 1024) {
+  try {
+    const text = readFileSync(path, "utf8");
+    return text.length > maxChars ? text.slice(-maxChars) : text;
+  } catch {
+    return "";
+  }
+}
+
+function lastMatchingLine(text, predicate) {
+  const lines = String(text || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (predicate(lines[index])) return lines[index];
+  }
+  return "";
+}
+
+function matchValue(text, pattern) {
+  const match = String(text || "").match(pattern);
+  return match ? match[1] : "";
+}
+
+function parseHeartbeatLine(line) {
+  if (!line || !line.startsWith("MacHeartbeat=status=")) {
+    return { found: false };
+  }
+  return {
+    found: true,
+    status: matchValue(line, /MacHeartbeat=status=([^;\s]+)/),
+    checkedAt: matchValue(line, /checkedAt=([^;\s]+)/),
+    reason: matchValue(line, /\breason=([^.\s;]+)/),
+    blockers: matchValue(line, /\bblockers=([^;\s]+)/),
+    warnings: matchValue(line, /\bwarnings=([^;\s]+)/),
+    codexStatus: matchValue(line, /\bcodex=[^;]*\bstatus=([^;\s]+)/),
+    codexUpdatedAt: matchValue(line, /\bcodex=[^;]*\bupdatedAt=([^;\s]+)/),
+    codexAgeMs: matchValue(line, /\bcodex=[^;]*\bageMs=([^;\s]+)/),
+    boardUpdatedAt: matchValue(line, /\bboard=[^;]*\bboardUpdatedAt=([^;\s]+)/),
+    summary: safeSnippet(line),
+  };
+}
+
+function parseWatcherRunLine(line) {
+  if (!line || !line.startsWith("Mac heartbeat watch:")) {
+    return { found: false };
+  }
+  return {
+    found: true,
+    run: matchValue(line, /\brun=([^;\s]+)/),
+    status: matchValue(line, /\bstatus=([^;\s]+)/),
+    reason: matchValue(line, /\breason=([^;\s]+)/),
+    post: matchValue(line, /\bpost=([^;\s]+)/),
+    summary: safeSnippet(line),
+  };
+}
+
+function inspectRecentHeartbeat(args) {
+  const text = readTextTail(args.outLog);
+  const heartbeatLine = lastMatchingLine(text, (line) => line.startsWith("MacHeartbeat=status="));
+  const watcherRunLine = lastMatchingLine(text, (line) => line.startsWith("Mac heartbeat watch:"));
+  return {
+    checked: Boolean(text),
+    outLog: toDisplayPath(args.outLog),
+    heartbeat: parseHeartbeatLine(heartbeatLine),
+    watcherRun: parseWatcherRunLine(watcherRunLine),
+  };
+}
+
 function readPid(path) {
   try {
     const raw = readFileSync(path, "utf8").trim();
@@ -240,6 +315,7 @@ function inspectWatcher(args) {
     metaFile: toDisplayPath(args.metaFile),
     outLog: toDisplayPath(args.outLog),
     errLog: toDisplayPath(args.errLog),
+    lastHeartbeat: inspectRecentHeartbeat(args),
   };
 }
 
@@ -423,6 +499,7 @@ function makeReport(action, args, details) {
       outLog: status.outLog,
       errLog: status.errLog,
     },
+    lastHeartbeat: status.lastHeartbeat,
     commands: {
       start: "node scripts/mac/start-mac-heartbeat-watcher.mjs --boardSummary",
       status: "node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary",
@@ -436,8 +513,14 @@ function makeReport(action, args, details) {
 
 function makeBoardSummary(report) {
   const state = report.running ? `running pid=${report.pid}` : "not-running";
+  const heartbeat = report.lastHeartbeat?.heartbeat?.found
+    ? `lastHeartbeat=status=${report.lastHeartbeat.heartbeat.status || "unknown"} checkedAt=${report.lastHeartbeat.heartbeat.checkedAt || "unknown"} reason=${report.lastHeartbeat.heartbeat.reason || "unknown"} codexAgeMs=${report.lastHeartbeat.heartbeat.codexAgeMs || "unknown"}`
+    : "lastHeartbeat=not-seen";
+  const watcherRun = report.lastHeartbeat?.watcherRun?.found
+    ? `lastRun=${report.lastHeartbeat.watcherRun.run || "unknown"} post=${report.lastHeartbeat.watcherRun.post || "unknown"}`
+    : "lastRun=not-seen";
   return [
-    `Mac heartbeat watcher: action=${report.action} ok=${report.ok ? "true" : "false"} ${state}; device=Mac Heartbeat; intervalMs=${report.watcher.intervalMs}.`,
+    `Mac heartbeat watcher: action=${report.action} ok=${report.ok ? "true" : "false"} ${state}; device=Mac Heartbeat; intervalMs=${report.watcher.intervalMs}; ${heartbeat}; ${watcherRun}.`,
     `Status=${report.commands.status}.`,
     `Start=${report.commands.start}.`,
     `Stop=${report.commands.stop}.`,
@@ -454,6 +537,12 @@ function printHuman(report) {
   console.log(`[INFO] PID file: ${report.files.pidFile}`);
   console.log(`[INFO] Output log: ${report.files.outLog}`);
   console.log(`[INFO] Error log: ${report.files.errLog}`);
+  if (report.lastHeartbeat?.heartbeat?.found) {
+    const last = report.lastHeartbeat.heartbeat;
+    console.log(`[INFO] Last heartbeat: status=${last.status || "unknown"} checkedAt=${last.checkedAt || "unknown"} reason=${last.reason || "unknown"} codexAgeMs=${last.codexAgeMs || "unknown"}`);
+  } else {
+    console.log("[INFO] Last heartbeat: not seen in stdout log");
+  }
   console.log(`[NEXT] Status: ${report.commands.status}`);
   console.log(`[NEXT] Start: ${report.commands.start}`);
   console.log(`[NEXT] Stop: ${report.commands.stop}`);

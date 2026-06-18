@@ -20,6 +20,41 @@
 ## 2026-06-18 Mac Codex
 
 日期：2026-06-18 继续推进
+开发端：Mac Codex
+本轮目标：增强 Mac heartbeat 后台 watcher 状态查询，让 Windows 新复制按钮拿到最近一次心跳结果。
+完成内容：
+- `scripts/mac/start-mac-heartbeat-watcher.mjs --status --json` 现在会读取后台 watcher stdout 日志尾部，并提取最后一条 `MacHeartbeat=status=...` 和最后一条 `Mac heartbeat watch: ...`。
+- JSON 新增 `lastHeartbeat.heartbeat` 与 `lastHeartbeat.watcherRun`，包含最近心跳 `status`、`checkedAt`、`reason`、`codexAgeMs`、`blockers`、`warnings`、`boardUpdatedAt` 和最近一次 watcher `run/post`。
+- `--status --boardSummary` 的一行摘要新增 `lastHeartbeat=...` 与 `lastRun=...`；没有后台日志时明确显示 `lastHeartbeat=not-seen` / `lastRun=not-seen`。
+- 状态查询只读日志尾部，不启动 watcher、不访问密码、不认证 WebSocket、不发送 input/inject；日志摘要会做 password/token/secret/key 脱敏。
+- `scripts/mac/test-mac-heartbeat-watcher-start-helper.mjs` 的 fake watcher 现在写入真实形态心跳日志，覆盖 start/status/boardSummary/restart 路径。
+修改文件：
+- `scripts/mac/start-mac-heartbeat-watcher.mjs`
+- `scripts/mac/test-mac-heartbeat-watcher-start-helper.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/start-mac-heartbeat-watcher.mjs`
+- `node --check scripts/mac/test-mac-heartbeat-watcher-start-helper.mjs`
+- `node scripts/mac/test-mac-heartbeat-watcher-start-helper.mjs --timeoutMs 45000`
+- `node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary`
+- `node scripts/mac/start-mac-heartbeat-watcher.mjs --status --json`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/mac docs` 无匹配。
+遗留问题：
+- 本轮没有真实启动后台 watcher；真实长期值守仍由用户或两端确认后执行 `MacHeartbeatStart=`。
+下一步建议：
+- Windows 端可直接用“查状态”按钮复制 `MacHeartbeatStatus=`，让 Mac 端运行后看 `lastHeartbeat=` 是否随后台 watcher 刷新。
+是否改了协议：否。
+是否需要另一端配合：暂不阻塞；这轮增强的是 Mac 端状态命令输出，Windows 新按钮可直接受益。
+
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
 开发端：Windows Codex
 本轮目标：把 Mac heartbeat watcher 管理入口从恢复摘要推进到 Windows 控制端页面，减少手工复制整段摘要。
 完成内容：

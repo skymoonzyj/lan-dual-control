@@ -100,6 +100,8 @@ function makeFakeWatcher(tmp) {
   writeFileSync(path, `#!/usr/bin/env node
 import { appendFileSync } from "node:fs";
 appendFileSync(${JSON.stringify(argvLog)}, JSON.stringify(process.argv.slice(2)) + "\\n");
+console.log("Mac heartbeat watch: run=1 status=ok reason=ok post=posted");
+console.log("MacHeartbeat=status=ok; checkedAt=2026-06-18T10:00:00.000Z; device=Mac; codex=ok status=idle updatedAt=2026-06-18T09:59:59.000Z ageMs=1000; macHost=online 127.0.0.1:43770 build=fake inputMode=log; macClient=online http://127.0.0.1:5188/; board=ok boardUpdatedAt=2026-06-18T09:59:59.000Z call=done; blockers=none warnings=none reason=ok. suggestedAction=none No password was requested or sent; no WebSocket auth/input/inject was attempted.");
 process.on("SIGTERM", () => process.exit(0));
 setInterval(() => {}, 1000);
 `);
@@ -152,6 +154,12 @@ function assertStartedPayload(payload, label) {
   assert(payload.watcher?.device === "Mac Heartbeat", `${label} should use Mac Heartbeat device`);
   assert(payload.watcher?.role === "Mac watchdog", `${label} should use Mac watchdog role`);
   assert(payload.watcher?.intervalMs === 1234, `${label} should preserve interval`);
+  assert(payload.lastHeartbeat?.heartbeat?.found === true, `${label} should include the last heartbeat summary from stdout`);
+  assert(payload.lastHeartbeat?.heartbeat?.status === "ok", `${label} should include last heartbeat status`);
+  assert(payload.lastHeartbeat?.heartbeat?.checkedAt === "2026-06-18T10:00:00.000Z", `${label} should include last heartbeat checkedAt`);
+  assert(payload.lastHeartbeat?.heartbeat?.reason === "ok", `${label} should include last heartbeat reason`);
+  assert(payload.lastHeartbeat?.heartbeat?.codexAgeMs === "1000", `${label} should include last heartbeat Codex age`);
+  assert(payload.lastHeartbeat?.watcherRun?.post === "posted", `${label} should include last watcher post result`);
   assertIncludes(payload.commands?.status || "", "start-mac-heartbeat-watcher.mjs --status --boardSummary", `${label} status command`);
   assertIncludes(payload.commands?.stop || "", "start-mac-heartbeat-watcher.mjs --stop --boardSummary", `${label} stop command`);
   assertIncludes(payload.commands?.once || "", "watch-mac-heartbeat.mjs --once --sendStatus --boardSummary", `${label} once command`);
@@ -215,6 +223,8 @@ function checkStartStatusStop(args) {
     assert(status.status === 0, `running status should pass.\n${status.stdout}\n${status.stderr}`);
     assert(statusPayload.running === true, "running status should report running");
     assert(statusPayload.pid === startPayload.pid, "running status should report same pid");
+    assert(statusPayload.lastHeartbeat?.heartbeat?.checkedAt === "2026-06-18T10:00:00.000Z", "running status should expose last heartbeat checkedAt");
+    assert(statusPayload.lastHeartbeat?.watcherRun?.post === "posted", "running status should expose last watcher post result");
     assertNoSecrets(status, "running status output");
 
     const boardSummary = run(["--status", "--boardSummary", ...commonArgs(paths)], args, env);
@@ -223,6 +233,8 @@ function checkStartStatusStop(args) {
     assert(!summary.includes("\n"), "boardSummary should be one line");
     assertIncludes(summary, "Mac heartbeat watcher:", "boardSummary");
     assertIncludes(summary, "device=Mac Heartbeat", "boardSummary");
+    assertIncludes(summary, "lastHeartbeat=status=ok checkedAt=2026-06-18T10:00:00.000Z reason=ok codexAgeMs=1000", "boardSummary");
+    assertIncludes(summary, "lastRun=1 post=posted", "boardSummary");
     assertIncludes(summary, "Status=node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary", "boardSummary");
     assertIncludes(summary, "No password was requested or sent", "boardSummary");
     assertNoSecrets(boardSummary, "boardSummary output");
