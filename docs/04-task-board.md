@@ -106,7 +106,7 @@ Windows 端：
 - [x] 桌面壳增加本机被控入口，可选择低风险/部署/深度体检、预览防火墙命令、启动/停止 Windows host。
 - [x] 连接真实 Mac 被控端。
 - [x] 正式 Mac E2E 无密预检可输出执行计划、耗时和安全边界。
-- [x] 正式 Mac E2E 无密预检可解释远端刷新率上限：JSON、`--boardSummary` 和 `NEED_USER_AUTH` 会输出 `FpsLimit requested=<请求>Hz remoteMax=<远端>Hz`，并给出 Mac 端安全 dry-run 的 `MacMaxFpsPlan=install-mac-host-launch-agent --maxScreenFps <请求> --boardSummary`，避免把 Mac 当前 30Hz 上限误判为 Windows 第二步卡住。
+- [x] 正式 Mac E2E 无密预检可解释远端刷新率上限：JSON、`--boardSummary` 和 `NEED_USER_AUTH` 会输出 `FpsLimit requested=<请求>Hz remoteMax=<远端>Hz`，并给出 Mac 端安全 dry-run 的 `MacMaxFpsPlan=install-mac-host-launch-agent --maxScreenFps <请求> --boardSummary` 以及写入/重启后的 `MacUnattendedFormal=check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary` 强校验入口，避免把 Mac 当前 30Hz 上限误判为 Windows 第二步卡住。
 - [x] 正式 Mac E2E 支持自动发现最佳 Mac host，预检 JSON 会记录选址结果。
 - [x] 正式 Mac E2E 增加 PowerShell 包装入口，可用 `-Discover -PreflightOnly -BoardSummary` 做无密码预检，或用 `-Discover -PromptPassword` 在 Windows 本机隐藏输入正式密码后跑完整验收。
 - [x] Windows 控制端页面自检支持自动发现最佳 Mac host 后再跑无密 UI runtime 验收。

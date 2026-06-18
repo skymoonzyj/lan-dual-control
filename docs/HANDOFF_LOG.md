@@ -21,6 +21,37 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows formal E2E 预检直接输出 Mac unattended formal 60Hz 强校验入口。
+完成内容：
+- `check-mac-formal-e2e` 的 `fpsLimit` JSON 新增 `macUnattendedFormalCommand`，命令为 `node scripts/mac/check-mac-unattended-status.mjs --host <Mac> --port <port> --requireLaunchAgentMaxFps --boardSummary`。
+- 当正式请求刷新率高于 Mac host `maxScreenFps` 时，`--boardSummary` 会在 `MacMaxFpsPlan=` 后继续输出 `MacUnattendedFormal=`，提示 Mac 端写入/重启后如何只读强校验 LaunchAgent max FPS blocker。
+- `--userAuthRequest` / `--sendUserAuthRequest` 的 `NEED_USER_AUTH` 刷新率提示也会带同一条强校验命令；仍不包含密码、不带 `--write`、不执行 `launchctl`、不发送 input/inject。
+- formal preflight mock client diagnostics 回归改用临时 `clientPort` / `debugPort`，避免本机默认 `5197/9337` 旧诊断残留导致误报。
+修改文件：
+- `scripts/windows/check-mac-formal-e2e.mjs`
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-mac-formal-e2e.mjs`
+- `node --check scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 30000`
+- `node scripts/windows/check-mac-formal-e2e.mjs --discover --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --boardSummary --progressIntervalMs 10000 --timeoutMs 45000`（真实只读摘要已输出 `MacMaxFpsPlan=` 和 `MacUnattendedFormal=`；当前 Mac host 仍上报 `maxScreenFps=30`）
+遗留问题：
+- 本轮只补 Windows formal preflight 的提示链路；真正让强校验通过仍需要 Mac 端写入/加载 LaunchAgent maxScreenFps 并重启 host。
+下一步建议：
+- Mac 端处理 LaunchAgent 后，Windows 侧重跑 formal preflight `--boardSummary`，确认 `MacUnattendedFormal=` 对应命令不再报 blocker，随后再做正式长测。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；消除 blocker 需要 Mac 端后续处理 LaunchAgent。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows LAN discovery 对齐 Mac unattended formal 60Hz 强校验入口。
 完成内容：
 - `discover-lan-hosts` 的 `macFormalE2e` JSON 新增 `macUnattendedFormalCommand`，命令为 `node scripts/mac/check-mac-unattended-status.mjs --host <Mac> --port <port> --requireLaunchAgentMaxFps --boardSummary`。

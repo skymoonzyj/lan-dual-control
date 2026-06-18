@@ -390,6 +390,12 @@ function makeMacMaxFpsPlanCommand(report, requestedFps) {
   return `node scripts/mac/install-mac-host-launch-agent.mjs --port ${port} --maxScreenFps ${planFps} --boardSummary`;
 }
 
+function makeMacUnattendedFormalCommand(report) {
+  const host = report.target?.host || defaults.host;
+  const port = Number(report.target?.port) || defaults.port;
+  return `node scripts/mac/check-mac-unattended-status.mjs --host ${host} --port ${port} --requireLaunchAgentMaxFps --boardSummary`;
+}
+
 function makeFpsLimitStatus(report) {
   const requestedFps = positiveNumber(report.runPlan?.video?.fps);
   const maxScreenFps = positiveNumber(report.capabilities?.maxScreenFps);
@@ -399,6 +405,7 @@ function makeFpsLimitStatus(report) {
     maxScreenFps,
     limited,
     macMaxFpsPlanCommand: "",
+    macUnattendedFormalCommand: makeMacUnattendedFormalCommand(report),
     note: requestedFps
       ? "remote maxScreenFps is unknown"
       : "formal run plan FPS is unknown",
@@ -447,7 +454,7 @@ function makeBoardSummary(report, outcome = "preflight") {
   const permissions = report.permissions || {};
   const fpsLimit = report.fpsLimit || makeFpsLimitStatus(report);
   const fpsLimitLine = fpsLimit.limited
-    ? `FpsLimit requested=${formatFps(fpsLimit.requestedFps)}Hz remoteMax=${formatFps(fpsLimit.maxScreenFps)}Hz; MacMaxFpsPlan=${fpsLimit.macMaxFpsPlanCommand}.`
+    ? `FpsLimit requested=${formatFps(fpsLimit.requestedFps)}Hz remoteMax=${formatFps(fpsLimit.maxScreenFps)}Hz; MacMaxFpsPlan=${fpsLimit.macMaxFpsPlanCommand}; MacUnattendedFormal=${fpsLimit.macUnattendedFormalCommand}.`
     : "";
   return [
     `${prefix}: ${state}; target=${report.target.host}:${report.target.port}; runtimeBuild=${report.runtime?.buildId || "unknown"}; runtimePid=${report.runtime?.processId || "unknown"}.`,
@@ -475,7 +482,7 @@ function makeUserAuthRequest(report) {
 
   const fpsLimit = report.fpsLimit || makeFpsLimitStatus(report);
   const fpsLimitText = fpsLimit.limited
-    ? `刷新率提示：当前 Mac host 上限 ${formatFps(fpsLimit.maxScreenFps)}Hz，正式验收请求 ${formatFps(fpsLimit.requestedFps)}Hz 会按远端上限运行；若要提高上限，先让 Mac 端 dry-run ${fpsLimit.macMaxFpsPlanCommand} 并重启 host 后再验收。`
+    ? `刷新率提示：当前 Mac host 上限 ${formatFps(fpsLimit.maxScreenFps)}Hz，正式验收请求 ${formatFps(fpsLimit.requestedFps)}Hz 会按远端上限运行；若要提高上限，先让 Mac 端 dry-run ${fpsLimit.macMaxFpsPlanCommand}，写入/重启后再跑强校验 ${fpsLimit.macUnattendedFormalCommand}。`
     : "";
 
   return [

@@ -262,6 +262,14 @@ async function withFakeLinkBoard(fn) {
   }
 }
 
+async function getFreePort() {
+  const server = createServer();
+  await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  const port = Number(server.address().port);
+  await new Promise((resolveClose) => server.close(resolveClose));
+  return port;
+}
+
 async function testOfflinePreflight(args) {
   const result = await runRunner(["--host", "127.0.0.1", "--port", "9", "--preflightOnly"], args);
   assert(result.exitCode !== 0, "offline preflight should fail");
@@ -376,10 +384,19 @@ async function testFpsLimitPreflightJson(args) {
     assertIncludes(payload.fpsLimit?.macMaxFpsPlanCommand || "", `--port ${port}`, "FPS limit Mac plan port");
     assertIncludes(payload.fpsLimit?.macMaxFpsPlanCommand || "", "--maxScreenFps 60", "FPS limit Mac plan FPS");
     assertIncludes(payload.fpsLimit?.macMaxFpsPlanCommand || "", "--boardSummary", "FPS limit Mac plan board summary");
+    assertIncludes(payload.fpsLimit?.macUnattendedFormalCommand || "", "scripts/mac/check-mac-unattended-status.mjs", "FPS limit Mac formal command");
+    assertIncludes(payload.fpsLimit?.macUnattendedFormalCommand || "", "--host 127.0.0.1", "FPS limit Mac formal command host");
+    assertIncludes(payload.fpsLimit?.macUnattendedFormalCommand || "", `--port ${port}`, "FPS limit Mac formal command port");
+    assertIncludes(payload.fpsLimit?.macUnattendedFormalCommand || "", "--requireLaunchAgentMaxFps", "FPS limit Mac formal command");
+    assertIncludes(payload.fpsLimit?.macUnattendedFormalCommand || "", "--boardSummary", "FPS limit Mac formal command");
     assertIncludes(String(payload.boardSummary || ""), "FpsLimit requested=60Hz remoteMax=30Hz", "FPS limit board summary");
     assertIncludes(String(payload.boardSummary || ""), "MacMaxFpsPlan=node scripts/mac/install-mac-host-launch-agent.mjs", "FPS limit board summary plan");
+    assertIncludes(String(payload.boardSummary || ""), "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs", "FPS limit board summary formal gate");
+    assertIncludes(String(payload.boardSummary || ""), "--requireLaunchAgentMaxFps --boardSummary", "FPS limit board summary formal gate");
     assertIncludes(String(payload.userAuthRequest || ""), "当前 Mac host 上限 30Hz", "FPS limit user auth request");
     assertIncludes(String(payload.userAuthRequest || ""), "dry-run", "FPS limit user auth request dry-run");
+    assertIncludes(String(payload.userAuthRequest || ""), "强校验", "FPS limit user auth request formal gate");
+    assertIncludes(String(payload.userAuthRequest || ""), "--requireLaunchAgentMaxFps", "FPS limit user auth request formal gate");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "FPS limit preflight JSON");
     assertNotIncludes(result.stdout + result.stderr, "--write", "FPS limit preflight JSON should stay dry-run");
     assertNotIncludes(result.stdout + result.stderr, "launchctl", "FPS limit preflight JSON should not load LaunchAgent");
@@ -536,12 +553,16 @@ async function testMockPreflightSendUserAuthRequest(args) {
 
 async function testMockPreflightClientDiagnostics(args) {
   await withMockHost(async (port) => {
+    const clientPort = await getFreePort();
+    const debugPort = await getFreePort();
     const result = await runRunner([
       "--host", "127.0.0.1",
       "--port", String(port),
       "--preflightOnly",
       "--json",
       "--checkClientDiagnostics",
+      "--clientPort", String(clientPort),
+      "--debugPort", String(debugPort),
       "--allowMockVideo",
       "--skipInputLog",
       "--skipAudio",
