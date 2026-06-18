@@ -165,6 +165,8 @@ function assertBoardSummaryShape(text, label) {
   assert(/MacMaxFpsSafeStart=/.test(text), `${label} should include Mac foreground 60Hz safe start guidance`);
   assert(/MacMaxFpsSafeStart=.*start-mac-host\.mjs/.test(text), `${label} should use start-mac-host for foreground 60Hz safe start`);
   assert(/MacMaxFpsSafeStart=.*--maxScreenFps 60/.test(text), `${label} should include the formal 60Hz safe start command`);
+  assert(/MacHostReadiness=/.test(text), `${label} should include low-risk Mac host readiness guidance`);
+  assert(/MacHostReadiness=.*check-mac-host-readiness\.mjs/.test(text), `${label} should include the low-risk Mac host readiness command`);
   assert(/MacUnattendedStatus=/.test(text), `${label} should include Mac unattended/startup guidance`);
   assert(/check-mac-unattended-status\.mjs/.test(text), `${label} should include the Mac unattended/startup command`);
   assert(/MacUnattendedFormal=/.test(text), `${label} should include Mac unattended formal max-FPS guidance`);
@@ -223,6 +225,18 @@ function assertMacHostSafeStartCommand(command, label) {
 function assertMacMaxFpsSafeStartCommand(command, label) {
   assertMacHostSafeStartCommand(command, label);
   assert(command.includes("--maxScreenFps 60"), `${label} should target the formal 60Hz foreground start`);
+}
+
+function assertMacHostReadinessCommand(command, label) {
+  assert(/check-mac-host-readiness\.mjs/.test(command), `${label} should use check-mac-host-readiness`);
+  assert(command.includes("--checkBoard"), `${label} should read Agent Link Board`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!command.includes("--probeMedia"), `${label} should stay low-risk and not run media probes`);
+  assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+  assert(!command.includes("inject"), `${label} should not instruct injection`);
 }
 
 function assertMacFormalLocalSmokeCommand(command, label) {
@@ -380,6 +394,7 @@ function checkHelp(args) {
     assert(/commands\.mediaReadinessBoardSummary/.test(result.stdout), `${script} ${flag} should document media command JSON field`);
     assert(/commands\.macHostSafeStartCommand/.test(result.stdout), `${script} ${flag} should document Mac host safe start JSON field`);
     assert(/commands\.macMaxFpsSafeStartCommand/.test(result.stdout), `${script} ${flag} should document Mac foreground 60Hz safe start JSON field`);
+    assert(/commands\.macHostReadinessCommand/.test(result.stdout), `${script} ${flag} should document Mac host readiness JSON field`);
     assert(/commands\.macFormalLocalSmokeCommand/.test(result.stdout), `${script} ${flag} should document Mac formal local smoke JSON field`);
     assert(/commands\.macFormalE2eStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac formal E2E status JSON field`);
     assert(/commands\.macUnattendedStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac unattended/startup JSON field`);
@@ -417,6 +432,8 @@ function checkOfflineJson(args) {
   assert((payload.commands?.macHostSafeStartCommand || "").includes("--port 9"), "offline JSON Mac host safe start command should keep port");
   assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand || "", "offline JSON Mac foreground 60Hz safe start command");
   assert((payload.commands?.macMaxFpsSafeStartCommand || "").includes("--port 9"), "offline JSON Mac foreground 60Hz safe start command should keep port");
+  assertMacHostReadinessCommand(payload.commands?.macHostReadinessCommand || "", "offline JSON Mac host readiness command");
+  assert((payload.commands?.macHostReadinessCommand || "").includes("--port 9"), "offline JSON Mac host readiness command should keep port");
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand || "", "offline JSON Mac formal local smoke command");
   assertMacFormalE2eStatusCommand(payload.commands?.macFormalE2eStatusCommand || "", "offline JSON Mac formal E2E status command");
   assertMacUnattendedStatusCommand(payload.commands?.macUnattendedStatusCommand || "", "offline JSON Mac unattended/startup command");
@@ -479,6 +496,8 @@ function checkOfflineBoardSummary(args) {
   assert(/--host 0\.0\.0\.0 --port 9/.test(text), "offline board summary should keep formal host start target");
   assert(/MacMaxFpsSafeStart=/.test(text), "offline board summary should include foreground 60Hz safe start guidance");
   assert(/MacMaxFpsSafeStart=.*--host 0\.0\.0\.0 --port 9 --maxScreenFps 60/.test(text), "offline board summary should keep foreground 60Hz start target");
+  assert(/MacHostReadiness=/.test(text), "offline board summary should include low-risk host readiness guidance");
+  assert(/MacHostReadiness=.*--host 127\.0\.0\.1 --port 9 --checkBoard --boardSummary/.test(text), "offline board summary should keep host readiness target");
   print("OK", "Offline board summary is short, secret-free, and actionable");
 }
 
@@ -496,6 +515,7 @@ function checkOfflinePlainReport(args) {
   assert(String(result.stdout || "").includes("Mac formal local smoke:"), "plain report should include Mac formal local smoke label");
   assert(String(result.stdout || "").includes("Mac formal E2E preflight:"), "plain report should include Mac formal E2E preflight label");
   assert(String(result.stdout || "").includes("Mac 60Hz safe foreground start:"), "plain report should include Mac foreground 60Hz safe start label");
+  assert(String(result.stdout || "").includes("Mac host readiness:"), "plain report should include low-risk Mac host readiness label");
   assert(String(result.stdout || "").includes("Mac unattended/startup status:"), "plain report should include Mac unattended/startup label");
   assert(String(result.stdout || "").includes("Mac unattended formal 60Hz gate:"), "plain report should include Mac unattended formal label");
   assert(String(result.stdout || "").includes("--requireLaunchAgentMaxFps"), "plain report should include Mac unattended formal max-FPS gate");
@@ -557,6 +577,7 @@ function checkOnlineJson(args) {
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand || "", "online JSON Mac formal local smoke command");
   assertMacHostSafeStartCommand(payload.commands?.macHostSafeStartCommand || "", "online JSON Mac host safe start command");
   assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand || "", "online JSON Mac foreground 60Hz safe start command");
+  assertMacHostReadinessCommand(payload.commands?.macHostReadinessCommand || "", "online JSON Mac host readiness command");
   assertMacFormalE2eStatusCommand(payload.commands?.macFormalE2eStatusCommand || "", "online JSON Mac formal E2E status command");
   assertMacUnattendedStatusCommand(payload.commands?.macUnattendedStatusCommand || "", "online JSON Mac unattended/startup command");
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand || "", "online JSON Mac unattended formal command");

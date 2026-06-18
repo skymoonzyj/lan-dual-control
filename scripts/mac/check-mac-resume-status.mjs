@@ -64,6 +64,10 @@ Machine-readable JSON fields:
                              Secret-free foreground Mac host start command for
                              the formal 60Hz target; it prompts locally, never
                              embeds a password in argv, and does not send input.
+  commands.macHostReadinessCommand
+                             Secret-free low-risk Mac host readiness command;
+                             it reads host and Agent Link Board state, prints
+                             a one-line summary, and does not request a password.
   commands.macFormalLocalSmokeCommand
                              Secret-free local formal smoke command for
                              H.264/PCM/input-log prep; it prompts visibly and
@@ -687,6 +691,18 @@ function makeMediaReadinessBoardSummaryCommand(args) {
   ].join(" ");
 }
 
+function makeMacHostReadinessCommand(args) {
+  return [
+    "node scripts/mac/check-mac-host-readiness.mjs",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--checkBoard",
+    "--boardSummary",
+  ].join(" ");
+}
+
 function makeMacFormalLocalSmokeCommand(args) {
   return [
     "node scripts/mac/check-mac-formal-local-smoke.mjs",
@@ -893,6 +909,7 @@ function formatBoardSummary(report) {
       `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
       `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
       `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
+      `MacHostReadiness=${report.commands.macHostReadinessCommand}.`,
       "Next: start the formal host with MacHostSafeStart, or MacMaxFpsSafeStart for foreground 60Hz validation, before Windows E2E.",
       `After host is online, refresh media baseline with ${report.commands.mediaReadinessBoardSummary}.`,
       `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
@@ -925,6 +942,7 @@ function formatBoardSummary(report) {
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
     `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
+    `MacHostReadiness=${report.commands.macHostReadinessCommand}.`,
     `Media baseline command: ${report.commands.mediaReadinessBoardSummary}.`,
     `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
     `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
@@ -1005,6 +1023,7 @@ function printReport(report) {
   console.log(`[NEXT] Mac formal E2E preflight: ${report.commands.macFormalE2eStatusCommand}`);
   console.log(`[NEXT] Mac host safe start: ${report.commands.macHostSafeStartCommand}`);
   console.log(`[NEXT] Mac 60Hz safe foreground start: ${report.commands.macMaxFpsSafeStartCommand}`);
+  console.log(`[NEXT] Mac host readiness: ${report.commands.macHostReadinessCommand}`);
   console.log(`[NEXT] Mac unattended/startup status: ${report.commands.macUnattendedStatusCommand}`);
   console.log(`[NEXT] Mac unattended formal 60Hz gate: ${report.commands.macUnattendedFormalCommand}`);
   console.log(`[NEXT] Mac LaunchAgent dry-run plan: ${report.commands.macLaunchAgentPlanCommand}`);
@@ -1053,6 +1072,7 @@ async function main() {
       mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
       macHostSafeStartCommand: makeMacHostSafeStartCommand(args),
       macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
+      macHostReadinessCommand: makeMacHostReadinessCommand(args),
       macFormalLocalSmokeCommand: makeMacFormalLocalSmokeCommand(args),
       macFormalE2eStatusCommand: makeMacFormalE2eStatusCommand(args),
       macUnattendedStatusCommand: makeMacUnattendedStatusCommand(args),
