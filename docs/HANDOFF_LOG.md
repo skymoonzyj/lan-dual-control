@@ -21,6 +21,33 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：给 Windows 音频设备检查增加可发 Agent Link Board 的一行摘要，并校准反向声音任务状态。
+完成内容：
+- `check-windows-audio-devices.mjs` 新增 `--boardSummary`，输出 `AudioDevices=Windows audio devices: wasapi=...; dshowAudio=...; probe=...; no password/auth/input/inject.`。
+- `--json` 也会带同一份 `boardSummary`，方便脚本或桌面壳读取。
+- 新增专项回归 `test-windows-audio-devices-summary.mjs`，用临时 fake WASAPI helper 覆盖一行摘要、JSON 字段、帮助文本和不泄密。
+- 任务板已把 Windows 系统声音采集、Mac client 播放 Windows 声音校准为已完成，并记录 `AudioDevices=` 摘要入口。
+修改文件：
+- `scripts/windows/check-windows-audio-devices.mjs`
+- `scripts/windows/test-windows-audio-devices-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/windows/test-windows-audio-devices-summary.mjs --timeoutMs 20000`
+遗留问题：
+- 这轮不重新做真实 WASAPI 长测；真实 Windows 声音仍以 `observe-windows-host-audio` / `observe-windows-host-media` 和 Mac client 播放验收为准。
+下一步建议：
+- Mac 反控 Windows 前可先跑 `node scripts/windows/check-windows-audio-devices.mjs --boardSummary` 同步本机音频能力，再按需跑 `observe-windows-host-audio --playTone --requireLevel` 或媒体基线。
+是否改了协议：否。
+是否需要另一端配合：不阻塞；Mac 端后续只需消费现有 `audio_frame` / PCM 播放链路。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 恢复开工总览直接消费 Agent Link Board 上的 Mac heartbeat 新鲜度。
 完成内容：
 - `check-windows-resume-status --checkBoard` 现在会从 `/api/state` 的状态/消息/事件里解析所有 `MacHeartbeat=` 摘要。

@@ -16,6 +16,7 @@ const defaults = {
   probe: false,
   wasapi: false,
   json: false,
+  boardSummary: false,
 };
 
 function printUsage() {
@@ -32,11 +33,13 @@ Options:
   --probe                     Capture a short PCM sample; default only lists devices and WASAPI format
   --wasapi                    Use WASAPI loopback for --probe instead of DirectShow
   --json                      Print JSON result
+  --boardSummary              Print one secret-free Agent Link Board summary line
   --help, -h                  Show this help without listing devices or capturing audio
 
 Examples:
   node scripts/windows/check-windows-audio-devices.mjs
   node scripts/windows/check-windows-audio-devices.mjs --probe --wasapi
+  node scripts/windows/check-windows-audio-devices.mjs --boardSummary
   node scripts/windows/check-windows-audio-devices.mjs --probe --device "Stereo Mix"
 `);
 }
@@ -48,7 +51,7 @@ function parseArgs(argv) {
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
     const next = argv[index + 1];
-    if (key === "probe" || key === "wasapi" || key === "json") {
+    if (key === "probe" || key === "wasapi" || key === "json" || key === "boardSummary") {
       args[key] = true;
       continue;
     }
@@ -76,7 +79,7 @@ function resolveFfmpegCommand(value) {
 }
 
 function print(kind, text, args) {
-  if (args.json) return;
+  if (args.json || args.boardSummary) return;
   console.log(`[${kind}] ${text}`);
 }
 
@@ -332,6 +335,35 @@ function summarizeEnv(args) {
   };
 }
 
+function oneLine(value) {
+  return String(value || "")
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function shortReason(value) {
+  const text = oneLine(value);
+  if (!text) return "unknown";
+  return text.length > 80 ? `${text.slice(0, 77)}...` : text;
+}
+
+function makeBoardSummary({ list, audioDevices, wasapi, probe }) {
+  const wasapiSummary = wasapi?.ok
+    ? `wasapi=ok ${wasapi.outputSampleRate || "?"}Hz/${wasapi.outputChannels || "?"}ch`
+    : `wasapi=unavailable(${shortReason(wasapi?.error)})`;
+  const dshowSummary = [
+    `dshowAudio=${audioDevices.length}`,
+    list?.error ? `dshowList=error(${shortReason(list.error)})` : "",
+  ].filter(Boolean).join(" ");
+  const probeSummary = !probe
+    ? "probe=skipped"
+    : probe.ok
+      ? `probe=ok ${probe.backend ?? "dshow"} bytes=${probe.bytes} peak=${probe.level}`
+      : `probe=failed ${shortReason(probe.error || probe.stderr || `exit ${probe.exitCode}`)}`;
+  return `AudioDevices=Windows audio devices: ${wasapiSummary}; ${dshowSummary}; ${probeSummary}; no password/auth/input/inject.`;
+}
+
 async function run() {
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
     printUsage();
@@ -356,7 +388,22 @@ async function run() {
   }
 
   if (args.json) {
-    console.log(JSON.stringify({ env, list, audioDevices, wasapi, probe }, null, 2));
+    console.log(JSON.stringify({
+      env,
+      list,
+      audioDevices,
+      wasapi,
+      probe,
+      boardSummary: makeBoardSummary({ list, audioDevices, wasapi, probe }),
+    }, null, 2));
+    return;
+  }
+
+  if (args.boardSummary) {
+    console.log(makeBoardSummary({ list, audioDevices, wasapi, probe }));
+    if (args.probe && !probe?.ok) {
+      process.exitCode = 1;
+    }
     return;
   }
 
