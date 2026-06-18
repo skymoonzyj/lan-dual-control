@@ -162,6 +162,25 @@ function assertMacMaxFpsSafeStartCommand(command, label, expectedPort = null) {
   }
 }
 
+function assertMacHostReadinessCommand(command, label, expectedPort = null) {
+  assertIncludes(command, "check-mac-host-readiness.mjs", label);
+  assertIncludes(command, "--host", label);
+  assertIncludes(command, "--port", label);
+  assertIncludes(command, "--checkBoard", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--probeMedia", label);
+  assertNotIncludes(command, "--probeMediaResourceSample", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+  if (expectedPort !== null) {
+    assertIncludes(command, `--port ${expectedPort}`, label);
+  }
+}
+
 function assertEphemeralStartCommand(command, label, expectedPort = null) {
   assertIncludes(command, "start-mac-host.mjs", label);
   assertIncludes(command, "--ephemeralPassword", label);
@@ -384,6 +403,8 @@ async function assertStatusOffline(timeoutMs) {
   assertIncludes(output, `--port ${port}`, "offline status");
   assertIncludes(output, "For formal 60Hz foreground start:", "offline status");
   assertIncludes(output, "--maxScreenFps 60", "offline status");
+  assertIncludes(output, "Mac host readiness:", "offline status");
+  assertIncludes(output, "check-mac-host-readiness.mjs", "offline status");
   assertIncludes(output, "Mac host LaunchAgent dry-run plan:", "offline status");
   assertIncludes(output, "Mac host unattended formal gate:", "offline status");
   assertIncludes(output, "install-mac-host-launch-agent.mjs", "offline status");
@@ -413,6 +434,7 @@ async function assertStatusOfflineJson(timeoutMs) {
   assertMediaReadinessCommand(json.commands?.mediaReadinessBoardSummary || "", "offline JSON status media command");
   assertSafeStartCommand(json.commands?.safeStartCommand || "", "offline JSON status safe start command", port);
   assertMacMaxFpsSafeStartCommand(json.commands?.macMaxFpsSafeStartCommand || "", "offline JSON status max-FPS safe start command", port);
+  assertMacHostReadinessCommand(json.commands?.macHostReadinessCommand || "", "offline JSON status host readiness command", port);
   assertEphemeralStartCommand(json.commands?.ephemeralStartCommand || "", "offline JSON status ephemeral start command", port);
   assertIncludes(json.suggestions?.[0] || "", `--port ${port}`, "offline JSON status suggestions");
   assertIncludes(json.suggestions?.[1] || "", `--port ${port}`, "offline JSON status suggestions");
@@ -421,6 +443,7 @@ async function assertStatusOfflineJson(timeoutMs) {
   assertIncludes(json.boardSummary || "", `--port ${port}`, "offline JSON status boardSummary");
   assertIncludes(json.boardSummary || "", `MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port}`, "offline JSON status boardSummary");
   assertIncludes(json.boardSummary || "", `MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port} --maxScreenFps 60`, "offline JSON status boardSummary");
+  assertIncludes(json.boardSummary || "", `MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs --host 127.0.0.1 --port ${port} --checkBoard --boardSummary`, "offline JSON status boardSummary");
   assertIncludes(json.boardSummary || "", "MacLaunchAgentPlan=", "offline JSON status boardSummary");
   assertIncludes(json.boardSummary || "", "MacMaxFpsPlan=", "offline JSON status boardSummary");
   assertIncludes(json.boardSummary || "", "--maxScreenFps 60", "offline JSON status boardSummary");
@@ -596,8 +619,11 @@ async function assertStatusDoesNotReadBoardByDefault(timeoutMs) {
   assertMediaReadinessCommand(json.commands?.mediaReadinessBoardSummary || "", "default JSON status media command");
   assertSafeStartCommand(json.commands?.safeStartCommand || "", "default JSON status safe start command", port);
   assertMacMaxFpsSafeStartCommand(json.commands?.macMaxFpsSafeStartCommand || "", "default JSON status max-FPS safe start command", port);
+  assertMacHostReadinessCommand(json.commands?.macHostReadinessCommand || "", "default JSON status host readiness command", port);
   assertIncludes(json.boardSummary || "", `MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port}`, "default JSON status boardSummary");
   assertIncludes(json.boardSummary || "", `MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port} --maxScreenFps 60`, "default JSON status boardSummary");
+  assertIncludes(json.boardSummary || "", "MacHostReadiness=", "default JSON status boardSummary");
+  assertIncludes(json.boardSummary || "", `check-mac-host-readiness.mjs --host 127.0.0.1 --port ${port} --checkBoard --boardSummary`, "default JSON status boardSummary");
   assertIncludes(json.boardSummary || "", "MacLaunchAgentPlan=", "default JSON status boardSummary");
   assertIncludes(json.boardSummary || "", "MacMaxFpsPlan=", "default JSON status boardSummary");
   assertIncludes(json.boardSummary || "", "MacUnattendedFormal=", "default JSON status boardSummary");
@@ -652,8 +678,10 @@ async function assertStatusBoardCurrentCall(timeoutMs) {
     assertMediaReadinessCommand(json.commands?.mediaReadinessBoardSummary || "", "status board currentCall media command");
     assertSafeStartCommand(json.commands?.safeStartCommand || "", "status board currentCall safe start command", port);
     assertMacMaxFpsSafeStartCommand(json.commands?.macMaxFpsSafeStartCommand || "", "status board currentCall max-FPS safe start command", port);
+    assertMacHostReadinessCommand(json.commands?.macHostReadinessCommand || "", "status board currentCall host readiness command", port);
     assertIncludes(json.boardSummary || "", "MacHostSafeStart=", "status boardSummary");
     assertIncludes(json.boardSummary || "", "MacMaxFpsSafeStart=", "status boardSummary");
+    assertIncludes(json.boardSummary || "", "MacHostReadiness=", "status boardSummary");
     assertIncludes(json.boardSummary || "", "MacLaunchAgentPlan=", "status boardSummary");
     assertIncludes(json.boardSummary || "", "MacMaxFpsPlan=", "status boardSummary");
     assertIncludes(json.boardSummary || "", "MacUnattendedFormal=", "status boardSummary");
@@ -691,6 +719,8 @@ async function assertStatusBoardCurrentCall(timeoutMs) {
     assertIncludes(lines[0], `MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port}`, "status boardSummary");
     assertIncludes(lines[0], "MacMaxFpsSafeStart=", "status boardSummary");
     assertIncludes(lines[0], `MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port} --maxScreenFps 60`, "status boardSummary");
+    assertIncludes(lines[0], "MacHostReadiness=", "status boardSummary");
+    assertIncludes(lines[0], `MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs --host 127.0.0.1 --port ${port} --checkBoard --boardSummary`, "status boardSummary");
     assertIncludes(lines[0], "MacLaunchAgentPlan=", "status boardSummary");
     assertIncludes(lines[0], "MacMaxFpsPlan=", "status boardSummary");
     assertIncludes(lines[0], "MacUnattendedFormal=", "status boardSummary");
@@ -815,6 +845,8 @@ async function assertStatusOnline(timeoutMs) {
     assertIncludes(statusOutput, "Windows side can try", "online status");
     assertIncludes(statusOutput, "Displays:", "online status");
     assertIncludes(statusOutput, "Could not inspect Mac host runtime changes since status-helper-test", "online status");
+    assertIncludes(statusOutput, "Mac host readiness:", "online status");
+    assertIncludes(statusOutput, "check-mac-host-readiness.mjs", "online status");
     assertNotIncludes(statusOutput, "Starting Mac host", "online status");
     const jsonStatus = await runNode(["--status", "--json", "--host", "127.0.0.1", "--port", String(port)], {
       timeoutMs,
@@ -846,9 +878,12 @@ async function assertStatusOnline(timeoutMs) {
     assertMediaReadinessCommand(json.commands?.mediaReadinessBoardSummary || "", "online JSON status media command");
     assertSafeStartCommand(json.commands?.safeStartCommand || "", "online JSON status safe start command", port);
     assertMacMaxFpsSafeStartCommand(json.commands?.macMaxFpsSafeStartCommand || "", "online JSON status max-FPS safe start command", port);
+    assertMacHostReadinessCommand(json.commands?.macHostReadinessCommand || "", "online JSON status host readiness command", port);
     assertEphemeralStartCommand(json.commands?.ephemeralStartCommand || "", "online JSON status ephemeral start command", port);
     assertIncludes(json.boardSummary || "", `MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port}`, "online JSON status boardSummary");
     assertIncludes(json.boardSummary || "", `MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port} --maxScreenFps 60`, "online JSON status boardSummary");
+    assertIncludes(json.boardSummary || "", "MacHostReadiness=", "online JSON status boardSummary");
+    assertIncludes(json.boardSummary || "", `check-mac-host-readiness.mjs --host 127.0.0.1 --port ${port} --checkBoard --boardSummary`, "online JSON status boardSummary");
     assertIncludes(json.boardSummary || "", "MacLaunchAgentPlan=", "online JSON status boardSummary");
     assertIncludes(json.boardSummary || "", "MacMaxFpsPlan=", "online JSON status boardSummary");
     assertIncludes(json.boardSummary || "", "MacUnattendedFormal=", "online JSON status boardSummary");
