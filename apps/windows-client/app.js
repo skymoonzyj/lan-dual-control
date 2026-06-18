@@ -148,6 +148,7 @@ const fileChunkSizeBytes = 64 * 1024;
 const maxClipboardFileBytes = 512 * 1024 * 1024;
 const remoteFileTransferStallTimeoutMs = 45 * 1000;
 const remoteFileTransferSweepIntervalMs = 1000;
+const remoteFileTransferRateSampleLimit = 8;
 const nativeClipboardChunkSizeBytes = 1024 * 1024;
 const maxNativeClipboardFileBytes = maxClipboardFileBytes;
 const defaultAgentLinkServer = "http://192.168.31.68:17888";
@@ -5674,6 +5675,21 @@ function remoteFileTransferProgressText(transfer = {}) {
   return `${formatBytes(receivedBytes)}${rateSuffix}`;
 }
 
+function remoteFileTransferSampleRateBytesPerSecond(transfer = {}) {
+  const samples = Array.isArray(transfer.rateSamples) ? transfer.rateSamples : [];
+  let sampleBytes = 0;
+  let sampleDurationMs = 0;
+  for (const sample of samples) {
+    const bytes = Math.max(0, Number(sample?.bytes) || 0);
+    const durationMs = Math.max(0, Number(sample?.durationMs) || 0);
+    if (bytes <= 0 || durationMs <= 0) continue;
+    sampleBytes += bytes;
+    sampleDurationMs += durationMs;
+  }
+  if (sampleBytes <= 0 || sampleDurationMs < 1000) return 0;
+  return sampleBytes / (sampleDurationMs / 1000);
+}
+
 function formatRemoteTransferEta(seconds) {
   const safeSeconds = Math.max(1, Math.ceil(Number(seconds) || 0));
   if (safeSeconds < 60) return `${safeSeconds} 秒`;
@@ -5690,7 +5706,8 @@ function remoteFileTransferRateText(transfer = {}, now = Date.now()) {
   if (!startedAt) return "";
   const lastActivityAt = Number(transfer.lastActivityAt) || now;
   const elapsedMs = Math.max(1, lastActivityAt - startedAt);
-  const bytesPerSecond = receivedBytes / (elapsedMs / 1000);
+  const sampleRate = remoteFileTransferSampleRateBytesPerSecond(transfer);
+  const bytesPerSecond = sampleRate > 0 ? sampleRate : receivedBytes / (elapsedMs / 1000);
   if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return "";
 
   const totalBytes = Math.max(0, Number(transfer.totalBytes) || 0);
@@ -5699,6 +5716,22 @@ function remoteFileTransferRateText(transfer = {}, now = Date.now()) {
     ? `，剩余约 ${formatRemoteTransferEta(remainingBytes / bytesPerSecond)}`
     : "";
   return `速度 ${formatBytes(Math.max(1, Math.round(bytesPerSecond)))}/s${etaText}`;
+}
+
+function recordRemoteFileTransferRateSample(transfer, byteCount, now = Date.now()) {
+  if (!transfer) return;
+  const bytes = Math.max(0, Number(byteCount) || 0);
+  const previousActivityAt = Number(transfer.lastActivityAt) || Number(transfer.startedAt) || now;
+  touchRemoteFileTransfer(transfer, now);
+  if (bytes <= 0) return;
+  const durationMs = Math.max(1, now - previousActivityAt);
+  if (!Array.isArray(transfer.rateSamples)) {
+    transfer.rateSamples = [];
+  }
+  transfer.rateSamples.push({ bytes, durationMs });
+  if (transfer.rateSamples.length > remoteFileTransferRateSampleLimit) {
+    transfer.rateSamples.splice(0, transfer.rateSamples.length - remoteFileTransferRateSampleLimit);
+  }
 }
 
 function rejectRemoteFileTransfer(transferId, reason, { notifyPeer = true, clipboardText = "剪贴板：远端文件接收中断" } = {}) {
@@ -6142,7 +6175,6 @@ function handleClipboardFileChunk(message) {
     addLog("文件剪贴板", `收到未知文件块，已忽略 · ${transferId || "missing"}`);
     return;
   }
-  touchRemoteFileTransfer(transfer);
 
   try {
     const fileIndex = Math.max(0, Number(message.fileIndex) || 0);
@@ -6165,6 +6197,7 @@ function handleClipboardFileChunk(message) {
     file.chunks.push({ offset, bytes });
     file.receivedBytes += bytes.byteLength;
     transfer.receivedBytes += bytes.byteLength;
+    recordRemoteFileTransferRateSample(transfer, bytes.byteLength);
 
     const totalBytes = transfer.totalBytes || Number(message.totalBytes) || transfer.receivedBytes;
     const percent = totalBytes === 0 ? 100 : Math.min(100, Math.round((transfer.receivedBytes / totalBytes) * 100));

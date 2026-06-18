@@ -17,6 +17,35 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 控制端远端文件接收速度/预计剩余时间使用最近分块滑动平均，减少大文件显示跳变。
+完成内容：
+- 接收远端文件分块时记录最近 8 个分块的字节数和间隔时间。
+- 速度/ETA 文案优先使用最近分块样本的加权平均；样本不足 1 秒时回退到原来的总平均。
+- 托盘、全屏/监看浮层剪贴板状态和复制/导出诊断共用同一套速度文案；不改 `clipboard_file_*` 协议，不实现断点续传。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`（失败点：诊断里的远端文件活动传输未显示 `速度 2.0 KB/s` / `剩余约 2 秒`）。
+- 实现后复跑：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- 收尾验证：`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`git diff --check`、行首冲突扫描。
+遗留问题：
+- 发送侧测速和断点续传尚未实现；真实大文件长测后再决定是否调整样本窗口或 ETA 显示策略。
+下一步建议：
+- 真实 Mac/Windows 双端文件传输时，用较大压缩包观察速度/ETA 是否平滑；如果连接中断仍需要对端重新复制，这是后续断点续传任务。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
 ## 2026-06-18 Windows Codex
 
 日期：2026-06-18 继续推进
