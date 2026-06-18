@@ -37,6 +37,7 @@
 - [x] Windows 控制端和 watcher 消费 Mac 本机短验收入口：`MacFormalLocalSmoke=` / `RerunFormalLocalSmoke=` 搭配失败、认证、密码或非空 warning/blocker 时会提醒并在复制/导出诊断显示“Mac 本机短验收需处理”和“Mac 本机短验收重跑命令已提供”；干净摘要不误弹，原始复跑命令会保留在诊断详情里。
 - [x] Windows 控制端和 watcher 消费 Mac 反控授权稳定标签：`WindowsReverseGrantStatus=` / `WindowsOpenOneTimeReverseGrant=` 及 Node fallback 只有搭配 `LAN008`、等待/重试、失败/阻塞或非空 warning/blocker 时会提醒；复制/导出诊断显示“Windows 反控授权状态命令已提供”“Windows 一次性反控授权命令已提供”，干净摘要不误弹。
 - [x] Windows 恢复总览输出并安全提取反控授权稳定标签：`check-windows-resume-status --checkBoard --boardSummary` 现在给出 `WindowsReverseGrantStatus=` / `WindowsOpenOneTimeReverseGrant=` / Node fallback，并从联络板最近摘要提取同名命令；非回环地址、敏感参数、缺 `BoardSummary` 或占位端口会被拒绝。
+- [x] Windows host 状态和 readiness 摘要对齐反控授权稳定标签：`start-windows-host --status --boardSummary`、`--status --json`、`check-windows-host-readiness --checkBoard --boardSummary` 和 readiness JSON 现在都会给出 `WindowsReverseGrantStatus=` / `WindowsOpenOneTimeReverseGrant=` / Node fallback，同时保留旧 `ReverseGrant=` / `ReverseGrantPs=`。
 - [x] Windows host 状态摘要补统一 Mac client 正式清单入口：`start-windows-host --status` 的普通输出、JSON 和 `--boardSummary` 在线路径现在给出 `MacClientFormalChecklist=check-mac-client-formal-status --boardSummary`，同时保留 readiness、formalCommand 和 `--sendCall` 命令，方便 Mac 控 Windows 前从 Windows 端状态一行复制正式清单。
 - [x] 上传到 GitHub 仓库。
 - [x] Mac mini 到位后克隆仓库。

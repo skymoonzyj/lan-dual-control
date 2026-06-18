@@ -21,6 +21,51 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows host 状态和 readiness 对齐 `WindowsReverseGrant*` 稳定标签。
+完成内容：
+- `start-windows-host --status` 的 JSON、普通输出和 `--boardSummary` 在默认需确认反控策略下新增 `WindowsReverseGrantStatus=`、`WindowsOpenOneTimeReverseGrant=`、`WindowsReverseGrantStatusNodeFallback=`、`WindowsOpenOneTimeReverseGrantNodeFallback=`；同时保留旧 `ReverseGrant=` / `ReverseGrantPs=`。
+- `check-windows-host-readiness` 的 JSON、普通输出和 `--boardSummary` 同步新增同名稳定标签；即使 runtime 摘要压缩，也会补齐 PowerShell 7 推荐命令和 Node fallback。
+- PowerShell wrapper 帮助、Windows host README、任务板和下一步文档同步说明新标签，方便 Mac 端或人工从任一 Windows host/status/readiness 摘要复制本机回环状态查询和 30 秒一次性授权命令。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/start-windows-host.ps1`
+- `scripts/windows/check-windows-host-readiness.mjs`
+- `scripts/windows/check-windows-host-readiness.ps1`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/check-windows-host-readiness.mjs`
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- `node --check scripts/windows/test-windows-host-readiness-board-summary.mjs`
+- PowerShell 7 AST parse `start-windows-host.ps1` 和 `check-windows-host-readiness.ps1`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-host-readiness-board-summary.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script start-windows-host.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-host-readiness.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-powershell-help.mjs --script start-windows-host.ps1 --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --script start-windows-host.ps1 --shell pwsh --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --script check-windows-host-readiness.ps1 --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --script check-windows-host-readiness.ps1 --shell pwsh --timeoutMs 10000 --boardSummary`
+- 真实只读 `node scripts/windows/start-windows-host.mjs --status --boardSummary --checkBoard --timeoutMs 12000`：本机 host 离线时按预期非 0，但摘要已输出 `WindowsReverseGrant*` 标签和旧兼容标签。
+- 真实只读 `node scripts/windows/check-windows-host-readiness.mjs --checkBoard --boardSummary --timeoutMs 12000`
+遗留问题：
+- 本轮不执行真实 Mac -> Windows 反控请求；一次性授权实际闭环仍需现场两端配合。
+下一步建议：
+- Mac 端拿到 `WindowsOpenOneTimeReverseGrant=` 后，在 Windows 本机打开临时授权，再让 Mac client 重试反控；后续可继续把相同稳定标签接入更多 UI 自动复制入口。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真实反控演练时需要 Mac 端发起请求。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows 恢复总览对齐 `WindowsReverseGrant*` 稳定标签。
 完成内容：
 - `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `WindowsReverseGrantStatus=`、`WindowsOpenOneTimeReverseGrant=`、`WindowsReverseGrantStatusNodeFallback=`、`WindowsOpenOneTimeReverseGrantNodeFallback=`；PowerShell 推荐命令使用 `pwsh ... allow-windows-reverse-control.ps1 -Status/-Grant -BoardSummary`，Node fallback 使用 `allow-windows-reverse-control.mjs --status/--grant --boardSummary`。

@@ -404,12 +404,28 @@ async function verifyReverseControlReadinessTokens(args, results) {
       `boardSummary should include reverse grant PowerShell command: ${pending.payload.boardSummary}`,
     );
     assert(
+      pending.payload.boardSummary?.includes("WindowsReverseGrantStatus=") && pending.payload.boardSummary?.includes("-Status -BoardSummary"),
+      `boardSummary should include reverse grant status command: ${pending.payload.boardSummary}`,
+    );
+    assert(
+      pending.payload.boardSummary?.includes("WindowsOpenOneTimeReverseGrant=") && pending.payload.boardSummary?.includes("-Grant -DurationMs 30000 -BoardSummary"),
+      `boardSummary should include one-time reverse grant command: ${pending.payload.boardSummary}`,
+    );
+    assert(
       pending.payload.windowsReverseControlGrantCommand?.includes("allow-windows-reverse-control.mjs"),
       `JSON should include reverse grant command: ${pending.payload.windowsReverseControlGrantCommand}`,
     );
     assert(
       pending.payload.windowsReverseControlGrantPowerShellCommand?.includes("allow-windows-reverse-control.ps1"),
       `JSON should include reverse grant PowerShell command: ${pending.payload.windowsReverseControlGrantPowerShellCommand}`,
+    );
+    assert(
+      pending.payload.windowsReverseGrantStatusPowerShellCommand?.includes("-Status"),
+      `JSON should include reverse grant status PowerShell command: ${pending.payload.windowsReverseGrantStatusPowerShellCommand}`,
+    );
+    assert(
+      pending.payload.windowsOpenOneTimeReverseGrantPowerShellCommand?.includes("-Grant"),
+      `JSON should include one-time reverse grant PowerShell command: ${pending.payload.windowsOpenOneTimeReverseGrantPowerShellCommand}`,
     );
 
     await grantReverseControl(host, port, args.readinessTimeoutMs);
@@ -431,6 +447,10 @@ async function verifyReverseControlReadinessTokens(args, results) {
     assert(
       grant.payload.boardSummary?.includes("ReverseGrantPs=") && grant.payload.boardSummary?.includes("allow-windows-reverse-control.ps1"),
       `boardSummary should include reverse grant PowerShell command while grant is active: ${grant.payload.boardSummary}`,
+    );
+    assert(
+      grant.payload.boardSummary?.includes("WindowsReverseGrantStatus=") && grant.payload.boardSummary?.includes("-Status -BoardSummary"),
+      `boardSummary should include reverse grant status command while grant is active: ${grant.payload.boardSummary}`,
     );
   });
 }
@@ -523,6 +543,8 @@ async function main() {
     assert(powerShellHelp.stdout.includes("WindowsWgcComparePs="), `PowerShell readiness ${helpArg} does not mention WindowsWgcComparePs`);
     assert(powerShellHelp.stdout.includes("compare-windows-wgc-h264-sources.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary"), `PowerShell readiness ${helpArg} does not mention compare PowerShell command`);
     assert(powerShellHelp.stdout.includes("ReverseGrantPs="), `PowerShell readiness ${helpArg} does not mention ReverseGrantPs`);
+    assert(powerShellHelp.stdout.includes("WindowsReverseGrantStatus="), `PowerShell readiness ${helpArg} does not mention WindowsReverseGrantStatus`);
+    assert(powerShellHelp.stdout.includes("WindowsOpenOneTimeReverseGrant="), `PowerShell readiness ${helpArg} does not mention WindowsOpenOneTimeReverseGrant`);
     assert(/do(?:es)? not ask for or print\s+passwords/i.test(powerShellHelp.stdout), `PowerShell readiness ${helpArg} does not document password safety`);
     assert(!powerShellHelp.stdout.includes("[INFO]"), `PowerShell readiness ${helpArg} should not run checks`);
     assertNoSecretLeak(powerShellHelp.stdout, `PowerShell readiness ${helpArg} stdout`);
@@ -603,6 +625,16 @@ async function main() {
     typeof jsonSummary.windowsReverseControlGrantPowerShellCommand === "string"
       && jsonSummary.windowsReverseControlGrantPowerShellCommand.includes("allow-windows-reverse-control.ps1"),
     "JSON windowsReverseControlGrantPowerShellCommand is missing",
+  );
+  assert(
+    typeof jsonSummary.windowsReverseGrantStatusPowerShellCommand === "string"
+      && jsonSummary.windowsReverseGrantStatusPowerShellCommand.includes("-Status"),
+    "JSON windowsReverseGrantStatusPowerShellCommand is missing",
+  );
+  assert(
+    typeof jsonSummary.windowsOpenOneTimeReverseGrantPowerShellCommand === "string"
+      && jsonSummary.windowsOpenOneTimeReverseGrantPowerShellCommand.includes("-Grant"),
+    "JSON windowsOpenOneTimeReverseGrantPowerShellCommand is missing",
   );
   assert(
     typeof jsonSummary.windowsHostMediaReadinessPowerShellCommand === "string"
@@ -744,6 +776,8 @@ async function main() {
     "JSON boardSummary should include the runnable Windows WGC compare PowerShell command",
   );
   assert(jsonSummary.boardSummary.includes("ReverseGrantPs="), "JSON boardSummary should include Windows reverse grant PowerShell command");
+  assert(jsonSummary.boardSummary.includes("WindowsReverseGrantStatus="), "JSON boardSummary should include Windows reverse grant status label");
+  assert(jsonSummary.boardSummary.includes("WindowsOpenOneTimeReverseGrant="), "JSON boardSummary should include Windows one-time reverse grant label");
   assert(
     jsonSummary.boardSummary.includes("allow-windows-reverse-control.ps1"),
     "JSON boardSummary should include the runnable Windows reverse grant PowerShell command",
@@ -885,6 +919,8 @@ async function main() {
     "PowerShell JSON should include Windows WGC compare PowerShell command",
   );
   assert(powerShellJsonSummary.boardSummary.includes("ReverseGrantPs="), "PowerShell JSON boardSummary should include ReverseGrantPs");
+  assert(powerShellJsonSummary.boardSummary.includes("WindowsReverseGrantStatus="), "PowerShell JSON boardSummary should include WindowsReverseGrantStatus");
+  assert(powerShellJsonSummary.boardSummary.includes("WindowsOpenOneTimeReverseGrant="), "PowerShell JSON boardSummary should include WindowsOpenOneTimeReverseGrant");
   assert(
     typeof powerShellJsonSummary.windowsReverseControlGrantPowerShellCommand === "string"
       && powerShellJsonSummary.windowsReverseControlGrantPowerShellCommand.includes("allow-windows-reverse-control.ps1"),
@@ -1028,6 +1064,8 @@ async function main() {
   assert(powerShellBoardLines[0].includes("WindowsWgcCompare="), "PowerShell board summary should include WindowsWgcCompare");
   assert(powerShellBoardLines[0].includes("WindowsWgcComparePs="), "PowerShell board summary should include WindowsWgcComparePs");
   assert(powerShellBoardLines[0].includes("ReverseGrantPs="), "PowerShell board summary should include ReverseGrantPs");
+  assert(powerShellBoardLines[0].includes("WindowsReverseGrantStatus="), "PowerShell board summary should include WindowsReverseGrantStatus");
+  assert(powerShellBoardLines[0].includes("WindowsOpenOneTimeReverseGrant="), "PowerShell board summary should include WindowsOpenOneTimeReverseGrant");
   assert(powerShellBoardLines[0].includes("Do not send passwords"), "PowerShell board summary is missing board safety reminder");
   assert(!/\[(INFO|OK|WARN|ERROR|FAIL)\]/.test(powerShellBoardLines[0]), "PowerShell board summary should be plain one-line text");
   assertNoSecretLeak(powerShellBoardRun.stdout, "PowerShell readiness -BoardSummary stdout");

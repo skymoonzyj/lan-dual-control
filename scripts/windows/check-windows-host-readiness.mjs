@@ -511,6 +511,26 @@ function windowsReverseControlGrantPowerShellCommand(port = defaults.port) {
   return `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port ${safePort} -DurationMs 30000 -BoardSummary`;
 }
 
+function windowsReverseGrantStatusCommand(port = defaults.port) {
+  const safePort = Math.max(1, Math.min(65535, Number(port) || defaults.port));
+  return `node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port ${safePort} --status --boardSummary`;
+}
+
+function windowsReverseGrantStatusPowerShellCommand(port = defaults.port) {
+  const safePort = Math.max(1, Math.min(65535, Number(port) || defaults.port));
+  return `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port ${safePort} -Status -BoardSummary`;
+}
+
+function windowsOpenOneTimeReverseGrantCommand(port = defaults.port) {
+  const safePort = Math.max(1, Math.min(65535, Number(port) || defaults.port));
+  return `node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port ${safePort} --grant --durationMs 30000 --boardSummary`;
+}
+
+function windowsOpenOneTimeReverseGrantPowerShellCommand(port = defaults.port) {
+  const safePort = Math.max(1, Math.min(65535, Number(port) || defaults.port));
+  return `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port ${safePort} -Grant -DurationMs 30000 -BoardSummary`;
+}
+
 function windowsHostMediaReadinessPowerShellCommand() {
   return "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary";
 }
@@ -658,6 +678,10 @@ async function checkRunningHostRuntime(args) {
         windowsHostMediaReadinessPowerShellCommand: statusPayload.windowsHostMediaReadinessPowerShellCommand || windowsHostMediaReadinessPowerShellCommand(),
         windowsReverseControlGrantCommand: statusPayload.windowsReverseControlGrantCommand || windowsReverseControlGrantCommand(args.port),
         windowsReverseControlGrantPowerShellCommand: statusPayload.windowsReverseControlGrantPowerShellCommand || windowsReverseControlGrantPowerShellCommand(args.port),
+        windowsReverseGrantStatusCommand: statusPayload.windowsReverseGrantStatusCommand || windowsReverseGrantStatusCommand(args.port),
+        windowsReverseGrantStatusPowerShellCommand: statusPayload.windowsReverseGrantStatusPowerShellCommand || windowsReverseGrantStatusPowerShellCommand(args.port),
+        windowsOpenOneTimeReverseGrantCommand: statusPayload.windowsOpenOneTimeReverseGrantCommand || windowsOpenOneTimeReverseGrantCommand(args.port),
+        windowsOpenOneTimeReverseGrantPowerShellCommand: statusPayload.windowsOpenOneTimeReverseGrantPowerShellCommand || windowsOpenOneTimeReverseGrantPowerShellCommand(args.port),
         windowsVideoEncoderSupportCommand: statusPayload.windowsVideoEncoderSupportCommand || windowsVideoEncoderSupportCommand(),
         windowsVideoEncoderSupportPowerShellCommand: statusPayload.windowsVideoEncoderSupportPowerShellCommand || windowsVideoEncoderSupportPowerShellCommand(),
         windowsWgcSupportCommand: statusPayload.windowsWgcSupportCommand || windowsWgcSupportCommand(),
@@ -724,6 +748,10 @@ async function checkRunningHostRuntime(args) {
       windowsHostMediaReadinessPowerShellCommand: statusPayload.windowsHostMediaReadinessPowerShellCommand || windowsHostMediaReadinessPowerShellCommand(),
       windowsReverseControlGrantCommand: statusPayload.windowsReverseControlGrantCommand || windowsReverseControlGrantCommand(args.port),
       windowsReverseControlGrantPowerShellCommand: statusPayload.windowsReverseControlGrantPowerShellCommand || windowsReverseControlGrantPowerShellCommand(args.port),
+      windowsReverseGrantStatusCommand: statusPayload.windowsReverseGrantStatusCommand || windowsReverseGrantStatusCommand(args.port),
+      windowsReverseGrantStatusPowerShellCommand: statusPayload.windowsReverseGrantStatusPowerShellCommand || windowsReverseGrantStatusPowerShellCommand(args.port),
+      windowsOpenOneTimeReverseGrantCommand: statusPayload.windowsOpenOneTimeReverseGrantCommand || windowsOpenOneTimeReverseGrantCommand(args.port),
+      windowsOpenOneTimeReverseGrantPowerShellCommand: statusPayload.windowsOpenOneTimeReverseGrantPowerShellCommand || windowsOpenOneTimeReverseGrantPowerShellCommand(args.port),
       windowsVideoEncoderSupportCommand: statusPayload.windowsVideoEncoderSupportCommand || windowsVideoEncoderSupportCommand(),
       windowsVideoEncoderSupportPowerShellCommand: statusPayload.windowsVideoEncoderSupportPowerShellCommand || windowsVideoEncoderSupportPowerShellCommand(),
       windowsWgcSupportCommand: statusPayload.windowsWgcSupportCommand || windowsWgcSupportCommand(),
@@ -753,6 +781,10 @@ async function checkRunningHostRuntime(args) {
       windowsHostMediaReadinessPowerShellCommand: windowsHostMediaReadinessPowerShellCommand(),
       windowsReverseControlGrantCommand: windowsReverseControlGrantCommand(args.port),
       windowsReverseControlGrantPowerShellCommand: windowsReverseControlGrantPowerShellCommand(args.port),
+      windowsReverseGrantStatusCommand: windowsReverseGrantStatusCommand(args.port),
+      windowsReverseGrantStatusPowerShellCommand: windowsReverseGrantStatusPowerShellCommand(args.port),
+      windowsOpenOneTimeReverseGrantCommand: windowsOpenOneTimeReverseGrantCommand(args.port),
+      windowsOpenOneTimeReverseGrantPowerShellCommand: windowsOpenOneTimeReverseGrantPowerShellCommand(args.port),
       windowsVideoEncoderSupportCommand: windowsVideoEncoderSupportCommand(),
       windowsVideoEncoderSupportPowerShellCommand: windowsVideoEncoderSupportPowerShellCommand(),
       windowsWgcSupportCommand: windowsWgcSupportCommand(),
@@ -797,6 +829,18 @@ function makeReadinessBoardSummary(summary) {
     : "";
   const reverseGrantPowerShell = summary.windowsReverseControlGrantPowerShellCommand && !runtimeText.includes("ReverseGrantPs=")
     ? ` ReverseGrantPs=${summary.windowsReverseControlGrantPowerShellCommand}.`
+    : "";
+  const reverseGrantStatus = summary.windowsReverseGrantStatusPowerShellCommand && !runtimeText.includes("WindowsReverseGrantStatus=")
+    ? ` WindowsReverseGrantStatus=${summary.windowsReverseGrantStatusPowerShellCommand}.`
+    : "";
+  const openOneTimeReverseGrant = summary.windowsOpenOneTimeReverseGrantPowerShellCommand && !runtimeText.includes("WindowsOpenOneTimeReverseGrant=")
+    ? ` WindowsOpenOneTimeReverseGrant=${summary.windowsOpenOneTimeReverseGrantPowerShellCommand}.`
+    : "";
+  const reverseGrantStatusNode = summary.windowsReverseGrantStatusCommand && !runtimeText.includes("WindowsReverseGrantStatusNodeFallback=")
+    ? ` WindowsReverseGrantStatusNodeFallback=${summary.windowsReverseGrantStatusCommand}.`
+    : "";
+  const openOneTimeReverseGrantNode = summary.windowsOpenOneTimeReverseGrantCommand && !runtimeText.includes("WindowsOpenOneTimeReverseGrantNodeFallback=")
+    ? ` WindowsOpenOneTimeReverseGrantNodeFallback=${summary.windowsOpenOneTimeReverseGrantCommand}.`
     : "";
   const hostMediaPowerShell = summary.windowsHostMediaReadinessPowerShellCommand
     && (!runtimeText.includes("WindowsHostMediaPs=") || !runtimeText.includes(summary.windowsHostMediaReadinessPowerShellCommand))
@@ -848,7 +892,7 @@ function makeReadinessBoardSummary(summary) {
   const probeText = probeSentences
     .map((sentence) => (sentence.endsWith(".") ? sentence : `${sentence}.`))
     .join(" ");
-  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrant}${reverseGrantPowerShell}${hostMediaPowerShell}${videoSupport}${videoSupportPowerShell}${wgcSupport}${wgcSupportPowerShell}${webCodecs}${webCodecsPowerShell}${wgcBenchmark}${wgcBenchmarkPowerShell}${wgcCompare}${wgcComparePowerShell}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
+  return `Windows readiness ${state} (${mode}): checks=${summary.passed}/${summary.results.length} failed=${summary.failed} warnings=${summary.warnings}; target=${summary.args.host}:${summary.args.port}; ${media};${activeCall} ${runtimeSentence}${reverseGrantStatus}${openOneTimeReverseGrant}${reverseGrantStatusNode}${openOneTimeReverseGrantNode}${reverseGrant}${reverseGrantPowerShell}${hostMediaPowerShell}${videoSupport}${videoSupportPowerShell}${wgcSupport}${wgcSupportPowerShell}${webCodecs}${webCodecsPowerShell}${wgcBenchmark}${wgcBenchmarkPowerShell}${wgcCompare}${wgcComparePowerShell}${next ? ` ${next}` : ""}${probeText ? ` ${probeText}` : ""}${safety}`;
 }
 
 function formatMediaBoardSummary(summary) {
@@ -1291,6 +1335,18 @@ async function main() {
   const windowsReverseControlGrantPowerShellCommandValue = results.find((result) =>
     typeof result.windowsReverseControlGrantPowerShellCommand === "string" && result.windowsReverseControlGrantPowerShellCommand,
   )?.windowsReverseControlGrantPowerShellCommand || windowsReverseControlGrantPowerShellCommand(args.port);
+  const windowsReverseGrantStatusCommandValue = results.find((result) =>
+    typeof result.windowsReverseGrantStatusCommand === "string" && result.windowsReverseGrantStatusCommand,
+  )?.windowsReverseGrantStatusCommand || windowsReverseGrantStatusCommand(args.port);
+  const windowsReverseGrantStatusPowerShellCommandValue = results.find((result) =>
+    typeof result.windowsReverseGrantStatusPowerShellCommand === "string" && result.windowsReverseGrantStatusPowerShellCommand,
+  )?.windowsReverseGrantStatusPowerShellCommand || windowsReverseGrantStatusPowerShellCommand(args.port);
+  const windowsOpenOneTimeReverseGrantCommandValue = results.find((result) =>
+    typeof result.windowsOpenOneTimeReverseGrantCommand === "string" && result.windowsOpenOneTimeReverseGrantCommand,
+  )?.windowsOpenOneTimeReverseGrantCommand || windowsOpenOneTimeReverseGrantCommand(args.port);
+  const windowsOpenOneTimeReverseGrantPowerShellCommandValue = results.find((result) =>
+    typeof result.windowsOpenOneTimeReverseGrantPowerShellCommand === "string" && result.windowsOpenOneTimeReverseGrantPowerShellCommand,
+  )?.windowsOpenOneTimeReverseGrantPowerShellCommand || windowsOpenOneTimeReverseGrantPowerShellCommand(args.port);
   const windowsVideoEncoderSupportCommandValue = results.find((result) =>
     typeof result.windowsVideoEncoderSupportCommand === "string" && result.windowsVideoEncoderSupportCommand,
   )?.windowsVideoEncoderSupportCommand || windowsVideoEncoderSupportCommand();
@@ -1356,6 +1412,10 @@ async function main() {
     windowsHostMediaReadinessPowerShellCommand: windowsHostMediaReadinessPowerShellCommandValue,
     windowsReverseControlGrantCommand: windowsReverseControlGrantCommandValue,
     windowsReverseControlGrantPowerShellCommand: windowsReverseControlGrantPowerShellCommandValue,
+    windowsReverseGrantStatusCommand: windowsReverseGrantStatusCommandValue,
+    windowsReverseGrantStatusPowerShellCommand: windowsReverseGrantStatusPowerShellCommandValue,
+    windowsOpenOneTimeReverseGrantCommand: windowsOpenOneTimeReverseGrantCommandValue,
+    windowsOpenOneTimeReverseGrantPowerShellCommand: windowsOpenOneTimeReverseGrantPowerShellCommandValue,
     windowsVideoEncoderSupportCommand: windowsVideoEncoderSupportCommandValue,
     windowsVideoEncoderSupportPowerShellCommand: windowsVideoEncoderSupportPowerShellCommandValue,
     windowsWgcSupportCommand: windowsWgcSupportCommandValue,
@@ -1380,6 +1440,10 @@ async function main() {
       windowsHostMediaReadinessPowerShellCommand: result.windowsHostMediaReadinessPowerShellCommand || "",
       windowsReverseControlGrantCommand: result.windowsReverseControlGrantCommand || "",
       windowsReverseControlGrantPowerShellCommand: result.windowsReverseControlGrantPowerShellCommand || "",
+      windowsReverseGrantStatusCommand: result.windowsReverseGrantStatusCommand || "",
+      windowsReverseGrantStatusPowerShellCommand: result.windowsReverseGrantStatusPowerShellCommand || "",
+      windowsOpenOneTimeReverseGrantCommand: result.windowsOpenOneTimeReverseGrantCommand || "",
+      windowsOpenOneTimeReverseGrantPowerShellCommand: result.windowsOpenOneTimeReverseGrantPowerShellCommand || "",
       windowsVideoEncoderSupportCommand: result.windowsVideoEncoderSupportCommand || "",
       windowsVideoEncoderSupportPowerShellCommand: result.windowsVideoEncoderSupportPowerShellCommand || "",
       windowsWgcSupportCommand: result.windowsWgcSupportCommand || "",

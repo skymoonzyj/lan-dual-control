@@ -258,6 +258,8 @@ async function assertPowerShellWrapperHelp(timeoutMs) {
     assertIncludes(output, "compare-windows-wgc-h264-sources.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "ReverseGrant=", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "ReverseGrantPs=", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "WindowsReverseGrantStatus=", `PowerShell wrapper ${helpArg}`);
+    assertIncludes(output, "WindowsOpenOneTimeReverseGrant=", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "allow-windows-reverse-control.ps1 -HostName 127.0.0.1", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "never starts Windows host", `PowerShell wrapper ${helpArg}`);
     assertIncludes(output, "never asks for or prints passwords", `PowerShell wrapper ${helpArg}`);
@@ -426,6 +428,12 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   if (!String(parsed.windowsReverseControlGrantPowerShellCommand || "").includes("allow-windows-reverse-control.ps1") || !String(parsed.windowsReverseControlGrantPowerShellCommand || "").includes("-BoardSummary")) {
     throw new Error(`Offline JSON status did not include Windows reverse grant PowerShell command.\n${jsonResult.stdout}`);
   }
+  if (!String(parsed.windowsReverseGrantStatusCommand || "").includes("--status") || !String(parsed.windowsReverseGrantStatusPowerShellCommand || "").includes("-Status")) {
+    throw new Error(`Offline JSON status did not include Windows reverse grant status commands.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.windowsOpenOneTimeReverseGrantCommand || "").includes("--grant") || !String(parsed.windowsOpenOneTimeReverseGrantPowerShellCommand || "").includes("-Grant")) {
+    throw new Error(`Offline JSON status did not include Windows one-time reverse grant commands.\n${jsonResult.stdout}`);
+  }
   if (!String(parsed.boardSummary || "").includes("WindowsHostMedia=")) {
     throw new Error(`Offline JSON board summary did not include WindowsHostMedia command.\n${jsonResult.stdout}`);
   }
@@ -461,6 +469,21 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   }
   if (!String(parsed.boardSummary || "").includes("WindowsWgcComparePs=") || !String(parsed.boardSummary || "").includes("compare-windows-wgc-h264-sources.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary")) {
     throw new Error(`Offline JSON board summary did not include WindowsWgcComparePs command.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.boardSummary || "").includes("WindowsReverseGrantStatus=") || !String(parsed.boardSummary || "").includes("-Status -BoardSummary")) {
+    throw new Error(`Offline JSON board summary did not include WindowsReverseGrantStatus command.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.boardSummary || "").includes("WindowsOpenOneTimeReverseGrant=") || !String(parsed.boardSummary || "").includes("-Grant -DurationMs 30000 -BoardSummary")) {
+    throw new Error(`Offline JSON board summary did not include WindowsOpenOneTimeReverseGrant command.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.boardSummary || "").includes("WindowsReverseGrantStatusNodeFallback=") || !String(parsed.boardSummary || "").includes("--status --boardSummary")) {
+    throw new Error(`Offline JSON board summary did not include WindowsReverseGrantStatusNodeFallback command.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.boardSummary || "").includes("WindowsOpenOneTimeReverseGrantNodeFallback=") || !String(parsed.boardSummary || "").includes("--grant --durationMs 30000 --boardSummary")) {
+    throw new Error(`Offline JSON board summary did not include WindowsOpenOneTimeReverseGrantNodeFallback command.\n${jsonResult.stdout}`);
+  }
+  if (!String(parsed.boardSummary || "").includes("ReverseGrantPs=") || !String(parsed.boardSummary || "").includes("allow-windows-reverse-control.ps1")) {
+    throw new Error(`Offline JSON board summary did not include legacy ReverseGrantPs command.\n${jsonResult.stdout}`);
   }
   assertNotIncludes(jsonOutput, "[INFO]", "offline JSON status");
   assertNotIncludes(jsonOutput, "LAN_DUAL_PASSWORD is required", "offline JSON status");
@@ -501,6 +524,16 @@ async function assertStatusOfflineNeedsNoPassword(timeoutMs) {
   assertIncludes(boardResult.stdout, "compare-windows-wgc-h264-sources.mjs --profile 60:20000:balanced --durationMs 1800 --boardSummary", "offline board summary");
   assertIncludes(boardResult.stdout, "WindowsWgcComparePs=", "offline board summary");
   assertIncludes(boardResult.stdout, "compare-windows-wgc-h264-sources.ps1 -Profile 60:20000:balanced -DurationMs 1800 -BoardSummary", "offline board summary");
+  assertIncludes(boardResult.stdout, "WindowsReverseGrantStatus=", "offline board summary");
+  assertIncludes(boardResult.stdout, "-Status -BoardSummary", "offline board summary");
+  assertIncludes(boardResult.stdout, "WindowsOpenOneTimeReverseGrant=", "offline board summary");
+  assertIncludes(boardResult.stdout, "-Grant -DurationMs 30000 -BoardSummary", "offline board summary");
+  assertIncludes(boardResult.stdout, "WindowsReverseGrantStatusNodeFallback=", "offline board summary");
+  assertIncludes(boardResult.stdout, "--status --boardSummary", "offline board summary");
+  assertIncludes(boardResult.stdout, "WindowsOpenOneTimeReverseGrantNodeFallback=", "offline board summary");
+  assertIncludes(boardResult.stdout, "--grant --durationMs 30000 --boardSummary", "offline board summary");
+  assertIncludes(boardResult.stdout, "ReverseGrant=", "offline board summary");
+  assertIncludes(boardResult.stdout, "ReverseGrantPs=", "offline board summary");
   assertIncludes(boardResult.stdout, "Do not send passwords", "offline board summary");
   assertNotIncludes(boardOutput, "LAN_DUAL_PASSWORD is required", "offline board summary");
   print("OK", "Status mode reports offline host without requiring a password");
@@ -798,6 +831,12 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         if (!String(parsed.windowsReverseControlGrantPowerShellCommand || "").includes("allow-windows-reverse-control.ps1") || !String(parsed.windowsReverseControlGrantPowerShellCommand || "").includes("-HostName 127.0.0.1")) {
           throw new Error(`Online JSON status did not include Windows reverse grant PowerShell command.\n${jsonResult.stdout}`);
         }
+        if (!String(parsed.windowsReverseGrantStatusCommand || "").includes("--status") || !String(parsed.windowsReverseGrantStatusPowerShellCommand || "").includes("-Status")) {
+          throw new Error(`Online JSON status did not include Windows reverse grant status commands.\n${jsonResult.stdout}`);
+        }
+        if (!String(parsed.windowsOpenOneTimeReverseGrantCommand || "").includes("--grant") || !String(parsed.windowsOpenOneTimeReverseGrantPowerShellCommand || "").includes("-Grant")) {
+          throw new Error(`Online JSON status did not include Windows one-time reverse grant commands.\n${jsonResult.stdout}`);
+        }
         if (!String(parsed.boardSummary || "").includes("WindowsHostMedia=")) {
           throw new Error(`Online JSON board summary did not include WindowsHostMedia command.\n${jsonResult.stdout}`);
         }
@@ -839,6 +878,12 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         }
         if (!String(parsed.boardSummary || "").includes("ReverseGrantPs=") || !String(parsed.boardSummary || "").includes("allow-windows-reverse-control.ps1")) {
           throw new Error(`Online JSON board summary did not include Windows reverse grant PowerShell command.\n${jsonResult.stdout}`);
+        }
+        if (!String(parsed.boardSummary || "").includes("WindowsReverseGrantStatus=") || !String(parsed.boardSummary || "").includes("-Status -BoardSummary")) {
+          throw new Error(`Online JSON board summary did not include Windows reverse grant status label.\n${jsonResult.stdout}`);
+        }
+        if (!String(parsed.boardSummary || "").includes("WindowsOpenOneTimeReverseGrant=") || !String(parsed.boardSummary || "").includes("-Grant -DurationMs 30000 -BoardSummary")) {
+          throw new Error(`Online JSON board summary did not include Windows one-time reverse grant label.\n${jsonResult.stdout}`);
         }
         if (parsed.buildDiff?.checked !== false || !String(parsed.buildDiff?.message || "").includes("Could not inspect")) {
           throw new Error(`Online JSON status did not include expected uninspectable build diff.\n${jsonResult.stdout}`);
@@ -888,6 +933,10 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         assertIncludes(boardResult.stdout, "allow-windows-reverse-control.mjs --host 127.0.0.1", "online board summary");
         assertIncludes(boardResult.stdout, "ReverseGrantPs=", "online board summary");
         assertIncludes(boardResult.stdout, "allow-windows-reverse-control.ps1 -HostName 127.0.0.1", "online board summary");
+        assertIncludes(boardResult.stdout, "WindowsReverseGrantStatus=", "online board summary");
+        assertIncludes(boardResult.stdout, "-Status -BoardSummary", "online board summary");
+        assertIncludes(boardResult.stdout, "WindowsOpenOneTimeReverseGrant=", "online board summary");
+        assertIncludes(boardResult.stdout, "-Grant -DurationMs 30000 -BoardSummary", "online board summary");
         assertIncludes(boardResult.stdout, "Do not send passwords", "online board summary");
         assertNotIncludes(boardOutput, "test-password", "online board summary");
         finish();
