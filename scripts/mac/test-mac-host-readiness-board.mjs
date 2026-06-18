@@ -144,6 +144,17 @@ function formatHostMediaBoardSummaryFixture(summary) {
   return Function("summary", `${helpers}\nreturn formatHostMediaBoardSummary(summary);`)(summary);
 }
 
+function formatReadinessFindingsFixture(results) {
+  const source = readFileSync(new URL("./check-mac-host-readiness.mjs", import.meta.url), "utf8");
+  const helpers = [
+    functionBlock(source, "normalizedText"),
+    functionBlock(source, "readinessResultId"),
+    functionBlock(source, "summarizeReadinessResultIds"),
+    functionBlock(source, "formatReadinessFindings"),
+  ].join("\n");
+  return Function("results", `${helpers}\nreturn formatReadinessFindings(results);`)(results);
+}
+
 function waitForPort(child, getStdout, getStderr) {
   return new Promise((resolve, reject) => {
     const started = Date.now();
@@ -241,6 +252,8 @@ function checkDefaultDoesNotReadBoard(args) {
   assert(payload.board?.checked === false, "default readiness should not read Agent Link Board");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand || "", "default readiness JSON LaunchAgent planner command");
   assert(String(payload.boardSummary || "").includes("call=not-checked"), "default boardSummary should mark call not checked");
+  assert(String(payload.boardSummary || "").includes("blockers="), "default boardSummary should include blocker ids");
+  assert(String(payload.boardSummary || "").includes("warnings="), "default boardSummary should include warning ids");
   assert(String(payload.boardSummary || "").includes("MacLaunchAgentPlan="), "default boardSummary should include LaunchAgent planner guidance");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "default readiness JSON");
   print("OK", "Mac host readiness does not read Agent Link Board by default");
@@ -312,6 +325,23 @@ function checkMediaBoardSummaryStatusFormatting() {
     "media board summary should keep a media=failed fallback",
   );
   print("OK", "Mac host readiness media boardSummary formats ok/partial/failed");
+}
+
+function checkReadinessFindingsFormatting() {
+  assert(
+    formatReadinessFindingsFixture([
+      { label: "Mac host media aggregate", ok: false, warnings: [] },
+      { label: "Mac host discovery", ok: true, warnings: ["offline"] },
+      { label: "Agent Link Board currentCall", ok: true, warnings: ["active call"] },
+      { label: "Agent Link Board currentCall", ok: true, warnings: ["duplicate warning"] },
+    ]) === "blockers=mac-host-media-aggregate warnings=mac-host-discovery,agent-link-board-currentcall",
+    "readiness findings should summarize failed and warning labels as stable ids",
+  );
+  assert(
+    formatReadinessFindingsFixture([{ label: "Node.js", ok: true, warnings: [] }]) === "blockers=none warnings=none",
+    "readiness findings should emit explicit none values",
+  );
+  print("OK", "Mac host readiness boardSummary findings use stable ids");
 }
 
 function checkH264FallbackPipelineFormatting() {
@@ -428,6 +458,8 @@ function checkProbeMediaBoardSummary(args) {
   assert(result.status !== 0, "offline --probeMedia boardSummary should fail readiness");
   const lines = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean);
   assert(lines.length === 1, `offline --probeMedia boardSummary should print one line, got ${lines.length}`);
+  assert(lines[0].includes("blockers=mac-host-media-aggregate"), "offline --probeMedia boardSummary should name media aggregate blocker");
+  assert(lines[0].includes("warnings=mac-host-discovery"), "offline --probeMedia boardSummary should name discovery warning");
   assert(lines[0].includes("media=failed("), "offline --probeMedia boardSummary should include failed media status");
   assert(lines[0].includes("MacLaunchAgentPlan="), "offline --probeMedia boardSummary should include LaunchAgent planner guidance");
   assert(!lines[0].includes("media=passed"), "offline --probeMedia boardSummary should not use legacy passed wording");
@@ -466,6 +498,8 @@ async function checkActiveBoardCall(args) {
     assert(payload.board?.currentCall?.goal === call.goal, "active board JSON should keep call goal");
     assert(payload.board?.currentCall?.command === call.command, "active board JSON should keep command for automation");
     assert(String(payload.boardSummary || "").includes("call=active"), "boardSummary should mention active call");
+    assert(String(payload.boardSummary || "").includes("warnings="), "active boardSummary should include warning ids");
+    assert(String(payload.boardSummary || "").includes("agent-link-board-currentcall"), "active boardSummary should name board currentCall warning");
     assert(String(payload.boardSummary || "").includes("MacLaunchAgentPlan="), "boardSummary should include LaunchAgent planner guidance");
     assert(String(payload.boardSummary || "").includes(call.goal), "boardSummary should include call goal");
     assert(!String(payload.boardSummary || "").includes("super-secret-command-token"), "boardSummary should not echo command");
@@ -534,6 +568,8 @@ async function checkBoardSummary(args) {
     const lines = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean);
     assert(lines.length === 1, `boardSummary should print one line, got ${lines.length}`);
     assert(lines[0].includes("Mac host readiness:"), "boardSummary should identify readiness");
+    assert(lines[0].includes("blockers="), "boardSummary should include blocker ids");
+    assert(lines[0].includes("warnings="), "boardSummary should include warning ids");
     assert(lines[0].includes("call=active"), "boardSummary should mention active call");
     assert(lines[0].includes("MacLaunchAgentPlan="), "boardSummary should include LaunchAgent planner guidance");
     assert(lines[0].includes(call.goal), "boardSummary should include call goal");
@@ -569,6 +605,7 @@ async function main() {
   checkHelp(args);
   checkDefaultDoesNotReadBoard(args);
   checkMediaBoardSummaryStatusFormatting();
+  checkReadinessFindingsFormatting();
   checkH264FallbackPipelineFormatting();
   checkProbeMediaOfflineJson(args);
   checkProbeMediaResourceSampleImpliesProbeMedia(args);

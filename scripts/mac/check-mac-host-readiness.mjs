@@ -634,15 +634,40 @@ function formatReadinessBoardSummary(summary) {
     : warnings > 0
       ? `attention=${warnings} warning(s)`
       : "attention=none";
+  const findings = formatReadinessFindings(summary.results);
   const probe = `${summary.args?.host || "127.0.0.1"}:${summary.args?.port || 43770}`;
   const media = formatMediaBoardSummary(summary);
   const hostMedia = formatHostMediaBoardSummary(summary);
   return [
-    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${media}${hostMedia ? `; ${hostMedia}` : ""}; ${formatBoardCallSummary(summary.board)}.`,
+    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${hostMedia ? `; ${hostMedia}` : ""}; ${formatBoardCallSummary(summary.board)}.`,
     `MacLaunchAgentPlan=${summary.commands?.macLaunchAgentPlanCommand || makeMacLaunchAgentPlanCommand(summary.args || {})}.`,
     "Next: fix failed checks before formal E2E; keep inputMode=log for unattended checks.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
+}
+
+function formatReadinessFindings(results) {
+  const items = Array.isArray(results) ? results : [];
+  const blockers = summarizeReadinessResultIds(items.filter((item) => item && item.ok === false));
+  const warnings = summarizeReadinessResultIds(items.filter((item) => Array.isArray(item?.warnings) && item.warnings.length > 0));
+  return `blockers=${blockers} warnings=${warnings}`;
+}
+
+function summarizeReadinessResultIds(items) {
+  const ids = [...new Set(items
+    .map((item) => readinessResultId(item?.label || item?.id || "unknown"))
+    .filter(Boolean))];
+  if (ids.length === 0) return "none";
+  if (ids.length <= 4) return ids.join(",");
+  return `${ids.slice(0, 4).join(",")}+${ids.length - 4}more`;
+}
+
+function readinessResultId(label) {
+  const normalized = normalizedText(label)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || "unknown";
 }
 
 function formatHostMediaBoardSummary(summary) {
