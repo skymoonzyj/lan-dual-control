@@ -2435,6 +2435,10 @@ function formatFloatingClipboardStatus() {
     return `剪贴板：已收 ${state.receivedClipboardFiles.length} 个远端文件`;
   }
 
+  if (state.lastOutgoingFileTransfer?.status === "remote-result") {
+    return `剪贴板：${compactFloatingStatusText(describeOutgoingFileResultStatus(state.lastOutgoingFileTransfer), 56)}`;
+  }
+
   if (state.lastOutgoingFileTransfer?.status === "failed") {
     return `剪贴板：${compactFloatingStatusText(describeLastOutgoingFileTransferStatus(state.lastOutgoingFileTransfer), 56)}`;
   }
@@ -4657,7 +4661,21 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
       fileCount: files.length,
     });
     transferSucceeded = true;
-    elements.clipboardText.textContent = `剪贴板：文件已发送 ${formatBytes(sentBytes)}`;
+    state.lastOutgoingFileTransfer = {
+      ...(state.outgoingFileTransfer || {}),
+      transferId,
+      status: "sent",
+      totalBytes,
+      sentBytes,
+      fileCount: files.length,
+      files: fileMetas,
+      completedAt: Date.now(),
+      lastActivityAt: Date.now(),
+      rateSamples: Array.isArray(state.outgoingFileTransfer?.rateSamples)
+        ? [...state.outgoingFileTransfer.rateSamples]
+        : [],
+    };
+    elements.clipboardText.textContent = `剪贴板：文件已发送 ${formatBytes(sentBytes)}，等待对端确认`;
     syncFloatingControlStatus();
     addLog(sourceLabel, `文件块发送完成，等待对端确认 · ${transferId}`);
   } catch (error) {
@@ -5808,6 +5826,46 @@ function describeLastOutgoingFileTransferStatus(transfer = {}) {
   return `文件发送失败 ${countText}：${outgoingFileTransferProgressText(transfer)}，${retryText}${errorText}`;
 }
 
+function outgoingFileResultBytesText(result = {}) {
+  const receivedBytes = Math.max(0, Number(result.receivedBytes) || 0);
+  const totalBytes = Math.max(0, Number(result.totalBytes) || 0);
+  if (receivedBytes > 0 && totalBytes > 0 && receivedBytes !== totalBytes) {
+    return `${formatBytes(receivedBytes)}/${formatBytes(totalBytes)}`;
+  }
+  if (totalBytes > 0) {
+    return formatBytes(totalBytes);
+  }
+  if (receivedBytes > 0) {
+    return formatBytes(receivedBytes);
+  }
+  return "";
+}
+
+function describeOutgoingFileResultStatus(result = {}) {
+  const fileCount = Number(result.fileCount) || (Array.isArray(result.files) ? result.files.length : 0);
+  const countText = fileCount > 0 ? `${fileCount} 个文件` : "文件";
+  const bytesText = outgoingFileResultBytesText(result);
+  const sizeText = bytesText ? `，${bytesText}` : "";
+  const reasonText = result.reason
+    ? ` · ${String(result.reason).replace(/\s+/g, " ").slice(0, 90)}`
+    : "";
+
+  if (!result.accepted) {
+    return `对端文件接收失败（${countText}${sizeText}）${reasonText}`;
+  }
+
+  if (result.saveMode === "clipboard") {
+    return `对端已接收并写入系统文件剪贴板（${countText}${sizeText}）${reasonText}`;
+  }
+  if (result.saveMode === "temp") {
+    return `对端已接收，系统剪贴板未写入，已保存到临时目录（${countText}${sizeText}）${reasonText}`;
+  }
+  if (result.saveMode === "memory-only") {
+    return `对端已接收，暂存在远端托盘（${countText}${sizeText}）${reasonText}`;
+  }
+  return `对端已完成文件接收（${countText}${sizeText}）${reasonText}`;
+}
+
 function remoteFileTransferRateText(transfer = {}, now = Date.now()) {
   const receivedBytes = Math.max(0, Number(transfer.receivedBytes) || 0);
   if (receivedBytes <= 0) return "";
@@ -6497,11 +6555,21 @@ function handleClipboardFileProgress(message) {
 }
 
 function handleClipboardFileResult(message) {
-  elements.clipboardText.textContent = message.accepted
-    ? "剪贴板：对端已完成文件接收"
-    : "剪贴板：对端文件接收失败";
+  const previousTransfer = state.lastOutgoingFileTransfer?.transferId === message.transferId
+    ? state.lastOutgoingFileTransfer
+    : {};
+  state.lastOutgoingFileTransfer = {
+    ...previousTransfer,
+    ...message,
+    status: "remote-result",
+    accepted: Boolean(message.accepted),
+    completedAt: Date.now(),
+    lastActivityAt: Date.now(),
+  };
+  const detail = describeOutgoingFileResultStatus(state.lastOutgoingFileTransfer);
+  elements.clipboardText.textContent = `剪贴板：${detail}`;
   syncFloatingControlStatus();
-  addLog("文件剪贴板", message.reason || (message.accepted ? "对端已完成文件接收" : "对端文件接收失败"));
+  addLog("文件剪贴板", detail);
 }
 
 async function receiveClipboardText(message) {

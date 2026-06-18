@@ -2405,6 +2405,122 @@ async function verifyFileClipboardRecoveryText(session) {
   return result;
 }
 
+async function verifyOutgoingFileResultStatus(session) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      if (
+        typeof handleClipboardFileResult !== "function" ||
+        typeof formatFloatingClipboardStatus !== "function" ||
+        typeof syncFloatingControlStatus !== "function"
+      ) {
+        return { ok: false, reason: "missing outgoing file result helpers" };
+      }
+      if (typeof state !== "object" || typeof elements !== "object") {
+        return { ok: false, reason: "missing app state" };
+      }
+
+      const originalLastOutgoingTransfer = state.lastOutgoingFileTransfer;
+      const originalConnected = state.connected;
+      const originalClipboardToggle = elements.clipboardToggle.checked;
+      try {
+        state.connected = true;
+        elements.clipboardToggle.checked = true;
+        state.lastOutgoingFileTransfer = {
+          transferId: "result-clipboard",
+          status: "sent",
+          fileCount: 2,
+          sentBytes: 4096,
+          totalBytes: 4096,
+          files: [
+            { index: 0, name: "a.txt", size: 2048 },
+            { index: 1, name: "b.zip", size: 2048 },
+          ],
+        };
+        handleClipboardFileResult({
+          type: "clipboard_file_result",
+          transferId: "result-clipboard",
+          accepted: true,
+          saveMode: "clipboard",
+          fileCount: 2,
+          receivedBytes: 4096,
+          totalBytes: 4096,
+          reason: "macOS 系统剪贴板已写入。",
+        });
+        const clipboardText = elements.clipboardText.textContent || "";
+        const floatingClipboardText = formatFloatingClipboardStatus();
+
+        handleClipboardFileResult({
+          type: "clipboard_file_result",
+          transferId: "result-temp",
+          accepted: true,
+          saveMode: "temp",
+          fileCount: 1,
+          receivedBytes: 2048,
+          totalBytes: 2048,
+          reason: "系统文件剪贴板写入失败，已保存到临时目录。",
+        });
+        const tempText = elements.clipboardText.textContent || "";
+
+        handleClipboardFileResult({
+          type: "clipboard_file_result",
+          transferId: "result-memory",
+          accepted: true,
+          saveMode: "memory-only",
+          fileCount: 1,
+          receivedBytes: 128,
+          totalBytes: 128,
+          reason: "浏览器预览版只能保留内存托盘。",
+        });
+        const memoryText = elements.clipboardText.textContent || "";
+
+        handleClipboardFileResult({
+          type: "clipboard_file_result",
+          transferId: "result-failed",
+          accepted: false,
+          fileCount: 1,
+          receivedBytes: 2048,
+          totalBytes: 4096,
+          reason: "接收超时",
+        });
+        const failedText = elements.clipboardText.textContent || "";
+        const resultState = state.lastOutgoingFileTransfer || {};
+
+        return {
+          ok:
+            clipboardText.includes("对端已接收并写入系统文件剪贴板") &&
+            clipboardText.includes("2 个文件") &&
+            clipboardText.includes("4.0 KB") &&
+            floatingClipboardText.includes("系统文件剪贴板") &&
+            tempText.includes("临时目录") &&
+            tempText.includes("2.0 KB") &&
+            memoryText.includes("远端托盘") &&
+            failedText.includes("对端文件接收失败") &&
+            failedText.includes("2.0 KB/4.0 KB") &&
+            failedText.includes("接收超时") &&
+            resultState.status === "remote-result" &&
+            resultState.accepted === false,
+          clipboardText,
+          floatingClipboardText,
+          tempText,
+          memoryText,
+          failedText,
+          resultState,
+        };
+      } finally {
+        state.lastOutgoingFileTransfer = originalLastOutgoingTransfer;
+        state.connected = originalConnected;
+        elements.clipboardToggle.checked = originalClipboardToggle;
+        syncFloatingControlStatus();
+      }
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`outgoing file result status check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 async function verifyFileClipboardIntegrityGuards(session) {
   const result = await evaluate(
     session,
@@ -4038,6 +4154,9 @@ async function run() {
     const fileClipboardRecoveryCheck = await verifyFileClipboardRecoveryText(session);
     summary.checks.push("file-clipboard-recovery");
     print("OK", `File clipboard recovery: ${fileClipboardRecoveryCheck.recovery}`);
+    const outgoingFileResultCheck = await verifyOutgoingFileResultStatus(session);
+    summary.checks.push("file-clipboard-outgoing-result");
+    print("OK", `File clipboard outgoing result: ${outgoingFileResultCheck.clipboardText}`);
     const fileClipboardIntegrityCheck = await verifyFileClipboardIntegrityGuards(session);
     summary.checks.push("file-clipboard-integrity");
     print("OK", `File clipboard integrity guards: rejected=${fileClipboardIntegrityCheck.rejectedResults.length}`);

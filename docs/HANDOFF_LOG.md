@@ -21,6 +21,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端发送文件后能看清对端实际处理结果。
+完成内容：
+- 本机分块发送完成后，顶部剪贴板状态会显示“等待对端确认”，避免把网络发送完成误读为对端已写入剪贴板。
+- 收到对端 `clipboard_file_result` 后，顶部状态、全屏/监看浮层和事件日志会区分：已写入系统文件剪贴板、已保存到临时目录、暂存在远端托盘或接收失败原因。
+- 新增页面 diagnostics-only 回归，覆盖 `saveMode=clipboard`、`temp`、`memory-only` 和失败带已收/总量四类结果。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`（失败点：旧界面只显示“对端已完成文件接收”，悬浮窗回到“已开启”）。
+- 实现后复跑：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- 仍不是断点续传；连接中断后仍需重新复制或重新发送。
+- 真机大文件/压缩包复制还需要在 Windows 桌面版和真实 Mac host 上继续人工长测。
+下一步建议：
+- 后续真实文件复制时同时观察两端速度/ETA、对端 result 提示和系统剪贴板粘贴体验；若失败原因仍不够清楚，再细化 Mac/Windows host 返回的 `reason` 文案。
+是否改了协议：否；复用既有 `clipboard_file_result.saveMode`、`reason`、`receivedBytes` 和 `totalBytes`。
+是否需要另一端配合：暂不需要；真机长测时再请 Mac 端配合复制文件或压缩包。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：补强 Windows 控制端远端文件接收完整性，避免坏分块被误拼成成功文件。
 完成内容：
 - Windows 控制端接收 `clipboard_file_chunk` 时，现在只接受 offer 清单里的 `fileIndex`。
