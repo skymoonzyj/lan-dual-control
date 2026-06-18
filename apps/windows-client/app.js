@@ -256,6 +256,10 @@ const macUnattendedRiskLabels = {
   "mac-watchdog-stale": "Mac watchdog 心跳过期",
   "mac-api-error": "Mac/API 网络错误",
   "mac-codex-stuck": "Mac Codex 可能卡住",
+  "codex-reconnect-stuck": "Mac Codex 可能卡在重新连接 5/5",
+  "codex-stream-disconnected": "检测到 stream disconnected before completion",
+  "codex-backend-request-error": "Codex 后端请求中断",
+  "codex-manual-retry": "请查看 Mac 窗口，可能需要手动重试/刷新",
   "mac-host": "Mac host 需检查",
   "mac-host-discovery": "Mac host 发现需检查",
   "mac-host-safe-start": "Mac host 安全启动命令已提供",
@@ -2992,6 +2996,25 @@ function parseMacUnattendedAttention(text) {
   }
   if (/\b(HTTP\s*)?502\b|Bad Gateway|Gateway Timeout|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|network timeout|request timeout|API error/i.test(source)) {
     risks.unshift("mac-api-error");
+  }
+  const hasCodexReconnectStuck =
+    /codex-reconnect-stuck/i.test(source) ||
+    /正在重新连接\s*5\/5/i.test(source);
+  const hasCodexStreamDisconnected = /stream disconnected before completion/i.test(source);
+  const hasCodexBackendRequestError =
+    /error sending request.*backend-api\/codex\/responses/i.test(source) ||
+    /backend-api\/codex\/responses.*error sending request/i.test(source);
+  if (hasCodexBackendRequestError) {
+    risks.unshift("codex-backend-request-error");
+  }
+  if (hasCodexStreamDisconnected) {
+    risks.unshift("codex-stream-disconnected");
+  }
+  if (hasCodexReconnectStuck) {
+    risks.unshift("codex-reconnect-stuck");
+  }
+  if (hasCodexReconnectStuck || hasCodexStreamDisconnected || hasCodexBackendRequestError) {
+    risks.push("codex-manual-retry");
   }
   if (/\b(stuck|blocked|hung)\b|卡住|阻塞/.test(source) && !/\bblockers\s*[:=]\s*none\b/i.test(source)) {
     risks.unshift("mac-codex-stuck");

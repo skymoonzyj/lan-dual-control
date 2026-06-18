@@ -21,6 +21,40 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows 侧消费精确 `codex-reconnect-stuck` 卡住信号。
+完成内容：
+- `watch-codex-link-mac-alerts.ps1` 新增精确匹配：`reason=codex-reconnect-stuck`、`正在重新连接 5/5`、`stream disconnected before completion`，以及 `error sending request` + `/backend-api/codex/responses`。
+- Windows 控制端 Mac 提醒区、快速摘要和复制/导出诊断新增中文风险：“Mac Codex 可能卡在重新连接 5/5”“检测到 stream disconnected before completion”“请查看 Mac 窗口，可能需要手动重试/刷新”。
+- 回归覆盖 Agent Link Board event/status 两种入口，确保 Mac 侧 watchdog 或人工消息都能触发 Windows 本机提醒。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- PowerShell 7 AST parse `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+遗留问题：
+- Mac 侧真正检测“正在重新连接 5/5”的 watchdog/OCR 仍由 Mac 端落地；Windows 侧已准备好消费其上报。
+下一步建议：
+- 继续做 Windows 控 Mac 页面内监看小窗，让这个 `codex-reconnect-stuck` 风险能直接显示在小窗里。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端 heartbeat/watchdog 后续上报 `reason=codex-reconnect-stuck` 或对应 evidence 文本。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows 侧先落地 Mac 卡住/心跳/502 独立提醒底座，并回复小窗模式排期。
 完成内容：
 - 已在 Agent Link Board 回复：Windows 侧 Mac 监看小窗第一版建议先做页面内“浮层缩小模式”，复用现有视频画布、悬浮控制中心和诊断状态，默认只监看、不捕获键鼠；稳定后再抽到桌面壳 always-on-top 独立小窗。

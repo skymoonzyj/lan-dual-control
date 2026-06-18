@@ -223,6 +223,29 @@ async function checkGatewayEventAlerts(args) {
   console.log("[OK] 502/Bad Gateway events alert");
 }
 
+async function checkCodexReconnectStuckEventAlerts(args) {
+  const output = await runWatcherAgainst(baseState({
+    events: [{
+      id: "codex-reconnect-stuck",
+      at: new Date().toISOString(),
+      type: "message",
+      from: "Mac Watchdog",
+      text: [
+        "NEED_USER_ATTENTION reason=codex-reconnect-stuck",
+        "evidence=正在重新连接 5/5 / stream disconnected before completion:",
+        "error sending request for url (https://chatgpt.com/backend-api/codex/responses)",
+        "suggestedAction=请用户查看 Mac Codex 窗口，可能需要手动重试/刷新。",
+      ].join(" "),
+    }],
+  }), ["-AlertExistingEvents"], args);
+  assertIncludes(output, "ALERT:", "codex reconnect stuck event");
+  assertIncludes(output, "codex-reconnect-stuck", "codex reconnect stuck event");
+  assertIncludes(output, "正在重新连接 5/5", "codex reconnect stuck event");
+  assertIncludes(output, "stream disconnected before completion", "codex reconnect stuck event");
+  assertIncludes(output, "/backend-api/codex/responses", "codex reconnect stuck event");
+  console.log("[OK] Codex reconnect-stuck events alert");
+}
+
 async function checkReverseGrantEventAlerts(args) {
   const output = await runWatcherAgainst(baseState({
     events: [{
@@ -475,6 +498,23 @@ async function checkMacHeartbeatAndHostUnreachableAlerts(args) {
   assertIncludes(output, "MacHeartbeat=stale", "Mac heartbeat status");
   assertIncludes(output, "Mac host /discovery unreachable", "Mac host unreachable status");
   console.log("[OK] Mac heartbeat stale and host unreachable wording alerts");
+}
+
+async function checkCodexReconnectStuckStatusAlerts(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Watchdog": {
+        role: "Mac 端",
+        status: "blocked",
+        note: "MacHeartbeat=blocked reason=codex-reconnect-stuck evidence=正在重新连接 5/5 / stream disconnected before completion suggestedAction=请用户查看 Mac Codex 窗口",
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "codex reconnect stuck status");
+  assertIncludes(output, "reason=codex-reconnect-stuck", "codex reconnect stuck status");
+  assertIncludes(output, "stream disconnected before completion", "codex reconnect stuck status");
+  console.log("[OK] Codex reconnect-stuck status alerts");
 }
 
 async function checkReverseGrantStatusAlerts(args) {
@@ -944,6 +984,7 @@ async function main() {
   await checkUrgentEventAlerts(args);
   await checkChinesePermissionEventAlerts(args);
   await checkGatewayEventAlerts(args);
+  await checkCodexReconnectStuckEventAlerts(args);
   await checkReverseGrantEventAlerts(args);
   await checkStructuredReverseGrantLabelsAlert(args);
   await checkStructuredReverseGrantCleanIgnored(args);
@@ -957,6 +998,7 @@ async function main() {
   await checkStaleStatusAlerts(args);
   await checkCodexWorkStatusStaleAlerts(args);
   await checkMacHeartbeatAndHostUnreachableAlerts(args);
+  await checkCodexReconnectStuckStatusAlerts(args);
   await checkReverseGrantStatusAlerts(args);
   await checkMacUnattendedStatusAlerts(args);
   await checkMacUnattendedOkStatusIgnored(args);
