@@ -532,7 +532,7 @@ function makeMacFormalCommands(item) {
     formalChecklistCommand: `${base} --preflightOnly --checkClientDiagnostics --boardSummary`,
     formalChecklistPowerShellCommand: `${psBase} -PreflightOnly -CheckClientDiagnostics -BoardSummary`,
     manualChecklistSummary: "connection/video/audio/clipboard/input_ack/diagnostics",
-    macUnattendedFormalCommand: `${macSideBase} --requireLaunchAgentMaxFps --boardSummary`,
+    macUnattendedFormalCommand: `${macSideBase} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`,
     userAuthRequestCommand: `${base} --preflightOnly --checkClientDiagnostics --userAuthRequest`,
     userAuthRequestPowerShellCommand: `${psBase} -PreflightOnly -CheckClientDiagnostics -UserAuthRequest`,
     sendUserAuthRequestCommand: `${base} --preflightOnly --checkClientDiagnostics --sendUserAuthRequest`,

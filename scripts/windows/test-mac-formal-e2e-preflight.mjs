@@ -388,15 +388,17 @@ async function testFpsLimitPreflightJson(args) {
     assertIncludes(payload.fpsLimit?.macUnattendedFormalCommand || "", "--host 127.0.0.1", "FPS limit Mac formal command host");
     assertIncludes(payload.fpsLimit?.macUnattendedFormalCommand || "", `--port ${port}`, "FPS limit Mac formal command port");
     assertIncludes(payload.fpsLimit?.macUnattendedFormalCommand || "", "--requireLaunchAgentMaxFps", "FPS limit Mac formal command");
+    assertIncludes(payload.fpsLimit?.macUnattendedFormalCommand || "", "--requireLaunchAgentLoaded", "FPS limit Mac formal command");
     assertIncludes(payload.fpsLimit?.macUnattendedFormalCommand || "", "--boardSummary", "FPS limit Mac formal command");
     assertIncludes(String(payload.boardSummary || ""), "FpsLimit requested=60Hz remoteMax=30Hz", "FPS limit board summary");
     assertIncludes(String(payload.boardSummary || ""), "MacMaxFpsPlan=node scripts/mac/install-mac-host-launch-agent.mjs", "FPS limit board summary plan");
     assertIncludes(String(payload.boardSummary || ""), "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs", "FPS limit board summary formal gate");
-    assertIncludes(String(payload.boardSummary || ""), "--requireLaunchAgentMaxFps --boardSummary", "FPS limit board summary formal gate");
+    assertIncludes(String(payload.boardSummary || ""), "--requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary", "FPS limit board summary formal gate");
     assertIncludes(String(payload.userAuthRequest || ""), "当前 Mac host 上限 30Hz", "FPS limit user auth request");
     assertIncludes(String(payload.userAuthRequest || ""), "dry-run", "FPS limit user auth request dry-run");
     assertIncludes(String(payload.userAuthRequest || ""), "强校验", "FPS limit user auth request formal gate");
     assertIncludes(String(payload.userAuthRequest || ""), "--requireLaunchAgentMaxFps", "FPS limit user auth request formal gate");
+    assertIncludes(String(payload.userAuthRequest || ""), "--requireLaunchAgentLoaded", "FPS limit user auth request formal gate");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "FPS limit preflight JSON");
     assertNotIncludes(result.stdout + result.stderr, "--write", "FPS limit preflight JSON should stay dry-run");
     assertNotIncludes(result.stdout + result.stderr, "launchctl", "FPS limit preflight JSON should not load LaunchAgent");

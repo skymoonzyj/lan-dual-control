@@ -64,7 +64,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/discover
 It also includes a Mac-side unattended/startup status command:
 node scripts/mac/check-mac-unattended-status.mjs --host <Mac IP> --port 43770 --boardSummary
 It also includes a formal 60Hz Mac-side unattended gate:
-node scripts/mac/check-mac-unattended-status.mjs --host <Mac IP> --port 43770 --requireLaunchAgentMaxFps --boardSummary
+node scripts/mac/check-mac-unattended-status.mjs --host <Mac IP> --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary
 It also includes the Windows -> Mac formal manual checklist command:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName <Mac IP> -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
 The board summary labels it as:

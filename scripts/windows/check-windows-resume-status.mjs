@@ -64,9 +64,9 @@ clipboard, input_ack, and diagnostics in that order.
   It also includes MacDiscovery Node and PowerShell commands that can be posted
   before formal preflight when the team wants a fresh, secret-free /discovery
   snapshot.
-  It also includes MacUnattendedFormal with --requireLaunchAgentMaxFps so formal
-  60Hz readiness can treat LaunchAgent max FPS gaps as blockers before asking
-  for a password.
+  It also includes MacUnattendedFormal with --requireLaunchAgentMaxFps and
+  --requireLaunchAgentLoaded so formal 60Hz readiness can treat LaunchAgent max
+  FPS gaps and unloaded LaunchAgents as blockers before asking for a password.
 
 Options:
   --host <host>                 Explicit Mac host target. Default: ${defaults.host}
@@ -103,7 +103,7 @@ Examples:
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
   node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host 192.168.31.122 --port 43770 --requireMacHost --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary
-  node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --boardSummary
+  node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/discover-lan-hosts.ps1 -NoLocalSubnets -HostName 192.168.31.122 -Port 43770 -RequireMacHost -BoardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --clientPort 5200 --debugPort 9340 --boardSummary
@@ -798,6 +798,7 @@ function makeCommands(args, preflight) {
     "--host", host,
     "--port", String(port),
     "--requireLaunchAgentMaxFps",
+    "--requireLaunchAgentLoaded",
     "--boardSummary",
   ].join(" ");
   const formalChecklistBoardSummary = [

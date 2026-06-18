@@ -208,7 +208,7 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "Mac-side unattended/startup status command", "PowerShell wrapper help");
   assertIncludes(output, "check-mac-unattended-status.mjs --host <Mac IP> --port 43770 --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "formal 60Hz Mac-side unattended gate", "PowerShell wrapper help");
-  assertIncludes(output, "check-mac-unattended-status.mjs --host <Mac IP> --port 43770 --requireLaunchAgentMaxFps --boardSummary", "PowerShell wrapper help");
+  assertIncludes(output, "check-mac-unattended-status.mjs --host <Mac IP> --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "Windows -> Mac formal manual checklist command", "PowerShell wrapper help");
   assertIncludes(output, "check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "PowerShell wrapper help");
   assertIncludes(output, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "PowerShell wrapper help");
@@ -289,6 +289,7 @@ async function checkMockJson(args) {
     assertIncludes(payload.commands?.macUnattendedFormalStatusCommand, "--host 127.0.0.1", "mock JSON formal Mac unattended command");
     assertIncludes(payload.commands?.macUnattendedFormalStatusCommand, `--port ${port}`, "mock JSON formal Mac unattended command");
     assertIncludes(payload.commands?.macUnattendedFormalStatusCommand, "--requireLaunchAgentMaxFps", "mock JSON formal Mac unattended command");
+    assertIncludes(payload.commands?.macUnattendedFormalStatusCommand, "--requireLaunchAgentLoaded", "mock JSON formal Mac unattended command");
     assertIncludes(payload.commands?.macUnattendedFormalStatusCommand, "--boardSummary", "mock JSON formal Mac unattended command");
     assertIncludes(payload.commands?.formalChecklistBoardSummary, "check-mac-formal-e2e.ps1", "mock JSON formal checklist command");
     assertIncludes(payload.commands?.formalChecklistBoardSummary, "-DiscoverNoLocalSubnets", "mock JSON formal checklist command");
@@ -475,7 +476,7 @@ async function checkBoardSummary(args) {
     assertIncludes(output, "check-mac-unattended-status.mjs --host 127.0.0.1", "PowerShell board summary");
     assertIncludes(output, `--port ${port} --boardSummary`, "PowerShell board summary");
     assertIncludes(output, "MacUnattendedFormal=", "PowerShell board summary");
-    assertIncludes(output, `--port ${port} --requireLaunchAgentMaxFps --boardSummary`, "PowerShell board summary");
+    assertIncludes(output, `--port ${port} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`, "PowerShell board summary");
     assertIncludes(output, "FormalChecklist=", "PowerShell board summary");
     assertIncludes(output, "check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "PowerShell board summary");
     assertIncludes(output, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "PowerShell board summary");

@@ -282,7 +282,7 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "discover-lan-hosts.mjs --noLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "discover-lan-hosts.ps1 -NoLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary", `help ${flag}`);
-    assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --boardSummary", `help ${flag}`);
+    assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "formal manual checklist command", `help ${flag}`);
     assertIncludes(result.stdout, "input_ack", `help ${flag}`);
     assertIncludes(result.stdout, "checks", `help ${flag}`);
@@ -340,6 +340,7 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.macUnattendedFormalStatusCommand || "").includes("--host 127.0.0.1"), "mock JSON formal Mac unattended command should target discovered host");
     assert(String(payload.commands?.macUnattendedFormalStatusCommand || "").includes(`--port ${port}`), "mock JSON formal Mac unattended command should use discovered mock port");
     assert(String(payload.commands?.macUnattendedFormalStatusCommand || "").includes("--requireLaunchAgentMaxFps"), "mock JSON formal Mac unattended command should require LaunchAgent max FPS");
+    assert(String(payload.commands?.macUnattendedFormalStatusCommand || "").includes("--requireLaunchAgentLoaded"), "mock JSON formal Mac unattended command should require loaded LaunchAgent");
     assert(String(payload.commands?.macUnattendedFormalStatusCommand || "").includes("--boardSummary"), "mock JSON formal Mac unattended command should be board-safe");
     assert(String(payload.commands?.formalChecklistBoardSummary || "").includes("check-mac-formal-e2e.ps1"), "mock JSON should include formal checklist command");
     assert(String(payload.commands?.formalChecklistBoardSummary || "").includes("-DiscoverNoLocalSubnets"), "mock JSON formal checklist should use fixed target discovery");
@@ -566,7 +567,7 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "check-mac-unattended-status.mjs --host 127.0.0.1", "board summary");
     assertIncludes(result.stdout, `--port ${port} --boardSummary`, "board summary");
     assertIncludes(result.stdout, "MacUnattendedFormal=", "board summary");
-    assertIncludes(result.stdout, `--port ${port} --requireLaunchAgentMaxFps --boardSummary`, "board summary");
+    assertIncludes(result.stdout, `--port ${port} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`, "board summary");
     assertIncludes(result.stdout, "FormalChecklist=", "board summary");
     assertIncludes(result.stdout, "check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "board summary");
     assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "board summary");

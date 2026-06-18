@@ -393,7 +393,7 @@ function makeMacMaxFpsPlanCommand(report, requestedFps) {
 function makeMacUnattendedFormalCommand(report) {
   const host = report.target?.host || defaults.host;
   const port = Number(report.target?.port) || defaults.port;
-  return `node scripts/mac/check-mac-unattended-status.mjs --host ${host} --port ${port} --requireLaunchAgentMaxFps --boardSummary`;
+  return `node scripts/mac/check-mac-unattended-status.mjs --host ${host} --port ${port} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`;
 }
 
 function makeFpsLimitStatus(report) {

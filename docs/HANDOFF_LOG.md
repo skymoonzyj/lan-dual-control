@@ -21,6 +21,60 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows 侧生成的 `MacUnattendedFormal=` 对齐 Mac 最新双门禁。
+完成内容：
+- `check-mac-formal-e2e` 的 `fpsLimit.macUnattendedFormalCommand` 现在同时带 `--requireLaunchAgentMaxFps` 和 `--requireLaunchAgentLoaded`。
+- `discover-lan-hosts` 的 JSON、普通输出和 `--boardSummary` 的 `MacUnattendedFormal=` 同步改为 max FPS + LaunchAgent loaded 双门禁。
+- `check-windows-resume-status` 的 JSON、普通输出、`--boardSummary` 与 PowerShell wrapper help 同步改为双门禁。
+- Windows 控制端 README、当前状态、下一步和任务板已把旧的单 max FPS 校验说明更新为双门禁。
+- 真实 Mac 无密预检确认当前 host 仍上报 `maxScreenFps=30`，但 formal preflight、discovery 和 resume status 均已输出双门禁命令；没有认证、不发密码、不发送 input/inject。
+修改文件：
+- `scripts/windows/check-mac-formal-e2e.mjs`
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `scripts/windows/discover-lan-hosts.mjs`
+- `scripts/windows/discover-lan-hosts.ps1`
+- `scripts/windows/test-discover-lan-hosts.mjs`
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-mac-formal-e2e.mjs`
+- `node --check scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `node --check scripts/windows/discover-lan-hosts.mjs`
+- `node --check scripts/windows/test-discover-lan-hosts.mjs`
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 30000`
+- `node scripts/windows/test-discover-lan-hosts.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 30000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-mac-formal-e2e.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-script-help.mjs --script discover-lan-hosts.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs --timeoutMs 10000`
+- `node scripts/windows/test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary`
+- `node scripts/windows/check-mac-formal-e2e.mjs --discover --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --boardSummary --timeoutMs 45000 --clientPort 5301 --debugPort 9441 --progressIntervalMs 5000`
+- `node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host 192.168.31.122 --port 43770 --requireMacHost --boardSummary --timeoutMs 1200`
+- `node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --boardSummary --clientPort 5302 --debugPort 9442`
+遗留问题：
+- 当前真实 Mac host 仍上报 `maxScreenFps=30`；要让 60Hz formal gate 通过，还需要 Mac 端实际写入并加载 LaunchAgent 后重启/复验。
+下一步建议：
+- Mac 端处理 LaunchAgent 后，Windows 侧先跑 discovery / resume / formal preflight 的 `--boardSummary`，确认 `MacUnattendedFormal=` 对应命令不再报 max FPS 或 loaded blocker，再做正式带密码长测。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端后续实际加载 LaunchAgent 后复验；本轮 Windows 侧已完成命令和文档对齐。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows host `--status` 离线安全启动建议保留当前 host/port。
 完成内容：
 - `start-windows-host --status` 的离线 JSON 新增 `safeStartCommand` 与 `ephemeralStartCommand`，两者都会显式带当前 `--host <host>` / `--port <port>`。
@@ -57,8 +111,8 @@
 开发端：Windows Codex
 本轮目标：Windows formal E2E 预检直接输出 Mac unattended formal 60Hz 强校验入口。
 完成内容：
-- `check-mac-formal-e2e` 的 `fpsLimit` JSON 新增 `macUnattendedFormalCommand`，命令为 `node scripts/mac/check-mac-unattended-status.mjs --host <Mac> --port <port> --requireLaunchAgentMaxFps --boardSummary`。
-- 当正式请求刷新率高于 Mac host `maxScreenFps` 时，`--boardSummary` 会在 `MacMaxFpsPlan=` 后继续输出 `MacUnattendedFormal=`，提示 Mac 端写入/重启后如何只读强校验 LaunchAgent max FPS blocker。
+- `check-mac-formal-e2e` 的 `fpsLimit` JSON 新增 `macUnattendedFormalCommand`，命令为 `node scripts/mac/check-mac-unattended-status.mjs --host <Mac> --port <port> --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`。
+- 当正式请求刷新率高于 Mac host `maxScreenFps` 时，`--boardSummary` 会在 `MacMaxFpsPlan=` 后继续输出 `MacUnattendedFormal=`，提示 Mac 端写入/重启后如何只读强校验 LaunchAgent max FPS / loaded blocker。
 - `--userAuthRequest` / `--sendUserAuthRequest` 的 `NEED_USER_AUTH` 刷新率提示也会带同一条强校验命令；仍不包含密码、不带 `--write`、不执行 `launchctl`、不发送 input/inject。
 - formal preflight mock client diagnostics 回归改用临时 `clientPort` / `debugPort`，避免本机默认 `5197/9337` 旧诊断残留导致误报。
 修改文件：
@@ -88,8 +142,8 @@
 开发端：Windows Codex
 本轮目标：Windows LAN discovery 对齐 Mac unattended formal 60Hz 强校验入口。
 完成内容：
-- `discover-lan-hosts` 的 `macFormalE2e` JSON 新增 `macUnattendedFormalCommand`，命令为 `node scripts/mac/check-mac-unattended-status.mjs --host <Mac> --port <port> --requireLaunchAgentMaxFps --boardSummary`。
-- `discover-lan-hosts --boardSummary` 和普通输出在发现 Mac host 后新增 `MacUnattendedFormal=`，让发现层就能提示正式 60Hz LaunchAgent max FPS 门禁。
+- `discover-lan-hosts` 的 `macFormalE2e` JSON 新增 `macUnattendedFormalCommand`，命令为 `node scripts/mac/check-mac-unattended-status.mjs --host <Mac> --port <port> --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`。
+- `discover-lan-hosts --boardSummary` 和普通输出在发现 Mac host 后新增 `MacUnattendedFormal=`，让发现层就能提示正式 60Hz LaunchAgent max FPS + loaded 门禁。
 - PowerShell wrapper `discover-lan-hosts.ps1 -Help` 同步说明 `MacUnattendedFormal=`；发现脚本 Node/PowerShell JSON 和 boardSummary 回归均覆盖新字段。
 修改文件：
 - `scripts/windows/discover-lan-hosts.mjs`
@@ -123,7 +177,7 @@
 开发端：Windows Codex
 本轮目标：Windows 恢复总览对齐 Mac unattended formal 60Hz 强校验。
 完成内容：
-- `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host <Mac> --port <port> --requireLaunchAgentMaxFps --boardSummary`。
+- `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host <Mac> --port <port> --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`。
 - PowerShell 包装入口 `check-windows-resume-status.ps1 -Help` 补充 formal 60Hz Mac-side unattended gate 说明。
 - Node 与 PowerShell 恢复总览回归覆盖新字段、boardSummary 标签和 `--requireLaunchAgentMaxFps` 参数，确保命令无密、只读、不认证、不发送 input/inject。
 修改文件：
