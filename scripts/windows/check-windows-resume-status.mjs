@@ -69,6 +69,9 @@ JSON, human output, and one-line board summaries. It also publishes and safely
 extracts WindowsSecureAuthPath= / SecureAuthPath= so Mac true browser smoke can
 recover from random runtime passwords by asking the user to type the same
 temporary password locally on both machines.
+It also safely extracts WindowsLanRisk= short labels from the board so the
+first Windows resume line can show known Windows host LAN/firewall risks such
+as no-firewall-allow or public-profile without leaking free-form board text.
 It also includes a secret-free MacHostReadiness command so Windows can ask the
 Mac side to run the detailed host readiness/status check before formal testing.
 It also includes a secret-free MacHeartbeat command so Windows can ask the Mac
@@ -1438,6 +1441,113 @@ function extractWindowsSecureAuthPathFromBoardState(state) {
   };
 }
 
+const windowsLanRiskLabels = new Set([
+  "none",
+  "not-checked",
+  "no-lan-ip",
+  "no-listener",
+  "bind-address",
+  "tcp-unreachable",
+  "lan-probe-blocked",
+  "firewall-query-failed",
+  "public-profile",
+  "no-firewall-allow",
+]);
+
+function emptyWindowsLanRisk(source = "none", textCount = 0, rejectedCount = 0) {
+  return {
+    found: false,
+    source,
+    textCount,
+    risks: [],
+    summary: "not-seen",
+    rejectedCount,
+  };
+}
+
+function parseWindowsLanRiskFragment(fragment) {
+  const value = String(fragment || "").trimStart();
+  const match = /^([A-Za-z0-9_-]+(?:,[A-Za-z0-9_-]+)*)/.exec(value);
+  if (!match) return null;
+  const token = match[1].replace(/[.,;，。；]+$/g, "");
+  const tail = value.slice(match[1].length);
+  const sameSentenceTail = String(tail.split(/[\r\n;；。]/)[0] || "");
+  if (
+    /^\s+(?:--|\$|\||&|>|<|`|node\b|cmd\b|pwsh\b|powershell\b)/i.test(sameSentenceTail) ||
+    hasSecretLikeCommandValue(sameSentenceTail)
+  ) {
+    return null;
+  }
+
+  const risks = [];
+  for (const item of token.split(",")) {
+    const risk = item.trim();
+    if (!risk || !windowsLanRiskLabels.has(risk)) return null;
+    if (!risks.includes(risk)) risks.push(risk);
+  }
+  if (risks.length === 0) return null;
+  if (risks.includes("none")) {
+    return risks.length === 1 ? { risks: [], summary: "none" } : null;
+  }
+  return {
+    risks,
+    summary: risks.join(","),
+  };
+}
+
+function extractWindowsLanRiskFromText(text, source = "text") {
+  const value = String(text || "");
+  const regex = /\bWindowsLanRisk\s*=\s*/gi;
+  const findings = [];
+  let rejectedCount = 0;
+  let match;
+  while ((match = regex.exec(value)) !== null) {
+    const fragment = value.slice(match.index + match[0].length);
+    const parsed = parseWindowsLanRiskFragment(fragment);
+    if (!parsed) {
+      rejectedCount += 1;
+      continue;
+    }
+    findings.push(parsed);
+  }
+  if (findings.length === 0) return emptyWindowsLanRisk(source, value ? 1 : 0, rejectedCount);
+  const latest = findings[findings.length - 1];
+  return {
+    found: true,
+    source,
+    textCount: value ? 1 : 0,
+    risks: latest.risks,
+    summary: latest.summary,
+    rejectedCount,
+  };
+}
+
+function extractWindowsLanRiskFromBoardState(state) {
+  const texts = collectStringValues(state);
+  const findings = [];
+  let rejectedCount = 0;
+  for (const text of texts) {
+    const extracted = extractWindowsLanRiskFromText(text, "api-state");
+    if (extracted.found) {
+      findings.push({
+        risks: extracted.risks,
+        summary: extracted.summary,
+      });
+    }
+    rejectedCount += extracted.rejectedCount;
+  }
+  if (findings.length === 0) return emptyWindowsLanRisk("api-state", texts.length, rejectedCount);
+  const latest = findings[findings.length - 1];
+  return {
+    found: true,
+    source: "api-state",
+    textCount: texts.length,
+    risks: latest.risks,
+    summary: latest.summary,
+    rejectedCount,
+  };
+}
+
 async function getBoardState(args) {
   const controller = new AbortController();
   const timeoutMs = Math.min(Math.max(args.timeoutMs, 5000), 30000);
@@ -1514,6 +1624,7 @@ async function getBoardSnapshot(args) {
       windowsReverseGrantStatusNodeFallback: emptyMacSafeStart("skipped"),
       windowsOpenOneTimeReverseGrantNodeFallback: emptyMacSafeStart("skipped"),
       windowsSecureAuthPath: emptyMacSafeStart("skipped"),
+      windowsLanRisk: emptyWindowsLanRisk("skipped"),
       error: "",
     };
   }
@@ -1542,6 +1653,7 @@ async function getBoardSnapshot(args) {
       windowsReverseGrantStatusNodeFallback: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsReverseGrantStatusNodeFallback", "status"),
       windowsOpenOneTimeReverseGrantNodeFallback: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsOpenOneTimeReverseGrantNodeFallback", "grant"),
       windowsSecureAuthPath: extractWindowsSecureAuthPathFromBoardState(stateResult.state),
+      windowsLanRisk: extractWindowsLanRiskFromBoardState(stateResult.state),
       error: "",
     };
   }
@@ -1575,6 +1687,7 @@ async function getBoardSnapshot(args) {
     windowsReverseGrantStatusNodeFallback: extractWindowsReverseGrantFromText(output, "WindowsReverseGrantStatusNodeFallback", "status", result.ok ? "codex-link-client" : "unavailable"),
     windowsOpenOneTimeReverseGrantNodeFallback: extractWindowsReverseGrantFromText(output, "WindowsOpenOneTimeReverseGrantNodeFallback", "grant", result.ok ? "codex-link-client" : "unavailable"),
     windowsSecureAuthPath: extractWindowsSecureAuthPathFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    windowsLanRisk: extractWindowsLanRiskFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     apiStateError: normalizedText(stateResult.error),
     error: result.ok ? "" : normalizedText(stateResult.error || result.error || result.stderr),
   };
@@ -2343,6 +2456,9 @@ function makeBoardSummary(report) {
   return [
     `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}${boardCall}${boardCallNext}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
     `WinClientPorts=${clientPorts}; WinClientPortsNext=${clientPortsNext}.`,
+    ...(report.board.windowsLanRisk?.found
+      ? [`WindowsLanRisk=${report.board.windowsLanRisk.summary}.`]
+      : []),
     `Next=${mac.ok ? report.commands.userAuthRequest : report.commands.preflightBoardSummary}.`,
     `MacDiscovery=${report.commands.macHostDiscoveryBoardSummary}.`,
     `MacDiscoveryPs=${report.commands.macHostDiscoveryPowerShellBoardSummary}.`,
@@ -2578,6 +2694,9 @@ function printHuman(report) {
     }
     if (report.board.windowsSecureAuthPath?.command) {
       console.log(`  WindowsSecureAuthPath=${report.board.windowsSecureAuthPath.command}`);
+    }
+    if (report.board.windowsLanRisk?.found) {
+      console.log(`  WindowsLanRisk=${report.board.windowsLanRisk.summary}`);
     }
   } else {
     console.log("- Agent Link Board: skipped (use --checkBoard)");

@@ -1347,6 +1347,109 @@ async function checkBoardWindowsSecureAuthPathExtraction(args) {
   });
 }
 
+async function checkBoardWindowsLanRiskExtraction(args) {
+  await withMockHost(async (port) => {
+    const boardState = {
+      statuses: {
+        "Windows Codex": {
+          role: "Windows 端",
+          status: "idle",
+          note: [
+            "Windows readiness reported LAN/firewall risk for current host.",
+            "WindowsLanRisk=no-firewall-allow,public-profile",
+          ].join(" "),
+        },
+      },
+      events: [
+        {
+          type: "message",
+          from: "Windows Codex",
+          text: "WindowsLanRisk=no-firewall-allow --password secret-value",
+        },
+        {
+          type: "status",
+          from: "Windows Codex",
+          text: "WindowsLanRisk=$(whoami)",
+        },
+        {
+          type: "message",
+          from: "Windows Codex",
+          text: "WindowsLanRisk=no-firewall-allow secret:secret-value",
+        },
+        {
+          type: "status",
+          from: "Windows Codex",
+          text: "WindowsLanRisk=no-firewall-allow,unknown-risk",
+        },
+      ],
+    };
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock WindowsLanRisk JSON failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.windowsLanRisk?.found === true, "WindowsLanRisk should be found");
+      assert(payload.board.windowsLanRisk.summary === "no-firewall-allow,public-profile", "WindowsLanRisk summary should keep safe labels");
+      assert(payload.board.windowsLanRisk.risks?.includes("no-firewall-allow"), "WindowsLanRisk should include no-firewall-allow");
+      assert(payload.board.windowsLanRisk.risks?.includes("public-profile"), "WindowsLanRisk should include public-profile");
+      assert(payload.board.windowsLanRisk.rejectedCount >= 4, "unsafe WindowsLanRisk candidates should be rejected");
+      assertIncludes(payload.boardSummary, "WindowsLanRisk=no-firewall-allow,public-profile.", "WindowsLanRisk JSON board summary");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "WindowsLanRisk JSON should not leak rejected text");
+      assertNotIncludes(result.stdout + result.stderr, "$(whoami)", "WindowsLanRisk JSON should not leak command-like text");
+    }, boardState);
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--boardSummary",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock WindowsLanRisk board summary failed\n${result.stdout}\n${result.stderr}`);
+      assertIncludes(result.stdout, "WindowsLanRisk=no-firewall-allow,public-profile.", "WindowsLanRisk board summary");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "WindowsLanRisk board summary should not leak rejected text");
+    }, boardState);
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock WindowsLanRisk human output failed\n${result.stdout}\n${result.stderr}`);
+      assertIncludes(result.stdout, "WindowsLanRisk=no-firewall-allow,public-profile", "WindowsLanRisk human output");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "WindowsLanRisk human output should not leak rejected text");
+      console.log("[OK] Windows resume status extracts Windows LAN risk from Agent Link Board safely");
+    }, boardState);
+  });
+}
+
 async function checkUserAuthRequest(args) {
   await withMockHost(async (port) => {
     const result = await run([
@@ -1476,6 +1579,7 @@ async function main() {
   await checkBoardMacHostSafeStartExtraction(args);
   await checkBoardWindowsReverseGrantExtraction(args);
   await checkBoardWindowsSecureAuthPathExtraction(args);
+  await checkBoardWindowsLanRiskExtraction(args);
   await checkUserAuthRequest(args);
   await checkSendUserAuthRequest(args);
   await checkSendUserAuthRequestOffline(args);

@@ -1031,6 +1031,93 @@ async function checkBoardWindowsSecureAuthPathExtraction(args) {
   });
 }
 
+async function checkBoardWindowsLanRiskExtraction(args) {
+  await withMockHost(async (port) => {
+    const boardState = {
+      statuses: {
+        "Windows Codex": {
+          role: "Windows 端",
+          status: "idle",
+          note: [
+            "Windows readiness reported LAN/firewall risk for current host.",
+            "WindowsLanRisk=no-firewall-allow,public-profile",
+          ].join(" "),
+        },
+      },
+      events: [
+        {
+          type: "message",
+          from: "Windows Codex",
+          text: "WindowsLanRisk=no-firewall-allow --password secret-value",
+        },
+        {
+          type: "status",
+          from: "Windows Codex",
+          text: "WindowsLanRisk=$(whoami)",
+        },
+        {
+          type: "message",
+          from: "Windows Codex",
+          text: "WindowsLanRisk=no-firewall-allow secret:secret-value",
+        },
+        {
+          type: "status",
+          from: "Windows Codex",
+          text: "WindowsLanRisk=no-firewall-allow,unknown-risk",
+        },
+      ],
+    };
+
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-CheckBoard",
+        "-Json",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell WindowsLanRisk JSON failed\n${output}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.windowsLanRisk?.found === true, "PowerShell WindowsLanRisk should be found");
+      assert(payload.board.windowsLanRisk.summary === "no-firewall-allow,public-profile", "PowerShell WindowsLanRisk summary should keep safe labels");
+      assert(payload.board.windowsLanRisk.risks?.includes("no-firewall-allow"), "PowerShell WindowsLanRisk should include no-firewall-allow");
+      assert(payload.board.windowsLanRisk.risks?.includes("public-profile"), "PowerShell WindowsLanRisk should include public-profile");
+      assert(payload.board.windowsLanRisk.rejectedCount >= 4, "PowerShell unsafe WindowsLanRisk candidates should be rejected");
+      assertIncludes(payload.boardSummary, "WindowsLanRisk=no-firewall-allow,public-profile.", "PowerShell WindowsLanRisk JSON board summary");
+      assertNotIncludes(output, "secret-value", "PowerShell WindowsLanRisk JSON should not leak rejected text");
+      assertNotIncludes(output, "$(whoami)", "PowerShell WindowsLanRisk JSON should not leak command-like text");
+    }, boardState);
+
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-CheckBoard",
+        "-BoardSummary",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell WindowsLanRisk board summary failed\n${output}`);
+      assertIncludes(output, "WindowsLanRisk=no-firewall-allow,public-profile.", "PowerShell WindowsLanRisk board summary");
+      assertNotIncludes(output, "secret-value", "PowerShell WindowsLanRisk board summary should not leak rejected text");
+      console.log("[OK] PowerShell resume status extracts Windows LAN risk from Agent Link Board safely");
+    }, boardState);
+  });
+}
+
 async function checkUserAuthRequest(args) {
   await withMockHost(async (port) => {
     const result = await runPowerShell([
@@ -1138,6 +1225,7 @@ async function main() {
   await checkSecureAuthCallNextSummary(args);
   await checkBoardMacHostSafeStartExtraction(args);
   await checkBoardWindowsSecureAuthPathExtraction(args);
+  await checkBoardWindowsLanRiskExtraction(args);
   await checkUserAuthRequest(args);
   await checkSendUserAuthRequest(args);
   await checkOfflineDefaults(args);

@@ -17,6 +17,36 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows resume 第一屏也消费联络板上的 `WindowsLanRisk=`，避免 LAN/firewall 风险只藏在 readiness 摘要里。
+完成内容：
+- `check-windows-resume-status --checkBoard` 现在会从 Agent Link Board `/api/state` 或 fallback `watch --once` 输出里安全提取 `WindowsLanRisk=`，写入 JSON `board.windowsLanRisk`、普通输出和 `--boardSummary`。
+- 提取器只接受固定短标签：`none`、`not-checked`、`no-lan-ip`、`no-listener`、`bind-address`、`tcp-unreachable`、`lan-probe-blocked`、`firewall-query-failed`、`public-profile`、`no-firewall-allow`；未知标签、命令样式内容或疑似敏感参数候选会被拒绝且不回显。
+- PowerShell wrapper 回归已覆盖同一场景；Windows 第一屏看到 `WindowsLanRisk=no-firewall-allow,public-profile` 时可优先排查防火墙放行和 Public 网络，避免误判为 Mac client 第二步或 H.264 卡住。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 实现后复跑：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- 当前只是只读显示/消费风险标签；没有修改 Windows 防火墙、没有改网络 Profile、没有认证 WebSocket、没有发送密码/input/inject。
+- 用户现场提到 formal E2E 第二部看起来卡住；本轮确认这类长等待阶段容易误判，后续真实跑 `test-mac-client-browser` 时可加/关注进度输出，并先看 `WindowsLanRisk=`、`WinClientPorts=`、`remoteMaxFps` 和 H.264 surface 等状态定位。
+下一步建议：
+- 推送后让 Mac 端拉取；Mac 端若也消费了 `WindowsLanRisk=`，双方可在下一轮先跑 resume/readiness 一行摘要，确认 Windows 防火墙/Public 网络风险，再决定是否做真实密码 browser smoke。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Mac 端可继续消费/展示 `WindowsLanRisk=`。不要在通讯板发送密码/token/系统账号。
+
 ## 2026-06-18 Mac Codex
 
 日期：2026-06-18 继续推进
