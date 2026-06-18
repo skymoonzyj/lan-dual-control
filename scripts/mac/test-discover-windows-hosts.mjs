@@ -2,7 +2,8 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -127,6 +128,20 @@ function assertSecretFreeCommand(command, label) {
   assertNotIncludes(command, "--forceCall", label);
 }
 
+function assertWindowsLanRisk(payload, output, label) {
+  assert(payload.windowsLanRisk?.checked === true, `${label} should check Agent Link Board for Windows LAN risk`);
+  assert(payload.windowsLanRisk?.found === true, `${label} should find WindowsLanRisk on the board`);
+  assert(Array.isArray(payload.windowsLanRisk?.risks), `${label} should expose sanitized risk tokens`);
+  assert(payload.windowsLanRisk.risks.join(",") === "no-firewall-allow,public-profile", `${label} should keep only safe risk tokens`);
+  assert(payload.windowsLanRisk.riskText === "no-firewall-allow,public-profile", `${label} should expose a compact riskText`);
+  assert(payload.windowsLanRisk.rejectedCount >= 2, `${label} should count rejected unsafe board candidates`);
+  assertIncludes(payload.boardSummary || "", "WindowsLanRisk=no-firewall-allow,public-profile", `${label} board summary`);
+  assertNotIncludes(output, "hunter2", `${label} output`);
+  assertNotIncludes(output, "sauce", `${label} output`);
+  assertNotIncludes(output, "LAN_DUAL_PASSWORD=hunter2", `${label} output`);
+  assertNotIncludes(output, "--password=sauce", `${label} output`);
+}
+
 function assertWindowsReverseGrantCommands(text, label) {
   assertIncludes(text, "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass", label);
   assertIncludes(text, "-File scripts/windows/allow-windows-reverse-control.ps1", label);
@@ -215,6 +230,72 @@ console.log(JSON.stringify({
 `, { mode: 0o755 });
 }
 
+async function getFreePort() {
+  return new Promise((resolvePort, rejectPort) => {
+    const server = createServer();
+    server.on("error", rejectPort);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      const port = address && typeof address === "object" ? address.port : 0;
+      server.close(() => resolvePort(port));
+    });
+  });
+}
+
+async function waitForHttpPath(port, pathname, timeoutMs) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt <= timeoutMs) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}${pathname}`);
+      if (response.ok) return;
+    } catch {
+      // Retry until the child server finishes binding the port.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 80));
+  }
+  throw new Error(`HTTP server on ${port}${pathname} did not become ready`);
+}
+
+async function withBoardStateServer(args, state, callback) {
+  const port = await getFreePort();
+  const child = spawn(process.execPath, [
+    "--input-type=module",
+    "-e",
+    `
+import { createServer } from "node:http";
+const port = Number(process.argv[1]);
+const state = ${JSON.stringify(state)};
+createServer((request, response) => {
+  const pathname = new URL(request.url || "/", "http://127.0.0.1").pathname;
+  if (pathname !== "/api/state") {
+    response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    response.end("not found\\n");
+    return;
+  }
+  response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+  response.end(JSON.stringify(state));
+}).listen(port, "127.0.0.1");
+`,
+    String(port),
+  ], {
+    cwd: repoRoot,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  try {
+    await waitForHttpPath(port, "/api/state", args.timeoutMs);
+    await callback(`http://127.0.0.1:${port}`);
+  } finally {
+    child.kill("SIGTERM");
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, 1000);
+      child.once("close", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+  }
+}
+
 function run(extraArgs, args, env = {}) {
   return spawnSync(process.execPath, [script, ...extraArgs], {
     cwd: repoRoot,
@@ -255,6 +336,8 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "windowsOpenOneTimeReverseGrantNodeFallback", `${script} ${flag}`);
     assertIncludes(result.stdout, "reverseControlRehearsal", `${script} ${flag}`);
     assertIncludes(result.stdout, "manualChecklistSummary", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--checkBoard", `${script} ${flag}`);
+    assertIncludes(result.stdout, "windowsLanRisk", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
   console.log("[OK] Windows host discovery help exits quickly");
@@ -392,7 +475,58 @@ function checkNoneRequireFound(tmp, args) {
   console.log("[OK] Missing Windows host fails only when required and explains next step");
 }
 
-function main() {
+async function checkBoardWindowsLanRisk(tmp, args) {
+  const boardState = {
+    updatedAt: "2026-06-18T12:58:23.345Z",
+    statuses: {
+      "Windows Codex": {
+        status: "idle",
+        note: "Windows readiness true summary WindowsLanRisk=no-firewall-allow,public-profile",
+      },
+    },
+    events: [
+      {
+        id: "safe-risk",
+        at: "2026-06-18T12:58:23.345Z",
+        type: "message",
+        from: "Windows Codex",
+        text: "WindowsLanRisk=no-firewall-allow,public-profile",
+      },
+      {
+        id: "unsafe-password-flag",
+        at: "2026-06-18T12:58:24.345Z",
+        type: "message",
+        from: "Windows Codex",
+        text: "Ignore unsafe candidate WindowsLanRisk=--password=sauce",
+      },
+      {
+        id: "unsafe-env-password",
+        at: "2026-06-18T12:58:25.345Z",
+        type: "message",
+        from: "Windows Codex",
+        text: "Ignore unsafe candidate WindowsLanRisk=LAN_DUAL_PASSWORD=hunter2",
+      },
+    ],
+  };
+  await withBoardStateServer(args, boardState, async (serverUrl) => {
+    const result = run([
+      "--json",
+      "--requireFound",
+      "--checkBoard",
+      "--server",
+      serverUrl,
+    ], args, {
+      FAKE_SCANNER_ROOT: tmp,
+      FAKE_WINDOWS_DISCOVERY_MODE: "none",
+    });
+    assert(result.status !== 0, `board risk JSON should still fail requireFound without a Windows host.\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "board risk JSON");
+    assertWindowsLanRisk(payload, `${result.stdout}\n${result.stderr}`, "board risk JSON");
+  });
+  console.log("[OK] Board WindowsLanRisk is surfaced without leaking unsafe candidates");
+}
+
+async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
     return;
@@ -406,15 +540,14 @@ function main() {
     checkBoardSummaryFound(tmp, args);
     checkPlainFound(tmp, args);
     checkNoneRequireFound(tmp, args);
+    await checkBoardWindowsLanRisk(tmp, args);
     console.log("[OK] Mac Windows host discovery self-test passed");
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
 }
 
-try {
-  main();
-} catch (error) {
+main().catch((error) => {
   console.error(`[FAIL] ${error.message}`);
   process.exitCode = 1;
-}
+});

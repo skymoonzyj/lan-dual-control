@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { emptyWindowsLanRisk, formatWindowsLanRisk, readWindowsLanRiskFromBoard } from "./board-windows-lan-risk.mjs";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -11,6 +12,8 @@ const defaults = {
   maxHostsPerSubnet: 254,
   requireFound: false,
   noLocalSubnets: false,
+  server: "http://192.168.31.68:17888",
+  checkBoard: false,
   json: false,
   boardSummary: false,
   verbose: false,
@@ -40,6 +43,8 @@ Options:
   --maxHostsPerSubnet <n> Safety cap per subnet. Default: ${defaults.maxHostsPerSubnet}
   --requireFound          Exit non-zero when no Windows host is found.
   --noLocalSubnets        Only probe 127.0.0.1, --host, and --subnet targets.
+  --server <url>          Agent Link Board URL. Default: ${defaults.server}
+  --checkBoard            Read Agent Link Board /api/state for WindowsLanRisk= hints.
   --boardSummary          Print a short secret-free Agent Link Board summary.
   --json                  Print one machine-readable JSON object.
   --verbose               Include scanner misses.
@@ -77,6 +82,9 @@ Machine-readable JSON fields:
   windowsOpenOneTimeReverseGrantNodeFallback
                            Secret-free Node fallback command to open the same
                            short local one-time reverse-control grant.
+  windowsLanRisk          Secret-free WindowsLanRisk= hints copied from Agent
+                           Link Board when --checkBoard is enabled. Only safe
+                           comma-separated risk tokens are accepted.
   reverseControlRehearsal  Secret-free human rehearsal for the guarded
                            reverse-control request loop after authentication:
                            Mac expects LAN008 first, Windows opens a local
@@ -97,6 +105,8 @@ function parseArgs(argv) {
     maxHostsPerSubnet: defaults.maxHostsPerSubnet,
     requireFound: defaults.requireFound,
     noLocalSubnets: defaults.noLocalSubnets,
+    server: defaults.server,
+    checkBoard: defaults.checkBoard,
     json: defaults.json,
     boardSummary: defaults.boardSummary,
     verbose: defaults.verbose,
@@ -110,7 +120,7 @@ function parseArgs(argv) {
       args.help = true;
       continue;
     }
-    if (token === "--json" || token === "--boardSummary" || token === "--verbose" || token === "--requireFound" || token === "--noLocalSubnets") {
+    if (token === "--json" || token === "--boardSummary" || token === "--verbose" || token === "--requireFound" || token === "--noLocalSubnets" || token === "--checkBoard") {
       args[token.slice(2)] = true;
       continue;
     }
@@ -126,6 +136,11 @@ function parseArgs(argv) {
     }
     if (token === "--subnet" && next && !next.startsWith("--")) {
       args.subnets.push(next.trim());
+      index += 1;
+      continue;
+    }
+    if (token === "--server" && next && !next.startsWith("--")) {
+      args.server = next.trim();
       index += 1;
       continue;
     }
@@ -157,6 +172,7 @@ function parseArgs(argv) {
   }
   args.hosts = [...new Set(args.hosts.filter(Boolean))];
   args.subnets = [...new Set(args.subnets.filter(Boolean))];
+  args.server = String(args.server || defaults.server).trim();
   return args;
 }
 
@@ -294,7 +310,7 @@ function reverseControlRehearsal(item) {
   ].join(" ");
 }
 
-function buildReport(scan, args) {
+function buildReport(scan, args, windowsLanRisk = emptyWindowsLanRisk(false)) {
   const found = Array.isArray(scan.found) ? scan.found : [];
   const windowsHosts = found.filter(isWindowsHost);
   const nonWindowsHosts = found.filter((item) => !isWindowsHost(item));
@@ -318,6 +334,7 @@ function buildReport(scan, args) {
     windowsOpenOneTimeReverseGrant: best ? windowsReverseGrantPowerShellCommand(best, "grant") : "",
     windowsReverseGrantStatusNodeFallback: best ? windowsReverseGrantNodeFallbackCommand(best, "status") : "",
     windowsOpenOneTimeReverseGrantNodeFallback: best ? windowsReverseGrantNodeFallbackCommand(best, "grant") : "",
+    windowsLanRisk,
     reverseControlRehearsal: best ? reverseControlRehearsal(best) : "",
     boardSummary: "",
   };
@@ -326,13 +343,15 @@ function buildReport(scan, args) {
 }
 
 function makeBoardSummary(report) {
+  const risk = formatWindowsLanRisk(report.windowsLanRisk);
+  const riskSummary = risk ? ` ${risk}.` : "";
   if (report.best) {
-    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}. FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. WindowsReverseGrantStatus=${report.windowsReverseGrantStatus}. WindowsOpenOneTimeReverseGrant=${report.windowsOpenOneTimeReverseGrant}. WindowsReverseGrantStatusNodeFallback=${report.windowsReverseGrantStatusNodeFallback}. WindowsOpenOneTimeReverseGrantNodeFallback=${report.windowsOpenOneTimeReverseGrantNodeFallback}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}.${riskSummary} FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. WindowsReverseGrantStatus=${report.windowsReverseGrantStatus}. WindowsOpenOneTimeReverseGrant=${report.windowsOpenOneTimeReverseGrant}. WindowsReverseGrantStatusNodeFallback=${report.windowsReverseGrantStatusNodeFallback}. WindowsOpenOneTimeReverseGrantNodeFallback=${report.windowsOpenOneTimeReverseGrantNodeFallback}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
   }
   const ignored = report.ignored.length > 0
     ? ` Saw ${report.ignored.length} non-Windows host(s), likely Mac/self.`
     : "";
-  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored}${riskSummary} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
 }
 
 function printText(report, args) {
@@ -360,6 +379,10 @@ function printText(report, args) {
         console.log(`[INFO] Ignored non-Windows host: ${summarizeHost(item)} platform=${item.platform || "unknown"}`);
       }
     }
+    const risk = formatWindowsLanRisk(report.windowsLanRisk);
+    if (risk) {
+      console.log(`[INFO] Agent Link Board hint: ${risk}`);
+    }
     console.log("[INFO] Ask Windows Codex to start Windows host, then rerun this discovery or check-mac-client-formal-status with the Windows IP.");
     console.log(`[INFO] Mac client browser self-test: ${report.macClientBrowserSelfTestCommand}`);
   }
@@ -371,15 +394,20 @@ function printText(report, args) {
   }
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv);
   if (args.help || helpRequested(process.argv)) {
     printHelp();
     return;
   }
 
+  const windowsLanRisk = await readWindowsLanRiskFromBoard({
+    enabled: args.checkBoard,
+    server: args.server,
+    timeoutMs: args.timeoutMs,
+  });
   const scan = runScanner(args);
-  const report = buildReport(scan, args);
+  const report = buildReport(scan, args, windowsLanRisk);
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
   } else if (args.boardSummary) {
@@ -390,9 +418,7 @@ function main() {
   process.exitCode = report.ok ? 0 : 1;
 }
 
-try {
-  main();
-} catch (error) {
+main().catch((error) => {
   console.error(`[FAIL] ${error.message}`);
   process.exitCode = 1;
-}
+});

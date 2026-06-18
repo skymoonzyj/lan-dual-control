@@ -3,6 +3,7 @@ import http from "node:http";
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { formatWindowsLanRisk, readWindowsLanRiskFromBoard } from "./board-windows-lan-risk.mjs";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const clientFiles = [
@@ -117,6 +118,9 @@ Machine-readable JSON fields:
                              one-line board summary without using a real host,
                              requesting a password, sending a call, or running
                              inject.
+  board.windowsLanRisk       Secret-free WindowsLanRisk= hints copied from
+                             Agent Link Board when --checkBoard is enabled.
+                             Only safe comma-separated risk tokens are accepted.
 
 Examples:
   node scripts/mac/check-mac-client-readiness.mjs --json
@@ -405,7 +409,7 @@ function checkBoard(args) {
     checked: true,
     ok: result.ok,
     summary: result.ok ? "readable" : "not readable",
-    error: normalizedText(result.error || result.stderr || result.stdout),
+    error: result.ok ? "" : normalizedText(result.error || result.stderr),
   };
 }
 
@@ -441,6 +445,7 @@ function audioSummary(audio = {}) {
 function buildChecklist({ git, client, clientServer, windowsHost, board }, args) {
   const checklist = [];
   const windowsHostStatusCommand = makeWindowsHostStatusCommand(windowsHost, args);
+  const lanRisk = windowsLanRiskHint(board);
   const add = (id, status, summary, detail = "", next = "") => {
     checklist.push({ id, status, summary, detail, next });
   };
@@ -480,9 +485,9 @@ function buildChecklist({ git, client, clientServer, windowsHost, board }, args)
   }
 
   if (!windowsHost.checked) {
-    add("windows-host", "warning", "Windows host discovery not checked", "", `Ask Windows Codex to run on the Windows host machine: ${windowsHostStatusCommand}. Then start safely if needed and rerun with --host <Windows IP> --port 43770.`);
+    add("windows-host", "warning", "Windows host discovery not checked", "", `Ask Windows Codex to run on the Windows host machine: ${windowsHostStatusCommand}.${lanRisk} Then start safely if needed and rerun with --host <Windows IP> --port 43770.`);
   } else if (!windowsHost.online) {
-    add("windows-host", args.requireWindowsHost ? "blocker" : "warning", `Windows host discovery offline at ${windowsHost.probe.host}:${windowsHost.probe.port}`, windowsHost.error?.message || "", `Ask Windows Codex to run on the Windows host machine: ${windowsHostStatusCommand}. Then start safely if needed and rerun this preflight.`);
+    add("windows-host", args.requireWindowsHost ? "blocker" : "warning", `Windows host discovery offline at ${windowsHost.probe.host}:${windowsHost.probe.port}`, windowsHost.error?.message || "", `Ask Windows Codex to run on the Windows host machine: ${windowsHostStatusCommand}.${lanRisk} Then start safely if needed and rerun this preflight.`);
   } else {
     const runtime = windowsHost.runtime?.buildId ? ` build=${windowsHost.runtime.buildId}` : "";
     const device = windowsHost.device?.name || "Windows host";
@@ -501,7 +506,7 @@ function countChecklist(checklist, status) {
   return checklist.filter((item) => item.status === status).length;
 }
 
-function makeRecommendations(checklist, windowsHost, args) {
+function makeRecommendations(checklist, windowsHost, args, board = {}) {
   const blockers = checklist.filter((item) => item.status === "blocker");
   if (blockers.length > 0) {
     return blockers.map((item) => ({
@@ -513,7 +518,7 @@ function makeRecommendations(checklist, windowsHost, args) {
   if (!windowsHost.checked || !windowsHost.online) {
     recommendations.push({
       level: "next",
-      text: `Ask Windows Codex to run on the Windows host machine: ${makeWindowsHostStatusCommand(windowsHost, args)}. Then start safely if needed and rerun with --host <Windows IP> --port 43770 --checkBoard --boardSummary.`,
+      text: `Ask Windows Codex to run on the Windows host machine: ${makeWindowsHostStatusCommand(windowsHost, args)}.${windowsLanRiskHint(board)} Then start safely if needed and rerun with --host <Windows IP> --port 43770 --checkBoard --boardSummary.`,
     });
   } else {
     recommendations.push({
@@ -537,7 +542,7 @@ function makeMacClientPageStatusCommand() {
 }
 
 function makeMacClientDiscoverWindowsCommand() {
-  return "node scripts/mac/discover-windows-hosts.mjs --boardSummary";
+  return "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary";
 }
 
 function makeWindowsHostStatusCommand(windowsHost = {}, args = {}) {
@@ -618,9 +623,16 @@ function makeBoardSummary(report) {
     : report.windowsHost.online
       ? `online ${report.windowsHost.probe.host}:${report.windowsHost.probe.port} build=${report.windowsHost.runtime?.buildId || "unknown"}`
       : `offline ${report.windowsHost.probe.host}:${report.windowsHost.probe.port}`;
+  const lanRisk = formatWindowsLanRisk(report.board?.windowsLanRisk);
+  const lanRiskSummary = lanRisk ? ` ${lanRisk};` : "";
   const findings = formatChecklistFindings(report.checklist);
   const next = report.recommendations[0]?.text || "No next step available.";
-  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows}; ${findings}. Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; WindowsHostStatus=${report.commands.windowsHostStatusCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; WindowsReverseGrantStatus=${report.commands.windowsReverseGrantStatusCommand}; WindowsOpenOneTimeReverseGrant=${report.commands.windowsOpenOneTimeReverseGrantCommand}; WindowsReverseGrantStatusNodeFallback=${report.commands.windowsReverseGrantStatusNodeFallbackCommand}; WindowsOpenOneTimeReverseGrantNodeFallback=${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}; MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
+  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows};${lanRiskSummary} ${findings}. Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; WindowsHostStatus=${report.commands.windowsHostStatusCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; WindowsReverseGrantStatus=${report.commands.windowsReverseGrantStatusCommand}; WindowsOpenOneTimeReverseGrant=${report.commands.windowsOpenOneTimeReverseGrantCommand}; WindowsReverseGrantStatusNodeFallback=${report.commands.windowsReverseGrantStatusNodeFallbackCommand}; WindowsOpenOneTimeReverseGrantNodeFallback=${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}; MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
+}
+
+function windowsLanRiskHint(board = {}) {
+  const risk = formatWindowsLanRisk(board.windowsLanRisk);
+  return risk ? ` Current Agent Link Board hint: ${risk}.` : "";
 }
 
 function formatChecklistFindings(checklist) {
@@ -646,6 +658,8 @@ function printHuman(report) {
   console.log(`- local server: ${report.clientServer.checked ? (report.clientServer.online ? `online ${report.clientServer.url}` : `offline ${report.clientServer.url}`) : "not checked"}`);
   console.log(`- Windows host: ${report.windowsHost.checked ? (report.windowsHost.online ? `online ${report.windowsHost.probe.host}:${report.windowsHost.probe.port}` : `offline ${report.windowsHost.probe.host}:${report.windowsHost.probe.port}`) : "not checked"}`);
   console.log(`- Agent Link Board: ${report.board.checked ? (report.board.ok ? "readable" : "not readable") : "not checked"}`);
+  const lanRisk = formatWindowsLanRisk(report.board.windowsLanRisk);
+  if (lanRisk) console.log(`- Windows LAN risk: ${lanRisk}`);
   console.log(`- Mac client page status: ${report.commands.macClientPageStatusCommand}`);
   console.log(`- Mac client discover Windows host: ${report.commands.macClientDiscoverWindowsCommand}`);
   console.log(`- Windows host status for Windows side: ${report.commands.windowsHostStatusCommand}`);
@@ -680,6 +694,11 @@ async function buildReport(args) {
     probeWindowsHost(args),
   ]);
   const board = checkBoard(args);
+  board.windowsLanRisk = await readWindowsLanRiskFromBoard({
+    enabled: args.checkBoard,
+    server: args.server,
+    timeoutMs: args.timeoutMs,
+  });
   const checklist = buildChecklist({ git, client, clientServer, windowsHost, board }, args);
   const counts = {
     ok: countChecklist(checklist, "ok"),
@@ -723,7 +742,7 @@ async function buildReport(args) {
       macClientBrowserSelfTestCommand: makeMacClientBrowserSelfTestCommand(),
       macClientCopyDiagnosticsAction: makeMacClientCopyDiagnosticsAction(),
     },
-    recommendations: makeRecommendations(checklist, windowsHost, args),
+    recommendations: makeRecommendations(checklist, windowsHost, args, board),
     boardSummary: "",
   };
   report.boardSummary = makeBoardSummary(report);

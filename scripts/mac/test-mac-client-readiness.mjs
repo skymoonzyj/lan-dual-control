@@ -204,6 +204,24 @@ function assertWindowsReverseGrantBoardSummary(text, label, expectedPort = "4377
   assertNotIncludes(text, "--password", label);
 }
 
+function assertWindowsLanRisk(payload, output, label) {
+  const risk = payload.board?.windowsLanRisk || {};
+  assert(risk.checked === true, `${label} should check Agent Link Board for Windows LAN risk`);
+  assert(risk.found === true, `${label} should find WindowsLanRisk on the board`);
+  assert(Array.isArray(risk.risks), `${label} should expose sanitized risk tokens`);
+  assert(risk.risks.join(",") === "no-firewall-allow,public-profile", `${label} should keep only safe risk tokens`);
+  assert(risk.riskText === "no-firewall-allow,public-profile", `${label} should expose a compact riskText`);
+  assert(risk.rejectedCount >= 2, `${label} should count rejected unsafe board candidates`);
+  assertIncludes(payload.boardSummary || "", "WindowsLanRisk=no-firewall-allow,public-profile", `${label} boardSummary`);
+  assertIncludes(payload.recommendations?.[0]?.text || "", "WindowsLanRisk=no-firewall-allow,public-profile", `${label} recommendation`);
+  const windowsHostItem = payload.checklist?.find((item) => item.id === "windows-host") || {};
+  assertIncludes(windowsHostItem.next || "", "WindowsLanRisk=no-firewall-allow,public-profile", `${label} windows-host next step`);
+  assertNotIncludes(output, "hunter2", `${label} output`);
+  assertNotIncludes(output, "sauce", `${label} output`);
+  assertNotIncludes(output, "LAN_DUAL_PASSWORD=hunter2", `${label} output`);
+  assertNotIncludes(output, "--password=sauce", `${label} output`);
+}
+
 function extractPlainLineValue(text, prefix, label) {
   const line = String(text || "")
     .split(/\r?\n/)
@@ -271,6 +289,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macClientFormalChecklistCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientFormalSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientBrowserSelfTestCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "board.windowsLanRisk", `${script} ${flag}`);
   }
   print("OK", "Mac client readiness help exits quickly");
 }
@@ -500,6 +519,96 @@ async function withMacClientServer(args, callback) {
   }
 }
 
+async function withBoardStateServer(args, state, callback) {
+  const port = await getFreePort();
+  const child = spawn(process.execPath, [
+    "--input-type=module",
+    "-e",
+    `
+import { createServer } from "node:http";
+const port = Number(process.argv[1]);
+const state = ${JSON.stringify(state)};
+createServer((request, response) => {
+  const pathname = new URL(request.url || "/", "http://127.0.0.1").pathname;
+  if (pathname !== "/api/state") {
+    response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    response.end("not found\\n");
+    return;
+  }
+  response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+  response.end(JSON.stringify(state));
+}).listen(port, "127.0.0.1");
+`,
+    String(port),
+  ], {
+    cwd: repoRoot,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  try {
+    await waitForHttpPath(port, "/api/state", args.timeoutMs);
+    await callback(`http://127.0.0.1:${port}`);
+  } finally {
+    child.kill("SIGTERM");
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, 1000);
+      child.once("close", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+  }
+}
+
+async function checkBoardWindowsLanRisk(args) {
+  const boardState = {
+    updatedAt: "2026-06-18T12:58:23.345Z",
+    currentCall: null,
+    statuses: {
+      "Windows Codex": {
+        status: "idle",
+        note: "Windows readiness true summary WindowsLanRisk=no-firewall-allow,public-profile",
+      },
+    },
+    events: [
+      {
+        id: "safe-risk",
+        at: "2026-06-18T12:58:23.345Z",
+        type: "message",
+        from: "Windows Codex",
+        text: "WindowsLanRisk=no-firewall-allow,public-profile",
+      },
+      {
+        id: "unsafe-password-flag",
+        at: "2026-06-18T12:58:24.345Z",
+        type: "message",
+        from: "Windows Codex",
+        text: "Ignore unsafe candidate WindowsLanRisk=--password=sauce",
+      },
+      {
+        id: "unsafe-env-password",
+        at: "2026-06-18T12:58:25.345Z",
+        type: "message",
+        from: "Windows Codex",
+        text: "Ignore unsafe candidate WindowsLanRisk=LAN_DUAL_PASSWORD=hunter2",
+      },
+    ],
+  };
+  await withBoardStateServer(args, boardState, async (serverUrl) => {
+    const result = run([
+      "--json",
+      "--checkBoard",
+      "--server",
+      serverUrl,
+      "--timeoutMs",
+      "1200",
+    ], args);
+    const payload = parseJson(result.stdout, "board risk JSON");
+    assert(result.status === 0, `board risk JSON should exit 0 with warnings allowed.\n${result.stdout}\n${result.stderr}`);
+    assertWindowsLanRisk(payload, `${result.stdout}\n${result.stderr}`, "board risk JSON");
+  });
+  print("OK", "Board WindowsLanRisk is surfaced without leaking unsafe candidates");
+}
+
 async function checkClientServerProbe(args) {
   await withMacClientServer(args, async (port) => {
     const result = run(["--json", "--probeClientServer", "--requireClientServer", "--clientPort", String(port)], args);
@@ -641,6 +750,7 @@ async function main() {
   checkRequireFailures(args);
   checkBoardSummary(args);
   checkPlainReport(args);
+  await checkBoardWindowsLanRisk(args);
   await checkClientServerProbe(args);
   await checkWindowsDiscoveryProbe(args);
   print("OK", "Mac client readiness self-test passed");

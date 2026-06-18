@@ -21,6 +21,43 @@
 
 日期：2026-06-18 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac discovery/readiness 消费 Windows 已经上板的 `WindowsLanRisk=`，把“发现不到 Windows host”转成可直接排查的 LAN/firewall 风险提示。
+完成内容：
+- 新增 `scripts/mac/board-windows-lan-risk.mjs`，统一只读读取 Agent Link Board `/api/state` 并安全提取 `WindowsLanRisk=` / `WindowsLanRisks=`；只接受逗号分隔的短 risk token，拒绝 `--password`、`LAN_DUAL_PASSWORD`、token/secret/passwd/pwd 等危险候选，且拒绝候选不回显。
+- `discover-windows-hosts` 新增 `--checkBoard` / `--server`，JSON 输出 `windowsLanRisk`，`--boardSummary` 在未发现 Windows host 或发现成功时都能附带脱敏 `WindowsLanRisk=no-firewall-allow,public-profile`。
+- `check-mac-client-readiness --checkBoard` 现在把风险写入 `board.windowsLanRisk`、recommendation、windows-host next step 和一行摘要；Mac client discovery 命令也默认带 `--checkBoard --boardSummary`。
+- `check-mac-client-readiness` 在 Agent Link Board 可读时不再把 `watch --once` 原始事件文本写进 `board.error`，避免危险示例或敏感文本通过 JSON 回显。
+修改文件：
+- `scripts/mac/board-windows-lan-risk.mjs`
+- `scripts/mac/discover-windows-hosts.mjs`
+- `scripts/mac/check-mac-client-readiness.mjs`
+- `scripts/mac/test-discover-windows-hosts.mjs`
+- `scripts/mac/test-mac-client-readiness.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增 discovery/readiness 自测断言并确认失败：缺 `--checkBoard` / `board.windowsLanRisk` 帮助字段。
+- `node --check scripts/mac/board-windows-lan-risk.mjs`
+- `node --check scripts/mac/discover-windows-hosts.mjs`
+- `node --check scripts/mac/check-mac-client-readiness.mjs`
+- `node --check scripts/mac/test-discover-windows-hosts.mjs`
+- `node --check scripts/mac/test-mac-client-readiness.mjs`
+- `node scripts/mac/test-discover-windows-hosts.mjs --timeoutMs 12000`
+- `node scripts/mac/test-mac-client-readiness.mjs --timeoutMs 18000`
+遗留问题：
+- 本轮只读消费 Windows 风险摘要，不修改 Windows 防火墙/网络配置，不认证、不请求或发送密码、不发送 input/inject。
+下一步建议：
+- Mac 端发现不到 Windows host 时优先跑 `node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary` 或 `node scripts/mac/check-mac-client-readiness.mjs --checkBoard --boardSummary`；如果看到 `WindowsLanRisk=no-firewall-allow,public-profile`，先让 Windows/人工确认防火墙入站放行和 Public 网络，再复查 discovery。
+是否改了协议：否。
+是否需要另一端配合：暂不需要 Windows 改代码；若真实现场仍发现不到 Windows host，需要 Windows/人工按风险标签排查防火墙/网络。不要在通讯板发送密码/token/系统账号。
+
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac formal status/smoke 消费 Windows 已经上板的安全认证路径，闭环 `mac-confirm-secure-auth-path` 下一步。
 完成内容：
 - `check-mac-client-formal-status` 现在会读取 Agent Link Board `/api/state`，从 `WindowsSecureAuthPath=` / `SecureAuthPath=` 中只提取安全的 Windows 本机隐藏密码重启命令：`node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port <port> --promptPassword --requirePassword`。
