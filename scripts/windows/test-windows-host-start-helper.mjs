@@ -687,6 +687,8 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         assertIncludes(statusOutput, "Clipboard:", "online status");
         assertIncludes(statusOutput, "Mac formal checklist command:", "online status");
         assertIncludes(statusOutput, "check-mac-client-formal-status.mjs", "online status");
+        assertIncludes(statusOutput, "Mac client formal checklist label:", "online status");
+        assertIncludes(statusOutput, "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "online status");
         assertIncludes(statusOutput, "Mac formal send-call command:", "online status");
         assertIncludes(statusOutput, "--sendCall", "online status");
         assertIncludes(statusOutput, "Windows host media baseline command:", "online status");
@@ -747,6 +749,9 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         }
         if (!String(parsed.macClientReadinessCommands[0].formalCommand || "").includes("check-mac-client-formal-status.mjs")) {
           throw new Error(`Online JSON status did not include expected Mac formal checklist command.\n${jsonResult.stdout}`);
+        }
+        if (!String(parsed.macClientReadinessCommands[0].formalChecklistLabel || "").includes("MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs")) {
+          throw new Error(`Online JSON status did not include expected Mac formal checklist label.\n${jsonResult.stdout}`);
         }
         if (!String(parsed.macClientReadinessCommands[0].sendCallCommand || "").includes("--sendCall")) {
           throw new Error(`Online JSON status did not include expected Mac formal send-call command.\n${jsonResult.stdout}`);
@@ -853,6 +858,7 @@ async function assertStatusOnlineWithTempHost(timeoutMs) {
         assertIncludes(boardResult.stdout, "reverse=deny-confirm", "online board summary");
         assertIncludes(boardResult.stdout, "check-mac-client-readiness.mjs", "online board summary");
         assertIncludes(boardResult.stdout, "check-mac-client-formal-status.mjs", "online board summary");
+        assertIncludes(boardResult.stdout, "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "online board summary");
         assertIncludes(boardResult.stdout, "--sendCall", "online board summary");
         assertIncludes(boardResult.stdout, "WindowsHostMedia=", "online board summary");
         assertIncludes(boardResult.stdout, "check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary", "online board summary");
@@ -972,6 +978,10 @@ async function assertLaunchWithEnvPassword(timeoutMs) {
       }
       if (!output.includes("Mac formal checklist command:") || !output.includes("check-mac-client-formal-status.mjs")) {
         rejectLaunch(new Error(`Start helper did not print Mac formal checklist command.\n${output}`));
+        return;
+      }
+      if (!output.includes("Mac client formal checklist label:") || !output.includes("MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs")) {
+        rejectLaunch(new Error(`Start helper did not print Mac formal checklist label.\n${output}`));
         return;
       }
       if (!output.includes("Mac formal send-call command:") || !output.includes("--sendCall")) {

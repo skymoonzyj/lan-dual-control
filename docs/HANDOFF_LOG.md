@@ -21,6 +21,40 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：复查 formal E2E 第二步，并让 Windows host 状态摘要输出统一 `MacClientFormalChecklist=` 标签。
+完成内容：
+- 重新复查 Windows formal E2E 第二步依赖：无密 preflight + Windows client diagnostics-only 均通过；正式连接 Mac 的第二步仍需要用户本机隐藏输入密码，密码未写入命令或通讯板。
+- `start-windows-host --status` 在线目标新增 `formalChecklistLabel`，内容为 `MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port <port> --boardSummary`。
+- 普通 status、JSON `macClientReadinessCommands[]` 和 `--boardSummary` 都会输出该统一标签；原 `formalCommand`、readiness 命令和 `sendCallCommand` 保持兼容。
+修改文件：
+- `scripts/windows/start-windows-host.mjs`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --preflightOnly --checkClientDiagnostics --boardSummary --timeoutMs 45000`
+- `node scripts/windows/test-windows-client-browser.mjs --host 192.168.31.122 --port 43770 --diagnosticsOnly --requireH264 --boardSummary --timeoutMs 45000`
+- `node --check scripts/windows/start-windows-host.mjs`
+- `node --check scripts/windows/test-windows-host-start-helper.mjs`
+- `node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-script-help.mjs --script start-windows-host.mjs --timeoutMs 10000`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/windows apps/windows-host docs`
+遗留问题：
+- Mac host 当前 `/discovery` 仍显示 `maxScreenFps=30`；正式 60Hz 长测前应先按 `MacMaxFpsPlan=` 或 `MacMaxFpsSafeStart=` 提升上限并用 `MacUnattendedFormal=` 强校验。
+下一步建议：
+- Mac 控 Windows 前先让 Windows 侧跑 `start-windows-host --status --boardSummary`，Mac 侧复制 `MacClientFormalChecklist=` 对应命令跑正式清单；ready 后再决定是否 `--sendCall`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；正式密码连 Mac 或 60Hz 上限调整需要用户/Mac 端现场配合。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows watcher 和控制端诊断消费 Mac 侧 `MacClientFormalChecklist=` 正式清单入口。
 完成内容：
 - `watch-codex-link-mac-alerts.ps1` 新增 `MacClientFormalChecklist=` 显式匹配：当它与 Mac client/formal 的 `windows-host`、`video`、`build`、`auth`、`repo` 等 warning/blocker 或 `ready=false/blocked/failed` 同时出现时提醒。
