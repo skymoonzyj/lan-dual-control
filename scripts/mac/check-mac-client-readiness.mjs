@@ -118,6 +118,9 @@ Machine-readable JSON fields:
                              one-line board summary without using a real host,
                              requesting a password, sending a call, or running
                              inject.
+  commands.macScriptHelpCommand
+                             Unified side-effect-free Mac script help
+                             self-check command.
   board.windowsLanRisk       Secret-free WindowsLanRisk= hints copied from
                              Agent Link Board when --checkBoard is enabled.
                              Only safe comma-separated risk tokens are accepted.
@@ -613,6 +616,10 @@ function makeMacClientBrowserSelfTestCommand() {
   return "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
 }
 
+function makeMacScriptHelpCommand() {
+  return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
+}
+
 function makeBoardSummary(report) {
   const repo = report.git.clean ? "clean" : `dirty(${report.git.changes.length})`;
   const client = report.client.ok ? "ok" : "blocked";
@@ -630,7 +637,7 @@ function makeBoardSummary(report) {
   const lanRiskSummary = lanRisk ? ` ${lanRisk};` : "";
   const findings = formatChecklistFindings(report.checklist);
   const next = report.recommendations[0]?.text || "No next step available.";
-  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows};${lanRiskSummary} ${findings}. Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; WindowsHostStatus=${report.commands.windowsHostStatusCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; WindowsReverseGrantStatus=${report.commands.windowsReverseGrantStatusCommand}; WindowsOpenOneTimeReverseGrant=${report.commands.windowsOpenOneTimeReverseGrantCommand}; WindowsReverseGrantStatusNodeFallback=${report.commands.windowsReverseGrantStatusNodeFallbackCommand}; WindowsOpenOneTimeReverseGrantNodeFallback=${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}; MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
+  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows};${lanRiskSummary} ${findings}. Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; WindowsHostStatus=${report.commands.windowsHostStatusCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; WindowsReverseGrantStatus=${report.commands.windowsReverseGrantStatusCommand}; WindowsOpenOneTimeReverseGrant=${report.commands.windowsOpenOneTimeReverseGrantCommand}; WindowsReverseGrantStatusNodeFallback=${report.commands.windowsReverseGrantStatusNodeFallbackCommand}; WindowsOpenOneTimeReverseGrantNodeFallback=${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}; MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; MacScriptHelp=${report.commands.macScriptHelpCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
 }
 
 function windowsLanRiskHint(board = {}) {
@@ -675,6 +682,7 @@ function printHuman(report) {
   console.log(`- Mac client formal checklist: ${report.commands.macClientFormalChecklistCommand}`);
   console.log(`- Mac client formal smoke preflight: ${report.commands.macClientFormalSmokeCommand}`);
   console.log(`- Mac client browser self-test: ${report.commands.macClientBrowserSelfTestCommand}`);
+  console.log(`- Mac script help safety check: ${report.commands.macScriptHelpCommand}`);
   console.log(`- Copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
   console.log(`- result: ${report.ok ? "ready with warnings allowed" : "blocked"} (${report.counts.blocker} blockers, ${report.counts.warning} warnings)`);
   console.log("");
@@ -743,6 +751,7 @@ async function buildReport(args) {
       macClientFormalChecklistCommand: makeMacClientFormalChecklistCommand(windowsHost, args),
       macClientFormalSmokeCommand: makeMacClientFormalSmokeCommand(),
       macClientBrowserSelfTestCommand: makeMacClientBrowserSelfTestCommand(),
+      macScriptHelpCommand: makeMacScriptHelpCommand(),
       macClientCopyDiagnosticsAction: makeMacClientCopyDiagnosticsAction(),
     },
     recommendations: makeRecommendations(checklist, windowsHost, args, board),

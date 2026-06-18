@@ -278,6 +278,20 @@ function assertMacClientBrowserSelfTestCommand(command, label) {
   assertNotIncludes(command, "--server", label);
 }
 
+function assertMacScriptHelpCommand(command, label) {
+  assertIncludes(command, "test-mac-script-help.mjs", label);
+  assertIncludes(command, "--timeoutMs 10000", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "--json", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run([flag], args);
@@ -296,6 +310,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macClientFormalChecklistCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientFormalSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientBrowserSelfTestCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macScriptHelpCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "board.windowsLanRisk", `${script} ${flag}`);
   }
   print("OK", "Mac client readiness help exits quickly");
@@ -325,6 +340,7 @@ function checkOfflineJson(args) {
   );
   assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "offline JSON Mac client formal smoke command");
   assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "offline JSON Mac client browser self-test command");
+  assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "offline JSON Mac script help command");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "payload should include copy diagnostics action");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("连接密码"), "copy diagnostics action should mention password safety");
   assert(/Mac client readiness:/.test(payload.boardSummary || ""), "payload should include boardSummary");
@@ -340,6 +356,8 @@ function checkOfflineJson(args) {
   assert(/MacClientFormalChecklist=/.test(payload.boardSummary || ""), "boardSummary should include formal checklist command");
   assert(/MacClientFormalSmoke=/.test(payload.boardSummary || ""), "boardSummary should include formal smoke command");
   assert(/MacClientBrowserSelfTest=/.test(payload.boardSummary || ""), "boardSummary should include browser self-test command");
+  assert(/MacScriptHelp=/.test(payload.boardSummary || ""), "boardSummary should include Mac script help command");
+  assertIncludes(payload.boardSummary || "", "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "offline JSON boardSummary");
   assert(/CopyDiagnostics=Mac client 事件日志点击/.test(payload.boardSummary || ""), "boardSummary should include copy diagnostics action");
   print("OK", "Offline JSON is parseable and secret-free");
 }
@@ -412,6 +430,8 @@ function checkBoardSummary(args) {
   assertIncludes(text, "--preflightOnly", "board summary");
   assertIncludes(text, "MacClientBrowserSelfTest=", "board summary");
   assertIncludes(text, "scripts/mac/test-mac-client-browser-self-test-wrapper.mjs", "board summary");
+  assertIncludes(text, "MacScriptHelp=", "board summary");
+  assertIncludes(text, "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "board summary");
   assertIncludes(text, "CopyDiagnostics=Mac client 事件日志点击", "board summary");
   assertIncludes(text, "连接密码", "board summary");
   assertIncludes(text, "Do not send passwords", "board summary");
@@ -466,6 +486,11 @@ function checkPlainReport(args) {
   assertIncludes(result.stdout, "run-mac-client-formal-smoke.mjs", "plain report");
   assertIncludes(result.stdout, "Mac client browser self-test:", "plain report");
   assertIncludes(result.stdout, "scripts/mac/test-mac-client-browser-self-test-wrapper.mjs", "plain report");
+  assertIncludes(result.stdout, "Mac script help safety check:", "plain report");
+  assertMacScriptHelpCommand(
+    extractPlainLineValue(result.stdout, "- Mac script help safety check: ", "plain report"),
+    "plain report Mac script help",
+  );
   assertIncludes(result.stdout, "Copy diagnostics:", "plain report");
   assertIncludes(result.stdout, "复制诊断", "plain report");
   assertIncludes(result.stdout, "连接密码", "plain report");
@@ -647,6 +672,7 @@ async function checkClientServerProbe(args) {
     );
     assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "client server probe formal smoke command");
     assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "client server probe browser self-test command");
+    assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "client server probe script help command");
     assert(payload.checklist.some((item) => item.id === "client-server" && item.status === "ok"), "client-server ok item should be present");
   });
   print("OK", "Running Mac client HTTP server probe passes");
@@ -754,6 +780,7 @@ async function checkWindowsDiscoveryProbe(args) {
     assertIncludes(payload.boardSummary || "", `MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 127.0.0.1 --port ${port} --boardSummary`, "Windows discovery boardSummary");
     assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "Windows discovery probe formal smoke command");
     assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "Windows discovery probe browser self-test command");
+    assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "Windows discovery probe script help command");
   });
   print("OK", "Mock Windows /discovery probe captures runtime and capabilities");
 }
