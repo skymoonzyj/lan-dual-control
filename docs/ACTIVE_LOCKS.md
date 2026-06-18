@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/mac/start-mac-host.mjs`, `scripts/mac/test-mac-host-start-helper.mjs`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 继续推进 | Mac host `--status --boardSummary` 离线/在线路径新增结构化 `MacHostSafeStart=` 标签；启动助手专项回归覆盖端口保留、不泄密、不启动服务、不发送 input/inject。 |
 | Mac Codex | `scripts/mac/check-mac-formal-e2e-status.mjs`, `scripts/mac/test-mac-formal-e2e-status.mjs`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 继续推进 | Mac formal E2E readiness `--boardSummary` 离线/在线路径新增结构化 `MacHostSafeStart=` 标签；专项自测覆盖端口保留、不发 call、不泄密、不发送 input/inject。 |
 | Mac Codex | `scripts/mac/check-mac-resume-status.mjs`, `scripts/mac/test-mac-resume-status.mjs`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 继续推进 | Mac 恢复总览 `--boardSummary` 离线/在线路径新增结构化 `MacHostSafeStart=` 标签，普通输出也显示 Mac host safe start；专项自测覆盖端口保留和不泄密。 |
 | Mac Codex | `scripts/mac/check-mac-unattended-status.mjs`, `scripts/mac/test-mac-unattended-status.mjs`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-18 继续推进 | Mac 值守检查 JSON/普通输出/`--boardSummary` 新增 `MacHostSafeStart=start-mac-host --promptPassword --requirePassword --host 0.0.0.0 --port <当前端口>`，LaunchAgent 或 host 问题同一行即可复制安全前台启动命令；专项自测覆盖不泄密、不发送 input/inject。 |

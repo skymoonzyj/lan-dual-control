@@ -21,6 +21,36 @@
 
 日期：2026-06-18 继续推进
 开发端：Mac Codex
+本轮目标：Mac host 状态摘要显式输出安全前台启动标签。
+完成内容：
+- `start-mac-host --status --boardSummary` 离线和在线路径都新增 `MacHostSafeStart=`，复用现有 `commands.safeStartCommand`。
+- 离线摘要仍保留原来的 `Next: start safely with ...` 人类提示，但同时提供可被 watcher/脚本稳定识别的一行标签。
+- 状态助手回归覆盖离线 JSON、默认 JSON、active currentCall 摘要和在线 JSON，确认 `MacHostSafeStart=` 保留当前 `--port <端口>`，且不泄密、不启动服务、不发送 input/inject。
+修改文件：
+- `scripts/mac/start-mac-host.mjs`
+- `scripts/mac/test-mac-host-start-helper.mjs`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/mac/start-mac-host.mjs`
+- `node --check scripts/mac/test-mac-host-start-helper.mjs`
+- `node scripts/mac/start-mac-host.mjs --status --host 127.0.0.1 --port 43888 --boardSummary`（预期因 host 离线退出非 0；stdout 一行摘要包含 `MacHostSafeStart=` 且保留 `--port 43888`）
+- `node scripts/mac/test-mac-host-start-helper.mjs --timeoutMs 45000`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- `git diff --check`
+- `rg -n "^(<<<<<<<|=======|>>>>>>>)" scripts/mac/start-mac-host.mjs scripts/mac/test-mac-host-start-helper.mjs docs/HANDOFF_LOG.md docs/ACTIVE_LOCKS.md docs/04-task-board.md`
+遗留问题：
+- 本轮只补 status 摘要标签；没有启动 host、没有写入/加载 LaunchAgent。
+下一步建议：
+- Windows watcher/控制端消费 `MacHostSafeStart=` 后，可以从 readiness/resume/formal/status 任一入口稳定识别安全启动建议；真实 60Hz 复验仍需要现场授权后处理 LaunchAgent 和重启。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-18 Mac Codex
+
+日期：2026-06-18 继续推进
+开发端：Mac Codex
 本轮目标：Mac formal E2E readiness 摘要显式输出安全前台启动标签。
 完成内容：
 - `check-mac-formal-e2e-status --boardSummary` 离线和在线路径都新增 `MacHostSafeStart=`，复用现有 `commands.macHostSafeStartCommand`。

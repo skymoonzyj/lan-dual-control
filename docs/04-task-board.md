@@ -16,6 +16,7 @@
 - [x] Windows Mac 提醒 watcher 识别 Mac 值守风险摘要：`MacUnattendedStatus`、`warnings=`、`blockers=`、LaunchAgent 缺失/未加载、电源或睡眠风险会触发 Windows 本机提醒，方便远控窗口最小化时透传 Mac 值守问题。
 - [x] Windows 控制端对齐 Mac unattended LaunchAgent 刷新率上限明细：`warnings=launch-agent-max-fps` 会被翻译成“LaunchAgent 刷新率上限需调整”，并保留原始短标签到复制/导出诊断。
 - [x] Mac 值守检查摘要补安全前台启动入口：`check-mac-unattended-status` 的 JSON、普通输出和 `--boardSummary` 现在给出 `MacHostSafeStart=start-mac-host --promptPassword --requirePassword --host 0.0.0.0 --port <当前端口>`，LaunchAgent 缺失、host 离线或正式 60Hz 门禁失败时同一行即可复制安全启动命令。
+- [x] Mac host 状态摘要补同名安全前台启动入口：`start-mac-host --status --boardSummary` 离线/在线路径现在显式输出 `MacHostSafeStart=`，最直接的 host 状态入口也能被 watcher/脚本稳定识别安全启动建议。
 - [x] Mac 恢复总览摘要补同名安全前台启动入口：`check-mac-resume-status --boardSummary` 离线/在线路径现在也显式输出 `MacHostSafeStart=`，恢复开工第一屏即可复制同一条安全启动命令。
 - [x] Mac formal E2E readiness 摘要补同名安全前台启动入口：`check-mac-formal-e2e-status --boardSummary` 离线/在线路径现在显式输出 `MacHostSafeStart=`，正式呼叫 Windows 前的 checklist 摘要也能直接复制安全启动命令。
 - [x] Windows 恢复总览对齐 Mac unattended formal 60Hz 强校验：JSON、普通输出和 `--boardSummary` 现在会给出 `MacUnattendedFormal=check-mac-unattended-status --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`，方便正式验收前把 LaunchAgent max FPS 或未加载缺口当 blocker 处理。

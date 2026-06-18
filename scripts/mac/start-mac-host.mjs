@@ -554,6 +554,7 @@ function formatStatusBoardSummary(payload) {
   if (!payload.online) {
     return [
       `Mac host status: offline at ${payload.probe.host}:${payload.probe.port}; ${callSummary}.`,
+      `MacHostSafeStart=${payload.commands?.safeStartCommand || "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword"}.`,
       `Next: start safely with ${payload.commands?.safeStartCommand || "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword"}.`,
       `MacLaunchAgentPlan=${payload.commands?.macLaunchAgentPlanCommand || "not-available"}.`,
       `MacMaxFpsPlan=${payload.commands?.macMaxFpsPlanCommand || "not-available"}.`,
@@ -581,6 +582,7 @@ function formatStatusBoardSummary(payload) {
   return [
     `Mac host status: online ${target}; runtimeBuild=${runtimeBuild} inputMode=${payload.inputMode || "unknown"}; ${callSummary}.`,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${formatStatusBuildDiff(payload.buildDiff)}.`,
+    `MacHostSafeStart=${payload.commands?.safeStartCommand || "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword"}.`,
     `MacLaunchAgentPlan=${payload.commands?.macLaunchAgentPlanCommand || "not-available"}.`,
     `MacMaxFpsPlan=${payload.commands?.macMaxFpsPlanCommand || "not-available"}.`,
     `MacUnattendedFormal=${payload.commands?.macUnattendedFormalCommand || "not-available"}.`,
