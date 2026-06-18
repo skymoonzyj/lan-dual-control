@@ -281,6 +281,8 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "MacDiscovery Node and PowerShell commands", `help ${flag}`);
     assertIncludes(result.stdout, "MacHostSafeStart=", `help ${flag}`);
     assertIncludes(result.stdout, "MacMaxFpsSafeStart=", `help ${flag}`);
+    assertIncludes(result.stdout, "WindowsReverseGrantStatus=", `help ${flag}`);
+    assertIncludes(result.stdout, "WindowsOpenOneTimeReverseGrant=", `help ${flag}`);
     assertIncludes(result.stdout, "discover-lan-hosts.mjs --noLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "discover-lan-hosts.ps1 -NoLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-host-readiness.mjs --host 192.168.31.122 --port 43770 --checkBoard --boardSummary", `help ${flag}`);
@@ -291,6 +293,7 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "checks", `help ${flag}`);
     assertIncludes(result.stdout, "alert-watcher status read-only", `help ${flag}`);
     assertIncludes(result.stdout, "start-mac-alert-watcher.ps1", `help ${flag}`);
+    assertIncludes(result.stdout, "allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary", `help ${flag}`);
   }
   console.log("[OK] Windows resume status help is pure");
 }
@@ -415,6 +418,20 @@ async function checkMockJson(args) {
     assert(String(payload.commands?.windowsReverseControlGrantPowerShellBoardSummary || "").includes("-Port 43770"), "mock JSON reverse grant PowerShell command should target the default Windows host port");
     assert(String(payload.commands?.windowsReverseControlGrantPowerShellBoardSummary || "").includes("-DurationMs 30000"), "mock JSON reverse grant PowerShell command should be time-limited");
     assert(String(payload.commands?.windowsReverseControlGrantPowerShellBoardSummary || "").includes("-BoardSummary"), "mock JSON reverse grant PowerShell command should be board-safe");
+    assert(String(payload.commands?.windowsReverseGrantStatusBoardSummary || "").includes("allow-windows-reverse-control.mjs"), "mock JSON should include Windows reverse grant status Node command");
+    assert(String(payload.commands?.windowsReverseGrantStatusBoardSummary || "").includes("--status"), "mock JSON reverse grant status Node command should use --status");
+    assert(String(payload.commands?.windowsReverseGrantStatusBoardSummary || "").includes("--boardSummary"), "mock JSON reverse grant status Node command should be board-safe");
+    assert(String(payload.commands?.windowsReverseGrantStatusPowerShellBoardSummary || "").includes("allow-windows-reverse-control.ps1"), "mock JSON should include Windows reverse grant status PowerShell command");
+    assert(String(payload.commands?.windowsReverseGrantStatusPowerShellBoardSummary || "").includes("-Status"), "mock JSON reverse grant status PowerShell command should use -Status");
+    assert(String(payload.commands?.windowsReverseGrantStatusPowerShellBoardSummary || "").includes("-BoardSummary"), "mock JSON reverse grant status PowerShell command should be board-safe");
+    assert(String(payload.commands?.windowsOpenOneTimeReverseGrantBoardSummary || "").includes("allow-windows-reverse-control.mjs"), "mock JSON should include Windows one-time reverse grant Node command");
+    assert(String(payload.commands?.windowsOpenOneTimeReverseGrantBoardSummary || "").includes("--grant"), "mock JSON one-time reverse grant Node command should use --grant");
+    assert(String(payload.commands?.windowsOpenOneTimeReverseGrantBoardSummary || "").includes("--durationMs 30000"), "mock JSON one-time reverse grant Node command should be time-limited");
+    assert(String(payload.commands?.windowsOpenOneTimeReverseGrantBoardSummary || "").includes("--boardSummary"), "mock JSON one-time reverse grant Node command should be board-safe");
+    assert(String(payload.commands?.windowsOpenOneTimeReverseGrantPowerShellBoardSummary || "").includes("allow-windows-reverse-control.ps1"), "mock JSON should include Windows one-time reverse grant PowerShell command");
+    assert(String(payload.commands?.windowsOpenOneTimeReverseGrantPowerShellBoardSummary || "").includes("-Grant"), "mock JSON one-time reverse grant PowerShell command should use -Grant");
+    assert(String(payload.commands?.windowsOpenOneTimeReverseGrantPowerShellBoardSummary || "").includes("-DurationMs 30000"), "mock JSON one-time reverse grant PowerShell command should be time-limited");
+    assert(String(payload.commands?.windowsOpenOneTimeReverseGrantPowerShellBoardSummary || "").includes("-BoardSummary"), "mock JSON one-time reverse grant PowerShell command should be board-safe");
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("test-windows-client-browser.mjs"), "mock JSON should include Windows client diagnostics command");
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("--diagnosticsOnly"), "mock JSON client diagnostics should be no-auth diagnostics only");
     assert(String(payload.commands?.windowsClientDiagnosticsCommand || "").includes("--boardSummary"), "mock JSON client diagnostics should be board-safe");
@@ -633,6 +650,14 @@ async function checkBoardSummary(args) {
     assertIncludes(result.stdout, "test-windows-powershell-help.mjs --timeoutMs 10000 --boardSummary", "board summary");
     assertIncludes(result.stdout, "PowerShellHelpPwsh=", "board summary");
     assertIncludes(result.stdout, "test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary", "board summary");
+    assertIncludes(result.stdout, "WindowsReverseGrantStatus=", "board summary");
+    assertIncludes(result.stdout, "allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary", "board summary");
+    assertIncludes(result.stdout, "WindowsOpenOneTimeReverseGrant=", "board summary");
+    assertIncludes(result.stdout, "allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary", "board summary");
+    assertIncludes(result.stdout, "WindowsReverseGrantStatusNodeFallback=", "board summary");
+    assertIncludes(result.stdout, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --status --boardSummary", "board summary");
+    assertIncludes(result.stdout, "WindowsOpenOneTimeReverseGrantNodeFallback=", "board summary");
+    assertIncludes(result.stdout, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --grant --durationMs 30000 --boardSummary", "board summary");
     assertIncludes(result.stdout, "ReverseGrant=", "board summary");
     assertIncludes(result.stdout, "allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary", "board summary");
     assertIncludes(result.stdout, "ReverseGrantPs=", "board summary");
@@ -865,6 +890,132 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   });
 }
 
+async function checkBoardWindowsReverseGrantExtraction(args) {
+  const statusCommand = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary";
+  const grantCommand = "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary";
+  const statusNodeCommand = "node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --status --boardSummary";
+  const grantNodeCommand = "node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --grant --durationMs 30000 --boardSummary";
+  await withMockHost(async (port) => {
+    const boardState = {
+      statuses: {
+        "Mac Codex": {
+          role: "Mac 端",
+          status: "blocked",
+          note: [
+            "LAN008 pending-request waiting for Windows reverse control grant.",
+            `WindowsReverseGrantStatus=${statusCommand}`,
+            `WindowsOpenOneTimeReverseGrant=${grantCommand}`,
+            `WindowsReverseGrantStatusNodeFallback=${statusNodeCommand}`,
+            `WindowsOpenOneTimeReverseGrantNodeFallback=${grantNodeCommand}`,
+          ].join(" "),
+        },
+      },
+      events: [
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 192.168.31.68 -Port 43770 -Status -BoardSummary",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -Password secret-value -BoardSummary",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "WindowsReverseGrantStatusNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --status",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "WindowsOpenOneTimeReverseGrantNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port <当前端口> --grant --durationMs 30000 --boardSummary",
+        },
+      ],
+    };
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock WindowsReverseGrant JSON failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.windowsReverseGrantStatus?.found === true, "WindowsReverseGrantStatus should be found");
+      assert(payload.board.windowsReverseGrantStatus.command === statusCommand, "WindowsReverseGrantStatus command mismatch");
+      assert(payload.board.windowsReverseGrantStatus.rejectedCount >= 1, "unsafe WindowsReverseGrantStatus should be rejected");
+      assert(payload.board?.windowsOpenOneTimeReverseGrant?.found === true, "WindowsOpenOneTimeReverseGrant should be found");
+      assert(payload.board.windowsOpenOneTimeReverseGrant.command === grantCommand, "WindowsOpenOneTimeReverseGrant command mismatch");
+      assert(payload.board.windowsOpenOneTimeReverseGrant.rejectedCount >= 1, "unsafe WindowsOpenOneTimeReverseGrant should be rejected");
+      assert(payload.board?.windowsReverseGrantStatusNodeFallback?.found === true, "WindowsReverseGrantStatusNodeFallback should be found");
+      assert(payload.board.windowsReverseGrantStatusNodeFallback.command === statusNodeCommand, "WindowsReverseGrantStatusNodeFallback command mismatch");
+      assert(payload.board.windowsReverseGrantStatusNodeFallback.rejectedCount >= 1, "missing boardSummary fallback should be rejected");
+      assert(payload.board?.windowsOpenOneTimeReverseGrantNodeFallback?.found === true, "WindowsOpenOneTimeReverseGrantNodeFallback should be found");
+      assert(payload.board.windowsOpenOneTimeReverseGrantNodeFallback.command === grantNodeCommand, "WindowsOpenOneTimeReverseGrantNodeFallback command mismatch");
+      assert(payload.board.windowsOpenOneTimeReverseGrantNodeFallback.rejectedCount >= 1, "placeholder fallback should be rejected");
+      assertIncludes(payload.boardSummary, `WindowsReverseGrantStatus=${statusCommand}.`, "WindowsReverseGrant JSON board summary");
+      assertIncludes(payload.boardSummary, `WindowsOpenOneTimeReverseGrant=${grantCommand}.`, "WindowsReverseGrant JSON board summary");
+      assertIncludes(payload.boardSummary, `WindowsReverseGrantStatusNodeFallback=${statusNodeCommand}.`, "WindowsReverseGrant JSON board summary");
+      assertIncludes(payload.boardSummary, `WindowsOpenOneTimeReverseGrantNodeFallback=${grantNodeCommand}.`, "WindowsReverseGrant JSON board summary");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "WindowsReverseGrant JSON should not leak rejected command");
+      assertNotIncludes(result.stdout + result.stderr, "192.168.31.68 -Port 43770 -Status", "WindowsReverseGrant JSON should not leak non-loopback command");
+    }, boardState);
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--boardSummary",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock WindowsReverseGrant board summary failed\n${result.stdout}\n${result.stderr}`);
+      assertIncludes(result.stdout, `WindowsReverseGrantStatus=${statusCommand}.`, "WindowsReverseGrant board summary");
+      assertIncludes(result.stdout, `WindowsOpenOneTimeReverseGrant=${grantCommand}.`, "WindowsReverseGrant board summary");
+      assertIncludes(result.stdout, `WindowsReverseGrantStatusNodeFallback=${statusNodeCommand}.`, "WindowsReverseGrant board summary");
+      assertIncludes(result.stdout, `WindowsOpenOneTimeReverseGrantNodeFallback=${grantNodeCommand}.`, "WindowsReverseGrant board summary");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "WindowsReverseGrant board summary should not leak rejected command");
+    }, boardState);
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock WindowsReverseGrant human output failed\n${result.stdout}\n${result.stderr}`);
+      assertIncludes(result.stdout, `WindowsReverseGrantStatus=${statusCommand}`, "WindowsReverseGrant human output");
+      assertIncludes(result.stdout, `WindowsOpenOneTimeReverseGrant=${grantCommand}`, "WindowsReverseGrant human output");
+      assertIncludes(result.stdout, `WindowsReverseGrantStatusNodeFallback=${statusNodeCommand}`, "WindowsReverseGrant human output");
+      assertIncludes(result.stdout, `WindowsOpenOneTimeReverseGrantNodeFallback=${grantNodeCommand}`, "WindowsReverseGrant human output");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "WindowsReverseGrant human output should not leak rejected command");
+      console.log("[OK] Windows resume status extracts Windows reverse-grant commands from Agent Link Board safely");
+    }, boardState);
+  });
+}
+
 async function checkUserAuthRequest(args) {
   await withMockHost(async (port) => {
     const result = await run([
@@ -991,6 +1142,7 @@ async function main() {
   await checkBoardDoneCallJson(args);
   await checkBoardCurrentCallSummary(args);
   await checkBoardMacHostSafeStartExtraction(args);
+  await checkBoardWindowsReverseGrantExtraction(args);
   await checkUserAuthRequest(args);
   await checkSendUserAuthRequest(args);
   await checkSendUserAuthRequestOffline(args);

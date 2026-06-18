@@ -53,9 +53,9 @@ passwords, does not send input, and does not execute inject.
 
 When -CheckBoard is set, the report also summarizes the current Agent Link
 call so Windows can see active Mac -> Windows test requests during resume.
-It also surfaces recent MacHostSafeStart=, MacMaxFpsSafeStart= and MacFormalLocalSmoke= commands from
-Agent Link Board status/messages so Mac host safe foreground-start guidance,
-including 60Hz foreground-start guidance and local smoke next steps, is visible in JSON, human output, and
+It also surfaces recent MacHostSafeStart=, MacMaxFpsSafeStart=, MacFormalLocalSmoke=,
+WindowsReverseGrantStatus= and WindowsOpenOneTimeReverseGrant= commands from Agent Link Board status/messages so Mac host safe foreground-start guidance,
+including 60Hz foreground-start guidance, local smoke next steps, and Windows local reverse-control grant guidance, is visible in JSON, human output, and
 one-line board summaries.
 The report also includes a Windows host media baseline command:
 node scripts/windows/check-windows-host-readiness.mjs --checkBoard --probeMedia --boardSummary
@@ -81,6 +81,11 @@ It also includes a Windows local one-time reverse-control grant command:
 node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary
 PowerShell 7 equivalent:
 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -DurationMs 30000 -BoardSummary
+The board summary also exposes stable labels for Mac/Windows coordination:
+WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary
+WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary
+WindowsReverseGrantStatusNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --status --boardSummary
+WindowsOpenOneTimeReverseGrantNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --grant --durationMs 30000 --boardSummary
 It also includes a one-line no-password Windows client diagnostics command:
 node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
 PowerShell equivalent:

@@ -59,9 +59,11 @@ so Windows can surface Mac-side auth, permission, blocked, and reverse-grant
 requests while a remote-control window is minimized. The report also checks
 the local alert-watcher status read-only, without starting it.
 When --checkBoard is enabled, the report also surfaces recent
-MacHostSafeStart=, MacMaxFpsSafeStart=, and MacFormalLocalSmoke= commands from Agent Link Board
-status/messages so Mac host safe foreground-start guidance is visible in
-Windows resume JSON, human output, and one-line board summaries.
+MacHostSafeStart=, MacMaxFpsSafeStart=, MacFormalLocalSmoke=,
+WindowsReverseGrantStatus=, and WindowsOpenOneTimeReverseGrant= commands from
+Agent Link Board status/messages so Mac host safe foreground-start guidance
+and Windows local reverse-control grant guidance are visible in Windows resume
+JSON, human output, and one-line board summaries.
 It also includes a secret-free MacHostReadiness command so Windows can ask the
 Mac side to run the detailed host readiness/status check before formal testing.
 The report also surfaces the formal manual checklist command and the checklist
@@ -133,6 +135,8 @@ Examples:
   node scripts/windows/test-windows-powershell-help.mjs --shell pwsh --timeoutMs 10000 --boardSummary
   node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --durationMs 30000 --boardSummary
   pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -DurationMs 30000 -BoardSummary
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server ${defaults.server}
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/start-mac-alert-watcher.ps1 -Server ${defaults.server} -Status
 `);
@@ -615,6 +619,153 @@ function parseMacFormalLocalSmokeCommand(fragment) {
   return commandText;
 }
 
+function isLoopbackHost(value) {
+  const host = String(value || "").trim().toLowerCase();
+  return host === "127.0.0.1" || host === "localhost" || host === "::1" || host === "[::1]";
+}
+
+function parseWindowsReverseGrantCommand(fragment, expectedAction) {
+  const rawTokens = String(fragment || "").split(/\s+/).map(stripCommandToken).filter(Boolean);
+  if (rawTokens.length < 2) return null;
+
+  let index = 0;
+  let style = "";
+  let action = "";
+  let host = "";
+  let port = 0;
+  let hasBoardSummary = false;
+  let hasDurationMs = false;
+  const tokens = [];
+  const executable = rawTokens[index];
+  const normalizedExecutable = executable.toLowerCase();
+
+  if (executable === "node") {
+    if (rawTokens[index + 1]?.replace(/\\/g, "/") !== "scripts/windows/allow-windows-reverse-control.mjs") {
+      return null;
+    }
+    style = "node";
+    tokens.push(rawTokens[index], rawTokens[index + 1]);
+    index += 2;
+  } else if (["pwsh", "pwsh.exe", "powershell", "powershell.exe"].includes(normalizedExecutable)) {
+    style = "powershell";
+    tokens.push(rawTokens[index]);
+    index += 1;
+    while (index < rawTokens.length) {
+      const token = rawTokens[index];
+      const normalized = token.toLowerCase();
+      if (normalized === "-noprofile" || normalized === "-noninteractive") {
+        tokens.push(token);
+        index += 1;
+        continue;
+      }
+      if (normalized === "-executionpolicy") {
+        const value = rawTokens[index + 1] || "";
+        if (!/^(bypass|remotesigned|unrestricted)$/i.test(value)) return null;
+        tokens.push(token, value);
+        index += 2;
+        continue;
+      }
+      if (normalized === "-file") {
+        const scriptPath = rawTokens[index + 1] || "";
+        if (scriptPath.replace(/\\/g, "/") !== "scripts/windows/allow-windows-reverse-control.ps1") return null;
+        tokens.push(token, scriptPath);
+        index += 2;
+        break;
+      }
+      return null;
+    }
+    if (!tokens.some((token) => token.toLowerCase() === "-file")) return null;
+  } else {
+    return null;
+  }
+
+  while (index < rawTokens.length) {
+    const token = rawTokens[index];
+    if (!token || /^[A-Za-z][A-Za-z0-9_-]*=/.test(token)) break;
+    if (!token.startsWith("-")) break;
+    if (/^-{1,2}(?:password|token|secret|passwd|pwd)$/i.test(token)) return null;
+
+    if (style === "node") {
+      if (token === "--status" || token === "--grant" || token === "--revoke" || token === "--boardSummary") {
+        if (token === "--status") action = "status";
+        if (token === "--grant") action = "grant";
+        if (token === "--revoke") action = "revoke";
+        if (token === "--boardSummary") hasBoardSummary = true;
+        tokens.push(token);
+        index += 1;
+        continue;
+      }
+      if (["--host", "--port", "--action", "--durationMs", "--timeoutMs"].includes(token)) {
+        const value = stripCommandToken(rawTokens[index + 1] || "");
+        if (!value || value.startsWith("-") || /^[A-Za-z][A-Za-z0-9_-]*=/.test(value) || /[<>]/.test(value)) return null;
+        if (token === "--host") {
+          host = value;
+          if (!isLoopbackHost(value)) return null;
+        } else if (token === "--port") {
+          port = Number(value);
+          if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+        } else if (token === "--durationMs" || token === "--timeoutMs") {
+          const integerValue = Number(value);
+          if (!Number.isInteger(integerValue) || integerValue < 0 || integerValue > 120000) return null;
+          if (token === "--durationMs") hasDurationMs = true;
+        } else if (token === "--action") {
+          if (!["status", "grant", "revoke"].includes(value)) return null;
+          action = value;
+        }
+        const pair = `${token} ${value}`;
+        if (hasSecretLikeCommandValue(pair)) return null;
+        tokens.push(token, value);
+        index += 2;
+        continue;
+      }
+      return null;
+    }
+
+    const normalized = token.toLowerCase();
+    if (["-status", "-grant", "-revoke", "-boardsummary"].includes(normalized)) {
+      if (normalized === "-status") action = "status";
+      if (normalized === "-grant") action = "grant";
+      if (normalized === "-revoke") action = "revoke";
+      if (normalized === "-boardsummary") hasBoardSummary = true;
+      tokens.push(token);
+      index += 1;
+      continue;
+    }
+    if (["-hostname", "-host", "-port", "-action", "-durationms", "-timeoutms"].includes(normalized)) {
+      const value = stripCommandToken(rawTokens[index + 1] || "");
+      if (!value || value.startsWith("-") || /^[A-Za-z][A-Za-z0-9_-]*=/.test(value) || /[<>]/.test(value)) return null;
+      if (normalized === "-hostname" || normalized === "-host") {
+        host = value;
+        if (!isLoopbackHost(value)) return null;
+      } else if (normalized === "-port") {
+        port = Number(value);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+      } else if (normalized === "-durationms" || normalized === "-timeoutms") {
+        const integerValue = Number(value);
+        if (!Number.isInteger(integerValue) || integerValue < 0 || integerValue > 120000) return null;
+        if (normalized === "-durationms") hasDurationMs = true;
+      } else if (normalized === "-action") {
+        if (!["status", "grant", "revoke"].includes(value)) return null;
+        action = value;
+      }
+      const pair = `${token} ${value}`;
+      if (hasSecretLikeCommandValue(pair)) return null;
+      tokens.push(token, value);
+      index += 2;
+      continue;
+    }
+    return null;
+  }
+
+  if (!action) action = "grant";
+  if (action !== expectedAction) return null;
+  if (!host || !port || !hasBoardSummary) return null;
+  if (expectedAction === "grant" && !hasDurationMs) return null;
+  const commandText = tokens.join(" ");
+  if (hasSecretLikeCommandValue(commandText)) return null;
+  return commandText;
+}
+
 function commandHasFlag(commandText, flagName) {
   return String(commandText || "").split(/\s+/).includes(flagName);
 }
@@ -722,6 +873,55 @@ function extractMacFormalLocalSmokeFromBoardState(state) {
   };
 }
 
+function extractWindowsReverseGrantFromText(text, label, expectedAction, source = "text") {
+  const value = String(text || "");
+  const escapedLabel = String(label).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`\\b${escapedLabel}\\s*=\\s*`, "gi");
+  const commands = [];
+  let rejectedCount = 0;
+  let match;
+  while ((match = regex.exec(value)) !== null) {
+    const fragment = value.slice(match.index + match[0].length);
+    const commandText = parseWindowsReverseGrantCommand(fragment, expectedAction);
+    if (!commandText) {
+      rejectedCount += 1;
+    } else if (!commands.includes(commandText)) {
+      commands.push(commandText);
+    }
+  }
+  if (commands.length === 0) return emptyMacSafeStart(source, value ? 1 : 0, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source,
+    textCount: value ? 1 : 0,
+    rejectedCount,
+  };
+}
+
+function extractWindowsReverseGrantFromBoardState(state, label, expectedAction) {
+  const texts = collectStringValues(state);
+  const commands = [];
+  let rejectedCount = 0;
+  for (const text of texts) {
+    const extracted = extractWindowsReverseGrantFromText(text, label, expectedAction, "api-state");
+    for (const commandText of extracted.commands) {
+      if (!commands.includes(commandText)) commands.push(commandText);
+    }
+    rejectedCount += extracted.rejectedCount;
+  }
+  if (commands.length === 0) return emptyMacSafeStart("api-state", texts.length, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source: "api-state",
+    textCount: texts.length,
+    rejectedCount,
+  };
+}
+
 async function getBoardState(args) {
   const controller = new AbortController();
   const timeoutMs = Math.min(Math.max(args.timeoutMs, 5000), 30000);
@@ -787,6 +987,10 @@ async function getBoardSnapshot(args) {
       macHostSafeStart: emptyMacSafeStart("skipped"),
       macMaxFpsSafeStart: emptyMacSafeStart("skipped"),
       macFormalLocalSmoke: emptyMacSafeStart("skipped"),
+      windowsReverseGrantStatus: emptyMacSafeStart("skipped"),
+      windowsOpenOneTimeReverseGrant: emptyMacSafeStart("skipped"),
+      windowsReverseGrantStatusNodeFallback: emptyMacSafeStart("skipped"),
+      windowsOpenOneTimeReverseGrantNodeFallback: emptyMacSafeStart("skipped"),
       error: "",
     };
   }
@@ -804,6 +1008,10 @@ async function getBoardSnapshot(args) {
       macHostSafeStart: extractMacSafeStartFromBoardState(stateResult.state, "MacHostSafeStart"),
       macMaxFpsSafeStart: extractMacSafeStartFromBoardState(stateResult.state, "MacMaxFpsSafeStart", { requireMaxScreenFps: true }),
       macFormalLocalSmoke: extractMacFormalLocalSmokeFromBoardState(stateResult.state),
+      windowsReverseGrantStatus: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsReverseGrantStatus", "status"),
+      windowsOpenOneTimeReverseGrant: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsOpenOneTimeReverseGrant", "grant"),
+      windowsReverseGrantStatusNodeFallback: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsReverseGrantStatusNodeFallback", "status"),
+      windowsOpenOneTimeReverseGrantNodeFallback: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsOpenOneTimeReverseGrantNodeFallback", "grant"),
       error: "",
     };
   }
@@ -826,6 +1034,10 @@ async function getBoardSnapshot(args) {
     macHostSafeStart: extractMacSafeStartFromText(output, "MacHostSafeStart", result.ok ? "codex-link-client" : "unavailable"),
     macMaxFpsSafeStart: extractMacSafeStartFromText(output, "MacMaxFpsSafeStart", result.ok ? "codex-link-client" : "unavailable", { requireMaxScreenFps: true }),
     macFormalLocalSmoke: extractMacFormalLocalSmokeFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    windowsReverseGrantStatus: extractWindowsReverseGrantFromText(output, "WindowsReverseGrantStatus", "status", result.ok ? "codex-link-client" : "unavailable"),
+    windowsOpenOneTimeReverseGrant: extractWindowsReverseGrantFromText(output, "WindowsOpenOneTimeReverseGrant", "grant", result.ok ? "codex-link-client" : "unavailable"),
+    windowsReverseGrantStatusNodeFallback: extractWindowsReverseGrantFromText(output, "WindowsReverseGrantStatusNodeFallback", "status", result.ok ? "codex-link-client" : "unavailable"),
+    windowsOpenOneTimeReverseGrantNodeFallback: extractWindowsReverseGrantFromText(output, "WindowsOpenOneTimeReverseGrantNodeFallback", "grant", result.ok ? "codex-link-client" : "unavailable"),
     apiStateError: normalizedText(stateResult.error),
     error: result.ok ? "" : normalizedText(stateResult.error || result.error || result.stderr),
   };
@@ -1333,6 +1545,36 @@ function makeCommands(args, preflight) {
       "-DurationMs", "30000",
       "-BoardSummary",
     ].join(" "),
+    windowsReverseGrantStatusBoardSummary: [
+      "node scripts/windows/allow-windows-reverse-control.mjs",
+      "--host", "127.0.0.1",
+      "--port", String(windowsHostPort),
+      "--status",
+      "--boardSummary",
+    ].join(" "),
+    windowsReverseGrantStatusPowerShellBoardSummary: [
+      "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1",
+      "-HostName", "127.0.0.1",
+      "-Port", String(windowsHostPort),
+      "-Status",
+      "-BoardSummary",
+    ].join(" "),
+    windowsOpenOneTimeReverseGrantBoardSummary: [
+      "node scripts/windows/allow-windows-reverse-control.mjs",
+      "--host", "127.0.0.1",
+      "--port", String(windowsHostPort),
+      "--grant",
+      "--durationMs", "30000",
+      "--boardSummary",
+    ].join(" "),
+    windowsOpenOneTimeReverseGrantPowerShellBoardSummary: [
+      "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1",
+      "-HostName", "127.0.0.1",
+      "-Port", String(windowsHostPort),
+      "-Grant",
+      "-DurationMs", "30000",
+      "-BoardSummary",
+    ].join(" "),
     windowsClientDiagnosticsCommand: windowsClientDiagnosticsCommand.join(" "),
     windowsClientDiagnosticsPowerShellCommand: windowsClientDiagnosticsPowerShellCommand.join(" "),
     windowsClientDiagnosticsAlternateCommand: windowsClientDiagnosticsAlternateCommand.join(" "),
@@ -1486,6 +1728,10 @@ function makeBoardSummary(report) {
     ? "default-ok"
     : `use --clientPort ${report.windowsClientDiagnosticsPorts?.alternateClientPort || defaults.alternateClientPort} --debugPort ${report.windowsClientDiagnosticsPorts?.alternateDebugPort || defaults.alternateDebugPort}`;
   const macFormalLocalSmokeCommand = report.board.macFormalLocalSmoke?.command || report.commands.macFormalLocalSmokeCommand;
+  const windowsReverseGrantStatusCommand = report.board.windowsReverseGrantStatus?.command || report.commands.windowsReverseGrantStatusPowerShellBoardSummary;
+  const windowsOpenOneTimeReverseGrantCommand = report.board.windowsOpenOneTimeReverseGrant?.command || report.commands.windowsOpenOneTimeReverseGrantPowerShellBoardSummary;
+  const windowsReverseGrantStatusNodeCommand = report.board.windowsReverseGrantStatusNodeFallback?.command || report.commands.windowsReverseGrantStatusBoardSummary;
+  const windowsOpenOneTimeReverseGrantNodeCommand = report.board.windowsOpenOneTimeReverseGrantNodeFallback?.command || report.commands.windowsOpenOneTimeReverseGrantBoardSummary;
   return [
     `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}${boardCall}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
     `WinClientPorts=${clientPorts}; WinClientPortsNext=${clientPortsNext}.`,
@@ -1515,6 +1761,10 @@ function makeBoardSummary(report) {
     `WindowsWebCodecsPs=${report.commands.windowsWebCodecsH264PowerShellBoardSummary}.`,
     `PowerShellHelp=${report.commands.windowsPowerShellHelpBoardSummary}.`,
     `PowerShellHelpPwsh=${report.commands.windowsPowerShell7HelpBoardSummary}.`,
+    `WindowsReverseGrantStatus=${windowsReverseGrantStatusCommand}.`,
+    `WindowsOpenOneTimeReverseGrant=${windowsOpenOneTimeReverseGrantCommand}.`,
+    `WindowsReverseGrantStatusNodeFallback=${windowsReverseGrantStatusNodeCommand}.`,
+    `WindowsOpenOneTimeReverseGrantNodeFallback=${windowsOpenOneTimeReverseGrantNodeCommand}.`,
     `ReverseGrant=${report.commands.windowsReverseControlGrantBoardSummary}.`,
     `ReverseGrantPs=${report.commands.windowsReverseControlGrantPowerShellBoardSummary}.`,
     "No password was requested or sent; no WebSocket auth/input/inject was performed.",
@@ -1689,6 +1939,18 @@ function printHuman(report) {
     if (report.board.macFormalLocalSmoke?.command) {
       console.log(`  MacFormalLocalSmoke=${report.board.macFormalLocalSmoke.command}`);
     }
+    if (report.board.windowsReverseGrantStatus?.command) {
+      console.log(`  WindowsReverseGrantStatus=${report.board.windowsReverseGrantStatus.command}`);
+    }
+    if (report.board.windowsOpenOneTimeReverseGrant?.command) {
+      console.log(`  WindowsOpenOneTimeReverseGrant=${report.board.windowsOpenOneTimeReverseGrant.command}`);
+    }
+    if (report.board.windowsReverseGrantStatusNodeFallback?.command) {
+      console.log(`  WindowsReverseGrantStatusNodeFallback=${report.board.windowsReverseGrantStatusNodeFallback.command}`);
+    }
+    if (report.board.windowsOpenOneTimeReverseGrantNodeFallback?.command) {
+      console.log(`  WindowsOpenOneTimeReverseGrantNodeFallback=${report.board.windowsOpenOneTimeReverseGrantNodeFallback.command}`);
+    }
   } else {
     console.log("- Agent Link Board: skipped (use --checkBoard)");
   }
@@ -1760,6 +2022,10 @@ function printHuman(report) {
   console.log(`  ${report.commands.windowsWebCodecsH264PowerShellBoardSummary}`);
   console.log(`  ${report.commands.windowsPowerShellHelpBoardSummary}`);
   console.log(`  ${report.commands.windowsPowerShell7HelpBoardSummary}`);
+  console.log(`  WindowsReverseGrantStatus=${report.board.windowsReverseGrantStatus?.command || report.commands.windowsReverseGrantStatusPowerShellBoardSummary}`);
+  console.log(`  WindowsOpenOneTimeReverseGrant=${report.board.windowsOpenOneTimeReverseGrant?.command || report.commands.windowsOpenOneTimeReverseGrantPowerShellBoardSummary}`);
+  console.log(`  WindowsReverseGrantStatusNodeFallback=${report.board.windowsReverseGrantStatusNodeFallback?.command || report.commands.windowsReverseGrantStatusBoardSummary}`);
+  console.log(`  WindowsOpenOneTimeReverseGrantNodeFallback=${report.board.windowsOpenOneTimeReverseGrantNodeFallback?.command || report.commands.windowsOpenOneTimeReverseGrantBoardSummary}`);
   console.log(`  ${report.commands.windowsReverseControlGrantBoardSummary}`);
   console.log(`  ${report.commands.windowsReverseControlGrantPowerShellBoardSummary}`);
   console.log(`  ${report.commands.windowsMacAlertWatcherStart}`);

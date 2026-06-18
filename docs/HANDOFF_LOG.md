@@ -21,6 +21,39 @@
 
 日期：2026-06-18 继续推进
 开发端：Windows Codex
+本轮目标：Windows 恢复总览对齐 `WindowsReverseGrant*` 稳定标签。
+完成内容：
+- `check-windows-resume-status` 的 JSON、普通输出和 `--boardSummary` 新增 `WindowsReverseGrantStatus=`、`WindowsOpenOneTimeReverseGrant=`、`WindowsReverseGrantStatusNodeFallback=`、`WindowsOpenOneTimeReverseGrantNodeFallback=`；PowerShell 推荐命令使用 `pwsh ... allow-windows-reverse-control.ps1 -Status/-Grant -BoardSummary`，Node fallback 使用 `allow-windows-reverse-control.mjs --status/--grant --boardSummary`。
+- `--checkBoard` 会从 Agent Link Board 最近状态/消息/事件安全提取 Mac 端同名标签：只接受 Windows 本机回环地址、真实数字端口、`BoardSummary`、`-Status` / `-Grant` 和限时授权参数；拒绝非回环地址、密码/token/secret、缺少 boardSummary 或占位端口，不把拒绝候选写入摘要。
+- PowerShell wrapper 帮助和 Node/PowerShell 回归同步覆盖新字段，保留旧 `ReverseGrant=` / `ReverseGrantPs=` 兼容标签。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- PowerShell 7 AST parse `scripts/windows/check-windows-resume-status.ps1`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- 本轮不执行真实 Mac -> Windows 反控请求；真实 LAN008 后一次性授权闭环仍需现场两端配合。
+下一步建议：
+- 让 Mac 端 `start-mac-client` / readiness / smoke 摘要继续输出同名稳定标签；Windows 侧用恢复总览或控制端提醒区直接复制 `WindowsOpenOneTimeReverseGrant=` 后让 Mac 重试反控。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真实演练时需要 Mac 端发起反控请求。
+
+## 2026-06-18 Windows Codex
+
+日期：2026-06-18 继续推进
+开发端：Windows Codex
 本轮目标：Windows watcher/控制端消费 Mac 侧 `WindowsReverseGrant*` 稳定标签。
 完成内容：
 - `watch-codex-link-mac-alerts.ps1` 收紧反控授权匹配：`WindowsReverseGrantStatus=` / `WindowsOpenOneTimeReverseGrant=` / `ReverseGrant=` / `allow-windows-reverse-control` 只有搭配 `LAN008`、等待/重试、失败/阻塞或非空风险上下文时才提醒；干净 `warnings=none blockers=none` 命令清单不误弹。
