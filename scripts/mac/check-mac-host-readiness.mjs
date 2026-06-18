@@ -231,6 +231,10 @@ Machine-readable JSON fields:
                             turns missing or low LaunchAgent maxScreenFps into
                             a blocker without writing files, loading launchctl,
                             requesting a password, or sending input.
+  commands.macFormalLocalSmokeCommand
+                            Secret-free formal local smoke command for the next
+                            H.264 + PCM + input-log short validation step. It
+                            prompts locally and never embeds a password in argv.
 `);
 }
 
@@ -703,6 +707,7 @@ function formatReadinessBoardSummary(summary) {
     `MacLaunchAgentPlan=${summary.commands?.macLaunchAgentPlanCommand || makeMacLaunchAgentPlanCommand(summary.args || {})}.`,
     `MacMaxFpsPlan=${summary.commands?.macMaxFpsPlanCommand || makeMacMaxFpsPlanCommand(summary.args || {})}.`,
     `MacUnattendedFormal=${summary.commands?.macUnattendedFormalCommand || makeMacUnattendedFormalCommand(summary.args || {})}.`,
+    `MacFormalLocalSmoke=${summary.commands?.macFormalLocalSmokeCommand || makeMacFormalLocalSmokeCommand(summary.args || {})}.`,
     "Next: fix failed checks before formal E2E; keep inputMode=log for unattended checks.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
@@ -802,6 +807,18 @@ function makeMacUnattendedFormalCommand(args = {}) {
     String(args.port || 43770),
     "--requireLaunchAgentMaxFps",
     "--requireLaunchAgentLoaded",
+    "--boardSummary",
+  ].join(" ");
+}
+
+function makeMacFormalLocalSmokeCommand(args = {}) {
+  return [
+    "node scripts/mac/check-mac-formal-local-smoke.mjs",
+    "--host",
+    args.host || "127.0.0.1",
+    "--port",
+    String(args.port || 43770),
+    "--promptPassword",
     "--boardSummary",
   ].join(" ");
 }
@@ -1296,6 +1313,7 @@ async function main() {
       macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
       macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
       macUnattendedFormalCommand: makeMacUnattendedFormalCommand(args),
+      macFormalLocalSmokeCommand: makeMacFormalLocalSmokeCommand(args),
     },
     results: results.map((result) => ({
       label: result.label,
@@ -1337,6 +1355,7 @@ async function main() {
     print("NEXT", `Mac LaunchAgent dry-run plan: ${summary.commands.macLaunchAgentPlanCommand}`, args);
     print("NEXT", `Mac max FPS dry-run plan: ${summary.commands.macMaxFpsPlanCommand}`, args);
     print("NEXT", `Mac unattended formal 60Hz gate: ${summary.commands.macUnattendedFormalCommand}`, args);
+    print("NEXT", `Mac formal local smoke: ${summary.commands.macFormalLocalSmokeCommand}`, args);
   }
 
   if (!ok) {

@@ -139,6 +139,20 @@ function assertMacUnattendedFormalCommand(command, label) {
   assert(!value.includes("inject"), `${label} should not instruct injection`);
 }
 
+function assertMacFormalLocalSmokeCommand(command, label) {
+  const value = String(command || "");
+  assert(value.includes("check-mac-formal-local-smoke.mjs"), `${label} should use check-mac-formal-local-smoke`);
+  assert(value.includes("--host"), `${label} should keep the target host explicit`);
+  assert(value.includes("--port"), `${label} should keep the target port explicit`);
+  assert(value.includes("--promptPassword"), `${label} should prompt locally for the formal password`);
+  assert(value.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!value.includes("--password"), `${label} should not embed a password argument`);
+  assert(!value.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!value.includes("--server"), `${label} should not echo board server URLs`);
+  assert(!value.includes("--json"), `${label} should default to one-line boardSummary output`);
+  assert(!value.includes("inject"), `${label} should not instruct injection`);
+}
+
 function functionBlock(source, name) {
   const start = source.indexOf(`function ${name}`);
   assert(start >= 0, `missing function ${name}`);
@@ -297,6 +311,7 @@ function checkHelp(args) {
     assert(String(result.stdout).includes("commands.macLaunchAgentPlanCommand"), `${script} ${flag} should document LaunchAgent planner command`);
     assert(String(result.stdout).includes("commands.macMaxFpsPlanCommand"), `${script} ${flag} should document max-FPS planner command`);
     assert(String(result.stdout).includes("commands.macUnattendedFormalCommand"), `${script} ${flag} should document unattended formal gate command`);
+    assert(String(result.stdout).includes("commands.macFormalLocalSmokeCommand"), `${script} ${flag} should document formal local smoke command`);
   }
   print("OK", "Mac host readiness board help exits quickly");
 }
@@ -310,6 +325,7 @@ function checkDefaultDoesNotReadBoard(args) {
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand || "", "default readiness JSON LaunchAgent planner command");
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand || "", "default readiness JSON max-FPS planner command");
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand || "", "default readiness JSON unattended formal command");
+  assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand || "", "default readiness JSON formal local smoke command");
   const maxFpsStep = payload.results?.find((item) => item.label === "Mac host max FPS");
   assert(maxFpsStep, "default readiness JSON should include an independent Mac host max FPS step");
   assert(maxFpsStep.ok === true, "Mac host max FPS step should be advisory and non-blocking");
@@ -323,6 +339,7 @@ function checkDefaultDoesNotReadBoard(args) {
   assert(String(payload.boardSummary || "").includes("MacLaunchAgentPlan="), "default boardSummary should include LaunchAgent planner guidance");
   assert(String(payload.boardSummary || "").includes("MacMaxFpsPlan="), "default boardSummary should include max-FPS planner guidance");
   assert(String(payload.boardSummary || "").includes("MacUnattendedFormal="), "default boardSummary should include unattended formal guidance");
+  assert(String(payload.boardSummary || "").includes("MacFormalLocalSmoke="), "default boardSummary should include formal local smoke guidance");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "default readiness JSON");
   print("OK", "Mac host readiness does not read Agent Link Board by default");
 }
@@ -554,6 +571,7 @@ function checkProbeMediaBoardSummary(args) {
   assert(lines[0].includes("MacLaunchAgentPlan="), "offline --probeMedia boardSummary should include LaunchAgent planner guidance");
   assert(lines[0].includes("MacMaxFpsPlan="), "offline --probeMedia boardSummary should include max-FPS planner guidance");
   assert(lines[0].includes("MacUnattendedFormal="), "offline --probeMedia boardSummary should include unattended formal guidance");
+  assert(lines[0].includes("MacFormalLocalSmoke="), "offline --probeMedia boardSummary should include formal local smoke guidance");
   assert(lines[0].includes("--requireLaunchAgentMaxFps"), "offline --probeMedia boardSummary should include formal max-FPS gate");
   assert(lines[0].includes("--maxScreenFps 60"), "offline --probeMedia boardSummary should include 60Hz planner command");
   assert(!lines[0].includes("media=passed"), "offline --probeMedia boardSummary should not use legacy passed wording");
@@ -599,6 +617,7 @@ async function checkActiveBoardCall(args) {
     assert(String(payload.boardSummary || "").includes("MacLaunchAgentPlan="), "boardSummary should include LaunchAgent planner guidance");
     assert(String(payload.boardSummary || "").includes("MacMaxFpsPlan="), "boardSummary should include max-FPS planner guidance");
     assert(String(payload.boardSummary || "").includes("MacUnattendedFormal="), "boardSummary should include unattended formal guidance");
+    assert(String(payload.boardSummary || "").includes("MacFormalLocalSmoke="), "boardSummary should include formal local smoke guidance");
     assert(String(payload.boardSummary || "").includes(call.goal), "boardSummary should include call goal");
     assert(!String(payload.boardSummary || "").includes("super-secret-command-token"), "boardSummary should not echo command");
     assert(payload.results.some((item) => item.label === "Agent Link Board currentCall" && item.warnings.some((warning) => warning.includes("active call"))), "active call should create readiness warning");
@@ -674,6 +693,7 @@ async function checkBoardSummary(args) {
     assert(lines[0].includes("MacLaunchAgentPlan="), "boardSummary should include LaunchAgent planner guidance");
     assert(lines[0].includes("MacMaxFpsPlan="), "boardSummary should include max-FPS planner guidance");
     assert(lines[0].includes("MacUnattendedFormal="), "boardSummary should include unattended formal guidance");
+    assert(lines[0].includes("MacFormalLocalSmoke="), "boardSummary should include formal local smoke guidance");
     assert(lines[0].includes(call.goal), "boardSummary should include call goal");
     assert(lines[0].includes("Do not send passwords"), "boardSummary should include password safety note");
     assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "readiness boardSummary");
@@ -696,9 +716,11 @@ function checkPlainOutputIncludesLaunchAgentPlan(args) {
   assert(String(result.stdout || "").includes("Mac max FPS dry-run plan:"), "plain output should include max-FPS planner label");
   assert(String(result.stdout || "").includes("Mac 60Hz safe foreground start:"), "plain output should include foreground 60Hz safe start label");
   assert(String(result.stdout || "").includes("Mac unattended formal 60Hz gate:"), "plain output should include unattended formal label");
+  assert(String(result.stdout || "").includes("Mac formal local smoke:"), "plain output should include formal local smoke label");
   assert(String(result.stdout || "").includes("install-mac-host-launch-agent.mjs"), "plain output should include LaunchAgent planner command");
   assert(String(result.stdout || "").includes("--maxScreenFps 60"), "plain output should include max-FPS planner command");
   assert(String(result.stdout || "").includes("--requireLaunchAgentMaxFps"), "plain output should include unattended formal gate command");
+  assert(String(result.stdout || "").includes("check-mac-formal-local-smoke.mjs"), "plain output should include formal local smoke command");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "plain readiness output");
   print("OK", "Mac host readiness plain output includes LaunchAgent planner guidance");
 }
