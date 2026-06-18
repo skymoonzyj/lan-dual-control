@@ -2084,6 +2084,43 @@ async function verifyMacClientFileClipboardRejectCancel({ args, session, uploadD
   print("OK", `File clipboard reject: ${rejectedSnapshot.fileClipboard}`);
 }
 
+async function assertMacClientCopiedFileClipboardAdvice({ args, session, expectedSnippets, label }) {
+  const inputEventsBefore = Number(await evaluate(
+    session,
+    `(() => (window.__lanDualSentMessages || []).filter((message) => message.type === "input_event").length)()`,
+  )) || 0;
+  await clickElement(session, "#copyLogButton");
+  await waitForPageSnapshot({
+    args,
+    session,
+    label,
+    check: async (value) => (
+      value.logCopyStatus.includes("诊断已复制") &&
+      value.copyLogButtonDisabled === false &&
+      Number(value.inputEvents) === inputEventsBefore
+        ? value
+        : null
+    ),
+  });
+  const copiedText = await evaluate(session, "navigator.clipboard.readText()");
+  const required = ["文件发送建议", ...expectedSnippets];
+  const missing = required.filter((item) => !copiedText.includes(item));
+  const forbidden = [
+    args.clientPassword || "",
+    "password",
+    "密码：",
+  ].filter((item) => item && copiedText.toLowerCase().includes(String(item).toLowerCase()));
+  if (missing.length || forbidden.length) {
+    throw new Error(`Mac client copied file clipboard advice mismatch: ${JSON.stringify({
+      label,
+      missing,
+      forbidden,
+      preview: copiedText.slice(0, 360),
+    })}`);
+  }
+  print("OK", `${label}: copied diagnostics include file clipboard advice`);
+}
+
 async function verifyMacClientFileClipboardResultFailureRetry({ args, session, uploadDir }) {
   const retryPath = join(uploadDir, `mac-client-file-retry-${Date.now()}.txt`);
   const retryText = [
@@ -2172,6 +2209,12 @@ async function verifyMacClientFileClipboardResultFailureRetry({ args, session, u
     args.timeoutMs,
     "Mac client file clipboard failed result retry state",
   );
+  await assertMacClientCopiedFileClipboardAdvice({
+    args,
+    session,
+    expectedSnippets: ["点击“重新发送”", "检查文件剪贴板能力"],
+    label: "Mac client file clipboard failed result copied advice",
+  });
 
   await evaluate(
     session,
@@ -2309,6 +2352,12 @@ async function verifyMacClientFileClipboardResultTimeoutRetry({ args, session, u
     args.timeoutMs,
     "Mac client file clipboard timeout retry state",
   );
+  await assertMacClientCopiedFileClipboardAdvice({
+    args,
+    session,
+    expectedSnippets: ["等待对端确认超时", "点击“重新发送”"],
+    label: "Mac client file clipboard timeout copied advice",
+  });
 
   await evaluate(
     session,

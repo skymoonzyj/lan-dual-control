@@ -1508,6 +1508,29 @@ function getReconnectExportStatus(now = Date.now()) {
   };
 }
 
+function getFileClipboardExportAdvice() {
+  const status = String(elements.fileClipboardStatus.textContent || "");
+  if (state.fileTransferActive || status.includes("发送 ")) {
+    return "文件正在发送，请保持连接，等待 Windows 返回确认结果。";
+  }
+  if (state.fileTransferAwaitingResult || status.includes("等待确认")) {
+    return "文件已发送，正在等待 Windows 的确认结果；如果长时间没有回执，等页面显示确认超时后再点击“重新发送”。";
+  }
+  if (state.fileTransferRetryAvailable && status.includes("确认超时")) {
+    return "等待对端确认超时，请点击“重新发送”；如果反复超时，请让 Windows 端检查连接、文件剪贴板能力、权限或磁盘空间。";
+  }
+  if (state.fileTransferRetryAvailable || status.includes("可重新发送")) {
+    return "对端返回失败，请点击“重新发送”；如果再次失败，请让 Windows 端检查文件剪贴板能力、权限、磁盘空间或连接。";
+  }
+  if (status.includes("对端拒绝")) {
+    return "Windows 拒绝了本次文件发送，请确认对端文件剪贴板能力、文件大小限制和连接状态后重新选择文件。";
+  }
+  if (status.includes("发送失败")) {
+    return "Mac 本机发送文件失败，请检查连接状态后重新选择文件再发送。";
+  }
+  return "-";
+}
+
 function buildLogExportText() {
   const settings = currentVideoSettings();
   const reconnectExport = getReconnectExportStatus();
@@ -1552,6 +1575,7 @@ function buildLogExportText() {
     `- 本机剪贴板监听：${elements.clipboardWatchToggle.checked ? "开启" : "关闭"}`,
     `- 本机剪贴板状态：${elements.localClipboardStatus.textContent || "-"}`,
     `- 文件剪贴板：${elements.fileClipboardStatus.textContent || "-"}`,
+    `- 文件发送建议：${getFileClipboardExportAdvice()}`,
     "",
     "运行统计",
     `- 视频帧：${state.frameCount}`,

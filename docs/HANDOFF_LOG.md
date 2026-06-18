@@ -17,6 +17,35 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
+本轮目标：让 Mac client 复制/导出诊断在文件发送失败或超时时直接给出下一步建议。
+完成内容：
+- Mac client 导出/复制诊断新增“文件发送建议”行。
+- 文件发送中或等待确认时提示保持连接和等待 Windows 回执。
+- 对端失败、确认超时或可重新发送时提示点击“重新发送”，并让 Windows 端检查连接、文件剪贴板能力、权限或磁盘空间。
+修改文件：
+- `apps/mac-client/app.js`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `apps/mac-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-mac-client-browser.mjs --clientPort 5198 --debugPort 9342 --mockVideo --allowClipboardFallback --progressIntervalMs 0 --timeoutMs 45000`（失败点：复制诊断缺少“文件发送建议”“点击‘重新发送’”“检查文件剪贴板能力”）。
+- 实现后复跑同一 mock browser 自测通过，新增输出：`Mac client file clipboard failed result copied advice: copied diagnostics include file clipboard advice` 和 `Mac client file clipboard timeout copied advice: copied diagnostics include file clipboard advice`。
+遗留问题：
+- 这仍是诊断和现场操作提示增强，不是断点续传。
+- 真机大文件/压缩包长测仍需观察 Mac 诊断建议、Windows 端 result 和重发体验是否足够好读。
+下一步建议：
+- 真机长测时同时粘贴 Mac client 复制诊断和 Windows 控制端复制/导出诊断，确认两边“文件发送建议 / 本机发送建议 / 远端文件建议 / 剪贴板能力建议”能互相对上。
+是否改了协议：否；只改 Mac client 本地诊断导出和页面自测。
+是否需要另一端配合：暂不需要；真机长测时再呼叫 Windows 配合。
+
 ## 2026-06-19 Windows Codex
 
 日期：2026-06-19 继续推进
