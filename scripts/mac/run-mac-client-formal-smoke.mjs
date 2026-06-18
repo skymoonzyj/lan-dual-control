@@ -739,10 +739,11 @@ function makeBoardSummary(report) {
     ? ` Discovery=${report.discovery.selected ? `${report.discovery.selected.host}:${report.discovery.selected.port}` : "requested"}.`
     : "";
   const discoveryChecklistText = makeDiscoveryChecklistText(report);
+  const preflightFindings = formatPreflightFindings(report.preflight);
   if (report.ok && report.browserSmoke?.ran) {
     return [
       `Mac client browser smoke passed against ${target}; duration=${report.browserSmoke.durationMs}ms.${discoveryText}${discoveryChecklistText}`,
-      `Preflight ready=${report.preflight?.readyToCall ? "yes" : "no"}; command used environment password, not argv.`,
+      `Preflight ready=${report.preflight?.readyToCall ? "yes" : "no"}; ${preflightFindings}; command used environment password, not argv.`,
       `Reverse rehearsal next if needed: ${report.commands?.reverseControlRehearsal || makeReverseControlRehearsalText(report.args)}.`,
       "No password was sent to Agent Link Board; inject was not executed.",
     ].join(" ");
@@ -759,7 +760,7 @@ function makeBoardSummary(report) {
       ? `Next: run with --promptPassword when ready to authenticate; command=${report.commands.browserSmoke}.${sendCallText}`
       : `Next: start or discover a Windows host, then rerun safe preflight; command=${report.commands?.discoverPreflight || ""}.`;
     return [
-      `Mac client browser smoke preflight for ${target}: ok=${report.preflight?.ok ? "yes" : "no"} ready=${report.preflight?.readyToCall ? "yes" : "no"}.${discoveryText}${discoveryChecklistText}`,
+      `Mac client browser smoke preflight for ${target}: ok=${report.preflight?.ok ? "yes" : "no"} ready=${report.preflight?.readyToCall ? "yes" : "no"}; ${preflightFindings}.${discoveryText}${discoveryChecklistText}`,
       nextText,
       `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
       `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
@@ -768,10 +769,26 @@ function makeBoardSummary(report) {
     ].join(" ");
   }
   return [
-    `Mac client browser smoke failed/blocked for ${target}: ${report.error?.message || report.browserSmoke?.error || "unknown"}.`,
+    `Mac client browser smoke failed/blocked for ${target}: ${report.error?.message || report.browserSmoke?.error || "unknown"}. Preflight ${preflightFindings}.`,
     "Keep passwords off Agent Link Board; rerun preflight before retrying.",
     "Inject was not executed.",
   ].join(" ");
+}
+
+function formatPreflightFindings(preflight) {
+  const blockers = summarizePreflightChecklistIds(preflight?.checklist, "blocker");
+  const warnings = summarizePreflightChecklistIds(preflight?.checklist, "warning");
+  return `blockers=${blockers} warnings=${warnings}`;
+}
+
+function summarizePreflightChecklistIds(checklist, status) {
+  const ids = [...new Set((Array.isArray(checklist) ? checklist : [])
+    .filter((entry) => entry.status === status)
+    .map((entry) => entry.id)
+    .filter(Boolean))];
+  if (ids.length === 0) return "none";
+  if (ids.length <= 4) return ids.join(",");
+  return `${ids.slice(0, 4).join(",")}+${ids.length - 4}more`;
 }
 
 function makeDiscoveryChecklistText(report) {

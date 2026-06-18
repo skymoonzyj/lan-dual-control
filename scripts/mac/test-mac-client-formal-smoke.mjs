@@ -384,6 +384,8 @@ async function checkPreflightAndDryRun(args) {
         assertIncludes(preflightPayload.commands?.reverseGrantCopyAction || "", "Copy Node", "preflight reverse grant copy action");
         assertIncludes(preflightPayload.boardSummary || "", "Coordinate first", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "--sendCall", "preflight board summary");
+        assertIncludes(preflightPayload.boardSummary || "", "blockers=none", "preflight board summary");
+        assertIncludes(preflightPayload.boardSummary || "", "warnings=", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "MacClientBrowserSelfTest=", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "ReverseGrantCopy=", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "Reverse rehearsal after auth", "preflight board summary");
@@ -415,6 +417,8 @@ async function checkPreflightAndDryRun(args) {
         assert("boardCallBeforeSend" in sendCallPayload.sentCall, "sendCall should expose prior board call state");
         assert(sendCallPayload.sentCall?.payload?.goal === "正式端到端验收 Windows host", "sendCall payload should keep formal goal");
         assertIncludes(sendCallPayload.boardSummary || "", "Agent Link Board call was sent", "sendCall board summary");
+        assertIncludes(sendCallPayload.boardSummary || "", "blockers=none", "sendCall board summary");
+        assertIncludes(sendCallPayload.boardSummary || "", "warnings=", "sendCall board summary");
         assertIncludes(sendCallPayload.boardSummary || "", "ReverseGrantCopy=", "sendCall board summary");
         assertIncludes(sendCallPayload.boardSummary || "", "Reverse rehearsal after auth", "sendCall board summary");
         assertNotIncludes(`${sendCall.stdout}\n${sendCall.stderr}`, secret, "sendCall output");
@@ -453,6 +457,9 @@ async function checkPreflightAndDryRun(args) {
       assertIncludes(dryRunPayload.commands?.reverseControlRehearsal || "", "recommended PowerShell command", "dryRun reverse rehearsal");
       assertIncludes(dryRunPayload.commands?.reverseGrantCopyAction || "", "Copy PowerShell", "dryRun reverse grant copy action");
       assertIncludes(dryRunPayload.commands?.reverseGrantCopyAction || "", "Copy Node", "dryRun reverse grant copy action");
+      assertIncludes(dryRunPayload.boardSummary || "", "blockers=none", "dryRun board summary");
+      assert(/warnings=[^.]*board/.test(dryRunPayload.boardSummary || ""), "dryRun board summary should name board warning");
+      assertIncludes(dryRunPayload.boardSummary || "", "warnings=", "dryRun board summary");
       assertNotIncludes(dryRunPayload.commands?.browserSmoke || "", secret, "dryRun command");
       assertNotIncludes(`${dryRun.stdout}\n${dryRun.stderr}`, secret, "dryRun output");
     });
@@ -503,6 +510,9 @@ async function checkDiscoverPreflight(args) {
       assert(payload.commands?.windowsOpenOneTimeReverseGrant?.includes(`-Port ${windowsPort} -Grant -DurationMs 30000 -BoardSummary`), "discover preflight should use selected port for recommended Windows PowerShell grant helper");
       assert(payload.commands?.windowsOpenOneTimeReverseGrantNodeFallback?.includes(`--port ${windowsPort} --grant --durationMs 30000 --boardSummary`), "discover preflight should use selected port for Windows grant helper fallback");
       assertIncludes(payload.boardSummary || "", "FormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "discover preflight board summary");
+      assertIncludes(payload.boardSummary || "", "blockers=none", "discover preflight board summary");
+      assert(/warnings=[^.]*board/.test(payload.boardSummary || ""), "discover preflight board summary should name board warning");
+      assertIncludes(payload.boardSummary || "", "warnings=", "discover preflight board summary");
       assertIncludes(payload.boardSummary || "", "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "discover preflight board summary");
       assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "discover preflight board summary");
       assertIncludes(payload.boardSummary || "", "ReverseGrantCopy=", "discover preflight board summary");
@@ -541,6 +551,8 @@ async function checkEnsureClientPreflight(args) {
     assert(payload.ensuredClient?.url?.includes(`:${clientPort}`), "ensure client should report the local client URL");
     assert(payload.preflight?.ok === true, "ensure client preflight should be ok");
     assert(payload.preflight?.counts?.blocker === 0, "ensure client preflight should have no blockers");
+    assertIncludes(payload.boardSummary || "", "blockers=none", "ensure client board summary");
+    assert(/warnings=[^.]*board/.test(payload.boardSummary || ""), "ensure client board summary should name board warning");
     assertNotIncludes(`${result.stdout}\n${result.stderr}`, secret, "ensure client output");
     if (payload.ensuredClient?.processId) {
       try {
@@ -590,6 +602,8 @@ async function checkDiscoverSendCall(args) {
         assert(payload.sentCall?.ok === true, "discover sendCall should report sentCall ok");
         assert(payload.sentCall?.payload?.connection === `127.0.0.1:${windowsPort}`, "discover sendCall should call selected Windows host");
         assertIncludes(payload.boardSummary || "", "Agent Link Board call was sent", "discover sendCall board summary");
+        assertIncludes(payload.boardSummary || "", "blockers=none", "discover sendCall board summary");
+        assertIncludes(payload.boardSummary || "", "warnings=", "discover sendCall board summary");
         assertIncludes(payload.boardSummary || "", "FormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "discover sendCall board summary");
         assertIncludes(payload.boardSummary || "", "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "discover sendCall board summary");
         assertIncludes(payload.boardSummary || "", "ReverseGrantCopy=", "discover sendCall board summary");
