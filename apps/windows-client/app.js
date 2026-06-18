@@ -542,6 +542,7 @@ const state = {
   fileTransferSequence: 0,
   fileTransferActive: false,
   outgoingFileTransfer: null,
+  lastOutgoingFileTransfer: null,
   remoteFileTransfers: new Map(),
   receivedClipboardFiles: [],
   receivedClipboardTempPath: "",
@@ -2432,6 +2433,10 @@ function formatFloatingClipboardStatus() {
 
   if (state.receivedClipboardFiles.length > 0) {
     return `剪贴板：已收 ${state.receivedClipboardFiles.length} 个远端文件`;
+  }
+
+  if (state.lastOutgoingFileTransfer?.status === "failed") {
+    return `剪贴板：${compactFloatingStatusText(describeLastOutgoingFileTransferStatus(state.lastOutgoingFileTransfer), 56)}`;
   }
 
   if (state.connected) {
@@ -4568,7 +4573,9 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
 
   let sentBytes = 0;
   const startedAt = Date.now();
+  let transferSucceeded = false;
   state.fileTransferActive = true;
+  state.lastOutgoingFileTransfer = null;
   state.outgoingFileTransfer = {
     transferId,
     totalBytes,
@@ -4631,18 +4638,35 @@ async function sendFilesToRemote(files, { sourceLabel = "文件剪贴板", clear
       totalBytes,
       fileCount: files.length,
     });
+    transferSucceeded = true;
     elements.clipboardText.textContent = `剪贴板：文件已发送 ${formatBytes(sentBytes)}`;
     syncFloatingControlStatus();
     addLog(sourceLabel, `文件块发送完成，等待对端确认 · ${transferId}`);
   } catch (error) {
     const message = error?.message || "文件发送失败";
-    elements.clipboardText.textContent = "剪贴板：文件发送失败";
+    const failedAt = Date.now();
+    const activeTransfer = state.outgoingFileTransfer || {};
+    state.lastOutgoingFileTransfer = {
+      ...activeTransfer,
+      transferId,
+      status: "failed",
+      totalBytes,
+      sentBytes,
+      fileCount: files.length,
+      files: fileMetas,
+      error: message,
+      failedAt,
+      lastActivityAt: Number(activeTransfer.lastActivityAt) || failedAt,
+      rateSamples: Array.isArray(activeTransfer.rateSamples) ? [...activeTransfer.rateSamples] : [],
+      canRetry: clearFileInput && (elements.fileClipboardInput.files?.length || 0) > 0,
+    };
+    elements.clipboardText.textContent = `剪贴板：${describeLastOutgoingFileTransferStatus(state.lastOutgoingFileTransfer)}`;
     syncFloatingControlStatus();
     addLog(`${sourceLabel}失败`, message);
   } finally {
     state.fileTransferActive = false;
     state.outgoingFileTransfer = null;
-    if (clearFileInput) elements.fileClipboardInput.value = "";
+    if (clearFileInput && transferSucceeded) elements.fileClipboardInput.value = "";
     updateFileClipboardButton();
     syncFloatingControlStatus();
   }
@@ -5746,6 +5770,15 @@ function describeOutgoingFileTransferStatus(transfer = {}) {
     return `正在发送 ${countText}：${outgoingFileTransferProgressText(transfer)}，${percent}%`;
   }
   return `正在发送 ${countText}：${outgoingFileTransferProgressText(transfer)}`;
+}
+
+function describeLastOutgoingFileTransferStatus(transfer = {}) {
+  if (!transfer || transfer.status !== "failed") return "";
+  const fileCount = Number(transfer.fileCount) || (Array.isArray(transfer.files) ? transfer.files.length : 0);
+  const countText = fileCount > 0 ? `${fileCount} 个文件` : "文件";
+  const retryText = transfer.canRetry ? "可重新发送" : "需重新选择文件";
+  const errorText = transfer.error ? ` · ${String(transfer.error).replace(/\s+/g, " ").slice(0, 80)}` : "";
+  return `文件发送失败 ${countText}：${outgoingFileTransferProgressText(transfer)}，${retryText}${errorText}`;
 }
 
 function remoteFileTransferRateText(transfer = {}, now = Date.now()) {

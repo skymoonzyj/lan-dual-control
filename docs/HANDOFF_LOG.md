@@ -49,6 +49,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端手动发送文件失败后保留重试线索，而不是只显示“失败”。
+完成内容：
+- `sendFilesToRemote` 失败时会保留最近发送失败快照，包括已发字节、总量、文件数、错误信息和最近分块样本。
+- 手动选择文件发送失败时不再清空文件选择，顶部剪贴板状态会显示“文件发送失败 ... 可重新发送”。
+- 全屏/监看浮层和复制/导出诊断会复用最近失败摘要；不改 `clipboard_file_*` 协议，也不实现真正断点续传。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 先新增断言并确认失败：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`（失败点：缺少最近发送失败摘要 helper）。
+- 实现后复跑：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`
+- 收尾验证：`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`git diff --check`、行首冲突扫描。
+遗留问题：
+- 这只是普通重新发送提示；连接中断后的断点续传仍未实现。
+下一步建议：
+- 后续真实大文件测试时重点看失败后再次点击发送文件是否符合预期；真正断点续传需要另行设计传输协议和两端状态。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端发送本机文件时也显示速度和预计剩余时间。
 完成内容：
 - `sendFilesToRemote` 新增发送侧状态对象，记录本次 transfer 的已发字节、总量、文件数和最近分块样本。
