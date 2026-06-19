@@ -178,6 +178,8 @@ function assertBoardSummaryShape(text, label) {
   assert(/MacHostMedia=.*--promptPassword/.test(text), `${label} should keep media baseline password entry local`);
   assert(/MacFormalLocalSmoke=/.test(text), `${label} should include local formal smoke guidance`);
   assert(/check-mac-formal-local-smoke\.mjs/.test(text), `${label} should include local formal smoke command`);
+  assert(/MacClientBrowserSelfTest=/.test(text), `${label} should include local Mac client browser self-test guidance`);
+  assert(/MacClientBrowserSelfTest=.*test-mac-client-browser-self-test-wrapper\.mjs/.test(text), `${label} should include Mac client browser self-test command`);
   assert(/MacScriptHelp=/.test(text), `${label} should include Mac script help safety check guidance`);
   assert(/MacScriptHelp=.*test-mac-script-help\.mjs/.test(text), `${label} should include Mac script help command`);
   assert(/Do not send passwords/.test(text), `${label} should include password safety note`);
@@ -342,6 +344,20 @@ function assertMacFormalLocalSmokeCommand(command, label, expectedPort = null) {
   if (expectedPort !== null) {
     assert(text.includes(`--port ${expectedPort}`), `${label} should target expected port ${expectedPort}`);
   }
+}
+
+function assertMacClientBrowserSelfTestCommand(command, label) {
+  const text = String(command || "");
+  assert(/node scripts\/mac\/test-mac-client-browser-self-test-wrapper\.mjs/.test(text), `${label} should use the local Mac client browser self-test wrapper`);
+  assert(/--boardSummary/.test(text), `${label} should produce boardSummary`);
+  assert(!/--promptPassword/.test(text), `${label} should not prompt for passwords`);
+  assert(!/(^|\s)--password(\s|=|$)/.test(text), `${label} should not embed --password`);
+  assert(!/--useEnvPassword/.test(text), `${label} should not authenticate against a real host`);
+  assert(!/--sendCall/.test(text), `${label} should not send Agent Link Board calls`);
+  assert(!/--server/.test(text), `${label} should not echo custom board server URLs`);
+  assert(!/input_event/.test(text), `${label} should not mention input events`);
+  assert(!/inject/.test(text), `${label} should not instruct injection`);
+  assert(!/super-secret-formal-password/.test(text), `${label} should not echo server-like secret text`);
 }
 
 function assertMacScriptHelpCommand(command, label) {
@@ -558,6 +574,7 @@ function checkHelp(args) {
     assert(/commands\.macLaunchAgentPlanCommand/.test(result.stdout), `${script} ${flag} should document LaunchAgent planner command output`);
     assert(/commands\.macMaxFpsPlanCommand/.test(result.stdout), `${script} ${flag} should document Mac max-FPS planner command output`);
     assert(/commands\.macUnattendedFormalCommand/.test(result.stdout), `${script} ${flag} should document Mac unattended formal gate command output`);
+    assert(/commands\.macClientBrowserSelfTestCommand/.test(result.stdout), `${script} ${flag} should document Mac client browser self-test command output`);
     assert(/commands\.macScriptHelpCommand/.test(result.stdout), `${script} ${flag} should document Mac script help safety command output`);
     assert(/--promptPassword/.test(result.stdout), `${script} ${flag} should document local password prompt for media readiness command`);
     assert(!/Mac host probe password/.test(result.stdout), `${script} ${flag} should not prompt for password`);
@@ -607,6 +624,7 @@ function checkOfflineJson(args) {
   assert(/check-mac-host-readiness\.mjs/.test(payload.callText || ""), "offline callText should include low-risk host readiness command");
   assert(/MacHostReadiness=.*check-mac-host-readiness\.mjs/.test(payload.boardSummary || ""), "offline boardSummary should include low-risk host readiness command");
   assert(/check-mac-formal-local-smoke\.mjs/.test(payload.callText || ""), "offline callText should include local smoke command");
+  assert(/test-mac-client-browser-self-test-wrapper\.mjs/.test(payload.callText || ""), "offline callText should include Mac client browser self-test command");
   assert(/MacHostMedia=.*check-mac-host-readiness\.mjs/.test(payload.boardSummary || ""), "offline boardSummary should include MacHostMedia command");
   assert(/MacHostMedia=.*--probeMedia/.test(payload.boardSummary || ""), "offline boardSummary should include media probing");
   assert(/MacHostMedia=.*--probeMediaResourceSample/.test(payload.boardSummary || ""), "offline boardSummary should include media resource sampling");
@@ -620,6 +638,7 @@ function checkOfflineJson(args) {
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand, "offline unattended formal command", 9);
   assertMacHostReadinessCommand(payload.commands?.macHostReadinessCommand, "offline host readiness command", 9);
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "offline local smoke command", 9);
+  assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand, "offline Mac client browser self-test command");
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand, "offline Mac script help command");
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "offline media readiness command", 9);
   assertMediaReadinessCommand(payload.commands?.macHostMediaCommand, "offline Mac host media command", 9);
@@ -649,6 +668,7 @@ function checkOfflineBoardSummary(args) {
   assert(/MacLaunchAgentLoad=.*launchctl bootstrap/.test(text), "offline board summary should include manual LaunchAgent load guidance");
   assert(/MacLaunchAgentPrint=.*launchctl print/.test(text), "offline board summary should include manual LaunchAgent verification guidance");
   assert(/MacHostMedia=/.test(text), "offline board summary should include MacHostMedia");
+  assert(/MacClientBrowserSelfTest=/.test(text), "offline board summary should include MacClientBrowserSelfTest");
   print("OK", "Offline board summary is short, secret-free, and actionable");
 }
 
@@ -1144,6 +1164,7 @@ function checkOnlineJson(args) {
   assert(/--requireLaunchAgentMaxFps/.test(payload.callText || ""), "online callText should include formal LaunchAgent max-FPS gate");
   assert(/check-mac-host-readiness\.mjs/.test(payload.callText || ""), "online callText should include low-risk host readiness command");
   assert(/check-mac-formal-local-smoke\.mjs/.test(payload.callText || ""), "online callText should include local smoke command");
+  assert(/test-mac-client-browser-self-test-wrapper\.mjs/.test(payload.callText || ""), "online callText should include Mac client browser self-test command");
   assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand, "online foreground 60Hz safe start command", args.port);
   assertMacHostStopCommand(payload.commands?.macHostStopCommand, "online Mac host stop command", args.port);
   assertMacLaunchAgentLoadCommand(payload.commands?.macLaunchAgentLoadCommand, "online Mac LaunchAgent load command");
@@ -1153,6 +1174,7 @@ function checkOnlineJson(args) {
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand, "online unattended formal command", args.port);
   assertMacHostReadinessCommand(payload.commands?.macHostReadinessCommand, "online host readiness command", args.port);
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "online local smoke command", args.port);
+  assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand, "online Mac client browser self-test command");
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand, "online Mac script help command");
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "online media readiness command", args.port);
   assertMediaReadinessCommand(payload.commands?.macHostMediaCommand, "online Mac host media command", args.port);
@@ -1210,6 +1232,7 @@ function checkSecretRedaction(args) {
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "secret-redaction media readiness command", 9);
   assertMediaReadinessCommand(payload.commands?.macHostMediaCommand, "secret-redaction Mac host media command", 9);
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "secret-redaction local smoke command", 9);
+  assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand, "secret-redaction Mac client browser self-test command");
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand, "secret-redaction Mac script help command");
   print("OK", "Formal E2E status output does not echo unrelated secret-like server text");
 }

@@ -109,6 +109,10 @@ JSON output:
                             turns missing or low LaunchAgent maxScreenFps into
                             a blocker without writing files, loading launchctl,
                             requesting a password, sending a call, or sending input.
+  commands.macClientBrowserSelfTestCommand
+                            Secret-free local Mac client browser self-test. It
+                            uses a mock Windows host and does not use a real
+                            host password, Agent Link call, input, or inject.
   commands.macScriptHelpCommand
                             Secret-free Mac script help safety check. It runs
                             --help/-h coverage only and does not start services,
@@ -518,6 +522,7 @@ function makeCallText(report) {
       `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
       `When the host is online, run low-risk host readiness with: ${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
       `When the host is online, run local smoke first with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
+      `If true Windows auth/LAN is not ready, run local Mac client browser self-test with: ${report.commands?.macClientBrowserSelfTestCommand || makeMacClientBrowserSelfTestCommand()}.`,
       `When the host is online, refresh the media baseline with: ${report.commands?.macHostMediaCommand || report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
       `If only this summary is available, verify Mac script help safety with: ${report.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
     ].join(" ");
@@ -536,6 +541,7 @@ function makeCallText(report) {
     `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
     `Before long formal runs, run low-risk host readiness with: ${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
     `Before long formal runs, run local H.264/PCM/input-log smoke with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
+    `If true Windows auth/LAN is not ready, run local Mac client browser self-test with: ${report.commands?.macClientBrowserSelfTestCommand || makeMacClientBrowserSelfTestCommand()}.`,
     `Before long formal runs, refresh the Mac media baseline with: ${report.commands?.macHostMediaCommand || report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
     `If only this summary is available, verify Mac script help safety with: ${report.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
     "If ready, Windows should run discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log. Do not run inject unless the user explicitly confirms they are watching.",
@@ -565,6 +571,7 @@ function makeBoardSummary(report) {
       `MacHostReadiness=${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
       `MacFormalLocalSmoke=${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
       `MacHostMedia=${report.commands?.macHostMediaCommand || report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
+      `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTestCommand || makeMacClientBrowserSelfTestCommand()}.`,
       `MacScriptHelp=${report.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
       "Do not send passwords on Agent Link Board; inject requires explicit user confirmation.",
     ].join(" ");
@@ -584,6 +591,7 @@ function makeBoardSummary(report) {
     `MacHostReadiness=${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
     `MacFormalLocalSmoke=${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
     `MacHostMedia=${report.commands?.macHostMediaCommand || report.commands?.mediaReadinessBoardSummary || "check-mac-host-readiness --probeMedia --boardSummary"}.`,
+    `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTestCommand || makeMacClientBrowserSelfTestCommand()}.`,
     `MacScriptHelp=${report.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
     "Formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log; no inject without explicit user confirmation.",
     "Do not send passwords on Agent Link Board.",
@@ -636,8 +644,13 @@ function makeCommands(report) {
     ].join(" "),
     mediaReadinessBoardSummary: mediaReadinessCommand,
     macHostMediaCommand: mediaReadinessCommand,
+    macClientBrowserSelfTestCommand: makeMacClientBrowserSelfTestCommand(),
     macScriptHelpCommand: makeMacScriptHelpCommand(),
   };
+}
+
+function makeMacClientBrowserSelfTestCommand() {
+  return "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
 }
 
 function makeMacScriptHelpCommand() {
