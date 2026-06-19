@@ -221,6 +221,8 @@ function makeFormalCommand(args) {
     "scripts/windows/check-mac-formal-e2e.mjs",
     "--host", args.host,
     "--port", String(args.port),
+    "--clientPort", String(args.clientPort),
+    "--debugPort", String(args.debugPort),
     "--promptPassword",
   ].join(" ");
 }
@@ -230,6 +232,8 @@ function makeFormalPowerShellCommand(args) {
     "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
     "-HostName", args.host,
     "-Port", String(args.port),
+    "-ClientPort", String(args.clientPort),
+    "-DebugPort", String(args.debugPort),
     "-PromptPassword",
   ].join(" ");
 }

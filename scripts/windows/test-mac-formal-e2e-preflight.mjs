@@ -677,6 +677,12 @@ async function testMockPreflightClientDiagnostics(args) {
     assert(payload.clientDiagnostics?.requested === true, "client diagnostics should be requested");
     assert(payload.clientDiagnostics?.ok === true, "client diagnostics should pass");
     assert(String(payload.boardSummary || "").includes("clientDiagnostics=passed"), "board summary should include client diagnostics state");
+    assert(String(payload.command || "").includes(`--clientPort ${clientPort}`), "safe formal command should preserve custom client port");
+    assert(String(payload.command || "").includes(`--debugPort ${debugPort}`), "safe formal command should preserve custom debug port");
+    assert(String(payload.formalPowerShellCommand || "").includes(`-ClientPort ${clientPort}`), "safe PowerShell formal command should preserve custom client port");
+    assert(String(payload.formalPowerShellCommand || "").includes(`-DebugPort ${debugPort}`), "safe PowerShell formal command should preserve custom debug port");
+    assert(String(payload.userAuthRequest || "").includes(`--clientPort ${clientPort}`), "user auth request should preserve custom client port");
+    assert(String(payload.userAuthRequest || "").includes(`--debugPort ${debugPort}`), "user auth request should preserve custom debug port");
     assert(payload.checks.some((check) => check.name === "windowsClientDiagnostics" && check.ok === true), "checks should include client diagnostics");
     assertRunPlanSafe(payload, "mock client diagnostics run plan", { audioSkipped: true, clipboardText: false, inputMode: "skipped" });
     assertNotIncludes(result.stdout + result.stderr, "test-password", "mock client diagnostics");
