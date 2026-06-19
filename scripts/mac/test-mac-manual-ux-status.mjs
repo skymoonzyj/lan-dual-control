@@ -92,12 +92,37 @@ function run(extraArgs, args) {
 
 async function withFakeBoard(state, callback, options = {}) {
   const posts = [];
+  let currentCall = state.currentCall || null;
   const server = http.createServer((request, response) => {
     const path = new URL(request.url || "/", "http://127.0.0.1").pathname;
     const headers = {
       "Content-Type": "application/json; charset=utf-8",
       "Access-Control-Allow-Origin": "*",
     };
+    if (request.method === "POST" && path === "/api/call") {
+      let body = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk) => {
+        body += chunk;
+      });
+      request.on("end", () => {
+        try {
+          currentCall = body ? JSON.parse(body) : {};
+          posts.push({ path, body: currentCall });
+          if (options.rejectCalls) {
+            response.writeHead(200, headers);
+            response.end(JSON.stringify({ ok: false, error: "fake-board-rejected-call" }));
+            return;
+          }
+          response.writeHead(200, headers);
+          response.end(JSON.stringify({ ok: true }));
+        } catch (error) {
+          response.writeHead(400, headers);
+          response.end(JSON.stringify({ ok: false, error: error.message }));
+        }
+      });
+      return;
+    }
     if (request.method === "POST" && (path === "/api/status" || path === "/api/message")) {
       let body = "";
       request.setEncoding("utf8");
@@ -127,7 +152,7 @@ async function withFakeBoard(state, callback, options = {}) {
       return;
     }
     response.writeHead(200, headers);
-    response.end(JSON.stringify(state));
+    response.end(JSON.stringify({ ...state, currentCall }));
   });
   await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
   const address = server.address();
@@ -273,6 +298,35 @@ function userAwakeManualUxCallBoardState() {
   };
 }
 
+function otherActiveCallWithUserAwakeSignalBoardState() {
+  return {
+    updatedAt: "2026-06-20T10:05:00.000Z",
+    currentCall: {
+      status: "CALLING",
+      goal: "Windows audio queue follow-up",
+      from: "Windows Codex",
+      need: "Mac Codex",
+      ask: "Please wait while Windows finishes an audio queue check.",
+    },
+    statuses: {
+      "Mac Manual UX": {
+        status: "manual-ux-waiting",
+        role: "Mac 端",
+        note: `MacManualUx=status=waiting ManualUxChecklist=${defaultChecklist}`,
+        updatedAt: "2026-06-20T10:04:58.000Z",
+      },
+    },
+    recentEvents: [
+      {
+        at: "2026-06-20T10:04:59.000Z",
+        type: "message",
+        from: "Supervisor Codex",
+        text: "USER_AWAKE: user is awake; prepare real manual UX validation after active Windows call is resolved.",
+      },
+    ],
+  };
+}
+
 function parseJson(stdout, label) {
   try {
     return JSON.parse(stdout);
@@ -300,6 +354,7 @@ async function checkHelp(args) {
   assertIncludes(result.stdout, "--boardSummary", "help");
   assertIncludes(result.stdout, "--sendStatus", "help");
   assertIncludes(result.stdout, "--sendMessage", "help");
+  assertIncludes(result.stdout, "--sendCall", "help");
   assertNotIncludes(result.stdout, "Mac host password:", "help");
   assertSecretSafe(result.stdout, "help");
   console.log("[OK] Mac manual UX status help is pure");
@@ -457,6 +512,51 @@ async function checkUserAwakeCallProducesManualUxCallPlan(args) {
   console.log("[OK] Mac manual UX status turns USER_AWAKE call into a safe manual UX call plan");
 }
 
+async function checkUserAwakeSendCallPostsManualUxCall(args) {
+  await withFakeBoard(userAwakeManualUxCallBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json", "--sendCall"], args);
+    assert(result.exitCode === 0, `USER_AWAKE --sendCall should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "USER_AWAKE --sendCall JSON");
+    const calls = posts.filter((post) => post.path === "/api/call");
+    assert(calls.length === 1, `USER_AWAKE --sendCall should post exactly one call, got ${calls.length}: ${JSON.stringify(posts)}`);
+    const call = calls[0].body;
+    assert(payload.sentCall?.ok === true, `USER_AWAKE --sendCall payload should record sentCall ok: ${JSON.stringify(payload.sentCall)}`);
+    assert(payload.boardCallBeforeSend?.active === true, "USER_AWAKE --sendCall should record the existing Supervisor call before send");
+    assert(call.from === "Mac Codex", `manual UX call sender mismatch: ${JSON.stringify(call)}`);
+    assert(call.need === "Windows Codex, User", `manual UX call need mismatch: ${JSON.stringify(call)}`);
+    assert(call.goal === "Mac manual UX validation: user-present real experience test", `manual UX call goal mismatch: ${JSON.stringify(call)}`);
+    assertIncludes(call.expected, "connection", "manual UX call expected");
+    assertIncludes(call.ask, "5-10 minute", "manual UX call ask");
+    assertIncludes(payload.boardSummary, "ManualUxCallSent=true", "USER_AWAKE --sendCall boardSummary");
+    assertSecretSafe(`${result.stdout}\n${result.stderr}\n${JSON.stringify(posts)}`, "USER_AWAKE --sendCall");
+  });
+  console.log("[OK] Mac manual UX status can send one safe USER_AWAKE manual UX call");
+}
+
+async function checkSendCallRefusesWhenNotCallReady(args) {
+  await withFakeBoard(readyBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json", "--sendCall"], args);
+    assert(result.exitCode === 1, `ready --sendCall should fail because it is already ready, not call-ready. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "ready --sendCall refusal JSON");
+    assertIncludes(payload.error?.message || "", "Refusing to send manual UX call", "ready --sendCall refusal");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `ready --sendCall should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(`${result.stdout}\n${result.stderr}`, "ready --sendCall refusal");
+  });
+  console.log("[OK] Mac manual UX status refuses --sendCall outside call-ready state");
+}
+
+async function checkSendCallRefusesOtherActiveCall(args) {
+  await withFakeBoard(otherActiveCallWithUserAwakeSignalBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json", "--sendCall"], args);
+    assert(result.exitCode === 1, `other active call --sendCall should fail. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "other active call --sendCall refusal JSON");
+    assertIncludes(payload.error?.message || "", "Refusing to replace existing Agent Link Board call", "other active call refusal");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `other active call should not be replaced: ${JSON.stringify(posts)}`);
+    assertSecretSafe(`${result.stdout}\n${result.stderr}`, "other active call --sendCall refusal");
+  });
+  console.log("[OK] Mac manual UX status refuses to replace non-matching active board calls");
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -473,6 +573,9 @@ async function main() {
   await checkRequireReadyFailure(args);
   await checkUsableEntryCurrentCallIsReady(args);
   await checkUserAwakeCallProducesManualUxCallPlan(args);
+  await checkUserAwakeSendCallPostsManualUxCall(args);
+  await checkSendCallRefusesWhenNotCallReady(args);
+  await checkSendCallRefusesOtherActiveCall(args);
   console.log("[OK] Mac manual UX status checks passed");
 }
 

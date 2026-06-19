@@ -14,6 +14,7 @@ const defaults = {
   boardSummary: false,
   sendStatus: false,
   sendMessage: false,
+  sendCall: false,
 };
 
 const manualChecklistLabels = {
@@ -56,6 +57,7 @@ Options:
   --json               Print one machine-readable JSON object.
   --sendStatus         Post the summary to Agent Link Board /api/status.
   --sendMessage        Post the summary to Agent Link Board /api/message.
+  --sendCall           Send a user-present manual UX call only from call-ready state.
   --device <name>      Status device name. Default: ${defaults.device}
   --role <role>        Status role. Default: ${defaults.role}
   --from <name>        Message sender. Default: ${defaults.from}
@@ -64,8 +66,8 @@ Options:
 
 Description:
   Prints a read-only Mac-side manual UX status report after REAL_TEST_PASS.
-  It only posts to Agent Link Board when --sendStatus or --sendMessage is
-  explicitly provided.
+  It only posts to Agent Link Board when --sendStatus, --sendMessage, or
+  --sendCall is explicitly provided.
   It consumes PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby,
   MAC_STANDING_BY_FOR_MANUAL_UX_TEST, and ManualUxChecklist=... from Agent Link
   Board state. A Supervisor usable-entry/manual-UX currentCall is also treated
@@ -79,6 +81,7 @@ Description:
 Examples:
   node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary
   node scripts/mac/check-mac-manual-ux-status.mjs --sendStatus --sendMessage --boardSummary
+  node scripts/mac/check-mac-manual-ux-status.mjs --sendCall --json
   node scripts/mac/check-mac-manual-ux-status.mjs --requireReady --json
 `);
 }
@@ -106,6 +109,10 @@ function parseArgs(argv) {
     }
     if (token === "--sendMessage") {
       args.sendMessage = true;
+      continue;
+    }
+    if (token === "--sendCall") {
+      args.sendCall = true;
       continue;
     }
     if (token === "--requireReady") {
@@ -259,29 +266,82 @@ function isUserAwakeManualUxCall(text) {
   return userAwake && manualUx;
 }
 
+function normalizedText(value) {
+  return compactText(value).trim();
+}
+
+function isActiveBoardCall(call) {
+  if (!call || typeof call !== "object") return false;
+  const status = normalizedText(call.status).toLowerCase();
+  if (!status) return true;
+  return !["done", "completed", "complete", "cancelled", "canceled", "resolved", "closed"].includes(status);
+}
+
+function normalizeCurrentBoardCall(call) {
+  if (!call || typeof call !== "object") {
+    return {
+      active: false,
+      raw: "",
+    };
+  }
+  const currentCall = {
+    active: isActiveBoardCall(call),
+    raw: compactText(call),
+  };
+  for (const key of ["status", "goal", "from", "need", "environment", "connection", "command", "expected", "actual", "ask", "blockedBy", "owner", "timeout", "updatedAt"]) {
+    const value = normalizedText(call[key]);
+    if (value) currentCall[key] = value;
+  }
+  return currentCall;
+}
+
+function isMatchingUserAwakeManualUxBoardCall(call) {
+  return Boolean(call?.active && isUserAwakeManualUxCall(call.raw || call));
+}
+
 function quoteCliArg(value) {
   const text = String(value ?? "");
   if (/^[A-Za-z0-9_./:=@%+-]+$/.test(text)) return text;
   return `'${text.replace(/'/g, "'\\''")}'`;
 }
 
+function makeManualUxCallPayload() {
+  return {
+    status: "CALLING",
+    from: "Mac Codex",
+    need: "Windows Codex, User",
+    goal: "Mac manual UX validation: user-present real experience test",
+    expected: "Verify connection, video, audio, clipboard, file, window, fullscreen, original quality, and copy diagnostics.",
+    ask: "Please confirm a 5-10 minute user-present manual UX window. Mac will not request credentials on the board or send remote input commands.",
+    owner: "Mac Codex",
+    timeout: "10m",
+  };
+}
+
 function makeManualUxCallCommand(server) {
+  const payload = makeManualUxCallPayload();
   return [
     "node",
     "scripts/codex-link-client.mjs",
     "--server",
     server,
     "call",
+    "--status",
+    payload.status,
     "--from",
-    "Mac Codex",
+    payload.from,
     "--need",
-    "Windows Codex, User",
+    payload.need,
     "--goal",
-    "Mac manual UX validation: user-present real experience test",
+    payload.goal,
     "--expected",
-    "Verify connection, video, audio, clipboard, file, window, fullscreen, original quality, and copy diagnostics.",
+    payload.expected,
     "--ask",
-    "Please confirm a 5-10 minute user-present manual UX window. Mac will not request credentials on the board or send remote input commands.",
+    payload.ask,
+    "--owner",
+    payload.owner,
+    "--timeout",
+    payload.timeout,
   ].map(quoteCliArg).join(" ");
 }
 
@@ -313,6 +373,7 @@ function makeReport(state, server) {
     server,
     checkedAt: new Date().toISOString(),
     target: firstLanMacHostEndpoint(texts, server),
+    boardCallBeforeCheck: normalizeCurrentBoardCall(state.currentCall),
     signals,
     manualChecklist: {
       summary: ids.join("/"),
@@ -374,6 +435,8 @@ function makeBoardSummary(report) {
     "NoFormalE2ERerun=true",
   ];
   if (report.commands?.manualUxCallCommand) parts.push(`ManualUxCallCommand=${report.commands.manualUxCallCommand}`);
+  if (report.sentCall?.ok) parts.push("ManualUxCallSent=true");
+  if (report.sentCall?.ok === false) parts.push("ManualUxCallSent=false");
   if (report.blockers.length > 0) parts.push(`blockers=${report.blockers.join(",")}`);
   if (report.warnings.length > 0) parts.push(`warnings=${report.warnings.join(",")}`);
   return parts.join(" ");
@@ -417,6 +480,10 @@ function makeOfflineReport(server, error) {
     commands: {
       manualUxCallCommand: null,
     },
+    boardCallBeforeCheck: {
+      active: false,
+      raw: "",
+    },
     safety: {
       requestPassword: false,
       sendUserAuthRequest: false,
@@ -446,6 +513,24 @@ async function main() {
     report = makeReport(state, args.server);
   } catch (error) {
     report = makeOfflineReport(args.server, error);
+  }
+
+  if (args.sendCall) {
+    try {
+      report.sentCall = await sendCall(args, report);
+      report.boardSummary = makeBoardSummary(report);
+    } catch (error) {
+      report.sentCall = {
+        ok: false,
+        attempted: false,
+        error: String(error?.message || error || "sendCall failed"),
+      };
+      report.error = {
+        message: report.sentCall.error,
+      };
+      report.boardSummary = makeBoardSummary(report);
+      process.exitCode = 1;
+    }
   }
 
   if (args.json) {
@@ -485,6 +570,31 @@ async function sendMessage(args, report) {
   });
 }
 
+async function sendCall(args, report) {
+  if (report.status !== "call-ready") {
+    throw new Error(`Refusing to send manual UX call from status=${report.status}; expected call-ready.`);
+  }
+  const currentCall = report.boardCallBeforeCheck || {
+    active: false,
+    raw: "",
+  };
+  report.boardCallBeforeSend = currentCall;
+  if (currentCall.active && !isMatchingUserAwakeManualUxBoardCall(currentCall)) {
+    const owner = currentCall.from || currentCall.need || currentCall.owner || "unknown";
+    const goal = currentCall.goal || currentCall.raw || "unknown goal";
+    throw new Error(`Refusing to replace existing Agent Link Board call from ${owner}: ${goal}. Wait for it to resolve before sending the manual UX call.`);
+  }
+  const payload = makeManualUxCallPayload();
+  const result = await postToBoard(args, "/api/call", payload);
+  return {
+    ok: true,
+    attempted: true,
+    payload,
+    boardCallBeforeSend: currentCall,
+    result: result || { ok: true },
+  };
+}
+
 async function postToBoard(args, pathName, body) {
   const response = await fetch(new URL(pathName, args.server), {
     method: "POST",
@@ -496,14 +606,15 @@ async function postToBoard(args, pathName, body) {
   });
   const text = await response.text();
   if (!response.ok) throw new Error(`Agent Link post failed: ${response.status} ${text}`);
-  if (!text) return;
+  if (!text) return { ok: true };
   let payload = null;
   try {
     payload = JSON.parse(text);
   } catch {
-    return;
+    return { ok: true, raw: text };
   }
   if (payload?.ok === false) throw new Error(payload.error || "Agent Link post failed");
+  return payload || { ok: true };
 }
 
 main().catch((error) => {

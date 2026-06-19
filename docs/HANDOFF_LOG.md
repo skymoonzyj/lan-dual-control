@@ -19,6 +19,34 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac 手工体验 USER_AWAKE 显式 sendCall
+开发端：Mac Codex
+本轮目标：把上一轮生成的 `ManualUxCallCommand=` 再收口成可自动发送的安全入口，避免白天手工复制 call 文本，同时继续保护通讯板上其他 active call。
+完成内容：
+- `check-mac-manual-ux-status` 新增显式 `--sendCall`，只有 `MacManualUx=status=call-ready` 时才尝试发送。
+- `--sendCall` 会把当前 `/api/state.currentCall` 记录为 `boardCallBeforeSend`；若当前 active call 不是匹配的 `USER_AWAKE` / 手工体验 call，则 fail-closed，不覆盖对方任务。
+- 发送 payload 固定为 Mac manual UX validation：协作对象 `Windows Codex, User`，验收清单包含 connection/video/audio/clipboard/file/window/fullscreen/original/copy diagnostics，ask 里明确预计 5-10 分钟且不请求凭据、不发送远端输入命令。
+- JSON/boardSummary 成功时输出 `sentCall.ok=true` / `ManualUxCallSent=true`；非 call-ready、其他 active call 或通讯板拒绝时返回 JSON 错误并非零退出。
+修改文件：
+- `scripts/mac/check-mac-manual-ux-status.mjs`
+- `scripts/mac/test-mac-manual-ux-status.mjs`
+- `docs/04-task-board.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-manual-ux-status.mjs --timeoutMs 20000` 先失败，help 缺少 `--sendCall`。
+- 绿灯：同一测试通过，覆盖 `USER_AWAKE --sendCall` 发送一条无密 `/api/call`、非 call-ready 拒绝发送、其他 active call 拒绝覆盖。
+遗留问题：
+- 本轮只用假通讯板验证发送路径；真实通讯板是否立刻发起手工体验 call，应在推送后看当前 call 是否仍是 `USER_AWAKE` 再显式运行 `--sendCall --json`。
+下一步建议：
+- 若当前 Agent Link Board 仍是 `USER_AWAKE` 且用户/Windows 可以配合，Mac 端可运行 `node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --sendCall --json` 发起明确手工体验 call；否则继续只跑 `--boardSummary` / `--sendStatus --sendMessage`。
+是否改了协议：否。
+是否需要另一端配合：Windows 端只需读取新的 explicit manual UX call；无须修改 Windows 端代码。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac 手工体验 USER_AWAKE call 计划
 开发端：Mac Codex
 本轮目标：当前 Agent Link Board 已有 `USER_AWAKE` 呼叫，要求用户操作前先说明目标、安全边界和预计耗时；让 Mac 手工体验第一屏直接给出无密 call 计划，而不是继续只显示 waiting。
