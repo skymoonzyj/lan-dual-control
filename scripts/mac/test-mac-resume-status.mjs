@@ -220,6 +220,9 @@ function assertBoardSummaryShape(text, label) {
   assert(/start-mac-client\.mjs/.test(text), `${label} should include the Mac client page status command`);
   assert(/MacClientDiagnostics=/.test(text), `${label} should include Mac client diagnostics guidance`);
   assert(/check-mac-client-readiness\.mjs/.test(text), `${label} should include the Mac client readiness command`);
+  assert(/MacClientManualChecklist=/.test(text), `${label} should include Mac client manual checklist guidance`);
+  assert(/MacClientManualChecklist=.*手工清单/.test(text), `${label} should mention the Mac client manual checklist`);
+  assert(/MacClientManualChecklist=.*连接\/视频\/音频\/剪贴板\/input_ack\/诊断/.test(text), `${label} should include the Mac client manual checklist items`);
   assert(/CopyDiagnostics=Mac client 事件日志点击/.test(text), `${label} should include Mac client copy diagnostics action`);
   assert(/MacClientDiscoverWindows=/.test(text), `${label} should include Mac client Windows discovery guidance`);
   assert(/discover-windows-hosts\.mjs/.test(text), `${label} should include the Mac client Windows discovery command`);
@@ -512,6 +515,18 @@ function assertMacClientReverseRehearsalAction(text, label) {
   assert(!String(text || "").includes("inject"), `${label} should not instruct injection`);
 }
 
+function assertMacClientManualChecklistAction(text, label) {
+  assert(String(text || "").includes("手工清单"), `${label} should mention the manual checklist`);
+  assert(String(text || "").includes("连接/视频/音频/剪贴板/input_ack/诊断"), `${label} should include the manual checklist items`);
+  assert(String(text || "").includes("复制诊断"), `${label} should mention copy diagnostics`);
+  assert(String(text || "").includes("连接密码"), `${label} should mention password safety`);
+  assert(!String(text || "").includes("LAN_DUAL_PASSWORD"), `${label} should not mention password env vars`);
+  assert(!String(text || "").includes("--password"), `${label} should not embed a password argument`);
+  assert(!String(text || "").includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!String(text || "").includes("input_event"), `${label} should not mention input events`);
+  assert(!String(text || "").includes("LAN_DUAL_INPUT_MODE=inject"), `${label} should not instruct injection mode`);
+}
+
 function assertMacClientFormalChecklistCommand(command, label) {
   assert(/check-mac-client-formal-status\.mjs/.test(command), `${label} should use check-mac-client-formal-status`);
   assert(command.includes("--discover"), `${label} should discover Windows hosts safely`);
@@ -715,6 +730,7 @@ function checkHelp(args) {
     assert(/commands\.macMaxFpsPlanCommand/.test(result.stdout), `${script} ${flag} should document Mac max-FPS planner JSON field`);
     assert(/commands\.macClientDiagnosticsCommand/.test(result.stdout), `${script} ${flag} should document Mac client diagnostics JSON field`);
     assert(/commands\.macClientPageStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac client page status JSON field`);
+    assert(/commands\.macClientManualChecklistAction/.test(result.stdout), `${script} ${flag} should document Mac client manual checklist JSON field`);
     assert(/commands\.macClientDiscoverWindowsCommand/.test(result.stdout), `${script} ${flag} should document Mac client Windows discovery JSON field`);
     assert(/commands\.macClientFormalChecklistCommand/.test(result.stdout), `${script} ${flag} should document Mac client formal checklist JSON field`);
     assert(/commands\.macClientFormalSmokeCommand/.test(result.stdout), `${script} ${flag} should document Mac client formal smoke preflight JSON field`);
@@ -793,6 +809,7 @@ function checkOfflineJson(args) {
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand || "", "offline JSON Mac max-FPS planner command");
   assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "offline JSON Mac client page status command");
   assertMacClientDiagnosticsCommand(payload.commands?.macClientDiagnosticsCommand || "", "offline JSON Mac client diagnostics command");
+  assertMacClientManualChecklistAction(payload.commands?.macClientManualChecklistAction || "", "offline JSON Mac client manual checklist action");
   assertMacClientDiscoverWindowsCommand(payload.commands?.macClientDiscoverWindowsCommand || "", "offline JSON Mac client Windows discovery command");
   assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "offline JSON Mac client reverse rehearsal action");
   assertMacClientFormalChecklistCommand(payload.commands?.macClientFormalChecklistCommand || "", "offline JSON Mac client formal checklist command");
@@ -873,6 +890,7 @@ function checkOfflinePlainReport(args) {
   ]);
   assert(result.status === 0, "offline plain report should stay non-failing without requireOnline");
   assert(String(result.stdout || "").includes("Mac client diagnostics:"), "plain report should include Mac client diagnostics label");
+  assert(String(result.stdout || "").includes("Mac client manual checklist:"), "plain report should include Mac client manual checklist label");
   assert(String(result.stdout || "").includes("Mac formal local smoke:"), "plain report should include Mac formal local smoke label");
   assert(String(result.stdout || "").includes("Mac formal E2E preflight:"), "plain report should include Mac formal E2E preflight label");
   assert(String(result.stdout || "").includes("Mac 60Hz safe foreground start:"), "plain report should include Mac foreground 60Hz safe start label");
@@ -907,6 +925,8 @@ function checkOfflinePlainReport(args) {
   assert(String(result.stdout || "").includes("Mac heartbeat watcher:"), "plain report should include Mac heartbeat watcher status");
   assert(String(result.stdout || "").includes("start-mac-client.mjs"), "plain report should include Mac client page status command");
   assert(String(result.stdout || "").includes("check-mac-client-readiness.mjs"), "plain report should include Mac client readiness command");
+  assert(String(result.stdout || "").includes("手工清单"), "plain report should mention the Mac client manual checklist");
+  assert(String(result.stdout || "").includes("连接/视频/音频/剪贴板/input_ack/诊断"), "plain report should include the Mac client manual checklist items");
   assert(String(result.stdout || "").includes("discover-windows-hosts.mjs"), "plain report should include Mac client Windows discovery command");
   assert(String(result.stdout || "").includes("ReverseRehearsal="), "plain report should point to discovery ReverseRehearsal output");
   assert(String(result.stdout || "").includes("check-mac-client-formal-status.mjs"), "plain report should include Mac client formal checklist command");
@@ -984,6 +1004,7 @@ function checkOnlineJson(args) {
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand || "", "online JSON Mac max-FPS planner command");
   assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "online JSON Mac client page status command");
   assertMacClientDiagnosticsCommand(payload.commands?.macClientDiagnosticsCommand || "", "online JSON Mac client diagnostics command");
+  assertMacClientManualChecklistAction(payload.commands?.macClientManualChecklistAction || "", "online JSON Mac client manual checklist action");
   assertMacClientDiscoverWindowsCommand(payload.commands?.macClientDiscoverWindowsCommand || "", "online JSON Mac client Windows discovery command");
   assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "online JSON Mac client reverse rehearsal action");
   assertMacClientFormalChecklistCommand(payload.commands?.macClientFormalChecklistCommand || "", "online JSON Mac client formal checklist command");

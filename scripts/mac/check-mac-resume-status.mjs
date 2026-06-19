@@ -238,6 +238,11 @@ Machine-readable JSON fields:
   commands.macClientPageStatusCommand
                              Secret-free local Mac client page status command;
                              it does not start the page or connect to Windows.
+  commands.macClientManualChecklistAction
+                             User-visible Mac client manual checklist action;
+                             it points to the page session diagnostics row and
+                             reminds the user to verify copied diagnostics do
+                             not include a connection password.
   commands.macClientDiscoverWindowsCommand
                              Secret-free Windows host discovery command from
                              the Mac side; it does not authenticate or send
@@ -1563,6 +1568,10 @@ function makeMacClientPageStatusCommand() {
   return "node scripts/mac/start-mac-client.mjs --status --boardSummary";
 }
 
+function makeMacClientManualChecklistAction() {
+  return "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
+}
+
 function makeMacClientDiscoverWindowsCommand() {
   return "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary";
 }
@@ -2056,7 +2065,7 @@ function formatBoardSummary(report) {
       `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
       `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
       `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
-      `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
+      `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; MacClientManualChecklist=${report.commands.macClientManualChecklistAction}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
       `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
       `MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}.`,
       `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
@@ -2113,7 +2122,7 @@ function formatBoardSummary(report) {
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
     `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
     `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
-    `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
+    `MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}; MacClientManualChecklist=${report.commands.macClientManualChecklistAction}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}.`,
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
     `MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}.`,
     `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
@@ -2237,6 +2246,7 @@ function printReport(report) {
   console.log(`[NEXT] Mac max FPS dry-run plan: ${report.commands.macMaxFpsPlanCommand}`);
   console.log(`[NEXT] Mac client page status: ${report.commands.macClientPageStatusCommand}`);
   console.log(`[NEXT] Mac client diagnostics: ${report.commands.macClientDiagnosticsCommand}`);
+  console.log(`[NEXT] Mac client manual checklist: ${report.commands.macClientManualChecklistAction}`);
   console.log(`[NEXT] Mac client discover Windows host: ${report.commands.macClientDiscoverWindowsCommand}`);
   console.log(`[NEXT] Mac client reverse rehearsal: ${report.commands.macClientReverseRehearsalAction}`);
   console.log(`[NEXT] Mac client formal checklist: ${report.commands.macClientFormalChecklistCommand}`);
@@ -2318,6 +2328,7 @@ async function main() {
       macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
       macClientPageStatusCommand: makeMacClientPageStatusCommand(),
       macClientDiagnosticsCommand: makeMacClientDiagnosticsCommand(),
+      macClientManualChecklistAction: makeMacClientManualChecklistAction(),
       macClientDiscoverWindowsCommand: makeMacClientDiscoverWindowsCommand(),
       macClientReverseRehearsalAction: makeMacClientReverseRehearsalAction(),
       macClientFormalChecklistCommand: makeMacClientFormalChecklistCommand(),

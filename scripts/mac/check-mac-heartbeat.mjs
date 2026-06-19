@@ -172,6 +172,7 @@ Machine-readable JSON fields:
                               Mac media baseline, the local Mac client mock
                               browser self-test, Mac script help safety check,
                               the user-run prompt-password Mac client smoke,
+                              macClientManualChecklistAction,
                               60Hz safe start, LaunchAgent load/print checks,
                               MacUnattendedSendStatus,
                               macHeartbeatRefreshRestartCommand,
@@ -880,6 +881,7 @@ function buildCommands(args) {
     macLaunchAgentPrintCommand: `launchctl print gui/$(id -u)/${shellQuote(launchAgentLabel)}`,
     macClientPageStatusCommand: "node scripts/mac/start-mac-client.mjs --status --boardSummary",
     macClientDiagnosticsCommand: "node scripts/mac/check-mac-client-readiness.mjs --probeClientServer --checkBoard --boardSummary",
+    macClientManualChecklistAction: makeMacClientManualChecklistAction(),
     macFormalLocalSmokeCommand: `node scripts/mac/check-mac-formal-local-smoke.mjs --host ${args.host} --port ${args.port} --promptPassword --boardSummary`,
     macFormalE2eStatusCommand: `node scripts/mac/check-mac-formal-e2e-status.mjs --host ${args.host} --port ${args.port} --boardSummary`,
     macClientDiscoverWindowsCommand: "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary",
@@ -889,6 +891,10 @@ function buildCommands(args) {
     macClientBrowserSelfTestCommand: "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary",
     macScriptHelpCommand: "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary",
   };
+}
+
+function makeMacClientManualChecklistAction() {
+  return "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
 }
 
 function buildFindings(args, { macHost, macClient, board, codex }) {
@@ -1111,6 +1117,7 @@ function makeBoardSummary(report) {
     `MacLaunchAgentPrint=${report.commands.macLaunchAgentPrintCommand}.`,
     `MacClientPage=${report.commands.macClientPageStatusCommand}.`,
     `MacClientDiagnostics=${report.commands.macClientDiagnosticsCommand}.`,
+    `MacClientManualChecklist=${report.commands.macClientManualChecklistAction}.`,
     `MacFormalLocalSmoke=${report.commands.macFormalLocalSmokeCommand}.`,
     `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
