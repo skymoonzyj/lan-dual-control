@@ -1483,6 +1483,81 @@ async function checkUsableEntryCallUsesManualUxPath(args) {
   print("OK", "Usable-entry currentCall keeps Mac resume on manual UX path");
 }
 
+async function checkBoardMacManualUxSummary(args) {
+  const reconfirmCommand = "node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --reconfirmCall --json";
+  const macManualUxSummary = `MacManualUx=status=calling ManualUxChecklist=${manualUxChecklist} ManualUxLabels=连接/画面/声音/剪贴板/文件/窗口/全屏/原画/复制诊断 Signals=manualChecklist,manualUxCallInProgress Target=unknown Next=ReconfirmManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxReconfirmCommand=${reconfirmCommand} ManualUxCall=timeout ManualUxCallAgeMs=660000 ManualUxCallOverdueMs=60000 warnings=manual-ux-call-timeout`;
+  await withFakeBoard(null, async (server) => {
+    const result = run(args, [
+      "--json",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--timeoutMs",
+      "1200",
+    ]);
+    assert(result.status === 0, `MacManualUx summary JSON should stay non-failing\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "MacManualUx summary resume status");
+    assert(payload.board?.macManualUx?.status === "calling", "MacManualUx JSON should expose calling status");
+    assert(payload.board.macManualUx.next === "ReconfirmManualUxCall", "MacManualUx JSON should expose next action");
+    assert(payload.board.macManualUx.manualUxCall === "timeout", "MacManualUx JSON should expose timeout call state");
+    assert(payload.board.macManualUx.manualUxReconfirmCommand === reconfirmCommand, "MacManualUx JSON should expose the safe reconfirm command");
+    assert(String(payload.boardSummary || "").includes("MacManualUx=status=calling"), "board summary should expose MacManualUx current status");
+    assert(String(payload.boardSummary || "").includes("ManualUxReconfirmCommand="), "board summary should expose the safe reconfirm command label");
+    assert(String(payload.boardSummary || "").includes("--reconfirmCall"), "board summary should keep the reconfirm flag visible");
+    assertNoPasswordLeak(result, "MacManualUx summary JSON");
+  }, {
+    statuses: {
+      "Mac Manual UX": {
+        status: "manual-ux-calling",
+        role: "Mac 端",
+        note: macManualUxSummary,
+      },
+      "Mac Codex": {
+        status: "idle",
+        role: "Mac 端",
+        note: "Mac 端空闲，没有重复手工体验摘要。",
+      },
+    },
+    events: [],
+  });
+
+  const unsafeMacManualUxSummary = `MacManualUx=status=calling ManualUxChecklist=${manualUxChecklist} ManualUxLabels=连接/画面/声音/剪贴板/文件/窗口/全屏/原画/复制诊断 Signals=manualChecklist Target=unknown Next=ReconfirmManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxReconfirmCommand=${reconfirmCommand} --password leaked ManualUxCall=timeout warnings=manual-ux-call-timeout`;
+  await withFakeBoard(null, async (server) => {
+    const result = run(args, [
+      "--json",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--timeoutMs",
+      "1200",
+    ]);
+    assert(result.status === 0, `unsafe MacManualUx summary JSON should stay non-failing\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "unsafe MacManualUx summary resume status");
+    assert(!payload.board?.macManualUx, "unsafe MacManualUx summary should not be promoted");
+    assert(!String(payload.boardSummary || "").includes("MacManualUx=status=calling"), "unsafe board summary should not expose MacManualUx");
+    assert(!String(result.stdout || "").includes("--password leaked"), "unsafe output should not echo password-like reconfirm text");
+    assertNoPasswordLeak(result, "unsafe MacManualUx summary JSON");
+  }, {
+    statuses: {
+      "Mac Manual UX": {
+        status: "manual-ux-calling",
+        role: "Mac 端",
+        note: unsafeMacManualUxSummary,
+      },
+    },
+    events: [],
+  });
+  print("OK", "Agent Link Board MacManualUx summary is surfaced safely");
+}
+
 async function checkBoardMacEvidence(args) {
   const cleanHeartbeat = "MacHeartbeat=status=ok; checkedAt=2026-06-19T04:54:22.847Z; device=Mac; macHost=online 127.0.0.1:43770; macClient=online http://127.0.0.1:5188/; board=ok call=none; blockers=none warnings=none reason=ok. Evidence=MacClientPageOnline,MacClientDiagnosticsOk.";
   await withFakeBoard(null, async (server) => {
@@ -1796,6 +1871,7 @@ async function main() {
   await checkBoardCurrentCall(args);
   await checkPostPassManualUxStandby(args);
   await checkUsableEntryCallUsesManualUxPath(args);
+  await checkBoardMacManualUxSummary(args);
   await checkBoardMacEvidence(args);
   await checkBoardMacPowerHealth(args);
   await checkBoardDoneCall(args);
