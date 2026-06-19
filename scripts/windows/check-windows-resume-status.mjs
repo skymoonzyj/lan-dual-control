@@ -574,6 +574,21 @@ function emptyMacInputSafety(source = "none", textCount = 0, rejectedCount = 0) 
   };
 }
 
+function emptyMacRemoteAudio(source = "none", textCount = 0, rejectedCount = 0) {
+  return {
+    found: false,
+    source,
+    textCount,
+    rejectedCount,
+    status: "",
+    capture: "",
+    remoteOnlyOptions: [],
+    recommended: "",
+    safety: [],
+    summary: "not-seen",
+  };
+}
+
 function emptyMacHeartbeatFreshness(source = "none", textCount = 0) {
   return {
     present: false,
@@ -1583,6 +1598,106 @@ function extractMacInputSafetyFromBoardState(state) {
 function extractMacInputSafetyFromText(text, source = "text") {
   const value = String(text || "");
   return extractMacInputSafetyFromTexts(value ? [value] : [], source);
+}
+
+const macRemoteAudioAllowedOptions = new Set(["manual-mute-restore", "virtual-output-device", "product-toggle"]);
+const macRemoteAudioAllowedSafety = new Set(["no-volume-change", "no password/input/inject"]);
+
+function splitMacRemoteAudioSegments(text) {
+  const value = String(text || "");
+  const matches = [...value.matchAll(/\bMac remote audio plan\s*:/gi)];
+  return matches.map((match, index) => {
+    const start = match.index || 0;
+    const end = index + 1 < matches.length ? matches[index + 1].index || value.length : value.length;
+    return value.slice(start, end);
+  });
+}
+
+function extractMacRemoteAudioField(segment, fieldName) {
+  const escaped = String(fieldName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = String(segment || "").match(new RegExp(`\\b${escaped}\\s*=\\s*([^;.]+)`, "i"));
+  return match ? stripCommandToken(match[1]).trim().replace(/[.]+$/g, "") : "";
+}
+
+function hasUnsafeMacRemoteAudioSummaryValue(value) {
+  const text = String(value || "");
+  return /--(?:password|token|secret|passwd|pwd)\b/i.test(text) ||
+    /\b(?:password|token|secret|passwd|pwd)\s*=/i.test(text) ||
+    /\bsecret-value\b/i.test(text);
+}
+
+function parseMacRemoteAudioSegment(segment, source = "text") {
+  const value = String(segment || "");
+  if (hasUnsafeMacRemoteAudioSummaryValue(value)) return null;
+
+  const status = extractMacRemoteAudioField(value, "status");
+  const capture = extractMacRemoteAudioField(value, "capture");
+  const remoteOnlyOptionsRaw = extractMacRemoteAudioField(value, "RemoteOnlyOptions");
+  const recommended = extractMacRemoteAudioField(value, "recommended");
+  const safetyRaw = extractMacRemoteAudioField(value, "safety");
+  const remoteOnlyOptions = remoteOnlyOptionsRaw.split("/").map((item) => item.trim()).filter(Boolean);
+  const safety = safetyRaw.split(",").map((item) => item.trim()).filter(Boolean);
+  const validOptions = remoteOnlyOptions.length === macRemoteAudioAllowedOptions.size &&
+    remoteOnlyOptions.every((item) => macRemoteAudioAllowedOptions.has(item)) &&
+    [...macRemoteAudioAllowedOptions].every((item) => remoteOnlyOptions.includes(item));
+  const validSafety = safety.length === macRemoteAudioAllowedSafety.size &&
+    safety.every((item) => macRemoteAudioAllowedSafety.has(item)) &&
+    [...macRemoteAudioAllowedSafety].every((item) => safety.includes(item));
+
+  if (
+    status !== "plan-only" ||
+    capture !== "system-pcm-does-not-mute-local" ||
+    !validOptions ||
+    recommended !== "product-toggle-with-explicit-consent" ||
+    !validSafety
+  ) {
+    return null;
+  }
+
+  const summary = `status=${status} capture=${capture} remoteOnlyOptions=${remoteOnlyOptions.join("/")} recommended=${recommended} safety=${safety.join(",")}`;
+  return {
+    found: true,
+    source,
+    status,
+    capture,
+    remoteOnlyOptions,
+    recommended,
+    safety,
+    summary,
+  };
+}
+
+function extractMacRemoteAudioFromTexts(texts, source = "text") {
+  let selected = null;
+  let segmentCount = 0;
+  let rejectedCount = 0;
+  for (const text of texts) {
+    for (const segment of splitMacRemoteAudioSegments(text)) {
+      segmentCount += 1;
+      const parsed = parseMacRemoteAudioSegment(segment, source);
+      if (!parsed) {
+        rejectedCount += 1;
+        continue;
+      }
+      selected = parsed;
+    }
+  }
+  if (!selected) return emptyMacRemoteAudio(source, texts.length, rejectedCount);
+  return {
+    ...selected,
+    textCount: texts.length,
+    segmentCount,
+    rejectedCount,
+  };
+}
+
+function extractMacRemoteAudioFromBoardState(state) {
+  return extractMacRemoteAudioFromTexts(collectStringValues(state), "api-state");
+}
+
+function extractMacRemoteAudioFromText(text, source = "text") {
+  const value = String(text || "");
+  return extractMacRemoteAudioFromTexts(value ? [value] : [], source);
 }
 
 function parseMacClientFormalChecklistCommand(fragment) {
@@ -2829,6 +2944,7 @@ async function getBoardSnapshot(args) {
       macClientFormalChecklist: emptyMacSafeStart("skipped"),
       macClientFormalSmoke: emptyMacSafeStart("skipped"),
       macRemoteAudioPlan: emptyMacSafeStart("skipped"),
+      macRemoteAudio: emptyMacRemoteAudio("skipped"),
       macInputSafetyPlan: emptyMacSafeStart("skipped"),
       macInputSafety: emptyMacInputSafety("skipped"),
       macHeartbeatOnce: emptyMacSafeStart("skipped"),
@@ -2869,6 +2985,7 @@ async function getBoardSnapshot(args) {
       macClientFormalChecklist: extractMacClientFormalChecklistFromBoardState(stateResult.state),
       macClientFormalSmoke: extractMacClientFormalSmokeFromBoardState(stateResult.state),
       macRemoteAudioPlan: extractMacRemoteAudioPlanFromBoardState(stateResult.state),
+      macRemoteAudio: extractMacRemoteAudioFromBoardState(stateResult.state),
       macInputSafetyPlan: extractMacInputSafetyPlanFromBoardState(stateResult.state),
       macInputSafety: extractMacInputSafetyFromBoardState(stateResult.state),
       macHeartbeatOnce: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatOnce", "once"),
@@ -2914,6 +3031,7 @@ async function getBoardSnapshot(args) {
     macClientFormalChecklist: extractMacClientFormalChecklistFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macClientFormalSmoke: extractMacClientFormalSmokeFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macRemoteAudioPlan: extractMacRemoteAudioPlanFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    macRemoteAudio: extractMacRemoteAudioFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macInputSafetyPlan: extractMacInputSafetyPlanFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macInputSafety: extractMacInputSafetyFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatOnce: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatOnce", "once", result.ok ? "codex-link-client" : "unavailable"),
@@ -3862,6 +3980,9 @@ function makeBoardSummary(report) {
     `MacClientFormalChecklist=${macClientFormalChecklistCommand}.`,
     `MacClientFormalSmoke=${macClientFormalSmokeCommand}.`,
     `MacRemoteAudioPlan=${macRemoteAudioPlanCommand}.`,
+    ...(report.board.macRemoteAudio?.found
+      ? [`MacRemoteAudio=${report.board.macRemoteAudio.summary}.`]
+      : []),
     `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`,
     ...(report.board.macInputSafety?.found
       ? [`MacInputSafety=${report.board.macInputSafety.summary}.`]
@@ -4179,6 +4300,9 @@ function printHuman(report) {
     if (report.board.macRemoteAudioPlan?.command) {
       console.log(`  MacRemoteAudioPlan=${report.board.macRemoteAudioPlan.command}`);
     }
+    if (report.board.macRemoteAudio?.found) {
+      console.log(`  MacRemoteAudio=${report.board.macRemoteAudio.summary}`);
+    }
     if (report.board.macInputSafetyPlan?.command) {
       console.log(`  MacInputSafetyPlan=${report.board.macInputSafetyPlan.command}`);
     }
@@ -4265,6 +4389,9 @@ function printHuman(report) {
   console.log(`  MacClientFormalChecklist=${report.board.macClientFormalChecklist?.command || report.commands.macClientFormalChecklistCommand}`);
   console.log(`  MacClientFormalSmoke=${report.board.macClientFormalSmoke?.command || report.commands.macClientFormalSmokeCommand}`);
   console.log(`  MacRemoteAudioPlan=${report.board.macRemoteAudioPlan?.command || report.commands.macRemoteAudioPlanCommand}`);
+  if (report.board.macRemoteAudio?.found) {
+    console.log(`  MacRemoteAudio=${report.board.macRemoteAudio.summary}`);
+  }
   console.log(`  MacInputSafetyPlan=${report.board.macInputSafetyPlan?.command || report.commands.macInputSafetyPlanCommand}`);
   if (report.board.macInputSafety?.found) {
     console.log(`  MacInputSafety=${report.board.macInputSafety.summary}`);

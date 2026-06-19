@@ -192,6 +192,39 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 恢复总览消费 Mac remote audio 摘要
+开发端：Windows Codex
+本轮目标：让 Windows 开工第一屏不只看到 `MacRemoteAudioPlan=` 命令，也能安全读懂 Mac 端实际输出的 `Mac remote audio plan:` 摘要。
+完成内容：
+- 新增 `Mac remote audio plan:` 白名单解析，JSON `board.macRemoteAudio`、普通输出和 `--boardSummary` 会显示 `MacRemoteAudio=status=plan-only capture=system-pcm-does-not-mute-local remoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle recommended=product-toggle-with-explicit-consent safety=no-volume-change,no password/input/inject`。
+- 摘要只接受 plan-only、不会自动静音本机、三条白名单 remote-only 路线、产品开关且用户显式同意路线、no-volume-change / no password/input/inject 安全边界。
+- 拒绝 `auto-mute`、`password=`、`--password`、secret/token 或非白名单 safety/route 候选；只读通讯板，不运行 Mac 脚本。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 先失败在 `Mac remote audio summary should be found in board state`。
+- 红灯：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000` 先失败在 `PowerShell Mac remote audio summary should be found`。
+- 绿灯：`node --check scripts/windows/check-windows-resume-status.mjs`
+- 绿灯：`node --check scripts/windows/test-windows-resume-status.mjs`
+- 绿灯：`node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- 绿灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 绿灯：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- remote-only audio 仍只是方案摘要；真正切换为远端独占声音必须等用户明确同意后另行实现产品开关或虚拟输出路线。
+下一步建议：
+- 开工第一屏继续跑 `check-windows-resume-status --checkBoard --boardSummary`；看到 `MacRemoteAudio=` 时按只读安全方案理解，不要把它当作已经改变 Mac 本机声音。
+是否改了协议：否。
+是否需要另一端配合：短期不需要；后续落地 remote-only audio 时需要 Mac 端和用户明确确认。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 恢复总览消费 MacRemoteAudioPlan
 开发端：Windows Codex
 本轮目标：让 Windows 开工第一屏只读消费 Mac 远端独占声音方案，不打开控制页也能看到当前只是安全方案提示、不会自动静音 Mac 本机。
