@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac formal E2E readiness 的正向证据来源更稳，不依赖证据一定出现在 recent event。
+完成内容：
+- `check-mac-formal-e2e-status` 的 `evidence[]` / `Evidence=` 现在除了读取 Agent Link Board recent lines，也会只读读取 `/api/state.statuses` 当前状态 note。
+- 当 `MacHostMedia passed=12/12 media=ok` 或 `MacFormalLocalSmoke H.264/PCM/input-log ... injected=false` 只存在于当前 status 中时，也会归一化显示为 `MacHostMedia ok` / `MacFormalLocalSmoke ok`。
+- 新增 fake board status-only 测试，确认没有相关 event 时仍能输出证据；输出仍不回显原始 status 文本，不改变 warning/blocker/readyToCall 判定。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增 status-only fake board 用例后，`node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 30000` 失败在 `MacHostMedia evidence as ok`。
+- 绿灯：实现 current statuses 读取后，`node --check scripts/mac/check-mac-formal-e2e-status.mjs`、`node --check scripts/mac/test-mac-formal-e2e-status.mjs`、`node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 30000` 通过。
+遗留问题：
+- 本轮仍只做无密只读证据提取，不主动运行媒体基线、本机 smoke、真实认证或正式 Windows 端验收。
+下一步建议：
+- Windows 端消费 `Evidence=` 时，可以把 Mac 当前 status note 中保留的正向证据也视为来源稳定；若同段 warning/blocker 非空，仍按风险摘要继续排查。
+是否改了协议：否；只加强 Mac 状态脚本本地证据提取。
+是否需要另一端配合：不需要；Windows 正在消费同名 `Evidence=` 字段，本轮保持字段形态不变。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac formal E2E readiness 直接输出 Agent Link Board 上的正向验证证据，避免只看到 warning 时误读状态。
 完成内容：
 - `check-mac-formal-e2e-status` 新增 JSON `evidence[]`：从通讯板 recent lines 里识别 `MacHostMedia passed=12/12 media=ok` 和 `MacFormalLocalSmoke H.264/PCM/input-log ... injected=false`，归一化为 `MacHostMedia ok` / `MacFormalLocalSmoke ok`。

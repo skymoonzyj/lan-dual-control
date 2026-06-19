@@ -466,11 +466,63 @@ function formatChecklistFindings(checklist) {
   return `blockers=${blockers} warnings=${warnings}`;
 }
 
-function collectBoardValidationEvidence(resume) {
+function collectBoardStatusEvidenceLines(args, resume) {
+  if (args.skipBoard || resume?.board?.checked !== true || resume?.board?.ok !== true) {
+    return [];
+  }
+  const stateReader = `
+const server = process.argv[1];
+const timeoutMs = Number(process.argv[2] || 5000);
+const token = process.env.CODEX_LINK_TOKEN || "";
+const controller = new AbortController();
+const timer = setTimeout(() => controller.abort(), timeoutMs);
+try {
+  const response = await fetch(new URL("/api/state", server), {
+    cache: "no-store",
+    signal: controller.signal,
+    headers: token ? { "X-Codex-Link-Token": token } : {},
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(response.status + ": " + text);
+  console.log(text || "{}");
+} finally {
+  clearTimeout(timer);
+}
+`;
+  const result = spawnSync(process.execPath, [
+    "-e",
+    stateReader,
+    args.server,
+    String(Math.max(args.timeoutMs + 2000, 5000)),
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: Math.max(args.timeoutMs + 2000, 5000),
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  if (result.status !== 0) return [];
+  try {
+    const state = JSON.parse(String(result.stdout || "{}"));
+    return Object.entries(state.statuses || {})
+      .map(([device, item]) => [
+        device,
+        item?.role,
+        item?.status,
+        item?.note,
+      ].map(normalizedText).filter(Boolean).join(" "))
+      .filter(Boolean)
+      .slice(-20);
+  } catch {
+    return [];
+  }
+}
+
+function collectBoardValidationEvidence(resume, args) {
   const recentLines = Array.isArray(resume?.board?.recentLines)
     ? resume.board.recentLines
     : [];
-  const text = splitLines(recentLines.join("\n")).join(" ");
+  const statusLines = collectBoardStatusEvidenceLines(args, resume);
+  const text = splitLines([...recentLines, ...statusLines].join("\n")).join(" ");
   const evidence = [];
   if (/(MacHostMedia|Mac host media|media baseline)[\s\S]{0,220}(passed=12\/12|media=ok|passed|ok)/i.test(text)) {
     evidence.push({
@@ -1094,7 +1146,7 @@ function buildReport(args) {
   const resume = runResumeStatus(args);
   const checklist = buildChecklist(resume, args);
   const counts = summarizeCounts(checklist);
-  const evidence = collectBoardValidationEvidence(resume);
+  const evidence = collectBoardValidationEvidence(resume, args);
   const boardReady = !args.skipBoard && resume.board?.checked === true && resume.board?.ok === true;
   const readyToCall = counts.blockers === 0 && boardReady;
   const report = {
