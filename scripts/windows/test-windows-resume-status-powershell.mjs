@@ -1122,11 +1122,12 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const macRemoteAudioPlanCommand = "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary";
   const macInputSafetyPlanCommand = "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
   const macManualUxStatusCommand = "node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary";
+  const macManualUxReconfirmCommand = "node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --reconfirmCall --json";
   const macManualUxChecklist = "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
-  const macManualUxSummary = `status=calling checklist=${macManualUxChecklist} labels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 signals=manualUxCallInProgress target=192.168.31.122:43770 next=ReconfirmManualUxCall safety=no-password,no-input-inject noFormalE2ERerun=true manualUxCall=timeout gate=wait-windows-codex-push callCommand=absent blockers=none warnings=manual-ux-call-timeout`;
+  const macManualUxSummary = `status=calling checklist=${macManualUxChecklist} labels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 signals=manualUxCallInProgress target=192.168.31.122:43770 next=ReconfirmManualUxCall safety=no-password,no-input-inject noFormalE2ERerun=true manualUxCall=timeout gate=wait-windows-codex-push callCommand=absent reconfirmCommand=present blockers=none warnings=manual-ux-call-timeout`;
   const macManualUxAckTimeoutSummary = "status=blocked reason=manual-ux-call-timeout next=AskMacReconfirmManualUxCall";
   const macManualUxBoardText = `MacManualUx=status=call-ready ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=userAwakeManualUx Target=192.168.31.122:43770 Next=SendManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxCallCommand=node scripts/codex-link-client.mjs --server http://192.168.31.68:17888 call --from MacCodex --need WindowsCodex`;
-  const macManualUxCallingBoardText = `MacManualUx=status=calling ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=manualUxCallInProgress Target=192.168.31.122:43770 Next=ReconfirmManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxCall=timeout MacManualUxGate=wait-windows-codex-push warnings=manual-ux-call-timeout`;
+  const macManualUxCallingBoardText = `MacManualUx=status=calling ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=manualUxCallInProgress Target=192.168.31.122:43770 Next=ReconfirmManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxReconfirmCommand=${macManualUxReconfirmCommand} ManualUxCall=timeout MacManualUxGate=wait-windows-codex-push warnings=manual-ux-call-timeout`;
   const macRemoteAudioSummary = "status=plan-only capture=system-pcm-does-not-mute-local remoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle recommended=product-toggle-with-explicit-consent safety=no-volume-change,no password/input/inject";
   const macRemoteAudioBoardText = "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject.";
   const macInputSafetySummary = "status=plan-only default=log realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe safety=no-password,no-input-events,no-inject";
@@ -1284,6 +1285,11 @@ async function checkBoardMacHostSafeStartExtraction(args) {
           text: "MacManualUx=status=armed ManualUxChecklist=connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics Safety=no-password,no-input-inject",
         },
         {
+          type: "message",
+          from: "Mac Codex",
+          text: `MacManualUx=status=calling ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=manualUxCallInProgress Target=192.168.31.122:43770 Next=ReconfirmManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxReconfirmCommand=${macManualUxReconfirmCommand} --password secret-value ManualUxCall=timeout warnings=manual-ux-call-timeout`,
+        },
+        {
           type: "status",
           from: "Mac Codex",
           text: macManualUxCallingBoardText,
@@ -1403,7 +1409,9 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board.macManualUx.gate === "wait-windows-codex-push", "PowerShell MacManualUx gate mismatch");
       assert(payload.board.macManualUx.warnings?.includes("manual-ux-call-timeout"), "PowerShell MacManualUx timeout warning should be preserved");
       assert(payload.board.macManualUx.callCommandPresent === false, "PowerShell MacManualUx call command should be absent while call is already active");
-      assert(payload.board.macManualUx.rejectedCount >= 2, "PowerShell unsafe MacManualUx summaries should be rejected");
+      assert(payload.board.macManualUx.reconfirmCommandPresent === true, "PowerShell MacManualUx reconfirm command should be present");
+      assert(payload.board.macManualUx.manualUxReconfirmCommand === macManualUxReconfirmCommand, "PowerShell MacManualUx reconfirm command mismatch");
+      assert(payload.board.macManualUx.rejectedCount >= 3, "PowerShell unsafe MacManualUx summaries should be rejected");
       assert(payload.board?.macManualUxAck?.status === "blocked", "PowerShell timeout MacManualUx should block Windows manual UX ack");
       assert(payload.board.macManualUxAck.summary === macManualUxAckTimeoutSummary, "PowerShell timeout MacManualUx ack summary mismatch");
       assert(payload.board?.macInputSafety?.found === true, "PowerShell Mac input safety summary should be found");
@@ -1445,6 +1453,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(payload.boardSummary, `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`, "PowerShell MacInputSafetyPlan JSON board summary");
       assertIncludes(payload.boardSummary, `MacManualUxStatus=${macManualUxStatusCommand}.`, "PowerShell MacManualUxStatus JSON board summary");
       assertIncludes(payload.boardSummary, `MacManualUx=${macManualUxSummary}.`, "PowerShell MacManualUx JSON board summary");
+      assertIncludes(payload.boardSummary, `MacManualUxReconfirm=${macManualUxReconfirmCommand}.`, "PowerShell MacManualUx reconfirm JSON board summary");
       assertIncludes(payload.boardSummary, `MacManualUxAck=${macManualUxAckTimeoutSummary}.`, "PowerShell MacManualUx timeout ack JSON board summary");
       assertIncludes(payload.boardSummary, `MacInputSafety=${macInputSafetySummary}.`, "PowerShell Mac input safety JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "PowerShell MacHeartbeatOnce JSON board summary");
@@ -1484,6 +1493,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(output, `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`, "PowerShell MacInputSafetyPlan board summary");
       assertIncludes(output, `MacManualUxStatus=${macManualUxStatusCommand}.`, "PowerShell MacManualUxStatus board summary");
       assertIncludes(output, `MacManualUx=${macManualUxSummary}.`, "PowerShell MacManualUx board summary");
+      assertIncludes(output, `MacManualUxReconfirm=${macManualUxReconfirmCommand}.`, "PowerShell MacManualUx reconfirm board summary");
       assertIncludes(output, `MacManualUxAck=${macManualUxAckTimeoutSummary}.`, "PowerShell MacManualUx timeout ack board summary");
       assertIncludes(output, `MacInputSafety=${macInputSafetySummary}.`, "PowerShell Mac input safety board summary");
       assertIncludes(output, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "PowerShell MacHeartbeatOnce board summary");

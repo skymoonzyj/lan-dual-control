@@ -1683,6 +1683,51 @@ function extractMacManualUxField(segment, fieldName) {
   return match ? stripCommandToken(match[1]).replace(/[.]+$/g, "") : "";
 }
 
+function extractMacManualUxCommandField(segment, fieldName) {
+  const escaped = String(fieldName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const boundary = "(?:ManualUxCall|ManualUxCallAgeMs|ManualUxCallRemainingMs|ManualUxCallOverdueMs|MacManualUxGate|ManualUxGate|gate|blockers|warnings)";
+  const match = String(segment || "").match(new RegExp(`\\b${escaped}\\s*=\\s*(.+?)(?=\\s+${boundary}\\s*=|$)`, "i"));
+  return match ? match[1].trim().replace(/[.]+$/g, "") : "";
+}
+
+function isSafeMacManualUxReconfirmCommand(commandText) {
+  const command = String(commandText || "").trim();
+  if (!command || macManualUxSecretPattern.test(command)) return false;
+  if (/\binput\b|inject|sendCall|sendStatus|sendMessage/i.test(command)) return false;
+  const tokens = command.split(/\s+/).filter(Boolean);
+  if (tokens[0] !== "node" || tokens[1] !== "scripts/mac/check-mac-manual-ux-status.mjs") return false;
+  let hasReconfirm = false;
+  let hasJson = false;
+  for (let index = 2; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token === "--server") {
+      const server = tokens[index + 1] || "";
+      if (!isSafeHttpUrl(server)) return false;
+      index += 1;
+      continue;
+    }
+    if (token === "--reconfirmCall") {
+      hasReconfirm = true;
+      continue;
+    }
+    if (token === "--json") {
+      hasJson = true;
+      continue;
+    }
+    return false;
+  }
+  return hasReconfirm && hasJson;
+}
+
+function isSafeHttpUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    return (url.protocol === "http:" || url.protocol === "https:") && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 function parseMacManualUxTokenList(raw, { allowNone = true } = {}) {
   const value = String(raw || "").trim();
   if (!value || (allowNone && /^none$/i.test(value))) return { ok: true, values: [] };
@@ -1721,6 +1766,7 @@ function parseMacManualUxSegment(segment, source = "text") {
   const callRemainingMs = parseOptionalMacManualUxMs(value, "ManualUxCallRemainingMs", "callRemainingMs");
   const callOverdueMs = parseOptionalMacManualUxMs(value, "ManualUxCallOverdueMs", "callOverdueMs");
   const gate = extractMacManualUxField(value, "MacManualUxGate") || extractMacManualUxField(value, "ManualUxGate") || extractMacManualUxField(value, "gate");
+  const manualUxReconfirmCommand = extractMacManualUxCommandField(value, "ManualUxReconfirmCommand");
   const blockersRaw = extractMacManualUxField(value, "blockers") || "none";
   const warningsRaw = extractMacManualUxField(value, "warnings") || "none";
   const safety = safetyRaw.split(",").map((item) => item.trim()).filter(Boolean);
@@ -1740,6 +1786,7 @@ function parseMacManualUxSegment(segment, source = "text") {
     noFormalE2ERerunRaw !== "true" ||
     (manualUxCall && !macManualUxAllowedCallStates.has(manualUxCall)) ||
     (gate && !macManualUxAllowedGates.has(gate)) ||
+    (manualUxReconfirmCommand && !isSafeMacManualUxReconfirmCommand(manualUxReconfirmCommand)) ||
     !callAgeMs.ok ||
     !callRemainingMs.ok ||
     !callOverdueMs.ok ||
@@ -1764,6 +1811,7 @@ function parseMacManualUxSegment(segment, source = "text") {
     ...(callOverdueMs.value != null ? [`callOverdueMs=${callOverdueMs.value}`] : []),
     ...(gate && gate !== "clear" ? [`gate=${gate}`] : []),
     callCommandPresent ? "callCommand=present" : "callCommand=absent",
+    ...(manualUxReconfirmCommand ? ["reconfirmCommand=present"] : []),
     `blockers=${blockers.values.length ? blockers.values.join(",") : "none"}`,
     `warnings=${warnings.values.length ? warnings.values.join(",") : "none"}`,
   ].join(" ");
@@ -1784,6 +1832,8 @@ function parseMacManualUxSegment(segment, source = "text") {
     callOverdueMs: callOverdueMs.value,
     gate: gate || "",
     callCommandPresent,
+    reconfirmCommandPresent: Boolean(manualUxReconfirmCommand),
+    manualUxReconfirmCommand: manualUxReconfirmCommand || "",
     blockers: blockers.values,
     warnings: warnings.values,
     summary,
@@ -4370,6 +4420,9 @@ function makeBoardSummary(report) {
     ...(report.board.macManualUx?.found
       ? [`MacManualUx=${report.board.macManualUx.summary}.`]
       : []),
+    ...(report.board.macManualUx?.manualUxReconfirmCommand
+      ? [`MacManualUxReconfirm=${report.board.macManualUx.manualUxReconfirmCommand}.`]
+      : []),
     ...(report.board.macManualUxAck?.status === "ready" && report.board.macManualUxAck.command
       ? [`MacManualUxAck=${report.board.macManualUxAck.command}.`]
       : []),
@@ -4753,6 +4806,9 @@ function printHuman(report) {
     if (report.board.macManualUx?.found) {
       console.log(`  MacManualUx=${report.board.macManualUx.summary}`);
     }
+    if (report.board.macManualUx?.manualUxReconfirmCommand) {
+      console.log(`  MacManualUxReconfirm=${report.board.macManualUx.manualUxReconfirmCommand}`);
+    }
     if (report.board.macManualUxAck?.status === "ready" && report.board.macManualUxAck.command) {
       console.log(`  MacManualUxAck=${report.board.macManualUxAck.command}`);
     } else if (report.board.macManualUxAck?.status === "blocked" && report.board.macManualUxAck.summary) {
@@ -4848,6 +4904,9 @@ function printHuman(report) {
   console.log(`  MacManualUxStatus=${report.board.macManualUxStatus?.command || report.commands.macManualUxStatusCommand}`);
   if (report.board.macManualUx?.found) {
     console.log(`  MacManualUx=${report.board.macManualUx.summary}`);
+  }
+  if (report.board.macManualUx?.manualUxReconfirmCommand) {
+    console.log(`  MacManualUxReconfirm=${report.board.macManualUx.manualUxReconfirmCommand}`);
   }
   if (report.board.macManualUxAck?.status === "ready" && report.board.macManualUxAck.command) {
     console.log(`  MacManualUxAck=${report.board.macManualUxAck.command}`);

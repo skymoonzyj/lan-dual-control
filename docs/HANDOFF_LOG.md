@@ -19,6 +19,36 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 消费 Mac manual UX reconfirm 命令
+开发端：Windows Codex
+本轮目标：让 Windows resume/status 安全看懂 Mac 端给出的手工体验重新确认命令，避免 timeout 后只看到“找 Mac 重新确认”但没有可复制入口。
+完成内容：
+- `check-windows-resume-status --checkBoard` 现在安全解析 `ManualUxReconfirmCommand=node scripts/mac/check-mac-manual-ux-status.mjs --server <board> --reconfirmCall --json`。
+- JSON `board.macManualUx.manualUxReconfirmCommand` 保留安全命令，`board.macManualUx.reconfirmCommandPresent=true`；`MacManualUx=` 简短摘要只显示 `reconfirmCommand=present`。
+- 普通输出和 `--boardSummary` 单独输出 `MacManualUxReconfirm=`，方便 Mac 端在确认 Windows 不处于 push/rebase 临界期后显式重发 5-10 分钟手工体验 call。
+- 拒绝带 password/token/secret、sendCall/sendStatus/sendMessage、input/inject 或未知参数的伪造候选；Windows 不运行该 Mac 命令。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 先失败于 `MacManualUx summary mismatch`。
+- 红灯：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000` 先失败于 `PowerShell MacManualUx summary mismatch`。
+- 绿灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 绿灯：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- 真实手工体验 call 仍需用户在场；Windows 只显示 Mac 端可执行的重新确认入口，不自动运行。
+下一步建议：
+- 白天用户在场时先跑 `check-windows-resume-status --checkBoard --boardSummary`；若看到 `MacManualUxAck=...timeout` 和 `MacManualUxReconfirm=...`，由 Mac 端重新确认 call，再让 Windows/User 发确认。
+是否改了协议：否，只是安全消费 Mac 已上板的 reconfirm 字段。
+是否需要另一端配合：Mac 端拉取后即可按 `MacManualUxReconfirm=` 重新确认手工体验 call；真实体验仍需用户在场。
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 消费 Mac manual UX gate
 开发端：Windows Codex
 本轮目标：让 Windows resume/status 看懂 Mac manual UX gate，并在 Windows push/commit gate 未解除时阻止误发手工体验确认。
