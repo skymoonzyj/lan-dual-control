@@ -49,6 +49,36 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端页面/复制诊断消费 `MacPowerHealth=` / `MacUnattendedHealth=` 中文风险。
+完成内容：
+- Windows 控制端 `macUnattendedRiskLabels` 新增 `system-sleep-enabled`、`display-sleep-enabled`、`network-wake-disabled` 中文映射。
+- Mac 提醒区、快速摘要和复制/导出诊断现在会把 `MacPowerHealth=warning ... warnings=system-sleep-enabled,display-sleep-enabled` 显示为“系统睡眠未关闭 / 显示器睡眠未关闭”。
+- `MacUnattendedHealth=warning ... warnings=launch-agent-not-loaded,power` 会继续进入中文风险摘要，显示“自启动未加载 / 电源设置需检查”。
+- `MacPowerHealth=ok`、`MacUnattendedHealth=ok` 和单独 `MacPowerPlan=` 预览命令不误弹风险；Windows 端仍只做本地解析展示，不运行 Mac 脚本、不执行 `pmset`、不加载 LaunchAgent、不认证、不发密码/input/inject。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：先新增 Windows 控制端 diagnostics-only 断言，`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 失败在 `MacPowerHealth` 只显示泛化“睡眠策略需检查”，缺少“系统睡眠未关闭 / 显示器睡眠未关闭”。
+- 绿灯：同一命令通过，覆盖 Mac 提醒区、快速摘要、复制/导出诊断、`ok` 不误弹和单独 `MacPowerPlan=` 不误弹。
+- 语法/空白/冲突检查：`node --check scripts/windows/test-windows-client-browser.mjs`、`node --check apps/windows-client/app.js`、`git diff --check`、`rg -n "^(<<<<<<<|=======|>>>>>>>)" apps/windows-client scripts/windows docs`。
+遗留问题：
+- 本轮只做 Windows 控制端本地解析和诊断展示，没有运行真实 Mac 命令，也没有改 Mac 端。
+下一步建议：
+- 真实现场看到这类电源风险时，先让 Mac 端复制 `MacPowerPlan=` 的只读预览命令，再由用户确认是否人工执行 `pmset` 修复并复跑 `MacUnattendedStatus` / `MacHeartbeatOnce`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 本机 Mac 提醒 watcher 对 `MacPowerHealth=` / `MacUnattendedHealth=` 也输出干净短摘要。
 完成内容：
 - `watch-codex-link-mac-alerts.ps1` 的结构化 health 解析从 `MacHeartbeatHealth=` 扩展到 `MacPowerHealth=` 和 `MacUnattendedHealth=`。

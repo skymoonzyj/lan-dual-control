@@ -1487,6 +1487,9 @@ async function verifyDesktopOnlyHostPanel(session) {
           : {};
       const macAlertFindingText = [
         "MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none",
+        "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled blockers=none checkedAt=2026-06-19T08:08:38.575Z",
+        "MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T08:10:38.575Z",
+        "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
         "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --boardSummary",
         "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary",
         "MacLaunchAgentLoad=launchctl bootstrap gui/$(id -u) /Users/skymoonzyj/Library/LaunchAgents/com.lan-dual-control.mac-host.plist",
@@ -1619,6 +1622,36 @@ async function verifyDesktopOnlyHostPanel(session) {
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
               "MacHeartbeatHealth=blocked checked=20s reason=mac-codex-stale blockers=none warnings=none",
+            )
+          : null;
+      const warningMacPowerHealthAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled blockers=none checkedAt=2026-06-19T08:08:38.575Z",
+            )
+          : null;
+      const okMacPowerHealthAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "MacPowerHealth=ok reason=ok warnings=none blockers=none checkedAt=2026-06-19T08:08:38.575Z; MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
+            )
+          : null;
+      const warningMacUnattendedHealthAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T08:10:38.575Z",
+            )
+          : null;
+      const okMacUnattendedHealthAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "MacUnattendedHealth=ok reason=ok blockers=none warnings=none checkedAt=2026-06-19T08:10:38.575Z",
+            )
+          : null;
+      const cleanMacPowerPlanCommandAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
             )
           : null;
       const watcherThrottleBefore =
@@ -2368,6 +2401,19 @@ async function verifyDesktopOnlyHostPanel(session) {
           !warningMacHeartbeatHealthAttention?.evidenceSummary.includes("Mac 心跳正常") &&
           blockedMacHeartbeatHealthAttention?.summary.includes("Mac Codex 长时间无新进展") &&
           !blockedMacHeartbeatHealthAttention?.evidenceSummary.includes("Mac 心跳正常") &&
+          warningMacPowerHealthAttention?.summary.includes("系统睡眠未关闭") &&
+          warningMacPowerHealthAttention?.summary.includes("显示器睡眠未关闭") &&
+          okMacPowerHealthAttention?.summary === "" &&
+          Array.isArray(okMacPowerHealthAttention?.labels) &&
+          okMacPowerHealthAttention.labels.length === 0 &&
+          warningMacUnattendedHealthAttention?.summary.includes("自启动未加载") &&
+          warningMacUnattendedHealthAttention?.summary.includes("电源设置需检查") &&
+          okMacUnattendedHealthAttention?.summary === "" &&
+          Array.isArray(okMacUnattendedHealthAttention?.labels) &&
+          okMacUnattendedHealthAttention.labels.length === 0 &&
+          cleanMacPowerPlanCommandAttention?.summary === "" &&
+          Array.isArray(cleanMacPowerPlanCommandAttention?.labels) &&
+          cleanMacPowerPlanCommandAttention.labels.length === 0 &&
           heartbeatCommandCheck.ok &&
           cleanMacHostReadinessCommandAttention?.summary === "" &&
           Array.isArray(cleanMacHostReadinessCommandAttention?.labels) &&
@@ -2549,6 +2595,11 @@ async function verifyDesktopOnlyHostPanel(session) {
         positiveMacHeartbeatHealthAttention,
         warningMacHeartbeatHealthAttention,
         blockedMacHeartbeatHealthAttention,
+        warningMacPowerHealthAttention,
+        okMacPowerHealthAttention,
+        warningMacUnattendedHealthAttention,
+        okMacUnattendedHealthAttention,
+        cleanMacPowerPlanCommandAttention,
         heartbeatCommandCheck,
         cleanMacHostReadinessCommandAttention,
         cleanMacHostMediaCommandAttention,
@@ -4885,6 +4936,9 @@ async function verifyReconnectControls(session) {
       let copiedText = "";
       const macAlertFindingText = [
         "MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none",
+        "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled blockers=none checkedAt=2026-06-19T08:08:38.575Z",
+        "MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T08:10:38.575Z",
+        "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
         "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --boardSummary",
         "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary",
         "MacLaunchAgentLoad=launchctl bootstrap gui/$(id -u) /Users/skymoonzyj/Library/LaunchAgents/com.lan-dual-control.mac-host.plist",
@@ -5129,6 +5183,9 @@ async function verifyReconnectControls(session) {
             exportText.includes("认证/密码步骤待确认") &&
             exportText.includes("Windows 被控端未指定或未就绪") &&
             exportText.includes("仓库状态需检查") &&
+            exportText.includes("系统睡眠未关闭") &&
+            exportText.includes("显示器睡眠未关闭") &&
+            exportText.includes("自启动未加载") &&
             exportText.includes("LaunchAgent 刷新率上限需调整") &&
             exportText.includes("Mac 值守状态命令已提供") &&
             exportText.includes("Mac 值守正式检查命令已提供") &&
@@ -5180,6 +5237,9 @@ async function verifyReconnectControls(session) {
           macAlertDetail:
             exportText.includes("- Mac 提醒详情：Windows 浮窗提醒已开启") &&
             exportText.includes("warnings=launch-agent-missing,launch-agent-max-fps,power-risk") &&
+            exportText.includes("MacPowerHealth=warning") &&
+            exportText.includes("MacUnattendedHealth=warning") &&
+            exportText.includes("MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs") &&
             exportText.includes("warnings: video,build,auth,windows-host,repo") &&
             exportText.includes("warnings=h264-fallback,fps-limit") &&
             exportText.includes("warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps") &&
@@ -5296,6 +5356,9 @@ async function verifyReconnectControls(session) {
           copiedText.includes("认证/密码步骤待确认") &&
           copiedText.includes("Windows 被控端未指定或未就绪") &&
           copiedText.includes("仓库状态需检查") &&
+          copiedText.includes("系统睡眠未关闭") &&
+          copiedText.includes("显示器睡眠未关闭") &&
+          copiedText.includes("自启动未加载") &&
           copiedText.includes("LaunchAgent 刷新率上限需调整") &&
           copiedText.includes("Mac 值守状态命令已提供") &&
           copiedText.includes("Mac 值守正式检查命令已提供") &&
