@@ -5,6 +5,19 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const script = "scripts/mac/plan-mac-input-safety.mjs";
 
+function printHelp() {
+  console.log(`Usage:
+  node scripts/mac/test-mac-input-safety-plan.mjs [options]
+
+Options:
+  --help, -h        Show this help without running checks
+
+Description:
+  Verifies the Mac input safety plan script. The self-test checks that plan
+  output stays read-only and secret-safe before real user-watched input work.
+`);
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -101,6 +114,10 @@ function checkBoardSummary() {
 }
 
 function main() {
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    printHelp();
+    return;
+  }
   checkHelp();
   checkJsonPlan();
   checkBoardSummary();
