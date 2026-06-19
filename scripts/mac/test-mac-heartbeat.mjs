@@ -138,6 +138,12 @@ function assertHeartbeatHealth(payload, expectedStatus, expectedReason, label) {
   assertIncludes(payload.boardSummary || "", `reason=${expectedReason}`, `${label} board summary`);
 }
 
+function assertMacEvidence(payload, expected, label) {
+  const actual = payload.macEvidence || [];
+  assert(Array.isArray(actual), `${label} should include macEvidence[]`);
+  assert(JSON.stringify(actual) === JSON.stringify(expected), `${label} macEvidence should be ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+}
+
 function assertCommandSet(commands, label) {
   assertIncludes(commands?.macHeartbeatCommand || "", "check-mac-heartbeat.mjs", label);
   assertIncludes(commands?.macHeartbeatCommand || "", "--checkBoard", label);
@@ -289,6 +295,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "--stateFile", `${script} ${flag}`);
     assertIncludes(result.stdout, "formal E2E readiness", `${script} ${flag}`);
     assertIncludes(result.stdout, "macHeartbeatHealth", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macEvidence", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
   print("OK", "Mac heartbeat help exits quickly");
@@ -328,6 +335,7 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assert(payload.warnings.includes("mac-client-offline"), "offline payload should warn about Mac client");
   assert(payload.codex.reason === "ok", "offline payload should not invent Codex blocker");
   assertHeartbeatHealth(payload, "warning", "mac-host-offline", "offline payload");
+  assertMacEvidence(payload, [], "offline payload");
   assertIsoTimestamp(payload.checkedAt, "offline checkedAt");
   assertIncludes(payload.boardSummary || "", "MacHeartbeat=status=warning", "offline board summary");
   assertIncludes(payload.boardSummary || "", "checkedAt=", "offline board summary");
@@ -417,6 +425,7 @@ async function checkOnlineOk(args) {
       assert(payload.macHost.inputMode === "log", "Mac host inputMode should be captured");
       assert(payload.macClient.online === true, "Mac client should be online");
       assertHeartbeatHealth(payload, "ok", "ok", "online payload");
+      assertMacEvidence(payload, ["MacClientPageOnline"], "online payload");
       assertIsoTimestamp(payload.checkedAt, "online checkedAt");
       assertIncludes(payload.boardSummary || "", "MacHeartbeat=status=ok", "online board summary");
       assertIncludes(payload.boardSummary || "", "checkedAt=", "online board summary");
@@ -515,6 +524,7 @@ async function checkOnlineBoardEvidence(args) {
         assert(payload.macClient?.online === true, "Mac client page should be online");
         assert(payload.macClient?.titleFound === true, "Mac client page title should be recognized");
         assertHeartbeatHealth(payload, "ok", "ok", "online board evidence payload");
+        assertMacEvidence(payload, ["MacClientPageOnline", "MacClientDiagnosticsOk"], "online board evidence payload");
         assertIncludes(payload.boardSummary || "", "Evidence=MacClientPageOnline,MacClientDiagnosticsOk", "online board evidence summary");
         assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "online board evidence output");
         assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--password", "online board evidence output");

@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac heartbeat JSON 直接输出稳定正向证据标签，并让 Windows resume-status 回归可在非 Windows 环境安全运行。
+完成内容：
+- `check-mac-heartbeat --json` 现在输出 `macEvidence[]`，与同次 `--boardSummary` 的 `Evidence=MacClientPageOnline,MacClientDiagnosticsOk` 共用同一套计算。
+- 干净 ok 且 Mac client 页面在线时输出 `MacClientPageOnline`；同次读取 Agent Link Board 成功且页面标题匹配时追加 `MacClientDiagnosticsOk`；离线、warning、blocked 或未满足条件时为空。
+- 帮助文档和回归测试同步覆盖该 JSON 字段；不启动/停止服务，不认证，不请求或发送密码，不发 call/input/inject。
+- `scripts/windows/test-windows-resume-status.mjs` 现在在 Windows 上继续强校验 `start-mac-alert-watcher.ps1 -Json`，在 macOS/Linux 上则要求 watcher 状态安全降级为 `unavailable` 并说明缺少 `powershell.exe`，避免 Mac 端跑 Windows resume 回归时误报。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增断言后，`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` 失败在帮助文档缺少 `macEvidence`。
+- 绿灯：实现后同一回归通过，覆盖离线空证据、页面在线证据、同次通讯板诊断证据。
+- 复现/修正：合入 Windows `85ff144` 后，`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 在 macOS 上失败于 watcher JSON 断言；确认根因是 `powershell.exe` 不存在后，改为按平台断言并复跑通过。
+遗留问题：
+- 本轮只增强 Mac heartbeat 的 JSON 可消费性；不改变现有 `Evidence=` 摘要格式。
+下一步建议：
+- Windows 端若要自动化读取 Mac heartbeat 正向证据，可优先读 JSON `macEvidence[]`；人工/通讯板仍看 `Evidence=`。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac heartbeat 本身也直接输出稳定 `MacHeartbeatHealth=` 健康字段。
 完成内容：
 - `check-mac-heartbeat --json/--boardSummary` 现在会基于本次心跳的 `status/blockers/warnings` 派生 JSON `macHeartbeatHealth`。

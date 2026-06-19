@@ -82,6 +82,8 @@ Machine-readable JSON fields:
   status                      ok|warning|blocked.
   macHeartbeatHealth          Stable ok|warning|blocked health summary exposed
                               as MacHeartbeatHealth= in board summaries.
+  macEvidence[]               Stable positive Mac evidence tags also exposed
+                              as Evidence= in clean board summaries.
   blockers[] / warnings[]     Stable reason ids for Windows alert routing.
   codex.reason                codex-reconnect-stuck, codex-reconnect-signal,
                               mac-codex-stale, or ok.
@@ -718,6 +720,23 @@ function formatMacHeartbeatHealthSummary(health) {
   ].join(" ");
 }
 
+function buildMacEvidence(report) {
+  const evidence = [];
+  if (report.status === "ok" && report.macClient.online) {
+    evidence.push("MacClientPageOnline");
+  }
+  if (
+    report.status === "ok" &&
+    report.macClient.online &&
+    report.macClient.titleFound &&
+    report.board.checked &&
+    report.board.ok
+  ) {
+    evidence.push("MacClientDiagnosticsOk");
+  }
+  return evidence;
+}
+
 function formatMacHostBuildDiff(buildDiff) {
   if (!buildDiff || buildDiff.severity === "ok") return "build=current";
   if (buildDiff.severity === "stale-metadata") {
@@ -752,19 +771,7 @@ function makeBoardSummary(report) {
     ? `ok status=${report.codex.status || "unknown"} updatedAt=${codexUpdatedAt} ageMs=${codexAge}`
     : `${report.codex.reason} status=${report.codex.status || "unknown"} updatedAt=${codexUpdatedAt} ageMs=${codexAge} evidenceAgeMs=${codexAgeMs ?? "unknown"}`;
   const evidence = report.codex.evidence ? ` evidence=${report.codex.evidence}` : "";
-  const stableEvidence = [];
-  if (report.status === "ok" && report.macClient.online) {
-    stableEvidence.push("MacClientPageOnline");
-  }
-  if (
-    report.status === "ok" &&
-    report.macClient.online &&
-    report.macClient.titleFound &&
-    report.board.checked &&
-    report.board.ok
-  ) {
-    stableEvidence.push("MacClientDiagnosticsOk");
-  }
+  const stableEvidence = report.macEvidence || [];
   const stableEvidenceSummary = stableEvidence.length > 0 ? ` Evidence=${stableEvidence.join(",")}.` : "";
   const suggestedAction = report.suggestedAction?.boardSummary || "suggestedAction=none";
   const heartbeatHealthSummary = formatMacHeartbeatHealthSummary(report.macHeartbeatHealth);
@@ -806,6 +813,7 @@ function printHuman(report) {
   console.log(`- blockers: ${summarizeIds(report.blockers)}`);
   console.log(`- warnings: ${summarizeIds(report.warnings)}`);
   console.log(`- heartbeat health: ${report.macHeartbeatHealth.status} (${report.macHeartbeatHealth.reason})`);
+  console.log(`- evidence: ${report.macEvidence.join(",") || "none"}`);
   console.log(report.boardSummary);
 }
 
@@ -840,6 +848,7 @@ async function buildReport(args) {
     boardSummary: "",
   };
   report.macHeartbeatHealth = buildMacHeartbeatHealth(report);
+  report.macEvidence = buildMacEvidence(report);
   report.suggestedAction = buildSuggestedAction(report);
   report.boardSummary = makeBoardSummary(report);
   return report;
