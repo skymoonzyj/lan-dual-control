@@ -541,8 +541,11 @@ const state = {
   audioContext: null,
   audioGain: null,
   audioNextPlayTime: 0,
+  audioScheduledSources: [],
   audioPlayedFrames: 0,
   audioDroppedFrames: 0,
+  audioResyncCount: 0,
+  audioLastDropReason: "",
   audioLastError: "",
   audioLastStatusUpdateAt: 0,
   audioLastRenderedDroppedFrames: 0,
@@ -2919,18 +2922,77 @@ function buildAudioSettingsMessage() {
 }
 
 function resetAudioPlayback() {
+  stopScheduledAudioSources();
   if (state.audioContext) {
     state.audioContext.close().catch(() => {});
   }
   state.audioContext = null;
   state.audioGain = null;
   state.audioNextPlayTime = 0;
+  state.audioScheduledSources = [];
   state.audioPlayedFrames = 0;
   state.audioDroppedFrames = 0;
+  state.audioResyncCount = 0;
+  state.audioLastDropReason = "";
   state.audioLastError = "";
   state.audioLastStatusUpdateAt = 0;
   state.audioLastRenderedDroppedFrames = 0;
   syncFloatingControlStatus();
+}
+
+function getScheduledAudioSources() {
+  if (!Array.isArray(state.audioScheduledSources)) {
+    state.audioScheduledSources = [];
+  }
+  return state.audioScheduledSources;
+}
+
+function removeScheduledAudioSource(source) {
+  const scheduled = getScheduledAudioSources();
+  const index = scheduled.findIndex((entry) => entry.source === source);
+  if (index >= 0) scheduled.splice(index, 1);
+}
+
+function stopScheduledAudioSource(entry) {
+  try {
+    entry?.source?.stop?.();
+  } catch {
+    // Already-ended WebAudio sources throw when stopped again.
+  }
+  try {
+    entry?.source?.disconnect?.();
+  } catch {
+    // Disconnect can throw after a source has already been detached.
+  }
+}
+
+function stopScheduledAudioSources() {
+  const scheduled = getScheduledAudioSources();
+  const entries = scheduled.splice(0, scheduled.length);
+  for (const entry of entries) {
+    stopScheduledAudioSource(entry);
+  }
+  return entries.length;
+}
+
+function pruneScheduledAudioSources(now) {
+  const scheduled = getScheduledAudioSources();
+  for (let index = scheduled.length - 1; index >= 0; index -= 1) {
+    const entry = scheduled[index];
+    const endAt = Number(entry.playAt) + Number(entry.duration || 0);
+    if (Number.isFinite(endAt) && endAt <= now) {
+      scheduled.splice(index, 1);
+    }
+  }
+}
+
+function resyncAudioQueue(reason, now) {
+  const flushed = stopScheduledAudioSources();
+  state.audioDroppedFrames += Math.max(1, flushed);
+  state.audioResyncCount = (Number(state.audioResyncCount) || 0) + 1;
+  state.audioLastDropReason = reason;
+  state.audioNextPlayTime = now + audioInitialBufferSeconds;
+  return flushed;
 }
 
 function primeAudioPlayback() {
@@ -3043,10 +3105,10 @@ async function playPcmAudioFrame(frame) {
   }
 
   const now = audioContext.currentTime;
+  pruneScheduledAudioSources(now);
   const queuedSeconds = Math.max(0, state.audioNextPlayTime - now);
   if (queuedSeconds > audioMaximumQueuedSeconds) {
-    state.audioDroppedFrames += 1;
-    return false;
+    resyncAudioQueue("queue-overflow-flush-old", now);
   }
   if (state.audioNextPlayTime < now + audioMinimumBufferSeconds) {
     state.audioNextPlayTime = now + audioInitialBufferSeconds;
@@ -3056,8 +3118,17 @@ async function playPcmAudioFrame(frame) {
   source.buffer = buffer;
   source.connect(state.audioGain);
   const playAt = state.audioNextPlayTime;
+  const scheduledEntry = { source, playAt, duration: buffer.duration };
+  getScheduledAudioSources().push(scheduledEntry);
+  source.onended = () => {
+    removeScheduledAudioSource(source);
+    try {
+      source.disconnect();
+    } catch {
+      // Ignore disconnect races on ended sources.
+    }
+  };
   source.start(playAt);
-  source.onended = () => source.disconnect();
   state.audioNextPlayTime = playAt + buffer.duration;
   state.audioPlayedFrames += 1;
   return true;
@@ -4324,8 +4395,12 @@ function getAudioPerformanceExportStatus() {
   const playedCount = Number(state.audioPlayedFrames) || 0;
   const droppedCount = Number(state.audioDroppedFrames) || 0;
   const queueMs = getAudioQueueMs();
+  const resyncCount = Number(state.audioResyncCount) || 0;
+  const dropReason = String(state.audioLastDropReason || "").trim();
   const bufferText = `${Math.round(audioInitialBufferSeconds * 1000)}/${Math.round(audioMinimumBufferSeconds * 1000)}/${Math.round(audioMaximumQueuedSeconds * 1000)} ms`;
   const parts = [enabled ? "开启" : "关闭", `队列 ${queueMs} ms`, `缓冲 ${bufferText}`, `接收 ${frameCount}`, `播放 ${playedCount}`, `丢 ${droppedCount}`];
+  if (resyncCount > 0) parts.push(`重同步 ${resyncCount}`);
+  if (dropReason) parts.push(`原因 ${dropReason}`);
   if (state.audioLastError) {
     parts.push(`错误 ${String(state.audioLastError).replace(/\s+/g, " ").slice(0, 80)}`);
   }

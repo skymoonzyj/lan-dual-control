@@ -19,6 +19,35 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 N2 音频队列治理
+开发端：Windows Codex
+本轮目标：按夜间/无人值守清单 N2，完善 Windows WebAudio 队列治理，避免队列过深时继续播放旧音频。
+完成内容：
+- `playPcmAudioFrame` 现在会记录已排队的 WebAudio source；队列超过 450ms 时停止旧 source，重置 80ms 预缓冲，并继续安排最新 PCM 帧播放。
+- 新增 `audioResyncCount` 和 `audioLastDropReason=queue-overflow-flush-old`，复制/导出诊断“现场声音”会显示重同步次数和最近原因。
+- 浏览器回归把原来“overflow 丢最新帧”的期望改成“flush old queue + schedule latest frame”，先红灯后绿灯。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --clientPort 5205 --debugPort 9345` 先失败，证据为 `overflowPlayed=false`、`overflowStops=0`、`overflowResyncCount=0`。
+- 绿灯：`node --check apps/windows-client/app.js`
+- 绿灯：`node --check scripts/windows/test-windows-client-browser.mjs`
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --clientPort 5205 --debugPort 9345`，输出 `Audio buffer guards: underrunStart=10.080 overflowDropped=2 resync=1` 和 `Diagnostics-only browser checks passed`。
+遗留问题：
+- 这是自动化层面的低延迟队列治理；真实听感仍需用户下一次连接 Mac 后确认。
+下一步建议：
+- 若用户仍反馈声音断续，先看复制诊断“现场声音”的队列、重同步次数和原因，再让 Mac 端同步跑音频基线。
+是否改了协议：否。
+是否需要另一端配合：真实听感复测时需要 Mac host 在线；本轮实现和验证不需要 Mac 端或用户授权。
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 继续推进
 开发端：Windows Codex
 本轮目标：增强 Windows 控制端现场诊断，方便定位卡顿和声音断续。

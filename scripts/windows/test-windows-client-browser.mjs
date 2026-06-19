@@ -5041,6 +5041,8 @@ async function verifyReconnectControls(session) {
       const originalAudioLastError = state.audioLastError;
       const originalAudioContext = state.audioContext;
       const originalAudioNextPlayTime = state.audioNextPlayTime;
+      const originalAudioResyncCount = state.audioResyncCount;
+      const originalAudioLastDropReason = state.audioLastDropReason;
       const originalVideoFrames = state.videoFrames;
       const originalVideoFrameTimes = Array.isArray(state.videoFrameTimes) ? state.videoFrameTimes.slice() : [];
       const originalActualVideoFps = state.actualVideoFps;
@@ -5213,6 +5215,8 @@ async function verifyReconnectControls(session) {
         state.audioLastError = "";
         state.audioContext = { currentTime: 10.12, state: "running" };
         state.audioNextPlayTime = 10.24;
+        state.audioResyncCount = 1;
+        state.audioLastDropReason = "queue-overflow-flush-old";
         state.videoFrames = 90;
         state.videoFrameTimes = [1000, 1033, 1066, 1099, 1199];
         state.actualVideoFps = 20.1;
@@ -5306,6 +5310,8 @@ async function verifyReconnectControls(session) {
             exportText.includes("队列 120 ms") &&
             exportText.includes("缓冲 80/70/450 ms") &&
             exportText.includes("接收 24") &&
+            exportText.includes("重同步 1") &&
+            exportText.includes("原因 queue-overflow-flush-old") &&
             exportText.includes("丢 2"),
           quickSummaryInput: exportText.includes("- 输入：7（安全日志，不会真正控制 / 已记录）"),
           quickSummaryFloating:
@@ -5463,7 +5469,9 @@ async function verifyReconnectControls(session) {
           liveAudioStatus:
             exportText.includes("- 现场声音统计：") &&
             exportText.includes("队列 120 ms") &&
-            exportText.includes("缓冲 80/70/450 ms"),
+            exportText.includes("缓冲 80/70/450 ms") &&
+            exportText.includes("重同步 1") &&
+            exportText.includes("原因 queue-overflow-flush-old"),
           audioLevel: exportText.includes("- 声音电平：37%"),
           audioError: exportText.includes("- 声音错误：-"),
           clipboardStatus:
@@ -5592,6 +5600,8 @@ async function verifyReconnectControls(session) {
           copiedText.includes("平均间隔 50 ms") &&
           copiedText.includes("- 现场声音：") &&
           copiedText.includes("队列 120 ms") &&
+          copiedText.includes("重同步 1") &&
+          copiedText.includes("原因 queue-overflow-flush-old") &&
           copiedText.includes("- 声音电平：37%") &&
           copiedText.includes("- 现场视频统计：") &&
           copiedText.includes("- 现场声音统计：") &&
@@ -5692,6 +5702,8 @@ async function verifyReconnectControls(session) {
         state.audioLastError = originalAudioLastError;
         state.audioContext = originalAudioContext;
         state.audioNextPlayTime = originalAudioNextPlayTime;
+        state.audioResyncCount = originalAudioResyncCount;
+        state.audioLastDropReason = originalAudioLastDropReason;
         state.videoFrames = originalVideoFrames;
         state.videoFrameTimes = originalVideoFrameTimes;
         state.actualVideoFps = originalActualVideoFps;
@@ -5770,8 +5782,12 @@ async function verifyAudioPlaybackBufferGuards(session) {
         played: state.audioPlayedFrames,
         dropped: state.audioDroppedFrames,
         lastError: state.audioLastError,
+        scheduledSources: Array.isArray(state.audioScheduledSources) ? state.audioScheduledSources.slice() : undefined,
+        resyncCount: state.audioResyncCount,
+        lastDropReason: state.audioLastDropReason,
       };
       const starts = [];
+      const stops = [];
       const makeFakeContext = (currentTime) => ({
         state: "running",
         currentTime,
@@ -5789,6 +5805,9 @@ async function verifyAudioPlaybackBufferGuards(session) {
             connect() {},
             start(time) {
               starts.push(time);
+            },
+            stop() {
+              stops.push(this.buffer?.duration ?? 0);
             },
             disconnect() {},
           };
@@ -5817,7 +5836,11 @@ async function verifyAudioPlaybackBufferGuards(session) {
         state.audioNextPlayTime = 9;
         state.audioPlayedFrames = 0;
         state.audioDroppedFrames = 0;
+        if (Array.isArray(state.audioScheduledSources)) state.audioScheduledSources.length = 0;
+        state.audioResyncCount = 0;
+        state.audioLastDropReason = "";
         starts.length = 0;
+        stops.length = 0;
         const underrunPlayed = await playPcmAudioFrame(makeFrame());
         const underrunStart = starts[0] || 0;
         const preservedPrebuffer = underrunPlayed && underrunStart >= 10.07;
@@ -5827,17 +5850,36 @@ async function verifyAudioPlaybackBufferGuards(session) {
         state.audioNextPlayTime = 20.9;
         state.audioPlayedFrames = 0;
         state.audioDroppedFrames = 0;
+        state.audioResyncCount = 0;
+        state.audioLastDropReason = "";
+        state.audioScheduledSources = [
+          { source: { stop() { stops.push(0.12); }, disconnect() {} }, playAt: 20.2, duration: 0.12 },
+          { source: { stop() { stops.push(0.12); }, disconnect() {} }, playAt: 20.32, duration: 0.12 },
+        ];
         starts.length = 0;
+        stops.length = 0;
         const overflowPlayed = await playPcmAudioFrame(makeFrame());
-        const droppedOverflow = !overflowPlayed && starts.length === 0 && state.audioDroppedFrames === 1;
+        const flushedOldQueue =
+          overflowPlayed &&
+          starts.length === 1 &&
+          stops.length === 2 &&
+          starts[0] >= 20.07 &&
+          starts[0] < 20.2 &&
+          state.audioDroppedFrames === 2 &&
+          state.audioResyncCount === 1 &&
+          state.audioLastDropReason === "queue-overflow-flush-old";
 
         return {
-          ok: preservedPrebuffer && droppedOverflow,
+          ok: preservedPrebuffer && flushedOldQueue,
           preservedPrebuffer,
           underrunStart,
           overflowPlayed,
           overflowStarts: starts.length,
           overflowDropped: state.audioDroppedFrames,
+          overflowStops: stops.length,
+          overflowStart: starts[0] || 0,
+          overflowResyncCount: state.audioResyncCount,
+          overflowDropReason: state.audioLastDropReason,
         };
       } finally {
         if (audioToggle) audioToggle.checked = original.checked;
@@ -5848,6 +5890,13 @@ async function verifyAudioPlaybackBufferGuards(session) {
         state.audioPlayedFrames = original.played;
         state.audioDroppedFrames = original.dropped;
         state.audioLastError = original.lastError;
+        if (original.scheduledSources === undefined) {
+          delete state.audioScheduledSources;
+        } else {
+          state.audioScheduledSources = original.scheduledSources;
+        }
+        state.audioResyncCount = original.resyncCount;
+        state.audioLastDropReason = original.lastDropReason;
       }
     })()`,
   );
@@ -6079,7 +6128,7 @@ async function run() {
     summary.checks.push("audio-buffer-guards");
     print(
       "OK",
-      `Audio buffer guards: underrunStart=${audioBufferGuardCheck.underrunStart.toFixed(3)} overflowDropped=${audioBufferGuardCheck.overflowDropped}`,
+      `Audio buffer guards: underrunStart=${audioBufferGuardCheck.underrunStart.toFixed(3)} overflowDropped=${audioBufferGuardCheck.overflowDropped} resync=${audioBufferGuardCheck.overflowResyncCount ?? 0}`,
     );
     const layoutStabilityCheck = await verifyLiveStatusLayoutStability(session);
     summary.checks.push("layout-stability");
