@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac LaunchAgent planner 给出稳定的人工应用顺序和加载后恢复总览复查入口，减少真正授权时漏步骤。
+完成内容：
+- `install-mac-host-launch-agent --json` 新增 `commands.macResumeStatus`，固定为 `node scripts/mac/check-mac-resume-status.mjs --host 127.0.0.1 --port <port> --checkBoard --boardSummary`。
+- JSON 新增 `commands.manualApplyRunbook[]`，按 `ManualWrite -> ManualLoad -> MacUnattendedFormal -> MacResumeStatus` 排列，分别对应写 plist、人工加载 LaunchAgent、强校验 loaded/maxFps、刷新恢复总览。
+- `--boardSummary` 新增 `MacResumeStatus=` 和 `ManualApply=ManualWrite->ManualLoad->MacUnattendedFormal->MacResumeStatus`；普通输出也显示 “resume status” 和 “manual apply runbook”。
+- 本轮仍只生成命令和顺序标签；不写真实 plist，不加载 `launchctl`，不执行 `pmset`，不启动 host，不认证 WebSocket，不请求或发送密码，也不发送 call/input/inject。
+修改文件：
+- `scripts/mac/install-mac-host-launch-agent.mjs`
+- `scripts/mac/test-mac-host-launch-agent.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-host-launch-agent.mjs --timeoutMs 15000` 先失败在 help 缺 `commands.macResumeStatus`。
+- 绿灯：实现后同一专项自测通过，覆盖 help、JSON、boardSummary、60Hz dry-run、写入临时 plist保护、密码模式和不泄密。
+- 真实只读抽样：`node scripts/mac/install-mac-host-launch-agent.mjs --boardSummary` 输出 `MacResumeStatus=` 与 `ManualApply=ManualWrite->ManualLoad->MacUnattendedFormal->MacResumeStatus`，并明确未执行 launchctl/start/auth/input/inject。
+遗留问题：
+- 当前真实 Mac 值守仍有 `launch-agent-not-loaded` 和系统/显示睡眠 warning；真实 `ManualWrite` / `ManualLoad` / `pmset` 处理仍需用户现场确认和授权，本轮不执行。
+下一步建议：
+- 用户在场准备收口 LaunchAgent 时，先读 `MacLaunchAgentPlan=`，再按 `ManualApply=` 的顺序人工执行：写 plist -> 加载 LaunchAgent -> 跑 `MacUnattendedFormal` -> 跑 `MacResumeStatus`。
+- 电源 warning 仍按 `MacPowerPlan=` 先 dry-run 预览，确认后再由用户授权执行系统设置并复查。
+是否改了协议：否；只补 Mac LaunchAgent planner 的安全命令标签和 runbook。
+是否需要另一端配合：暂不需要；Windows 端可继续只识别既有 `MacLaunchAgentPlan=`，后续如需要可消费 `ManualApply=`。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：同步 Mac heartbeat watcher 最新运行事实，避免另一端继续按旧交接文字把“需要人工重启刷新模式”当成当前待办。
 完成内容：
 - 记录已推送代码提交 `15168dc` / `5cd9a23` 后的真实状态：后台 `Mac Heartbeat` watcher 已实际重启为 `refreshUnattended=true`，`start-mac-heartbeat-watcher --status --boardSummary` 输出 `configMismatch=none`。

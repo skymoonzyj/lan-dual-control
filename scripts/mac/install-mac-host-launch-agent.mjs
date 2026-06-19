@@ -81,6 +81,11 @@ Machine-readable JSON fields:
                                help paths stay side-effect-free.
   commands.macPowerPlanCommand Secret-free dry-run Mac power settings plan;
                                prints the copyable preview command only.
+  commands.macResumeStatus     Secret-free post-load resume/status check;
+                               reads host, LaunchAgent, power, and board state.
+  commands.manualApplyRunbook  Ordered manual labels for a supervised apply:
+                               ManualWrite -> ManualLoad ->
+                               MacUnattendedFormal -> MacResumeStatus.
 
 Examples:
   node scripts/mac/install-mac-host-launch-agent.mjs --boardSummary
@@ -312,7 +317,7 @@ ${programArguments.map((item) => `    <string>${xmlEscape(item)}</string>`).join
 
 function makeCommands(args) {
   const uid = "$(id -u)";
-  return {
+  const commands = {
     dryRun: makeDryRunCommand(args),
     writePlist: makeWritePlistCommand(args),
     createDirs: `mkdir -p ${shellQuote(path.dirname(args.launchAgentPath))} ${shellQuote(args.logDir)}`,
@@ -326,7 +331,35 @@ function makeCommands(args) {
     macUnattendedFormal: `node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port ${args.port} --launchAgentPath ${shellQuote(args.launchAgentPath)} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`,
     macScriptHelp: "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary",
     macPowerPlanCommand: "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
+    macResumeStatus: `node scripts/mac/check-mac-resume-status.mjs --host 127.0.0.1 --port ${args.port} --checkBoard --boardSummary`,
   };
+  commands.manualApplyRunbook = makeManualApplyRunbook(commands);
+  return commands;
+}
+
+function makeManualApplyRunbook(commands) {
+  return [
+    {
+      label: "ManualWrite",
+      command: commands.writePlist,
+      note: "Write or overwrite the LaunchAgent plist only after reviewing the dry-run plan.",
+    },
+    {
+      label: "ManualLoad",
+      command: commands.bootstrap,
+      note: "Load the user LaunchAgent from the local Mac session.",
+    },
+    {
+      label: "MacUnattendedFormal",
+      command: commands.macUnattendedFormal,
+      note: "Verify the plist max FPS and launchctl loaded state.",
+    },
+    {
+      label: "MacResumeStatus",
+      command: commands.macResumeStatus,
+      note: "Refresh the shared resume/status evidence after loading.",
+    },
+  ];
 }
 
 function appendNonDefaultPlanArgs(parts, args, { includeLaunchAgentPath = false, includeLogDir = false } = {}) {
@@ -388,9 +421,10 @@ function makeBoardSummary(report) {
   const auth = report.args.passwordMode === "ephemeral"
     ? "ephemeral-discovery-only"
     : report.args.passwordMode;
+  const manualApply = report.commands.manualApplyRunbook.map((step) => step.label).join("->");
   return [
     `Mac LaunchAgent plan: ${writeState}; label=${report.args.label}; path=${report.paths.launchAgentPath}; port=${report.args.port}; maxFps=${report.args.maxScreenFps}; auth=${auth}; keepAlive=${report.args.keepAlive ? "on" : "off"}.`,
-    `MacLaunchAgentPlan=${report.commands.dryRun}; ManualWrite=${report.commands.writePlist}; ManualLoad=${report.commands.bootstrap}; Status=${report.commands.unattendedStatus}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacScriptHelp=${report.commands.macScriptHelp}; MacPowerPlan=${report.commands.macPowerPlanCommand}.`,
+    `MacLaunchAgentPlan=${report.commands.dryRun}; ManualWrite=${report.commands.writePlist}; ManualLoad=${report.commands.bootstrap}; Status=${report.commands.unattendedStatus}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacResumeStatus=${report.commands.macResumeStatus}; ManualApply=${manualApply}; MacHostReadiness=${report.commands.macHostReadiness}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacScriptHelp=${report.commands.macScriptHelp}; MacPowerPlan=${report.commands.macPowerPlanCommand}.`,
     "No password is written or requested by this planner; no launchctl/start/auth/input/inject action was attempted.",
   ].join(" ");
 }
@@ -463,6 +497,8 @@ function printHuman(report) {
   console.log(`  - load: ${report.commands.bootstrap}`);
   console.log(`  - status: ${report.commands.unattendedStatus}`);
   console.log(`  - formal check: ${report.commands.macUnattendedFormal}`);
+  console.log(`  - resume status: ${report.commands.macResumeStatus}`);
+  console.log(`  - manual apply runbook: ${report.commands.manualApplyRunbook.map((step) => step.label).join(" -> ")}`);
   console.log(`  - host readiness: ${report.commands.macHostReadiness}`);
   console.log(`  - formal local smoke: ${report.commands.macFormalLocalSmoke}`);
   console.log(`  - script help safety check: ${report.commands.macScriptHelp}`);
