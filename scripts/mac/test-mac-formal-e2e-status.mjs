@@ -169,6 +169,8 @@ function assertBoardSummaryShape(text, label) {
   assert(/--maxScreenFps 60/.test(text), `${label} should include the formal 60Hz max-FPS planner command`);
   assert(/MacPowerPlan=/.test(text), `${label} should include Mac power settings dry-run planner guidance`);
   assert(/MacPowerPlan=.*plan-mac-power-settings\.mjs/.test(text), `${label} should include the Mac power settings planner command`);
+  assert(/MacRemoteAudioPlan=/.test(text), `${label} should include Mac remote audio dry-run planner guidance`);
+  assert(/MacRemoteAudioPlan=.*plan-mac-remote-audio\.mjs/.test(text), `${label} should include the Mac remote audio planner command`);
   assert(/MacUnattendedFormal=/.test(text), `${label} should include Mac unattended formal gate guidance`);
   assert(/--requireLaunchAgentMaxFps/.test(text), `${label} should include the formal LaunchAgent max-FPS gate`);
   assert(/MacHostReadiness=/.test(text), `${label} should include low-risk Mac host readiness guidance`);
@@ -350,6 +352,22 @@ function assertMacPowerPlanCommand(command, label) {
   assert(!/(^|\s)--password(\s|=|$)/.test(text), `${label} should not embed --password`);
   assert(!/--sendCall/.test(text), `${label} should not send Agent Link Board calls`);
   assert(!/--server/.test(text), `${label} should not echo custom board server URLs`);
+  assert(!/input_event/.test(text), `${label} should not mention input events`);
+  assert(!/inject/.test(text), `${label} should not instruct injection`);
+  assert(!/super-secret-formal-password/.test(text), `${label} should not echo server-like secret text`);
+}
+
+function assertMacRemoteAudioPlanCommand(command, label) {
+  const text = String(command || "");
+  assert(/node scripts\/mac\/plan-mac-remote-audio\.mjs/.test(text), `${label} should use plan-mac-remote-audio`);
+  assert(/--boardSummary/.test(text), `${label} should produce boardSummary`);
+  assert(!/(^|\s)--apply(\s|=|$)/.test(text), `${label} should stay dry-run by default`);
+  assert(!/sudo/.test(text), `${label} should not request privileged shell execution`);
+  assert(!/--promptPassword/.test(text), `${label} should not prompt for passwords`);
+  assert(!/(^|\s)--password(\s|=|$)/.test(text), `${label} should not embed --password`);
+  assert(!/--sendCall/.test(text), `${label} should not send Agent Link Board calls`);
+  assert(!/--server/.test(text), `${label} should not echo custom board server URLs`);
+  assert(!/--json/.test(text), `${label} should remain board-summary oriented`);
   assert(!/input_event/.test(text), `${label} should not mention input events`);
   assert(!/inject/.test(text), `${label} should not instruct injection`);
   assert(!/super-secret-formal-password/.test(text), `${label} should not echo server-like secret text`);
@@ -658,6 +676,7 @@ function checkHelp(args) {
     assert(/commands\.macLaunchAgentPlanCommand/.test(result.stdout), `${script} ${flag} should document LaunchAgent planner command output`);
     assert(/commands\.macMaxFpsPlanCommand/.test(result.stdout), `${script} ${flag} should document Mac max-FPS planner command output`);
     assert(/commands\.macPowerPlanCommand/.test(result.stdout), `${script} ${flag} should document Mac power settings planner command output`);
+    assert(/commands\.macRemoteAudioPlanCommand/.test(result.stdout), `${script} ${flag} should document Mac remote audio planner command output`);
     assert(/commands\.macUnattendedFormalCommand/.test(result.stdout), `${script} ${flag} should document Mac unattended formal gate command output`);
     assert(/commands\.macClientBrowserSelfTestCommand/.test(result.stdout), `${script} ${flag} should document Mac client browser self-test command output`);
     assert(/commands\.macScriptHelpCommand/.test(result.stdout), `${script} ${flag} should document Mac script help safety command output`);
@@ -708,6 +727,8 @@ function checkOfflineJson(args) {
   assert(/--maxScreenFps 60/.test(payload.callText || ""), "offline callText should include max-FPS planner command");
   assert(/plan-mac-power-settings\.mjs/.test(payload.callText || ""), "offline callText should include Mac power settings planner command");
   assert(/MacPowerPlan=.*plan-mac-power-settings\.mjs/.test(payload.boardSummary || ""), "offline boardSummary should include Mac power settings planner command");
+  assert(/plan-mac-remote-audio\.mjs/.test(payload.callText || ""), "offline callText should include Mac remote audio planner command");
+  assert(/MacRemoteAudioPlan=.*plan-mac-remote-audio\.mjs/.test(payload.boardSummary || ""), "offline boardSummary should include Mac remote audio planner command");
   assert(/check-mac-unattended-status\.mjs/.test(payload.callText || ""), "offline callText should include unattended formal gate command");
   assert(/--requireLaunchAgentMaxFps/.test(payload.callText || ""), "offline callText should include formal LaunchAgent max-FPS gate");
   assert(/check-mac-host-readiness\.mjs/.test(payload.callText || ""), "offline callText should include low-risk host readiness command");
@@ -725,6 +746,7 @@ function checkOfflineJson(args) {
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand, "offline LaunchAgent planner command", 9);
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "offline max-FPS planner command", 9);
   assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand, "offline Mac power settings planner command");
+  assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlanCommand, "offline Mac remote audio planner command");
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand, "offline unattended formal command", 9);
   assertMacHostReadinessCommand(payload.commands?.macHostReadinessCommand, "offline host readiness command", 9);
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "offline local smoke command", 9);
@@ -1008,6 +1030,7 @@ async function checkReadySendCall(args) {
       assertMacLaunchAgentLoadCommand(payload.commands?.macLaunchAgentLoadCommand, "ready sendCall Mac LaunchAgent load command");
       assertMacLaunchAgentPrintCommand(payload.commands?.macLaunchAgentPrintCommand, "ready sendCall Mac LaunchAgent print command");
       assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "ready sendCall max-FPS planner command", macHost.port);
+      assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlanCommand, "ready sendCall Mac remote audio planner command");
       assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand, "ready sendCall unattended formal command", macHost.port);
       assertMacHostReadinessCommand(payload.commands?.macHostReadinessCommand, "ready sendCall host readiness command", macHost.port);
       assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "ready sendCall media readiness command", macHost.port);
@@ -1312,11 +1335,14 @@ async function checkBoardMacPowerHealth(args) {
       assert(/checkedAt=2026-06-19T07:23:38.703Z/.test(payload.boardSummary || ""), "Mac power formal boardSummary should expose MacUnattendedFreshness checkedAt");
       assert(/source=MacUnattendedHealth/.test(payload.boardSummary || ""), "Mac power formal boardSummary should expose MacUnattendedFreshness source");
       assert(/MacPowerPlan=node scripts\/mac\/plan-mac-power-settings\.mjs/.test(payload.boardSummary || ""), "Mac power formal boardSummary should expose MacPowerPlan");
+      assert(/MacRemoteAudioPlan=node scripts\/mac\/plan-mac-remote-audio\.mjs/.test(payload.boardSummary || ""), "Mac power formal boardSummary should expose MacRemoteAudioPlan");
       assert(/Mac power health: status=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled/.test(payload.callText || ""), "Mac power formal callText should summarize MacPowerHealth");
       assert(/Mac unattended freshness: status=stale/.test(payload.callText || ""), "Mac power formal callText should summarize MacUnattendedFreshness");
       assert(/source=MacUnattendedHealth/.test(payload.callText || ""), "Mac power formal callText should include MacUnattendedFreshness source");
       assert(/Mac power plan: node scripts\/mac\/plan-mac-power-settings\.mjs/.test(payload.callText || ""), "Mac power formal callText should include MacPowerPlan");
+      assert(/Mac remote audio plan: node scripts\/mac\/plan-mac-remote-audio\.mjs/.test(payload.callText || ""), "Mac power formal callText should include MacRemoteAudioPlan");
       assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand, "Mac power formal E2E planner command");
+      assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlanCommand, "Mac remote audio formal E2E planner command");
       assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "Mac power formal E2E status");
       print("OK", "Formal E2E status surfaces Agent Link Board MacPowerHealth and MacUnattendedFreshness safely");
     }, {
@@ -1465,6 +1491,7 @@ async function checkMaxFpsLimitWarning(args) {
     assertMacLaunchAgentLoadCommand(payload.commands?.macLaunchAgentLoadCommand, "max-FPS formal E2E LaunchAgent load command");
     assertMacLaunchAgentPrintCommand(payload.commands?.macLaunchAgentPrintCommand, "max-FPS formal E2E LaunchAgent print command");
     assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "max-FPS formal E2E planner command", macHost.port);
+    assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlanCommand, "max-FPS formal E2E Mac remote audio planner command");
     assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand, "max-FPS formal E2E unattended formal command", macHost.port);
     assertMacHostReadinessCommand(payload.commands?.macHostReadinessCommand, "max-FPS formal E2E host readiness command", macHost.port);
     assertMediaReadinessCommand(payload.commands?.macHostMediaCommand, "max-FPS formal E2E Mac host media command", macHost.port);
@@ -1478,6 +1505,7 @@ async function checkMaxFpsLimitWarning(args) {
     assert(/MacUnattendedFormal=/.test(payload.boardSummary || ""), "max-FPS board summary should include MacUnattendedFormal");
     assert(/MacHostReadiness=/.test(payload.boardSummary || ""), "max-FPS board summary should include MacHostReadiness");
     assert(/MacHostMedia=/.test(payload.boardSummary || ""), "max-FPS board summary should include MacHostMedia");
+    assert(/MacRemoteAudioPlan=/.test(payload.boardSummary || ""), "max-FPS board summary should include MacRemoteAudioPlan");
     assert(/--maxScreenFps 60/.test(payload.boardSummary || ""), "max-FPS board summary should include the 60Hz planner command");
     assert(/--requireLaunchAgentMaxFps/.test(payload.boardSummary || ""), "max-FPS board summary should include the formal max-FPS gate");
     assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "max-FPS formal E2E status");
@@ -1518,6 +1546,7 @@ function checkOnlineJson(args) {
   assert(/install-mac-host-launch-agent\.mjs/.test(payload.callText || ""), "online callText should include LaunchAgent planner command");
   assert(/--maxScreenFps 60/.test(payload.callText || ""), "online callText should include max-FPS planner command");
   assert(/plan-mac-power-settings\.mjs/.test(payload.callText || ""), "online callText should include Mac power settings planner command");
+  assert(/plan-mac-remote-audio\.mjs/.test(payload.callText || ""), "online callText should include Mac remote audio planner command");
   assert(/foreground formal 60Hz/.test(payload.callText || ""), "online callText should mention foreground 60Hz safe start");
   assert(/stop the current Mac host/i.test(payload.callText || ""), "online callText should mention stopping the current host before LaunchAgent load");
   assert(/launchctl bootstrap/.test(payload.callText || ""), "online callText should include manual LaunchAgent load command");
@@ -1534,6 +1563,7 @@ function checkOnlineJson(args) {
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand, "online LaunchAgent planner command", args.port);
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "online max-FPS planner command", args.port);
   assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand, "online Mac power settings planner command");
+  assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlanCommand, "online Mac remote audio planner command");
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand, "online unattended formal command", args.port);
   assertMacHostReadinessCommand(payload.commands?.macHostReadinessCommand, "online host readiness command", args.port);
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "online local smoke command", args.port);
@@ -1593,6 +1623,7 @@ function checkSecretRedaction(args) {
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand, "secret-redaction LaunchAgent planner command", 9);
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand, "secret-redaction max-FPS planner command", 9);
   assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand, "secret-redaction Mac power settings planner command");
+  assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlanCommand, "secret-redaction Mac remote audio planner command");
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary, "secret-redaction media readiness command", 9);
   assertMediaReadinessCommand(payload.commands?.macHostMediaCommand, "secret-redaction Mac host media command", 9);
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand, "secret-redaction local smoke command", 9);

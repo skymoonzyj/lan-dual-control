@@ -130,6 +130,21 @@ function assertMacPowerPlanCommand(command, label) {
   assert(!/inject/.test(command), `${label} should not mention inject`);
 }
 
+function assertMacRemoteAudioPlanCommand(command, label) {
+  assertSecretFreeCommand(command, label);
+  assert(command.includes("node scripts/mac/plan-mac-remote-audio.mjs"), `${label} should use plan-mac-remote-audio`);
+  assert(command.includes("--boardSummary"), `${label} should be board-summary ready`);
+  assert(!/(^|\s)--apply(\s|=|$)/.test(command), `${label} should stay dry-run by default`);
+  assert(!/sudo/.test(command), `${label} should not request privileged shell execution`);
+  assert(!/--promptPassword/.test(command), `${label} should not prompt locally`);
+  assert(!/(^|\s)--password(\s|=|$)/.test(command), `${label} should not embed --password`);
+  assert(!/--sendCall/.test(command), `${label} should not send Agent Link Board calls`);
+  assert(!/--server/.test(command), `${label} should not echo board URLs`);
+  assert(!/--json/.test(command), `${label} should remain board-summary oriented`);
+  assert(!/input_event/.test(command), `${label} should not mention input events`);
+  assert(!/inject/.test(command), `${label} should not mention inject`);
+}
+
 function assertMacFormalLocalSmokeCommand(command, label, expectedPort) {
   assertSecretFreeCommand(command, label);
   assert(command.includes("node scripts/mac/check-mac-formal-local-smoke.mjs"), `${label} should use formal local smoke`);
@@ -186,6 +201,7 @@ function assertLocalSmokeCommands(payload, expectedPort, label) {
   assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand || "", `${label} MacMaxFpsSafeStart`, expectedPort);
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand || "", `${label} MacUnattendedFormal`, expectedPort);
   assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand || "", `${label} MacPowerPlan`);
+  assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlanCommand || "", `${label} MacRemoteAudioPlan`);
   assertSecretFreeCommand(payload.commands?.macHostReadinessCommand || "", `${label} MacHostReadiness`);
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", `${label} MacScriptHelp`);
   assertSecretFreeCommand(payload.commands?.rerunBoardSummaryCommand || "", `${label} rerun command`);
@@ -220,6 +236,7 @@ function checkHelp(args) {
     assert(/commands\.macClientPromptPasswordSmokeCommand/.test(result.stdout), `${script} ${flag} should document commands.macClientPromptPasswordSmokeCommand`);
     assert(/commands\.macClientBrowserSelfTestCommand/.test(result.stdout), `${script} ${flag} should document commands.macClientBrowserSelfTestCommand`);
     assert(/commands\.macPowerPlanCommand/.test(result.stdout), `${script} ${flag} should document commands.macPowerPlanCommand`);
+    assert(/commands\.macRemoteAudioPlanCommand/.test(result.stdout), `${script} ${flag} should document commands.macRemoteAudioPlanCommand`);
     assert(/commands\.macScriptHelpCommand/.test(result.stdout), `${script} ${flag} should document commands.macScriptHelpCommand`);
     assert(!/Mac host formal smoke password:/.test(result.stdout), `${script} ${flag} should not prompt`);
   }
@@ -238,6 +255,7 @@ function checkPasswordSafety(args) {
   assert(/MacFormalLocalSmoke=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include formal local smoke command");
   assert(/MacClientPromptPasswordSmoke=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include Mac client prompt-password smoke command");
   assert(/MacPowerPlan=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include Mac power settings dry-run command");
+  assert(/MacRemoteAudioPlan=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include Mac remote audio dry-run command");
   assert(/MacClientBrowserSelfTest=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include Mac client browser self-test command");
   assert(/MacScriptHelp=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include Mac script help command");
   assert(/RerunFormalLocalSmoke=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include rerun command");
@@ -290,6 +308,7 @@ function checkPasswordSafety(args) {
   assert(/MacMaxFpsSafeStart=/.test(boardLines[0]), "missing password boardSummary should include 60Hz safe start command");
   assert(/MacUnattendedFormal=/.test(boardLines[0]), "missing password boardSummary should include unattended formal command");
   assert(/MacPowerPlan=/.test(boardLines[0]), "missing password boardSummary should include Mac power settings dry-run command");
+  assert(/MacRemoteAudioPlan=/.test(boardLines[0]), "missing password boardSummary should include Mac remote audio dry-run command");
   assert(/MacFormalLocalSmoke=/.test(boardLines[0]), "missing password boardSummary should include formal local smoke command");
   assert(/MacClientPromptPasswordSmoke=/.test(boardLines[0]), "missing password boardSummary should include Mac client prompt-password smoke command");
   assert(/MacClientBrowserSelfTest=/.test(boardLines[0]), "missing password boardSummary should include Mac client browser self-test command");
@@ -683,6 +702,7 @@ async function checkFakeHostSuccess(args) {
     assert(payload.boardSummary.includes("MacMaxFpsSafeStart="), "boardSummary should include 60Hz safe start command");
     assert(payload.boardSummary.includes("MacUnattendedFormal="), "boardSummary should include formal unattended gate");
     assert(payload.boardSummary.includes("MacPowerPlan="), "boardSummary should include Mac power settings dry-run command");
+    assert(payload.boardSummary.includes("MacRemoteAudioPlan="), "boardSummary should include Mac remote audio dry-run command");
     assert(payload.boardSummary.includes("MacFormalLocalSmoke="), "boardSummary should include formal local smoke command");
     assert(payload.boardSummary.includes("MacClientPromptPasswordSmoke="), "boardSummary should include Mac client prompt-password smoke command");
     assert(payload.boardSummary.includes("MacClientBrowserSelfTest="), "boardSummary should include Mac client browser self-test command");
@@ -728,6 +748,7 @@ async function checkFakeHostBoardSummary(args) {
     assert(lines[0].includes(`MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port} --maxScreenFps 60`), "boardSummary should include 60Hz safe start command");
     assert(lines[0].includes(`MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port ${port} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`), "boardSummary should include unattended formal gate");
     assert(lines[0].includes("MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary"), "boardSummary should include Mac power settings dry-run command");
+    assert(lines[0].includes("MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary"), "boardSummary should include Mac remote audio dry-run command");
     assert(lines[0].includes(`MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port ${port} --promptPassword --boardSummary`), "boardSummary should include formal local smoke command");
     assert(lines[0].includes("MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword --boardSummary"), "boardSummary should include Mac client prompt-password smoke command");
     assert(lines[0].includes("MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary"), "boardSummary should include Mac client browser self-test command");

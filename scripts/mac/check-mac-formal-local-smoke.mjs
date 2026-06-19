@@ -89,6 +89,10 @@ JSON output:
                              Secret-free Mac power settings dry-run planner.
                              It previews pmset changes for unattended use and
                              does not apply them or request a password.
+  commands.macRemoteAudioPlanCommand
+                             Secret-free Mac remote audio dry-run planner. It
+                             explains remote-only audio options without changing
+                             system output, volume, or requesting a password.
   commands.macScriptHelpCommand
                              Secret-free Mac script help safety check. It runs
                              without prompting, reading the board, authenticating,
@@ -498,6 +502,10 @@ function makeMacPowerPlanCommand() {
   ].join(" ");
 }
 
+function makeMacRemoteAudioPlanCommand() {
+  return "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary";
+}
+
 function makeRerunBoardSummaryCommand(args) {
   return [
     "node scripts/mac/check-mac-formal-local-smoke.mjs",
@@ -541,6 +549,7 @@ function makeCommands(args) {
     macHostSafeStartCommand: makeMacHostSafeStartCommand(args),
     macMaxFpsSafeStartCommand: makeMacMaxFpsSafeStartCommand(args),
     macPowerPlanCommand: makeMacPowerPlanCommand(),
+    macRemoteAudioPlanCommand: makeMacRemoteAudioPlanCommand(),
     macScriptHelpCommand: makeMacScriptHelpCommand(),
     macUnattendedFormalCommand: makeMacUnattendedFormalCommand(args),
     rerunBoardSummaryCommand: makeRerunBoardSummaryCommand(args),
@@ -605,6 +614,7 @@ function makeBoardSummary(args, probes, failed, commands) {
     `MacMaxFpsSafeStart=${commands.macMaxFpsSafeStartCommand}.`,
     `MacUnattendedFormal=${commands.macUnattendedFormalCommand}.`,
     `MacPowerPlan=${commands.macPowerPlanCommand}.`,
+    `MacRemoteAudioPlan=${commands.macRemoteAudioPlanCommand}.`,
     `MacFormalLocalSmoke=${commands.macFormalLocalSmokeCommand}.`,
     `MacClientPromptPasswordSmoke=${commands.macClientPromptPasswordSmokeCommand}.`,
     `MacClientBrowserSelfTest=${commands.macClientBrowserSelfTestCommand}.`,
@@ -638,6 +648,7 @@ function makeFailureReport(error, argv) {
       `MacMaxFpsSafeStart=${commands.macMaxFpsSafeStartCommand}.`,
       `MacUnattendedFormal=${commands.macUnattendedFormalCommand}.`,
       `MacPowerPlan=${commands.macPowerPlanCommand}.`,
+      `MacRemoteAudioPlan=${commands.macRemoteAudioPlanCommand}.`,
       `MacFormalLocalSmoke=${commands.macFormalLocalSmokeCommand}.`,
       `MacClientPromptPasswordSmoke=${commands.macClientPromptPasswordSmokeCommand}.`,
       `MacClientBrowserSelfTest=${commands.macClientBrowserSelfTestCommand}.`,
@@ -682,6 +693,7 @@ function printReport(args, report) {
   print(args, "NEXT", `Mac 60Hz safe foreground start: ${report.commands.macMaxFpsSafeStartCommand}`);
   print(args, "NEXT", `Mac unattended formal 60Hz gate: ${report.commands.macUnattendedFormalCommand}`);
   print(args, "NEXT", `Mac power settings dry-run plan: ${report.commands.macPowerPlanCommand}`);
+  print(args, "NEXT", `Mac remote audio dry-run plan: ${report.commands.macRemoteAudioPlanCommand}`);
   print(args, "NEXT", `Mac client prompt-password smoke: ${report.commands.macClientPromptPasswordSmokeCommand}`);
   print(args, "NEXT", `Mac client browser self-test: ${report.commands.macClientBrowserSelfTestCommand}`);
   print(args, "NEXT", `Mac script help safety check: ${report.commands.macScriptHelpCommand}`);
