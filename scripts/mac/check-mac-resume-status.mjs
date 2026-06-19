@@ -132,6 +132,11 @@ Machine-readable JSON fields:
                              preflight command; it discovers Windows hosts and
                              prints a summary without authenticating, prompting
                              for a password, sending a call, or sending input.
+  commands.macClientPromptPasswordSmokeCommand
+                             User-run Mac controls Windows browser-smoke command;
+                             it discovers Windows hosts, ensures the local Mac
+                             client page, then rings and prompts in a frontmost
+                             password dialog only when a human explicitly runs it.
   commands.macClientBrowserSelfTestCommand
                              Secret-free local Mac client browser self-test
                              command; it starts a temporary mock Windows host
@@ -906,6 +911,10 @@ function makeMacClientFormalSmokeCommand() {
   return "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
 }
 
+function makeMacClientPromptPasswordSmokeCommand() {
+  return "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword --boardSummary";
+}
+
 function makeMacClientBrowserSelfTestCommand() {
   return "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
 }
@@ -1113,6 +1122,7 @@ function formatBoardSummary(report) {
       `MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}.`,
       `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
       `MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}.`,
+      `MacClientPromptPasswordSmoke=${report.commands.macClientPromptPasswordSmokeCommand}.`,
       `MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}.`,
       `MacHeartbeatOnce=${report.commands.macHeartbeatOnceCommand}.`,
       `MacHeartbeatWatch=${report.commands.macHeartbeatWatchCommand}.`,
@@ -1154,6 +1164,7 @@ function formatBoardSummary(report) {
     `MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}.`,
     `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
     `MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}.`,
+    `MacClientPromptPasswordSmoke=${report.commands.macClientPromptPasswordSmokeCommand}.`,
     `MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}.`,
     `MacHeartbeatOnce=${report.commands.macHeartbeatOnceCommand}.`,
     `MacHeartbeatWatch=${report.commands.macHeartbeatWatchCommand}.`,
@@ -1248,6 +1259,7 @@ function printReport(report) {
   console.log(`[NEXT] Mac client reverse rehearsal: ${report.commands.macClientReverseRehearsalAction}`);
   console.log(`[NEXT] Mac client formal checklist: ${report.commands.macClientFormalChecklistCommand}`);
   console.log(`[NEXT] Mac client formal smoke preflight: ${report.commands.macClientFormalSmokeCommand}`);
+  console.log(`[NEXT] Mac client prompt-password smoke: ${report.commands.macClientPromptPasswordSmokeCommand}`);
   console.log(`[NEXT] Mac client browser self-test: ${report.commands.macClientBrowserSelfTestCommand}`);
   console.log(`[NEXT] Mac heartbeat one-shot board update: ${report.commands.macHeartbeatOnceCommand}`);
   console.log(`[NEXT] Mac heartbeat continuous board watcher: ${report.commands.macHeartbeatWatchCommand}`);
@@ -1314,6 +1326,7 @@ async function main() {
       macClientReverseRehearsalAction: makeMacClientReverseRehearsalAction(),
       macClientFormalChecklistCommand: makeMacClientFormalChecklistCommand(),
       macClientFormalSmokeCommand: makeMacClientFormalSmokeCommand(),
+      macClientPromptPasswordSmokeCommand: makeMacClientPromptPasswordSmokeCommand(),
       macClientBrowserSelfTestCommand: makeMacClientBrowserSelfTestCommand(),
       macHeartbeatOnceCommand: makeMacHeartbeatOnceCommand(),
       macHeartbeatWatchCommand: makeMacHeartbeatWatchCommand(),

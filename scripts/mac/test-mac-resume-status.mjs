@@ -203,6 +203,9 @@ function assertBoardSummaryShape(text, label) {
   assert(/MacClientFormalChecklist=.*--port 43770/.test(text), `${label} should keep the default Windows host port explicit for discovery`);
   assert(/MacClientFormalSmoke=/.test(text), `${label} should include Mac client formal smoke preflight guidance`);
   assert(/run-mac-client-formal-smoke\.mjs/.test(text), `${label} should include the Mac client formal smoke preflight command`);
+  assert(/MacClientPromptPasswordSmoke=/.test(text), `${label} should include Mac client prompt-password smoke guidance`);
+  assert(/MacClientPromptPasswordSmoke=.*run-mac-client-formal-smoke\.mjs/.test(text), `${label} should include the Mac client prompt-password smoke command`);
+  assert(/MacClientPromptPasswordSmoke=.*--promptPassword/.test(text), `${label} should make the prompt-password smoke path explicit`);
   assert(/MacClientBrowserSelfTest=/.test(text), `${label} should include Mac client browser self-test guidance`);
   assert(/scripts\/mac\/test-mac-client-browser-self-test-wrapper\.mjs/.test(text), `${label} should include the Mac client browser self-test command`);
   assert(/MacHeartbeatOnce=/.test(text), `${label} should include Mac heartbeat one-shot guidance`);
@@ -438,6 +441,23 @@ function assertMacClientFormalSmokeCommand(command, label) {
   assert(!command.includes("--json"), `${label} should default to one-line boardSummary output`);
 }
 
+function assertMacClientPromptPasswordSmokeCommand(command, label) {
+  assert(/run-mac-client-formal-smoke\.mjs/.test(command), `${label} should use run-mac-client-formal-smoke`);
+  assert(command.includes("--discover"), `${label} should discover Windows hosts safely before the real smoke`);
+  assert(command.includes("--ensureClient"), `${label} should safely start or reuse the local Mac client page`);
+  assert(command.includes("--promptPassword"), `${label} should use the frontmost password prompt`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!command.includes("--preflightOnly"), `${label} should be the real smoke path, not preflight`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--useEnvPassword"), `${label} should not expose the child env-password test path`);
+  assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!command.includes("--forceCall"), `${label} should not replace an Agent Link Board call`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+  assert(!command.includes("--json"), `${label} should default to one-line boardSummary output`);
+  assert(!command.includes("input_event"), `${label} should not mention input events`);
+  assert(!command.includes("inject"), `${label} should not mention inject`);
+}
+
 function assertMacClientBrowserSelfTestCommand(command, label) {
   assert(/scripts\/mac\/test-mac-client-browser-self-test-wrapper\.mjs/.test(command), `${label} should use the Mac browser self-test wrapper`);
   assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
@@ -567,6 +587,7 @@ function checkHelp(args) {
     assert(/commands\.macClientDiscoverWindowsCommand/.test(result.stdout), `${script} ${flag} should document Mac client Windows discovery JSON field`);
     assert(/commands\.macClientFormalChecklistCommand/.test(result.stdout), `${script} ${flag} should document Mac client formal checklist JSON field`);
     assert(/commands\.macClientFormalSmokeCommand/.test(result.stdout), `${script} ${flag} should document Mac client formal smoke preflight JSON field`);
+    assert(/commands\.macClientPromptPasswordSmokeCommand/.test(result.stdout), `${script} ${flag} should document Mac client prompt-password smoke JSON field`);
     assert(/commands\.macClientBrowserSelfTestCommand/.test(result.stdout), `${script} ${flag} should document Mac client browser self-test JSON field`);
     assert(/commands\.macHeartbeatOnceCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat one-shot JSON field`);
     assert(/commands\.macHeartbeatWatchCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat watcher JSON field`);
@@ -627,6 +648,7 @@ function checkOfflineJson(args) {
   assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "offline JSON Mac client reverse rehearsal action");
   assertMacClientFormalChecklistCommand(payload.commands?.macClientFormalChecklistCommand || "", "offline JSON Mac client formal checklist command");
   assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "offline JSON Mac client formal smoke preflight command");
+  assertMacClientPromptPasswordSmokeCommand(payload.commands?.macClientPromptPasswordSmokeCommand || "", "offline JSON Mac client prompt-password smoke command");
   assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "offline JSON Mac client browser self-test command");
   assertMacHeartbeatOnceCommand(payload.commands?.macHeartbeatOnceCommand || "", "offline JSON Mac heartbeat one-shot command");
   assertMacHeartbeatWatchCommand(payload.commands?.macHeartbeatWatchCommand || "", "offline JSON Mac heartbeat watcher command");
@@ -713,6 +735,7 @@ function checkOfflinePlainReport(args) {
   assert(String(result.stdout || "").includes("Mac client reverse rehearsal:"), "plain report should include Mac client reverse rehearsal label");
   assert(String(result.stdout || "").includes("Mac client formal checklist:"), "plain report should include Mac client formal checklist label");
   assert(String(result.stdout || "").includes("Mac client formal smoke preflight:"), "plain report should include Mac client formal smoke preflight label");
+  assert(String(result.stdout || "").includes("Mac client prompt-password smoke:"), "plain report should include Mac client prompt-password smoke label");
   assert(String(result.stdout || "").includes("Mac client browser self-test:"), "plain report should include Mac client browser self-test label");
   assert(String(result.stdout || "").includes("Mac heartbeat one-shot board update:"), "plain report should include Mac heartbeat one-shot label");
   assert(String(result.stdout || "").includes("Mac heartbeat continuous board watcher:"), "plain report should include Mac heartbeat watcher label");
@@ -793,6 +816,7 @@ function checkOnlineJson(args) {
   assertMacClientReverseRehearsalAction(payload.commands?.macClientReverseRehearsalAction || "", "online JSON Mac client reverse rehearsal action");
   assertMacClientFormalChecklistCommand(payload.commands?.macClientFormalChecklistCommand || "", "online JSON Mac client formal checklist command");
   assertMacClientFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "online JSON Mac client formal smoke preflight command");
+  assertMacClientPromptPasswordSmokeCommand(payload.commands?.macClientPromptPasswordSmokeCommand || "", "online JSON Mac client prompt-password smoke command");
   assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "online JSON Mac client browser self-test command");
   assertMacHeartbeatOnceCommand(payload.commands?.macHeartbeatOnceCommand || "", "online JSON Mac heartbeat one-shot command");
   assertMacHeartbeatWatchCommand(payload.commands?.macHeartbeatWatchCommand || "", "online JSON Mac heartbeat watcher command");

@@ -21,6 +21,40 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让开工第一屏直接暴露 Mac 控 Windows 真实 browser smoke 的前台密码入口。
+完成内容：
+- `check-mac-heartbeat --json/--boardSummary` 新增 `commands.macClientPromptPasswordSmokeCommand` / `MacClientPromptPasswordSmoke=`。
+- `check-mac-resume-status --json/--boardSummary` 和普通输出同步新增 `macClientPromptPasswordSmokeCommand` / `MacClientPromptPasswordSmoke=` / `Mac client prompt-password smoke:`。
+- 新命令统一为 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword --boardSummary`，用于用户在场时进入真实 Mac 控 Windows browser smoke；摘要生成阶段不弹密码、不认证、不发送 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` 失败在 boardSummary 缺 `MacClientPromptPasswordSmoke=`。
+- 红灯：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 15000` 失败在 help 缺 `commands.macClientPromptPasswordSmokeCommand`。
+- 绿灯：实现后复跑上述两条自测通过。
+- 语法：`node --check` 覆盖本轮 4 个 Mac 脚本通过。
+- Help：`node scripts/mac/test-mac-script-help.mjs --script check-mac-heartbeat.mjs --script check-mac-resume-status.mjs --timeoutMs 10000 --boardSummary` 通过 4/4。
+- 抽样：无密 JSON 检查确认 heartbeat/resume 都输出 `MacClientPromptPasswordSmoke=`，且不含 `--password`、`--useEnvPassword`、`--sendCall` 或 `inject`。
+- `git diff --check` 和本轮触达文件冲突标记扫描通过。
+遗留问题：
+- 当前本机 Mac host 仍运行旧 build；本轮没有重启 host，也没有请求用户密码或执行真实 browser smoke。
+下一步建议：
+- 白天用户在场且 Windows host 已准备好后，可从 `MacHeartbeat=` 或 `MacResumeStatus=` 复制 `MacClientPromptPasswordSmoke=` 进入真实 browser smoke；无人值守时继续只跑 `MacClientFormalSmoke=` 无密 preflight 或 `MacClientBrowserSelfTest=` 本地 mock 自测。
+是否改了协议：否；只补 Mac 侧恢复/心跳摘要和自测。
+是否需要另一端配合：本轮不需要；Windows 端后续可按需消费 `MacClientPromptPasswordSmoke=`。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：修复 Mac client formal smoke preflight 下一步认证命令指向不够安全直观的问题。
 完成内容：
 - `run-mac-client-formal-smoke --preflightOnly/--dryRun/--sendCall --json/--boardSummary` 在已有 Windows host 时新增 `commands.promptPasswordSmoke` / `MacClientPromptPasswordSmoke=`。

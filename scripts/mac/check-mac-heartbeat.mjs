@@ -91,6 +91,7 @@ Machine-readable JSON fields:
                               including Mac resume status, formal E2E readiness,
                               Mac media baseline, the local Mac client mock
                               browser self-test, Mac script help safety check,
+                              the user-run prompt-password Mac client smoke,
                               60Hz safe start, and LaunchAgent load/print checks.
 
 Examples:
@@ -621,6 +622,7 @@ function buildCommands(args) {
     macClientDiscoverWindowsCommand: "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary",
     macClientFormalChecklistCommand: "node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary",
     macClientFormalSmokeCommand: "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary",
+    macClientPromptPasswordSmokeCommand: "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword --boardSummary",
     macClientBrowserSelfTestCommand: "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary",
     macScriptHelpCommand: "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary",
   };
@@ -746,6 +748,7 @@ function makeBoardSummary(report) {
     `MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}.`,
     `MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}.`,
     `MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}.`,
+    `MacClientPromptPasswordSmoke=${report.commands.macClientPromptPasswordSmokeCommand}.`,
     `MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}.`,
     `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
     "No password was requested or sent; no WebSocket auth/input/inject was attempted.",
