@@ -197,6 +197,22 @@ function readyBoardState() {
   };
 }
 
+function readyWhileWindowsPushingBoardState() {
+  const state = readyBoardState();
+  return {
+    ...state,
+    statuses: {
+      ...state.statuses,
+      "Windows Codex": {
+        status: "pushing-soon",
+        role: "Windows 端",
+        note: "Preparing final push for Windows manual UX coordination; Mac should wait before starting real manual UX validation.",
+        updatedAt: "2026-06-20T01:24:58.000Z",
+      },
+    },
+  };
+}
+
 function loopbackOnlyBoardState() {
   return {
     updatedAt: "2026-06-20T01:27:00.000Z",
@@ -516,6 +532,21 @@ async function checkReadyJson(args) {
     assertSecretSafe(JSON.stringify(payload), "ready JSON");
   });
   console.log("[OK] Mac manual UX status detects ready PostPass board state");
+}
+
+async function checkReadyWhileWindowsPushingAddsManualUxGate(args) {
+  await withFakeBoard(readyWhileWindowsPushingBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `ready while Windows pushing JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "ready while Windows pushing JSON");
+    assert(payload.status === "ready", `ready while Windows pushing status mismatch: ${payload.status}`);
+    assert(payload.warnings?.includes("windows-codex-pushing"), `ready while Windows pushing should include warning: ${JSON.stringify(payload.warnings)}`);
+    assertIncludes(payload.boardSummary, "ManualUxGate=wait-windows-codex-push", "ready while Windows pushing boardSummary");
+    assertIncludes(payload.nextActions?.join("\n") || "", "Wait for Windows Codex to finish push/rebase coordination", "ready while Windows pushing nextActions");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `read-only ready status should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "ready while Windows pushing JSON");
+  });
+  console.log("[OK] Mac manual UX status gates ready state while Windows is pushing");
 }
 
 async function checkLoopbackTargetIsNotAdvertised(args) {
@@ -855,6 +886,7 @@ async function main() {
   }
   await checkHelp(args);
   await checkReadyJson(args);
+  await checkReadyWhileWindowsPushingAddsManualUxGate(args);
   await checkLoopbackTargetIsNotAdvertised(args);
   await checkChinesePunctuationAfterChecklist(args);
   await checkBoardSummary(args);

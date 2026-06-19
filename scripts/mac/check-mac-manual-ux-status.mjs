@@ -540,43 +540,52 @@ function makeReport(state, server) {
     manualUxCall,
     coordination: {
       windowsCodex: windowsCoordination,
+      manualUxGate: windowsCoordination.pushInProgress ? "wait-windows-codex-push" : "clear",
     },
     blockers,
     warnings,
-    nextActions: makeNextActions(status, manualUxCall, server),
+    nextActions: makeNextActions(status, manualUxCall, server, windowsCoordination),
   };
   report.boardSummary = makeBoardSummary(report);
   return report;
 }
 
-function makeNextActions(status, manualUxCall = null, server = defaults.server) {
+function withCoordinationGate(actions, status, windowsCoordination = null) {
+  if (!windowsCoordination?.pushInProgress || status === "waiting") return actions;
+  return [
+    "Wait for Windows Codex to finish push/rebase coordination before starting manual UX testing or replacing the call.",
+    ...actions,
+  ];
+}
+
+function makeNextActions(status, manualUxCall = null, server = defaults.server, windowsCoordination = null) {
   if (status === "ready") {
-    return [
+    return withCoordinationGate([
       "Keep Mac host, Mac client, and heartbeat online for user-present manual UX testing.",
       "Validate connection, video, audio, clipboard text/file, window, fullscreen, original quality, and copy diagnostics.",
       "Record real manual UX findings instead of returning to formal E2E password flow.",
-    ];
+    ], status, windowsCoordination);
   }
   if (status === "call-ready") {
-    return [
+    return withCoordinationGate([
       "Send the ManualUxCallCommand to Agent Link Board before asking the user or Windows side to act.",
       "State the goal, safety boundary, and estimated 5-10 minute duration in the call.",
       "Do not request credentials or send remote input commands from this status command.",
-    ];
+    ], status, windowsCoordination);
   }
   if (status === "calling") {
     if (manualUxCall?.timedOut) {
-      return [
+      return withCoordinationGate([
         "The current Mac manual UX call timed out before confirmation.",
         `After Windows Codex is not pushing/rebasing, run: node scripts/mac/check-mac-manual-ux-status.mjs --server ${server} --reconfirmCall --json`,
         "Do not request credentials or send remote input commands while reconfirming the manual UX window.",
-      ];
+      ], status, windowsCoordination);
     }
-    return [
+    return withCoordinationGate([
       "Wait for Windows Codex/User to confirm the manual UX validation window.",
       "Do not send another manual UX call while the current one is active.",
       "After confirmation, validate connection, video, audio, clipboard, file, window, fullscreen, original quality, and copy diagnostics.",
-    ];
+    ], status, windowsCoordination);
   }
   return [
     "Wait for PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby, MAC_STANDING_BY_FOR_MANUAL_UX_TEST, the usable-entry manual UX currentCall, or USER_AWAKE manual UX coordination on Agent Link Board.",
@@ -620,6 +629,7 @@ function makeBoardSummary(report) {
   if (report.sentCall?.ok === false) parts.push("ManualUxCallSent=false");
   if (report.reconfirmedCall?.ok) parts.push("ManualUxCallReconfirmed=true");
   if (report.reconfirmedCall?.ok === false) parts.push("ManualUxCallReconfirmed=false");
+  if (report.coordination?.manualUxGate === "wait-windows-codex-push") parts.push("ManualUxGate=wait-windows-codex-push");
   if (report.blockers.length > 0) parts.push(`blockers=${report.blockers.join(",")}`);
   if (report.warnings.length > 0) parts.push(`warnings=${report.warnings.join(",")}`);
   return parts.join(" ");
