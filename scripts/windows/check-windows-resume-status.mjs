@@ -479,6 +479,34 @@ function isSecureAuthCurrentCall(call) {
   return /secure\s*auth|安全认证|认证路径|随机运行期密码|运行期密码|LAN_DUAL_PASSWORD|promptPassword|password|密码|auth/i.test(text);
 }
 
+function isPostPassCurrentCall(call) {
+  if (!call?.active) return false;
+  const text = [
+    call.goal,
+    call.environment,
+    call.connection,
+    call.command,
+    call.expected,
+    call.actual,
+    call.ask,
+    call.blockedBy,
+  ].join("\n");
+  return /REAL_TEST_PASS/.test(text) &&
+    /(后续|PASS_RECORDED|TAIL_ERROR|NativeCommandFailed|手工体验|manual\s*ux|不要回旧|diagnostics\s*循环)/i.test(text);
+}
+
+function makePrimaryNextSegments(report, mac) {
+  if (isPostPassCurrentCall(report.board?.currentCall)) {
+    return [
+      "PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby.",
+      "ManualUxChecklist=connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics.",
+    ];
+  }
+  return [
+    `Next=${mac.ok ? report.commands.formalRunFixedTarget : report.commands.preflightBoardSummary}.`,
+  ];
+}
+
 function annotateBoardCurrentCall(board, commands) {
   const currentCall = board?.currentCall;
   if (!currentCall?.present) {
@@ -3517,7 +3545,7 @@ function makeBoardSummary(report) {
     ...(report.board.windowsLanRisk?.found
       ? [`WindowsLanRisk=${report.board.windowsLanRisk.summary}.`]
       : []),
-    `Next=${mac.ok ? report.commands.formalRunFixedTarget : report.commands.preflightBoardSummary}.`,
+    ...makePrimaryNextSegments(report, mac),
     `MacDiscovery=${report.commands.macHostDiscoveryBoardSummary}.`,
     `MacDiscoveryPs=${report.commands.macHostDiscoveryPowerShellBoardSummary}.`,
     `MacHostReadiness=${report.commands.macHostReadinessCommand}.`,

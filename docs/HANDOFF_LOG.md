@@ -19,6 +19,36 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 00:59 CST
+开发端：Mac Codex
+本轮目标：修正 Windows resume/status 在 `REAL_TEST_PASS` 后续呼叫下仍把主 `Next=` 指向 formal E2E 密码复跑的旧循环提示。
+完成内容：
+- 复现真实通讯板现象：当前 call 已是 `REAL_TEST_PASS` 后续，但 `check-windows-resume-status --checkBoard --boardSummary` 仍输出 `Next=...check-mac-formal-e2e.ps1 ... -PromptPassword`，容易让两端回到旧第二步/diagnostics 循环。
+- 新增回归用例：模拟 `REAL_TEST_PASS 后续` currentCall，要求 boardSummary 输出 `PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby`，且主 `Next=` 不再是 formal E2E 密码命令。
+- `check-windows-resume-status` 现在只在该类 PASS 后续 currentCall 下替换主下一步；普通 Mac ready / `MAC_READY_FOR_REAL_TEST` 场景仍保留原 formal E2E `Next=`，避免影响真正需要复跑的流程。
+- 真实通讯板摘要已确认输出 `PostPassNext=...` 与 `ManualUxChecklist=connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics`；本轮未认证、未请求或发送密码、未发 input/inject。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `docs/HANDOFF_LOG.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增 `checkPostPassCallDoesNotRequestFormalRerun` 后，`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 20000` 先失败在缺少 `PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby`，并显示旧 `Next=...-PromptPassword`。
+- 绿灯：同一命令修复后通过，包含 `Windows resume status does not send post-pass currentCall back to formal E2E`。
+- 语法：`node --check scripts/windows/check-windows-resume-status.mjs`、`node --check scripts/windows/test-windows-resume-status.mjs` 通过。
+- 真实通讯板：`node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary --allowMockVideo --skipAudio --skipClipboard --skipInputLog --timeoutMs 12000` 输出 `PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby`。
+遗留问题：
+- Windows 端仍需上报 `REAL_TEST_PASS_RECORDED + TAIL_ERROR_INVESTIGATION_STATUS`。
+- 下一轮手工体验测试仍需用户在场；true input inject 仍必须用户明确看着 Mac 屏幕。
+下一步建议：
+- 白天继续时先看 Agent Link Board；看到 `PostPassNext=` 就按 PASS 后分工推进，不要回旧 formal E2E 第二步。
+是否改了协议：否；只改 Windows resume/status 摘要选择和回归测试。
+是否需要另一端配合：需要 Windows 端继续记录 PASS 和尾部错误排查；不需要 Windows 改 Mac 代码。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 00:52 CST
 开发端：Mac Codex
 本轮目标：收尾校正 `REAL_TEST_PASS` 后的短期下一步描述，避免继续按旧“Windows 真实测试未开始”口径行动。

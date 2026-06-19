@@ -298,6 +298,20 @@ function userAuthBlockedCallForWindowsRealTest() {
   };
 }
 
+function postPassCallForManualUx() {
+  return {
+    status: "CALLING",
+    from: "Supervisor Codex",
+    need: "Windows Codex, Mac Codex",
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    goal: "REAL_TEST_PASS 后续：Windows 记录 PASS 并排查尾部错误；Mac 保持 host 等手工体验测试",
+    expected: "Windows 上报 REAL_TEST_PASS_RECORDED + TAIL_ERROR_INVESTIGATION_STATUS；Mac 上报 MAC_STANDING_BY_FOR_MANUAL_UX_TEST。",
+    actual: "Formal E2E 主体 PASS；尾部 NativeCommandFailed 单独处理。",
+    ask: "请按分工执行，不要回旧第二步/diagnostics 循环。",
+  };
+}
+
 async function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = await run([flag], args);
@@ -1003,6 +1017,35 @@ async function checkUserAuthBlockedCallDoesNotRequestAgentAck(args) {
       console.log("[OK] Windows resume status does not request AgentCallAck for user-auth blocked currentCall");
     }, {
       currentCall: userAuthBlockedCallForWindowsRealTest(),
+    });
+  });
+}
+
+async function checkPostPassCallDoesNotRequestFormalRerun(args) {
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--boardSummary",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args, freeWindowsClientPortsEnv);
+      assert(result.exitCode === 0, `mock post-pass currentCall board summary failed\n${result.stdout}\n${result.stderr}`);
+      assertIncludes(result.stdout, "call=CALLING Supervisor Codex->Windows Codex, Mac Codex", "post-pass currentCall board summary");
+      assertIncludes(result.stdout, "PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby", "post-pass currentCall board summary");
+      assertNotIncludes(result.stdout, "Next=powershell.exe", "post-pass currentCall board summary should not prompt formal E2E rerun as primary Next");
+      assertNotIncludes(result.stdout, "Next=PowerShell", "post-pass currentCall board summary should not prompt formal E2E rerun as primary Next");
+      assertNotIncludes(result.stdout + result.stderr, "test-password", "post-pass currentCall board summary");
+      console.log("[OK] Windows resume status does not send post-pass currentCall back to formal E2E");
+    }, {
+      currentCall: postPassCallForManualUx(),
     });
   });
 }
@@ -2236,6 +2279,7 @@ async function main() {
   await checkBoardCurrentCallSummary(args);
   await checkSecureAuthCallNextSummary(args);
   await checkUserAuthBlockedCallDoesNotRequestAgentAck(args);
+  await checkPostPassCallDoesNotRequestFormalRerun(args);
   await checkBoardMacHeartbeatHealthExtraction(args);
   await checkBoardMacPowerAndUnattendedHealthExtraction(args);
   await checkBoardMacHostSafeStartExtraction(args);
