@@ -21,6 +21,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端消费 `MacHeartbeatRerun=` 心跳复查入口。
+完成内容：
+- `parseMacUnattendedAttention` 新增 `MacHeartbeatRerun=` 识别和中文风险标签“Mac 心跳复查命令已提供”。
+- 当同段 `MacHeartbeat=` 已经 stale/blocked、出现非空 warning/blocker、Mac Codex stale/reconnect 或旧 build 上下文，并带 `MacHeartbeatRerun=node scripts/mac/check-mac-heartbeat.mjs ... --boardSummary` 时，Mac 提醒区、快速摘要和复制/导出诊断会显示该复查入口。
+- 新增页面自测覆盖 `MacHeartbeat=status=blocked ... MacHeartbeatRerun=`；干净命令清单仍不误弹。Windows 端只提示/复制，不运行 Mac 脚本、不认证、不发密码/input/inject。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败在 `MacHeartbeat=blocked ... MacHeartbeatRerun=` 缺少“Mac 心跳复查命令已提供”。
+- 绿灯：实现后复跑同一命令通过。
+- 收尾复跑：`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`、`git diff --check`。
+遗留问题：
+- 本轮只消费 Mac 摘要标签，不启动或运行 `check-mac-heartbeat`；真实心跳复查仍由 Mac 端或人工按摘要命令执行。
+下一步建议：
+- 后续如果 Mac heartbeat 继续新增更多安全复查标签，Windows 端保持同一规则：有风险上下文才提示，干净命令清单不误弹。
+是否改了协议：否；只补 Windows 控制端诊断识别、自测和文档。
+是否需要另一端配合：不需要；Mac 端如看到 Windows 已拉取该提交，可继续上板 `MacHeartbeatRerun=` 让 Windows 侧直接读到中文提示。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端在 `MacUnattendedStatus=` / 值守 warning 上下文里也能提示 `MacClientBrowserSelfTest=` 本地 browser 自测入口。
 完成内容：
 - `parseMacUnattendedAttention` 的 `MacClientBrowserSelfTest=` 识别现在会复用同段已解析出的值守风险：只要同段已有非空 warning/blocker 或其它风险标签，就显示“Mac client 本地 browser 自测命令已提供”。

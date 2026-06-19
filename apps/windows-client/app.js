@@ -265,6 +265,7 @@ const macUnattendedRiskLabels = {
   "host-unreachable": "Mac host 不可达",
   "mac-heartbeat-summary-stale": "Mac 心跳摘要过旧",
   "mac-heartbeat-stale": "Mac 心跳过期，可能卡住",
+  "mac-heartbeat-rerun-command": "Mac 心跳复查命令已提供",
   "mac-heartbeat-once-command": "Mac 单次心跳上板命令已提供",
   "mac-heartbeat-watch-command": "Mac 持续心跳 watcher 命令已提供",
   "mac-heartbeat-start-command": "Mac 后台心跳启动命令已提供",
@@ -3323,6 +3324,7 @@ function parseMacUnattendedAttention(text) {
   const hasMacScriptHelp =
     /\bMacScriptHelp\s*=\s*(?:node\s+scripts[\\/]+mac[\\/]+)?test-mac-script-help\.mjs\b/i.test(source);
   const hasMacFormalE2e = /\bMacFormalE2E\s*=/i.test(source);
+  const hasMacHeartbeatRerun = /\bMacHeartbeatRerun\s*=/i.test(source);
   const hasMacHeartbeatOnce = /\bMacHeartbeatOnce\s*=/i.test(source);
   const hasMacHeartbeatWatch = /\bMacHeartbeatWatch\s*=/i.test(source);
   const hasMacHeartbeatStart = /\bMacHeartbeatStart\s*=/i.test(source);
@@ -3524,6 +3526,12 @@ function parseMacUnattendedAttention(text) {
     )
   ) {
     risks.unshift("mac-script-help-command");
+  }
+  if (
+    hasMacHeartbeatRerun &&
+    (risks.length > 0 || /ready\s*=\s*false|blocked|failed|stale|watchdog|heartbeat|codex-reconnect|mac-codex/.test(lower))
+  ) {
+    risks.unshift("mac-heartbeat-rerun-command");
   }
   if (
     hasMacHeartbeatOnce &&

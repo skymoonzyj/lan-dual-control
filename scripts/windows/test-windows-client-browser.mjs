@@ -1672,6 +1672,15 @@ async function verifyDesktopOnlyHostPanel(session) {
               ].join("; "),
             )
           : null;
+      const macHeartbeatRerunAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "MacHeartbeat=status=blocked blockers=mac-codex-stale warnings=mac-host-build-stale reason=mac-codex-stale",
+                "MacHeartbeatRerun=node scripts/mac/check-mac-heartbeat.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary",
+              ].join("; "),
+            )
+          : null;
       const macFormalE2eBrowserSelfTestAttention =
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
@@ -2014,6 +2023,7 @@ async function verifyDesktopOnlyHostPanel(session) {
           cleanMacScriptHelpAttention?.summary === "" &&
           Array.isArray(cleanMacScriptHelpAttention?.labels) &&
           cleanMacScriptHelpAttention.labels.length === 0 &&
+          macHeartbeatRerunAttention?.summary.includes("Mac 心跳复查命令已提供") &&
           macFormalE2eBrowserSelfTestAttention?.summary.includes("Mac client 本地 browser 自测命令已提供") &&
           macFormalE2eScriptHelpAttention?.summary.includes("Mac 脚本 help 安全自检命令已提供") &&
           readinessHeaderText.includes("client-test") &&
@@ -2073,6 +2083,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         macUnattendedBrowserSelfTestAttention,
         cleanMacClientPromptPasswordSmokeAttention,
         cleanMacScriptHelpAttention,
+        macHeartbeatRerunAttention,
         macFormalE2eBrowserSelfTestAttention,
         macFormalE2eScriptHelpAttention,
         readinessHeader: readinessHeaderLines.slice(0, 4),
