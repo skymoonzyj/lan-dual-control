@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：同步 Mac heartbeat watcher 最新运行事实，避免另一端继续按旧交接文字把“需要人工重启刷新模式”当成当前待办。
+完成内容：
+- 记录已推送代码提交 `15168dc` / `5cd9a23` 后的真实状态：后台 `Mac Heartbeat` watcher 已实际重启为 `refreshUnattended=true`，`start-mac-heartbeat-watcher --status --boardSummary` 输出 `configMismatch=none`。
+- 当前 `check-mac-resume-status --checkBoard --boardSummary` 已显示 `MacHeartbeatRefresh=enabled`、`MacUnattendedFreshness=fresh`，说明后台 watcher 正在持续刷新独立 `Mac Unattended` 证据；无需再为了 freshness 重启 watcher。
+- `start-mac-heartbeat-watcher --status` 现在按 watcher metadata 报告真实 `refreshUnattended`，并在“命令要求 refresh 但复用旧 watcher”时给出 `configurationMismatches` / `configMismatch=refreshUnattended` 与 `RefreshRestart=` 指引。
+- 本轮只同步交接文档；不改协议，不执行 `pmset`，不加载 `launchctl`，不认证 WebSocket，不请求或发送密码，也不发送 call/input/inject。
+修改文件：
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 开工检查：`git status --short --branch` 干净，`HEAD...origin/main` 为 `0 0`，Agent Link Board `currentCall=none`。
+- 真实只读复查：`node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary` 输出 `refreshUnattended=true`、`configMismatch=none`。
+- 真实只读复查：`node scripts/mac/check-mac-resume-status.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary` 输出 `MacHeartbeatRefresh=enabled`、`MacUnattendedFreshness=fresh`。
+- 文档收尾验证：`git diff --check` 通过，交接文档冲突标记扫描无命中。
+遗留问题：
+- Mac 值守真实风险仍是 `launch-agent-not-loaded` 和系统/显示睡眠 warning；处理 `launchctl` / `pmset` 需要用户现场确认和授权，本轮不执行。
+下一步建议：
+- 后续开工先看 `MacHeartbeatRefresh=enabled` 与 `configMismatch=none`；若两者正常，不要重复重启 watcher。
+- 只有看到 `MacHeartbeatRefresh=disabled` 或 `configMismatch=refreshUnattended` 时，才复制 `MacHeartbeatRefreshRestart=` / `RefreshRestart=` 切回刷新模式。
+- 真正下一块仍是用户在场时处理 LaunchAgent / 电源设置，或按通讯板与 Windows Codex 协调正式 E2E / 反控演练。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Windows 端只需读最新交接和通讯板即可。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让最常见的 `MacHeartbeat=` 心跳摘要也直接给出 `MacHeartbeatRefreshRestart=`，不用只依赖 `MacResumeStatus=` 或 watcher status。
 完成内容：
 - `check-mac-heartbeat` JSON `commands` 新增 `macHeartbeatRefreshRestartCommand`。
