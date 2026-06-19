@@ -533,6 +533,17 @@ function emptyMacHeartbeatFreshness(source = "none", textCount = 0) {
   };
 }
 
+function emptyMacEvidence(source = "none", textCount = 0, rejectedCount = 0) {
+  return {
+    found: false,
+    source,
+    textCount,
+    tokens: [],
+    summary: "not-seen",
+    rejectedCount,
+  };
+}
+
 function collectStringValues(value, results = [], depth = 0) {
   if (depth > 6 || value === null || value === undefined) return results;
   if (typeof value === "string") {
@@ -647,6 +658,106 @@ function extractMacHeartbeatFreshnessFromBoardState(state) {
 function extractMacHeartbeatFreshnessFromText(text, source = "text") {
   const value = String(text || "");
   return extractMacHeartbeatFreshnessFromTexts(value ? [value] : [], source);
+}
+
+function splitMacEvidenceSegments(text) {
+  return String(text || "")
+    .split(/[;\r\n]+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
+function isCleanMacEvidenceSegment(segment) {
+  return (
+    !/\b(?:failed|blocked|cancelled|timeout|timed out|stale|unreachable|offline|partial)\b|失败|阻塞|离线|不可达|未通过|不通过/i.test(segment) &&
+    !/\bready(?:ToCall)?\s*=\s*false\b/i.test(segment) &&
+    !/\bstatus\s*=\s*(?:warning|blocked|failed)\b/i.test(segment) &&
+    !/\bwarnings?\s*[:=]\s*(?!none\b)[^;\s]+/i.test(segment) &&
+    !/\bblockers?\s*[:=]\s*(?!none\b)[^;\s]+/i.test(segment) &&
+    !/\bnode\s+scripts[\\/]+mac[\\/]+|\bscripts[\\/]+mac[\\/]+|\.mjs\b/i.test(segment)
+  );
+}
+
+function normalizeMacEvidenceToken(value) {
+  const compact = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "");
+  if (!compact) return "";
+  if (/macheartbeat(?:ok|healthy|normal)|mac心跳正常|心跳正常/.test(compact)) return "MacHeartbeatOk";
+  if (/machostmedia(?:ok|passed|ready)|macmediabaseline(?:ok|passed)|媒体基线(?:已)?(?:通过|正常)/.test(compact)) return "MacHostMediaOk";
+  if (/macformallocalsmoke(?:ok|passed|ready)|本机短验收(?:已)?通过/.test(compact)) return "MacFormalLocalSmokeOk";
+  if (/macformale2e(?:ok|passed|ready|readytocall|checklistpassed)|formale2e(?:ok|passed|ready)|formale2e已就绪|正式e2e已就绪/.test(compact)) {
+    return "MacFormalE2EOk";
+  }
+  if (/macclientpage(?:online|ok|ready)|clientpage(?:online|ok|ready)|macclient页面在线|控制页在线|页面在线/.test(compact)) {
+    return "MacClientPageOnline";
+  }
+  if (/macclientdiagnostics(?:ok|passed|ready)|macclientreadiness(?:ok|passed|ready)|clientdiagnostics(?:ok|passed|ready)|clientreadiness(?:ok|passed|ready)|macclient诊断(?:已)?通过|诊断(?:已)?通过/.test(compact)) {
+    return "MacClientDiagnosticsOk";
+  }
+  return "";
+}
+
+function extractMacEvidenceFromText(text, source = "text") {
+  const value = String(text || "");
+  const tokens = [];
+  let rejectedCount = 0;
+  for (const segment of splitMacEvidenceSegments(value)) {
+    if (!/\bevidence\s*[:=]/i.test(segment)) continue;
+    if (!isCleanMacEvidenceSegment(segment)) {
+      rejectedCount += 1;
+      continue;
+    }
+    let segmentAccepted = false;
+    for (const match of segment.matchAll(/\bevidence\s*[:=]\s*([^;]+)/gi)) {
+      const rawValues = String(match[1] || "")
+        .replace(/\b(?:warnings?|blockers?|reason|suggestedAction|actionCommands)\s*[:=][\s\S]*$/i, "")
+        .split(/[,|/]+|\s{2,}/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+      let matchAccepted = false;
+      for (const rawValue of rawValues) {
+        const token = normalizeMacEvidenceToken(rawValue);
+        if (!token) continue;
+        if (!tokens.includes(token)) tokens.push(token);
+        matchAccepted = true;
+        segmentAccepted = true;
+      }
+      if (!matchAccepted) rejectedCount += 1;
+    }
+  }
+  if (tokens.length === 0) return emptyMacEvidence(source, value ? 1 : 0, rejectedCount);
+  return {
+    found: true,
+    source,
+    textCount: value ? 1 : 0,
+    tokens,
+    summary: tokens.join(","),
+    rejectedCount,
+  };
+}
+
+function extractMacEvidenceFromBoardState(state) {
+  const texts = collectStringValues(state);
+  const tokens = [];
+  let rejectedCount = 0;
+  for (const text of texts) {
+    const extracted = extractMacEvidenceFromText(text, "api-state");
+    for (const token of extracted.tokens) {
+      if (!tokens.includes(token)) tokens.push(token);
+    }
+    rejectedCount += extracted.rejectedCount;
+  }
+  if (tokens.length === 0) return emptyMacEvidence("api-state", texts.length, rejectedCount);
+  return {
+    found: true,
+    source: "api-state",
+    textCount: texts.length,
+    tokens,
+    summary: tokens.join(","),
+    rejectedCount,
+  };
 }
 
 function stripCommandToken(token) {
@@ -2047,6 +2158,7 @@ async function getBoardSnapshot(args) {
       macHeartbeatStatus: emptyMacSafeStart("skipped"),
       macHeartbeatStop: emptyMacSafeStart("skipped"),
       macHeartbeatFreshness: emptyMacHeartbeatFreshness("skipped"),
+      macEvidence: emptyMacEvidence("skipped"),
       windowsReverseGrantStatus: emptyMacSafeStart("skipped"),
       windowsOpenOneTimeReverseGrant: emptyMacSafeStart("skipped"),
       windowsReverseGrantStatusNodeFallback: emptyMacSafeStart("skipped"),
@@ -2079,6 +2191,7 @@ async function getBoardSnapshot(args) {
       macHeartbeatStatus: extractMacHeartbeatStartHelperFromBoardState(stateResult.state, "MacHeartbeatStatus", "status"),
       macHeartbeatStop: extractMacHeartbeatStartHelperFromBoardState(stateResult.state, "MacHeartbeatStop", "stop"),
       macHeartbeatFreshness: extractMacHeartbeatFreshnessFromBoardState(stateResult.state),
+      macEvidence: extractMacEvidenceFromBoardState(stateResult.state),
       windowsReverseGrantStatus: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsReverseGrantStatus", "status"),
       windowsOpenOneTimeReverseGrant: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsOpenOneTimeReverseGrant", "grant"),
       windowsReverseGrantStatusNodeFallback: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsReverseGrantStatusNodeFallback", "status"),
@@ -2116,6 +2229,7 @@ async function getBoardSnapshot(args) {
     macHeartbeatStatus: extractMacHeartbeatStartHelperFromText(output, "MacHeartbeatStatus", "status", result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatStop: extractMacHeartbeatStartHelperFromText(output, "MacHeartbeatStop", "stop", result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatFreshness: extractMacHeartbeatFreshnessFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    macEvidence: extractMacEvidenceFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     windowsReverseGrantStatus: extractWindowsReverseGrantFromText(output, "WindowsReverseGrantStatus", "status", result.ok ? "codex-link-client" : "unavailable"),
     windowsOpenOneTimeReverseGrant: extractWindowsReverseGrantFromText(output, "WindowsOpenOneTimeReverseGrant", "grant", result.ok ? "codex-link-client" : "unavailable"),
     windowsReverseGrantStatusNodeFallback: extractWindowsReverseGrantFromText(output, "WindowsReverseGrantStatusNodeFallback", "status", result.ok ? "codex-link-client" : "unavailable"),
@@ -2971,6 +3085,9 @@ function makeBoardSummary(report) {
     ...(report.board.macHeartbeatFreshness?.present
       ? [`MacHeartbeatFreshness=${report.board.macHeartbeatFreshness.summary}.`]
       : []),
+    ...(report.board.macEvidence?.found
+      ? [`MacEvidence=${report.board.macEvidence.summary}.`]
+      : []),
     `MacHeartbeatOnce=${macHeartbeatOnceCommand}.`,
     `MacHeartbeatWatch=${macHeartbeatWatchCommand}.`,
     `MacHeartbeatStart=${macHeartbeatStartCommand}.`,
@@ -3245,6 +3362,9 @@ function printHuman(report) {
     }
     if (report.board.macHeartbeatFreshness?.present) {
       console.log(`  MacHeartbeatFreshness=${report.board.macHeartbeatFreshness.summary}`);
+    }
+    if (report.board.macEvidence?.found) {
+      console.log(`  MacEvidence=${report.board.macEvidence.summary}`);
     }
     if (report.board.windowsReverseGrantStatus?.command) {
       console.log(`  WindowsReverseGrantStatus=${report.board.windowsReverseGrantStatus.command}`);

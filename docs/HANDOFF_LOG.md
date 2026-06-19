@@ -17,6 +17,33 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 恢复总览也能消费 Mac 端上板的干净正向 `Evidence=` 字段。
+完成内容：
+- `check-windows-resume-status --checkBoard` 新增 JSON `board.macEvidence`，从 Agent Link Board `/api/state` 或 fallback watch 文本提取干净 `Evidence=` / `evidence=`。
+- `--boardSummary` 和普通输出会显示 `MacEvidence=MacHostMediaOk,MacFormalLocalSmokeOk,MacClientPageOnline`，便于 Windows 开工第一屏直接看到 Mac 端已有正向验收证据。
+- 提取器只接受已知正向 token，拒绝 failed/blocked/stale/offline、非空 warning/blocker、Mac 脚本命令和重连文本；`MacHeartbeat=blocked ... evidence=正在重新连接 5/5` 不会误判为健康证据。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增测试后，`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 先失败在 `Mac positive evidence should be found in board state`。
+- 绿灯：实现后，`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 通过；后续提交前还会跑语法、live board summary、diff/check 和冲突标记扫描。
+遗留问题：
+- 本轮只读取通讯板证据，不主动运行 Mac 侧媒体基线、本机 smoke 或正式认证验收。
+下一步建议：
+- 开工第一屏看到 `MacEvidence=` 时先把它当作正向验收证据；是否还要处理问题继续看同屏 warning/blocker、MacHeartbeatFreshness 和 currentCall。
+是否改了协议：否；只增加 Windows 侧状态脚本文本解析和摘要字段。
+是否需要另一端配合：不需要。
+
 ## 2026-06-19 Mac Codex
 
 日期：2026-06-19 继续推进
