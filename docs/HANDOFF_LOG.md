@@ -17,6 +17,34 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 Windows 手工体验确认回执闭环
+开发端：Windows Codex
+本轮目标：让 Windows resume 第一屏能安全回应 Mac manual UX validation call，并在 call 超时后阻止误确认。
+完成内容：
+- `check-windows-resume-status --checkBoard` 新增 `MacManualUxAck=`：active/near-timeout manual UX call 下输出无密 `WINDOWS_MANUAL_UX_ACK` 发送命令。
+- 新增显式 `--sendManualUxAck --json` 和 PowerShell `-SendManualUxAck -Json`，只有 ack ready 时才向 Agent Link Board 发送同一条无密确认。
+- `ManualUxCall=timeout`、`Next=ReconfirmManualUxCall` 或 `manual-ux-call-timeout` 时 fail-closed，输出 `status=blocked reason=manual-ux-call-timeout next=AskMacReconfirmManualUxCall` 并拒绝发送。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 先因缺 `MacManualUxAck` / `--sendManualUxAck` 失败。
+- 绿灯：Node 与 PowerShell wrapper 回归通过，覆盖 ready 发送、timeout 拒绝和无密安全边界。
+遗留问题：
+- 当前真实通讯板上的 Mac manual UX call 已显示 timeout；需要 Mac 端重新发起/确认后，Windows/User 再发送确认并做真实手工体验。
+下一步建议：
+- 白天开工先跑 `check-windows-resume-status --checkBoard --boardSummary`；看到 `MacManualUxAck=status=blocked reason=manual-ux-call-timeout` 时先 call Mac 重新确认，看到 `MacManualUxAck=node scripts/codex-link-client.mjs ... WINDOWS_MANUAL_UX_ACK` 时再显式发送确认。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端在用户在场时重新确认或重新发起 manual UX call。
 ## 2026-06-20 Mac Codex
 
 日期：2026-06-20 Mac 手工体验 call 确认信号

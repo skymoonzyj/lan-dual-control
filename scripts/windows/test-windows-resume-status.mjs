@@ -312,6 +312,19 @@ function postPassCallForManualUx() {
   };
 }
 
+function manualUxCallForWindows() {
+  return {
+    status: "CALLING",
+    from: "Mac Codex",
+    need: "Windows Codex",
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    goal: "User Mac manual UX validation: user-present real experience test",
+    expected: "Windows/User confirms the 5-10 minute manual UX validation window before Mac waits for real observations.",
+    ask: "请 Windows/User 确认可进入手工体验窗口；不要发送密码/token/系统账号。",
+  };
+}
+
 async function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = await run([flag], args);
@@ -322,6 +335,7 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "--clientPort", `help ${flag}`);
     assertIncludes(result.stdout, "--debugPort", `help ${flag}`);
     assertIncludes(result.stdout, "--sendAgentCallAck", `help ${flag}`);
+    assertIncludes(result.stdout, "--sendManualUxAck", `help ${flag}`);
     assertIncludes(result.stdout, "Windows host media-baseline", `help ${flag}`);
     assertIncludes(result.stdout, "check-windows-host-readiness.ps1 -CheckBoard -ProbeMedia -BoardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "one-time reverse-control grant", `help ${flag}`);
@@ -1390,6 +1404,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const macManualUxStatusCommand = "node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary";
   const macManualUxChecklist = "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
   const macManualUxSummary = `status=calling checklist=${macManualUxChecklist} labels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 signals=manualUxCallInProgress target=192.168.31.122:43770 next=ReconfirmManualUxCall safety=no-password,no-input-inject noFormalE2ERerun=true manualUxCall=timeout callCommand=absent blockers=none warnings=manual-ux-call-timeout`;
+  const macManualUxAckTimeoutSummary = "status=blocked reason=manual-ux-call-timeout next=AskMacReconfirmManualUxCall";
   const macManualUxBoardText = `MacManualUx=status=call-ready ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=userAwakeManualUx Target=192.168.31.122:43770 Next=SendManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxCallCommand=node scripts/codex-link-client.mjs --server http://192.168.31.68:17888 call --from MacCodex --need WindowsCodex`;
   const macManualUxCallingBoardText = `MacManualUx=status=calling ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=manualUxCallInProgress Target=192.168.31.122:43770 Next=ReconfirmManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxCall=timeout warnings=manual-ux-call-timeout`;
   const macRemoteAudioSummary = "status=plan-only capture=system-pcm-does-not-mute-local remoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle recommended=product-toggle-with-explicit-consent safety=no-volume-change,no password/input/inject";
@@ -1702,6 +1717,9 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board.macManualUx.warnings?.includes("manual-ux-call-timeout"), "MacManualUx timeout warning should be preserved");
       assert(payload.board.macManualUx.callCommandPresent === false, "MacManualUx call command should be absent while call is already active");
       assert(payload.board.macManualUx.rejectedCount >= 2, "unsafe MacManualUx summaries should be rejected");
+      assert(payload.board?.macManualUxAck?.status === "blocked", "timeout MacManualUx should block Windows manual UX ack");
+      assert(payload.board.macManualUxAck.summary === macManualUxAckTimeoutSummary, "timeout MacManualUx ack summary mismatch");
+      assert((payload.board.macManualUxAck.command || "") === "", "timeout MacManualUx should not build an ack send command");
       assert(payload.board?.macInputSafety?.found === true, "Mac input safety summary should be found in board state");
       assert(payload.board.macInputSafety.summary === macInputSafetySummary, "Mac input safety summary mismatch");
       assert(payload.board.macInputSafety.realInput === "blocked-until-user-watching", "Mac input safety realInput mismatch");
@@ -1758,6 +1776,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(payload.boardSummary, `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`, "MacInputSafetyPlan JSON board summary");
       assertIncludes(payload.boardSummary, `MacManualUxStatus=${macManualUxStatusCommand}.`, "MacManualUxStatus JSON board summary");
       assertIncludes(payload.boardSummary, `MacManualUx=${macManualUxSummary}.`, "MacManualUx JSON board summary");
+      assertIncludes(payload.boardSummary, `MacManualUxAck=${macManualUxAckTimeoutSummary}.`, "MacManualUx timeout ack JSON board summary");
       assertIncludes(payload.boardSummary, `MacInputSafety=${macInputSafetySummary}.`, "Mac input safety JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "MacHeartbeatOnce JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "MacHeartbeatWatch JSON board summary");
@@ -1799,6 +1818,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`, "MacInputSafetyPlan board summary");
       assertIncludes(result.stdout, `MacManualUxStatus=${macManualUxStatusCommand}.`, "MacManualUxStatus board summary");
       assertIncludes(result.stdout, `MacManualUx=${macManualUxSummary}.`, "MacManualUx board summary");
+      assertIncludes(result.stdout, `MacManualUxAck=${macManualUxAckTimeoutSummary}.`, "MacManualUx timeout ack board summary");
       assertIncludes(result.stdout, `MacInputSafety=${macInputSafetySummary}.`, "Mac input safety board summary");
       assertIncludes(result.stdout, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "MacHeartbeatOnce board summary");
       assertIncludes(result.stdout, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "MacHeartbeatWatch board summary");
@@ -2347,6 +2367,96 @@ async function checkSendAgentCallAckWithoutReadyCall(args) {
   });
 }
 
+async function checkSendManualUxAck(args) {
+  const macManualUxChecklist = "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
+  const macManualUxActiveText = `MacManualUx=status=calling ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=manualUxCallInProgress Target=192.168.31.122:43770 Next=WaitForManualUxConfirmation Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxCall=active warnings=none`;
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--sendManualUxAck",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock sendManualUxAck failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.macManualUxAck?.status === "ready", "active MacManualUx should prepare Windows manual UX ack");
+      assertIncludes(payload.board.macManualUxAck.command, "WINDOWS_MANUAL_UX_ACK", "manual UX ack command");
+      assertIncludes(payload.boardSummary, "MacManualUxAck=node scripts/codex-link-client.mjs", "manual UX ack board summary");
+      assert(payload.sentManualUxAck?.requested === true, "sendManualUxAck should be requested");
+      assert(payload.sentManualUxAck?.ok === true, "sendManualUxAck should pass");
+      assert(board.messages.length === 1, `expected one manual UX ack board message, got ${board.messages.length}`);
+      assert(board.messages[0].from === "Windows Codex", "ManualUxAck message should use Windows Codex sender");
+      assertIncludes(board.messages[0].text, "WINDOWS_MANUAL_UX_ACK", "sent ManualUxAck");
+      assertIncludes(board.messages[0].text, "5-10 分钟", "sent ManualUxAck");
+      assertIncludes(board.messages[0].text, macManualUxChecklist, "sent ManualUxAck");
+      assertIncludes(board.messages[0].text, "不请求密码", "sent ManualUxAck");
+      assertIncludes(board.messages[0].text, "不发送 input/inject", "sent ManualUxAck");
+      assertNotIncludes(JSON.stringify(board.messages), "secret-value", "sent ManualUxAck");
+      assertNotIncludes(JSON.stringify(board.messages), "--password", "sent ManualUxAck");
+      console.log("[OK] Windows resume status can send a secret-free ManualUxAck");
+    }, {
+      currentCall: manualUxCallForWindows(),
+      statuses: {
+        "Mac Codex": {
+          role: "Mac 端",
+          status: "calling",
+          note: macManualUxActiveText,
+        },
+      },
+    });
+  });
+}
+
+async function checkSendManualUxAckTimeout(args) {
+  const macManualUxChecklist = "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
+  const macManualUxTimeoutText = `MacManualUx=status=calling ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=manualUxCallInProgress Target=192.168.31.122:43770 Next=ReconfirmManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxCall=timeout warnings=manual-ux-call-timeout`;
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--sendManualUxAck",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode !== 0, "sendManualUxAck should fail when manual UX call timed out");
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.macManualUxAck?.status === "blocked", "timeout MacManualUx should block sendManualUxAck");
+      assert(payload.sentManualUxAck?.requested === true, "timeout sendManualUxAck should be requested");
+      assert(payload.sentManualUxAck?.ok === false, "timeout sendManualUxAck should fail");
+      assert(payload.failedChecks?.some((check) => check.name === "sendManualUxAck"), "ManualUxAck refusal should be named");
+      assert(board.messages.length === 0, `timeout ManualUxAck should not post a board message, got ${board.messages.length}`);
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "timeout ManualUxAck");
+      console.log("[OK] Windows resume status refuses ManualUxAck after timeout");
+    }, {
+      currentCall: manualUxCallForWindows(),
+      statuses: {
+        "Mac Codex": {
+          role: "Mac 端",
+          status: "calling",
+          note: macManualUxTimeoutText,
+        },
+      },
+    });
+  });
+}
+
 async function checkBoardMacReadyTargetSelection(args) {
   await withMockHostOnAnyAddress(async (port) => {
     const macReadyHost = "localhost";
@@ -2467,6 +2577,8 @@ async function main() {
   await checkSendUserAuthRequestOffline(args);
   await checkSendAgentCallAck(args);
   await checkSendAgentCallAckWithoutReadyCall(args);
+  await checkSendManualUxAck(args);
+  await checkSendManualUxAckTimeout(args);
   await checkBoardMacReadyTargetSelection(args);
   await checkOfflineJson(args);
   await checkRequireMacReady(args);

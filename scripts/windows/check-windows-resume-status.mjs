@@ -31,6 +31,7 @@ const defaults = {
   userAuthRequest: false,
   sendUserAuthRequest: false,
   sendAgentCallAck: false,
+  sendManualUxAck: false,
 };
 const macHeartbeatFreshnessStaleMs = 2 * 60 * 1000;
 
@@ -150,6 +151,7 @@ Options:
   --userAuthRequest             Print a secret-free NEED_USER_AUTH message for Agent Link Board.
   --sendUserAuthRequest         Send NEED_USER_AUTH to Agent Link Board only when preflight is ready.
   --sendAgentCallAck            Send the secret-free AgentCallAck only when secure-auth currentCall is ready.
+  --sendManualUxAck           Send the secret-free Mac manual UX ack only when the manual UX call is active.
   --json                        Print one machine-readable JSON object.
   --help, -h                    Show this help without probing anything.
 
@@ -158,6 +160,7 @@ Examples:
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --userAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --checkClientDiagnostics --sendUserAuthRequest
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --sendAgentCallAck --json
+  node scripts/windows/check-windows-resume-status.mjs --checkBoard --sendManualUxAck --json
   node scripts/windows/check-windows-resume-status.mjs --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --json
   node scripts/windows/discover-lan-hosts.mjs --noLocalSubnets --host 192.168.31.122 --port 43770 --requireMacHost --boardSummary
   node scripts/mac/check-mac-host-readiness.mjs --host 192.168.31.122 --port 43770 --checkBoard --boardSummary
@@ -232,6 +235,7 @@ function parseArgs(argv) {
       token === "--userAuthRequest" ||
       token === "--sendUserAuthRequest" ||
       token === "--sendAgentCallAck" ||
+      token === "--sendManualUxAck" ||
       token === "--json"
     ) {
       args[token.slice(2)] = true;
@@ -3662,6 +3666,93 @@ function makeAgentCallAckCommand(server, windowsSecureAuthPathCommand) {
   ].map(quoteCommandArg).join(" ");
 }
 
+function makeManualUxAckText(macManualUx) {
+  const checklist = String(macManualUx?.checklist || "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics");
+  const target = String(macManualUx?.target || "unknown");
+  return [
+    "WINDOWS_MANUAL_UX_ACK: Windows/User 确认可进入 5-10 分钟手工体验窗口；",
+    `Target=${target}；Checklist=${checklist}；`,
+    "按连接/画面/声音/剪贴板/文件/窗口/全屏/原画/复制诊断验收；",
+    "不请求密码，不发送 input/inject。",
+  ].join("");
+}
+
+function makeManualUxAckCommand(server, macManualUx) {
+  const text = makeManualUxAckText(macManualUx);
+  return [
+    "node",
+    "scripts/codex-link-client.mjs",
+    "--server",
+    server || defaults.server,
+    "send",
+    "--from",
+    "Windows Codex",
+    "--text",
+    text,
+  ].map(quoteCommandArg).join(" ");
+}
+
+function makeMacManualUxAck(args, macManualUx) {
+  if (!macManualUx?.found) {
+    return {
+      found: false,
+      status: "not-needed",
+      reason: "mac-manual-ux-not-found",
+      summary: "",
+      command: "",
+    };
+  }
+
+  if (macManualUx.status !== "calling") {
+    return {
+      found: true,
+      status: "not-needed",
+      reason: `mac-manual-ux-${macManualUx.status || "unknown"}`,
+      summary: "",
+      command: "",
+    };
+  }
+
+  const warnings = Array.isArray(macManualUx.warnings) ? macManualUx.warnings : [];
+  const timedOut = macManualUx.manualUxCall === "timeout" ||
+    macManualUx.next === "ReconfirmManualUxCall" ||
+    warnings.includes("manual-ux-call-timeout");
+  if (timedOut) {
+    return {
+      found: true,
+      status: "blocked",
+      reason: "manual-ux-call-timeout",
+      next: "AskMacReconfirmManualUxCall",
+      summary: "status=blocked reason=manual-ux-call-timeout next=AskMacReconfirmManualUxCall",
+      command: "",
+    };
+  }
+
+  const activeCall = macManualUx.manualUxCall === "active" ||
+    macManualUx.manualUxCall === "near-timeout" ||
+    macManualUx.next === "WaitForManualUxConfirmation";
+  if (!activeCall) {
+    return {
+      found: true,
+      status: "blocked",
+      reason: "manual-ux-call-state-unknown",
+      next: "AskMacReconfirmManualUxCall",
+      summary: "status=blocked reason=manual-ux-call-state-unknown next=AskMacReconfirmManualUxCall",
+      command: "",
+    };
+  }
+
+  const command = makeManualUxAckCommand(args.server, macManualUx);
+  return {
+    found: true,
+    status: "ready",
+    reason: "manual-ux-call-active",
+    next: "SendManualUxAck",
+    summary: `status=ready command=${command}`,
+    command,
+  };
+}
+
 function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
   const target = preflight.payload?.target || { host: args.host, port: args.port };
   const host = String(target.host || args.host);
@@ -4242,6 +4333,12 @@ function makeBoardSummary(report) {
     ...(report.board.macManualUx?.found
       ? [`MacManualUx=${report.board.macManualUx.summary}.`]
       : []),
+    ...(report.board.macManualUxAck?.status === "ready" && report.board.macManualUxAck.command
+      ? [`MacManualUxAck=${report.board.macManualUxAck.command}.`]
+      : []),
+    ...(report.board.macManualUxAck?.status === "blocked" && report.board.macManualUxAck.summary
+      ? [`MacManualUxAck=${report.board.macManualUxAck.summary}.`]
+      : []),
     ...(report.board.macInputSafety?.found
       ? [`MacInputSafety=${report.board.macInputSafety.summary}.`]
       : []),
@@ -4400,6 +4497,45 @@ function sendAgentCallAck(args, report) {
   };
 }
 
+function sendManualUxAck(args, report) {
+  if (!args.sendManualUxAck) {
+    return {
+      requested: false,
+      ok: null,
+      status: null,
+      error: "",
+      detail: "not requested",
+    };
+  }
+
+  const ack = report.board?.macManualUxAck;
+  if (ack?.status !== "ready" || !ack.command) {
+    const detail = ack?.summary || "No active unexpired MacManualUx call; ManualUxAck was not sent.";
+    return {
+      requested: true,
+      ok: false,
+      status: null,
+      error: "",
+      detail,
+    };
+  }
+
+  const result = command(process.execPath, [
+    "scripts/codex-link-client.mjs",
+    "--server", args.server,
+    "send",
+    "--from", "Windows Codex",
+    "--text", makeManualUxAckText(report.board.macManualUx),
+  ], { timeoutMs: Math.min(Math.max(args.timeoutMs, 5000), 30000) });
+  return {
+    requested: true,
+    ok: result.ok,
+    status: result.status,
+    error: normalizedText(result.error || result.stderr),
+    detail: result.ok ? "sent" : normalizedText(result.error || result.stderr || `exit ${result.status}`),
+  };
+}
+
 function applyBoardReadyTarget(args, board) {
   const ready = board?.macReadyForRealTest;
   if (!ready?.found || !ready.host || !ready.port || args.hostProvided) {
@@ -4475,6 +4611,7 @@ async function makeReport(args) {
       requireMacReady: effectiveArgs.requireMacReady,
       sendUserAuthRequest: effectiveArgs.sendUserAuthRequest,
       sendAgentCallAck: effectiveArgs.sendAgentCallAck,
+      sendManualUxAck: effectiveArgs.sendManualUxAck,
       originalHost: effectiveArgs.originalHost || args.host,
       originalPort: effectiveArgs.originalPort || args.port,
       boardReadyTarget: effectiveArgs.boardReadyTarget || null,
@@ -4489,10 +4626,12 @@ async function makeReport(args) {
     checks,
     failedChecks: [],
   };
+  report.board.macManualUxAck = makeMacManualUxAck(effectiveArgs, report.board?.macManualUx);
   report.boardSummary = makeBoardSummary(report);
   report.userAuthRequest = makeUserAuthRequest(report);
   report.sentUserAuthRequest = sendUserAuthRequest(effectiveArgs, report);
   report.sentAgentCallAck = sendAgentCallAck(effectiveArgs, report);
+  report.sentManualUxAck = sendManualUxAck(effectiveArgs, report);
   if (effectiveArgs.sendUserAuthRequest) {
     checks.push({
       name: "sendUserAuthRequest",
@@ -4505,6 +4644,13 @@ async function makeReport(args) {
       name: "sendAgentCallAck",
       ok: report.sentAgentCallAck.ok,
       detail: report.sentAgentCallAck.detail,
+    });
+  }
+  if (effectiveArgs.sendManualUxAck) {
+    checks.push({
+      name: "sendManualUxAck",
+      ok: report.sentManualUxAck.ok,
+      detail: report.sentManualUxAck.detail,
     });
   }
   report.failedChecks = checks.filter((check) => !check.ok);
@@ -4569,6 +4715,11 @@ function printHuman(report) {
     }
     if (report.board.macManualUx?.found) {
       console.log(`  MacManualUx=${report.board.macManualUx.summary}`);
+    }
+    if (report.board.macManualUxAck?.status === "ready" && report.board.macManualUxAck.command) {
+      console.log(`  MacManualUxAck=${report.board.macManualUxAck.command}`);
+    } else if (report.board.macManualUxAck?.status === "blocked" && report.board.macManualUxAck.summary) {
+      console.log(`  MacManualUxAck=${report.board.macManualUxAck.summary}`);
     }
     if (report.board.macInputSafety?.found) {
       console.log(`  MacInputSafety=${report.board.macInputSafety.summary}`);
@@ -4661,6 +4812,11 @@ function printHuman(report) {
   if (report.board.macManualUx?.found) {
     console.log(`  MacManualUx=${report.board.macManualUx.summary}`);
   }
+  if (report.board.macManualUxAck?.status === "ready" && report.board.macManualUxAck.command) {
+    console.log(`  MacManualUxAck=${report.board.macManualUxAck.command}`);
+  } else if (report.board.macManualUxAck?.status === "blocked" && report.board.macManualUxAck.summary) {
+    console.log(`  MacManualUxAck=${report.board.macManualUxAck.summary}`);
+  }
   if (report.board.macInputSafety?.found) {
     console.log(`  MacInputSafety=${report.board.macInputSafety.summary}`);
   }
@@ -4729,6 +4885,9 @@ function printHuman(report) {
   }
   if (report.sentAgentCallAck.requested) {
     console.log(`- Sent AgentCallAck: ${report.sentAgentCallAck.ok ? "ok" : "failed"} (${report.sentAgentCallAck.detail})`);
+  }
+  if (report.sentManualUxAck.requested) {
+    console.log(`- Sent ManualUxAck: ${report.sentManualUxAck.ok ? "ok" : "failed"} (${report.sentManualUxAck.detail})`);
   }
 }
 
