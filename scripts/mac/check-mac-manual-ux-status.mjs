@@ -15,6 +15,7 @@ const defaults = {
   sendStatus: false,
   sendMessage: false,
   sendCall: false,
+  reconfirmCall: false,
 };
 
 const manualChecklistLabels = {
@@ -58,6 +59,7 @@ Options:
   --sendStatus         Post the summary to Agent Link Board /api/status.
   --sendMessage        Post the summary to Agent Link Board /api/message.
   --sendCall           Send a user-present manual UX call only from call-ready state.
+  --reconfirmCall      Replace an expired Mac manual UX call with a fresh one.
   --device <name>      Status device name. Default: ${defaults.device}
   --role <role>        Status role. Default: ${defaults.role}
   --from <name>        Message sender. Default: ${defaults.from}
@@ -67,7 +69,7 @@ Options:
 Description:
   Prints a read-only Mac-side manual UX status report after REAL_TEST_PASS.
   It only posts to Agent Link Board when --sendStatus, --sendMessage, or
-  --sendCall is explicitly provided.
+  --sendCall/--reconfirmCall is explicitly provided.
   It consumes PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby,
   MAC_STANDING_BY_FOR_MANUAL_UX_TEST, and ManualUxChecklist=... from Agent Link
   Board state. A Supervisor usable-entry/manual-UX currentCall is also treated
@@ -75,7 +77,8 @@ Description:
   formal E2E path. A USER_AWAKE/manual-UX currentCall is treated as
   call-ready and prints ManualUxCallCommand=... so the next user-present step
   can be coordinated before asking for any action. An active Mac manual UX call
-  is treated as calling so the script does not offer a duplicate call. It does not authenticate,
+  is treated as calling so the script does not offer a duplicate call. An expired
+  Mac manual UX call can be refreshed only with explicit --reconfirmCall. It does not authenticate,
   does not ask for or print passwords, does not send user-auth requests, and
   does not send input events.
 
@@ -83,6 +86,7 @@ Examples:
   node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary
   node scripts/mac/check-mac-manual-ux-status.mjs --sendStatus --sendMessage --boardSummary
   node scripts/mac/check-mac-manual-ux-status.mjs --sendCall --json
+  node scripts/mac/check-mac-manual-ux-status.mjs --reconfirmCall --json
   node scripts/mac/check-mac-manual-ux-status.mjs --requireReady --json
 `);
 }
@@ -114,6 +118,10 @@ function parseArgs(argv) {
     }
     if (token === "--sendCall") {
       args.sendCall = true;
+      continue;
+    }
+    if (token === "--reconfirmCall") {
+      args.reconfirmCall = true;
       continue;
     }
     if (token === "--requireReady") {
@@ -492,13 +500,13 @@ function makeReport(state, server) {
     },
     blockers,
     warnings,
-    nextActions: makeNextActions(status),
+    nextActions: makeNextActions(status, manualUxCall, server),
   };
   report.boardSummary = makeBoardSummary(report);
   return report;
 }
 
-function makeNextActions(status) {
+function makeNextActions(status, manualUxCall = null, server = defaults.server) {
   if (status === "ready") {
     return [
       "Keep Mac host, Mac client, and heartbeat online for user-present manual UX testing.",
@@ -514,6 +522,13 @@ function makeNextActions(status) {
     ];
   }
   if (status === "calling") {
+    if (manualUxCall?.timedOut) {
+      return [
+        "The current Mac manual UX call timed out before confirmation.",
+        `After Windows Codex is not pushing/rebasing, run: node scripts/mac/check-mac-manual-ux-status.mjs --server ${server} --reconfirmCall --json`,
+        "Do not request credentials or send remote input commands while reconfirming the manual UX window.",
+      ];
+    }
     return [
       "Wait for Windows Codex/User to confirm the manual UX validation window.",
       "Do not send another manual UX call while the current one is active.",
@@ -550,6 +565,8 @@ function makeBoardSummary(report) {
   if (report.manualUxCall?.state) parts.push(`ManualUxCall=${report.manualUxCall.state}`);
   if (report.sentCall?.ok) parts.push("ManualUxCallSent=true");
   if (report.sentCall?.ok === false) parts.push("ManualUxCallSent=false");
+  if (report.reconfirmedCall?.ok) parts.push("ManualUxCallReconfirmed=true");
+  if (report.reconfirmedCall?.ok === false) parts.push("ManualUxCallReconfirmed=false");
   if (report.blockers.length > 0) parts.push(`blockers=${report.blockers.join(",")}`);
   if (report.warnings.length > 0) parts.push(`warnings=${report.warnings.join(",")}`);
   return parts.join(" ");
@@ -628,7 +645,13 @@ async function main() {
     report = makeOfflineReport(args.server, error);
   }
 
-  if (args.sendCall) {
+  if (args.sendCall && args.reconfirmCall) {
+    report.error = {
+      message: "Choose only one of --sendCall or --reconfirmCall.",
+    };
+    report.boardSummary = makeBoardSummary(report);
+    process.exitCode = 1;
+  } else if (args.sendCall) {
     try {
       report.sentCall = await sendCall(args, report);
       report.boardSummary = makeBoardSummary(report);
@@ -640,6 +663,22 @@ async function main() {
       };
       report.error = {
         message: report.sentCall.error,
+      };
+      report.boardSummary = makeBoardSummary(report);
+      process.exitCode = 1;
+    }
+  } else if (args.reconfirmCall) {
+    try {
+      report.reconfirmedCall = await reconfirmCall(args, report);
+      report.boardSummary = makeBoardSummary(report);
+    } catch (error) {
+      report.reconfirmedCall = {
+        ok: false,
+        attempted: false,
+        error: String(error?.message || error || "reconfirmCall failed"),
+      };
+      report.error = {
+        message: report.reconfirmedCall.error,
       };
       report.boardSummary = makeBoardSummary(report);
       process.exitCode = 1;
@@ -700,6 +739,35 @@ async function sendCall(args, report) {
   if (report.coordination?.windowsCodex?.pushInProgress) {
     const status = report.coordination.windowsCodex.status || "unknown";
     throw new Error(`Windows Codex is ${status}; refusing to send manual UX call until Windows finishes push/rebase coordination.`);
+  }
+  const payload = makeManualUxCallPayload();
+  const result = await postToBoard(args, "/api/call", payload);
+  return {
+    ok: true,
+    attempted: true,
+    payload,
+    boardCallBeforeSend: currentCall,
+    result: result || { ok: true },
+  };
+}
+
+async function reconfirmCall(args, report) {
+  if (report.status !== "calling" || !report.manualUxCall?.timedOut) {
+    throw new Error(`Refusing to reconfirm manual UX call from status=${report.status}; expected expired manual UX call.`);
+  }
+  const currentCall = report.boardCallBeforeCheck || {
+    active: false,
+    raw: "",
+  };
+  report.boardCallBeforeSend = currentCall;
+  if (!isActiveMacManualUxValidationBoardCall(currentCall)) {
+    const owner = currentCall.from || currentCall.need || currentCall.owner || "unknown";
+    const goal = currentCall.goal || currentCall.raw || "unknown goal";
+    throw new Error(`Refusing to reconfirm non-Mac manual UX call from ${owner}: ${goal}. Wait for it to resolve before sending another manual UX call.`);
+  }
+  if (report.coordination?.windowsCodex?.pushInProgress) {
+    const status = report.coordination.windowsCodex.status || "unknown";
+    throw new Error(`Windows Codex is ${status}; refusing to reconfirm manual UX call until Windows finishes push/rebase coordination.`);
   }
   const payload = makeManualUxCallPayload();
   const result = await postToBoard(args, "/api/call", payload);

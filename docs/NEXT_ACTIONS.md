@@ -17,6 +17,7 @@
 - 下一步继续手工体验验收：窗口/全屏、画面流畅度、声音、文本和文件剪贴板、input_ack，以及用户明确确认后的真实 inject 安全验收。
 - 巡检或需要上报 DAILY_ITEM 时，优先跑 `node scripts/codex-link-daily-items.mjs --preset wmc-current --boardSummary`；确认一行里有 `DAILY_ITEM W1 PASS`、`W2 PASS`、`W3 PASS`、`M1 PASS`、`M2 PASS`、`C1 PASS`，且每项带旧编号 `alias=` 后，再按需要显式加 `--sendStatus --sendMessage --server http://192.168.31.68:17888` 上板。`--preset night-unattended` 仅作兼容别名，也会输出新 W/M/C 编号。默认只读、不上板、不认证、不请求密码、不发 input/inject。
 - 准备进入手工体验或需要告诉 Windows 端 Mac 已待命时，Mac 端可跑 `node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --sendStatus --sendMessage --boardSummary`；它只读当前 `ManualUxTest` / `USER_AWAKE` 信号并发送无密摘要。若当前是 `USER_AWAKE` 且要求准备真实体验验收，会输出 `MacManualUx=status=call-ready`、`Next=SendManualUxCall` 和 `ManualUxCallCommand=`，用于先在通讯板说明目标、安全边界和预计 5-10 分钟；确认要直接发起该 call 时，可显式运行 `node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --sendCall --json`。该发送只允许回应匹配的 `USER_AWAKE` 手工体验 call，遇到其他 active call 会拒绝覆盖；默认不自动发 call、不认证、不请求密码、不发 user-auth/input/inject。
+- 如果 `check-mac-manual-ux-status --boardSummary` 已显示 `ManualUxCall=timeout` / `Next=ReconfirmManualUxCall`，先确认 Windows Codex 不在 `pushing-soon` / push / rebase 临界期；确认后可显式运行 `node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --reconfirmCall --json` 重新发起新的 5-10 分钟手工体验 call。该入口只会替换 Mac 自己发起且已超时的 manual UX call，未超时、非 Mac call 或 Windows 推送期都会拒绝，不认证、不请求密码、不发 input/inject。
 只放短期任务，长期计划继续放在 `docs/04-task-board.md`。
 
 ## 最高优先级

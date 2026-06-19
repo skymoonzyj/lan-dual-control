@@ -366,6 +366,22 @@ function expiredMacManualUxCallBoardState() {
   };
 }
 
+function expiredMacManualUxCallWhileWindowsPushingBoardState() {
+  const state = expiredMacManualUxCallBoardState();
+  return {
+    ...state,
+    statuses: {
+      ...state.statuses,
+      "Windows Codex": {
+        status: "pushing-soon",
+        role: "Windows 端",
+        note: "Preparing to push Windows manual UX resume/status parsing; Mac should not replace currentCall yet.",
+        updatedAt: "2026-06-20T10:10:00.000Z",
+      },
+    },
+  };
+}
+
 function otherActiveCallWithUserAwakeSignalBoardState() {
   return {
     updatedAt: "2026-06-20T10:05:00.000Z",
@@ -423,6 +439,7 @@ async function checkHelp(args) {
   assertIncludes(result.stdout, "--sendStatus", "help");
   assertIncludes(result.stdout, "--sendMessage", "help");
   assertIncludes(result.stdout, "--sendCall", "help");
+  assertIncludes(result.stdout, "--reconfirmCall", "help");
   assertNotIncludes(result.stdout, "Mac host password:", "help");
   assertSecretSafe(result.stdout, "help");
   console.log("[OK] Mac manual UX status help is pure");
@@ -630,6 +647,7 @@ async function checkExpiredManualUxCallRequestsReconfirmation(args) {
     assert(payload.manualUxCall?.state === "timeout", `expired manual UX call should expose timeout state: ${JSON.stringify(payload.manualUxCall)}`);
     assert(payload.manualUxCall?.timedOut === true, `expired manual UX call should expose timedOut=true: ${JSON.stringify(payload.manualUxCall)}`);
     assert(payload.warnings?.includes("manual-ux-call-timeout"), `expired manual UX call should include timeout warning: ${JSON.stringify(payload.warnings)}`);
+    assertIncludes(payload.nextActions?.join("\n") || "", "--reconfirmCall", "expired manual UX call nextActions");
     assertIncludes(payload.boardSummary, "ManualUxCall=timeout", "expired manual UX call boardSummary");
     assertIncludes(payload.boardSummary, "Next=ReconfirmManualUxCall", "expired manual UX call boardSummary");
     assertNotIncludes(payload.boardSummary, "ManualUxCallCommand=", "expired manual UX call boardSummary");
@@ -637,6 +655,47 @@ async function checkExpiredManualUxCallRequestsReconfirmation(args) {
     assertSecretSafe(JSON.stringify(payload), "expired manual UX call JSON");
   });
   console.log("[OK] Mac manual UX status warns when the active manual UX call times out");
+}
+
+async function checkExpiredManualUxCallCanBeReconfirmed(args) {
+  await withFakeBoard(expiredMacManualUxCallBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json", "--reconfirmCall"], args);
+    assert(result.exitCode === 0, `expired manual UX --reconfirmCall should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "expired manual UX --reconfirmCall JSON");
+    const calls = posts.filter((post) => post.path === "/api/call");
+    assert(calls.length === 1, `expired manual UX --reconfirmCall should post exactly one call, got ${calls.length}: ${JSON.stringify(posts)}`);
+    assert(payload.reconfirmedCall?.ok === true, `expired manual UX --reconfirmCall should record reconfirmedCall ok: ${JSON.stringify(payload.reconfirmedCall)}`);
+    assert(payload.boardCallBeforeSend?.active === true, "expired manual UX --reconfirmCall should record previous active call before replacement");
+    assert(payload.manualUxCall?.state === "timeout", `expired manual UX --reconfirmCall should preserve timeout state: ${JSON.stringify(payload.manualUxCall)}`);
+    assert(calls[0].body.goal === "Mac manual UX validation: user-present real experience test", `reconfirm call goal mismatch: ${JSON.stringify(calls[0].body)}`);
+    assertIncludes(payload.boardSummary, "ManualUxCallReconfirmed=true", "expired manual UX --reconfirmCall boardSummary");
+    assertSecretSafe(`${result.stdout}\n${result.stderr}\n${JSON.stringify(posts)}`, "expired manual UX --reconfirmCall");
+  });
+  console.log("[OK] Mac manual UX status can explicitly reconfirm an expired manual UX call");
+}
+
+async function checkActiveManualUxCallRefusesReconfirm(args) {
+  await withFakeBoard(macManualUxCallInProgressBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json", "--reconfirmCall"], args);
+    assert(result.exitCode === 1, `active manual UX --reconfirmCall should fail. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "active manual UX --reconfirmCall refusal JSON");
+    assertIncludes(payload.error?.message || "", "expired manual UX call", "active manual UX --reconfirmCall refusal");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `active manual UX --reconfirmCall should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(`${result.stdout}\n${result.stderr}`, "active manual UX --reconfirmCall refusal");
+  });
+  console.log("[OK] Mac manual UX status refuses to reconfirm an active manual UX call");
+}
+
+async function checkReconfirmRefusesWhileWindowsIsPushing(args) {
+  await withFakeBoard(expiredMacManualUxCallWhileWindowsPushingBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json", "--reconfirmCall"], args);
+    assert(result.exitCode === 1, `expired manual UX --reconfirmCall should fail while Windows is pushing. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "Windows pushing --reconfirmCall refusal JSON");
+    assertIncludes(payload.error?.message || "", "Windows Codex is pushing-soon", "Windows pushing reconfirm refusal");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `Windows pushing state should not post a reconfirm call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(`${result.stdout}\n${result.stderr}`, "Windows pushing --reconfirmCall refusal");
+  });
+  console.log("[OK] Mac manual UX status refuses --reconfirmCall while Windows is pushing");
 }
 
 async function checkSendCallRefusesWhileWindowsIsPushing(args) {
@@ -696,6 +755,9 @@ async function main() {
   await checkUserAwakeSendCallPostsManualUxCall(args);
   await checkManualUxCallInProgressDoesNotOfferDuplicateCall(args);
   await checkExpiredManualUxCallRequestsReconfirmation(args);
+  await checkExpiredManualUxCallCanBeReconfirmed(args);
+  await checkActiveManualUxCallRefusesReconfirm(args);
+  await checkReconfirmRefusesWhileWindowsIsPushing(args);
   await checkSendCallRefusesWhileWindowsIsPushing(args);
   await checkSendCallRefusesWhenNotCallReady(args);
   await checkSendCallRefusesOtherActiveCall(args);

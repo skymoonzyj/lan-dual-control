@@ -19,6 +19,31 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac 手工体验过期 call 重新确认入口
+开发端：Mac Codex
+本轮目标：`Mac manual UX validation` call 超时后，不只提示 `ReconfirmManualUxCall`，还提供一个显式、安全、受护栏保护的重新确认入口。
+完成内容：
+- `check-mac-manual-ux-status` 新增显式 `--reconfirmCall`。
+- 只有当前 active call 被识别为 Mac 自己发起的 manual UX validation，且 `manualUxCall.timedOut=true` 时，才会重新发送新的 10 分钟 `Mac manual UX validation` call。
+- 未超时、非 Mac manual UX call、或 Windows Codex 正在 `pushing-soon` / push / rebase 临界期时，`--reconfirmCall` 都 fail-closed，不发送 `/api/call`。
+- 成功时 JSON 记录 `reconfirmedCall.ok=true`，摘要追加 `ManualUxCallReconfirmed=true`；默认 `--boardSummary` 仍只读。
+修改文件：
+- `scripts/mac/check-mac-manual-ux-status.mjs`
+- `scripts/mac/test-mac-manual-ux-status.mjs`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-manual-ux-status.mjs --timeoutMs 20000` 先失败，help 没有 `--reconfirmCall`。
+- 绿灯：同一测试通过，覆盖过期 call 显式重新确认、未超时拒绝、Windows 推送期拒绝。
+遗留问题：
+- 该入口只重新发起协作 call，不执行真实体验；真实验收仍需要 Windows/User 确认可用窗口。
+下一步建议：
+- 白天继续时先跑 `node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --boardSummary`。若仍显示 `ManualUxCall=timeout` 且 Windows 不在推送期，再显式运行 `node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --reconfirmCall --json` 重新确认体验窗口。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows/User 在新的 call 上确认后再做真实体验。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac 手工体验 call 超时状态
 开发端：Mac Codex
 本轮目标：当前 `Mac manual UX validation` call 已经发出后，补齐 active/timeout 状态，让通讯板能提示是否仍在等待确认窗口内，避免过期 call 被误判为可继续执行。
