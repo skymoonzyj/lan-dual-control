@@ -1388,6 +1388,10 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const macRemoteAudioPlanCommand = "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary";
   const macInputSafetyPlanCommand = "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
   const macManualUxStatusCommand = "node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary";
+  const macManualUxChecklist = "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
+  const macManualUxSummary = `status=calling checklist=${macManualUxChecklist} labels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 signals=manualUxCallInProgress target=192.168.31.122:43770 next=ReconfirmManualUxCall safety=no-password,no-input-inject noFormalE2ERerun=true manualUxCall=timeout callCommand=absent blockers=none warnings=manual-ux-call-timeout`;
+  const macManualUxBoardText = `MacManualUx=status=call-ready ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=userAwakeManualUx Target=192.168.31.122:43770 Next=SendManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxCallCommand=node scripts/codex-link-client.mjs --server http://192.168.31.68:17888 call --from MacCodex --need WindowsCodex`;
+  const macManualUxCallingBoardText = `MacManualUx=status=calling ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=manualUxCallInProgress Target=192.168.31.122:43770 Next=ReconfirmManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxCall=timeout warnings=manual-ux-call-timeout`;
   const macRemoteAudioSummary = "status=plan-only capture=system-pcm-does-not-mute-local remoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle recommended=product-toggle-with-explicit-consent safety=no-volume-change,no password/input/inject";
   const macRemoteAudioBoardText = "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject.";
   const macInputSafetySummary = "status=plan-only default=log realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe safety=no-password,no-input-events,no-inject";
@@ -1407,7 +1411,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
         "Mac Codex": {
           role: "Mac 端",
           status: "idle",
-          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacClientDiscoverWindows=${macClientDiscoverWindowsCommand} MacClientFormalChecklist=${macClientFormalChecklistCommand} MacClientFormalSmoke=${macClientFormalSmokeCommand} MacRemoteAudioPlan=${macRemoteAudioPlanCommand} ${macRemoteAudioBoardText} MacInputSafetyPlan=${macInputSafetyPlanCommand} ${macInputSafetyBoardText} MacManualUxStatus=${macManualUxStatusCommand} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand} MacHeartbeatStart=${heartbeatStartCommand} MacHeartbeatStatus=${heartbeatStatusCommand} MacHeartbeatStop=${heartbeatStopCommand}`,
+          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacClientDiscoverWindows=${macClientDiscoverWindowsCommand} MacClientFormalChecklist=${macClientFormalChecklistCommand} MacClientFormalSmoke=${macClientFormalSmokeCommand} MacRemoteAudioPlan=${macRemoteAudioPlanCommand} ${macRemoteAudioBoardText} MacInputSafetyPlan=${macInputSafetyPlanCommand} ${macInputSafetyBoardText} MacManualUxStatus=${macManualUxStatusCommand} ${macManualUxBoardText} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand} MacHeartbeatStart=${heartbeatStartCommand} MacHeartbeatStatus=${heartbeatStatusCommand} MacHeartbeatStop=${heartbeatStopCommand}`,
         },
         "Mac Heartbeat": {
           role: "Mac heartbeat watcher",
@@ -1560,6 +1564,22 @@ async function checkBoardMacHostSafeStartExtraction(args) {
         {
           type: "message",
           from: "Mac Codex",
+          text: "MacManualUx=status=call-ready ManualUxChecklist=connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics Safety=no-password,password=secret-value Next=SendManualUxCall",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacManualUx=status=armed ManualUxChecklist=connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics Safety=no-password,no-input-inject",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: macManualUxCallingBoardText,
+        },
+
+        {
+          type: "message",
+          from: "Mac Codex",
           text: "Mac input safety plan: status=plan-only; default=log; realInput=blocked-until-user-watching; required=--confirmUserWatching; eventSet=full; safety=no-password,no-input-events,no-inject.",
         },
         {
@@ -1673,6 +1693,15 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board.macManualUxStatus.command === macManualUxStatusCommand, "MacManualUxStatus command mismatch");
       assert(payload.board.macManualUxStatus.source === "api-state", "MacManualUxStatus should come from /api/state");
       assert(payload.board.macManualUxStatus.rejectedCount >= 2, "unsafe MacManualUxStatus candidates should be rejected");
+      assert(payload.board?.macManualUx?.found === true, "MacManualUx summary should be found in board state");
+      assert(payload.board.macManualUx.summary === macManualUxSummary, "MacManualUx summary mismatch");
+      assert(payload.board.macManualUx.source === "api-state", "MacManualUx summary should come from /api/state");
+      assert(payload.board.macManualUx.status === "calling", "MacManualUx status mismatch");
+      assert(payload.board.macManualUx.next === "ReconfirmManualUxCall", "MacManualUx next mismatch");
+      assert(payload.board.macManualUx.manualUxCall === "timeout", "MacManualUx call timing mismatch");
+      assert(payload.board.macManualUx.warnings?.includes("manual-ux-call-timeout"), "MacManualUx timeout warning should be preserved");
+      assert(payload.board.macManualUx.callCommandPresent === false, "MacManualUx call command should be absent while call is already active");
+      assert(payload.board.macManualUx.rejectedCount >= 2, "unsafe MacManualUx summaries should be rejected");
       assert(payload.board?.macInputSafety?.found === true, "Mac input safety summary should be found in board state");
       assert(payload.board.macInputSafety.summary === macInputSafetySummary, "Mac input safety summary mismatch");
       assert(payload.board.macInputSafety.realInput === "blocked-until-user-watching", "Mac input safety realInput mismatch");
@@ -1728,6 +1757,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(payload.boardSummary, `MacRemoteAudio=${macRemoteAudioSummary}.`, "Mac remote audio JSON board summary");
       assertIncludes(payload.boardSummary, `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`, "MacInputSafetyPlan JSON board summary");
       assertIncludes(payload.boardSummary, `MacManualUxStatus=${macManualUxStatusCommand}.`, "MacManualUxStatus JSON board summary");
+      assertIncludes(payload.boardSummary, `MacManualUx=${macManualUxSummary}.`, "MacManualUx JSON board summary");
       assertIncludes(payload.boardSummary, `MacInputSafety=${macInputSafetySummary}.`, "Mac input safety JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "MacHeartbeatOnce JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "MacHeartbeatWatch JSON board summary");
@@ -1768,6 +1798,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacRemoteAudio=${macRemoteAudioSummary}.`, "Mac remote audio board summary");
       assertIncludes(result.stdout, `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`, "MacInputSafetyPlan board summary");
       assertIncludes(result.stdout, `MacManualUxStatus=${macManualUxStatusCommand}.`, "MacManualUxStatus board summary");
+      assertIncludes(result.stdout, `MacManualUx=${macManualUxSummary}.`, "MacManualUx board summary");
       assertIncludes(result.stdout, `MacInputSafety=${macInputSafetySummary}.`, "Mac input safety board summary");
       assertIncludes(result.stdout, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "MacHeartbeatOnce board summary");
       assertIncludes(result.stdout, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "MacHeartbeatWatch board summary");
@@ -1805,6 +1836,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacRemoteAudio=${macRemoteAudioSummary}`, "Mac remote audio human output");
       assertIncludes(result.stdout, `MacInputSafetyPlan=${macInputSafetyPlanCommand}`, "MacInputSafetyPlan human output");
       assertIncludes(result.stdout, `MacManualUxStatus=${macManualUxStatusCommand}`, "MacManualUxStatus human output");
+      assertIncludes(result.stdout, `MacManualUx=${macManualUxSummary}`, "MacManualUx human output");
       assertIncludes(result.stdout, `MacInputSafety=${macInputSafetySummary}`, "Mac input safety human output");
       assertIncludes(result.stdout, `MacHeartbeatOnce=${heartbeatOnceCommand}`, "MacHeartbeatOnce human output");
       assertIncludes(result.stdout, `MacHeartbeatWatch=${heartbeatWatchCommand}`, "MacHeartbeatWatch human output");

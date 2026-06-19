@@ -89,6 +89,35 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows resume 消费 Mac 手工体验安全摘要
+开发端：Windows Codex
+本轮目标：让 Windows 开工第一屏不仅能看到 Mac 手工体验状态入口，也能直接读懂 Mac 已上板的 `MacManualUx=` 安全摘要。
+完成内容：
+- `check-windows-resume-status` 新增 `MacManualUx=` 安全摘要解析，JSON `board.macManualUx`、普通输出和 `--boardSummary` 会显示 `status=ready|waiting|call-ready|calling`、手工体验清单、中文标签、目标、next、safety、`NoFormalE2ERerun=true`、`ManualUxCall=active|near-timeout|timeout` 以及 `callCommand=present|absent`、blockers/warnings。
+- `ManualUxCallCommand=` 只记录是否存在，不把原始 call 命令作为可执行命令透传；解析拒绝密码/secret/token、未知状态、非白名单 checklist/safety/next 和不安全目标。
+- Node 与 PowerShell wrapper 回归都加入合法摘要、带敏感字段摘要和未知状态摘要样本。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 与 `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000` 先失败在 `MacManualUx summary should be found`。
+- 绿灯：同两条回归通过。
+- `node --check scripts/windows/check-windows-resume-status.mjs`。
+遗留问题：
+- 这仍是只读通讯板消费，不替代真实手工体验验收；是否发起 manual UX call 仍由 Mac 端显式 `--sendCall` 或人工操作决定。
+下一步建议：
+- 用户在场时先看 Windows resume 的 `MacManualUx=` 状态；若 `call-ready`，让 Mac 端显式发起手工体验 call，再按连接、画面、声音、剪贴板、文件、小窗、全屏/原画和复制诊断逐项验收。
+是否改了协议：否。
+是否需要另一端配合：不强制；Mac 端继续按既有格式上板 `MacManualUx=` 即可。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows resume 消费 Mac 手工体验状态入口
 开发端：Windows Codex
 本轮目标：让 Windows 开工第一屏能直接消费 Mac heartbeat/unattended/resume 发布的 `MacManualUxStatus=`，不再需要翻 Mac 端交接记录找手工体验状态入口。

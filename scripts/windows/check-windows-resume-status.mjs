@@ -579,6 +579,28 @@ function emptyMacInputSafety(source = "none", textCount = 0, rejectedCount = 0) 
   };
 }
 
+function emptyMacManualUx(source = "none", textCount = 0, rejectedCount = 0) {
+  return {
+    found: false,
+    source,
+    textCount,
+    rejectedCount,
+    status: "",
+    checklist: "",
+    labels: "",
+    signals: [],
+    target: "",
+    next: "",
+    safety: [],
+    noFormalE2ERerun: false,
+    manualUxCall: "",
+    callCommandPresent: false,
+    blockers: [],
+    warnings: [],
+    summary: "not-seen",
+  };
+}
+
 function emptyMacRemoteAudio(source = "none", textCount = 0, rejectedCount = 0) {
   return {
     found: false,
@@ -1558,7 +1580,7 @@ function splitMacInputSafetySegments(text) {
 
 function extractMacInputSafetyField(segment, fieldName) {
   const escaped = String(fieldName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = String(segment || "").match(new RegExp(`\\b${escaped}\\s*=\\s*([^;\\s.]+)`, "i"));
+  const match = String(segment || "").match(new RegExp(`\\b${escaped}\\s*=\\s*([^;\\s]+)`, "i"));
   return match ? stripCommandToken(match[1]).replace(/[.]+$/g, "") : "";
 }
 
@@ -1629,6 +1651,146 @@ function extractMacInputSafetyFromBoardState(state) {
 function extractMacInputSafetyFromText(text, source = "text") {
   const value = String(text || "");
   return extractMacInputSafetyFromTexts(value ? [value] : [], source);
+}
+
+const macManualUxAllowedStatuses = new Set(["ready", "waiting", "call-ready", "calling"]);
+const macManualUxChecklist = "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
+const macManualUxAllowedNext = new Set(["ManualUxTest", "WaitForPostPassOrManualUxStandby", "SendManualUxCall", "WaitForManualUxConfirmation", "ReconfirmManualUxCall"]);
+const macManualUxAllowedSafety = new Set(["no-password", "no-input-inject"]);
+const macManualUxAllowedCallStates = new Set(["active", "near-timeout", "timeout"]);
+const macManualUxSecretPattern = /(?:^|[\s,;])(?:password|secret|passwd|token|apikey|api-key|credential|cookie|pwd)\s*[:=]|--(?:password|token|secret|passwd|pwd)\b|密码|密钥|口令|令牌/i;
+
+function splitMacManualUxSegments(text) {
+  const value = String(text || "");
+  const matches = [...value.matchAll(/\bMacManualUx\s*=/gi)];
+  return matches.map((match, index) => {
+    const start = match.index || 0;
+    const next = index + 1 < matches.length ? matches[index + 1].index || value.length : value.length;
+    const rawSegment = value.slice(start, next);
+    const boundaryMatch = /\s+(?=(?:Mac(?!ManualUx)|Windows|Win|PowerShell|Formal|Copy|ReverseGrant)[A-Za-z0-9]*\s*=)/.exec(rawSegment.slice(1));
+    return boundaryMatch ? rawSegment.slice(0, boundaryMatch.index + 1) : rawSegment;
+  });
+}
+
+function extractMacManualUxField(segment, fieldName) {
+  const escaped = String(fieldName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = String(segment || "").match(new RegExp(`\\b${escaped}\\s*=\\s*([^;\\s]+)`, "i"));
+  return match ? stripCommandToken(match[1]).replace(/[.]+$/g, "") : "";
+}
+
+function parseMacManualUxTokenList(raw, { allowNone = true } = {}) {
+  const value = String(raw || "").trim();
+  if (!value || (allowNone && /^none$/i.test(value))) return { ok: true, values: [] };
+  const values = value.split(/[,|]+/).map((item) => item.trim()).filter(Boolean);
+  if (!values.every(isSafeMacHealthToken)) return { ok: false, values: [] };
+  return { ok: true, values };
+}
+
+function isSafeMacManualUxTarget(value) {
+  const target = String(value || "").trim();
+  return target === "unknown" || /^(?:localhost|127(?:\.\d{1,3}){3}|(?:\d{1,3}\.){3}\d{1,3}):\d{1,5}$/i.test(target);
+}
+
+function parseMacManualUxSegment(segment, source = "text") {
+  const value = String(segment || "");
+  if (macManualUxSecretPattern.test(value)) return null;
+  const status = extractMacManualUxField(value, "status");
+  const checklist = extractMacManualUxField(value, "ManualUxChecklist") || extractMacManualUxField(value, "checklist");
+  const labels = extractMacManualUxField(value, "ManualUxLabels") || extractMacManualUxField(value, "labels");
+  const signalsRaw = extractMacManualUxField(value, "Signals") || extractMacManualUxField(value, "signals") || "none";
+  const target = extractMacManualUxField(value, "Target") || extractMacManualUxField(value, "target") || "unknown";
+  const next = extractMacManualUxField(value, "Next") || extractMacManualUxField(value, "next");
+  const safetyRaw = extractMacManualUxField(value, "Safety") || extractMacManualUxField(value, "safety");
+  const noFormalE2ERerunRaw = extractMacManualUxField(value, "NoFormalE2ERerun") || extractMacManualUxField(value, "noFormalE2ERerun");
+  const manualUxCall = extractMacManualUxField(value, "ManualUxCall") || extractMacManualUxField(value, "manualUxCall");
+  const blockersRaw = extractMacManualUxField(value, "blockers") || "none";
+  const warningsRaw = extractMacManualUxField(value, "warnings") || "none";
+  const safety = safetyRaw.split(",").map((item) => item.trim()).filter(Boolean);
+  const signals = parseMacManualUxTokenList(signalsRaw);
+  const blockers = parseMacManualUxTokenList(blockersRaw);
+  const warnings = parseMacManualUxTokenList(warningsRaw);
+  const validSafety = safety.length === macManualUxAllowedSafety.size &&
+    safety.every((item) => macManualUxAllowedSafety.has(item)) &&
+    [...macManualUxAllowedSafety].every((item) => safety.includes(item));
+  if (
+    !macManualUxAllowedStatuses.has(status) ||
+    checklist !== macManualUxChecklist ||
+    !labels || macManualUxSecretPattern.test(labels) || /\s/.test(labels) ||
+    !signals.ok || !isSafeMacManualUxTarget(target) ||
+    !macManualUxAllowedNext.has(next) ||
+    !validSafety ||
+    noFormalE2ERerunRaw !== "true" ||
+    (manualUxCall && !macManualUxAllowedCallStates.has(manualUxCall)) ||
+    !blockers.ok ||
+    !warnings.ok
+  ) {
+    return null;
+  }
+  const callCommandPresent = /\bManualUxCallCommand\s*=/.test(value);
+  const summary = [
+    `status=${status}`,
+    `checklist=${checklist}`,
+    `labels=${labels}`,
+    `signals=${signals.values.length ? signals.values.join(",") : "none"}`,
+    `target=${target}`,
+    `next=${next}`,
+    `safety=${safety.join(",")}`,
+    "noFormalE2ERerun=true",
+    ...(manualUxCall ? [`manualUxCall=${manualUxCall}`] : []),
+    callCommandPresent ? "callCommand=present" : "callCommand=absent",
+    `blockers=${blockers.values.length ? blockers.values.join(",") : "none"}`,
+    `warnings=${warnings.values.length ? warnings.values.join(",") : "none"}`,
+  ].join(" ");
+  return {
+    found: true,
+    source,
+    status,
+    checklist,
+    labels,
+    signals: signals.values,
+    target,
+    next,
+    safety,
+    noFormalE2ERerun: true,
+    manualUxCall,
+    callCommandPresent,
+    blockers: blockers.values,
+    warnings: warnings.values,
+    summary,
+  };
+}
+
+function extractMacManualUxFromTexts(texts, source = "text") {
+  let selected = null;
+  let segmentCount = 0;
+  let rejectedCount = 0;
+  for (const text of texts) {
+    for (const segment of splitMacManualUxSegments(text)) {
+      segmentCount += 1;
+      const parsed = parseMacManualUxSegment(segment, source);
+      if (!parsed) {
+        rejectedCount += 1;
+        continue;
+      }
+      selected = parsed;
+    }
+  }
+  if (!selected) return emptyMacManualUx(source, texts.length, rejectedCount);
+  return {
+    ...selected,
+    textCount: texts.length,
+    segmentCount,
+    rejectedCount,
+  };
+}
+
+function extractMacManualUxFromBoardState(state) {
+  return extractMacManualUxFromTexts(collectStringValues(state), "api-state");
+}
+
+function extractMacManualUxFromText(text, source = "text") {
+  const value = String(text || "");
+  return extractMacManualUxFromTexts(value ? [value] : [], source);
 }
 
 const macRemoteAudioAllowedOptions = new Set(["manual-mute-restore", "virtual-output-device", "product-toggle"]);
@@ -3030,6 +3192,7 @@ async function getBoardSnapshot(args) {
       macRemoteAudio: emptyMacRemoteAudio("skipped"),
       macInputSafetyPlan: emptyMacSafeStart("skipped"),
       macManualUxStatus: emptyMacSafeStart("skipped"),
+      macManualUx: emptyMacManualUx("skipped"),
       macInputSafety: emptyMacInputSafety("skipped"),
       macHeartbeatOnce: emptyMacSafeStart("skipped"),
       macHeartbeatWatch: emptyMacSafeStart("skipped"),
@@ -3072,6 +3235,7 @@ async function getBoardSnapshot(args) {
       macRemoteAudio: extractMacRemoteAudioFromBoardState(stateResult.state),
       macInputSafetyPlan: extractMacInputSafetyPlanFromBoardState(stateResult.state),
       macManualUxStatus: extractMacManualUxStatusFromBoardState(stateResult.state),
+      macManualUx: extractMacManualUxFromBoardState(stateResult.state),
       macInputSafety: extractMacInputSafetyFromBoardState(stateResult.state),
       macHeartbeatOnce: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatOnce", "once"),
       macHeartbeatWatch: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatWatch", "watch"),
@@ -3119,6 +3283,7 @@ async function getBoardSnapshot(args) {
     macRemoteAudio: extractMacRemoteAudioFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macInputSafetyPlan: extractMacInputSafetyPlanFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macManualUxStatus: extractMacManualUxStatusFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    macManualUx: extractMacManualUxFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macInputSafety: extractMacInputSafetyFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatOnce: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatOnce", "once", result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatWatch: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatWatch", "watch", result.ok ? "codex-link-client" : "unavailable"),
@@ -4074,6 +4239,9 @@ function makeBoardSummary(report) {
       : []),
     `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`,
     `MacManualUxStatus=${macManualUxStatusCommand}.`,
+    ...(report.board.macManualUx?.found
+      ? [`MacManualUx=${report.board.macManualUx.summary}.`]
+      : []),
     ...(report.board.macInputSafety?.found
       ? [`MacInputSafety=${report.board.macInputSafety.summary}.`]
       : []),
@@ -4399,6 +4567,9 @@ function printHuman(report) {
     if (report.board.macManualUxStatus?.command) {
       console.log(`  MacManualUxStatus=${report.board.macManualUxStatus.command}`);
     }
+    if (report.board.macManualUx?.found) {
+      console.log(`  MacManualUx=${report.board.macManualUx.summary}`);
+    }
     if (report.board.macInputSafety?.found) {
       console.log(`  MacInputSafety=${report.board.macInputSafety.summary}`);
     }
@@ -4487,6 +4658,9 @@ function printHuman(report) {
   }
   console.log(`  MacInputSafetyPlan=${report.board.macInputSafetyPlan?.command || report.commands.macInputSafetyPlanCommand}`);
   console.log(`  MacManualUxStatus=${report.board.macManualUxStatus?.command || report.commands.macManualUxStatusCommand}`);
+  if (report.board.macManualUx?.found) {
+    console.log(`  MacManualUx=${report.board.macManualUx.summary}`);
+  }
   if (report.board.macInputSafety?.found) {
     console.log(`  MacInputSafety=${report.board.macInputSafety.summary}`);
   }
