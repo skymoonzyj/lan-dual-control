@@ -114,6 +114,11 @@ Machine-readable JSON fields:
   commands.sendCall              Secret-free --preflightOnly call sender; only set after a Windows host is known.
   commands.discoverPreflight     Safe discovery + preflight retry command when no host is known.
   commands.browserSmoke          Browser smoke command shape; uses --useEnvPassword, never embeds passwords.
+  commands.promptPasswordSmoke   Human-run Mac wrapper for the real smoke. It
+                                  ensures/reuses the local client page, rings,
+                                  prompts in a frontmost macOS password dialog,
+                                  and prints a board summary without embedding
+                                  the password in arguments.
   commands.macClientBrowserSelfTest
                                   Secret-free local browser self-test command.
                                   It uses a temporary mock Windows host and
@@ -516,6 +521,37 @@ function makeBrowserSmokeCommand(args) {
   return makeBrowserArgs(args).join(" ");
 }
 
+function makePromptPasswordSmokeCommand(args) {
+  if (!hasWindowsHost(args)) return "";
+  const command = [
+    "node",
+    "scripts/mac/run-mac-client-formal-smoke.mjs",
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--ensureClient",
+    "--promptPassword",
+    "--boardSummary",
+  ];
+  if (args.clientHost !== defaults.clientHost) command.push("--clientHost", args.clientHost);
+  if (args.clientPort !== defaults.clientPort) command.push("--clientPort", String(args.clientPort));
+  if (args.debugPort !== defaults.debugPort) command.push("--debugPort", String(args.debugPort));
+  if (args.timeoutMs !== defaults.timeoutMs) command.push("--timeoutMs", String(args.timeoutMs));
+  if (args.observeVideoMs !== defaults.observeVideoMs) command.push("--observeVideoMs", String(args.observeVideoMs));
+  if (args.minObservedVideoFrames !== defaults.minObservedVideoFrames) command.push("--minObservedVideoFrames", String(args.minObservedVideoFrames));
+  if (args.minObservedVideoFps !== defaults.minObservedVideoFps) command.push("--minObservedVideoFps", String(args.minObservedVideoFps));
+  if (args.maxInitialVideoMs !== defaults.maxInitialVideoMs) command.push("--maxInitialVideoMs", String(args.maxInitialVideoMs));
+  if (args.maxAudioFrameMs !== defaults.maxAudioFrameMs) command.push("--maxAudioFrameMs", String(args.maxAudioFrameMs));
+  if (args.maxAudioPlaybackMs !== defaults.maxAudioPlaybackMs) command.push("--maxAudioPlaybackMs", String(args.maxAudioPlaybackMs));
+  if (args.skipAudio) command.push("--skipAudio");
+  if (args.skipFileClipboard) command.push("--skipFileClipboard");
+  if (args.headed) command.push("--headed");
+  if (args.allowPreflightWarnings) command.push("--allowPreflightWarnings");
+  if (args.server !== defaults.server) command.push("--server", args.server);
+  return command.join(" ");
+}
+
 function makeMacClientBrowserSelfTestCommand() {
   return "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
 }
@@ -892,6 +928,7 @@ function makeBoardSummary(report) {
       `Preflight ready=${report.preflight?.readyToCall ? "yes" : "no"}; ${preflightFindings}; command used environment password, not argv.`,
       `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
       `MacClientFormalSmoke=${report.commands?.macClientFormalSmoke || makeMacClientFormalSmokeCommand(report.args)}.`,
+      ...(report.commands?.promptPasswordSmoke ? [`MacClientPromptPasswordSmoke=${report.commands.promptPasswordSmoke}.`] : []),
       `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
       ...reverseGrantParts,
       ...secureAuthParts,
@@ -907,14 +944,15 @@ function makeBoardSummary(report) {
           ? ` Agent Link Board call was not sent: ${report.sentCall.error || "sendCall failed"}.`
         : ` Coordinate first if Windows needs a board call: ${report.commands.sendCall}.`
       : "";
-    const nextText = report.commands?.browserSmoke
-      ? `Next: run with --promptPassword when ready to authenticate; command=${report.commands.browserSmoke}.${sendCallText}`
+    const nextText = report.commands?.promptPasswordSmoke
+      ? `Next: run with --promptPassword when ready to authenticate; command=${report.commands.promptPasswordSmoke}.${sendCallText}`
       : `Next: start or discover a Windows host, then rerun safe preflight; command=${report.commands?.discoverPreflight || ""}.`;
     return [
       `Mac client browser smoke preflight for ${target}: ok=${report.preflight?.ok ? "yes" : "no"} ready=${report.preflight?.readyToCall ? "yes" : "no"}; ${preflightFindings}.${discoveryText}${discoveryChecklistText}`,
       nextText,
       `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
       `MacClientFormalSmoke=${report.commands?.macClientFormalSmoke || makeMacClientFormalSmokeCommand(report.args)}.`,
+      ...(report.commands?.promptPasswordSmoke ? [`MacClientPromptPasswordSmoke=${report.commands.promptPasswordSmoke}.`] : []),
       `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
       `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
       `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
@@ -928,6 +966,7 @@ function makeBoardSummary(report) {
     `Mac client browser smoke failed/blocked for ${target}: ${report.error?.message || report.browserSmoke?.error || "unknown"}.${discoveryText}${discoveryChecklistText} Preflight ${preflightFindings}.`,
     `MacClientFormalChecklist=${report.commands?.macClientFormalChecklist || makePreflightCommand(report.args)}.`,
     `MacClientFormalSmoke=${report.commands?.macClientFormalSmoke || makeMacClientFormalSmokeCommand(report.args)}.`,
+    ...(report.commands?.promptPasswordSmoke ? [`MacClientPromptPasswordSmoke=${report.commands.promptPasswordSmoke}.`] : []),
     `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
     `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
     `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
@@ -1024,6 +1063,7 @@ function makeReport(args, preflight) {
       sendCall: makeSendCallCommand(args),
       discoverPreflight: makeDiscoveryRetryCommand(args),
       browserSmoke: makeBrowserSmokeCommand(args),
+      promptPasswordSmoke: makePromptPasswordSmokeCommand(args),
       macClientBrowserSelfTest: makeMacClientBrowserSelfTestCommand(),
       macScriptHelp: makeMacScriptHelpCommand(),
       windowsReverseGrantStatus: makeWindowsReverseGrantCommand(args, "status"),

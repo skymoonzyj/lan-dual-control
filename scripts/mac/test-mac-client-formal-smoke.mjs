@@ -147,6 +147,24 @@ function assertMacClientFormalSmokeCommand(command, label, options = {}) {
   assertNotIncludes(command, "LAN_DUAL_PASSWORD=", label);
 }
 
+function assertPromptPasswordSmokeCommand(command, label, options = {}) {
+  assertIncludes(command, "node scripts/mac/run-mac-client-formal-smoke.mjs", label);
+  assertIncludes(command, "--ensureClient", label);
+  assertIncludes(command, "--promptPassword", label);
+  assertIncludes(command, "--boardSummary", label);
+  if (options.expectedHost) assertIncludes(command, `--host ${options.expectedHost}`, label);
+  if (options.expectedPort) assertIncludes(command, `--port ${options.expectedPort}`, label);
+  if (options.expectedServer) assertIncludes(command, `--server ${options.expectedServer}`, label);
+  if (options.expectedClientPort) assertIncludes(command, `--clientPort ${options.expectedClientPort}`, label);
+  assertNotIncludes(command, "--preflightOnly", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--useEnvPassword", label);
+  assertNotIncludes(command, "scripts/windows/test-mac-client-browser.mjs", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "LAN_DUAL_PASSWORD=", label);
+}
+
 function assertReverseGrantBoardSummary(text, label, expectedPort) {
   assertIncludes(text, "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass", label);
   assertIncludes(text, `-Port ${expectedPort} -Status -BoardSummary`, label);
@@ -399,6 +417,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.preflight", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.sendCall", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.browserSmoke", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.promptPasswordSmoke", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientBrowserSelfTest", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macScriptHelp", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.windowsReverseGrantStatus", `${script} ${flag}`);
@@ -490,6 +509,11 @@ async function checkPreflightAndDryRun(args) {
         assert(preflightPayload.commands?.sendCall?.includes(`--server ${boardServer}`), "sendCall command should preserve custom board server");
         assert(preflightPayload.commands?.discoverPreflight?.includes("--discover"), "preflight should expose safe discovery retry command");
         assert(preflightPayload.commands?.browserSmoke?.includes("--useEnvPassword"), "preflight should expose env-password browser command shape");
+        assertPromptPasswordSmokeCommand(
+          preflightPayload.commands?.promptPasswordSmoke || "",
+          "preflight prompt-password smoke command",
+          { expectedHost: "127.0.0.1", expectedPort: String(windowsPort), expectedServer: boardServer, expectedClientPort: String(clientPort) },
+        );
         assertMacClientBrowserSelfTestCommand(
           preflightPayload.commands?.macClientBrowserSelfTest || "",
           "preflight Mac client browser self-test command",
@@ -522,6 +546,12 @@ async function checkPreflightAndDryRun(args) {
         assertIncludes(preflightPayload.boardSummary || "", "warnings=", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "MacClientFormalChecklist=", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "MacClientFormalSmoke=", "preflight board summary");
+        assertIncludes(preflightPayload.boardSummary || "", "MacClientPromptPasswordSmoke=", "preflight board summary");
+        assertPromptPasswordSmokeCommand(
+          (preflightPayload.boardSummary || "").split("MacClientPromptPasswordSmoke=")[1]?.split(". ")[0] || "",
+          "preflight board summary prompt-password smoke command",
+          { expectedHost: "127.0.0.1", expectedPort: String(windowsPort), expectedServer: boardServer, expectedClientPort: String(clientPort) },
+        );
         assertIncludes(preflightPayload.boardSummary || "", "--discover --ensureClient --preflightOnly --boardSummary", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", `--port ${windowsPort}`, "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "MacClientBrowserSelfTest=", "preflight board summary");
@@ -564,6 +594,12 @@ async function checkPreflightAndDryRun(args) {
         assertIncludes(sendCallPayload.boardSummary || "", "warnings=", "sendCall board summary");
         assertIncludes(sendCallPayload.boardSummary || "", "MacClientFormalChecklist=", "sendCall board summary");
         assertIncludes(sendCallPayload.boardSummary || "", "MacClientFormalSmoke=", "sendCall board summary");
+        assertIncludes(sendCallPayload.boardSummary || "", "MacClientPromptPasswordSmoke=", "sendCall board summary");
+        assertPromptPasswordSmokeCommand(
+          (sendCallPayload.boardSummary || "").split("MacClientPromptPasswordSmoke=")[1]?.split(". ")[0] || "",
+          "sendCall board summary prompt-password smoke command",
+          { expectedHost: "127.0.0.1", expectedPort: String(windowsPort), expectedServer: boardServer, expectedClientPort: String(clientPort) },
+        );
         assertIncludes(sendCallPayload.boardSummary || "", `--port ${windowsPort}`, "sendCall board summary");
         assertMacScriptHelpCommand(
           (sendCallPayload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
@@ -608,6 +644,11 @@ async function checkPreflightAndDryRun(args) {
       assert(dryRunPayload.commands?.discoverPreflight?.includes("--discover"), "dryRun should expose safe discovery command");
       assert(dryRunPayload.commands?.browserSmoke?.includes("--useEnvPassword"), "dryRun should use environment password flag");
       assert(dryRunPayload.commands?.browserSmoke?.includes("--requirePassword"), "dryRun should require password in child command");
+      assertPromptPasswordSmokeCommand(
+        dryRunPayload.commands?.promptPasswordSmoke || "",
+        "dryRun prompt-password smoke command",
+        { expectedHost: "127.0.0.1", expectedPort: String(windowsPort), expectedClientPort: String(clientPort) },
+      );
       assertMacClientBrowserSelfTestCommand(
         dryRunPayload.commands?.macClientBrowserSelfTest || "",
         "dryRun Mac client browser self-test command",
@@ -630,6 +671,7 @@ async function checkPreflightAndDryRun(args) {
       assertIncludes(dryRunPayload.boardSummary || "", "warnings=", "dryRun board summary");
       assertIncludes(dryRunPayload.boardSummary || "", "MacClientFormalChecklist=", "dryRun board summary");
       assertIncludes(dryRunPayload.boardSummary || "", "MacClientFormalSmoke=", "dryRun board summary");
+      assertIncludes(dryRunPayload.boardSummary || "", "MacClientPromptPasswordSmoke=", "dryRun board summary");
       assertMacScriptHelpCommand(
         (dryRunPayload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
         "dryRun board summary Mac script help command",
@@ -695,6 +737,11 @@ async function checkDiscoverPreflight(args) {
       assert(payload.commands?.sendCall?.includes("--sendCall"), "discover preflight should expose selected-host sendCall command");
       assert(payload.commands?.sendCall?.includes(`--port ${windowsPort}`), "discover preflight sendCall should use selected port");
       assert(payload.commands?.browserSmoke?.includes("--host 127.0.0.1"), "browser command should use discovered host");
+      assertPromptPasswordSmokeCommand(
+        payload.commands?.promptPasswordSmoke || "",
+        "discover preflight prompt-password smoke command",
+        { expectedHost: "127.0.0.1", expectedPort: String(windowsPort), expectedClientPort: String(clientPort) },
+      );
       assertMacClientBrowserSelfTestCommand(
         payload.commands?.macClientBrowserSelfTest || "",
         "discover preflight Mac client browser self-test command",
@@ -710,6 +757,12 @@ async function checkDiscoverPreflight(args) {
       assertIncludes(payload.boardSummary || "", "FormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "discover preflight board summary");
       assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "discover preflight board summary");
       assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs", "discover preflight board summary");
+      assertIncludes(payload.boardSummary || "", "MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs", "discover preflight board summary");
+      assertPromptPasswordSmokeCommand(
+        (payload.boardSummary || "").split("MacClientPromptPasswordSmoke=")[1]?.split(". ")[0] || "",
+        "discover preflight board summary prompt-password smoke command",
+        { expectedHost: "127.0.0.1", expectedPort: String(windowsPort), expectedClientPort: String(clientPort) },
+      );
       assertMacClientFormalSmokeCommand(
         (payload.boardSummary || "").split("MacClientFormalSmoke=")[1]?.split(". ")[0] || "",
         "discover preflight board summary Mac client formal smoke command",
@@ -770,6 +823,12 @@ async function checkEnsureClientPreflight(args) {
     assertIncludes(payload.boardSummary || "", "blockers=none", "ensure client board summary");
     assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=", "ensure client board summary");
     assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "ensure client board summary");
+    assertIncludes(payload.boardSummary || "", "MacClientPromptPasswordSmoke=", "ensure client board summary");
+    assertPromptPasswordSmokeCommand(
+      payload.commands?.promptPasswordSmoke || "",
+      "ensure client prompt-password smoke command",
+      { expectedHost: "127.0.0.1", expectedPort: String(windowsPort), expectedClientPort: String(clientPort) },
+    );
     assertMacScriptHelpCommand(
       (payload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
       "ensure client board summary Mac script help command",
@@ -832,6 +891,12 @@ async function checkDiscoverSendCall(args) {
         assertIncludes(payload.boardSummary || "", "FormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "discover sendCall board summary");
         assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs", "discover sendCall board summary");
         assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs", "discover sendCall board summary");
+        assertIncludes(payload.boardSummary || "", "MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs", "discover sendCall board summary");
+        assertPromptPasswordSmokeCommand(
+          payload.commands?.promptPasswordSmoke || "",
+          "discover sendCall prompt-password smoke command",
+          { expectedHost: "127.0.0.1", expectedPort: String(windowsPort), expectedServer: boardServer, expectedClientPort: String(clientPort) },
+        );
         assertMacScriptHelpCommand(
           (payload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
           "discover sendCall board summary Mac script help command",

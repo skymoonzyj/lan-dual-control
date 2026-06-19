@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：修复 Mac client formal smoke preflight 下一步认证命令指向不够安全直观的问题。
+完成内容：
+- `run-mac-client-formal-smoke --preflightOnly/--dryRun/--sendCall --json/--boardSummary` 在已有 Windows host 时新增 `commands.promptPasswordSmoke` / `MacClientPromptPasswordSmoke=`。
+- `Next: run with --promptPassword...` 现在指向真正可由人工运行的 Mac wrapper：`node scripts/mac/run-mac-client-formal-smoke.mjs --host <Windows IP> --port <port> --ensureClient --promptPassword --boardSummary`，不再指向底层 `test-mac-client-browser --useEnvPassword` 子命令。
+- 这条入口只作为后续真实认证操作指引；本轮没有运行它，所以没有弹密码框、没有认证、没有发 call/input/inject。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 45000` 失败在 help 缺 `commands.promptPasswordSmoke`。
+- 绿灯：实现后复跑同一自测通过。
+遗留问题：
+- 当前本机 Mac host 仍是旧 build；本轮没有重启它，也没有跑需要用户密码的真实 browser smoke。
+下一步建议：
+- 下一次正式 Mac 控 Windows 真测前，先跑 `MacClientFormalSmoke=` 无密 preflight；ready 后复制 `MacClientPromptPasswordSmoke=` 进入本机前台密码认证，不要复制底层 `--useEnvPassword` 子命令。
+是否改了协议：否；只修 Mac 侧 formal smoke 摘要/JSON 的下一步命令。
+是否需要另一端配合：本轮不需要；Windows 端后续可按需消费 `MacClientPromptPasswordSmoke=`。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac formal E2E readiness 对齐旧 host build 的安全重启建议。
 完成内容：
 - `check-mac-formal-e2e-status --json/--boardSummary` 现在遇到 Mac host runtime 源码已变化、当前运行 host 仍是旧 build 时，输出 `suggestedAction=restart-mac-host-safely`。
