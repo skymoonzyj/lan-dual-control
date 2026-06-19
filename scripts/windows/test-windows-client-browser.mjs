@@ -1588,6 +1588,12 @@ async function verifyDesktopOnlyHostPanel(session) {
         typeof parseMacHeartbeatFreshness === "function"
           ? parseMacHeartbeatFreshness("MacHeartbeatFreshness=fresh checked=20s codex=164s board=49s checkedAt=2026-06-19T05:12:59.408Z")
           : null;
+      const stableHeartbeatFreshnessEvidence =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "Windows resume: repo=clean board=ok mac=ready; MacHeartbeatFreshness=fresh checked=20s codex=64s board=38s checkedAt=2026-06-19T05:12:59.408Z",
+            )
+          : null;
       const watcherThrottleBefore =
         typeof shouldRefreshMacAlertWatcherStatus === "function"
           ? shouldRefreshMacAlertWatcherStatus(15999)
@@ -2321,6 +2327,10 @@ async function verifyDesktopOnlyHostPanel(session) {
           stableHeartbeatFreshnessAttention?.summary.includes("Mac 心跳摘要过旧") &&
           stableHeartbeatFreshnessAttention?.summary.includes("心跳检查 3 分钟前") &&
           stableHeartbeatFreshnessAttention?.summary.includes("Mac Codex 5 分钟前") &&
+          stableHeartbeatFreshnessEvidence?.summary === "" &&
+          Array.isArray(stableHeartbeatFreshnessEvidence?.evidenceLabels) &&
+          stableHeartbeatFreshnessEvidence.evidenceLabels.includes("Mac 心跳正常") &&
+          stableHeartbeatFreshnessEvidence?.evidenceSummary.includes("Mac 心跳正常") &&
           heartbeatCommandCheck.ok &&
           cleanMacHostReadinessCommandAttention?.summary === "" &&
           Array.isArray(cleanMacHostReadinessCommandAttention?.labels) &&
@@ -2497,6 +2507,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         freshHeartbeatNoStale,
         stableHeartbeatFreshnessDirect,
         stableHeartbeatFreshnessAttention,
+        stableHeartbeatFreshnessEvidence,
         heartbeatCommandCheck,
         cleanMacHostReadinessCommandAttention,
         cleanMacHostMediaCommandAttention,

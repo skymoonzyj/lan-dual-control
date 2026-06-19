@@ -3470,10 +3470,24 @@ function isCleanLatestMacHeartbeatEvidence(text, now = Date.now()) {
   );
 }
 
+function hasCleanMacHeartbeatFreshnessEvidence(text, now = Date.now()) {
+  return splitMacStatusSegments(text).some((segment) => {
+    if (
+      !/\bMacHeartbeatFreshness\s*=\s*fresh\b/i.test(segment) ||
+      /\bnode\s+scripts[\\/]+mac[\\/]+|\bscripts[\\/]+mac[\\/]+|\.mjs\b/i.test(segment) ||
+      !isCleanMacStatusEvidenceSegment(segment)
+    ) {
+      return false;
+    }
+    const freshness = parseMacHeartbeatFreshness(segment, now);
+    return freshness.present && freshness.checkedAgeMs !== null && !freshness.stale;
+  });
+}
+
 function parseMacPositiveEvidenceLabels(text) {
   const source = String(text || "");
   const labels = [];
-  if (isCleanLatestMacHeartbeatEvidence(source)) {
+  if (isCleanLatestMacHeartbeatEvidence(source) || hasCleanMacHeartbeatFreshnessEvidence(source)) {
     labels.push("Mac 心跳正常");
   }
   if (

@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端把干净 `MacHeartbeatFreshness=fresh` 稳定字段显示为值守证据。
+完成内容：
+- `apps/windows-client/app.js` 新增干净 `MacHeartbeatFreshness=fresh` 证据判断：字段 fresh、带可解析 `checked=` 或 `checkedAt=`，且同片段没有失败、stale、离线、非空 warning/blocker 或 Mac 脚本命令时，会显示“Mac 心跳正常”。
+- stale 的 `MacHeartbeatFreshness=` 仍走风险摘要；上轮已实现的“Mac 心跳摘要过旧（心跳检查 / Mac Codex / 联络板）”不受影响。
+- 页面 diagnostics-only 回归覆盖只有稳定 freshness 字段、没有原始 `MacHeartbeat=status=ok` 时的值守证据路径。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 失败在 `stableHeartbeatFreshnessEvidence.evidenceLabels` 为空。
+- 绿灯：实现后同一命令通过。
+遗留问题：
+- 本轮只做 Windows 控制端本地解析和展示；不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
+下一步建议：
+- 后续 Windows 第一屏只看到 `MacHeartbeatFreshness=fresh` 时，控制端和复制诊断可以直接把它当成“Mac 心跳正常”的值守证据；若同屏还有 warning/blocker，再按对应风险继续排查。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端直接消费稳定 `MacHeartbeatFreshness=` 摘要，避免把心跳复查命令误判成实时心跳。
 完成内容：
 - `apps/windows-client/app.js` 新增 `MacHeartbeatFreshness=fresh|stale checked=<秒> codex=<秒> board=<秒> checkedAt=<时间>` 解析，优先级高于旧的原始 `MacHeartbeat=` 段。
