@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：把 Mac 值守里的笼统 `power` warning 拆成稳定可读的电源健康字段。
+完成内容：
+- `check-mac-unattended-status --json` 新增 `macPowerHealth`，从 `pmset -g custom` 派生 `ok|warning|unknown`、首个 `reason` 和稳定 `warnings` 短标签。
+- `power.risks[]` 新增细分风险对象，当前支持 `system-sleep-enabled`、`display-sleep-enabled`、`network-wake-disabled`。
+- `--boardSummary` 新增 `MacPowerHealth=`，同时保留原 `MacUnattendedHealth=... warnings=power` 兼容输出，方便 Windows 端继续按旧字段识别风险、按新字段展示具体原因。
+- 真实只读复查显示当前 Mac 电源风险为 `MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled`；LaunchAgent 仍未 loaded，值守总体仍是 warning。
+修改文件：
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增断言后，`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 12000` 先失败在帮助文档缺少 `macPowerHealth`。
+- 绿灯：实现后同一回归通过，覆盖 fake `pmset` 的三类电源风险、JSON `power.risks[]`、JSON `macPowerHealth`、`MacPowerHealth=` 摘要，以及仍只产生一个兼容 `power` finding。
+- 真实只读：`node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --boardSummary` 输出 `MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled`。
+遗留问题：
+- 本轮只增强只读诊断，不改 pmset、不加载 LaunchAgent、不停/启 Mac host、不认证、不请求或发送密码、不发 input/inject。
+下一步建议：
+- 真处理值守时，先按 `MacPowerHealth=` 判断是否需要调整系统睡眠/显示睡眠/网络唤醒，再按 `MacUnattendedFormal=` 验证 LaunchAgent loaded。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；Windows 端后续可选择消费 `MacPowerHealth=` 做更细中文提示。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让独立 Mac Unattended 状态摘要自己也暴露刷新自身的安全入口。
 完成内容：
 - `check-mac-unattended-status --json` 新增 `commands.macUnattendedSendStatus`，基于当前 host/port/LaunchAgent path/require/skip flags 生成自刷新命令。

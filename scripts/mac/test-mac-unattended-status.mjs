@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -206,6 +206,17 @@ function assertUnattendedHealth(payload, expected, label) {
   }
 }
 
+function assertPowerHealth(payload, expected, label) {
+  const health = payload.macPowerHealth;
+  assert(health && typeof health === "object", `${label} should include macPowerHealth`);
+  for (const [key, value] of Object.entries(expected)) {
+    assert(
+      health[key] === value,
+      `${label} macPowerHealth.${key} expected ${value}, got ${health[key]}`,
+    );
+  }
+}
+
 function assertMacClientBrowserSelfTestCommand(command, label) {
   const text = String(command || "");
   assertIncludes(text, "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs", label);
@@ -327,6 +338,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "launchAgent", `${script} ${flag}`);
     assertIncludes(result.stdout, "power", `${script} ${flag}`);
     assertIncludes(result.stdout, "macUnattendedHealth", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macPowerHealth", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.launchAgentPlan", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macMaxFpsPlan", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macUnattendedStatus", `${script} ${flag}`);
@@ -345,6 +357,97 @@ function checkHelp(args) {
     assertNoSecretOrInputGuidance(result.stdout, `${script} ${flag}`);
   }
   print("OK", "Unattended status help exits quickly and stays side-effect-free");
+}
+
+async function checkPowerHealthDetails(args) {
+  if (process.platform !== "darwin") {
+    print("SKIP", "Mac power health detail check requires macOS pmset semantics");
+    return;
+  }
+  const dir = mkdtempSync(path.join(tmpdir(), "lan-dual-unattended-power-"));
+  try {
+    const plist = path.join(dir, "com.lan-dual-control.mac-host.plist");
+    writeFileSync(plist, fakeLaunchAgentPlist({ maxScreenFps: 60 }), "utf8");
+    const bin = path.join(dir, "bin");
+    const fakePmset = path.join(bin, "pmset");
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(fakePmset, `#!/bin/sh
+cat <<'PMSET'
+Battery Power:
+ sleep 0
+ displaysleep 0
+ womp 0
+ tcpkeepalive 0
+AC Power:
+ sleep 1
+ displaysleep 10
+ womp 0
+ tcpkeepalive 0
+PMSET
+`, "utf8");
+    chmodSync(fakePmset, 0o755);
+
+    await withFakeHost({
+      deviceName: "Fake power-risk Mac",
+      inputMode: "log",
+      permissions: {
+        screenRecording: true,
+        accessibility: true,
+        inputMonitoring: true,
+      },
+      runtime: {
+        buildId: "fake-power-risk-build",
+        processId: 12345,
+      },
+      capabilities: {
+        h264Stream: true,
+        capturePipeline: "screencapturekit-h264",
+        audioMode: "system-pcm",
+      },
+    }, async (port) => {
+      const result = runWithEnv(args, [
+        "--json",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(port),
+        "--timeoutMs",
+        "1200",
+        "--launchAgentPath",
+        plist,
+        "--skipLaunchctl",
+      ], {
+        PATH: `${bin}:${process.env.PATH || ""}`,
+      });
+      const payload = parseJson(result.stdout, "power health details JSON");
+      assert(result.status === 0, `power risks should stay warning-only by default\n${result.stdout}\n${result.stderr}`);
+      assert(Array.isArray(payload.power?.risks), "power payload should expose stable risk objects");
+      assert(
+        payload.power.risks.map((item) => item.id).join(",") === "system-sleep-enabled,display-sleep-enabled,network-wake-disabled",
+        `power risks should preserve stable ids, got ${JSON.stringify(payload.power.risks)}`,
+      );
+      assert(payload.findings.filter((item) => item.id === "power").length === 1, "detailed power risks should collapse to one compatibility finding");
+      assertPowerHealth(payload, {
+        status: "warning",
+        reason: "system-sleep-enabled",
+        warnings: "system-sleep-enabled,display-sleep-enabled,network-wake-disabled",
+      }, "power health details JSON");
+      assertUnattendedHealth(payload, {
+        status: "warning",
+        reason: "power",
+        blockers: "none",
+        warnings: "power",
+      }, "power health details JSON");
+      assertIncludes(payload.boardSummary, "MacPowerHealth=warning", "power health board summary");
+      assertIncludes(payload.boardSummary, "reason=system-sleep-enabled", "power health board summary");
+      assertIncludes(payload.boardSummary, "warnings=system-sleep-enabled,display-sleep-enabled,network-wake-disabled", "power health board summary");
+      assertIncludes(payload.boardSummary, "warnings=power", "power health compatibility board summary");
+      assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "power health details JSON");
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  print("OK", "Mac power risks expose stable detailed health tags");
 }
 
 function checkMissingLaunchAgentJson(args) {
@@ -1038,6 +1141,7 @@ async function main() {
   checkFakePlist(args);
   checkLaunchAgentMaxFpsWarning(args);
   checkBoardSummary(args);
+  await checkPowerHealthDetails(args);
   await checkCapabilitiesInputMode(args);
   await checkStaleRuntimeBuildWarning(args);
   await checkNoFindingsSummary(args);

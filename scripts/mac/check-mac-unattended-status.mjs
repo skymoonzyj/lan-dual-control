@@ -77,6 +77,11 @@ Machine-readable JSON fields:
   launchAgent                    LaunchAgent plist existence and launchctl loaded status.
   power                          pmset sleep/display/network-wake snapshot and risk notes.
   limitations                    Lock screen, display sleep, system sleep, reboot/login limits.
+  macPowerHealth                 Stable ok|warning|unknown power risk summary
+                                  exposed as MacPowerHealth= in board
+                                  summaries. Detailed warning tags include
+                                  system-sleep-enabled, display-sleep-enabled,
+                                  and network-wake-disabled.
   macUnattendedHealth            Stable ok|warning|blocked health summary
                                   exposed as MacUnattendedHealth= in board
                                   summaries.
@@ -490,12 +495,14 @@ function runPmset(args) {
   });
   const raw = String(result.stdout || result.stderr || "");
   const settings = parsePmset(raw);
-  const warnings = classifyPowerWarnings(settings);
+  const risks = classifyPowerRisks(settings);
+  const warnings = classifyPowerWarnings(risks);
   return {
     checked: true,
     ok: result.status === 0,
     raw: raw.slice(0, 12000),
     settings,
+    risks,
     summary: summarizePower(settings),
     warnings,
   };
@@ -532,17 +539,36 @@ function settingValues(settings, keys) {
   return values;
 }
 
-function classifyPowerWarnings(settings) {
-  const warnings = [];
+function classifyPowerRisks(settings) {
+  const risks = [];
   const sleep = settingValues(settings, ["sleep"]);
   if (sleep.some((item) => item.value > 0)) {
-    warnings.push("system sleep is enabled in at least one power profile; sleeping Mac will not stay controllable.");
+    risks.push({
+      id: "system-sleep-enabled",
+      text: "System sleep is enabled in at least one power profile; a sleeping Mac will not stay controllable.",
+    });
+  }
+  const displaySleep = settingValues(settings, ["displaysleep"]);
+  if (displaySleep.some((item) => item.value > 0)) {
+    risks.push({
+      id: "display-sleep-enabled",
+      text: "Display sleep is enabled in at least one power profile; ScreenCaptureKit behavior still needs real Mac verification after display sleep.",
+    });
   }
   const wakeNetwork = settingValues(settings, ["womp", "tcpkeepalive"]);
   if (wakeNetwork.length > 0 && wakeNetwork.every((item) => item.value === 0)) {
-    warnings.push("Wake for network access/tcpkeepalive appears disabled; unattended reconnect after idle may be unreliable.");
+    risks.push({
+      id: "network-wake-disabled",
+      text: "Wake for network access/tcpkeepalive appears disabled; unattended reconnect after idle may be unreliable.",
+    });
   }
-  return warnings;
+  return risks;
+}
+
+function classifyPowerWarnings(risks) {
+  const items = Array.isArray(risks) ? risks : [];
+  if (items.length === 0) return [];
+  return [items.map((item) => item.text).filter(Boolean).join(" ")];
 }
 
 function summarizePower(settings) {
@@ -848,9 +874,10 @@ function makeBoardSummary(report) {
   const agent = `launchAgent=${report.launchAgent.exists ? "file-present" : "missing"} loaded=${report.launchAgent.loaded === null ? "unknown" : boolText(report.launchAgent.loaded)}`;
   const agentMaxFps = report.launchAgent.maxScreenFps === null ? "unknown" : String(report.launchAgent.maxScreenFps);
   const suggestedAction = report.suggestedAction?.boardSummary || "";
+  const powerHealth = formatMacPowerHealthSummary(report.macPowerHealth);
   const unattendedHealth = formatMacUnattendedHealthSummary(report.macUnattendedHealth);
   return [
-    `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${unattendedHealth}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedAction ? ` ${suggestedAction}` : ""}.`,
+    `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${powerHealth}; ${unattendedHealth}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedAction ? ` ${suggestedAction}` : ""}.`,
     `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacUnattendedSendStatus=${report.commands.macUnattendedSendStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacHostMedia=${report.commands.macHostMedia}; MacResumeStatus=${report.commands.macResumeStatus}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTest}; MacScriptHelp=${report.commands.macScriptHelp}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
@@ -895,6 +922,48 @@ function summarizeFindingIds(findings) {
 function summarizeHealthFindingIds(findings) {
   const ids = [...new Set(findings.map((item) => item.id).filter(Boolean))];
   return ids.length > 0 ? ids.join(",") : "none";
+}
+
+function summarizePowerRiskIds(risks) {
+  const ids = [...new Set((Array.isArray(risks) ? risks : []).map((item) => item.id).filter(Boolean))];
+  return ids.length > 0 ? ids.join(",") : "none";
+}
+
+function buildMacPowerHealth(report) {
+  const power = report.power || {};
+  if (!power.checked) {
+    return {
+      status: "unknown",
+      reason: power.summary === "skipped" ? "skipped" : "not-checked",
+      warnings: "unknown",
+      checkedAt: report.checkedAt || "",
+    };
+  }
+  if (power.ok !== true) {
+    return {
+      status: "unknown",
+      reason: "pmset-failed",
+      warnings: summarizePowerRiskIds(power.risks),
+      checkedAt: report.checkedAt || "",
+    };
+  }
+  const warnings = summarizePowerRiskIds(power.risks);
+  return {
+    status: warnings === "none" ? "ok" : "warning",
+    reason: warnings === "none" ? "ok" : warnings.split(",")[0],
+    warnings,
+    checkedAt: report.checkedAt || "",
+  };
+}
+
+function formatMacPowerHealthSummary(health) {
+  if (!health) return "MacPowerHealth=unknown reason=unknown warnings=unknown checkedAt=unknown";
+  return [
+    `MacPowerHealth=${health.status || "unknown"}`,
+    `reason=${health.reason || "unknown"}`,
+    `warnings=${health.warnings || "unknown"}`,
+    `checkedAt=${health.checkedAt || "unknown"}`,
+  ].join(" ");
 }
 
 function buildMacUnattendedHealth(report) {
@@ -967,11 +1036,13 @@ async function buildReport(args) {
     power,
     limitations: makeLimitations(),
     findings,
+    macPowerHealth: undefined,
     macUnattendedHealth: undefined,
     commands: makeCommands(args),
     suggestedAction: undefined,
     boardSummary: "",
   };
+  report.macPowerHealth = buildMacPowerHealth(report);
   report.macUnattendedHealth = buildMacUnattendedHealth(report);
   report.suggestedAction = buildSuggestedAction(report);
   report.boardSummary = makeBoardSummary(report);
@@ -984,6 +1055,7 @@ function printHuman(report) {
   console.log(`- permissions: screen=${boolText(report.host.permissions?.screenRecording)} accessibility=${boolText(report.host.permissions?.accessibility)} inputMonitoring=${boolText(report.host.permissions?.inputMonitoring)}`);
   console.log(`- LaunchAgent: path=${report.launchAgent.path}; file=${report.launchAgent.exists ? "present" : "missing"}; loaded=${report.launchAgent.loaded === null ? "unknown" : boolText(report.launchAgent.loaded)}; maxFps=${report.launchAgent.maxScreenFps === null ? "unknown" : report.launchAgent.maxScreenFps}`);
   console.log(`- power: ${report.power.summary}`);
+  console.log(`- power health: ${report.macPowerHealth.status} (${report.macPowerHealth.reason})`);
   console.log(`- unattended health: ${report.macUnattendedHealth.status} (${report.macUnattendedHealth.reason})`);
   for (const item of report.findings) {
     const prefix = item.level === "blocker" ? "BLOCK" : item.level === "warning" ? "WARN" : "INFO";
