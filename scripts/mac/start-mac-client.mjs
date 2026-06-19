@@ -30,6 +30,7 @@ const formalChecklistCommand = "node scripts/mac/check-mac-client-formal-status.
 const formalSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
 const promptPasswordSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword --boardSummary";
 const browserSelfTestCommand = "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
+const macPowerPlanCommand = "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary";
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -93,6 +94,9 @@ Machine-readable JSON fields:
                          Secret-free local browser self-test command. It uses a
                          temporary mock Windows host and does not use a real host,
                          password, call, or inject.
+  commands.macPowerPlanCommand
+                         Secret-free dry-run Mac power plan command for keeping
+                         formal testing awake. It does not apply system settings.
   commands.macClientCopyDiagnosticsAction
                          Safe in-page action for copying diagnostics after
                          confirming no connection password is included.
@@ -263,6 +267,7 @@ function makeBoardSummary(report) {
       `WindowsOpenOneTimeReverseGrantNodeFallback=${windowsOpenOneTimeReverseGrantNodeFallbackCommand}.`,
       `MacClientPromptPasswordSmoke=${promptPasswordSmokeCommand}.`,
       `MacClientBrowserSelfTest=${browserSelfTestCommand}.`,
+      `MacPowerPlan=${macPowerPlanCommand}.`,
       `CopyDiagnostics=${copyDiagnosticsAction}.`,
       "No password was requested or sent; no Windows connection/input was attempted.",
     ].join(" ");
@@ -281,6 +286,7 @@ function makeBoardSummary(report) {
     `WindowsOpenOneTimeReverseGrantNodeFallback=${windowsOpenOneTimeReverseGrantNodeFallbackCommand}.`,
     `MacClientPromptPasswordSmoke=${promptPasswordSmokeCommand}.`,
     `MacClientBrowserSelfTest=${browserSelfTestCommand}.`,
+    `MacPowerPlan=${macPowerPlanCommand}.`,
     `CopyDiagnostics=页面在线后在 ${copyDiagnosticsAction}.`,
     "No password was requested or sent; no Windows connection/input was attempted.",
   ].join(" ");
@@ -300,6 +306,7 @@ function makeCommands(args) {
     macClientFormalSmokeCommand: formalSmokeCommand,
     macClientPromptPasswordSmokeCommand: promptPasswordSmokeCommand,
     macClientBrowserSelfTestCommand: browserSelfTestCommand,
+    macPowerPlanCommand,
     macClientCopyDiagnosticsAction: copyDiagnosticsAction,
   };
 }

@@ -144,6 +144,25 @@ function assertMacClientDiscoverWindowsCommand(command, label) {
   assertNotIncludes(command, "--server", label);
 }
 
+function assertMacPowerPlanCommand(command, label) {
+  assertIncludes(command, "node scripts/mac/plan-mac-power-settings.mjs", label);
+  assertIncludes(command, "--profile all", label);
+  assertIncludes(command, "--sleep 0", label);
+  assertIncludes(command, "--displaySleep 0", label);
+  assertIncludes(command, "--networkWake on", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--apply", label);
+  assertNotIncludes(command, "sudo", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "--json", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function assertMacClientReverseRehearsalAction(text, label) {
   assertIncludes(text, "MacClientDiscoverWindows", label);
   assertIncludes(text, "ReverseRehearsal=", label);
@@ -245,6 +264,10 @@ function assertMacClientBrowserSelfTestCommand(command, label) {
   assertNotIncludes(command, "--server", label);
 }
 
+function extractBoardSummaryCommand(text, key) {
+  return String(text || "").split(`${key}=`)[1]?.split(". ")[0] || "";
+}
+
 async function getFreePort() {
   return new Promise((resolvePort, rejectPort) => {
     const server = createServer();
@@ -299,6 +322,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientPromptPasswordSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientBrowserSelfTestCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macPowerPlanCommand", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
   print("OK", "Mac client start helper help exits quickly");
@@ -324,6 +348,11 @@ async function checkOfflineStatus(args) {
   assertIncludes(payload.boardSummary || "", "ReverseRehearsal=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientPromptPasswordSmoke=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacPowerPlan=", "offline board summary");
+  assertMacPowerPlanCommand(
+    extractBoardSummaryCommand(payload.boardSummary, "MacPowerPlan"),
+    "offline board summary Mac power plan command",
+  );
   assertIncludes(payload.boardSummary || "", "CopyDiagnostics=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "复制诊断", "offline board summary");
   assertIncludes(payload.boardSummary || "", "连接密码", "offline board summary");
@@ -343,6 +372,7 @@ async function checkOfflineStatus(args) {
     payload.commands?.macClientBrowserSelfTestCommand || "",
     "offline Mac client browser self-test command",
   );
+  assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand || "", "offline Mac power plan command");
   assertIncludes(payload.commands?.macClientCopyDiagnosticsAction || "", "复制诊断", "offline commands");
   assertIncludes(payload.commands?.macClientCopyDiagnosticsAction || "", "连接密码", "offline commands");
   assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "offline status");
@@ -368,6 +398,11 @@ async function checkOfflineStatus(args) {
     "offline board summary stdout prompt-password smoke command",
   );
   assertIncludes(summaryLine, "MacClientBrowserSelfTest=", "offline board summary stdout");
+  assertIncludes(summaryLine, "MacPowerPlan=", "offline board summary stdout");
+  assertMacPowerPlanCommand(
+    extractBoardSummaryCommand(summaryLine, "MacPowerPlan"),
+    "offline board summary stdout Mac power plan command",
+  );
   assertIncludes(summaryLine, "CopyDiagnostics=", "offline board summary stdout");
   assertIncludes(summaryLine, "复制诊断", "offline board summary stdout");
   assertIncludes(summaryLine, "连接密码", "offline board summary stdout");
@@ -395,6 +430,11 @@ async function checkStartAndExisting(args) {
   assertWindowsReverseGrantBoardSummary(started.boardSummary || "", "start board summary");
   assertIncludes(started.boardSummary || "", "MacClientPromptPasswordSmoke=", "start board summary");
   assertIncludes(started.boardSummary || "", "MacClientBrowserSelfTest=", "start board summary");
+  assertIncludes(started.boardSummary || "", "MacPowerPlan=", "start board summary");
+  assertMacPowerPlanCommand(
+    extractBoardSummaryCommand(started.boardSummary, "MacPowerPlan"),
+    "start board summary Mac power plan command",
+  );
   assertIncludes(started.boardSummary || "", "CopyDiagnostics=", "start board summary");
   assertIncludes(started.boardSummary || "", "复制诊断", "start board summary");
   assertIncludes(started.boardSummary || "", "连接密码", "start board summary");
@@ -413,6 +453,7 @@ async function checkStartAndExisting(args) {
     started.commands?.macClientBrowserSelfTestCommand || "",
     "start Mac client browser self-test command",
   );
+  assertMacPowerPlanCommand(started.commands?.macPowerPlanCommand || "", "start Mac power plan command");
   assertIncludes(started.commands?.macClientCopyDiagnosticsAction || "", "复制诊断", "start commands");
   assertNotIncludes(`${start.stdout}\n${start.stderr}`, "demo-password", "start output");
 
@@ -436,6 +477,11 @@ async function checkStartAndExisting(args) {
     assertWindowsReverseGrantBoardSummary(statusPayload.boardSummary || "", "online status board summary");
     assertIncludes(statusPayload.boardSummary || "", "MacClientPromptPasswordSmoke=", "online status board summary");
     assertIncludes(statusPayload.boardSummary || "", "MacClientBrowserSelfTest=", "online status board summary");
+    assertIncludes(statusPayload.boardSummary || "", "MacPowerPlan=", "online status board summary");
+    assertMacPowerPlanCommand(
+      extractBoardSummaryCommand(statusPayload.boardSummary, "MacPowerPlan"),
+      "online status board summary Mac power plan command",
+    );
     assertIncludes(statusPayload.boardSummary || "", "复制诊断", "online status board summary");
     assertIncludes(statusPayload.commands?.macClientStartOrReuseCommand || "", `--port ${port}`, "online status commands");
     assertMacClientFormalStatusCommand(
@@ -455,6 +501,7 @@ async function checkStartAndExisting(args) {
       statusPayload.commands?.macClientBrowserSelfTestCommand || "",
       "online status Mac client browser self-test command",
     );
+    assertMacPowerPlanCommand(statusPayload.commands?.macPowerPlanCommand || "", "online status Mac power plan command");
     assertIncludes(statusPayload.commands?.macClientCopyDiagnosticsAction || "", "连接密码", "online status commands");
 
     const summary = run(["--status", "--boardSummary", "--port", String(port), "--timeoutMs", "1200"], {
@@ -477,6 +524,11 @@ async function checkStartAndExisting(args) {
       "online board summary stdout prompt-password smoke command",
     );
     assertIncludes(summaryLine, "MacClientBrowserSelfTest=", "online board summary stdout");
+    assertIncludes(summaryLine, "MacPowerPlan=", "online board summary stdout");
+    assertMacPowerPlanCommand(
+      extractBoardSummaryCommand(summaryLine, "MacPowerPlan"),
+      "online board summary stdout Mac power plan command",
+    );
     assertIncludes(summaryLine, "CopyDiagnostics=", "online board summary stdout");
     assertIncludes(summaryLine, "复制诊断", "online board summary stdout");
     assertIncludes(summaryLine, "连接密码", "online board summary stdout");
@@ -510,6 +562,7 @@ async function checkStartAndExisting(args) {
       allowedPayload.commands?.macClientBrowserSelfTestCommand || "",
       "allow existing Mac client browser self-test command",
     );
+    assertMacPowerPlanCommand(allowedPayload.commands?.macPowerPlanCommand || "", "allow existing Mac power plan command");
     assertIncludes(
       allowedPayload.commands?.macClientCopyDiagnosticsAction || "",
       "复制诊断",
