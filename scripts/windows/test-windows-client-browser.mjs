@@ -1645,6 +1645,15 @@ async function verifyDesktopOnlyHostPanel(session) {
               ].join("; "),
             )
           : null;
+      const macUnattendedBrowserSelfTestAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none",
+                "MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary",
+              ].join("; "),
+            )
+          : null;
       const cleanMacClientPromptPasswordSmokeAttention =
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
@@ -1998,6 +2007,7 @@ async function verifyDesktopOnlyHostPanel(session) {
           cleanMacClientBrowserSelfTestAttention?.summary === "" &&
           Array.isArray(cleanMacClientBrowserSelfTestAttention?.labels) &&
           cleanMacClientBrowserSelfTestAttention.labels.length === 0 &&
+          macUnattendedBrowserSelfTestAttention?.summary.includes("Mac client 本地 browser 自测命令已提供") &&
           cleanMacClientPromptPasswordSmokeAttention?.summary === "" &&
           Array.isArray(cleanMacClientPromptPasswordSmokeAttention?.labels) &&
           cleanMacClientPromptPasswordSmokeAttention.labels.length === 0 &&
@@ -2060,6 +2070,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         heartbeatCommandCheck,
         cleanMacHostReadinessCommandAttention,
         cleanMacClientBrowserSelfTestAttention,
+        macUnattendedBrowserSelfTestAttention,
         cleanMacClientPromptPasswordSmokeAttention,
         cleanMacScriptHelpAttention,
         macFormalE2eBrowserSelfTestAttention,

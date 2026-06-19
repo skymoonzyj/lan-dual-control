@@ -3507,6 +3507,7 @@ function parseMacUnattendedAttention(text) {
   if (
     hasMacClientBrowserSelfTest &&
     (
+      risks.length > 0 ||
       hasMacClientFormalFinding ||
       hasMacFormalE2eFinding ||
       /ready\s*=\s*false|blocked|failed/.test(lower)

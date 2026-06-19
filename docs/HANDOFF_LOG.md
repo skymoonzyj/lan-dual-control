@@ -21,6 +21,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端在 `MacUnattendedStatus=` / 值守 warning 上下文里也能提示 `MacClientBrowserSelfTest=` 本地 browser 自测入口。
+完成内容：
+- `parseMacUnattendedAttention` 的 `MacClientBrowserSelfTest=` 识别现在会复用同段已解析出的值守风险：只要同段已有非空 warning/blocker 或其它风险标签，就显示“Mac client 本地 browser 自测命令已提供”。
+- 新增页面自测覆盖 `MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none` + `MacClientBrowserSelfTest=` 的独立场景，避免只靠 Formal E2E 或 formal smoke fixtures 间接覆盖。
+- 干净 `warnings=none blockers=none` 命令清单仍不误弹；Windows 端只提示/复制，不运行 Mac 脚本、不认证、不发密码/input/inject。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败在 `MacUnattendedStatus=attention ... MacClientBrowserSelfTest=` 缺少“Mac client 本地 browser 自测命令已提供”。
+- 绿灯：实现后复跑同一命令通过。
+- 收尾复跑：`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`、`git diff --check` 与触碰文件冲突标记扫描。
+遗留问题：
+- 本轮只消费 Mac 摘要标签，不启动或运行 Mac 本地 browser 自测；真实自测仍由 Mac 端在用户/自动化明确选择时运行。
+下一步建议：
+- 如果 Mac 端继续把 `MacClientBrowserSelfTest=` 接到更多值守或 readiness 摘要里，Windows 端保持同一模式：有风险上下文才提示，干净命令清单不误弹。
+是否改了协议：否；只补 Windows 控制端诊断识别、自测和文档。
+是否需要另一端配合：不需要；后续真实 browser self-test 或真连验收再由 Mac 端按摘要命令执行即可。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端消费 `MacScriptHelp=` Mac 脚本 help 安全自检入口。
 完成内容：
 - `parseMacUnattendedAttention` 新增 `MacScriptHelp=` 识别和中文风险标签“Mac 脚本 help 安全自检命令已提供”。
