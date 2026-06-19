@@ -19,6 +19,39 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 恢复总览消费 MacInputSafetyPlan
+开发端：Windows Codex
+本轮目标：让 Windows 开工第一屏只读消费 Mac 真实输入安全方案，不打开控制页也能看到真实输入仍处于安全日志/需用户在场的边界。
+完成内容：
+- `check-windows-resume-status --checkBoard` 新增 `MacInputSafetyPlan=` 命令白名单解析，只接受 `node scripts/mac/plan-mac-input-safety.mjs --boardSummary`，拒绝 `--password`、非 board summary 和未知参数。
+- 新增 `Mac input safety plan:` 摘要白名单解析，JSON `board.macInputSafety`、普通输出和 `--boardSummary` 会显示 `status=plan-only default=log realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe safety=no-password,no-input-events,no-inject`。
+- PowerShell wrapper help 同步展示同一只读入口；不新增参数，不改变执行路径。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 和 `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000` 先失败，帮助/摘要里没有 `MacInputSafetyPlan=`。
+- 绿灯：`node --check scripts/windows/check-windows-resume-status.mjs`
+- 绿灯：`node --check scripts/windows/test-windows-resume-status.mjs`
+- 绿灯：`node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- 绿灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 绿灯：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- 真实 inject 仍未开启；后续必须用户明确确认正在看 Mac 屏幕后，由 Mac 端带 `--confirmUserWatching` 和 safe event set 另行验收。
+下一步建议：
+- 开工第一屏继续优先跑 `check-windows-resume-status --checkBoard --boardSummary`；看到 `MacInputSafety=` 时按只读安全边界理解，不要当成已经允许真实输入。
+是否改了协议：否。
+是否需要另一端配合：短期不需要；真实 inject 验收时需要 Mac 端和用户在场。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 控制端消费 MacInputSafetyPlan
 开发端：Windows Codex
 本轮目标：让 Windows 控制端只读消费 Mac 端真实输入安全方案，避免把 plan-only 的 `blocked-until-user-watching` 误报成 Mac Codex 卡住。

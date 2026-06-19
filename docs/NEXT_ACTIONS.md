@@ -10,6 +10,7 @@
 - remote-only audio 先按安全方案处理：当前 Mac `system-pcm` 采集不会自动让本机静音；需要“只在 Windows 播放、Mac 本机不出声”时，先跑 `node scripts/mac/plan-mac-remote-audio.mjs --boardSummary` 看 `manual-mute-restore` / `virtual-output-device` / `product-toggle` 三条路线。没有用户明确同意前，不要让脚本自动改系统音量或切换输出设备。
   - Windows 控制端现在会消费同一组 `MacRemoteAudioPlan=` / `Mac remote audio plan:` 文本：Mac 提醒区、Mac 值守快速摘要和复制/导出诊断会把它显示为“Mac 远端独占声音方案已提供 / 当前不会自动静音 Mac 本机 / 远端独占声音需用户明确同意 / 不自动改系统音量”。看到这条时先按“只读方案提示”理解，不要把它当作已经切换远端独占声音。
   - Windows 控制端现在也会消费 `MacInputSafetyPlan=` / `Mac input safety plan:` 文本：Mac 提醒区、Mac 值守快速摘要和复制/导出诊断会把它显示为“Mac 真实输入安全方案已提供 / 默认输入模式保持安全日志 / 真实输入需用户正在看 Mac 屏幕 / 真实输入需 --confirmUserWatching / 先用 safe 输入事件集 / 不发送输入事件或执行注入”。看到这条时先按“真实输入仍被安全阻止”理解，不要把它当作已经切到 inject。
+  - Windows 恢复总览现在也会消费同一条 `MacInputSafetyPlan=` / `Mac input safety plan:`：开工第一屏、JSON 和 `--boardSummary` 都会显示 `MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary` 以及 `MacInputSafety=status=plan-only default=log realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe safety=no-password,no-input-events,no-inject`。看到这条时仍按“只读安全边界”理解，不能当作真实 inject 已开启。
 - 尾部 NativeCommandFailed 的处理结论是改用 PowerShell 7 / pwsh 路径。现场复测或用户授权输入密码时，优先复制 resume/status 摘要里的 pwsh ... check-mac-formal-e2e.ps1 ... -PromptPassword 命令。
 - 下一步继续手工体验验收：窗口/全屏、画面流畅度、声音、文本和文件剪贴板、input_ack，以及用户明确确认后的真实 inject 安全验收。
 只放短期任务，长期计划继续放在 `docs/04-task-board.md`。

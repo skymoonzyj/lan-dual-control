@@ -65,6 +65,7 @@ MacHostSafeStart=, MacMaxFpsSafeStart=, MacFormalLocalSmoke=,
 MacClientDiscoverWindows=,
 MacClientFormalChecklist=,
 MacClientFormalSmoke=,
+MacInputSafetyPlan=,
 MacHeartbeatOnce=, MacHeartbeatWatch=, WindowsReverseGrantStatus=, and
 WindowsOpenOneTimeReverseGrant= commands from
 Agent Link Board status/messages so Mac host safe foreground-start guidance
@@ -111,6 +112,10 @@ clipboard, input_ack, and diagnostics in that order.
   formal checklist that can discover the Windows host first.
   It also includes MacClientFormalSmoke for the Mac client no-password formal
   preflight that first starts or reuses the Mac client page.
+  It also includes MacInputSafetyPlan for the plan-only Mac real-input safety
+  boundary; summary extraction accepts only status=plan-only, default=log,
+  realInput=blocked-until-user-watching, required=--confirmUserWatching,
+  eventSet=safe, and safety=no-password,no-input-events,no-inject.
 
 Options:
   --host <host>                 Explicit Mac host target. Default: ${defaults.host}
@@ -159,6 +164,7 @@ Examples:
   node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary
   node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary
   node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary
+  node scripts/mac/plan-mac-input-safety.mjs --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/discover-lan-hosts.ps1 -NoLocalSubnets -HostName 192.168.31.122 -Port 43770 -RequireMacHost -BoardSummary
@@ -545,6 +551,22 @@ function emptyMacSafeStart(source = "none", textCount = 0, rejectedCount = 0) {
     source,
     textCount,
     rejectedCount,
+  };
+}
+
+function emptyMacInputSafety(source = "none", textCount = 0, rejectedCount = 0) {
+  return {
+    found: false,
+    source,
+    textCount,
+    rejectedCount,
+    status: "",
+    defaultMode: "",
+    realInput: "",
+    required: "",
+    eventSet: "",
+    safety: [],
+    summary: "not-seen",
   };
 }
 
@@ -1420,6 +1442,119 @@ function parseMacClientFormalSmokeCommand(fragment) {
   return commandText;
 }
 
+function parseMacInputSafetyPlanCommand(fragment) {
+  const rawTokens = String(fragment || "").split(/\s+/).map(stripCommandToken).filter(Boolean);
+  if (rawTokens.length < 3) return null;
+  if (rawTokens[0] !== "node") return null;
+  if (rawTokens[1].replace(/\\/g, "/") !== "scripts/mac/plan-mac-input-safety.mjs") return null;
+
+  const tokens = [rawTokens[0], rawTokens[1]];
+  let hasBoardSummary = false;
+  for (let index = 2; index < rawTokens.length; index += 1) {
+    const token = rawTokens[index];
+    if (!token || /^[A-Za-z][A-Za-z0-9_-]*=/.test(token)) break;
+    if (!token.startsWith("--")) break;
+    if (/^--(?:password|token|secret|passwd|pwd)$/i.test(token)) return null;
+    if (token === "--boardSummary") {
+      hasBoardSummary = true;
+      tokens.push(token);
+      continue;
+    }
+    return null;
+  }
+
+  const commandText = tokens.join(" ");
+  if (tokens.length !== 3 || !hasBoardSummary || hasSecretLikeCommandValue(commandText)) return null;
+  return commandText;
+}
+
+const macInputSafetyAllowedSafety = new Set(["no-password", "no-input-events", "no-inject"]);
+
+function splitMacInputSafetySegments(text) {
+  const value = String(text || "");
+  const matches = [...value.matchAll(/\bMac input safety plan\s*:/gi)];
+  return matches.map((match, index) => {
+    const start = match.index || 0;
+    const end = index + 1 < matches.length ? matches[index + 1].index || value.length : value.length;
+    return value.slice(start, end);
+  });
+}
+
+function extractMacInputSafetyField(segment, fieldName) {
+  const escaped = String(fieldName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = String(segment || "").match(new RegExp(`\\b${escaped}\\s*=\\s*([^;\\s.]+)`, "i"));
+  return match ? stripCommandToken(match[1]).replace(/[.]+$/g, "") : "";
+}
+
+function parseMacInputSafetySegment(segment, source = "text") {
+  const value = String(segment || "");
+  const status = extractMacInputSafetyField(value, "status");
+  const defaultMode = extractMacInputSafetyField(value, "default");
+  const realInput = extractMacInputSafetyField(value, "realInput");
+  const required = extractMacInputSafetyField(value, "required");
+  const eventSet = extractMacInputSafetyField(value, "eventSet");
+  const safetyRaw = extractMacInputSafetyField(value, "safety");
+  const safety = safetyRaw.split(",").map((item) => item.trim()).filter(Boolean);
+  const validSafety = safety.length === macInputSafetyAllowedSafety.size &&
+    safety.every((item) => macInputSafetyAllowedSafety.has(item)) &&
+    [...macInputSafetyAllowedSafety].every((item) => safety.includes(item));
+  if (
+    status !== "plan-only" ||
+    defaultMode !== "log" ||
+    realInput !== "blocked-until-user-watching" ||
+    required !== "--confirmUserWatching" ||
+    eventSet !== "safe" ||
+    !validSafety
+  ) {
+    return null;
+  }
+  const summary = `status=${status} default=${defaultMode} realInput=${realInput} required=${required} eventSet=${eventSet} safety=${safety.join(",")}`;
+  return {
+    found: true,
+    source,
+    status,
+    defaultMode,
+    realInput,
+    required,
+    eventSet,
+    safety,
+    summary,
+  };
+}
+
+function extractMacInputSafetyFromTexts(texts, source = "text") {
+  let selected = null;
+  let segmentCount = 0;
+  let rejectedCount = 0;
+  for (const text of texts) {
+    for (const segment of splitMacInputSafetySegments(text)) {
+      segmentCount += 1;
+      const parsed = parseMacInputSafetySegment(segment, source);
+      if (!parsed) {
+        rejectedCount += 1;
+        continue;
+      }
+      selected = parsed;
+    }
+  }
+  if (!selected) return emptyMacInputSafety(source, texts.length, rejectedCount);
+  return {
+    ...selected,
+    textCount: texts.length,
+    segmentCount,
+    rejectedCount,
+  };
+}
+
+function extractMacInputSafetyFromBoardState(state) {
+  return extractMacInputSafetyFromTexts(collectStringValues(state), "api-state");
+}
+
+function extractMacInputSafetyFromText(text, source = "text") {
+  const value = String(text || "");
+  return extractMacInputSafetyFromTexts(value ? [value] : [], source);
+}
+
 function parseMacClientFormalChecklistCommand(fragment) {
   const rawTokens = String(fragment || "").split(/\s+/).map(stripCommandToken).filter(Boolean);
   if (rawTokens.length < 2) return null;
@@ -1965,6 +2100,58 @@ function extractMacSafeStartFromBoardState(state, label, options = {}) {
   let rejectedCount = 0;
   for (const text of texts) {
     const extracted = extractMacSafeStartFromText(text, label, "api-state", options);
+    for (const commandText of extracted.commands) {
+      if (!commands.includes(commandText)) commands.push(commandText);
+    }
+    rejectedCount += extracted.rejectedCount;
+  }
+  if (commands.length === 0) return emptyMacSafeStart("api-state", texts.length, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source: "api-state",
+    textCount: texts.length,
+    rejectedCount,
+  };
+}
+
+function extractMacInputSafetyPlanFromText(text, source = "text") {
+  const value = String(text || "");
+  const labels = ["MacInputSafetyPlan"];
+  const commands = [];
+  let rejectedCount = 0;
+  for (const label of labels) {
+    const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`\\b${escapedLabel}\\s*=\\s*`, "gi");
+    let match;
+    while ((match = regex.exec(value)) !== null) {
+      const fragment = value.slice(match.index + match[0].length);
+      const commandText = parseMacInputSafetyPlanCommand(fragment);
+      if (!commandText) {
+        rejectedCount += 1;
+      } else if (!commands.includes(commandText)) {
+        commands.push(commandText);
+      }
+    }
+  }
+  if (commands.length === 0) return emptyMacSafeStart(source, value ? 1 : 0, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source,
+    textCount: value ? 1 : 0,
+    rejectedCount,
+  };
+}
+
+function extractMacInputSafetyPlanFromBoardState(state) {
+  const texts = collectStringValues(state);
+  const commands = [];
+  let rejectedCount = 0;
+  for (const text of texts) {
+    const extracted = extractMacInputSafetyPlanFromText(text, "api-state");
     for (const commandText of extracted.commands) {
       if (!commands.includes(commandText)) commands.push(commandText);
     }
@@ -2559,6 +2746,8 @@ async function getBoardSnapshot(args) {
       macClientDiscoverWindows: emptyMacSafeStart("skipped"),
       macClientFormalChecklist: emptyMacSafeStart("skipped"),
       macClientFormalSmoke: emptyMacSafeStart("skipped"),
+      macInputSafetyPlan: emptyMacSafeStart("skipped"),
+      macInputSafety: emptyMacInputSafety("skipped"),
       macHeartbeatOnce: emptyMacSafeStart("skipped"),
       macHeartbeatWatch: emptyMacSafeStart("skipped"),
       macHeartbeatStart: emptyMacSafeStart("skipped"),
@@ -2596,6 +2785,8 @@ async function getBoardSnapshot(args) {
       macClientDiscoverWindows: extractMacClientDiscoverWindowsFromBoardState(stateResult.state),
       macClientFormalChecklist: extractMacClientFormalChecklistFromBoardState(stateResult.state),
       macClientFormalSmoke: extractMacClientFormalSmokeFromBoardState(stateResult.state),
+      macInputSafetyPlan: extractMacInputSafetyPlanFromBoardState(stateResult.state),
+      macInputSafety: extractMacInputSafetyFromBoardState(stateResult.state),
       macHeartbeatOnce: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatOnce", "once"),
       macHeartbeatWatch: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatWatch", "watch"),
       macHeartbeatStart: extractMacHeartbeatStartHelperFromBoardState(stateResult.state, "MacHeartbeatStart", "start"),
@@ -2638,6 +2829,8 @@ async function getBoardSnapshot(args) {
     macClientDiscoverWindows: extractMacClientDiscoverWindowsFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macClientFormalChecklist: extractMacClientFormalChecklistFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macClientFormalSmoke: extractMacClientFormalSmokeFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    macInputSafetyPlan: extractMacInputSafetyPlanFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    macInputSafety: extractMacInputSafetyFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatOnce: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatOnce", "once", result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatWatch: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatWatch", "watch", result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatStart: extractMacHeartbeatStartHelperFromText(output, "MacHeartbeatStart", "start", result.ok ? "codex-link-client" : "unavailable"),
@@ -3101,6 +3294,7 @@ function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
     "--port", String(windowsHostPort),
     "--boardSummary",
   ].join(" ");
+  const macInputSafetyPlanCommand = "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
   const macClientFormalSmokeCommand = [
     "node scripts/mac/run-mac-client-formal-smoke.mjs",
     "--discover",
@@ -3206,6 +3400,7 @@ function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
     macClientDiscoverWindowsCommand,
     macClientFormalChecklistCommand,
     macClientFormalSmokeCommand,
+    macInputSafetyPlanCommand,
     macUnattendedStatusCommand,
     macUnattendedFormalStatusCommand,
     formalChecklistBoardSummary,
@@ -3529,6 +3724,7 @@ function makeBoardSummary(report) {
   const macClientDiscoverWindowsCommand = report.board.macClientDiscoverWindows?.command || report.commands.macClientDiscoverWindowsCommand;
   const macClientFormalChecklistCommand = report.board.macClientFormalChecklist?.command || report.commands.macClientFormalChecklistCommand;
   const macClientFormalSmokeCommand = report.board.macClientFormalSmoke?.command || report.commands.macClientFormalSmokeCommand;
+  const macInputSafetyPlanCommand = report.board.macInputSafetyPlan?.command || report.commands.macInputSafetyPlanCommand;
   const macHeartbeatOnceCommand = report.board.macHeartbeatOnce?.command || report.commands.macHeartbeatOnceCommand;
   const macHeartbeatWatchCommand = report.board.macHeartbeatWatch?.command || report.commands.macHeartbeatWatchCommand;
   const macHeartbeatStartCommand = report.board.macHeartbeatStart?.command || report.commands.macHeartbeatStartCommand;
@@ -3577,6 +3773,10 @@ function makeBoardSummary(report) {
     `MacClientDiscoverWindows=${macClientDiscoverWindowsCommand}.`,
     `MacClientFormalChecklist=${macClientFormalChecklistCommand}.`,
     `MacClientFormalSmoke=${macClientFormalSmokeCommand}.`,
+    `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`,
+    ...(report.board.macInputSafety?.found
+      ? [`MacInputSafety=${report.board.macInputSafety.summary}.`]
+      : []),
     `MacUnattended=${report.commands.macUnattendedStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalStatusCommand}.`,
     ...(report.board.macHostSafeStart?.command ? [`MacHostSafeStart=${report.board.macHostSafeStart.command}.`] : []),
@@ -3887,6 +4087,12 @@ function printHuman(report) {
     if (report.board.macClientFormalSmoke?.command) {
       console.log(`  MacClientFormalSmoke=${report.board.macClientFormalSmoke.command}`);
     }
+    if (report.board.macInputSafetyPlan?.command) {
+      console.log(`  MacInputSafetyPlan=${report.board.macInputSafetyPlan.command}`);
+    }
+    if (report.board.macInputSafety?.found) {
+      console.log(`  MacInputSafety=${report.board.macInputSafety.summary}`);
+    }
     if (report.board.macHeartbeatFreshness?.present) {
       console.log(`  MacHeartbeatFreshness=${report.board.macHeartbeatFreshness.summary}`);
     }
@@ -3966,6 +4172,10 @@ function printHuman(report) {
   console.log(`  MacClientDiscoverWindows=${report.board.macClientDiscoverWindows?.command || report.commands.macClientDiscoverWindowsCommand}`);
   console.log(`  MacClientFormalChecklist=${report.board.macClientFormalChecklist?.command || report.commands.macClientFormalChecklistCommand}`);
   console.log(`  MacClientFormalSmoke=${report.board.macClientFormalSmoke?.command || report.commands.macClientFormalSmokeCommand}`);
+  console.log(`  MacInputSafetyPlan=${report.board.macInputSafetyPlan?.command || report.commands.macInputSafetyPlanCommand}`);
+  if (report.board.macInputSafety?.found) {
+    console.log(`  MacInputSafety=${report.board.macInputSafety.summary}`);
+  }
   console.log(`  ${report.commands.macUnattendedStatusCommand}`);
   console.log(`  ${report.commands.macUnattendedFormalStatusCommand}`);
   if (report.board.macHostSafeStart?.command) {
