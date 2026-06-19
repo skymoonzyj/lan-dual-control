@@ -463,7 +463,7 @@ function normalizeBoardCurrentCall(call) {
 }
 
 function isSecureAuthCurrentCall(call) {
-  if (!call?.active || !call.needsWindows || !call.fromMacSide) {
+  if (!call?.active || !call.needsWindows || !call.fromMacSide || !isMacText(call.from)) {
     return false;
   }
   const text = [

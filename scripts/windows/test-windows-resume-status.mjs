@@ -283,6 +283,20 @@ function secureAuthMacCallForWindows() {
     ask: "Mac 环境 LAN_DUAL_PASSWORD=unset，Windows host 使用随机运行期密码且未上板。请 Windows 端协助给出安全认证路径，不要在 Agent Link Board 发送密码/token/系统账号。",
   };
 }
+function userAuthBlockedCallForWindowsRealTest() {
+  return {
+    status: "BLOCKED",
+    from: "Supervisor Codex",
+    need: "User + Windows Codex",
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    goal: "等待用户在 Windows 本机输入同一临时密码后开始 Windows 控 Mac 真实测试",
+    expected: "用户输入密码后，Windows 立即运行带 5200/9340 的正式命令并上报 REAL_TEST_PASS 或 REAL_TEST_BLOCKED exact error。",
+    actual: "Mac 已 ready；Windows 备用端口预检通过；密码不能上板。",
+    ask: "请用户在 Windows 本机按 NEED_USER_AUTH 命令输入与 Mac 前台 host 相同临时密码；Windows 随后跑真实测试。",
+    blockedBy: "user-auth-windows-promptPassword",
+  };
+}
 
 async function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
@@ -960,6 +974,38 @@ async function checkSecureAuthCallNextSummary(args) {
   });
 }
 
+async function checkUserAuthBlockedCallDoesNotRequestAgentAck(args) {
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock user-auth blocked currentCall JSON failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.currentCall?.active === true, "user-auth blocked currentCall should be active");
+      assert(payload.board?.currentCall?.secureAuthPathReady === false, "user-auth blocked currentCall should not be marked as secure-auth path ready");
+      assert((payload.board?.currentCall?.next || "") === "", "user-auth blocked currentCall should not ask Mac to confirm auth path");
+      assert((payload.board?.currentCall?.agentCallAckCommand || "") === "", "user-auth blocked currentCall should not build AgentCallAck");
+      assertIncludes(payload.boardSummary, "call=BLOCKED Supervisor Codex->User + Windows Codex", "user-auth blocked currentCall board summary");
+      assertNotIncludes(payload.boardSummary, "AgentCallNext=", "user-auth blocked currentCall board summary");
+      assertNotIncludes(payload.boardSummary, "AgentCallAck=", "user-auth blocked currentCall board summary");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "user-auth blocked currentCall JSON should not leak secrets");
+      console.log("[OK] Windows resume status does not request AgentCallAck for user-auth blocked currentCall");
+    }, {
+      currentCall: userAuthBlockedCallForWindowsRealTest(),
+    });
+  });
+}
 async function checkBoardMacHeartbeatHealthExtraction(args) {
   const okCheckedAt = new Date(Date.now() - 20_000).toISOString();
   const blockedCheckedAt = new Date(Date.now() - 25_000).toISOString();
@@ -2188,6 +2234,7 @@ async function main() {
   await checkBoardDoneCallJson(args);
   await checkBoardCurrentCallSummary(args);
   await checkSecureAuthCallNextSummary(args);
+  await checkUserAuthBlockedCallDoesNotRequestAgentAck(args);
   await checkBoardMacHeartbeatHealthExtraction(args);
   await checkBoardMacPowerAndUnattendedHealthExtraction(args);
   await checkBoardMacHostSafeStartExtraction(args);
