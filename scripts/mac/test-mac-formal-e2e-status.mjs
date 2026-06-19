@@ -1177,6 +1177,38 @@ async function checkBoardStatusValidationEvidence(args) {
   }, { capturePipeline: "background-jpeg" });
 }
 
+async function checkBoardStableTagValidationEvidence(args) {
+  const statuses = {
+    "Windows Codex": {
+      status: "online",
+      note: "Windows resume status=ok blockers=none warnings=none; MacEvidence=MacHostMediaOk,MacFormalLocalSmokeOk.",
+    },
+  };
+  await withFakeMacHost(async (macHost) => {
+    await withFakeBoard(async (board) => {
+      const localTimeoutMs = String(Math.min(args.timeoutMs, 5000));
+      const result = await runAsync(args, [
+        "--json",
+        "--allowDirty",
+        "--host",
+        macHost.host,
+        "--port",
+        String(macHost.port),
+        "--server",
+        board.serverUrl,
+        "--timeoutMs",
+        localTimeoutMs,
+      ]);
+      const payload = parseJson(result.stdout, "board stable tag evidence formal E2E status");
+      assert(result.status === 0, `board stable tag evidence formal status should exit 0:\n${result.stdout}\n${result.stderr}`);
+      assert(payload.readyToCall === true, "board stable tag evidence payload should be readyToCall when board is checked");
+      assertValidationEvidence(payload, "board stable tag evidence formal E2E status");
+      assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "board stable tag evidence formal E2E status");
+      print("OK", "Formal E2E status surfaces positive evidence from stable board tags");
+    }, { statuses });
+  }, { capturePipeline: "background-jpeg" });
+}
+
 async function checkMaxFpsLimitWarning(args) {
   await withFakeMacHost(async (macHost) => {
     const localTimeoutMs = String(Math.min(args.timeoutMs, 5000));
@@ -1360,6 +1392,7 @@ async function main() {
   await checkFallbackPipelineVideoWarning(args);
   await checkBoardValidationEvidence(args);
   await checkBoardStatusValidationEvidence(args);
+  await checkBoardStableTagValidationEvidence(args);
   await checkMaxFpsLimitWarning(args);
   checkOnlineJson(args);
   checkOnlineBoardSummary(args);

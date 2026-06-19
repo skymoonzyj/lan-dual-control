@@ -17,6 +17,33 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
+本轮目标：让 Mac formal E2E readiness 也能消费通讯板上的稳定 `Evidence=` / `MacEvidence=` 短标签。
+完成内容：
+- `check-mac-formal-e2e-status` 现在除 raw `MacHostMedia` / `MacFormalLocalSmoke` 文本外，也会识别 Agent Link Board recent lines 和 `/api/state.statuses` 里的 `Evidence=MacHostMediaOk,MacFormalLocalSmokeOk` 或 `MacEvidence=MacHostMediaOk,MacFormalLocalSmokeOk`。
+- 只认 `MacHostMediaOk` / `MacFormalLocalSmokeOk` 白名单标签，转换为同样的 JSON `evidence[]`、`tag` 和 `--boardSummary Evidence=...`；`callText` 仍保留可读 `Recent evidence: MacHostMedia ok; MacFormalLocalSmoke ok`。
+- 证据只做展示，不改变 `readyToCall`、warning 或 blocker 判定；本轮不认证、不请求密码、不发 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增 fake board stable tag 用例后，`node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 30000` 失败在 `MacFormalLocalSmoke` stable tag evidence missing。
+- 绿灯：实现 tag parser 后，同一回归通过；提交前已跑语法、Mac formal E2E status 回归、Mac script help、diff check 和冲突扫描。
+遗留问题：
+- 本轮只读证据提取；不跑真实媒体、真实认证、Windows 正式验收或输入注入。
+下一步建议：
+- Windows resume/client 输出 `MacEvidence=` 后，MacFormalE2E 可重新吸收同一证据；如同段 warning/blocker 非空，仍按风险摘要继续处理。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
 ## 2026-06-19 Windows Codex
 
 日期：2026-06-19 继续推进

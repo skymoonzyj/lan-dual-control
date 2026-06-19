@@ -522,8 +522,32 @@ function collectBoardValidationEvidence(resume, args) {
     ? resume.board.recentLines
     : [];
   const statusLines = collectBoardStatusEvidenceLines(args, resume);
-  const text = splitLines([...recentLines, ...statusLines].join("\n")).join(" ");
+  const lines = splitLines([...recentLines, ...statusLines].join("\n"));
+  const text = lines.join(" ");
+  const taggedEvidenceText = lines
+    .filter((line) => /\b(?:MacEvidence|Evidence)\s*[:=]/i.test(line))
+    .join(" ");
   const evidence = [];
+  if (/\bMacHostMediaOk\b/i.test(taggedEvidenceText)) {
+    evidence.push({
+      id: "mac-host-media",
+      label: "MacHostMedia",
+      tag: "MacHostMediaOk",
+      status: "ok",
+      summary: "media baseline passed",
+      source: "Agent Link Board",
+    });
+  }
+  if (/\bMacFormalLocalSmokeOk\b/i.test(taggedEvidenceText)) {
+    evidence.push({
+      id: "mac-formal-local-smoke",
+      label: "MacFormalLocalSmoke",
+      tag: "MacFormalLocalSmokeOk",
+      status: "ok",
+      summary: "H.264/PCM/input-log passed",
+      source: "Agent Link Board",
+    });
+  }
   if (/(MacHostMedia|Mac host media|media baseline)[\s\S]{0,220}(passed=12\/12|media=ok|passed|ok)/i.test(text)) {
     evidence.push({
       id: "mac-host-media",
