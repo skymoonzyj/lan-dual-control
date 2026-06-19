@@ -17,6 +17,36 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 Windows 控制端消费 MacRemoteAudioPlan
+开发端：Windows Codex
+本轮目标：让 Windows 控制端只读消费 Mac 端 remote-only audio 方案入口，把双路声音风险解释同步到 Mac 提醒区和复制诊断。
+完成内容：
+- `parseMacPositiveEvidenceLabels` 新增 `MacRemoteAudioPlan=` / `Mac remote audio plan:` 证据解析，显示“Mac 远端独占声音方案已提供 / 当前不会自动静音 Mac 本机 / 远端独占声音需用户明确同意 / 不自动改系统音量”。
+- Mac 提醒区、Mac 值守快速摘要和复制/导出诊断都会把该内容作为证据/值守证据，不进入风险摘要。
+- 这是只读展示：Windows 不运行 Mac 脚本、不改 Mac 系统音量或输出设备、不认证、不请求或发送密码、不发 input/inject。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --clientPort 5215 --debugPort 9355` 先失败，Mac 提醒证据里没有 remote-audio 四条中文提示。
+- 绿灯：`node --check apps/windows-client/app.js`
+- 绿灯：`node --check scripts/windows/test-windows-client-browser.mjs`
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --clientPort 5216 --debugPort 9356`，输出 `Diagnostics-only browser checks passed`。
+遗留问题：
+- 真实“Mac 本机不出声、只在 Windows 播放”仍未实现；后续需要用户明确同意后再做产品开关、状态快照和断开恢复。
+下一步建议：
+- 下次真实体验若仍有双路声音，先复制诊断确认是否出现 `MacRemoteAudioPlan` 证据，再由用户选择手动静音、虚拟输出设备或产品开关路线。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；真正 remote-only 开关需要 Mac 端后续实现和用户现场确认。
+
 ## 2026-06-20 Mac Codex
 
 日期：2026-06-20 真实体验 blocker / remote-only audio 评估

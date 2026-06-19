@@ -3610,6 +3610,25 @@ function parsePostPassManualUxEvidenceLabels(text) {
   return [`已进入手工体验清单${suffix}`];
 }
 
+function parseMacRemoteAudioPlanEvidenceLabels(text) {
+  const source = String(text || "");
+  const hasRemoteAudioPlan =
+    /\bMacRemoteAudioPlan\s*=\s*(?:node\s+)?(?:scripts[\\/]+mac[\\/]+)?plan-mac-remote-audio\.mjs\b/i.test(source) ||
+    /\bMac remote audio plan\b/i.test(source) ||
+    /\bRemoteOnlyOptions\s*=/i.test(source);
+  if (!hasRemoteAudioPlan) return [];
+  const labels = ["Mac 远端独占声音方案已提供"];
+  if (/\bcapture\s*=\s*system-pcm-does-not-mute-local\b|does-not-mute-local|does not mute local|不会自动静音/i.test(source)) {
+    labels.push("当前不会自动静音 Mac 本机");
+  }
+  if (/\brecommended\s*=\s*product-toggle-with-explicit-consent\b|explicit-consent|明确同意/i.test(source)) {
+    labels.push("远端独占声音需用户明确同意");
+  }
+  if (/\bsafety\s*=\s*[^;\r\n]*\bno-volume-change\b|\bno-volume-change\b|no volume change|不自动改系统音量/i.test(source)) {
+    labels.push("不自动改系统音量");
+  }
+  return [...new Set(labels)];
+}
 function splitMacHeartbeatHealthReasonValues(segment) {
   const reason = extractMacHeartbeatFreshnessValue(segment, "reason");
   if (!reason) return [];
@@ -3720,6 +3739,7 @@ function parseMacPositiveEvidenceLabels(text) {
   labels.push(...parseMacEvidenceFieldLabels(source));
   labels.push(...parseStandaloneMacEvidenceLabels(source));
   labels.push(...parsePostPassManualUxEvidenceLabels(source));
+  labels.push(...parseMacRemoteAudioPlanEvidenceLabels(source));
   return [...new Set(labels)];
 }
 

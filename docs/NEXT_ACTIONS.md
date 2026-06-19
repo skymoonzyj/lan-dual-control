@@ -8,6 +8,7 @@
 - 不要再回旧第二步/diagnostics 循环：Windows 控 Mac formal E2E 主体已经 PASS。
 - 最新真实体验 blocker 第一轮已收口：Windows 控制端页面上下抖动来自底部状态栏实时文字换行撑高，已固定为 36px 单行省略；声音丢包第一轮修复为 WebAudio 80ms 预缓冲、450ms 高水位 flush 旧队列并播放最新帧、状态文字限频；视频低延迟第一轮新增 H.264 本机队列治理，解码队列超过 8 帧或最旧帧超过 450ms 时清掉旧队列，delta 帧等待下一关键帧，避免继续播放过期画面。复制诊断现在会输出“现场视频 / 现场声音”两行，包含实收 FPS、请求/协商 Hz、平均/最大帧间隔、视频本机队列毫秒、解码延迟、本地过期丢帧/原因、WebAudio 队列毫秒、缓冲阈值、接收/播放/丢弃计数、重同步次数和原因。下一次用户实测时重点确认：连接后画面是否还上下跳、画面是否仍明显卡顿、声音是否仍断续；若仍有问题，先抓这两行诊断，再让 Mac 端同步跑视频/音频基线观察。
 - remote-only audio 先按安全方案处理：当前 Mac `system-pcm` 采集不会自动让本机静音；需要“只在 Windows 播放、Mac 本机不出声”时，先跑 `node scripts/mac/plan-mac-remote-audio.mjs --boardSummary` 看 `manual-mute-restore` / `virtual-output-device` / `product-toggle` 三条路线。没有用户明确同意前，不要让脚本自动改系统音量或切换输出设备。
+  - Windows 控制端现在会消费同一组 `MacRemoteAudioPlan=` / `Mac remote audio plan:` 文本：Mac 提醒区、Mac 值守快速摘要和复制/导出诊断会把它显示为“Mac 远端独占声音方案已提供 / 当前不会自动静音 Mac 本机 / 远端独占声音需用户明确同意 / 不自动改系统音量”。看到这条时先按“只读方案提示”理解，不要把它当作已经切换远端独占声音。
 - 尾部 NativeCommandFailed 的处理结论是改用 PowerShell 7 / pwsh 路径。现场复测或用户授权输入密码时，优先复制 resume/status 摘要里的 pwsh ... check-mac-formal-e2e.ps1 ... -PromptPassword 命令。
 - 下一步继续手工体验验收：窗口/全屏、画面流畅度、声音、文本和文件剪贴板、input_ack，以及用户明确确认后的真实 inject 安全验收。
 只放短期任务，长期计划继续放在 `docs/04-task-board.md`。

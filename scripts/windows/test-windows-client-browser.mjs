@@ -1520,6 +1520,8 @@ async function verifyDesktopOnlyHostPanel(session) {
         "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled blockers=none checkedAt=2026-06-19T08:08:38.575Z",
         "MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T08:10:38.575Z",
         "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
+        "MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary",
+        "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject.",
         "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --boardSummary",
         "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary",
         "MacLaunchAgentLoad=launchctl bootstrap gui/$(id -u) /Users/skymoonzyj/Library/LaunchAgents/com.lan-dual-control.mac-host.plist",
@@ -1576,6 +1578,27 @@ async function verifyDesktopOnlyHostPanel(session) {
               server: "http://192.168.31.68:17888",
               recentAlerts: [{ at: "2026-06-20 01:20:00", title: "Post pass UX", message: postPassManualUxText }],
               lastAlert: { at: "2026-06-20 01:20:00", title: "Post pass UX", message: postPassManualUxText },
+              message: "Mac alert watcher is running.",
+            }, { available: true, busy: false })
+          : {};
+      const macRemoteAudioPlanText = [
+        "MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary",
+        "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject.",
+      ].join("; ");
+      const macRemoteAudioPlanAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(macRemoteAudioPlanText)
+          : null;
+      const macRemoteAudioPlanView =
+        typeof macAlertWatcherUiState === "function"
+          ? macAlertWatcherUiState({
+              ok: true,
+              action: "status",
+              running: true,
+              processIds: [2469],
+              server: "http://192.168.31.68:17888",
+              recentAlerts: [{ at: "2026-06-20 02:30:00", title: "Mac remote audio", message: macRemoteAudioPlanText }],
+              lastAlert: { at: "2026-06-20 02:30:00", title: "Mac remote audio", message: macRemoteAudioPlanText },
               message: "Mac alert watcher is running.",
             }, { available: true, busy: false })
           : {};
@@ -2526,6 +2549,19 @@ async function verifyDesktopOnlyHostPanel(session) {
           postPassManualUxView.statusText.includes("已进入手工体验清单") &&
           postPassManualUxView.statusText.includes("复制诊断") &&
           !postPassManualUxView.statusText.includes("风险：") &&
+          macRemoteAudioPlanAttention?.summary === "" &&
+          macRemoteAudioPlanAttention?.evidenceSummary.includes("Mac 远端独占声音方案已提供") &&
+          macRemoteAudioPlanAttention?.evidenceSummary.includes("当前不会自动静音 Mac 本机") &&
+          macRemoteAudioPlanAttention?.evidenceSummary.includes("远端独占声音需用户明确同意") &&
+          macRemoteAudioPlanAttention?.evidenceSummary.includes("不自动改系统音量") &&
+          Array.isArray(macRemoteAudioPlanAttention?.evidenceLabels) &&
+          macRemoteAudioPlanAttention.evidenceLabels.length >= 4 &&
+          macRemoteAudioPlanView.statusText.includes("证据：") &&
+          macRemoteAudioPlanView.statusText.includes("Mac 远端独占声音方案已提供") &&
+          macRemoteAudioPlanView.statusText.includes("当前不会自动静音 Mac 本机") &&
+          macRemoteAudioPlanView.statusText.includes("远端独占声音需用户明确同意") &&
+          macRemoteAudioPlanView.statusText.includes("不自动改系统音量") &&
+          !macRemoteAudioPlanView.statusText.includes("风险：") &&
           positiveMacValidationAttention?.summary === "" &&
           Array.isArray(positiveMacValidationAttention?.labels) &&
           positiveMacValidationAttention.labels.length === 0 &&
@@ -5239,6 +5275,8 @@ async function verifyReconnectControls(session) {
         "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled blockers=none checkedAt=2026-06-19T08:08:38.575Z",
         "MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T08:10:38.575Z",
         "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
+        "MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary",
+        "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject.",
         "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --boardSummary",
         "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary",
         "MacLaunchAgentLoad=launchctl bootstrap gui/$(id -u) /Users/skymoonzyj/Library/LaunchAgents/com.lan-dual-control.mac-host.plist",
@@ -5568,6 +5606,10 @@ async function verifyReconnectControls(session) {
             exportText.includes("MacPowerHealth=warning") &&
             exportText.includes("MacUnattendedHealth=warning") &&
             exportText.includes("MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs") &&
+            exportText.includes("MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs") &&
+            exportText.includes("capture=system-pcm-does-not-mute-local") &&
+            exportText.includes("recommended=product-toggle-with-explicit-consent") &&
+            exportText.includes("safety=no-volume-change") &&
             exportText.includes("warnings: video,build,auth,windows-host,repo") &&
             exportText.includes("warnings=h264-fallback,fps-limit") &&
             exportText.includes("warnings=mac-host-discovery,agent-link-board-currentcall,mac-host-max-fps") &&
