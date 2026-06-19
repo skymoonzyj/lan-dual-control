@@ -114,6 +114,11 @@ JSON output:
                             --help/-h coverage only and does not start services,
                             request passwords, read Agent Link Board, authenticate,
                             send calls, or send input.
+  suggestedAction
+                            Optional structured next action. When runtime Mac
+                            host sources changed after the running host build,
+                            this recommends a safe local restart sequence only;
+                            it never executes the commands.
 
 Examples:
   node scripts/mac/check-mac-formal-e2e-status.mjs
@@ -543,6 +548,7 @@ function makeBoardSummary(report) {
     ? report.counts.warnings > 0 ? "ready with warnings for Windows formal E2E" : "ready for Windows formal E2E"
     : `needs attention (${report.counts.blockers} blocker(s), ${report.counts.warnings} warning(s))`;
   const findings = formatChecklistFindings(report.checklist);
+  const suggestedAction = report.suggestedAction?.boardSummary ? `${report.suggestedAction.boardSummary}.` : "";
   if (!host.online) {
     return [
       `Mac formal E2E: ${state}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}; ${findings}.`,
@@ -566,6 +572,7 @@ function makeBoardSummary(report) {
   return [
     `Mac formal E2E: ${state}; host=${formatHostAddress(host)}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}; runtimeBuild=${host.runtime?.buildId || "unknown"}; inputMode=${host.inputMode || "unknown"}; ${findings}.`,
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)}; pipeline=${host.capabilities?.capturePipeline || "unknown"}; audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}; ${formatBuildDiff(host.buildDiff)}.`,
+    ...(suggestedAction ? [suggestedAction] : []),
     `MacHostSafeStart=${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}.`,
     `MacMaxFpsSafeStart=${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
     `MacHostStop=${report.commands?.macHostStopCommand || makeMacHostStopCommand(report.args?.host, report.args?.port)}.`,
@@ -616,6 +623,7 @@ function makeCommands(report) {
     macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(probePort),
     macUnattendedFormalCommand: makeMacUnattendedFormalCommand(probeHost, probePort),
     macHostReadinessCommand: makeMacHostReadinessCommand(probeHost, probePort),
+    macResumeStatusCommand: makeMacResumeStatusCommand(probeHost, probePort),
     macFormalLocalSmokeCommand: [
       "node",
       "scripts/mac/check-mac-formal-local-smoke.mjs",
@@ -640,6 +648,19 @@ function makeMacHostReadinessCommand(host, port) {
   return [
     "node",
     "scripts/mac/check-mac-host-readiness.mjs",
+    "--host",
+    shellArg(host || defaults.host),
+    "--port",
+    String(port || defaults.port),
+    "--checkBoard",
+    "--boardSummary",
+  ].join(" ");
+}
+
+function makeMacResumeStatusCommand(host, port) {
+  return [
+    "node",
+    "scripts/mac/check-mac-resume-status.mjs",
     "--host",
     shellArg(host || defaults.host),
     "--port",
@@ -725,6 +746,24 @@ function makeMacUnattendedFormalCommand(host, port) {
     "--requireLaunchAgentLoaded",
     "--boardSummary",
   ].join(" ");
+}
+
+function buildSuggestedAction(report) {
+  const host = report.resume.host || {};
+  if (host.online && host.buildDiff?.severity === "restart-recommended") {
+    return {
+      id: "restart-mac-host-safely",
+      reason: "Mac host runtime build is stale; stop the old local host, restart with a visible password prompt, then rerun MacResumeStatus.",
+      commands: {
+        macHostStopCommand: report.commands?.macHostStopCommand,
+        macHostSafeStartCommand: report.commands?.macHostSafeStartCommand,
+        macMaxFpsSafeStartCommand: report.commands?.macMaxFpsSafeStartCommand,
+        macResumeStatusCommand: report.commands?.macResumeStatusCommand,
+      },
+      boardSummary: "suggestedAction=restart-mac-host-safely actionCommands=MacHostStop->MacHostSafeStart-or-MacMaxFpsSafeStart->MacResumeStatus",
+    };
+  }
+  return null;
 }
 
 function makeCallPayload(report) {
@@ -1012,6 +1051,7 @@ function buildReport(args) {
     resume,
   };
   report.commands = makeCommands(report);
+  report.suggestedAction = buildSuggestedAction(report);
   report.callText = makeCallText(report);
   report.boardSummary = makeBoardSummary(report);
   report.callPayload = makeCallPayload(report);

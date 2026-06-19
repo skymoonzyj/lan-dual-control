@@ -312,6 +312,24 @@ function assertMacHostReadinessCommand(command, label, expectedPort = null) {
   }
 }
 
+function assertMacResumeStatusCommand(command, label, expectedPort = null) {
+  const text = String(command || "");
+  assert(/node scripts\/mac\/check-mac-resume-status\.mjs/.test(text), `${label} should use check-mac-resume-status`);
+  assert(/--host/.test(text), `${label} should keep the target host explicit`);
+  assert(/--port/.test(text), `${label} should keep the target port explicit`);
+  assert(/--checkBoard/.test(text), `${label} should check Agent Link Board`);
+  assert(/--boardSummary/.test(text), `${label} should produce boardSummary`);
+  assert(!/--promptPassword/.test(text), `${label} should not prompt for passwords`);
+  assert(!/(^|\s)--password(\s|=|$)/.test(text), `${label} should not embed --password`);
+  assert(!/--sendCall/.test(text), `${label} should not send Agent Link Board calls`);
+  assert(!/--server/.test(text), `${label} should not echo custom board server URLs`);
+  assert(!/input_event/.test(text), `${label} should not mention input events`);
+  assert(!/inject/.test(text), `${label} should not instruct injection`);
+  if (expectedPort !== null) {
+    assert(text.includes(`--port ${expectedPort}`), `${label} should target expected port ${expectedPort}`);
+  }
+}
+
 function assertMacFormalLocalSmokeCommand(command, label, expectedPort = null) {
   const text = String(command || "");
   assert(/node scripts\/mac\/check-mac-formal-local-smoke\.mjs/.test(text), `${label} should use check-mac-formal-local-smoke`);
@@ -808,8 +826,18 @@ async function checkStaleRuntimeSendCallRefuses(args) {
       assert(/restart recommended/.test(payload.error?.message || ""), "stale runtime refusal should say restart is recommended");
       assert(/Restart Mac host before deploy-style validation/.test(payload.error?.message || ""), "stale runtime refusal should give the restart next step");
       assert(/apps\/mac-host\/Sources\/MacHost\/MacHostService\.swift/.test(payload.error?.message || ""), "stale runtime refusal should name changed runtime files");
+      assert(payload.suggestedAction?.id === "restart-mac-host-safely", "stale runtime refusal should expose a structured safe restart action");
+      assert(/Mac host runtime build is stale/.test(payload.suggestedAction?.reason || ""), "stale runtime action should explain stale runtime");
+      assert(/suggestedAction=restart-mac-host-safely/.test(payload.suggestedAction?.boardSummary || ""), "stale runtime action should include board summary label");
+      assert(/MacHostStop->MacHostSafeStart-or-MacMaxFpsSafeStart->MacResumeStatus/.test(payload.suggestedAction?.boardSummary || ""), "stale runtime action should include the safe command order");
+      assertMacHostStopCommand(payload.suggestedAction?.commands?.macHostStopCommand || "", "stale runtime suggested Mac host stop command", macHost.port);
+      assertMacHostSafeStartCommand(payload.suggestedAction?.commands?.macHostSafeStartCommand || "", "stale runtime suggested Mac host safe start command", macHost.port);
+      assertMacMaxFpsSafeStartCommand(payload.suggestedAction?.commands?.macMaxFpsSafeStartCommand || "", "stale runtime suggested Mac 60Hz safe start command", macHost.port);
+      assertMacResumeStatusCommand(payload.suggestedAction?.commands?.macResumeStatusCommand || "", "stale runtime suggested Mac resume status command", macHost.port);
       assert(payload.counts?.blockers >= 1, "stale runtime refusal should include blocker count");
       assert(payload.checklist?.some((entry) => entry.id === "build" && entry.status === "blocker"), "stale runtime checklist should block on build");
+      assert(/suggestedAction=restart-mac-host-safely/.test(payload.boardSummary || ""), "stale runtime boardSummary should include the suggested action");
+      assert(/MacHostStop->MacHostSafeStart-or-MacMaxFpsSafeStart->MacResumeStatus/.test(payload.boardSummary || ""), "stale runtime boardSummary should include the safe command order");
       assert(payload.boardCallBeforeSend === undefined, "stale runtime refusal should not read board current call after readiness failed");
       assert(board.calls.length === 0, "stale runtime refusal should not post a board call");
       assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "stale-runtime sendCall refusal");

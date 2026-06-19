@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac formal E2E readiness 对齐旧 host build 的安全重启建议。
+完成内容：
+- `check-mac-formal-e2e-status --json/--boardSummary` 现在遇到 Mac host runtime 源码已变化、当前运行 host 仍是旧 build 时，输出 `suggestedAction=restart-mac-host-safely`。
+- JSON 新增 `suggestedAction.id/reason/commands`，包含安全顺序：`MacHostStop` -> `MacHostSafeStart` 或 `MacMaxFpsSafeStart` -> `MacResumeStatus`。
+- 这只是只读建议，不会自动停止旧 host、不会启动新 host、不会弹密码、不会认证 WebSocket，也不会发送 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 45000` 失败在旧 runtime build 缺结构化 `suggestedAction`。
+- 绿灯：实现后复跑同一自测通过。
+- 真实本机抽样：当前 `127.0.0.1:43770` 的 formal E2E 摘要已显示 `suggestedAction=restart-mac-host-safely actionCommands=MacHostStop->MacHostSafeStart-or-MacMaxFpsSafeStart->MacResumeStatus`。
+遗留问题：
+- 当前本机 Mac host 仍是旧 build；本轮没有重启它，因为安全启动需要用户在本机可见密码提示里授权。
+下一步建议：
+- 白天正式验收前，看到 Mac formal E2E 的 `suggestedAction=restart-mac-host-safely` 时，按摘要顺序先停旧本机 host，再由用户授权安全前台启动，最后跑 `MacResumeStatus` / `MacHostMedia` 确认 build 和媒体基线。
+是否改了协议：否；只补 Mac formal E2E readiness 的只读建议字段和摘要文案。
+是否需要另一端配合：本轮不需要；Windows 端可后续按需消费 `suggestedAction=restart-mac-host-safely`。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac formal E2E readiness 也暴露稳定媒体基线入口。
 完成内容：
 - `check-mac-formal-e2e-status --json/--boardSummary` 现在输出 `commands.macHostMediaCommand` / `MacHostMedia=node scripts/mac/check-mac-host-readiness.mjs --host <host> --port <port> --checkBoard --probeMedia --probeMediaResourceSample --promptPassword --boardSummary`。
