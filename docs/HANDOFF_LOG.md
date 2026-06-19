@@ -19,6 +19,30 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 00:52 CST
+开发端：Mac Codex
+本轮目标：收尾校正 `REAL_TEST_PASS` 后的短期下一步描述，避免继续按旧“Windows 真实测试未开始”口径行动。
+完成内容：
+- 将 `docs/NEXT_ACTIONS.md` 中一处过期句子从“短期下一步优先进入 Windows 真实测试”改为“按 `REAL_TEST_PASS` 后续分工推进：Windows 记录 PASS 并排查尾部 `NativeCommandFailed`，Mac 保持值守并等待用户在场的手工体验测试”。
+- 未改业务代码、协议、脚本或运行态；未认证、未请求或发送密码、未发 input/inject、未停止 Mac host。
+修改文件：
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `git status --short --branch` 确认开工前与 `origin/main` 对齐。
+- `node scripts/codex-link-client.mjs --server http://192.168.31.68:17888 state --json` 确认通讯板仍在 `REAL_TEST_PASS` 后续分工。
+- `git diff --check` 和冲突标记扫描见本轮提交前验证。
+遗留问题：
+- Windows 端仍需上报 `REAL_TEST_PASS_RECORDED + TAIL_ERROR_INVESTIGATION_STATUS`。
+- 下一轮手工体验测试仍需用户在场；true input inject 仍必须用户明确看着 Mac 屏幕。
+下一步建议：
+- 白天继续时先看 Agent Link Board，再围绕 PASS 后手工体验测试清单和 Windows 尾部错误分工推进。
+是否改了协议：否；只改交接文档。
+是否需要另一端配合：需要 Windows 端继续当前尾部错误记录/排查；不需要 Windows 改 Mac 代码。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 00:33 CST
 开发端：Mac Codex
 本轮目标：把 `REAL_TEST_PASS` 后的 Mac 值守状态和下一步分工同步到交接文档，并修复合入 Windows 最新提交后暴露的 resume-status 回归。

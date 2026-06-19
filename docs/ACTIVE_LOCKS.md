@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 00:52 CST | 收尾校正 `REAL_TEST_PASS` 后短期下一步：不再写“优先进入 Windows 真实测试”，改为 Windows 记录 PASS 并排查尾部 `NativeCommandFailed`、Mac 保持值守等待用户在场手工体验测试。不改业务代码/协议/脚本，不认证、不请求或发送密码、不发 input/inject、不停止 host。 |
 | Mac Codex | `scripts/windows/check-windows-resume-status.mjs`, `scripts/windows/test-windows-resume-status.mjs` | 2026-06-20 00:40 CST | 合入 Windows 最新 `b51f8a4` 后修复 resume-status 回归：`MAC_READY_FOR_REAL_TEST` 明确目标不再被内部 preflight discovery 覆盖；测试改用可达 `localhost` 验证目标提升，避免 macOS `127.0.0.2` 假失败。不改协议、不认证、不请求密码、不发 input/inject；不处理 Windows 尾部 `NativeCommandFailed`。 |
 | Mac Codex | `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 00:33 CST | 同步 `REAL_TEST_PASS` 后状态：Windows 控 Mac formal E2E 主体已 PASS，Windows 尾部 `NativeCommandFailed` 单独排查；Mac 保持 host/client/heartbeat 在线，等待下一轮手工体验测试。不改协议、不认证、不请求密码、不发 input/inject、不停止 host。 |
 | Mac Codex | `apps/mac-client/index.html`, `apps/mac-client/app.js`, `apps/mac-client/styles.css`, `apps/mac-client/README.md`, `scripts/windows/test-mac-client-browser.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Mac client 密码框下新增安全状态：演示密码只标为本机 mock，真机需临时密码；复制/导出诊断新增 `密码安全` 行但不输出连接密码或英文 `password` 字样。页面自测覆盖演示/非演示路径、诊断复制和不发额外 input_event。不改协议、不认证、不请求密码、不发 input/inject。 |
