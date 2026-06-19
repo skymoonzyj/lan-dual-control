@@ -3319,6 +3319,7 @@ function parseMacUnattendedAttention(text) {
   const hasMacClientFormalChecklist = /\bMacClientFormalChecklist\s*=/i.test(source);
   const hasMacClientPromptPasswordSmoke = /\bMacClientPromptPasswordSmoke\s*=/i.test(source);
   const hasMacClientBrowserSelfTest = /\bMacClientBrowserSelfTest\s*=/i.test(source);
+  const hasMacFormalE2e = /\bMacFormalE2E\s*=/i.test(source);
   const hasMacHeartbeatOnce = /\bMacHeartbeatOnce\s*=/i.test(source);
   const hasMacHeartbeatWatch = /\bMacHeartbeatWatch\s*=/i.test(source);
   const hasMacHeartbeatStart = /\bMacHeartbeatStart\s*=/i.test(source);
@@ -3348,6 +3349,12 @@ function parseMacUnattendedAttention(text) {
     risk === "repo" ||
     risk === "board",
   );
+  const hasMacFormalE2eFinding =
+    hasMacFormalE2e &&
+    (
+      risks.length > 0 ||
+      /readytocall\s*=\s*false|ready\s*=\s*false|blocked|failed/.test(lower)
+    );
   const hasWindowsReverseGrantContext =
     risks.some((risk) => risk === "windows-host" || risk === "auth" || risk === "board") ||
     /\bLAN008\b|reverse_control_|ready\s*=\s*false|blocked|failed|pending-request|临时允许|重试|请求反控|等待\s*Windows/i.test(source);
@@ -3498,6 +3505,7 @@ function parseMacUnattendedAttention(text) {
     hasMacClientBrowserSelfTest &&
     (
       hasMacClientFormalFinding ||
+      hasMacFormalE2eFinding ||
       /ready\s*=\s*false|blocked|failed/.test(lower)
     )
   ) {

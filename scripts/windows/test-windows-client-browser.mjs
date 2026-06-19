@@ -1653,6 +1653,15 @@ async function verifyDesktopOnlyHostPanel(session) {
               ].join("; "),
             )
           : null;
+      const macFormalE2eBrowserSelfTestAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "MacFormalE2E=status=warning readyToCall=false blockers=mac-host-build-stale warnings=fps-limit",
+                "MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary",
+              ].join("; "),
+            )
+          : null;
       const readinessHeaderLines =
         typeof readinessLines === "function"
           ? readinessLines({
@@ -1973,6 +1982,7 @@ async function verifyDesktopOnlyHostPanel(session) {
           cleanMacClientPromptPasswordSmokeAttention?.summary === "" &&
           Array.isArray(cleanMacClientPromptPasswordSmokeAttention?.labels) &&
           cleanMacClientPromptPasswordSmokeAttention.labels.length === 0 &&
+          macFormalE2eBrowserSelfTestAttention?.summary.includes("Mac client 本地 browser 自测命令已提供") &&
           readinessHeaderText.includes("client-test") &&
           readinessHeaderText.includes("1000 ms") &&
           readinessHeaderText.includes("750 ms") &&
@@ -2028,6 +2038,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         cleanMacHostReadinessCommandAttention,
         cleanMacClientBrowserSelfTestAttention,
         cleanMacClientPromptPasswordSmokeAttention,
+        macFormalE2eBrowserSelfTestAttention,
         readinessHeader: readinessHeaderLines.slice(0, 4),
         readinessSummaryText,
         helperSummary,
