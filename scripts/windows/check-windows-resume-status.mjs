@@ -3517,7 +3517,7 @@ function makeBoardSummary(report) {
     ...(report.board.windowsLanRisk?.found
       ? [`WindowsLanRisk=${report.board.windowsLanRisk.summary}.`]
       : []),
-    `Next=${mac.ok ? report.commands.userAuthRequest : report.commands.preflightBoardSummary}.`,
+    `Next=${mac.ok ? report.commands.formalRunFixedTarget : report.commands.preflightBoardSummary}.`,
     `MacDiscovery=${report.commands.macHostDiscoveryBoardSummary}.`,
     `MacDiscoveryPs=${report.commands.macHostDiscoveryPowerShellBoardSummary}.`,
     `MacHostReadiness=${report.commands.macHostReadinessCommand}.`,

@@ -680,7 +680,8 @@ async function checkWindowsClientDiagnosticsPortOccupancy(args) {
     assertNotIncludes(payload.boardSummary, "apps/windows-client/server.mjs", "occupied client ports board summary should not include process command line");
     assertNotIncludes(payload.boardSummary, "user-data-dir", "occupied client ports board summary should not include browser command line");
     assertIncludes(payload.boardSummary, "Next=powershell.exe", "occupied client ports board summary");
-    assertIncludes(payload.boardSummary, "Next=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -ClientPort 5200 -DebugPort 9340", "occupied client ports board summary should prefer alternate ports for Next");
+    assertIncludes(payload.boardSummary, "Next=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "occupied client ports board summary should use fixed-target prompt command for Next");
+    assertIncludes(payload.boardSummary, `-HostName 127.0.0.1 -Port ${port} -ClientPort 5200 -DebugPort 9340 -PromptPassword`, "occupied client ports board summary should prefer alternate ports for prompt Next");
     assertIncludes(payload.boardSummary, "FormalChecklist=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "occupied client ports board summary should include formal checklist");
     assertIncludes(payload.boardSummary, "-ClientPort 5200 -DebugPort 9340 -PreflightOnly -CheckClientDiagnostics -BoardSummary", "occupied client ports board summary should prefer alternate ports for formal checklist");
     assertIncludes(payload.macPreflight?.command, "--clientPort 5200", "occupied client ports preflight command should prefer alternate page port");
@@ -2111,6 +2112,8 @@ async function checkBoardMacReadyTargetSelection(args) {
       assert(payload.macPreflight.payload.target?.port === port, "preflight should use MAC_READY port");
       assertIncludes(payload.boardSummary, `MacReadyForRealTest=host=127.0.0.2 port=${port}`, "MAC_READY board summary");
       assertIncludes(payload.boardSummary, `target=127.0.0.2:${port}`, "MAC_READY board summary target");
+      assertIncludes(payload.boardSummary, `Next=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 127.0.0.2 -Port ${port}`, "MAC_READY board summary should use a fixed-target prompt command");
+      assertIncludes(payload.boardSummary, "-PromptPassword", "MAC_READY board summary should tell the user where to enter the password");
       assertNotIncludes(result.stdout + result.stderr, "secret-value", "MAC_READY target selection");
       console.log("[OK] Windows resume status promotes MAC_READY_FOR_REAL_TEST target from Agent Link Board");
     }, {
