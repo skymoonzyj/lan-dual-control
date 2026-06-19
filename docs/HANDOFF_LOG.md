@@ -17,6 +17,29 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Mac Codex
+
+日期：2026-06-20 Mac 手工体验 sendCall 推送期护栏
+开发端：Mac Codex
+本轮目标：把昨晚“Windows 正在 pushing-soon 时 Mac 不替换 currentCall”的人工判断固化到 `check-mac-manual-ux-status --sendCall`，避免两端推送/变基临界期误抢通讯板 call。
+完成内容：
+- `check-mac-manual-ux-status` 现在会读取 Agent Link Board 的 `Windows Codex` 状态。
+- 当 Windows 状态或 note 命中 `pushing-soon`、`pushing`、`rebasing`、`merging`、`resolving-conflicts` 或准备 push/rebase 语义时，`--sendCall` fail-closed，不发送 `/api/call`。
+- 普通 `--boardSummary` / `--json` 仍保持只读；Windows 不在推送临界区时，原 `USER_AWAKE` 手工体验 call-ready 流程不变。
+修改文件：
+- `scripts/mac/check-mac-manual-ux-status.mjs`
+- `scripts/mac/test-mac-manual-ux-status.mjs`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-manual-ux-status.mjs --timeoutMs 20000` 先失败，`USER_AWAKE --sendCall` 在假板 `Windows Codex=pushing-soon` 下仍发送了 call。
+- 绿灯：同一测试通过，新增 `Mac manual UX status refuses --sendCall while Windows is pushing` 覆盖无 `/api/call` 写入。
+遗留问题：
+- 这只是协作护栏，不替代真实手工体验验收。
+下一步建议：
+- 真实通讯板若仍是 `USER_AWAKE` 且 Windows 已不在 pushing/rebase 状态，可显式运行 `node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --sendCall --json` 发起 5-10 分钟用户在场手工体验 call。
+是否改了协议：否。
+是否需要另一端配合：不强制；Windows 端只需避免在 pushing/rebase 临界期要求 Mac 替换 currentCall。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 Windows resume 消费 Mac 手工体验状态入口

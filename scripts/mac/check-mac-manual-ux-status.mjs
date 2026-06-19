@@ -299,6 +299,34 @@ function isMatchingUserAwakeManualUxBoardCall(call) {
   return Boolean(call?.active && isUserAwakeManualUxCall(call.raw || call));
 }
 
+function statusByDevice(state, deviceName) {
+  if (!state?.statuses || typeof state.statuses !== "object") return null;
+  const wanted = String(deviceName || "").toLowerCase();
+  for (const [device, status] of Object.entries(state.statuses)) {
+    if (String(device).toLowerCase() === wanted) return status;
+  }
+  return null;
+}
+
+function isWindowsPushCriticalStatus(status, note) {
+  const combined = `${normalizedText(status)} ${normalizedText(note)}`.toLowerCase();
+  return /\b(pushing-soon|pushing|rebasing|merging|resolving-conflicts)\b/.test(combined)
+    || /\b(preparing|prepare|ready|about)\b[^.;\n]{0,80}\b(push|rebase)\b/.test(combined)
+    || /\b(pull|rebase)\b[^.;\n]{0,80}\b(push|pushing)\b/.test(combined);
+}
+
+function windowsCodexCoordination(state) {
+  const status = statusByDevice(state, "Windows Codex");
+  const value = normalizedText(status?.status);
+  const note = normalizedText(status?.note);
+  const pushInProgress = isWindowsPushCriticalStatus(value, note);
+  return {
+    status: value || "unknown",
+    updatedAt: normalizedText(status?.updatedAt) || "",
+    pushInProgress,
+  };
+}
+
 function quoteCliArg(value) {
   const text = String(value ?? "");
   if (/^[A-Za-z0-9_./:=@%+-]+$/.test(text)) return text;
@@ -367,6 +395,8 @@ function makeReport(state, server) {
   if (/MacHeartbeat=status=blocked|MacHeartbeatHealth=blocked|reason=mac-codex-stale/i.test(combined)) {
     warnings.push("mac-heartbeat-attention");
   }
+  const windowsCoordination = windowsCodexCoordination(state);
+  if (windowsCoordination.pushInProgress) warnings.push("windows-codex-pushing");
   const report = {
     ok: ready || callReady,
     status,
@@ -388,6 +418,9 @@ function makeReport(state, server) {
     },
     commands: {
       manualUxCallCommand: callReady ? makeManualUxCallCommand(server) : null,
+    },
+    coordination: {
+      windowsCodex: windowsCoordination,
     },
     blockers,
     warnings,
@@ -583,6 +616,10 @@ async function sendCall(args, report) {
     const owner = currentCall.from || currentCall.need || currentCall.owner || "unknown";
     const goal = currentCall.goal || currentCall.raw || "unknown goal";
     throw new Error(`Refusing to replace existing Agent Link Board call from ${owner}: ${goal}. Wait for it to resolve before sending the manual UX call.`);
+  }
+  if (report.coordination?.windowsCodex?.pushInProgress) {
+    const status = report.coordination.windowsCodex.status || "unknown";
+    throw new Error(`Windows Codex is ${status}; refusing to send manual UX call until Windows finishes push/rebase coordination.`);
   }
   const payload = makeManualUxCallPayload();
   const result = await postToBoard(args, "/api/call", payload);

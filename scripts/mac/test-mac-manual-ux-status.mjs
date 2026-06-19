@@ -298,6 +298,22 @@ function userAwakeManualUxCallBoardState() {
   };
 }
 
+function userAwakeWhileWindowsPushingBoardState() {
+  const state = userAwakeManualUxCallBoardState();
+  return {
+    ...state,
+    statuses: {
+      ...state.statuses,
+      "Windows Codex": {
+        status: "pushing-soon",
+        role: "Windows 端",
+        note: "Preparing pull/rebase and push for Windows resume/status changes; Mac should not replace currentCall yet.",
+        updatedAt: "2026-06-20T09:59:59.000Z",
+      },
+    },
+  };
+}
+
 function otherActiveCallWithUserAwakeSignalBoardState() {
   return {
     updatedAt: "2026-06-20T10:05:00.000Z",
@@ -533,6 +549,20 @@ async function checkUserAwakeSendCallPostsManualUxCall(args) {
   console.log("[OK] Mac manual UX status can send one safe USER_AWAKE manual UX call");
 }
 
+async function checkSendCallRefusesWhileWindowsIsPushing(args) {
+  await withFakeBoard(userAwakeWhileWindowsPushingBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json", "--sendCall"], args);
+    assert(result.exitCode === 1, `USER_AWAKE --sendCall should fail while Windows is pushing. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "Windows pushing --sendCall refusal JSON");
+    assertIncludes(payload.error?.message || "", "Windows Codex is pushing-soon", "Windows pushing refusal");
+    assertIncludes(payload.error?.message || "", "manual UX call", "Windows pushing refusal");
+    assert(payload.sentCall?.ok === false, `Windows pushing refusal should record sentCall ok=false: ${JSON.stringify(payload.sentCall)}`);
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `Windows pushing state should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(`${result.stdout}\n${result.stderr}`, "Windows pushing --sendCall refusal");
+  });
+  console.log("[OK] Mac manual UX status refuses --sendCall while Windows is pushing");
+}
+
 async function checkSendCallRefusesWhenNotCallReady(args) {
   await withFakeBoard(readyBoardState(), async (serverUrl, posts) => {
     const result = await run(["--server", serverUrl, "--json", "--sendCall"], args);
@@ -574,6 +604,7 @@ async function main() {
   await checkUsableEntryCurrentCallIsReady(args);
   await checkUserAwakeCallProducesManualUxCallPlan(args);
   await checkUserAwakeSendCallPostsManualUxCall(args);
+  await checkSendCallRefusesWhileWindowsIsPushing(args);
   await checkSendCallRefusesWhenNotCallReady(args);
   await checkSendCallRefusesOtherActiveCall(args);
   console.log("[OK] Mac manual UX status checks passed");
