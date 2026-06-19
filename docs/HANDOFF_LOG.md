@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac heartbeat 摘要直接暴露刷新独立 Mac Unattended 状态的安全入口。
+完成内容：
+- `check-mac-heartbeat --json` 新增 `commands.macUnattendedSendStatusCommand`，指向 `check-mac-unattended-status --sendStatus --boardSummary`，并沿用当前 Agent Link Board `--server`。
+- `--boardSummary` 新增 `MacUnattendedSendStatus=`，让 Windows 端或人工只看最新 `MacHeartbeat=` 就能复制命令刷新独立 `Mac Unattended` 值守状态。
+- heartbeat 本身仍只读：不自动运行该命令、不认证、不请求或发送密码、不发 input/inject。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增断言后，`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` 失败在帮助文档缺少 `MacUnattendedSendStatus`。
+- 绿灯：实现后同一回归通过，覆盖 help、offline/online/stale build 的 JSON commands 和 `--boardSummary` 标签。
+- 真实只读：`node scripts/mac/check-mac-heartbeat.mjs --host 127.0.0.1 --port 43770 --clientHost 127.0.0.1 --clientPort 5188 --checkBoard --boardSummary` 输出 `MacUnattendedSendStatus=node scripts/mac/check-mac-unattended-status.mjs ... --sendStatus --boardSummary`。
+遗留问题：
+- 本轮只暴露可复制入口，不让 heartbeat 自动刷新 `Mac Unattended`；是否让后台 watcher 定期发 `Mac Unattended` 需要后续按噪音和频率另行设计。
+下一步建议：
+- Windows 端后续如果要提示“刷新 Mac Unattended 状态”，可优先消费 `MacUnattendedSendStatus=`；人工也可直接复制该命令让 Mac 更新独立值守状态。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac unattended/status 的稳定健康字段可以显式上板，方便 Windows watcher/resume/status 消费。
 完成内容：
 - `check-mac-unattended-status` 新增 `--sendStatus`、`--server`、`--device`、`--role`，默认仍只读不上板；只有显式 `--sendStatus` 才会调用 Agent Link Board。

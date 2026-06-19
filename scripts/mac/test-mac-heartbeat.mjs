@@ -178,6 +178,9 @@ function assertCommandSet(commands, label) {
   assertNotIncludes(commands?.macHostMediaCommand || "", "inject", label);
   assertIncludes(commands?.macUnattendedStatusCommand || "", "check-mac-unattended-status.mjs", label);
   assertIncludes(commands?.macUnattendedStatusCommand || "", "--boardSummary", label);
+  assertIncludes(commands?.macUnattendedSendStatusCommand || "", "check-mac-unattended-status.mjs", label);
+  assertIncludes(commands?.macUnattendedSendStatusCommand || "", "--sendStatus", label);
+  assertIncludes(commands?.macUnattendedSendStatusCommand || "", "--boardSummary", label);
   assertIncludes(commands?.macUnattendedFormalCommand || "", "check-mac-unattended-status.mjs", label);
   assertIncludes(commands?.macUnattendedFormalCommand || "", "--requireLaunchAgentMaxFps", label);
   assertIncludes(commands?.macUnattendedFormalCommand || "", "--requireLaunchAgentLoaded", label);
@@ -187,14 +190,17 @@ function assertCommandSet(commands, label) {
   assertIncludes(commands?.macLaunchAgentPrintCommand || "", "launchctl print", label);
   assertIncludes(commands?.macLaunchAgentPrintCommand || "", "com.lan-dual-control.mac-host", label);
   assertNotIncludes(commands?.macUnattendedStatusCommand || "", "--promptPassword", label);
+  assertNotIncludes(commands?.macUnattendedSendStatusCommand || "", "--promptPassword", label);
   assertNotIncludes(commands?.macUnattendedFormalCommand || "", "--promptPassword", label);
   assertNotIncludes(commands?.macLaunchAgentLoadCommand || "", "--promptPassword", label);
   assertNotIncludes(commands?.macLaunchAgentPrintCommand || "", "--promptPassword", label);
   assertNotIncludes(commands?.macUnattendedStatusCommand || "", "--password", label);
+  assertNotIncludes(commands?.macUnattendedSendStatusCommand || "", "--password", label);
   assertNotIncludes(commands?.macUnattendedFormalCommand || "", "--password", label);
   assertNotIncludes(commands?.macLaunchAgentLoadCommand || "", "--password", label);
   assertNotIncludes(commands?.macLaunchAgentPrintCommand || "", "--password", label);
   assertNotIncludes(commands?.macUnattendedStatusCommand || "", "inject", label);
+  assertNotIncludes(commands?.macUnattendedSendStatusCommand || "", "inject", label);
   assertNotIncludes(commands?.macUnattendedFormalCommand || "", "inject", label);
   assertNotIncludes(commands?.macLaunchAgentLoadCommand || "", "inject", label);
   assertNotIncludes(commands?.macLaunchAgentPrintCommand || "", "inject", label);
@@ -296,6 +302,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "formal E2E readiness", `${script} ${flag}`);
     assertIncludes(result.stdout, "macHeartbeatHealth", `${script} ${flag}`);
     assertIncludes(result.stdout, "macEvidence", `${script} ${flag}`);
+    assertIncludes(result.stdout, "MacUnattendedSendStatus", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
   print("OK", "Mac heartbeat help exits quickly");
@@ -346,6 +353,8 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "MacHostMedia=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacMaxFpsSafeStart=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacUnattendedStatus=", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacUnattendedSendStatus=", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "--sendStatus", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentLoad=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentPrint=", "offline board summary");
@@ -435,6 +444,8 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "MacHostMedia=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacMaxFpsSafeStart=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacUnattendedStatus=", "online board summary");
+      assertIncludes(payload.boardSummary || "", "MacUnattendedSendStatus=", "online board summary");
+      assertIncludes(payload.boardSummary || "", "--sendStatus", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacLaunchAgentLoad=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacLaunchAgentPrint=", "online board summary");
@@ -600,6 +611,8 @@ async function checkOnlineStaleHostBuildWarning(args) {
       assertIncludes(payload.boardSummary || "", "--maxScreenFps 60", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "MacHostReadiness=node scripts/mac/check-mac-host-readiness.mjs", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "MacHostMedia=node scripts/mac/check-mac-host-readiness.mjs", "stale build board summary");
+      assertIncludes(payload.boardSummary || "", "MacUnattendedSendStatus=node scripts/mac/check-mac-unattended-status.mjs", "stale build board summary");
+      assertIncludes(payload.boardSummary || "", "--sendStatus", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "MacLaunchAgentLoad=launchctl bootstrap", "stale build board summary");
       assertIncludes(payload.boardSummary || "", "MacLaunchAgentPrint=launchctl print", "stale build board summary");
@@ -615,6 +628,8 @@ async function checkOnlineStaleHostBuildWarning(args) {
       assertIncludes(payload.commands?.macHostReadinessCommand || "", `--host 127.0.0.1 --port ${hostPort}`, "stale build commands");
       assertIncludes(payload.commands?.macHostMediaCommand || "", `--host 127.0.0.1 --port ${hostPort}`, "stale build commands");
       assertIncludes(payload.commands?.macHostStopCommand || "", `--host 127.0.0.1 --port ${hostPort}`, "stale build commands");
+      assertIncludes(payload.commands?.macUnattendedSendStatusCommand || "", `--host 127.0.0.1 --port ${hostPort}`, "stale build commands");
+      assertIncludes(payload.commands?.macUnattendedSendStatusCommand || "", "--sendStatus", "stale build commands");
       assertIncludes(payload.commands?.macUnattendedFormalCommand || "", `--host 127.0.0.1 --port ${hostPort}`, "stale build commands");
       assertNotIncludes(payload.commands?.macHostStopCommand || "", "--promptPassword", "stale build commands");
       assertNoSecrets(`${result.stdout}\n${result.stderr}`, "stale build output");

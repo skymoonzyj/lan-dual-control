@@ -96,7 +96,9 @@ Machine-readable JSON fields:
                               Mac media baseline, the local Mac client mock
                               browser self-test, Mac script help safety check,
                               the user-run prompt-password Mac client smoke,
-                              60Hz safe start, and LaunchAgent load/print checks.
+                              60Hz safe start, LaunchAgent load/print checks,
+                              and MacUnattendedSendStatus for explicitly
+                              refreshing the independent Mac Unattended status.
 
 Examples:
   node scripts/mac/check-mac-heartbeat.mjs --checkBoard --boardSummary
@@ -616,6 +618,7 @@ function buildCommands(args) {
     macHostReadinessCommand: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     macHostMediaCommand: `node scripts/mac/check-mac-host-readiness.mjs --host ${args.host} --port ${args.port} --checkBoard --probeMedia --probeMediaResourceSample --promptPassword --boardSummary`,
     macUnattendedStatusCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --boardSummary`,
+    macUnattendedSendStatusCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --server ${args.server} --sendStatus --boardSummary`,
     macUnattendedFormalCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`,
     macLaunchAgentLoadCommand: `launchctl bootstrap gui/$(id -u) ${shellQuote(launchAgentPath)}`,
     macLaunchAgentPrintCommand: `launchctl print gui/$(id -u)/${shellQuote(launchAgentLabel)}`,
@@ -786,6 +789,7 @@ function makeBoardSummary(report) {
     `MacHostReadiness=${report.commands.macHostReadinessCommand}.`,
     `MacHostMedia=${report.commands.macHostMediaCommand}.`,
     `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
+    `MacUnattendedSendStatus=${report.commands.macUnattendedSendStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
     `MacLaunchAgentLoad=${report.commands.macLaunchAgentLoadCommand}.`,
     `MacLaunchAgentPrint=${report.commands.macLaunchAgentPrintCommand}.`,
