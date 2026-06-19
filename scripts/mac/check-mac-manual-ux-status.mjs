@@ -325,10 +325,18 @@ function isActiveMacManualUxValidationBoardCall(call) {
 function isManualUxConfirmationText(value) {
   const source = compactText(value);
   if (!source) return false;
+  if (isManualUxConfirmationReferenceText(source)) return false;
   if (/\bMAC_MANUAL_UX_CONFIRMED\b|\bManualUxConfirmed\b/i.test(source)) return true;
   const manualUx = /manual\s*ux|ManualUx|手工体验|真实体验|体验窗口|体验验收/i.test(source);
   const confirmed = /confirmed|confirmation|ready\s+for|can\s+start|start\s+ManualUxTest|已确认|确认|可以开始|可开始|同意|准备开始/i.test(source);
   return manualUx && confirmed;
+}
+
+function isManualUxConfirmationReferenceText(value) {
+  const source = compactText(value);
+  if (!/\bMAC_MANUAL_UX_CONFIRMED\b|\bManualUxConfirmed\b/i.test(source)) return false;
+  return /\b(do not|don't|not\s+(?:treat|accept|send|a\s+real)|planned|planning|prepar(?:e|ing|ed)?|will\s+(?:carry|include|send)|guard|mention(?:ed)?|reference|example)\b/i.test(source)
+    || /误判|不要|不能|不应|防误触|守卫|计划|将会|会携带|提到|示例|短标签/i.test(source);
 }
 
 function isManualUxConfirmationSender(name) {
@@ -488,6 +496,7 @@ function makeReport(state, server) {
   const texts = collectBoardTexts(state);
   const combined = texts.join("\n");
   const boardCallBeforeCheck = normalizeCurrentBoardCall(state.currentCall);
+  const manualUxCall = manualUxCallTiming(boardCallBeforeCheck);
   const signals = {
     realTestPass: /\bREAL_TEST_PASS(?:_RECORDED)?\b/i.test(combined),
     postPassNext: /\bPostPassNext\s*=\s*WindowsRecordPassAndTailError\+MacManualUxStandby\b/i.test(combined),
@@ -496,7 +505,7 @@ function makeReport(state, server) {
     usableEntryManualUxCall: texts.some((text) => isUsableEntryManualUxCall(text)),
     userAwakeManualUxCall: texts.some((text) => isUserAwakeManualUxCall(text)),
     manualUxCallInProgress: isActiveMacManualUxValidationBoardCall(boardCallBeforeCheck),
-    manualUxConfirmed: hasManualUxConfirmation(state, boardCallBeforeCheck),
+    manualUxConfirmed: !manualUxCall?.timedOut && hasManualUxConfirmation(state, boardCallBeforeCheck),
   };
   const ready = signals.postPassNext || signals.manualUxStandby || signals.usableEntryManualUxCall || signals.manualUxConfirmed;
   const calling = signals.manualUxCallInProgress;
@@ -512,7 +521,6 @@ function makeReport(state, server) {
   }
   const windowsCoordination = windowsCodexCoordination(state);
   if (windowsCoordination.pushInProgress) warnings.push("windows-codex-pushing");
-  const manualUxCall = manualUxCallTiming(boardCallBeforeCheck);
   if (manualUxCall?.timedOut) warnings.push("manual-ux-call-timeout");
   else if (manualUxCall?.nearTimeout) warnings.push("manual-ux-call-near-timeout");
   const report = {

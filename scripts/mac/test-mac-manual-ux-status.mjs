@@ -418,6 +418,22 @@ function confirmedMacManualUxCallBoardState() {
   };
 }
 
+function referencedConfirmationTagBoardState() {
+  const state = macManualUxCallInProgressBoardState();
+  return {
+    ...state,
+    statuses: {
+      ...state.statuses,
+      "Windows Codex": {
+        status: "fixing-confirm-guard",
+        role: "Windows 端",
+        note: "Preparing guard fix: do not treat a planned MAC_MANUAL_UX_CONFIRMED / WINDOWS_MANUAL_UX_ACK tag mention as a real manual UX confirmation.",
+        updatedAt: new Date(Date.now() - 30 * 1000).toISOString(),
+      },
+    },
+  };
+}
+
 function staleConfirmedMacManualUxCallBoardState() {
   const state = macManualUxCallInProgressBoardState();
   return {
@@ -445,6 +461,23 @@ function expiredConfirmedMacManualUxCallBoardState() {
         type: "message",
         from: "Windows Codex",
         text: "MAC_MANUAL_UX_CONFIRMED: Late confirmation after the manual UX call already timed out.",
+      },
+    ],
+  };
+}
+
+function expiredCallWithInWindowConfirmationBoardState() {
+  const state = expiredMacManualUxCallBoardState();
+  const startedAtMs = Date.parse(state.currentCall.startedAt);
+  return {
+    ...state,
+    recentEvents: [
+      ...state.recentEvents,
+      {
+        at: new Date(startedAtMs + 60 * 1000).toISOString(),
+        type: "message",
+        from: "Windows Codex",
+        text: "MAC_MANUAL_UX_CONFIRMED: Windows/User confirmed the manual UX window.",
       },
     ],
   };
@@ -744,6 +777,21 @@ async function checkConfirmedManualUxCallIsReady(args) {
   console.log("[OK] Mac manual UX status treats a current call confirmation as ready");
 }
 
+async function checkReferencedConfirmationTagDoesNotReadyCall(args) {
+  await withFakeBoard(referencedConfirmationTagBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `referenced confirmation tag JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "referenced confirmation tag JSON");
+    assert(payload.status === "calling", `referenced confirmation tag should remain calling, got ${payload.status}`);
+    assert(payload.signals?.manualUxConfirmed !== true, `referenced confirmation tag should not be accepted: ${JSON.stringify(payload.signals)}`);
+    assertIncludes(payload.boardSummary, "MacManualUx=status=calling", "referenced confirmation tag boardSummary");
+    assertIncludes(payload.boardSummary, "Next=WaitForManualUxConfirmation", "referenced confirmation tag boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `referenced confirmation tag read-only status should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "referenced confirmation tag JSON");
+  });
+  console.log("[OK] Mac manual UX status ignores explanatory confirmation-tag references");
+}
+
 async function checkStaleManualUxConfirmationDoesNotReadyNewCall(args) {
   await withFakeBoard(staleConfirmedMacManualUxCallBoardState(), async (serverUrl, posts) => {
     const result = await run(["--server", serverUrl, "--json"], args);
@@ -775,6 +823,23 @@ async function checkLateManualUxConfirmationDoesNotReadyExpiredCall(args) {
     assertSecretSafe(JSON.stringify(payload), "late confirmed manual UX call JSON");
   });
   console.log("[OK] Mac manual UX status ignores confirmations after the call timeout");
+}
+
+async function checkExpiredCallRequiresReconfirmEvenWhenPreviouslyConfirmed(args) {
+  await withFakeBoard(expiredCallWithInWindowConfirmationBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `previously confirmed expired call JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "previously confirmed expired call JSON");
+    assert(payload.status === "calling", `previously confirmed expired call should require reconfirm, got ${payload.status}`);
+    assert(payload.signals?.manualUxConfirmed !== true, `expired call should not keep manualUxConfirmed after timeout: ${JSON.stringify(payload.signals)}`);
+    assert(payload.manualUxCall?.timedOut === true, `previously confirmed expired call should expose timeout: ${JSON.stringify(payload.manualUxCall)}`);
+    assertIncludes(payload.boardSummary, "MacManualUx=status=calling", "previously confirmed expired call boardSummary");
+    assertIncludes(payload.boardSummary, "Next=ReconfirmManualUxCall", "previously confirmed expired call boardSummary");
+    assertIncludes(payload.boardSummary, "ManualUxCall=timeout", "previously confirmed expired call boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `previously confirmed expired read-only status should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "previously confirmed expired call JSON");
+  });
+  console.log("[OK] Mac manual UX status requires reconfirm after a confirmed call times out");
 }
 
 async function checkExpiredManualUxCallRequestsReconfirmation(args) {
@@ -898,8 +963,10 @@ async function main() {
   await checkUserAwakeSendCallPostsManualUxCall(args);
   await checkManualUxCallInProgressDoesNotOfferDuplicateCall(args);
   await checkConfirmedManualUxCallIsReady(args);
+  await checkReferencedConfirmationTagDoesNotReadyCall(args);
   await checkStaleManualUxConfirmationDoesNotReadyNewCall(args);
   await checkLateManualUxConfirmationDoesNotReadyExpiredCall(args);
+  await checkExpiredCallRequiresReconfirmEvenWhenPreviouslyConfirmed(args);
   await checkExpiredManualUxCallRequestsReconfirmation(args);
   await checkExpiredManualUxCallCanBeReconfirmed(args);
   await checkActiveManualUxCallRefusesReconfirm(args);
