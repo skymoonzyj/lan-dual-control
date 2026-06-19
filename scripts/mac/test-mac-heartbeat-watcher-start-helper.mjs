@@ -301,6 +301,40 @@ function checkStartWithUnattendedRefresh(args) {
   print("OK", "Start helper can explicitly enable Mac Unattended refresh");
 }
 
+function checkStartWarnsWhenReusingDifferentRefreshMode(args) {
+  const tmp = mkdtempSync(join(tmpdir(), "lan-dual-heartbeat-start-"));
+  const fake = makeFakeWatcher(tmp);
+  const paths = pathsFor(tmp);
+  const env = {
+    LAN_DUAL_MAC_HEARTBEAT_WATCHER_SCRIPT: fake.path,
+  };
+  try {
+    const first = run(["--json", ...commonArgs(paths)], args, env);
+    const firstPayload = parseJson(first.stdout, "default start JSON");
+    assert(first.status === 0, `default start should pass.\n${first.stdout}\n${first.stderr}`);
+    assert(firstPayload.watcher?.refreshUnattended === false, "default start should run without unattended refresh");
+
+    const startWithRefresh = run(["--json", "--refreshUnattended", ...commonArgs(paths)], args, env);
+    const payload = parseJson(startWithRefresh.stdout, "reuse mismatch JSON");
+    assert(startWithRefresh.status === 0, `start with refresh against existing watcher should pass.\n${startWithRefresh.stdout}\n${startWithRefresh.stderr}`);
+    assert(payload.reused === true, "reuse mismatch should keep the existing watcher running");
+    assert(payload.watcher?.refreshUnattended === false, "reuse mismatch JSON should report the running watcher refresh state");
+    assert(payload.configurationMismatches?.includes("refreshUnattended"), "reuse mismatch JSON should name refreshUnattended mismatch");
+    assertIncludes(payload.message || "", "restart", "reuse mismatch message should guide restart");
+    assertNoSecrets(startWithRefresh, "reuse mismatch output");
+
+    const boardSummary = run(["--boardSummary", "--refreshUnattended", ...commonArgs(paths)], args, env);
+    assert(boardSummary.status === 0, `reuse mismatch boardSummary should pass.\n${boardSummary.stdout}\n${boardSummary.stderr}`);
+    assertIncludes(boardSummary.stdout, "configMismatch=refreshUnattended", "reuse mismatch boardSummary");
+    assertIncludes(boardSummary.stdout, "RefreshRestart=node scripts/mac/start-mac-heartbeat-watcher.mjs --restart --refreshUnattended --boardSummary", "reuse mismatch boardSummary restart guidance");
+    assertNoSecrets(boardSummary, "reuse mismatch boardSummary output");
+  } finally {
+    run(["--stop", ...commonArgs(paths)], args, env);
+    rmSync(tmp, { recursive: true, force: true });
+  }
+  print("OK", "Start helper warns when requested refresh mode differs from reused watcher");
+}
+
 function checkRestart(args) {
   const tmp = mkdtempSync(join(tmpdir(), "lan-dual-heartbeat-start-"));
   const fake = makeFakeWatcher(tmp);
@@ -339,6 +373,7 @@ function main() {
   checkStatusNotRunning(args);
   checkStartStatusStop(args);
   checkStartWithUnattendedRefresh(args);
+  checkStartWarnsWhenReusingDifferentRefreshMode(args);
   checkRestart(args);
   print("OK", "Mac heartbeat watcher start helper self-test passed");
 }

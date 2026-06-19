@@ -476,12 +476,29 @@ async function restartWatcher(args) {
   };
 }
 
+function findConfigurationMismatches(args, status) {
+  const mismatches = [];
+  if (
+    status.running &&
+    args.refreshUnattended &&
+    typeof status.meta?.refreshUnattended === "boolean" &&
+    status.meta.refreshUnattended !== args.refreshUnattended
+  ) {
+    mismatches.push("refreshUnattended");
+  }
+  return mismatches;
+}
+
 function makeReport(action, args, details) {
   const status = details.status || inspectWatcher(args);
   const refreshUnattended = typeof status.meta?.refreshUnattended === "boolean"
     ? status.meta.refreshUnattended
     : args.refreshUnattended;
   const reportArgs = { ...args, refreshUnattended };
+  const configurationMismatches = findConfigurationMismatches(args, status);
+  const message = configurationMismatches.length > 0
+    ? `${details.message || "Mac heartbeat watcher is already running."} restart the watcher to apply requested setting(s): ${configurationMismatches.join(",")}.`
+    : details.message || "";
   return {
     ok: Boolean(details.ok),
     action,
@@ -491,7 +508,8 @@ function makeReport(action, args, details) {
     reused: Boolean(details.reused),
     stopped: Boolean(details.stopped),
     stalePidFile: Boolean(status.stalePidFile),
-    message: details.message || "",
+    configurationMismatches,
+    message,
     watcher: {
       device: "Mac Heartbeat",
       role: "Mac watchdog",
@@ -533,6 +551,9 @@ function makeCommands(args) {
 
 function makeBoardSummary(report) {
   const state = report.running ? `running pid=${report.pid}` : "not-running";
+  const configMismatch = report.configurationMismatches?.length
+    ? `configMismatch=${report.configurationMismatches.join(",")}; restartRequired=true.`
+    : "configMismatch=none.";
   const heartbeat = report.lastHeartbeat?.heartbeat?.found
     ? `lastHeartbeat=status=${report.lastHeartbeat.heartbeat.status || "unknown"} checkedAt=${report.lastHeartbeat.heartbeat.checkedAt || "unknown"} reason=${report.lastHeartbeat.heartbeat.reason || "unknown"} codexAgeMs=${report.lastHeartbeat.heartbeat.codexAgeMs || "unknown"}`
     : "lastHeartbeat=not-seen";
@@ -541,6 +562,7 @@ function makeBoardSummary(report) {
     : "lastRun=not-seen";
   return [
     `Mac heartbeat watcher: action=${report.action} ok=${report.ok ? "true" : "false"} ${state}; device=Mac Heartbeat; intervalMs=${report.watcher.intervalMs}; refreshUnattended=${report.watcher.refreshUnattended ? "true" : "false"}; ${heartbeat}; ${watcherRun}.`,
+    configMismatch,
     `Status=${report.commands.status}.`,
     `Start=${report.commands.start}.`,
     `RefreshStart=${report.commands.startWithUnattendedRefresh}.`,
