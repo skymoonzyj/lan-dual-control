@@ -310,7 +310,7 @@ async function checkMockJson(args) {
     assert(payload.windowsClientDiagnosticsPorts?.clientPort === 5197, "mock JSON should record default client diagnostics page port");
     assert(payload.windowsClientDiagnosticsPorts?.debugPort === 9337, "mock JSON should record default client diagnostics debug port");
     assertIncludes(payload.userAuthRequest, "NEED_USER_AUTH", "mock JSON userAuthRequest");
-    assertIncludes(payload.userAuthRequest, "powershell.exe", "mock JSON userAuthRequest");
+    assertIncludes(payload.userAuthRequest, "pwsh -NoProfile", "mock JSON userAuthRequest should prefer PowerShell 7 for prompt-password runs");
     assertIncludes(payload.commands?.macHostDiscoveryBoardSummary, "discover-lan-hosts.mjs", "mock JSON Mac discovery command");
     assertIncludes(payload.commands?.macHostDiscoveryBoardSummary, "--noLocalSubnets", "mock JSON Mac discovery command");
     assertIncludes(payload.commands?.macHostDiscoveryBoardSummary, "--host 127.0.0.1", "mock JSON Mac discovery command");
@@ -562,7 +562,8 @@ async function checkCustomClientDiagnosticsPorts(args) {
     assertIncludes(payload.boardSummary, "WinClientPortsOwners=5200:node.exe:61088,9340:msedge.exe:44488", "PowerShell custom ports board summary should include safe owner summary");
     assertNotIncludes(payload.boardSummary, "apps/windows-client/server.mjs", "PowerShell custom ports board summary should not include process command line");
     assertNotIncludes(payload.boardSummary, "user-data-dir", "PowerShell custom ports board summary should not include browser command line");
-    assertIncludes(payload.boardSummary, "Next=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -ClientPort 5201 -DebugPort 9341", "PowerShell custom ports board summary should prefer alternate ports for Next");
+    assertIncludes(payload.boardSummary, "Next=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1", "PowerShell custom ports board summary should prefer PowerShell 7 for Next");
+    assertIncludes(payload.boardSummary, "-ClientPort 5201 -DebugPort 9341 -PromptPassword", "PowerShell custom ports board summary should prefer alternate ports for prompt Next");
     assertIncludes(payload.boardSummary, "-ClientPort 5201 -DebugPort 9341 -PreflightOnly -CheckClientDiagnostics -BoardSummary", "PowerShell custom ports board summary should prefer alternate ports for formal checklist");
     assertIncludes(payload.commands?.preflightBoardSummary, "-ClientPort 5201 -DebugPort 9341", "PowerShell custom ports preflight board command should prefer alternate ports");
     assertIncludes(payload.commands?.userAuthRequest, "-ClientPort 5201 -DebugPort 9341", "PowerShell custom ports user auth request should prefer alternate ports");
@@ -1541,7 +1542,7 @@ async function checkUserAuthRequest(args) {
     assert(lines.length === 1, `PowerShell userAuthRequest should be one line, got ${lines.length}`);
     assertIncludes(output, "NEED_USER_AUTH", "PowerShell userAuthRequest");
     assertIncludes(output, "Windows 本机隐藏输入 Mac host 正式密码", "PowerShell userAuthRequest");
-    assertIncludes(output, "powershell.exe", "PowerShell userAuthRequest");
+    assertIncludes(output, "pwsh -NoProfile", "PowerShell userAuthRequest should prefer PowerShell 7 for prompt-password runs");
     assertIncludes(output, "-PromptPassword", "PowerShell userAuthRequest");
     assertIncludes(output, "inject 仍需", "PowerShell userAuthRequest");
     assertIncludes(output, "另行明确确认", "PowerShell userAuthRequest");

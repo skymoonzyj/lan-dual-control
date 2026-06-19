@@ -397,7 +397,7 @@ async function checkMockJson(args) {
     assert(String(payload.boardSummary || "").includes("Windows resume:"), "mock JSON should include board summary");
     assert(String(payload.userAuthRequest || "").includes("NEED_USER_AUTH"), "mock JSON should include user auth request");
     assert(String(payload.userAuthRequest || "").includes("正式 Mac 端到端验收需要你在 Windows 本机隐藏输入"), "mock JSON should include formal auth wording");
-    assert(String(payload.userAuthRequest || "").includes("powershell.exe"), "mock JSON user auth request should prefer PowerShell");
+    assert(String(payload.userAuthRequest || "").includes("pwsh -NoProfile"), "mock JSON user auth request should prefer PowerShell 7 for prompt-password runs");
     assert(String(payload.userAuthRequest || "").includes("-PromptPassword"), "mock JSON user auth request should prompt for password");
     assert(String(payload.commands?.formalRun || "").includes("-PromptPassword"), "mock JSON should include formal command");
     assert(String(payload.commands?.macHostDiscoveryBoardSummary || "").includes("discover-lan-hosts.mjs"), "mock JSON should include Mac discovery command");
@@ -707,10 +707,10 @@ async function checkWindowsClientDiagnosticsPortOccupancy(args) {
     assertIncludes(payload.boardSummary, "WinClientPortsOwners=5197:node.exe:61088,9337:msedge.exe:44488", "occupied client ports board summary should include safe owner summary");
     assertNotIncludes(payload.boardSummary, "apps/windows-client/server.mjs", "occupied client ports board summary should not include process command line");
     assertNotIncludes(payload.boardSummary, "user-data-dir", "occupied client ports board summary should not include browser command line");
-    assertIncludes(payload.boardSummary, "Next=powershell.exe", "occupied client ports board summary");
-    assertIncludes(payload.boardSummary, "Next=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "occupied client ports board summary should use fixed-target prompt command for Next");
+    assertIncludes(payload.boardSummary, "Next=pwsh -NoProfile", "occupied client ports board summary");
+    assertIncludes(payload.boardSummary, "Next=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "occupied client ports board summary should use PowerShell 7 fixed-target prompt command for Next");
     assertIncludes(payload.boardSummary, `-HostName 127.0.0.1 -Port ${port} -ClientPort 5200 -DebugPort 9340 -PromptPassword`, "occupied client ports board summary should prefer alternate ports for prompt Next");
-    assertIncludes(payload.boardSummary, "FormalChecklist=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "occupied client ports board summary should include formal checklist");
+    assertIncludes(payload.boardSummary, "FormalChecklist=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "occupied client ports board summary should include PowerShell 7 formal checklist");
     assertIncludes(payload.boardSummary, "-ClientPort 5200 -DebugPort 9340 -PreflightOnly -CheckClientDiagnostics -BoardSummary", "occupied client ports board summary should prefer alternate ports for formal checklist");
     assertIncludes(payload.macPreflight?.command, "--clientPort 5200", "occupied client ports preflight command should prefer alternate page port");
     assertIncludes(payload.macPreflight?.command, "--debugPort 9340", "occupied client ports preflight command should prefer alternate debug port");
@@ -2029,7 +2029,7 @@ async function checkUserAuthRequest(args) {
     assert(lines.length === 1, `userAuthRequest should be one line, got ${lines.length}`);
     assertIncludes(result.stdout, "NEED_USER_AUTH", "userAuthRequest");
     assertIncludes(result.stdout, "Windows 本机隐藏输入 Mac host 正式密码", "userAuthRequest");
-    assertIncludes(result.stdout, "powershell.exe", "userAuthRequest");
+    assertIncludes(result.stdout, "pwsh -NoProfile", "userAuthRequest should prefer PowerShell 7 for prompt-password runs");
     assertIncludes(result.stdout, "-PromptPassword", "userAuthRequest");
     assertIncludes(result.stdout, "inject 仍需", "userAuthRequest");
     assertIncludes(result.stdout, "另行明确确认", "userAuthRequest");
@@ -2202,7 +2202,7 @@ async function checkBoardMacReadyTargetSelection(args) {
       assert(payload.macPreflight.payload.target?.port === port, "preflight should use MAC_READY port");
       assertIncludes(payload.boardSummary, `MacReadyForRealTest=host=${macReadyHost} port=${port}`, "MAC_READY board summary");
       assertIncludes(payload.boardSummary, `target=${macReadyHost}:${port}`, "MAC_READY board summary target");
-      assertIncludes(payload.boardSummary, `Next=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName ${macReadyHost} -Port ${port}`, "MAC_READY board summary should use a fixed-target prompt command");
+      assertIncludes(payload.boardSummary, `Next=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName ${macReadyHost} -Port ${port}`, "MAC_READY board summary should use a fixed-target prompt command");
       assertIncludes(payload.boardSummary, "-PromptPassword", "MAC_READY board summary should tell the user where to enter the password");
       assertNotIncludes(result.stdout + result.stderr, "secret-value", "MAC_READY target selection");
       console.log("[OK] Windows resume status promotes MAC_READY_FOR_REAL_TEST target from Agent Link Board");

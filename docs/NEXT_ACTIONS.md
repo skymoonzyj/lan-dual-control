@@ -2,7 +2,13 @@
 
 最后更新：2026-06-20
 
-用途：让两台机器上的 Codex 都知道现在最值得做什么。只放短期任务，长期计划继续放在 `docs/04-task-board.md`。
+用途：让两台机器上的 Codex 都知道现在最值得做什么。
+## 2026-06-20 现场校正
+
+- 不要再回旧第二步/diagnostics 循环：Windows 控 Mac formal E2E 主体已经 PASS。
+- 尾部 NativeCommandFailed 的处理结论是改用 PowerShell 7 / pwsh 路径。现场复测或用户授权输入密码时，优先复制 resume/status 摘要里的 pwsh ... check-mac-formal-e2e.ps1 ... -PromptPassword 命令。
+- 下一步继续手工体验验收：窗口/全屏、画面流畅度、声音、文本和文件剪贴板、input_ack，以及用户明确确认后的真实 inject 安全验收。
+只放短期任务，长期计划继续放在 `docs/04-task-board.md`。
 
 ## 最高优先级
 

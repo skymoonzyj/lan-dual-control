@@ -162,7 +162,7 @@ Examples:
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/discover-lan-hosts.ps1 -NoLocalSubnets -HostName 192.168.31.122 -Port 43770 -RequireMacHost -BoardSummary
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
+  pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -PreflightOnly -CheckClientDiagnostics -BoardSummary
   node scripts/windows/check-windows-resume-status.mjs --checkBoard --clientPort 5200 --debugPort 9340 --boardSummary
   node scripts/windows/test-windows-client-browser.mjs --discover --diagnosticsOnly --boardSummary --timeoutMs 45000
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-windows-client-browser.ps1 -Discover -DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770 -DiagnosticsOnly -BoardSummary -TimeoutMs 45000
@@ -3123,7 +3123,7 @@ function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
     "--boardSummary",
   ].join(" ");
   const formalChecklistBoardSummary = [
-    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
+    "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
     "-Discover",
     "-DiscoverNoLocalSubnets",
     "-HostName", host,
@@ -3210,7 +3210,7 @@ function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
     macUnattendedFormalStatusCommand,
     formalChecklistBoardSummary,
     preflightBoardSummary: [
-      "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
+      "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
       "-Discover",
       "-ClientPort", String(preferredClientPorts.clientPort),
       "-DebugPort", String(preferredClientPorts.debugPort),
@@ -3219,7 +3219,7 @@ function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
       "-BoardSummary",
     ].join(" "),
     userAuthRequest: [
-      "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
+      "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
       "-Discover",
       "-ClientPort", String(preferredClientPorts.clientPort),
       "-DebugPort", String(preferredClientPorts.debugPort),
@@ -3228,14 +3228,14 @@ function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
       "-UserAuthRequest",
     ].join(" "),
     formalRun: [
-      "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
+      "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
       "-Discover",
       "-ClientPort", String(preferredClientPorts.clientPort),
       "-DebugPort", String(preferredClientPorts.debugPort),
       "-PromptPassword",
     ].join(" "),
     formalRunFixedTarget: [
-      "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
+      "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
       "-Discover",
       "-DiscoverNoLocalSubnets",
       "-HostName", host,

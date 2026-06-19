@@ -17,6 +17,37 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 继续推进
+开发端：Windows Codex
+本轮目标：记录 Windows 控 Mac formal E2E PASS，并收口尾部 NativeCommandFailed。
+完成内容：
+- 复查通讯板 currentCall，确认要求是 REAL_TEST_PASS 后续：Windows 记录 PASS 并调查尾部错误，不再回旧第二步/diagnostics 循环。
+- 查看真实日志：formal E2E 主体已通过，尾部 NativeCommandFailed 来自 Windows PowerShell 5.1 交互 wrapper / transcript 启动 node.exe 的收尾异常，不是 Mac host、H.264、音频、剪贴板或 input-log 主流程失败。
+- check-windows-resume-status 的正式密码路径现在优先输出 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 ... -PromptPassword，覆盖 Next、FormalChecklist、preflightBoardSummary、userAuthRequest、formalRun 和固定目标 formalRunFixedTarget。
+- 同步 Node 和 PowerShell wrapper 回归，锁定恢复总览和用户授权提醒不会退回 Windows PowerShell 5.1。
+修改文件：
+- scripts/windows/check-windows-resume-status.mjs
+- scripts/windows/test-windows-resume-status.mjs
+- scripts/windows/test-windows-resume-status-powershell.mjs
+- docs/CURRENT_STATUS.md
+- docs/NEXT_ACTIONS.md
+- docs/04-task-board.md
+- docs/HANDOFF_LOG.md
+- docs/ACTIVE_LOCKS.md
+验证方式：
+- 红灯：node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000 先失败在 userAuthRequest 仍要求 PowerShell 7。
+- 绿灯：node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000 通过。
+- 绿灯：node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000 通过。
+遗留问题：
+- 本轮没有执行真实输入注入；后续真实 inject 仍需用户明确确认正在看 Mac 屏幕。
+- 若现场再次手工打开旧 Windows PowerShell 5.1 transcript 包装命令，仍可能复现同类 NativeCommandFailed；应复制恢复总览里的 pwsh 命令。
+下一步建议：
+- 双端继续做手工体验测试：窗口/全屏、画面流畅度、声音、剪贴板/文件、输入 ack 和后续真实 inject 安全验收。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端继续保持 host/client/heartbeat 在线，后续需要人工体验或 inject 时再发 call。
+
 ## 2026-06-20 Mac Codex
 
 日期：2026-06-20 00:59 CST
