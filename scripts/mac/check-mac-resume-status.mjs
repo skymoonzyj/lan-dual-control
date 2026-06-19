@@ -23,6 +23,16 @@ const defaults = {
   boardSummary: false,
 };
 const formalTargetMaxScreenFps = 60;
+const allowedMacEvidenceTokens = new Set([
+  "MacClientPageOnline",
+  "MacClientDiagnosticsOk",
+  "MacHostOnline",
+  "MacHostMediaOk",
+  "MacFormalLocalSmokeOk",
+  "MacFormalE2EReady",
+  "MacFormalE2EOk",
+  "MacUnattendedReady",
+]);
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -475,6 +485,7 @@ async function getBoardStatus(args) {
       ok: null,
       summary: "not checked",
       recentLines: [],
+      macEvidence: [],
       currentCall: null,
       activeCall: false,
     };
@@ -493,14 +504,81 @@ async function getBoardStatus(args) {
   const output = `${watchResult.stdout}\n${watchResult.stderr}`;
   const lines = splitLines(output);
   const currentCall = normalizeBoardCall(stateResult.state?.currentCall);
+  const macEvidence = collectMacEvidence(stateResult.state, lines);
   return {
     checked: true,
     ok: watchResult.ok && stateResult.ok,
     summary: watchResult.ok && stateResult.ok ? `read ${lines.length} non-empty line(s)` : `failed: ${watchResult.error || watchResult.stderr || stateResult.error || `exit ${watchResult.status ?? "state"}`}`,
     recentLines: lines.slice(-12),
+    macEvidence,
     currentCall,
     activeCall: isActiveCall(currentCall),
   };
+}
+
+function collectMacEvidence(state, recentLines = []) {
+  const tokens = [];
+  for (const text of collectBoardEvidenceTexts(state, recentLines)) {
+    tokens.push(...extractCleanMacEvidence(text));
+  }
+  return [...new Set(tokens)];
+}
+
+function collectBoardEvidenceTexts(state, recentLines = []) {
+  const texts = [...(Array.isArray(recentLines) ? recentLines : [])];
+  const statuses = state && typeof state === "object" && state.statuses && typeof state.statuses === "object"
+    ? state.statuses
+    : {};
+  for (const [device, entry] of Object.entries(statuses)) {
+    if (typeof entry === "string") {
+      texts.push(`${device}: ${entry}`);
+      continue;
+    }
+    if (!entry || typeof entry !== "object") continue;
+    const statusText = [device, entry.status, entry.note, entry.text, entry.message, entry.summary]
+      .map(normalizedText)
+      .filter(Boolean)
+      .join(" ");
+    if (statusText) texts.push(statusText);
+  }
+  const events = Array.isArray(state?.events) ? state.events : [];
+  for (const event of events) {
+    if (typeof event === "string") {
+      texts.push(event);
+      continue;
+    }
+    if (!event || typeof event !== "object") continue;
+    const eventText = [event.device, event.from, event.status, event.note, event.text, event.message, event.summary]
+      .map(normalizedText)
+      .filter(Boolean)
+      .join(" ");
+    if (eventText) texts.push(eventText);
+  }
+  return texts.filter(Boolean);
+}
+
+function extractCleanMacEvidence(text) {
+  const source = normalizedText(text);
+  if (!source || !/\b(?:MacEvidence|Evidence)=/i.test(source)) return [];
+  if (!hasCleanMacEvidenceContext(source)) return [];
+
+  const tokens = [];
+  for (const match of source.matchAll(/\b(?:MacEvidence|Evidence)=([A-Za-z0-9_,]+)/gi)) {
+    for (const token of match[1].split(",")) {
+      const normalized = token.trim();
+      if (allowedMacEvidenceTokens.has(normalized)) tokens.push(normalized);
+    }
+  }
+  return tokens;
+}
+
+function hasCleanMacEvidenceContext(text) {
+  if (!/\b(?:MacHeartbeat|MacClientDiagnostics)=status=ok\b/i.test(text)) return false;
+  if (/\b(?:MacHeartbeat|MacClientDiagnostics)=status=(?:blocked|warning|failed|fail|offline)\b/i.test(text)) return false;
+  if (/\bblockers=(?!none\b)[^;\s.]*/i.test(text)) return false;
+  if (/\bwarnings=(?!none\b)[^;\s.]*/i.test(text)) return false;
+  if (/\breason=(?:blocked|warning|failed|fail|offline)\b/i.test(text)) return false;
+  return /\bblockers=none\b/i.test(text) && /\bwarnings=none\b/i.test(text);
 }
 
 async function getBoardState(args) {
@@ -1053,6 +1131,11 @@ function formatBoardCallSummary(board) {
   return `call=${state}(${formatCallOneLine(board.currentCall)})`;
 }
 
+function formatMacEvidenceSummary(board) {
+  if (!Array.isArray(board?.macEvidence) || board.macEvidence.length === 0) return "";
+  return `MacEvidence=${board.macEvidence.join(",")};`;
+}
+
 function formatHeartbeatWatcherSummary(watcher) {
   if (!watcher?.checked) return "heartbeatWatcher=not-checked";
   if (!watcher.ok) return `heartbeatWatcher=unknown${watcher.error ? ` error=${watcher.error}` : ""}`;
@@ -1098,11 +1181,13 @@ function formatBoardSummary(report) {
   const findingSummary = formatRecommendationSummary(blockerItems, warningItems);
   const callSummary = formatBoardCallSummary(board);
   const heartbeatWatcherSummary = formatHeartbeatWatcherSummary(macHeartbeatWatcher);
+  const macEvidenceSummary = formatMacEvidenceSummary(board);
   const suggestedActionSummary = report.suggestedAction?.boardSummary ? ` ${report.suggestedAction.boardSummary}` : "";
 
   if (!host.online) {
     return [
       `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${heartbeatWatcherSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
+      macEvidenceSummary,
       `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
       `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
       `MacHostStop=${report.commands.macHostStopCommand}.`,
@@ -1131,7 +1216,7 @@ function formatBoardSummary(report) {
       `MacHeartbeatStop=${report.commands.macHeartbeatStopCommand}.`,
       `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
       "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
-    ].join(" ");
+    ].filter(Boolean).join(" ");
   }
 
   const permissions = formatPermissions(host.permissions || {});
@@ -1144,6 +1229,7 @@ function formatBoardSummary(report) {
 
   return [
     `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}; ${heartbeatWatcherSummary}.`,
+    macEvidenceSummary,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedActionSummary}.`,
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
     `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
@@ -1174,7 +1260,7 @@ function formatBoardSummary(report) {
     `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
     "Next formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
-  ].join(" ");
+  ].filter(Boolean).join(" ");
 }
 
 function formatRecommendationSummary(blockerItems, warningItems) {

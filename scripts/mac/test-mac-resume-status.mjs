@@ -1032,13 +1032,13 @@ function checkPasswordRedaction(args) {
   print("OK", "Resume status output does not echo unrelated secret-like server text in normal offline mode");
 }
 
-async function withFakeBoard(call, callback) {
+async function withFakeBoard(call, callback, options = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "lan-dual-mac-resume-board-"));
   const scriptPath = path.join(dir, "fake-board.mjs");
   const state = {
     currentCall: call,
-    statuses: {},
-    events: [
+    statuses: options.statuses || {},
+    events: options.events || [
       {
         id: "event-1",
         at: new Date().toISOString(),
@@ -1178,6 +1178,90 @@ async function checkBoardCurrentCall(args) {
   print("OK", "Agent Link Board currentCall is surfaced in JSON and board summary");
 }
 
+async function checkBoardMacEvidence(args) {
+  const cleanHeartbeat = "MacHeartbeat=status=ok; checkedAt=2026-06-19T04:54:22.847Z; device=Mac; macHost=online 127.0.0.1:43770; macClient=online http://127.0.0.1:5188/; board=ok call=none; blockers=none warnings=none reason=ok. Evidence=MacClientPageOnline,MacClientDiagnosticsOk.";
+  await withFakeBoard(null, async (server) => {
+    const result = run(args, [
+      "--json",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--timeoutMs",
+      "1200",
+    ]);
+    assert(result.status === 0, `clean Mac evidence JSON should stay non-failing\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "clean Mac evidence resume status");
+    assert(payload.board?.checked === true, "clean Mac evidence JSON should mark board checked");
+    assert(payload.board?.ok === true, "clean Mac evidence JSON should mark board ok");
+    assert(Array.isArray(payload.board?.macEvidence), "clean Mac evidence JSON should expose board.macEvidence");
+    assert(payload.board.macEvidence.includes("MacClientPageOnline"), "clean Mac evidence should include MacClientPageOnline");
+    assert(payload.board.macEvidence.includes("MacClientDiagnosticsOk"), "clean Mac evidence should include MacClientDiagnosticsOk");
+    assert(String(payload.boardSummary || "").includes("MacEvidence=MacClientPageOnline,MacClientDiagnosticsOk;"), "board summary should expose clean MacEvidence as a standalone segment");
+    assertNoPasswordLeak(result, "clean Mac evidence JSON");
+  }, {
+    statuses: {
+      "Mac Heartbeat": {
+        status: "online",
+        role: "Mac heartbeat",
+        note: cleanHeartbeat,
+      },
+    },
+    events: [
+      {
+        id: "event-clean-mac-evidence",
+        at: new Date().toISOString(),
+        type: "status",
+        device: "Mac Heartbeat",
+        text: cleanHeartbeat,
+      },
+    ],
+  });
+
+  const riskyHeartbeat = "MacHeartbeat=status=blocked; checkedAt=2026-06-19T04:54:22.847Z; device=Mac; macHost=offline; macClient=offline; board=ok call=none; blockers=mac-host-offline warnings=none reason=blocked. Evidence=MacClientDiagnosticsOk.";
+  await withFakeBoard(null, async (server) => {
+    const result = run(args, [
+      "--json",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--timeoutMs",
+      "1200",
+    ]);
+    assert(result.status === 0, `risky Mac evidence JSON should stay non-failing\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "risky Mac evidence resume status");
+    assert(Array.isArray(payload.board?.macEvidence), "risky Mac evidence JSON should still expose board.macEvidence array");
+    assert(payload.board.macEvidence.length === 0, "risky Mac evidence should not be promoted");
+    assert(!String(payload.boardSummary || "").includes("MacEvidence="), "risky board summary should not expose MacEvidence");
+    assertNoPasswordLeak(result, "risky Mac evidence JSON");
+  }, {
+    statuses: {
+      "Mac Heartbeat": {
+        status: "offline",
+        role: "Mac heartbeat",
+        note: riskyHeartbeat,
+      },
+    },
+    events: [
+      {
+        id: "event-risky-mac-evidence",
+        at: new Date().toISOString(),
+        type: "status",
+        device: "Mac Heartbeat",
+        text: riskyHeartbeat,
+      },
+    ],
+  });
+  print("OK", "Agent Link Board clean MacEvidence is surfaced while risky evidence is ignored");
+}
+
 async function checkBoardDoneCall(args) {
   const call = {
     status: "DONE",
@@ -1228,6 +1312,7 @@ async function main() {
   await checkH264FallbackPipelineWarning(args);
   checkPasswordRedaction(args);
   await checkBoardCurrentCall(args);
+  await checkBoardMacEvidence(args);
   await checkBoardDoneCall(args);
   print("OK", "Mac resume status self-test passed");
 }

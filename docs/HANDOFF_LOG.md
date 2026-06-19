@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac 恢复总览转述通讯板上干净的 Mac 正向证据。
+完成内容：
+- `check-mac-resume-status --checkBoard --json/--boardSummary` 现在会从 Agent Link Board 当前状态/事件和 `watch --once` 输出里提取干净 `Evidence=` / `MacEvidence=`，在 JSON `board.macEvidence` 与摘要 `MacEvidence=...;` 中显示 `MacClientPageOnline,MacClientDiagnosticsOk` 等稳定短标签。
+- 仅接受 `MacHeartbeat=status=ok` 或 `MacClientDiagnostics=status=ok` 且 `blockers=none warnings=none` 的上下文；blocked/warning/offline、非空 blocker/warning 或失败原因不会提升成健康证据。
+- 不新增探测副作用，不启动服务、不认证、不请求或发送密码、不发 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增 fake board 用例后，`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000` 失败在缺少 `board.macEvidence`。
+- 绿灯：实现严格提取后，同一回归通过，并覆盖风险 heartbeat 不提升证据。
+遗留问题：
+- 本轮只做只读证据转述；不跑真实 Windows host 认证、真实 browser smoke 或输入注入。
+下一步建议：
+- 白天开工可先跑 `MacResumeStatus=node scripts/mac/check-mac-resume-status.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary`，若看到 `MacEvidence=MacClientPageOnline,MacClientDiagnosticsOk;`，说明恢复总览已接住最新 Mac client 页面/诊断值守证据。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac heartbeat 在干净读板场景也输出 Mac client 诊断正向证据。
 完成内容：
 - `check-mac-heartbeat --checkBoard --json/--boardSummary` 现在会在 heartbeat 自身 `status=ok`、Mac client 页面在线且标题匹配、Agent Link Board 可读时，把 `Evidence=` 扩展为 `MacClientPageOnline,MacClientDiagnosticsOk`。
