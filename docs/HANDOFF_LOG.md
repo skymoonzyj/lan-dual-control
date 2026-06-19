@@ -17,6 +17,35 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 控制端读懂 `MacLaunchAgentPlan=` dry-run 规划提示。
+完成内容：
+- Windows 控制端 `parseMacUnattendedAttention` 新增 `MacLaunchAgentPlan=` 识别：当同段已有 LaunchAgent、刷新率、旧 build、重启建议或 warning/blocker 上下文时，风险摘要显示“Mac LaunchAgent 预案命令已提供”。
+- 保留安全边界：单独 `MacLaunchAgentPlan=` dry-run 命令清单不会误弹风险；Windows 端只提示和导出诊断，不运行 Mac 脚本、不执行 `launchctl`。
+- 更新 Windows 控制端 README、当前状态、下一步和任务板，方便 Mac 端后续继续透传 LaunchAgent plan 时 Windows 侧能直接消费。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败在 `macLaunchAgentPlanAttention` 缺少“Mac LaunchAgent 预案命令已提供”。
+- 绿灯：实现后同一 diagnostics-only 页面自检通过。
+- 收口：`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`git diff --check` 均通过；冲突标记扫描无命中。
+遗留问题：
+- Mac 端若继续调整 `install-mac-host-launch-agent` 输出字段，Windows 侧只要继续保持 `MacLaunchAgentPlan=` 稳定标签即可自动识别。
+下一步建议：
+- 若 Mac 端推送新的 LaunchAgent planner 电源预案字段，Windows 侧先拉取后跑 diagnostics-only，确认新摘要能同时显示 LaunchAgent 预案和电源预案。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
 ## 2026-06-19 Mac Codex
 
 日期：2026-06-19 继续推进

@@ -296,6 +296,7 @@ const macUnattendedRiskLabels = {
   "mac-host-stop-command": "Mac host 停止旧进程命令已提供",
   "mac-host-safe-start": "Mac host 安全启动命令已提供",
   "mac-max-fps-safe-start": "Mac 60Hz 安全启动命令已提供",
+  "mac-launch-agent-plan-command": "Mac LaunchAgent 预案命令已提供",
   "mac-launch-agent-load-command": "Mac LaunchAgent 加载命令已提供",
   "mac-launch-agent-print-command": "Mac LaunchAgent 打印验证命令已提供",
   "mac-client-page-command": "Mac client 页面状态命令已提供",
@@ -3589,6 +3590,8 @@ function parseMacUnattendedAttention(text) {
     /\bMacHostMedia\s*=\s*(?:node\s+)?(?:scripts[\\/]+mac[\\/]+)?check-mac-host-readiness\.mjs\b/i.test(source);
   const hasMacHostSafeStart = /\bMacHostSafeStart\s*=/i.test(source);
   const hasMacMaxFpsSafeStart = /\bMacMaxFpsSafeStart\s*=/i.test(source);
+  const hasMacLaunchAgentPlan =
+    /\bMacLaunchAgentPlan\s*=\s*(?:node\s+)?(?:scripts[\\/]+mac[\\/]+)?install-mac-host-launch-agent\.mjs\b/i.test(source);
   const hasMacLaunchAgentLoad = /\bMacLaunchAgentLoad\s*=\s*launchctl\s+bootstrap\b/i.test(source);
   const hasMacLaunchAgentPrint = /\bMacLaunchAgentPrint\s*=\s*launchctl\s+print\b/i.test(source);
   const hasMacClientPageCommand =
@@ -3742,6 +3745,9 @@ function parseMacUnattendedAttention(text) {
   const hasMacLaunchAgentCommandContext =
     risks.length > 0 ||
     /attention\s*=\s*(warning|blocker|failed)|ready\s*=\s*false|restart recommended|hostRuntimeChanges|runtimeBuild|mac-host-build-stale|launch-agent-(missing|not-loaded|failed|disabled|max-fps|max-screen-fps)|max-fps|fps-limit|loaded\s*=\s*false|not[- ]loaded|未\s*loaded|未加载|stale build|build.*stale|运行.*旧|重启/i.test(source);
+  if (hasMacLaunchAgentPlan && hasMacLaunchAgentCommandContext) {
+    risks.unshift("mac-launch-agent-plan-command");
+  }
   if (hasMacLaunchAgentLoad && hasMacLaunchAgentCommandContext) {
     risks.unshift("mac-launch-agent-load-command");
   }

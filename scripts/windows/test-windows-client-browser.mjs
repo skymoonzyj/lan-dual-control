@@ -1648,10 +1648,22 @@ async function verifyDesktopOnlyHostPanel(session) {
               "MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T08:10:38.575Z",
             )
           : null;
+      const macLaunchAgentPlanAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded checkedAt=2026-06-19T08:10:38.575Z; MacLaunchAgentPlan=node scripts/mac/install-mac-host-launch-agent.mjs --port 43770 --maxScreenFps 60 --boardSummary",
+            )
+          : null;
       const okMacUnattendedHealthAttention =
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
               "MacUnattendedHealth=ok reason=ok blockers=none warnings=none checkedAt=2026-06-19T08:10:38.575Z",
+            )
+          : null;
+      const cleanMacLaunchAgentPlanAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "MacLaunchAgentPlan=node scripts/mac/install-mac-host-launch-agent.mjs --port 43770 --maxScreenFps 60 --boardSummary",
             )
           : null;
       const cleanMacPowerPlanCommandAttention =
@@ -2417,9 +2429,14 @@ async function verifyDesktopOnlyHostPanel(session) {
           okMacPowerHealthAttention.labels.length === 0 &&
           warningMacUnattendedHealthAttention?.summary.includes("自启动未加载") &&
           warningMacUnattendedHealthAttention?.summary.includes("电源设置需检查") &&
+          macLaunchAgentPlanAttention?.summary.includes("自启动未加载") &&
+          macLaunchAgentPlanAttention?.summary.includes("Mac LaunchAgent 预案命令已提供") &&
           okMacUnattendedHealthAttention?.summary === "" &&
           Array.isArray(okMacUnattendedHealthAttention?.labels) &&
           okMacUnattendedHealthAttention.labels.length === 0 &&
+          cleanMacLaunchAgentPlanAttention?.summary === "" &&
+          Array.isArray(cleanMacLaunchAgentPlanAttention?.labels) &&
+          cleanMacLaunchAgentPlanAttention.labels.length === 0 &&
           cleanMacPowerPlanCommandAttention?.summary === "" &&
           Array.isArray(cleanMacPowerPlanCommandAttention?.labels) &&
           cleanMacPowerPlanCommandAttention.labels.length === 0 &&
@@ -2608,7 +2625,9 @@ async function verifyDesktopOnlyHostPanel(session) {
         warningMacPowerHealthWithPlanAttention,
         okMacPowerHealthAttention,
         warningMacUnattendedHealthAttention,
+        macLaunchAgentPlanAttention,
         okMacUnattendedHealthAttention,
+        cleanMacLaunchAgentPlanAttention,
         cleanMacPowerPlanCommandAttention,
         heartbeatCommandCheck,
         cleanMacHostReadinessCommandAttention,
