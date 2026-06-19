@@ -220,6 +220,22 @@ function assertMacClientBrowserSelfTestCommand(command, label) {
   assertNotIncludes(text, "inject", label);
 }
 
+function assertMacUnattendedSendStatusCommand(command, label) {
+  const text = String(command || "");
+  assertIncludes(text, "node scripts/mac/check-mac-unattended-status.mjs", label);
+  assertIncludes(text, "--host", label);
+  assertIncludes(text, "--port", label);
+  assertIncludes(text, "--server http://192.168.31.68:17888", label);
+  assertIncludes(text, "--sendStatus", label);
+  assertIncludes(text, "--boardSummary", label);
+  assertNotIncludes(text, "--promptPassword", label);
+  assertNotIncludes(text, "--password", label);
+  assertNotIncludes(text, "--sendCall", label);
+  assertNotIncludes(text, "--json", label);
+  assertNotIncludes(text, "input_event", label);
+  assertNotIncludes(text, "inject", label);
+}
+
 function gitLines(args) {
   const result = spawnSync("git", args, {
     cwd: repoRoot,
@@ -314,6 +330,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.launchAgentPlan", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macMaxFpsPlan", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macUnattendedStatus", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macUnattendedSendStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macUnattendedFormal", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macHostSafeStart", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macMaxFpsSafeStart", `${script} ${flag}`);
@@ -361,6 +378,13 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.commands?.macUnattendedStatus || "", "--skipPmset", "missing LaunchAgent commands.macUnattendedStatus");
   assertIncludes(payload.commands?.macUnattendedStatus || "", "--boardSummary", "missing LaunchAgent commands.macUnattendedStatus");
   assertNotIncludes(payload.commands?.macUnattendedStatus || "", "--json", "missing LaunchAgent commands.macUnattendedStatus");
+  assertMacUnattendedSendStatusCommand(payload.commands?.macUnattendedSendStatus || "", "missing LaunchAgent commands.macUnattendedSendStatus");
+  assertIncludes(payload.commands?.macUnattendedSendStatus || "", "--host 127.0.0.1", "missing LaunchAgent commands.macUnattendedSendStatus");
+  assertIncludes(payload.commands?.macUnattendedSendStatus || "", "--port 9", "missing LaunchAgent commands.macUnattendedSendStatus");
+  assertIncludes(payload.commands?.macUnattendedSendStatus || "", "--launchAgentPath", "missing LaunchAgent commands.macUnattendedSendStatus");
+  assertIncludes(payload.commands?.macUnattendedSendStatus || "", missingPath, "missing LaunchAgent commands.macUnattendedSendStatus");
+  assertIncludes(payload.commands?.macUnattendedSendStatus || "", "--skipLaunchctl", "missing LaunchAgent commands.macUnattendedSendStatus");
+  assertIncludes(payload.commands?.macUnattendedSendStatus || "", "--skipPmset", "missing LaunchAgent commands.macUnattendedSendStatus");
   assertIncludes(payload.commands?.macUnattendedFormal || "", "check-mac-unattended-status.mjs", "missing LaunchAgent commands.macUnattendedFormal");
   assertIncludes(payload.commands?.macUnattendedFormal || "", "--host 127.0.0.1", "missing LaunchAgent commands.macUnattendedFormal");
   assertIncludes(payload.commands?.macUnattendedFormal || "", "--port 9", "missing LaunchAgent commands.macUnattendedFormal");
@@ -447,6 +471,8 @@ function checkMissingLaunchAgentJson(args) {
     "missing LaunchAgent commands.macClientBrowserSelfTest",
   );
   assertIncludes(payload.boardSummary, "MacUnattendedStatus=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacUnattendedSendStatus=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "--sendStatus", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacHostSafeStart=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacHostSafeStart=node scripts/mac/start-mac-host.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacMaxFpsSafeStart=", "missing LaunchAgent board summary");
@@ -673,6 +699,9 @@ function checkSendStatus(args) {
     assertIncludes(argv, "--status warning", "sendStatus codex-link argv");
     assertIncludes(argv, "MacUnattendedHealth=warning", "sendStatus codex-link argv");
     assertIncludes(argv, "warnings=host-offline,launch-agent-missing", "sendStatus codex-link argv");
+    assertIncludes(argv, "MacUnattendedSendStatus=", "sendStatus codex-link argv");
+    assertIncludes(argv, "--server http://192.168.31.68:17888", "sendStatus codex-link argv should expose default self-refresh board");
+    assertIncludes(argv, "--sendStatus", "sendStatus codex-link argv should expose self-refresh flag");
     assertNotIncludes(argv, "Mac Codex", "sendStatus should not mask Mac Codex freshness");
     assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}\n${argv}`, "sendStatus output");
   } finally {
@@ -760,6 +789,11 @@ function checkBoardSummary(args) {
   assertIncludes(text, "MacUnattendedHealth=warning", "board summary");
   assertIncludes(text, "reason=host-offline", "board summary");
   assertIncludes(text, "MacUnattendedStatus=", "board summary");
+  assertIncludes(text, "MacUnattendedSendStatus=", "board summary");
+  assertMacUnattendedSendStatusCommand(
+    text.split("MacUnattendedSendStatus=")[1]?.split("; ")[0] || "",
+    "board summary MacUnattendedSendStatus",
+  );
   assertIncludes(text, "MacHostSafeStart=", "board summary");
   assertIncludes(text, "MacHostSafeStart=node scripts/mac/start-mac-host.mjs", "board summary");
   assertIncludes(text, "MacMaxFpsSafeStart=", "board summary");
@@ -962,6 +996,11 @@ async function checkNoFindingsSummary(args) {
       assertIncludes(payload.boardSummary, "MacUnattendedHealth=ok", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "attention=none", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "maxFps=60", "clean unattended board summary");
+      assertIncludes(payload.boardSummary, "MacUnattendedSendStatus=", "clean unattended board summary");
+      assertMacUnattendedSendStatusCommand(
+        payload.commands?.macUnattendedSendStatus || "",
+        "clean unattended commands.macUnattendedSendStatus",
+      );
       assertIncludes(payload.boardSummary, "MacMaxFpsSafeStart=", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "MacHostMedia=", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "MacResumeStatus=", "clean unattended board summary");

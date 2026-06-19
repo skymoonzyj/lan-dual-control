@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让独立 Mac Unattended 状态摘要自己也暴露刷新自身的安全入口。
+完成内容：
+- `check-mac-unattended-status --json` 新增 `commands.macUnattendedSendStatus`，基于当前 host/port/LaunchAgent path/require/skip flags 生成自刷新命令。
+- `--boardSummary` 新增 `MacUnattendedSendStatus=`，让只看 `Mac Unattended` 状态行时也能复制 `check-mac-unattended-status --sendStatus --boardSummary` 刷新独立值守状态。
+- 自刷新命令固定使用默认 Agent Link Board `http://192.168.31.68:17888`，避免回显自定义 server 里的 secret-like 文本；脚本默认仍只读，只有显式 `--sendStatus` 才上板。
+- 已真实刷新 `Mac Unattended` 行，当前仍为 `warning reason=launch-agent-not-loaded warnings=launch-agent-not-loaded,power`，但摘要已包含 `MacUnattendedSendStatus=`。
+修改文件：
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增断言后，`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 12000` 先失败在帮助文档缺少 `commands.macUnattendedSendStatus`。
+- 绿灯：实现后同一回归通过，覆盖 help、JSON、boardSummary、`--sendStatus` fake 上板 argv、clean/warning 状态，以及不带密码/input/inject。
+- 真实上板：`node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --sendStatus --boardSummary` 成功输出并上板 `MacUnattendedSendStatus=`。
+遗留问题：
+- 本轮只补自刷新入口，不加载 LaunchAgent、不改 pmset、不切 inputMode、不认证、不请求或发送密码、不发 input/inject。
+下一步建议：
+- 现场处理值守时，可直接从 `Mac Unattended` 行复制 `MacUnattendedSendStatus=` 刷新状态；真正消除 warning 仍需人工加载 LaunchAgent 并复查电源/息屏策略。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac resume 摘要也直接暴露刷新独立 Mac Unattended 状态的安全入口。
 完成内容：
 - `check-mac-resume-status --json` 新增 `commands.macUnattendedSendStatusCommand`，指向 `check-mac-unattended-status --server http://192.168.31.68:17888 --sendStatus --boardSummary`。

@@ -85,6 +85,11 @@ Machine-readable JSON fields:
                                   for the formal 60Hz max-FPS target.
   commands.macUnattendedStatus   Secret-free exact rerun command for this
                                   report; preserves host/port/path and require flags.
+  commands.macUnattendedSendStatus
+                                  Secret-free exact rerun command that also
+                                  posts the independent "Mac Unattended"
+                                  Agent Link Board status; it uses the default
+                                  board URL and never requests a password.
   commands.macUnattendedFormal   Secret-free formal 60Hz gate command requiring
                                   LaunchAgent maxScreenFps and loaded status.
   commands.macHostSafeStart      Secret-free foreground Mac host safe-start
@@ -618,6 +623,7 @@ function makeCommands(args) {
     macUnattendedFormal: makeMacUnattendedFormalCommand(args),
     launchAgentPlan: makeLaunchAgentPlanCommand(args),
     macMaxFpsPlan: makeLaunchAgentPlanCommand(args, { maxScreenFps: formalTargetMaxScreenFps }),
+    macUnattendedSendStatus: makeMacUnattendedSendStatusCommand(args),
     macHostSafeStart: makeMacHostSafeStartCommand(args),
     macMaxFpsSafeStart: makeMacMaxFpsSafeStartCommand(args),
     macHostStop: makeMacHostStopCommand(args),
@@ -789,6 +795,32 @@ function makeMacUnattendedStatusCommand(args) {
   return parts.join(" ");
 }
 
+function makeMacUnattendedSendStatusCommand(args) {
+  const parts = [
+    "node scripts/mac/check-mac-unattended-status.mjs",
+    "--host",
+    shellQuote(args.host),
+    "--port",
+    String(args.port),
+    "--launchAgentPath",
+    shellQuote(args.launchAgentPath),
+    "--server",
+    defaults.server,
+  ];
+  if (args.timeoutMs !== defaults.timeoutMs) parts.push("--timeoutMs", String(args.timeoutMs));
+  if (args.label !== defaults.label) parts.push("--label", shellQuote(args.label));
+  if (args.requireHostOnline) parts.push("--requireHostOnline");
+  if (args.requireLaunchAgent) parts.push("--requireLaunchAgent");
+  if (args.requireLaunchAgentMaxFps) parts.push("--requireLaunchAgentMaxFps");
+  if (args.requireLaunchAgentLoaded) parts.push("--requireLaunchAgentLoaded");
+  if (args.requireControlPermissions) parts.push("--requireControlPermissions");
+  if (args.strict) parts.push("--strict");
+  if (args.skipLaunchctl) parts.push("--skipLaunchctl");
+  if (args.skipPmset) parts.push("--skipPmset");
+  parts.push("--sendStatus", "--boardSummary");
+  return parts.join(" ");
+}
+
 function shellQuote(value) {
   const text = String(value ?? "");
   if (/^[A-Za-z0-9_./:=@%+-]+$/.test(text)) return text;
@@ -819,7 +851,7 @@ function makeBoardSummary(report) {
   const unattendedHealth = formatMacUnattendedHealthSummary(report.macUnattendedHealth);
   return [
     `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${unattendedHealth}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedAction ? ` ${suggestedAction}` : ""}.`,
-    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacHostMedia=${report.commands.macHostMedia}; MacResumeStatus=${report.commands.macResumeStatus}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTest}; MacScriptHelp=${report.commands.macScriptHelp}.`,
+    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacUnattendedSendStatus=${report.commands.macUnattendedSendStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacHostMedia=${report.commands.macHostMedia}; MacResumeStatus=${report.commands.macResumeStatus}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTest}; MacScriptHelp=${report.commands.macScriptHelp}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
@@ -969,6 +1001,7 @@ function printHuman(report) {
   console.log(`- Mac host readiness: ${report.commands.macHostReadiness}`);
   console.log(`- Mac host media: ${report.commands.macHostMedia}`);
   console.log(`- Mac resume status: ${report.commands.macResumeStatus}`);
+  console.log(`- Mac unattended board-status refresh: ${report.commands.macUnattendedSendStatus}`);
   if (report.suggestedAction) console.log(`- suggested action: ${report.suggestedAction.boardSummary}`);
   console.log(`- Mac formal local smoke: ${report.commands.macFormalLocalSmoke}`);
   console.log(`- Mac client browser self-test: ${report.commands.macClientBrowserSelfTest}`);
