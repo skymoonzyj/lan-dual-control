@@ -104,6 +104,10 @@ JSON output:
                             for the formal 60Hz target. It does not write
                             files, load launchctl, start Mac host, request a
                             password, or send input.
+  commands.macPowerPlanCommand
+                            Secret-free Mac power settings dry-run planner.
+                            It previews pmset changes for unattended use and
+                            does not apply them or request a password.
   commands.macUnattendedFormalCommand
                             Secret-free read-only formal unattended gate. It
                             turns missing or low LaunchAgent maxScreenFps into
@@ -668,6 +672,7 @@ function makeCallText(report) {
       `If targeting formal 60Hz, dry-run max-FPS planning first with: ${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
       ...(evidenceText ? [evidenceText] : []),
       ...(powerText ? [powerText] : []),
+      `If MacPowerHealth warns, review the dry-run power settings plan with: ${report.commands?.macPowerPlanCommand || makeMacPowerPlanCommand()}.`,
       `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
       `When the host is online, run low-risk host readiness with: ${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
       `When the host is online, run local smoke first with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
@@ -689,6 +694,7 @@ function makeCallText(report) {
     `Verify launchd state with: ${report.commands?.macLaunchAgentPrintCommand || makeMacLaunchAgentPrintCommand()}.`,
     `If this Mac should stay ready after reboot, review the dry-run LaunchAgent plan with: ${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
     `If targeting formal 60Hz, review the max-FPS dry-run plan with: ${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
+    `Mac power plan: ${report.commands?.macPowerPlanCommand || makeMacPowerPlanCommand()}.`,
     `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
     `Before long formal runs, run low-risk host readiness with: ${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
     `Before long formal runs, run local H.264/PCM/input-log smoke with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
@@ -724,6 +730,7 @@ function makeBoardSummary(report) {
       "Next: start with MacHostSafeStart, or MacMaxFpsSafeStart for foreground 60Hz validation, then rerun checklist.",
       `MacLaunchAgentPlan=${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
       `MacMaxFpsPlan=${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
+      `MacPowerPlan=${report.commands?.macPowerPlanCommand || makeMacPowerPlanCommand()}.`,
       `MacUnattendedFormal=${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
       `MacHostReadiness=${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
       `MacFormalLocalSmoke=${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
@@ -746,6 +753,7 @@ function makeBoardSummary(report) {
     `MacLaunchAgentPrint=${report.commands?.macLaunchAgentPrintCommand || makeMacLaunchAgentPrintCommand()}.`,
     `MacLaunchAgentPlan=${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
     `MacMaxFpsPlan=${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
+    `MacPowerPlan=${report.commands?.macPowerPlanCommand || makeMacPowerPlanCommand()}.`,
     `MacUnattendedFormal=${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
     `MacHostReadiness=${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
     `MacFormalLocalSmoke=${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
@@ -788,6 +796,7 @@ function makeCommands(report) {
       "--boardSummary",
     ].join(" "),
     macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(probePort),
+    macPowerPlanCommand: makeMacPowerPlanCommand(),
     macUnattendedFormalCommand: makeMacUnattendedFormalCommand(probeHost, probePort),
     macHostReadinessCommand: makeMacHostReadinessCommand(probeHost, probePort),
     macResumeStatusCommand: makeMacResumeStatusCommand(probeHost, probePort),
@@ -902,6 +911,22 @@ function makeMacMaxFpsPlanCommand(port) {
     String(port || defaults.port),
     "--maxScreenFps",
     String(formalTargetMaxScreenFps),
+    "--boardSummary",
+  ].join(" ");
+}
+
+function makeMacPowerPlanCommand() {
+  return [
+    "node",
+    "scripts/mac/plan-mac-power-settings.mjs",
+    "--profile",
+    "all",
+    "--sleep",
+    "0",
+    "--displaySleep",
+    "0",
+    "--networkWake",
+    "on",
     "--boardSummary",
   ].join(" ");
 }
