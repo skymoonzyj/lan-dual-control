@@ -21,6 +21,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 `MacResumeStatus=` 第一屏也说明当前 `Mac Unattended` / `MacPowerHealth` 证据是否新鲜。
+完成内容：
+- `check-mac-resume-status --checkBoard --json/--boardSummary` 新增 JSON `board.macUnattendedFreshness` 和摘要 `MacUnattendedFreshness=fresh|stale checkedAgeMs=<毫秒> thresholdMs=600000 checkedAt=<时间> source=MacUnattendedHealth|MacPowerHealth`。
+- 新字段优先从安全解析到的 `MacUnattendedHealth=` 派生，缺失时才退到 `MacPowerHealth=`；只接受白名单状态/短标签，拒绝 `--password`、token 或命令形态候选。
+- resume 读取通讯板证据时现在优先 `/api/state.statuses` 当前状态，再看 `watch --once` recent lines 和历史 events，避免旧 event 抢在刚刷新的 `Mac Unattended` 状态前面。
+- `stale` 只表示值守/电源证据旧了，建议先跑同屏 `MacUnattendedSendStatus=` 刷新，不代表 resume/heartbeat 自身失败，也不代表已经修复电源或 LaunchAgent。
+- 本轮只补只读 freshness 字段，不运行 `pmset`、不提权、不改系统、不写 plist、不加载 `launchctl`、不认证、不请求或发送密码、不发 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000` 先失败在 help 缺 `board.macUnattendedFreshness`。
+- 绿灯：实现后同一专项回归通过，并覆盖 JSON、boardSummary、stale 判断、当前 status 优先于旧 event、敏感文本不提升。
+- 完整收口验证和推送状态见本轮提交记录。
+遗留问题：
+- 真实 `MacPowerHealth` / `MacUnattendedHealth` 仍显示系统/显示器睡眠和 LaunchAgent 未加载风险；需要用户现场确认后人工执行 `pmset` / `launchctl` 再刷新证据。
+下一步建议：
+- 如果恢复第一屏看到 `MacUnattendedFreshness=stale`，先运行 `MacUnattendedSendStatus=` 刷新独立值守状态，再判断是否进入真实系统设置/LaunchAgent 加载流程。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 `MacHeartbeat=` 同屏说明当前 `Mac Unattended` / `MacPowerHealth` 证据是否新鲜。
 完成内容：
 - `check-mac-heartbeat --checkBoard --json/--boardSummary` 新增 JSON `board.macUnattendedFreshness` 和摘要 `MacUnattendedFreshness=fresh|stale checkedAgeMs=<毫秒> thresholdMs=600000 checkedAt=<时间> source=MacUnattendedHealth|MacPowerHealth`。

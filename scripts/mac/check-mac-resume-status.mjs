@@ -24,6 +24,7 @@ const defaults = {
 };
 const formalTargetMaxScreenFps = 60;
 const heartbeatFreshnessStaleMs = 120000;
+const macUnattendedFreshnessStaleMs = 600000;
 const allowedMacEvidenceTokens = new Set([
   "MacClientPageOnline",
   "MacClientDiagnosticsOk",
@@ -50,6 +51,34 @@ const allowedMacPowerWarnings = new Set([
   "system-sleep-enabled",
   "display-sleep-enabled",
   "network-wake-disabled",
+]);
+const allowedMacUnattendedStatuses = new Set(["ok", "warning", "blocked", "unknown"]);
+const allowedMacUnattendedReasons = new Set([
+  "ok",
+  "skipped",
+  "not-checked",
+  "host-offline",
+  "launch-agent-missing",
+  "launch-agent-not-loaded",
+  "launch-agent-max-fps",
+  "power",
+  "permissions",
+  "pmset-failed",
+  "unknown",
+]);
+const allowedMacUnattendedFindings = new Set([
+  "none",
+  "unknown",
+  "host-offline",
+  "launch-agent-missing",
+  "launch-agent-not-loaded",
+  "launch-agent-max-fps",
+  "power",
+  "permissions",
+  "screen-recording",
+  "accessibility",
+  "input-monitoring",
+  "pmset-failed",
 ]);
 
 function helpRequested(argv) {
@@ -214,6 +243,11 @@ Machine-readable JSON fields:
                              status. It keeps power warning details such as
                              system-sleep-enabled or display-sleep-enabled
                              visible in resume summaries without running pmset.
+  board.macUnattendedFreshness
+                             Stable fresh/stale status for the current
+                             MacUnattendedHealth/MacPowerHealth checkedAt
+                             evidence. It only reads Agent Link Board text and
+                             does not run pmset, launchctl, auth, or input.
   commands.macClientReverseRehearsalAction
                              Human action for the guarded Mac-controls-Windows
                              reverse-control request rehearsal. Run discovery,
@@ -518,7 +552,7 @@ async function getMacHostStatus(args, currentBuildId) {
   }
 }
 
-async function getBoardStatus(args) {
+async function getBoardStatus(args, nowMs) {
   if (!args.checkBoard) {
     return {
       checked: false,
@@ -526,6 +560,8 @@ async function getBoardStatus(args) {
       summary: "not checked",
       recentLines: [],
       macEvidence: [],
+      macPowerHealth: null,
+      macUnattendedFreshness: null,
       currentCall: null,
       activeCall: false,
     };
@@ -546,6 +582,7 @@ async function getBoardStatus(args) {
   const currentCall = normalizeBoardCall(stateResult.state?.currentCall);
   const macEvidence = collectMacEvidence(stateResult.state, lines);
   const macPowerHealth = collectMacPowerHealth(stateResult.state, lines);
+  const macUnattendedFreshness = collectMacUnattendedFreshness(stateResult.state, lines, nowMs);
   return {
     checked: true,
     ok: watchResult.ok && stateResult.ok,
@@ -553,6 +590,7 @@ async function getBoardStatus(args) {
     recentLines: lines.slice(-12),
     macEvidence,
     macPowerHealth,
+    macUnattendedFreshness,
     currentCall,
     activeCall: isActiveCall(currentCall),
   };
@@ -574,8 +612,16 @@ function collectMacPowerHealth(state, recentLines = []) {
   return null;
 }
 
+function collectMacUnattendedFreshness(state, recentLines = [], nowMs = Date.now()) {
+  for (const text of collectBoardEvidenceTexts(state, recentLines)) {
+    const freshness = extractMacUnattendedFreshness(text, nowMs);
+    if (freshness) return freshness;
+  }
+  return null;
+}
+
 function collectBoardEvidenceTexts(state, recentLines = []) {
-  const texts = [...(Array.isArray(recentLines) ? recentLines : [])];
+  const texts = [];
   const statuses = state && typeof state === "object" && state.statuses && typeof state.statuses === "object"
     ? state.statuses
     : {};
@@ -591,6 +637,7 @@ function collectBoardEvidenceTexts(state, recentLines = []) {
       .join(" ");
     if (statusText) texts.push(statusText);
   }
+  if (Array.isArray(recentLines)) texts.push(...recentLines);
   const events = Array.isArray(state?.events) ? state.events : [];
   for (const event of events) {
     if (typeof event === "string") {
@@ -645,6 +692,53 @@ function extractMacPowerHealth(text) {
   if (!isSafeMacPowerWarnings(warnings)) return null;
   if (!Number.isFinite(Date.parse(checkedAt))) return null;
   return { status, reason, warnings, checkedAt };
+}
+
+function extractMacUnattendedFreshness(text, nowMs) {
+  const unattended = extractMacUnattendedHealth(text);
+  if (unattended) return makeMacUnattendedFreshness(unattended.checkedAt, "MacUnattendedHealth", nowMs);
+  const power = extractMacPowerHealth(text);
+  if (power) return makeMacUnattendedFreshness(power.checkedAt, "MacPowerHealth", nowMs);
+  return null;
+}
+
+function extractMacUnattendedHealth(text) {
+  const source = normalizedText(text);
+  if (!source || !/\bMacUnattendedHealth=/i.test(source)) return null;
+  const match = source.match(/\bMacUnattendedHealth=([A-Za-z]+)\s+reason=([A-Za-z0-9_-]+)\s+blockers=([A-Za-z0-9_,_-]+)\s+warnings=([A-Za-z0-9_,_-]+)\s+checkedAt=([0-9TZ:.-]+)/i);
+  if (!match) return null;
+  const status = match[1].toLowerCase();
+  const reason = match[2];
+  const blockers = match[3];
+  const warnings = match[4];
+  const checkedAt = match[5];
+  if (!allowedMacUnattendedStatuses.has(status)) return null;
+  if (!allowedMacUnattendedReasons.has(reason)) return null;
+  if (!isSafeMacUnattendedFindings(blockers)) return null;
+  if (!isSafeMacUnattendedFindings(warnings)) return null;
+  if (!Number.isFinite(Date.parse(checkedAt))) return null;
+  return { status, reason, blockers, warnings, checkedAt };
+}
+
+function isSafeMacUnattendedFindings(value) {
+  const tokens = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return tokens.length > 0 && tokens.every((token) => allowedMacUnattendedFindings.has(token));
+}
+
+function makeMacUnattendedFreshness(checkedAt, source, nowMs) {
+  const checkedMs = Date.parse(checkedAt);
+  if (!Number.isFinite(checkedMs)) return null;
+  const checkedAgeMs = Math.max(0, Math.trunc((Number.isFinite(nowMs) ? nowMs : Date.now()) - checkedMs));
+  return {
+    status: checkedAgeMs > macUnattendedFreshnessStaleMs ? "stale" : "fresh",
+    checkedAt,
+    checkedAgeMs,
+    thresholdMs: macUnattendedFreshnessStaleMs,
+    source,
+  };
 }
 
 function isSafeMacPowerWarnings(value) {
@@ -1250,6 +1344,18 @@ function formatMacPowerHealthSummary(board) {
   ].join(" ") + ";";
 }
 
+function formatMacUnattendedFreshnessSummary(board) {
+  const freshness = board?.macUnattendedFreshness;
+  if (!freshness) return "";
+  return [
+    `MacUnattendedFreshness=${freshness.status || "unknown"}`,
+    `checkedAgeMs=${Number.isFinite(freshness.checkedAgeMs) ? freshness.checkedAgeMs : "unknown"}`,
+    `thresholdMs=${freshness.thresholdMs ?? macUnattendedFreshnessStaleMs}`,
+    `checkedAt=${freshness.checkedAt || "unknown"}`,
+    `source=${freshness.source || "unknown"}`,
+  ].join(" ") + ";";
+}
+
 function formatHeartbeatWatcherSummary(watcher) {
   if (!watcher?.checked) return "heartbeatWatcher=not-checked";
   if (!watcher.ok) return `heartbeatWatcher=unknown${watcher.error ? ` error=${watcher.error}` : ""}`;
@@ -1461,6 +1567,7 @@ function formatBoardSummary(report) {
   const heartbeatHealthSummary = formatMacHeartbeatHealthSummary(report.macHeartbeatHealth);
   const macEvidenceSummary = formatMacEvidenceSummary(board);
   const macPowerHealthSummary = formatMacPowerHealthSummary(board);
+  const macUnattendedFreshnessSummary = formatMacUnattendedFreshnessSummary(board);
   const suggestedActionSummary = report.suggestedAction?.boardSummary ? ` ${report.suggestedAction.boardSummary}` : "";
 
   if (!host.online) {
@@ -1468,6 +1575,7 @@ function formatBoardSummary(report) {
       `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${heartbeatWatcherSummary}; ${heartbeatFreshnessSummary}; ${heartbeatHealthSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
       macEvidenceSummary,
       macPowerHealthSummary,
+      macUnattendedFreshnessSummary,
       `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
       `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
       `MacHostStop=${report.commands.macHostStopCommand}.`,
@@ -1513,6 +1621,7 @@ function formatBoardSummary(report) {
     `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}; ${heartbeatWatcherSummary}; ${heartbeatFreshnessSummary}; ${heartbeatHealthSummary}.`,
     macEvidenceSummary,
     macPowerHealthSummary,
+    macUnattendedFreshnessSummary,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedActionSummary}.`,
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
     `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
@@ -1581,6 +1690,9 @@ function printReport(report) {
     }
     if (board.macPowerHealth) {
       console.log(`[INFO] Mac power health: status=${board.macPowerHealth.status} reason=${board.macPowerHealth.reason} warnings=${board.macPowerHealth.warnings}`);
+    }
+    if (board.macUnattendedFreshness) {
+      console.log(`[INFO] Mac unattended freshness: status=${board.macUnattendedFreshness.status} checkedAgeMs=${board.macUnattendedFreshness.checkedAgeMs} thresholdMs=${board.macUnattendedFreshness.thresholdMs} source=${board.macUnattendedFreshness.source}`);
     }
   } else {
     console.log("[INFO] Agent Link Board: not checked; add --checkBoard when coordinating with Windows Codex.");
@@ -1660,14 +1772,15 @@ async function main() {
     return;
   }
   const args = parseArgs(process.argv);
+  const nowMs = Date.now();
   const currentBuildId = getCurrentBuildId();
   const git = getGitStatus();
   const host = await getMacHostStatus(args, currentBuildId);
-  const board = await getBoardStatus(args);
+  const board = await getBoardStatus(args, nowMs);
   const macHeartbeatWatcher = getMacHeartbeatWatcherStatus(args);
   const recommendations = buildRecommendations({ git, host, board, macHeartbeatWatcher, args });
-  const checkedAt = new Date().toISOString();
-  const macHeartbeatFreshness = makeMacHeartbeatFreshness(macHeartbeatWatcher, Date.parse(checkedAt));
+  const checkedAt = new Date(nowMs).toISOString();
+  const macHeartbeatFreshness = makeMacHeartbeatFreshness(macHeartbeatWatcher, nowMs);
   const macHeartbeatHealth = makeMacHeartbeatHealth(macHeartbeatWatcher);
   const report = {
     ok: computeOk({ git, host, board, recommendations, args }),
