@@ -163,6 +163,17 @@ function assertNoSecretOrInputGuidance(text, label) {
   assertNotIncludes(value, "--injectInput", label);
 }
 
+function assertUnattendedHealth(payload, expected, label) {
+  const health = payload.macUnattendedHealth;
+  assert(health && typeof health === "object", `${label} should include macUnattendedHealth`);
+  for (const [key, value] of Object.entries(expected)) {
+    assert(
+      health[key] === value,
+      `${label} macUnattendedHealth.${key} expected ${value}, got ${health[key]}`,
+    );
+  }
+}
+
 function assertMacClientBrowserSelfTestCommand(command, label) {
   const text = String(command || "");
   assertIncludes(text, "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs", label);
@@ -265,6 +276,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "host", `${script} ${flag}`);
     assertIncludes(result.stdout, "launchAgent", `${script} ${flag}`);
     assertIncludes(result.stdout, "power", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macUnattendedHealth", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.launchAgentPlan", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macMaxFpsPlan", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macUnattendedStatus", `${script} ${flag}`);
@@ -299,6 +311,12 @@ function checkMissingLaunchAgentJson(args) {
   assert(payload.power?.checked === false, "missing LaunchAgent payload should skip pmset");
   assert(Array.isArray(payload.findings), "missing LaunchAgent payload should include findings");
   assert(payload.findings.some((item) => item.id === "launch-agent-missing" && item.level === "warning"), "missing LaunchAgent should be a warning by default");
+  assertUnattendedHealth(payload, {
+    status: "warning",
+    reason: "host-offline",
+    blockers: "none",
+    warnings: "host-offline,launch-agent-missing",
+  }, "missing LaunchAgent JSON");
   assertIncludes(payload.commands?.macUnattendedStatus || "", "check-mac-unattended-status.mjs", "missing LaunchAgent commands.macUnattendedStatus");
   assertIncludes(payload.commands?.macUnattendedStatus || "", "--host 127.0.0.1", "missing LaunchAgent commands.macUnattendedStatus");
   assertIncludes(payload.commands?.macUnattendedStatus || "", "--port 9", "missing LaunchAgent commands.macUnattendedStatus");
@@ -567,6 +585,12 @@ function checkRequireLaunchAgentLoadedNeedsProbe(args) {
   assert(result.status !== 0, "requireLaunchAgentLoaded should fail when launchctl is skipped");
   assert(payload.ok === false, "requireLaunchAgentLoaded payload should report ok=false");
   assert(payload.findings.some((item) => item.id === "launch-agent-loaded-unchecked" && item.level === "blocker"), "requireLaunchAgentLoaded should require a launchctl result");
+  assertUnattendedHealth(payload, {
+    status: "blocked",
+    reason: "launch-agent-loaded-unchecked",
+    blockers: "launch-agent-loaded-unchecked",
+    warnings: "host-offline,launch-agent-missing",
+  }, "require LaunchAgent loaded JSON");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "require LaunchAgent loaded JSON");
   print("OK", "requireLaunchAgentLoaded refuses an unchecked launchctl result");
 }
@@ -663,6 +687,8 @@ function checkBoardSummary(args) {
   const lines = text.split(/\r?\n/).filter(Boolean);
   assert(lines.length === 1, `board summary should be one line, got ${lines.length}`);
   assertIncludes(text, "Mac unattended status:", "board summary");
+  assertIncludes(text, "MacUnattendedHealth=warning", "board summary");
+  assertIncludes(text, "reason=host-offline", "board summary");
   assertIncludes(text, "MacUnattendedStatus=", "board summary");
   assertIncludes(text, "MacHostSafeStart=", "board summary");
   assertIncludes(text, "MacHostSafeStart=node scripts/mac/start-mac-host.mjs", "board summary");
@@ -856,7 +882,14 @@ async function checkNoFindingsSummary(args) {
       assert(result.status === 0, `clean unattended path should pass\n${result.stdout}\n${result.stderr}`);
       assert(payload.ok === true, "clean unattended payload should report ok=true");
       assert(payload.findings.length === 0, "clean unattended payload should have no findings");
+      assertUnattendedHealth(payload, {
+        status: "ok",
+        reason: "ok",
+        blockers: "none",
+        warnings: "none",
+      }, "clean unattended JSON");
       assert(payload.launchAgent?.maxScreenFps === 60, "clean unattended payload should report LaunchAgent maxScreenFps=60");
+      assertIncludes(payload.boardSummary, "MacUnattendedHealth=ok", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "attention=none", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "maxFps=60", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "MacMaxFpsSafeStart=", "clean unattended board summary");

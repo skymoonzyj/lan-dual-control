@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac unattended/status 输出稳定健康字段，便于后续值守和 Windows 侧消费。
+完成内容：
+- `check-mac-unattended-status --json` 现在输出 JSON `macUnattendedHealth`，基于当前 findings 派生 `ok|warning|blocked`、首个 `reason`、稳定 `blockers` 和 `warnings` 短标签。
+- `--boardSummary` 首段现在输出 `MacUnattendedHealth=ok|warning|blocked reason=<首个风险或 ok> blockers=<...> warnings=<...> checkedAt=<时间>`，不必再只解析 `attention=` 或长文本。
+- `strict` 只影响退出码和 `ok=false`，健康语义仍按真实 findings 保留 `warning`，避免把策略门槛误写成 blocker。
+- 现场只读复查显示当前 Mac 值守为 `MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power`：host 在线、权限开启、LaunchAgent 文件存在且 maxFps=60，但 launchctl 未加载，电源/息屏策略仍需真实确认。
+修改文件：
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增断言后，`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 12000` 失败在帮助文档缺少 `macUnattendedHealth`。
+- 绿灯：实现后同一回归通过，覆盖 missing LaunchAgent warning、require loaded blocker、boardSummary 和 clean ok。
+- 现场只读：`node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --boardSummary` 输出 `MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power`。
+遗留问题：
+- 本轮只输出稳定健康字段，不加载 LaunchAgent、不改 pmset、不切 inputMode、不认证、不请求或发送密码、不发 input/inject。
+下一步建议：
+- Windows 侧 watcher/resume/control 可以后续消费 `MacUnattendedHealth=`，把 `launch-agent-not-loaded` 和 `power` 按稳定短标签展示；真实无人值守承诺仍需 Mac 端现场加载 LaunchAgent 并复查电源/息屏策略。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac heartbeat JSON 直接输出稳定正向证据标签，并让 Windows resume-status 回归可在非 Windows 环境安全运行。
 完成内容：
 - `check-mac-heartbeat --json` 现在输出 `macEvidence[]`，与同次 `--boardSummary` 的 `Evidence=MacClientPageOnline,MacClientDiagnosticsOk` 共用同一套计算。

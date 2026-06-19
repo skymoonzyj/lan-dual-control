@@ -64,6 +64,9 @@ Machine-readable JSON fields:
   launchAgent                    LaunchAgent plist existence and launchctl loaded status.
   power                          pmset sleep/display/network-wake snapshot and risk notes.
   limitations                    Lock screen, display sleep, system sleep, reboot/login limits.
+  macUnattendedHealth            Stable ok|warning|blocked health summary
+                                  exposed as MacUnattendedHealth= in board
+                                  summaries.
   commands.launchAgentPlan       Secret-free LaunchAgent dry-run planner command.
   commands.macMaxFpsPlan         Secret-free LaunchAgent dry-run planner command
                                   for the formal 60Hz max-FPS target.
@@ -780,8 +783,9 @@ function makeBoardSummary(report) {
   const agent = `launchAgent=${report.launchAgent.exists ? "file-present" : "missing"} loaded=${report.launchAgent.loaded === null ? "unknown" : boolText(report.launchAgent.loaded)}`;
   const agentMaxFps = report.launchAgent.maxScreenFps === null ? "unknown" : String(report.launchAgent.maxScreenFps);
   const suggestedAction = report.suggestedAction?.boardSummary || "";
+  const unattendedHealth = formatMacUnattendedHealthSummary(report.macUnattendedHealth);
   return [
-    `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedAction ? ` ${suggestedAction}` : ""}.`,
+    `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${unattendedHealth}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedAction ? ` ${suggestedAction}` : ""}.`,
     `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacHostMedia=${report.commands.macHostMedia}; MacResumeStatus=${report.commands.macResumeStatus}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTest}; MacScriptHelp=${report.commands.macScriptHelp}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
@@ -823,6 +827,39 @@ function summarizeFindingIds(findings) {
   return `${ids.slice(0, 4).join(",")}+${ids.length - 4}more`;
 }
 
+function summarizeHealthFindingIds(findings) {
+  const ids = [...new Set(findings.map((item) => item.id).filter(Boolean))];
+  return ids.length > 0 ? ids.join(",") : "none";
+}
+
+function buildMacUnattendedHealth(report) {
+  const blockers = report.findings.filter((item) => item.level === "blocker");
+  const warnings = report.findings.filter((item) => item.level === "warning");
+  const status = blockers.length > 0
+    ? "blocked"
+    : warnings.length > 0
+      ? "warning"
+      : "ok";
+  return {
+    status,
+    reason: blockers[0]?.id || warnings[0]?.id || "ok",
+    blockers: summarizeHealthFindingIds(blockers),
+    warnings: summarizeHealthFindingIds(warnings),
+    checkedAt: report.checkedAt || "",
+  };
+}
+
+function formatMacUnattendedHealthSummary(health) {
+  if (!health) return "MacUnattendedHealth=unknown reason=unknown blockers=unknown warnings=unknown checkedAt=unknown";
+  return [
+    `MacUnattendedHealth=${health.status || "unknown"}`,
+    `reason=${health.reason || "unknown"}`,
+    `blockers=${health.blockers || "unknown"}`,
+    `warnings=${health.warnings || "unknown"}`,
+    `checkedAt=${health.checkedAt || "unknown"}`,
+  ].join(" ");
+}
+
 function boolText(value) {
   if (value === true) return "true";
   if (value === false) return "false";
@@ -861,10 +898,12 @@ async function buildReport(args) {
     power,
     limitations: makeLimitations(),
     findings,
+    macUnattendedHealth: undefined,
     commands: makeCommands(args),
     suggestedAction: undefined,
     boardSummary: "",
   };
+  report.macUnattendedHealth = buildMacUnattendedHealth(report);
   report.suggestedAction = buildSuggestedAction(report);
   report.boardSummary = makeBoardSummary(report);
   return report;
@@ -876,6 +915,7 @@ function printHuman(report) {
   console.log(`- permissions: screen=${boolText(report.host.permissions?.screenRecording)} accessibility=${boolText(report.host.permissions?.accessibility)} inputMonitoring=${boolText(report.host.permissions?.inputMonitoring)}`);
   console.log(`- LaunchAgent: path=${report.launchAgent.path}; file=${report.launchAgent.exists ? "present" : "missing"}; loaded=${report.launchAgent.loaded === null ? "unknown" : boolText(report.launchAgent.loaded)}; maxFps=${report.launchAgent.maxScreenFps === null ? "unknown" : report.launchAgent.maxScreenFps}`);
   console.log(`- power: ${report.power.summary}`);
+  console.log(`- unattended health: ${report.macUnattendedHealth.status} (${report.macUnattendedHealth.reason})`);
   for (const item of report.findings) {
     const prefix = item.level === "blocker" ? "BLOCK" : item.level === "warning" ? "WARN" : "INFO";
     console.log(`[${prefix}] ${item.text}`);
