@@ -92,6 +92,43 @@ function assertMacClientFormalSmokeCommand(command, label) {
   assertNotIncludes(command, "--json", label);
 }
 
+function assertMacClientPromptPasswordSmokeCommand(command, label) {
+  assertIncludes(command, "run-mac-client-formal-smoke.mjs", label);
+  assertIncludes(command, "--host 192.168.31.68", label);
+  assertIncludes(command, "--port 43770", label);
+  assertIncludes(command, "--ensureClient", label);
+  assertIncludes(command, "--promptPassword", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--discover", label);
+  assertNotIncludes(command, "--preflightOnly", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--useEnvPassword", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "--json", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
+function assertFallbackMacClientPromptPasswordSmokeCommand(command, label) {
+  assertIncludes(command, "run-mac-client-formal-smoke.mjs", label);
+  assertIncludes(command, "--discover", label);
+  assertIncludes(command, "--ensureClient", label);
+  assertIncludes(command, "--promptPassword", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--host 192.168.31.68", label);
+  assertNotIncludes(command, "--preflightOnly", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--useEnvPassword", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "--json", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function assertFormalChecklistCommand(command, label) {
   assertIncludes(command, "check-mac-client-formal-status.mjs", label);
   assertIncludes(command, "--host 192.168.31.68", label);
@@ -190,7 +227,7 @@ function assertWindowsReverseGrantCommands(text, label) {
 }
 
 function extractFormalSmokeCommand(text, label) {
-  const match = String(text || "").match(/FormalSmoke=(.+?)(?:\. ManualChecklist=|\n|$)/);
+  const match = String(text || "").match(/FormalSmoke=(.+?)(?:\. MacClientFormalSmoke=|\. MacClientPromptPasswordSmoke=|\. ManualChecklist=|\n|$)/);
   assert(match, `${label} should include FormalSmoke= command.\n${text}`);
   return match[1].trim();
 }
@@ -198,6 +235,12 @@ function extractFormalSmokeCommand(text, label) {
 function extractMacClientBrowserSelfTestCommand(text, label) {
   const match = String(text || "").match(/MacClientBrowserSelfTest=(.+?)(?:\. WindowsReverseGrantStatus=|\. ReverseRehearsal=|\. If that checklist|\.\s*No password|\n|$)/);
   assert(match, `${label} should include MacClientBrowserSelfTest= command.\n${text}`);
+  return match[1].trim();
+}
+
+function extractMacClientPromptPasswordSmokeCommand(text, label) {
+  const match = String(text || "").match(/MacClientPromptPasswordSmoke=(.+?)(?:\. ManualChecklist=|\. MacClientBrowserSelfTest=|\. WindowsReverseGrantStatus=|\. ReverseRehearsal=|\. If that checklist|\.\s*No password|\n|$)/);
+  assert(match, `${label} should include MacClientPromptPasswordSmoke= command.\n${text}`);
   return match[1].trim();
 }
 
@@ -366,6 +409,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "macClientFormalChecklistCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "formalSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macClientFormalSmokeCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macClientPromptPasswordSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macClientBrowserSelfTestCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macScriptHelpCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "windowsReverseGrantStatus", `${script} ${flag}`);
@@ -397,6 +441,7 @@ function checkFoundJson(tmp, args) {
   assertFormalChecklistCommand(payload.macClientFormalChecklistCommand || "", "Mac client formal checklist command");
   assertFormalSmokeCommand(payload.formalSmokeCommand || "", "formal smoke command");
   assertMacClientFormalSmokeCommand(payload.macClientFormalSmokeCommand || "", "Mac client formal smoke command");
+  assertMacClientPromptPasswordSmokeCommand(payload.macClientPromptPasswordSmokeCommand || "", "Mac client prompt-password smoke command");
   assertMacClientBrowserSelfTestCommand(
     payload.macClientBrowserSelfTestCommand || "",
     "Mac client browser self-test command",
@@ -416,6 +461,11 @@ function checkFoundJson(tmp, args) {
   assertIncludes(payload.boardSummary, "FormalSmoke=", "board summary");
   assertIncludes(payload.boardSummary, "MacClientFormalSmoke=", "board summary");
   assertIncludes(payload.boardSummary, "MacClientFormalSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary", "board summary");
+  assertIncludes(payload.boardSummary, "MacClientPromptPasswordSmoke=", "board summary");
+  assertMacClientPromptPasswordSmokeCommand(
+    extractMacClientPromptPasswordSmokeCommand(payload.boardSummary, "board summary"),
+    "board summary Mac client prompt-password smoke command",
+  );
   assertFormalSmokeCommand(extractFormalSmokeCommand(payload.boardSummary, "board summary"), "board summary formal smoke command");
   assertIncludes(payload.boardSummary, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "board summary");
   assertIncludes(payload.boardSummary, "MacClientBrowserSelfTest=", "board summary");
@@ -447,6 +497,11 @@ function checkBoardSummaryFound(tmp, args) {
   assertIncludes(result.stdout, "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.68", "found board summary");
   assertIncludes(result.stdout, "FormalSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.68", "found board summary");
   assertIncludes(result.stdout, "MacClientFormalSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary", "found board summary");
+  assertIncludes(result.stdout, "MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.68 --port 43770 --ensureClient --promptPassword --boardSummary", "found board summary");
+  assertMacClientPromptPasswordSmokeCommand(
+    extractMacClientPromptPasswordSmokeCommand(result.stdout, "found board summary"),
+    "found board summary Mac client prompt-password smoke command",
+  );
   assertFormalSmokeCommand(extractFormalSmokeCommand(result.stdout, "found board summary"), "found board summary formal smoke command");
   assertIncludes(result.stdout, "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "found board summary");
   assertIncludes(result.stdout, "MacClientBrowserSelfTest=", "found board summary");
@@ -477,6 +532,7 @@ function checkPlainFound(tmp, args) {
   assertIncludes(result.stdout, "check-mac-client-formal-status.mjs --host 192.168.31.68", "found plain output");
   assertIncludes(result.stdout, "Formal smoke preflight:", "found plain output");
   assertIncludes(result.stdout, "Mac client formal smoke:", "found plain output");
+  assertIncludes(result.stdout, "Mac client prompt-password smoke:", "found plain output");
   assertIncludes(result.stdout, "Mac client browser self-test:", "found plain output");
   assertIncludes(result.stdout, "Mac script help safety check:", "found plain output");
   assertIncludes(result.stdout, "Windows reverse grant status:", "found plain output");
@@ -490,6 +546,9 @@ function checkPlainFound(tmp, args) {
   const macClientFormalSmokeMatch = String(result.stdout || "").match(/Mac client formal smoke: ([^\n]+)/);
   assert(macClientFormalSmokeMatch, `found plain output should include Mac client formal smoke command line.\n${result.stdout}`);
   assertMacClientFormalSmokeCommand(macClientFormalSmokeMatch[1], "found plain output Mac client formal smoke command");
+  const macClientPromptPasswordSmokeMatch = String(result.stdout || "").match(/Mac client prompt-password smoke: ([^\n]+)/);
+  assert(macClientPromptPasswordSmokeMatch, `found plain output should include Mac client prompt-password smoke command line.\n${result.stdout}`);
+  assertMacClientPromptPasswordSmokeCommand(macClientPromptPasswordSmokeMatch[1], "found plain output Mac client prompt-password smoke command");
   const selfTestMatch = String(result.stdout || "").match(/Mac client browser self-test: ([^\n]+)/);
   assert(selfTestMatch, `found plain output should include self-test command line.\n${result.stdout}`);
   assertMacClientBrowserSelfTestCommand(selfTestMatch[1], "found plain output Mac client browser self-test command");
@@ -520,7 +579,12 @@ function checkNoneRequireFound(tmp, args) {
   assertIncludes(payload.boardSummary, "no Windows host found", "none board summary");
   assertIncludes(payload.boardSummary, "Ask Windows Codex to start Windows host", "none board summary");
   assertIncludes(payload.boardSummary, "MacClientBrowserSelfTest=", "none board summary");
+  assertIncludes(payload.boardSummary, "MacClientPromptPasswordSmoke=", "none board summary");
   assertIncludes(payload.boardSummary, "MacScriptHelp=", "none board summary");
+  assertFallbackMacClientPromptPasswordSmokeCommand(
+    payload.macClientPromptPasswordSmokeCommand || "",
+    "none JSON Mac client prompt-password smoke command",
+  );
   assert(!payload.reverseControlRehearsal, "none payload should not invent a reverse rehearsal without a Windows host");
   assert(!payload.windowsReverseGrantStatus, "none payload should not invent a Windows reverse grant status command without a Windows host");
   assert(!payload.windowsOpenOneTimeReverseGrant, "none payload should not invent a Windows reverse grant command without a Windows host");
@@ -529,6 +593,10 @@ function checkNoneRequireFound(tmp, args) {
   assertMacClientBrowserSelfTestCommand(
     payload.macClientBrowserSelfTestCommand || "",
     "none JSON Mac client browser self-test command",
+  );
+  assertFallbackMacClientPromptPasswordSmokeCommand(
+    extractMacClientPromptPasswordSmokeCommand(payload.boardSummary, "none board summary"),
+    "none board summary Mac client prompt-password smoke command",
   );
   assertMacScriptHelpCommand(payload.macScriptHelpCommand || "", "none JSON Mac script help command");
   assertMacClientBrowserSelfTestCommand(

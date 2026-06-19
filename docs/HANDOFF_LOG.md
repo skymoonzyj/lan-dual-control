@@ -21,6 +21,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 `MacClientDiscoverWindows=` / Windows discovery 摘要也暴露 Mac 控 Windows 真实 browser smoke 的前台密码入口。
+完成内容：
+- `discover-windows-hosts --json/--boardSummary` 新增 `macClientPromptPasswordSmokeCommand` / `MacClientPromptPasswordSmoke=`。
+- 发现到 Windows host 时，新命令会带目标 `--host <Windows IP> --port <port>`；未发现时给出 `--discover --ensureClient --promptPassword --boardSummary` fallback。
+- 普通输出新增 `Mac client prompt-password smoke:`，方便不看 JSON/通讯板摘要时也能复制下一步。
+- discovery 阶段仍只做只读发现和摘要生成，不弹密码、不认证、不发送 call/input_event、不执行 `inject`。
+修改文件：
+- `scripts/mac/discover-windows-hosts.mjs`
+- `scripts/mac/test-discover-windows-hosts.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-discover-windows-hosts.mjs --timeoutMs 20000` 先失败在 `discover-windows-hosts --help` 缺 `macClientPromptPasswordSmokeCommand`。
+- 绿灯：实现后复跑 `node scripts/mac/test-discover-windows-hosts.mjs --timeoutMs 20000` 通过。
+- 最终收尾：`node --check scripts/mac/discover-windows-hosts.mjs`、`node --check scripts/mac/test-discover-windows-hosts.mjs`、`node scripts/mac/test-discover-windows-hosts.mjs --timeoutMs 20000`、`node scripts/mac/test-mac-script-help.mjs --script discover-windows-hosts.mjs --timeoutMs 10000 --boardSummary`、`git diff --check` 与触碰文件冲突标记扫描均通过；未运行真实认证、未请求密码、未发送 call/input/inject。
+遗留问题：
+- 当前真实 Mac host 仍是旧 build；本轮没有重启 host，也没有跑需要用户密码的真实 browser smoke。
+下一步建议：
+- 只看到 `MacClientDiscoverWindows=` 时，用户在场可复制 `MacClientPromptPasswordSmoke=` 进入真实 browser smoke；无人值守时继续用同一摘要里的 `MacClientFormalSmoke=` 无密 preflight 或 `MacClientBrowserSelfTest=` 本地 mock 自测。
+是否改了协议：否；只补 Mac discovery 的安全命令标签、文档和自测。
+是否需要另一端配合：不需要；已避免触碰 Windows host/readiness/control 端文件。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 `MacFormalLocalSmoke=` / 本机短验收摘要也暴露 Mac 控 Windows 真实 browser smoke 的前台密码入口。
 完成内容：
 - `check-mac-formal-local-smoke --json/--boardSummary` 新增 `commands.macClientPromptPasswordSmokeCommand` / `MacClientPromptPasswordSmoke=`。

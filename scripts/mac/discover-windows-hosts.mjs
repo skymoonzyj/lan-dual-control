@@ -70,6 +70,10 @@ Machine-readable JSON fields:
                            Standard MacClientFormalSmoke= board-summary label
                            for watcher and automation consumers. It uses the
                            safe --discover --ensureClient --preflightOnly shape.
+  macClientPromptPasswordSmokeCommand
+                           User-present browser smoke command with the standard
+                           MacClientPromptPasswordSmoke= board-summary label.
+                           It only prompts when this command is explicitly run.
   macClientBrowserSelfTestCommand
                            Secret-free local Mac client browser self-test. It
                            uses a temporary mock Windows host and does not use
@@ -279,6 +283,20 @@ function macClientFormalSmokeCommand(args, item) {
   return command.join(" ");
 }
 
+function macClientPromptPasswordSmokeCommand(args, item) {
+  const command = ["node scripts/mac/run-mac-client-formal-smoke.mjs"];
+  if (item?.host) {
+    command.push("--host", item.host, "--port", String(item.port || args.ports?.[0] || defaults.port));
+  } else {
+    command.push("--discover");
+    const port = Number(args.ports?.[0] || defaults.port);
+    if (Number.isInteger(port) && port !== defaults.port) command.push("--port", String(port));
+  }
+  command.push("--ensureClient", "--promptPassword", "--boardSummary");
+  if (args.server !== defaults.server) command.push("--server", args.server);
+  return command.join(" ");
+}
+
 function macClientBrowserSelfTestCommand() {
   return "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
 }
@@ -354,6 +372,7 @@ function buildReport(scan, args, windowsLanRisk = emptyWindowsLanRisk(false)) {
     macClientFormalChecklistCommand: best ? readinessCommand(best) : "",
     formalSmokeCommand: best ? formalSmokeCommand(best) : "",
     macClientFormalSmokeCommand: best ? macClientFormalSmokeCommand(args, best) : macClientFormalSmokeCommand(args, null),
+    macClientPromptPasswordSmokeCommand: best ? macClientPromptPasswordSmokeCommand(args, best) : macClientPromptPasswordSmokeCommand(args, null),
     macClientBrowserSelfTestCommand: macClientBrowserSelfTestCommand(),
     macScriptHelpCommand: macScriptHelpCommand(),
     manualChecklistSummary,
@@ -374,12 +393,12 @@ function makeBoardSummary(report) {
   const risk = formatWindowsLanRisk(report.windowsLanRisk);
   const riskSummary = risk ? ` ${risk}.` : "";
   if (report.best) {
-    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}.${riskSummary} FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. MacClientFormalSmoke=${report.macClientFormalSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. WindowsReverseGrantStatus=${report.windowsReverseGrantStatus}. WindowsOpenOneTimeReverseGrant=${report.windowsOpenOneTimeReverseGrant}. WindowsReverseGrantStatusNodeFallback=${report.windowsReverseGrantStatusNodeFallback}. WindowsOpenOneTimeReverseGrantNodeFallback=${report.windowsOpenOneTimeReverseGrantNodeFallback}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}.${riskSummary} FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. MacClientFormalSmoke=${report.macClientFormalSmokeCommand}. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. WindowsReverseGrantStatus=${report.windowsReverseGrantStatus}. WindowsOpenOneTimeReverseGrant=${report.windowsOpenOneTimeReverseGrant}. WindowsReverseGrantStatusNodeFallback=${report.windowsReverseGrantStatusNodeFallback}. WindowsOpenOneTimeReverseGrantNodeFallback=${report.windowsOpenOneTimeReverseGrantNodeFallback}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
   }
   const ignored = report.ignored.length > 0
     ? ` Saw ${report.ignored.length} non-Windows host(s), likely Mac/self.`
     : "";
-  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored}${riskSummary} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored}${riskSummary} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
 }
 
 function printText(report, args) {
@@ -393,6 +412,7 @@ function printText(report, args) {
     console.log(`[INFO] Mac client formal checklist: ${report.macClientFormalChecklistCommand}`);
     console.log(`[INFO] Formal smoke preflight: ${report.formalSmokeCommand}`);
     console.log(`[INFO] Mac client formal smoke: ${report.macClientFormalSmokeCommand}`);
+    console.log(`[INFO] Mac client prompt-password smoke: ${report.macClientPromptPasswordSmokeCommand}`);
     console.log(`[INFO] Manual checklist: ${report.manualChecklistSummary}`);
     console.log(`[INFO] Mac client browser self-test: ${report.macClientBrowserSelfTestCommand}`);
     console.log(`[INFO] Mac script help safety check: ${report.macScriptHelpCommand}`);
@@ -414,6 +434,7 @@ function printText(report, args) {
       console.log(`[INFO] Agent Link Board hint: ${risk}`);
     }
     console.log("[INFO] Ask Windows Codex to start Windows host, then rerun this discovery or check-mac-client-formal-status with the Windows IP.");
+    console.log(`[INFO] Mac client prompt-password smoke: ${report.macClientPromptPasswordSmokeCommand}`);
     console.log(`[INFO] Mac client browser self-test: ${report.macClientBrowserSelfTestCommand}`);
     console.log(`[INFO] Mac script help safety check: ${report.macScriptHelpCommand}`);
   }
