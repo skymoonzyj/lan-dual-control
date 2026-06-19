@@ -50,6 +50,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端在 Mac 电源 warning 场景里明确提示 `MacPowerPlan=` 已经可复制。
+完成内容：
+- Windows 控制端 `parseMacUnattendedAttention` 新增 `MacPowerPlan=` 上下文识别：只有同段已有电源/睡眠风险时，才把风险摘要补成“Mac 电源预案命令已提供”。
+- 保留既有安全边界：`MacPowerHealth=ok`、`MacUnattendedHealth=ok` 或单独 `MacPowerPlan=` 预览命令不会误弹风险。
+- 更新 Windows 控制端 README、当前状态、下一步和任务板，说明该行为只做本地提示和诊断导出，不运行 Mac 脚本、不执行 `pmset`、不认证、不发密码/input/inject。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败在 `warningMacPowerHealthWithPlanAttention` 缺少“Mac 电源预案命令已提供”。
+- 绿灯：实现后同一 diagnostics-only 页面自检通过。
+- 语法/收口：`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`git diff --check` 均通过；冲突标记扫描无命中。
+遗留问题：
+- Mac 真实系统睡眠/显示睡眠仍需用户现场按 Mac 端 `MacPowerPlan=` 的 dry-run 方案人工处理，并复跑 `MacUnattendedStatus` / `MacHeartbeatOnce` 刷新证据。
+下一步建议：
+- 如果继续 Windows 侧，可把同一“有风险时显示对应修复预案、单独命令不误弹”的模式推广到更多 Mac 端值守/正式验收命令。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 恢复总览开工第一屏也能消费 `MacPowerHealth=` / `MacUnattendedHealth=`。
 完成内容：
 - `check-windows-resume-status --checkBoard` 现在输出 JSON `board.macPowerHealth` / `board.macUnattendedHealth`，普通输出和 `--boardSummary` 同步显示同名短摘要。

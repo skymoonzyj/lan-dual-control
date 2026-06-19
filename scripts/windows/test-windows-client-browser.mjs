@@ -1630,6 +1630,12 @@ async function verifyDesktopOnlyHostPanel(session) {
               "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled blockers=none checkedAt=2026-06-19T08:08:38.575Z",
             )
           : null;
+      const warningMacPowerHealthWithPlanAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled blockers=none checkedAt=2026-06-19T08:08:38.575Z; MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
+            )
+          : null;
       const okMacPowerHealthAttention =
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
@@ -2403,6 +2409,9 @@ async function verifyDesktopOnlyHostPanel(session) {
           !blockedMacHeartbeatHealthAttention?.evidenceSummary.includes("Mac 心跳正常") &&
           warningMacPowerHealthAttention?.summary.includes("系统睡眠未关闭") &&
           warningMacPowerHealthAttention?.summary.includes("显示器睡眠未关闭") &&
+          warningMacPowerHealthWithPlanAttention?.summary.includes("系统睡眠未关闭") &&
+          warningMacPowerHealthWithPlanAttention?.summary.includes("显示器睡眠未关闭") &&
+          warningMacPowerHealthWithPlanAttention?.summary.includes("Mac 电源预案命令已提供") &&
           okMacPowerHealthAttention?.summary === "" &&
           Array.isArray(okMacPowerHealthAttention?.labels) &&
           okMacPowerHealthAttention.labels.length === 0 &&
@@ -2596,6 +2605,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         warningMacHeartbeatHealthAttention,
         blockedMacHeartbeatHealthAttention,
         warningMacPowerHealthAttention,
+        warningMacPowerHealthWithPlanAttention,
         okMacPowerHealthAttention,
         warningMacUnattendedHealthAttention,
         okMacUnattendedHealthAttention,
