@@ -654,8 +654,12 @@ async function checkWindowsClientDiagnosticsPortOccupancy(args) {
     assert(ports?.state === "occupied-stale-diagnostics", `occupied client ports should be stale diagnostics, got ${ports?.state}`);
     assert(Array.isArray(ports?.occupiedPorts) && ports.occupiedPorts.includes(5197), "occupied client ports should include page port");
     assert(Array.isArray(ports?.occupiedPorts) && ports.occupiedPorts.includes(9337), "occupied client ports should include debug port");
+    assert(ports?.ownerSummary === "5197:node.exe:61088,9337:msedge.exe:44488", `occupied client ports owner summary mismatch: ${ports?.ownerSummary}`);
     assertIncludes(payload.boardSummary, "WinClientPorts=occupied(5197,9337;stale-diagnostics)", "occupied client ports board summary");
     assertIncludes(payload.boardSummary, "WinClientPortsNext=use --clientPort 5200 --debugPort 9340", "occupied client ports board summary");
+    assertIncludes(payload.boardSummary, "WinClientPortsOwners=5197:node.exe:61088,9337:msedge.exe:44488", "occupied client ports board summary should include safe owner summary");
+    assertNotIncludes(payload.boardSummary, "apps/windows-client/server.mjs", "occupied client ports board summary should not include process command line");
+    assertNotIncludes(payload.boardSummary, "user-data-dir", "occupied client ports board summary should not include browser command line");
     assertIncludes(payload.boardSummary, "Next=powershell.exe", "occupied client ports board summary");
     assertIncludes(payload.boardSummary, "Next=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -ClientPort 5200 -DebugPort 9340", "occupied client ports board summary should prefer alternate ports for Next");
     assertIncludes(payload.boardSummary, "FormalChecklist=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "occupied client ports board summary should include formal checklist");

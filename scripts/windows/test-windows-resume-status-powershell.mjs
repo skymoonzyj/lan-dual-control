@@ -556,8 +556,12 @@ async function checkCustomClientDiagnosticsPorts(args) {
     assertIncludes(payload.macPreflight?.command, "--clientPort 5201", "PowerShell custom ports formal preflight command should prefer alternate page port");
     assertIncludes(payload.macPreflight?.command, "--debugPort 9341", "PowerShell custom ports formal preflight command should prefer alternate debug port");
     assert(payload.windowsClientDiagnosticsPorts?.state === "occupied-stale-diagnostics", "PowerShell custom ports should detect stale diagnostics occupancy");
+    assert(payload.windowsClientDiagnosticsPorts?.ownerSummary === "5200:node.exe:61088,9340:msedge.exe:44488", `PowerShell custom ports owner summary mismatch: ${payload.windowsClientDiagnosticsPorts?.ownerSummary}`);
     assertIncludes(payload.boardSummary, "WinClientPorts=occupied(5200,9340;stale-diagnostics)", "PowerShell custom ports board summary");
     assertIncludes(payload.boardSummary, "WinClientPortsNext=use --clientPort 5201 --debugPort 9341", "PowerShell custom ports board summary");
+    assertIncludes(payload.boardSummary, "WinClientPortsOwners=5200:node.exe:61088,9340:msedge.exe:44488", "PowerShell custom ports board summary should include safe owner summary");
+    assertNotIncludes(payload.boardSummary, "apps/windows-client/server.mjs", "PowerShell custom ports board summary should not include process command line");
+    assertNotIncludes(payload.boardSummary, "user-data-dir", "PowerShell custom ports board summary should not include browser command line");
     assertIncludes(payload.boardSummary, "Next=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -ClientPort 5201 -DebugPort 9341", "PowerShell custom ports board summary should prefer alternate ports for Next");
     assertIncludes(payload.boardSummary, "-ClientPort 5201 -DebugPort 9341 -PreflightOnly -CheckClientDiagnostics -BoardSummary", "PowerShell custom ports board summary should prefer alternate ports for formal checklist");
     assertIncludes(payload.commands?.preflightBoardSummary, "-ClientPort 5201 -DebugPort 9341", "PowerShell custom ports preflight board command should prefer alternate ports");

@@ -2346,6 +2346,32 @@ function isLikelyWindowsClientDiagnosticsOwner(owner, args) {
   return false;
 }
 
+function safePortOwnerToken(value, fallback = "unknown") {
+  const text = String(value || "").trim();
+  if (!text) return fallback;
+  return text.replace(/[^A-Za-z0-9_.-]+/g, "_").slice(0, 64) || fallback;
+}
+
+function makePortOwnerSummary(owners) {
+  const seen = new Set();
+  const items = [];
+  for (const owner of Array.isArray(owners) ? owners : []) {
+    const port = Number(owner?.localPort);
+    if (!Number.isFinite(port) || port <= 0) continue;
+    const processName = safePortOwnerToken(owner?.processName || "unknown");
+    const pid = Number(owner?.owningProcess);
+    const pidText = Number.isFinite(pid) && pid > 0 ? String(pid) : "unknown";
+    const item = `${port}:${processName}:${pidText}`;
+    if (seen.has(item)) continue;
+    seen.add(item);
+    items.push({ port, item });
+  }
+  return items
+    .sort((left, right) => left.port - right.port || left.item.localeCompare(right.item))
+    .map((entry) => entry.item)
+    .join(",");
+}
+
 function parseFakeWindowsClientPorts(args) {
   const raw = process.env.LAN_DUAL_FAKE_WINDOWS_CLIENT_PORTS_JSON;
   if (!raw) return null;
@@ -2478,6 +2504,7 @@ function inspectWindowsClientDiagnosticsPorts(args) {
           : "occupied";
   const available = state === "free";
   const stale = state === "occupied-stale-diagnostics";
+  const ownerSummary = makePortOwnerSummary(owners);
   const summary = state === "free"
     ? `free(${args.clientPort},${args.debugPort})`
     : state === "unsupported"
@@ -2502,6 +2529,7 @@ function inspectWindowsClientDiagnosticsPorts(args) {
     occupiedPorts,
     ports,
     owners,
+    ownerSummary,
     staleOwnerCount: staleOwners.length,
     summary,
     recommendation,
@@ -3075,6 +3103,9 @@ function makeBoardSummary(report) {
   const clientPortsNext = report.windowsClientDiagnosticsPorts?.available
     ? "default-ok"
     : `use --clientPort ${report.windowsClientDiagnosticsPorts?.alternateClientPort || defaults.alternateClientPort} --debugPort ${report.windowsClientDiagnosticsPorts?.alternateDebugPort || defaults.alternateDebugPort}`;
+  const clientPortOwners = report.windowsClientDiagnosticsPorts?.ownerSummary
+    ? ` WinClientPortsOwners=${report.windowsClientDiagnosticsPorts.ownerSummary}.`
+    : "";
   const macFormalLocalSmokeCommand = report.board.macFormalLocalSmoke?.command || report.commands.macFormalLocalSmokeCommand;
   const macClientDiscoverWindowsCommand = report.board.macClientDiscoverWindows?.command || report.commands.macClientDiscoverWindowsCommand;
   const macClientFormalChecklistCommand = report.board.macClientFormalChecklist?.command || report.commands.macClientFormalChecklistCommand;
@@ -3091,7 +3122,7 @@ function makeBoardSummary(report) {
   const windowsSecureAuthPathCommand = report.board.windowsSecureAuthPath?.command || report.commands.windowsSecureAuthPath;
   return [
     `Windows resume: repo=${git}; head=${report.git.currentBuildId || "unknown"}; board=${board}${boardCall}${boardCallNext}${boardCallAck}; mac=${macState}; target=${target}; runtimeBuild=${runtime}; inputMode=${inputMode}; clientDiagnostics=${clientDiagnostics}; failedChecks=${failedChecks}.`,
-    `WinClientPorts=${clientPorts}; WinClientPortsNext=${clientPortsNext}.`,
+    `WinClientPorts=${clientPorts}; WinClientPortsNext=${clientPortsNext}.${clientPortOwners}`,
     ...(report.board.windowsLanRisk?.found
       ? [`WindowsLanRisk=${report.board.windowsLanRisk.summary}.`]
       : []),

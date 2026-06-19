@@ -17,6 +17,35 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
+本轮目标：增强 Windows 恢复总览的 Windows client 诊断端口占用定位。
+完成内容：
+- `check-windows-resume-status` 新增安全 owner 摘要：JSON `windowsClientDiagnosticsPorts.ownerSummary` 和 `--boardSummary` 的 `WinClientPortsOwners=` 输出 `端口:进程名:PID`。
+- owner 摘要按端口排序，只使用已归一化的进程名/PID，不输出完整 command line、`user-data-dir`、密码或 token。
+- Node 与 PowerShell 包装回归都覆盖 stale diagnostics 占用场景，确认 owner 摘要存在且一行摘要不泄露命令行片段。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增测试后，`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 失败在 `ownerSummary` 为 `undefined`。
+- 绿灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 绿灯：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- 本轮不关闭任何旧进程，只把安全 owner 摘要显示出来；是否关闭旧浏览器/页面仍由人工决定。
+下一步建议：
+- 现场看到 `WinClientPortsOwners=9337:msedge.exe:<PID>` 时，可先关闭对应旧调试浏览器或直接使用摘要中的 `WinClientDiagnosticsAlt=` / `Next=` 备用端口命令。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
 ## 2026-06-19 Mac Codex
 
 日期：2026-06-19 继续推进
