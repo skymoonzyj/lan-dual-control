@@ -591,6 +591,21 @@ function makeEvidenceSentence(evidence) {
   return summary === "none" ? "" : `Recent evidence: ${summary.replace(/, /g, "; ")}.`;
 }
 
+function formatMacPowerHealthSummary(health) {
+  if (!health) return "";
+  return [
+    `MacPowerHealth=${health.status || "unknown"}`,
+    `reason=${health.reason || "unknown"}`,
+    `warnings=${health.warnings || "unknown"}`,
+    `checkedAt=${health.checkedAt || "unknown"}`,
+  ].join(" ");
+}
+
+function makeMacPowerHealthSentence(health) {
+  if (!health) return "";
+  return `Mac power health: status=${health.status || "unknown"} reason=${health.reason || "unknown"} warnings=${health.warnings || "unknown"}.`;
+}
+
 function summarizeChecklistIds(checklist, status) {
   const ids = [...new Set((checklist || [])
     .filter((entry) => entry.status === status)
@@ -636,6 +651,7 @@ function makeCallText(report) {
   const host = report.resume.host || {};
   const findings = formatChecklistFindings(report.checklist);
   const evidenceText = makeEvidenceSentence(report.evidence);
+  const powerText = makeMacPowerHealthSentence(report.macPowerHealth);
   const readinessText = report.readyToCall
     ? report.counts.warnings > 0 ? "ready with warnings" : "ready"
     : "needs attention";
@@ -651,6 +667,7 @@ function makeCallText(report) {
       `Plan safe reboot persistence first with: ${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
       `If targeting formal 60Hz, dry-run max-FPS planning first with: ${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
       ...(evidenceText ? [evidenceText] : []),
+      ...(powerText ? [powerText] : []),
       `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
       `When the host is online, run low-risk host readiness with: ${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
       `When the host is online, run local smoke first with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
@@ -665,6 +682,7 @@ function makeCallText(report) {
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)} pipeline=${host.capabilities?.capturePipeline || "unknown"} audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}.`,
     `Checklist ${findings}.`,
     ...(evidenceText ? [evidenceText] : []),
+    ...(powerText ? [powerText] : []),
     `For foreground formal 60Hz, use: ${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
     `For LaunchAgent transition, stop the current Mac host with: ${report.commands?.macHostStopCommand || makeMacHostStopCommand(report.args?.host, report.args?.port)}.`,
     `Then manually load the LaunchAgent with: ${report.commands?.macLaunchAgentLoadCommand || makeMacLaunchAgentLoadCommand()}.`,
@@ -689,12 +707,15 @@ function makeBoardSummary(report) {
   const findings = formatChecklistFindings(report.checklist);
   const evidenceTags = formatEvidenceTags(report.evidence);
   const evidenceLine = evidenceTags === "none" ? "" : `Evidence=${evidenceTags}.`;
+  const macPowerHealthSummary = formatMacPowerHealthSummary(report.macPowerHealth);
+  const macPowerHealthLine = macPowerHealthSummary ? `${macPowerHealthSummary}.` : "";
   const suggestedAction = report.suggestedAction?.boardSummary ? `${report.suggestedAction.boardSummary}.` : "";
   if (!host.online) {
     return [
       `Mac formal E2E: ${state}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}; ${findings}.`,
       `Mac host offline at ${host.probe?.host || report.args.host}:${host.probe?.port || report.args.port}.`,
       ...(evidenceLine ? [evidenceLine] : []),
+      ...(macPowerHealthLine ? [macPowerHealthLine] : []),
       `MacHostSafeStart=${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}.`,
       `MacMaxFpsSafeStart=${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
       `MacHostStop=${report.commands?.macHostStopCommand || makeMacHostStopCommand(report.args?.host, report.args?.port)}.`,
@@ -716,6 +737,7 @@ function makeBoardSummary(report) {
     `Mac formal E2E: ${state}; host=${formatHostAddress(host)}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}; runtimeBuild=${host.runtime?.buildId || "unknown"}; inputMode=${host.inputMode || "unknown"}; ${findings}.`,
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)}; pipeline=${host.capabilities?.capturePipeline || "unknown"}; audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}; ${formatBuildDiff(host.buildDiff)}.`,
     ...(evidenceLine ? [evidenceLine] : []),
+    ...(macPowerHealthLine ? [macPowerHealthLine] : []),
     ...(suggestedAction ? [suggestedAction] : []),
     `MacHostSafeStart=${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}.`,
     `MacMaxFpsSafeStart=${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
@@ -1181,6 +1203,7 @@ function buildReport(args) {
   const checklist = buildChecklist(resume, args);
   const counts = summarizeCounts(checklist);
   const evidence = collectBoardValidationEvidence(resume, args);
+  const macPowerHealth = resume?.board?.macPowerHealth || null;
   const boardReady = !args.skipBoard && resume.board?.checked === true && resume.board?.ok === true;
   const readyToCall = counts.blockers === 0 && boardReady;
   const report = {
@@ -1200,6 +1223,7 @@ function buildReport(args) {
     counts,
     checklist,
     evidence,
+    macPowerHealth,
     resume,
   };
   report.commands = makeCommands(report);

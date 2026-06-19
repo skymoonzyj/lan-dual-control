@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac formal E2E readiness 也能直接转述当前 `Mac Unattended` 的 `MacPowerHealth=` 电源细分风险。
+完成内容：
+- `check-mac-formal-e2e-status --json` 新增顶层 `macPowerHealth`，复用 `check-mac-resume-status` 已安全提取的 `resume.board.macPowerHealth`。
+- `--boardSummary` 新增独立 `MacPowerHealth=` 片段；`callText` 新增 `Mac power health: ...`，正式呼叫 Windows 前也能看到系统睡眠/显示睡眠值守风险。
+- 风险候选仍由 resume/status 的白名单解析把关；测试覆盖干净 `MacPowerHealth=` 提取和 `reason=--password` / 伪 token 候选拒绝。
+- formal readiness 仍只读：不运行 `pmset`、不加载 LaunchAgent、不自动刷新 `Mac Unattended`、不认证、不请求或发送密码、不发 input/inject。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增断言后，`node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 12000` 先失败在 `macPowerHealth` status 缺失。
+- 绿灯：实现后同一回归通过，覆盖 JSON 顶层字段、resume board 字段保留、`MacPowerHealth=` 摘要、`callText` 转述和危险候选拒绝。
+- 真实只读：当前工作区未提交时运行 `node scripts/mac/check-mac-formal-e2e-status.mjs --host 127.0.0.1 --port 43770 --boardSummary` 已输出 `MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled`；退出码因 repo dirty blocker 为 1，提交后需再复查干净状态。
+遗留问题：
+- 这轮只让 formal readiness 转述现有电源风险，不修系统睡眠/显示睡眠/网络唤醒设置；真实值守前仍需用户现场确认系统设置与 LaunchAgent loaded。
+下一步建议：
+- Windows 端后续可选择消费 `MacFormalE2E=` 里的 `MacPowerHealth=`，把正式呼叫前的电源风险显示到提醒区；现有 `MacUnattended`、`MacResumeStatus`、`MacHeartbeat` 已同时保留该字段。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让最新 Mac heartbeat 也能直接转述当前 `Mac Unattended` 的 `MacPowerHealth=` 电源细分风险。
 完成内容：
 - `check-mac-heartbeat --checkBoard --json` 新增 `board.macPowerHealth`，从 Agent Link Board 当前 `Mac Unattended` 状态安全提取 `MacPowerHealth=ok|warning|unknown reason=<短标签> warnings=<短标签> checkedAt=<时间>`。

@@ -207,6 +207,14 @@ function assertValidationEvidence(payload, label) {
   assertNoSecretLikeText(JSON.stringify(payload.evidence), `${label} evidence`);
 }
 
+function assertMacPowerHealth(payload, expected, label) {
+  assert(payload.macPowerHealth?.status === expected.status, `${label} should expose MacPowerHealth status`);
+  assert(payload.macPowerHealth?.reason === expected.reason, `${label} should expose MacPowerHealth reason`);
+  assert(payload.macPowerHealth?.warnings === expected.warnings, `${label} should expose MacPowerHealth warnings`);
+  assert(payload.macPowerHealth?.checkedAt === expected.checkedAt, `${label} should expose MacPowerHealth checkedAt`);
+  assert(payload.resume?.board?.macPowerHealth?.status === expected.status, `${label} should preserve resume board MacPowerHealth status`);
+}
+
 function assertMacHostSafeStartCommand(command, label, expectedPort = null) {
   const text = String(command || "");
   assert(/node scripts\/mac\/start-mac-host\.mjs/.test(text), `${label} should use start-mac-host`);
@@ -1209,6 +1217,77 @@ async function checkBoardStableTagValidationEvidence(args) {
   }, { capturePipeline: "background-jpeg" });
 }
 
+async function checkBoardMacPowerHealth(args) {
+  const cleanPower = "Mac unattended status: host=online inputMode=log build=ed937a2; power=sleep=ac-power:1 displaySleep=ac-power:10 networkWake=ac-power:1; MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T07:23:38.703Z; attention=2 warning(s) blockers=none warnings=launch-agent-not-loaded,power.";
+  await withFakeMacHost(async (macHost) => {
+    await withFakeBoard(async (board) => {
+      const result = await runAsync(args, [
+        "--json",
+        "--allowDirty",
+        "--host",
+        macHost.host,
+        "--port",
+        String(macHost.port),
+        "--server",
+        board.serverUrl,
+        "--timeoutMs",
+        String(Math.min(args.timeoutMs, 5000)),
+      ]);
+      const payload = parseJson(result.stdout, "Mac power formal E2E status");
+      assert(result.status === 0, `Mac power formal status should exit 0:\n${result.stdout}\n${result.stderr}`);
+      assertMacPowerHealth(payload, {
+        status: "warning",
+        reason: "system-sleep-enabled",
+        warnings: "system-sleep-enabled,display-sleep-enabled",
+        checkedAt: "2026-06-19T07:23:38.703Z",
+      }, "Mac power formal E2E status");
+      assert(/MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z/.test(payload.boardSummary || ""), "Mac power formal boardSummary should expose MacPowerHealth");
+      assert(/Mac power health: status=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled/.test(payload.callText || ""), "Mac power formal callText should summarize MacPowerHealth");
+      assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "Mac power formal E2E status");
+      print("OK", "Formal E2E status surfaces Agent Link Board MacPowerHealth safely");
+    }, {
+      statuses: {
+        "Mac Unattended": {
+          status: "warning",
+          note: cleanPower,
+        },
+      },
+    });
+  });
+
+  const riskyPower = "MacPowerHealth=warning reason=--password warnings=system-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; token=fake-formal-power-token";
+  await withFakeMacHost(async (macHost) => {
+    await withFakeBoard(async (board) => {
+      const result = await runAsync(args, [
+        "--json",
+        "--allowDirty",
+        "--host",
+        macHost.host,
+        "--port",
+        String(macHost.port),
+        "--server",
+        board.serverUrl,
+        "--timeoutMs",
+        String(Math.min(args.timeoutMs, 5000)),
+      ]);
+      const payload = parseJson(result.stdout, "risky Mac power formal E2E status");
+      assert(result.status === 0, `risky Mac power formal status should exit 0:\n${result.stdout}\n${result.stderr}`);
+      assert(!payload.macPowerHealth, "risky MacPowerHealth should not be promoted");
+      assert(!payload.resume?.board?.macPowerHealth, "risky resume board MacPowerHealth should not be promoted");
+      assert(!/MacPowerHealth=/.test(payload.boardSummary || ""), "risky Mac power formal boardSummary should not expose MacPowerHealth");
+      assert(!/fake-formal-power-token/.test(`${result.stdout}\n${result.stderr}`), "risky Mac power formal output should not leak fake token");
+      assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "risky Mac power formal E2E status");
+    }, {
+      statuses: {
+        "Mac Unattended": {
+          status: "warning",
+          note: riskyPower,
+        },
+      },
+    });
+  });
+}
+
 async function checkMaxFpsLimitWarning(args) {
   await withFakeMacHost(async (macHost) => {
     const localTimeoutMs = String(Math.min(args.timeoutMs, 5000));
@@ -1393,6 +1472,7 @@ async function main() {
   await checkBoardValidationEvidence(args);
   await checkBoardStatusValidationEvidence(args);
   await checkBoardStableTagValidationEvidence(args);
+  await checkBoardMacPowerHealth(args);
   await checkMaxFpsLimitWarning(args);
   checkOnlineJson(args);
   checkOnlineBoardSummary(args);
