@@ -2131,8 +2131,9 @@ async function checkSendAgentCallAckWithoutReadyCall(args) {
 
 async function checkBoardMacReadyTargetSelection(args) {
   await withMockHostOnAnyAddress(async (port) => {
+    const macReadyHost = "localhost";
     const readyText = [
-      `MAC_READY_FOR_REAL_TEST: host=127.0.0.2 port=${port} build=8015f22 inputMode=log maxScreenFps=60 media=ok`,
+      `MAC_READY_FOR_REAL_TEST: host=${macReadyHost} port=${port} build=8015f22 inputMode=log maxScreenFps=60 media=ok`,
       "readiness=passed=12/12 blockers=none warnings=none",
       "Password was entered only in the Mac local hidden prompt; no password/token on board.",
     ].join(" ");
@@ -2149,16 +2150,16 @@ async function checkBoardMacReadyTargetSelection(args) {
       assert(result.exitCode === 0, `MAC_READY target selection failed\n${result.stdout}\n${result.stderr}`);
       const payload = JSON.parse(result.stdout);
       assert(payload.board?.macReadyForRealTest?.found === true, "MAC_READY_FOR_REAL_TEST should be extracted from board");
-      assert(payload.board.macReadyForRealTest.host === "127.0.0.2", "MAC_READY target host should be extracted");
+      assert(payload.board.macReadyForRealTest.host === macReadyHost, "MAC_READY target host should be extracted");
       assert(payload.board.macReadyForRealTest.port === port, "MAC_READY target port should be extracted");
-      assert(payload.args?.host === "127.0.0.2", "resume status should promote MAC_READY host before preflight");
+      assert(payload.args?.host === macReadyHost, "resume status should promote MAC_READY host before preflight");
       assert(payload.args?.port === port, "resume status should promote MAC_READY port before preflight");
       assert(payload.macPreflight?.payload?.online === true, "promoted MAC_READY target should be probed");
-      assert(payload.macPreflight.payload.target?.host === "127.0.0.2", "preflight should use MAC_READY host");
+      assert(payload.macPreflight.payload.target?.host === macReadyHost, "preflight should use MAC_READY host");
       assert(payload.macPreflight.payload.target?.port === port, "preflight should use MAC_READY port");
-      assertIncludes(payload.boardSummary, `MacReadyForRealTest=host=127.0.0.2 port=${port}`, "MAC_READY board summary");
-      assertIncludes(payload.boardSummary, `target=127.0.0.2:${port}`, "MAC_READY board summary target");
-      assertIncludes(payload.boardSummary, `Next=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName 127.0.0.2 -Port ${port}`, "MAC_READY board summary should use a fixed-target prompt command");
+      assertIncludes(payload.boardSummary, `MacReadyForRealTest=host=${macReadyHost} port=${port}`, "MAC_READY board summary");
+      assertIncludes(payload.boardSummary, `target=${macReadyHost}:${port}`, "MAC_READY board summary target");
+      assertIncludes(payload.boardSummary, `Next=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets -HostName ${macReadyHost} -Port ${port}`, "MAC_READY board summary should use a fixed-target prompt command");
       assertIncludes(payload.boardSummary, "-PromptPassword", "MAC_READY board summary should tell the user where to enter the password");
       assertNotIncludes(result.stdout + result.stderr, "secret-value", "MAC_READY target selection");
       console.log("[OK] Windows resume status promotes MAC_READY_FOR_REAL_TEST target from Agent Link Board");

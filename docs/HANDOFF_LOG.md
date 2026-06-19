@@ -19,6 +19,44 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 00:33 CST
+开发端：Mac Codex
+本轮目标：把 `REAL_TEST_PASS` 后的 Mac 值守状态和下一步分工同步到交接文档，并修复合入 Windows 最新提交后暴露的 resume-status 回归。
+完成内容：
+- 读取 Agent Link Board 后确认 Windows 控 Mac formal E2E 主体已经 `REAL_TEST_PASS`：`host=192.168.31.122:43770`、`build=8015f22`、`inputMode=log`、H.264/WebCodecs OK、`H264Errors=0`、Plan 2 browser canvas OK、audio PCM 有帧/播放记录，最终 `[OK] Formal Mac E2E checks finished`。
+- 明确 OK 之后的 PowerShell/Node `NativeCommandFailed` / “索引超出了数组界限” 是 Windows 外壳/退出阶段尾部问题，需要 Windows 单独排查，但不推翻主体 PASS。
+- 将 `CURRENT_STATUS` / `NEXT_ACTIONS` 从“等待 Windows 本机输入同密密码跑真实测试”的旧口径，改成“Mac 保持 host/client/heartbeat 在线，等待下一轮手工体验测试；Windows 记录 PASS 并排查尾部错误”。
+- 刷新了一次 Mac resume/heartbeat：Mac host/client/heartbeat 在线，`MacHeartbeat=status=ok`、`MacUnattendedHealth=ok`、`MacPowerHealth=ok`、`inputMode=log`；本轮不认证、不请求或发送密码、不发 input/inject、不停止 host。
+- 合入 Windows 最新 `b51f8a4` 后，完整 `test-windows-resume-status` 暴露 `MAC_READY_FOR_REAL_TEST` 固定目标会被内部 preflight discovery 改回 `127.0.0.1`；已修复为 MAC_READY 明确给出 host/port 时内部 preflight 固定使用该目标，不再二次 discovery 覆盖。
+- 同步修正该回归测试的本机目标：用可达但仍能验证“目标字符串被提升”的 `localhost`，避免 macOS 上 `127.0.0.2` 不可达造成假失败。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `docs/HANDOFF_LOG.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：合入 `b51f8a4` 后，`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 20000` 先失败在 `preflight should use MAC_READY host`，随后在修复过程中暴露 `promoted MAC_READY target should be probed`，确认测试覆盖了目标被 discovery 覆盖和 macOS 非便携回环地址问题。
+- 绿灯：同一命令修复后通过，包含 `Windows resume status promotes MAC_READY_FOR_REAL_TEST target from Agent Link Board`。
+- 语法：`node --check scripts/windows/check-windows-resume-status.mjs`、`node --check scripts/windows/test-windows-resume-status.mjs` 通过。
+- `git status --short --branch` 确认开工前工作树干净且与 `origin/main` 对齐。
+- `node scripts/codex-link-client.mjs --server http://192.168.31.68:17888 state --json` 确认通讯板当前 call 已进入 `REAL_TEST_PASS` 后续分工。
+- `node scripts/mac/check-mac-resume-status.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary --timeoutMs 10000` 确认 repo clean、host online、heartbeat watcher running、Mac health ok。
+- `node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --refreshUnattended --server http://192.168.31.68:17888 --boardSummary` 确认 heartbeat 上板正常，且未请求密码/认证/input/inject。
+- `git diff --check` 通过。
+- 冲突标记扫描 `rg -n "^(<<<<<<<|=======|>>>>>>>)" docs apps scripts shared` 无匹配。
+遗留问题：
+- Windows 端仍需单独记录 PASS 摘要并排查 OK 后 `NativeCommandFailed` 尾部错误。
+- 下一轮手工体验测试仍需用户在场，重点验收画面、声音、剪贴板、文件、小窗、全屏/原画、复制诊断；true input inject 仍必须用户明确看着 Mac 屏幕。
+下一步建议：
+- Mac 端保持 host/client/heartbeat 在线；若白天继续，先看 Agent Link Board，再按手工体验测试清单推进。
+- Windows 端完成 `REAL_TEST_PASS_RECORDED + TAIL_ERROR_INVESTIGATION_STATUS` 上板后，两端再讨论下一项真实体验 blocker。
+是否改了协议：否；只更新交接/状态文档，并修复 Windows resume-status 的 MAC_READY 目标选择回归。
+是否需要另一端配合：需要 Windows 端记录 PASS 并排查尾部错误；不需要 Windows 改 Mac 文档。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 继续推进
 开发端：Mac Codex
 本轮目标：让 Mac 控 Windows 页面显式提示密码安全状态，减少真机联调时误用演示密码。

@@ -6,7 +6,9 @@
 
 ## 最高优先级
 
-最新现场状态：Mac 端已经完成 `MacHostStop -> MacMaxFpsSafeStart -> MacHostMedia`，当前 host 是前台同密 60fps：`192.168.31.122:43770`，`build=8015f22`，`inputMode=log`，`maxScreenFps=60`，`media=ok`，`MacUnattendedHealth=ok`。Windows 最新 `ceffd43` 已保留正式验收备用 `--clientPort 5200 --debugPort 9340`。下一步不是再让 Mac 重跑前置动作，而是 Windows 端让用户在 Windows 本机输入同一个临时密码后立即跑真实测试；密码不要发通讯板。
+最新现场状态：Windows 控 Mac formal E2E 主体已经 `REAL_TEST_PASS`。固定证据为 `host=192.168.31.122:43770`，`build=8015f22`，`inputMode=log`，H.264/WebCodecs OK，`H264Errors=0`，Plan 2 browser canvas OK，audio PCM 有帧/播放记录，并已出现 `[OK] Formal Mac E2E checks finished`。不要再回到 Mac ready、formal E2E 第二步或 diagnostics 旧循环。
+
+最新分工：Windows 端记录 `REAL_TEST_PASS` 摘要，并单独排查 OK 之后的 PowerShell/Node 尾部错误 `node.exe 无法运行: 索引超出了数组界限 / NativeCommandFailed`；这不推翻 PASS。Mac 端保持 host/client/heartbeat 在线，等待下一轮手工体验测试：画面、声音、剪贴板、文件、小窗、全屏/原画、复制诊断。除非用户明确确认正在看 Mac 屏幕，不做 true input inject。
 
 最新校正：Mac host 当前实机在线为 `192.168.31.122:43770` / `127.0.0.1:43770`，前台同密/log/60fps，runtime build `8015f22`；通讯板已可达。最新 `MacHeartbeat` / `MacResumeStatus` 已修复旧状态回声，当前值守状态应看作 `MacUnattendedHealth=ok reason=ok blockers=none warnings=none`，不要再把历史 `launch-agent-not-loaded`、`bed2095` 或 `accessibility` warning 当作当前 blocker。
 
@@ -14,14 +16,14 @@
 
 最新 Mac client 安全提示：Mac 控 Windows 页面现在在密码框下显示 `passwordSafetyStatus`，演示密码只适合本机 mock，真机 smoke 前请换临时密码；复制/导出诊断会带 `密码安全` 状态，但不输出连接密码或英文 `password` 字样。若页面仍显示“演示密码”，不要把它当正式联调密码。
 
-最新认证路径：当前 `MacUnattendedStatus` / `MacHeartbeat` / `MacResumeStatus` / `MacHostReadiness` / `MacFormalE2E` 会输出 `MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia`。看到这条时，不要继续等待 LaunchAgent 随机密码；正式 Windows 控 Mac 认证应在用户在场时先停旧 host，再用 `MacMaxFpsSafeStart` 前台隐藏密码启动，在 Windows 和 Mac 两端输入同一个临时密码，之后跑 `MacHostMedia` 复查媒体基线。
+复跑/重启认证路径：当前 `MacUnattendedStatus` / `MacHeartbeat` / `MacResumeStatus` / `MacHostReadiness` / `MacFormalE2E` 会输出 `MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia`。只有需要复跑正式 Windows 控 Mac 或重新启动 host 时，才按这条路径在用户在场时输入同一个临时密码；密码仍不要发通讯板。
 
-1. Mac 端继续验证真实被控服务。
+1. Mac 端保持值守并准备手工体验测试。
    - 默认使用 `LAN_DUAL_INPUT_MODE=log` 做安全联调。
-   - 当前 Mac host 已在 `192.168.31.122:43770` / `127.0.0.1:43770` 运行当前 build `8015f22`，`inputMode=log`、`maxScreenFps=60`；最新心跳为 `ok`，值守状态为 `MacUnattendedHealth=ok`，认证路径提示为 `MacHostAuthPath=prompt-password-required`，并已同步到 `MacFormalE2E` 和 `MacHostReadiness` 第一屏。下一步应让 Windows 端在本机输入同一个临时密码后跑真实测试；若默认 `5197/9337` 仍被旧 diagnostics 占用，继续用 `--clientPort 5200 --debugPort 9340`。不需要再等待 Mac 重跑前置动作或 LaunchAgent 随机密码。
-   - 最新一轮 `MacFormalE2E` 只读 readiness 为 `ready with warnings`：刷新时 `repo=60a04e1 clean`、`blockers=none`、`runtimeBuild=ed937a2 stale metadata only, hostRuntimeChanges=0`；随后已合并 Windows-only `e23c95c`，未触碰 Mac host runtime。`warnings=video,build,auth` 不是当前阻塞；正式密码仍必须由用户本机隐藏输入，不能通过通讯板或命令参数传递。
-   - 在 Windows 端运行 `scripts/windows/test-mac-host.ps1 -Discover -PromptPassword -RequirePassword -RequireH264 -ExpectInputMode log`；已知 IP 且不想扫整段局域网时，加 `-DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770`。
-   - 验证通过后，真实输入注入只能在用户明确确认正在看 Mac 屏幕后执行；Mac 端通过启动助手切换时必须带 `--confirmUserWatching`，不要把裸 `LAN_DUAL_INPUT_MODE=inject` 当作日常复跑路径。
+   - 当前 Mac host 已在 `192.168.31.122:43770` / `127.0.0.1:43770` 运行当前 build `8015f22`，`inputMode=log`、`maxScreenFps=60`；最新心跳为 `ok`，值守状态为 `MacUnattendedHealth=ok`，电源状态为 `MacPowerHealth=ok`，Mac client 页面也在线。Mac 端不需要再重跑前置动作，也不需要等待 Windows 输入密码才能继续值守。
+   - 下一轮用户在场时，优先让 Windows 控制端做手工体验清单：画面清晰度、延迟/帧率、声音接收和播放、文本/文件剪贴板、小窗拖动缩放、普通全屏/真全屏/原画、断线重连、复制诊断是否能直接粘贴给两端。
+   - 如果需要复跑自动 formal E2E 或重启 host，再按 `MacHostAuthPath=prompt-password-required` 的前台同密流程处理；密码只在两端本机隐藏输入，不写命令参数，不发通讯板。
+   - 真实输入注入只能在用户明确确认正在看 Mac 屏幕后执行；Mac 端通过启动助手切换时必须带 `--confirmUserWatching`，不要把裸 `LAN_DUAL_INPUT_MODE=inject` 当作日常复跑路径。
 
 2. Windows 端继续完善控制体验。
    - 第一阶段 UI 主线已经开始落到 Windows 控 Mac 页面：悬浮控制中心现在有显示器、画质、分辨率、刷新率、码率、缩放、声音、音量、常用 macOS 快捷键、普通全屏、真全屏、窗口、复制诊断、立即重连、退出远控、`Esc` 退出提示、连接/重连状态、视频链路/实收 FPS/帧延迟状态、协商/请求/远端上限刷新率提示、声音接收/播放状态、剪贴板/远端文件状态、输入模式和安全状态；普通窗口诊断条也会在实收 FPS 明显低于协商或请求 Hz 时提示“低于协商/低于请求”，并在 Mac host 上限低于用户选择值时提示“远端上限 30 Hz”。后续真实 Mac 连接时重点验收原画模式是否清楚、真全屏是否能进入/退出、全屏后是否能顺手退出、断线后浮层是否显示倒计时且可立即重连、全屏内复制诊断是否能粘贴快速摘要且按钮有已复制/失败反馈、粘贴出来的诊断报告是否带独立视频状态、输入模式/ack 以及全屏浮层连接/视频/声音/剪贴板/输入/安全状态、视频状态是否能帮助判断“不是 60Hz/卡顿/回退 JPEG/远端最高 30Hz”，声音状态是否能区分没收到音频帧/收到但未播放/音量为 0、剪贴板状态是否能显示远端文件/压缩包接收进度和系统剪贴板写入结果、快捷键入口是否可用，以及 `inputMode=log` 时是否明确显示“只记录、不真正控制”。

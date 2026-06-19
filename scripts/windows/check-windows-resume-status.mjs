@@ -3698,6 +3698,7 @@ function applyBoardReadyTarget(args, board) {
     originalPort: args.port,
     host: ready.host,
     port: ready.port,
+    discover: false,
     hostProvided: true,
     discoverNoLocalSubnets: true,
     boardReadyTarget: {
