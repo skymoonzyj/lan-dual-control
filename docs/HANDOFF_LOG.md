@@ -21,6 +21,34 @@
 
 日期：2026-06-20 继续推进
 开发端：Windows Codex
+本轮目标：新增 Windows 侧 PostPass 手工体验状态第一屏。
+完成内容：
+- 新增 `scripts/windows/check-windows-manual-ux-status.mjs`，只读 Agent Link Board，识别 `PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby`、`MAC_STANDING_BY_FOR_MANUAL_UX_TEST` 和 `ManualUxChecklist=`。
+- 输出 `WindowsManualUx=status=ready|waiting`、中文手工验收清单、目标提示和安全边界；`--requireReady` 在未进入手工验收待命时 fail-closed。
+- 过滤通讯板端口和 loopback：只有局域网 Mac host 才作为 `Target=`，只看到 `127.0.0.1` 时显示 `Target=unknown`，避免 Windows 误连本机。
+修改文件：
+- `scripts/windows/check-windows-manual-ux-status.mjs`
+- `scripts/windows/test-windows-manual-ux-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增测试先失败在脚本不存在；补 target 回归后先失败在误把 `192.168.31.68:17888` / `127.0.0.1:43770` 当目标。
+- 绿灯：`node scripts/windows/test-windows-manual-ux-status.mjs --timeoutMs 20000` 通过。
+- 真实通讯板：`node scripts/windows/check-windows-manual-ux-status.mjs --boardSummary` 输出 ready 和完整清单，当前 `Target=unknown`，避免 loopback 误导。
+遗留问题：
+- 真实手工体验仍需用户在场逐项验收；本脚本只负责开工第一屏和防回旧流程。
+下一步建议：
+- 用户准备测试时，先跑该脚本确认 `WindowsManualUx=status=ready`，再打开 Windows 控制端逐项验收窗口/全屏、画面、声音、剪贴板、文件和复制诊断。
+是否改了协议：否。
+是否需要另一端配合：不需要；Mac 端继续保持 host/client/heartbeat 在线即可。
+
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端显示 REAL_TEST_PASS 后手工体验清单。
 完成内容：
 - Windows 控制端 Mac 提醒区、值守证据和复制/导出诊断现在识别 `PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby` 与 `ManualUxChecklist=`。
