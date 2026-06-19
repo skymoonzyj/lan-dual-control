@@ -307,6 +307,30 @@ function formatReadinessFindingsFixture(results) {
   return Function("results", `${helpers}\nreturn formatReadinessFindings(results);`)(results);
 }
 
+function formatReadinessBoardSummaryFixture(summary) {
+  const source = readFileSync(new URL("./check-mac-host-readiness.mjs", import.meta.url), "utf8");
+  const helpers = [
+    functionBlock(source, "normalizedText"),
+    functionBlock(source, "status"),
+    functionBlock(source, "getMaxScreenFps"),
+    functionBlock(source, "formatMediaBoardSummary"),
+    functionBlock(source, "normalizeMediaStatus"),
+    functionBlock(source, "formatHostBuildBoardSummary"),
+    functionBlock(source, "formatHostMediaBoardSummary"),
+    functionBlock(source, "readinessResultId"),
+    functionBlock(source, "summarizeReadinessResultIds"),
+    functionBlock(source, "isMacHostBuildStaleWarning"),
+    functionBlock(source, "readinessWarningResultIds"),
+    functionBlock(source, "summarizeReadinessWarningResultIds"),
+    functionBlock(source, "formatReadinessFindings"),
+    functionBlock(source, "formatBoardCallOneLine"),
+    functionBlock(source, "formatBoardCallSummary"),
+    functionBlock(source, "formatMacHostAuthPathSummary"),
+    functionBlock(source, "formatReadinessBoardSummary"),
+  ].join("\n");
+  return Function("summary", `${helpers}\nreturn formatReadinessBoardSummary(summary);`)(summary);
+}
+
 function buildSuggestedActionFixture(summary) {
   const source = readFileSync(new URL("./check-mac-host-readiness.mjs", import.meta.url), "utf8");
   const helpers = [
@@ -551,6 +575,79 @@ function checkReadinessFindingsFormatting() {
     "readiness findings should emit explicit none values",
   );
   print("OK", "Mac host readiness boardSummary findings use stable ids");
+}
+
+function checkReadinessNextStepFormatting() {
+  const summary = {
+    args: { profile: "default", host: "127.0.0.1", port: 43770, probeMedia: true },
+    passed: 12,
+    failed: 0,
+    warnings: 3,
+    results: [
+      {
+        label: "Mac host discovery",
+        ok: true,
+        warnings: ["running host build 8015f22 has stale metadata only"],
+        details: {
+          online: true,
+          buildDiff: {
+            differs: true,
+            severity: "stale-metadata",
+            fromBuildId: "8015f22",
+            changedHostRuntimeFileCount: 0,
+          },
+          capabilities: {
+            h264Stream: true,
+            capturePipeline: "background-jpeg",
+            maxScreenFps: 60,
+          },
+        },
+      },
+      {
+        label: "Agent Link Board currentCall",
+        ok: true,
+        warnings: ["active call from Supervisor Codex"],
+      },
+      {
+        label: "Mac host media aggregate",
+        ok: true,
+        warnings: [],
+        details: {
+          summary: {
+            status: "ok",
+            passed: 2,
+            failed: 0,
+          },
+        },
+      },
+      ...Array.from({ length: 9 }, (_, index) => ({
+        label: `Auxiliary readiness ${index + 1}`,
+        ok: true,
+        warnings: [],
+      })),
+    ],
+    board: { checked: true, ok: true, currentCall: null, activeCall: false },
+    commands: {
+      macHostSafeStartCommand: "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770",
+      macHostStopCommand: "node scripts/mac/start-mac-host.mjs --stop --host 127.0.0.1 --port 43770",
+      macMaxFpsSafeStartCommand: "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60",
+      macResumeStatusCommand: "node scripts/mac/check-mac-resume-status.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary",
+      macLaunchAgentPlanCommand: "node scripts/mac/install-mac-host-launch-agent.mjs --port 43770 --boardSummary",
+      macMaxFpsPlanCommand: "node scripts/mac/install-mac-host-launch-agent.mjs --port 43770 --maxScreenFps 60 --boardSummary",
+      macUnattendedFormalCommand: "node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary",
+      macFormalLocalSmokeCommand: "node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
+      macPowerPlanCommand: "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
+      macScriptHelpCommand: "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary",
+    },
+  };
+  const text = formatReadinessBoardSummaryFixture(summary);
+  assert(text.includes("passed=12/12"), "passing readiness summary should preserve passed count");
+  assert(text.includes("media=ok"), "passing media readiness summary should preserve media=ok");
+  assert(!text.includes("fix failed checks"), "zero-failure readiness summary should not ask to fix failed checks");
+  assert(text.includes("review warnings"), "zero-failure readiness summary with warnings should ask to review warnings");
+  assert(text.includes("continue manual UX/formal E2E coordination"), "zero-failure readiness summary should keep the next validation path clear");
+  assert(text.includes("keep inputMode=log"), "zero-failure readiness summary should keep unattended safety guidance");
+  print("OK", "Mac host readiness boardSummary next step matches failed/warning state");
 }
 
 function checkHostBuildBoardSummaryFormatting() {
@@ -1057,6 +1154,7 @@ async function main() {
   checkDefaultDoesNotReadBoard(args);
   checkMediaBoardSummaryStatusFormatting();
   checkReadinessFindingsFormatting();
+  checkReadinessNextStepFormatting();
   checkHostBuildBoardSummaryFormatting();
   checkStaleBuildSuggestedActionFormatting();
   checkH264FallbackPipelineFormatting();

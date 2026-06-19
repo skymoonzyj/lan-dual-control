@@ -754,6 +754,11 @@ function formatReadinessBoardSummary(summary) {
   const hostMedia = formatHostMediaBoardSummary(summary);
   const suggestedAction = summary.suggestedAction?.boardSummary ? `; ${summary.suggestedAction.boardSummary}` : "";
   const macHostAuthPath = formatMacHostAuthPathSummary(summary.board);
+  const nextStep = failed > 0
+    ? "Next: fix failed checks before formal E2E; keep inputMode=log for unattended checks."
+    : warnings > 0
+      ? "Next: review warnings, then continue manual UX/formal E2E coordination; keep inputMode=log for unattended checks."
+      : "Next: continue manual UX/formal E2E coordination; keep inputMode=log for unattended checks.";
   return [
     `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${hostBuild ? `; ${hostBuild}` : ""}${hostMedia ? `; ${hostMedia}` : ""}${suggestedAction}; ${formatBoardCallSummary(summary.board)}${macHostAuthPath ? `; ${macHostAuthPath}` : ""}.`,
     `MacHostSafeStart=${summary.commands?.macHostSafeStartCommand || makeMacHostSafeStartCommand(summary.args || {})}.`,
@@ -766,7 +771,7 @@ function formatReadinessBoardSummary(summary) {
     `MacFormalLocalSmoke=${summary.commands?.macFormalLocalSmokeCommand || makeMacFormalLocalSmokeCommand(summary.args || {})}.`,
     `MacPowerPlan=${summary.commands?.macPowerPlanCommand || makeMacPowerPlanCommand()}.`,
     `MacScriptHelp=${summary.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
-    "Next: fix failed checks before formal E2E; keep inputMode=log for unattended checks.",
+    nextStep,
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
 }
