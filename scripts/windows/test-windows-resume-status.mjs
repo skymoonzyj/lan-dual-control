@@ -122,6 +122,20 @@ async function withMockHost(callback) {
   }
 }
 
+async function withMockHostOnAnyAddress(callback) {
+  const service = createMockMacHostServer({
+    host: "0.0.0.0",
+    port: 0,
+    password: "test-password",
+  });
+  await service.listen();
+  const address = service.server.address();
+  try {
+    await callback(Number(address.port));
+  } finally {
+    await service.close().catch(() => {});
+  }
+}
 async function withRuntimeDiscoveryHost(callback) {
   const buildId = "resume-runtime-build";
   const server = http.createServer((request, response) => {
@@ -2068,6 +2082,61 @@ async function checkSendAgentCallAckWithoutReadyCall(args) {
   });
 }
 
+async function checkBoardMacReadyTargetSelection(args) {
+  await withMockHostOnAnyAddress(async (port) => {
+    const readyText = [
+      `MAC_READY_FOR_REAL_TEST: host=127.0.0.2 port=${port} build=8015f22 inputMode=log maxScreenFps=60 media=ok`,
+      "readiness=passed=12/12 blockers=none warnings=none",
+      "Password was entered only in the Mac local hidden prompt; no password/token on board.",
+    ].join(" ");
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--checkBoard",
+        "--server", board.url,
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args, freeWindowsClientPortsEnv);
+      assert(result.exitCode === 0, `MAC_READY target selection failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.macReadyForRealTest?.found === true, "MAC_READY_FOR_REAL_TEST should be extracted from board");
+      assert(payload.board.macReadyForRealTest.host === "127.0.0.2", "MAC_READY target host should be extracted");
+      assert(payload.board.macReadyForRealTest.port === port, "MAC_READY target port should be extracted");
+      assert(payload.args?.host === "127.0.0.2", "resume status should promote MAC_READY host before preflight");
+      assert(payload.args?.port === port, "resume status should promote MAC_READY port before preflight");
+      assert(payload.macPreflight?.payload?.online === true, "promoted MAC_READY target should be probed");
+      assert(payload.macPreflight.payload.target?.host === "127.0.0.2", "preflight should use MAC_READY host");
+      assert(payload.macPreflight.payload.target?.port === port, "preflight should use MAC_READY port");
+      assertIncludes(payload.boardSummary, `MacReadyForRealTest=host=127.0.0.2 port=${port}`, "MAC_READY board summary");
+      assertIncludes(payload.boardSummary, `target=127.0.0.2:${port}`, "MAC_READY board summary target");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "MAC_READY target selection");
+      console.log("[OK] Windows resume status promotes MAC_READY_FOR_REAL_TEST target from Agent Link Board");
+    }, {
+      currentCall: {
+        status: "CALLING",
+        from: "Mac Codex",
+        need: "Windows Codex",
+        goal: "开始 Windows 控 Mac 真实测试",
+        ask: "MAC_READY_FOR_REAL_TEST 已完成，请 Windows 进入真实测试。",
+      },
+      messages: [
+        {
+          from: "Mac Codex",
+          text: readyText,
+        },
+      ],
+      statuses: {
+        "Mac Codex": {
+          role: "Mac 端",
+          status: "online",
+          note: readyText,
+        },
+      },
+    });
+  });
+}
 async function checkOfflineJson(args) {
   const result = await run([
     "--noDiscover",
@@ -2127,6 +2196,7 @@ async function main() {
   await checkSendUserAuthRequestOffline(args);
   await checkSendAgentCallAck(args);
   await checkSendAgentCallAckWithoutReadyCall(args);
+  await checkBoardMacReadyTargetSelection(args);
   await checkOfflineJson(args);
   await checkRequireMacReady(args);
   console.log("[OK] Windows resume status regression passed");

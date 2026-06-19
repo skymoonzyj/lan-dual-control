@@ -575,6 +575,155 @@ function emptyMacEvidence(source = "none", textCount = 0, rejectedCount = 0) {
     rejectedCount,
   };
 }
+function emptyMacReadyForRealTest(source = "none", textCount = 0, rejectedCount = 0) {
+  return {
+    found: false,
+    source,
+    textCount,
+    segmentCount: 0,
+    rejectedCount,
+    host: "",
+    port: null,
+    build: "",
+    inputMode: "",
+    maxScreenFps: null,
+    media: "",
+    readiness: "",
+    blockers: [],
+    warnings: [],
+    summary: "not-seen",
+  };
+}
+
+function splitMacReadyForRealTestSegments(text) {
+  const source = String(text || "");
+  const matches = [...source.matchAll(/\bMAC_READY_FOR_REAL_TEST\b/gi)];
+  return matches.map((match, index) => {
+    const next = matches[index + 1];
+    return source.slice(match.index, next ? next.index : source.length);
+  });
+}
+
+function isSafeMacReadyHost(value) {
+  const host = String(value || "").trim();
+  if (!host || host.length > 253) return false;
+  if (/^(?:0\.0\.0\.0|\*|unknown|none|null|undefined)$/i.test(host)) return false;
+  if (/(?:secret|password|passwd|token|apikey|api-key|credential|cookie|账号|密钥|密码|口令)/i.test(host)) return false;
+  return /^[A-Za-z0-9_.:-]+$/.test(host);
+}
+
+function parseMacReadyHostPort(rawHost, rawPort) {
+  let host = String(rawHost || "").trim();
+  let portText = String(rawPort || "").trim();
+  const bracketMatch = host.match(/^\[([^\]]+)\]:(\d{1,5})$/);
+  const simpleMatch = host.match(/^([^:]+):(\d{1,5})$/);
+  if (bracketMatch) {
+    host = bracketMatch[1];
+    if (!portText) portText = bracketMatch[2];
+  } else if (simpleMatch) {
+    host = simpleMatch[1];
+    if (!portText) portText = simpleMatch[2];
+  }
+  const port = Number(portText);
+  if (!isSafeMacReadyHost(host) || !Number.isInteger(port) || port < 1 || port > 65535) {
+    return null;
+  }
+  return { host, port };
+}
+
+function normalizeSafeMacReadyToken(value) {
+  const token = String(value || "").trim();
+  if (!token || token.length > 80) return "";
+  if (/(?:secret|password|passwd|token|apikey|api-key|credential|cookie|账号|密钥|密码|口令)/i.test(token)) return "";
+  return /^[A-Za-z0-9._/:=-]+$/.test(token) ? token : "";
+}
+
+function parseMacReadyForRealTestSegment(segment, source) {
+  const text = String(segment || "");
+  if (!/\bMAC_READY_FOR_REAL_TEST\b/i.test(text)) return null;
+  if (/(?:--password\s+|-Password\s+|LAN_DUAL_PASSWORD\s*=|CODEX_LINK_TOKEN\s*=|secret-value|token\s*=|passwd\s*=|credential\s*=|cookie\s*=|密钥\s*=|密码\s*=|口令\s*=)/i.test(text)) {
+    return null;
+  }
+
+  const target = parseMacReadyHostPort(extractLabeledValue(text, "host"), extractLabeledValue(text, "port"));
+  if (!target) return null;
+
+  const blockers = parseMacHealthList(text, "blockers");
+  const warnings = parseMacHealthList(text, "warnings");
+  if (!blockers.ok || !warnings.ok || blockers.values.length > 0) return null;
+
+  const media = normalizeSafeMacReadyToken(extractLabeledValue(text, "media"));
+  const readiness = normalizeSafeMacReadyToken(extractLabeledValue(text, "readiness"));
+  const hasReadyEvidence =
+    /^(?:ok|passed|ready)$/i.test(media) ||
+    /^(?:passed|ok|ready)(?:=|:|\/|$)/i.test(readiness) ||
+    /\bblockers\s*=\s*none\b/i.test(text);
+  if (!hasReadyEvidence) return null;
+
+  const build = normalizeSafeMacReadyToken(extractLabeledValue(text, "build"));
+  const inputMode = normalizeSafeMacReadyToken(extractLabeledValue(text, "inputMode"));
+  const fpsRaw = extractLabeledValue(text, "maxScreenFps");
+  const maxScreenFps = /^\d{1,4}$/.test(fpsRaw) ? Number(fpsRaw) : null;
+  const summary = [
+    `host=${target.host}`,
+    `port=${target.port}`,
+    build ? `build=${build}` : "",
+    inputMode ? `inputMode=${inputMode}` : "",
+    maxScreenFps ? `maxScreenFps=${maxScreenFps}` : "",
+    media ? `media=${media}` : "",
+    readiness ? `readiness=${readiness}` : "",
+    `blockers=${blockers.values.length ? blockers.values.join(",") : "none"}`,
+    `warnings=${warnings.values.length ? warnings.values.join(",") : "none"}`,
+  ].filter(Boolean).join(" ");
+
+  return {
+    found: true,
+    source,
+    host: target.host,
+    port: target.port,
+    build,
+    inputMode,
+    maxScreenFps,
+    media,
+    readiness,
+    blockers: blockers.values,
+    warnings: warnings.values,
+    summary,
+  };
+}
+
+function extractMacReadyForRealTestFromTexts(texts, source = "text") {
+  let selected = null;
+  let segmentCount = 0;
+  let rejectedCount = 0;
+  for (const text of texts) {
+    for (const segment of splitMacReadyForRealTestSegments(text)) {
+      segmentCount += 1;
+      const parsed = parseMacReadyForRealTestSegment(segment, source);
+      if (!parsed) {
+        rejectedCount += 1;
+        continue;
+      }
+      selected = parsed;
+    }
+  }
+  if (!selected) return emptyMacReadyForRealTest(source, texts.length, rejectedCount);
+  return {
+    ...selected,
+    textCount: texts.length,
+    segmentCount,
+    rejectedCount,
+  };
+}
+
+function extractMacReadyForRealTestFromBoardState(state) {
+  return extractMacReadyForRealTestFromTexts(collectStringValues(state), "api-state");
+}
+
+function extractMacReadyForRealTestFromText(text, source = "text") {
+  const value = String(text || "");
+  return extractMacReadyForRealTestFromTexts(value ? [value] : [], source);
+}
 
 function collectStringValues(value, results = [], depth = 0) {
   if (depth > 6 || value === null || value === undefined) return results;
@@ -2392,6 +2541,7 @@ async function getBoardSnapshot(args) {
       macPowerHealth: emptyMacPowerHealth("skipped"),
       macUnattendedHealth: emptyMacUnattendedHealth("skipped"),
       macEvidence: emptyMacEvidence("skipped"),
+      macReadyForRealTest: emptyMacReadyForRealTest("skipped"),
       windowsReverseGrantStatus: emptyMacSafeStart("skipped"),
       windowsOpenOneTimeReverseGrant: emptyMacSafeStart("skipped"),
       windowsReverseGrantStatusNodeFallback: emptyMacSafeStart("skipped"),
@@ -2428,6 +2578,7 @@ async function getBoardSnapshot(args) {
       macPowerHealth: extractMacPowerHealthFromBoardState(stateResult.state),
       macUnattendedHealth: extractMacUnattendedHealthFromBoardState(stateResult.state),
       macEvidence: extractMacEvidenceFromBoardState(stateResult.state),
+      macReadyForRealTest: extractMacReadyForRealTestFromBoardState(stateResult.state),
       windowsReverseGrantStatus: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsReverseGrantStatus", "status"),
       windowsOpenOneTimeReverseGrant: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsOpenOneTimeReverseGrant", "grant"),
       windowsReverseGrantStatusNodeFallback: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsReverseGrantStatusNodeFallback", "status"),
@@ -2469,6 +2620,7 @@ async function getBoardSnapshot(args) {
     macPowerHealth: extractMacPowerHealthFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macUnattendedHealth: extractMacUnattendedHealthFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macEvidence: extractMacEvidenceFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    macReadyForRealTest: extractMacReadyForRealTestFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     windowsReverseGrantStatus: extractWindowsReverseGrantFromText(output, "WindowsReverseGrantStatus", "status", result.ok ? "codex-link-client" : "unavailable"),
     windowsOpenOneTimeReverseGrant: extractWindowsReverseGrantFromText(output, "WindowsOpenOneTimeReverseGrant", "grant", result.ok ? "codex-link-client" : "unavailable"),
     windowsReverseGrantStatusNodeFallback: extractWindowsReverseGrantFromText(output, "WindowsReverseGrantStatusNodeFallback", "status", result.ok ? "codex-link-client" : "unavailable"),
@@ -3385,6 +3537,9 @@ function makeBoardSummary(report) {
     ...(report.board.macEvidence?.found
       ? [`MacEvidence=${report.board.macEvidence.summary}.`]
       : []),
+    ...(report.board.macReadyForRealTest?.found
+      ? [`MacReadyForRealTest=${report.board.macReadyForRealTest.summary}.`]
+      : []),
     `MacHeartbeatOnce=${macHeartbeatOnceCommand}.`,
     `MacHeartbeatWatch=${macHeartbeatWatchCommand}.`,
     `MacHeartbeatStart=${macHeartbeatStartCommand}.`,
@@ -3532,15 +3687,41 @@ function sendAgentCallAck(args, report) {
   };
 }
 
+function applyBoardReadyTarget(args, board) {
+  const ready = board?.macReadyForRealTest;
+  if (!ready?.found || !ready.host || !ready.port || args.hostProvided) {
+    return args;
+  }
+  return {
+    ...args,
+    originalHost: args.host,
+    originalPort: args.port,
+    host: ready.host,
+    port: ready.port,
+    hostProvided: true,
+    discoverNoLocalSubnets: true,
+    boardReadyTarget: {
+      applied: true,
+      source: "MAC_READY_FOR_REAL_TEST",
+      host: ready.host,
+      port: ready.port,
+      build: ready.build || "",
+      inputMode: ready.inputMode || "",
+      maxScreenFps: ready.maxScreenFps ?? null,
+      media: ready.media || "",
+    },
+  };
+}
 async function makeReport(args) {
   const git = getGitStatus();
   const board = await getBoardSnapshot(args);
-  const windowsClientDiagnosticsPorts = inspectWindowsClientDiagnosticsPorts(args);
-  const macPreflight = runFormalPreflight(args, windowsClientDiagnosticsPorts);
-  const commands = makeCommands(args, macPreflight, windowsClientDiagnosticsPorts);
+  const effectiveArgs = applyBoardReadyTarget(args, board);
+  const windowsClientDiagnosticsPorts = inspectWindowsClientDiagnosticsPorts(effectiveArgs);
+  const macPreflight = runFormalPreflight(effectiveArgs, windowsClientDiagnosticsPorts);
+  const commands = makeCommands(effectiveArgs, macPreflight, windowsClientDiagnosticsPorts);
   annotateBoardCurrentCall(board, commands);
   const formalManualChecklist = makeFormalManualChecklist(macPreflight.payload, commands);
-  const windowsMacAlertWatcher = getWindowsMacAlertWatcherStatus(args, commands);
+  const windowsMacAlertWatcher = getWindowsMacAlertWatcherStatus(effectiveArgs, commands);
   const checks = [
     { name: "gitStatus", ok: git.ok, detail: git.clean ? "clean" : `${git.changeCount} change(s)` },
     { name: "board", ok: !board.requested || board.ok, detail: board.requested ? `lines=${board.lineCount}` : "skipped" },
@@ -3552,10 +3733,10 @@ async function makeReport(args) {
         : macPreflight.payload?.error?.message || macPreflight.parseError || "offline",
     },
   ];
-  if (args.requireClean) {
+  if (effectiveArgs.requireClean) {
     checks.push({ name: "requireClean", ok: git.clean, detail: git.clean ? "clean" : `${git.changeCount} change(s)` });
   }
-  if (args.requireMacReady) {
+  if (effectiveArgs.requireMacReady) {
     checks.push({
       name: "requireMacReady",
       ok: Boolean(macPreflight.payload?.ok),
@@ -3566,20 +3747,23 @@ async function makeReport(args) {
     ok: false,
     generatedAt: new Date().toISOString(),
     args: {
-      host: args.host,
-      port: args.port,
-      discover: args.discover,
-      discoverNoLocalSubnets: args.discoverNoLocalSubnets,
-      clientPort: args.clientPort,
-      debugPort: args.debugPort,
-      alternateClientPort: args.alternateClientPort,
-      alternateDebugPort: args.alternateDebugPort,
-      checkBoard: args.checkBoard,
-      checkClientDiagnostics: args.checkClientDiagnostics,
-      requireClean: args.requireClean,
-      requireMacReady: args.requireMacReady,
-      sendUserAuthRequest: args.sendUserAuthRequest,
-      sendAgentCallAck: args.sendAgentCallAck,
+      host: effectiveArgs.host,
+      port: effectiveArgs.port,
+      discover: effectiveArgs.discover,
+      discoverNoLocalSubnets: effectiveArgs.discoverNoLocalSubnets,
+      clientPort: effectiveArgs.clientPort,
+      debugPort: effectiveArgs.debugPort,
+      alternateClientPort: effectiveArgs.alternateClientPort,
+      alternateDebugPort: effectiveArgs.alternateDebugPort,
+      checkBoard: effectiveArgs.checkBoard,
+      checkClientDiagnostics: effectiveArgs.checkClientDiagnostics,
+      requireClean: effectiveArgs.requireClean,
+      requireMacReady: effectiveArgs.requireMacReady,
+      sendUserAuthRequest: effectiveArgs.sendUserAuthRequest,
+      sendAgentCallAck: effectiveArgs.sendAgentCallAck,
+      originalHost: effectiveArgs.originalHost || args.host,
+      originalPort: effectiveArgs.originalPort || args.port,
+      boardReadyTarget: effectiveArgs.boardReadyTarget || null,
     },
     git,
     board,
@@ -3593,16 +3777,16 @@ async function makeReport(args) {
   };
   report.boardSummary = makeBoardSummary(report);
   report.userAuthRequest = makeUserAuthRequest(report);
-  report.sentUserAuthRequest = sendUserAuthRequest(args, report);
-  report.sentAgentCallAck = sendAgentCallAck(args, report);
-  if (args.sendUserAuthRequest) {
+  report.sentUserAuthRequest = sendUserAuthRequest(effectiveArgs, report);
+  report.sentAgentCallAck = sendAgentCallAck(effectiveArgs, report);
+  if (effectiveArgs.sendUserAuthRequest) {
     checks.push({
       name: "sendUserAuthRequest",
       ok: report.sentUserAuthRequest.ok,
       detail: report.sentUserAuthRequest.detail,
     });
   }
-  if (args.sendAgentCallAck) {
+  if (effectiveArgs.sendAgentCallAck) {
     checks.push({
       name: "sendAgentCallAck",
       ok: report.sentAgentCallAck.ok,
