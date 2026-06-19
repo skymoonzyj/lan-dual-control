@@ -291,6 +291,11 @@ Machine-readable JSON fields:
                             Secret-free real-input safety plan. It explains
                             default log mode, the --confirmUserWatching gate,
                             and the safe event set without sending input.
+  commands.macClientManualChecklistAction
+                            User-visible Mac client manual checklist action.
+                            It points operators to the page diagnostics manual
+                            checklist and never prompts, authenticates, sends a
+                            call, or sends input.
   board.macHostAuthPath
                             Optional sanitized MacHostAuthPath summary copied
                             from Agent Link Board statuses when --checkBoard is
@@ -831,6 +836,7 @@ function formatReadinessBoardSummary(summary) {
     `MacScriptHelp=${summary.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
     `MacRemoteAudioPlan=${summary.commands?.macRemoteAudioPlanCommand || makeMacRemoteAudioPlanCommand()}.`,
     `MacInputSafetyPlan=${summary.commands?.macInputSafetyPlanCommand || makeMacInputSafetyPlanCommand()}.`,
+    `MacClientManualChecklist=${summary.commands?.macClientManualChecklistAction || makeMacClientManualChecklistAction()}.`,
     nextStep,
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
@@ -1040,6 +1046,10 @@ function makeMacRemoteAudioPlanCommand() {
 
 function makeMacInputSafetyPlanCommand() {
   return "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
+}
+
+function makeMacClientManualChecklistAction() {
+  return "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
 }
 
 function formatMediaBoardSummary(summary) {
@@ -1630,6 +1640,7 @@ async function main() {
       macScriptHelpCommand: makeMacScriptHelpCommand(),
       macRemoteAudioPlanCommand: makeMacRemoteAudioPlanCommand(),
       macInputSafetyPlanCommand: makeMacInputSafetyPlanCommand(),
+      macClientManualChecklistAction: makeMacClientManualChecklistAction(),
     },
     results: results.map((result) => ({
       label: result.label,
@@ -1679,6 +1690,7 @@ async function main() {
     print("NEXT", `Mac script help safety check: ${summary.commands.macScriptHelpCommand}`, args);
     print("NEXT", `Mac remote-only audio plan: ${summary.commands.macRemoteAudioPlanCommand}`, args);
     print("NEXT", `Mac input safety plan: ${summary.commands.macInputSafetyPlanCommand}`, args);
+    print("NEXT", `Mac client manual checklist: ${summary.commands.macClientManualChecklistAction}`, args);
     if (summary.suggestedAction?.id) {
       print("NEXT", `Suggested action: ${summary.suggestedAction.id} · ${summary.suggestedAction.reason}`, args);
     }

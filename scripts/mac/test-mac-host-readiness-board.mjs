@@ -249,6 +249,19 @@ function assertMacInputSafetyPlanCommand(command, label) {
   assert(!value.includes("--inputMode inject"), `${label} should not start inject mode`);
 }
 
+function assertMacClientManualChecklistAction(text, label) {
+  const value = String(text || "");
+  assert(value.includes("Mac client 会话诊断查看“手工清单”"), `${label} should explain where to review the Mac client manual checklist`);
+  assert(value.includes("连接/视频/音频/剪贴板/input_ack/诊断"), `${label} should list the manual UX checklist coverage`);
+  assert(value.includes("复制诊断"), `${label} should tell operators to copy diagnostics after checking`);
+  assert(!value.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!value.includes("--password"), `${label} should not embed a password argument`);
+  assert(!value.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!value.includes("--forceCall"), `${label} should not force an Agent Link Board call`);
+  assert(!value.includes("input_event"), `${label} should not mention input events`);
+  assert(!value.includes("inject"), `${label} should not instruct injection`);
+}
+
 function assertMacHostAuthPath(payload, expected, label) {
   const authPath = payload.board?.macHostAuthPath;
   assert(authPath?.status === expected.status, `${label} should expose MacHostAuthPath status`);
@@ -360,6 +373,7 @@ function formatReadinessBoardSummaryFixture(summary) {
     functionBlock(source, "formatMacHostAuthPathSummary"),
     functionBlock(source, "makeMacRemoteAudioPlanCommand"),
     functionBlock(source, "makeMacInputSafetyPlanCommand"),
+    functionBlock(source, "makeMacClientManualChecklistAction"),
     functionBlock(source, "formatReadinessBoardSummary"),
   ].join("\n");
   return Function("summary", `${helpers}\nreturn formatReadinessBoardSummary(summary);`)(summary);
@@ -471,6 +485,7 @@ function checkHelp(args) {
     assert(String(result.stdout).includes("commands.macScriptHelpCommand"), `${script} ${flag} should document Mac script help safety command`);
     assert(String(result.stdout).includes("commands.macRemoteAudioPlanCommand"), `${script} ${flag} should document Mac remote audio plan command`);
     assert(String(result.stdout).includes("commands.macInputSafetyPlanCommand"), `${script} ${flag} should document Mac input safety plan command`);
+    assert(String(result.stdout).includes("commands.macClientManualChecklistAction"), `${script} ${flag} should document Mac client manual checklist action`);
     assert(String(result.stdout).includes("board.macHostAuthPath"), `${script} ${flag} should document sanitized MacHostAuthPath board field`);
   }
   print("OK", "Mac host readiness board help exits quickly");
@@ -492,6 +507,7 @@ function checkDefaultDoesNotReadBoard(args) {
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "default readiness JSON script help command");
   assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlanCommand || "", "default readiness JSON remote audio plan command");
   assertMacInputSafetyPlanCommand(payload.commands?.macInputSafetyPlanCommand || "", "default readiness JSON input safety plan command");
+  assertMacClientManualChecklistAction(payload.commands?.macClientManualChecklistAction || "", "default readiness JSON Mac client manual checklist action");
   const maxFpsStep = payload.results?.find((item) => item.label === "Mac host max FPS");
   assert(maxFpsStep, "default readiness JSON should include an independent Mac host max FPS step");
   assert(maxFpsStep.ok === true, "Mac host max FPS step should be advisory and non-blocking");
@@ -518,6 +534,11 @@ function checkDefaultDoesNotReadBoard(args) {
   assert(String(payload.boardSummary || "").includes("MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary"), "default boardSummary should include the Mac remote audio plan command");
   assert(String(payload.boardSummary || "").includes("MacInputSafetyPlan="), "default boardSummary should include Mac input safety plan guidance");
   assert(String(payload.boardSummary || "").includes("MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary"), "default boardSummary should include the Mac input safety plan command");
+  assert(String(payload.boardSummary || "").includes("MacClientManualChecklist="), "default boardSummary should include Mac client manual checklist guidance");
+  assertMacClientManualChecklistAction(
+    payload.boardSummary.split("MacClientManualChecklist=")[1]?.split(". Do not send passwords")[0] || "",
+    "default boardSummary MacClientManualChecklist",
+  );
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "default readiness JSON");
   print("OK", "Mac host readiness does not read Agent Link Board by default");
 }
@@ -1251,12 +1272,15 @@ function checkPlainOutputIncludesLaunchAgentPlan(args) {
   assert(String(result.stdout || "").includes("Mac formal local smoke:"), "plain output should include formal local smoke label");
   assert(String(result.stdout || "").includes("Mac remote-only audio plan:"), "plain output should include remote audio plan label");
   assert(String(result.stdout || "").includes("Mac input safety plan:"), "plain output should include input safety plan label");
+  assert(String(result.stdout || "").includes("Mac client manual checklist:"), "plain output should include Mac client manual checklist label");
   assert(String(result.stdout || "").includes("install-mac-host-launch-agent.mjs"), "plain output should include LaunchAgent planner command");
   assert(String(result.stdout || "").includes("--maxScreenFps 60"), "plain output should include max-FPS planner command");
   assert(String(result.stdout || "").includes("--requireLaunchAgentMaxFps"), "plain output should include unattended formal gate command");
   assert(String(result.stdout || "").includes("check-mac-formal-local-smoke.mjs"), "plain output should include formal local smoke command");
   assert(String(result.stdout || "").includes("plan-mac-remote-audio.mjs"), "plain output should include remote audio plan command");
   assert(String(result.stdout || "").includes("plan-mac-input-safety.mjs"), "plain output should include input safety plan command");
+  const manualChecklistLine = String(result.stdout || "").split(/\r?\n/).find((line) => line.includes("Mac client manual checklist:")) || "";
+  assertMacClientManualChecklistAction(manualChecklistLine, "plain output Mac client manual checklist");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "plain readiness output");
   print("OK", "Mac host readiness plain output includes LaunchAgent planner guidance");
 }
