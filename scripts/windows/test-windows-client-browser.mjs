@@ -1594,6 +1594,15 @@ async function verifyDesktopOnlyHostPanel(session) {
               "Windows resume: repo=clean board=ok mac=ready; MacHeartbeatFreshness=fresh checked=20s codex=64s board=38s checkedAt=2026-06-19T05:12:59.408Z",
             )
           : null;
+      const blockedHeartbeatWithFreshnessEvidence =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "MacHeartbeat=status=blocked; checkedAt=2026-06-19T05:12:59.408Z; blockers=mac-codex-stale warnings=none reason=mac-codex-stale",
+                "MacHeartbeatFreshness=fresh checked=20s codex=360s board=38s checkedAt=2026-06-19T05:12:59.408Z",
+              ].join("; "),
+            )
+          : null;
       const watcherThrottleBefore =
         typeof shouldRefreshMacAlertWatcherStatus === "function"
           ? shouldRefreshMacAlertWatcherStatus(15999)
@@ -2327,10 +2336,12 @@ async function verifyDesktopOnlyHostPanel(session) {
           stableHeartbeatFreshnessAttention?.summary.includes("Mac 心跳摘要过旧") &&
           stableHeartbeatFreshnessAttention?.summary.includes("心跳检查 3 分钟前") &&
           stableHeartbeatFreshnessAttention?.summary.includes("Mac Codex 5 分钟前") &&
-          stableHeartbeatFreshnessEvidence?.summary === "" &&
           Array.isArray(stableHeartbeatFreshnessEvidence?.evidenceLabels) &&
-          stableHeartbeatFreshnessEvidence.evidenceLabels.includes("Mac 心跳正常") &&
-          stableHeartbeatFreshnessEvidence?.evidenceSummary.includes("Mac 心跳正常") &&
+          stableHeartbeatFreshnessEvidence.evidenceLabels.length === 0 &&
+          stableHeartbeatFreshnessEvidence?.evidenceSummary === "" &&
+          blockedHeartbeatWithFreshnessEvidence?.summary.includes("Mac Codex 可能卡住") &&
+          Array.isArray(blockedHeartbeatWithFreshnessEvidence?.evidenceLabels) &&
+          !blockedHeartbeatWithFreshnessEvidence.evidenceLabels.includes("Mac 心跳正常") &&
           heartbeatCommandCheck.ok &&
           cleanMacHostReadinessCommandAttention?.summary === "" &&
           Array.isArray(cleanMacHostReadinessCommandAttention?.labels) &&
@@ -2508,6 +2519,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         stableHeartbeatFreshnessDirect,
         stableHeartbeatFreshnessAttention,
         stableHeartbeatFreshnessEvidence,
+        blockedHeartbeatWithFreshnessEvidence,
         heartbeatCommandCheck,
         cleanMacHostReadinessCommandAttention,
         cleanMacHostMediaCommandAttention,
