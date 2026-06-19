@@ -175,9 +175,10 @@ Machine-readable JSON fields:
                               60Hz safe start, LaunchAgent load/print checks,
                               MacUnattendedSendStatus,
                               macHeartbeatRefreshRestartCommand,
-                              macPowerPlanCommand, and
+                              macPowerPlanCommand,
+                              macRemoteAudioPlanCommand, and
                               macLaunchAgentPlanCommand for dry-run
-                              power/LaunchAgent plans.
+                              power/audio/LaunchAgent plans.
 
 Examples:
   node scripts/mac/check-mac-heartbeat.mjs --checkBoard --boardSummary
@@ -869,6 +870,7 @@ function buildCommands(args) {
     macUnattendedSendStatusCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --server ${args.server} --sendStatus --boardSummary`,
     macUnattendedFormalCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`,
     macPowerPlanCommand: "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
+    macRemoteAudioPlanCommand: "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary",
     macLaunchAgentPlanCommand: `node scripts/mac/install-mac-host-launch-agent.mjs --launchAgentPath ${shellQuote(launchAgentPath)} --port ${args.port} --boardSummary`,
     macLaunchAgentLoadCommand: `launchctl bootstrap gui/$(id -u) ${shellQuote(launchAgentPath)}`,
     macLaunchAgentPrintCommand: `launchctl print gui/$(id -u)/${shellQuote(launchAgentLabel)}`,
@@ -1096,6 +1098,7 @@ function makeBoardSummary(report) {
     `MacUnattendedSendStatus=${report.commands.macUnattendedSendStatusCommand}.`,
     `MacHeartbeatRefreshRestart=${report.commands.macHeartbeatRefreshRestartCommand}.`,
     `MacPowerPlan=${report.commands.macPowerPlanCommand}.`,
+    `MacRemoteAudioPlan=${report.commands.macRemoteAudioPlanCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
     `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
     `MacLaunchAgentLoad=${report.commands.macLaunchAgentLoadCommand}.`,

@@ -263,6 +263,20 @@ function assertMacPowerPlanCommand(command, label) {
   assertNotIncludes(text, "inject", label);
 }
 
+function assertMacRemoteAudioPlanCommand(command, label) {
+  const text = String(command || "");
+  assertIncludes(text, "node scripts/mac/plan-mac-remote-audio.mjs", label);
+  assertIncludes(text, "--boardSummary", label);
+  assertNotIncludes(text, "--promptPassword", label);
+  assertNotIncludes(text, "--password", label);
+  assertNotIncludes(text, "--apply", label);
+  assertNotIncludes(text, "sudo", label);
+  assertNotIncludes(text, "--sendCall", label);
+  assertNotIncludes(text, "--server", label);
+  assertNotIncludes(text, "input_event", label);
+  assertNotIncludes(text, "inject", label);
+}
+
 function gitLines(args) {
   const result = spawnSync("git", args, {
     cwd: repoRoot,
@@ -366,6 +380,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macUnattendedStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macUnattendedSendStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macPowerPlan", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macRemoteAudioPlan", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macUnattendedFormal", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macHostSafeStart", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macMaxFpsSafeStart", `${script} ${flag}`);
@@ -512,6 +527,7 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.commands?.macUnattendedSendStatus || "", "--skipLaunchctl", "missing LaunchAgent commands.macUnattendedSendStatus");
   assertIncludes(payload.commands?.macUnattendedSendStatus || "", "--skipPmset", "missing LaunchAgent commands.macUnattendedSendStatus");
   assertMacPowerPlanCommand(payload.commands?.macPowerPlan || "", "missing LaunchAgent commands.macPowerPlan");
+  assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlan || "", "missing LaunchAgent commands.macRemoteAudioPlan");
   assertIncludes(payload.commands?.macUnattendedFormal || "", "check-mac-unattended-status.mjs", "missing LaunchAgent commands.macUnattendedFormal");
   assertIncludes(payload.commands?.macUnattendedFormal || "", "--host 127.0.0.1", "missing LaunchAgent commands.macUnattendedFormal");
   assertIncludes(payload.commands?.macUnattendedFormal || "", "--port 9", "missing LaunchAgent commands.macUnattendedFormal");
@@ -601,6 +617,8 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.boardSummary, "MacUnattendedSendStatus=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacPowerPlan=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacRemoteAudioPlan=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "--networkWake on", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "--sendStatus", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacHostSafeStart=", "missing LaunchAgent board summary");
@@ -685,6 +703,7 @@ function checkLaunchAgentPlannerPreservesOptions(args) {
   assertIncludes(payload.commands?.macMaxFpsSafeStart || "", "--maxScreenFps 60", "custom LaunchAgent commands.macMaxFpsSafeStart");
   assertIncludes(payload.commands?.macHostStop || "", "--port 9", "custom LaunchAgent commands.macHostStop");
   assertMacPowerPlanCommand(payload.commands?.macPowerPlan || "", "custom LaunchAgent commands.macPowerPlan");
+  assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlan || "", "custom LaunchAgent commands.macRemoteAudioPlan");
   assertIncludes(payload.commands?.macLaunchAgentLoad || "", missingPath, "custom LaunchAgent commands.macLaunchAgentLoad");
   assertIncludes(payload.commands?.macLaunchAgentPrint || "", label, "custom LaunchAgent commands.macLaunchAgentPrint");
   assertIncludes(payload.commands?.macUnattendedFormal || "", `--label ${label}`, "custom LaunchAgent commands.macUnattendedFormal");
@@ -696,6 +715,7 @@ function checkLaunchAgentPlannerPreservesOptions(args) {
   assertIncludes(payload.boardSummary || "", "MacMaxFpsSafeStart=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacHostStop=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacPowerPlan=", "custom LaunchAgent board summary");
+  assertIncludes(payload.boardSummary || "", "MacRemoteAudioPlan=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentLoad=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentPrint=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacFormalLocalSmoke=", "custom LaunchAgent board summary");
@@ -971,6 +991,8 @@ function checkBoardSummary(args) {
   );
   assertIncludes(text, "MacScriptHelp=", "board summary");
   assertIncludes(text, "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "board summary");
+  assertIncludes(text, "MacRemoteAudioPlan=", "board summary");
+  assertIncludes(text, "MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs", "board summary");
   assertIncludes(text, "blockers=none", "board summary");
   assertIncludes(text, "warnings=host-offline,launch-agent-missing", "board summary");
   assertIncludes(text, "No password", "board summary");

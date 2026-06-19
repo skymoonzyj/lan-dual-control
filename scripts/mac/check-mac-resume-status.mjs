@@ -202,6 +202,10 @@ Machine-readable JSON fields:
                              Secret-free Mac power settings dry-run planner;
                              it prints the pmset changes needed for unattended
                              use without applying them or requesting a password.
+  commands.macRemoteAudioPlanCommand
+                             Secret-free Mac remote-only audio dry-run planner;
+                             it explains that system-pcm capture does not mute
+                             local speakers and does not change volume/output.
   commands.macLaunchAgentPlanCommand
                              Secret-free Mac host LaunchAgent dry-run planner;
                              it prints a plist plan and manual load commands
@@ -1322,6 +1326,10 @@ function makeMacPowerPlanCommand() {
   ].join(" ");
 }
 
+function makeMacRemoteAudioPlanCommand() {
+  return "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary";
+}
+
 function makeMacLaunchAgentPlanCommand(args) {
   return [
     "node scripts/mac/install-mac-host-launch-agent.mjs",
@@ -1831,6 +1839,7 @@ function formatBoardSummary(report) {
       `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
       `MacUnattendedSendStatus=${report.commands.macUnattendedSendStatusCommand}.`,
       `MacPowerPlan=${report.commands.macPowerPlanCommand}.`,
+      `MacRemoteAudioPlan=${report.commands.macRemoteAudioPlanCommand}.`,
       `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
       `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
       `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
@@ -1884,6 +1893,7 @@ function formatBoardSummary(report) {
     `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
     `MacUnattendedSendStatus=${report.commands.macUnattendedSendStatusCommand}.`,
     `MacPowerPlan=${report.commands.macPowerPlanCommand}.`,
+    `MacRemoteAudioPlan=${report.commands.macRemoteAudioPlanCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
     `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
     `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
@@ -2000,6 +2010,7 @@ function printReport(report) {
   console.log(`[NEXT] Mac unattended board-status refresh: ${report.commands.macUnattendedSendStatusCommand}`);
   console.log(`[NEXT] Mac unattended formal 60Hz gate: ${report.commands.macUnattendedFormalCommand}`);
   console.log(`[NEXT] Mac power settings dry-run plan: ${report.commands.macPowerPlanCommand}`);
+  console.log(`[NEXT] Mac remote-only audio dry-run plan: ${report.commands.macRemoteAudioPlanCommand}`);
   console.log(`[NEXT] Mac LaunchAgent dry-run plan: ${report.commands.macLaunchAgentPlanCommand}`);
   console.log(`[NEXT] Mac max FPS dry-run plan: ${report.commands.macMaxFpsPlanCommand}`);
   console.log(`[NEXT] Mac client page status: ${report.commands.macClientPageStatusCommand}`);
@@ -2078,6 +2089,7 @@ async function main() {
       macUnattendedSendStatusCommand: makeMacUnattendedSendStatusCommand(args),
       macUnattendedFormalCommand: makeMacUnattendedFormalCommand(args),
       macPowerPlanCommand: makeMacPowerPlanCommand(),
+      macRemoteAudioPlanCommand: makeMacRemoteAudioPlanCommand(),
       macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
       macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
       macClientPageStatusCommand: makeMacClientPageStatusCommand(),
