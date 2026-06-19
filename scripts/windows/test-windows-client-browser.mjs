@@ -1751,6 +1751,37 @@ async function verifyDesktopOnlyHostPanel(session) {
               message: "Mac alert watcher is running.",
             }, { available: true, busy: false })
           : {};
+      const positiveMacGenericEvidenceText = [
+        "MacFormalE2E=status=ok readyToCall=true checklist=passed blockers=none warnings=none",
+        "Evidence=MacClientPageOnline,MacClientDiagnosticsOk,MacHostMediaOk",
+      ].join("; ");
+      const positiveMacGenericEvidenceAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(positiveMacGenericEvidenceText)
+          : null;
+      const positiveMacGenericEvidenceView =
+        typeof macAlertWatcherUiState === "function"
+          ? macAlertWatcherUiState({
+              ok: true,
+              action: "status",
+              running: true,
+              processIds: [2468],
+              server: "http://192.168.31.68:17888",
+              lastAlert: {
+                at: "2026-06-19 11:35:00",
+                title: "Mac generic evidence",
+                message: positiveMacGenericEvidenceText,
+                summary: positiveMacGenericEvidenceText,
+              },
+              message: "Mac alert watcher is running.",
+            }, { available: true, busy: false })
+          : {};
+      const blockedHeartbeatRiskEvidenceAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "MacHeartbeat=blocked reason=codex-reconnect-stuck evidence=正在重新连接 5/5 / stream disconnected before completion blockers=mac-codex-stale warnings=none",
+            )
+          : null;
       const cleanMacClientPageCommandAttention =
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
@@ -2240,6 +2271,22 @@ async function verifyDesktopOnlyHostPanel(session) {
           positiveMacClientStatusView.statusText.includes("Mac client 页面在线") &&
           positiveMacClientStatusView.statusText.includes("Mac client 诊断已通过") &&
           !positiveMacClientStatusView.statusText.includes("风险：") &&
+          positiveMacGenericEvidenceAttention?.summary === "" &&
+          Array.isArray(positiveMacGenericEvidenceAttention?.labels) &&
+          positiveMacGenericEvidenceAttention.labels.length === 0 &&
+          positiveMacGenericEvidenceAttention?.evidenceSummary.includes("Mac formal E2E 已就绪") &&
+          positiveMacGenericEvidenceAttention?.evidenceSummary.includes("Mac client 页面在线") &&
+          positiveMacGenericEvidenceAttention?.evidenceSummary.includes("Mac client 诊断已通过") &&
+          positiveMacGenericEvidenceAttention?.evidenceSummary.includes("Mac 媒体基线已通过") &&
+          Array.isArray(positiveMacGenericEvidenceAttention?.evidenceLabels) &&
+          positiveMacGenericEvidenceAttention.evidenceLabels.length === 4 &&
+          positiveMacGenericEvidenceView.statusText.includes("证据：") &&
+          positiveMacGenericEvidenceView.statusText.includes("Mac client 页面在线") &&
+          positiveMacGenericEvidenceView.statusText.includes("Mac client 诊断已通过") &&
+          positiveMacGenericEvidenceView.statusText.includes("Mac 媒体基线已通过") &&
+          !positiveMacGenericEvidenceView.statusText.includes("风险：") &&
+          blockedHeartbeatRiskEvidenceAttention?.summary.includes("Mac Codex 长时间无新进展") &&
+          !blockedHeartbeatRiskEvidenceAttention?.evidenceSummary.includes("Mac 心跳正常") &&
           cleanMacClientPageCommandAttention?.summary === "" &&
           Array.isArray(cleanMacClientPageCommandAttention?.labels) &&
           cleanMacClientPageCommandAttention.labels.length === 0 &&
@@ -2328,6 +2375,9 @@ async function verifyDesktopOnlyHostPanel(session) {
         positiveMacHeartbeatView,
         positiveMacClientStatusAttention,
         positiveMacClientStatusView,
+        positiveMacGenericEvidenceAttention,
+        positiveMacGenericEvidenceView,
+        blockedHeartbeatRiskEvidenceAttention,
         cleanMacClientPageCommandAttention,
         cleanMacClientDiagnosticsCommandAttention,
         cleanMacClientBrowserSelfTestAttention,
@@ -4669,6 +4719,7 @@ async function verifyReconnectControls(session) {
         "MacFormalE2E=status=ok readyToCall=true checklist=passed repo=ok board=ok macHost=ok h264=ok audio=ok clipboard=ok display=ok build=current blockers=none warnings=none",
         "MacClientPage=status=online url=http://127.0.0.1:5188/ blockers=none warnings=none",
         "MacClientDiagnostics=status=ok probeClientServer=ok page=online blockers=none warnings=none",
+        "Evidence=MacClientPageOnline,MacClientDiagnosticsOk,MacHostMediaOk",
         "MacFormalLocalSmoke=failed blockers=auth warnings=video",
         "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
         "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",

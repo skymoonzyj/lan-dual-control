@@ -3331,6 +3331,50 @@ function hasMacPositiveEvidenceSegment(text, keywordPattern, successPattern) {
   );
 }
 
+function labelMacPositiveEvidenceValue(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const compact = text.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, "");
+  if (/macheartbeat(?:ok|healthy|normal)|mac心跳正常|心跳正常/.test(compact)) return "Mac 心跳正常";
+  if (/machostmedia(?:ok|passed|ready)|macmediabaseline(?:ok|passed)|媒体基线(?:已)?(?:通过|正常)/.test(compact)) return "Mac 媒体基线已通过";
+  if (/macformallocalsmoke(?:ok|passed|ready)|本机短验收(?:已)?通过/.test(compact)) return "Mac 本机短验收已通过";
+  if (/macformale2e(?:ok|passed|ready|readytocall|checklistpassed)|formale2e(?:ok|passed|ready)|formale2e已就绪|正式e2e已就绪/.test(compact)) {
+    return "Mac formal E2E 已就绪";
+  }
+  if (/macclientpage(?:online|ok|ready)|clientpage(?:online|ok|ready)|macclient页面在线|控制页在线|页面在线/.test(compact)) {
+    return "Mac client 页面在线";
+  }
+  if (/macclientdiagnostics(?:ok|passed|ready)|macclientreadiness(?:ok|passed|ready)|clientdiagnostics(?:ok|passed|ready)|clientreadiness(?:ok|passed|ready)|macclient诊断(?:已)?通过|诊断(?:已)?通过/.test(compact)) {
+    return "Mac client 诊断已通过";
+  }
+  return "";
+}
+
+function parseMacEvidenceFieldLabels(text) {
+  const labels = [];
+  for (const segment of splitMacStatusSegments(text)) {
+    if (
+      !/\bevidence\s*[:=]/i.test(segment) ||
+      /\bnode\s+scripts[\\/]+mac[\\/]+|\bscripts[\\/]+mac[\\/]+|\.mjs\b/i.test(segment) ||
+      !isCleanMacStatusEvidenceSegment(segment)
+    ) {
+      continue;
+    }
+    for (const match of segment.matchAll(/\bevidence\s*[:=]\s*([^;]+)/gi)) {
+      const rawValues = String(match[1] || "")
+        .replace(/\b(?:warnings?|blockers?|reason|suggestedAction|actionCommands)\s*[:=][\s\S]*$/i, "")
+        .split(/[,|/]+|\s{2,}/)
+        .map((value) => value.trim())
+        .filter(Boolean);
+      for (const value of rawValues) {
+        const label = labelMacPositiveEvidenceValue(value);
+        if (label) labels.push(label);
+      }
+    }
+  }
+  return [...new Set(labels)];
+}
+
 function isCleanLatestMacHeartbeatEvidence(text, now = Date.now()) {
   const segment = selectLatestMacHeartbeatSegment(text);
   if (!segment) return false;
@@ -3399,6 +3443,7 @@ function parseMacPositiveEvidenceLabels(text) {
   ) {
     labels.push("Mac client 诊断已通过");
   }
+  labels.push(...parseMacEvidenceFieldLabels(source));
   return [...new Set(labels)];
 }
 

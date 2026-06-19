@@ -48,6 +48,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端消费 Mac 正向 `Evidence=` / `evidence=` 字段，同时避免风险 evidence 误判。
+完成内容：
+- 新增 `labelMacPositiveEvidenceValue` / `parseMacEvidenceFieldLabels`，只从干净片段提取已知正向标签，例如 `MacClientPageOnline`、`MacClientDiagnosticsOk`、`MacHostMediaOk`、`MacFormalE2EReady`。
+- `parseMacPositiveEvidenceLabels` 先保留旧有明确摘要顺序，再用通用 Evidence 字段补缺口，避免改变既有“媒体基线 / 本机短验收 / formal E2E”导出顺序。
+- 页面 diagnostics-only 覆盖 `Evidence=MacClientPageOnline,MacClientDiagnosticsOk,MacHostMediaOk` 的 UI/导出证据，以及 `MacHeartbeat=blocked ... evidence=正在重新连接 5/5` 不进入健康证据。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败在通用 Evidence 只显示 `Mac formal E2E 已就绪`，缺少 Mac client 页面、诊断和媒体基线证据。
+- 绿灯：实现后，同一 diagnostics-only 回归通过。
+遗留问题：
+- 本轮只消费文本摘要里的通用正向 Evidence，不定义新协议字段，不运行 Mac 侧脚本。
+下一步建议：
+- Mac 端后续可以继续在 boardSummary 里输出稳定 `Evidence=` 短标签；Windows 侧会把已知干净标签显示为值守证据，风险 evidence 仍按风险摘要处理。
+是否改了协议：否；只改 Windows 控制端本地文本解析和诊断展示。
+是否需要另一端配合：不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端把 Mac client 页面在线和诊断通过的干净结果显示为值守证据。
 完成内容：
 - `parseMacPositiveEvidenceLabels` 新增 `MacClientPage` 正向结果识别：`status=online/ok/ready`、`online`、`ready=true` 或“通过”且同段无 warning/blocker/failed/stale 时，显示“Mac client 页面在线”。
