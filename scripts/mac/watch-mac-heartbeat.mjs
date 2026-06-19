@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const heartbeatScript = process.env.LAN_DUAL_MAC_HEARTBEAT_SCRIPT || "scripts/mac/check-mac-heartbeat.mjs";
+const unattendedStatusScript = process.env.LAN_DUAL_MAC_UNATTENDED_STATUS_SCRIPT || "scripts/mac/check-mac-unattended-status.mjs";
 const codexLinkClient = process.env.LAN_DUAL_CODEX_LINK_CLIENT || "scripts/codex-link-client.mjs";
 
 const defaults = {
@@ -19,6 +20,7 @@ const defaults = {
   codexTextFile: "",
   stuckThresholdMs: 60000,
   staleThresholdMs: 300000,
+  refreshUnattended: false,
   sendStatus: false,
   once: false,
   device: "Mac Heartbeat",
@@ -44,6 +46,9 @@ Options:
   --maxRuns <n>             Stop after n checks. Default: 0 means forever.
   --sendStatus              Send each heartbeat summary to Agent Link Board
                             as device "Mac Heartbeat" by default.
+  --refreshUnattended       Before each heartbeat, refresh the independent
+                            "Mac Unattended" status with a read-only check.
+                            Default: off.
   --device <name>           Agent Link Board status device. Default: ${defaults.device}
   --role <role>             Agent Link Board status role. Default: ${defaults.role}
   --host <host>             Mac host discovery host. Default: ${defaults.host}
@@ -78,7 +83,7 @@ function parseArgs(argv) {
       args.help = true;
       continue;
     }
-    if (token === "--once" || token === "--sendStatus" || token === "--json" || token === "--boardSummary") {
+    if (token === "--once" || token === "--sendStatus" || token === "--refreshUnattended" || token === "--json" || token === "--boardSummary") {
       args[token.slice(2)] = true;
       continue;
     }
@@ -225,14 +230,65 @@ function runHeartbeat(args) {
   };
 }
 
-function statusForReport(report) {
+function unattendedRefreshArgs(args) {
+  return [
+    "--host",
+    args.host,
+    "--port",
+    String(args.port),
+    "--server",
+    args.server,
+    "--sendStatus",
+    "--boardSummary",
+  ];
+}
+
+function refreshUnattended(args) {
+  if (!args.refreshUnattended) {
+    return {
+      requested: false,
+      ok: null,
+      status: null,
+      signal: null,
+      summary: "not-requested",
+      error: "",
+    };
+  }
+  const result = spawnSync(process.execPath, [unattendedStatusScript, ...unattendedRefreshArgs(args)], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: Math.max(args.timeoutMs + 3000, 5000),
+    maxBuffer: 4 * 1024 * 1024,
+    env: {
+      ...process.env,
+      LAN_DUAL_PASSWORD: "",
+    },
+  });
+  const output = safeSnippet(String(result.stdout || "").trim() || String(result.stderr || "").trim() || result.error?.message || "");
+  return {
+    requested: true,
+    ok: result.status === 0,
+    status: result.status,
+    signal: result.signal,
+    summary: output || `unattended status exit ${result.status ?? "unknown"}`,
+    error: safeSnippet(result.error?.message || String(result.stderr || "")),
+  };
+}
+
+function statusForReport(report, unattendedRefresh) {
+  if (unattendedRefresh?.requested && unattendedRefresh.ok === false) return "warning";
   if (!report) return "blocked";
   if (report.status === "blocked") return "blocked";
   if (report.status === "warning") return "warning";
   return "online";
 }
 
-function noteForReport(run) {
+function noteForReport(run, unattendedRefresh) {
+  if (unattendedRefresh?.requested && unattendedRefresh.ok === false) {
+    const heartbeatStatus = run.report?.status || "unknown";
+    const reason = unattendedRefresh.error || unattendedRefresh.summary || "refresh-failed";
+    return `MacHeartbeat=status=warning; reason=mac-unattended-refresh-failed; heartbeat=${heartbeatStatus}; unattendedRefresh=${safeSnippet(reason)}. ${run.report?.boardSummary || "Heartbeat still ran after refresh failure."} No password was requested or sent; no WebSocket auth/input/inject was attempted.`;
+  }
   if (run.report?.boardSummary) return run.report.boardSummary;
   const reason = run.parseError || run.error || run.stderr || `heartbeat exit ${run.status ?? "unknown"}`;
   return `MacHeartbeat=status=blocked; device=Mac; reason=heartbeat-run-failed; error=${safeSnippet(reason)}. No password was requested or sent; no WebSocket auth/input/inject was attempted.`;
@@ -246,9 +302,9 @@ function safeSnippet(text) {
     .slice(0, 220);
 }
 
-function postStatus(args, run) {
-  const status = statusForReport(run.report);
-  const note = noteForReport(run);
+function postStatus(args, run, unattendedRefresh) {
+  const status = statusForReport(run.report, unattendedRefresh);
+  const note = noteForReport(run, unattendedRefresh);
   const result = spawnSync(process.execPath, [
     codexLinkClient,
     "--server",
@@ -285,11 +341,16 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function makeSummary(iteration, run, post) {
+function unattendedRefreshLabel(unattendedRefresh) {
+  if (!unattendedRefresh?.requested) return "not-requested";
+  return unattendedRefresh.ok ? "refreshed" : "refresh-failed";
+}
+
+function makeSummary(iteration, run, post, unattendedRefresh) {
   const reportStatus = run.report?.status || "blocked";
   const reason = run.report?.codex?.reason || (run.parseError ? "heartbeat-parse-failed" : "heartbeat-run-failed");
   const posted = post ? (post.ok ? "posted" : "post-failed") : "not-posted";
-  return `Mac heartbeat watch: run=${iteration} status=${reportStatus} reason=${reason} post=${posted}`;
+  return `Mac heartbeat watch: run=${iteration} status=${reportStatus} reason=${reason} post=${posted} unattended=${unattendedRefreshLabel(unattendedRefresh)}`;
 }
 
 async function watch(args) {
@@ -297,16 +358,18 @@ async function watch(args) {
   let iteration = 0;
   while (true) {
     iteration += 1;
+    const unattendedRefresh = refreshUnattended(args);
     const run = runHeartbeat(args);
-    const post = args.sendStatus ? postStatus(args, run) : null;
-    const summary = makeSummary(iteration, run, post);
+    const post = args.sendStatus ? postStatus(args, run, unattendedRefresh) : null;
+    const summary = makeSummary(iteration, run, post, unattendedRefresh);
     const item = {
       iteration,
+      unattendedRefresh,
       heartbeatStatus: run.status,
       heartbeatOk: run.ok,
       reportStatus: run.report?.status || "blocked",
       reason: run.report?.codex?.reason || "",
-      boardSummary: noteForReport(run),
+      boardSummary: noteForReport(run, unattendedRefresh),
       posted: post ? post.ok : false,
       postStatus: post?.status ?? null,
       postError: post ? safeSnippet(post.error || post.stderr) : "",
@@ -316,13 +379,17 @@ async function watch(args) {
     if (!args.json && !args.boardSummary) {
       console.log(summary);
       if (run.report?.boardSummary) console.log(run.report.boardSummary);
+      if (unattendedRefresh.requested && !unattendedRefresh.ok) {
+        console.error(`[WARN] Mac Unattended refresh failed: ${safeSnippet(unattendedRefresh.error || unattendedRefresh.summary)}`);
+      }
       if (post && !post.ok) console.error(`[WARN] Agent Link Board status post failed: ${item.postError}`);
     }
     if (args.maxRuns > 0 && iteration >= args.maxRuns) break;
     await sleep(args.intervalMs);
   }
   const last = runs[runs.length - 1] || null;
-  const ok = Boolean(last) && last.reportStatus !== "blocked" && (!args.sendStatus || last.posted);
+  const unattendedOk = !args.refreshUnattended || last?.unattendedRefresh?.ok === true;
+  const ok = Boolean(last) && unattendedOk && last.reportStatus !== "blocked" && (!args.sendStatus || last.posted);
   return { ok, runs, last };
 }
 

@@ -32,6 +32,7 @@ const defaults = {
   status: false,
   stop: false,
   restart: false,
+  refreshUnattended: false,
   json: false,
   boardSummary: false,
 };
@@ -55,6 +56,8 @@ Options:
   --status                  Inspect the background watcher and exit.
   --stop                    Stop the background watcher if it is running.
   --restart                 Stop then start the background watcher.
+  --refreshUnattended       Start watcher with a read-only Mac Unattended
+                            status refresh before each heartbeat. Default: off.
   --host <host>             Mac host discovery host. Default: ${defaults.host}
   --port <port>             Mac host discovery port. Default: ${defaults.port}
   --clientHost <host>       Local Mac client host. Default: ${defaults.clientHost}
@@ -89,7 +92,7 @@ function parseArgs(argv) {
       args.help = true;
       continue;
     }
-    if (token === "--status" || token === "--stop" || token === "--restart" || token === "--json" || token === "--boardSummary") {
+    if (token === "--status" || token === "--stop" || token === "--restart" || token === "--refreshUnattended" || token === "--json" || token === "--boardSummary") {
       args[token.slice(2)] = true;
       continue;
     }
@@ -340,6 +343,7 @@ function watcherArgs(args) {
     args.stateFile,
   ];
   if (args.codexTextFile) result.push("--codexTextFile", args.codexTextFile);
+  if (args.refreshUnattended) result.push("--refreshUnattended");
   return result;
 }
 
@@ -390,6 +394,7 @@ async function startWatcher(args) {
     clientPort: args.clientPort,
     stateFile: toDisplayPath(args.stateFile),
     codexTextFile: args.codexTextFile ? toDisplayPath(args.codexTextFile) : "",
+    refreshUnattended: args.refreshUnattended,
     device: "Mac Heartbeat",
     role: "Mac watchdog",
   };
@@ -492,6 +497,7 @@ function makeReport(action, args, details) {
       clientPort: args.clientPort,
       stateFile: toDisplayPath(args.stateFile),
       codexTextFile: args.codexTextFile ? toDisplayPath(args.codexTextFile) : "",
+      refreshUnattended: args.refreshUnattended,
     },
     files: {
       pidFile: status.pidFile,
@@ -500,14 +506,22 @@ function makeReport(action, args, details) {
       errLog: status.errLog,
     },
     lastHeartbeat: status.lastHeartbeat,
-    commands: {
-      start: "node scripts/mac/start-mac-heartbeat-watcher.mjs --boardSummary",
-      status: "node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary",
-      stop: "node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --boardSummary",
-      restart: "node scripts/mac/start-mac-heartbeat-watcher.mjs --restart --boardSummary",
-      once: "node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --boardSummary",
-    },
+    commands: makeCommands(args),
     safety: "No password was requested or sent; no WebSocket auth/input/inject was attempted.",
+  };
+}
+
+function makeCommands(args) {
+  const refreshStart = args.refreshUnattended ? " --refreshUnattended" : "";
+  const refreshOnce = args.refreshUnattended ? " --refreshUnattended" : "";
+  return {
+    start: `node scripts/mac/start-mac-heartbeat-watcher.mjs${refreshStart} --boardSummary`,
+    status: "node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary",
+    stop: "node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --boardSummary",
+    restart: `node scripts/mac/start-mac-heartbeat-watcher.mjs --restart${refreshStart} --boardSummary`,
+    once: `node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus${refreshOnce} --boardSummary`,
+    startWithUnattendedRefresh: "node scripts/mac/start-mac-heartbeat-watcher.mjs --refreshUnattended --boardSummary",
+    onceWithUnattendedRefresh: "node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --refreshUnattended --boardSummary",
   };
 }
 
@@ -520,9 +534,11 @@ function makeBoardSummary(report) {
     ? `lastRun=${report.lastHeartbeat.watcherRun.run || "unknown"} post=${report.lastHeartbeat.watcherRun.post || "unknown"}`
     : "lastRun=not-seen";
   return [
-    `Mac heartbeat watcher: action=${report.action} ok=${report.ok ? "true" : "false"} ${state}; device=Mac Heartbeat; intervalMs=${report.watcher.intervalMs}; ${heartbeat}; ${watcherRun}.`,
+    `Mac heartbeat watcher: action=${report.action} ok=${report.ok ? "true" : "false"} ${state}; device=Mac Heartbeat; intervalMs=${report.watcher.intervalMs}; refreshUnattended=${report.watcher.refreshUnattended ? "true" : "false"}; ${heartbeat}; ${watcherRun}.`,
     `Status=${report.commands.status}.`,
     `Start=${report.commands.start}.`,
+    `RefreshStart=${report.commands.startWithUnattendedRefresh}.`,
+    `RefreshOnce=${report.commands.onceWithUnattendedRefresh}.`,
     `Stop=${report.commands.stop}.`,
     `Once=${report.commands.once}.`,
     report.safety,
@@ -534,6 +550,7 @@ function printHuman(report) {
   console.log(`[INFO] Action: ${report.action}`);
   console.log(`[INFO] Running: ${report.running ? `yes pid=${report.pid}` : "no"}`);
   console.log(`[INFO] Device: ${report.watcher.device}; role=${report.watcher.role}; intervalMs=${report.watcher.intervalMs}`);
+  console.log(`[INFO] Refresh Mac Unattended: ${report.watcher.refreshUnattended ? "yes" : "no"}`);
   console.log(`[INFO] PID file: ${report.files.pidFile}`);
   console.log(`[INFO] Output log: ${report.files.outLog}`);
   console.log(`[INFO] Error log: ${report.files.errLog}`);
@@ -545,8 +562,10 @@ function printHuman(report) {
   }
   console.log(`[NEXT] Status: ${report.commands.status}`);
   console.log(`[NEXT] Start: ${report.commands.start}`);
+  console.log(`[NEXT] Start with Mac Unattended refresh: ${report.commands.startWithUnattendedRefresh}`);
   console.log(`[NEXT] Stop: ${report.commands.stop}`);
   console.log(`[NEXT] One-shot heartbeat: ${report.commands.once}`);
+  console.log(`[NEXT] One-shot with Mac Unattended refresh: ${report.commands.onceWithUnattendedRefresh}`);
   console.log(`[INFO] ${report.safety}`);
 }
 

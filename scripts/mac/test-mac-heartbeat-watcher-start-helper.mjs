@@ -154,6 +154,7 @@ function assertStartedPayload(payload, label) {
   assert(payload.watcher?.device === "Mac Heartbeat", `${label} should use Mac Heartbeat device`);
   assert(payload.watcher?.role === "Mac watchdog", `${label} should use Mac watchdog role`);
   assert(payload.watcher?.intervalMs === 1234, `${label} should preserve interval`);
+  assert(payload.watcher?.refreshUnattended === false, `${label} should not refresh Mac Unattended by default`);
   assert(payload.lastHeartbeat?.heartbeat?.found === true, `${label} should include the last heartbeat summary from stdout`);
   assert(payload.lastHeartbeat?.heartbeat?.status === "ok", `${label} should include last heartbeat status`);
   assert(payload.lastHeartbeat?.heartbeat?.checkedAt === "2026-06-18T10:00:00.000Z", `${label} should include last heartbeat checkedAt`);
@@ -163,6 +164,8 @@ function assertStartedPayload(payload, label) {
   assertIncludes(payload.commands?.status || "", "start-mac-heartbeat-watcher.mjs --status --boardSummary", `${label} status command`);
   assertIncludes(payload.commands?.stop || "", "start-mac-heartbeat-watcher.mjs --stop --boardSummary", `${label} stop command`);
   assertIncludes(payload.commands?.once || "", "watch-mac-heartbeat.mjs --once --sendStatus --boardSummary", `${label} once command`);
+  assertIncludes(payload.commands?.startWithUnattendedRefresh || "", "start-mac-heartbeat-watcher.mjs --refreshUnattended --boardSummary", `${label} refresh start command`);
+  assertIncludes(payload.commands?.onceWithUnattendedRefresh || "", "watch-mac-heartbeat.mjs --once --sendStatus --refreshUnattended --boardSummary", `${label} refresh once command`);
 }
 
 function checkHelp(args) {
@@ -172,6 +175,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "Usage:", `${script} ${flag}`);
     assertIncludes(result.stdout, "--status", `${script} ${flag}`);
     assertIncludes(result.stdout, "--stop", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--refreshUnattended", `${script} ${flag}`);
     assertIncludes(result.stdout, "Mac Heartbeat", `${script} ${flag}`);
     assertNoSecrets(result, `${script} ${flag}`);
   }
@@ -215,6 +219,7 @@ function checkStartStatusStop(args) {
     assertIncludes(argv, "--sendStatus", "fake watcher argv");
     assertIncludes(argv, "--intervalMs 1234", "fake watcher argv");
     assertIncludes(argv, "--stateFile", "fake watcher argv");
+    assertNotIncludes(argv, "--refreshUnattended", "fake watcher argv should not refresh Mac Unattended by default");
     assertNotIncludes(argv, "Mac Codex", "fake watcher argv should not mask Mac Codex freshness");
     assertNotIncludes(argv, "--password", "fake watcher argv");
 
@@ -235,7 +240,9 @@ function checkStartStatusStop(args) {
     assertIncludes(summary, "device=Mac Heartbeat", "boardSummary");
     assertIncludes(summary, "lastHeartbeat=status=ok checkedAt=2026-06-18T10:00:00.000Z reason=ok codexAgeMs=1000", "boardSummary");
     assertIncludes(summary, "lastRun=1 post=posted", "boardSummary");
+    assertIncludes(summary, "refreshUnattended=false", "boardSummary");
     assertIncludes(summary, "Status=node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary", "boardSummary");
+    assertIncludes(summary, "RefreshStart=node scripts/mac/start-mac-heartbeat-watcher.mjs --refreshUnattended --boardSummary", "boardSummary");
     assertIncludes(summary, "No password was requested or sent", "boardSummary");
     assertNoSecrets(boardSummary, "boardSummary output");
 
@@ -252,6 +259,30 @@ function checkStartStatusStop(args) {
     rmSync(tmp, { recursive: true, force: true });
   }
   print("OK", "Start/status/boardSummary/stop lifecycle works with a fake watcher");
+}
+
+function checkStartWithUnattendedRefresh(args) {
+  const tmp = mkdtempSync(join(tmpdir(), "lan-dual-heartbeat-start-"));
+  const fake = makeFakeWatcher(tmp);
+  const paths = pathsFor(tmp);
+  const env = {
+    LAN_DUAL_MAC_HEARTBEAT_WATCHER_SCRIPT: fake.path,
+  };
+  try {
+    const start = run(["--json", "--refreshUnattended", ...commonArgs(paths)], args, env);
+    const payload = parseJson(start.stdout, "refresh start JSON");
+    assert(start.status === 0, `refresh start should pass.\n${start.stdout}\n${start.stderr}`);
+    assert(payload.watcher?.refreshUnattended === true, "refresh start JSON should preserve refreshUnattended=true");
+    assert(payload.commands?.start.includes("--refreshUnattended"), "refresh start command should preserve refreshUnattended");
+    assert(payload.commands?.once.includes("--refreshUnattended"), "refresh once command should preserve refreshUnattended");
+    const argv = readWatcherArgv(fake.argvLog)[0].join(" ");
+    assertIncludes(argv, "--refreshUnattended", "refresh fake watcher argv");
+    assertNoSecrets(start, "refresh start output");
+  } finally {
+    run(["--stop", ...commonArgs(paths)], args, env);
+    rmSync(tmp, { recursive: true, force: true });
+  }
+  print("OK", "Start helper can explicitly enable Mac Unattended refresh");
 }
 
 function checkRestart(args) {
@@ -290,6 +321,7 @@ function main() {
   checkHelp(args);
   checkStatusNotRunning(args);
   checkStartStatusStop(args);
+  checkStartWithUnattendedRefresh(args);
   checkRestart(args);
   print("OK", "Mac heartbeat watcher start helper self-test passed");
 }

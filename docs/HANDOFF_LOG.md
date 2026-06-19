@@ -21,6 +21,36 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让后台 Mac heartbeat watcher 可在显式开启时刷新独立 `Mac Unattended` 证据，减少通讯板 `MacUnattendedFreshness=stale` 噪声。
+完成内容：
+- `watch-mac-heartbeat` 新增默认关闭的 `--refreshUnattended`：每次 heartbeat 前先运行只读 `check-mac-unattended-status --sendStatus --boardSummary`，再运行 heartbeat；刷新成功时 JSON `last.unattendedRefresh.ok=true`，watch summary 标记 `unattended=refreshed`。
+- 刷新失败时 heartbeat 仍会继续跑并保留心跳证据，watch summary 标记 `unattended=refresh-failed`；单次 `--once` 会非零退出，方便自动化看见值守刷新异常。
+- `start-mac-heartbeat-watcher` 新增同名 `--refreshUnattended`，默认启动仍不刷新；JSON、boardSummary 和普通输出会给出 `startWithUnattendedRefresh` / `onceWithUnattendedRefresh` 安全命令。
+- 本轮没有重启现有后台 watcher，没有执行 `pmset`、没有加载 `launchctl`、没有认证 WebSocket、没有请求或发送密码，也没有发送 call/input/inject。
+修改文件：
+- `scripts/mac/watch-mac-heartbeat.mjs`
+- `scripts/mac/test-watch-mac-heartbeat.mjs`
+- `scripts/mac/start-mac-heartbeat-watcher.mjs`
+- `scripts/mac/test-mac-heartbeat-watcher-start-helper.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-watch-mac-heartbeat.mjs --timeoutMs 12000` / `node scripts/mac/test-mac-heartbeat-watcher-start-helper.mjs --timeoutMs 15000` 先失败在 help 缺 `--refreshUnattended`。
+- 绿灯：实现后同两条专项回归通过，覆盖默认不刷新、显式刷新、刷新失败仍跑 heartbeat、启动器传参、boardSummary 命令和不泄密。
+- 真实只读 one-shot：`node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --refreshUnattended --boardSummary` 已复跑通过，输出 `MacHeartbeat=status=ok` 且 `MacUnattendedFreshness=fresh`；不需要密码或系统授权。
+遗留问题：
+- 当前真实值守风险本身仍未修复：LaunchAgent 未加载、系统睡眠/显示睡眠仍需用户现场确认后人工处理；本轮只解决证据刷新噪声，不承诺无人值守已完成。
+下一步建议：
+- 白天若要让后台 watcher 持续保持 `Mac Unattended` 新鲜，可先停旧 watcher，再显式运行 `node scripts/mac/start-mac-heartbeat-watcher.mjs --refreshUnattended --boardSummary`；如果只想临时刷新一次，用 `node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --refreshUnattended --boardSummary`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac heartbeat / resume 第一屏也能直接转述新鲜 `MacUnattendedHealth=`，不用再只靠 `MacUnattendedFreshness=` 推断值守风险来源。
 完成内容：
 - 已先运行 `check-mac-unattended-status --sendStatus --boardSummary` 刷新真实通讯板证据；当前证据新鲜，仍为 `MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power`，并伴随 `MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled`。

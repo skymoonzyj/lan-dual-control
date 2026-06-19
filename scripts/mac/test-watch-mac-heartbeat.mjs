@@ -120,6 +120,23 @@ console.log("ok");
   return { path, logPath };
 }
 
+function makeFakeUnattendedStatus(tmp, status = "ok") {
+  const path = join(tmp, `fake-unattended-${status}.mjs`);
+  const logPath = join(tmp, "unattended-calls.jsonl");
+  writeFileSync(path, `#!/usr/bin/env node
+import { appendFileSync } from "node:fs";
+appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(process.argv.slice(2)) + "\\n");
+const status = ${JSON.stringify(status)};
+if (status === "ok") {
+  console.log("Mac unattended status: MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T12:00:00.000Z; No password was requested or sent; no input/inject/system changes were attempted.");
+  process.exit(0);
+}
+console.error("Mac unattended status failed without secrets");
+process.exit(2);
+`);
+  return { path, logPath };
+}
+
 function readJsonl(path) {
   return readFileSync(path, "utf8")
     .trim()
@@ -134,6 +151,7 @@ function checkHelp(args) {
     assert(result.status === 0, `${script} ${flag} should exit 0`);
     assertIncludes(result.stdout, "Usage:", `${script} ${flag}`);
     assertIncludes(result.stdout, "--sendStatus", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--refreshUnattended", `${script} ${flag}`);
     assertIncludes(result.stdout, "Mac Heartbeat", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
@@ -189,6 +207,75 @@ function checkSendStatus(args) {
   print("OK", "Watcher posts status as Mac Heartbeat, not Mac Codex");
 }
 
+function checkRefreshUnattended(args) {
+  const tmp = mkdtempSync(join(tmpdir(), "lan-dual-watch-heartbeat-"));
+  try {
+    const heartbeat = makeFakeHeartbeat(tmp, "ok");
+    const unattended = makeFakeUnattendedStatus(tmp, "ok");
+    const fakeLink = makeFakeCodexLink(tmp);
+    const result = run([
+      "--once",
+      "--refreshUnattended",
+      "--sendStatus",
+      "--json",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "43770",
+      "--server",
+      "http://127.0.0.1:17888",
+    ], args, {
+      LAN_DUAL_MAC_HEARTBEAT_SCRIPT: heartbeat,
+      LAN_DUAL_MAC_UNATTENDED_STATUS_SCRIPT: unattended.path,
+      LAN_DUAL_CODEX_LINK_CLIENT: fakeLink.path,
+    });
+    const payload = parseJson(result.stdout, "refresh unattended JSON");
+    assert(result.status === 0, `refresh unattended should pass.\n${result.stdout}\n${result.stderr}`);
+    assert(payload.last.unattendedRefresh?.requested === true, "refresh unattended should mark refresh requested");
+    assert(payload.last.unattendedRefresh?.ok === true, "refresh unattended should mark refresh ok");
+    assertIncludes(payload.last.summary, "unattended=refreshed", "refresh unattended summary");
+    const calls = readJsonl(unattended.logPath);
+    assert(calls.length === 1, "fake unattended status should receive one call");
+    const argv = calls[0].join(" ");
+    assertIncludes(argv, "127.0.0.1", "unattended argv");
+    assertIncludes(argv, "--port 43770", "unattended argv");
+    assertIncludes(argv, "--sendStatus", "unattended argv");
+    assertIncludes(argv, "--boardSummary", "unattended argv");
+    assertNotIncludes(argv, "--promptPassword", "unattended argv");
+    assertNotIncludes(argv, "--password", "unattended argv");
+    assertNoSecrets(`${result.stdout}\n${result.stderr}\n${argv}`, "refresh unattended output");
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+  print("OK", "Watcher can refresh Mac Unattended status before heartbeat when requested");
+}
+
+function checkRefreshUnattendedFailure(args) {
+  const tmp = mkdtempSync(join(tmpdir(), "lan-dual-watch-heartbeat-"));
+  try {
+    const heartbeat = makeFakeHeartbeat(tmp, "ok");
+    const unattended = makeFakeUnattendedStatus(tmp, "failed");
+    const result = run([
+      "--once",
+      "--refreshUnattended",
+      "--json",
+    ], args, {
+      LAN_DUAL_MAC_HEARTBEAT_SCRIPT: heartbeat,
+      LAN_DUAL_MAC_UNATTENDED_STATUS_SCRIPT: unattended.path,
+    });
+    const payload = parseJson(result.stdout, "refresh unattended failure JSON");
+    assert(result.status !== 0, "failed unattended refresh should make one-shot watcher exit non-zero");
+    assert(payload.last.reportStatus === "ok", "heartbeat should still run after unattended refresh failure");
+    assert(payload.last.unattendedRefresh?.requested === true, "refresh failure should mark refresh requested");
+    assert(payload.last.unattendedRefresh?.ok === false, "refresh failure should mark refresh failed");
+    assertIncludes(payload.last.summary, "unattended=refresh-failed", "refresh failure summary");
+    assertNoSecrets(`${result.stdout}\n${result.stderr}`, "refresh failure output");
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+  print("OK", "Watcher reports Mac Unattended refresh failure without skipping heartbeat");
+}
+
 function checkBlockedStatus(args) {
   const tmp = mkdtempSync(join(tmpdir(), "lan-dual-watch-heartbeat-"));
   try {
@@ -223,6 +310,8 @@ function main() {
   checkHelp(args);
   checkOnceNoPost(args);
   checkSendStatus(args);
+  checkRefreshUnattended(args);
+  checkRefreshUnattendedFailure(args);
   checkBlockedStatus(args);
   print("OK", "Mac heartbeat watcher self-test passed");
 }
