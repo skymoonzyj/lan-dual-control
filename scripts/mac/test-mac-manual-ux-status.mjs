@@ -402,6 +402,22 @@ function expiredMacManualUxCallWhileWindowsPushingBoardState() {
   };
 }
 
+function expiredMacManualUxCallWhileWindowsCommittingBoardState() {
+  const state = expiredMacManualUxCallBoardState();
+  return {
+    ...state,
+    statuses: {
+      ...state.statuses,
+      "Windows Codex": {
+        status: "committing",
+        role: "Windows 端",
+        note: "验证完成，准备提交推送：Windows ack 文案对齐 + Mac manual UX 确认防误触。",
+        updatedAt: "2026-06-20T10:10:30.000Z",
+      },
+    },
+  };
+}
+
 function confirmedMacManualUxCallBoardState() {
   const state = macManualUxCallInProgressBoardState();
   return {
@@ -905,6 +921,20 @@ async function checkReconfirmRefusesWhileWindowsIsPushing(args) {
   console.log("[OK] Mac manual UX status refuses --reconfirmCall while Windows is pushing");
 }
 
+async function checkReconfirmRefusesWhileWindowsIsCommittingPush(args) {
+  await withFakeBoard(expiredMacManualUxCallWhileWindowsCommittingBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json", "--reconfirmCall"], args);
+    assert(result.exitCode === 1, `expired manual UX --reconfirmCall should fail while Windows is committing a push. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "Windows committing push --reconfirmCall refusal JSON");
+    assertIncludes(payload.error?.message || "", "Windows Codex is committing", "Windows committing push reconfirm refusal");
+    assert(payload.warnings?.includes("windows-codex-pushing"), `Windows committing push refusal should keep warning: ${JSON.stringify(payload.warnings)}`);
+    assertIncludes(payload.boardSummary, "ManualUxGate=wait-windows-codex-push", "Windows committing push refusal boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `Windows committing push state should not post a reconfirm call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(`${result.stdout}\n${result.stderr}`, "Windows committing push --reconfirmCall refusal");
+  });
+  console.log("[OK] Mac manual UX status refuses --reconfirmCall while Windows is committing a push");
+}
+
 async function checkSendCallRefusesWhileWindowsIsPushing(args) {
   await withFakeBoard(userAwakeWhileWindowsPushingBoardState(), async (serverUrl, posts) => {
     const result = await run(["--server", serverUrl, "--json", "--sendCall"], args);
@@ -971,6 +1001,7 @@ async function main() {
   await checkExpiredManualUxCallCanBeReconfirmed(args);
   await checkActiveManualUxCallRefusesReconfirm(args);
   await checkReconfirmRefusesWhileWindowsIsPushing(args);
+  await checkReconfirmRefusesWhileWindowsIsCommittingPush(args);
   await checkSendCallRefusesWhileWindowsIsPushing(args);
   await checkSendCallRefusesWhenNotCallReady(args);
   await checkSendCallRefusesOtherActiveCall(args);

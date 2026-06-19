@@ -383,9 +383,11 @@ function statusByDevice(state, deviceName) {
 
 function isWindowsPushCriticalStatus(status, note) {
   const combined = `${normalizedText(status)} ${normalizedText(note)}`.toLowerCase();
-  return /\b(pushing-soon|pushing|rebasing|merging|resolving-conflicts)\b/.test(combined)
+  return /\b(pushing-soon|pushing|rebasing|merging|resolving-conflicts|committing)\b/.test(combined)
     || /\b(preparing|prepare|ready|about)\b[^.;\n]{0,80}\b(push|rebase)\b/.test(combined)
-    || /\b(pull|rebase)\b[^.;\n]{0,80}\b(push|pushing)\b/.test(combined);
+    || /\b(pull|rebase)\b[^.;\n]{0,80}\b(push|pushing)\b/.test(combined)
+    || /(?:准备|即将|正在|开始|完成)[^。；;\n]{0,40}(?:提交|推送|变基|合并|解决冲突)/.test(combined)
+    || /(?:提交|推送|变基|合并|解决冲突)[^。；;\n]{0,40}(?:准备|即将|正在|开始|完成)/.test(combined);
 }
 
 function windowsCodexCoordination(state) {
