@@ -198,6 +198,31 @@ function assertMacClientFormalChecklistCommand(command, label, expectedHost = "<
   assertNotIncludes(command, "--json", label);
 }
 
+function assertMacClientPromptPasswordSmokeCommand(command, label, expectedHost = "", expectedPort = "43770", options = {}) {
+  assertIncludes(command, "run-mac-client-formal-smoke.mjs", label);
+  if (options.discover) {
+    assertIncludes(command, "--discover", label);
+    assertNotIncludes(command, "--host", label);
+    assertNotIncludes(command, "<Windows IP>", label);
+  } else {
+    assertIncludes(command, `--host ${expectedHost}`, label);
+    assertIncludes(command, `--port ${expectedPort}`, label);
+  }
+  assertIncludes(command, "--ensureClient", label);
+  assertIncludes(command, "--promptPassword", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--preflightOnly", label);
+  assertNotIncludes(command, "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(command, "--useEnvPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "--json", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function assertReverseGrantBoardSummary(text, label, expectedPort = "43770") {
   assertIncludes(text, "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass", label);
   assertIncludes(text, `-Port ${expectedPort} -Status -BoardSummary`, label);
@@ -250,6 +275,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "runPlan.commands.safePreflightWithEnsureClient", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.sendCallWithEnsureClient", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.macClientFormalChecklist", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.commands.macClientPromptPasswordSmoke", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.macClientBrowserSelfTest", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.macScriptHelp", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsHostStatus", `${script} ${flag}`);
@@ -304,6 +330,13 @@ function checkOfflineJson(args) {
     "43770",
     { discover: true },
   );
+  assertMacClientPromptPasswordSmokeCommand(
+    payload.runPlan?.commands?.macClientPromptPasswordSmoke || "",
+    "offline runPlan Mac client prompt-password smoke command",
+    "",
+    "43770",
+    { discover: true },
+  );
   assertWindowsHostStatusCommand(payload.runPlan?.commands?.windowsHostStatus || "", "offline runPlan Windows host status command");
   assertMacClientBrowserSelfTestCommand(
     payload.runPlan?.commands?.macClientBrowserSelfTest || "",
@@ -338,6 +371,14 @@ function checkOfflineJson(args) {
   assertReverseGrantBoardSummary(payload.boardSummary || "", "offline board summary");
   assertIncludes(payload.boardSummary || "", "WindowsHostStatus=node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacClientPromptPasswordSmoke=", "offline board summary");
+  assertMacClientPromptPasswordSmokeCommand(
+    (payload.boardSummary || "").split("MacClientPromptPasswordSmoke=")[1]?.split(". ")[0] || "",
+    "offline board summary Mac client prompt-password smoke command",
+    "",
+    "43770",
+    { discover: true },
+  );
   assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "allow-windows-reverse-control.mjs", "offline board summary");
@@ -373,6 +414,14 @@ function checkAllowOfflineWarnings(args) {
   assertSecureAuthPath(payload.boardSummary || "", "allow offline board summary secure auth path", "43770", { expectBoardLabel: true });
   assertMacScriptHelpCommand(payload.runPlan?.commands?.macScriptHelp || "", "allow offline runPlan Mac script help command");
   assertIncludes(payload.boardSummary || "", "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "allow offline board summary");
+  assertMacClientPromptPasswordSmokeCommand(
+    payload.runPlan?.commands?.macClientPromptPasswordSmoke || "",
+    "allow offline runPlan Mac client prompt-password smoke command",
+    "",
+    "43770",
+    { discover: true },
+  );
+  assertIncludes(payload.boardSummary || "", "MacClientPromptPasswordSmoke=", "allow offline board summary");
   print("OK", "Allow flags keep offline state as warnings but not readyToCall");
 }
 
@@ -403,6 +452,14 @@ function checkBoardSummarySecretFree(args) {
   assertIncludes(result.stdout, "start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary", "board summary");
   assertIncludes(result.stdout, "MacClientFormalChecklist=", "board summary");
   assertIncludes(result.stdout, "check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary", "board summary");
+  assertIncludes(result.stdout, "MacClientPromptPasswordSmoke=", "board summary");
+  assertMacClientPromptPasswordSmokeCommand(
+    result.stdout.split("MacClientPromptPasswordSmoke=")[1]?.split(". ")[0] || "",
+    "board summary Mac client prompt-password smoke command",
+    "",
+    "43770",
+    { discover: true },
+  );
   assertIncludes(result.stdout, "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "board summary");
   assertIncludes(result.stdout, "Reverse rehearsal:", "board summary");
   assertIncludes(result.stdout, "ReverseGrantCopy=", "board summary");
@@ -436,6 +493,17 @@ function checkHumanRunPlan(args) {
   assertIncludes(result.stdout, "start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary", "human runPlan");
   assertIncludes(result.stdout, "Mac client formal checklist:", "human runPlan");
   assertIncludes(result.stdout, "check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary", "human runPlan");
+  assertIncludes(result.stdout, "Mac client prompt-password smoke:", "human runPlan");
+  const promptSmokeLine = String(result.stdout)
+    .split(/\r?\n/)
+    .find((line) => line.startsWith("- Mac client prompt-password smoke: "));
+  assertMacClientPromptPasswordSmokeCommand(
+    String(promptSmokeLine || "").slice("- Mac client prompt-password smoke: ".length),
+    "human runPlan Mac client prompt-password smoke",
+    "",
+    "43770",
+    { discover: true },
+  );
   assertIncludes(result.stdout, "Mac script help safety check:", "human runPlan");
   const macScriptHelpLine = String(result.stdout)
     .split(/\r?\n/)
@@ -740,6 +808,12 @@ async function checkReadyShape(args) {
         "127.0.0.1",
         String(windowsPort),
       );
+      assertMacClientPromptPasswordSmokeCommand(
+        payload.runPlan?.commands?.macClientPromptPasswordSmoke || "",
+        "ready runPlan Mac client prompt-password smoke command",
+        "127.0.0.1",
+        String(windowsPort),
+      );
       assert(payload.runPlan?.safety?.authenticatesWebSocket === false, "formal checklist runPlan itself should not authenticate");
       assert(payload.runPlan?.safety?.reverseControlRequestSendsInput === false, "ready runPlan should say reverse request sends no input");
       assert(payload.runPlan?.safety?.windowsReverseGrantLoopbackOnly === true, "ready runPlan should keep Windows grant loopback-only");
@@ -753,6 +827,13 @@ async function checkReadyShape(args) {
       assertMatches(payload.boardSummary || "", /warnings=[^.]*board/, "ready board summary warnings");
       assertIncludes(payload.boardSummary || "", "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "ready board summary");
       assertIncludes(payload.boardSummary || "", `WindowsHostStatus=node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port ${windowsPort} --boardSummary`, "ready board summary");
+      assertIncludes(payload.boardSummary || "", "MacClientPromptPasswordSmoke=", "ready board summary");
+      assertMacClientPromptPasswordSmokeCommand(
+        (payload.boardSummary || "").split("MacClientPromptPasswordSmoke=")[1]?.split(". ")[0] || "",
+        "ready board summary Mac client prompt-password smoke command",
+        "127.0.0.1",
+        String(windowsPort),
+      );
       assertIncludes(payload.boardSummary || "", `MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 127.0.0.1 --port ${windowsPort} --boardSummary`, "ready board summary");
       assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "ready board summary");
       assertIncludes(payload.boardSummary || "", "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "ready board summary");
@@ -795,9 +876,16 @@ async function checkDiscoverSelectsWindowsHost(args) {
       assert(payload.args?.discoveredWindowsHost === true, "effective args should mark discovered Windows host");
       assert(payload.runPlan?.target?.host === "127.0.0.1", "runPlan target should use discovered host");
       assert(payload.runPlan?.commands?.macClientFormalChecklist?.includes(`--host 127.0.0.1 --port ${windowsPort}`), "runPlan checklist should be target-specific after discovery");
+      assertMacClientPromptPasswordSmokeCommand(
+        payload.runPlan?.commands?.macClientPromptPasswordSmoke || "",
+        "discover runPlan Mac client prompt-password smoke command",
+        "127.0.0.1",
+        String(windowsPort),
+      );
       assertMacScriptHelpCommand(payload.runPlan?.commands?.macScriptHelp || "", "discover runPlan Mac script help command");
       assertIncludes(payload.boardSummary || "", `Discovery=127.0.0.1:${windowsPort}`, "discover board summary");
       assertIncludes(payload.boardSummary || "", `MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 127.0.0.1 --port ${windowsPort} --boardSummary`, "discover board summary");
+      assertIncludes(payload.boardSummary || "", `MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --host 127.0.0.1 --port ${windowsPort} --ensureClient --promptPassword --boardSummary`, "discover board summary");
       assertIncludes(payload.boardSummary || "", "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "discover board summary");
       assertNoSecretLikeText(output, "discover formal checklist output");
     });

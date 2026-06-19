@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 `MacClientFormalChecklist=` / formal checklist 摘要也暴露 Mac 控 Windows 真实 browser smoke 的前台密码入口。
+完成内容：
+- `check-mac-client-formal-status --json/--boardSummary` 新增 `runPlan.commands.macClientPromptPasswordSmoke` / `MacClientPromptPasswordSmoke=`。
+- 已知 Windows host 时输出目标明确的 `node scripts/mac/run-mac-client-formal-smoke.mjs --host <Windows IP> --port <port> --ensureClient --promptPassword --boardSummary`；无 host 时输出 `--discover --ensureClient --promptPassword --boardSummary`。
+- 普通输出新增 `Mac client prompt-password smoke:`，formal checklist 本身仍只读，不弹密码、不认证、不发送 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 30000` 失败在 `check-mac-client-formal-status --help` 缺 `runPlan.commands.macClientPromptPasswordSmoke`。
+- 绿灯：实现后复跑 `node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 30000` 通过。
+- 最终收尾：`node --check scripts/mac/check-mac-client-formal-status.mjs`、`node --check scripts/mac/test-mac-client-formal-status.mjs`、`node scripts/mac/test-mac-script-help.mjs --script check-mac-client-formal-status.mjs --timeoutMs 10000 --boardSummary`、`node scripts/mac/check-mac-client-formal-status.mjs --boardSummary --skipBoard --allowDirty --allowClientServerOffline --allowWindowsHostOffline --clientPort 9 --timeoutMs 1200`、`git diff --check` 与触碰文件冲突标记扫描均通过。
+遗留问题：
+- 当前真实 Mac host 仍是旧 build；本轮没有重启 host，也没有跑需要用户密码的真实 browser smoke。
+下一步建议：
+- 只看到 `MacClientFormalChecklist=` 时，用户在场可复制 `MacClientPromptPasswordSmoke=` 进入真实 browser smoke；无人值守时继续只跑 `MacClientFormalSmoke=` 无密 preflight 或 `MacClientBrowserSelfTest=` 本地 mock 自测。
+是否改了协议：否；只补 Mac client formal checklist 的安全命令标签和自测。
+是否需要另一端配合：本轮不需要；Windows 端后续可按需消费 `MacClientPromptPasswordSmoke=`。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 `MacClientDiagnostics=` / Mac client readiness 摘要也暴露 Mac 控 Windows 真实 browser smoke 的前台密码入口。
 完成内容：
 - `check-mac-client-readiness --json/--boardSummary` 新增 `commands.macClientPromptPasswordSmokeCommand` / `MacClientPromptPasswordSmoke=`。

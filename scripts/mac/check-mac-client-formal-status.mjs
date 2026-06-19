@@ -92,6 +92,11 @@ JSON output:
                                   MacClientFormalChecklist= board-summary
                                   label. It does not authenticate, request a
                                   password, send a call, or send input.
+  runPlan.commands.macClientPromptPasswordSmoke
+                                  User-present browser smoke command with the
+                                  standard MacClientPromptPasswordSmoke=
+                                  board-summary label. It asks for the password
+                                  only when this command is explicitly run.
   runPlan.commands.macClientBrowserSelfTest
                                   Secret-free local browser self-test command.
                                   It uses a temporary mock Windows host and
@@ -762,6 +767,20 @@ function makeBrowserTestCommand(report, args) {
   ].join(" ");
 }
 
+function makePromptPasswordSmokeCommand(report, args) {
+  const host = report.readiness.windowsHost || {};
+  const targetHost = host.probe?.host || args.windowsHost || "";
+  const targetPort = host.probe?.port || args.windowsPort || defaults.windowsPort;
+  const parts = ["node scripts/mac/run-mac-client-formal-smoke.mjs"];
+  if (targetHost) {
+    parts.push("--host", targetHost, "--port", String(targetPort));
+  } else {
+    parts.push("--discover");
+  }
+  parts.push("--ensureClient", "--promptPassword", "--boardSummary");
+  return parts.join(" ");
+}
+
 function makeMacClientBrowserSelfTestCommand() {
   return "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
 }
@@ -1057,6 +1076,7 @@ function makeRunPlan(report, args) {
       sendCallWithEnsureClient: makeEnsureClientSmokeCommand(args, ["--preflightOnly", "--sendCall"]),
       macClientFormalChecklist: makeChecklistCommand(args),
       rerunFormalChecklist: makeChecklistCommand(args),
+      macClientPromptPasswordSmoke: makePromptPasswordSmokeCommand(report, args),
       macClientBrowserSelfTest: makeMacClientBrowserSelfTestCommand(),
       macScriptHelp: makeMacScriptHelpCommand(),
       browserSmoke: browserTestCommand,
@@ -1153,6 +1173,7 @@ function makeBoardSummary(report) {
     `WindowsHostStatus=${report.runPlan?.commands?.windowsHostStatus || makeWindowsHostStatusCommand(host, report.args || {})}.`,
     `MacClientDiscoverWindows=${report.runPlan?.commands?.discoverWindowsHost || "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary"}.`,
     `MacClientFormalChecklist=${report.runPlan?.commands?.macClientFormalChecklist || makeChecklistCommand(report.args || {})}.`,
+    `MacClientPromptPasswordSmoke=${report.runPlan?.commands?.macClientPromptPasswordSmoke || makePromptPasswordSmokeCommand(report, report.args || {})}.`,
     "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
     `MacClientBrowserSelfTest=${report.runPlan?.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
     `MacScriptHelp=${report.runPlan?.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
@@ -1338,6 +1359,9 @@ function printRunPlan(runPlan) {
   }
   if (runPlan.commands?.macClientFormalChecklist) {
     console.log(`- Mac client formal checklist: ${runPlan.commands.macClientFormalChecklist}`);
+  }
+  if (runPlan.commands?.macClientPromptPasswordSmoke) {
+    console.log(`- Mac client prompt-password smoke: ${runPlan.commands.macClientPromptPasswordSmoke}`);
   }
   if (runPlan.commands?.macScriptHelp) {
     console.log(`- Mac script help safety check: ${runPlan.commands.macScriptHelp}`);
