@@ -208,6 +208,8 @@ function assertBoardSummaryShape(text, label) {
   assert(/MacPowerPlan=.*plan-mac-power-settings\.mjs/.test(text), `${label} should include the Mac power settings planner command`);
   assert(/MacRemoteAudioPlan=/.test(text), `${label} should include Mac remote-only audio safety guidance`);
   assert(/MacRemoteAudioPlan=.*plan-mac-remote-audio\.mjs/.test(text), `${label} should include the Mac remote-only audio planner command`);
+  assert(/MacInputSafetyPlan=/.test(text), `${label} should include Mac input safety plan guidance`);
+  assert(/MacInputSafetyPlan=.*plan-mac-input-safety\.mjs/.test(text), `${label} should include the Mac input safety planner command`);
   assert(/MacUnattendedFormal=/.test(text), `${label} should include Mac unattended formal max-FPS guidance`);
   assert(/--requireLaunchAgentMaxFps/.test(text), `${label} should include the formal max-FPS gate`);
   assert(/MacLaunchAgentPlan=/.test(text), `${label} should include Mac LaunchAgent dry-run guidance`);
@@ -444,6 +446,19 @@ function assertMacPowerPlanCommand(command, label) {
 
 function assertMacRemoteAudioPlanCommand(command, label) {
   assert(/plan-mac-remote-audio\.mjs/.test(command), `${label} should use plan-mac-remote-audio`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!command.includes("--apply"), `${label} should stay dry-run by default`);
+  assert(!command.includes("sudo"), `${label} should not request privileged shell execution`);
+  assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+  assert(!command.includes("input_event"), `${label} should not send input`);
+  assert(!command.includes("inject"), `${label} should not instruct injection`);
+}
+
+function assertMacInputSafetyPlanCommand(command, label) {
+  assert(/plan-mac-input-safety\.mjs/.test(command), `${label} should use plan-mac-input-safety`);
   assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
   assert(!command.includes("--apply"), `${label} should stay dry-run by default`);
   assert(!command.includes("sudo"), `${label} should not request privileged shell execution`);
@@ -705,6 +720,7 @@ function checkHelp(args) {
     assert(/board\.macUnattendedHealth/.test(result.stdout), `${script} ${flag} should document Mac unattended health JSON field`);
     assert(/board\.macUnattendedFreshness/.test(result.stdout), `${script} ${flag} should document Mac unattended evidence freshness JSON field`);
     assert(/commands\.macRemoteAudioPlanCommand/.test(result.stdout), `${script} ${flag} should document Mac remote-only audio plan JSON field`);
+    assert(/commands\.macInputSafetyPlanCommand/.test(result.stdout), `${script} ${flag} should document Mac input safety plan JSON field`);
     assert(/commands\.macScriptHelpCommand/.test(result.stdout), `${script} ${flag} should document Mac script help JSON field`);
   }
   print("OK", "Resume status help exits quickly");
@@ -755,6 +771,9 @@ function checkOfflineJson(args) {
   assertMacUnattendedStatusCommand(payload.commands?.macUnattendedStatusCommand || "", "offline JSON Mac unattended/startup command");
   assertMacUnattendedSendStatusCommand(payload.commands?.macUnattendedSendStatusCommand || "", "offline JSON Mac unattended board-status refresh command");
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand || "", "offline JSON Mac unattended formal command");
+  assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand || "", "offline JSON Mac power settings planner command");
+  assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlanCommand || "", "offline JSON Mac remote-only audio planner command");
+  assertMacInputSafetyPlanCommand(payload.commands?.macInputSafetyPlanCommand || "", "offline JSON Mac input safety planner command");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand || "", "offline JSON Mac LaunchAgent planner command");
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand || "", "offline JSON Mac max-FPS planner command");
   assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "offline JSON Mac client page status command");
@@ -847,6 +866,10 @@ function checkOfflinePlainReport(args) {
   assert(String(result.stdout || "").includes("--requireLaunchAgentMaxFps"), "plain report should include Mac unattended formal max-FPS gate");
   assert(String(result.stdout || "").includes("Mac power settings dry-run plan:"), "plain report should include Mac power settings planner label");
   assert(String(result.stdout || "").includes("plan-mac-power-settings.mjs"), "plain report should include Mac power settings planner command");
+  assert(String(result.stdout || "").includes("Mac remote-only audio dry-run plan:"), "plain report should include Mac remote-only audio planner label");
+  assert(String(result.stdout || "").includes("plan-mac-remote-audio.mjs"), "plain report should include Mac remote-only audio planner command");
+  assert(String(result.stdout || "").includes("Mac input safety plan:"), "plain report should include Mac input safety planner label");
+  assert(String(result.stdout || "").includes("plan-mac-input-safety.mjs"), "plain report should include Mac input safety planner command");
   assert(String(result.stdout || "").includes("Mac LaunchAgent dry-run plan:"), "plain report should include Mac LaunchAgent planner label");
   assert(String(result.stdout || "").includes("Mac max FPS dry-run plan:"), "plain report should include Mac max-FPS planner label");
   assert(String(result.stdout || "").includes("--maxScreenFps 60"), "plain report should include Mac max-FPS planner command");
@@ -940,6 +963,7 @@ function checkOnlineJson(args) {
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand || "", "online JSON Mac unattended formal command");
   assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand || "", "online JSON Mac power settings planner command");
   assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlanCommand || "", "online JSON Mac remote-only audio planner command");
+  assertMacInputSafetyPlanCommand(payload.commands?.macInputSafetyPlanCommand || "", "online JSON Mac input safety planner command");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand || "", "online JSON Mac LaunchAgent planner command");
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand || "", "online JSON Mac max-FPS planner command");
   assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "online JSON Mac client page status command");
@@ -1574,6 +1598,8 @@ async function checkBoardMacPowerHealth(args) {
     assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand || "", "Mac power health JSON Mac power settings planner command");
     assert(String(payload.boardSummary || "").includes("MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs"), "board summary should include a safe Mac remote-only audio dry-run plan");
     assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlanCommand || "", "Mac power health JSON Mac remote-only audio planner command");
+    assert(String(payload.boardSummary || "").includes("MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs"), "board summary should include a safe Mac input safety dry-run plan");
+    assertMacInputSafetyPlanCommand(payload.commands?.macInputSafetyPlanCommand || "", "Mac power health JSON Mac input safety planner command");
     assertNoPasswordLeak(result, "Mac power health JSON");
   }, {
     statuses: {

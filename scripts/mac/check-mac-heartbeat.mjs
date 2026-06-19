@@ -176,9 +176,10 @@ Machine-readable JSON fields:
                               MacUnattendedSendStatus,
                               macHeartbeatRefreshRestartCommand,
                               macPowerPlanCommand,
-                              macRemoteAudioPlanCommand, and
+                              macRemoteAudioPlanCommand,
+                              macInputSafetyPlanCommand, and
                               macLaunchAgentPlanCommand for dry-run
-                              power/audio/LaunchAgent plans.
+                              power/audio/input/LaunchAgent plans.
 
 Examples:
   node scripts/mac/check-mac-heartbeat.mjs --checkBoard --boardSummary
@@ -871,6 +872,7 @@ function buildCommands(args) {
     macUnattendedFormalCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`,
     macPowerPlanCommand: "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
     macRemoteAudioPlanCommand: "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary",
+    macInputSafetyPlanCommand: "node scripts/mac/plan-mac-input-safety.mjs --boardSummary",
     macLaunchAgentPlanCommand: `node scripts/mac/install-mac-host-launch-agent.mjs --launchAgentPath ${shellQuote(launchAgentPath)} --port ${args.port} --boardSummary`,
     macLaunchAgentLoadCommand: `launchctl bootstrap gui/$(id -u) ${shellQuote(launchAgentPath)}`,
     macLaunchAgentPrintCommand: `launchctl print gui/$(id -u)/${shellQuote(launchAgentLabel)}`,
@@ -1099,6 +1101,7 @@ function makeBoardSummary(report) {
     `MacHeartbeatRefreshRestart=${report.commands.macHeartbeatRefreshRestartCommand}.`,
     `MacPowerPlan=${report.commands.macPowerPlanCommand}.`,
     `MacRemoteAudioPlan=${report.commands.macRemoteAudioPlanCommand}.`,
+    `MacInputSafetyPlan=${report.commands.macInputSafetyPlanCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
     `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
     `MacLaunchAgentLoad=${report.commands.macLaunchAgentLoadCommand}.`,

@@ -205,6 +205,19 @@ function assertMacRemoteAudioPlanCommand(command, label) {
   assertNotIncludes(command || "", "inject", label);
 }
 
+function assertMacInputSafetyPlanCommand(command, label) {
+  assertIncludes(command || "", "plan-mac-input-safety.mjs", label);
+  assertIncludes(command || "", "--boardSummary", label);
+  assertNotIncludes(command || "", "--apply", label);
+  assertNotIncludes(command || "", "sudo", label);
+  assertNotIncludes(command || "", "--promptPassword", label);
+  assertNotIncludes(command || "", "--password", label);
+  assertNotIncludes(command || "", "--sendCall", label);
+  assertNotIncludes(command || "", "--server", label);
+  assertNotIncludes(command || "", "input_event", label);
+  assertNotIncludes(command || "", "inject", label);
+}
+
 function assertMacLaunchAgentPlanCommand(command, label) {
   assertIncludes(command || "", "install-mac-host-launch-agent.mjs", label);
   assertIncludes(command || "", "--boardSummary", label);
@@ -291,6 +304,7 @@ function assertCommandSet(commands, label) {
   assertNotIncludes(commands?.macLaunchAgentLoadCommand || "", "inject", label);
   assertNotIncludes(commands?.macLaunchAgentPrintCommand || "", "inject", label);
   assertMacRemoteAudioPlanCommand(commands?.macRemoteAudioPlanCommand || "", label);
+  assertMacInputSafetyPlanCommand(commands?.macInputSafetyPlanCommand || "", label);
   assertIncludes(commands?.macClientPageStatusCommand || "", "start-mac-client.mjs --status --boardSummary", label);
   assertIncludes(commands?.macClientDiagnosticsCommand || "", "check-mac-client-readiness.mjs", label);
   assertIncludes(commands?.macFormalLocalSmokeCommand || "", "check-mac-formal-local-smoke.mjs", label);
@@ -395,6 +409,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "board.macUnattendedFreshness", `${script} ${flag}`);
     assertIncludes(result.stdout, "macPowerPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macRemoteAudioPlanCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macInputSafetyPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macLaunchAgentPlanCommand", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
@@ -453,6 +468,8 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "plan-mac-power-settings.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacRemoteAudioPlan=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "plan-mac-remote-audio.mjs", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacInputSafetyPlan=", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "plan-mac-input-safety.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "install-mac-host-launch-agent.mjs", "offline board summary");
@@ -551,6 +568,8 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "plan-mac-power-settings.mjs", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacRemoteAudioPlan=", "online board summary");
       assertIncludes(payload.boardSummary || "", "plan-mac-remote-audio.mjs", "online board summary");
+      assertIncludes(payload.boardSummary || "", "MacInputSafetyPlan=", "online board summary");
+      assertIncludes(payload.boardSummary || "", "plan-mac-input-safety.mjs", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=", "online board summary");
       assertIncludes(payload.boardSummary || "", "install-mac-host-launch-agent.mjs", "online board summary");
