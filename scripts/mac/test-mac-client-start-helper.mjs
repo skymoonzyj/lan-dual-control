@@ -101,6 +101,24 @@ function assertFormalSmokeCommand(command, label) {
   assertNotIncludes(command, "--json", label);
 }
 
+function assertPromptPasswordSmokeCommand(command, label) {
+  assertIncludes(command, "run-mac-client-formal-smoke.mjs", label);
+  assertIncludes(command, "--discover", label);
+  assertIncludes(command, "--ensureClient", label);
+  assertIncludes(command, "--promptPassword", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--preflightOnly", label);
+  assertNotIncludes(command, "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(command, "--useEnvPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "--json", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function assertMacClientFormalStatusCommand(command, label) {
   assertIncludes(command, "check-mac-client-formal-status.mjs", label);
   assertIncludes(command, "--discover", label);
@@ -279,6 +297,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.windowsOpenOneTimeReverseGrantCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.windowsReverseGrantStatusNodeFallbackCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macClientPromptPasswordSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientBrowserSelfTestCommand", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
@@ -302,6 +321,7 @@ async function checkOfflineStatus(args) {
   assertIncludes(payload.boardSummary || "", "MacClientReverseGrantCopy=", "offline board summary");
   assertWindowsReverseGrantBoardSummary(payload.boardSummary || "", "offline board summary");
   assertIncludes(payload.boardSummary || "", "ReverseRehearsal=", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacClientPromptPasswordSmoke=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "CopyDiagnostics=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "复制诊断", "offline board summary");
@@ -314,6 +334,10 @@ async function checkOfflineStatus(args) {
   assertMacClientReverseGrantCopyAction(payload.commands?.macClientReverseGrantCopyAction || "", "offline reverse grant copy action");
   assertWindowsReverseGrantCommands(payload.commands, "offline Windows reverse grant commands");
   assertFormalSmokeCommand(payload.commands?.macClientFormalSmokeCommand || "", "offline formal smoke commands");
+  assertPromptPasswordSmokeCommand(
+    payload.commands?.macClientPromptPasswordSmokeCommand || "",
+    "offline prompt-password smoke command",
+  );
   assertMacClientBrowserSelfTestCommand(
     payload.commands?.macClientBrowserSelfTestCommand || "",
     "offline Mac client browser self-test command",
@@ -336,6 +360,11 @@ async function checkOfflineStatus(args) {
   assertIncludes(summaryLine, "MacClientReverseGrantCopy=", "offline board summary stdout");
   assertWindowsReverseGrantBoardSummary(summaryLine, "offline board summary stdout");
   assertIncludes(summaryLine, "LAN008", "offline board summary stdout");
+  assertIncludes(summaryLine, "MacClientPromptPasswordSmoke=", "offline board summary stdout");
+  assertPromptPasswordSmokeCommand(
+    summaryLine.split("MacClientPromptPasswordSmoke=")[1]?.split(". ")[0] || "",
+    "offline board summary stdout prompt-password smoke command",
+  );
   assertIncludes(summaryLine, "MacClientBrowserSelfTest=", "offline board summary stdout");
   assertIncludes(summaryLine, "CopyDiagnostics=", "offline board summary stdout");
   assertIncludes(summaryLine, "复制诊断", "offline board summary stdout");
@@ -361,6 +390,7 @@ async function checkStartAndExisting(args) {
   assertIncludes(started.boardSummary || "", "MacClientReverseRehearsal=", "start board summary");
   assertIncludes(started.boardSummary || "", "MacClientReverseGrantCopy=", "start board summary");
   assertWindowsReverseGrantBoardSummary(started.boardSummary || "", "start board summary");
+  assertIncludes(started.boardSummary || "", "MacClientPromptPasswordSmoke=", "start board summary");
   assertIncludes(started.boardSummary || "", "MacClientBrowserSelfTest=", "start board summary");
   assertIncludes(started.boardSummary || "", "CopyDiagnostics=", "start board summary");
   assertIncludes(started.boardSummary || "", "复制诊断", "start board summary");
@@ -372,6 +402,10 @@ async function checkStartAndExisting(args) {
   assertMacClientReverseGrantCopyAction(started.commands?.macClientReverseGrantCopyAction || "", "start reverse grant copy action");
   assertWindowsReverseGrantCommands(started.commands, "start Windows reverse grant commands");
   assertFormalSmokeCommand(started.commands?.macClientFormalSmokeCommand || "", "start formal smoke commands");
+  assertPromptPasswordSmokeCommand(
+    started.commands?.macClientPromptPasswordSmokeCommand || "",
+    "start prompt-password smoke command",
+  );
   assertMacClientBrowserSelfTestCommand(
     started.commands?.macClientBrowserSelfTestCommand || "",
     "start Mac client browser self-test command",
@@ -396,6 +430,7 @@ async function checkStartAndExisting(args) {
     assertIncludes(statusPayload.boardSummary || "", "MacClientReverseRehearsal=", "online status board summary");
     assertIncludes(statusPayload.boardSummary || "", "MacClientReverseGrantCopy=", "online status board summary");
     assertWindowsReverseGrantBoardSummary(statusPayload.boardSummary || "", "online status board summary");
+    assertIncludes(statusPayload.boardSummary || "", "MacClientPromptPasswordSmoke=", "online status board summary");
     assertIncludes(statusPayload.boardSummary || "", "MacClientBrowserSelfTest=", "online status board summary");
     assertIncludes(statusPayload.boardSummary || "", "复制诊断", "online status board summary");
     assertIncludes(statusPayload.commands?.macClientStartOrReuseCommand || "", `--port ${port}`, "online status commands");
@@ -408,6 +443,10 @@ async function checkStartAndExisting(args) {
     assertMacClientReverseGrantCopyAction(statusPayload.commands?.macClientReverseGrantCopyAction || "", "online status reverse grant copy action");
     assertWindowsReverseGrantCommands(statusPayload.commands, "online status Windows reverse grant commands");
     assertFormalSmokeCommand(statusPayload.commands?.macClientFormalSmokeCommand || "", "online status formal smoke commands");
+    assertPromptPasswordSmokeCommand(
+      statusPayload.commands?.macClientPromptPasswordSmokeCommand || "",
+      "online status prompt-password smoke command",
+    );
     assertMacClientBrowserSelfTestCommand(
       statusPayload.commands?.macClientBrowserSelfTestCommand || "",
       "online status Mac client browser self-test command",
@@ -427,6 +466,11 @@ async function checkStartAndExisting(args) {
     assertIncludes(summaryLine, "MacClientReverseRehearsal=", "online board summary stdout");
     assertIncludes(summaryLine, "MacClientReverseGrantCopy=", "online board summary stdout");
     assertWindowsReverseGrantBoardSummary(summaryLine, "online board summary stdout");
+    assertIncludes(summaryLine, "MacClientPromptPasswordSmoke=", "online board summary stdout");
+    assertPromptPasswordSmokeCommand(
+      summaryLine.split("MacClientPromptPasswordSmoke=")[1]?.split(". ")[0] || "",
+      "online board summary stdout prompt-password smoke command",
+    );
     assertIncludes(summaryLine, "MacClientBrowserSelfTest=", "online board summary stdout");
     assertIncludes(summaryLine, "CopyDiagnostics=", "online board summary stdout");
     assertIncludes(summaryLine, "复制诊断", "online board summary stdout");
@@ -453,6 +497,10 @@ async function checkStartAndExisting(args) {
     assertMacClientReverseGrantCopyAction(allowedPayload.commands?.macClientReverseGrantCopyAction || "", "allow existing reverse grant copy action");
     assertWindowsReverseGrantCommands(allowedPayload.commands, "allow existing Windows reverse grant commands");
     assertFormalSmokeCommand(allowedPayload.commands?.macClientFormalSmokeCommand || "", "allow existing formal smoke commands");
+    assertPromptPasswordSmokeCommand(
+      allowedPayload.commands?.macClientPromptPasswordSmokeCommand || "",
+      "allow existing prompt-password smoke command",
+    );
     assertMacClientBrowserSelfTestCommand(
       allowedPayload.commands?.macClientBrowserSelfTestCommand || "",
       "allow existing Mac client browser self-test command",

@@ -28,6 +28,7 @@ const windowsReverseGrantStatusNodeFallbackCommand = "node scripts/windows/allow
 const windowsOpenOneTimeReverseGrantNodeFallbackCommand = "node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --grant --durationMs 30000 --boardSummary";
 const formalChecklistCommand = "node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary";
 const formalSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
+const promptPasswordSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword --boardSummary";
 const browserSelfTestCommand = "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
 
 function helpRequested(argv) {
@@ -84,6 +85,10 @@ Machine-readable JSON fields:
   commands.macClientFormalSmokeCommand
                          Secret-free preflight command. It does not authenticate,
                          prompt for a password, send a call, or send input.
+  commands.macClientPromptPasswordSmokeCommand
+                         User-present browser smoke command. It discovers Windows,
+                         ensures the local client page, then asks for the password
+                         only when this command is explicitly run.
   commands.macClientBrowserSelfTestCommand
                          Secret-free local browser self-test command. It uses a
                          temporary mock Windows host and does not use a real host,
@@ -255,6 +260,7 @@ function makeBoardSummary(report) {
       `WindowsOpenOneTimeReverseGrant=${windowsOpenOneTimeReverseGrantCommand}.`,
       `WindowsReverseGrantStatusNodeFallback=${windowsReverseGrantStatusNodeFallbackCommand}.`,
       `WindowsOpenOneTimeReverseGrantNodeFallback=${windowsOpenOneTimeReverseGrantNodeFallbackCommand}.`,
+      `MacClientPromptPasswordSmoke=${promptPasswordSmokeCommand}.`,
       `MacClientBrowserSelfTest=${browserSelfTestCommand}.`,
       `CopyDiagnostics=${copyDiagnosticsAction}.`,
       "No password was requested or sent; no Windows connection/input was attempted.",
@@ -272,6 +278,7 @@ function makeBoardSummary(report) {
     `WindowsOpenOneTimeReverseGrant=${windowsOpenOneTimeReverseGrantCommand}.`,
     `WindowsReverseGrantStatusNodeFallback=${windowsReverseGrantStatusNodeFallbackCommand}.`,
     `WindowsOpenOneTimeReverseGrantNodeFallback=${windowsOpenOneTimeReverseGrantNodeFallbackCommand}.`,
+    `MacClientPromptPasswordSmoke=${promptPasswordSmokeCommand}.`,
     `MacClientBrowserSelfTest=${browserSelfTestCommand}.`,
     `CopyDiagnostics=页面在线后在 ${copyDiagnosticsAction}.`,
     "No password was requested or sent; no Windows connection/input was attempted.",
@@ -290,6 +297,7 @@ function makeCommands(args) {
     windowsReverseGrantStatusNodeFallbackCommand,
     windowsOpenOneTimeReverseGrantNodeFallbackCommand,
     macClientFormalSmokeCommand: formalSmokeCommand,
+    macClientPromptPasswordSmokeCommand: promptPasswordSmokeCommand,
     macClientBrowserSelfTestCommand: browserSelfTestCommand,
     macClientCopyDiagnosticsAction: copyDiagnosticsAction,
   };

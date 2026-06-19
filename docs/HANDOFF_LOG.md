@@ -21,6 +21,36 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 `MacClientPage=` 页面状态入口也暴露 Mac 控 Windows 真实 browser smoke 的前台密码入口。
+完成内容：
+- `start-mac-client --status --json/--boardSummary` 新增 `commands.macClientPromptPasswordSmokeCommand` / `MacClientPromptPasswordSmoke=`。
+- 新命令统一为 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword --boardSummary`，用于用户在场时进入真实 Mac 控 Windows browser smoke。
+- 状态摘要生成阶段仍只检查/启动本机 Mac client 页面，不弹密码、不认证、不发送 call/input/inject。
+修改文件：
+- `scripts/mac/start-mac-client.mjs`
+- `scripts/mac/test-mac-client-start-helper.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-client-start-helper.mjs --timeoutMs 15000` 失败在 `start-mac-client --help` 缺 `commands.macClientPromptPasswordSmokeCommand`。
+- 绿灯：实现后复跑 `node scripts/mac/test-mac-client-start-helper.mjs --timeoutMs 15000` 通过。
+- 语法：`node --check scripts/mac/start-mac-client.mjs`、`node --check scripts/mac/test-mac-client-start-helper.mjs` 通过。
+- Help：`node scripts/mac/test-mac-script-help.mjs --script start-mac-client.mjs --timeoutMs 10000 --boardSummary` 通过 2/2，确认 help 不启动服务、不弹密码、不读联络板、不认证、不发送 input/inject。
+- `git diff --check` 和本轮触达文件冲突标记扫描通过。
+遗留问题：
+- 当前真实 Mac host 仍是旧 build；本轮没有重启 host，也没有跑需要用户密码的真实 browser smoke。
+下一步建议：
+- 白天用户在场时，可从 `MacClientPage=` 复制 `MacClientPromptPasswordSmoke=` 进入真实 browser smoke；无人值守时继续只跑 `MacClientFormalSmoke=` 无密 preflight 或 `MacClientBrowserSelfTest=` 本地 mock 自测。
+是否改了协议：否；只补 Mac 侧页面状态摘要、JSON 字段和自测。
+是否需要另一端配合：本轮不需要；Windows 端后续可按需消费 `MacClientPromptPasswordSmoke=`。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让开工第一屏直接暴露 Mac 控 Windows 真实 browser smoke 的前台密码入口。
 完成内容：
 - `check-mac-heartbeat --json/--boardSummary` 新增 `commands.macClientPromptPasswordSmokeCommand` / `MacClientPromptPasswordSmoke=`。
