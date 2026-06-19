@@ -3375,6 +3375,24 @@ function parseMacEvidenceFieldLabels(text) {
   return [...new Set(labels)];
 }
 
+function parseStandaloneMacEvidenceLabels(text) {
+  const labels = [];
+  for (const segment of splitMacStatusSegments(text)) {
+    if (
+      /\b(?:MacEvidence|Evidence)\s*[:=]/i.test(segment) ||
+      /\bnode\s+scripts[\\/]+mac[\\/]+|\bscripts[\\/]+mac[\\/]+|\.mjs\b/i.test(segment) ||
+      !isCleanMacStatusEvidenceSegment(segment)
+    ) {
+      continue;
+    }
+    for (const match of segment.matchAll(/\b(MacHeartbeatOk|MacHostMediaOk|MacFormalLocalSmokeOk|MacFormalE2EOk|MacClientPageOnline|MacClientDiagnosticsOk)\b/gi)) {
+      const label = labelMacPositiveEvidenceValue(match[1]);
+      if (label) labels.push(label);
+    }
+  }
+  return [...new Set(labels)];
+}
+
 function isCleanLatestMacHeartbeatEvidence(text, now = Date.now()) {
   const segment = selectLatestMacHeartbeatSegment(text);
   if (!segment) return false;
@@ -3444,6 +3462,7 @@ function parseMacPositiveEvidenceLabels(text) {
     labels.push("Mac client 诊断已通过");
   }
   labels.push(...parseMacEvidenceFieldLabels(source));
+  labels.push(...parseStandaloneMacEvidenceLabels(source));
   return [...new Set(labels)];
 }
 

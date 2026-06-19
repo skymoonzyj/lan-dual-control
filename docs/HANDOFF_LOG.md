@@ -17,6 +17,33 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 控制端页面也接住 Mac 独立稳定证据短标签。
+完成内容：
+- `apps/windows-client/app.js` 的 Mac 提醒/复制诊断解析现在会从干净片段识别独立 `MacClientPageOnline`、`MacClientDiagnosticsOk` 等白名单短标签，即使没有 `Evidence=` / `MacEvidence=` 前缀，也会显示为值守证据。
+- 失败、阻塞、离线、过期、非空 warning/blocker 或 Mac 脚本命令片段仍不会进入健康证据；`MacClientDiagnosticsOk failed blockers=...` 不会误判为诊断通过。
+- 页面 diagnostics-only 回归新增干净独立短标签和失败短标签两条路径。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增测试后，`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 失败在独立短标签未进入证据摘要。
+- 绿灯：实现后同一命令通过。
+遗留问题：
+- 本轮只增强 Windows 控制端页面诊断解析；不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
+下一步建议：
+- Mac 端只要把 `MacClientPageOnline` / `MacClientDiagnosticsOk` 这类稳定短标签写进干净状态或消息，Windows 控制端页面和复制诊断都能显示为值守证据。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
 ## 2026-06-19 Mac Codex
 
 日期：2026-06-19 继续推进

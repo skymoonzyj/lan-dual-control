@@ -1801,6 +1801,34 @@ async function verifyDesktopOnlyHostPanel(session) {
               message: "Mac alert watcher is running.",
             }, { available: true, busy: false })
           : {};
+      const positiveMacStandaloneEvidenceText = [
+        "Mac heartbeat watcher evidence refreshed: MacClientPageOnline MacClientDiagnosticsOk",
+      ].join("; ");
+      const positiveMacStandaloneEvidenceAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(positiveMacStandaloneEvidenceText)
+          : null;
+      const positiveMacStandaloneEvidenceView =
+        typeof macAlertWatcherUiState === "function"
+          ? macAlertWatcherUiState({
+              ok: true,
+              action: "status",
+              running: true,
+              processIds: [2468],
+              server: "http://192.168.31.68:17888",
+              lastAlert: {
+                at: "2026-06-19 12:58:00",
+                title: "Mac standalone evidence",
+                message: positiveMacStandaloneEvidenceText,
+                summary: positiveMacStandaloneEvidenceText,
+              },
+              message: "Mac alert watcher is running.",
+            }, { available: true, busy: false })
+          : {};
+      const failedMacStandaloneEvidenceAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention("Mac diagnostics failed: MacHostMediaOk failed blockers=media")
+          : null;
       const blockedHeartbeatRiskEvidenceAttention =
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
@@ -2323,6 +2351,21 @@ async function verifyDesktopOnlyHostPanel(session) {
           positiveMacResumeEvidenceView.statusText.includes("Mac 本机短验收已通过") &&
           positiveMacResumeEvidenceView.statusText.includes("Mac client 页面在线") &&
           !positiveMacResumeEvidenceView.statusText.includes("风险：") &&
+          positiveMacStandaloneEvidenceAttention?.summary === "" &&
+          Array.isArray(positiveMacStandaloneEvidenceAttention?.labels) &&
+          positiveMacStandaloneEvidenceAttention.labels.length === 0 &&
+          positiveMacStandaloneEvidenceAttention?.evidenceSummary.includes("Mac client 页面在线") &&
+          positiveMacStandaloneEvidenceAttention?.evidenceSummary.includes("Mac client 诊断已通过") &&
+          !positiveMacStandaloneEvidenceAttention?.evidenceSummary.includes("Mac 媒体基线已通过") &&
+          Array.isArray(positiveMacStandaloneEvidenceAttention?.evidenceLabels) &&
+          positiveMacStandaloneEvidenceAttention.evidenceLabels.length === 2 &&
+          positiveMacStandaloneEvidenceView.statusText.includes("证据：") &&
+          positiveMacStandaloneEvidenceView.statusText.includes("Mac client 页面在线") &&
+          positiveMacStandaloneEvidenceView.statusText.includes("Mac client 诊断已通过") &&
+          !positiveMacStandaloneEvidenceView.statusText.includes("Mac 媒体基线已通过") &&
+          !positiveMacStandaloneEvidenceView.statusText.includes("风险：") &&
+          failedMacStandaloneEvidenceAttention?.summary.includes("媒体基线需检查") &&
+          !failedMacStandaloneEvidenceAttention?.evidenceSummary.includes("Mac 媒体基线已通过") &&
           blockedHeartbeatRiskEvidenceAttention?.summary.includes("Mac Codex 长时间无新进展") &&
           !blockedHeartbeatRiskEvidenceAttention?.evidenceSummary.includes("Mac 心跳正常") &&
           cleanMacClientPageCommandAttention?.summary === "" &&
@@ -2415,6 +2458,9 @@ async function verifyDesktopOnlyHostPanel(session) {
         positiveMacClientStatusView,
         positiveMacGenericEvidenceAttention,
         positiveMacGenericEvidenceView,
+        positiveMacStandaloneEvidenceAttention,
+        positiveMacStandaloneEvidenceView,
+        failedMacStandaloneEvidenceAttention,
         blockedHeartbeatRiskEvidenceAttention,
         cleanMacClientPageCommandAttention,
         cleanMacClientDiagnosticsCommandAttention,
