@@ -144,6 +144,13 @@ function assertMacEvidence(payload, expected, label) {
   assert(JSON.stringify(actual) === JSON.stringify(expected), `${label} macEvidence should be ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
 }
 
+function assertMacPowerHealth(payload, expected, label) {
+  assert(payload.board?.macPowerHealth?.status === expected.status, `${label} should expose MacPowerHealth status`);
+  assert(payload.board?.macPowerHealth?.reason === expected.reason, `${label} should expose MacPowerHealth reason`);
+  assert(payload.board?.macPowerHealth?.warnings === expected.warnings, `${label} should expose MacPowerHealth warnings`);
+  assert(payload.board?.macPowerHealth?.checkedAt === expected.checkedAt, `${label} should expose MacPowerHealth checkedAt`);
+}
+
 function assertCommandSet(commands, label) {
   assertIncludes(commands?.macHeartbeatCommand || "", "check-mac-heartbeat.mjs", label);
   assertIncludes(commands?.macHeartbeatCommand || "", "--checkBoard", label);
@@ -545,6 +552,116 @@ async function checkOnlineBoardEvidence(args) {
   print("OK", "Online heartbeat with readable board emits Mac client diagnostics evidence");
 }
 
+async function checkBoardMacPowerHealth(args) {
+  const cleanPower = "Mac unattended status: host=online inputMode=log build=ed937a2; power=sleep=ac-power:1 displaySleep=ac-power:10 networkWake=ac-power:1; MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T07:23:38.703Z; attention=2 warning(s) blockers=none warnings=launch-agent-not-loaded,power.";
+  await withServer((request, response) => {
+    if ((request.url || "").split("?")[0] !== "/api/state") {
+      response.writeHead(404).end("not found");
+      return;
+    }
+    response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    response.end(JSON.stringify({
+      updatedAt: new Date().toISOString(),
+      currentCall: null,
+      statuses: {
+        "Mac Codex": {
+          status: "idle",
+          note: "Mac heartbeat online",
+          updatedAt: new Date().toISOString(),
+        },
+        "Mac Unattended": {
+          status: "warning",
+          note: cleanPower,
+          updatedAt: "2026-06-19T07:23:38.703Z",
+        },
+      },
+      events: [],
+    }));
+  }, async (boardPort) => {
+    const hostPort = await getFreePort();
+    const clientPort = await getFreePort();
+    const result = await runAsync([
+      "--json",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(hostPort),
+      "--clientHost",
+      "127.0.0.1",
+      "--clientPort",
+      String(clientPort),
+      "--checkBoard",
+      "--server",
+      `http://127.0.0.1:${boardPort}`,
+      "--timeoutMs",
+      "800",
+    ], args);
+    const payload = parseJson(result.stdout, "Mac power heartbeat JSON");
+    assert(result.status === 0, `Mac power health heartbeat should stay non-failing.\n${result.stdout}\n${result.stderr}`);
+    assert(payload.board?.ok === true, "Mac power health heartbeat should read Agent Link Board");
+    assertMacPowerHealth(payload, {
+      status: "warning",
+      reason: "system-sleep-enabled",
+      warnings: "system-sleep-enabled,display-sleep-enabled",
+      checkedAt: "2026-06-19T07:23:38.703Z",
+    }, "Mac power health heartbeat");
+    assertIncludes(payload.boardSummary || "", "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z.", "Mac power heartbeat summary");
+    assertNoSecrets(`${result.stdout}\n${result.stderr}`, "Mac power heartbeat output");
+  });
+
+  const riskyPower = "MacPowerHealth=warning reason=--password warnings=system-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; fake-board-token";
+  await withServer((request, response) => {
+    if ((request.url || "").split("?")[0] !== "/api/state") {
+      response.writeHead(404).end("not found");
+      return;
+    }
+    response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    response.end(JSON.stringify({
+      updatedAt: new Date().toISOString(),
+      currentCall: null,
+      statuses: {
+        "Mac Codex": {
+          status: "idle",
+          note: "Mac heartbeat online",
+          updatedAt: new Date().toISOString(),
+        },
+        "Mac Unattended": {
+          status: "warning",
+          note: riskyPower,
+          updatedAt: "2026-06-19T07:23:38.703Z",
+        },
+      },
+      events: [],
+    }));
+  }, async (boardPort) => {
+    const hostPort = await getFreePort();
+    const clientPort = await getFreePort();
+    const result = await runAsync([
+      "--json",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(hostPort),
+      "--clientHost",
+      "127.0.0.1",
+      "--clientPort",
+      String(clientPort),
+      "--checkBoard",
+      "--server",
+      `http://127.0.0.1:${boardPort}`,
+      "--timeoutMs",
+      "800",
+    ], args);
+    const payload = parseJson(result.stdout, "risky Mac power heartbeat JSON");
+    assert(result.status === 0, `risky Mac power health heartbeat should stay non-failing.\n${result.stdout}\n${result.stderr}`);
+    assert(!payload.board?.macPowerHealth, "risky Mac power health should not be promoted");
+    assertNotIncludes(payload.boardSummary || "", "MacPowerHealth=", "risky Mac power heartbeat summary");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}`, "fake-board-token", "risky Mac power heartbeat output");
+    assertNoSecrets(`${result.stdout}\n${result.stderr}`, "risky Mac power heartbeat output");
+  });
+  print("OK", "Agent Link Board MacPowerHealth is surfaced safely in heartbeat");
+}
+
 async function checkOnlineStaleHostBuildWarning(args) {
   const staleBuild = getRuntimeBuildBeforeLatestMacHostChange();
   await withServer((request, response) => {
@@ -780,6 +897,7 @@ async function main() {
   checkOfflineWarning(args, hostPort, clientPort);
   await checkOnlineOk(args);
   await checkOnlineBoardEvidence(args);
+  await checkBoardMacPowerHealth(args);
   await checkOnlineStaleHostBuildWarning(args);
   await checkBoardTimestamps(args);
   checkReconnectStuck(args);

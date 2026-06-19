@@ -21,6 +21,36 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让最新 Mac heartbeat 也能直接转述当前 `Mac Unattended` 的 `MacPowerHealth=` 电源细分风险。
+完成内容：
+- `check-mac-heartbeat --checkBoard --json` 新增 `board.macPowerHealth`，从 Agent Link Board 当前 `Mac Unattended` 状态安全提取 `MacPowerHealth=ok|warning|unknown reason=<短标签> warnings=<短标签> checkedAt=<时间>`。
+- `--boardSummary` 在 `MacHeartbeatHealth=` 旁新增独立 `MacPowerHealth=` 片段；当前真实只读心跳已显示 `MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled`。
+- 解析只接受固定状态和固定短标签：`system-sleep-enabled`、`display-sleep-enabled`、`network-wake-disabled`、`none/unknown` 等；拒绝 `--password`、伪 token、未知/命令形态候选。
+- heartbeat 仍只读：不运行 `pmset`、不加载 LaunchAgent、不自动刷新 `Mac Unattended`、不认证、不请求或发送密码、不发 input/inject。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增断言后，`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` 先失败在 `MacPowerHealth` status 缺失。
+- 绿灯：实现后同一回归通过，覆盖干净 `MacPowerHealth=` 提取、`--password` / `fake-board-token` 风险候选拒绝、JSON 字段、board summary 转述和不泄密。
+- 语法：`node --check scripts/mac/check-mac-heartbeat.mjs`、`node --check scripts/mac/test-mac-heartbeat.mjs` 通过。
+- 统一 help 安全自检：`node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary` 通过，114/114 commands。
+- 真实只读：`node scripts/mac/check-mac-heartbeat.mjs --host 127.0.0.1 --port 43770 --clientHost 127.0.0.1 --clientPort 5188 --checkBoard --boardSummary` 输出 `MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled`。
+遗留问题：
+- 这轮只让 heartbeat 转述现有电源风险，不修系统睡眠/显示睡眠/网络唤醒设置；真实值守前仍需用户现场确认系统设置与 LaunchAgent loaded。
+下一步建议：
+- Windows 端后续可选择消费 `MacHeartbeat` 里的 `MacPowerHealth=`，把电源细分风险显示到提醒区；现有 `MacUnattended` 和 `MacResumeStatus` 已同时保留该字段。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac resume 开工第一屏也能转述独立 `Mac Unattended` 的 `MacPowerHealth=` 电源细分风险。
 完成内容：
 - `check-mac-resume-status --checkBoard --json` 新增 `board.macPowerHealth`，从 Agent Link Board 当前状态安全提取 `MacPowerHealth=ok|warning|unknown reason=<短标签> warnings=<短标签> checkedAt=<时间>`。

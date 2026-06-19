@@ -39,6 +39,23 @@ const defaults = {
 
 const completedCallStatuses = new Set(["done", "completed", "cancelled", "canceled", "resolved", "closed"]);
 const activeAgentStatuses = new Set(["coding", "checking", "thinking", "running", "syncing"]);
+const allowedMacPowerStatuses = new Set(["ok", "warning", "unknown"]);
+const allowedMacPowerReasons = new Set([
+  "ok",
+  "skipped",
+  "not-checked",
+  "pmset-failed",
+  "system-sleep-enabled",
+  "display-sleep-enabled",
+  "network-wake-disabled",
+]);
+const allowedMacPowerWarnings = new Set([
+  "none",
+  "unknown",
+  "system-sleep-enabled",
+  "display-sleep-enabled",
+  "network-wake-disabled",
+]);
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -91,6 +108,8 @@ Machine-readable JSON fields:
   macHost                     Read-only /discovery status and key runtime data.
   macClient                   Read-only local Mac client page status.
   board                       Agent Link Board readability and currentCall.
+  board.macPowerHealth        Stable MacPowerHealth= status safely extracted
+                              from current Mac Unattended board text.
   commands                    Secret-free next-step commands for user action,
                               including Mac resume status, formal E2E readiness,
                               Mac media baseline, the local Mac client mock
@@ -445,6 +464,7 @@ async function readBoard(args) {
     updatedAt: "",
     currentCall: { status: "not-checked", active: false, from: "", need: "", connection: "" },
     macCodexStatus: { status: "", note: "", updatedAt: "" },
+    macPowerHealth: null,
     error: "",
   };
   if (!args.checkBoard) return result;
@@ -468,10 +488,76 @@ async function readBoard(args) {
       note: macStatus.note || "",
       updatedAt: macStatus.updatedAt || "",
     };
+    result.macPowerHealth = collectMacPowerHealth(state);
   } catch (error) {
     result.error = error.message;
   }
   return result;
+}
+
+function collectMacPowerHealth(state) {
+  for (const text of collectBoardTexts(state)) {
+    const health = extractMacPowerHealth(text);
+    if (health) return health;
+  }
+  return null;
+}
+
+function collectBoardTexts(state) {
+  const texts = [];
+  const statuses = state && typeof state === "object" && state.statuses && typeof state.statuses === "object"
+    ? state.statuses
+    : {};
+  for (const [device, entry] of Object.entries(statuses)) {
+    if (typeof entry === "string") {
+      texts.push(`${device}: ${entry}`);
+      continue;
+    }
+    if (!entry || typeof entry !== "object") continue;
+    const statusText = [device, entry.status, entry.note, entry.text, entry.message, entry.summary]
+      .map(normalizedText)
+      .filter(Boolean)
+      .join(" ");
+    if (statusText) texts.push(statusText);
+  }
+  const events = Array.isArray(state?.events) ? state.events : [];
+  for (const event of events) {
+    if (typeof event === "string") {
+      texts.push(event);
+      continue;
+    }
+    if (!event || typeof event !== "object") continue;
+    const eventText = [event.device, event.from, event.status, event.note, event.text, event.message, event.summary]
+      .map(normalizedText)
+      .filter(Boolean)
+      .join(" ");
+    if (eventText) texts.push(eventText);
+  }
+  return texts.filter(Boolean);
+}
+
+function extractMacPowerHealth(text) {
+  const source = normalizedText(text);
+  if (!source || !/\bMacPowerHealth=/i.test(source)) return null;
+  const match = source.match(/\bMacPowerHealth=([A-Za-z]+)\s+reason=([A-Za-z0-9_-]+)\s+warnings=([A-Za-z0-9_,_-]+)\s+checkedAt=([0-9TZ:.-]+)/i);
+  if (!match) return null;
+  const status = match[1].toLowerCase();
+  const reason = match[2];
+  const warnings = match[3];
+  const checkedAt = match[4];
+  if (!allowedMacPowerStatuses.has(status)) return null;
+  if (!allowedMacPowerReasons.has(reason)) return null;
+  if (!isSafeMacPowerWarnings(warnings)) return null;
+  if (!Number.isFinite(Date.parse(checkedAt))) return null;
+  return { status, reason, warnings, checkedAt };
+}
+
+function isSafeMacPowerWarnings(value) {
+  const tokens = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return tokens.length > 0 && tokens.every((token) => allowedMacPowerWarnings.has(token));
 }
 
 function readCodexText(args) {
@@ -723,6 +809,17 @@ function formatMacHeartbeatHealthSummary(health) {
   ].join(" ");
 }
 
+function formatMacPowerHealthSummary(board) {
+  const health = board?.macPowerHealth;
+  if (!health) return "";
+  return [
+    `MacPowerHealth=${health.status || "unknown"}`,
+    `reason=${health.reason || "unknown"}`,
+    `warnings=${health.warnings || "unknown"}`,
+    `checkedAt=${health.checkedAt || "unknown"}`,
+  ].join(" ");
+}
+
 function buildMacEvidence(report) {
   const evidence = [];
   if (report.status === "ok" && report.macClient.online) {
@@ -776,10 +873,12 @@ function makeBoardSummary(report) {
   const evidence = report.codex.evidence ? ` evidence=${report.codex.evidence}` : "";
   const stableEvidence = report.macEvidence || [];
   const stableEvidenceSummary = stableEvidence.length > 0 ? ` Evidence=${stableEvidence.join(",")}.` : "";
+  const macPowerHealthSummary = formatMacPowerHealthSummary(report.board);
+  const macPowerHealthSegment = macPowerHealthSummary ? ` ${macPowerHealthSummary}.` : "";
   const suggestedAction = report.suggestedAction?.boardSummary || "suggestedAction=none";
   const heartbeatHealthSummary = formatMacHeartbeatHealthSummary(report.macHeartbeatHealth);
   return [
-    `MacHeartbeat=status=${report.status}; checkedAt=${checkedAt}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}; ${heartbeatHealthSummary}.${evidence}${stableEvidenceSummary}`,
+    `MacHeartbeat=status=${report.status}; checkedAt=${checkedAt}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}; ${heartbeatHealthSummary}.${macPowerHealthSegment}${evidence}${stableEvidenceSummary}`,
     suggestedAction,
     `MacHeartbeatRerun=${report.commands.macHeartbeatCommand}.`,
     `MacResumeStatus=${report.commands.macResumeStatusCommand}.`,
