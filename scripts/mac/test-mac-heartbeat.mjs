@@ -201,6 +201,15 @@ function assertMacLaunchAgentPlanCommand(command, label) {
 function assertCommandSet(commands, label) {
   assertIncludes(commands?.macHeartbeatCommand || "", "check-mac-heartbeat.mjs", label);
   assertIncludes(commands?.macHeartbeatCommand || "", "--checkBoard", label);
+  assertIncludes(commands?.macHeartbeatRefreshRestartCommand || "", "start-mac-heartbeat-watcher.mjs", label);
+  assertIncludes(commands?.macHeartbeatRefreshRestartCommand || "", "--restart", label);
+  assertIncludes(commands?.macHeartbeatRefreshRestartCommand || "", "--refreshUnattended", label);
+  assertIncludes(commands?.macHeartbeatRefreshRestartCommand || "", "--boardSummary", label);
+  assertNotIncludes(commands?.macHeartbeatRefreshRestartCommand || "", "--promptPassword", label);
+  assertNotIncludes(commands?.macHeartbeatRefreshRestartCommand || "", "--password", label);
+  assertNotIncludes(commands?.macHeartbeatRefreshRestartCommand || "", "--sendCall", label);
+  assertNotIncludes(commands?.macHeartbeatRefreshRestartCommand || "", "input_event", label);
+  assertNotIncludes(commands?.macHeartbeatRefreshRestartCommand || "", "inject", label);
   assertIncludes(commands?.macResumeStatusCommand || "", "check-mac-resume-status.mjs", label);
   assertIncludes(commands?.macResumeStatusCommand || "", "--checkBoard", label);
   assertIncludes(commands?.macResumeStatusCommand || "", "--boardSummary", label);
@@ -359,6 +368,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "macHeartbeatHealth", `${script} ${flag}`);
     assertIncludes(result.stdout, "macEvidence", `${script} ${flag}`);
     assertIncludes(result.stdout, "MacUnattendedSendStatus", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macHeartbeatRefreshRestartCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "board.macUnattendedHealth", `${script} ${flag}`);
     assertIncludes(result.stdout, "board.macUnattendedFreshness", `${script} ${flag}`);
     assertIncludes(result.stdout, "macPowerPlanCommand", `${script} ${flag}`);
@@ -414,6 +424,7 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "MacMaxFpsSafeStart=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacUnattendedStatus=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacUnattendedSendStatus=", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacHeartbeatRefreshRestart=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "--sendStatus", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacPowerPlan=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "plan-mac-power-settings.mjs", "offline board summary");
@@ -509,6 +520,7 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "MacMaxFpsSafeStart=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacUnattendedStatus=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacUnattendedSendStatus=", "online board summary");
+      assertIncludes(payload.boardSummary || "", "MacHeartbeatRefreshRestart=", "online board summary");
       assertIncludes(payload.boardSummary || "", "--sendStatus", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacPowerPlan=", "online board summary");
       assertIncludes(payload.boardSummary || "", "plan-mac-power-settings.mjs", "online board summary");

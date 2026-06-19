@@ -21,6 +21,36 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让最常见的 `MacHeartbeat=` 心跳摘要也直接给出 `MacHeartbeatRefreshRestart=`，不用只依赖 `MacResumeStatus=` 或 watcher status。
+完成内容：
+- `check-mac-heartbeat` JSON `commands` 新增 `macHeartbeatRefreshRestartCommand`。
+- `MacHeartbeat=` / `--boardSummary` 新增 `MacHeartbeatRefreshRestart=node scripts/mac/start-mac-heartbeat-watcher.mjs --restart --refreshUnattended --boardSummary`。
+- help 文档同步说明该 JSON 字段；测试覆盖命令必须是 boardSummary 友好、无密码、无 call/input/inject。
+- 本轮只输出可复制命令，不自动重启 watcher；不执行 `pmset`，不加载 `launchctl`，不认证 WebSocket，不请求或发送密码，也不发送 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` 先失败在 help 缺 `macHeartbeatRefreshRestartCommand`。
+- 绿灯：实现后同一专项回归通过，覆盖 help、离线/在线 JSON、boardSummary 和不泄密。
+- 收尾验证：`node --check scripts/mac/check-mac-heartbeat.mjs`、`node --check scripts/mac/test-mac-heartbeat.mjs`、`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000`、`node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`、`git diff --check` 均通过；冲突标记扫描无命中。
+- 真实只读复查：`node scripts/mac/check-mac-heartbeat.mjs --host 127.0.0.1 --port 43770 --clientHost 127.0.0.1 --clientPort 5188 --checkBoard --boardSummary` 输出 `MacHeartbeatRefreshRestart=node scripts/mac/start-mac-heartbeat-watcher.mjs --restart --refreshUnattended --boardSummary`。
+遗留问题：
+- 当前真实后台 watcher 仍需人工运行 `MacHeartbeatRefreshRestart=` 才会切到持续刷新 `Mac Unattended` 证据；本轮不改变运行态。
+下一步建议：
+- 如果只看最新 `MacHeartbeat=` 发现 `MacUnattendedFreshness=stale`，可直接复制同屏 `MacHeartbeatRefreshRestart=`，无需再先跑 `MacResumeStatus=` 找命令。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：把已有 heartbeat watcher `--restart --refreshUnattended` 安全组合暴露成一条可复制命令，减少手动“先停再启”漏步骤。
 完成内容：
 - `start-mac-heartbeat-watcher` 的 JSON `commands` 新增 `restartWithUnattendedRefresh`，`--boardSummary` 新增 `RefreshRestart=`，普通输出新增 “Restart with Mac Unattended refresh”。

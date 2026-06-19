@@ -150,8 +150,10 @@ Machine-readable JSON fields:
                               browser self-test, Mac script help safety check,
                               the user-run prompt-password Mac client smoke,
                               60Hz safe start, LaunchAgent load/print checks,
-                              MacUnattendedSendStatus, macPowerPlanCommand,
-                              and macLaunchAgentPlanCommand for dry-run
+                              MacUnattendedSendStatus,
+                              macHeartbeatRefreshRestartCommand,
+                              macPowerPlanCommand, and
+                              macLaunchAgentPlanCommand for dry-run
                               power/LaunchAgent plans.
 
 Examples:
@@ -798,6 +800,7 @@ function safeSnippet(text) {
 function buildCommands(args) {
   return {
     macHeartbeatCommand: `node scripts/mac/check-mac-heartbeat.mjs --host ${args.host} --port ${args.port} --clientHost ${args.clientHost} --clientPort ${args.clientPort} --checkBoard --boardSummary`,
+    macHeartbeatRefreshRestartCommand: "node scripts/mac/start-mac-heartbeat-watcher.mjs --restart --refreshUnattended --boardSummary",
     macResumeStatusCommand: `node scripts/mac/check-mac-resume-status.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     macHostStopCommand: `node scripts/mac/start-mac-host.mjs --stop --host ${args.host} --port ${args.port}`,
     macHostSafeStartCommand: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port}`,
@@ -1020,6 +1023,7 @@ function makeBoardSummary(report) {
     `MacHostMedia=${report.commands.macHostMediaCommand}.`,
     `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
     `MacUnattendedSendStatus=${report.commands.macUnattendedSendStatusCommand}.`,
+    `MacHeartbeatRefreshRestart=${report.commands.macHeartbeatRefreshRestartCommand}.`,
     `MacPowerPlan=${report.commands.macPowerPlanCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
     `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
