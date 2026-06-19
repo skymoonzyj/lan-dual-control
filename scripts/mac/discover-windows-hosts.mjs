@@ -21,6 +21,52 @@ const defaults = {
 };
 
 const manualChecklistSummary = "connection/video/audio/clipboard/input_ack/diagnostics";
+const macUnattendedFreshnessStaleMs = 600000;
+const allowedMacPowerStatuses = new Set(["ok", "warning", "unknown"]);
+const allowedMacPowerReasons = new Set([
+  "ok",
+  "skipped",
+  "not-checked",
+  "pmset-failed",
+  "system-sleep-enabled",
+  "display-sleep-enabled",
+  "network-wake-disabled",
+]);
+const allowedMacPowerWarnings = new Set([
+  "none",
+  "unknown",
+  "system-sleep-enabled",
+  "display-sleep-enabled",
+  "network-wake-disabled",
+]);
+const allowedMacUnattendedStatuses = new Set(["ok", "warning", "blocked", "unknown"]);
+const allowedMacUnattendedReasons = new Set([
+  "ok",
+  "skipped",
+  "not-checked",
+  "host-offline",
+  "launch-agent-missing",
+  "launch-agent-not-loaded",
+  "launch-agent-max-fps",
+  "power",
+  "permissions",
+  "pmset-failed",
+  "unknown",
+]);
+const allowedMacUnattendedFindings = new Set([
+  "none",
+  "unknown",
+  "host-offline",
+  "launch-agent-missing",
+  "launch-agent-not-loaded",
+  "launch-agent-max-fps",
+  "power",
+  "permissions",
+  "screen-recording",
+  "accessibility",
+  "input-monitoring",
+  "pmset-failed",
+]);
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -44,7 +90,8 @@ Options:
   --requireFound          Exit non-zero when no Windows host is found.
   --noLocalSubnets        Only probe 127.0.0.1, --host, and --subnet targets.
   --server <url>          Agent Link Board URL. Default: ${defaults.server}
-  --checkBoard            Read Agent Link Board /api/state for WindowsLanRisk= hints.
+  --checkBoard            Read Agent Link Board /api/state for WindowsLanRisk=
+                          and MacUnattendedFreshness hints.
   --boardSummary          Print a short secret-free Agent Link Board summary.
   --json                  Print one machine-readable JSON object.
   --verbose               Include scanner misses.
@@ -85,6 +132,9 @@ Machine-readable JSON fields:
   macPowerPlanCommand      Secret-free dry-run Mac power plan command for
                            keeping formal testing awake. It does not apply
                            system settings.
+  macUnattendedFreshness   Optional fresh/stale summary for current Mac
+                           Unattended or MacPowerHealth evidence from Agent
+                           Link Board when --checkBoard is enabled.
   windowsReverseGrantStatus
                            Secret-free Windows-side PowerShell status command
                            for the local one-time reverse-control grant.
@@ -195,6 +245,19 @@ function clampInteger(value, min, max, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.max(min, Math.min(max, Math.trunc(number)));
+}
+
+function normalizedText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function hasSecretLikeCommandValue(text) {
+  const source = String(text || "");
+  return (
+    /\bLAN_DUAL_PASSWORD\s*=/i.test(source) ||
+    /\b(?:token|secret|passwd|pwd)\s*[:=]\s*\S+/i.test(source) ||
+    /(?:^|\s)--(?:password|token|secret|passwd|pwd)(?:[=\s]\S+)?/i.test(source)
+  );
 }
 
 function scannerArgs(args) {
@@ -312,6 +375,182 @@ function macPowerPlanCommand() {
   return "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary";
 }
 
+async function readMacUnattendedFreshnessFromBoard(options = {}) {
+  const enabled = Boolean(options.enabled ?? options.checkBoard);
+  if (!enabled) return null;
+  try {
+    const state = await readBoardState(options.server, options.timeoutMs);
+    return collectMacUnattendedFreshnessFromBoardState(state);
+  } catch {
+    return null;
+  }
+}
+
+async function readBoardState(server, timeoutMs) {
+  const baseUrl = String(server || "").trim().replace(/\/+$/, "");
+  if (!baseUrl) throw new Error("missing Agent Link Board URL");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 5000));
+  try {
+    const token = process.env.CODEX_LINK_TOKEN || "";
+    const response = await fetch(`${baseUrl}/api/state`, {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: token ? { "X-Codex-Link-Token": token } : {},
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function collectMacUnattendedFreshnessFromBoardState(state, nowMs = Date.now()) {
+  for (const text of collectBoardMacUnattendedTexts(state)) {
+    const freshness = extractMacUnattendedFreshness(text, nowMs);
+    if (freshness) return freshness;
+  }
+  return null;
+}
+
+function collectBoardMacUnattendedTexts(state) {
+  const priorityStatusTexts = [];
+  const statusTexts = [];
+  const eventTexts = [];
+  const statuses = state && typeof state === "object" && state.statuses && typeof state.statuses === "object"
+    ? state.statuses
+    : {};
+  for (const [device, entry] of Object.entries(statuses)) {
+    if (typeof entry === "string") {
+      const statusText = `${device}: ${entry}`;
+      if (isMacUnattendedPriorityText(device, statusText)) {
+        priorityStatusTexts.push(statusText);
+      } else {
+        statusTexts.push(statusText);
+      }
+      continue;
+    }
+    if (!entry || typeof entry !== "object") continue;
+    const statusText = [device, entry.status, entry.note, entry.text, entry.message, entry.summary]
+      .map(normalizedText)
+      .filter(Boolean)
+      .join(" ");
+    if (!statusText) continue;
+    if (isMacUnattendedPriorityText(device, statusText)) {
+      priorityStatusTexts.push(statusText);
+    } else {
+      statusTexts.push(statusText);
+    }
+  }
+
+  const events = Array.isArray(state?.events) ? state.events : [];
+  for (const event of events) {
+    if (typeof event === "string") {
+      eventTexts.push(event);
+      continue;
+    }
+    if (!event || typeof event !== "object") continue;
+    const eventText = [event.device, event.from, event.status, event.note, event.text, event.message, event.summary]
+      .map(normalizedText)
+      .filter(Boolean)
+      .join(" ");
+    if (eventText) eventTexts.push(eventText);
+  }
+  return [...priorityStatusTexts, ...statusTexts, ...eventTexts].filter(Boolean);
+}
+
+function isMacUnattendedPriorityText(device, text) {
+  return /\bMac Unattended\b/i.test(String(device || "")) || /\bMacUnattendedHealth=/i.test(String(text || ""));
+}
+
+function extractMacUnattendedFreshness(text, nowMs) {
+  const unattended = extractMacUnattendedHealth(text);
+  if (unattended) return makeMacUnattendedFreshness(unattended.checkedAt, "MacUnattendedHealth", nowMs);
+  const power = extractMacPowerHealth(text);
+  if (power) return makeMacUnattendedFreshness(power.checkedAt, "MacPowerHealth", nowMs);
+  return null;
+}
+
+function extractMacUnattendedHealth(text) {
+  const source = normalizedText(text);
+  if (!source || !/\bMacUnattendedHealth=/i.test(source)) return null;
+  if (hasSecretLikeCommandValue(source)) return null;
+  const match = source.match(/\bMacUnattendedHealth=([A-Za-z]+)\s+reason=([A-Za-z0-9_-]+)\s+blockers=([A-Za-z0-9_,_-]+)\s+warnings=([A-Za-z0-9_,_-]+)\s+checkedAt=([0-9TZ:.-]+)/i);
+  if (!match) return null;
+  const status = match[1].toLowerCase();
+  const reason = match[2];
+  const blockers = match[3];
+  const warnings = match[4];
+  const checkedAt = cleanCheckedAt(match[5]);
+  if (!allowedMacUnattendedStatuses.has(status)) return null;
+  if (!allowedMacUnattendedReasons.has(reason)) return null;
+  if (!isSafeMacUnattendedFindings(blockers)) return null;
+  if (!isSafeMacUnattendedFindings(warnings)) return null;
+  if (!Number.isFinite(Date.parse(checkedAt))) return null;
+  return { status, reason, blockers, warnings, checkedAt };
+}
+
+function extractMacPowerHealth(text) {
+  const source = normalizedText(text);
+  if (!source || !/\bMacPowerHealth=/i.test(source)) return null;
+  if (hasSecretLikeCommandValue(source)) return null;
+  const match = source.match(/\bMacPowerHealth=([A-Za-z]+)\s+reason=([A-Za-z0-9_-]+)\s+warnings=([A-Za-z0-9_,_-]+)\s+checkedAt=([0-9TZ:.-]+)/i);
+  if (!match) return null;
+  const status = match[1].toLowerCase();
+  const reason = match[2];
+  const warnings = match[3];
+  const checkedAt = cleanCheckedAt(match[4]);
+  if (!allowedMacPowerStatuses.has(status)) return null;
+  if (!allowedMacPowerReasons.has(reason)) return null;
+  if (!isSafeMacPowerWarnings(warnings)) return null;
+  if (!Number.isFinite(Date.parse(checkedAt))) return null;
+  return { status, reason, warnings, checkedAt };
+}
+
+function cleanCheckedAt(value) {
+  return String(value || "").replace(/[.,;]+$/g, "");
+}
+
+function isSafeMacUnattendedFindings(value) {
+  const tokens = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return tokens.length > 0 && tokens.every((token) => allowedMacUnattendedFindings.has(token));
+}
+
+function isSafeMacPowerWarnings(value) {
+  const tokens = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return tokens.length > 0 && tokens.every((token) => allowedMacPowerWarnings.has(token));
+}
+
+function makeMacUnattendedFreshness(checkedAt, source, nowMs) {
+  const checkedMs = Date.parse(checkedAt);
+  if (!Number.isFinite(checkedMs)) return null;
+  const checkedAgeMs = Math.max(0, Math.trunc((Number.isFinite(nowMs) ? nowMs : Date.now()) - checkedMs));
+  return {
+    status: checkedAgeMs > macUnattendedFreshnessStaleMs ? "stale" : "fresh",
+    checkedAt,
+    checkedAgeMs,
+    thresholdMs: macUnattendedFreshnessStaleMs,
+    source,
+  };
+}
+
+function formatMacUnattendedFreshnessSummary(freshness) {
+  if (!freshness) return "";
+  return [
+    `MacUnattendedFreshness=${freshness.status || "unknown"}`,
+    `checkedAgeMs=${Number.isFinite(freshness.checkedAgeMs) ? freshness.checkedAgeMs : "unknown"}`,
+    `thresholdMs=${freshness.thresholdMs ?? macUnattendedFreshnessStaleMs}`,
+    `checkedAt=${freshness.checkedAt || "unknown"}`,
+    `source=${freshness.source || "unknown"}`,
+  ].join(" ");
+}
+
 function sendCallCommand(item) {
   return `node scripts/mac/check-mac-client-formal-status.mjs --host ${item.host} --port ${item.port} --sendCall`;
 }
@@ -361,7 +600,7 @@ function reverseControlRehearsal(item) {
   ].join(" ");
 }
 
-function buildReport(scan, args, windowsLanRisk = emptyWindowsLanRisk(false)) {
+function buildReport(scan, args, windowsLanRisk = emptyWindowsLanRisk(false), macUnattendedFreshness = null) {
   const found = Array.isArray(scan.found) ? scan.found : [];
   const windowsHosts = found.filter(isWindowsHost);
   const nonWindowsHosts = found.filter((item) => !isWindowsHost(item));
@@ -383,6 +622,7 @@ function buildReport(scan, args, windowsLanRisk = emptyWindowsLanRisk(false)) {
     macClientBrowserSelfTestCommand: macClientBrowserSelfTestCommand(),
     macScriptHelpCommand: macScriptHelpCommand(),
     macPowerPlanCommand: macPowerPlanCommand(),
+    macUnattendedFreshness,
     manualChecklistSummary,
     sendCallCommand: best ? sendCallCommand(best) : "",
     windowsReverseGrantStatus: best ? windowsReverseGrantPowerShellCommand(best, "status") : "",
@@ -400,13 +640,15 @@ function buildReport(scan, args, windowsLanRisk = emptyWindowsLanRisk(false)) {
 function makeBoardSummary(report) {
   const risk = formatWindowsLanRisk(report.windowsLanRisk);
   const riskSummary = risk ? ` ${risk}.` : "";
+  const macUnattendedFreshnessSummary = formatMacUnattendedFreshnessSummary(report.macUnattendedFreshness);
+  const macUnattendedFreshnessSegment = macUnattendedFreshnessSummary ? ` ${macUnattendedFreshnessSummary}.` : "";
   if (report.best) {
-    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}.${riskSummary} FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. MacClientFormalSmoke=${report.macClientFormalSmokeCommand}. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. MacPowerPlan=${report.macPowerPlanCommand}. WindowsReverseGrantStatus=${report.windowsReverseGrantStatus}. WindowsOpenOneTimeReverseGrant=${report.windowsOpenOneTimeReverseGrant}. WindowsReverseGrantStatusNodeFallback=${report.windowsReverseGrantStatusNodeFallback}. WindowsOpenOneTimeReverseGrantNodeFallback=${report.windowsOpenOneTimeReverseGrantNodeFallback}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}.${riskSummary} FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. MacClientFormalSmoke=${report.macClientFormalSmokeCommand}. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. MacPowerPlan=${report.macPowerPlanCommand}.${macUnattendedFreshnessSegment} WindowsReverseGrantStatus=${report.windowsReverseGrantStatus}. WindowsOpenOneTimeReverseGrant=${report.windowsOpenOneTimeReverseGrant}. WindowsReverseGrantStatusNodeFallback=${report.windowsReverseGrantStatusNodeFallback}. WindowsOpenOneTimeReverseGrantNodeFallback=${report.windowsOpenOneTimeReverseGrantNodeFallback}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
   }
   const ignored = report.ignored.length > 0
     ? ` Saw ${report.ignored.length} non-Windows host(s), likely Mac/self.`
     : "";
-  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored}${riskSummary} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. MacPowerPlan=${report.macPowerPlanCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored}${riskSummary} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. MacPowerPlan=${report.macPowerPlanCommand}.${macUnattendedFreshnessSegment} No password was requested or sent; no WebSocket/input/inject was attempted.`;
 }
 
 function printText(report, args) {
@@ -425,6 +667,9 @@ function printText(report, args) {
     console.log(`[INFO] Mac client browser self-test: ${report.macClientBrowserSelfTestCommand}`);
     console.log(`[INFO] Mac script help safety check: ${report.macScriptHelpCommand}`);
     console.log(`[INFO] Mac power settings dry-run plan: ${report.macPowerPlanCommand}`);
+    if (report.macUnattendedFreshness) {
+      console.log(`[INFO] Mac unattended freshness: ${formatMacUnattendedFreshnessSummary(report.macUnattendedFreshness)}`);
+    }
     console.log(`[INFO] Windows reverse grant status: ${report.windowsReverseGrantStatus}`);
     console.log(`[INFO] Windows one-time reverse grant: ${report.windowsOpenOneTimeReverseGrant}`);
     console.log(`[INFO] Windows reverse grant status (Node fallback): ${report.windowsReverseGrantStatusNodeFallback}`);
@@ -447,6 +692,9 @@ function printText(report, args) {
     console.log(`[INFO] Mac client browser self-test: ${report.macClientBrowserSelfTestCommand}`);
     console.log(`[INFO] Mac script help safety check: ${report.macScriptHelpCommand}`);
     console.log(`[INFO] Mac power settings dry-run plan: ${report.macPowerPlanCommand}`);
+    if (report.macUnattendedFreshness) {
+      console.log(`[INFO] Mac unattended freshness: ${formatMacUnattendedFreshnessSummary(report.macUnattendedFreshness)}`);
+    }
   }
   if (args.verbose && Array.isArray(report.subnets)) {
     for (const subnet of report.subnets) {
@@ -463,13 +711,20 @@ async function main() {
     return;
   }
 
-  const windowsLanRisk = await readWindowsLanRiskFromBoard({
-    enabled: args.checkBoard,
-    server: args.server,
-    timeoutMs: args.timeoutMs,
-  });
+  const [windowsLanRisk, macUnattendedFreshness] = await Promise.all([
+    readWindowsLanRiskFromBoard({
+      enabled: args.checkBoard,
+      server: args.server,
+      timeoutMs: args.timeoutMs,
+    }),
+    readMacUnattendedFreshnessFromBoard({
+      enabled: args.checkBoard,
+      server: args.server,
+      timeoutMs: args.timeoutMs,
+    }),
+  ]);
   const scan = runScanner(args);
-  const report = buildReport(scan, args, windowsLanRisk);
+  const report = buildReport(scan, args, windowsLanRisk, macUnattendedFreshness);
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
   } else if (args.boardSummary) {
