@@ -235,6 +235,20 @@ function assertMacRemoteAudioPlanCommand(command, label) {
   assert(!value.includes("inject"), `${label} should not instruct injection`);
 }
 
+function assertMacInputSafetyPlanCommand(command, label) {
+  const value = String(command || "");
+  assert(value.includes("plan-mac-input-safety.mjs"), `${label} should use plan-mac-input-safety`);
+  assert(value.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!value.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!value.includes("--password"), `${label} should not embed a password argument`);
+  assert(!value.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!value.includes("--forceCall"), `${label} should not force an Agent Link Board call`);
+  assert(!value.includes("--server"), `${label} should not echo board server URLs`);
+  assert(!value.includes("--json"), `${label} should default to one-line boardSummary output`);
+  assert(!value.includes("input_event"), `${label} should not mention input events`);
+  assert(!value.includes("--inputMode inject"), `${label} should not start inject mode`);
+}
+
 function assertMacHostAuthPath(payload, expected, label) {
   const authPath = payload.board?.macHostAuthPath;
   assert(authPath?.status === expected.status, `${label} should expose MacHostAuthPath status`);
@@ -345,6 +359,7 @@ function formatReadinessBoardSummaryFixture(summary) {
     functionBlock(source, "formatManualUxStandbyBoardSummary"),
     functionBlock(source, "formatMacHostAuthPathSummary"),
     functionBlock(source, "makeMacRemoteAudioPlanCommand"),
+    functionBlock(source, "makeMacInputSafetyPlanCommand"),
     functionBlock(source, "formatReadinessBoardSummary"),
   ].join("\n");
   return Function("summary", `${helpers}\nreturn formatReadinessBoardSummary(summary);`)(summary);
@@ -455,6 +470,7 @@ function checkHelp(args) {
     assert(String(result.stdout).includes("commands.macPowerPlanCommand"), `${script} ${flag} should document Mac power dry-run plan command`);
     assert(String(result.stdout).includes("commands.macScriptHelpCommand"), `${script} ${flag} should document Mac script help safety command`);
     assert(String(result.stdout).includes("commands.macRemoteAudioPlanCommand"), `${script} ${flag} should document Mac remote audio plan command`);
+    assert(String(result.stdout).includes("commands.macInputSafetyPlanCommand"), `${script} ${flag} should document Mac input safety plan command`);
     assert(String(result.stdout).includes("board.macHostAuthPath"), `${script} ${flag} should document sanitized MacHostAuthPath board field`);
   }
   print("OK", "Mac host readiness board help exits quickly");
@@ -475,6 +491,7 @@ function checkDefaultDoesNotReadBoard(args) {
   assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand || "", "default readiness JSON Mac power plan command");
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "default readiness JSON script help command");
   assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlanCommand || "", "default readiness JSON remote audio plan command");
+  assertMacInputSafetyPlanCommand(payload.commands?.macInputSafetyPlanCommand || "", "default readiness JSON input safety plan command");
   const maxFpsStep = payload.results?.find((item) => item.label === "Mac host max FPS");
   assert(maxFpsStep, "default readiness JSON should include an independent Mac host max FPS step");
   assert(maxFpsStep.ok === true, "Mac host max FPS step should be advisory and non-blocking");
@@ -499,6 +516,8 @@ function checkDefaultDoesNotReadBoard(args) {
   assert(String(payload.boardSummary || "").includes("MacScriptHelp=node scripts/mac/test-mac-script-help.mjs"), "default boardSummary should include the Mac script help command");
   assert(String(payload.boardSummary || "").includes("MacRemoteAudioPlan="), "default boardSummary should include Mac remote audio plan guidance");
   assert(String(payload.boardSummary || "").includes("MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary"), "default boardSummary should include the Mac remote audio plan command");
+  assert(String(payload.boardSummary || "").includes("MacInputSafetyPlan="), "default boardSummary should include Mac input safety plan guidance");
+  assert(String(payload.boardSummary || "").includes("MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary"), "default boardSummary should include the Mac input safety plan command");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "default readiness JSON");
   print("OK", "Mac host readiness does not read Agent Link Board by default");
 }
@@ -1002,6 +1021,8 @@ function checkProbeMediaBoardSummary(args) {
   assert(lines[0].includes("MacScriptHelp=node scripts/mac/test-mac-script-help.mjs"), "offline --probeMedia boardSummary should include the Mac script help command");
   assert(lines[0].includes("MacRemoteAudioPlan="), "offline --probeMedia boardSummary should include Mac remote audio plan guidance");
   assert(lines[0].includes("MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary"), "offline --probeMedia boardSummary should include the Mac remote audio plan command");
+  assert(lines[0].includes("MacInputSafetyPlan="), "offline --probeMedia boardSummary should include Mac input safety plan guidance");
+  assert(lines[0].includes("MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary"), "offline --probeMedia boardSummary should include the Mac input safety plan command");
   assert(lines[0].includes("--requireLaunchAgentMaxFps"), "offline --probeMedia boardSummary should include formal max-FPS gate");
   assert(lines[0].includes("--maxScreenFps 60"), "offline --probeMedia boardSummary should include 60Hz planner command");
   assert(!lines[0].includes("media=passed"), "offline --probeMedia boardSummary should not use legacy passed wording");
@@ -1055,6 +1076,8 @@ async function checkActiveBoardCall(args) {
     assert(String(payload.boardSummary || "").includes("MacScriptHelp=node scripts/mac/test-mac-script-help.mjs"), "boardSummary should include the Mac script help command");
     assert(String(payload.boardSummary || "").includes("MacRemoteAudioPlan="), "boardSummary should include Mac remote audio plan guidance");
     assert(String(payload.boardSummary || "").includes("MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary"), "boardSummary should include the Mac remote audio plan command");
+    assert(String(payload.boardSummary || "").includes("MacInputSafetyPlan="), "boardSummary should include Mac input safety plan guidance");
+    assert(String(payload.boardSummary || "").includes("MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary"), "boardSummary should include the Mac input safety plan command");
     assert(String(payload.boardSummary || "").includes(call.goal), "boardSummary should include call goal");
     assert(!String(payload.boardSummary || "").includes("super-secret-command-token"), "boardSummary should not echo command");
     assert(payload.results.some((item) => item.label === "Agent Link Board currentCall" && item.warnings.some((warning) => warning.includes("active call"))), "active call should create readiness warning");
@@ -1200,6 +1223,8 @@ async function checkBoardSummary(args) {
     assert(lines[0].includes("MacScriptHelp=node scripts/mac/test-mac-script-help.mjs"), "boardSummary should include the Mac script help command");
     assert(lines[0].includes("MacRemoteAudioPlan="), "boardSummary should include Mac remote audio plan guidance");
     assert(lines[0].includes("MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary"), "boardSummary should include the Mac remote audio plan command");
+    assert(lines[0].includes("MacInputSafetyPlan="), "boardSummary should include Mac input safety plan guidance");
+    assert(lines[0].includes("MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary"), "boardSummary should include the Mac input safety plan command");
     assert(lines[0].includes(call.goal), "boardSummary should include call goal");
     assert(lines[0].includes("Do not send passwords"), "boardSummary should include password safety note");
     assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "readiness boardSummary");
@@ -1225,11 +1250,13 @@ function checkPlainOutputIncludesLaunchAgentPlan(args) {
   assert(String(result.stdout || "").includes("Mac unattended formal 60Hz gate:"), "plain output should include unattended formal label");
   assert(String(result.stdout || "").includes("Mac formal local smoke:"), "plain output should include formal local smoke label");
   assert(String(result.stdout || "").includes("Mac remote-only audio plan:"), "plain output should include remote audio plan label");
+  assert(String(result.stdout || "").includes("Mac input safety plan:"), "plain output should include input safety plan label");
   assert(String(result.stdout || "").includes("install-mac-host-launch-agent.mjs"), "plain output should include LaunchAgent planner command");
   assert(String(result.stdout || "").includes("--maxScreenFps 60"), "plain output should include max-FPS planner command");
   assert(String(result.stdout || "").includes("--requireLaunchAgentMaxFps"), "plain output should include unattended formal gate command");
   assert(String(result.stdout || "").includes("check-mac-formal-local-smoke.mjs"), "plain output should include formal local smoke command");
   assert(String(result.stdout || "").includes("plan-mac-remote-audio.mjs"), "plain output should include remote audio plan command");
+  assert(String(result.stdout || "").includes("plan-mac-input-safety.mjs"), "plain output should include input safety plan command");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "plain readiness output");
   print("OK", "Mac host readiness plain output includes LaunchAgent planner guidance");
 }

@@ -287,6 +287,10 @@ Machine-readable JSON fields:
                             current system-pcm capture behavior and safe
                             remote-only options without changing Mac audio
                             output, prompting, authenticating, or sending input.
+  commands.macInputSafetyPlanCommand
+                            Secret-free real-input safety plan. It explains
+                            default log mode, the --confirmUserWatching gate,
+                            and the safe event set without sending input.
   board.macHostAuthPath
                             Optional sanitized MacHostAuthPath summary copied
                             from Agent Link Board statuses when --checkBoard is
@@ -826,6 +830,7 @@ function formatReadinessBoardSummary(summary) {
     `MacPowerPlan=${summary.commands?.macPowerPlanCommand || makeMacPowerPlanCommand()}.`,
     `MacScriptHelp=${summary.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
     `MacRemoteAudioPlan=${summary.commands?.macRemoteAudioPlanCommand || makeMacRemoteAudioPlanCommand()}.`,
+    `MacInputSafetyPlan=${summary.commands?.macInputSafetyPlanCommand || makeMacInputSafetyPlanCommand()}.`,
     nextStep,
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
@@ -1031,6 +1036,10 @@ function makeMacScriptHelpCommand() {
 
 function makeMacRemoteAudioPlanCommand() {
   return "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary";
+}
+
+function makeMacInputSafetyPlanCommand() {
+  return "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
 }
 
 function formatMediaBoardSummary(summary) {
@@ -1620,6 +1629,7 @@ async function main() {
       macPowerPlanCommand: makeMacPowerPlanCommand(),
       macScriptHelpCommand: makeMacScriptHelpCommand(),
       macRemoteAudioPlanCommand: makeMacRemoteAudioPlanCommand(),
+      macInputSafetyPlanCommand: makeMacInputSafetyPlanCommand(),
     },
     results: results.map((result) => ({
       label: result.label,
@@ -1668,6 +1678,7 @@ async function main() {
     print("NEXT", `Mac power settings dry-run plan: ${summary.commands.macPowerPlanCommand}`, args);
     print("NEXT", `Mac script help safety check: ${summary.commands.macScriptHelpCommand}`, args);
     print("NEXT", `Mac remote-only audio plan: ${summary.commands.macRemoteAudioPlanCommand}`, args);
+    print("NEXT", `Mac input safety plan: ${summary.commands.macInputSafetyPlanCommand}`, args);
     if (summary.suggestedAction?.id) {
       print("NEXT", `Suggested action: ${summary.suggestedAction.id} · ${summary.suggestedAction.reason}`, args);
     }
