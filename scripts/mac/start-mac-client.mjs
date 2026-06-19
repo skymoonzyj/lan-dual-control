@@ -9,14 +9,62 @@ const serverScript = "apps/mac-client/server.mjs";
 const defaults = {
   host: "127.0.0.1",
   port: 5188,
+  server: "http://192.168.31.68:17888",
   timeoutMs: 8000,
   status: false,
   json: false,
   boardSummary: false,
+  checkBoard: false,
   open: false,
   allowExisting: false,
   help: false,
 };
+const macUnattendedFreshnessStaleMs = 600000;
+const allowedMacPowerStatuses = new Set(["ok", "warning", "unknown"]);
+const allowedMacPowerReasons = new Set([
+  "ok",
+  "skipped",
+  "not-checked",
+  "pmset-failed",
+  "system-sleep-enabled",
+  "display-sleep-enabled",
+  "network-wake-disabled",
+]);
+const allowedMacPowerWarnings = new Set([
+  "none",
+  "unknown",
+  "system-sleep-enabled",
+  "display-sleep-enabled",
+  "network-wake-disabled",
+]);
+const allowedMacUnattendedStatuses = new Set(["ok", "warning", "blocked", "unknown"]);
+const allowedMacUnattendedReasons = new Set([
+  "ok",
+  "skipped",
+  "not-checked",
+  "host-offline",
+  "launch-agent-missing",
+  "launch-agent-not-loaded",
+  "launch-agent-max-fps",
+  "power",
+  "permissions",
+  "pmset-failed",
+  "unknown",
+]);
+const allowedMacUnattendedFindings = new Set([
+  "none",
+  "unknown",
+  "host-offline",
+  "launch-agent-missing",
+  "launch-agent-not-loaded",
+  "launch-agent-max-fps",
+  "power",
+  "permissions",
+  "screen-recording",
+  "accessibility",
+  "input-monitoring",
+  "pmset-failed",
+]);
 
 const copyDiagnosticsAction = "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码";
 const discoverWindowsCommand = "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary";
@@ -50,6 +98,10 @@ Options:
   --status               Only probe the local Mac client page, then exit.
   --json                 Print one machine-readable JSON object.
   --boardSummary         Print a short secret-free Agent Link Board summary.
+  --checkBoard           Read Agent Link Board for secret-free Mac unattended
+                         freshness evidence. Default: off.
+  --server <url>         Agent Link Board URL for --checkBoard.
+                         Default: ${defaults.server}
   --open                 Open the local page in the default browser after start.
   --allowExisting        Treat an already-running page on the port as success.
   --help, -h             Show this help without starting anything.
@@ -100,10 +152,15 @@ Machine-readable JSON fields:
   commands.macClientCopyDiagnosticsAction
                          Safe in-page action for copying diagnostics after
                          confirming no connection password is included.
+  board.macUnattendedFreshness
+                         Optional fresh/stale summary for current Mac
+                         Unattended or MacPowerHealth evidence from Agent
+                         Link Board when --checkBoard is enabled.
 
 Examples:
   node scripts/mac/start-mac-client.mjs
   node scripts/mac/start-mac-client.mjs --status --boardSummary
+  node scripts/mac/start-mac-client.mjs --status --checkBoard --boardSummary
   node scripts/mac/start-mac-client.mjs --port 5199 --open
 `);
 }
@@ -121,6 +178,7 @@ function parseArgs(argv) {
       token === "--status" ||
       token === "--json" ||
       token === "--boardSummary" ||
+      token === "--checkBoard" ||
       token === "--open" ||
       token === "--allowExisting"
     ) {
@@ -142,9 +200,15 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if (token === "--server" && next && !next.startsWith("--")) {
+      args.server = next;
+      index += 1;
+      continue;
+    }
     throw new Error(`Unknown argument: ${token}`);
   }
   args.host = String(args.host || defaults.host).trim();
+  args.server = String(args.server || defaults.server).trim();
   return args;
 }
 
@@ -250,11 +314,211 @@ function openBrowser(url) {
   child.unref();
 }
 
+function normalizedText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function hasSecretLikeCommandValue(text) {
+  const source = String(text || "");
+  return (
+    /\bLAN_DUAL_PASSWORD\s*=/i.test(source) ||
+    /\b(?:token|secret|passwd|pwd)\s*[:=]\s*\S+/i.test(source) ||
+    /(?:^|\s)--(?:password|token|secret|passwd|pwd)(?:[=\s]\S+)?/i.test(source)
+  );
+}
+
+async function readBoard(args) {
+  if (!args.checkBoard) return undefined;
+  try {
+    const state = await readBoardState(args.server, args.timeoutMs);
+    return {
+      checked: true,
+      ok: true,
+      macUnattendedFreshness: collectMacUnattendedFreshnessFromBoardState(state),
+    };
+  } catch (error) {
+    return {
+      checked: true,
+      ok: false,
+      error: error.message,
+      macUnattendedFreshness: null,
+    };
+  }
+}
+
+async function readBoardState(server, timeoutMs) {
+  const baseUrl = String(server || "").trim().replace(/\/+$/, "");
+  if (!baseUrl) throw new Error("missing Agent Link Board URL");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || defaults.timeoutMs));
+  try {
+    const token = process.env.CODEX_LINK_TOKEN || "";
+    const response = await fetch(`${baseUrl}/api/state`, {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: token ? { "X-Codex-Link-Token": token } : {},
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function collectMacUnattendedFreshnessFromBoardState(state, nowMs = Date.now()) {
+  for (const text of collectBoardMacUnattendedTexts(state)) {
+    const freshness = extractMacUnattendedFreshness(text, nowMs);
+    if (freshness) return freshness;
+  }
+  return null;
+}
+
+function collectBoardMacUnattendedTexts(state) {
+  const priorityStatusTexts = [];
+  const statusTexts = [];
+  const eventTexts = [];
+  const statuses = state && typeof state === "object" && state.statuses && typeof state.statuses === "object"
+    ? state.statuses
+    : {};
+  for (const [device, entry] of Object.entries(statuses)) {
+    if (typeof entry === "string") {
+      const statusText = `${device}: ${entry}`;
+      if (isMacUnattendedPriorityText(device, statusText)) {
+        priorityStatusTexts.push(statusText);
+      } else {
+        statusTexts.push(statusText);
+      }
+      continue;
+    }
+    if (!entry || typeof entry !== "object") continue;
+    const statusText = [device, entry.status, entry.note, entry.text, entry.message, entry.summary]
+      .map(normalizedText)
+      .filter(Boolean)
+      .join(" ");
+    if (!statusText) continue;
+    if (isMacUnattendedPriorityText(device, statusText)) {
+      priorityStatusTexts.push(statusText);
+    } else {
+      statusTexts.push(statusText);
+    }
+  }
+
+  const events = Array.isArray(state?.events) ? state.events : [];
+  for (const event of events) {
+    if (typeof event === "string") {
+      eventTexts.push(event);
+      continue;
+    }
+    if (!event || typeof event !== "object") continue;
+    const eventText = [event.device, event.from, event.status, event.note, event.text, event.message, event.summary]
+      .map(normalizedText)
+      .filter(Boolean)
+      .join(" ");
+    if (eventText) eventTexts.push(eventText);
+  }
+  return [...priorityStatusTexts, ...statusTexts, ...eventTexts].filter(Boolean);
+}
+
+function isMacUnattendedPriorityText(device, text) {
+  return /\bMac Unattended\b/i.test(String(device || "")) || /\bMacUnattendedHealth=/i.test(String(text || ""));
+}
+
+function extractMacUnattendedFreshness(text, nowMs) {
+  const unattended = extractMacUnattendedHealth(text);
+  if (unattended) return makeMacUnattendedFreshness(unattended.checkedAt, "MacUnattendedHealth", nowMs);
+  const power = extractMacPowerHealth(text);
+  if (power) return makeMacUnattendedFreshness(power.checkedAt, "MacPowerHealth", nowMs);
+  return null;
+}
+
+function extractMacUnattendedHealth(text) {
+  const source = normalizedText(text);
+  if (!source || !/\bMacUnattendedHealth=/i.test(source)) return null;
+  if (hasSecretLikeCommandValue(source)) return null;
+  const match = source.match(/\bMacUnattendedHealth=([A-Za-z]+)\s+reason=([A-Za-z0-9_-]+)\s+blockers=([A-Za-z0-9_,_-]+)\s+warnings=([A-Za-z0-9_,_-]+)\s+checkedAt=([0-9TZ:.-]+)/i);
+  if (!match) return null;
+  const status = match[1].toLowerCase();
+  const reason = match[2];
+  const blockers = match[3];
+  const warnings = match[4];
+  const checkedAt = cleanCheckedAt(match[5]);
+  if (!allowedMacUnattendedStatuses.has(status)) return null;
+  if (!allowedMacUnattendedReasons.has(reason)) return null;
+  if (!isSafeMacUnattendedFindings(blockers)) return null;
+  if (!isSafeMacUnattendedFindings(warnings)) return null;
+  if (!Number.isFinite(Date.parse(checkedAt))) return null;
+  return { status, reason, blockers, warnings, checkedAt };
+}
+
+function extractMacPowerHealth(text) {
+  const source = normalizedText(text);
+  if (!source || !/\bMacPowerHealth=/i.test(source)) return null;
+  if (hasSecretLikeCommandValue(source)) return null;
+  const match = source.match(/\bMacPowerHealth=([A-Za-z]+)\s+reason=([A-Za-z0-9_-]+)\s+warnings=([A-Za-z0-9_,_-]+)\s+checkedAt=([0-9TZ:.-]+)/i);
+  if (!match) return null;
+  const status = match[1].toLowerCase();
+  const reason = match[2];
+  const warnings = match[3];
+  const checkedAt = cleanCheckedAt(match[4]);
+  if (!allowedMacPowerStatuses.has(status)) return null;
+  if (!allowedMacPowerReasons.has(reason)) return null;
+  if (!isSafeMacPowerWarnings(warnings)) return null;
+  if (!Number.isFinite(Date.parse(checkedAt))) return null;
+  return { status, reason, warnings, checkedAt };
+}
+
+function cleanCheckedAt(value) {
+  return String(value || "").replace(/[.,;]+$/g, "");
+}
+
+function isSafeMacUnattendedFindings(value) {
+  const tokens = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return tokens.length > 0 && tokens.every((token) => allowedMacUnattendedFindings.has(token));
+}
+
+function isSafeMacPowerWarnings(value) {
+  const tokens = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return tokens.length > 0 && tokens.every((token) => allowedMacPowerWarnings.has(token));
+}
+
+function makeMacUnattendedFreshness(checkedAt, source, nowMs) {
+  const checkedMs = Date.parse(checkedAt);
+  if (!Number.isFinite(checkedMs)) return null;
+  const checkedAgeMs = Math.max(0, Math.trunc((Number.isFinite(nowMs) ? nowMs : Date.now()) - checkedMs));
+  return {
+    status: checkedAgeMs > macUnattendedFreshnessStaleMs ? "stale" : "fresh",
+    checkedAt,
+    checkedAgeMs,
+    thresholdMs: macUnattendedFreshnessStaleMs,
+    source,
+  };
+}
+
+function formatMacUnattendedFreshnessSummary(freshness) {
+  if (!freshness) return "";
+  return [
+    `MacUnattendedFreshness=${freshness.status || "unknown"}`,
+    `checkedAgeMs=${Number.isFinite(freshness.checkedAgeMs) ? freshness.checkedAgeMs : "unknown"}`,
+    `thresholdMs=${freshness.thresholdMs ?? macUnattendedFreshnessStaleMs}`,
+    `checkedAt=${freshness.checkedAt || "unknown"}`,
+    `source=${freshness.source || "unknown"}`,
+  ].join(" ");
+}
+
 function makeBoardSummary(report) {
+  const macUnattendedFreshness = formatMacUnattendedFreshnessSummary(report.board?.macUnattendedFreshness);
+  const macUnattendedFreshnessSummary = macUnattendedFreshness ? `${macUnattendedFreshness}.` : "";
   if (report.online) {
     return [
       `Mac client page online at ${report.url}; pid=${report.processId || "existing"}; title=${report.titleFound ? "ok" : "unexpected"}.`,
       "Evidence=MacClientPageOnline.",
+      macUnattendedFreshnessSummary,
       "Next: run MacClientFormalChecklist before true Windows control.",
       `MacClientFormalChecklist=${formalChecklistCommand}.`,
       `MacClientFormalSmoke=${formalSmokeCommand}.`,
@@ -274,6 +538,7 @@ function makeBoardSummary(report) {
   }
   return [
     `Mac client page offline at ${report.url}: ${report.error?.message || "unknown"}.`,
+    macUnattendedFreshnessSummary,
     "Next: start with node scripts/mac/start-mac-client.mjs, then rerun formal checklist.",
     `MacClientFormalChecklist=${formalChecklistCommand}.`,
     `MacClientFormalSmoke=${formalSmokeCommand}.`,
@@ -316,8 +581,18 @@ function printHuman(report) {
   if (report.processId) console.log(`Process: ${report.processId}`);
   if (report.statusCode) console.log(`HTTP: ${report.statusCode}`);
   console.log(`Page shape: ${report.titleFound ? "ok" : "not confirmed"}`);
+  const macUnattendedFreshness = formatMacUnattendedFreshnessSummary(report.board?.macUnattendedFreshness);
+  if (macUnattendedFreshness) console.log(`Mac unattended freshness: ${macUnattendedFreshness}`);
   if (report.error?.message) console.log(`Error: ${report.error.message}`);
   console.log(report.boardSummary);
+}
+
+async function finalizeReport(report, args) {
+  const board = await readBoard(args);
+  if (board) report.board = board;
+  report.boardSummary = makeBoardSummary(report);
+  report.commands = makeCommands(args);
+  return report;
 }
 
 async function buildStatusReport(args) {
@@ -332,9 +607,7 @@ async function buildStatusReport(args) {
     processId: null,
     error: probe.error,
   };
-  report.boardSummary = makeBoardSummary(report);
-  report.commands = makeCommands(args);
-  return report;
+  return finalizeReport(report, args);
 }
 
 async function startAndReport(args) {
@@ -351,9 +624,7 @@ async function startAndReport(args) {
         processId: null,
         error: { message: "Mac client page is already running; pass --allowExisting to accept it." },
       };
-      report.boardSummary = makeBoardSummary(report);
-      report.commands = makeCommands(args);
-      return report;
+      return finalizeReport(report, args);
     }
     const report = {
       ok: true,
@@ -365,8 +636,7 @@ async function startAndReport(args) {
       processId: null,
       error: null,
     };
-    report.boardSummary = makeBoardSummary(report);
-    report.commands = makeCommands(args);
+    await finalizeReport(report, args);
     if (args.open) openBrowser(report.url);
     return report;
   }
@@ -383,8 +653,7 @@ async function startAndReport(args) {
     processId: child.pid || null,
     error: ready.error,
   };
-  report.boardSummary = makeBoardSummary(report);
-  report.commands = makeCommands(args);
+  await finalizeReport(report, args);
 
   if (report.ok) {
     child.unref();

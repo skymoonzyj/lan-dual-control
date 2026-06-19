@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 `MacClientPage=` / `start-mac-client --status` 在显式读取通讯板时也能提示当前 `Mac Unattended` / `MacPowerHealth` 证据是否新鲜。
+完成内容：
+- `start-mac-client --status --checkBoard --json/--boardSummary` 新增 JSON `board.macUnattendedFreshness`，并在页面状态摘要和普通输出里转述 `MacUnattendedFreshness=fresh|stale checkedAgeMs=<毫秒> thresholdMs=600000 checkedAt=<时间> source=MacUnattendedHealth|MacPowerHealth`。
+- 默认 `start-mac-client --status --boardSummary` 仍只做本地页面状态检查，不读取 Agent Link Board；只有显式 `--checkBoard` 才访问 `/api/state`。
+- 新字段只从 Agent Link Board 当前 status/event 的安全短字段派生；优先 `MacUnattendedHealth=`，缺失时退到 `MacPowerHealth=`，并拒绝疑似 `--password`、token、secret、pwd/passwd 的候选。
+- `stale` 只提醒先刷新独立值守/电源证据，不改变页面在线/离线判定，不启动页面，不认证，不发送 call/input/inject。
+修改文件：
+- `scripts/mac/start-mac-client.mjs`
+- `scripts/mac/test-mac-client-start-helper.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-client-start-helper.mjs --timeoutMs 15000` 先失败在 `--checkBoard` 路径缺 `MacUnattendedFreshness`。
+- 绿灯：实现后同一专项回归通过，并覆盖默认不读板、JSON、boardSummary、`MacUnattendedHealth` 优先级、`MacPowerHealth` fallback 和敏感文本不提升。
+遗留问题：
+- 当前真实 `MacUnattendedFreshness=stale` 仍表示独立值守证据旧了；真正修改系统睡眠或加载 LaunchAgent 仍需用户现场确认后人工执行。
+下一步建议：
+- 如果只想确认本地页面是否在线，继续用默认 `start-mac-client --status --boardSummary`；如果还要同屏看值守/电源证据新旧，再加 `--checkBoard`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 `MacClientDiagnostics=` / `check-mac-client-readiness` 第一屏也能提示当前 `Mac Unattended` / `MacPowerHealth` 证据是否新鲜。
 完成内容：
 - `check-mac-client-readiness --checkBoard --json/--boardSummary` 新增 JSON `board.macUnattendedFreshness`，并在 `MacClientDiagnostics=` 摘要和普通输出里转述 `MacUnattendedFreshness=fresh|stale checkedAgeMs=<毫秒> thresholdMs=600000 checkedAt=<时间> source=MacUnattendedHealth|MacPowerHealth`。

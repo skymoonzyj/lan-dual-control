@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 
@@ -59,6 +59,15 @@ function assertSingleLine(text, label) {
   assert(trimmed.length > 0, `${label} should not be empty`);
   assert(!trimmed.includes("\n"), `${label} should be a single line.\n${text}`);
   return trimmed;
+}
+
+function assertMacUnattendedFreshness(payload, expected, label) {
+  const freshness = payload.board?.macUnattendedFreshness;
+  assert(freshness?.status === expected.status, `${label} should expose MacUnattendedFreshness status=${expected.status}`);
+  assert(freshness.checkedAt === expected.checkedAt, `${label} should preserve MacUnattendedFreshness checkedAt`);
+  assert(freshness.thresholdMs === expected.thresholdMs, `${label} should expose MacUnattendedFreshness thresholdMs`);
+  assert(freshness.source === expected.source, `${label} should expose MacUnattendedFreshness source`);
+  assert(Number.isFinite(freshness.checkedAgeMs), `${label} should expose finite MacUnattendedFreshness checkedAgeMs`);
 }
 
 function run(args, options = {}) {
@@ -280,14 +289,58 @@ async function getFreePort() {
   });
 }
 
+async function withBoardStateServer(args, boardState, fn) {
+  const port = await getFreePort();
+  const child = spawn(process.execPath, [
+    "--input-type=module",
+    "-e",
+    `
+import { createServer } from "node:http";
+const port = Number(process.argv[1]);
+const state = ${JSON.stringify(boardState)};
+createServer((request, response) => {
+  const pathname = new URL(request.url || "/", "http://127.0.0.1").pathname;
+  if (pathname !== "/api/state") {
+    response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+    response.end("not found\\n");
+    return;
+  }
+  response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+  response.end(JSON.stringify(state));
+}).listen(port, "127.0.0.1");
+`,
+    String(port),
+  ], {
+    cwd: repoRoot,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  try {
+    await waitForHttpPath(port, "/api/state", args.timeoutMs);
+    return await fn(`http://127.0.0.1:${port}`);
+  } finally {
+    child.kill("SIGTERM");
+    await new Promise((resolveClose) => {
+      const timer = setTimeout(resolveClose, 1000);
+      child.once("close", () => {
+        clearTimeout(timer);
+        resolveClose();
+      });
+    });
+  }
+}
+
 function waitForHttp(port, timeoutMs) {
+  return waitForHttpPath(port, "/", timeoutMs);
+}
+
+function waitForHttpPath(port, path, timeoutMs) {
   const startedAt = Date.now();
   return new Promise((resolveWait, rejectWait) => {
     const attempt = () => {
       const result = spawnSync(process.execPath, [
         "--input-type=module",
         "-e",
-        `const r=await fetch("http://127.0.0.1:${port}/"); if(!r.ok) process.exit(1);`,
+        `const r=await fetch("http://127.0.0.1:${port}${path}"); if(!r.ok) process.exit(1);`,
       ], {
         encoding: "utf8",
         timeout: 2000,
@@ -312,6 +365,7 @@ function checkHelp(args) {
     assert(result.status === 0, `${script} ${flag} should exit 0`);
     assertIncludes(result.stdout, "Usage:", `${script} ${flag}`);
     assertIncludes(result.stdout, "--status", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--checkBoard", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientFormalStatusCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientDiscoverWindowsCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientReverseRehearsalAction", `${script} ${flag}`);
@@ -323,6 +377,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macClientPromptPasswordSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientBrowserSelfTestCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macPowerPlanCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "board.macUnattendedFreshness", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
   print("OK", "Mac client start helper help exits quickly");
@@ -337,7 +392,9 @@ async function checkOfflineStatus(args) {
   assert(result.status !== 0, "offline status should fail");
   assert(payload.ok === false, "offline payload should be ok=false");
   assert(payload.online === false, "offline payload should be online=false");
+  assert(payload.board === undefined, "offline status should not read Agent Link Board by default");
   assertIncludes(payload.boardSummary || "", "Mac client page offline", "offline board summary");
+  assertNotIncludes(payload.boardSummary || "", "MacUnattendedFreshness=", "offline board summary");
   assertNotIncludes(payload.boardSummary || "", "Evidence=MacClientPageOnline", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "offline board summary");
@@ -408,6 +465,94 @@ async function checkOfflineStatus(args) {
   assertIncludes(summaryLine, "连接密码", "offline board summary stdout");
   assertNotIncludes(`${summary.stdout}\n${summary.stderr}`, "LAN_DUAL_PASSWORD", "offline board summary stdout");
   print("OK", "Offline status reports machine-readable JSON without secrets");
+}
+
+async function checkBoardMacUnattendedFreshness(args) {
+  const port = await getFreePort();
+  const boardState = {
+    updatedAt: "2026-06-19T08:10:00.000Z",
+    currentCall: null,
+    statuses: {
+      "Mac Heartbeat": {
+        status: "online",
+        note: "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T08:09:00.000Z.",
+      },
+      "Mac Unattended": {
+        status: "warning",
+        note: "MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-01-01T00:00:00.000Z.",
+      },
+    },
+    events: [
+      {
+        at: "2026-06-19T08:11:00.000Z",
+        from: "Mac Codex",
+        text: "Ignore unsafe candidate MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=--password=sauce checkedAt=2026-06-19T08:10:00.000Z",
+      },
+    ],
+  };
+  await withBoardStateServer(args, boardState, async (serverUrl) => {
+    const result = run([
+      "--status",
+      "--json",
+      "--checkBoard",
+      "--server",
+      serverUrl,
+      "--port",
+      String(port),
+      "--timeoutMs",
+      "1200",
+    ], {
+      timeoutMs: args.timeoutMs,
+    });
+    const payload = parseJson(result.stdout, "board MacUnattendedFreshness JSON");
+    assert(result.status !== 0, "board MacUnattendedFreshness offline status should still fail because local page is offline");
+    assertMacUnattendedFreshness(payload, {
+      status: "stale",
+      checkedAt: "2026-01-01T00:00:00.000Z",
+      thresholdMs: 600000,
+      source: "MacUnattendedHealth",
+    }, "board MacUnattendedFreshness JSON");
+    assertIncludes(payload.boardSummary || "", "MacUnattendedFreshness=stale", "board MacUnattendedFreshness summary");
+    assertIncludes(payload.boardSummary || "", "checkedAt=2026-01-01T00:00:00.000Z", "board MacUnattendedFreshness summary");
+    assertIncludes(payload.boardSummary || "", "source=MacUnattendedHealth", "board MacUnattendedFreshness summary");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}`, "sauce", "board MacUnattendedFreshness output");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--password", "board MacUnattendedFreshness output");
+  });
+  const powerOnlyState = {
+    updatedAt: "2026-06-19T08:12:00.000Z",
+    currentCall: null,
+    statuses: {
+      "Mac Heartbeat": {
+        status: "online",
+        note: "MacPowerHealth=warning reason=display-sleep-enabled warnings=display-sleep-enabled checkedAt=2026-01-02T00:00:00.000Z.",
+      },
+    },
+    events: [],
+  };
+  await withBoardStateServer(args, powerOnlyState, async (serverUrl) => {
+    const result = run([
+      "--status",
+      "--json",
+      "--checkBoard",
+      "--server",
+      serverUrl,
+      "--port",
+      String(port),
+      "--timeoutMs",
+      "1200",
+    ], {
+      timeoutMs: args.timeoutMs,
+    });
+    const payload = parseJson(result.stdout, "board MacPowerHealth fallback JSON");
+    assert(result.status !== 0, "board MacPowerHealth fallback offline status should still fail because local page is offline");
+    assertMacUnattendedFreshness(payload, {
+      status: "stale",
+      checkedAt: "2026-01-02T00:00:00.000Z",
+      thresholdMs: 600000,
+      source: "MacPowerHealth",
+    }, "board MacPowerHealth fallback JSON");
+  });
+  print("OK", "Board MacUnattendedFreshness is optional and secret-safe");
 }
 
 async function checkStartAndExisting(args) {
@@ -588,6 +733,7 @@ async function main() {
   const args = parseArgs(process.argv);
   checkHelp(args);
   await checkOfflineStatus(args);
+  await checkBoardMacUnattendedFreshness(args);
   await checkStartAndExisting(args);
   print("OK", "Mac client start helper self-test passed");
 }
