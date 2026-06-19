@@ -315,6 +315,7 @@ function userAwakeWhileWindowsPushingBoardState() {
 }
 
 function macManualUxCallInProgressBoardState() {
+  const startedAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
   return {
     updatedAt: "2026-06-20T10:08:00.000Z",
     currentCall: {
@@ -325,6 +326,7 @@ function macManualUxCallInProgressBoardState() {
       expected: "Verify connection, video, audio, clipboard, file, window, fullscreen, original quality, and copy diagnostics.",
       ask: "Please confirm a 5-10 minute user-present manual UX window. Mac will not request credentials on the board or send remote input commands.",
       owner: "Mac Codex",
+      startedAt,
       timeout: "10m",
     },
     statuses: {
@@ -349,6 +351,18 @@ function macManualUxCallInProgressBoardState() {
         text: "USER_AWAKE: user is awake; prepare real manual UX validation after explicit call.",
       },
     ],
+  };
+}
+
+function expiredMacManualUxCallBoardState() {
+  const state = macManualUxCallInProgressBoardState();
+  return {
+    ...state,
+    currentCall: {
+      ...state.currentCall,
+      startedAt: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
+      timeout: "10m",
+    },
   };
 }
 
@@ -594,14 +608,35 @@ async function checkManualUxCallInProgressDoesNotOfferDuplicateCall(args) {
     const payload = parseJson(result.stdout, "manual UX call-in-progress JSON");
     assert(payload.status === "calling", `manual UX call-in-progress should be calling, got ${payload.status}`);
     assert(payload.signals?.manualUxCallInProgress === true, "manual UX call-in-progress signal should be true");
+    assert(payload.manualUxCall?.state === "active", `manual UX call-in-progress should expose active call timing: ${JSON.stringify(payload.manualUxCall)}`);
+    assert(Number.isFinite(payload.manualUxCall?.ageMs), `manual UX call-in-progress should expose ageMs: ${JSON.stringify(payload.manualUxCall)}`);
     assert(payload.commands?.manualUxCallCommand == null, `manual UX call-in-progress should not expose another call command: ${JSON.stringify(payload.commands)}`);
     assertIncludes(payload.boardSummary, "MacManualUx=status=calling", "manual UX call-in-progress boardSummary");
     assertIncludes(payload.boardSummary, "Next=WaitForManualUxConfirmation", "manual UX call-in-progress boardSummary");
+    assertIncludes(payload.boardSummary, "ManualUxCall=active", "manual UX call-in-progress boardSummary");
     assertNotIncludes(payload.boardSummary, "ManualUxCallCommand=", "manual UX call-in-progress boardSummary");
     assert(posts.filter((post) => post.path === "/api/call").length === 0, `read-only calling status should not post a call: ${JSON.stringify(posts)}`);
     assertSecretSafe(JSON.stringify(payload), "manual UX call-in-progress JSON");
   });
   console.log("[OK] Mac manual UX status treats an active manual UX call as waiting for confirmation");
+}
+
+async function checkExpiredManualUxCallRequestsReconfirmation(args) {
+  await withFakeBoard(expiredMacManualUxCallBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `expired manual UX call JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "expired manual UX call JSON");
+    assert(payload.status === "calling", `expired manual UX call should remain calling, got ${payload.status}`);
+    assert(payload.manualUxCall?.state === "timeout", `expired manual UX call should expose timeout state: ${JSON.stringify(payload.manualUxCall)}`);
+    assert(payload.manualUxCall?.timedOut === true, `expired manual UX call should expose timedOut=true: ${JSON.stringify(payload.manualUxCall)}`);
+    assert(payload.warnings?.includes("manual-ux-call-timeout"), `expired manual UX call should include timeout warning: ${JSON.stringify(payload.warnings)}`);
+    assertIncludes(payload.boardSummary, "ManualUxCall=timeout", "expired manual UX call boardSummary");
+    assertIncludes(payload.boardSummary, "Next=ReconfirmManualUxCall", "expired manual UX call boardSummary");
+    assertNotIncludes(payload.boardSummary, "ManualUxCallCommand=", "expired manual UX call boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `expired read-only status should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "expired manual UX call JSON");
+  });
+  console.log("[OK] Mac manual UX status warns when the active manual UX call times out");
 }
 
 async function checkSendCallRefusesWhileWindowsIsPushing(args) {
@@ -660,6 +695,7 @@ async function main() {
   await checkUserAwakeCallProducesManualUxCallPlan(args);
   await checkUserAwakeSendCallPostsManualUxCall(args);
   await checkManualUxCallInProgressDoesNotOfferDuplicateCall(args);
+  await checkExpiredManualUxCallRequestsReconfirmation(args);
   await checkSendCallRefusesWhileWindowsIsPushing(args);
   await checkSendCallRefusesWhenNotCallReady(args);
   await checkSendCallRefusesOtherActiveCall(args);

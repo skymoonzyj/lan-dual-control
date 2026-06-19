@@ -299,7 +299,7 @@ function normalizeCurrentBoardCall(call) {
     active: isActiveBoardCall(call),
     raw: compactText(call),
   };
-  for (const key of ["status", "goal", "from", "need", "environment", "connection", "command", "expected", "actual", "ask", "blockedBy", "owner", "timeout", "updatedAt"]) {
+  for (const key of ["status", "goal", "from", "need", "environment", "connection", "command", "expected", "actual", "ask", "blockedBy", "owner", "startedAt", "timeout", "updatedAt"]) {
     const value = normalizedText(call[key]);
     if (value) currentCall[key] = value;
   }
@@ -339,6 +339,52 @@ function windowsCodexCoordination(state) {
     status: value || "unknown",
     updatedAt: normalizedText(status?.updatedAt) || "",
     pushInProgress,
+  };
+}
+
+function parseDurationMs(value) {
+  const text = normalizedText(value).toLowerCase();
+  if (!text) return null;
+  const match = /^(\d+(?:\.\d+)?)(ms|s|m|h)?$/.exec(text);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount)) return null;
+  const unit = match[2] || "ms";
+  if (unit === "h") return Math.round(amount * 60 * 60 * 1000);
+  if (unit === "m") return Math.round(amount * 60 * 1000);
+  if (unit === "s") return Math.round(amount * 1000);
+  return Math.round(amount);
+}
+
+function manualUxCallTiming(call, now = Date.now()) {
+  if (!isActiveMacManualUxValidationBoardCall(call)) return null;
+  const startedAtMs = Date.parse(call.startedAt || call.updatedAt || "");
+  const timeoutMs = parseDurationMs(call.timeout);
+  if (!Number.isFinite(startedAtMs)) {
+    return {
+      state: "active",
+      startedAt: call.startedAt || "",
+      timeout: call.timeout || "",
+      timeoutMs,
+      ageMs: null,
+      remainingMs: null,
+      nearTimeout: false,
+      timedOut: false,
+    };
+  }
+  const ageMs = Math.max(0, now - startedAtMs);
+  const remainingMs = Number.isFinite(timeoutMs) ? timeoutMs - ageMs : null;
+  const timedOut = Number.isFinite(remainingMs) && remainingMs <= 0;
+  const nearTimeout = !timedOut && Number.isFinite(remainingMs) && remainingMs <= 2 * 60 * 1000;
+  return {
+    state: timedOut ? "timeout" : nearTimeout ? "near-timeout" : "active",
+    startedAt: call.startedAt || "",
+    timeout: call.timeout || "",
+    timeoutMs,
+    ageMs,
+    remainingMs,
+    nearTimeout,
+    timedOut,
   };
 }
 
@@ -415,6 +461,9 @@ function makeReport(state, server) {
   }
   const windowsCoordination = windowsCodexCoordination(state);
   if (windowsCoordination.pushInProgress) warnings.push("windows-codex-pushing");
+  const manualUxCall = manualUxCallTiming(boardCallBeforeCheck);
+  if (manualUxCall?.timedOut) warnings.push("manual-ux-call-timeout");
+  else if (manualUxCall?.nearTimeout) warnings.push("manual-ux-call-near-timeout");
   const report = {
     ok: ready || calling || callReady,
     status,
@@ -437,6 +486,7 @@ function makeReport(state, server) {
     commands: {
       manualUxCallCommand: callReady ? makeManualUxCallCommand(server) : null,
     },
+    manualUxCall,
     coordination: {
       windowsCodex: windowsCoordination,
     },
@@ -482,7 +532,9 @@ function makeBoardSummary(report) {
     : report.status === "call-ready"
       ? "SendManualUxCall"
       : report.status === "calling"
-        ? "WaitForManualUxConfirmation"
+        ? report.manualUxCall?.timedOut
+          ? "ReconfirmManualUxCall"
+          : "WaitForManualUxConfirmation"
         : "WaitForPostPassOrManualUxStandby";
   const parts = [
     `MacManualUx=status=${report.status}`,
@@ -495,6 +547,7 @@ function makeBoardSummary(report) {
     "NoFormalE2ERerun=true",
   ];
   if (report.commands?.manualUxCallCommand) parts.push(`ManualUxCallCommand=${report.commands.manualUxCallCommand}`);
+  if (report.manualUxCall?.state) parts.push(`ManualUxCall=${report.manualUxCall.state}`);
   if (report.sentCall?.ok) parts.push("ManualUxCallSent=true");
   if (report.sentCall?.ok === false) parts.push("ManualUxCallSent=false");
   if (report.blockers.length > 0) parts.push(`blockers=${report.blockers.join(",")}`);

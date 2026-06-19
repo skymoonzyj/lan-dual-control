@@ -19,6 +19,29 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac 手工体验 call 超时状态
+开发端：Mac Codex
+本轮目标：当前 `Mac manual UX validation` call 已经发出后，补齐 active/timeout 状态，让通讯板能提示是否仍在等待确认窗口内，避免过期 call 被误判为可继续执行。
+完成内容：
+- `check-mac-manual-ux-status` 现在读取 currentCall 的 `startedAt` 和 `timeout`，输出 `manualUxCall` 计时信息。
+- 未超时时保持 `MacManualUx=status=calling`、`Next=WaitForManualUxConfirmation`、`ManualUxCall=active`。
+- 超过 timeout 后仍不重复发送 call，不输出 `ManualUxCallCommand=`，改为 `ManualUxCall=timeout`、`Next=ReconfirmManualUxCall` 并给出 `manual-ux-call-timeout` warning。
+修改文件：
+- `scripts/mac/check-mac-manual-ux-status.mjs`
+- `scripts/mac/test-mac-manual-ux-status.mjs`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-manual-ux-status.mjs --timeoutMs 20000` 先失败，active call 没有暴露计时状态。
+- 绿灯：同一测试通过，新增 `Mac manual UX status warns when the active manual UX call times out` 覆盖 timeout 后只提示重新确认、不重复发 call。
+遗留问题：
+- 当前真实手工体验仍需要 Windows/User 在通讯板重新确认可用窗口；未做真实体验验收。
+下一步建议：
+- 白天继续时先看 `MacManualUxStatus=node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary`。如果显示 `ManualUxCall=timeout`，先由 Mac 端重新发起/确认 manual UX call，再让 Windows 端进入真实连接体验。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows/User 重新确认真实体验窗口后再测试。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac 手工体验 active call 状态收口
 开发端：Mac Codex
 本轮目标：Mac 已发起 `Mac manual UX validation` call 后，避免 `check-mac-manual-ux-status` 继续显示 `call-ready` 并给出重复发 call 命令。
