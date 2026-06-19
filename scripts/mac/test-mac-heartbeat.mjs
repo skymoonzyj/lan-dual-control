@@ -151,6 +151,14 @@ function assertMacPowerHealth(payload, expected, label) {
   assert(payload.board?.macPowerHealth?.checkedAt === expected.checkedAt, `${label} should expose MacPowerHealth checkedAt`);
 }
 
+function assertMacUnattendedHealth(payload, expected, label) {
+  assert(payload.board?.macUnattendedHealth?.status === expected.status, `${label} should expose MacUnattendedHealth status`);
+  assert(payload.board?.macUnattendedHealth?.reason === expected.reason, `${label} should expose MacUnattendedHealth reason`);
+  assert(payload.board?.macUnattendedHealth?.blockers === expected.blockers, `${label} should expose MacUnattendedHealth blockers`);
+  assert(payload.board?.macUnattendedHealth?.warnings === expected.warnings, `${label} should expose MacUnattendedHealth warnings`);
+  assert(payload.board?.macUnattendedHealth?.checkedAt === expected.checkedAt, `${label} should expose MacUnattendedHealth checkedAt`);
+}
+
 function assertMacUnattendedFreshness(payload, expected, label) {
   const freshness = payload.board?.macUnattendedFreshness;
   assert(freshness?.status === expected.status, `${label} should expose MacUnattendedFreshness status`);
@@ -351,6 +359,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "macHeartbeatHealth", `${script} ${flag}`);
     assertIncludes(result.stdout, "macEvidence", `${script} ${flag}`);
     assertIncludes(result.stdout, "MacUnattendedSendStatus", `${script} ${flag}`);
+    assertIncludes(result.stdout, "board.macUnattendedHealth", `${script} ${flag}`);
     assertIncludes(result.stdout, "board.macUnattendedFreshness", `${script} ${flag}`);
     assertIncludes(result.stdout, "macPowerPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macLaunchAgentPlanCommand", `${script} ${flag}`);
@@ -657,11 +666,19 @@ async function checkBoardMacPowerHealth(args) {
       warnings: "system-sleep-enabled,display-sleep-enabled",
       checkedAt: "2026-06-19T07:23:38.703Z",
     }, "Mac power health heartbeat");
+    assertMacUnattendedHealth(payload, {
+      status: "warning",
+      reason: "launch-agent-not-loaded",
+      blockers: "none",
+      warnings: "launch-agent-not-loaded,power",
+      checkedAt: "2026-06-19T07:23:38.703Z",
+    }, "Mac unattended health heartbeat");
     assertMacUnattendedFreshness(payload, {
       status: "stale",
       checkedAt: "2026-06-19T07:23:38.703Z",
     }, "Mac power health heartbeat");
     assertIncludes(payload.boardSummary || "", "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z.", "Mac power heartbeat summary");
+    assertIncludes(payload.boardSummary || "", "MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T07:23:38.703Z.", "Mac unattended heartbeat summary");
     assertIncludes(payload.boardSummary || "", "MacUnattendedFreshness=stale", "Mac power heartbeat summary");
     assertIncludes(payload.boardSummary || "", "checkedAt=2026-06-19T07:23:38.703Z", "Mac power heartbeat summary");
     assertIncludes(payload.boardSummary || "", "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs", "Mac power heartbeat summary");
@@ -671,7 +688,7 @@ async function checkBoardMacPowerHealth(args) {
     assertNoSecrets(`${result.stdout}\n${result.stderr}`, "Mac power heartbeat output");
   });
 
-  const riskyPower = "MacPowerHealth=warning reason=--password warnings=system-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; fake-board-token";
+  const riskyPower = "MacPowerHealth=warning reason=--password warnings=system-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=fake-token-value checkedAt=2026-06-19T07:23:38.703Z; fake-board-token";
   await withServer((request, response) => {
     if ((request.url || "").split("?")[0] !== "/api/state") {
       response.writeHead(404).end("not found");
@@ -717,13 +734,16 @@ async function checkBoardMacPowerHealth(args) {
     const payload = parseJson(result.stdout, "risky Mac power heartbeat JSON");
     assert(result.status === 0, `risky Mac power health heartbeat should stay non-failing.\n${result.stdout}\n${result.stderr}`);
     assert(!payload.board?.macPowerHealth, "risky Mac power health should not be promoted");
+    assert(!payload.board?.macUnattendedHealth, "risky Mac unattended health should not be promoted");
     assert(!payload.board?.macUnattendedFreshness, "risky Mac unattended freshness should not be promoted");
     assertNotIncludes(payload.boardSummary || "", "MacPowerHealth=", "risky Mac power heartbeat summary");
+    assertNotIncludes(payload.boardSummary || "", "MacUnattendedHealth=", "risky Mac power heartbeat summary");
     assertNotIncludes(payload.boardSummary || "", "MacUnattendedFreshness=", "risky Mac power heartbeat summary");
     assertNotIncludes(`${result.stdout}\n${result.stderr}`, "fake-board-token", "risky Mac power heartbeat output");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}`, "fake-token-value", "risky Mac power heartbeat output");
     assertNoSecrets(`${result.stdout}\n${result.stderr}`, "risky Mac power heartbeat output");
   });
-  print("OK", "Agent Link Board MacPowerHealth is surfaced safely in heartbeat");
+  print("OK", "Agent Link Board MacPowerHealth and MacUnattendedHealth are surfaced safely in heartbeat");
 }
 
 async function checkOnlineStaleHostBuildWarning(args) {

@@ -243,6 +243,9 @@ Machine-readable JSON fields:
                              status. It keeps power warning details such as
                              system-sleep-enabled or display-sleep-enabled
                              visible in resume summaries without running pmset.
+  board.macUnattendedHealth  Stable MacUnattendedHealth= status safely
+                             extracted from the current Agent Link Board Mac
+                             Unattended status.
   board.macUnattendedFreshness
                              Stable fresh/stale status for the current
                              MacUnattendedHealth/MacPowerHealth checkedAt
@@ -561,6 +564,7 @@ async function getBoardStatus(args, nowMs) {
       recentLines: [],
       macEvidence: [],
       macPowerHealth: null,
+      macUnattendedHealth: null,
       macUnattendedFreshness: null,
       currentCall: null,
       activeCall: false,
@@ -582,6 +586,7 @@ async function getBoardStatus(args, nowMs) {
   const currentCall = normalizeBoardCall(stateResult.state?.currentCall);
   const macEvidence = collectMacEvidence(stateResult.state, lines);
   const macPowerHealth = collectMacPowerHealth(stateResult.state, lines);
+  const macUnattendedHealth = collectMacUnattendedHealth(stateResult.state, lines);
   const macUnattendedFreshness = collectMacUnattendedFreshness(stateResult.state, lines, nowMs);
   return {
     checked: true,
@@ -590,6 +595,7 @@ async function getBoardStatus(args, nowMs) {
     recentLines: lines.slice(-12),
     macEvidence,
     macPowerHealth,
+    macUnattendedHealth,
     macUnattendedFreshness,
     currentCall,
     activeCall: isActiveCall(currentCall),
@@ -607,6 +613,14 @@ function collectMacEvidence(state, recentLines = []) {
 function collectMacPowerHealth(state, recentLines = []) {
   for (const text of collectBoardEvidenceTexts(state, recentLines)) {
     const health = extractMacPowerHealth(text);
+    if (health) return health;
+  }
+  return null;
+}
+
+function collectMacUnattendedHealth(state, recentLines = []) {
+  for (const text of collectBoardEvidenceTexts(state, recentLines)) {
+    const health = extractMacUnattendedHealth(text);
     if (health) return health;
   }
   return null;
@@ -1344,6 +1358,18 @@ function formatMacPowerHealthSummary(board) {
   ].join(" ") + ";";
 }
 
+function formatMacUnattendedHealthSummary(board) {
+  const health = board?.macUnattendedHealth;
+  if (!health) return "";
+  return [
+    `MacUnattendedHealth=${health.status || "unknown"}`,
+    `reason=${boardToken(health.reason)}`,
+    `blockers=${boardToken(health.blockers)}`,
+    `warnings=${boardToken(health.warnings)}`,
+    `checkedAt=${health.checkedAt || "unknown"}`,
+  ].join(" ") + ";";
+}
+
 function formatMacUnattendedFreshnessSummary(board) {
   const freshness = board?.macUnattendedFreshness;
   if (!freshness) return "";
@@ -1567,6 +1593,7 @@ function formatBoardSummary(report) {
   const heartbeatHealthSummary = formatMacHeartbeatHealthSummary(report.macHeartbeatHealth);
   const macEvidenceSummary = formatMacEvidenceSummary(board);
   const macPowerHealthSummary = formatMacPowerHealthSummary(board);
+  const macUnattendedHealthSummary = formatMacUnattendedHealthSummary(board);
   const macUnattendedFreshnessSummary = formatMacUnattendedFreshnessSummary(board);
   const suggestedActionSummary = report.suggestedAction?.boardSummary ? ` ${report.suggestedAction.boardSummary}` : "";
 
@@ -1575,6 +1602,7 @@ function formatBoardSummary(report) {
       `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${heartbeatWatcherSummary}; ${heartbeatFreshnessSummary}; ${heartbeatHealthSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
       macEvidenceSummary,
       macPowerHealthSummary,
+      macUnattendedHealthSummary,
       macUnattendedFreshnessSummary,
       `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
       `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
@@ -1621,6 +1649,7 @@ function formatBoardSummary(report) {
     `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}; ${heartbeatWatcherSummary}; ${heartbeatFreshnessSummary}; ${heartbeatHealthSummary}.`,
     macEvidenceSummary,
     macPowerHealthSummary,
+    macUnattendedHealthSummary,
     macUnattendedFreshnessSummary,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedActionSummary}.`,
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
@@ -1690,6 +1719,9 @@ function printReport(report) {
     }
     if (board.macPowerHealth) {
       console.log(`[INFO] Mac power health: status=${board.macPowerHealth.status} reason=${board.macPowerHealth.reason} warnings=${board.macPowerHealth.warnings}`);
+    }
+    if (board.macUnattendedHealth) {
+      console.log(`[INFO] Mac unattended health: status=${board.macUnattendedHealth.status} reason=${board.macUnattendedHealth.reason} blockers=${board.macUnattendedHealth.blockers} warnings=${board.macUnattendedHealth.warnings}`);
     }
     if (board.macUnattendedFreshness) {
       console.log(`[INFO] Mac unattended freshness: status=${board.macUnattendedFreshness.status} checkedAgeMs=${board.macUnattendedFreshness.checkedAgeMs} thresholdMs=${board.macUnattendedFreshness.thresholdMs} source=${board.macUnattendedFreshness.source}`);

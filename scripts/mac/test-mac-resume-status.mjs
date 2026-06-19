@@ -646,6 +646,7 @@ function checkHelp(args) {
     assert(/macHeartbeatWatcher/.test(result.stdout), `${script} ${flag} should document Mac heartbeat watcher status JSON field`);
     assert(/macHeartbeatFreshness/.test(result.stdout), `${script} ${flag} should document Mac heartbeat freshness JSON field`);
     assert(/macHeartbeatHealth/.test(result.stdout), `${script} ${flag} should document Mac heartbeat health JSON field`);
+    assert(/board\.macUnattendedHealth/.test(result.stdout), `${script} ${flag} should document Mac unattended health JSON field`);
     assert(/board\.macUnattendedFreshness/.test(result.stdout), `${script} ${flag} should document Mac unattended evidence freshness JSON field`);
     assert(/commands\.macScriptHelpCommand/.test(result.stdout), `${script} ${flag} should document Mac script help JSON field`);
   }
@@ -1348,10 +1349,16 @@ async function checkBoardMacPowerHealth(args) {
     assert(payload.board?.macPowerHealth?.reason === "system-sleep-enabled", "Mac power health JSON should expose reason");
     assert(payload.board?.macPowerHealth?.warnings === "system-sleep-enabled,display-sleep-enabled", "Mac power health JSON should expose detailed warning tags");
     assert(payload.board?.macPowerHealth?.checkedAt === "2026-06-19T07:23:38.703Z", "Mac power health JSON should expose checkedAt");
+    assert(payload.board?.macUnattendedHealth?.status === "warning", "Mac unattended health JSON should expose warning status");
+    assert(payload.board?.macUnattendedHealth?.reason === "launch-agent-not-loaded", "Mac unattended health JSON should expose reason");
+    assert(payload.board?.macUnattendedHealth?.blockers === "none", "Mac unattended health JSON should expose blockers");
+    assert(payload.board?.macUnattendedHealth?.warnings === "launch-agent-not-loaded,power", "Mac unattended health JSON should expose detailed warning tags");
+    assert(payload.board?.macUnattendedHealth?.checkedAt === "2026-06-19T07:23:38.703Z", "Mac unattended health JSON should expose checkedAt");
     assertMacUnattendedFreshness(payload.board?.macUnattendedFreshness, "stale", "Mac unattended freshness JSON");
     assert(payload.board?.macUnattendedFreshness?.checkedAt === "2026-06-19T07:23:38.703Z", "Mac unattended freshness JSON should reuse the board checkedAt");
     assert(payload.board?.macUnattendedFreshness?.source === "MacUnattendedHealth", "Mac unattended freshness should prefer MacUnattendedHealth over MacPowerHealth");
     assert(String(payload.boardSummary || "").includes("MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z;"), "board summary should expose MacPowerHealth as a standalone segment");
+    assert(String(payload.boardSummary || "").includes("MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T07:23:38.703Z;"), "board summary should expose MacUnattendedHealth as a standalone segment");
     assert(String(payload.boardSummary || "").includes("MacUnattendedFreshness=stale"), "board summary should expose stale Mac unattended freshness");
     assert(String(payload.boardSummary || "").includes("thresholdMs=600000"), "board summary should include the freshness threshold");
     assert(String(payload.boardSummary || "").includes("checkedAt=2026-06-19T07:23:38.703Z"), "board summary should include freshness checkedAt");
@@ -1387,6 +1394,7 @@ async function checkBoardMacPowerHealth(args) {
     assert(result.status === 0, `current Mac unattended status should win over stale events\n${result.stdout}\n${result.stderr}`);
     const payload = parseJson(result.stdout, "current Mac unattended freshness resume status");
     assert(payload.board?.macPowerHealth?.checkedAt === "2026-06-19T10:30:22.477Z", "Mac power health should prefer current status over stale event text");
+    assert(payload.board?.macUnattendedHealth?.checkedAt === "2026-06-19T10:30:22.477Z", "Mac unattended health should prefer current status over stale event text");
     assert(payload.board?.macUnattendedFreshness?.checkedAt === "2026-06-19T10:30:22.477Z", "Mac unattended freshness should prefer current status over stale event text");
     assert(String(payload.boardSummary || "").includes("checkedAt=2026-06-19T10:30:22.477Z"), "board summary should use current status freshness timestamp");
   }, {
@@ -1408,7 +1416,7 @@ async function checkBoardMacPowerHealth(args) {
     ],
   });
 
-  const riskyPower = "MacPowerHealth=warning reason=--password warnings=system-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; fake-board-token";
+  const riskyPower = "MacPowerHealth=warning reason=--password warnings=system-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=fake-token-value checkedAt=2026-06-19T07:23:38.703Z; fake-board-token";
   await withFakeBoard(null, async (server) => {
     const result = run(args, [
       "--json",
@@ -1425,9 +1433,12 @@ async function checkBoardMacPowerHealth(args) {
     assert(result.status === 0, `risky Mac power health JSON should stay non-failing\n${result.stdout}\n${result.stderr}`);
     const payload = parseJson(result.stdout, "risky Mac power health resume status");
     assert(!payload.board?.macPowerHealth, "risky Mac power health should not be promoted");
+    assert(!payload.board?.macUnattendedHealth, "risky Mac unattended health should not be promoted");
     assert(!payload.board?.macUnattendedFreshness, "risky Mac power health should not create freshness");
     assert(!String(payload.boardSummary || "").includes("MacPowerHealth="), "risky board summary should not expose MacPowerHealth");
+    assert(!String(payload.boardSummary || "").includes("MacUnattendedHealth="), "risky board summary should not expose MacUnattendedHealth");
     assert(!String(payload.boardSummary || "").includes("MacUnattendedFreshness="), "risky board summary should not expose freshness");
+    assert(!String(result.stdout || "").includes("fake-token-value"), "risky output should not expose unsafe MacUnattendedHealth warning token");
     assertNoPasswordLeak(result, "risky Mac power health JSON");
   }, {
     statuses: {
@@ -1438,7 +1449,7 @@ async function checkBoardMacPowerHealth(args) {
       },
     },
   });
-  print("OK", "Agent Link Board MacPowerHealth and MacUnattendedFreshness are surfaced safely");
+  print("OK", "Agent Link Board MacPowerHealth, MacUnattendedHealth, and MacUnattendedFreshness are surfaced safely");
 }
 
 async function checkBoardDoneCall(args) {

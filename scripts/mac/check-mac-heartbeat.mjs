@@ -57,6 +57,34 @@ const allowedMacPowerWarnings = new Set([
   "display-sleep-enabled",
   "network-wake-disabled",
 ]);
+const allowedMacUnattendedStatuses = new Set(["ok", "warning", "blocked", "unknown"]);
+const allowedMacUnattendedReasons = new Set([
+  "ok",
+  "skipped",
+  "not-checked",
+  "host-offline",
+  "launch-agent-missing",
+  "launch-agent-not-loaded",
+  "launch-agent-max-fps",
+  "power",
+  "permissions",
+  "pmset-failed",
+  "unknown",
+]);
+const allowedMacUnattendedFindings = new Set([
+  "none",
+  "unknown",
+  "host-offline",
+  "launch-agent-missing",
+  "launch-agent-not-loaded",
+  "launch-agent-max-fps",
+  "power",
+  "permissions",
+  "screen-recording",
+  "accessibility",
+  "input-monitoring",
+  "pmset-failed",
+]);
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -111,6 +139,8 @@ Machine-readable JSON fields:
   board                       Agent Link Board readability and currentCall.
   board.macPowerHealth        Stable MacPowerHealth= status safely extracted
                               from current Mac Unattended board text.
+  board.macUnattendedHealth   Stable MacUnattendedHealth= status safely
+                              extracted from current Mac Unattended board text.
   board.macUnattendedFreshness
                               Stable fresh/stale freshness for the latest safe
                               MacUnattendedHealth/MacPowerHealth checkedAt.
@@ -470,6 +500,7 @@ async function readBoard(args, nowMs) {
     currentCall: { status: "not-checked", active: false, from: "", need: "", connection: "" },
     macCodexStatus: { status: "", note: "", updatedAt: "" },
     macPowerHealth: null,
+    macUnattendedHealth: null,
     macUnattendedFreshness: null,
     error: "",
   };
@@ -495,11 +526,20 @@ async function readBoard(args, nowMs) {
       updatedAt: macStatus.updatedAt || "",
     };
     result.macPowerHealth = collectMacPowerHealth(state);
+    result.macUnattendedHealth = collectMacUnattendedHealth(state);
     result.macUnattendedFreshness = collectMacUnattendedFreshness(state, nowMs);
   } catch (error) {
     result.error = error.message;
   }
   return result;
+}
+
+function collectMacUnattendedHealth(state) {
+  for (const text of collectBoardTexts(state)) {
+    const health = extractMacUnattendedHealth(text);
+    if (health) return health;
+  }
+  return null;
 }
 
 function collectMacUnattendedFreshness(state, nowMs) {
@@ -581,19 +621,24 @@ function extractMacUnattendedHealth(text) {
   const match = source.match(/\bMacUnattendedHealth=([A-Za-z]+)\s+reason=([A-Za-z0-9_-]+)\s+blockers=([A-Za-z0-9_,_-]+)\s+warnings=([A-Za-z0-9_,_-]+)\s+checkedAt=([0-9TZ:.-]+)/i);
   if (!match) return null;
   const status = match[1].toLowerCase();
+  const reason = match[2];
+  const blockers = match[3];
+  const warnings = match[4];
   const checkedAt = match[5];
-  if (!["ok", "warning", "blocked", "unknown"].includes(status)) return null;
-  if (!isSafeMacHealthTokenList(match[3]) || !isSafeMacHealthTokenList(match[4])) return null;
+  if (!allowedMacUnattendedStatuses.has(status)) return null;
+  if (!allowedMacUnattendedReasons.has(reason)) return null;
+  if (!isSafeMacUnattendedFindings(blockers)) return null;
+  if (!isSafeMacUnattendedFindings(warnings)) return null;
   if (!Number.isFinite(Date.parse(checkedAt))) return null;
-  return { status, checkedAt };
+  return { status, reason, blockers, warnings, checkedAt };
 }
 
-function isSafeMacHealthTokenList(value) {
+function isSafeMacUnattendedFindings(value) {
   const tokens = String(value || "")
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
-  return tokens.length > 0 && tokens.every((token) => /^[A-Za-z0-9_-]+$/.test(token));
+  return tokens.length > 0 && tokens.every((token) => allowedMacUnattendedFindings.has(token));
 }
 
 function makeMacUnattendedFreshness(checkedAt, source, nowMs) {
@@ -878,6 +923,18 @@ function formatMacPowerHealthSummary(board) {
   ].join(" ");
 }
 
+function formatMacUnattendedHealthSummary(board) {
+  const health = board?.macUnattendedHealth;
+  if (!health) return "";
+  return [
+    `MacUnattendedHealth=${health.status || "unknown"}`,
+    `reason=${health.reason || "unknown"}`,
+    `blockers=${health.blockers || "unknown"}`,
+    `warnings=${health.warnings || "unknown"}`,
+    `checkedAt=${health.checkedAt || "unknown"}`,
+  ].join(" ");
+}
+
 function formatMacUnattendedFreshnessSummary(board) {
   const freshness = board?.macUnattendedFreshness;
   if (!freshness) return "";
@@ -945,12 +1002,14 @@ function makeBoardSummary(report) {
   const stableEvidenceSummary = stableEvidence.length > 0 ? ` Evidence=${stableEvidence.join(",")}.` : "";
   const macPowerHealthSummary = formatMacPowerHealthSummary(report.board);
   const macPowerHealthSegment = macPowerHealthSummary ? ` ${macPowerHealthSummary}.` : "";
+  const macUnattendedHealthSummary = formatMacUnattendedHealthSummary(report.board);
+  const macUnattendedHealthSegment = macUnattendedHealthSummary ? ` ${macUnattendedHealthSummary}.` : "";
   const macUnattendedFreshnessSummary = formatMacUnattendedFreshnessSummary(report.board);
   const macUnattendedFreshnessSegment = macUnattendedFreshnessSummary ? ` ${macUnattendedFreshnessSummary}.` : "";
   const suggestedAction = report.suggestedAction?.boardSummary || "suggestedAction=none";
   const heartbeatHealthSummary = formatMacHeartbeatHealthSummary(report.macHeartbeatHealth);
   return [
-    `MacHeartbeat=status=${report.status}; checkedAt=${checkedAt}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}; ${heartbeatHealthSummary}.${macPowerHealthSegment}${macUnattendedFreshnessSegment}${evidence}${stableEvidenceSummary}`,
+    `MacHeartbeat=status=${report.status}; checkedAt=${checkedAt}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}; ${heartbeatHealthSummary}.${macPowerHealthSegment}${macUnattendedHealthSegment}${macUnattendedFreshnessSegment}${evidence}${stableEvidenceSummary}`,
     suggestedAction,
     `MacHeartbeatRerun=${report.commands.macHeartbeatCommand}.`,
     `MacResumeStatus=${report.commands.macResumeStatusCommand}.`,

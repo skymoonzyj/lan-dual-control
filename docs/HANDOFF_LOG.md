@@ -21,6 +21,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac heartbeat / resume 第一屏也能直接转述新鲜 `MacUnattendedHealth=`，不用再只靠 `MacUnattendedFreshness=` 推断值守风险来源。
+完成内容：
+- 已先运行 `check-mac-unattended-status --sendStatus --boardSummary` 刷新真实通讯板证据；当前证据新鲜，仍为 `MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power`，并伴随 `MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled`。
+- `check-mac-heartbeat --checkBoard --json/--boardSummary` 新增 JSON `board.macUnattendedHealth`，并在 `MacHeartbeat=` 摘要里输出 `MacUnattendedHealth=ok|warning|blocked|unknown reason=<短标签> blockers=<短标签> warnings=<短标签> checkedAt=<时间>`。
+- `check-mac-resume-status --checkBoard --json/--boardSummary` 新增 JSON `board.macUnattendedHealth`，并在 `MacResumeStatus=` 摘要和普通输出里转述同一稳定短字段。
+- 新字段复用安全白名单解析；`fake-token-value`、不在白名单的 warning/blocker、疑似 password/token/secret 候选不会提升到 JSON 或摘要，也不会影响 freshness。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` / `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000` 先失败在 help 或输出缺 `MacUnattendedHealth`。
+- 绿灯：实现后同两条专项回归通过，并覆盖 JSON、boardSummary、当前 status 优先于旧 event、unsafe warning 不提升、不泄密。
+遗留问题：
+- 真实 Mac 值守仍有 warning：LaunchAgent 未加载、系统睡眠和显示睡眠未关闭；真正执行 `launchctl` / `pmset` 仍需用户现场确认。
+下一步建议：
+- 看到 `MacUnattendedHealth=warning reason=launch-agent-not-loaded` 时，按摘要里的 `MacLaunchAgentPlan=` / `MacLaunchAgentLoad=` / `MacLaunchAgentPrint=` / `MacUnattendedFormal=` 顺序规划并由人工确认执行；看到 `MacPowerHealth=warning` 时先跑 `MacPowerPlan=` 预览。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 `MacClientPage=` / `start-mac-client --status` 在显式读取通讯板时也能提示当前 `Mac Unattended` / `MacPowerHealth` 证据是否新鲜。
 完成内容：
 - `start-mac-client --status --checkBoard --json/--boardSummary` 新增 JSON `board.macUnattendedFreshness`，并在页面状态摘要和普通输出里转述 `MacUnattendedFreshness=fresh|stale checkedAgeMs=<毫秒> thresholdMs=600000 checkedAt=<时间> source=MacUnattendedHealth|MacPowerHealth`。
