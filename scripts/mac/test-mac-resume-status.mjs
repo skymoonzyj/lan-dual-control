@@ -155,6 +155,9 @@ function assertBoardSummaryShape(text, label) {
   assert(/heartbeatWatcher=/.test(text), `${label} should include Mac heartbeat watcher status`);
   assert(/lastHeartbeat=/.test(text), `${label} should include the last Mac heartbeat watcher observation`);
   assert(/MacHeartbeatFreshness=/.test(text), `${label} should include stable Mac heartbeat freshness`);
+  assert(/MacHeartbeatHealth=/.test(text), `${label} should include stable Mac heartbeat health`);
+  assert(/MacHeartbeatHealth=(ok|blocked|warning|unknown)\b/.test(text), `${label} should include a parseable Mac heartbeat health status`);
+  assert(/MacHeartbeatHealth=[^;.]*(?: |^)reason=/.test(text), `${label} should include Mac heartbeat health reason`);
   assert(/media baseline/i.test(text), `${label} should include media baseline guidance`);
   assert(/check-mac-host-readiness\.mjs/.test(text), `${label} should include the media readiness command`);
   assert(/MacHostMedia=/.test(text), `${label} should include stable Mac host media baseline guidance`);
@@ -597,6 +600,7 @@ function checkHelp(args) {
     assert(/commands\.macHeartbeatStopCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat background stop JSON field`);
     assert(/macHeartbeatWatcher/.test(result.stdout), `${script} ${flag} should document Mac heartbeat watcher status JSON field`);
     assert(/macHeartbeatFreshness/.test(result.stdout), `${script} ${flag} should document Mac heartbeat freshness JSON field`);
+    assert(/macHeartbeatHealth/.test(result.stdout), `${script} ${flag} should document Mac heartbeat health JSON field`);
     assert(/commands\.macScriptHelpCommand/.test(result.stdout), `${script} ${flag} should document Mac script help JSON field`);
   }
   print("OK", "Resume status help exits quickly");
@@ -619,6 +623,8 @@ function checkOfflineJson(args) {
   assert(payload.macHeartbeatWatcher?.checked === true, "offline payload should include Mac heartbeat watcher status");
   assert(typeof payload.macHeartbeatWatcher.running === "boolean", "offline payload should include Mac heartbeat watcher running flag");
   assert(["fresh", "stale", "unknown"].includes(payload.macHeartbeatFreshness?.status), "offline payload should include structured Mac heartbeat freshness");
+  assert(["ok", "blocked", "warning", "unknown"].includes(payload.macHeartbeatHealth?.status), "offline payload should include structured Mac heartbeat health");
+  assert(typeof payload.macHeartbeatHealth?.reason === "string", "offline payload should include Mac heartbeat health reason");
   assert(Array.isArray(payload.recommendations), "offline payload should include recommendations");
   if (payload.macHeartbeatWatcher.running === false) {
     assert(payload.recommendations.some((item) => item.id === "heartbeat-watcher-not-running"), "offline recommendations should flag a stopped Mac heartbeat watcher");
@@ -796,6 +802,8 @@ function checkOnlineJson(args) {
   assert(payload.macHeartbeatWatcher?.checked === true, "online payload should include Mac heartbeat watcher status");
   assert(typeof payload.macHeartbeatWatcher.running === "boolean", "online payload should include Mac heartbeat watcher running flag");
   assert(["fresh", "stale", "unknown"].includes(payload.macHeartbeatFreshness?.status), "online payload should include structured Mac heartbeat freshness");
+  assert(["ok", "blocked", "warning", "unknown"].includes(payload.macHeartbeatHealth?.status), "online payload should include structured Mac heartbeat health");
+  assert(typeof payload.macHeartbeatHealth?.reason === "string", "online payload should include Mac heartbeat health reason");
   assertMediaReadinessCommand(payload.commands?.mediaReadinessBoardSummary || "", "online JSON media readiness command");
   assertMediaReadinessCommand(payload.commands?.macHostMediaCommand || "", "online JSON Mac host media command");
   assert(

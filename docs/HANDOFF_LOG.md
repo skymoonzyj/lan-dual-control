@@ -48,6 +48,31 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac 恢复总览同时输出稳定 `MacHeartbeatHealth=` 健康字段。
+完成内容：
+- `check-mac-resume-status --json/--boardSummary` 现在会从后台 heartbeat watcher 的最近 `lastHeartbeat` 派生 JSON `macHeartbeatHealth`，并在摘要输出 `MacHeartbeatHealth=ok|blocked|warning|unknown reason=<原因> heartbeat=<原始状态> blockers=<...> warnings=<...> checkedAt=<时间>`。
+- 保持 `MacHeartbeatFreshness=` 原语义不变：freshness 只说明心跳摘要是否新鲜；health 单独说明最近心跳是 ok、blocked、warning 还是 unknown。
+- 该字段只读生产；Windows 端 `ae3f664` 已预备消费 `MacHeartbeatHealth=`，推送后两端可用真实 resume/diagnostics 复测闭环。不启动/停止 watcher，不认证，不请求或发送密码，不发 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增断言后，`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000` 失败在缺少 `macHeartbeatHealth` 帮助字段。
+- 绿灯：实现后同一回归通过，覆盖 help、offline/online JSON、offline/online boardSummary。
+遗留问题：
+- 本轮只增强 Mac resume 生产字段；Windows 消费端已在 `ae3f664` 预备好，仍需后续用真实 Agent Link Board 摘要和页面 diagnostics 复测端到端展示。
+下一步建议：
+- 下一轮先让 Mac 跑 `MacResumeStatus=` 产出真实 `MacHeartbeatHealth=ok` 摘要，再让 Windows 跑 resume / 页面 diagnostics，确认 `ok` 进入健康证据、`blocked|warning` 进入风险提示。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac 恢复总览也输出稳定 `MacHeartbeatFreshness=` 字段。
 完成内容：
 - `check-mac-resume-status --json/--boardSummary` 现在会从后台 heartbeat watcher 的 `lastHeartbeat` 派生 `macHeartbeatFreshness`，并在一行摘要输出 `MacHeartbeatFreshness=fresh|stale|unknown checked=<秒>s codex=<秒>s board=<秒>s checkedAt=<时间>`。
