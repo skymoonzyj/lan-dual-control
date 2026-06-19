@@ -17,6 +17,37 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 恢复总览开工第一屏也能消费 `MacPowerHealth=` / `MacUnattendedHealth=`。
+完成内容：
+- `check-windows-resume-status --checkBoard` 现在输出 JSON `board.macPowerHealth` / `board.macUnattendedHealth`，普通输出和 `--boardSummary` 同步显示同名短摘要。
+- 健康字段解析器从 `MacHeartbeatHealth=` 泛化到三类 Mac health 字段，保持状态/短标签白名单、优先 `/api/state.statuses` 当前状态、拒绝密码/token/secret/命令形态候选。
+- 修正健康字段后面紧跟 `MacPowerPlan=`、`MacUnattendedStatus=`、`--promptPassword` 等安全命令时被整段误拒绝的问题；同时清理 `checkedAt=...Z.` 末尾句号，避免摘要里时间戳带标点。
+- 本轮只读通讯板，不运行 Mac 脚本、不执行 `pmset`、不加载 LaunchAgent、不认证、不请求或发送密码、不发 input/inject。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 先失败在 `MacPowerHealth should be found`；PowerShell 包装器同样失败在 `PowerShell MacPowerHealth should be found`。
+- 红灯追加：真实通讯板暴露 `checkedAt` 末尾句号后，新增句号用例，Node 回归先失败在 `MacPowerHealth checkedAt mismatch`。
+- 绿灯：实现后 Node 与 PowerShell 两套 resume-status 回归均通过。
+- 真实只读：`check-windows-resume-status --checkBoard --boardSummary` 已显示 `MacPowerHealth=warning ... system-sleep-enabled,display-sleep-enabled` 和 `MacUnattendedHealth=warning ... launch-agent-not-loaded,power`，未请求密码、未认证、未发 input/inject。
+遗留问题：
+- Mac 真实系统睡眠/显示睡眠和 LaunchAgent loaded 状态仍需用户现场在 Mac 端按 `MacPowerPlan=` / `MacUnattendedStatus` 流程处理并刷新证据。
+下一步建议：
+- 后续可把 resume/status 的 `MacPowerHealth` / `MacUnattendedHealth` 真实输出纳入日常开工 checklist：先看 heartbeat 是否 ok，再看电源和值守是否 warning。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
 ## 2026-06-19 Mac Codex
 
 日期：2026-06-19 继续推进

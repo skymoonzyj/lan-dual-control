@@ -1099,6 +1099,137 @@ async function checkBoardMacHeartbeatHealthExtraction(args) {
   });
 }
 
+async function checkBoardMacPowerAndUnattendedHealthExtraction(args) {
+  const powerCheckedAt = new Date(Date.now() - 30_000).toISOString();
+  const unattendedCheckedAt = new Date(Date.now() - 35_000).toISOString();
+  const olderPowerCheckedAt = new Date(Date.now() - 120_000).toISOString();
+
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock MacPowerHealth/MacUnattendedHealth JSON failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+
+      assert(payload.board?.macPowerHealth?.found === true, "MacPowerHealth should be found");
+      assert(payload.board.macPowerHealth.status === "warning", "MacPowerHealth status mismatch");
+      assert(payload.board.macPowerHealth.reason === "system-sleep-enabled", "MacPowerHealth reason mismatch");
+      assert(payload.board.macPowerHealth.checkedAt === powerCheckedAt, "MacPowerHealth checkedAt mismatch");
+      assert(payload.board.macPowerHealth.blockers.length === 0, "MacPowerHealth should not include blockers");
+      assert(payload.board.macPowerHealth.warnings.join(",") === "system-sleep-enabled,display-sleep-enabled", "MacPowerHealth warnings mismatch");
+      assert(payload.board.macPowerHealth.rejectedCount >= 1, "unsafe MacPowerHealth candidates should be rejected");
+
+      assert(payload.board?.macUnattendedHealth?.found === true, "MacUnattendedHealth should be found");
+      assert(payload.board.macUnattendedHealth.status === "warning", "MacUnattendedHealth status mismatch");
+      assert(payload.board.macUnattendedHealth.reason === "launch-agent-not-loaded", "MacUnattendedHealth reason mismatch");
+      assert(payload.board.macUnattendedHealth.checkedAt === unattendedCheckedAt, "MacUnattendedHealth checkedAt mismatch");
+      assert(payload.board.macUnattendedHealth.blockers.length === 0, "MacUnattendedHealth should not include blockers");
+      assert(payload.board.macUnattendedHealth.warnings.join(",") === "launch-agent-not-loaded,power", "MacUnattendedHealth warnings mismatch");
+      assert(payload.board.macUnattendedHealth.rejectedCount >= 2, "unsafe MacUnattendedHealth candidates should be rejected");
+
+      assertIncludes(payload.boardSummary, `MacPowerHealth=warning checkedAt=${powerCheckedAt} reason=system-sleep-enabled blockers=none warnings=system-sleep-enabled,display-sleep-enabled.`, "MacPowerHealth board summary");
+      assertIncludes(payload.boardSummary, `MacUnattendedHealth=warning checkedAt=${unattendedCheckedAt} reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power.`, "MacUnattendedHealth board summary");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "Mac power/unattended health JSON should not leak rejected candidates");
+      assertNotIncludes(payload.boardSummary, "network-wake-disabled", "current MacPowerHealth status should win over older event");
+    }, {
+      statuses: {
+        "Mac Heartbeat": {
+          role: "Mac heartbeat watcher",
+          status: "online",
+          note: [
+            "MacHeartbeatHealth=ok reason=ok blockers=none warnings=none",
+            `MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=${powerCheckedAt}.`,
+            "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
+            "MacHostMedia=node scripts/mac/check-mac-host-readiness.mjs --probeMedia --promptPassword --boardSummary",
+          ].join(" "),
+        },
+        "Mac Unattended": {
+          role: "Mac unattended status",
+          status: "warning",
+          note: [
+            `MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=${unattendedCheckedAt}.`,
+            "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --boardSummary",
+          ].join(" "),
+        },
+      },
+      events: [
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: `MacPowerHealth=warning checkedAt=${olderPowerCheckedAt} reason=network-wake-disabled warnings=network-wake-disabled`,
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacPowerHealth=warning reason=secret-value --password secret-value warnings=none",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacUnattendedHealth=blocked reason=secret-value blockers=secret-value warnings=none",
+        },
+        {
+          type: "status",
+          from: "Mac Unattended",
+          text: "MacUnattendedHealth=$(whoami) reason=ok blockers=none warnings=none",
+        },
+      ],
+    });
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--boardSummary",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock MacPowerHealth/MacUnattendedHealth board summary failed\n${result.stdout}\n${result.stderr}`);
+      assertIncludes(result.stdout, `MacPowerHealth=warning checkedAt=${powerCheckedAt} reason=system-sleep-enabled blockers=none warnings=system-sleep-enabled,display-sleep-enabled.`, "MacPowerHealth board summary output");
+      assertIncludes(result.stdout, `MacUnattendedHealth=warning checkedAt=${unattendedCheckedAt} reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power.`, "MacUnattendedHealth board summary output");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "Mac power/unattended health board summary should not leak rejected candidates");
+      console.log("[OK] Windows resume status extracts Mac power and unattended health from Agent Link Board safely");
+    }, {
+      statuses: {
+        "Mac Heartbeat": {
+          role: "Mac heartbeat watcher",
+          status: "online",
+          note: [
+            `MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=${powerCheckedAt}.`,
+            "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
+            "MacHostMedia=node scripts/mac/check-mac-host-readiness.mjs --probeMedia --promptPassword --boardSummary",
+          ].join(" "),
+        },
+        "Mac Unattended": {
+          role: "Mac unattended status",
+          status: "warning",
+          note: [
+            `MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=${unattendedCheckedAt}.`,
+            "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --boardSummary",
+          ].join(" "),
+        },
+      },
+    });
+  });
+}
+
 async function checkBoardMacHostSafeStartExtraction(args) {
   const safeCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888";
   const maxFpsCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888 --maxScreenFps 60";
@@ -1986,6 +2117,7 @@ async function main() {
   await checkBoardCurrentCallSummary(args);
   await checkSecureAuthCallNextSummary(args);
   await checkBoardMacHeartbeatHealthExtraction(args);
+  await checkBoardMacPowerAndUnattendedHealthExtraction(args);
   await checkBoardMacHostSafeStartExtraction(args);
   await checkBoardWindowsReverseGrantExtraction(args);
   await checkBoardWindowsSecureAuthPathExtraction(args);
