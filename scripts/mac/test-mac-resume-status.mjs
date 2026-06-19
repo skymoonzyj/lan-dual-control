@@ -1295,6 +1295,88 @@ async function checkBoardCurrentCall(args) {
   print("OK", "Agent Link Board currentCall is surfaced in JSON and board summary");
 }
 
+async function checkPostPassManualUxStandby(args) {
+  const standbyStatus = [
+    "本轮完成并已推送 e8f946d。",
+    "MAC_STANDING_BY_FOR_MANUAL_UX_TEST：Mac 端保持 host/客户端待命，未请求密码、未 input/inject；白天继续前先看通讯板。",
+    "ManualUxChecklist=connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics",
+  ].join(" ");
+  await withFakeMacHost(async (macHost) => {
+    await withFakeBoard(null, async (server) => {
+      const result = await runAsync(args, [
+        "--json",
+        "--checkBoard",
+        "--server",
+        server,
+        "--host",
+        macHost.host,
+        "--port",
+        String(macHost.port),
+        "--timeoutMs",
+        "1200",
+      ]);
+      assert(result.status === 0, `post-pass manual UX standby JSON should stay non-failing\n${result.stdout}\n${result.stderr}`);
+      const payload = parseJson(result.stdout, "post-pass manual UX standby resume status");
+      assert(payload.host?.online === true, "post-pass standby fixture should keep Mac host online");
+      assert(payload.board?.macManualUxStandby?.status === "standby", "post-pass standby JSON should expose manual UX standby status");
+      assert(payload.board.macManualUxStandby.checklist === "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics", "post-pass standby JSON should expose the manual UX checklist");
+      assert(payload.recommendations.some((item) => item.id === "manual-ux-standby" && /hand[- ]off|手工体验/i.test(item.text)), "post-pass standby recommendations should point to manual UX testing");
+      assert(String(payload.boardSummary || "").includes("ManualUxStandby=MAC_STANDING_BY_FOR_MANUAL_UX_TEST"), "post-pass standby boardSummary should expose ManualUxStandby");
+      assert(String(payload.boardSummary || "").includes("ManualUxChecklist=connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics"), "post-pass standby boardSummary should expose ManualUxChecklist");
+      assert(!String(payload.boardSummary || "").includes("Next formal path"), "post-pass standby boardSummary should not send Mac back to the formal E2E path");
+      assertNoPasswordLeak(result, "post-pass manual UX standby JSON");
+    }, {
+      statuses: {
+        "Mac Codex": {
+          status: "idle",
+          role: "Mac 端",
+          note: standbyStatus,
+        },
+      },
+      events: [],
+    });
+
+    await withFakeBoard(null, async (server) => {
+      const result = await runAsync(args, [
+        "--json",
+        "--checkBoard",
+        "--server",
+        server,
+        "--host",
+        macHost.host,
+        "--port",
+        String(macHost.port),
+        "--timeoutMs",
+        "1200",
+      ]);
+      assert(result.status === 0, `stale manual UX event should stay non-failing\n${result.stdout}\n${result.stderr}`);
+      const payload = parseJson(result.stdout, "stale manual UX event resume status");
+      assert(!payload.board?.macManualUxStandby, "manual UX standby should ignore stale historical events when current statuses do not carry the signal");
+      assert(String(payload.boardSummary || "").includes("Next formal path"), "without a current standby signal, boardSummary should keep the normal formal path guidance");
+      assert(!String(payload.boardSummary || "").includes("ManualUxStandby="), "stale event should not create ManualUxStandby boardSummary");
+      assertNoPasswordLeak(result, "stale manual UX event JSON");
+    }, {
+      statuses: {
+        "Mac Codex": {
+          status: "coding",
+          role: "Mac 端",
+          note: "当前正在开发下一轮补丁，没有声明手工体验待命。",
+        },
+      },
+      events: [
+        {
+          id: "stale-manual-ux",
+          at: "2026-06-19T16:00:00.000Z",
+          type: "status",
+          device: "Mac Codex",
+          text: standbyStatus,
+        },
+      ],
+    });
+  }, { capturePipeline: "screencapturekit-h264" });
+  print("OK", "Post-pass Mac resume status promotes manual UX standby instead of formal rerun");
+}
+
 async function checkBoardMacEvidence(args) {
   const cleanHeartbeat = "MacHeartbeat=status=ok; checkedAt=2026-06-19T04:54:22.847Z; device=Mac; macHost=online 127.0.0.1:43770; macClient=online http://127.0.0.1:5188/; board=ok call=none; blockers=none warnings=none reason=ok. Evidence=MacClientPageOnline,MacClientDiagnosticsOk.";
   await withFakeBoard(null, async (server) => {
@@ -1602,6 +1684,7 @@ async function main() {
   await checkH264FallbackPipelineWarning(args);
   checkPasswordRedaction(args);
   await checkBoardCurrentCall(args);
+  await checkPostPassManualUxStandby(args);
   await checkBoardMacEvidence(args);
   await checkBoardMacPowerHealth(args);
   await checkBoardDoneCall(args);

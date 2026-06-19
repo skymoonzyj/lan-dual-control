@@ -103,6 +103,19 @@ const allowedMacHostAuthPathReasons = new Set([
 ]);
 const allowedMacHostAuthPathModes = new Set(["ephemeral", "prompt", "env-required", "none", "unknown"]);
 const allowedMacHostAuthPathNext = new Set(["MacHostStop->MacMaxFpsSafeStart->MacHostMedia", "unknown"]);
+const manualUxChecklistTokens = [
+  "connection",
+  "video",
+  "audio",
+  "clipboard",
+  "file",
+  "window",
+  "fullscreen",
+  "original",
+  "copy-diagnostics",
+];
+const allowedManualUxChecklistTokens = new Set(manualUxChecklistTokens);
+const defaultManualUxChecklist = manualUxChecklistTokens.join("/");
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -289,6 +302,9 @@ Machine-readable JSON fields:
                              MacUnattendedHealth/MacPowerHealth checkedAt
                              evidence. It only reads Agent Link Board text and
                              does not run pmset, launchctl, auth, or input.
+  board.macManualUxStandby   Stable post-PASS/manual UX standby signal safely
+                             extracted from Agent Link Board short status
+                             tokens such as MAC_STANDING_BY_FOR_MANUAL_UX_TEST.
   commands.macClientReverseRehearsalAction
                              Human action for the guarded Mac-controls-Windows
                              reverse-control request rehearsal. Run discovery,
@@ -605,6 +621,7 @@ async function getBoardStatus(args, nowMs) {
       macUnattendedHealth: null,
       macUnattendedFreshness: null,
       macHostAuthPath: null,
+      macManualUxStandby: null,
       currentCall: null,
       activeCall: false,
     };
@@ -628,6 +645,7 @@ async function getBoardStatus(args, nowMs) {
   const macUnattendedHealth = collectMacUnattendedHealth(stateResult.state, lines);
   const macUnattendedFreshness = collectMacUnattendedFreshness(stateResult.state, lines, nowMs);
   const macHostAuthPath = collectMacHostAuthPath(stateResult.state, lines);
+  const macManualUxStandby = collectMacManualUxStandby(stateResult.state);
   return {
     checked: true,
     ok: watchResult.ok && stateResult.ok,
@@ -638,6 +656,7 @@ async function getBoardStatus(args, nowMs) {
     macUnattendedHealth,
     macUnattendedFreshness,
     macHostAuthPath,
+    macManualUxStandby,
     currentCall,
     activeCall: isActiveCall(currentCall),
   };
@@ -647,6 +666,14 @@ function collectMacHostAuthPath(state, recentLines = []) {
   for (const text of collectBoardEvidenceTexts(state, recentLines)) {
     const authPath = extractMacHostAuthPath(text);
     if (authPath) return authPath;
+  }
+  return null;
+}
+
+function collectMacManualUxStandby(state) {
+  for (const text of collectBoardCurrentStateTexts(state)) {
+    const standby = extractMacManualUxStandby(text);
+    if (standby) return standby;
   }
   return null;
 }
@@ -685,6 +712,36 @@ function collectMacUnattendedFreshness(state, recentLines = [], nowMs = Date.now
 
 function collectBoardEvidenceTexts(state, recentLines = []) {
   const texts = [];
+  texts.push(...collectBoardStatusTexts(state));
+  if (Array.isArray(recentLines)) texts.push(...recentLines);
+  const events = Array.isArray(state?.events) ? state.events : [];
+  for (const event of events) {
+    if (typeof event === "string") {
+      texts.push(event);
+      continue;
+    }
+    if (!event || typeof event !== "object") continue;
+    const eventText = [event.device, event.from, event.status, event.note, event.text, event.message, event.summary]
+      .map(normalizedText)
+      .filter(Boolean)
+      .join(" ");
+    if (eventText) texts.push(eventText);
+  }
+  return texts.filter(Boolean);
+}
+
+function collectBoardCurrentStateTexts(state) {
+  const texts = [];
+  const currentCallText = state?.currentCall && typeof state.currentCall === "object"
+    ? Object.values(state.currentCall).map(normalizedText).filter(Boolean).join(" ")
+    : "";
+  if (currentCallText) texts.push(currentCallText);
+  texts.push(...collectBoardStatusTexts(state));
+  return texts.filter(Boolean);
+}
+
+function collectBoardStatusTexts(state) {
+  const texts = [];
   const statuses = state && typeof state === "object" && state.statuses && typeof state.statuses === "object"
     ? state.statuses
     : {};
@@ -705,21 +762,7 @@ function collectBoardEvidenceTexts(state, recentLines = []) {
       .join(" ");
     if (statusText) texts.push(statusText);
   }
-  if (Array.isArray(recentLines)) texts.push(...recentLines);
-  const events = Array.isArray(state?.events) ? state.events : [];
-  for (const event of events) {
-    if (typeof event === "string") {
-      texts.push(event);
-      continue;
-    }
-    if (!event || typeof event !== "object") continue;
-    const eventText = [event.device, event.from, event.status, event.note, event.text, event.message, event.summary]
-      .map(normalizedText)
-      .filter(Boolean)
-      .join(" ");
-    if (eventText) texts.push(eventText);
-  }
-  return texts.filter(Boolean);
+  return texts;
 }
 
 function isMacUnattendedDevice(device) {
@@ -808,6 +851,35 @@ function extractMacHostAuthPath(text) {
   return { status, reason, mode, next };
 }
 
+function extractMacManualUxStandby(text) {
+  const source = normalizedText(text);
+  if (!source) return null;
+  const hasStandbyToken = /\bMAC_STANDING_BY_FOR_MANUAL_UX_TEST\b/.test(source)
+    || /\bPostPassNext=WindowsRecordPassAndTailError\+MacManualUxStandby\b/.test(source)
+    || /\bManualUxChecklist=/i.test(source);
+  if (!hasStandbyToken) return null;
+  const checklist = extractManualUxChecklist(source) || defaultManualUxChecklist;
+  return {
+    status: "standby",
+    signal: source.includes("MAC_STANDING_BY_FOR_MANUAL_UX_TEST")
+      ? "MAC_STANDING_BY_FOR_MANUAL_UX_TEST"
+      : "MacManualUxStandby",
+    checklist,
+  };
+}
+
+function extractManualUxChecklist(text) {
+  const match = normalizedText(text).match(/\bManualUxChecklist=([A-Za-z0-9_/-]+)/i);
+  if (!match) return null;
+  const tokens = match[1]
+    .split(/[\/,]/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+  if (tokens.length === 0) return null;
+  if (!tokens.every((token) => allowedManualUxChecklistTokens.has(token))) return null;
+  return tokens.join("/");
+}
+
 function isSafeMacUnattendedFindings(value) {
   const tokens = String(value || "")
     .split(",")
@@ -877,6 +949,13 @@ function buildRecommendations({ git, host, board, macHeartbeatWatcher, args }) {
     recommendations.push({
       level: "next",
       text: `Agent Link Board has an active call: ${formatCallOneLine(board.currentCall)}. Coordinate before starting another formal test.`,
+    });
+  }
+  if (board.macManualUxStandby?.status === "standby") {
+    recommendations.push({
+      level: "next",
+      id: "manual-ux-standby",
+      text: `Post-PASS hand-off is in manual UX standby; keep Mac host/client/heartbeat online and validate ${board.macManualUxStandby.checklist || defaultManualUxChecklist} with the user present. Do not rerun password formal E2E unless a new call is opened.`,
     });
   }
   if (!git.clean) {
@@ -992,10 +1071,12 @@ function buildRecommendations({ git, host, board, macHeartbeatWatcher, args }) {
     level: "next",
     text: `Before writing any login startup plist, dry-run the LaunchAgent template first: ${makeMacLaunchAgentPlanCommand(args)}.`,
   });
-  recommendations.push({
-    level: "next",
-    text: "Next formal path: board sync -> formal password Mac host -> Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input log.",
-  });
+  if (!board.macManualUxStandby) {
+    recommendations.push({
+      level: "next",
+      text: "Next formal path: board sync -> formal password Mac host -> Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input log.",
+    });
+  }
   recommendations.push({
     level: "safety",
     text: "Do not run inject mode until the user explicitly confirms they are watching the screen; start-mac-host inject startups must include --confirmUserWatching.",
@@ -1482,6 +1563,15 @@ function formatMacHostAuthPathSummary(board) {
   ].join(" ") + ";";
 }
 
+function formatMacManualUxStandbySummary(board) {
+  const standby = board?.macManualUxStandby;
+  if (standby?.status !== "standby") return "";
+  const signal = standby.signal === "MAC_STANDING_BY_FOR_MANUAL_UX_TEST"
+    ? "MAC_STANDING_BY_FOR_MANUAL_UX_TEST"
+    : "MacManualUxStandby";
+  return `ManualUxStandby=${signal}; ManualUxChecklist=${standby.checklist || defaultManualUxChecklist};`;
+}
+
 function formatHeartbeatWatcherSummary(watcher) {
   if (!watcher?.checked) return "heartbeatWatcher=not-checked";
   if (!watcher.ok) return `heartbeatWatcher=unknown${watcher.error ? ` error=${watcher.error}` : ""}`;
@@ -1704,6 +1794,7 @@ function formatBoardSummary(report) {
   const macUnattendedHealthSummary = formatMacUnattendedHealthSummary(board);
   const macUnattendedFreshnessSummary = formatMacUnattendedFreshnessSummary(board);
   const macHostAuthPathSummary = formatMacHostAuthPathSummary(board);
+  const macManualUxStandbySummary = formatMacManualUxStandbySummary(board);
   const suggestedActionSummary = report.suggestedAction?.boardSummary ? ` ${report.suggestedAction.boardSummary}` : "";
 
   if (!host.online) {
@@ -1714,6 +1805,7 @@ function formatBoardSummary(report) {
       macUnattendedHealthSummary,
       macUnattendedFreshnessSummary,
       macHostAuthPathSummary,
+      macManualUxStandbySummary,
       `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
       `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
       `MacHostStop=${report.commands.macHostStopCommand}.`,
@@ -1765,6 +1857,7 @@ function formatBoardSummary(report) {
     macUnattendedHealthSummary,
     macUnattendedFreshnessSummary,
     macHostAuthPathSummary,
+    macManualUxStandbySummary,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedActionSummary}.`,
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
     `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
@@ -1798,7 +1891,9 @@ function formatBoardSummary(report) {
     `MacHeartbeatStatus=${report.commands.macHeartbeatStatusCommand}.`,
     `MacHeartbeatStop=${report.commands.macHeartbeatStopCommand}.`,
     `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
-    "Next formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log.",
+    board.macManualUxStandby
+      ? "Manual UX standby: keep Mac host/client/heartbeat online; validate connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics with the user present; do not rerun password formal E2E unless a new call is opened."
+      : "Next formal path: Windows discovery -> auth -> H.264 5-10 min -> audio -> clipboard -> input-log.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].filter(Boolean).join(" ");
 }
