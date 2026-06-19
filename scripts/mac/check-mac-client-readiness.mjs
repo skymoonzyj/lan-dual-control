@@ -173,6 +173,11 @@ Machine-readable JSON fields:
                              It previews pmset changes and follow-up checks
                              without applying settings, prompting,
                              authenticating, or sending input.
+  commands.macInputSafetyPlanCommand
+                             Secret-free Mac input safety planner. It explains
+                             the log-mode default and user-visible checks
+                             required before true input without applying
+                             settings or sending input.
   commands.macScriptHelpCommand
                              Unified side-effect-free Mac script help
                              self-check command.
@@ -692,6 +697,10 @@ function makeMacPowerPlanCommand() {
   return "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary";
 }
 
+function makeMacInputSafetyPlanCommand() {
+  return "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
+}
+
 function makeMacScriptHelpCommand() {
   return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
@@ -892,7 +901,7 @@ function makeBoardSummary(report) {
   const findings = formatChecklistFindings(report.checklist);
   const diagnosticsEvidence = makeMacClientDiagnosticsEvidence(report);
   const next = report.recommendations[0]?.text || "No next step available.";
-  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows};${lanRiskSummary}${macUnattendedFreshnessSummary} ${findings}.${diagnosticsEvidence} Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; WindowsHostStatus=${report.commands.windowsHostStatusCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; WindowsReverseGrantStatus=${report.commands.windowsReverseGrantStatusCommand}; WindowsOpenOneTimeReverseGrant=${report.commands.windowsOpenOneTimeReverseGrantCommand}; WindowsReverseGrantStatusNodeFallback=${report.commands.windowsReverseGrantStatusNodeFallbackCommand}; WindowsOpenOneTimeReverseGrantNodeFallback=${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}; MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientPromptPasswordSmoke=${report.commands.macClientPromptPasswordSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; MacPowerPlan=${report.commands.macPowerPlanCommand}; MacScriptHelp=${report.commands.macScriptHelpCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
+  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows};${lanRiskSummary}${macUnattendedFreshnessSummary} ${findings}.${diagnosticsEvidence} Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; WindowsHostStatus=${report.commands.windowsHostStatusCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; WindowsReverseGrantStatus=${report.commands.windowsReverseGrantStatusCommand}; WindowsOpenOneTimeReverseGrant=${report.commands.windowsOpenOneTimeReverseGrantCommand}; WindowsReverseGrantStatusNodeFallback=${report.commands.windowsReverseGrantStatusNodeFallbackCommand}; WindowsOpenOneTimeReverseGrantNodeFallback=${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}; MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientPromptPasswordSmoke=${report.commands.macClientPromptPasswordSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; MacPowerPlan=${report.commands.macPowerPlanCommand}; MacInputSafetyPlan=${report.commands.macInputSafetyPlanCommand}; MacScriptHelp=${report.commands.macScriptHelpCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
 }
 
 function makeMacClientDiagnosticsEvidence(report) {
@@ -949,6 +958,7 @@ function printHuman(report) {
   console.log(`- Mac client prompt-password smoke: ${report.commands.macClientPromptPasswordSmokeCommand}`);
   console.log(`- Mac client browser self-test: ${report.commands.macClientBrowserSelfTestCommand}`);
   console.log(`- Mac power settings dry-run plan: ${report.commands.macPowerPlanCommand}`);
+  console.log(`- Mac input safety plan: ${report.commands.macInputSafetyPlanCommand}`);
   console.log(`- Mac script help safety check: ${report.commands.macScriptHelpCommand}`);
   console.log(`- Copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
   console.log(`- result: ${report.ok ? "ready with warnings allowed" : "blocked"} (${report.counts.blocker} blockers, ${report.counts.warning} warnings)`);
@@ -1029,6 +1039,7 @@ async function buildReport(args) {
       macClientPromptPasswordSmokeCommand: makeMacClientPromptPasswordSmokeCommand(),
       macClientBrowserSelfTestCommand: makeMacClientBrowserSelfTestCommand(),
       macPowerPlanCommand: makeMacPowerPlanCommand(),
+      macInputSafetyPlanCommand: makeMacInputSafetyPlanCommand(),
       macScriptHelpCommand: makeMacScriptHelpCommand(),
       macClientCopyDiagnosticsAction: makeMacClientCopyDiagnosticsAction(),
     },

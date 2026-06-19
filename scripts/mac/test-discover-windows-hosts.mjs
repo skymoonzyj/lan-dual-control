@@ -189,6 +189,21 @@ function assertMacPowerPlanCommand(command, label) {
   assertNotIncludes(command, "inject", label);
 }
 
+function assertMacInputSafetyPlanCommand(command, label) {
+  assertIncludes(command, "node scripts/mac/plan-mac-input-safety.mjs", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--apply", label);
+  assertNotIncludes(command, "sudo", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "--json", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function assertReverseControlRehearsal(text, label) {
   assertIncludes(text, "LAN008", label);
   assertIncludes(text, "allow-windows-reverse-control.ps1", label);
@@ -279,8 +294,14 @@ function extractMacScriptHelpCommand(text, label) {
 }
 
 function extractMacPowerPlanCommand(text, label) {
-  const match = String(text || "").match(/MacPowerPlan=(.+?)(?:\. MacUnattendedFreshness=|\. WindowsReverseGrantStatus=|\. ReverseRehearsal=|\. If that checklist|\.\s*No password|\n|$)/);
+  const match = String(text || "").match(/MacPowerPlan=(.+?)(?:\. MacInputSafetyPlan=|\. MacUnattendedFreshness=|\. WindowsReverseGrantStatus=|\. ReverseRehearsal=|\. If that checklist|\.\s*No password|\n|$)/);
   assert(match, `${label} should include MacPowerPlan= command.\n${text}`);
+  return match[1].trim();
+}
+
+function extractMacInputSafetyPlanCommand(text, label) {
+  const match = String(text || "").match(/MacInputSafetyPlan=(.+?)(?:\. MacUnattendedFreshness=|\. WindowsReverseGrantStatus=|\. ReverseRehearsal=|\. If that checklist|\.\s*No password|\n|$)/);
+  assert(match, `${label} should include MacInputSafetyPlan= command.\n${text}`);
   return match[1].trim();
 }
 
@@ -447,6 +468,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "macClientBrowserSelfTestCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macScriptHelpCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macPowerPlanCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macInputSafetyPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macUnattendedFreshness", `${script} ${flag}`);
     assertIncludes(result.stdout, "windowsReverseGrantStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "windowsOpenOneTimeReverseGrant", `${script} ${flag}`);
@@ -484,6 +506,7 @@ function checkFoundJson(tmp, args) {
   );
   assertMacScriptHelpCommand(payload.macScriptHelpCommand || "", "Mac script help command");
   assertMacPowerPlanCommand(payload.macPowerPlanCommand || "", "Mac power plan command");
+  assertMacInputSafetyPlanCommand(payload.macInputSafetyPlanCommand || "", "Mac input safety plan command");
   assert(payload.manualChecklistSummary === "connection/video/audio/clipboard/input_ack/diagnostics", "found payload should include manual checklist summary");
   assertIncludes(payload.sendCallCommand, "--host 192.168.31.68", "send call command");
   assertIncludes(payload.sendCallCommand, "--sendCall", "send call command");
@@ -519,6 +542,11 @@ function checkFoundJson(tmp, args) {
   assertMacPowerPlanCommand(
     extractMacPowerPlanCommand(payload.boardSummary, "board summary"),
     "board summary Mac power plan command",
+  );
+  assertIncludes(payload.boardSummary, "MacInputSafetyPlan=", "board summary");
+  assertMacInputSafetyPlanCommand(
+    extractMacInputSafetyPlanCommand(payload.boardSummary, "board summary"),
+    "board summary Mac input safety plan command",
   );
   assertWindowsReverseGrantCommands(payload.boardSummary, "board summary Windows reverse grant commands");
   assertIncludes(payload.boardSummary, "ReverseRehearsal=", "board summary");
@@ -561,6 +589,11 @@ function checkBoardSummaryFound(tmp, args) {
     extractMacPowerPlanCommand(result.stdout, "found board summary"),
     "found board summary Mac power plan command",
   );
+  assertIncludes(result.stdout, "MacInputSafetyPlan=", "found board summary");
+  assertMacInputSafetyPlanCommand(
+    extractMacInputSafetyPlanCommand(result.stdout, "found board summary"),
+    "found board summary Mac input safety plan command",
+  );
   assertWindowsReverseGrantCommands(result.stdout, "found board summary Windows reverse grant commands");
   assertIncludes(result.stdout, "ReverseRehearsal=", "found board summary");
   assertReverseControlRehearsal(extractReverseRehearsal(result.stdout, "found board summary"), "found board summary reverse rehearsal");
@@ -583,6 +616,7 @@ function checkPlainFound(tmp, args) {
   assertIncludes(result.stdout, "Mac client browser self-test:", "found plain output");
   assertIncludes(result.stdout, "Mac script help safety check:", "found plain output");
   assertIncludes(result.stdout, "Mac power settings dry-run plan:", "found plain output");
+  assertIncludes(result.stdout, "Mac input safety plan:", "found plain output");
   assertIncludes(result.stdout, "Windows reverse grant status:", "found plain output");
   assertIncludes(result.stdout, "Windows one-time reverse grant:", "found plain output");
   assertIncludes(result.stdout, "Windows reverse grant status (Node fallback):", "found plain output");
@@ -606,6 +640,9 @@ function checkPlainFound(tmp, args) {
   const macPowerPlanMatch = String(result.stdout || "").match(/Mac power settings dry-run plan: ([^\n]+)/);
   assert(macPowerPlanMatch, `found plain output should include Mac power plan command line.\n${result.stdout}`);
   assertMacPowerPlanCommand(macPowerPlanMatch[1], "found plain output Mac power plan command");
+  const macInputSafetyPlanMatch = String(result.stdout || "").match(/Mac input safety plan: ([^\n]+)/);
+  assert(macInputSafetyPlanMatch, `found plain output should include Mac input safety plan command line.\n${result.stdout}`);
+  assertMacInputSafetyPlanCommand(macInputSafetyPlanMatch[1], "found plain output Mac input safety plan command");
   assertIncludes(result.stdout, "-Port 43770 -Status -BoardSummary", "found plain output Windows reverse grant status");
   assertIncludes(result.stdout, "-Port 43770 -Grant -DurationMs 30000 -BoardSummary", "found plain output Windows one-time reverse grant");
   assertIncludes(result.stdout, "--host 127.0.0.1 --port 43770 --status --boardSummary", "found plain output Windows reverse grant status Node fallback");
@@ -633,6 +670,7 @@ function checkNoneRequireFound(tmp, args) {
   assertIncludes(payload.boardSummary, "MacClientPromptPasswordSmoke=", "none board summary");
   assertIncludes(payload.boardSummary, "MacScriptHelp=", "none board summary");
   assertIncludes(payload.boardSummary, "MacPowerPlan=", "none board summary");
+  assertIncludes(payload.boardSummary, "MacInputSafetyPlan=", "none board summary");
   assertFallbackMacClientPromptPasswordSmokeCommand(
     payload.macClientPromptPasswordSmokeCommand || "",
     "none JSON Mac client prompt-password smoke command",
@@ -652,6 +690,7 @@ function checkNoneRequireFound(tmp, args) {
   );
   assertMacScriptHelpCommand(payload.macScriptHelpCommand || "", "none JSON Mac script help command");
   assertMacPowerPlanCommand(payload.macPowerPlanCommand || "", "none JSON Mac power plan command");
+  assertMacInputSafetyPlanCommand(payload.macInputSafetyPlanCommand || "", "none JSON Mac input safety plan command");
   assertMacClientBrowserSelfTestCommand(
     extractMacClientBrowserSelfTestCommand(payload.boardSummary, "none board summary"),
     "none board summary Mac client browser self-test command",
@@ -663,6 +702,10 @@ function checkNoneRequireFound(tmp, args) {
   assertMacPowerPlanCommand(
     extractMacPowerPlanCommand(payload.boardSummary, "none board summary"),
     "none board summary Mac power plan command",
+  );
+  assertMacInputSafetyPlanCommand(
+    extractMacInputSafetyPlanCommand(payload.boardSummary, "none board summary"),
+    "none board summary Mac input safety plan command",
   );
   console.log("[OK] Missing Windows host fails only when required and explains next step");
 }
