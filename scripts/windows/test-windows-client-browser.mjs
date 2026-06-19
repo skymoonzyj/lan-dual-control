@@ -1506,6 +1506,8 @@ async function verifyDesktopOnlyHostPanel(session) {
         "MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.68 --port 43770 --ensureClient --promptPassword --boardSummary",
         "MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary",
         "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary",
+        "MacHostMedia 通过 passed=12/12 media=ok",
+        "MacFormalLocalSmoke 通过：H.264 89 frames / 29.54 fps / maxGap 38ms，PCM 151 frames / 49.87 fps / maxGap 32ms，input-log 16/16 ack，injected=false",
         "MacFormalLocalSmoke=failed blockers=auth warnings=video",
         "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
         "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
@@ -1645,6 +1647,32 @@ async function verifyDesktopOnlyHostPanel(session) {
               ].join("; "),
             )
           : null;
+      const positiveMacValidationText = [
+        "MacHostMedia 通过 passed=12/12 media=ok",
+        "MacFormalLocalSmoke 通过：H.264 89 frames / 29.54 fps / maxGap 38ms，PCM 151 frames / 49.87 fps / maxGap 32ms，input-log 16/16 ack，injected=false",
+        "blockers=none warnings=none",
+      ].join("; ");
+      const positiveMacValidationAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(positiveMacValidationText)
+          : null;
+      const positiveMacValidationView =
+        typeof macAlertWatcherUiState === "function"
+          ? macAlertWatcherUiState({
+              ok: true,
+              action: "status",
+              running: true,
+              processIds: [2468],
+              server: "http://192.168.31.68:17888",
+              lastAlert: {
+                at: "2026-06-19 10:51:58",
+                title: "Mac validation evidence",
+                message: positiveMacValidationText,
+                summary: positiveMacValidationText,
+              },
+              message: "Mac alert watcher is running.",
+            }, { available: true, busy: false })
+          : {};
       const cleanMacClientPageCommandAttention =
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
@@ -2094,6 +2122,17 @@ async function verifyDesktopOnlyHostPanel(session) {
           cleanMacHostMediaCommandAttention?.summary === "" &&
           Array.isArray(cleanMacHostMediaCommandAttention?.labels) &&
           cleanMacHostMediaCommandAttention.labels.length === 0 &&
+          positiveMacValidationAttention?.summary === "" &&
+          Array.isArray(positiveMacValidationAttention?.labels) &&
+          positiveMacValidationAttention.labels.length === 0 &&
+          positiveMacValidationAttention?.evidenceSummary.includes("Mac 媒体基线已通过") &&
+          positiveMacValidationAttention?.evidenceSummary.includes("Mac 本机短验收已通过") &&
+          Array.isArray(positiveMacValidationAttention?.evidenceLabels) &&
+          positiveMacValidationAttention.evidenceLabels.length === 2 &&
+          positiveMacValidationView.statusText.includes("证据：") &&
+          positiveMacValidationView.statusText.includes("Mac 媒体基线已通过") &&
+          positiveMacValidationView.statusText.includes("Mac 本机短验收已通过") &&
+          !positiveMacValidationView.statusText.includes("风险：") &&
           cleanMacClientPageCommandAttention?.summary === "" &&
           Array.isArray(cleanMacClientPageCommandAttention?.labels) &&
           cleanMacClientPageCommandAttention.labels.length === 0 &&
@@ -2174,6 +2213,8 @@ async function verifyDesktopOnlyHostPanel(session) {
         heartbeatCommandCheck,
         cleanMacHostReadinessCommandAttention,
         cleanMacHostMediaCommandAttention,
+        positiveMacValidationAttention,
+        positiveMacValidationView,
         cleanMacClientPageCommandAttention,
         cleanMacClientDiagnosticsCommandAttention,
         cleanMacClientBrowserSelfTestAttention,
@@ -4510,6 +4551,8 @@ async function verifyReconnectControls(session) {
         "MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.68 --port 43770 --ensureClient --promptPassword --boardSummary",
         "MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary",
         "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary",
+        "MacHostMedia 通过 passed=12/12 media=ok",
+        "MacFormalLocalSmoke 通过：H.264 89 frames / 29.54 fps / maxGap 38ms，PCM 151 frames / 49.87 fps / maxGap 32ms，input-log 16/16 ack，injected=false",
         "MacFormalLocalSmoke=failed blockers=auth warnings=video",
         "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
         "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
@@ -4680,6 +4723,7 @@ async function verifyReconnectControls(session) {
           quickSummaryMacReachability:
             exportText.includes("- Mac 值守：恢复中") &&
             exportText.includes("值守风险") &&
+            exportText.includes("值守证据") &&
             exportText.includes("提醒 提醒中") &&
             exportText.includes("Mac 心跳摘要过旧"),
           quickSummaryReconnect:
@@ -4761,6 +4805,8 @@ async function verifyReconnectControls(session) {
             exportText.includes("Mac Codex 可能卡在重新连接 5/5") &&
             exportText.includes("检测到 stream disconnected before completion") &&
             exportText.includes("请查看 Mac 窗口，可能需要手动重试/刷新") &&
+            exportText.includes("值守证据 Mac 媒体基线已通过") &&
+            exportText.includes("Mac 本机短验收已通过") &&
             exportText.includes("- Mac 值守说明：Windows 已从 Mac 提醒 watcher 状态里识别到值守 warnings/blockers"),
           reconnectReason: exportText.includes("- 重连原因：测试断线"),
           reconnectNext: exportText.includes("- 下次重连："),

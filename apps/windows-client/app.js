@@ -3305,6 +3305,56 @@ function labelMacUnattendedRisk(value) {
   return token.replace(/[-_]+/g, " ");
 }
 
+function splitMacStatusSegments(text) {
+  return String(text || "")
+    .split(/[;\r\n]+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
+function isCleanMacStatusEvidenceSegment(segment) {
+  return (
+    !/\b(?:failed|blocked|cancelled|timeout|timed out|stale|unreachable|offline|partial)\b|失败|阻塞|离线|不可达|未通过|不通过/i.test(segment) &&
+    !/\bready(?:ToCall)?\s*=\s*false\b/i.test(segment) &&
+    !/\bstatus\s*=\s*(?:warning|blocked|failed)\b/i.test(segment) &&
+    !/\bwarnings?\s*[:=]\s*(?!none\b)[^;\s]+/i.test(segment) &&
+    !/\bblockers?\s*[:=]\s*(?!none\b)[^;\s]+/i.test(segment)
+  );
+}
+
+function hasMacPositiveEvidenceSegment(text, keywordPattern, successPattern) {
+  return splitMacStatusSegments(text).some((segment) =>
+    keywordPattern.test(segment) &&
+    !/\bnode\s+scripts[\\/]+mac[\\/]+|\bscripts[\\/]+mac[\\/]+|\.mjs\b/i.test(segment) &&
+    successPattern.test(segment) &&
+    isCleanMacStatusEvidenceSegment(segment),
+  );
+}
+
+function parseMacPositiveEvidenceLabels(text) {
+  const source = String(text || "");
+  const labels = [];
+  if (
+    hasMacPositiveEvidenceSegment(
+      source,
+      /\bMacHostMedia\b/i,
+      /\bmedia\s*=\s*ok\b|\bpassed\s*=\s*[1-9]\d*\s*\/\s*[1-9]\d*\b|通过/i,
+    )
+  ) {
+    labels.push("Mac 媒体基线已通过");
+  }
+  if (
+    hasMacPositiveEvidenceSegment(
+      source,
+      /\bMacFormalLocalSmoke\b/i,
+      /通过|\bpassed\s*[:=]\s*(?:true|ok|[1-9]\d*\s*\/\s*[1-9]\d*)\b|\bstatus\s*=\s*ok\b|\bH\.?264\s+\d+[\s\S]*\bPCM\s+\d+[\s\S]*\binput[- ]log\s+\d+\s*\/\s*\d+\s+ack\b/i,
+    )
+  ) {
+    labels.push("Mac 本机短验收已通过");
+  }
+  return [...new Set(labels)];
+}
+
 function parseMacUnattendedAttention(text) {
   const source = String(text || "");
   const warnings = extractMacUnattendedValues(source, "warnings");
@@ -3312,6 +3362,7 @@ function parseMacUnattendedAttention(text) {
   const windowsLanRisks = extractWindowsLanRiskValues(source);
   const risks = [...new Set([...blockers, ...warnings, ...windowsLanRisks])];
   const heartbeatFreshness = parseMacHeartbeatFreshness(source);
+  const evidenceLabels = parseMacPositiveEvidenceLabels(source);
   const lower = source.toLowerCase();
   const hasMacHostStop = /\bMacHostStop\s*=/i.test(source);
   const hasMacHostReadinessCommand =
@@ -3648,6 +3699,8 @@ function parseMacUnattendedAttention(text) {
     blockers,
     labels,
     summary: labels.length ? compactExportStatusText(labels.join(" / "), 1200) : "",
+    evidenceLabels,
+    evidenceSummary: evidenceLabels.length ? compactExportStatusText(evidenceLabels.join(" / "), 1200) : "",
     heartbeatFreshness,
   };
 }
@@ -3729,9 +3782,15 @@ function getMacReachabilityExportStatus({ targetLabel, reconnectExport, macAlert
   } else {
     parts.push("提醒未检查");
   }
-  if (macAlertWatcherExport.unattended?.summary) {
-    parts.push(`值守风险 ${macAlertWatcherExport.unattended.summary}`);
-  } else {
+  const unattendedSummary = macAlertWatcherExport.unattended?.summary || "";
+  const evidenceSummary = macAlertWatcherExport.unattended?.evidenceSummary || "";
+  if (unattendedSummary) {
+    parts.push(`值守风险 ${unattendedSummary}`);
+  }
+  if (evidenceSummary) {
+    parts.push(`值守证据 ${evidenceSummary}`);
+  }
+  if (!unattendedSummary && !evidenceSummary) {
     parts.push("自启/睡眠状态等待 Mac 上报");
   }
   const heartbeatFreshness =
@@ -3742,8 +3801,10 @@ function getMacReachabilityExportStatus({ targetLabel, reconnectExport, macAlert
 
   return {
     status: compactExportStatusText(parts.join(" · "), 1600),
-    note: macAlertWatcherExport.unattended?.summary
+    note: unattendedSummary
       ? "Windows 已从 Mac 提醒 watcher 状态里识别到值守 warnings/blockers；详细 LaunchAgent、自启动、电源、锁屏/睡眠可达性仍以 Mac status/readiness 为准。"
+      : evidenceSummary
+        ? "Windows 已从 Mac 提醒 watcher 状态里识别到 Mac 媒体或本机短验收通过证据；详细 LaunchAgent、自启动、电源、锁屏/睡眠可达性仍以 Mac status/readiness 为准。"
       : "当前仅由 Windows 侧连接、发现、重连和提醒 watcher 推断；LaunchAgent、自启动、锁屏/睡眠可达性需等 Mac status/readiness 上报。",
   };
 }
@@ -5416,9 +5477,8 @@ async function copyMacHeartbeatCommand(key, button) {
   }
 }
 
-function formatMacAlertWatcherFindingSummary(payload) {
-  const attention = parseMacUnattendedAttention(macAlertWatcherPayloadFindingText(payload));
-  return attention.summary;
+function parseMacAlertWatcherFindingAttention(payload) {
+  return parseMacUnattendedAttention(macAlertWatcherPayloadFindingText(payload));
 }
 
 function macAlertWatcherUiState(payload, { available = canUseDesktopHostControl(), busy = false } = {}) {
@@ -5458,15 +5518,18 @@ function macAlertWatcherUiState(payload, { available = canUseDesktopHostControl(
   const serverText = payload.server ? `，监听 ${payload.server}` : "";
   const lastAlertText = formatMacAlertWatcherLastAlert(payload);
   const lastAlertSuffix = lastAlertText ? ` 最近提醒：${lastAlertText}。` : "";
-  const findingSummary = formatMacAlertWatcherFindingSummary(payload);
+  const findingAttention = parseMacAlertWatcherFindingAttention(payload);
+  const findingSummary = findingAttention.summary;
+  const evidenceSummary = findingAttention.evidenceSummary;
   const findingSuffix = findingSummary ? ` 风险：${findingSummary}。` : "";
+  const evidenceSuffix = evidenceSummary ? ` 证据：${evidenceSummary}。` : "";
   return {
     running,
     badgeMode: running ? "online" : "offline",
     badgeText: running ? "提醒中" : "未开启",
     statusText: running
-      ? `Windows 浮窗提醒已开启${processText}${serverText}。${lastAlertSuffix}${findingSuffix}`
-      : `Windows 浮窗提醒未开启；可一键启动后接收 Mac 授权、权限和反控等待消息。${lastAlertSuffix}${findingSuffix}`,
+      ? `Windows 浮窗提醒已开启${processText}${serverText}。${lastAlertSuffix}${findingSuffix}${evidenceSuffix}`
+      : `Windows 浮窗提醒未开启；可一键启动后接收 Mac 授权、权限和反控等待消息。${lastAlertSuffix}${findingSuffix}${evidenceSuffix}`,
     toggleText: running ? "停止提醒" : "开启提醒",
     toggleIcon: running ? "■" : "◌",
   };
