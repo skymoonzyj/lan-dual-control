@@ -171,7 +171,7 @@ function collectBoardTexts(state) {
 
 function parseManualChecklist(texts) {
   for (const text of texts) {
-    const match = /\bManualUxChecklist\s*=\s*([^;\r\n]+)/i.exec(text);
+    const match = /\bManualUxChecklist\s*=\s*([^;；\r\n]+)/i.exec(text);
     if (!match) continue;
     const ids = match[1]
       .split(/[,|/\s]+/)

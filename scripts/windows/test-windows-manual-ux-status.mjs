@@ -154,6 +154,23 @@ function loopbackOnlyBoardState() {
     recentEvents: [],
   };
 }
+
+function chinesePunctuationBoardState() {
+  return {
+    updatedAt: "2026-06-20T01:28:00.000Z",
+    currentCall: null,
+    statuses: {
+      "Mac Codex": {
+        status: "manual-ux-standby",
+        role: "Mac 端",
+        note: `MAC_STANDING_BY_FOR_MANUAL_UX_TEST ManualUxChecklist=${defaultChecklist}；host=192.168.31.122:43770 inputMode=log`,
+        updatedAt: "2026-06-20T01:27:55.000Z",
+      },
+    },
+    recentEvents: [],
+  };
+}
+
 function waitingBoardState() {
   return {
     updatedAt: "2026-06-20T01:26:00.000Z",
@@ -224,6 +241,20 @@ async function checkLoopbackTargetIsNotAdvertised(args) {
   });
   console.log("[OK] Windows manual UX status does not advertise loopback-only Mac target");
 }
+
+async function checkChinesePunctuationAfterChecklist(args) {
+  await withFakeBoard(chinesePunctuationBoardState(), async (serverUrl) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `Chinese-punctuation JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "Chinese-punctuation JSON");
+    assert(payload.status === "ready", `Chinese-punctuation JSON status mismatch: ${payload.status}`);
+    assert(payload.manualChecklist?.summary === defaultChecklist, `Chinese punctuation after checklist should not drop the last item: ${payload.manualChecklist?.summary}`);
+    assert(payload.manualChecklist?.labels?.includes("复制诊断"), "Chinese punctuation after checklist should keep copy diagnostics label");
+    assertIncludes(payload.boardSummary, `ManualUxChecklist=${defaultChecklist}`, "Chinese-punctuation boardSummary");
+  });
+  console.log("[OK] Windows manual UX status keeps full checklist before Chinese punctuation");
+}
+
 async function checkBoardSummary(args) {
   await withFakeBoard(readyBoardState(), async (serverUrl) => {
     const result = await run(["--server", serverUrl, "--boardSummary"], args);
@@ -258,6 +289,7 @@ async function main() {
   await checkHelp(args);
   await checkReadyJson(args);
   await checkLoopbackTargetIsNotAdvertised(args);
+  await checkChinesePunctuationAfterChecklist(args);
   await checkBoardSummary(args);
   await checkRequireReadyFailure(args);
   console.log("[OK] Windows manual UX status checks passed");
