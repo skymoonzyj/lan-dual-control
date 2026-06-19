@@ -910,6 +910,8 @@ async function checkExpiredManualUxCallRequestsReconfirmation(args) {
     assertIncludes(payload.boardSummary, "Next=ReconfirmManualUxCall", "expired manual UX call boardSummary");
     assertMatches(payload.boardSummary, /\bManualUxCallAgeMs=\d+\b/, "expired manual UX call boardSummary");
     assertMatches(payload.boardSummary, /\bManualUxCallOverdueMs=\d+\b/, "expired manual UX call boardSummary");
+    assertIncludes(payload.boardSummary, "ManualUxReconfirmCommand=", "expired manual UX call boardSummary");
+    assertIncludes(payload.boardSummary, "--reconfirmCall", "expired manual UX call boardSummary");
     assertNotIncludes(payload.boardSummary, "ManualUxCallRemainingMs=", "expired manual UX call boardSummary");
     assertNotIncludes(payload.boardSummary, "ManualUxCallCommand=", "expired manual UX call boardSummary");
     assert(posts.filter((post) => post.path === "/api/call").length === 0, `expired read-only status should not post a call: ${JSON.stringify(posts)}`);
@@ -953,6 +955,7 @@ async function checkReconfirmRefusesWhileWindowsIsPushing(args) {
     assert(result.exitCode === 1, `expired manual UX --reconfirmCall should fail while Windows is pushing. stdout=${result.stdout} stderr=${result.stderr}`);
     const payload = parseJson(result.stdout, "Windows pushing --reconfirmCall refusal JSON");
     assertIncludes(payload.error?.message || "", "Windows Codex is pushing-soon", "Windows pushing reconfirm refusal");
+    assertNotIncludes(payload.boardSummary, "ManualUxReconfirmCommand=", "Windows pushing reconfirm refusal boardSummary");
     assert(posts.filter((post) => post.path === "/api/call").length === 0, `Windows pushing state should not post a reconfirm call: ${JSON.stringify(posts)}`);
     assertSecretSafe(`${result.stdout}\n${result.stderr}`, "Windows pushing --reconfirmCall refusal");
   });
@@ -967,6 +970,7 @@ async function checkReconfirmRefusesWhileWindowsIsCommittingPush(args) {
     assertIncludes(payload.error?.message || "", "Windows Codex is committing", "Windows committing push reconfirm refusal");
     assert(payload.warnings?.includes("windows-codex-pushing"), `Windows committing push refusal should keep warning: ${JSON.stringify(payload.warnings)}`);
     assertIncludes(payload.boardSummary, "ManualUxGate=wait-windows-codex-push", "Windows committing push refusal boardSummary");
+    assertNotIncludes(payload.boardSummary, "ManualUxReconfirmCommand=", "Windows committing push refusal boardSummary");
     assert(posts.filter((post) => post.path === "/api/call").length === 0, `Windows committing push state should not post a reconfirm call: ${JSON.stringify(posts)}`);
     assertSecretSafe(`${result.stdout}\n${result.stderr}`, "Windows committing push --reconfirmCall refusal");
   });

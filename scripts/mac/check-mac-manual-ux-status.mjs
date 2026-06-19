@@ -78,9 +78,11 @@ Description:
   call-ready and prints ManualUxCallCommand=... so the next user-present step
   can be coordinated before asking for any action. An active Mac manual UX call
   is treated as calling so the script does not offer a duplicate call. An expired
-  Mac manual UX call can be refreshed only with explicit --reconfirmCall. It does not authenticate,
-  does not ask for or print passwords, does not send user-auth requests, and
-  does not send input events.
+  Mac manual UX call can be refreshed only with explicit --reconfirmCall. When
+  safe, an expired Mac manual UX call prints ManualUxReconfirmCommand=... so the
+  next coordination step is visible without sending it automatically. It does
+  not authenticate, does not ask for or print passwords, does not send
+  user-auth requests, and does not send input events.
 
 Examples:
   node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary
@@ -503,6 +505,17 @@ function makeManualUxCallCommand(server) {
   ].map(quoteCliArg).join(" ");
 }
 
+function makeManualUxReconfirmCommand(server) {
+  return [
+    "node",
+    "scripts/mac/check-mac-manual-ux-status.mjs",
+    "--server",
+    server,
+    "--reconfirmCall",
+    "--json",
+  ].map(quoteCliArg).join(" ");
+}
+
 function makeReport(state, server) {
   const texts = collectBoardTexts(state);
   const combined = texts.join("\n");
@@ -555,6 +568,9 @@ function makeReport(state, server) {
     },
     commands: {
       manualUxCallCommand: callReady ? makeManualUxCallCommand(server) : null,
+      manualUxReconfirmCommand: calling && manualUxCall?.timedOut && !windowsCoordination.pushInProgress
+        ? makeManualUxReconfirmCommand(server)
+        : null,
     },
     manualUxCall,
     coordination: {
@@ -633,6 +649,7 @@ function makeBoardSummary(report) {
     "NoFormalE2ERerun=true",
   ];
   if (report.commands?.manualUxCallCommand) parts.push(`ManualUxCallCommand=${report.commands.manualUxCallCommand}`);
+  if (report.commands?.manualUxReconfirmCommand) parts.push(`ManualUxReconfirmCommand=${report.commands.manualUxReconfirmCommand}`);
   if (report.manualUxCall?.state) {
     parts.push(`ManualUxCall=${report.manualUxCall.state}`);
     if (Number.isFinite(report.manualUxCall.ageMs)) {
@@ -691,6 +708,7 @@ function makeOfflineReport(server, error) {
     },
     commands: {
       manualUxCallCommand: null,
+      manualUxReconfirmCommand: null,
     },
     boardCallBeforeCheck: {
       active: false,
