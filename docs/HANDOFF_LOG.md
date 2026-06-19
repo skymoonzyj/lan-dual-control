@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac client readiness / `MacClientDiagnostics=` 第一屏也能直接给出安全 `MacPowerPlan=` 电源预案入口。
+完成内容：
+- `check-mac-client-readiness` JSON `commands` 新增 `macPowerPlanCommand`，指向 `node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary`。
+- `--boardSummary` 新增同一条 `MacPowerPlan=`；普通输出新增 “Mac power settings dry-run plan”。
+- 测试覆盖 help、离线 JSON、普通输出、boardSummary 和安全边界：命令不能含 `--apply`、`sudo`、密码、server、call、input_event 或 inject。
+- 本轮只补 Mac client readiness 的可复制只读预案入口，不运行 `pmset`、不提权、不改系统、不认证、不请求或发送密码、不发 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-client-readiness.mjs`
+- `scripts/mac/test-mac-client-readiness.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-client-readiness.mjs --timeoutMs 12000` 先失败在 help 缺 `commands.macPowerPlanCommand`。
+- 绿灯：实现后同一专项回归通过。
+- 完整验证和推送状态见本轮提交记录。
+遗留问题：
+- 真实系统睡眠/显示睡眠仍需用户现场确认后人工执行预览里的 `pmset` 命令，再复跑 `MacUnattendedStatus` / `MacHeartbeatOnce` 刷新证据。
+下一步建议：
+- Windows 侧如只拿到 `MacClientDiagnostics=`，可消费同一稳定 `MacPowerPlan=`；协议和 Windows 端字段暂不需要改。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac client formal checklist 第一屏也能直接给出安全 `MacPowerPlan=` 电源预案入口。
 完成内容：
 - `check-mac-client-formal-status` JSON `runPlan.commands` 新增 `macPowerPlanCommand`，指向 `node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary`。
