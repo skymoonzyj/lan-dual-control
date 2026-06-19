@@ -1089,6 +1089,7 @@ async function verifyMacClientLogExport({ args, session }) {
           "- 重连原因：测试断线",
           "- 下次重连：",
           "- 远端运行：",
+          "- 密码安全：",
           "- 反控策略：",
           "- 视频状态：",
           "- 文本剪贴板：",
@@ -1175,6 +1176,7 @@ async function verifyMacClientLogExport({ args, session }) {
   const requiredCopied = [
     "LAN Dual Control Mac 控制端日志",
     "连接状态",
+    "密码安全",
     "显示与媒体",
     "输入与剪贴板",
     "事件记录",
@@ -1394,6 +1396,7 @@ function buildSnapshotExpression() {
       connectButtonDisabled: document.querySelector("#connectButton")?.disabled || false,
       reconnectNowHidden: document.querySelector("#reconnectNowButton")?.hidden !== false,
       reconnectNowDisabled: document.querySelector("#reconnectNowButton")?.disabled !== false,
+      passwordSafety: text("#passwordSafetyStatus"),
       copyLogButtonDisabled: document.querySelector("#copyLogButton")?.disabled || false,
       logCopyStatus: text("#logCopyStatus"),
       exportLogButtonDisabled: document.querySelector("#exportLogButton")?.disabled || false,
@@ -2812,6 +2815,22 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       !defaultSettingsSnapshot.sendClipboardFilesButtonDisabled
     ) {
       throw new Error(`Mac client default video settings mismatch: ${JSON.stringify(defaultSettingsSnapshot)}`);
+    }
+    const expectedPasswordSafety = args.clientPassword
+      ? args.clientPassword === "demo-password"
+        ? "演示密码"
+        : "已输入"
+      : "未输入";
+    if (
+      !defaultSettingsSnapshot.passwordSafety.includes(expectedPasswordSafety) ||
+      !defaultSettingsSnapshot.passwordSafety.includes("不保存") ||
+      defaultSettingsSnapshot.passwordSafety.includes(args.clientPassword || "demo-password") ||
+      /password/i.test(defaultSettingsSnapshot.passwordSafety)
+    ) {
+      throw new Error(`Mac client password safety status mismatch: ${JSON.stringify({
+        expectedPasswordSafety,
+        passwordSafety: defaultSettingsSnapshot.passwordSafety,
+      })}`);
     }
     if (args.enableAudio) {
       await clickElement(session, "#audioToggle");

@@ -2,6 +2,7 @@ const elements = {
   hostInput: document.querySelector("#hostInput"),
   portInput: document.querySelector("#portInput"),
   passwordInput: document.querySelector("#passwordInput"),
+  passwordSafetyStatus: document.querySelector("#passwordSafetyStatus"),
   discoverButton: document.querySelector("#discoverButton"),
   connectButton: document.querySelector("#connectButton"),
   reconnectNowButton: document.querySelector("#reconnectNowButton"),
@@ -223,6 +224,32 @@ function setConnected(connected) {
   updateTextClipboardButton();
   updateFileClipboardButton();
   renderSessionDiagnostics();
+}
+
+function passwordSafetyStatusFor(value = elements.passwordInput.value) {
+  const password = String(value || "");
+  if (!password) {
+    return {
+      kind: "warning",
+      text: "未输入 · 真机需临时密码 · 不保存",
+    };
+  }
+  if (password === "demo-password") {
+    return {
+      kind: "warning",
+      text: "演示密码 · 仅限本机 mock · 真机请换临时密码 · 不保存",
+    };
+  }
+  return {
+    kind: "ok",
+    text: "已输入 · 仅用于本次连接 · 不保存到最近连接或诊断",
+  };
+}
+
+function updatePasswordSafetyStatus() {
+  const status = passwordSafetyStatusFor();
+  elements.passwordSafetyStatus.textContent = status.text;
+  elements.passwordSafetyStatus.dataset.kind = status.kind;
 }
 
 function formatMs(value) {
@@ -1623,6 +1650,7 @@ function buildLogExportText() {
     `- 远端摘要：${elements.remoteStatus.textContent || "-"}`,
     `- 目标地址：${currentEndpoint().host}:${currentEndpoint().port}`,
     `- 远端运行：${elements.remoteRuntimeMetric.textContent || "-"}`,
+    `- 密码安全：${elements.passwordSafetyStatus.textContent || "-"}`,
     `- 反控策略：${elements.reversePolicyMetric.textContent || "-"}`,
     `- 反控请求：${elements.reverseControlStatus.textContent || "-"}`,
     `- 反控授权提示：${elements.reverseControlHint.textContent || "-"}`,
@@ -3219,6 +3247,7 @@ elements.reconnectNowButton.addEventListener("click", reconnectNow);
 elements.disconnectButton.addEventListener("click", disconnect);
 elements.hostInput.addEventListener("input", () => resetEndpointDiscoveryState());
 elements.portInput.addEventListener("input", () => resetEndpointDiscoveryState());
+elements.passwordInput.addEventListener("input", updatePasswordSafetyStatus);
 elements.useRecentConnectionButton.addEventListener("click", applySelectedRecentConnection);
 elements.recentConnectionSelect.addEventListener("change", applySelectedRecentConnection);
 elements.clearRecentConnectionsButton.addEventListener("click", clearRecentConnections);
@@ -3309,6 +3338,7 @@ elements.remoteViewport.addEventListener("keydown", (event) => {
 });
 
 updateAudioVolumeLabel();
+updatePasswordSafetyStatus();
 updateDisplaySettingsStatus();
 initializeRecentConnections();
 updateTextClipboardButton();

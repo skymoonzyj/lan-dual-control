@@ -21,6 +21,38 @@
 
 日期：2026-06-20 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac 控 Windows 页面显式提示密码安全状态，减少真机联调时误用演示密码。
+完成内容：
+- Mac client 密码框下新增 `passwordSafetyStatus`：空密码提示真机需临时密码，`demo-password` 只标为本机 mock 可用，其他输入只显示“已输入”；不会显示实际密码。
+- 复制/导出诊断新增 `- 密码安全：...`，仍不包含连接密码或英文 `password` 字样；最近连接仍只保存 host/port，不保存密码。
+- 页面自测新增断言：安全状态必须出现、必须包含“不保存”、不得包含实际密码；诊断复制/导出必须包含密码安全行且继续拒绝密码泄露。
+修改文件：
+- `apps/mac-client/index.html`
+- `apps/mac-client/app.js`
+- `apps/mac-client/styles.css`
+- `apps/mac-client/README.md`
+- `scripts/windows/test-mac-client-browser.mjs`
+- `docs/HANDOFF_LOG.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-mac-client-browser.mjs --port 43801 --clientPort 5201 --debugPort 9343 --mockVideo --allowClipboardFallback --skipFileClipboard --progressIntervalMs 0 --timeoutMs 45000` 先失败在 `Mac client password safety status mismatch`。
+- 绿灯：同一命令修复后通过，覆盖演示密码路径、诊断复制/导出、反控请求演练、剪贴板和 input-log。
+- 非演示密码路径：`node scripts/windows/test-mac-client-browser.mjs --port 43802 --clientPort 5202 --debugPort 9344 --mockVideo --allowClipboardFallback --skipFileClipboard --expectAuthFailure --expectedAttemptsRemaining 2 --expectedMaxAttempts 3 --progressIntervalMs 0 --timeoutMs 45000` 通过。
+- 语法：`node --check apps/mac-client/app.js`、`node --check apps/mac-client/server.mjs`、`node --check scripts/windows/test-mac-client-browser.mjs` 通过。
+- 本机包装器：`node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary` 通过。
+遗留问题：
+- Windows 控 Mac 真实测试仍等待 Windows 本机输入同一个临时密码后启动；本轮未触碰该流程。
+下一步建议：
+- Windows 侧继续按通讯板 currentCall 做同密真实测试；Mac 侧保持 host/heartbeat watcher 在线。Mac 控 Windows 真连时，页面若显示“演示密码”，先换临时密码再跑正式 smoke。
+是否改了协议：否；只改 Mac client UI/诊断与页面自测。
+是否需要另一端配合：不需要 Windows 代码配合；真实测试仍需要 Windows 端和用户按现有 call 继续。
+
+## 2026-06-20 Mac Codex
+
+日期：2026-06-20 继续推进
+开发端：Mac Codex
 本轮目标：修复 Mac heartbeat watcher 的通讯板 server 可观测性，并恢复后台心跳上板。
 完成内容：
 - 发现真实后台 `Mac Heartbeat` watcher 仍在运行且 Mac host 在线，但日志持续显示 `post=post-failed` / `unattended=refresh-failed`；同参数前台一次性 heartbeat 与 `Mac Unattended` 上板成功，说明 Mac host 不坏，问题集中在后台 watcher 运行态/可观测性。

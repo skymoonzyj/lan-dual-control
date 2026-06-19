@@ -12,6 +12,8 @@
 
 最新 heartbeat watcher 校正：Mac 端后台 `Mac Heartbeat` watcher 已重启并恢复上板，当前 `server=http://192.168.31.68:17888`、`lastRun=1 post=posted`、`lastHeartbeat=status=ok`、`refreshUnattended=true`、`configMismatch=none`。后续若 `MacResumeStatus=` 看到 `post=post-failed` 或 `warnings=agent-link-board`，先看同屏 `server=` 和 `configMismatch=`；若 `configMismatch=server` 或 server 不是当前通讯板，复制 `RefreshRestart=` 重启 watcher，不要误判为 Mac host 离线。
 
+最新 Mac client 安全提示：Mac 控 Windows 页面现在在密码框下显示 `passwordSafetyStatus`，演示密码只适合本机 mock，真机 smoke 前请换临时密码；复制/导出诊断会带 `密码安全` 状态，但不输出连接密码或英文 `password` 字样。若页面仍显示“演示密码”，不要把它当正式联调密码。
+
 最新认证路径：当前 `MacUnattendedStatus` / `MacHeartbeat` / `MacResumeStatus` / `MacHostReadiness` / `MacFormalE2E` 会输出 `MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia`。看到这条时，不要继续等待 LaunchAgent 随机密码；正式 Windows 控 Mac 认证应在用户在场时先停旧 host，再用 `MacMaxFpsSafeStart` 前台隐藏密码启动，在 Windows 和 Mac 两端输入同一个临时密码，之后跑 `MacHostMedia` 复查媒体基线。
 
 1. Mac 端继续验证真实被控服务。
