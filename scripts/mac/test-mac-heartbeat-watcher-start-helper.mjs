@@ -282,6 +282,18 @@ function checkStartWithUnattendedRefresh(args) {
     const argv = readWatcherArgv(fake.argvLog)[0].join(" ");
     assertIncludes(argv, "--refreshUnattended", "refresh fake watcher argv");
     assertNoSecrets(start, "refresh start output");
+
+    const status = run(["--status", "--json", ...commonArgs(paths)], args, env);
+    const statusPayload = parseJson(status.stdout, "refresh running status JSON");
+    assert(status.status === 0, `refresh running status should pass.\n${status.stdout}\n${status.stderr}`);
+    assert(statusPayload.running === true, "refresh running status should report running");
+    assert(statusPayload.watcher?.refreshUnattended === true, "refresh running status JSON should report refreshUnattended=true from watcher metadata");
+    assertNoSecrets(status, "refresh running status output");
+
+    const boardSummary = run(["--status", "--boardSummary", ...commonArgs(paths)], args, env);
+    assert(boardSummary.status === 0, `refresh boardSummary status should pass.\n${boardSummary.stdout}\n${boardSummary.stderr}`);
+    assertIncludes(boardSummary.stdout, "refreshUnattended=true", "refresh running boardSummary should report metadata refresh state");
+    assertNoSecrets(boardSummary, "refresh boardSummary status output");
   } finally {
     run(["--stop", ...commonArgs(paths)], args, env);
     rmSync(tmp, { recursive: true, force: true });

@@ -478,6 +478,10 @@ async function restartWatcher(args) {
 
 function makeReport(action, args, details) {
   const status = details.status || inspectWatcher(args);
+  const refreshUnattended = typeof status.meta?.refreshUnattended === "boolean"
+    ? status.meta.refreshUnattended
+    : args.refreshUnattended;
+  const reportArgs = { ...args, refreshUnattended };
   return {
     ok: Boolean(details.ok),
     action,
@@ -498,7 +502,7 @@ function makeReport(action, args, details) {
       clientPort: args.clientPort,
       stateFile: toDisplayPath(args.stateFile),
       codexTextFile: args.codexTextFile ? toDisplayPath(args.codexTextFile) : "",
-      refreshUnattended: args.refreshUnattended,
+      refreshUnattended,
     },
     files: {
       pidFile: status.pidFile,
@@ -507,7 +511,7 @@ function makeReport(action, args, details) {
       errLog: status.errLog,
     },
     lastHeartbeat: status.lastHeartbeat,
-    commands: makeCommands(args),
+    commands: makeCommands(reportArgs),
     safety: "No password was requested or sent; no WebSocket auth/input/inject was attempted.",
   };
 }
