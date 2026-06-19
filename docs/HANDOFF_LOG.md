@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac formal E2E 第一屏也明确显示当前 Mac host 认证路径，减少 Windows 端等待 LaunchAgent 随机密码的误判。
+完成内容：
+- `check-mac-formal-e2e-status` 现在会复用 `check-mac-resume-status` 已安全提取的 `board.macHostAuthPath`，在顶层 JSON 输出 `macHostAuthPath`，并在 `Mac formal E2E:` 摘要和 `callText` 中转述 `MacHostAuthPath=`。
+- 当前真实路径仍是 `prompt-password-required / launch-agent-ephemeral-password / mode=ephemeral`，意思是 LaunchAgent 随机运行期密码不能上板、不能让 Windows 端继续等待；正式 Windows 控 Mac 认证应走用户在场的 `MacHostStop -> MacMaxFpsSafeStart -> MacHostMedia`。
+- 新增测试覆盖干净 `MacHostAuthPath` 会转述、疑似 `--password` / token 的候选不会被提升；该字段只读展示，不改变 `readyToCall`、blocker 或 call 发送判定。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `docs/HANDOFF_LOG.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增 `MacHostAuthPath` 用例后，`node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 12000` 先失败在 `Mac auth path formal E2E status should expose MacHostAuthPath status`。
+- 绿灯：同一命令修复后通过。
+- 后续实机验证见本轮提交前验证记录；全程无认证、不请求或发送密码、不发 call/input/inject。
+遗留问题：
+- Mac host 仍是 LaunchAgent/log/60fps 安全联调态；真实注入前仍需用户本机确认权限或使用前台安全启动路径。
+下一步建议：
+- Windows 端如果只看到 `MacFormalE2E=`，也可按其中 `MacHostAuthPath=prompt-password-required ... next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia` 判断下一步，不要等待 LaunchAgent 随机密码。
+是否改了协议：否；只补 Mac 端诊断/通讯板摘要字段转述。
+是否需要另一端配合：需要 Windows 端重新读取最新 `MacFormalE2E=` 摘要；暂不需要改 Windows 代码。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：把 Mac LaunchAgent 随机密码阻塞转成稳定、无密的认证路径信号。
 完成内容：
 - `check-mac-unattended-status` 现在会从 LaunchAgent plist `ProgramArguments` 识别 `passwordMode`：`ephemeral` / `prompt` / `env-required` / `none` / `unknown`。

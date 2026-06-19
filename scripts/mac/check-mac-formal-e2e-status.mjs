@@ -135,6 +135,12 @@ JSON output:
                             reused from check-mac-resume-status. Stale means the
                             independent unattended/power evidence should be
                             refreshed; it does not make this checklist fail.
+  macHostAuthPath
+                            Optional sanitized MacHostAuthPath summary reused
+                            from check-mac-resume-status. It explains whether
+                            LaunchAgent uses an ephemeral password and which
+                            safe local foreground path should be used; it does
+                            not make this checklist fail.
   suggestedAction
                             Optional structured next action. When runtime Mac
                             host sources changed after the running host build,
@@ -640,6 +646,26 @@ function makeMacUnattendedFreshnessSentence(freshness) {
   ].join(" ");
 }
 
+function formatMacHostAuthPathSummary(authPath) {
+  if (!authPath) return "";
+  return [
+    `MacHostAuthPath=${authPath.status || "unknown"}`,
+    `reason=${authPath.reason || "unknown"}`,
+    `mode=${authPath.mode || "unknown"}`,
+    `next=${authPath.next || "unknown"}`,
+  ].join(" ");
+}
+
+function makeMacHostAuthPathSentence(authPath) {
+  if (!authPath) return "";
+  return [
+    `Mac host auth path: status=${authPath.status || "unknown"}`,
+    `reason=${authPath.reason || "unknown"}`,
+    `mode=${authPath.mode || "unknown"}`,
+    `next=${authPath.next || "unknown"}.`,
+  ].join(" ");
+}
+
 function summarizeChecklistIds(checklist, status) {
   const ids = [...new Set((checklist || [])
     .filter((entry) => entry.status === status)
@@ -687,6 +713,7 @@ function makeCallText(report) {
   const evidenceText = makeEvidenceSentence(report.evidence);
   const powerText = makeMacPowerHealthSentence(report.macPowerHealth);
   const freshnessText = makeMacUnattendedFreshnessSentence(report.macUnattendedFreshness);
+  const authPathText = makeMacHostAuthPathSentence(report.macHostAuthPath);
   const readinessText = report.readyToCall
     ? report.counts.warnings > 0 ? "ready with warnings" : "ready"
     : "needs attention";
@@ -704,6 +731,7 @@ function makeCallText(report) {
       ...(evidenceText ? [evidenceText] : []),
       ...(powerText ? [powerText] : []),
       ...(freshnessText ? [freshnessText] : []),
+      ...(authPathText ? [authPathText] : []),
       `If MacPowerHealth warns, review the dry-run power settings plan with: ${report.commands?.macPowerPlanCommand || makeMacPowerPlanCommand()}.`,
       `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
       `When the host is online, run low-risk host readiness with: ${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
@@ -721,6 +749,7 @@ function makeCallText(report) {
     ...(evidenceText ? [evidenceText] : []),
     ...(powerText ? [powerText] : []),
     ...(freshnessText ? [freshnessText] : []),
+    ...(authPathText ? [authPathText] : []),
     `For foreground formal 60Hz, use: ${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
     `For LaunchAgent transition, stop the current Mac host with: ${report.commands?.macHostStopCommand || makeMacHostStopCommand(report.args?.host, report.args?.port)}.`,
     `Then manually load the LaunchAgent with: ${report.commands?.macLaunchAgentLoadCommand || makeMacLaunchAgentLoadCommand()}.`,
@@ -750,6 +779,8 @@ function makeBoardSummary(report) {
   const macPowerHealthLine = macPowerHealthSummary ? `${macPowerHealthSummary}.` : "";
   const macUnattendedFreshnessSummary = formatMacUnattendedFreshnessSummary(report.macUnattendedFreshness);
   const macUnattendedFreshnessLine = macUnattendedFreshnessSummary ? `${macUnattendedFreshnessSummary}.` : "";
+  const macHostAuthPathSummary = formatMacHostAuthPathSummary(report.macHostAuthPath);
+  const macHostAuthPathLine = macHostAuthPathSummary ? `${macHostAuthPathSummary}.` : "";
   const suggestedAction = report.suggestedAction?.boardSummary ? `${report.suggestedAction.boardSummary}.` : "";
   if (!host.online) {
     return [
@@ -758,6 +789,7 @@ function makeBoardSummary(report) {
       ...(evidenceLine ? [evidenceLine] : []),
       ...(macPowerHealthLine ? [macPowerHealthLine] : []),
       ...(macUnattendedFreshnessLine ? [macUnattendedFreshnessLine] : []),
+      ...(macHostAuthPathLine ? [macHostAuthPathLine] : []),
       `MacHostSafeStart=${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}.`,
       `MacMaxFpsSafeStart=${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
       `MacHostStop=${report.commands?.macHostStopCommand || makeMacHostStopCommand(report.args?.host, report.args?.port)}.`,
@@ -782,6 +814,7 @@ function makeBoardSummary(report) {
     ...(evidenceLine ? [evidenceLine] : []),
     ...(macPowerHealthLine ? [macPowerHealthLine] : []),
     ...(macUnattendedFreshnessLine ? [macUnattendedFreshnessLine] : []),
+    ...(macHostAuthPathLine ? [macHostAuthPathLine] : []),
     ...(suggestedAction ? [suggestedAction] : []),
     `MacHostSafeStart=${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}.`,
     `MacMaxFpsSafeStart=${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
@@ -1267,6 +1300,7 @@ function buildReport(args) {
   const evidence = collectBoardValidationEvidence(resume, args);
   const macPowerHealth = resume?.board?.macPowerHealth || null;
   const macUnattendedFreshness = resume?.board?.macUnattendedFreshness || null;
+  const macHostAuthPath = resume?.board?.macHostAuthPath || null;
   const boardReady = !args.skipBoard && resume.board?.checked === true && resume.board?.ok === true;
   const readyToCall = counts.blockers === 0 && boardReady;
   const report = {
@@ -1288,6 +1322,7 @@ function buildReport(args) {
     evidence,
     macPowerHealth,
     macUnattendedFreshness,
+    macHostAuthPath,
     resume,
   };
   report.commands = makeCommands(report);

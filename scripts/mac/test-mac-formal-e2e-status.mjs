@@ -237,6 +237,19 @@ function assertMacUnattendedFreshness(payload, expected, label) {
   assert(resumeFreshness?.source === expected.source, `${label} should preserve resume board MacUnattendedFreshness source`);
 }
 
+function assertMacHostAuthPath(payload, expected, label) {
+  const authPath = payload.macHostAuthPath;
+  assert(authPath?.status === expected.status, `${label} should expose MacHostAuthPath status`);
+  assert(authPath?.reason === expected.reason, `${label} should expose MacHostAuthPath reason`);
+  assert(authPath?.mode === expected.mode, `${label} should expose MacHostAuthPath mode`);
+  assert(authPath?.next === expected.next, `${label} should expose MacHostAuthPath next action`);
+  const resumeAuthPath = payload.resume?.board?.macHostAuthPath;
+  assert(resumeAuthPath?.status === expected.status, `${label} should preserve resume board MacHostAuthPath status`);
+  assert(resumeAuthPath?.reason === expected.reason, `${label} should preserve resume board MacHostAuthPath reason`);
+  assert(resumeAuthPath?.mode === expected.mode, `${label} should preserve resume board MacHostAuthPath mode`);
+  assert(resumeAuthPath?.next === expected.next, `${label} should preserve resume board MacHostAuthPath next action`);
+}
+
 function assertMacHostSafeStartCommand(command, label, expectedPort = null) {
   const text = String(command || "");
   assert(/node scripts\/mac\/start-mac-host\.mjs/.test(text), `${label} should use start-mac-host`);
@@ -1352,6 +1365,78 @@ async function checkBoardMacPowerHealth(args) {
   });
 }
 
+async function checkBoardMacHostAuthPath(args) {
+  const cleanAuthPath = "Mac unattended status: host=online inputMode=log build=bed2095; MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia; attention=1 warning(s) blockers=none warnings=accessibility.";
+  await withFakeMacHost(async (macHost) => {
+    await withFakeBoard(async (board) => {
+      const result = await runAsync(args, [
+        "--json",
+        "--allowDirty",
+        "--host",
+        macHost.host,
+        "--port",
+        String(macHost.port),
+        "--server",
+        board.serverUrl,
+        "--timeoutMs",
+        String(Math.min(args.timeoutMs, 5000)),
+      ]);
+      const payload = parseJson(result.stdout, "Mac auth path formal E2E status");
+      assert(result.status === 0, `Mac auth path formal status should exit 0:\n${result.stdout}\n${result.stderr}`);
+      assertMacHostAuthPath(payload, {
+        status: "prompt-password-required",
+        reason: "launch-agent-ephemeral-password",
+        mode: "ephemeral",
+        next: "MacHostStop->MacMaxFpsSafeStart->MacHostMedia",
+      }, "Mac auth path formal E2E status");
+      assert(/MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia/.test(payload.boardSummary || ""), "Mac auth path formal boardSummary should expose MacHostAuthPath");
+      assert(/Mac host auth path: status=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia/.test(payload.callText || ""), "Mac auth path formal callText should summarize MacHostAuthPath");
+      assert(payload.readyToCall === true, "Mac auth path should not change formal E2E readyToCall");
+      assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "Mac auth path formal E2E status");
+      print("OK", "Formal E2E status surfaces Agent Link Board MacHostAuthPath safely");
+    }, {
+      statuses: {
+        "Mac Unattended": {
+          status: "warning",
+          note: cleanAuthPath,
+        },
+      },
+    });
+  });
+
+  const riskyAuthPath = "MacHostAuthPath=prompt-password-required reason=--password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia; token=fake-auth-path-token";
+  await withFakeMacHost(async (macHost) => {
+    await withFakeBoard(async (board) => {
+      const result = await runAsync(args, [
+        "--json",
+        "--allowDirty",
+        "--host",
+        macHost.host,
+        "--port",
+        String(macHost.port),
+        "--server",
+        board.serverUrl,
+        "--timeoutMs",
+        String(Math.min(args.timeoutMs, 5000)),
+      ]);
+      const payload = parseJson(result.stdout, "risky Mac auth path formal E2E status");
+      assert(result.status === 0, `risky Mac auth path formal status should exit 0:\n${result.stdout}\n${result.stderr}`);
+      assert(!payload.macHostAuthPath, "risky MacHostAuthPath should not be promoted");
+      assert(!payload.resume?.board?.macHostAuthPath, "risky resume board MacHostAuthPath should not be promoted");
+      assert(!/MacHostAuthPath=/.test(payload.boardSummary || ""), "risky Mac auth path formal boardSummary should not expose MacHostAuthPath");
+      assert(!/fake-auth-path-token/.test(`${result.stdout}\n${result.stderr}`), "risky Mac auth path formal output should not leak fake token");
+      assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "risky Mac auth path formal E2E status");
+    }, {
+      statuses: {
+        "Mac Unattended": {
+          status: "warning",
+          note: riskyAuthPath,
+        },
+      },
+    });
+  });
+}
+
 async function checkMaxFpsLimitWarning(args) {
   await withFakeMacHost(async (macHost) => {
     const localTimeoutMs = String(Math.min(args.timeoutMs, 5000));
@@ -1540,6 +1625,7 @@ async function main() {
   await checkBoardStatusValidationEvidence(args);
   await checkBoardStableTagValidationEvidence(args);
   await checkBoardMacPowerHealth(args);
+  await checkBoardMacHostAuthPath(args);
   await checkMaxFpsLimitWarning(args);
   checkOnlineJson(args);
   checkOnlineBoardSummary(args);
