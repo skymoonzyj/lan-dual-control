@@ -21,6 +21,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端消费 Mac Windows discovery 成功摘要里的 `MacClientPromptPasswordSmoke=` 前台真测入口。
+完成内容：
+- `parseMacUnattendedAttention` 新增 discovery 成功上下文：`Windows host discovery: found N` / `best=` / `selected=` / `ready=true` 与 `MacClientPromptPasswordSmoke=` 同段出现时，快速摘要会显示“Mac client 前台密码真测命令已提供”。
+- 保留原有安全边界：纯 `MacClientPromptPasswordSmoke=` 命令清单和 `warnings=none blockers=none` 不误弹；Windows 端只提示/复制，不运行 Mac 脚本、不认证、不传递密码、不发 input/inject。
+- 页面 diagnostics-only 新增直测，覆盖 `MacClientDiscoverWindows=` + discovery found + 目标 host/port prompt smoke 的中文提示。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败在 discovery found + `MacClientPromptPasswordSmoke=` 没有“Mac client 前台密码真测命令已提供”。
+- 绿灯：实现后复跑同一命令通过。
+- 收尾复跑：`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`、`git diff --check`、触碰文件冲突标记扫描。
+遗留问题：
+- 本轮不运行 Mac 端 discovery 或真实 browser smoke；用户在场时仍由 Mac 端或人工显式运行 `MacClientPromptPasswordSmoke=`。
+下一步建议：
+- 现场只看到 `MacClientDiscoverWindows=` / discovery 摘要且已经发现 Windows host 时，可直接让 Mac 端按同段 `MacClientPromptPasswordSmoke=` 进入前台密码真测；无人值守时继续用无密 preflight 或本地 browser 自测。
+是否改了协议：否；只补 Windows 控制端本地解析、页面回归和文档。
+是否需要另一端配合：不需要；Mac 端已经输出该标签。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端消费 `MacClientPage=` / `MacClientDiagnostics=` 页面状态与 readiness 诊断命令提示。
 完成内容：
 - `parseMacUnattendedAttention` 新增 `MacClientPage=` 与 `MacClientDiagnostics=` 识别，并映射中文风险标签“Mac client 页面状态命令已提供”“Mac client 诊断命令已提供”。

@@ -3363,6 +3363,11 @@ function parseMacUnattendedAttention(text) {
     risk === "repo" ||
     risk === "board",
   );
+  const hasMacClientDiscoverPromptContext =
+    /\bWindows host discovery:\s*found\s*[1-9]\d*\b/i.test(source) ||
+    /\bWindows host discovery:[^;]*\bbest\s*=\s*(?!none\b|not[- ]found\b)[^.;]+/i.test(source) ||
+    /\bMacClientDiscoverWindows\b[^;]*(found\s*[1-9]\d*|best\s*=|selected\s*=|ready\s*=\s*true)/i.test(source) ||
+    /\bdiscover-windows-hosts\.mjs\b[^;]*(found\s*[1-9]\d*|best\s*=|selected\s*=|ready\s*=\s*true)/i.test(source);
   const hasMacFormalE2eFinding =
     hasMacFormalE2e &&
     (
@@ -3537,6 +3542,7 @@ function parseMacUnattendedAttention(text) {
     hasMacClientPromptPasswordSmoke &&
     (
       hasMacClientFormalFinding ||
+      hasMacClientDiscoverPromptContext ||
       /ready\s*=\s*false|blocked|failed|\bauth\b|windowssecureauthpath|lan008|认证|密码/.test(lower)
     )
   ) {

@@ -1690,6 +1690,16 @@ async function verifyDesktopOnlyHostPanel(session) {
               ].join("; "),
             )
           : null;
+      const macDiscoveryPromptPasswordSmokeAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "Windows host discovery: found 1; best=Windows 被控端 / windows / 192.168.31.68:43770",
+                "MacClientDiscoverWindows=node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary",
+                "MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.68 --port 43770 --ensureClient --promptPassword --boardSummary",
+              ].join("; "),
+            )
+          : null;
       const cleanMacScriptHelpAttention =
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
@@ -2083,6 +2093,7 @@ async function verifyDesktopOnlyHostPanel(session) {
           cleanMacClientPromptPasswordSmokeAttention?.summary === "" &&
           Array.isArray(cleanMacClientPromptPasswordSmokeAttention?.labels) &&
           cleanMacClientPromptPasswordSmokeAttention.labels.length === 0 &&
+          macDiscoveryPromptPasswordSmokeAttention?.summary.includes("Mac client 前台密码真测命令已提供") &&
           cleanMacScriptHelpAttention?.summary === "" &&
           Array.isArray(cleanMacScriptHelpAttention?.labels) &&
           cleanMacScriptHelpAttention.labels.length === 0 &&
@@ -2151,6 +2162,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         cleanMacClientBrowserSelfTestAttention,
         macUnattendedBrowserSelfTestAttention,
         cleanMacClientPromptPasswordSmokeAttention,
+        macDiscoveryPromptPasswordSmokeAttention,
         cleanMacScriptHelpAttention,
         macHeartbeatRerunAttention,
         macHostMediaCommandAttention,
