@@ -19,6 +19,35 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac client 状态摘要暴露可用入口
+开发端：Mac Codex
+本轮目标：让只看 `start-mac-client --status --boardSummary` / `MacClientPage=` 的人，也能直接看到 Mac 端根目录双击入口，不必再翻 README 或交接日志。
+完成内容：
+- `start-mac-client` 新增 `MacUsableEntry=status=ready USABLE_NEXT=open_mac_client Entry=./Start-Mac-Control-Windows.command Safety=no-password,no-input-inject`。
+- JSON `commands` 新增 `macControlWindowsEntryCommand`，固定为 `./Start-Mac-Control-Windows.command`。
+- `test-mac-client-start-helper` 覆盖 help、离线、在线、启动和 allowExisting 路径，确认该入口摘要不带密码、系统命令、input_event 或真实注入命令。
+修改文件：
+- `scripts/mac/start-mac-client.mjs`
+- `scripts/mac/test-mac-client-start-helper.mjs`
+- `apps/mac-client/README.md`
+- `docs/04-task-board.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-client-start-helper.mjs --timeoutMs 20000` 先失败，提示 help 缺少 `commands.macControlWindowsEntryCommand`。
+- 绿灯：`node scripts/mac/test-mac-client-start-helper.mjs --timeoutMs 20000`
+- 后续本轮收尾会继续跑语法、真实 `start-mac-client --status --boardSummary`、diff 和冲突扫描。
+遗留问题：
+- `MacUsableEntry` 只表示本地页面打开入口可用，不代表已经发现/连接/认证 Windows host。
+下一步建议：
+- 开工第一屏或通讯板只看到 `MacClientPage=` 时，先复制/双击 `Entry=./Start-Mac-Control-Windows.command` 打开页面，再按 `MacClientDiscoverWindows=` 和 formal checklist 进入真连。
+是否改了协议：否。
+是否需要另一端配合：不需要；Windows 端可继续只读消费该新标签。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac 控 Windows 根目录双击入口
 开发端：Mac Codex
 本轮目标：给 Mac 端补一个和 Windows `Start-Windows-Control-Mac.cmd` 对称的根目录双击入口，降低白天继续手工验收时的启动门槛。

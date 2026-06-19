@@ -79,6 +79,8 @@ const formalSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --d
 const promptPasswordSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword --boardSummary";
 const browserSelfTestCommand = "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
 const macPowerPlanCommand = "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary";
+const macControlWindowsEntryCommand = "./Start-Mac-Control-Windows.command";
+const macUsableEntrySummary = `MacUsableEntry=status=ready USABLE_NEXT=open_mac_client Entry=${macControlWindowsEntryCommand} Safety=no-password,no-input-inject`;
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -149,6 +151,10 @@ Machine-readable JSON fields:
   commands.macPowerPlanCommand
                          Secret-free dry-run Mac power plan command for keeping
                          formal testing awake. It does not apply system settings.
+  commands.macControlWindowsEntryCommand
+                         Finder double-click entry for opening or reusing the
+                         local Mac control page. It does not connect,
+                         authenticate, request a password, or send input.
   commands.macClientCopyDiagnosticsAction
                          Safe in-page action for copying diagnostics after
                          confirming no connection password is included.
@@ -531,6 +537,7 @@ function makeBoardSummary(report) {
       `WindowsOpenOneTimeReverseGrantNodeFallback=${windowsOpenOneTimeReverseGrantNodeFallbackCommand}.`,
       `MacClientPromptPasswordSmoke=${promptPasswordSmokeCommand}.`,
       `MacClientBrowserSelfTest=${browserSelfTestCommand}.`,
+      `${macUsableEntrySummary}.`,
       `MacPowerPlan=${macPowerPlanCommand}.`,
       `CopyDiagnostics=${copyDiagnosticsAction}.`,
       "No password was requested or sent; no Windows connection/input was attempted.",
@@ -551,6 +558,7 @@ function makeBoardSummary(report) {
     `WindowsOpenOneTimeReverseGrantNodeFallback=${windowsOpenOneTimeReverseGrantNodeFallbackCommand}.`,
     `MacClientPromptPasswordSmoke=${promptPasswordSmokeCommand}.`,
     `MacClientBrowserSelfTest=${browserSelfTestCommand}.`,
+    `${macUsableEntrySummary}.`,
     `MacPowerPlan=${macPowerPlanCommand}.`,
     `CopyDiagnostics=页面在线后在 ${copyDiagnosticsAction}.`,
     "No password was requested or sent; no Windows connection/input was attempted.",
@@ -571,6 +579,7 @@ function makeCommands(args) {
     macClientFormalSmokeCommand: formalSmokeCommand,
     macClientPromptPasswordSmokeCommand: promptPasswordSmokeCommand,
     macClientBrowserSelfTestCommand: browserSelfTestCommand,
+    macControlWindowsEntryCommand,
     macPowerPlanCommand,
     macClientCopyDiagnosticsAction: copyDiagnosticsAction,
   };

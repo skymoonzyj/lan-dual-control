@@ -28,6 +28,8 @@
 
 当前 Mac 控 Windows 首选入口：在 Mac 仓库根目录双击 `Start-Mac-Control-Windows.command`；它只会启动/复用本地 Mac 控制端页面并打开浏览器，之后再由用户在页面里发现 Windows host、输入临时密码并点连接。终端等价命令是 `node scripts/mac/start-mac-client.mjs --allowExisting --open`。
 
+当前 Mac client 状态摘要入口：`node scripts/mac/start-mac-client.mjs --status --boardSummary` 会输出 `MacUsableEntry=... Entry=./Start-Mac-Control-Windows.command`。如果白天开工只看到 `MacClientPage=` 或页面离线，先用这个入口打开本地页面，再继续 Windows discovery / formal checklist。
+
 当前 Windows 最短入口：用户在 Windows 上运行 `node scripts/windows/start-windows-control-mac.mjs`，脚本会打开 `127.0.0.1:5200` 控制页并预填 `192.168.31.122:43770` / WebSocket；用户只需在页面里输入 Mac 当前临时密码后点连接。不要让用户再记旧的 `5197/9337` 诊断端口；本入口固定可用口径为 `clientPort=5200 debugPort=9340`，不认证、不发 input/inject。
 
 最新校正：Mac host 当前实机在线为 `192.168.31.122:43770` / `127.0.0.1:43770`，前台同密/log/60fps，runtime build `8015f22`；通讯板已可达。最新 `MacHeartbeat` / `MacResumeStatus` 已修复旧状态回声，当前值守状态应看作 `MacUnattendedHealth=ok reason=ok blockers=none warnings=none`，不要再把历史 `launch-agent-not-loaded`、`bed2095` 或 `accessibility` warning 当作当前 blocker。
