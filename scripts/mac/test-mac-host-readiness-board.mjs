@@ -221,6 +221,14 @@ function assertMacScriptHelpCommand(command, label) {
   assert(!value.includes("inject"), `${label} should not instruct injection`);
 }
 
+function assertMacHostAuthPath(payload, expected, label) {
+  const authPath = payload.board?.macHostAuthPath;
+  assert(authPath?.status === expected.status, `${label} should expose MacHostAuthPath status`);
+  assert(authPath?.reason === expected.reason, `${label} should expose MacHostAuthPath reason`);
+  assert(authPath?.mode === expected.mode, `${label} should expose MacHostAuthPath mode`);
+  assert(authPath?.next === expected.next, `${label} should expose MacHostAuthPath next action`);
+}
+
 function functionBlock(source, name) {
   const start = source.indexOf(`function ${name}`);
   assert(start >= 0, `missing function ${name}`);
@@ -330,13 +338,13 @@ function waitForPort(child, getStdout, getStderr) {
   });
 }
 
-async function withFakeBoard(currentCall, callback) {
+async function withFakeBoard(currentCall, callback, options = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "lan-dual-mac-readiness-board-"));
   const scriptPath = path.join(dir, "fake-board.mjs");
   const state = {
     currentCall,
-    statuses: {},
-    events: [],
+    statuses: options.statuses || {},
+    events: options.events || [],
     updatedAt: new Date().toISOString(),
   };
   writeFileSync(scriptPath, `
@@ -403,6 +411,7 @@ function checkHelp(args) {
     assert(String(result.stdout).includes("commands.macFormalLocalSmokeCommand"), `${script} ${flag} should document formal local smoke command`);
     assert(String(result.stdout).includes("commands.macPowerPlanCommand"), `${script} ${flag} should document Mac power dry-run plan command`);
     assert(String(result.stdout).includes("commands.macScriptHelpCommand"), `${script} ${flag} should document Mac script help safety command`);
+    assert(String(result.stdout).includes("board.macHostAuthPath"), `${script} ${flag} should document sanitized MacHostAuthPath board field`);
   }
   print("OK", "Mac host readiness board help exits quickly");
 }
@@ -904,6 +913,70 @@ async function checkDoneBoardCall(args) {
   print("OK", "Mac host readiness treats DONE Agent Link Board currentCall as inactive");
 }
 
+async function checkBoardMacHostAuthPath(args) {
+  const cleanAuthPath = "Mac unattended status: host=online inputMode=log build=bed2095; MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia; attention=1 warning(s) blockers=none warnings=accessibility.";
+  await withFakeBoard(null, async (server) => {
+    const result = run([
+      "--json",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--timeoutMs",
+      "5000",
+      "--skipCurrentBuildCheck",
+    ], args);
+    const payload = parseJson(result.stdout, "Mac host readiness auth path JSON");
+    assertMacHostAuthPath(payload, {
+      status: "prompt-password-required",
+      reason: "launch-agent-ephemeral-password",
+      mode: "ephemeral",
+      next: "MacHostStop->MacMaxFpsSafeStart->MacHostMedia",
+    }, "Mac host readiness auth path JSON");
+    assert(String(payload.boardSummary || "").includes("MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia"), "boardSummary should expose MacHostAuthPath");
+    assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "Mac host readiness auth path JSON");
+  }, {
+    statuses: {
+      "Mac Unattended": {
+        status: "warning",
+        note: cleanAuthPath,
+      },
+    },
+  });
+
+  const riskyAuthPath = "MacHostAuthPath=prompt-password-required reason=--password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia; token=super-secret-command-token";
+  await withFakeBoard(null, async (server) => {
+    const result = run([
+      "--json",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--timeoutMs",
+      "5000",
+      "--skipCurrentBuildCheck",
+    ], args);
+    const payload = parseJson(result.stdout, "risky Mac host readiness auth path JSON");
+    assert(!payload.board?.macHostAuthPath, "risky MacHostAuthPath should not be promoted");
+    assert(!String(payload.boardSummary || "").includes("MacHostAuthPath="), "risky boardSummary should not expose MacHostAuthPath");
+    assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "risky Mac host readiness auth path JSON");
+  }, {
+    statuses: {
+      "Mac Unattended": {
+        status: "warning",
+        note: riskyAuthPath,
+      },
+    },
+  });
+  print("OK", "Mac host readiness surfaces Agent Link Board MacHostAuthPath safely");
+}
+
 async function checkBoardSummary(args) {
   const call = {
     status: "CALLING",
@@ -994,6 +1067,7 @@ async function main() {
   checkPlainOutputIncludesLaunchAgentPlan(args);
   await checkActiveBoardCall(args);
   await checkDoneBoardCall(args);
+  await checkBoardMacHostAuthPath(args);
   await checkBoardSummary(args);
   print("OK", "Mac host readiness Agent Link Board self-test passed");
 }

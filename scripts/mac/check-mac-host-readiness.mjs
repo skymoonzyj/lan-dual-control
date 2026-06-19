@@ -36,6 +36,24 @@ const defaults = {
   boardSummary: false,
 };
 const formalTargetMaxScreenFps = 60;
+const allowedMacHostAuthPathStatuses = new Set([
+  "prompt-password-required",
+  "prompt-password-configured",
+  "env-password-required",
+  "no-password-required",
+  "unknown",
+]);
+const allowedMacHostAuthPathReasons = new Set([
+  "launch-agent-ephemeral-password",
+  "launch-agent-prompt-password",
+  "launch-agent-env-required",
+  "launch-agent-no-password",
+  "launch-agent-auth-mode-unknown",
+  "launch-agent-missing",
+  "unknown",
+]);
+const allowedMacHostAuthPathModes = new Set(["ephemeral", "prompt", "env-required", "none", "unknown"]);
+const allowedMacHostAuthPathNext = new Set(["MacHostStop->MacMaxFpsSafeStart->MacHostMedia", "unknown"]);
 
 const profileDescriptions = {
   default: "default low-risk checks only",
@@ -252,6 +270,11 @@ Machine-readable JSON fields:
   commands.macScriptHelpCommand
                             Unified side-effect-free Mac script help
                             self-check command.
+  board.macHostAuthPath
+                            Optional sanitized MacHostAuthPath summary copied
+                            from Agent Link Board statuses when --checkBoard is
+                            enabled. It uses fixed allowlists and never echoes
+                            raw passwords, tokens, or unsafe source text.
 `);
 }
 
@@ -705,6 +728,17 @@ function formatBoardCallSummary(board) {
   return `call=${board.activeCall ? "active" : "done"}(${formatBoardCallOneLine(board.currentCall)})`;
 }
 
+function formatMacHostAuthPathSummary(board) {
+  const authPath = board?.macHostAuthPath;
+  if (!authPath) return "";
+  return [
+    `MacHostAuthPath=${authPath.status || "unknown"}`,
+    `reason=${authPath.reason || "unknown"}`,
+    `mode=${authPath.mode || "unknown"}`,
+    `next=${authPath.next || "unknown"}`,
+  ].join(" ");
+}
+
 function formatReadinessBoardSummary(summary) {
   const failed = Number(summary.failed || 0);
   const warnings = Number(summary.warnings || 0);
@@ -719,8 +753,9 @@ function formatReadinessBoardSummary(summary) {
   const hostBuild = formatHostBuildBoardSummary(summary);
   const hostMedia = formatHostMediaBoardSummary(summary);
   const suggestedAction = summary.suggestedAction?.boardSummary ? `; ${summary.suggestedAction.boardSummary}` : "";
+  const macHostAuthPath = formatMacHostAuthPathSummary(summary.board);
   return [
-    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${hostBuild ? `; ${hostBuild}` : ""}${hostMedia ? `; ${hostMedia}` : ""}${suggestedAction}; ${formatBoardCallSummary(summary.board)}.`,
+    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${hostBuild ? `; ${hostBuild}` : ""}${hostMedia ? `; ${hostMedia}` : ""}${suggestedAction}; ${formatBoardCallSummary(summary.board)}${macHostAuthPath ? `; ${macHostAuthPath}` : ""}.`,
     `MacHostSafeStart=${summary.commands?.macHostSafeStartCommand || makeMacHostSafeStartCommand(summary.args || {})}.`,
     `MacHostStop=${summary.commands?.macHostStopCommand || makeMacHostStopCommand(summary.args || {})}.`,
     `MacMaxFpsSafeStart=${summary.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(summary.args || {})}.`,
@@ -973,6 +1008,7 @@ async function getBoardStatus(args) {
     summary: "not checked",
     currentCall: null,
     activeCall: false,
+    macHostAuthPath: null,
     error: "",
   };
   if (!args.checkBoard) return base;
@@ -1007,6 +1043,7 @@ async function getBoardStatus(args) {
         : "no currentCall",
       currentCall,
       activeCall: Boolean(currentCall?.active),
+      macHostAuthPath: collectMacHostAuthPath(state),
       updatedAt: normalizedText(state.updatedAt),
     };
   } catch (error) {
@@ -1020,6 +1057,72 @@ async function getBoardStatus(args) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+function collectMacHostAuthPath(state) {
+  for (const text of collectBoardTexts(state)) {
+    const authPath = extractMacHostAuthPath(text);
+    if (authPath) return authPath;
+  }
+  return null;
+}
+
+function collectBoardTexts(state) {
+  const texts = [];
+  const statuses = state && typeof state === "object" && state.statuses && typeof state.statuses === "object"
+    ? state.statuses
+    : {};
+  const statusEntries = Object.entries(statuses);
+  const orderedStatusEntries = [
+    ...statusEntries.filter(([device]) => isMacUnattendedDevice(device)),
+    ...statusEntries.filter(([device]) => !isMacUnattendedDevice(device)),
+  ];
+  for (const [device, entry] of orderedStatusEntries) {
+    if (typeof entry === "string") {
+      texts.push(`${device}: ${entry}`);
+      continue;
+    }
+    if (!entry || typeof entry !== "object") continue;
+    const statusText = [device, entry.status, entry.note, entry.text, entry.message, entry.summary]
+      .map(normalizedText)
+      .filter(Boolean)
+      .join(" ");
+    if (statusText) texts.push(statusText);
+  }
+  const events = Array.isArray(state?.events) ? state.events : [];
+  for (const event of events) {
+    if (typeof event === "string") {
+      texts.push(event);
+      continue;
+    }
+    if (!event || typeof event !== "object") continue;
+    const eventText = [event.device, event.from, event.status, event.note, event.text, event.message, event.summary]
+      .map(normalizedText)
+      .filter(Boolean)
+      .join(" ");
+    if (eventText) texts.push(eventText);
+  }
+  return texts.filter(Boolean);
+}
+
+function isMacUnattendedDevice(device) {
+  return normalizedText(device).toLowerCase() === "mac unattended";
+}
+
+function extractMacHostAuthPath(text) {
+  const source = normalizedText(text);
+  if (!source || !/\bMacHostAuthPath=/i.test(source)) return null;
+  const match = source.match(/\bMacHostAuthPath=([A-Za-z0-9_-]+)\s+reason=([A-Za-z0-9_-]+)\s+mode=([A-Za-z0-9_-]+)\s+next=([A-Za-z0-9_>.-]+)/i);
+  if (!match) return null;
+  const status = match[1];
+  const reason = match[2];
+  const mode = match[3];
+  const next = match[4];
+  if (!allowedMacHostAuthPathStatuses.has(status)) return null;
+  if (!allowedMacHostAuthPathReasons.has(reason)) return null;
+  if (!allowedMacHostAuthPathModes.has(mode)) return null;
+  if (!allowedMacHostAuthPathNext.has(next)) return null;
+  return { status, reason, mode, next };
 }
 
 function buildMismatchMessage(buildDiff) {

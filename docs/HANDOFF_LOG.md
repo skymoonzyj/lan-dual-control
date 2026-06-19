@@ -21,6 +21,36 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac host readiness 第一屏也安全显示当前 Mac host 认证路径。
+完成内容：
+- `check-mac-host-readiness --checkBoard` 现在会从 Agent Link Board 当前状态安全提取 `MacHostAuthPath=`，在 JSON `board.macHostAuthPath` 和 `Mac host readiness:` 摘要里转述。
+- 该字段只接受固定白名单：`prompt-password-required` 等状态、`launch-agent-ephemeral-password` 等原因、`ephemeral/prompt/env-required/none/unknown` 模式，以及 `MacHostStop->MacMaxFpsSafeStart->MacHostMedia` 这条下一步；疑似 `--password`、token 或未知文本不会被提升。
+- 默认不加 `--checkBoard` 时仍不读取通讯板；本轮不认证、不请求或发送密码、不发 call/input/inject，也不停止或启动 host。
+修改文件：
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `scripts/mac/test-mac-host-readiness-board.mjs`
+- `docs/HANDOFF_LOG.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增 readiness `MacHostAuthPath` 用例后，`node scripts/mac/test-mac-host-readiness-board.mjs --timeoutMs 45000` 先失败在 `Mac host readiness auth path JSON should expose MacHostAuthPath status`。
+- 绿灯：同一命令修复后通过。
+- 语法：`node --check scripts/mac/check-mac-host-readiness.mjs`、`node --check scripts/mac/test-mac-host-readiness-board.mjs` 通过。
+- 真实通讯板摘要：`node scripts/mac/check-mac-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary --timeoutMs 20000` 输出 `MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia`。
+- 帮助/安全覆盖：`node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary` 通过，122/122 commands across 61 scripts。
+- `git diff --check` 和冲突标记扫描通过。
+遗留问题：
+- 当前 Mac host 仍是 LaunchAgent/log/60fps 安全联调态；真实注入前仍需用户明确确认正在看 Mac 屏幕，并处理前台安全启动/权限路径。
+下一步建议：
+- Windows 或 Mac 只看 `MacHostReadiness=` 时，也可按 `MacHostAuthPath=prompt-password-required ... next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia` 判断不要等待 LaunchAgent 随机密码，应走用户在场的前台同密流程。
+是否改了协议：否；只补 Mac 端诊断/通讯板摘要字段转述。
+是否需要另一端配合：需要 Windows 端重新读取最新 `MacHostReadiness=` 摘要；暂不需要改 Windows 代码。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac formal E2E 第一屏也明确显示当前 Mac host 认证路径，减少 Windows 端等待 LaunchAgent 随机密码的误判。
 完成内容：
 - `check-mac-formal-e2e-status` 现在会复用 `check-mac-resume-status` 已安全提取的 `board.macHostAuthPath`，在顶层 JSON 输出 `macHostAuthPath`，并在 `Mac formal E2E:` 摘要和 `callText` 中转述 `MacHostAuthPath=`。
