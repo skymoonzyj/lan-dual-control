@@ -17,6 +17,34 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
+本轮目标：让 Mac 恢复总览也输出稳定 `MacHeartbeatFreshness=` 字段。
+完成内容：
+- `check-mac-resume-status --json/--boardSummary` 现在会从后台 heartbeat watcher 的 `lastHeartbeat` 派生 `macHeartbeatFreshness`，并在一行摘要输出 `MacHeartbeatFreshness=fresh|stale|unknown checked=<秒>s codex=<秒>s board=<秒>s checkedAt=<时间>`。
+- freshness 只表示最近心跳摘要是否新鲜，不覆盖原有 `MacHeartbeat` 的 blockers/warnings/reason；最近但 blocked 的心跳仍由原风险字段表达健康状态。
+- 没有最近 heartbeat 或 watcher 不可用时输出 `unknown`，不启动/停止 watcher，不认证，不请求或发送密码，不发 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增断言后，`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000` 失败在缺少 `MacHeartbeatFreshness=`。
+- 绿灯：实现后同一回归通过。
+- `node --check scripts/mac/check-mac-resume-status.mjs`
+- `node --check scripts/mac/test-mac-resume-status.mjs`
+- 现场 `check-mac-resume-status --checkBoard --boardSummary` 已输出 `MacHeartbeatFreshness=fresh ...`，JSON 已输出 `macHeartbeatFreshness.status=fresh`。
+遗留问题：
+- 本轮只增强只读 resume 摘要；不跑真实 Windows host 认证、真实 browser smoke 或输入注入。
+下一步建议：
+- Windows 控制端已经优先消费 `MacHeartbeatFreshness=`；后续看到 stale 时先让 Mac 端复跑 `MacHeartbeatRerun=` 或查 `MacHeartbeatStatus=`，再判断是否需要人工看 Mac Codex 窗口。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
 ## 2026-06-19 Windows Codex
 
 日期：2026-06-19 继续推进

@@ -23,6 +23,7 @@ const defaults = {
   boardSummary: false,
 };
 const formalTargetMaxScreenFps = 60;
+const heartbeatFreshnessStaleMs = 120000;
 const allowedMacEvidenceTokens = new Set([
   "MacClientPageOnline",
   "MacClientDiagnosticsOk",
@@ -174,6 +175,9 @@ Machine-readable JSON fields:
   macHeartbeatWatcher        Read-only background watcher status snapshot from
                              start-mac-heartbeat-watcher --status --json,
                              including lastHeartbeat when log evidence exists.
+  macHeartbeatFreshness      Stable fresh/stale/unknown summary derived from
+                             the background watcher's last heartbeat, exposed
+                             as MacHeartbeatFreshness= in board summaries.
   commands.macClientReverseRehearsalAction
                              Human action for the guarded Mac-controls-Windows
                              reverse-control request rehearsal. Run discovery,
@@ -1149,6 +1153,96 @@ function formatHeartbeatWatcherSummary(watcher) {
   return `heartbeatWatcher=${state} ${heartbeat} ${run}`;
 }
 
+function parseTimeMs(value) {
+  const parsed = Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseNonNegativeMs(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function ageFromIsoMs(value, nowMs) {
+  const parsed = parseTimeMs(value);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, nowMs - parsed);
+}
+
+function ageSeconds(ageMs) {
+  return Number.isFinite(ageMs) ? Math.max(0, Math.round(ageMs / 1000)) : null;
+}
+
+function makeMacHeartbeatFreshness(watcher, nowMs) {
+  const base = {
+    checked: Boolean(watcher?.checked),
+    status: "unknown",
+    reason: "watcher-not-checked",
+    thresholdMs: heartbeatFreshnessStaleMs,
+  };
+  if (!watcher?.checked) return base;
+  if (!watcher.ok) {
+    return {
+      ...base,
+      checked: true,
+      reason: "watcher-unavailable",
+      error: watcher.error || "",
+    };
+  }
+  const heartbeat = watcher.lastHeartbeat?.heartbeat;
+  if (!heartbeat?.found) {
+    return {
+      ...base,
+      checked: true,
+      reason: "last-heartbeat-not-seen",
+    };
+  }
+  const checkedAgeMs = ageFromIsoMs(heartbeat.checkedAt, nowMs);
+  const codexAgeMs = ageFromIsoMs(heartbeat.codexUpdatedAt, nowMs) ?? parseNonNegativeMs(heartbeat.codexAgeMs);
+  const boardAgeMs = ageFromIsoMs(heartbeat.boardUpdatedAt, nowMs);
+  const status = Number.isFinite(checkedAgeMs)
+    ? checkedAgeMs > heartbeatFreshnessStaleMs ? "stale" : "fresh"
+    : "unknown";
+  return {
+    checked: true,
+    status,
+    reason: status === "unknown"
+      ? "checkedAt-missing"
+      : status === "stale"
+        ? "checkedAt-stale"
+        : "checkedAt-fresh",
+    thresholdMs: heartbeatFreshnessStaleMs,
+    checkedAt: heartbeat.checkedAt || "",
+    checkedAgeMs,
+    checkedAgeSeconds: ageSeconds(checkedAgeMs),
+    codexUpdatedAt: heartbeat.codexUpdatedAt || "",
+    codexAgeMs,
+    codexAgeSeconds: ageSeconds(codexAgeMs),
+    boardUpdatedAt: heartbeat.boardUpdatedAt || "",
+    boardAgeMs,
+    boardAgeSeconds: ageSeconds(boardAgeMs),
+    heartbeatStatus: heartbeat.status || "",
+    blockers: heartbeat.blockers || "",
+    warnings: heartbeat.warnings || "",
+  };
+}
+
+function formatAgeForBoard(ageMs) {
+  const seconds = ageSeconds(ageMs);
+  return seconds === null ? "unknown" : `${seconds}s`;
+}
+
+function formatMacHeartbeatFreshnessSummary(freshness) {
+  if (!freshness) return "MacHeartbeatFreshness=unknown checked=unknown codex=unknown board=unknown checkedAt=unknown";
+  return [
+    `MacHeartbeatFreshness=${freshness.status || "unknown"}`,
+    `checked=${formatAgeForBoard(freshness.checkedAgeMs)}`,
+    `codex=${formatAgeForBoard(freshness.codexAgeMs)}`,
+    `board=${formatAgeForBoard(freshness.boardAgeMs)}`,
+    `checkedAt=${freshness.checkedAt || "unknown"}`,
+  ].join(" ");
+}
+
 function buildSuggestedAction(report) {
   if (report.host?.online && report.host?.buildDiff?.severity === "restart-recommended") {
     return {
@@ -1181,12 +1275,13 @@ function formatBoardSummary(report) {
   const findingSummary = formatRecommendationSummary(blockerItems, warningItems);
   const callSummary = formatBoardCallSummary(board);
   const heartbeatWatcherSummary = formatHeartbeatWatcherSummary(macHeartbeatWatcher);
+  const heartbeatFreshnessSummary = formatMacHeartbeatFreshnessSummary(report.macHeartbeatFreshness);
   const macEvidenceSummary = formatMacEvidenceSummary(board);
   const suggestedActionSummary = report.suggestedAction?.boardSummary ? ` ${report.suggestedAction.boardSummary}` : "";
 
   if (!host.online) {
     return [
-      `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${heartbeatWatcherSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
+      `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${heartbeatWatcherSummary}; ${heartbeatFreshnessSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
       macEvidenceSummary,
       `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
       `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
@@ -1228,7 +1323,7 @@ function formatBoardSummary(report) {
   const buildDiff = formatBoardBuildDiff(host.buildDiff);
 
   return [
-    `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}; ${heartbeatWatcherSummary}.`,
+    `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}; ${heartbeatWatcherSummary}; ${heartbeatFreshnessSummary}.`,
     macEvidenceSummary,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedActionSummary}.`,
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
@@ -1372,9 +1467,11 @@ async function main() {
   const board = await getBoardStatus(args);
   const macHeartbeatWatcher = getMacHeartbeatWatcherStatus(args);
   const recommendations = buildRecommendations({ git, host, board, macHeartbeatWatcher, args });
+  const checkedAt = new Date().toISOString();
+  const macHeartbeatFreshness = makeMacHeartbeatFreshness(macHeartbeatWatcher, Date.parse(checkedAt));
   const report = {
     ok: computeOk({ git, host, board, recommendations, args }),
-    checkedAt: new Date().toISOString(),
+    checkedAt,
     args: {
       host: args.host,
       port: args.port,
@@ -1389,6 +1486,7 @@ async function main() {
     git,
     board,
     macHeartbeatWatcher,
+    macHeartbeatFreshness,
     host,
     commands: {
       mediaReadinessBoardSummary: makeMediaReadinessBoardSummaryCommand(args),
