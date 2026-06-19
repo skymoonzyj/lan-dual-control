@@ -19,6 +19,35 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac 控 Windows 根目录双击入口
+开发端：Mac Codex
+本轮目标：给 Mac 端补一个和 Windows `Start-Windows-Control-Mac.cmd` 对称的根目录双击入口，降低白天继续手工验收时的启动门槛。
+完成内容：
+- 新增 `Start-Mac-Control-Windows.command`，双击会调用 `start-mac-client --allowExisting --open`，启动或复用本地 Mac 控制端页面并打开浏览器。
+- 新增 `test-mac-control-windows-entry`，检查入口可执行、调用正确脚本、透传参数，并拒绝密码、系统授权、Windows 脚本、input/inject 等高风险片段。
+- `apps/mac-client/README.md`、状态文档和任务板同步记录该入口。
+修改文件：
+- `Start-Mac-Control-Windows.command`
+- `scripts/mac/test-mac-control-windows-entry.mjs`
+- `apps/mac-client/README.md`
+- `docs/04-task-board.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-control-windows-entry.mjs` 先失败，提示缺少 `Start-Mac-Control-Windows.command`。
+- 绿灯：`node scripts/mac/test-mac-control-windows-entry.mjs`
+- 后续本轮收尾会继续跑语法、bash 语法、Mac client start helper、真实只读 status、diff 和冲突扫描。
+遗留问题：
+- 该入口只打开本地控制页，不做真实 Windows host 连接、认证、反控请求或输入发送；真连仍需用户在页面里手动输入临时密码并操作。
+下一步建议：
+- 白天继续 Mac 控 Windows 手工验收时，Mac 上可先双击根目录 `Start-Mac-Control-Windows.command`，再按页面里的发现、连接和反控授权提示走。
+是否改了协议：否。
+是否需要另一端配合：不需要；Windows 端只需知道 Mac 侧也有根目录可双击入口。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac 手工体验状态一键上板
 开发端：Mac Codex
 本轮目标：让 Mac 端在准备手工体验或收尾同步时，可以把 `MacManualUx=status=ready|waiting` 无密摘要一键发到 Agent Link Board，不再人工拼状态和消息。

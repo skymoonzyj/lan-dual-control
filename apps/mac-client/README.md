@@ -33,6 +33,8 @@
 node scripts/mac/start-mac-client.mjs
 ```
 
+也可以在仓库根目录双击 `Start-Mac-Control-Windows.command`：它会复用或启动本地 Mac 控制端页面并打开浏览器；只打开页面，不连接 Windows host、不认证、不要求或打印密码，也不发送输入事件。
+
 打开：
 
 ```text
@@ -114,6 +116,7 @@ node scripts/mac/check-mac-client-formal-status.mjs --host <Windows IP> --port 4
 ```bash
 node --check apps/mac-client/server.mjs
 node --check apps/mac-client/app.js
+node scripts/mac/test-mac-control-windows-entry.mjs
 node scripts/mac/test-mac-client-start-helper.mjs
 node scripts/mac/test-mac-client-readiness.mjs
 node scripts/mac/test-mac-client-formal-status.mjs
