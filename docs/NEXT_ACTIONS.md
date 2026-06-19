@@ -9,6 +9,7 @@
 1. Mac 端继续验证真实被控服务。
    - 默认使用 `LAN_DUAL_INPUT_MODE=log` 做安全联调。
    - 当前 Mac host 已在 `192.168.31.122:43770` / `127.0.0.1:43770` 运行当前 build `ed937a2`，`inputMode=log`、`maxScreenFps=60`；Mac heartbeat 为 `ok`，`MacHostMedia` 已通过 `passed=12/12 media=ok`，本机 `MacFormalLocalSmoke` 已通过 H.264 89 帧 / 29.54 fps、PCM 151 帧 / 49.87 fps、`input-log` 16/16 ack，且 `injected=false`。下一步可让 Windows 端跑真实发现/正式页面验收，不需要再先处理旧 build。
+   - 最新一轮 `MacFormalE2E` 只读 readiness 为 `ready with warnings`：刷新时 `repo=60a04e1 clean`、`blockers=none`、`runtimeBuild=ed937a2 stale metadata only, hostRuntimeChanges=0`；随后已合并 Windows-only `e23c95c`，未触碰 Mac host runtime。`warnings=video,build,auth` 不是当前阻塞；正式密码仍必须由用户本机隐藏输入，不能通过通讯板或命令参数传递。
    - 在 Windows 端运行 `scripts/windows/test-mac-host.ps1 -Discover -PromptPassword -RequirePassword -RequireH264 -ExpectInputMode log`；已知 IP 且不想扫整段局域网时，加 `-DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770`。
    - 验证通过后，真实输入注入只能在用户明确确认正在看 Mac 屏幕后执行；Mac 端通过启动助手切换时必须带 `--confirmUserWatching`，不要把裸 `LAN_DUAL_INPUT_MODE=inject` 当作日常复跑路径。
 

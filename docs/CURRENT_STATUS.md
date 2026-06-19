@@ -13,6 +13,12 @@
 - 任务入口：`docs/04-task-board.md`
 - 下一步入口：`docs/NEXT_ACTIONS.md`
 
+## Mac 端状态
+
+- Mac host 当前仍在线于 `192.168.31.122:43770` / `127.0.0.1:43770`，运行 `ed937a2`，`inputMode=log`，`maxScreenFps=60`；最新 Mac heartbeat 为 `status=ok`，Mac host 与 Mac client 均在线，Agent Link Board `call=none`，`blockers=none warnings=none`。
+- 本轮 `MacFormalE2E` 只读 readiness 刷新为 `ready with warnings`：刷新时返回 `repo=60a04e1 clean`、`blockers=none`、权限均开启、H.264 能力和系统 PCM 能力可见；随后已合并 Windows-only `e23c95c`，未触碰 Mac host runtime。非阻断提醒为 `warnings=video,build,auth`，其中 build 是 `runtimeBuild=ed937a2 stale metadata only, hostRuntimeChanges=0`，正式密码仍只能用户本机隐藏输入，不能上联络板。
+- 本轮没有认证 WebSocket、没有请求或发送密码、没有发送 `input_event`，也没有执行 `inject`；真实输入注入仍需用户明确确认正在看 Mac 屏幕后另行启动。
+
 ## Windows 端状态
 - Windows host `start-windows-host --status` 与 `check-windows-host-readiness` 现在会在普通输出、JSON 和 `--boardSummary` 里给出 `WindowsSecureAuthPath=`：当当前 host 是随机运行期密码、Mac 真实 browser smoke 无法认证时，不在 Agent Link Board 传密码，也不尝试取回旧密码；现场流程是 Windows 本机前台用 `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port <port> --promptPassword --requirePassword` 重启 host，用户在 Windows 和 Mac 的 `--promptPassword` 提示里输入同一个临时密码，再由 Mac 端复跑 browser smoke。该路径不含 `--password` 参数，不认证 WebSocket、不发送 input/inject，只作为安全操作指引。
 - Windows host readiness 的 JSON 和 `--boardSummary` 现在会输出 `WindowsLanRisk=` / `windowsLanRisks[]`，把 LAN/firewall warning 稳定归类为 `no-firewall-allow`、`public-profile`、`lan-probe-blocked`、`tcp-unreachable`、`bind-address`、`no-listener`、`no-lan-ip`、`firewall-query-failed` 或 `none`；Mac 端或人工看到“发现不到 Windows host / 局域网不通”时，不用翻长日志就能先判断是 Windows 防火墙放行、Public 网络配置、监听地址还是端口可达性问题。该字段只读，不改防火墙、不认证、不发密码/input/inject。

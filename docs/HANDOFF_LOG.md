@@ -50,6 +50,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：刷新 Mac host 正式端到端 readiness 和心跳状态，给白天继续联调留下可核验的一行证据。
+完成内容：
+- 跑 `MacFormalE2E` 只读 readiness：当前 Mac host `192.168.31.122:43770` / `127.0.0.1:43770` 可继续 Windows formal E2E，刷新时返回 `repo=60a04e1 clean`，`runtimeBuild=ed937a2`，`inputMode=log`，`blockers=none`；随后已快进合并 Windows-only `e23c95c`，未触碰 Mac host runtime。
+- readiness 保留非阻断提醒 `warnings=video,build,auth`：发现页当前管线仍显示 `background-jpeg`，运行 build 是 `ed937a2` 但 `hostRuntimeChanges=0` 属于 metadata stale，正式密码仍只能用户本机隐藏输入，不能发联络板。
+- 跑 `MacHeartbeat` 一行摘要：`status=ok`，Mac Codex 状态为 `coding`，Mac host 与 Mac client 均在线，`call=none`，`blockers=none warnings=none`，没有请求密码、没有认证 WebSocket、没有发送 input/inject。
+修改文件：
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/mac/check-mac-formal-e2e-status.mjs --host 127.0.0.1 --port 43770 --boardSummary`
+- `node scripts/mac/check-mac-heartbeat.mjs --host 127.0.0.1 --port 43770 --clientHost 127.0.0.1 --clientPort 5188 --checkBoard --boardSummary`
+- 文档格式检查与冲突标记扫描
+遗留问题：
+- 本轮不发新的 formal E2E call，不运行需要密码的真实 Windows 端验收，也不切 `inject`。
+- 若要把 Supervisor/Windows 端的 formal E2E 成功结果写成正式证据，需要 Windows 端同步具体命令、退出码和日志摘要。
+下一步建议：
+- 白天继续时先看 Agent Link Board；若 Windows 端空闲，可让 Windows 端基于当前 Mac host 继续正式发现/页面验收或补交成功日志。
+- 真实输入注入仍必须等用户明确确认正在看 Mac 屏幕后，再用带 `--confirmUserWatching` 的安全启动路径。
+是否改了协议：否；只记录运行态 readiness/heartbeat 证据。
+是否需要另一端配合：需要 Windows 端补正式 E2E 结果或继续现场验收时，再通过 Agent Link Board 发 call。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：在 Mac host 重启到当前 build 后刷新正式验收前媒体基线和本机短 smoke 证据。
 完成内容：
 - 确认 Mac host 当前运行 `ed937a2`，`inputMode=log`，`maxScreenFps=60`，Mac heartbeat 为 `ok` 且无 warning/blocker。
