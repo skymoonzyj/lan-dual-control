@@ -21,6 +21,34 @@
 
 日期：2026-06-20 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端显示 REAL_TEST_PASS 后手工体验清单。
+完成内容：
+- Windows 控制端 Mac 提醒区、值守证据和复制/导出诊断现在识别 `PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby` 与 `ManualUxChecklist=`。
+- 显示为“已进入手工体验清单：连接/画面/声音/剪贴板/文件/窗口/全屏/原画/复制诊断”，作为证据摘要，不进入风险摘要。
+- 这让窗口最小化或复制诊断时也能直接看到 PASS 后下一步是手工体验测试，不会被旧 formal E2E 复跑路径带偏。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败在 `postPassManualUxAttention` 没有 evidence。
+- 绿灯：同一命令修复后通过。
+遗留问题：
+- 本轮只做 PostPass 手工体验摘要；真实手工体验测试仍需用户在场逐项操作。
+下一步建议：
+- 继续围绕手工体验清单做真实窗口/全屏、声音、剪贴板文件、小窗和复制诊断验收。
+是否改了协议：否。
+是否需要另一端配合：不需要；Mac 端保持 host/client/heartbeat 在线即可。
+
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 继续推进
+开发端：Windows Codex
 本轮目标：记录 Windows 控 Mac formal E2E PASS，并收口尾部 NativeCommandFailed。
 完成内容：
 - 复查通讯板 currentCall，确认要求是 REAL_TEST_PASS 后续：Windows 记录 PASS 并调查尾部错误，不再回旧第二步/diagnostics 循环。

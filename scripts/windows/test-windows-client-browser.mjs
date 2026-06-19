@@ -1546,6 +1546,8 @@ async function verifyDesktopOnlyHostPanel(session) {
         "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
         "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary",
         "WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword",
+        "PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby",
+        "ManualUxChecklist=connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics",
         "run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
         "MacHeartbeat=status=ok; checkedAt=2020-01-01T00:00:00.000Z; device=Mac; codex=ok status=coding updatedAt=2020-01-01T00:00:00.000Z ageMs=999999; macHost=online 127.0.0.1:43770; macClient=online http://127.0.0.1:5188/; board=ok boardUpdatedAt=2020-01-01T00:00:00.000Z; blockers=none warnings=none reason=ok",
         "MacHeartbeat=stale heartbeat missing; Mac host /discovery unreachable ECONNREFUSED; HTTP 502 Bad Gateway",
@@ -1559,6 +1561,24 @@ async function verifyDesktopOnlyHostPanel(session) {
         "MacHeartbeatStop=node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --host 127.0.0.1 --port 43770 --server http://192.168.31.68:17888 --boardSummary",
       ].join("; ");
       const macAlertFindingSummary = "Mac side status alert - Mac Codex | " + macAlertFindingText;
+      const postPassManualUxText = "PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby; ManualUxChecklist=connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
+      const postPassManualUxAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(postPassManualUxText)
+          : null;
+      const postPassManualUxView =
+        typeof macAlertWatcherUiState === "function"
+          ? macAlertWatcherUiState({
+              ok: true,
+              action: "status",
+              running: true,
+              processIds: [1357],
+              server: "http://192.168.31.68:17888",
+              recentAlerts: [{ at: "2026-06-20 01:20:00", title: "Post pass UX", message: postPassManualUxText }],
+              lastAlert: { at: "2026-06-20 01:20:00", title: "Post pass UX", message: postPassManualUxText },
+              message: "Mac alert watcher is running.",
+            }, { available: true, busy: false })
+          : {};
       const watcherRunningView =
         typeof macAlertWatcherUiState === "function"
           ? macAlertWatcherUiState({
@@ -2431,6 +2451,8 @@ async function verifyDesktopOnlyHostPanel(session) {
           watcherRunningView.statusText.includes("Mac Codex 可能卡在重新连接 5/5") &&
           watcherRunningView.statusText.includes("stream disconnected before completion") &&
           watcherRunningView.statusText.includes("请查看 Mac 窗口") &&
+          watcherRunningView.statusText.includes("已进入手工体验清单") &&
+          watcherRunningView.statusText.includes("复制诊断") &&
           watcherStoppedView.running === false &&
           watcherStoppedView.badgeText === "未开启" &&
           watcherStoppedView.toggleText === "开启提醒" &&
@@ -2495,6 +2517,15 @@ async function verifyDesktopOnlyHostPanel(session) {
           cleanMacHostMediaCommandAttention?.summary === "" &&
           Array.isArray(cleanMacHostMediaCommandAttention?.labels) &&
           cleanMacHostMediaCommandAttention.labels.length === 0 &&
+          postPassManualUxAttention?.summary === "" &&
+          postPassManualUxAttention?.evidenceSummary.includes("已进入手工体验清单") &&
+          postPassManualUxAttention?.evidenceSummary.includes("复制诊断") &&
+          Array.isArray(postPassManualUxAttention?.evidenceLabels) &&
+          postPassManualUxAttention.evidenceLabels.length === 1 &&
+          postPassManualUxView.statusText.includes("证据：") &&
+          postPassManualUxView.statusText.includes("已进入手工体验清单") &&
+          postPassManualUxView.statusText.includes("复制诊断") &&
+          !postPassManualUxView.statusText.includes("风险：") &&
           positiveMacValidationAttention?.summary === "" &&
           Array.isArray(positiveMacValidationAttention?.labels) &&
           positiveMacValidationAttention.labels.length === 0 &&
@@ -2682,6 +2713,8 @@ async function verifyDesktopOnlyHostPanel(session) {
         heartbeatCommandCheck,
         cleanMacHostReadinessCommandAttention,
         cleanMacHostMediaCommandAttention,
+        postPassManualUxAttention,
+        postPassManualUxView,
         positiveMacValidationAttention,
         positiveMacValidationView,
         positiveMacFormalE2eAttention,
@@ -5048,6 +5081,8 @@ async function verifyReconnectControls(session) {
         "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
         "WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Grant -DurationMs 30000 -BoardSummary",
         "WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword",
+        "PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby",
+        "ManualUxChecklist=connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics",
         "run-mac-client-formal-smoke preflight ready=false blockers=windows-host warnings=board",
         "MacHeartbeat=status=ok; checkedAt=2020-01-01T00:00:00.000Z; device=Mac; codex=ok status=coding updatedAt=2020-01-01T00:00:00.000Z ageMs=999999; macHost=online 127.0.0.1:43770; macClient=online http://127.0.0.1:5188/; board=ok boardUpdatedAt=2020-01-01T00:00:00.000Z; blockers=none warnings=none reason=ok",
         "MacHeartbeat=stale heartbeat missing; Mac host /discovery unreachable ECONNREFUSED; HTTP 502 Bad Gateway",
@@ -5288,6 +5323,8 @@ async function verifyReconnectControls(session) {
             exportText.includes("Windows 反控授权状态命令已提供") &&
             exportText.includes("Windows 一次性反控授权命令已提供") &&
             exportText.includes("Windows 安全认证路径已提供") &&
+            exportText.includes("已进入手工体验清单") &&
+            exportText.includes("复制诊断") &&
             exportText.includes("Mac 心跳摘要过旧") &&
             exportText.includes("Mac 心跳过期，可能卡住") &&
             exportText.includes("Mac 后台心跳启动命令已提供") &&
@@ -5343,6 +5380,8 @@ async function verifyReconnectControls(session) {
             exportText.includes("WindowsReverseGrantStatus=pwsh") &&
             exportText.includes("WindowsOpenOneTimeReverseGrant=pwsh") &&
             exportText.includes("WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs") &&
+            exportText.includes("PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby") &&
+            exportText.includes("ManualUxChecklist=connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics") &&
             exportText.includes("checkedAt=2020-01-01T00:00:00.000Z") &&
             exportText.includes("MacHeartbeat=stale") &&
             exportText.includes("HTTP 502 Bad Gateway") &&

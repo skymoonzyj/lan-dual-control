@@ -49,6 +49,8 @@
 - 本轮没有认证 WebSocket、没有请求或发送密码、没有发送 `input_event`，也没有执行 `inject`；真实输入注入仍需用户明确确认正在看 Mac 屏幕后另行启动。
 
 ## Windows 端状态
+- 最新 Windows 控制端 PostPass 摘要：Mac 提醒区、值守证据和复制/导出诊断现在会消费 `PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby` 与 `ManualUxChecklist=`，显示“已进入手工体验清单：连接/画面/声音/剪贴板/文件/窗口/全屏/原画/复制诊断”。这只做本地中文摘要，不回旧 formal E2E，不认证、不请求密码、不发 input/inject。
+
 - 最新现场状态：Windows 控 Mac formal E2E 主体已通过；不要再回到旧的 Mac ready、formal E2E 第二步或 diagnostics 循环。Windows 端当前后续任务是记录 `REAL_TEST_PASS` 摘要，并单独排查 OK 之后的 PowerShell/Node 尾部错误：`node.exe 无法运行: 索引超出了数组界限 / NativeCommandFailed`。该尾部错误属于外壳/退出阶段问题，不推翻主体 PASS；排查过程中仍不要发送密码、不要认证无关 WebSocket、不要发 input/inject。
 - 最新 resume-status 小修：合入 Windows 最新 `b51f8a4` 后，Mac 端完整回归发现 `MAC_READY_FOR_REAL_TEST` 明确给出 host/port 时，内部 preflight 仍可能经 discovery 把目标改回本机回环地址。`check-windows-resume-status` 现在在应用 MAC_READY 固定目标后，内部 preflight 不再二次 discovery 覆盖该目标；对应测试改用可达的 `localhost` 验证目标提升，避免 macOS 上 `127.0.0.2` 不可达造成假失败。不改协议、不认证、不发密码/input/inject。
 - Windows resume-status Node 回归现在能在 macOS/Linux 上安全跑过本地 mock 路径：`start-mac-alert-watcher.ps1 -Json` 仍只在 Windows 上强校验 JSON，非 Windows 环境缺少 `powershell.exe` 时要求状态为 `unavailable` 并保留错误说明；这只修正测试断言，不改变 resume/status 生产逻辑、不认证、不请求或发送密码、不发 input/inject。

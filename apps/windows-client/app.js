@@ -3461,6 +3461,32 @@ function parseStandaloneMacEvidenceLabels(text) {
   }
   return [...new Set(labels)];
 }
+const manualUxChecklistLabels = {
+  connection: "连接",
+  video: "画面",
+  audio: "声音",
+  clipboard: "剪贴板",
+  file: "文件",
+  window: "窗口",
+  fullscreen: "全屏",
+  original: "原画",
+  "copy-diagnostics": "复制诊断",
+};
+
+function parsePostPassManualUxEvidenceLabels(text) {
+  const source = String(text || "");
+  const hasPostPassNext = /\bPostPassNext\s*=\s*WindowsRecordPassAndTailError\+MacManualUxStandby\b/i.test(source);
+  const checklistMatch = /\bManualUxChecklist\s*=\s*([^;\r\n]+)/i.exec(source);
+  if (!hasPostPassNext && !checklistMatch) return [];
+  const checklist = String(checklistMatch?.[1] || "")
+    .split(/[,|/\s]+/)
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)
+    .map((item) => manualUxChecklistLabels[item] || "")
+    .filter(Boolean);
+  const suffix = checklist.length ? `：${[...new Set(checklist)].join("/")}` : "";
+  return [`已进入手工体验清单${suffix}`];
+}
 
 function splitMacHeartbeatHealthReasonValues(segment) {
   const reason = extractMacHeartbeatFreshnessValue(segment, "reason");
@@ -3571,6 +3597,7 @@ function parseMacPositiveEvidenceLabels(text) {
   }
   labels.push(...parseMacEvidenceFieldLabels(source));
   labels.push(...parseStandaloneMacEvidenceLabels(source));
+  labels.push(...parsePostPassManualUxEvidenceLabels(source));
   return [...new Set(labels)];
 }
 
