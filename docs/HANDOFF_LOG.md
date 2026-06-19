@@ -19,6 +19,33 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac Unattended 带手工体验入口
+开发端：Mac Codex
+本轮目标：让 Windows 端只看独立 `Mac Unattended` 值守行时，也能直接复制 Mac 手工体验第一屏命令，不必依赖 heartbeat/resume。
+完成内容：
+- `check-mac-unattended-status` JSON `commands` 新增 `macManualUxStatus`，固定为 `node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary`。
+- `Mac unattended status:` board summary 新增 `MacManualUxStatus=`，和 `check-mac-resume-status` / `check-mac-heartbeat` 保持一致。
+- `test-mac-unattended-status` 覆盖 help、JSON、board summary 和命令安全边界，确认该入口不带密码、认证、call、server、JSON 或 input/inject。
+修改文件：
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 20000` 先失败，help 里没有 `commands.macManualUxStatus`。
+- 绿灯：`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 20000`
+- 后续本轮收尾会继续跑语法、Mac help、真实只读 board summary、diff 和冲突扫描。
+遗留问题：
+- 当前通讯板 active call 仍要求只推进低风险无人值守任务；真实手工体验、声音听感和 true input inject 仍需要用户在场确认。
+下一步建议：
+- Windows 侧看最新 `Mac Unattended` 行时，如需进入 PASS 后手工体验准备，直接复制同屏 `MacManualUxStatus=`；不要沿用旧 formal/password 复跑。
+是否改了协议：否。
+是否需要另一端配合：不需要；这是 Mac-only 只读摘要增强。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac heartbeat 带手工体验入口
 开发端：Mac Codex
 本轮目标：让 Windows 端只看最新 `MacHeartbeat=` 时，也能直接复制 Mac 手工体验第一屏命令，不必先找 `MacResumeStatus=`。
