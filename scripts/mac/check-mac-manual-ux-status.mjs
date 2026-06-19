@@ -70,8 +70,11 @@ Description:
   MAC_STANDING_BY_FOR_MANUAL_UX_TEST, and ManualUxChecklist=... from Agent Link
   Board state. A Supervisor usable-entry/manual-UX currentCall is also treated
   as ready so Mac status updates do not accidentally send the team back to the
-  formal E2E path. It does not authenticate, does not ask for or print
-  passwords, does not send user-auth requests, and does not send input events.
+  formal E2E path. A USER_AWAKE/manual-UX currentCall is treated as
+  call-ready and prints ManualUxCallCommand=... so the next user-present step
+  can be coordinated before asking for any action. It does not authenticate,
+  does not ask for or print passwords, does not send user-auth requests, and
+  does not send input events.
 
 Examples:
   node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary
@@ -248,6 +251,40 @@ function isUsableEntryManualUxCall(text) {
   return usableEntry && manualUx;
 }
 
+function isUserAwakeManualUxCall(text) {
+  const source = compactText(text);
+  if (!source) return false;
+  const userAwake = /\bUSER_AWAKE\b|用户已醒|可以授权|可授权任务/i.test(source);
+  const manualUx = /真实体验|体验验收|手工体验|ManualUx|Manual UX|ManualUxTest|用户操作前先发明确\s*call/i.test(source);
+  return userAwake && manualUx;
+}
+
+function quoteCliArg(value) {
+  const text = String(value ?? "");
+  if (/^[A-Za-z0-9_./:=@%+-]+$/.test(text)) return text;
+  return `'${text.replace(/'/g, "'\\''")}'`;
+}
+
+function makeManualUxCallCommand(server) {
+  return [
+    "node",
+    "scripts/codex-link-client.mjs",
+    "--server",
+    server,
+    "call",
+    "--from",
+    "Mac Codex",
+    "--need",
+    "Windows Codex, User",
+    "--goal",
+    "Mac manual UX validation: user-present real experience test",
+    "--expected",
+    "Verify connection, video, audio, clipboard, file, window, fullscreen, original quality, and copy diagnostics.",
+    "--ask",
+    "Please confirm a 5-10 minute user-present manual UX window. Mac will not request credentials on the board or send remote input commands.",
+  ].map(quoteCliArg).join(" ");
+}
+
 function makeReport(state, server) {
   const texts = collectBoardTexts(state);
   const combined = texts.join("\n");
@@ -257,19 +294,22 @@ function makeReport(state, server) {
     manualUxStandby: /\bMAC_STANDING_BY_FOR_MANUAL_UX_TEST\b|\bMacManualUxStandby\b|\bManualUxStandby\b/i.test(combined),
     manualChecklist: /\bManualUxChecklist\s*=/i.test(combined),
     usableEntryManualUxCall: texts.some((text) => isUsableEntryManualUxCall(text)),
+    userAwakeManualUxCall: texts.some((text) => isUserAwakeManualUxCall(text)),
   };
   const ready = signals.postPassNext || signals.manualUxStandby || signals.usableEntryManualUxCall;
+  const callReady = !ready && signals.userAwakeManualUxCall;
+  const status = ready ? "ready" : callReady ? "call-ready" : "waiting";
   const ids = parseManualChecklist(texts);
   const labels = ids.map((id) => manualChecklistLabels[id]);
   const warnings = [];
   const blockers = [];
-  if (!ready) blockers.push("manual-ux-standby-not-detected");
+  if (!ready && !callReady) blockers.push("manual-ux-standby-not-detected");
   if (/MacHeartbeat=status=blocked|MacHeartbeatHealth=blocked|reason=mac-codex-stale/i.test(combined)) {
     warnings.push("mac-heartbeat-attention");
   }
   const report = {
-    ok: ready,
-    status: ready ? "ready" : "waiting",
+    ok: ready || callReady,
+    status,
     server,
     checkedAt: new Date().toISOString(),
     target: firstLanMacHostEndpoint(texts, server),
@@ -285,34 +325,55 @@ function makeReport(state, server) {
       sendInputOrInject: false,
       rerunFormalE2E: false,
     },
+    commands: {
+      manualUxCallCommand: callReady ? makeManualUxCallCommand(server) : null,
+    },
     blockers,
     warnings,
-    nextActions: ready
-      ? [
-          "Keep Mac host, Mac client, and heartbeat online for user-present manual UX testing.",
-          "Validate connection, video, audio, clipboard text/file, window, fullscreen, original quality, and copy diagnostics.",
-          "Record real manual UX findings instead of returning to formal E2E password flow.",
-        ]
-      : [
-          "Wait for PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby, MAC_STANDING_BY_FOR_MANUAL_UX_TEST, or the usable-entry manual UX currentCall on Agent Link Board.",
-          "Do not send user-auth requests or ask for another password while waiting for manual UX standby.",
-        ],
+    nextActions: makeNextActions(status),
   };
   report.boardSummary = makeBoardSummary(report);
   return report;
 }
 
+function makeNextActions(status) {
+  if (status === "ready") {
+    return [
+      "Keep Mac host, Mac client, and heartbeat online for user-present manual UX testing.",
+      "Validate connection, video, audio, clipboard text/file, window, fullscreen, original quality, and copy diagnostics.",
+      "Record real manual UX findings instead of returning to formal E2E password flow.",
+    ];
+  }
+  if (status === "call-ready") {
+    return [
+      "Send the ManualUxCallCommand to Agent Link Board before asking the user or Windows side to act.",
+      "State the goal, safety boundary, and estimated 5-10 minute duration in the call.",
+      "Do not request credentials or send remote input commands from this status command.",
+    ];
+  }
+  return [
+    "Wait for PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby, MAC_STANDING_BY_FOR_MANUAL_UX_TEST, the usable-entry manual UX currentCall, or USER_AWAKE manual UX coordination on Agent Link Board.",
+    "Do not send user-auth requests or ask for another password while waiting for manual UX standby.",
+  ];
+}
+
 function makeBoardSummary(report) {
+  const next = report.status === "ready"
+    ? "ManualUxTest"
+    : report.status === "call-ready"
+      ? "SendManualUxCall"
+      : "WaitForPostPassOrManualUxStandby";
   const parts = [
     `MacManualUx=status=${report.status}`,
     `ManualUxChecklist=${report.manualChecklist.summary}`,
     `ManualUxLabels=${report.manualChecklist.labels.join("/")}`,
     `Signals=${Object.entries(report.signals).filter(([, value]) => value).map(([key]) => key).join(",") || "none"}`,
     `Target=${report.target}`,
-    `Next=${report.status === "ready" ? "ManualUxTest" : "WaitForPostPassOrManualUxStandby"}`,
+    `Next=${next}`,
     "Safety=no-password,no-input-inject",
     "NoFormalE2ERerun=true",
   ];
+  if (report.commands?.manualUxCallCommand) parts.push(`ManualUxCallCommand=${report.commands.manualUxCallCommand}`);
   if (report.blockers.length > 0) parts.push(`blockers=${report.blockers.join(",")}`);
   if (report.warnings.length > 0) parts.push(`warnings=${report.warnings.join(",")}`);
   return parts.join(" ");
@@ -346,11 +407,15 @@ function makeOfflineReport(server, error) {
       manualUxStandby: false,
       manualChecklist: false,
       usableEntryManualUxCall: false,
+      userAwakeManualUxCall: false,
     },
     manualChecklist: {
       summary: defaultManualChecklist.join("/"),
       ids: [...defaultManualChecklist],
       labels: defaultManualChecklist.map((id) => manualChecklistLabels[id]),
+    },
+    commands: {
+      manualUxCallCommand: null,
     },
     safety: {
       requestPassword: false,

@@ -244,6 +244,35 @@ function usableEntryCurrentCallBoardState() {
   };
 }
 
+function userAwakeManualUxCallBoardState() {
+  return {
+    updatedAt: "2026-06-20T10:00:00.000Z",
+    currentCall: {
+      status: "CALLING",
+      goal: "USER_AWAKE: resume authorized tasks and prepare real manual UX validation",
+      from: "Supervisor Codex",
+      need: "Windows Codex, Mac Codex",
+      expected: "Before user action, send an explicit call with goal, safety boundary, and estimated duration.",
+      actual: "User is awake and can authorize; Mac Manual UX is not standing by yet.",
+      ask: "Prepare user-present manual UX validation without sending passwords or input/inject.",
+    },
+    statuses: {
+      "Mac Heartbeat": {
+        status: "online",
+        note: "MacHeartbeat=status=ok; host=192.168.31.122:43770; MacUnattendedHealth=ok reason=ok blockers=none warnings=none",
+        updatedAt: "2026-06-20T09:59:57.000Z",
+      },
+      "Mac Manual UX": {
+        status: "manual-ux-waiting",
+        role: "Mac 端",
+        note: `MacManualUx=status=waiting ManualUxChecklist=${defaultChecklist} Safety=no-password,no-input-inject blockers=manual-ux-standby-not-detected`,
+        updatedAt: "2026-06-20T09:59:58.000Z",
+      },
+    },
+    recentEvents: [],
+  };
+}
+
 function parseJson(stdout, label) {
   try {
     return JSON.parse(stdout);
@@ -408,6 +437,26 @@ async function checkUsableEntryCurrentCallIsReady(args) {
   console.log("[OK] Mac manual UX status treats usable-entry currentCall as manual UX ready");
 }
 
+async function checkUserAwakeCallProducesManualUxCallPlan(args) {
+  await withFakeBoard(userAwakeManualUxCallBoardState(), async (serverUrl) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `USER_AWAKE currentCall JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "USER_AWAKE currentCall JSON");
+    assert(payload.status === "call-ready", `USER_AWAKE currentCall should be call-ready, got ${payload.status}`);
+    assert(payload.signals?.userAwakeManualUxCall === true, "USER_AWAKE currentCall should be detected as a manual UX coordination signal");
+    assert(payload.commands?.manualUxCallCommand?.includes("codex-link-client.mjs"), `USER_AWAKE currentCall should expose manual UX call command: ${JSON.stringify(payload.commands)}`);
+    assert(payload.commands?.manualUxCallCommand?.includes("--server"), "manual UX call command should include board server");
+    assert(payload.commands?.manualUxCallCommand?.includes("--need"), "manual UX call command should include required collaborators");
+    assertIncludes(payload.boardSummary, "MacManualUx=status=call-ready", "USER_AWAKE boardSummary");
+    assertIncludes(payload.boardSummary, "userAwakeManualUxCall", "USER_AWAKE boardSummary");
+    assertIncludes(payload.boardSummary, "Next=SendManualUxCall", "USER_AWAKE boardSummary");
+    assertIncludes(payload.boardSummary, "ManualUxCallCommand=", "USER_AWAKE boardSummary");
+    assertNotIncludes(payload.boardSummary, "blockers=manual-ux-standby-not-detected", "USER_AWAKE boardSummary");
+    assertSecretSafe(JSON.stringify(payload), "USER_AWAKE currentCall JSON");
+  });
+  console.log("[OK] Mac manual UX status turns USER_AWAKE call into a safe manual UX call plan");
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -423,6 +472,7 @@ async function main() {
   await checkPostFailureFailsClosed(args);
   await checkRequireReadyFailure(args);
   await checkUsableEntryCurrentCallIsReady(args);
+  await checkUserAwakeCallProducesManualUxCallPlan(args);
   console.log("[OK] Mac manual UX status checks passed");
 }
 

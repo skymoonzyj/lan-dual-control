@@ -19,6 +19,35 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac 手工体验 USER_AWAKE call 计划
+开发端：Mac Codex
+本轮目标：当前 Agent Link Board 已有 `USER_AWAKE` 呼叫，要求用户操作前先说明目标、安全边界和预计耗时；让 Mac 手工体验第一屏直接给出无密 call 计划，而不是继续只显示 waiting。
+完成内容：
+- `check-mac-manual-ux-status` 新增 `userAwakeManualUxCall` 信号，识别 `USER_AWAKE` / 用户已醒 / 可授权任务 + 真实体验/手工体验验收语义。
+- 当前尚未进入 `ManualUxTest` 但已可发起用户在场验收 call 时，输出 `MacManualUx=status=call-ready`、`Next=SendManualUxCall` 和 `ManualUxCallCommand=`。
+- `--requireReady` 仍只对真正 `ready` 放行，避免把“准备发 call”误当成已经进入手工体验。
+- `ManualUxCallCommand` 只说明目标、协作对象、验收清单、安全边界和预计 5-10 分钟，不包含密码、token、认证、user-auth、input 或 inject。
+修改文件：
+- `scripts/mac/check-mac-manual-ux-status.mjs`
+- `scripts/mac/test-mac-manual-ux-status.mjs`
+- `docs/04-task-board.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-manual-ux-status.mjs --timeoutMs 20000` 先失败，`USER_AWAKE currentCall should be call-ready, got waiting`。
+- 绿灯：同一测试通过，并确认 `Mac manual UX status turns USER_AWAKE call into a safe manual UX call plan`。
+- 真实通讯板只读确认：`node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --boardSummary` 输出 `MacManualUx=status=call-ready`、`Next=SendManualUxCall` 和 `ManualUxCallCommand=`。
+遗留问题：
+- 这一步只生成并可上板 call 计划，不自动覆盖当前 call，也不执行真实用户操作；真正手工体验仍需要用户和 Windows 端确认后再开始。
+下一步建议：
+- 若用户准备配合，先复制 `ManualUxCallCommand=` 到通讯板发起明确 call；收到确认后再开始连接/画面/声音/剪贴板/文件/窗口/全屏/原画/复制诊断验收。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端读取新的 `MacManualUx=status=call-ready` / `ManualUxCallCommand=`；无须修改 Windows 端代码。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 DAILY_ITEM 新 W/M/C 编号对齐
 开发端：Mac Codex
 本轮目标：响应 Agent Link Board 新编号规则，把 `codex-link-daily-items` 从旧 `N1-N6` 输出切到 `W1/W2/W3/M1/M2/C1`，避免后续两端上报只写旧编号。
