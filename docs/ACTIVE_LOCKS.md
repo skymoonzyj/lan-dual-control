@@ -15,7 +15,6 @@
 
 | 端 | 文件或目录 | 原因 | 开始时间 | 状态 |
 | --- | --- | --- | --- | --- |
-| Windows Codex | `scripts/mac/check-mac-manual-ux-status.mjs`, `scripts/mac/test-mac-manual-ux-status.mjs`, `scripts/windows/check-windows-resume-status.mjs`, `scripts/windows/test-windows-resume-status.mjs`, `scripts/windows/test-windows-resume-status-powershell.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Mac manual UX 确认防误触：固定确认短标签必须位于确认正文开头；推送预告/说明文字里只是提到确认短标签不会触发 `MacManualUx=status=ready`。Windows ack 正文保持可识别。不认证、不请求或发送密码、不发 input/inject。 |
 
 
 ## 高冲突区域
@@ -33,6 +32,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `scripts/windows/check-windows-resume-status.mjs`, `scripts/windows/test-windows-resume-status.mjs`, `scripts/windows/test-windows-resume-status-powershell.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Windows 恢复总览消费 `MacManualUxGate=` / `ManualUxGate=` / `gate=`，在 `MacManualUx` 摘要和 JSON 中显示 gate；gate 未解除时阻止 `MacManualUxAck` 发送，timeout 仍优先要求 Mac 重新确认 call。不认证、不请求或发送密码、不发 input/inject。 |
 | Mac Codex | `scripts/mac/check-mac-manual-ux-status.mjs`, `scripts/mac/test-mac-manual-ux-status.mjs`, `scripts/windows/check-windows-resume-status.mjs`, `scripts/windows/test-windows-resume-status.mjs`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Mac manual UX call 摘要新增 `ManualUxCallAgeMs=` / `ManualUxCallRemainingMs=` / `ManualUxCallOverdueMs=`；Windows resume 安全消费并规范化为 `callAgeMs=` / `callRemainingMs=` / `callOverdueMs=`；超时后的确认不再让 MacManualUx 进入 ready。只读摘要扩展，不认证、不请求密码、不发 input/inject。 |
 | Windows Codex | `scripts/windows/check-windows-resume-status.mjs`, `scripts/windows/test-windows-resume-status.mjs`, `scripts/windows/test-windows-resume-status-powershell.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Windows 恢复总览只读消费 `MacManualUx=` 安全摘要本体：JSON、普通输出和 `--boardSummary` 显示状态、清单、目标、next/safety/noFormalE2ERerun、ManualUxCall 计时状态和 callCommand 是否存在；拒绝密码/secret/token、未知状态或非白名单候选。不透传原始 call 命令、不运行 Mac 脚本、不认证、不请求密码、不发 input/inject。 |
 | Windows Codex | `scripts/windows/check-windows-resume-status.mjs`, `scripts/windows/check-windows-resume-status.ps1`, `scripts/windows/test-windows-resume-status.mjs`, `scripts/windows/test-windows-resume-status-powershell.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Windows 恢复总览生成 `MacManualUxAck=`：active/near-timeout manual UX call 输出带 `MAC_MANUAL_UX_CONFIRMED` / `WINDOWS_MANUAL_UX_ACK` 的无密 Windows/User 确认命令，显式 `--sendManualUxAck` / `-SendManualUxAck` 才发送；timeout/reconfirm fail-closed 并提示 Mac 重新确认。不认证、不请求或发送密码、不发 input/inject。 |

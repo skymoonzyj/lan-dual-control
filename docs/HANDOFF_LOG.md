@@ -19,6 +19,35 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 消费 Mac manual UX gate
+开发端：Windows Codex
+本轮目标：让 Windows resume/status 看懂 Mac manual UX gate，并在 Windows push/commit gate 未解除时阻止误发手工体验确认。
+完成内容：
+- `check-windows-resume-status --checkBoard` 现在安全解析 `MacManualUxGate=` / `ManualUxGate=` / `gate=`，在 `MacManualUx=` 摘要和 JSON `board.macManualUx.gate` 中显示 gate。
+- `--sendManualUxAck --json` 与 PowerShell `-SendManualUxAck -Json` 遇到未超时但 gate 存在时 fail-closed，不向 Agent Link Board 发送确认。
+- 如果 call 已 timeout，仍优先输出 `reason=manual-ux-call-timeout`，提示 Mac 重新确认 call。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：Node / PowerShell resume 回归先因 `MacManualUx` 摘要缺 gate 失败。
+- 绿灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 绿灯：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- 真实手工体验仍需用户在场；看到 gate 时先等 Windows 推送/提交窗口结束，再重新跑 resume/status。
+下一步建议：
+- 白天开工先看 `MacManualUx=` / `MacManualUxAck=`；若 gate 仍在，不要发确认；若 timeout，让 Mac 重新发起或确认 call。
+是否改了协议：否，只是安全消费 Mac 已上板的 gate 字段并收紧 Windows ack 发送条件。
+是否需要另一端配合：Mac 端拉取后即可看到 Windows resume/status 对 gate 的解释；真实体验仍需 Mac 端重新确认窗口。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Mac manual UX 确认防误触
 开发端：Windows Codex
 本轮目标：防止推送说明或文档说明里提到确认短标签时，被 Mac 状态脚本误认为 Windows/User 已确认手工体验窗口。

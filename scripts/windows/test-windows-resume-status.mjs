@@ -1404,10 +1404,10 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const macManualUxStatusCommand = "node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary";
   const macManualUxReconfirmCommand = "node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --reconfirmCall --json";
   const macManualUxChecklist = "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
-  const macManualUxSummary = `status=calling checklist=${macManualUxChecklist} labels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 signals=manualUxCallInProgress target=192.168.31.122:43770 next=ReconfirmManualUxCall safety=no-password,no-input-inject noFormalE2ERerun=true manualUxCall=timeout callAgeMs=660000 callOverdueMs=60000 callCommand=absent blockers=none warnings=manual-ux-call-timeout`;
+  const macManualUxSummary = `status=calling checklist=${macManualUxChecklist} labels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 signals=manualUxCallInProgress target=192.168.31.122:43770 next=ReconfirmManualUxCall safety=no-password,no-input-inject noFormalE2ERerun=true manualUxCall=timeout callAgeMs=660000 callOverdueMs=60000 gate=wait-windows-codex-push callCommand=absent blockers=none warnings=manual-ux-call-timeout`;
   const macManualUxAckTimeoutSummary = "status=blocked reason=manual-ux-call-timeout next=AskMacReconfirmManualUxCall";
   const macManualUxBoardText = `MacManualUx=status=call-ready ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=userAwakeManualUx Target=192.168.31.122:43770 Next=SendManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxCallCommand=node scripts/codex-link-client.mjs --server http://192.168.31.68:17888 call --from MacCodex --need WindowsCodex`;
-  const macManualUxCallingBoardText = `MacManualUx=status=calling ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=manualUxCallInProgress Target=192.168.31.122:43770 Next=ReconfirmManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxReconfirmCommand=${macManualUxReconfirmCommand} ManualUxCall=timeout ManualUxCallAgeMs=660000 ManualUxCallOverdueMs=60000 warnings=manual-ux-call-timeout`;
+  const macManualUxCallingBoardText = `MacManualUx=status=calling ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=manualUxCallInProgress Target=192.168.31.122:43770 Next=ReconfirmManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxReconfirmCommand=${macManualUxReconfirmCommand} ManualUxCall=timeout ManualUxCallAgeMs=660000 ManualUxCallOverdueMs=60000 MacManualUxGate=wait-windows-codex-push warnings=manual-ux-call-timeout`;
   const macRemoteAudioSummary = "status=plan-only capture=system-pcm-does-not-mute-local remoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle recommended=product-toggle-with-explicit-consent safety=no-volume-change,no password/input/inject";
   const macRemoteAudioBoardText = "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject.";
   const macInputSafetySummary = "status=plan-only default=log realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe safety=no-password,no-input-events,no-inject";
@@ -1718,6 +1718,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board.macManualUx.callAgeMs === 660000, "MacManualUx call age mismatch");
       assert(payload.board.macManualUx.callOverdueMs === 60000, "MacManualUx call overdue mismatch");
       assert(payload.board.macManualUx.callRemainingMs == null, "MacManualUx timeout should not expose remaining time");
+      assert(payload.board.macManualUx.gate === "wait-windows-codex-push", "MacManualUx gate mismatch");
       assert(payload.board.macManualUx.warnings?.includes("manual-ux-call-timeout"), "MacManualUx timeout warning should be preserved");
       assert(payload.board.macManualUx.callCommandPresent === false, "MacManualUx call command should be absent while call is already active");
       assert(payload.board.macManualUx.rejectedCount >= 2, "unsafe MacManualUx summaries should be rejected");
@@ -2421,6 +2422,46 @@ async function checkSendManualUxAck(args) {
     });
   });
 }
+async function checkSendManualUxAckBlockedByGate(args) {
+  const macManualUxChecklist = "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
+  const macManualUxActiveText = `MacManualUx=status=calling ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=manualUxCallInProgress Target=192.168.31.122:43770 Next=WaitForManualUxConfirmation Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxCall=active MacManualUxGate=wait-windows-codex-push warnings=windows-codex-pushing`;
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--sendManualUxAck",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode !== 0, "sendManualUxAck should fail while MacManualUxGate is active");
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.macManualUx?.gate === "wait-windows-codex-push", "gated MacManualUx should be parsed");
+      assert(payload.board?.macManualUxAck?.status === "blocked", "gated MacManualUx should block sendManualUxAck");
+      assert(payload.board.macManualUxAck.reason === "mac-manual-ux-gated", "gated MacManualUx block reason mismatch");
+      assert(payload.sentManualUxAck?.requested === true, "gated sendManualUxAck should be requested");
+      assert(payload.sentManualUxAck?.ok === false, "gated sendManualUxAck should fail");
+      assert(board.messages.length === 0, `gated ManualUxAck should not post a board message, got ${board.messages.length}`);
+      console.log("[OK] Windows resume status blocks ManualUxAck while MacManualUxGate is active");
+    }, {
+      currentCall: manualUxCallForWindows(),
+      statuses: {
+        "Mac Codex": {
+          role: "Mac 端",
+          status: "calling",
+          note: macManualUxActiveText,
+        },
+      },
+    });
+  });
+}
 
 async function checkSendManualUxAckTimeout(args) {
   const macManualUxChecklist = "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
@@ -2584,6 +2625,7 @@ async function main() {
   await checkSendAgentCallAck(args);
   await checkSendAgentCallAckWithoutReadyCall(args);
   await checkSendManualUxAck(args);
+  await checkSendManualUxAckBlockedByGate(args);
   await checkSendManualUxAckTimeout(args);
   await checkBoardMacReadyTargetSelection(args);
   await checkOfflineJson(args);

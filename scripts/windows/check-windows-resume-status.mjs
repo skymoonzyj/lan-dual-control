@@ -1662,6 +1662,7 @@ const macManualUxChecklist = "connection/video/audio/clipboard/file/window/fulls
 const macManualUxAllowedNext = new Set(["ManualUxTest", "WaitForPostPassOrManualUxStandby", "SendManualUxCall", "WaitForManualUxConfirmation", "ReconfirmManualUxCall"]);
 const macManualUxAllowedSafety = new Set(["no-password", "no-input-inject"]);
 const macManualUxAllowedCallStates = new Set(["active", "near-timeout", "timeout"]);
+const macManualUxAllowedGates = new Set(["clear", "wait-windows-codex-push", "wait-windows-codex-commit"]);
 const macManualUxSecretPattern = /(?:^|[\s,;])(?:password|secret|passwd|token|apikey|api-key|credential|cookie|pwd)\s*[:=]|--(?:password|token|secret|passwd|pwd)\b|密码|密钥|口令|令牌/i;
 
 function splitMacManualUxSegments(text) {
@@ -1719,6 +1720,7 @@ function parseMacManualUxSegment(segment, source = "text") {
   const callAgeMs = parseOptionalMacManualUxMs(value, "ManualUxCallAgeMs", "callAgeMs");
   const callRemainingMs = parseOptionalMacManualUxMs(value, "ManualUxCallRemainingMs", "callRemainingMs");
   const callOverdueMs = parseOptionalMacManualUxMs(value, "ManualUxCallOverdueMs", "callOverdueMs");
+  const gate = extractMacManualUxField(value, "MacManualUxGate") || extractMacManualUxField(value, "ManualUxGate") || extractMacManualUxField(value, "gate");
   const blockersRaw = extractMacManualUxField(value, "blockers") || "none";
   const warningsRaw = extractMacManualUxField(value, "warnings") || "none";
   const safety = safetyRaw.split(",").map((item) => item.trim()).filter(Boolean);
@@ -1737,6 +1739,7 @@ function parseMacManualUxSegment(segment, source = "text") {
     !validSafety ||
     noFormalE2ERerunRaw !== "true" ||
     (manualUxCall && !macManualUxAllowedCallStates.has(manualUxCall)) ||
+    (gate && !macManualUxAllowedGates.has(gate)) ||
     !callAgeMs.ok ||
     !callRemainingMs.ok ||
     !callOverdueMs.ok ||
@@ -1759,6 +1762,7 @@ function parseMacManualUxSegment(segment, source = "text") {
     ...(callAgeMs.value != null ? [`callAgeMs=${callAgeMs.value}`] : []),
     ...(callRemainingMs.value != null ? [`callRemainingMs=${callRemainingMs.value}`] : []),
     ...(callOverdueMs.value != null ? [`callOverdueMs=${callOverdueMs.value}`] : []),
+    ...(gate && gate !== "clear" ? [`gate=${gate}`] : []),
     callCommandPresent ? "callCommand=present" : "callCommand=absent",
     `blockers=${blockers.values.length ? blockers.values.join(",") : "none"}`,
     `warnings=${warnings.values.length ? warnings.values.join(",") : "none"}`,
@@ -1778,6 +1782,7 @@ function parseMacManualUxSegment(segment, source = "text") {
     callAgeMs: callAgeMs.value,
     callRemainingMs: callRemainingMs.value,
     callOverdueMs: callOverdueMs.value,
+    gate: gate || "",
     callCommandPresent,
     blockers: blockers.values,
     warnings: warnings.values,
@@ -3735,6 +3740,7 @@ function makeMacManualUxAck(args, macManualUx) {
   }
 
   const warnings = Array.isArray(macManualUx.warnings) ? macManualUx.warnings : [];
+
   const timedOut = macManualUx.manualUxCall === "timeout" ||
     macManualUx.next === "ReconfirmManualUxCall" ||
     warnings.includes("manual-ux-call-timeout");
@@ -3745,6 +3751,16 @@ function makeMacManualUxAck(args, macManualUx) {
       reason: "manual-ux-call-timeout",
       next: "AskMacReconfirmManualUxCall",
       summary: "status=blocked reason=manual-ux-call-timeout next=AskMacReconfirmManualUxCall",
+      command: "",
+    };
+  }
+  if (macManualUx.gate && macManualUx.gate !== "clear") {
+    return {
+      found: true,
+      status: "blocked",
+      reason: "mac-manual-ux-gated",
+      next: "WaitForManualUxGateClear",
+      summary: `status=blocked reason=mac-manual-ux-gated gate=${macManualUx.gate} next=WaitForManualUxGateClear`,
       command: "",
     };
   }
