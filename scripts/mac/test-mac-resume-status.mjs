@@ -168,6 +168,8 @@ function assertBoardSummaryShape(text, label) {
   assert(/Mac resume:/.test(text), `${label} should start with Mac resume summary`);
   assert(/repo=/.test(text), `${label} should include repo state`);
   assert(/heartbeatWatcher=/.test(text), `${label} should include Mac heartbeat watcher status`);
+  assert(/heartbeatWatcher=[^;]*server=/.test(text), `${label} should include Mac heartbeat watcher server`);
+  assert(/heartbeatWatcher=[^;]*configMismatch=/.test(text), `${label} should include Mac heartbeat watcher configuration mismatch state`);
   assert(/lastHeartbeat=/.test(text), `${label} should include the last Mac heartbeat watcher observation`);
   assert(/MacHeartbeatFreshness=/.test(text), `${label} should include stable Mac heartbeat freshness`);
   assert(/MacHeartbeatHealth=/.test(text), `${label} should include stable Mac heartbeat health`);
@@ -896,6 +898,8 @@ function checkOnlineJson(args) {
   assert(payload.host.buildDiff && typeof payload.host.buildDiff === "object", "online payload should include buildDiff");
   assert(payload.macHeartbeatWatcher?.checked === true, "online payload should include Mac heartbeat watcher status");
   assert(typeof payload.macHeartbeatWatcher.running === "boolean", "online payload should include Mac heartbeat watcher running flag");
+  assert(typeof payload.macHeartbeatWatcher.server === "string" && payload.macHeartbeatWatcher.server.length > 0, "online payload should include Mac heartbeat watcher server label");
+  assert(Array.isArray(payload.macHeartbeatWatcher.configurationMismatches), "online payload should include Mac heartbeat watcher configuration mismatches");
   assert(typeof payload.macHeartbeatWatcher.refreshUnattended === "boolean", "online payload should include Mac heartbeat watcher refreshUnattended flag");
   assert(["fresh", "stale", "unknown"].includes(payload.macHeartbeatFreshness?.status), "online payload should include structured Mac heartbeat freshness");
   assert(["ok", "blocked", "warning", "unknown"].includes(payload.macHeartbeatHealth?.status), "online payload should include structured Mac heartbeat health");

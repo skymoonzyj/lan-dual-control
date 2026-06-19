@@ -1351,6 +1351,8 @@ function getMacHeartbeatWatcherStatus(args) {
       lastHeartbeat: payload.lastHeartbeat || null,
       files: payload.files || {},
       commands: payload.commands || {},
+      server: typeof payload.watcher?.server === "string" ? payload.watcher.server : "",
+      configurationMismatches: Array.isArray(payload.configurationMismatches) ? payload.configurationMismatches : [],
       refreshUnattended: Boolean(payload.watcher?.refreshUnattended),
       message: normalizedText(payload.message),
     };
@@ -1490,7 +1492,9 @@ function formatHeartbeatWatcherSummary(watcher) {
   const run = watcher.lastHeartbeat?.watcherRun?.found
     ? `lastRun=${watcher.lastHeartbeat.watcherRun.run || "unknown"} post=${watcher.lastHeartbeat.watcherRun.post || "unknown"}`
     : "lastRun=not-seen";
-  return `heartbeatWatcher=${state} ${heartbeat} ${run}`;
+  const server = `server=${watcher.server || "unknown"}`;
+  const configMismatch = `configMismatch=${watcher.configurationMismatches?.length ? watcher.configurationMismatches.join(",") : "none"}`;
+  return `heartbeatWatcher=${state} ${server} ${configMismatch} ${heartbeat} ${run}`;
 }
 
 function formatMacHeartbeatRefreshSummary(watcher) {

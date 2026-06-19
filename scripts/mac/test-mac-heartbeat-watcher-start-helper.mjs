@@ -154,6 +154,8 @@ function assertStartedPayload(payload, label) {
   assert(payload.watcher?.device === "Mac Heartbeat", `${label} should use Mac Heartbeat device`);
   assert(payload.watcher?.role === "Mac watchdog", `${label} should use Mac watchdog role`);
   assert(payload.watcher?.intervalMs === 1234, `${label} should preserve interval`);
+  assert(typeof payload.watcher?.server === "string" && payload.watcher.server.length > 0, `${label} should include a safe server label`);
+  assert(!payload.watcher.server.includes("fake-board-token"), `${label} should redact token-like server labels`);
   assert(payload.watcher?.refreshUnattended === false, `${label} should not refresh Mac Unattended by default`);
   assert(payload.lastHeartbeat?.heartbeat?.found === true, `${label} should include the last heartbeat summary from stdout`);
   assert(payload.lastHeartbeat?.heartbeat?.status === "ok", `${label} should include last heartbeat status`);
@@ -239,6 +241,8 @@ function checkStartStatusStop(args) {
     assert(!summary.includes("\n"), "boardSummary should be one line");
     assertIncludes(summary, "Mac heartbeat watcher:", "boardSummary");
     assertIncludes(summary, "device=Mac Heartbeat", "boardSummary");
+    assertIncludes(summary, "server=", "boardSummary");
+    assertNotIncludes(summary, "fake-board-token", "boardSummary should not expose token-like server labels");
     assertIncludes(summary, "lastHeartbeat=status=ok checkedAt=2026-06-18T10:00:00.000Z reason=ok codexAgeMs=1000", "boardSummary");
     assertIncludes(summary, "lastRun=1 post=posted", "boardSummary");
     assertIncludes(summary, "refreshUnattended=false", "boardSummary");
@@ -335,6 +339,77 @@ function checkStartWarnsWhenReusingDifferentRefreshMode(args) {
   print("OK", "Start helper warns when requested refresh mode differs from reused watcher");
 }
 
+function checkStartWarnsWhenReusingDifferentServer(args) {
+  const tmp = mkdtempSync(join(tmpdir(), "lan-dual-heartbeat-start-"));
+  const fake = makeFakeWatcher(tmp);
+  const paths = pathsFor(tmp);
+  const env = {
+    LAN_DUAL_MAC_HEARTBEAT_WATCHER_SCRIPT: fake.path,
+  };
+  const firstServerArgs = [
+    "--pidFile",
+    paths.pidFile,
+    "--metaFile",
+    paths.metaFile,
+    "--outLog",
+    paths.outLog,
+    "--errLog",
+    paths.errLog,
+    "--stateFile",
+    paths.stateFile,
+    "--server",
+    "http://board-a.invalid:17888",
+    "--intervalMs",
+    "1234",
+    "--timeoutMs",
+    "1200",
+  ];
+  const secondServerArgs = [
+    "--pidFile",
+    paths.pidFile,
+    "--metaFile",
+    paths.metaFile,
+    "--outLog",
+    paths.outLog,
+    "--errLog",
+    paths.errLog,
+    "--stateFile",
+    paths.stateFile,
+    "--server",
+    "http://board-b.invalid:17888",
+    "--intervalMs",
+    "1234",
+    "--timeoutMs",
+    "1200",
+  ];
+  try {
+    const first = run(["--json", ...firstServerArgs], args, env);
+    const firstPayload = parseJson(first.stdout, "server A start JSON");
+    assert(first.status === 0, `server A start should pass.\n${first.stdout}\n${first.stderr}`);
+    assert(firstPayload.watcher?.server === "http://board-a.invalid:17888", "server A start should expose safe server label");
+
+    const startWithDifferentServer = run(["--json", ...secondServerArgs], args, env);
+    const payload = parseJson(startWithDifferentServer.stdout, "server mismatch JSON");
+    assert(startWithDifferentServer.status === 0, `start with different server against existing watcher should pass.\n${startWithDifferentServer.stdout}\n${startWithDifferentServer.stderr}`);
+    assert(payload.reused === true, "server mismatch should keep the existing watcher running");
+    assert(payload.watcher?.server === "http://board-a.invalid:17888", "server mismatch JSON should report the running watcher server");
+    assert(payload.configurationMismatches?.includes("server"), "server mismatch JSON should name server mismatch");
+    assertIncludes(payload.message || "", "restart", "server mismatch message should guide restart");
+    assertNoSecrets(startWithDifferentServer, "server mismatch output");
+
+    const boardSummary = run(["--boardSummary", ...secondServerArgs], args, env);
+    assert(boardSummary.status === 0, `server mismatch boardSummary should pass.\n${boardSummary.stdout}\n${boardSummary.stderr}`);
+    assertIncludes(boardSummary.stdout, "server=http://board-a.invalid:17888", "server mismatch boardSummary should show the running server");
+    assertIncludes(boardSummary.stdout, "configMismatch=server", "server mismatch boardSummary");
+    assertIncludes(boardSummary.stdout, "RefreshRestart=node scripts/mac/start-mac-heartbeat-watcher.mjs --restart --refreshUnattended --boardSummary", "server mismatch boardSummary restart guidance");
+    assertNoSecrets(boardSummary, "server mismatch boardSummary output");
+  } finally {
+    run(["--stop", ...firstServerArgs], args, env);
+    rmSync(tmp, { recursive: true, force: true });
+  }
+  print("OK", "Start helper warns when requested server differs from reused watcher");
+}
+
 function checkRestart(args) {
   const tmp = mkdtempSync(join(tmpdir(), "lan-dual-heartbeat-start-"));
   const fake = makeFakeWatcher(tmp);
@@ -374,6 +449,7 @@ function main() {
   checkStartStatusStop(args);
   checkStartWithUnattendedRefresh(args);
   checkStartWarnsWhenReusingDifferentRefreshMode(args);
+  checkStartWarnsWhenReusingDifferentServer(args);
   checkRestart(args);
   print("OK", "Mac heartbeat watcher start helper self-test passed");
 }

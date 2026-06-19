@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   closeSync,
   existsSync,
@@ -210,6 +211,29 @@ function safeSnippet(text, maxLength = 260) {
     .slice(0, maxLength);
 }
 
+function safeServerLabel(value) {
+  const text = String(value || "").trim().replace(/\/+$/, "");
+  if (!text) return "";
+  try {
+    const url = new URL(text);
+    const sensitive = [url.username, url.password, url.hostname].some((part) => /(password|passwd|pwd|token|secret|key)/i.test(part || ""));
+    if (sensitive) return `${url.protocol}//<redacted-server>${url.port ? `:${url.port}` : ""}`;
+    url.username = "";
+    url.password = "";
+    url.pathname = "";
+    url.search = "";
+    url.hash = "";
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return /(password|passwd|pwd|token|secret|key)/i.test(text) ? "<redacted-server>" : safeSnippet(text, 120);
+  }
+}
+
+function serverKey(value) {
+  const text = String(value || "").trim().replace(/\/+$/, "");
+  return createHash("sha256").update(text).digest("hex").slice(0, 16);
+}
+
 function readTextTail(path, maxChars = 128 * 1024) {
   try {
     const text = readFileSync(path, "utf8");
@@ -395,6 +419,8 @@ async function startWatcher(args) {
     clientPort: args.clientPort,
     stateFile: toDisplayPath(args.stateFile),
     codexTextFile: args.codexTextFile ? toDisplayPath(args.codexTextFile) : "",
+    server: safeServerLabel(args.server),
+    serverKey: serverKey(args.server),
     refreshUnattended: args.refreshUnattended,
     device: "Mac Heartbeat",
     role: "Mac watchdog",
@@ -486,6 +512,14 @@ function findConfigurationMismatches(args, status) {
   ) {
     mismatches.push("refreshUnattended");
   }
+  if (
+    status.running &&
+    typeof status.meta?.serverKey === "string" &&
+    status.meta.serverKey &&
+    status.meta.serverKey !== serverKey(args.server)
+  ) {
+    mismatches.push("server");
+  }
   return mismatches;
 }
 
@@ -518,6 +552,9 @@ function makeReport(action, args, details) {
       port: args.port,
       clientHost: args.clientHost,
       clientPort: args.clientPort,
+      server: typeof status.meta?.server === "string" && status.meta.server
+        ? status.meta.server
+        : safeServerLabel(args.server),
       stateFile: toDisplayPath(args.stateFile),
       codexTextFile: args.codexTextFile ? toDisplayPath(args.codexTextFile) : "",
       refreshUnattended,
@@ -561,7 +598,7 @@ function makeBoardSummary(report) {
     ? `lastRun=${report.lastHeartbeat.watcherRun.run || "unknown"} post=${report.lastHeartbeat.watcherRun.post || "unknown"}`
     : "lastRun=not-seen";
   return [
-    `Mac heartbeat watcher: action=${report.action} ok=${report.ok ? "true" : "false"} ${state}; device=Mac Heartbeat; intervalMs=${report.watcher.intervalMs}; refreshUnattended=${report.watcher.refreshUnattended ? "true" : "false"}; ${heartbeat}; ${watcherRun}.`,
+    `Mac heartbeat watcher: action=${report.action} ok=${report.ok ? "true" : "false"} ${state}; device=Mac Heartbeat; server=${report.watcher.server || "unknown"}; intervalMs=${report.watcher.intervalMs}; refreshUnattended=${report.watcher.refreshUnattended ? "true" : "false"}; ${heartbeat}; ${watcherRun}.`,
     configMismatch,
     `Status=${report.commands.status}.`,
     `Start=${report.commands.start}.`,
@@ -578,7 +615,7 @@ function printHuman(report) {
   console.log(`[${report.ok ? "OK" : "FAIL"}] ${report.message}`);
   console.log(`[INFO] Action: ${report.action}`);
   console.log(`[INFO] Running: ${report.running ? `yes pid=${report.pid}` : "no"}`);
-  console.log(`[INFO] Device: ${report.watcher.device}; role=${report.watcher.role}; intervalMs=${report.watcher.intervalMs}`);
+  console.log(`[INFO] Device: ${report.watcher.device}; role=${report.watcher.role}; server=${report.watcher.server || "unknown"}; intervalMs=${report.watcher.intervalMs}`);
   console.log(`[INFO] Refresh Mac Unattended: ${report.watcher.refreshUnattended ? "yes" : "no"}`);
   console.log(`[INFO] PID file: ${report.files.pidFile}`);
   console.log(`[INFO] Output log: ${report.files.outLog}`);

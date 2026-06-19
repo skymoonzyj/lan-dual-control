@@ -1,6 +1,6 @@
 # 当前开发状态
 
-最后更新：2026-06-19
+最后更新：2026-06-20
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
@@ -15,6 +15,7 @@
 
 ## Mac 端状态
 
+- 最新值守修复：`start-mac-heartbeat-watcher --status --json/--boardSummary` 现在会输出安全脱敏后的 `watcher.server` / `server=`，并在复用中的 watcher 与当前 `--server` 不一致时输出 `configurationMismatches=["server"]` / `configMismatch=server`，提示用 `RefreshRestart=` 重启到正确通讯板；`check-mac-resume-status --json/--boardSummary` 也会在 `macHeartbeatWatcher` / `heartbeatWatcher=` 第一屏透传同一 `server` 和 `configMismatch`。真实 Mac 已重启 heartbeat watcher，当前 `server=http://192.168.31.68:17888`、`lastHeartbeat=status=ok`、`lastRun=1 post=posted`、`refreshUnattended=true`、`configMismatch=none`；这只重启心跳上板进程，不停止 Mac host、不认证、不请求或发送密码、不发 input/inject。
 - 最新现场状态：Mac 已执行 Windows 控 Mac 真实测试前置动作。旧 `bed2095` host 已通过 `MacHostStop` 停止；当前前台同密 host 已通过 `MacMaxFpsSafeStart` 启动在 `192.168.31.122:43770` / `127.0.0.1:43770`，`build=8015f22`，`inputMode=log`，`maxScreenFps=60`，runtime pid `78993`。`MacHostMedia` 已返回 `media=ok`、`passed=12/12`、`blockers=none`；最新心跳已刷新为 `MacHeartbeat=status=ok`、`build=current`、`MacUnattendedHealth=ok`、`permissions=screen/accessibility/inputMonitoring on`、`power=ok`。当前唯一卡点在 Windows 侧：需要用户在 Windows 本机输入同一个临时密码后启动真实测试；密码不要发到通讯板。
 - 最新认证路径信号：`check-mac-unattended-status` 现在会读取 LaunchAgent `ProgramArguments` 的密码模式，并输出 JSON `macHostAuthPath` / 摘要 `MacHostAuthPath=`。当前真实 LaunchAgent 是 `--ephemeralPassword`，因此最新值为 `MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia`；这表示随机运行期密码不会共享给 Windows，正式 Windows 控 Mac 认证应由用户在场时走前台 `MacMaxFpsSafeStart`，在两端隐藏密码框输入同一个临时密码后再跑 `MacHostMedia` 复查。`check-mac-heartbeat --checkBoard`、`check-mac-resume-status --checkBoard`、`check-mac-host-readiness --checkBoard` 与 `check-mac-formal-e2e-status --boardSummary` 会安全透传该短字段，不认证、不请求或发送密码、不发 input/inject。
 - 最新校正：Agent Link Board 当前可达；`Mac Unattended` 已刷新为 `MacUnattendedHealth=ok reason=ok blockers=none warnings=none`，`check-mac-heartbeat` / `check-mac-resume-status` 会优先采样当前 `Mac Unattended` 状态并接受 `accessibility/input-monitoring/screen-recording/input-mode` 等真实短标签。后续若旧段落或旧事件仍出现 `launch-agent-not-loaded`、`bed2095` 或 `accessibility` warning，以最新 `Mac Unattended` / `MacHeartbeat` / `MacResumeStatus` checkedAt 为准。

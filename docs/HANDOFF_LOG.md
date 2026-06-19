@@ -17,6 +17,41 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Mac Codex
+
+日期：2026-06-20 继续推进
+开发端：Mac Codex
+本轮目标：修复 Mac heartbeat watcher 的通讯板 server 可观测性，并恢复后台心跳上板。
+完成内容：
+- 发现真实后台 `Mac Heartbeat` watcher 仍在运行且 Mac host 在线，但日志持续显示 `post=post-failed` / `unattended=refresh-failed`；同参数前台一次性 heartbeat 与 `Mac Unattended` 上板成功，说明 Mac host 不坏，问题集中在后台 watcher 运行态/可观测性。
+- `start-mac-heartbeat-watcher --status --json/--boardSummary` 现在输出安全脱敏 `watcher.server` / `server=`，并在运行中的 watcher 与当前请求 `--server` 不一致时输出 `configurationMismatches=["server"]` / `configMismatch=server` 和 `RefreshRestart=`。
+- `check-mac-resume-status --json/--boardSummary` 会把同一组 `server` / `configMismatch` 放进 `macHeartbeatWatcher` 和 `heartbeatWatcher=` 第一屏，避免只看 resume 摘要时误把 watcher 连错板或 post 失败当成 Mac host 离线。
+- server 以脱敏 label 展示，疑似 password/token/secret/key 的 host 或凭据会隐藏；内部用 server fingerprint 做 mismatch 判断，避免把敏感 URL 原样打到 stdout/boardSummary。
+- 已安全重启真实 heartbeat watcher：当前 `server=http://192.168.31.68:17888`、`refreshUnattended=true`、`lastHeartbeat=status=ok`、`lastRun=1 post=posted`、`configMismatch=none`。
+- Mac host 未停止，仍保持 `192.168.31.122:43770 build=8015f22 inputMode=log` 等待 Windows 本机同密真实测试。
+修改文件：
+- `scripts/mac/start-mac-heartbeat-watcher.mjs`
+- `scripts/mac/test-mac-heartbeat-watcher-start-helper.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/HANDOFF_LOG.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat-watcher-start-helper.mjs --timeoutMs 20000` 先失败在 `start JSON should include a safe server label`。
+- 绿灯：同一命令修复后通过，并覆盖 `server` mismatch 时的 `configMismatch=server`。
+- 红灯：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 20000` 先失败在 `offline JSON boardSummary should include Mac heartbeat watcher server`。
+- 绿灯：同一命令修复后通过，并覆盖 resume JSON/boardSummary 的 watcher `server` / `configMismatch`。
+- 语法：`node --check scripts/mac/start-mac-heartbeat-watcher.mjs`、`node --check scripts/mac/test-mac-heartbeat-watcher-start-helper.mjs`、`node --check scripts/mac/check-mac-resume-status.mjs`、`node --check scripts/mac/test-mac-resume-status.mjs` 通过。
+- 真实运行态：`node scripts/mac/start-mac-heartbeat-watcher.mjs --restart --refreshUnattended --boardSummary` 返回 `server=http://192.168.31.68:17888`；随后 `--status --boardSummary` 返回 `lastHeartbeat=status=ok`、`lastRun=1 post=posted`、`configMismatch=none`。
+遗留问题：
+- Windows 控 Mac 真实测试仍未开始；当前唯一外部卡点仍是用户在 Windows 本机输入与 Mac 前台 host 相同的临时密码，并运行带 `5200/9340` 的正式命令。
+下一步建议：
+- Windows 端继续按通讯板 currentCall 执行真实测试；Mac 端保持 host 运行并继续只做值守/心跳维护，不要回到旧 diagnostics 循环。
+是否改了协议：否；只改 Mac 端本地 watcher 管理/状态摘要。
+是否需要另一端配合：需要 Windows 端/用户继续正式测试；不需要 Windows 代码配合这个 watcher 小修。
+
 ## 2026-06-19 Mac Codex
 
 日期：2026-06-19 继续推进

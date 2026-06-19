@@ -1,6 +1,6 @@
 # 下一步行动
 
-最后更新：2026-06-19
+最后更新：2026-06-20
 
 用途：让两台机器上的 Codex 都知道现在最值得做什么。只放短期任务，长期计划继续放在 `docs/04-task-board.md`。
 
@@ -9,6 +9,8 @@
 最新现场状态：Mac 端已经完成 `MacHostStop -> MacMaxFpsSafeStart -> MacHostMedia`，当前 host 是前台同密 60fps：`192.168.31.122:43770`，`build=8015f22`，`inputMode=log`，`maxScreenFps=60`，`media=ok`，`MacUnattendedHealth=ok`。Windows 最新 `ceffd43` 已保留正式验收备用 `--clientPort 5200 --debugPort 9340`。下一步不是再让 Mac 重跑前置动作，而是 Windows 端让用户在 Windows 本机输入同一个临时密码后立即跑真实测试；密码不要发通讯板。
 
 最新校正：Mac host 当前实机在线为 `192.168.31.122:43770` / `127.0.0.1:43770`，前台同密/log/60fps，runtime build `8015f22`；通讯板已可达。最新 `MacHeartbeat` / `MacResumeStatus` 已修复旧状态回声，当前值守状态应看作 `MacUnattendedHealth=ok reason=ok blockers=none warnings=none`，不要再把历史 `launch-agent-not-loaded`、`bed2095` 或 `accessibility` warning 当作当前 blocker。
+
+最新 heartbeat watcher 校正：Mac 端后台 `Mac Heartbeat` watcher 已重启并恢复上板，当前 `server=http://192.168.31.68:17888`、`lastRun=1 post=posted`、`lastHeartbeat=status=ok`、`refreshUnattended=true`、`configMismatch=none`。后续若 `MacResumeStatus=` 看到 `post=post-failed` 或 `warnings=agent-link-board`，先看同屏 `server=` 和 `configMismatch=`；若 `configMismatch=server` 或 server 不是当前通讯板，复制 `RefreshRestart=` 重启 watcher，不要误判为 Mac host 离线。
 
 最新认证路径：当前 `MacUnattendedStatus` / `MacHeartbeat` / `MacResumeStatus` / `MacHostReadiness` / `MacFormalE2E` 会输出 `MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia`。看到这条时，不要继续等待 LaunchAgent 随机密码；正式 Windows 控 Mac 认证应在用户在场时先停旧 host，再用 `MacMaxFpsSafeStart` 前台隐藏密码启动，在 Windows 和 Mac 两端输入同一个临时密码，之后跑 `MacHostMedia` 复查媒体基线。
 
