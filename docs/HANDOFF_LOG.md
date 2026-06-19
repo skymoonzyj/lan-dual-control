@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 `MacClientFormalChecklist=` 也能直接说明当前 `Mac Unattended` / `MacPowerHealth` 证据是否新鲜。
+完成内容：
+- `check-mac-client-formal-status --json/--boardSummary` 新增 JSON 顶层 `macUnattendedFreshness`，并在 `runPlan.macUnattendedFreshness`、普通 runPlan、`callText` 和 `MacClientFormalChecklist=` 摘要里转述 `MacUnattendedFreshness=fresh|stale checkedAgeMs=<毫秒> thresholdMs=600000 checkedAt=<时间> source=MacUnattendedHealth|MacPowerHealth`。
+- 新字段只从 Agent Link Board 的当前 status/event 安全短字段派生；只接受白名单状态/短标签，拒绝疑似 `--password`、token/secret 或命令形态候选。
+- `stale` 只提示先刷新独立值守/电源证据，不改变 `readyToCall`、blocker 或 call 发送判定。
+- 本轮只补只读 freshness 字段，不运行 `pmset`、不提权、不改系统、不写 plist、不加载 `launchctl`、不认证、不请求或发送密码、不发 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-client-formal-status.mjs`
+- `scripts/mac/test-mac-client-formal-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-client-formal-status.mjs --timeoutMs 15000` 先失败在 help 缺 `macUnattendedFreshness`。
+- 绿灯：实现后同一专项回归通过，并覆盖 JSON、runPlan、boardSummary、callText、stale 判断和敏感文本不提升。
+遗留问题：
+- 真实 `MacPowerHealth` / `MacUnattendedHealth` 仍由独立 `Mac Unattended` 状态决定；当前系统/显示器睡眠和 LaunchAgent 未加载风险仍需用户现场确认后处理。
+下一步建议：
+- 如果 `MacClientFormalChecklist=` 看到 `MacUnattendedFreshness=stale`，先运行同屏或 heartbeat/resume 里的 `MacUnattendedSendStatus=` 刷新独立值守证据，再决定是否进入 `pmset` / LaunchAgent 人工处理。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 `MacFormalE2E=` 第一屏也说明当前 `Mac Unattended` / `MacPowerHealth` 证据是否新鲜。
 完成内容：
 - `check-mac-formal-e2e-status --json/--boardSummary` 新增 JSON 顶层 `macUnattendedFreshness`，并在 `--boardSummary` / `callText` 转述 `MacUnattendedFreshness=fresh|stale checkedAgeMs=<毫秒> thresholdMs=600000 checkedAt=<时间> source=MacUnattendedHealth|MacPowerHealth`。

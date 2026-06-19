@@ -31,6 +31,52 @@ const formalWindowsCallIdentity = {
   need: "Windows Codex",
   goal: "正式端到端验收 Windows host",
 };
+const macUnattendedFreshnessStaleMs = 600000;
+const allowedMacPowerStatuses = new Set(["ok", "warning", "unknown"]);
+const allowedMacPowerReasons = new Set([
+  "ok",
+  "skipped",
+  "not-checked",
+  "pmset-failed",
+  "system-sleep-enabled",
+  "display-sleep-enabled",
+  "network-wake-disabled",
+]);
+const allowedMacPowerWarnings = new Set([
+  "none",
+  "unknown",
+  "system-sleep-enabled",
+  "display-sleep-enabled",
+  "network-wake-disabled",
+]);
+const allowedMacUnattendedStatuses = new Set(["ok", "warning", "blocked", "unknown"]);
+const allowedMacUnattendedReasons = new Set([
+  "ok",
+  "skipped",
+  "not-checked",
+  "host-offline",
+  "launch-agent-missing",
+  "launch-agent-not-loaded",
+  "launch-agent-max-fps",
+  "power",
+  "permissions",
+  "pmset-failed",
+  "unknown",
+]);
+const allowedMacUnattendedFindings = new Set([
+  "none",
+  "unknown",
+  "host-offline",
+  "launch-agent-missing",
+  "launch-agent-not-loaded",
+  "launch-agent-max-fps",
+  "power",
+  "permissions",
+  "screen-recording",
+  "accessibility",
+  "input-monitoring",
+  "pmset-failed",
+]);
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -153,6 +199,11 @@ JSON output:
   runPlan.commands.windowsSecureAuthStartNodeFallback
                                   Node fallback for the same Windows-side
                                   hidden-prompt restart.
+  macUnattendedFreshness
+                                  Optional secret-free Agent Link Board
+                                  freshness summary from MacUnattendedHealth
+                                  or MacPowerHealth. It is advisory and does
+                                  not change readiness by itself.
 
 Examples:
   node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.50 --port 43770 --boardSummary
@@ -400,9 +451,9 @@ function extractWindowsSecureAuthPathFromBoardState(state) {
   };
 }
 
-function getBoardSecureAuthPath(args) {
+function readBoardState(args) {
   if (args.skipBoard) {
-    return emptyWindowsSecureAuthPath("skipped", 0, 0);
+    return { ok: false, source: "skipped", state: null, error: "" };
   }
   const stateReader = `
 const server = process.argv[1];
@@ -434,14 +485,164 @@ try {
     maxBuffer: 8 * 1024 * 1024,
   });
   if (result.status !== 0) {
-    return emptyWindowsSecureAuthPath("unavailable", 0, 0, "Agent Link Board state unavailable");
+    return { ok: false, source: "unavailable", state: null, error: "Agent Link Board state unavailable" };
   }
   try {
     const state = JSON.parse(String(result.stdout || "{}"));
-    return extractWindowsSecureAuthPathFromBoardState(state);
+    return { ok: true, source: "api-state", state, error: "" };
   } catch {
-    return emptyWindowsSecureAuthPath("api-state", 0, 0, "Agent Link Board state was not valid JSON");
+    return { ok: false, source: "api-state", state: null, error: "Agent Link Board state was not valid JSON" };
   }
+}
+
+function getBoardSecureAuthPath(args, stateResult = null) {
+  const result = stateResult || readBoardState(args);
+  if (!result.ok) {
+    return emptyWindowsSecureAuthPath(result.source || "unavailable", 0, 0, result.error || "");
+  }
+  return extractWindowsSecureAuthPathFromBoardState(result.state);
+}
+
+function getBoardMacUnattendedFreshness(args, stateResult = null, nowMs = Date.now()) {
+  const result = stateResult || readBoardState(args);
+  if (!result.ok) return null;
+  return collectMacUnattendedFreshnessFromBoardState(result.state, nowMs);
+}
+
+function collectMacUnattendedFreshnessFromBoardState(state, nowMs = Date.now()) {
+  for (const text of collectBoardMacUnattendedTexts(state)) {
+    const freshness = extractMacUnattendedFreshness(text, nowMs);
+    if (freshness) return freshness;
+  }
+  return null;
+}
+
+function collectBoardMacUnattendedTexts(state) {
+  const texts = [];
+  const statuses = state && typeof state === "object" && state.statuses && typeof state.statuses === "object"
+    ? state.statuses
+    : {};
+  for (const [device, entry] of Object.entries(statuses)) {
+    if (typeof entry === "string") {
+      texts.push(`${device}: ${entry}`);
+      continue;
+    }
+    if (!entry || typeof entry !== "object") continue;
+    const statusText = [device, entry.status, entry.note, entry.text, entry.message, entry.summary]
+      .map(normalizedText)
+      .filter(Boolean)
+      .join(" ");
+    if (statusText) texts.push(statusText);
+  }
+  const events = Array.isArray(state?.events) ? state.events : [];
+  for (const event of events) {
+    if (typeof event === "string") {
+      texts.push(event);
+      continue;
+    }
+    if (!event || typeof event !== "object") continue;
+    const eventText = [event.device, event.from, event.status, event.note, event.text, event.message, event.summary]
+      .map(normalizedText)
+      .filter(Boolean)
+      .join(" ");
+    if (eventText) texts.push(eventText);
+  }
+  return texts.filter(Boolean);
+}
+
+function extractMacPowerHealth(text) {
+  const source = normalizedText(text);
+  if (!source || !/\bMacPowerHealth=/i.test(source)) return null;
+  if (hasSecretLikeCommandValue(source)) return null;
+  const match = source.match(/\bMacPowerHealth=([A-Za-z]+)\s+reason=([A-Za-z0-9_-]+)\s+warnings=([A-Za-z0-9_,_-]+)\s+checkedAt=([0-9TZ:.-]+)/i);
+  if (!match) return null;
+  const status = match[1].toLowerCase();
+  const reason = match[2];
+  const warnings = match[3];
+  const checkedAt = match[4];
+  if (!allowedMacPowerStatuses.has(status)) return null;
+  if (!allowedMacPowerReasons.has(reason)) return null;
+  if (!isSafeMacPowerWarnings(warnings)) return null;
+  if (!Number.isFinite(Date.parse(checkedAt))) return null;
+  return { status, reason, warnings, checkedAt };
+}
+
+function extractMacUnattendedFreshness(text, nowMs) {
+  const unattended = extractMacUnattendedHealth(text);
+  if (unattended) return makeMacUnattendedFreshness(unattended.checkedAt, "MacUnattendedHealth", nowMs);
+  const power = extractMacPowerHealth(text);
+  if (power) return makeMacUnattendedFreshness(power.checkedAt, "MacPowerHealth", nowMs);
+  return null;
+}
+
+function extractMacUnattendedHealth(text) {
+  const source = normalizedText(text);
+  if (!source || !/\bMacUnattendedHealth=/i.test(source)) return null;
+  if (hasSecretLikeCommandValue(source)) return null;
+  const match = source.match(/\bMacUnattendedHealth=([A-Za-z]+)\s+reason=([A-Za-z0-9_-]+)\s+blockers=([A-Za-z0-9_,_-]+)\s+warnings=([A-Za-z0-9_,_-]+)\s+checkedAt=([0-9TZ:.-]+)/i);
+  if (!match) return null;
+  const status = match[1].toLowerCase();
+  const reason = match[2];
+  const blockers = match[3];
+  const warnings = match[4];
+  const checkedAt = match[5];
+  if (!allowedMacUnattendedStatuses.has(status)) return null;
+  if (!allowedMacUnattendedReasons.has(reason)) return null;
+  if (!isSafeMacUnattendedFindings(blockers)) return null;
+  if (!isSafeMacUnattendedFindings(warnings)) return null;
+  if (!Number.isFinite(Date.parse(checkedAt))) return null;
+  return { status, reason, blockers, warnings, checkedAt };
+}
+
+function isSafeMacUnattendedFindings(value) {
+  const tokens = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return tokens.length > 0 && tokens.every((token) => allowedMacUnattendedFindings.has(token));
+}
+
+function makeMacUnattendedFreshness(checkedAt, source, nowMs) {
+  const checkedMs = Date.parse(checkedAt);
+  if (!Number.isFinite(checkedMs)) return null;
+  const checkedAgeMs = Math.max(0, Math.trunc((Number.isFinite(nowMs) ? nowMs : Date.now()) - checkedMs));
+  return {
+    status: checkedAgeMs > macUnattendedFreshnessStaleMs ? "stale" : "fresh",
+    checkedAt,
+    checkedAgeMs,
+    thresholdMs: macUnattendedFreshnessStaleMs,
+    source,
+  };
+}
+
+function isSafeMacPowerWarnings(value) {
+  const tokens = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return tokens.length > 0 && tokens.every((token) => allowedMacPowerWarnings.has(token));
+}
+
+function formatMacUnattendedFreshnessSummary(freshness) {
+  if (!freshness) return "";
+  return [
+    `MacUnattendedFreshness=${freshness.status || "unknown"}`,
+    `checkedAgeMs=${Number.isFinite(freshness.checkedAgeMs) ? freshness.checkedAgeMs : "unknown"}`,
+    `thresholdMs=${freshness.thresholdMs ?? macUnattendedFreshnessStaleMs}`,
+    `checkedAt=${freshness.checkedAt || "unknown"}`,
+    `source=${freshness.source || "unknown"}`,
+  ].join(" ");
+}
+
+function makeMacUnattendedFreshnessSentence(freshness) {
+  if (!freshness) return "";
+  return [
+    `Mac unattended freshness: status=${freshness.status || "unknown"}`,
+    `checkedAgeMs=${Number.isFinite(freshness.checkedAgeMs) ? freshness.checkedAgeMs : "unknown"}`,
+    `thresholdMs=${freshness.thresholdMs ?? macUnattendedFreshnessStaleMs}`,
+    `checkedAt=${freshness.checkedAt || "unknown"}`,
+    `source=${freshness.source || "unknown"}.`,
+  ].join(" ");
 }
 
 function statusValue(value) {
@@ -701,14 +902,19 @@ function countChecklist(checklist, status) {
 
 function makeCallText(report) {
   const host = report.readiness.windowsHost || {};
+  const freshnessText = makeMacUnattendedFreshnessSentence(report.macUnattendedFreshness);
   if (!host.online) {
-    return `Mac client formal Windows test is not ready: Windows host discovery is offline or not checked. Run node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary, or ask Windows Codex to run on the Windows host machine: ${makeWindowsHostStatusCommand(host, report.args || {})}. Then rerun with --host <Windows IP> --port 43770 --boardSummary.`;
+    return [
+      `Mac client formal Windows test is not ready: Windows host discovery is offline or not checked. Run node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary, or ask Windows Codex to run on the Windows host machine: ${makeWindowsHostStatusCommand(host, report.args || {})}. Then rerun with --host <Windows IP> --port 43770 --boardSummary.`,
+      ...(freshnessText ? [freshnessText] : []),
+    ].join(" ");
   }
   const address = `${host.probe?.host}:${host.probe?.port}`;
   return [
     `Mac client formal Windows test ${report.readyToCall ? "ready" : "needs attention"}: windowsHost=${address}, runtimeBuild=${host.runtime?.buildId || "unknown"}.`,
     `Screen ${screenSummary(host.capabilities?.screen || {})}; audio ${audioSummary(host.capabilities?.audio || {})}; inputMode=${host.capabilities?.input?.mode || "unknown"}; clipboard text=${statusValue(host.capabilities?.clipboard?.text)} file=${statusValue(host.capabilities?.clipboard?.file)}.`,
     `Checklist blockers=${report.counts.blocker}, warnings=${report.counts.warning}.`,
+    ...(freshnessText ? [freshnessText] : []),
     `Suggested browser test: ${host.recommendedCommand || `node scripts/mac/run-mac-client-formal-smoke.mjs --host ${address.split(":")[0]} --port ${address.split(":")[1]} --promptPassword`}.`,
     "Do not send passwords on Agent Link Board; no inject unless the user explicitly confirms they are watching.",
   ].join(" ");
@@ -1058,6 +1264,7 @@ function makeRunPlan(report, args) {
       url: clientServer.url || `http://${args.clientHost}:${args.clientPort}/`,
       online: Boolean(clientServer.online),
     },
+    macUnattendedFreshness: report.macUnattendedFreshness || null,
     estimatedDuration: {
       preflight: "under 1 minute",
       browserSmoke: "2-5 minutes",
@@ -1171,6 +1378,8 @@ function makeBoardSummary(report) {
   const findings = formatChecklistFindings(report.checklist);
   const reverseGrantParts = makeReverseGrantBoardSummaryParts(report, report.args || {});
   const secureAuthParts = makeSecureAuthBoardSummaryParts(report, report.args || {});
+  const macUnattendedFreshnessSummary = formatMacUnattendedFreshnessSummary(report.macUnattendedFreshness);
+  const macUnattendedFreshnessLine = macUnattendedFreshnessSummary ? `${macUnattendedFreshnessSummary}.` : "";
   const discoveryPart = report.discovery?.best
     ? `Discovery=${report.discovery.best.host || report.discovery.best.probeHost}:${report.discovery.best.probePort || report.discovery.best.port || report.args?.windowsPort || defaults.windowsPort}.`
     : "";
@@ -1187,6 +1396,7 @@ function makeBoardSummary(report) {
     "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
     `MacClientBrowserSelfTest=${report.runPlan?.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
     `MacPowerPlan=${report.runPlan?.commands?.macPowerPlanCommand || makeMacPowerPlanCommand()}.`,
+    ...(macUnattendedFreshnessLine ? [macUnattendedFreshnessLine] : []),
     `MacScriptHelp=${report.runPlan?.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
     `ReverseGrantCopy=${report.runPlan?.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
     ...reverseGrantParts,
@@ -1377,6 +1587,9 @@ function printRunPlan(runPlan) {
   if (runPlan.commands?.macPowerPlanCommand) {
     console.log(`- Mac power settings dry-run plan: ${runPlan.commands.macPowerPlanCommand}`);
   }
+  if (runPlan.macUnattendedFreshness) {
+    console.log(`- Mac unattended freshness: ${formatMacUnattendedFreshnessSummary(runPlan.macUnattendedFreshness)}`);
+  }
   if (runPlan.commands?.macScriptHelp) {
     console.log(`- Mac script help safety check: ${runPlan.commands.macScriptHelp}`);
   }
@@ -1414,7 +1627,9 @@ function buildReport(args) {
   const discovery = runWindowsDiscovery(args);
   const effectiveArgs = applyDiscoveredWindowsHost(args, discovery);
   const readiness = runReadiness(effectiveArgs);
-  const boardSecureAuthPath = getBoardSecureAuthPath(effectiveArgs);
+  const boardState = readBoardState(effectiveArgs);
+  const boardSecureAuthPath = getBoardSecureAuthPath(effectiveArgs, boardState);
+  const macUnattendedFreshness = getBoardMacUnattendedFreshness(effectiveArgs, boardState);
   const checklist = buildChecklist(readiness, effectiveArgs);
   const counts = {
     ok: countChecklist(checklist, "ok"),
@@ -1448,6 +1663,7 @@ function buildReport(args) {
     readiness,
     discovery,
     boardSecureAuthPath,
+    macUnattendedFreshness,
   };
   report.runPlan = makeRunPlan(report, effectiveArgs);
   report.callText = makeCallText(report);

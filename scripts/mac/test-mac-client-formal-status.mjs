@@ -280,6 +280,25 @@ function assertWindowsSecureAuthPathCommand(command, label, expectedPort = "4377
   assertNotIncludes(command, "secret", label);
 }
 
+function assertMacUnattendedFreshness(payload, expected, label) {
+  const freshness = payload.macUnattendedFreshness;
+  assert(freshness?.status === expected.status, `${label} should expose MacUnattendedFreshness status`);
+  assert(freshness?.checkedAt === expected.checkedAt, `${label} should expose MacUnattendedFreshness checkedAt`);
+  assert(freshness?.thresholdMs === expected.thresholdMs, `${label} should expose MacUnattendedFreshness thresholdMs`);
+  assert(freshness?.source === expected.source, `${label} should expose MacUnattendedFreshness source`);
+  assert(Number.isFinite(freshness?.checkedAgeMs), `${label} should expose numeric MacUnattendedFreshness checkedAgeMs`);
+  if (expected.status === "stale") {
+    assert(freshness.checkedAgeMs >= expected.thresholdMs, `${label} stale MacUnattendedFreshness should be older than threshold`);
+  }
+  if (expected.status === "fresh") {
+    assert(freshness.checkedAgeMs < expected.thresholdMs, `${label} fresh MacUnattendedFreshness should be newer than threshold`);
+  }
+  assert(payload.runPlan?.macUnattendedFreshness?.status === expected.status, `${label} should preserve runPlan MacUnattendedFreshness status`);
+  assert(payload.runPlan?.macUnattendedFreshness?.checkedAt === expected.checkedAt, `${label} should preserve runPlan MacUnattendedFreshness checkedAt`);
+  assert(payload.runPlan?.macUnattendedFreshness?.thresholdMs === expected.thresholdMs, `${label} should preserve runPlan MacUnattendedFreshness thresholdMs`);
+  assert(payload.runPlan?.macUnattendedFreshness?.source === expected.source, `${label} should preserve runPlan MacUnattendedFreshness source`);
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run([flag], args);
@@ -309,6 +328,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "runPlan.commands.windowsSecureAuthPath", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsSecureAuthStart", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsSecureAuthStartNodeFallback", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macUnattendedFreshness", `${script} ${flag}`);
     assertIncludes(result.stdout, "--ensureClient", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
@@ -941,6 +961,72 @@ async function checkDiscoverSelectsWindowsHost(args) {
   print("OK", "Discover mode selects a Windows host before building formal checklist");
 }
 
+async function checkBoardMacUnattendedFreshness(args) {
+  const cleanPower = "Mac unattended status: host=online inputMode=log build=ed937a2; power=sleep=ac-power:1 displaySleep=ac-power:10 networkWake=ac-power:1; MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T07:23:38.703Z; attention=2 warning(s) blockers=none warnings=launch-agent-not-loaded,power.";
+  await withMacClientServer(args, async (clientPort) => {
+    await withWindowsDiscoveryServer(async (windowsPort) => {
+      await withFakeBoard(async (board) => {
+        const result = await runAsync([
+          "--json",
+          "--allowDirty",
+          "--clientPort",
+          String(clientPort),
+          "--host",
+          "127.0.0.1",
+          "--port",
+          String(windowsPort),
+          "--server",
+          board.serverUrl,
+        ], args);
+        const payload = parseJson(result.stdout, "board Mac unattended freshness JSON");
+        const output = `${result.stdout}\n${result.stderr}`;
+        assert(result.status === 0, `board Mac unattended freshness should exit 0.\n${output}`);
+        assertMacUnattendedFreshness(payload, {
+          status: "stale",
+          checkedAt: "2026-06-19T07:23:38.703Z",
+          thresholdMs: 600000,
+          source: "MacUnattendedHealth",
+        }, "board Mac unattended freshness");
+        assertIncludes(payload.boardSummary || "", "MacUnattendedFreshness=stale", "board Mac unattended freshness summary");
+        assertIncludes(payload.boardSummary || "", "thresholdMs=600000", "board Mac unattended freshness summary");
+        assertIncludes(payload.boardSummary || "", "source=MacUnattendedHealth", "board Mac unattended freshness summary");
+        assertIncludes(payload.callText || "", "Mac unattended freshness: status=stale", "board Mac unattended freshness call text");
+        assertIncludes(payload.callText || "", "source=MacUnattendedHealth", "board Mac unattended freshness call text");
+        assertNoSecretLikeText(output, "board Mac unattended freshness output");
+      }, { statuses: { "Mac Unattended": { status: "warning", note: cleanPower } } });
+    });
+  });
+
+  const riskyPower = "MacPowerHealth=warning reason=--password warnings=system-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; token=fake-client-formal-power-token";
+  await withMacClientServer(args, async (clientPort) => {
+    await withWindowsDiscoveryServer(async (windowsPort) => {
+      await withFakeBoard(async (board) => {
+        const result = await runAsync([
+          "--json",
+          "--allowDirty",
+          "--clientPort",
+          String(clientPort),
+          "--host",
+          "127.0.0.1",
+          "--port",
+          String(windowsPort),
+          "--server",
+          board.serverUrl,
+        ], args);
+        const payload = parseJson(result.stdout, "risky board Mac unattended freshness JSON");
+        const output = `${result.stdout}\n${result.stderr}`;
+        assert(result.status === 0, `risky Mac unattended freshness should exit 0.\n${output}`);
+        assert(!payload.macUnattendedFreshness, "risky MacUnattendedFreshness should not be promoted");
+        assert(!payload.runPlan?.macUnattendedFreshness, "risky runPlan MacUnattendedFreshness should not be promoted");
+        assertNotIncludes(payload.boardSummary || "", "MacUnattendedFreshness=", "risky Mac unattended freshness summary");
+        assertNotIncludes(payload.callText || "", "Mac unattended freshness:", "risky Mac unattended freshness call text");
+        assertNotIncludes(output, "fake-client-formal-power-token", "risky Mac unattended freshness output");
+      }, { statuses: { "Mac Unattended": { status: "warning", note: riskyPower } } });
+    });
+  });
+  print("OK", "Agent Link Board MacUnattendedFreshness is surfaced safely in formal checklist");
+}
+
 async function checkBoardWindowsSecureAuthPathExtraction(args) {
   await withMacClientServer(args, async (clientPort) => {
     await withWindowsDiscoveryServer(async (windowsPort) => {
@@ -1222,6 +1308,7 @@ async function main() {
   checkHumanRunPlan(args);
   await checkReadyShape(args);
   await checkDiscoverSelectsWindowsHost(args);
+  await checkBoardMacUnattendedFreshness(args);
   await checkBoardWindowsSecureAuthPathExtraction(args);
   await checkOfflineSendCallRefuses(args);
   await checkReadySendCall(args);
