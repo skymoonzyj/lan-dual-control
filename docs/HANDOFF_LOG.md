@@ -55,7 +55,7 @@
 - 第一次加载失败根因明确：LaunchAgent 默认使用 `/usr/bin/env node`，launchd 的 PATH 找不到 nvm Node，日志为 `env: node: No such file or directory`。
 - 用 TDD 修复 `install-mac-host-launch-agent`：默认 `ProgramArguments[0]` 改为当前 `process.execPath` 的绝对 Node 路径，并新增回归防止回退到 `/usr/bin/env node`。
 - 第二次加载暴露 helper 前台模式不适合 launchd 值守：Node helper 被 launchd 持有但未监听 43770；继续用 TDD 将 LaunchAgent 启动参数切到已验证的 `start-mac-host --background` 路径。
-- 真实重写 plist 后重新 `launchctl bootstrap`，当前 `/discovery` 在线：`runtimeBuild=9fcf917`、`inputMode=log`、`maxScreenFps=60`、`capturePipeline=background-jpeg`。
+- 真实重写 plist 后重新 `launchctl bootstrap` / `kickstart`，当前 `/discovery` 在线：`runtimeBuild=bed2095`、`inputMode=log`、`maxScreenFps=60`、`capturePipeline=background-jpeg`。
 - `MacUnattendedFormal` 现在通过 LaunchAgent loaded/maxFps 门禁：`launchAgent=file-present loaded=true maxFps=60`；`launch-agent-not-loaded` 已消失。
 修改文件：
 - `scripts/mac/install-mac-host-launch-agent.mjs`
