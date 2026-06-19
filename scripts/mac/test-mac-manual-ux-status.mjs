@@ -56,6 +56,10 @@ function assertNotIncludes(text, expected, label) {
   assert(!String(text).includes(expected), `${label} unexpectedly included ${JSON.stringify(expected)}.\n${text}`);
 }
 
+function assertMatches(text, pattern, label) {
+  assert(pattern.test(String(text)), `${label} did not match ${pattern}.\n${text}`);
+}
+
 function run(extraArgs, args) {
   return new Promise((resolveRun) => {
     const child = spawn(process.execPath, [script, ...extraArgs], {
@@ -414,6 +418,22 @@ function staleConfirmedMacManualUxCallBoardState() {
   };
 }
 
+function expiredConfirmedMacManualUxCallBoardState() {
+  const state = expiredMacManualUxCallBoardState();
+  return {
+    ...state,
+    recentEvents: [
+      ...state.recentEvents,
+      {
+        at: new Date(Date.now() - 30 * 1000).toISOString(),
+        type: "message",
+        from: "Windows Codex",
+        text: "MAC_MANUAL_UX_CONFIRMED: Late confirmation after the manual UX call already timed out.",
+      },
+    ],
+  };
+}
+
 function otherActiveCallWithUserAwakeSignalBoardState() {
   return {
     updatedAt: "2026-06-20T10:05:00.000Z",
@@ -663,6 +683,8 @@ async function checkManualUxCallInProgressDoesNotOfferDuplicateCall(args) {
     assertIncludes(payload.boardSummary, "MacManualUx=status=calling", "manual UX call-in-progress boardSummary");
     assertIncludes(payload.boardSummary, "Next=WaitForManualUxConfirmation", "manual UX call-in-progress boardSummary");
     assertIncludes(payload.boardSummary, "ManualUxCall=active", "manual UX call-in-progress boardSummary");
+    assertMatches(payload.boardSummary, /\bManualUxCallAgeMs=\d+\b/, "manual UX call-in-progress boardSummary");
+    assertMatches(payload.boardSummary, /\bManualUxCallRemainingMs=\d+\b/, "manual UX call-in-progress boardSummary");
     assertNotIncludes(payload.boardSummary, "ManualUxCallCommand=", "manual UX call-in-progress boardSummary");
     assert(posts.filter((post) => post.path === "/api/call").length === 0, `read-only calling status should not post a call: ${JSON.stringify(posts)}`);
     assertSecretSafe(JSON.stringify(payload), "manual UX call-in-progress JSON");
@@ -683,6 +705,8 @@ async function checkConfirmedManualUxCallIsReady(args) {
     assertIncludes(payload.boardSummary, "manualUxConfirmed", "confirmed manual UX call boardSummary");
     assertIncludes(payload.boardSummary, "Next=ManualUxTest", "confirmed manual UX call boardSummary");
     assertIncludes(payload.boardSummary, "ManualUxCall=active", "confirmed manual UX call boardSummary");
+    assertMatches(payload.boardSummary, /\bManualUxCallAgeMs=\d+\b/, "confirmed manual UX call boardSummary");
+    assertMatches(payload.boardSummary, /\bManualUxCallRemainingMs=\d+\b/, "confirmed manual UX call boardSummary");
     assert(posts.filter((post) => post.path === "/api/call").length === 0, `confirmed read-only status should not post a call: ${JSON.stringify(posts)}`);
     assertSecretSafe(JSON.stringify(payload), "confirmed manual UX call JSON");
   });
@@ -704,6 +728,24 @@ async function checkStaleManualUxConfirmationDoesNotReadyNewCall(args) {
   console.log("[OK] Mac manual UX status ignores stale manual UX confirmations");
 }
 
+async function checkLateManualUxConfirmationDoesNotReadyExpiredCall(args) {
+  await withFakeBoard(expiredConfirmedMacManualUxCallBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `late confirmed manual UX call JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "late confirmed manual UX call JSON");
+    assert(payload.status === "calling", `late confirmed manual UX call should remain calling, got ${payload.status}`);
+    assert(payload.signals?.manualUxConfirmed !== true, `late confirmation should not be accepted after timeout: ${JSON.stringify(payload.signals)}`);
+    assert(payload.manualUxCall?.timedOut === true, `late confirmed manual UX call should expose timeout: ${JSON.stringify(payload.manualUxCall)}`);
+    assertIncludes(payload.boardSummary, "MacManualUx=status=calling", "late confirmed manual UX call boardSummary");
+    assertIncludes(payload.boardSummary, "Next=ReconfirmManualUxCall", "late confirmed manual UX call boardSummary");
+    assertIncludes(payload.boardSummary, "ManualUxCall=timeout", "late confirmed manual UX call boardSummary");
+    assertMatches(payload.boardSummary, /\bManualUxCallOverdueMs=\d+\b/, "late confirmed manual UX call boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `late confirmed read-only status should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "late confirmed manual UX call JSON");
+  });
+  console.log("[OK] Mac manual UX status ignores confirmations after the call timeout");
+}
+
 async function checkExpiredManualUxCallRequestsReconfirmation(args) {
   await withFakeBoard(expiredMacManualUxCallBoardState(), async (serverUrl, posts) => {
     const result = await run(["--server", serverUrl, "--json"], args);
@@ -716,6 +758,9 @@ async function checkExpiredManualUxCallRequestsReconfirmation(args) {
     assertIncludes(payload.nextActions?.join("\n") || "", "--reconfirmCall", "expired manual UX call nextActions");
     assertIncludes(payload.boardSummary, "ManualUxCall=timeout", "expired manual UX call boardSummary");
     assertIncludes(payload.boardSummary, "Next=ReconfirmManualUxCall", "expired manual UX call boardSummary");
+    assertMatches(payload.boardSummary, /\bManualUxCallAgeMs=\d+\b/, "expired manual UX call boardSummary");
+    assertMatches(payload.boardSummary, /\bManualUxCallOverdueMs=\d+\b/, "expired manual UX call boardSummary");
+    assertNotIncludes(payload.boardSummary, "ManualUxCallRemainingMs=", "expired manual UX call boardSummary");
     assertNotIncludes(payload.boardSummary, "ManualUxCallCommand=", "expired manual UX call boardSummary");
     assert(posts.filter((post) => post.path === "/api/call").length === 0, `expired read-only status should not post a call: ${JSON.stringify(posts)}`);
     assertSecretSafe(JSON.stringify(payload), "expired manual UX call JSON");
@@ -822,6 +867,7 @@ async function main() {
   await checkManualUxCallInProgressDoesNotOfferDuplicateCall(args);
   await checkConfirmedManualUxCallIsReady(args);
   await checkStaleManualUxConfirmationDoesNotReadyNewCall(args);
+  await checkLateManualUxConfirmationDoesNotReadyExpiredCall(args);
   await checkExpiredManualUxCallRequestsReconfirmation(args);
   await checkExpiredManualUxCallCanBeReconfirmed(args);
   await checkActiveManualUxCallRefusesReconfirm(args);

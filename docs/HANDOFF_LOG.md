@@ -47,6 +47,35 @@
 是否需要另一端配合：需要 Mac 端在用户在场时重新确认或重新发起 manual UX call。
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac manual UX call 计时摘要
+开发端：Mac Codex
+本轮目标：让两端第一屏不仅看到 `ManualUxCall=near-timeout|timeout`，还能看到当前 call 已等待多久、还剩多久或已超时多久，方便判断是否应确认或重新发起。
+完成内容：
+- `check-mac-manual-ux-status --boardSummary` 在 manual UX call 存在时新增 `ManualUxCallAgeMs=`。
+- call 未超时时新增 `ManualUxCallRemainingMs=`；call 超时时新增 `ManualUxCallOverdueMs=`，且不再输出 remaining。
+- 顺手修正超时确认误判：Windows/User 确认必须落在当前 call 的 `startedAt` 到 `startedAt + timeout` 有效窗口内；超时后的确认不会让 `MacManualUx=status=ready`。
+- `check-windows-resume-status` 安全消费上述字段，普通输出、JSON 和 `--boardSummary` 规范化为 `callAgeMs=`、`callRemainingMs=`、`callOverdueMs=`。
+- Windows 解析只接受非负安全整数，继续拒绝密码、secret、token、未知状态或非白名单字段。
+修改文件：
+- `scripts/mac/check-mac-manual-ux-status.mjs`
+- `scripts/mac/test-mac-manual-ux-status.mjs`
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：Mac manual UX 测试先失败，摘要缺 `ManualUxCallAgeMs=`；Windows resume 测试先失败，`MacManualUx` 标准摘要不含 `callAgeMs/callOverdueMs`。
+- 绿灯：`node scripts/mac/test-mac-manual-ux-status.mjs --timeoutMs 20000` 通过，覆盖超时后确认不进入 ready；`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 通过。
+遗留问题：
+- 当前真实通讯板上的旧 Mac manual UX call 已 timeout；这轮只增强摘要，不自动重发 call。
+下一步建议：
+- 若 Windows/User 现在准备好 5-10 分钟体验窗口，Mac 可在确认 Windows 不处于推送/变基临界区后显式运行 `check-mac-manual-ux-status --reconfirmCall --json` 发起新 call。
+是否改了协议：否，只是通讯板状态摘要字段扩展。
+是否需要另一端配合：Windows 端已同步 parser；真实体验仍需要 Windows/User 确认窗口。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac 手工体验 call 确认信号
 开发端：Mac Codex
 本轮目标：Mac 发出 `Mac manual UX validation` call 后，能在 Windows/User 已确认当前体验窗口时自动进入 `ManualUxTest`，不再一直停留在 `WaitForManualUxConfirmation`。

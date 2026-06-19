@@ -1690,6 +1690,15 @@ function parseMacManualUxTokenList(raw, { allowNone = true } = {}) {
   return { ok: true, values };
 }
 
+function parseOptionalMacManualUxMs(segment, ...fieldNames) {
+  const raw = fieldNames.map((fieldName) => extractMacManualUxField(segment, fieldName)).find(Boolean) || "";
+  if (!raw) return { ok: true, value: null };
+  if (!/^\d{1,12}$/.test(raw)) return { ok: false, value: null };
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value)) return { ok: false, value: null };
+  return { ok: true, value };
+}
+
 function isSafeMacManualUxTarget(value) {
   const target = String(value || "").trim();
   return target === "unknown" || /^(?:localhost|127(?:\.\d{1,3}){3}|(?:\d{1,3}\.){3}\d{1,3}):\d{1,5}$/i.test(target);
@@ -1707,6 +1716,9 @@ function parseMacManualUxSegment(segment, source = "text") {
   const safetyRaw = extractMacManualUxField(value, "Safety") || extractMacManualUxField(value, "safety");
   const noFormalE2ERerunRaw = extractMacManualUxField(value, "NoFormalE2ERerun") || extractMacManualUxField(value, "noFormalE2ERerun");
   const manualUxCall = extractMacManualUxField(value, "ManualUxCall") || extractMacManualUxField(value, "manualUxCall");
+  const callAgeMs = parseOptionalMacManualUxMs(value, "ManualUxCallAgeMs", "callAgeMs");
+  const callRemainingMs = parseOptionalMacManualUxMs(value, "ManualUxCallRemainingMs", "callRemainingMs");
+  const callOverdueMs = parseOptionalMacManualUxMs(value, "ManualUxCallOverdueMs", "callOverdueMs");
   const blockersRaw = extractMacManualUxField(value, "blockers") || "none";
   const warningsRaw = extractMacManualUxField(value, "warnings") || "none";
   const safety = safetyRaw.split(",").map((item) => item.trim()).filter(Boolean);
@@ -1725,6 +1737,9 @@ function parseMacManualUxSegment(segment, source = "text") {
     !validSafety ||
     noFormalE2ERerunRaw !== "true" ||
     (manualUxCall && !macManualUxAllowedCallStates.has(manualUxCall)) ||
+    !callAgeMs.ok ||
+    !callRemainingMs.ok ||
+    !callOverdueMs.ok ||
     !blockers.ok ||
     !warnings.ok
   ) {
@@ -1741,6 +1756,9 @@ function parseMacManualUxSegment(segment, source = "text") {
     `safety=${safety.join(",")}`,
     "noFormalE2ERerun=true",
     ...(manualUxCall ? [`manualUxCall=${manualUxCall}`] : []),
+    ...(callAgeMs.value != null ? [`callAgeMs=${callAgeMs.value}`] : []),
+    ...(callRemainingMs.value != null ? [`callRemainingMs=${callRemainingMs.value}`] : []),
+    ...(callOverdueMs.value != null ? [`callOverdueMs=${callOverdueMs.value}`] : []),
     callCommandPresent ? "callCommand=present" : "callCommand=absent",
     `blockers=${blockers.values.length ? blockers.values.join(",") : "none"}`,
     `warnings=${warnings.values.length ? warnings.values.join(",") : "none"}`,
@@ -1757,6 +1775,9 @@ function parseMacManualUxSegment(segment, source = "text") {
     safety,
     noFormalE2ERerun: true,
     manualUxCall,
+    callAgeMs: callAgeMs.value,
+    callRemainingMs: callRemainingMs.value,
+    callOverdueMs: callOverdueMs.value,
     callCommandPresent,
     blockers: blockers.values,
     warnings: warnings.values,

@@ -1403,10 +1403,10 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const macInputSafetyPlanCommand = "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
   const macManualUxStatusCommand = "node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary";
   const macManualUxChecklist = "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
-  const macManualUxSummary = `status=calling checklist=${macManualUxChecklist} labels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 signals=manualUxCallInProgress target=192.168.31.122:43770 next=ReconfirmManualUxCall safety=no-password,no-input-inject noFormalE2ERerun=true manualUxCall=timeout callCommand=absent blockers=none warnings=manual-ux-call-timeout`;
+  const macManualUxSummary = `status=calling checklist=${macManualUxChecklist} labels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 signals=manualUxCallInProgress target=192.168.31.122:43770 next=ReconfirmManualUxCall safety=no-password,no-input-inject noFormalE2ERerun=true manualUxCall=timeout callAgeMs=660000 callOverdueMs=60000 callCommand=absent blockers=none warnings=manual-ux-call-timeout`;
   const macManualUxAckTimeoutSummary = "status=blocked reason=manual-ux-call-timeout next=AskMacReconfirmManualUxCall";
   const macManualUxBoardText = `MacManualUx=status=call-ready ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=userAwakeManualUx Target=192.168.31.122:43770 Next=SendManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxCallCommand=node scripts/codex-link-client.mjs --server http://192.168.31.68:17888 call --from MacCodex --need WindowsCodex`;
-  const macManualUxCallingBoardText = `MacManualUx=status=calling ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=manualUxCallInProgress Target=192.168.31.122:43770 Next=ReconfirmManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxCall=timeout warnings=manual-ux-call-timeout`;
+  const macManualUxCallingBoardText = `MacManualUx=status=calling ManualUxChecklist=${macManualUxChecklist} ManualUxLabels=连接/画面/声音/文本剪贴板/文件剪贴板/窗口/全屏/原画/复制诊断 Signals=manualUxCallInProgress Target=192.168.31.122:43770 Next=ReconfirmManualUxCall Safety=no-password,no-input-inject NoFormalE2ERerun=true ManualUxCall=timeout ManualUxCallAgeMs=660000 ManualUxCallOverdueMs=60000 warnings=manual-ux-call-timeout`;
   const macRemoteAudioSummary = "status=plan-only capture=system-pcm-does-not-mute-local remoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle recommended=product-toggle-with-explicit-consent safety=no-volume-change,no password/input/inject";
   const macRemoteAudioBoardText = "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject.";
   const macInputSafetySummary = "status=plan-only default=log realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe safety=no-password,no-input-events,no-inject";
@@ -1714,6 +1714,9 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board.macManualUx.status === "calling", "MacManualUx status mismatch");
       assert(payload.board.macManualUx.next === "ReconfirmManualUxCall", "MacManualUx next mismatch");
       assert(payload.board.macManualUx.manualUxCall === "timeout", "MacManualUx call timing mismatch");
+      assert(payload.board.macManualUx.callAgeMs === 660000, "MacManualUx call age mismatch");
+      assert(payload.board.macManualUx.callOverdueMs === 60000, "MacManualUx call overdue mismatch");
+      assert(payload.board.macManualUx.callRemainingMs == null, "MacManualUx timeout should not expose remaining time");
       assert(payload.board.macManualUx.warnings?.includes("manual-ux-call-timeout"), "MacManualUx timeout warning should be preserved");
       assert(payload.board.macManualUx.callCommandPresent === false, "MacManualUx call command should be absent while call is already active");
       assert(payload.board.macManualUx.rejectedCount >= 2, "unsafe MacManualUx summaries should be rejected");

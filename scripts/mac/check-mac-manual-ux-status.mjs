@@ -335,11 +335,14 @@ function isManualUxConfirmationSender(name) {
   return /windows codex|user|用户|skymoonzyj/i.test(normalizedText(name));
 }
 
-function happenedAfterCallStart(value, call) {
+function happenedDuringCallWindow(value, call) {
   const callStartedAtMs = Date.parse(call?.startedAt || call?.updatedAt || "");
   if (!Number.isFinite(callStartedAtMs)) return true;
   const happenedAtMs = Date.parse(normalizedText(value));
-  return Number.isFinite(happenedAtMs) && happenedAtMs >= callStartedAtMs;
+  if (!Number.isFinite(happenedAtMs) || happenedAtMs < callStartedAtMs) return false;
+  const timeoutMs = parseDurationMs(call?.timeout);
+  if (!Number.isFinite(timeoutMs)) return true;
+  return happenedAtMs <= callStartedAtMs + timeoutMs;
 }
 
 function hasManualUxConfirmation(state, call) {
@@ -347,14 +350,14 @@ function hasManualUxConfirmation(state, call) {
   if (state?.statuses && typeof state.statuses === "object") {
     for (const [device, status] of Object.entries(state.statuses)) {
       if (!isManualUxConfirmationSender(device)) continue;
-      if (!happenedAfterCallStart(status?.updatedAt, call)) continue;
+      if (!happenedDuringCallWindow(status?.updatedAt, call)) continue;
       if (isManualUxConfirmationText(status)) return true;
     }
   }
   if (Array.isArray(state?.recentEvents)) {
     for (const event of state.recentEvents) {
       if (!isManualUxConfirmationSender(event?.from)) continue;
-      if (!happenedAfterCallStart(event?.at, call)) continue;
+      if (!happenedDuringCallWindow(event?.at, call)) continue;
       if (isManualUxConfirmationText(event)) return true;
     }
   }
@@ -602,7 +605,17 @@ function makeBoardSummary(report) {
     "NoFormalE2ERerun=true",
   ];
   if (report.commands?.manualUxCallCommand) parts.push(`ManualUxCallCommand=${report.commands.manualUxCallCommand}`);
-  if (report.manualUxCall?.state) parts.push(`ManualUxCall=${report.manualUxCall.state}`);
+  if (report.manualUxCall?.state) {
+    parts.push(`ManualUxCall=${report.manualUxCall.state}`);
+    if (Number.isFinite(report.manualUxCall.ageMs)) {
+      parts.push(`ManualUxCallAgeMs=${Math.max(0, Math.round(report.manualUxCall.ageMs))}`);
+    }
+    if (report.manualUxCall.timedOut && Number.isFinite(report.manualUxCall.remainingMs)) {
+      parts.push(`ManualUxCallOverdueMs=${Math.max(0, Math.round(-report.manualUxCall.remainingMs))}`);
+    } else if (Number.isFinite(report.manualUxCall.remainingMs)) {
+      parts.push(`ManualUxCallRemainingMs=${Math.max(0, Math.round(report.manualUxCall.remainingMs))}`);
+    }
+  }
   if (report.sentCall?.ok) parts.push("ManualUxCallSent=true");
   if (report.sentCall?.ok === false) parts.push("ManualUxCallSent=false");
   if (report.reconfirmedCall?.ok) parts.push("ManualUxCallReconfirmed=true");
