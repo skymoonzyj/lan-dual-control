@@ -17,6 +17,36 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Mac Codex
+
+日期：2026-06-20 真实体验 blocker / remote-only audio 评估
+开发端：Mac Codex
+本轮目标：响应通讯板要求，评估 Mac 系统声音采集是否会自动变成“仅远端播放”，并给出安全 remote-only audio 方案入口。
+完成内容：
+- 结论：当前 Mac host 的 ScreenCaptureKit `system-pcm` 链路只做系统声音捕获并发送 `audio_frame`，不会自动静音本机扬声器，也不会切换输出设备或改系统音量。
+- 新增 `scripts/mac/plan-mac-remote-audio.mjs`：只输出 plan/JSON/boardSummary，明确 `capture=system-pcm-does-not-mute-local`，给出 `manual-mute-restore`、`virtual-output-device`、`product-toggle` 三种路线；推荐后续做显式用户同意、可见状态和断开恢复的产品开关。
+- `check-mac-host-readiness` 的 JSON、`--boardSummary` 和普通 NEXT 输出新增 `MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary`，方便只看 readiness/heartbeat 摘要的人直接复制无害方案入口。
+修改文件：
+- `scripts/mac/plan-mac-remote-audio.mjs`
+- `scripts/mac/test-mac-remote-audio-plan.mjs`
+- `scripts/mac/check-mac-host-readiness.mjs`
+- `scripts/mac/test-mac-host-readiness-board.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-remote-audio-plan.mjs` 先失败在 `plan-mac-remote-audio.mjs` 不存在。
+- 绿灯：`node scripts/mac/test-mac-remote-audio-plan.mjs` 通过，确认 help/JSON/boardSummary 不含密码、输入、inject 或系统音量修改命令。
+- 红灯：`node scripts/mac/test-mac-host-readiness-board.mjs --timeoutMs 20000` 先失败在 help 未记录 `commands.macRemoteAudioPlanCommand`。
+- 绿灯：同一 readiness 自测通过，确认 JSON、boardSummary、普通输出都带 `MacRemoteAudioPlan` 且不泄密。
+遗留问题：
+- 这轮只做安全评估和方案入口，不实现自动静音/切换输出设备；后续若要真正 remote-only，必须在用户明确同意下实现状态快照、可见开关和恢复逻辑。
+下一步建议：
+- 用户下一次真实体验时，先用 Windows 端验证第一轮抖动/音频缓冲修复；如果需要“Mac 本机不出声”，先讨论并选择 remote-only 路线，不要让脚本擅自改系统音量。
+是否改了协议：否。
+是否需要另一端配合：Windows 端可消费 `MacRemoteAudioPlan=` 作为提示入口；真实 remote-only 产品开关需要后续双端 UI/状态协商再定。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 N2 音频队列治理

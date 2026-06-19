@@ -282,6 +282,11 @@ Machine-readable JSON fields:
   commands.macScriptHelpCommand
                             Unified side-effect-free Mac script help
                             self-check command.
+  commands.macRemoteAudioPlanCommand
+                            Secret-free remote-only audio plan. It explains
+                            current system-pcm capture behavior and safe
+                            remote-only options without changing Mac audio
+                            output, prompting, authenticating, or sending input.
   board.macHostAuthPath
                             Optional sanitized MacHostAuthPath summary copied
                             from Agent Link Board statuses when --checkBoard is
@@ -820,6 +825,7 @@ function formatReadinessBoardSummary(summary) {
     `MacFormalLocalSmoke=${summary.commands?.macFormalLocalSmokeCommand || makeMacFormalLocalSmokeCommand(summary.args || {})}.`,
     `MacPowerPlan=${summary.commands?.macPowerPlanCommand || makeMacPowerPlanCommand()}.`,
     `MacScriptHelp=${summary.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
+    `MacRemoteAudioPlan=${summary.commands?.macRemoteAudioPlanCommand || makeMacRemoteAudioPlanCommand()}.`,
     nextStep,
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
   ].join(" ");
@@ -1021,6 +1027,10 @@ function makeMacPowerPlanCommand() {
 
 function makeMacScriptHelpCommand() {
   return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
+}
+
+function makeMacRemoteAudioPlanCommand() {
+  return "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary";
 }
 
 function formatMediaBoardSummary(summary) {
@@ -1609,6 +1619,7 @@ async function main() {
       macFormalLocalSmokeCommand: makeMacFormalLocalSmokeCommand(args),
       macPowerPlanCommand: makeMacPowerPlanCommand(),
       macScriptHelpCommand: makeMacScriptHelpCommand(),
+      macRemoteAudioPlanCommand: makeMacRemoteAudioPlanCommand(),
     },
     results: results.map((result) => ({
       label: result.label,
@@ -1656,6 +1667,7 @@ async function main() {
     print("NEXT", `Mac formal local smoke: ${summary.commands.macFormalLocalSmokeCommand}`, args);
     print("NEXT", `Mac power settings dry-run plan: ${summary.commands.macPowerPlanCommand}`, args);
     print("NEXT", `Mac script help safety check: ${summary.commands.macScriptHelpCommand}`, args);
+    print("NEXT", `Mac remote-only audio plan: ${summary.commands.macRemoteAudioPlanCommand}`, args);
     if (summary.suggestedAction?.id) {
       print("NEXT", `Suggested action: ${summary.suggestedAction.id} · ${summary.suggestedAction.reason}`, args);
     }
