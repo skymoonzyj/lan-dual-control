@@ -291,6 +291,8 @@ const macUnattendedRiskLabels = {
   "mac-max-fps-safe-start": "Mac 60Hz 安全启动命令已提供",
   "mac-launch-agent-load-command": "Mac LaunchAgent 加载命令已提供",
   "mac-launch-agent-print-command": "Mac LaunchAgent 打印验证命令已提供",
+  "mac-client-page-command": "Mac client 页面状态命令已提供",
+  "mac-client-diagnostics-command": "Mac client 诊断命令已提供",
   "mac-client-discover-windows": "Mac client Windows 发现命令已提供",
   "mac-client-formal-checklist": "Mac client 正式清单命令已提供",
   "mac-client-prompt-password-smoke": "Mac client 前台密码真测命令已提供",
@@ -3320,6 +3322,10 @@ function parseMacUnattendedAttention(text) {
   const hasMacMaxFpsSafeStart = /\bMacMaxFpsSafeStart\s*=/i.test(source);
   const hasMacLaunchAgentLoad = /\bMacLaunchAgentLoad\s*=\s*launchctl\s+bootstrap\b/i.test(source);
   const hasMacLaunchAgentPrint = /\bMacLaunchAgentPrint\s*=\s*launchctl\s+print\b/i.test(source);
+  const hasMacClientPageCommand =
+    /\bMacClientPage\s*=\s*(?:node\s+)?(?:scripts[\\/]+mac[\\/]+)?start-mac-client\.mjs\b/i.test(source);
+  const hasMacClientDiagnosticsCommand =
+    /\bMacClientDiagnostics\s*=\s*(?:node\s+)?(?:scripts[\\/]+mac[\\/]+)?check-mac-client-readiness\.mjs\b/i.test(source);
   const hasMacClientDiscoverWindows = /\bMacClientDiscoverWindows\s*=/i.test(source);
   const hasMacClientFormalChecklist = /\bMacClientFormalChecklist\s*=/i.test(source);
   const hasMacClientPromptPasswordSmoke = /\bMacClientPromptPasswordSmoke\s*=/i.test(source);
@@ -3490,6 +3496,26 @@ function parseMacUnattendedAttention(text) {
   }
   if (windowsLanRisks.length > 0) {
     risks.unshift("windows-lan-risk");
+  }
+  const hasMacClientCommandFinding =
+    risks.some((risk) =>
+      [
+        "client-page",
+        "local-server",
+        "windows-host",
+        "auth",
+        "board",
+        "video",
+        "build",
+        "repo",
+      ].includes(risk),
+    ) ||
+    /\b(MacClientPage|MacClientDiagnostics|Mac client page|Mac client readiness|start-mac-client|check-mac-client-readiness)\b[^;]*(status\s*=\s*(warning|blocked|failed)|ready\s*=\s*false|offline|unreachable|failed|blockers\s*[:=]\s*(?!none\b)[^;\s]+|warnings\s*[:=]\s*(?!none\b)[^;\s]+)/i.test(source);
+  if (hasMacClientPageCommand && hasMacClientCommandFinding) {
+    risks.unshift("mac-client-page-command");
+  }
+  if (hasMacClientDiagnosticsCommand && hasMacClientCommandFinding) {
+    risks.unshift("mac-client-diagnostics-command");
   }
   if (
     hasMacClientDiscoverWindows &&

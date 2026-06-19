@@ -1645,6 +1645,24 @@ async function verifyDesktopOnlyHostPanel(session) {
               ].join("; "),
             )
           : null;
+      const cleanMacClientPageCommandAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "MacClientPage=node scripts/mac/start-mac-client.mjs --status --boardSummary",
+                "Mac client page online blockers=none warnings=none",
+              ].join("; "),
+            )
+          : null;
+      const cleanMacClientDiagnosticsCommandAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "MacClientDiagnostics=node scripts/mac/check-mac-client-readiness.mjs --probeClientServer --checkBoard --boardSummary",
+                "Mac client readiness ready blockers=none warnings=none",
+              ].join("; "),
+            )
+          : null;
       const cleanMacClientBrowserSelfTestAttention =
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
@@ -1696,6 +1714,24 @@ async function verifyDesktopOnlyHostPanel(session) {
               [
                 "MacHeartbeat=status=warning warnings=mac-host-build-stale reason=ok restart recommended hostRuntimeChanges=1",
                 "MacHostMedia=node scripts/mac/check-mac-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --probeMedia --probeMediaResourceSample --promptPassword --boardSummary",
+              ].join("; "),
+            )
+          : null;
+      const macClientPageCommandAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "MacClientPage=node scripts/mac/start-mac-client.mjs --status --boardSummary",
+                "Mac client page offline blockers=client-page warnings=local-server",
+              ].join("; "),
+            )
+          : null;
+      const macClientDiagnosticsCommandAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "MacClientDiagnostics=node scripts/mac/check-mac-client-readiness.mjs --probeClientServer --checkBoard --boardSummary",
+                "Mac client readiness status=warning blockers=windows-host warnings=board",
               ].join("; "),
             )
           : null;
@@ -2034,6 +2070,12 @@ async function verifyDesktopOnlyHostPanel(session) {
           cleanMacHostMediaCommandAttention?.summary === "" &&
           Array.isArray(cleanMacHostMediaCommandAttention?.labels) &&
           cleanMacHostMediaCommandAttention.labels.length === 0 &&
+          cleanMacClientPageCommandAttention?.summary === "" &&
+          Array.isArray(cleanMacClientPageCommandAttention?.labels) &&
+          cleanMacClientPageCommandAttention.labels.length === 0 &&
+          cleanMacClientDiagnosticsCommandAttention?.summary === "" &&
+          Array.isArray(cleanMacClientDiagnosticsCommandAttention?.labels) &&
+          cleanMacClientDiagnosticsCommandAttention.labels.length === 0 &&
           cleanMacClientBrowserSelfTestAttention?.summary === "" &&
           Array.isArray(cleanMacClientBrowserSelfTestAttention?.labels) &&
           cleanMacClientBrowserSelfTestAttention.labels.length === 0 &&
@@ -2046,6 +2088,8 @@ async function verifyDesktopOnlyHostPanel(session) {
           cleanMacScriptHelpAttention.labels.length === 0 &&
           macHeartbeatRerunAttention?.summary.includes("Mac 心跳复查命令已提供") &&
           macHostMediaCommandAttention?.summary.includes("Mac 媒体基线命令已提供") &&
+          macClientPageCommandAttention?.summary.includes("Mac client 页面状态命令已提供") &&
+          macClientDiagnosticsCommandAttention?.summary.includes("Mac client 诊断命令已提供") &&
           macFormalE2eBrowserSelfTestAttention?.summary.includes("Mac client 本地 browser 自测命令已提供") &&
           macFormalE2eScriptHelpAttention?.summary.includes("Mac 脚本 help 安全自检命令已提供") &&
           readinessHeaderText.includes("client-test") &&
@@ -2102,12 +2146,16 @@ async function verifyDesktopOnlyHostPanel(session) {
         heartbeatCommandCheck,
         cleanMacHostReadinessCommandAttention,
         cleanMacHostMediaCommandAttention,
+        cleanMacClientPageCommandAttention,
+        cleanMacClientDiagnosticsCommandAttention,
         cleanMacClientBrowserSelfTestAttention,
         macUnattendedBrowserSelfTestAttention,
         cleanMacClientPromptPasswordSmokeAttention,
         cleanMacScriptHelpAttention,
         macHeartbeatRerunAttention,
         macHostMediaCommandAttention,
+        macClientPageCommandAttention,
+        macClientDiagnosticsCommandAttention,
         macFormalE2eBrowserSelfTestAttention,
         macFormalE2eScriptHelpAttention,
         readinessHeader: readinessHeaderLines.slice(0, 4),
