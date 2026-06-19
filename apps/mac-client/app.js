@@ -2862,6 +2862,31 @@ function formatBytes(bytes) {
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function formatDurationApprox(ms) {
+  const value = Math.max(0, Number(ms) || 0);
+  const seconds = Math.ceil(value / 1000);
+  if (seconds < 60) return `${seconds} 秒`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (minutes < 60) {
+    return remainingSeconds ? `${minutes} 分 ${remainingSeconds} 秒` : `${minutes} 分`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes ? `${hours} 小时 ${remainingMinutes} 分` : `${hours} 小时`;
+}
+
+function formatFileTransferProgress({ sentBytes = 0, totalBytes = 0, startedAt = performance.now() } = {}) {
+  const safeTotal = Math.max(0, Number(totalBytes) || 0);
+  const safeSent = Math.min(safeTotal || Number.MAX_SAFE_INTEGER, Math.max(0, Number(sentBytes) || 0));
+  const percent = safeTotal === 0 ? 100 : Math.round((safeSent / safeTotal) * 100);
+  const elapsedMs = Math.max(1, performance.now() - (Number(startedAt) || performance.now()));
+  const bytesPerSecond = safeSent > 0 ? safeSent / (elapsedMs / 1000) : 0;
+  const remainingBytes = Math.max(0, safeTotal - safeSent);
+  const eta = bytesPerSecond > 0 ? formatDurationApprox((remainingBytes / bytesPerSecond) * 1000) : "计算中";
+  return `发送 ${percent}% · 已发 ${formatBytes(safeSent)}/${formatBytes(safeTotal)} · ${formatBytes(bytesPerSecond)}/s · 剩余约 ${eta}`;
+}
+
 function makeFileTransferId() {
   if (window.crypto?.randomUUID) {
     return window.crypto.randomUUID();
@@ -3008,6 +3033,7 @@ async function sendClipboardFiles() {
   }
 
   const transferId = makeFileTransferId();
+  const startedAt = performance.now();
   const fileMetas = files.map((file, index) => ({
     index,
     name: file.name,
@@ -3024,7 +3050,7 @@ async function sendClipboardFiles() {
   state.fileTransferRetryAvailable = false;
   state.fileTransferId = transferId;
   state.fileTransferAbortController = abortController;
-  state.fileTransfers.set(transferId, { fileCount: files.length, totalBytes, sentBytes: 0 });
+  state.fileTransfers.set(transferId, { fileCount: files.length, totalBytes, sentBytes: 0, startedAt });
   updateFileClipboardButton();
   elements.fileClipboardStatus.textContent = `准备发送 ${files.length} 个`;
 
@@ -3081,9 +3107,9 @@ async function sendClipboardFiles() {
         });
         sentBytes = nextSentBytes;
         chunkIndex += 1;
-        state.fileTransfers.set(transferId, { fileCount: files.length, totalBytes, sentBytes });
-        const percent = totalBytes === 0 ? 100 : Math.round((sentBytes / totalBytes) * 100);
-        elements.fileClipboardStatus.textContent = `发送 ${percent}%`;
+        const transfer = { fileCount: files.length, totalBytes, sentBytes, startedAt };
+        state.fileTransfers.set(transferId, transfer);
+        elements.fileClipboardStatus.textContent = formatFileTransferProgress(transfer);
         if (chunkIndex % 8 === 0) {
           await yieldToUi();
         }

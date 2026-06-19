@@ -2626,6 +2626,20 @@ async function verifyMacClientFileClipboardDisconnectCancel({ args, session, upl
     args.timeoutMs,
     "Mac client file clipboard sending state",
   );
+  const progressSnapshot = await waitFor(
+    async () => {
+      const value = await evaluate(session, buildSnapshotExpression());
+      return value.fileClipboard.includes("发送 ") &&
+        value.fileClipboard.includes("已发") &&
+        value.fileClipboard.includes("/s") &&
+        value.fileClipboard.includes("剩余约")
+        ? value
+        : null;
+    },
+    args.timeoutMs,
+    "Mac client file clipboard progress speed and ETA",
+  );
+  print("OK", `File clipboard progress detail: ${progressSnapshot.fileClipboard}`);
   await evaluate(
     session,
     `(() => {
