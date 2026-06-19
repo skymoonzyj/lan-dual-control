@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const script = "scripts/mac/check-mac-resume-status.mjs";
+const manualUxChecklist = "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
 
 const defaults = {
   host: "127.0.0.1",
@@ -1377,6 +1378,53 @@ async function checkPostPassManualUxStandby(args) {
   print("OK", "Post-pass Mac resume status promotes manual UX standby instead of formal rerun");
 }
 
+async function checkUsableEntryCallUsesManualUxPath(args) {
+  const call = {
+    status: "CALLING",
+    goal: "强制可用化：尽快交付用户可打开、可连接、可远程 Mac 的第一版入口",
+    from: "Supervisor Codex",
+    need: "Windows Codex, Mac Codex",
+    expected: "Windows 提供最短启动入口，Mac 保持 host/client/heartbeat 在线并配合手工体验测试。",
+    ask: "停止外围完善，直接推进可用入口和手工体验测试。",
+  };
+  await withFakeMacHost(async (macHost) => {
+    await withFakeBoard(call, async (server) => {
+      const result = await runAsync(args, [
+        "--json",
+        "--checkBoard",
+        "--server",
+        server,
+        "--host",
+        macHost.host,
+        "--port",
+        String(macHost.port),
+        "--timeoutMs",
+        "1200",
+      ]);
+      assert(result.status === 0, `usable-entry call JSON should stay non-failing\n${result.stdout}\n${result.stderr}`);
+      const payload = parseJson(result.stdout, "usable-entry call resume status");
+      assert(payload.board?.activeCall === true, "usable-entry call JSON should keep the active call");
+      assert(payload.board?.macManualUxStandby?.status === "standby", "usable-entry call should promote manual UX standby");
+      assert(payload.board.macManualUxStandby.checklist === manualUxChecklist, "usable-entry call should use the default manual UX checklist");
+      assert(payload.recommendations.some((item) => item.id === "manual-ux-standby"), "usable-entry call should recommend manual UX validation");
+      assert(String(payload.boardSummary || "").includes("ManualUxStandby=MacManualUxStandby"), "usable-entry boardSummary should expose manual UX standby");
+      assert(String(payload.boardSummary || "").includes(`ManualUxChecklist=${manualUxChecklist}`), "usable-entry boardSummary should expose the default checklist");
+      assert(!String(payload.boardSummary || "").includes("Next formal path"), "usable-entry boardSummary should not point back to formal E2E");
+      assertNoPasswordLeak(result, "usable-entry call JSON");
+    }, {
+      statuses: {
+        "Mac Codex": {
+          status: "coding",
+          role: "Mac 端",
+          note: "正在按强制可用化 call 刷新 Mac 可用证据，没有单独重复 MAC_STANDING_BY_FOR_MANUAL_UX_TEST。",
+        },
+      },
+      events: [],
+    });
+  }, { capturePipeline: "screencapturekit-h264" });
+  print("OK", "Usable-entry currentCall keeps Mac resume on manual UX path");
+}
+
 async function checkBoardMacEvidence(args) {
   const cleanHeartbeat = "MacHeartbeat=status=ok; checkedAt=2026-06-19T04:54:22.847Z; device=Mac; macHost=online 127.0.0.1:43770; macClient=online http://127.0.0.1:5188/; board=ok call=none; blockers=none warnings=none reason=ok. Evidence=MacClientPageOnline,MacClientDiagnosticsOk.";
   await withFakeBoard(null, async (server) => {
@@ -1685,6 +1733,7 @@ async function main() {
   checkPasswordRedaction(args);
   await checkBoardCurrentCall(args);
   await checkPostPassManualUxStandby(args);
+  await checkUsableEntryCallUsesManualUxPath(args);
   await checkBoardMacEvidence(args);
   await checkBoardMacPowerHealth(args);
   await checkBoardDoneCall(args);

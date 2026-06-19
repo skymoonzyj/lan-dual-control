@@ -854,18 +854,30 @@ function extractMacHostAuthPath(text) {
 function extractMacManualUxStandby(text) {
   const source = normalizedText(text);
   if (!source) return null;
+  const hasUsableEntryManualUxCall = isUsableEntryManualUxCall(source);
   const hasStandbyToken = /\bMAC_STANDING_BY_FOR_MANUAL_UX_TEST\b/.test(source)
     || /\bPostPassNext=WindowsRecordPassAndTailError\+MacManualUxStandby\b/.test(source)
-    || /\bManualUxChecklist=/i.test(source);
+    || /\bManualUxChecklist=/i.test(source)
+    || hasUsableEntryManualUxCall;
   if (!hasStandbyToken) return null;
   const checklist = extractManualUxChecklist(source) || defaultManualUxChecklist;
   return {
     status: "standby",
     signal: source.includes("MAC_STANDING_BY_FOR_MANUAL_UX_TEST")
       ? "MAC_STANDING_BY_FOR_MANUAL_UX_TEST"
+      : hasUsableEntryManualUxCall
+        ? "USABLE_ENTRY_MANUAL_UX"
       : "MacManualUxStandby",
     checklist,
   };
+}
+
+function isUsableEntryManualUxCall(text) {
+  const source = normalizedText(text);
+  if (!source) return false;
+  const usableEntry = /强制可用化|第一版入口|可打开.*可连接.*远程\s*Mac/i.test(source);
+  const manualUx = /手工体验|ManualUx|Manual UX|ManualUxTest/i.test(source);
+  return usableEntry && manualUx;
 }
 
 function extractManualUxChecklist(text) {
