@@ -186,6 +186,8 @@ function assertBoardSummaryShape(text, label) {
   assert(/check-mac-unattended-status\.mjs/.test(text), `${label} should include the Mac unattended/startup command`);
   assert(/MacUnattendedSendStatus=/.test(text), `${label} should include Mac unattended board-status refresh guidance`);
   assert(/MacUnattendedSendStatus=.*--sendStatus/.test(text), `${label} should make the unattended board-status refresh explicit`);
+  assert(/MacPowerPlan=/.test(text), `${label} should include Mac power settings dry-run guidance`);
+  assert(/MacPowerPlan=.*plan-mac-power-settings\.mjs/.test(text), `${label} should include the Mac power settings planner command`);
   assert(/MacUnattendedFormal=/.test(text), `${label} should include Mac unattended formal max-FPS guidance`);
   assert(/--requireLaunchAgentMaxFps/.test(text), `${label} should include the formal max-FPS gate`);
   assert(/MacLaunchAgentPlan=/.test(text), `${label} should include Mac LaunchAgent dry-run guidance`);
@@ -393,6 +395,23 @@ function assertMacLaunchAgentPlanCommand(command, label) {
 function assertMacMaxFpsPlanCommand(command, label) {
   assertMacLaunchAgentPlanCommand(command, label);
   assert(command.includes("--maxScreenFps 60"), `${label} should target the formal 60Hz max-FPS plan`);
+}
+
+function assertMacPowerPlanCommand(command, label) {
+  assert(/plan-mac-power-settings\.mjs/.test(command), `${label} should use plan-mac-power-settings`);
+  assert(command.includes("--profile all"), `${label} should plan AC and battery settings`);
+  assert(command.includes("--sleep 0"), `${label} should plan system sleep disablement`);
+  assert(command.includes("--displaySleep 0"), `${label} should plan display sleep disablement`);
+  assert(command.includes("--networkWake on"), `${label} should plan network wake`);
+  assert(command.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!command.includes("--apply"), `${label} should stay dry-run by default`);
+  assert(!command.includes("sudo"), `${label} should not request privileged shell execution`);
+  assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!command.includes("--password"), `${label} should not embed a password argument`);
+  assert(!command.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!command.includes("--server"), `${label} should not echo custom board server URLs`);
+  assert(!command.includes("input_event"), `${label} should not send input`);
+  assert(!command.includes("inject"), `${label} should not instruct injection`);
 }
 
 function assertMacClientDiagnosticsCommand(command, label) {
@@ -755,6 +774,8 @@ function checkOfflinePlainReport(args) {
   assert(String(result.stdout || "").includes("Mac unattended/startup status:"), "plain report should include Mac unattended/startup label");
   assert(String(result.stdout || "").includes("Mac unattended formal 60Hz gate:"), "plain report should include Mac unattended formal label");
   assert(String(result.stdout || "").includes("--requireLaunchAgentMaxFps"), "plain report should include Mac unattended formal max-FPS gate");
+  assert(String(result.stdout || "").includes("Mac power settings dry-run plan:"), "plain report should include Mac power settings planner label");
+  assert(String(result.stdout || "").includes("plan-mac-power-settings.mjs"), "plain report should include Mac power settings planner command");
   assert(String(result.stdout || "").includes("Mac LaunchAgent dry-run plan:"), "plain report should include Mac LaunchAgent planner label");
   assert(String(result.stdout || "").includes("Mac max FPS dry-run plan:"), "plain report should include Mac max-FPS planner label");
   assert(String(result.stdout || "").includes("--maxScreenFps 60"), "plain report should include Mac max-FPS planner command");
@@ -840,6 +861,7 @@ function checkOnlineJson(args) {
   assertMacUnattendedStatusCommand(payload.commands?.macUnattendedStatusCommand || "", "online JSON Mac unattended/startup command");
   assertMacUnattendedSendStatusCommand(payload.commands?.macUnattendedSendStatusCommand || "", "online JSON Mac unattended board-status refresh command");
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand || "", "online JSON Mac unattended formal command");
+  assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand || "", "online JSON Mac power settings planner command");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlanCommand || "", "online JSON Mac LaunchAgent planner command");
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand || "", "online JSON Mac max-FPS planner command");
   assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "online JSON Mac client page status command");
@@ -1318,6 +1340,8 @@ async function checkBoardMacPowerHealth(args) {
     assert(payload.board?.macPowerHealth?.warnings === "system-sleep-enabled,display-sleep-enabled", "Mac power health JSON should expose detailed warning tags");
     assert(payload.board?.macPowerHealth?.checkedAt === "2026-06-19T07:23:38.703Z", "Mac power health JSON should expose checkedAt");
     assert(String(payload.boardSummary || "").includes("MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z;"), "board summary should expose MacPowerHealth as a standalone segment");
+    assert(String(payload.boardSummary || "").includes("MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs"), "board summary should include a safe Mac power settings dry-run plan");
+    assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand || "", "Mac power health JSON Mac power settings planner command");
     assertNoPasswordLeak(result, "Mac power health JSON");
   }, {
     statuses: {

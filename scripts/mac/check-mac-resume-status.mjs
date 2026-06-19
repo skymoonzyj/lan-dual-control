@@ -133,6 +133,10 @@ Machine-readable JSON fields:
                              Secret-free formal 60Hz unattended gate; it turns
                              missing or low LaunchAgent maxScreenFps into a
                              blocker and still does not change system state.
+  commands.macPowerPlanCommand
+                             Secret-free Mac power settings dry-run planner;
+                             it prints the pmset changes needed for unattended
+                             use without applying them or requesting a password.
   commands.macLaunchAgentPlanCommand
                              Secret-free Mac host LaunchAgent dry-run planner;
                              it prints a plist plan and manual load commands
@@ -1028,6 +1032,21 @@ function makeMacUnattendedFormalCommand(args) {
   ].join(" ");
 }
 
+function makeMacPowerPlanCommand() {
+  return [
+    "node scripts/mac/plan-mac-power-settings.mjs",
+    "--profile",
+    "all",
+    "--sleep",
+    "0",
+    "--displaySleep",
+    "0",
+    "--networkWake",
+    "on",
+    "--boardSummary",
+  ].join(" ");
+}
+
 function makeMacLaunchAgentPlanCommand(args) {
   return [
     "node scripts/mac/install-mac-host-launch-agent.mjs",
@@ -1461,6 +1480,7 @@ function formatBoardSummary(report) {
       `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
       `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
       `MacUnattendedSendStatus=${report.commands.macUnattendedSendStatusCommand}.`,
+      `MacPowerPlan=${report.commands.macPowerPlanCommand}.`,
       `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
       `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
       `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
@@ -1506,6 +1526,7 @@ function formatBoardSummary(report) {
     `MacFormalE2E=${report.commands.macFormalE2eStatusCommand}.`,
     `MacUnattendedStatus=${report.commands.macUnattendedStatusCommand}.`,
     `MacUnattendedSendStatus=${report.commands.macUnattendedSendStatusCommand}.`,
+    `MacPowerPlan=${report.commands.macPowerPlanCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
     `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
     `MacMaxFpsPlan=${report.commands.macMaxFpsPlanCommand}.`,
@@ -1609,6 +1630,7 @@ function printReport(report) {
   console.log(`[NEXT] Mac unattended/startup status: ${report.commands.macUnattendedStatusCommand}`);
   console.log(`[NEXT] Mac unattended board-status refresh: ${report.commands.macUnattendedSendStatusCommand}`);
   console.log(`[NEXT] Mac unattended formal 60Hz gate: ${report.commands.macUnattendedFormalCommand}`);
+  console.log(`[NEXT] Mac power settings dry-run plan: ${report.commands.macPowerPlanCommand}`);
   console.log(`[NEXT] Mac LaunchAgent dry-run plan: ${report.commands.macLaunchAgentPlanCommand}`);
   console.log(`[NEXT] Mac max FPS dry-run plan: ${report.commands.macMaxFpsPlanCommand}`);
   console.log(`[NEXT] Mac client page status: ${report.commands.macClientPageStatusCommand}`);
@@ -1682,6 +1704,7 @@ async function main() {
       macUnattendedStatusCommand: makeMacUnattendedStatusCommand(args),
       macUnattendedSendStatusCommand: makeMacUnattendedSendStatusCommand(args),
       macUnattendedFormalCommand: makeMacUnattendedFormalCommand(args),
+      macPowerPlanCommand: makeMacPowerPlanCommand(),
       macLaunchAgentPlanCommand: makeMacLaunchAgentPlanCommand(args),
       macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
       macClientPageStatusCommand: makeMacClientPageStatusCommand(),

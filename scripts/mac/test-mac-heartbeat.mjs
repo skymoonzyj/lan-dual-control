@@ -151,6 +151,23 @@ function assertMacPowerHealth(payload, expected, label) {
   assert(payload.board?.macPowerHealth?.checkedAt === expected.checkedAt, `${label} should expose MacPowerHealth checkedAt`);
 }
 
+function assertMacPowerPlanCommand(command, label) {
+  assertIncludes(command || "", "plan-mac-power-settings.mjs", label);
+  assertIncludes(command || "", "--profile all", label);
+  assertIncludes(command || "", "--sleep 0", label);
+  assertIncludes(command || "", "--displaySleep 0", label);
+  assertIncludes(command || "", "--networkWake on", label);
+  assertIncludes(command || "", "--boardSummary", label);
+  assertNotIncludes(command || "", "--apply", label);
+  assertNotIncludes(command || "", "sudo", label);
+  assertNotIncludes(command || "", "--promptPassword", label);
+  assertNotIncludes(command || "", "--password", label);
+  assertNotIncludes(command || "", "--sendCall", label);
+  assertNotIncludes(command || "", "--server", label);
+  assertNotIncludes(command || "", "input_event", label);
+  assertNotIncludes(command || "", "inject", label);
+}
+
 function assertCommandSet(commands, label) {
   assertIncludes(commands?.macHeartbeatCommand || "", "check-mac-heartbeat.mjs", label);
   assertIncludes(commands?.macHeartbeatCommand || "", "--checkBoard", label);
@@ -192,6 +209,7 @@ function assertCommandSet(commands, label) {
   assertIncludes(commands?.macUnattendedFormalCommand || "", "--requireLaunchAgentMaxFps", label);
   assertIncludes(commands?.macUnattendedFormalCommand || "", "--requireLaunchAgentLoaded", label);
   assertIncludes(commands?.macUnattendedFormalCommand || "", "--boardSummary", label);
+  assertMacPowerPlanCommand(commands?.macPowerPlanCommand || "", label);
   assertIncludes(commands?.macLaunchAgentLoadCommand || "", "launchctl bootstrap", label);
   assertIncludes(commands?.macLaunchAgentLoadCommand || "", "Library/LaunchAgents/com.lan-dual-control.mac-host.plist", label);
   assertIncludes(commands?.macLaunchAgentPrintCommand || "", "launchctl print", label);
@@ -310,6 +328,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "macHeartbeatHealth", `${script} ${flag}`);
     assertIncludes(result.stdout, "macEvidence", `${script} ${flag}`);
     assertIncludes(result.stdout, "MacUnattendedSendStatus", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macPowerPlanCommand", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
   print("OK", "Mac heartbeat help exits quickly");
@@ -362,6 +381,8 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "MacUnattendedStatus=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacUnattendedSendStatus=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "--sendStatus", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacPowerPlan=", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "plan-mac-power-settings.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentLoad=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentPrint=", "offline board summary");
@@ -453,6 +474,8 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "MacUnattendedStatus=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacUnattendedSendStatus=", "online board summary");
       assertIncludes(payload.boardSummary || "", "--sendStatus", "online board summary");
+      assertIncludes(payload.boardSummary || "", "MacPowerPlan=", "online board summary");
+      assertIncludes(payload.boardSummary || "", "plan-mac-power-settings.mjs", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacLaunchAgentLoad=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacLaunchAgentPrint=", "online board summary");
@@ -606,6 +629,8 @@ async function checkBoardMacPowerHealth(args) {
       checkedAt: "2026-06-19T07:23:38.703Z",
     }, "Mac power health heartbeat");
     assertIncludes(payload.boardSummary || "", "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z.", "Mac power heartbeat summary");
+    assertIncludes(payload.boardSummary || "", "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs", "Mac power heartbeat summary");
+    assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand || "", "Mac power heartbeat commands");
     assertNoSecrets(`${result.stdout}\n${result.stderr}`, "Mac power heartbeat output");
   });
 
