@@ -48,6 +48,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 恢复总览接住 Mac 端独立稳定证据短标签。
+完成内容：
+- `check-windows-resume-status --checkBoard` 现在会从干净通讯板片段识别独立 `MacClientDiagnosticsOk` 等白名单短标签，即使没有 `Evidence=` 前缀，也会汇总进 JSON `board.macEvidence`、普通输出和 `MacEvidence=` 一行摘要。
+- 风险片段仍被拒绝：`failed/blocked/stale/offline`、非空 warning/blocker、Mac 脚本命令、重连文本或 `MacClientDiagnosticsOk failed` 不会进入健康证据。
+- 现场只读总览已看到 `MacEvidence=MacClientDiagnosticsOk,MacHostMediaOk,MacFormalLocalSmokeOk,MacClientPageOnline`。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增测试后，`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 失败在 `Mac positive evidence summary mismatch`。
+- 绿灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 现场：`node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary`
+遗留问题：
+- 本轮只增强证据汇总，不运行 Mac 认证、媒体长测或输入注入。
+下一步建议：
+- Mac 端只要把稳定短标签写到干净状态/消息里，Windows resume 第一屏就能同步显示；如果同段有 warning/blocker，仍按风险处理。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：增强 Windows 恢复总览的 Windows client 诊断端口占用定位。
 完成内容：
 - `check-windows-resume-status` 新增安全 owner 摘要：JSON `windowsClientDiagnosticsPorts.ownerSummary` 和 `--boardSummary` 的 `WinClientPortsOwners=` 输出 `端口:进程名:PID`。

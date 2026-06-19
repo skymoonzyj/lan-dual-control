@@ -699,32 +699,46 @@ function normalizeMacEvidenceToken(value) {
   return "";
 }
 
+function collectStandaloneMacEvidenceTokens(segment) {
+  const tokens = [];
+  for (const match of String(segment || "").matchAll(/\b(MacHeartbeatOk|MacHostMediaOk|MacFormalLocalSmokeOk|MacFormalE2EOk|MacClientPageOnline|MacClientDiagnosticsOk)\b/gi)) {
+    const token = normalizeMacEvidenceToken(match[1]);
+    if (token && !tokens.includes(token)) tokens.push(token);
+  }
+  return tokens;
+}
+
 function extractMacEvidenceFromText(text, source = "text") {
   const value = String(text || "");
   const tokens = [];
   let rejectedCount = 0;
   for (const segment of splitMacEvidenceSegments(value)) {
-    if (!/\bevidence\s*[:=]/i.test(segment)) continue;
+    const hasEvidenceField = /\bevidence\s*[:=]/i.test(segment);
+    const standaloneTokens = collectStandaloneMacEvidenceTokens(segment);
+    if (!hasEvidenceField && standaloneTokens.length === 0) continue;
     if (!isCleanMacEvidenceSegment(segment)) {
       rejectedCount += 1;
       continue;
     }
-    let segmentAccepted = false;
-    for (const match of segment.matchAll(/\bevidence\s*[:=]\s*([^;]+)/gi)) {
-      const rawValues = String(match[1] || "")
-        .replace(/\b(?:warnings?|blockers?|reason|suggestedAction|actionCommands)\s*[:=][\s\S]*$/i, "")
-        .split(/[,|/]+|\s{2,}/)
-        .map((item) => item.trim())
-        .filter(Boolean);
-      let matchAccepted = false;
-      for (const rawValue of rawValues) {
-        const token = normalizeMacEvidenceToken(rawValue);
-        if (!token) continue;
-        if (!tokens.includes(token)) tokens.push(token);
-        matchAccepted = true;
-        segmentAccepted = true;
+    if (hasEvidenceField) {
+      for (const match of segment.matchAll(/\bevidence\s*[:=]\s*([^;]+)/gi)) {
+        const rawValues = String(match[1] || "")
+          .replace(/\b(?:warnings?|blockers?|reason|suggestedAction|actionCommands)\s*[:=][\s\S]*$/i, "")
+          .split(/[,|/]+|\s{2,}/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+        let matchAccepted = false;
+        for (const rawValue of rawValues) {
+          const token = normalizeMacEvidenceToken(rawValue);
+          if (!token) continue;
+          if (!tokens.includes(token)) tokens.push(token);
+          matchAccepted = true;
+        }
+        if (!matchAccepted) rejectedCount += 1;
       }
-      if (!matchAccepted) rejectedCount += 1;
+    }
+    for (const token of standaloneTokens) {
+      if (!tokens.includes(token)) tokens.push(token);
     }
   }
   if (tokens.length === 0) return emptyMacEvidence(source, value ? 1 : 0, rejectedCount);
