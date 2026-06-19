@@ -65,6 +65,7 @@ MacHostSafeStart=, MacMaxFpsSafeStart=, MacFormalLocalSmoke=,
 MacClientDiscoverWindows=,
 MacClientFormalChecklist=,
 MacClientFormalSmoke=,
+MacRemoteAudioPlan=,
 MacInputSafetyPlan=,
 MacHeartbeatOnce=, MacHeartbeatWatch=, WindowsReverseGrantStatus=, and
 WindowsOpenOneTimeReverseGrant= commands from
@@ -112,6 +113,8 @@ clipboard, input_ack, and diagnostics in that order.
   formal checklist that can discover the Windows host first.
   It also includes MacClientFormalSmoke for the Mac client no-password formal
   preflight that first starts or reuses the Mac client page.
+  It also includes MacRemoteAudioPlan for the Mac remote-only audio planning
+  path; command extraction accepts only the read-only --boardSummary form.
   It also includes MacInputSafetyPlan for the plan-only Mac real-input safety
   boundary; summary extraction accepts only status=plan-only, default=log,
   realInput=blocked-until-user-watching, required=--confirmUserWatching,
@@ -164,6 +167,7 @@ Examples:
   node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary
   node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary
   node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary
+  node scripts/mac/plan-mac-remote-audio.mjs --boardSummary
   node scripts/mac/plan-mac-input-safety.mjs --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary
@@ -1442,6 +1446,32 @@ function parseMacClientFormalSmokeCommand(fragment) {
   return commandText;
 }
 
+function parseMacRemoteAudioPlanCommand(fragment) {
+  const rawTokens = String(fragment || "").split(/\s+/).map(stripCommandToken).filter(Boolean);
+  if (rawTokens.length < 3) return null;
+  if (rawTokens[0] !== "node") return null;
+  if (rawTokens[1].replace(/\\/g, "/") !== "scripts/mac/plan-mac-remote-audio.mjs") return null;
+
+  const tokens = [rawTokens[0], rawTokens[1]];
+  let hasBoardSummary = false;
+  for (let index = 2; index < rawTokens.length; index += 1) {
+    const token = rawTokens[index];
+    if (!token || /^[A-Za-z][A-Za-z0-9_-]*=/.test(token)) break;
+    if (!token.startsWith("--")) break;
+    if (/^--(?:password|token|secret|passwd|pwd)$/i.test(token)) return null;
+    if (token === "--boardSummary") {
+      hasBoardSummary = true;
+      tokens.push(token);
+      continue;
+    }
+    return null;
+  }
+
+  const commandText = tokens.join(" ");
+  if (tokens.length !== 3 || !hasBoardSummary || hasSecretLikeCommandValue(commandText)) return null;
+  return commandText;
+}
+
 function parseMacInputSafetyPlanCommand(fragment) {
   const rawTokens = String(fragment || "").split(/\s+/).map(stripCommandToken).filter(Boolean);
   if (rawTokens.length < 3) return null;
@@ -2116,6 +2146,58 @@ function extractMacSafeStartFromBoardState(state, label, options = {}) {
   };
 }
 
+function extractMacRemoteAudioPlanFromText(text, source = "text") {
+  const value = String(text || "");
+  const labels = ["MacRemoteAudioPlan"];
+  const commands = [];
+  let rejectedCount = 0;
+  for (const label of labels) {
+    const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`\\b${escapedLabel}\\s*=\\s*`, "gi");
+    let match;
+    while ((match = regex.exec(value)) !== null) {
+      const fragment = value.slice(match.index + match[0].length);
+      const commandText = parseMacRemoteAudioPlanCommand(fragment);
+      if (!commandText) {
+        rejectedCount += 1;
+      } else if (!commands.includes(commandText)) {
+        commands.push(commandText);
+      }
+    }
+  }
+  if (commands.length === 0) return emptyMacSafeStart(source, value ? 1 : 0, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source,
+    textCount: value ? 1 : 0,
+    rejectedCount,
+  };
+}
+
+function extractMacRemoteAudioPlanFromBoardState(state) {
+  const texts = collectStringValues(state);
+  const commands = [];
+  let rejectedCount = 0;
+  for (const text of texts) {
+    const extracted = extractMacRemoteAudioPlanFromText(text, "api-state");
+    for (const commandText of extracted.commands) {
+      if (!commands.includes(commandText)) commands.push(commandText);
+    }
+    rejectedCount += extracted.rejectedCount;
+  }
+  if (commands.length === 0) return emptyMacSafeStart("api-state", texts.length, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source: "api-state",
+    textCount: texts.length,
+    rejectedCount,
+  };
+}
+
 function extractMacInputSafetyPlanFromText(text, source = "text") {
   const value = String(text || "");
   const labels = ["MacInputSafetyPlan"];
@@ -2746,6 +2828,7 @@ async function getBoardSnapshot(args) {
       macClientDiscoverWindows: emptyMacSafeStart("skipped"),
       macClientFormalChecklist: emptyMacSafeStart("skipped"),
       macClientFormalSmoke: emptyMacSafeStart("skipped"),
+      macRemoteAudioPlan: emptyMacSafeStart("skipped"),
       macInputSafetyPlan: emptyMacSafeStart("skipped"),
       macInputSafety: emptyMacInputSafety("skipped"),
       macHeartbeatOnce: emptyMacSafeStart("skipped"),
@@ -2785,6 +2868,7 @@ async function getBoardSnapshot(args) {
       macClientDiscoverWindows: extractMacClientDiscoverWindowsFromBoardState(stateResult.state),
       macClientFormalChecklist: extractMacClientFormalChecklistFromBoardState(stateResult.state),
       macClientFormalSmoke: extractMacClientFormalSmokeFromBoardState(stateResult.state),
+      macRemoteAudioPlan: extractMacRemoteAudioPlanFromBoardState(stateResult.state),
       macInputSafetyPlan: extractMacInputSafetyPlanFromBoardState(stateResult.state),
       macInputSafety: extractMacInputSafetyFromBoardState(stateResult.state),
       macHeartbeatOnce: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatOnce", "once"),
@@ -2829,6 +2913,7 @@ async function getBoardSnapshot(args) {
     macClientDiscoverWindows: extractMacClientDiscoverWindowsFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macClientFormalChecklist: extractMacClientFormalChecklistFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macClientFormalSmoke: extractMacClientFormalSmokeFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    macRemoteAudioPlan: extractMacRemoteAudioPlanFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macInputSafetyPlan: extractMacInputSafetyPlanFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macInputSafety: extractMacInputSafetyFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatOnce: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatOnce", "once", result.ok ? "codex-link-client" : "unavailable"),
@@ -3294,6 +3379,7 @@ function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
     "--port", String(windowsHostPort),
     "--boardSummary",
   ].join(" ");
+  const macRemoteAudioPlanCommand = "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary";
   const macInputSafetyPlanCommand = "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
   const macClientFormalSmokeCommand = [
     "node scripts/mac/run-mac-client-formal-smoke.mjs",
@@ -3400,6 +3486,7 @@ function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
     macClientDiscoverWindowsCommand,
     macClientFormalChecklistCommand,
     macClientFormalSmokeCommand,
+    macRemoteAudioPlanCommand,
     macInputSafetyPlanCommand,
     macUnattendedStatusCommand,
     macUnattendedFormalStatusCommand,
@@ -3724,6 +3811,7 @@ function makeBoardSummary(report) {
   const macClientDiscoverWindowsCommand = report.board.macClientDiscoverWindows?.command || report.commands.macClientDiscoverWindowsCommand;
   const macClientFormalChecklistCommand = report.board.macClientFormalChecklist?.command || report.commands.macClientFormalChecklistCommand;
   const macClientFormalSmokeCommand = report.board.macClientFormalSmoke?.command || report.commands.macClientFormalSmokeCommand;
+  const macRemoteAudioPlanCommand = report.board.macRemoteAudioPlan?.command || report.commands.macRemoteAudioPlanCommand;
   const macInputSafetyPlanCommand = report.board.macInputSafetyPlan?.command || report.commands.macInputSafetyPlanCommand;
   const macHeartbeatOnceCommand = report.board.macHeartbeatOnce?.command || report.commands.macHeartbeatOnceCommand;
   const macHeartbeatWatchCommand = report.board.macHeartbeatWatch?.command || report.commands.macHeartbeatWatchCommand;
@@ -3773,6 +3861,7 @@ function makeBoardSummary(report) {
     `MacClientDiscoverWindows=${macClientDiscoverWindowsCommand}.`,
     `MacClientFormalChecklist=${macClientFormalChecklistCommand}.`,
     `MacClientFormalSmoke=${macClientFormalSmokeCommand}.`,
+    `MacRemoteAudioPlan=${macRemoteAudioPlanCommand}.`,
     `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`,
     ...(report.board.macInputSafety?.found
       ? [`MacInputSafety=${report.board.macInputSafety.summary}.`]
@@ -4087,6 +4176,9 @@ function printHuman(report) {
     if (report.board.macClientFormalSmoke?.command) {
       console.log(`  MacClientFormalSmoke=${report.board.macClientFormalSmoke.command}`);
     }
+    if (report.board.macRemoteAudioPlan?.command) {
+      console.log(`  MacRemoteAudioPlan=${report.board.macRemoteAudioPlan.command}`);
+    }
     if (report.board.macInputSafetyPlan?.command) {
       console.log(`  MacInputSafetyPlan=${report.board.macInputSafetyPlan.command}`);
     }
@@ -4172,6 +4264,7 @@ function printHuman(report) {
   console.log(`  MacClientDiscoverWindows=${report.board.macClientDiscoverWindows?.command || report.commands.macClientDiscoverWindowsCommand}`);
   console.log(`  MacClientFormalChecklist=${report.board.macClientFormalChecklist?.command || report.commands.macClientFormalChecklistCommand}`);
   console.log(`  MacClientFormalSmoke=${report.board.macClientFormalSmoke?.command || report.commands.macClientFormalSmokeCommand}`);
+  console.log(`  MacRemoteAudioPlan=${report.board.macRemoteAudioPlan?.command || report.commands.macRemoteAudioPlanCommand}`);
   console.log(`  MacInputSafetyPlan=${report.board.macInputSafetyPlan?.command || report.commands.macInputSafetyPlanCommand}`);
   if (report.board.macInputSafety?.found) {
     console.log(`  MacInputSafety=${report.board.macInputSafety.summary}`);

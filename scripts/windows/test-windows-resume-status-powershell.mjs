@@ -227,6 +227,8 @@ async function checkWrapperHelp(args) {
   assertIncludes(output, "WindowsReverseGrantStatus=", "PowerShell wrapper help");
   assertIncludes(output, "WindowsOpenOneTimeReverseGrant=", "PowerShell wrapper help");
   assertIncludes(output, "WindowsSecureAuthPath=", "PowerShell wrapper help");
+  assertIncludes(output, "MacRemoteAudioPlan=", "PowerShell wrapper help");
+  assertIncludes(output, "plan-mac-remote-audio.mjs --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "MacInputSafetyPlan=", "PowerShell wrapper help");
   assertIncludes(output, "plan-mac-input-safety.mjs --boardSummary", "PowerShell wrapper help");
   assertIncludes(output, "does not ask for or print", "PowerShell wrapper help");
@@ -1101,6 +1103,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const macClientDiscoverWindowsCommand = "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary";
   const macClientFormalChecklistCommand = "node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary";
   const macClientFormalSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
+  const macRemoteAudioPlanCommand = "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary";
   const macInputSafetyPlanCommand = "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
   const macInputSafetySummary = "status=plan-only default=log realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe safety=no-password,no-input-events,no-inject";
   const macInputSafetyBoardText = "Mac input safety plan: status=plan-only; default=log; realInput=blocked-until-user-watching; required=--confirmUserWatching; eventSet=safe; safety=no-password,no-input-events,no-inject.";
@@ -1116,7 +1119,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
         "Mac Codex": {
           role: "Mac 端",
           status: "idle",
-          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacClientDiscoverWindows=${macClientDiscoverWindowsCommand} MacClientFormalChecklist=${macClientFormalChecklistCommand} MacClientFormalSmoke=${macClientFormalSmokeCommand} MacInputSafetyPlan=${macInputSafetyPlanCommand} ${macInputSafetyBoardText} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand} MacHeartbeatStart=${heartbeatStartCommand} MacHeartbeatStatus=${heartbeatStatusCommand} MacHeartbeatStop=${heartbeatStopCommand}`,
+          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacClientDiscoverWindows=${macClientDiscoverWindowsCommand} MacClientFormalChecklist=${macClientFormalChecklistCommand} MacClientFormalSmoke=${macClientFormalSmokeCommand} MacRemoteAudioPlan=${macRemoteAudioPlanCommand} MacInputSafetyPlan=${macInputSafetyPlanCommand} ${macInputSafetyBoardText} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand} MacHeartbeatStart=${heartbeatStartCommand} MacHeartbeatStatus=${heartbeatStatusCommand} MacHeartbeatStop=${heartbeatStopCommand}`,
         },
         "Mac Heartbeat": {
           role: "Mac heartbeat watcher",
@@ -1205,6 +1208,16 @@ async function checkBoardMacHostSafeStartExtraction(args) {
           type: "status",
           from: "Mac Codex",
           text: "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port <当前端口> --promptPassword --boardSummary",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --password secret-value --boardSummary",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --json",
         },
         {
           type: "message",
@@ -1304,6 +1317,9 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board?.macClientFormalSmoke?.found === true, "PowerShell MacClientFormalSmoke should be found");
       assert(payload.board.macClientFormalSmoke.command === macClientFormalSmokeCommand, "PowerShell MacClientFormalSmoke command mismatch");
       assert(payload.board.macClientFormalSmoke.rejectedCount >= 3, "PowerShell unsafe or incomplete MacClientFormalSmoke should be rejected");
+      assert(payload.board?.macRemoteAudioPlan?.found === true, "PowerShell MacRemoteAudioPlan should be found");
+      assert(payload.board.macRemoteAudioPlan.command === macRemoteAudioPlanCommand, "PowerShell MacRemoteAudioPlan command mismatch");
+      assert(payload.board.macRemoteAudioPlan.rejectedCount >= 2, "PowerShell unsafe or non-board MacRemoteAudioPlan should be rejected");
       assert(payload.board?.macInputSafetyPlan?.found === true, "PowerShell MacInputSafetyPlan should be found");
       assert(payload.board.macInputSafetyPlan.command === macInputSafetyPlanCommand, "PowerShell MacInputSafetyPlan command mismatch");
       assert(payload.board.macInputSafetyPlan.rejectedCount >= 2, "PowerShell unsafe or non-board MacInputSafetyPlan should be rejected");
@@ -1341,6 +1357,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(payload.boardSummary, `MacClientDiscoverWindows=${macClientDiscoverWindowsCommand}.`, "PowerShell MacClientDiscoverWindows JSON board summary");
       assertIncludes(payload.boardSummary, `MacClientFormalChecklist=${macClientFormalChecklistCommand}.`, "PowerShell MacClientFormalChecklist JSON board summary");
       assertIncludes(payload.boardSummary, `MacClientFormalSmoke=${macClientFormalSmokeCommand}.`, "PowerShell MacClientFormalSmoke JSON board summary");
+      assertIncludes(payload.boardSummary, `MacRemoteAudioPlan=${macRemoteAudioPlanCommand}.`, "PowerShell MacRemoteAudioPlan JSON board summary");
       assertIncludes(payload.boardSummary, `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`, "PowerShell MacInputSafetyPlan JSON board summary");
       assertIncludes(payload.boardSummary, `MacInputSafety=${macInputSafetySummary}.`, "PowerShell Mac input safety JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "PowerShell MacHeartbeatOnce JSON board summary");
@@ -1375,6 +1392,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(output, `MacClientDiscoverWindows=${macClientDiscoverWindowsCommand}.`, "PowerShell MacClientDiscoverWindows board summary");
       assertIncludes(output, `MacClientFormalChecklist=${macClientFormalChecklistCommand}.`, "PowerShell MacClientFormalChecklist board summary");
       assertIncludes(output, `MacClientFormalSmoke=${macClientFormalSmokeCommand}.`, "PowerShell MacClientFormalSmoke board summary");
+      assertIncludes(output, `MacRemoteAudioPlan=${macRemoteAudioPlanCommand}.`, "PowerShell MacRemoteAudioPlan board summary");
       assertIncludes(output, `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`, "PowerShell MacInputSafetyPlan board summary");
       assertIncludes(output, `MacInputSafety=${macInputSafetySummary}.`, "PowerShell Mac input safety board summary");
       assertIncludes(output, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "PowerShell MacHeartbeatOnce board summary");

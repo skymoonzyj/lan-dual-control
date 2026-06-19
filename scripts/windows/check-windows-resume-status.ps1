@@ -59,6 +59,7 @@ It also surfaces recent MacHostSafeStart=, MacMaxFpsSafeStart=, MacFormalLocalSm
 MacClientDiscoverWindows=,
 MacClientFormalChecklist=,
 MacClientFormalSmoke=,
+MacRemoteAudioPlan=,
 MacInputSafetyPlan=,
 WindowsReverseGrantStatus=, WindowsOpenOneTimeReverseGrant=, WindowsSecureAuthPath=, WindowsFirewallStatus= and WindowsFirewallPreview= commands from Agent Link Board status/messages so Mac host safe foreground-start guidance,
 including 60Hz foreground-start guidance, local smoke next steps, Windows local reverse-control grant guidance, and onsite Windows host secure-auth restart guidance, is visible in JSON, human output, and
@@ -84,6 +85,8 @@ It also includes a Mac client formal checklist command:
 node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary
 It also includes a Mac client formal smoke preflight command:
 node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary
+It also includes a Mac remote-only audio planning command:
+node scripts/mac/plan-mac-remote-audio.mjs --boardSummary
 It also includes a plan-only Mac input safety command:
 node scripts/mac/plan-mac-input-safety.mjs --boardSummary
 It also includes a Mac-side unattended/startup status command:
@@ -104,6 +107,7 @@ WindowsOpenOneTimeReverseGrant=pwsh -NoProfile -ExecutionPolicy Bypass -File scr
 WindowsReverseGrantStatusNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --status --boardSummary
 WindowsOpenOneTimeReverseGrantNodeFallback=node scripts/windows/allow-windows-reverse-control.mjs --host 127.0.0.1 --port 43770 --grant --durationMs 30000 --boardSummary
 WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword
+MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary
 MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary
 WindowsFirewallStatus=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --json
 WindowsFirewallPreview=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --dryRunRule --ruleProfile Private
