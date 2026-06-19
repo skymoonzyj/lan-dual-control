@@ -1603,6 +1603,24 @@ async function verifyDesktopOnlyHostPanel(session) {
               ].join("; "),
             )
           : null;
+      const positiveMacHeartbeatHealthAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "MacHeartbeatHealth=ok checked=20s reason=ok blockers=none warnings=none",
+            )
+          : null;
+      const warningMacHeartbeatHealthAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "MacHeartbeatHealth=warning checked=20s reason=mac-host-build-stale blockers=none warnings=none",
+            )
+          : null;
+      const blockedMacHeartbeatHealthAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "MacHeartbeatHealth=blocked checked=20s reason=mac-codex-stale blockers=none warnings=none",
+            )
+          : null;
       const watcherThrottleBefore =
         typeof shouldRefreshMacAlertWatcherStatus === "function"
           ? shouldRefreshMacAlertWatcherStatus(15999)
@@ -2342,6 +2360,14 @@ async function verifyDesktopOnlyHostPanel(session) {
           blockedHeartbeatWithFreshnessEvidence?.summary.includes("Mac Codex 可能卡住") &&
           Array.isArray(blockedHeartbeatWithFreshnessEvidence?.evidenceLabels) &&
           !blockedHeartbeatWithFreshnessEvidence.evidenceLabels.includes("Mac 心跳正常") &&
+          positiveMacHeartbeatHealthAttention?.summary === "" &&
+          positiveMacHeartbeatHealthAttention?.evidenceSummary.includes("Mac 心跳正常") &&
+          Array.isArray(positiveMacHeartbeatHealthAttention?.evidenceLabels) &&
+          positiveMacHeartbeatHealthAttention.evidenceLabels.length === 1 &&
+          warningMacHeartbeatHealthAttention?.summary.includes("Mac host 运行版本偏旧") &&
+          !warningMacHeartbeatHealthAttention?.evidenceSummary.includes("Mac 心跳正常") &&
+          blockedMacHeartbeatHealthAttention?.summary.includes("Mac Codex 长时间无新进展") &&
+          !blockedMacHeartbeatHealthAttention?.evidenceSummary.includes("Mac 心跳正常") &&
           heartbeatCommandCheck.ok &&
           cleanMacHostReadinessCommandAttention?.summary === "" &&
           Array.isArray(cleanMacHostReadinessCommandAttention?.labels) &&
@@ -2520,6 +2546,9 @@ async function verifyDesktopOnlyHostPanel(session) {
         stableHeartbeatFreshnessAttention,
         stableHeartbeatFreshnessEvidence,
         blockedHeartbeatWithFreshnessEvidence,
+        positiveMacHeartbeatHealthAttention,
+        warningMacHeartbeatHealthAttention,
+        blockedMacHeartbeatHealthAttention,
         heartbeatCommandCheck,
         cleanMacHostReadinessCommandAttention,
         cleanMacHostMediaCommandAttention,

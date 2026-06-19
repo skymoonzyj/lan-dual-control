@@ -17,6 +17,33 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 控制端预备消费稳定 `MacHeartbeatHealth=` 健康字段。
+完成内容：
+- `MacHeartbeatHealth=ok` 且片段干净时，会显示“Mac 心跳正常”证据/值守证据。
+- `MacHeartbeatHealth=warning/blocked/failed/stale/unknown` 会从 `reason=` 和状态生成风险摘要；例如 `reason=mac-host-build-stale` 显示“Mac host 运行版本偏旧”，`reason=mac-codex-stale` 显示“Mac Codex 长时间无新进展”。
+- `MacHeartbeatHealth=` 和 `MacHeartbeatFreshness=` 分开处理：fresh 仍只代表摘要新鲜，不代替健康判定。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 失败在 `MacHeartbeatHealth=ok` 没有进入“Mac 心跳正常”，以及 `warning` 没有生成风险摘要。
+- 绿灯：实现后同一命令通过。
+遗留问题：
+- 本轮只做 Windows 控制端消费端预备；如果 Mac 端最终 `MacHeartbeatHealth=` 字段格式调整，需要按最终格式再补一轮兼容。
+下一步建议：
+- Mac 端推送 `MacHeartbeatHealth=` 生产字段后，Windows 侧再跑一次现场 `check-windows-resume-status --checkBoard --boardSummary` 和页面 diagnostics-only，确认真实摘要能闭环展示。
+是否改了协议：否。
+是否需要另一端配合：等 Mac 端字段生产推送后复测。
+
 ## 2026-06-19 Mac Codex
 
 日期：2026-06-19 继续推进

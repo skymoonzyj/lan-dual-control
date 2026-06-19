@@ -265,6 +265,9 @@ const macUnattendedRiskLabels = {
   "host-unreachable": "Mac host 不可达",
   "mac-heartbeat-summary-stale": "Mac 心跳摘要过旧",
   "mac-heartbeat-stale": "Mac 心跳过期，可能卡住",
+  "mac-heartbeat-health-warning": "Mac 心跳健康有提醒",
+  "mac-heartbeat-health-blocked": "Mac 心跳健康阻塞",
+  "mac-heartbeat-health-unknown": "Mac 心跳健康未知",
   "mac-heartbeat-rerun-command": "Mac 心跳复查命令已提供",
   "mac-heartbeat-once-command": "Mac 单次心跳上板命令已提供",
   "mac-heartbeat-watch-command": "Mac 持续心跳 watcher 命令已提供",
@@ -3453,6 +3456,45 @@ function parseStandaloneMacEvidenceLabels(text) {
   return [...new Set(labels)];
 }
 
+function splitMacHeartbeatHealthReasonValues(segment) {
+  const reason = extractMacHeartbeatFreshnessValue(segment, "reason");
+  if (!reason) return [];
+  return reason
+    .split(/[,|/]+/)
+    .map((value) => normalizeMacUnattendedToken(value))
+    .filter((value) => !isEmptyMacUnattendedValue(value));
+}
+
+function extractMacHeartbeatHealthRisks(text) {
+  const risks = [];
+  for (const segment of splitMacStatusSegments(text)) {
+    const match = /\bMacHeartbeatHealth\s*=\s*(ok|healthy|normal|warning|blocked|failed|stale|unknown)\b/i.exec(segment);
+    if (!match || /\bnode\s+scripts[\\/]+mac[\\/]+|\bscripts[\\/]+mac[\\/]+|\.mjs\b/i.test(segment)) {
+      continue;
+    }
+    const status = normalizeMacUnattendedToken(match[1]);
+    if (status === "ok" || status === "healthy" || status === "normal") {
+      continue;
+    }
+    const reasonRisks = splitMacHeartbeatHealthReasonValues(segment);
+    risks.push(...reasonRisks);
+    if (status === "warning") risks.push("mac-heartbeat-health-warning");
+    if (status === "blocked" || status === "failed") risks.push("mac-heartbeat-health-blocked");
+    if (status === "stale") risks.push("mac-heartbeat-stale");
+    if (status === "unknown") risks.push("mac-heartbeat-health-unknown");
+  }
+  return risks.filter((risk) => !isEmptyMacUnattendedValue(risk));
+}
+
+function hasCleanMacHeartbeatHealthEvidence(text) {
+  return splitMacStatusSegments(text).some(
+    (segment) =>
+      /\bMacHeartbeatHealth\s*=\s*(?:ok|healthy|normal)\b/i.test(segment) &&
+      !/\bnode\s+scripts[\\/]+mac[\\/]+|\bscripts[\\/]+mac[\\/]+|\.mjs\b/i.test(segment) &&
+      isCleanMacStatusEvidenceSegment(segment),
+  );
+}
+
 function isCleanLatestMacHeartbeatEvidence(text, now = Date.now()) {
   const segment = selectLatestMacHeartbeatSegment(text);
   if (!segment) return false;
@@ -3473,7 +3515,7 @@ function isCleanLatestMacHeartbeatEvidence(text, now = Date.now()) {
 function parseMacPositiveEvidenceLabels(text) {
   const source = String(text || "");
   const labels = [];
-  if (isCleanLatestMacHeartbeatEvidence(source)) {
+  if (hasCleanMacHeartbeatHealthEvidence(source) || isCleanLatestMacHeartbeatEvidence(source)) {
     labels.push("Mac 心跳正常");
   }
   if (
@@ -3531,7 +3573,8 @@ function parseMacUnattendedAttention(text) {
   const warnings = extractMacUnattendedValues(source, "warnings");
   const blockers = extractMacUnattendedValues(source, "blockers");
   const windowsLanRisks = extractWindowsLanRiskValues(source);
-  const risks = [...new Set([...blockers, ...warnings, ...windowsLanRisks])];
+  const heartbeatHealthRisks = extractMacHeartbeatHealthRisks(source);
+  const risks = [...new Set([...blockers, ...warnings, ...windowsLanRisks, ...heartbeatHealthRisks])];
   const heartbeatFreshness = parseMacHeartbeatFreshness(source);
   const evidenceLabels = parseMacPositiveEvidenceLabels(source);
   const lower = source.toLowerCase();
