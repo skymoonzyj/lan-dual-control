@@ -118,6 +118,11 @@ JSON output:
                             --help/-h coverage only and does not start services,
                             request passwords, read Agent Link Board, authenticate,
                             send calls, or send input.
+  evidence
+                            Optional normalized positive validation evidence
+                            extracted from recent Agent Link Board lines. This
+                            never changes blockers/warnings and never echoes
+                            raw board text.
   suggestedAction
                             Optional structured next action. When runtime Mac
                             host sources changed after the running host build,
@@ -461,6 +466,45 @@ function formatChecklistFindings(checklist) {
   return `blockers=${blockers} warnings=${warnings}`;
 }
 
+function collectBoardValidationEvidence(resume) {
+  const recentLines = Array.isArray(resume?.board?.recentLines)
+    ? resume.board.recentLines
+    : [];
+  const text = splitLines(recentLines.join("\n")).join(" ");
+  const evidence = [];
+  if (/(MacHostMedia|Mac host media|media baseline)[\s\S]{0,220}(passed=12\/12|media=ok|passed|ok)/i.test(text)) {
+    evidence.push({
+      id: "mac-host-media",
+      label: "MacHostMedia",
+      status: "ok",
+      summary: "media baseline passed",
+      source: "Agent Link Board",
+    });
+  }
+  if (/(MacFormalLocalSmoke|local formal smoke|local H\.?264\/PCM\/input-log)[\s\S]{0,360}(H\.?264|PCM|input-log)[\s\S]{0,360}(ack|passed|injected=false|ok)/i.test(text)) {
+    evidence.push({
+      id: "mac-formal-local-smoke",
+      label: "MacFormalLocalSmoke",
+      status: "ok",
+      summary: "H.264/PCM/input-log passed",
+      source: "Agent Link Board",
+    });
+  }
+  return [...new Map(evidence.map((entry) => [entry.id, entry])).values()];
+}
+
+function formatEvidenceSummary(evidence) {
+  const items = (Array.isArray(evidence) ? evidence : [])
+    .filter((entry) => entry?.status === "ok" && entry.label)
+    .map((entry) => `${entry.label} ok`);
+  return items.length > 0 ? items.join(", ") : "none";
+}
+
+function makeEvidenceSentence(evidence) {
+  const summary = formatEvidenceSummary(evidence);
+  return summary === "none" ? "" : `Recent evidence: ${summary.replace(/, /g, "; ")}.`;
+}
+
 function summarizeChecklistIds(checklist, status) {
   const ids = [...new Set((checklist || [])
     .filter((entry) => entry.status === status)
@@ -505,6 +549,7 @@ function formatSendCallRefusal(report) {
 function makeCallText(report) {
   const host = report.resume.host || {};
   const findings = formatChecklistFindings(report.checklist);
+  const evidenceText = makeEvidenceSentence(report.evidence);
   const readinessText = report.readyToCall
     ? report.counts.warnings > 0 ? "ready with warnings" : "ready"
     : "needs attention";
@@ -519,6 +564,7 @@ function makeCallText(report) {
       `Verify launchd state with: ${report.commands?.macLaunchAgentPrintCommand || makeMacLaunchAgentPrintCommand()}.`,
       `Plan safe reboot persistence first with: ${report.commands?.macLaunchAgentPlanCommand || "install-mac-host-launch-agent --boardSummary"}.`,
       `If targeting formal 60Hz, dry-run max-FPS planning first with: ${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
+      ...(evidenceText ? [evidenceText] : []),
       `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
       `When the host is online, run low-risk host readiness with: ${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
       `When the host is online, run local smoke first with: ${report.commands?.macFormalLocalSmokeCommand || "check-mac-formal-local-smoke --promptPassword --boardSummary"}.`,
@@ -532,6 +578,7 @@ function makeCallText(report) {
     `Mac formal E2E ${readinessText}: host=${address}, repo=${report.resume.currentBuildId || "unknown"}, runtimeBuild=${host.runtime?.buildId || "unknown"}, inputMode=${host.inputMode || "unknown"}.`,
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)} pipeline=${host.capabilities?.capturePipeline || "unknown"} audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}.`,
     `Checklist ${findings}.`,
+    ...(evidenceText ? [evidenceText] : []),
     `For foreground formal 60Hz, use: ${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
     `For LaunchAgent transition, stop the current Mac host with: ${report.commands?.macHostStopCommand || makeMacHostStopCommand(report.args?.host, report.args?.port)}.`,
     `Then manually load the LaunchAgent with: ${report.commands?.macLaunchAgentLoadCommand || makeMacLaunchAgentLoadCommand()}.`,
@@ -554,11 +601,14 @@ function makeBoardSummary(report) {
     ? report.counts.warnings > 0 ? "ready with warnings for Windows formal E2E" : "ready for Windows formal E2E"
     : `needs attention (${report.counts.blockers} blocker(s), ${report.counts.warnings} warning(s))`;
   const findings = formatChecklistFindings(report.checklist);
+  const evidenceSummary = formatEvidenceSummary(report.evidence);
+  const evidenceLine = evidenceSummary === "none" ? "" : `Evidence=${evidenceSummary}.`;
   const suggestedAction = report.suggestedAction?.boardSummary ? `${report.suggestedAction.boardSummary}.` : "";
   if (!host.online) {
     return [
       `Mac formal E2E: ${state}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}; ${findings}.`,
       `Mac host offline at ${host.probe?.host || report.args.host}:${host.probe?.port || report.args.port}.`,
+      ...(evidenceLine ? [evidenceLine] : []),
       `MacHostSafeStart=${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}.`,
       `MacMaxFpsSafeStart=${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
       `MacHostStop=${report.commands?.macHostStopCommand || makeMacHostStopCommand(report.args?.host, report.args?.port)}.`,
@@ -579,6 +629,7 @@ function makeBoardSummary(report) {
   return [
     `Mac formal E2E: ${state}; host=${formatHostAddress(host)}; repo=${report.resume.currentBuildId || "unknown"} ${report.resume.git?.clean ? "clean" : "dirty"}; runtimeBuild=${host.runtime?.buildId || "unknown"}; inputMode=${host.inputMode || "unknown"}; ${findings}.`,
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)}; pipeline=${host.capabilities?.capturePipeline || "unknown"}; audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}; ${formatBuildDiff(host.buildDiff)}.`,
+    ...(evidenceLine ? [evidenceLine] : []),
     ...(suggestedAction ? [suggestedAction] : []),
     `MacHostSafeStart=${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}.`,
     `MacMaxFpsSafeStart=${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
@@ -1043,6 +1094,7 @@ function buildReport(args) {
   const resume = runResumeStatus(args);
   const checklist = buildChecklist(resume, args);
   const counts = summarizeCounts(checklist);
+  const evidence = collectBoardValidationEvidence(resume);
   const boardReady = !args.skipBoard && resume.board?.checked === true && resume.board?.ok === true;
   const readyToCall = counts.blockers === 0 && boardReady;
   const report = {
@@ -1061,6 +1113,7 @@ function buildReport(args) {
     },
     counts,
     checklist,
+    evidence,
     resume,
   };
   report.commands = makeCommands(report);

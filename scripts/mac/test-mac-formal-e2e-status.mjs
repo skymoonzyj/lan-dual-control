@@ -187,6 +187,24 @@ function assertBoardSummaryShape(text, label) {
   assertNoSecretLikeText(text, label);
 }
 
+function assertValidationEvidence(payload, label) {
+  assert(Array.isArray(payload.evidence), `${label} should include normalized validation evidence`);
+  const byId = new Map(payload.evidence.map((entry) => [entry.id, entry]));
+  const hostMedia = byId.get("mac-host-media");
+  const localSmoke = byId.get("mac-formal-local-smoke");
+  assert(hostMedia?.status === "ok", `${label} should mark MacHostMedia evidence as ok`);
+  assert(hostMedia?.source === "Agent Link Board", `${label} should identify the MacHostMedia evidence source`);
+  assert(/media baseline/i.test(hostMedia?.summary || ""), `${label} should summarize MacHostMedia evidence`);
+  assert(localSmoke?.status === "ok", `${label} should mark MacFormalLocalSmoke evidence as ok`);
+  assert(localSmoke?.source === "Agent Link Board", `${label} should identify the MacFormalLocalSmoke evidence source`);
+  assert(/H\.264\/PCM\/input-log/i.test(localSmoke?.summary || ""), `${label} should summarize MacFormalLocalSmoke evidence`);
+  assert(/Evidence=.*MacHostMedia ok/.test(payload.boardSummary || ""), `${label} boardSummary should include MacHostMedia evidence`);
+  assert(/Evidence=.*MacFormalLocalSmoke ok/.test(payload.boardSummary || ""), `${label} boardSummary should include MacFormalLocalSmoke evidence`);
+  assert(/Recent evidence:.*MacHostMedia ok/.test(payload.callText || ""), `${label} callText should include MacHostMedia evidence`);
+  assert(/Recent evidence:.*MacFormalLocalSmoke ok/.test(payload.callText || ""), `${label} callText should include MacFormalLocalSmoke evidence`);
+  assertNoSecretLikeText(JSON.stringify(payload.evidence), `${label} evidence`);
+}
+
 function assertMacHostSafeStartCommand(command, label, expectedPort = null) {
   const text = String(command || "");
   assert(/node scripts\/mac\/start-mac-host\.mjs/.test(text), `${label} should use start-mac-host`);
@@ -505,22 +523,24 @@ async function withFakeBoard(callback, options = {}) {
   const calls = [];
   const clears = [];
   let currentCall = options.currentCall || null;
+  const statuses = options.statuses || {};
+  const events = options.events || [
+    {
+      id: "fake-board-event-1",
+      at: new Date().toISOString(),
+      type: "message",
+      from: "Fake Board",
+      text: "ready",
+    },
+  ];
   const server = http.createServer(async (request, response) => {
     if (request.method === "GET" && request.url === "/api/state") {
       response.writeHead(200, { "Content-Type": "application/json" });
       response.end(JSON.stringify({
         updatedAt: new Date().toISOString(),
         currentCall,
-        statuses: {},
-        events: [
-          {
-            id: "fake-board-event-1",
-            at: new Date().toISOString(),
-            type: "message",
-            from: "Fake Board",
-            text: "ready",
-          },
-        ],
+        statuses,
+        events,
       }));
       return;
     }
@@ -576,6 +596,7 @@ function checkHelp(args) {
     assert(/commands\.macUnattendedFormalCommand/.test(result.stdout), `${script} ${flag} should document Mac unattended formal gate command output`);
     assert(/commands\.macClientBrowserSelfTestCommand/.test(result.stdout), `${script} ${flag} should document Mac client browser self-test command output`);
     assert(/commands\.macScriptHelpCommand/.test(result.stdout), `${script} ${flag} should document Mac script help safety command output`);
+    assert(/\bevidence\b/.test(result.stdout), `${script} ${flag} should document normalized validation evidence output`);
     assert(/--promptPassword/.test(result.stdout), `${script} ${flag} should document local password prompt for media readiness command`);
     assert(!/Mac host probe password/.test(result.stdout), `${script} ${flag} should not prompt for password`);
   }
@@ -1076,6 +1097,52 @@ async function checkFallbackPipelineVideoWarning(args) {
   }, { capturePipeline: "background-jpeg" });
 }
 
+async function checkBoardValidationEvidence(args) {
+  const events = [
+    {
+      id: "fake-board-evidence-1",
+      at: new Date().toISOString(),
+      type: "message",
+      from: "Mac Codex",
+      text: "MacHostMedia passed=12/12 media=ok; MacFormalLocalSmoke H.264 89 frames/29.54fps/maxGap38ms, PCM 151 frames/49.87fps/maxGap32ms, input-log 16/16 ack, injected=false.",
+    },
+  ];
+  const statuses = {
+    "Mac Heartbeat": {
+      status: "online",
+      note: "MacHeartbeat status=ok blockers=none warnings=none; MacHostMedia passed=12/12 media=ok; MacFormalLocalSmoke H.264/PCM/input-log passed injected=false.",
+    },
+  };
+  await withFakeMacHost(async (macHost) => {
+    await withFakeBoard(async (board) => {
+      const localTimeoutMs = String(Math.min(args.timeoutMs, 5000));
+      const result = await runAsync(args, [
+        "--json",
+        "--allowDirty",
+        "--host",
+        macHost.host,
+        "--port",
+        String(macHost.port),
+        "--server",
+        board.serverUrl,
+        "--timeoutMs",
+        localTimeoutMs,
+      ]);
+      const payload = parseJson(result.stdout, "board evidence formal E2E status");
+      assert(result.status === 0, `board evidence formal status should exit 0:\n${result.stdout}\n${result.stderr}`);
+      assert(payload.ok === true, "board evidence payload should remain ok");
+      assert(payload.readyToCall === true, "board evidence payload should be readyToCall when board is checked");
+      const video = payload.checklist?.find((entry) => entry.id === "video");
+      assert(video?.status === "warning", "board evidence should not hide the fallback video warning");
+      assert(/currentPipeline=background-jpeg/.test(video.summary || ""), "board evidence should preserve current pipeline detail");
+      assert(/warnings=[^.]*video/.test(payload.boardSummary || ""), "board evidence boardSummary should still name video warning");
+      assertValidationEvidence(payload, "board evidence formal E2E status");
+      assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "board evidence formal E2E status");
+      print("OK", "Formal E2E status surfaces recent positive board evidence without hiding warnings");
+    }, { events, statuses });
+  }, { capturePipeline: "background-jpeg" });
+}
+
 async function checkMaxFpsLimitWarning(args) {
   await withFakeMacHost(async (macHost) => {
     const localTimeoutMs = String(Math.min(args.timeoutMs, 5000));
@@ -1257,6 +1324,7 @@ async function main() {
   await checkDoneBoardCallDoesNotBlock(args);
   await checkForceSendCall(args);
   await checkFallbackPipelineVideoWarning(args);
+  await checkBoardValidationEvidence(args);
   await checkMaxFpsLimitWarning(args);
   checkOnlineJson(args);
   checkOnlineBoardSummary(args);

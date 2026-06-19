@@ -17,6 +17,33 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
+本轮目标：让 Mac formal E2E readiness 直接输出 Agent Link Board 上的正向验证证据，避免只看到 warning 时误读状态。
+完成内容：
+- `check-mac-formal-e2e-status` 新增 JSON `evidence[]`：从通讯板 recent lines 里识别 `MacHostMedia passed=12/12 media=ok` 和 `MacFormalLocalSmoke H.264/PCM/input-log ... injected=false`，归一化为 `MacHostMedia ok` / `MacFormalLocalSmoke ok`。
+- `callText` 会追加 `Recent evidence: ...`，`--boardSummary` 会追加 `Evidence=...`；该证据只做展示，不改变 `blockers` / `warnings` / `readyToCall` 判定，也不会回显原始通讯板文本。
+- 自测补 fake Agent Link Board 事件，确认 `background-jpeg` 的 video warning 仍保留，同时正向证据会单独输出。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增测试后，`node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 30000` 先失败在帮助/输出尚未提供 normalized validation evidence。
+- 绿灯：实现后，`node --check scripts/mac/check-mac-formal-e2e-status.mjs`、`node --check scripts/mac/test-mac-formal-e2e-status.mjs`、`node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 30000` 通过。
+遗留问题：
+- 本轮只解析通讯板近期文本里的固定正向证据，不主动运行媒体基线、本机 smoke、真实认证或正式 Windows 端验收。
+下一步建议：
+- 白天继续时先看 Agent Link Board；如果最新 `MacFormalE2E=` 摘要里有 `Evidence=MacHostMedia ok, MacFormalLocalSmoke ok`，Windows/人工应把它当作已存在的正向验证证据，同时仍按同段 warning/blocker 判断是否需要复查。
+是否改了协议：否；只增加 Mac 侧本地状态脚本输出字段和摘要文本。
+是否需要另一端配合：不需要；Windows 端已能消费同类正向证据，本轮不要求 Windows 修改。
+
 ## 2026-06-19 Windows Codex
 
 日期：2026-06-19 继续推进
