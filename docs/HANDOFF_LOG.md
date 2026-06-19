@@ -75,6 +75,42 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：修正 Windows 恢复总览在旧 Windows client 诊断端口占用时，`Next=` / formal checklist 仍指向旧端口的问题。
+完成内容：
+- `check-windows-resume-status` 先检测默认 client/debug 端口，再把正式预检、授权提示、formal checklist 和正式运行命令切到推荐端口。
+- 当 `WinClientPorts=occupied(...;stale-diagnostics)` 时，`Next=`、`FormalChecklist=`、`preflightBoardSummary`、`userAuthRequest` 和 `formalRun` 会优先用备用 `5200/9340`；PowerShell 自定义端口场景会用对应 alternate 端口。
+- 默认 `WinClientDiagnostics=` 仍保留原端口用于说明占用来源，`WinClientDiagnosticsAlt=` 继续给出备用诊断入口。
+- 测试默认路径时注入“端口空闲”假数据，避免本机残留旧诊断进程让默认端口测试不稳定。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 先失败在 `Next=` 仍输出 `5197/9337`。
+- 绿灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 绿灯：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+- 语法：`node --check scripts/windows/check-windows-resume-status.mjs`
+- 语法：`node --check scripts/windows/test-windows-resume-status.mjs`
+- 语法：`node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- Help：`node scripts/windows/test-windows-script-help.mjs --script check-windows-resume-status.mjs`
+- 现场摘要：`node scripts/windows/check-windows-resume-status.mjs --checkBoard --boardSummary` 显示 `WinClientPorts=occupied(9337;stale-diagnostics)` 时，`Next=` 和 `FormalChecklist=` 均已使用 `5200/9340`。
+- 清理：`git diff --check` 通过，冲突标记扫描无命中。
+遗留问题：
+- 本轮不跑真实 Mac 密码认证、H.264 页面长测或 input/inject，只修正 Windows 恢复摘要给出的下一步命令。
+下一步建议：
+- 现场复核第二步时优先复制 `check-windows-resume-status --checkBoard --boardSummary` 输出的新 `Next=` / `FormalChecklist=`；如果仍卡住，再查浏览器调试端口释放、H.264 canvas、`WindowsLanRisk` 和 Mac 端 FPS 上限。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：修正 Windows formal E2E 第二步看起来卡住时外层没有总时限兜底的问题。
 完成内容：
 - `check-mac-formal-e2e` 的 runPlan、普通输出和步骤启动日志新增 `step total timeout`，把预计耗时、单次等待超时和整步兜底时限区分开。

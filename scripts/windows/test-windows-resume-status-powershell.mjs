@@ -13,6 +13,10 @@ const defaults = {
   timeoutMs: 30000,
 };
 
+const freeWindowsClientPortsEnv = {
+  LAN_DUAL_FAKE_WINDOWS_CLIENT_PORTS_JSON: JSON.stringify({ owners: [] }),
+};
+
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
 }
@@ -292,7 +296,7 @@ async function checkMockJson(args) {
       "-SkipAudio",
       "-SkipClipboard",
       "-SkipInputLog",
-    ], args);
+    ], args, freeWindowsClientPortsEnv);
     const output = `${result.stdout}\n${result.stderr}`;
     assert(result.exitCode === 0, `PowerShell mock JSON failed\n${output}`);
     const payload = JSON.parse(result.stdout);
@@ -549,11 +553,17 @@ async function checkCustomClientDiagnosticsPorts(args) {
     assert(payload.args?.debugPort === 9340, "PowerShell custom ports should reach Node args debugPort");
     assert(payload.args?.alternateClientPort === 5201, "PowerShell custom ports should reach Node args alternateClientPort");
     assert(payload.args?.alternateDebugPort === 9341, "PowerShell custom ports should reach Node args alternateDebugPort");
-    assertIncludes(payload.macPreflight?.command, "--clientPort 5200", "PowerShell custom ports formal preflight command");
-    assertIncludes(payload.macPreflight?.command, "--debugPort 9340", "PowerShell custom ports formal preflight command");
+    assertIncludes(payload.macPreflight?.command, "--clientPort 5201", "PowerShell custom ports formal preflight command should prefer alternate page port");
+    assertIncludes(payload.macPreflight?.command, "--debugPort 9341", "PowerShell custom ports formal preflight command should prefer alternate debug port");
     assert(payload.windowsClientDiagnosticsPorts?.state === "occupied-stale-diagnostics", "PowerShell custom ports should detect stale diagnostics occupancy");
     assertIncludes(payload.boardSummary, "WinClientPorts=occupied(5200,9340;stale-diagnostics)", "PowerShell custom ports board summary");
     assertIncludes(payload.boardSummary, "WinClientPortsNext=use --clientPort 5201 --debugPort 9341", "PowerShell custom ports board summary");
+    assertIncludes(payload.boardSummary, "Next=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -ClientPort 5201 -DebugPort 9341", "PowerShell custom ports board summary should prefer alternate ports for Next");
+    assertIncludes(payload.boardSummary, "-ClientPort 5201 -DebugPort 9341 -PreflightOnly -CheckClientDiagnostics -BoardSummary", "PowerShell custom ports board summary should prefer alternate ports for formal checklist");
+    assertIncludes(payload.commands?.preflightBoardSummary, "-ClientPort 5201 -DebugPort 9341", "PowerShell custom ports preflight board command should prefer alternate ports");
+    assertIncludes(payload.commands?.userAuthRequest, "-ClientPort 5201 -DebugPort 9341", "PowerShell custom ports user auth request should prefer alternate ports");
+    assertIncludes(payload.commands?.formalChecklistBoardSummary, "-ClientPort 5201 -DebugPort 9341", "PowerShell custom ports formal checklist should prefer alternate ports");
+    assertIncludes(payload.commands?.formalRun, "-ClientPort 5201 -DebugPort 9341", "PowerShell custom ports formal run should prefer alternate ports");
     assertIncludes(payload.commands?.windowsClientDiagnosticsCommand, "--clientPort 5200 --debugPort 9340", "PowerShell custom ports client diagnostics command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsAlternateCommand, "--clientPort 5201 --debugPort 9341", "PowerShell custom ports alternate diagnostics command");
     assertIncludes(payload.commands?.windowsClientDiagnosticsPowerShellCommand, "-ClientPort 5200 -DebugPort 9340", "PowerShell custom ports client diagnostics PowerShell command");
@@ -575,7 +585,7 @@ async function checkBoardSummary(args) {
       "-SkipAudio",
       "-SkipClipboard",
       "-SkipInputLog",
-    ], args);
+    ], args, freeWindowsClientPortsEnv);
     const output = `${result.stdout}\n${result.stderr}`;
     assert(result.exitCode === 0, `PowerShell board summary failed\n${output}`);
     const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean);

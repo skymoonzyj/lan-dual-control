@@ -2241,7 +2241,8 @@ async function getBoardSnapshot(args) {
   };
 }
 
-function makePreflightArgs(args) {
+function makePreflightArgs(args, windowsClientDiagnosticsPorts = null) {
+  const preferredClientPorts = getPreferredWindowsClientDiagnosticsPorts(args, windowsClientDiagnosticsPorts);
   const child = [
     "scripts/windows/check-mac-formal-e2e.mjs",
     "--preflightOnly",
@@ -2249,8 +2250,8 @@ function makePreflightArgs(args) {
     "--timeoutMs", String(args.timeoutMs),
     "--discoverTimeoutMs", String(args.discoverTimeoutMs),
     "--port", String(args.port),
-    "--clientPort", String(args.clientPort),
-    "--debugPort", String(args.debugPort),
+    "--clientPort", String(preferredClientPorts.clientPort),
+    "--debugPort", String(preferredClientPorts.debugPort),
   ];
   if (args.discover) {
     child.push("--discover");
@@ -2282,8 +2283,8 @@ function makePreflightArgs(args) {
   return child;
 }
 
-function runFormalPreflight(args) {
-  const childArgs = makePreflightArgs(args);
+function runFormalPreflight(args, windowsClientDiagnosticsPorts = null) {
+  const childArgs = makePreflightArgs(args, windowsClientDiagnosticsPorts);
   const result = command(process.execPath, childArgs, {
     timeoutMs: Math.max(args.timeoutMs, args.checkClientDiagnostics ? 70000 : 15000),
   });
@@ -2508,6 +2509,22 @@ function inspectWindowsClientDiagnosticsPorts(args) {
   };
 }
 
+function getPreferredWindowsClientDiagnosticsPorts(args, windowsClientDiagnosticsPorts = null) {
+  const useAlternate = windowsClientDiagnosticsPorts?.requested && windowsClientDiagnosticsPorts.available === false;
+  const clientPort = useAlternate
+    ? Number(windowsClientDiagnosticsPorts.alternateClientPort || args.alternateClientPort)
+    : Number(args.clientPort);
+  const debugPort = useAlternate
+    ? Number(windowsClientDiagnosticsPorts.alternateDebugPort || args.alternateDebugPort)
+    : Number(args.debugPort);
+  return {
+    clientPort: clampInteger(clientPort, 1, 65535, defaults.clientPort),
+    debugPort: clampInteger(debugPort, 1, 65535, defaults.debugPort),
+    usingAlternate: Boolean(useAlternate),
+    reason: useAlternate ? String(windowsClientDiagnosticsPorts.state || "unavailable") : "default",
+  };
+}
+
 function makeWindowsSecureAuthPathCommand(port = 43770) {
   const safePort = clampInteger(port, 1, 65535, 43770);
   return `node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port ${safePort} --promptPassword --requirePassword`;
@@ -2551,10 +2568,11 @@ function makeAgentCallAckCommand(server, windowsSecureAuthPathCommand) {
   ].map(quoteCommandArg).join(" ");
 }
 
-function makeCommands(args, preflight) {
+function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
   const target = preflight.payload?.target || { host: args.host, port: args.port };
   const host = String(target.host || args.host);
   const port = Number(target.port || args.port);
+  const preferredClientPorts = getPreferredWindowsClientDiagnosticsPorts(args, windowsClientDiagnosticsPorts);
   const runtimeBuildId = String(preflight.payload?.runtime?.buildId || "").trim();
   const windowsHostPort = 43770;
   const windowsSecureAuthPath = makeWindowsSecureAuthPathCommand(windowsHostPort);
@@ -2663,8 +2681,8 @@ function makeCommands(args, preflight) {
     "-DiscoverNoLocalSubnets",
     "-HostName", host,
     "-Port", String(port),
-    "-ClientPort", String(args.clientPort),
-    "-DebugPort", String(args.debugPort),
+    "-ClientPort", String(preferredClientPorts.clientPort),
+    "-DebugPort", String(preferredClientPorts.debugPort),
     "-PreflightOnly",
     "-CheckClientDiagnostics",
     "-BoardSummary",
@@ -2747,8 +2765,8 @@ function makeCommands(args, preflight) {
     preflightBoardSummary: [
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
       "-Discover",
-      "-ClientPort", String(args.clientPort),
-      "-DebugPort", String(args.debugPort),
+      "-ClientPort", String(preferredClientPorts.clientPort),
+      "-DebugPort", String(preferredClientPorts.debugPort),
       "-PreflightOnly",
       "-CheckClientDiagnostics",
       "-BoardSummary",
@@ -2756,8 +2774,8 @@ function makeCommands(args, preflight) {
     userAuthRequest: [
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
       "-Discover",
-      "-ClientPort", String(args.clientPort),
-      "-DebugPort", String(args.debugPort),
+      "-ClientPort", String(preferredClientPorts.clientPort),
+      "-DebugPort", String(preferredClientPorts.debugPort),
       "-PreflightOnly",
       "-CheckClientDiagnostics",
       "-UserAuthRequest",
@@ -2765,8 +2783,8 @@ function makeCommands(args, preflight) {
     formalRun: [
       "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1",
       "-Discover",
-      "-ClientPort", String(args.clientPort),
-      "-DebugPort", String(args.debugPort),
+      "-ClientPort", String(preferredClientPorts.clientPort),
+      "-DebugPort", String(preferredClientPorts.debugPort),
       "-PromptPassword",
     ].join(" "),
     formalRunFixedTarget: [
@@ -2775,8 +2793,8 @@ function makeCommands(args, preflight) {
       "-DiscoverNoLocalSubnets",
       "-HostName", host,
       "-Port", String(port),
-      "-ClientPort", String(args.clientPort),
-      "-DebugPort", String(args.debugPort),
+      "-ClientPort", String(preferredClientPorts.clientPort),
+      "-DebugPort", String(preferredClientPorts.debugPort),
       "-PromptPassword",
     ].join(" "),
     windowsHostMediaReadinessBoardSummary: [
@@ -3238,12 +3256,12 @@ function sendAgentCallAck(args, report) {
 async function makeReport(args) {
   const git = getGitStatus();
   const board = await getBoardSnapshot(args);
-  const macPreflight = runFormalPreflight(args);
-  const commands = makeCommands(args, macPreflight);
+  const windowsClientDiagnosticsPorts = inspectWindowsClientDiagnosticsPorts(args);
+  const macPreflight = runFormalPreflight(args, windowsClientDiagnosticsPorts);
+  const commands = makeCommands(args, macPreflight, windowsClientDiagnosticsPorts);
   annotateBoardCurrentCall(board, commands);
   const formalManualChecklist = makeFormalManualChecklist(macPreflight.payload, commands);
   const windowsMacAlertWatcher = getWindowsMacAlertWatcherStatus(args, commands);
-  const windowsClientDiagnosticsPorts = inspectWindowsClientDiagnosticsPorts(args);
   const checks = [
     { name: "gitStatus", ok: git.ok, detail: git.clean ? "clean" : `${git.changeCount} change(s)` },
     { name: "board", ok: !board.requested || board.ok, detail: board.requested ? `lines=${board.lineCount}` : "skipped" },

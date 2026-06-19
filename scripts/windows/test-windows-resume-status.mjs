@@ -13,6 +13,10 @@ const defaults = {
   timeoutMs: 30000,
 };
 
+const freeWindowsClientPortsEnv = {
+  LAN_DUAL_FAKE_WINDOWS_CLIENT_PORTS_JSON: JSON.stringify({ owners: [] }),
+};
+
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
 }
@@ -338,7 +342,7 @@ async function checkMockJson(args) {
       "--skipAudio",
       "--skipClipboard",
       "--skipInputLog",
-    ], args);
+    ], args, freeWindowsClientPortsEnv);
     assert(result.exitCode === 0, `mock JSON resume failed\n${result.stdout}\n${result.stderr}`);
     const payload = JSON.parse(result.stdout);
     assert(payload.ok === true, "mock JSON should be ok");
@@ -579,7 +583,7 @@ async function checkRuntimeBuildClientDiagnosticsCommand(args) {
       "--skipAudio",
       "--skipClipboard",
       "--skipInputLog",
-    ], args);
+    ], args, freeWindowsClientPortsEnv);
     assert(result.exitCode === 0, `runtime discovery JSON resume failed\n${result.stdout}\n${result.stderr}`);
     const payload = JSON.parse(result.stdout);
     assert(payload.macPreflight?.payload?.runtime?.buildId === buildId, "preflight should expose runtime build id");
@@ -652,6 +656,16 @@ async function checkWindowsClientDiagnosticsPortOccupancy(args) {
     assert(Array.isArray(ports?.occupiedPorts) && ports.occupiedPorts.includes(9337), "occupied client ports should include debug port");
     assertIncludes(payload.boardSummary, "WinClientPorts=occupied(5197,9337;stale-diagnostics)", "occupied client ports board summary");
     assertIncludes(payload.boardSummary, "WinClientPortsNext=use --clientPort 5200 --debugPort 9340", "occupied client ports board summary");
+    assertIncludes(payload.boardSummary, "Next=powershell.exe", "occupied client ports board summary");
+    assertIncludes(payload.boardSummary, "Next=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -ClientPort 5200 -DebugPort 9340", "occupied client ports board summary should prefer alternate ports for Next");
+    assertIncludes(payload.boardSummary, "FormalChecklist=powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 -Discover -DiscoverNoLocalSubnets", "occupied client ports board summary should include formal checklist");
+    assertIncludes(payload.boardSummary, "-ClientPort 5200 -DebugPort 9340 -PreflightOnly -CheckClientDiagnostics -BoardSummary", "occupied client ports board summary should prefer alternate ports for formal checklist");
+    assertIncludes(payload.macPreflight?.command, "--clientPort 5200", "occupied client ports preflight command should prefer alternate page port");
+    assertIncludes(payload.macPreflight?.command, "--debugPort 9340", "occupied client ports preflight command should prefer alternate debug port");
+    assertIncludes(payload.commands?.preflightBoardSummary, "-ClientPort 5200 -DebugPort 9340", "occupied client ports preflight board command should prefer alternate ports");
+    assertIncludes(payload.commands?.userAuthRequest, "-ClientPort 5200 -DebugPort 9340", "occupied client ports user auth request should prefer alternate ports");
+    assertIncludes(payload.commands?.formalChecklistBoardSummary, "-ClientPort 5200 -DebugPort 9340", "occupied client ports formal checklist should prefer alternate ports");
+    assertIncludes(payload.commands?.formalRun, "-ClientPort 5200 -DebugPort 9340", "occupied client ports formal run should prefer alternate ports");
     assertIncludes(payload.boardSummary, "WinClientDiagnosticsAlt=", "occupied client ports board summary");
     assertIncludes(payload.boardSummary, "--clientPort 5200 --debugPort 9340", "occupied client ports board summary");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "occupied client ports JSON");
