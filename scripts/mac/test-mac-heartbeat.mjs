@@ -131,6 +131,13 @@ function assertNoSecrets(text, label) {
   assertNotIncludes(text, "fake-token-value", label);
 }
 
+function assertHeartbeatHealth(payload, expectedStatus, expectedReason, label) {
+  assert(payload.macHeartbeatHealth?.status === expectedStatus, `${label} should include macHeartbeatHealth.status=${expectedStatus}`);
+  assert(payload.macHeartbeatHealth?.reason === expectedReason, `${label} should include macHeartbeatHealth.reason=${expectedReason}`);
+  assertIncludes(payload.boardSummary || "", `MacHeartbeatHealth=${expectedStatus}`, `${label} board summary`);
+  assertIncludes(payload.boardSummary || "", `reason=${expectedReason}`, `${label} board summary`);
+}
+
 function assertCommandSet(commands, label) {
   assertIncludes(commands?.macHeartbeatCommand || "", "check-mac-heartbeat.mjs", label);
   assertIncludes(commands?.macHeartbeatCommand || "", "--checkBoard", label);
@@ -281,6 +288,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "--codexTextFile", `${script} ${flag}`);
     assertIncludes(result.stdout, "--stateFile", `${script} ${flag}`);
     assertIncludes(result.stdout, "formal E2E readiness", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macHeartbeatHealth", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
   print("OK", "Mac heartbeat help exits quickly");
@@ -319,6 +327,7 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assert(payload.warnings.includes("mac-host-offline"), "offline payload should warn about Mac host");
   assert(payload.warnings.includes("mac-client-offline"), "offline payload should warn about Mac client");
   assert(payload.codex.reason === "ok", "offline payload should not invent Codex blocker");
+  assertHeartbeatHealth(payload, "warning", "mac-host-offline", "offline payload");
   assertIsoTimestamp(payload.checkedAt, "offline checkedAt");
   assertIncludes(payload.boardSummary || "", "MacHeartbeat=status=warning", "offline board summary");
   assertIncludes(payload.boardSummary || "", "checkedAt=", "offline board summary");
@@ -407,6 +416,7 @@ async function checkOnlineOk(args) {
       assert(payload.macHost.runtimeBuild === currentBuild, "Mac host runtime build should be captured");
       assert(payload.macHost.inputMode === "log", "Mac host inputMode should be captured");
       assert(payload.macClient.online === true, "Mac client should be online");
+      assertHeartbeatHealth(payload, "ok", "ok", "online payload");
       assertIsoTimestamp(payload.checkedAt, "online checkedAt");
       assertIncludes(payload.boardSummary || "", "MacHeartbeat=status=ok", "online board summary");
       assertIncludes(payload.boardSummary || "", "checkedAt=", "online board summary");
@@ -504,6 +514,7 @@ async function checkOnlineBoardEvidence(args) {
         assert(payload.board?.ok === true, "Agent Link Board should be readable");
         assert(payload.macClient?.online === true, "Mac client page should be online");
         assert(payload.macClient?.titleFound === true, "Mac client page title should be recognized");
+        assertHeartbeatHealth(payload, "ok", "ok", "online board evidence payload");
         assertIncludes(payload.boardSummary || "", "Evidence=MacClientPageOnline,MacClientDiagnosticsOk", "online board evidence summary");
         assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "online board evidence output");
         assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--password", "online board evidence output");
@@ -558,6 +569,7 @@ async function checkOnlineStaleHostBuildWarning(args) {
       assert(result.status === 0, `stale Mac host build should be a warning, not a blocker.\n${result.stdout}\n${result.stderr}`);
       assert(payload.status === "warning", "stale Mac host build payload should be warning");
       assert(payload.warnings.includes("mac-host-build-stale"), "stale build warning should be present");
+      assertHeartbeatHealth(payload, "warning", "mac-host-build-stale", "stale build payload");
       assert(payload.suggestedAction?.id === "restart-mac-host-safely", "stale build should suggest a safe host restart action");
       assertIncludes(payload.suggestedAction?.reason || "", "Mac host runtime build is stale", "stale build suggested action");
       assertIncludes(payload.suggestedAction?.commands?.macHostStopCommand || "", "start-mac-host.mjs --stop", "stale build suggested action");
@@ -647,6 +659,7 @@ async function checkBoardTimestamps(args) {
     assert(payload.board.macCodexStatus.updatedAt === macCodexUpdatedAt, "board timestamp payload should preserve Mac Codex updatedAt");
     assert(payload.codex.lastEventAt === macCodexUpdatedAt, "board timestamp payload should use Mac Codex updatedAt as last event");
     assert(payload.codex.status === "idle", "board timestamp payload should use Mac Codex status");
+    assertHeartbeatHealth(payload, "warning", "mac-host-offline", "board timestamp payload");
     assertIncludes(payload.boardSummary || "", `checkedAt=${payload.checkedAt}`, "board timestamp summary");
     assertIncludes(payload.boardSummary || "", `boardUpdatedAt=${boardUpdatedAt}`, "board timestamp summary");
     assertIncludes(payload.boardSummary || "", `codex=ok status=idle updatedAt=${macCodexUpdatedAt}`, "board timestamp summary");
@@ -690,6 +703,7 @@ function checkReconnectStuck(args) {
     assert(payload.codex.signals.includes("reconnecting-5-of-5"), "should detect reconnect 5/5");
     assert(payload.codex.signals.includes("stream-disconnected-before-completion"), "should detect stream disconnect");
     assert(payload.codex.signals.includes("codex-backend-api-request-error"), "should detect backend request error");
+    assertHeartbeatHealth(payload, "blocked", "codex-reconnect-stuck", "reconnect payload");
     assertIncludes(payload.boardSummary || "", "reason=codex-reconnect-stuck", "reconnect board summary");
     assertIncludes(payload.boardSummary || "", "checkedAt=", "reconnect board summary");
     assertIncludes(payload.boardSummary || "", `updatedAt=${old}`, "reconnect board summary");
@@ -720,6 +734,7 @@ function checkCodexStale(args) {
   assert(payload.blockers.includes("mac-codex-stale"), "stale blocker should be present");
   assert(payload.codex.reason === "mac-codex-stale", "codex reason should be stale");
   assert(payload.codex.lastEventAgeMs >= 60000, "last event age should cross threshold");
+  assertHeartbeatHealth(payload, "blocked", "mac-codex-stale", "stale payload");
   assertIncludes(payload.boardSummary || "", "reason=mac-codex-stale", "stale board summary");
   assertIncludes(payload.boardSummary || "", "evidenceAgeMs=", "stale board summary");
   assertNotIncludes(payload.boardSummary || "", "evidenceAgeMs=0", "stale board summary");

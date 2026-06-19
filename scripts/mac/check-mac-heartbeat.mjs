@@ -80,6 +80,8 @@ Options:
 
 Machine-readable JSON fields:
   status                      ok|warning|blocked.
+  macHeartbeatHealth          Stable ok|warning|blocked health summary exposed
+                              as MacHeartbeatHealth= in board summaries.
   blockers[] / warnings[]     Stable reason ids for Windows alert routing.
   codex.reason                codex-reconnect-stuck, codex-reconnect-signal,
                               mac-codex-stale, or ok.
@@ -692,6 +694,30 @@ function summarizeIds(ids) {
   return ids.length > 0 ? ids.join(",") : "none";
 }
 
+function buildMacHeartbeatHealth(report) {
+  const reason = report.blockers[0] || report.warnings[0] || "ok";
+  return {
+    status: report.status || "unknown",
+    reason,
+    heartbeatStatus: report.status || "unknown",
+    blockers: summarizeIds(report.blockers),
+    warnings: summarizeIds(report.warnings),
+    checkedAt: report.checkedAt || "",
+  };
+}
+
+function formatMacHeartbeatHealthSummary(health) {
+  if (!health) return "MacHeartbeatHealth=unknown reason=unknown heartbeat=unknown blockers=unknown warnings=unknown checkedAt=unknown";
+  return [
+    `MacHeartbeatHealth=${health.status || "unknown"}`,
+    `reason=${health.reason || "unknown"}`,
+    `heartbeat=${health.heartbeatStatus || "unknown"}`,
+    `blockers=${health.blockers || "unknown"}`,
+    `warnings=${health.warnings || "unknown"}`,
+    `checkedAt=${health.checkedAt || "unknown"}`,
+  ].join(" ");
+}
+
 function formatMacHostBuildDiff(buildDiff) {
   if (!buildDiff || buildDiff.severity === "ok") return "build=current";
   if (buildDiff.severity === "stale-metadata") {
@@ -741,8 +767,9 @@ function makeBoardSummary(report) {
   }
   const stableEvidenceSummary = stableEvidence.length > 0 ? ` Evidence=${stableEvidence.join(",")}.` : "";
   const suggestedAction = report.suggestedAction?.boardSummary || "suggestedAction=none";
+  const heartbeatHealthSummary = formatMacHeartbeatHealthSummary(report.macHeartbeatHealth);
   return [
-    `MacHeartbeat=status=${report.status}; checkedAt=${checkedAt}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}.${evidence}${stableEvidenceSummary}`,
+    `MacHeartbeat=status=${report.status}; checkedAt=${checkedAt}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}; ${heartbeatHealthSummary}.${evidence}${stableEvidenceSummary}`,
     suggestedAction,
     `MacHeartbeatRerun=${report.commands.macHeartbeatCommand}.`,
     `MacResumeStatus=${report.commands.macResumeStatusCommand}.`,
@@ -778,6 +805,7 @@ function printHuman(report) {
   console.log(`- Agent Link Board: ${report.board.checked ? (report.board.ok ? "ok" : "failed") : "not checked"}`);
   console.log(`- blockers: ${summarizeIds(report.blockers)}`);
   console.log(`- warnings: ${summarizeIds(report.warnings)}`);
+  console.log(`- heartbeat health: ${report.macHeartbeatHealth.status} (${report.macHeartbeatHealth.reason})`);
   console.log(report.boardSummary);
 }
 
@@ -811,6 +839,7 @@ async function buildReport(args) {
     suggestedAction: null,
     boardSummary: "",
   };
+  report.macHeartbeatHealth = buildMacHeartbeatHealth(report);
   report.suggestedAction = buildSuggestedAction(report);
   report.boardSummary = makeBoardSummary(report);
   return report;

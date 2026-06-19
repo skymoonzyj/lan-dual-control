@@ -17,6 +17,31 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
+本轮目标：让 Mac heartbeat 本身也直接输出稳定 `MacHeartbeatHealth=` 健康字段。
+完成内容：
+- `check-mac-heartbeat --json/--boardSummary` 现在会基于本次心跳的 `status/blockers/warnings` 派生 JSON `macHeartbeatHealth`。
+- 通讯板摘要首段会直接输出 `MacHeartbeatHealth=ok|warning|blocked reason=<首个风险或 ok> heartbeat=<原始状态> blockers=<...> warnings=<...> checkedAt=<时间>`，不必等 Mac resume 再从 watcher 日志转述。
+- `ok`、离线 warning、旧 build warning、reconnect stuck blocked、Mac Codex stale blocked 场景均有回归覆盖；不启动/停止 watcher，不认证，不请求或发送密码，不发 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增断言后，`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` 失败在帮助文档缺少 `macHeartbeatHealth`。
+- 绿灯：实现后同一回归通过，覆盖 help、offline/online JSON、boardSummary、旧 build、reconnect stuck、Mac Codex stale。
+遗留问题：
+- Windows 端已经能消费 `MacHeartbeatHealth=`；本轮只增强 Mac heartbeat 生产侧，后续可让 Windows resume/status 直接读最新 Mac Heartbeat 状态验证真实展示。
+下一步建议：
+- 等 Windows 当前 resume/status 增强推送后，跑一次 `MacHeartbeatOnce=` 或等待后台 watcher 自动上板，再让 Windows 复跑 resume/diagnostics，确认直接从 `Mac Heartbeat` 状态读取 `Health=ok`。
+是否改了协议：否。
+是否需要另一端配合：等 Windows 当前工作完成后可复测。
+
 ## 2026-06-19 Windows Codex
 
 日期：2026-06-19 继续推进
