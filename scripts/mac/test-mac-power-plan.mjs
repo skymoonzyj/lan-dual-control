@@ -100,6 +100,19 @@ function assertMacLaunchAgentPlanCommand(command, label) {
   assertNotIncludes(command, "inject", label);
 }
 
+function assertPowerApplyRunbook(value, label) {
+  assertIncludes(value, "Preview", label);
+  assertIncludes(value, "ManualApply", label);
+  assertIncludes(value, "Verify", label);
+  assertIncludes(value, "MacUnattendedStatus", label);
+  assertIncludes(value, "MacLaunchAgentPlan", label);
+  assertNotIncludes(value, "sudo", label);
+  assertNotIncludes(value, "--password", label);
+  assertNotIncludes(value, "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(value, "input_event", label);
+  assertNotIncludes(value, "inject", label);
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run(args, [flag]);
@@ -111,6 +124,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "--networkWake", `${script} ${flag}`);
     assertIncludes(result.stdout, "read-only", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macLaunchAgentPlan", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.powerApplyRunbook", `${script} ${flag}`);
     assertNoSecretOrInputGuidance(result.stdout, `${script} ${flag}`);
   }
   console.log("[OK] Mac power plan help is side-effect-free");
@@ -130,10 +144,14 @@ function checkJson(args) {
   assertIncludes(payload.commands?.macUnattendedStatus || "", "check-mac-unattended-status.mjs", "JSON unattended command");
   assertIncludes(payload.commands?.macUnattendedStatus || "", "--boardSummary", "JSON unattended command");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlan || "", "JSON LaunchAgent plan command");
+  assert(Array.isArray(payload.commands?.powerApplyRunbook), "JSON commands.powerApplyRunbook should be an array");
+  assertPowerApplyRunbook(payload.commands.powerApplyRunbook.map((item) => item.label || item.command || "").join(" "), "JSON power apply runbook");
   assertIncludes(payload.boardSummary || "", "MacPowerPlan=status=preview", "JSON board summary");
   assertIncludes(payload.boardSummary || "", "DryRunOnly", "JSON board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=", "JSON board summary");
   assertMacLaunchAgentPlanCommand(payload.boardSummary || "", "JSON board summary LaunchAgent plan");
+  assertIncludes(payload.boardSummary || "", "PowerApply=", "JSON board summary");
+  assertPowerApplyRunbook(payload.boardSummary || "", "JSON board summary PowerApply");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "default power plan JSON");
   console.log("[OK] Mac power plan JSON previews safe pmset and verification commands");
 }
@@ -162,6 +180,8 @@ function checkBoardSummary(args) {
   assertIncludes(text, "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --boardSummary", "board summary");
   assertIncludes(text, "MacLaunchAgentPlan=", "board summary");
   assertMacLaunchAgentPlanCommand(text, "board summary LaunchAgent plan");
+  assertIncludes(text, "PowerApply=Preview->ManualApply->Verify->MacUnattendedStatus->MacLaunchAgentPlan", "board summary");
+  assertPowerApplyRunbook(text, "board summary PowerApply");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "board summary");
   console.log("[OK] Mac power plan board summary is copyable and secret-free");
 }
@@ -171,6 +191,8 @@ function checkText(args) {
   assert(result.status === 0, `text output should exit 0\n${result.stdout}\n${result.stderr}`);
   assertIncludes(result.stdout, "Mac LaunchAgent plan:", "text output");
   assertMacLaunchAgentPlanCommand(result.stdout, "text output LaunchAgent plan");
+  assertIncludes(result.stdout, "Power apply runbook:", "text output");
+  assertPowerApplyRunbook(result.stdout, "text output PowerApply");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "text output");
   console.log("[OK] Mac power plan text output includes the safe LaunchAgent planner");
 }

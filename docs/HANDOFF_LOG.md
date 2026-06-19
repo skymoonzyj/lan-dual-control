@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac 电源预案也给出稳定的人工应用顺序，避免用户现场处理系统/显示睡眠时漏复查。
+完成内容：
+- `plan-mac-power-settings --json` 新增 `commands.powerApplyRunbook[]`，顺序为 `Preview -> ManualApply -> Verify -> MacUnattendedStatus -> MacLaunchAgentPlan`。
+- `--boardSummary` 新增 `PowerApply=Preview->ManualApply->Verify->MacUnattendedStatus->MacLaunchAgentPlan`；普通输出新增 “Power apply runbook”。
+- `ManualApply` 只是提示用户确认后手工执行同一条 `pmset` 预览命令；脚本仍拒绝 `--apply`，不自动改系统设置。
+- 本轮不执行 `pmset`，不提权，不加载 `launchctl`，不写 plist，不认证 WebSocket，不请求或发送密码，也不发送 call/input/inject。
+修改文件：
+- `scripts/mac/plan-mac-power-settings.mjs`
+- `scripts/mac/test-mac-power-plan.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-power-plan.mjs --timeoutMs 8000` 先失败在 help 缺 `commands.powerApplyRunbook`。
+- 绿灯：实现后同一专项自测通过，覆盖 help、JSON、boardSummary、普通输出、`--apply` 拒绝和不泄密。
+- 真实只读抽样：`node scripts/mac/plan-mac-power-settings.mjs --boardSummary` 输出 `PowerApply=Preview->ManualApply->Verify->MacUnattendedStatus->MacLaunchAgentPlan`，并明确未请求密码、未改系统、未发送 input。
+遗留问题：
+- 当前真实 Mac 仍有系统睡眠/显示睡眠 warning；真正执行 `pmset` 仍需用户现场确认后手工执行，并复跑 `Verify` / `MacUnattendedStatus` 刷新证据。
+下一步建议：
+- 用户在场准备处理电源 warning 时，先读 `MacPowerPlan=`，再按 `PowerApply=` 顺序人工执行：预览 -> 手工执行 -> `pmset -g custom` -> `MacUnattendedStatus` -> `MacLaunchAgentPlan`。
+- LaunchAgent warning 继续按 `ManualApply=` 顺序人工处理，不要把任一 planner 输出当成已经完成系统修改。
+是否改了协议：否；只补 Mac power planner 的安全 runbook 标签。
+是否需要另一端配合：暂不需要；Windows 端继续只识别 `MacPowerPlan=` 也可用，后续如需要可消费 `PowerApply=`。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac LaunchAgent planner 给出稳定的人工应用顺序和加载后恢复总览复查入口，减少真正授权时漏步骤。
 完成内容：
 - `install-mac-host-launch-agent --json` 新增 `commands.macResumeStatus`，固定为 `node scripts/mac/check-mac-resume-status.mjs --host 127.0.0.1 --port <port> --checkBoard --boardSummary`。
