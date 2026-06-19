@@ -1020,6 +1020,34 @@ async function verifyFloatingControlCenter(session) {
         document.querySelector("#floatingInputModeStatus")?.textContent.includes("输入") &&
         document.querySelector("#floatingSecurityStatus")?.textContent.includes("安全");
 
+      const displaySettingsPartialClient = (() => {
+        const originalConnected = state.connected;
+        const originalClient = state.client;
+        const originalHostDiagnostics = { ...state.hostDiagnostics };
+        let error = "";
+        try {
+          state.connected = true;
+          state.client = {
+            sendInputEvent() {},
+          };
+          state.hostDiagnostics = {
+            ...state.hostDiagnostics,
+            audio: true,
+          };
+          try {
+            sendDisplaySettings();
+          } catch (caught) {
+            error = caught?.message || String(caught);
+          }
+          return { ok: !error, error };
+        } finally {
+          state.connected = originalConnected;
+          state.client = originalClient;
+          state.hostDiagnostics = originalHostDiagnostics;
+          if (typeof syncFloatingControlCenter === "function") syncFloatingControlCenter();
+        }
+      })();
+
       const shortcutSent = (() => {
         const sent = [];
         const originalConnected = state.connected;
@@ -1369,6 +1397,7 @@ async function verifyFloatingControlCenter(session) {
           audioStatusVisible &&
           clipboardStatusVisible &&
           videoStatusVisible &&
+          displaySettingsPartialClient.ok &&
           shortcutSent &&
           diagnosticsCopyVisible &&
           fullscreenEntered &&
@@ -1396,6 +1425,7 @@ async function verifyFloatingControlCenter(session) {
         clipboardStatusText,
         videoStatusVisible,
         videoStatusText,
+        displaySettingsPartialClient,
         shortcutSent,
         diagnosticsCopyVisible,
         diagnosticsCopyTextLength: diagnosticsCopyText.length,

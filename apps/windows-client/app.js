@@ -4785,12 +4785,23 @@ function sendDisplaySettings() {
   updateMetrics();
   applyScaleMode();
   savePreferences();
-  if (!state.connected || !state.client) {
+  const client = state.client;
+  if (!state.connected || !client) {
     return;
   }
 
-  state.client.sendDisplaySettings(buildDisplaySettingsMessage());
-  state.client.sendAudioSettings(buildAudioSettingsMessage());
+  const canSendDisplaySettings = typeof client.sendDisplaySettings === "function";
+  const canSendAudioSettings = typeof client.sendAudioSettings === "function";
+  if (!canSendDisplaySettings && !canSendAudioSettings) {
+    return;
+  }
+
+  if (canSendDisplaySettings) {
+    client.sendDisplaySettings(buildDisplaySettingsMessage());
+  }
+  if (canSendAudioSettings) {
+    client.sendAudioSettings(buildAudioSettingsMessage());
+  }
   addLog("更新显示设置", describeDisplaySettings());
 }
 
@@ -7835,7 +7846,7 @@ function requestJpegVideoFallback(reason) {
   updateH264DecoderDiagnostics();
   addLog("视频回退", `${state.h264FallbackReason}，已请求 JPEG 兜底`);
 
-  if (state.connected && state.client) {
+  if (state.connected && typeof state.client?.sendDisplaySettings === "function") {
     state.client.sendDisplaySettings(buildDisplaySettingsMessage());
   }
 }

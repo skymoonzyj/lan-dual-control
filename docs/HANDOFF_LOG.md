@@ -562,6 +562,37 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：重新检查正式 E2E 第二步卡住点，并修复 Windows client diagnostics/discovery 全屏诊断崩溃。
+完成内容：
+- 现场复查 `check-windows-resume-status --checkBoard --boardSummary`，确认默认 debug 端口 `9337` 被旧 `msedge.exe` 占用，恢复总览已建议使用备用 `--clientPort 5200 --debugPort 9340`。
+- 复现第二步备用端口诊断失败：`test-windows-client-browser --discover --discoverNoLocalSubnets --clientPort 5200 --debugPort 9340 --diagnosticsOnly --boardSummary` 在全屏诊断时抛 `state.client.sendDisplaySettings is not a function`。
+- Windows 控制端 `sendDisplaySettings()` 改为先检查轻量 client 是否支持 `sendDisplaySettings` / `sendAudioSettings`，没有对应方法时只更新本地 UI 和偏好，不再崩溃；H.264 回退请求路径也加了同类保护。
+- 页面 diagnostics-only 增加 partial client 回归，覆盖 diagnostics/discovery 模式里只有输入发送方法、没有显示/声音设置发送方法的情况。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败在 `displaySettingsPartialClient.error="state.client.sendDisplaySettings is not a function"`。
+- 绿灯：实现后同一 diagnostics-only 页面自检通过。
+- 真实第二步无密复查：`node scripts/windows/test-windows-client-browser.mjs --discover --discoverNoLocalSubnets --host 192.168.31.122 --port 43770 --clientPort 5200 --debugPort 9340 --diagnosticsOnly --boardSummary --timeoutMs 45000 --expectDiscoveryRuntimeBuildId ed937a2` 通过。
+- 无密正式预检：`node scripts/windows/check-mac-formal-e2e.mjs --host 192.168.31.122 --port 43770 --clientPort 5200 --debugPort 9340 --preflightOnly --checkClientDiagnostics --boardSummary --timeoutMs 45000` 返回 ready / `clientDiagnostics=passed`。
+遗留问题：
+- 完整正式第二步仍需要用户现场输入 Mac host 密码；本轮未认证 WebSocket、未请求或发送密码、未发 input/inject。
+下一步建议：
+- 现场继续完整正式 E2E 时优先用 `check-windows-resume-status --checkBoard --boardSummary` 输出的 `Next=` / `FormalChecklist=`；若默认端口仍显示 stale diagnostics，继续使用备用 `5200/9340`。
+是否改了协议：否。
+是否需要另一端配合：完整正式第二步需要用户现场输入密码；当前无需 Mac Codex 改代码。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端读懂 `MacLaunchAgentPlan=` dry-run 规划提示。
 完成内容：
 - Windows 控制端 `parseMacUnattendedAttention` 新增 `MacLaunchAgentPlan=` 识别：当同段已有 LaunchAgent、刷新率、旧 build、重启建议或 warning/blocker 上下文时，风险摘要显示“Mac LaunchAgent 预案命令已提供”。
