@@ -90,6 +90,9 @@ If Agent Link Board already has a MacHeartbeat= status, the report also emits
 MacHeartbeatFreshness= from the newest checkedAt= timestamp, with checked,
 Mac Codex, and board ages, so old heartbeat status is visible in the first
 Windows resume line.
+If Agent Link Board already has a stable MacHeartbeatHealth= field, the report
+also emits the latest safe health status separately from freshness, so ok and
+blocked/warning states cannot be confused.
 The report also surfaces the formal manual checklist command and the checklist
 ids so a resume handoff can immediately verify connection, video, audio,
 clipboard, input_ack, and diagnostics in that order.
@@ -533,6 +536,22 @@ function emptyMacHeartbeatFreshness(source = "none", textCount = 0) {
   };
 }
 
+function emptyMacHeartbeatHealth(source = "none", textCount = 0, rejectedCount = 0) {
+  return {
+    found: false,
+    source,
+    textCount,
+    status: "not-seen",
+    reason: "",
+    checkedAt: "",
+    checked: "",
+    blockers: [],
+    warnings: [],
+    summary: "not-seen",
+    rejectedCount,
+  };
+}
+
 function emptyMacEvidence(source = "none", textCount = 0, rejectedCount = 0) {
   return {
     found: false,
@@ -658,6 +677,138 @@ function extractMacHeartbeatFreshnessFromBoardState(state) {
 function extractMacHeartbeatFreshnessFromText(text, source = "text") {
   const value = String(text || "");
   return extractMacHeartbeatFreshnessFromTexts(value ? [value] : [], source);
+}
+
+function splitLabeledSegments(text, label) {
+  const source = String(text || "");
+  const matches = [...source.matchAll(new RegExp(`\\b${escapeRegExp(label)}\\s*=`, "gi"))];
+  return matches.map((match, index) => {
+    const next = matches[index + 1];
+    return source.slice(match.index, next ? next.index : source.length);
+  });
+}
+
+function normalizeMacHeartbeatHealthStatus(value) {
+  const status = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "");
+  if (!status) return "";
+  if (status === "healthy" || status === "normal") return "ok";
+  if (["ok", "warning", "blocked", "failed", "stale", "unknown"].includes(status)) return status;
+  return "";
+}
+
+function isSafeMacHeartbeatHealthToken(value) {
+  const token = String(value || "").trim();
+  if (!token || token.length > 80) return false;
+  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(token)) return false;
+  if (/(?:secret|password|passwd|token|apikey|api-key|key|pwd|pass|credential|cookie|账号|密钥|密码)/i.test(token)) {
+    return false;
+  }
+  return true;
+}
+
+function parseMacHeartbeatHealthList(segment, label) {
+  const raw = extractLabeledValue(segment, label);
+  if (!raw || /^none$/i.test(raw)) return { ok: true, values: [] };
+  const values = raw
+    .split(/[,|/]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (values.length === 0) return { ok: true, values: [] };
+  if (!values.every(isSafeMacHeartbeatHealthToken)) return { ok: false, values: [] };
+  return { ok: true, values };
+}
+
+function parseMacHeartbeatHealthSegment(segment, source) {
+  if (/(?:--password|--token|LAN_DUAL_PASSWORD|secret|password|passwd|token|apikey|api-key|credential|cookie|密钥|密码)/i.test(segment)) {
+    return null;
+  }
+
+  const directMatch = /\bMacHeartbeatHealth\s*=\s*([^\s;；，。]+)/i.exec(String(segment || ""));
+  const directValue = directMatch ? directMatch[1] : "";
+  const status = normalizeMacHeartbeatHealthStatus(extractLabeledValue(segment, "status") || directValue.replace(/^status=/i, ""));
+  if (!status) return null;
+
+  const reason = extractLabeledValue(segment, "reason") || (status === "ok" ? "ok" : status);
+  if (!isSafeMacHeartbeatHealthToken(reason)) return null;
+
+  const blockers = parseMacHeartbeatHealthList(segment, "blockers");
+  const warnings = parseMacHeartbeatHealthList(segment, "warnings");
+  if (!blockers.ok || !warnings.ok) return null;
+
+  const checkedAt = extractLabeledValue(segment, "checkedAt");
+  const checked = extractLabeledValue(segment, "checked");
+  const checkedTime = Date.parse(checkedAt);
+  const summary = [
+    status,
+    checkedAt ? `checkedAt=${checkedAt}` : checked ? `checked=${checked}` : "",
+    `reason=${reason}`,
+    `blockers=${blockers.values.length ? blockers.values.join(",") : "none"}`,
+    `warnings=${warnings.values.length ? warnings.values.join(",") : "none"}`,
+  ].filter(Boolean).join(" ");
+  return {
+    found: true,
+    source,
+    status,
+    reason,
+    checkedAt,
+    checked,
+    blockers: blockers.values,
+    warnings: warnings.values,
+    summary,
+    checkedTime: Number.isFinite(checkedTime) ? checkedTime : Number.NEGATIVE_INFINITY,
+  };
+}
+
+function extractMacHeartbeatHealthFromTexts(texts, source = "text") {
+  const segments = [];
+  for (const text of texts) {
+    segments.push(...splitLabeledSegments(text, "MacHeartbeatHealth"));
+  }
+  if (!segments.length) return emptyMacHeartbeatHealth(source, texts.length);
+
+  let selected = null;
+  let rejectedCount = 0;
+  for (const segment of segments) {
+    const parsed = parseMacHeartbeatHealthSegment(segment, source);
+    if (!parsed) {
+      rejectedCount += 1;
+      continue;
+    }
+    if (!selected || parsed.checkedTime >= selected.checkedTime) {
+      selected = parsed;
+    }
+  }
+  if (!selected) return emptyMacHeartbeatHealth(source, texts.length, rejectedCount);
+
+  const { checkedTime, ...safeSelected } = selected;
+  return {
+    ...safeSelected,
+    textCount: texts.length,
+    segmentCount: segments.length,
+    rejectedCount,
+  };
+}
+
+function extractMacHeartbeatHealthFromBoardState(state) {
+  const allTexts = collectStringValues(state);
+  const allResult = extractMacHeartbeatHealthFromTexts(allTexts, "api-state");
+  const statusTexts = collectStringValues(state?.statuses);
+  const statusResult = extractMacHeartbeatHealthFromTexts(statusTexts, "api-state");
+  if (!statusResult.found) return allResult;
+  return {
+    ...statusResult,
+    textCount: allResult.textCount,
+    segmentCount: allResult.segmentCount,
+    rejectedCount: allResult.rejectedCount,
+  };
+}
+
+function extractMacHeartbeatHealthFromText(text, source = "text") {
+  const value = String(text || "");
+  return extractMacHeartbeatHealthFromTexts(value ? [value] : [], source);
 }
 
 function splitMacEvidenceSegments(text) {
@@ -2172,6 +2323,7 @@ async function getBoardSnapshot(args) {
       macHeartbeatStatus: emptyMacSafeStart("skipped"),
       macHeartbeatStop: emptyMacSafeStart("skipped"),
       macHeartbeatFreshness: emptyMacHeartbeatFreshness("skipped"),
+      macHeartbeatHealth: emptyMacHeartbeatHealth("skipped"),
       macEvidence: emptyMacEvidence("skipped"),
       windowsReverseGrantStatus: emptyMacSafeStart("skipped"),
       windowsOpenOneTimeReverseGrant: emptyMacSafeStart("skipped"),
@@ -2205,6 +2357,7 @@ async function getBoardSnapshot(args) {
       macHeartbeatStatus: extractMacHeartbeatStartHelperFromBoardState(stateResult.state, "MacHeartbeatStatus", "status"),
       macHeartbeatStop: extractMacHeartbeatStartHelperFromBoardState(stateResult.state, "MacHeartbeatStop", "stop"),
       macHeartbeatFreshness: extractMacHeartbeatFreshnessFromBoardState(stateResult.state),
+      macHeartbeatHealth: extractMacHeartbeatHealthFromBoardState(stateResult.state),
       macEvidence: extractMacEvidenceFromBoardState(stateResult.state),
       windowsReverseGrantStatus: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsReverseGrantStatus", "status"),
       windowsOpenOneTimeReverseGrant: extractWindowsReverseGrantFromBoardState(stateResult.state, "WindowsOpenOneTimeReverseGrant", "grant"),
@@ -2243,6 +2396,7 @@ async function getBoardSnapshot(args) {
     macHeartbeatStatus: extractMacHeartbeatStartHelperFromText(output, "MacHeartbeatStatus", "status", result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatStop: extractMacHeartbeatStartHelperFromText(output, "MacHeartbeatStop", "stop", result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatFreshness: extractMacHeartbeatFreshnessFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    macHeartbeatHealth: extractMacHeartbeatHealthFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macEvidence: extractMacEvidenceFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     windowsReverseGrantStatus: extractWindowsReverseGrantFromText(output, "WindowsReverseGrantStatus", "status", result.ok ? "codex-link-client" : "unavailable"),
     windowsOpenOneTimeReverseGrant: extractWindowsReverseGrantFromText(output, "WindowsOpenOneTimeReverseGrant", "grant", result.ok ? "codex-link-client" : "unavailable"),
@@ -3148,6 +3302,9 @@ function makeBoardSummary(report) {
     ...(report.board.macHeartbeatFreshness?.present
       ? [`MacHeartbeatFreshness=${report.board.macHeartbeatFreshness.summary}.`]
       : []),
+    ...(report.board.macHeartbeatHealth?.found
+      ? [`MacHeartbeatHealth=${report.board.macHeartbeatHealth.summary}.`]
+      : []),
     ...(report.board.macEvidence?.found
       ? [`MacEvidence=${report.board.macEvidence.summary}.`]
       : []),
@@ -3425,6 +3582,9 @@ function printHuman(report) {
     }
     if (report.board.macHeartbeatFreshness?.present) {
       console.log(`  MacHeartbeatFreshness=${report.board.macHeartbeatFreshness.summary}`);
+    }
+    if (report.board.macHeartbeatHealth?.found) {
+      console.log(`  MacHeartbeatHealth=${report.board.macHeartbeatHealth.summary}`);
     }
     if (report.board.macEvidence?.found) {
       console.log(`  MacEvidence=${report.board.macEvidence.summary}`);

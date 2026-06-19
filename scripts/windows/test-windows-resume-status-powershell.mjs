@@ -795,6 +795,164 @@ async function checkSecureAuthCallNextSummary(args) {
   });
 }
 
+async function checkBoardMacHeartbeatHealthExtraction(args) {
+  const okCheckedAt = new Date(Date.now() - 20_000).toISOString();
+  const blockedCheckedAt = new Date(Date.now() - 25_000).toISOString();
+  const olderBlockedCheckedAt = new Date(Date.now() - 90_000).toISOString();
+
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-CheckBoard",
+        "-Json",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell MacHeartbeatHealth ok JSON failed\n${output}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.macHeartbeatHealth?.found === true, "PowerShell MacHeartbeatHealth ok should be found");
+      assert(payload.board.macHeartbeatHealth.status === "ok", "PowerShell MacHeartbeatHealth ok status mismatch");
+      assert(payload.board.macHeartbeatHealth.reason === "ok", "PowerShell MacHeartbeatHealth ok reason mismatch");
+      assert(payload.board.macHeartbeatHealth.checkedAt === okCheckedAt, "PowerShell MacHeartbeatHealth ok checkedAt mismatch");
+      assert(payload.board.macHeartbeatHealth.blockers.length === 0, "PowerShell MacHeartbeatHealth ok should not include blockers");
+      assert(payload.board.macHeartbeatHealth.warnings.length === 0, "PowerShell MacHeartbeatHealth ok should not include warnings");
+      assert(payload.board.macHeartbeatHealth.rejectedCount >= 2, "PowerShell unsafe MacHeartbeatHealth candidates should be rejected");
+      assertIncludes(payload.boardSummary, `MacHeartbeatHealth=ok checkedAt=${okCheckedAt} reason=ok blockers=none warnings=none.`, "PowerShell MacHeartbeatHealth ok board summary");
+      assertNotIncludes(output, "secret-value", "PowerShell MacHeartbeatHealth ok JSON should not leak rejected candidates");
+    }, {
+      statuses: {
+        "Mac Heartbeat": {
+          role: "Mac heartbeat watcher",
+          status: "online",
+          note: `MacHeartbeatHealth=ok checked=20s checkedAt=${okCheckedAt} reason=ok blockers=none warnings=none`,
+        },
+      },
+      events: [
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacHeartbeatHealth=failed reason=secret-value blockers=secret-value warnings=none",
+        },
+        {
+          type: "status",
+          from: "Mac Heartbeat",
+          text: "MacHeartbeatHealth=$(whoami) reason=ok blockers=none warnings=none",
+        },
+      ],
+    });
+
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-CheckBoard",
+        "-Json",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell MacHeartbeatHealth current status JSON failed\n${output}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.macHeartbeatHealth?.found === true, "PowerShell current MacHeartbeatHealth should be found");
+      assert(payload.board.macHeartbeatHealth.status === "ok", "PowerShell current MacHeartbeatHealth status without checkedAt should win over older event");
+      assert(payload.board.macHeartbeatHealth.checkedAt === "", "PowerShell current MacHeartbeatHealth should preserve missing checkedAt");
+      assertIncludes(payload.boardSummary, "MacHeartbeatHealth=ok reason=ok blockers=none warnings=none.", "PowerShell current MacHeartbeatHealth board summary");
+      assertNotIncludes(payload.boardSummary, "mac-codex-stale", "PowerShell current MacHeartbeatHealth board summary should not use older event");
+    }, {
+      statuses: {
+        "Mac Heartbeat": {
+          role: "Mac heartbeat watcher",
+          status: "online",
+          note: "MacHeartbeatHealth=ok reason=ok blockers=none warnings=none",
+        },
+      },
+      events: [
+        {
+          type: "status",
+          from: "Mac Heartbeat",
+          text: `MacHeartbeatHealth=blocked checkedAt=${olderBlockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`,
+        },
+      ],
+    });
+
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-CheckBoard",
+        "-BoardSummary",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell MacHeartbeatHealth blocked board summary failed\n${output}`);
+      assertIncludes(output, `MacHeartbeatHealth=blocked checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none.`, "PowerShell MacHeartbeatHealth blocked board summary");
+      assertNotIncludes(output, "secret-value", "PowerShell MacHeartbeatHealth blocked board summary should not leak rejected candidates");
+    }, {
+      statuses: {
+        "Mac Heartbeat": {
+          role: "Mac heartbeat watcher",
+          status: "blocked",
+          note: `MacHeartbeatHealth=status=blocked checked=25s checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`,
+        },
+      },
+      events: [
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacHeartbeatHealth=warning reason=secret-value --password secret-value blockers=none warnings=none",
+        },
+      ],
+    });
+
+    await withMockLinkBoard(async (board) => {
+      const result = await runPowerShell([
+        "-Discover",
+        "-DiscoverNoLocalSubnets",
+        "-HostName", "127.0.0.1",
+        "-Port", String(port),
+        "-Server", board.url,
+        "-CheckBoard",
+        "-AllowMockVideo",
+        "-SkipAudio",
+        "-SkipClipboard",
+        "-SkipInputLog",
+      ], args);
+      const output = `${result.stdout}\n${result.stderr}`;
+      assert(result.exitCode === 0, `PowerShell MacHeartbeatHealth human output failed\n${output}`);
+      assertIncludes(output, `MacHeartbeatHealth=blocked checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`, "PowerShell MacHeartbeatHealth human output");
+      assertNotIncludes(output, "secret-value", "PowerShell MacHeartbeatHealth human output should not leak rejected candidates");
+      console.log("[OK] PowerShell resume status extracts Mac heartbeat health from Agent Link Board safely");
+    }, {
+      statuses: {
+        "Mac Heartbeat": {
+          role: "Mac heartbeat watcher",
+          status: "blocked",
+          note: `MacHeartbeatHealth=status=blocked checked=25s checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`,
+        },
+      },
+    });
+  });
+}
+
 async function checkBoardMacHostSafeStartExtraction(args) {
   const safeCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888";
   const maxFpsCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888 --maxScreenFps 60";
@@ -1379,6 +1537,7 @@ async function main() {
   await checkBoardCurrentCallSummary(args);
   await checkBoardCurrentCallJson(args);
   await checkSecureAuthCallNextSummary(args);
+  await checkBoardMacHeartbeatHealthExtraction(args);
   await checkBoardMacHostSafeStartExtraction(args);
   await checkBoardWindowsSecureAuthPathExtraction(args);
   await checkBoardWindowsLanRiskExtraction(args);

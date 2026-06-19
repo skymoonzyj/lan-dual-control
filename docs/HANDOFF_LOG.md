@@ -46,6 +46,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 恢复总览也能消费稳定 `MacHeartbeatHealth=` 健康字段。
+完成内容：
+- `check-windows-resume-status --checkBoard` 现在会从 Agent Link Board 安全提取最新 `MacHeartbeatHealth=`，输出 JSON `board.macHeartbeatHealth`、普通输出和 `--boardSummary` 的 `MacHeartbeatHealth=...`。
+- 支持 `MacHeartbeatHealth=ok` 和 `MacHeartbeatHealth=status=blocked` 两种形态，并保留安全短标签 `reason/blockers/warnings`；若 Mac 端提供 `checkedAt` 也会转述。解析优先使用 `/api/state.statuses` 当前状态，避免旧 event 覆盖当前健康字段。
+- `MacHeartbeatHealth=` 继续和 `MacHeartbeatFreshness=` 分开：fresh 只代表摘要新鲜，health 才代表健康状态；密码/token/secret/命令形态候选会被拒绝。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 失败在 `MacHeartbeatHealth ok should be found`。
+- 红灯：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000` 失败在 `PowerShell MacHeartbeatHealth ok should be found`。
+- 绿灯：实现后上述两条回归通过。
+遗留问题：
+- Mac 端生产字段已随 `270de02` 进入本地 main；本轮现场 `check-windows-resume-status --checkBoard --boardSummary` 已确认真实摘要可读到 `MacHeartbeatHealth=ok reason=ok blockers=none warnings=none`。
+下一步建议：
+- 后续若 Mac 端新增更多 `reason/blockers/warnings` 短标签，再按真实摘要补充 Windows 风险中文化；当前只读链路已闭环。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端预备消费稳定 `MacHeartbeatHealth=` 健康字段。
 完成内容：
 - `MacHeartbeatHealth=ok` 且片段干净时，会显示“Mac 心跳正常”证据/值守证据。

@@ -940,6 +940,160 @@ async function checkSecureAuthCallNextSummary(args) {
   });
 }
 
+async function checkBoardMacHeartbeatHealthExtraction(args) {
+  const okCheckedAt = new Date(Date.now() - 20_000).toISOString();
+  const blockedCheckedAt = new Date(Date.now() - 25_000).toISOString();
+  const olderBlockedCheckedAt = new Date(Date.now() - 90_000).toISOString();
+
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock MacHeartbeatHealth ok JSON failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.macHeartbeatHealth?.found === true, "MacHeartbeatHealth ok should be found");
+      assert(payload.board.macHeartbeatHealth.status === "ok", "MacHeartbeatHealth ok status mismatch");
+      assert(payload.board.macHeartbeatHealth.reason === "ok", "MacHeartbeatHealth ok reason mismatch");
+      assert(payload.board.macHeartbeatHealth.checkedAt === okCheckedAt, "MacHeartbeatHealth ok checkedAt mismatch");
+      assert(payload.board.macHeartbeatHealth.blockers.length === 0, "MacHeartbeatHealth ok should not include blockers");
+      assert(payload.board.macHeartbeatHealth.warnings.length === 0, "MacHeartbeatHealth ok should not include warnings");
+      assert(payload.board.macHeartbeatHealth.rejectedCount >= 2, "unsafe MacHeartbeatHealth candidates should be rejected");
+      assertIncludes(payload.boardSummary, `MacHeartbeatHealth=ok checkedAt=${okCheckedAt} reason=ok blockers=none warnings=none.`, "MacHeartbeatHealth ok board summary");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "MacHeartbeatHealth ok JSON should not leak rejected candidates");
+    }, {
+      statuses: {
+        "Mac Heartbeat": {
+          role: "Mac heartbeat watcher",
+          status: "online",
+          note: `MacHeartbeatHealth=ok checked=20s checkedAt=${okCheckedAt} reason=ok blockers=none warnings=none`,
+        },
+      },
+      events: [
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacHeartbeatHealth=failed reason=secret-value blockers=secret-value warnings=none",
+        },
+        {
+          type: "status",
+          from: "Mac Heartbeat",
+          text: "MacHeartbeatHealth=$(whoami) reason=ok blockers=none warnings=none",
+        },
+      ],
+    });
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock MacHeartbeatHealth current status JSON failed\n${result.stdout}\n${result.stderr}`);
+      const payload = JSON.parse(result.stdout);
+      assert(payload.board?.macHeartbeatHealth?.found === true, "current MacHeartbeatHealth should be found");
+      assert(payload.board.macHeartbeatHealth.status === "ok", "current MacHeartbeatHealth status without checkedAt should win over older event");
+      assert(payload.board.macHeartbeatHealth.checkedAt === "", "current MacHeartbeatHealth should preserve missing checkedAt");
+      assertIncludes(payload.boardSummary, "MacHeartbeatHealth=ok reason=ok blockers=none warnings=none.", "current MacHeartbeatHealth board summary");
+      assertNotIncludes(payload.boardSummary, "mac-codex-stale", "current MacHeartbeatHealth board summary should not use older event");
+    }, {
+      statuses: {
+        "Mac Heartbeat": {
+          role: "Mac heartbeat watcher",
+          status: "online",
+          note: "MacHeartbeatHealth=ok reason=ok blockers=none warnings=none",
+        },
+      },
+      events: [
+        {
+          type: "status",
+          from: "Mac Heartbeat",
+          text: `MacHeartbeatHealth=blocked checkedAt=${olderBlockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`,
+        },
+      ],
+    });
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--boardSummary",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock MacHeartbeatHealth blocked board summary failed\n${result.stdout}\n${result.stderr}`);
+      assertIncludes(result.stdout, `MacHeartbeatHealth=blocked checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none.`, "MacHeartbeatHealth blocked board summary");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "MacHeartbeatHealth blocked board summary should not leak rejected candidates");
+    }, {
+      statuses: {
+        "Mac Heartbeat": {
+          role: "Mac heartbeat watcher",
+          status: "blocked",
+          note: `MacHeartbeatHealth=status=blocked checked=25s checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`,
+        },
+      },
+      events: [
+        {
+          type: "message",
+          from: "Mac Codex",
+          text: "MacHeartbeatHealth=warning reason=secret-value --password secret-value blockers=none warnings=none",
+        },
+      ],
+    });
+
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args);
+      assert(result.exitCode === 0, `mock MacHeartbeatHealth human output failed\n${result.stdout}\n${result.stderr}`);
+      assertIncludes(result.stdout, `MacHeartbeatHealth=blocked checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`, "MacHeartbeatHealth human output");
+      assertNotIncludes(result.stdout + result.stderr, "secret-value", "MacHeartbeatHealth human output should not leak rejected candidates");
+      console.log("[OK] Windows resume status extracts Mac heartbeat health from Agent Link Board safely");
+    }, {
+      statuses: {
+        "Mac Heartbeat": {
+          role: "Mac heartbeat watcher",
+          status: "blocked",
+          note: `MacHeartbeatHealth=status=blocked checked=25s checkedAt=${blockedCheckedAt} reason=mac-codex-stale blockers=mac-codex-stale warnings=none`,
+        },
+      },
+    });
+  });
+}
+
 async function checkBoardMacHostSafeStartExtraction(args) {
   const safeCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888";
   const maxFpsCommand = "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43888 --maxScreenFps 60";
@@ -1826,6 +1980,7 @@ async function main() {
   await checkBoardDoneCallJson(args);
   await checkBoardCurrentCallSummary(args);
   await checkSecureAuthCallNextSummary(args);
+  await checkBoardMacHeartbeatHealthExtraction(args);
   await checkBoardMacHostSafeStartExtraction(args);
   await checkBoardWindowsReverseGrantExtraction(args);
   await checkBoardWindowsSecureAuthPathExtraction(args);
