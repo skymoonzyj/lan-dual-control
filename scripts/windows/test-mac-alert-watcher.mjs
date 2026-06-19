@@ -58,6 +58,10 @@ function assertNotIncludes(text, pattern, label) {
   assert(!text.includes(pattern), `${label} should not include ${JSON.stringify(pattern)}\n${text}`);
 }
 
+function countOccurrences(text, pattern) {
+  return text.split(pattern).length - 1;
+}
+
 async function resolvePowerShellExe() {
   if (process.env.LAN_DUAL_POWERSHELL_EXE) {
     return process.env.LAN_DUAL_POWERSHELL_EXE;
@@ -593,6 +597,91 @@ async function checkMacHeartbeatHealthBlockedSanitizesUnsafeDetails(args) {
   assertNotIncludes(output, "secret-token-for-test", "Mac heartbeat health blocked status");
   assertNotIncludes(output, "debugSecret=", "Mac heartbeat health blocked status");
   console.log("[OK] Mac heartbeat health blocked status sanitizes unsafe details");
+}
+
+async function checkMacPowerHealthWarningSanitizesUnsafeDetails(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Heartbeat": {
+        role: "Mac heartbeat watcher",
+        status: "online",
+        note: [
+          "MacHeartbeatHealth=ok reason=ok heartbeat=ok blockers=none warnings=none checkedAt=2026-06-19T08:37:39.592Z.",
+          "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T08:08:38.575Z.",
+          "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary.",
+          "debugSecret=secret-token-for-test",
+        ].join(" "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "Mac power health warning status");
+  assertIncludes(output, "MacPowerHealth=warning", "Mac power health warning status");
+  assertIncludes(output, "reason=system-sleep-enabled", "Mac power health warning status");
+  assertIncludes(output, "warnings=system-sleep-enabled,display-sleep-enabled", "Mac power health warning status");
+  assertNotIncludes(output, "MacPowerPlan=", "Mac power health warning status");
+  assertNotIncludes(output, "plan-mac-power-settings", "Mac power health warning status");
+  assertNotIncludes(output, "secret-token-for-test", "Mac power health warning status");
+  assertNotIncludes(output, "debugSecret=", "Mac power health warning status");
+  console.log("[OK] Mac power health warning status sanitizes unsafe details");
+}
+
+async function checkMacUnattendedHealthWarningSanitizesUnsafeDetails(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Unattended": {
+        role: "Mac 端",
+        status: "warning",
+        note: [
+          "MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T08:08:38.575Z.",
+          "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --boardSummary.",
+          "debugSecret=secret-token-for-test",
+        ].join(" "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "Mac unattended health warning status");
+  assertIncludes(output, "MacUnattendedHealth=warning", "Mac unattended health warning status");
+  assertIncludes(output, "reason=launch-agent-not-loaded", "Mac unattended health warning status");
+  assertIncludes(output, "warnings=launch-agent-not-loaded,power", "Mac unattended health warning status");
+  assertNotIncludes(output, "MacUnattendedStatus=node", "Mac unattended health warning status");
+  assertNotIncludes(output, "check-mac-unattended-status", "Mac unattended health warning status");
+  assertNotIncludes(output, "secret-token-for-test", "Mac unattended health warning status");
+  assertNotIncludes(output, "debugSecret=", "Mac unattended health warning status");
+  console.log("[OK] Mac unattended health warning status sanitizes unsafe details");
+}
+
+async function checkMacPowerHealthDuplicateSummariesDeduped(args) {
+  const sharedPowerHealth = "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T08:08:38.575Z.";
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Heartbeat": {
+        role: "Mac heartbeat watcher",
+        status: "online",
+        note: [
+          "MacHeartbeatHealth=ok reason=ok heartbeat=ok blockers=none warnings=none checkedAt=2026-06-19T08:37:39.592Z.",
+          sharedPowerHealth,
+        ].join(" "),
+        updatedAt: new Date().toISOString(),
+      },
+      "Mac Unattended": {
+        role: "Mac 端",
+        status: "warning",
+        note: [
+          "MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T08:08:38.575Z.",
+          "MacPowerHealth=warning reason=system-sleep-enabled blockers=none warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T08:08:38.575Z.",
+        ].join(" "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "MacPowerHealth=warning", "Mac power health duplicate status");
+  assert(
+    countOccurrences(output, "MacPowerHealth=warning") === 1,
+    `Mac power health duplicate status should alert once\n${output}`,
+  );
+  console.log("[OK] Mac power health duplicate summaries are deduped");
 }
 
 async function checkReverseGrantStatusAlerts(args) {
@@ -1221,6 +1310,9 @@ async function main() {
   await checkMacHeartbeatHealthOkIgnored(args);
   await checkMacHeartbeatHealthWarningAlerts(args);
   await checkMacHeartbeatHealthBlockedSanitizesUnsafeDetails(args);
+  await checkMacPowerHealthWarningSanitizesUnsafeDetails(args);
+  await checkMacUnattendedHealthWarningSanitizesUnsafeDetails(args);
+  await checkMacPowerHealthDuplicateSummariesDeduped(args);
   await checkReverseGrantStatusAlerts(args);
   await checkMacUnattendedStatusAlerts(args);
   await checkMacUnattendedOkStatusIgnored(args);

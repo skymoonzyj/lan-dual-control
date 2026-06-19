@@ -311,9 +311,34 @@ function Get-SafeAlertField {
     return ""
 }
 
-function Get-MacHeartbeatHealthAlert {
-    param([string]$Text)
-    $match = [regex]::Match($Text, "(?i)\bMacHeartbeatHealth\s*=\s*([^\s;]+)")
+function Get-NormalizedHealthDedupValue {
+    param([string]$Value)
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return "none"
+    }
+    $trimmed = $Value.Trim().ToLowerInvariant()
+    if ($trimmed -match "^(none|ok|0|false|-)$") {
+        return "none"
+    }
+    return $trimmed
+}
+
+function Get-StructuredHealthTitle {
+    param([string]$FieldName)
+    switch ($FieldName) {
+        "MacHeartbeatHealth" { return "Mac heartbeat health alert" }
+        "MacUnattendedHealth" { return "Mac unattended health alert" }
+        "MacPowerHealth" { return "Mac power health alert" }
+        default { return "Mac structured health alert" }
+    }
+}
+
+function Get-MacStructuredHealthAlert {
+    param(
+        [string]$Text,
+        [string]$FieldName
+    )
+    $match = [regex]::Match($Text, "(?i)\b" + [regex]::Escape($FieldName) + "\s*=\s*([^\s;]+)")
     if (-not $match.Success) {
         return $null
     }
@@ -326,19 +351,20 @@ function Get-MacHeartbeatHealthAlert {
         $status = "unknown"
     }
 
-    $reason = Get-SafeAlertField -Text $Text -Name "reason"
-    $heartbeat = Get-SafeAlertField -Text $Text -Name "heartbeat"
-    $blockers = Get-SafeAlertField -Text $Text -Name "blockers"
-    $warnings = Get-SafeAlertField -Text $Text -Name "warnings"
-    $checkedAt = Get-SafeAlertField -Text $Text -Name "checkedAt"
+    $fieldText = $Text.Substring($match.Index)
+    $reason = Get-SafeAlertField -Text $fieldText -Name "reason"
+    $heartbeat = Get-SafeAlertField -Text $fieldText -Name "heartbeat"
+    $blockers = Get-SafeAlertField -Text $fieldText -Name "blockers"
+    $warnings = Get-SafeAlertField -Text $fieldText -Name "warnings"
+    $checkedAt = Get-SafeAlertField -Text $fieldText -Name "checkedAt"
 
-    $unsafeDetail = ($Text -match "(?i)(password|passwd|pwd|secret|token|credential|cookie|authorization|bearer|private[-_]?key|api[-_]?key|backend-api|chatgpt\.com|scripts[\\/]|--[a-z0-9-]+)")
+    $unsafeDetail = ($fieldText -match "(?i)(password|passwd|pwd|secret|token|credential|cookie|authorization|bearer|private[-_]?key|api[-_]?key|backend-api|chatgpt\.com|scripts[\\/]|--[a-z0-9-]+)")
     $hasBlockers = (-not [string]::IsNullOrWhiteSpace($blockers)) -and ($blockers -notmatch "^(?i:none|ok|0|false|-)$")
     $hasWarnings = (-not [string]::IsNullOrWhiteSpace($warnings)) -and ($warnings -notmatch "^(?i:none|ok|0|false|-)$")
     $shouldAlert = (@("warning", "blocked", "failed", "stale", "unknown", "attention") -contains $status) -or $hasBlockers -or $hasWarnings
 
     $parts = New-Object 'System.Collections.Generic.List[string]'
-    $parts.Add("MacHeartbeatHealth=$status") | Out-Null
+    $parts.Add(("{0}={1}" -f $FieldName, $status)) | Out-Null
     foreach ($entry in @(
         @("reason", $reason),
         @("heartbeat", $heartbeat),
@@ -356,7 +382,18 @@ function Get-MacHeartbeatHealthAlert {
 
     return [pscustomobject]@{
         Present = $true
+        FieldName = $FieldName
+        Title = Get-StructuredHealthTitle -FieldName $FieldName
         Status = $status
+        DedupKey = (@(
+            $FieldName,
+            (Get-NormalizedHealthDedupValue -Value $status),
+            (Get-NormalizedHealthDedupValue -Value $reason),
+            (Get-NormalizedHealthDedupValue -Value $heartbeat),
+            (Get-NormalizedHealthDedupValue -Value $blockers),
+            (Get-NormalizedHealthDedupValue -Value $warnings),
+            (Get-NormalizedHealthDedupValue -Value $checkedAt)
+        ) -join ":")
         ShouldAlert = $shouldAlert
         Message = ($parts -join " ")
     }
@@ -489,12 +526,19 @@ while ($true) {
                 continue
             }
 
-            $heartbeatHealth = Get-MacHeartbeatHealthAlert -Text $note
-            if ($heartbeatHealth -and $heartbeatHealth.ShouldAlert) {
-                Add-AlertOnce `
-                    -Id ("mac-heartbeat-health:" + $device + ":" + [string]$item.updatedAt + ":" + $heartbeatHealth.Status) `
-                    -Title ("Mac heartbeat health alert - " + $device) `
-                    -Message ($heartbeatHealth.Message + "`n`nUpdated at: " + [string]$item.updatedAt)
+            $structuredHealthFields = @("MacHeartbeatHealth", "MacUnattendedHealth", "MacPowerHealth")
+            $structuredHealthAlerted = $false
+            foreach ($healthField in $structuredHealthFields) {
+                $healthAlert = Get-MacStructuredHealthAlert -Text $note -FieldName $healthField
+                if ($healthAlert -and $healthAlert.ShouldAlert) {
+                    Add-AlertOnce `
+                        -Id ("mac-structured-health:" + $healthAlert.DedupKey) `
+                        -Title ($healthAlert.Title + " - " + $device) `
+                        -Message ($healthAlert.Message + "`n`nUpdated at: " + [string]$item.updatedAt)
+                    $structuredHealthAlerted = $true
+                }
+            }
+            if ($structuredHealthAlerted) {
                 continue
             }
 

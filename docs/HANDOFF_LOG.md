@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 本机 Mac 提醒 watcher 对 `MacPowerHealth=` / `MacUnattendedHealth=` 也输出干净短摘要。
+完成内容：
+- `watch-codex-link-mac-alerts.ps1` 的结构化 health 解析从 `MacHeartbeatHealth=` 扩展到 `MacPowerHealth=` 和 `MacUnattendedHealth=`。
+- `MacPowerHealth=warning`、`MacUnattendedHealth=warning/blocked` 会弹 Windows 本机提醒；`ok` 不误弹。
+- 提醒正文只输出稳定短字段 `reason/heartbeat/blockers/warnings/checkedAt`，同段 `MacPowerPlan=`、`MacUnattendedStatus=`、脚本参数或疑似 secret/token/password 会被脱敏为 `unsafeDetails=redacted`，不再把整段通讯板命令打进弹窗/日志。
+- 结构化 health 提醒按 `field/status/reason/heartbeat/blockers/warnings/checkedAt` 去重，避免 `Mac Heartbeat` 和 `Mac Unattended` 同时转述同一 `MacPowerHealth` 时重复提醒。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增 `MacPowerHealth=warning ... MacPowerPlan=node ... debugSecret=...` 断言后，`node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 45000` 失败在输出仍包含 `MacPowerPlan=`。
+- 绿灯：实现结构化字段作用域和去重键后，同一 watcher 回归通过，覆盖 power health 与 unattended health 的提醒、脱敏和相同 power health 双设备转述去重。
+遗留问题：
+- 本轮只收敛 watcher 弹窗/日志正文；Windows 控制端页面里的 `MacPowerHealth=` 中文风险展示可后续单独补。
+下一步建议：
+- 后续可让 Windows 控制端快速摘要也消费 `MacPowerHealth=`，把 `system-sleep-enabled/display-sleep-enabled` 中文化显示。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 本机 Mac 提醒 watcher 直接消费稳定 `MacHeartbeatHealth=`。
 完成内容：
 - `watch-codex-link-mac-alerts.ps1` 现在会专门解析 `MacHeartbeatHealth=`：`ok` 不弹提醒，`warning/blocked/failed/stale/unknown` 或非空安全 `blockers/warnings` 会弹 Windows 本机提醒。
