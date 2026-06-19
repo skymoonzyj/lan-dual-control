@@ -141,6 +141,18 @@ function assertMacClientReverseGrantCopyAction(text, label) {
   assertNotIncludes(text, "inject", label);
 }
 
+function assertMacClientManualChecklistAction(text, label) {
+  assertIncludes(text, "手工清单", label);
+  assertIncludes(text, "连接/视频/音频/剪贴板/input_ack/诊断", label);
+  assertIncludes(text, "复制诊断", label);
+  assertIncludes(text, "连接密码", label);
+  assertNotIncludes(text, "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(text, "--password", label);
+  assertNotIncludes(text, "--sendCall", label);
+  assertNotIncludes(text, "input_event", label);
+  assertNotIncludes(text, "LAN_DUAL_INPUT_MODE=inject", label);
+}
+
 function assertWindowsReverseGrantPowerShellCommand(command, label, expectedPort = "43770", action = "grant") {
   assertIncludes(command, "pwsh -NoProfile -ExecutionPolicy Bypass", label);
   assertIncludes(command, "-File scripts/windows/allow-windows-reverse-control.ps1", label);
@@ -375,6 +387,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "Usage:", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientPageStatusCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientCopyDiagnosticsAction", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macClientManualChecklistAction", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientDiscoverWindowsCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.windowsHostStatusCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientReverseRehearsalAction", `${script} ${flag}`);
@@ -429,6 +442,10 @@ function checkOfflineJson(args) {
   assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlanCommand || "", "offline JSON Mac remote audio plan command");
   assertMacInputSafetyPlanCommand(payload.commands?.macInputSafetyPlanCommand || "", "offline JSON Mac input safety plan command");
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "offline JSON Mac script help command");
+  assertMacClientManualChecklistAction(
+    payload.commands?.macClientManualChecklistAction || "",
+    "offline JSON Mac client manual checklist action",
+  );
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "payload should include copy diagnostics action");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("连接密码"), "copy diagnostics action should mention password safety");
   assert(/Mac client readiness:/.test(payload.boardSummary || ""), "payload should include boardSummary");
@@ -468,6 +485,11 @@ function checkOfflineJson(args) {
   );
   assert(/MacScriptHelp=/.test(payload.boardSummary || ""), "boardSummary should include Mac script help command");
   assertIncludes(payload.boardSummary || "", "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "offline JSON boardSummary");
+  assert(/MacClientManualChecklist=/.test(payload.boardSummary || ""), "boardSummary should include manual checklist action");
+  assertMacClientManualChecklistAction(
+    (payload.boardSummary || "").split("MacClientManualChecklist=")[1]?.split("; ")[0] || "",
+    "offline JSON boardSummary manual checklist action",
+  );
   assert(/CopyDiagnostics=Mac client 事件日志点击/.test(payload.boardSummary || ""), "boardSummary should include copy diagnostics action");
   print("OK", "Offline JSON is parseable and secret-free");
 }
@@ -559,6 +581,11 @@ function checkBoardSummary(args) {
   );
   assertIncludes(text, "MacScriptHelp=", "board summary");
   assertIncludes(text, "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "board summary");
+  assertIncludes(text, "MacClientManualChecklist=", "board summary");
+  assertMacClientManualChecklistAction(
+    text.split("MacClientManualChecklist=")[1]?.split("; ")[0] || "",
+    "board summary manual checklist action",
+  );
   assertIncludes(text, "CopyDiagnostics=Mac client 事件日志点击", "board summary");
   assertIncludes(text, "连接密码", "board summary");
   assertIncludes(text, "Do not send passwords", "board summary");
@@ -627,6 +654,11 @@ function checkPlainReport(args) {
   assertMacScriptHelpCommand(
     extractPlainLineValue(result.stdout, "- Mac script help safety check: ", "plain report"),
     "plain report Mac script help",
+  );
+  assertIncludes(result.stdout, "Mac client manual checklist:", "plain report");
+  assertMacClientManualChecklistAction(
+    extractPlainLineValue(result.stdout, "- Mac client manual checklist: ", "plain report"),
+    "plain report Mac client manual checklist",
   );
   assertIncludes(result.stdout, "Copy diagnostics:", "plain report");
   assertIncludes(result.stdout, "复制诊断", "plain report");
@@ -897,6 +929,11 @@ async function checkClientServerProbe(args) {
     assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "client server probe browser self-test command");
     assertMacInputSafetyPlanCommand(payload.commands?.macInputSafetyPlanCommand || "", "client server probe Mac input safety plan command");
     assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "client server probe script help command");
+    assertMacClientManualChecklistAction(
+      payload.commands?.macClientManualChecklistAction || "",
+      "client server probe manual checklist action",
+    );
+    assertIncludes(payload.boardSummary || "", "MacClientManualChecklist=", "client server probe boardSummary");
     assert(payload.checklist.some((item) => item.id === "client-server" && item.status === "ok"), "client-server ok item should be present");
   });
   print("OK", "Running Mac client HTTP server probe passes");
@@ -1057,6 +1094,11 @@ async function checkWindowsDiscoveryProbe(args) {
     assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "Windows discovery probe browser self-test command");
     assertMacInputSafetyPlanCommand(payload.commands?.macInputSafetyPlanCommand || "", "Windows discovery probe Mac input safety plan command");
     assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "Windows discovery probe script help command");
+    assertMacClientManualChecklistAction(
+      payload.commands?.macClientManualChecklistAction || "",
+      "Windows discovery probe manual checklist action",
+    );
+    assertIncludes(payload.boardSummary || "", "MacClientManualChecklist=", "Windows discovery boardSummary");
   });
   print("OK", "Mock Windows /discovery probe captures runtime and capabilities");
 }
