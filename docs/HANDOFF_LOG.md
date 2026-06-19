@@ -17,6 +17,35 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
+本轮目标：让 Mac client formal smoke 找不到 Windows 主机时给出清晰通讯板 warning。
+完成内容：
+- `run-mac-client-formal-smoke --discover --ensureClient --preflightOnly --boardSummary` 在没有选出 Windows host 时，摘要现在会显示 `warnings=windows-host`，不再出现 `ok=no ready=no` 但 `warnings=none` 的矛盾状态。
+- 保持原有安全边界：找不到 Windows host 时仍失败退出，不弹密码、不认证、不发 call/input/inject，并继续输出安全重试、反控授权和脚本 help 命令。
+- 回归覆盖 discovery 失败且 `--promptPassword --requirePassword` 的场景，确认失败发生在密码提示之前，并保留 `WindowsLanRisk=` 安全短标签。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增断言后，`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 20000` 失败在缺少 `warnings=windows-host`。
+- 绿灯：实现后同一回归通过。
+- `node --check scripts/mac/run-mac-client-formal-smoke.mjs`
+- `node --check scripts/mac/test-mac-client-formal-smoke.mjs`
+- `node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`
+- 现场缺主机命令确认摘要为 `blockers=none warnings=windows-host`，退出码仍为 1。
+遗留问题：
+- 本轮不做真实 Windows host 认证或真实控制；仍需 Windows host 在线后由用户在场跑前台密码真测。
+下一步建议：
+- Windows 端或人工看到 `warnings=windows-host` 时，优先按 `MacClientDiscoverWindows=` / `WindowsLanRisk=` 排查 Windows host、端口、防火墙或网络 Profile，再复跑 Mac formal smoke preflight。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
 ## 2026-06-19 Windows Codex
 
 日期：2026-06-19 继续推进

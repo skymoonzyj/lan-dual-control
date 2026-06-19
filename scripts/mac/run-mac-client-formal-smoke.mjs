@@ -919,7 +919,7 @@ function makeBoardSummary(report) {
     ? ` Discovery=${report.discovery.selected ? `${report.discovery.selected.host}:${report.discovery.selected.port}` : "requested"}.`
     : "";
   const discoveryChecklistText = makeDiscoveryChecklistText(report);
-  const preflightFindings = formatPreflightFindings(report.preflight);
+  const preflightFindings = formatPreflightFindings(report.preflight, report);
   const reverseGrantParts = makeReverseGrantBoardSummaryParts(report, report.args);
   const secureAuthParts = makeSecureAuthBoardSummaryParts(report, report.args);
   if (report.ok && report.browserSmoke?.ran) {
@@ -978,10 +978,23 @@ function makeBoardSummary(report) {
   ].join(" ");
 }
 
-function formatPreflightFindings(preflight) {
+function formatPreflightFindings(preflight, report = {}) {
+  const checklist = withDerivedPreflightWarnings(preflight, report);
   const blockers = summarizePreflightChecklistIds(preflight?.checklist, "blocker");
-  const warnings = summarizePreflightChecklistIds(preflight?.checklist, "warning");
+  const warnings = summarizePreflightChecklistIds(checklist, "warning");
   return `blockers=${blockers} warnings=${warnings}`;
+}
+
+function withDerivedPreflightWarnings(preflight, report = {}) {
+  const checklist = Array.isArray(preflight?.checklist) ? preflight.checklist : [];
+  if (!shouldSurfaceMissingWindowsHostWarning(checklist, preflight, report)) return checklist;
+  return [...checklist, { id: "windows-host", status: "warning" }];
+}
+
+function shouldSurfaceMissingWindowsHostWarning(checklist, preflight, report = {}) {
+  if (String(report.args?.host || "").trim()) return false;
+  if (preflight?.readyToCall === true) return false;
+  return !checklist.some((entry) => entry?.id === "windows-host" && entry?.status === "warning");
 }
 
 function summarizePreflightChecklistIds(checklist, status) {

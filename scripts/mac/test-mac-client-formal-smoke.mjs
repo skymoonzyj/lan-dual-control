@@ -983,6 +983,8 @@ async function checkDiscoverFailureNoPasswordPrompt(args) {
       "discover failure Mac script help command",
     );
     assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "discover failure board summary");
+    assertIncludes(payload.boardSummary || "", "warnings=windows-host", "discover failure board summary");
+    assertNotIncludes(payload.boardSummary || "", "blockers=none warnings=none", "discover failure board summary");
     assertMacScriptHelpCommand(
       (payload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
       "discover failure board summary Mac script help command",
