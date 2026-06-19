@@ -17,6 +17,36 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
+本轮目标：修复 Mac 心跳/恢复摘要误转述旧 `launch-agent-not-loaded` 值守状态的问题。
+完成内容：
+- 根因确认：`Mac Unattended` 独立状态已刷新为 `MacUnattendedHealth=warning reason=accessibility`，但 `check-mac-heartbeat` / `check-mac-resume-status` 的安全白名单不认识 `accessibility` 等真实 finding id，导致跳过当前值并从旧 `Mac Heartbeat` 摘要里捡到历史 `launch-agent-not-loaded`。
+- 同步修复心跳和恢复脚本：允许 `input-mode`、`screen-recording`、`accessibility`、`input-monitoring` 这些 `check-mac-unattended-status` 会真实输出的短标签，并优先采样通讯板当前 `Mac Unattended` 状态行，再看其他状态/事件文本。
+- 真实复查后，`MacHeartbeat` 和 `MacResumeStatus` 都正确显示 `MacUnattendedHealth=warning reason=accessibility blockers=none warnings=accessibility`，不再把旧 LaunchAgent 未加载误报给 Windows 端。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/HANDOFF_LOG.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+验证方式：
+- 红灯：新增“当前 Mac Unattended 状态应覆盖旧 Mac Heartbeat 回声”的用例后，`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 20000` 和 `node scripts/mac/test-mac-resume-status.mjs --timeoutMs 20000` 均先失败在 `accessibility` reason 未被接受。
+- 绿灯：修复后两项测试均通过；`node --check scripts/mac/check-mac-heartbeat.mjs`、`node --check scripts/mac/check-mac-resume-status.mjs` 通过。
+- 真实验证：`check-mac-heartbeat --checkBoard --boardSummary`、`check-mac-resume-status --checkBoard --boardSummary`、`watch-mac-heartbeat --once --sendStatus --refreshUnattended --boardSummary` 都显示最新 `reason=accessibility`，且无密码、无认证、无 input/inject。
+遗留问题：
+- 当前 Mac host 仍是 LaunchAgent/log/60fps 安全联调态；真实输入注入前仍需处理 Accessibility/Input Monitoring 权限视角，或改走用户在场的前台安全启动路径。
+- Windows 正式控 Mac 验收仍不能依赖 LaunchAgent 的随机 ephemeral password；需要用户在 Windows 本机隐藏输入当前可用密码，或 Mac 端临时切到前台 `--promptPassword` 共享一次性现场密码流程。
+下一步建议：
+- Windows 端重新读取 `MacHeartbeat` / `MacResumeStatus` 时，以 `MacUnattendedHealth=warning reason=accessibility` 作为当前剩余风险；不要再把旧 `launch-agent-not-loaded` 当作当前 blocker。
+- 若要进入真实注入测试，先让用户明确确认正在看 Mac 屏幕，再处理权限/前台启动/`--confirmUserWatching`。
+是否改了协议：否；只修通讯板安全字段解析和转述优先级。
+是否需要另一端配合：需要 Windows 端重新读取最新通讯板状态；暂不需要改 Windows 代码。
+
 ## 2026-06-19 Windows Codex
 
 日期：2026-06-19 继续推进

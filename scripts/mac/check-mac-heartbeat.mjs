@@ -63,11 +63,15 @@ const allowedMacUnattendedReasons = new Set([
   "skipped",
   "not-checked",
   "host-offline",
+  "input-mode",
   "launch-agent-missing",
   "launch-agent-not-loaded",
   "launch-agent-max-fps",
   "power",
   "permissions",
+  "screen-recording",
+  "accessibility",
+  "input-monitoring",
   "pmset-failed",
   "unknown",
 ]);
@@ -75,6 +79,7 @@ const allowedMacUnattendedFindings = new Set([
   "none",
   "unknown",
   "host-offline",
+  "input-mode",
   "launch-agent-missing",
   "launch-agent-not-loaded",
   "launch-agent-max-fps",
@@ -565,7 +570,12 @@ function collectBoardTexts(state) {
   const statuses = state && typeof state === "object" && state.statuses && typeof state.statuses === "object"
     ? state.statuses
     : {};
-  for (const [device, entry] of Object.entries(statuses)) {
+  const statusEntries = Object.entries(statuses);
+  const orderedStatusEntries = [
+    ...statusEntries.filter(([device]) => isMacUnattendedDevice(device)),
+    ...statusEntries.filter(([device]) => !isMacUnattendedDevice(device)),
+  ];
+  for (const [device, entry] of orderedStatusEntries) {
     if (typeof entry === "string") {
       texts.push(`${device}: ${entry}`);
       continue;
@@ -591,6 +601,10 @@ function collectBoardTexts(state) {
     if (eventText) texts.push(eventText);
   }
   return texts.filter(Boolean);
+}
+
+function isMacUnattendedDevice(device) {
+  return normalizedText(device).toLowerCase() === "mac unattended";
 }
 
 function extractMacPowerHealth(text) {

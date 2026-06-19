@@ -1458,6 +1458,46 @@ async function checkBoardMacPowerHealth(args) {
     ],
   });
 
+  const staleHeartbeatPower = "MacHeartbeat=status=ok; MacPowerHealth=ok reason=ok warnings=none checkedAt=2026-06-19T13:52:50.216Z. MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T13:52:50.216Z. MacUnattendedFreshness=fresh checkedAt=2026-06-19T13:52:50.216Z source=MacUnattendedHealth.";
+  const currentAccessibilityPower = "Mac unattended status: MacPowerHealth=ok reason=ok warnings=none checkedAt=2026-06-19T15:01:42.855Z; MacUnattendedHealth=warning reason=accessibility blockers=none warnings=accessibility checkedAt=2026-06-19T15:01:42.855Z;";
+  await withFakeBoard(null, async (server) => {
+    const result = run(args, [
+      "--json",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--timeoutMs",
+      "1200",
+    ]);
+    assert(result.status === 0, `current Mac unattended status should win over stale heartbeat status\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "current Mac unattended over stale heartbeat resume status");
+    assert(payload.board?.macUnattendedHealth?.reason === "accessibility", "Mac unattended health should accept current accessibility reason");
+    assert(payload.board?.macUnattendedHealth?.warnings === "accessibility", "Mac unattended health should expose current accessibility warning");
+    assert(payload.board?.macUnattendedHealth?.checkedAt === "2026-06-19T15:01:42.855Z", "Mac unattended health should prefer current status over stale heartbeat text");
+    assert(payload.board?.macUnattendedFreshness?.source === "MacUnattendedHealth", "Mac unattended freshness should use current MacUnattendedHealth");
+    assert(String(payload.boardSummary || "").includes("MacUnattendedHealth=warning reason=accessibility blockers=none warnings=accessibility checkedAt=2026-06-19T15:01:42.855Z;"), "board summary should expose current accessibility MacUnattendedHealth");
+    assert(!String(payload.boardSummary || "").includes("MacUnattendedHealth=warning reason=launch-agent-not-loaded"), "board summary should not echo stale heartbeat MacUnattendedHealth");
+    assertNoPasswordLeak(result, "current Mac unattended over stale heartbeat JSON");
+  }, {
+    statuses: {
+      "Mac Heartbeat": {
+        status: "online",
+        role: "Mac watchdog",
+        note: staleHeartbeatPower,
+      },
+      "Mac Unattended": {
+        status: "warning",
+        role: "Mac 值守",
+        note: currentAccessibilityPower,
+      },
+    },
+    events: [],
+  });
+
   const riskyPower = "MacPowerHealth=warning reason=--password warnings=system-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=fake-token-value checkedAt=2026-06-19T07:23:38.703Z; fake-board-token";
   await withFakeBoard(null, async (server) => {
     const result = run(args, [

@@ -700,6 +700,61 @@ async function checkBoardMacPowerHealth(args) {
     assertNoSecrets(`${result.stdout}\n${result.stderr}`, "Mac power heartbeat output");
   });
 
+  const staleHeartbeatPower = "MacHeartbeat=status=ok; MacPowerHealth=ok reason=ok warnings=none checkedAt=2026-06-19T13:52:50.216Z. MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T13:52:50.216Z. MacUnattendedFreshness=fresh checkedAt=2026-06-19T13:52:50.216Z source=MacUnattendedHealth.";
+  const currentUnattendedPower = "Mac unattended status: host=online inputMode=log build=bed2095; MacPowerHealth=ok reason=ok warnings=none checkedAt=2026-06-19T15:01:42.855Z; MacUnattendedHealth=warning reason=accessibility blockers=none warnings=accessibility checkedAt=2026-06-19T15:01:42.855Z; attention=1 warning(s) blockers=none warnings=accessibility.";
+  await withServer((request, response) => {
+    if ((request.url || "").split("?")[0] !== "/api/state") {
+      response.writeHead(404).end("not found");
+      return;
+    }
+    response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    response.end(JSON.stringify({
+      updatedAt: new Date().toISOString(),
+      currentCall: null,
+      statuses: {
+        "Mac Heartbeat": {
+          status: "online",
+          note: staleHeartbeatPower,
+          updatedAt: "2026-06-19T13:52:50.216Z",
+        },
+        "Mac Unattended": {
+          status: "warning",
+          note: currentUnattendedPower,
+          updatedAt: "2026-06-19T15:01:42.855Z",
+        },
+      },
+      events: [],
+    }));
+  }, async (boardPort) => {
+    const hostPort = await getFreePort();
+    const clientPort = await getFreePort();
+    const result = await runAsync([
+      "--json",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(hostPort),
+      "--clientHost",
+      "127.0.0.1",
+      "--clientPort",
+      String(clientPort),
+      "--checkBoard",
+      "--server",
+      `http://127.0.0.1:${boardPort}`,
+      "--timeoutMs",
+      "800",
+    ], args);
+    const payload = parseJson(result.stdout, "current Mac unattended over stale heartbeat JSON");
+    assert(result.status === 0, `current Mac unattended health should stay non-failing.\n${result.stdout}\n${result.stderr}`);
+    assert(payload.board?.macUnattendedHealth?.reason === "accessibility", "Mac unattended health should accept current accessibility reason");
+    assert(payload.board?.macUnattendedHealth?.warnings === "accessibility", "Mac unattended health should expose current accessibility warning");
+    assert(payload.board?.macUnattendedHealth?.checkedAt === "2026-06-19T15:01:42.855Z", "Mac unattended health should prefer current Mac Unattended status over stale Mac Heartbeat text");
+    assert(payload.board?.macUnattendedFreshness?.source === "MacUnattendedHealth", "Mac unattended freshness should use the current MacUnattendedHealth source");
+    assertIncludes(payload.boardSummary || "", "MacUnattendedHealth=warning reason=accessibility blockers=none warnings=accessibility checkedAt=2026-06-19T15:01:42.855Z.", "current Mac unattended heartbeat summary");
+    assertNotIncludes(payload.boardSummary || "", "MacUnattendedHealth=warning reason=launch-agent-not-loaded", "current Mac unattended heartbeat summary");
+    assertNoSecrets(`${result.stdout}\n${result.stderr}`, "current Mac unattended heartbeat output");
+  });
+
   const riskyPower = "MacPowerHealth=warning reason=--password warnings=system-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=fake-token-value checkedAt=2026-06-19T07:23:38.703Z; fake-board-token";
   await withServer((request, response) => {
     if ((request.url || "").split("?")[0] !== "/api/state") {
