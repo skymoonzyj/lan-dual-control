@@ -730,6 +730,15 @@ function makeBoardSummary(report) {
   if (report.status === "ok" && report.macClient.online) {
     stableEvidence.push("MacClientPageOnline");
   }
+  if (
+    report.status === "ok" &&
+    report.macClient.online &&
+    report.macClient.titleFound &&
+    report.board.checked &&
+    report.board.ok
+  ) {
+    stableEvidence.push("MacClientDiagnosticsOk");
+  }
   const stableEvidenceSummary = stableEvidence.length > 0 ? ` Evidence=${stableEvidence.join(",")}.` : "";
   const suggestedAction = report.suggestedAction?.boardSummary || "suggestedAction=none";
   return [

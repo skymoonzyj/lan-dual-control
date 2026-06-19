@@ -427,11 +427,90 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "scripts/mac/test-mac-client-browser-self-test-wrapper.mjs", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacScriptHelp=", "online board summary");
       assertIncludes(payload.boardSummary || "", "Evidence=MacClientPageOnline", "online board summary");
+      assertNotIncludes(payload.boardSummary || "", "MacClientDiagnosticsOk", "online board summary without board check");
       assertCommandSet(payload.commands, "online commands");
       assertNoSecrets(`${result.stdout}\n${result.stderr}`, "online output");
     });
   });
   print("OK", "Online heartbeat captures fake Mac host and client state");
+}
+
+async function checkOnlineBoardEvidence(args) {
+  const currentBuild = getCurrentBuildId();
+  await withServer((request, response) => {
+    if ((request.url || "").split("?")[0] !== "/discovery") {
+      response.writeHead(404).end("not found");
+      return;
+    }
+    response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    response.end(JSON.stringify({
+      platform: "macos",
+      runtime: { processId: 1234, buildId: currentBuild },
+      permissions: { screenRecording: true, accessibility: true, inputMonitoring: true },
+      capabilities: {
+        input: { mode: "log" },
+        screen: {
+          active: true,
+          h264: true,
+          maxScreenFps: 60,
+          capturePipeline: "screencapturekit-h264",
+        },
+        audio: { active: true, mode: "system-pcm" },
+      },
+    }));
+  }, async (hostPort) => {
+    await withServer((request, response) => {
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end("<!doctype html><title>LAN Dual Mac 控制 Windows</title>");
+    }, async (clientPort) => {
+      await withServer((request, response) => {
+        if ((request.url || "").split("?")[0] !== "/api/state") {
+          response.writeHead(404).end("not found");
+          return;
+        }
+        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        response.end(JSON.stringify({
+          updatedAt: new Date().toISOString(),
+          currentCall: null,
+          statuses: {
+            "Mac Codex": {
+              status: "idle",
+              note: "Mac heartbeat online",
+              updatedAt: new Date().toISOString(),
+            },
+          },
+          events: [],
+        }));
+      }, async (boardPort) => {
+        const result = await runAsync([
+          "--json",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          String(hostPort),
+          "--clientHost",
+          "127.0.0.1",
+          "--clientPort",
+          String(clientPort),
+          "--checkBoard",
+          "--server",
+          `http://127.0.0.1:${boardPort}`,
+          "--timeoutMs",
+          "1200",
+        ], args);
+        const payload = parseJson(result.stdout, "online board evidence JSON");
+        assert(result.status === 0, `online heartbeat with board should pass.\n${result.stdout}\n${result.stderr}`);
+        assert(payload.status === "ok", "online board evidence payload should be ok");
+        assert(payload.board?.ok === true, "Agent Link Board should be readable");
+        assert(payload.macClient?.online === true, "Mac client page should be online");
+        assert(payload.macClient?.titleFound === true, "Mac client page title should be recognized");
+        assertIncludes(payload.boardSummary || "", "Evidence=MacClientPageOnline,MacClientDiagnosticsOk", "online board evidence summary");
+        assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "online board evidence output");
+        assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--password", "online board evidence output");
+      });
+    });
+  });
+  print("OK", "Online heartbeat with readable board emits Mac client diagnostics evidence");
 }
 
 async function checkOnlineStaleHostBuildWarning(args) {
@@ -660,6 +739,7 @@ async function main() {
   const clientPort = await getFreePort();
   checkOfflineWarning(args, hostPort, clientPort);
   await checkOnlineOk(args);
+  await checkOnlineBoardEvidence(args);
   await checkOnlineStaleHostBuildWarning(args);
   await checkBoardTimestamps(args);
   checkReconnectStuck(args);

@@ -17,6 +17,33 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
+本轮目标：让 Mac heartbeat 在干净读板场景也输出 Mac client 诊断正向证据。
+完成内容：
+- `check-mac-heartbeat --checkBoard --json/--boardSummary` 现在会在 heartbeat 自身 `status=ok`、Mac client 页面在线且标题匹配、Agent Link Board 可读时，把 `Evidence=` 扩展为 `MacClientPageOnline,MacClientDiagnosticsOk`。
+- 未读取通讯板、通讯板失败、Mac client 离线、页面标题不匹配、heartbeat warning/blocker 时不输出 `MacClientDiagnosticsOk`，避免把风险摘要误当诊断通过。
+- 不新增探测副作用，不启动服务、不认证、不请求或发送密码、不发 input/inject。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增 online + fake board 用例后，`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` 失败在 `Evidence=` 缺少 `MacClientDiagnosticsOk`。
+- 绿灯：实现严格条件后，同一 heartbeat 回归通过。
+遗留问题：
+- 本轮只增强只读 heartbeat 摘要；不跑真实 Windows host 认证、真实浏览器 smoke 或输入注入。
+下一步建议：
+- Windows 端开工第一屏看到 `MacHeartbeat=status=ok ... Evidence=MacClientPageOnline,MacClientDiagnosticsOk` 时，可同时确认 Mac 心跳、Mac client 页面在线和本地诊断证据；同段若出现 warning/blocker 仍按风险摘要处理。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
 ## 2026-06-19 Windows Codex
 
 日期：2026-06-19 继续推进
