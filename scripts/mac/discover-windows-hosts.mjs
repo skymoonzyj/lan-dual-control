@@ -132,6 +132,11 @@ Machine-readable JSON fields:
   macPowerPlanCommand      Secret-free dry-run Mac power plan command for
                            keeping formal testing awake. It does not apply
                            system settings.
+  macRemoteAudioPlanCommand
+                           Secret-free Mac remote-only audio planner command.
+                           It explains current system-pcm behavior and user
+                           consent checks without changing system volume or
+                           output devices.
   macInputSafetyPlanCommand
                            Secret-free Mac input safety planner command. It
                            explains log-mode defaults and user-visible checks
@@ -378,6 +383,10 @@ function macScriptHelpCommand() {
 
 function macPowerPlanCommand() {
   return "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary";
+}
+
+function macRemoteAudioPlanCommand() {
+  return "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary";
 }
 
 function macInputSafetyPlanCommand() {
@@ -631,6 +640,7 @@ function buildReport(scan, args, windowsLanRisk = emptyWindowsLanRisk(false), ma
     macClientBrowserSelfTestCommand: macClientBrowserSelfTestCommand(),
     macScriptHelpCommand: macScriptHelpCommand(),
     macPowerPlanCommand: macPowerPlanCommand(),
+    macRemoteAudioPlanCommand: macRemoteAudioPlanCommand(),
     macInputSafetyPlanCommand: macInputSafetyPlanCommand(),
     macUnattendedFreshness,
     manualChecklistSummary,
@@ -653,12 +663,12 @@ function makeBoardSummary(report) {
   const macUnattendedFreshnessSummary = formatMacUnattendedFreshnessSummary(report.macUnattendedFreshness);
   const macUnattendedFreshnessSegment = macUnattendedFreshnessSummary ? ` ${macUnattendedFreshnessSummary}.` : "";
   if (report.best) {
-    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}.${riskSummary} FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. MacClientFormalSmoke=${report.macClientFormalSmokeCommand}. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. MacPowerPlan=${report.macPowerPlanCommand}. MacInputSafetyPlan=${report.macInputSafetyPlanCommand}.${macUnattendedFreshnessSegment} WindowsReverseGrantStatus=${report.windowsReverseGrantStatus}. WindowsOpenOneTimeReverseGrant=${report.windowsOpenOneTimeReverseGrant}. WindowsReverseGrantStatusNodeFallback=${report.windowsReverseGrantStatusNodeFallback}. WindowsOpenOneTimeReverseGrantNodeFallback=${report.windowsOpenOneTimeReverseGrantNodeFallback}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}.${riskSummary} FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. MacClientFormalSmoke=${report.macClientFormalSmokeCommand}. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. MacPowerPlan=${report.macPowerPlanCommand}. MacRemoteAudioPlan=${report.macRemoteAudioPlanCommand}. MacInputSafetyPlan=${report.macInputSafetyPlanCommand}.${macUnattendedFreshnessSegment} WindowsReverseGrantStatus=${report.windowsReverseGrantStatus}. WindowsOpenOneTimeReverseGrant=${report.windowsOpenOneTimeReverseGrant}. WindowsReverseGrantStatusNodeFallback=${report.windowsReverseGrantStatusNodeFallback}. WindowsOpenOneTimeReverseGrantNodeFallback=${report.windowsOpenOneTimeReverseGrantNodeFallback}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
   }
   const ignored = report.ignored.length > 0
     ? ` Saw ${report.ignored.length} non-Windows host(s), likely Mac/self.`
     : "";
-  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored}${riskSummary} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. MacPowerPlan=${report.macPowerPlanCommand}. MacInputSafetyPlan=${report.macInputSafetyPlanCommand}.${macUnattendedFreshnessSegment} No password was requested or sent; no WebSocket/input/inject was attempted.`;
+  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored}${riskSummary} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. MacPowerPlan=${report.macPowerPlanCommand}. MacRemoteAudioPlan=${report.macRemoteAudioPlanCommand}. MacInputSafetyPlan=${report.macInputSafetyPlanCommand}.${macUnattendedFreshnessSegment} No password was requested or sent; no WebSocket/input/inject was attempted.`;
 }
 
 function printText(report, args) {
@@ -677,6 +687,7 @@ function printText(report, args) {
     console.log(`[INFO] Mac client browser self-test: ${report.macClientBrowserSelfTestCommand}`);
     console.log(`[INFO] Mac script help safety check: ${report.macScriptHelpCommand}`);
     console.log(`[INFO] Mac power settings dry-run plan: ${report.macPowerPlanCommand}`);
+    console.log(`[INFO] Mac remote audio plan: ${report.macRemoteAudioPlanCommand}`);
     console.log(`[INFO] Mac input safety plan: ${report.macInputSafetyPlanCommand}`);
     if (report.macUnattendedFreshness) {
       console.log(`[INFO] Mac unattended freshness: ${formatMacUnattendedFreshnessSummary(report.macUnattendedFreshness)}`);
@@ -703,6 +714,7 @@ function printText(report, args) {
     console.log(`[INFO] Mac client browser self-test: ${report.macClientBrowserSelfTestCommand}`);
     console.log(`[INFO] Mac script help safety check: ${report.macScriptHelpCommand}`);
     console.log(`[INFO] Mac power settings dry-run plan: ${report.macPowerPlanCommand}`);
+    console.log(`[INFO] Mac remote audio plan: ${report.macRemoteAudioPlanCommand}`);
     console.log(`[INFO] Mac input safety plan: ${report.macInputSafetyPlanCommand}`);
     if (report.macUnattendedFreshness) {
       console.log(`[INFO] Mac unattended freshness: ${formatMacUnattendedFreshnessSummary(report.macUnattendedFreshness)}`);

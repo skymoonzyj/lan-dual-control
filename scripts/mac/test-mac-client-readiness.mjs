@@ -353,6 +353,21 @@ function assertMacInputSafetyPlanCommand(command, label) {
   assertNotIncludes(command, "inject", label);
 }
 
+function assertMacRemoteAudioPlanCommand(command, label) {
+  assertIncludes(command, "scripts/mac/plan-mac-remote-audio.mjs", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--apply", label);
+  assertNotIncludes(command, "sudo", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "--json", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run([flag], args);
@@ -373,6 +388,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macClientPromptPasswordSmokeCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientBrowserSelfTestCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macPowerPlanCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macRemoteAudioPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macInputSafetyPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macScriptHelpCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "board.windowsLanRisk", `${script} ${flag}`);
@@ -410,6 +426,7 @@ function checkOfflineJson(args) {
   );
   assertMacClientBrowserSelfTestCommand(payload.commands?.macClientBrowserSelfTestCommand || "", "offline JSON Mac client browser self-test command");
   assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand || "", "offline JSON Mac power plan command");
+  assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlanCommand || "", "offline JSON Mac remote audio plan command");
   assertMacInputSafetyPlanCommand(payload.commands?.macInputSafetyPlanCommand || "", "offline JSON Mac input safety plan command");
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "offline JSON Mac script help command");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "payload should include copy diagnostics action");
@@ -438,6 +455,11 @@ function checkOfflineJson(args) {
   assertMacPowerPlanCommand(
     (payload.boardSummary || "").split("MacPowerPlan=")[1]?.split("; ")[0] || "",
     "offline JSON boardSummary Mac power plan command",
+  );
+  assert(/MacRemoteAudioPlan=/.test(payload.boardSummary || ""), "boardSummary should include Mac remote audio plan");
+  assertMacRemoteAudioPlanCommand(
+    (payload.boardSummary || "").split("MacRemoteAudioPlan=")[1]?.split("; ")[0] || "",
+    "offline JSON boardSummary Mac remote audio plan command",
   );
   assert(/MacInputSafetyPlan=/.test(payload.boardSummary || ""), "boardSummary should include Mac input safety plan");
   assertMacInputSafetyPlanCommand(

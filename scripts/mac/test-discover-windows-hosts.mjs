@@ -204,6 +204,21 @@ function assertMacInputSafetyPlanCommand(command, label) {
   assertNotIncludes(command, "inject", label);
 }
 
+function assertMacRemoteAudioPlanCommand(command, label) {
+  assertIncludes(command, "node scripts/mac/plan-mac-remote-audio.mjs", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--apply", label);
+  assertNotIncludes(command, "sudo", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "--json", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function assertReverseControlRehearsal(text, label) {
   assertIncludes(text, "LAN008", label);
   assertIncludes(text, "allow-windows-reverse-control.ps1", label);
@@ -288,14 +303,20 @@ function extractMacClientPromptPasswordSmokeCommand(text, label) {
 }
 
 function extractMacScriptHelpCommand(text, label) {
-  const match = String(text || "").match(/MacScriptHelp=(.+?)(?:\. MacPowerPlan=|\. WindowsReverseGrantStatus=|\. ReverseRehearsal=|\. If that checklist|\.\s*No password|\n|$)/);
+  const match = String(text || "").match(/MacScriptHelp=(.+?)(?:\. MacPowerPlan=|\. MacRemoteAudioPlan=|\. WindowsReverseGrantStatus=|\. ReverseRehearsal=|\. If that checklist|\.\s*No password|\n|$)/);
   assert(match, `${label} should include MacScriptHelp= command.\n${text}`);
   return match[1].trim();
 }
 
 function extractMacPowerPlanCommand(text, label) {
-  const match = String(text || "").match(/MacPowerPlan=(.+?)(?:\. MacInputSafetyPlan=|\. MacUnattendedFreshness=|\. WindowsReverseGrantStatus=|\. ReverseRehearsal=|\. If that checklist|\.\s*No password|\n|$)/);
+  const match = String(text || "").match(/MacPowerPlan=(.+?)(?:\. MacRemoteAudioPlan=|\. MacInputSafetyPlan=|\. MacUnattendedFreshness=|\. WindowsReverseGrantStatus=|\. ReverseRehearsal=|\. If that checklist|\.\s*No password|\n|$)/);
   assert(match, `${label} should include MacPowerPlan= command.\n${text}`);
+  return match[1].trim();
+}
+
+function extractMacRemoteAudioPlanCommand(text, label) {
+  const match = String(text || "").match(/MacRemoteAudioPlan=(.+?)(?:\. MacInputSafetyPlan=|\. MacUnattendedFreshness=|\. WindowsReverseGrantStatus=|\. ReverseRehearsal=|\. If that checklist|\.\s*No password|\n|$)/);
+  assert(match, `${label} should include MacRemoteAudioPlan= command.\n${text}`);
   return match[1].trim();
 }
 
@@ -468,6 +489,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "macClientBrowserSelfTestCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macScriptHelpCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macPowerPlanCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macRemoteAudioPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macInputSafetyPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macUnattendedFreshness", `${script} ${flag}`);
     assertIncludes(result.stdout, "windowsReverseGrantStatus", `${script} ${flag}`);
@@ -506,6 +528,7 @@ function checkFoundJson(tmp, args) {
   );
   assertMacScriptHelpCommand(payload.macScriptHelpCommand || "", "Mac script help command");
   assertMacPowerPlanCommand(payload.macPowerPlanCommand || "", "Mac power plan command");
+  assertMacRemoteAudioPlanCommand(payload.macRemoteAudioPlanCommand || "", "Mac remote audio plan command");
   assertMacInputSafetyPlanCommand(payload.macInputSafetyPlanCommand || "", "Mac input safety plan command");
   assert(payload.manualChecklistSummary === "connection/video/audio/clipboard/input_ack/diagnostics", "found payload should include manual checklist summary");
   assertIncludes(payload.sendCallCommand, "--host 192.168.31.68", "send call command");
@@ -542,6 +565,11 @@ function checkFoundJson(tmp, args) {
   assertMacPowerPlanCommand(
     extractMacPowerPlanCommand(payload.boardSummary, "board summary"),
     "board summary Mac power plan command",
+  );
+  assertIncludes(payload.boardSummary, "MacRemoteAudioPlan=", "board summary");
+  assertMacRemoteAudioPlanCommand(
+    extractMacRemoteAudioPlanCommand(payload.boardSummary, "board summary"),
+    "board summary Mac remote audio plan command",
   );
   assertIncludes(payload.boardSummary, "MacInputSafetyPlan=", "board summary");
   assertMacInputSafetyPlanCommand(
@@ -589,6 +617,11 @@ function checkBoardSummaryFound(tmp, args) {
     extractMacPowerPlanCommand(result.stdout, "found board summary"),
     "found board summary Mac power plan command",
   );
+  assertIncludes(result.stdout, "MacRemoteAudioPlan=", "found board summary");
+  assertMacRemoteAudioPlanCommand(
+    extractMacRemoteAudioPlanCommand(result.stdout, "found board summary"),
+    "found board summary Mac remote audio plan command",
+  );
   assertIncludes(result.stdout, "MacInputSafetyPlan=", "found board summary");
   assertMacInputSafetyPlanCommand(
     extractMacInputSafetyPlanCommand(result.stdout, "found board summary"),
@@ -616,6 +649,7 @@ function checkPlainFound(tmp, args) {
   assertIncludes(result.stdout, "Mac client browser self-test:", "found plain output");
   assertIncludes(result.stdout, "Mac script help safety check:", "found plain output");
   assertIncludes(result.stdout, "Mac power settings dry-run plan:", "found plain output");
+  assertIncludes(result.stdout, "Mac remote audio plan:", "found plain output");
   assertIncludes(result.stdout, "Mac input safety plan:", "found plain output");
   assertIncludes(result.stdout, "Windows reverse grant status:", "found plain output");
   assertIncludes(result.stdout, "Windows one-time reverse grant:", "found plain output");
@@ -640,6 +674,9 @@ function checkPlainFound(tmp, args) {
   const macPowerPlanMatch = String(result.stdout || "").match(/Mac power settings dry-run plan: ([^\n]+)/);
   assert(macPowerPlanMatch, `found plain output should include Mac power plan command line.\n${result.stdout}`);
   assertMacPowerPlanCommand(macPowerPlanMatch[1], "found plain output Mac power plan command");
+  const macRemoteAudioPlanMatch = String(result.stdout || "").match(/Mac remote audio plan: ([^\n]+)/);
+  assert(macRemoteAudioPlanMatch, `found plain output should include Mac remote audio plan command line.\n${result.stdout}`);
+  assertMacRemoteAudioPlanCommand(macRemoteAudioPlanMatch[1], "found plain output Mac remote audio plan command");
   const macInputSafetyPlanMatch = String(result.stdout || "").match(/Mac input safety plan: ([^\n]+)/);
   assert(macInputSafetyPlanMatch, `found plain output should include Mac input safety plan command line.\n${result.stdout}`);
   assertMacInputSafetyPlanCommand(macInputSafetyPlanMatch[1], "found plain output Mac input safety plan command");
@@ -670,6 +707,7 @@ function checkNoneRequireFound(tmp, args) {
   assertIncludes(payload.boardSummary, "MacClientPromptPasswordSmoke=", "none board summary");
   assertIncludes(payload.boardSummary, "MacScriptHelp=", "none board summary");
   assertIncludes(payload.boardSummary, "MacPowerPlan=", "none board summary");
+  assertIncludes(payload.boardSummary, "MacRemoteAudioPlan=", "none board summary");
   assertIncludes(payload.boardSummary, "MacInputSafetyPlan=", "none board summary");
   assertFallbackMacClientPromptPasswordSmokeCommand(
     payload.macClientPromptPasswordSmokeCommand || "",
@@ -690,6 +728,7 @@ function checkNoneRequireFound(tmp, args) {
   );
   assertMacScriptHelpCommand(payload.macScriptHelpCommand || "", "none JSON Mac script help command");
   assertMacPowerPlanCommand(payload.macPowerPlanCommand || "", "none JSON Mac power plan command");
+  assertMacRemoteAudioPlanCommand(payload.macRemoteAudioPlanCommand || "", "none JSON Mac remote audio plan command");
   assertMacInputSafetyPlanCommand(payload.macInputSafetyPlanCommand || "", "none JSON Mac input safety plan command");
   assertMacClientBrowserSelfTestCommand(
     extractMacClientBrowserSelfTestCommand(payload.boardSummary, "none board summary"),
@@ -702,6 +741,10 @@ function checkNoneRequireFound(tmp, args) {
   assertMacPowerPlanCommand(
     extractMacPowerPlanCommand(payload.boardSummary, "none board summary"),
     "none board summary Mac power plan command",
+  );
+  assertMacRemoteAudioPlanCommand(
+    extractMacRemoteAudioPlanCommand(payload.boardSummary, "none board summary"),
+    "none board summary Mac remote audio plan command",
   );
   assertMacInputSafetyPlanCommand(
     extractMacInputSafetyPlanCommand(payload.boardSummary, "none board summary"),

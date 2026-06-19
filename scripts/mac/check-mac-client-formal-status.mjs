@@ -153,6 +153,11 @@ JSON output:
                                   planner. It previews pmset changes and
                                   follow-up checks without applying settings,
                                   prompting, authenticating, or sending input.
+  runPlan.commands.macRemoteAudioPlanCommand
+                                  Secret-free Mac remote-only audio planner.
+                                  It explains current system-pcm behavior and
+                                  user consent checks without changing system
+                                  volume or output devices.
   runPlan.commands.macInputSafetyPlanCommand
                                   Secret-free Mac input safety planner. It
                                   explains the log-mode default, required
@@ -1006,6 +1011,10 @@ function makeMacPowerPlanCommand() {
   return "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary";
 }
 
+function makeMacRemoteAudioPlanCommand() {
+  return "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary";
+}
+
 function makeMacInputSafetyPlanCommand() {
   return "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
 }
@@ -1305,6 +1314,7 @@ function makeRunPlan(report, args) {
       macClientPromptPasswordSmoke: makePromptPasswordSmokeCommand(report, args),
       macClientBrowserSelfTest: makeMacClientBrowserSelfTestCommand(),
       macPowerPlanCommand: makeMacPowerPlanCommand(),
+      macRemoteAudioPlanCommand: makeMacRemoteAudioPlanCommand(),
       macInputSafetyPlanCommand: makeMacInputSafetyPlanCommand(),
       macScriptHelp: makeMacScriptHelpCommand(),
       browserSmoke: browserTestCommand,
@@ -1407,6 +1417,7 @@ function makeBoardSummary(report) {
     "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
     `MacClientBrowserSelfTest=${report.runPlan?.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
     `MacPowerPlan=${report.runPlan?.commands?.macPowerPlanCommand || makeMacPowerPlanCommand()}.`,
+    `MacRemoteAudioPlan=${report.runPlan?.commands?.macRemoteAudioPlanCommand || makeMacRemoteAudioPlanCommand()}.`,
     `MacInputSafetyPlan=${report.runPlan?.commands?.macInputSafetyPlanCommand || makeMacInputSafetyPlanCommand()}.`,
     ...(macUnattendedFreshnessLine ? [macUnattendedFreshnessLine] : []),
     `MacScriptHelp=${report.runPlan?.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
@@ -1598,6 +1609,9 @@ function printRunPlan(runPlan) {
   }
   if (runPlan.commands?.macPowerPlanCommand) {
     console.log(`- Mac power settings dry-run plan: ${runPlan.commands.macPowerPlanCommand}`);
+  }
+  if (runPlan.commands?.macRemoteAudioPlanCommand) {
+    console.log(`- Mac remote audio plan: ${runPlan.commands.macRemoteAudioPlanCommand}`);
   }
   if (runPlan.commands?.macInputSafetyPlanCommand) {
     console.log(`- Mac input safety plan: ${runPlan.commands.macInputSafetyPlanCommand}`);

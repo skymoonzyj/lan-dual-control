@@ -128,6 +128,10 @@ Machine-readable JSON fields:
                                   It checks Mac-side helper commands and
                                   board summaries without passwords, calls,
                                   input events, or inject.
+  commands.macRemoteAudioPlan    Secret-free Mac remote-only audio planner
+                                  command. It explains current system-pcm
+                                  behavior and user consent checks without
+                                  changing system volume or output devices.
   commands.macInputSafetyPlan    Secret-free Mac input safety planner command.
                                   It explains the log-mode default and the
                                   user-visible checks required before true
@@ -572,6 +576,10 @@ function makeMacScriptHelpCommand() {
   return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
 
+function makeMacRemoteAudioPlanCommand() {
+  return "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary";
+}
+
 function makeMacInputSafetyPlanCommand() {
   return "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
 }
@@ -966,6 +974,7 @@ function makeBoardSummary(report) {
       `MacClientFormalSmoke=${report.commands?.macClientFormalSmoke || makeMacClientFormalSmokeCommand(report.args)}.`,
       ...(report.commands?.promptPasswordSmoke ? [`MacClientPromptPasswordSmoke=${report.commands.promptPasswordSmoke}.`] : []),
       `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
+      `MacRemoteAudioPlan=${report.commands?.macRemoteAudioPlan || makeMacRemoteAudioPlanCommand()}.`,
       `MacInputSafetyPlan=${report.commands?.macInputSafetyPlan || makeMacInputSafetyPlanCommand()}.`,
       ...macUnattendedParts,
       ...reverseGrantParts,
@@ -993,6 +1002,7 @@ function makeBoardSummary(report) {
       ...(report.commands?.promptPasswordSmoke ? [`MacClientPromptPasswordSmoke=${report.commands.promptPasswordSmoke}.`] : []),
       `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
       `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
+      `MacRemoteAudioPlan=${report.commands?.macRemoteAudioPlan || makeMacRemoteAudioPlanCommand()}.`,
       `MacInputSafetyPlan=${report.commands?.macInputSafetyPlan || makeMacInputSafetyPlanCommand()}.`,
       ...macUnattendedParts,
       `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
@@ -1009,6 +1019,7 @@ function makeBoardSummary(report) {
     ...(report.commands?.promptPasswordSmoke ? [`MacClientPromptPasswordSmoke=${report.commands.promptPasswordSmoke}.`] : []),
     `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
     `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
+    `MacRemoteAudioPlan=${report.commands?.macRemoteAudioPlan || makeMacRemoteAudioPlanCommand()}.`,
     `MacInputSafetyPlan=${report.commands?.macInputSafetyPlan || makeMacInputSafetyPlanCommand()}.`,
     ...macUnattendedParts,
     `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
@@ -1137,6 +1148,7 @@ function makeReport(args, preflight) {
       promptPasswordSmoke: makePromptPasswordSmokeCommand(args),
       macClientBrowserSelfTest: makeMacClientBrowserSelfTestCommand(),
       macScriptHelp: makeMacScriptHelpCommand(),
+      macRemoteAudioPlan: makeMacRemoteAudioPlanCommand(),
       macInputSafetyPlan: makeMacInputSafetyPlanCommand(),
       macUnattendedSendStatus: makeMacUnattendedSendStatusCommand(args),
       windowsReverseGrantStatus: makeWindowsReverseGrantCommand(args, "status"),

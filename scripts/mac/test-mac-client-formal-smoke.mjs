@@ -130,6 +130,21 @@ function assertMacInputSafetyPlanCommand(command, label) {
   assertNotIncludes(command, "inject", label);
 }
 
+function assertMacRemoteAudioPlanCommand(command, label) {
+  assertIncludes(command, "node scripts/mac/plan-mac-remote-audio.mjs", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--apply", label);
+  assertNotIncludes(command, "sudo", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--useEnvPassword", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function assertMacUnattendedSendStatusCommand(command, label, expectedServer = "") {
   assertIncludes(command, "node scripts/mac/check-mac-unattended-status.mjs", label);
   assertIncludes(command, "--host 127.0.0.1", label);
@@ -451,6 +466,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.promptPasswordSmoke", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientBrowserSelfTest", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macScriptHelp", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macRemoteAudioPlan", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macInputSafetyPlan", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macUnattendedSendStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "macUnattendedFreshness", `${script} ${flag}`);
@@ -567,6 +583,10 @@ async function checkPreflightAndDryRun(args) {
           preflightPayload.commands?.macScriptHelp || "",
           "preflight Mac script help command",
         );
+        assertMacRemoteAudioPlanCommand(
+          preflightPayload.commands?.macRemoteAudioPlan || "",
+          "preflight Mac remote audio plan command",
+        );
         assertMacInputSafetyPlanCommand(
           preflightPayload.commands?.macInputSafetyPlan || "",
           "preflight Mac input safety plan command",
@@ -615,6 +635,10 @@ async function checkPreflightAndDryRun(args) {
         assertMacScriptHelpCommand(
           (preflightPayload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
           "preflight board summary Mac script help command",
+        );
+        assertMacRemoteAudioPlanCommand(
+          (preflightPayload.boardSummary || "").split("MacRemoteAudioPlan=")[1]?.split(". ")[0] || "",
+          "preflight board summary Mac remote audio plan command",
         );
         assertMacInputSafetyPlanCommand(
           (preflightPayload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
@@ -665,6 +689,10 @@ async function checkPreflightAndDryRun(args) {
         assertMacScriptHelpCommand(
           (sendCallPayload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
           "sendCall board summary Mac script help command",
+        );
+        assertMacRemoteAudioPlanCommand(
+          (sendCallPayload.boardSummary || "").split("MacRemoteAudioPlan=")[1]?.split(". ")[0] || "",
+          "sendCall board summary Mac remote audio plan command",
         );
         assertMacInputSafetyPlanCommand(
           (sendCallPayload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
@@ -730,6 +758,10 @@ async function checkPreflightAndDryRun(args) {
         dryRunPayload.commands?.macScriptHelp || "",
         "dryRun Mac script help command",
       );
+      assertMacRemoteAudioPlanCommand(
+        dryRunPayload.commands?.macRemoteAudioPlan || "",
+        "dryRun Mac remote audio plan command",
+      );
       assertMacInputSafetyPlanCommand(
         dryRunPayload.commands?.macInputSafetyPlan || "",
         "dryRun Mac input safety plan command",
@@ -752,6 +784,10 @@ async function checkPreflightAndDryRun(args) {
       assertMacScriptHelpCommand(
         (dryRunPayload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
         "dryRun board summary Mac script help command",
+      );
+      assertMacRemoteAudioPlanCommand(
+        (dryRunPayload.boardSummary || "").split("MacRemoteAudioPlan=")[1]?.split(". ")[0] || "",
+        "dryRun board summary Mac remote audio plan command",
       );
       assertMacInputSafetyPlanCommand(
         (dryRunPayload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
@@ -831,6 +867,10 @@ async function checkDiscoverPreflight(args) {
         payload.commands?.macScriptHelp || "",
         "discover preflight Mac script help command",
       );
+      assertMacRemoteAudioPlanCommand(
+        payload.commands?.macRemoteAudioPlan || "",
+        "discover preflight Mac remote audio plan command",
+      );
       assertMacInputSafetyPlanCommand(
         payload.commands?.macInputSafetyPlan || "",
         "discover preflight Mac input safety plan command",
@@ -867,6 +907,10 @@ async function checkDiscoverPreflight(args) {
       assertMacScriptHelpCommand(
         (payload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
         "discover preflight board summary Mac script help command",
+      );
+      assertMacRemoteAudioPlanCommand(
+        (payload.boardSummary || "").split("MacRemoteAudioPlan=")[1]?.split(". ")[0] || "",
+        "discover preflight board summary Mac remote audio plan command",
       );
       assertMacInputSafetyPlanCommand(
         (payload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
@@ -925,6 +969,14 @@ async function checkEnsureClientPreflight(args) {
     assertMacInputSafetyPlanCommand(
       payload.commands?.macInputSafetyPlan || "",
       "ensure client Mac input safety plan command",
+    );
+    assertMacRemoteAudioPlanCommand(
+      payload.commands?.macRemoteAudioPlan || "",
+      "ensure client Mac remote audio plan command",
+    );
+    assertMacRemoteAudioPlanCommand(
+      (payload.boardSummary || "").split("MacRemoteAudioPlan=")[1]?.split(". ")[0] || "",
+      "ensure client board summary Mac remote audio plan command",
     );
     assertMacInputSafetyPlanCommand(
       (payload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
@@ -1087,6 +1139,10 @@ async function checkDiscoverFailureNoPasswordPrompt(args) {
       payload.commands?.macScriptHelp || "",
       "discover failure Mac script help command",
     );
+    assertMacRemoteAudioPlanCommand(
+      payload.commands?.macRemoteAudioPlan || "",
+      "discover failure Mac remote audio plan command",
+    );
     assertMacInputSafetyPlanCommand(
       payload.commands?.macInputSafetyPlan || "",
       "discover failure Mac input safety plan command",
@@ -1097,6 +1153,10 @@ async function checkDiscoverFailureNoPasswordPrompt(args) {
     assertMacScriptHelpCommand(
       (payload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
       "discover failure board summary Mac script help command",
+    );
+    assertMacRemoteAudioPlanCommand(
+      (payload.boardSummary || "").split("MacRemoteAudioPlan=")[1]?.split(". ")[0] || "",
+      "discover failure board summary Mac remote audio plan command",
     );
     assertMacInputSafetyPlanCommand(
       (payload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
@@ -1135,6 +1195,10 @@ async function checkPasswordSafety(args) {
         noPasswordPayload.commands?.macScriptHelp || "",
         "no password Mac script help command",
       );
+      assertMacRemoteAudioPlanCommand(
+        noPasswordPayload.commands?.macRemoteAudioPlan || "",
+        "no password Mac remote audio plan command",
+      );
       assertMacInputSafetyPlanCommand(
         noPasswordPayload.commands?.macInputSafetyPlan || "",
         "no password Mac input safety plan command",
@@ -1142,6 +1206,10 @@ async function checkPasswordSafety(args) {
       assertMacScriptHelpCommand(
         (noPasswordPayload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
         "no password board summary Mac script help command",
+      );
+      assertMacRemoteAudioPlanCommand(
+        (noPasswordPayload.boardSummary || "").split("MacRemoteAudioPlan=")[1]?.split(". ")[0] || "",
+        "no password board summary Mac remote audio plan command",
       );
       assertMacInputSafetyPlanCommand(
         (noPasswordPayload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",

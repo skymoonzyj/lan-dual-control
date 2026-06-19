@@ -200,6 +200,21 @@ function assertMacInputSafetyPlanCommand(command, label) {
   assertNotIncludes(command, "inject", label);
 }
 
+function assertMacRemoteAudioPlanCommand(command, label) {
+  assertIncludes(command, "scripts/mac/plan-mac-remote-audio.mjs", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--apply", label);
+  assertNotIncludes(command, "sudo", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "--json", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function assertWindowsHostStatusCommand(command, label, expectedPort = "43770") {
   assertIncludes(command, "scripts/windows/start-windows-host.mjs", label);
   assertIncludes(command, "--status", label);
@@ -331,6 +346,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "runPlan.commands.macClientPromptPasswordSmoke", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.macClientBrowserSelfTest", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.macPowerPlanCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.commands.macRemoteAudioPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.macInputSafetyPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.macScriptHelp", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsHostStatus", `${script} ${flag}`);
@@ -402,6 +418,10 @@ function checkOfflineJson(args) {
     payload.runPlan?.commands?.macPowerPlanCommand || "",
     "offline runPlan Mac power plan command",
   );
+  assertMacRemoteAudioPlanCommand(
+    payload.runPlan?.commands?.macRemoteAudioPlanCommand || "",
+    "offline runPlan Mac remote audio plan command",
+  );
   assertMacInputSafetyPlanCommand(
     payload.runPlan?.commands?.macInputSafetyPlanCommand || "",
     "offline runPlan Mac input safety plan command",
@@ -448,6 +468,11 @@ function checkOfflineJson(args) {
   assertMacPowerPlanCommand(
     (payload.boardSummary || "").split("MacPowerPlan=")[1]?.split(". ")[0] || "",
     "offline board summary Mac power plan command",
+  );
+  assertIncludes(payload.boardSummary || "", "MacRemoteAudioPlan=", "offline board summary");
+  assertMacRemoteAudioPlanCommand(
+    (payload.boardSummary || "").split("MacRemoteAudioPlan=")[1]?.split(". ")[0] || "",
+    "offline board summary Mac remote audio plan command",
   );
   assertIncludes(payload.boardSummary || "", "MacInputSafetyPlan=", "offline board summary");
   assertMacInputSafetyPlanCommand(
@@ -588,6 +613,14 @@ function checkHumanRunPlan(args) {
   assertMacPowerPlanCommand(
     String(macPowerPlanLine || "").slice("- Mac power settings dry-run plan: ".length),
     "human runPlan Mac power plan",
+  );
+  assertIncludes(result.stdout, "Mac remote audio plan:", "human runPlan");
+  const macRemoteAudioPlanLine = String(result.stdout)
+    .split(/\r?\n/)
+    .find((line) => line.startsWith("- Mac remote audio plan: "));
+  assertMacRemoteAudioPlanCommand(
+    String(macRemoteAudioPlanLine || "").slice("- Mac remote audio plan: ".length),
+    "human runPlan Mac remote audio plan",
   );
   assertIncludes(result.stdout, "Mac input safety plan:", "human runPlan");
   const macInputSafetyPlanLine = String(result.stdout)
@@ -879,6 +912,10 @@ async function checkReadyShape(args) {
         payload.runPlan?.commands?.macPowerPlanCommand || "",
         "ready runPlan Mac power plan command",
       );
+      assertMacRemoteAudioPlanCommand(
+        payload.runPlan?.commands?.macRemoteAudioPlanCommand || "",
+        "ready runPlan Mac remote audio plan command",
+      );
       assertMacInputSafetyPlanCommand(
         payload.runPlan?.commands?.macInputSafetyPlanCommand || "",
         "ready runPlan Mac input safety plan command",
@@ -942,6 +979,11 @@ async function checkReadyShape(args) {
         (payload.boardSummary || "").split("MacPowerPlan=")[1]?.split(". ")[0] || "",
         "ready board summary Mac power plan command",
       );
+      assertIncludes(payload.boardSummary || "", "MacRemoteAudioPlan=", "ready board summary");
+      assertMacRemoteAudioPlanCommand(
+        (payload.boardSummary || "").split("MacRemoteAudioPlan=")[1]?.split(". ")[0] || "",
+        "ready board summary Mac remote audio plan command",
+      );
       assertIncludes(payload.boardSummary || "", "MacInputSafetyPlan=", "ready board summary");
       assertMacInputSafetyPlanCommand(
         (payload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
@@ -995,10 +1037,12 @@ async function checkDiscoverSelectsWindowsHost(args) {
       );
       assertMacScriptHelpCommand(payload.runPlan?.commands?.macScriptHelp || "", "discover runPlan Mac script help command");
       assertMacPowerPlanCommand(payload.runPlan?.commands?.macPowerPlanCommand || "", "discover runPlan Mac power plan command");
+      assertMacRemoteAudioPlanCommand(payload.runPlan?.commands?.macRemoteAudioPlanCommand || "", "discover runPlan Mac remote audio plan command");
       assertIncludes(payload.boardSummary || "", `Discovery=127.0.0.1:${windowsPort}`, "discover board summary");
       assertIncludes(payload.boardSummary || "", `MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 127.0.0.1 --port ${windowsPort} --boardSummary`, "discover board summary");
       assertIncludes(payload.boardSummary || "", `MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --host 127.0.0.1 --port ${windowsPort} --ensureClient --promptPassword --boardSummary`, "discover board summary");
       assertIncludes(payload.boardSummary || "", "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs", "discover board summary");
+      assertIncludes(payload.boardSummary || "", "MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs", "discover board summary");
       assertMacInputSafetyPlanCommand(payload.runPlan?.commands?.macInputSafetyPlanCommand || "", "discover runPlan Mac input safety plan command");
       assertIncludes(payload.boardSummary || "", "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs", "discover board summary");
       assertIncludes(payload.boardSummary || "", "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "discover board summary");
