@@ -21,6 +21,32 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：在 Mac host 重启到当前 build 后刷新正式验收前媒体基线和本机短 smoke 证据。
+完成内容：
+- 确认 Mac host 当前运行 `ed937a2`，`inputMode=log`，`maxScreenFps=60`，Mac heartbeat 为 `ok` 且无 warning/blocker。
+- 跑 `MacHostMedia`：`check-mac-host-readiness --probeMedia --probeMediaResourceSample --promptPassword --boardSummary` 返回 `passed=12/12`、`media=ok`。
+- 跑 `MacFormalLocalSmoke`：H.264 89 frames / 29.54 fps / maxGap 38ms，PCM 151 frames / 49.87 fps / maxGap 32ms，`input-log` 16/16 ack，`injected=false`。
+修改文件：
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/mac/check-mac-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --probeMedia --probeMediaResourceSample --promptPassword --boardSummary`
+- `node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary`
+- `git diff --check`
+- 触碰文档冲突标记扫描
+遗留问题：
+- 本轮没有执行 Windows 端正式页面验收，也没有切换真实 `inject`；真实输入注入仍需用户明确确认正在看 Mac 屏幕后另行启动。
+下一步建议：
+- Windows 端可直接跑 `test-mac-host.ps1 -Discover -PromptPassword -RequirePassword -RequireH264 -ExpectInputMode log` 或 Windows 控制端正式页面验收；当前不需要再先处理旧 build。
+是否改了协议：否；只记录运行态验证证据。
+是否需要另一端配合：下一步真实 Windows 页面验收需要 Windows 端运行。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：同步上一轮 Mac client 文件发送进度显示事实到共享交接文档。
 完成内容：
 - 记录 Mac client 文件发送中状态已显示百分比、已发/总量、平均速度和预计剩余时间。
