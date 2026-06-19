@@ -33,6 +33,52 @@ const defaults = {
   json: false,
   boardSummary: false,
 };
+const macUnattendedFreshnessStaleMs = 600000;
+const allowedMacPowerStatuses = new Set(["ok", "warning", "unknown"]);
+const allowedMacPowerReasons = new Set([
+  "ok",
+  "skipped",
+  "not-checked",
+  "pmset-failed",
+  "system-sleep-enabled",
+  "display-sleep-enabled",
+  "network-wake-disabled",
+]);
+const allowedMacPowerWarnings = new Set([
+  "none",
+  "unknown",
+  "system-sleep-enabled",
+  "display-sleep-enabled",
+  "network-wake-disabled",
+]);
+const allowedMacUnattendedStatuses = new Set(["ok", "warning", "blocked", "unknown"]);
+const allowedMacUnattendedReasons = new Set([
+  "ok",
+  "skipped",
+  "not-checked",
+  "host-offline",
+  "launch-agent-missing",
+  "launch-agent-not-loaded",
+  "launch-agent-max-fps",
+  "power",
+  "permissions",
+  "pmset-failed",
+  "unknown",
+]);
+const allowedMacUnattendedFindings = new Set([
+  "none",
+  "unknown",
+  "host-offline",
+  "launch-agent-missing",
+  "launch-agent-not-loaded",
+  "launch-agent-max-fps",
+  "power",
+  "permissions",
+  "screen-recording",
+  "accessibility",
+  "input-monitoring",
+  "pmset-failed",
+]);
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -133,6 +179,10 @@ Machine-readable JSON fields:
   board.windowsLanRisk       Secret-free WindowsLanRisk= hints copied from
                              Agent Link Board when --checkBoard is enabled.
                              Only safe comma-separated risk tokens are accepted.
+  board.macUnattendedFreshness
+                             Optional fresh/stale summary for current Mac
+                             Unattended or MacPowerHealth evidence from Agent
+                             Link Board when --checkBoard is enabled.
 
 Examples:
   node scripts/mac/check-mac-client-readiness.mjs --json
@@ -229,6 +279,15 @@ function command(commandName, commandArgs, options = {}) {
 
 function normalizedText(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function hasSecretLikeCommandValue(text) {
+  const source = String(text || "");
+  return (
+    /\bLAN_DUAL_PASSWORD\s*=/i.test(source) ||
+    /\b(?:token|secret|passwd|pwd)\s*[:=]\s*\S+/i.test(source) ||
+    /(?:^|\s)--(?:password|token|secret|passwd|pwd)(?:[=\s]\S+)?/i.test(source)
+  );
 }
 
 function splitLines(value) {
@@ -637,6 +696,182 @@ function makeMacScriptHelpCommand() {
   return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
 
+async function readMacUnattendedFreshnessFromBoard(options = {}) {
+  const enabled = Boolean(options.enabled ?? options.checkBoard);
+  if (!enabled) return null;
+  try {
+    const state = await readBoardState(options.server, options.timeoutMs);
+    return collectMacUnattendedFreshnessFromBoardState(state);
+  } catch {
+    return null;
+  }
+}
+
+async function readBoardState(server, timeoutMs) {
+  const baseUrl = String(server || "").trim().replace(/\/+$/, "");
+  if (!baseUrl) throw new Error("missing Agent Link Board URL");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 5000));
+  try {
+    const token = process.env.CODEX_LINK_TOKEN || "";
+    const response = await fetch(`${baseUrl}/api/state`, {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: token ? { "X-Codex-Link-Token": token } : {},
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function collectMacUnattendedFreshnessFromBoardState(state, nowMs = Date.now()) {
+  for (const text of collectBoardMacUnattendedTexts(state)) {
+    const freshness = extractMacUnattendedFreshness(text, nowMs);
+    if (freshness) return freshness;
+  }
+  return null;
+}
+
+function collectBoardMacUnattendedTexts(state) {
+  const priorityStatusTexts = [];
+  const statusTexts = [];
+  const eventTexts = [];
+  const statuses = state && typeof state === "object" && state.statuses && typeof state.statuses === "object"
+    ? state.statuses
+    : {};
+  for (const [device, entry] of Object.entries(statuses)) {
+    if (typeof entry === "string") {
+      const statusText = `${device}: ${entry}`;
+      if (isMacUnattendedPriorityText(device, statusText)) {
+        priorityStatusTexts.push(statusText);
+      } else {
+        statusTexts.push(statusText);
+      }
+      continue;
+    }
+    if (!entry || typeof entry !== "object") continue;
+    const statusText = [device, entry.status, entry.note, entry.text, entry.message, entry.summary]
+      .map(normalizedText)
+      .filter(Boolean)
+      .join(" ");
+    if (!statusText) continue;
+    if (isMacUnattendedPriorityText(device, statusText)) {
+      priorityStatusTexts.push(statusText);
+    } else {
+      statusTexts.push(statusText);
+    }
+  }
+
+  const events = Array.isArray(state?.events) ? state.events : [];
+  for (const event of events) {
+    if (typeof event === "string") {
+      eventTexts.push(event);
+      continue;
+    }
+    if (!event || typeof event !== "object") continue;
+    const eventText = [event.device, event.from, event.status, event.note, event.text, event.message, event.summary]
+      .map(normalizedText)
+      .filter(Boolean)
+      .join(" ");
+    if (eventText) eventTexts.push(eventText);
+  }
+  return [...priorityStatusTexts, ...statusTexts, ...eventTexts].filter(Boolean);
+}
+
+function isMacUnattendedPriorityText(device, text) {
+  return /\bMac Unattended\b/i.test(String(device || "")) || /\bMacUnattendedHealth=/i.test(String(text || ""));
+}
+
+function extractMacUnattendedFreshness(text, nowMs) {
+  const unattended = extractMacUnattendedHealth(text);
+  if (unattended) return makeMacUnattendedFreshness(unattended.checkedAt, "MacUnattendedHealth", nowMs);
+  const power = extractMacPowerHealth(text);
+  if (power) return makeMacUnattendedFreshness(power.checkedAt, "MacPowerHealth", nowMs);
+  return null;
+}
+
+function extractMacUnattendedHealth(text) {
+  const source = normalizedText(text);
+  if (!source || !/\bMacUnattendedHealth=/i.test(source)) return null;
+  if (hasSecretLikeCommandValue(source)) return null;
+  const match = source.match(/\bMacUnattendedHealth=([A-Za-z]+)\s+reason=([A-Za-z0-9_-]+)\s+blockers=([A-Za-z0-9_,_-]+)\s+warnings=([A-Za-z0-9_,_-]+)\s+checkedAt=([0-9TZ:.-]+)/i);
+  if (!match) return null;
+  const status = match[1].toLowerCase();
+  const reason = match[2];
+  const blockers = match[3];
+  const warnings = match[4];
+  const checkedAt = cleanCheckedAt(match[5]);
+  if (!allowedMacUnattendedStatuses.has(status)) return null;
+  if (!allowedMacUnattendedReasons.has(reason)) return null;
+  if (!isSafeMacUnattendedFindings(blockers)) return null;
+  if (!isSafeMacUnattendedFindings(warnings)) return null;
+  if (!Number.isFinite(Date.parse(checkedAt))) return null;
+  return { status, reason, blockers, warnings, checkedAt };
+}
+
+function extractMacPowerHealth(text) {
+  const source = normalizedText(text);
+  if (!source || !/\bMacPowerHealth=/i.test(source)) return null;
+  if (hasSecretLikeCommandValue(source)) return null;
+  const match = source.match(/\bMacPowerHealth=([A-Za-z]+)\s+reason=([A-Za-z0-9_-]+)\s+warnings=([A-Za-z0-9_,_-]+)\s+checkedAt=([0-9TZ:.-]+)/i);
+  if (!match) return null;
+  const status = match[1].toLowerCase();
+  const reason = match[2];
+  const warnings = match[3];
+  const checkedAt = cleanCheckedAt(match[4]);
+  if (!allowedMacPowerStatuses.has(status)) return null;
+  if (!allowedMacPowerReasons.has(reason)) return null;
+  if (!isSafeMacPowerWarnings(warnings)) return null;
+  if (!Number.isFinite(Date.parse(checkedAt))) return null;
+  return { status, reason, warnings, checkedAt };
+}
+
+function cleanCheckedAt(value) {
+  return String(value || "").replace(/[.,;]+$/g, "");
+}
+
+function isSafeMacUnattendedFindings(value) {
+  const tokens = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return tokens.length > 0 && tokens.every((token) => allowedMacUnattendedFindings.has(token));
+}
+
+function isSafeMacPowerWarnings(value) {
+  const tokens = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return tokens.length > 0 && tokens.every((token) => allowedMacPowerWarnings.has(token));
+}
+
+function makeMacUnattendedFreshness(checkedAt, source, nowMs) {
+  const checkedMs = Date.parse(checkedAt);
+  if (!Number.isFinite(checkedMs)) return null;
+  const checkedAgeMs = Math.max(0, Math.trunc((Number.isFinite(nowMs) ? nowMs : Date.now()) - checkedMs));
+  return {
+    status: checkedAgeMs > macUnattendedFreshnessStaleMs ? "stale" : "fresh",
+    checkedAt,
+    checkedAgeMs,
+    thresholdMs: macUnattendedFreshnessStaleMs,
+    source,
+  };
+}
+
+function formatMacUnattendedFreshnessSummary(freshness) {
+  if (!freshness) return "";
+  return [
+    `MacUnattendedFreshness=${freshness.status || "unknown"}`,
+    `checkedAgeMs=${Number.isFinite(freshness.checkedAgeMs) ? freshness.checkedAgeMs : "unknown"}`,
+    `thresholdMs=${freshness.thresholdMs ?? macUnattendedFreshnessStaleMs}`,
+    `checkedAt=${freshness.checkedAt || "unknown"}`,
+    `source=${freshness.source || "unknown"}`,
+  ].join(" ");
+}
+
 function makeBoardSummary(report) {
   const repo = report.git.clean ? "clean" : `dirty(${report.git.changes.length})`;
   const client = report.client.ok ? "ok" : "blocked";
@@ -652,10 +887,12 @@ function makeBoardSummary(report) {
       : `offline ${report.windowsHost.probe.host}:${report.windowsHost.probe.port}`;
   const lanRisk = formatWindowsLanRisk(report.board?.windowsLanRisk);
   const lanRiskSummary = lanRisk ? ` ${lanRisk};` : "";
+  const macUnattendedFreshness = formatMacUnattendedFreshnessSummary(report.board?.macUnattendedFreshness);
+  const macUnattendedFreshnessSummary = macUnattendedFreshness ? ` ${macUnattendedFreshness};` : "";
   const findings = formatChecklistFindings(report.checklist);
   const diagnosticsEvidence = makeMacClientDiagnosticsEvidence(report);
   const next = report.recommendations[0]?.text || "No next step available.";
-  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows};${lanRiskSummary} ${findings}.${diagnosticsEvidence} Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; WindowsHostStatus=${report.commands.windowsHostStatusCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; WindowsReverseGrantStatus=${report.commands.windowsReverseGrantStatusCommand}; WindowsOpenOneTimeReverseGrant=${report.commands.windowsOpenOneTimeReverseGrantCommand}; WindowsReverseGrantStatusNodeFallback=${report.commands.windowsReverseGrantStatusNodeFallbackCommand}; WindowsOpenOneTimeReverseGrantNodeFallback=${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}; MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientPromptPasswordSmoke=${report.commands.macClientPromptPasswordSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; MacPowerPlan=${report.commands.macPowerPlanCommand}; MacScriptHelp=${report.commands.macScriptHelpCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
+  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows};${lanRiskSummary}${macUnattendedFreshnessSummary} ${findings}.${diagnosticsEvidence} Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; WindowsHostStatus=${report.commands.windowsHostStatusCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; WindowsReverseGrantStatus=${report.commands.windowsReverseGrantStatusCommand}; WindowsOpenOneTimeReverseGrant=${report.commands.windowsOpenOneTimeReverseGrantCommand}; WindowsReverseGrantStatusNodeFallback=${report.commands.windowsReverseGrantStatusNodeFallbackCommand}; WindowsOpenOneTimeReverseGrantNodeFallback=${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}; MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientPromptPasswordSmoke=${report.commands.macClientPromptPasswordSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; MacPowerPlan=${report.commands.macPowerPlanCommand}; MacScriptHelp=${report.commands.macScriptHelpCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
 }
 
 function makeMacClientDiagnosticsEvidence(report) {
@@ -696,6 +933,8 @@ function printHuman(report) {
   console.log(`- Agent Link Board: ${report.board.checked ? (report.board.ok ? "readable" : "not readable") : "not checked"}`);
   const lanRisk = formatWindowsLanRisk(report.board.windowsLanRisk);
   if (lanRisk) console.log(`- Windows LAN risk: ${lanRisk}`);
+  const macUnattendedFreshness = formatMacUnattendedFreshnessSummary(report.board.macUnattendedFreshness);
+  if (macUnattendedFreshness) console.log(`- Mac unattended freshness: ${macUnattendedFreshness}`);
   console.log(`- Mac client page status: ${report.commands.macClientPageStatusCommand}`);
   console.log(`- Mac client discover Windows host: ${report.commands.macClientDiscoverWindowsCommand}`);
   console.log(`- Windows host status for Windows side: ${report.commands.windowsHostStatusCommand}`);
@@ -733,11 +972,20 @@ async function buildReport(args) {
     probeWindowsHost(args),
   ]);
   const board = checkBoard(args);
-  board.windowsLanRisk = await readWindowsLanRiskFromBoard({
-    enabled: args.checkBoard,
-    server: args.server,
-    timeoutMs: args.timeoutMs,
-  });
+  const [windowsLanRisk, macUnattendedFreshness] = await Promise.all([
+    readWindowsLanRiskFromBoard({
+      enabled: args.checkBoard,
+      server: args.server,
+      timeoutMs: args.timeoutMs,
+    }),
+    readMacUnattendedFreshnessFromBoard({
+      enabled: args.checkBoard,
+      server: args.server,
+      timeoutMs: args.timeoutMs,
+    }),
+  ]);
+  board.windowsLanRisk = windowsLanRisk;
+  board.macUnattendedFreshness = macUnattendedFreshness;
   const checklist = buildChecklist({ git, client, clientServer, windowsHost, board }, args);
   const counts = {
     ok: countChecklist(checklist, "ok"),

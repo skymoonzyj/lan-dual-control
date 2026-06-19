@@ -222,6 +222,15 @@ function assertWindowsLanRisk(payload, output, label) {
   assertNotIncludes(output, "--password=sauce", `${label} output`);
 }
 
+function assertMacUnattendedFreshness(payload, expected, label) {
+  const freshness = payload.board?.macUnattendedFreshness;
+  assert(freshness?.status === expected.status, `${label} should expose MacUnattendedFreshness status=${expected.status}`);
+  assert(freshness.checkedAt === expected.checkedAt, `${label} should preserve MacUnattendedFreshness checkedAt`);
+  assert(freshness.thresholdMs === expected.thresholdMs, `${label} should expose MacUnattendedFreshness thresholdMs`);
+  assert(freshness.source === expected.source, `${label} should expose MacUnattendedFreshness source`);
+  assert(Number.isFinite(freshness.checkedAgeMs), `${label} should expose finite MacUnattendedFreshness checkedAgeMs`);
+}
+
 function extractPlainLineValue(text, prefix, label) {
   const line = String(text || "")
     .split(/\r?\n/)
@@ -351,6 +360,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macPowerPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macScriptHelpCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "board.windowsLanRisk", `${script} ${flag}`);
+    assertIncludes(result.stdout, "board.macUnattendedFreshness", `${script} ${flag}`);
   }
   print("OK", "Mac client readiness help exits quickly");
 }
@@ -720,6 +730,85 @@ async function checkBoardWindowsLanRisk(args) {
   print("OK", "Board WindowsLanRisk is surfaced without leaking unsafe candidates");
 }
 
+async function checkBoardMacUnattendedFreshness(args) {
+  const boardState = {
+    updatedAt: "2026-06-19T08:10:00.000Z",
+    currentCall: null,
+    statuses: {
+      "Mac Heartbeat": {
+        status: "online",
+        note: "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T08:09:00.000Z.",
+      },
+      "Mac Unattended": {
+        status: "warning",
+        note: "MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-01-01T00:00:00.000Z. MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T08:09:00.000Z.",
+      },
+    },
+    events: [
+      {
+        id: "unsafe-password-flag",
+        at: "2026-06-19T08:10:01.000Z",
+        type: "message",
+        from: "Mac Codex",
+        text: "Ignore unsafe candidate MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=--password=sauce checkedAt=2026-06-19T08:10:00.000Z",
+      },
+    ],
+  };
+  await withBoardStateServer(args, boardState, async (serverUrl) => {
+    const result = run([
+      "--json",
+      "--checkBoard",
+      "--server",
+      serverUrl,
+      "--timeoutMs",
+      "1200",
+    ], args);
+    const payload = parseJson(result.stdout, "board MacUnattendedFreshness JSON");
+    assert(result.status === 0, `board MacUnattendedFreshness JSON should exit 0 with warnings allowed.\n${result.stdout}\n${result.stderr}`);
+    assertMacUnattendedFreshness(payload, {
+      status: "stale",
+      checkedAt: "2026-01-01T00:00:00.000Z",
+      thresholdMs: 600000,
+      source: "MacUnattendedHealth",
+    }, "board MacUnattendedFreshness JSON");
+    assertIncludes(payload.boardSummary || "", "MacUnattendedFreshness=stale", "board MacUnattendedFreshness summary");
+    assertIncludes(payload.boardSummary || "", "checkedAt=2026-01-01T00:00:00.000Z", "board MacUnattendedFreshness summary");
+    assertIncludes(payload.boardSummary || "", "source=MacUnattendedHealth", "board MacUnattendedFreshness summary");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}`, "sauce", "board MacUnattendedFreshness output");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--password", "board MacUnattendedFreshness output");
+  });
+  const powerOnlyState = {
+    updatedAt: "2026-06-19T08:12:00.000Z",
+    currentCall: null,
+    statuses: {
+      "Mac Heartbeat": {
+        status: "online",
+        note: "MacPowerHealth=warning reason=display-sleep-enabled warnings=display-sleep-enabled checkedAt=2026-01-02T00:00:00.000Z.",
+      },
+    },
+    events: [],
+  };
+  await withBoardStateServer(args, powerOnlyState, async (serverUrl) => {
+    const result = run([
+      "--json",
+      "--checkBoard",
+      "--server",
+      serverUrl,
+      "--timeoutMs",
+      "1200",
+    ], args);
+    const payload = parseJson(result.stdout, "board MacPowerHealth fallback JSON");
+    assert(result.status === 0, `board MacPowerHealth fallback should exit 0 with warnings allowed.\n${result.stdout}\n${result.stderr}`);
+    assertMacUnattendedFreshness(payload, {
+      status: "stale",
+      checkedAt: "2026-01-02T00:00:00.000Z",
+      thresholdMs: 600000,
+      source: "MacPowerHealth",
+    }, "board MacPowerHealth fallback JSON");
+  });
+  print("OK", "Board MacUnattendedFreshness is surfaced without leaking unsafe candidates");
+}
+
 async function checkClientServerProbe(args) {
   await withMacClientServer(args, async (port) => {
     const result = run(["--json", "--probeClientServer", "--requireClientServer", "--clientPort", String(port)], args);
@@ -928,6 +1017,7 @@ async function main() {
   checkBoardSummary(args);
   checkPlainReport(args);
   await checkBoardWindowsLanRisk(args);
+  await checkBoardMacUnattendedFreshness(args);
   await checkClientServerProbe(args);
   await checkClientDiagnosticsEvidence(args);
   await checkWindowsDiscoveryProbe(args);
