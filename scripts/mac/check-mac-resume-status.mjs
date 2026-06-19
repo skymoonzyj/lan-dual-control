@@ -223,6 +223,15 @@ Machine-readable JSON fields:
                              Secret-free background Mac heartbeat watcher
                              start command. It manages PID/log files and posts
                              as device "Mac Heartbeat", not "Mac Codex".
+  commands.macHeartbeatRefreshOnceCommand
+                             Secret-free one-shot Mac heartbeat command that
+                             first refreshes the independent Mac Unattended
+                             board status, then posts MacHeartbeat.
+  commands.macHeartbeatRefreshStartCommand
+                             Secret-free background Mac heartbeat watcher
+                             start command with explicit Mac Unattended refresh
+                             before each heartbeat. It still posts as device
+                             "Mac Heartbeat", not "Mac Codex".
   commands.macHeartbeatStatusCommand
                              Secret-free background watcher status command.
   commands.macHeartbeatStopCommand
@@ -1220,6 +1229,14 @@ function makeMacHeartbeatStartCommand() {
   return "node scripts/mac/start-mac-heartbeat-watcher.mjs --boardSummary";
 }
 
+function makeMacHeartbeatRefreshOnceCommand() {
+  return "node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --refreshUnattended --boardSummary";
+}
+
+function makeMacHeartbeatRefreshStartCommand() {
+  return "node scripts/mac/start-mac-heartbeat-watcher.mjs --refreshUnattended --boardSummary";
+}
+
 function makeMacHeartbeatStatusCommand() {
   return "node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary";
 }
@@ -1265,6 +1282,7 @@ function getMacHeartbeatWatcherStatus(args) {
       lastHeartbeat: payload.lastHeartbeat || null,
       files: payload.files || {},
       commands: payload.commands || {},
+      refreshUnattended: Boolean(payload.watcher?.refreshUnattended),
       message: normalizedText(payload.message),
     };
   } catch (error) {
@@ -1393,6 +1411,11 @@ function formatHeartbeatWatcherSummary(watcher) {
     ? `lastRun=${watcher.lastHeartbeat.watcherRun.run || "unknown"} post=${watcher.lastHeartbeat.watcherRun.post || "unknown"}`
     : "lastRun=not-seen";
   return `heartbeatWatcher=${state} ${heartbeat} ${run}`;
+}
+
+function formatMacHeartbeatRefreshSummary(watcher) {
+  if (!watcher?.checked || !watcher.ok) return "MacHeartbeatRefresh=unknown";
+  return `MacHeartbeatRefresh=${watcher.refreshUnattended ? "enabled" : "disabled"}`;
 }
 
 function parseTimeMs(value) {
@@ -1589,6 +1612,7 @@ function formatBoardSummary(report) {
   const findingSummary = formatRecommendationSummary(blockerItems, warningItems);
   const callSummary = formatBoardCallSummary(board);
   const heartbeatWatcherSummary = formatHeartbeatWatcherSummary(macHeartbeatWatcher);
+  const heartbeatRefreshSummary = formatMacHeartbeatRefreshSummary(macHeartbeatWatcher);
   const heartbeatFreshnessSummary = formatMacHeartbeatFreshnessSummary(report.macHeartbeatFreshness);
   const heartbeatHealthSummary = formatMacHeartbeatHealthSummary(report.macHeartbeatHealth);
   const macEvidenceSummary = formatMacEvidenceSummary(board);
@@ -1599,7 +1623,7 @@ function formatBoardSummary(report) {
 
   if (!host.online) {
     return [
-      `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${heartbeatWatcherSummary}; ${heartbeatFreshnessSummary}; ${heartbeatHealthSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
+      `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${heartbeatWatcherSummary}; ${heartbeatRefreshSummary}; ${heartbeatFreshnessSummary}; ${heartbeatHealthSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
       macEvidenceSummary,
       macPowerHealthSummary,
       macUnattendedHealthSummary,
@@ -1630,6 +1654,8 @@ function formatBoardSummary(report) {
       `MacHeartbeatOnce=${report.commands.macHeartbeatOnceCommand}.`,
       `MacHeartbeatWatch=${report.commands.macHeartbeatWatchCommand}.`,
       `MacHeartbeatStart=${report.commands.macHeartbeatStartCommand}.`,
+      `MacHeartbeatRefreshOnce=${report.commands.macHeartbeatRefreshOnceCommand}.`,
+      `MacHeartbeatRefreshStart=${report.commands.macHeartbeatRefreshStartCommand}.`,
       `MacHeartbeatStatus=${report.commands.macHeartbeatStatusCommand}.`,
       `MacHeartbeatStop=${report.commands.macHeartbeatStopCommand}.`,
       `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
@@ -1646,7 +1672,7 @@ function formatBoardSummary(report) {
   const buildDiff = formatBoardBuildDiff(host.buildDiff);
 
   return [
-    `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}; ${heartbeatWatcherSummary}; ${heartbeatFreshnessSummary}; ${heartbeatHealthSummary}.`,
+    `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}; ${heartbeatWatcherSummary}; ${heartbeatRefreshSummary}; ${heartbeatFreshnessSummary}; ${heartbeatHealthSummary}.`,
     macEvidenceSummary,
     macPowerHealthSummary,
     macUnattendedHealthSummary,
@@ -1678,6 +1704,8 @@ function formatBoardSummary(report) {
     `MacHeartbeatOnce=${report.commands.macHeartbeatOnceCommand}.`,
     `MacHeartbeatWatch=${report.commands.macHeartbeatWatchCommand}.`,
     `MacHeartbeatStart=${report.commands.macHeartbeatStartCommand}.`,
+    `MacHeartbeatRefreshOnce=${report.commands.macHeartbeatRefreshOnceCommand}.`,
+    `MacHeartbeatRefreshStart=${report.commands.macHeartbeatRefreshStartCommand}.`,
     `MacHeartbeatStatus=${report.commands.macHeartbeatStatusCommand}.`,
     `MacHeartbeatStop=${report.commands.macHeartbeatStopCommand}.`,
     `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
@@ -1731,10 +1759,11 @@ function printReport(report) {
   }
   if (macHeartbeatWatcher?.checked) {
     const state = macHeartbeatWatcher.running ? `running pid=${macHeartbeatWatcher.pid || "unknown"}` : "not running";
+    const refresh = macHeartbeatWatcher.ok ? (macHeartbeatWatcher.refreshUnattended ? "enabled" : "disabled") : "unknown";
     const last = macHeartbeatWatcher.lastHeartbeat?.heartbeat?.found
       ? `last=${macHeartbeatWatcher.lastHeartbeat.heartbeat.status || "unknown"} checkedAt=${macHeartbeatWatcher.lastHeartbeat.heartbeat.checkedAt || "unknown"} reason=${macHeartbeatWatcher.lastHeartbeat.heartbeat.reason || "unknown"}`
       : "last=not seen";
-    console.log(`[${macHeartbeatWatcher.ok ? "OK" : "WARN"}] Mac heartbeat watcher: ${state}; ${last}`);
+    console.log(`[${macHeartbeatWatcher.ok ? "OK" : "WARN"}] Mac heartbeat watcher: ${state}; refreshUnattended=${refresh}; ${last}`);
   }
   if (report.macHeartbeatHealth) {
     const health = report.macHeartbeatHealth;
@@ -1788,6 +1817,8 @@ function printReport(report) {
   console.log(`[NEXT] Mac heartbeat one-shot board update: ${report.commands.macHeartbeatOnceCommand}`);
   console.log(`[NEXT] Mac heartbeat continuous board watcher: ${report.commands.macHeartbeatWatchCommand}`);
   console.log(`[NEXT] Mac heartbeat background start: ${report.commands.macHeartbeatStartCommand}`);
+  console.log(`[NEXT] Mac heartbeat one-shot with unattended refresh: ${report.commands.macHeartbeatRefreshOnceCommand}`);
+  console.log(`[NEXT] Mac heartbeat background refresh start: ${report.commands.macHeartbeatRefreshStartCommand}`);
   console.log(`[NEXT] Mac heartbeat background status: ${report.commands.macHeartbeatStatusCommand}`);
   console.log(`[NEXT] Mac heartbeat background stop: ${report.commands.macHeartbeatStopCommand}`);
   console.log(`[NEXT] Mac client copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
@@ -1863,6 +1894,8 @@ async function main() {
       macHeartbeatOnceCommand: makeMacHeartbeatOnceCommand(),
       macHeartbeatWatchCommand: makeMacHeartbeatWatchCommand(),
       macHeartbeatStartCommand: makeMacHeartbeatStartCommand(),
+      macHeartbeatRefreshOnceCommand: makeMacHeartbeatRefreshOnceCommand(),
+      macHeartbeatRefreshStartCommand: makeMacHeartbeatRefreshStartCommand(),
       macHeartbeatStatusCommand: makeMacHeartbeatStatusCommand(),
       macHeartbeatStopCommand: makeMacHeartbeatStopCommand(),
       macClientCopyDiagnosticsAction: "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码",

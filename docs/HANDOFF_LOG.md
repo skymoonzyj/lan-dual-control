@@ -21,6 +21,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 `MacResumeStatus=` 第一屏直接显示后台 heartbeat watcher 是否启用了 `refreshUnattended`，并给出刷新版 watcher 入口。
+完成内容：
+- `check-mac-resume-status` 新增 JSON `macHeartbeatWatcher.refreshUnattended`，来自 `start-mac-heartbeat-watcher --status --json` 的只读状态。
+- JSON `commands` 新增 `macHeartbeatRefreshOnceCommand` / `macHeartbeatRefreshStartCommand`，分别对应一次性刷新 `Mac Unattended` 后发 heartbeat，以及后台 watcher 显式启用刷新。
+- `MacResumeStatus=` / `--boardSummary` 新增 `MacHeartbeatRefresh=enabled|disabled|unknown`、`MacHeartbeatRefreshOnce=`、`MacHeartbeatRefreshStart=`；普通输出也新增两条 NEXT。
+- 本轮不自动停止/启动现有 watcher，不执行 `pmset`，不加载 `launchctl`，不认证 WebSocket，不请求或发送密码，也不发送 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000` 先失败在 help 缺 `commands.macHeartbeatRefreshOnceCommand`。
+- 绿灯：实现后同一专项回归通过，覆盖 help、JSON、普通输出、boardSummary、刷新命令安全边界和不泄密。
+- 收尾验证：`node --check scripts/mac/check-mac-resume-status.mjs`、`node --check scripts/mac/test-mac-resume-status.mjs`、`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000`、`node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`、`git diff --check` 均通过；冲突标记扫描无命中。
+- 真实只读复查：`node scripts/mac/check-mac-resume-status.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary` 输出 `MacHeartbeatRefresh=disabled`、`MacHeartbeatRefreshOnce=`、`MacHeartbeatRefreshStart=`，确认当前后台 watcher 未启用持续刷新但新入口可见。
+遗留问题：
+- 当前真实后台 watcher 仍显示 `refreshUnattended=false/disabled`，因为本轮只提升可见性，没有重启后台 watcher；LaunchAgent 未加载和系统/显示睡眠 warning 仍需用户现场确认后处理。
+下一步建议：
+- 开工第一屏若看到 `MacHeartbeatRefresh=disabled` 且 `MacUnattendedFreshness=stale`，可先运行 `MacHeartbeatRefreshOnce=` 临时刷新；若白天决定长期保持独立值守证据新鲜，再人工停旧 watcher 并运行 `MacHeartbeatRefreshStart=`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让后台 Mac heartbeat watcher 可在显式开启时刷新独立 `Mac Unattended` 证据，减少通讯板 `MacUnattendedFreshness=stale` 噪声。
 完成内容：
 - `watch-mac-heartbeat` 新增默认关闭的 `--refreshUnattended`：每次 heartbeat 前先运行只读 `check-mac-unattended-status --sendStatus --boardSummary`，再运行 heartbeat；刷新成功时 JSON `last.unattendedRefresh.ok=true`，watch summary 标记 `unattended=refreshed`。
