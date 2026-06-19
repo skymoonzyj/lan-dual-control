@@ -54,8 +54,11 @@ Description:
   Prints a read-only Windows-side manual UX status report after REAL_TEST_PASS.
   It consumes PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby,
   MAC_STANDING_BY_FOR_MANUAL_UX_TEST, and ManualUxChecklist=... from Agent Link
-  Board state. It does not authenticate, does not ask for or print passwords,
-  does not send user-auth requests, and does not send input or inject events.
+  Board state. A Supervisor usable-entry/manual-UX currentCall is also treated
+  as ready so status updates do not accidentally send the team back to the
+  formal E2E path. It does not authenticate, does not ask for or print
+  passwords, does not send user-auth requests, and does not send input or
+  inject events.
 
 Examples:
   node scripts/windows/check-windows-manual-ux-status.mjs --boardSummary
@@ -208,6 +211,14 @@ function firstPrivateEndpoint(texts, server) {
   return lan?.endpoint || "unknown";
 }
 
+function isUsableEntryManualUxCall(text) {
+  const source = compactText(text);
+  if (!source) return false;
+  const usableEntry = /强制可用化|第一版入口|可打开.*可连接.*远程\s*Mac/i.test(source);
+  const manualUx = /手工体验|ManualUx|Manual UX|ManualUxTest/i.test(source);
+  return usableEntry && manualUx;
+}
+
 function makeReport(state, server) {
   const texts = collectBoardTexts(state);
   const combined = texts.join("\n");
@@ -216,8 +227,9 @@ function makeReport(state, server) {
     postPassNext: /\bPostPassNext\s*=\s*WindowsRecordPassAndTailError\+MacManualUxStandby\b/i.test(combined),
     manualUxStandby: /\bMAC_STANDING_BY_FOR_MANUAL_UX_TEST\b|\bMacManualUxStandby\b|\bManualUxStandby\b/i.test(combined),
     manualChecklist: /\bManualUxChecklist\s*=/i.test(combined),
+    usableEntryManualUxCall: texts.some((text) => isUsableEntryManualUxCall(text)),
   };
-  const ready = signals.postPassNext || signals.manualUxStandby;
+  const ready = signals.postPassNext || signals.manualUxStandby || signals.usableEntryManualUxCall;
   const ids = parseManualChecklist(texts);
   const labels = ids.map((id) => manualChecklistLabels[id]);
   const warnings = [];
@@ -253,7 +265,7 @@ function makeReport(state, server) {
           "Record real manual UX findings instead of returning to formal E2E password flow.",
         ]
       : [
-          "Wait for PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby or MAC_STANDING_BY_FOR_MANUAL_UX_TEST on Agent Link Board.",
+          "Wait for PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby, MAC_STANDING_BY_FOR_MANUAL_UX_TEST, or the usable-entry manual UX currentCall on Agent Link Board.",
           "Do not send NEED_USER_AUTH or ask for another password while waiting for manual UX standby.",
         ],
   };
@@ -304,6 +316,7 @@ function makeOfflineReport(server, error) {
       postPassNext: false,
       manualUxStandby: false,
       manualChecklist: false,
+      usableEntryManualUxCall: false,
     },
     manualChecklist: {
       summary: defaultManualChecklist.join("/"),

@@ -89,7 +89,8 @@ function run(extraArgs, args) {
 
 function runCmd(extraArgs, args) {
   return new Promise((resolveRun) => {
-    const child = spawn("cmd.exe", ["/d", "/c", "Start-Windows-Control-Mac.cmd", ...extraArgs], {
+    const shell = process.env.ComSpec || "cmd.exe";
+    const child = spawn(shell, ["/d", "/c", "Start-Windows-Control-Mac.cmd", ...extraArgs], {
       cwd: repoRoot,
       env: {
         ...process.env,
@@ -173,6 +174,11 @@ async function checkCmdLauncher(args) {
   assertNotIncludes(content, "demo-password", "cmd launcher");
   assertNotIncludes(content, "secret", "cmd launcher");
   assertNotIncludes(content, "token", "cmd launcher");
+
+  if (process.platform !== "win32") {
+    console.log("[OK] Windows root cmd launcher content is safe; execution skipped on non-Windows");
+    return;
+  }
 
   const result = await runCmd(["--dryRun", "--boardSummary"], args);
   assert(result.exitCode === 0, `cmd dryRun boardSummary should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);

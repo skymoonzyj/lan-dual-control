@@ -186,6 +186,35 @@ function waitingBoardState() {
   };
 }
 
+function usableEntryCurrentCallBoardState() {
+  return {
+    updatedAt: "2026-06-20T09:00:00.000Z",
+    currentCall: {
+      status: "CALLING",
+      goal: "强制可用化：尽快交付用户可打开、可连接、可远程 Mac 的第一版入口",
+      from: "Supervisor Codex",
+      need: "Windows Codex, Mac Codex",
+      expected: "双方上报 USABLE_NEXT 和 BLOCKER；Windows 提供最短启动入口，Mac 保持 host/client/heartbeat 在线并配合手工体验测试。",
+      actual: "Formal E2E 主体已 PASS；现在要从测试通过切到用户可用。",
+      ask: "停止外围完善，直接推进可用入口和手工体验测试。",
+    },
+    statuses: {
+      "Mac Heartbeat": {
+        status: "online",
+        note: "MacHeartbeat=status=ok; host=192.168.31.122:43770; MacUnattendedHealth=ok reason=ok blockers=none warnings=none",
+        updatedAt: "2026-06-20T08:59:57.000Z",
+      },
+      "Mac Codex": {
+        status: "checking-next-usable-gap",
+        role: "Mac 端",
+        note: "Mac 端正在只读复核第一版可用入口链路，暂不碰 Windows 入口文件。",
+        updatedAt: "2026-06-20T08:59:58.000Z",
+      },
+    },
+    recentEvents: [],
+  };
+}
+
 function parseJson(stdout, label) {
   try {
     return JSON.parse(stdout);
@@ -280,6 +309,23 @@ async function checkRequireReadyFailure(args) {
   console.log("[OK] Windows manual UX status requireReady fails closed before standby signal");
 }
 
+async function checkUsableEntryCurrentCallIsReady(args) {
+  await withFakeBoard(usableEntryCurrentCallBoardState(), async (serverUrl) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `usable-entry currentCall JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "usable-entry currentCall JSON");
+    assert(payload.status === "ready", `usable-entry currentCall should be ready, got ${payload.status}`);
+    assert(payload.signals?.usableEntryManualUxCall === true, "usable-entry currentCall should be a stable ready signal");
+    assert(payload.manualChecklist?.summary === defaultChecklist, "usable-entry currentCall should use default manual checklist");
+    assert(payload.target === "192.168.31.122:43770", `usable-entry currentCall should keep LAN Mac target, got ${payload.target}`);
+    assertIncludes(payload.boardSummary, "WindowsManualUx=status=ready", "usable-entry boardSummary");
+    assertIncludes(payload.boardSummary, "Signals=usableEntryManualUxCall", "usable-entry boardSummary");
+    assertIncludes(payload.boardSummary, "Next=ManualUxTest", "usable-entry boardSummary");
+    assertNotIncludes(JSON.stringify(payload), "demo-password", "usable-entry currentCall JSON");
+  });
+  console.log("[OK] Windows manual UX status treats usable-entry currentCall as manual UX ready");
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -292,6 +338,7 @@ async function main() {
   await checkChinesePunctuationAfterChecklist(args);
   await checkBoardSummary(args);
   await checkRequireReadyFailure(args);
+  await checkUsableEntryCurrentCallIsReady(args);
   console.log("[OK] Windows manual UX status checks passed");
 }
 
