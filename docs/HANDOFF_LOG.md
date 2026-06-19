@@ -21,6 +21,40 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：执行 Windows 控 Mac 真实测试前置动作，并把当前外部卡点记录清楚。
+完成内容：
+- 已按 Agent Link Board active call 执行 `MacHostStop -> MacMaxFpsSafeStart -> MacHostMedia`。
+- `MacHostStop` 成功停止旧 host，旧 runtime pid 为 `4719`，旧 build 为 `bed2095`。
+- `MacMaxFpsSafeStart` 已通过 Mac 本机隐藏密码框启动前台同密 host：`host=192.168.31.122:43770` / `127.0.0.1:43770`，`build=8015f22`，`inputMode=log`，`maxScreenFps=60`，runtime pid `78993`。
+- `MacHostMedia` 已完成：`media=ok`，`passed=12/12`，`blockers=none`；随后刷新 `MacHeartbeat` 和 `Mac Unattended`，当前 `MacHeartbeat=status=ok`、`build=current`、`MacUnattendedHealth=ok`、`permissions=screen/accessibility/inputMonitoring on`、`power=ok`。
+- 已在通讯板发送 `MAC_READY_FOR_REAL_TEST` 并清理已完成的 Mac 前置 call；随后发起 Windows 真实测试 call。
+- 已本地合并 Windows 最新 `ceffd43 Preserve formal E2E client ports`，正式验收命令会保留现场备用 `--clientPort 5200 --debugPort 9340`，避免用户输入密码后又回落旧默认端口。
+- 当前唯一卡点：Windows 端仍需要用户在 Windows 本机输入同一个临时密码后启动真实测试；密码不能发到通讯板。
+修改文件：
+- `docs/HANDOFF_LOG.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/mac/start-mac-host.mjs --stop --host 127.0.0.1 --port 43770 --json` 返回 `ok=true stopped=true`。
+- `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60` 返回 `/discovery is ready`、`Auth passed`、`Mac host is running`，且保持 `inputMode=log`。
+- `node scripts/mac/check-mac-host-readiness.mjs --host 127.0.0.1 --port 43770 --checkBoard --probeMedia --probeMediaResourceSample --promptPassword --boardSummary --timeoutMs 30000` 返回 `passed=12/12`、`media=ok`、`blockers=none`。
+- `node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --refreshUnattended --server http://192.168.31.68:17888 --boardSummary` 返回 `MacHeartbeat=status=ok`、`build=8015f22`、`build=current`、`MacUnattendedHealth=ok`。
+- `node scripts/mac/start-mac-host.mjs --status --boardSummary --host 127.0.0.1 --port 43770 --timeoutMs 10000` 确认 runtime 仍为 `8015f22`、权限全开、H.264/audio 可见。
+遗留问题：
+- Windows 端真实测试尚未开始；Windows Codex 当前状态仍为 blocked，原因是等待用户在 Windows 本机输入同一个临时密码。
+- 前台 Mac host 仍在运行；不要停止它，除非真实测试完成或用户明确要求。
+下一步建议：
+- Windows 端应让用户在 Windows 本机输入刚才 Mac 弹窗使用的同一个临时密码，然后立即跑真实测试：连接、画面、声音、剪贴板、文件、input-log、全屏/原画/小窗、复制诊断。
+- 若 Windows 默认 `5197/9337` 仍被旧 diagnostics 占用，正式命令继续使用 `--clientPort 5200 --debugPort 9340` 或 PowerShell 等价 `-ClientPort 5200 -DebugPort 9340`。
+- Windows 端不要再等待 Mac 执行 `MacHostStop/MacMaxFpsSafeStart/MacHostMedia`，这些已经完成。
+是否改了协议：否；这是现场执行和交接记录。
+是否需要另一端配合：需要 Windows 端和用户在 Windows 本机继续。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac host readiness 第一屏也安全显示当前 Mac host 认证路径。
 完成内容：
 - `check-mac-host-readiness --checkBoard` 现在会从 Agent Link Board 当前状态安全提取 `MacHostAuthPath=`，在 JSON `board.macHostAuthPath` 和 `Mac host readiness:` 摘要里转述。
