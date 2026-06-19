@@ -463,6 +463,11 @@ function makeMacFormalLocalSmokeCommand(report) {
   return `node scripts/mac/check-mac-formal-local-smoke.mjs --host ${host} --port ${port} --promptPassword --boardSummary`;
 }
 
+function makeMacHostSafeStartCommand(report) {
+  const port = Number(report.target?.port) || defaults.port;
+  return `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port}`;
+}
+
 function makeFpsLimitStatus(report) {
   const requestedFps = positiveNumber(report.runPlan?.video?.fps);
   const maxScreenFps = positiveNumber(report.capabilities?.maxScreenFps);
@@ -561,6 +566,7 @@ function makeUserAuthRequest(report) {
     `正式长验收前建议 Mac 端先跑本机短验收：${report.macFormalLocalSmokeCommand}。`,
     `位置/步骤：在 E:\\codex\\lan-dual-control 运行 ${report.command}。`,
     `PowerShell 等价：${report.formalPowerShellCommand}。`,
+    `如果不知道当前 Mac host 密码，或当前 host 是 LaunchAgent 随机密码：请 Mac 端先切到前台可见/可设置密码路径：MacHostSafeStart=${report.macHostSafeStartCommand}。`,
     "不要把密码发到联络板；本命令默认不执行 inject，inject 仍需你另行明确确认。",
     "处理后请回复 已输入密码并开始验收。",
   ].filter(Boolean).join(" ");
@@ -568,6 +574,7 @@ function makeUserAuthRequest(report) {
 
 function attachBoardSummary(report, outcome = "preflight") {
   report.macFormalLocalSmokeCommand = makeMacFormalLocalSmokeCommand(report);
+  report.macHostSafeStartCommand = makeMacHostSafeStartCommand(report);
   report.fpsLimit = makeFpsLimitStatus(report);
   report.boardSummary = makeBoardSummary(report, outcome);
   report.userAuthRequest = makeUserAuthRequest(report);

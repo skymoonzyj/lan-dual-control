@@ -581,6 +581,9 @@ async function testMockPreflightUserAuthRequest(args) {
     assertIncludes(result.stdout, "check-mac-formal-local-smoke.mjs", "mock user auth request");
     assertIncludes(result.stdout, "PowerShell 等价", "mock user auth request");
     assertIncludes(result.stdout, "-PromptPassword", "mock user auth request");
+    assertIncludes(result.stdout, "如果不知道当前 Mac host 密码", "mock user auth request");
+    assertIncludes(result.stdout, "MacHostSafeStart=", "mock user auth request");
+    assertIncludes(result.stdout, "start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0", "mock user auth request");
     assertIncludes(result.stdout, "不要把密码发到联络板", "mock user auth request");
     assertIncludes(result.stdout, "inject", "mock user auth request");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "mock user auth request");
@@ -631,6 +634,9 @@ async function testMockPreflightSendUserAuthRequest(args) {
       assert(String(requests[0].body.text || "").includes("--promptPassword"), "mock send text missing safe formal command");
       assert(String(requests[0].body.text || "").includes("PowerShell 等价"), "mock send text missing PowerShell formal command");
       assert(String(requests[0].body.text || "").includes("-PromptPassword"), "mock send text missing PowerShell prompt command");
+      assert(String(requests[0].body.text || "").includes("如果不知道当前 Mac host 密码"), "mock send text missing unknown-password guidance");
+      assert(String(requests[0].body.text || "").includes("MacHostSafeStart="), "mock send text missing MacHostSafeStart guidance");
+      assert(String(requests[0].body.text || "").includes("start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0"), "mock send text missing foreground password command");
       assertNotIncludes(JSON.stringify(requests[0].body), "test-password", "mock send user auth request body");
       assertNotIncludes(result.stdout + result.stderr, "test-password", "mock send user auth request output");
       print("OK", "Mock send user auth request posts a secret-free Agent Link Board message");
