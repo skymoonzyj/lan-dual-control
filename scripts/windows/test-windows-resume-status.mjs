@@ -349,6 +349,8 @@ async function checkHelp(args) {
     assertIncludes(result.stdout, "plan-mac-remote-audio.mjs --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "MacInputSafetyPlan=", `help ${flag}`);
     assertIncludes(result.stdout, "plan-mac-input-safety.mjs --boardSummary", `help ${flag}`);
+    assertIncludes(result.stdout, "MacManualUxStatus=", `help ${flag}`);
+    assertIncludes(result.stdout, "check-mac-manual-ux-status.mjs --boardSummary", `help ${flag}`);
     assertIncludes(result.stdout, "discover-lan-hosts.mjs --noLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "discover-lan-hosts.ps1 -NoLocalSubnets", `help ${flag}`);
     assertIncludes(result.stdout, "check-mac-host-readiness.mjs --host 192.168.31.122 --port 43770 --checkBoard --boardSummary", `help ${flag}`);
@@ -1385,6 +1387,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const macClientFormalSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
   const macRemoteAudioPlanCommand = "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary";
   const macInputSafetyPlanCommand = "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
+  const macManualUxStatusCommand = "node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary";
   const macRemoteAudioSummary = "status=plan-only capture=system-pcm-does-not-mute-local remoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle recommended=product-toggle-with-explicit-consent safety=no-volume-change,no password/input/inject";
   const macRemoteAudioBoardText = "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject.";
   const macInputSafetySummary = "status=plan-only default=log realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe safety=no-password,no-input-events,no-inject";
@@ -1404,7 +1407,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
         "Mac Codex": {
           role: "Mac 端",
           status: "idle",
-          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacClientDiscoverWindows=${macClientDiscoverWindowsCommand} MacClientFormalChecklist=${macClientFormalChecklistCommand} MacClientFormalSmoke=${macClientFormalSmokeCommand} MacRemoteAudioPlan=${macRemoteAudioPlanCommand} ${macRemoteAudioBoardText} MacInputSafetyPlan=${macInputSafetyPlanCommand} ${macInputSafetyBoardText} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand} MacHeartbeatStart=${heartbeatStartCommand} MacHeartbeatStatus=${heartbeatStatusCommand} MacHeartbeatStop=${heartbeatStopCommand}`,
+          note: `MacHostReadiness=blocked blockers=host-offline warnings=none MacHostSafeStart=${safeCommand} MacMaxFpsSafeStart=${maxFpsCommand} MacFormalLocalSmoke=${localSmokeCommand} MacClientDiscoverWindows=${macClientDiscoverWindowsCommand} MacClientFormalChecklist=${macClientFormalChecklistCommand} MacClientFormalSmoke=${macClientFormalSmokeCommand} MacRemoteAudioPlan=${macRemoteAudioPlanCommand} ${macRemoteAudioBoardText} MacInputSafetyPlan=${macInputSafetyPlanCommand} ${macInputSafetyBoardText} MacManualUxStatus=${macManualUxStatusCommand} MacHeartbeatOnce=${heartbeatOnceCommand} MacHeartbeatWatch=${heartbeatWatchCommand} MacHeartbeatStart=${heartbeatStartCommand} MacHeartbeatStatus=${heartbeatStatusCommand} MacHeartbeatStop=${heartbeatStopCommand}`,
         },
         "Mac Heartbeat": {
           role: "Mac heartbeat watcher",
@@ -1547,6 +1550,16 @@ async function checkBoardMacHostSafeStartExtraction(args) {
         {
           type: "message",
           from: "Mac Codex",
+          text: "MacManualUxStatus=node scripts/mac/check-mac-manual-ux-status.mjs --password secret-value --boardSummary",
+        },
+        {
+          type: "status",
+          from: "Mac Codex",
+          text: "MacManualUxStatus=node scripts/mac/check-mac-manual-ux-status.mjs --sendStatus --boardSummary",
+        },
+        {
+          type: "message",
+          from: "Mac Codex",
           text: "Mac input safety plan: status=plan-only; default=log; realInput=blocked-until-user-watching; required=--confirmUserWatching; eventSet=full; safety=no-password,no-input-events,no-inject.",
         },
         {
@@ -1656,6 +1669,10 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assert(payload.board.macInputSafetyPlan.command === macInputSafetyPlanCommand, "MacInputSafetyPlan command mismatch");
       assert(payload.board.macInputSafetyPlan.source === "api-state", "MacInputSafetyPlan should come from /api/state");
       assert(payload.board.macInputSafetyPlan.rejectedCount >= 2, "unsafe or non-board MacInputSafetyPlan should be rejected");
+      assert(payload.board?.macManualUxStatus?.found === true, "MacManualUxStatus should be found in board state");
+      assert(payload.board.macManualUxStatus.command === macManualUxStatusCommand, "MacManualUxStatus command mismatch");
+      assert(payload.board.macManualUxStatus.source === "api-state", "MacManualUxStatus should come from /api/state");
+      assert(payload.board.macManualUxStatus.rejectedCount >= 2, "unsafe MacManualUxStatus candidates should be rejected");
       assert(payload.board?.macInputSafety?.found === true, "Mac input safety summary should be found in board state");
       assert(payload.board.macInputSafety.summary === macInputSafetySummary, "Mac input safety summary mismatch");
       assert(payload.board.macInputSafety.realInput === "blocked-until-user-watching", "Mac input safety realInput mismatch");
@@ -1710,6 +1727,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(payload.boardSummary, `MacRemoteAudioPlan=${macRemoteAudioPlanCommand}.`, "MacRemoteAudioPlan JSON board summary");
       assertIncludes(payload.boardSummary, `MacRemoteAudio=${macRemoteAudioSummary}.`, "Mac remote audio JSON board summary");
       assertIncludes(payload.boardSummary, `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`, "MacInputSafetyPlan JSON board summary");
+      assertIncludes(payload.boardSummary, `MacManualUxStatus=${macManualUxStatusCommand}.`, "MacManualUxStatus JSON board summary");
       assertIncludes(payload.boardSummary, `MacInputSafety=${macInputSafetySummary}.`, "Mac input safety JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "MacHeartbeatOnce JSON board summary");
       assertIncludes(payload.boardSummary, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "MacHeartbeatWatch JSON board summary");
@@ -1749,6 +1767,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacRemoteAudioPlan=${macRemoteAudioPlanCommand}.`, "MacRemoteAudioPlan board summary");
       assertIncludes(result.stdout, `MacRemoteAudio=${macRemoteAudioSummary}.`, "Mac remote audio board summary");
       assertIncludes(result.stdout, `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`, "MacInputSafetyPlan board summary");
+      assertIncludes(result.stdout, `MacManualUxStatus=${macManualUxStatusCommand}.`, "MacManualUxStatus board summary");
       assertIncludes(result.stdout, `MacInputSafety=${macInputSafetySummary}.`, "Mac input safety board summary");
       assertIncludes(result.stdout, `MacHeartbeatOnce=${heartbeatOnceCommand}.`, "MacHeartbeatOnce board summary");
       assertIncludes(result.stdout, `MacHeartbeatWatch=${heartbeatWatchCommand}.`, "MacHeartbeatWatch board summary");
@@ -1785,6 +1804,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
       assertIncludes(result.stdout, `MacRemoteAudioPlan=${macRemoteAudioPlanCommand}`, "MacRemoteAudioPlan human output");
       assertIncludes(result.stdout, `MacRemoteAudio=${macRemoteAudioSummary}`, "Mac remote audio human output");
       assertIncludes(result.stdout, `MacInputSafetyPlan=${macInputSafetyPlanCommand}`, "MacInputSafetyPlan human output");
+      assertIncludes(result.stdout, `MacManualUxStatus=${macManualUxStatusCommand}`, "MacManualUxStatus human output");
       assertIncludes(result.stdout, `MacInputSafety=${macInputSafetySummary}`, "Mac input safety human output");
       assertIncludes(result.stdout, `MacHeartbeatOnce=${heartbeatOnceCommand}`, "MacHeartbeatOnce human output");
       assertIncludes(result.stdout, `MacHeartbeatWatch=${heartbeatWatchCommand}`, "MacHeartbeatWatch human output");

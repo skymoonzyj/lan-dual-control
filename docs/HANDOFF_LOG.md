@@ -17,6 +17,37 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 Windows resume 消费 Mac 手工体验状态入口
+开发端：Windows Codex
+本轮目标：让 Windows 开工第一屏能直接消费 Mac heartbeat/unattended/resume 发布的 `MacManualUxStatus=`，不再需要翻 Mac 端交接记录找手工体验状态入口。
+完成内容：
+- `check-windows-resume-status` 新增 `MacManualUxStatus=` 安全提取，JSON `board.macManualUxStatus`、普通输出和 `--boardSummary` 都会显示 `node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary`。
+- 提取器只接受只读 `node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary`，拒绝 `--password`、`--sendStatus`、`--sendMessage`、`--json` 或未知参数候选。
+- PowerShell wrapper help 同步加入稳定标签和命令说明。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/check-windows-resume-status.ps1`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node --check scripts/windows/check-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status.mjs`
+- `node --check scripts/windows/test-windows-resume-status-powershell.mjs`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- 这只是 Windows resume/status 的只读入口消费，不替代用户在场的真实手工体验验收。
+下一步建议：
+- 白天真实体验时优先跑 Windows/Mac 手工体验第一屏，再按连接、画面、声音、剪贴板、文件、小窗、全屏/原画和复制诊断逐项验收。
+是否改了协议：否。
+是否需要另一端配合：不强制；Mac 端只需继续在 heartbeat/unattended/resume 上保留 `MacManualUxStatus=`。
 ## 2026-06-20 Mac Codex
 
 日期：2026-06-20 Mac 手工体验 USER_AWAKE 显式 sendCall

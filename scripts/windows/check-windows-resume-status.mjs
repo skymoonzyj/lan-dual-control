@@ -67,6 +67,7 @@ MacClientFormalChecklist=,
 MacClientFormalSmoke=,
 MacRemoteAudioPlan=,
 MacInputSafetyPlan=,
+MacManualUxStatus=,
 MacHeartbeatOnce=, MacHeartbeatWatch=, WindowsReverseGrantStatus=, and
 WindowsOpenOneTimeReverseGrant= commands from
 Agent Link Board status/messages so Mac host safe foreground-start guidance
@@ -119,6 +120,9 @@ clipboard, input_ack, and diagnostics in that order.
   boundary; summary extraction accepts only status=plan-only, default=log,
   realInput=blocked-until-user-watching, required=--confirmUserWatching,
   eventSet=safe, and safety=no-password,no-input-events,no-inject.
+  It also includes MacManualUxStatus for the secret-free post-PASS manual UX
+  first-screen status path; command extraction accepts only the read-only
+  --boardSummary form.
 
 Options:
   --host <host>                 Explicit Mac host target. Default: ${defaults.host}
@@ -169,6 +173,7 @@ Examples:
   node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary
   node scripts/mac/plan-mac-remote-audio.mjs --boardSummary
   node scripts/mac/plan-mac-input-safety.mjs --boardSummary
+  node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --boardSummary
   node scripts/mac/check-mac-unattended-status.mjs --host 192.168.31.122 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/discover-lan-hosts.ps1 -NoLocalSubnets -HostName 192.168.31.122 -Port 43770 -RequireMacHost -BoardSummary
@@ -1513,6 +1518,32 @@ function parseMacInputSafetyPlanCommand(fragment) {
   return commandText;
 }
 
+function parseMacManualUxStatusCommand(fragment) {
+  const rawTokens = String(fragment || "").split(/\s+/).map(stripCommandToken).filter(Boolean);
+  if (rawTokens.length < 3) return null;
+  if (rawTokens[0] !== "node") return null;
+  if (rawTokens[1].replace(/\\/g, "/") !== "scripts/mac/check-mac-manual-ux-status.mjs") return null;
+
+  const tokens = [rawTokens[0], rawTokens[1]];
+  let hasBoardSummary = false;
+  for (let index = 2; index < rawTokens.length; index += 1) {
+    const token = rawTokens[index];
+    if (!token || /^[A-Za-z][A-Za-z0-9_-]*=/.test(token)) break;
+    if (!token.startsWith("--")) break;
+    if (/^--(?:password|token|secret|passwd|pwd)$/i.test(token)) return null;
+    if (token === "--boardSummary") {
+      hasBoardSummary = true;
+      tokens.push(token);
+      continue;
+    }
+    return null;
+  }
+
+  const commandText = tokens.join(" ");
+  if (tokens.length !== 3 || !hasBoardSummary || hasSecretLikeCommandValue(commandText)) return null;
+  return commandText;
+}
+
 const macInputSafetyAllowedSafety = new Set(["no-password", "no-input-events", "no-inject"]);
 
 function splitMacInputSafetySegments(text) {
@@ -2365,6 +2396,58 @@ function extractMacInputSafetyPlanFromBoardState(state) {
   };
 }
 
+function extractMacManualUxStatusFromText(text, source = "text") {
+  const value = String(text || "");
+  const labels = ["MacManualUxStatus"];
+  const commands = [];
+  let rejectedCount = 0;
+  for (const label of labels) {
+    const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`\\b${escapedLabel}\\s*=\\s*`, "gi");
+    let match;
+    while ((match = regex.exec(value)) !== null) {
+      const fragment = value.slice(match.index + match[0].length);
+      const commandText = parseMacManualUxStatusCommand(fragment);
+      if (!commandText) {
+        rejectedCount += 1;
+      } else if (!commands.includes(commandText)) {
+        commands.push(commandText);
+      }
+    }
+  }
+  if (commands.length === 0) return emptyMacSafeStart(source, value ? 1 : 0, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source,
+    textCount: value ? 1 : 0,
+    rejectedCount,
+  };
+}
+
+function extractMacManualUxStatusFromBoardState(state) {
+  const texts = collectStringValues(state);
+  const commands = [];
+  let rejectedCount = 0;
+  for (const text of texts) {
+    const extracted = extractMacManualUxStatusFromText(text, "api-state");
+    for (const commandText of extracted.commands) {
+      if (!commands.includes(commandText)) commands.push(commandText);
+    }
+    rejectedCount += extracted.rejectedCount;
+  }
+  if (commands.length === 0) return emptyMacSafeStart("api-state", texts.length, rejectedCount);
+  return {
+    found: true,
+    command: commands[commands.length - 1],
+    commands,
+    source: "api-state",
+    textCount: texts.length,
+    rejectedCount,
+  };
+}
+
 function extractMacFormalLocalSmokeFromText(text, source = "text") {
   const value = String(text || "");
   const labels = ["MacFormalLocalSmoke", "RerunFormalLocalSmoke"];
@@ -2946,6 +3029,7 @@ async function getBoardSnapshot(args) {
       macRemoteAudioPlan: emptyMacSafeStart("skipped"),
       macRemoteAudio: emptyMacRemoteAudio("skipped"),
       macInputSafetyPlan: emptyMacSafeStart("skipped"),
+      macManualUxStatus: emptyMacSafeStart("skipped"),
       macInputSafety: emptyMacInputSafety("skipped"),
       macHeartbeatOnce: emptyMacSafeStart("skipped"),
       macHeartbeatWatch: emptyMacSafeStart("skipped"),
@@ -2987,6 +3071,7 @@ async function getBoardSnapshot(args) {
       macRemoteAudioPlan: extractMacRemoteAudioPlanFromBoardState(stateResult.state),
       macRemoteAudio: extractMacRemoteAudioFromBoardState(stateResult.state),
       macInputSafetyPlan: extractMacInputSafetyPlanFromBoardState(stateResult.state),
+      macManualUxStatus: extractMacManualUxStatusFromBoardState(stateResult.state),
       macInputSafety: extractMacInputSafetyFromBoardState(stateResult.state),
       macHeartbeatOnce: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatOnce", "once"),
       macHeartbeatWatch: extractMacHeartbeatWatcherFromBoardState(stateResult.state, "MacHeartbeatWatch", "watch"),
@@ -3033,6 +3118,7 @@ async function getBoardSnapshot(args) {
     macRemoteAudioPlan: extractMacRemoteAudioPlanFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macRemoteAudio: extractMacRemoteAudioFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macInputSafetyPlan: extractMacInputSafetyPlanFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    macManualUxStatus: extractMacManualUxStatusFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macInputSafety: extractMacInputSafetyFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatOnce: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatOnce", "once", result.ok ? "codex-link-client" : "unavailable"),
     macHeartbeatWatch: extractMacHeartbeatWatcherFromText(output, "MacHeartbeatWatch", "watch", result.ok ? "codex-link-client" : "unavailable"),
@@ -3499,6 +3585,7 @@ function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
   ].join(" ");
   const macRemoteAudioPlanCommand = "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary";
   const macInputSafetyPlanCommand = "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
+  const macManualUxStatusCommand = "node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary";
   const macClientFormalSmokeCommand = [
     "node scripts/mac/run-mac-client-formal-smoke.mjs",
     "--discover",
@@ -3606,6 +3693,7 @@ function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
     macClientFormalSmokeCommand,
     macRemoteAudioPlanCommand,
     macInputSafetyPlanCommand,
+    macManualUxStatusCommand,
     macUnattendedStatusCommand,
     macUnattendedFormalStatusCommand,
     formalChecklistBoardSummary,
@@ -3931,6 +4019,7 @@ function makeBoardSummary(report) {
   const macClientFormalSmokeCommand = report.board.macClientFormalSmoke?.command || report.commands.macClientFormalSmokeCommand;
   const macRemoteAudioPlanCommand = report.board.macRemoteAudioPlan?.command || report.commands.macRemoteAudioPlanCommand;
   const macInputSafetyPlanCommand = report.board.macInputSafetyPlan?.command || report.commands.macInputSafetyPlanCommand;
+  const macManualUxStatusCommand = report.board.macManualUxStatus?.command || report.commands.macManualUxStatusCommand;
   const macHeartbeatOnceCommand = report.board.macHeartbeatOnce?.command || report.commands.macHeartbeatOnceCommand;
   const macHeartbeatWatchCommand = report.board.macHeartbeatWatch?.command || report.commands.macHeartbeatWatchCommand;
   const macHeartbeatStartCommand = report.board.macHeartbeatStart?.command || report.commands.macHeartbeatStartCommand;
@@ -3984,6 +4073,7 @@ function makeBoardSummary(report) {
       ? [`MacRemoteAudio=${report.board.macRemoteAudio.summary}.`]
       : []),
     `MacInputSafetyPlan=${macInputSafetyPlanCommand}.`,
+    `MacManualUxStatus=${macManualUxStatusCommand}.`,
     ...(report.board.macInputSafety?.found
       ? [`MacInputSafety=${report.board.macInputSafety.summary}.`]
       : []),
@@ -4306,6 +4396,9 @@ function printHuman(report) {
     if (report.board.macInputSafetyPlan?.command) {
       console.log(`  MacInputSafetyPlan=${report.board.macInputSafetyPlan.command}`);
     }
+    if (report.board.macManualUxStatus?.command) {
+      console.log(`  MacManualUxStatus=${report.board.macManualUxStatus.command}`);
+    }
     if (report.board.macInputSafety?.found) {
       console.log(`  MacInputSafety=${report.board.macInputSafety.summary}`);
     }
@@ -4393,6 +4486,7 @@ function printHuman(report) {
     console.log(`  MacRemoteAudio=${report.board.macRemoteAudio.summary}`);
   }
   console.log(`  MacInputSafetyPlan=${report.board.macInputSafetyPlan?.command || report.commands.macInputSafetyPlanCommand}`);
+  console.log(`  MacManualUxStatus=${report.board.macManualUxStatus?.command || report.commands.macManualUxStatusCommand}`);
   if (report.board.macInputSafety?.found) {
     console.log(`  MacInputSafety=${report.board.macInputSafety.summary}`);
   }

@@ -61,6 +61,7 @@ MacClientFormalChecklist=,
 MacClientFormalSmoke=,
 MacRemoteAudioPlan=,
 MacInputSafetyPlan=,
+MacManualUxStatus=,
 WindowsReverseGrantStatus=, WindowsOpenOneTimeReverseGrant=, WindowsSecureAuthPath=, WindowsFirewallStatus= and WindowsFirewallPreview= commands from Agent Link Board status/messages so Mac host safe foreground-start guidance,
 including 60Hz foreground-start guidance, local smoke next steps, Windows local reverse-control grant guidance, and onsite Windows host secure-auth restart guidance, is visible in JSON, human output, and
 one-line board summaries.
@@ -89,6 +90,8 @@ It also includes a Mac remote-only audio planning command:
 node scripts/mac/plan-mac-remote-audio.mjs --boardSummary
 It also includes a plan-only Mac input safety command:
 node scripts/mac/plan-mac-input-safety.mjs --boardSummary
+It also includes a secret-free Mac manual UX status command:
+node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary
 It also includes a Mac-side unattended/startup status command:
 node scripts/mac/check-mac-unattended-status.mjs --host <Mac IP> --port 43770 --boardSummary
 It also includes a formal 60Hz Mac-side unattended gate:
@@ -109,6 +112,7 @@ WindowsOpenOneTimeReverseGrantNodeFallback=node scripts/windows/allow-windows-re
 WindowsSecureAuthPath=node scripts/windows/start-windows-host.mjs --host 0.0.0.0 --port 43770 --promptPassword --requirePassword
 MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary
 MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary
+MacManualUxStatus=node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary
 WindowsFirewallStatus=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --json
 WindowsFirewallPreview=node scripts/windows/check-windows-firewall.mjs --host 0.0.0.0 --port 43770 --dryRunRule --ruleProfile Private
 If a secure-auth currentCall is active and the summary shows AgentCallAck=,
