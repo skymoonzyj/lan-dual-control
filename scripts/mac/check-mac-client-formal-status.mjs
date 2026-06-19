@@ -102,6 +102,11 @@ JSON output:
                                   It uses a temporary mock Windows host and
                                   does not use a real host, password, call, or
                                   inject.
+  runPlan.commands.macPowerPlanCommand
+                                  Secret-free Mac power settings dry-run
+                                  planner. It previews pmset changes and
+                                  follow-up checks without applying settings,
+                                  prompting, authenticating, or sending input.
   runPlan.commands.macScriptHelp
                                   Unified side-effect-free Mac script help
                                   self-check command.
@@ -785,6 +790,10 @@ function makeMacClientBrowserSelfTestCommand() {
   return "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
 }
 
+function makeMacPowerPlanCommand() {
+  return "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary";
+}
+
 function makeMacScriptHelpCommand() {
   return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
@@ -1078,6 +1087,7 @@ function makeRunPlan(report, args) {
       rerunFormalChecklist: makeChecklistCommand(args),
       macClientPromptPasswordSmoke: makePromptPasswordSmokeCommand(report, args),
       macClientBrowserSelfTest: makeMacClientBrowserSelfTestCommand(),
+      macPowerPlanCommand: makeMacPowerPlanCommand(),
       macScriptHelp: makeMacScriptHelpCommand(),
       browserSmoke: browserTestCommand,
       windowsReverseGrantStatus: makeWindowsReverseGrantCommand(report, args, "status"),
@@ -1176,6 +1186,7 @@ function makeBoardSummary(report) {
     `MacClientPromptPasswordSmoke=${report.runPlan?.commands?.macClientPromptPasswordSmoke || makePromptPasswordSmokeCommand(report, report.args || {})}.`,
     "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
     `MacClientBrowserSelfTest=${report.runPlan?.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
+    `MacPowerPlan=${report.runPlan?.commands?.macPowerPlanCommand || makeMacPowerPlanCommand()}.`,
     `MacScriptHelp=${report.runPlan?.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
     `ReverseGrantCopy=${report.runPlan?.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
     ...reverseGrantParts,
@@ -1362,6 +1373,9 @@ function printRunPlan(runPlan) {
   }
   if (runPlan.commands?.macClientPromptPasswordSmoke) {
     console.log(`- Mac client prompt-password smoke: ${runPlan.commands.macClientPromptPasswordSmoke}`);
+  }
+  if (runPlan.commands?.macPowerPlanCommand) {
+    console.log(`- Mac power settings dry-run plan: ${runPlan.commands.macPowerPlanCommand}`);
   }
   if (runPlan.commands?.macScriptHelp) {
     console.log(`- Mac script help safety check: ${runPlan.commands.macScriptHelp}`);
