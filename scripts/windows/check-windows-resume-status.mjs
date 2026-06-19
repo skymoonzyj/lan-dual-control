@@ -3691,7 +3691,7 @@ function makeManualUxAckText(macManualUx) {
   const checklist = String(macManualUx?.checklist || "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics");
   const target = String(macManualUx?.target || "unknown");
   return [
-    "WINDOWS_MANUAL_UX_ACK: Windows/User 确认可进入 5-10 分钟手工体验窗口；",
+    "MAC_MANUAL_UX_CONFIRMED: WINDOWS_MANUAL_UX_ACK: Windows/User 确认可进入 5-10 分钟手工体验窗口；",
     `Target=${target}；Checklist=${checklist}；`,
     "按连接/画面/声音/剪贴板/文件/窗口/全屏/原画/复制诊断验收；",
     "不请求密码，不发送 input/inject。",

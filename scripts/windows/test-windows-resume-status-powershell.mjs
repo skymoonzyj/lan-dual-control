@@ -1796,11 +1796,13 @@ async function checkSendManualUxAck(args) {
       assert(result.exitCode === 0, `PowerShell sendManualUxAck failed\n${output}`);
       const payload = JSON.parse(result.stdout);
       assert(payload.board?.macManualUxAck?.status === "ready", "PowerShell active MacManualUx should prepare Windows manual UX ack");
+      assertIncludes(payload.board.macManualUxAck.command, "MAC_MANUAL_UX_CONFIRMED", "PowerShell manual UX ack command");
       assertIncludes(payload.board.macManualUxAck.command, "WINDOWS_MANUAL_UX_ACK", "PowerShell manual UX ack command");
       assert(payload.sentManualUxAck?.requested === true, "PowerShell sendManualUxAck should be requested");
       assert(payload.sentManualUxAck?.ok === true, "PowerShell sendManualUxAck should pass");
       assert(board.messages.length === 1, `expected one PowerShell manual UX ack board message, got ${board.messages.length}`);
       assert(board.messages[0].from === "Windows Codex", "PowerShell ManualUxAck sender mismatch");
+      assertIncludes(board.messages[0].text, "MAC_MANUAL_UX_CONFIRMED", "PowerShell sent ManualUxAck");
       assertIncludes(board.messages[0].text, "WINDOWS_MANUAL_UX_ACK", "PowerShell sent ManualUxAck");
       assertIncludes(board.messages[0].text, "5-10 分钟", "PowerShell sent ManualUxAck");
       assertIncludes(board.messages[0].text, macManualUxChecklist, "PowerShell sent ManualUxAck");

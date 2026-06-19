@@ -323,13 +323,22 @@ function isActiveMacManualUxValidationBoardCall(call) {
 }
 
 function isManualUxConfirmationText(value) {
-  const source = compactText(value);
+  const source = normalizedText(value);
   if (!source) return false;
   if (isManualUxConfirmationReferenceText(source)) return false;
-  if (/\bMAC_MANUAL_UX_CONFIRMED\b|\bManualUxConfirmed\b/i.test(source)) return true;
+  if (/^(?:MAC_MANUAL_UX_CONFIRMED|ManualUxConfirmed)\b(?:\s*[:=\-]|\s|$)/i.test(source)) return true;
   const manualUx = /manual\s*ux|ManualUx|手工体验|真实体验|体验窗口|体验验收/i.test(source);
-  const confirmed = /confirmed|confirmation|ready\s+for|can\s+start|start\s+ManualUxTest|已确认|确认|可以开始|可开始|同意|准备开始/i.test(source);
-  return manualUx && confirmed;
+  const confirmedPrefix = /^(?:(?:Windows\s*\/\s*User|Windows\s+Codex|User|用户)\s*[:：,，;；-]?\s*)?(?:confirmed|confirmation|ready\s+for|can\s+start|start\s+ManualUxTest|已确认|确认|可以开始|可开始|同意|准备开始)\b/i.test(source);
+  return manualUx && confirmedPrefix;
+}
+
+function manualUxConfirmationTextCandidates(value) {
+  if (value == null) return [];
+  if (typeof value === "string") return [value];
+  if (typeof value !== "object") return [value];
+  return [value.text, value.note, value.message, value.body, value.summary, value.status]
+    .map((item) => normalizedText(item))
+    .filter(Boolean);
 }
 
 function isManualUxConfirmationReferenceText(value) {
@@ -359,14 +368,14 @@ function hasManualUxConfirmation(state, call) {
     for (const [device, status] of Object.entries(state.statuses)) {
       if (!isManualUxConfirmationSender(device)) continue;
       if (!happenedDuringCallWindow(status?.updatedAt, call)) continue;
-      if (isManualUxConfirmationText(status)) return true;
+      if (manualUxConfirmationTextCandidates(status).some((text) => isManualUxConfirmationText(text))) return true;
     }
   }
   if (Array.isArray(state?.recentEvents)) {
     for (const event of state.recentEvents) {
       if (!isManualUxConfirmationSender(event?.from)) continue;
       if (!happenedDuringCallWindow(event?.at, call)) continue;
-      if (isManualUxConfirmationText(event)) return true;
+      if (manualUxConfirmationTextCandidates(event).some((text) => isManualUxConfirmationText(text))) return true;
     }
   }
   return false;

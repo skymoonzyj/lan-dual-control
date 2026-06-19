@@ -19,11 +19,41 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Mac manual UX 确认防误触
+开发端：Windows Codex
+本轮目标：防止推送说明或文档说明里提到确认短标签时，被 Mac 状态脚本误认为 Windows/User 已确认手工体验窗口。
+完成内容：
+- `check-mac-manual-ux-status` 的 manual UX 确认识别改为只检查正文类字段，并要求固定确认短标签出现在正文开头。
+- 普通确认语仍可用，但必须以明确确认动作开头并包含手工体验语义；“准备推送/说明会包含某确认标签”不会触发 ready。
+- Windows 生成的 `MacManualUxAck=` / `--sendManualUxAck` 正文已经以 Mac 固定确认短标签开头，仍可被识别。
+修改文件：
+- `scripts/mac/check-mac-manual-ux-status.mjs`
+- `scripts/mac/test-mac-manual-ux-status.mjs`
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/04-task-board.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `node scripts/mac/test-mac-manual-ux-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- `node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- 真实手工体验仍需要用户在场时重新确认/重新发起，不要把推送预告当确认。
+下一步建议：
+- 继续按 `check-windows-resume-status --checkBoard --boardSummary` 的 `MacManualUx` / `MacManualUxAck` 状态判断是否进入真实体验。
+是否改了协议：否，收窄确认识别规则。
+是否需要另一端配合：Mac 端后续拉取本提交后即可使用新守卫。
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 手工体验确认回执闭环
 开发端：Windows Codex
 本轮目标：让 Windows resume 第一屏能安全回应 Mac manual UX validation call，并在 call 超时后阻止误确认。
 完成内容：
-- `check-windows-resume-status --checkBoard` 新增 `MacManualUxAck=`：active/near-timeout manual UX call 下输出无密 `WINDOWS_MANUAL_UX_ACK` 发送命令。
+- `check-windows-resume-status --checkBoard` 新增 `MacManualUxAck=`：active/near-timeout manual UX call 下输出带 `MAC_MANUAL_UX_CONFIRMED` / `WINDOWS_MANUAL_UX_ACK` 的无密发送命令。
 - 新增显式 `--sendManualUxAck --json` 和 PowerShell `-SendManualUxAck -Json`，只有 ack ready 时才向 Agent Link Board 发送同一条无密确认。
 - `ManualUxCall=timeout`、`Next=ReconfirmManualUxCall` 或 `manual-ux-call-timeout` 时 fail-closed，输出 `status=blocked reason=manual-ux-call-timeout next=AskMacReconfirmManualUxCall` 并拒绝发送。
 修改文件：
@@ -42,7 +72,7 @@
 遗留问题：
 - 当前真实通讯板上的 Mac manual UX call 已显示 timeout；需要 Mac 端重新发起/确认后，Windows/User 再发送确认并做真实手工体验。
 下一步建议：
-- 白天开工先跑 `check-windows-resume-status --checkBoard --boardSummary`；看到 `MacManualUxAck=status=blocked reason=manual-ux-call-timeout` 时先 call Mac 重新确认，看到 `MacManualUxAck=node scripts/codex-link-client.mjs ... WINDOWS_MANUAL_UX_ACK` 时再显式发送确认。
+- 白天开工先跑 `check-windows-resume-status --checkBoard --boardSummary`；看到 `MacManualUxAck=status=blocked reason=manual-ux-call-timeout` 时先 call Mac 重新确认，看到 `MacManualUxAck=node scripts/codex-link-client.mjs ... MAC_MANUAL_UX_CONFIRMED ... WINDOWS_MANUAL_UX_ACK` 时再显式发送确认。
 是否改了协议：否。
 是否需要另一端配合：需要 Mac 端在用户在场时重新确认或重新发起 manual UX call。
 ## 2026-06-20 Mac Codex

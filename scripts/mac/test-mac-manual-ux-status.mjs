@@ -450,6 +450,59 @@ function referencedConfirmationTagBoardState() {
   };
 }
 
+function descriptiveMacManualUxTagMentionBoardState() {
+  const state = macManualUxCallInProgressBoardState();
+  return {
+    ...state,
+    statuses: {
+      ...state.statuses,
+      "Windows Codex": {
+        status: "pushing-soon",
+        role: "Windows 端",
+        note: "准备推送：本轮仅对齐 Windows MacManualUxAck 确认文案，让确认消息同时携带 MAC_MANUAL_UX_CONFIRMED 与 WINDOWS_MANUAL_UX_ACK；这不是实际手工体验确认。",
+        updatedAt: new Date(Date.now() - 20 * 1000).toISOString(),
+      },
+    },
+    recentEvents: [
+      ...state.recentEvents,
+      {
+        at: new Date(Date.now() - 30 * 1000).toISOString(),
+        type: "message",
+        from: "Windows Codex",
+        text: "准备推送：这里只是说明确认短标签 MAC_MANUAL_UX_CONFIRMED 和 WINDOWS_MANUAL_UX_ACK 会写入 ack；这不是实际手工体验确认。",
+      },
+    ],
+  };
+}
+async function checkReferencedConfirmationTagDoesNotReadyCall(args) {
+  await withFakeBoard(referencedConfirmationTagBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `referenced confirmation tag JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "referenced confirmation tag JSON");
+    assert(payload.status === "calling", `referenced confirmation tag should remain calling, got ${payload.status}`);
+    assert(payload.signals?.manualUxConfirmed !== true, `referenced confirmation tag should not be accepted: ${JSON.stringify(payload.signals)}`);
+    assertIncludes(payload.boardSummary, "MacManualUx=status=calling", "referenced confirmation tag boardSummary");
+    assertIncludes(payload.boardSummary, "Next=WaitForManualUxConfirmation", "referenced confirmation tag boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `referenced confirmation tag read-only status should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "referenced confirmation tag JSON");
+  });
+  console.log("[OK] Mac manual UX status ignores explanatory confirmation-tag references");
+}
+
+async function checkDescriptiveManualUxTagMentionDoesNotConfirm(args) {
+  await withFakeBoard(descriptiveMacManualUxTagMentionBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `descriptive manual UX tag mention JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "descriptive manual UX tag mention JSON");
+    assert(payload.status === "calling", `descriptive tag mention should remain calling, got ${payload.status}`);
+    assert(payload.signals?.manualUxConfirmed !== true, `descriptive tag mention should not be accepted: ${JSON.stringify(payload.signals)}`);
+    assertIncludes(payload.boardSummary, "MacManualUx=status=calling", "descriptive manual UX tag mention boardSummary");
+    assertIncludes(payload.boardSummary, "Next=WaitForManualUxConfirmation", "descriptive manual UX tag mention boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `descriptive tag mention should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "descriptive manual UX tag mention JSON");
+  });
+  console.log("[OK] Mac manual UX status ignores descriptive confirmation tag mentions");
+}
 function staleConfirmedMacManualUxCallBoardState() {
   const state = macManualUxCallInProgressBoardState();
   return {
@@ -793,21 +846,6 @@ async function checkConfirmedManualUxCallIsReady(args) {
   console.log("[OK] Mac manual UX status treats a current call confirmation as ready");
 }
 
-async function checkReferencedConfirmationTagDoesNotReadyCall(args) {
-  await withFakeBoard(referencedConfirmationTagBoardState(), async (serverUrl, posts) => {
-    const result = await run(["--server", serverUrl, "--json"], args);
-    assert(result.exitCode === 0, `referenced confirmation tag JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
-    const payload = parseJson(result.stdout, "referenced confirmation tag JSON");
-    assert(payload.status === "calling", `referenced confirmation tag should remain calling, got ${payload.status}`);
-    assert(payload.signals?.manualUxConfirmed !== true, `referenced confirmation tag should not be accepted: ${JSON.stringify(payload.signals)}`);
-    assertIncludes(payload.boardSummary, "MacManualUx=status=calling", "referenced confirmation tag boardSummary");
-    assertIncludes(payload.boardSummary, "Next=WaitForManualUxConfirmation", "referenced confirmation tag boardSummary");
-    assert(posts.filter((post) => post.path === "/api/call").length === 0, `referenced confirmation tag read-only status should not post a call: ${JSON.stringify(posts)}`);
-    assertSecretSafe(JSON.stringify(payload), "referenced confirmation tag JSON");
-  });
-  console.log("[OK] Mac manual UX status ignores explanatory confirmation-tag references");
-}
-
 async function checkStaleManualUxConfirmationDoesNotReadyNewCall(args) {
   await withFakeBoard(staleConfirmedMacManualUxCallBoardState(), async (serverUrl, posts) => {
     const result = await run(["--server", serverUrl, "--json"], args);
@@ -994,6 +1032,7 @@ async function main() {
   await checkManualUxCallInProgressDoesNotOfferDuplicateCall(args);
   await checkConfirmedManualUxCallIsReady(args);
   await checkReferencedConfirmationTagDoesNotReadyCall(args);
+  await checkDescriptiveManualUxTagMentionDoesNotConfirm(args);
   await checkStaleManualUxConfirmationDoesNotReadyNewCall(args);
   await checkLateManualUxConfirmationDoesNotReadyExpiredCall(args);
   await checkExpiredCallRequiresReconfirmEvenWhenPreviouslyConfirmed(args);

@@ -2392,12 +2392,14 @@ async function checkSendManualUxAck(args) {
       assert(result.exitCode === 0, `mock sendManualUxAck failed\n${result.stdout}\n${result.stderr}`);
       const payload = JSON.parse(result.stdout);
       assert(payload.board?.macManualUxAck?.status === "ready", "active MacManualUx should prepare Windows manual UX ack");
+      assertIncludes(payload.board.macManualUxAck.command, "MAC_MANUAL_UX_CONFIRMED", "manual UX ack command");
       assertIncludes(payload.board.macManualUxAck.command, "WINDOWS_MANUAL_UX_ACK", "manual UX ack command");
       assertIncludes(payload.boardSummary, "MacManualUxAck=node scripts/codex-link-client.mjs", "manual UX ack board summary");
       assert(payload.sentManualUxAck?.requested === true, "sendManualUxAck should be requested");
       assert(payload.sentManualUxAck?.ok === true, "sendManualUxAck should pass");
       assert(board.messages.length === 1, `expected one manual UX ack board message, got ${board.messages.length}`);
       assert(board.messages[0].from === "Windows Codex", "ManualUxAck message should use Windows Codex sender");
+      assertIncludes(board.messages[0].text, "MAC_MANUAL_UX_CONFIRMED", "sent ManualUxAck");
       assertIncludes(board.messages[0].text, "WINDOWS_MANUAL_UX_ACK", "sent ManualUxAck");
       assertIncludes(board.messages[0].text, "5-10 分钟", "sent ManualUxAck");
       assertIncludes(board.messages[0].text, macManualUxChecklist, "sent ManualUxAck");
