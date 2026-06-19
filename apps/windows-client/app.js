@@ -3331,9 +3331,29 @@ function hasMacPositiveEvidenceSegment(text, keywordPattern, successPattern) {
   );
 }
 
+function isCleanLatestMacHeartbeatEvidence(text, now = Date.now()) {
+  const segment = selectLatestMacHeartbeatSegment(text);
+  if (!segment) return false;
+  const freshness = parseMacHeartbeatFreshness(segment, now);
+  const riskText = segment.replace(/\bstale metadata only\b/gi, "");
+  return (
+    freshness.present &&
+    freshness.checkedAgeMs !== null &&
+    !freshness.stale &&
+    /\bMacHeartbeat\s*=\s*(?:status\s*=\s*)?ok\b/i.test(segment) &&
+    !/\b(?:failed|blocked|cancelled|timeout|timed out|unreachable|offline|partial)\b|失败|阻塞|离线|不可达|未通过|不通过/i.test(riskText) &&
+    !/\bstatus\s*=\s*(?:warning|blocked|failed)\b/i.test(riskText) &&
+    !/\bwarnings?\s*[:=]\s*(?!none\b)[^;\s]+/i.test(segment) &&
+    !/\bblockers?\s*[:=]\s*(?!none\b)[^;\s]+/i.test(segment)
+  );
+}
+
 function parseMacPositiveEvidenceLabels(text) {
   const source = String(text || "");
   const labels = [];
+  if (isCleanLatestMacHeartbeatEvidence(source)) {
+    labels.push("Mac 心跳正常");
+  }
   if (
     hasMacPositiveEvidenceSegment(
       source,
@@ -3461,7 +3481,8 @@ function parseMacUnattendedAttention(text) {
   if (heartbeatFreshness.stale) {
     risks.unshift("mac-heartbeat-summary-stale");
   }
-  if (/\b(MacHeartbeat|heartbeat)\b.*\b(stale|missing|expired|timeout|timed out|lost|failed|unreachable)\b/i.test(source)) {
+  const macHeartbeatRiskSource = source.replace(/\bstale metadata only\b/gi, "");
+  if (/\b(MacHeartbeat|heartbeat)\b.*\b(stale|missing|expired|timeout|timed out|lost|failed|unreachable)\b/i.test(macHeartbeatRiskSource)) {
     risks.unshift("mac-heartbeat-stale");
   }
   if (/\b(MacWatchdog|watchdog)\b.*\b(stale|missing|expired|timeout|timed out|lost|failed|unreachable)\b/i.test(source)) {

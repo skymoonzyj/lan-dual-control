@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端把新鲜、干净的 MacHeartbeat ok 显示为值守证据，并避免 `stale metadata only` 误判成心跳过期。
+完成内容：
+- 新增 `isCleanLatestMacHeartbeatEvidence`：只把最新 `MacHeartbeat=status=ok`、未过期 `checkedAt`、`blockers=none`、`warnings=none` 且无 blocked/warning/failed 的 heartbeat 显示为“Mac 心跳正常”。
+- `parseMacPositiveEvidenceLabels` 会把该证据并入 Mac 提醒区和复制/导出诊断的“证据 / 值守证据”。
+- 心跳风险扫描会过滤 `stale metadata only`，因此 `runtimeBuild=... stale metadata only, hostRuntimeChanges=0` 不再触发“Mac 心跳过期，可能卡住”；真正的 `MacHeartbeat=stale heartbeat missing` 仍会保留风险。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败在新鲜 ok heartbeat 被误判为“Mac 心跳过期”且缺少 `Mac 心跳正常` 证据。
+- 绿灯：实现后，`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：
+- 本轮只消费既有 Mac heartbeat 摘要，不启动或复查 Mac heartbeat watcher。
+下一步建议：
+- 后续看到最新 Mac heartbeat 为 `status=ok blockers=none warnings=none` 时，可先把它作为值守健康证据；若同段另有非空 warning/blocker、stale、host 不可达或 Codex 重连信号，再按风险摘要处理。
+是否改了协议：否；只改 Windows 控制端本地解析、显示和诊断。
+是否需要另一端配合：不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端把 MacFormalE2E ready/readyToCall 正向结果显示为证据，而不是风险。
 完成内容：
 - `parseMacPositiveEvidenceLabels` 新增 `MacFormalE2E` 正向结果识别：`status=ok`、`readyToCall=true`、`ready=true`、`checklist=passed/ok` 或“通过”且同段无 warning/blocker/failed/stale 时，显示“Mac formal E2E 已就绪”。

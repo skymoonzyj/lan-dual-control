@@ -1699,6 +1699,33 @@ async function verifyDesktopOnlyHostPanel(session) {
               message: "Mac alert watcher is running.",
             }, { available: true, busy: false })
           : {};
+      const positiveMacHeartbeatText = [
+        "MacHeartbeat=status=ok; checkedAt=" + new Date(Date.now() - 30000).toISOString(),
+        "device=Mac; codex=ok status=idle updatedAt=2026-06-19T03:09:35.367Z ageMs=30000",
+        "macHost=online 127.0.0.1:43770 build=ed937a2 inputMode=log runtimeBuild=ed937a2 stale metadata only, hostRuntimeChanges=0",
+        "macClient=online http://127.0.0.1:5188/; board=ok; blockers=none warnings=none reason=ok",
+      ].join("; ");
+      const positiveMacHeartbeatAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(positiveMacHeartbeatText)
+          : null;
+      const positiveMacHeartbeatView =
+        typeof macAlertWatcherUiState === "function"
+          ? macAlertWatcherUiState({
+              ok: true,
+              action: "status",
+              running: true,
+              processIds: [2468],
+              server: "http://192.168.31.68:17888",
+              lastAlert: {
+                at: "2026-06-19 11:15:00",
+                title: "Mac heartbeat evidence",
+                message: positiveMacHeartbeatText,
+                summary: positiveMacHeartbeatText,
+              },
+              message: "Mac alert watcher is running.",
+            }, { available: true, busy: false })
+          : {};
       const cleanMacClientPageCommandAttention =
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
@@ -2168,6 +2195,15 @@ async function verifyDesktopOnlyHostPanel(session) {
           positiveMacFormalE2eView.statusText.includes("证据：") &&
           positiveMacFormalE2eView.statusText.includes("Mac formal E2E 已就绪") &&
           !positiveMacFormalE2eView.statusText.includes("风险：") &&
+          positiveMacHeartbeatAttention?.summary === "" &&
+          Array.isArray(positiveMacHeartbeatAttention?.labels) &&
+          positiveMacHeartbeatAttention.labels.length === 0 &&
+          positiveMacHeartbeatAttention?.evidenceSummary.includes("Mac 心跳正常") &&
+          Array.isArray(positiveMacHeartbeatAttention?.evidenceLabels) &&
+          positiveMacHeartbeatAttention.evidenceLabels.length === 1 &&
+          positiveMacHeartbeatView.statusText.includes("证据：") &&
+          positiveMacHeartbeatView.statusText.includes("Mac 心跳正常") &&
+          !positiveMacHeartbeatView.statusText.includes("风险：") &&
           cleanMacClientPageCommandAttention?.summary === "" &&
           Array.isArray(cleanMacClientPageCommandAttention?.labels) &&
           cleanMacClientPageCommandAttention.labels.length === 0 &&
@@ -2252,6 +2288,8 @@ async function verifyDesktopOnlyHostPanel(session) {
         positiveMacValidationView,
         positiveMacFormalE2eAttention,
         positiveMacFormalE2eView,
+        positiveMacHeartbeatAttention,
+        positiveMacHeartbeatView,
         cleanMacClientPageCommandAttention,
         cleanMacClientDiagnosticsCommandAttention,
         cleanMacClientBrowserSelfTestAttention,
