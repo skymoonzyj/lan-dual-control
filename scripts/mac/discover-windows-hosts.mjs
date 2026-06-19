@@ -82,6 +82,9 @@ Machine-readable JSON fields:
                            runs --help/-h paths and does not start services,
                            read Agent Link Board, prompt, auth, input, or
                            inject.
+  macPowerPlanCommand      Secret-free dry-run Mac power plan command for
+                           keeping formal testing awake. It does not apply
+                           system settings.
   windowsReverseGrantStatus
                            Secret-free Windows-side PowerShell status command
                            for the local one-time reverse-control grant.
@@ -305,6 +308,10 @@ function macScriptHelpCommand() {
   return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
 
+function macPowerPlanCommand() {
+  return "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary";
+}
+
 function sendCallCommand(item) {
   return `node scripts/mac/check-mac-client-formal-status.mjs --host ${item.host} --port ${item.port} --sendCall`;
 }
@@ -375,6 +382,7 @@ function buildReport(scan, args, windowsLanRisk = emptyWindowsLanRisk(false)) {
     macClientPromptPasswordSmokeCommand: best ? macClientPromptPasswordSmokeCommand(args, best) : macClientPromptPasswordSmokeCommand(args, null),
     macClientBrowserSelfTestCommand: macClientBrowserSelfTestCommand(),
     macScriptHelpCommand: macScriptHelpCommand(),
+    macPowerPlanCommand: macPowerPlanCommand(),
     manualChecklistSummary,
     sendCallCommand: best ? sendCallCommand(best) : "",
     windowsReverseGrantStatus: best ? windowsReverseGrantPowerShellCommand(best, "status") : "",
@@ -393,12 +401,12 @@ function makeBoardSummary(report) {
   const risk = formatWindowsLanRisk(report.windowsLanRisk);
   const riskSummary = risk ? ` ${risk}.` : "";
   if (report.best) {
-    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}.${riskSummary} FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. MacClientFormalSmoke=${report.macClientFormalSmokeCommand}. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. WindowsReverseGrantStatus=${report.windowsReverseGrantStatus}. WindowsOpenOneTimeReverseGrant=${report.windowsOpenOneTimeReverseGrant}. WindowsReverseGrantStatusNodeFallback=${report.windowsReverseGrantStatusNodeFallback}. WindowsOpenOneTimeReverseGrantNodeFallback=${report.windowsOpenOneTimeReverseGrantNodeFallback}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}.${riskSummary} FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. MacClientFormalSmoke=${report.macClientFormalSmokeCommand}. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. MacPowerPlan=${report.macPowerPlanCommand}. WindowsReverseGrantStatus=${report.windowsReverseGrantStatus}. WindowsOpenOneTimeReverseGrant=${report.windowsOpenOneTimeReverseGrant}. WindowsReverseGrantStatusNodeFallback=${report.windowsReverseGrantStatusNodeFallback}. WindowsOpenOneTimeReverseGrantNodeFallback=${report.windowsOpenOneTimeReverseGrantNodeFallback}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
   }
   const ignored = report.ignored.length > 0
     ? ` Saw ${report.ignored.length} non-Windows host(s), likely Mac/self.`
     : "";
-  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored}${riskSummary} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored}${riskSummary} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. MacPowerPlan=${report.macPowerPlanCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
 }
 
 function printText(report, args) {
@@ -416,6 +424,7 @@ function printText(report, args) {
     console.log(`[INFO] Manual checklist: ${report.manualChecklistSummary}`);
     console.log(`[INFO] Mac client browser self-test: ${report.macClientBrowserSelfTestCommand}`);
     console.log(`[INFO] Mac script help safety check: ${report.macScriptHelpCommand}`);
+    console.log(`[INFO] Mac power settings dry-run plan: ${report.macPowerPlanCommand}`);
     console.log(`[INFO] Windows reverse grant status: ${report.windowsReverseGrantStatus}`);
     console.log(`[INFO] Windows one-time reverse grant: ${report.windowsOpenOneTimeReverseGrant}`);
     console.log(`[INFO] Windows reverse grant status (Node fallback): ${report.windowsReverseGrantStatusNodeFallback}`);
@@ -437,6 +446,7 @@ function printText(report, args) {
     console.log(`[INFO] Mac client prompt-password smoke: ${report.macClientPromptPasswordSmokeCommand}`);
     console.log(`[INFO] Mac client browser self-test: ${report.macClientBrowserSelfTestCommand}`);
     console.log(`[INFO] Mac script help safety check: ${report.macScriptHelpCommand}`);
+    console.log(`[INFO] Mac power settings dry-run plan: ${report.macPowerPlanCommand}`);
   }
   if (args.verbose && Array.isArray(report.subnets)) {
     for (const subnet of report.subnets) {
