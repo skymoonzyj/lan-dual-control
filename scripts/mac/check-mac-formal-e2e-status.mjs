@@ -127,6 +127,14 @@ JSON output:
                             extracted from recent Agent Link Board lines. This
                             never changes blockers/warnings and never echoes
                             raw board text.
+  macPowerHealth
+                            Optional sanitized MacPowerHealth summary reused
+                            from check-mac-resume-status Agent Link Board parsing.
+  macUnattendedFreshness
+                            Optional sanitized MacUnattendedFreshness summary
+                            reused from check-mac-resume-status. Stale means the
+                            independent unattended/power evidence should be
+                            refreshed; it does not make this checklist fail.
   suggestedAction
                             Optional structured next action. When runtime Mac
                             host sources changed after the running host build,
@@ -610,6 +618,28 @@ function makeMacPowerHealthSentence(health) {
   return `Mac power health: status=${health.status || "unknown"} reason=${health.reason || "unknown"} warnings=${health.warnings || "unknown"}.`;
 }
 
+function formatMacUnattendedFreshnessSummary(freshness) {
+  if (!freshness) return "";
+  return [
+    `MacUnattendedFreshness=${freshness.status || "unknown"}`,
+    `checkedAgeMs=${Number.isFinite(freshness.checkedAgeMs) ? freshness.checkedAgeMs : "unknown"}`,
+    `thresholdMs=${freshness.thresholdMs ?? "unknown"}`,
+    `checkedAt=${freshness.checkedAt || "unknown"}`,
+    `source=${freshness.source || "unknown"}`,
+  ].join(" ");
+}
+
+function makeMacUnattendedFreshnessSentence(freshness) {
+  if (!freshness) return "";
+  return [
+    `Mac unattended freshness: status=${freshness.status || "unknown"}`,
+    `checkedAgeMs=${Number.isFinite(freshness.checkedAgeMs) ? freshness.checkedAgeMs : "unknown"}`,
+    `thresholdMs=${freshness.thresholdMs ?? "unknown"}`,
+    `checkedAt=${freshness.checkedAt || "unknown"}`,
+    `source=${freshness.source || "unknown"}.`,
+  ].join(" ");
+}
+
 function summarizeChecklistIds(checklist, status) {
   const ids = [...new Set((checklist || [])
     .filter((entry) => entry.status === status)
@@ -656,6 +686,7 @@ function makeCallText(report) {
   const findings = formatChecklistFindings(report.checklist);
   const evidenceText = makeEvidenceSentence(report.evidence);
   const powerText = makeMacPowerHealthSentence(report.macPowerHealth);
+  const freshnessText = makeMacUnattendedFreshnessSentence(report.macUnattendedFreshness);
   const readinessText = report.readyToCall
     ? report.counts.warnings > 0 ? "ready with warnings" : "ready"
     : "needs attention";
@@ -672,6 +703,7 @@ function makeCallText(report) {
       `If targeting formal 60Hz, dry-run max-FPS planning first with: ${report.commands?.macMaxFpsPlanCommand || "install-mac-host-launch-agent --maxScreenFps 60 --boardSummary"}.`,
       ...(evidenceText ? [evidenceText] : []),
       ...(powerText ? [powerText] : []),
+      ...(freshnessText ? [freshnessText] : []),
       `If MacPowerHealth warns, review the dry-run power settings plan with: ${report.commands?.macPowerPlanCommand || makeMacPowerPlanCommand()}.`,
       `Before calling Windows for formal 60Hz, run the read-only unattended gate with: ${report.commands?.macUnattendedFormalCommand || "check-mac-unattended-status --requireLaunchAgentMaxFps --boardSummary"}.`,
       `When the host is online, run low-risk host readiness with: ${report.commands?.macHostReadinessCommand || "check-mac-host-readiness --checkBoard --boardSummary"}.`,
@@ -688,6 +720,7 @@ function makeCallText(report) {
     `Checklist ${findings}.`,
     ...(evidenceText ? [evidenceText] : []),
     ...(powerText ? [powerText] : []),
+    ...(freshnessText ? [freshnessText] : []),
     `For foreground formal 60Hz, use: ${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
     `For LaunchAgent transition, stop the current Mac host with: ${report.commands?.macHostStopCommand || makeMacHostStopCommand(report.args?.host, report.args?.port)}.`,
     `Then manually load the LaunchAgent with: ${report.commands?.macLaunchAgentLoadCommand || makeMacLaunchAgentLoadCommand()}.`,
@@ -715,6 +748,8 @@ function makeBoardSummary(report) {
   const evidenceLine = evidenceTags === "none" ? "" : `Evidence=${evidenceTags}.`;
   const macPowerHealthSummary = formatMacPowerHealthSummary(report.macPowerHealth);
   const macPowerHealthLine = macPowerHealthSummary ? `${macPowerHealthSummary}.` : "";
+  const macUnattendedFreshnessSummary = formatMacUnattendedFreshnessSummary(report.macUnattendedFreshness);
+  const macUnattendedFreshnessLine = macUnattendedFreshnessSummary ? `${macUnattendedFreshnessSummary}.` : "";
   const suggestedAction = report.suggestedAction?.boardSummary ? `${report.suggestedAction.boardSummary}.` : "";
   if (!host.online) {
     return [
@@ -722,6 +757,7 @@ function makeBoardSummary(report) {
       `Mac host offline at ${host.probe?.host || report.args.host}:${host.probe?.port || report.args.port}.`,
       ...(evidenceLine ? [evidenceLine] : []),
       ...(macPowerHealthLine ? [macPowerHealthLine] : []),
+      ...(macUnattendedFreshnessLine ? [macUnattendedFreshnessLine] : []),
       `MacHostSafeStart=${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}.`,
       `MacMaxFpsSafeStart=${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
       `MacHostStop=${report.commands?.macHostStopCommand || makeMacHostStopCommand(report.args?.host, report.args?.port)}.`,
@@ -745,6 +781,7 @@ function makeBoardSummary(report) {
     `Permissions screen=${statusValue(host.permissions?.screenRecording)} accessibility=${statusValue(host.permissions?.accessibility)} inputMonitoring=${statusValue(host.permissions?.inputMonitoring)}; h264=${statusValue(host.capabilities?.h264Stream)}; pipeline=${host.capabilities?.capturePipeline || "unknown"}; audio=${host.capabilities?.audioMode || statusValue(host.capabilities?.audio)}; ${formatBuildDiff(host.buildDiff)}.`,
     ...(evidenceLine ? [evidenceLine] : []),
     ...(macPowerHealthLine ? [macPowerHealthLine] : []),
+    ...(macUnattendedFreshnessLine ? [macUnattendedFreshnessLine] : []),
     ...(suggestedAction ? [suggestedAction] : []),
     `MacHostSafeStart=${report.commands?.macHostSafeStartCommand || makeSafeStartCommand(report.args || {})}.`,
     `MacMaxFpsSafeStart=${report.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(report.args || {})}.`,
@@ -1229,6 +1266,7 @@ function buildReport(args) {
   const counts = summarizeCounts(checklist);
   const evidence = collectBoardValidationEvidence(resume, args);
   const macPowerHealth = resume?.board?.macPowerHealth || null;
+  const macUnattendedFreshness = resume?.board?.macUnattendedFreshness || null;
   const boardReady = !args.skipBoard && resume.board?.checked === true && resume.board?.ok === true;
   const readyToCall = counts.blockers === 0 && boardReady;
   const report = {
@@ -1249,6 +1287,7 @@ function buildReport(args) {
     checklist,
     evidence,
     macPowerHealth,
+    macUnattendedFreshness,
     resume,
   };
   report.commands = makeCommands(report);

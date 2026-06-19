@@ -217,6 +217,26 @@ function assertMacPowerHealth(payload, expected, label) {
   assert(payload.resume?.board?.macPowerHealth?.status === expected.status, `${label} should preserve resume board MacPowerHealth status`);
 }
 
+function assertMacUnattendedFreshness(payload, expected, label) {
+  const freshness = payload.macUnattendedFreshness;
+  assert(freshness?.status === expected.status, `${label} should expose MacUnattendedFreshness status`);
+  assert(freshness?.checkedAt === expected.checkedAt, `${label} should expose MacUnattendedFreshness checkedAt`);
+  assert(freshness?.thresholdMs === expected.thresholdMs, `${label} should expose MacUnattendedFreshness thresholdMs`);
+  assert(freshness?.source === expected.source, `${label} should expose MacUnattendedFreshness source`);
+  assert(Number.isFinite(freshness?.checkedAgeMs), `${label} should expose numeric MacUnattendedFreshness checkedAgeMs`);
+  if (expected.status === "stale") {
+    assert(freshness.checkedAgeMs >= expected.thresholdMs, `${label} stale MacUnattendedFreshness should be older than threshold`);
+  }
+  if (expected.status === "fresh") {
+    assert(freshness.checkedAgeMs < expected.thresholdMs, `${label} fresh MacUnattendedFreshness should be newer than threshold`);
+  }
+  const resumeFreshness = payload.resume?.board?.macUnattendedFreshness;
+  assert(resumeFreshness?.status === expected.status, `${label} should preserve resume board MacUnattendedFreshness status`);
+  assert(resumeFreshness?.checkedAt === expected.checkedAt, `${label} should preserve resume board MacUnattendedFreshness checkedAt`);
+  assert(resumeFreshness?.thresholdMs === expected.thresholdMs, `${label} should preserve resume board MacUnattendedFreshness thresholdMs`);
+  assert(resumeFreshness?.source === expected.source, `${label} should preserve resume board MacUnattendedFreshness source`);
+}
+
 function assertMacHostSafeStartCommand(command, label, expectedPort = null) {
   const text = String(command || "");
   assert(/node scripts\/mac\/start-mac-host\.mjs/.test(text), `${label} should use start-mac-host`);
@@ -628,6 +648,7 @@ function checkHelp(args) {
     assert(/commands\.macUnattendedFormalCommand/.test(result.stdout), `${script} ${flag} should document Mac unattended formal gate command output`);
     assert(/commands\.macClientBrowserSelfTestCommand/.test(result.stdout), `${script} ${flag} should document Mac client browser self-test command output`);
     assert(/commands\.macScriptHelpCommand/.test(result.stdout), `${script} ${flag} should document Mac script help safety command output`);
+    assert(/macUnattendedFreshness/.test(result.stdout), `${script} ${flag} should document Mac unattended freshness output`);
     assert(/\bevidence\b/.test(result.stdout), `${script} ${flag} should document normalized validation evidence output`);
     assert(/--promptPassword/.test(result.stdout), `${script} ${flag} should document local password prompt for media readiness command`);
     assert(!/Mac host probe password/.test(result.stdout), `${script} ${flag} should not prompt for password`);
@@ -1266,13 +1287,25 @@ async function checkBoardMacPowerHealth(args) {
         warnings: "system-sleep-enabled,display-sleep-enabled",
         checkedAt: "2026-06-19T07:23:38.703Z",
       }, "Mac power formal E2E status");
+      assertMacUnattendedFreshness(payload, {
+        status: "stale",
+        checkedAt: "2026-06-19T07:23:38.703Z",
+        thresholdMs: 600000,
+        source: "MacUnattendedHealth",
+      }, "Mac power formal E2E status");
       assert(/MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z/.test(payload.boardSummary || ""), "Mac power formal boardSummary should expose MacPowerHealth");
+      assert(/MacUnattendedFreshness=stale/.test(payload.boardSummary || ""), "Mac power formal boardSummary should expose MacUnattendedFreshness status");
+      assert(/thresholdMs=600000/.test(payload.boardSummary || ""), "Mac power formal boardSummary should expose MacUnattendedFreshness threshold");
+      assert(/checkedAt=2026-06-19T07:23:38.703Z/.test(payload.boardSummary || ""), "Mac power formal boardSummary should expose MacUnattendedFreshness checkedAt");
+      assert(/source=MacUnattendedHealth/.test(payload.boardSummary || ""), "Mac power formal boardSummary should expose MacUnattendedFreshness source");
       assert(/MacPowerPlan=node scripts\/mac\/plan-mac-power-settings\.mjs/.test(payload.boardSummary || ""), "Mac power formal boardSummary should expose MacPowerPlan");
       assert(/Mac power health: status=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled/.test(payload.callText || ""), "Mac power formal callText should summarize MacPowerHealth");
+      assert(/Mac unattended freshness: status=stale/.test(payload.callText || ""), "Mac power formal callText should summarize MacUnattendedFreshness");
+      assert(/source=MacUnattendedHealth/.test(payload.callText || ""), "Mac power formal callText should include MacUnattendedFreshness source");
       assert(/Mac power plan: node scripts\/mac\/plan-mac-power-settings\.mjs/.test(payload.callText || ""), "Mac power formal callText should include MacPowerPlan");
       assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand, "Mac power formal E2E planner command");
       assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "Mac power formal E2E status");
-      print("OK", "Formal E2E status surfaces Agent Link Board MacPowerHealth safely");
+      print("OK", "Formal E2E status surfaces Agent Link Board MacPowerHealth and MacUnattendedFreshness safely");
     }, {
       statuses: {
         "Mac Unattended": {
@@ -1301,8 +1334,11 @@ async function checkBoardMacPowerHealth(args) {
       const payload = parseJson(result.stdout, "risky Mac power formal E2E status");
       assert(result.status === 0, `risky Mac power formal status should exit 0:\n${result.stdout}\n${result.stderr}`);
       assert(!payload.macPowerHealth, "risky MacPowerHealth should not be promoted");
+      assert(!payload.macUnattendedFreshness, "risky MacUnattendedFreshness should not be promoted without safe health evidence");
       assert(!payload.resume?.board?.macPowerHealth, "risky resume board MacPowerHealth should not be promoted");
+      assert(!payload.resume?.board?.macUnattendedFreshness, "risky resume board MacUnattendedFreshness should not be promoted without safe health evidence");
       assert(!/MacPowerHealth=/.test(payload.boardSummary || ""), "risky Mac power formal boardSummary should not expose MacPowerHealth");
+      assert(!/MacUnattendedFreshness=/.test(payload.boardSummary || ""), "risky Mac power formal boardSummary should not expose MacUnattendedFreshness");
       assert(!/fake-formal-power-token/.test(`${result.stdout}\n${result.stderr}`), "risky Mac power formal output should not leak fake token");
       assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "risky Mac power formal E2E status");
     }, {

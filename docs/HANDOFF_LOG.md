@@ -21,6 +21,32 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 `MacFormalE2E=` 第一屏也说明当前 `Mac Unattended` / `MacPowerHealth` 证据是否新鲜。
+完成内容：
+- `check-mac-formal-e2e-status --json/--boardSummary` 新增 JSON 顶层 `macUnattendedFreshness`，并在 `--boardSummary` / `callText` 转述 `MacUnattendedFreshness=fresh|stale checkedAgeMs=<毫秒> thresholdMs=600000 checkedAt=<时间> source=MacUnattendedHealth|MacPowerHealth`。
+- 新字段只复用 `check-mac-resume-status` 已安全提取的 `board.macUnattendedFreshness`，不在 formal 脚本里重新解析长通讯板文本；`stale` 只提示先刷新独立值守/电源证据，不改变 `readyToCall` 或 blocker 判定。
+- 本轮只补只读 freshness 字段，不运行 `pmset`、不提权、不改系统、不写 plist、不加载 `launchctl`、不认证、不请求或发送密码、不发 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 12000` 先失败在 help 缺 `macUnattendedFreshness`。
+- 绿灯：实现后同一专项回归通过，并覆盖 JSON、boardSummary、callText、stale 判断和敏感文本不提升。
+遗留问题：
+- 真实 `MacPowerHealth` / `MacUnattendedHealth` 仍显示系统/显示器睡眠和 LaunchAgent 未加载风险；需要用户现场确认后人工执行 `pmset` / `launchctl` 再刷新证据。
+下一步建议：
+- 如果 `MacFormalE2E=` 看到 `MacUnattendedFreshness=stale`，先运行同屏或 heartbeat/resume 里的 `MacUnattendedSendStatus=` 刷新独立值守证据，再判断是否进入电源或 LaunchAgent 处理。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 `MacResumeStatus=` 第一屏也说明当前 `Mac Unattended` / `MacPowerHealth` 证据是否新鲜。
 完成内容：
 - `check-mac-resume-status --checkBoard --json/--boardSummary` 新增 JSON `board.macUnattendedFreshness` 和摘要 `MacUnattendedFreshness=fresh|stale checkedAgeMs=<毫秒> thresholdMs=600000 checkedAt=<时间> source=MacUnattendedHealth|MacPowerHealth`。
