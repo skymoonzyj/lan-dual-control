@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac unattended/status 的稳定健康字段可以显式上板，方便 Windows watcher/resume/status 消费。
+完成内容：
+- `check-mac-unattended-status` 新增 `--sendStatus`、`--server`、`--device`、`--role`，默认仍只读不上板；只有显式 `--sendStatus` 才会调用 Agent Link Board。
+- 上板设备默认为独立的 `Mac Unattended` / `Mac 值守`，状态按 `macUnattendedHealth.status` 映射为 `online|warning|blocked`，避免刷新或伪装 `Mac Codex` 本人的在线状态。
+- JSON 输出在 `--sendStatus` 时新增 `postStatus`，记录上板状态、退出码和经过截断/脱敏的输出；发板环境强制清空 `LAN_DUAL_PASSWORD`。
+- 真实上板已确认当前 Mac 值守为 `warning`：`MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power`。
+修改文件：
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：接入 `checkSendStatus` 后，`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 12000` 失败在帮助文档缺少 `--sendStatus`。
+- 绿灯：实现后同一回归通过，覆盖 fake Agent Link Board 调用、默认设备 `Mac Unattended`、`--status warning`、`MacUnattendedHealth=warning` 和不覆盖 `Mac Codex`。
+- 真实上板：`node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --sendStatus --boardSummary` 成功，通讯板出现 `Mac Unattended: warning`。
+遗留问题：
+- 本轮只增加显式状态上板能力，不加载 LaunchAgent、不改 pmset、不切 inputMode、不认证、不请求或发送密码、不发 input/inject。
+下一步建议：
+- Windows 端可后续消费当前状态列表里的 `Mac Unattended` / `MacUnattendedHealth=`；真实无人值守承诺仍需 Mac 端现场加载 LaunchAgent 并复查电源/息屏策略。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac unattended/status 输出稳定健康字段，便于后续值守和 Windows 侧消费。
 完成内容：
 - `check-mac-unattended-status --json` 现在输出 JSON `macUnattendedHealth`，基于当前 findings 派生 `ok|warning|blocked`、首个 `reason`、稳定 `blockers` 和 `warnings` 短标签。

@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
+const codexLinkClient = process.env.LAN_DUAL_CODEX_LINK_CLIENT || "scripts/codex-link-client.mjs";
 const hostRuntimePaths = [
   "apps/mac-host/Package.swift",
   "apps/mac-host/Sources",
@@ -16,10 +17,14 @@ const defaults = {
   host: "127.0.0.1",
   port: 43770,
   timeoutMs: 3000,
+  server: "http://192.168.31.68:17888",
+  device: "Mac Unattended",
+  role: "Mac 值守",
   label: "com.lan-dual-control.mac-host",
   launchAgentPath: path.join(os.homedir(), "Library", "LaunchAgents", "com.lan-dual-control.mac-host.plist"),
   json: false,
   boardSummary: false,
+  sendStatus: false,
   requireHostOnline: false,
   requireLaunchAgent: false,
   requireLaunchAgentMaxFps: false,
@@ -56,8 +61,16 @@ Options:
   --skipLaunchctl                Do not run launchctl print; useful for local tests.
   --skipPmset                    Do not run pmset; useful for local tests.
   --boardSummary                 Print a short secret-free Agent Link Board summary.
+  --sendStatus                   Send the summary to Agent Link Board as
+                                 device "${defaults.device}" by default.
+  --server <url>                 Agent Link Board URL. Default: ${defaults.server}
+  --device <name>                Agent Link Board status device. Default: ${defaults.device}
+  --role <role>                  Agent Link Board status role. Default: ${defaults.role}
   --json                         Print one machine-readable JSON object.
   --help, -h                     Show this help without probing anything.
+
+By default this command is read-only and does not write to Agent Link Board.
+Only --sendStatus posts the MacUnattendedHealth= summary.
 
 Machine-readable JSON fields:
   host                           Mac host /discovery status, permissions, inputMode.
@@ -135,7 +148,8 @@ function parseArgs(argv) {
       token === "--requireControlPermissions" ||
       token === "--strict" ||
       token === "--skipLaunchctl" ||
-      token === "--skipPmset"
+      token === "--skipPmset" ||
+      token === "--sendStatus"
     ) {
       args[token.slice(2)] = true;
       continue;
@@ -155,6 +169,21 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if (token === "--server" && next && !next.startsWith("--")) {
+      args.server = next.trim();
+      index += 1;
+      continue;
+    }
+    if (token === "--device" && next && !next.startsWith("--")) {
+      args.device = next.trim();
+      index += 1;
+      continue;
+    }
+    if (token === "--role" && next && !next.startsWith("--")) {
+      args.role = next.trim();
+      index += 1;
+      continue;
+    }
     if (token === "--label" && next && !next.startsWith("--")) {
       args.label = next.trim();
       index += 1;
@@ -167,6 +196,10 @@ function parseArgs(argv) {
     }
     throw new Error(`Unknown argument: ${token}`);
   }
+  args.host = String(args.host || defaults.host).trim();
+  args.server = String(args.server || defaults.server).trim().replace(/\/+$/, "");
+  args.device = String(args.device || defaults.device).trim() || defaults.device;
+  args.role = String(args.role || defaults.role).trim() || defaults.role;
   return args;
 }
 
@@ -882,6 +915,10 @@ async function buildReport(args) {
     args: {
       host: args.host,
       port: args.port,
+      server: args.server,
+      sendStatus: args.sendStatus,
+      device: args.device,
+      role: args.role,
       label: args.label,
       launchAgentPath: args.launchAgentPath,
       requireHostOnline: args.requireHostOnline,
@@ -936,7 +973,60 @@ function printHuman(report) {
   console.log(`- Mac formal local smoke: ${report.commands.macFormalLocalSmoke}`);
   console.log(`- Mac client browser self-test: ${report.commands.macClientBrowserSelfTest}`);
   console.log(`- Mac script help: ${report.commands.macScriptHelp}`);
+  if (report.postStatus) {
+    console.log(`- Agent Link status post: ${report.postStatus.ok ? "ok" : "failed"} (${report.postStatus.status})`);
+  }
   console.log(report.boardSummary);
+}
+
+function statusForReport(report) {
+  const health = report?.macUnattendedHealth?.status || "";
+  if (health === "blocked") return "blocked";
+  if (health === "warning") return "warning";
+  return "online";
+}
+
+function safeSnippet(text) {
+  return String(text || "")
+    .replace(/(password|token|secret|key)\s*[:=]\s*["']?[^"'\s]+/gi, "$1=<redacted>")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 220);
+}
+
+function postStatus(args, report) {
+  const status = statusForReport(report);
+  const result = spawnSync(process.execPath, [
+    codexLinkClient,
+    "--server",
+    args.server,
+    "status",
+    "--device",
+    args.device,
+    "--role",
+    args.role,
+    "--status",
+    status,
+    "--note",
+    report.boardSummary,
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: Math.max(args.timeoutMs + 3000, 5000),
+    maxBuffer: 2 * 1024 * 1024,
+    env: {
+      ...process.env,
+      LAN_DUAL_PASSWORD: "",
+    },
+  });
+  return {
+    ok: result.status === 0,
+    status,
+    exitCode: result.status,
+    stdout: safeSnippet(result.stdout),
+    stderr: safeSnippet(result.stderr),
+    error: safeSnippet(result.error ? result.error.message : ""),
+  };
 }
 
 async function main() {
@@ -946,6 +1036,9 @@ async function main() {
   }
   const args = parseArgs(process.argv);
   const report = await buildReport(args);
+  if (args.sendStatus) {
+    report.postStatus = postStatus(args, report);
+  }
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
   } else if (args.boardSummary) {
@@ -953,7 +1046,7 @@ async function main() {
   } else {
     printHuman(report);
   }
-  process.exitCode = report.ok ? 0 : 1;
+  process.exitCode = report.ok && (!args.sendStatus || report.postStatus?.ok) ? 0 : 1;
 }
 
 main().catch((error) => {

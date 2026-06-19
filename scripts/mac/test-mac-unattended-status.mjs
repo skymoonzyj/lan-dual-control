@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,6 +59,19 @@ function run(args, extraArgs = []) {
     encoding: "utf8",
     timeout: args.timeoutMs,
     maxBuffer: 8 * 1024 * 1024,
+  });
+}
+
+function runWithEnv(args, extraArgs = [], env = {}) {
+  return spawnSync(process.execPath, [script, ...extraArgs], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: args.timeoutMs,
+    maxBuffer: 8 * 1024 * 1024,
+    env: {
+      ...process.env,
+      ...env,
+    },
   });
 }
 
@@ -161,6 +174,25 @@ function assertNoSecretOrInputGuidance(text, label) {
   assertNotIncludes(value, "input_event", label);
   assertNotIncludes(value, "--inputMode inject", label);
   assertNotIncludes(value, "--injectInput", label);
+}
+
+function makeFakeCodexLink(tmp) {
+  const scriptPath = path.join(tmp, "fake-codex-link.mjs");
+  const logPath = path.join(tmp, "codex-link-calls.jsonl");
+  writeFileSync(scriptPath, `#!/usr/bin/env node
+import { appendFileSync } from "node:fs";
+appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(process.argv.slice(2)) + "\\n");
+console.log("ok");
+`, "utf8");
+  return { scriptPath, logPath };
+}
+
+function readJsonl(logPath) {
+  return readFileSync(logPath, "utf8")
+    .trim()
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
 }
 
 function assertUnattendedHealth(payload, expected, label) {
@@ -272,6 +304,8 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "Usage", `${script} ${flag}`);
     assertIncludes(result.stdout, "--requireLaunchAgent", `${script} ${flag}`);
     assertIncludes(result.stdout, "--requireLaunchAgentMaxFps", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--sendStatus", `${script} ${flag}`);
+    assertIncludes(result.stdout, "Mac Unattended", `${script} ${flag}`);
     assertIncludes(result.stdout, "--skipLaunchctl", `${script} ${flag}`);
     assertIncludes(result.stdout, "host", `${script} ${flag}`);
     assertIncludes(result.stdout, "launchAgent", `${script} ${flag}`);
@@ -611,6 +645,42 @@ function checkStrictWarningsFail(args) {
   print("OK", "strict mode turns unattended warnings into a failing report");
 }
 
+function checkSendStatus(args) {
+  const dir = mkdtempSync(path.join(tmpdir(), "lan-dual-unattended-send-status-"));
+  try {
+    const missingPath = path.join(dir, "missing-agent.plist");
+    const fakeLink = makeFakeCodexLink(dir);
+    const result = runWithEnv(args, [
+      "--json",
+      "--sendStatus",
+      "--server",
+      "http://127.0.0.1:17888",
+      ...baseOfflineArgs(missingPath),
+    ], {
+      LAN_DUAL_CODEX_LINK_CLIENT: fakeLink.scriptPath,
+    });
+    const payload = parseJson(result.stdout, "sendStatus JSON");
+    assert(result.status === 0, `sendStatus warning path should stay non-failing\n${result.stdout}\n${result.stderr}`);
+    assert(payload.postStatus?.ok === true, "sendStatus payload should report postStatus.ok=true");
+    assert(payload.postStatus?.status === "warning", "sendStatus payload should post warning status");
+    const calls = readJsonl(fakeLink.logPath);
+    assert(calls.length === 1, "fake Codex Link should receive one status call");
+    const argv = calls[0].join(" ");
+    assertIncludes(argv, "status", "sendStatus codex-link argv");
+    assertIncludes(argv, "--server http://127.0.0.1:17888", "sendStatus codex-link argv");
+    assertIncludes(argv, "--device Mac Unattended", "sendStatus codex-link argv");
+    assertIncludes(argv, "--role Mac 值守", "sendStatus codex-link argv");
+    assertIncludes(argv, "--status warning", "sendStatus codex-link argv");
+    assertIncludes(argv, "MacUnattendedHealth=warning", "sendStatus codex-link argv");
+    assertIncludes(argv, "warnings=host-offline,launch-agent-missing", "sendStatus codex-link argv");
+    assertNotIncludes(argv, "Mac Codex", "sendStatus should not mask Mac Codex freshness");
+    assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}\n${argv}`, "sendStatus output");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  print("OK", "Mac unattended status can post a dedicated Agent Link Board status");
+}
+
 function checkFakePlist(args) {
   const dir = mkdtempSync(path.join(tmpdir(), "lan-dual-unattended-agent-"));
   try {
@@ -925,6 +995,7 @@ async function main() {
   checkRequireLaunchAgentMaxFpsFails(args);
   checkRequireLaunchAgentLoadedNeedsProbe(args);
   checkStrictWarningsFail(args);
+  checkSendStatus(args);
   checkFakePlist(args);
   checkLaunchAgentMaxFpsWarning(args);
   checkBoardSummary(args);
