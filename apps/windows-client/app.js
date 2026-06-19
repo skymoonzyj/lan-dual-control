@@ -293,6 +293,7 @@ const macUnattendedRiskLabels = {
   "mac-client-formal-checklist": "Mac client 正式清单命令已提供",
   "mac-client-prompt-password-smoke": "Mac client 前台密码真测命令已提供",
   "mac-client-browser-self-test": "Mac client 本地 browser 自测命令已提供",
+  "mac-script-help-command": "Mac 脚本 help 安全自检命令已提供",
   "mac-formal-local-smoke": "Mac 本机短验收需处理",
   "mac-formal-local-smoke-rerun": "Mac 本机短验收重跑命令已提供",
   "windows-reverse-grant-status": "Windows 反控授权状态命令已提供",
@@ -3319,6 +3320,8 @@ function parseMacUnattendedAttention(text) {
   const hasMacClientFormalChecklist = /\bMacClientFormalChecklist\s*=/i.test(source);
   const hasMacClientPromptPasswordSmoke = /\bMacClientPromptPasswordSmoke\s*=/i.test(source);
   const hasMacClientBrowserSelfTest = /\bMacClientBrowserSelfTest\s*=/i.test(source);
+  const hasMacScriptHelp =
+    /\bMacScriptHelp\s*=\s*(?:node\s+scripts[\\/]+mac[\\/]+)?test-mac-script-help\.mjs\b/i.test(source);
   const hasMacFormalE2e = /\bMacFormalE2E\s*=/i.test(source);
   const hasMacHeartbeatOnce = /\bMacHeartbeatOnce\s*=/i.test(source);
   const hasMacHeartbeatWatch = /\bMacHeartbeatWatch\s*=/i.test(source);
@@ -3510,6 +3513,16 @@ function parseMacUnattendedAttention(text) {
     )
   ) {
     risks.unshift("mac-client-browser-self-test");
+  }
+  if (
+    hasMacScriptHelp &&
+    (
+      risks.length > 0 ||
+      hasMacFormalE2eFinding ||
+      /attention\s*=\s*(warning|blocker|failed)|readytocall\s*=\s*false|ready\s*=\s*false|blocked|failed|stale|restart recommended/.test(lower)
+    )
+  ) {
+    risks.unshift("mac-script-help-command");
   }
   if (
     hasMacHeartbeatOnce &&

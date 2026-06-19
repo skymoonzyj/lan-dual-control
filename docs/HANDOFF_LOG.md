@@ -21,6 +21,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端消费 `MacScriptHelp=` Mac 脚本 help 安全自检入口。
+完成内容：
+- `parseMacUnattendedAttention` 新增 `MacScriptHelp=` 识别和中文风险标签“Mac 脚本 help 安全自检命令已提供”。
+- 当同段已有 `MacFormalE2E=readyToCall=false`、失败、旧 build、stale 或非空 warning/blocker 上下文，并带 `MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary` 时，Mac 提醒区、快速摘要和复制/导出诊断会显示该命令提示并保留原始命令。
+- 干净 `warnings=none blockers=none` 命令清单仍不误弹；Windows 端只提示/复制，不运行 Mac 脚本、不认证、不发密码/input/inject。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败在 `MacFormalE2E=readyToCall=false ... MacScriptHelp=` 缺少“Mac 脚本 help 安全自检命令已提供”。
+- 绿灯：实现后复跑同一命令通过。
+- 收尾复跑：`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`、`git diff --check` 均通过；行首冲突标记扫描无命中。
+遗留问题：
+- 本轮只消费 Mac 摘要标签，不运行 `test-mac-script-help`；真实 help 安全自检仍由 Mac 端或人工按摘要命令执行。
+下一步建议：
+- 若 Mac 端继续把 `MacScriptHelp=` 接到更多摘要里，Windows 端保持同一规则：有风险上下文才提示，干净命令清单不误弹。
+是否改了协议：否；只补 Windows 控制端诊断识别、自测和文档。
+是否需要另一端配合：不需要；等待后续真实联调时由 Mac 端自行运行 help 安全自检即可。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端在 `MacFormalE2E=` 正式 E2E readiness 上下文里也能提示 `MacClientBrowserSelfTest=` 本地 browser 自测入口。
 完成内容：
 - `parseMacUnattendedAttention` 新增 `MacFormalE2E=` / `readyToCall=false` 上下文判断。

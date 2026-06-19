@@ -1505,6 +1505,7 @@ async function verifyDesktopOnlyHostPanel(session) {
         "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.68 --port 43770 --boardSummary",
         "MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.68 --port 43770 --ensureClient --promptPassword --boardSummary",
         "MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary",
+        "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary",
         "MacFormalLocalSmoke=failed blockers=auth warnings=video",
         "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
         "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
@@ -1653,12 +1654,30 @@ async function verifyDesktopOnlyHostPanel(session) {
               ].join("; "),
             )
           : null;
+      const cleanMacScriptHelpAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary",
+                "Mac script help ready blockers=none warnings=none",
+              ].join("; "),
+            )
+          : null;
       const macFormalE2eBrowserSelfTestAttention =
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
               [
                 "MacFormalE2E=status=warning readyToCall=false blockers=mac-host-build-stale warnings=fps-limit",
                 "MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary",
+              ].join("; "),
+            )
+          : null;
+      const macFormalE2eScriptHelpAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "MacFormalE2E=status=warning readyToCall=false blockers=mac-host-build-stale warnings=fps-limit",
+                "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary",
               ].join("; "),
             )
           : null;
@@ -1982,7 +2001,11 @@ async function verifyDesktopOnlyHostPanel(session) {
           cleanMacClientPromptPasswordSmokeAttention?.summary === "" &&
           Array.isArray(cleanMacClientPromptPasswordSmokeAttention?.labels) &&
           cleanMacClientPromptPasswordSmokeAttention.labels.length === 0 &&
+          cleanMacScriptHelpAttention?.summary === "" &&
+          Array.isArray(cleanMacScriptHelpAttention?.labels) &&
+          cleanMacScriptHelpAttention.labels.length === 0 &&
           macFormalE2eBrowserSelfTestAttention?.summary.includes("Mac client 本地 browser 自测命令已提供") &&
+          macFormalE2eScriptHelpAttention?.summary.includes("Mac 脚本 help 安全自检命令已提供") &&
           readinessHeaderText.includes("client-test") &&
           readinessHeaderText.includes("1000 ms") &&
           readinessHeaderText.includes("750 ms") &&
@@ -2038,7 +2061,9 @@ async function verifyDesktopOnlyHostPanel(session) {
         cleanMacHostReadinessCommandAttention,
         cleanMacClientBrowserSelfTestAttention,
         cleanMacClientPromptPasswordSmokeAttention,
+        cleanMacScriptHelpAttention,
         macFormalE2eBrowserSelfTestAttention,
+        macFormalE2eScriptHelpAttention,
         readinessHeader: readinessHeaderLines.slice(0, 4),
         readinessSummaryText,
         helperSummary,
@@ -4361,6 +4386,7 @@ async function verifyReconnectControls(session) {
         "MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 192.168.31.68 --port 43770 --boardSummary",
         "MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.68 --port 43770 --ensureClient --promptPassword --boardSummary",
         "MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary",
+        "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary",
         "MacFormalLocalSmoke=failed blockers=auth warnings=video",
         "RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
         "WindowsReverseGrantStatus=pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/allow-windows-reverse-control.ps1 -HostName 127.0.0.1 -Port 43770 -Status -BoardSummary",
@@ -4596,6 +4622,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("Mac client 正式清单命令已提供") &&
             exportText.includes("Mac client 前台密码真测命令已提供") &&
             exportText.includes("Mac client 本地 browser 自测命令已提供") &&
+            exportText.includes("Mac 脚本 help 安全自检命令已提供") &&
             exportText.includes("Mac 本机短验收需处理") &&
             exportText.includes("Mac 本机短验收重跑命令已提供") &&
             exportText.includes("Windows 反控授权状态命令已提供") &&
@@ -4643,6 +4670,7 @@ async function verifyReconnectControls(session) {
             exportText.includes("MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs") &&
             exportText.includes("MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs") &&
             exportText.includes("MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs") &&
+            exportText.includes("MacScriptHelp=node scripts/mac/test-mac-script-help.mjs") &&
             exportText.includes("RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs") &&
             exportText.includes("WindowsReverseGrantStatus=pwsh") &&
             exportText.includes("WindowsOpenOneTimeReverseGrant=pwsh") &&
@@ -4756,6 +4784,7 @@ async function verifyReconnectControls(session) {
           copiedText.includes("Mac client 正式清单命令已提供") &&
           copiedText.includes("Mac client 前台密码真测命令已提供") &&
           copiedText.includes("Mac client 本地 browser 自测命令已提供") &&
+          copiedText.includes("Mac 脚本 help 安全自检命令已提供") &&
           copiedText.includes("Mac 本机短验收需处理") &&
           copiedText.includes("Mac 本机短验收重跑命令已提供") &&
           copiedText.includes("Windows 反控授权状态命令已提供") &&
@@ -4788,6 +4817,7 @@ async function verifyReconnectControls(session) {
           copiedText.includes("MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs") &&
           copiedText.includes("MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs") &&
           copiedText.includes("MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs") &&
+          copiedText.includes("MacScriptHelp=node scripts/mac/test-mac-script-help.mjs") &&
           copiedText.includes("RerunFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs") &&
           copiedText.includes("WindowsReverseGrantStatus=pwsh") &&
           copiedText.includes("WindowsOpenOneTimeReverseGrant=pwsh") &&
