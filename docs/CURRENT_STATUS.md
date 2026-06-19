@@ -4,6 +4,7 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 ## 2026-06-20 Windows 收口
+- Windows 恢复总览现在也会消费 Mac client 手工清单提示：`check-windows-resume-status --checkBoard` 会安全提取 `MacClientManualChecklist=`，在 JSON `board.macClientManualChecklist`、普通输出和 `--boardSummary` 中显示 “Mac client 会话诊断查看手工清单、复制诊断会带出同一行、粘贴前确认不包含连接密码”。解析只接受 Mac 端固定安全文本或页面离线前缀，拒绝带 password/token/secret、`input_event`、`inject` 或自动发送语义的伪造候选；Windows 不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 - Windows 恢复总览现在会消费 Mac 手工体验 gate：`check-windows-resume-status --checkBoard` 会把 `MacManualUxGate=wait-windows-codex-push` / `ManualUxGate=` / `gate=` 安全规范化为 `MacManualUx=... gate=...` 和 JSON `board.macManualUx.gate`。显式 `--sendManualUxAck --json` / PowerShell `-SendManualUxAck -Json` 遇到未超时但 gate 仍在时会 fail-closed，输出 `MacManualUxAck=status=blocked reason=mac-manual-ux-gated gate=<gate> next=WaitForManualUxGateClear`，不向通讯板发确认；若同一 call 已 timeout，仍优先提示 `reason=manual-ux-call-timeout` 让 Mac 重新确认。仍只读通讯板，不认证、不请求或发送密码、不发 input/inject。
 - Windows 恢复总览现在还会安全消费 Mac 手工体验重新确认命令：当 `MacManualUx=` 摘要里带 `ManualUxReconfirmCommand=node scripts/mac/check-mac-manual-ux-status.mjs --server <board> --reconfirmCall --json` 时，`check-windows-resume-status --checkBoard` 会在 JSON `board.macManualUx.manualUxReconfirmCommand`、普通输出和 `--boardSummary` 中显示独立 `MacManualUxReconfirm=`；`MacManualUx=` 简短摘要只标 `reconfirmCommand=present`。候选必须是 `check-mac-manual-ux-status` 的 `--reconfirmCall --json` 只读/显式入口，带 password/token/secret、sendCall/sendStatus/sendMessage、input/inject 或未知参数会被拒绝；Windows 不运行该命令、不认证、不请求或发送密码、不发 input/inject。
 

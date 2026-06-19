@@ -19,6 +19,36 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 消费 MacClientManualChecklist
+开发端：Windows Codex
+本轮目标：让 Windows resume/status 看懂 Mac 端新加的 Mac client 页面手工清单提示，开工第一屏即可知道现场要测连接、视频、音频、剪贴板、input_ack 和复制诊断。
+完成内容：
+- `check-windows-resume-status --checkBoard` 现在安全解析 `MacClientManualChecklist=`。
+- JSON 新增 `board.macClientManualChecklist`，普通输出和 `--boardSummary` 会显示独立 `MacClientManualChecklist=`。
+- 解析只接受 Mac 端固定安全文本或页面离线前缀，拒绝 `password=`、token/secret、`input_event`、`inject` 或自动发送语义的伪造候选。
+- PowerShell wrapper 回归同步覆盖同一输出。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status-powershell.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000` 先失败于 `MacClientManualChecklist should be found in board state`。
+- 绿灯：`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 45000`
+- 绿灯：`node scripts/windows/test-windows-resume-status-powershell.mjs --timeoutMs 45000`
+遗留问题：
+- 真实手工体验仍需用户在场；这条只是现场清单/复制诊断提示，不会自动连接或自动发输入。
+下一步建议：
+- 白天用户在场时，先跑 `check-windows-resume-status --checkBoard --boardSummary`，按 `MacClientManualChecklist=` 和 `MacManualUx=` 逐项做手工体验。
+是否改了协议：否，只是安全消费 Mac 已上板的只读提示字段。
+是否需要另一端配合：Mac 端无需改动；真实体验时按清单复制诊断给双方。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 消费 Mac manual UX reconfirm 命令
 开发端：Windows Codex
 本轮目标：让 Windows resume/status 安全看懂 Mac 端给出的手工体验重新确认命令，避免 timeout 后只看到“找 Mac 重新确认”但没有可复制入口。

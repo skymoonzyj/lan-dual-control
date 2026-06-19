@@ -34,6 +34,12 @@ const defaults = {
   sendManualUxAck: false,
 };
 const macHeartbeatFreshnessStaleMs = 2 * 60 * 1000;
+const macClientManualChecklistAction = "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
+const macClientManualChecklistOfflineAction = `页面在线后在 ${macClientManualChecklistAction}`;
+const macClientManualChecklistAllowedActions = new Set([
+  macClientManualChecklistAction,
+  macClientManualChecklistOfflineAction,
+]);
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -66,6 +72,7 @@ MacHostSafeStart=, MacMaxFpsSafeStart=, MacFormalLocalSmoke=,
 MacClientDiscoverWindows=,
 MacClientFormalChecklist=,
 MacClientFormalSmoke=,
+MacClientManualChecklist=,
 MacRemoteAudioPlan=,
 MacInputSafetyPlan=,
 MacManualUxStatus=,
@@ -115,6 +122,9 @@ clipboard, input_ack, and diagnostics in that order.
   formal checklist that can discover the Windows host first.
   It also includes MacClientFormalSmoke for the Mac client no-password formal
   preflight that first starts or reuses the Mac client page.
+  It also includes MacClientManualChecklist for the Mac client in-page manual
+  checklist row and copy-diagnostics reminder; extraction accepts only the
+  known safe text and rejects password/input_event/inject variants.
   It also includes MacRemoteAudioPlan for the Mac remote-only audio planning
   path; command extraction accepts only the read-only --boardSummary form.
   It also includes MacInputSafetyPlan for the plan-only Mac real-input safety
@@ -563,6 +573,18 @@ function emptyMacSafeStart(source = "none", textCount = 0, rejectedCount = 0) {
     commands: [],
     source,
     textCount,
+    rejectedCount,
+  };
+}
+
+function emptyMacClientManualChecklist(source = "none", textCount = 0, rejectedCount = 0) {
+  return {
+    found: false,
+    action: "",
+    summary: "",
+    source,
+    textCount,
+    segmentCount: 0,
     rejectedCount,
   };
 }
@@ -2802,6 +2824,75 @@ function extractMacClientFormalChecklistFromText(text, source = "text") {
   };
 }
 
+const macClientManualChecklistBoundaryPattern = /\s+(?:CopyDiagnostics|MacClientFormalChecklist|MacClientFormalSmoke|MacClientDiscoverWindows|MacClientReverseRehearsal|MacClientReverseGrantCopy|MacClientPromptPasswordSmoke|MacClientBrowserSelfTest|WindowsReverseGrantStatus|WindowsOpenOneTimeReverseGrant|WindowsReverseGrantStatusNodeFallback|WindowsOpenOneTimeReverseGrantNodeFallback|MacPowerPlan|MacRemoteAudioPlan|MacInputSafetyPlan|MacManualUxStatus|MacHeartbeatOnce|MacHeartbeatWatch|MacHeartbeatStart|MacHeartbeatStatus|MacHeartbeatStop|MacHostSafeStart|MacMaxFpsSafeStart|MacFormalLocalSmoke|MacHostReadiness|MacHeartbeat|MacUnattended|MacUnattendedFormal|Evidence|Next)\s*(?:=|:|\b)|\s+No password was requested\b|\s+No Windows connection\b/i;
+
+function cleanMacClientManualChecklistAction(fragment) {
+  let value = normalizedText(fragment).replace(/\s+/g, " ");
+  const boundary = value.search(macClientManualChecklistBoundaryPattern);
+  if (boundary >= 0) value = value.slice(0, boundary);
+  return normalizedText(value).replace(/[.。]+$/g, "");
+}
+
+function parseMacClientManualChecklistSegment(fragment, source = "text") {
+  const action = cleanMacClientManualChecklistAction(fragment);
+  if (!action || hasSecretLikeCommandValue(action) || /\b(?:input_event|input_events|inject)\b/i.test(action) || /自动发送/.test(action)) {
+    return null;
+  }
+  if (!macClientManualChecklistAllowedActions.has(action)) return null;
+  return {
+    found: true,
+    action,
+    summary: action,
+    source,
+  };
+}
+
+function extractMacClientManualChecklistFromText(text, source = "text") {
+  const value = String(text || "");
+  const regex = /\bMacClientManualChecklist\s*=\s*/gi;
+  let selected = null;
+  let segmentCount = 0;
+  let rejectedCount = 0;
+  let match;
+  while ((match = regex.exec(value)) !== null) {
+    segmentCount += 1;
+    const fragment = value.slice(match.index + match[0].length);
+    const parsed = parseMacClientManualChecklistSegment(fragment, source);
+    if (!parsed) {
+      rejectedCount += 1;
+      continue;
+    }
+    selected = parsed;
+  }
+  if (!selected) return emptyMacClientManualChecklist(source, value ? 1 : 0, rejectedCount);
+  return {
+    ...selected,
+    textCount: value ? 1 : 0,
+    segmentCount,
+    rejectedCount,
+  };
+}
+
+function extractMacClientManualChecklistFromBoardState(state) {
+  const texts = collectStringValues(state);
+  let selected = null;
+  let segmentCount = 0;
+  let rejectedCount = 0;
+  for (const text of texts) {
+    const extracted = extractMacClientManualChecklistFromText(text, "api-state");
+    segmentCount += extracted.segmentCount || 0;
+    rejectedCount += extracted.rejectedCount || 0;
+    if (extracted.found) selected = extracted;
+  }
+  if (!selected) return emptyMacClientManualChecklist("api-state", texts.length, rejectedCount);
+  return {
+    ...selected,
+    source: "api-state",
+    textCount: texts.length,
+    segmentCount,
+    rejectedCount,
+  };
+}
 function extractMacClientDiscoverWindowsFromText(text, source = "text") {
   const value = String(text || "");
   const labels = ["MacClientDiscoverWindows", "RerunMacClientDiscoverWindows"];
@@ -3268,6 +3359,7 @@ async function getBoardSnapshot(args) {
       macClientDiscoverWindows: emptyMacSafeStart("skipped"),
       macClientFormalChecklist: emptyMacSafeStart("skipped"),
       macClientFormalSmoke: emptyMacSafeStart("skipped"),
+      macClientManualChecklist: emptyMacClientManualChecklist("skipped"),
       macRemoteAudioPlan: emptyMacSafeStart("skipped"),
       macRemoteAudio: emptyMacRemoteAudio("skipped"),
       macInputSafetyPlan: emptyMacSafeStart("skipped"),
@@ -3311,6 +3403,7 @@ async function getBoardSnapshot(args) {
       macClientDiscoverWindows: extractMacClientDiscoverWindowsFromBoardState(stateResult.state),
       macClientFormalChecklist: extractMacClientFormalChecklistFromBoardState(stateResult.state),
       macClientFormalSmoke: extractMacClientFormalSmokeFromBoardState(stateResult.state),
+      macClientManualChecklist: extractMacClientManualChecklistFromBoardState(stateResult.state),
       macRemoteAudioPlan: extractMacRemoteAudioPlanFromBoardState(stateResult.state),
       macRemoteAudio: extractMacRemoteAudioFromBoardState(stateResult.state),
       macInputSafetyPlan: extractMacInputSafetyPlanFromBoardState(stateResult.state),
@@ -3359,6 +3452,7 @@ async function getBoardSnapshot(args) {
     macClientDiscoverWindows: extractMacClientDiscoverWindowsFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macClientFormalChecklist: extractMacClientFormalChecklistFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macClientFormalSmoke: extractMacClientFormalSmokeFromText(output, result.ok ? "codex-link-client" : "unavailable"),
+    macClientManualChecklist: extractMacClientManualChecklistFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macRemoteAudioPlan: extractMacRemoteAudioPlanFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macRemoteAudio: extractMacRemoteAudioFromText(output, result.ok ? "codex-link-client" : "unavailable"),
     macInputSafetyPlan: extractMacInputSafetyPlanFromText(output, result.ok ? "codex-link-client" : "unavailable"),
@@ -3936,6 +4030,7 @@ function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
     "--preflightOnly",
     "--boardSummary",
   ].join(" ");
+  const macClientManualChecklistCommand = macClientManualChecklistAction;
   const macUnattendedStatusCommand = [
     "node scripts/mac/check-mac-unattended-status.mjs",
     "--host", host,
@@ -4034,6 +4129,7 @@ function makeCommands(args, preflight, windowsClientDiagnosticsPorts = null) {
     macClientDiscoverWindowsCommand,
     macClientFormalChecklistCommand,
     macClientFormalSmokeCommand,
+    macClientManualChecklistAction: macClientManualChecklistCommand,
     macRemoteAudioPlanCommand,
     macInputSafetyPlanCommand,
     macManualUxStatusCommand,
@@ -4360,6 +4456,7 @@ function makeBoardSummary(report) {
   const macClientDiscoverWindowsCommand = report.board.macClientDiscoverWindows?.command || report.commands.macClientDiscoverWindowsCommand;
   const macClientFormalChecklistCommand = report.board.macClientFormalChecklist?.command || report.commands.macClientFormalChecklistCommand;
   const macClientFormalSmokeCommand = report.board.macClientFormalSmoke?.command || report.commands.macClientFormalSmokeCommand;
+  const macClientManualChecklistActionText = report.board.macClientManualChecklist?.action || report.commands.macClientManualChecklistAction;
   const macRemoteAudioPlanCommand = report.board.macRemoteAudioPlan?.command || report.commands.macRemoteAudioPlanCommand;
   const macInputSafetyPlanCommand = report.board.macInputSafetyPlan?.command || report.commands.macInputSafetyPlanCommand;
   const macManualUxStatusCommand = report.board.macManualUxStatus?.command || report.commands.macManualUxStatusCommand;
@@ -4411,6 +4508,7 @@ function makeBoardSummary(report) {
     `MacClientDiscoverWindows=${macClientDiscoverWindowsCommand}.`,
     `MacClientFormalChecklist=${macClientFormalChecklistCommand}.`,
     `MacClientFormalSmoke=${macClientFormalSmokeCommand}.`,
+    `MacClientManualChecklist=${macClientManualChecklistActionText}.`,
     `MacRemoteAudioPlan=${macRemoteAudioPlanCommand}.`,
     ...(report.board.macRemoteAudio?.found
       ? [`MacRemoteAudio=${report.board.macRemoteAudio.summary}.`]
@@ -4791,6 +4889,9 @@ function printHuman(report) {
     if (report.board.macClientFormalSmoke?.command) {
       console.log(`  MacClientFormalSmoke=${report.board.macClientFormalSmoke.command}`);
     }
+    if (report.board.macClientManualChecklist?.found) {
+      console.log(`  MacClientManualChecklist=${report.board.macClientManualChecklist.action}`);
+    }
     if (report.board.macRemoteAudioPlan?.command) {
       console.log(`  MacRemoteAudioPlan=${report.board.macRemoteAudioPlan.command}`);
     }
@@ -4896,6 +4997,7 @@ function printHuman(report) {
   console.log(`  MacClientDiscoverWindows=${report.board.macClientDiscoverWindows?.command || report.commands.macClientDiscoverWindowsCommand}`);
   console.log(`  MacClientFormalChecklist=${report.board.macClientFormalChecklist?.command || report.commands.macClientFormalChecklistCommand}`);
   console.log(`  MacClientFormalSmoke=${report.board.macClientFormalSmoke?.command || report.commands.macClientFormalSmokeCommand}`);
+  console.log(`  MacClientManualChecklist=${report.board.macClientManualChecklist?.action || report.commands.macClientManualChecklistAction}`);
   console.log(`  MacRemoteAudioPlan=${report.board.macRemoteAudioPlan?.command || report.commands.macRemoteAudioPlanCommand}`);
   if (report.board.macRemoteAudio?.found) {
     console.log(`  MacRemoteAudio=${report.board.macRemoteAudio.summary}`);
