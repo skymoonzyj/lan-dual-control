@@ -528,6 +528,7 @@ function collectBoardValidationEvidence(resume, args) {
     evidence.push({
       id: "mac-host-media",
       label: "MacHostMedia",
+      tag: "MacHostMediaOk",
       status: "ok",
       summary: "media baseline passed",
       source: "Agent Link Board",
@@ -537,6 +538,7 @@ function collectBoardValidationEvidence(resume, args) {
     evidence.push({
       id: "mac-formal-local-smoke",
       label: "MacFormalLocalSmoke",
+      tag: "MacFormalLocalSmokeOk",
       status: "ok",
       summary: "H.264/PCM/input-log passed",
       source: "Agent Link Board",
@@ -550,6 +552,14 @@ function formatEvidenceSummary(evidence) {
     .filter((entry) => entry?.status === "ok" && entry.label)
     .map((entry) => `${entry.label} ok`);
   return items.length > 0 ? items.join(", ") : "none";
+}
+
+function formatEvidenceTags(evidence) {
+  const items = (Array.isArray(evidence) ? evidence : [])
+    .filter((entry) => entry?.status === "ok")
+    .map((entry) => normalizedText(entry.tag || `${entry.label || entry.id} ${entry.status}`))
+    .filter(Boolean);
+  return items.length > 0 ? items.join(",") : "none";
 }
 
 function makeEvidenceSentence(evidence) {
@@ -653,8 +663,8 @@ function makeBoardSummary(report) {
     ? report.counts.warnings > 0 ? "ready with warnings for Windows formal E2E" : "ready for Windows formal E2E"
     : `needs attention (${report.counts.blockers} blocker(s), ${report.counts.warnings} warning(s))`;
   const findings = formatChecklistFindings(report.checklist);
-  const evidenceSummary = formatEvidenceSummary(report.evidence);
-  const evidenceLine = evidenceSummary === "none" ? "" : `Evidence=${evidenceSummary}.`;
+  const evidenceTags = formatEvidenceTags(report.evidence);
+  const evidenceLine = evidenceTags === "none" ? "" : `Evidence=${evidenceTags}.`;
   const suggestedAction = report.suggestedAction?.boardSummary ? `${report.suggestedAction.boardSummary}.` : "";
   if (!host.online) {
     return [

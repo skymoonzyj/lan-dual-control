@@ -76,6 +76,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：把 Mac formal E2E readiness 的正向证据输出对齐 Windows 已识别的稳定 `Evidence=` 短标签。
+完成内容：
+- `check-mac-formal-e2e-status` 的 JSON `evidence[]` 现在为 `MacHostMedia` / `MacFormalLocalSmoke` 正向证据增加 `tag` 字段：`MacHostMediaOk`、`MacFormalLocalSmokeOk`。
+- `--boardSummary` 的 `Evidence=` 改为输出稳定短标签，例如 `Evidence=MacHostMediaOk,MacFormalLocalSmokeOk`，方便 Windows 控制端通用 `Evidence=` 解析直接显示值守证据。
+- `callText` 仍保留 `Recent evidence: MacHostMedia ok; MacFormalLocalSmoke ok`，方便人工阅读；证据仍只做展示，不改变 warning/blocker/readyToCall 判定，不回显原始通讯板文本。
+修改文件：
+- `scripts/mac/check-mac-formal-e2e-status.mjs`
+- `scripts/mac/test-mac-formal-e2e-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：先改测试要求 `evidence[].tag` 和 `Evidence=MacHostMediaOk/MacFormalLocalSmokeOk`，`node scripts/mac/test-mac-formal-e2e-status.mjs --timeoutMs 30000` 失败在缺少稳定 `MacHostMedia` evidence tag。
+- 绿灯：实现 `tag` 和 boardSummary 稳定标签后，同一命令通过。
+遗留问题：
+- 本轮只做字段稳定化；不主动运行媒体基线、本机 smoke、真实认证或正式 Windows 端验收。
+下一步建议：
+- Windows 端看到 `Evidence=MacHostMediaOk,MacFormalLocalSmokeOk` 时可走现有通用 positive evidence parser；如果同段另有 warning/blocker，仍按风险摘要继续排查。
+是否改了协议：否；仍是本地状态/摘要文本字段增强。
+是否需要另一端配合：不需要；Windows 已能消费这类短标签。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac formal E2E readiness 的正向证据来源更稳，不依赖证据一定出现在 recent event。
 完成内容：
 - `check-mac-formal-e2e-status` 的 `evidence[]` / `Evidence=` 现在除了读取 Agent Link Board recent lines，也会只读读取 `/api/state.statuses` 当前状态 note。

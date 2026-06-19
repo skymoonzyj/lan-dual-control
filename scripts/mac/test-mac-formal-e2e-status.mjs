@@ -193,13 +193,15 @@ function assertValidationEvidence(payload, label) {
   const hostMedia = byId.get("mac-host-media");
   const localSmoke = byId.get("mac-formal-local-smoke");
   assert(hostMedia?.status === "ok", `${label} should mark MacHostMedia evidence as ok`);
+  assert(hostMedia?.tag === "MacHostMediaOk", `${label} should expose stable MacHostMedia evidence tag`);
   assert(hostMedia?.source === "Agent Link Board", `${label} should identify the MacHostMedia evidence source`);
   assert(/media baseline/i.test(hostMedia?.summary || ""), `${label} should summarize MacHostMedia evidence`);
   assert(localSmoke?.status === "ok", `${label} should mark MacFormalLocalSmoke evidence as ok`);
+  assert(localSmoke?.tag === "MacFormalLocalSmokeOk", `${label} should expose stable MacFormalLocalSmoke evidence tag`);
   assert(localSmoke?.source === "Agent Link Board", `${label} should identify the MacFormalLocalSmoke evidence source`);
   assert(/H\.264\/PCM\/input-log/i.test(localSmoke?.summary || ""), `${label} should summarize MacFormalLocalSmoke evidence`);
-  assert(/Evidence=.*MacHostMedia ok/.test(payload.boardSummary || ""), `${label} boardSummary should include MacHostMedia evidence`);
-  assert(/Evidence=.*MacFormalLocalSmoke ok/.test(payload.boardSummary || ""), `${label} boardSummary should include MacFormalLocalSmoke evidence`);
+  assert(/Evidence=.*MacHostMediaOk/.test(payload.boardSummary || ""), `${label} boardSummary should include stable MacHostMedia evidence tag`);
+  assert(/Evidence=.*MacFormalLocalSmokeOk/.test(payload.boardSummary || ""), `${label} boardSummary should include stable MacFormalLocalSmoke evidence tag`);
   assert(/Recent evidence:.*MacHostMedia ok/.test(payload.callText || ""), `${label} callText should include MacHostMedia evidence`);
   assert(/Recent evidence:.*MacFormalLocalSmoke ok/.test(payload.callText || ""), `${label} callText should include MacFormalLocalSmoke evidence`);
   assertNoSecretLikeText(JSON.stringify(payload.evidence), `${label} evidence`);
