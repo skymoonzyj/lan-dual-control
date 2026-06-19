@@ -21,6 +21,36 @@
 
 日期：2026-06-20 继续推进
 开发端：Windows Codex
+本轮目标：新增 Windows 一键打开当前 Mac 控制页。
+完成内容：
+- 新增 `scripts/windows/start-windows-control-mac.mjs`，默认启动/复用本地 Windows 控制端页面 `127.0.0.1:5200`，打开预填 `192.168.31.122:43770` / WebSocket 的链接，并固定 `debugPort=9340` 作为现场可用口径。
+- 新增 `apps/windows-client/launch-params.js` 并接入页面启动流程，链接参数会覆盖旧本地模拟默认值、清空 `demo-password`，让用户只需在页面输入 Mac 当前临时密码后点击连接。
+- `--dryRun --boardSummary` 输出 `WindowsUsableEntry=status=ready USABLE_NEXT=open_windows_client BLOCKER=none Safety=no-password,no-input-inject`，可直接同步通讯板且不泄密。
+修改文件：
+- `apps/windows-client/launch-params.js`
+- `apps/windows-client/index.html`
+- `apps/windows-client/app.js`
+- `scripts/windows/start-windows-control-mac.mjs`
+- `scripts/windows/test-windows-control-mac-entry.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-control-mac-entry.mjs` 先失败在 `apps/windows-client/launch-params.js` 不存在。
+- 绿灯：`node scripts/windows/test-windows-control-mac-entry.mjs` 通过，覆盖页面参数预填、help、dry-run JSON 和无密 boardSummary。
+遗留问题：
+- 真实手工体验仍需用户在场连接后逐项验收；当前仍保持 `inputMode=log`，不做 true inject。
+下一步建议：
+- 用户准备试用时直接运行 `node scripts/windows/start-windows-control-mac.mjs`，打开页面后输入 Mac 当前临时密码并按手工清单验收。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端继续保持 `192.168.31.122:43770` host/client/heartbeat 在线。
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 继续推进
+开发端：Windows Codex
 本轮目标：新增 Windows 侧 PostPass 手工体验状态第一屏。
 完成内容：
 - 新增 `scripts/windows/check-windows-manual-ux-status.mjs`，只读 Agent Link Board，识别 `PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby`、`MAC_STANDING_BY_FOR_MANUAL_UX_TEST` 和 `ManualUxChecklist=`。

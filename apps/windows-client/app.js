@@ -8588,6 +8588,18 @@ setInterval(tickClock, 1000);
 setInterval(expireStaleRemoteFileTransfers, remoteFileTransferSweepIntervalMs);
 setInterval(expirePendingOutgoingFileResult, remoteFileTransferSweepIntervalMs);
 applyPreferences();
+const launchParams = window.LanDualLaunchParams?.applyLaunchParams({
+  search: window.location.search,
+  elements,
+  log: addLog,
+});
+if (launchParams?.applied) {
+  savePreferences();
+  if (launchParams.focusPassword && elements.passwordInput) {
+    elements.passwordInput.focus();
+    elements.passwordInput.select();
+  }
+}
 state.discoveredDevices = buildDeviceList();
 renderDiscoveredDevices();
 applyScaleMode();

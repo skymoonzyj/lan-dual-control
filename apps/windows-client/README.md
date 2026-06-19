@@ -72,6 +72,17 @@
 
 ## 运行方式
 
+### 最短入口：打开当前 Mac 控制页
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\start-windows-control-mac.mjs
+```
+
+该入口会启动或复用本地 Windows 控制端页面服务，打开 `http://127.0.0.1:5200/`，并把目标预填为 `192.168.31.122:43770`、`WebSocket 局域网`。页面会清空演示密码；在页面里输入 Mac 端当前临时密码后点“连接”。入口不打印密码、不认证、不发送 input/inject。只想把无密摘要发到通讯板时可运行：
+
+```powershell
+node E:\codex\lan-dual-control\scripts\windows\start-windows-control-mac.mjs --dryRun --boardSummary
+```
 ### 方式一：直接打开静态页面
 
 ```text

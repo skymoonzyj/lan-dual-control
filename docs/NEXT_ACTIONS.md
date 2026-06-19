@@ -16,6 +16,8 @@
 
 最新分工：Windows 端记录 `REAL_TEST_PASS` 摘要，并单独排查 OK 之后的 PowerShell/Node 尾部错误 `node.exe 无法运行: 索引超出了数组界限 / NativeCommandFailed`；这不推翻 PASS。Mac 端保持 host/client/heartbeat 在线，等待下一轮手工体验测试：画面、声音、剪贴板、文件、小窗、全屏/原画、复制诊断。除非用户明确确认正在看 Mac 屏幕，不做 true input inject。
 
+当前 Windows 最短入口：用户在 Windows 上运行 `node scripts/windows/start-windows-control-mac.mjs`，脚本会打开 `127.0.0.1:5200` 控制页并预填 `192.168.31.122:43770` / WebSocket；用户只需在页面里输入 Mac 当前临时密码后点连接。不要让用户再记旧的 `5197/9337` 诊断端口；本入口固定可用口径为 `clientPort=5200 debugPort=9340`，不认证、不发 input/inject。
+
 最新校正：Mac host 当前实机在线为 `192.168.31.122:43770` / `127.0.0.1:43770`，前台同密/log/60fps，runtime build `8015f22`；通讯板已可达。最新 `MacHeartbeat` / `MacResumeStatus` 已修复旧状态回声，当前值守状态应看作 `MacUnattendedHealth=ok reason=ok blockers=none warnings=none`，不要再把历史 `launch-agent-not-loaded`、`bed2095` 或 `accessibility` warning 当作当前 blocker。
 
 最新 heartbeat watcher 校正：Mac 端后台 `Mac Heartbeat` watcher 已重启并恢复上板，当前 `server=http://192.168.31.68:17888`、`lastRun=1 post=posted`、`lastHeartbeat=status=ok`、`refreshUnattended=true`、`configMismatch=none`。后续若 `MacResumeStatus=` 看到 `post=post-failed` 或 `warnings=agent-link-board`，先看同屏 `server=` 和 `configMismatch=`；若 `configMismatch=server` 或 server 不是当前通讯板，复制 `RefreshRestart=` 重启 watcher，不要误判为 Mac host 离线。

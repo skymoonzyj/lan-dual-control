@@ -8,6 +8,7 @@
 - Windows formal Mac E2E 主体已通过。尾部 NativeCommandFailed 来自 Windows PowerShell 5.1 交互 wrapper / transcript 启动 node.exe 时的收尾异常，不是 Mac host、H.264、音频、剪贴板或 input-log 主流程失败。
 - Windows resume/status 的正式密码路径已经改成优先输出 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows/check-mac-formal-e2e.ps1 ... -PromptPassword，覆盖 Next、FormalChecklist、userAuthRequest 和 formalRun。后续不要再复制旧 powershell.exe 交互 transcript 包装路径。
 - Windows 新增 `check-windows-manual-ux-status --boardSummary` 只读手工体验第一屏：消费 Agent Link Board 当前 `PostPassNext=` / `MAC_STANDING_BY_FOR_MANUAL_UX_TEST` / `ManualUxChecklist=`，输出 `WindowsManualUx=status=ready|waiting`、中文清单和 `Safety=no-password,no-input-inject`；只看到 `127.0.0.1` 时 `Target=unknown`，避免 Windows 误连本机。
+- Windows 新增 `start-windows-control-mac` 一键可用入口：默认启动/复用本地控制端页面 `127.0.0.1:5200`，打开带预填参数的 `192.168.31.122:43770` WebSocket 页面，并固定记录 `debugPort=9340`；页面会清空演示密码，用户只在本机页面输入当前 Mac 临时密码。`--dryRun --boardSummary` 输出 `WindowsUsableEntry=status=ready USABLE_NEXT=open_windows_client BLOCKER=none Safety=no-password,no-input-inject`。
 - 本轮不改协议，不认证，不请求或发送密码，不发 input/inject。真实 inject 仍需用户明确确认正在看 Mac 屏幕后另行安排。
 
 
