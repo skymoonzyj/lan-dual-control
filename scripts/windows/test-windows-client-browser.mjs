@@ -1666,6 +1666,12 @@ async function verifyDesktopOnlyHostPanel(session) {
               "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled blockers=none checkedAt=2026-06-19T08:08:38.575Z; MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
             )
           : null;
+      const warningMacPowerHealthWithApplyAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled blockers=none checkedAt=2026-06-19T08:08:38.575Z; MacPowerApply=node scripts/mac/apply-mac-power-settings.mjs --apply --confirmUserPresent --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
+            )
+          : null;
       const okMacPowerHealthAttention =
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
@@ -1700,6 +1706,12 @@ async function verifyDesktopOnlyHostPanel(session) {
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
               "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
+            )
+          : null;
+      const cleanMacPowerApplyCommandAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              "MacPowerApply=node scripts/mac/apply-mac-power-settings.mjs --apply --confirmUserPresent --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
             )
           : null;
       const watcherThrottleBefore =
@@ -2454,6 +2466,9 @@ async function verifyDesktopOnlyHostPanel(session) {
           warningMacPowerHealthWithPlanAttention?.summary.includes("系统睡眠未关闭") &&
           warningMacPowerHealthWithPlanAttention?.summary.includes("显示器睡眠未关闭") &&
           warningMacPowerHealthWithPlanAttention?.summary.includes("Mac 电源预案命令已提供") &&
+          warningMacPowerHealthWithApplyAttention?.summary.includes("系统睡眠未关闭") &&
+          warningMacPowerHealthWithApplyAttention?.summary.includes("显示器睡眠未关闭") &&
+          warningMacPowerHealthWithApplyAttention?.summary.includes("Mac 电源授权执行命令已提供") &&
           okMacPowerHealthAttention?.summary === "" &&
           Array.isArray(okMacPowerHealthAttention?.labels) &&
           okMacPowerHealthAttention.labels.length === 0 &&
@@ -2470,6 +2485,9 @@ async function verifyDesktopOnlyHostPanel(session) {
           cleanMacPowerPlanCommandAttention?.summary === "" &&
           Array.isArray(cleanMacPowerPlanCommandAttention?.labels) &&
           cleanMacPowerPlanCommandAttention.labels.length === 0 &&
+          cleanMacPowerApplyCommandAttention?.summary === "" &&
+          Array.isArray(cleanMacPowerApplyCommandAttention?.labels) &&
+          cleanMacPowerApplyCommandAttention.labels.length === 0 &&
           heartbeatCommandCheck.ok &&
           cleanMacHostReadinessCommandAttention?.summary === "" &&
           Array.isArray(cleanMacHostReadinessCommandAttention?.labels) &&
@@ -2653,12 +2671,14 @@ async function verifyDesktopOnlyHostPanel(session) {
         blockedMacHeartbeatHealthAttention,
         warningMacPowerHealthAttention,
         warningMacPowerHealthWithPlanAttention,
+        warningMacPowerHealthWithApplyAttention,
         okMacPowerHealthAttention,
         warningMacUnattendedHealthAttention,
         macLaunchAgentPlanAttention,
         okMacUnattendedHealthAttention,
         cleanMacLaunchAgentPlanAttention,
         cleanMacPowerPlanCommandAttention,
+        cleanMacPowerApplyCommandAttention,
         heartbeatCommandCheck,
         cleanMacHostReadinessCommandAttention,
         cleanMacHostMediaCommandAttention,

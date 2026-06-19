@@ -258,6 +258,7 @@ const macUnattendedRiskLabels = {
   "power-warning": "电源设置有提醒",
   "power-blocked": "电源设置阻塞值守",
   "mac-power-plan-command": "Mac 电源预案命令已提供",
+  "mac-power-apply-command": "Mac 电源授权执行命令已提供",
   "system-sleep-enabled": "系统睡眠未关闭",
   "display-sleep-enabled": "显示器睡眠未关闭",
   "network-wake-disabled": "网络唤醒未开启",
@@ -3617,6 +3618,8 @@ function parseMacUnattendedAttention(text) {
     /\bMacUnattendedFormal\s*=\s*node\s+scripts[\\/]+mac[\\/]+check-mac-unattended-status\.mjs\b/i.test(source);
   const hasMacPowerPlanCommand =
     /\bMacPowerPlan\s*=\s*(?:node\s+)?(?:scripts[\\/]+mac[\\/]+)?plan-mac-power-settings\.mjs\b/i.test(source);
+  const hasMacPowerApplyCommand =
+    /\bMacPowerApply\s*=\s*(?:node\s+)?(?:scripts[\\/]+mac[\\/]+)?apply-mac-power-settings\.mjs\b/i.test(source);
   const hasMacFormalLocalSmoke = /\b(MacFormalLocalSmoke|check-mac-formal-local-smoke)\b/i.test(source);
   const hasRerunFormalLocalSmoke = /\bRerunFormalLocalSmoke\s*=/i.test(source);
   const hasWindowsReverseGrantStatus = /\bWindowsReverseGrantStatus(NodeFallback)?\s*=/i.test(source);
@@ -3741,6 +3744,9 @@ function parseMacUnattendedAttention(text) {
   );
   if (hasMacPowerPlanCommand && hasMacPowerPlanCommandContext) {
     risks.unshift("mac-power-plan-command");
+  }
+  if (hasMacPowerApplyCommand && hasMacPowerPlanCommandContext) {
+    risks.unshift("mac-power-apply-command");
   }
   const hasMacLaunchAgentCommandContext =
     risks.length > 0 ||

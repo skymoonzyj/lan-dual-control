@@ -17,6 +17,34 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 控制端读懂 `MacPowerApply=` 授权执行入口。
+完成内容：
+- Windows 控制端 `parseMacUnattendedAttention` 新增 `MacPowerApply=` 识别：当同段已有电源/睡眠风险上下文时，Mac 提醒区、快速摘要和复制/导出诊断显示“Mac 电源授权执行命令已提供”。
+- 保留安全边界：单独 `MacPowerApply=` 命令清单不会误弹风险；Windows 端只提示和导出诊断，不运行 Mac 脚本、不执行 `apply-mac-power-settings`、不执行 `pmset` 或 `osascript`。
+- 更新 Windows 控制端 README、当前状态、下一步、任务板和文件占用，方便 Mac 端继续把 `MacPowerApply=` 放进 `MacPowerPlan=` 时 Windows 侧能直接提示现场授权入口。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败在 `warningMacPowerHealthWithApplyAttention` 缺少“Mac 电源授权执行命令已提供”。
+- 绿灯：实现后同一 diagnostics-only 页面自检通过。
+- 收口：`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`git diff --check` 均通过；冲突标记扫描无命中。
+遗留问题：
+- 真正执行 `MacPowerApply=` 仍必须在 Mac 本机由用户看到并完成 macOS 管理员授权；Windows 不代跑也不传递密码。
+下一步建议：
+- 用户在场准备处理电源 warning 时，先看 Windows 控制端复制诊断是否同时提示 `MacPowerPlan=` 和 `MacPowerApply=`，再由 Mac 端按授权弹窗完成 apply 并复跑值守状态。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
 ## 2026-06-19 Mac Codex
 
 日期：2026-06-19 继续推进
