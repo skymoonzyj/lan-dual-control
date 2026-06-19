@@ -5039,6 +5039,13 @@ async function verifyReconnectControls(session) {
       const originalAudioPlayedFrames = state.audioPlayedFrames;
       const originalAudioDroppedFrames = state.audioDroppedFrames;
       const originalAudioLastError = state.audioLastError;
+      const originalAudioContext = state.audioContext;
+      const originalAudioNextPlayTime = state.audioNextPlayTime;
+      const originalVideoFrames = state.videoFrames;
+      const originalVideoFrameTimes = Array.isArray(state.videoFrameTimes) ? state.videoFrameTimes.slice() : [];
+      const originalActualVideoFps = state.actualVideoFps;
+      const originalRequestedFps = state.requestedFps;
+      const originalNegotiatedFps = state.negotiatedFps;
       const originalInputEvents = state.inputEvents;
       const originalHostDiagnostics = { ...(state.hostDiagnostics || {}) };
       const originalHostDiagnosticsText = hostDiagnosticsElement?.textContent || "";
@@ -5204,6 +5211,13 @@ async function verifyReconnectControls(session) {
         state.audioPlayedFrames = 0;
         state.audioDroppedFrames = 2;
         state.audioLastError = "";
+        state.audioContext = { currentTime: 10.12, state: "running" };
+        state.audioNextPlayTime = 10.24;
+        state.videoFrames = 90;
+        state.videoFrameTimes = [1000, 1033, 1066, 1099, 1199];
+        state.actualVideoFps = 20.1;
+        state.requestedFps = 60;
+        state.negotiatedFps = 60;
         scheduleReconnect("测试断线");
         state.inputEvents = 7;
         state.controlDirection = "windows_to_mac";
@@ -5279,6 +5293,19 @@ async function verifyReconnectControls(session) {
             exportText.includes("音量 33%") &&
             exportText.includes("接收 24 帧") &&
             exportText.includes("播放 0") &&
+            exportText.includes("丢 2"),
+          quickSummaryLiveVideo:
+            exportText.includes("- 现场视频：") &&
+            exportText.includes("实收 20.1 FPS") &&
+            exportText.includes("请求 60 Hz") &&
+            exportText.includes("协商 60 Hz") &&
+            exportText.includes("平均间隔 50 ms") &&
+            exportText.includes("最大间隔 100 ms"),
+          quickSummaryLiveAudio:
+            exportText.includes("- 现场声音：") &&
+            exportText.includes("队列 120 ms") &&
+            exportText.includes("缓冲 80/70/450 ms") &&
+            exportText.includes("接收 24") &&
             exportText.includes("丢 2"),
           quickSummaryInput: exportText.includes("- 输入：7（安全日志，不会真正控制 / 已记录）"),
           quickSummaryFloating:
@@ -5429,6 +5456,14 @@ async function verifyReconnectControls(session) {
             exportText.includes("接收 24 帧") &&
             exportText.includes("播放 0") &&
             exportText.includes("丢 2"),
+          liveVideoStatus:
+            exportText.includes("- 现场视频统计：") &&
+            exportText.includes("实收 20.1 FPS") &&
+            exportText.includes("最大间隔 100 ms"),
+          liveAudioStatus:
+            exportText.includes("- 现场声音统计：") &&
+            exportText.includes("队列 120 ms") &&
+            exportText.includes("缓冲 80/70/450 ms"),
           audioLevel: exportText.includes("- 声音电平：37%"),
           audioError: exportText.includes("- 声音错误：-"),
           clipboardStatus:
@@ -5553,7 +5588,13 @@ async function verifyReconnectControls(session) {
           copiedText.includes("- 输入：7（安全日志，不会真正控制 / 已记录）") &&
           copiedText.includes("- 输入事件：7（安全日志，不会真正控制 / 已记录）") &&
           copiedText.includes("- 声音状态：已接收，等待播放") &&
+          copiedText.includes("- 现场视频：") &&
+          copiedText.includes("平均间隔 50 ms") &&
+          copiedText.includes("- 现场声音：") &&
+          copiedText.includes("队列 120 ms") &&
           copiedText.includes("- 声音电平：37%") &&
+          copiedText.includes("- 现场视频统计：") &&
+          copiedText.includes("- 现场声音统计：") &&
           copiedText.includes("- 远端文件状态：warning") &&
           copiedText.includes("远端文件接收超时") &&
           copiedText.includes("- 远端文件建议：") &&
@@ -5649,6 +5690,13 @@ async function verifyReconnectControls(session) {
         state.audioPlayedFrames = originalAudioPlayedFrames;
         state.audioDroppedFrames = originalAudioDroppedFrames;
         state.audioLastError = originalAudioLastError;
+        state.audioContext = originalAudioContext;
+        state.audioNextPlayTime = originalAudioNextPlayTime;
+        state.videoFrames = originalVideoFrames;
+        state.videoFrameTimes = originalVideoFrameTimes;
+        state.actualVideoFps = originalActualVideoFps;
+        state.requestedFps = originalRequestedFps;
+        state.negotiatedFps = originalNegotiatedFps;
         state.inputEvents = originalInputEvents;
         state.hostDiagnostics = originalHostDiagnostics;
         if (hostDiagnosticsElement) {

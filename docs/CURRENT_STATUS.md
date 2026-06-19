@@ -11,6 +11,7 @@
 - Windows 新增 `start-windows-control-mac` 一键可用入口：默认启动/复用本地控制端页面 `127.0.0.1:5200`，打开带预填参数的 `192.168.31.122:43770` WebSocket 页面，并固定记录 `debugPort=9340`；页面会清空演示密码，用户只在本机页面输入当前 Mac 临时密码。`--dryRun --boardSummary` 输出 `WindowsUsableEntry=status=ready USABLE_NEXT=open_windows_client BLOCKER=none Safety=no-password,no-input-inject`。
 - Windows 新增根目录双击入口 `Start-Windows-Control-Mac.cmd`：双击即可调用 `start-windows-control-mac`，启动/复用 `127.0.0.1:5200` 并预填 `192.168.31.122:43770`；支持透传 `--dryRun --boardSummary` 方便无密验证，不包含密码、认证或 input/inject 参数。
 - Windows 真实体验 blocker 已做第一轮修复：页面上下抖动根因是底部状态栏里的连接/输入/声音/剪贴板文字随实时帧状态变长后换行，`grid` 中间远程画面被重新分配高度；现在 statusbar 固定 36px、单行省略，浏览器诊断确认长状态文字下 `statusbar=36px` 且远程画面高度稳定。声音丢包第一轮根因定位在控制端 WebAudio 播放调度缺少低水位预缓冲和高水位背压，突发时会从 `currentTime+15ms` 直接起播或继续堆队列；现在低水位补到 80ms 预缓冲，高水位超过 450ms 时丢弃新帧并计数，声音状态 DOM 刷新限频。验证见 `test-windows-client-browser --diagnosticsOnly` 的 `Audio buffer guards` 和 `Live status layout stability`。
+- Windows 控制端复制诊断已新增“现场视频 / 现场声音”统计：视频导出实收 FPS、请求/协商 Hz、平均/最大帧间隔、总帧数、远端丢帧和解码队列；声音导出 WebAudio 当前队列毫秒、80/70/450 ms 缓冲阈值、接收/播放/丢弃计数。下一次真实体验反馈“卡、不像 60Hz、声音断续”时，优先让用户点复制诊断并粘贴这两行给两端定位。
 - 本轮不改协议，不认证，不请求或发送密码，不发 input/inject。真实 inject 仍需用户明确确认正在看 Mac 屏幕后另行安排。
 
 

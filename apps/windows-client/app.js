@@ -4260,6 +4260,78 @@ function getAudioExportStatus() {
   };
 }
 
+function getVideoFrameGapStats() {
+  const times = Array.isArray(state.videoFrameTimes)
+    ? state.videoFrameTimes.filter((time) => Number.isFinite(Number(time))).map(Number)
+    : [];
+  if (times.length < 2) {
+    return { sampleCount: times.length, averageGapMs: 0, maxGapMs: 0 };
+  }
+
+  const gaps = [];
+  for (let index = 1; index < times.length; index += 1) {
+    const gap = times[index] - times[index - 1];
+    if (Number.isFinite(gap) && gap >= 0) gaps.push(gap);
+  }
+  if (!gaps.length) {
+    return { sampleCount: times.length, averageGapMs: 0, maxGapMs: 0 };
+  }
+
+  const total = gaps.reduce((sum, gap) => sum + gap, 0);
+  return {
+    sampleCount: times.length,
+    averageGapMs: Math.round(total / gaps.length),
+    maxGapMs: Math.round(Math.max(...gaps)),
+  };
+}
+
+function getVideoPerformanceExportStatus() {
+  const requested = Number(state.requestedFps || elements.fpsSelect.value) || 0;
+  const negotiated = Number(state.negotiatedFps || requested) || 0;
+  const actual = Number(state.actualVideoFps) || 0;
+  const frameCount = Number(state.videoFrames) || 0;
+  const droppedFrames = Number(state.hostDiagnostics?.droppedFrames) || 0;
+  const decoderQueue = Number(state.h264DecoderQueue?.length ?? state.hostDiagnostics?.videoDecoderQueue) || 0;
+  const decoderStatus = state.hostDiagnostics?.videoDecoderStatus || state.h264DecoderStatus || "";
+  const { sampleCount, averageGapMs, maxGapMs } = getVideoFrameGapStats();
+  const parts = [];
+  parts.push(actual > 0 ? `实收 ${actual.toFixed(1)} FPS` : "实收 -- FPS");
+  if (requested) parts.push(`请求 ${requested} Hz`);
+  if (negotiated) parts.push(`协商 ${negotiated} Hz`);
+  if (sampleCount >= 2) {
+    parts.push(`平均间隔 ${averageGapMs} ms`);
+    parts.push(`最大间隔 ${maxGapMs} ms`);
+  } else {
+    parts.push("间隔样本不足");
+  }
+  parts.push(`帧 ${frameCount}`);
+  if (droppedFrames > 0) parts.push(`远端丢帧 ${droppedFrames}`);
+  if (decoderQueue > 0) parts.push(`解码队列 ${decoderQueue}`);
+  if (decoderStatus && decoderStatus !== "idle") parts.push(`解码 ${labelFromMap(decoderStatus, videoDecoderStatusLabels)}`);
+  return parts.join(" · ");
+}
+
+function getAudioQueueMs() {
+  const currentTime = Number(state.audioContext?.currentTime);
+  const nextPlayTime = Number(state.audioNextPlayTime);
+  if (!Number.isFinite(currentTime) || !Number.isFinite(nextPlayTime)) return 0;
+  return Math.max(0, Math.round((nextPlayTime - currentTime) * 1000));
+}
+
+function getAudioPerformanceExportStatus() {
+  const enabled = elements.audioToggle.checked;
+  const frameCount = Number(state.audioFrames) || 0;
+  const playedCount = Number(state.audioPlayedFrames) || 0;
+  const droppedCount = Number(state.audioDroppedFrames) || 0;
+  const queueMs = getAudioQueueMs();
+  const bufferText = `${Math.round(audioInitialBufferSeconds * 1000)}/${Math.round(audioMinimumBufferSeconds * 1000)}/${Math.round(audioMaximumQueuedSeconds * 1000)} ms`;
+  const parts = [enabled ? "开启" : "关闭", `队列 ${queueMs} ms`, `缓冲 ${bufferText}`, `接收 ${frameCount}`, `播放 ${playedCount}`, `丢 ${droppedCount}`];
+  if (state.audioLastError) {
+    parts.push(`错误 ${String(state.audioLastError).replace(/\s+/g, " ").slice(0, 80)}`);
+  }
+  return parts.join(" · ");
+}
+
 function getFloatingControlExportStatus() {
   return {
     mode: state.monitorMode ? "监看小窗" : state.immersiveFullscreen ? "真全屏" : state.fullscreen ? "普通全屏" : "窗口",
@@ -4292,6 +4364,8 @@ function buildDiagnosticsQuickSummary({
   outgoingFileSuggestionExport,
   videoExport,
   audioExport,
+  videoPerformanceExport,
+  audioPerformanceExport,
   floatingControlExport,
   inputExport,
 }) {
@@ -4321,7 +4395,9 @@ function buildDiagnosticsQuickSummary({
     ...(outgoingFileExport && outgoingFileExport !== "-" ? [`- 本机发送文件：${outgoingFileExport}`] : []),
     ...(outgoingFileSuggestionExport && outgoingFileSuggestionExport !== "-" ? [`- 本机发送建议：${outgoingFileSuggestionExport}`] : []),
     `- 视频：${videoExport}`,
+    `- 现场视频：${videoPerformanceExport}`,
     `- 声音：${audioExport.summary}`,
+    `- 现场声音：${audioPerformanceExport}`,
     `- 输入：${inputExport}`,
     `- 全屏浮层：${floatingControlExport.mode} · ${floatingControlExport.connection} · ${floatingControlExport.video}`,
     `- 本机协作：Mac 提醒 ${macAlertWatcherExport.status} · 本机被控 ${localHostExport.status} · 反控 ${localHostExport.reverseControlMode}`,
@@ -4355,6 +4431,8 @@ function buildLogExportText() {
   const outgoingFileSuggestionExport = getOutgoingFileTransferSuggestionExportStatus();
   const videoExport = getVideoExportStatus();
   const audioExport = getAudioExportStatus();
+  const videoPerformanceExport = getVideoPerformanceExportStatus();
+  const audioPerformanceExport = getAudioPerformanceExportStatus();
   const floatingControlExport = getFloatingControlExportStatus();
   const inputExport = getInputExportStatus();
   const resolutionLabel = getResolutionExportLabel(settings);
@@ -4393,6 +4471,8 @@ function buildLogExportText() {
       outgoingFileSuggestionExport,
       videoExport,
       audioExport,
+      videoPerformanceExport,
+      audioPerformanceExport,
       floatingControlExport,
       inputExport,
     }),
@@ -4440,8 +4520,10 @@ function buildLogExportText() {
     `- 刷新率：${settings.fps} Hz`,
     `- 码率：${Math.round(settings.maxBandwidthKbps / 1000)} Mbps`,
     `- 视频状态：${videoExport}`,
+    `- 现场视频统计：${videoPerformanceExport}`,
     `- 声音：${settings.audio ? `开启 · ${settings.audioVolume}%` : "关闭"}`,
     `- 声音状态：${audioExport.summary}`,
+    `- 现场声音统计：${audioPerformanceExport}`,
     `- 声音电平：${audioExport.level}`,
     `- 声音错误：${audioExport.error}`,
     `- 剪贴板：${settings.clipboard ? "开启" : "关闭"}`,

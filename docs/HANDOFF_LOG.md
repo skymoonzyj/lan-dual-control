@@ -19,6 +19,37 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 继续推进
+开发端：Windows Codex
+本轮目标：增强 Windows 控制端现场诊断，方便定位卡顿和声音断续。
+完成内容：
+- 复制/导出诊断的快速摘要新增“现场视频 / 现场声音”两行。
+- 现场视频导出实收 FPS、请求/协商 Hz、平均/最大帧间隔、视频帧数、远端丢帧和解码队列。
+- 现场声音导出 WebAudio 当前队列毫秒、80/70/450 ms 缓冲阈值、接收/播放/丢弃计数和播放错误。
+- `test-windows-client-browser` 的 reconnect/复制诊断回归覆盖新增字段，先红灯确认字段缺失，再绿灯确认导出文本可复制。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --clientPort 5203 --debugPort 9343` 先失败在 `quickSummaryLiveVideo=false`、`quickSummaryLiveAudio=false`、`liveVideoStatus=false`、`liveAudioStatus=false`。
+- 绿灯：`node --check apps/windows-client/app.js`
+- 绿灯：`node --check scripts/windows/test-windows-client-browser.mjs`
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --clientPort 5203 --debugPort 9343`，输出 `Diagnostics-only browser checks passed`。
+遗留问题：
+- 这次只增强 Windows 控制端诊断导出，不声明真实卡顿或声音断续已经完全解决；仍需下一次用户真连后用新增两行现场数据判断。
+下一步建议：
+- 用户反馈“卡/不像 60Hz/声音断续”时，先让 Windows 控制端复制诊断，重点看“现场视频 / 现场声音”；必要时让 Mac 端同步跑视频/音频基线。
+是否改了协议：否。
+是否需要另一端配合：真实复测时需要 Mac 端保持 host 在线并按需同步基线观察。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 真实体验 blocker
 开发端：Windows Codex
 本轮目标：修复用户真实连接后的页面上下抖动和声音丢包第一轮问题。
