@@ -1049,6 +1049,39 @@ async function checkPostPassCallDoesNotRequestFormalRerun(args) {
     });
   });
 }
+
+async function checkPostPassCallDoesNotSendUserAuthRequest(args) {
+  await withMockHost(async (port) => {
+    await withMockLinkBoard(async (board) => {
+      const result = await run([
+        "--discover",
+        "--discoverNoLocalSubnets",
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--server", board.url,
+        "--checkBoard",
+        "--sendUserAuthRequest",
+        "--json",
+        "--allowMockVideo",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipInputLog",
+      ], args, freeWindowsClientPortsEnv);
+      assert(result.exitCode !== 0, "post-pass sendUserAuthRequest should fail closed instead of posting a password prompt");
+      const payload = JSON.parse(result.stdout);
+      assert(payload.sentUserAuthRequest?.requested === true, "post-pass sendUserAuthRequest refusal should be requested");
+      assert(payload.sentUserAuthRequest?.ok === false, "post-pass sendUserAuthRequest refusal should fail");
+      assertIncludes(payload.sentUserAuthRequest?.detail || "", "REAL_TEST_PASS", "post-pass sendUserAuthRequest refusal detail");
+      assertIncludes(payload.boardSummary, "PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby", "post-pass sendUserAuthRequest board summary");
+      assertNotIncludes(payload.userAuthRequest || "", "NEED_USER_AUTH", "post-pass userAuthRequest should not ask for password");
+      assert(board.messages.length === 0, `post-pass sendUserAuthRequest should not post to board, got ${board.messages.length}`);
+      assertNotIncludes(result.stdout + result.stderr, "test-password", "post-pass sendUserAuthRequest JSON");
+      console.log("[OK] Windows resume status refuses user auth request after REAL_TEST_PASS");
+    }, {
+      currentCall: postPassCallForManualUx(),
+    });
+  });
+}
 async function checkBoardMacHeartbeatHealthExtraction(args) {
   const okCheckedAt = new Date(Date.now() - 20_000).toISOString();
   const blockedCheckedAt = new Date(Date.now() - 25_000).toISOString();
@@ -2280,6 +2313,7 @@ async function main() {
   await checkSecureAuthCallNextSummary(args);
   await checkUserAuthBlockedCallDoesNotRequestAgentAck(args);
   await checkPostPassCallDoesNotRequestFormalRerun(args);
+  await checkPostPassCallDoesNotSendUserAuthRequest(args);
   await checkBoardMacHeartbeatHealthExtraction(args);
   await checkBoardMacPowerAndUnattendedHealthExtraction(args);
   await checkBoardMacHostSafeStartExtraction(args);

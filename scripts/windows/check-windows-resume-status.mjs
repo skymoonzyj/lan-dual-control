@@ -3612,6 +3612,13 @@ function makeBoardSummary(report) {
 }
 
 function makeUserAuthRequest(report) {
+  if (isPostPassCurrentCall(report.board?.currentCall)) {
+    return [
+      "NO_USER_AUTH: 当前 Agent Link Board 已进入 REAL_TEST_PASS 后续分工。",
+      "Windows 端应记录 PASS 并排查尾部 NativeCommandFailed；Mac 端保持值守等待用户在场手工体验测试。",
+      "不要回旧 formal E2E 第二步，不要再次请求或发送密码。",
+    ].join(" ");
+  }
   const mac = report.macPreflight?.payload;
   if (mac?.ok) {
     const target = mac.target
@@ -3647,6 +3654,16 @@ function sendUserAuthRequest(args, report) {
       status: null,
       error: "",
       detail: "not requested",
+    };
+  }
+
+  if (isPostPassCurrentCall(report.board?.currentCall)) {
+    return {
+      requested: true,
+      ok: false,
+      status: null,
+      error: "",
+      detail: "REAL_TEST_PASS post-pass currentCall does not require a user auth request; nothing was sent.",
     };
   }
 

@@ -50,6 +50,36 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 01:05 CST
+开发端：Mac Codex
+本轮目标：继续收口 `REAL_TEST_PASS` 后防回退，避免 `check-windows-resume-status --sendUserAuthRequest` 误发用户密码输入请求。
+完成内容：
+- 在上一轮 `PostPassNext` 修正后继续检查发送路径，发现 `sendUserAuthRequest` 只看 Mac preflight ready，不看当前 call 是否已经是 PASS 后续。
+- 新增回归用例：模拟 `REAL_TEST_PASS 后续` currentCall，并带 `--sendUserAuthRequest --json`；要求脚本 fail-closed、mock 联络板消息数为 0、`userAuthRequest` 不包含 `NEED_USER_AUTH`。
+- `makeUserAuthRequest` 在 PASS 后续 call 下输出 `NO_USER_AUTH`，明确不要回旧 formal E2E 第二步、不要再次请求或发送密码。
+- `sendUserAuthRequest` 在同一条件下直接拒绝发送，返回 `REAL_TEST_PASS post-pass currentCall does not require a user auth request; nothing was sent.`；普通未 PASS 的正式复跑路径仍保留原隐藏密码请求。
+修改文件：
+- `scripts/windows/check-windows-resume-status.mjs`
+- `scripts/windows/test-windows-resume-status.mjs`
+- `docs/HANDOFF_LOG.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增 `checkPostPassCallDoesNotSendUserAuthRequest` 后，`node scripts/windows/test-windows-resume-status.mjs --timeoutMs 20000` 先失败在 `post-pass sendUserAuthRequest should fail closed instead of posting a password prompt`。
+- 绿灯：同一命令修复后通过，包含 `Windows resume status refuses user auth request after REAL_TEST_PASS`，且旧的正常 `can send a secret-free user auth request` 仍通过。
+- 语法：`node --check scripts/windows/check-windows-resume-status.mjs`、`node --check scripts/windows/test-windows-resume-status.mjs` 通过。
+- 真实通讯板只读 JSON：`check-windows-resume-status --checkBoard --json ...` 输出 `NO_USER_AUTH` 和 `PostPassNext=...`，未发送任何真实 `NEED_USER_AUTH`。
+遗留问题：
+- Windows 端仍需上报 `REAL_TEST_PASS_RECORDED + TAIL_ERROR_INVESTIGATION_STATUS`。
+- 下一轮手工体验测试仍需用户在场；true input inject 仍必须用户明确看着 Mac 屏幕。
+下一步建议：
+- 白天继续时，PASS 后续 call 下不要再使用 `--sendUserAuthRequest` 打扰用户输入密码；若确需复跑正式 E2E，先由两端重新确认新的测试 call。
+是否改了协议：否；只改 Windows resume/status 的发送防线和回归测试。
+是否需要另一端配合：需要 Windows 端继续当前 PASS 记录和尾部错误排查；不需要 Windows 改 Mac 代码。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 00:59 CST
 开发端：Mac Codex
 本轮目标：修正 Windows resume/status 在 `REAL_TEST_PASS` 后续呼叫下仍把主 `Next=` 指向 formal E2E 密码复跑的旧循环提示。
