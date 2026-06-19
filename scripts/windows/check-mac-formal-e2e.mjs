@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -16,6 +16,8 @@ const defaults = {
   discoverNoLocalSubnets: false,
   discoverTimeoutMs: 1200,
   timeoutMs: 30000,
+  stepTimeoutMs: 0,
+  stepTimeoutGraceMs: 15000,
   videoDurationMs: 300000,
   audioDurationMs: 30000,
   minVideoFrames: 1200,
@@ -70,6 +72,8 @@ Options:
   --requirePassword              Refuse empty/demo-password credentials. Default: on.
   --allowDemoPassword            Permit demo-password for local mock/dev probes only.
   --timeoutMs <ms>               Per-step timeout. Default: ${defaults.timeoutMs}
+  --stepTimeoutMs <ms>           Total timeout for each child step. Default: auto.
+  --stepTimeoutGraceMs <ms>      Extra time added to auto step timeout. Default: ${defaults.stepTimeoutGraceMs}
   --videoDurationMs <ms>         H.264 observation duration. Default: ${defaults.videoDurationMs}
   --audioDurationMs <ms>         PCM audio observation duration. Default: ${defaults.audioDurationMs}
   --minVideoFrames <count>       Required observed video frames. Default: ${defaults.minVideoFrames}
@@ -165,6 +169,8 @@ function parseArgs(argv) {
 
   for (const key of [
     "timeoutMs",
+    "stepTimeoutMs",
+    "stepTimeoutGraceMs",
     "videoDurationMs",
     "audioDurationMs",
     "minVideoFrames",
@@ -309,6 +315,16 @@ function makeFormalRunPlan(args) {
     (Number(args.videoDurationMs) || 0) +
     (args.skipAudio ? 0 : Number(args.audioDurationMs) || 0);
   const browserTimeoutMs = Math.max(args.timeoutMs, 45000);
+  const probeTotalTimeoutMs = computeStepTotalTimeoutMs(args, {
+    kind: "protocol",
+    expectedDurationMs: probeExpectedMs,
+    timeoutMs: args.timeoutMs,
+  });
+  const browserTotalTimeoutMs = computeStepTotalTimeoutMs(args, {
+    kind: "browser",
+    expectedDurationMs: browserTimeoutMs,
+    timeoutMs: browserTimeoutMs,
+  });
   const steps = [];
   if (!args.skipProbe) {
     steps.push({
@@ -318,6 +334,7 @@ function makeFormalRunPlan(args) {
       command: makeDisplayCommand("scripts/windows/probe-mac-host.mjs", makeProbeArgs(args)),
       timeoutMs: args.timeoutMs,
       expectedDurationMs: probeExpectedMs,
+      totalTimeoutMs: probeTotalTimeoutMs,
       checks: {
         h264: !args.allowMockVideo,
         realVideo: !args.allowMockVideo,
@@ -338,6 +355,7 @@ function makeFormalRunPlan(args) {
       command: makeDisplayCommand("scripts/windows/test-windows-client-browser.mjs", makeBrowserArgs(args)),
       timeoutMs: browserTimeoutMs,
       expectedDurationMs: browserTimeoutMs,
+      totalTimeoutMs: browserTotalTimeoutMs,
       checks: {
         discoveryUi: true,
         h264: !args.allowMockVideo,
@@ -355,6 +373,10 @@ function makeFormalRunPlan(args) {
     inject: false,
     inputMode: args.skipInputLog ? "skipped" : "log",
     profile: args.fastProfile ? "fast" : "formal",
+    stepTimeout: {
+      explicitMs: Math.max(0, Number(args.stepTimeoutMs) || 0),
+      graceMs: Math.max(0, Number(args.stepTimeoutGraceMs) || 0),
+    },
     video: {
       width: args.width,
       height: args.height,
@@ -383,6 +405,18 @@ function makeFormalRunPlan(args) {
     steps,
     estimatedDurationMs: steps.reduce((total, step) => total + (Number(step.expectedDurationMs) || 0), 0),
   };
+}
+
+function computeStepTotalTimeoutMs(args, step) {
+  const explicitMs = Math.max(0, Number(args.stepTimeoutMs) || 0);
+  if (explicitMs > 0) return explicitMs;
+  const expectedMs = Math.max(0, Number(step.expectedDurationMs) || 0);
+  const perWaitMs = Math.max(0, Number(step.timeoutMs) || Number(args.timeoutMs) || defaults.timeoutMs);
+  const graceMs = Math.max(0, Number(args.stepTimeoutGraceMs) || 0);
+  if (step.kind === "protocol") {
+    return expectedMs + perWaitMs + graceMs;
+  }
+  return Math.max(expectedMs, perWaitMs) + graceMs;
 }
 
 function statusFlag(value) {
@@ -823,7 +857,7 @@ function printRunPlan(runPlan) {
   for (const [index, step] of steps.entries()) {
     print(
       "INFO",
-      `Plan ${index + 1}: ${step.label}; expected=${formatDurationMs(step.expectedDurationMs)}; per-wait timeout=${formatDurationMs(step.timeoutMs)}; command=${step.command}`,
+      `Plan ${index + 1}: ${step.label}; expected=${formatDurationMs(step.expectedDurationMs)}; per-wait timeout=${formatDurationMs(step.timeoutMs)}; step total timeout=${formatDurationMs(step.totalTimeoutMs)}; command=${step.command}`,
     );
     printStepTroubleshootingHints(step, index);
   }
@@ -846,7 +880,7 @@ function printStepTroubleshootingHints(step, index) {
 function printFormalStepStart(step, index, totalSteps, runPlan) {
   print(
     "INFO",
-    `Starting plan ${index + 1}/${totalSteps}: ${step.label}; expected about ${formatDurationMs(step.expectedDurationMs)}, per-wait timeout ${formatDurationMs(step.timeoutMs)}.`,
+    `Starting plan ${index + 1}/${totalSteps}: ${step.label}; expected about ${formatDurationMs(step.expectedDurationMs)}, per-wait timeout ${formatDurationMs(step.timeoutMs)}, step total timeout ${formatDurationMs(step.totalTimeoutMs)}.`,
   );
   if (step.id === "protocol-media-clipboard-input-log") {
     const video = runPlan.video || {};
@@ -1154,7 +1188,24 @@ function promptHidden(label) {
   });
 }
 
-function runNode(script, childArgs, { env, cwd }) {
+function getFormalChildScript(defaultScript, envName) {
+  const override = String(process.env[envName] || "").trim();
+  return override || defaultScript;
+}
+
+function stopChildProcessTree(child) {
+  if (!child?.pid) return;
+  if (process.platform === "win32") {
+    spawnSync("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    return;
+  }
+  child.kill("SIGTERM");
+}
+
+function runNode(script, childArgs, { env, cwd, timeoutMs }) {
   return new Promise((resolveRun, rejectRun) => {
     print("RUN", `node ${script} ${childArgs.join(" ")}`);
     const child = spawn(process.execPath, [script, ...childArgs], {
@@ -1163,8 +1214,25 @@ function runNode(script, childArgs, { env, cwd }) {
       stdio: "inherit",
       windowsHide: true,
     });
-    child.on("error", rejectRun);
+    let settled = false;
+    const effectiveTimeoutMs = Math.max(1, Number(timeoutMs) || 0);
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      print("WARN", `Child step exceeded step total timeout after ${formatDurationMs(effectiveTimeoutMs)}; stopping node ${script}.`);
+      stopChildProcessTree(child);
+      rejectRun(new Error(`${script} timed out after ${formatDurationMs(effectiveTimeoutMs)} (step total timeout)`));
+    }, effectiveTimeoutMs);
+    child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      rejectRun(error);
+    });
     child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       if (code === 0) {
         resolveRun();
       } else {
@@ -1281,13 +1349,29 @@ async function main() {
   if (!args.skipProbe) {
     const index = probeStep ? plannedSteps.indexOf(probeStep) : 0;
     printFormalStepStart(probeStep || { label: "Protocol, H.264, audio, clipboard, and input-log probe", timeoutMs: args.timeoutMs }, index, plannedSteps.length || 2, runPlan);
-    await runNode("scripts/windows/probe-mac-host.mjs", makeProbeArgs(args), { env: childEnv, cwd: repoRoot });
+    await runNode(getFormalChildScript("scripts/windows/probe-mac-host.mjs", "LAN_DUAL_FORMAL_E2E_PROBE_SCRIPT"), makeProbeArgs(args), {
+      env: childEnv,
+      cwd: repoRoot,
+      timeoutMs: probeStep?.totalTimeoutMs || computeStepTotalTimeoutMs(args, {
+        kind: "protocol",
+        expectedDurationMs: Number(args.videoDurationMs || 0) + (args.skipAudio ? 0 : Number(args.audioDurationMs || 0)),
+        timeoutMs: args.timeoutMs,
+      }),
+    });
     printFormalStepDone(probeStep || { label: "Protocol, H.264, audio, clipboard, and input-log probe" }, index, plannedSteps.length || 2);
   }
   if (!args.skipBrowser) {
     const index = browserStep ? plannedSteps.indexOf(browserStep) : args.skipProbe ? 0 : 1;
     printFormalStepStart(browserStep || { label: "Windows client browser discovery and H.264 canvas check", timeoutMs: Math.max(args.timeoutMs, 45000) }, index, plannedSteps.length || 2, runPlan);
-    await runNode("scripts/windows/test-windows-client-browser.mjs", makeBrowserArgs(args), { env: childEnv, cwd: repoRoot });
+    await runNode(getFormalChildScript("scripts/windows/test-windows-client-browser.mjs", "LAN_DUAL_FORMAL_E2E_BROWSER_SCRIPT"), makeBrowserArgs(args), {
+      env: childEnv,
+      cwd: repoRoot,
+      timeoutMs: browserStep?.totalTimeoutMs || computeStepTotalTimeoutMs(args, {
+        kind: "browser",
+        expectedDurationMs: Math.max(args.timeoutMs, 45000),
+        timeoutMs: Math.max(args.timeoutMs, 45000),
+      }),
+    });
     printFormalStepDone(browserStep || { label: "Windows client browser discovery and H.264 canvas check" }, index, plannedSteps.length || 2);
   }
 

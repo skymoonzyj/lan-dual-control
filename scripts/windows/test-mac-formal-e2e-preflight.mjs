@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createMockMacHostServer } from "../../apps/mock-mac-host/server.mjs";
@@ -81,6 +83,7 @@ function assertRunPlanSafe(payload, label, expectations = {}) {
   assert(plan.steps.some((step) => step.id === "windows-client-browser-h264"), `${label} should include the browser probe`);
   const browserStep = plan.steps.find((step) => step.id === "windows-client-browser-h264");
   assertIncludes(browserStep.command, "--progressIntervalMs", `${label} browser progress command`);
+  assert(Number(browserStep.totalTimeoutMs || 0) >= Number(browserStep.timeoutMs || 0), `${label} browser step should expose total timeout`);
   assert(Array.isArray(browserStep.troubleshootingHints), `${label} browser step should include troubleshooting hints`);
   const browserHintText = browserStep.troubleshootingHints.join("\n");
   assertIncludes(browserHintText, "progress snapshots", `${label} browser troubleshooting hints`);
@@ -98,6 +101,7 @@ function assertRunPlanSafe(payload, label, expectations = {}) {
       Number(protocolStep.expectedDurationMs || 0) === expectedProtocolMs,
       `${label} should report sequential video/audio probe duration`,
     );
+    assert(Number(protocolStep.totalTimeoutMs || 0) > Number(protocolStep.expectedDurationMs || 0), `${label} protocol step should expose total timeout`);
     assert(Array.isArray(protocolStep.troubleshootingHints), `${label} protocol step should include troubleshooting hints`);
     const protocolHintText = protocolStep.troubleshootingHints.join("\n");
     assertIncludes(protocolHintText, "First H.264 frame", `${label} protocol troubleshooting hints`);
@@ -330,6 +334,7 @@ async function testOfflinePreflight(args) {
   assertIncludes(result.stdout, "Plan 2 hint:", "offline text preflight browser hints");
   assertIncludes(result.stdout, "Plan 1 hint:", "offline text preflight protocol hints");
   assertIncludes(result.stdout, "per-wait timeout=30s", "offline text preflight timeout wording");
+  assertIncludes(result.stdout, "step total timeout=", "offline text preflight timeout wording");
   assertIncludes(result.stdout, "WinClientPorts", "offline text preflight browser hints");
   assertIncludes(result.stdout, "WindowsLanRisk", "offline text preflight browser hints");
   assertNotIncludes(result.stdout + result.stderr, "Mac host password", "offline text preflight");
@@ -746,6 +751,50 @@ async function testMockFastPath(args) {
   });
 }
 
+async function testFormalStepTimeoutKillsHungProbe(args) {
+  await withMockHost(async (port) => {
+    const tempDir = await mkdtemp(resolve(tmpdir(), "lan-dual-formal-timeout-"));
+    const hungProbe = resolve(tempDir, "hung-probe.mjs");
+    await writeFile(
+      hungProbe,
+      [
+        "setInterval(() => {",
+        "  console.log('[fake] child still running');",
+        "}, 200);",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    try {
+      const result = await runRunner([
+        "--host", "127.0.0.1",
+        "--port", String(port),
+        "--allowMockVideo",
+        "--skipInputLog",
+        "--skipAudio",
+        "--skipClipboard",
+        "--skipBrowser",
+        "--stepTimeoutMs", "800",
+      ], {
+        ...args,
+        env: {
+          LAN_DUAL_PASSWORD: "test-password",
+          LAN_DUAL_FORMAL_E2E_PROBE_SCRIPT: hungProbe,
+        },
+        timeoutMs: 6000,
+      });
+      assert(result.exitCode !== 0, "hung formal probe should fail through the parent step timeout");
+      assert(result.timedOut !== true, "parent regression wrapper should not be the timeout owner");
+      assertIncludes(result.stdout + result.stderr, "timed out after 0.8s", "hung formal probe timeout");
+      assertIncludes(result.stdout + result.stderr, "step total timeout", "hung formal probe timeout");
+      assertNotIncludes(result.stdout + result.stderr, "test-password", "hung formal probe timeout");
+      print("OK", "Formal runner kills a hung child step through the step total timeout");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+}
+
 async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -772,6 +821,7 @@ async function main() {
   await testMockRequiresPasswordAfterPreflight(args);
   await testFormalPromptExplainsPasswordWait(args);
   await testBrowserPromptExplainsPasswordWait(args);
+  await testFormalStepTimeoutKillsHungProbe(args);
   await testMockFastPath(args);
   print("OK", "Windows formal E2E preflight regression passed");
 }

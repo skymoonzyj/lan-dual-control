@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：修正 Windows formal E2E 第二步看起来卡住时外层没有总时限兜底的问题。
+完成内容：
+- `check-mac-formal-e2e` 的 runPlan、普通输出和步骤启动日志新增 `step total timeout`，把预计耗时、单次等待超时和整步兜底时限区分开。
+- 正式执行子进程时新增外层总时限；probe/browser child 超过总时限会被停止，并报 `timed out ... (step total timeout)`，避免第二步或子进程挂住时父进程无限等待。
+- 新增挂住 probe child 回归：用测试专用 child 脚本模拟不退出，确认 formal runner 自己在 0.8 秒总时限内收口，且不泄露密码。
+修改文件：
+- `scripts/windows/check-mac-formal-e2e.mjs`
+- `scripts/windows/test-mac-formal-e2e-preflight.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增测试后，`node scripts/windows/test-mac-formal-e2e-preflight.mjs --timeoutMs 90000` 先失败在离线 runPlan 缺少 `step total timeout=`。
+- 绿灯：实现后，同一回归通过，并覆盖“挂住 child 由 formal runner 自己超时收口”。
+遗留问题：
+- 本轮不跑真实 Mac 密码认证和 H.264 页面长测，只修正 Windows formal runner 外层收口。
+下一步建议：
+- 之后现场复跑正式 Mac E2E 时，如果第二步超过 `step total timeout` 报错，优先查 Windows client 端口、浏览器/H.264 canvas、`WinClientPorts`、`WindowsLanRisk` 和 Mac 远端 FPS 上限。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端也消费 Windows resume 总览输出的稳定 `MacEvidence=` 字段。
 完成内容：
 - `parseMacEvidenceFieldLabels` 同时识别 `Evidence=` 和 `MacEvidence=`，继续只接受干净片段与已知正向 token。
