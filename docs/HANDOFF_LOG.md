@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端把 Mac client 页面在线和诊断通过的干净结果显示为值守证据。
+完成内容：
+- `parseMacPositiveEvidenceLabels` 新增 `MacClientPage` 正向结果识别：`status=online/ok/ready`、`online`、`ready=true` 或“通过”且同段无 warning/blocker/failed/stale 时，显示“Mac client 页面在线”。
+- 新增 `MacClientDiagnostics` 正向结果识别：`status=ok`、`probeClientServer=ok`、`page=online` 或“通过”且同段干净时，显示“Mac client 诊断已通过”。
+- 页面 diagnostics-only 覆盖 Mac 提醒区“证据：Mac client 页面在线 / Mac client 诊断已通过”和复制/导出诊断“值守证据”。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败在 `positiveMacClientStatusAttention.evidenceSummary` 为空。
+- 绿灯：实现后，`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：
+- 本轮只消费已有 Mac client 页面/诊断摘要，不启动 Mac client、不运行 Mac 脚本。
+下一步建议：
+- 后续如果 Mac 端上板 `MacClientPage=status=online` 或 `MacClientDiagnostics=status=ok`，Windows 侧可先当作页面和诊断健康证据；只有同段另有 warning/blocker、失败、离线或不可达时再按风险摘要处理。
+是否改了协议：否；只改 Windows 控制端本地解析和显示。
+是否需要另一端配合：不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端把新鲜、干净的 MacHeartbeat ok 显示为值守证据，并避免 `stale metadata only` 误判成心跳过期。
 完成内容：
 - 新增 `isCleanLatestMacHeartbeatEvidence`：只把最新 `MacHeartbeat=status=ok`、未过期 `checkedAt`、`blockers=none`、`warnings=none` 且无 blocked/warning/failed 的 heartbeat 显示为“Mac 心跳正常”。

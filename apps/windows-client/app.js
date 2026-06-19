@@ -3381,6 +3381,24 @@ function parseMacPositiveEvidenceLabels(text) {
   ) {
     labels.push("Mac formal E2E 已就绪");
   }
+  if (
+    hasMacPositiveEvidenceSegment(
+      source,
+      /\bMacClientPage\b/i,
+      /\bstatus\s*=\s*(?:online|ok|ready)\b|\bonline\b|\bready\s*=\s*true\b|通过/i,
+    )
+  ) {
+    labels.push("Mac client 页面在线");
+  }
+  if (
+    hasMacPositiveEvidenceSegment(
+      source,
+      /\bMacClientDiagnostics\b/i,
+      /\bstatus\s*=\s*ok\b|\bprobeClientServer\s*=\s*ok\b|\bpage\s*=\s*online\b|通过/i,
+    )
+  ) {
+    labels.push("Mac client 诊断已通过");
+  }
   return [...new Set(labels)];
 }
 
