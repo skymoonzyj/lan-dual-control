@@ -128,6 +128,13 @@ Machine-readable JSON fields:
                                   It checks Mac-side helper commands and
                                   board summaries without passwords, calls,
                                   input events, or inject.
+  commands.macUnattendedSendStatus
+                                  Secret-free command to refresh the independent
+                                  Mac Unattended Agent Link Board status when
+                                  macUnattendedFreshness is stale.
+  macUnattendedFreshness         Optional freshness summary forwarded from the
+                                  nested formal checklist. It is advisory and
+                                  never changes readiness by itself.
   commands.windowsReverseGrantStatus
                                   Recommended Windows-side PowerShell loopback
                                   command to inspect the one-time reverse-
@@ -560,6 +567,19 @@ function makeMacScriptHelpCommand() {
   return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
 
+function makeMacUnattendedSendStatusCommand(args) {
+  const parts = [
+    "node scripts/mac/check-mac-unattended-status.mjs",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "43770",
+  ];
+  if (args.server !== defaults.server) parts.push("--server", args.server);
+  parts.push("--sendStatus", "--boardSummary");
+  return parts.join(" ");
+}
+
 function makePreflightCommand(args) {
   const parts = [
     "node scripts/mac/check-mac-client-formal-status.mjs",
@@ -922,6 +942,13 @@ function makeBoardSummary(report) {
   const preflightFindings = formatPreflightFindings(report.preflight, report);
   const reverseGrantParts = makeReverseGrantBoardSummaryParts(report, report.args);
   const secureAuthParts = makeSecureAuthBoardSummaryParts(report, report.args);
+  const macUnattendedFreshnessSummary = formatMacUnattendedFreshnessSummary(report.macUnattendedFreshness);
+  const macUnattendedParts = macUnattendedFreshnessSummary
+    ? [
+        `${macUnattendedFreshnessSummary}.`,
+        `MacUnattendedSendStatus=${report.commands?.macUnattendedSendStatus || makeMacUnattendedSendStatusCommand(report.args)}.`,
+      ]
+    : [];
   if (report.ok && report.browserSmoke?.ran) {
     return [
       `Mac client browser smoke passed against ${target}; duration=${report.browserSmoke.durationMs}ms.${discoveryText}${discoveryChecklistText}`,
@@ -930,6 +957,7 @@ function makeBoardSummary(report) {
       `MacClientFormalSmoke=${report.commands?.macClientFormalSmoke || makeMacClientFormalSmokeCommand(report.args)}.`,
       ...(report.commands?.promptPasswordSmoke ? [`MacClientPromptPasswordSmoke=${report.commands.promptPasswordSmoke}.`] : []),
       `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
+      ...macUnattendedParts,
       ...reverseGrantParts,
       ...secureAuthParts,
       `Reverse rehearsal next if needed: ${makeReverseControlRehearsalBoardText()}`,
@@ -955,6 +983,7 @@ function makeBoardSummary(report) {
       ...(report.commands?.promptPasswordSmoke ? [`MacClientPromptPasswordSmoke=${report.commands.promptPasswordSmoke}.`] : []),
       `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
       `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
+      ...macUnattendedParts,
       `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
       ...reverseGrantParts,
       ...secureAuthParts,
@@ -969,6 +998,7 @@ function makeBoardSummary(report) {
     ...(report.commands?.promptPasswordSmoke ? [`MacClientPromptPasswordSmoke=${report.commands.promptPasswordSmoke}.`] : []),
     `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
     `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
+    ...macUnattendedParts,
     `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
     ...reverseGrantParts,
     ...secureAuthParts,
@@ -1018,6 +1048,17 @@ function makeDiscoveryChecklistText(report) {
   return `${riskText} FormalChecklist=${report.discovery.formalChecklistCommand}.${manual}`;
 }
 
+function formatMacUnattendedFreshnessSummary(freshness) {
+  if (!freshness) return "";
+  return [
+    `MacUnattendedFreshness=${freshness.status || "unknown"}`,
+    `checkedAgeMs=${Number.isFinite(freshness.checkedAgeMs) ? freshness.checkedAgeMs : "unknown"}`,
+    `thresholdMs=${freshness.thresholdMs ?? "unknown"}`,
+    `checkedAt=${freshness.checkedAt || "unknown"}`,
+    `source=${freshness.source || "unknown"}`,
+  ].join(" ");
+}
+
 function printHuman(report) {
   console.log("Mac client formal browser smoke");
   console.log(`- target: ${report.args.host || "<missing>"}:${report.args.port}`);
@@ -1027,6 +1068,9 @@ function printHuman(report) {
   console.log(`- preflight: ok=${report.preflight?.ok ? "yes" : "no"} ready=${report.preflight?.readyToCall ? "yes" : "no"}`);
   if (report.preflight?.counts) {
     console.log(`- checklist: ${report.preflight.counts.blocker} blockers, ${report.preflight.counts.warning} warnings`);
+  }
+  if (report.macUnattendedFreshness) {
+    console.log(`- Mac unattended freshness: ${formatMacUnattendedFreshnessSummary(report.macUnattendedFreshness)}`);
   }
   if (report.dryRun) {
     console.log(`- dryRun command: ${report.commands.browserSmoke}`);
@@ -1042,11 +1086,13 @@ function printHuman(report) {
 
 function makeReport(args, preflight) {
   const windowsSecureAuthPath = preflight.payload?.runPlan?.commands?.windowsSecureAuthPath || "";
+  const macUnattendedFreshness = preflight.payload?.macUnattendedFreshness || null;
   return {
     ok: false,
     preflightOnly: args.preflightOnly,
     dryRun: args.dryRun,
     checkedAt: new Date().toISOString(),
+    macUnattendedFreshness,
     args: {
       host: args.host,
       port: args.port,
@@ -1079,6 +1125,7 @@ function makeReport(args, preflight) {
       promptPasswordSmoke: makePromptPasswordSmokeCommand(args),
       macClientBrowserSelfTest: makeMacClientBrowserSelfTestCommand(),
       macScriptHelp: makeMacScriptHelpCommand(),
+      macUnattendedSendStatus: makeMacUnattendedSendStatusCommand(args),
       windowsReverseGrantStatus: makeWindowsReverseGrantCommand(args, "status"),
       windowsOpenOneTimeReverseGrant: makeWindowsReverseGrantCommand(args, "grant"),
       windowsReverseGrantStatusPowerShell: makeWindowsReverseGrantPowerShellCommand(args, "status"),

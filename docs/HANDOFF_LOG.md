@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 `MacClientFormalSmoke=` 也能直接提醒 `Mac Unattended` / `MacPowerHealth` 证据是否新鲜，并给出刷新入口。
+完成内容：
+- `run-mac-client-formal-smoke --json/--boardSummary` 现在把 nested formal checklist 已安全过滤出的 `macUnattendedFreshness` 透传到顶层 JSON、普通输出和 `MacClientFormalSmoke=` 摘要。
+- 摘要里当 freshness 存在时追加 `MacUnattendedFreshness=fresh|stale checkedAgeMs=<毫秒> thresholdMs=600000 checkedAt=<时间> source=MacUnattendedHealth|MacPowerHealth`。
+- 同屏新增 `commands.macUnattendedSendStatus` / `MacUnattendedSendStatus=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --server <board> --sendStatus --boardSummary`，用于刷新独立 `Mac Unattended` 状态；该命令不请求密码、不认证、不发 call/input/inject。
+- 本轮只透传 formal checklist 的安全结果，不新增第二套通讯板解析，不运行 `pmset`、不提权、不改系统、不写 plist、不加载 `launchctl`、不认证、不请求或发送密码、不发 call/input/inject。
+修改文件：
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 20000` 先失败在 help 缺 `commands.macUnattendedSendStatus`。
+- 绿灯：实现后同一专项回归通过，并覆盖 JSON 顶层、boardSummary、刷新命令和不泄露密码/不认证边界。
+遗留问题：
+- 当前真实 `MacUnattendedFreshness=stale` 仍表示独立值守证据旧了；真正修改系统睡眠或加载 LaunchAgent 仍需用户现场确认后人工执行。
+下一步建议：
+- 如果 `MacClientFormalSmoke=` 看到 `MacUnattendedFreshness=stale`，先复制同屏 `MacUnattendedSendStatus=` 刷新独立值守证据，再继续正式 smoke 或电源/LaunchAgent 人工处理判断。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 `MacClientFormalChecklist=` 也能直接说明当前 `Mac Unattended` / `MacPowerHealth` 证据是否新鲜。
 完成内容：
 - `check-mac-client-formal-status --json/--boardSummary` 新增 JSON 顶层 `macUnattendedFreshness`，并在 `runPlan.macUnattendedFreshness`、普通 runPlan、`callText` 和 `MacClientFormalChecklist=` 摘要里转述 `MacUnattendedFreshness=fresh|stale checkedAgeMs=<毫秒> thresholdMs=600000 checkedAt=<时间> source=MacUnattendedHealth|MacPowerHealth`。

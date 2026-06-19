@@ -115,6 +115,22 @@ function assertMacScriptHelpCommand(command, label) {
   assertNotIncludes(command, "inject", label);
 }
 
+function assertMacUnattendedSendStatusCommand(command, label, expectedServer = "") {
+  assertIncludes(command, "node scripts/mac/check-mac-unattended-status.mjs", label);
+  assertIncludes(command, "--host 127.0.0.1", label);
+  assertIncludes(command, "--port 43770", label);
+  assertIncludes(command, "--sendStatus", label);
+  assertIncludes(command, "--boardSummary", label);
+  if (expectedServer) assertIncludes(command, `--server ${expectedServer}`, label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--useEnvPassword", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function assertMacClientFormalChecklistCommand(command, label, expectedHost = "127.0.0.1", expectedPort = "") {
   assertIncludes(command, "scripts/mac/check-mac-client-formal-status.mjs", label);
   assertIncludes(command, "--boardSummary", label);
@@ -420,6 +436,8 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.promptPasswordSmoke", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientBrowserSelfTest", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macScriptHelp", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macUnattendedSendStatus", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macUnattendedFreshness", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.windowsReverseGrantStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.windowsOpenOneTimeReverseGrant", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.windowsReverseGrantStatusNodeFallback", `${script} ${flag}`);
@@ -471,6 +489,7 @@ async function checkPreflightAndDryRun(args) {
           text: `WindowsSecureAuthPath=${secureAuthCommand}.`,
         },
       ];
+      const macUnattendedStatus = "Mac unattended status: host=online inputMode=log build=ed937a2; power=sleep=ac-power:1 displaySleep=ac-power:10 networkWake=ac-power:1; MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T07:23:38.703Z; attention=2 warning(s) blockers=none warnings=launch-agent-not-loaded,power.";
       await withBoardServer(async (boardServer) => {
         const preflight = run([
           "--json",
@@ -492,7 +511,17 @@ async function checkPreflightAndDryRun(args) {
         assert(preflightPayload.preflightOnly === true, "preflightOnly should be recorded");
         assert(preflightPayload.preflight?.ok === true, "nested formal preflight should be ok=true");
         assert(preflightPayload.preflight?.readyToCall === true, "custom board server should allow readyToCall");
+        assert(preflightPayload.macUnattendedFreshness?.status === "stale", "preflight should surface top-level MacUnattendedFreshness status");
+        assert(preflightPayload.macUnattendedFreshness?.checkedAt === "2026-06-19T07:23:38.703Z", "preflight should surface MacUnattendedFreshness checkedAt");
+        assert(preflightPayload.macUnattendedFreshness?.thresholdMs === 600000, "preflight should surface MacUnattendedFreshness threshold");
+        assert(preflightPayload.macUnattendedFreshness?.source === "MacUnattendedHealth", "preflight should surface MacUnattendedFreshness source");
+        assert(preflightPayload.preflight?.macUnattendedFreshness?.status === "stale", "nested formal preflight should still include MacUnattendedFreshness");
         assert(preflightPayload.ensuredClient?.attempted === false, "preflight without ensureClient should record no ensure attempt");
+        assertMacUnattendedSendStatusCommand(
+          preflightPayload.commands?.macUnattendedSendStatus || "",
+          "preflight Mac unattended sendStatus command",
+          boardServer,
+        );
         assertMacClientFormalChecklistCommand(
           preflightPayload.commands?.macClientFormalChecklist || "",
           "preflight Mac client formal checklist command",
@@ -547,6 +576,14 @@ async function checkPreflightAndDryRun(args) {
         assertIncludes(preflightPayload.boardSummary || "", "MacClientFormalChecklist=", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "MacClientFormalSmoke=", "preflight board summary");
         assertIncludes(preflightPayload.boardSummary || "", "MacClientPromptPasswordSmoke=", "preflight board summary");
+        assertIncludes(preflightPayload.boardSummary || "", "MacUnattendedFreshness=stale", "preflight board summary");
+        assertIncludes(preflightPayload.boardSummary || "", "source=MacUnattendedHealth", "preflight board summary");
+        assertIncludes(preflightPayload.boardSummary || "", "MacUnattendedSendStatus=", "preflight board summary");
+        assertMacUnattendedSendStatusCommand(
+          (preflightPayload.boardSummary || "").split("MacUnattendedSendStatus=")[1]?.split(". ")[0] || "",
+          "preflight board summary Mac unattended sendStatus command",
+          boardServer,
+        );
         assertPromptPasswordSmokeCommand(
           (preflightPayload.boardSummary || "").split("MacClientPromptPasswordSmoke=")[1]?.split(". ")[0] || "",
           "preflight board summary prompt-password smoke command",
@@ -609,7 +646,15 @@ async function checkPreflightAndDryRun(args) {
         assertReverseGrantBoardSummary(sendCallPayload.boardSummary || "", "sendCall board summary", windowsPort);
         assertIncludes(sendCallPayload.boardSummary || "", "Reverse rehearsal after auth", "sendCall board summary");
         assertNotIncludes(`${sendCall.stdout}\n${sendCall.stderr}`, secret, "sendCall output");
-      }, { events: boardEvents });
+      }, {
+        events: boardEvents,
+        statuses: {
+          "Mac Unattended": {
+            status: "warning",
+            note: macUnattendedStatus,
+          },
+        },
+      });
 
       const dryRun = run([
         "--json",
