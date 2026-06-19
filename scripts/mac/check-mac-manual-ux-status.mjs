@@ -322,6 +322,45 @@ function isActiveMacManualUxValidationBoardCall(call) {
   return Boolean(call?.active && isMacManualUxValidationCall(call.raw || call));
 }
 
+function isManualUxConfirmationText(value) {
+  const source = compactText(value);
+  if (!source) return false;
+  if (/\bMAC_MANUAL_UX_CONFIRMED\b|\bManualUxConfirmed\b/i.test(source)) return true;
+  const manualUx = /manual\s*ux|ManualUx|手工体验|真实体验|体验窗口|体验验收/i.test(source);
+  const confirmed = /confirmed|confirmation|ready\s+for|can\s+start|start\s+ManualUxTest|已确认|确认|可以开始|可开始|同意|准备开始/i.test(source);
+  return manualUx && confirmed;
+}
+
+function isManualUxConfirmationSender(name) {
+  return /windows codex|user|用户|skymoonzyj/i.test(normalizedText(name));
+}
+
+function happenedAfterCallStart(value, call) {
+  const callStartedAtMs = Date.parse(call?.startedAt || call?.updatedAt || "");
+  if (!Number.isFinite(callStartedAtMs)) return true;
+  const happenedAtMs = Date.parse(normalizedText(value));
+  return Number.isFinite(happenedAtMs) && happenedAtMs >= callStartedAtMs;
+}
+
+function hasManualUxConfirmation(state, call) {
+  if (!isActiveMacManualUxValidationBoardCall(call)) return false;
+  if (state?.statuses && typeof state.statuses === "object") {
+    for (const [device, status] of Object.entries(state.statuses)) {
+      if (!isManualUxConfirmationSender(device)) continue;
+      if (!happenedAfterCallStart(status?.updatedAt, call)) continue;
+      if (isManualUxConfirmationText(status)) return true;
+    }
+  }
+  if (Array.isArray(state?.recentEvents)) {
+    for (const event of state.recentEvents) {
+      if (!isManualUxConfirmationSender(event?.from)) continue;
+      if (!happenedAfterCallStart(event?.at, call)) continue;
+      if (isManualUxConfirmationText(event)) return true;
+    }
+  }
+  return false;
+}
+
 function statusByDevice(state, deviceName) {
   if (!state?.statuses || typeof state.statuses !== "object") return null;
   const wanted = String(deviceName || "").toLowerCase();
@@ -454,8 +493,9 @@ function makeReport(state, server) {
     usableEntryManualUxCall: texts.some((text) => isUsableEntryManualUxCall(text)),
     userAwakeManualUxCall: texts.some((text) => isUserAwakeManualUxCall(text)),
     manualUxCallInProgress: isActiveMacManualUxValidationBoardCall(boardCallBeforeCheck),
+    manualUxConfirmed: hasManualUxConfirmation(state, boardCallBeforeCheck),
   };
-  const ready = signals.postPassNext || signals.manualUxStandby || signals.usableEntryManualUxCall;
+  const ready = signals.postPassNext || signals.manualUxStandby || signals.usableEntryManualUxCall || signals.manualUxConfirmed;
   const calling = signals.manualUxCallInProgress;
   const callReady = !ready && !calling && signals.userAwakeManualUxCall;
   const status = ready ? "ready" : calling ? "calling" : callReady ? "call-ready" : "waiting";

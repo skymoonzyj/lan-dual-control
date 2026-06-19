@@ -382,6 +382,38 @@ function expiredMacManualUxCallWhileWindowsPushingBoardState() {
   };
 }
 
+function confirmedMacManualUxCallBoardState() {
+  const state = macManualUxCallInProgressBoardState();
+  return {
+    ...state,
+    recentEvents: [
+      ...state.recentEvents,
+      {
+        at: new Date(Date.now() - 30 * 1000).toISOString(),
+        type: "message",
+        from: "Windows Codex",
+        text: "MAC_MANUAL_UX_CONFIRMED: Windows/User confirmed the manual UX window; start ManualUxTest now.",
+      },
+    ],
+  };
+}
+
+function staleConfirmedMacManualUxCallBoardState() {
+  const state = macManualUxCallInProgressBoardState();
+  return {
+    ...state,
+    recentEvents: [
+      ...state.recentEvents,
+      {
+        at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+        type: "message",
+        from: "Windows Codex",
+        text: "MAC_MANUAL_UX_CONFIRMED: Old manual UX window confirmation from a previous call.",
+      },
+    ],
+  };
+}
+
 function otherActiveCallWithUserAwakeSignalBoardState() {
   return {
     updatedAt: "2026-06-20T10:05:00.000Z",
@@ -638,6 +670,40 @@ async function checkManualUxCallInProgressDoesNotOfferDuplicateCall(args) {
   console.log("[OK] Mac manual UX status treats an active manual UX call as waiting for confirmation");
 }
 
+async function checkConfirmedManualUxCallIsReady(args) {
+  await withFakeBoard(confirmedMacManualUxCallBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `confirmed manual UX call JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "confirmed manual UX call JSON");
+    assert(payload.status === "ready", `confirmed manual UX call should be ready, got ${payload.status}`);
+    assert(payload.signals?.manualUxCallInProgress === true, "confirmed manual UX call should still expose current call signal");
+    assert(payload.signals?.manualUxConfirmed === true, "confirmed manual UX call should expose confirmation signal");
+    assert(payload.commands?.manualUxCallCommand == null, `confirmed manual UX call should not expose another call command: ${JSON.stringify(payload.commands)}`);
+    assertIncludes(payload.boardSummary, "MacManualUx=status=ready", "confirmed manual UX call boardSummary");
+    assertIncludes(payload.boardSummary, "manualUxConfirmed", "confirmed manual UX call boardSummary");
+    assertIncludes(payload.boardSummary, "Next=ManualUxTest", "confirmed manual UX call boardSummary");
+    assertIncludes(payload.boardSummary, "ManualUxCall=active", "confirmed manual UX call boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `confirmed read-only status should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "confirmed manual UX call JSON");
+  });
+  console.log("[OK] Mac manual UX status treats a current call confirmation as ready");
+}
+
+async function checkStaleManualUxConfirmationDoesNotReadyNewCall(args) {
+  await withFakeBoard(staleConfirmedMacManualUxCallBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `stale confirmed manual UX call JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "stale confirmed manual UX call JSON");
+    assert(payload.status === "calling", `stale confirmed manual UX call should remain calling, got ${payload.status}`);
+    assert(payload.signals?.manualUxConfirmed !== true, `stale confirmation should not be accepted: ${JSON.stringify(payload.signals)}`);
+    assertIncludes(payload.boardSummary, "MacManualUx=status=calling", "stale confirmed manual UX call boardSummary");
+    assertIncludes(payload.boardSummary, "Next=WaitForManualUxConfirmation", "stale confirmed manual UX call boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `stale read-only status should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "stale confirmed manual UX call JSON");
+  });
+  console.log("[OK] Mac manual UX status ignores stale manual UX confirmations");
+}
+
 async function checkExpiredManualUxCallRequestsReconfirmation(args) {
   await withFakeBoard(expiredMacManualUxCallBoardState(), async (serverUrl, posts) => {
     const result = await run(["--server", serverUrl, "--json"], args);
@@ -754,6 +820,8 @@ async function main() {
   await checkUserAwakeCallProducesManualUxCallPlan(args);
   await checkUserAwakeSendCallPostsManualUxCall(args);
   await checkManualUxCallInProgressDoesNotOfferDuplicateCall(args);
+  await checkConfirmedManualUxCallIsReady(args);
+  await checkStaleManualUxConfirmationDoesNotReadyNewCall(args);
   await checkExpiredManualUxCallRequestsReconfirmation(args);
   await checkExpiredManualUxCallCanBeReconfirmed(args);
   await checkActiveManualUxCallRefusesReconfirm(args);

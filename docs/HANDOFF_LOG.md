@@ -19,6 +19,31 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac 手工体验 call 确认信号
+开发端：Mac Codex
+本轮目标：Mac 发出 `Mac manual UX validation` call 后，能在 Windows/User 已确认当前体验窗口时自动进入 `ManualUxTest`，不再一直停留在 `WaitForManualUxConfirmation`。
+完成内容：
+- `check-mac-manual-ux-status` 新增 `manualUxConfirmed` 信号。
+- 只有 Windows/User 发出的确认消息或状态，且时间晚于当前 Mac manual UX call 的 `startedAt`，才会把 `MacManualUx=status=calling` 提升为 `MacManualUx=status=ready` / `Next=ManualUxTest`。
+- 推荐确认短标签：`MAC_MANUAL_UX_CONFIRMED`。普通中英文确认语也可识别，但必须包含 manual UX / 手工体验语义。
+- 旧确认消息不会影响新的 call；currentCall 自己的 `ask=Please confirm...` 也不会误触发。
+修改文件：
+- `scripts/mac/check-mac-manual-ux-status.mjs`
+- `scripts/mac/test-mac-manual-ux-status.mjs`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-manual-ux-status.mjs --timeoutMs 20000` 先失败，确认后仍是 `calling`。
+- 绿灯：同一测试通过，覆盖当前 call 确认后 ready，以及旧确认消息不误判。
+遗留问题：
+- 该能力只做只读状态识别，不自动清理 currentCall，也不执行真实 input/inject。
+下一步建议：
+- Windows/User 准备好 5-10 分钟体验窗口时，在通讯板发送 `MAC_MANUAL_UX_CONFIRMED: Windows/User confirmed the manual UX window.`，随后 Mac/Windows 均可看到 `MacManualUx=status=ready` 并进入真实体验清单。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows/User 在准备好时发送确认消息。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac 手工体验过期 call 重新确认入口
 开发端：Mac Codex
 本轮目标：`Mac manual UX validation` call 超时后，不只提示 `ReconfirmManualUxCall`，还提供一个显式、安全、受护栏保护的重新确认入口。
