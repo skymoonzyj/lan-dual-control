@@ -1967,6 +1967,29 @@ async function verifyDesktopOnlyHostPanel(session) {
               ].join("; "),
             )
           : null;
+      const windowsClientPortsAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "Windows resume: repo=clean board=ok mac=ready",
+                "WinClientPorts=occupied(5197,9337;stale-diagnostics)",
+                "WinClientPortsNext=use --clientPort 5200 --debugPort 9340",
+                "WinClientPortsOwners=5197:node.exe:61088,9337:msedge.exe:44488",
+                "WinClientDiagnosticsAlt=node scripts/windows/test-windows-client-browser.mjs --clientPort 5200 --debugPort 9340 --diagnosticsOnly --boardSummary --timeoutMs 45000",
+              ].join("; "),
+            )
+          : null;
+      const cleanWindowsClientPortsAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "Windows resume: repo=clean board=ok mac=ready",
+                "WinClientPorts=free",
+                "WinClientPortsNext=none",
+                "WinClientPortsOwners=none",
+              ].join("; "),
+            )
+          : null;
       const readinessHeaderLines =
         typeof readinessLines === "function"
           ? readinessLines({
@@ -2394,6 +2417,12 @@ async function verifyDesktopOnlyHostPanel(session) {
           macClientDiagnosticsCommandAttention?.summary.includes("Mac client 诊断命令已提供") &&
           macFormalE2eBrowserSelfTestAttention?.summary.includes("Mac client 本地 browser 自测命令已提供") &&
           macFormalE2eScriptHelpAttention?.summary.includes("Mac 脚本 help 安全自检命令已提供") &&
+          windowsClientPortsAttention?.summary.includes("Windows 控制端诊断端口被占用") &&
+          windowsClientPortsAttention?.summary.includes("Windows 控制端备用诊断命令已提供") &&
+          windowsClientPortsAttention?.summary.includes("Windows 控制端端口占用进程已提供") &&
+          cleanWindowsClientPortsAttention?.summary === "" &&
+          Array.isArray(cleanWindowsClientPortsAttention?.labels) &&
+          cleanWindowsClientPortsAttention.labels.length === 0 &&
           readinessHeaderText.includes("client-test") &&
           readinessHeaderText.includes("1000 ms") &&
           readinessHeaderText.includes("750 ms") &&
@@ -2475,6 +2504,8 @@ async function verifyDesktopOnlyHostPanel(session) {
         macClientDiagnosticsCommandAttention,
         macFormalE2eBrowserSelfTestAttention,
         macFormalE2eScriptHelpAttention,
+        windowsClientPortsAttention,
+        cleanWindowsClientPortsAttention,
         readinessHeader: readinessHeaderLines.slice(0, 4),
         readinessSummaryText,
         helperSummary,

@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端快速摘要接住恢复总览里的诊断端口占用信息。
+完成内容：
+- `apps/windows-client/app.js` 的 Mac 提醒/复制诊断解析现在会识别 `WinClientPorts=occupied(...;stale-diagnostics)`，显示“Windows 控制端诊断端口被占用”。
+- 同段出现 `WinClientPortsNext=` 或 `WinClientDiagnosticsAlt=` 时，会提示“Windows 控制端备用诊断命令已提供”；出现 `WinClientPortsOwners=` 时，会提示“Windows 控制端端口占用进程已提供”。
+- `WinClientPorts=free` / `WinClientPortsOwners=none` 不会误弹，控制端只做中文提示和诊断导出，不结束旧进程、不启动浏览器。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增测试后，`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 失败在 `windowsClientPortsAttention.summary` 为空。
+- 绿灯：实现后同一命令通过。
+遗留问题：
+- 本轮只增强 Windows 控制端诊断解析；不关闭旧端口进程、不运行正式 Mac 认证、不请求或发送密码、不发 input/inject。
+下一步建议：
+- 现场第二步像是卡住时，优先复制 `check-windows-resume-status --boardSummary` 或页面诊断，让控制端快速摘要直接显示旧诊断端口、备用端口和 owner 信息。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端页面也接住 Mac 独立稳定证据短标签。
 完成内容：
 - `apps/windows-client/app.js` 的 Mac 提醒/复制诊断解析现在会从干净片段识别独立 `MacClientPageOnline`、`MacClientDiagnosticsOk` 等白名单短标签，即使没有 `Evidence=` / `MacEvidence=` 前缀，也会显示为值守证据。

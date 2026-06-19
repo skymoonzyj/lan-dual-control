@@ -305,6 +305,9 @@ const macUnattendedRiskLabels = {
   "windows-secure-auth-path": "Windows 安全认证路径已提供",
   "windows-firewall-status": "Windows 防火墙只读检查命令已提供",
   "windows-firewall-preview": "Windows 防火墙放行预览命令已提供",
+  "windows-client-ports-occupied": "Windows 控制端诊断端口被占用",
+  "windows-client-diagnostics-alt": "Windows 控制端备用诊断命令已提供",
+  "windows-client-ports-owners": "Windows 控制端端口占用进程已提供",
   "mac-host-media-aggregate": "Mac 媒体基线需检查",
   "mac-host-runtime-display-round-trip": "Mac runtime/display 回环需检查",
   "mac-host-build": "Mac host 构建需检查",
@@ -3512,6 +3515,11 @@ function parseMacUnattendedAttention(text) {
   const hasWindowsSecureAuthPath = /\b(?:WindowsSecureAuthPath|SecureAuthPath)\s*=/i.test(source);
   const hasWindowsFirewallStatus = /\bWindowsFirewallStatus\s*=/i.test(source);
   const hasWindowsFirewallPreview = /\bWindowsFirewallPreview\s*=/i.test(source);
+  const hasWindowsClientPortsOccupied = /\bWinClientPorts\s*=\s*occupied\(/i.test(source);
+  const hasWindowsClientPortsStaleDiagnostics = /\bstale-diagnostics\b/i.test(source);
+  const hasWindowsClientDiagnosticsAlt = /\bWinClientDiagnosticsAlt\s*=/i.test(source);
+  const hasWindowsClientPortsNext = /\bWinClientPortsNext\s*=\s*(?!none\b)[^;]+/i.test(source);
+  const hasWindowsClientPortsOwners = /\bWinClientPortsOwners\s*=\s*(?!none\b|-)[^;\s]+/i.test(source);
   const hasMacMaxFpsFinding = risks.some((risk) =>
     risk === "fps-limit" ||
     risk === "mac-host-max-fps" ||
@@ -3784,6 +3792,18 @@ function parseMacUnattendedAttention(text) {
   if (hasWindowsFirewallPreview && hasWindowsFirewallContext) {
     risks.unshift("windows-firewall-preview");
   }
+  if (hasWindowsClientPortsOccupied) {
+    risks.unshift("windows-client-ports-occupied");
+  }
+  if (
+    (hasWindowsClientDiagnosticsAlt || hasWindowsClientPortsNext) &&
+    (hasWindowsClientPortsOccupied || hasWindowsClientPortsStaleDiagnostics)
+  ) {
+    risks.unshift("windows-client-diagnostics-alt");
+  }
+  if (hasWindowsClientPortsOwners && (hasWindowsClientPortsOccupied || hasWindowsClientPortsStaleDiagnostics)) {
+    risks.unshift("windows-client-ports-owners");
+  }
   const priority = new Map(
     [
       "mac-client-discover-windows",
@@ -3792,6 +3812,9 @@ function parseMacUnattendedAttention(text) {
       "public-profile",
       "windows-firewall-status",
       "windows-firewall-preview",
+      "windows-client-ports-occupied",
+      "windows-client-diagnostics-alt",
+      "windows-client-ports-owners",
       "mac-host-readiness-command",
       "lan-probe-blocked",
       "tcp-unreachable",
