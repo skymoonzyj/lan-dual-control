@@ -540,6 +540,61 @@ async function checkMacHeartbeatReasonAlerts(args) {
   console.log("[OK] Mac heartbeat reason ids alert");
 }
 
+async function checkMacHeartbeatHealthOkIgnored(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Heartbeat": {
+        role: "Mac heartbeat watcher",
+        status: "online",
+        note: "MacHeartbeatHealth=ok reason=ok heartbeat=ok blockers=none warnings=none checkedAt=2026-06-19T06:09:48.417Z.",
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertNotIncludes(output, "ALERT:", "Mac heartbeat health ok status");
+  console.log("[OK] Mac heartbeat health ok status is ignored");
+}
+
+async function checkMacHeartbeatHealthWarningAlerts(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Heartbeat": {
+        role: "Mac heartbeat watcher",
+        status: "online",
+        note: "MacHeartbeatHealth=warning reason=watchdog-health heartbeat=ok blockers=none warnings=none checkedAt=2026-06-19T06:09:48.417Z.",
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "Mac heartbeat health warning status");
+  assertIncludes(output, "MacHeartbeatHealth=warning", "Mac heartbeat health warning status");
+  assertIncludes(output, "reason=watchdog-health", "Mac heartbeat health warning status");
+  console.log("[OK] Mac heartbeat health warning status alerts");
+}
+
+async function checkMacHeartbeatHealthBlockedSanitizesUnsafeDetails(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Heartbeat": {
+        role: "Mac heartbeat watcher",
+        status: "online",
+        note: [
+          "MacHeartbeatHealth=blocked reason=mac-codex-stale heartbeat=blocked blockers=mac-codex-stale warnings=none checkedAt=2026-06-19T06:10:18.946Z.",
+          "debugSecret=secret-token-for-test",
+          "MacHeartbeatRerun=node scripts/mac/check-mac-heartbeat.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary.",
+        ].join(" "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "Mac heartbeat health blocked status");
+  assertIncludes(output, "MacHeartbeatHealth=blocked", "Mac heartbeat health blocked status");
+  assertIncludes(output, "reason=mac-codex-stale", "Mac heartbeat health blocked status");
+  assertNotIncludes(output, "secret-token-for-test", "Mac heartbeat health blocked status");
+  assertNotIncludes(output, "debugSecret=", "Mac heartbeat health blocked status");
+  console.log("[OK] Mac heartbeat health blocked status sanitizes unsafe details");
+}
+
 async function checkReverseGrantStatusAlerts(args) {
   const output = await runWatcherAgainst(baseState({
     statuses: {
@@ -1163,6 +1218,9 @@ async function main() {
   await checkMacHeartbeatAndHostUnreachableAlerts(args);
   await checkCodexReconnectStuckStatusAlerts(args);
   await checkMacHeartbeatReasonAlerts(args);
+  await checkMacHeartbeatHealthOkIgnored(args);
+  await checkMacHeartbeatHealthWarningAlerts(args);
+  await checkMacHeartbeatHealthBlockedSanitizesUnsafeDetails(args);
   await checkReverseGrantStatusAlerts(args);
   await checkMacUnattendedStatusAlerts(args);
   await checkMacUnattendedOkStatusIgnored(args);

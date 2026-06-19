@@ -277,6 +277,91 @@ function Get-AgeMinutes {
     }
 }
 
+function Test-SafeAlertValue {
+    param([string]$Value)
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $false
+    }
+    $trimmed = $Value.Trim().TrimEnd(".", ",")
+    if ($trimmed -match "(?i)(password|passwd|pwd|secret|token|credential|cookie|authorization|bearer|private[-_]?key|api[-_]?key)") {
+        return $false
+    }
+    if ($trimmed -match "(?i)(^|[\\/])(node|pwsh|powershell|bash|zsh|sh|cmd|launchctl|sudo)(\.exe)?($|[\\/])") {
+        return $false
+    }
+    if ($trimmed -match "(?i)\b(scripts[\\/]|--[a-z0-9-]+|backend-api|chatgpt\.com)\b") {
+        return $false
+    }
+    return ($trimmed -match "^[A-Za-z0-9_.:,+@-]+$")
+}
+
+function Get-SafeAlertField {
+    param(
+        [string]$Text,
+        [string]$Name
+    )
+    $match = [regex]::Match($Text, "(?i)(^|[\s;])" + [regex]::Escape($Name) + "\s*=\s*([^\s;]+)")
+    if (-not $match.Success) {
+        return ""
+    }
+    $value = $match.Groups[2].Value.Trim().TrimEnd(".", ",")
+    if (Test-SafeAlertValue -Value $value) {
+        return $value
+    }
+    return ""
+}
+
+function Get-MacHeartbeatHealthAlert {
+    param([string]$Text)
+    $match = [regex]::Match($Text, "(?i)\bMacHeartbeatHealth\s*=\s*([^\s;]+)")
+    if (-not $match.Success) {
+        return $null
+    }
+
+    $status = $match.Groups[1].Value.Trim().TrimEnd(".", ",").ToLowerInvariant()
+    if ($status -match "^status=(.+)$") {
+        $status = $Matches[1].Trim().ToLowerInvariant()
+    }
+    if (-not (Test-SafeAlertValue -Value $status)) {
+        $status = "unknown"
+    }
+
+    $reason = Get-SafeAlertField -Text $Text -Name "reason"
+    $heartbeat = Get-SafeAlertField -Text $Text -Name "heartbeat"
+    $blockers = Get-SafeAlertField -Text $Text -Name "blockers"
+    $warnings = Get-SafeAlertField -Text $Text -Name "warnings"
+    $checkedAt = Get-SafeAlertField -Text $Text -Name "checkedAt"
+
+    $unsafeDetail = ($Text -match "(?i)(password|passwd|pwd|secret|token|credential|cookie|authorization|bearer|private[-_]?key|api[-_]?key|backend-api|chatgpt\.com|scripts[\\/]|--[a-z0-9-]+)")
+    $hasBlockers = (-not [string]::IsNullOrWhiteSpace($blockers)) -and ($blockers -notmatch "^(?i:none|ok|0|false|-)$")
+    $hasWarnings = (-not [string]::IsNullOrWhiteSpace($warnings)) -and ($warnings -notmatch "^(?i:none|ok|0|false|-)$")
+    $shouldAlert = (@("warning", "blocked", "failed", "stale", "unknown", "attention") -contains $status) -or $hasBlockers -or $hasWarnings
+
+    $parts = New-Object 'System.Collections.Generic.List[string]'
+    $parts.Add("MacHeartbeatHealth=$status") | Out-Null
+    foreach ($entry in @(
+        @("reason", $reason),
+        @("heartbeat", $heartbeat),
+        @("blockers", $blockers),
+        @("warnings", $warnings),
+        @("checkedAt", $checkedAt)
+    )) {
+        if (-not [string]::IsNullOrWhiteSpace($entry[1])) {
+            $parts.Add(("{0}={1}" -f $entry[0], $entry[1])) | Out-Null
+        }
+    }
+    if ($unsafeDetail) {
+        $parts.Add("unsafeDetails=redacted") | Out-Null
+    }
+
+    return [pscustomobject]@{
+        Present = $true
+        Status = $status
+        ShouldAlert = $shouldAlert
+        Message = ($parts -join " ")
+    }
+}
+
 function Show-Alert {
     param(
         [string]$Title,
@@ -401,6 +486,15 @@ while ($true) {
             $note = [string]$item.note
             $status = ([string]$item.status).ToLowerInvariant()
             if (-not (Test-MacRelated -From $device -Role $role)) {
+                continue
+            }
+
+            $heartbeatHealth = Get-MacHeartbeatHealthAlert -Text $note
+            if ($heartbeatHealth -and $heartbeatHealth.ShouldAlert) {
+                Add-AlertOnce `
+                    -Id ("mac-heartbeat-health:" + $device + ":" + [string]$item.updatedAt + ":" + $heartbeatHealth.Status) `
+                    -Title ("Mac heartbeat health alert - " + $device) `
+                    -Message ($heartbeatHealth.Message + "`n`nUpdated at: " + [string]$item.updatedAt)
                 continue
             }
 

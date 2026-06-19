@@ -17,6 +17,33 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 本机 Mac 提醒 watcher 直接消费稳定 `MacHeartbeatHealth=`。
+完成内容：
+- `watch-codex-link-mac-alerts.ps1` 现在会专门解析 `MacHeartbeatHealth=`：`ok` 不弹提醒，`warning/blocked/failed/stale/unknown` 或非空安全 `blockers/warnings` 会弹 Windows 本机提醒。
+- 提醒正文只输出 `MacHeartbeatHealth/status/reason/heartbeat/blockers/warnings/checkedAt` 等稳定短字段摘要；疑似 password/token/secret/cookie、命令或脚本参数形态细节会脱敏为 `unsafeDetails=redacted`，避免本机提醒/日志回显敏感片段。
+- 该 watcher 仍只读 Agent Link Board，不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
+修改文件：
+- `scripts/windows/watch-codex-link-mac-alerts.ps1`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增 `MacHeartbeatHealth=warning reason=watchdog-health ...` 断言后，`node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 45000` 失败在缺少 `ALERT:`。
+- 绿灯：实现后同一 watcher 回归通过，覆盖 `ok` 不提醒、`warning` 提醒、`blocked` 提醒且假 secret 不出现在输出里。
+遗留问题：
+- 本轮没有启动后台 watcher 做真实弹窗演示；只跑了 `-Once -NoPopup` 自动回归，避免打扰当前桌面。
+下一步建议：
+- 后续可把桌面壳/控制端的 watcher 状态入口继续产品化成常驻小浮窗；协议和 Mac 端字段暂不需要改。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
 ## 2026-06-19 Mac Codex
 
 日期：2026-06-19 继续推进
