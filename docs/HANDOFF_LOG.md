@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 `MacClientDiagnostics=` / Mac client readiness 摘要也暴露 Mac 控 Windows 真实 browser smoke 的前台密码入口。
+完成内容：
+- `check-mac-client-readiness --json/--boardSummary` 新增 `commands.macClientPromptPasswordSmokeCommand` / `MacClientPromptPasswordSmoke=`。
+- 普通输出新增 `Mac client prompt-password smoke:`，和 `MacClientFormalSmoke=` 无密 preflight、`MacClientBrowserSelfTest=` 本地 mock 自测形成同一条 readiness 摘要里的三段路径。
+- 新命令统一为 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword --boardSummary`；readiness 本身仍只读，不弹密码、不认证、不发送 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-client-readiness.mjs`
+- `scripts/mac/test-mac-client-readiness.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-client-readiness.mjs --timeoutMs 20000` 失败在 `check-mac-client-readiness --help` 缺 `commands.macClientPromptPasswordSmokeCommand`。
+- 绿灯：实现后复跑 `node scripts/mac/test-mac-client-readiness.mjs --timeoutMs 20000` 通过。
+遗留问题：
+- 当前真实 Mac host 仍是旧 build；本轮没有重启 host，也没有跑需要用户密码的真实 browser smoke。
+下一步建议：
+- 只看到 `MacClientDiagnostics=` 时，用户在场可复制 `MacClientPromptPasswordSmoke=` 进入真实 browser smoke；无人值守时继续只跑 `MacClientFormalSmoke=` 无密 preflight 或 `MacClientBrowserSelfTest=` 本地 mock 自测。
+是否改了协议：否；只补 Mac client readiness 的安全命令标签和自测。
+是否需要另一端配合：本轮不需要；Windows 端后续可按需消费 `MacClientPromptPasswordSmoke=`。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 `MacClientPage=` 页面状态入口也暴露 Mac 控 Windows 真实 browser smoke 的前台密码入口。
 完成内容：
 - `start-mac-client --status --json/--boardSummary` 新增 `commands.macClientPromptPasswordSmokeCommand` / `MacClientPromptPasswordSmoke=`。

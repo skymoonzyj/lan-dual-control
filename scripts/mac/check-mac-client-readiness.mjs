@@ -112,6 +112,10 @@ Machine-readable JSON fields:
                              discovers Windows hosts, and prints a summary
                              without authenticating, prompting for a password,
                              sending a call, or sending input.
+  commands.macClientPromptPasswordSmokeCommand
+                             User-present browser smoke command. It discovers
+                             Windows hosts, ensures the local Mac client page,
+                             then asks for the password only when explicitly run.
   commands.macClientBrowserSelfTestCommand
                              Secret-free local browser self-test command. It
                              starts a temporary mock Windows host and prints a
@@ -612,6 +616,10 @@ function makeMacClientFormalSmokeCommand() {
   return "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
 }
 
+function makeMacClientPromptPasswordSmokeCommand() {
+  return "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword --boardSummary";
+}
+
 function makeMacClientBrowserSelfTestCommand() {
   return "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
 }
@@ -637,7 +645,7 @@ function makeBoardSummary(report) {
   const lanRiskSummary = lanRisk ? ` ${lanRisk};` : "";
   const findings = formatChecklistFindings(report.checklist);
   const next = report.recommendations[0]?.text || "No next step available.";
-  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows};${lanRiskSummary} ${findings}. Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; WindowsHostStatus=${report.commands.windowsHostStatusCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; WindowsReverseGrantStatus=${report.commands.windowsReverseGrantStatusCommand}; WindowsOpenOneTimeReverseGrant=${report.commands.windowsOpenOneTimeReverseGrantCommand}; WindowsReverseGrantStatusNodeFallback=${report.commands.windowsReverseGrantStatusNodeFallbackCommand}; WindowsOpenOneTimeReverseGrantNodeFallback=${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}; MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; MacScriptHelp=${report.commands.macScriptHelpCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
+  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows};${lanRiskSummary} ${findings}. Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; WindowsHostStatus=${report.commands.windowsHostStatusCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; WindowsReverseGrantStatus=${report.commands.windowsReverseGrantStatusCommand}; WindowsOpenOneTimeReverseGrant=${report.commands.windowsOpenOneTimeReverseGrantCommand}; WindowsReverseGrantStatusNodeFallback=${report.commands.windowsReverseGrantStatusNodeFallbackCommand}; WindowsOpenOneTimeReverseGrantNodeFallback=${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}; MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientPromptPasswordSmoke=${report.commands.macClientPromptPasswordSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; MacScriptHelp=${report.commands.macScriptHelpCommand}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
 }
 
 function windowsLanRiskHint(board = {}) {
@@ -681,6 +689,7 @@ function printHuman(report) {
   console.log(`- Windows one-time reverse grant (Node fallback): ${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}`);
   console.log(`- Mac client formal checklist: ${report.commands.macClientFormalChecklistCommand}`);
   console.log(`- Mac client formal smoke preflight: ${report.commands.macClientFormalSmokeCommand}`);
+  console.log(`- Mac client prompt-password smoke: ${report.commands.macClientPromptPasswordSmokeCommand}`);
   console.log(`- Mac client browser self-test: ${report.commands.macClientBrowserSelfTestCommand}`);
   console.log(`- Mac script help safety check: ${report.commands.macScriptHelpCommand}`);
   console.log(`- Copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
@@ -750,6 +759,7 @@ async function buildReport(args) {
       windowsOpenOneTimeReverseGrantNodeFallbackCommand: makeWindowsReverseGrantNodeFallbackCommand(windowsHost, args, "grant"),
       macClientFormalChecklistCommand: makeMacClientFormalChecklistCommand(windowsHost, args),
       macClientFormalSmokeCommand: makeMacClientFormalSmokeCommand(),
+      macClientPromptPasswordSmokeCommand: makeMacClientPromptPasswordSmokeCommand(),
       macClientBrowserSelfTestCommand: makeMacClientBrowserSelfTestCommand(),
       macScriptHelpCommand: makeMacScriptHelpCommand(),
       macClientCopyDiagnosticsAction: makeMacClientCopyDiagnosticsAction(),
