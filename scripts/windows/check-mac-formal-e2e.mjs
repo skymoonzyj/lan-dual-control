@@ -468,6 +468,22 @@ function makeMacHostSafeStartCommand(report) {
   return `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port}`;
 }
 
+function makeMacHostStopCommand(report) {
+  const port = Number(report.target?.port) || defaults.port;
+  return `node scripts/mac/start-mac-host.mjs --stop --host 127.0.0.1 --port ${port}`;
+}
+
+function makeMacMaxFpsSafeStartCommand(report) {
+  const port = Number(report.target?.port) || defaults.port;
+  const fps = Math.max(1, Math.min(60, Math.trunc(Number(report.runPlan?.video?.fps) || 60)));
+  return `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port} --maxScreenFps ${fps}`;
+}
+
+function makeMacHostMediaCommand(report) {
+  const port = Number(report.target?.port) || defaults.port;
+  return `node scripts/mac/check-mac-host-readiness.mjs --host 127.0.0.1 --port ${port} --checkBoard --probeMedia --probeMediaResourceSample --promptPassword --boardSummary`;
+}
+
 function makeFpsLimitStatus(report) {
   const requestedFps = positiveNumber(report.runPlan?.video?.fps);
   const maxScreenFps = positiveNumber(report.capabilities?.maxScreenFps);
@@ -566,7 +582,7 @@ function makeUserAuthRequest(report) {
     `正式长验收前建议 Mac 端先跑本机短验收：${report.macFormalLocalSmokeCommand}。`,
     `位置/步骤：在 E:\\codex\\lan-dual-control 运行 ${report.command}。`,
     `PowerShell 等价：${report.formalPowerShellCommand}。`,
-    `如果不知道当前 Mac host 密码，或当前 host 是 LaunchAgent 随机密码：请 Mac 端先切到前台可见/可设置密码路径：MacHostSafeStart=${report.macHostSafeStartCommand}。`,
+    `如果不知道当前 Mac host 密码，或当前 host 是 LaunchAgent 随机密码：请 Mac 端按完整安全顺序 MacHostStop->MacMaxFpsSafeStart->MacHostMedia 执行。MacHostStop=${report.macHostStopCommand}；MacMaxFpsSafeStart=${report.macMaxFpsSafeStartCommand}；MacHostMedia=${report.macHostMediaCommand}；兼容短路径 MacHostSafeStart=${report.macHostSafeStartCommand}。`,
     "不要把密码发到联络板；本命令默认不执行 inject，inject 仍需你另行明确确认。",
     "处理后请回复 已输入密码并开始验收。",
   ].filter(Boolean).join(" ");
@@ -575,6 +591,9 @@ function makeUserAuthRequest(report) {
 function attachBoardSummary(report, outcome = "preflight") {
   report.macFormalLocalSmokeCommand = makeMacFormalLocalSmokeCommand(report);
   report.macHostSafeStartCommand = makeMacHostSafeStartCommand(report);
+  report.macHostStopCommand = makeMacHostStopCommand(report);
+  report.macMaxFpsSafeStartCommand = makeMacMaxFpsSafeStartCommand(report);
+  report.macHostMediaCommand = makeMacHostMediaCommand(report);
   report.fpsLimit = makeFpsLimitStatus(report);
   report.boardSummary = makeBoardSummary(report, outcome);
   report.userAuthRequest = makeUserAuthRequest(report);

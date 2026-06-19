@@ -583,7 +583,13 @@ async function testMockPreflightUserAuthRequest(args) {
     assertIncludes(result.stdout, "-PromptPassword", "mock user auth request");
     assertIncludes(result.stdout, "如果不知道当前 Mac host 密码", "mock user auth request");
     assertIncludes(result.stdout, "MacHostSafeStart=", "mock user auth request");
+    assertIncludes(result.stdout, "MacHostStop=", "mock user auth request");
+    assertIncludes(result.stdout, "MacMaxFpsSafeStart=", "mock user auth request");
+    assertIncludes(result.stdout, "MacHostMedia=", "mock user auth request");
+    assertIncludes(result.stdout, "MacHostStop->MacMaxFpsSafeStart->MacHostMedia", "mock user auth request");
     assertIncludes(result.stdout, "start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0", "mock user auth request");
+    assertIncludes(result.stdout, "--maxScreenFps 60", "mock user auth request");
+    assertIncludes(result.stdout, "check-mac-host-readiness.mjs", "mock user auth request");
     assertIncludes(result.stdout, "不要把密码发到联络板", "mock user auth request");
     assertIncludes(result.stdout, "inject", "mock user auth request");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "mock user auth request");
@@ -636,7 +642,12 @@ async function testMockPreflightSendUserAuthRequest(args) {
       assert(String(requests[0].body.text || "").includes("-PromptPassword"), "mock send text missing PowerShell prompt command");
       assert(String(requests[0].body.text || "").includes("如果不知道当前 Mac host 密码"), "mock send text missing unknown-password guidance");
       assert(String(requests[0].body.text || "").includes("MacHostSafeStart="), "mock send text missing MacHostSafeStart guidance");
+      assert(String(requests[0].body.text || "").includes("MacHostStop="), "mock send text missing MacHostStop guidance");
+      assert(String(requests[0].body.text || "").includes("MacMaxFpsSafeStart="), "mock send text missing MacMaxFpsSafeStart guidance");
+      assert(String(requests[0].body.text || "").includes("MacHostMedia="), "mock send text missing MacHostMedia guidance");
+      assert(String(requests[0].body.text || "").includes("MacHostStop->MacMaxFpsSafeStart->MacHostMedia"), "mock send text missing complete auth order");
       assert(String(requests[0].body.text || "").includes("start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0"), "mock send text missing foreground password command");
+      assert(String(requests[0].body.text || "").includes("--maxScreenFps 60"), "mock send text missing max FPS safe start");
       assertNotIncludes(JSON.stringify(requests[0].body), "test-password", "mock send user auth request body");
       assertNotIncludes(result.stdout + result.stderr, "test-password", "mock send user auth request output");
       print("OK", "Mock send user auth request posts a secret-free Agent Link Board message");
