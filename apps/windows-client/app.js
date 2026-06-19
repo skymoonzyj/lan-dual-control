@@ -291,6 +291,7 @@ const macUnattendedRiskLabels = {
   "mac-launch-agent-print-command": "Mac LaunchAgent 打印验证命令已提供",
   "mac-client-discover-windows": "Mac client Windows 发现命令已提供",
   "mac-client-formal-checklist": "Mac client 正式清单命令已提供",
+  "mac-client-prompt-password-smoke": "Mac client 前台密码真测命令已提供",
   "mac-client-browser-self-test": "Mac client 本地 browser 自测命令已提供",
   "mac-formal-local-smoke": "Mac 本机短验收需处理",
   "mac-formal-local-smoke-rerun": "Mac 本机短验收重跑命令已提供",
@@ -3316,6 +3317,7 @@ function parseMacUnattendedAttention(text) {
   const hasMacLaunchAgentPrint = /\bMacLaunchAgentPrint\s*=\s*launchctl\s+print\b/i.test(source);
   const hasMacClientDiscoverWindows = /\bMacClientDiscoverWindows\s*=/i.test(source);
   const hasMacClientFormalChecklist = /\bMacClientFormalChecklist\s*=/i.test(source);
+  const hasMacClientPromptPasswordSmoke = /\bMacClientPromptPasswordSmoke\s*=/i.test(source);
   const hasMacClientBrowserSelfTest = /\bMacClientBrowserSelfTest\s*=/i.test(source);
   const hasMacHeartbeatOnce = /\bMacHeartbeatOnce\s*=/i.test(source);
   const hasMacHeartbeatWatch = /\bMacHeartbeatWatch\s*=/i.test(source);
@@ -3482,6 +3484,15 @@ function parseMacUnattendedAttention(text) {
     (hasMacClientFormalFinding || /ready\s*=\s*false|blocked|failed/.test(lower))
   ) {
     risks.unshift("mac-client-formal-checklist");
+  }
+  if (
+    hasMacClientPromptPasswordSmoke &&
+    (
+      hasMacClientFormalFinding ||
+      /ready\s*=\s*false|blocked|failed|\bauth\b|windowssecureauthpath|lan008|认证|密码/.test(lower)
+    )
+  ) {
+    risks.unshift("mac-client-prompt-password-smoke");
   }
   if (
     hasMacClientBrowserSelfTest &&

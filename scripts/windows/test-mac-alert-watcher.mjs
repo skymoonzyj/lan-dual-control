@@ -948,6 +948,45 @@ async function checkMacClientBrowserSelfTestCleanIgnored(args) {
   console.log("[OK] Mac client browser self-test clean status is ignored");
 }
 
+async function checkMacClientPromptPasswordSmokeFindingsAlert(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: [
+          "MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --host 192.168.31.68 --port 43770 --ensureClient --promptPassword --boardSummary",
+          "Mac client prompt smoke ready=false blockers=windows-host warnings=board",
+        ].join("; "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertIncludes(output, "ALERT:", "Mac client prompt password smoke findings status");
+  assertIncludes(output, "MacClientPromptPasswordSmoke=", "Mac client prompt password smoke findings status");
+  assertIncludes(output, "blockers=windows-host", "Mac client prompt password smoke findings status");
+  assertIncludes(output, "warnings=board", "Mac client prompt password smoke findings status");
+  console.log("[OK] Mac client prompt password smoke finding status alerts");
+}
+
+async function checkMacClientPromptPasswordSmokeCleanIgnored(args) {
+  const output = await runWatcherAgainst(baseState({
+    statuses: {
+      "Mac Codex": {
+        role: "Mac 端",
+        status: "idle",
+        note: [
+          "MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword --boardSummary",
+          "Mac client prompt smoke ready blockers=none warnings=none",
+        ].join("; "),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  }), [], args);
+  assertNotIncludes(output, "ALERT:", "Mac client prompt password smoke clean status");
+  console.log("[OK] Mac client prompt password smoke clean status is ignored");
+}
+
 async function checkStartWrapperJsonStatus(args) {
   const basePath = resolve(repoRoot, ".dev-lab", `mac-alert-watcher-json-status-${process.pid}-${Date.now()}`);
   const pidFile = `${basePath}.pid`;
@@ -1146,6 +1185,8 @@ async function main() {
   await checkMacClientFormalSmokeCleanIgnored(args);
   await checkMacClientBrowserSelfTestFindingsAlert(args);
   await checkMacClientBrowserSelfTestCleanIgnored(args);
+  await checkMacClientPromptPasswordSmokeFindingsAlert(args);
+  await checkMacClientPromptPasswordSmokeCleanIgnored(args);
   await checkStartWrapperJsonStatus(args);
   if (args.includeLifecycle) {
     await checkStartWrapperLifecycle(args);

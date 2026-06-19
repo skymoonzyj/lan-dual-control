@@ -49,6 +49,41 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：消费 Mac 端新增的 `MacClientPromptPasswordSmoke=` 前台密码真测入口，让 Windows 控制端诊断能提示用户在场时可进入真实 browser smoke。
+完成内容：
+- Windows 控制端 Mac 提醒区、快速摘要和复制/导出诊断现在会在 Mac client/formal warning、认证、失败或 blocker 上下文里显示“Mac client 前台密码真测命令已提供”。
+- 诊断详情保留原始 `MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs ... --promptPassword --boardSummary`，但 Windows 端不会运行 Mac 脚本、不会传递密码。
+- 页面回归新增干净命令清单边界：`warnings=none blockers=none` 时不误弹；watcher 专项覆盖 prompt smoke findings 与 clean ignored，现有 formal smoke 规则已能接住该提醒。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `scripts/windows/test-mac-alert-watcher.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败在缺少“Mac client 前台密码真测命令已提供”。
+- 绿灯：实现后复跑同一命令通过。
+- `node scripts/windows/test-mac-alert-watcher.mjs --timeoutMs 20000` 通过，覆盖 prompt smoke findings 与 clean ignored。
+- `node --check apps/windows-client/app.js`
+- `node --check scripts/windows/test-windows-client-browser.mjs`
+- `node --check scripts/windows/test-mac-alert-watcher.mjs`
+- `git diff --check`
+- 冲突标记扫描通过。
+遗留问题：
+- 真实 Mac -> Windows browser smoke 仍需要用户在 Mac 前台隐藏输入密码；本轮只提示安全入口，不弹密码、不认证。
+下一步建议：
+- 后续看到 `MacClientPromptPasswordSmoke=` 时，只有用户在 Mac 前台可操作时才运行；无人值守或想先排除页面退化时，优先跑 `MacClientBrowserSelfTest=`。
+是否改了协议：否；只补 Windows 侧诊断识别和测试。
+是否需要另一端配合：本轮不需要；后续真实 browser smoke 需要用户在场和 Windows host 安全认证路径。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：消费 Mac 端新增的 `MacClientBrowserSelfTest=` 本地 browser 自测入口，让 Windows 控制端诊断能直接提示下一步。
 完成内容：
 - Windows 控制端 Mac 提醒区、快速摘要和复制/导出诊断现在会在 Mac client formal smoke、browser self-test、失败或非空 warning/blocker 上下文里显示“Mac client 本地 browser 自测命令已提供”。
