@@ -17,6 +17,34 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
+本轮目标：让 `MacFormalLocalSmoke=` / 本机短验收摘要也暴露本地 Mac client browser 自测入口。
+完成内容：
+- `check-mac-formal-local-smoke --json/--boardSummary` 新增 `commands.macClientBrowserSelfTestCommand` / `MacClientBrowserSelfTest=`。
+- 新命令统一为 `node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary`，用于无人值守或真实 Windows host 密码/LAN/授权未就绪时先排除 Mac client 页面、反控 UI、剪贴板和 input-log 流程退化。
+- 成功摘要、失败摘要、普通输出和 `--help/-h` 均保留该入口；本机短验收本身仍不使用真实 Windows host、不认证、不发送 call/input_event、不执行 `inject`。
+修改文件：
+- `scripts/mac/check-mac-formal-local-smoke.mjs`
+- `scripts/mac/test-mac-formal-local-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-formal-local-smoke.mjs --timeoutMs 30000` 先失败在 `check-mac-formal-local-smoke --help` 缺 `commands.macClientBrowserSelfTestCommand`。
+- 绿灯：实现后复跑 `node scripts/mac/test-mac-formal-local-smoke.mjs --timeoutMs 30000` 通过。
+- 最终收尾：`node --check scripts/mac/check-mac-formal-local-smoke.mjs`、`node --check scripts/mac/test-mac-formal-local-smoke.mjs`、`node scripts/mac/test-mac-formal-local-smoke.mjs --timeoutMs 30000`、`node scripts/mac/test-mac-script-help.mjs --script check-mac-formal-local-smoke.mjs --timeoutMs 10000 --boardSummary`、`LAN_DUAL_PASSWORD=formal-local-smoke-test-password node scripts/mac/check-mac-formal-local-smoke.mjs --json --host 127.0.0.1 --port 9 --timeoutMs 3000 --skipVideo --skipAudio --skipInputLog`、`git diff --check` 与触碰文件冲突标记扫描均通过；无密码打印、无真实 host 认证、无 call/input/inject。
+遗留问题：
+- 当前真实 Mac host 仍是旧 build；本轮没有重启 host，也没有跑需要用户密码的真实 browser smoke。
+下一步建议：
+- 只看到 `MacFormalLocalSmoke=` / `RerunFormalLocalSmoke=` 时，无人值守可先复制 `MacClientBrowserSelfTest=`；用户在场且准备真实连接密码时再复制 `MacClientPromptPasswordSmoke=`。
+是否改了协议：否；只补 Mac 本机短验收的安全命令标签和自测。
+是否需要另一端配合：不需要；已避免触碰 Windows host/readiness/control 端文件。
+
 ## 2026-06-19 Windows Codex
 
 日期：2026-06-19 继续推进
