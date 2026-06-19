@@ -186,6 +186,26 @@ function assertMacFormalLocalSmokeCommand(command, label) {
   assert(!value.includes("inject"), `${label} should not instruct injection`);
 }
 
+function assertMacPowerPlanCommand(command, label) {
+  const value = String(command || "");
+  assert(value.includes("plan-mac-power-settings.mjs"), `${label} should use plan-mac-power-settings`);
+  assert(value.includes("--profile all"), `${label} should cover the full Mac power profile`);
+  assert(value.includes("--sleep 0"), `${label} should plan disabling system sleep`);
+  assert(value.includes("--displaySleep 0"), `${label} should plan disabling display sleep`);
+  assert(value.includes("--networkWake on"), `${label} should plan enabling network wake`);
+  assert(value.includes("--boardSummary"), `${label} should produce a board summary`);
+  assert(!value.includes("--apply"), `${label} should stay dry-run by default`);
+  assert(!value.includes("sudo"), `${label} should not use sudo`);
+  assert(!value.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!value.includes("--password"), `${label} should not embed a password argument`);
+  assert(!value.includes("--sendCall"), `${label} should not send an Agent Link Board call`);
+  assert(!value.includes("--forceCall"), `${label} should not force an Agent Link Board call`);
+  assert(!value.includes("--server"), `${label} should not echo board server URLs`);
+  assert(!value.includes("--json"), `${label} should default to one-line boardSummary output`);
+  assert(!value.includes("input_event"), `${label} should not mention input events`);
+  assert(!value.includes("inject"), `${label} should not instruct injection`);
+}
+
 function assertMacScriptHelpCommand(command, label) {
   const value = String(command || "");
   assert(value.includes("test-mac-script-help.mjs"), `${label} should use test-mac-script-help`);
@@ -381,6 +401,7 @@ function checkHelp(args) {
     assert(String(result.stdout).includes("commands.macMaxFpsPlanCommand"), `${script} ${flag} should document max-FPS planner command`);
     assert(String(result.stdout).includes("commands.macUnattendedFormalCommand"), `${script} ${flag} should document unattended formal gate command`);
     assert(String(result.stdout).includes("commands.macFormalLocalSmokeCommand"), `${script} ${flag} should document formal local smoke command`);
+    assert(String(result.stdout).includes("commands.macPowerPlanCommand"), `${script} ${flag} should document Mac power dry-run plan command`);
     assert(String(result.stdout).includes("commands.macScriptHelpCommand"), `${script} ${flag} should document Mac script help safety command`);
   }
   print("OK", "Mac host readiness board help exits quickly");
@@ -398,6 +419,7 @@ function checkDefaultDoesNotReadBoard(args) {
   assertMacMaxFpsPlanCommand(payload.commands?.macMaxFpsPlanCommand || "", "default readiness JSON max-FPS planner command");
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand || "", "default readiness JSON unattended formal command");
   assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmokeCommand || "", "default readiness JSON formal local smoke command");
+  assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand || "", "default readiness JSON Mac power plan command");
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", "default readiness JSON script help command");
   const maxFpsStep = payload.results?.find((item) => item.label === "Mac host max FPS");
   assert(maxFpsStep, "default readiness JSON should include an independent Mac host max FPS step");
@@ -417,6 +439,8 @@ function checkDefaultDoesNotReadBoard(args) {
   assert(String(payload.boardSummary || "").includes("MacMaxFpsPlan="), "default boardSummary should include max-FPS planner guidance");
   assert(String(payload.boardSummary || "").includes("MacUnattendedFormal="), "default boardSummary should include unattended formal guidance");
   assert(String(payload.boardSummary || "").includes("MacFormalLocalSmoke="), "default boardSummary should include formal local smoke guidance");
+  assert(String(payload.boardSummary || "").includes("MacPowerPlan="), "default boardSummary should include Mac power dry-run plan guidance");
+  assert(String(payload.boardSummary || "").includes("MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs"), "default boardSummary should include the Mac power dry-run plan command");
   assert(String(payload.boardSummary || "").includes("MacScriptHelp="), "default boardSummary should include Mac script help safety guidance");
   assert(String(payload.boardSummary || "").includes("MacScriptHelp=node scripts/mac/test-mac-script-help.mjs"), "default boardSummary should include the Mac script help command");
   assertNoSecretLikeText(`${result.stdout}\n${result.stderr}`, "default readiness JSON");
@@ -784,6 +808,8 @@ function checkProbeMediaBoardSummary(args) {
   assert(lines[0].includes("MacMaxFpsPlan="), "offline --probeMedia boardSummary should include max-FPS planner guidance");
   assert(lines[0].includes("MacUnattendedFormal="), "offline --probeMedia boardSummary should include unattended formal guidance");
   assert(lines[0].includes("MacFormalLocalSmoke="), "offline --probeMedia boardSummary should include formal local smoke guidance");
+  assert(lines[0].includes("MacPowerPlan="), "offline --probeMedia boardSummary should include Mac power dry-run plan guidance");
+  assert(lines[0].includes("MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs"), "offline --probeMedia boardSummary should include the Mac power dry-run plan command");
   assert(lines[0].includes("MacScriptHelp="), "offline --probeMedia boardSummary should include Mac script help safety guidance");
   assert(lines[0].includes("MacScriptHelp=node scripts/mac/test-mac-script-help.mjs"), "offline --probeMedia boardSummary should include the Mac script help command");
   assert(lines[0].includes("--requireLaunchAgentMaxFps"), "offline --probeMedia boardSummary should include formal max-FPS gate");
@@ -833,6 +859,8 @@ async function checkActiveBoardCall(args) {
     assert(String(payload.boardSummary || "").includes("MacMaxFpsPlan="), "boardSummary should include max-FPS planner guidance");
     assert(String(payload.boardSummary || "").includes("MacUnattendedFormal="), "boardSummary should include unattended formal guidance");
     assert(String(payload.boardSummary || "").includes("MacFormalLocalSmoke="), "boardSummary should include formal local smoke guidance");
+    assert(String(payload.boardSummary || "").includes("MacPowerPlan="), "boardSummary should include Mac power dry-run plan guidance");
+    assert(String(payload.boardSummary || "").includes("MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs"), "boardSummary should include the Mac power dry-run plan command");
     assert(String(payload.boardSummary || "").includes("MacScriptHelp="), "boardSummary should include Mac script help safety guidance");
     assert(String(payload.boardSummary || "").includes("MacScriptHelp=node scripts/mac/test-mac-script-help.mjs"), "boardSummary should include the Mac script help command");
     assert(String(payload.boardSummary || "").includes(call.goal), "boardSummary should include call goal");

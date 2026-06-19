@@ -244,6 +244,11 @@ Machine-readable JSON fields:
                             Secret-free formal local smoke command for the next
                             H.264 + PCM + input-log short validation step. It
                             prompts locally and never embeds a password in argv.
+  commands.macPowerPlanCommand
+                            Secret-free Mac power settings dry-run planner. It
+                            previews pmset changes and follow-up checks without
+                            applying settings, prompting, authenticating, or
+                            sending input.
   commands.macScriptHelpCommand
                             Unified side-effect-free Mac script help
                             self-check command.
@@ -724,6 +729,7 @@ function formatReadinessBoardSummary(summary) {
     `MacMaxFpsPlan=${summary.commands?.macMaxFpsPlanCommand || makeMacMaxFpsPlanCommand(summary.args || {})}.`,
     `MacUnattendedFormal=${summary.commands?.macUnattendedFormalCommand || makeMacUnattendedFormalCommand(summary.args || {})}.`,
     `MacFormalLocalSmoke=${summary.commands?.macFormalLocalSmokeCommand || makeMacFormalLocalSmokeCommand(summary.args || {})}.`,
+    `MacPowerPlan=${summary.commands?.macPowerPlanCommand || makeMacPowerPlanCommand()}.`,
     `MacScriptHelp=${summary.commands?.macScriptHelpCommand || makeMacScriptHelpCommand()}.`,
     "Next: fix failed checks before formal E2E; keep inputMode=log for unattended checks.",
     "Do not send passwords on Agent Link Board; inject startups require the user watching the Mac screen and --confirmUserWatching.",
@@ -918,6 +924,10 @@ function makeMacFormalLocalSmokeCommand(args = {}) {
     "--promptPassword",
     "--boardSummary",
   ].join(" ");
+}
+
+function makeMacPowerPlanCommand() {
+  return "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary";
 }
 
 function makeMacScriptHelpCommand() {
@@ -1440,6 +1450,7 @@ async function main() {
       macMaxFpsPlanCommand: makeMacMaxFpsPlanCommand(args),
       macUnattendedFormalCommand: makeMacUnattendedFormalCommand(args),
       macFormalLocalSmokeCommand: makeMacFormalLocalSmokeCommand(args),
+      macPowerPlanCommand: makeMacPowerPlanCommand(),
       macScriptHelpCommand: makeMacScriptHelpCommand(),
     },
     results: results.map((result) => ({
@@ -1486,6 +1497,7 @@ async function main() {
     print("NEXT", `Mac max FPS dry-run plan: ${summary.commands.macMaxFpsPlanCommand}`, args);
     print("NEXT", `Mac unattended formal 60Hz gate: ${summary.commands.macUnattendedFormalCommand}`, args);
     print("NEXT", `Mac formal local smoke: ${summary.commands.macFormalLocalSmokeCommand}`, args);
+    print("NEXT", `Mac power settings dry-run plan: ${summary.commands.macPowerPlanCommand}`, args);
     print("NEXT", `Mac script help safety check: ${summary.commands.macScriptHelpCommand}`, args);
     if (summary.suggestedAction?.id) {
       print("NEXT", `Suggested action: ${summary.suggestedAction.id} · ${summary.suggestedAction.reason}`, args);
