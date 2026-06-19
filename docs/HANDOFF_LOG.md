@@ -17,6 +17,31 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
+本轮目标：同步上一轮 Mac client 文件发送进度显示事实到共享交接文档。
+完成内容：
+- 记录 Mac client 文件发送中状态已显示百分比、已发/总量、平均速度和预计剩余时间。
+- 记录复制/导出诊断会带出当前“文件剪贴板”状态，方便真机大文件测试判断仍在发送还是卡住。
+- 记录页面自测已覆盖延迟大文件发送中速度/ETA 文案，并继续覆盖断开取消不会发送迟到 complete。
+修改文件：
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- `git diff --check`
+- 触碰文档冲突标记扫描
+遗留问题：
+- 本轮只补文档，不重启当前旧 build Mac host，不运行需要用户密码的真实 Windows host/browser smoke。
+下一步建议：
+- 真机大文件/压缩包测试时同时看 Mac client 发送侧速度/ETA、Windows 接收侧速度/ETA、对端 result 和确认超时/重发体验是否一致。
+是否改了协议：否；只补共享状态文档。
+是否需要另一端配合：不需要。
+
 ## 2026-06-19 Windows Codex
 
 日期：2026-06-19 继续推进
