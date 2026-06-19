@@ -80,6 +80,7 @@ Examples:
   node scripts/mac/start-mac-heartbeat-watcher.mjs --boardSummary
   node scripts/mac/start-mac-heartbeat-watcher.mjs --status --json
   node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --boardSummary
+  node scripts/mac/start-mac-heartbeat-watcher.mjs --restart --refreshUnattended --boardSummary
 `);
 }
 
@@ -521,6 +522,7 @@ function makeCommands(args) {
     restart: `node scripts/mac/start-mac-heartbeat-watcher.mjs --restart${refreshStart} --boardSummary`,
     once: `node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus${refreshOnce} --boardSummary`,
     startWithUnattendedRefresh: "node scripts/mac/start-mac-heartbeat-watcher.mjs --refreshUnattended --boardSummary",
+    restartWithUnattendedRefresh: "node scripts/mac/start-mac-heartbeat-watcher.mjs --restart --refreshUnattended --boardSummary",
     onceWithUnattendedRefresh: "node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --refreshUnattended --boardSummary",
   };
 }
@@ -538,6 +540,7 @@ function makeBoardSummary(report) {
     `Status=${report.commands.status}.`,
     `Start=${report.commands.start}.`,
     `RefreshStart=${report.commands.startWithUnattendedRefresh}.`,
+    `RefreshRestart=${report.commands.restartWithUnattendedRefresh}.`,
     `RefreshOnce=${report.commands.onceWithUnattendedRefresh}.`,
     `Stop=${report.commands.stop}.`,
     `Once=${report.commands.once}.`,
@@ -563,6 +566,7 @@ function printHuman(report) {
   console.log(`[NEXT] Status: ${report.commands.status}`);
   console.log(`[NEXT] Start: ${report.commands.start}`);
   console.log(`[NEXT] Start with Mac Unattended refresh: ${report.commands.startWithUnattendedRefresh}`);
+  console.log(`[NEXT] Restart with Mac Unattended refresh: ${report.commands.restartWithUnattendedRefresh}`);
   console.log(`[NEXT] Stop: ${report.commands.stop}`);
   console.log(`[NEXT] One-shot heartbeat: ${report.commands.once}`);
   console.log(`[NEXT] One-shot with Mac Unattended refresh: ${report.commands.onceWithUnattendedRefresh}`);

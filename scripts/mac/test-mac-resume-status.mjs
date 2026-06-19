@@ -236,6 +236,8 @@ function assertBoardSummaryShape(text, label) {
   assert(/MacHeartbeatRefreshOnce=.*watch-mac-heartbeat\.mjs/.test(text), `${label} should include the Mac heartbeat one-shot unattended-refresh command`);
   assert(/MacHeartbeatRefreshStart=/.test(text), `${label} should include Mac heartbeat background unattended-refresh start guidance`);
   assert(/MacHeartbeatRefreshStart=.*start-mac-heartbeat-watcher\.mjs/.test(text), `${label} should include the Mac heartbeat background unattended-refresh start command`);
+  assert(/MacHeartbeatRefreshRestart=/.test(text), `${label} should include Mac heartbeat background unattended-refresh restart guidance`);
+  assert(/MacHeartbeatRefreshRestart=.*start-mac-heartbeat-watcher\.mjs/.test(text), `${label} should include the Mac heartbeat background unattended-refresh restart command`);
   assert(/MacHeartbeatStatus=/.test(text), `${label} should include Mac heartbeat background status guidance`);
   assert(/MacHeartbeatStatus=.*start-mac-heartbeat-watcher\.mjs/.test(text), `${label} should include the Mac heartbeat background status command`);
   assert(/MacHeartbeatStop=/.test(text), `${label} should include Mac heartbeat background stop guidance`);
@@ -580,6 +582,16 @@ function assertMacHeartbeatRefreshStartCommand(command, label) {
   assert(command.includes("--refreshUnattended"), `${label} should start the watcher with Mac Unattended refresh enabled`);
 }
 
+function assertMacHeartbeatRefreshRestartCommand(command, label) {
+  assert(/start-mac-heartbeat-watcher\.mjs/.test(command), `${label} should use start-mac-heartbeat-watcher`);
+  assert(command.includes("--restart"), `${label} should restart the watcher`);
+  assert(command.includes("--refreshUnattended"), `${label} should restart with Mac Unattended refresh enabled`);
+  assert(command.includes("--boardSummary"), `${label} should be board-summary friendly`);
+  assert(!command.includes("--password"), `${label} should not include a password flag`);
+  assert(!command.includes("--promptPassword"), `${label} should not prompt for passwords`);
+  assert(!command.includes("inject"), `${label} should not instruct injection`);
+}
+
 function assertMacHeartbeatStatusCommand(command, label) {
   assert(/start-mac-heartbeat-watcher\.mjs/.test(command), `${label} should use start-mac-heartbeat-watcher`);
   assert(command.includes("--status"), `${label} should check status`);
@@ -659,6 +671,7 @@ function checkHelp(args) {
     assert(/commands\.macHeartbeatStartCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat background start JSON field`);
     assert(/commands\.macHeartbeatRefreshOnceCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat one-shot unattended refresh JSON field`);
     assert(/commands\.macHeartbeatRefreshStartCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat background unattended refresh start JSON field`);
+    assert(/commands\.macHeartbeatRefreshRestartCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat background unattended refresh restart JSON field`);
     assert(/commands\.macHeartbeatStatusCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat background status JSON field`);
     assert(/commands\.macHeartbeatStopCommand/.test(result.stdout), `${script} ${flag} should document Mac heartbeat background stop JSON field`);
     assert(/macHeartbeatWatcher/.test(result.stdout), `${script} ${flag} should document Mac heartbeat watcher status JSON field`);
@@ -731,6 +744,7 @@ function checkOfflineJson(args) {
   assertMacHeartbeatStartCommand(payload.commands?.macHeartbeatStartCommand || "", "offline JSON Mac heartbeat background start command");
   assertMacHeartbeatRefreshOnceCommand(payload.commands?.macHeartbeatRefreshOnceCommand || "", "offline JSON Mac heartbeat unattended refresh one-shot command");
   assertMacHeartbeatRefreshStartCommand(payload.commands?.macHeartbeatRefreshStartCommand || "", "offline JSON Mac heartbeat unattended refresh background start command");
+  assertMacHeartbeatRefreshRestartCommand(payload.commands?.macHeartbeatRefreshRestartCommand || "", "offline JSON Mac heartbeat unattended refresh background restart command");
   assertMacHeartbeatStatusCommand(payload.commands?.macHeartbeatStatusCommand || "", "offline JSON Mac heartbeat background status command");
   assertMacHeartbeatStopCommand(payload.commands?.macHeartbeatStopCommand || "", "offline JSON Mac heartbeat background stop command");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "offline JSON should include copy diagnostics action");
@@ -822,6 +836,7 @@ function checkOfflinePlainReport(args) {
   assert(String(result.stdout || "").includes("Mac heartbeat background start:"), "plain report should include Mac heartbeat background start label");
   assert(String(result.stdout || "").includes("Mac heartbeat one-shot with unattended refresh:"), "plain report should include Mac heartbeat unattended refresh one-shot label");
   assert(String(result.stdout || "").includes("Mac heartbeat background refresh start:"), "plain report should include Mac heartbeat unattended refresh background start label");
+  assert(String(result.stdout || "").includes("Mac heartbeat background refresh restart:"), "plain report should include Mac heartbeat unattended refresh background restart label");
   assert(String(result.stdout || "").includes("Mac heartbeat background status:"), "plain report should include Mac heartbeat background status label");
   assert(String(result.stdout || "").includes("Mac heartbeat background stop:"), "plain report should include Mac heartbeat background stop label");
   assert(String(result.stdout || "").includes("Mac heartbeat watcher:"), "plain report should include Mac heartbeat watcher status");
@@ -911,6 +926,7 @@ function checkOnlineJson(args) {
   assertMacHeartbeatStartCommand(payload.commands?.macHeartbeatStartCommand || "", "online JSON Mac heartbeat background start command");
   assertMacHeartbeatRefreshOnceCommand(payload.commands?.macHeartbeatRefreshOnceCommand || "", "online JSON Mac heartbeat unattended refresh one-shot command");
   assertMacHeartbeatRefreshStartCommand(payload.commands?.macHeartbeatRefreshStartCommand || "", "online JSON Mac heartbeat unattended refresh background start command");
+  assertMacHeartbeatRefreshRestartCommand(payload.commands?.macHeartbeatRefreshRestartCommand || "", "online JSON Mac heartbeat unattended refresh background restart command");
   assertMacHeartbeatStatusCommand(payload.commands?.macHeartbeatStatusCommand || "", "online JSON Mac heartbeat background status command");
   assertMacHeartbeatStopCommand(payload.commands?.macHeartbeatStopCommand || "", "online JSON Mac heartbeat background stop command");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("连接密码"), "online JSON copy diagnostics action should mention password safety");

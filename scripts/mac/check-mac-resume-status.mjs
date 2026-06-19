@@ -232,6 +232,12 @@ Machine-readable JSON fields:
                              start command with explicit Mac Unattended refresh
                              before each heartbeat. It still posts as device
                              "Mac Heartbeat", not "Mac Codex".
+  commands.macHeartbeatRefreshRestartCommand
+                             Secret-free background Mac heartbeat watcher
+                             restart command with explicit Mac Unattended
+                             refresh before each heartbeat. It reuses the
+                             managed watcher PID/log files and still posts as
+                             device "Mac Heartbeat", not "Mac Codex".
   commands.macHeartbeatStatusCommand
                              Secret-free background watcher status command.
   commands.macHeartbeatStopCommand
@@ -1237,6 +1243,10 @@ function makeMacHeartbeatRefreshStartCommand() {
   return "node scripts/mac/start-mac-heartbeat-watcher.mjs --refreshUnattended --boardSummary";
 }
 
+function makeMacHeartbeatRefreshRestartCommand() {
+  return "node scripts/mac/start-mac-heartbeat-watcher.mjs --restart --refreshUnattended --boardSummary";
+}
+
 function makeMacHeartbeatStatusCommand() {
   return "node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary";
 }
@@ -1656,6 +1666,7 @@ function formatBoardSummary(report) {
       `MacHeartbeatStart=${report.commands.macHeartbeatStartCommand}.`,
       `MacHeartbeatRefreshOnce=${report.commands.macHeartbeatRefreshOnceCommand}.`,
       `MacHeartbeatRefreshStart=${report.commands.macHeartbeatRefreshStartCommand}.`,
+      `MacHeartbeatRefreshRestart=${report.commands.macHeartbeatRefreshRestartCommand}.`,
       `MacHeartbeatStatus=${report.commands.macHeartbeatStatusCommand}.`,
       `MacHeartbeatStop=${report.commands.macHeartbeatStopCommand}.`,
       `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
@@ -1706,6 +1717,7 @@ function formatBoardSummary(report) {
     `MacHeartbeatStart=${report.commands.macHeartbeatStartCommand}.`,
     `MacHeartbeatRefreshOnce=${report.commands.macHeartbeatRefreshOnceCommand}.`,
     `MacHeartbeatRefreshStart=${report.commands.macHeartbeatRefreshStartCommand}.`,
+    `MacHeartbeatRefreshRestart=${report.commands.macHeartbeatRefreshRestartCommand}.`,
     `MacHeartbeatStatus=${report.commands.macHeartbeatStatusCommand}.`,
     `MacHeartbeatStop=${report.commands.macHeartbeatStopCommand}.`,
     `MacScriptHelp=${report.commands.macScriptHelpCommand}.`,
@@ -1819,6 +1831,7 @@ function printReport(report) {
   console.log(`[NEXT] Mac heartbeat background start: ${report.commands.macHeartbeatStartCommand}`);
   console.log(`[NEXT] Mac heartbeat one-shot with unattended refresh: ${report.commands.macHeartbeatRefreshOnceCommand}`);
   console.log(`[NEXT] Mac heartbeat background refresh start: ${report.commands.macHeartbeatRefreshStartCommand}`);
+  console.log(`[NEXT] Mac heartbeat background refresh restart: ${report.commands.macHeartbeatRefreshRestartCommand}`);
   console.log(`[NEXT] Mac heartbeat background status: ${report.commands.macHeartbeatStatusCommand}`);
   console.log(`[NEXT] Mac heartbeat background stop: ${report.commands.macHeartbeatStopCommand}`);
   console.log(`[NEXT] Mac client copy diagnostics: ${report.commands.macClientCopyDiagnosticsAction}`);
@@ -1896,6 +1909,7 @@ async function main() {
       macHeartbeatStartCommand: makeMacHeartbeatStartCommand(),
       macHeartbeatRefreshOnceCommand: makeMacHeartbeatRefreshOnceCommand(),
       macHeartbeatRefreshStartCommand: makeMacHeartbeatRefreshStartCommand(),
+      macHeartbeatRefreshRestartCommand: makeMacHeartbeatRefreshRestartCommand(),
       macHeartbeatStatusCommand: makeMacHeartbeatStatusCommand(),
       macHeartbeatStopCommand: makeMacHeartbeatStopCommand(),
       macClientCopyDiagnosticsAction: "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码",

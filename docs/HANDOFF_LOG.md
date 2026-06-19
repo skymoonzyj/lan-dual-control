@@ -21,6 +21,38 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：把已有 heartbeat watcher `--restart --refreshUnattended` 安全组合暴露成一条可复制命令，减少手动“先停再启”漏步骤。
+完成内容：
+- `start-mac-heartbeat-watcher` 的 JSON `commands` 新增 `restartWithUnattendedRefresh`，`--boardSummary` 新增 `RefreshRestart=`，普通输出新增 “Restart with Mac Unattended refresh”。
+- `check-mac-resume-status` 新增 JSON `commands.macHeartbeatRefreshRestartCommand`，并在 `MacResumeStatus=` / 普通输出里新增 `MacHeartbeatRefreshRestart=` / “Mac heartbeat background refresh restart”。
+- 新命令固定为 `node scripts/mac/start-mac-heartbeat-watcher.mjs --restart --refreshUnattended --boardSummary`；脚本不会自动执行它，只有人工复制运行时才重启 watcher。
+- 本轮不执行 `pmset`，不加载 `launchctl`，不认证 WebSocket，不请求或发送密码，也不发送 call/input/inject。
+修改文件：
+- `scripts/mac/start-mac-heartbeat-watcher.mjs`
+- `scripts/mac/test-mac-heartbeat-watcher-start-helper.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat-watcher-start-helper.mjs --timeoutMs 15000` 先失败在缺 `restartWithUnattendedRefresh`；`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000` 先失败在 help 缺 `commands.macHeartbeatRefreshRestartCommand`。
+- 绿灯：实现后同两条专项回归通过，覆盖 JSON、boardSummary、普通输出、安全命令形态和不泄密。
+- 收尾验证：`node --check scripts/mac/start-mac-heartbeat-watcher.mjs`、`node --check scripts/mac/test-mac-heartbeat-watcher-start-helper.mjs`、`node --check scripts/mac/check-mac-resume-status.mjs`、`node --check scripts/mac/test-mac-resume-status.mjs`、`node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary`、`git diff --check` 均通过；冲突标记扫描无命中。
+- 真实只读复查：`node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary` 输出 `RefreshRestart=node scripts/mac/start-mac-heartbeat-watcher.mjs --restart --refreshUnattended --boardSummary`；`node scripts/mac/check-mac-resume-status.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary` 输出 `MacHeartbeatRefreshRestart=`。
+遗留问题：
+- 当前真实后台 watcher 是否切到刷新模式仍取决于人工是否运行 `MacHeartbeatRefreshRestart=`；本轮只暴露命令，不自动重启 watcher，也不处理 LaunchAgent/睡眠系统设置。
+下一步建议：
+- 如果开工第一屏看到 `MacHeartbeatRefresh=disabled` 且 `MacUnattendedFreshness=stale`，可先运行 `MacHeartbeatRefreshOnce=` 临时刷新；若决定长期保持独立值守证据新鲜，再人工运行 `MacHeartbeatRefreshRestart=`。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 `MacResumeStatus=` 第一屏直接显示后台 heartbeat watcher 是否启用了 `refreshUnattended`，并给出刷新版 watcher 入口。
 完成内容：
 - `check-mac-resume-status` 新增 JSON `macHeartbeatWatcher.refreshUnattended`，来自 `start-mac-heartbeat-watcher --status --json` 的只读状态。

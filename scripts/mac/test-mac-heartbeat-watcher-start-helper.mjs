@@ -165,6 +165,7 @@ function assertStartedPayload(payload, label) {
   assertIncludes(payload.commands?.stop || "", "start-mac-heartbeat-watcher.mjs --stop --boardSummary", `${label} stop command`);
   assertIncludes(payload.commands?.once || "", "watch-mac-heartbeat.mjs --once --sendStatus --boardSummary", `${label} once command`);
   assertIncludes(payload.commands?.startWithUnattendedRefresh || "", "start-mac-heartbeat-watcher.mjs --refreshUnattended --boardSummary", `${label} refresh start command`);
+  assertIncludes(payload.commands?.restartWithUnattendedRefresh || "", "start-mac-heartbeat-watcher.mjs --restart --refreshUnattended --boardSummary", `${label} refresh restart command`);
   assertIncludes(payload.commands?.onceWithUnattendedRefresh || "", "watch-mac-heartbeat.mjs --once --sendStatus --refreshUnattended --boardSummary", `${label} refresh once command`);
 }
 
@@ -243,6 +244,7 @@ function checkStartStatusStop(args) {
     assertIncludes(summary, "refreshUnattended=false", "boardSummary");
     assertIncludes(summary, "Status=node scripts/mac/start-mac-heartbeat-watcher.mjs --status --boardSummary", "boardSummary");
     assertIncludes(summary, "RefreshStart=node scripts/mac/start-mac-heartbeat-watcher.mjs --refreshUnattended --boardSummary", "boardSummary");
+    assertIncludes(summary, "RefreshRestart=node scripts/mac/start-mac-heartbeat-watcher.mjs --restart --refreshUnattended --boardSummary", "boardSummary");
     assertIncludes(summary, "No password was requested or sent", "boardSummary");
     assertNoSecrets(boardSummary, "boardSummary output");
 
@@ -274,7 +276,9 @@ function checkStartWithUnattendedRefresh(args) {
     assert(start.status === 0, `refresh start should pass.\n${start.stdout}\n${start.stderr}`);
     assert(payload.watcher?.refreshUnattended === true, "refresh start JSON should preserve refreshUnattended=true");
     assert(payload.commands?.start.includes("--refreshUnattended"), "refresh start command should preserve refreshUnattended");
+    assert(payload.commands?.restart.includes("--refreshUnattended"), "refresh restart command should preserve refreshUnattended");
     assert(payload.commands?.once.includes("--refreshUnattended"), "refresh once command should preserve refreshUnattended");
+    assertIncludes(payload.commands?.restartWithUnattendedRefresh || "", "--restart --refreshUnattended", "refresh start JSON restart-with-refresh command");
     const argv = readWatcherArgv(fake.argvLog)[0].join(" ");
     assertIncludes(argv, "--refreshUnattended", "refresh fake watcher argv");
     assertNoSecrets(start, "refresh start output");
@@ -301,6 +305,7 @@ function checkRestart(args) {
     assert(restart.status === 0, `restart should pass.\n${restart.stdout}\n${restart.stderr}`);
     assertStartedPayload(restartPayload, "restart JSON");
     assert(restartPayload.action === "restart", "restart payload should use action=restart");
+    assertIncludes(restartPayload.commands?.restartWithUnattendedRefresh || "", "--restart --refreshUnattended", "restart JSON should expose refresh restart command");
     assert(restartPayload.pid !== firstPayload.pid, "restart should replace the watcher process");
     const stop = run(["--stop", "--json", ...commonArgs(paths)], args, env);
     assert(stop.status === 0, `stop after restart should pass.\n${stop.stdout}\n${stop.stderr}`);
