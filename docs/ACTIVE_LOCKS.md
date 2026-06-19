@@ -14,7 +14,7 @@
 ## 当前占用
 
 | 端 | 文件或目录 | 原因 | 开始时间 | 状态 |
-| --- | --- | --- | --- | --- |
+| --- | --- | --- | --- |
 
 ## 高冲突区域
 
@@ -31,6 +31,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `apps/windows-client/styles.css`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | 真实体验 blocker 第一轮：修复 statusbar 换行导致画面上下抖动；补 WebAudio 预缓冲/背压/状态限频，降低声音断续；新增浏览器回归。 |
 | Windows Codex | `Start-Windows-Control-Mac.cmd`, `scripts/windows/test-windows-control-mac-entry.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | `Start-Windows-Control-Mac.cmd` 可直接双击打开当前 Mac 控制页，并透传 dryRun/boardSummary 参数；不含密码、认证或 input/inject。 |
 | Windows Codex | `apps/windows-client/launch-params.js`, `apps/windows-client/index.html`, `apps/windows-client/app.js`, `scripts/windows/start-windows-control-mac.mjs`, `scripts/windows/test-windows-control-mac-entry.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | 新增 Windows 一键打开当前 Mac 控制页：默认 127.0.0.1:5200 预填 192.168.31.122:43770 / WebSocket，固定 debugPort=9340；页面清空演示密码，密码只由用户本机输入。不改协议、不认证、不请求密码、不发 input/inject。 |
 | Windows Codex | `scripts/windows/check-windows-manual-ux-status.mjs`, `scripts/windows/test-windows-manual-ux-status.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | 新增 Windows 手工体验第一屏：只读 Agent Link Board 识别 PostPass/ManualUxStandby/ManualUxChecklist，输出 ready/waiting、中文清单和 Safety=no-password,no-input-inject；过滤 board 端口和 loopback 目标。不改协议、不认证、不请求密码、不发 input/inject。 |

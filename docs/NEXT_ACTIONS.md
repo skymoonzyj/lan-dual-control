@@ -6,6 +6,7 @@
 ## 2026-06-20 现场校正
 
 - 不要再回旧第二步/diagnostics 循环：Windows 控 Mac formal E2E 主体已经 PASS。
+- 最新真实体验 blocker 第一轮已收口：Windows 控制端页面上下抖动来自底部状态栏实时文字换行撑高，已固定为 36px 单行省略；声音丢包第一轮修复为 WebAudio 80ms 预缓冲、450ms 高水位丢新帧背压和状态文字限频。下一次用户实测时重点确认：连接后画面是否还上下跳、声音是否仍断续；若仍有声音断续，下一步抓复制诊断里的“声音状态/丢帧/播放计数”，并让 Mac 端同步跑音频基线观察。
 - 尾部 NativeCommandFailed 的处理结论是改用 PowerShell 7 / pwsh 路径。现场复测或用户授权输入密码时，优先复制 resume/status 摘要里的 pwsh ... check-mac-formal-e2e.ps1 ... -PromptPassword 命令。
 - 下一步继续手工体验验收：窗口/全屏、画面流畅度、声音、文本和文件剪贴板、input_ack，以及用户明确确认后的真实 inject 安全验收。
 只放短期任务，长期计划继续放在 `docs/04-task-board.md`。

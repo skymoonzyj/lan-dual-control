@@ -5704,6 +5704,183 @@ async function verifyReconnectControls(session) {
   return result;
 }
 
+async function verifyAudioPlaybackBufferGuards(session) {
+  const result = await evaluate(
+    session,
+    `(async () => {
+      if (typeof playPcmAudioFrame !== "function") {
+        return { ok: false, reason: "playPcmAudioFrame missing" };
+      }
+      const audioToggle = document.querySelector("#audioToggle");
+      const volumeRange = document.querySelector("#audioVolumeRange");
+      const original = {
+        checked: Boolean(audioToggle?.checked),
+        volume: volumeRange?.value || "",
+        context: state.audioContext,
+        gain: state.audioGain,
+        nextPlayTime: state.audioNextPlayTime,
+        played: state.audioPlayedFrames,
+        dropped: state.audioDroppedFrames,
+        lastError: state.audioLastError,
+      };
+      const starts = [];
+      const makeFakeContext = (currentTime) => ({
+        state: "running",
+        currentTime,
+        createBuffer(channels, frameCount, sampleRate) {
+          return {
+            duration: frameCount / sampleRate,
+            getChannelData() {
+              return new Float32Array(frameCount);
+            },
+          };
+        },
+        createBufferSource() {
+          return {
+            buffer: null,
+            connect() {},
+            start(time) {
+              starts.push(time);
+            },
+            disconnect() {},
+          };
+        },
+      });
+      const makeFrame = () => {
+        const samples = new Float32Array(960 * 2);
+        const bytes = new Uint8Array(samples.buffer);
+        let binary = "";
+        for (const byte of bytes) binary += String.fromCharCode(byte);
+        return {
+          codec: "pcm-f32le",
+          encoding: "pcm-f32le-base64",
+          layout: "interleaved",
+          channels: 2,
+          sampleRate: 48000,
+          payload: btoa(binary),
+        };
+      };
+
+      try {
+        if (audioToggle) audioToggle.checked = true;
+        if (volumeRange) volumeRange.value = "80";
+        state.audioContext = makeFakeContext(10);
+        state.audioGain = { gain: { value: 0 } };
+        state.audioNextPlayTime = 9;
+        state.audioPlayedFrames = 0;
+        state.audioDroppedFrames = 0;
+        starts.length = 0;
+        const underrunPlayed = await playPcmAudioFrame(makeFrame());
+        const underrunStart = starts[0] || 0;
+        const preservedPrebuffer = underrunPlayed && underrunStart >= 10.07;
+
+        state.audioContext = makeFakeContext(20);
+        state.audioGain = { gain: { value: 0 } };
+        state.audioNextPlayTime = 20.9;
+        state.audioPlayedFrames = 0;
+        state.audioDroppedFrames = 0;
+        starts.length = 0;
+        const overflowPlayed = await playPcmAudioFrame(makeFrame());
+        const droppedOverflow = !overflowPlayed && starts.length === 0 && state.audioDroppedFrames === 1;
+
+        return {
+          ok: preservedPrebuffer && droppedOverflow,
+          preservedPrebuffer,
+          underrunStart,
+          overflowPlayed,
+          overflowStarts: starts.length,
+          overflowDropped: state.audioDroppedFrames,
+        };
+      } finally {
+        if (audioToggle) audioToggle.checked = original.checked;
+        if (volumeRange) volumeRange.value = original.volume;
+        state.audioContext = original.context;
+        state.audioGain = original.gain;
+        state.audioNextPlayTime = original.nextPlayTime;
+        state.audioPlayedFrames = original.played;
+        state.audioDroppedFrames = original.dropped;
+        state.audioLastError = original.lastError;
+      }
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`audio playback buffer guard check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+async function verifyLiveStatusLayoutStability(session) {
+  const result = await evaluate(
+    session,
+    `(() => {
+      const statusbar = document.querySelector(".statusbar");
+      const remoteCanvas = document.querySelector("#remoteCanvas");
+      const statusText = document.querySelector("#statusText");
+      const inputText = document.querySelector("#inputText");
+      const audioText = document.querySelector("#audioText");
+      const clipboardText = document.querySelector("#clipboardText");
+      if (!statusbar || !remoteCanvas || !statusText || !inputText || !audioText || !clipboardText) {
+        return { ok: false, reason: "missing layout elements" };
+      }
+
+      const original = {
+        status: statusText.textContent,
+        input: inputText.textContent,
+        audio: audioText.textContent,
+        clipboard: clipboardText.textContent,
+      };
+      const before = {
+        statusbarHeight: statusbar.getBoundingClientRect().height,
+        remoteHeight: remoteCanvas.getBoundingClientRect().height,
+      };
+
+      try {
+        statusText.textContent = "已连接 · 192.168.31.122:43770 · H.264 · ScreenCaptureKit · 实收 59.8 FPS · 协商 60 Hz · 请求 60 Hz";
+        inputText.textContent = "输入事件：128 · 已注入 · Ctrl→Command · 远控 macOS 快捷键映射";
+        audioText.textContent = "声音：接收中 · 37% · 80% · 28 ms · 播放 2048 · 丢 2 · PCM 48000 Hz 2ch";
+        clipboardText.textContent = "剪贴板：文件同步 · 接收 2 个文件 · 128.0 MB/512.0 MB · 等待系统剪贴板写入";
+        const after = {
+          statusbarHeight: statusbar.getBoundingClientRect().height,
+          remoteHeight: remoteCanvas.getBoundingClientRect().height,
+        };
+        const statusbarStable = Math.abs(after.statusbarHeight - before.statusbarHeight) <= 1;
+        const remoteStable = Math.abs(after.remoteHeight - before.remoteHeight) <= 1;
+        const statusbarStyle = getComputedStyle(statusbar);
+        const textStyles = [statusText, inputText, audioText, clipboardText].map((element) => {
+          const style = getComputedStyle(element);
+          return {
+            whiteSpace: style.whiteSpace,
+            overflow: style.overflow,
+            textOverflow: style.textOverflow,
+          };
+        });
+        const nowrap = textStyles.every(
+          (style) =>
+            style.whiteSpace === "nowrap" &&
+            style.overflow === "hidden" &&
+            style.textOverflow === "ellipsis",
+        );
+        return {
+          ok: statusbarStable && remoteStable && statusbarStyle.flexWrap === "nowrap" && nowrap,
+          before,
+          after,
+          statusbarStable,
+          remoteStable,
+          flexWrap: statusbarStyle.flexWrap,
+          textStyles,
+        };
+      } finally {
+        statusText.textContent = original.status;
+        inputText.textContent = original.input;
+        audioText.textContent = original.audio;
+        clipboardText.textContent = original.clipboard;
+      }
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`live status layout stability check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
 async function run() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -5849,6 +6026,18 @@ async function run() {
     print(
       "OK",
       `Reconnect controls: scheduled=${reconnectControlsCheck.scheduled}, immediate=${reconnectControlsCheck.immediate}`,
+    );
+    const audioBufferGuardCheck = await verifyAudioPlaybackBufferGuards(session);
+    summary.checks.push("audio-buffer-guards");
+    print(
+      "OK",
+      `Audio buffer guards: underrunStart=${audioBufferGuardCheck.underrunStart.toFixed(3)} overflowDropped=${audioBufferGuardCheck.overflowDropped}`,
+    );
+    const layoutStabilityCheck = await verifyLiveStatusLayoutStability(session);
+    summary.checks.push("layout-stability");
+    print(
+      "OK",
+      `Live status layout stability: statusbar=${layoutStabilityCheck.after.statusbarHeight}px remote=${layoutStabilityCheck.after.remoteHeight}px`,
     );
     if (args.expectDiscoveryRuntimeBuildId) {
       const discoveryRuntimeCheck = await verifyDiscoveryRuntimeDiagnostics(session, {

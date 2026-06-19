@@ -19,6 +19,39 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 真实体验 blocker
+开发端：Windows Codex
+本轮目标：修复用户真实连接后的页面上下抖动和声音丢包第一轮问题。
+完成内容：
+- Root cause：底部状态栏 `audioText` / 连接 / 输入 / 剪贴板实时文本变长后会换行，statusbar 从 36px 涨到 46px，`grid` 中间远程画面高度随之减少，形成可见上下抖动。
+- 最小修复：`.statusbar` 固定 36px、禁止换行并对各状态项做单行省略。
+- Root cause：控制端 PCM 播放调度在队列断档时只用 `currentTime + 15ms` 起播，队列过深时仍继续安排新帧，容易在突发/调度抖动时出现 underrun 或重叠/漂移。
+- 最小修复：WebAudio 播放低水位补到 80ms 预缓冲，高水位超过 450ms 直接丢弃新帧并计数；音频状态 DOM 刷新限频，减少实时音频帧对布局和主线程的压力。
+- `test-windows-client-browser` 新增 `audio-buffer-guards` 和 `layout-stability` 浏览器级回归。
+修改文件：
+- `apps/windows-client/app.js`
+- `apps/windows-client/styles.css`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --clientPort 5202 --debugPort 9342` 先失败在 `live status layout stability`，证据为 statusbar 36px -> 46px、remoteHeight 减少 10px。
+- 红灯：同脚本新增音频检查先失败在 `audio playback buffer guard`，证据为 underrunStart=10.015 且 overflowPlayed=true。
+- 绿灯：`node --check apps/windows-client/app.js`
+- 绿灯：`node --check scripts/windows/test-windows-client-browser.mjs`
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --clientPort 5202 --debugPort 9342`，输出 `Audio buffer guards: underrunStart=10.080 overflowDropped=1` 和 `Live status layout stability: statusbar=36px ...`。
+遗留问题：
+- 这是 Windows 控制端第一轮修复；真实听感仍需用户下一次连接 Mac 后确认。如果仍有断续，下一步用复制诊断里的声音接收/播放/丢帧计数和 Mac 端音频基线共同定位。
+下一步建议：
+- 用户实测 Windows 控 Mac 时先看画面是否还上下跳，再听声音是否仍丢包；需要另一端时让 Mac 保持 host 在线并同步跑音频基线观察。
+是否改了协议：否。
+是否需要另一端配合：需要下一轮真实听感/画面体验复测时 Mac 端保持在线配合。
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 继续推进
 开发端：Windows Codex
 本轮目标：新增 Windows 根目录双击入口。

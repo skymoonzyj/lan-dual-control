@@ -155,6 +155,10 @@ const defaultAgentLinkServer = "http://192.168.31.68:17888";
 const localMacAlertWatcherStatusPollMs = 15000;
 const macHeartbeatFreshnessStaleMs = 2 * 60 * 1000;
 const defaultHostDiagnosticsText = "诊断：等待连接。";
+const audioInitialBufferSeconds = 0.08;
+const audioMinimumBufferSeconds = 0.07;
+const audioMaximumQueuedSeconds = 0.45;
+const audioStatusRenderIntervalMs = 140;
 const displayOptionDefaults = {
   resolution: "1920x1080",
   fps: "60",
@@ -540,6 +544,8 @@ const state = {
   audioPlayedFrames: 0,
   audioDroppedFrames: 0,
   audioLastError: "",
+  audioLastStatusUpdateAt: 0,
+  audioLastRenderedDroppedFrames: 0,
   recentConnections: [],
   localHostRunning: false,
   localHostOnline: false,
@@ -2922,6 +2928,8 @@ function resetAudioPlayback() {
   state.audioPlayedFrames = 0;
   state.audioDroppedFrames = 0;
   state.audioLastError = "";
+  state.audioLastStatusUpdateAt = 0;
+  state.audioLastRenderedDroppedFrames = 0;
   syncFloatingControlStatus();
 }
 
@@ -2958,7 +2966,7 @@ async function ensureAudioPlayback(sampleRate) {
     }
     state.audioGain = state.audioContext.createGain();
     state.audioGain.connect(state.audioContext.destination);
-    state.audioNextPlayTime = state.audioContext.currentTime + 0.04;
+    state.audioNextPlayTime = state.audioContext.currentTime + audioInitialBufferSeconds;
   }
 
   if (state.audioContext.state === "suspended") {
@@ -3034,16 +3042,20 @@ async function playPcmAudioFrame(frame) {
     }
   }
 
+  const now = audioContext.currentTime;
+  const queuedSeconds = Math.max(0, state.audioNextPlayTime - now);
+  if (queuedSeconds > audioMaximumQueuedSeconds) {
+    state.audioDroppedFrames += 1;
+    return false;
+  }
+  if (state.audioNextPlayTime < now + audioMinimumBufferSeconds) {
+    state.audioNextPlayTime = now + audioInitialBufferSeconds;
+  }
+
   const source = audioContext.createBufferSource();
   source.buffer = buffer;
   source.connect(state.audioGain);
-  const now = audioContext.currentTime;
-  const queuedSeconds = Math.max(0, state.audioNextPlayTime - now);
-  if (queuedSeconds > 0.35) {
-    state.audioDroppedFrames += 1;
-    state.audioNextPlayTime = now + 0.04;
-  }
-  const playAt = Math.max(audioContext.currentTime + 0.015, state.audioNextPlayTime);
+  const playAt = state.audioNextPlayTime;
   source.start(playAt);
   source.onended = () => source.disconnect();
   state.audioNextPlayTime = playAt + buffer.duration;
@@ -3051,7 +3063,17 @@ async function playPcmAudioFrame(frame) {
   return true;
 }
 
-function renderAudioStatusFromFrame(frame) {
+function shouldRenderAudioStatus({ force = false } = {}) {
+  if (force) return true;
+  const now = performance.now();
+  if (state.audioDroppedFrames !== state.audioLastRenderedDroppedFrames) return true;
+  return now - state.audioLastStatusUpdateAt >= audioStatusRenderIntervalMs;
+}
+
+function renderAudioStatusFromFrame(frame, options = {}) {
+  if (!shouldRenderAudioStatus(options)) return false;
+  state.audioLastStatusUpdateAt = performance.now();
+  state.audioLastRenderedDroppedFrames = state.audioDroppedFrames;
   const volume = Number(elements.audioVolumeRange.value);
   const levelText = `${Math.round(state.audioLevel * 100)}%`;
   const latencyText = frame.latencyMs ? ` · ${Math.round(frame.latencyMs)} ms` : "";
@@ -3075,7 +3097,7 @@ function renderAudioStatusFromFrame(frame) {
 function updateAudioStatusFromFrame(frame) {
   state.audioFrames += 1;
   state.audioLevel = Math.max(0, Math.min(1, Number(frame.level ?? frame.peak ?? 0)));
-  renderAudioStatusFromFrame(frame);
+  renderAudioStatusFromFrame(frame, { force: state.audioFrames === 1 });
 }
 
 function handleAudioFrame(frame) {
@@ -3084,10 +3106,11 @@ function handleAudioFrame(frame) {
     return;
   }
 
+  const droppedBeforePlayback = state.audioDroppedFrames;
   void playPcmAudioFrame(frame)
     .then((played) => {
-      if (played) {
-        renderAudioStatusFromFrame(frame);
+      if (played || state.audioDroppedFrames !== droppedBeforePlayback) {
+        renderAudioStatusFromFrame(frame, { force: state.audioDroppedFrames !== droppedBeforePlayback });
       }
     })
     .catch((error) => {

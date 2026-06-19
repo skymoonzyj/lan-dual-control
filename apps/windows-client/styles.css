@@ -1324,18 +1324,24 @@ button:disabled {
 
 .statusbar {
   display: flex;
+  height: 36px;
   min-height: 36px;
   align-items: center;
   gap: 22px;
+  overflow: hidden;
   border-top: 1px solid var(--line);
   background: var(--panel);
   color: var(--muted);
+  flex-wrap: nowrap;
   font-size: 12px;
   padding: 0 18px;
 }
 
 .statusbar span {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .is-fullscreen .sidebar {
