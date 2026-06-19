@@ -8,9 +8,11 @@
 
 最新校正：Mac host 当前实机在线为 `192.168.31.122:43770` / `127.0.0.1:43770`，LaunchAgent/log/60fps，runtime build `bed2095`；通讯板已可达。最新 `MacHeartbeat` / `MacResumeStatus` 已修复旧状态回声，当前剩余风险应看作 `MacUnattendedHealth=warning reason=accessibility blockers=none warnings=accessibility`，不要再把历史 `launch-agent-not-loaded` 当作当前 blocker。
 
+最新认证路径：当前 `MacUnattendedStatus` / `MacHeartbeat` / `MacResumeStatus` 会输出 `MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia`。看到这条时，不要继续等待 LaunchAgent 随机密码；正式 Windows 控 Mac 认证应在用户在场时先停旧 host，再用 `MacMaxFpsSafeStart` 前台隐藏密码启动，在 Windows 和 Mac 两端输入同一个临时密码，之后跑 `MacHostMedia` 复查媒体基线。
+
 1. Mac 端继续验证真实被控服务。
    - 默认使用 `LAN_DUAL_INPUT_MODE=log` 做安全联调。
-   - 当前 Mac host 已在 `192.168.31.122:43770` / `127.0.0.1:43770` 运行当前 build `ed937a2`，`inputMode=log`、`maxScreenFps=60`；Mac heartbeat 为 `ok`，`MacHostMedia` 已通过 `passed=12/12 media=ok`，本机 `MacFormalLocalSmoke` 已通过 H.264 89 帧 / 29.54 fps、PCM 151 帧 / 49.87 fps、`input-log` 16/16 ack，且 `injected=false`。下一步可让 Windows 端跑真实发现/正式页面验收，不需要再先处理旧 build。
+   - 当前 Mac host 已在 `192.168.31.122:43770` / `127.0.0.1:43770` 运行当前 build `bed2095`，`inputMode=log`、`maxScreenFps=60`；最新心跳为 `ok`，值守剩余 warning 是 `accessibility`，认证路径提示为 `MacHostAuthPath=prompt-password-required`。下一步可让 Windows 端按前台同密 promptPassword 路径跑真实发现/正式页面验收，不需要再等待 LaunchAgent 随机密码。
    - 最新一轮 `MacFormalE2E` 只读 readiness 为 `ready with warnings`：刷新时 `repo=60a04e1 clean`、`blockers=none`、`runtimeBuild=ed937a2 stale metadata only, hostRuntimeChanges=0`；随后已合并 Windows-only `e23c95c`，未触碰 Mac host runtime。`warnings=video,build,auth` 不是当前阻塞；正式密码仍必须由用户本机隐藏输入，不能通过通讯板或命令参数传递。
    - 在 Windows 端运行 `scripts/windows/test-mac-host.ps1 -Discover -PromptPassword -RequirePassword -RequireH264 -ExpectInputMode log`；已知 IP 且不想扫整段局域网时，加 `-DiscoverNoLocalSubnets -HostName 192.168.31.122 -Port 43770`。
    - 验证通过后，真实输入注入只能在用户明确确认正在看 Mac 屏幕后执行；Mac 端通过启动助手切换时必须带 `--confirmUserWatching`，不要把裸 `LAN_DUAL_INPUT_MODE=inject` 当作日常复跑路径。

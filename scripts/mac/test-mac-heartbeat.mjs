@@ -167,6 +167,14 @@ function assertMacUnattendedFreshness(payload, expected, label) {
   assert(freshness?.thresholdMs === 600000, `${label} should expose MacUnattendedFreshness thresholdMs`);
 }
 
+function assertMacHostAuthPath(payload, expected, label) {
+  const authPath = payload.board?.macHostAuthPath;
+  assert(authPath?.status === expected.status, `${label} should expose MacHostAuthPath status`);
+  assert(authPath?.reason === expected.reason, `${label} should expose MacHostAuthPath reason`);
+  assert(authPath?.mode === expected.mode, `${label} should expose MacHostAuthPath mode`);
+  assert(authPath?.next === expected.next, `${label} should expose MacHostAuthPath next`);
+}
+
 function assertMacPowerPlanCommand(command, label) {
   assertIncludes(command || "", "plan-mac-power-settings.mjs", label);
   assertIncludes(command || "", "--profile all", label);
@@ -626,7 +634,7 @@ async function checkOnlineBoardEvidence(args) {
 }
 
 async function checkBoardMacPowerHealth(args) {
-  const cleanPower = "Mac unattended status: host=online inputMode=log build=ed937a2; power=sleep=ac-power:1 displaySleep=ac-power:10 networkWake=ac-power:1; MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T07:23:38.703Z; attention=2 warning(s) blockers=none warnings=launch-agent-not-loaded,power.";
+  const cleanPower = "Mac unattended status: host=online inputMode=log build=ed937a2; power=sleep=ac-power:1 displaySleep=ac-power:10 networkWake=ac-power:1; MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T07:23:38.703Z; MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia; attention=2 warning(s) blockers=none warnings=launch-agent-not-loaded,power.";
   await withServer((request, response) => {
     if ((request.url || "").split("?")[0] !== "/api/state") {
       response.writeHead(404).end("not found");
@@ -689,9 +697,16 @@ async function checkBoardMacPowerHealth(args) {
       status: "stale",
       checkedAt: "2026-06-19T07:23:38.703Z",
     }, "Mac power health heartbeat");
+    assertMacHostAuthPath(payload, {
+      status: "prompt-password-required",
+      reason: "launch-agent-ephemeral-password",
+      mode: "ephemeral",
+      next: "MacHostStop->MacMaxFpsSafeStart->MacHostMedia",
+    }, "Mac power health heartbeat");
     assertIncludes(payload.boardSummary || "", "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z.", "Mac power heartbeat summary");
     assertIncludes(payload.boardSummary || "", "MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T07:23:38.703Z.", "Mac unattended heartbeat summary");
     assertIncludes(payload.boardSummary || "", "MacUnattendedFreshness=stale", "Mac power heartbeat summary");
+    assertIncludes(payload.boardSummary || "", "MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia.", "Mac power heartbeat summary");
     assertIncludes(payload.boardSummary || "", "checkedAt=2026-06-19T07:23:38.703Z", "Mac power heartbeat summary");
     assertIncludes(payload.boardSummary || "", "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs", "Mac power heartbeat summary");
     assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=node scripts/mac/install-mac-host-launch-agent.mjs", "Mac power heartbeat summary");

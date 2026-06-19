@@ -157,6 +157,13 @@ function assertMacUnattendedFreshness(freshness, expectedStatus, label) {
   assert(["MacUnattendedHealth", "MacPowerHealth"].includes(freshness.source), `${label} should expose a safe source label`);
 }
 
+function assertMacHostAuthPath(authPath, expected, label) {
+  assert(authPath?.status === expected.status, `${label} should expose MacHostAuthPath status`);
+  assert(authPath?.reason === expected.reason, `${label} should expose MacHostAuthPath reason`);
+  assert(authPath?.mode === expected.mode, `${label} should expose MacHostAuthPath mode`);
+  assert(authPath?.next === expected.next, `${label} should expose MacHostAuthPath next`);
+}
+
 function assertBoardSummaryShape(text, label) {
   assert(/Mac resume:/.test(text), `${label} should start with Mac resume summary`);
   assert(/repo=/.test(text), `${label} should include repo state`);
@@ -1369,7 +1376,7 @@ async function checkBoardMacEvidence(args) {
 }
 
 async function checkBoardMacPowerHealth(args) {
-  const cleanPower = "Mac unattended status: host=online inputMode=log build=ed937a2; power=sleep=ac-power:1 displaySleep=ac-power:10 networkWake=ac-power:1; MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T07:23:38.703Z; attention=2 warning(s) blockers=none warnings=launch-agent-not-loaded,power.";
+  const cleanPower = "Mac unattended status: host=online inputMode=log build=ed937a2; power=sleep=ac-power:1 displaySleep=ac-power:10 networkWake=ac-power:1; MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T07:23:38.703Z; MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia; attention=2 warning(s) blockers=none warnings=launch-agent-not-loaded,power.";
   await withFakeBoard(null, async (server) => {
     const result = run(args, [
       "--json",
@@ -1399,9 +1406,16 @@ async function checkBoardMacPowerHealth(args) {
     assertMacUnattendedFreshness(payload.board?.macUnattendedFreshness, "stale", "Mac unattended freshness JSON");
     assert(payload.board?.macUnattendedFreshness?.checkedAt === "2026-06-19T07:23:38.703Z", "Mac unattended freshness JSON should reuse the board checkedAt");
     assert(payload.board?.macUnattendedFreshness?.source === "MacUnattendedHealth", "Mac unattended freshness should prefer MacUnattendedHealth over MacPowerHealth");
+    assertMacHostAuthPath(payload.board?.macHostAuthPath, {
+      status: "prompt-password-required",
+      reason: "launch-agent-ephemeral-password",
+      mode: "ephemeral",
+      next: "MacHostStop->MacMaxFpsSafeStart->MacHostMedia",
+    }, "Mac host auth path JSON");
     assert(String(payload.boardSummary || "").includes("MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z;"), "board summary should expose MacPowerHealth as a standalone segment");
     assert(String(payload.boardSummary || "").includes("MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T07:23:38.703Z;"), "board summary should expose MacUnattendedHealth as a standalone segment");
     assert(String(payload.boardSummary || "").includes("MacUnattendedFreshness=stale"), "board summary should expose stale Mac unattended freshness");
+    assert(String(payload.boardSummary || "").includes("MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia;"), "board summary should expose MacHostAuthPath as a standalone segment");
     assert(String(payload.boardSummary || "").includes("thresholdMs=600000"), "board summary should include the freshness threshold");
     assert(String(payload.boardSummary || "").includes("checkedAt=2026-06-19T07:23:38.703Z"), "board summary should include freshness checkedAt");
     assert(String(payload.boardSummary || "").includes("source=MacUnattendedHealth"), "board summary should include the freshness source");

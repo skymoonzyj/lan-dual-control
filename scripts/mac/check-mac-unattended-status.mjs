@@ -75,6 +75,9 @@ Only --sendStatus posts the MacUnattendedHealth= summary.
 Machine-readable JSON fields:
   host                           Mac host /discovery status, permissions, inputMode.
   launchAgent                    LaunchAgent plist existence and launchctl loaded status.
+  macHostAuthPath                Secret-free formal-auth guidance for the
+                                 current LaunchAgent password mode, exposed
+                                 as MacHostAuthPath= in board summaries.
   power                          pmset sleep/display/network-wake snapshot and risk notes.
   limitations                    Lock screen, display sleep, system sleep, reboot/login limits.
   macPowerHealth                 Stable ok|warning|unknown power risk summary
@@ -397,6 +400,7 @@ function readLaunchAgentPlist(args) {
     }
   }
   const maxScreenFps = getProgramArgumentNumber(programArguments, "--maxScreenFps");
+  const passwordMode = detectLaunchAgentPasswordMode(programArguments);
   return {
     path: args.launchAgentPath,
     exists,
@@ -405,6 +409,7 @@ function readLaunchAgentPlist(args) {
     labelMatches: !label || label === args.label,
     programArguments,
     maxScreenFps,
+    passwordMode,
     error,
   };
 }
@@ -445,6 +450,19 @@ function getProgramArgumentNumber(programArguments, key) {
     }
   }
   return null;
+}
+
+function hasProgramArgument(programArguments, key) {
+  const items = Array.isArray(programArguments) ? programArguments : [];
+  return items.some((item) => String(item || "") === key);
+}
+
+function detectLaunchAgentPasswordMode(programArguments) {
+  if (!Array.isArray(programArguments) || programArguments.length === 0) return "unknown";
+  if (hasProgramArgument(programArguments, "--ephemeralPassword")) return "ephemeral";
+  if (hasProgramArgument(programArguments, "--promptPassword")) return "prompt";
+  if (hasProgramArgument(programArguments, "--requirePassword")) return "env-required";
+  return "none";
 }
 
 function checkLaunchctl(args) {
@@ -674,6 +692,53 @@ function makeCommands(args) {
   };
 }
 
+function buildMacHostAuthPath(report) {
+  const mode = report.launchAgent?.passwordMode || "unknown";
+  const base = {
+    mode,
+    next: "MacHostStop->MacMaxFpsSafeStart->MacHostMedia",
+    command: report.commands.macMaxFpsSafeStart,
+  };
+  if (mode === "ephemeral") {
+    return {
+      ...base,
+      status: "prompt-password-required",
+      reason: "launch-agent-ephemeral-password",
+      note: "LaunchAgent uses a random runtime password that is not shared; formal auth needs a foreground prompt-password restart with the same temporary password typed locally on both sides.",
+    };
+  }
+  if (mode === "prompt") {
+    return {
+      ...base,
+      status: "prompt-password-configured",
+      reason: "launch-agent-prompt-password",
+      note: "LaunchAgent is configured for a visible prompt-password path; a user must still enter the same temporary password locally for formal auth.",
+    };
+  }
+  if (mode === "env-required") {
+    return {
+      ...base,
+      status: "env-password-required",
+      reason: "launch-agent-env-required",
+      note: "LaunchAgent requires an externally supplied password; do not put it on Agent Link Board or in command arguments.",
+    };
+  }
+  if (mode === "none") {
+    return {
+      ...base,
+      status: "no-password-required",
+      reason: "launch-agent-no-password",
+      note: "LaunchAgent ProgramArguments do not require a password; review before formal auth.",
+    };
+  }
+  return {
+    ...base,
+    status: "unknown",
+    reason: report.launchAgent?.exists ? "launch-agent-auth-mode-unknown" : "launch-agent-missing",
+    note: "LaunchAgent password mode is unknown; use a foreground prompt-password safe start before formal auth.",
+  };
+}
+
 function makeMacHostStopCommand(args) {
   return [
     "node scripts/mac/start-mac-host.mjs",
@@ -895,8 +960,9 @@ function makeBoardSummary(report) {
   const suggestedAction = report.suggestedAction?.boardSummary || "";
   const powerHealth = formatMacPowerHealthSummary(report.macPowerHealth);
   const unattendedHealth = formatMacUnattendedHealthSummary(report.macUnattendedHealth);
+  const authPath = formatMacHostAuthPathSummary(report.macHostAuthPath);
   return [
-    `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${powerHealth}; ${unattendedHealth}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedAction ? ` ${suggestedAction}` : ""}.`,
+    `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${powerHealth}; ${unattendedHealth}; ${authPath}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedAction ? ` ${suggestedAction}` : ""}.`,
     `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacUnattendedSendStatus=${report.commands.macUnattendedSendStatus}; MacPowerPlan=${report.commands.macPowerPlan}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacHostMedia=${report.commands.macHostMedia}; MacResumeStatus=${report.commands.macResumeStatus}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTest}; MacScriptHelp=${report.commands.macScriptHelp}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
@@ -1013,6 +1079,16 @@ function formatMacUnattendedHealthSummary(health) {
   ].join(" ");
 }
 
+function formatMacHostAuthPathSummary(authPath) {
+  if (!authPath) return "MacHostAuthPath=unknown reason=unknown mode=unknown next=unknown";
+  return [
+    `MacHostAuthPath=${authPath.status || "unknown"}`,
+    `reason=${authPath.reason || "unknown"}`,
+    `mode=${authPath.mode || "unknown"}`,
+    `next=${authPath.next || "unknown"}`,
+  ].join(" ");
+}
+
 function boolText(value) {
   if (value === true) return "true";
   if (value === false) return "false";
@@ -1057,12 +1133,14 @@ async function buildReport(args) {
     findings,
     macPowerHealth: undefined,
     macUnattendedHealth: undefined,
+    macHostAuthPath: undefined,
     commands: makeCommands(args),
     suggestedAction: undefined,
     boardSummary: "",
   };
   report.macPowerHealth = buildMacPowerHealth(report);
   report.macUnattendedHealth = buildMacUnattendedHealth(report);
+  report.macHostAuthPath = buildMacHostAuthPath(report);
   report.suggestedAction = buildSuggestedAction(report);
   report.boardSummary = makeBoardSummary(report);
   return report;

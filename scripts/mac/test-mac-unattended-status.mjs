@@ -307,7 +307,7 @@ function baseOfflineArgs(launchAgentPath) {
   ];
 }
 
-function fakeLaunchAgentPlist({ label = "com.lan-dual-control.mac-host", maxScreenFps = 60 } = {}) {
+function fakeLaunchAgentPlist({ label = "com.lan-dual-control.mac-host", maxScreenFps = 60, passwordMode = "ephemeral" } = {}) {
   const programArguments = [
     "/usr/bin/env",
     "node",
@@ -324,6 +324,11 @@ function fakeLaunchAgentPlist({ label = "com.lan-dual-control.mac-host", maxScre
   ];
   if (maxScreenFps !== null) {
     programArguments.push("--maxScreenFps", String(maxScreenFps));
+  }
+  if (passwordMode === "ephemeral") {
+    programArguments.push("--ephemeralPassword");
+  } else if (passwordMode === "prompt") {
+    programArguments.push("--promptPassword");
   }
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -353,6 +358,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "host", `${script} ${flag}`);
     assertIncludes(result.stdout, "launchAgent", `${script} ${flag}`);
     assertIncludes(result.stdout, "power", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macHostAuthPath", `${script} ${flag}`);
     assertIncludes(result.stdout, "macUnattendedHealth", `${script} ${flag}`);
     assertIncludes(result.stdout, "macPowerHealth", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.launchAgentPlan", `${script} ${flag}`);
@@ -852,7 +858,12 @@ function checkFakePlist(args) {
     assert(payload.launchAgent?.installed === true, "fake plist should be considered installed");
     assert(payload.launchAgent?.labelMatches === true, "fake plist label should match");
     assert(payload.launchAgent?.maxScreenFps === 60, "fake plist should expose maxScreenFps from ProgramArguments");
+    assert(payload.launchAgent?.passwordMode === "ephemeral", "fake plist should expose LaunchAgent passwordMode=ephemeral");
     assert(Array.isArray(payload.launchAgent?.programArguments), "fake plist should expose ProgramArguments");
+    assert(payload.macHostAuthPath?.status === "prompt-password-required", "fake plist should expose prompt-password-required auth path");
+    assert(payload.macHostAuthPath?.reason === "launch-agent-ephemeral-password", "fake plist should explain ephemeral LaunchAgent password");
+    assert(payload.macHostAuthPath?.mode === "ephemeral", "fake plist auth path should include mode=ephemeral");
+    assert(payload.macHostAuthPath?.next === "MacHostStop->MacMaxFpsSafeStart->MacHostMedia", "fake plist auth path should include the safe formal next-step order");
     assertIncludes(payload.commands?.launchAgentPlan || "", "install-mac-host-launch-agent.mjs", "fake plist commands.launchAgentPlan");
     assertIncludes(payload.commands?.macMaxFpsPlan || "", "--maxScreenFps 60", "fake plist commands.macMaxFpsPlan");
     assertIncludes(payload.commands?.macHostSafeStart || "", "--promptPassword", "fake plist commands.macHostSafeStart");
@@ -864,6 +875,7 @@ function checkFakePlist(args) {
     assertIncludes(payload.commands?.macUnattendedFormal || "", "--requireLaunchAgentLoaded", "fake plist commands.macUnattendedFormal");
     assertIncludes(payload.commands?.macHostReadiness || "", "check-mac-host-readiness.mjs", "fake plist commands.macHostReadiness");
     assertIncludes(payload.commands?.hostReadiness || "", "check-mac-host-readiness.mjs", "fake plist commands.hostReadiness");
+    assertIncludes(payload.boardSummary, "MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia", "fake plist board summary should expose MacHostAuthPath");
     assert(payload.limitations.some((item) => /System sleep/.test(item)), "fake plist payload should document sleep limit");
     assert(payload.limitations.some((item) => /Reboot/.test(item)), "fake plist payload should document reboot/login limit");
     assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "fake plist unattended JSON");

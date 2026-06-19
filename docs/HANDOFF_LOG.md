@@ -21,6 +21,38 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：把 Mac LaunchAgent 随机密码阻塞转成稳定、无密的认证路径信号。
+完成内容：
+- `check-mac-unattended-status` 现在会从 LaunchAgent plist `ProgramArguments` 识别 `passwordMode`：`ephemeral` / `prompt` / `env-required` / `none` / `unknown`。
+- 新增 JSON `macHostAuthPath` 和摘要 `MacHostAuthPath=`：当前真实 LaunchAgent 为 `mode=ephemeral` 时输出 `MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia`，明确随机运行期密码不能上板、不能让 Windows 用户凭空输入，正式验收要走前台 promptPassword 同一临时密码路径。
+- `check-mac-heartbeat --checkBoard` 与 `check-mac-resume-status --checkBoard` 会安全透传通讯板当前 `MacHostAuthPath=`，并只接受白名单短标签；不回显命令参数里的密码、token 或未知文本。
+- 已用真实 Mac 状态刷新 Agent Link Board：当前 `MacUnattendedHealth=warning reason=accessibility`，并带 `MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia`。
+修改文件：
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/HANDOFF_LOG.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 20000` 先失败在 help/JSON 缺 `macHostAuthPath`；`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 20000` 先失败在 `board.macHostAuthPath`；`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 20000` 先失败在 `board.macHostAuthPath`。
+- 绿灯：三项测试修复后均通过。
+- 真实验证：`check-mac-unattended-status --sendStatus --boardSummary`、`check-mac-heartbeat --checkBoard --boardSummary`、`check-mac-resume-status --checkBoard --boardSummary` 都显示 `MacHostAuthPath=prompt-password-required reason=launch-agent-ephemeral-password mode=ephemeral next=MacHostStop->MacMaxFpsSafeStart->MacHostMedia`；全程无密码、无认证、无 input/inject。
+遗留问题：
+- 当前 Mac host 仍为 LaunchAgent/log/60fps 安全联调态；真实注入前仍需处理 Accessibility/Input Monitoring 或改走用户在场的前台安全启动路径。
+- `MacHostAuthPath` 是安全信号和下一步顺序，不会自动停止/启动 host；用户在场时才可按 `MacHostStop` -> `MacMaxFpsSafeStart` 输入同一临时密码 -> `MacHostMedia` 复查。
+下一步建议：
+- Windows 端读取到 `MacHostAuthPath=prompt-password-required` 时，不要继续等待 LaunchAgent 随机密码；应提示 Mac 端/用户走前台 `MacMaxFpsSafeStart` 隐藏密码流程。
+是否改了协议：否；只新增通讯板/JSON 的稳定诊断短字段。
+是否需要另一端配合：需要 Windows 端消费或至少按该字段理解正式认证路径；不需要 Windows 端改协议。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：修复 Mac 心跳/恢复摘要误转述旧 `launch-agent-not-loaded` 值守状态的问题。
 完成内容：
 - 根因确认：`Mac Unattended` 独立状态已刷新为 `MacUnattendedHealth=warning reason=accessibility`，但 `check-mac-heartbeat` / `check-mac-resume-status` 的安全白名单不认识 `accessibility` 等真实 finding id，导致跳过当前值并从旧 `Mac Heartbeat` 摘要里捡到历史 `launch-agent-not-loaded`。

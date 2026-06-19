@@ -90,6 +90,24 @@ const allowedMacUnattendedFindings = new Set([
   "input-monitoring",
   "pmset-failed",
 ]);
+const allowedMacHostAuthPathStatuses = new Set([
+  "prompt-password-required",
+  "prompt-password-configured",
+  "env-password-required",
+  "no-password-required",
+  "unknown",
+]);
+const allowedMacHostAuthPathReasons = new Set([
+  "launch-agent-ephemeral-password",
+  "launch-agent-prompt-password",
+  "launch-agent-env-required",
+  "launch-agent-no-password",
+  "launch-agent-auth-mode-unknown",
+  "launch-agent-missing",
+  "unknown",
+]);
+const allowedMacHostAuthPathModes = new Set(["ephemeral", "prompt", "env-required", "none", "unknown"]);
+const allowedMacHostAuthPathNext = new Set(["MacHostStop->MacMaxFpsSafeStart->MacHostMedia", "unknown"]);
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -509,6 +527,7 @@ async function readBoard(args, nowMs) {
     macPowerHealth: null,
     macUnattendedHealth: null,
     macUnattendedFreshness: null,
+    macHostAuthPath: null,
     error: "",
   };
   if (!args.checkBoard) return result;
@@ -535,10 +554,19 @@ async function readBoard(args, nowMs) {
     result.macPowerHealth = collectMacPowerHealth(state);
     result.macUnattendedHealth = collectMacUnattendedHealth(state);
     result.macUnattendedFreshness = collectMacUnattendedFreshness(state, nowMs);
+    result.macHostAuthPath = collectMacHostAuthPath(state);
   } catch (error) {
     result.error = error.message;
   }
   return result;
+}
+
+function collectMacHostAuthPath(state) {
+  for (const text of collectBoardTexts(state)) {
+    const authPath = extractMacHostAuthPath(text);
+    if (authPath) return authPath;
+  }
+  return null;
 }
 
 function collectMacUnattendedHealth(state) {
@@ -647,6 +675,22 @@ function extractMacUnattendedHealth(text) {
   if (!isSafeMacUnattendedFindings(warnings)) return null;
   if (!Number.isFinite(Date.parse(checkedAt))) return null;
   return { status, reason, blockers, warnings, checkedAt };
+}
+
+function extractMacHostAuthPath(text) {
+  const source = normalizedText(text);
+  if (!source || !/\bMacHostAuthPath=/i.test(source)) return null;
+  const match = source.match(/\bMacHostAuthPath=([A-Za-z0-9_-]+)\s+reason=([A-Za-z0-9_-]+)\s+mode=([A-Za-z0-9_-]+)\s+next=([A-Za-z0-9_>.-]+)/i);
+  if (!match) return null;
+  const status = match[1];
+  const reason = match[2];
+  const mode = match[3];
+  const next = match[4];
+  if (!allowedMacHostAuthPathStatuses.has(status)) return null;
+  if (!allowedMacHostAuthPathReasons.has(reason)) return null;
+  if (!allowedMacHostAuthPathModes.has(mode)) return null;
+  if (!allowedMacHostAuthPathNext.has(next)) return null;
+  return { status, reason, mode, next };
 }
 
 function isSafeMacUnattendedFindings(value) {
@@ -964,6 +1008,17 @@ function formatMacUnattendedFreshnessSummary(board) {
   ].join(" ");
 }
 
+function formatMacHostAuthPathSummary(board) {
+  const authPath = board?.macHostAuthPath;
+  if (!authPath) return "";
+  return [
+    `MacHostAuthPath=${authPath.status || "unknown"}`,
+    `reason=${authPath.reason || "unknown"}`,
+    `mode=${authPath.mode || "unknown"}`,
+    `next=${authPath.next || "unknown"}`,
+  ].join(" ");
+}
+
 function buildMacEvidence(report) {
   const evidence = [];
   if (report.status === "ok" && report.macClient.online) {
@@ -1023,10 +1078,12 @@ function makeBoardSummary(report) {
   const macUnattendedHealthSegment = macUnattendedHealthSummary ? ` ${macUnattendedHealthSummary}.` : "";
   const macUnattendedFreshnessSummary = formatMacUnattendedFreshnessSummary(report.board);
   const macUnattendedFreshnessSegment = macUnattendedFreshnessSummary ? ` ${macUnattendedFreshnessSummary}.` : "";
+  const macHostAuthPathSummary = formatMacHostAuthPathSummary(report.board);
+  const macHostAuthPathSegment = macHostAuthPathSummary ? ` ${macHostAuthPathSummary}.` : "";
   const suggestedAction = report.suggestedAction?.boardSummary || "suggestedAction=none";
   const heartbeatHealthSummary = formatMacHeartbeatHealthSummary(report.macHeartbeatHealth);
   return [
-    `MacHeartbeat=status=${report.status}; checkedAt=${checkedAt}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}; ${heartbeatHealthSummary}.${macPowerHealthSegment}${macUnattendedHealthSegment}${macUnattendedFreshnessSegment}${evidence}${stableEvidenceSummary}`,
+    `MacHeartbeat=status=${report.status}; checkedAt=${checkedAt}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}; ${heartbeatHealthSummary}.${macPowerHealthSegment}${macUnattendedHealthSegment}${macUnattendedFreshnessSegment}${macHostAuthPathSegment}${evidence}${stableEvidenceSummary}`,
     suggestedAction,
     `MacHeartbeatRerun=${report.commands.macHeartbeatCommand}.`,
     `MacResumeStatus=${report.commands.macResumeStatusCommand}.`,

@@ -85,6 +85,24 @@ const allowedMacUnattendedFindings = new Set([
   "input-monitoring",
   "pmset-failed",
 ]);
+const allowedMacHostAuthPathStatuses = new Set([
+  "prompt-password-required",
+  "prompt-password-configured",
+  "env-password-required",
+  "no-password-required",
+  "unknown",
+]);
+const allowedMacHostAuthPathReasons = new Set([
+  "launch-agent-ephemeral-password",
+  "launch-agent-prompt-password",
+  "launch-agent-env-required",
+  "launch-agent-no-password",
+  "launch-agent-auth-mode-unknown",
+  "launch-agent-missing",
+  "unknown",
+]);
+const allowedMacHostAuthPathModes = new Set(["ephemeral", "prompt", "env-required", "none", "unknown"]);
+const allowedMacHostAuthPathNext = new Set(["MacHostStop->MacMaxFpsSafeStart->MacHostMedia", "unknown"]);
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -586,6 +604,7 @@ async function getBoardStatus(args, nowMs) {
       macPowerHealth: null,
       macUnattendedHealth: null,
       macUnattendedFreshness: null,
+      macHostAuthPath: null,
       currentCall: null,
       activeCall: false,
     };
@@ -608,6 +627,7 @@ async function getBoardStatus(args, nowMs) {
   const macPowerHealth = collectMacPowerHealth(stateResult.state, lines);
   const macUnattendedHealth = collectMacUnattendedHealth(stateResult.state, lines);
   const macUnattendedFreshness = collectMacUnattendedFreshness(stateResult.state, lines, nowMs);
+  const macHostAuthPath = collectMacHostAuthPath(stateResult.state, lines);
   return {
     checked: true,
     ok: watchResult.ok && stateResult.ok,
@@ -617,9 +637,18 @@ async function getBoardStatus(args, nowMs) {
     macPowerHealth,
     macUnattendedHealth,
     macUnattendedFreshness,
+    macHostAuthPath,
     currentCall,
     activeCall: isActiveCall(currentCall),
   };
+}
+
+function collectMacHostAuthPath(state, recentLines = []) {
+  for (const text of collectBoardEvidenceTexts(state, recentLines)) {
+    const authPath = extractMacHostAuthPath(text);
+    if (authPath) return authPath;
+  }
+  return null;
 }
 
 function collectMacEvidence(state, recentLines = []) {
@@ -761,6 +790,22 @@ function extractMacUnattendedHealth(text) {
   if (!isSafeMacUnattendedFindings(warnings)) return null;
   if (!Number.isFinite(Date.parse(checkedAt))) return null;
   return { status, reason, blockers, warnings, checkedAt };
+}
+
+function extractMacHostAuthPath(text) {
+  const source = normalizedText(text);
+  if (!source || !/\bMacHostAuthPath=/i.test(source)) return null;
+  const match = source.match(/\bMacHostAuthPath=([A-Za-z0-9_-]+)\s+reason=([A-Za-z0-9_-]+)\s+mode=([A-Za-z0-9_-]+)\s+next=([A-Za-z0-9_>.-]+)/i);
+  if (!match) return null;
+  const status = match[1];
+  const reason = match[2];
+  const mode = match[3];
+  const next = match[4];
+  if (!allowedMacHostAuthPathStatuses.has(status)) return null;
+  if (!allowedMacHostAuthPathReasons.has(reason)) return null;
+  if (!allowedMacHostAuthPathModes.has(mode)) return null;
+  if (!allowedMacHostAuthPathNext.has(next)) return null;
+  return { status, reason, mode, next };
 }
 
 function isSafeMacUnattendedFindings(value) {
@@ -1424,6 +1469,17 @@ function formatMacUnattendedFreshnessSummary(board) {
   ].join(" ") + ";";
 }
 
+function formatMacHostAuthPathSummary(board) {
+  const authPath = board?.macHostAuthPath;
+  if (!authPath) return "";
+  return [
+    `MacHostAuthPath=${authPath.status || "unknown"}`,
+    `reason=${boardToken(authPath.reason)}`,
+    `mode=${boardToken(authPath.mode)}`,
+    `next=${authPath.next || "unknown"}`,
+  ].join(" ") + ";";
+}
+
 function formatHeartbeatWatcherSummary(watcher) {
   if (!watcher?.checked) return "heartbeatWatcher=not-checked";
   if (!watcher.ok) return `heartbeatWatcher=unknown${watcher.error ? ` error=${watcher.error}` : ""}`;
@@ -1643,6 +1699,7 @@ function formatBoardSummary(report) {
   const macPowerHealthSummary = formatMacPowerHealthSummary(board);
   const macUnattendedHealthSummary = formatMacUnattendedHealthSummary(board);
   const macUnattendedFreshnessSummary = formatMacUnattendedFreshnessSummary(board);
+  const macHostAuthPathSummary = formatMacHostAuthPathSummary(board);
   const suggestedActionSummary = report.suggestedAction?.boardSummary ? ` ${report.suggestedAction.boardSummary}` : "";
 
   if (!host.online) {
@@ -1652,6 +1709,7 @@ function formatBoardSummary(report) {
       macPowerHealthSummary,
       macUnattendedHealthSummary,
       macUnattendedFreshnessSummary,
+      macHostAuthPathSummary,
       `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
       `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
       `MacHostStop=${report.commands.macHostStopCommand}.`,
@@ -1702,6 +1760,7 @@ function formatBoardSummary(report) {
     macPowerHealthSummary,
     macUnattendedHealthSummary,
     macUnattendedFreshnessSummary,
+    macHostAuthPathSummary,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedActionSummary}.`,
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
     `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
