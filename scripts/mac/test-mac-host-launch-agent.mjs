@@ -84,6 +84,13 @@ function assertNotIncludes(text, needle, label) {
   assert(!String(text || "").includes(needle), `${label} should not include ${needle}`);
 }
 
+function extractSummaryField(text, field, label) {
+  const value = String(text || "");
+  const part = value.split(";").map((item) => item.trim()).find((item) => item.startsWith(`${field}=`));
+  assert(part, `${label} should include ${field}=`);
+  return part.slice(field.length + 1).replace(/\.$/, "").trim();
+}
+
 function assertNoSecretsOrRuntimeActions(text, label) {
   const value = String(text || "");
   assertNotIncludes(value, "super-secret-launch-agent-password", label);
@@ -116,6 +123,23 @@ function assertMacScriptHelpCommand(command, label) {
   assertIncludes(command, "test-mac-script-help.mjs", label);
   assertIncludes(command, "--timeoutMs 10000", label);
   assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
+function assertMacPowerPlanCommand(command, label) {
+  assertIncludes(command, "plan-mac-power-settings.mjs", label);
+  assertIncludes(command, "--profile all", label);
+  assertIncludes(command, "--sleep 0", label);
+  assertIncludes(command, "--displaySleep 0", label);
+  assertIncludes(command, "--networkWake on", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--apply", label);
+  assertNotIncludes(command, "sudo", label);
   assertNotIncludes(command, "--password", label);
   assertNotIncludes(command, "--promptPassword", label);
   assertNotIncludes(command, "--sendCall", label);
@@ -160,6 +184,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macHostReadiness", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macFormalLocalSmoke", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macScriptHelp", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macPowerPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "loaded", `${script} ${flag}`);
     assertNoSecretsOrRuntimeActions(`${result.stdout}\n${result.stderr}`, `${script} ${flag}`);
   }
@@ -203,6 +228,7 @@ function checkDryRunJson(args) {
     assertNotIncludes(payload.commands?.macHostReadiness || "", "inject", "dry-run commands.macHostReadiness");
     assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmoke || "", "dry-run commands.macFormalLocalSmoke", 43770);
     assertMacScriptHelpCommand(payload.commands?.macScriptHelp || "", "dry-run commands.macScriptHelp");
+    assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand || "", "dry-run commands.macPowerPlanCommand");
     assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=", "dry-run boardSummary");
     assertIncludes(payload.boardSummary || "", "MacUnattendedFormal=", "dry-run boardSummary");
     assertIncludes(payload.boardSummary || "", "MacHostReadiness=", "dry-run boardSummary");
@@ -210,6 +236,8 @@ function checkDryRunJson(args) {
     assertIncludes(payload.boardSummary || "", "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs", "dry-run boardSummary");
     assertIncludes(payload.boardSummary || "", "MacScriptHelp=", "dry-run boardSummary");
     assertIncludes(payload.boardSummary || "", "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "dry-run boardSummary");
+    assertIncludes(payload.boardSummary || "", "MacPowerPlan=", "dry-run boardSummary");
+    assertMacPowerPlanCommand(extractSummaryField(payload.boardSummary, "MacPowerPlan", "dry-run boardSummary"), "dry-run boardSummary MacPowerPlan");
     assertIncludes(payload.boardSummary || "", "maxFps=30", "dry-run boardSummary");
     assertIncludes(payload.boardSummary || "", "ManualLoad=", "dry-run boardSummary");
     assert(payload.warnings.some((item) => /random password is not shared/.test(item)), "dry-run warnings should explain ephemeral auth limit");
@@ -244,6 +272,8 @@ function checkBoardSummary(args) {
     assertIncludes(text, "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs", "boardSummary");
     assertIncludes(text, "MacScriptHelp=", "boardSummary");
     assertIncludes(text, "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "boardSummary");
+    assertIncludes(text, "MacPowerPlan=", "boardSummary");
+    assertMacPowerPlanCommand(extractSummaryField(text, "MacPowerPlan", "boardSummary"), "boardSummary MacPowerPlan");
     assertIncludes(text, "--promptPassword --boardSummary", "boardSummary");
     assertIncludes(text, "--requireLaunchAgentMaxFps", "boardSummary");
     assertIncludes(text, "--requireLaunchAgentLoaded", "boardSummary");
@@ -283,6 +313,7 @@ function checkMaxFpsDryRunSummary(args) {
     assertIncludes(payload.commands?.macHostReadiness || "", "--checkBoard", "max-FPS commands.macHostReadiness");
     assertMacFormalLocalSmokeCommand(payload.commands?.macFormalLocalSmoke || "", "max-FPS commands.macFormalLocalSmoke", 43770);
     assertMacScriptHelpCommand(payload.commands?.macScriptHelp || "", "max-FPS commands.macScriptHelp");
+    assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand || "", "max-FPS commands.macPowerPlanCommand");
     assertIncludes(payload.boardSummary || "", "maxFps=60", "max-FPS boardSummary");
     assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=node scripts/mac/install-mac-host-launch-agent.mjs", "max-FPS boardSummary");
     assertIncludes(payload.boardSummary || "", "--maxScreenFps 60 --boardSummary", "max-FPS boardSummary");
@@ -291,6 +322,8 @@ function checkMaxFpsDryRunSummary(args) {
     assertIncludes(payload.boardSummary || "", "MacHostReadiness=", "max-FPS boardSummary");
     assertIncludes(payload.boardSummary || "", "MacFormalLocalSmoke=", "max-FPS boardSummary");
     assertIncludes(payload.boardSummary || "", "MacScriptHelp=", "max-FPS boardSummary");
+    assertIncludes(payload.boardSummary || "", "MacPowerPlan=", "max-FPS boardSummary");
+    assertMacPowerPlanCommand(extractSummaryField(payload.boardSummary, "MacPowerPlan", "max-FPS boardSummary"), "max-FPS boardSummary MacPowerPlan");
     assertIncludes(payload.boardSummary || "", "--requireLaunchAgentMaxFps", "max-FPS boardSummary");
     assertIncludes(payload.boardSummary || "", "--requireLaunchAgentLoaded", "max-FPS boardSummary");
     assertIncludes(payload.boardSummary || "", "--maxScreenFps 60", "max-FPS boardSummary ManualWrite");
