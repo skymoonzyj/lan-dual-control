@@ -1709,6 +1709,20 @@ async function verifyDesktopOnlyHostPanel(session) {
               ].join("; "),
             )
           : null;
+      const cleanMacHeartbeatCommandAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "MacHeartbeat=status=ok warnings=none blockers=none reason=ok",
+                "MacHeartbeatRerun=node scripts/mac/check-mac-heartbeat.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary",
+                "MacHeartbeatOnce=node scripts/mac/watch-mac-heartbeat.mjs --once --sendStatus --boardSummary",
+                "MacHeartbeatWatch=node scripts/mac/watch-mac-heartbeat.mjs --sendStatus --intervalMs 30000",
+                "MacHeartbeatStart=node scripts/mac/start-mac-heartbeat-watcher.mjs --host 127.0.0.1 --port 43770 --server http://192.168.31.68:17888 --intervalMs 30000 --boardSummary",
+                "MacHeartbeatStatus=node scripts/mac/start-mac-heartbeat-watcher.mjs --status --host 127.0.0.1 --port 43770 --server http://192.168.31.68:17888 --boardSummary",
+                "MacHeartbeatStop=node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --host 127.0.0.1 --port 43770 --server http://192.168.31.68:17888 --boardSummary",
+              ].join("; "),
+            )
+          : null;
       const macHeartbeatRerunAttention =
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
@@ -2097,6 +2111,9 @@ async function verifyDesktopOnlyHostPanel(session) {
           cleanMacScriptHelpAttention?.summary === "" &&
           Array.isArray(cleanMacScriptHelpAttention?.labels) &&
           cleanMacScriptHelpAttention.labels.length === 0 &&
+          cleanMacHeartbeatCommandAttention?.summary === "" &&
+          Array.isArray(cleanMacHeartbeatCommandAttention?.labels) &&
+          cleanMacHeartbeatCommandAttention.labels.length === 0 &&
           macHeartbeatRerunAttention?.summary.includes("Mac 心跳复查命令已提供") &&
           macHostMediaCommandAttention?.summary.includes("Mac 媒体基线命令已提供") &&
           macClientPageCommandAttention?.summary.includes("Mac client 页面状态命令已提供") &&

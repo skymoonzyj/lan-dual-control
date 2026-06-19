@@ -3569,40 +3569,29 @@ function parseMacUnattendedAttention(text) {
   ) {
     risks.unshift("mac-script-help-command");
   }
+  const hasMacHeartbeatCommandContext =
+    risks.length > 0 ||
+    heartbeatFreshness.stale ||
+    /status\s*=\s*(warning|blocked|failed)|ready\s*=\s*false|blocked|failed|stale|watchdog|codex-reconnect|mac-codex|reason\s*=\s*(mac-codex-stale|codex-reconnect-signal|codex-reconnect-stuck)|warnings\s*[:=]\s*(?!none\b)[^;\s]+|blockers\s*[:=]\s*(?!none\b)[^;\s]+|restart recommended|mac-host-build-stale|hostRuntimeChanges|stream disconnected before completion|error sending request|正在重新连接\s*5\/5/i.test(source);
   if (
     hasMacHeartbeatRerun &&
-    (risks.length > 0 || /ready\s*=\s*false|blocked|failed|stale|watchdog|heartbeat|codex-reconnect|mac-codex/.test(lower))
+    hasMacHeartbeatCommandContext
   ) {
     risks.unshift("mac-heartbeat-rerun-command");
   }
-  if (
-    hasMacHeartbeatOnce &&
-    (risks.length > 0 || /ready\s*=\s*false|blocked|failed|stale|watchdog|heartbeat|codex-reconnect|mac-codex/.test(lower))
-  ) {
+  if (hasMacHeartbeatOnce && hasMacHeartbeatCommandContext) {
     risks.unshift("mac-heartbeat-once-command");
   }
-  if (
-    hasMacHeartbeatWatch &&
-    (risks.length > 0 || /ready\s*=\s*false|blocked|failed|stale|watchdog|heartbeat|codex-reconnect|mac-codex/.test(lower))
-  ) {
+  if (hasMacHeartbeatWatch && hasMacHeartbeatCommandContext) {
     risks.unshift("mac-heartbeat-watch-command");
   }
-  if (
-    hasMacHeartbeatStart &&
-    (risks.length > 0 || /ready\s*=\s*false|blocked|failed|stale|watchdog|heartbeat|codex-reconnect|mac-codex/.test(lower))
-  ) {
+  if (hasMacHeartbeatStart && hasMacHeartbeatCommandContext) {
     risks.unshift("mac-heartbeat-start-command");
   }
-  if (
-    hasMacHeartbeatStatus &&
-    (risks.length > 0 || /ready\s*=\s*false|blocked|failed|stale|watchdog|heartbeat|codex-reconnect|mac-codex/.test(lower))
-  ) {
+  if (hasMacHeartbeatStatus && hasMacHeartbeatCommandContext) {
     risks.unshift("mac-heartbeat-status-command");
   }
-  if (
-    hasMacHeartbeatStop &&
-    (risks.length > 0 || /ready\s*=\s*false|blocked|failed|stale|watchdog|heartbeat|codex-reconnect|mac-codex/.test(lower))
-  ) {
+  if (hasMacHeartbeatStop && hasMacHeartbeatCommandContext) {
     risks.unshift("mac-heartbeat-stop-command");
   }
   if (

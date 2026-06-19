@@ -46,6 +46,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：收紧 Windows 控制端 Mac heartbeat 命令提示，避免干净心跳命令清单误报风险。
+完成内容：
+- `parseMacUnattendedAttention` 新增统一心跳命令上下文：`MacHeartbeatOnce/Rerun/Watch/Start/Status/Stop=` 只有伴随 stale、blocked、warning/failed、非空 warning/blocker、旧 build、Codex reconnect、心跳过期或相关异常文本时才显示命令提示。
+- `MacHeartbeat=status=ok warnings=none blockers=none` 同段带完整 heartbeat 复制命令清单时，快速摘要保持为空，不再显示“Mac 单次心跳上板命令已提供”等风险。
+- 页面 diagnostics-only 增加干净心跳命令清单红绿回归；不改协议、不运行 Mac 脚本、不认证、不发送密码/input/inject。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败，干净 heartbeat 命令清单被误报为多条心跳命令风险。
+- 绿灯：收紧上下文后，同一命令通过。
+- 收尾复跑：`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`、`git diff --check`、触碰文件冲突标记扫描。
+遗留问题：
+- 本轮只处理 Windows 控制端本地解析；真实 Mac heartbeat watcher 运行状态仍由 Mac 端或人工显式刷新。
+下一步建议：
+- 看到 `MacHeartbeat=status=ok warnings=none blockers=none` 时，不要因同段复制命令判断为风险；只有 stale/blocked/warning 或 reconnect 等上下文才让 Mac 端复查心跳。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端消费 Mac Windows discovery 成功摘要里的 `MacClientPromptPasswordSmoke=` 前台真测入口。
 完成内容：
 - `parseMacUnattendedAttention` 新增 discovery 成功上下文：`Windows host discovery: found N` / `best=` / `selected=` / `ready=true` 与 `MacClientPromptPasswordSmoke=` 同段出现时，快速摘要会显示“Mac client 前台密码真测命令已提供”。
