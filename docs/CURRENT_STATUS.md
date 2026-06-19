@@ -15,7 +15,7 @@
 
 ## Mac 端状态
 
-- Mac host 当前仍在线于 `192.168.31.122:43770` / `127.0.0.1:43770`，运行 `ed937a2`，`inputMode=log`，`maxScreenFps=60`；最新 Mac heartbeat 为 `status=ok`，Mac host 与 Mac client 均在线，Agent Link Board `call=none`，`blockers=none warnings=none`。
+- Mac host 当前仍在线于 `192.168.31.122:43770` / `127.0.0.1:43770`，运行 `ed937a2`，`inputMode=log`，`maxScreenFps=60`；最新 Mac heartbeat 为 `status=ok`，Mac host 与 Mac client 均在线，Agent Link Board `call=none`，`blockers=none warnings=none`。`check-mac-heartbeat --boardSummary` 在 heartbeat 干净 ok 且 Mac client 页面在线时会追加 `Evidence=MacClientPageOnline`，方便 Windows resume / 控制端把“Mac client 页面在线”当作同一套稳定值守证据；有 warning/blocker 或 Mac client 离线时不输出该证据标签。
 - 本轮 `MacFormalE2E` 只读 readiness 刷新为 `ready with warnings`：刷新时返回 `repo=60a04e1 clean`、`blockers=none`、权限均开启、H.264 能力和系统 PCM 能力可见；随后已合并 Windows-only `e23c95c`，未触碰 Mac host runtime。非阻断提醒为 `warnings=video,build,auth`，其中 build 是 `runtimeBuild=ed937a2 stale metadata only, hostRuntimeChanges=0`，正式密码仍只能用户本机隐藏输入，不能上联络板。
 - `MacFormalE2E` 状态脚本现在会把 Agent Link Board recent lines 或当前 `/api/state.statuses` 里的正向验证结果单独显示成证据：既能识别 `MacHostMedia passed=12/12 media=ok` / `MacFormalLocalSmoke H.264/PCM/input-log ... injected=false` 这类原始文本，也能识别 `Evidence=MacHostMediaOk,MacFormalLocalSmokeOk` 或 `MacEvidence=MacHostMediaOk,MacFormalLocalSmokeOk` 稳定短标签。JSON `evidence[]` 会带 `tag=MacHostMediaOk` / `tag=MacFormalLocalSmokeOk`，`--boardSummary` 输出同名 `Evidence=`；`callText` 仍保留 `Recent evidence: MacHostMedia ok; MacFormalLocalSmoke ok` 这种可读句。证据只做展示，不改变 warning/blocker 判定，不回显原始通讯板文本。
 - 本轮没有认证 WebSocket、没有请求或发送密码、没有发送 `input_event`，也没有执行 `inject`；真实输入注入仍需用户明确确认正在看 Mac 屏幕后另行启动。

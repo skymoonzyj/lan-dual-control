@@ -339,6 +339,7 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "scripts/mac/test-mac-client-browser-self-test-wrapper.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacScriptHelp=", "offline board summary");
+  assertNotIncludes(payload.boardSummary || "", "Evidence=MacClientPageOnline", "offline board summary");
   assertCommandSet(payload.commands, "offline commands");
   assertNoSecrets(`${result.stdout}\n${result.stderr}`, "offline output");
   print("OK", "Offline heartbeat reports warnings without secrets");
@@ -425,6 +426,7 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "MacClientBrowserSelfTest=", "online board summary");
       assertIncludes(payload.boardSummary || "", "scripts/mac/test-mac-client-browser-self-test-wrapper.mjs", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacScriptHelp=", "online board summary");
+      assertIncludes(payload.boardSummary || "", "Evidence=MacClientPageOnline", "online board summary");
       assertCommandSet(payload.commands, "online commands");
       assertNoSecrets(`${result.stdout}\n${result.stderr}`, "online output");
     });

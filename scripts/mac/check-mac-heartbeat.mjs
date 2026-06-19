@@ -726,9 +726,14 @@ function makeBoardSummary(report) {
     ? `ok status=${report.codex.status || "unknown"} updatedAt=${codexUpdatedAt} ageMs=${codexAge}`
     : `${report.codex.reason} status=${report.codex.status || "unknown"} updatedAt=${codexUpdatedAt} ageMs=${codexAge} evidenceAgeMs=${codexAgeMs ?? "unknown"}`;
   const evidence = report.codex.evidence ? ` evidence=${report.codex.evidence}` : "";
+  const stableEvidence = [];
+  if (report.status === "ok" && report.macClient.online) {
+    stableEvidence.push("MacClientPageOnline");
+  }
+  const stableEvidenceSummary = stableEvidence.length > 0 ? ` Evidence=${stableEvidence.join(",")}.` : "";
   const suggestedAction = report.suggestedAction?.boardSummary || "suggestedAction=none";
   return [
-    `MacHeartbeat=status=${report.status}; checkedAt=${checkedAt}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}.${evidence}`,
+    `MacHeartbeat=status=${report.status}; checkedAt=${checkedAt}; device=Mac; codex=${codex}; macHost=${host}; macClient=${client}; board=${board}; blockers=${summarizeIds(report.blockers)} warnings=${summarizeIds(report.warnings)} reason=${report.codex.reason}.${evidence}${stableEvidenceSummary}`,
     suggestedAction,
     `MacHeartbeatRerun=${report.commands.macHeartbeatCommand}.`,
     `MacResumeStatus=${report.commands.macResumeStatusCommand}.`,

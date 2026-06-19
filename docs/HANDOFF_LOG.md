@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac heartbeat 的干净在线摘要也输出稳定 Mac client 页面在线证据。
+完成内容：
+- `check-mac-heartbeat --json/--boardSummary` 在 heartbeat 自身 `status=ok`、`blockers=none warnings=none` 且 Mac client 页面在线时追加 `Evidence=MacClientPageOnline`。
+- Mac client 离线、heartbeat warning/blocker、旧 build warning 或 Codex reconnect/stale 等风险场景不会输出该正向证据标签，避免把风险摘要误当健康证据。
+- 该标签可被 Windows resume / 控制端现有通用 `Evidence=` parser 消费为“Mac client 页面在线”值守证据。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：先让 heartbeat 在线 fake host/client 用例要求 `Evidence=MacClientPageOnline`，`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` 失败在 online board summary 缺少该标签。
+- 绿灯：实现后，同一 heartbeat 回归通过；提交前还会跑语法、watch heartbeat、Mac script help、diff check 和冲突扫描。
+遗留问题：
+- 本轮只增强只读 heartbeat 摘要；不跑真实认证、真实 Windows host 页面验收、媒体长测或输入注入。
+下一步建议：
+- Windows 端开工第一屏看到 `MacHeartbeat=status=ok ... Evidence=MacClientPageOnline` 时，可同时确认 Mac heartbeat 和 Mac client 页面在线；同段若出现 warning/blocker 仍按风险处理。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac formal E2E readiness 也能消费通讯板上的稳定 `Evidence=` / `MacEvidence=` 短标签。
 完成内容：
 - `check-mac-formal-e2e-status` 现在除 raw `MacHostMedia` / `MacFormalLocalSmoke` 文本外，也会识别 Agent Link Board recent lines 和 `/api/state.statuses` 里的 `Evidence=MacHostMediaOk,MacFormalLocalSmokeOk` 或 `MacEvidence=MacHostMediaOk,MacFormalLocalSmokeOk`。
