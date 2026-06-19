@@ -310,6 +310,7 @@ function formatReadinessFindingsFixture(results) {
 function formatReadinessBoardSummaryFixture(summary) {
   const source = readFileSync(new URL("./check-mac-host-readiness.mjs", import.meta.url), "utf8");
   const helpers = [
+    "const defaultManualUxChecklist = \"connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics\";",
     functionBlock(source, "normalizedText"),
     functionBlock(source, "status"),
     functionBlock(source, "getMaxScreenFps"),
@@ -325,6 +326,9 @@ function formatReadinessBoardSummaryFixture(summary) {
     functionBlock(source, "formatReadinessFindings"),
     functionBlock(source, "formatBoardCallOneLine"),
     functionBlock(source, "formatBoardCallSummary"),
+    functionBlock(source, "boardCallSearchText"),
+    functionBlock(source, "isUsableEntryManualUxCall"),
+    functionBlock(source, "formatManualUxStandbyBoardSummary"),
     functionBlock(source, "formatMacHostAuthPathSummary"),
     functionBlock(source, "formatReadinessBoardSummary"),
   ].join("\n");
@@ -648,6 +652,65 @@ function checkReadinessNextStepFormatting() {
   assert(text.includes("continue manual UX/formal E2E coordination"), "zero-failure readiness summary should keep the next validation path clear");
   assert(text.includes("keep inputMode=log"), "zero-failure readiness summary should keep unattended safety guidance");
   print("OK", "Mac host readiness boardSummary next step matches failed/warning state");
+}
+
+function checkUsableEntryCallKeepsManualUxStandby() {
+  const manualUxChecklist = "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
+  const summary = {
+    args: { profile: "default", host: "127.0.0.1", port: 43770 },
+    failed: 0,
+    warnings: 1,
+    passed: 3,
+    results: [
+      {
+        label: "Agent Link Board currentCall",
+        ok: true,
+        warnings: ["active call from Supervisor Codex"],
+      },
+      {
+        label: "Mac host discovery",
+        ok: true,
+        warnings: [],
+        details: { online: true },
+      },
+      {
+        label: "Auxiliary readiness",
+        ok: true,
+        warnings: [],
+      },
+    ],
+    board: {
+      checked: true,
+      ok: true,
+      activeCall: true,
+      currentCall: {
+        status: "CALLING",
+        goal: "强制可用化：尽快交付用户可打开、可连接、可远程 Mac 的第一版入口",
+        from: "Supervisor Codex",
+        need: "Windows Codex, Mac Codex",
+        ask: "停止外围完善，直接推进可用入口和手工体验测试。",
+      },
+    },
+    commands: {
+      macHostSafeStartCommand: "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770",
+      macHostStopCommand: "node scripts/mac/start-mac-host.mjs --stop --host 127.0.0.1 --port 43770",
+      macMaxFpsSafeStartCommand: "node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port 43770 --maxScreenFps 60",
+      macResumeStatusCommand: "node scripts/mac/check-mac-resume-status.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary",
+      macLaunchAgentPlanCommand: "node scripts/mac/install-mac-host-launch-agent.mjs --port 43770 --boardSummary",
+      macMaxFpsPlanCommand: "node scripts/mac/install-mac-host-launch-agent.mjs --port 43770 --maxScreenFps 60 --boardSummary",
+      macUnattendedFormalCommand: "node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary",
+      macFormalLocalSmokeCommand: "node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port 43770 --promptPassword --boardSummary",
+      macPowerPlanCommand: "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
+      macScriptHelpCommand: "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary",
+    },
+  };
+  const text = formatReadinessBoardSummaryFixture(summary);
+  assert(text.includes("ManualUxStandby=MacManualUxStandby"), "usable-entry call should expose Mac manual UX standby");
+  assert(text.includes(`ManualUxChecklist=${manualUxChecklist}`), "usable-entry call should expose the default manual UX checklist");
+  assert(text.includes("manual UX validation"), "usable-entry next step should keep the first usable path explicit");
+  assert(!text.includes("formal E2E coordination"), "usable-entry call should not send host readiness back to formal E2E coordination");
+  assertNoSecretLikeText(text, "usable-entry Mac host readiness boardSummary");
+  print("OK", "Usable-entry currentCall keeps Mac host readiness on manual UX path");
 }
 
 function checkHostBuildBoardSummaryFormatting() {
@@ -1155,6 +1218,7 @@ async function main() {
   checkMediaBoardSummaryStatusFormatting();
   checkReadinessFindingsFormatting();
   checkReadinessNextStepFormatting();
+  checkUsableEntryCallKeepsManualUxStandby();
   checkHostBuildBoardSummaryFormatting();
   checkStaleBuildSuggestedActionFormatting();
   checkH264FallbackPipelineFormatting();

@@ -54,6 +54,18 @@ const allowedMacHostAuthPathReasons = new Set([
 ]);
 const allowedMacHostAuthPathModes = new Set(["ephemeral", "prompt", "env-required", "none", "unknown"]);
 const allowedMacHostAuthPathNext = new Set(["MacHostStop->MacMaxFpsSafeStart->MacHostMedia", "unknown"]);
+const manualUxChecklistTokens = [
+  "connection",
+  "video",
+  "audio",
+  "clipboard",
+  "file",
+  "window",
+  "fullscreen",
+  "original",
+  "copy-diagnostics",
+];
+const defaultManualUxChecklist = manualUxChecklistTokens.join("/");
 
 const profileDescriptions = {
   default: "default low-risk checks only",
@@ -728,6 +740,36 @@ function formatBoardCallSummary(board) {
   return `call=${board.activeCall ? "active" : "done"}(${formatBoardCallOneLine(board.currentCall)})`;
 }
 
+function boardCallSearchText(call) {
+  if (!call || typeof call !== "object") return "";
+  return [
+    call.status,
+    call.goal,
+    call.from,
+    call.need,
+    call.environment,
+    call.connection,
+    call.expected,
+    call.actual,
+    call.ask,
+    call.blockedBy,
+    call.owner,
+  ].map(normalizedText).filter(Boolean).join(" ");
+}
+
+function isUsableEntryManualUxCall(call) {
+  const source = boardCallSearchText(call);
+  if (!source) return false;
+  const usableEntry = /强制可用化|第一版入口|可打开.*可连接.*远程\s*Mac/i.test(source);
+  const manualUx = /手工体验|ManualUx|Manual UX|ManualUxTest/i.test(source);
+  return usableEntry && manualUx;
+}
+
+function formatManualUxStandbyBoardSummary(board) {
+  if (!board?.activeCall || !isUsableEntryManualUxCall(board.currentCall)) return "";
+  return `ManualUxStandby=MacManualUxStandby; ManualUxChecklist=${defaultManualUxChecklist}`;
+}
+
 function formatMacHostAuthPathSummary(board) {
   const authPath = board?.macHostAuthPath;
   if (!authPath) return "";
@@ -754,13 +796,20 @@ function formatReadinessBoardSummary(summary) {
   const hostMedia = formatHostMediaBoardSummary(summary);
   const suggestedAction = summary.suggestedAction?.boardSummary ? `; ${summary.suggestedAction.boardSummary}` : "";
   const macHostAuthPath = formatMacHostAuthPathSummary(summary.board);
-  const nextStep = failed > 0
-    ? "Next: fix failed checks before formal E2E; keep inputMode=log for unattended checks."
-    : warnings > 0
-      ? "Next: review warnings, then continue manual UX/formal E2E coordination; keep inputMode=log for unattended checks."
-      : "Next: continue manual UX/formal E2E coordination; keep inputMode=log for unattended checks.";
+  const manualUxStandby = formatManualUxStandbyBoardSummary(summary.board);
+  const nextStep = manualUxStandby
+    ? failed > 0
+      ? "Next: fix failed checks before manual UX validation; keep inputMode=log for unattended checks."
+      : warnings > 0
+        ? "Next: review warnings, then keep Mac host/client/heartbeat online for manual UX validation; keep inputMode=log for unattended checks."
+        : "Next: keep Mac host/client/heartbeat online for manual UX validation; keep inputMode=log for unattended checks."
+    : failed > 0
+      ? "Next: fix failed checks before formal E2E; keep inputMode=log for unattended checks."
+      : warnings > 0
+        ? "Next: review warnings, then continue manual UX/formal E2E coordination; keep inputMode=log for unattended checks."
+        : "Next: continue manual UX/formal E2E coordination; keep inputMode=log for unattended checks.";
   return [
-    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${hostBuild ? `; ${hostBuild}` : ""}${hostMedia ? `; ${hostMedia}` : ""}${suggestedAction}; ${formatBoardCallSummary(summary.board)}${macHostAuthPath ? `; ${macHostAuthPath}` : ""}.`,
+    `Mac host readiness: profile=${summary.args?.profile || "default"}; probe=${probe}; passed=${summary.passed}/${Array.isArray(summary.results) ? summary.results.length : "?"}; ${attention}; ${findings}; ${media}${hostBuild ? `; ${hostBuild}` : ""}${hostMedia ? `; ${hostMedia}` : ""}${suggestedAction}; ${formatBoardCallSummary(summary.board)}${macHostAuthPath ? `; ${macHostAuthPath}` : ""}${manualUxStandby ? `; ${manualUxStandby}` : ""}.`,
     `MacHostSafeStart=${summary.commands?.macHostSafeStartCommand || makeMacHostSafeStartCommand(summary.args || {})}.`,
     `MacHostStop=${summary.commands?.macHostStopCommand || makeMacHostStopCommand(summary.args || {})}.`,
     `MacMaxFpsSafeStart=${summary.commands?.macMaxFpsSafeStartCommand || makeMacMaxFpsSafeStartCommand(summary.args || {})}.`,
