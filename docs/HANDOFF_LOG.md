@@ -17,6 +17,35 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 控制端消费 `MacHostMedia=` 稳定媒体基线命令提示。
+完成内容：
+- `parseMacUnattendedAttention` 新增 `MacHostMedia=` 识别和中文风险标签“Mac 媒体基线命令已提供”。
+- 当同段 heartbeat/resume/unattended/formal 摘要已经有旧 build、重启建议、H.264/PCM、刷新率或非空 warning/blocker 上下文，并带 `MacHostMedia=node scripts/mac/check-mac-host-readiness.mjs ... --probeMedia --probeMediaResourceSample --promptPassword --boardSummary` 时，Mac 提醒区、快速摘要和复制/导出诊断会显示该入口。
+- 新增页面自测覆盖风险上下文和干净命令清单：`warnings=none blockers=none` 的 `MacHostMedia=` 不误弹。Windows 端只提示/复制，不运行 Mac 脚本、不请求或发送密码、不认证、不发 input/inject。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败在 `MacHeartbeat=warning ... MacHostMedia=` 缺少“Mac 媒体基线命令已提供”。
+- 绿灯：实现后复跑同一命令通过。
+- 收尾复跑：`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000`、`git diff --check`、触碰文件冲突标记扫描。
+遗留问题：
+- 本轮不运行真实 `MacHostMedia=`，不触发 Mac 本机密码提示；正式 H.264/PCM 媒体基线仍由 Mac 端或人工在用户在场时显式运行。
+下一步建议：
+- 真实联调时如果页面提示“Mac 媒体基线命令已提供”，优先让 Mac 端刷新媒体基线，再判断卡顿、不是 60Hz、声音或 H.264/PCM 问题是否仍存在。
+是否改了协议：否；只补 Windows 控制端本地解析、页面回归和文档。
+是否需要另一端配合：不需要；Mac 端已有 `MacHostMedia=` 输出，本轮只消费该标签。
+
 ## 2026-06-19 Mac Codex
 
 日期：2026-06-19 继续推进
