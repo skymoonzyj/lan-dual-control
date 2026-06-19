@@ -110,6 +110,12 @@ Machine-readable JSON fields:
   commands.macManualUxStatus      Secret-free read-only post-PASS manual UX
                                   status command; it only reports which
                                   checks still need a person at the keyboard.
+  commands.macClientManualChecklist
+                                  User-visible Mac client manual checklist
+                                  action for local page session diagnostics;
+                                  it reminds the user to verify copied
+                                  diagnostics do not include a connection
+                                  password.
   commands.macUnattendedFormal   Secret-free formal 60Hz gate command requiring
                                   LaunchAgent maxScreenFps and loaded status.
   commands.macHostSafeStart      Secret-free foreground Mac host safe-start
@@ -684,6 +690,7 @@ function makeCommands(args) {
     macRemoteAudioPlan: makeMacRemoteAudioPlanCommand(),
     macInputSafetyPlan: makeMacInputSafetyPlanCommand(),
     macManualUxStatus: makeMacManualUxStatusCommand(),
+    macClientManualChecklist: makeMacClientManualChecklistAction(),
     macHostSafeStart: makeMacHostSafeStartCommand(args),
     macMaxFpsSafeStart: makeMacMaxFpsSafeStartCommand(args),
     macHostStop: makeMacHostStopCommand(args),
@@ -889,6 +896,10 @@ function makeMacManualUxStatusCommand() {
   return "node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary";
 }
 
+function makeMacClientManualChecklistAction() {
+  return "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
+}
+
 function makeMacUnattendedFormalCommand(args) {
   const parts = [
     "node scripts/mac/check-mac-unattended-status.mjs",
@@ -987,7 +998,7 @@ function makeBoardSummary(report) {
   const authPath = formatMacHostAuthPathSummary(report.macHostAuthPath);
   return [
     `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${powerHealth}; ${unattendedHealth}; ${authPath}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedAction ? ` ${suggestedAction}` : ""}.`,
-    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacUnattendedSendStatus=${report.commands.macUnattendedSendStatus}; MacPowerPlan=${report.commands.macPowerPlan}; MacRemoteAudioPlan=${report.commands.macRemoteAudioPlan}; MacInputSafetyPlan=${report.commands.macInputSafetyPlan}; MacManualUxStatus=${report.commands.macManualUxStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacHostMedia=${report.commands.macHostMedia}; MacResumeStatus=${report.commands.macResumeStatus}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTest}; MacScriptHelp=${report.commands.macScriptHelp}.`,
+    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacUnattendedSendStatus=${report.commands.macUnattendedSendStatus}; MacPowerPlan=${report.commands.macPowerPlan}; MacRemoteAudioPlan=${report.commands.macRemoteAudioPlan}; MacInputSafetyPlan=${report.commands.macInputSafetyPlan}; MacManualUxStatus=${report.commands.macManualUxStatus}; MacClientManualChecklist=${report.commands.macClientManualChecklist}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacHostMedia=${report.commands.macHostMedia}; MacResumeStatus=${report.commands.macResumeStatus}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTest}; MacScriptHelp=${report.commands.macScriptHelp}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
@@ -1199,6 +1210,7 @@ function printHuman(report) {
   console.log(`- Mac remote-only audio plan: ${report.commands.macRemoteAudioPlan}`);
   console.log(`- Mac input safety plan: ${report.commands.macInputSafetyPlan}`);
   console.log(`- Mac manual UX status: ${report.commands.macManualUxStatus}`);
+  console.log(`- Mac client manual checklist: ${report.commands.macClientManualChecklist}`);
   if (report.suggestedAction) console.log(`- suggested action: ${report.suggestedAction.boardSummary}`);
   console.log(`- Mac formal local smoke: ${report.commands.macFormalLocalSmoke}`);
   console.log(`- Mac client browser self-test: ${report.commands.macClientBrowserSelfTest}`);

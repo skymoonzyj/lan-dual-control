@@ -306,6 +306,19 @@ function assertMacManualUxStatusCommand(command, label) {
   assertNotIncludes(text, "inject", label);
 }
 
+function assertMacClientManualChecklistAction(text, label) {
+  const value = String(text || "");
+  assertIncludes(value, "手工清单", label);
+  assertIncludes(value, "连接/视频/音频/剪贴板/input_ack/诊断", label);
+  assertIncludes(value, "复制诊断", label);
+  assertIncludes(value, "连接密码", label);
+  assertNotIncludes(value, "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(value, "--password", label);
+  assertNotIncludes(value, "--sendCall", label);
+  assertNotIncludes(value, "input_event", label);
+  assertNotIncludes(value, "LAN_DUAL_INPUT_MODE=inject", label);
+}
+
 function gitLines(args) {
   const result = spawnSync("git", args, {
     cwd: repoRoot,
@@ -412,6 +425,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macRemoteAudioPlan", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macInputSafetyPlan", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macManualUxStatus", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macClientManualChecklist", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macUnattendedFormal", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macHostSafeStart", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macMaxFpsSafeStart", `${script} ${flag}`);
@@ -561,6 +575,7 @@ function checkMissingLaunchAgentJson(args) {
   assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlan || "", "missing LaunchAgent commands.macRemoteAudioPlan");
   assertMacInputSafetyPlanCommand(payload.commands?.macInputSafetyPlan || "", "missing LaunchAgent commands.macInputSafetyPlan");
   assertMacManualUxStatusCommand(payload.commands?.macManualUxStatus || "", "missing LaunchAgent commands.macManualUxStatus");
+  assertMacClientManualChecklistAction(payload.commands?.macClientManualChecklist || "", "missing LaunchAgent commands.macClientManualChecklist");
   assertIncludes(payload.commands?.macUnattendedFormal || "", "check-mac-unattended-status.mjs", "missing LaunchAgent commands.macUnattendedFormal");
   assertIncludes(payload.commands?.macUnattendedFormal || "", "--host 127.0.0.1", "missing LaunchAgent commands.macUnattendedFormal");
   assertIncludes(payload.commands?.macUnattendedFormal || "", "--port 9", "missing LaunchAgent commands.macUnattendedFormal");
@@ -656,6 +671,11 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.boardSummary, "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacManualUxStatus=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacManualUxStatus=node scripts/mac/check-mac-manual-ux-status.mjs", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacClientManualChecklist=", "missing LaunchAgent board summary");
+  assertMacClientManualChecklistAction(
+    payload.boardSummary.split("MacClientManualChecklist=")[1]?.split("; ")[0] || "",
+    "missing LaunchAgent board summary MacClientManualChecklist",
+  );
   assertIncludes(payload.boardSummary, "--networkWake on", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "--sendStatus", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacHostSafeStart=", "missing LaunchAgent board summary");
@@ -743,6 +763,7 @@ function checkLaunchAgentPlannerPreservesOptions(args) {
   assertMacRemoteAudioPlanCommand(payload.commands?.macRemoteAudioPlan || "", "custom LaunchAgent commands.macRemoteAudioPlan");
   assertMacInputSafetyPlanCommand(payload.commands?.macInputSafetyPlan || "", "custom LaunchAgent commands.macInputSafetyPlan");
   assertMacManualUxStatusCommand(payload.commands?.macManualUxStatus || "", "custom LaunchAgent commands.macManualUxStatus");
+  assertMacClientManualChecklistAction(payload.commands?.macClientManualChecklist || "", "custom LaunchAgent commands.macClientManualChecklist");
   assertIncludes(payload.commands?.macLaunchAgentLoad || "", missingPath, "custom LaunchAgent commands.macLaunchAgentLoad");
   assertIncludes(payload.commands?.macLaunchAgentPrint || "", label, "custom LaunchAgent commands.macLaunchAgentPrint");
   assertIncludes(payload.commands?.macUnattendedFormal || "", `--label ${label}`, "custom LaunchAgent commands.macUnattendedFormal");
@@ -757,6 +778,7 @@ function checkLaunchAgentPlannerPreservesOptions(args) {
   assertIncludes(payload.boardSummary || "", "MacRemoteAudioPlan=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacInputSafetyPlan=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacManualUxStatus=", "custom LaunchAgent board summary");
+  assertIncludes(payload.boardSummary || "", "MacClientManualChecklist=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentLoad=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentPrint=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacFormalLocalSmoke=", "custom LaunchAgent board summary");
@@ -1038,11 +1060,28 @@ function checkBoardSummary(args) {
   assertIncludes(text, "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs", "board summary");
   assertIncludes(text, "MacManualUxStatus=", "board summary");
   assertIncludes(text, "MacManualUxStatus=node scripts/mac/check-mac-manual-ux-status.mjs", "board summary");
+  assertIncludes(text, "MacClientManualChecklist=", "board summary");
+  assertMacClientManualChecklistAction(
+    text.split("MacClientManualChecklist=")[1]?.split("; ")[0] || "",
+    "board summary MacClientManualChecklist",
+  );
   assertIncludes(text, "blockers=none", "board summary");
   assertIncludes(text, "warnings=host-offline,launch-agent-missing", "board summary");
   assertIncludes(text, "No password", "board summary");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "board summary");
   print("OK", "Board summary is one line, actionable, and secret-free");
+}
+
+function checkPlainReport(args) {
+  const missingPath = path.join(tmpdir(), `missing-lan-dual-agent-plain-${Date.now()}.plist`);
+  const result = run(args, [
+    ...baseOfflineArgs(missingPath),
+  ]);
+  assert(result.status === 0, "plain report should stay non-failing by default");
+  assertIncludes(result.stdout, "Mac client manual checklist:", "plain report");
+  assertMacClientManualChecklistAction(result.stdout, "plain report MacClientManualChecklist");
+  assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "plain report");
+  print("OK", "Plain report includes Mac client manual checklist guidance");
 }
 
 async function checkCapabilitiesInputMode(args) {
@@ -1209,6 +1248,11 @@ async function checkNoFindingsSummary(args) {
       assertIncludes(payload.boardSummary, "MacMaxFpsSafeStart=", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "MacHostMedia=", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "MacResumeStatus=", "clean unattended board summary");
+      assertIncludes(payload.boardSummary, "MacClientManualChecklist=", "clean unattended board summary");
+      assertMacClientManualChecklistAction(
+        payload.commands?.macClientManualChecklist || "",
+        "clean unattended commands.macClientManualChecklist",
+      );
       assertIncludes(payload.boardSummary, "MacClientBrowserSelfTest=", "clean unattended board summary");
       assertMacClientBrowserSelfTestCommand(
         payload.commands?.macClientBrowserSelfTest || "",
@@ -1243,6 +1287,7 @@ async function main() {
   checkFakePlist(args);
   checkLaunchAgentMaxFpsWarning(args);
   checkBoardSummary(args);
+  checkPlainReport(args);
   await checkPowerHealthDetails(args);
   await checkCapabilitiesInputMode(args);
   await checkStaleRuntimeBuildWarning(args);
