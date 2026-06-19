@@ -72,7 +72,17 @@
 
 ## 运行方式
 
-### 最短入口：打开当前 Mac 控制页
+### 双击入口：根目录启动器
+
+在仓库根目录双击：
+
+```text
+Start-Windows-Control-Mac.cmd
+```
+
+它会调用同一个安全入口，启动或复用 `127.0.0.1:5200` 控制页，并预填 `192.168.31.122:43770`。如果需要从终端运行，使用下面的命令。
+
+### 命令入口：打开当前 Mac 控制页
 
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\start-windows-control-mac.mjs

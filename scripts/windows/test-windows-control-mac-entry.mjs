@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -86,6 +87,35 @@ function run(extraArgs, args) {
   });
 }
 
+function runCmd(extraArgs, args) {
+  return new Promise((resolveRun) => {
+    const child = spawn("cmd.exe", ["/d", "/c", "Start-Windows-Control-Mac.cmd", ...extraArgs], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        LAN_DUAL_PASSWORD: "",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      resolveRun({ exitCode: null, timedOut: true, stdout, stderr });
+    }, args.timeoutMs);
+    child.stdout.on("data", (chunk) => { stdout += String(chunk); });
+    child.stderr.on("data", (chunk) => { stderr += String(chunk); });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolveRun({ exitCode: null, timedOut: false, stdout, stderr: `${stderr}\n${error.message}`.trim() });
+    });
+    child.on("close", (exitCode) => {
+      clearTimeout(timer);
+      resolveRun({ exitCode, timedOut: false, stdout, stderr });
+    });
+  });
+}
 function parseJson(stdout, label) {
   try {
     return JSON.parse(stdout);
@@ -133,6 +163,26 @@ function checkLaunchParamHelper() {
   console.log("[OK] Windows client launch params prefill the Mac target safely");
 }
 
+async function checkCmdLauncher(args) {
+  const launcherPath = resolve(repoRoot, "Start-Windows-Control-Mac.cmd");
+  assert(existsSync(launcherPath), "root Start-Windows-Control-Mac.cmd launcher should exist");
+  const content = readFileSync(launcherPath, "utf8");
+  assertIncludes(content, "scripts\\windows\\start-windows-control-mac.mjs", "cmd launcher");
+  assertIncludes(content, "%*", "cmd launcher should forward extra args");
+  assertNotIncludes(content, "--password", "cmd launcher");
+  assertNotIncludes(content, "demo-password", "cmd launcher");
+  assertNotIncludes(content, "secret", "cmd launcher");
+  assertNotIncludes(content, "token", "cmd launcher");
+
+  const result = await runCmd(["--dryRun", "--boardSummary"], args);
+  assert(result.exitCode === 0, `cmd dryRun boardSummary should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+  assertIncludes(result.stdout, "WindowsUsableEntry=status=ready", "cmd boardSummary");
+  assertIncludes(result.stdout, "OpenUrl=http://127.0.0.1:5200/", "cmd boardSummary");
+  assertIncludes(result.stdout, "target=192.168.31.122:43770", "cmd boardSummary");
+  assertNotIncludes(result.stdout, "demo-password", "cmd boardSummary");
+  assertNotIncludes(result.stdout, "Mac host password:", "cmd boardSummary");
+  console.log("[OK] Windows root cmd launcher forwards to the usable entry safely");
+}
 async function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = await run([flag], args);
@@ -197,6 +247,7 @@ async function main() {
 
   checkIndexLoadsLaunchParams();
   checkLaunchParamHelper();
+  await checkCmdLauncher(args);
   await checkHelp(args);
   await checkDryRunJson(args);
   await checkBoardSummary(args);

@@ -21,6 +21,34 @@
 
 日期：2026-06-20 继续推进
 开发端：Windows Codex
+本轮目标：新增 Windows 根目录双击入口。
+完成内容：
+- 新增 `Start-Windows-Control-Mac.cmd`，仓库根目录可直接双击；内部切到仓库目录并调用 `scripts/windows/start-windows-control-mac.mjs`。
+- `.cmd` 支持透传参数，`Start-Windows-Control-Mac.cmd --dryRun --boardSummary` 可用于无密验证和通讯板摘要。
+- 入口不包含密码、认证或 input/inject 参数；实际连接密码仍只由用户在本机控制页输入。
+修改文件：
+- `Start-Windows-Control-Mac.cmd`
+- `scripts/windows/test-windows-control-mac-entry.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-control-mac-entry.mjs` 先失败在根目录 `Start-Windows-Control-Mac.cmd` 不存在。
+- 绿灯：同一测试通过，确认 `.cmd` 存在、透传 `--dryRun --boardSummary`、输出 `WindowsUsableEntry=status=ready`，且不含 demo password、secret、token 或 `Mac host password:`。
+遗留问题：
+- 真实手工体验仍需用户在场连接 Mac 后逐项验收；当前仍保持 `inputMode=log`。
+下一步建议：
+- 用户准备试用时优先双击根目录 `Start-Windows-Control-Mac.cmd`，再在页面输入 Mac 当前临时密码。
+是否改了协议：否。
+是否需要另一端配合：Mac 端保持 `192.168.31.122:43770` host/client/heartbeat 在线即可。
+
+## 2026-06-20 Windows Codex
+
+日期：2026-06-20 继续推进
+开发端：Windows Codex
 本轮目标：新增 Windows 一键打开当前 Mac 控制页。
 完成内容：
 - 新增 `scripts/windows/start-windows-control-mac.mjs`，默认启动/复用本地 Windows 控制端页面 `127.0.0.1:5200`，打开预填 `192.168.31.122:43770` / WebSocket 的链接，并固定 `debugPort=9340` 作为现场可用口径。

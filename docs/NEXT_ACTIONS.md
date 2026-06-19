@@ -16,6 +16,8 @@
 
 最新分工：Windows 端记录 `REAL_TEST_PASS` 摘要，并单独排查 OK 之后的 PowerShell/Node 尾部错误 `node.exe 无法运行: 索引超出了数组界限 / NativeCommandFailed`；这不推翻 PASS。Mac 端保持 host/client/heartbeat 在线，等待下一轮手工体验测试：画面、声音、剪贴板、文件、小窗、全屏/原画、复制诊断。除非用户明确确认正在看 Mac 屏幕，不做 true input inject。
 
+当前 Windows 首选入口：在仓库根目录双击 `Start-Windows-Control-Mac.cmd`；等浏览器打开后，在页面里输入 Mac 当前临时密码并点连接。终端等价命令仍是 `node scripts/windows/start-windows-control-mac.mjs`。
+
 当前 Windows 最短入口：用户在 Windows 上运行 `node scripts/windows/start-windows-control-mac.mjs`，脚本会打开 `127.0.0.1:5200` 控制页并预填 `192.168.31.122:43770` / WebSocket；用户只需在页面里输入 Mac 当前临时密码后点连接。不要让用户再记旧的 `5197/9337` 诊断端口；本入口固定可用口径为 `clientPort=5200 debugPort=9340`，不认证、不发 input/inject。
 
 最新校正：Mac host 当前实机在线为 `192.168.31.122:43770` / `127.0.0.1:43770`，前台同密/log/60fps，runtime build `8015f22`；通讯板已可达。最新 `MacHeartbeat` / `MacResumeStatus` 已修复旧状态回声，当前值守状态应看作 `MacUnattendedHealth=ok reason=ok blockers=none warnings=none`，不要再把历史 `launch-agent-not-loaded`、`bed2095` 或 `accessibility` warning 当作当前 blocker。
