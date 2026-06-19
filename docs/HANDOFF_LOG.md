@@ -21,6 +21,39 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：把 Mac 电源 warning 从“手工复制 pmset”推进到可复用的响铃/系统授权/复查工具，并接入现有 `MacPowerPlan=`。
+完成内容：
+- 新增 `scripts/mac/apply-mac-power-settings.mjs`：默认 dry-run；真正执行必须显式 `--apply --confirmUserPresent`，先响铃，再调用 macOS `osascript ... with administrator privileges with prompt ...` 执行 `pmset`，最后 `pmset -g custom` 只读复查。
+- 新增 `scripts/mac/test-mac-power-apply.mjs`，用 fake `osascript` / fake `pmset` 覆盖 help 纯输出、dry-run 不触碰工具、缺确认拒绝、响铃先于管理员授权、授权后复查、授权超时明确报 `timed out`。
+- `plan-mac-power-settings` 的 JSON / 普通输出 / `--boardSummary` 新增 `MacPowerApply=node scripts/mac/apply-mac-power-settings.mjs --apply --confirmUserPresent ...`；`PowerApply` runbook 的 `ManualApply` 现在指向该安全工具，不再只提示手敲裸 `pmset`。
+- 真实 Mac 上两次尝试执行 `MacPowerApply` 均未完成系统授权：第二次已明确返回 `macOS authorization did not complete: timed out after 240000ms; signal SIGTERM; spawnSync osascript ETIMEDOUT`。复查 `pmset -g custom` 后确认系统仍是 `sleep=1`、`displaysleep=10`，本轮没有改动系统设置。
+修改文件：
+- `scripts/mac/apply-mac-power-settings.mjs`
+- `scripts/mac/test-mac-power-apply.mjs`
+- `scripts/mac/plan-mac-power-settings.mjs`
+- `scripts/mac/test-mac-power-plan.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：新增 power apply 自测先失败在 `apply-mac-power-settings.mjs --help` 不存在；补超时/可见 prompt 回归后又先失败在缺 `with prompt`。
+- 绿灯：`node scripts/mac/test-mac-power-apply.mjs --timeoutMs 10000` 通过，覆盖 fake 授权和超时路径。
+- 红灯：`node scripts/mac/test-mac-power-plan.mjs --timeoutMs 8000` 先失败在 help 缺 `commands.macPowerApply`。
+- 绿灯：实现后同一 power planner 专项通过，确认 `MacPowerApply=` 已接入 JSON / boardSummary / 普通输出且不泄密。
+- 真实只读复查：`pmset -g custom` 仍显示 `sleep=1`、`displaysleep=10`；`check-mac-unattended-status --boardSummary` 仍显示 `MacPowerHealth=warning` 和 `MacUnattendedHealth=warning`。
+遗留问题：
+- 真实系统睡眠/显示睡眠 warning 仍未修复；需要用户能看到并完成 macOS 管理员授权弹窗后再复跑 `MacPowerApply=`。
+- LaunchAgent 仍是 `file-present loaded=false`；本轮没有停当前 host，也没有加载 `launchctl`，避免把现有手动 host 切成 `ephemeral-discovery-only` 运行态。
+下一步建议：
+- 用户在场时先复制最新 `MacPowerPlan=` 里的 `MacPowerApply=`，确认看到系统授权弹窗并完成授权；若仍看不到弹窗，先排查 macOS `osascript ... with administrator privileges` 弹窗是否被遮挡或被系统策略拦截。
+- 授权成功后立即按同屏顺序跑 `Verify` / `MacUnattendedSendStatus` / `MacLaunchAgentPlan`，刷新通讯板证据，再决定是否处理 LaunchAgent。
+是否改了协议：否；只新增 Mac 本机电源 apply 工具和 `MacPowerPlan=` 摘要字段。
+是否需要另一端配合：暂不需要；Windows 端可继续消费 `MacPowerPlan=`，后续若愿意可识别 `MacPowerApply=` 作为更安全的现场执行入口。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac 电源预案也给出稳定的人工应用顺序，避免用户现场处理系统/显示睡眠时漏复查。
 完成内容：
 - `plan-mac-power-settings --json` 新增 `commands.powerApplyRunbook[]`，顺序为 `Preview -> ManualApply -> Verify -> MacUnattendedStatus -> MacLaunchAgentPlan`。

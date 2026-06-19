@@ -38,6 +38,9 @@ Machine-readable JSON fields:
   profile                         all|ac|battery|ups.
   settings                        Proposed sleep, displaySleep, and networkWake values.
   commands.preview                Copyable pmset preview command; not executed.
+  commands.macPowerApply          Supervised apply command; rings first, requires
+                                  --confirmUserPresent, uses macOS authorization,
+                                  then verifies pmset readback.
   commands.verify                 Copyable pmset readback command.
   commands.macUnattendedStatus    Follow-up Mac unattended status command.
   commands.macLaunchAgentPlan     Follow-up LaunchAgent dry-run planner command.
@@ -135,6 +138,22 @@ function makeMacUnattendedStatusCommand() {
   return "node scripts/mac/check-mac-unattended-status.mjs --boardSummary";
 }
 
+function makeMacPowerApplyCommand(args) {
+  return [
+    "node scripts/mac/apply-mac-power-settings.mjs",
+    "--apply",
+    "--confirmUserPresent",
+    "--profile",
+    args.profile,
+    "--sleep",
+    String(args.sleep),
+    "--displaySleep",
+    String(args.displaySleep),
+    "--networkWake",
+    args.networkWake,
+  ].join(" ");
+}
+
 function makeMacLaunchAgentPlanCommand() {
   return "node scripts/mac/install-mac-host-launch-agent.mjs --boardSummary";
 }
@@ -148,8 +167,8 @@ function makePowerApplyRunbook(commands) {
     },
     {
       label: "ManualApply",
-      command: commands.preview,
-      note: "Run the preview command manually only after the user confirms this Mac should change power settings.",
+      command: commands.macPowerApply,
+      note: "Run the supervised apply helper only after the user confirms this Mac should change power settings.",
     },
     {
       label: "Verify",
@@ -172,6 +191,7 @@ function makePowerApplyRunbook(commands) {
 function makeReport(args) {
   const commands = {
     preview: makePreviewCommand(args),
+    macPowerApply: makeMacPowerApplyCommand(args),
     verify: "pmset -g custom",
     macUnattendedStatus: makeMacUnattendedStatusCommand(),
     macLaunchAgentPlan: makeMacLaunchAgentPlanCommand(),
@@ -188,7 +208,8 @@ function makeReport(args) {
     commands,
     notes: [
       "Dry-run only: copy the preview command only after deciding to change local Mac power settings.",
-      "Run the verify command, MacUnattendedStatus, and MacLaunchAgentPlan afterwards to refresh Agent Link Board evidence and plan login persistence.",
+      "For supervised changes, run MacPowerApply; it rings first, asks macOS for authorization, and verifies pmset readback.",
+      "Run MacUnattendedStatus and MacLaunchAgentPlan afterwards to refresh Agent Link Board evidence and plan login persistence.",
     ],
     boardSummary: "",
   };
@@ -200,7 +221,7 @@ function makeBoardSummary(report) {
   const powerApply = report.commands.powerApplyRunbook.map((step) => step.label).join("->");
   return [
     `MacPowerPlan=status=${report.status} profile=${report.profile} sleep=${report.settings.sleep} displaySleep=${report.settings.displaySleep} networkWake=${report.settings.networkWake} DryRunOnly.`,
-    `Preview=${report.commands.preview}; PowerApply=${powerApply}; Verify=${report.commands.verify}; MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacLaunchAgentPlan=${report.commands.macLaunchAgentPlan}.`,
+    `Preview=${report.commands.preview}; MacPowerApply=${report.commands.macPowerApply}; PowerApply=${powerApply}; Verify=${report.commands.verify}; MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacLaunchAgentPlan=${report.commands.macLaunchAgentPlan}.`,
     "No password was requested or sent; no system changes or input events were attempted.",
   ].join(" ");
 }
@@ -213,6 +234,7 @@ function printText(report) {
   console.log(`- displaySleep: ${report.settings.displaySleep}`);
   console.log(`- networkWake: ${report.settings.networkWake}`);
   console.log(`- preview: ${report.commands.preview}`);
+  console.log(`- Mac power apply: ${report.commands.macPowerApply}`);
   console.log(`- verify: ${report.commands.verify}`);
   console.log(`- Mac unattended status: ${report.commands.macUnattendedStatus}`);
   console.log(`- Mac LaunchAgent plan: ${report.commands.macLaunchAgentPlan}`);

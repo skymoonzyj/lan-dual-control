@@ -80,10 +80,13 @@ function assertNoSecretOrInputGuidance(text, label) {
   assertNotIncludes(value, "LAN_DUAL_PASSWORD", label);
   assertNotIncludes(value, "--password", label);
   assertNotIncludes(value, "sudo", label);
-  assertNotIncludes(value, "--apply", label);
   assertNotIncludes(value, "input_event", label);
   assertNotIncludes(value, "--inputMode inject", label);
   assertNotIncludes(value, "inject", label);
+  if (value.includes("--apply")) {
+    assertIncludes(value, "apply-mac-power-settings.mjs", `${label} apply command`);
+    assertIncludes(value, "--confirmUserPresent", `${label} apply command`);
+  }
 }
 
 function assertMacLaunchAgentPlanCommand(command, label) {
@@ -113,6 +116,21 @@ function assertPowerApplyRunbook(value, label) {
   assertNotIncludes(value, "inject", label);
 }
 
+function assertMacPowerApplyCommand(command, label) {
+  assertIncludes(command, "node scripts/mac/apply-mac-power-settings.mjs", label);
+  assertIncludes(command, "--apply", label);
+  assertIncludes(command, "--confirmUserPresent", label);
+  assertIncludes(command, "--profile", label);
+  assertIncludes(command, "--sleep", label);
+  assertIncludes(command, "--displaySleep", label);
+  assertIncludes(command, "--networkWake", label);
+  assertNotIncludes(command, "sudo", label);
+  assertNotIncludes(command, "LAN_DUAL_PASSWORD", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run(args, [flag]);
@@ -124,6 +142,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "--networkWake", `${script} ${flag}`);
     assertIncludes(result.stdout, "read-only", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macLaunchAgentPlan", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macPowerApply", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.powerApplyRunbook", `${script} ${flag}`);
     assertNoSecretOrInputGuidance(result.stdout, `${script} ${flag}`);
   }
@@ -141,6 +160,7 @@ function checkJson(args) {
   assert(payload.settings?.networkWake === "on", "JSON networkWake should default to on");
   assertIncludes(payload.commands?.preview || "", "pmset -a sleep 0 displaysleep 0 womp 1 tcpkeepalive 1", "JSON preview command");
   assertIncludes(payload.commands?.verify || "", "pmset -g custom", "JSON verify command");
+  assertMacPowerApplyCommand(payload.commands?.macPowerApply || "", "JSON Mac power apply command");
   assertIncludes(payload.commands?.macUnattendedStatus || "", "check-mac-unattended-status.mjs", "JSON unattended command");
   assertIncludes(payload.commands?.macUnattendedStatus || "", "--boardSummary", "JSON unattended command");
   assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlan || "", "JSON LaunchAgent plan command");
@@ -150,6 +170,8 @@ function checkJson(args) {
   assertIncludes(payload.boardSummary || "", "DryRunOnly", "JSON board summary");
   assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=", "JSON board summary");
   assertMacLaunchAgentPlanCommand(payload.boardSummary || "", "JSON board summary LaunchAgent plan");
+  assertIncludes(payload.boardSummary || "", "MacPowerApply=", "JSON board summary");
+  assertMacPowerApplyCommand(payload.boardSummary || "", "JSON board summary Mac power apply command");
   assertIncludes(payload.boardSummary || "", "PowerApply=", "JSON board summary");
   assertPowerApplyRunbook(payload.boardSummary || "", "JSON board summary PowerApply");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "default power plan JSON");
@@ -176,6 +198,9 @@ function checkBoardSummary(args) {
   assertIncludes(text, "displaySleep=5", "board summary");
   assertIncludes(text, "networkWake=off", "board summary");
   assertIncludes(text, "pmset -c sleep 0 displaysleep 5 womp 0 tcpkeepalive 0", "board summary");
+  assertIncludes(text, "MacPowerApply=", "board summary");
+  assertMacPowerApplyCommand(text, "board summary Mac power apply command");
+  assertIncludes(text, "--profile ac --sleep 0 --displaySleep 5 --networkWake off", "board summary Mac power apply command");
   assertIncludes(text, "Verify=pmset -g custom", "board summary");
   assertIncludes(text, "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --boardSummary", "board summary");
   assertIncludes(text, "MacLaunchAgentPlan=", "board summary");
@@ -191,6 +216,8 @@ function checkText(args) {
   assert(result.status === 0, `text output should exit 0\n${result.stdout}\n${result.stderr}`);
   assertIncludes(result.stdout, "Mac LaunchAgent plan:", "text output");
   assertMacLaunchAgentPlanCommand(result.stdout, "text output LaunchAgent plan");
+  assertIncludes(result.stdout, "Mac power apply:", "text output");
+  assertMacPowerApplyCommand(result.stdout, "text output Mac power apply command");
   assertIncludes(result.stdout, "Power apply runbook:", "text output");
   assertPowerApplyRunbook(result.stdout, "text output PowerApply");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "text output");
