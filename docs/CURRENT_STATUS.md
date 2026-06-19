@@ -19,6 +19,7 @@
 - Windows 控制端已消费 `MacInputSafetyPlan=`：Mac 提醒区、值守证据和复制/导出诊断会显示“Mac 真实输入安全方案已提供 / 默认输入模式保持安全日志 / 真实输入需用户正在看 Mac 屏幕 / 真实输入需 --confirmUserWatching / 先用 safe 输入事件集 / 不发送输入事件或执行注入”。`realInput=blocked-until-user-watching` 不再被误判为 Mac Codex 卡住；这只是只读中文提示，不运行 `plan-mac-input-safety`，不认证、不请求或发送密码、不发 input/inject。
 - Windows 恢复总览现在也会消费 `MacRemoteAudioPlan=`：`check-windows-resume-status --checkBoard` 会在 JSON `board.macRemoteAudioPlan`、普通输出和 `--boardSummary` 中显示 `node scripts/mac/plan-mac-remote-audio.mjs --boardSummary`；该解析只接受只读 board summary 命令，拒绝带 `--password`、`--json` 或未知参数的候选。仍只读通讯板，不运行 Mac 脚本、不改系统声音/输出设备/音量、不认证、不请求或发送密码、不发 input/inject。
 - Windows 恢复总览现在也会消费 `MacInputSafetyPlan=` 和 `Mac input safety plan:`：`check-windows-resume-status --checkBoard` 会在 JSON `board.macInputSafetyPlan` / `board.macInputSafety`、普通输出和 `--boardSummary` 中显示计划命令与 `status=plan-only default=log realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe safety=no-password,no-input-events,no-inject`。该解析只接受白名单字段，拒绝带 `--password`、非 `--boardSummary`、非 safe 事件集或非白名单 safety 的候选；仍只读通讯板，不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
+- 新增 `codex-link-daily-items --preset night-unattended --boardSummary` 低风险汇总入口：只读 `docs/04-task-board.md` 证据，固定输出 `DAILY_ITEM N1 PASS` 到 `DAILY_ITEM N6 PASS`，覆盖 N1 视频低延迟、N2 WebAudio 队列、N3 一键入口、N4 远端独占声音方案、N5 真实输入安全路径、N6 DAILY_ITEM 格式闭环；`--json` 可自动巡检读取，只有显式 `--sendStatus` / `--sendMessage` 才上板，默认不上板、不认证、不请求密码、不发 input/inject。
 - 本轮不改协议，不认证，不请求或发送密码，不发 input/inject。真实 inject 仍需用户明确确认正在看 Mac 屏幕后另行安排。
 
 

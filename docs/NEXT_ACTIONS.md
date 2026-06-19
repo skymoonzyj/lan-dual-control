@@ -14,6 +14,7 @@
   - Windows 恢复总览现在也会消费同一条 `MacInputSafetyPlan=` / `Mac input safety plan:`：开工第一屏、JSON 和 `--boardSummary` 都会显示 `MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary` 以及 `MacInputSafety=status=plan-only default=log realInput=blocked-until-user-watching required=--confirmUserWatching eventSet=safe safety=no-password,no-input-events,no-inject`。看到这条时仍按“只读安全边界”理解，不能当作真实 inject 已开启。
 - 尾部 NativeCommandFailed 的处理结论是改用 PowerShell 7 / pwsh 路径。现场复测或用户授权输入密码时，优先复制 resume/status 摘要里的 pwsh ... check-mac-formal-e2e.ps1 ... -PromptPassword 命令。
 - 下一步继续手工体验验收：窗口/全屏、画面流畅度、声音、文本和文件剪贴板、input_ack，以及用户明确确认后的真实 inject 安全验收。
+- 夜间 N1-N6 巡检或需要上报 DAILY_ITEM 时，优先跑 `node scripts/codex-link-daily-items.mjs --preset night-unattended --boardSummary`；确认一行里有 `DAILY_ITEM N1 PASS` 到 `DAILY_ITEM N6 PASS` 后，再按需要显式加 `--sendStatus --sendMessage --server http://192.168.31.68:17888` 上板。默认只读、不上板、不认证、不请求密码、不发 input/inject。
 只放短期任务，长期计划继续放在 `docs/04-task-board.md`。
 
 ## 最高优先级
