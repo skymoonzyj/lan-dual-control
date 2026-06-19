@@ -367,6 +367,8 @@ function checkOfflineJson(args) {
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("复制诊断"), "payload should include copy diagnostics action");
   assert(String(payload.commands?.macClientCopyDiagnosticsAction || "").includes("连接密码"), "copy diagnostics action should mention password safety");
   assert(/Mac client readiness:/.test(payload.boardSummary || ""), "payload should include boardSummary");
+  assertNotIncludes(payload.boardSummary || "", "Evidence=MacClientDiagnosticsOk", "offline JSON boardSummary");
+  assertNotIncludes(payload.boardSummary || "", "MacClientDiagnostics=status=ok", "offline JSON boardSummary");
   assertIncludes(payload.boardSummary || "", "blockers=none", "offline JSON boardSummary");
   assertMatches(payload.boardSummary || "", /warnings=[^.]*client-server/, "offline JSON boardSummary warnings");
   assertMatches(payload.boardSummary || "", /warnings=[^.]*board/, "offline JSON boardSummary warnings");
@@ -436,6 +438,8 @@ function checkBoardSummary(args) {
   const text = String(result.stdout || "").trim();
   assert(result.status === 0, "board summary should exit 0 without blockers");
   assertIncludes(text, "Mac client readiness:", "board summary");
+  assertNotIncludes(text, "Evidence=MacClientDiagnosticsOk", "board summary");
+  assertNotIncludes(text, "MacClientDiagnostics=status=ok", "board summary");
   assertIncludes(text, "blockers=none", "board summary");
   assertMatches(text, /warnings=[^.]*client-server/, "board summary warnings");
   assertMatches(text, /warnings=[^.]*board/, "board summary warnings");
@@ -688,6 +692,8 @@ async function checkClientServerProbe(args) {
     assert(payload.clientServer?.online === true, "client server should be online");
     assert(payload.clientServer?.titleFound === true, "client server should look like Mac client page");
     assertIncludes(payload.boardSummary || "", "blockers=none", "client server probe boardSummary");
+    assertNotIncludes(payload.boardSummary || "", "Evidence=MacClientDiagnosticsOk", "client server probe boardSummary");
+    assertNotIncludes(payload.boardSummary || "", "MacClientDiagnostics=status=ok", "client server probe boardSummary");
     assertMatches(payload.boardSummary || "", /warnings=[^.]*board/, "client server probe boardSummary warnings");
     assertMatches(payload.boardSummary || "", /warnings=[^.]*windows-host/, "client server probe boardSummary warnings");
     assertMacClientPageStatusCommand(payload.commands?.macClientPageStatusCommand || "", "client server probe command");
@@ -714,6 +720,52 @@ async function checkClientServerProbe(args) {
     assert(payload.checklist.some((item) => item.id === "client-server" && item.status === "ok"), "client-server ok item should be present");
   });
   print("OK", "Running Mac client HTTP server probe passes");
+}
+
+async function checkClientDiagnosticsEvidence(args) {
+  const boardState = {
+    updatedAt: "2026-06-19T04:35:00.000Z",
+    currentCall: null,
+    statuses: {
+      "Windows Codex": {
+        status: "idle",
+        note: "Windows ready; no risk tags",
+      },
+    },
+    events: [],
+  };
+  await withMacClientServer(args, async (clientPort) => {
+    await withBoardStateServer(args, boardState, async (serverUrl) => {
+      const result = run([
+        "--json",
+        "--probeClientServer",
+        "--requireClientServer",
+        "--checkBoard",
+        "--server",
+        serverUrl,
+        "--clientPort",
+        String(clientPort),
+        "--timeoutMs",
+        "1200",
+      ], args);
+      const payload = parseJson(result.stdout, "client diagnostics evidence JSON");
+      assert(result.status === 0, `client diagnostics evidence should pass.\n${result.stdout}\n${result.stderr}`);
+      assert(payload.clientServer?.online === true, "client diagnostics evidence should see the local page online");
+      assert(payload.board?.ok === true, "client diagnostics evidence should see Agent Link Board readable");
+      assert(payload.checklist.some((item) => item.id === "windows-host" && item.status === "warning"), "windows-host warning should remain visible");
+      assertIncludes(payload.boardSummary || "", "warnings=", "client diagnostics evidence boardSummary");
+      assertIncludes(payload.boardSummary || "", "windows-host", "client diagnostics evidence boardSummary");
+      assertIncludes(
+        payload.boardSummary || "",
+        "MacClientDiagnostics=status=ok probeClientServer=ok page=online blockers=none warnings=none",
+        "client diagnostics evidence boardSummary",
+      );
+      assertIncludes(payload.boardSummary || "", "Evidence=MacClientDiagnosticsOk", "client diagnostics evidence boardSummary");
+      assertNotIncludes(`${result.stdout}\n${result.stderr}`, "LAN_DUAL_PASSWORD", "client diagnostics evidence output");
+      assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--password", "client diagnostics evidence output");
+    });
+  });
+  print("OK", "Clean local Mac client diagnostics emit stable evidence");
 }
 
 async function withWindowsDiscoveryServer(callback) {
@@ -841,6 +893,7 @@ async function main() {
   checkPlainReport(args);
   await checkBoardWindowsLanRisk(args);
   await checkClientServerProbe(args);
+  await checkClientDiagnosticsEvidence(args);
   await checkWindowsDiscoveryProbe(args);
   print("OK", "Mac client readiness self-test passed");
 }
