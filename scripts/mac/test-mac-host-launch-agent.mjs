@@ -236,7 +236,11 @@ function checkDryRunJson(args) {
     assert(payload.wrote === false, "dry-run JSON should not write");
     assert(!existsSync(paths.plist), "dry-run should not create plist");
     assert(Array.isArray(payload.programArguments), "dry-run JSON should include programArguments");
-    assert(payload.programArguments.includes("scripts/mac/start-mac-host.mjs"), "programArguments should start Mac host helper");
+    assert(payload.programArguments[0] === process.execPath, "programArguments should use the current Node executable so launchd does not depend on shell PATH");
+    assert(payload.programArguments[1] === "scripts/mac/start-mac-host.mjs", "programArguments should start Mac host helper directly after node");
+    assertIncludes(payload.plist, process.execPath, "dry-run plist");
+    assertNotIncludes(payload.plist, "<string>/usr/bin/env</string>", "dry-run plist");
+    assert(payload.programArguments.includes("--background"), "LaunchAgent should start the host through the proven background helper path");
     assert(payload.programArguments.includes("--ephemeralPassword"), "default mode should use ephemeral password");
     assert(payload.programArguments.includes("--requirePassword"), "programArguments should require password");
     assert(payload.programArguments.includes("--inputMode"), "programArguments should include input mode");

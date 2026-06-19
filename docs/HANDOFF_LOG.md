@@ -49,6 +49,39 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：真实收口 Mac LaunchAgent `loaded=false`，并修复 launchd 环境下启动失败的根因。
+完成内容：
+- 真实执行 LaunchAgent 切换前先确认当前 plist 已是 `maxFps=60` / `inputMode=log` / `ephemeralPassword`，但 `launchctl print gui/$(id -u)/com.lan-dual-control.mac-host` 显示未加载。
+- 第一次加载失败根因明确：LaunchAgent 默认使用 `/usr/bin/env node`，launchd 的 PATH 找不到 nvm Node，日志为 `env: node: No such file or directory`。
+- 用 TDD 修复 `install-mac-host-launch-agent`：默认 `ProgramArguments[0]` 改为当前 `process.execPath` 的绝对 Node 路径，并新增回归防止回退到 `/usr/bin/env node`。
+- 第二次加载暴露 helper 前台模式不适合 launchd 值守：Node helper 被 launchd 持有但未监听 43770；继续用 TDD 将 LaunchAgent 启动参数切到已验证的 `start-mac-host --background` 路径。
+- 真实重写 plist 后重新 `launchctl bootstrap`，当前 `/discovery` 在线：`runtimeBuild=9fcf917`、`inputMode=log`、`maxScreenFps=60`、`capturePipeline=background-jpeg`。
+- `MacUnattendedFormal` 现在通过 LaunchAgent loaded/maxFps 门禁：`launchAgent=file-present loaded=true maxFps=60`；`launch-agent-not-loaded` 已消失。
+修改文件：
+- `scripts/mac/install-mac-host-launch-agent.mjs`
+- `scripts/mac/test-mac-host-launch-agent.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯 1：`node scripts/mac/test-mac-host-launch-agent.mjs --timeoutMs 10000` 先失败在 “programArguments should use the current Node executable...”。
+- 绿灯 1：改默认 `nodePath=process.execPath` 后专项通过对应断言。
+- 红灯 2：新增 `--background` 断言后专项先失败在 “LaunchAgent should start the host through the proven background helper path”。
+- 绿灯 2：加入 `--background` 后 `node scripts/mac/test-mac-host-launch-agent.mjs --timeoutMs 10000` 通过。
+- 真实复查：`start-mac-host --status --json` 显示 host 在线、build=current、maxFps=60；`launchctl print` 显示 plist 已 loaded，last exit code 0；`check-mac-unattended-status --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary` 显示 loaded=true / maxFps=60。
+遗留问题：
+- LaunchAgent 后台拉起的 host 当前报告 `accessibility=false`、`inputMonitoring=false`，`MacUnattendedHealth=warning reason=accessibility warnings=accessibility`；当前仍是 `inputMode=log`，不做真实注入。后续如要进入真实 inject，需要用户在 Mac 本机确认 TCC 权限或改为前台安全启动路径。
+- Agent Link Board 仍连接失败：绕过代理访问 `192.168.31.68:17888` / `codex-link-client` 仍为 fetch failed/connection refused，本轮无法上板同步。
+下一步建议：
+- 白天先恢复 Agent Link Board；随后让 Windows 端读取新的 Mac 状态，确认 `launch-agent-not-loaded` 已消失。
+- 若要推进真实输入注入，先处理 LaunchAgent 后台进程的 Accessibility/Input Monitoring 权限视角；在用户明确看着 Mac 屏幕前仍不要切 `inject`。
+是否改了协议：否；只修 LaunchAgent 本地启动路径和真实系统加载状态。
+是否需要另一端配合：暂不需要；Windows 端后续只读消费 `MacUnattendedHealth=warning reason=accessibility` 即可。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：跟进 `MacPowerApply` 授权超时，修复复查误判，并真实收口 Mac 电源 warning。
 完成内容：
 - 分层排查 `osascript`：普通蜂鸣和自动关闭对话框均正常；管理员授权探针执行 `/usr/bin/true` 可成功返回，说明授权机制可用，上轮主要是授权未完成。
