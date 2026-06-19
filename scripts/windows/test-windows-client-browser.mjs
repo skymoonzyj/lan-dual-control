@@ -1574,6 +1574,20 @@ async function verifyDesktopOnlyHostPanel(session) {
               Date.parse("2026-06-18T10:01:00.000Z"),
             )
           : null;
+      const stableHeartbeatFreshnessAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(
+              [
+                "Windows resume: repo=clean board=ok mac=ready",
+                "MacHeartbeat=node scripts/mac/check-mac-heartbeat.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary",
+                "MacHeartbeatFreshness=stale checked=180s codex=303s board=49s checkedAt=2026-06-19T05:00:00.000Z",
+              ].join("; "),
+            )
+          : null;
+      const stableHeartbeatFreshnessDirect =
+        typeof parseMacHeartbeatFreshness === "function"
+          ? parseMacHeartbeatFreshness("MacHeartbeatFreshness=fresh checked=20s codex=164s board=49s checkedAt=2026-06-19T05:12:59.408Z")
+          : null;
       const watcherThrottleBefore =
         typeof shouldRefreshMacAlertWatcherStatus === "function"
           ? shouldRefreshMacAlertWatcherStatus(15999)
@@ -2300,6 +2314,13 @@ async function verifyDesktopOnlyHostPanel(session) {
           watcherThrottleNoCache === true &&
           freshHeartbeatNoStale?.stale === false &&
           freshHeartbeatNoStale?.summary.includes("心跳检查 1 分钟前") &&
+          stableHeartbeatFreshnessDirect?.present === true &&
+          stableHeartbeatFreshnessDirect?.stale === false &&
+          stableHeartbeatFreshnessDirect?.summary.includes("心跳检查 20 秒前") &&
+          stableHeartbeatFreshnessDirect?.summary.includes("Mac Codex 3 分钟前") &&
+          stableHeartbeatFreshnessAttention?.summary.includes("Mac 心跳摘要过旧") &&
+          stableHeartbeatFreshnessAttention?.summary.includes("心跳检查 3 分钟前") &&
+          stableHeartbeatFreshnessAttention?.summary.includes("Mac Codex 5 分钟前") &&
           heartbeatCommandCheck.ok &&
           cleanMacHostReadinessCommandAttention?.summary === "" &&
           Array.isArray(cleanMacHostReadinessCommandAttention?.labels) &&
@@ -2474,6 +2495,8 @@ async function verifyDesktopOnlyHostPanel(session) {
         watcherThrottleAtLimit,
         watcherThrottleNoCache,
         freshHeartbeatNoStale,
+        stableHeartbeatFreshnessDirect,
+        stableHeartbeatFreshnessAttention,
         heartbeatCommandCheck,
         cleanMacHostReadinessCommandAttention,
         cleanMacHostMediaCommandAttention,

@@ -3184,6 +3184,21 @@ function parseIsoAgeMs(value, now = Date.now()) {
   return Math.max(0, now - parsed);
 }
 
+function parseCompactAgeMs(value) {
+  const match = /^(\d+(?:\.\d+)?)(ms|s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours)?$/i.exec(
+    String(value || "").trim(),
+  );
+  if (!match) return null;
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  const unit = String(match[2] || "ms").toLowerCase();
+  if (unit === "ms") return amount;
+  if (unit === "s" || unit.startsWith("sec") || unit.startsWith("second")) return amount * 1000;
+  if (unit === "m" || unit.startsWith("min") || unit.startsWith("minute")) return amount * 60 * 1000;
+  if (unit === "h" || unit.startsWith("hr") || unit.startsWith("hour")) return amount * 60 * 60 * 1000;
+  return null;
+}
+
 function normalizeMacUnattendedToken(token) {
   return String(token || "")
     .trim()
@@ -3233,6 +3248,12 @@ function extractMacHeartbeatValue(text, key) {
   return match ? match[1] : "";
 }
 
+function extractMacHeartbeatFreshnessValue(text, key) {
+  const pattern = new RegExp(`\\b${escapeRegExp(key)}\\s*=\\s*([^\\s;；，。]+)`, "i");
+  const match = pattern.exec(String(text || ""));
+  return match ? match[1] : "";
+}
+
 function extractMacHeartbeatSegments(text) {
   const source = String(text || "");
   const matches = [...source.matchAll(/\bMacHeartbeat\s*=/gi)];
@@ -3258,8 +3279,44 @@ function selectLatestMacHeartbeatSegment(text) {
   return selected;
 }
 
+function parseMacHeartbeatFreshnessField(text, now = Date.now()) {
+  const source = String(text || "");
+  const match = /\bMacHeartbeatFreshness\s*=\s*(fresh|stale)\b([^;\r\n]*)/i.exec(source);
+  if (!match) return null;
+
+  const status = String(match[1] || "").toLowerCase();
+  const segment = `${match[0]}`;
+  const checkedAt = extractMacHeartbeatFreshnessValue(segment, "checkedAt");
+  const checkedAgeMs =
+    parseCompactAgeMs(extractMacHeartbeatFreshnessValue(segment, "checked")) ?? parseIsoAgeMs(checkedAt, now);
+  const codexAgeMs = parseCompactAgeMs(extractMacHeartbeatFreshnessValue(segment, "codex"));
+  const boardAgeMs = parseCompactAgeMs(extractMacHeartbeatFreshnessValue(segment, "board"));
+  const parts = [];
+  if (checkedAgeMs !== null) parts.push(`心跳检查 ${formatRelativeAgeMs(checkedAgeMs)}`);
+  if (codexAgeMs !== null) parts.push(`Mac Codex ${formatRelativeAgeMs(codexAgeMs)}`);
+  if (boardAgeMs !== null) parts.push(`联络板 ${formatRelativeAgeMs(boardAgeMs)}`);
+  const detail = parts.filter(Boolean).join(" / ");
+  const stale = status === "stale";
+
+  return {
+    present: true,
+    checkedAt,
+    boardUpdatedAt: "",
+    codexUpdatedAt: "",
+    checkedAgeMs,
+    boardAgeMs,
+    codexAgeMs,
+    stale,
+    summary: stale ? `Mac 心跳摘要过旧${detail ? `（${detail}）` : ""}` : detail,
+    detail,
+  };
+}
+
 function parseMacHeartbeatFreshness(text, now = Date.now()) {
   const source = String(text || "");
+  const stableFreshness = parseMacHeartbeatFreshnessField(source, now);
+  if (stableFreshness) return stableFreshness;
+
   if (!/\bMacHeartbeat\s*=/.test(source)) {
     return { present: false, summary: "", detail: "", stale: false };
   }
@@ -3271,7 +3328,7 @@ function parseMacHeartbeatFreshness(text, now = Date.now()) {
   const codexAgeRaw = extractMacHeartbeatValue(heartbeatSource, "ageMs");
   const checkedAgeMs = parseIsoAgeMs(checkedAt, now);
   const boardAgeMs = parseIsoAgeMs(boardUpdatedAt, now);
-  const rawCodexAgeMs = Number(codexAgeRaw);
+  const rawCodexAgeMs = codexAgeRaw === "" ? NaN : Number(codexAgeRaw);
   const codexAgeMs = Number.isFinite(rawCodexAgeMs)
     ? Math.max(0, rawCodexAgeMs)
     : parseIsoAgeMs(codexUpdatedAt, now);
@@ -3828,7 +3885,17 @@ function parseMacUnattendedAttention(text) {
     .map((risk, index) => ({ risk, index }))
     .sort((a, b) => (priority.get(a.risk) ?? 1000) - (priority.get(b.risk) ?? 1000) || a.index - b.index)
     .map(({ risk }) => risk);
-  const labels = [...new Set(orderedRisks.map(labelMacUnattendedRisk).filter(Boolean))];
+  const labels = [
+    ...new Set(
+      orderedRisks
+        .map((risk) =>
+          risk === "mac-heartbeat-summary-stale" && heartbeatFreshness.summary
+            ? heartbeatFreshness.summary
+            : labelMacUnattendedRisk(risk),
+        )
+        .filter(Boolean),
+    ),
+  ];
   return {
     warnings,
     blockers,

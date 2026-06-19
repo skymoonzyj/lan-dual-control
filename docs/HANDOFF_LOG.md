@@ -17,6 +17,33 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
+本轮目标：让 Windows 控制端直接消费稳定 `MacHeartbeatFreshness=` 摘要，避免把心跳复查命令误判成实时心跳。
+完成内容：
+- `apps/windows-client/app.js` 新增 `MacHeartbeatFreshness=fresh|stale checked=<秒> codex=<秒> board=<秒> checkedAt=<时间>` 解析，优先级高于旧的原始 `MacHeartbeat=` 段。
+- stale 时快速摘要现在会显示“Mac 心跳摘要过旧（心跳检查 ... / Mac Codex ... / 联络板 ...）”，方便现场判断是心跳检查旧、Mac Codex 卡住，还是只是联络板更新时间正常。
+- 旧 `MacHeartbeat=` 解析修正空 `ageMs` 被当成 0 的误判；同段出现 `MacHeartbeat=node scripts/mac/...` 安全复查命令时，不再显示“Mac Codex 刚刚”。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 失败在 `stableHeartbeatFreshnessDirect.present=false`，且命令段误判为 `Mac Codex 刚刚`。
+- 绿灯：实现后同一命令通过。
+遗留问题：
+- 本轮只做 Windows 控制端本地解析和展示；不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
+下一步建议：
+- 后续 Windows 第一屏或控制端诊断看到 `MacHeartbeatFreshness=stale` 时，优先让 Mac 端复跑 `MacHeartbeatRerun=` 或刷新 heartbeat watcher，再判断是否需要人工看 Mac Codex 窗口。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
 ## 2026-06-19 Mac Codex
 
 日期：2026-06-19 继续推进
