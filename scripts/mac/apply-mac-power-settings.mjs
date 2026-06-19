@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 
 const defaults = {
   profile: "all",
@@ -175,7 +176,8 @@ function appleScriptQuote(value) {
 }
 
 function selectedPmsetBin() {
-  return process.env.LAN_DUAL_PMSET_BIN || "pmset";
+  if (process.env.LAN_DUAL_PMSET_BIN) return process.env.LAN_DUAL_PMSET_BIN;
+  return existsSync("/usr/bin/pmset") ? "/usr/bin/pmset" : "pmset";
 }
 
 function selectedOsaScriptBin() {
@@ -227,9 +229,20 @@ function runVerify(args) {
   });
   const raw = String(result.stdout || result.stderr || "");
   const settings = parsePmset(raw);
+  const parsedPowerSettingCount = countParsedPowerSettings(settings);
   const risks = classifyPowerRisks(settings);
+  if (result.status === 0 && parsedPowerSettingCount === 0) {
+    risks.push({
+      id: raw.trim() ? "pmset-readback-unparsed" : "pmset-readback-empty",
+    });
+  }
+  const ok = result.status === 0 && risks.length === 0;
+  const reason = ok
+    ? "ok"
+    : risks[0]?.id || `pmset-exit-${result.status ?? "unknown"}`;
   return {
-    ok: result.status === 0,
+    ok,
+    reason,
     status: result.status,
     signal: result.signal,
     raw: raw.slice(0, 12000),
@@ -269,6 +282,12 @@ function settingValues(settings, keys) {
     }
   }
   return values;
+}
+
+function countParsedPowerSettings(settings) {
+  return Object.values(settings || {}).reduce((count, data) => {
+    return count + Object.keys(data || {}).length;
+  }, 0);
 }
 
 function classifyPowerRisks(settings) {
@@ -359,7 +378,7 @@ function makeBoardSummary(report) {
       "No password was printed or sent; no system changes or remote control events were attempted.",
     ].join(" ");
   }
-  const verified = report.verify?.ok && riskIds === "none" ? "ok" : "warning";
+  const verified = report.verify?.ok && riskIds === "none" ? "ok" : "failed";
   return [
     `MacPowerApply=status=applied profile=${report.profile} sleep=${report.settings.sleep} displaySleep=${report.settings.displaySleep} networkWake=${report.settings.networkWake} verified=${verified} risks=${riskIds}.`,
     `VerifySummary=${report.verify?.summary || "unknown"}; MacUnattendedSendStatus=${report.commands.macUnattendedSendStatus}; MacLaunchAgentPlan=${report.commands.macLaunchAgentPlan}.`,
@@ -397,13 +416,16 @@ function main() {
   const report = makeReport(args);
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
+    if (!report.ok) process.exitCode = 1;
     return;
   }
   if (args.boardSummary) {
     console.log(report.boardSummary);
+    if (!report.ok) process.exitCode = 1;
     return;
   }
   printText(report);
+  if (!report.ok) process.exitCode = 1;
 }
 
 try {

@@ -21,6 +21,36 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：跟进 `MacPowerApply` 授权超时，修复复查误判，并真实收口 Mac 电源 warning。
+完成内容：
+- 分层排查 `osascript`：普通蜂鸣和自动关闭对话框均正常；管理员授权探针执行 `/usr/bin/true` 可成功返回，说明授权机制可用，上轮主要是授权未完成。
+- 修复 `apply-mac-power-settings` 的验证漏洞：`pmset -g custom` 复查必须解析到实际电源字段且无风险才算 `verified=ok`；空输出或不可解析输出现在 `ok=false`、非零退出，并在摘要里写 `verified=failed risks=pmset-readback-empty|pmset-readback-unparsed`。
+- `apply-mac-power-settings` 执行层默认使用 `/usr/bin/pmset` 绝对路径，避免管理员 shell 的 PATH 差异；dry-run 显示命令仍保持用户可读。
+- 真实执行 `node scripts/mac/apply-mac-power-settings.mjs --apply --confirmUserPresent --timeoutMs 240000 --boardSummary` 成功，摘要返回 `verified=ok risks=none`。
+- 已刷新通讯板：`MacPowerHealth=ok reason=ok warnings=none`；当前剩余真实值守 warning 只剩 `launch-agent-not-loaded`。
+修改文件：
+- `scripts/mac/apply-mac-power-settings.mjs`
+- `scripts/mac/test-mac-power-apply.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-power-apply.mjs --timeoutMs 10000` 先失败在 “empty pmset readback should fail verification”。
+- 绿灯：实现后同一专项通过，覆盖空复查不再误判 verified ok。
+- 真实复查：`pmset -g custom` 显示 `sleep=0`、`displaysleep=0`、`womp=1`、`tcpkeepalive=1`。
+- 真实上板：`check-mac-unattended-status --sendStatus --boardSummary` 与 `watch-mac-heartbeat --once --sendStatus --refreshUnattended --boardSummary` 均显示 `MacPowerHealth=ok`，`MacUnattendedHealth=warning reason=launch-agent-not-loaded`。
+- 收尾推送前重试 Agent Link Board：绕过代理访问 `http://192.168.31.68:17888/api/state` 为 connection refused，`codex-link-client status` 返回 fetch failed；因此本轮无法在板上发送推送通知，需明天开工先恢复联络板再继续互通。
+遗留问题：
+- LaunchAgent 仍未 loaded；本轮没有停止当前手动 host，也没有执行 `launchctl bootstrap`。
+下一步建议：
+- 下一轮优先处理 LaunchAgent：先确认是否接受 `ephemeral-discovery-only` 的 plist 作为值守自启动，若要日常远控认证体验更好，先调整 LaunchAgent password mode / 启动策略，再按 `MacHostStop -> MacLaunchAgentLoad -> MacLaunchAgentPrint -> MacUnattendedFormal -> MacResumeStatus` 复查。
+是否改了协议：否；只修 Mac 本机电源 apply 验证和真实系统设置。
+是否需要另一端配合：暂不需要；Windows 端可继续只读消费最新 `MacPowerHealth=ok`。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：把 Mac 电源 warning 从“手工复制 pmset”推进到可复用的响铃/系统授权/复查工具，并接入现有 `MacPowerPlan=`。
 完成内容：
 - 新增 `scripts/mac/apply-mac-power-settings.mjs`：默认 dry-run；真正执行必须显式 `--apply --confirmUserPresent`，先响铃，再调用 macOS `osascript ... with administrator privileges with prompt ...` 执行 `pmset`，最后 `pmset -g custom` 只读复查。

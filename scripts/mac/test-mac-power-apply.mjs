@@ -127,6 +127,7 @@ const logPath = process.env.FAKE_TOOL_LOG;
 const args = process.argv.slice(2);
 fs.appendFileSync(logPath, "pmset " + JSON.stringify(args) + "\\n");
 if (args.join(" ") === "-g custom") {
+  if (process.env.FAKE_VERIFY_EMPTY === "1") process.exit(0);
   console.log("AC Power:");
   console.log(" sleep                0");
   console.log(" displaysleep         0");
@@ -256,6 +257,29 @@ function checkAdminTimeoutIsClear(args) {
   console.log("[OK] Mac power apply reports administrator timeout clearly");
 }
 
+function checkEmptyVerifyIsNotOk(args) {
+  const tools = makeFakeTools();
+  try {
+    const result = run(args, ["--apply", "--confirmUserPresent", "--json"], {
+      LAN_DUAL_OSASCRIPT_BIN: tools.osascriptPath,
+      LAN_DUAL_PMSET_BIN: tools.pmsetPath,
+      FAKE_TOOL_LOG: tools.logPath,
+      FAKE_VERIFY_EMPTY: "1",
+    });
+    assert(result.status !== 0, "empty pmset readback should fail verification");
+    const payload = parseJson(result.stdout, "empty verify JSON");
+    assert(payload.ok === false, "empty verify JSON should be ok=false");
+    assert(payload.verify?.ok === false, "empty verify should be ok=false");
+    assertIncludes(payload.verify?.reason || "", "pmset-readback-empty", "empty verify reason");
+    assertIncludes(payload.boardSummary || "", "verified=failed", "empty verify board summary");
+    assertIncludes(payload.boardSummary || "", "risks=pmset-readback-empty", "empty verify board summary");
+    assertSecretSafe(`${result.stdout}\n${result.stderr}`, "empty verify JSON");
+  } finally {
+    rmSync(tools.dir, { recursive: true, force: true });
+  }
+  console.log("[OK] Mac power apply does not treat empty pmset readback as verified");
+}
+
 function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -267,6 +291,7 @@ function main() {
   checkApplyRequiresConfirmation(args);
   checkApplyWithAdminPrompt(args);
   checkAdminTimeoutIsClear(args);
+  checkEmptyVerifyIsNotOk(args);
   console.log("[OK] Mac power apply self-test passed");
 }
 
