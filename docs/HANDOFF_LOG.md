@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 `MacFormalLocalSmoke=` / 本机短验收摘要也暴露 Mac 控 Windows 真实 browser smoke 的前台密码入口。
+完成内容：
+- `check-mac-formal-local-smoke --json/--boardSummary` 新增 `commands.macClientPromptPasswordSmokeCommand` / `MacClientPromptPasswordSmoke=`。
+- 新命令统一为 `node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword --boardSummary`，只在用户显式运行时才响铃并弹本机前台隐藏密码框。
+- 本机短验收摘要生成阶段仍只做 H.264/PCM/input-log 本机聚合，不发现 Windows、不认证 Windows host、不发送 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-formal-local-smoke.mjs`
+- `scripts/mac/test-mac-formal-local-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-formal-local-smoke.mjs --timeoutMs 30000` 失败在 `check-mac-formal-local-smoke --help` 缺 `commands.macClientPromptPasswordSmokeCommand`。
+- 绿灯：实现后复跑 `node scripts/mac/test-mac-formal-local-smoke.mjs --timeoutMs 30000` 通过。
+- 最终收尾：`node --check scripts/mac/check-mac-formal-local-smoke.mjs`、`node --check scripts/mac/test-mac-formal-local-smoke.mjs`、`node scripts/mac/test-mac-script-help.mjs --script check-mac-formal-local-smoke.mjs --timeoutMs 10000 --boardSummary`、`LAN_DUAL_PASSWORD=formal-local-smoke-test-password node scripts/mac/check-mac-formal-local-smoke.mjs --json --host 127.0.0.1 --port 9 --timeoutMs 3000 --skipVideo --skipAudio --skipInputLog`、`git diff --check` 与触碰文件冲突标记扫描均通过；无密码打印、无认证、无 call/input/inject。
+遗留问题：
+- 当前真实 Mac host 仍是旧 build；本轮没有重启 host，也没有跑需要用户密码的真实 browser smoke。
+下一步建议：
+- 只看到 `MacFormalLocalSmoke=` / `RerunFormalLocalSmoke=` 时，用户在场可复制 `MacClientPromptPasswordSmoke=` 进入真实 browser smoke；无人值守时继续只跑 `MacClientFormalSmoke=` 无密 preflight 或 `MacClientBrowserSelfTest=` 本地 mock 自测。
+是否改了协议：否；只补 Mac 本机短验收的安全命令标签和自测。
+是否需要另一端配合：本轮不需要；Windows 端后续可按需消费 `MacClientPromptPasswordSmoke=`。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 `MacClientFormalChecklist=` / formal checklist 摘要也暴露 Mac 控 Windows 真实 browser smoke 的前台密码入口。
 完成内容：
 - `check-mac-client-formal-status --json/--boardSummary` 新增 `runPlan.commands.macClientPromptPasswordSmoke` / `MacClientPromptPasswordSmoke=`。

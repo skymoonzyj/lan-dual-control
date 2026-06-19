@@ -76,6 +76,11 @@ Options:
   --help, -h                 Show this help without probing anything.
 
 JSON output:
+  commands.macClientPromptPasswordSmokeCommand
+                             User-present Mac client browser smoke command with
+                             the standard MacClientPromptPasswordSmoke=
+                             board-summary label. It asks for the password only
+                             when this command is explicitly run.
   commands.macScriptHelpCommand
                              Secret-free Mac script help safety check. It runs
                              without prompting, reading the board, authenticating,
@@ -486,12 +491,23 @@ function makeMacFormalLocalSmokeCommand(args) {
   return makeRerunBoardSummaryCommand(args);
 }
 
+function makeMacClientPromptPasswordSmokeCommand() {
+  return [
+    "node scripts/mac/run-mac-client-formal-smoke.mjs",
+    "--discover",
+    "--ensureClient",
+    "--promptPassword",
+    "--boardSummary",
+  ].join(" ");
+}
+
 function makeMacScriptHelpCommand() {
   return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
 
 function makeCommands(args) {
   return {
+    macClientPromptPasswordSmokeCommand: makeMacClientPromptPasswordSmokeCommand(),
     macFormalLocalSmokeCommand: makeMacFormalLocalSmokeCommand(args),
     macHostReadinessCommand: makeMacHostReadinessCommand(args),
     macHostSafeStartCommand: makeMacHostSafeStartCommand(args),
@@ -560,6 +576,7 @@ function makeBoardSummary(args, probes, failed, commands) {
     `MacMaxFpsSafeStart=${commands.macMaxFpsSafeStartCommand}.`,
     `MacUnattendedFormal=${commands.macUnattendedFormalCommand}.`,
     `MacFormalLocalSmoke=${commands.macFormalLocalSmokeCommand}.`,
+    `MacClientPromptPasswordSmoke=${commands.macClientPromptPasswordSmokeCommand}.`,
     `MacScriptHelp=${commands.macScriptHelpCommand}.`,
     `RerunFormalLocalSmoke=${commands.rerunBoardSummaryCommand}.`,
   ].join(" ");
@@ -590,6 +607,7 @@ function makeFailureReport(error, argv) {
       `MacMaxFpsSafeStart=${commands.macMaxFpsSafeStartCommand}.`,
       `MacUnattendedFormal=${commands.macUnattendedFormalCommand}.`,
       `MacFormalLocalSmoke=${commands.macFormalLocalSmokeCommand}.`,
+      `MacClientPromptPasswordSmoke=${commands.macClientPromptPasswordSmokeCommand}.`,
       `MacScriptHelp=${commands.macScriptHelpCommand}.`,
       `RerunFormalLocalSmoke=${commands.rerunBoardSummaryCommand}.`,
     ].join(" "),
@@ -630,6 +648,7 @@ function printReport(args, report) {
   print(args, "NEXT", `Mac host safe start: ${report.commands.macHostSafeStartCommand}`);
   print(args, "NEXT", `Mac 60Hz safe foreground start: ${report.commands.macMaxFpsSafeStartCommand}`);
   print(args, "NEXT", `Mac unattended formal 60Hz gate: ${report.commands.macUnattendedFormalCommand}`);
+  print(args, "NEXT", `Mac client prompt-password smoke: ${report.commands.macClientPromptPasswordSmokeCommand}`);
   print(args, "NEXT", `Mac script help safety check: ${report.commands.macScriptHelpCommand}`);
 }
 
@@ -669,6 +688,7 @@ main().catch((error) => {
     console.error(`[NEXT] Mac host safe start: ${report.commands.macHostSafeStartCommand}`);
     console.error(`[NEXT] Mac 60Hz safe foreground start: ${report.commands.macMaxFpsSafeStartCommand}`);
     console.error(`[NEXT] Mac unattended formal 60Hz gate: ${report.commands.macUnattendedFormalCommand}`);
+    console.error(`[NEXT] Mac client prompt-password smoke: ${report.commands.macClientPromptPasswordSmokeCommand}`);
     console.error(`[NEXT] Mac script help safety check: ${report.commands.macScriptHelpCommand}`);
   }
   process.exitCode = 1;
