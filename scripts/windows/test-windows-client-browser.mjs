@@ -1776,6 +1776,31 @@ async function verifyDesktopOnlyHostPanel(session) {
               message: "Mac alert watcher is running.",
             }, { available: true, busy: false })
           : {};
+      const positiveMacResumeEvidenceText = [
+        "Windows resume: board=ok mac=ready blockers=none warnings=none",
+        "MacEvidence=MacHostMediaOk,MacFormalLocalSmokeOk,MacClientPageOnline",
+      ].join("; ");
+      const positiveMacResumeEvidenceAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(positiveMacResumeEvidenceText)
+          : null;
+      const positiveMacResumeEvidenceView =
+        typeof macAlertWatcherUiState === "function"
+          ? macAlertWatcherUiState({
+              ok: true,
+              action: "status",
+              running: true,
+              processIds: [2468],
+              server: "http://192.168.31.68:17888",
+              lastAlert: {
+                at: "2026-06-19 11:55:00",
+                title: "Windows resume MacEvidence",
+                message: positiveMacResumeEvidenceText,
+                summary: positiveMacResumeEvidenceText,
+              },
+              message: "Mac alert watcher is running.",
+            }, { available: true, busy: false })
+          : {};
       const blockedHeartbeatRiskEvidenceAttention =
         typeof parseMacUnattendedAttention === "function"
           ? parseMacUnattendedAttention(
@@ -2285,6 +2310,19 @@ async function verifyDesktopOnlyHostPanel(session) {
           positiveMacGenericEvidenceView.statusText.includes("Mac client 诊断已通过") &&
           positiveMacGenericEvidenceView.statusText.includes("Mac 媒体基线已通过") &&
           !positiveMacGenericEvidenceView.statusText.includes("风险：") &&
+          positiveMacResumeEvidenceAttention?.summary === "" &&
+          Array.isArray(positiveMacResumeEvidenceAttention?.labels) &&
+          positiveMacResumeEvidenceAttention.labels.length === 0 &&
+          positiveMacResumeEvidenceAttention?.evidenceSummary.includes("Mac 媒体基线已通过") &&
+          positiveMacResumeEvidenceAttention?.evidenceSummary.includes("Mac 本机短验收已通过") &&
+          positiveMacResumeEvidenceAttention?.evidenceSummary.includes("Mac client 页面在线") &&
+          Array.isArray(positiveMacResumeEvidenceAttention?.evidenceLabels) &&
+          positiveMacResumeEvidenceAttention.evidenceLabels.length === 3 &&
+          positiveMacResumeEvidenceView.statusText.includes("证据：") &&
+          positiveMacResumeEvidenceView.statusText.includes("Mac 媒体基线已通过") &&
+          positiveMacResumeEvidenceView.statusText.includes("Mac 本机短验收已通过") &&
+          positiveMacResumeEvidenceView.statusText.includes("Mac client 页面在线") &&
+          !positiveMacResumeEvidenceView.statusText.includes("风险：") &&
           blockedHeartbeatRiskEvidenceAttention?.summary.includes("Mac Codex 长时间无新进展") &&
           !blockedHeartbeatRiskEvidenceAttention?.evidenceSummary.includes("Mac 心跳正常") &&
           cleanMacClientPageCommandAttention?.summary === "" &&

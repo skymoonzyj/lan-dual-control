@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端也消费 Windows resume 总览输出的稳定 `MacEvidence=` 字段。
+完成内容：
+- `parseMacEvidenceFieldLabels` 同时识别 `Evidence=` 和 `MacEvidence=`，继续只接受干净片段与已知正向 token。
+- 页面 diagnostics-only 新增 `Windows resume ... MacEvidence=MacHostMediaOk,MacFormalLocalSmokeOk,MacClientPageOnline` 用例，确认会显示“Mac 媒体基线已通过 / Mac 本机短验收已通过 / Mac client 页面在线”证据，且不进入风险摘要。
+- README 与交接文档同步说明 `MacEvidence=` 是 Windows resume 到 Windows 控制端的稳定证据桥。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增测试后，`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 失败在 `positiveMacResumeEvidenceAttention` 未识别 `MacEvidence=`。
+- 绿灯：实现后，同一 diagnostics-only 回归通过。
+遗留问题：
+- 本轮只改 Windows 控制端文本解析，不主动刷新 Mac formal/readiness 证据。
+下一步建议：
+- 后续 Windows resume 上板出现 `MacEvidence=` 时，控制端和复制诊断都能把它当正向值守证据展示；仍按同段 warning/blocker 判断是否要继续排查。
+是否改了协议：否；只扩展本地文本解析。
+是否需要另一端配合：不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 恢复总览也能消费 Mac 端上板的干净正向 `Evidence=` 字段。
 完成内容：
 - `check-windows-resume-status --checkBoard` 新增 JSON `board.macEvidence`，从 Agent Link Board `/api/state` 或 fallback watch 文本提取干净 `Evidence=` / `evidence=`。

@@ -3354,13 +3354,13 @@ function parseMacEvidenceFieldLabels(text) {
   const labels = [];
   for (const segment of splitMacStatusSegments(text)) {
     if (
-      !/\bevidence\s*[:=]/i.test(segment) ||
+      !/\b(?:MacEvidence|Evidence)\s*[:=]/i.test(segment) ||
       /\bnode\s+scripts[\\/]+mac[\\/]+|\bscripts[\\/]+mac[\\/]+|\.mjs\b/i.test(segment) ||
       !isCleanMacStatusEvidenceSegment(segment)
     ) {
       continue;
     }
-    for (const match of segment.matchAll(/\bevidence\s*[:=]\s*([^;]+)/gi)) {
+    for (const match of segment.matchAll(/\b(?:MacEvidence|Evidence)\s*[:=]\s*([^;]+)/gi)) {
       const rawValues = String(match[1] || "")
         .replace(/\b(?:warnings?|blockers?|reason|suggestedAction|actionCommands)\s*[:=][\s\S]*$/i, "")
         .split(/[,|/]+|\s{2,}/)
