@@ -21,6 +21,35 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：给当前 `MacPowerHealth=warning` 增加一个只读、可复制的 Mac 电源值守预案入口。
+完成内容：
+- 新增 `scripts/mac/plan-mac-power-settings.mjs`：默认输出 `pmset -a sleep 0 displaysleep 0 womp 1 tcpkeepalive 1` 预览、`pmset -g custom` 复查和 `MacUnattendedStatus` 复查命令。
+- 支持 `--json` / `--boardSummary`，摘要稳定为 `MacPowerPlan=status=preview ... DryRunOnly`；显式拒绝执行式 `--apply`。
+- `check-mac-unattended-status` 的 JSON `commands.macPowerPlan` 与 `--boardSummary` 新增 `MacPowerPlan=`，让 `Mac Unattended` 行能直接复制这条只读预案。
+- 该入口不运行 `pmset`、不提权、不改系统、不认证、不请求或发送密码、不发 input/inject；真正改电源设置仍需用户现场确认后人工执行。
+修改文件：
+- `scripts/mac/plan-mac-power-settings.mjs`
+- `scripts/mac/test-mac-power-plan.mjs`
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-power-plan.mjs --timeoutMs 8000` 先失败在 helper 不存在；`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 12000` 先失败在帮助缺少 `commands.macPowerPlan`。
+- 绿灯：实现后两条回归均通过，覆盖 help、JSON、boardSummary、`--apply` 拒绝、`MacPowerPlan=` 接入和不泄密。
+遗留问题：
+- 本轮只提供安全预案，不实际修改系统电源设置；真实值守前仍需用户现场决定是否执行预览里的 `pmset` 命令，并复跑 `MacUnattendedStatus` / `MacHeartbeatOnce` 刷新证据。
+下一步建议：
+- Windows 端后续可选择消费 `MacPowerPlan=`，在 `MacPowerHealth=warning` 上下文里提示“Mac 电源预案命令已提供”；当前不需要 Windows 配合才能使用。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac formal E2E readiness 也能直接转述当前 `Mac Unattended` 的 `MacPowerHealth=` 电源细分风险。
 完成内容：
 - `check-mac-formal-e2e-status --json` 新增顶层 `macPowerHealth`，复用 `check-mac-resume-status` 已安全提取的 `resume.board.macPowerHealth`。
