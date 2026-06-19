@@ -250,6 +250,7 @@ function makeBoardSummary(report) {
   if (report.online) {
     return [
       `Mac client page online at ${report.url}; pid=${report.processId || "existing"}; title=${report.titleFound ? "ok" : "unexpected"}.`,
+      "Evidence=MacClientPageOnline.",
       "Next: run MacClientFormalChecklist before true Windows control.",
       `MacClientFormalChecklist=${formalChecklistCommand}.`,
       `MacClientFormalSmoke=${formalSmokeCommand}.`,

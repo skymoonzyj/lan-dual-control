@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac client 页面状态入口自己输出稳定页面在线证据。
+完成内容：
+- `start-mac-client --status --json/--boardSummary` 在本地 Mac client 页面在线时追加 `Evidence=MacClientPageOnline`。
+- 页面离线时不输出该正向证据标签，避免把 offline 摘要误当健康证据。
+- 只跑 `MacClientPage=` 时也能给 Windows resume / 控制端同一套“Mac client 页面在线”值守证据。
+修改文件：
+- `scripts/mac/start-mac-client.mjs`
+- `scripts/mac/test-mac-client-start-helper.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：先让 `test-mac-client-start-helper` 要求在线摘要带 `Evidence=MacClientPageOnline`，测试失败在 start board summary 缺少该标签。
+- 绿灯：实现后同一专项回归通过；已跑语法、Mac script help、diff check、冲突扫描和真实本地 `MacClientPage=` 摘要。
+遗留问题：
+- 本轮只增强本地页面状态摘要；不跑真实 Windows host 认证、媒体长测或输入注入。
+下一步建议：
+- Windows 端看到 `MacClientPage=... Evidence=MacClientPageOnline` 时可按页面在线值守证据处理；同段若出现 offline、warning 或 blocker 仍按风险处理。
+是否改了协议：否。
+是否需要另一端配合：不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac heartbeat 的干净在线摘要也输出稳定 Mac client 页面在线证据。
 完成内容：
 - `check-mac-heartbeat --json/--boardSummary` 在 heartbeat 自身 `status=ok`、`blockers=none warnings=none` 且 Mac client 页面在线时追加 `Evidence=MacClientPageOnline`。

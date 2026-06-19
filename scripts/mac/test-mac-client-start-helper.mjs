@@ -314,6 +314,7 @@ async function checkOfflineStatus(args) {
   assert(payload.ok === false, "offline payload should be ok=false");
   assert(payload.online === false, "offline payload should be online=false");
   assertIncludes(payload.boardSummary || "", "Mac client page offline", "offline board summary");
+  assertNotIncludes(payload.boardSummary || "", "Evidence=MacClientPageOnline", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientFormalChecklist=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientDiscoverWindows=", "offline board summary");
@@ -352,6 +353,7 @@ async function checkOfflineStatus(args) {
   const summaryLine = assertSingleLine(summary.stdout, "offline board summary stdout");
   assert(summary.status !== 0, "offline board summary should fail");
   assertIncludes(summaryLine, "Mac client page offline", "offline board summary stdout");
+  assertNotIncludes(summaryLine, "Evidence=MacClientPageOnline", "offline board summary stdout");
   assertIncludes(summaryLine, "MacClientFormalChecklist=", "offline board summary stdout");
   assertIncludes(summaryLine, "check-mac-client-formal-status.mjs", "offline board summary stdout");
   assertIncludes(summaryLine, "MacClientFormalSmoke=", "offline board summary stdout");
@@ -384,6 +386,7 @@ async function checkStartAndExisting(args) {
   assert(started.online === true, "started payload should be online=true");
   assert(started.processId, "started payload should include processId");
   assertIncludes(started.boardSummary || "", "Mac client page online", "start board summary");
+  assertIncludes(started.boardSummary || "", "Evidence=MacClientPageOnline", "start board summary");
   assertIncludes(started.boardSummary || "", "MacClientFormalChecklist=", "start board summary");
   assertIncludes(started.boardSummary || "", "MacClientFormalSmoke=", "start board summary");
   assertIncludes(started.boardSummary || "", "MacClientDiscoverWindows=", "start board summary");
@@ -423,6 +426,7 @@ async function checkStartAndExisting(args) {
     assert(status.status === 0, "online status should pass");
     assert(statusPayload.ok === true, "online status should be ok=true");
     assert(statusPayload.online === true, "online status should be online=true");
+    assertIncludes(statusPayload.boardSummary || "", "Evidence=MacClientPageOnline", "online status board summary");
     assertIncludes(statusPayload.boardSummary || "", "CopyDiagnostics=", "online status board summary");
     assertIncludes(statusPayload.boardSummary || "", "MacClientFormalChecklist=", "online status board summary");
     assertIncludes(statusPayload.boardSummary || "", "MacClientFormalSmoke=", "online status board summary");
@@ -459,6 +463,7 @@ async function checkStartAndExisting(args) {
     const summaryLine = assertSingleLine(summary.stdout, "online board summary stdout");
     assert(summary.status === 0, "online board summary should pass");
     assertIncludes(summaryLine, "Mac client page online", "online board summary stdout");
+    assertIncludes(summaryLine, "Evidence=MacClientPageOnline", "online board summary stdout");
     assertIncludes(summaryLine, "MacClientFormalChecklist=", "online board summary stdout");
     assertIncludes(summaryLine, "check-mac-client-formal-status.mjs", "online board summary stdout");
     assertIncludes(summaryLine, "MacClientFormalSmoke=", "online board summary stdout");
