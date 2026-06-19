@@ -185,6 +185,21 @@ function assertMacPowerPlanCommand(command, label) {
   assertNotIncludes(command, "inject", label);
 }
 
+function assertMacInputSafetyPlanCommand(command, label) {
+  assertIncludes(command, "scripts/mac/plan-mac-input-safety.mjs", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--apply", label);
+  assertNotIncludes(command, "sudo", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "--json", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function assertWindowsHostStatusCommand(command, label, expectedPort = "43770") {
   assertIncludes(command, "scripts/windows/start-windows-host.mjs", label);
   assertIncludes(command, "--status", label);
@@ -316,6 +331,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "runPlan.commands.macClientPromptPasswordSmoke", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.macClientBrowserSelfTest", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.macPowerPlanCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "runPlan.commands.macInputSafetyPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.macScriptHelp", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsHostStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "runPlan.commands.windowsReverseGrantStatus", `${script} ${flag}`);
@@ -386,6 +402,10 @@ function checkOfflineJson(args) {
     payload.runPlan?.commands?.macPowerPlanCommand || "",
     "offline runPlan Mac power plan command",
   );
+  assertMacInputSafetyPlanCommand(
+    payload.runPlan?.commands?.macInputSafetyPlanCommand || "",
+    "offline runPlan Mac input safety plan command",
+  );
   assertMacScriptHelpCommand(
     payload.runPlan?.commands?.macScriptHelp || "",
     "offline runPlan Mac script help command",
@@ -429,6 +449,11 @@ function checkOfflineJson(args) {
     (payload.boardSummary || "").split("MacPowerPlan=")[1]?.split(". ")[0] || "",
     "offline board summary Mac power plan command",
   );
+  assertIncludes(payload.boardSummary || "", "MacInputSafetyPlan=", "offline board summary");
+  assertMacInputSafetyPlanCommand(
+    (payload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
+    "offline board summary Mac input safety plan command",
+  );
   assertIncludes(payload.boardSummary || "", "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "allow-windows-reverse-control.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "RunPlan:", "offline board summary");
@@ -461,6 +486,8 @@ function checkAllowOfflineWarnings(args) {
   assertMatches(payload.boardSummary || "", /warnings=[^.]*windows-host/, "allow offline board summary warnings");
   assertReverseGrantBoardSummary(payload.boardSummary || "", "allow offline board summary");
   assertSecureAuthPath(payload.boardSummary || "", "allow offline board summary secure auth path", "43770", { expectBoardLabel: true });
+  assertMacInputSafetyPlanCommand(payload.runPlan?.commands?.macInputSafetyPlanCommand || "", "allow offline runPlan Mac input safety plan command");
+  assertIncludes(payload.boardSummary || "", "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs", "allow offline board summary");
   assertMacScriptHelpCommand(payload.runPlan?.commands?.macScriptHelp || "", "allow offline runPlan Mac script help command");
   assertIncludes(payload.boardSummary || "", "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "allow offline board summary");
   assertMacClientPromptPasswordSmokeCommand(
@@ -509,6 +536,7 @@ function checkBoardSummarySecretFree(args) {
     "43770",
     { discover: true },
   );
+  assertIncludes(result.stdout, "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs", "board summary");
   assertIncludes(result.stdout, "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "board summary");
   assertIncludes(result.stdout, "Reverse rehearsal:", "board summary");
   assertIncludes(result.stdout, "ReverseGrantCopy=", "board summary");
@@ -560,6 +588,14 @@ function checkHumanRunPlan(args) {
   assertMacPowerPlanCommand(
     String(macPowerPlanLine || "").slice("- Mac power settings dry-run plan: ".length),
     "human runPlan Mac power plan",
+  );
+  assertIncludes(result.stdout, "Mac input safety plan:", "human runPlan");
+  const macInputSafetyPlanLine = String(result.stdout)
+    .split(/\r?\n/)
+    .find((line) => line.startsWith("- Mac input safety plan: "));
+  assertMacInputSafetyPlanCommand(
+    String(macInputSafetyPlanLine || "").slice("- Mac input safety plan: ".length),
+    "human runPlan Mac input safety plan",
   );
   assertIncludes(result.stdout, "Mac script help safety check:", "human runPlan");
   const macScriptHelpLine = String(result.stdout)
@@ -843,6 +879,10 @@ async function checkReadyShape(args) {
         payload.runPlan?.commands?.macPowerPlanCommand || "",
         "ready runPlan Mac power plan command",
       );
+      assertMacInputSafetyPlanCommand(
+        payload.runPlan?.commands?.macInputSafetyPlanCommand || "",
+        "ready runPlan Mac input safety plan command",
+      );
       assertMacScriptHelpCommand(
         payload.runPlan?.commands?.macScriptHelp || "",
         "ready runPlan Mac script help command",
@@ -902,6 +942,11 @@ async function checkReadyShape(args) {
         (payload.boardSummary || "").split("MacPowerPlan=")[1]?.split(". ")[0] || "",
         "ready board summary Mac power plan command",
       );
+      assertIncludes(payload.boardSummary || "", "MacInputSafetyPlan=", "ready board summary");
+      assertMacInputSafetyPlanCommand(
+        (payload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
+        "ready board summary Mac input safety plan command",
+      );
       assertIncludes(payload.boardSummary || "", "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "ready board summary");
       assertIncludes(payload.boardSummary || "", "ReverseGrantCopy=", "ready board summary");
       assertReverseGrantBoardSummary(payload.boardSummary || "", "ready board summary", String(windowsPort));
@@ -954,6 +999,8 @@ async function checkDiscoverSelectsWindowsHost(args) {
       assertIncludes(payload.boardSummary || "", `MacClientFormalChecklist=node scripts/mac/check-mac-client-formal-status.mjs --host 127.0.0.1 --port ${windowsPort} --boardSummary`, "discover board summary");
       assertIncludes(payload.boardSummary || "", `MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --host 127.0.0.1 --port ${windowsPort} --ensureClient --promptPassword --boardSummary`, "discover board summary");
       assertIncludes(payload.boardSummary || "", "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs", "discover board summary");
+      assertMacInputSafetyPlanCommand(payload.runPlan?.commands?.macInputSafetyPlanCommand || "", "discover runPlan Mac input safety plan command");
+      assertIncludes(payload.boardSummary || "", "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs", "discover board summary");
       assertIncludes(payload.boardSummary || "", "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "discover board summary");
       assertNoSecretLikeText(output, "discover formal checklist output");
     });

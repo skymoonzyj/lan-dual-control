@@ -128,6 +128,11 @@ Machine-readable JSON fields:
                                   It checks Mac-side helper commands and
                                   board summaries without passwords, calls,
                                   input events, or inject.
+  commands.macInputSafetyPlan    Secret-free Mac input safety planner command.
+                                  It explains the log-mode default and the
+                                  user-visible checks required before true
+                                  input without applying settings or sending
+                                  input.
   commands.macUnattendedSendStatus
                                   Secret-free command to refresh the independent
                                   Mac Unattended Agent Link Board status when
@@ -567,6 +572,10 @@ function makeMacScriptHelpCommand() {
   return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
 
+function makeMacInputSafetyPlanCommand() {
+  return "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
+}
+
 function makeMacUnattendedSendStatusCommand(args) {
   const parts = [
     "node scripts/mac/check-mac-unattended-status.mjs",
@@ -957,6 +966,7 @@ function makeBoardSummary(report) {
       `MacClientFormalSmoke=${report.commands?.macClientFormalSmoke || makeMacClientFormalSmokeCommand(report.args)}.`,
       ...(report.commands?.promptPasswordSmoke ? [`MacClientPromptPasswordSmoke=${report.commands.promptPasswordSmoke}.`] : []),
       `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
+      `MacInputSafetyPlan=${report.commands?.macInputSafetyPlan || makeMacInputSafetyPlanCommand()}.`,
       ...macUnattendedParts,
       ...reverseGrantParts,
       ...secureAuthParts,
@@ -983,6 +993,7 @@ function makeBoardSummary(report) {
       ...(report.commands?.promptPasswordSmoke ? [`MacClientPromptPasswordSmoke=${report.commands.promptPasswordSmoke}.`] : []),
       `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
       `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
+      `MacInputSafetyPlan=${report.commands?.macInputSafetyPlan || makeMacInputSafetyPlanCommand()}.`,
       ...macUnattendedParts,
       `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
       ...reverseGrantParts,
@@ -998,6 +1009,7 @@ function makeBoardSummary(report) {
     ...(report.commands?.promptPasswordSmoke ? [`MacClientPromptPasswordSmoke=${report.commands.promptPasswordSmoke}.`] : []),
     `MacClientBrowserSelfTest=${report.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
     `MacScriptHelp=${report.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
+    `MacInputSafetyPlan=${report.commands?.macInputSafetyPlan || makeMacInputSafetyPlanCommand()}.`,
     ...macUnattendedParts,
     `ReverseGrantCopy=${report.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
     ...reverseGrantParts,
@@ -1125,6 +1137,7 @@ function makeReport(args, preflight) {
       promptPasswordSmoke: makePromptPasswordSmokeCommand(args),
       macClientBrowserSelfTest: makeMacClientBrowserSelfTestCommand(),
       macScriptHelp: makeMacScriptHelpCommand(),
+      macInputSafetyPlan: makeMacInputSafetyPlanCommand(),
       macUnattendedSendStatus: makeMacUnattendedSendStatusCommand(args),
       windowsReverseGrantStatus: makeWindowsReverseGrantCommand(args, "status"),
       windowsOpenOneTimeReverseGrant: makeWindowsReverseGrantCommand(args, "grant"),

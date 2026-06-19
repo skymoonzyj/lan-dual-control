@@ -153,6 +153,12 @@ JSON output:
                                   planner. It previews pmset changes and
                                   follow-up checks without applying settings,
                                   prompting, authenticating, or sending input.
+  runPlan.commands.macInputSafetyPlanCommand
+                                  Secret-free Mac input safety planner. It
+                                  explains the log-mode default, required
+                                  user-visible checks before true input, and
+                                  follow-up commands without applying system
+                                  changes or sending input.
   runPlan.commands.macScriptHelp
                                   Unified side-effect-free Mac script help
                                   self-check command.
@@ -1000,6 +1006,10 @@ function makeMacPowerPlanCommand() {
   return "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary";
 }
 
+function makeMacInputSafetyPlanCommand() {
+  return "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";
+}
+
 function makeMacScriptHelpCommand() {
   return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
@@ -1295,6 +1305,7 @@ function makeRunPlan(report, args) {
       macClientPromptPasswordSmoke: makePromptPasswordSmokeCommand(report, args),
       macClientBrowserSelfTest: makeMacClientBrowserSelfTestCommand(),
       macPowerPlanCommand: makeMacPowerPlanCommand(),
+      macInputSafetyPlanCommand: makeMacInputSafetyPlanCommand(),
       macScriptHelp: makeMacScriptHelpCommand(),
       browserSmoke: browserTestCommand,
       windowsReverseGrantStatus: makeWindowsReverseGrantCommand(report, args, "status"),
@@ -1396,6 +1407,7 @@ function makeBoardSummary(report) {
     "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics.",
     `MacClientBrowserSelfTest=${report.runPlan?.commands?.macClientBrowserSelfTest || makeMacClientBrowserSelfTestCommand()}.`,
     `MacPowerPlan=${report.runPlan?.commands?.macPowerPlanCommand || makeMacPowerPlanCommand()}.`,
+    `MacInputSafetyPlan=${report.runPlan?.commands?.macInputSafetyPlanCommand || makeMacInputSafetyPlanCommand()}.`,
     ...(macUnattendedFreshnessLine ? [macUnattendedFreshnessLine] : []),
     `MacScriptHelp=${report.runPlan?.commands?.macScriptHelp || makeMacScriptHelpCommand()}.`,
     `ReverseGrantCopy=${report.runPlan?.commands?.reverseGrantCopyAction || makeReverseGrantCopyAction()}.`,
@@ -1586,6 +1598,9 @@ function printRunPlan(runPlan) {
   }
   if (runPlan.commands?.macPowerPlanCommand) {
     console.log(`- Mac power settings dry-run plan: ${runPlan.commands.macPowerPlanCommand}`);
+  }
+  if (runPlan.commands?.macInputSafetyPlanCommand) {
+    console.log(`- Mac input safety plan: ${runPlan.commands.macInputSafetyPlanCommand}`);
   }
   if (runPlan.macUnattendedFreshness) {
     console.log(`- Mac unattended freshness: ${formatMacUnattendedFreshnessSummary(runPlan.macUnattendedFreshness)}`);

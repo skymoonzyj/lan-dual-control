@@ -115,6 +115,21 @@ function assertMacScriptHelpCommand(command, label) {
   assertNotIncludes(command, "inject", label);
 }
 
+function assertMacInputSafetyPlanCommand(command, label) {
+  assertIncludes(command, "node scripts/mac/plan-mac-input-safety.mjs", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--apply", label);
+  assertNotIncludes(command, "sudo", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--useEnvPassword", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--forceCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function assertMacUnattendedSendStatusCommand(command, label, expectedServer = "") {
   assertIncludes(command, "node scripts/mac/check-mac-unattended-status.mjs", label);
   assertIncludes(command, "--host 127.0.0.1", label);
@@ -436,6 +451,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.promptPasswordSmoke", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientBrowserSelfTest", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macScriptHelp", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macInputSafetyPlan", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macUnattendedSendStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "macUnattendedFreshness", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.windowsReverseGrantStatus", `${script} ${flag}`);
@@ -551,6 +567,10 @@ async function checkPreflightAndDryRun(args) {
           preflightPayload.commands?.macScriptHelp || "",
           "preflight Mac script help command",
         );
+        assertMacInputSafetyPlanCommand(
+          preflightPayload.commands?.macInputSafetyPlan || "",
+          "preflight Mac input safety plan command",
+        );
         assert(preflightPayload.commands?.windowsReverseGrantStatus?.includes(`-Port ${windowsPort} -Status -BoardSummary`), "preflight should expose recommended Windows PowerShell reverse grant status command");
         assert(preflightPayload.commands?.windowsOpenOneTimeReverseGrant?.includes(`-Port ${windowsPort} -Grant -DurationMs 30000 -BoardSummary`), "preflight should expose recommended Windows PowerShell one-time grant command");
         assert(preflightPayload.commands?.windowsReverseGrantStatusNodeFallback?.includes(`--port ${windowsPort} --status --boardSummary`), "preflight should expose Windows reverse grant Node fallback command");
@@ -595,6 +615,10 @@ async function checkPreflightAndDryRun(args) {
         assertMacScriptHelpCommand(
           (preflightPayload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
           "preflight board summary Mac script help command",
+        );
+        assertMacInputSafetyPlanCommand(
+          (preflightPayload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
+          "preflight board summary Mac input safety plan command",
         );
         assertIncludes(preflightPayload.boardSummary || "", "ReverseGrantCopy=", "preflight board summary");
         assertReverseGrantBoardSummary(preflightPayload.boardSummary || "", "preflight board summary", windowsPort);
@@ -641,6 +665,10 @@ async function checkPreflightAndDryRun(args) {
         assertMacScriptHelpCommand(
           (sendCallPayload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
           "sendCall board summary Mac script help command",
+        );
+        assertMacInputSafetyPlanCommand(
+          (sendCallPayload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
+          "sendCall board summary Mac input safety plan command",
         );
         assertIncludes(sendCallPayload.boardSummary || "", "ReverseGrantCopy=", "sendCall board summary");
         assertReverseGrantBoardSummary(sendCallPayload.boardSummary || "", "sendCall board summary", windowsPort);
@@ -702,6 +730,10 @@ async function checkPreflightAndDryRun(args) {
         dryRunPayload.commands?.macScriptHelp || "",
         "dryRun Mac script help command",
       );
+      assertMacInputSafetyPlanCommand(
+        dryRunPayload.commands?.macInputSafetyPlan || "",
+        "dryRun Mac input safety plan command",
+      );
       assert(dryRunPayload.commands?.windowsReverseGrantStatus?.includes(`-Port ${windowsPort} -Status -BoardSummary`), "dryRun should expose recommended Windows PowerShell reverse grant status command");
       assert(dryRunPayload.commands?.windowsOpenOneTimeReverseGrant?.includes(`-Port ${windowsPort} -Grant -DurationMs 30000 -BoardSummary`), "dryRun should expose recommended Windows PowerShell one-time grant command");
       assert(dryRunPayload.commands?.windowsReverseGrantStatusNodeFallback?.includes(`--port ${windowsPort} --status --boardSummary`), "dryRun should expose Windows reverse grant Node fallback command");
@@ -720,6 +752,10 @@ async function checkPreflightAndDryRun(args) {
       assertMacScriptHelpCommand(
         (dryRunPayload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
         "dryRun board summary Mac script help command",
+      );
+      assertMacInputSafetyPlanCommand(
+        (dryRunPayload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
+        "dryRun board summary Mac input safety plan command",
       );
       assertReverseGrantBoardSummary(dryRunPayload.boardSummary || "", "dryRun board summary", windowsPort);
       assertNotIncludes(dryRunPayload.commands?.browserSmoke || "", secret, "dryRun command");
@@ -795,6 +831,10 @@ async function checkDiscoverPreflight(args) {
         payload.commands?.macScriptHelp || "",
         "discover preflight Mac script help command",
       );
+      assertMacInputSafetyPlanCommand(
+        payload.commands?.macInputSafetyPlan || "",
+        "discover preflight Mac input safety plan command",
+      );
       assert(payload.commands?.windowsOpenOneTimeReverseGrant?.includes(`-Port ${windowsPort} -Grant -DurationMs 30000 -BoardSummary`), "discover preflight should use selected port for recommended Windows PowerShell grant helper");
       assert(payload.commands?.windowsOpenOneTimeReverseGrantNodeFallback?.includes(`--port ${windowsPort} --grant --durationMs 30000 --boardSummary`), "discover preflight should use selected port for Windows grant helper fallback");
       assertSecureAuthPath(payload.commands?.secureAuthPath || "", "discover preflight secure auth path", windowsPort);
@@ -827,6 +867,10 @@ async function checkDiscoverPreflight(args) {
       assertMacScriptHelpCommand(
         (payload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
         "discover preflight board summary Mac script help command",
+      );
+      assertMacInputSafetyPlanCommand(
+        (payload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
+        "discover preflight board summary Mac input safety plan command",
       );
       assertIncludes(payload.boardSummary || "", "ReverseGrantCopy=", "discover preflight board summary");
       assertReverseGrantBoardSummary(payload.boardSummary || "", "discover preflight board summary", windowsPort);
@@ -877,6 +921,14 @@ async function checkEnsureClientPreflight(args) {
     assertMacScriptHelpCommand(
       (payload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
       "ensure client board summary Mac script help command",
+    );
+    assertMacInputSafetyPlanCommand(
+      payload.commands?.macInputSafetyPlan || "",
+      "ensure client Mac input safety plan command",
+    );
+    assertMacInputSafetyPlanCommand(
+      (payload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
+      "ensure client board summary Mac input safety plan command",
     );
     assertReverseGrantBoardSummary(payload.boardSummary || "", "ensure client board summary", windowsPort);
     assertSecureAuthPath(payload.commands?.secureAuthPath || "", "ensure client secure auth path", windowsPort);
@@ -945,6 +997,14 @@ async function checkDiscoverSendCall(args) {
         assertMacScriptHelpCommand(
           (payload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
           "discover sendCall board summary Mac script help command",
+        );
+        assertMacInputSafetyPlanCommand(
+          payload.commands?.macInputSafetyPlan || "",
+          "discover sendCall Mac input safety plan command",
+        );
+        assertMacInputSafetyPlanCommand(
+          (payload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
+          "discover sendCall board summary Mac input safety plan command",
         );
         assertIncludes(payload.boardSummary || "", "ManualChecklist=connection/video/audio/clipboard/input_ack/diagnostics", "discover sendCall board summary");
         assertIncludes(payload.boardSummary || "", "ReverseGrantCopy=", "discover sendCall board summary");
@@ -1027,12 +1087,20 @@ async function checkDiscoverFailureNoPasswordPrompt(args) {
       payload.commands?.macScriptHelp || "",
       "discover failure Mac script help command",
     );
+    assertMacInputSafetyPlanCommand(
+      payload.commands?.macInputSafetyPlan || "",
+      "discover failure Mac input safety plan command",
+    );
     assertIncludes(payload.boardSummary || "", "MacClientFormalSmoke=", "discover failure board summary");
     assertIncludes(payload.boardSummary || "", "warnings=windows-host", "discover failure board summary");
     assertNotIncludes(payload.boardSummary || "", "blockers=none warnings=none", "discover failure board summary");
     assertMacScriptHelpCommand(
       (payload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
       "discover failure board summary Mac script help command",
+    );
+    assertMacInputSafetyPlanCommand(
+      (payload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
+      "discover failure board summary Mac input safety plan command",
     );
   }, boardState);
   print("OK", "Discovery failure exits before password prompt and keeps LAN risk hints");
@@ -1067,9 +1135,17 @@ async function checkPasswordSafety(args) {
         noPasswordPayload.commands?.macScriptHelp || "",
         "no password Mac script help command",
       );
+      assertMacInputSafetyPlanCommand(
+        noPasswordPayload.commands?.macInputSafetyPlan || "",
+        "no password Mac input safety plan command",
+      );
       assertMacScriptHelpCommand(
         (noPasswordPayload.boardSummary || "").split("MacScriptHelp=")[1]?.split(". ")[0] || "",
         "no password board summary Mac script help command",
+      );
+      assertMacInputSafetyPlanCommand(
+        (noPasswordPayload.boardSummary || "").split("MacInputSafetyPlan=")[1]?.split(". ")[0] || "",
+        "no password board summary Mac input safety plan command",
       );
       assertIncludes(noPasswordPayload.boardSummary || "", "ReverseGrantCopy=", "no password board summary");
       assertReverseGrantBoardSummary(noPasswordPayload.boardSummary || "", "no password board summary", windowsPort);
