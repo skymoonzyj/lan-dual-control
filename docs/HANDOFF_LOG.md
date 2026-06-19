@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 `MacHeartbeat=` 同屏说明当前 `Mac Unattended` / `MacPowerHealth` 证据是否新鲜。
+完成内容：
+- `check-mac-heartbeat --checkBoard --json/--boardSummary` 新增 JSON `board.macUnattendedFreshness` 和摘要 `MacUnattendedFreshness=fresh|stale checkedAgeMs=<毫秒> thresholdMs=600000 checkedAt=<时间> source=MacUnattendedHealth|MacPowerHealth`。
+- 新字段只从安全解析到的 `MacUnattendedHealth=` 或 `MacPowerHealth=` 的 `checkedAt` 派生，不回显通讯板原始长文本；`stale` 只表示值守/电源证据旧了，建议先跑同屏 `MacUnattendedSendStatus=` 刷新，不代表 heartbeat 本身失败。
+- 测试覆盖 help、JSON、boardSummary、stale 判断、安全边界和风险文本不提升：不接受带 `--password` / token 的伪 MacPowerHealth。
+- 本轮只补只读 freshness 字段，不运行 `pmset`、不提权、不改系统、不写 plist、不加载 `launchctl`、不认证、不请求或发送密码、不发 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` 先失败在 help 缺 `board.macUnattendedFreshness`。
+- 绿灯：实现后同一专项回归通过。
+- 完整验证和推送状态见本轮提交记录。
+遗留问题：
+- 真实 `MacPowerHealth` / `MacUnattendedHealth` 仍显示系统/显示器睡眠和 LaunchAgent 未加载风险；需要用户现场确认后人工执行 `pmset` / `launchctl` 再刷新证据。
+下一步建议：
+- 如果下一屏看到 `MacUnattendedFreshness=stale`，先运行 `MacUnattendedSendStatus=` 刷新独立值守状态，再判断是否进入真实系统设置/LaunchAgent 加载流程。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 `MacHeartbeat=` 第一屏也直接给出安全 `MacLaunchAgentPlan=` 值守加载规划入口。
 完成内容：
 - `check-mac-heartbeat` JSON `commands` 新增 `macLaunchAgentPlanCommand`，指向 `node scripts/mac/install-mac-host-launch-agent.mjs --launchAgentPath <用户 LaunchAgent plist> --port <当前端口> --boardSummary`。
