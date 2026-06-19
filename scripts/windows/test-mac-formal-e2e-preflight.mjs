@@ -699,6 +699,8 @@ async function testFormalPromptExplainsPasswordWait(args) {
     ], args);
     assert(result.exitCode !== 0, "formal prompt should fail in a non-interactive test terminal");
     assertIncludes(result.stdout, "等待隐藏密码输入", "formal password prompt hint");
+    assertIncludes(result.stdout, "当前终端窗口", "formal password prompt hint");
+    assertIncludes(result.stdout, "按 Enter", "formal password prompt hint");
     assertIncludes(result.stdout, "不是卡住", "formal password prompt hint");
     assertIncludes(result.stderr, "--promptPassword requires an interactive terminal", "formal password prompt hint");
     assertNotIncludes(result.stdout + result.stderr, "test-password", "formal password prompt hint");
@@ -715,6 +717,8 @@ async function testBrowserPromptExplainsPasswordWait(args) {
   ], args);
   assert(result.exitCode !== 0, "browser prompt should fail in a non-interactive test terminal");
   assertIncludes(result.stdout, "等待隐藏密码输入", "browser password prompt hint");
+  assertIncludes(result.stdout, "当前终端窗口", "browser password prompt hint");
+  assertIncludes(result.stdout, "按 Enter", "browser password prompt hint");
   assertIncludes(result.stdout, "不是卡住", "browser password prompt hint");
   assertIncludes(result.stderr, "--promptPassword requires an interactive terminal", "browser password prompt hint");
   print("OK", "Browser runner explains password wait before interactive prompt");
