@@ -21,6 +21,31 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac resume 摘要也直接暴露刷新独立 Mac Unattended 状态的安全入口。
+完成内容：
+- `check-mac-resume-status --json` 新增 `commands.macUnattendedSendStatusCommand`，指向 `check-mac-unattended-status --server http://192.168.31.68:17888 --sendStatus --boardSummary`。
+- `--boardSummary` 新增 `MacUnattendedSendStatus=`，让只看恢复总览时也能复制命令刷新独立 `Mac Unattended` 值守状态；命令固定使用默认 Agent Link Board，避免回显测试/自定义 server 里的 secret-like 文本。
+- resume 本身仍只读：不自动运行该命令、不认证、不请求或发送密码、不发 input/inject。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增断言后，`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000` 先失败在帮助文档缺少 `MacUnattendedSendStatus`。
+- 绿灯：实现后同一回归通过，覆盖 help、offline/online JSON、boardSummary、安全命令形状，以及不回显 `super-secret-resume-password` / `fake-board-token`。
+遗留问题：
+- 本轮只补 resume 可复制入口，不让 resume 自动刷新 `Mac Unattended`；真实无人值守仍需现场加载 LaunchAgent 并复查电源/息屏策略。
+下一步建议：
+- Windows 端或人工如果只看到 `MacResumeStatus=`，也可以复制 `MacUnattendedSendStatus=` 让 Mac 端刷新独立值守状态。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac heartbeat 摘要直接暴露刷新独立 Mac Unattended 状态的安全入口。
 完成内容：
 - `check-mac-heartbeat --json` 新增 `commands.macUnattendedSendStatusCommand`，指向 `check-mac-unattended-status --sendStatus --boardSummary`，并沿用当前 Agent Link Board `--server`。
