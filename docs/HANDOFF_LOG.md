@@ -49,6 +49,36 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 N1 视频低延迟队列治理
+开发端：Windows Codex
+本轮目标：按无人值守清单 N1，增强 Windows 控制端视频低延迟诊断和 H.264 本机解码队列治理。
+完成内容：
+- 新增 H.264 本机解码队列治理：队列超过 8 帧或最旧帧超过 450ms 时关闭旧 decoder、清空旧队列；当前帧是 delta 时丢弃并等待下一关键帧，避免继续播放过期画面。
+- 新增 `videoDecoderQueueMs`、`videoDroppedStaleFrames`、`videoLastDropReason`，复制/导出诊断“现场视频”会显示本机队列毫秒、解码延迟、本地过期丢帧和最近原因。
+- 浏览器回归新增 `H.264 latency queue guard`，先红灯确认 helper/导出字段缺失，再绿灯确认队列 flush、等待关键帧和诊断字段。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --clientPort 5207 --debugPort 9347` 先失败，证据为 `missing H.264 latency queue guard helpers`。
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --clientPort 5209 --debugPort 9349` 补关键帧场景后先失败，证据为 `keyPreserved=false`、`droppedStale=0`、`keyExportText` 丢失本地过期丢帧原因。
+- 绿灯：`node --check apps/windows-client/app.js`
+- 绿灯：`node --check scripts/windows/test-windows-client-browser.mjs`
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --clientPort 5213 --debugPort 9353`，输出 `H.264 latency queue guard: dropped=9 reason=queue-overflow-wait-keyframe` 和 `Diagnostics-only browser checks passed`。
+遗留问题：
+- 这是 Windows 控制端本机队列治理和诊断导出；真实观感仍需下一次用户连接 Mac 后用“现场视频”数据确认。
+下一步建议：
+- 若用户仍反馈画面不像 60Hz 或拖影卡顿，先复制诊断，看“本机队列 / 解码延迟 / 本地过期丢帧 / 原因”与 Mac 端媒体基线是否同步异常。
+是否改了协议：否。
+是否需要另一端配合：真实体验复测时需要 Mac host 在线；本轮实现和验证不需要 Mac 端或用户授权。
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 N2 音频队列治理
 开发端：Windows Codex
 本轮目标：按夜间/无人值守清单 N2，完善 Windows WebAudio 队列治理，避免队列过深时继续播放旧音频。

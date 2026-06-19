@@ -158,6 +158,8 @@ const defaultHostDiagnosticsText = "诊断：等待连接。";
 const audioInitialBufferSeconds = 0.08;
 const audioMinimumBufferSeconds = 0.07;
 const audioMaximumQueuedSeconds = 0.45;
+const h264MaximumQueuedFrames = 8;
+const h264MaximumQueueAgeMs = 450;
 const audioStatusRenderIntervalMs = 140;
 const displayOptionDefaults = {
   resolution: "1920x1080",
@@ -417,6 +419,8 @@ const videoDecoderStatusLabels = {
   configuring: "初始化",
   configured: "已就绪",
   decoding: "解码中",
+  "waiting-keyframe": "等待关键帧",
+  resyncing: "重同步",
   rendering: "已绘制",
   error: "解码错误",
   fallback: "JPEG 回退",
@@ -528,6 +532,9 @@ const state = {
   h264DecoderStatus: "idle",
   h264DecoderLastError: "",
   h264DecoderLatencyMs: 0,
+  videoDecoderQueueMs: 0,
+  videoDroppedStaleFrames: 0,
+  videoLastDropReason: "",
   h264DecoderErrorCount: 0,
   h264DecoderWarned: false,
   h264DecoderQueue: [],
@@ -625,6 +632,9 @@ const state = {
     videoDecoderQueue: 0,
     h264DecodedFrames: 0,
     h264DecoderLatencyMs: 0,
+    videoDecoderQueueMs: 0,
+    videoDroppedStaleFrames: 0,
+    videoLastDropReason: "",
     h264FallbackReason: "",
     streamFallbackReason: "",
     maxScreenFps: null,
@@ -838,6 +848,9 @@ function getEmptyHostDiagnostics() {
     videoDecoderQueue: 0,
     h264DecodedFrames: 0,
     h264DecoderLatencyMs: 0,
+    videoDecoderQueueMs: 0,
+    videoDroppedStaleFrames: 0,
+    videoLastDropReason: "",
     h264FallbackReason: "",
     streamFallbackReason: "",
     maxScreenFps: null,
@@ -1101,7 +1114,10 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   const decodedFrames = Number(diagnostics.h264DecodedFrames);
   const errors = Number(diagnostics.videoDecoderErrors);
   const queue = Number(diagnostics.videoDecoderQueue);
+  const queueMs = Number(diagnostics.videoDecoderQueueMs);
   const latency = Number(diagnostics.h264DecoderLatencyMs);
+  const droppedStaleFrames = Number(diagnostics.videoDroppedStaleFrames);
+  const lastDropReason = String(diagnostics.videoLastDropReason || "").trim();
   const parts = [status, codec].filter(Boolean);
 
   if (Number.isFinite(decodedFrames) && decodedFrames > 0) {
@@ -1110,8 +1126,17 @@ function formatVideoDecoderDiagnostics(diagnostics) {
   if (Number.isFinite(queue) && queue > 0) {
     parts.push(`队列 ${queue}`);
   }
+  if (Number.isFinite(queueMs) && queueMs > 0) {
+    parts.push(`队列 ${Math.round(queueMs)}ms`);
+  }
   if (Number.isFinite(latency) && latency > 0) {
     parts.push(`解码 ${Math.round(latency)}ms`);
+  }
+  if (Number.isFinite(droppedStaleFrames) && droppedStaleFrames > 0) {
+    parts.push(`本机丢旧帧 ${droppedStaleFrames}`);
+  }
+  if (lastDropReason) {
+    parts.push(`原因 ${lastDropReason}`);
   }
   if (Number.isFinite(errors) && errors > 0) {
     parts.push(`错误 ${errors}`);
@@ -2860,6 +2885,9 @@ function resetVideoDecoder({ resetFallback = false } = {}) {
   state.h264DecoderStatus = "idle";
   state.h264DecoderLastError = "";
   state.h264DecoderLatencyMs = 0;
+  state.videoDecoderQueueMs = 0;
+  state.videoDroppedStaleFrames = 0;
+  state.videoLastDropReason = "";
   state.h264DecoderErrorCount = 0;
   state.h264DecoderWarned = false;
   state.h264DecoderQueue = [];
@@ -4362,7 +4390,15 @@ function getVideoPerformanceExportStatus() {
   const actual = Number(state.actualVideoFps) || 0;
   const frameCount = Number(state.videoFrames) || 0;
   const droppedFrames = Number(state.hostDiagnostics?.droppedFrames) || 0;
+  const decoderQueueMetrics = getH264DecoderQueueMetrics();
   const decoderQueue = Number(state.h264DecoderQueue?.length ?? state.hostDiagnostics?.videoDecoderQueue) || 0;
+  const decoderQueueMs = Math.max(
+    Number(decoderQueueMetrics.oldestAgeMs) || 0,
+    Number(state.videoDecoderQueueMs || state.hostDiagnostics?.videoDecoderQueueMs) || 0,
+  );
+  const decoderLatencyMs = Number(state.h264DecoderLatencyMs || state.hostDiagnostics?.h264DecoderLatencyMs) || 0;
+  const staleDrops = Number(state.videoDroppedStaleFrames || state.hostDiagnostics?.videoDroppedStaleFrames) || 0;
+  const dropReason = String(state.videoLastDropReason || state.hostDiagnostics?.videoLastDropReason || "").trim();
   const decoderStatus = state.hostDiagnostics?.videoDecoderStatus || state.h264DecoderStatus || "";
   const { sampleCount, averageGapMs, maxGapMs } = getVideoFrameGapStats();
   const parts = [];
@@ -4378,6 +4414,10 @@ function getVideoPerformanceExportStatus() {
   parts.push(`帧 ${frameCount}`);
   if (droppedFrames > 0) parts.push(`远端丢帧 ${droppedFrames}`);
   if (decoderQueue > 0) parts.push(`解码队列 ${decoderQueue}`);
+  if (decoderQueueMs > 0) parts.push(`本机队列 ${Math.round(decoderQueueMs)} ms`);
+  if (decoderLatencyMs > 0) parts.push(`解码延迟 ${Math.round(decoderLatencyMs)} ms`);
+  if (staleDrops > 0) parts.push(`本地过期丢帧 ${staleDrops}`);
+  if (dropReason) parts.push(`原因 ${dropReason}`);
   if (decoderStatus && decoderStatus !== "idle") parts.push(`解码 ${labelFromMap(decoderStatus, videoDecoderStatusLabels)}`);
   return parts.join(" · ");
 }
@@ -8037,8 +8077,100 @@ function updateH264DecoderDiagnostics(extra = {}) {
     videoDecoderQueue: state.h264DecoderQueue.length,
     h264DecodedFrames: state.h264DecodedFrames,
     h264DecoderLatencyMs: state.h264DecoderLatencyMs,
+    videoDecoderQueueMs: state.videoDecoderQueueMs,
+    videoDroppedStaleFrames: state.videoDroppedStaleFrames,
+    videoLastDropReason: state.videoLastDropReason,
     h264FallbackReason: state.h264FallbackReason,
     ...extra,
+  });
+}
+
+function getH264DecoderQueueMetrics(now = performance.now()) {
+  const queue = Array.isArray(state.h264DecoderQueue) ? state.h264DecoderQueue : [];
+  const queuedAtValues = queue
+    .map((item) => Number(item?.queuedAt))
+    .filter((value) => Number.isFinite(value));
+  if (!queuedAtValues.length) {
+    return { queueLength: queue.length, oldestAgeMs: 0, newestAgeMs: 0 };
+  }
+
+  const oldestQueuedAt = Math.min(...queuedAtValues);
+  const newestQueuedAt = Math.max(...queuedAtValues);
+  return {
+    queueLength: queue.length,
+    oldestAgeMs: Math.max(0, Math.round(Number(now) - oldestQueuedAt)),
+    newestAgeMs: Math.max(0, Math.round(Number(now) - newestQueuedAt)),
+  };
+}
+
+function shouldResyncH264DecoderQueue(now = performance.now()) {
+  const metrics = getH264DecoderQueueMetrics(now);
+  return (
+    metrics.queueLength > h264MaximumQueuedFrames ||
+    metrics.oldestAgeMs > h264MaximumQueueAgeMs
+  );
+}
+
+function closeH264DecoderForLatencyResync() {
+  if (state.h264Decoder && state.h264Decoder.state !== "closed") {
+    try {
+      state.h264Decoder.close();
+    } catch {
+      // Decoder latency resync is best-effort; the next key frame reconfigures it.
+    }
+  }
+}
+
+function resyncH264DecoderQueueForLatency({
+  isKeyFrame = false,
+  frameId = "",
+  now = performance.now(),
+  reason = "queue-overflow-wait-keyframe",
+} = {}) {
+  const metrics = getH264DecoderQueueMetrics(now);
+  const queuedDrops = metrics.queueLength;
+  const currentFrameDrop = isKeyFrame ? 0 : 1;
+  const droppedFrames = queuedDrops + currentFrameDrop;
+  if (droppedFrames <= 0) {
+    return { dropFrame: false, droppedFrames: 0, queueMs: metrics.oldestAgeMs, reason };
+  }
+
+  closeH264DecoderForLatencyResync();
+  state.h264Decoder = null;
+  state.h264DecoderKey = "";
+  state.h264DecoderCodec = "";
+  state.h264DecoderQueue = [];
+  state.videoDecoderQueueMs = metrics.oldestAgeMs;
+  state.videoDroppedStaleFrames = (Number(state.videoDroppedStaleFrames) || 0) + droppedFrames;
+  state.videoLastDropReason = reason;
+  state.h264DecoderNeedsKeyFrame = true;
+  state.h264DecoderStatus = isKeyFrame ? "resyncing" : "waiting-keyframe";
+  if (!isKeyFrame) {
+    state.h264SkippedDeltaFrames += 1;
+  }
+  updateH264DecoderDiagnostics();
+
+  const detail = isKeyFrame
+    ? `清理旧队列 ${queuedDrops} 帧，改用关键帧 #${frameId || "--"}`
+    : `清理旧队列 ${queuedDrops} 帧并丢弃 delta #${frameId || "--"}，等待关键帧`;
+  addLog("H.264 低延迟重同步", detail);
+  return {
+    dropFrame: !isKeyFrame,
+    droppedFrames,
+    queueMs: metrics.oldestAgeMs,
+    reason,
+  };
+}
+
+function maybeResyncH264DecoderQueueForLatency({ isKeyFrame = false, frameId = "", now = performance.now() } = {}) {
+  if (!shouldResyncH264DecoderQueue(now)) {
+    return { dropFrame: false, droppedFrames: 0, queueMs: getH264DecoderQueueMetrics(now).oldestAgeMs };
+  }
+  return resyncH264DecoderQueueForLatency({
+    isKeyFrame,
+    frameId,
+    now,
+    reason: "queue-overflow-wait-keyframe",
   });
 }
 
@@ -8207,9 +8339,16 @@ async function renderH264VideoFrame(frame) {
   elements.remoteStatusText.textContent = `正在接收 H.264 视频帧 #${frame.frameId ?? state.videoFrames}`;
 
   try {
-    const decoder = await ensureH264Decoder(frame);
     const payloadBytes = base64ToUint8Array(frame.payload);
     const isKeyFrame = Boolean(frame.keyFrame) || isH264KeyFramePayload(payloadBytes, frame.encoding);
+    const latencyResync = maybeResyncH264DecoderQueueForLatency({
+      isKeyFrame,
+      frameId: frame.frameId ?? state.videoFrames,
+    });
+    if (latencyResync.dropFrame) {
+      elements.remoteStatusText.textContent = `H.264 本机队列过高，已丢旧帧并等待关键帧 #${frame.frameId ?? state.videoFrames}`;
+      return;
+    }
     if (state.h264DecoderNeedsKeyFrame && !isKeyFrame) {
       state.h264SkippedDeltaFrames += 1;
       state.h264DecoderStatus = "waiting-keyframe";
@@ -8223,6 +8362,7 @@ async function renderH264VideoFrame(frame) {
     if (isKeyFrame) {
       state.h264DecoderNeedsKeyFrame = false;
     }
+    const decoder = await ensureH264Decoder(frame);
     const durationUs = Number(frame.durationUs) || Math.round(1_000_000 / Math.max(1, state.negotiatedFps || 30));
     const timestampUs =
       Number(frame.timestampUs) ||
@@ -8275,10 +8415,16 @@ async function ensureH264Decoder(frame) {
   const previousErrorCount = state.h264DecoderErrorCount;
   const previousWarned = state.h264DecoderWarned;
   const previousLastError = state.h264DecoderLastError;
+  const previousQueueMs = state.videoDecoderQueueMs;
+  const previousDroppedStaleFrames = state.videoDroppedStaleFrames;
+  const previousLastDropReason = state.videoLastDropReason;
   resetVideoDecoder();
   state.h264DecoderErrorCount = previousErrorCount;
   state.h264DecoderWarned = previousWarned;
   state.h264DecoderLastError = previousLastError;
+  state.videoDecoderQueueMs = previousQueueMs;
+  state.videoDroppedStaleFrames = previousDroppedStaleFrames;
+  state.videoLastDropReason = previousLastDropReason;
   state.h264DecoderStatus = "configuring";
   state.h264DecoderKey = decoderKey;
   state.h264DecoderCodec = `${decoderKey}:checking`;

@@ -14,7 +14,8 @@
 ## 当前占用
 
 | 端 | 文件或目录 | 原因 | 开始时间 | 状态 |
-| --- | --- | --- | --- |
+| --- | --- | --- | --- | --- |
+
 
 ## 高冲突区域
 
@@ -31,6 +32,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | N1 H.264 视频低延迟队列治理：本机解码队列超过 8 帧或 450ms 时清旧队列并等待关键帧，复制诊断导出本机队列/解码延迟/过期丢帧；不改协议、不认证、不发密码/input/inject。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | N2 WebAudio 队列治理：overflow flush old queue + schedule latest frame，导出 resync/dropReason；只做本地模拟/diagnosticsOnly，不改系统声音、不认证、不发密码/input/inject。 |
 | Windows Codex | `apps/windows-client/app.js`, `scripts/windows/test-windows-client-browser.mjs`, `apps/windows-client/README.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/04-task-board.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Windows 控制端复制诊断新增现场视频/现场声音统计：实收 FPS、请求/协商 Hz、平均/最大帧间隔、WebAudio 队列、缓冲阈值和接收/播放/丢弃计数；不改协议、不认证、不请求密码、不发 input/inject。 |
 | Mac Codex | `scripts/mac/plan-mac-remote-audio.mjs`, `scripts/mac/test-mac-remote-audio-plan.mjs`, `scripts/mac/check-mac-host-readiness.mjs`, `scripts/mac/test-mac-host-readiness-board.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Mac remote-only audio 安全评估入口：确认当前 system-pcm 采集不会自动本机静音；新增 plan/JSON/boardSummary 和 `MacRemoteAudioPlan=` readiness 入口。不改系统音量/输出设备，不认证、不请求或发送密码、不发 input/inject。 |

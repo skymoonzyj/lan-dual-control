@@ -4765,6 +4765,185 @@ async function verifyH264KeyFrameDetection(session) {
   return result;
 }
 
+async function verifyH264LatencyQueueGuard(session) {
+  const result = await evaluate(
+    session,
+    `(async () => {
+      if (
+        typeof resyncH264DecoderQueueForLatency !== "function" ||
+        typeof getVideoPerformanceExportStatus !== "function" ||
+        typeof ensureH264Decoder !== "function" ||
+        typeof state !== "object"
+      ) {
+        return { ok: false, reason: "missing H.264 latency queue guard helpers" };
+      }
+
+      const originalDecoder = state.h264Decoder;
+      const originalDecoderQueue = Array.isArray(state.h264DecoderQueue) ? state.h264DecoderQueue.slice() : [];
+      const originalDecoderStatus = state.h264DecoderStatus;
+      const originalDecoderKey = state.h264DecoderKey;
+      const originalDecoderCodec = state.h264DecoderCodec;
+      const originalDecoderLatency = state.h264DecoderLatencyMs;
+      const originalDecoderErrors = state.h264DecoderErrorCount;
+      const originalDecoderWarned = state.h264DecoderWarned;
+      const originalDecoderLastError = state.h264DecoderLastError;
+      const originalNeedsKeyFrame = state.h264DecoderNeedsKeyFrame;
+      const originalSkippedDelta = state.h264SkippedDeltaFrames;
+      const originalDecodedFrames = state.h264DecodedFrames;
+      const originalDroppedStale = state.videoDroppedStaleFrames;
+      const originalQueueMs = state.videoDecoderQueueMs;
+      const originalLastDropReason = state.videoLastDropReason;
+      const originalHostDiagnostics = { ...(state.hostDiagnostics || {}) };
+      const originalVideoDecoderDescriptor = Object.getOwnPropertyDescriptor(window, "VideoDecoder");
+
+      let closeCalls = 0;
+      try {
+        state.h264Decoder = {
+          state: "configured",
+          close: () => { closeCalls += 1; },
+        };
+        state.h264DecoderQueue = Array.from({ length: 9 }, (_, index) => ({
+          frameId: index + 1,
+          queuedAt: 100 + index,
+          timestampUs: index * 33333,
+        }));
+        state.h264DecoderStatus = "decoding";
+        state.h264DecoderKey = "avc1.420029:annexb";
+        state.h264DecoderCodec = "avc1.420029:annexb";
+        state.h264DecoderLatencyMs = 488;
+        state.h264DecoderErrorCount = 0;
+        state.h264DecoderWarned = false;
+        state.h264DecoderLastError = "";
+        state.h264DecoderNeedsKeyFrame = false;
+        state.h264SkippedDeltaFrames = 0;
+        state.h264DecodedFrames = 12;
+        state.videoDecoderQueueMs = 0;
+        state.videoDroppedStaleFrames = 0;
+        state.videoLastDropReason = "";
+
+        const resync = resyncH264DecoderQueueForLatency({
+          isKeyFrame: false,
+          frameId: 99,
+          now: 1000,
+          reason: "queue-overflow-wait-keyframe",
+        });
+        const exportText = getVideoPerformanceExportStatus();
+        const deltaOk =
+          resync?.dropFrame === true &&
+          resync?.droppedFrames === 10 &&
+          closeCalls === 1 &&
+          state.h264Decoder === null &&
+          state.h264DecoderQueue.length === 0 &&
+          state.h264DecoderNeedsKeyFrame === true &&
+          state.h264DecoderStatus === "waiting-keyframe" &&
+          state.h264SkippedDeltaFrames === 1 &&
+          state.videoDroppedStaleFrames === 10 &&
+          state.videoLastDropReason === "queue-overflow-wait-keyframe" &&
+          exportText.includes("本机队列 900 ms") &&
+          exportText.includes("解码延迟 488 ms") &&
+          exportText.includes("本地过期丢帧 10") &&
+          exportText.includes("原因 queue-overflow-wait-keyframe");
+
+        class FakeVideoDecoder {
+          static async isConfigSupported() {
+            return { supported: true };
+          }
+          constructor(options = {}) {
+            this.options = options;
+            this.state = "configured";
+          }
+          configure(config) {
+            this.config = config;
+          }
+          close() {
+            this.state = "closed";
+          }
+        }
+        Object.defineProperty(window, "VideoDecoder", {
+          configurable: true,
+          value: FakeVideoDecoder,
+        });
+
+        state.h264Decoder = {
+          state: "configured",
+          close: () => { closeCalls += 1; },
+        };
+        state.h264DecoderQueue = Array.from({ length: 9 }, (_, index) => ({
+          frameId: index + 11,
+          queuedAt: 200 + index,
+          timestampUs: index * 33333,
+        }));
+        state.h264DecoderStatus = "decoding";
+        state.h264DecoderKey = "avc1.420029:annexb";
+        state.h264DecoderCodec = "avc1.420029:annexb";
+        state.h264DecoderLatencyMs = 333;
+        state.h264DecoderNeedsKeyFrame = false;
+        state.videoDecoderQueueMs = 0;
+        state.videoDroppedStaleFrames = 0;
+        state.videoLastDropReason = "";
+
+        const keyResync = resyncH264DecoderQueueForLatency({
+          isKeyFrame: true,
+          frameId: 120,
+          now: 1100,
+          reason: "queue-overflow-wait-keyframe",
+        });
+        await ensureH264Decoder({ codecString: "avc1.420029", encoding: "annexb-base64" });
+        const keyExportText = getVideoPerformanceExportStatus();
+        const keyPreserved =
+          keyResync?.dropFrame === false &&
+          keyResync?.droppedFrames === 9 &&
+          state.videoDroppedStaleFrames === 9 &&
+          state.videoDecoderQueueMs === 900 &&
+          state.videoLastDropReason === "queue-overflow-wait-keyframe" &&
+          keyExportText.includes("本地过期丢帧 9") &&
+          keyExportText.includes("原因 queue-overflow-wait-keyframe");
+
+        return {
+          ok: deltaOk && keyPreserved,
+          deltaOk,
+          keyPreserved,
+          resync,
+          keyResync,
+          closeCalls,
+          queueLength: state.h264DecoderQueue.length,
+          needsKeyFrame: state.h264DecoderNeedsKeyFrame,
+          status: state.h264DecoderStatus,
+          skippedDelta: state.h264SkippedDeltaFrames,
+          droppedStale: state.videoDroppedStaleFrames,
+          queueMs: state.videoDecoderQueueMs,
+          lastDropReason: state.videoLastDropReason,
+          exportText,
+          keyExportText,
+        };
+      } finally {
+        state.h264Decoder = originalDecoder;
+        state.h264DecoderQueue = originalDecoderQueue;
+        state.h264DecoderStatus = originalDecoderStatus;
+        state.h264DecoderKey = originalDecoderKey;
+        state.h264DecoderCodec = originalDecoderCodec;
+        state.h264DecoderLatencyMs = originalDecoderLatency;
+        state.h264DecoderErrorCount = originalDecoderErrors;
+        state.h264DecoderWarned = originalDecoderWarned;
+        state.h264DecoderLastError = originalDecoderLastError;
+        state.h264DecoderNeedsKeyFrame = originalNeedsKeyFrame;
+        state.h264SkippedDeltaFrames = originalSkippedDelta;
+        state.h264DecodedFrames = originalDecodedFrames;
+        state.videoDroppedStaleFrames = originalDroppedStale;
+        state.videoDecoderQueueMs = originalQueueMs;
+        state.videoLastDropReason = originalLastDropReason;
+        state.hostDiagnostics = originalHostDiagnostics;
+        if (originalVideoDecoderDescriptor) {
+          Object.defineProperty(window, "VideoDecoder", originalVideoDecoderDescriptor);
+        }
+      }
+    })()`,
+  );
+  if (!result?.ok) {
+    throw new Error(`H.264 latency queue guard check failed: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
 async function verifyInputModeStatusText(session) {
   const result = await evaluate(
     session,
@@ -6105,6 +6284,12 @@ async function run() {
     print(
       "OK",
       `H.264 key frame detection: annexbKey=${keyFrameCheck.annexbKey}, annexbDelta=${keyFrameCheck.annexbDelta}, avcKey=${keyFrameCheck.avcKey}`,
+    );
+    const latencyQueueCheck = await verifyH264LatencyQueueGuard(session);
+    summary.checks.push("h264-latency-queue");
+    print(
+      "OK",
+      `H.264 latency queue guard: dropped=${latencyQueueCheck.droppedStale} reason=${latencyQueueCheck.lastDropReason}`,
     );
     const inputStatusCheck = await verifyInputModeStatusText(session);
     summary.checks.push("input-status");
