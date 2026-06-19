@@ -34,6 +34,23 @@ const allowedMacEvidenceTokens = new Set([
   "MacFormalE2EOk",
   "MacUnattendedReady",
 ]);
+const allowedMacPowerStatuses = new Set(["ok", "warning", "unknown"]);
+const allowedMacPowerReasons = new Set([
+  "ok",
+  "skipped",
+  "not-checked",
+  "pmset-failed",
+  "system-sleep-enabled",
+  "display-sleep-enabled",
+  "network-wake-disabled",
+]);
+const allowedMacPowerWarnings = new Set([
+  "none",
+  "unknown",
+  "system-sleep-enabled",
+  "display-sleep-enabled",
+  "network-wake-disabled",
+]);
 
 function helpRequested(argv) {
   return argv.includes("--help") || argv.includes("-h");
@@ -188,6 +205,11 @@ Machine-readable JSON fields:
                              heartbeat, exposed as MacHeartbeatHealth= in
                              board summaries. Freshness means "recent"; health
                              means "safe/blocked/warning".
+  board.macPowerHealth       Stable MacPowerHealth= status safely extracted
+                             from the current Agent Link Board Mac Unattended
+                             status. It keeps power warning details such as
+                             system-sleep-enabled or display-sleep-enabled
+                             visible in resume summaries without running pmset.
   commands.macClientReverseRehearsalAction
                              Human action for the guarded Mac-controls-Windows
                              reverse-control request rehearsal. Run discovery,
@@ -519,12 +541,14 @@ async function getBoardStatus(args) {
   const lines = splitLines(output);
   const currentCall = normalizeBoardCall(stateResult.state?.currentCall);
   const macEvidence = collectMacEvidence(stateResult.state, lines);
+  const macPowerHealth = collectMacPowerHealth(stateResult.state, lines);
   return {
     checked: true,
     ok: watchResult.ok && stateResult.ok,
     summary: watchResult.ok && stateResult.ok ? `read ${lines.length} non-empty line(s)` : `failed: ${watchResult.error || watchResult.stderr || stateResult.error || `exit ${watchResult.status ?? "state"}`}`,
     recentLines: lines.slice(-12),
     macEvidence,
+    macPowerHealth,
     currentCall,
     activeCall: isActiveCall(currentCall),
   };
@@ -536,6 +560,14 @@ function collectMacEvidence(state, recentLines = []) {
     tokens.push(...extractCleanMacEvidence(text));
   }
   return [...new Set(tokens)];
+}
+
+function collectMacPowerHealth(state, recentLines = []) {
+  for (const text of collectBoardEvidenceTexts(state, recentLines)) {
+    const health = extractMacPowerHealth(text);
+    if (health) return health;
+  }
+  return null;
 }
 
 function collectBoardEvidenceTexts(state, recentLines = []) {
@@ -593,6 +625,30 @@ function hasCleanMacEvidenceContext(text) {
   if (/\bwarnings=(?!none\b)[^;\s.]*/i.test(text)) return false;
   if (/\breason=(?:blocked|warning|failed|fail|offline)\b/i.test(text)) return false;
   return /\bblockers=none\b/i.test(text) && /\bwarnings=none\b/i.test(text);
+}
+
+function extractMacPowerHealth(text) {
+  const source = normalizedText(text);
+  if (!source || !/\bMacPowerHealth=/i.test(source)) return null;
+  const match = source.match(/\bMacPowerHealth=([A-Za-z]+)\s+reason=([A-Za-z0-9_-]+)\s+warnings=([A-Za-z0-9_,_-]+)\s+checkedAt=([0-9TZ:.-]+)/i);
+  if (!match) return null;
+  const status = match[1].toLowerCase();
+  const reason = match[2];
+  const warnings = match[3];
+  const checkedAt = match[4];
+  if (!allowedMacPowerStatuses.has(status)) return null;
+  if (!allowedMacPowerReasons.has(reason)) return null;
+  if (!isSafeMacPowerWarnings(warnings)) return null;
+  if (!Number.isFinite(Date.parse(checkedAt))) return null;
+  return { status, reason, warnings, checkedAt };
+}
+
+function isSafeMacPowerWarnings(value) {
+  const tokens = String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return tokens.length > 0 && tokens.every((token) => allowedMacPowerWarnings.has(token));
 }
 
 async function getBoardState(args) {
@@ -1164,6 +1220,17 @@ function formatMacEvidenceSummary(board) {
   return `MacEvidence=${board.macEvidence.join(",")};`;
 }
 
+function formatMacPowerHealthSummary(board) {
+  const health = board?.macPowerHealth;
+  if (!health) return "";
+  return [
+    `MacPowerHealth=${health.status || "unknown"}`,
+    `reason=${boardToken(health.reason)}`,
+    `warnings=${boardToken(health.warnings)}`,
+    `checkedAt=${health.checkedAt || "unknown"}`,
+  ].join(" ") + ";";
+}
+
 function formatHeartbeatWatcherSummary(watcher) {
   if (!watcher?.checked) return "heartbeatWatcher=not-checked";
   if (!watcher.ok) return `heartbeatWatcher=unknown${watcher.error ? ` error=${watcher.error}` : ""}`;
@@ -1374,12 +1441,14 @@ function formatBoardSummary(report) {
   const heartbeatFreshnessSummary = formatMacHeartbeatFreshnessSummary(report.macHeartbeatFreshness);
   const heartbeatHealthSummary = formatMacHeartbeatHealthSummary(report.macHeartbeatHealth);
   const macEvidenceSummary = formatMacEvidenceSummary(board);
+  const macPowerHealthSummary = formatMacPowerHealthSummary(board);
   const suggestedActionSummary = report.suggestedAction?.boardSummary ? ` ${report.suggestedAction.boardSummary}` : "";
 
   if (!host.online) {
     return [
       `Mac resume: repo=${repoState}; Mac host offline at ${host.probe.host}:${host.probe.port}; ${callSummary}; ${heartbeatWatcherSummary}; ${heartbeatFreshnessSummary}; ${heartbeatHealthSummary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}.`,
       macEvidenceSummary,
+      macPowerHealthSummary,
       `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
       `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
       `MacHostStop=${report.commands.macHostStopCommand}.`,
@@ -1423,6 +1492,7 @@ function formatBoardSummary(report) {
   return [
     `Mac resume: repo=${repoState}; host=${formatBoardHostAddress(host)} online runtimeBuild=${runtimeBuild} inputMode=${host.inputMode || "unknown"}; ${callSummary}; ${heartbeatWatcherSummary}; ${heartbeatFreshnessSummary}; ${heartbeatHealthSummary}.`,
     macEvidenceSummary,
+    macPowerHealthSummary,
     `Permissions ${permissions}; h264=${h264}; audio=${audio}; pipeline=${pipeline}; displays=${displays}; ${buildDiff}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedActionSummary}.`,
     `MacHostSafeStart=${report.commands.macHostSafeStartCommand}.`,
     `MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStartCommand}.`,
@@ -1487,6 +1557,9 @@ function printReport(report) {
       console.log(`[${prefix}] Agent Link Board currentCall: ${formatCallOneLine(board.currentCall)}`);
     } else if (board.ok) {
       console.log("[OK] Agent Link Board currentCall: none");
+    }
+    if (board.macPowerHealth) {
+      console.log(`[INFO] Mac power health: status=${board.macPowerHealth.status} reason=${board.macPowerHealth.reason} warnings=${board.macPowerHealth.warnings}`);
     }
   } else {
     console.log("[INFO] Agent Link Board: not checked; add --checkBoard when coordinating with Windows Codex.");

@@ -1294,6 +1294,72 @@ async function checkBoardMacEvidence(args) {
   print("OK", "Agent Link Board clean MacEvidence is surfaced while risky evidence is ignored");
 }
 
+async function checkBoardMacPowerHealth(args) {
+  const cleanPower = "Mac unattended status: host=online inputMode=log build=ed937a2; power=sleep=ac-power:1 displaySleep=ac-power:10 networkWake=ac-power:1; MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T07:23:38.703Z; attention=2 warning(s) blockers=none warnings=launch-agent-not-loaded,power.";
+  await withFakeBoard(null, async (server) => {
+    const result = run(args, [
+      "--json",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--timeoutMs",
+      "1200",
+    ]);
+    assert(result.status === 0, `Mac power health JSON should stay non-failing\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "Mac power health resume status");
+    assert(payload.board?.checked === true, "Mac power health JSON should mark board checked");
+    assert(payload.board?.ok === true, "Mac power health JSON should mark board ok");
+    assert(payload.board?.macPowerHealth?.status === "warning", "Mac power health JSON should expose warning status");
+    assert(payload.board?.macPowerHealth?.reason === "system-sleep-enabled", "Mac power health JSON should expose reason");
+    assert(payload.board?.macPowerHealth?.warnings === "system-sleep-enabled,display-sleep-enabled", "Mac power health JSON should expose detailed warning tags");
+    assert(payload.board?.macPowerHealth?.checkedAt === "2026-06-19T07:23:38.703Z", "Mac power health JSON should expose checkedAt");
+    assert(String(payload.boardSummary || "").includes("MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z;"), "board summary should expose MacPowerHealth as a standalone segment");
+    assertNoPasswordLeak(result, "Mac power health JSON");
+  }, {
+    statuses: {
+      "Mac Unattended": {
+        status: "warning",
+        role: "Mac 值守",
+        note: cleanPower,
+      },
+    },
+  });
+
+  const riskyPower = "MacPowerHealth=warning reason=--password warnings=system-sleep-enabled checkedAt=2026-06-19T07:23:38.703Z; fake-board-token";
+  await withFakeBoard(null, async (server) => {
+    const result = run(args, [
+      "--json",
+      "--checkBoard",
+      "--server",
+      server,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9",
+      "--timeoutMs",
+      "1200",
+    ]);
+    assert(result.status === 0, `risky Mac power health JSON should stay non-failing\n${result.stdout}\n${result.stderr}`);
+    const payload = parseJson(result.stdout, "risky Mac power health resume status");
+    assert(!payload.board?.macPowerHealth, "risky Mac power health should not be promoted");
+    assert(!String(payload.boardSummary || "").includes("MacPowerHealth="), "risky board summary should not expose MacPowerHealth");
+    assertNoPasswordLeak(result, "risky Mac power health JSON");
+  }, {
+    statuses: {
+      "Mac Unattended": {
+        status: "warning",
+        role: "Mac 值守",
+        note: riskyPower,
+      },
+    },
+  });
+  print("OK", "Agent Link Board MacPowerHealth is surfaced safely");
+}
+
 async function checkBoardDoneCall(args) {
   const call = {
     status: "DONE",
@@ -1345,6 +1411,7 @@ async function main() {
   checkPasswordRedaction(args);
   await checkBoardCurrentCall(args);
   await checkBoardMacEvidence(args);
+  await checkBoardMacPowerHealth(args);
   await checkBoardDoneCall(args);
   print("OK", "Mac resume status self-test passed");
 }

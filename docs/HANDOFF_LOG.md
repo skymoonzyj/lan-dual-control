@@ -21,6 +21,33 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac resume 开工第一屏也能转述独立 `Mac Unattended` 的 `MacPowerHealth=` 电源细分风险。
+完成内容：
+- `check-mac-resume-status --checkBoard --json` 新增 `board.macPowerHealth`，从 Agent Link Board 当前状态安全提取 `MacPowerHealth=ok|warning|unknown reason=<短标签> warnings=<短标签> checkedAt=<时间>`。
+- `--boardSummary` 新增独立 `MacPowerHealth=` 片段；普通报告新增 `Mac power health:` 行。
+- 解析只接受固定状态和固定短标签：`system-sleep-enabled`、`display-sleep-enabled`、`network-wake-disabled`、`none/unknown` 等；拒绝 `--password`、未知/命令形态或不可解析时间。
+- 真实只读复查显示 resume 摘要已能转述当前 `MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled`。
+修改文件：
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增断言后，`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 12000` 先失败在 `board.macPowerHealth` 缺失。
+- 绿灯：实现后同一回归通过，覆盖干净 `MacPowerHealth=` 提取、`--password` 风险候选拒绝、JSON 字段、board summary 转述和不泄密。
+- 真实只读：`node scripts/mac/check-mac-resume-status.mjs --host 127.0.0.1 --port 43770 --checkBoard --boardSummary` 输出 `MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled`。
+遗留问题：
+- 本轮只读转述通讯板状态，不运行 `pmset` 修改、不加载 LaunchAgent、不停/启 host、不认证、不请求或发送密码、不发 input/inject。
+下一步建议：
+- Windows 端后续可消费 Mac resume 里的 `MacPowerHealth=`，把系统睡眠/显示睡眠/网络唤醒风险显示到提醒区；真处理值守仍需用户现场确认系统设置。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：把 Mac 值守里的笼统 `power` warning 拆成稳定可读的电源健康字段。
 完成内容：
 - `check-mac-unattended-status --json` 新增 `macPowerHealth`，从 `pmset -g custom` 派生 `ok|warning|unknown`、首个 `reason` 和稳定 `warnings` 短标签。
