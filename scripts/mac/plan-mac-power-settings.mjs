@@ -40,6 +40,7 @@ Machine-readable JSON fields:
   commands.preview                Copyable pmset preview command; not executed.
   commands.verify                 Copyable pmset readback command.
   commands.macUnattendedStatus    Follow-up Mac unattended status command.
+  commands.macLaunchAgentPlan     Follow-up LaunchAgent dry-run planner command.
 
 Examples:
   node scripts/mac/plan-mac-power-settings.mjs --boardSummary
@@ -131,6 +132,10 @@ function makeMacUnattendedStatusCommand() {
   return "node scripts/mac/check-mac-unattended-status.mjs --boardSummary";
 }
 
+function makeMacLaunchAgentPlanCommand() {
+  return "node scripts/mac/install-mac-host-launch-agent.mjs --boardSummary";
+}
+
 function makeReport(args) {
   const report = {
     status: "preview",
@@ -144,10 +149,11 @@ function makeReport(args) {
       preview: makePreviewCommand(args),
       verify: "pmset -g custom",
       macUnattendedStatus: makeMacUnattendedStatusCommand(),
+      macLaunchAgentPlan: makeMacLaunchAgentPlanCommand(),
     },
     notes: [
       "Dry-run only: copy the preview command only after deciding to change local Mac power settings.",
-      "Run the verify command and MacUnattendedStatus afterwards to refresh Agent Link Board evidence.",
+      "Run the verify command, MacUnattendedStatus, and MacLaunchAgentPlan afterwards to refresh Agent Link Board evidence and plan login persistence.",
     ],
     boardSummary: "",
   };
@@ -158,7 +164,7 @@ function makeReport(args) {
 function makeBoardSummary(report) {
   return [
     `MacPowerPlan=status=${report.status} profile=${report.profile} sleep=${report.settings.sleep} displaySleep=${report.settings.displaySleep} networkWake=${report.settings.networkWake} DryRunOnly.`,
-    `Preview=${report.commands.preview}; Verify=${report.commands.verify}; MacUnattendedStatus=${report.commands.macUnattendedStatus}.`,
+    `Preview=${report.commands.preview}; Verify=${report.commands.verify}; MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacLaunchAgentPlan=${report.commands.macLaunchAgentPlan}.`,
     "No password was requested or sent; no system changes or input events were attempted.",
   ].join(" ");
 }
@@ -173,6 +179,7 @@ function printText(report) {
   console.log(`- preview: ${report.commands.preview}`);
   console.log(`- verify: ${report.commands.verify}`);
   console.log(`- Mac unattended status: ${report.commands.macUnattendedStatus}`);
+  console.log(`- Mac LaunchAgent plan: ${report.commands.macLaunchAgentPlan}`);
   console.log("- safety: dry-run only; no password, no system changes, no input events");
 }
 

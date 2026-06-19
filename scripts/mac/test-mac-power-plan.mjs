@@ -86,6 +86,20 @@ function assertNoSecretOrInputGuidance(text, label) {
   assertNotIncludes(value, "inject", label);
 }
 
+function assertMacLaunchAgentPlanCommand(command, label) {
+  assertIncludes(command, "install-mac-host-launch-agent.mjs", label);
+  assertIncludes(command, "--boardSummary", label);
+  assertNotIncludes(command, "--write", label);
+  assertNotIncludes(command, "--force", label);
+  assertNotIncludes(command, "launchctl", label);
+  assertNotIncludes(command, "--password", label);
+  assertNotIncludes(command, "--promptPassword", label);
+  assertNotIncludes(command, "--sendCall", label);
+  assertNotIncludes(command, "--server", label);
+  assertNotIncludes(command, "input_event", label);
+  assertNotIncludes(command, "inject", label);
+}
+
 function checkHelp(args) {
   for (const flag of ["--help", "-h"]) {
     const result = run(args, [flag]);
@@ -96,6 +110,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "--displaySleep", `${script} ${flag}`);
     assertIncludes(result.stdout, "--networkWake", `${script} ${flag}`);
     assertIncludes(result.stdout, "read-only", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macLaunchAgentPlan", `${script} ${flag}`);
     assertNoSecretOrInputGuidance(result.stdout, `${script} ${flag}`);
   }
   console.log("[OK] Mac power plan help is side-effect-free");
@@ -114,8 +129,11 @@ function checkJson(args) {
   assertIncludes(payload.commands?.verify || "", "pmset -g custom", "JSON verify command");
   assertIncludes(payload.commands?.macUnattendedStatus || "", "check-mac-unattended-status.mjs", "JSON unattended command");
   assertIncludes(payload.commands?.macUnattendedStatus || "", "--boardSummary", "JSON unattended command");
+  assertMacLaunchAgentPlanCommand(payload.commands?.macLaunchAgentPlan || "", "JSON LaunchAgent plan command");
   assertIncludes(payload.boardSummary || "", "MacPowerPlan=status=preview", "JSON board summary");
   assertIncludes(payload.boardSummary || "", "DryRunOnly", "JSON board summary");
+  assertIncludes(payload.boardSummary || "", "MacLaunchAgentPlan=", "JSON board summary");
+  assertMacLaunchAgentPlanCommand(payload.boardSummary || "", "JSON board summary LaunchAgent plan");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "default power plan JSON");
   console.log("[OK] Mac power plan JSON previews safe pmset and verification commands");
 }
@@ -142,8 +160,19 @@ function checkBoardSummary(args) {
   assertIncludes(text, "pmset -c sleep 0 displaysleep 5 womp 0 tcpkeepalive 0", "board summary");
   assertIncludes(text, "Verify=pmset -g custom", "board summary");
   assertIncludes(text, "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --boardSummary", "board summary");
+  assertIncludes(text, "MacLaunchAgentPlan=", "board summary");
+  assertMacLaunchAgentPlanCommand(text, "board summary LaunchAgent plan");
   assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "board summary");
   console.log("[OK] Mac power plan board summary is copyable and secret-free");
+}
+
+function checkText(args) {
+  const result = run(args, []);
+  assert(result.status === 0, `text output should exit 0\n${result.stdout}\n${result.stderr}`);
+  assertIncludes(result.stdout, "Mac LaunchAgent plan:", "text output");
+  assertMacLaunchAgentPlanCommand(result.stdout, "text output LaunchAgent plan");
+  assertNoSecretOrInputGuidance(`${result.stdout}\n${result.stderr}`, "text output");
+  console.log("[OK] Mac power plan text output includes the safe LaunchAgent planner");
 }
 
 function checkRejectsApply(args) {
@@ -162,6 +191,7 @@ function main() {
   checkHelp(args);
   checkJson(args);
   checkBoardSummary(args);
+  checkText(args);
   checkRejectsApply(args);
   console.log("[OK] Mac power plan self-test passed");
 }
