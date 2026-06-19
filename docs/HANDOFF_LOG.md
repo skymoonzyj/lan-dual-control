@@ -19,6 +19,34 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac 手工体验状态一键上板
+开发端：Mac Codex
+本轮目标：让 Mac 端在准备手工体验或收尾同步时，可以把 `MacManualUx=status=ready|waiting` 无密摘要一键发到 Agent Link Board，不再人工拼状态和消息。
+完成内容：
+- `check-mac-manual-ux-status` 新增显式 `--sendStatus` / `--sendMessage`，默认仍只读不上板。
+- 新增 `--device` / `--role` / `--from` / `--token` 参数；状态默认发到 `Mac Manual UX`，消息默认来自 `Mac Codex`。
+- 测试用假通讯板覆盖 `/api/state`、`/api/status`、`/api/message`，确认发送内容只包含现有无密 `boardSummary`，不发密码、不发 user-auth、不发 input/inject。
+修改文件：
+- `scripts/mac/check-mac-manual-ux-status.mjs`
+- `scripts/mac/test-mac-manual-ux-status.mjs`
+- `docs/04-task-board.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-manual-ux-status.mjs --timeoutMs 20000` 先失败，提示 `Unknown argument: --sendStatus`。
+- 绿灯：`node scripts/mac/test-mac-manual-ux-status.mjs --timeoutMs 20000`
+- 后续本轮收尾会继续跑语法、真实 `--boardSummary`、发送到通讯板、diff 和冲突扫描。
+遗留问题：
+- 真实画面/声音/窗口/全屏/input_ack 手工体验仍需用户在场；该脚本只同步状态，不做认证或控制。
+下一步建议：
+- 准备手工体验或本轮收尾同步时，Mac 端可跑 `node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --sendStatus --sendMessage --boardSummary`。
+是否改了协议：否。
+是否需要另一端配合：不需要；Windows 端只需读取通讯板新增的 `Mac Manual UX` 状态或 Mac Codex 消息。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 DAILY_ITEM N1-N6 上报格式工具
 开发端：Mac Codex
 本轮目标：收口 Supervisor 点名的 N6，把夜间 N1-N6 进度上报固定成可复制/可自动发送的 `DAILY_ITEM` 格式，避免人工拼消息漏项。

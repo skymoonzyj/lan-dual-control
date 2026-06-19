@@ -32,6 +32,7 @@
 
 | 端 | 文件或目录 | 完成时间 | 说明 |
 | --- | --- | --- | --- |
+| Mac Codex | `scripts/mac/check-mac-manual-ux-status.mjs`, `scripts/mac/test-mac-manual-ux-status.mjs`, `docs/04-task-board.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Mac 手工体验第一屏新增显式 `--sendStatus` / `--sendMessage` 上板，默认仍只读；假通讯板测试覆盖 status/message 发送和无密安全边界。不认证、不请求或发送密码、不发 user-auth/input/inject。 |
 | Mac Codex | `scripts/codex-link-daily-items.mjs`, `scripts/test-codex-link-daily-items.mjs`, `docs/04-task-board.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | N6 DAILY_ITEM 格式闭环：新增只读 N1-N6 汇总/上板工具，默认不上板，显式 `--sendStatus` / `--sendMessage` 才发送；缺证据 fail-closed 输出 BLOCKED。不认证、不请求或发送密码、不发 input/inject。 |
 | Mac Codex | `scripts/mac/check-mac-unattended-status.mjs`, `scripts/mac/test-mac-unattended-status.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Mac Unattended 摘要补 `MacManualUxStatus=` / `commands.macManualUxStatus`，让 Windows 端只看独立值守行也能复制手工体验第一屏入口；只读提示，不认证、不请求或发送密码、不发 call/input/inject。 |
 | Mac Codex | `scripts/mac/check-mac-heartbeat.mjs`, `scripts/mac/test-mac-heartbeat.mjs`, `docs/CURRENT_STATUS.md`, `docs/NEXT_ACTIONS.md`, `docs/HANDOFF_LOG.md`, `docs/ACTIVE_LOCKS.md` | 2026-06-20 本轮 | Mac heartbeat 摘要补 `MacManualUxStatus=` / `commands.macManualUxStatusCommand`，让 Windows 端只看最新心跳也能复制手工体验第一屏入口；只读提示，不认证、不请求或发送密码、不发 call/input/inject。 |

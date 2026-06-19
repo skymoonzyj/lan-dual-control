@@ -90,13 +90,37 @@ function run(extraArgs, args) {
   });
 }
 
-async function withFakeBoard(state, callback) {
+async function withFakeBoard(state, callback, options = {}) {
+  const posts = [];
   const server = http.createServer((request, response) => {
     const path = new URL(request.url || "/", "http://127.0.0.1").pathname;
     const headers = {
       "Content-Type": "application/json; charset=utf-8",
       "Access-Control-Allow-Origin": "*",
     };
+    if (request.method === "POST" && (path === "/api/status" || path === "/api/message")) {
+      let body = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk) => {
+        body += chunk;
+      });
+      request.on("end", () => {
+        try {
+          posts.push({ path, body: body ? JSON.parse(body) : {} });
+          if (options.rejectPosts) {
+            response.writeHead(200, headers);
+            response.end(JSON.stringify({ ok: false, error: "fake-board-rejected-post" }));
+            return;
+          }
+          response.writeHead(200, headers);
+          response.end(JSON.stringify({ ok: true }));
+        } catch (error) {
+          response.writeHead(400, headers);
+          response.end(JSON.stringify({ ok: false, error: error.message }));
+        }
+      });
+      return;
+    }
     if (path !== "/api/state") {
       response.writeHead(404, headers);
       response.end(JSON.stringify({ ok: false, error: "not found" }));
@@ -109,7 +133,7 @@ async function withFakeBoard(state, callback) {
   const address = server.address();
   const url = `http://127.0.0.1:${address.port}`;
   try {
-    await callback(url);
+    await callback(url, posts);
   } finally {
     await new Promise((resolveClose) => server.close(resolveClose));
   }
@@ -245,6 +269,8 @@ async function checkHelp(args) {
   assertIncludes(result.stdout, "--server", "help");
   assertIncludes(result.stdout, "--requireReady", "help");
   assertIncludes(result.stdout, "--boardSummary", "help");
+  assertIncludes(result.stdout, "--sendStatus", "help");
+  assertIncludes(result.stdout, "--sendMessage", "help");
   assertNotIncludes(result.stdout, "Mac host password:", "help");
   assertSecretSafe(result.stdout, "help");
   console.log("[OK] Mac manual UX status help is pure");
@@ -308,6 +334,50 @@ async function checkBoardSummary(args) {
   console.log("[OK] Mac manual UX status prints secret-free board summary");
 }
 
+async function checkSendStatusAndMessage(args) {
+  await withFakeBoard(readyBoardState(), async (serverUrl, posts) => {
+    const result = await run([
+      "--server",
+      serverUrl,
+      "--boardSummary",
+      "--sendStatus",
+      "--sendMessage",
+      "--device",
+      "Mac Manual UX",
+      "--role",
+      "Mac 端",
+      "--from",
+      "Mac Codex",
+    ], args);
+    assert(result.exitCode === 0, `sendStatus/sendMessage should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    assert(posts.length === 2, `sendStatus/sendMessage should post two records, got ${posts.length}: ${JSON.stringify(posts)}`);
+    const statusPost = posts.find((post) => post.path === "/api/status");
+    const messagePost = posts.find((post) => post.path === "/api/message");
+    assert(statusPost, `missing /api/status post: ${JSON.stringify(posts)}`);
+    assert(messagePost, `missing /api/message post: ${JSON.stringify(posts)}`);
+    assert(statusPost.body.device === "Mac Manual UX", `status device mismatch: ${JSON.stringify(statusPost.body)}`);
+    assert(statusPost.body.role === "Mac 端", `status role mismatch: ${JSON.stringify(statusPost.body)}`);
+    assert(statusPost.body.status === "manual-ux-ready", `status value mismatch: ${JSON.stringify(statusPost.body)}`);
+    assertIncludes(statusPost.body.note, "MacManualUx=status=ready", "status note");
+    assertIncludes(statusPost.body.note, "Safety=no-password,no-input-inject", "status note");
+    assert(messagePost.body.from === "Mac Codex", `message sender mismatch: ${JSON.stringify(messagePost.body)}`);
+    assert(messagePost.body.type === "message", `message type mismatch: ${JSON.stringify(messagePost.body)}`);
+    assertIncludes(messagePost.body.text, "Next=ManualUxTest", "message text");
+    assertSecretSafe(`${result.stdout}\n${result.stderr}\n${JSON.stringify(posts)}`, "sendStatus/sendMessage");
+  });
+  console.log("[OK] Mac manual UX status can post secret-free status and message");
+}
+
+async function checkPostFailureFailsClosed(args) {
+  await withFakeBoard(readyBoardState(), async (serverUrl) => {
+    const result = await run(["--server", serverUrl, "--boardSummary", "--sendStatus"], args);
+    assert(result.exitCode === 1, `sendStatus rejected by board should exit 1. stdout=${result.stdout} stderr=${result.stderr}`);
+    assertIncludes(result.stderr, "fake-board-rejected-post", "sendStatus rejection");
+    assertSecretSafe(`${result.stdout}\n${result.stderr}`, "sendStatus rejection");
+  }, { rejectPosts: true });
+  console.log("[OK] Mac manual UX status fails closed when Agent Link rejects a post");
+}
+
 async function checkRequireReadyFailure(args) {
   await withFakeBoard(waitingBoardState(), async (serverUrl) => {
     const result = await run(["--server", serverUrl, "--requireReady", "--json"], args);
@@ -349,6 +419,8 @@ async function main() {
   await checkLoopbackTargetIsNotAdvertised(args);
   await checkChinesePunctuationAfterChecklist(args);
   await checkBoardSummary(args);
+  await checkSendStatusAndMessage(args);
+  await checkPostFailureFailsClosed(args);
   await checkRequireReadyFailure(args);
   await checkUsableEntryCurrentCallIsReady(args);
   console.log("[OK] Mac manual UX status checks passed");

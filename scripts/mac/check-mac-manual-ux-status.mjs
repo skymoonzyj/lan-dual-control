@@ -4,10 +4,16 @@ import https from "node:https";
 
 const defaults = {
   server: "http://192.168.31.68:17888",
+  token: process.env.CODEX_LINK_TOKEN || "",
+  device: "Mac Manual UX",
+  role: "Mac 端",
+  from: "Mac Codex",
   timeoutMs: 5000,
   requireReady: false,
   json: false,
   boardSummary: false,
+  sendStatus: false,
+  sendMessage: false,
 };
 
 const manualChecklistLabels = {
@@ -48,10 +54,18 @@ Options:
   --requireReady       Exit non-zero unless PostPass/ManualUxStandby is visible.
   --boardSummary       Print one secret-free Agent Link Board summary line.
   --json               Print one machine-readable JSON object.
+  --sendStatus         Post the summary to Agent Link Board /api/status.
+  --sendMessage        Post the summary to Agent Link Board /api/message.
+  --device <name>      Status device name. Default: ${defaults.device}
+  --role <role>        Status role. Default: ${defaults.role}
+  --from <name>        Message sender. Default: ${defaults.from}
+  --token <token>      Optional Agent Link Board token header.
   --help, -h           Show this help without probing anything.
 
 Description:
   Prints a read-only Mac-side manual UX status report after REAL_TEST_PASS.
+  It only posts to Agent Link Board when --sendStatus or --sendMessage is
+  explicitly provided.
   It consumes PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby,
   MAC_STANDING_BY_FOR_MANUAL_UX_TEST, and ManualUxChecklist=... from Agent Link
   Board state. A Supervisor usable-entry/manual-UX currentCall is also treated
@@ -61,6 +75,7 @@ Description:
 
 Examples:
   node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary
+  node scripts/mac/check-mac-manual-ux-status.mjs --sendStatus --sendMessage --boardSummary
   node scripts/mac/check-mac-manual-ux-status.mjs --requireReady --json
 `);
 }
@@ -82,6 +97,14 @@ function parseArgs(argv) {
       args.boardSummary = true;
       continue;
     }
+    if (token === "--sendStatus") {
+      args.sendStatus = true;
+      continue;
+    }
+    if (token === "--sendMessage") {
+      args.sendMessage = true;
+      continue;
+    }
     if (token === "--requireReady") {
       args.requireReady = true;
       continue;
@@ -99,8 +122,15 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if ((token === "--device" || token === "--role" || token === "--from" || token === "--token") && next && !next.startsWith("--")) {
+      args[token.slice(2)] = next;
+      index += 1;
+      continue;
+    }
     throw new Error(`Unknown argument: ${token}`);
   }
+  args.server = String(args.server || defaults.server).replace(/\/+$/, "");
+  args.token = String(args.token || "");
   return args;
 }
 
@@ -361,9 +391,54 @@ async function main() {
     printHuman(report);
   }
 
+  if (args.sendStatus) {
+    await sendStatus(args, report);
+  }
+  if (args.sendMessage) {
+    await sendMessage(args, report);
+  }
+
   if (args.requireReady && report.status !== "ready") {
     process.exitCode = 1;
   }
+}
+
+async function sendStatus(args, report) {
+  await postToBoard(args, "/api/status", {
+    device: args.device,
+    role: args.role,
+    status: `manual-ux-${report.status}`,
+    note: report.boardSummary,
+  });
+}
+
+async function sendMessage(args, report) {
+  await postToBoard(args, "/api/message", {
+    from: args.from,
+    type: "message",
+    text: report.boardSummary,
+  });
+}
+
+async function postToBoard(args, pathName, body) {
+  const response = await fetch(new URL(pathName, args.server), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(args.token ? { "X-Codex-Link-Token": args.token } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(`Agent Link post failed: ${response.status} ${text}`);
+  if (!text) return;
+  let payload = null;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    return;
+  }
+  if (payload?.ok === false) throw new Error(payload.error || "Agent Link post failed");
 }
 
 main().catch((error) => {
