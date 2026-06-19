@@ -112,6 +112,24 @@ function assertMacUnattendedFormalCommand(command, label, expectedPort) {
   assert(command.includes("--boardSummary"), `${label} should be board-summary ready`);
 }
 
+function assertMacPowerPlanCommand(command, label) {
+  assertSecretFreeCommand(command, label);
+  assert(command.includes("node scripts/mac/plan-mac-power-settings.mjs"), `${label} should use plan-mac-power-settings`);
+  assert(command.includes("--profile all"), `${label} should plan AC and battery settings`);
+  assert(command.includes("--sleep 0"), `${label} should plan system sleep disablement`);
+  assert(command.includes("--displaySleep 0"), `${label} should plan display sleep disablement`);
+  assert(command.includes("--networkWake on"), `${label} should plan network wake`);
+  assert(command.includes("--boardSummary"), `${label} should be board-summary ready`);
+  assert(!/(^|\s)--apply(\s|=|$)/.test(command), `${label} should stay dry-run by default`);
+  assert(!/sudo/.test(command), `${label} should not request privileged shell execution`);
+  assert(!/--promptPassword/.test(command), `${label} should not prompt locally`);
+  assert(!/(^|\s)--password(\s|=|$)/.test(command), `${label} should not embed --password`);
+  assert(!/--sendCall/.test(command), `${label} should not send Agent Link Board calls`);
+  assert(!/--server/.test(command), `${label} should not echo board URLs`);
+  assert(!/input_event/.test(command), `${label} should not mention input events`);
+  assert(!/inject/.test(command), `${label} should not mention inject`);
+}
+
 function assertMacFormalLocalSmokeCommand(command, label, expectedPort) {
   assertSecretFreeCommand(command, label);
   assert(command.includes("node scripts/mac/check-mac-formal-local-smoke.mjs"), `${label} should use formal local smoke`);
@@ -167,6 +185,7 @@ function assertLocalSmokeCommands(payload, expectedPort, label) {
   assertMacHostSafeStartCommand(payload.commands?.macHostSafeStartCommand || "", `${label} MacHostSafeStart`, expectedPort);
   assertMacMaxFpsSafeStartCommand(payload.commands?.macMaxFpsSafeStartCommand || "", `${label} MacMaxFpsSafeStart`, expectedPort);
   assertMacUnattendedFormalCommand(payload.commands?.macUnattendedFormalCommand || "", `${label} MacUnattendedFormal`, expectedPort);
+  assertMacPowerPlanCommand(payload.commands?.macPowerPlanCommand || "", `${label} MacPowerPlan`);
   assertSecretFreeCommand(payload.commands?.macHostReadinessCommand || "", `${label} MacHostReadiness`);
   assertMacScriptHelpCommand(payload.commands?.macScriptHelpCommand || "", `${label} MacScriptHelp`);
   assertSecretFreeCommand(payload.commands?.rerunBoardSummaryCommand || "", `${label} rerun command`);
@@ -200,6 +219,7 @@ function checkHelp(args) {
     assert(/--boardSummary/.test(result.stdout), `${script} ${flag} should document --boardSummary`);
     assert(/commands\.macClientPromptPasswordSmokeCommand/.test(result.stdout), `${script} ${flag} should document commands.macClientPromptPasswordSmokeCommand`);
     assert(/commands\.macClientBrowserSelfTestCommand/.test(result.stdout), `${script} ${flag} should document commands.macClientBrowserSelfTestCommand`);
+    assert(/commands\.macPowerPlanCommand/.test(result.stdout), `${script} ${flag} should document commands.macPowerPlanCommand`);
     assert(/commands\.macScriptHelpCommand/.test(result.stdout), `${script} ${flag} should document commands.macScriptHelpCommand`);
     assert(!/Mac host formal smoke password:/.test(result.stdout), `${script} ${flag} should not prompt`);
   }
@@ -217,6 +237,7 @@ function checkPasswordSafety(args) {
   assert(/MacHostSafeStart=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include safe start command");
   assert(/MacFormalLocalSmoke=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include formal local smoke command");
   assert(/MacClientPromptPasswordSmoke=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include Mac client prompt-password smoke command");
+  assert(/MacPowerPlan=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include Mac power settings dry-run command");
   assert(/MacClientBrowserSelfTest=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include Mac client browser self-test command");
   assert(/MacScriptHelp=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include Mac script help command");
   assert(/RerunFormalLocalSmoke=/.test(noPasswordPayload.boardSummary || ""), "missing password JSON boardSummary should include rerun command");
@@ -268,6 +289,7 @@ function checkPasswordSafety(args) {
   assert(/MacHostSafeStart=/.test(boardLines[0]), "missing password boardSummary should include safe start command");
   assert(/MacMaxFpsSafeStart=/.test(boardLines[0]), "missing password boardSummary should include 60Hz safe start command");
   assert(/MacUnattendedFormal=/.test(boardLines[0]), "missing password boardSummary should include unattended formal command");
+  assert(/MacPowerPlan=/.test(boardLines[0]), "missing password boardSummary should include Mac power settings dry-run command");
   assert(/MacFormalLocalSmoke=/.test(boardLines[0]), "missing password boardSummary should include formal local smoke command");
   assert(/MacClientPromptPasswordSmoke=/.test(boardLines[0]), "missing password boardSummary should include Mac client prompt-password smoke command");
   assert(/MacClientBrowserSelfTest=/.test(boardLines[0]), "missing password boardSummary should include Mac client browser self-test command");
@@ -660,6 +682,7 @@ async function checkFakeHostSuccess(args) {
     assert(payload.boardSummary.includes("MacHostSafeStart="), "boardSummary should include safe start command");
     assert(payload.boardSummary.includes("MacMaxFpsSafeStart="), "boardSummary should include 60Hz safe start command");
     assert(payload.boardSummary.includes("MacUnattendedFormal="), "boardSummary should include formal unattended gate");
+    assert(payload.boardSummary.includes("MacPowerPlan="), "boardSummary should include Mac power settings dry-run command");
     assert(payload.boardSummary.includes("MacFormalLocalSmoke="), "boardSummary should include formal local smoke command");
     assert(payload.boardSummary.includes("MacClientPromptPasswordSmoke="), "boardSummary should include Mac client prompt-password smoke command");
     assert(payload.boardSummary.includes("MacClientBrowserSelfTest="), "boardSummary should include Mac client browser self-test command");
@@ -704,6 +727,7 @@ async function checkFakeHostBoardSummary(args) {
     assert(lines[0].includes(`MacHostSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port}`), "boardSummary should include safe start command");
     assert(lines[0].includes(`MacMaxFpsSafeStart=node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${port} --maxScreenFps 60`), "boardSummary should include 60Hz safe start command");
     assert(lines[0].includes(`MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port ${port} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`), "boardSummary should include unattended formal gate");
+    assert(lines[0].includes("MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary"), "boardSummary should include Mac power settings dry-run command");
     assert(lines[0].includes(`MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs --host 127.0.0.1 --port ${port} --promptPassword --boardSummary`), "boardSummary should include formal local smoke command");
     assert(lines[0].includes("MacClientPromptPasswordSmoke=node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --promptPassword --boardSummary"), "boardSummary should include Mac client prompt-password smoke command");
     assert(lines[0].includes("MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary"), "boardSummary should include Mac client browser self-test command");

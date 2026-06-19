@@ -48,6 +48,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 Mac 本机 formal local smoke 摘要也能直接给出安全 `MacPowerPlan=` 电源预案入口。
+完成内容：
+- `check-mac-formal-local-smoke` JSON `commands` 新增 `macPowerPlanCommand`，指向 `node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary`。
+- 成功/失败 `--boardSummary`、普通输出 NEXT 和错误 NEXT 都新增同一条 `MacPowerPlan=` / “Mac power settings dry-run plan”。
+- 测试覆盖 help、缺密码失败、fake host 成功 JSON、fake host 一行 boardSummary 和安全边界：命令不能含 `--apply`、`sudo`、密码、server、call、input_event 或 inject。
+- 本轮只补 formal local smoke 的可复制只读预案入口，不运行 `pmset`、不提权、不改系统、不加载 LaunchAgent、不认证、不请求或发送密码、不发 input/inject。
+修改文件：
+- `scripts/mac/check-mac-formal-local-smoke.mjs`
+- `scripts/mac/test-mac-formal-local-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-formal-local-smoke.mjs --timeoutMs 12000` 先失败在 help 缺 `commands.macPowerPlanCommand`。
+- 绿灯：实现后同一专项回归通过。
+- 完整验证和推送状态见本轮提交记录。
+遗留问题：
+- 真实系统睡眠/显示睡眠仍需用户现场确认后人工执行预览里的 `pmset` 命令，再复跑 `MacUnattendedStatus` / `MacHeartbeatOnce` 刷新证据。
+下一步建议：
+- Windows 端如需显示 formal local smoke 上下文里的电源预案，可消费同一稳定 `MacPowerPlan=`；不阻塞 Mac 侧继续正式联调。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 Mac formal E2E readiness 第一屏也能直接给出安全 `MacPowerPlan=` 电源预案入口。
 完成内容：
 - `check-mac-formal-e2e-status` JSON `commands` 新增 `macPowerPlanCommand`，指向 `node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary`。
