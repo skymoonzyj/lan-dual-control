@@ -1085,6 +1085,7 @@ async function verifyMacClientLogExport({ args, session }) {
           "LAN Dual Control Mac 控制端日志",
           "- 当前状态：",
           "- 目标地址：${args.host}:${args.port}",
+          "- 手工清单：",
           "- 重连状态：等待自动重连（1/3",
           "- 重连原因：测试断线",
           "- 下次重连：",
@@ -1176,6 +1177,7 @@ async function verifyMacClientLogExport({ args, session }) {
   const requiredCopied = [
     "LAN Dual Control Mac 控制端日志",
     "连接状态",
+    "手工清单",
     "密码安全",
     "显示与媒体",
     "输入与剪贴板",
@@ -1279,6 +1281,7 @@ function buildSnapshotExpression() {
       videoFlowMetric: text("#videoFlowMetric"),
       audioFlowMetric: text("#audioFlowMetric"),
       reconnectMetric: text("#reconnectMetric"),
+      manualChecklist: text("#manualChecklistMetric"),
       remoteRuntime: text("#remoteRuntimeMetric"),
       reversePolicy: text("#reversePolicyMetric"),
       reverseControlStatus: text("#reverseControlStatus"),
@@ -2811,6 +2814,12 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
       !defaultSettingsSnapshot.displaySettings.includes("1080P") ||
       !defaultSettingsSnapshot.displaySettings.includes("60 Hz") ||
       !defaultSettingsSnapshot.displaySettings.includes("20 Mbps") ||
+      !defaultSettingsSnapshot.manualChecklist.includes("连接") ||
+      !defaultSettingsSnapshot.manualChecklist.includes("视频") ||
+      !defaultSettingsSnapshot.manualChecklist.includes("音频") ||
+      !defaultSettingsSnapshot.manualChecklist.includes("剪贴板") ||
+      !defaultSettingsSnapshot.manualChecklist.includes("input_ack") ||
+      !defaultSettingsSnapshot.manualChecklist.includes("诊断") ||
       !defaultSettingsSnapshot.sendClipboardButtonDisabled ||
       !defaultSettingsSnapshot.sendClipboardFilesButtonDisabled
     ) {
@@ -2973,6 +2982,11 @@ Object.defineProperty(window, "EncodedVideoChunk", { value: undefined, configura
     print("OK", `Connection: ${videoSnapshot.connection}`);
     print("OK", `Remote: ${videoSnapshot.remote}`);
     print("OK", `Video: ${videoSnapshot.video}`);
+    for (const expected of ["连接已认证", "视频已出帧", "音频未开启", "剪贴板", "input_ack待测", "诊断可复制"]) {
+      if (!videoSnapshot.manualChecklist.includes(expected)) {
+        throw new Error(`Mac client manual checklist missing ${expected}: ${videoSnapshot.manualChecklist}`);
+      }
+    }
     lastBoardSummaryReport = {
       ...lastBoardSummaryReport,
       connection: videoSnapshot.connection,

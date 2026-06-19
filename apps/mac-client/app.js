@@ -28,6 +28,7 @@ const elements = {
   videoFlowMetric: document.querySelector("#videoFlowMetric"),
   audioFlowMetric: document.querySelector("#audioFlowMetric"),
   reconnectMetric: document.querySelector("#reconnectMetric"),
+  manualChecklistMetric: document.querySelector("#manualChecklistMetric"),
   remoteRuntimeMetric: document.querySelector("#remoteRuntimeMetric"),
   reversePolicyMetric: document.querySelector("#reversePolicyMetric"),
   reverseControlStatus: document.querySelector("#reverseControlStatus"),
@@ -989,9 +990,50 @@ function renderSessionDiagnostics() {
   elements.reconnectMetric.textContent = state.reconnectTotal > 0
     ? `已尝试 ${state.reconnectTotal} 次 · 当前 ${state.reconnectAttempts}/${maxReconnectAttempts}${formatReconnectCountdownSuffix()}`
     : "0 次";
+  elements.manualChecklistMetric.textContent = formatManualChecklistStatus();
   elements.remoteRuntimeMetric.textContent = formatRemoteRuntimeDiagnostics(state.remoteRuntime);
   elements.reversePolicyMetric.textContent = formatReversePolicyDiagnostics(state.remoteCapabilities);
   renderReverseControlRequest();
+}
+
+function formatManualChecklistStatus() {
+  const connection = state.authenticated
+    ? "连接已认证"
+    : state.connected
+      ? "连接已连接"
+      : "连接待连";
+  const video = state.frameCount > 0
+    ? "视频已出帧"
+    : state.connected
+      ? "视频待首帧"
+      : "视频待连";
+  const audio = elements.audioToggle.checked
+    ? state.audioPlayedFrames > 0
+      ? "音频已播放"
+      : state.audioFrames > 0
+        ? "音频已接收"
+        : "音频等待"
+    : "音频未开启";
+  const clipboardText = [
+    elements.clipboardStatus.textContent || "",
+    elements.fileClipboardStatus.textContent || "",
+  ].join(" ");
+  let clipboard = "剪贴板待测";
+  if (/确认超时|写入失败|发送失败|对端拒绝|失败|文件过大|不可用/.test(clipboardText)) {
+    clipboard = "剪贴板需重试";
+  } else if (/等待确认|已发送|发送\s|对端接收|对端准备/.test(clipboardText)) {
+    clipboard = "剪贴板等待回执";
+  } else if (/已写入|已读取|监听发送|已确认/.test(clipboardText)) {
+    clipboard = "剪贴板已确认";
+  }
+  const inputText = elements.inputStatus.textContent || "";
+  const inputAck = inputText.includes("已确认")
+    ? "input_ack已确认"
+    : inputText.includes("被拒绝")
+      ? "input_ack被拒绝"
+      : "input_ack待测";
+  const diagnostics = elements.copyLogButton.disabled ? "诊断不可复制" : "诊断可复制";
+  return [connection, video, audio, clipboard, inputAck, diagnostics].join(" · ");
 }
 
 function reconnectDelayForAttempt(attempt) {
@@ -1649,6 +1691,7 @@ function buildLogExportText() {
     `- 当前状态：${elements.connectionStatus.textContent || "-"}`,
     `- 远端摘要：${elements.remoteStatus.textContent || "-"}`,
     `- 目标地址：${currentEndpoint().host}:${currentEndpoint().port}`,
+    `- 手工清单：${formatManualChecklistStatus()}`,
     `- 远端运行：${elements.remoteRuntimeMetric.textContent || "-"}`,
     `- 密码安全：${elements.passwordSafetyStatus.textContent || "-"}`,
     `- 反控策略：${elements.reversePolicyMetric.textContent || "-"}`,
@@ -1868,6 +1911,7 @@ async function handleMessage(rawData) {
       if (!message.accepted) {
         logEvent("输入被拒绝", message.reason || message.code || "unknown");
       }
+      renderSessionDiagnostics();
       break;
     case "clipboard_ack":
       handleClipboardAck(message);
@@ -2777,12 +2821,14 @@ function sendClipboardText({ source = "manual" } = {}) {
   });
   elements.clipboardStatus.textContent = `已发送 ${text.length} 字`;
   logEvent(source === "watch" ? "监听剪贴板已发送" : "剪贴板已发送", `${text.length} 字`);
+  renderSessionDiagnostics();
 }
 
 function handleClipboardAck(message) {
   const status = `${message.accepted ? "已写入" : "写入失败"} · ${message.mode || "unknown"} · ${message.textLength ?? 0} 字`;
   elements.clipboardStatus.textContent = status;
   logEvent(message.accepted ? "剪贴板确认" : "剪贴板失败", message.reason || status);
+  renderSessionDiagnostics();
 }
 
 function clipboardApiAvailable() {
@@ -2957,6 +3003,7 @@ function renderFileClipboardSelectionStatus({ resetRetry = false } = {}) {
         : `${files.length} 个 · ${formatBytes(totalBytes)}`
     : "未选择";
   updateFileClipboardButton();
+  renderSessionDiagnostics();
 }
 
 function updateFileClipboardButton() {
@@ -3002,6 +3049,7 @@ function handleFileTransferResultTimeout(transferId) {
   elements.fileClipboardStatus.textContent = `确认超时${sentText} · 可重新发送`;
   logEvent("文件剪贴板确认超时", `${Math.round(clipboardFileResultTimeoutMs / 1000)} 秒未收到对端结果，请重新发送`);
   updateFileClipboardButton();
+  renderSessionDiagnostics();
 }
 
 function scheduleFileTransferResultTimeout(transferId) {
@@ -3025,6 +3073,7 @@ function cancelActiveFileTransfer(status = "文件发送已取消") {
   state.fileTransfers.clear();
   elements.fileClipboardStatus.textContent = status;
   updateFileClipboardButton();
+  renderSessionDiagnostics();
 }
 
 function isCurrentFileTransferMessage(message) {
@@ -3036,12 +3085,14 @@ async function sendClipboardFiles() {
   if (!state.authenticated) {
     elements.fileClipboardStatus.textContent = "未连接";
     logEvent("文件剪贴板未发送", "请先连接 Windows host");
+    renderSessionDiagnostics();
     return;
   }
 
   const { files, totalBytes } = selectedClipboardFiles();
   if (files.length === 0) {
     elements.fileClipboardStatus.textContent = "未选择";
+    renderSessionDiagnostics();
     return;
   }
 
@@ -3049,6 +3100,7 @@ async function sendClipboardFiles() {
     const detail = `${formatBytes(totalBytes)} 超过上限 ${formatBytes(maxClipboardFileBytes)}`;
     elements.fileClipboardStatus.textContent = "文件过大";
     logEvent("文件剪贴板过大", detail);
+    renderSessionDiagnostics();
     return;
   }
 
@@ -3057,6 +3109,7 @@ async function sendClipboardFiles() {
     elements.fileClipboardStatus.textContent = message;
     logEvent("文件剪贴板未发送", message);
     updateFileClipboardButton();
+    renderSessionDiagnostics();
     return;
   }
 
@@ -3081,6 +3134,7 @@ async function sendClipboardFiles() {
   state.fileTransfers.set(transferId, { fileCount: files.length, totalBytes, sentBytes: 0, startedAt });
   updateFileClipboardButton();
   elements.fileClipboardStatus.textContent = `准备发送 ${files.length} 个`;
+  renderSessionDiagnostics();
 
   try {
     send({
@@ -3113,6 +3167,7 @@ async function sendClipboardFiles() {
           dataBase64: "",
         });
         elements.fileClipboardStatus.textContent = "发送空文件";
+        renderSessionDiagnostics();
       }
       for (let offset = 0; offset < file.size; offset += fileChunkSizeBytes) {
         throwIfFileTransferCanceled(abortController.signal);
@@ -3138,6 +3193,7 @@ async function sendClipboardFiles() {
         const transfer = { fileCount: files.length, totalBytes, sentBytes, startedAt };
         state.fileTransfers.set(transferId, transfer);
         elements.fileClipboardStatus.textContent = formatFileTransferProgress(transfer);
+        renderSessionDiagnostics();
         if (chunkIndex % 8 === 0) {
           await yieldToUi();
         }
@@ -3155,6 +3211,7 @@ async function sendClipboardFiles() {
     scheduleFileTransferResultTimeout(transferId);
     elements.fileClipboardStatus.textContent = `已发送 ${formatBytes(sentBytes)} · 等待确认`;
     logEvent("文件剪贴板", `文件块发送完成，等待确认 · ${transferId}`);
+    renderSessionDiagnostics();
   } catch (error) {
     if (error?.name === "AbortError") {
       logEvent("文件剪贴板取消", elements.fileClipboardStatus.textContent || "文件发送已取消");
@@ -3163,6 +3220,7 @@ async function sendClipboardFiles() {
     const message = error?.message || "文件发送失败";
     elements.fileClipboardStatus.textContent = "发送失败";
     logEvent("文件剪贴板失败", message);
+    renderSessionDiagnostics();
   } finally {
     if (state.fileTransferAbortController === abortController) {
       state.fileTransferAbortController = null;
@@ -3175,6 +3233,7 @@ async function sendClipboardFiles() {
       elements.clipboardFileInput.value = "";
     }
     updateFileClipboardButton();
+    renderSessionDiagnostics();
   }
 }
 
@@ -3189,10 +3248,12 @@ function handleClipboardFileResponse(message) {
     if (state.fileTransferActive && message.transferId === state.fileTransferId) {
       cancelActiveFileTransfer("对端拒绝，文件发送已取消");
     }
+    renderSessionDiagnostics();
     return;
   }
   const chunkText = message.maxChunkBytes ? ` · 块 ${formatBytes(message.maxChunkBytes)}` : "";
   elements.fileClipboardStatus.textContent = `对端准备 · ${message.saveMode || "unknown"}${chunkText}`;
+  renderSessionDiagnostics();
 }
 
 function handleClipboardFileProgress(message) {
@@ -3203,6 +3264,7 @@ function handleClipboardFileProgress(message) {
   const totalBytes = Number(message.totalBytes) || 0;
   const percent = totalBytes === 0 ? 100 : Math.round((receivedBytes / totalBytes) * 100);
   elements.fileClipboardStatus.textContent = `对端接收 ${percent}%`;
+  renderSessionDiagnostics();
 }
 
 function formatClipboardFileFailure(message) {
@@ -3233,6 +3295,7 @@ function handleClipboardFileResult(message) {
     elements.clipboardFileInput.value = "";
   }
   updateFileClipboardButton();
+  renderSessionDiagnostics();
 }
 
 elements.discoverButton.addEventListener("click", () => {
