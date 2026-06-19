@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Windows Codex
+本轮目标：让 Windows 控制端把 MacFormalE2E ready/readyToCall 正向结果显示为证据，而不是风险。
+完成内容：
+- `parseMacPositiveEvidenceLabels` 新增 `MacFormalE2E` 正向结果识别：`status=ok`、`readyToCall=true`、`ready=true`、`checklist=passed/ok` 或“通过”且同段无 warning/blocker/failed/stale 时，显示“Mac formal E2E 已就绪”。
+- Mac 提醒区会显示“证据：Mac formal E2E 已就绪”，复制/导出诊断会写入“值守证据 Mac formal E2E 已就绪”；同段仍有 warning/blocker/stale/失败时继续按风险摘要处理。
+- 页面 diagnostics-only 新增正向 `MacFormalE2E` 证据和导出报告覆盖，确认不会触发风险提示。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：新增测试后，`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 先失败在 `positiveMacFormalE2eAttention.evidenceSummary` 为空。
+- 绿灯：实现解析后，`node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：
+- 本轮只消费 Mac 已输出的 formal E2E 就绪证据，不主动运行 Mac formal E2E、不认证、不请求密码。
+下一步建议：
+- 如果下一轮最新通讯板出现 `MacFormalE2E status=ok readyToCall=true checklist=passed blockers=none warnings=none`，Windows 侧先把它当作正向 readiness 证据；只有同段出现非空 warning/blocker、stale、失败或授权问题时才继续排查。
+是否改了协议：否；只增加 Windows 控制端本地解析、显示和诊断导出。
+是否需要另一端配合：不需要。
+
+## 2026-06-19 Windows Codex
+
+日期：2026-06-19 继续推进
+开发端：Windows Codex
 本轮目标：让 Windows 控制端把 Mac 正向验收结果显示为证据，而不是风险。
 完成内容：
 - `parseMacUnattendedAttention` 新增 `evidenceLabels` / `evidenceSummary`，识别 `MacHostMedia 通过 passed=... media=ok` 为“Mac 媒体基线已通过”，识别 `MacFormalLocalSmoke 通过 H.264/PCM/input-log` 为“Mac 本机短验收已通过”。

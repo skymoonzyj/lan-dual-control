@@ -3352,6 +3352,15 @@ function parseMacPositiveEvidenceLabels(text) {
   ) {
     labels.push("Mac 本机短验收已通过");
   }
+  if (
+    hasMacPositiveEvidenceSegment(
+      source,
+      /\bMacFormalE2E\b/i,
+      /\bready(?:ToCall)?\s*=\s*true\b|\bchecklist\s*=\s*(?:passed|ok)\b|\bstatus\s*=\s*ok\b|通过/i,
+    )
+  ) {
+    labels.push("Mac formal E2E 已就绪");
+  }
   return [...new Set(labels)];
 }
 
