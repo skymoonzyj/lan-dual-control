@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const defaults = {
-  preset: "night-unattended",
+  preset: "wmc-current",
   server: process.env.CODEX_LINK_SERVER || "http://127.0.0.1:17888",
   token: process.env.CODEX_LINK_TOKEN || "",
   device: "Mac Codex",
@@ -16,45 +16,52 @@ const defaults = {
 };
 
 const presets = {
-  "night-unattended": [
+  "wmc-current": [
     {
-      id: "N1",
-      topic: "video-low-latency",
-      evidence: "task-board:windows-n1-h264-video-queue",
-      needles: ["Windows N1 H.264 视频低延迟队列治理"],
-    },
-    {
-      id: "N2",
-      topic: "audio-low-latency",
-      evidence: "task-board:windows-n2-webaudio-queue",
-      needles: ["Windows N2 WebAudio 队列治理"],
-    },
-    {
-      id: "N3",
+      id: "W1",
+      aliases: ["G1", "N3"],
       topic: "one-click-entry",
       evidence: "task-board:windows-control-mac-entry",
       needles: ["Windows 根目录双击入口", "Windows 一键打开当前 Mac 控制页"],
     },
     {
-      id: "N4",
+      id: "W2",
+      aliases: ["G2", "N1"],
+      topic: "video-low-latency",
+      evidence: "task-board:windows-n1-h264-video-queue",
+      needles: ["Windows N1 H.264 视频低延迟队列治理"],
+    },
+    {
+      id: "W3",
+      aliases: ["G3", "N2"],
+      topic: "audio-low-latency",
+      evidence: "task-board:windows-n2-webaudio-queue",
+      needles: ["Windows N2 WebAudio 队列治理"],
+    },
+    {
+      id: "M1",
+      aliases: ["G4", "N4"],
       topic: "remote-only-audio-plan",
       evidence: "task-board:mac-remote-audio-plan-and-windows-consumer",
       needles: ["MacRemoteAudioPlan=", "Windows 控制端消费 Mac 远端独占声音方案"],
     },
     {
-      id: "N5",
+      id: "M2",
+      aliases: ["G5", "N5"],
       topic: "input-safety-path",
       evidence: "task-board:mac-input-safety-plan-and-windows-consumer",
       needles: ["Windows 控制端消费 Mac 真实输入安全方案"],
     },
     {
-      id: "N6",
+      id: "C1",
+      aliases: ["N6"],
       topic: "daily-item-reporting",
-      evidence: "task-board:daily-item-reporter",
-      needles: ["DAILY_ITEM N1-N6 上报格式工具"],
+      evidence: "task-board:daily-item-reporter-wmc-numbering",
+      needles: ["DAILY_ITEM W/M/C 新编号上报格式工具"],
     },
   ],
 };
+presets["night-unattended"] = presets["wmc-current"];
 
 try {
   const args = parseArgs(process.argv.slice(2));
@@ -133,12 +140,14 @@ function buildReport(args) {
   const taskBoard = readFileSync(args.taskBoardPath, "utf8");
   const items = presets[args.preset].map((item) => {
     const missing = item.needles.filter((needle) => !taskBoard.includes(needle));
+    const aliasPart = item.aliases?.length ? ` alias=${item.aliases.join(",")}` : "";
     const status = missing.length === 0 ? "PASS" : "BLOCKED";
     const line = status === "PASS"
-      ? `DAILY_ITEM ${item.id} PASS topic=${item.topic} evidence=${item.evidence}`
-      : `DAILY_ITEM ${item.id} BLOCKED topic=${item.topic} blockedBy=missing-evidence missing=${missing.map(safeToken).join(",") || "unknown"}`;
+      ? `DAILY_ITEM ${item.id} PASS${aliasPart} topic=${item.topic} evidence=${item.evidence}`
+      : `DAILY_ITEM ${item.id} BLOCKED${aliasPart} topic=${item.topic} blockedBy=missing-evidence missing=${missing.map(safeToken).join(",") || "unknown"}`;
     return {
       id: item.id,
+      aliases: item.aliases || [],
       topic: item.topic,
       status,
       evidence: item.evidence,
@@ -222,11 +231,14 @@ async function post(args, pathName, body) {
 
 function printHelp() {
   console.log(`Usage:
-  node scripts/codex-link-daily-items.mjs [--preset night-unattended] [--boardSummary|--json]
+  node scripts/codex-link-daily-items.mjs [--preset wmc-current] [--boardSummary|--json]
   node scripts/codex-link-daily-items.mjs --server http://host:17888 --sendStatus --sendMessage --boardSummary
 
 Options:
   --preset <name>           Report preset. Default: ${defaults.preset}
+                            wmc-current emits W1/W2/W3/M1/M2/C1.
+                            night-unattended is kept as a legacy alias but also
+                            emits W/M/C item IDs with old G/N aliases.
   --taskBoardPath <path>    Markdown task board to verify. Default: docs/04-task-board.md
   --boardSummary            Print one Agent Link friendly DAILY_ITEM summary line.
   --json                    Print machine-readable JSON.

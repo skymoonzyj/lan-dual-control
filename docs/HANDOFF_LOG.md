@@ -19,6 +19,34 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 DAILY_ITEM 新 W/M/C 编号对齐
+开发端：Mac Codex
+本轮目标：响应 Agent Link Board 新编号规则，把 `codex-link-daily-items` 从旧 `N1-N6` 输出切到 `W1/W2/W3/M1/M2/C1`，避免后续两端上报只写旧编号。
+完成内容：
+- 默认 preset 改为 `wmc-current`，输出 `DAILY_ITEM W1/W2/W3/M1/M2/C1`。
+- 每条 `DAILY_ITEM` 新增 `alias=`，保留旧 `G/N` 映射：W1=G1,N3、W2=G2,N1、W3=G3,N2、M1=G4,N4、M2=G5,N5、C1=N6。
+- `--preset night-unattended` 保留为兼容别名，但也输出新 W/M/C 编号。
+- 测试覆盖 help、默认 JSON、board summary、兼容 preset 和缺证据 fail-closed。
+修改文件：
+- `scripts/codex-link-daily-items.mjs`
+- `scripts/test-codex-link-daily-items.mjs`
+- `docs/04-task-board.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/test-codex-link-daily-items.mjs --timeoutMs 10000` 先失败，help 缺少 `W1/W2/W3/M1/M2/C1`，随后 C1 因任务板缺新编号证据而 BLOCKED。
+- 绿灯：后续本轮收尾会继续跑该测试、真实 `--boardSummary`、diff 和冲突扫描。
+遗留问题：
+- 该工具只根据任务板文本证据汇总，不替代真实体验验收；需要用户操作的项目仍要先发 Agent Link Board call。
+下一步建议：
+- 后续上板 DAILY_ITEM 时用 `node scripts/codex-link-daily-items.mjs --preset wmc-current --server http://192.168.31.68:17888 --sendStatus --sendMessage --boardSummary`，不要只写旧 N/G 编号。
+是否改了协议：否。
+是否需要另一端配合：Windows 端只需读取新 W/M/C 编号；旧 `night-unattended` 命令可继续兼容。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac client 状态摘要暴露可用入口
 开发端：Mac Codex
 本轮目标：让只看 `start-mac-client --status --boardSummary` / `MacClientPage=` 的人，也能直接看到 Mac 端根目录双击入口，不必再翻 README 或交接日志。

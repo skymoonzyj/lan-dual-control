@@ -8,6 +8,14 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const script = "scripts/codex-link-daily-items.mjs";
 const defaultTimeoutMs = 10000;
+const expectedDailyItems = [
+  { id: "W1", alias: "G1,N3" },
+  { id: "W2", alias: "G2,N1" },
+  { id: "W3", alias: "G3,N2" },
+  { id: "M1", alias: "G4,N4" },
+  { id: "M2", alias: "G5,N5" },
+  { id: "C1", alias: "N6" },
+];
 
 function parseArgs(argv) {
   const args = { timeoutMs: defaultTimeoutMs };
@@ -75,6 +83,7 @@ function checkHelp(args) {
     assert(result.status === 0, `${flag} should exit 0. stderr=${result.stderr}`);
     assertIncludes(result.stdout, "Usage:", `${flag} help`);
     assertIncludes(result.stdout, "DAILY_ITEM", `${flag} help`);
+    assertIncludes(result.stdout, "W1/W2/W3/M1/M2/C1", `${flag} help`);
     assertIncludes(result.stdout, "--preset", `${flag} help`);
     assertIncludes(result.stdout, "--boardSummary", `${flag} help`);
     assertIncludes(result.stdout, "--sendStatus", `${flag} help`);
@@ -87,20 +96,22 @@ function checkJsonPass(args) {
   const result = run(["--json"], args);
   assert(result.status === 0, `default JSON should pass. stdout=${result.stdout} stderr=${result.stderr}`);
   const payload = parseJson(result.stdout, "default JSON");
-  assert(payload.preset === "night-unattended", `unexpected preset: ${payload.preset}`);
+  assert(payload.preset === "wmc-current", `unexpected preset: ${payload.preset}`);
   assert(payload.status === "PASS", `unexpected status: ${payload.status}`);
   assert(Array.isArray(payload.items), "payload should include items");
   assert(payload.items.length === 6, `expected 6 items, got ${payload.items.length}`);
-  for (const id of ["N1", "N2", "N3", "N4", "N5", "N6"]) {
+  for (const { id, alias } of expectedDailyItems) {
     const item = payload.items.find((candidate) => candidate.id === id);
     assert(item, `missing item ${id}`);
     assert(item.status === "PASS", `${id} should PASS, got ${item.status}`);
     assertIncludes(item.line, `DAILY_ITEM ${id} PASS`, `${id} line`);
+    assertIncludes(item.line, `alias=${alias}`, `${id} line`);
   }
-  assertIncludes(payload.boardSummary, "DAILY_ITEM_REPORT preset=night-unattended status=PASS", "default JSON boardSummary");
+  assertIncludes(payload.boardSummary, "DAILY_ITEM_REPORT preset=wmc-current status=PASS", "default JSON boardSummary");
+  assertNotIncludes(payload.boardSummary, "DAILY_ITEM N1", "default JSON boardSummary");
   assertIncludes(payload.boardSummary, "Safety=no-credentials,no-auth,no-input-inject", "default JSON boardSummary");
   assertSafeOutput(`${result.stdout}\n${result.stderr}`, "default JSON");
-  console.log("[OK] daily item reporter emits N1-N6 PASS JSON from current task board evidence");
+  console.log("[OK] daily item reporter emits W/M/C PASS JSON from current task board evidence");
 }
 
 function checkBoardSummary(args) {
@@ -109,13 +120,31 @@ function checkBoardSummary(args) {
   const text = String(result.stdout || "").trim();
   const lines = text.split(/\r?\n/).filter(Boolean);
   assert(lines.length === 1, `boardSummary should be one line, got ${lines.length}`);
-  assertIncludes(text, "DAILY_ITEM_REPORT preset=night-unattended status=PASS", "boardSummary");
-  for (const id of ["N1", "N2", "N3", "N4", "N5", "N6"]) {
+  assertIncludes(text, "DAILY_ITEM_REPORT preset=wmc-current status=PASS", "boardSummary");
+  for (const { id, alias } of expectedDailyItems) {
     assertIncludes(text, `DAILY_ITEM ${id} PASS`, "boardSummary");
+    assertIncludes(text, `alias=${alias}`, "boardSummary");
   }
+  assertNotIncludes(text, "DAILY_ITEM N1", "boardSummary");
   assertIncludes(text, "Safety=no-credentials,no-auth,no-input-inject", "boardSummary");
   assertSafeOutput(`${result.stdout}\n${result.stderr}`, "boardSummary");
   console.log("[OK] daily item reporter boardSummary is one-line and Agent Link safe");
+}
+
+function checkLegacyPresetAlias(args) {
+  const result = run(["--preset", "night-unattended", "--json"], args);
+  assert(result.status === 0, `legacy preset alias should pass. stdout=${result.stdout} stderr=${result.stderr}`);
+  const payload = parseJson(result.stdout, "legacy preset alias JSON");
+  assert(payload.preset === "night-unattended", `unexpected legacy preset echo: ${payload.preset}`);
+  for (const { id, alias } of expectedDailyItems) {
+    const item = payload.items.find((candidate) => candidate.id === id);
+    assert(item, `legacy preset missing item ${id}`);
+    assertIncludes(item.line, `DAILY_ITEM ${id} PASS`, `legacy ${id} line`);
+    assertIncludes(item.line, `alias=${alias}`, `legacy ${id} line`);
+  }
+  assertNotIncludes(payload.boardSummary, "DAILY_ITEM N1", "legacy preset alias boardSummary");
+  assertSafeOutput(`${result.stdout}\n${result.stderr}`, "legacy preset alias JSON");
+  console.log("[OK] legacy night-unattended preset now emits W/M/C numbering with aliases");
 }
 
 function checkMissingEvidence(args) {
@@ -128,7 +157,9 @@ function checkMissingEvidence(args) {
     const payload = parseJson(result.stdout, "missing evidence JSON");
     assert(payload.status === "BLOCKED", `missing evidence status should be BLOCKED, got ${payload.status}`);
     assert(payload.items.some((item) => item.status === "BLOCKED"), "missing evidence should include blocked items");
-    assertIncludes(payload.boardSummary, "DAILY_ITEM N1 BLOCKED", "missing evidence boardSummary");
+    assertIncludes(payload.boardSummary, "DAILY_ITEM W1 BLOCKED", "missing evidence boardSummary");
+    assertIncludes(payload.boardSummary, "alias=G1,N3", "missing evidence boardSummary");
+    assertNotIncludes(payload.boardSummary, "DAILY_ITEM N1", "missing evidence boardSummary");
     assertSafeOutput(`${result.stdout}\n${result.stderr}`, "missing evidence JSON");
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -145,6 +176,7 @@ async function main() {
   checkHelp(args);
   checkJsonPass(args);
   checkBoardSummary(args);
+  checkLegacyPresetAlias(args);
   checkMissingEvidence(args);
   console.log("[OK] daily item reporter self-test passed");
 }
