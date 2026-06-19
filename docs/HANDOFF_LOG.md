@@ -21,6 +21,34 @@
 
 日期：2026-06-19 继续推进
 开发端：Mac Codex
+本轮目标：让 `MacHeartbeat=` 第一屏也直接给出安全 `MacLaunchAgentPlan=` 值守加载规划入口。
+完成内容：
+- `check-mac-heartbeat` JSON `commands` 新增 `macLaunchAgentPlanCommand`，指向 `node scripts/mac/install-mac-host-launch-agent.mjs --launchAgentPath <用户 LaunchAgent plist> --port <当前端口> --boardSummary`。
+- `--boardSummary` 新增同一条 `MacLaunchAgentPlan=`，让只看最新心跳的人也能复制 LaunchAgent dry-run 规划入口。
+- 测试覆盖 help、JSON commands、离线/在线/stale/power warning 摘要和安全边界：LaunchAgent plan 命令不能含 `--write`、`--force`、`launchctl`、密码、server、call、input_event 或 inject。
+- 本轮只补 Mac heartbeat 的可复制只读值守加载规划入口，不运行 `pmset`、不提权、不改系统、不写 plist、不加载 `launchctl`、不认证、不请求或发送密码、不发 call/input/inject。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 12000` 先失败在 help 缺 `macLaunchAgentPlanCommand`。
+- 绿灯：实现后同一专项回归通过。
+- 完整验证和推送状态见本轮提交记录。
+遗留问题：
+- 真实 LaunchAgent loaded 状态仍需用户现场确认后人工执行 `launchctl` 加载/打印复查，再复跑 `MacUnattendedStatus` / `MacHeartbeatOnce` 刷新证据；本轮只提供 dry-run 规划入口。
+下一步建议：
+- Windows 侧已能消费 `MacLaunchAgentPlan=`；后续拉取后只需确认 `MacHeartbeat=` 第一屏也能被 Windows 控制端/恢复总览正常展示或导出。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
 本轮目标：让 `MacPowerPlan=` / `plan-mac-power-settings` 第一屏也能直接给出安全 `MacLaunchAgentPlan=` 值守加载规划入口。
 完成内容：
 - `plan-mac-power-settings` JSON `commands` 新增 `macLaunchAgentPlan`，指向 `node scripts/mac/install-mac-host-launch-agent.mjs --boardSummary`。

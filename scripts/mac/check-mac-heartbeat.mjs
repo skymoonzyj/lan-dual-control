@@ -116,8 +116,9 @@ Machine-readable JSON fields:
                               browser self-test, Mac script help safety check,
                               the user-run prompt-password Mac client smoke,
                               60Hz safe start, LaunchAgent load/print checks,
-                              MacUnattendedSendStatus, and macPowerPlanCommand
-                              for a dry-run power settings plan.
+                              MacUnattendedSendStatus, macPowerPlanCommand,
+                              and macLaunchAgentPlanCommand for dry-run
+                              power/LaunchAgent plans.
 
 Examples:
   node scripts/mac/check-mac-heartbeat.mjs --checkBoard --boardSummary
@@ -707,6 +708,7 @@ function buildCommands(args) {
     macUnattendedSendStatusCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --server ${args.server} --sendStatus --boardSummary`,
     macUnattendedFormalCommand: `node scripts/mac/check-mac-unattended-status.mjs --host ${args.host} --port ${args.port} --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary`,
     macPowerPlanCommand: "node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
+    macLaunchAgentPlanCommand: `node scripts/mac/install-mac-host-launch-agent.mjs --launchAgentPath ${shellQuote(launchAgentPath)} --port ${args.port} --boardSummary`,
     macLaunchAgentLoadCommand: `launchctl bootstrap gui/$(id -u) ${shellQuote(launchAgentPath)}`,
     macLaunchAgentPrintCommand: `launchctl print gui/$(id -u)/${shellQuote(launchAgentLabel)}`,
     macClientPageStatusCommand: "node scripts/mac/start-mac-client.mjs --status --boardSummary",
@@ -892,6 +894,7 @@ function makeBoardSummary(report) {
     `MacUnattendedSendStatus=${report.commands.macUnattendedSendStatusCommand}.`,
     `MacPowerPlan=${report.commands.macPowerPlanCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
+    `MacLaunchAgentPlan=${report.commands.macLaunchAgentPlanCommand}.`,
     `MacLaunchAgentLoad=${report.commands.macLaunchAgentLoadCommand}.`,
     `MacLaunchAgentPrint=${report.commands.macLaunchAgentPrintCommand}.`,
     `MacClientPage=${report.commands.macClientPageStatusCommand}.`,
