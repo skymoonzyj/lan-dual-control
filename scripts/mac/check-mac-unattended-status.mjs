@@ -95,6 +95,11 @@ Machine-readable JSON fields:
   commands.macFormalLocalSmoke   Follow-up formal H.264 + PCM + input-log
                                   short validation command; prompts locally
                                   and never embeds a password in argv.
+  commands.macClientBrowserSelfTest
+                                  Secret-free local Mac client browser self-test.
+                                  It uses a mock Windows host and does not use
+                                  a real host password, Agent Link call, input,
+                                  or inject.
   commands.macScriptHelp         Unified side-effect-free Mac script help
                                   self-check command.
 
@@ -588,6 +593,7 @@ function makeCommands(args) {
     macHostMedia: makeMacHostMediaCommand(args),
     macResumeStatus: makeMacResumeStatusCommand(args),
     macFormalLocalSmoke: makeMacFormalLocalSmokeCommand(args),
+    macClientBrowserSelfTest: makeMacClientBrowserSelfTestCommand(),
     macScriptHelp: makeMacScriptHelpCommand(),
     startHost: `node scripts/mac/start-mac-host.mjs --promptPassword --requirePassword --host 0.0.0.0 --port ${args.port}`,
     stopHost: makeMacHostStopCommand(args),
@@ -703,6 +709,10 @@ function makeMacScriptHelpCommand() {
   return "node scripts/mac/test-mac-script-help.mjs --timeoutMs 10000 --boardSummary";
 }
 
+function makeMacClientBrowserSelfTestCommand() {
+  return "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary";
+}
+
 function makeMacUnattendedFormalCommand(args) {
   const parts = [
     "node scripts/mac/check-mac-unattended-status.mjs",
@@ -772,7 +782,7 @@ function makeBoardSummary(report) {
   const suggestedAction = report.suggestedAction?.boardSummary || "";
   return [
     `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedAction ? ` ${suggestedAction}` : ""}.`,
-    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacHostMedia=${report.commands.macHostMedia}; MacResumeStatus=${report.commands.macResumeStatus}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacScriptHelp=${report.commands.macScriptHelp}.`,
+    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacHostMedia=${report.commands.macHostMedia}; MacResumeStatus=${report.commands.macResumeStatus}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTest}; MacScriptHelp=${report.commands.macScriptHelp}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
@@ -884,6 +894,7 @@ function printHuman(report) {
   console.log(`- Mac resume status: ${report.commands.macResumeStatus}`);
   if (report.suggestedAction) console.log(`- suggested action: ${report.suggestedAction.boardSummary}`);
   console.log(`- Mac formal local smoke: ${report.commands.macFormalLocalSmoke}`);
+  console.log(`- Mac client browser self-test: ${report.commands.macClientBrowserSelfTest}`);
   console.log(`- Mac script help: ${report.commands.macScriptHelp}`);
   console.log(report.boardSummary);
 }

@@ -17,6 +17,34 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-19 Mac Codex
+
+日期：2026-06-19 继续推进
+开发端：Mac Codex
+本轮目标：让 `MacUnattendedStatus=` / `MacUnattendedFormal=` 值守摘要也暴露本地 Mac client browser 自测入口。
+完成内容：
+- `check-mac-unattended-status --json/--boardSummary` 新增 `commands.macClientBrowserSelfTest` / `MacClientBrowserSelfTest=`。
+- 新命令统一为 `node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs --boardSummary`，用于只看到值守摘要、但真实 Windows host 密码/LAN/授权未就绪时，先排除 Mac client 页面、反控 UI、剪贴板和 input-log 流程退化。
+- 帮助、JSON、普通输出和 `--boardSummary` 均保留该入口；unattended status 本身仍不使用真实 Windows host、不请求密码、不认证、不发送 call/input_event、不执行 `inject`。
+修改文件：
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 30000` 先失败在 `check-mac-unattended-status --help` 缺 `commands.macClientBrowserSelfTest`。
+- 绿灯：实现后复跑 `node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 30000` 通过。
+- 最终收尾：`node --check scripts/mac/check-mac-unattended-status.mjs`、`node --check scripts/mac/test-mac-unattended-status.mjs`、`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 30000`、`node scripts/mac/test-mac-script-help.mjs --script check-mac-unattended-status.mjs --timeoutMs 10000 --boardSummary`、离线 JSON 样例、`git diff --check` 与触碰文件冲突标记扫描。
+遗留问题：
+- 当前真实 Mac host 仍是旧 build；本轮没有重启 host，也没有跑需要用户密码或真实 Windows host 的 browser smoke。
+下一步建议：
+- 只看到 `MacUnattendedStatus=` / `MacUnattendedFormal=` 时，无人值守或真实 Windows host 尚未准备好可先复制 `MacClientBrowserSelfTest=`；用户在场且准备真实连接密码时再走已有 `MacClientPromptPasswordSmoke=` 或正式验收流程。
+是否改了协议：否；只补 Mac unattended status 的安全命令标签和自测。
+是否需要另一端配合：不需要；已避免触碰 Windows host/control 端代码。
+
 ## 2026-06-19 Windows Codex
 
 日期：2026-06-19 继续推进

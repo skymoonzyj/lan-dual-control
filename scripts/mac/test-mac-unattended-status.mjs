@@ -163,6 +163,20 @@ function assertNoSecretOrInputGuidance(text, label) {
   assertNotIncludes(value, "--injectInput", label);
 }
 
+function assertMacClientBrowserSelfTestCommand(command, label) {
+  const text = String(command || "");
+  assertIncludes(text, "node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs", label);
+  assertIncludes(text, "--boardSummary", label);
+  assertNotIncludes(text, "--promptPassword", label);
+  assertNotIncludes(text, "--password", label);
+  assertNotIncludes(text, "--useEnvPassword", label);
+  assertNotIncludes(text, "--sendCall", label);
+  assertNotIncludes(text, "--forceCall", label);
+  assertNotIncludes(text, "--server", label);
+  assertNotIncludes(text, "input_event", label);
+  assertNotIncludes(text, "inject", label);
+}
+
 function gitLines(args) {
   const result = spawnSync("git", args, {
     cwd: repoRoot,
@@ -263,6 +277,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macHostMedia", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macResumeStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macFormalLocalSmoke", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macClientBrowserSelfTest", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macScriptHelp", `${script} ${flag}`);
     assertNoSecretOrInputGuidance(result.stdout, `${script} ${flag}`);
   }
@@ -375,6 +390,10 @@ function checkMissingLaunchAgentJson(args) {
   assertNotIncludes(payload.commands?.macScriptHelp || "", "--sendCall", "missing LaunchAgent commands.macScriptHelp");
   assertNotIncludes(payload.commands?.macScriptHelp || "", "input_event", "missing LaunchAgent commands.macScriptHelp");
   assertNotIncludes(payload.commands?.macScriptHelp || "", "inject", "missing LaunchAgent commands.macScriptHelp");
+  assertMacClientBrowserSelfTestCommand(
+    payload.commands?.macClientBrowserSelfTest || "",
+    "missing LaunchAgent commands.macClientBrowserSelfTest",
+  );
   assertIncludes(payload.boardSummary, "MacUnattendedStatus=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacHostSafeStart=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacHostSafeStart=node scripts/mac/start-mac-host.mjs", "missing LaunchAgent board summary");
@@ -409,6 +428,8 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.boardSummary, "MacResumeStatus=node scripts/mac/check-mac-resume-status.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacFormalLocalSmoke=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacClientBrowserSelfTest=", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacClientBrowserSelfTest=node scripts/mac/test-mac-client-browser-self-test-wrapper.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacScriptHelp=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "blockers=none", "missing LaunchAgent board summary");
@@ -675,6 +696,11 @@ function checkBoardSummary(args) {
   assertIncludes(text, "MacResumeStatus=node scripts/mac/check-mac-resume-status.mjs", "board summary");
   assertIncludes(text, "MacFormalLocalSmoke=", "board summary");
   assertIncludes(text, "MacFormalLocalSmoke=node scripts/mac/check-mac-formal-local-smoke.mjs", "board summary");
+  assertIncludes(text, "MacClientBrowserSelfTest=", "board summary");
+  assertMacClientBrowserSelfTestCommand(
+    text.split("MacClientBrowserSelfTest=")[1]?.split("; ")[0] || "",
+    "board summary MacClientBrowserSelfTest",
+  );
   assertIncludes(text, "MacScriptHelp=", "board summary");
   assertIncludes(text, "MacScriptHelp=node scripts/mac/test-mac-script-help.mjs", "board summary");
   assertIncludes(text, "blockers=none", "board summary");
@@ -836,6 +862,11 @@ async function checkNoFindingsSummary(args) {
       assertIncludes(payload.boardSummary, "MacMaxFpsSafeStart=", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "MacHostMedia=", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "MacResumeStatus=", "clean unattended board summary");
+      assertIncludes(payload.boardSummary, "MacClientBrowserSelfTest=", "clean unattended board summary");
+      assertMacClientBrowserSelfTestCommand(
+        payload.commands?.macClientBrowserSelfTest || "",
+        "clean unattended commands.macClientBrowserSelfTest",
+      );
       assert(!payload.suggestedAction, "clean unattended payload should not expose a restart suggestedAction");
       assertNotIncludes(payload.boardSummary, "suggestedAction=restart-mac-host-safely", "clean unattended board summary");
       assertIncludes(payload.boardSummary, "blockers=none", "clean unattended board summary");
