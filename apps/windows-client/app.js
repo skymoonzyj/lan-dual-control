@@ -3629,6 +3629,31 @@ function parseMacRemoteAudioPlanEvidenceLabels(text) {
   }
   return [...new Set(labels)];
 }
+function parseMacInputSafetyPlanEvidenceLabels(text) {
+  const source = String(text || "");
+  const hasInputSafetyPlan =
+    /\bMacInputSafetyPlan\s*=\s*(?:node\s+)?(?:scripts[\\/]+mac[\\/]+)?plan-mac-input-safety\.mjs\b/i.test(source) ||
+    /\bMac input safety plan\b/i.test(source) ||
+    /\brealInput\s*=\s*blocked-until-user-watching\b/i.test(source);
+  if (!hasInputSafetyPlan) return [];
+  const labels = ["Mac 真实输入安全方案已提供"];
+  if (/\bdefault\s*=\s*log\b|Default mode:\s*log|default input mode[^;\r\n]*log|默认.*安全日志/i.test(source)) {
+    labels.push("默认输入模式保持安全日志");
+  }
+  if (/\brealInput\s*=\s*blocked-until-user-watching\b|blocked until the user confirms|requires-user-watching|正在看 Mac 屏幕/i.test(source)) {
+    labels.push("真实输入需用户正在看 Mac 屏幕");
+  }
+  if (/--confirmUserWatching\b/i.test(source)) {
+    labels.push("真实输入需 --confirmUserWatching");
+  }
+  if (/\beventSet\s*=\s*safe\b|recommended first event set:\s*safe|recommendedEventSet[^;\r\n]*safe/i.test(source)) {
+    labels.push("先用 safe 输入事件集");
+  }
+  if (/\bsafety\s*=\s*[^;\r\n]*(?:no-input-events|no-inject)\b|no input events|no inject|noInputEventsSent|noInjectExecuted/i.test(source)) {
+    labels.push("不发送输入事件或执行注入");
+  }
+  return [...new Set(labels)];
+}
 function splitMacHeartbeatHealthReasonValues(segment) {
   const reason = extractMacHeartbeatFreshnessValue(segment, "reason");
   if (!reason) return [];
@@ -3740,6 +3765,7 @@ function parseMacPositiveEvidenceLabels(text) {
   labels.push(...parseStandaloneMacEvidenceLabels(source));
   labels.push(...parsePostPassManualUxEvidenceLabels(source));
   labels.push(...parseMacRemoteAudioPlanEvidenceLabels(source));
+  labels.push(...parseMacInputSafetyPlanEvidenceLabels(source));
   return [...new Set(labels)];
 }
 
@@ -3893,7 +3919,11 @@ function parseMacUnattendedAttention(text) {
   if (hasCodexReconnectStuck || hasCodexStreamDisconnected || hasCodexBackendRequestError) {
     risks.push("codex-manual-retry");
   }
-  if (/\b(stuck|blocked|hung)\b|卡住|阻塞/.test(source) && !/\bblockers\s*[:=]\s*none\b/i.test(source)) {
+  const genericStuckRiskSource = source
+    .replace(/\brealInput\s*=\s*blocked-until-user-watching\b/gi, "")
+    .replace(/\bReal input:\s*blocked until the user confirms[^.;\r\n]*/gi, "")
+    .replace(/\bblocked until the user confirms[^.;\r\n]*/gi, "");
+  if (/\b(stuck|blocked|hung)\b|卡住|阻塞/.test(genericStuckRiskSource) && !/\bblockers\s*[:=]\s*none\b/i.test(source)) {
     risks.unshift("mac-codex-stuck");
   }
   if (/attention\s*=\s*(warning|blocker|failed)/i.test(source) && risks.length === 0) {

@@ -15,6 +15,7 @@
 - Windows N1 视频低延迟治理已推进：H.264 本机解码队列超过 8 帧或最旧帧超过 450ms 时会关闭旧 decoder、清空旧队列并等待下一关键帧，delta 帧不再继续加深延迟；复制诊断会输出 `videoDroppedStaleFrames` 对应的“本地过期丢帧”和 `videoLastDropReason=queue-overflow-wait-keyframe`。本轮只做 Windows 控制端本地队列治理和 diagnostics-only 浏览器回归，不改协议、不认证、不请求或发送密码、不发 input/inject。
 - Mac remote-only audio 已完成安全评估入口：当前 Mac host 的 ScreenCaptureKit `system-pcm` 链路只捕获并发送系统 PCM，不会自动静音本机扬声器，也不会切换输出设备或改系统音量。新增 `node scripts/mac/plan-mac-remote-audio.mjs --boardSummary`，输出 `capture=system-pcm-does-not-mute-local`、三条路线 `manual-mute-restore/virtual-output-device/product-toggle` 和 `safety=no-volume-change,no password/input/inject`；`check-mac-host-readiness --json/--boardSummary` 同屏新增 `MacRemoteAudioPlan=`。真正 remote-only 后续必须做用户显式同意、状态可见和断开恢复，不要擅自改系统音量。
 - Windows 控制端已消费 `MacRemoteAudioPlan=`：Mac 提醒区、值守证据和复制/导出诊断会显示“Mac 远端独占声音方案已提供 / 当前不会自动静音 Mac 本机 / 远端独占声音需用户明确同意 / 不自动改系统音量”。这只是只读中文提示，不运行 `plan-mac-remote-audio`，不改 Mac 系统声音、输出设备或音量，不认证、不请求或发送密码、不发 input/inject。
+- Windows 控制端已消费 `MacInputSafetyPlan=`：Mac 提醒区、值守证据和复制/导出诊断会显示“Mac 真实输入安全方案已提供 / 默认输入模式保持安全日志 / 真实输入需用户正在看 Mac 屏幕 / 真实输入需 --confirmUserWatching / 先用 safe 输入事件集 / 不发送输入事件或执行注入”。`realInput=blocked-until-user-watching` 不再被误判为 Mac Codex 卡住；这只是只读中文提示，不运行 `plan-mac-input-safety`，不认证、不请求或发送密码、不发 input/inject。
 - 本轮不改协议，不认证，不请求或发送密码，不发 input/inject。真实 inject 仍需用户明确确认正在看 Mac 屏幕后另行安排。
 
 

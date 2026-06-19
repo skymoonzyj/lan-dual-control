@@ -1522,6 +1522,8 @@ async function verifyDesktopOnlyHostPanel(session) {
         "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
         "MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary",
         "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject.",
+        "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary",
+        "Mac input safety plan: status=plan-only; default=log; realInput=blocked-until-user-watching; required=--confirmUserWatching; eventSet=safe; safety=no-password,no-input-events,no-inject.",
         "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --boardSummary",
         "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary",
         "MacLaunchAgentLoad=launchctl bootstrap gui/$(id -u) /Users/skymoonzyj/Library/LaunchAgents/com.lan-dual-control.mac-host.plist",
@@ -1599,6 +1601,27 @@ async function verifyDesktopOnlyHostPanel(session) {
               server: "http://192.168.31.68:17888",
               recentAlerts: [{ at: "2026-06-20 02:30:00", title: "Mac remote audio", message: macRemoteAudioPlanText }],
               lastAlert: { at: "2026-06-20 02:30:00", title: "Mac remote audio", message: macRemoteAudioPlanText },
+              message: "Mac alert watcher is running.",
+            }, { available: true, busy: false })
+          : {};
+      const macInputSafetyPlanText = [
+        "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary",
+        "Mac input safety plan: status=plan-only; default=log; realInput=blocked-until-user-watching; required=--confirmUserWatching; eventSet=safe; safety=no-password,no-input-events,no-inject.",
+      ].join("; ");
+      const macInputSafetyPlanAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(macInputSafetyPlanText)
+          : null;
+      const macInputSafetyPlanView =
+        typeof macAlertWatcherUiState === "function"
+          ? macAlertWatcherUiState({
+              ok: true,
+              action: "status",
+              running: true,
+              processIds: [2470],
+              server: "http://192.168.31.68:17888",
+              recentAlerts: [{ at: "2026-06-20 02:35:00", title: "Mac input safety", message: macInputSafetyPlanText }],
+              lastAlert: { at: "2026-06-20 02:35:00", title: "Mac input safety", message: macInputSafetyPlanText },
               message: "Mac alert watcher is running.",
             }, { available: true, busy: false })
           : {};
@@ -2562,6 +2585,23 @@ async function verifyDesktopOnlyHostPanel(session) {
           macRemoteAudioPlanView.statusText.includes("远端独占声音需用户明确同意") &&
           macRemoteAudioPlanView.statusText.includes("不自动改系统音量") &&
           !macRemoteAudioPlanView.statusText.includes("风险：") &&
+          macInputSafetyPlanAttention?.summary === "" &&
+          macInputSafetyPlanAttention?.evidenceSummary.includes("Mac 真实输入安全方案已提供") &&
+          macInputSafetyPlanAttention?.evidenceSummary.includes("默认输入模式保持安全日志") &&
+          macInputSafetyPlanAttention?.evidenceSummary.includes("真实输入需用户正在看 Mac 屏幕") &&
+          macInputSafetyPlanAttention?.evidenceSummary.includes("真实输入需 --confirmUserWatching") &&
+          macInputSafetyPlanAttention?.evidenceSummary.includes("先用 safe 输入事件集") &&
+          macInputSafetyPlanAttention?.evidenceSummary.includes("不发送输入事件或执行注入") &&
+          Array.isArray(macInputSafetyPlanAttention?.evidenceLabels) &&
+          macInputSafetyPlanAttention.evidenceLabels.length >= 6 &&
+          macInputSafetyPlanView.statusText.includes("证据：") &&
+          macInputSafetyPlanView.statusText.includes("Mac 真实输入安全方案已提供") &&
+          macInputSafetyPlanView.statusText.includes("默认输入模式保持安全日志") &&
+          macInputSafetyPlanView.statusText.includes("真实输入需用户正在看 Mac 屏幕") &&
+          macInputSafetyPlanView.statusText.includes("真实输入需 --confirmUserWatching") &&
+          macInputSafetyPlanView.statusText.includes("先用 safe 输入事件集") &&
+          macInputSafetyPlanView.statusText.includes("不发送输入事件或执行注入") &&
+          !macInputSafetyPlanView.statusText.includes("风险：") &&
           positiveMacValidationAttention?.summary === "" &&
           Array.isArray(positiveMacValidationAttention?.labels) &&
           positiveMacValidationAttention.labels.length === 0 &&
@@ -2751,6 +2791,10 @@ async function verifyDesktopOnlyHostPanel(session) {
         cleanMacHostMediaCommandAttention,
         postPassManualUxAttention,
         postPassManualUxView,
+        macRemoteAudioPlanAttention,
+        macRemoteAudioPlanView,
+        macInputSafetyPlanAttention,
+        macInputSafetyPlanView,
         positiveMacValidationAttention,
         positiveMacValidationView,
         positiveMacFormalE2eAttention,
@@ -5277,6 +5321,8 @@ async function verifyReconnectControls(session) {
         "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
         "MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary",
         "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject.",
+        "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs --boardSummary",
+        "Mac input safety plan: status=plan-only; default=log; realInput=blocked-until-user-watching; required=--confirmUserWatching; eventSet=safe; safety=no-password,no-input-events,no-inject.",
         "MacUnattendedStatus=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --boardSummary",
         "MacUnattendedFormal=node scripts/mac/check-mac-unattended-status.mjs --host 127.0.0.1 --port 43770 --requireLaunchAgentMaxFps --requireLaunchAgentLoaded --boardSummary",
         "MacLaunchAgentLoad=launchctl bootstrap gui/$(id -u) /Users/skymoonzyj/Library/LaunchAgents/com.lan-dual-control.mac-host.plist",
@@ -5607,6 +5653,17 @@ async function verifyReconnectControls(session) {
             exportText.includes("MacUnattendedHealth=warning") &&
             exportText.includes("MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs") &&
             exportText.includes("MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs") &&
+            exportText.includes("MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs") &&
+            exportText.includes("realInput=blocked-until-user-watching") &&
+            exportText.includes("required=--confirmUserWatching") &&
+            exportText.includes("eventSet=safe") &&
+            exportText.includes("safety=no-password,no-input-events,no-inject") &&
+            exportText.includes("Mac 真实输入安全方案已提供") &&
+            exportText.includes("默认输入模式保持安全日志") &&
+            exportText.includes("真实输入需用户正在看 Mac 屏幕") &&
+            exportText.includes("真实输入需 --confirmUserWatching") &&
+            exportText.includes("先用 safe 输入事件集") &&
+            exportText.includes("不发送输入事件或执行注入") &&
             exportText.includes("capture=system-pcm-does-not-mute-local") &&
             exportText.includes("recommended=product-toggle-with-explicit-consent") &&
             exportText.includes("safety=no-volume-change") &&

@@ -19,6 +19,34 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 控制端消费 MacInputSafetyPlan
+开发端：Windows Codex
+本轮目标：让 Windows 控制端只读消费 Mac 端真实输入安全方案，避免把 plan-only 的 `blocked-until-user-watching` 误报成 Mac Codex 卡住。
+完成内容：
+- `parseMacPositiveEvidenceLabels` 新增 `MacInputSafetyPlan=` / `Mac input safety plan:` 证据解析，显示“Mac 真实输入安全方案已提供 / 默认输入模式保持安全日志 / 真实输入需用户正在看 Mac 屏幕 / 真实输入需 --confirmUserWatching / 先用 safe 输入事件集 / 不发送输入事件或执行注入”。
+- Mac 提醒区、Mac 值守快速摘要和复制/导出诊断都会把该内容作为证据/值守证据，不进入风险摘要。
+- 通用 stuck/blocked 风险判断已排除 `realInput=blocked-until-user-watching`，避免 plan-only 安全阻止被误判成 Mac Codex 卡住。
+修改文件：
+- `apps/windows-client/app.js`
+- `scripts/windows/test-windows-client-browser.mjs`
+- `apps/windows-client/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --clientPort 5220 --debugPort 9360` 先失败，Mac 输入安全方案没有进入证据。
+- 绿灯：`node --check apps/windows-client/app.js`
+- 绿灯：`node --check scripts/windows/test-windows-client-browser.mjs`
+- 绿灯：`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000 --clientPort 5225 --debugPort 9365`，输出 `Diagnostics-only browser checks passed`。
+遗留问题：
+- 真实 `inject` 仍未开启；后续必须用户明确确认正在看 Mac 屏幕，并由 Mac 端带 `--confirmUserWatching`、safe 事件集先验收。
+下一步建议：
+- 用户在场后继续手工体验清单；若进入真实输入验收，先让 Mac 端发 `MacInputSafetyPlan=`，再按 safe event set 做可见验收。
+是否改了协议：否。
+是否需要另一端配合：短期不需要；真实 inject 验收时需要 Mac 端和用户在场。
+
 日期：2026-06-20 Windows 控制端消费 MacRemoteAudioPlan
 开发端：Windows Codex
 本轮目标：让 Windows 控制端只读消费 Mac 端 remote-only audio 方案入口，把双路声音风险解释同步到 Mac 提醒区和复制诊断。
