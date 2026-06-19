@@ -19,6 +19,30 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac 手工体验 active call 状态收口
+开发端：Mac Codex
+本轮目标：Mac 已发起 `Mac manual UX validation` call 后，避免 `check-mac-manual-ux-status` 继续显示 `call-ready` 并给出重复发 call 命令。
+完成内容：
+- `check-mac-manual-ux-status` 新增 `manualUxCallInProgress` 信号，识别当前 active currentCall 是否已经是 Mac 发起的手工体验验收 call。
+- currentCall 已是 `Mac manual UX validation` 时，输出 `MacManualUx=status=calling` 和 `Next=WaitForManualUxConfirmation`。
+- `calling` 状态不输出 `ManualUxCallCommand=`，`--sendCall` 继续 fail-closed，等待 Windows/User 确认后再进入真实体验清单。
+修改文件：
+- `scripts/mac/check-mac-manual-ux-status.mjs`
+- `scripts/mac/test-mac-manual-ux-status.mjs`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-manual-ux-status.mjs --timeoutMs 20000` 先失败，已发出的 Mac manual UX call 被误判为 `call-ready`。
+- 绿灯：同一测试通过，新增 `Mac manual UX status treats an active manual UX call as waiting for confirmation` 覆盖 no duplicate call command。
+- 真实通讯板只读：`node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --boardSummary` 输出 `MacManualUx=status=calling ... Next=WaitForManualUxConfirmation`。
+遗留问题：
+- 当前仍在等待 Windows/User 对手工体验 call 的确认；未开始真实验收。
+下一步建议：
+- Windows/User 确认 5-10 分钟体验窗口后，再按 connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics 逐项验收。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows/User 在通讯板确认当前 Mac manual UX validation call 后再进入手工验收。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac 手工体验 sendCall 推送期护栏
 开发端：Mac Codex
 本轮目标：把昨晚“Windows 正在 pushing-soon 时 Mac 不替换 currentCall”的人工判断固化到 `check-mac-manual-ux-status --sendCall`，避免两端推送/变基临界期误抢通讯板 call。

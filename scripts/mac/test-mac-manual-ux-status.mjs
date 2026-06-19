@@ -314,6 +314,44 @@ function userAwakeWhileWindowsPushingBoardState() {
   };
 }
 
+function macManualUxCallInProgressBoardState() {
+  return {
+    updatedAt: "2026-06-20T10:08:00.000Z",
+    currentCall: {
+      status: "CALLING",
+      from: "Mac Codex",
+      need: "Windows Codex, User",
+      goal: "Mac manual UX validation: user-present real experience test",
+      expected: "Verify connection, video, audio, clipboard, file, window, fullscreen, original quality, and copy diagnostics.",
+      ask: "Please confirm a 5-10 minute user-present manual UX window. Mac will not request credentials on the board or send remote input commands.",
+      owner: "Mac Codex",
+      timeout: "10m",
+    },
+    statuses: {
+      "Mac Manual UX": {
+        status: "manual-ux-call-ready",
+        role: "Mac 端",
+        note: `MacManualUx=status=call-ready ManualUxChecklist=${defaultChecklist} Next=SendManualUxCall`,
+        updatedAt: "2026-06-20T10:07:55.000Z",
+      },
+      "Windows Codex": {
+        status: "pushed",
+        role: "Windows 端",
+        note: "Ready to read the Mac manual UX call.",
+        updatedAt: "2026-06-20T10:07:57.000Z",
+      },
+    },
+    recentEvents: [
+      {
+        at: "2026-06-20T10:07:50.000Z",
+        type: "message",
+        from: "Supervisor Codex",
+        text: "USER_AWAKE: user is awake; prepare real manual UX validation after explicit call.",
+      },
+    ],
+  };
+}
+
 function otherActiveCallWithUserAwakeSignalBoardState() {
   return {
     updatedAt: "2026-06-20T10:05:00.000Z",
@@ -549,6 +587,23 @@ async function checkUserAwakeSendCallPostsManualUxCall(args) {
   console.log("[OK] Mac manual UX status can send one safe USER_AWAKE manual UX call");
 }
 
+async function checkManualUxCallInProgressDoesNotOfferDuplicateCall(args) {
+  await withFakeBoard(macManualUxCallInProgressBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `manual UX call-in-progress JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "manual UX call-in-progress JSON");
+    assert(payload.status === "calling", `manual UX call-in-progress should be calling, got ${payload.status}`);
+    assert(payload.signals?.manualUxCallInProgress === true, "manual UX call-in-progress signal should be true");
+    assert(payload.commands?.manualUxCallCommand == null, `manual UX call-in-progress should not expose another call command: ${JSON.stringify(payload.commands)}`);
+    assertIncludes(payload.boardSummary, "MacManualUx=status=calling", "manual UX call-in-progress boardSummary");
+    assertIncludes(payload.boardSummary, "Next=WaitForManualUxConfirmation", "manual UX call-in-progress boardSummary");
+    assertNotIncludes(payload.boardSummary, "ManualUxCallCommand=", "manual UX call-in-progress boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `read-only calling status should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "manual UX call-in-progress JSON");
+  });
+  console.log("[OK] Mac manual UX status treats an active manual UX call as waiting for confirmation");
+}
+
 async function checkSendCallRefusesWhileWindowsIsPushing(args) {
   await withFakeBoard(userAwakeWhileWindowsPushingBoardState(), async (serverUrl, posts) => {
     const result = await run(["--server", serverUrl, "--json", "--sendCall"], args);
@@ -604,6 +659,7 @@ async function main() {
   await checkUsableEntryCurrentCallIsReady(args);
   await checkUserAwakeCallProducesManualUxCallPlan(args);
   await checkUserAwakeSendCallPostsManualUxCall(args);
+  await checkManualUxCallInProgressDoesNotOfferDuplicateCall(args);
   await checkSendCallRefusesWhileWindowsIsPushing(args);
   await checkSendCallRefusesWhenNotCallReady(args);
   await checkSendCallRefusesOtherActiveCall(args);

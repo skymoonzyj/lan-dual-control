@@ -74,7 +74,8 @@ Description:
   as ready so Mac status updates do not accidentally send the team back to the
   formal E2E path. A USER_AWAKE/manual-UX currentCall is treated as
   call-ready and prints ManualUxCallCommand=... so the next user-present step
-  can be coordinated before asking for any action. It does not authenticate,
+  can be coordinated before asking for any action. An active Mac manual UX call
+  is treated as calling so the script does not offer a duplicate call. It does not authenticate,
   does not ask for or print passwords, does not send user-auth requests, and
   does not send input events.
 
@@ -266,6 +267,16 @@ function isUserAwakeManualUxCall(text) {
   return userAwake && manualUx;
 }
 
+function isMacManualUxValidationCall(text) {
+  const source = compactText(text);
+  if (!source) return false;
+  const fromMac = /\bfrom\s*=\s*Mac Codex\b|Mac Codex/i.test(source);
+  const goal = /Mac manual UX validation|user-present real experience test|手工体验|真实体验/i.test(source);
+  const expected = /connection.*video.*audio.*clipboard|连接.*画面.*声音.*剪贴板/i.test(source);
+  const safety = /will not request credentials|no-password|不请求密码|不发送远端输入命令|no-input/i.test(source);
+  return fromMac && goal && expected && safety;
+}
+
 function normalizedText(value) {
   return compactText(value).trim();
 }
@@ -297,6 +308,10 @@ function normalizeCurrentBoardCall(call) {
 
 function isMatchingUserAwakeManualUxBoardCall(call) {
   return Boolean(call?.active && isUserAwakeManualUxCall(call.raw || call));
+}
+
+function isActiveMacManualUxValidationBoardCall(call) {
+  return Boolean(call?.active && isMacManualUxValidationCall(call.raw || call));
 }
 
 function statusByDevice(state, deviceName) {
@@ -376,6 +391,7 @@ function makeManualUxCallCommand(server) {
 function makeReport(state, server) {
   const texts = collectBoardTexts(state);
   const combined = texts.join("\n");
+  const boardCallBeforeCheck = normalizeCurrentBoardCall(state.currentCall);
   const signals = {
     realTestPass: /\bREAL_TEST_PASS(?:_RECORDED)?\b/i.test(combined),
     postPassNext: /\bPostPassNext\s*=\s*WindowsRecordPassAndTailError\+MacManualUxStandby\b/i.test(combined),
@@ -383,27 +399,29 @@ function makeReport(state, server) {
     manualChecklist: /\bManualUxChecklist\s*=/i.test(combined),
     usableEntryManualUxCall: texts.some((text) => isUsableEntryManualUxCall(text)),
     userAwakeManualUxCall: texts.some((text) => isUserAwakeManualUxCall(text)),
+    manualUxCallInProgress: isActiveMacManualUxValidationBoardCall(boardCallBeforeCheck),
   };
   const ready = signals.postPassNext || signals.manualUxStandby || signals.usableEntryManualUxCall;
-  const callReady = !ready && signals.userAwakeManualUxCall;
-  const status = ready ? "ready" : callReady ? "call-ready" : "waiting";
+  const calling = signals.manualUxCallInProgress;
+  const callReady = !ready && !calling && signals.userAwakeManualUxCall;
+  const status = ready ? "ready" : calling ? "calling" : callReady ? "call-ready" : "waiting";
   const ids = parseManualChecklist(texts);
   const labels = ids.map((id) => manualChecklistLabels[id]);
   const warnings = [];
   const blockers = [];
-  if (!ready && !callReady) blockers.push("manual-ux-standby-not-detected");
+  if (!ready && !calling && !callReady) blockers.push("manual-ux-standby-not-detected");
   if (/MacHeartbeat=status=blocked|MacHeartbeatHealth=blocked|reason=mac-codex-stale/i.test(combined)) {
     warnings.push("mac-heartbeat-attention");
   }
   const windowsCoordination = windowsCodexCoordination(state);
   if (windowsCoordination.pushInProgress) warnings.push("windows-codex-pushing");
   const report = {
-    ok: ready || callReady,
+    ok: ready || calling || callReady,
     status,
     server,
     checkedAt: new Date().toISOString(),
     target: firstLanMacHostEndpoint(texts, server),
-    boardCallBeforeCheck: normalizeCurrentBoardCall(state.currentCall),
+    boardCallBeforeCheck,
     signals,
     manualChecklist: {
       summary: ids.join("/"),
@@ -445,6 +463,13 @@ function makeNextActions(status) {
       "Do not request credentials or send remote input commands from this status command.",
     ];
   }
+  if (status === "calling") {
+    return [
+      "Wait for Windows Codex/User to confirm the manual UX validation window.",
+      "Do not send another manual UX call while the current one is active.",
+      "After confirmation, validate connection, video, audio, clipboard, file, window, fullscreen, original quality, and copy diagnostics.",
+    ];
+  }
   return [
     "Wait for PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby, MAC_STANDING_BY_FOR_MANUAL_UX_TEST, the usable-entry manual UX currentCall, or USER_AWAKE manual UX coordination on Agent Link Board.",
     "Do not send user-auth requests or ask for another password while waiting for manual UX standby.",
@@ -456,7 +481,9 @@ function makeBoardSummary(report) {
     ? "ManualUxTest"
     : report.status === "call-ready"
       ? "SendManualUxCall"
-      : "WaitForPostPassOrManualUxStandby";
+      : report.status === "calling"
+        ? "WaitForManualUxConfirmation"
+        : "WaitForPostPassOrManualUxStandby";
   const parts = [
     `MacManualUx=status=${report.status}`,
     `ManualUxChecklist=${report.manualChecklist.summary}`,
