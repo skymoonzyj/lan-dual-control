@@ -256,6 +256,45 @@ function readyWhileUserSleepingBoardState() {
   };
 }
 
+function readyWithOldSleepHistoryButUserPresentBoardState() {
+  return {
+    ...readyWhileUserSleepingBoardState(),
+    userPresence: {
+      status: "present",
+      label: "用户在场",
+      instruction: "可以安排需要用户授权/输入密码/现场审核的任务，但必须先说明目标、安全边界和预计耗时。",
+      reason: "用户当前在场，可以授权",
+      updatedAt: "2026-06-20T09:38:09.199Z",
+      updatedBy: "Supervisor",
+    },
+  };
+}
+
+function readyWithOldAwakeHistoryButUserAwayBoardState() {
+  const state = readyBoardState();
+  return {
+    ...state,
+    userPresence: {
+      status: "away",
+      label: "用户不在",
+      instruction: "只做无授权任务；需要用户操作时标记 BLOCKED_BY_USER_AWAY。",
+      reason: "用户当前不在场",
+      updatedAt: "2026-06-20T09:48:09.199Z",
+      updatedBy: "Supervisor",
+    },
+    events: [
+      ...(state.recentEvents || []),
+      {
+        at: "2026-06-20T09:47:00.000Z",
+        type: "message",
+        from: "Supervisor Codex",
+        text: "USER_AWAKE: user is awake; resume authorized manual UX tasks with safety explanation.",
+      },
+    ],
+    recentEvents: [],
+  };
+}
+
 function loopbackOnlyBoardState() {
   return {
     updatedAt: "2026-06-20T01:27:00.000Z",
@@ -896,6 +935,42 @@ async function checkReadyWhileUserSleepingWaitsForUserAwake(args) {
   console.log("[OK] Mac manual UX status gates ready state while the user is sleeping");
 }
 
+async function checkStructuredUserPresentOverridesOldSleepHistory(args) {
+  await withFakeBoard(readyWithOldSleepHistoryButUserPresentBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `structured user present JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "structured user present JSON");
+    assert(payload.status === "ready", `structured user present should clear old sleep history, got ${payload.status}`);
+    assert(payload.coordination?.manualUxGate === "clear", `structured user present gate mismatch: ${JSON.stringify(payload.coordination)}`);
+    assert(!payload.warnings?.includes("user-sleeping"), `structured user present should not keep sleeping warning: ${JSON.stringify(payload.warnings)}`);
+    assertNotIncludes(payload.boardSummary, "ManualUxGate=wait-user-awake", "structured user present boardSummary");
+    assertIncludes(payload.boardSummary, "MacManualUx=status=ready", "structured user present boardSummary");
+    assertManualUxUserPresence(payload, "awake", "structured user present JSON");
+    assertIncludes(payload.boardSummary, "source=userPresence", "structured user present boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `read-only user present status should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "structured user present JSON");
+  });
+  console.log("[OK] Mac manual UX status lets structured userPresence=present override old sleep history");
+}
+
+async function checkStructuredUserAwayOverridesOldAwakeHistory(args) {
+  await withFakeBoard(readyWithOldAwakeHistoryButUserAwayBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `structured user away JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "structured user away JSON");
+    assert(payload.status === "waiting", `structured user away should pause user-present manual UX, got ${payload.status}`);
+    assert(payload.coordination?.manualUxGate === "wait-user-awake", `structured user away gate mismatch: ${JSON.stringify(payload.coordination)}`);
+    assert(payload.warnings?.includes("user-sleeping"), `structured user away should include user gate warning: ${JSON.stringify(payload.warnings)}`);
+    assertIncludes(payload.nextActions?.join("\n") || "", "Wait for USER_AWAKE", "structured user away nextActions");
+    assertIncludes(payload.boardSummary, "ManualUxGate=wait-user-awake", "structured user away boardSummary");
+    assertManualUxUserPresence(payload, "sleeping", "structured user away JSON");
+    assertIncludes(payload.boardSummary, "source=userPresence", "structured user away boardSummary");
+    assert(posts.filter((post) => post.path === "/api/call").length === 0, `read-only user away status should not post a call: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "structured user away JSON");
+  });
+  console.log("[OK] Mac manual UX status lets structured userPresence=away override old awake history");
+}
+
 async function checkSendStatusWhileUserSleepingPostsWaiting(args) {
   await withFakeBoard(readyWhileUserSleepingBoardState(), async (serverUrl, posts) => {
     const result = await run([
@@ -1459,6 +1534,8 @@ async function main() {
   await checkReadyJson(args);
   await checkReadyWhileWindowsPushingAddsManualUxGate(args);
   await checkReadyWhileUserSleepingWaitsForUserAwake(args);
+  await checkStructuredUserPresentOverridesOldSleepHistory(args);
+  await checkStructuredUserAwayOverridesOldAwakeHistory(args);
   await checkSendStatusWhileUserSleepingPostsWaiting(args);
   await checkLoopbackTargetIsNotAdvertised(args);
   await checkLocalDiscoveryFillsManualUxTarget(args);

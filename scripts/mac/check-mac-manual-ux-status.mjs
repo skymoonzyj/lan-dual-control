@@ -469,7 +469,28 @@ function isUserPresenceReferenceText(text) {
     || /已补|新增|实现|测试|文案|说明|引用|标签|识别|解析|守卫|防误判|功能说明/i.test(source);
 }
 
+function structuredUserPresence(state) {
+  const presence = state?.userPresence;
+  if (!presence || typeof presence !== "object") return null;
+  const status = normalizedText(presence.status || presence.state).toLowerCase();
+  const mappedState = {
+    present: "awake",
+    awake: "awake",
+    away: "sleeping",
+    sleeping: "sleeping",
+  }[status];
+  if (!mappedState) return null;
+  return {
+    state: mappedState,
+    source: "userPresence",
+    at: normalizedText(presence.updatedAt || presence.at),
+  };
+}
+
 function detectUserPresence(state) {
+  const structuredPresence = structuredUserPresence(state);
+  if (structuredPresence) return structuredPresence;
+
   const candidates = [];
   let order = 0;
   const addCandidate = (source, value, at = "") => {
