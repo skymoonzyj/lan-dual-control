@@ -213,6 +213,23 @@ function readyWhileWindowsPushingBoardState() {
   };
 }
 
+function readyWhileUserSleepingBoardState() {
+  const state = readyBoardState();
+  return {
+    ...state,
+    events: [
+      ...(state.recentEvents || []),
+      {
+        at: "2026-06-20T01:25:30.000Z",
+        type: "message",
+        from: "Supervisor Codex",
+        text: "USER_SLEEPING: user is resting; pause user-present manual UX until USER_AWAKE. No passwords, auth prompts, real input/inject, audio, or visual confirmation.",
+      },
+    ],
+    recentEvents: [],
+  };
+}
+
 function loopbackOnlyBoardState() {
   return {
     updatedAt: "2026-06-20T01:27:00.000Z",
@@ -827,6 +844,57 @@ async function checkReadyWhileWindowsPushingAddsManualUxGate(args) {
   console.log("[OK] Mac manual UX status gates ready state while Windows is pushing");
 }
 
+async function checkReadyWhileUserSleepingWaitsForUserAwake(args) {
+  await withFakeBoard(readyWhileUserSleepingBoardState(), async (serverUrl, posts) => {
+    const result = await run(["--server", serverUrl, "--json"], args);
+    assert(result.exitCode === 0, `ready while user sleeping JSON should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const payload = parseJson(result.stdout, "ready while user sleeping JSON");
+    assert(payload.status === "waiting", `ready while user sleeping should wait, got ${payload.status}`);
+    assert(payload.ok === false, `ready while user sleeping should not be ok=true: ${JSON.stringify(payload)}`);
+    assert(payload.signals?.manualUxStandby === true, "ready while user sleeping should keep the standby signal for evidence");
+    assert(payload.coordination?.userPresence?.state === "sleeping", `ready while user sleeping should detect sleeping user: ${JSON.stringify(payload.coordination)}`);
+    assert(payload.coordination?.manualUxGate === "wait-user-awake", `ready while user sleeping gate mismatch: ${JSON.stringify(payload.coordination)}`);
+    assert(payload.warnings?.includes("user-sleeping"), `ready while user sleeping should include warning: ${JSON.stringify(payload.warnings)}`);
+    assert(!payload.blockers?.includes("manual-ux-standby-not-detected"), `standby evidence should not be reported missing: ${JSON.stringify(payload.blockers)}`);
+    assertIncludes(payload.nextActions?.join("\n") || "", "Wait for USER_AWAKE", "ready while user sleeping nextActions");
+    assertIncludes(payload.boardSummary, "MacManualUx=status=waiting", "ready while user sleeping boardSummary");
+    assertNotIncludes(payload.boardSummary, "MacManualUx=status=ready", "ready while user sleeping boardSummary");
+    assertIncludes(payload.boardSummary, "Next=WaitForUserAwake", "ready while user sleeping boardSummary");
+    assertIncludes(payload.boardSummary, "ManualUxGate=wait-user-awake", "ready while user sleeping boardSummary");
+    assertIncludes(payload.boardSummary, "warnings=user-sleeping", "ready while user sleeping boardSummary");
+    assertOperatorAction(payload, "wait-user-awake", "ready while user sleeping JSON");
+    assertManualUxUserPresence(payload, "sleeping", "ready while user sleeping JSON");
+    assert(posts.filter((post) => post.path === "/api/status").length === 0, `read-only sleeping gate should not post a status: ${JSON.stringify(posts)}`);
+    assertSecretSafe(JSON.stringify(payload), "ready while user sleeping JSON");
+  });
+  console.log("[OK] Mac manual UX status gates ready state while the user is sleeping");
+}
+
+async function checkSendStatusWhileUserSleepingPostsWaiting(args) {
+  await withFakeBoard(readyWhileUserSleepingBoardState(), async (serverUrl, posts) => {
+    const result = await run([
+      "--server",
+      serverUrl,
+      "--boardSummary",
+      "--sendStatus",
+      "--device",
+      "Mac Manual UX",
+      "--role",
+      "Mac 端",
+    ], args);
+    assert(result.exitCode === 0, `sendStatus while user sleeping should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    const statusPost = posts.find((post) => post.path === "/api/status");
+    assert(statusPost, `missing /api/status post: ${JSON.stringify(posts)}`);
+    assert(statusPost.body.status === "manual-ux-waiting", `sleeping status value mismatch: ${JSON.stringify(statusPost.body)}`);
+    assertIncludes(statusPost.body.note, "MacManualUx=status=waiting", "sleeping status note");
+    assertNotIncludes(statusPost.body.note, "MacManualUx=status=ready", "sleeping status note");
+    assertIncludes(statusPost.body.note, "ManualUxGate=wait-user-awake", "sleeping status note");
+    assertIncludes(statusPost.body.note, "warnings=user-sleeping", "sleeping status note");
+    assertSecretSafe(`${result.stdout}\n${result.stderr}\n${JSON.stringify(posts)}`, "sendStatus while user sleeping");
+  });
+  console.log("[OK] Mac manual UX status posts waiting while the user is sleeping");
+}
+
 async function checkLoopbackTargetIsNotAdvertised(args) {
   await withFakeBoard(loopbackOnlyBoardState(), async (serverUrl) => {
     const result = await run(["--server", serverUrl, "--json"], args);
@@ -1329,6 +1397,8 @@ async function main() {
   await checkHelp(args);
   await checkReadyJson(args);
   await checkReadyWhileWindowsPushingAddsManualUxGate(args);
+  await checkReadyWhileUserSleepingWaitsForUserAwake(args);
+  await checkSendStatusWhileUserSleepingPostsWaiting(args);
   await checkLoopbackTargetIsNotAdvertised(args);
   await checkChinesePunctuationAfterChecklist(args);
   await checkBoardSummary(args);

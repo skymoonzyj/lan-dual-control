@@ -724,16 +724,17 @@ function makeReport(state, server) {
     manualUxCallInProgress: isActiveMacManualUxValidationBoardCall(boardCallBeforeCheck),
     manualUxConfirmed: !manualUxCall?.timedOut && hasManualUxConfirmation(state, boardCallBeforeCheck),
   };
-  const ready = signals.postPassNext || signals.manualUxStandby || signals.usableEntryManualUxCall || signals.manualUxConfirmed;
-  const calling = signals.manualUxCallInProgress;
   const userSleeping = userPresence.state === "sleeping";
+  const hasReadySignal = signals.postPassNext || signals.manualUxStandby || signals.usableEntryManualUxCall || signals.manualUxConfirmed;
+  const calling = signals.manualUxCallInProgress;
+  const ready = hasReadySignal && !userSleeping;
   const callReady = !ready && !calling && signals.userAwakeManualUxCall && !userSleeping;
   const status = ready ? "ready" : calling ? "calling" : callReady ? "call-ready" : "waiting";
   const ids = parseManualChecklist(texts);
   const labels = ids.map((id) => manualChecklistLabels[id]);
   const warnings = [];
   const blockers = [];
-  if (!ready && !calling && !callReady) blockers.push("manual-ux-standby-not-detected");
+  if (!hasReadySignal && !calling && !callReady) blockers.push("manual-ux-standby-not-detected");
   if (/MacHeartbeat=status=blocked|MacHeartbeatHealth=blocked|reason=mac-codex-stale/i.test(combined)) {
     warnings.push("mac-heartbeat-attention");
   }
@@ -847,7 +848,9 @@ function makeNextActions(status, manualUxCall = null, server = defaults.server, 
 
 function makeBoardSummary(report) {
   const operatorAction = refreshOperatorAction(report);
-  const next = report.status === "ready"
+  const next = report.coordination?.manualUxGate === "wait-user-awake"
+    ? "WaitForUserAwake"
+    : report.status === "ready"
     ? "ManualUxTest"
     : report.status === "call-ready"
       ? "SendManualUxCall"
