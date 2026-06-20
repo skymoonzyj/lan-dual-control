@@ -45,6 +45,37 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 M2 Mac Input Safety first-screen sendStatus command
+开发端：Mac Codex
+本轮目标：让 Mac 端任一开工第一屏都能直接刷新 `Mac Input Safety` 通讯板状态，而不是只给只读检查命令。
+完成内容：
+- `check-mac-heartbeat`、`check-mac-resume-status` 和 `check-mac-unattended-status` 的 commands / 普通输出 / `--boardSummary` 新增 `MacInputSafetySendStatus=`。
+- 新命令调用 `check-mac-input-safety-status --checkBoard --server http://192.168.31.68:17888 --sendStatus --boardSummary`，只发布无密 `MacInputSafetyStatus=` 摘要。
+- 输出继续保留 `MacInputSafetyStatus=` 只读检查入口；`MacInputSafetySendStatus=` 只负责刷新通讯板，`away` 仍 fail-closed。
+修改文件：
+- `scripts/mac/check-mac-heartbeat.mjs`
+- `scripts/mac/test-mac-heartbeat.mjs`
+- `scripts/mac/check-mac-resume-status.mjs`
+- `scripts/mac/test-mac-resume-status.mjs`
+- `scripts/mac/check-mac-unattended-status.mjs`
+- `scripts/mac/test-mac-unattended-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-heartbeat.mjs --timeoutMs 10000` 先失败于 help 缺少 `macInputSafetySendStatusCommand`。
+- 红灯：`node scripts/mac/test-mac-resume-status.mjs --timeoutMs 10000` 先失败于 help 缺少 `commands.macInputSafetySendStatusCommand`。
+- 红灯：`node scripts/mac/test-mac-unattended-status.mjs --timeoutMs 10000` 先失败于 help 缺少 `commands.macInputSafetySendStatus`。
+- 绿灯：上述三项测试均通过；后续完整验证见本轮提交前记录。
+遗留问题：这不是启用真实输入；真正发送 input/inject 仍必须用户看着 Mac 屏幕、先说明目标/安全边界/预计耗时并显式确认。
+下一步建议：Windows 或 Mac 第一屏发现 `Mac Input Safety` 摘要旧时，复制 `MacInputSafetySendStatus=` 刷新；不要把上板成功当作真实输入已允许。
+是否改了协议：否；只新增 Mac 侧脚本摘要/命令字段。
+是否需要另一端配合：暂不需要；Windows 已能消费 `MacInputSafetyStatus=`，后续若要展示新 `MacInputSafetySendStatus=` 可由 Windows 端自行选择。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 M1 Mac Remote Audio first-screen sendStatus command
 开发端：Mac Codex
 本轮目标：让 Mac 端任一开工第一屏都能直接刷新 `Mac Remote Audio` 通讯板状态，而不是只给只读检查命令。

@@ -344,6 +344,25 @@ function assertMacInputSafetyStatusCommand(command, label) {
   assertNotIncludes(text, "--inputMode inject", label);
 }
 
+function assertMacInputSafetySendStatusCommand(command, label) {
+  const text = String(command || "");
+  assertIncludes(text, "node scripts/mac/check-mac-input-safety-status.mjs", label);
+  assertIncludes(text, "--host", label);
+  assertIncludes(text, "--port", label);
+  assertIncludes(text, "--checkBoard", label);
+  assertIncludes(text, "--server", label);
+  assertIncludes(text, "--sendStatus", label);
+  assertIncludes(text, "--boardSummary", label);
+  assertNotIncludes(text, "--promptPassword", label);
+  assertNotIncludes(text, "--password", label);
+  assertNotIncludes(text, "--apply", label);
+  assertNotIncludes(text, "sudo", label);
+  assertNotIncludes(text, "--sendCall", label);
+  assertNotIncludes(text, "--json", label);
+  assertNotIncludes(text, "input_event", label);
+  assertNotIncludes(text, "--inputMode inject", label);
+}
+
 function assertMacSafeInjectRehearsalCommand(command, label) {
   const text = String(command || "");
   assertIncludes(text, "node scripts/mac/plan-mac-safe-inject-rehearsal.mjs", label);
@@ -540,6 +559,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "commands.macRemoteAudioSendStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macInputSafetyPlan", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macInputSafetyStatus", `${script} ${flag}`);
+    assertIncludes(result.stdout, "commands.macInputSafetySendStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macSafeInjectRehearsal", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macManualUxStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "commands.macClientManualChecklist", `${script} ${flag}`);
@@ -696,6 +716,7 @@ function checkMissingLaunchAgentJson(args) {
   assertMacRemoteAudioSendStatusCommand(payload.commands?.macRemoteAudioSendStatus || "", "missing LaunchAgent commands.macRemoteAudioSendStatus");
   assertMacInputSafetyPlanCommand(payload.commands?.macInputSafetyPlan || "", "missing LaunchAgent commands.macInputSafetyPlan");
   assertMacInputSafetyStatusCommand(payload.commands?.macInputSafetyStatus || "", "missing LaunchAgent commands.macInputSafetyStatus");
+  assertMacInputSafetySendStatusCommand(payload.commands?.macInputSafetySendStatus || "", "missing LaunchAgent commands.macInputSafetySendStatus");
   assertMacSafeInjectRehearsalCommand(payload.commands?.macSafeInjectRehearsal || "", "missing LaunchAgent commands.macSafeInjectRehearsal");
   assertMacManualUxStatusCommand(payload.commands?.macManualUxStatus || "", "missing LaunchAgent commands.macManualUxStatus");
   assertMacClientManualChecklistAction(payload.commands?.macClientManualChecklist || "", "missing LaunchAgent commands.macClientManualChecklist");
@@ -803,6 +824,11 @@ function checkMissingLaunchAgentJson(args) {
   assertIncludes(payload.boardSummary, "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacInputSafetyStatus=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacInputSafetyStatus=node scripts/mac/check-mac-input-safety-status.mjs", "missing LaunchAgent board summary");
+  assertIncludes(payload.boardSummary, "MacInputSafetySendStatus=", "missing LaunchAgent board summary");
+  assertMacInputSafetySendStatusCommand(
+    String(payload.boardSummary || "").split("MacInputSafetySendStatus=")[1]?.split("; ")[0] || "",
+    "missing LaunchAgent board summary MacInputSafetySendStatus",
+  );
   assertIncludes(payload.boardSummary, "MacSafeInjectRehearsal=", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacSafeInjectRehearsal=node scripts/mac/plan-mac-safe-inject-rehearsal.mjs", "missing LaunchAgent board summary");
   assertIncludes(payload.boardSummary, "MacManualUxStatus=", "missing LaunchAgent board summary");
@@ -902,6 +928,7 @@ function checkLaunchAgentPlannerPreservesOptions(args) {
   assertMacRemoteAudioSendStatusCommand(payload.commands?.macRemoteAudioSendStatus || "", "custom LaunchAgent commands.macRemoteAudioSendStatus");
   assertMacInputSafetyPlanCommand(payload.commands?.macInputSafetyPlan || "", "custom LaunchAgent commands.macInputSafetyPlan");
   assertMacInputSafetyStatusCommand(payload.commands?.macInputSafetyStatus || "", "custom LaunchAgent commands.macInputSafetyStatus");
+  assertMacInputSafetySendStatusCommand(payload.commands?.macInputSafetySendStatus || "", "custom LaunchAgent commands.macInputSafetySendStatus");
   assertMacSafeInjectRehearsalCommand(payload.commands?.macSafeInjectRehearsal || "", "custom LaunchAgent commands.macSafeInjectRehearsal");
   assertMacManualUxStatusCommand(payload.commands?.macManualUxStatus || "", "custom LaunchAgent commands.macManualUxStatus");
   assertMacClientManualChecklistAction(payload.commands?.macClientManualChecklist || "", "custom LaunchAgent commands.macClientManualChecklist");
@@ -925,6 +952,11 @@ function checkLaunchAgentPlannerPreservesOptions(args) {
   );
   assertIncludes(payload.boardSummary || "", "MacInputSafetyPlan=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacInputSafetyStatus=", "custom LaunchAgent board summary");
+  assertIncludes(payload.boardSummary || "", "MacInputSafetySendStatus=", "custom LaunchAgent board summary");
+  assertMacInputSafetySendStatusCommand(
+    String(payload.boardSummary || "").split("MacInputSafetySendStatus=")[1]?.split("; ")[0] || "",
+    "custom LaunchAgent board summary MacInputSafetySendStatus",
+  );
   assertIncludes(payload.boardSummary || "", "MacSafeInjectRehearsal=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacManualUxStatus=", "custom LaunchAgent board summary");
   assertIncludes(payload.boardSummary || "", "MacClientManualChecklist=", "custom LaunchAgent board summary");
@@ -1217,6 +1249,11 @@ function checkBoardSummary(args) {
   assertIncludes(text, "MacInputSafetyPlan=node scripts/mac/plan-mac-input-safety.mjs", "board summary");
   assertIncludes(text, "MacInputSafetyStatus=", "board summary");
   assertIncludes(text, "MacInputSafetyStatus=node scripts/mac/check-mac-input-safety-status.mjs", "board summary");
+  assertIncludes(text, "MacInputSafetySendStatus=", "board summary");
+  assertMacInputSafetySendStatusCommand(
+    String(text || "").split("MacInputSafetySendStatus=")[1]?.split("; ")[0] || "",
+    "board summary MacInputSafetySendStatus",
+  );
   assertIncludes(text, "MacSafeInjectRehearsal=", "board summary");
   assertIncludes(text, "MacSafeInjectRehearsal=node scripts/mac/plan-mac-safe-inject-rehearsal.mjs", "board summary");
   assertIncludes(text, "MacManualUxStatus=", "board summary");

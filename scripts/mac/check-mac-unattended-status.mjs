@@ -118,6 +118,10 @@ Machine-readable JSON fields:
   commands.macInputSafetyStatus   Secret-free read-only input safety status
                                   gate; probes /discovery only and keeps real
                                   input blocked until the user is watching.
+  commands.macInputSafetySendStatus
+                                  Secret-free read-only input safety status
+                                  refresh; posts "Mac Input Safety" to Agent
+                                  Link Board without sending input.
   commands.macSafeInjectRehearsal Secret-free read-only safe inject rehearsal
                                   planner; checks userPresence and prints copy-
                                   only steps without starting inject.
@@ -714,6 +718,7 @@ function makeCommands(args) {
     macRemoteAudioSendStatus: makeMacRemoteAudioSendStatusCommand(args),
     macInputSafetyPlan: makeMacInputSafetyPlanCommand(),
     macInputSafetyStatus: makeMacInputSafetyStatusCommand(args),
+    macInputSafetySendStatus: makeMacInputSafetySendStatusCommand(args),
     macSafeInjectRehearsal: makeMacSafeInjectRehearsalCommand(args),
     macManualUxStatus: makeMacManualUxStatusCommand(),
     macClientManualChecklist: makeMacClientManualChecklistAction(),
@@ -965,6 +970,21 @@ function makeMacInputSafetyStatusCommand(args) {
   ].join(" ");
 }
 
+function makeMacInputSafetySendStatusCommand(args) {
+  return [
+    "node scripts/mac/check-mac-input-safety-status.mjs",
+    "--host",
+    shellQuote(args.host),
+    "--port",
+    String(args.port),
+    "--checkBoard",
+    "--server",
+    shellQuote(defaults.server),
+    "--sendStatus",
+    "--boardSummary",
+  ].join(" ");
+}
+
 function makeMacSafeInjectRehearsalCommand(args) {
   return [
     "node scripts/mac/plan-mac-safe-inject-rehearsal.mjs",
@@ -1083,7 +1103,7 @@ function makeBoardSummary(report) {
   const authPath = formatMacHostAuthPathSummary(report.macHostAuthPath);
   return [
     `Mac unattended status: host=${host}; ${perms}; ${agent} maxFps=${agentMaxFps}; power=${report.power.summary}; ${powerHealth}; ${unattendedHealth}; ${authPath}; ${attention}${findingSummary ? ` ${findingSummary}` : ""}${suggestedAction ? ` ${suggestedAction}` : ""}.`,
-    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacUnattendedSendStatus=${report.commands.macUnattendedSendStatus}; MacPowerPlan=${report.commands.macPowerPlan}; MacRemoteAudioPlan=${report.commands.macRemoteAudioPlan}; MacRemoteAudioStatus=${report.commands.macRemoteAudioStatus}; MacRemoteAudioSendStatus=${report.commands.macRemoteAudioSendStatus}; MacInputSafetyPlan=${report.commands.macInputSafetyPlan}; MacInputSafetyStatus=${report.commands.macInputSafetyStatus}; MacSafeInjectRehearsal=${report.commands.macSafeInjectRehearsal}; MacManualUxStatus=${report.commands.macManualUxStatus}; MacClientManualChecklist=${report.commands.macClientManualChecklist}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacHostMedia=${report.commands.macHostMedia}; MacResumeStatus=${report.commands.macResumeStatus}; WindowsHostStatus=${report.commands.windowsHostStatus}; WindowsHostReadiness=${report.commands.windowsHostReadiness}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTest}; MacScriptHelp=${report.commands.macScriptHelp}.`,
+    `MacUnattendedStatus=${report.commands.macUnattendedStatus}; MacUnattendedSendStatus=${report.commands.macUnattendedSendStatus}; MacPowerPlan=${report.commands.macPowerPlan}; MacRemoteAudioPlan=${report.commands.macRemoteAudioPlan}; MacRemoteAudioStatus=${report.commands.macRemoteAudioStatus}; MacRemoteAudioSendStatus=${report.commands.macRemoteAudioSendStatus}; MacInputSafetyPlan=${report.commands.macInputSafetyPlan}; MacInputSafetyStatus=${report.commands.macInputSafetyStatus}; MacInputSafetySendStatus=${report.commands.macInputSafetySendStatus}; MacSafeInjectRehearsal=${report.commands.macSafeInjectRehearsal}; MacManualUxStatus=${report.commands.macManualUxStatus}; MacClientManualChecklist=${report.commands.macClientManualChecklist}; MacHostSafeStart=${report.commands.macHostSafeStart}; MacMaxFpsSafeStart=${report.commands.macMaxFpsSafeStart}; MacHostStop=${report.commands.macHostStop}; MacLaunchAgentLoad=${report.commands.macLaunchAgentLoad}; MacLaunchAgentPrint=${report.commands.macLaunchAgentPrint}; MacLaunchAgentPlan=${report.commands.launchAgentPlan}; MacMaxFpsPlan=${report.commands.macMaxFpsPlan}; MacUnattendedFormal=${report.commands.macUnattendedFormal}; MacHostReadiness=${report.commands.macHostReadiness}; HostReadiness=${report.commands.hostReadiness}; MacHostMedia=${report.commands.macHostMedia}; MacResumeStatus=${report.commands.macResumeStatus}; WindowsHostStatus=${report.commands.windowsHostStatus}; WindowsHostReadiness=${report.commands.windowsHostReadiness}; MacFormalLocalSmoke=${report.commands.macFormalLocalSmoke}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTest}; MacScriptHelp=${report.commands.macScriptHelp}.`,
     "Limits: lock/display-sleep/reboot-login still need real Mac verification before unattended promises.",
     "No password was requested or sent; no input/inject/system changes were attempted.",
   ].join(" ");
@@ -1297,6 +1317,7 @@ function printHuman(report) {
   console.log(`- Mac remote audio board-status refresh: ${report.commands.macRemoteAudioSendStatus}`);
   console.log(`- Mac input safety plan: ${report.commands.macInputSafetyPlan}`);
   console.log(`- Mac input safety status: ${report.commands.macInputSafetyStatus}`);
+  console.log(`- Mac input safety board-status refresh: ${report.commands.macInputSafetySendStatus}`);
   console.log(`- Mac safe inject rehearsal plan: ${report.commands.macSafeInjectRehearsal}`);
   console.log(`- Mac manual UX status: ${report.commands.macManualUxStatus}`);
   console.log(`- Mac client manual checklist: ${report.commands.macClientManualChecklist}`);

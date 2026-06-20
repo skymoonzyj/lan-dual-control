@@ -280,6 +280,24 @@ function assertMacInputSafetyStatusCommand(command, label) {
   assertNotIncludes(command || "", "--inputMode inject", label);
 }
 
+function assertMacInputSafetySendStatusCommand(command, label) {
+  assertIncludes(command || "", "check-mac-input-safety-status.mjs", label);
+  assertIncludes(command || "", "--host", label);
+  assertIncludes(command || "", "--port", label);
+  assertIncludes(command || "", "--checkBoard", label);
+  assertIncludes(command || "", "--server", label);
+  assertIncludes(command || "", "--sendStatus", label);
+  assertIncludes(command || "", "--boardSummary", label);
+  assertNotIncludes(command || "", "--apply", label);
+  assertNotIncludes(command || "", "sudo", label);
+  assertNotIncludes(command || "", "--promptPassword", label);
+  assertNotIncludes(command || "", "--password", label);
+  assertNotIncludes(command || "", "--sendCall", label);
+  assertNotIncludes(command || "", "--json", label);
+  assertNotIncludes(command || "", "input_event", label);
+  assertNotIncludes(command || "", "--inputMode inject", label);
+}
+
 function assertMacSafeInjectRehearsalCommand(command, label) {
   assertIncludes(command || "", "plan-mac-safe-inject-rehearsal.mjs", label);
   assertIncludes(command || "", "--host", label);
@@ -490,6 +508,7 @@ function assertCommandSet(commands, label) {
   assertMacRemoteAudioSendStatusCommand(commands?.macRemoteAudioSendStatusCommand || "", label);
   assertMacInputSafetyPlanCommand(commands?.macInputSafetyPlanCommand || "", label);
   assertMacInputSafetyStatusCommand(commands?.macInputSafetyStatusCommand || "", label);
+  assertMacInputSafetySendStatusCommand(commands?.macInputSafetySendStatusCommand || "", label);
   assertMacSafeInjectRehearsalCommand(commands?.macSafeInjectRehearsalCommand || "", label);
   assertMacManualUxStatusCommand(commands?.macManualUxStatusCommand || "", label);
   assertIncludes(commands?.macClientPageStatusCommand || "", "start-mac-client.mjs --status --boardSummary", label);
@@ -605,6 +624,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "macInputSafetyPlanCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macRemoteAudioSendStatusCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macInputSafetyStatusCommand", `${script} ${flag}`);
+    assertIncludes(result.stdout, "macInputSafetySendStatusCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macSafeInjectRehearsalCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macManualUxStatusCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "macLaunchAgentPlanCommand", `${script} ${flag}`);
@@ -679,6 +699,11 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "plan-mac-input-safety.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacInputSafetyStatus=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "check-mac-input-safety-status.mjs", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "MacInputSafetySendStatus=", "offline board summary");
+  assertMacInputSafetySendStatusCommand(
+    (payload.boardSummary || "").split("MacInputSafetySendStatus=")[1]?.split(". ")[0] || "",
+    "offline board summary Mac input safety send status command",
+  );
   assertIncludes(payload.boardSummary || "", "MacSafeInjectRehearsal=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "plan-mac-safe-inject-rehearsal.mjs", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacManualUxStatus=", "offline board summary");
@@ -807,6 +832,11 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "plan-mac-input-safety.mjs", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacInputSafetyStatus=", "online board summary");
       assertIncludes(payload.boardSummary || "", "check-mac-input-safety-status.mjs", "online board summary");
+      assertIncludes(payload.boardSummary || "", "MacInputSafetySendStatus=", "online board summary");
+      assertMacInputSafetySendStatusCommand(
+        (payload.boardSummary || "").split("MacInputSafetySendStatus=")[1]?.split(". ")[0] || "",
+        "online board summary Mac input safety send status command",
+      );
       assertIncludes(payload.boardSummary || "", "MacSafeInjectRehearsal=", "online board summary");
       assertIncludes(payload.boardSummary || "", "plan-mac-safe-inject-rehearsal.mjs", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacManualUxStatus=", "online board summary");

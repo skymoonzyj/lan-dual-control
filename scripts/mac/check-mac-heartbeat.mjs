@@ -185,6 +185,7 @@ Machine-readable JSON fields:
                               macRemoteAudioSendStatusCommand,
                               macInputSafetyPlanCommand,
                               macInputSafetyStatusCommand,
+                              macInputSafetySendStatusCommand,
                               macSafeInjectRehearsalCommand,
                               macManualUxStatusCommand, and
                               macLaunchAgentPlanCommand for dry-run
@@ -896,6 +897,7 @@ function buildCommands(args) {
     macRemoteAudioSendStatusCommand: `node scripts/mac/check-mac-remote-audio-status.mjs --host ${args.host} --port ${args.port} --server ${args.server} --sendStatus --boardSummary`,
     macInputSafetyPlanCommand: "node scripts/mac/plan-mac-input-safety.mjs --boardSummary",
     macInputSafetyStatusCommand: `node scripts/mac/check-mac-input-safety-status.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
+    macInputSafetySendStatusCommand: `node scripts/mac/check-mac-input-safety-status.mjs --host ${args.host} --port ${args.port} --checkBoard --server ${args.server} --sendStatus --boardSummary`,
     macSafeInjectRehearsalCommand: `node scripts/mac/plan-mac-safe-inject-rehearsal.mjs --host ${args.host} --port ${args.port} --checkBoard --boardSummary`,
     macManualUxStatusCommand: "node scripts/mac/check-mac-manual-ux-status.mjs --boardSummary",
     macLaunchAgentPlanCommand: `node scripts/mac/install-mac-host-launch-agent.mjs --launchAgentPath ${shellQuote(launchAgentPath)} --port ${args.port} --boardSummary`,
@@ -1190,6 +1192,7 @@ function makeBoardSummary(report) {
     `MacRemoteAudioSendStatus=${report.commands.macRemoteAudioSendStatusCommand}.`,
     `MacInputSafetyPlan=${report.commands.macInputSafetyPlanCommand}.`,
     `MacInputSafetyStatus=${report.commands.macInputSafetyStatusCommand}.`,
+    `MacInputSafetySendStatus=${report.commands.macInputSafetySendStatusCommand}.`,
     `MacSafeInjectRehearsal=${report.commands.macSafeInjectRehearsalCommand}.`,
     `MacManualUxStatus=${report.commands.macManualUxStatusCommand}.`,
     `MacUnattendedFormal=${report.commands.macUnattendedFormalCommand}.`,
