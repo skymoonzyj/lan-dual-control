@@ -346,8 +346,10 @@ function createVideoStats(args) {
       keyFramesWithParameterSets: 0,
       firstNalTypes: [],
       firstKeyFrameNalTypes: [],
+      firstKeyFrameHasParameterSets: null,
       lastNalTypes: [],
       lastKeyFrameNalTypes: [],
+      lastKeyFrameHasParameterSets: null,
       keyFrameIntervalFrames: [],
       keyFrameIntervalMs: [],
       lastKeyFrameFrameId: null,
@@ -587,8 +589,10 @@ function trackH264Frame(stats, h264Info, frame = {}) {
     stats.h264.keyFrames += 1;
     if (stats.h264.firstKeyFrameNalTypes.length === 0) {
       stats.h264.firstKeyFrameNalTypes = h264Info.nalTypes;
+      stats.h264.firstKeyFrameHasParameterSets = Boolean(h264Info.keyFrameWithParameterSets);
     }
     stats.h264.lastKeyFrameNalTypes = h264Info.nalTypes;
+    stats.h264.lastKeyFrameHasParameterSets = Boolean(h264Info.keyFrameWithParameterSets);
     trackH264KeyFrameInterval(stats.h264, frame);
   }
   if (h264Info.keyFrameFlag) stats.h264.keyFrameFlagFrames += 1;
@@ -733,8 +737,10 @@ function makeH264Observation(h264) {
     keyFramesWithParameterSets: h264.keyFramesWithParameterSets,
     firstNalTypes: h264.firstNalTypes,
     firstKeyFrameNalTypes: h264.firstKeyFrameNalTypes,
+    firstKeyFrameHasParameterSets: h264.firstKeyFrameHasParameterSets === true,
     lastNalTypes: h264.lastNalTypes,
     lastKeyFrameNalTypes: h264.lastKeyFrameNalTypes,
+    lastKeyFrameHasParameterSets: h264.lastKeyFrameHasParameterSets === true,
     keyFrameTailGapFrames,
     keyFrameTailGapMs,
     keyFrameIntervalFrames: {

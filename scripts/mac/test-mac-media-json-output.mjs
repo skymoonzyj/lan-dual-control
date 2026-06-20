@@ -630,6 +630,8 @@ async function checkBoardSummary(args) {
     assert(lines[0].includes("video=") && lines[0].includes("audio="), "boardSummary should include video and audio");
     assert(lines[0].includes("h264Frames="), "boardSummary should include H.264 sent frame count");
     assert(lines[0].includes("h264Delta="), "boardSummary should include H.264 delta frame count");
+    assert(lines[0].includes("firstKeyParam=yes"), "boardSummary should include first H.264 keyframe parameter-set status");
+    assert(lines[0].includes("lastKeyParam=yes"), "boardSummary should include latest H.264 keyframe parameter-set status");
     assert(lines[0].includes("firstKeyNal=7,8,5"), "boardSummary should include first H.264 keyframe NAL types");
     assert(lines[0].includes("lastKeyNal=7,8,5"), "boardSummary should include last H.264 keyframe NAL types");
     assert(lines[0].includes("lastNal="), "boardSummary should include last H.264 frame NAL types");

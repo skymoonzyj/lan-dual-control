@@ -736,6 +736,8 @@ function formatH264ProbeSummary(h264) {
     `pps=${h264.ppsFrames || 0}`,
     `idr=${h264.idrFrames || 0}`,
     `keyParam=${h264.keyFramesWithParameterSets || 0}`,
+    formatH264KeyParam("firstKeyParam", h264.firstKeyFrameHasParameterSets),
+    formatH264KeyParam("lastKeyParam", h264.lastKeyFrameHasParameterSets),
     formatH264NalTypes("firstKeyNal", h264.firstKeyFrameNalTypes),
     formatH264NalTypes("firstNal", h264.firstNalTypes),
     formatH264NalTypes("lastKeyNal", h264.lastKeyFrameNalTypes),
@@ -747,6 +749,12 @@ function formatH264ProbeSummary(h264) {
     formatH264TailGap("keyTailFrames", h264.keyFrameTailGapFrames),
     formatH264TailGap("keyTailMs", h264.keyFrameTailGapMs),
   ].filter(Boolean).join(",");
+}
+
+function formatH264KeyParam(label, value) {
+  if (value === true) return `${label}=yes`;
+  if (value === false) return `${label}=no`;
+  return "";
 }
 
 function formatH264IntervalLast(label, value, decimals) {

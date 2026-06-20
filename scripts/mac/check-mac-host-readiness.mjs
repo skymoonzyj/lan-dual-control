@@ -1168,6 +1168,8 @@ function formatMediaH264BoardSummary(details) {
     `pps=${ppsFrames}`,
     `idr=${idrFrames}`,
     `keyParam=${keyParam}`,
+    formatH264KeyParamBoardSummary("firstKeyParam", h264.firstKeyFrameHasParameterSets),
+    formatH264KeyParamBoardSummary("lastKeyParam", h264.lastKeyFrameHasParameterSets),
     formatH264NalTypesBoardSummary("firstKeyNal", h264.firstKeyFrameNalTypes),
     formatH264NalTypesBoardSummary("firstNal", h264.firstNalTypes),
     formatH264NalTypesBoardSummary("lastKeyNal", h264.lastKeyFrameNalTypes),
@@ -1179,6 +1181,12 @@ function formatMediaH264BoardSummary(details) {
     formatH264TailGapBoardSummary("keyTailFrames", h264.keyFrameTailGapFrames),
     formatH264TailGapBoardSummary("keyTailMs", h264.keyFrameTailGapMs),
   ].filter(Boolean).join(" ");
+}
+
+function formatH264KeyParamBoardSummary(label, value) {
+  if (value === true) return `${label}=yes`;
+  if (value === false) return `${label}=no`;
+  return "";
 }
 
 function formatH264IntervalLastBoardSummary(label, value) {
