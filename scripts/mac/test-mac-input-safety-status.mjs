@@ -173,7 +173,21 @@ async function withFakeMacHost(discoveryPayload, callback) {
 }
 
 async function withFakeAgentLinkBoard(state, callback) {
+  const posts = [];
   const server = createServer((request, response) => {
+    if (request.url === "/api/status" && request.method === "POST") {
+      let body = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk) => {
+        body += chunk;
+      });
+      request.on("end", () => {
+        posts.push({ path: request.url, body: JSON.parse(body || "{}") });
+        response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        response.end(JSON.stringify({ ok: true }));
+      });
+      return;
+    }
     if (request.url !== "/api/state") {
       response.writeHead(404).end("not found");
       return;
@@ -188,7 +202,7 @@ async function withFakeAgentLinkBoard(state, callback) {
   try {
     const address = server.address();
     const port = typeof address === "object" && address ? address.port : 0;
-    await callback(`http://127.0.0.1:${port}`);
+    await callback(`http://127.0.0.1:${port}`, posts);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -222,6 +236,7 @@ function checkHelp(args) {
     assert(result.status === 0, `${script} ${flag} should exit 0\n${outputOf(result)}`);
     assertIncludes(result.stdout, "Usage:", `${script} ${flag}`);
     assertIncludes(result.stdout, "--boardSummary", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--sendStatus", `${script} ${flag}`);
     assertIncludes(result.stdout, "--confirmUserWatching", `${script} ${flag}`);
     assertSafeOutput(outputOf(result), `${script} ${flag}`);
   }
@@ -366,6 +381,47 @@ async function checkBoardUserPresenceAwayBlocksInject(args) {
   print("OK", "Structured userPresence=away blocks real-input inject planning");
 }
 
+async function checkSendStatusPostsAwayGate(args) {
+  await withFakeMacHost(baseDiscovery(), async ({ host, port }) => {
+    await withFakeAgentLinkBoard({
+      userPresence: {
+        status: "away",
+        label: "user away",
+        reason: "user cannot approve supervised tasks",
+        updatedAt: "2026-06-20T10:32:00.000Z",
+        updatedBy: "Supervisor",
+      },
+    }, async (serverUrl, posts) => {
+      const result = await runAsync([
+        "--boardSummary",
+        "--host",
+        host,
+        "--port",
+        String(port),
+        "--timeoutMs",
+        "1000",
+        "--checkBoard",
+        "--server",
+        serverUrl,
+        "--sendStatus",
+      ], args);
+      assert(result.status !== 0, `sendStatus away should still exit non-zero because input is blocked\n${outputOf(result)}`);
+      assert(posts.length === 1, `sendStatus away should post one status: ${JSON.stringify(posts)}`);
+      const statusPost = posts[0];
+      assert(statusPost.path === "/api/status", `sendStatus away should post /api/status: ${JSON.stringify(posts)}`);
+      assert(statusPost.body.device === "Mac Input Safety", `status device mismatch: ${JSON.stringify(statusPost.body)}`);
+      assert(statusPost.body.role === "Mac 端", `status role mismatch: ${JSON.stringify(statusPost.body)}`);
+      assert(statusPost.body.status === "blocked", `status value mismatch: ${JSON.stringify(statusPost.body)}`);
+      assertIncludes(statusPost.body.note || "", "MacInputSafetyStatus=blocked", "sendStatus away note");
+      assertIncludes(statusPost.body.note || "", "reason=user-away", "sendStatus away note");
+      assertIncludes(statusPost.body.note || "", "MacInputSafetyAction=no-auth-only", "sendStatus away note");
+      assertIncludes(statusPost.body.note || "", "BLOCKED_BY_USER_AWAY", "sendStatus away note");
+      assertSafeOutput(`${result.stdout}\n${result.stderr}\n${JSON.stringify(posts)}`, "sendStatus away");
+    });
+  });
+  print("OK", "Mac input safety status can refresh Agent Link Board while user is away");
+}
+
 async function checkPermissionBlocker(args) {
   await withFakeMacHost(baseDiscovery({
     permissions: {
@@ -422,6 +478,7 @@ async function main() {
   await checkReadyLogMode(args);
   await checkBoardUserPresencePresentAllowsExplainedInject(args);
   await checkBoardUserPresenceAwayBlocksInject(args);
+  await checkSendStatusPostsAwayGate(args);
   await checkPermissionBlocker(args);
   await checkInjectActiveFailsClosed(args);
   print("OK", "Mac input safety status self-test passed");

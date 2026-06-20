@@ -18,6 +18,31 @@
 ```
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 M2 Mac Input Safety sendStatus
+开发端：Mac Codex
+本轮目标：让 Mac Input Safety 能用脚本刷新当前只读门禁状态到通讯板，避免 `userPresence` 变化后旧 ready/present 摘要误导真实输入流程。
+完成内容：
+- `check-mac-input-safety-status` 新增 `--sendStatus`，向 Agent Link Board `/api/status` 发布 `device="Mac Input Safety"`、`role="Mac 端"`、`status=<ready|blocked>` 和当前 `boardSummary`。
+- `userPresence=away` 时仍发布 blocked/no-auth-only 摘要，但进程保持非零退出，明确这是 fail-closed。
+- `--help` 和自测覆盖 `--sendStatus`，并用假 Agent Link Board 校验 POST body 不含密码、auth、input/inject。
+修改文件：
+- `scripts/mac/check-mac-input-safety-status.mjs`
+- `scripts/mac/test-mac-input-safety-status.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-mac-input-safety-status.mjs --timeoutMs 10000` 先失败于 `--help` 缺少 `--sendStatus`。
+- 绿灯：`node scripts/mac/test-mac-input-safety-status.mjs --timeoutMs 10000` 通过，并确认 away 状态发布一个 `/api/status`。
+遗留问题：真实 inject 仍未执行；`--sendStatus` 只刷新门禁状态，不代表可以请求密码或发送 input/inject。
+下一步建议：开工第一屏或 `userPresence` 改变后，Mac 端可运行 `check-mac-input-safety-status --checkBoard --sendStatus --boardSummary` 刷新 `Mac Input Safety` 状态。
+是否改了协议：否；只新增 Mac 侧脚本上板参数。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 M2 Mac input safety user notice
 开发端：Mac Codex
 本轮目标：把真实输入安全测试前必须告知用户的目标、用户动作、安全边界和预计耗时结构化，避免把 `UserPresence=present` 误解成可以直接 inject。

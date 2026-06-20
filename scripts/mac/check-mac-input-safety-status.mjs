@@ -10,6 +10,7 @@ const defaults = {
   json: false,
   boardSummary: false,
   checkBoard: false,
+  sendStatus: false,
 };
 
 function helpRequested(argv) {
@@ -29,6 +30,7 @@ Options:
   --server <url>     Agent Link Board URL for --checkBoard. Default: ${defaults.server}
   --timeoutMs <ms>   Discovery timeout. Default: ${defaults.timeoutMs}
   --checkBoard       Read /api/state.userPresence without posting anything.
+  --sendStatus       Post the current secret-free summary to Agent Link Board.
   --json             Print one machine-readable JSON object.
   --boardSummary     Print one secret-free Agent Link Board summary line.
   --help, -h         Show this help without probing anything.
@@ -47,7 +49,7 @@ function parseArgs(argv) {
       args.help = true;
       continue;
     }
-    if (token === "--json" || token === "--boardSummary" || token === "--checkBoard") {
+    if (token === "--json" || token === "--boardSummary" || token === "--checkBoard" || token === "--sendStatus") {
       args[token.slice(2)] = true;
       continue;
     }
@@ -113,6 +115,44 @@ function requestJson(url, timeoutMs) {
       request.destroy(new Error(`timeout after ${timeoutMs}ms`));
     });
     request.on("error", reject);
+  });
+}
+
+function postJson(url, payload, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const parsed = typeof url === "string" ? new URL(url) : url;
+    const body = JSON.stringify(payload);
+    const client = parsed.protocol === "https:" ? https : http;
+    const request = client.request(parsed, {
+      method: "POST",
+      timeout: timeoutMs,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Length": Buffer.byteLength(body),
+      },
+    }, (response) => {
+      let responseBody = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        responseBody += chunk;
+      });
+      response.on("end", () => {
+        if ((response.statusCode || 0) < 200 || (response.statusCode || 0) >= 300) {
+          reject(new Error(`HTTP ${response.statusCode || 0}`));
+          return;
+        }
+        try {
+          resolve(responseBody ? JSON.parse(responseBody) : { ok: true });
+        } catch {
+          resolve({ ok: true });
+        }
+      });
+    });
+    request.on("timeout", () => {
+      request.destroy(new Error(`timeout after ${timeoutMs}ms`));
+    });
+    request.on("error", reject);
+    request.end(body);
   });
 }
 
@@ -306,6 +346,14 @@ function boardStateUrl(server) {
   return url;
 }
 
+function boardStatusUrl(server) {
+  const url = new URL(server);
+  url.pathname = "/api/status";
+  url.search = "";
+  url.hash = "";
+  return url;
+}
+
 function normalizeUserPresence(state, error = "") {
   if (error) {
     return {
@@ -487,6 +535,21 @@ async function buildReport(args) {
   return applyUserPresenceGate(report, userPresence, args);
 }
 
+async function sendStatus(args, report) {
+  try {
+    await postJson(boardStatusUrl(args.server), {
+      device: "Mac Input Safety",
+      role: "Mac 端",
+      status: report.status,
+      note: report.boardSummary || makeBoardSummary(report),
+    }, args.timeoutMs);
+    report.postStatus = { ok: true };
+  } catch (error) {
+    report.postStatus = { ok: false, error: error.message };
+  }
+  return report.postStatus;
+}
+
 async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -499,6 +562,9 @@ async function main() {
   }
   const report = await buildReport(args);
   report.boardSummary = makeBoardSummary(report);
+  if (args.sendStatus) {
+    await sendStatus(args, report);
+  }
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
   } else if (args.boardSummary) {
@@ -506,7 +572,7 @@ async function main() {
   } else {
     printPlain(report);
   }
-  process.exitCode = report.ok ? 0 : 1;
+  process.exitCode = report.ok && (!args.sendStatus || report.postStatus?.ok) ? 0 : 1;
 }
 
 main().catch((error) => {

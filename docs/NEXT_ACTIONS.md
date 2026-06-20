@@ -5,6 +5,7 @@
 用途：让两台机器上的 Codex 都知道现在最值得做什么。
 
 ## 2026-06-20 现场校正
+- M2 上板刷新口径：如果通讯板 `Mac Input Safety` 仍显示旧 `UserPresence=present` 或旧 ready 摘要，而 `/api/state.userPresence` 已是 `away`，Mac 端直接跑 `node scripts/mac/check-mac-input-safety-status.mjs --host 127.0.0.1 --port 43770 --checkBoard --server http://192.168.31.68:17888 --sendStatus --boardSummary` 刷新。`away` 时会发送 blocked/no-auth-only 摘要并保持非零退出，这是预期的 fail-closed，不代表脚本坏了；不要因此请求密码、授权或真实 input/inject。
 - W3/M1 远端独占声音最新口径补充：Windows 控制端已消费 Mac 新版 `Consent=explicit-before-change` / `RestorePath=required-before-apply`，会把恢复路径门禁显示成“恢复路径需先确认”。现场看到这条时，表示任何静音、切输出设备或 remote-only toggle 前都要先说明如何恢复，并在结束后复跑只读状态检查；仍不能让脚本自动改 Mac 音量或输出设备。
 - M2 真实输入最新口径：`check-mac-input-safety-status --checkBoard --boardSummary` 和 `plan-mac-safe-inject-rehearsal --checkBoard --boardSummary` 看到 `UserNoticeGoal=verify-real-mac-input-safe-event-set UserNoticeAction=watch-mac-screen-and-be-ready-to-take-over UserNoticeBoundary=safe-event-set-only-no-click-delete-shortcuts-return-log UserNoticeDuration=2-3-minutes` 时，只表示可以向用户发起“看着 Mac 屏幕的 safe 事件集验收说明”。它不是已开启 inject，也不是可自动发 input；真正测试前仍要先当面说明目标、用户动作、安全边界和预计 2-3 分钟，并且只用 `--confirmUserWatching` + `--inputEventSet safe`。
 - W2 视频恢复最新口径补充：Windows 控制端触发 `keyframe-wait-timeout-fallback` 后会先请求 MJPEG/JPEG 保画面；如果接下来 2.5 秒冷却期已过且至少收到 3 帧稳定 JPEG，会再用同一 `display_settings` 请求恢复 `preferredVideoCodec=h264` / `preferredVideoEncoding=annexb`。现场看到短暂 JPEG 回退不代表永久降级；若反复回退/恢复循环，下一步查 Mac 端关键帧/GOP、采集编码稳定性或网络丢关键帧。
