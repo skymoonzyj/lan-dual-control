@@ -19,6 +19,19 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 控制端 UserPresence away 可见化
+开发端：Windows Codex
+本轮目标：让 Windows 控制端页面直接显示通讯板 userPresence=away 带来的安全边界，避免用户不在时误进密码/授权/真实输入流程。
+完成内容：`parseMacUnattendedAttention()` 新增 `UserPresence=away`、`UserPresenceAction=no-auth-only` 和 `BLOCKED_BY_USER_AWAY` 的只读解析；Mac 提醒区、值守摘要和复制/导出诊断会显示“用户不在 / 只做无授权任务”；测试覆盖 watcher 文本和 reachability/export 摘要。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于 watcher 状态和 export 摘要缺少“用户不在 / 只做无授权任务”；绿灯 `node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：只增强 Windows 控制端本地提示，不会同步结构化 presence，也不会改变授权、密码、音视频、剪贴板或输入控制。
+下一步建议：用户在场后，先用 Agent Link Board presence 同步结构化状态，再进入需要密码、授权或真实输入的手工体验。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows 重连上限失败提示
 开发端：Windows Codex
 本轮目标：让自动重连耗尽后的失败状态直接告诉用户下一步怎么处理。

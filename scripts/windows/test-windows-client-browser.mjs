@@ -1519,6 +1519,8 @@ async function verifyDesktopOnlyHostPanel(session) {
         "MacUnattendedStatus=attention warnings=launch-agent-missing,launch-agent-max-fps,power-risk blockers=none",
         "MacPowerHealth=warning reason=system-sleep-enabled warnings=system-sleep-enabled,display-sleep-enabled blockers=none checkedAt=2026-06-19T08:08:38.575Z",
         "MacUnattendedHealth=warning reason=launch-agent-not-loaded blockers=none warnings=launch-agent-not-loaded,power checkedAt=2026-06-19T08:10:38.575Z",
+        "UserPresence=away source=api-state updatedAt=2026-06-20T13:52:05.698Z",
+        "UserPresenceAction=no-auth-only blocker=BLOCKED_BY_USER_AWAY",
         "MacPowerPlan=node scripts/mac/plan-mac-power-settings.mjs --profile all --sleep 0 --displaySleep 0 --networkWake on --boardSummary",
         "MacRemoteAudioPlan=node scripts/mac/plan-mac-remote-audio.mjs --boardSummary",
         "Mac remote audio plan: status=plan-only; capture=system-pcm-does-not-mute-local; RemoteOnlyOptions=manual-mute-restore/virtual-output-device/product-toggle; recommended=product-toggle-with-explicit-consent; safety=no-volume-change,no password/input/inject. Consent=explicit-before-change; RestorePath=required-before-apply.",
@@ -1567,6 +1569,23 @@ async function verifyDesktopOnlyHostPanel(session) {
         "MacHeartbeatStop=node scripts/mac/start-mac-heartbeat-watcher.mjs --stop --host 127.0.0.1 --port 43770 --server http://192.168.31.68:17888 --boardSummary",
       ].join("; ");
       const macAlertFindingSummary = "Mac side status alert - Mac Codex | " + macAlertFindingText;
+      const userPresenceAwayText = "UserPresence=away source=api-state updatedAt=2026-06-20T13:52:05.698Z; UserPresenceAction=no-auth-only blocker=BLOCKED_BY_USER_AWAY";
+      const userPresenceAwayAttention =
+        typeof parseMacUnattendedAttention === "function"
+          ? parseMacUnattendedAttention(userPresenceAwayText)
+          : null;
+      const userPresenceAwayReachability =
+        typeof getMacReachabilityExportStatus === "function"
+          ? getMacReachabilityExportStatus({
+              targetLabel: "",
+              reconnectExport: { status: "未等待" },
+              macAlertWatcherExport: {
+                status: "提醒中",
+                unattended: userPresenceAwayAttention,
+                heartbeatFreshness: userPresenceAwayAttention?.heartbeatFreshness,
+              },
+            })
+          : null;
       const postPassManualUxText = "PostPassNext=WindowsRecordPassAndTailError+MacManualUxStandby; ManualUxChecklist=connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
       const postPassManualUxAttention =
         typeof parseMacUnattendedAttention === "function"
@@ -2545,6 +2564,12 @@ async function verifyDesktopOnlyHostPanel(session) {
           watcherRunningView.statusText.includes("最近提醒") &&
           watcherRunningView.statusText.includes("MacUnattendedStatus=attention") &&
           watcherRunningView.statusText.includes("风险：") &&
+          watcherRunningView.statusText.includes("用户不在") &&
+          watcherRunningView.statusText.includes("只做无授权任务") &&
+          userPresenceAwayAttention?.summary.includes("用户不在") &&
+          userPresenceAwayAttention?.summary.includes("只做无授权任务") &&
+          userPresenceAwayReachability?.status.includes("用户不在") &&
+          userPresenceAwayReachability?.status.includes("只做无授权任务") &&
           watcherRunningView.statusText.includes("视频链路需检查") &&
           watcherRunningView.statusText.includes("运行版本需检查") &&
           watcherRunningView.statusText.includes("认证/密码步骤待确认") &&

@@ -287,6 +287,10 @@ const macUnattendedRiskLabels = {
   "mac-remote-audio-not-active": "远端独占声音未开启",
   "mac-remote-audio-user-consent": "远端独占声音需用户明确同意",
   "mac-remote-audio-read-only": "不会自动改 Mac 音量",
+  "user-presence-away": "用户不在",
+  "user-presence-no-auth-only": "只做无授权任务",
+  "blocked_by_user_away": "用户不在，只做无授权任务",
+  "blocked-by-user-away": "用户不在，只做无授权任务",
   "system-sleep-enabled": "系统睡眠未关闭",
   "display-sleep-enabled": "显示器睡眠未关闭",
   "network-wake-disabled": "网络唤醒未开启",
@@ -4056,6 +4060,22 @@ function extractMacRemoteAudioStatusRisks(text) {
   return [...new Set(risks)];
 }
 
+function extractUserPresenceRisks(text) {
+  const source = String(text || "");
+  if (!/\bUserPresence(?:Action)?\s*=/i.test(source) && !/\bBLOCKED_BY_USER_AWAY\b/i.test(source)) return [];
+  if (/\b(?:password|passwd|pwd|token|secret)\s*[:=]\s*\S+/i.test(source)) return [];
+  if (/(?:^|\s)--(?:password|token|secret|passwd|pwd)\s+\S+/i.test(source)) return [];
+
+  const risks = [];
+  if (/\bUserPresence\s*=\s*(?:away|sleeping|asleep|user-away|user_sleeping|用户不在|不在|休息|睡觉)\b/i.test(source)) {
+    risks.push("user-presence-away");
+  }
+  if (/\bUserPresenceAction\s*=\s*no-auth-only\b|\bBLOCKED_BY_USER_AWAY\b/i.test(source)) {
+    risks.push("user-presence-no-auth-only");
+  }
+  return [...new Set(risks)];
+}
+
 function parseMacInputSafetyPlanEvidenceLabels(text) {
   const source = String(text || "");
   const hasInputSafetyPlan =
@@ -4253,7 +4273,8 @@ function parseMacUnattendedAttention(text) {
   const windowsLanRisks = extractWindowsLanRiskValues(source);
   const heartbeatHealthRisks = extractMacHeartbeatHealthRisks(source);
   const remoteAudioStatusRisks = extractMacRemoteAudioStatusRisks(source);
-  const risks = [...new Set([...blockers, ...warnings, ...windowsLanRisks, ...heartbeatHealthRisks, ...remoteAudioStatusRisks])];
+  const userPresenceRisks = extractUserPresenceRisks(source);
+  const risks = [...new Set([...userPresenceRisks, ...blockers, ...warnings, ...windowsLanRisks, ...heartbeatHealthRisks, ...remoteAudioStatusRisks])];
   const heartbeatFreshness = parseMacHeartbeatFreshness(source);
   const evidenceLabels = parseMacPositiveEvidenceLabels(source);
   const lower = source.toLowerCase();

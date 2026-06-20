@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 Windows 控制端 UserPresence away 可见化
+- Windows 控制端现在会从 Mac 提醒/值守文本中识别 `UserPresence=away`、`UserPresenceAction=no-auth-only` 和 `BLOCKED_BY_USER_AWAY`，把 Mac 提醒区、值守摘要和复制/导出诊断里的风险翻译成“用户不在 / 只做无授权任务”。页面自测先红于缺少这两个中文提示，再绿于 `test-windows-client-browser --diagnosticsOnly`。只做本地解析和展示，不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-20 Windows 重连上限失败提示
 - Windows 控制端自动重连达到 3/3 上限后，不再只显示 `连接失败`；状态行和远程状态会显示 `自动重连 3 次仍未恢复`、断线原因，并提示点“连接”重新尝试或复制诊断给两端。host 诊断同步显示 `自动重连已停止`，复制/导出诊断新增 `重连建议` 行，快速摘要也会带同一建议。页面自测先红于状态仍是 `连接失败` 且导出没有 `重连建议`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改重连次数/间隔、不改协议、不认证、不请求或发送密码、不发 input/inject。
 
