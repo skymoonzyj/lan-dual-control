@@ -162,6 +162,30 @@ async function checkPresenceEndpoint(args) {
   console.log("[OK] codex-link-server /api/presence updates structured userPresence safely");
 }
 
+async function checkHealthEndpoint(args) {
+  await withServer(initialState(), args, async (baseUrl) => {
+    const before = await waitForState(baseUrl, args.timeoutMs);
+    const response = await fetch(`${baseUrl}/api/health`);
+    if (!response.ok) {
+      throw new Error(`/api/health should return 200, got ${response.status}: ${await response.text()}`);
+    }
+    const payload = await response.json();
+    assert(payload.ok === true, `health response should be ok: ${JSON.stringify(payload)}`);
+    assert(payload.service === "codex-link-board", `health service mismatch: ${JSON.stringify(payload)}`);
+    assert(payload.features?.state === true, `health should expose state feature: ${JSON.stringify(payload.features)}`);
+    assert(payload.features?.presence === true, `health should expose presence feature: ${JSON.stringify(payload.features)}`);
+    assert(payload.features?.userPresence === true, `health should expose userPresence feature: ${JSON.stringify(payload.features)}`);
+    assert(payload.limits?.maxEvents === 200, `health should expose event retention: ${JSON.stringify(payload.limits)}`);
+    assertNotIncludes(JSON.stringify(payload), "只做无授权任务", "health response");
+    assertNotIncludes(JSON.stringify(payload), "password", "health response");
+    assertNotIncludes(JSON.stringify(payload), "input_event", "health response");
+    const after = await waitForState(baseUrl, args.timeoutMs);
+    assert((after.events || []).length === (before.events || []).length, "/api/health should not add board events");
+    assert(after.userPresence?.status === before.userPresence?.status, "/api/health should not mutate userPresence");
+  });
+  console.log("[OK] codex-link-server /api/health exposes safe feature flags without mutating state");
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -170,6 +194,7 @@ async function main() {
   }
   await checkStatePreservesPresenceAndPinnedTasks(args);
   await checkPresenceEndpoint(args);
+  await checkHealthEndpoint(args);
   console.log("[OK] codex-link-server self-test passed");
 }
 

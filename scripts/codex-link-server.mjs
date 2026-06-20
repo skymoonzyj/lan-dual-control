@@ -33,6 +33,12 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/api/health") {
+      if (!isAuthorized(req, url)) return unauthorized(res);
+      sendJson(res, makeHealth());
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/events") {
       if (!isAuthorized(req, url)) return unauthorized(res);
       openEventStream(req, res);
@@ -177,6 +183,30 @@ function normalizeState(input) {
     events: Array.isArray(input.events) ? input.events.slice(-200) : [],
     pinnedTasks: Array.isArray(input.pinnedTasks) ? input.pinnedTasks : [],
     userPresence: input.userPresence && typeof input.userPresence === "object" ? input.userPresence : null,
+  };
+}
+
+function makeHealth() {
+  return {
+    ok: true,
+    service: "codex-link-board",
+    version: "presence-health-v1",
+    serverTime: now(),
+    stateUpdatedAt: state.updatedAt || "",
+    features: {
+      state: true,
+      events: true,
+      status: true,
+      message: true,
+      call: true,
+      clearCall: true,
+      presence: true,
+      userPresence: true,
+      pinnedTasks: true,
+    },
+    limits: {
+      maxEvents: 200,
+    },
   };
 }
 

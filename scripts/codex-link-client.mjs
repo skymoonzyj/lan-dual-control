@@ -18,6 +18,8 @@ try {
     await watch(args);
   } else if (command === "state") {
     printState(await get(args, "/api/state"), args);
+  } else if (command === "health") {
+    printHealth(await get(args, "/api/health"), args);
   } else if (command === "status") {
     await post(args, "/api/status", {
       device: args.device || args.from || "Codex",
@@ -129,6 +131,14 @@ async function get(options, path) {
 
 function formatClientError(error, commandName, options) {
   const message = error?.message || String(error);
+  if (commandName === "health" && /^404:/.test(message)) {
+    return [
+      message,
+      "当前通讯板服务不支持 /api/health，可能还没有重启到新版。",
+      "需要重启或升级通讯板服务后，才能只读确认 presence/features 支持状态。",
+      "在此之前请继续以 state 输出的 userPresence 为准；presence 支持无法只读确认，不要把普通消息当作用户在场或授权依据。",
+    ].join("\n");
+  }
   if (commandName !== "presence" || !/^404:/.test(message)) return message;
 
   const from = options.updatedBy || options.by || options.from || options.device || "Codex";
@@ -194,6 +204,25 @@ function printState(state, options = {}) {
   }
 }
 
+function printHealth(health, options = {}) {
+  if (options.json) {
+    console.log(JSON.stringify(health, null, 2));
+    return;
+  }
+
+  console.log(`Agent Link Board health: ${health?.ok === false ? "failed" : "ok"}`);
+  console.log(`service: ${health?.service || "unknown"}`);
+  console.log(`version: ${health?.version || "unknown"}`);
+  if (health?.stateUpdatedAt) console.log(`stateUpdatedAt: ${health.stateUpdatedAt}`);
+  console.log("features:");
+  const features = health?.features && typeof health.features === "object" ? health.features : {};
+  for (const name of ["state", "events", "status", "message", "call", "clearCall", "presence", "userPresence", "pinnedTasks"]) {
+    console.log(`  ${name}: ${features[name] ? "yes" : "no"}`);
+  }
+  console.log("limits:");
+  console.log(`  maxEvents: ${health?.limits?.maxEvents ?? "unknown"}`);
+}
+
 function formatCall(call) {
   return [
     `[call] ${call.status || ""}: ${call.goal || ""}`,
@@ -257,6 +286,7 @@ function printHelp() {
   console.log(`Usage:
   node scripts/codex-link-client.mjs --server http://host:17888 watch [--once] [--eventLimit 10] [--allEvents]
   node scripts/codex-link-client.mjs --server http://host:17888 state [--json] [--eventLimit 10] [--allEvents]
+  node scripts/codex-link-client.mjs --server http://host:17888 health [--json]
   node scripts/codex-link-client.mjs --server http://host:17888 status --device "Windows Codex" --role "Windows端" --status online --note "ready"
   node scripts/codex-link-client.mjs --server http://host:17888 presence --status present --updatedBy "Mac Codex" --reason "presence refresh"
   node scripts/codex-link-client.mjs --server http://host:17888 send --from "Windows Codex" --text "message"

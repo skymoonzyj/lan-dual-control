@@ -113,6 +113,27 @@ async function withFakeBoard(state, fn, options = {}) {
   const server = http.createServer(async (request, response) => {
     const record = { method: request.method, url: request.url };
     requests.push(record);
+    if (request.method === "GET" && request.url === "/api/health" && !options.healthUnsupported) {
+      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify(options.healthPayload || {
+        ok: true,
+        service: "codex-link-board",
+        version: "test-health",
+        features: {
+          state: true,
+          events: true,
+          status: true,
+          message: true,
+          call: true,
+          clearCall: true,
+          presence: true,
+          userPresence: true,
+          pinnedTasks: true,
+        },
+        limits: { maxEvents: 200 },
+      }));
+      return;
+    }
     if (request.method === "GET" && request.url === "/api/state") {
       response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       response.end(JSON.stringify(state));
@@ -251,6 +272,40 @@ async function checkStateTextAcceptsCustomEventLimit(args) {
   console.log("[OK] codex-link-client state accepts a custom recent event limit");
 }
 
+async function checkHealthText(args) {
+  await withFakeBoard(makeState(), async (serverUrl, requests) => {
+    const result = await run(["--server", serverUrl, "health"], args);
+    assert(result.status === 0, `health should exit 0. stdout=${result.stdout} stderr=${result.stderr}`);
+    assert(result.stderr === "", `health should not write stderr. stderr=${result.stderr}`);
+    assertIncludes(result.stdout, "Agent Link Board health: ok", "health text");
+    assertIncludes(result.stdout, "service: codex-link-board", "health text");
+    assertIncludes(result.stdout, "version: test-health", "health text");
+    assertIncludes(result.stdout, "presence: yes", "health text");
+    assertIncludes(result.stdout, "userPresence: yes", "health text");
+    assertIncludes(result.stdout, "maxEvents: 200", "health text");
+    assertNotIncludes(result.stdout.trim(), "\"features\"", "health text");
+    assertNotIncludes(result.stdout, "password", "health text");
+    assertNotIncludes(result.stdout, "input_event", "health text");
+    assert(requests.length === 1 && requests[0].url === "/api/health", `health should only read /api/health: ${JSON.stringify(requests)}`);
+  });
+  console.log("[OK] codex-link-client health prints safe board feature flags");
+}
+
+async function checkHealthUnsupportedHint(args) {
+  await withFakeBoard(makeState(), async (serverUrl, requests) => {
+    const result = await run(["--server", serverUrl, "health"], args);
+    assert(result.status === 1, `unsupported health should exit 1. stdout=${result.stdout} stderr=${result.stderr}`);
+    assertIncludes(result.stderr, "当前通讯板服务不支持 /api/health", "unsupported health stderr");
+    assertIncludes(result.stderr, "需要重启或升级通讯板服务", "unsupported health restart hint");
+    assertIncludes(result.stderr, "presence 支持无法只读确认", "unsupported health presence hint");
+    assertNotIncludes(result.stderr, "用户已在当前线程确认在场", "unsupported health stderr");
+    assertNotIncludes(result.stderr, "password", "unsupported health stderr");
+    assertNotIncludes(result.stderr, "input_event", "unsupported health stderr");
+    assert(requests.length === 1 && requests[0].url === "/api/health", `health should probe only /api/health: ${JSON.stringify(requests)}`);
+  }, { healthUnsupported: true });
+  console.log("[OK] codex-link-client health explains old Agent Link Board fallback safely");
+}
+
 async function checkWatchOnceShowsUserPresence(args) {
   await withFakeBoard(makeState(), async (serverUrl, requests) => {
     const result = await run(["--server", serverUrl, "watch", "--once"], args);
@@ -367,6 +422,8 @@ async function main() {
   await checkStateTextLimitsEventsByDefault(args);
   await checkStateTextCanShowAllEvents(args);
   await checkStateTextAcceptsCustomEventLimit(args);
+  await checkHealthText(args);
+  await checkHealthUnsupportedHint(args);
   await checkWatchOnceShowsUserPresence(args);
   await checkWatchOnceLimitsEventsByDefault(args);
   await checkWatchOnceCanShowAllEvents(args);
