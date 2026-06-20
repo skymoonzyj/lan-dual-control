@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { formatWindowsLanRisk } from "./board-windows-lan-risk.mjs";
+import { formatWindowsFirewallHealth, formatWindowsLanRisk } from "./board-windows-lan-risk.mjs";
 import { promptPassword as promptMacPassword } from "./password-prompt.mjs";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -195,6 +195,9 @@ Machine-readable JSON fields:
   discovery.manualChecklistSummary
                                   Human true-test checklist order from Windows
                                   host discovery.
+  discovery.windowsFirewallHealth
+                                  Secret-free WindowsFirewallHealth= hint
+                                  copied from Agent Link Board by discovery.
   sentCall                       Present only with --preflightOnly --sendCall; secret-free Agent Link Board result.
 
 Examples:
@@ -1103,11 +1106,13 @@ function makeDiscoveryChecklistText(report) {
   if (!report.discovery?.requested) return "";
   const risk = formatWindowsLanRisk(report.discovery.windowsLanRisk);
   const riskText = risk ? ` ${risk}.` : "";
-  if (!report.discovery?.formalChecklistCommand) return riskText;
+  const firewallHealth = formatWindowsFirewallHealth(report.discovery.windowsFirewallHealth);
+  const firewallHealthText = firewallHealth ? ` ${firewallHealth}.` : "";
+  if (!report.discovery?.formalChecklistCommand) return `${riskText}${firewallHealthText}`;
   const manual = report.discovery.manualChecklistSummary
     ? ` ManualChecklist=${report.discovery.manualChecklistSummary}.`
     : "";
-  return `${riskText} FormalChecklist=${report.discovery.formalChecklistCommand}.${manual}`;
+  return `${riskText}${firewallHealthText} FormalChecklist=${report.discovery.formalChecklistCommand}.${manual}`;
 }
 
 function formatMacUnattendedFreshnessSummary(freshness) {
@@ -1359,6 +1364,7 @@ function summarizeDiscovery(discovery) {
     formalChecklistCommand: discovery.payload?.formalChecklistCommand || "",
     manualChecklistSummary: discovery.payload?.manualChecklistSummary || "",
     windowsLanRisk: discovery.payload?.windowsLanRisk || null,
+    windowsFirewallHealth: discovery.payload?.windowsFirewallHealth || null,
     boardSummary: discovery.payload?.boardSummary || "",
     parseError: discovery.parseError || "",
   };

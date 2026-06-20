@@ -3,7 +3,12 @@ import http from "node:http";
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { formatWindowsLanRisk, readWindowsLanRiskFromBoard } from "./board-windows-lan-risk.mjs";
+import {
+  formatWindowsFirewallHealth,
+  formatWindowsLanRisk,
+  readWindowsFirewallHealthFromBoard,
+  readWindowsLanRiskFromBoard,
+} from "./board-windows-lan-risk.mjs";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const clientFiles = [
@@ -198,6 +203,11 @@ Machine-readable JSON fields:
   board.windowsLanRisk       Secret-free WindowsLanRisk= hints copied from
                              Agent Link Board when --checkBoard is enabled.
                              Only safe comma-separated risk tokens are accepted.
+  board.windowsFirewallHealth
+                             Secret-free WindowsFirewallHealth= hint copied
+                             from Agent Link Board when --checkBoard is
+                             enabled. Only safe status/reason tokens are
+                             accepted.
   board.macUnattendedFreshness
                              Optional fresh/stale summary for current Mac
                              Unattended or MacPowerHealth evidence from Agent
@@ -928,12 +938,14 @@ function makeBoardSummary(report) {
       : `offline ${report.windowsHost.probe.host}:${report.windowsHost.probe.port}`;
   const lanRisk = formatWindowsLanRisk(report.board?.windowsLanRisk);
   const lanRiskSummary = lanRisk ? ` ${lanRisk};` : "";
+  const firewallHealth = formatWindowsFirewallHealth(report.board?.windowsFirewallHealth);
+  const firewallHealthSummary = firewallHealth ? ` ${firewallHealth};` : "";
   const macUnattendedFreshness = formatMacUnattendedFreshnessSummary(report.board?.macUnattendedFreshness);
   const macUnattendedFreshnessSummary = macUnattendedFreshness ? ` ${macUnattendedFreshness};` : "";
   const findings = formatChecklistFindings(report.checklist);
   const diagnosticsEvidence = makeMacClientDiagnosticsEvidence(report);
   const next = report.recommendations[0]?.text || "No next step available.";
-  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows};${lanRiskSummary}${macUnattendedFreshnessSummary} ${findings}.${diagnosticsEvidence} Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; WindowsHostStatus=${report.commands.windowsHostStatusCommand}; WindowsHostReadiness=${report.commands.windowsHostReadinessCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; WindowsReverseGrantStatus=${report.commands.windowsReverseGrantStatusCommand}; WindowsOpenOneTimeReverseGrant=${report.commands.windowsOpenOneTimeReverseGrantCommand}; WindowsReverseGrantStatusNodeFallback=${report.commands.windowsReverseGrantStatusNodeFallbackCommand}; WindowsOpenOneTimeReverseGrantNodeFallback=${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}; MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientPromptPasswordSmoke=${report.commands.macClientPromptPasswordSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; MacPowerPlan=${report.commands.macPowerPlanCommand}; MacRemoteAudioPlan=${report.commands.macRemoteAudioPlanCommand}; MacInputSafetyPlan=${report.commands.macInputSafetyPlanCommand}; MacScriptHelp=${report.commands.macScriptHelpCommand}; MacClientManualChecklist=${report.commands.macClientManualChecklistAction}; MacClientPasswordLocation=${report.commands.macClientPasswordLocationAction}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
+  return `Mac client readiness: repo=${repo}; client=${client}; localServer=${clientServer}; windowsHost=${windows};${lanRiskSummary}${firewallHealthSummary}${macUnattendedFreshnessSummary} ${findings}.${diagnosticsEvidence} Next: ${next} MacClientPage=${report.commands.macClientPageStatusCommand}; MacClientDiscoverWindows=${report.commands.macClientDiscoverWindowsCommand}; WindowsHostStatus=${report.commands.windowsHostStatusCommand}; WindowsHostReadiness=${report.commands.windowsHostReadinessCommand}; MacClientReverseRehearsal=${report.commands.macClientReverseRehearsalAction}; MacClientReverseGrantCopy=${report.commands.macClientReverseGrantCopyAction}; WindowsReverseGrantStatus=${report.commands.windowsReverseGrantStatusCommand}; WindowsOpenOneTimeReverseGrant=${report.commands.windowsOpenOneTimeReverseGrantCommand}; WindowsReverseGrantStatusNodeFallback=${report.commands.windowsReverseGrantStatusNodeFallbackCommand}; WindowsOpenOneTimeReverseGrantNodeFallback=${report.commands.windowsOpenOneTimeReverseGrantNodeFallbackCommand}; MacClientFormalChecklist=${report.commands.macClientFormalChecklistCommand}; MacClientFormalSmoke=${report.commands.macClientFormalSmokeCommand}; MacClientPromptPasswordSmoke=${report.commands.macClientPromptPasswordSmokeCommand}; MacClientBrowserSelfTest=${report.commands.macClientBrowserSelfTestCommand}; MacPowerPlan=${report.commands.macPowerPlanCommand}; MacRemoteAudioPlan=${report.commands.macRemoteAudioPlanCommand}; MacInputSafetyPlan=${report.commands.macInputSafetyPlanCommand}; MacScriptHelp=${report.commands.macScriptHelpCommand}; MacClientManualChecklist=${report.commands.macClientManualChecklistAction}; MacClientPasswordLocation=${report.commands.macClientPasswordLocationAction}; CopyDiagnostics=${report.commands.macClientCopyDiagnosticsAction}. Do not send passwords on Agent Link Board.`;
 }
 
 function makeMacClientDiagnosticsEvidence(report) {
@@ -946,7 +958,9 @@ function makeMacClientDiagnosticsEvidence(report) {
 
 function windowsLanRiskHint(board = {}) {
   const risk = formatWindowsLanRisk(board.windowsLanRisk);
-  return risk ? ` Current Agent Link Board hint: ${risk}.` : "";
+  const firewallHealth = formatWindowsFirewallHealth(board.windowsFirewallHealth);
+  const segments = [risk, firewallHealth].filter(Boolean);
+  return segments.length > 0 ? ` Current Agent Link Board hint: ${segments.join(" ")}.` : "";
 }
 
 function formatChecklistFindings(checklist) {
@@ -974,6 +988,8 @@ function printHuman(report) {
   console.log(`- Agent Link Board: ${report.board.checked ? (report.board.ok ? "readable" : "not readable") : "not checked"}`);
   const lanRisk = formatWindowsLanRisk(report.board.windowsLanRisk);
   if (lanRisk) console.log(`- Windows LAN risk: ${lanRisk}`);
+  const firewallHealth = formatWindowsFirewallHealth(report.board.windowsFirewallHealth);
+  if (firewallHealth) console.log(`- Windows firewall health: ${firewallHealth}`);
   const macUnattendedFreshness = formatMacUnattendedFreshnessSummary(report.board.macUnattendedFreshness);
   if (macUnattendedFreshness) console.log(`- Mac unattended freshness: ${macUnattendedFreshness}`);
   console.log(`- Mac client page status: ${report.commands.macClientPageStatusCommand}`);
@@ -1018,7 +1034,7 @@ async function buildReport(args) {
     probeWindowsHost(args),
   ]);
   const board = checkBoard(args);
-  const [windowsLanRisk, macUnattendedFreshness] = await Promise.all([
+  const [windowsLanRisk, macUnattendedFreshness, windowsFirewallHealth] = await Promise.all([
     readWindowsLanRiskFromBoard({
       enabled: args.checkBoard,
       server: args.server,
@@ -1029,9 +1045,15 @@ async function buildReport(args) {
       server: args.server,
       timeoutMs: args.timeoutMs,
     }),
+    readWindowsFirewallHealthFromBoard({
+      enabled: args.checkBoard,
+      server: args.server,
+      timeoutMs: args.timeoutMs,
+    }),
   ]);
   board.windowsLanRisk = windowsLanRisk;
   board.macUnattendedFreshness = macUnattendedFreshness;
+  board.windowsFirewallHealth = windowsFirewallHealth;
   const checklist = buildChecklist({ git, client, clientServer, windowsHost, board }, args);
   const counts = {
     ok: countChecklist(checklist, "ok"),

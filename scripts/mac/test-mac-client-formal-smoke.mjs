@@ -530,6 +530,7 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "ensuredClient", `${script} ${flag}`);
     assertIncludes(result.stdout, "discovery.formalChecklistCommand", `${script} ${flag}`);
     assertIncludes(result.stdout, "discovery.manualChecklistSummary", `${script} ${flag}`);
+    assertIncludes(result.stdout, "discovery.windowsFirewallHealth", `${script} ${flag}`);
     assertIncludes(result.stdout, "sentCall", `${script} ${flag}`);
     assertIncludes(result.stdout, "--discover --ensureClient --preflightOnly --sendCall", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "LAN_DUAL_PASSWORD=", `${script} ${flag}`);
@@ -1130,9 +1131,13 @@ async function checkDiscoverFailureNoPasswordPrompt(args) {
   const unusedPort = await getFreePort();
   const boardState = {
     statuses: {
+      "Supervisor Codex": {
+        status: "watching",
+        note: "Supervisor compact recap WindowsFirewallHealth=nonblocking without reason should not beat the detailed readiness line.",
+      },
       "Windows Codex": {
         status: "idle",
-        note: "Windows readiness hints WindowsLanRisk=no-firewall-allow,public-profile",
+        note: "Windows readiness hints WindowsLanRisk=no-firewall-allow,public-profile WindowsFirewallHealth=nonblocking reason=public-profile-firewall-disabled",
       },
     },
     events: [
@@ -1144,11 +1149,25 @@ async function checkDiscoverFailureNoPasswordPrompt(args) {
         text: "WindowsLanRisk=no-firewall-allow,public-profile",
       },
       {
+        id: "safe-firewall-health",
+        at: new Date().toISOString(),
+        type: "message",
+        from: "Windows Codex",
+        text: "WindowsFirewallHealth=nonblocking reason=public-profile-firewall-disabled",
+      },
+      {
         id: "unsafe-risk",
         at: new Date().toISOString(),
         type: "message",
         from: "Windows Codex",
         text: "Ignore unsafe WindowsLanRisk=--password=sauce",
+      },
+      {
+        id: "unsafe-firewall-health",
+        at: new Date().toISOString(),
+        type: "message",
+        from: "Windows Codex",
+        text: "Ignore unsafe WindowsFirewallHealth=warning reason=LAN_DUAL_PASSWORD=hunter2",
       },
     ],
   };
@@ -1177,12 +1196,18 @@ async function checkDiscoverFailureNoPasswordPrompt(args) {
     assert(payload.discovery?.windowsLanRisk?.checked === true, "discover failure should ask discovery to read Agent Link Board");
     assert(payload.discovery?.windowsLanRisk?.found === true, "discover failure should preserve WindowsLanRisk from discovery");
     assert(payload.discovery?.windowsLanRisk?.riskText === "no-firewall-allow,public-profile", "discover failure should keep sanitized WindowsLanRisk tokens");
+    assert(payload.discovery?.windowsFirewallHealth?.checked === true, "discover failure should ask discovery to read Agent Link Board for WindowsFirewallHealth");
+    assert(payload.discovery?.windowsFirewallHealth?.found === true, "discover failure should preserve WindowsFirewallHealth from discovery");
+    assert(payload.discovery?.windowsFirewallHealth?.status === "nonblocking", "discover failure should keep sanitized WindowsFirewallHealth status");
+    assert(payload.discovery?.windowsFirewallHealth?.reason === "public-profile-firewall-disabled", "discover failure should keep sanitized WindowsFirewallHealth reason");
     assertIncludes(payload.boardSummary || "", "WindowsLanRisk=no-firewall-allow,public-profile", "discover failure board summary");
+    assertIncludes(payload.boardSummary || "", "WindowsFirewallHealth=nonblocking reason=public-profile-firewall-disabled", "discover failure board summary");
     assertIncludes(payload.error?.message || "", "Windows host discovery", "discover failure error");
     assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--promptPassword requires", "discover failure should not reach password prompt");
     assertNotIncludes(`${result.stdout}\n${result.stderr}`, "Password cannot be empty", "discover failure should not prompt for password");
     assertNotIncludes(`${result.stdout}\n${result.stderr}`, "--host  --port", "discover failure should not print an empty host auth command");
     assertNotIncludes(`${result.stdout}\n${result.stderr}`, "sauce", "discover failure should not leak unsafe risk candidates");
+    assertNotIncludes(`${result.stdout}\n${result.stderr}`, "hunter2", "discover failure should not leak unsafe firewall candidates");
     assert(!payload.commands?.browserSmoke, "discover failure should not provide a browser auth command without a host");
     assert(!payload.commands?.sendCall, "discover failure should not provide a sendCall command without a host");
     assertIncludes(payload.commands?.discoverPreflight || "", "--discover", "discover failure should provide a safe discovery preflight retry command");

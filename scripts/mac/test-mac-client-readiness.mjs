@@ -261,6 +261,23 @@ function assertWindowsLanRisk(payload, output, label) {
   assertNotIncludes(output, "--password=sauce", `${label} output`);
 }
 
+function assertWindowsFirewallHealth(payload, output, label) {
+  const health = payload.board?.windowsFirewallHealth || {};
+  assert(health.checked === true, `${label} should check Agent Link Board for Windows firewall health`);
+  assert(health.found === true, `${label} should find WindowsFirewallHealth on the board`);
+  assert(health.status === "nonblocking", `${label} should expose the sanitized WindowsFirewallHealth status`);
+  assert(health.reason === "public-profile-firewall-disabled", `${label} should expose the sanitized WindowsFirewallHealth reason`);
+  assert(health.rejectedCount >= 2, `${label} should count rejected unsafe firewall health candidates`);
+  assertIncludes(payload.boardSummary || "", "WindowsFirewallHealth=nonblocking reason=public-profile-firewall-disabled", `${label} boardSummary`);
+  assertIncludes(payload.recommendations?.[0]?.text || "", "WindowsFirewallHealth=nonblocking reason=public-profile-firewall-disabled", `${label} recommendation`);
+  const windowsHostItem = payload.checklist?.find((item) => item.id === "windows-host") || {};
+  assertIncludes(windowsHostItem.next || "", "WindowsFirewallHealth=nonblocking reason=public-profile-firewall-disabled", `${label} windows-host next step`);
+  assertNotIncludes(output, "hunter2", `${label} output`);
+  assertNotIncludes(output, "sauce", `${label} output`);
+  assertNotIncludes(output, "LAN_DUAL_PASSWORD=hunter2", `${label} output`);
+  assertNotIncludes(output, "--password=sauce", `${label} output`);
+}
+
 function assertMacUnattendedFreshness(payload, expected, label) {
   const freshness = payload.board?.macUnattendedFreshness;
   assert(freshness?.status === expected.status, `${label} should expose MacUnattendedFreshness status=${expected.status}`);
@@ -824,9 +841,13 @@ async function checkBoardWindowsLanRisk(args) {
     updatedAt: "2026-06-18T12:58:23.345Z",
     currentCall: null,
     statuses: {
+      "Supervisor Codex": {
+        status: "watching",
+        note: "Supervisor compact recap WindowsFirewallHealth=nonblocking without reason should not beat the detailed readiness line.",
+      },
       "Windows Codex": {
         status: "idle",
-        note: "Windows readiness true summary WindowsLanRisk=no-firewall-allow,public-profile",
+        note: "Windows readiness true summary WindowsLanRisk=no-firewall-allow,public-profile WindowsFirewallHealth=nonblocking reason=public-profile-firewall-disabled",
       },
     },
     events: [
@@ -836,6 +857,13 @@ async function checkBoardWindowsLanRisk(args) {
         type: "message",
         from: "Windows Codex",
         text: "WindowsLanRisk=no-firewall-allow,public-profile",
+      },
+      {
+        id: "safe-firewall-health",
+        at: "2026-06-18T12:58:23.678Z",
+        type: "message",
+        from: "Windows Codex",
+        text: "WindowsFirewallHealth=nonblocking reason=public-profile-firewall-disabled",
       },
       {
         id: "unsafe-password-flag",
@@ -851,6 +879,20 @@ async function checkBoardWindowsLanRisk(args) {
         from: "Windows Codex",
         text: "Ignore unsafe candidate WindowsLanRisk=LAN_DUAL_PASSWORD=hunter2",
       },
+      {
+        id: "unsafe-firewall-password-flag",
+        at: "2026-06-18T12:58:26.345Z",
+        type: "message",
+        from: "Windows Codex",
+        text: "Ignore unsafe candidate WindowsFirewallHealth=warning reason=--password=sauce",
+      },
+      {
+        id: "unsafe-firewall-env-password",
+        at: "2026-06-18T12:58:27.345Z",
+        type: "message",
+        from: "Windows Codex",
+        text: "Ignore unsafe candidate WindowsFirewallHealth=warning reason=LAN_DUAL_PASSWORD=hunter2",
+      },
     ],
   };
   await withBoardStateServer(args, boardState, async (serverUrl) => {
@@ -865,8 +907,9 @@ async function checkBoardWindowsLanRisk(args) {
     const payload = parseJson(result.stdout, "board risk JSON");
     assert(result.status === 0, `board risk JSON should exit 0 with warnings allowed.\n${result.stdout}\n${result.stderr}`);
     assertWindowsLanRisk(payload, `${result.stdout}\n${result.stderr}`, "board risk JSON");
+    assertWindowsFirewallHealth(payload, `${result.stdout}\n${result.stderr}`, "board risk JSON");
   });
-  print("OK", "Board WindowsLanRisk is surfaced without leaking unsafe candidates");
+  print("OK", "Board WindowsLanRisk and WindowsFirewallHealth are surfaced without leaking unsafe candidates");
 }
 
 async function checkBoardMacUnattendedFreshness(args) {

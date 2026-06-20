@@ -17,6 +17,39 @@
 是否需要另一端配合：
 ```
 
+## 2026-06-20 Mac Codex
+
+日期：2026-06-20 Mac 消费 WindowsFirewallHealth
+开发端：Mac Codex
+本轮目标：让 Mac discover/readiness/formal smoke 读懂 Windows 端新增的 `WindowsFirewallHealth=`，避免 Public profile 被误判成当前防火墙阻塞。
+完成内容：
+- `board-windows-lan-risk` 新增安全 `WindowsFirewallHealth=<status> reason=<reason>` 解析/格式化，只接受短 status/reason token，拒绝 password/token/secret、`LAN_DUAL_PASSWORD`、`--password` 等危险候选且不回显。
+- `discover-windows-hosts --checkBoard` JSON/`--boardSummary` 现在输出 `windowsFirewallHealth` / `WindowsFirewallHealth=nonblocking reason=public-profile-firewall-disabled`。
+- `check-mac-client-readiness --checkBoard` 第一屏、推荐语和 Windows host next step 同步显示同一只读健康口径。
+- `run-mac-client-formal-smoke --discover` 会从 discovery payload 透传 `discovery.windowsFirewallHealth`，发现失败/预检摘要也保留该线索。
+修改文件：
+- `scripts/mac/board-windows-lan-risk.mjs`
+- `scripts/mac/discover-windows-hosts.mjs`
+- `scripts/mac/check-mac-client-readiness.mjs`
+- `scripts/mac/run-mac-client-formal-smoke.mjs`
+- `scripts/mac/test-discover-windows-hosts.mjs`
+- `scripts/mac/test-mac-client-readiness.mjs`
+- `scripts/mac/test-mac-client-formal-smoke.mjs`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/mac/test-discover-windows-hosts.mjs --timeoutMs 20000` 先失败于缺少 `windowsFirewallHealth`；`node scripts/mac/test-mac-client-readiness.mjs --timeoutMs 20000` 先失败于缺少 `board.windowsFirewallHealth`；`node scripts/mac/test-mac-client-formal-smoke.mjs --timeoutMs 30000` 先失败于 formal 未透传 discovery 的 `windowsFirewallHealth`。
+- 绿灯：上述三条 Mac 自测通过；收尾还会跑语法检查、help 安全自检、diff 空白/冲突扫描后再推送。
+遗留问题：
+- 该字段只是诊断口径，不改变 Mac 发现/ready/blocker 判定；如果 Windows 真实 TCP LAN 探测不通、listener 不是 `0.0.0.0`，或后续 `WindowsFirewallHealth=warning`，仍需按网络/防火墙继续排查。
+下一步建议：
+- Windows/User 看到 `WindowsLanRisk=public-profile` 且同段 `WindowsFirewallHealth=nonblocking reason=public-profile-firewall-disabled` 时，不要先要求改网络位置或防火墙；继续看 host listener、TCP 可达性、视频/音频/剪贴板和输入授权。
+是否改了协议：否。只读消费 Agent Link Board 摘要字段，不改 WebSocket/HTTP 协议。
+是否需要另一端配合：不需要立即配合；Windows 端继续稳定输出 `WindowsFirewallHealth=` 即可。
+
 ## 2026-06-20 Windows Codex
 
 日期：2026-06-20 Windows 消费 MacManualUx TargetSource

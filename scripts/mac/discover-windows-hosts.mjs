@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { emptyWindowsLanRisk, formatWindowsLanRisk, readWindowsLanRiskFromBoard } from "./board-windows-lan-risk.mjs";
+import {
+  emptyWindowsFirewallHealth,
+  emptyWindowsLanRisk,
+  formatWindowsFirewallHealth,
+  formatWindowsLanRisk,
+  readWindowsFirewallHealthFromBoard,
+  readWindowsLanRiskFromBoard,
+} from "./board-windows-lan-risk.mjs";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -98,7 +105,8 @@ Options:
   --noLocalSubnets        Only probe 127.0.0.1, --host, and --subnet targets.
   --server <url>          Agent Link Board URL. Default: ${defaults.server}
   --checkBoard            Read Agent Link Board /api/state for WindowsLanRisk=
-                          and MacUnattendedFreshness hints.
+                          WindowsFirewallHealth=, and MacUnattendedFreshness
+                          hints.
   --boardSummary          Print a short secret-free Agent Link Board summary.
   --sendStatus            Post the board summary to Agent Link Board /api/status.
   --sendMessage           Post the board summary to Agent Link Board /api/message.
@@ -183,6 +191,9 @@ Machine-readable JSON fields:
   windowsLanRisk          Secret-free WindowsLanRisk= hints copied from Agent
                            Link Board when --checkBoard is enabled. Only safe
                            comma-separated risk tokens are accepted.
+  windowsFirewallHealth   Secret-free WindowsFirewallHealth= hint copied from
+                           Agent Link Board when --checkBoard is enabled. Only
+                           safe status/reason tokens are accepted.
   scanError               Optional secret-free scanner failure details. A LAN
                            scan timeout is reported as reason=timeout while
                            still printing actionable next-step commands.
@@ -723,7 +734,13 @@ function reverseControlRehearsal(item) {
   ].join(" ");
 }
 
-function buildReport(scan, args, windowsLanRisk = emptyWindowsLanRisk(false), macUnattendedFreshness = null) {
+function buildReport(
+  scan,
+  args,
+  windowsLanRisk = emptyWindowsLanRisk(false),
+  macUnattendedFreshness = null,
+  windowsFirewallHealth = emptyWindowsFirewallHealth(false),
+) {
   const found = Array.isArray(scan.found) ? scan.found : [];
   const windowsHosts = found.filter(isWindowsHost);
   const nonWindowsHosts = found.filter((item) => !isWindowsHost(item));
@@ -757,6 +774,7 @@ function buildReport(scan, args, windowsLanRisk = emptyWindowsLanRisk(false), ma
     windowsReverseGrantStatusNodeFallback: best ? windowsReverseGrantNodeFallbackCommand(best, "status") : "",
     windowsOpenOneTimeReverseGrantNodeFallback: best ? windowsReverseGrantNodeFallbackCommand(best, "grant") : "",
     windowsLanRisk,
+    windowsFirewallHealth,
     reverseControlRehearsal: best ? reverseControlRehearsal(best) : "",
     windowsHostReadinessCall: null,
     scanError: scan.scanError || null,
@@ -776,17 +794,19 @@ function formatScannerWarning(scanError) {
 function makeBoardSummary(report) {
   const risk = formatWindowsLanRisk(report.windowsLanRisk);
   const riskSummary = risk ? ` ${risk}.` : "";
+  const firewallHealth = formatWindowsFirewallHealth(report.windowsFirewallHealth);
+  const firewallHealthSummary = firewallHealth ? ` ${firewallHealth}.` : "";
   const scannerWarning = formatScannerWarning(report.scanError);
   const scannerWarningSummary = scannerWarning ? ` ${scannerWarning}.` : "";
   const macUnattendedFreshnessSummary = formatMacUnattendedFreshnessSummary(report.macUnattendedFreshness);
   const macUnattendedFreshnessSegment = macUnattendedFreshnessSummary ? ` ${macUnattendedFreshnessSummary}.` : "";
   if (report.best) {
-    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}.${riskSummary} FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. MacClientFormalSmoke=${report.macClientFormalSmokeCommand}. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. MacPowerPlan=${report.macPowerPlanCommand}. MacRemoteAudioPlan=${report.macRemoteAudioPlanCommand}. MacInputSafetyPlan=${report.macInputSafetyPlanCommand}.${macUnattendedFreshnessSegment} WindowsReverseGrantStatus=${report.windowsReverseGrantStatus}. WindowsOpenOneTimeReverseGrant=${report.windowsOpenOneTimeReverseGrant}. WindowsReverseGrantStatusNodeFallback=${report.windowsReverseGrantStatusNodeFallback}. WindowsOpenOneTimeReverseGrantNodeFallback=${report.windowsOpenOneTimeReverseGrantNodeFallback}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. WindowsHostStatus=${report.windowsHostStatusCommand}. WindowsHostReadiness=${report.windowsHostReadinessCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
+    return `Windows host discovery: found ${report.found.length}; best=${summarizeHost(report.best)}.${riskSummary}${firewallHealthSummary} FormalChecklist=${report.formalChecklistCommand}. MacClientFormalChecklist=${report.macClientFormalChecklistCommand}. FormalSmoke=${report.formalSmokeCommand}. MacClientFormalSmoke=${report.macClientFormalSmokeCommand}. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. ManualChecklist=${report.manualChecklistSummary}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. MacPowerPlan=${report.macPowerPlanCommand}. MacRemoteAudioPlan=${report.macRemoteAudioPlanCommand}. MacInputSafetyPlan=${report.macInputSafetyPlanCommand}.${macUnattendedFreshnessSegment} WindowsReverseGrantStatus=${report.windowsReverseGrantStatus}. WindowsOpenOneTimeReverseGrant=${report.windowsOpenOneTimeReverseGrant}. WindowsReverseGrantStatusNodeFallback=${report.windowsReverseGrantStatusNodeFallback}. WindowsOpenOneTimeReverseGrantNodeFallback=${report.windowsOpenOneTimeReverseGrantNodeFallback}. ReverseRehearsal=${report.reverseControlRehearsal}. If that checklist is ready and Windows coordination is needed: ${report.sendCallCommand}. WindowsHostStatus=${report.windowsHostStatusCommand}. WindowsHostReadiness=${report.windowsHostReadinessCommand}. No password was requested or sent; no WebSocket/input/inject was attempted.`;
   }
   const ignored = report.ignored.length > 0
     ? ` Saw ${report.ignored.length} non-Windows host(s), likely Mac/self.`
     : "";
-  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored}${scannerWarningSummary}${riskSummary} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. WindowsHostStatus=${report.windowsHostStatusCommand}. WindowsHostReadiness=${report.windowsHostReadinessCommand}. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. MacPowerPlan=${report.macPowerPlanCommand}. MacRemoteAudioPlan=${report.macRemoteAudioPlanCommand}. MacInputSafetyPlan=${report.macInputSafetyPlanCommand}.${macUnattendedFreshnessSegment} No password was requested or sent; no WebSocket/input/inject was attempted.`;
+  return `Windows host discovery: no Windows host found after scanning ${report.scanned} candidate(s).${ignored}${scannerWarningSummary}${riskSummary}${firewallHealthSummary} Ask Windows Codex to start Windows host and share IP/port, then rerun Mac formal check. WindowsHostStatus=${report.windowsHostStatusCommand}. WindowsHostReadiness=${report.windowsHostReadinessCommand}. MacClientPromptPasswordSmoke=${report.macClientPromptPasswordSmokeCommand}. MacClientBrowserSelfTest=${report.macClientBrowserSelfTestCommand}. MacScriptHelp=${report.macScriptHelpCommand}. MacPowerPlan=${report.macPowerPlanCommand}. MacRemoteAudioPlan=${report.macRemoteAudioPlanCommand}. MacInputSafetyPlan=${report.macInputSafetyPlanCommand}.${macUnattendedFreshnessSegment} No password was requested or sent; no WebSocket/input/inject was attempted.`;
 }
 
 function printText(report, args) {
@@ -812,6 +832,10 @@ function printText(report, args) {
     if (report.macUnattendedFreshness) {
       console.log(`[INFO] Mac unattended freshness: ${formatMacUnattendedFreshnessSummary(report.macUnattendedFreshness)}`);
     }
+    const firewallHealth = formatWindowsFirewallHealth(report.windowsFirewallHealth);
+    if (firewallHealth) {
+      console.log(`[INFO] Agent Link Board firewall health: ${firewallHealth}`);
+    }
     console.log(`[INFO] Windows reverse grant status: ${report.windowsReverseGrantStatus}`);
     console.log(`[INFO] Windows one-time reverse grant: ${report.windowsOpenOneTimeReverseGrant}`);
     console.log(`[INFO] Windows reverse grant status (Node fallback): ${report.windowsReverseGrantStatusNodeFallback}`);
@@ -832,6 +856,10 @@ function printText(report, args) {
     const risk = formatWindowsLanRisk(report.windowsLanRisk);
     if (risk) {
       console.log(`[INFO] Agent Link Board hint: ${risk}`);
+    }
+    const firewallHealth = formatWindowsFirewallHealth(report.windowsFirewallHealth);
+    if (firewallHealth) {
+      console.log(`[INFO] Agent Link Board firewall health: ${firewallHealth}`);
     }
     console.log("[INFO] Ask Windows Codex to start Windows host, then rerun this discovery or check-mac-client-formal-status with the Windows IP.");
     console.log(`[INFO] Windows host status: ${report.windowsHostStatusCommand}`);
@@ -1006,7 +1034,7 @@ async function main() {
     return;
   }
 
-  const [windowsLanRisk, macUnattendedFreshness] = await Promise.all([
+  const [windowsLanRisk, macUnattendedFreshness, windowsFirewallHealth] = await Promise.all([
     readWindowsLanRiskFromBoard({
       enabled: args.checkBoard,
       server: args.server,
@@ -1017,9 +1045,14 @@ async function main() {
       server: args.server,
       timeoutMs: args.timeoutMs,
     }),
+    readWindowsFirewallHealthFromBoard({
+      enabled: args.checkBoard,
+      server: args.server,
+      timeoutMs: args.timeoutMs,
+    }),
   ]);
   const scan = runScanner(args);
-  const report = buildReport(scan, args, windowsLanRisk, macUnattendedFreshness);
+  const report = buildReport(scan, args, windowsLanRisk, macUnattendedFreshness, windowsFirewallHealth);
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
   } else if (args.boardSummary) {
