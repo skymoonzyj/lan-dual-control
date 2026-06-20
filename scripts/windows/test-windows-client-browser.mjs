@@ -4980,6 +4980,10 @@ async function verifyVideoStutterDiagnostics(session) {
         decoderQueueMs: state.videoDecoderQueueMs,
         droppedStale: state.videoDroppedStaleFrames,
         lastDropReason: state.videoLastDropReason,
+        fallbackRecoveryCount: state.h264FallbackRecoveryCount,
+        fallbackLastReason: state.h264FallbackLastReason,
+        fallbackRecoveryPausedUntil: state.h264FallbackRecoveryPausedUntil,
+        fallbackRecoveryPauseCount: state.h264FallbackRecoveryPauseCount,
         connected: state.connected,
         videoWaitingSince: state.videoWaitingSince,
         videoLastFrameAt: state.videoLastFrameAt,
@@ -4996,15 +5000,25 @@ async function verifyVideoStutterDiagnostics(session) {
         state.hostDiagnostics = {};
         state.h264DecoderQueue = [];
         state.h264DecoderLatencyMs = 0;
-        state.videoDecoderQueueMs = 0;
-        state.videoDroppedStaleFrames = 0;
-        state.videoLastDropReason = "";
+        state.videoDecoderQueueMs = 260;
+        state.videoDroppedStaleFrames = 3;
+        state.videoLastDropReason = "queue-overflow-wait-keyframe";
+        state.h264FallbackRecoveryCount = 2;
+        state.h264FallbackLastReason = "keyframe-wait-timeout-fallback";
+        state.h264FallbackRecoveryPauseCount = 1;
+        state.h264FallbackRecoveryPausedUntil = performance.now() + 9000;
         const exportText = getVideoPerformanceExportStatus();
         updateFpsMetric();
         const fpsStatusText = document.querySelector("#metricFps")?.textContent || "";
         const videoStutterStatusVisible =
           fpsStatusText.includes("最大间隔 184 ms") &&
           fpsStatusText.includes("卡顿 2");
+        const videoLocalQueueStatusVisible =
+          fpsStatusText.includes("本机队列 260 ms") &&
+          fpsStatusText.includes("本地过期丢帧 3") &&
+          fpsStatusText.includes("回退恢复 2 次") &&
+          fpsStatusText.includes("恢复暂停 1 次") &&
+          fpsStatusText.includes("暂停剩余");
         const firstFrameWaitNow = 9000;
         state.connected = true;
         state.videoFrames = 0;
@@ -5046,11 +5060,17 @@ async function verifyVideoStutterDiagnostics(session) {
             exportText.includes("最大间隔 184 ms") &&
             exportText.includes("卡顿 2") &&
             exportText.includes("最大卡顿 184 ms") &&
+            exportText.includes("本机队列 260 ms") &&
+            exportText.includes("本地过期丢帧 3") &&
+            exportText.includes("回退恢复 2 次") &&
+            exportText.includes("恢复暂停 1 次") &&
             videoStutterStatusVisible &&
+            videoLocalQueueStatusVisible &&
             videoFirstFrameWaitVisible &&
             videoStreamStallVisible,
           exportText,
           videoStutterStatusVisible,
+          videoLocalQueueStatusVisible,
           fpsStatusText,
           videoFirstFrameWaitVisible,
           firstFrameWaitRendered,
@@ -5073,6 +5093,10 @@ async function verifyVideoStutterDiagnostics(session) {
         state.videoDecoderQueueMs = original.decoderQueueMs;
         state.videoDroppedStaleFrames = original.droppedStale;
         state.videoLastDropReason = original.lastDropReason;
+        state.h264FallbackRecoveryCount = original.fallbackRecoveryCount;
+        state.h264FallbackLastReason = original.fallbackLastReason;
+        state.h264FallbackRecoveryPausedUntil = original.fallbackRecoveryPausedUntil;
+        state.h264FallbackRecoveryPauseCount = original.fallbackRecoveryPauseCount;
         state.connected = original.connected;
         if (original.videoWaitingSince === undefined) {
           delete state.videoWaitingSince;

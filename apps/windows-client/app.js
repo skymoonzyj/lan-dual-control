@@ -3031,6 +3031,26 @@ function formatVideoFrameGapStatusText() {
   return parts.join(" · ");
 }
 
+function formatVideoLocalQueueStatusText() {
+  const decoderQueueMetrics = getH264DecoderQueueMetrics();
+  const decoderQueueMs = Math.max(
+    Number(decoderQueueMetrics.oldestAgeMs) || 0,
+    Number(state.videoDecoderQueueMs || state.hostDiagnostics?.videoDecoderQueueMs) || 0,
+  );
+  const staleDrops = Number(state.videoDroppedStaleFrames || state.hostDiagnostics?.videoDroppedStaleFrames) || 0;
+  const fallbackRecoveryCount = Number(state.h264FallbackRecoveryCount || state.hostDiagnostics?.h264FallbackRecoveryCount) || 0;
+  const fallbackRecoveryPauseCount =
+    Number(state.h264FallbackRecoveryPauseCount || state.hostDiagnostics?.h264FallbackRecoveryPauseCount) || 0;
+  const fallbackRecoveryPausedMs = getH264FallbackRecoveryPausedMs();
+  const parts = [];
+  if (decoderQueueMs > 0) parts.push("本机队列 " + Math.round(decoderQueueMs) + " ms");
+  if (staleDrops > 0) parts.push("本地过期丢帧 " + staleDrops);
+  if (fallbackRecoveryCount > 0) parts.push("回退恢复 " + fallbackRecoveryCount + " 次");
+  if (fallbackRecoveryPauseCount > 0) parts.push("恢复暂停 " + fallbackRecoveryPauseCount + " 次");
+  if (fallbackRecoveryPausedMs > 0) parts.push("暂停剩余 " + Math.ceil(fallbackRecoveryPausedMs / 1000) + "s");
+  return parts.join(" · ");
+}
+
 function updateFpsMetric() {
   const requested = state.requestedFps || Number(elements.fpsSelect.value) || 0;
   const negotiated = state.negotiatedFps || requested;
@@ -3047,6 +3067,10 @@ function updateFpsMetric() {
   const frameGapText = formatVideoFrameGapStatusText();
   if (frameGapText) {
     parts.push(frameGapText);
+  }
+  const localQueueText = formatVideoLocalQueueStatusText();
+  if (localQueueText) {
+    parts.push(localQueueText);
   }
   elements.metricFps.textContent = parts.join(" · ");
   syncFloatingControlStatus();

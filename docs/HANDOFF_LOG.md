@@ -19,6 +19,19 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 W2 Windows 视频本地队列状态实时可见化
+开发端：Windows Codex
+本轮目标：让用户在 Windows 控制端页面 FPS 状态里直接看到本地解码队列和 H.264 恢复自救状态。
+完成内容：新增 `formatVideoLocalQueueStatusText()`；页面 FPS 状态在本机队列、过期丢帧、回退恢复或恢复暂停非零时追加 `本机队列`、`本地过期丢帧`、`回退恢复`、`恢复暂停` 和 `暂停剩余`；复制/导出诊断继续保留原因和最近回退。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于 `videoLocalQueueStatusVisible=false`；绿灯 `node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：只增强 Windows 端页面可见性，不改变 Mac 采集、H.264 编码、网络传输或输入控制。
+下一步建议：真实观感复测时，若页面 FPS 行同时显示卡顿和本机队列/过期丢帧/恢复暂停，优先查 Windows 本地 WebCodecs/H.264 解码队列与 fallback/recovery；若只显示卡顿，优先查 Mac 采集和局域网供流节奏。
+是否改了协议：否。
+是否需要另一端配合：暂不需要；后续真实观感仍需要用户现场确认。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 W2 Windows 视频状态实时可见化
 开发端：Windows Codex
 本轮目标：让用户不复制诊断也能在 Windows 控制端页面 FPS 状态里看到视频帧节奏是否明显卡顿。
