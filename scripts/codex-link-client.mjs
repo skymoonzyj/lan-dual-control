@@ -59,7 +59,7 @@ try {
     throw new Error(`Unknown command: ${command}`);
   }
 } catch (error) {
-  console.error(`Codex Link client error: ${error.message}`);
+  console.error(`Codex Link client error: ${formatClientError(error, command, args)}`);
   process.exitCode = 1;
 }
 
@@ -96,6 +96,19 @@ async function post(options, path, body) {
 
 async function get(options, path) {
   return request(options, "GET", path);
+}
+
+function formatClientError(error, commandName, options) {
+  const message = error?.message || String(error);
+  if (commandName !== "presence" || !/^404:/.test(message)) return message;
+
+  const from = options.updatedBy || options.by || options.from || options.device || "Codex";
+  return [
+    message,
+    "当前通讯板服务不支持 presence，可能还没有重启到新版。",
+    "请先用普通消息同步用户在场，或等待通讯板服务重启后重试。",
+    `降级消息示例：node scripts/codex-link-client.mjs --server ${options.server} send --from "${from}" --text "用户已在当前线程确认在场；presence 接口暂不可用，等待通讯板服务重启。"`,
+  ].join("\n");
 }
 
 async function request(options, method, path, body) {

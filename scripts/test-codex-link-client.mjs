@@ -87,7 +87,7 @@ async function readJson(request) {
   return raw ? JSON.parse(raw) : {};
 }
 
-async function withFakeBoard(state, fn) {
+async function withFakeBoard(state, fn, options = {}) {
   const requests = [];
   const server = http.createServer(async (request, response) => {
     const record = { method: request.method, url: request.url };
@@ -95,6 +95,11 @@ async function withFakeBoard(state, fn) {
     if (request.method === "GET" && request.url === "/api/state") {
       response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       response.end(JSON.stringify(state));
+      return;
+    }
+    if (request.method === "POST" && request.url === "/api/presence" && options.presenceUnsupported) {
+      response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("Not found");
       return;
     }
     if (request.method === "POST" && request.url === "/api/presence") {
@@ -200,6 +205,27 @@ async function checkPresencePost(args) {
   console.log("[OK] codex-link-client presence posts structured userPresence safely");
 }
 
+async function checkPresenceUnsupportedHint(args) {
+  await withFakeBoard(makeState(), async (serverUrl, requests) => {
+    const result = await run([
+      "--server", serverUrl,
+      "presence",
+      "--status", "present",
+      "--updatedBy", "Mac Codex",
+      "--reason", "user is present in current thread",
+    ], args);
+    assert(result.status === 1, `unsupported presence should exit 1. stdout=${result.stdout} stderr=${result.stderr}`);
+    assertIncludes(result.stderr, "当前通讯板服务不支持 presence", "unsupported presence stderr");
+    assertIncludes(result.stderr, "send --from", "unsupported presence fallback");
+    assertIncludes(result.stderr, "等待通讯板服务重启", "unsupported presence restart hint");
+    assertNotIncludes(result.stderr, "password", "unsupported presence stderr");
+    assertNotIncludes(result.stderr, "input_event", "unsupported presence stderr");
+    const presencePost = requests.find((request) => request.method === "POST" && request.url === "/api/presence");
+    assert(presencePost, `presence should still probe /api/presence: ${JSON.stringify(requests)}`);
+  }, { presenceUnsupported: true });
+  console.log("[OK] codex-link-client presence explains old Agent Link Board fallback safely");
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
@@ -210,6 +236,7 @@ async function main() {
   await checkStateJson(args);
   await checkStateTextStillHumanReadable(args);
   await checkPresencePost(args);
+  await checkPresenceUnsupportedHint(args);
   console.log("[OK] codex-link-client self-test passed");
 }
 
