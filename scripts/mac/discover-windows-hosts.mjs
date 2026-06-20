@@ -18,6 +18,12 @@ const defaults = {
   boardSummary: false,
   verbose: false,
   scanTimeoutMs: 0,
+  sendStatus: false,
+  sendMessage: false,
+  device: "Mac Client Discover Windows",
+  role: "Mac 端",
+  from: "Mac Codex",
+  token: process.env.CODEX_LINK_TOKEN || "",
 };
 
 const manualChecklistSummary = "connection/video/audio/clipboard/input_ack/diagnostics";
@@ -93,12 +99,19 @@ Options:
   --checkBoard            Read Agent Link Board /api/state for WindowsLanRisk=
                           and MacUnattendedFreshness hints.
   --boardSummary          Print a short secret-free Agent Link Board summary.
+  --sendStatus            Post the board summary to Agent Link Board /api/status.
+  --sendMessage           Post the board summary to Agent Link Board /api/message.
+  --device <name>         Status device name. Default: ${defaults.device}
+  --role <role>           Status role. Default: ${defaults.role}
+  --from <name>           Message sender. Default: ${defaults.from}
+  --token <token>         Optional Agent Link Board token header.
   --json                  Print one machine-readable JSON object.
   --verbose               Include scanner misses.
   --help, -h              Show this help without scanning.
 
 Examples:
   node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary
+  node scripts/mac/discover-windows-hosts.mjs --checkBoard --sendStatus --sendMessage --boardSummary
   node scripts/mac/discover-windows-hosts.mjs --subnet 192.168.31.0/24 --requireFound
   node scripts/mac/discover-windows-hosts.mjs --host 192.168.31.68 --json
 
@@ -194,6 +207,12 @@ function parseArgs(argv) {
     json: defaults.json,
     boardSummary: defaults.boardSummary,
     verbose: defaults.verbose,
+    sendStatus: defaults.sendStatus,
+    sendMessage: defaults.sendMessage,
+    device: defaults.device,
+    role: defaults.role,
+    from: defaults.from,
+    token: defaults.token,
     help: false,
   };
 
@@ -204,7 +223,7 @@ function parseArgs(argv) {
       args.help = true;
       continue;
     }
-    if (token === "--json" || token === "--boardSummary" || token === "--verbose" || token === "--requireFound" || token === "--noLocalSubnets" || token === "--checkBoard") {
+    if (token === "--json" || token === "--boardSummary" || token === "--verbose" || token === "--requireFound" || token === "--noLocalSubnets" || token === "--checkBoard" || token === "--sendStatus" || token === "--sendMessage") {
       args[token.slice(2)] = true;
       continue;
     }
@@ -225,6 +244,11 @@ function parseArgs(argv) {
     }
     if (token === "--server" && next && !next.startsWith("--")) {
       args.server = next.trim();
+      index += 1;
+      continue;
+    }
+    if ((token === "--device" || token === "--role" || token === "--from" || token === "--token") && next && !next.startsWith("--")) {
+      args[token.slice(2)] = next.trim();
       index += 1;
       continue;
     }
@@ -783,6 +807,68 @@ function printText(report, args) {
   }
 }
 
+function discoveryBoardStatus(report) {
+  if (report.best) return "windows-discovery-found";
+  if (report.scanError?.reason === "timeout") return "windows-discovery-timeout";
+  return report.ok ? "windows-discovery-waiting" : "windows-discovery-missing";
+}
+
+function boardPostUrl(server, path) {
+  const baseUrl = String(server || defaults.server).trim().replace(/\/+$/, "");
+  if (!baseUrl) throw new Error("missing Agent Link Board URL");
+  return `${baseUrl}${path}`;
+}
+
+async function postToBoard(args, path, payload) {
+  const url = boardPostUrl(args.server, path);
+  const headers = {
+    "Content-Type": "application/json; charset=utf-8",
+  };
+  const token = String(args.token || process.env.CODEX_LINK_TOKEN || "");
+  if (token) headers["X-Codex-Link-Token"] = token;
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    const cause = error?.cause
+      ? ` cause=${error.cause.code || error.cause.name || "unknown"}:${error.cause.message || error.cause}`
+      : "";
+    throw new Error(`Agent Link Board ${path} fetch failed at ${url}: ${error.message}${cause}`);
+  }
+  const text = await response.text();
+  let body = {};
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    body = { raw: text };
+  }
+  if (!response.ok || body?.ok === false) {
+    throw new Error(`Agent Link Board ${path} rejected discovery summary: HTTP ${response.status} ${text}`.trim());
+  }
+  return body;
+}
+
+async function sendStatus(args, report) {
+  return postToBoard(args, "/api/status", {
+    device: args.device,
+    role: args.role,
+    status: discoveryBoardStatus(report),
+    note: report.boardSummary,
+  });
+}
+
+async function sendMessage(args, report) {
+  return postToBoard(args, "/api/message", {
+    from: args.from,
+    type: "message",
+    text: report.boardSummary,
+  });
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help || helpRequested(process.argv)) {
@@ -810,6 +896,12 @@ async function main() {
     console.log(report.boardSummary);
   } else {
     printText(report, args);
+  }
+  if (args.sendStatus) {
+    await sendStatus(args, report);
+  }
+  if (args.sendMessage) {
+    await sendMessage(args, report);
   }
   process.exitCode = report.ok ? 0 : 1;
 }

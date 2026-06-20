@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -448,15 +448,38 @@ async function waitForHttpPath(port, pathname, timeoutMs) {
 
 async function withBoardStateServer(args, state, callback) {
   const port = await getFreePort();
+  const postDir = mkdtempSync(join(tmpdir(), "lan-dual-discover-board-posts-"));
+  const postLogPath = join(postDir, "posts.jsonl");
   const child = spawn(process.execPath, [
     "--input-type=module",
     "-e",
     `
 import { createServer } from "node:http";
+import { appendFileSync } from "node:fs";
 const port = Number(process.argv[1]);
+const postLogPath = process.argv[2];
 const state = ${JSON.stringify(state)};
 createServer((request, response) => {
   const pathname = new URL(request.url || "/", "http://127.0.0.1").pathname;
+  if (request.method === "POST" && (pathname === "/api/status" || pathname === "/api/message")) {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => {
+      body += chunk;
+    });
+    request.on("end", () => {
+      let parsed = {};
+      try {
+        parsed = body ? JSON.parse(body) : {};
+      } catch (error) {
+        parsed = { parseError: error.message, raw: body };
+      }
+      appendFileSync(postLogPath, JSON.stringify({ path: pathname, body: parsed }) + "\\n");
+      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify({ ok: true }));
+    });
+    return;
+  }
   if (pathname !== "/api/state") {
     response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
     response.end("not found\\n");
@@ -467,13 +490,14 @@ createServer((request, response) => {
 }).listen(port, "127.0.0.1");
 `,
     String(port),
+    postLogPath,
   ], {
     cwd: repoRoot,
     stdio: ["ignore", "pipe", "pipe"],
   });
   try {
     await waitForHttpPath(port, "/api/state", args.timeoutMs);
-    await callback(`http://127.0.0.1:${port}`);
+    await callback(`http://127.0.0.1:${port}`, postLogPath);
   } finally {
     child.kill("SIGTERM");
     await new Promise((resolve) => {
@@ -483,6 +507,19 @@ createServer((request, response) => {
         resolve();
       });
     });
+    rmSync(postDir, { recursive: true, force: true });
+  }
+}
+
+function readPostLog(postLogPath) {
+  try {
+    return readFileSync(postLogPath, "utf8")
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+  } catch {
+    return [];
   }
 }
 
@@ -537,6 +574,8 @@ function checkHelp(args) {
     assertIncludes(result.stdout, "reverseControlRehearsal", `${script} ${flag}`);
     assertIncludes(result.stdout, "manualChecklistSummary", `${script} ${flag}`);
     assertIncludes(result.stdout, "--checkBoard", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--sendStatus", `${script} ${flag}`);
+    assertIncludes(result.stdout, "--sendMessage", `${script} ${flag}`);
     assertIncludes(result.stdout, "windowsLanRisk", `${script} ${flag}`);
     assertNotIncludes(result.stdout, "password:", `${script} ${flag}`);
   }
@@ -936,6 +975,53 @@ async function checkBoardMacUnattendedFreshness(tmp, args) {
   console.log("[OK] Board MacUnattendedFreshness is surfaced without leaking unsafe candidates");
 }
 
+async function checkExplicitBoardPostsForScannerTimeout(tmp, args) {
+  await withBoardStateServer(args, { statuses: {}, events: [] }, async (serverUrl, postLogPath) => {
+    const readOnlyResult = run(["--server", serverUrl, "--checkBoard", "--json", "--requireFound", "--scanTimeoutMs", "1000"], args, {
+      FAKE_SCANNER_ROOT: tmp,
+      FAKE_WINDOWS_DISCOVERY_MODE: "hang",
+    });
+    assert(readOnlyResult.status !== 0, "read-only scanner timeout should still fail when requireFound is set");
+    assert(readPostLog(postLogPath).length === 0, `read-only scanner timeout should not post: ${JSON.stringify(readPostLog(postLogPath))}`);
+
+    const sendResult = run([
+      "--server",
+      serverUrl,
+      "--checkBoard",
+      "--json",
+      "--requireFound",
+      "--scanTimeoutMs",
+      "1000",
+      "--sendStatus",
+      "--sendMessage",
+    ], args, {
+      FAKE_SCANNER_ROOT: tmp,
+      FAKE_WINDOWS_DISCOVERY_MODE: "hang",
+    });
+    assert(sendResult.status !== 0, "scanner timeout with sendStatus should still fail when requireFound is set");
+    const payload = parseJson(sendResult.stdout, "scanner timeout send JSON");
+    assert(payload.scanError?.reason === "timeout", `send payload should preserve scan timeout reason: ${JSON.stringify(payload.scanError)}`);
+    const posts = readPostLog(postLogPath);
+    assert(posts.length === 2, `sendStatus/sendMessage should post two records: ${JSON.stringify(posts)}`);
+    const statusPost = posts.find((post) => post.path === "/api/status");
+    const messagePost = posts.find((post) => post.path === "/api/message");
+    assert(statusPost, `missing /api/status post: ${JSON.stringify(posts)}`);
+    assert(messagePost, `missing /api/message post: ${JSON.stringify(posts)}`);
+    assert(statusPost.body.device === "Mac Client Discover Windows", `status device mismatch: ${JSON.stringify(statusPost.body)}`);
+    assert(statusPost.body.role === "Mac 端", `status role mismatch: ${JSON.stringify(statusPost.body)}`);
+    assert(statusPost.body.status === "windows-discovery-timeout", `status value mismatch: ${JSON.stringify(statusPost.body)}`);
+    assertIncludes(statusPost.body.note, "ScannerWarning=timeout", "status note");
+    assertIncludes(statusPost.body.note, "WindowsHostStatus=", "status note");
+    assertIncludes(statusPost.body.note, "WindowsHostReadiness=", "status note");
+    assert(messagePost.body.from === "Mac Codex", `message sender mismatch: ${JSON.stringify(messagePost.body)}`);
+    assertIncludes(messagePost.body.text, "ScannerWarning=timeout", "message text");
+    assertNotIncludes(`${sendResult.stdout}\n${sendResult.stderr}\n${JSON.stringify(posts)}`, "LAN_DUAL_PASSWORD", "scanner timeout send output");
+    assertNotIncludes(`${sendResult.stdout}\n${sendResult.stderr}\n${JSON.stringify(posts)}`, "--password", "scanner timeout send output");
+    assertNotIncludes(`${sendResult.stdout}\n${sendResult.stderr}\n${JSON.stringify(posts)}`, "input_event", "scanner timeout send output");
+  });
+  console.log("[OK] Explicit scanner-timeout status/message posts are secret-free");
+}
+
 async function main() {
   if (helpRequested(process.argv)) {
     printHelp();
@@ -953,6 +1039,7 @@ async function main() {
     checkScannerTimeoutProducesActionableSummary(tmp, args);
     await checkBoardWindowsLanRisk(tmp, args);
     await checkBoardMacUnattendedFreshness(tmp, args);
+    await checkExplicitBoardPostsForScannerTimeout(tmp, args);
     console.log("[OK] Mac Windows host discovery self-test passed");
   } finally {
     rmSync(tmp, { recursive: true, force: true });

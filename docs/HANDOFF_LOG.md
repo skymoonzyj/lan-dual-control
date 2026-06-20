@@ -19,6 +19,30 @@
 
 ## 2026-06-20 Mac Codex
 
+日期：2026-06-20 Mac discovery 显式上板
+开发端：Mac Codex
+本轮目标：让 Mac 侧 Windows host discovery 结果可以作为独立状态上板，减少 Windows 端从普通消息里查找 `ScannerWarning=timeout` 的成本。
+完成内容：
+- `discover-windows-hosts` 新增 `--sendStatus` / `--sendMessage`，默认仍只读；显式加参数才 POST 到 Agent Link Board。
+- 状态设备为 `Mac Client Discover Windows`，超时场景状态值为 `windows-discovery-timeout`，note/text 复用无密 `boardSummary`，包含 `ScannerWarning=timeout`、`WindowsHostStatus=` 和 `WindowsHostReadiness=`。
+- POST 失败时错误信息会带出接口路径和 URL，不再只剩模糊 `fetch failed`。
+修改文件：
+- `scripts/mac/discover-windows-hosts.mjs`
+- `scripts/mac/test-discover-windows-hosts.mjs`
+- `docs/HANDOFF_LOG.md`
+验证方式：
+- 红灯：`node scripts/mac/test-discover-windows-hosts.mjs --timeoutMs 12000` 先失败于 `--sendStatus/--sendMessage` 无 JSON/POST 行为。
+- 绿灯：同一测试通过，覆盖默认不 POST、显式 status/message 双 POST、无密码/无 input_event。
+- 真实上板：`node scripts/mac/discover-windows-hosts.mjs --checkBoard --sendStatus --sendMessage --boardSummary --scanTimeoutMs 12000` 已成功发送当前 `ScannerWarning=timeout` 摘要。
+遗留问题：
+- 当前通讯板 active call 仍需要 Windows Codex 在 Windows 本机运行 `WindowsHostStatus=` / `WindowsHostReadiness=` 或安全启动 Windows host。
+下一步建议：
+- Windows 端开工先看 `Mac Client Discover Windows` 状态；若是 `windows-discovery-timeout`，按 note 里的 Windows host status/readiness 命令刷新，再让 Mac 重跑 discovery/formal smoke。
+是否改了协议：否。
+是否需要另一端配合：需要 Windows 端按 currentCall 刷新 Windows host 状态；Mac 本轮仅新增显式上板能力。
+
+## 2026-06-20 Mac Codex
+
 日期：2026-06-20 Mac Windows host discovery 超时摘要
 开发端：Mac Codex
 本轮目标：让 Mac 侧发现 Windows host 的入口在 LAN 扫描超时时仍给出可执行下一步，避免通讯板 active call 卡在底层 ETIMEDOUT。
