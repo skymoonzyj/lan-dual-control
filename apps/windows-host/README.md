@@ -37,6 +37,7 @@ node .\server.mjs
 ```powershell
 node E:\codex\lan-dual-control\scripts\windows\start-windows-host.mjs
 ```
+如果只想现场最快启动 Windows 被控端，也可以在仓库根目录双击 `Start-Windows-Host.cmd`。它会优先用 PowerShell 7 调用同一个启动助手，并默认带 `-PromptPassword -RequirePassword`，也就是只在 Windows 本机黑色终端里隐藏输入临时密码，不把密码写进命令、日志或 Agent Link Board。需要先看说明时可运行 `.\Start-Windows-Host.cmd -Help`，不会启动 host。
 
 PowerShell 入口等价，但参数更像 Windows 工具：
 

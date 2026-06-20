@@ -19,6 +19,34 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows host 双击启动入口
+开发端：Windows Codex
+本轮目标：把当前 Windows host readiness call 的本机启动动作变成用户可双击执行的最短入口。
+完成内容：
+- 新增仓库根目录 `Start-Windows-Host.cmd`，双击后优先使用 PowerShell 7 调用 `start-windows-host.ps1 -PromptPassword -RequirePassword`。
+- 入口失败时保留窗口并提示只读 status/boardSummary 复查命令；`-Help` 只打印帮助，不启动 host。
+- `test-windows-host-start-helper` 增加根目录入口覆盖，确认入口存在、帮助 0 退出、不提示密码、不含明文密码或环境密码参数。
+修改文件：
+- `Start-Windows-Host.cmd`
+- `scripts/windows/test-windows-host-start-helper.mjs`
+- `apps/windows-host/README.md`
+- `docs/CURRENT_STATUS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/04-task-board.md`
+- `docs/HANDOFF_LOG.md`
+- `docs/ACTIVE_LOCKS.md`
+验证方式：
+- 红灯：`node scripts/windows/test-windows-host-start-helper.mjs --timeoutMs 20000` 先失败于 `Start-Windows-Host.cmd is missing from the repository root`。
+- 绿灯：同一测试通过，新增 `Root Windows host cmd entry is safe and documents hidden password startup`。
+遗留问题：
+- 真正让 Mac 发现 Windows host 仍需要用户在 Windows 本机双击入口并输入临时密码。
+下一步建议：
+- 用户启动 Windows host 后，Mac 端运行 `node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary` 做只读发现，再进入 Mac 控 Windows formal checklist。
+是否改了协议：否。
+是否需要另一端配合：需要 Mac 端在 Windows host 启动后只读重试 discovery。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 Windows host 安全启动动作摘要
 开发端：Windows Codex
 本轮目标：让 Mac 端发现 Windows host 离线/no-listener 时，Windows 状态摘要能给出下一步现场动作，同时保持不传密码、不认证、不发送输入。

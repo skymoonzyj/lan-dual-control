@@ -4,8 +4,12 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 Windows host 双击启动入口
+- 仓库根目录新增 `Start-Windows-Host.cmd`：用户可直接双击启动 Windows 被控端，入口会优先使用 PowerShell 7 调用 `scripts/windows/start-windows-host.ps1 -PromptPassword -RequirePassword`，只在 Windows 本机终端隐藏输入临时密码。`.\Start-Windows-Host.cmd -Help` 只打印安全帮助，不启动 host、不认证、不请求或打印密码、不发 input/inject；自测已覆盖入口存在、帮助快速退出和不包含明文密码参数。
+
 ## 2026-06-20 Windows host 安全启动动作摘要
 - `start-windows-host --status` / `-Status` 在 Windows host 离线或 no-listener 时，现在会输出 `WindowsHostStartAction=needs-local-password-prompt`：包含 Windows 本机隐藏密码启动命令、启动后让 Mac 只读重试 `discover-windows-hosts --checkBoard --boardSummary` 的命令，以及 `Safety=no-password-on-board,no-auth,no-input-inject`。JSON 同步提供 `windowsHostStartAction` 对象；`--boardSummary` 会带同一条无密动作。该动作不启动 host、不认证、不请求或发送密码、不发 input/inject，也不会默认让 Mac 再发 call。
+
 ## 2026-06-20 Mac client H.264 decode queue guard
 - Mac 控 Windows 页面 H.264 WebCodecs 本地解码队列现在有低延迟保护：排队超过 8 帧或最旧帧超过 450ms 时会关闭旧 decoder、清空旧队列、记录本地丢帧，并进入等待下一关键帧状态，避免本地继续播放严重过期画面。会话诊断、顶部视频状态和复制/导出诊断会显示 `本地丢 <n>`、`解码队列 <n>`、`queue-overflow-wait-keyframe`、H.264 解码帧/错误等字段；这些诊断在页面临时切回 mock/JPEG 帧时也会保留到本轮会话日志中。新增 `test-mac-client-browser --expectH264QueueGuard`：在页面里安装只收帧不出帧的 fake WebCodecs decoder，并注入合成 H.264 burst，稳定覆盖本地队列保护。本轮不改协议、不认证、不请求密码、不发 input/inject，不触碰 Windows host/readiness。
 

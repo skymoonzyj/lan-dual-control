@@ -1,11 +1,13 @@
 import net from "node:net";
 import http from "node:http";
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const helperScript = "scripts/windows/start-windows-host.mjs";
 const powershellWrapperScript = "scripts/windows/start-windows-host.ps1";
+const cmdEntryScript = "Start-Windows-Host.cmd";
 
 const defaults = {
   timeoutMs: 12000,
@@ -61,6 +63,10 @@ function runPowerShell(args, options = {}) {
     powershellWrapperScript,
     ...args,
   ], options);
+}
+function runCmdEntry(args, options = {}) {
+  const shell = process.env.ComSpec || "cmd.exe";
+  return run(shell, ["/d", "/c", cmdEntryScript, ...args], options);
 }
 
 function run(command, commandArgs, options = {}) {
@@ -250,6 +256,32 @@ async function assertDryRunWithEnvPassword(timeoutMs) {
   print("OK", "Environment password allows dry run without demo warning");
 }
 
+async function assertRootCmdEntryHelp(timeoutMs) {
+  const fullPath = new URL(`../../${cmdEntryScript}`, import.meta.url);
+  if (!existsSync(fullPath)) {
+    throw new Error(`${cmdEntryScript} is missing from the repository root.`);
+  }
+  const content = readFileSync(fullPath, "utf8");
+  assertIncludes(content, "start-windows-host.ps1", `${cmdEntryScript} content`);
+  assertIncludes(content, "-PromptPassword", `${cmdEntryScript} content`);
+  assertIncludes(content, "-RequirePassword", `${cmdEntryScript} content`);
+  assertNotIncludes(content, "--password", `${cmdEntryScript} content`);
+  assertNotIncludes(content, "LAN_DUAL_PASSWORD", `${cmdEntryScript} content`);
+
+  const result = await runCmdEntry(["-Help"], {
+    timeoutMs,
+    env: { LAN_DUAL_PASSWORD: "" },
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (result.exitCode !== 0 || result.timedOut) {
+    throw new Error(`${cmdEntryScript} -Help should exit 0 without prompting.\n${output}`);
+  }
+  assertIncludes(output, "Usage:", `${cmdEntryScript} -Help`);
+  assertIncludes(output, "Start Windows host with a hidden local password prompt", `${cmdEntryScript} -Help`);
+  assertNotIncludes(output, "Mac host password:", `${cmdEntryScript} -Help`);
+  assertNotIncludes(output, "LAN_DUAL_PASSWORD", `${cmdEntryScript} -Help`);
+  print("OK", "Root Windows host cmd entry is safe and documents hidden password startup");
+}
 async function assertPowerShellWrapperHelp(timeoutMs) {
   for (const helpArg of ["-Help", "-h"]) {
     const result = await runPowerShell([helpArg], {
@@ -1160,6 +1192,7 @@ async function main() {
   await assertPromptPasswordFailsWithoutTty(args.timeoutMs);
   await assertDryRunWithEnvPassword(args.timeoutMs);
   await assertPowerShellWrapperHelp(args.timeoutMs);
+  await assertRootCmdEntryHelp(args.timeoutMs);
   await assertDryRunReverseControlMode(args.timeoutMs);
   await assertDryRunWgcH264BridgeOptions(args.timeoutMs);
   await assertStatusOfflineNeedsNoPassword(args.timeoutMs);
