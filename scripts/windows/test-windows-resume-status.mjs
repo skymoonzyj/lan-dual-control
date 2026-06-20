@@ -1415,7 +1415,7 @@ async function checkBoardMacHostSafeStartExtraction(args) {
   const macClientDiscoverWindowsCommand = "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary";
   const macClientFormalChecklistCommand = "node scripts/mac/check-mac-client-formal-status.mjs --discover --port 43770 --boardSummary";
   const macClientFormalSmokeCommand = "node scripts/mac/run-mac-client-formal-smoke.mjs --discover --ensureClient --preflightOnly --boardSummary";
-  const macClientManualChecklistAction = "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
+  const macClientManualChecklistAction = "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/文件/窗口/全屏/原画/input_ack/复制诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
   const macClientPasswordLocationAction = "Mac client 页面连接 Windows 时，把 Windows 当前临时密码填页面“连接密码”框；formal/browser runner 的终端隐藏输入只用于脚本；不要把密码发通讯板";
   const macRemoteAudioPlanCommand = "node scripts/mac/plan-mac-remote-audio.mjs --boardSummary";
   const macInputSafetyPlanCommand = "node scripts/mac/plan-mac-input-safety.mjs --boardSummary";

@@ -272,7 +272,7 @@ function assertMacClientReverseGrantCopyAction(text, label) {
 
 function assertMacClientManualChecklistAction(text, label) {
   assertIncludes(text, "手工清单", label);
-  assertIncludes(text, "连接/视频/音频/剪贴板/input_ack/诊断", label);
+  assertIncludes(text, "连接/视频/音频/剪贴板/文件/窗口/全屏/原画/input_ack/复制诊断", label);
   assertIncludes(text, "复制诊断", label);
   assertIncludes(text, "连接密码", label);
   assertNotIncludes(text, "LAN_DUAL_PASSWORD", label);

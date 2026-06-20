@@ -228,7 +228,10 @@ function assertBoardSummaryShape(text, label) {
   assert(/check-mac-client-readiness\.mjs/.test(text), `${label} should include the Mac client readiness command`);
   assert(/MacClientManualChecklist=/.test(text), `${label} should include Mac client manual checklist guidance`);
   assert(/MacClientManualChecklist=.*手工清单/.test(text), `${label} should mention the Mac client manual checklist`);
-  assert(/MacClientManualChecklist=.*连接\/视频\/音频\/剪贴板\/input_ack\/诊断/.test(text), `${label} should include the Mac client manual checklist items`);
+  assert(
+    /MacClientManualChecklist=.*连接\/视频\/音频\/剪贴板\/文件\/窗口\/全屏\/原画\/input_ack\/复制诊断/.test(text),
+    `${label} should include the Mac client manual checklist items`,
+  );
   assert(/MacClientPasswordLocation=/.test(text), `${label} should include Mac client password location guidance`);
   assertMacClientPasswordLocationAction(
     String(text || "").split("MacClientPasswordLocation=")[1]?.split(". ")[0] || "",
@@ -589,7 +592,10 @@ function assertMacClientReverseRehearsalAction(text, label) {
 
 function assertMacClientManualChecklistAction(text, label) {
   assert(String(text || "").includes("手工清单"), `${label} should mention the manual checklist`);
-  assert(String(text || "").includes("连接/视频/音频/剪贴板/input_ack/诊断"), `${label} should include the manual checklist items`);
+  assert(
+    String(text || "").includes("连接/视频/音频/剪贴板/文件/窗口/全屏/原画/input_ack/复制诊断"),
+    `${label} should include the manual checklist items`,
+  );
   assert(String(text || "").includes("复制诊断"), `${label} should mention copy diagnostics`);
   assert(String(text || "").includes("连接密码"), `${label} should mention password safety`);
   assert(!String(text || "").includes("LAN_DUAL_PASSWORD"), `${label} should not mention password env vars`);
@@ -1018,7 +1024,10 @@ function checkOfflinePlainReport(args) {
   assert(String(result.stdout || "").includes("start-mac-client.mjs"), "plain report should include Mac client page status command");
   assert(String(result.stdout || "").includes("check-mac-client-readiness.mjs"), "plain report should include Mac client readiness command");
   assert(String(result.stdout || "").includes("手工清单"), "plain report should mention the Mac client manual checklist");
-  assert(String(result.stdout || "").includes("连接/视频/音频/剪贴板/input_ack/诊断"), "plain report should include the Mac client manual checklist items");
+  assert(
+    String(result.stdout || "").includes("连接/视频/音频/剪贴板/文件/窗口/全屏/原画/input_ack/复制诊断"),
+    "plain report should include the Mac client manual checklist items",
+  );
   assert(String(result.stdout || "").includes("discover-windows-hosts.mjs"), "plain report should include Mac client Windows discovery command");
   assert(String(result.stdout || "").includes("Windows host status for Windows side:"), "plain report should include Windows host status label");
   assert(String(result.stdout || "").includes("start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary"), "plain report should include Windows host status command");

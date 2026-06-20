@@ -368,7 +368,7 @@ function assertWindowsHostBoardSummary(text, label) {
 function assertMacClientManualChecklistAction(text, label) {
   const value = String(text || "");
   assertIncludes(value, "手工清单", label);
-  assertIncludes(value, "连接/视频/音频/剪贴板/input_ack/诊断", label);
+  assertIncludes(value, "连接/视频/音频/剪贴板/文件/窗口/全屏/原画/input_ack/复制诊断", label);
   assertIncludes(value, "复制诊断", label);
   assertIncludes(value, "连接密码", label);
   assertNotIncludes(value, "LAN_DUAL_PASSWORD", label);

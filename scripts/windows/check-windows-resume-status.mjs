@@ -34,7 +34,7 @@ const defaults = {
   sendManualUxAck: false,
 };
 const macHeartbeatFreshnessStaleMs = 2 * 60 * 1000;
-const macClientManualChecklistAction = "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
+const macClientManualChecklistAction = "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/文件/窗口/全屏/原画/input_ack/复制诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
 const macClientManualChecklistOfflineAction = `页面在线后在 ${macClientManualChecklistAction}`;
 const macClientManualChecklistAllowedActions = new Set([
   macClientManualChecklistAction,

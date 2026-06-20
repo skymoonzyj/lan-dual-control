@@ -67,7 +67,7 @@ const allowedMacUnattendedFindings = new Set([
 ]);
 
 const copyDiagnosticsAction = "Mac client 事件日志点击“复制诊断”，粘贴前确认不包含连接密码";
-const manualChecklistAction = "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
+const manualChecklistAction = "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/文件/窗口/全屏/原画/input_ack/复制诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
 const passwordLocationAction = "Windows 临时密码只填 Mac 页面密码框；不要发到通讯板；不保存到最近连接或诊断";
 const discoverWindowsCommand = "node scripts/mac/discover-windows-hosts.mjs --checkBoard --boardSummary";
 const windowsHostStatusCommand = "node scripts/windows/start-windows-host.mjs --status --host 127.0.0.1 --port 43770 --boardSummary";

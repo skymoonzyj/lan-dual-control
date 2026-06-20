@@ -329,7 +329,7 @@ function assertMacClientDiscoverWindowsCallCommand(command, label) {
 
 function assertMacClientManualChecklistAction(text, label) {
   assertIncludes(text || "", "手工清单", label);
-  assertIncludes(text || "", "连接/视频/音频/剪贴板/input_ack/诊断", label);
+  assertIncludes(text || "", "连接/视频/音频/剪贴板/文件/窗口/全屏/原画/input_ack/复制诊断", label);
   assertIncludes(text || "", "复制诊断", label);
   assertIncludes(text || "", "连接密码", label);
   assertNotIncludes(text || "", "LAN_DUAL_PASSWORD", label);
@@ -628,7 +628,7 @@ function checkOfflineWarning(args, hostPort, clientPort) {
   assertIncludes(payload.boardSummary || "", "MacFormalE2E=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientManualChecklist=", "offline board summary");
   assertIncludes(payload.boardSummary || "", "手工清单", "offline board summary");
-  assertIncludes(payload.boardSummary || "", "连接/视频/音频/剪贴板/input_ack/诊断", "offline board summary");
+  assertIncludes(payload.boardSummary || "", "连接/视频/音频/剪贴板/文件/窗口/全屏/原画/input_ack/复制诊断", "offline board summary");
   assertIncludes(payload.boardSummary || "", "MacClientPasswordLocation=", "offline board summary");
   assertMacClientPasswordLocationAction(
     (payload.boardSummary || "").split("MacClientPasswordLocation=")[1]?.split(". ")[0] || "",
@@ -747,7 +747,7 @@ async function checkOnlineOk(args) {
       assertIncludes(payload.boardSummary || "", "MacFormalE2E=", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacClientManualChecklist=", "online board summary");
       assertIncludes(payload.boardSummary || "", "手工清单", "online board summary");
-      assertIncludes(payload.boardSummary || "", "连接/视频/音频/剪贴板/input_ack/诊断", "online board summary");
+      assertIncludes(payload.boardSummary || "", "连接/视频/音频/剪贴板/文件/窗口/全屏/原画/input_ack/复制诊断", "online board summary");
       assertIncludes(payload.boardSummary || "", "MacClientPasswordLocation=", "online board summary");
       assertMacClientPasswordLocationAction(
         (payload.boardSummary || "").split("MacClientPasswordLocation=")[1]?.split(". ")[0] || "",

@@ -252,7 +252,10 @@ function assertMacInputSafetyPlanCommand(command, label) {
 function assertMacClientManualChecklistAction(text, label) {
   const value = String(text || "");
   assert(value.includes("Mac client 会话诊断查看“手工清单”"), `${label} should explain where to review the Mac client manual checklist`);
-  assert(value.includes("连接/视频/音频/剪贴板/input_ack/诊断"), `${label} should list the manual UX checklist coverage`);
+  assert(
+    value.includes("连接/视频/音频/剪贴板/文件/窗口/全屏/原画/input_ack/复制诊断"),
+    `${label} should list the manual UX checklist coverage`,
+  );
   assert(value.includes("复制诊断"), `${label} should tell operators to copy diagnostics after checking`);
   assert(!value.includes("--promptPassword"), `${label} should not prompt for passwords`);
   assert(!value.includes("--password"), `${label} should not embed a password argument`);

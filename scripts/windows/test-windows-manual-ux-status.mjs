@@ -9,7 +9,7 @@ const script = "scripts/windows/check-windows-manual-ux-status.mjs";
 const powershellScript = "scripts/windows/check-windows-manual-ux-status.ps1";
 const defaultTimeoutMs = 20000;
 const defaultChecklist = "connection/video/audio/clipboard/file/window/fullscreen/original/copy-diagnostics";
-const macClientManualChecklistAction = "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/input_ack/诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
+const macClientManualChecklistAction = "Mac client 会话诊断查看“手工清单”：连接/视频/音频/剪贴板/文件/窗口/全屏/原画/input_ack/复制诊断；复制诊断会带出同一行，粘贴前确认不包含连接密码";
 const macManualUxReconfirmCommand = "node scripts/mac/check-mac-manual-ux-status.mjs --server http://192.168.31.68:17888 --reconfirmCall --json";
 
 function printHelp() {
