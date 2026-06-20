@@ -8,6 +8,8 @@
 - [x] Windows 恢复总览消费 `userPresence`：`check-windows-resume-status --checkBoard` 现在优先读取 Agent Link Board `/api/state.userPresence`，输出 JSON `board.userPresence`、普通输出和 `--boardSummary` 的 `UserPresence=` / `UserPresenceAction=`；`present` 覆盖旧休息历史并提示授权前先说明目标/安全边界/预计耗时，`away` 输出 `BLOCKED_BY_USER_AWAY` 只做无授权任务。不运行 Mac 脚本、不认证、不请求或发送密码、不发 input/inject。
 
 状态：进行中。
+- [x] Windows 长状态悬停完整可读：FPS 指标和底部连接/输入/声音/剪贴板等长状态同步完整 `title`，保持单行省略同时可悬停查看全文。页面自测先红于 `videoLocalQueueTitleVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 - [x] W2 Windows 视频本地队列状态实时可见化：页面 FPS 状态追加本机队列、过期丢帧、回退恢复和恢复暂停信号，帮助不复制诊断也能区分供流抖动与 Windows 本地解码自救。页面自测先红于 `videoLocalQueueStatusVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 
 - [x] W2 Windows 视频状态实时可见化：页面 FPS 状态直接显示最近最大视频帧间隔和视频卡顿次数；复制/导出诊断继续保留完整平均/最大/卡顿明细。页面自测先红于 `videoStutterStatusVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。

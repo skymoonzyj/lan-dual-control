@@ -2715,6 +2715,30 @@ function getOutgoingFileTransferSuggestionExportStatus() {
   return "-";
 }
 
+function syncElementTitleFromText(element) {
+  if (!element) return;
+  const title = String(element.textContent || "").replace(/\s+/g, " ").trim();
+  if (title) {
+    element.title = title;
+  } else {
+    element.removeAttribute("title");
+  }
+}
+
+function syncReadableStatusTitles() {
+  [
+    elements.metricFps,
+    elements.metricBandwidth,
+    elements.metricLatency,
+    elements.statusText,
+    elements.inputText,
+    elements.audioText,
+    elements.clipboardText,
+    elements.remoteStatusText,
+    elements.hostDiagnosticsText,
+  ].forEach(syncElementTitleFromText);
+}
+
 function syncFloatingControlStatus() {
   if (elements.floatingFullscreenHint) {
     elements.floatingFullscreenHint.textContent = state.immersiveFullscreen
@@ -2753,6 +2777,7 @@ function syncFloatingControlStatus() {
   if (state.monitorMode) {
     updateMonitorModeStatus();
   }
+  syncReadableStatusTitles();
 }
 
 function clearFullscreenHintTimer() {

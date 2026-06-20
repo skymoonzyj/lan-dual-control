@@ -19,6 +19,19 @@
 
 ## 2026-06-20 Windows Codex
 
+日期：2026-06-20 Windows 长状态悬停完整可读
+开发端：Windows Codex
+本轮目标：让 Windows 控制端长状态保持单行稳定，同时用户能看到完整文本。
+完成内容：新增 `syncElementTitleFromText()` / `syncReadableStatusTitles()`；`syncFloatingControlStatus()` 会把 FPS 指标、码率、帧延迟、底部状态、远程画面状态和 host 诊断文本同步到 title。
+修改文件：apps/windows-client/app.js；scripts/windows/test-windows-client-browser.mjs；CURRENT_STATUS/NEXT_ACTIONS/04-task-board/HANDOFF_LOG/ACTIVE_LOCKS。
+验证方式：红灯先失败于 `videoLocalQueueTitleVisible=false`；绿灯 `node --check apps/windows-client/app.js`、`node --check scripts/windows/test-windows-client-browser.mjs`、`node scripts/windows/test-windows-client-browser.mjs --diagnosticsOnly --timeoutMs 45000` 通过。
+遗留问题：只增强 Windows 控制端可读性，不改变 Mac 采集、H.264 编码、音频、剪贴板、网络传输或输入控制。
+下一步建议：后续继续新增状态字段时，保持页面单行省略，并确认 title 仍同步完整内容。
+是否改了协议：否。
+是否需要另一端配合：暂不需要。
+
+## 2026-06-20 Windows Codex
+
 日期：2026-06-20 W2 Windows 视频本地队列状态实时可见化
 开发端：Windows Codex
 本轮目标：让用户在 Windows 控制端页面 FPS 状态里直接看到本地解码队列和 H.264 恢复自救状态。

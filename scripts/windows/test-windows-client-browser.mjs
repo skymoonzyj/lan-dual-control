@@ -5009,7 +5009,9 @@ async function verifyVideoStutterDiagnostics(session) {
         state.h264FallbackRecoveryPausedUntil = performance.now() + 9000;
         const exportText = getVideoPerformanceExportStatus();
         updateFpsMetric();
-        const fpsStatusText = document.querySelector("#metricFps")?.textContent || "";
+        const fpsElement = document.querySelector("#metricFps");
+        const fpsStatusText = fpsElement?.textContent || "";
+        const fpsTitleText = fpsElement?.getAttribute("title") || "";
         const videoStutterStatusVisible =
           fpsStatusText.includes("最大间隔 184 ms") &&
           fpsStatusText.includes("卡顿 2");
@@ -5019,6 +5021,12 @@ async function verifyVideoStutterDiagnostics(session) {
           fpsStatusText.includes("回退恢复 2 次") &&
           fpsStatusText.includes("恢复暂停 1 次") &&
           fpsStatusText.includes("暂停剩余");
+        const videoLocalQueueTitleVisible =
+          fpsTitleText.includes("本机队列 260 ms") &&
+          fpsTitleText.includes("本地过期丢帧 3") &&
+          fpsTitleText.includes("回退恢复 2 次") &&
+          fpsTitleText.includes("恢复暂停 1 次") &&
+          fpsTitleText.includes("暂停剩余");
         const firstFrameWaitNow = 9000;
         state.connected = true;
         state.videoFrames = 0;
@@ -5066,12 +5074,15 @@ async function verifyVideoStutterDiagnostics(session) {
             exportText.includes("恢复暂停 1 次") &&
             videoStutterStatusVisible &&
             videoLocalQueueStatusVisible &&
+            videoLocalQueueTitleVisible &&
             videoFirstFrameWaitVisible &&
             videoStreamStallVisible,
           exportText,
           videoStutterStatusVisible,
           videoLocalQueueStatusVisible,
+          videoLocalQueueTitleVisible,
           fpsStatusText,
+          fpsTitleText,
           videoFirstFrameWaitVisible,
           firstFrameWaitRendered,
           firstFrameWaitStatusText,
@@ -6858,6 +6869,7 @@ async function verifyLiveStatusLayoutStability(session) {
         inputText.textContent = "输入事件：128 · 已注入 · Ctrl→Command · 远控 macOS 快捷键映射";
         audioText.textContent = "声音：接收中 · 37% · 80% · 28 ms · 播放 2048 · 丢 2 · PCM 48000 Hz 2ch";
         clipboardText.textContent = "剪贴板：文件同步 · 接收 2 个文件 · 128.0 MB/512.0 MB · 等待系统剪贴板写入";
+        if (typeof syncFloatingControlStatus === "function") syncFloatingControlStatus();
         const after = {
           statusbarHeight: statusbar.getBoundingClientRect().height,
           remoteHeight: remoteCanvas.getBoundingClientRect().height,
@@ -6879,14 +6891,22 @@ async function verifyLiveStatusLayoutStability(session) {
             style.overflow === "hidden" &&
             style.textOverflow === "ellipsis",
         );
+        const titleMirrors = [statusText, inputText, audioText, clipboardText].map((element) => ({
+          text: element.textContent,
+          title: element.getAttribute("title") || "",
+          ok: (element.getAttribute("title") || "") === element.textContent,
+        }));
+        const titleMirrorsOk = titleMirrors.every((entry) => entry.ok);
         return {
-          ok: statusbarStable && remoteStable && statusbarStyle.flexWrap === "nowrap" && nowrap,
+          ok: statusbarStable && remoteStable && statusbarStyle.flexWrap === "nowrap" && nowrap && titleMirrorsOk,
           before,
           after,
           statusbarStable,
           remoteStable,
           flexWrap: statusbarStyle.flexWrap,
           textStyles,
+          titleMirrors,
+          titleMirrorsOk,
         };
       } finally {
         statusText.textContent = original.status;

@@ -4,6 +4,9 @@
 
 用途：这是 Windows Codex 和 Mac Codex 每次开工前的第一入口。这里只写当前事实，不写长期规划。
 
+## 2026-06-20 Windows 长状态悬停完整可读
+- Windows 控制端现在会把 FPS 指标、码率、帧延迟、底部连接/输入/声音/剪贴板状态、远程画面状态和 host 诊断的完整文本同步到 `title`。状态栏仍保持 36px 单行省略，不会撑动画面；用户把鼠标停在长状态上即可看完整内容。页面自测先红于 `videoLocalQueueTitleVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
+
 ## 2026-06-20 W2 Windows 视频本地队列状态实时可见化
 - Windows 控制端页面 FPS 状态现在除了 `最大间隔` / `卡顿`，还会在本地解码队列或 H.264 恢复自救发生时追加 `本机队列 <ms> ms`、`本地过期丢帧 <n>`、`回退恢复 <n> 次`、`恢复暂停 <n> 次` 和 `暂停剩余 <秒>s`。复制/导出诊断仍保留 `原因`、`最近回退` 等完整字段；页面自测先红于 `videoLocalQueueStatusVisible=false`，再绿于 `test-windows-client-browser --diagnosticsOnly`。不改协议、不认证、不请求或发送密码、不发 input/inject。
 
